@@ -1,42 +1,64 @@
 """
-marriage_engine/marriage_timing.py
-==================================
-TIMING sub-engine — locked Dasha + Transit window math for marriage.
+event_timing/marriage/marriage_timing.py
+========================================
+VIVAH-7 PROTOCOL — KP-first marriage timing engine.
 
-Phase 2.8.30a — STEP 1: WIRING (toolset bridges)
-================================================
-This file is the **integration layer** between marriage timing logic and
-the existing deterministic helpers scattered across the codebase. Every
-wrapper below is a thin lazy-loaded bridge to an EXISTING function so
-Step 2 (layer logic) can call clean, named helpers without worrying about
-import paths or signature drift.
+Phase 2.8.52 (May 2 2026) — full pipeline rewrite per user spec
+(see .local/notes/VIVAH-7_protocol.md). Replaces the previous Parashari-
+first 5-layer pipeline with a KP-first 7-step pipeline.
 
-Architecture lock:
-  Engine = Truth (frozen)
-  LLM    = Narrator (this file's output is read-only for LLM)
+Architecture lock (UNCHANGED):
+  Engine    = Truth (frozen)
+  LLM       = Narrator (this file's output is read-only for LLM)
   Validator = Guard (post-injector, regex-only)
 
-Layer plan (Step 2 will populate compute_timing_window):
-  Layer 1  D1 Promise check       -> uses _get_manglik + house lords
-  Layer 2  D9 Confirmation        -> uses _get_d9_chart
-  Layer 3  KP 7CSL Verdict        -> uses _get_7csl + _get_kp_significators
-  Layer 4  Triple Confluence      -> uses _scan_cluster_ads + _project_pds
-                                     + _get_jupiter_sign_at + _get_saturn_sign_at
-  Layer 5  Reality Filter         -> uses _get_current_age
+Pipeline (VIVAH-7):
+  STEP 0  Late vs Early Tendency       -> adjusts STEP 5 age table
+  STEP 1  KP Filter (FIRST GATE)       -> 7CSL + 7C Star Lord verdict
+  STEP 2  D1 + D9 Cross-Validation     -> independent confirmation
+  STEP 3  Redemption                   -> own 7L / vargottama Venus rescue
+  STEP 4  Dasha + Confluence           -> cluster ADs scored with:
+            cluster_hit + AD/PD weight (DOMINANT, base 3)
+            dasha_lord_strength multiplier (x0.5 - x1.3)
+            Jupiter conjunction +2 / aspect +1
+            Saturn  conjunction +2 / aspect +1
+            Double Transit (Jup+Sat both)  +1
+            Ashtakavarga BAV  +/-1
+            7H Sarvashtakavarga  +/-0.5
+            Mars trigger +1 (with Mars+Saturn conflict flag)
+            Dasha Sandhi +1.5 (HIGH WEIGHT)
+            Retrograde -0.5 per MD/AD lord
+            Eclipse window -> -1 + delay flag
+  STEP 5  Reality Filter (age-gate)    -> adjusted by STEP 0 tendency
 
-Public function (Step 2 will fill):
+Priority order (locked):
+  Dasha > Sandhi > Transit > Mars > Retrograde
+
+One-line truth (locked):
+  "Dasha decide karta hai, Sandhi activate karta hai,
+   Mars accelerate karta hai, Retrograde delay karta hai."
+
+Public function:
   compute_timing_window(kundli, intel, kp, birth) -> dict
 
-Returns dict shape (when populated):
+Output dict shape (backward-compatible + 2 new fields):
   {
-    "verdict":        "PROMISED" | "DELAYED" | "DENIED",
-    "band":           "WEAK" | "MEDIUM" | "STRONG",
-    "primary_window": "August - October 2027",
-    "backup_window":  "March - May 2029",
-    "key_trigger":    "Venus AD + Jupiter PD + Jupiter transit on 7H Libra",
-    "ul_outlook":     {"sign": "Capricorn", "verdict": "NEUTRAL"},
-    "risk_flag":      "Manglik" | "7L afflicted" | "Karaka weak" | None,
-    "factors":        [...]   # internal trace, hidden from user
+    # Existing contract (preserved):
+    "verdict":             "PROMISED" | "DELAYED" | "DENIED" | "PREMATURE" | "UNKNOWN",
+    "band":                "WEAK" | "MEDIUM" | "STRONG",
+    "primary_window":      "August - October 2027",
+    "backup_window":       "March - May 2029",
+    "key_trigger":         "Venus AD + Jupiter PD + Jupiter on 7H + Sandhi",
+    "confluence_strength": "STRONG" | "MODERATE",
+    "ul_outlook":          None,
+    "risk_flag":           str | None,
+    "risk_flags":          [...],
+    "factors":             [...],
+    # NEW (additive, optional consumers):
+    "top_3_windows":       [{...}, {...}, {...}],
+    "step0_tendency":      {"verdict": "LATE"|"EARLY"|"BALANCED",
+                            "score":   int,
+                            "reasons": [...]},
   }
 """
 
@@ -57,18 +79,43 @@ _MARRIAGE_HOUSES: List[int] = [7, 2, 11]
 
 # KP signification rule — 7CSL signifies these houses -> PROMISED
 _KP_PROMISE_HOUSES: Set[int] = {2, 7, 11}
-# KP signification rule — 7CSL signifies these -> DENIED / single life
-_KP_DENY_HOUSES: Set[int] = {1, 6, 10}
+# KP signification rule (VIVAH-7 spec) — 7CSL signifies these -> DENIED
+# Spec lock: 6/8/12 (dusthana/separation/loss). NOTE: {1,6,10} is the
+# classical "no-marriage / single-life" set; we use {6,8,12} per VIVAH-7
+# because for the "kab shaadi hogi" question we treat marriage that
+# results in dusthana karma as denial-equivalent (no stable marriage).
+_KP_DENY_HOUSES: Set[int] = {6, 8, 12}
 
-# Reality Filter age thresholds (Layer 5)
+# Reality Filter age thresholds (BASE — STEP 0 may shift these)
 _AGE_HARD_BLOCK = 18      # below this: never predict marriage in <2 yr
 _AGE_EARLY_FLAG = 22      # 18-21: flag "practically early"
 _AGE_LATE_FLAG = 39       # 39+: flag "late pattern"
 _AGE_VERY_LATE = 45       # 45+: flag "compromise/fast-arranged typical"
 
+# STEP 0 tendency shifts (added to base age thresholds)
+_AGE_SHIFT_LATE = +3      # LATE tendency: push everything later
+_AGE_SHIFT_EARLY = -2     # EARLY tendency: pull everything earlier
+
+# Cardinal (movable) signs — quick-trigger marriages
+_CARDINAL_SIGNS: Set[int] = {0, 3, 6, 9}    # Aries, Cancer, Libra, Capricorn
+# Dual signs — multiple/delayed marriages classically
+_DUAL_SIGNS: Set[int] = {2, 5, 8, 11}       # Gemini, Virgo, Sag, Pisces
+# Fixed signs — stable but slower-trigger
+_FIXED_SIGNS: Set[int] = {1, 4, 7, 10}      # Taurus, Leo, Scorpio, Aquarius
+
+# Dusthana houses (avoidance set for karaka placements)
+_DUSTHANA: Set[int] = {6, 8, 12}
+# Kendra (1, 4, 7, 10) + Trikona (1, 5, 9) — strong houses
+_KENDRA_TRIKONA: Set[int] = {1, 4, 5, 7, 9, 10}
+
+# VIVAH-7 score thresholds (STEP 4 window selection)
+_WINDOW_MIN_SCORE = 2.5     # below this: discard candidate window
+_WINDOW_STRONG_SCORE = 5.0  # at/above this: STRONG confluence band
+_WINDOW_MEDIUM_SCORE = 3.5  # at/above this: MODERATE confluence band
+
 
 # ════════════════════════════════════════════════════════════════════════
-# SECTION 1 — D9 Navamsha (Layer 2 toolset)
+# SECTION 1 — D9 Navamsha (cross-validation toolset)
 # ════════════════════════════════════════════════════════════════════════
 def _get_d9_chart(planets: list, lagna_lon: Optional[float] = None) -> dict:
     """Compute D9 (Navamsha) sign placement per planet.
@@ -87,12 +134,12 @@ def _get_d9_chart(planets: list, lagna_lon: Optional[float] = None) -> dict:
 
 
 # ════════════════════════════════════════════════════════════════════════
-# SECTION 2 — KP cusps + sub-lord + significations (Layer 3 toolset)
+# SECTION 2 — KP cusps + sub-lord + significations (STEP 1 toolset)
 # ════════════════════════════════════════════════════════════════════════
 def _get_kp_cusp(kp: dict, house: int) -> Optional[dict]:
     """Fetch the KP cusp dict for a given house (1-12).
 
-    Bridges -> marriage_engine.love_or_arrange._kp_cusp(kp, house)
+    Bridges -> event_timing.marriage.love_or_arrange._kp_cusp(kp, house)
     Returns the cusp dict (with sl/nl/sb/ss fields) or None.
     """
     try:
@@ -118,10 +165,27 @@ def _get_7csl(kp: dict) -> str:
         return ""
 
 
+def _get_7c_star_lord(kp: dict) -> str:
+    """Get the 7th cusp's STAR LORD (nl) — VIVAH-7 STEP 1 cross-check.
+
+    Per spec: 7CSL is FINAL ARBITER, but 7C Star Lord acts as
+    independent confirmation. If both denial -> hard DENY. If both
+    promise -> hard PROMISE. If split -> MIXED/DELAYED.
+    """
+    try:
+        cusp7 = _get_kp_cusp(kp, 7)
+        if not isinstance(cusp7, dict):
+            return ""
+        return str(cusp7.get("nl") or "").strip()
+    except Exception as exc:
+        print(f"[marriage_timing._get_7c_star_lord] failed: {exc}")
+        return ""
+
+
 def _get_kp_significators(kp: dict, house: int) -> Set[str]:
     """Get planets that signify a given house via KP CCS rules.
 
-    Bridges -> marriage_engine.love_or_arrange._kp_significators_of(kp, house)
+    Bridges -> event_timing.marriage.love_or_arrange._kp_significators_of(kp, house)
     Returns set of planet names. Empty set on failure.
     """
     try:
@@ -135,62 +199,68 @@ def _get_kp_significators(kp: dict, house: int) -> Set[str]:
         return set()
 
 
-def _kp_csl_verdict(kp: dict) -> Tuple[str, List[int]]:
-    """Layer 3 prep — compute KP 7CSL verdict signal.
+def _planet_kp_significations(kp: dict, planet: str) -> List[int]:
+    """Houses that a given planet signifies (across all 12 houses).
 
-    Returns (verdict, signified_houses):
-      verdict in {"PROMISED", "DENIED", "MIXED", "UNKNOWN"}
-      signified_houses = list of houses 7CSL is a significator of
+    Used by STEP 1 to evaluate both 7CSL and 7C Star Lord.
     """
-    try:
-        csl7 = _get_7csl(kp)
-        if not csl7:
-            return ("UNKNOWN", [])
-        # Find which houses csl7 signifies
-        signified: List[int] = []
-        for h in range(1, 13):
-            sigs = _get_kp_significators(kp, h)
-            if csl7 in sigs:
-                signified.append(h)
-        sset = set(signified)
-        promise_hits = len(sset & _KP_PROMISE_HOUSES)
-        deny_hits = len(sset & _KP_DENY_HOUSES)
-        if promise_hits >= 2 and deny_hits == 0:
-            return ("PROMISED", signified)
-        if deny_hits >= 2 and promise_hits == 0:
-            return ("DENIED", signified)
-        if promise_hits >= 1 and deny_hits >= 1:
-            return ("MIXED", signified)
-        if promise_hits >= 1:
-            return ("PROMISED", signified)
-        if deny_hits >= 1:
-            return ("DENIED", signified)
+    if not planet:
+        return []
+    out: List[int] = []
+    for h in range(1, 13):
+        sigs = _get_kp_significators(kp, h)
+        if planet in sigs:
+            out.append(h)
+    return out
+
+
+def _kp_planet_verdict(kp: dict, planet: str) -> Tuple[str, List[int]]:
+    """Return ('PROMISED'|'DENIED'|'MIXED'|'UNKNOWN', signified_houses)
+    for a single KP planet (used for both 7CSL and 7C Star Lord).
+    """
+    if not planet:
+        return ("UNKNOWN", [])
+    signified = _planet_kp_significations(kp, planet)
+    sset = set(signified)
+    promise_hits = len(sset & _KP_PROMISE_HOUSES)
+    deny_hits = len(sset & _KP_DENY_HOUSES)
+    if promise_hits >= 2 and deny_hits == 0:
+        return ("PROMISED", signified)
+    if deny_hits >= 2 and promise_hits == 0:
+        return ("DENIED", signified)
+    if promise_hits >= 1 and deny_hits >= 1:
         return ("MIXED", signified)
+    if promise_hits >= 1:
+        return ("PROMISED", signified)
+    if deny_hits >= 1:
+        return ("DENIED", signified)
+    return ("MIXED", signified)
+
+
+def _kp_csl_verdict(kp: dict) -> Tuple[str, List[int]]:
+    """STEP 1 prep — compute KP 7CSL verdict (single planet, primary)."""
+    try:
+        return _kp_planet_verdict(kp, _get_7csl(kp))
     except Exception as exc:
         print(f"[marriage_timing._kp_csl_verdict] failed: {exc}")
         return ("UNKNOWN", [])
 
 
 # ════════════════════════════════════════════════════════════════════════
-# SECTION 3 — Vimshottari MD-AD scanner (Layer 4 base)
+# SECTION 3 — Vimshottari MD-AD scanner (STEP 4 base)
 # ════════════════════════════════════════════════════════════════════════
 def _get_dasha_upcoming(kundli: dict) -> List[dict]:
-    """Fetch upcoming MD-AD blocks from kundli, normalised to the shape
-    expected by `vedic.timing.timing_engine._scan_dasha_for_lords`.
-
-    Each returned block is `{md_lord, ad_lord, start, end}`.
+    """Fetch upcoming MD-AD blocks from kundli.
 
     Handles three known shapes:
       A) kundli["vimshottari"]["upcoming"]              (already flat)
       B) kundli["upcomingAntars"]                       (already flat)
       C) kundli["dashas"] = [{planet, startDate, endDate, subDashas:[
               {planet, startDate, endDate, subDashas:[PDs]}, ... ]}]
-         (real production shape from kundli_engine.calculate_kundli)
     """
     if not isinstance(kundli, dict):
         return []
 
-    # Shape A
     vims = kundli.get("vimshottari") or kundli.get("dasha") or {}
     if isinstance(vims, dict):
         flat = (vims.get("upcoming")
@@ -199,7 +269,6 @@ def _get_dasha_upcoming(kundli: dict) -> List[dict]:
         if flat and isinstance(flat, list):
             return flat
 
-    # Shape B
     flat = (kundli.get("upcomingAntars")
             or kundli.get("upcoming_antars")
             or kundli.get("upcomingDashas")
@@ -208,7 +277,6 @@ def _get_dasha_upcoming(kundli: dict) -> List[dict]:
     if flat and isinstance(flat, list):
         return flat
 
-    # Shape C — flatten kundli["dashas"][*].subDashas into AD list
     dashas = kundli.get("dashas") or []
     if not isinstance(dashas, list):
         return []
@@ -227,7 +295,6 @@ def _get_dasha_upcoming(kundli: dict) -> List[dict]:
             ad_end = ad.get("endDate") or ad.get("end")
             if not (ad_lord and ad_end):
                 continue
-            # Filter to upcoming only (lookback handled by scanner)
             try:
                 end_d = datetime.strptime(str(ad_end)[:10], "%Y-%m-%d").date()
                 if end_d < today - timedelta(days=60):
@@ -248,7 +315,7 @@ def _scan_cluster_ads(kundli: dict, target_lords: Set[str],
     """Find upcoming MD-AD jodis where MD or AD lord is in target_lords.
 
     Bridges -> vedic.timing.timing_engine._scan_dasha_for_lords
-    Returns list of {md, ad, start, end, score} dicts (score 2 or 4).
+    Returns list of {md, ad, start, end, score} dicts.
     """
     try:
         from vedic.timing.timing_engine import (   # type: ignore
@@ -257,8 +324,6 @@ def _scan_cluster_ads(kundli: dict, target_lords: Set[str],
         vims = (kundli.get("vimshottari")
                 or kundli.get("dasha")
                 or {})
-        # The scanner reads vims["upcoming"]; if our data is in another
-        # field, build a thin dict with the right shape.
         if not (isinstance(vims, dict) and vims.get("upcoming")):
             upcoming = _get_dasha_upcoming(kundli)
             vims = {"upcoming": upcoming, "current": (vims or {}).get("current") or {}}
@@ -270,9 +335,7 @@ def _scan_cluster_ads(kundli: dict, target_lords: Set[str],
 
 def _marriage_target_lords(lagna_sign_idx: int) -> Set[str]:
     """Compute target lords for marriage cluster {7H, 2H, 11H} from lagna.
-
-    Adds Karaka planets (Venus, Jupiter) — both sexes' karakas are
-    always relevant signifiers, gender-specific weighting handled later.
+    Adds Karaka planets (Venus, Jupiter).
     """
     try:
         si = int(lagna_sign_idx) % 12
@@ -285,17 +348,13 @@ def _marriage_target_lords(lagna_sign_idx: int) -> Set[str]:
 
 
 # ════════════════════════════════════════════════════════════════════════
-# SECTION 4 — PD month-window chain (Layer 4 month precision)
+# SECTION 4 — PD month-window chain (STEP 4 month precision)
 # ════════════════════════════════════════════════════════════════════════
 def _project_pds(md_lord: str, ad_lord: str,
                  ad_start: datetime, ad_end: datetime,
                  from_dt: Optional[datetime] = None,
                  months_needed: int = 6) -> List[dict]:
-    """Project PD chain inside a given AD (and walk forward if needed).
-
-    Bridges -> vedic.future_engine._project_pd_chain
-    Returns list of {md, ad, pd, start, end} dicts.
-    """
+    """Project PD chain inside a given AD."""
     try:
         from vedic.future_engine import _project_pd_chain   # type: ignore
         from_dt = from_dt or datetime.utcnow()
@@ -308,12 +367,7 @@ def _project_pds(md_lord: str, ad_lord: str,
 
 def _get_current_pd(current_dasha: dict,
                     when: Optional[datetime] = None) -> dict:
-    """Get the currently-running Pratyantar Dasha info.
-
-    Bridges -> pratyantar.compute_pratyantar(current_dasha, when)
-    Returns {"current_pd": {...}, "upcoming_pds": [...], "ad_lord": ...,
-             "md_lord": ...} or {} on failure.
-    """
+    """Get the currently-running Pratyantar Dasha info."""
     try:
         from pratyantar import compute_pratyantar   # type: ignore
         return compute_pratyantar(current_dasha, when=when) or {}
@@ -323,16 +377,11 @@ def _get_current_pd(current_dasha: dict,
 
 
 # ════════════════════════════════════════════════════════════════════════
-# SECTION 5 — Jupiter / Saturn transit ephemeris (Layer 4 confluence)
+# SECTION 5 — Jupiter / Saturn / Mars transit ephemeris (STEP 4 confluence)
 # ════════════════════════════════════════════════════════════════════════
 def _get_transits_at(natal_lagna_si: int, natal_moon_si: Optional[int],
                      when: Optional[datetime] = None) -> dict:
-    """Compute Jupiter/Saturn/Rahu sidereal sign at a given date.
-
-    Bridges -> transits.compute_transits(lagna_si, moon_si, when=when)
-    Returns dict like {"as_of": "YYYY-MM-DD", "Saturn": {...},
-                       "Jupiter": {...}, ...} or {} on failure.
-    """
+    """Compute Jupiter/Saturn/Mars/Rahu sidereal sign at a given date."""
     try:
         from transits import compute_transits   # type: ignore
         return compute_transits(natal_lagna_si, natal_moon_si,
@@ -343,22 +392,12 @@ def _get_transits_at(natal_lagna_si: int, natal_moon_si: Optional[int],
 
 
 def _transit_sign_idx(transit_data: dict, planet: str) -> Optional[int]:
-    """Extract a transiting planet's sidereal sign index from the
-    real shape returned by `transits.compute_transits`:
-        {"as_of": "...",
-         "transit_houses": {"Jupiter": {"sign": "Cancer", "house_from_lagna": 8}, ...}}
-
-    Tolerates legacy/test shapes too:
-        {"Jupiter": {"sign_idx": 3}}  or  {"Jupiter": {"sign": "Cancer"}}
-    Returns int 0-11 or None.
-    """
+    """Extract a transiting planet's sidereal sign index."""
     if not isinstance(transit_data, dict):
         return None
-    # Real production shape
     th = transit_data.get("transit_houses") or {}
     p = th.get(planet) if isinstance(th, dict) else None
     if not isinstance(p, dict):
-        # Legacy/flat shape
         p = transit_data.get(planet) or {}
     if not isinstance(p, dict):
         return None
@@ -371,48 +410,81 @@ def _transit_sign_idx(transit_data: dict, planet: str) -> Optional[int]:
     return None
 
 
-def _jupiter_on_marriage_house(transit_data: dict,
-                               natal_7h_sign_idx: int,
-                               natal_venus_sign_idx: Optional[int] = None
-                               ) -> bool:
-    """True if transiting Jupiter's sidereal sign equals natal 7H or natal Venus sign."""
-    try:
-        jup_si = _transit_sign_idx(transit_data, "Jupiter")
-        if jup_si is None:
-            return False
-        if jup_si == int(natal_7h_sign_idx) % 12:
-            return True
-        if (natal_venus_sign_idx is not None
-                and jup_si == int(natal_venus_sign_idx) % 12):
-            return True
-        return False
-    except Exception:
-        return False
+def _is_jupiter_aspect(jup_si: int, target_si: int) -> bool:
+    """Jupiter has 5th, 7th, 9th aspects (counted from itself)."""
+    diff = (target_si - jup_si) % 12
+    return diff in (4, 6, 8)
 
 
-def _saturn_seventh_from_moon(transit_data: dict,
-                              natal_moon_sign_idx: int) -> bool:
-    """True if transiting Saturn's sidereal sign is the 7th sign from natal Moon."""
-    try:
-        sat_si = _transit_sign_idx(transit_data, "Saturn")
-        if sat_si is None:
-            return False
-        seventh_from_moon = (int(natal_moon_sign_idx) + 6) % 12
-        return sat_si == seventh_from_moon
-    except Exception:
-        return False
+def _is_saturn_aspect(sat_si: int, target_si: int) -> bool:
+    """Saturn has 3rd, 7th, 10th aspects."""
+    diff = (target_si - sat_si) % 12
+    return diff in (2, 6, 9)
+
+
+def _is_mars_aspect(mars_si: int, target_si: int) -> bool:
+    """Mars has 4th, 7th, 8th aspects."""
+    diff = (target_si - mars_si) % 12
+    return diff in (3, 6, 7)
+
+
+def _jupiter_score_on_7h(transit_data: dict, h7_si: int,
+                          venus_si: Optional[int]) -> Tuple[int, str]:
+    """+2 conjunction (same sign as 7H or natal Venus), +1 aspect, 0 else."""
+    jup_si = _transit_sign_idx(transit_data, "Jupiter")
+    if jup_si is None:
+        return (0, "")
+    if jup_si == h7_si:
+        return (2, f"Jupiter conj 7H ({_SIGNS[h7_si]})")
+    if venus_si is not None and jup_si == venus_si:
+        return (2, f"Jupiter conj natal Venus ({_SIGNS[venus_si]})")
+    if _is_jupiter_aspect(jup_si, h7_si):
+        return (1, f"Jupiter aspect 7H ({_SIGNS[jup_si]} -> {_SIGNS[h7_si]})")
+    return (0, "")
+
+
+def _saturn_score_on_7h(transit_data: dict, h7_si: int,
+                         moon_si: Optional[int]) -> Tuple[int, str]:
+    """+2 conjunction (7H or 7th-from-Moon), +1 aspect, 0 else."""
+    sat_si = _transit_sign_idx(transit_data, "Saturn")
+    if sat_si is None:
+        return (0, "")
+    if sat_si == h7_si:
+        return (2, f"Saturn conj 7H ({_SIGNS[h7_si]})")
+    if moon_si is not None:
+        seventh_from_moon = (moon_si + 6) % 12
+        if sat_si == seventh_from_moon:
+            return (2, f"Saturn 7th-from-Moon ({_SIGNS[seventh_from_moon]})")
+    if _is_saturn_aspect(sat_si, h7_si):
+        return (1, f"Saturn aspect 7H ({_SIGNS[sat_si]} -> {_SIGNS[h7_si]})")
+    return (0, "")
+
+
+def _mars_trigger_check(transit_data: dict, h7_si: int,
+                         venus_si: Optional[int],
+                         seventh_lord_si: Optional[int]) -> Tuple[bool, str]:
+    """Mars trigger: Mars conjunct or aspecting 7H, Venus, or 7L."""
+    mars_si = _transit_sign_idx(transit_data, "Mars")
+    if mars_si is None:
+        return (False, "")
+    targets = [("7H", h7_si)]
+    if venus_si is not None:
+        targets.append(("Venus", venus_si))
+    if seventh_lord_si is not None:
+        targets.append(("7L", seventh_lord_si))
+    for label, t_si in targets:
+        if mars_si == t_si:
+            return (True, f"Mars conj {label} ({_SIGNS[t_si]})")
+        if _is_mars_aspect(mars_si, t_si):
+            return (True, f"Mars aspect {label} ({_SIGNS[mars_si]}->{_SIGNS[t_si]})")
+    return (False, "")
 
 
 # ════════════════════════════════════════════════════════════════════════
-# SECTION 6 — Manglik (Layer 1 risk flag)
+# SECTION 6 — Manglik (STEP 0 / risk flag)
 # ════════════════════════════════════════════════════════════════════════
 def _get_manglik(planets: list) -> str:
-    """Compute Manglik status from planet list.
-
-    Bridges -> dosh_engine._manglik(pl) which returns a tuple
-    (status, label, desc, remedies, note). We only need the status.
-    Returns: "Active" | "Mild" | "None" | "Unknown"
-    """
+    """Compute Manglik status. Returns: Active|Mild|None|Unknown."""
     try:
         from dosh_engine import _manglik   # type: ignore
         result = _manglik(planets)
@@ -427,15 +499,11 @@ def _get_manglik(planets: list) -> str:
 
 
 # ════════════════════════════════════════════════════════════════════════
-# SECTION 7 — Age compute (Layer 5 reality filter)
+# SECTION 7 — Age compute (STEP 5 reality filter)
 # ════════════════════════════════════════════════════════════════════════
 def _get_current_age(birth: Any, kundli: dict,
                      current_dasha: Optional[dict] = None) -> Optional[int]:
-    """Compute current age in years from birth date.
-
-    Bridges -> vedic.context.age_context.compute_age_context(birth, kundli)
-    Returns int age or None on failure.
-    """
+    """Compute current age in years from birth date."""
     try:
         from vedic.context.age_context import (   # type: ignore
             compute_age_context,
@@ -443,7 +511,6 @@ def _get_current_age(birth: Any, kundli: dict,
         ctx = compute_age_context(birth or {}, kundli or {},
                                   current_dasha=current_dasha)
         if not isinstance(ctx, dict) or not ctx.get("available", True):
-            # The function returns {"available": False, ...} on parse fail
             if isinstance(ctx, dict) and "current_age" in ctx:
                 return int(ctx["current_age"])
             return None
@@ -459,70 +526,453 @@ def _get_current_age(birth: Any, kundli: dict,
         return None
 
 
-def _age_filter_action(age: Optional[int],
-                       predicted_year: Optional[int]) -> str:
-    """Decide Reality Filter action based on age + predicted year.
+def _adjusted_age_thresholds(step0_verdict: str) -> Tuple[int, int, int, int]:
+    """STEP 5 — return age boundaries shifted by STEP 0 tendency.
 
-    Returns one of:
-      "BLOCK"        -> never predict, age too low
-      "PUSH_LATER"   -> predicted window before age 22, push to next valid
-      "FLAG_EARLY"   -> predicted age 18-21, allow but soften framing
-      "OK"           -> predicted age 22-38, normal output
-      "FLAG_LATE"    -> predicted age 39-44, late pattern framing
-      "FLAG_VERY_LATE" -> predicted age 45+, compromise/arranged framing
-      "UNKNOWN"      -> insufficient data
+    Returns (HARD_BLOCK, EARLY_FLAG, LATE_FLAG, VERY_LATE).
     """
+    if step0_verdict == "LATE":
+        s = _AGE_SHIFT_LATE
+    elif step0_verdict == "EARLY":
+        s = _AGE_SHIFT_EARLY
+    else:
+        s = 0
+    return (
+        _AGE_HARD_BLOCK,                  # never shifted (legal floor)
+        max(_AGE_HARD_BLOCK, _AGE_EARLY_FLAG + s),
+        _AGE_LATE_FLAG + s,
+        _AGE_VERY_LATE + s,
+    )
+
+
+def _age_filter_action(age: Optional[int], predicted_age: Optional[int],
+                        thresholds: Tuple[int, int, int, int]) -> str:
+    """Decide STEP 5 action.
+
+    Returns: BLOCK | PUSH_LATER | FLAG_EARLY | OK | FLAG_LATE | FLAG_VERY_LATE | UNKNOWN
+    """
+    hard_block, early_flag, late_flag, very_late = thresholds
     if age is None:
         return "UNKNOWN"
-    if age < _AGE_HARD_BLOCK:
+    if age < hard_block:
         return "BLOCK"
-    if predicted_year is None:
+    if predicted_age is None:
         return "UNKNOWN"
-    try:
-        years_ahead = int(predicted_year) - 0   # placeholder; caller knows
-        # Caller should pass predicted_age = (predicted_year - birth_year)
-        predicted_age = int(predicted_year)
-    except Exception:
-        return "UNKNOWN"
-    if predicted_age < _AGE_HARD_BLOCK:
+    if predicted_age < hard_block:
         return "PUSH_LATER"
-    if predicted_age < _AGE_EARLY_FLAG:
+    if predicted_age < early_flag:
         return "FLAG_EARLY"
-    if predicted_age < _AGE_LATE_FLAG:
+    if predicted_age < late_flag:
         return "OK"
-    if predicted_age < _AGE_VERY_LATE:
+    if predicted_age < very_late:
         return "FLAG_LATE"
     return "FLAG_VERY_LATE"
 
 
 # ════════════════════════════════════════════════════════════════════════
-# INTERNAL UTILITIES (small inline helpers for the public function)
+# SECTION 8 — STEP 0: Late vs Early Tendency Check
 # ════════════════════════════════════════════════════════════════════════
-def _planet_sign_idx(planets: list, name: str) -> Optional[int]:
-    """Find a planet's sidereal sign index (0-11) from kundli's planets list."""
+def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
+                                lagna_si: Optional[int],
+                                h7_si: Optional[int],
+                                seventh_lord: Optional[str],
+                                venus_si: Optional[int],
+                                gender: str = "") -> dict:
+    """STEP 0 — count LATE vs EARLY indicators.
+
+    LATE indicators (4):
+      L1: Saturn conjunct or aspecting 7H or 7L (natal)
+      L2: 7L in 12H or debilitated
+      L3: Venus combust or in dusthana
+      L11: Saturn IN 7H natally
+
+    EARLY indicators (4):
+      E1: Jupiter conjunct or aspecting 7H or 7L (natal)
+      E2: Venus exalted, in own sign, or in 5/7H
+      E5: 7H in cardinal sign (quick triggers)
+      E6: 7L in kendra/trikona (1/4/5/7/9/10) and not retro
+
+    Gender modifier (G1/G2):
+      Men   -> Venus karaka issues weighted +1 LATE
+      Women -> Jupiter karaka issues weighted +1 LATE
+
+    Returns:
+      {"verdict":"LATE"|"EARLY"|"BALANCED",
+       "score": int (positive=LATE, negative=EARLY),
+       "reasons": [...]}
+    """
+    reasons: List[str] = []
+    late = 0
+    early = 0
+
+    if lagna_si is None or h7_si is None:
+        return {"verdict": "BALANCED", "score": 0,
+                "late_count": 0, "early_count": 0,
+                "reasons": ["STEP 0 skipped: lagna unknown"]}
+
+    seventh_lord_si = _planet_sign_idx(planets, seventh_lord) if seventh_lord else None
+    seventh_lord_h = _planet_house_local(planets, seventh_lord) if seventh_lord else None
+    seventh_lord_dignity = _planet_dignity(planets, seventh_lord) if seventh_lord else ""
+    venus_house = _planet_house_local(planets, "Venus")
+    venus_dignity = _planet_dignity(planets, "Venus")
+    venus_combust = _is_combust_local(planets, "Venus")
+    saturn_si = _planet_sign_idx(planets, "Saturn")
+    saturn_house = _planet_house_local(planets, "Saturn")
+    jup_si = _planet_sign_idx(planets, "Jupiter")
+
+    # ── L1: Saturn conjunct or aspecting 7H/7L (natal)
+    sat_aff_7h = saturn_si is not None and (
+        saturn_si == h7_si or _is_saturn_aspect(saturn_si, h7_si))
+    sat_aff_7l = (saturn_si is not None and seventh_lord_si is not None
+                  and (saturn_si == seventh_lord_si
+                       or _is_saturn_aspect(saturn_si, seventh_lord_si)))
+    if sat_aff_7h:
+        late += 1
+        reasons.append("L1: natal Saturn conjunct/aspect 7H (+1 LATE)")
+    elif sat_aff_7l:
+        late += 1
+        reasons.append(f"L1: natal Saturn afflicting 7L {seventh_lord} (+1 LATE)")
+
+    # ── L2: 7L in 12H or debilitated
+    if seventh_lord_h == 12:
+        late += 1
+        reasons.append(f"L2: 7L {seventh_lord} in 12H — withdrawal (+1 LATE)")
+    if seventh_lord_dignity == "debilitated":
+        late += 1
+        reasons.append(f"L2: 7L {seventh_lord} debilitated (+1 LATE)")
+
+    # ── L3: Venus combust or in dusthana
+    if venus_combust:
+        late += 1
+        reasons.append("L3: Venus combust (+1 LATE)")
+    elif venus_house in _DUSTHANA:
+        late += 1
+        reasons.append(f"L3: Venus in {venus_house}H dusthana (+1 LATE)")
+
+    # ── L11: Saturn IN 7H natally
+    if saturn_house == 7:
+        late += 1
+        reasons.append("L11: natal Saturn IN 7H (+1 LATE)")
+
+    # ── E1: Jupiter aspect/conjunct 7H or 7L
+    jup_aff_7h = jup_si is not None and (
+        jup_si == h7_si or _is_jupiter_aspect(jup_si, h7_si))
+    jup_aff_7l = (jup_si is not None and seventh_lord_si is not None
+                  and (jup_si == seventh_lord_si
+                       or _is_jupiter_aspect(jup_si, seventh_lord_si)))
+    if jup_aff_7h:
+        early += 1
+        reasons.append("E1: natal Jupiter conjunct/aspect 7H (+1 EARLY)")
+    elif jup_aff_7l:
+        early += 1
+        reasons.append(f"E1: natal Jupiter blessing 7L {seventh_lord} (+1 EARLY)")
+
+    # ── E2: Venus exalted/own sign or in 5/7H
+    if venus_dignity in ("exalted", "own", "moolatrikona"):
+        early += 1
+        reasons.append(f"E2: Venus {venus_dignity} (+1 EARLY)")
+    elif venus_house in {5, 7}:
+        early += 1
+        reasons.append(f"E2: Venus in {venus_house}H — auspicious karaka (+1 EARLY)")
+
+    # ── E5: 7H sign is cardinal (quick trigger)
+    if h7_si in _CARDINAL_SIGNS:
+        early += 1
+        reasons.append(f"E5: 7H {_SIGNS[h7_si]} cardinal — quick trigger (+1 EARLY)")
+    elif h7_si in _DUAL_SIGNS:
+        late += 1
+        reasons.append(f"E5 (inv): 7H {_SIGNS[h7_si]} dual — delays/multiples (+1 LATE)")
+
+    # ── E6: 7L in kendra/trikona and not retro
+    if seventh_lord_h in _KENDRA_TRIKONA:
+        retro = _planet_is_retrograde(planets, seventh_lord)
+        if not retro:
+            early += 1
+            reasons.append(f"E6: 7L {seventh_lord} in {seventh_lord_h}H kendra/trikona (+1 EARLY)")
+        else:
+            reasons.append(f"E6 (skip): 7L {seventh_lord} in {seventh_lord_h}H but retro — neutral")
+
+    # ── Gender modifier (G1/G2)
+    g = (gender or "").strip().lower()
+    if g in ("m", "male", "man", "boy"):
+        if venus_combust or venus_house in _DUSTHANA or venus_dignity == "debilitated":
+            late += 1
+            reasons.append("G1: male + Venus karaka weak (+1 LATE)")
+    elif g in ("f", "female", "woman", "girl"):
+        jup_house = _planet_house_local(planets, "Jupiter")
+        jup_dignity = _planet_dignity(planets, "Jupiter")
+        if jup_house in _DUSTHANA or jup_dignity == "debilitated":
+            late += 1
+            reasons.append("G2: female + Jupiter karaka weak (+1 LATE)")
+
+    score = late - early
+    if score >= 2:
+        verdict = "LATE"
+    elif score <= -2:
+        verdict = "EARLY"
+    else:
+        verdict = "BALANCED"
+
+    return {
+        "verdict": verdict,
+        "score": score,
+        "late_count": late,
+        "early_count": early,
+        "reasons": reasons,
+    }
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION 9 — Ashtakavarga bridge (STEP 4 BAV / SAV bonuses)
+# ════════════════════════════════════════════════════════════════════════
+def _compute_ashtakavarga_for_chart(planets: list,
+                                      lagna_si: Optional[int]) -> dict:
+    """Bridge -> ashtakavarga.compute_ashtakavarga(planets, lagna_sign_idx).
+
+    Returns full result dict or {} on failure.
+    """
+    try:
+        from ashtakavarga import compute_ashtakavarga   # type: ignore
+        return compute_ashtakavarga(planets, lagna_si) or {}
+    except Exception as exc:
+        print(f"[marriage_timing._compute_ashtakavarga] failed: {exc}")
+        return {}
+
+
+def _bav_bonus(av: dict, planet: str, sign_si: Optional[int]) -> float:
+    """BAV bindus of a planet at a given sign.
+
+    Returns:
+       +1.0 if bindus >= 5 (strong)
+       +0.5 if bindus == 4 (above average)
+        0.0 if bindus == 3 (neutral)
+       -0.5 if bindus == 2 (weak)
+       -1.0 if bindus <= 1 (very weak)
+        0.0 if data missing
+    """
+    if not av or sign_si is None or not planet:
+        return 0.0
+    bav = av.get("bav") or {}
+    arr = bav.get(planet)
+    if not (isinstance(arr, list) and 0 <= sign_si < len(arr)):
+        return 0.0
+    b = int(arr[sign_si])
+    if b >= 5:
+        return 1.0
+    if b == 4:
+        return 0.5
+    if b == 3:
+        return 0.0
+    if b == 2:
+        return -0.5
+    return -1.0
+
+
+def _sav_bonus(av: dict, sign_si: Optional[int]) -> float:
+    """SAV bindus at a given sign.
+
+    Returns:
+       +0.5 if SAV >= 30 (strong)
+        0.0 if 25-29 (average)
+       -0.5 if < 25 (weak)
+    """
+    if not av or sign_si is None:
+        return 0.0
+    sav = av.get("sav") or []
+    if not (isinstance(sav, list) and 0 <= sign_si < len(sav)):
+        return 0.0
+    s = int(sav[sign_si])
+    if s >= 30:
+        return 0.5
+    if s >= 25:
+        return 0.0
+    return -0.5
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION 10 — Eclipse window detection (STEP 4 delay flag)
+# ════════════════════════════════════════════════════════════════════════
+def _eclipse_in_window(start: datetime, end: datetime,
+                        pad_days: int = 10) -> Tuple[bool, str]:
+    """True if a solar or lunar eclipse falls within the window
+    [start - pad_days, end + pad_days].
+
+    Bridges -> vedic.transits.phase_h.find_recent_eclipses(when=mid).
+    Returns (flag, reason_str). Eclipse adds delay/disturbance to
+    marriage windows per classical KP (Rahu/Ketu activation).
+    """
+    try:
+        from vedic.transits.phase_h import find_recent_eclipses   # type: ignore
+        mid = start + (end - start) / 2
+        ec = find_recent_eclipses(when=mid, back_years=1, fwd_years=1) or {}
+        if not ec.get("available"):
+            return (False, "")
+        win_start = start - timedelta(days=pad_days)
+        win_end = end + timedelta(days=pad_days)
+        for key, label in (("solar_back", "Solar"), ("solar_fwd", "Solar"),
+                            ("lunar_back", "Lunar"), ("lunar_fwd", "Lunar")):
+            blk = ec.get(key) or {}
+            d = blk.get("date")
+            if not d:
+                continue
+            try:
+                ed = datetime.strptime(str(d)[:10], "%Y-%m-%d")
+            except ValueError:
+                continue
+            if win_start <= ed <= win_end:
+                return (True, f"{label} eclipse {d} within window")
+        return (False, "")
+    except Exception as exc:
+        print(f"[marriage_timing._eclipse_in_window] failed: {exc}")
+        return (False, "")
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION 11 — Dasha Sandhi detection (STEP 4 HIGH WEIGHT activation)
+# ════════════════════════════════════════════════════════════════════════
+def _is_in_md_sandhi(kundli: dict, when: datetime,
+                      sandhi_days: int = 183) -> Tuple[bool, str]:
+    """True if `when` is within sandhi_days of MD start or end.
+
+    MD sandhi (transition zone) is the HIGHEST-WEIGHT activation factor
+    in VIVAH-7 (+1.5 to score). Per classical KSK + experiential patterns,
+    marriage and major life events disproportionately fire in MD sandhi
+    windows because the karmic transition releases pending karma.
+    """
+    if not isinstance(kundli, dict):
+        return (False, "")
+    dashas = kundli.get("dashas") or []
+    if not isinstance(dashas, list):
+        return (False, "")
+    when_d = when.date() if isinstance(when, datetime) else when
+    for md in dashas:
+        if not isinstance(md, dict):
+            continue
+        sd = md.get("startDate") or md.get("start")
+        ed = md.get("endDate") or md.get("end")
+        if not (sd and ed):
+            continue
+        try:
+            sd_d = datetime.strptime(str(sd)[:10], "%Y-%m-%d").date()
+            ed_d = datetime.strptime(str(ed)[:10], "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        if sd_d <= when_d <= ed_d:
+            from_start = (when_d - sd_d).days
+            from_end = (ed_d - when_d).days
+            md_lord = md.get("planet") or md.get("md_lord") or "?"
+            if from_start <= sandhi_days:
+                return (True, f"{md_lord} MD entry sandhi ({from_start}d in)")
+            if from_end <= sandhi_days:
+                return (True, f"{md_lord} MD exit sandhi ({from_end}d to next)")
+            return (False, "")
+    return (False, "")
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION 12 — Planet helpers (retrograde, dignity, combust, strength)
+# ════════════════════════════════════════════════════════════════════════
+def _planet_record(planets: list, name: str) -> Optional[dict]:
+    if not name:
+        return None
     for p in (planets or []):
         if isinstance(p, dict) and p.get("name") == name:
-            si = p.get("sign_idx")
-            if isinstance(si, int):
-                return si % 12
-            sign = p.get("sign")
-            if isinstance(sign, str) and sign in _SIGNS:
-                return _SIGNS.index(sign)
+            return p
+    return None
+
+
+def _planet_sign_idx(planets: list, name: str) -> Optional[int]:
+    rec = _planet_record(planets, name)
+    if not rec:
+        return None
+    si = rec.get("sign_idx")
+    if isinstance(si, int):
+        return si % 12
+    sign = rec.get("sign")
+    if isinstance(sign, str) and sign in _SIGNS:
+        return _SIGNS.index(sign)
     return None
 
 
 def _planet_house_local(planets: list, name: str) -> Optional[int]:
-    """Find a planet's house (1-12) from kundli's planets list."""
-    for p in (planets or []):
-        if isinstance(p, dict) and p.get("name") == name:
-            h = p.get("house")
-            if isinstance(h, int):
-                return h
+    rec = _planet_record(planets, name)
+    if not rec:
+        return None
+    h = rec.get("house")
+    if isinstance(h, int):
+        return h
     return None
 
 
+def _planet_is_retrograde(planets: list, name: str) -> bool:
+    """True if named planet is retrograde (Sun/Moon excluded)."""
+    if name in ("Sun", "Moon", "Rahu", "Ketu"):
+        return False  # Rahu/Ketu are always retrograde — neutral here
+    rec = _planet_record(planets, name)
+    if not rec:
+        return False
+    return bool(rec.get("retrograde") or rec.get("isRetro"))
+
+
+def _planet_dignity(planets: list, name: str) -> str:
+    """Return dignity string: exalted | moolatrikona | own | friend |
+    neutral | enemy | debilitated | "" (unknown).
+    """
+    rec = _planet_record(planets, name)
+    if not rec:
+        return ""
+    d = rec.get("dignity") or rec.get("dignityState") or ""
+    return str(d).strip().lower()
+
+
+def _is_combust_local(planets: list, name: str) -> bool:
+    """True if planet is combust (close to Sun)."""
+    rec = _planet_record(planets, name)
+    if not rec:
+        return False
+    if rec.get("combust") is True:
+        return True
+    if rec.get("isCombust") is True:
+        return True
+    return False
+
+
+def _dasha_lord_strength(planets: list, lord: str) -> float:
+    """Return multiplier 0.5 - 1.3 for a dasha lord based on dignity + retro.
+
+    Per VIVAH-7 STEP 6.2: weak dasha lord can't fire even if dasha is
+    "right". Multiplier scales the entire window score.
+
+    Mapping:
+      exalted        -> 1.3
+      moolatrikona   -> 1.2
+      own sign       -> 1.15
+      friend         -> 1.05
+      neutral / unk  -> 1.0
+      enemy          -> 0.85
+      debilitated    -> 0.5
+    Combust further -0.1, retrograde further -0.05 (floor 0.5).
+    """
+    if not lord:
+        return 1.0
+    d = _planet_dignity(planets, lord)
+    base_map = {
+        "exalted": 1.3, "moolatrikona": 1.2, "own": 1.15,
+        "friend": 1.05, "neutral": 1.0, "enemy": 0.85,
+        "debilitated": 0.5,
+    }
+    base = base_map.get(d, 1.0)
+    if _is_combust_local(planets, lord):
+        base -= 0.1
+    if _planet_is_retrograde(planets, lord):
+        base -= 0.05
+    return max(0.5, min(1.3, base))
+
+
+# ════════════════════════════════════════════════════════════════════════
+# SECTION 13 — Internal utilities
+# ════════════════════════════════════════════════════════════════════════
 def _parse_dt(value: Any) -> Optional[datetime]:
-    """Parse a date/datetime/string to a datetime object."""
     if isinstance(value, datetime):
         return value
     if isinstance(value, date):
@@ -546,11 +996,6 @@ _MONTHS = ["January", "February", "March", "April", "May", "June",
 
 
 def _format_window(start: datetime, end: datetime) -> str:
-    """Format a datetime range as 'August - October 2027'.
-
-    If start and end span different years, render as
-    'August 2026 - February 2027'.
-    """
     try:
         s_m = _MONTHS[start.month - 1]
         e_m = _MONTHS[end.month - 1]
@@ -564,7 +1009,6 @@ def _format_window(start: datetime, end: datetime) -> str:
 
 
 def _extract_birth_year(birth: Any) -> Optional[int]:
-    """Pull birth year from common birth dict shapes used in this codebase."""
     if not isinstance(birth, dict):
         return None
     for k in ("year", "birth_year", "yr"):
@@ -584,12 +1028,24 @@ def _extract_birth_year(birth: Any) -> Optional[int]:
     return None
 
 
+def _extract_gender(birth: Any, intel: dict) -> str:
+    """Try multiple sources for devotee's gender."""
+    for src in (birth, intel):
+        if not isinstance(src, dict):
+            continue
+        for k in ("gender", "sex", "lingam"):
+            v = src.get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+    return ""
+
+
 # ════════════════════════════════════════════════════════════════════════
-# PUBLIC API — Layer 1-5 ORCHESTRATION (Phase 2.8.30a STEP 2)
+# PUBLIC API — VIVAH-7 PROTOCOL ORCHESTRATOR (Phase 2.8.52)
 # ════════════════════════════════════════════════════════════════════════
 def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                           birth: Optional[Any] = None) -> dict:
-    """Run the full 5-layer marriage-timing pipeline.
+    """Run the full VIVAH-7 KP-first marriage-timing pipeline.
 
     Returns dict (see module docstring for shape). Returns
     {"verdict": "UNKNOWN", "factors": [...]} when inputs are too thin
@@ -597,20 +1053,27 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     """
     factors: List[str] = []
 
-    # ── Common input extraction ────────────────────────────────────
     def _empty(reason: str) -> dict:
-        return {"verdict": "UNKNOWN", "band": "WEAK",
-                "primary_window": None, "backup_window": None,
-                "key_trigger": None, "confluence_strength": None,
-                "ul_outlook": None,
-                "risk_flag": None, "risk_flags": [],
-                "factors": [reason]}
+        return {
+            "verdict": "UNKNOWN", "band": "WEAK",
+            "primary_window": None, "backup_window": None,
+            "key_trigger": None, "confluence_strength": None,
+            "ul_outlook": None,
+            "risk_flag": None, "risk_flags": [],
+            "factors": [reason],
+            "top_3_windows": [],
+            "step0_tendency": {"verdict": "BALANCED", "score": 0,
+                                "reasons": []},
+        }
 
+    # ── Common input extraction ────────────────────────────────────
     if not isinstance(kundli, dict) or not isinstance(intel, dict):
         return _empty("Insufficient input: missing kundli/intel")
 
     planets = kundli.get("planets") or []
-    # lagna_lon: prefer explicit, fall back to ascendantDeg from kundli_engine
+    if not planets:
+        return _empty("Insufficient input: empty planets list")
+
     lagna_lon = kundli.get("lagna_lon")
     if lagna_lon is None:
         for k in ("ascendantDeg", "lagnaDeg", "ascDeg"):
@@ -618,7 +1081,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             if isinstance(v, (int, float)):
                 lagna_lon = float(v)
                 break
-    # lagna_sign: prefer intel, fall back to kundli["ascendant"]
+
     lagna_sign = (intel.get("lagna_sign") or "").strip()
     if not lagna_sign:
         for k in ("ascendant", "ascSign", "lagnaSign", "lagna_sign"):
@@ -626,128 +1089,199 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             if isinstance(v, str) and v.strip() in _SIGNS:
                 lagna_sign = v.strip()
                 break
+
     lagna_si = _SIGNS.index(lagna_sign) if lagna_sign in _SIGNS else None
     moon_si = _planet_sign_idx(planets, "Moon")
     venus_si = _planet_sign_idx(planets, "Venus")
     h7_si = ((lagna_si + 6) % 12) if lagna_si is not None else None
     current_dasha = kundli.get("currentDasha") or kundli.get("current_dasha") or {}
+    gender = _extract_gender(birth, intel)
 
-    if not planets:
-        return _empty("Insufficient input: empty planets list")
-
-    # ── LAYER 1 — D1 Promise check ────────────────────────────────
+    # 7L lord lookup
     seventh_lord = None
     for hl in (intel.get("house_lords") or []):
         if isinstance(hl, dict) and hl.get("house") == 7:
             seventh_lord = hl.get("lord")
             break
+    seventh_lord_si = _planet_sign_idx(planets, seventh_lord) if seventh_lord else None
     seventh_lord_house = _planet_house_local(planets, seventh_lord) if seventh_lord else None
+
+    # Compute Ashtakavarga ONCE (used many times in STEP 4)
+    av = _compute_ashtakavarga_for_chart(planets, lagna_si)
+
+    # ════════════════════════════════════════════════════════════════
+    # STEP 0 — Late vs Early Tendency Check
+    # ════════════════════════════════════════════════════════════════
+    step0 = _step0_late_early_tendency(
+        planets, intel, kp, lagna_si, h7_si,
+        seventh_lord, venus_si, gender)
+    factors.append(f"STEP 0: tendency={step0['verdict']} "
+                   f"(LATE={step0['late_count']} EARLY={step0['early_count']} "
+                   f"net={step0['score']})")
+
+    # ════════════════════════════════════════════════════════════════
+    # STEP 1 — KP Filter (FIRST GATE — sublord = FINAL ARBITER)
+    # ════════════════════════════════════════════════════════════════
+    csl7 = _get_7csl(kp)
+    starlord = _get_7c_star_lord(kp)
+    csl_verdict, csl_signs = _kp_planet_verdict(kp, csl7)
+    star_verdict, star_signs = _kp_planet_verdict(kp, starlord) if starlord else ("UNKNOWN", [])
+
+    factors.append(f"STEP 1 KP: 7CSL={csl7 or 'n/a'} -> {csl_verdict} "
+                   f"signifies {csl_signs}")
+    factors.append(f"STEP 1 KP: 7C StarLord={starlord or 'n/a'} -> "
+                   f"{star_verdict} signifies {star_signs}")
+
+    # KP gate decision (sublord dominant, starlord cross-check)
+    if csl_verdict == "PROMISED" and star_verdict in ("PROMISED", "MIXED", "UNKNOWN"):
+        kp_gate = "PROMISED"
+    elif csl_verdict == "DENIED" and star_verdict == "DENIED":
+        kp_gate = "DENIED"
+    elif csl_verdict == "DENIED" and star_verdict in ("PROMISED", "MIXED"):
+        kp_gate = "DELAYED"
+    elif csl_verdict == "PROMISED" and star_verdict == "DENIED":
+        kp_gate = "DELAYED"
+    elif csl_verdict == "MIXED":
+        kp_gate = "DELAYED" if star_verdict == "DENIED" else "MIXED"
+    else:
+        kp_gate = csl_verdict if csl_verdict != "UNKNOWN" else "MIXED"
+
+    factors.append(f"STEP 1 KP GATE: {kp_gate}")
+
+    # ════════════════════════════════════════════════════════════════
+    # STEP 2 — D1 + D9 Cross-Validation
+    # ════════════════════════════════════════════════════════════════
     venus_house = _planet_house_local(planets, "Venus")
     manglik_status = _get_manglik(planets)
 
     d1_score = 0
-    if seventh_lord_house and seventh_lord_house not in {6, 8, 12}:
+    if seventh_lord_house and seventh_lord_house not in _DUSTHANA:
         d1_score += 1
-        factors.append(f"D1 OK: 7L ({seventh_lord}) in {seventh_lord_house}H")
+        factors.append(f"STEP 2 D1: 7L ({seventh_lord}) in {seventh_lord_house}H OK")
     else:
-        factors.append(f"D1 FLAG: 7L ({seventh_lord}) in {seventh_lord_house}H (dusthana/missing)")
+        factors.append(f"STEP 2 D1 FLAG: 7L ({seventh_lord}) in {seventh_lord_house}H (dusthana/missing)")
 
-    if venus_house and venus_house not in {6, 8, 12}:
+    if venus_house and venus_house not in _DUSTHANA:
         d1_score += 1
-        factors.append(f"D1 OK: Venus karaka in {venus_house}H")
+        factors.append(f"STEP 2 D1: Venus karaka in {venus_house}H OK")
     else:
-        factors.append(f"D1 FLAG: Venus karaka in {venus_house}H (weak)")
+        factors.append(f"STEP 2 D1 FLAG: Venus karaka in {venus_house}H (weak)")
 
     if manglik_status not in ("Active",):
         d1_score += 1
-        factors.append(f"D1 OK: Manglik={manglik_status}")
+        factors.append(f"STEP 2 D1: Manglik={manglik_status}")
     else:
-        factors.append("D1 FLAG: Manglik=Active")
+        factors.append("STEP 2 D1 FLAG: Manglik=Active")
 
-    if d1_score >= 2:
-        verdict_d1 = "PROMISED"
-    elif d1_score == 1:
-        verdict_d1 = "DELAYED"
-    else:
-        verdict_d1 = "DENIED"
-
-    # ── LAYER 2 — D9 Navamsha confirmation ────────────────────────
+    # D9 Confirmation
     d9 = _get_d9_chart(planets, lagna_lon) if lagna_lon is not None else _get_d9_chart(planets)
-    # `divisional_charts.compute_d9` returns planets at top level, e.g.
-    # {"Sun": {"sign": ..., "sign_idx": ..., "vargottama": ...}, ...,
-    #  "_lagna": {...}}. Some implementations nest under "planets".
     if isinstance(d9, dict) and isinstance(d9.get("planets"), dict):
         d9_planets = d9["planets"]
     else:
         d9_planets = d9 if isinstance(d9, dict) else {}
     if not d9_planets:
-        factors.append("D9 NOTE: navamsa unavailable — Layer 2 skipped")
+        factors.append("STEP 2 D9 NOTE: navamsa unavailable")
     venus_d9_sign = (d9_planets.get("Venus") or {}).get("sign", "")
     seventh_lord_d9_sign = (d9_planets.get(seventh_lord) or {}).get("sign", "") if seventh_lord else ""
     venus_vargottama = bool((d9_planets.get("Venus") or {}).get("vargottama"))
 
     d9_bonus = 0
-    # Venus debilitated in Virgo in D9 weakens; vargottama strengthens
     if venus_d9_sign and venus_d9_sign != "Virgo":
         d9_bonus += 1
-        factors.append(f"D9 OK: Venus in {venus_d9_sign}"
+        factors.append(f"STEP 2 D9: Venus in {venus_d9_sign}"
                        + (" (vargottama)" if venus_vargottama else ""))
     elif venus_d9_sign:
-        factors.append(f"D9 FLAG: Venus debilitated in {venus_d9_sign}")
+        factors.append(f"STEP 2 D9 FLAG: Venus debilitated in {venus_d9_sign}")
     if seventh_lord_d9_sign:
         d9_bonus += 1
-        factors.append(f"D9 OK: 7L ({seventh_lord}) placed in {seventh_lord_d9_sign}")
+        factors.append(f"STEP 2 D9: 7L ({seventh_lord}) in {seventh_lord_d9_sign}")
 
-    # Combine D1 with D9 (D9 can promote/demote one tier)
-    if verdict_d1 == "DENIED" and d9_bonus >= 2:
-        verdict_combined = "DELAYED"
-    elif verdict_d1 == "DELAYED" and d9_bonus >= 2:
-        verdict_combined = "PROMISED"
-    elif verdict_d1 == "PROMISED" and d9_bonus == 0:
-        verdict_combined = "DELAYED"
-    else:
-        verdict_combined = verdict_d1
+    # ════════════════════════════════════════════════════════════════
+    # STEP 3 — Redemption (own 7L / vargottama Venus rescue)
+    # ════════════════════════════════════════════════════════════════
+    redemption = 0
+    redemption_reasons: List[str] = []
+    # R1: 7L in own sign
+    if (seventh_lord and seventh_lord_si is not None
+            and _SIGN_LORDS.get(seventh_lord_si) == seventh_lord):
+        redemption += 1
+        redemption_reasons.append(f"R1: 7L {seventh_lord} in own sign {_SIGNS[seventh_lord_si]} (+1)")
+    # R2: Venus vargottama
+    if venus_vargottama:
+        redemption += 1
+        redemption_reasons.append("R2: Venus vargottama in D9 (+1)")
+    # R3: 7L exalted natally
+    if _planet_dignity(planets, seventh_lord) == "exalted":
+        redemption += 1
+        redemption_reasons.append(f"R3: 7L {seventh_lord} exalted (+1)")
+    # R4: Strong 7H Sarvashtakavarga (>= 30)
+    sav_h7 = _sav_bonus(av, h7_si)
+    if sav_h7 > 0:
+        redemption += 1
+        redemption_reasons.append(f"R4: 7H SAV strong ({_SIGNS[h7_si]}) (+1)")
 
-    # ── LAYER 3 — KP 7CSL verdict (independent) ──────────────────
-    csl_verdict, csl_signs = _kp_csl_verdict(kp)
-    csl7 = _get_7csl(kp)
-    factors.append(f"KP: 7CSL={csl7 or 'n/a'} signifies houses {csl_signs} -> {csl_verdict}")
+    for r in redemption_reasons:
+        factors.append(f"STEP 3 REDEMPTION: {r}")
+    if not redemption_reasons:
+        factors.append("STEP 3 REDEMPTION: no rescue factors")
 
-    # Combine with D1+D9
-    if csl_verdict == "DENIED" and verdict_combined == "DENIED":
-        final_verdict = "DENIED"
-    elif csl_verdict == "DENIED":
+    # ── Combine STEP 1+2+3 -> final verdict
+    # KP is primary, D1+D9 cross-validate, redemption can promote
+    parashari_strength = d1_score + d9_bonus  # max 5
+    if kp_gate == "PROMISED":
+        if parashari_strength >= 2:
+            final_verdict = "PROMISED"
+        else:
+            final_verdict = "DELAYED"
+            factors.append("CROSS-VAL: KP says PROMISED but Parashari weak -> DELAYED")
+    elif kp_gate == "DENIED":
+        if redemption >= 2:
+            final_verdict = "DELAYED"
+            factors.append(f"REDEMPTION RESCUE: KP DENIED upgraded to DELAYED ({redemption} factors)")
+        else:
+            final_verdict = "DENIED"
+    elif kp_gate == "DELAYED":
         final_verdict = "DELAYED"
-    elif csl_verdict == "PROMISED" and verdict_combined != "DENIED":
-        final_verdict = "PROMISED"
-    elif verdict_combined == "DENIED" and csl_verdict == "PROMISED":
-        final_verdict = "DELAYED"
-    else:
-        final_verdict = verdict_combined
+        if parashari_strength >= 4 and redemption >= 1:
+            final_verdict = "PROMISED"
+            factors.append("PROMOTE: strong Parashari + redemption -> PROMISED")
+    else:  # MIXED / UNKNOWN
+        if parashari_strength >= 3:
+            final_verdict = "PROMISED"
+        elif parashari_strength >= 2:
+            final_verdict = "DELAYED"
+        else:
+            final_verdict = "DELAYED"
 
-    # Strength band — KP UNKNOWN now penalised (was 1 pt freebie -> now 0)
+    # Strength band — combines all 3 steps
     csl_pts = {"PROMISED": 2, "MIXED": 1, "UNKNOWN": 0, "DENIED": 0}.get(csl_verdict, 0)
-    strength = d1_score + d9_bonus + csl_pts   # max 7 (3 D1 + 2 D9 + 2 KP)
-    if strength >= 6:
+    star_pts = {"PROMISED": 1, "MIXED": 0, "UNKNOWN": 0, "DENIED": 0}.get(star_verdict, 0)
+    strength = d1_score + d9_bonus + csl_pts + star_pts + redemption
+    # max possible: 3 (D1) + 2 (D9) + 2 (CSL) + 1 (Star) + 4 (Redemp) = 12
+    if strength >= 8:
         band = "STRONG"
-    elif strength >= 4:
+    elif strength >= 5:
         band = "MEDIUM"
     else:
         band = "WEAK"
 
-    # Risk flags — collect ALL (not just most severe). risk_flag = top one.
+    # Risk flags — collect ALL
     risk_flags: List[str] = []
     if manglik_status == "Active":
         risk_flags.append("Manglik")
-    if seventh_lord_house in {6, 8, 12}:
+    if seventh_lord_house in _DUSTHANA:
         risk_flags.append("7L afflicted")
     if d1_score == 0:
         risk_flags.append("Karaka weak")
     if csl_verdict == "DENIED":
         risk_flags.append("KP 7CSL denial")
+    if star_verdict == "DENIED":
+        risk_flags.append("KP 7C StarLord denial")
+    if step0["verdict"] == "LATE":
+        risk_flags.append("Late tendency")
     risk_flag: Optional[str] = risk_flags[0] if risk_flags else None
 
-    # Early-exit if denied — skip Layer 4/5
+    # Early-exit if denied — skip STEP 4/5
     if final_verdict == "DENIED":
         return {
             "verdict": "DENIED",
@@ -760,19 +1294,24 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             "risk_flag": risk_flag or "Multiple denials",
             "risk_flags": risk_flags or ["Multiple denials"],
             "factors": factors,
+            "top_3_windows": [],
+            "step0_tendency": step0,
         }
 
-    # ── LAYER 4 — Triple Confluence (Dasha + PD + Transits) ──────
+    # ════════════════════════════════════════════════════════════════
+    # STEP 4 — Dasha + Confluence (VIVAH-7 weighted scoring)
+    # ════════════════════════════════════════════════════════════════
     target_lords = _marriage_target_lords(lagna_si) if lagna_si is not None else {"Venus", "Jupiter"}
     candidate_ads = _scan_cluster_ads(kundli, target_lords, lookback_days=30)
-    factors.append(f"L4: target_lords={sorted(target_lords)}, candidate_ADs={len(candidate_ads)}")
+    factors.append(f"STEP 4: target_lords={sorted(target_lords)}, "
+                   f"candidate_ADs={len(candidate_ads)}")
 
     today = datetime.utcnow()
     windows: List[dict] = []
 
     for ad_blk in candidate_ads:
-        md = ad_blk.get("md")
-        ad = ad_blk.get("ad")
+        md = ad_blk.get("md") or ad_blk.get("md_lord")
+        ad = ad_blk.get("ad") or ad_blk.get("ad_lord")
         ad_start = _parse_dt(ad_blk.get("start"))
         ad_end = _parse_dt(ad_blk.get("end"))
         if not (md and ad and ad_start and ad_end):
@@ -785,44 +1324,147 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         pds = _project_pds(md, ad, ad_start, ad_end,
                            from_dt=from_dt, months_needed=ad_months)
 
+        # Per-dasha-pair pre-computes (don't repeat per PD)
+        md_strength = _dasha_lord_strength(planets, md)
+        ad_strength = _dasha_lord_strength(planets, ad)
+        strength_mult = (md_strength + ad_strength) / 2.0
+        md_retro = _planet_is_retrograde(planets, md)
+        ad_retro = _planet_is_retrograde(planets, ad)
+        md_in_target = md in target_lords
+        ad_in_target = ad in target_lords
+
         for pd_blk in pds:
             pd_start = pd_blk.get("start")
             pd_end = pd_blk.get("end")
             if not (isinstance(pd_start, datetime) and isinstance(pd_end, datetime)):
                 continue
+            pd_lord = pd_blk.get("pd")
             mid = pd_start + (pd_end - pd_start) / 2
 
-            # Score: cluster_hit + jup_hit + sat_hit
+            window_factors: List[str] = []
+
+            # ── A. Cluster hit + AD/PD weight (DOMINANT base)
             cluster_hit = 1
-            if pd_blk.get("pd") in target_lords:
+            if pd_lord in target_lords:
                 cluster_hit = 2
+                window_factors.append(f"PD {pd_lord} in cluster (+1)")
+            adpd_weight = 0
+            if ad_in_target and pd_lord in target_lords:
+                adpd_weight = 3   # DOMINANT: AD+PD both in target
+                window_factors.append(f"AD+PD both in target -> DOMINANT (+3)")
+            elif md_in_target and ad_in_target:
+                adpd_weight = 2
+                window_factors.append("MD+AD both in target (+2)")
+            elif ad_in_target:
+                adpd_weight = 1
 
+            # ── B. Transits (Jupiter, Saturn, Mars)
             transit = _get_transits_at(lagna_si, moon_si, when=mid) if lagna_si is not None else {}
-            jup_hit = _jupiter_on_marriage_house(transit, h7_si, venus_si) if h7_si is not None else False
-            sat_hit = _saturn_seventh_from_moon(transit, moon_si) if moon_si is not None else False
+            jup_score, jup_reason = _jupiter_score_on_7h(transit, h7_si, venus_si) if h7_si is not None else (0, "")
+            sat_score, sat_reason = _saturn_score_on_7h(transit, h7_si, moon_si) if h7_si is not None else (0, "")
+            if jup_reason:
+                window_factors.append(f"+{jup_score} {jup_reason}")
+            if sat_reason:
+                window_factors.append(f"+{sat_score} {sat_reason}")
 
-            score = cluster_hit + (1 if jup_hit else 0) + (1 if sat_hit else 0)
-            if score >= 2:
+            # Double Transit bonus
+            double_transit_bonus = 0
+            if jup_score > 0 and sat_score > 0:
+                double_transit_bonus = 1
+                window_factors.append("DOUBLE TRANSIT bonus (+1)")
+
+            # ── C. Mars trigger (+1 activation only) + conflict flag
+            mars_trig, mars_reason = _mars_trigger_check(
+                transit, h7_si, venus_si, seventh_lord_si) if h7_si is not None else (False, "")
+            mars_bonus = 0
+            mars_sat_conflict = False
+            if mars_trig:
+                mars_bonus = 1
+                window_factors.append(f"+1 Mars TRIGGER ({mars_reason})")
+                if sat_score > 0:
+                    mars_sat_conflict = True
+                    window_factors.append("⚠ Mars+Saturn CONFLICT (push vs delay)")
+
+            # ── D. Retrograde penalty (MD/AD lord)
+            retro_penalty = 0.0
+            if md_retro:
+                retro_penalty -= 0.5
+                window_factors.append(f"-0.5 MD lord {md} retro")
+            if ad_retro:
+                retro_penalty -= 0.5
+                window_factors.append(f"-0.5 AD lord {ad} retro")
+
+            # ── E. Ashtakavarga BAV (Venus bindus in 7H sign)
+            bav_b = _bav_bonus(av, "Venus", h7_si) if h7_si is not None else 0.0
+            if bav_b != 0:
+                window_factors.append(f"{bav_b:+} Venus BAV in 7H ({_SIGNS[h7_si]})")
+
+            # ── F. SAV in 7H sign
+            sav_b = _sav_bonus(av, h7_si) if h7_si is not None else 0.0
+            if sav_b != 0:
+                window_factors.append(f"{sav_b:+} 7H SAV")
+
+            # ── G. Dasha Sandhi (HIGH WEIGHT +1.5)
+            sandhi, sandhi_reason = _is_in_md_sandhi(kundli, mid)
+            sandhi_bonus = 0.0
+            if sandhi:
+                sandhi_bonus = 1.5
+                window_factors.append(f"+1.5 SANDHI ACTIVATION ({sandhi_reason})")
+
+            # ── H. Eclipse delay flag
+            ecl_flag, ecl_reason = _eclipse_in_window(pd_start, pd_end)
+            eclipse_penalty = 0.0
+            if ecl_flag:
+                eclipse_penalty = -1.0
+                window_factors.append(f"-1.0 ECLIPSE DELAY ({ecl_reason})")
+
+            # ── TOTAL: base components, then strength multiplier, then eclipse
+            base = (cluster_hit + adpd_weight
+                    + jup_score + sat_score
+                    + double_transit_bonus
+                    + mars_bonus
+                    + retro_penalty
+                    + bav_b + sav_b
+                    + sandhi_bonus)
+            score = base * strength_mult + eclipse_penalty
+
+            if score >= _WINDOW_MIN_SCORE:
                 windows.append({
-                    "start": pd_start, "end": pd_end, "score": score,
-                    "md": md, "ad": ad, "pd": pd_blk.get("pd"),
-                    "jup": jup_hit, "sat": sat_hit,
+                    "start": pd_start,
+                    "end": pd_end,
+                    "score": round(score, 2),
+                    "raw_base": round(base, 2),
+                    "strength_mult": round(strength_mult, 2),
+                    "md": md, "ad": ad, "pd": pd_lord,
+                    "jup": jup_score > 0,
+                    "sat": sat_score > 0,
+                    "double_transit": jup_score > 0 and sat_score > 0,
+                    "mars_trigger": mars_trig,
+                    "mars_sat_conflict": mars_sat_conflict,
+                    "sandhi": sandhi,
+                    "eclipse_flag": ecl_flag,
+                    "factors": window_factors,
                 })
 
-    factors.append(f"L4: {len(windows)} candidate PD windows after confluence")
+    factors.append(f"STEP 4: {len(windows)} candidate PD windows above threshold "
+                   f"({_WINDOW_MIN_SCORE})")
 
-    # ── LAYER 5 — Reality Filter (age gate) ──────────────────────
+    # ════════════════════════════════════════════════════════════════
+    # STEP 5 — Reality Filter (STEP 0-adjusted age table)
+    # ════════════════════════════════════════════════════════════════
     age = _get_current_age(birth, kundli, current_dasha)
     birth_year = _extract_birth_year(birth)
-    if age is not None:
-        factors.append(f"L5: current_age={age}, birth_year={birth_year}")
+    thresholds = _adjusted_age_thresholds(step0["verdict"])
+    factors.append(f"STEP 5: age={age} birth_year={birth_year} "
+                   f"thresholds={thresholds} (STEP 0 adj for {step0['verdict']})")
 
     valid_windows: List[dict] = []
     blocked_count = 0
     for w in windows:
         predicted_year = w["start"].year
         predicted_age = (predicted_year - birth_year) if (birth_year and birth_year > 0) else None
-        action = _age_filter_action(age, predicted_age) if predicted_age is not None else "OK"
+        action = (_age_filter_action(age, predicted_age, thresholds)
+                  if predicted_age is not None else "OK")
         if action in ("BLOCK", "PUSH_LATER"):
             blocked_count += 1
             continue
@@ -830,54 +1472,89 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         w["predicted_age"] = predicted_age
         valid_windows.append(w)
 
-    factors.append(f"L5: {len(valid_windows)} windows survived (blocked={blocked_count})")
+    factors.append(f"STEP 5: {len(valid_windows)} survived (blocked={blocked_count})")
 
-    # If ALL candidate windows were blocked by Layer 5 (and there WERE
-    # candidates), downgrade verdict to PREMATURE for trust consistency.
-    # Promised marriage exists in the chart, but the engine refuses to
-    # quote a window because the user is currently too young.
+    # If ALL windows blocked & promised -> PREMATURE downgrade
     if windows and not valid_windows and final_verdict == "PROMISED":
         final_verdict = "PREMATURE"
-        factors.append("L5 DOWNGRADE: PROMISED -> PREMATURE (all windows blocked by age gate)")
+        factors.append("STEP 5 DOWNGRADE: PROMISED -> PREMATURE (age gate)")
         risk_flag = risk_flag or "Below marriageable age"
         if "Below marriageable age" not in risk_flags:
             risk_flags.insert(0, "Below marriageable age")
 
-    # Sort by (score desc, start asc) — best scoring + soonest first
+    # Sort by (score desc, start asc)
     valid_windows.sort(key=lambda w: (-w["score"], w["start"]))
+
+    # Pick top 3
+    top_3 = valid_windows[:3]
 
     primary_window = None
     backup_window = None
     key_trigger = None
-    confluence_strength = None  # "STRONG" if score>=3 else "MODERATE"
+    confluence_strength = None
 
     def _trigger_str(w: dict) -> str:
         parts = [f"{w['ad']} AD", f"{w['pd']} PD"]
-        if w["jup"]:
+        if w.get("jup"):
             parts.append("Jupiter on 7H/Venus")
-        if w["sat"]:
+        if w.get("sat"):
             parts.append("Saturn 7th-from-Moon")
+        if w.get("double_transit"):
+            parts.append("DT")
+        if w.get("mars_trigger"):
+            parts.append("Mars trigger")
+        if w.get("sandhi"):
+            parts.append("Sandhi")
         return " + ".join(parts)
 
-    if valid_windows:
-        p = valid_windows[0]
+    if top_3:
+        p = top_3[0]
         primary_window = _format_window(p["start"], p["end"])
         key_trigger = _trigger_str(p)
-        confluence_strength = "STRONG" if p["score"] >= 3 else "MODERATE"
-        factors.append(f"L4 PRIMARY: {primary_window} (score={p['score']}, "
-                       f"{confluence_strength} confluence)")
+        # Contract lock: confluence_strength is "STRONG" | "MODERATE" only
+        # (legacy consumers downstream do not handle "WEAK"). Below MODERATE
+        # we leave it None — the score is still in top_3_windows for
+        # consumers who want it.
+        if p["score"] >= _WINDOW_STRONG_SCORE:
+            confluence_strength = "STRONG"
+        elif p["score"] >= _WINDOW_MEDIUM_SCORE:
+            confluence_strength = "MODERATE"
+        else:
+            confluence_strength = "MODERATE"
+        factors.append(f"STEP 4 PRIMARY: {primary_window} score={p['score']} "
+                       f"({confluence_strength})")
 
-        # Backup = next valid window in a DIFFERENT AD (so user has a
-        # genuinely different timing option, not just a sibling PD).
-        for w in valid_windows[1:]:
+        # Backup = next window in DIFFERENT AD
+        for w in top_3[1:]:
             if w["ad"] != p["ad"]:
                 bk_str = _format_window(w["start"], w["end"])
-                # Disambiguate when calendar months overlap with primary
                 if bk_str == primary_window:
                     bk_str = f"{bk_str} ({w['ad']} AD)"
                 backup_window = bk_str
-                factors.append(f"L4 BACKUP: {backup_window} (score={w['score']}, AD={w['ad']})")
+                factors.append(f"STEP 4 BACKUP: {backup_window} score={w['score']}")
                 break
+        # If all top 3 share same AD, use 2nd as backup (different month)
+        if backup_window is None and len(top_3) >= 2:
+            w = top_3[1]
+            backup_window = _format_window(w["start"], w["end"])
+
+    # Serialize top_3 to plain dicts (datetimes -> isoformat)
+    top_3_serial = []
+    for w in top_3:
+        top_3_serial.append({
+            "window": _format_window(w["start"], w["end"]),
+            "start": w["start"].strftime("%Y-%m-%d"),
+            "end": w["end"].strftime("%Y-%m-%d"),
+            "score": w["score"],
+            "md": w["md"], "ad": w["ad"], "pd": w["pd"],
+            "trigger": _trigger_str(w),
+            "predicted_age": w.get("predicted_age"),
+            "age_action": w.get("age_action"),
+            "sandhi": w.get("sandhi", False),
+            "eclipse_flag": w.get("eclipse_flag", False),
+            "mars_sat_conflict": w.get("mars_sat_conflict", False),
+            "factors": w.get("factors", []),
+        })
 
     return {
         "verdict": final_verdict,
@@ -886,8 +1563,10 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         "backup_window": backup_window,
         "key_trigger": key_trigger,
         "confluence_strength": confluence_strength,
-        "ul_outlook": None,   # Love engine's job, merged at narrator layer
+        "ul_outlook": None,                # Love engine merges this later
         "risk_flag": risk_flag,
         "risk_flags": risk_flags,
         "factors": factors,
+        "top_3_windows": top_3_serial,
+        "step0_tendency": step0,
     }

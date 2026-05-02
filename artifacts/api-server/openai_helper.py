@@ -159,64 +159,7 @@ def _passthrough_marriage_block(*a, **k): return ""  # Phase 2.8.37 stub
 def _validate_marriage_answer(answer_text, engine_block): return answer_text  # Phase 2.8.37 stub
 
 
-def _stock_engine():
-    """Lazy-load deterministic stock-market verdict engine."""
-    from stock_engine import (assess_stock,                     # type: ignore
-                              format_verdict_for_prompt as _fmt_stock,
-                              extract_window_str as _stock_window_str,
-                              classify_stock_question)
-    return assess_stock, _fmt_stock, _stock_window_str, classify_stock_question
-
-
-# ────────────────────────────────────────────────────────────────────
-# Phase 1 prompt-polish constant — single source of truth for the
-# LLM_FULL_CHART_MODE passthrough system intro. Used by:
-#   • _build_messages()     (sync helper, ~L1957)
-#   • ai_ask()              (sync passthrough block, ~L13007)
-#   • ai_ask_stream()       (streaming passthrough, ~L16216)
-# Update this constant in ONE place — all three call sites pick it up.
-# 18 explicit output rules. Phase 2.2 (30 Apr 2026) added:
-#   • Rule 2 PERSONA — name = "Cosmo", never reveal AI / GPT / model name.
-#   • Rule 3 SOURCE — "aapki kundli mere paas hai", never expose Section X.
-# Phase 2.3 Tier-1 (30 Apr 2026) added:
-#   • Rule 12 GURU-TONE — warm devotee/jajman address, "aap" not "tum".
-#   • Rule 13 LAGNA-AWARE — every meaningful reply subtly refs user's lagna.
-#   • Rule 14 NO-HEDGING — confident guru voice; hedge-words banned.
-#   • Rule 15 NO-AI-TELLS — explicit forbidden phrases ("As an AI",
-#     "consult a professional astrologer", "Hope this helps", etc.).
-#   • _scrub_ai_tells() defensive post-processor: belt-and-suspenders
-#     safety net that drops any sentence still containing an AI tell
-#     before the answer reaches the devotee.
-# Phase 2.4 Tier-1.5 (01 May 2026) added — fixes question→house leak
-# (e.g. friend question pulled 9H, sibling question pulled 11H, etc.):
-#   • Rule 6 EXPANDED — 17-topic classical bhava+karaka cheat-sheet
-#     (was 5 topics: Health/Career/Marriage/Wealth/General). Now also
-#     covers friends, elder/younger sibling, children, mother, father,
-#     home/property, education, higher studies, court, foreign travel,
-#     spirituality.
-#   • Rule 16 STRICT FOCUS — if a TOPIC-LOCK block appears at top of
-#     user message, it overrides Rule 6 and the LLM must cite ONLY
-#     the houses/lords/karakas listed (and never the "DO NOT cite"
-#     houses).
-#   • Rule 17 DASHA-FIRST TIMING — every detailed answer must link
-#     current MD-AD lord to the topic-house/lord (this is what gives
-#     each answer its TIMING + PERSONALIZATION).
-# Phase 2.5 (01 May 2026) added:
-#   • Rule 18 DEEP-CHART FRAMEWORK — every detailed answer must
-#     internally cover a 7-layer scholarly checklist (Karaka,
-#     Bhava, Bhavesh, Karaka-se-Bhava/Bhavat-Bhavam, D9 Navamsha
-#     confirmation, Dosh check, Dasha+Gochar timing). Bullets stay
-#     3-4 (Rule 5) — layers are blended into them, not numbered as
-#     headers. This pushes the answer from "basic 3-step" to full
-#     classical BPHS guru-level depth.
-#   • _detect_topic() + _build_topic_lock() — see Phase 2.4 block
-#     below `_PT_SYS_INTRO` for the topic-rules + helpers. Wired at
-#     all 3 passthrough sites (sync `ai_ask`, stream `ai_ask_stream`,
-#     `_build_messages`) — lock is PREPENDED to the user message so
-#     system prompt stays cacheable.
-# Also fixed Phase 2.1 numbering bug (two "Rule 4"s — FOCUS + HISTORY).
-# See replit.md "Phase 1 / 2 / 2.1 / 2.2 / 2.3 / 2.4 Prompt Polish" entries.
-# ────────────────────────────────────────────────────────────────────
+def _stock_engine(): return (lambda *a, **k: None, lambda *a, **k: "", lambda *a, **k: "", lambda *a, **k: "")  # Phase 2.8.38 stub
 _PT_SYS_INTRO = (
     "Tum ek anubhavi Vedic Jyotishi ho jo devotee se sidhe baat "
     "kar rahe ho. Devotee ka prashn user message mein hai. Niche "
@@ -1759,47 +1702,7 @@ def _scrub_ai_tells(text: str) -> str:
 # Stock-question gate (regex). Triggers stock_engine ONLY when the question
 # is genuinely about share-market / trading / investing — not for generic
 # wealth/loan/property finance questions that the engine isn't designed for.
-_STOCK_QUESTION_RX = __import__("re").compile(
-    # Anchored stock vocabulary only. Bare "bazar" / "व्यापार" are NOT here
-    # because they false-trigger generic business-and-market questions; we
-    # require explicit share/stock/equity/fund/trading anchors instead.
-    r"(?:\b(stocks?|shares?|nifty|sensex|share[- ]?market|stock[- ]?market|"
-    r"trading|trader|broker(age)?|equity|equities|portfolio|demat|"
-    r"intraday|swing|scalping|fno|futures?|options?|derivative|"
-    r"crypto|bitcoin|ethereum|dogecoin|nft|"
-    # NOTE: SIP / mutual-funds / lump-sum / generic invest* DELIBERATELY
-    # REMOVED from stock vocab. Those are long-term wealth instruments
-    # (handled by wealth_engine), not active trading. Active-trading
-    # anchors above (stocks/shares/intraday/F&O/etc.) still route here.
-    r"share[- ]?bazar|stock[- ]?bazar|shaire[- ]?bazaar|shaire[- ]?bazar|"
-    # Trading-context bigrams that are unambiguously stock-market
-    # (not generic life-finance). DELIBERATELY EXCLUDED because they
-    # false-trigger on non-stock contexts:
-    #   • "risk management" (life/health/work)
-    #   • "capital protection" (insurance/savings)
-    #   • bare "market mein aau/jaau/jaana" (sabzi/local market)
-    # The kept set requires a stock-trading-specific noun phrase or
-    # an explicit re-entry verb ("dobara/wapas/wapsi") that civilians
-    # don't use for sabzi-market visits.
-    r"profit[- ]?booking|stop[- ]?loss|trailing[- ]?stop|"
-    r"risk[- ]?reward|position[- ]?sizing|"
-    r"max(?:imum)?[- ]?drawdown|hedging|"
-    r"average[- ]?down|margin[- ]?call|wealth[- ]?window|"
-    r"dhan[- ]?yog|dhana[- ]?yog)\b"
-    r"|f&o|F&O"
-    # Market re-entry / wapsi phrasings — unambiguous trading lingo.
-    # "dobara market" (returning to market after exit) and
-    # "market mein wapsi/wapas/wapis/return" are trading-specific;
-    # nobody uses these for sabzi-market or local-market trips.
-    r"|\bdobara\s+market\b"
-    r"|\bmarket\s+(?:me|mein|m[ae])\s+(?:wapsi|wapas|wapis|return)\b"
-    # "paisa lagana" (to deploy capital) — narrow trading verb that's
-    # almost always about investing/trading. Allow inflections.
-    r"|\bpaisa\s+(?:laga(?:na|u|ye|yi|ya)?|lagaa(?:na|u|ye|yi|ya)?|"
-    r"lag\s+(?:gaya|gayi))\b"
-    r"|शेयर|शेयर बाज़ार|निवेश)",
-    __import__("re").IGNORECASE,
-)
+_STOCK_QUESTION_RX = type("_NoMatch", (), {"search": staticmethod(lambda *a, **k: None)})()  # Phase 2.8.38 stub
 
 
 # Wealth-instrument override (NARROWED). Matches ONLY explicit long-term
@@ -1809,47 +1712,16 @@ _STOCK_QUESTION_RX = __import__("re").compile(
 # legitimate stock queries like "intraday trading expense kitna hai".
 # Generic savings/kharcha vocabulary still routes to wealth via
 # `_WEALTH_QUESTION_RX` directly; it just doesn't suppress stock here.
-_WEALTH_INSTRUMENT_STRICT_RX = __import__("re").compile(
-    r"\b(?:sip|sips|mutual[- ]?funds?|\bmf\b|\bmfs\b|"
-    r"ppf|nps|nsc|kvp|elss|"
-    r"\bfd\b|\bfds\b|fixed[- ]?deposit|fixed[- ]?deposits|"
-    r"\brd\b|\brds\b|recurring[- ]?deposit|"
-    r"insurance|life[- ]?insurance|term[- ]?insurance|health[- ]?insurance|"
-    r"sovereign[- ]?gold|gold[- ]?bond)\b",
-    __import__("re").IGNORECASE,
-)
+_WEALTH_INSTRUMENT_STRICT_RX = type("_NoMatch", (), {"search": staticmethod(lambda *a, **k: None)})()  # Phase 2.8.38 stub
 
 # Strong stock anchors. If ANY of these explicitly appear, the question is
 # a real stock-trading question — even when SIP/MF is also mentioned (e.g.
 # "share market vs SIP — kahan invest karu" → user genuinely wants both
 # compared, route to stock since stock has the comparison framework).
-_STRONG_STOCK_ANCHOR_RX = __import__("re").compile(
-    r"\b(?:stocks?|shares?|nifty|sensex|share[- ]?market|stock[- ]?market|"
-    r"intraday|swing|scalping|fno|futures?|options?|derivative|"
-    r"equity|equities|portfolio|demat|trading|trader|broker(?:age)?|"
-    r"crypto|bitcoin|ethereum)\b|f&o|F&O",
-    __import__("re").IGNORECASE,
-)
+_STRONG_STOCK_ANCHOR_RX = type("_NoMatch", (), {"search": staticmethod(lambda *a, **k: None)})()  # Phase 2.8.38 stub
 
 
-def _is_stock_question(text: str) -> bool:
-    """True iff text matches the stock trigger gate AND is not over-ridden
-    by a wealth-instrument-only context. Override fires only when the user
-    explicitly names a wealth instrument (SIP/MF/PPF/etc.) AND no strong
-    stock anchor (intraday/nifty/share market/etc.) coexists. This keeps
-    'SIP mein paisa lagana?' routed to wealth, while 'share market vs SIP
-    kya behtar?' stays with stock."""
-    if not isinstance(text, str) or not text.strip():
-        return False
-    if not _STOCK_QUESTION_RX.search(text):
-        return False
-    # Stock RX matched → check for the wealth-instrument override
-    if (_WEALTH_INSTRUMENT_STRICT_RX.search(text)
-            and not _STRONG_STOCK_ANCHOR_RX.search(text)):
-        return False
-    return True
-
-
+def _is_stock_question(text: str) -> bool: return False  # Phase 2.8.38 stub
 def _love_engine():
     """Lazy-load deterministic love & relationship verdict engine."""
     from love_engine import (assess_love,                       # type: ignore

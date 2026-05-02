@@ -13793,6 +13793,15 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     #   • _use_wealth_structured_path == False — wealth json_schema path
     #     uses response_format=json_schema; injecting prose-heavy hint
     #     would risk schema violations (architect: MEDIUM, Phase 7.0).
+    #   • Phase 2.8.44 HALLUCINATION GATE — _qu_conf >= 0.7. The
+    #     `hidden_intent` field is LLM-generated free text (not a
+    #     bounded enum), so on low-confidence classifications it can
+    #     hallucinate a wrong "true intent" that then drives the entire
+    #     narrator answer. We now require the OVERALL classifier
+    #     confidence to be at least 0.7 before promoting hidden_intent
+    #     from telemetry into an actual prompt driver. Below 0.7 the
+    #     field still appears in telemetry (`question_intent` payload
+    #     and 1.UNDERSTANDING trace) but is NOT injected into messages.
     #
     # Phase 5.0 INTERPLAY (intentional): when phase50 minimal-prompt is
     # active, this injection ADDS one ~25-line system message back to
@@ -13800,10 +13809,16 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # Phase 7.0 — phase50 minimal-prompt assumed "engine facts + user
     # question is enough"; Phase 7.0 disagrees for tendency/overview
     # asks where intent context is the missing ingredient.
+    try:
+        _qu_conf_f = float(_qu_conf) if _qu_conf is not None else 0.0
+    except (TypeError, ValueError):
+        _qu_conf_f = 0.0
+    _hidden_conf_ok = _qu_conf_f >= 0.7
     if (mode == "astro"
             and isinstance(_qu_hidden_intent, str)
             and _qu_hidden_intent.strip()
-            and not _use_wealth_structured_path):
+            and not _use_wealth_structured_path
+            and _hidden_conf_ok):
         try:
             # Phase 7.1 — pull richer slots from the classifier output so
             # the hint can include focus/timeframe/depth/user_keywords on
@@ -13850,6 +13865,19 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         except Exception as _ti_exc:
             _trace(req_id, "2da.TRUE_INTENT_INJECT_FAIL",
                    {"error": str(_ti_exc)[:200]})
+    elif (mode == "astro"
+          and isinstance(_qu_hidden_intent, str)
+          and _qu_hidden_intent.strip()
+          and not _use_wealth_structured_path):
+        # Phase 2.8.44 — hidden_intent extracted but classifier
+        # confidence < 0.7 → skip prompt promotion to avoid
+        # hallucination-driven narrator drift. Telemetry-only.
+        _trace(req_id, "2da.TRUE_INTENT_SKIPPED_LOW_CONF", {
+            "hidden_intent": _qu_hidden_intent,
+            "qu_confidence": _qu_conf_f,
+            "threshold":     0.7,
+            "reason":        "low_confidence_hallucination_gate",
+        })
 
     if not _skip_contract_reason:
         _supertype_tag = (question_supertype or {}).get("supertype") or "GENERAL_ANALYSIS"

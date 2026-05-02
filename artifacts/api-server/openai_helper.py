@@ -2490,18 +2490,28 @@ def _detect_question_lang(question: str, fallback: str) -> str:
 # applies to ALL paths (single-intent OpenAI, structured wealth cards,
 # rule-engine fallback) so we run it as a final scrub on the response text.
 # ─────────────────────────────────────────────────────────────────────────────
-# Phase 2.8.45 — moved to narrator_cosmo/hinglishify.py. Re-imported here
-# so existing call sites keep working:
-#   - openai_helper internal calls to _hinglishify_zodiac (zero-cost)
-#   - flask_app.py L5815: `from openai_helper import hinglishify_response`
-# The constants (_ZODIAC_EN_TO_HI, _ZODIAC_RX) are also re-exported in case
-# any future code wants to import them via the openai_helper namespace.
-from narrator_cosmo.hinglishify import (  # noqa: F401
-    _ZODIAC_EN_TO_HI,
-    _ZODIAC_RX,
-    _hinglishify_zodiac,
-    hinglishify_response,
-)
+# Phase 2.8.46 — narrator_cosmo/hinglishify.py PERMANENTLY DELETED on
+# explicit user direction ("validator chodke sab remove karo permanent
+# agar kuch baad me chahiye me add karunga"). The zodiac EN→Hinglish
+# scrubber surface is now a passthrough stub. flask_app.py L5815 still
+# does `from openai_helper import hinglishify_response, _resolve_response_lang`
+# — kept as a no-op so that import keeps working without code change at
+# the call site. Functional consequence (user-accepted regression): if a
+# Hinglish-locale response contains English zodiac names like "Aries" or
+# "Cancer", they will reach the user unscrubbed. To restore, re-create
+# narrator_cosmo/hinglishify.py and replace these stubs with re-imports.
+_ZODIAC_EN_TO_HI: dict[str, str] = {}  # empty — no replacement table
+_ZODIAC_RX = None  # type: ignore[assignment]
+
+
+def _hinglishify_zodiac(text, lang):  # noqa: D401
+    """Phase 2.8.46 stub — passthrough (returns text unchanged)."""
+    return text
+
+
+def hinglishify_response(result, lang):  # noqa: D401
+    """Phase 2.8.46 stub — passthrough (returns result unchanged)."""
+    return result
 
 
 def _resolve_response_lang(question: str, lang: str,
@@ -18697,55 +18707,15 @@ def _v2_run_card(intent_summary: str,
                 flush=True,
             )
 
-    # ── P3: AI Mouth — reshape into conversational diagnostic card ─────────
-    if os.environ.get("NARRATOR_V2_ENABLED", "1") != "0":
-        try:
-            from narrator_v2 import (  # local import
-                compose_card_narrative,
-                NarratorV2Error,
-            )
-            try:
-                card = compose_card_narrative(
-                    intent_summary  = intent_summary,
-                    intent_bucket   = intent_bucket,
-                    intent_facts    = intent_facts or {},
-                    raw_engine_text = raw_engine_text,
-                    language        = narrator_lang,
-                    emotional_tone  = emotional_tone,
-                    intent_domain   = intent_domain,
-                )
-                client_card = card.to_client_dict()
-                # Compose final card payload for the client.
-                final_text = (
-                    f"{client_card['verdict_tag']}\n\n"
-                    f"{client_card['narrative']}"
-                )
-                if client_card.get("remedy_line"):
-                    final_text += f"\n\n{client_card['remedy_line']}"
-                if client_card.get("advisor_line"):
-                    final_text += f"\n\n{client_card['advisor_line']}"
-                return {
-                    "intent_label":   intent_label,
-                    "intent_bucket":  intent_bucket,
-                    "intent_summary": intent_summary,
-                    "verdict_tag":    client_card["verdict_tag"],
-                    "narrative":      client_card["narrative"],
-                    "remedy_line":    client_card.get("remedy_line", ""),
-                    "advisor_line":   client_card.get("advisor_line", ""),
-                    "text":           final_text,
-                    "topic":          raw_topic,
-                    "confidence":     raw_confidence,
-                    "source":         "ai_v2_narrator",
-                    "follow_ups":     raw_followups,
-                    "narrator_latency_ms": card.latency_ms,
-                }
-            except NarratorV2Error as nexc:
-                # Narrator failed — fall back to raw engine text so user
-                # still sees something. Mark source so caller can detect.
-                print(f"[ai_ask_v2] narrator_v2 failed → raw engine text "
-                      f"({nexc})", flush=True)
-        except Exception as outer:
-            print(f"[ai_ask_v2] narrator_v2 outer error: {outer}", flush=True)
+    # ── P3: AI Mouth — DELETED (Phase 2.8.46 user-approved permanent removal)
+    # narrator_v2 reshape step (compose_card_narrative) was deleted along
+    # with the narrator_v2 module and its narrator_cosmo/narrator_v2.py
+    # successor. This branch now falls straight through to the raw engine
+    # text fallback below — same behavior as a NarratorV2Error in the old
+    # code path. The NARRATOR_V2_ENABLED env var is now a no-op and the
+    # `ai_v2_narrator` source value will never be emitted again.
+    # User direction: "validator chodke sab remove karo permanent agar kuch
+    # baad me chahiye me add karunga" — explicit deletion authorization.
 
     # Fallback: return the raw engine text as a non-conversational card.
     return {

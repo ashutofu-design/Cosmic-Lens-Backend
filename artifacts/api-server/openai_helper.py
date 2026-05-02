@@ -433,26 +433,11 @@ if _brevity_mode_enabled():
 # ────────────────────────────────────────────────────────────────────
 import re as _re_topic  # local alias to avoid module-level collision
 
-# Whole-sign lords (BPHS Ch.5). Sanskrit names so the lock block
-# matches the rest of the prompt's Hinglish style.
-_TOPIC_SIGN_LORDS = (
-    "Mangal", "Shukra", "Budh", "Chandra", "Surya", "Budh",
-    "Shukra", "Mangal", "Guru", "Shani", "Shani", "Guru",
-)
-_TOPIC_SIGN_ALIASES = {
-    "mesh": 0, "mesha": 0, "aries": 0,
-    "vrish": 1, "vrishabha": 1, "vrushabh": 1, "taurus": 1,
-    "mithun": 2, "mithuna": 2, "gemini": 2,
-    "kark": 3, "karka": 3, "cancer": 3,
-    "simh": 4, "simha": 4, "leo": 4,
-    "kanya": 5, "virgo": 5,
-    "tula": 6, "libra": 6,
-    "vrishchik": 7, "vrishchika": 7, "scorpio": 7,
-    "dhanu": 8, "dhanus": 8, "sagittarius": 8,
-    "makar": 9, "makara": 9, "capricorn": 9,
-    "kumbh": 10, "kumbha": 10, "aquarius": 10,
-    "meen": 11, "meena": 11, "pisces": 11,
-}
+# Phase 2.8.49 - _TOPIC_SIGN_LORDS + _TOPIC_SIGN_ALIASES moved to
+# narrator_cosmo/prompt_builders.py alongside the topic helpers and
+# _build_topic_lock that were the only consumers. Re-imported here so
+# any future caller that grabs them via openai_helper still works.
+from narrator_cosmo import _TOPIC_SIGN_LORDS, _TOPIC_SIGN_ALIASES  # noqa: F401
 
 # Topic rules — ORDERED. First match wins, so the more specific
 # patterns (elder/younger sibling) MUST come before the generic
@@ -815,78 +800,22 @@ def _detect_topic(question):
     return matched[0]
 
 
-def _topic_lagna_sign_idx(kundli):
-    """Extract lagna sign 0-11 from kundli, or None if missing."""
-    if not isinstance(kundli, dict):
-        return None
-    asc = kundli.get("ascendant") or kundli.get("lagna")
-    if isinstance(asc, dict):
-        asc = asc.get("sign") or asc.get("name")
-    if not isinstance(asc, str):
-        return None
-    return _TOPIC_SIGN_ALIASES.get(asc.strip().lower())
+# Phase 2.8.49 - _topic_lagna_sign_idx, _topic_house_lord,
+# _topic_current_dasha, AND _build_topic_lock all moved to
+# narrator_cosmo/prompt_builders.py. Body bit-for-bit preserved; only
+# circular-dep avoidance via lazy `from openai_helper import
+# _brevity_mode_enabled` inside _build_topic_lock changed. Re-imported
+# here so external callers that do `from openai_helper import ...` keep
+# working unchanged.
+from narrator_cosmo import (  # noqa: F401
+    _topic_lagna_sign_idx,
+    _topic_house_lord,
+    _topic_current_dasha,
+    _build_topic_lock,
+)
 
 
-def _topic_house_lord(kundli, house_num):
-    """Whole-sign lord of `house_num` (1-12) for this lagna. '?' if unknown."""
-    asc_idx = _topic_lagna_sign_idx(kundli)
-    if (asc_idx is None
-            or not isinstance(house_num, int)
-            or not 1 <= house_num <= 12):
-        return "?"
-    house_sign_idx = (asc_idx + house_num - 1) % 12
-    return _TOPIC_SIGN_LORDS[house_sign_idx]
-
-
-def _topic_current_dasha(kundli):
-    """Returns ('MD-lord', 'AD-lord') for today, or ('?', '?').
-
-    Reads `kundli["currentDasha"]` first (same shape `kundli_full_context.py`
-    consumes via `cd.get("maha")` + `cd.get("antar")`). Falls back to the
-    `kundli["dashas"]` Vimshottari tree walk if `currentDasha` is missing
-    or malformed — this preserves Phase 2.4 telemetry on legacy charts.
-    """
-    if not isinstance(kundli, dict):
-        return ("?", "?")
-    # Primary path — the modern `currentDasha` shape used by
-    # kundli_full_context._section_dasha (line 311+).
-    cd = kundli.get("currentDasha")
-    if isinstance(cd, dict):
-        md = cd.get("maha")
-        ad = cd.get("antar")
-        if isinstance(md, str) and md.strip():
-            return (md.strip(), (ad.strip() if isinstance(ad, str) and ad.strip() else "?"))
-    # Fallback path — walk the dashas tree by today's date.
-    dashas = kundli.get("dashas")
-    if not isinstance(dashas, list) or not dashas:
-        return ("?", "?")
-    import datetime as _dt
-    today = _dt.date.today().isoformat()
-    md_planet = "?"
-    ad_planet = "?"
-    for md in dashas:
-        if not isinstance(md, dict):
-            continue
-        s, e = md.get("startDate"), md.get("endDate")
-        if not (isinstance(s, str) and isinstance(e, str)):
-            continue
-        if s <= today < e:
-            md_planet = md.get("planet") or "?"
-            subs = md.get("subDashas")
-            if isinstance(subs, list):
-                for ad in subs:
-                    if not isinstance(ad, dict):
-                        continue
-                    s2, e2 = ad.get("startDate"), ad.get("endDate")
-                    if (isinstance(s2, str) and isinstance(e2, str)
-                            and s2 <= today < e2):
-                        ad_planet = ad.get("planet") or "?"
-                        break
-            break
-    return (md_planet, ad_planet)
-
-
-def _build_topic_lock(rule, kundli):
+def __unused_build_topic_lock(rule, kundli):  # pragma: no cover
     """Compose the TOPIC-LOCK block in Hinglish. Returns '' on any failure.
 
     The block is PREPENDED to the user message (not system prompt) so
@@ -1006,9 +935,12 @@ def _build_topic_lock(rule, kundli):
 # ────────────────────────────────────────────────────────────────────
 # Phase 2.8.43 — _EMOTION_TONE_HINT_HN + _build_emotion_tone_hint
 # moved to `ask_cosmo/tone_hints.py` alongside the SQU classifier.
-# Re-imported here so the rest of openai_helper.py (passthrough
-# block + post-Phase 5.0 append site) keeps working unchanged.
-from ask_cosmo import _EMOTION_TONE_HINT_HN, _build_emotion_tone_hint  # noqa: F401
+# Phase 2.8.49 — relocated to `narrator_cosmo/tone_hints.py` because
+# tone-hints are response-shaping (narrator side), not question
+# classification (ask side). `ask_cosmo/tone_hints.py` remains as a
+# back-compat shim. Re-imported here so the passthrough block + the
+# post-Phase 5.0 append site keep working unchanged.
+from narrator_cosmo import _EMOTION_TONE_HINT_HN, _build_emotion_tone_hint  # noqa: F401
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -1618,12 +1550,21 @@ def _ym_human_w(ym: str) -> str:
         return ""
 
 
-def _build_wealth_structured_system_prompt(verdict_obj: dict,
+# Phase 2.8.49 - _build_wealth_structured_system_prompt moved to
+# narrator_cosmo/prompt_builders.py. Body bit-for-bit preserved; only
+# circular-dep avoidance via lazy `from openai_helper import
+# _WEALTH_VERDICT_TAG_MAP, _ym_human_w` inside the function changed.
+# Re-imported here so external callers (treatment_playbook.py docstring,
+# any future caller) that do `from openai_helper import ...` keep working.
+from narrator_cosmo import _build_wealth_structured_system_prompt  # noqa: F401
+
+
+def __unused_build_wealth_structured_system_prompt(verdict_obj: dict,
                                            emotional_tone: str = "neutral",
                                            intent_domain: str = "wealth",
                                            ask_types: list | None = None,
                                            narrator_lang: str = "hn",
-                                           has_recovery_subask: bool = False) -> str:
+                                           has_recovery_subask: bool = False) -> str:  # pragma: no cover
     """Compact narrator-locked prompt for wealth structured-output mode.
     Replaces the 100+ line verbose WEALTH NARRATOR OVERRIDE with a focused
     facts-only prompt that fits in ~40 lines and demands strict JSON.
@@ -2490,28 +2431,28 @@ def _detect_question_lang(question: str, fallback: str) -> str:
 # applies to ALL paths (single-intent OpenAI, structured wealth cards,
 # rule-engine fallback) so we run it as a final scrub on the response text.
 # ─────────────────────────────────────────────────────────────────────────────
-# Phase 2.8.46 — narrator_cosmo/hinglishify.py PERMANENTLY DELETED on
-# explicit user direction ("validator chodke sab remove karo permanent
-# agar kuch baad me chahiye me add karunga"). The zodiac EN→Hinglish
-# scrubber surface is now a passthrough stub. flask_app.py L5815 still
-# does `from openai_helper import hinglishify_response, _resolve_response_lang`
-# — kept as a no-op so that import keeps working without code change at
+# Phase 2.8.46 - narrator_cosmo/hinglishify.py PERMANENTLY DELETED on
+# explicit user direction. The zodiac EN->Hinglish scrubber surface is
+# now a passthrough stub. flask_app.py L5815 still does
+# `from openai_helper import hinglishify_response, _resolve_response_lang`
+# - kept as a no-op so that import keeps working without code change at
 # the call site. Functional consequence (user-accepted regression): if a
-# Hinglish-locale response contains English zodiac names like "Aries" or
-# "Cancer", they will reach the user unscrubbed. To restore, re-create
-# narrator_cosmo/hinglishify.py and replace these stubs with re-imports.
-_ZODIAC_EN_TO_HI: dict[str, str] = {}  # empty — no replacement table
-_ZODIAC_RX = None  # type: ignore[assignment]
-
-
-def _hinglishify_zodiac(text, lang):  # noqa: D401
-    """Phase 2.8.46 stub — passthrough (returns text unchanged)."""
-    return text
-
-
-def hinglishify_response(result, lang):  # noqa: D401
-    """Phase 2.8.46 stub — passthrough (returns result unchanged)."""
-    return result
+# Hinglish-locale response contains English zodiac names like "Aries"
+# or "Cancer", they will reach the user unscrubbed.
+#
+# Phase 2.8.49 - the dead passthrough stubs were *moved* out of this
+# file into `narrator_cosmo/hinglishify_stubs.py` so the entire
+# narrator-shaping surface lives in one place. Re-imported here so the
+# `from openai_helper import hinglishify_response` import contract
+# stays intact. To restore real Hinglish scrubbing, replace the stub
+# bodies in `narrator_cosmo/hinglishify_stubs.py` with the real
+# implementation - no further changes needed at the call sites.
+from narrator_cosmo import (  # noqa: F401
+    _ZODIAC_EN_TO_HI,
+    _ZODIAC_RX,
+    _hinglishify_zodiac,
+    hinglishify_response,
+)
 
 
 def _resolve_response_lang(question: str, lang: str,
@@ -8838,7 +8779,15 @@ def _build_supertype_contract(supertype: str,
 # message right BEFORE the per-supertype contract install so the
 # contract still wins recency, but the LLM sees the user's true
 # intent as context.
-def _build_true_intent_hint(
+# Phase 2.8.49 - _build_true_intent_hint moved to
+# narrator_cosmo/prompt_builders.py. Pure function (no openai_helper
+# deps), so no lazy imports needed inside body. Re-imported here so
+# external callers (ask_cosmo/understanding.py docstring + any future
+# caller) doing `from openai_helper import ...` keep working.
+from narrator_cosmo import _build_true_intent_hint  # noqa: F401
+
+
+def __unused_build_true_intent_hint(
     hidden_intent: str,
     question: str,
     focus: Optional[str] = None,
@@ -8846,7 +8795,7 @@ def _build_true_intent_hint(
     depth: Optional[str] = None,
     user_keywords: Optional[list] = None,
     archetype: Optional[str] = None,
-) -> str:
+) -> str:  # pragma: no cover
     """Phase 7.0 / 7.1 / 7.3 — return a system-message string promoting
     the classifier-extracted intent + slots + archetype from telemetry
     into a response-shaping rule.
@@ -9258,12 +9207,20 @@ def _phase74_retry_threshold() -> float:
     return max(0.0, min(1.0, v))
 
 
-def _build_repair_prompt(
+# Phase 2.8.49 - _build_repair_prompt moved to
+# narrator_cosmo/prompt_builders.py. Body bit-for-bit preserved; only
+# circular-dep avoidance via lazy `from openai_helper import
+# _PHASE74_REPAIRABLE_CHECKS` inside the function changed. Re-imported
+# here so internal callers (_run_repair_retry below) keep working.
+from narrator_cosmo import _build_repair_prompt  # noqa: F401
+
+
+def __unused_build_repair_prompt(
     question: str,
     original_answer: str,
     qu: Optional[dict],
     verify_result: dict,
-) -> Optional[list[dict]]:
+) -> Optional[list[dict]]:  # pragma: no cover
     """Phase 7.4 — build a tight repair prompt for the failed checks.
 
     Returns a `messages` list (system + user) ready for

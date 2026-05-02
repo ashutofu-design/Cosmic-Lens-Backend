@@ -1002,64 +1002,11 @@ def _build_topic_lock(rule, kundli):
 # Returns "" for neutral / excitement / unknown emotion → prompt is
 # byte-identical to pre-2.8.42 behaviour, preserving prompt-cache hits.
 # ────────────────────────────────────────────────────────────────────
-_EMOTION_TONE_HINT_HN = {
-    "anxiety": (
-        "User pareshan / anxious feel kar raha hai. Pehli 1 line "
-        "REASSURANCE do (jaise: 'Aaram se, dekho — ghabraane ki baat "
-        "nahi'), uske baad hi facts batao. Tone: shaant, supportive."
-    ),
-    "frustration": (
-        "User tang aa chuka hai / frustrated hai. Pehli 1 line uski "
-        "feeling VALIDATE karo (jaise: 'Samajh raha hu — ye situation "
-        "real mein thakaa deti hai'), fir solution-oriented answer."
-    ),
-    "sadness": (
-        "User udaas hai. Gentle empathy se shuru karo (1 line), fir "
-        "answer dete waqt ek hope-anchor zaroor rakhna (kuch positive "
-        "engine-fact se justified)."
-    ),
-    "anger": (
-        "User gussa / irritated hai. Pehle uski baat ACKNOWLEDGE karo "
-        "('Samjha — ye annoying hai'), defensive mat hona, balanced "
-        "view do. Lecture mat do."
-    ),
-    "confusion": (
-        "User confused hai. Har point CLEAN single-thought sentences "
-        "mein likho. Jargon avoid karo. Ek-ek concept simple example "
-        "ke saath. Speed slow rakho."
-    ),
-}
-
-
-def _build_emotion_tone_hint(emotion, urgency = "medium") -> str:
-    """Phase 2.8.42 — compose tone-hint block for the system prompt.
-
-    Returns '' for neutral / excitement / unknown emotion so the prompt
-    stays cache-friendly in the common path. When emotion is one of
-    the 5 negative-affect labels, returns a small block that nudges
-    narrator opening tone WITHOUT changing engine facts or routing.
-
-    `urgency='high'` adds a brief tail nudging concise + immediate
-    action focus; otherwise no tail (medium/low = default pacing).
-    """
-    try:
-        e = (emotion or "").strip().lower()
-        hint = _EMOTION_TONE_HINT_HN.get(e)
-        if not hint:
-            return ""
-        u = (urgency or "medium").strip().lower()
-        urgency_tail = ""
-        if u == "high":
-            urgency_tail = (
-                " Urgency HIGH — answer ko concise rakho aur immediate "
-                "next-step (1 actionable line) zaroor do."
-            )
-        return (
-            "\n[EMOTION-AWARE TONE — Phase 2.8.42]\n"
-            f"{hint}{urgency_tail}\n"
-        )
-    except Exception:
-        return ""
+# Phase 2.8.43 — _EMOTION_TONE_HINT_HN + _build_emotion_tone_hint
+# moved to `ask_cosmo/tone_hints.py` alongside the SQU classifier.
+# Re-imported here so the rest of openai_helper.py (passthrough
+# block + post-Phase 5.0 append site) keeps working unchanged.
+from ask_cosmo import _EMOTION_TONE_HINT_HN, _build_emotion_tone_hint  # noqa: F401
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -13079,7 +13026,8 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # the emotion-aware tone hint and cleaned-q user message; without
     # this hoist those vars were undefined → NameError → silent
     # fallback to legacy ai_ask body on every passthrough attempt.
-    from question_understanding import (
+    # Phase 2.8.43 — SQU classifier moved to `ask_cosmo` package.
+    from ask_cosmo import (
         understand_question, supertype_for, has_recovery_subask,
     )
     _qu = understand_question(question)
@@ -13440,7 +13388,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # from the kundli — even if the AI classifier marked topic=general.
     if _early_mode == "general":
         try:
-            from question_understanding import is_personal_chart_question
+            from ask_cosmo import is_personal_chart_question
             if is_personal_chart_question(question):
                 _early_mode = "astro"
                 _early_reason = (f"qu intent={_qu_intent} topic={_qu_topic} "
@@ -14455,7 +14403,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         # validator's per-topic bucket doesn't cover this reasoning path,
         # so it strips the very tokens the user needs to see. Soften.
         try:
-            from question_understanding import _WHY_LEADING_RX as _why_rx
+            from ask_cosmo import _WHY_LEADING_RX as _why_rx
             _why_leading = bool(_why_rx.search(question or ""))
         except Exception:
             _why_leading = False
@@ -16702,7 +16650,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
         return
 
     # Sprint-26: SINGLE AI understanding call — same source of truth as ai_ask.
-    from question_understanding import understand_question, supertype_for
+    from ask_cosmo import understand_question, supertype_for
     _qu = understand_question(question)
     # Phase 4.1 Fix-P — telemetry parity with ai_ask (non-stream) for the
     # classifier sanity-layer override decision. Stream path does not yet
@@ -16736,7 +16684,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     # Sprint-26 Fix-O — Personal-chart override (mirror of ai_ask path).
     if mode == "general":
         try:
-            from question_understanding import is_personal_chart_question
+            from ask_cosmo import is_personal_chart_question
             if is_personal_chart_question(question):
                 mode = "astro"
                 _mode_reason += " → FORCED astro (personal-chart anchor, Fix-O)"

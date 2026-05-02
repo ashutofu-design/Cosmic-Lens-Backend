@@ -1370,14 +1370,96 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     # Sprint-51 — Pre-computed timing windows (engine-only, no AI guess)
     # These are the AUTHORITATIVE timing answers for any "kab hoga" question.
     # AI is NEVER allowed to invent dates — it must mirror these verbatim.
+    #
+    # Phase 2.8.53 (May 2 2026) — VIVAH-7 wiring:
+    # Marriage row now sourced from event_timing.marriage.assess_marriage()
+    # which runs the KP-first 7-step pipeline (compute_timing_window) and
+    # returns rich verdict/band/primary_window/backup_window/confluence_strength
+    # /key_trigger/risk_flag/top_3_windows/step0_tendency. The other 6 topics
+    # still use the legacy single-line timing_engine (unchanged contract).
+    # Falls back to legacy marriage_timing on any error so the block never
+    # collapses.
     timing_str = ""
     try:
         from vedic.timing.timing_engine import (  # type: ignore
-            marriage_timing, child_timing, career_timing, promotion_timing,
+            child_timing, career_timing, promotion_timing,
             wealth_timing, foreign_timing, property_timing,
         )
+
+        # ── Marriage: VIVAH-7 path ─────────────────────────────────────
+        marriage_line = None
+        try:
+            from event_timing.marriage import assess_marriage  # type: ignore
+            kp_dict: dict = {}
+            try:
+                from openai_helper import _adapt_birth_for_kp  # lazy
+                from kp_engine import calculate_kp  # type: ignore
+                kp_birth = _adapt_birth_for_kp(birth) if isinstance(birth, dict) else None
+                if kp_birth:
+                    kp_dict = calculate_kp(kp_birth) or {}
+            except Exception as _kpexc:  # noqa: BLE001
+                print(f"[locked_facts] vivah7 kp calc failed (non-fatal): {_kpexc}")
+            v = assess_marriage(kundli, intel, kp_dict, birth) or {}
+            verdict = v.get("verdict") or "—"
+            band = v.get("band") or "—"
+            primary = v.get("primary_window") or "—"
+            backup = v.get("backup_window")
+            key_trigger = v.get("key_trigger")
+            confluence = v.get("confluence_strength")
+            risk = v.get("risk_flag")
+            tendency = (v.get("step0_tendency") or {}).get("verdict")
+            top3 = v.get("top_3_windows") or []
+            extras = []
+            if confluence:
+                extras.append(f"confluence: {confluence}")
+            if key_trigger:
+                extras.append(f"trigger: {key_trigger}")
+            if tendency:
+                extras.append(f"tendency: {tendency}")
+            if risk:
+                extras.append(f"risk: {risk}")
+            extras_str = f" [{', '.join(extras)}]" if extras else ""
+            backup_str = (
+                f" | backup: {backup}"
+                if backup and backup != primary else ""
+            )
+            marriage_line = (
+                f"   • Marriage   window: {primary}{backup_str}  "
+                f"verdict: {verdict}/{band}{extras_str}"
+            )
+            # Append top_3_windows trace (compact, max 3)
+            # Phase 2.8.53 — "trace:" prefix per architect note: explicitly
+            # tags these as VIVAH-7 internal scoring trace so the LLM does
+            # not confuse them with parallel timing rows for other topics.
+            if isinstance(top3, list) and top3:
+                _trace_lines = []
+                for i, w in enumerate(top3[:3], 1):
+                    if not isinstance(w, dict):
+                        continue
+                    ws = w.get("window") or "—"
+                    sc = w.get("score")
+                    sc_str = f" (score: {sc:.1f})" if isinstance(sc, (int, float)) else ""
+                    _trace_lines.append(f"     trace {i}: {ws}{sc_str}")
+                if _trace_lines:
+                    marriage_line += "\n" + "\n".join(_trace_lines)
+        except Exception as _exc:  # noqa: BLE001
+            print(f"[locked_facts] vivah7 marriage failed, fallback to legacy: {_exc}")
+            try:
+                from vedic.timing.timing_engine import marriage_timing  # type: ignore
+                r = marriage_timing(kundli)
+                if r and r.get("available"):
+                    marriage_line = (
+                        f"   • Marriage   window: {r['window']}  "
+                        f"[confidence: {r['confidence']}, lords: {','.join(r['house_lords'])}]"
+                    )
+                else:
+                    marriage_line = "   • Marriage   window: — (insufficient dasha lookahead)"
+            except Exception as _exc2:  # noqa: BLE001
+                print(f"[locked_facts] legacy marriage fallback also failed: {_exc2}")
+                marriage_line = "   • Marriage   window: — (engine unavailable)"
+
+        # ── Other 6 topics: legacy timing_engine (unchanged) ──────────
         _ks = {
-            "Marriage":  marriage_timing(kundli),
             "Child":     child_timing(kundli),
             "Career":    career_timing(kundli),
             "Promotion": promotion_timing(kundli),
@@ -1386,6 +1468,8 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             "Property":  property_timing(kundli),
         }
         _t_lines = ["▸ TIMING ENGINE (Sprint-51 — engine-only, AI MUST mirror verbatim, NEVER invent dates):"]
+        if marriage_line:
+            _t_lines.append(marriage_line)
         for topic, r in _ks.items():
             if r and r.get("available"):
                 _t_lines.append(

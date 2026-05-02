@@ -96,7 +96,7 @@ def _get_kp_cusp(kp: dict, house: int) -> Optional[dict]:
     Returns the cusp dict (with sl/nl/sb/ss fields) or None.
     """
     try:
-        from marriage_engine.love_or_arrange import _kp_cusp   # type: ignore
+        from .love_or_arrange import _kp_cusp   # type: ignore
         return _kp_cusp(kp, house)
     except Exception as exc:
         print(f"[marriage_timing._get_kp_cusp] failed: {exc}")
@@ -125,7 +125,7 @@ def _get_kp_significators(kp: dict, house: int) -> Set[str]:
     Returns set of planet names. Empty set on failure.
     """
     try:
-        from marriage_engine.love_or_arrange import (   # type: ignore
+        from .love_or_arrange import (   # type: ignore
             _kp_significators_of,
         )
         result = _kp_significators_of(kp, house)

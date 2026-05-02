@@ -1179,14 +1179,14 @@ def _layer_moon_psychology(intel: dict, kundli: dict) -> dict:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DASHA LORD EXTRACTOR (multi-key tolerance — mirror of career_engine)
+# DASHA LORD EXTRACTOR (multi-key tolerance — mirror of career_timing)
 # ─────────────────────────────────────────────────────────────────────────────
 def _stock_dasha_lords(kundli: dict) -> tuple[str, str, str]:
     """Return current (MD, AD, PD) lord names from kundli.currentDasha,
     tolerant of every key naming convention used by upstream chart
     providers (mahadasha|maha|MD|md_lord|mahadashaLord, etc.). Falls
     back to currentPhase.name parsing and finally to walking the
-    kundli.dashas hierarchy at "now". Mirror of career_engine._dasha_lords
+    kundli.dashas hierarchy at "now". Mirror of career_timing._dasha_lords
     so the stock narrator gets the same dasha-citation reliability."""
     cd = kundli.get("currentDasha") or {}
     md = (cd.get("mahadasha") or cd.get("maha") or cd.get("MD") or
@@ -1997,7 +1997,7 @@ def format_verdict_for_prompt(v: dict) -> str:
                    "  >>> NARRATE: \"agle 12 saal mein koi spasht prabal wealth-yog window nahi mil raha\" — DO NOT invent dates. <<<\n")
 
     # Validator-friendly current-window heading line + dasha aliases.
-    # Mirrors career_engine.format_verdict_for_prompt's "▸ Current Career
+    # Mirrors career_timing.format_verdict_for_prompt's "▸ Current Career
     # window:" pattern so timing_validator's heading-only window picker
     # (openai_helper.py ~3596 _heading_rx) and the planet-in-authorised-
     # dasha matcher (timing_validator.py ~_planet_in_authorised_dasha)

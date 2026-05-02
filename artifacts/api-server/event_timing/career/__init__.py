@@ -10,8 +10,13 @@ root) to `event_timing/career/` per user direction:
   "career engine me jo sab buckets he, woh pura move karo,
    event timing ke andar career ke andar"
 
+Phase 2.8.36 (May 2 2026) — renamed `career_engine.py` → `career_timing.py`
+per user direction (matches marriage_timing.py naming pattern):
+  "career engine nehi career timing rename karo, uske andar jo
+   buckets he all good"
+
 Architecture mirrors `event_timing/marriage/` pattern:
-  - career_engine.py   : full engine (4429 lines — 8 buckets, 5 conditionals,
+  - career_timing.py   : full engine (4429 lines — 8 buckets, 5 conditionals,
                          32 layers, 3 triggers, 7 modifiers, dispatch tables,
                          orchestrator)
 
@@ -29,7 +34,7 @@ Usage from openai_helper:
   )
 """
 
-from .career_engine import (
+from .career_timing import (
     assess_career,
     format_verdict_for_prompt,
     classify_career_question,

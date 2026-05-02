@@ -2278,11 +2278,12 @@ def _is_love_question(text: str) -> bool:
     return bool(_LOVE_QUESTION_RX.search(text))
 
 
-def _career_engine():
+def _career_timing():
     """Lazy-load deterministic career & profession verdict engine.
 
-    Phase 2.8.35: moved from career_engine.py (api-server root) to
-    event_timing.career package — facade re-exports the 3 public funcs.
+    Phase 2.8.36: module path is now event_timing.career.career_timing
+    (consolidated under event_timing in Phase 2.8.35, then renamed to
+    match marriage_timing.py naming convention).
     """
     from event_timing.career import (assess_career,             # type: ignore
                                       format_verdict_for_prompt as _fmt_career,
@@ -2290,7 +2291,7 @@ def _career_engine():
     return assess_career, _fmt_career, classify_career_question
 
 
-# Career-question gate. Triggers career_engine when question is genuinely
+# Career-question gate. Triggers career_timing when question is genuinely
 # about job / career / promotion / business / transfer / govt-exam — but
 # NOT when stock-market or marriage routing already wins. Order in the
 # orchestrator below: marriage > stock > love > career > general.
@@ -2321,7 +2322,7 @@ _CAREER_QUESTION_RX = __import__("re").compile(
     __import__("re").IGNORECASE,
 )
 
-# Stock-market vocabulary that should NOT trigger career_engine even if
+# Stock-market vocabulary that should NOT trigger career_timing even if
 # career keywords (business / venture) are also present — e.g.
 # "share business kaisa rahega" must go to stock_engine.
 #
@@ -4304,7 +4305,7 @@ def _build_messages(
 
     # ── DETERMINISTIC CAREER & PROFESSION VERDICT ─────────────────────────────
     # For career-keyword questions (job/promotion/transfer/govt-job/business/
-    # partnership/setback), compute deterministic verdict via career_engine.
+    # partnership/setback), compute deterministic verdict via career_timing.
     # Routing priority above career: marriage > stock > love. AI becomes
     # pure narrator with brand-safety guards for govt-job / business-start /
     # resignation / partnership softening. Mirror of marriage/stock/love.
@@ -4325,7 +4326,7 @@ def _build_messages(
                     kp_dict_c = _kp_calc()(birth)
             except Exception as exc:
                 print(f"[openai_helper] kp calc for career failed: {exc}")
-            assess_career, fmt_career, _classify_career_q = _career_engine()
+            assess_career, fmt_career, _classify_career_q = _career_timing()
             _career_pre_bucket = _ai_ear_bucket_for(out_meta, "career")
             career_verdict_obj = assess_career(
                 kundli, intel_obj or {}, kp_dict_c or {}, birth, question,
@@ -4335,14 +4336,14 @@ def _build_messages(
                 if isinstance(out_meta, dict):
                     out_meta["career_verdict_obj"]   = career_verdict_obj
                     out_meta["career_question_type"] = career_verdict_obj.get("bucket")
-                print(f"[openai_helper] career_engine OK → "
+                print(f"[openai_helper] career_timing OK → "
                       f"bucket='{career_verdict_obj.get('bucket')}' "
                       f"tense='{career_verdict_obj.get('tense')}' "
                       f"verdict='{career_verdict_obj.get('verdict','')[:60]}' "
                       f"score={career_verdict_obj.get('score')} "
                       f"conf={career_verdict_obj.get('confidence')}")
         except Exception as exc:
-            print(f"[openai_helper] career_engine failed: {exc}")
+            print(f"[openai_helper] career_timing failed: {exc}")
 
     # ── DETERMINISTIC WEALTH & FINANCE VERDICT ────────────────────────────────
     # For wealth/finance-keyword questions (salary / business profit / loan /
@@ -13650,13 +13651,13 @@ def _phase59_format_dosh_facts_block(v: Any) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # Phase 5.9 Batch 3b — CAREER_FACTS block (engine sochta hai, LLM bolta hai)
 # ─────────────────────────────────────────────────────────────────────────────
-# Surfaces career_engine.assess_career() output as a structured CAREER_FACTS
+# Surfaces career_timing.assess_career() output as a structured CAREER_FACTS
 # block in the minimal-prompt path. Replaces the legacy 1-line
 # "Career verdict: ..." that left the LLM blind to bucket / tense / score /
 # timing window / strategy / brand-safety guardrails.
 #
 # Strict rule (architect-enforced): NO new astrology logic. The block is
-# pure formatting of fields already produced by career_engine. brand_safety
+# pure formatting of fields already produced by career_timing. brand_safety
 # bullets are surfaced VERBATIM — they are the engine's deterministic
 # softening rules (govt-job, business, resignation, partnership).
 #

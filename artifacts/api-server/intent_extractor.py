@@ -55,7 +55,7 @@ from typing import Any, Optional
 #   love_engine        → affair_third_party | breakup_signal | reconciliation |
 #                        commitment_fear | one_sided | compatibility |
 #                        existing_status | timing | general_love
-#   career_engine      → govt_job | foreign_job | promotion | resignation |
+#   career_timing      → govt_job | foreign_job | promotion | resignation |
 #                        business_start | partnership | transfer |
 #                        career_setback | new_job_timing | job_change |
 #                        career_field_choice | general_career

@@ -1,7 +1,7 @@
 """
 wealth_engine.py — Deterministic Wealth & Finance verdict engine (Vedic / KP).
 
-Mirror of career_engine.py + stock_engine.py + love_engine.py + marriage_engine.py
+Mirror of career_timing.py + stock_engine.py + love_engine.py + marriage_engine.py
 + health_engine.py architecture (CLE format): pure-Python rule engine that
 consumes the already-computed kundli + chart_intelligence + KP outputs and
 produces a structured WEALTH verdict BEFORE the AI is invoked. The AI then acts
@@ -329,7 +329,7 @@ _Q_PATTERNS: list[tuple[str, list[str]]] = [
         r"\b(साझेदारी|पार्टनरशिप|पार्टनर|जॉइंट वेंचर)\b",
     ]),
     # ── BUSINESS PROFIT ──
-    # Must come AFTER career_engine has handled "business start".
+    # Must come AFTER career_timing has handled "business start".
     # This is for ONGOING business profit / loss / cash-flow questions.
     ("business_profit", [
         r"\b(business)\b.*\b(profit|munafa|munaafa|fayda|labh|"
@@ -361,7 +361,7 @@ _Q_PATTERNS: list[tuple[str, list[str]]] = [
         r"\b(बचत|जमा|सेविंग|वित्तीय सुरक्षा|रिटायरमेंट)\b",
     ]),
     # ── SALARY GROWTH ──
-    # Must come AFTER career_engine (which handles new_job/promotion).
+    # Must come AFTER career_timing (which handles new_job/promotion).
     # This is for raw "salary increase / increment / hike / appraisal" Qs
     # that are about MONEY not job-change.
     ("salary_growth", [
@@ -538,7 +538,7 @@ def _brand_safety_warnings(bucket: str) -> list[str]:
             "amount — emit only relative language.",
             "If verdict is red_avoid, suggest 'agla appraisal cycle wait "
             "karein, current role mein value-add increase karein', NEVER "
-            "'job chod do' (career_engine handles job-change).",
+            "'job chod do' (career_timing handles job-change).",
         ],
         "business_profit": [
             "NEVER predict business closure / 'dhandha band ho jaayega' — "
@@ -751,7 +751,7 @@ def _planets_aspecting_house(planets: list, target_house: int) -> list[str]:
 def _dasha_lords(kundli: dict) -> tuple[Optional[str], Optional[str], Optional[str]]:
     """Return (Mahadasha lord, Antardasha lord, Pratyantar lord) tolerating
     multiple key naming conventions used across the codebase. Mirrors
-    health_engine._dasha_lords / career_engine._dasha_lords."""
+    health_engine._dasha_lords / career_timing._dasha_lords."""
     if not isinstance(kundli, dict):
         return None, None, None
     md = ad = pd = None

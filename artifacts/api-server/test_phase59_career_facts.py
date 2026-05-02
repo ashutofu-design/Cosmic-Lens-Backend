@@ -7,7 +7,7 @@ Mirrors the Phase 5.9 Batch 3a (dosh) test structure. Verifies:
   * extractor routing precedence + 1-liner suppression when block fires
   * Phase 5.7 source-cleanliness preserved
 
-Engine is `career_engine.assess_career()` which returns:
+Engine is `career_timing.assess_career()` which returns:
   {
     "bucket": str (12 question types),
     "tense": "future"|"present"|"general",

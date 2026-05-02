@@ -1,5 +1,5 @@
 """
-career_engine.py — Deterministic Career & Profession verdict engine (Vedic / KP).
+career_timing.py — Deterministic Career & Profession verdict engine (Vedic / KP).
 
 Mirror of love_engine.py + marriage_engine.py + stock_engine.py architecture
 (CLE format): pure-Python rule engine that consumes the already-computed

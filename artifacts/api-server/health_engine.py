@@ -1,7 +1,7 @@
 """
 health_engine.py — Deterministic Health & Vitality verdict engine (Vedic / KP).
 
-Mirror of career_engine.py + stock_engine.py + love_engine.py + marriage_engine.py
+Mirror of career_timing.py + stock_engine.py + love_engine.py + marriage_engine.py
 architecture (CLE format): pure-Python rule engine that consumes the already-
 computed kundli + chart_intelligence + KP outputs and produces a structured
 HEALTH verdict BEFORE the AI is invoked. The AI then acts purely as a
@@ -29,7 +29,7 @@ Inputs:
 
 Output: see assess_health().__doc__
 
-CLE Format Logic Framework (10 standard steps, mirror of career_engine):
+CLE Format Logic Framework (10 standard steps, mirror of career_timing):
     Step 1  — Question Type Detection (12-bucket classifier) + Tense Detector
     Step 2  — 2-Step Verdict Framework (natal_promise + current_trigger → bucket)
     Step 3  — Layer Stacking (25 layers + D9 + D6 + D30 + KP mandatory + Atmakaraka)
@@ -580,7 +580,7 @@ def _planets_aspecting_house(planets: list, target_house: int) -> list[str]:
 
 def _dasha_lords(kundli: dict) -> tuple[str, str, str]:
     """Return current (MD, AD, PD) lord names from kundli — same multi-key
-    tolerance as career_engine to absorb provider naming variants."""
+    tolerance as career_timing to absorb provider naming variants."""
     cd = kundli.get("currentDasha") or {}
     md = (cd.get("mahadasha") or cd.get("maha") or cd.get("MD") or
           cd.get("md_lord") or cd.get("mahadashaLord") or "").strip()

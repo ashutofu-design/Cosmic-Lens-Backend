@@ -2924,7 +2924,7 @@ def _build_messages(
     locked_facts_str = ""
     engine_status = {"ok": [], "skipped": [], "failed": [], "overall": "empty"}
     try:
-        from engine_locked_to_llm.locked_facts import (build_locked_facts,  # type: ignore
+        from narrator_cosmo.engine_locked_to_llm.locked_facts import (build_locked_facts,  # type: ignore
                                    get_last_engine_status,
                                    _finalise_engine_status)
         locked_facts_str = build_locked_facts(kundli, birth) or ""
@@ -7476,7 +7476,7 @@ def _engine_honesty_check(engine_status, qu=None):
         return {"refuse": False, "warn": False, "failed_phases": [],
                 "optional_failed": [], "reason": "no_status"}
     try:
-        from engine_locked_to_llm.locked_facts import _is_primary_phase  # type: ignore
+        from narrator_cosmo.engine_locked_to_llm.locked_facts import _is_primary_phase  # type: ignore
     except Exception:
         return {"refuse": False, "warn": False, "failed_phases": [],
                 "optional_failed": [], "reason": "import_failed"}
@@ -10010,7 +10010,7 @@ def _validate_supertype_contract(text: str, supertype: str,
         _facts = {}
         if kundli is not None:
             try:
-                from engine_locked_to_llm.locked_facts import compute_strength_facts  # type: ignore
+                from narrator_cosmo.engine_locked_to_llm.locked_facts import compute_strength_facts  # type: ignore
                 _facts = compute_strength_facts(kundli) or {}
             except Exception:
                 _facts = {}
@@ -10751,7 +10751,7 @@ def _phase55_safe_compute_kp_summary(kundli: Any) -> dict:
     if not isinstance(kundli, dict):
         return {}
     try:
-        from engine_locked_to_llm.kp_locked_facts import compute_kp_summary  # type: ignore
+        from narrator_cosmo.engine_locked_to_llm.kp_locked_facts import compute_kp_summary  # type: ignore
     except Exception:
         return {}
     try:

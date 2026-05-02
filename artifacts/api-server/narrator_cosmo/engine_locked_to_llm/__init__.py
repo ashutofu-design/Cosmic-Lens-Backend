@@ -25,19 +25,27 @@ Contents:
       * compute_kp_summary(birth, kundli)       — KP house signification
       * format_kp_summary(kp_summary)           — render to prompt string
 
-Re-exports below let callers use `from engine_locked_to_llm import …`
-as the canonical import path. The two sub-modules can also be imported
-directly via `engine_locked_to_llm.locked_facts` / `.kp_locked_facts`
-for situations where lazy-loading the heavy `locked_facts` body matters.
+Re-exports below let callers use
+`from narrator_cosmo.engine_locked_to_llm import …` as the canonical
+import path. The two sub-modules can also be imported directly via
+`narrator_cosmo.engine_locked_to_llm.locked_facts` /
+`.kp_locked_facts` for situations where lazy-loading the heavy
+`locked_facts` body matters.
+
+Phase 2.8.48 — package nested under narrator_cosmo/ on user direction
+"Engine locked to LLM isko narrator cosmo ke andar rakho". The previous
+top-level path `engine_locked_to_llm/` is gone — all 5 importers
+(4 in openai_helper.py + 1 internal cross-import) now use the
+`narrator_cosmo.engine_locked_to_llm.*` prefix.
 """
 
-from engine_locked_to_llm.locked_facts import (
+from narrator_cosmo.engine_locked_to_llm.locked_facts import (
     build_locked_facts,
     compute_strength_facts,
     get_last_engine_status,
     _is_primary_phase,
 )
-from engine_locked_to_llm.kp_locked_facts import (
+from narrator_cosmo.engine_locked_to_llm.kp_locked_facts import (
     compute_kp_summary,
     format_kp_summary,
 )

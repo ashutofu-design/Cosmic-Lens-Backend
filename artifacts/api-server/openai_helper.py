@@ -10302,6 +10302,52 @@ def _phase48_is_timing_question(question: str) -> bool:
     return any(k in q for k in _PHASE48_TIMING_KEYWORDS)
 
 
+# ── Phase 2.8.55 — STRICT word-boundary timing detector ───────────────────
+# Used by the ai_ask_stream passthrough engine-injection gate (L16419).
+# We do NOT touch _phase48_is_timing_question (used in 4 narrative-trim
+# call-sites where false-positive cost is just one extra trim guard).
+# But the engine-injection gate must be precise: substring matching like
+# "date" in "update", "din" in "finding", "tak" in "stake" would silently
+# fire VIVAH-7 + ~5-8k locked_facts on non-timing prompts and violate the
+# user's "only timing me engine chalega" directive.
+#
+# Strategy: word-boundary regex with the same Hinglish + English vocabulary
+# as _PHASE48_TIMING_KEYWORDS plus the cleaner cues from
+# vedic.validator.timing_validator (TIMING_CUES_EN/HI). Multi-word phrases
+# kept as literal sub-patterns; single tokens guarded by \b on both sides.
+import re as _re_phase2855
+_PHASE2855_TIMING_RX = _re_phase2855.compile(
+    r"(?ix)"
+    r"\b("
+    # Hindi/Hinglish "kab" family — all standalone tokens
+    r"kab|kabhi[\s\-]?kab|kab[\s\-]?tak|kab[\s\-]?hoga|kab[\s\-]?hogi|"
+    r"kab[\s\-]?milega|kab[\s\-]?milegi|"
+    # "kis saal / kis mahine / konse saal / kaunse mahine"
+    r"kis[\s\-]?saal|kis[\s\-]?mahine|konse[\s\-]?saal|kaunse[\s\-]?mahine|"
+    r"kitne[\s\-]?saal|kitne[\s\-]?mahine|kitne[\s\-]?din|kitne[\s\-]?time|"
+    r"kitna[\s\-]?time|"
+    # English "when/by when/how soon/what year/which month" variants
+    r"when|by[\s\-]?when|how[\s\-]?soon|how[\s\-]?long|"
+    r"what[\s\-]?year|which[\s\-]?year|what[\s\-]?month|which[\s\-]?month|"
+    r"timing[\s\-]?of|date[\s\-]?of|year[\s\-]?of|"
+    # Single tokens — strict word boundaries
+    r"timing|timeline|schedule|deadline|muhurat|muhurta|"
+    r"samay|samaya|saal|mahine|window"
+    r")\b"
+)
+
+
+def _phase2855_is_timing_question_strict(question: str) -> bool:
+    """STRICT timing detector for engine-injection gate (Phase 2.8.55).
+    Word-boundary regex avoids substring false positives like
+    'date' in 'update', 'din' in 'finding', 'tak' in 'stake',
+    'year' in 'yearn', 'month' in '6-month-old', etc.
+    Returns True only when question contains a real timing cue."""
+    if not isinstance(question, str) or not question:
+        return False
+    return _PHASE2855_TIMING_RX.search(question) is not None
+
+
 # ── Phase 4.9 T022 — Adaptive depth classifier ────────────────────────────
 # Replaces Phase 4.8's flat 1-2 sentence cap with intent-driven depth.
 #   "simple"    → default; yes/no, short advice → 1-2 sentences
@@ -16397,20 +16443,42 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             # children / career / wealth / foreign_travel / home_property
             # (see _LF_KEEP_BY_TOPIC at L7268). On any failure we fall back
             # to chart_block-only so the answer never collapses.
+            #
+            # Phase 2.8.55 — TIMING-ONLY GATE per user direction (Hinglish):
+            # "only shadi kab hoga / event kab hoga / timing me engine chalega".
+            # Engine (TIMING ENGINE block + supporting locked_facts) now fires
+            # ONLY when the question is a timing question — "shaadi kab hogi",
+            # "career kab badhega", "kab milegi promotion", etc. Non-timing
+            # marriage Qs ("biwi kaisi hogi", "spouse nature") and other
+            # non-timing Qs skip the locked_facts injection entirely. This:
+            #  (a) avoids unnecessary 5-8k chars + ~80ms build cost on Qs
+            #      where the engine output is irrelevant
+            #  (b) matches user's mental model: engine = timing answers
+            #  (c) keeps non-timing Qs on the pre-2.8.54 chart_block-only
+            #      path which Cosmo already handles well in narrative mode
+            # Detection uses _phase48_is_timing_question (broad keyword set —
+            # kab/when/timing/year/month/saal/din/muhurat/tak etc.).
+            # Phase 2.8.55 — use STRICT word-boundary detector (not the
+            # broader _phase48_is_timing_question which substring-matches
+            # "date" inside "update", "din" inside "finding", etc.). The
+            # engine-injection gate must be precise to honor the user's
+            # "only timing me engine chalega" directive.
             _locked_facts_pt_s = ""
-            try:
-                from reply_cosmo.engine_locked_to_llm.locked_facts import (  # type: ignore
-                    build_locked_facts as _build_lf_s,
-                )
-                _lf_full_s = _build_lf_s(kundli, birth) or ""
-                _locked_facts_pt_s = _slim_locked_facts_for_narrative(
-                    _lf_full_s, topic=_topic_id_s
-                ) if _lf_full_s else ""
-            except Exception as _lf_exc_s:  # noqa: BLE001
-                _trace(req_id, "PASSTHROUGH(stream).LOCKED_FACTS_SKIPPED", {
-                    "reason": str(_lf_exc_s)[:200],
-                })
-                _locked_facts_pt_s = ""
+            _is_timing_q_pt_s = _phase2855_is_timing_question_strict(question or "")
+            if _is_timing_q_pt_s:
+                try:
+                    from reply_cosmo.engine_locked_to_llm.locked_facts import (  # type: ignore
+                        build_locked_facts as _build_lf_s,
+                    )
+                    _lf_full_s = _build_lf_s(kundli, birth) or ""
+                    _locked_facts_pt_s = _slim_locked_facts_for_narrative(
+                        _lf_full_s, topic=_topic_id_s
+                    ) if _lf_full_s else ""
+                except Exception as _lf_exc_s:  # noqa: BLE001
+                    _trace(req_id, "PASSTHROUGH(stream).LOCKED_FACTS_SKIPPED", {
+                        "reason": str(_lf_exc_s)[:200],
+                    })
+                    _locked_facts_pt_s = ""
             _locked_section_pt_s = (
                 f"\n\n{_locked_facts_pt_s}\n" if _locked_facts_pt_s else ""
             )
@@ -16442,6 +16510,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 "lock_chars":    len(_topic_lock_s),
                 "marriage_block_chars": len(_marriage_block_pt_s),
                 "locked_facts_chars":   len(_locked_facts_pt_s),
+                "is_timing_q":          _is_timing_q_pt_s,
             })
 
             # 3. OpenAI streaming call

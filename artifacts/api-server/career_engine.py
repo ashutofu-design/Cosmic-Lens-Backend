@@ -93,23 +93,15 @@ Layer rubric (canonical CLE table — career-specific):
         bucket-tuned KP cusp/CSL check via _kp_bucket_assist().
         C1  Govt-job check (Sun strong + 10L exalt + Sun-Mars-Jup combo)
             — fires for q_type == "govt_job" or strong govt-promise
-        C2  Foreign-job check (12H + 9H + Rahu axis + KP cusps 9/12/7)
-            — fires for q_type == "foreign_job" or "abroad/visa" in question
-        C3  Business vs Service identifier (7H vs 6H/10H + KP cusp 7)
-            — fires for q_type == "business_start" or "job_change"
         C4  Promotion-window check (current AD/PD activates 10H/11H)
             — fires for q_type == "promotion"
         C5  Career-setback recovery check (when next Jupiter clears
             + KP cusps 8/12/11 cross-check)
             — fires for q_type == "career_setback"
-        C6  New-job-timing window (T1 + KP cusps 6/10/11)
-            — fires for q_type == "new_job_timing"
         C7  Transfer probability (Saturn transit + KP cusps 3/12/10)
             — fires for q_type == "transfer"
         C8  Resignation viability (KP cusps 12/6/1 + AD lord exit signal)
             — fires for q_type == "resignation"
-        C9  Partnership compatibility (7H + 7L + KP cusps 7/11/2)
-            — fires for q_type == "partnership"
 """
 from __future__ import annotations
 
@@ -3140,182 +3132,6 @@ def _conditional_govt_job(intel: dict, kundli: dict, karakas_d: dict, kp: Option
     }
 
 
-# ── C2 — Foreign-job check ───────────────────────────────────────────────────
-def _conditional_foreign_job(intel: dict, kundli: dict, kp: Optional[dict] = None) -> dict:
-    """Fires for q_type == 'foreign_job' or 'visa/abroad' question.
-
-    Foreign-career recipe (any 2-3 → strong foreign-promise):
-      1. 12H occupied by Sun/Moon/Mercury/Venus/Rahu (foreign-house active)
-      2. 9L or 12L in 9/10/12 (long-journey + foreign-luck)
-      3. Rahu in 7H, 9H, or 12H
-      4. Moon in 12H (foreign-mind)
-      5. Lagna lord in 12H or 9H
-    """
-    score = 0
-    why: list[str] = []
-    flags: list[str] = []
-    planets = kundli.get("planets") or []
-
-    twelfth_occupants = [p.get("name") for p in planets
-                         if isinstance(p, dict) and p.get("house") == 12 and p.get("name")]
-    if twelfth_occupants:
-        score += 2
-        flags.append(f"12H occupied by {twelfth_occupants}")
-        why.append(f"C2: 12H occupied by {twelfth_occupants} — foreign-house active (+2)")
-
-    ninth_lord = _house_lord(intel, 9)
-    twelfth_lord = _house_lord(intel, 12)
-    for lord_label, lord in [("9L", ninth_lord), ("12L", twelfth_lord)]:
-        if lord:
-            lh = _planet_house(planets, lord)
-            if lh in {9, 10, 12}:
-                score += 2
-                flags.append(f"{lord_label} {lord} in h{lh}")
-                why.append(f"C2: {lord_label} {lord} in h{lh} — foreign-luck signal (+2)")
-
-    rahu_h = _planet_house(planets, "Rahu")
-    if rahu_h in {7, 9, 12}:
-        score += 3
-        flags.append(f"Rahu in h{rahu_h}")
-        why.append(f"⭐ C2: Rahu in h{rahu_h} — strong foreign-axis tilt (+3)")
-
-    moon_h = _planet_house(planets, "Moon")
-    if moon_h == 12:
-        score += 2
-        flags.append("Moon in 12H")
-        why.append("C2: Moon in 12H — foreign-mind / NRI lifestyle pull (+2)")
-
-    lagna_lord = _house_lord(intel, 1)
-    if lagna_lord:
-        ll_h = _planet_house(planets, lagna_lord)
-        if ll_h in {9, 12}:
-            score += 2
-            flags.append(f"Lagnesh {lagna_lord} in h{ll_h}")
-            why.append(f"C2: Lagnesh {lagna_lord} in h{ll_h} — self-bound for foreign (+2)")
-
-    # KP bucket-tuned cross-check (cusps 9, 12, 7, 10)
-    kp_assist = _kp_bucket_assist(kp or {}, "foreign_job")
-    if kp_assist["score"] != 0 or kp_assist["why"]:
-        score += kp_assist["score"]
-        why.extend(kp_assist["why"])
-        if kp_assist["score"] > 0:
-            flags.append("KP foreign-cusps confirm")
-
-    promise = "high" if score >= 6 else ("moderate" if score >= 3 else "low")
-    return {
-        "fired": True,
-        "score": score,
-        "why": why,
-        "flags": flags,
-        "foreign_promise_level": promise,
-        "kp_summary": kp_assist["summary"],
-    }
-
-
-# ── C3 — Business vs Service identifier ──────────────────────────────────────
-def _conditional_business_vs_service(intel: dict, kundli: dict, karakas_d: dict, kp: Optional[dict] = None) -> dict:
-    """Fires for q_type in {'business_start', 'job_change', 'career_field_choice'}.
-
-    Tilt-score: positive → business-favoured, negative → service-favoured.
-    Business indicators: 7H strong, Mercury strong, AmK = Mercury/Venus,
-    Lagnesh in 7H/10H, 11L strong.
-    Service indicators: 6H strong, Saturn strong, AmK = Saturn/Sun,
-    10L in 6H, Sasha-yoga.
-    """
-    business_score = 0
-    service_score = 0
-    why: list[str] = []
-    planets = kundli.get("planets") or []
-
-    # 7H strength → business
-    seventh_lord = _house_lord(intel, 7)
-    if seventh_lord:
-        sl_h = _planet_house(planets, seventh_lord)
-        sl_dgn = _planet_dignity(intel, seventh_lord)
-        if sl_h in {1, 7, 10, 11} and sl_dgn in ("exalted", "own-sign", "friend-sign"):
-            business_score += 4
-            why.append(f"BIZ: 7L {seventh_lord} ({sl_dgn}) in h{sl_h} — strong public-dealing (+4 biz)")
-
-    # Mercury (commerce karaka) strong → business
-    mer_dgn = _planet_dignity(intel, "Mercury")
-    if mer_dgn in ("exalted", "own-sign", "moolatrikona"):
-        business_score += 3
-        why.append(f"BIZ: Mercury {mer_dgn} — commerce karaka strong (+3 biz)")
-
-    # AmK Mercury/Venus → business; Saturn/Sun → service
-    amk = (karakas_d or {}).get("AmK")
-    if amk in ("Mercury", "Venus"):
-        business_score += 3
-        why.append(f"BIZ: Amatyakaraka = {amk} — soul-career business-aligned (+3 biz)")
-    elif amk in ("Saturn", "Sun"):
-        service_score += 3
-        why.append(f"SVC: Amatyakaraka = {amk} — soul-career service-aligned (+3 svc)")
-
-    # Lagnesh in 7H/10H → business
-    ll = _house_lord(intel, 1)
-    if ll:
-        ll_h = _planet_house(planets, ll)
-        if ll_h in {7, 10}:
-            business_score += 2
-            why.append(f"BIZ: Lagnesh {ll} in h{ll_h} — self drives toward independent enterprise (+2 biz)")
-
-    # 6H strong → service (good for job)
-    sixth_lord = _house_lord(intel, 6)
-    if sixth_lord:
-        sxl_h = _planet_house(planets, sixth_lord)
-        if sxl_h in {3, 6, 10, 11}:
-            service_score += 3
-            why.append(f"SVC: 6L {sixth_lord} in upachaya h{sxl_h} — service-job strength (+3 svc)")
-
-    # Saturn (service karaka) strong → service
-    sat_dgn = _planet_dignity(intel, "Saturn")
-    sat_h = _planet_house(planets, "Saturn")
-    if sat_dgn in ("exalted", "own-sign") and sat_h in {1, 4, 7, 10}:
-        service_score += 4
-        why.append(f"SVC: Saturn {sat_dgn} in kendra h{sat_h} (Sasha-yoga) — service-excellence (+4 svc)")
-
-    # 10L in 6H → service-leaning (working FOR someone)
-    tl = _house_lord(intel, 10)
-    if tl:
-        tl_h = _planet_house(planets, tl)
-        if tl_h == 6:
-            service_score += 2
-            why.append(f"SVC: 10L {tl} in 6H — career-flow through employment (+2 svc)")
-
-    # KP cusp 7 (business) vs cusp 6 (service) — tilt assist
-    kp_biz = _kp_bucket_assist(kp or {}, "business_start")
-    kp_svc = _kp_bucket_assist(kp or {}, "job_change")
-    if kp_biz["score"] > 0:
-        business_score += kp_biz["score"]
-        why.extend(kp_biz["why"])
-    if kp_svc["score"] > 0:
-        service_score += kp_svc["score"]
-        why.extend(kp_svc["why"])
-
-    tilt = business_score - service_score
-    if tilt >= 4:
-        leaning = "STRONGLY BUSINESS"
-    elif tilt >= 1:
-        leaning = "lean business"
-    elif tilt <= -4:
-        leaning = "STRONGLY SERVICE/JOB"
-    elif tilt <= -1:
-        leaning = "lean service/job"
-    else:
-        leaning = "balanced (either viable)"
-
-    return {
-        "fired": True,
-        "business_score": business_score,
-        "service_score": service_score,
-        "tilt": tilt,
-        "leaning": leaning,
-        "why": why,
-        "kp_biz_summary": kp_biz["summary"],
-        "kp_svc_summary": kp_svc["summary"],
-    }
-
-
 # ── C4 — Promotion-window check ──────────────────────────────────────────────
 def _conditional_promotion_window(t1_d: dict, intel: dict, jup_t: dict, saturn_t: dict, kp: Optional[dict] = None) -> dict:
     """Fires for q_type == 'promotion'.
@@ -3476,72 +3292,6 @@ def _conditional_setback_recovery(t1_d: dict, jup_t: dict, intel: dict, kp: Opti
     }
 
 
-# ── C6 — New-job-timing window ───────────────────────────────────────────────
-def _conditional_new_job_timing(t1_d: dict, intel: dict, kp: Optional[dict] = None) -> dict:
-    """Fires for q_type == 'new_job_timing'. Detects WHEN the next job-offer
-    window is likely to land. Combines:
-      - Current/next AD lord favouring 6/10/11 houses
-      - 6L or 10L active in current MD
-      - KP cusps 6 (service-opening) + 10 (career-fire) + 11 (offer-gain) CSLs
-    """
-    why: list[str] = []
-    timing_score = 0
-    next_window: dict = {}
-
-    if t1_d:
-        cur_lords = (t1_d or {}).get("current_lords") or ""
-        parts = cur_lords.split("/")
-        md = parts[0].strip() if parts else ""
-        ad = parts[1].strip() if len(parts) > 1 else ""
-        sxl = _house_lord(intel, 6)
-        tl  = _house_lord(intel, 10)
-        el  = _house_lord(intel, 11)
-        for label, lord in (("MD", md), ("AD", ad)):
-            if lord and lord in {sxl, tl, el}:
-                timing_score += 3 if label == "AD" else 2
-                why.append(f"✓ {label} lord {lord} = career-significator (+{3 if label == 'AD' else 2})")
-
-        nxt = (t1_d or {}).get("next_career_window") or {}
-        if nxt.get("start"):
-            try:
-                start_dt = datetime.fromisoformat(str(nxt["start"]).split("T")[0])
-                days_to = (start_dt - datetime.utcnow()).days
-                if 0 <= days_to <= 365:
-                    timing_score += 4
-                    why.append(f"✓ Next career-AD ({nxt.get('ad')}) within 12 months — strong landing window (+4)")
-                    next_window = {"ad": nxt.get("ad"), "start": nxt.get("start"), "end": nxt.get("end")}
-                elif 365 < days_to <= 1095:
-                    timing_score += 2
-                    why.append(f"○ Next career-AD ({nxt.get('ad')}) in {days_to} days — moderate horizon (+2)")
-                    next_window = {"ad": nxt.get("ad"), "start": nxt.get("start"), "end": nxt.get("end")}
-            except Exception:
-                pass
-
-    # KP bucket cross-check (cusps 6, 10, 11)
-    kp_assist = _kp_bucket_assist(kp or {}, "new_job_timing")
-    timing_score += kp_assist["score"]
-    why.extend(kp_assist["why"])
-
-    if timing_score >= 8:
-        verdict = "IMMEDIATE_WINDOW"
-    elif timing_score >= 5:
-        verdict = "near_window_6_18mo"
-    elif timing_score >= 2:
-        verdict = "slow_horizon"
-    else:
-        verdict = "no_clear_window"
-
-    return {
-        "fired": True,
-        "timing_verdict": verdict,
-        "timing_score": timing_score,
-        "score": timing_score,  # alias so assess_career cond_bonus aggregator sees it
-        "next_window": next_window,
-        "why": why,
-        "kp_summary": kp_assist["summary"],
-    }
-
-
 # ── C7 — Transfer probability ────────────────────────────────────────────────
 def _conditional_transfer(intel: dict, kundli: dict, saturn_t: dict, kp: Optional[dict] = None) -> dict:
     """Fires for q_type == 'transfer'. Checks short-relocation/job-posting
@@ -3663,88 +3413,6 @@ def _conditional_resignation(t1_d: dict, intel: dict, kp: Optional[dict] = None)
     return {
         "fired": True,
         "resignation_verdict": verdict,
-        "score": score,
-        "flags": flags,
-        "why": why,
-        "kp_summary": kp_assist["summary"],
-    }
-
-
-# ── C9 — Partnership compatibility ───────────────────────────────────────────
-def _conditional_partnership(intel: dict, kundli: dict, karakas_d: dict, kp: Optional[dict] = None) -> dict:
-    """Fires for q_type == 'partnership'. Business-partnership viability.
-    Recipe:
-      - 7L strong/well-placed (partner karma sound)
-      - 7H not occupied by malefics-in-debility
-      - 11L strong (joint-gains)
-      - 2L well-placed (joint-funds)
-      - Venus (partnership karaka) dignity
-      - KP cusps 7 + 11 + 2 CSLs
-    """
-    score = 0
-    why: list[str] = []
-    flags: list[str] = []
-    planets = kundli.get("planets") or []
-
-    seventh_lord  = _house_lord(intel, 7)
-    eleventh_lord = _house_lord(intel, 11)
-    second_lord   = _house_lord(intel, 2)
-
-    for label, lord, good_houses in (
-        ("7L",  seventh_lord,  {1, 4, 7, 10, 11}),
-        ("11L", eleventh_lord, {2, 5, 9, 10, 11}),
-        ("2L",  second_lord,   {2, 5, 9, 10, 11}),
-    ):
-        if lord:
-            lh = _planet_house(planets, lord)
-            ldgn = _planet_dignity(intel, lord)
-            if lh in good_houses and ldgn not in ("debilitated", "enemy-sign"):
-                score += 3
-                flags.append(f"{label} {lord} h{lh} ({ldgn})")
-                why.append(f"C9: {label} {lord} in h{lh} ({ldgn}) — partnership-house lord well-placed (+3)")
-            elif ldgn == "debilitated":
-                score -= 3
-                flags.append(f"{label} {lord} debilitated")
-                why.append(f"C9: {label} {lord} debilitated — partnership-house lord weak (-3)")
-
-    # 7H malefic affliction
-    seventh_occupants = [p.get("name") for p in planets
-                         if isinstance(p, dict) and p.get("house") == 7 and p.get("name")]
-    afflictors = [p for p in seventh_occupants
-                  if p in NATURAL_MALEFICS and _planet_dignity(intel, p) in ("debilitated", "enemy-sign")]
-    if afflictors:
-        score -= 3
-        flags.append(f"7H afflicted by {afflictors}")
-        why.append(f"C9: 7H occupied by debilitated malefics {afflictors} — partnership friction (-3)")
-
-    # Venus dignity
-    venus_dgn = _planet_dignity(intel, "Venus")
-    if venus_dgn in ("exalted", "own-sign", "moolatrikona"):
-        score += 2
-        flags.append(f"Venus {venus_dgn}")
-        why.append(f"C9: Venus {venus_dgn} — partnership karaka strong (+2)")
-    elif venus_dgn == "debilitated":
-        score -= 2
-        flags.append("Venus debilitated")
-        why.append("C9: Venus debilitated — partnership karaka weak (-2)")
-
-    # KP bucket cross-check (cusps 7, 11, 2)
-    kp_assist = _kp_bucket_assist(kp or {}, "partnership")
-    score += kp_assist["score"]
-    why.extend(kp_assist["why"])
-
-    if score >= 8:
-        verdict = "STRONG_FIT"
-    elif score >= 4:
-        verdict = "viable_with_due_diligence"
-    elif score >= 0:
-        verdict = "marginal"
-    else:
-        verdict = "AVOID_PARTNERSHIP"
-
-    return {
-        "fired": True,
-        "partnership_verdict": verdict,
         "score": score,
         "flags": flags,
         "why": why,
@@ -4461,10 +4129,6 @@ def assess_career(kundli: dict,
     conditionals: dict[str, dict] = {}
     if bucket == "govt_job" or _planet_dignity(intel, "Sun") in ("exalted", "own-sign", "moolatrikona"):
         conditionals["C1_govt_job"] = _conditional_govt_job(intel, kundli, karakas_d, kp)
-    if bucket == "foreign_job" or re.search(r"\b(foreign|abroad|videsh|visa|nri)\b", question or "", re.IGNORECASE):
-        conditionals["C2_foreign_job"] = _conditional_foreign_job(intel, kundli, kp)
-    if bucket in ("business_start", "job_change", "career_field_choice"):
-        conditionals["C3_business_vs_service"] = _conditional_business_vs_service(intel, kundli, karakas_d, kp)
     if bucket == "promotion":
         conditionals["C4_promotion_window"] = _conditional_promotion_window(
             T["T1_vimshottari"], intel, jup_t, saturn_t, kp
@@ -4473,19 +4137,12 @@ def assess_career(kundli: dict,
         conditionals["C5_setback_recovery"] = _conditional_setback_recovery(
             T["T1_vimshottari"], jup_t, intel, kp
         )
-    if bucket == "new_job_timing":
-        conditionals["C6_new_job_timing"] = _conditional_new_job_timing(
-            T["T1_vimshottari"], intel, kp
-        )
     if bucket == "transfer":
         conditionals["C7_transfer"] = _conditional_transfer(intel, kundli, saturn_t, kp)
     if bucket == "resignation":
         conditionals["C8_resignation"] = _conditional_resignation(
             T["T1_vimshottari"], intel, kp
         )
-    if bucket == "partnership":
-        conditionals["C9_partnership"] = _conditional_partnership(intel, kundli, karakas_d, kp)
-
     # ── Synastry (only if other-kundli provided)
     synastry: dict[str, dict] = {}
     if boss_kundli:
@@ -4512,10 +4169,6 @@ def assess_career(kundli: dict,
             if ck == "C1_govt_job" and bucket != "govt_job":
                 cv_score = round(cv_score * 0.35)
             cond_bonus += cv_score
-            # business_vs_service uses tilt as score signal
-            if ck == "C3_business_vs_service" and isinstance(cv.get("tilt"), int):
-                # Don't add tilt to score (it's a leaning indicator), but use for narrator
-                pass
 
     syn_bonus = sum((synastry[r].get("score") or 0) for r in synastry)
 
@@ -4813,17 +4466,6 @@ def format_verdict_for_prompt(v: dict, question: str = "") -> str:
         for f in (c.get("flags") or [])[:3]:
             lines.append(f"   • {f}")
         lines.append("")
-    if "C2_foreign_job" in conds:
-        c = conds["C2_foreign_job"]
-        lines.append(f"▸ FOREIGN-JOB PROMISE: {c.get('foreign_promise_level','?').upper()}")
-        for f in (c.get("flags") or [])[:3]:
-            lines.append(f"   • {f}")
-        lines.append("")
-    if "C3_business_vs_service" in conds:
-        c = conds["C3_business_vs_service"]
-        lines.append(f"▸ BUSINESS vs SERVICE LEANING: {c.get('leaning','?')}")
-        lines.append(f"   • Business signals: {c.get('business_score',0)}, Service signals: {c.get('service_score',0)}")
-        lines.append("")
     if "C4_promotion_window" in conds:
         c = conds["C4_promotion_window"]
         lines.append(f"▸ PROMOTION-WINDOW SIGNAL: {c.get('promotion_signal','?')}")
@@ -4939,16 +4581,12 @@ def format_final_answer(v: dict, question: str = "") -> str:
     conds = v.get("conditionals") or {}
     if "C1_govt_job" in conds:
         parts.append(f"🏛 *Govt-Job Promise:* {conds['C1_govt_job'].get('govt_promise_level','?').upper()}")
-    if "C2_foreign_job" in conds:
-        parts.append(f"🌏 *Foreign-Job Promise:* {conds['C2_foreign_job'].get('foreign_promise_level','?').upper()}")
-    if "C3_business_vs_service" in conds:
-        parts.append(f"⚖️ *Business vs Service:* {conds['C3_business_vs_service'].get('leaning','?')}")
     if "C4_promotion_window" in conds:
         parts.append(f"📈 *Promotion Signal:* {conds['C4_promotion_window'].get('promotion_signal','?')}")
     if "C5_setback_recovery" in conds:
         parts.append(f"🔄 *Recovery Outlook:* {conds['C5_setback_recovery'].get('recovery_outlook','?')}")
 
-    if any(k in conds for k in ("C1_govt_job","C2_foreign_job","C3_business_vs_service","C4_promotion_window","C5_setback_recovery")):
+    if any(k in conds for k in ("C1_govt_job","C4_promotion_window","C5_setback_recovery")):
         parts.append("")
 
     # Field recommendations

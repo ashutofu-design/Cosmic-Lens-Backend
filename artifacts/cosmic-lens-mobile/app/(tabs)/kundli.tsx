@@ -107,6 +107,8 @@ function getKundliLabels(t: ReturnType<typeof useT>) {
     snapNakshatraLord:   t.ku_snapNakshatraLord,
     snapDashaBalance:    t.ku_snapDashaBalance,
     snapLiveMoonTransit: t.ku_snapLiveMoonTransit,
+    snapLiveJupiterTransit: t.ku_snapLiveJupiterTransit ?? "LIVE JUPITER TRANSIT",
+    snapLiveSaturnTransit:  t.ku_snapLiveSaturnTransit  ?? "LIVE SANI TRANSIT",
     padaLabel:           t.ku_padaLabel,
     jaiminiDegPre:       t.ku_jaiminiDegPre,
     jaiminiDegSuf:       t.ku_jaiminiDegSuf,
@@ -1121,6 +1123,10 @@ export default function KundliScreen() {
   const [antarIdx,  setAntarIdx]  = useState(0);
   const [pratIdx,   setPratIdx]   = useState(0);
   const [moonRashi, setMoonRashi] = useState<any>(null);
+  // Phase 2.8.59: live Jupiter + Saturn transit (real Swiss Ephemeris from
+  // /api/moon_transit response, sits under Live Moon Transit in snapshot).
+  const [jupiterT, setJupiterT] = useState<any>(null);
+  const [saturnT,  setSaturnT]  = useState<any>(null);
 
   useEffect(() => {
     apiFetch(`${BASE_URL}/api/moon_transit`)
@@ -1129,6 +1135,24 @@ export default function KundliScreen() {
         if (typeof d.rashiIndex === "number") {
           const nakIdx = Math.floor(d.longitude / (360/27)) % 27;
           setMoonRashi({ index:d.rashiIndex, name:d.rashiName, nakshatra:NAKSHATRAS[nakIdx], longitude:d.longitude });
+        }
+        if (d.jupiter && typeof d.jupiter.rashiIndex === "number") {
+          setJupiterT({
+            index:      d.jupiter.rashiIndex,
+            name:       d.jupiter.rashiName,
+            nakshatra:  d.jupiter.nakshatra,
+            retrograde: d.jupiter.retrograde,
+            degInSign:  d.jupiter.degInSign,
+          });
+        }
+        if (d.saturn && typeof d.saturn.rashiIndex === "number") {
+          setSaturnT({
+            index:      d.saturn.rashiIndex,
+            name:       d.saturn.rashiName,
+            nakshatra:  d.saturn.nakshatra,
+            retrograde: d.saturn.retrograde,
+            degInSign:  d.saturn.degInSign,
+          });
         }
       }).catch(()=>{});
   }, []);
@@ -1180,6 +1204,21 @@ export default function KundliScreen() {
   const moonTransitText = moonRashi
     ? (() => { const h=((moonRashi.index-lagnaSign+12)%12)+1; return `${moonRashi.name} · H${h} · ${moonRashi.nakshatra}`; })()
     : null;
+  // Phase 2.8.59 — live Jupiter & Saturn transit rows under Live Moon Transit
+  const jupiterTransitText = jupiterT
+    ? (() => {
+        const h = ((jupiterT.index - lagnaSign + 12) % 12) + 1;
+        const r = jupiterT.retrograde ? " · R" : "";
+        return `${jupiterT.name} · H${h} · ${jupiterT.nakshatra}${r}`;
+      })()
+    : null;
+  const saturnTransitText = saturnT
+    ? (() => {
+        const h = ((saturnT.index - lagnaSign + 12) % 12) + 1;
+        const r = saturnT.retrograde ? " · R" : "";
+        return `${saturnT.name} · H${h} · ${saturnT.nakshatra}${r}`;
+      })()
+    : null;
   const snapshotRows = [
     { label:L.snapAscendant,  value:kundli.ascendant,  icon:"sunrise" },
     { label:L.snapMoonSign,   value:kundli.moonSign,   icon:"moon" },
@@ -1187,6 +1226,8 @@ export default function KundliScreen() {
     ...(kundli.nakshatraRuler?[{ label:L.snapNakshatraLord, value:kundli.nakshatraRuler, icon:"shield" }]:[]),
     ...(dbText?[{ label:L.snapDashaBalance, value:dbText, icon:"clock" }]:[]),
     ...(moonTransitText?[{ label:L.snapLiveMoonTransit, value:moonTransitText, icon:"radio" }]:[]),
+    ...(jupiterTransitText?[{ label:L.snapLiveJupiterTransit, value:jupiterTransitText, icon:"trending-up" }]:[]),
+    ...(saturnTransitText?[{ label:L.snapLiveSaturnTransit, value:saturnTransitText, icon:"clock" }]:[]),
   ];
 
   return (

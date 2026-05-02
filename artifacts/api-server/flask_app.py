@@ -2612,11 +2612,43 @@ def moon_transit():
         "Aries","Taurus","Gemini","Cancer","Leo","Virgo",
         "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"
     ]
+    nakshatra_names = [
+        "Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra","Punarvasu",
+        "Pushya","Ashlesha","Magha","Purva Phalguni","Uttara Phalguni","Hasta",
+        "Chitra","Swati","Vishakha","Anuradha","Jyeshtha","Mula","Purva Ashadha",
+        "Uttara Ashadha","Shravana","Dhanishta","Shatabhisha","Purva Bhadrapada",
+        "Uttara Bhadrapada","Revati"
+    ]
     rashi_index = int(lon / 30) % 12
+
+    # ── Phase 2.8.59: ADD-ONLY — also expose live Jupiter + Saturn transit
+    # for the kundli snapshot card (real Swiss Ephemeris sidereal, retrograde
+    # flag from speed sign). Existing `rashiIndex` / `rashiName` / `longitude`
+    # fields preserved verbatim for backward compat.
+    extras: dict = {}
+    try:
+        for nm, pid in (("jupiter", swe.JUPITER), ("saturn", swe.SATURN)):
+            r = swe.calc_ut(jd, pid, flags)
+            p_lon   = r[0][0] % 360
+            p_speed = r[0][3]
+            p_idx   = int(p_lon / 30) % 12
+            n_idx   = int(p_lon / (360 / 27)) % 27
+            extras[nm] = {
+                "rashiIndex":  p_idx,
+                "rashiName":   rashi_names[p_idx],
+                "longitude":   round(p_lon, 4),
+                "degInSign":   round(p_lon % 30, 2),
+                "retrograde":  bool(p_speed < 0),
+                "nakshatra":   nakshatra_names[n_idx],
+            }
+    except Exception as _exc:  # noqa: BLE001
+        print(f"[moon_transit] jupiter/saturn extra failed (non-fatal): {_exc}")
+
     return jsonify({
         "rashiIndex": rashi_index,
         "rashiName":  rashi_names[rashi_index],
         "longitude":  round(lon, 4),
+        **extras,
     })
 
 

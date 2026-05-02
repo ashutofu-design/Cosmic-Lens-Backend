@@ -957,6 +957,11 @@ export interface MoreT {
   ku_snapNakshatraLord: string;
   ku_snapDashaBalance: string;
   ku_snapLiveMoonTransit: string;
+  // Phase 2.8.59 — optional, fall back to English in kundli.tsx if a locale
+  // file does not yet provide a translation. Keeps the i18n contract
+  // backward-compatible across all 20+ language objects.
+  ku_snapLiveJupiterTransit?: string;
+  ku_snapLiveSaturnTransit?: string;
   ku_padaLabel: string;
   ku_jaiminiDegPre: string;
   ku_jaiminiDegSuf: string;

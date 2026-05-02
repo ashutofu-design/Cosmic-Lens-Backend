@@ -1303,7 +1303,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     # Sprint-6 — KP Cuspal Sub-Lord cross-check (best-effort — needs lat/lon/tz)
     kp_str = ""
     try:
-        from kp_locked_facts import compute_kp_summary, format_kp_summary  # type: ignore
+        from engine_locked_to_llm.kp_locked_facts import compute_kp_summary, format_kp_summary  # type: ignore
         kp_sum = compute_kp_summary(birth, kundli)
         kp_str = format_kp_summary(kp_sum) if kp_sum else ""
     except Exception as exc:  # noqa: BLE001

@@ -2279,10 +2279,14 @@ def _is_love_question(text: str) -> bool:
 
 
 def _career_engine():
-    """Lazy-load deterministic career & profession verdict engine."""
-    from career_engine import (assess_career,                    # type: ignore
-                                format_verdict_for_prompt as _fmt_career,
-                                classify_career_question)
+    """Lazy-load deterministic career & profession verdict engine.
+
+    Phase 2.8.35: moved from career_engine.py (api-server root) to
+    event_timing.career package — facade re-exports the 3 public funcs.
+    """
+    from event_timing.career import (assess_career,             # type: ignore
+                                      format_verdict_for_prompt as _fmt_career,
+                                      classify_career_question)
     return assess_career, _fmt_career, classify_career_question
 
 

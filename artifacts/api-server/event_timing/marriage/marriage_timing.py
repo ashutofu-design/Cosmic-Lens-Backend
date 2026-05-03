@@ -175,6 +175,36 @@ def _late_status(age_band: str, step0_verdict: str) -> str:
     return "critical"
 
 
+# Phase 2.8.62 — "marriage nearby" signal.
+# When STEP 0 verdict = LATE AND user's current age is already inside the
+# LATE / VERY_LATE / DELAYED_CRITICAL band, the marriage is no longer a
+# distant possibility — the karmic window is open NOW. UI / narrator can
+# use this flag to surface a "shadi nearby hai" message instead of the
+# generic "delayed" framing.
+_NEARBY_AGE_BANDS: Set[str] = {"LATE", "VERY_LATE", "DELAYED_CRITICAL"}
+
+
+def _marriage_nearby(age_band: str, step0_verdict: str) -> Tuple[bool, str]:
+    """Return (is_nearby, hinglish_reason).
+
+    Trigger: engine says LATE AND user's current age band is already in the
+    late zone (LATE / VERY_LATE / DELAYED_CRITICAL). This means the late
+    karma is no longer "future" — it's the active window NOW.
+    """
+    if step0_verdict != "LATE":
+        return (False, "")
+    if age_band not in _NEARBY_AGE_BANDS:
+        return (False, "")
+    if age_band == "LATE":
+        return (True, "Engine LATE bola aur aap abhi LATE age band me ho — "
+                       "shadi nearby hai (active window chal raha hai).")
+    if age_band == "VERY_LATE":
+        return (True, "Engine LATE bola aur aap VERY_LATE band me ho — "
+                       "shadi bahut nearby hai (window peak pe hai).")
+    return (True, "Engine LATE bola aur aap delayed-critical zone me ho — "
+                   "shadi ki window abhi sabse zyada open hai.")
+
+
 # ════════════════════════════════════════════════════════════════════════
 # SECTION 1 — D9 Navamsha (cross-validation toolset)
 # ════════════════════════════════════════════════════════════════════════
@@ -1318,12 +1348,15 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
     # ── Age-band overlay (hard-coded thresholds; gender-aware) ─────
     age_band = _age_band(current_age, gender) if current_age is not None else "UNKNOWN"
     late_status = _late_status(age_band, verdict)
+    nearby, nearby_reason = _marriage_nearby(age_band, verdict)
     if current_age is not None and age_band != "UNKNOWN":
         reasons.append(f"AGE: current={current_age}y gender={gender or '?'} "
                        f"band={age_band} status={late_status}")
     elif current_age is not None:
         reasons.append(f"AGE: current={current_age}y but gender unknown — "
                        f"band/status skipped")
+    if nearby:
+        reasons.append(f"NEARBY: {nearby_reason}")
 
     return {
         "verdict": verdict,
@@ -1335,6 +1368,9 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
         "gender": gender or "",
         "age_band": age_band,
         "late_status": late_status,
+        # Phase 2.8.62 — actionable "shadi nearby" signal for UI/narrator.
+        "marriage_nearby":        nearby,
+        "marriage_nearby_reason": nearby_reason,
         "age_thresholds": {
             "male":   {"early_max": _AGE_BANDS_MALE[0],
                         "normal_max": _AGE_BANDS_MALE[1],

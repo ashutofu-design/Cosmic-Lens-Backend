@@ -1193,6 +1193,11 @@ function KPSummaryCard({ kundli }: { kundli: KundliData }) {
   };
   const plHousesOf = (lord: string): number[] => {
     const sv = serverSigs?.[lord]?.pl;
+    // PURE KP: only trust server's KP-Placidus significations. Never mix in
+    // Vedic whole-sign house from kundli.planets[].house — KP and Vedic are
+    // two different house systems and must not be merged. If server data is
+    // missing (legacy kundli), local fallback uses KP cusp sign-lord ownership
+    // only; the auto-refetch effect upstream backfills the kp block.
     return (sv && sv.length) ? [...sv].sort((a,b)=>a-b) : plHousesOfLocal(lord);
   };
   const fmt = (lord: string): string => {

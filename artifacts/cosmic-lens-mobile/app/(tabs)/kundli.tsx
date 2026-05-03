@@ -1006,6 +1006,8 @@ function KPTab({ kundli }: { kundli: KundliData }) {
         </View>
       </View>
 
+      <KPSummaryCard kundli={kundli} />
+
       <View style={{gap:10}}>
         {kpData.map(({ name, lon, kp }) => {
           const isAsc = name === "Ascendant";
@@ -1410,8 +1412,6 @@ export default function KundliScreen() {
           ))}
         </View>
       </View>
-
-      <KPSummaryCard kundli={kundli} />
 
       <View style={{ gap: 10 }}>
         <Pressable

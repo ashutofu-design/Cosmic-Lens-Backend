@@ -964,6 +964,33 @@ def _aspects_target(planet: str, p_si: int, target_si: int) -> bool:
     return False
 
 
+# ──────────────────────────────────────────────────────────────────────
+# Phase 2.8.72 (May 3 2026) — FIX #1: WEIGHTED LINK SCORING
+#
+# Reality of KP/Vedic link strength:
+#   parivartana (sign exchange) > conjunction = occupation > aspect (loose)
+# Old code treated all 4 link types as equal booleans → aspect-only
+# planets bloated the "linked" bucket and inflated approver counts.
+#
+# Weights and threshold:
+#   parivartana = 3   (strongest — full mutual exchange of signs)
+#   conjunction = 2   (planet sits with 7L)
+#   occupation  = 2   (planet sits in 7H)
+#   aspect      = 1   (sign-only aspect — loose without orb)
+#
+# `linked` now means score >= 2 (i.e. at least one strong link, OR
+# the very strong parivartana alone). Aspect-only (score 1) no longer
+# counts as a meaningful link. `any_linked` retained for observability.
+# ──────────────────────────────────────────────────────────────────────
+_LINK_WEIGHTS: Dict[str, int] = {
+    "parivartana": 3,
+    "conjunction": 2,
+    "occupation":  2,
+    "aspect":      1,
+}
+_LINK_THRESHOLD: int = 2
+
+
 def _planet_link_in_chart(planet: str, p_si: Optional[int], p_house: Optional[int],
                            h7_si: Optional[int],
                            seventh_lord: str,
@@ -972,13 +999,19 @@ def _planet_link_in_chart(planet: str, p_si: Optional[int], p_house: Optional[in
     """Check 4 link types between `planet` and 7H/7L within a single chart.
 
     Returns dict:
-      {"occupation": bool, "conjunction": bool, "aspect": bool,
-       "parivartana": bool, "linked": bool, "details": [str]}
+      {"occupation":  bool, "conjunction": bool, "aspect": bool,
+       "parivartana": bool, "linked": bool, "any_linked": bool,
+       "score": int, "details": [str]}
+
+    Phase 2.8.72 FIX #1: `linked` is now score-based (>= _LINK_THRESHOLD).
+    `any_linked` preserves the old "any link present" boolean for
+    diagnostic / backward inspection only.
     """
-    out = {
+    out: Dict[str, Any] = {
         "occupation": False, "conjunction": False,
         "aspect": False, "parivartana": False,
-        "linked": False, "details": [],
+        "linked": False, "any_linked": False, "score": 0,
+        "details": [],
     }
     if p_si is None or h7_si is None:
         return out
@@ -1022,8 +1055,11 @@ def _planet_link_in_chart(planet: str, p_si: Optional[int], p_house: Optional[in
             out["parivartana"] = True
             out["details"].append(f"pari-7L({seventh_lord})")
 
-    out["linked"] = (out["occupation"] or out["conjunction"]
-                     or out["aspect"] or out["parivartana"])
+    # Phase 2.8.72 FIX #1: weighted score replaces equal-weight boolean
+    out["any_linked"] = bool(out["occupation"] or out["conjunction"]
+                             or out["aspect"] or out["parivartana"])
+    out["score"] = sum(_LINK_WEIGHTS[k] for k in _LINK_WEIGHTS if out.get(k))
+    out["linked"] = out["score"] >= _LINK_THRESHOLD
     return out
 
 
@@ -1051,11 +1087,17 @@ def _d9_planet_state(d9_planets_list: list, name: str
 
 
 # Final classification matrix
+# Phase 2.8.72 FIX #3 (May 3 2026): STRONG + NONE downgraded
+# PASSIVE_PROMISE → NEUTRAL. Rationale: KP says "promise" but the planet
+# has zero meaningful link (score < 2) to 7H/7L in either D1 or D9 →
+# execution mechanism missing → not safe to count as a soft promiser.
+# Old PASSIVE_PROMISE label kept in _STEP2_FINAL_BUCKET for defensive
+# backward-compat (no longer produced by the matrix).
 _STEP2_MATRIX: Dict[Tuple[str, str], str] = {
     ("STRONG", "BOTH"):  "STRONGEST_PROMISE",
     ("STRONG", "D1"):    "CONFIRMED_PROMISE",
     ("STRONG", "D9"):    "CONFIRMED_PROMISE",
-    ("STRONG", "NONE"):  "PASSIVE_PROMISE",
+    ("STRONG", "NONE"):  "NEUTRAL",            # was PASSIVE_PROMISE [2.8.72]
     ("MIXED",  "BOTH"):  "STRONG_CONDITIONAL",
     ("MIXED",  "D1"):    "CONDITIONAL",
     ("MIXED",  "D9"):    "CONDITIONAL",

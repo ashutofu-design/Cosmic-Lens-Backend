@@ -19,7 +19,7 @@ swe.set_sid_mode(swe.SIDM_LAHIRI)
 
 # Bumped on any math/structure change to a kundli output. Used by the
 # cache layer (cache_helpers.KundliCache) to invalidate stale rows.
-KUNDLI_CALC_VERSION = 12
+KUNDLI_CALC_VERSION = 13
 
 SIGNS = [
     "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",

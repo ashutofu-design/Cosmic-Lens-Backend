@@ -2094,6 +2094,19 @@ def kundli():
                 try:
                     chart = _json.loads(cached.chart_data)
                     if isinstance(chart, dict):
+                        # Phase 2.8.61: respect engine calcVersion. If the cached
+                        # chart was computed by an older engine (e.g. before the
+                        # timezonefinder fix that corrected tz=5.0→5.5 for India),
+                        # skip the cache and recompute fresh. Stale rows will be
+                        # overwritten by the fresh-compute persist path below.
+                        try:
+                            from kundli_engine import KUNDLI_CALC_VERSION as _CUR_CV
+                        except Exception:
+                            _CUR_CV = None
+                        _cached_cv = int(chart.get("calcVersion") or 0)
+                        if _CUR_CV is not None and _cached_cv != _CUR_CV:
+                            print(f"[kundli.profile_cache] stale calcVersion {_cached_cv} != {_CUR_CV} for profile.id={cached.id}, recomputing")
+                            raise ValueError("stale_calc_version")
                         # Lazy-repair (Phase 2.8.57): if cached row predates KP-cache
                         # rollout (or KP failed during initial compute), backfill it
                         # ONCE on read so downstream callers always get kundli["kp"].
@@ -2149,6 +2162,27 @@ def kundli():
                 }), 402
             result["quota"]  = {"used": quota["used"], "limit": quota["limit"]}
             result["cached"] = False
+            # Phase 2.8.61: backfill fresh result into Profile.chart_data so
+            # the next request hits the per-user cache instead of recomputing
+            # (e.g. after calcVersion bump invalidated the stale row).
+            try:
+                if birth_key:
+                    prof = (Profile.query
+                            .filter_by(user_id=user.id, birth_key=birth_key, deleted_at=None)
+                            .first())
+                    if prof is not None:
+                        # Strip transient response metadata so the persisted
+                        # blob contains only canonical chart fields. This keeps
+                        # the cache row clean of per-request flags like
+                        # quota/cached/_cache that don't belong in storage.
+                        _persist = {k: v for k, v in result.items()
+                                    if k not in ("quota", "cached", "_cache")}
+                        prof.chart_data = _json.dumps(_persist)
+                        db.session.commit()
+            except Exception as _bf_exc:
+                print(f"[kundli.profile_cache] backfill failed (non-fatal): {_bf_exc}")
+                try: db.session.rollback()
+                except Exception: pass
         return jsonify(result)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500

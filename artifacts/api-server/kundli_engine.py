@@ -17,6 +17,10 @@ from dateutil.relativedelta import relativedelta
 # call in this process uses consistent Lahiri values.
 swe.set_sid_mode(swe.SIDM_LAHIRI)
 
+# Bumped on any math/structure change to a kundli output. Used by the
+# cache layer (cache_helpers.KundliCache) to invalidate stale rows.
+KUNDLI_CALC_VERSION = 8
+
 SIGNS = [
     "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
     "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"
@@ -457,7 +461,7 @@ def calculate_kundli(data):
         "nakshatraRuler": NAKSHATRA_RULERS[nakshatra_idx],
         "moonLongitude": round(moon_lon, 6),
         "dashaBalance":  birth_dasha_balance,
-        "calcVersion":   8,
+        "calcVersion":   KUNDLI_CALC_VERSION,
         "planets": planet_list,
         "divisionalCharts": {
             "D9":  d9_chart,

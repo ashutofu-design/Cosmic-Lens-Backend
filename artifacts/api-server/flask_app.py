@@ -2129,7 +2129,10 @@ def kundli():
             }), 402
 
     try:
-        result = calculate_kundli(data)
+        # Phase-3: route through global cache (read-through; falls back
+        # to fresh compute on miss or DB error).
+        from cache_helpers import get_or_compute_kundli
+        result = get_or_compute_kundli(data)
         # Consume quota ONLY after a successful fresh calculation. The atomic
         # consume can still fail under heavy concurrency (another request used
         # the last slot between our pre-check and now) — in that case we must

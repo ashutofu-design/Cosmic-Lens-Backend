@@ -402,6 +402,62 @@ class UserQuestion(db.Model):
         }
 
 
+class KundliCache(db.Model):
+    """
+    Global shared cache of computed natal kundlis (Phase-3 cache layer).
+
+    Keyed by birth_key alone (NOT user_id) — two different users with
+    identical DOB+time+place share the same row, so we compute the chart
+    only once project-wide.
+
+    Stores the FULL calculate_kundli() output as JSON, plus a few "hot"
+    fields promoted to indexed columns for fast filtering (e.g. notify
+    all users entering Saturn MD next week).
+
+    Cache invalidation: row is recomputed when stored calc_version differs
+    from kundli_engine.calculate_kundli()'s current calcVersion (8).
+    """
+    __tablename__ = "kundli_cache"
+
+    birth_key      = db.Column(db.String(120), primary_key=True)
+    kundli_json    = db.Column(db.JSON, nullable=False)   # full ~230KB chart
+    calc_version   = db.Column(db.Integer, nullable=False, index=True)
+
+    # Hot fields (denormalized for fast SQL queries; source-of-truth is kundli_json)
+    ascendant      = db.Column(db.String(20), index=True)
+    moon_sign      = db.Column(db.String(20), index=True)
+    sun_sign       = db.Column(db.String(20))
+    nakshatra      = db.Column(db.String(30))
+    current_md     = db.Column(db.String(20), index=True)
+    current_ad     = db.Column(db.String(20))
+    current_md_end = db.Column(db.Date, index=True)
+
+    # Audit
+    computed_at    = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    last_accessed  = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    access_count   = db.Column(db.Integer, default=1, nullable=False)
+
+
+class DailyTransitCache(db.Model):
+    """
+    Per-day transit snapshot for a given natal chart.
+
+    Composite PK = (birth_key, transit_date). One row per chart per day.
+    Engines (marriage/career/daily-horoscope) read from here instead of
+    re-invoking Swiss Ephemeris on every request.
+
+    transit_json shape = output of transits.compute_transits().
+    """
+    __tablename__ = "daily_transit_cache"
+
+    birth_key     = db.Column(db.String(120), primary_key=True)
+    transit_date  = db.Column(db.Date, primary_key=True)
+    transit_json  = db.Column(db.JSON, nullable=False)
+    computed_at   = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    last_accessed = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    access_count  = db.Column(db.Integer, default=1, nullable=False)
+
+
 def compute_birth_key(birth_data) -> str:
     """
     Deterministic dedup key for a kundli computation. Two birth-data inputs

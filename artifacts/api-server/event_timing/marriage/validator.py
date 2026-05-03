@@ -540,10 +540,20 @@ def _check_transit_ephemeris_30yr(lagna_si: Optional[int],
             "saturn_signs": sorted(by_year[yr]["sat"]),
         })
 
+    window_start = samples[0]["date"] if samples else None
+    window_end = samples[-1]["date"] if samples else None
     return {
         "issues": issues,
         "samples_taken": len(samples),
         "bad_samples": bad_count,
+        "window_start": window_start,
+        "window_end": window_end,
+        "window_note": ("rolling 30-year window anchored to today (utcnow); "
+                        "advances every time validator runs"),
+        "jup_forward_steps": jup_steps,
+        "sat_forward_steps": sat_steps,
+        "jup_avg_sign_stay_months": round(avg_jup_mo, 1),
+        "sat_avg_sign_stay_months": round(avg_sat_mo, 1),
         "jupiter_transitions": jup_transitions,
         "saturn_transitions": sat_transitions,
         "year_table": year_table,

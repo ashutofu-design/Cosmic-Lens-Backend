@@ -1545,7 +1545,7 @@ _EXALT_SIGN: Dict[str, int] = {  # planet -> sign idx of exaltation
     "Venus": 11, "Saturn": 6, "Rahu": 1, "Ketu": 7,
 }
 _DEBIL_SIGN: Dict[str, int] = {  # planet -> sign idx of debilitation (180° from exalt)
-    "Sun": 6, "Moon": 7, "Mars": 3, "Mercury": 11, "Jupiter": 5,
+    "Sun": 6, "Moon": 7, "Mars": 3, "Mercury": 11, "Jupiter": 9,
     "Venus": 5, "Saturn": 0, "Rahu": 7, "Ketu": 1,
 }
 _OWN_SIGNS: Dict[str, Set[int]] = {

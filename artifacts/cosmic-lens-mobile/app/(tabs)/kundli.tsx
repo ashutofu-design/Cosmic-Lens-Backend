@@ -1054,6 +1054,92 @@ function KPTab({ kundli }: { kundli: KundliData }) {
   );
 }
 
+// ── KP Summary Card (inline on Kundli main screen) ────────────────────────
+// Compact 3-column table: Planet | Star Lord (with PL houses) | Sub Lord (with PL houses).
+// Computes everything client-side from kundli.planets + ascendant.
+const KP_SIGN_LORDS = [
+  "Mars","Venus","Mercury","Moon","Sun","Mercury",
+  "Venus","Mars","Jupiter","Saturn","Saturn","Jupiter",
+];
+function KPSummaryCard({ kundli }: { kundli: KundliData }) {
+  const C = useC();
+  const ac = C.isDark ? "#f59e0b" : "#7C3AED";
+  const o = (v: string) => oa(C.isDark, v);
+  const ABBR: Record<string,string> = { Sun:"Su",Moon:"Mo",Mars:"Ma",Mercury:"Me",Jupiter:"Ju",Venus:"Ve",Saturn:"Sa",Rahu:"Ra",Ketu:"Ke" };
+  const CORE = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Rahu","Ketu"];
+  const lagnaSign = Math.floor((kundli.ascendantDeg ?? 0) / 30) % 12;
+
+  // Build map: planet name -> { house, sign }
+  const pmap: Record<string,{house:number; signIdx:number}> = {};
+  for (const p of kundli.planets) {
+    pmap[p.name] = { house: p.house, signIdx: Math.floor((p.longitude % 360) / 30) % 12 };
+  }
+  // Compute PL houses for any lord = occupation house + owned houses (relative to lagna)
+  const plHousesOf = (lord: string): number[] => {
+    const occ = pmap[lord]?.house;
+    const owned: number[] = [];
+    for (let h = 0; h < 12; h++) {
+      const signAtCusp = (lagnaSign + h) % 12;
+      if (KP_SIGN_LORDS[signAtCusp] === lord) owned.push(h + 1);
+    }
+    const set = new Set<number>(owned);
+    if (occ) set.add(occ);
+    return [...set].sort((a,b)=>a-b);
+  };
+  const fmt = (lord: string): string => {
+    const hs = plHousesOf(lord);
+    return `${ABBR[lord] ?? lord}-${hs.length ? hs.join(",") : "?"}`;
+  };
+
+  const rows = CORE.filter(n => pmap[n]).map(n => {
+    const p = kundli.planets.find(pl => pl.name === n)!;
+    const kp = getKPLords(p.longitude);
+    return { name: n, house: p.house, nl: kp.starLord, sb: kp.subLord };
+  });
+
+  return (
+    <View style={{
+      borderRadius: 18, borderWidth: 1, overflow: "hidden",
+      backgroundColor: C.bgCard, borderColor: C.border,
+    }}>
+      <View style={{
+        backgroundColor: `${ac}${o("12")}`, paddingVertical: 10, paddingHorizontal: 16,
+        borderBottomWidth: 1, borderBottomColor: C.border,
+        flexDirection: "row", alignItems: "center", gap: 8,
+      }}>
+        <Feather name="crosshair" size={13} color={ac} />
+        <Text style={{ color: ac, fontSize: 11, fontFamily: F.bold, letterSpacing: 1 }}>KP SUB-LORDS</Text>
+      </View>
+      <View style={{ flexDirection: "row", paddingVertical: 8, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: C.border }}>
+        <Text style={{ flex: 1.0, color: C.textMid, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5 }}>PLANET</Text>
+        <Text style={{ flex: 0.6, color: C.textMid, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5, textAlign: "center" }}>HOUSE</Text>
+        <Text style={{ flex: 1.4, color: C.textMid, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5 }}>NL</Text>
+        <Text style={{ flex: 1.4, color: C.textMid, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5 }}>SBL</Text>
+      </View>
+      {rows.map((r, idx) => {
+        const pHue = hue(r.name);
+        return (
+          <View key={r.name} style={{
+            flexDirection: "row", alignItems: "center", paddingVertical: 9, paddingHorizontal: 14,
+            backgroundColor: idx % 2 === 0 ? "transparent" : `${ac}${o("05")}`,
+            borderBottomWidth: idx < rows.length - 1 ? 1 : 0, borderBottomColor: C.border,
+          }}>
+            <View style={{ flex: 1.0, flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: `${pHue}${o("15")}`, alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ color: pHue, fontSize: 9, fontFamily: F.bold }}>{ABBR[r.name]}</Text>
+              </View>
+              <Text style={{ color: C.text, fontSize: 12, fontFamily: F.semibold }}>{r.name}</Text>
+            </View>
+            <Text style={{ flex: 0.6, color: C.text, fontSize: 12, fontFamily: F.bold, textAlign: "center" }}>{r.house}</Text>
+            <Text style={{ flex: 1.4, color: C.textMid, fontSize: 11, fontFamily: F.semibold }}>{fmt(r.nl)}</Text>
+            <Text style={{ flex: 1.4, color: C.textMid, fontSize: 11, fontFamily: F.semibold }}>{fmt(r.sb)}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 function KPLordChip({ label, lord }: { label:string; lord:string }) {
   const C = useC();
   const color = hue(lord);
@@ -1311,6 +1397,8 @@ export default function KundliScreen() {
           ))}
         </View>
       </View>
+
+      <KPSummaryCard kundli={kundli} />
 
       <View style={{ gap: 10 }}>
         <Pressable

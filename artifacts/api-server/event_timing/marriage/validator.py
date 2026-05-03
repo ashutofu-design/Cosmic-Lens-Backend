@@ -20,6 +20,12 @@ Checks performed:
   C8  Top-3 chronology: must be sorted by start date ascending
   C9  Verdict band consistency (DELAYED/PROMISED/DENIED vs band)
   C10 Min-age gate: no window earlier than birth_year + early_thr
+  C11 SCHEMA: all required output fields present + correct types
+  C12 PLANET PARITY: all 9 planets present in chart with valid sign+house
+  C13 PRIMARY CROSS-CHECK: primary_window appears in top_3_windows AND
+      engine's d1_d9 promisers ⊆ validator-derived promisers
+  C14 HELPER SANITY: KP, dasha, ashtakavarga, transits all returned data
+  C15 ERROR LEAK: no exception strings or None-where-bool in output dict
 """
 
 from __future__ import annotations
@@ -251,6 +257,161 @@ def _verify_window_dtt(window: Dict[str, Any], lagna_si: int,
     }
 
 
+_REQUIRED_OUTPUT_FIELDS: Dict[str, type] = {
+    "verdict": str, "band": str,
+    "factors": list, "risk_flags": list,
+    "top_3_windows": list,
+    "step0_tendency": dict,
+    "d1_d9_planet_scan": dict,
+    "chronological_top3_strict_dtt": list,
+}
+_OPTIONAL_NULLABLE_FIELDS = {
+    "primary_window", "backup_window", "key_trigger",
+    "confluence_strength", "ul_outlook", "risk_flag",
+}
+_NINE_PLANETS = ["Sun", "Moon", "Mars", "Mercury", "Jupiter",
+                  "Venus", "Saturn", "Rahu", "Ketu"]
+
+
+def _check_schema(engine_output: dict) -> Dict[str, Any]:
+    """C11: required fields present with correct types."""
+    issues: List[str] = []
+    for k, t in _REQUIRED_OUTPUT_FIELDS.items():
+        if k not in engine_output:
+            issues.append(f"C11 FAIL: missing required field '{k}'")
+            continue
+        v = engine_output[k]
+        if not isinstance(v, t):
+            issues.append(f"C11 FAIL: field '{k}' type={type(v).__name__} "
+                          f"expected={t.__name__}")
+    for k in _OPTIONAL_NULLABLE_FIELDS:
+        if k in engine_output:
+            v = engine_output[k]
+            if v is not None and not isinstance(v, str):
+                issues.append(f"C11 FAIL: optional field '{k}' must be str|None, "
+                              f"got {type(v).__name__}")
+    return {"issues": issues, "field_count": len(engine_output)}
+
+
+def _check_planet_parity(planets: list) -> Dict[str, Any]:
+    """C12: all 9 planets present with valid sign + house."""
+    issues: List[str] = []
+    found: Dict[str, Dict[str, Any]] = {}
+    for p in planets if isinstance(planets, list) else []:
+        if not isinstance(p, dict):
+            continue
+        nm = p.get("name")
+        if nm in _NINE_PLANETS:
+            found[nm] = {"sign": p.get("sign"), "house": p.get("house")}
+    for nm in _NINE_PLANETS:
+        if nm not in found:
+            issues.append(f"C12 FAIL: planet '{nm}' missing from chart")
+            continue
+        sg = found[nm]["sign"]; ho = found[nm]["house"]
+        if sg not in _SIGNS:
+            issues.append(f"C12 FAIL: planet '{nm}' has invalid sign={sg!r}")
+        if not isinstance(ho, int) or not (1 <= ho <= 12):
+            issues.append(f"C12 FAIL: planet '{nm}' has invalid house={ho!r}")
+    return {"issues": issues, "found": found}
+
+
+def _check_primary_crosscheck(engine_output: dict,
+                                verifier_d1_promisers: List[str]
+                                ) -> Dict[str, Any]:
+    """C13: primary_window must appear in top_3_windows OR be None.
+    AND engine's d1_d9_scan promisers must be a subset of the validator's
+    independent promiser list (engine should never INVENT promisers).
+    """
+    issues: List[str] = []
+    primary = engine_output.get("primary_window")
+    top3 = engine_output.get("top_3_windows") or []
+    chrono = engine_output.get("chronological_top3_strict_dtt") or []
+    if primary:
+        windows_set = {w.get("window") for w in top3 if isinstance(w, dict)}
+        chrono_set = {w.get("window") for w in chrono if isinstance(w, dict)}
+        if primary not in windows_set and primary not in chrono_set:
+            issues.append(
+                f"C13 FAIL: primary_window {primary!r} not found in "
+                f"top_3_windows or chronological_top3_strict_dtt")
+
+    eng_scan = engine_output.get("d1_d9_planet_scan") or {}
+    eng_proms_clean = {p.split("(")[0].strip() for p in
+                        (eng_scan.get("promisers") or [])}
+    ver_proms_clean = set(verifier_d1_promisers or [])
+    invented = eng_proms_clean - ver_proms_clean
+    if invented:
+        issues.append(
+            f"C13 WARN: engine d1_d9_scan reports promisers not seen by "
+            f"verifier: {sorted(invented)}")
+
+    return {"issues": issues,
+            "primary_in_top3": (primary in {w.get("window") for w in top3}) if primary else None,
+            "primary_in_chrono": (primary in {w.get("window") for w in chrono}) if primary else None,
+            "engine_promisers": sorted(eng_proms_clean),
+            "verifier_promisers": sorted(ver_proms_clean)}
+
+
+def _check_helper_sanity(chart: dict) -> Dict[str, Any]:
+    """C14: critical helpers (KP, dasha, ashtakavarga, transits) returned data."""
+    issues: List[str] = []
+    kp = chart.get("kp") or chart.get("kp_engine") or {}
+    if not isinstance(kp, dict) or not kp:
+        issues.append("C14 WARN: chart.kp absent or empty")
+    elif not (kp.get("cuspal_sub_lords") or kp.get("cusps")):
+        issues.append("C14 WARN: KP block has no cuspal_sub_lords/cusps")
+
+    vims = (chart.get("vimshottari") or chart.get("vimshottari_dasha")
+            or chart.get("dashas"))
+    if not vims:
+        issues.append("C14 FAIL: vimshottari dasha tree absent from chart "
+                      "(checked vimshottari/vimshottari_dasha/dashas)")
+
+    cd = chart.get("currentDasha") or chart.get("current_dasha") or {}
+    if not cd:
+        issues.append("C14 WARN: currentDasha absent from chart")
+
+    # Ashtakavarga is computed on-the-fly in marriage_timing
+    # (_compute_ashtakavarga_for_chart). Not required at chart level —
+    # informational only.
+    av = chart.get("ashtakavarga") or chart.get("ashtakvarga")
+
+    return {
+        "issues": issues,
+        "kp_present": bool(kp),
+        "dasha_present": bool(vims),
+        "current_dasha_present": bool(cd),
+        "ashtakavarga_chart_level": bool(av),
+        "ashtakavarga_note": ("computed on-the-fly inside engine; "
+                              "chart-level absence is OK"),
+    }
+
+
+def _check_error_leak(engine_output: dict) -> Dict[str, Any]:
+    """C15: scan output strings for exception/error indicators."""
+    issues: List[str] = []
+    suspect_keywords = ("Traceback", "Exception", "failed:", "<error",
+                         "NoneType has no")
+    factors = engine_output.get("factors") or []
+    for f in factors:
+        if not isinstance(f, str):
+            continue
+        for kw in suspect_keywords:
+            if kw in f:
+                issues.append(f"C15 WARN: factor leak '{f[:80]}'")
+                break
+    rf = engine_output.get("risk_flags") or []
+    for r in rf:
+        if isinstance(r, str) and any(kw in r for kw in suspect_keywords):
+            issues.append(f"C15 WARN: risk_flag leak '{r[:80]}'")
+    # Booleans should not be None
+    for w in (engine_output.get("top_3_windows") or []):
+        if isinstance(w, dict):
+            for bk in ("sandhi", "eclipse_flag", "mars_sat_conflict"):
+                if bk in w and w[bk] is None:
+                    issues.append(f"C15 FAIL: top_3 window has None for boolean '{bk}'")
+    return {"issues": issues}
+
+
 def _check_chronology_and_age(chrono: List[Dict[str, Any]],
                                 birth_year: Optional[int]
                                 ) -> Dict[str, Any]:
@@ -390,6 +551,37 @@ def validate_marriage_assessment(chart: dict, birth: Any,
             report["mismatches"].append(it)
         else:
             report["warnings"].append(it)
+
+    # ── C11 schema
+    sch = _check_schema(engine_output)
+    report["checks"]["C11_schema"] = sch
+    for it in sch["issues"]:
+        (report["mismatches"] if "FAIL" in it else report["warnings"]).append(it)
+
+    # ── C12 planet parity
+    pp = _check_planet_parity(planets)
+    report["checks"]["C12_planet_parity"] = pp
+    for it in pp["issues"]:
+        report["mismatches"].append(it)
+
+    # ── C13 primary cross-check
+    ver_proms = (report["checks"].get("C5_d1_promisers") or {}).get("promisers") or []
+    pc = _check_primary_crosscheck(engine_output, ver_proms)
+    report["checks"]["C13_primary_crosscheck"] = pc
+    for it in pc["issues"]:
+        (report["mismatches"] if "FAIL" in it else report["warnings"]).append(it)
+
+    # ── C14 helper sanity
+    hs = _check_helper_sanity(chart)
+    report["checks"]["C14_helper_sanity"] = hs
+    for it in hs["issues"]:
+        (report["mismatches"] if "FAIL" in it else report["warnings"]).append(it)
+
+    # ── C15 error leak
+    el = _check_error_leak(engine_output)
+    report["checks"]["C15_error_leak"] = el
+    for it in el["issues"]:
+        (report["mismatches"] if "FAIL" in it else report["warnings"]).append(it)
 
     # ── Final roll-up
     if report["mismatches"]:

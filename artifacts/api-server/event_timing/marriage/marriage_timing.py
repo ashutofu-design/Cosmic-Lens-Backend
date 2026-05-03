@@ -511,6 +511,313 @@ def compute_kp_sublord_marriage_filter(kp: dict) -> Dict[str, Any]:
 
 
 # ════════════════════════════════════════════════════════════════════════
+# SECTION 2b — Phase 2.8.67 (May 3 2026): KP CONFIDENCE GATE WRAPPER
+#
+# ADD-ONLY layer on top of compute_kp_sublord_marriage_filter().
+# Solves the "rigid binary kill switch" gap WITHOUT changing KP truth.
+#
+# Default behavior (birth_time_confidence == "confident") is IDENTICAL
+# to before — DENIED hard-stops the timing scan. Nothing changes for
+# 99% of users.
+#
+# When the user (or a future rectification module) explicitly tags the
+# birth time as uncertain (birth_time_confidence == "uncertain"), a
+# DENIED KP verdict becomes "DENIED_LOW_CONFIDENCE":
+#   • timing scan IS allowed to run downstream
+#   • final user-facing verdict still leans denial-flavored
+#   • LLM narration must include the low-confidence disclaimer
+#
+# This is the ONLY behavioral change. PROMISED / DELAYED paths are
+# untouched regardless of confidence flag.
+# ════════════════════════════════════════════════════════════════════════
+
+# Allowed confidence levels (canonical strings)
+_BTC_CONFIDENT = "confident"     # default — exact birth time known
+_BTC_UNCERTAIN = "uncertain"     # birth time approximate / rectification pending
+_BTC_VALID: Set[str] = {_BTC_CONFIDENT, _BTC_UNCERTAIN}
+
+
+def _normalize_birth_time_confidence(value: Any) -> str:
+    """Coerce arbitrary input to one of {confident, uncertain}.
+
+    Defaults to 'confident' so unknown/missing inputs preserve legacy
+    hard-gate behavior. Recognized mappings:
+      uncertain  ← 'uncertain', 'unknown', 'approx', 'approximate',
+                   'low', 'low_confidence', 'uncertain_time', 'rectify',
+                   'rectification_pending', 'no', 'false', '0', False
+      confident  ← 'confident', 'exact', 'confirmed', 'high',
+                   'high_confidence', 'known', 'yes', 'true', '1', True,
+                   None, '' (empty)
+    Anything else falls through to 'confident' (safe default).
+    """
+    if value is None:
+        return _BTC_CONFIDENT
+    if isinstance(value, bool):
+        # bool: True = confident, False = uncertain
+        return _BTC_CONFIDENT if value else _BTC_UNCERTAIN
+    s = str(value).strip().lower()
+    if not s:
+        return _BTC_CONFIDENT
+    if s in _BTC_VALID:
+        return s
+    if s in {"unknown", "approx", "approximate", "low", "low_confidence",
+             "uncertain_time", "rectify", "rectification_pending",
+             "no", "false", "0"}:
+        return _BTC_UNCERTAIN
+    if s in {"exact", "confirmed", "high", "high_confidence", "known",
+             "yes", "true", "1"}:
+        return _BTC_CONFIDENT
+    # Unrecognized — be safe, treat as confident (preserve old behavior)
+    return _BTC_CONFIDENT
+
+
+def extract_birth_time_confidence(birth_data: Any) -> str:
+    """Pull birth_time_confidence from a birth_data dict.
+
+    Looks at multiple key spellings to be tolerant of upstream changes:
+      birth_time_confidence | btc | time_confidence | tob_confidence
+
+    Returns 'confident' if missing or unrecognized.
+    """
+    if not isinstance(birth_data, dict):
+        return _BTC_CONFIDENT
+    for key in ("birth_time_confidence", "btc", "time_confidence",
+                "tob_confidence", "birthTimeConfidence"):
+        if key in birth_data:
+            return _normalize_birth_time_confidence(birth_data.get(key))
+    return _BTC_CONFIDENT
+
+
+def compute_kp_gate_decision(kp: dict,
+                              birth_time_confidence: Any = _BTC_CONFIDENT
+                              ) -> Dict[str, Any]:
+    """Apply the KP gate with birth-time-confidence awareness.
+
+    Wraps compute_kp_sublord_marriage_filter() and decides whether the
+    downstream timing scan should run, hard-stop, or run in
+    low-confidence mode.
+
+    Args:
+      kp: chart_data['kp'] dict (must contain 'significations' + 'cusps')
+      birth_time_confidence: 'confident' | 'uncertain' (or any value
+        normalized via _normalize_birth_time_confidence)
+
+    Returns dict:
+      {
+        "kp_filter":          {... raw output of compute_kp_sublord_marriage_filter ...},
+        "kp_verdict":         "PROMISED" | "DELAYED" | "DENIED" | "UNKNOWN",
+        "kp_strength":        "STRONG" | "MEDIUM" | "WEAK",
+        "confidence":         "confident" | "uncertain",
+        "gate_action":        "PROCEED" | "HARD_STOP" | "PROCEED_LOW_CONF",
+        "final_label":        "PROMISED" | "DELAYED" | "DENIED" | "DENIED_LOW_CONFIDENCE" | "UNKNOWN",
+        "allow_timing_scan":  bool,
+        "low_confidence_mode": bool,
+        "reason":             str,
+        "disclaimer":         str | None,   # required for narration if low-conf
+      }
+
+    Decision matrix:
+      ────────────────────────────────────────────────────────────────
+      KP verdict   | confidence  | gate_action       | final_label
+      ────────────────────────────────────────────────────────────────
+      PROMISED     | confident   | PROCEED           | PROMISED
+      PROMISED     | uncertain   | PROCEED           | PROMISED        (no disclaimer)
+      DELAYED      | confident   | PROCEED           | DELAYED
+      DELAYED      | uncertain   | PROCEED_LOW_CONF  | DELAYED         (with disclaimer)
+      DENIED       | confident   | HARD_STOP         | DENIED
+      DENIED       | uncertain   | PROCEED_LOW_CONF  | DENIED_LOW_CONFIDENCE
+      UNKNOWN      | (any)       | PROCEED_LOW_CONF  | UNKNOWN
+      ────────────────────────────────────────────────────────────────
+    """
+    btc = _normalize_birth_time_confidence(birth_time_confidence)
+    # Default skeleton — note that for non-dict / missing KP we fall through
+    # to the same UNKNOWN→PROCEED_LOW_CONF branch as the matrix documents,
+    # so the matrix and implementation stay in lock-step.
+    out: Dict[str, Any] = {
+        "kp_filter": {}, "kp_verdict": "UNKNOWN", "kp_strength": "WEAK",
+        "confidence": btc,
+        "gate_action": "PROCEED_LOW_CONF", "final_label": "UNKNOWN",
+        "allow_timing_scan": True, "low_confidence_mode": True,
+        "reason": "kp data unavailable → low-confidence proceed",
+        "disclaimer": (
+            "KP sub-lord data is unavailable for this chart. "
+            "Marriage verdict cannot be locked; results below are "
+            "heuristic estimates only."
+        ),
+    }
+    if not isinstance(kp, dict):
+        return out
+
+    try:
+        kp_filter = compute_kp_sublord_marriage_filter(kp)
+        out["kp_filter"] = kp_filter
+        verdict = kp_filter.get("verdict") or "UNKNOWN"
+        strength = kp_filter.get("strength") or "WEAK"
+        out["kp_verdict"] = verdict
+        out["kp_strength"] = strength
+
+        # Apply decision matrix
+        if verdict == "PROMISED":
+            gate_action = "PROCEED"
+            final_label = "PROMISED"
+            allow_scan = True
+            low_conf = False
+            disclaimer = None
+            reason = f"KP gate PROMISED (7CSL strong); confidence={btc}"
+
+        elif verdict == "DELAYED":
+            allow_scan = True
+            final_label = "DELAYED"
+            if btc == _BTC_UNCERTAIN:
+                gate_action = "PROCEED_LOW_CONF"
+                low_conf = True
+                disclaimer = (
+                    "Note: birth time confidence is low; KP sub-lord "
+                    "results may shift with even a 2-minute correction. "
+                    "Treat the timing window as approximate."
+                )
+                reason = "KP gate DELAYED + uncertain birth time → low-confidence proceed"
+            else:
+                gate_action = "PROCEED"
+                low_conf = False
+                disclaimer = None
+                reason = "KP gate DELAYED → proceed with delay narrative"
+
+        elif verdict == "DENIED":
+            if btc == _BTC_UNCERTAIN:
+                # The ONE genuine behavioral change in this phase.
+                gate_action = "PROCEED_LOW_CONF"
+                final_label = "DENIED_LOW_CONFIDENCE"
+                allow_scan = True
+                low_conf = True
+                disclaimer = (
+                    "KP sub-lord analysis indicates denial, BUT the birth "
+                    "time is flagged as uncertain. A small (2-3 min) birth-"
+                    "time correction can flip this verdict. Showing "
+                    "best-effort timing windows for reference only — do "
+                    "NOT treat as final until birth-time rectification is "
+                    "completed."
+                )
+                reason = ("KP gate DENIED + uncertain birth time → "
+                          "low-confidence fallback timing scan allowed")
+            else:
+                gate_action = "HARD_STOP"
+                final_label = "DENIED"
+                allow_scan = False
+                low_conf = False
+                disclaimer = None
+                reason = "KP gate DENIED (confident birth time) → hard stop"
+
+        else:
+            # UNKNOWN — insufficient KP data; always low-confidence proceed
+            gate_action = "PROCEED_LOW_CONF"
+            final_label = "UNKNOWN"
+            allow_scan = True
+            low_conf = True
+            disclaimer = (
+                "KP sub-lord data is incomplete for this chart. "
+                "Marriage verdict cannot be locked; timing windows below "
+                "are heuristic estimates only."
+            )
+            reason = "KP verdict UNKNOWN → low-confidence proceed"
+
+        out.update({
+            "gate_action": gate_action,
+            "final_label": final_label,
+            "allow_timing_scan": allow_scan,
+            "low_confidence_mode": low_conf,
+            "reason": reason,
+            "disclaimer": disclaimer,
+        })
+        return out
+    except Exception as exc:
+        print(f"[marriage_timing.compute_kp_gate_decision] failed: {exc}")
+        return out
+
+
+def apply_birth_time_confidence_to_verdict(verdict: str,
+                                             birth_time_confidence: Any = _BTC_CONFIDENT,
+                                             ) -> Dict[str, Any]:
+    """Lightweight wiring helper for callers that already hold a KP verdict.
+
+    Use this when you already have a KP gate verdict from the live STEP-1
+    path (e.g. compute_timing_window's 7CSL + StarLord truth-table) and
+    only need the confidence overlay — without re-running the full
+    9-planet sub-lord filter.
+
+    Returns the same shape as compute_kp_gate_decision() except
+    `kp_filter` is empty (no per-planet detail), and `kp_strength` is
+    derived heuristically from the verdict alone.
+
+    This keeps the wiring path safe: existing verdict semantics remain
+    the source of truth; only the gate_action / disclaimer layer is new.
+    """
+    btc = _normalize_birth_time_confidence(birth_time_confidence)
+    v = (verdict or "UNKNOWN").upper()
+    # Map raw verdict → strength heuristic (only used for downstream display)
+    strength = {"PROMISED": "STRONG", "DELAYED": "MEDIUM",
+                "DENIED": "WEAK", "UNKNOWN": "WEAK"}.get(v, "WEAK")
+
+    out: Dict[str, Any] = {
+        "kp_filter": {},
+        "kp_verdict": v,
+        "kp_strength": strength,
+        "confidence": btc,
+        "gate_action": "PROCEED",
+        "final_label": v,
+        "allow_timing_scan": True,
+        "low_confidence_mode": False,
+        "reason": "",
+        "disclaimer": None,
+    }
+
+    if v == "PROMISED":
+        out["reason"] = f"KP gate PROMISED; confidence={btc}"
+    elif v == "DELAYED":
+        if btc == _BTC_UNCERTAIN:
+            out["gate_action"] = "PROCEED_LOW_CONF"
+            out["low_confidence_mode"] = True
+            out["disclaimer"] = (
+                "Note: birth time confidence is low; KP sub-lord results "
+                "may shift with even a 2-minute correction. Treat the "
+                "timing window as approximate."
+            )
+            out["reason"] = "KP gate DELAYED + uncertain birth time → low-confidence proceed"
+        else:
+            out["reason"] = "KP gate DELAYED → proceed with delay narrative"
+    elif v == "DENIED":
+        if btc == _BTC_UNCERTAIN:
+            out["gate_action"] = "PROCEED_LOW_CONF"
+            out["final_label"] = "DENIED_LOW_CONFIDENCE"
+            out["low_confidence_mode"] = True
+            out["disclaimer"] = (
+                "KP sub-lord analysis indicates denial, BUT the birth "
+                "time is flagged as uncertain. A small (2-3 min) birth-"
+                "time correction can flip this verdict. Showing best-"
+                "effort timing windows for reference only — do NOT treat "
+                "as final until birth-time rectification is completed."
+            )
+            out["reason"] = ("KP gate DENIED + uncertain birth time → "
+                             "low-confidence fallback timing scan allowed")
+        else:
+            out["gate_action"] = "HARD_STOP"
+            out["allow_timing_scan"] = False
+            out["reason"] = "KP gate DENIED (confident birth time) → hard stop"
+    else:
+        # UNKNOWN — always low-confidence proceed, regardless of btc
+        out["gate_action"] = "PROCEED_LOW_CONF"
+        out["low_confidence_mode"] = True
+        out["disclaimer"] = (
+            "KP sub-lord verdict is incomplete for this chart. "
+            "Marriage verdict cannot be locked; timing windows below "
+            "are heuristic estimates only."
+        )
+        out["reason"] = "KP verdict UNKNOWN → low-confidence proceed"
+
+    return out
+
+
+# ════════════════════════════════════════════════════════════════════════
 # SECTION 2c — STEP 2: D1 + D9 link filter (Phase 2.8.64, May 3 2026)
 #
 # User-locked spec for STEP 2:

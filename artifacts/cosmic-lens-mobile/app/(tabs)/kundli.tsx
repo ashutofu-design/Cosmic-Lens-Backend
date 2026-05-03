@@ -1102,9 +1102,10 @@ function KPSummaryCard({ kundli }: { kundli: KundliData }) {
 
   const rows = CORE.filter(n => pmap[n]).map(n => {
     const p = kundli.planets.find(pl => pl.name === n)!;
-    // Prefer server's NL/SBL — they reflect the canonical engine
+    // Prefer server's KP Placidus house + NL/SBL (matches Astrosage convention).
+    // kundli.planets[].house uses whole-sign Vedic; KP table must use Placidus.
     const sp = serverPlanets?.find(x => x.name === n);
-    if (sp) return { name: n, house: p.house, nl: sp.nl, sb: sp.sb };
+    if (sp) return { name: n, house: sp.house, nl: sp.nl, sb: sp.sb };
     const kp = getKPLords(p.longitude);
     return { name: n, house: p.house, nl: kp.starLord, sb: kp.subLord };
   });

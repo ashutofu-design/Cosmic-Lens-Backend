@@ -993,8 +993,21 @@ function KPTab({ kundli }: { kundli: KundliData }) {
     const sp = kundli.kp?.planets || [];
     const findSp = (n: string) => sp.find(x => x.name === n);
 
-    // Ascendant — server has no separate KP record, compute client-side
-    rows.push({ name:"Ascendant", lon:ascLon, kp:getKPLords(ascLon) });
+    // Ascendant — prefer server's KP cusp[0] (Krishnamurti). Falls back to
+    // client compute over Lahiri ascendantDeg only if server payload missing.
+    const c0 = kundli.kp?.cusps?.[0];
+    if (c0) {
+      const lon = c0.longitude % 360;
+      const nakSize = 360 / 27;
+      const nakIdx = Math.floor(lon / nakSize) % 27;
+      rows.push({
+        name: "Ascendant",
+        lon,
+        kp: { nakIdx, nakName: "", starLord: c0.nl, subLord: c0.sb, subSubLord: c0.ss },
+      });
+    } else {
+      rows.push({ name:"Ascendant", lon:ascLon, kp:getKPLords(ascLon) });
+    }
 
     for (const name of CORE) {
       const s = findSp(name);

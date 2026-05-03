@@ -1171,11 +1171,11 @@ function KPLordChip({ label, lord }: { label:string; lord:string }) {
 
 const CHART_BTNS = [
   { tab:"Kundli",       icon:"star" },
+  { tab:"KP",           icon:"crosshair" },
   { tab:"Ashtakavarga", icon:"grid" },
   { tab:"Navatara",     icon:"compass" },
   { tab:"Jaimini",      icon:"award" },
   { tab:"Transit",      icon:"navigation" },
-  { tab:"KP",           icon:"crosshair" },
 ] as const;
 
 function chartBtnLabel(tab: string, L: ReturnType<typeof getKundliLabels>): string {

@@ -2524,21 +2524,50 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     #   Method A (chain-union, Deny={6,8,12}) REMOVED entirely.
     #   Method B (strict sub-lord, Promise={2,7,11},
     #             Deny={1,6,8,10,12}) is the ONLY filter from now on.
+    # Phase 2.8.71 (May 3 2026) — FIX F: SINGLE SOURCE OF TRUTH.
+    #   Old parallel inline verdict logic REMOVED. Now uses canonical
+    #   pipeline:
+    #     compute_kp_gate_decision()
+    #       ├─ compute_kp_sublord_marriage_filter() — 9-planet consensus
+    #       │     + contradiction guard + FIX E NL tie-breaker
+    #       └─ birth_time_confidence overlay (Phase 2.8.67 NOW LIVE)
+    #   Star Lord (cusp NL) cross-check retained for downstream strength
+    #   scoring + risk flags, but does NOT alter the unified kp_gate.
     # ════════════════════════════════════════════════════════════════
-    csl7 = _get_7csl(kp)
+    btc = extract_birth_time_confidence(birth)
+    gate = compute_kp_gate_decision(kp, btc) or {}
+    kp_filter_full = gate.get("kp_filter") or {}
+
+    # Pull csl planet + filter from the unified pipeline output (the
+    # filter ran ONCE inside compute_kp_gate_decision; no double-compute).
+    csl7 = (kp_filter_full.get("csl_planet") or _get_7csl(kp)) or ""
+    _csl_fallback = {
+        "planet": csl7 or None, "verdict": "UNKNOWN", "sub_lord": None,
+        "sb_houses": [], "promise_hits": [], "deny_hits": [],
+        "reason": "no 7CSL", "star_lord": None, "nl_houses": [],
+        "nl_promise_hits": [], "nl_deny_hits": [],
+        "nl_tiebreak_applied": False, "raw_sb_verdict": "UNKNOWN",
+    }
+    csl_filter = kp_filter_full.get("csl_filter") or _csl_fallback
+
+    # 7C STAR LORD (cusp NL) — independent diagnostic cross-check.
+    # NOTE: This is the 7th cusp's Nakshatra Lord (a planet name from
+    # cusps[6].nl) — distinct from each planet's own NL used in FIX E.
+    # Retained for downstream strength scoring + risk flags only.
     starlord = _get_7c_star_lord(kp)
+    _star_fallback = {
+        "planet": starlord or None, "verdict": "UNKNOWN", "sub_lord": None,
+        "sb_houses": [], "promise_hits": [], "deny_hits": [],
+        "reason": "no star lord", "star_lord": None, "nl_houses": [],
+        "nl_promise_hits": [], "nl_deny_hits": [],
+        "nl_tiebreak_applied": False, "raw_sb_verdict": "UNKNOWN",
+    }
+    star_filter = (_kp_sublord_filter_planet(kp, starlord)
+                   if starlord else _star_fallback)
 
-    # Method B: each planet's SUB-LORD's basic houses (occupation +
-    # KP cusp ownership) compared against {2,7,11} promise / {1,6,8,10,12} deny.
-    csl_filter = _kp_sublord_filter_planet(kp, csl7) if csl7 else {
-        "verdict": "UNKNOWN", "sub_lord": None, "sb_houses": [],
-        "promise_hits": [], "deny_hits": [], "reason": "no 7CSL"}
-    star_filter = _kp_sublord_filter_planet(kp, starlord) if starlord else {
-        "verdict": "UNKNOWN", "sub_lord": None, "sb_houses": [],
-        "promise_hits": [], "deny_hits": [], "reason": "no star lord"}
-
-    # Map Method B verdicts {STRONG/MIXED/WEAK/UNKNOWN} -> legacy gate
-    # vocabulary {PROMISED/MIXED/DENIED/UNKNOWN} for downstream consumers.
+    # Map Method B per-planet verdicts {STRONG/MIXED/WEAK/UNKNOWN} ->
+    # legacy gate vocabulary {PROMISED/MIXED/DENIED/UNKNOWN} for
+    # downstream consumers (strength scoring, risk flags).
     def _b_to_gate(v: str) -> str:
         if v == "STRONG":  return "PROMISED"
         if v == "WEAK":    return "DENIED"
@@ -2547,33 +2576,81 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
 
     csl_verdict  = _b_to_gate(csl_filter.get("verdict") or "UNKNOWN")
     star_verdict = _b_to_gate(star_filter.get("verdict") or "UNKNOWN")
-    csl_signs   = csl_filter.get("sb_houses") or []
-    star_signs  = star_filter.get("sb_houses") or []
+    csl_signs    = csl_filter.get("sb_houses") or []
+    star_signs   = star_filter.get("sb_houses") or []
 
+    # UNIFIED kp_gate from compute_kp_gate_decision (single source of
+    # truth). final_label encodes 9-planet consensus + contradiction
+    # guard + birth-time-confidence overlay. Map back to legacy
+    # {PROMISED/DENIED/DELAYED/MIXED} vocabulary so downstream
+    # combination logic (L2700+) stays untouched.
+    _LABEL_TO_GATE = {
+        "PROMISED":               "PROMISED",
+        "DELAYED":                "DELAYED",
+        "DENIED":                 "DENIED",
+        "DENIED_LOW_CONFIDENCE":  "DELAYED",  # proceed-but-lean-denial
+        "UNKNOWN":                "MIXED",
+    }
+    final_label = gate.get("final_label") or "UNKNOWN"
+    kp_gate = _LABEL_TO_GATE.get(final_label, "MIXED")
+
+    # STEP 1 narration — surfaces FIX E (NL tie-breaker) + Phase 2.8.67
+    # confidence fields for LLM transparency.
+    _csl_nl_note = (f" [NL tie-break {csl_filter.get('star_lord')} applied]"
+                    if csl_filter.get("nl_tiebreak_applied") else "")
+    _star_nl_note = (f" [NL tie-break {star_filter.get('star_lord')} applied]"
+                     if star_filter.get("nl_tiebreak_applied") else "")
     factors.append(f"STEP 1 KP: 7CSL={csl7 or 'n/a'} SB={csl_filter.get('sub_lord') or 'n/a'} "
                    f"basic_houses={csl_signs} promise={csl_filter.get('promise_hits')} "
-                   f"deny={csl_filter.get('deny_hits')} -> {csl_verdict}")
+                   f"deny={csl_filter.get('deny_hits')} -> {csl_verdict}{_csl_nl_note}")
     factors.append(f"STEP 1 KP: 7C StarLord={starlord or 'n/a'} SB={star_filter.get('sub_lord') or 'n/a'} "
                    f"basic_houses={star_signs} promise={star_filter.get('promise_hits')} "
-                   f"deny={star_filter.get('deny_hits')} -> {star_verdict}")
-
-    # KP gate decision (7CSL primary, starlord cross-check). Same gate
-    # truth-table as before — only the per-planet verdicts now come from
-    # Method B's strict sub-lord filter.
-    if csl_verdict == "PROMISED" and star_verdict in ("PROMISED", "MIXED", "UNKNOWN"):
-        kp_gate = "PROMISED"
-    elif csl_verdict == "DENIED" and star_verdict == "DENIED":
-        kp_gate = "DENIED"
-    elif csl_verdict == "DENIED" and star_verdict in ("PROMISED", "MIXED"):
-        kp_gate = "DELAYED"
-    elif csl_verdict == "PROMISED" and star_verdict == "DENIED":
-        kp_gate = "DELAYED"
-    elif csl_verdict == "MIXED":
-        kp_gate = "DELAYED" if star_verdict == "DENIED" else "MIXED"
-    else:
-        kp_gate = csl_verdict if csl_verdict != "UNKNOWN" else "MIXED"
-
+                   f"deny={star_filter.get('deny_hits')} -> {star_verdict}{_star_nl_note}")
+    buckets = (kp_filter_full.get("buckets") or
+               {"strong": [], "mixed": [], "weak": [], "unknown": []})
+    factors.append(f"STEP 1 KP CONSENSUS: {len(buckets.get('strong',[]))} strong, "
+                   f"{len(buckets.get('mixed',[]))} mixed, "
+                   f"{len(buckets.get('weak',[]))} weak; "
+                   f"strength={gate.get('kp_strength','WEAK')} "
+                   f"raw_verdict={gate.get('kp_verdict','UNKNOWN')}")
+    factors.append(f"STEP 1 KP CONFIDENCE: btc={btc} "
+                   f"action={gate.get('gate_action','PROCEED')} "
+                   f"final_label={final_label} "
+                   f"allow_scan={gate.get('allow_timing_scan',True)} "
+                   f"low_conf={gate.get('low_confidence_mode',False)}")
+    if gate.get("disclaimer"):
+        factors.append(f"STEP 1 KP DISCLAIMER: {gate['disclaimer']}")
     factors.append(f"STEP 1 KP GATE: {kp_gate}")
+
+    # HARD-STOP wiring (Phase 2.8.71 FIX F) — when birth time is
+    # confident AND KP is DENIED, skip the entire downstream scan.
+    # Phase 2.8.67's confidence wrapper now actually fires in production.
+    if not gate.get("allow_timing_scan", True):
+        return {
+            "verdict": "DENIED",
+            "band": "WEAK",
+            "primary_window": None,
+            "backup_window": None,
+            "key_trigger": None,
+            "confluence_strength": None,
+            "ul_outlook": None,
+            "risk_flag": "KP hard denial",
+            "risk_flags": ["KP hard denial"],
+            "factors": factors,
+            "top_3_windows": [],
+            "step0_tendency": {
+                "verdict": step0.get("verdict", "BALANCED"),
+                "score": step0.get("score", 0),
+                "reasons": step0.get("reasons", []),
+            },
+            "kp_gate_meta": {
+                "btc": btc,
+                "gate_action": gate.get("gate_action"),
+                "final_label": final_label,
+                "low_confidence_mode": gate.get("low_confidence_mode", False),
+                "disclaimer": gate.get("disclaimer"),
+            },
+        }
 
     # ════════════════════════════════════════════════════════════════
     # STEP 2 — D1 + D9 Cross-Validation

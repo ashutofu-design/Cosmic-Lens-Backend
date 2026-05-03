@@ -1166,9 +1166,8 @@ function KPSummaryCard({ kundli }: { kundli: KundliData }) {
       </View>
       <View style={{ flexDirection: "row", paddingVertical: 8, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: C.border }}>
         <Text style={{ flex: 1.0, color: C.textMid, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5 }}>PLANET</Text>
-        <Text style={{ flex: 0.6, color: C.textMid, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5, textAlign: "center" }}>HOUSE</Text>
-        <Text style={{ flex: 1.4, color: C.textMid, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5 }}>NL</Text>
-        <Text style={{ flex: 1.4, color: C.textMid, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5 }}>SBL</Text>
+        <Text style={{ flex: 1.5, color: C.textMid, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5 }}>NL</Text>
+        <Text style={{ flex: 1.5, color: C.textMid, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5 }}>SBL</Text>
       </View>
       {rows.map((r, idx) => {
         const pHue = hue(r.name);
@@ -1184,9 +1183,8 @@ function KPSummaryCard({ kundli }: { kundli: KundliData }) {
               </View>
               <Text style={{ color: C.text, fontSize: 12, fontFamily: F.semibold }}>{r.name}</Text>
             </View>
-            <Text style={{ flex: 0.6, color: C.text, fontSize: 12, fontFamily: F.bold, textAlign: "center" }}>{r.house}</Text>
-            <Text style={{ flex: 1.4, color: C.textMid, fontSize: 11, fontFamily: F.semibold }}>{fmt(r.nl)}</Text>
-            <Text style={{ flex: 1.4, color: C.textMid, fontSize: 11, fontFamily: F.semibold }}>{fmt(r.sb)}</Text>
+            <Text style={{ flex: 1.5, color: C.textMid, fontSize: 11, fontFamily: F.semibold }}>{fmt(r.nl)}</Text>
+            <Text style={{ flex: 1.5, color: C.textMid, fontSize: 11, fontFamily: F.semibold }}>{fmt(r.sb)}</Text>
           </View>
         );
       })}

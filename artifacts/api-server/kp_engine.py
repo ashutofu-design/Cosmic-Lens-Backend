@@ -238,10 +238,32 @@ def calculate_kp(data):
     }
 
     # ── Helper: combined houses for a lord (occupied + owned) ─────────────────
+    # For Rahu/Ketu (NO_OWNERSHIP), also inherit from dispositor (sign-lord)
+    # and conjunct planets (planets in the same sign). Classical KP rule —
+    # shadow planets carry their dispositor's + conjuncts' significations.
+    def _planet_sign_idx(p):
+        return int(planet_lons[p] / 30) % 12
+
     def houses_for_lord(lord_name):
         h_occ = [planet_house_map[lord_name]] if lord_name in planet_house_map else []
         h_own = get_owned_houses(lord_name, sidereal_cusps)
-        return sorted(set(h_occ + h_own))
+        houses = set(h_occ + h_own)
+        if lord_name in NO_OWNERSHIP:
+            # Dispositor (sign-lord of Rahu/Ketu's own sign)
+            own_sign = _planet_sign_idx(lord_name)
+            disp = SIGN_LORDS[own_sign]
+            if disp != lord_name:
+                houses.add(planet_house_map.get(disp, 0))
+                houses.update(get_owned_houses(disp, sidereal_cusps))
+            # Conjunct planets (same sign, excluding self)
+            for other in ALL_PLANETS:
+                if other == lord_name:
+                    continue
+                if _planet_sign_idx(other) == own_sign:
+                    houses.add(planet_house_map.get(other, 0))
+                    houses.update(get_owned_houses(other, sidereal_cusps))
+        houses.discard(0)
+        return sorted(houses)
 
     # ── Build cusps output ────────────────────────────────────────────────────
     cusps_out = []
@@ -285,8 +307,12 @@ def calculate_kp(data):
             "ss":        ss,
         })
 
-        # PL houses: occupied house + owned houses (sorted unique)
-        pl_houses = sorted(set([house] + owned))
+        # PL houses: occupied house + owned houses (sorted unique).
+        # For shadow planets (Rahu/Ketu), also add dispositor + conjunct
+        # planets' houses (classical KP — shadow planets carry inherited
+        # significations since they own no signs themselves).
+        pl_houses = sorted(set([house] + owned)) if pname not in NO_OWNERSHIP \
+                    else houses_for_lord(pname)
 
         significations_out[pname] = {
             "nl_lord":  nl,

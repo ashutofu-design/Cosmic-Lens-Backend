@@ -2696,7 +2696,29 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
 
     # ════════════════════════════════════════════════════════════════
     # STEP 2 — D1 + D9 Cross-Validation
+    # Phase 2.8.73 (May 3 2026) — FIX H WIRING:
+    #   compute_step2_link_filter() now LIVE in production pipeline.
+    #   Provides per-planet weighted-link verdicts (FIX G) + buckets
+    #   {approvers, conditional, deniers, ignore}. Approver bucket is
+    #   used downstream to filter STEP 4 dasha-scan target_lords.
+    #   Old inline 3-check (7L/Venus/Manglik dusthana) RETAINED below
+    #   as supplementary chart-level signal feeding strength scoring;
+    #   does NOT override the new buckets.
     # ════════════════════════════════════════════════════════════════
+    try:
+        step2 = compute_step2_link_filter(kundli, kp) or {}
+    except Exception as exc:
+        print(f"[marriage_timing STEP 2 wire] compute_step2_link_filter failed: {exc}")
+        step2 = {}
+    step2_buckets = step2.get("buckets") or {
+        "approvers": [], "conditional": [], "deniers": [], "ignore": []
+    }
+    approver_planets: Set[str] = set(step2_buckets.get("approvers") or [])
+    denier_planets:   Set[str] = set(step2_buckets.get("deniers")   or [])
+    factors.append(f"STEP 2 LINK FILTER: approvers={sorted(approver_planets)} "
+                   f"deniers={sorted(denier_planets)} "
+                   f"conditional={step2_buckets.get('conditional', [])}")
+
     venus_house = _planet_house_local(planets, "Venus")
     manglik_status = _get_manglik(planets)
 
@@ -2848,6 +2870,45 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     # STEP 4 — Dasha + Confluence (VIVAH-7 weighted scoring)
     # ════════════════════════════════════════════════════════════════
     target_lords = _marriage_target_lords(lagna_si) if lagna_si is not None else {"Venus", "Jupiter"}
+
+    # Phase 2.8.73 FIX H — STEP 2 approver/denier filter on target_lords.
+    # Only planets that passed both KP STEP 1 (STRONG/MIXED) AND have
+    # meaningful D1/D9 link to 7H/7L survive into the dasha scan.
+    # Karaka safety net: Venus/Jupiter retained if they're approvers.
+    # Fallback: if no approver overlap, scan raw lords (avoid empty scan).
+    raw_target_count = len(target_lords)
+    raw_target_snapshot = set(target_lords)
+    if approver_planets:
+        filtered = set(target_lords) & approver_planets
+        for karaka in ("Venus", "Jupiter"):
+            if karaka in approver_planets:
+                filtered.add(karaka)
+        if filtered:
+            target_lords = filtered
+            factors.append(f"STEP 4 SCAN FILTER: {raw_target_count} raw lords -> "
+                           f"{len(target_lords)} approver-filtered "
+                           f"({sorted(target_lords)})")
+        else:
+            factors.append(f"STEP 4 SCAN FILTER: no approver overlap, "
+                           f"falling back to raw {raw_target_count} lords")
+    else:
+        factors.append("STEP 4 SCAN FILTER: STEP 2 produced no approvers, "
+                       "scanning raw target lords")
+
+    # Drop deniers from target set (safety filter — prevents Mars/Sat
+    # denied dashas from generating false-positive windows).
+    if denier_planets:
+        dropped = (raw_target_snapshot & denier_planets) - {"Venus", "Jupiter"}
+        if dropped:
+            target_lords = target_lords - dropped
+            factors.append(f"STEP 4 DENIER DROP: removed {sorted(dropped)}")
+
+    # Final safety: ensure target_lords is never empty (engine invariant)
+    if not target_lords:
+        target_lords = {"Venus", "Jupiter"}
+        factors.append("STEP 4 SAFETY: target_lords empty after filters, "
+                       "defaulting to {Venus, Jupiter}")
+
     candidate_ads = _scan_cluster_ads(kundli, target_lords, lookback_days=30)
     factors.append(f"STEP 4: target_lords={sorted(target_lords)}, "
                    f"candidate_ADs={len(candidate_ads)}")
@@ -3165,6 +3226,21 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         # ADD-ONLY new diagnostic fields:
         "d1_d9_planet_scan": d1_d9_scan,
         "chronological_top3_strict_dtt": chrono_top3_serial,
+        # Phase 2.8.73 FIX H — STEP 2 link-filter visibility (debug/LLM)
+        "step2_link_filter": {
+            "approvers":   sorted(approver_planets),
+            "deniers":     sorted(denier_planets),
+            "conditional": list(step2_buckets.get("conditional", [])),
+            "ignore":      list(step2_buckets.get("ignore", [])),
+            "per_planet_summary": [
+                {"planet": e.get("planet"),
+                 "step1":  e.get("step1_verdict"),
+                 "link":   e.get("link_strength"),
+                 "final":  e.get("final"),
+                 "bucket": e.get("bucket")}
+                for e in (step2.get("per_planet") or [])
+            ],
+        },
     }
 
     # ── ADD-ONLY: Validator (Guard) report

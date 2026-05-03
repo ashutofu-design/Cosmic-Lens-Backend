@@ -1178,9 +1178,9 @@ function KPSummaryCard({ kundli }: { kundli: KundliData }) {
         <Text style={{ color: ac, fontSize: 11, fontFamily: F.bold, letterSpacing: 1 }}>KP SUB-LORDS</Text>
       </View>
       <View style={{ flexDirection: "row", paddingVertical: 8, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: C.border }}>
-        <Text style={{ flex: 1.0, color: C.textMid, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5 }}>PLANET</Text>
-        <Text style={{ flex: 1.5, color: C.textMid, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5 }}>NL</Text>
-        <Text style={{ flex: 1.5, color: C.textMid, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5 }}>SBL</Text>
+        <Text style={{ flex: 1.7, color: C.textMid, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5 }}>PLANET</Text>
+        <Text style={{ flex: 1.3, color: C.textMid, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5, paddingLeft: 6 }}>NL</Text>
+        <Text style={{ flex: 1.3, color: C.textMid, fontSize: 10, fontFamily: F.bold, letterSpacing: 0.5, paddingLeft: 6 }}>SBL</Text>
       </View>
       {rows.map((r, idx) => {
         const pHue = hue(r.name);
@@ -1190,16 +1190,16 @@ function KPSummaryCard({ kundli }: { kundli: KundliData }) {
             backgroundColor: idx % 2 === 0 ? "transparent" : `${ac}${o("05")}`,
             borderBottomWidth: idx < rows.length - 1 ? 1 : 0, borderBottomColor: C.border,
           }}>
-            <View style={{ flex: 1.0, flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: `${pHue}${o("15")}`, alignItems: "center", justifyContent: "center" }}>
+            <View style={{ flex: 1.7, flexDirection: "row", alignItems: "center", gap: 6, paddingRight: 6 }}>
+              <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: `${pHue}${o("15")}`, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <Text style={{ color: pHue, fontSize: 9, fontFamily: F.bold }}>{ABBR[r.name]}</Text>
               </View>
-              <Text style={{ color: C.text, fontSize: 12, fontFamily: F.semibold }}>
+              <Text style={{ flex: 1, color: C.text, fontSize: 11, fontFamily: F.semibold }} numberOfLines={1}>
                 {r.name}-{[...new Set([r.house, ...r.owns])].sort((a,b)=>a-b).join(",")}
               </Text>
             </View>
-            <Text style={{ flex: 1.5, color: C.textMid, fontSize: 11, fontFamily: F.semibold }}>{fmt(r.nl)}</Text>
-            <Text style={{ flex: 1.5, color: C.textMid, fontSize: 11, fontFamily: F.semibold }}>{fmt(r.sb)}</Text>
+            <Text style={{ flex: 1.3, color: C.textMid, fontSize: 10, fontFamily: F.semibold, paddingLeft: 6 }} numberOfLines={1}>{fmt(r.nl)}</Text>
+            <Text style={{ flex: 1.3, color: C.textMid, fontSize: 10, fontFamily: F.semibold, paddingLeft: 6 }} numberOfLines={1}>{fmt(r.sb)}</Text>
           </View>
         );
       })}

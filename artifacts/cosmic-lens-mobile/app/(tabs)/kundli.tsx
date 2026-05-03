@@ -3,7 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Platform, Pressable, ScrollView,
+  Modal, Platform, Pressable, ScrollView,
   StatusBar, StyleSheet, Text, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -1259,8 +1259,9 @@ function sectionTitleFor(tab: string, L: ReturnType<typeof getKundliLabels>): st
 export default function KundliScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
-  const { kundli, language, profiles, primaryProfileId } = useUser();
+  const { kundli, language, profiles, primaryProfileId, setPrimaryProfile } = useUser();
   const primaryProfile = profiles.find(p => p.id === primaryProfileId) ?? profiles[0] ?? null;
+  const [switcherOpen, setSwitcherOpen] = useState(false);
   const tI18n = getT(language);
   const v: VLang = vedicLang(language);
   const t = useT();
@@ -1400,17 +1401,87 @@ export default function KundliScreen() {
         >
           <Feather name="arrow-left" size={16} color={C.text} />
         </Pressable>
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: C.text, fontSize: 17, fontFamily: F.bold }} numberOfLines={1}>
-            {primaryProfile?.name ?? t.tabKundli}
-          </Text>
-          {primaryProfile?.birthData && (
-            <Text style={{ color: C.textMuted, fontSize: 10.5, fontFamily: F.medium }}>
-              {`${primaryProfile.birthData.day}/${primaryProfile.birthData.month}/${primaryProfile.birthData.year} · ${String(primaryProfile.birthData.hour).padStart(2,"0")}:${String(primaryProfile.birthData.minute).padStart(2,"0")} ${primaryProfile.birthData.ampm}`}
+        <Pressable
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setSwitcherOpen(true); }}
+          style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6 }}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: C.text, fontSize: 17, fontFamily: F.bold }} numberOfLines={1}>
+              {primaryProfile?.name ?? t.tabKundli}
             </Text>
-          )}
-        </View>
+            {primaryProfile?.birthData && (
+              <Text style={{ color: C.textMuted, fontSize: 10.5, fontFamily: F.medium }}>
+                {`${primaryProfile.birthData.day}/${primaryProfile.birthData.month}/${primaryProfile.birthData.year} · ${String(primaryProfile.birthData.hour).padStart(2,"0")}:${String(primaryProfile.birthData.minute).padStart(2,"0")} ${primaryProfile.birthData.ampm}`}
+              </Text>
+            )}
+          </View>
+          {profiles.length > 1 && <Feather name="chevron-down" size={16} color={C.textMid} />}
+        </Pressable>
       </View>
+
+      <Modal visible={switcherOpen} transparent animationType="fade" onRequestClose={() => setSwitcherOpen(false)}>
+        <Pressable
+          onPress={() => setSwitcherOpen(false)}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center", padding: 24 }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              width: "100%", maxWidth: 380, borderRadius: 18, borderWidth: 1,
+              backgroundColor: C.bgCard, borderColor: C.border, overflow: "hidden",
+            }}
+          >
+            <View style={{ paddingVertical: 14, paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: C.border, flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Feather name="users" size={14} color={ac} />
+              <Text style={{ color: C.text, fontSize: 14, fontFamily: F.bold, flex: 1 }}>Switch Kundli</Text>
+              <Pressable onPress={() => setSwitcherOpen(false)}>
+                <Feather name="x" size={18} color={C.textMid} />
+              </Pressable>
+            </View>
+            <ScrollView style={{ maxHeight: 360 }}>
+              {profiles.map((p, idx) => {
+                const isActive = p.id === primaryProfileId;
+                return (
+                  <Pressable
+                    key={p.id}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setPrimaryProfile(p.id);
+                      setSwitcherOpen(false);
+                    }}
+                    style={{
+                      flexDirection: "row", alignItems: "center", gap: 12,
+                      paddingVertical: 14, paddingHorizontal: 18,
+                      backgroundColor: isActive ? `${ac}${o("12")}` : "transparent",
+                      borderBottomWidth: idx < profiles.length - 1 ? 1 : 0, borderBottomColor: C.border,
+                    }}
+                  >
+                    <View style={{ width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: isActive ? `${ac}${o("20")}` : C.bgCard2, borderWidth: 1, borderColor: isActive ? `${ac}${o("50")}` : C.border }}>
+                      <Feather name="user" size={14} color={isActive ? ac : C.textMid} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: C.text, fontSize: 14, fontFamily: F.semibold }} numberOfLines={1}>{p.name}</Text>
+                      {p.birthData && (
+                        <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.medium, marginTop: 2 }} numberOfLines={1}>
+                          {`${p.birthData.day}/${p.birthData.month}/${p.birthData.year} · ${String(p.birthData.hour).padStart(2,"0")}:${String(p.birthData.minute).padStart(2,"0")} ${p.birthData.ampm}`}
+                        </Text>
+                      )}
+                    </View>
+                    {isActive && <Feather name="check" size={16} color={ac} />}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <Pressable
+              onPress={() => { setSwitcherOpen(false); router.push("/profile-edit" as any); }}
+              style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 14, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: `${ac}${o("08")}` }}
+            >
+              <Feather name="plus" size={14} color={ac} />
+              <Text style={{ color: ac, fontSize: 13, fontFamily: F.bold }}>Manage Profiles</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginBottom:2}}>
         <View style={{ flexDirection: "row", gap: 8 }}>

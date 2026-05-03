@@ -986,11 +986,37 @@ function KPTab({ kundli }: { kundli: KundliData }) {
   const CORE = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Rahu","Ketu"];
   const ascLon = kundli.ascendantDeg ?? 0;
   const kpData = useMemo(() => {
-    const rows: Array<{name:string;lon:number;kp:ReturnType<typeof getKPLords>}> = [];
+    // Prefer server's KP-Krishnamurti computed planets (longitudes + NL/SB/SS).
+    // Fallback to client-side getKPLords() over Lahiri longitudes only when
+    // the server payload doesn't include the kp block.
+    const rows: Array<{name:string;lon:number;kp:{nakIdx:number;nakName:string;starLord:string;subLord:string;subSubLord:string}}> = [];
+    const sp = kundli.kp?.planets || [];
+    const findSp = (n: string) => sp.find(x => x.name === n);
+
+    // Ascendant — server has no separate KP record, compute client-side
     rows.push({ name:"Ascendant", lon:ascLon, kp:getKPLords(ascLon) });
+
     for (const name of CORE) {
-      const p = kundli.planets.find(pl => pl.name === name);
-      if (p) rows.push({ name, lon:p.longitude, kp:getKPLords(p.longitude) });
+      const s = findSp(name);
+      if (s) {
+        const lon = s.longitude % 360;
+        const nakSize = 360 / 27;
+        const nakIdx = Math.floor(lon / nakSize) % 27;
+        rows.push({
+          name,
+          lon,
+          kp: {
+            nakIdx,
+            nakName: NAKSHATRA[nakIdx]?.en ?? "",
+            starLord: s.nl,
+            subLord: s.sb,
+            subSubLord: s.ss,
+          },
+        });
+      } else {
+        const p = kundli.planets.find(pl => pl.name === name);
+        if (p) rows.push({ name, lon:p.longitude, kp:getKPLords(p.longitude) });
+      }
     }
     return rows;
   }, [kundli]);

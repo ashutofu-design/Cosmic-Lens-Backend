@@ -1193,14 +1193,7 @@ function KPSummaryCard({ kundli }: { kundli: KundliData }) {
   };
   const plHousesOf = (lord: string): number[] => {
     const sv = serverSigs?.[lord]?.pl;
-    // Server PL uses Placidus house. Always merge in the planet's Vedic
-    // whole-sign occupation house so the displayed number set covers BOTH
-    // KP-Placidus and classical Rashi-house views (matches Astrosage Nakshatra
-    // Nadi convention where the planet's actual sign-house is always listed).
-    const set = new Set<number>((sv && sv.length) ? sv : plHousesOfLocal(lord));
-    const wholeSignHouse = pmap[lord]?.house;
-    if (wholeSignHouse) set.add(wholeSignHouse);
-    return [...set].sort((a,b)=>a-b);
+    return (sv && sv.length) ? [...sv].sort((a,b)=>a-b) : plHousesOfLocal(lord);
   };
   const fmt = (lord: string): string => {
     const hs = plHousesOf(lord);

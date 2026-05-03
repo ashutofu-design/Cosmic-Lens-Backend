@@ -332,6 +332,22 @@ def _sig_sb_lord(kp: dict, planet: str) -> str:
     return entry.get("sb_lord") or ""
 
 
+def _sig_nl_lord(kp: dict, planet: str) -> str:
+    """Get a planet's STAR-LORD (Nakshatra Lord) from kp.significations[planet].nl_lord ONLY.
+
+    Phase 2.8.70 (May 3 2026) — added for STEP 1 FIX E (NL tie-breaker on MIXED).
+    Source: kp_engine writes 'nl_lord' into each significations[planet] entry.
+    Same data-purity contract as _sig_sb_lord — never reads kp.planets[] / kp.cusps[].
+    """
+    if not isinstance(kp, dict) or not planet:
+        return ""
+    sigs = (kp.get("significations") or {})
+    entry = sigs.get(planet) if isinstance(sigs, dict) else None
+    if not isinstance(entry, dict):
+        return ""
+    return entry.get("nl_lord") or ""
+
+
 def _kp_sublord_filter_planet(kp: dict, planet: str) -> Dict[str, Any]:
     """Apply strict Sub-Lord filter to ONE planet using significations only.
 
@@ -363,6 +379,11 @@ def _kp_sublord_filter_planet(kp: dict, planet: str) -> Dict[str, Any]:
         "planet": planet, "sub_lord": None, "sb_houses": [],
         "promise_hits": [], "deny_hits": [],
         "verdict": "UNKNOWN", "reason": "no SB found",
+        # Phase 2.8.70 FIX E (added) — NL tie-breaker metadata
+        "star_lord": None, "nl_houses": [],
+        "nl_promise_hits": [], "nl_deny_hits": [],
+        "nl_tiebreak_applied": False,
+        "raw_sb_verdict": "UNKNOWN",
     }
     if not isinstance(kp, dict) or not planet:
         return out
@@ -388,6 +409,53 @@ def _kp_sublord_filter_planet(kp: dict, planet: str) -> Dict[str, Any]:
         verdict = "UNKNOWN"
         reason = f"SB {sb} ({','.join(map(str, sb_houses))}) -> no promise no deny"
 
+    # ──────────────────────────────────────────────────────────────────────
+    # Phase 2.8.70 FIX E (added 2026-05-03) — STAR LORD (NL) TIE-BREAKER
+    #
+    # Classical KP hierarchy: SL > NL > planet itself. Sub-Lord is FINAL
+    # DECIDER (golden rule preserved), but when SL is itself ambiguous
+    # (promise AND deny both present → MIXED), the planet's Star Lord acts
+    # as the tie-breaker. This is the only case where NL is allowed to
+    # influence the verdict; STRONG / WEAK / UNKNOWN are NEVER touched.
+    #
+    # Rules (NL ONLY consulted on raw SB verdict == MIXED):
+    #   NL only-promise (no deny) → upgrade MIXED → STRONG
+    #   NL only-deny (no promise) → downgrade MIXED → WEAK
+    #   NL mixed/unknown          → keep MIXED (no flip)
+    #
+    # Data source: kp.significations[planet].nl_lord, then
+    # significations[nl_lord].pl. Same purity contract as SB path.
+    # ──────────────────────────────────────────────────────────────────────
+    raw_sb_verdict = verdict
+    nl = _sig_nl_lord(kp, planet)
+    nl_houses: List[int] = []
+    nl_promise: List[int] = []
+    nl_deny: List[int] = []
+    nl_tiebreak_applied = False
+
+    if nl:
+        nl_houses = sorted(set(_sig_pl(kp, nl)))
+        nl_set = set(nl_houses)
+        nl_promise = sorted(nl_set & _KP_SB_PROMISE_HOUSES)
+        nl_deny = sorted(nl_set & _KP_SB_DENY_HOUSES)
+
+        if verdict == "MIXED" and nl_houses:
+            if nl_promise and not nl_deny:
+                verdict = "STRONG"
+                reason = (
+                    f"{reason}; NL tie-break {nl} ({','.join(map(str, nl_houses))}) "
+                    f"-> only promise {nl_promise} -> upgrade to STRONG [2.8.70]"
+                )
+                nl_tiebreak_applied = True
+            elif nl_deny and not nl_promise:
+                verdict = "WEAK"
+                reason = (
+                    f"{reason}; NL tie-break {nl} ({','.join(map(str, nl_houses))}) "
+                    f"-> only deny {nl_deny} -> downgrade to WEAK [2.8.70]"
+                )
+                nl_tiebreak_applied = True
+            # NL mixed or empty intersection → no flip, keep MIXED
+
     out.update({
         "sub_lord": sb,
         "sb_houses": sb_houses,
@@ -395,6 +463,13 @@ def _kp_sublord_filter_planet(kp: dict, planet: str) -> Dict[str, Any]:
         "deny_hits": deny,
         "verdict": verdict,
         "reason": reason,
+        # FIX E observability fields
+        "star_lord": nl or None,
+        "nl_houses": nl_houses,
+        "nl_promise_hits": nl_promise,
+        "nl_deny_hits": nl_deny,
+        "nl_tiebreak_applied": nl_tiebreak_applied,
+        "raw_sb_verdict": raw_sb_verdict,
     })
     return out
 

@@ -19,6 +19,7 @@ import { pName } from "@/lib/proInsightEngine";
 import type { KundliData, PlanetInfo } from "@/types";
 
 import { API_BASE as BASE_URL, apiFetch } from "@/lib/apiConfig";
+import { fetchKundliFromAPI } from "@/lib/kundliAPI";
 
 const F = {
   regular:  "Nunito_400Regular",
@@ -1259,9 +1260,26 @@ function sectionTitleFor(tab: string, L: ReturnType<typeof getKundliLabels>): st
 export default function KundliScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
-  const { kundli, language, profiles, primaryProfileId, setPrimaryProfile } = useUser();
+  const { kundli, language, profiles, primaryProfileId, setPrimaryProfile, updateProfile, user } = useUser();
   const primaryProfile = profiles.find(p => p.id === primaryProfileId) ?? profiles[0] ?? null;
   const [switcherOpen, setSwitcherOpen] = useState(false);
+
+  // Auto-refetch kundli when active profile lacks the KP block (older profiles
+  // saved before kp_engine v12 won't have kundli.kp). Ensures KP table updates
+  // correctly when switching between profiles.
+  useEffect(() => {
+    if (!primaryProfile?.id || !primaryProfile?.birthData) return;
+    if (primaryProfile.kundli?.kp?.planets?.length) return;
+    let cancelled = false;
+    const auth = user?.id && user?.api_key ? { user_id: user.id, api_key: user.api_key } : null;
+    fetchKundliFromAPI(primaryProfile.birthData, auth)
+      .then((fresh) => {
+        if (cancelled) return;
+        updateProfile(primaryProfile.id, { kundli: fresh });
+      })
+      .catch(() => { /* silent — old data still renders via fallback */ });
+    return () => { cancelled = true; };
+  }, [primaryProfile?.id, primaryProfile?.kundli?.kp?.planets?.length, user?.id, user?.api_key, updateProfile, primaryProfile?.birthData]);
   const tI18n = getT(language);
   const v: VLang = vedicLang(language);
   const t = useT();

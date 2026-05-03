@@ -976,6 +976,62 @@ function getKPLords(longitude: number): { nakIdx:number; nakName:string; starLor
   return { nakIdx, nakName:NAKSHATRAS[nakIdx], starLord, subLord, subSubLord };
 }
 
+// ── Cusps Table (Astrosage-style: House | Degree | SL | NL | SB | SS) ─────
+const ABBR_LORD: Record<string,string> = { Sun:"Su",Moon:"Mo",Mars:"Ma",Mercury:"Me",Jupiter:"Ju",Venus:"Ve",Saturn:"Sa",Rahu:"Ra",Ketu:"Ke" };
+function fmtCuspDeg(lon: number): string {
+  const within = lon % 30;
+  const d = Math.floor(within);
+  const mFloat = (within - d) * 60;
+  const m = Math.floor(mFloat);
+  const s = Math.round((mFloat - m) * 60);
+  return `${String(d).padStart(2,"0")}°${String(m).padStart(2,"0")}'${String(s).padStart(2,"0")}"`;
+}
+const SIGN_ABBR = ["Ar","Ta","Ge","Cn","Le","Vi","Li","Sc","Sg","Cp","Aq","Pi"];
+function CuspsTable({ kundli }: { kundli: KundliData }) {
+  const C = useC();
+  const ac = C.isDark ? "#f59e0b" : "#7C3AED";
+  const o = (v: string) => oa(C.isDark, v);
+  const cusps = kundli.kp?.cusps;
+  if (!cusps || cusps.length !== 12) return null;
+  const ab = (lord: string) => ABBR_LORD[lord] ?? lord.slice(0,2);
+  return (
+    <View style={{ borderRadius: 18, borderWidth: 1, overflow: "hidden", backgroundColor: C.bgCard, borderColor: C.border }}>
+      <View style={{ backgroundColor: `${ac}${o("12")}`, paddingVertical: 10, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: C.border, flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <Feather name="grid" size={13} color={ac} />
+        <Text style={{ color: ac, fontSize: 11, fontFamily: F.bold, letterSpacing: 1 }}>CUSPS</Text>
+      </View>
+      <View style={{ flexDirection: "row", paddingVertical: 8, paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: C.border }}>
+        <Text style={{ width: 26, color: C.textMid, fontSize: 9, fontFamily: F.bold, letterSpacing: 0.5 }}>H</Text>
+        <Text style={{ flex: 1.6, color: C.textMid, fontSize: 9, fontFamily: F.bold, letterSpacing: 0.5 }}>DEGREE</Text>
+        <Text style={{ flex: 0.7, color: C.textMid, fontSize: 9, fontFamily: F.bold, letterSpacing: 0.5, textAlign: "center" }}>SL</Text>
+        <Text style={{ flex: 0.7, color: C.textMid, fontSize: 9, fontFamily: F.bold, letterSpacing: 0.5, textAlign: "center" }}>NL</Text>
+        <Text style={{ flex: 0.7, color: C.textMid, fontSize: 9, fontFamily: F.bold, letterSpacing: 0.5, textAlign: "center" }}>SB</Text>
+        <Text style={{ flex: 0.7, color: C.textMid, fontSize: 9, fontFamily: F.bold, letterSpacing: 0.5, textAlign: "center" }}>SS</Text>
+      </View>
+      {cusps.map((c, idx) => {
+        const signIdx = Math.floor((c.longitude % 360) / 30) % 12;
+        return (
+          <View key={c.house} style={{
+            flexDirection: "row", alignItems: "center", paddingVertical: 8, paddingHorizontal: 10,
+            backgroundColor: idx % 2 === 0 ? "transparent" : `${ac}${o("05")}`,
+            borderBottomWidth: idx < cusps.length - 1 ? 1 : 0, borderBottomColor: C.border,
+          }}>
+            <Text style={{ width: 26, color: C.text, fontSize: 11, fontFamily: F.bold }}>{c.house}</Text>
+            <View style={{ flex: 1.6, flexDirection: "row", alignItems: "baseline", gap: 4 }}>
+              <Text style={{ color: C.text, fontSize: 10, fontFamily: F.semibold }} numberOfLines={1}>{fmtCuspDeg(c.longitude)}</Text>
+              <Text style={{ color: C.textMuted, fontSize: 9, fontFamily: F.medium }}>{SIGN_ABBR[signIdx]}</Text>
+            </View>
+            <Text style={{ flex: 0.7, color: hue(c.sl), fontSize: 11, fontFamily: F.bold, textAlign: "center" }}>{ab(c.sl)}</Text>
+            <Text style={{ flex: 0.7, color: hue(c.nl), fontSize: 11, fontFamily: F.bold, textAlign: "center" }}>{ab(c.nl)}</Text>
+            <Text style={{ flex: 0.7, color: hue(c.sb), fontSize: 11, fontFamily: F.bold, textAlign: "center" }}>{ab(c.sb)}</Text>
+            <Text style={{ flex: 0.7, color: hue(c.ss), fontSize: 11, fontFamily: F.bold, textAlign: "center" }}>{ab(c.ss)}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 function KPTab({ kundli }: { kundli: KundliData }) {
   const C = useC();
   const { language } = useUser();
@@ -1037,6 +1093,8 @@ function KPTab({ kundli }: { kundli: KundliData }) {
 
   return (
     <View style={{gap:16}}>
+      <CuspsTable kundli={kundli} />
+
       <View style={{ borderRadius: 14, borderWidth: 1, borderColor: C.border, backgroundColor: C.bgCard, overflow: "hidden" }}>
         <View style={{ borderLeftWidth: 3, borderLeftColor: ac, padding: 14, gap: 4 }}>
           <Text style={{ color: ac, fontSize: 14, fontFamily: F.bold }}>{L.whatKP}</Text>

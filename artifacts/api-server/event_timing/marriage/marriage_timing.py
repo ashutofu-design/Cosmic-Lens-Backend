@@ -707,6 +707,320 @@ def _mars_trigger_check(transit_data: dict, h7_si: int,
 
 
 # ════════════════════════════════════════════════════════════════════════
+# SECTION 5b — STRICT DTT helpers (ADD-ONLY: 7H sign + natal 7L sign both
+# treated as marriage cluster targets). User-spec rule:
+#   "Jupiter aur Saturn ka transit hamesha 7H ya 7L per hona chahiye."
+# Single-transit acceptable agar dasha very strong (triple-promiser).
+# ════════════════════════════════════════════════════════════════════════
+def _jup_sat_marriage_cluster_check(transit_data: dict,
+                                     h7_si: Optional[int],
+                                     seventh_lord_natal_si: Optional[int]
+                                     ) -> Dict[str, Any]:
+    """Check Jupiter+Saturn against BOTH 7H sign and natal 7L sign.
+
+    Returns:
+      {"jup_hit": bool, "sat_hit": bool, "dtt": bool,
+       "jup_detail": str, "sat_detail": str,
+       "jup_target": "7H"|"7L"|"", "sat_target": "7H"|"7L"|""}
+    """
+    out: Dict[str, Any] = {
+        "jup_hit": False, "sat_hit": False, "dtt": False,
+        "jup_detail": "", "sat_detail": "",
+        "jup_target": "", "sat_target": "",
+    }
+    targets: List[Tuple[str, int]] = []
+    if h7_si is not None:
+        targets.append(("7H", h7_si))
+    if seventh_lord_natal_si is not None and seventh_lord_natal_si != h7_si:
+        targets.append(("7L", seventh_lord_natal_si))
+    if not targets:
+        return out
+
+    jup_si = _transit_sign_idx(transit_data, "Jupiter")
+    sat_si = _transit_sign_idx(transit_data, "Saturn")
+
+    if jup_si is not None:
+        for label, t_si in targets:
+            if jup_si == t_si:
+                out["jup_hit"] = True
+                out["jup_target"] = label
+                out["jup_detail"] = f"Jup OCCUPIES {label} ({_SIGNS[t_si]})"
+                break
+            if _is_jupiter_aspect(jup_si, t_si):
+                out["jup_hit"] = True
+                out["jup_target"] = label
+                out["jup_detail"] = f"Jup asp {label} ({_SIGNS[jup_si]}->{_SIGNS[t_si]})"
+                break
+
+    if sat_si is not None:
+        for label, t_si in targets:
+            if sat_si == t_si:
+                out["sat_hit"] = True
+                out["sat_target"] = label
+                out["sat_detail"] = f"Sat OCCUPIES {label} ({_SIGNS[t_si]})"
+                break
+            if _is_saturn_aspect(sat_si, t_si):
+                out["sat_hit"] = True
+                out["sat_target"] = label
+                out["sat_detail"] = f"Sat asp {label} ({_SIGNS[sat_si]}->{_SIGNS[t_si]})"
+                break
+
+    out["dtt"] = out["jup_hit"] and out["sat_hit"]
+    return out
+
+
+def _dtt_score_window(start: datetime, end: datetime,
+                       lagna_si: int, moon_si: Optional[int],
+                       h7_si: Optional[int],
+                       seventh_lord_natal_si: Optional[int],
+                       samples: int = 5) -> Dict[str, Any]:
+    """Sample N points across a window, count DTT and single-transit hits.
+
+    Returns: {"dtt_count": int, "single_count": int, "samples": int,
+              "dtt_pct": float, "details": [{"date","jup","sat","dtt"}]}
+    """
+    if end <= start:
+        return {"dtt_count": 0, "single_count": 0, "samples": 0,
+                "dtt_pct": 0.0, "details": []}
+    span = (end - start).days
+    points: List[datetime] = []
+    if samples <= 1:
+        points.append(start + timedelta(days=span // 2))
+    else:
+        for i in range(samples):
+            f = (i + 0.5) / samples
+            points.append(start + timedelta(days=int(span * f)))
+    dtt_n = 0
+    sng_n = 0
+    details: List[Dict[str, Any]] = []
+    for d in points:
+        try:
+            t = _get_transits_at(lagna_si, moon_si, when=d)
+        except Exception:
+            t = {}
+        chk = _jup_sat_marriage_cluster_check(t, h7_si, seventh_lord_natal_si)
+        if chk["dtt"]:
+            dtt_n += 1
+        if chk["jup_hit"] or chk["sat_hit"]:
+            sng_n += 1
+        details.append({
+            "date": d.strftime("%Y-%m-%d"),
+            "jup": chk["jup_detail"] or "—",
+            "sat": chk["sat_detail"] or "—",
+            "dtt": chk["dtt"],
+        })
+    return {
+        "dtt_count": dtt_n,
+        "single_count": sng_n,
+        "samples": len(points),
+        "dtt_pct": round(100.0 * dtt_n / max(1, len(points)), 1),
+        "details": details,
+    }
+
+
+def _full_d1_d9_marriage_planet_scan(planets: list,
+                                       h7_si: Optional[int],
+                                       seventh_lord: Optional[str],
+                                       seventh_lord_natal_si: Optional[int],
+                                       kundli: dict,
+                                       asc_lon: Optional[float]
+                                       ) -> Dict[str, Any]:
+    """Full 9-planet × {sit_7H, asp_7H, conj_7L, asp_7L} scan in D1 + D9.
+
+    Returns dict with per-planet connections and totals. Used to flag
+    promiser/denier planets the engine's STEP 2 (3 hardcoded checks) misses.
+    """
+    NINE = ["Sun", "Moon", "Mars", "Mercury", "Jupiter",
+            "Venus", "Saturn", "Rahu", "Ketu"]
+    out: Dict[str, Any] = {
+        "d1": [], "d9": [],
+        "d1_promiser_count": 0,
+        "d1_denier_count": 0,
+        "d9_promiser_count": 0,
+        "promisers": [], "deniers": [],
+    }
+    if h7_si is None:
+        return out
+
+    p_by = {p.get("name"): p for p in planets if isinstance(p, dict)}
+
+    def _aspect(planet: str, p_si: int, target_si: int) -> str:
+        if (target_si - p_si) % 12 == 6:
+            return "7th"
+        if planet == "Mars" and (target_si - p_si) % 12 in (3, 7):
+            return "4th" if (target_si - p_si) % 12 == 3 else "8th"
+        if planet == "Jupiter" and (target_si - p_si) % 12 in (4, 8):
+            return "5th" if (target_si - p_si) % 12 == 4 else "9th"
+        if planet == "Saturn" and (target_si - p_si) % 12 in (2, 9):
+            return "3rd" if (target_si - p_si) % 12 == 2 else "10th"
+        return ""
+
+    promisers: List[str] = []
+    deniers: List[str] = []
+
+    for nm in NINE:
+        p = p_by.get(nm)
+        if not p:
+            continue
+        sg = p.get("sign")
+        if sg not in _SIGNS:
+            continue
+        si = _SIGNS.index(sg)
+        sit_7h = (si == h7_si)
+        asp_7h = _aspect(nm, si, h7_si) if not sit_7h else ""
+        conj_7l = (seventh_lord_natal_si is not None
+                   and si == seventh_lord_natal_si and nm != seventh_lord)
+        asp_7l = (_aspect(nm, si, seventh_lord_natal_si)
+                  if (seventh_lord_natal_si is not None and not conj_7l
+                      and si != seventh_lord_natal_si and nm != seventh_lord)
+                  else "")
+        connects = sit_7h or bool(asp_7h) or conj_7l or bool(asp_7l)
+        # Classical denier flag: Mars/Saturn aspect 7H/7L = delay/affliction
+        is_denier = (nm in ("Mars", "Saturn")
+                     and (sit_7h or asp_7h or conj_7l or asp_7l))
+        is_promiser = (nm in ("Jupiter", "Venus", "Moon", "Mercury", "Rahu")
+                        and connects)
+        if is_promiser:
+            promisers.append(nm)
+            out["d1_promiser_count"] += 1
+        if is_denier:
+            deniers.append(nm)
+            out["d1_denier_count"] += 1
+        out["d1"].append({
+            "planet": nm, "sign": sg, "house": p.get("house"),
+            "sit_7h": sit_7h, "asp_7h": asp_7h or None,
+            "conj_7l": conj_7l, "asp_7l": asp_7l or None,
+            "role": "promiser" if is_promiser else (
+                "denier" if is_denier else "neutral"),
+        })
+
+    # D9 scan — conjunctions only (D9 lagna may not be reliable here)
+    try:
+        d9 = _get_d9_chart(planets, asc_lon) or {}
+        d9p = d9.get("planets") if isinstance(d9.get("planets"), dict) else d9
+        if isinstance(d9p, dict):
+            d9_merc_sg = (d9p.get(seventh_lord or "") or {}).get("sign") if seventh_lord else None
+            d9_merc_si = _SIGNS.index(d9_merc_sg) if d9_merc_sg in _SIGNS else None
+            for nm in NINE:
+                dp = d9p.get(nm) or {}
+                sg = dp.get("sign")
+                if sg not in _SIGNS:
+                    continue
+                si = _SIGNS.index(sg)
+                conj_7l_d9 = (d9_merc_si is not None and si == d9_merc_si
+                              and nm != seventh_lord)
+                if conj_7l_d9 and nm in ("Jupiter", "Venus", "Moon",
+                                          "Mercury", "Rahu", "Mars"):
+                    if nm not in promisers:
+                        promisers.append(nm + "(D9)")
+                    out["d9_promiser_count"] += 1
+                out["d9"].append({
+                    "planet": nm, "sign": sg,
+                    "conj_7l_d9": conj_7l_d9,
+                })
+    except Exception as exc:
+        print(f"[marriage_timing._full_d1_d9_marriage_planet_scan D9] failed: {exc}")
+
+    out["promisers"] = promisers
+    out["deniers"] = deniers
+    return out
+
+
+def _chronological_dtt_top3_strict(kundli: dict,
+                                     target_lords: Set[str],
+                                     lagna_si: int,
+                                     moon_si: Optional[int],
+                                     h7_si: Optional[int],
+                                     seventh_lord_natal_si: Optional[int],
+                                     min_age_dt: Optional[datetime] = None,
+                                     scan_until: Optional[datetime] = None
+                                     ) -> List[Dict[str, Any]]:
+    """STRICT iterative DTT picker (user-spec rule).
+
+    Iterates promiser ADs/PDs in chronological order. For each promiser PD,
+    checks Jup+Sat double transit on 7H sign OR natal 7L sign. Returns
+    first 3 windows ranked by DTT score (then chronological). Single-
+    transit windows accepted only if dasha is triple-promiser (MD+AD+PD).
+    """
+    today = datetime.utcnow()
+    floor_dt = max(today, min_age_dt) if min_age_dt else today
+    ceil_dt = scan_until or datetime(2050, 1, 1)
+    if h7_si is None:
+        return []
+
+    candidate_ads = _scan_cluster_ads(kundli, target_lords, lookback_days=30)
+    candidates: List[Dict[str, Any]] = []
+    for ad_blk in candidate_ads:
+        md = ad_blk.get("md") or ad_blk.get("md_lord")
+        ad = ad_blk.get("ad") or ad_blk.get("ad_lord")
+        ad_start = _parse_dt(ad_blk.get("start"))
+        ad_end = _parse_dt(ad_blk.get("end"))
+        if not (md and ad and ad_start and ad_end):
+            continue
+        if ad_end < floor_dt or ad_start > ceil_dt:
+            continue
+        if md not in target_lords and ad not in target_lords:
+            continue
+        ad_months = max(3, int((ad_end - ad_start).days / 30) + 1)
+        from_dt = max(floor_dt, ad_start)
+        if from_dt >= ad_end:
+            continue
+        pds = _project_pds(md, ad, ad_start, ad_end,
+                           from_dt=from_dt, months_needed=ad_months)
+        for pd_blk in pds:
+            ps = pd_blk.get("start"); pe = pd_blk.get("end")
+            pl = pd_blk.get("pd")
+            if not (isinstance(ps, datetime) and isinstance(pe, datetime)):
+                continue
+            if pl not in target_lords:
+                continue
+            if pe < floor_dt or ps > ceil_dt:
+                continue
+            scan = _dtt_score_window(ps, pe, lagna_si, moon_si,
+                                       h7_si, seventh_lord_natal_si, samples=5)
+            triple = (1 if md in target_lords else 0) + \
+                     (1 if ad in target_lords else 0) + \
+                     (1 if pl in target_lords else 0)
+            # Acceptance: DTT >= 3/5 OR (single >= 4/5 AND triple == 3)
+            accept = (scan["dtt_count"] >= 3) or \
+                     (scan["single_count"] >= 4 and triple == 3)
+            if not accept:
+                continue
+            candidates.append({
+                "md": md, "ad": ad, "pd": pl,
+                "start": ps, "end": pe,
+                "window": _format_window(ps, pe),
+                "start_iso": ps.strftime("%Y-%m-%d"),
+                "end_iso": pe.strftime("%Y-%m-%d"),
+                "dtt_count": scan["dtt_count"],
+                "single_count": scan["single_count"],
+                "samples": scan["samples"],
+                "dtt_pct": scan["dtt_pct"],
+                "triple_promiser": triple,
+                "rule_passed": "DTT" if scan["dtt_count"] >= 3 else "SINGLE+TRIPLE",
+                "details": scan["details"],
+            })
+
+    # Rank: DTT count desc, then chronological asc
+    candidates.sort(key=lambda c: (-c["dtt_count"], -c["triple_promiser"], c["start"]))
+    # Dedupe by AD (keep best PD per AD for top-3 spread)
+    seen_ads: Set[Tuple[str, str]] = set()
+    top3: List[Dict[str, Any]] = []
+    for c in candidates:
+        key = (c["md"], c["ad"])
+        if key in seen_ads and len(top3) >= 1:
+            # allow same-AD only if no other ADs left to fill top-3
+            continue
+        top3.append(c)
+        seen_ads.add(key)
+        if len(top3) >= 3:
+            break
+    # Re-sort top-3 chronologically for user-friendly display
+    top3.sort(key=lambda c: c["start"])
+    return top3
+
+
+# ════════════════════════════════════════════════════════════════════════
 # SECTION 6 — Manglik (STEP 0 / risk flag)
 # ════════════════════════════════════════════════════════════════════════
 def _get_manglik(planets: list) -> str:
@@ -1782,6 +2096,58 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             "factors": w.get("factors", []),
         })
 
+    # ════════════════════════════════════════════════════════════════
+    # ADD-ONLY (post-merge): two new diagnostic fields per user spec
+    #   1. d1_d9_planet_scan      — full 9-planet × {7H/7L} connection scan
+    #   2. chronological_top3_strict_dtt — strict DTT (Jup+Sat on 7H or
+    #      natal 7L) chronologically-picked top 3 windows
+    # These are additive: existing top_3_windows / primary_window remain.
+    # ════════════════════════════════════════════════════════════════
+    d1_d9_scan: Dict[str, Any] = {}
+    chrono_top3: List[Dict[str, Any]] = []
+    try:
+        asc_lon = kundli.get("ascendantDeg")
+        d1_d9_scan = _full_d1_d9_marriage_planet_scan(
+            planets, h7_si, seventh_lord, seventh_lord_si, kundli, asc_lon)
+    except Exception as exc:
+        print(f"[marriage_timing add-on d1_d9_scan] failed: {exc}")
+
+    try:
+        if final_verdict != "DENIED" and lagna_si is not None and h7_si is not None:
+            # Robust 7L natal sign: prefer intel-derived; fall back to
+            # computing 7H sign-lord then locating that planet in chart.
+            sl_natal_si = seventh_lord_si
+            sl_name = seventh_lord
+            if sl_natal_si is None:
+                fallback_lord = _SIGN_LORDS.get(h7_si)
+                if fallback_lord:
+                    sl_name = sl_name or fallback_lord
+                    sl_natal_si = _planet_sign_idx(planets, fallback_lord)
+
+            # min_age_dt = STEP 0-shifted early threshold age boundary
+            min_age_dt = None
+            try:
+                by = _extract_birth_year(birth) if isinstance(birth, dict) else None
+                if by and isinstance(thresholds, (tuple, list)) and len(thresholds) >= 2:
+                    early_thr = thresholds[1]
+                    if isinstance(early_thr, (int, float)) and early_thr > 0:
+                        min_age_dt = datetime(by + int(early_thr), 1, 1)
+            except Exception as _exc_age:
+                print(f"[marriage_timing add-on min_age_dt] failed: {_exc_age}")
+
+            chrono_top3 = _chronological_dtt_top3_strict(
+                kundli, target_lords, lagna_si, moon_si,
+                h7_si, sl_natal_si,
+                min_age_dt=min_age_dt)
+    except Exception as exc:
+        print(f"[marriage_timing add-on chronological_top3_strict_dtt] failed: {exc}")
+
+    # Strip non-serializable datetime objects from chrono_top3
+    chrono_top3_serial: List[Dict[str, Any]] = []
+    for c in chrono_top3:
+        c2 = {k: v for k, v in c.items() if k not in ("start", "end")}
+        chrono_top3_serial.append(c2)
+
     return {
         "verdict": final_verdict,
         "band": band,
@@ -1795,4 +2161,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         "factors": factors,
         "top_3_windows": top_3_serial,
         "step0_tendency": step0,
+        # ADD-ONLY new diagnostic fields:
+        "d1_d9_planet_scan": d1_d9_scan,
+        "chronological_top3_strict_dtt": chrono_top3_serial,
     }

@@ -2148,7 +2148,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         c2 = {k: v for k, v in c.items() if k not in ("start", "end")}
         chrono_top3_serial.append(c2)
 
-    return {
+    result: Dict[str, Any] = {
         "verdict": final_verdict,
         "band": band,
         "primary_window": primary_window,
@@ -2165,3 +2165,18 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         "d1_d9_planet_scan": d1_d9_scan,
         "chronological_top3_strict_dtt": chrono_top3_serial,
     }
+
+    # ── ADD-ONLY: Validator (Guard) report
+    try:
+        from .validator import validate_marriage_assessment
+        result["validator_report"] = validate_marriage_assessment(
+            kundli, birth, intel, result)
+    except Exception as exc:
+        print(f"[marriage_timing add-on validator_report] failed: {exc}")
+        result["validator_report"] = {
+            "pass": False, "severity": "FAIL",
+            "summary": f"validator crashed: {exc}",
+            "checks": {}, "mismatches": [], "warnings": [],
+        }
+
+    return result

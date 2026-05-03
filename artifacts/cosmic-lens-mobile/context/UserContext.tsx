@@ -444,10 +444,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    _setUser(null); _setProfiles([]); _setPrimaryId(null);
+    _setUser(null);
     _setTodayEnergy(null); _setMoonData(null);
     _setDoshData(null); doshKundliRef.current = null;
-    Promise.all(Object.values(KEYS).map(k => AsyncStorage.removeItem(k))).catch(() => {});
+    // Only clear auth session — keep profiles/primaryId/birthData/kundli/language
+    // so user doesn't have to re-enter kundli details after logging back in.
+    Promise.all([
+      AsyncStorage.removeItem(KEYS.user),
+      AsyncStorage.removeItem(KEYS.legacyUser),
+    ]).catch(() => {});
   }, []);
 
   const refreshUser = useCallback(async () => {

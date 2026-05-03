@@ -113,6 +113,67 @@ _WINDOW_MIN_SCORE = 2.5     # below this: discard candidate window
 _WINDOW_STRONG_SCORE = 5.0  # at/above this: STRONG confluence band
 _WINDOW_MEDIUM_SCORE = 3.5  # at/above this: MODERATE confluence band
 
+# ── STEP 0 hard-coded marriage age bands (gender-aware) ──────────────
+# User-locked defaults (Hinglish: "yeh hardcoded rakho taki check kar paaye").
+# Tuple = (early_max, normal_max, late_max, very_late_max).
+# Anything > very_late_max -> DELAYED-CRITICAL.
+_AGE_BANDS_MALE   = (24, 29, 35, 40)
+_AGE_BANDS_FEMALE = (22, 27, 33, 38)
+
+def _age_band(age_years: float, gender: str) -> str:
+    """Map current age to band per gender. Returns one of:
+    EARLY | NORMAL | LATE | VERY_LATE | DELAYED_CRITICAL | UNKNOWN."""
+    if age_years is None or age_years < 0:
+        return "UNKNOWN"
+    g = (gender or "").strip().lower()
+    if g in ("f", "female", "woman", "girl"):
+        e, n, l, vl = _AGE_BANDS_FEMALE
+    elif g in ("m", "male", "man", "boy"):
+        e, n, l, vl = _AGE_BANDS_MALE
+    else:
+        return "UNKNOWN"
+    if age_years < e:    return "EARLY"
+    if age_years < n:    return "NORMAL"
+    if age_years <= l:   return "LATE"
+    if age_years <= vl:  return "VERY_LATE"
+    return "DELAYED_CRITICAL"
+
+def _compute_current_age(birth: Any) -> Optional[float]:
+    """Compute current age in years (decimal) from birth dict."""
+    if not isinstance(birth, dict):
+        return None
+    try:
+        y = int(birth.get("year"))
+        m = int(birth.get("month"))
+        d = int(birth.get("day"))
+        bdt = datetime(y, m, d)
+        delta = datetime.utcnow() - bdt
+        return round(delta.days / 365.2425, 2)
+    except Exception:
+        return None
+
+def _late_status(age_band: str, step0_verdict: str) -> str:
+    """Combine STEP 0 verdict + current age band -> actionable late status.
+    Returns one of:
+      not_yet           -> tendency LATE but age still pre-late zone
+      in_late_window    -> currently in late band, predicted zone aligned
+      already_late      -> past late band into very-late
+      critical          -> past very-late, delayed-critical
+      no_late_tendency  -> STEP 0 said EARLY/BALANCED
+      unknown           -> missing gender or age
+    """
+    if age_band == "UNKNOWN":
+        return "unknown"
+    if step0_verdict != "LATE":
+        return "no_late_tendency"
+    if age_band in ("EARLY", "NORMAL"):
+        return "not_yet"
+    if age_band == "LATE":
+        return "in_late_window"
+    if age_band == "VERY_LATE":
+        return "already_late"
+    return "critical"
+
 
 # ════════════════════════════════════════════════════════════════════════
 # SECTION 1 — D9 Navamsha (cross-validation toolset)
@@ -1117,7 +1178,8 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
                                 h7_si: Optional[int],
                                 seventh_lord: Optional[str],
                                 venus_si: Optional[int],
-                                gender: str = "") -> dict:
+                                gender: str = "",
+                                current_age: Optional[float] = None) -> dict:
     """STEP 0 — count LATE vs EARLY indicators.
 
     LATE indicators (4):
@@ -1253,12 +1315,36 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
     else:
         verdict = "BALANCED"
 
+    # ── Age-band overlay (hard-coded thresholds; gender-aware) ─────
+    age_band = _age_band(current_age, gender) if current_age is not None else "UNKNOWN"
+    late_status = _late_status(age_band, verdict)
+    if current_age is not None and age_band != "UNKNOWN":
+        reasons.append(f"AGE: current={current_age}y gender={gender or '?'} "
+                       f"band={age_band} status={late_status}")
+    elif current_age is not None:
+        reasons.append(f"AGE: current={current_age}y but gender unknown — "
+                       f"band/status skipped")
+
     return {
         "verdict": verdict,
         "score": score,
         "late_count": late,
         "early_count": early,
         "reasons": reasons,
+        "current_age": current_age,
+        "gender": gender or "",
+        "age_band": age_band,
+        "late_status": late_status,
+        "age_thresholds": {
+            "male":   {"early_max": _AGE_BANDS_MALE[0],
+                        "normal_max": _AGE_BANDS_MALE[1],
+                        "late_max": _AGE_BANDS_MALE[2],
+                        "very_late_max": _AGE_BANDS_MALE[3]},
+            "female": {"early_max": _AGE_BANDS_FEMALE[0],
+                        "normal_max": _AGE_BANDS_FEMALE[1],
+                        "late_max": _AGE_BANDS_FEMALE[2],
+                        "very_late_max": _AGE_BANDS_FEMALE[3]},
+        },
     }
 
 
@@ -1454,15 +1540,42 @@ def _planet_is_retrograde(planets: list, name: str) -> bool:
     return bool(rec.get("retrograde") or rec.get("isRetro"))
 
 
+_EXALT_SIGN: Dict[str, int] = {  # planet -> sign idx of exaltation
+    "Sun": 0, "Moon": 1, "Mars": 9, "Mercury": 5, "Jupiter": 3,
+    "Venus": 11, "Saturn": 6, "Rahu": 1, "Ketu": 7,
+}
+_DEBIL_SIGN: Dict[str, int] = {  # planet -> sign idx of debilitation (180° from exalt)
+    "Sun": 6, "Moon": 7, "Mars": 3, "Mercury": 11, "Jupiter": 5,
+    "Venus": 5, "Saturn": 0, "Rahu": 7, "Ketu": 1,
+}
+_OWN_SIGNS: Dict[str, Set[int]] = {
+    "Sun": {4}, "Moon": {3}, "Mars": {0, 7}, "Mercury": {2, 5},
+    "Jupiter": {8, 11}, "Venus": {1, 6}, "Saturn": {9, 10},
+}
+
 def _planet_dignity(planets: list, name: str) -> str:
-    """Return dignity string: exalted | moolatrikona | own | friend |
-    neutral | enemy | debilitated | "" (unknown).
+    """Return dignity: exalted | own | debilitated | neutral | "".
+
+    Prefer raw field if upstream populated; else compute deterministically
+    from sign index using classical exalt/debil/own tables.
     """
     rec = _planet_record(planets, name)
     if not rec:
         return ""
     d = rec.get("dignity") or rec.get("dignityState") or ""
-    return str(d).strip().lower()
+    if d:
+        return str(d).strip().lower()
+    # Fallback: compute from sign
+    si = _planet_sign_idx(planets, name)
+    if si is None:
+        return ""
+    if _EXALT_SIGN.get(name) == si:
+        return "exalted"
+    if _DEBIL_SIGN.get(name) == si:
+        return "debilitated"
+    if si in _OWN_SIGNS.get(name, set()):
+        return "own"
+    return "neutral"
 
 
 def _is_combust_local(planets: list, name: str) -> bool:
@@ -1661,9 +1774,10 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     # ════════════════════════════════════════════════════════════════
     # STEP 0 — Late vs Early Tendency Check
     # ════════════════════════════════════════════════════════════════
+    current_age = _compute_current_age(birth)
     step0 = _step0_late_early_tendency(
         planets, intel, kp, lagna_si, h7_si,
-        seventh_lord, venus_si, gender)
+        seventh_lord, venus_si, gender, current_age)
     factors.append(f"STEP 0: tendency={step0['verdict']} "
                    f"(LATE={step0['late_count']} EARLY={step0['early_count']} "
                    f"net={step0['score']})")

@@ -26,11 +26,19 @@ Checks performed:
       engine's d1_d9 promisers ⊆ validator-derived promisers
   C14 HELPER SANITY: KP, dasha, ashtakavarga, transits all returned data
   C15 ERROR LEAK: no exception strings or None-where-bool in output dict
+  C16 TRANSIT EPHEMERIS: Jupiter+Saturn signs sampled across 30 years —
+      every sample valid sign, expected transition cadence (~12mo Jup,
+      ~30mo Sat), no missing data
+  C17 TRANSIT PARITY: engine's _get_transits_at(today) matches a fresh
+      compute_transits() call at the SAME instant (deterministic)
+  C18 EPHEMERIS GROUND-TRUTH: direct Swiss Ephemeris spot-checks at 5
+      future dates verify compute_transits itself — catches regressions
+      in the canonical ephemeris layer, not just wrapper drift
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from .marriage_timing import (
@@ -412,6 +420,249 @@ def _check_error_leak(engine_output: dict) -> Dict[str, Any]:
     return {"issues": issues}
 
 
+def _check_transit_ephemeris_30yr(lagna_si: Optional[int],
+                                     moon_si: Optional[int]
+                                     ) -> Dict[str, Any]:
+    """C16: Sample Jupiter + Saturn transit signs every ~91 days, anchored
+    from TODAY for the next 30 years. Verifies ephemeris coverage,
+    transition cadence, and FAILS hard on stagnation.
+    """
+    issues: List[str] = []
+    if lagna_si is None:
+        return {"issues": ["C16 SKIP: lagna_si missing"],
+                "samples": [], "year_table": [], "transitions": {}}
+
+    today = datetime.utcnow().replace(hour=12, minute=0, second=0, microsecond=0)
+    samples: List[Dict[str, Any]] = []
+    bad_count = 0
+    for q in range(0, 30 * 4):  # 120 quarterly samples from today forward
+        when = today + timedelta(days=91 * q)
+        try:
+            t = _get_transits_at(lagna_si, moon_si, when=when)
+        except Exception as exc:
+            issues.append(f"C16 FAIL: ephemeris exception at {when.date()}: {exc}")
+            bad_count += 1
+            continue
+        th = t.get("transit_houses") or {}
+        jp = (th.get("Jupiter") or {}) if isinstance(th, dict) else {}
+        sp = (th.get("Saturn") or {}) if isinstance(th, dict) else {}
+        jup_sg = jp.get("sign")
+        sat_sg = sp.get("sign")
+        jup_ok = jup_sg in _SIGNS
+        sat_ok = sat_sg in _SIGNS
+        if not jup_ok:
+            bad_count += 1
+            issues.append(f"C16 FAIL: Jupiter sign invalid at {when.date()}: {jup_sg!r}")
+        if not sat_ok:
+            bad_count += 1
+            issues.append(f"C16 FAIL: Saturn sign invalid at {when.date()}: {sat_sg!r}")
+        samples.append({
+            "date": when.strftime("%Y-%m-%d"),
+            "jupiter": jup_sg, "saturn": sat_sg,
+            "jup_house": jp.get("house_from_lagna"),
+            "sat_house": sp.get("house_from_lagna"),
+        })
+
+    # Detect transitions and build year-by-year table
+    jup_transitions: List[Dict[str, str]] = []
+    sat_transitions: List[Dict[str, str]] = []
+    last_jup = last_sat = None
+    for s in samples:
+        if s["jupiter"] and s["jupiter"] != last_jup:
+            jup_transitions.append({"date": s["date"],
+                                     "from": last_jup or "—",
+                                     "to": s["jupiter"]})
+            last_jup = s["jupiter"]
+        if s["saturn"] and s["saturn"] != last_sat:
+            sat_transitions.append({"date": s["date"],
+                                     "from": last_sat or "—",
+                                     "to": s["saturn"]})
+            last_sat = s["saturn"]
+
+    # Cadence sanity (Jupiter ~12mo, Saturn ~30mo per sign)
+    # NOTE: Jup/Sat retrograde causes back-tracking across sign boundaries
+    # (e.g. Cancer->Leo->Cancer->Leo). Count UNIQUE signs visited as a
+    # zodiac progression (full 12-sign cycle ≈ 12yr Jup, ≈ 29.5yr Sat).
+    def _zodiac_progression(transitions: List[Dict[str, str]]) -> int:
+        """Count net zodiac advance: number of NEW signs reached forward."""
+        seen: List[str] = []
+        for tr in transitions:
+            sg = tr["to"]
+            if sg in _SIGNS and (not seen or sg != seen[-1]):
+                # only add if forward step (next sign in zodiac order)
+                if not seen:
+                    seen.append(sg)
+                else:
+                    nxt = _SIGNS[(_SIGNS.index(seen[-1]) + 1) % 12]
+                    if sg == nxt:
+                        seen.append(sg)
+        return len(seen) - 1  # net forward steps
+
+    avg_jup_mo = avg_sat_mo = 0.0
+    jup_steps = sat_steps = 0
+    if samples:
+        span_yrs = (datetime.strptime(samples[-1]["date"], "%Y-%m-%d")
+                    - datetime.strptime(samples[0]["date"], "%Y-%m-%d")).days / 365.25
+        jup_steps = _zodiac_progression(jup_transitions)
+        sat_steps = _zodiac_progression(sat_transitions)
+        avg_jup_mo = (span_yrs * 12 / jup_steps) if jup_steps > 0 else 0
+        avg_sat_mo = (span_yrs * 12 / sat_steps) if sat_steps > 0 else 0
+
+        # HARD FAIL on stagnation: in 30 years Jupiter MUST advance ≥20 signs
+        # (perfect = 30), Saturn MUST advance ≥8 signs (perfect = 12).
+        if span_yrs >= 25 and jup_steps < 20:
+            issues.append(f"C16 FAIL: Jupiter forward progression only "
+                          f"{jup_steps} signs in {span_yrs:.0f}y (expected ≥20) "
+                          f"— ephemeris stuck or broken")
+        if span_yrs >= 25 and sat_steps < 8:
+            issues.append(f"C16 FAIL: Saturn forward progression only "
+                          f"{sat_steps} signs in {span_yrs:.0f}y (expected ≥8) "
+                          f"— ephemeris stuck or broken")
+        if jup_steps > 0 and not (10 <= avg_jup_mo <= 14):
+            issues.append(f"C16 WARN: Jupiter avg sign-stay {avg_jup_mo:.1f}mo "
+                          f"(expected ~12mo, {jup_steps} forward steps in {span_yrs:.0f}y)")
+        if sat_steps > 0 and not (26 <= avg_sat_mo <= 34):
+            issues.append(f"C16 WARN: Saturn avg sign-stay {avg_sat_mo:.1f}mo "
+                          f"(expected ~30mo, {sat_steps} forward steps in {span_yrs:.0f}y)")
+
+    # Year table (one row per year showing Jup + Sat signs visited)
+    year_table: List[Dict[str, Any]] = []
+    by_year: Dict[int, Dict[str, set]] = {}
+    for s in samples:
+        yr = int(s["date"][:4])
+        by_year.setdefault(yr, {"jup": set(), "sat": set()})
+        if s["jupiter"]: by_year[yr]["jup"].add(s["jupiter"])
+        if s["saturn"]:  by_year[yr]["sat"].add(s["saturn"])
+    for yr in sorted(by_year.keys()):
+        year_table.append({
+            "year": yr,
+            "jupiter_signs": sorted(by_year[yr]["jup"]),
+            "saturn_signs": sorted(by_year[yr]["sat"]),
+        })
+
+    return {
+        "issues": issues,
+        "samples_taken": len(samples),
+        "bad_samples": bad_count,
+        "jupiter_transitions": jup_transitions,
+        "saturn_transitions": sat_transitions,
+        "year_table": year_table,
+    }
+
+
+def _check_transit_parity_today(lagna_si: Optional[int],
+                                  moon_si: Optional[int]
+                                  ) -> Dict[str, Any]:
+    """C17: engine's _get_transits_at(when=T) must match a direct
+    compute_transits(when=T) call at the SAME deterministic instant.
+    Both sign AND house must match. Missing planet entries = FAIL.
+    """
+    issues: List[str] = []
+    out: Dict[str, Any] = {"issues": issues, "compared": {}}
+    if lagna_si is None:
+        issues.append("C17 SKIP: lagna_si missing")
+        return out
+
+    when = datetime.utcnow().replace(hour=12, minute=0, second=0, microsecond=0)
+    try:
+        eng = _get_transits_at(lagna_si, moon_si, when=when)
+    except Exception as exc:
+        issues.append(f"C17 FAIL: engine transit call raised: {exc}")
+        return out
+    try:
+        from transits import compute_transits
+        direct = compute_transits(lagna_si, moon_si, when=when) or {}
+    except Exception as exc:
+        issues.append(f"C17 FAIL: direct compute_transits raised: {exc}")
+        return out
+
+    e_th = (eng.get("transit_houses") or {})
+    d_th = (direct.get("transit_houses") or {})
+    # Only check planets that compute_transits actually returns
+    for planet in ("Jupiter", "Saturn", "Rahu"):
+        e_entry = e_th.get(planet) or {}
+        d_entry = d_th.get(planet) or {}
+        if not e_entry:
+            issues.append(f"C17 FAIL: {planet} missing from engine transits")
+            continue
+        if not d_entry:
+            issues.append(f"C17 FAIL: {planet} missing from direct ephemeris")
+            continue
+        e_sg, d_sg = e_entry.get("sign"), d_entry.get("sign")
+        e_h, d_h = e_entry.get("house_from_lagna"), d_entry.get("house_from_lagna")
+        out["compared"][planet] = {"sign": e_sg, "house": e_h,
+                                    "match_sign": e_sg == d_sg,
+                                    "match_house": e_h == d_h}
+        if e_sg != d_sg:
+            issues.append(f"C17 FAIL: {planet} sign engine={e_sg!r} vs direct={d_sg!r}")
+        if e_h != d_h:
+            issues.append(f"C17 FAIL: {planet} house engine={e_h} vs direct={d_h}")
+    return out
+
+
+def _check_ephemeris_ground_truth(lagna_si: Optional[int]) -> Dict[str, Any]:
+    """C18: Direct Swiss Ephemeris spot-checks at 5 future dates.
+    This bypasses compute_transits entirely — catches regressions in the
+    canonical ephemeris layer itself (not just wrapper drift).
+
+    Compares: compute_transits(when=T).Jupiter.sign vs raw swe.calc_ut at T.
+    """
+    issues: List[str] = []
+    out: Dict[str, Any] = {"issues": issues, "spot_checks": [],
+                            "swe_available": False}
+    if lagna_si is None:
+        issues.append("C18 SKIP: lagna_si missing")
+        return out
+    try:
+        import swisseph as swe  # type: ignore
+        from transits import compute_transits, _SIGN_NAMES
+        swe.set_sid_mode(swe.SIDM_LAHIRI)
+        flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
+    except Exception as exc:
+        issues.append(f"C18 SKIP: Swiss Ephemeris unavailable: {exc}")
+        return out
+    out["swe_available"] = True
+
+    today = datetime.utcnow().replace(hour=12, minute=0, second=0, microsecond=0)
+    # Spot-check at +0, +2, +5, +10, +20 years
+    test_offsets_years = [0, 2, 5, 10, 20]
+    bodies = {"Jupiter": swe.JUPITER, "Saturn": swe.SATURN}
+
+    for yr_off in test_offsets_years:
+        when = today.replace(year=today.year + yr_off)
+        # raw swisseph
+        raw_signs: Dict[str, str] = {}
+        try:
+            jd = swe.julday(when.year, when.month, when.day,
+                             when.hour + when.minute / 60.0)
+            for name, pid in bodies.items():
+                pos, _ = swe.calc_ut(jd, pid, flags)
+                lon = float(pos[0]) % 360.0
+                raw_signs[name] = _SIGN_NAMES[int(lon / 30.0) % 12]
+        except Exception as exc:
+            issues.append(f"C18 FAIL: raw swe.calc_ut at {when.date()}: {exc}")
+            continue
+        # compute_transits
+        try:
+            ct = compute_transits(lagna_si, lagna_si, when=when) or {}
+            ct_th = ct.get("transit_houses") or {}
+        except Exception as exc:
+            issues.append(f"C18 FAIL: compute_transits at {when.date()}: {exc}")
+            continue
+
+        row: Dict[str, Any] = {"date": when.strftime("%Y-%m-%d")}
+        for name in bodies:
+            raw_sg = raw_signs.get(name)
+            ct_sg = (ct_th.get(name) or {}).get("sign")
+            row[name] = {"raw_swe": raw_sg, "compute_transits": ct_sg,
+                          "match": raw_sg == ct_sg}
+            if raw_sg != ct_sg:
+                issues.append(f"C18 FAIL: {name} at {when.date()} "
+                              f"raw_swe={raw_sg!r} vs compute_transits={ct_sg!r}")
+        out["spot_checks"].append(row)
+    return out
+
+
 def _check_chronology_and_age(chrono: List[Dict[str, Any]],
                                 birth_year: Optional[int]
                                 ) -> Dict[str, Any]:
@@ -581,6 +832,24 @@ def validate_marriage_assessment(chart: dict, birth: Any,
     el = _check_error_leak(engine_output)
     report["checks"]["C15_error_leak"] = el
     for it in el["issues"]:
+        (report["mismatches"] if "FAIL" in it else report["warnings"]).append(it)
+
+    # ── C16 transit ephemeris 30-year sanity
+    te = _check_transit_ephemeris_30yr(lagna_si, moon_si)
+    report["checks"]["C16_transit_ephemeris_30yr"] = te
+    for it in te["issues"]:
+        (report["mismatches"] if "FAIL" in it else report["warnings"]).append(it)
+
+    # ── C17 transit parity today (engine vs direct compute_transits)
+    tp = _check_transit_parity_today(lagna_si, moon_si)
+    report["checks"]["C17_transit_parity_today"] = tp
+    for it in tp["issues"]:
+        (report["mismatches"] if "FAIL" in it else report["warnings"]).append(it)
+
+    # ── C18 ephemeris ground-truth (raw Swiss Ephemeris spot-checks)
+    eg = _check_ephemeris_ground_truth(lagna_si)
+    report["checks"]["C18_ephemeris_ground_truth"] = eg
+    for it in eg["issues"]:
         (report["mismatches"] if "FAIL" in it else report["warnings"]).append(it)
 
     # ── Final roll-up

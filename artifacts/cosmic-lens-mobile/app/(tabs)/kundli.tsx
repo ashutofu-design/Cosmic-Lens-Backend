@@ -1330,12 +1330,24 @@ export default function KundliScreen() {
   const primaryProfile = profiles.find(p => p.id === primaryProfileId) ?? profiles[0] ?? null;
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
-  // Auto-refetch kundli when active profile lacks the KP block (older profiles
-  // saved before kp_engine v12 won't have kundli.kp). Ensures KP table updates
+  // Auto-refetch kundli when active profile lacks a complete KP block (older
+  // profiles saved before kp_engine v12 won't have kundli.kp, or may have
+  // partial cusps without sl/nl/sb/ss lord fields). Ensures KP table updates
   // correctly when switching between profiles.
+  const kpBlock = primaryProfile?.kundli?.kp;
+  const kpComplete = !!(
+    kpBlock?.planets?.length === 9 &&
+    kpBlock?.cusps?.length === 12 &&
+    kpBlock?.cusps?.[0]?.sl &&
+    kpBlock?.cusps?.[0]?.nl &&
+    kpBlock?.cusps?.[0]?.sb &&
+    kpBlock?.cusps?.[0]?.ss &&
+    kpBlock?.significations &&
+    Object.keys(kpBlock.significations).length >= 9
+  );
   useEffect(() => {
     if (!primaryProfile?.id || !primaryProfile?.birthData) return;
-    if (primaryProfile.kundli?.kp?.planets?.length) return;
+    if (kpComplete) return;
     let cancelled = false;
     const auth = user?.id && user?.api_key ? { user_id: user.id, api_key: user.api_key } : null;
     fetchKundliFromAPI(primaryProfile.birthData, auth)
@@ -1345,7 +1357,7 @@ export default function KundliScreen() {
       })
       .catch(() => { /* silent — old data still renders via fallback */ });
     return () => { cancelled = true; };
-  }, [primaryProfile?.id, primaryProfile?.kundli?.kp?.planets?.length, user?.id, user?.api_key, updateProfile, primaryProfile?.birthData]);
+  }, [primaryProfile?.id, kpComplete, user?.id, user?.api_key, updateProfile, primaryProfile?.birthData]);
   const tI18n = getT(language);
   const v: VLang = vedicLang(language);
   const t = useT();

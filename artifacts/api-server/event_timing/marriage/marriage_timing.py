@@ -2778,20 +2778,55 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     if venus_vargottama:
         redemption += 1
         redemption_reasons.append("R2: Venus vargottama in D9 (+1)")
-    # R3: 7L exalted natally
-    if _planet_dignity(planets, seventh_lord) == "exalted":
+    # R3: 7L in dignity (Phase 2.8.74 FIX I — expanded from "exalted"-only
+    # to {exalted, own, moolatrikona}. Catches strong 7L cases previously
+    # missed when 7L was in own sign or moolatrikona.)
+    seventh_lord_dignity = _planet_dignity(planets, seventh_lord)
+    if seventh_lord_dignity in ("exalted", "own", "moolatrikona"):
         redemption += 1
-        redemption_reasons.append(f"R3: 7L {seventh_lord} exalted (+1)")
+        redemption_reasons.append(
+            f"R3: 7L {seventh_lord} {seventh_lord_dignity} (+1)")
     # R4: Strong 7H Sarvashtakavarga (>= 30)
     sav_h7 = _sav_bonus(av, h7_si)
     if sav_h7 > 0:
         redemption += 1
         redemption_reasons.append(f"R4: 7H SAV strong ({_SIGNS[h7_si]}) (+1)")
 
+    # ── Phase 2.8.74 FIX I — Negative weighting (rescue cap, anti-bias)
+    # Pure-additive STEP 3 was over-rescuing DENIED charts that had real
+    # afflictions. Penalty checks now offset rescue points so chart-level
+    # weakness can cancel positives. Floor at 0 prevents underflow into
+    # strength scoring (band still computed from non-negative redemption).
+    redemption_penalty = 0
+    redemption_penalty_reasons: List[str] = []
+    # P1: 7L debilitated natally
+    if seventh_lord_dignity == "debilitated":
+        redemption_penalty += 1
+        redemption_penalty_reasons.append(
+            f"P1: 7L {seventh_lord} debilitated (-1)")
+    # P2: Venus combust
+    if _is_combust_local(planets, "Venus"):
+        redemption_penalty += 1
+        redemption_penalty_reasons.append("P2: Venus combust (-1)")
+    # P3: 7H SAV weak (< 25 -> _sav_bonus returns -0.5)
+    if sav_h7 < 0:
+        redemption_penalty += 1
+        redemption_penalty_reasons.append(
+            f"P3: 7H SAV weak ({_SIGNS[h7_si]}) (-1)")
+
+    redemption_raw = redemption
+    redemption = max(0, redemption_raw - redemption_penalty)
+
     for r in redemption_reasons:
         factors.append(f"STEP 3 REDEMPTION: {r}")
-    if not redemption_reasons:
-        factors.append("STEP 3 REDEMPTION: no rescue factors")
+    for p in redemption_penalty_reasons:
+        factors.append(f"STEP 3 PENALTY: {p}")
+    if redemption_penalty > 0:
+        factors.append(
+            f"STEP 3 NET: rescue={redemption_raw} penalty={redemption_penalty}"
+            f" -> effective={redemption}")
+    if not redemption_reasons and not redemption_penalty_reasons:
+        factors.append("STEP 3 REDEMPTION: no rescue or penalty factors")
 
     # ── Combine STEP 1+2+3 -> final verdict
     # KP is primary, D1+D9 cross-validate, redemption can promote

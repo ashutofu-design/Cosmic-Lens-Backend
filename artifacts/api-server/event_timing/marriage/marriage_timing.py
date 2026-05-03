@@ -1824,6 +1824,8 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
     seventh_lord_si = _planet_sign_idx(planets, seventh_lord) if seventh_lord else None
     seventh_lord_h = _planet_house_local(planets, seventh_lord) if seventh_lord else None
     seventh_lord_dignity = _planet_dignity(planets, seventh_lord) if seventh_lord else ""
+    seventh_lord_retro = (_planet_is_retrograde(planets, seventh_lord)
+                          if seventh_lord else False)
     venus_house = _planet_house_local(planets, "Venus")
     venus_dignity = _planet_dignity(planets, "Venus")
     venus_combust = _is_combust_local(planets, "Venus")
@@ -1831,15 +1833,25 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
     saturn_house = _planet_house_local(planets, "Saturn")
     jup_si = _planet_sign_idx(planets, "Jupiter")
 
-    # ── L1: Saturn conjunct or aspecting 7H/7L (natal)
-    sat_aff_7h = saturn_si is not None and (
-        saturn_si == h7_si or _is_saturn_aspect(saturn_si, h7_si))
+    # ── L1 + L11: Saturn affliction on 7H/7L (natal)
+    # Phase 2.8.68 FIX A — de-duplicate L1+L11. Saturn-in-7H now scores +2
+    # via L11 only; L1 occupation branch is suppressed in that case to
+    # prevent the historical double-count (+2 was actually +1+1).
+    sat_in_7h = (saturn_house == 7) or (
+        saturn_si is not None and saturn_si == h7_si)
+    sat_aff_7h_aspect = (saturn_si is not None
+                         and not sat_in_7h
+                         and _is_saturn_aspect(saturn_si, h7_si))
     sat_aff_7l = (saturn_si is not None and seventh_lord_si is not None
                   and (saturn_si == seventh_lord_si
                        or _is_saturn_aspect(saturn_si, seventh_lord_si)))
-    if sat_aff_7h:
+    if sat_in_7h:
+        # L11 takes the strongest reading; L1 is folded in to avoid double penalty.
+        late += 2
+        reasons.append("L11: natal Saturn IN 7H (+2 LATE; L1 folded in)")
+    elif sat_aff_7h_aspect:
         late += 1
-        reasons.append("L1: natal Saturn conjunct/aspect 7H (+1 LATE)")
+        reasons.append("L1: natal Saturn aspect on 7H (+1 LATE)")
     elif sat_aff_7l:
         late += 1
         reasons.append(f"L1: natal Saturn afflicting 7L {seventh_lord} (+1 LATE)")
@@ -1852,18 +1864,25 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
         late += 1
         reasons.append(f"L2: 7L {seventh_lord} debilitated (+1 LATE)")
 
-    # ── L3: Venus combust or in dusthana
+    # ── L3: Venus weakness — combust + dusthana + debilitated
+    # Phase 2.8.68 FIX B — debilitated Venus now adds a LATE point (was 0
+    # before). Total Venus weakness contribution capped at +2 so a triply
+    # afflicted Venus doesn't over-bias the verdict.
+    venus_late = 0
     if venus_combust:
-        late += 1
+        venus_late += 1
         reasons.append("L3: Venus combust (+1 LATE)")
-    elif venus_house in _DUSTHANA:
-        late += 1
+    if venus_house in _DUSTHANA:
+        venus_late += 1
         reasons.append(f"L3: Venus in {venus_house}H dusthana (+1 LATE)")
-
-    # ── L11: Saturn IN 7H natally
-    if saturn_house == 7:
-        late += 1
-        reasons.append("L11: natal Saturn IN 7H (+1 LATE)")
+    if venus_dignity == "debilitated":
+        venus_late += 1
+        reasons.append("L3: Venus debilitated (+1 LATE) [NEW 2.8.68]")
+    if venus_late > 2:
+        reasons.append(f"L3 cap: Venus weakness capped at +2 "
+                       f"(raw {venus_late})")
+        venus_late = 2
+    late += venus_late
 
     # ── E1: Jupiter aspect/conjunct 7H or 7L
     jup_aff_7h = jup_si is not None and (
@@ -1895,13 +1914,19 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
         reasons.append(f"E5 (inv): 7H {_SIGNS[h7_si]} dual — delays/multiples (+1 LATE)")
 
     # ── E6: 7L in kendra/trikona and not retro
+    # Phase 2.8.68 FIX C — 7L retrograde now adds +1 LATE independently of
+    # house placement (classical Vedic: retrograde 7L = delay signal).
+    # Old behavior preserved: kendra/trikona placement still gives EARLY
+    # only when not retro.
     if seventh_lord_h in _KENDRA_TRIKONA:
-        retro = _planet_is_retrograde(planets, seventh_lord)
-        if not retro:
+        if not seventh_lord_retro:
             early += 1
             reasons.append(f"E6: 7L {seventh_lord} in {seventh_lord_h}H kendra/trikona (+1 EARLY)")
         else:
-            reasons.append(f"E6 (skip): 7L {seventh_lord} in {seventh_lord_h}H but retro — neutral")
+            reasons.append(f"E6 (skip): 7L {seventh_lord} in {seventh_lord_h}H but retro — no EARLY")
+    if seventh_lord_retro:
+        late += 1
+        reasons.append(f"L4: 7L {seventh_lord} retrograde — delay signal (+1 LATE) [NEW 2.8.68]")
 
     # ── Gender modifier (G1/G2)
     g = (gender or "").strip().lower()

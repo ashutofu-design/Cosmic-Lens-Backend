@@ -1637,14 +1637,23 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     current_dasha = kundli.get("currentDasha") or kundli.get("current_dasha") or {}
     gender = _extract_gender(birth, intel)
 
-    # 7L lord lookup
+    # 7L lord lookup — prefer intel.house_lords; FALLBACK to 7H sign-lord
+    # (computed from h7_si via _SIGN_LORDS) when intel is incomplete.
+    # This single source-of-truth feeds STEP 0/3/4 + add-on diagnostics.
     seventh_lord = None
     for hl in (intel.get("house_lords") or []):
         if isinstance(hl, dict) and hl.get("house") == 7:
             seventh_lord = hl.get("lord")
             break
+    if not seventh_lord and h7_si is not None:
+        seventh_lord = _SIGN_LORDS.get(h7_si)  # canonical fallback
     seventh_lord_si = _planet_sign_idx(planets, seventh_lord) if seventh_lord else None
     seventh_lord_house = _planet_house_local(planets, seventh_lord) if seventh_lord else None
+    if seventh_lord:
+        factors.append(f"7L resolved: {seventh_lord} in "
+                       f"{_SIGNS[seventh_lord_si] if seventh_lord_si is not None else '?'}"
+                       f" H{seventh_lord_house or '?'}"
+                       f"{' [from intel]' if intel.get('house_lords') else ' [fallback from 7H sign-lord]'}")
 
     # Compute Ashtakavarga ONCE (used many times in STEP 4)
     av = _compute_ashtakavarga_for_chart(planets, lagna_si)
@@ -2103,26 +2112,21 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     #      natal 7L) chronologically-picked top 3 windows
     # These are additive: existing top_3_windows / primary_window remain.
     # ════════════════════════════════════════════════════════════════
+    # 7L already resolved canonically at L1641 (with fallback). Reuse.
+    sl_natal_si = seventh_lord_si
+    sl_name = seventh_lord
+
     d1_d9_scan: Dict[str, Any] = {}
     chrono_top3: List[Dict[str, Any]] = []
     try:
         asc_lon = kundli.get("ascendantDeg")
         d1_d9_scan = _full_d1_d9_marriage_planet_scan(
-            planets, h7_si, seventh_lord, seventh_lord_si, kundli, asc_lon)
+            planets, h7_si, sl_name, sl_natal_si, kundli, asc_lon)
     except Exception as exc:
         print(f"[marriage_timing add-on d1_d9_scan] failed: {exc}")
 
     try:
         if final_verdict != "DENIED" and lagna_si is not None and h7_si is not None:
-            # Robust 7L natal sign: prefer intel-derived; fall back to
-            # computing 7H sign-lord then locating that planet in chart.
-            sl_natal_si = seventh_lord_si
-            sl_name = seventh_lord
-            if sl_natal_si is None:
-                fallback_lord = _SIGN_LORDS.get(h7_si)
-                if fallback_lord:
-                    sl_name = sl_name or fallback_lord
-                    sl_natal_si = _planet_sign_idx(planets, fallback_lord)
 
             # min_age_dt = STEP 0-shifted early threshold age boundary
             min_age_dt = None

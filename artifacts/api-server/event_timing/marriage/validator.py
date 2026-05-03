@@ -342,15 +342,19 @@ def _check_primary_crosscheck(engine_output: dict,
                 f"C13 FAIL: primary_window {primary!r} not found in "
                 f"top_3_windows or chronological_top3_strict_dtt")
 
+    # Compare ONLY D1 promisers (engine tags D9 ones with "(D9)" suffix).
+    # Mixing D1 + D9 sets here would falsely flag legitimate D9-only
+    # promisers as "invented" by the engine.
     eng_scan = engine_output.get("d1_d9_planet_scan") or {}
-    eng_proms_clean = {p.split("(")[0].strip() for p in
-                        (eng_scan.get("promisers") or [])}
+    eng_d1_only = {p for p in (eng_scan.get("promisers") or [])
+                   if "(D9)" not in p and "(d9)" not in p}
     ver_proms_clean = set(verifier_d1_promisers or [])
-    invented = eng_proms_clean - ver_proms_clean
+    invented = eng_d1_only - ver_proms_clean
     if invented:
         issues.append(
-            f"C13 WARN: engine d1_d9_scan reports promisers not seen by "
-            f"verifier: {sorted(invented)}")
+            f"C13 WARN: engine d1_d9_scan reports D1 promisers not seen "
+            f"by verifier: {sorted(invented)}")
+    eng_proms_clean = eng_d1_only
 
     return {"issues": issues,
             "primary_in_top3": (primary in {w.get("window") for w in top3}) if primary else None,

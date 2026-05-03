@@ -1162,7 +1162,10 @@ function KPSummaryCard({ kundli }: { kundli: KundliData }) {
     const base = sp
       ? { name: n, house: sp.house, nl: sp.nl, sb: sp.sb }
       : (() => { const kp = getKPLords(p.longitude); return { name: n, house: p.house, nl: kp.starLord, sb: kp.subLord }; })();
-    return { ...base, owns: ownedHousesOf(n) };
+    // Use full classical PL houses (server significations: occ + dispositor +
+    // conjuncts + aspects for nodes). This matches the NL/SBL columns and
+    // Astrosage. Falls back to occ+owned only when server sigs are missing.
+    return { ...base, plHouses: plHousesOf(n), owns: ownedHousesOf(n) };
   });
 
   return (
@@ -1196,7 +1199,7 @@ function KPSummaryCard({ kundli }: { kundli: KundliData }) {
                 <Text style={{ color: pHue, fontSize: 9, fontFamily: F.bold }}>{ABBR[r.name]}</Text>
               </View>
               <Text style={{ flex: 1, color: C.text, fontSize: 11, fontFamily: F.semibold }} numberOfLines={1}>
-                {r.name}-{[...new Set([r.house, ...r.owns])].sort((a,b)=>a-b).join(",")}
+                {r.name}-{r.plHouses.length ? r.plHouses.join(",") : "—"}
               </Text>
             </View>
             <Text style={{ flex: 1.3, color: C.textMid, fontSize: 10, fontFamily: F.semibold, paddingLeft: 6 }} numberOfLines={1}>{fmt(r.nl)}</Text>

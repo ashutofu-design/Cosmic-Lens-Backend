@@ -1436,6 +1436,7 @@ export default function KundliScreen() {
         </View>
       </ScrollView>
 
+      {activeTab === "Kundli" && (<>
       <View style={{
         borderRadius: 18, borderWidth: 1, overflow: "hidden",
         backgroundColor: C.bgCard, borderColor: C.border,
@@ -1506,6 +1507,8 @@ export default function KundliScreen() {
           <Feather name="chevron-right" size={16} color={ac} style={{ opacity: 0.7 }} />
         </Pressable>
       </View>
+
+      </>)}
 
       <SectionHeader
         title={sectionTitleFor(activeTab, L)}

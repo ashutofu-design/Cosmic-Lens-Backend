@@ -1194,12 +1194,9 @@ function KPSummaryCard({ kundli }: { kundli: KundliData }) {
               <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: `${pHue}${o("15")}`, alignItems: "center", justifyContent: "center" }}>
                 <Text style={{ color: pHue, fontSize: 9, fontFamily: F.bold }}>{ABBR[r.name]}</Text>
               </View>
-              <View style={{ flex: 1, gap: 1 }}>
-                <Text style={{ color: C.text, fontSize: 12, fontFamily: F.semibold }}>{r.name}-{r.house}</Text>
-                <Text style={{ color: C.textMuted, fontSize: 9, fontFamily: F.medium }}>
-                  Occ {r.house} · Own {r.owns.length ? r.owns.join(",") : "—"}
-                </Text>
-              </View>
+              <Text style={{ color: C.text, fontSize: 12, fontFamily: F.semibold }}>
+                {r.name}-{[...new Set([r.house, ...r.owns])].sort((a,b)=>a-b).join(",")}
+              </Text>
             </View>
             <Text style={{ flex: 1.5, color: C.textMid, fontSize: 11, fontFamily: F.semibold }}>{fmt(r.nl)}</Text>
             <Text style={{ flex: 1.5, color: C.textMid, fontSize: 11, fontFamily: F.semibold }}>{fmt(r.sb)}</Text>

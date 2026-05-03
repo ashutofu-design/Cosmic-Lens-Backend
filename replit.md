@@ -67,4 +67,7 @@ The project is a pnpm workspace monorepo using Node.js 24 and TypeScript 5.9.
 - **Mobile Development**: Expo (React Native).
 - **Image Processing**: Pillow.
 - **Ask Pipeline V2**: AI Ear, `ai_ask_v2` dispatcher, AI Mouth.
-```
+
+## Recent Changes
+
+- **Phase 2.8.63 (May 3 2026) — VIVAH-7 STEP 1 KP filter unified**: Method A (chain-union with Promise={2,7,11}, Deny={6,8,12}) removed entirely from `event_timing/marriage/marriage_timing.py`. Method B (strict sub-lord with Promise={2,7,11}, Deny={1,6,8,10,12}) is now the SOLE KP marriage filter per user lock-in. Deleted helpers: `_KP_PROMISE_HOUSES`, `_KP_DENY_HOUSES`, `_get_kp_significators`, `_planet_kp_significations`, `_kp_planet_verdict`, `_kp_csl_verdict`. STEP 1 invocation rewritten to use `_kp_sublord_filter_planet` for both 7CSL (primary, FINAL ARBITER) and 7C Star Lord (cross-check). Verdict mapping: STRONG→PROMISED, WEAK→DENIED, MIXED→MIXED. Verified on profile 40 (rajalaxmi): 7CSL Sun SB=Sun basic=[9,11] promise=[11] deny=[] → PROMISED; 7C StarLord Mars SB=Saturn basic=[2,3] promise=[2] deny=[] → PROMISED; STEP 1 KP GATE = PROMISED. No external callers existed for the removed helpers.

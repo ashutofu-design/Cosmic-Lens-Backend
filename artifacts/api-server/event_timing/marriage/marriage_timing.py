@@ -77,14 +77,11 @@ _SIGN_LORDS = {0: "Mars", 1: "Venus", 2: "Mercury", 3: "Moon", 4: "Sun",
 # Marriage cluster — classical 7H (spouse) + 2H (kutumba) + 11H (gain)
 _MARRIAGE_HOUSES: List[int] = [7, 2, 11]
 
-# KP signification rule — 7CSL signifies these houses -> PROMISED
-_KP_PROMISE_HOUSES: Set[int] = {2, 7, 11}
-# KP signification rule (VIVAH-7 spec) — 7CSL signifies these -> DENIED
-# Spec lock: 6/8/12 (dusthana/separation/loss). NOTE: {1,6,10} is the
-# classical "no-marriage / single-life" set; we use {6,8,12} per VIVAH-7
-# because for the "kab shaadi hogi" question we treat marriage that
-# results in dusthana karma as denial-equivalent (no stable marriage).
-_KP_DENY_HOUSES: Set[int] = {6, 8, 12}
+# Phase 2.8.63 (May 3 2026) — Method A removed.
+# Method A's chain-union sets (_KP_PROMISE_HOUSES / _KP_DENY_HOUSES with
+# Deny={6,8,12}) have been deleted per user spec. Method B (strict
+# sub-lord) is the ONLY KP filter from now on. See _KP_SB_PROMISE_HOUSES
+# and _KP_SB_DENY_HOUSES below for the active rule sets.
 
 # Reality Filter age thresholds (BASE — STEP 0 may shift these)
 _AGE_HARD_BLOCK = 18      # below this: never predict marriage in <2 yr
@@ -273,68 +270,12 @@ def _get_7c_star_lord(kp: dict) -> str:
         return ""
 
 
-def _get_kp_significators(kp: dict, house: int) -> Set[str]:
-    """Get planets that signify a given house via KP CCS rules.
-
-    Bridges -> event_timing.marriage.love_or_arrange._kp_significators_of(kp, house)
-    Returns set of planet names. Empty set on failure.
-    """
-    try:
-        from .love_or_arrange import (   # type: ignore
-            _kp_significators_of,
-        )
-        result = _kp_significators_of(kp, house)
-        return result if isinstance(result, set) else set(result or [])
-    except Exception as exc:
-        print(f"[marriage_timing._get_kp_significators] failed: {exc}")
-        return set()
-
-
-def _planet_kp_significations(kp: dict, planet: str) -> List[int]:
-    """Houses that a given planet signifies (across all 12 houses).
-
-    Used by STEP 1 to evaluate both 7CSL and 7C Star Lord.
-    """
-    if not planet:
-        return []
-    out: List[int] = []
-    for h in range(1, 13):
-        sigs = _get_kp_significators(kp, h)
-        if planet in sigs:
-            out.append(h)
-    return out
-
-
-def _kp_planet_verdict(kp: dict, planet: str) -> Tuple[str, List[int]]:
-    """Return ('PROMISED'|'DENIED'|'MIXED'|'UNKNOWN', signified_houses)
-    for a single KP planet (used for both 7CSL and 7C Star Lord).
-    """
-    if not planet:
-        return ("UNKNOWN", [])
-    signified = _planet_kp_significations(kp, planet)
-    sset = set(signified)
-    promise_hits = len(sset & _KP_PROMISE_HOUSES)
-    deny_hits = len(sset & _KP_DENY_HOUSES)
-    if promise_hits >= 2 and deny_hits == 0:
-        return ("PROMISED", signified)
-    if deny_hits >= 2 and promise_hits == 0:
-        return ("DENIED", signified)
-    if promise_hits >= 1 and deny_hits >= 1:
-        return ("MIXED", signified)
-    if promise_hits >= 1:
-        return ("PROMISED", signified)
-    if deny_hits >= 1:
-        return ("DENIED", signified)
-    return ("MIXED", signified)
-
-
-def _kp_csl_verdict(kp: dict) -> Tuple[str, List[int]]:
-    """STEP 1 prep — compute KP 7CSL verdict (single planet, primary)."""
-    try:
-        return _kp_planet_verdict(kp, _get_7csl(kp))
-    except Exception as exc:
-        print(f"[marriage_timing._kp_csl_verdict] failed: {exc}")
-        return ("UNKNOWN", [])
+# Phase 2.8.63 (May 3 2026) — Method A helpers REMOVED.
+# Deleted: _get_kp_significators, _planet_kp_significations,
+#          _kp_planet_verdict, _kp_csl_verdict.
+# Reason: per user spec, only Method B (strict sub-lord, Promise={2,7,11},
+# Deny={1,6,8,10,12}) is used for the KP gate. See _kp_sublord_filter_planet
+# and compute_kp_sublord_marriage_filter below.
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -345,8 +286,9 @@ def _kp_csl_verdict(kp: dict) -> Tuple[str, List[int]]:
 # KP cusp ownership). Classify per:
 #   Promise = {2, 7, 11}
 #   Deny    = {1, 6, 8, 10, 12}
-# This is STRICTER and CLEANER than the chain-union approach used by
-# _kp_planet_verdict above. Both methods coexist (ADD-ONLY).
+# Phase 2.8.63 (May 3 2026) — this is now the SOLE KP marriage filter.
+# The earlier Method A (chain-union, Deny={6,8,12}) has been removed
+# entirely per user spec: "Method A pura hatao, Method B hamesha apply karo".
 #
 # Per user's GOLDEN RULE: "Sub-lord = FINAL DECISION".
 # ════════════════════════════════════════════════════════════════════════
@@ -361,47 +303,55 @@ _KP_PLANET_NAMES: List[str] = [
 ]
 
 
-def _planet_basic_houses(kp: dict, planet: str) -> List[int]:
-    """Return planet's BASIC signified houses = occupation + KP cusp ownership.
+def _sig_pl(kp: dict, planet: str) -> List[int]:
+    """Get a planet's signified houses from kp.significations[planet].pl ONLY.
 
-    Used by ChatGPT-style strict Sub-Lord filter (NOT the 4-level CCS chain).
-    Returns sorted unique list. Empty list if planet not found.
-
-    For shadow planets (Rahu/Ketu) ownership is empty (no own sign in KP),
-    so they only contribute their occupation house.
+    Phase 2.8.63 (May 3 2026) — locked data source per user spec:
+    KP rules MUST read from chart_data.kp.significations (per-planet `pl`,
+    `nl_lord`, `sb_lord`). Never touch kp.planets[] (Vedic-flavoured
+    occupation) or kp.cusps[] (sign ownership) for KP marriage decisions.
     """
     if not isinstance(kp, dict) or not planet:
         return []
-    out: Set[int] = set()
-    # Occupation (where planet sits in KP houses)
-    for p in (kp.get("planets") or []):
-        if isinstance(p, dict) and p.get("name") == planet:
-            h = p.get("house")
-            if isinstance(h, int):
-                out.add(h)
-            break
-    # Ownership: any KP cusp whose sign-lord is this planet
-    for c in (kp.get("cusps") or []):
-        if isinstance(c, dict) and c.get("sl") == planet:
-            h = c.get("house")
-            if isinstance(h, int):
-                out.add(h)
-    return sorted(out)
+    sigs = (kp.get("significations") or {})
+    entry = sigs.get(planet) if isinstance(sigs, dict) else None
+    if not isinstance(entry, dict):
+        return []
+    pl = entry.get("pl") or []
+    return [h for h in pl if isinstance(h, int)]
+
+
+def _sig_sb_lord(kp: dict, planet: str) -> str:
+    """Get a planet's SUB-LORD from kp.significations[planet].sb_lord ONLY."""
+    if not isinstance(kp, dict) or not planet:
+        return ""
+    sigs = (kp.get("significations") or {})
+    entry = sigs.get(planet) if isinstance(sigs, dict) else None
+    if not isinstance(entry, dict):
+        return ""
+    return entry.get("sb_lord") or ""
 
 
 def _kp_sublord_filter_planet(kp: dict, planet: str) -> Dict[str, Any]:
-    """Apply strict ChatGPT-style Sub-Lord filter to ONE planet.
+    """Apply strict Sub-Lord filter to ONE planet using significations only.
 
     Returns dict:
       {
         "planet":       "Sun",
         "sub_lord":     "Saturn",
-        "sb_houses":    [2, 4],
+        "sb_houses":    [2, 3],         # = significations[sub_lord].pl
         "promise_hits": [2],
         "deny_hits":    [],
         "verdict":      "STRONG" | "MIXED" | "WEAK" | "UNKNOWN",
-        "reason":       "Sub-lord Saturn (2,4) → 2 promise present"
+        "reason":       "SB Saturn (2,3) -> promise [2]"
       }
+
+    Phase 2.8.63 (May 3 2026) — locked KP data source:
+      - Sub-lord planet:    kp.significations[planet].sb_lord
+      - Sub-lord's houses:  kp.significations[sb_lord].pl
+    Does NOT read kp.planets[] or kp.cusps[]. This guarantees we never
+    accidentally mix Vedic whole-sign occupation/ownership into the
+    KP marriage gate.
 
     Verdict rules:
       promise_hits >= 1 and deny_hits == 0   -> STRONG
@@ -416,14 +366,11 @@ def _kp_sublord_filter_planet(kp: dict, planet: str) -> Dict[str, Any]:
     }
     if not isinstance(kp, dict) or not planet:
         return out
-    pl = next((p for p in (kp.get("planets") or [])
-               if isinstance(p, dict) and p.get("name") == planet), None)
-    if not pl:
-        return out
-    sb = pl.get("sb")
+    sb = _sig_sb_lord(kp, planet)
     if not sb:
+        out["reason"] = f"no sb_lord in significations[{planet}]"
         return out
-    sb_houses = _planet_basic_houses(kp, sb)
+    sb_houses = sorted(set(_sig_pl(kp, sb)))
     sb_set = set(sb_houses)
     promise = sorted(sb_set & _KP_SB_PROMISE_HOUSES)
     deny = sorted(sb_set & _KP_SB_DENY_HOUSES)
@@ -1820,18 +1767,46 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
 
     # ════════════════════════════════════════════════════════════════
     # STEP 1 — KP Filter (FIRST GATE — sublord = FINAL ARBITER)
+    # Phase 2.8.63 (May 3 2026) — user-locked spec:
+    #   Method A (chain-union, Deny={6,8,12}) REMOVED entirely.
+    #   Method B (strict sub-lord, Promise={2,7,11},
+    #             Deny={1,6,8,10,12}) is the ONLY filter from now on.
     # ════════════════════════════════════════════════════════════════
     csl7 = _get_7csl(kp)
     starlord = _get_7c_star_lord(kp)
-    csl_verdict, csl_signs = _kp_planet_verdict(kp, csl7)
-    star_verdict, star_signs = _kp_planet_verdict(kp, starlord) if starlord else ("UNKNOWN", [])
 
-    factors.append(f"STEP 1 KP: 7CSL={csl7 or 'n/a'} -> {csl_verdict} "
-                   f"signifies {csl_signs}")
-    factors.append(f"STEP 1 KP: 7C StarLord={starlord or 'n/a'} -> "
-                   f"{star_verdict} signifies {star_signs}")
+    # Method B: each planet's SUB-LORD's basic houses (occupation +
+    # KP cusp ownership) compared against {2,7,11} promise / {1,6,8,10,12} deny.
+    csl_filter = _kp_sublord_filter_planet(kp, csl7) if csl7 else {
+        "verdict": "UNKNOWN", "sub_lord": None, "sb_houses": [],
+        "promise_hits": [], "deny_hits": [], "reason": "no 7CSL"}
+    star_filter = _kp_sublord_filter_planet(kp, starlord) if starlord else {
+        "verdict": "UNKNOWN", "sub_lord": None, "sb_houses": [],
+        "promise_hits": [], "deny_hits": [], "reason": "no star lord"}
 
-    # KP gate decision (sublord dominant, starlord cross-check)
+    # Map Method B verdicts {STRONG/MIXED/WEAK/UNKNOWN} -> legacy gate
+    # vocabulary {PROMISED/MIXED/DENIED/UNKNOWN} for downstream consumers.
+    def _b_to_gate(v: str) -> str:
+        if v == "STRONG":  return "PROMISED"
+        if v == "WEAK":    return "DENIED"
+        if v == "MIXED":   return "MIXED"
+        return "UNKNOWN"
+
+    csl_verdict  = _b_to_gate(csl_filter.get("verdict") or "UNKNOWN")
+    star_verdict = _b_to_gate(star_filter.get("verdict") or "UNKNOWN")
+    csl_signs   = csl_filter.get("sb_houses") or []
+    star_signs  = star_filter.get("sb_houses") or []
+
+    factors.append(f"STEP 1 KP: 7CSL={csl7 or 'n/a'} SB={csl_filter.get('sub_lord') or 'n/a'} "
+                   f"basic_houses={csl_signs} promise={csl_filter.get('promise_hits')} "
+                   f"deny={csl_filter.get('deny_hits')} -> {csl_verdict}")
+    factors.append(f"STEP 1 KP: 7C StarLord={starlord or 'n/a'} SB={star_filter.get('sub_lord') or 'n/a'} "
+                   f"basic_houses={star_signs} promise={star_filter.get('promise_hits')} "
+                   f"deny={star_filter.get('deny_hits')} -> {star_verdict}")
+
+    # KP gate decision (7CSL primary, starlord cross-check). Same gate
+    # truth-table as before — only the per-planet verdicts now come from
+    # Method B's strict sub-lord filter.
     if csl_verdict == "PROMISED" and star_verdict in ("PROMISED", "MIXED", "UNKNOWN"):
         kp_gate = "PROMISED"
     elif csl_verdict == "DENIED" and star_verdict == "DENIED":

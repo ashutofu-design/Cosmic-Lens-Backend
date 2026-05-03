@@ -1074,8 +1074,13 @@ function KPSummaryCard({ kundli }: { kundli: KundliData }) {
   for (const p of kundli.planets) {
     pmap[p.name] = { house: p.house, signIdx: Math.floor((p.longitude % 360) / 30) % 12 };
   }
-  // Compute PL houses for any lord = occupation house + owned houses (relative to lagna)
-  const plHousesOf = (lord: string): number[] => {
+  // Prefer server-computed significations (full classical KP inheritance for
+  // Rahu/Ketu) when present in kundli.kp; fall back to local compute otherwise.
+  const serverSigs = kundli.kp?.significations;
+  const serverPlanets = kundli.kp?.planets;
+
+  // Compute PL houses for any lord = occupation + owned (client fallback only)
+  const plHousesOfLocal = (lord: string): number[] => {
     const occ = pmap[lord]?.house;
     const owned: number[] = [];
     for (let h = 0; h < 12; h++) {
@@ -1086,6 +1091,10 @@ function KPSummaryCard({ kundli }: { kundli: KundliData }) {
     if (occ) set.add(occ);
     return [...set].sort((a,b)=>a-b);
   };
+  const plHousesOf = (lord: string): number[] => {
+    const sv = serverSigs?.[lord]?.pl;
+    return (sv && sv.length) ? [...sv].sort((a,b)=>a-b) : plHousesOfLocal(lord);
+  };
   const fmt = (lord: string): string => {
     const hs = plHousesOf(lord);
     return `${ABBR[lord] ?? lord}-${hs.length ? hs.join(",") : "?"}`;
@@ -1093,6 +1102,9 @@ function KPSummaryCard({ kundli }: { kundli: KundliData }) {
 
   const rows = CORE.filter(n => pmap[n]).map(n => {
     const p = kundli.planets.find(pl => pl.name === n)!;
+    // Prefer server's NL/SBL — they reflect the canonical engine
+    const sp = serverPlanets?.find(x => x.name === n);
+    if (sp) return { name: n, house: p.house, nl: sp.nl, sb: sp.sb };
     const kp = getKPLords(p.longitude);
     return { name: n, house: p.house, nl: kp.starLord, sb: kp.subLord };
   });

@@ -238,13 +238,64 @@ def calculate_kp(data):
     }
 
     # ── Helper: combined houses for a lord (occupied + owned) ─────────────────
-    # For Rahu/Ketu (NO_OWNERSHIP), only the house they physically occupy
-    # is returned. No dispositor / conjunct / aspect inheritance — per user
-    # spec, shadow planets signify only where they sit.
+    # Standard for non-shadow planets: occupation house + owned houses.
+    # For Rahu/Ketu, classical KP "Nakshatra Nadi" inheritance (Astrosage rule):
+    #   1. own occupation house
+    #   2. dispositor (sign-lord of own sign) — its occ + owned
+    #   3. conjunct planets (same sign as node) — their occ + owned
+    #   4. planets in nodal partner's sign EXCLUDING partner's sign-lord
+    #      (partner's sign-lord's chain is implicitly already represented via
+    #       its own dispositor/ownership cycle and would over-count)
+    #   5. planets that aspect node's sign by special aspect:
+    #      Jupiter (5/9), Saturn (3/10), Mars (4/8) — their occ + owned
+    SPECIAL_ASPECTS = {"Jupiter": (4, 8), "Saturn": (2, 9), "Mars": (3, 7)}
+
+    def _planet_sign(p):
+        return int(planet_lons[p] / 30) % 12
+
+    def _add_planet_houses(houses_set, p):
+        h = planet_house_map.get(p)
+        if h:
+            houses_set.add(h)
+        houses_set.update(get_owned_houses(p, sidereal_cusps))
+
     def houses_for_lord(lord_name):
-        h_occ = [planet_house_map[lord_name]] if lord_name in planet_house_map else []
-        h_own = get_owned_houses(lord_name, sidereal_cusps)
-        return sorted(set(h_occ + h_own))
+        houses = set()
+        if lord_name in planet_house_map:
+            houses.add(planet_house_map[lord_name])
+        houses.update(get_owned_houses(lord_name, sidereal_cusps))
+
+        if lord_name in NO_OWNERSHIP:
+            own_sign = _planet_sign(lord_name)
+            partner_sign = (own_sign + 6) % 12
+            partner_lord = SIGN_LORDS[partner_sign]
+
+            # Rule 2: dispositor of own sign
+            disp = SIGN_LORDS[own_sign]
+            _add_planet_houses(houses, disp)
+
+            # Rule 3: planets conjunct (same sign)
+            for other in ALL_PLANETS:
+                if other == lord_name or other in NO_OWNERSHIP:
+                    continue
+                if _planet_sign(other) == own_sign:
+                    _add_planet_houses(houses, other)
+
+            # Rule 4: planets in nodal partner's sign except partner's sign-lord
+            for other in ALL_PLANETS:
+                if other in NO_OWNERSHIP or other == partner_lord:
+                    continue
+                if _planet_sign(other) == partner_sign:
+                    _add_planet_houses(houses, other)
+
+            # Rule 5: planets aspecting node's sign by special aspect
+            for asp_planet, offsets in SPECIAL_ASPECTS.items():
+                p_sign = _planet_sign(asp_planet)
+                if any((p_sign + off) % 12 == own_sign for off in offsets):
+                    _add_planet_houses(houses, asp_planet)
+
+        houses.discard(0)
+        return sorted(houses)
 
     # ── Build cusps output ────────────────────────────────────────────────────
     cusps_out = []
@@ -288,9 +339,11 @@ def calculate_kp(data):
             "ss":        ss,
         })
 
-        # PL houses: occupied house + owned houses (sorted unique).
-        # Rahu/Ketu own no signs → PL is just the occupation house.
-        pl_houses = sorted(set([house] + owned))
+        # PL houses: for non-shadow planets = occupation + owned; for
+        # Rahu/Ketu = full classical Nakshatra Nadi inheritance via
+        # houses_for_lord() (matches Astrosage Planet Signification table).
+        pl_houses = sorted(set([house] + owned)) if pname not in NO_OWNERSHIP \
+                    else houses_for_lord(pname)
 
         significations_out[pname] = {
             "nl_lord":  nl,

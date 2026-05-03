@@ -66,6 +66,12 @@ export interface KundliData {
   dashas: DashaData[];
   calcVersion?: number;
   ashtakavarga?: Record<string, number[]>;
+  kp?: {
+    planets?: Array<{ name: string; longitude: number; house: number; sl: string; nl: string; sb: string; ss: string; sign?: string; nakshatra?: string; degree?: string }>;
+    significations?: Record<string, { nl_lord: string; sb_lord: string; ss_lord: string; pl: number[]; sl: number[]; sb_houses: number[]; ss_houses: number[] }>;
+    cusps?: Array<{ house: number; longitude: number; sl: string; nl: string; sb: string; ss: string }>;
+    ayanamsa?: number;
+  };
 }
 
 export interface MoonHistoryPoint {

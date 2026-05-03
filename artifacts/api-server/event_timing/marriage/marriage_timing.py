@@ -511,6 +511,331 @@ def compute_kp_sublord_marriage_filter(kp: dict) -> Dict[str, Any]:
 
 
 # ════════════════════════════════════════════════════════════════════════
+# SECTION 2c — STEP 2: D1 + D9 link filter (Phase 2.8.64, May 3 2026)
+#
+# User-locked spec for STEP 2:
+#   "STEP 1 me jo planets filter hue (full approval / semi / reject), unka
+#    D1 aur D9 dono me 7H aur 7L ke saath connection check karo."
+#
+# Four standard "links" with 7H / 7L:
+#   1. occupation   — planet sits in 7H of that chart
+#   2. conjunction  — planet shares 7L's sign (and is not 7L itself)
+#   3. aspect       — planet aspects 7H sign OR 7L's sign (special aspects
+#                     for Mars/Jupiter/Saturn; everyone else only 7th)
+#   4. parivartana  — planet in 7L's owned sign AND 7L in planet's owned
+#                     sign (skipped for Rahu/Ketu — no lordship)
+#
+# Link strength per planet:
+#   BOTH   — link present in BOTH D1 and D9   (strongest)
+#   D1     — link present only in D1
+#   D9     — link present only in D9
+#   NONE   — no link in either chart
+#
+# Final classification matrix (STEP 1 verdict × link strength):
+#   STRONG (full approval) + BOTH      -> STRONGEST_PROMISE
+#   STRONG                 + D1|D9     -> CONFIRMED_PROMISE
+#   STRONG                 + NONE      -> PASSIVE_PROMISE
+#   MIXED  (semi)          + BOTH      -> STRONG_CONDITIONAL
+#   MIXED                  + D1|D9     -> CONDITIONAL
+#   MIXED                  + NONE      -> NEUTRAL
+#   WEAK   (reject)        + BOTH      -> STRONGEST_DENIAL
+#   WEAK                   + D1|D9     -> ACTIVE_DENIAL
+#   WEAK                   + NONE      -> PASSIVE_DENIAL
+#
+# Final buckets (last filter):
+#   APPROVERS    = STRONGEST_PROMISE  + CONFIRMED_PROMISE
+#   CONDITIONAL  = STRONG_CONDITIONAL + CONDITIONAL + PASSIVE_PROMISE
+#   DENIERS      = STRONGEST_DENIAL   + ACTIVE_DENIAL
+#   IGNORE       = NEUTRAL            + PASSIVE_DENIAL
+# ════════════════════════════════════════════════════════════════════════
+
+def _planet_owned_signs(planet: str) -> List[int]:
+    """Return list of zodiac sign indices ruled by this planet.
+
+    Rahu/Ketu return [] (no lordship in classical scheme).
+    """
+    if planet in ("", "Rahu", "Ketu"):
+        return []
+    return [si for si, lord in _SIGN_LORDS.items() if lord == planet]
+
+
+def _aspects_target(planet: str, p_si: int, target_si: int) -> bool:
+    """True if `planet` (sitting in sign `p_si`) aspects `target_si` sign.
+
+    Universal: every planet has 7th aspect. Special aspects:
+      Mars    -> 4, 7, 8 (diff 3, 6, 7)
+      Jupiter -> 5, 7, 9 (diff 4, 6, 8)
+      Saturn  -> 3, 7, 10 (diff 2, 6, 9)
+    Rahu/Ketu — conservative: only 7th aspect (no special drishti).
+    """
+    if p_si is None or target_si is None:
+        return False
+    diff = (target_si - p_si) % 12
+    if diff == 6:
+        return True   # universal 7th aspect
+    if planet == "Mars":
+        return diff in (3, 7)
+    if planet == "Jupiter":
+        return diff in (4, 8)
+    if planet == "Saturn":
+        return diff in (2, 9)
+    return False
+
+
+def _planet_link_in_chart(planet: str, p_si: Optional[int], p_house: Optional[int],
+                           h7_si: Optional[int],
+                           seventh_lord: str,
+                           seventh_lord_si: Optional[int]
+                           ) -> Dict[str, Any]:
+    """Check 4 link types between `planet` and 7H/7L within a single chart.
+
+    Returns dict:
+      {"occupation": bool, "conjunction": bool, "aspect": bool,
+       "parivartana": bool, "linked": bool, "details": [str]}
+    """
+    out = {
+        "occupation": False, "conjunction": False,
+        "aspect": False, "parivartana": False,
+        "linked": False, "details": [],
+    }
+    if p_si is None or h7_si is None:
+        return out
+
+    # 1. Occupation — planet sits in 7H
+    if p_house == 7:
+        out["occupation"] = True
+        out["details"].append("occ-7H")
+    elif p_si == h7_si:
+        # House data missing: fall back to sign-based check
+        out["occupation"] = True
+        out["details"].append("occ-7H(sign)")
+
+    # 2. Conjunction with 7L — same sign as 7L planet (not 7L itself)
+    if (seventh_lord and seventh_lord_si is not None
+            and planet != seventh_lord
+            and p_si == seventh_lord_si):
+        out["conjunction"] = True
+        out["details"].append(f"conj-7L({seventh_lord})")
+
+    # 3. Aspect on 7H sign OR 7L's sign
+    if not out["occupation"]:
+        if _aspects_target(planet, p_si, h7_si):
+            out["aspect"] = True
+            out["details"].append("asp-7H")
+        elif (seventh_lord_si is not None
+                and planet != seventh_lord
+                and not out["conjunction"]
+                and _aspects_target(planet, p_si, seventh_lord_si)):
+            out["aspect"] = True
+            out["details"].append(f"asp-7L({seventh_lord})")
+
+    # 4. Parivartana with 7L (skip Rahu/Ketu and self-7L case)
+    if (seventh_lord and seventh_lord_si is not None
+            and planet != seventh_lord
+            and planet not in ("Rahu", "Ketu")
+            and seventh_lord not in ("Rahu", "Ketu")):
+        p_owned = _planet_owned_signs(planet)
+        sl_owned = _planet_owned_signs(seventh_lord)
+        if p_si in sl_owned and seventh_lord_si in p_owned:
+            out["parivartana"] = True
+            out["details"].append(f"pari-7L({seventh_lord})")
+
+    out["linked"] = (out["occupation"] or out["conjunction"]
+                     or out["aspect"] or out["parivartana"])
+    return out
+
+
+def _d1_planet_state(planets: list, name: str
+                      ) -> Tuple[Optional[int], Optional[int]]:
+    """Return (sign_idx, house) of `name` from D1 planets list."""
+    return (_planet_sign_idx(planets, name), _planet_house_local(planets, name))
+
+
+def _d9_planet_state(d9_planets_list: list, name: str
+                      ) -> Tuple[Optional[int], Optional[int]]:
+    """Return (sign_idx, house) of `name` from D9 planets list."""
+    if not isinstance(d9_planets_list, list):
+        return (None, None)
+    for entry in d9_planets_list:
+        if not isinstance(entry, dict) or entry.get("name") != name:
+            continue
+        si = entry.get("signIndex")
+        if not isinstance(si, int):
+            si = entry.get("sign_idx")
+        h = entry.get("house")
+        return (si if isinstance(si, int) else None,
+                h if isinstance(h, int) else None)
+    return (None, None)
+
+
+# Final classification matrix
+_STEP2_MATRIX: Dict[Tuple[str, str], str] = {
+    ("STRONG", "BOTH"):  "STRONGEST_PROMISE",
+    ("STRONG", "D1"):    "CONFIRMED_PROMISE",
+    ("STRONG", "D9"):    "CONFIRMED_PROMISE",
+    ("STRONG", "NONE"):  "PASSIVE_PROMISE",
+    ("MIXED",  "BOTH"):  "STRONG_CONDITIONAL",
+    ("MIXED",  "D1"):    "CONDITIONAL",
+    ("MIXED",  "D9"):    "CONDITIONAL",
+    ("MIXED",  "NONE"):  "NEUTRAL",
+    ("WEAK",   "BOTH"):  "STRONGEST_DENIAL",
+    ("WEAK",   "D1"):    "ACTIVE_DENIAL",
+    ("WEAK",   "D9"):    "ACTIVE_DENIAL",
+    ("WEAK",   "NONE"):  "PASSIVE_DENIAL",
+    # UNKNOWN STEP 1 verdict — passthrough
+    ("UNKNOWN", "BOTH"): "UNKNOWN",
+    ("UNKNOWN", "D1"):   "UNKNOWN",
+    ("UNKNOWN", "D9"):   "UNKNOWN",
+    ("UNKNOWN", "NONE"): "UNKNOWN",
+}
+
+# Final-bucket grouping
+_STEP2_FINAL_BUCKET: Dict[str, str] = {
+    "STRONGEST_PROMISE":  "approvers",
+    "CONFIRMED_PROMISE":  "approvers",
+    "STRONG_CONDITIONAL": "conditional",
+    "CONDITIONAL":        "conditional",
+    "PASSIVE_PROMISE":    "conditional",
+    "STRONGEST_DENIAL":   "deniers",
+    "ACTIVE_DENIAL":      "deniers",
+    "NEUTRAL":            "ignore",
+    "PASSIVE_DENIAL":     "ignore",
+    "UNKNOWN":            "ignore",
+}
+
+
+def compute_step2_link_filter(kundli: dict, kp: dict
+                                ) -> Dict[str, Any]:
+    """STEP 2 — re-filter STEP 1 planets via D1 + D9 link to 7H/7L.
+
+    Returns dict:
+      {
+        "d1": {"lagna_si": 8, "h7_si": 2, "seventh_lord": "Mercury",
+               "seventh_lord_si": 9},
+        "d9": {"lagna_si": 1, "h7_si": 7, "seventh_lord": "Mars",
+               "seventh_lord_si": 4},
+        "per_planet": [
+          {"planet": "Sun", "step1_verdict": "STRONG",
+           "d1_link": {...}, "d9_link": {...},
+           "link_strength": "BOTH" | "D1" | "D9" | "NONE",
+           "final": "STRONGEST_PROMISE",
+           "bucket": "approvers"}, ...
+        ],
+        "buckets": {
+          "approvers":   ["Sun", ...],
+          "conditional": [...],
+          "deniers":     [...],
+          "ignore":      [...],
+        },
+      }
+    """
+    out: Dict[str, Any] = {
+        "d1": {}, "d9": {},
+        "per_planet": [],
+        "buckets": {"approvers": [], "conditional": [],
+                    "deniers": [], "ignore": []},
+    }
+    if not isinstance(kundli, dict):
+        return out
+    try:
+        # ---- Pull D1 essentials ----
+        planets = kundli.get("planets") or []
+        asc_sign = kundli.get("ascendant")
+        lagna_si = (_SIGNS.index(asc_sign)
+                    if isinstance(asc_sign, str) and asc_sign in _SIGNS
+                    else None)
+        if lagna_si is None:
+            return out
+        h7_si = (lagna_si + 6) % 12
+        seventh_lord = _SIGN_LORDS.get(h7_si) or ""
+        seventh_lord_si = _planet_sign_idx(planets, seventh_lord) if seventh_lord else None
+
+        out["d1"] = {
+            "lagna_si": lagna_si, "lagna_sign": _SIGNS[lagna_si],
+            "h7_si": h7_si, "h7_sign": _SIGNS[h7_si],
+            "seventh_lord": seventh_lord,
+            "seventh_lord_si": seventh_lord_si,
+            "seventh_lord_sign": _SIGNS[seventh_lord_si] if seventh_lord_si is not None else None,
+        }
+
+        # ---- Pull D9 essentials (use kundli.divisionalCharts.D9 — has houses) ----
+        dc = kundli.get("divisionalCharts") or {}
+        d9 = dc.get("D9") or dc.get("d9") or {}
+        d9_planets_list = d9.get("planets") if isinstance(d9, dict) else []
+        d9_lagna_si = d9.get("ascendantSignIndex") if isinstance(d9, dict) else None
+        if not isinstance(d9_lagna_si, int):
+            d9_asc = d9.get("ascendant") if isinstance(d9, dict) else None
+            d9_lagna_si = (_SIGNS.index(d9_asc)
+                           if isinstance(d9_asc, str) and d9_asc in _SIGNS
+                           else None)
+
+        if isinstance(d9_lagna_si, int):
+            d9_h7_si = (d9_lagna_si + 6) % 12
+            d9_seventh_lord = _SIGN_LORDS.get(d9_h7_si) or ""
+            d9_seventh_lord_si, _ = _d9_planet_state(d9_planets_list, d9_seventh_lord)
+            out["d9"] = {
+                "lagna_si": d9_lagna_si, "lagna_sign": _SIGNS[d9_lagna_si],
+                "h7_si": d9_h7_si, "h7_sign": _SIGNS[d9_h7_si],
+                "seventh_lord": d9_seventh_lord,
+                "seventh_lord_si": d9_seventh_lord_si,
+                "seventh_lord_sign": _SIGNS[d9_seventh_lord_si] if d9_seventh_lord_si is not None else None,
+            }
+        else:
+            d9_h7_si = None
+            d9_seventh_lord = ""
+            d9_seventh_lord_si = None
+
+        # ---- STEP 1 verdicts (Method B per-planet) ----
+        step1 = compute_kp_sublord_marriage_filter(kp)
+        s1_verdict_by_planet = {e["planet"]: (e.get("verdict") or "UNKNOWN")
+                                 for e in (step1.get("per_planet") or [])}
+
+        # ---- For each of the 9 planets: link in D1 + link in D9 ----
+        for pname in _KP_PLANET_NAMES:
+            s1v = s1_verdict_by_planet.get(pname, "UNKNOWN")
+
+            d1_si, d1_house = _d1_planet_state(planets, pname)
+            d1_link = _planet_link_in_chart(
+                pname, d1_si, d1_house, h7_si, seventh_lord, seventh_lord_si)
+
+            d9_si, d9_house = _d9_planet_state(d9_planets_list, pname)
+            d9_link = _planet_link_in_chart(
+                pname, d9_si, d9_house, d9_h7_si,
+                d9_seventh_lord, d9_seventh_lord_si)
+
+            d1_linked = d1_link["linked"]
+            d9_linked = d9_link["linked"]
+            if d1_linked and d9_linked:
+                strength = "BOTH"
+            elif d1_linked:
+                strength = "D1"
+            elif d9_linked:
+                strength = "D9"
+            else:
+                strength = "NONE"
+
+            final = _STEP2_MATRIX.get((s1v, strength), "UNKNOWN")
+            bucket = _STEP2_FINAL_BUCKET.get(final, "ignore")
+
+            out["per_planet"].append({
+                "planet": pname,
+                "step1_verdict": s1v,
+                "d1_link": d1_link,
+                "d9_link": d9_link,
+                "link_strength": strength,
+                "final": final,
+                "bucket": bucket,
+            })
+            if bucket in out["buckets"]:
+                out["buckets"][bucket].append(pname)
+
+        return out
+    except Exception as exc:
+        print(f"[marriage_timing.compute_step2_link_filter] failed: {exc}")
+        return out
+
+
+# ════════════════════════════════════════════════════════════════════════
 # SECTION 3 — Vimshottari MD-AD scanner (STEP 4 base)
 # ════════════════════════════════════════════════════════════════════════
 def _get_dasha_upcoming(kundli: dict) -> List[dict]:

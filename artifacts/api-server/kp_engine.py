@@ -209,26 +209,36 @@ def calculate_kp(data):
         ut_day, ut_month, ut_year = nxt.day, nxt.month, nxt.year
 
     # ── Swiss Ephemeris setup ──────────────────────────────────────────────────
-    swe.set_sid_mode(swe.SIDM_LAHIRI)
+    # KP / Nakshatra-Nadi work uses the Krishnamurti ayanamsa (NOT Lahiri).
+    # The two differ by ~5–6 arc-minutes which is enough to flip planets across
+    # KP sub-lord boundaries (e.g. Sun's SBL Ve↔Su). We set Krishnamurti only
+    # for this function and restore Lahiri at the end so other engines
+    # (kundli_engine D9, dasha, transits) remain on Lahiri.
+    swe.set_sid_mode(swe.SIDM_KRISHNAMURTI)
     jd = swe.julday(ut_year, ut_month, ut_day, ut_decimal)
     ayanamsa = swe.get_ayanamsa_ut(jd)
 
-    # ── Placidus cusps (tropical) → sidereal ──────────────────────────────────
-    cusps_trop, _ = swe.houses(jd, lat, lon, b'P')
-    sidereal_cusps = [(c - ayanamsa + 360) % 360 for c in cusps_trop[:12]]
+    try:
+        # ── Placidus cusps (tropical) → sidereal ──────────────────────────────
+        cusps_trop, _ = swe.houses(jd, lat, lon, b'P')
+        sidereal_cusps = [(c - ayanamsa + 360) % 360 for c in cusps_trop[:12]]
 
-    # ── Planet longitudes (sidereal) ──────────────────────────────────────────
-    flags_sid = swe.FLG_SIDEREAL | swe.FLG_SPEED
-    planet_lons = {}
+        # ── Planet longitudes (sidereal) ──────────────────────────────────────
+        flags_sid = swe.FLG_SIDEREAL | swe.FLG_SPEED
+        planet_lons = {}
 
-    for pname, pid in PLANET_IDS.items():
-        result, _ = swe.calc_ut(jd, pid, flags_sid)
-        planet_lons[pname] = result[0] % 360
+        for pname, pid in PLANET_IDS.items():
+            result, _ = swe.calc_ut(jd, pid, flags_sid)
+            planet_lons[pname] = result[0] % 360
 
-    rahu_result, _ = swe.calc_ut(jd, swe.MEAN_NODE, flags_sid)
-    rahu_lon = rahu_result[0] % 360
-    planet_lons["Rahu"] = rahu_lon
-    planet_lons["Ketu"] = (rahu_lon + 180) % 360
+        rahu_result, _ = swe.calc_ut(jd, swe.MEAN_NODE, flags_sid)
+        rahu_lon = rahu_result[0] % 360
+        planet_lons["Rahu"] = rahu_lon
+        planet_lons["Ketu"] = (rahu_lon + 180) % 360
+    finally:
+        # Always restore Lahiri so subsequent kundli_engine calls aren't
+        # contaminated by the global swisseph ayanamsa state.
+        swe.set_sid_mode(swe.SIDM_LAHIRI)
 
     # ── House placement for every planet ──────────────────────────────────────
     # planet_house_map: { planet_name: house_number }

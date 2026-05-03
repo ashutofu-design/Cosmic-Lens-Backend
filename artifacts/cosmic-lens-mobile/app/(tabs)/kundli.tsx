@@ -1141,14 +1141,27 @@ function KPSummaryCard({ kundli }: { kundli: KundliData }) {
     return `${ABBR[lord] ?? lord}-${hs.length ? hs.join(",") : "?"}`;
   };
 
+  // Owned houses per planet relative to lagna (sign-lord cusps). Nodes own none.
+  const NODES = new Set(["Rahu","Ketu"]);
+  const ownedHousesOf = (lord: string): number[] => {
+    if (NODES.has(lord)) return [];
+    const out: number[] = [];
+    for (let h = 0; h < 12; h++) {
+      const signAtCusp = (lagnaSign + h) % 12;
+      if (KP_SIGN_LORDS[signAtCusp] === lord) out.push(h + 1);
+    }
+    return out;
+  };
+
   const rows = CORE.filter(n => pmap[n]).map(n => {
     const p = kundli.planets.find(pl => pl.name === n)!;
     // Prefer server's KP Placidus house + NL/SBL (matches Astrosage convention).
     // kundli.planets[].house uses whole-sign Vedic; KP table must use Placidus.
     const sp = serverPlanets?.find(x => x.name === n);
-    if (sp) return { name: n, house: sp.house, nl: sp.nl, sb: sp.sb };
-    const kp = getKPLords(p.longitude);
-    return { name: n, house: p.house, nl: kp.starLord, sb: kp.subLord };
+    const base = sp
+      ? { name: n, house: sp.house, nl: sp.nl, sb: sp.sb }
+      : (() => { const kp = getKPLords(p.longitude); return { name: n, house: p.house, nl: kp.starLord, sb: kp.subLord }; })();
+    return { ...base, owns: ownedHousesOf(n) };
   });
 
   return (
@@ -1181,7 +1194,12 @@ function KPSummaryCard({ kundli }: { kundli: KundliData }) {
               <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: `${pHue}${o("15")}`, alignItems: "center", justifyContent: "center" }}>
                 <Text style={{ color: pHue, fontSize: 9, fontFamily: F.bold }}>{ABBR[r.name]}</Text>
               </View>
-              <Text style={{ color: C.text, fontSize: 12, fontFamily: F.semibold }}>{r.name}-{r.house}</Text>
+              <View style={{ flex: 1, gap: 1 }}>
+                <Text style={{ color: C.text, fontSize: 12, fontFamily: F.semibold }}>{r.name}-{r.house}</Text>
+                <Text style={{ color: C.textMuted, fontSize: 9, fontFamily: F.medium }}>
+                  Occ {r.house} · Own {r.owns.length ? r.owns.join(",") : "—"}
+                </Text>
+              </View>
             </View>
             <Text style={{ flex: 1.5, color: C.textMid, fontSize: 11, fontFamily: F.semibold }}>{fmt(r.nl)}</Text>
             <Text style={{ flex: 1.5, color: C.textMid, fontSize: 11, fontFamily: F.semibold }}>{fmt(r.sb)}</Text>

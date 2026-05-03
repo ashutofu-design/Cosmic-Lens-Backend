@@ -1832,6 +1832,10 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
     saturn_si = _planet_sign_idx(planets, "Saturn")
     saturn_house = _planet_house_local(planets, "Saturn")
     jup_si = _planet_sign_idx(planets, "Jupiter")
+    # Phase 2.8.69 FIX D — hoist Jupiter strength metadata for E1 gating.
+    jup_house = _planet_house_local(planets, "Jupiter")
+    jup_dignity = _planet_dignity(planets, "Jupiter")
+    jup_combust = _is_combust_local(planets, "Jupiter")
 
     # ── L1 + L11: Saturn affliction on 7H/7L (natal)
     # Phase 2.8.68 FIX A — de-duplicate L1+L11. Saturn-in-7H now scores +2
@@ -1885,17 +1889,35 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
     late += venus_late
 
     # ── E1: Jupiter aspect/conjunct 7H or 7L
+    # Phase 2.8.69 FIX D — gate Jupiter blessing on Jupiter strength.
+    # Pehle debilitated/combust Jupiter bhi +1 EARLY deta tha (false
+    # optimism). Ab weak Jupiter ka blessing suppress hota hai:
+    #   debilitated  → 0 EARLY (blessing weak)
+    #   combust      → 0 EARLY (blessing burnt)
+    #   dusthana 6/8/12 → +1 EARLY but log warning (compromised)
+    #   normal/strong   → +1 EARLY (full blessing)
     jup_aff_7h = jup_si is not None and (
         jup_si == h7_si or _is_jupiter_aspect(jup_si, h7_si))
     jup_aff_7l = (jup_si is not None and seventh_lord_si is not None
                   and (jup_si == seventh_lord_si
                        or _is_jupiter_aspect(jup_si, seventh_lord_si)))
-    if jup_aff_7h:
-        early += 1
-        reasons.append("E1: natal Jupiter conjunct/aspect 7H (+1 EARLY)")
-    elif jup_aff_7l:
-        early += 1
-        reasons.append(f"E1: natal Jupiter blessing 7L {seventh_lord} (+1 EARLY)")
+    if jup_aff_7h or jup_aff_7l:
+        target = "7H" if jup_aff_7h else f"7L {seventh_lord}"
+        if jup_dignity == "debilitated":
+            reasons.append(f"E1 (skip): Jupiter aspect/conj {target} but "
+                           "Jupiter debilitated — blessing too weak [2.8.69]")
+        elif jup_combust:
+            reasons.append(f"E1 (skip): Jupiter aspect/conj {target} but "
+                           "Jupiter combust — blessing burnt [2.8.69]")
+        elif jup_house in _DUSTHANA:
+            early += 1
+            reasons.append(f"E1: Jupiter aspect/conj {target} (+1 EARLY) "
+                           f"— but Jupiter in {jup_house}H dusthana, "
+                           "blessing compromised [2.8.69]")
+        else:
+            early += 1
+            reasons.append(f"E1: natal Jupiter aspect/conj {target} "
+                           "(+1 EARLY)")
 
     # ── E2: Venus exalted/own sign or in 5/7H
     if venus_dignity in ("exalted", "own", "moolatrikona"):
@@ -1935,8 +1957,7 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
             late += 1
             reasons.append("G1: male + Venus karaka weak (+1 LATE)")
     elif g in ("f", "female", "woman", "girl"):
-        jup_house = _planet_house_local(planets, "Jupiter")
-        jup_dignity = _planet_dignity(planets, "Jupiter")
+        # Phase 2.8.69 — reuse hoisted jup_house / jup_dignity
         if jup_house in _DUSTHANA or jup_dignity == "debilitated":
             late += 1
             reasons.append("G2: female + Jupiter karaka weak (+1 LATE)")

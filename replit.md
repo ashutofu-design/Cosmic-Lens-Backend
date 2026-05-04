@@ -670,5 +670,98 @@ classifier exceptions (previously swallowed) are now visible in
 
 P40 baseline re-verified PASS post-fix. 5/5 alias mappings unit-tested.
 
-### M14/M15 still pending
-Pure Hindi-English language parity, A/B telemetry instrumentation.
+---
+
+## Phase 2.10.5 STEP M14 — Pure-Hindi / Pure-English Language Parity ✅
+
+**Goal:** ensure pure-Devanagari-Hindi (`hi`) and pure-English (`en`)
+questions get answers in the SAME language with no Hinglish bleed. The
+existing legacy `_build_messages` (L3658) already injected
+`_strict_lang_block(...)` but the PASSTHROUGH paths (which serve every
+real production request since `LLM_FULL_CHART_MODE` defaults ON) skipped
+it.
+
+**Implementation (ADD-ONLY, defensive):**
+- Sync passthrough (`openai_helper.py` ~L13408): inject
+  `_lang_lock_pt = _strict_lang_block(_resolve_response_lang(question,
+  lang, preferred_language))` at the FRONT of `_user_content` before
+  topic_lock + transparency directive. Trace event
+  `4h.LANG_LOCK_APPLIED` with `{path, code, lock_chars}`.
+- Stream passthrough (`openai_helper.py` ~L16927): mirror.
+- try/except guarded — falls back to NO lock on any error and traces
+  `4h.LANG_LOCK_ERR`. Existing language-resolution priority preserved
+  (`preferred_language > detected > lang`).
+
+**Verified live:**
+- Pure Devanagari question `मेरी शादी कब होगी?` (lang=hi) →
+  `4h.LANG_LOCK_APPLIED: code=hi, lock_chars=578` → 836-char reply,
+  **648 Devanagari chars / 0 Roman alpha (100% pure Hindi)** ✅
+- Default Hinglish question (`Meri shaadi kab hogi?`, lang=hn) →
+  `4h.LANG_LOCK_APPLIED: code=hn, lock_chars=705` → preserves Hinglish
+  conversational tone (no robotic shift, per user concern).
+- P40 baseline still PASS.
+
+---
+
+## Phase 2.10.5 STEP M15 — A/B Telemetry Counters ✅
+
+**Goal:** observable acceptance rate for translator_lock decisions
+(LLM_POLISHED vs TEMPLATE vs RAW) — required for confidence-tuning the
+guard's strictness over time.
+
+**Implementation:**
+- In-memory thread-safe counters in `openai_helper.py` (~L2326):
+  `_TRANSLATOR_LOCK_COUNTERS` + `_TRANSLATOR_LOCK_COUNTERS_LOCK`
+  (`threading.Lock`). Tracks: `total`, `by_path`, `by_severity`,
+  `by_pipeline` (sync vs stream), `llm_rejected`, `llm_accepted`,
+  `acceptance_rate`, `started_at`.
+- Helper `_record_translator_lock_event(meta, pipeline_path)` —
+  **never raises** (try/except wrap), so any counter bug cannot break
+  the answer pipeline. Called inside both passthrough wraps right after
+  `_translator_lock_meta_pt` is built (sync L13591, stream L17225).
+- Public read accessors: `get_translator_lock_telemetry()` and
+  `reset_translator_lock_telemetry()`.
+- New Flask endpoint (`flask_app.py` L314):
+  - `GET  /api/telemetry/translator_lock` — public read-only snapshot.
+  - `POST /api/telemetry/translator_lock` — admin-only reset; requires
+    `X-Admin-Token` header (gated via `require_admin()`, returns 401
+    otherwise). Verified: no token → 401, valid token → zeros snapshot.
+
+**Architect-fix applied during M14/M15 review:**
+- Re-ordered passthrough user content so `_topic_lock` precedes
+  `_lang_lock_pt` (both sync L13431 + stream L16951). Restores the
+  `_PT_SYS_INTRO` positional contract ("user message starts with
+  TOPIC-LOCK") so M13's topic-lock compliance isn't weakened by M14.
+- Pure-Hindi test re-verified after reorder: still 100% Devanagari, 0
+  Roman alpha — both locks coexist cleanly.
+
+**Verified live:**
+```
+GET /api/telemetry/translator_lock →
+{
+  "total": 2, "acceptance_rate": 1.0,
+  "by_path": {"LLM_POLISHED": 2},
+  "by_severity": {"OK": 2},
+  "by_pipeline": {"passthrough_sync": 2},
+  "llm_accepted": 2, "llm_rejected": 0,
+  "started_at": "2026-05-04T19:14:01..."
+}
+```
+
+**Caveats:**
+- Per-process counters; reset on workflow restart. Not yet persisted to
+  DB — sufficient for current single-pod debug observability.
+- Stream pipeline counter not exercised yet in production (mobile
+  defaults to streaming; sync route only used by golden harness +
+  curl). Will populate naturally once mobile traffic arrives.
+
+---
+
+## Phase 2.10.5 — M11→M15 ALL COMPLETE ✅
+Ready for production deploy of the marriage answer pipeline.
+The Truth/Translator/Validator triad is now:
+- **M11** Frozen baselines (P40 LOCKED)
+- **M12** Adaptive temperature (dormant on gpt-5, armed for gpt-4)
+- **M13** Topic-aware history cleaner (cross-taxonomy fix applied)
+- **M14** Hard language lock (hi/hn/en, no mid-reply drift)
+- **M15** Observable acceptance-rate telemetry

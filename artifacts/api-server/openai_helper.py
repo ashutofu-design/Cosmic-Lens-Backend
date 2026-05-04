@@ -2320,6 +2320,84 @@ def _transit_context() -> str:
         return ""
 
 
+# Phase 2.10.5 STEP M15 — Translator-lock A/B telemetry counters.
+# In-memory thread-safe counters incremented inside both passthrough
+# translator_lock wraps (sync L13481+, stream L17096+). Exposed via
+# `GET /api/telemetry/translator_lock` (Flask endpoint in flask_app.py).
+# ADD-ONLY, never raises — guarded with try/except so any counter bug
+# cannot break the answer pipeline.
+import threading as _m15_threading
+_TRANSLATOR_LOCK_COUNTERS: dict = {
+    "total":         0,
+    "by_path":       {},   # {"LLM_POLISHED": N, "TEMPLATE": N, ...}
+    "by_severity":   {},   # {"OK": N, "WARN": N, ...}
+    "by_path_topic": {},   # {"passthrough_sync": N, "passthrough_stream": N}
+    "llm_rejected":  0,
+    "llm_accepted":  0,
+    "started_at":    None, # ISO timestamp of first event after process start
+}
+_TRANSLATOR_LOCK_COUNTERS_LOCK = _m15_threading.Lock()
+
+
+def _record_translator_lock_event(meta: dict | None,
+                                   pipeline_path: str | None = None) -> None:
+    """Increment in-memory A/B counters. Never raises."""
+    try:
+        if not isinstance(meta, dict):
+            return
+        with _TRANSLATOR_LOCK_COUNTERS_LOCK:
+            c = _TRANSLATOR_LOCK_COUNTERS
+            if c["started_at"] is None:
+                from datetime import datetime, timezone
+                c["started_at"] = datetime.now(timezone.utc).isoformat()
+            c["total"] += 1
+            p = (meta.get("path_used") or "UNKNOWN").upper()
+            s = (meta.get("severity")  or "UNKNOWN").upper()
+            c["by_path"][p]     = c["by_path"].get(p, 0) + 1
+            c["by_severity"][s] = c["by_severity"].get(s, 0) + 1
+            if pipeline_path:
+                c["by_path_topic"][pipeline_path] = \
+                    c["by_path_topic"].get(pipeline_path, 0) + 1
+            if meta.get("llm_rejected"):
+                c["llm_rejected"] += 1
+            else:
+                c["llm_accepted"] += 1
+    except Exception:
+        pass  # telemetry must never break the answer path
+
+
+def get_translator_lock_telemetry() -> dict:
+    """Public read accessor for `/api/telemetry/translator_lock`."""
+    with _TRANSLATOR_LOCK_COUNTERS_LOCK:
+        c = _TRANSLATOR_LOCK_COUNTERS
+        return {
+            "total":         c["total"],
+            "by_path":       dict(c["by_path"]),
+            "by_severity":   dict(c["by_severity"]),
+            "by_pipeline":   dict(c["by_path_topic"]),
+            "llm_rejected":  c["llm_rejected"],
+            "llm_accepted":  c["llm_accepted"],
+            "acceptance_rate": (
+                round(c["llm_accepted"] /
+                      max(1, c["llm_accepted"] + c["llm_rejected"]), 4)
+            ),
+            "started_at":    c["started_at"],
+        }
+
+
+def reset_translator_lock_telemetry() -> dict:
+    """Reset all counters. Returns the (now-empty) snapshot."""
+    with _TRANSLATOR_LOCK_COUNTERS_LOCK:
+        _TRANSLATOR_LOCK_COUNTERS["total"]        = 0
+        _TRANSLATOR_LOCK_COUNTERS["by_path"]      = {}
+        _TRANSLATOR_LOCK_COUNTERS["by_severity"]  = {}
+        _TRANSLATOR_LOCK_COUNTERS["by_path_topic"]= {}
+        _TRANSLATOR_LOCK_COUNTERS["llm_rejected"] = 0
+        _TRANSLATOR_LOCK_COUNTERS["llm_accepted"] = 0
+        _TRANSLATOR_LOCK_COUNTERS["started_at"]   = None
+    return get_translator_lock_telemetry()
+
+
 # Phase 2.10.5 STEP M13 — Cross-taxonomy topic alias map.
 # The codebase has THREE topic vocabularies that don't fully agree:
 #   1. `_qu_topic` (AI Ear `understand_question`):  love, children,
@@ -13324,8 +13402,31 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 # detectors above (`_detect_topic`,
                 # `_is_transparency_query`) still receive RAW question
                 # because they rely on the user's exact wording.
-                _user_content = (_topic_lock + _trans_directive + _engine_q) \
-                    if (_topic_lock or _trans_directive) else _engine_q
+                # Phase 2.10.5 STEP M14 — pure-Hindi / pure-English language
+                # parity. Inject the existing `_strict_lang_block(...)` (used
+                # by legacy _build_messages L3658) at the FRONT of the user
+                # turn so the LLM cannot drift between languages mid-reply.
+                # Resolution priority: preferred_language > detected > lang.
+                # ADD-ONLY, defensive try/except — falls back to no lock.
+                _lang_lock_pt = ""
+                try:
+                    _eff_lang_pt = _resolve_response_lang(
+                        question, lang, preferred_language,
+                    )
+                    _lang_lock_pt = _strict_lang_block(_eff_lang_pt)
+                    _trace(req_id, "4h.LANG_LOCK_APPLIED", {
+                        "path": "passthrough_sync",
+                        "code": _eff_lang_pt,
+                        "lock_chars": len(_lang_lock_pt),
+                    })
+                except Exception as _lang_exc_pt:  # noqa: BLE001
+                    _trace(req_id, "4h.LANG_LOCK_ERR",
+                           f"passthrough_sync:{str(_lang_exc_pt)[:160]}")
+                # Order: TOPIC-LOCK first (preserves _PT_SYS_INTRO positional
+                # contract "user message starts with TOPIC-LOCK"), then
+                # language lock, then transparency directive, then question.
+                _user_content = (_topic_lock + _lang_lock_pt + _trans_directive + _engine_q) \
+                    if (_lang_lock_pt or _topic_lock or _trans_directive) else _engine_q
                 _msgs_pt.append({"role": "user", "content": _user_content})
 
                 _trace(req_id, "PASSTHROUGH.MESSAGES_BUILT", {
@@ -13487,6 +13588,10 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                                 "ui_badge":          _locked_pt["ui_badge"],
                                 "provenance_footer": _locked_pt["provenance_footer"],
                             }
+                            # Phase 2.10.5 STEP M15 — A/B telemetry counter.
+                            _record_translator_lock_event(
+                                _translator_lock_meta_pt, "passthrough_sync",
+                            )
                             _engine_tag_pt = "ans-engine"  # translator_lock IS engine grounding
                             _trace(req_id, "4e.TRANSLATOR_LOCK", {
                                 "path":         "passthrough_sync",
@@ -16823,8 +16928,25 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             _topic_lock_s = _build_topic_lock(_topic_rule_s, kundli) if _topic_rule_s else ""
             _is_transparent_s = _is_transparency_query(question)
             _trans_directive_s = _build_transparency_directive() if _is_transparent_s else ""
-            _user_content_s = (_topic_lock_s + _trans_directive_s + question) \
-                if (_topic_lock_s or _trans_directive_s) else question
+            # Phase 2.10.5 STEP M14 — language lock (stream mirror).
+            _lang_lock_pt_s = ""
+            try:
+                _eff_lang_pt_s = _resolve_response_lang(
+                    question, lang, preferred_language,
+                )
+                _lang_lock_pt_s = _strict_lang_block(_eff_lang_pt_s)
+                _trace(req_id, "4h.LANG_LOCK_APPLIED", {
+                    "path": "passthrough_stream",
+                    "code": _eff_lang_pt_s,
+                    "lock_chars": len(_lang_lock_pt_s),
+                })
+            except Exception as _lang_exc_pt_s:  # noqa: BLE001
+                _trace(req_id, "4h.LANG_LOCK_ERR",
+                       f"passthrough_stream:{str(_lang_exc_pt_s)[:160]}")
+            # Order: TOPIC-LOCK first (preserves _PT_SYS_INTRO positional
+            # contract), then language lock, then transparency, then question.
+            _user_content_s = (_topic_lock_s + _lang_lock_pt_s + _trans_directive_s + question) \
+                if (_lang_lock_pt_s or _topic_lock_s or _trans_directive_s) else question
             _msgs_pt_s.append({"role": "user", "content": _user_content_s})
 
             _trace(req_id, "PASSTHROUGH(stream).MESSAGES_BUILT", {
@@ -17102,6 +17224,10 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                             "ui_badge":          _locked_pt_s["ui_badge"],
                             "provenance_footer": _locked_pt_s["provenance_footer"],
                         }
+                        # Phase 2.10.5 STEP M15 — A/B telemetry counter.
+                        _record_translator_lock_event(
+                            _translator_lock_meta_pt_s, "passthrough_stream",
+                        )
                         _engine_tag_pt_s = "ans-engine"
                         _trace(req_id, "4e.TRANSLATOR_LOCK", {
                             "path":         "passthrough_stream",

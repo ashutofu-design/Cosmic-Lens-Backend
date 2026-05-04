@@ -308,6 +308,31 @@ def healthz():
     return jsonify({"status": "ok"}), 200
 
 
+# Phase 2.10.5 STEP M15 — translator-lock A/B telemetry endpoint.
+# In-memory counters (per-process, reset on restart). Increments inside
+# `openai_helper._record_translator_lock_event` from both passthrough
+# wraps.
+#   GET  → read-only snapshot (public, no auth — read-only counter data
+#          is non-sensitive observability).
+#   POST → reset counters; requires X-Admin-Token header (admin only).
+@app.route("/api/telemetry/translator_lock", methods=["GET", "POST"])
+def api_telemetry_translator_lock():
+    try:
+        from openai_helper import (
+            get_translator_lock_telemetry,
+            reset_translator_lock_telemetry,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"error": "telemetry_unavailable",
+                        "detail": str(exc)[:200]}), 500
+    if request.method == "POST":
+        auth_err = require_admin()
+        if auth_err is not None:
+            return auth_err
+        return jsonify(reset_translator_lock_telemetry())
+    return jsonify(get_translator_lock_telemetry())
+
+
 # ───────────────────────── Face Reading (Step 0: foundation) ─────────────────
 @app.route("/api/face_reading/extract", methods=["POST"])
 @_rate_limit("20 per minute")

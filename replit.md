@@ -523,3 +523,44 @@ ops/UI badge). Trace events: `4e.TRANSLATOR_LOCK` / `4e.TRANSLATOR_LOCK_ERR`.
 
 **Pending (M11-M15 / Phase 2.10.4 STEP 7C)**: golden tests, LLM temp lockdown,
 multi-turn cleaner, i18n parity, A/B telemetry.
+
+## Phase 2.10.5 STEP 8B — Translator Lockdown LIVE in production ✅
+
+**Live `/api/ask` test on P40 — confirmed working end-to-end:**
+- HTTP 200, response includes `translator_lock` meta dict
+- `engine_tag: ans-engine` (promoted from `ans-cosmo`)
+- `path_used: LLM_POLISHED` (LLM output passed fact-check, polished returned)
+- `severity: OK`, `llm_rejected: False`, `ui_badge: green/Verified`
+- Trace event `4e.TRANSLATOR_LOCK` fires in server logs
+
+### Root cause discovered during STEP 8B
+STEP 8 wiring (legacy `ai_ask` body L16263 + `ai_ask_stream` L17580) was
+**unreachable** in production: `LLM_FULL_CHART_MODE` is **default ON** since
+Apr 30 2026 (`_llm_full_chart_mode_enabled()` returns `True` unless
+explicitly `0/false/off`). Both legacy paths sit ~3000+ lines BELOW the
+PASSTHROUGH early-return that handles every real production request.
+
+### STEP 8B fixes (3 sites)
+1. **Sync passthrough wrap** (`openai_helper.py` L13253-13322) — compute
+   `marriage_verdict_obj` on-the-fly, run translator_lock, replace
+   `_text_pt_scrubbed`, attach `translator_lock` to return dict, promote
+   `engine_tag` to `ans-engine`. Try/except guarded.
+2. **Stream passthrough wrap** (`openai_helper.py` L16836-16899) — mirror
+   for streaming path. Mutates `_full_text_pt_s_scrubbed` (mobile commits
+   `final.text` to local history/DB so locking the persisted text is
+   meaningful). Same envelope augmentation.
+3. **Direct import bypass** — `_marriage_engine()` factory at L46 is a
+   Phase 2.8.37 stub (`return (lambda *a, **k: None, lambda *a, **k: "")`).
+   All 3 wraps must `from event_timing.marriage import assess_marriage`
+   directly. Without this, `_mvo_pt = None` → wrap silently skips.
+
+### Honest carryover (STEP 8 legacy wraps still broken)
+The legacy-path wraps from STEP 8 (sync L16263, stream L17580) read
+`out_meta["marriage_verdict_obj"]` populated at L2948 — which ALSO uses the
+same broken `_marriage_engine()` stub. Those wraps remain dormant (LLM_FULL_
+CHART_MODE always on in production). Fix deferred until/unless the legacy
+path is reactivated.
+
+### M11-M15 still pending (Phase 2.10.4 STEP 7C)
+Golden tests, LLM temp lockdown, multi-turn cleaner, i18n parity, A/B
+telemetry.

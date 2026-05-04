@@ -13249,7 +13249,73 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 # Currently triggered ONLY by the marriage engine block;
                 # extend the OR condition as more engines come online.
                 _engine_tag_pt = "ans-engine" if _marriage_block_pt else "ans-cosmo"
-                return {
+
+                # ─── Phase 2.10.5 STEP 8B — Translator Lockdown (passthrough) ───
+                # PASSTHROUGH path bypasses legacy ai_ask body, so the wrap at
+                # L16263 never fires here. Compute marriage_verdict_obj on-the-
+                # fly (mirroring legacy L2920-2948) and run translator_lock as
+                # a fact-check / safety net on the LLM output. ADD-ONLY,
+                # marriage-topic gated, refusal-safe, try/except guarded.
+                _translator_lock_meta_pt: dict | None = None
+                try:
+                    _qt_topic_pt = (_qu_topic or "").lower()
+                    if (_qt_topic_pt == "marriage"
+                            and isinstance(kundli, dict)
+                            and kundli.get("planets")
+                            and isinstance(_text_pt_scrubbed, str)
+                            and _text_pt_scrubbed.strip()
+                            and _text_pt_scrubbed.strip() != _ENGINE_HONESTY_REFUSAL_TEXT.strip()
+                            and _text_pt_scrubbed.strip() != _POST_LOGIC_REFUSAL_TEXT.strip()):
+                        _kp_dict_pt = None
+                        try:
+                            _kp_dict_pt = _kp_calc()(birth) if isinstance(birth, dict) else None
+                        except Exception as _kp_exc_pt:  # noqa: BLE001
+                            _trace(req_id, "PASSTHROUGH.MVO_KP_SKIPPED",
+                                   {"reason": str(_kp_exc_pt)[:200]})
+                        # Direct import — `_marriage_engine()` is a Phase
+                        # 2.8.37 stub that returns None; using it would
+                        # silently skip the wrap on every request.
+                        from event_timing.marriage import (
+                            assess_marriage as _assess_marriage_pt,
+                        )
+                        _mvo_pt = _assess_marriage_pt(
+                            kundli, _intel_obj_pt or {}, _kp_dict_pt or {},
+                            birth, question=question or "",
+                        )
+                        if isinstance(_mvo_pt, dict) and _mvo_pt:
+                            from event_timing.marriage.translator_lock import (
+                                render_marriage_output as _render_marriage_lock_pt,
+                            )
+                            _llm_text_snapshot_pt = _text_pt_scrubbed
+                            _locked_pt = _render_marriage_lock_pt(
+                                engine_result          = _mvo_pt,
+                                lang                   = "hinglish",
+                                llm_polish_fn          = lambda _t, _e: _llm_text_snapshot_pt,
+                                include_footer_in_text = False,
+                            )
+                            _text_pt_scrubbed = _locked_pt["text"]
+                            _translator_lock_meta_pt = {
+                                "path_used":         _locked_pt["path_used"],
+                                "severity":          _locked_pt["severity"],
+                                "llm_rejected":      _locked_pt["llm_rejected"],
+                                "rejection_reason":  _locked_pt.get("rejection_reason"),
+                                "snapshot_hash":     _locked_pt["snapshot_hash"],
+                                "ui_badge":          _locked_pt["ui_badge"],
+                                "provenance_footer": _locked_pt["provenance_footer"],
+                            }
+                            _engine_tag_pt = "ans-engine"  # translator_lock IS engine grounding
+                            _trace(req_id, "4e.TRANSLATOR_LOCK", {
+                                "path":         "passthrough_sync",
+                                "path_used":    _locked_pt["path_used"],
+                                "severity":     _locked_pt["severity"],
+                                "llm_rejected": _locked_pt["llm_rejected"],
+                                "reason":       _locked_pt.get("rejection_reason"),
+                            })
+                except Exception as _tlock_exc_pt:  # noqa: BLE001
+                    _trace(req_id, "4e.TRANSLATOR_LOCK_ERR",
+                           f"passthrough_sync:{str(_tlock_exc_pt)[:180]}")
+
+                _ret_pt = {
                     "text":       _text_pt_scrubbed,
                     "topic":      "general",
                     "confidence": 1.0,
@@ -13257,6 +13323,9 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     "follow_ups": [],
                     "engine_tag": _engine_tag_pt,
                 }
+                if _translator_lock_meta_pt is not None:
+                    _ret_pt["translator_lock"] = _translator_lock_meta_pt
+                return _ret_pt
             # chart_block empty (no planets after build) → legacy fallback
             print("[ai_ask] passthrough chart_block empty → fall through to legacy")
         except Exception as _pt_exc:  # noqa: BLE001
@@ -16766,11 +16835,75 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                     "reason": str(_diag_exc_s)[:200],
                 })
 
+            # ─── Phase 2.10.5 STEP 8B — Translator Lockdown (passthrough stream) ───
+            # Mirror of sync passthrough wrap above. Stream chunks already
+            # left the wire, but mobile client commits the `final.text`
+            # field to local history + DB — so locking the persisted final
+            # text is still meaningful. ADD-ONLY, gated on
+            # `_topic_id_s == "marriage"` (regex-based topic from
+            # `_detect_topic`, available in stream passthrough scope).
+            _translator_lock_meta_pt_s: dict | None = None
+            _engine_tag_pt_s = "ans-engine" if _locked_facts_pt_s else "ans-cosmo"
+            try:
+                if (_topic_id_s == "marriage"
+                        and isinstance(kundli, dict)
+                        and kundli.get("planets")
+                        and isinstance(_full_text_pt_s_scrubbed, str)
+                        and _full_text_pt_s_scrubbed.strip()
+                        and _full_text_pt_s_scrubbed.strip() != _ENGINE_HONESTY_REFUSAL_TEXT.strip()
+                        and _full_text_pt_s_scrubbed.strip() != _POST_LOGIC_REFUSAL_TEXT.strip()):
+                    _kp_dict_pt_s = None
+                    try:
+                        _kp_dict_pt_s = _kp_calc()(birth) if isinstance(birth, dict) else None
+                    except Exception as _kp_exc_pt_s:  # noqa: BLE001
+                        _trace(req_id, "PASSTHROUGH(stream).MVO_KP_SKIPPED",
+                               {"reason": str(_kp_exc_pt_s)[:200]})
+                    # Direct import — see sync passthrough wrap rationale.
+                    from event_timing.marriage import (
+                        assess_marriage as _assess_marriage_pt_s,
+                    )
+                    _mvo_pt_s = _assess_marriage_pt_s(
+                        kundli, _intel_obj_pt_s or {}, _kp_dict_pt_s or {},
+                        birth, question=question or "",
+                    )
+                    if isinstance(_mvo_pt_s, dict) and _mvo_pt_s:
+                        from event_timing.marriage.translator_lock import (
+                            render_marriage_output as _render_marriage_lock_pt_s,
+                        )
+                        _llm_text_snapshot_pt_s = _full_text_pt_s_scrubbed
+                        _locked_pt_s = _render_marriage_lock_pt_s(
+                            engine_result          = _mvo_pt_s,
+                            lang                   = "hinglish",
+                            llm_polish_fn          = lambda _t, _e: _llm_text_snapshot_pt_s,
+                            include_footer_in_text = False,
+                        )
+                        _full_text_pt_s_scrubbed = _locked_pt_s["text"]
+                        _translator_lock_meta_pt_s = {
+                            "path_used":         _locked_pt_s["path_used"],
+                            "severity":          _locked_pt_s["severity"],
+                            "llm_rejected":      _locked_pt_s["llm_rejected"],
+                            "rejection_reason":  _locked_pt_s.get("rejection_reason"),
+                            "snapshot_hash":     _locked_pt_s["snapshot_hash"],
+                            "ui_badge":          _locked_pt_s["ui_badge"],
+                            "provenance_footer": _locked_pt_s["provenance_footer"],
+                        }
+                        _engine_tag_pt_s = "ans-engine"
+                        _trace(req_id, "4e.TRANSLATOR_LOCK", {
+                            "path":         "passthrough_stream",
+                            "path_used":    _locked_pt_s["path_used"],
+                            "severity":     _locked_pt_s["severity"],
+                            "llm_rejected": _locked_pt_s["llm_rejected"],
+                            "reason":       _locked_pt_s.get("rejection_reason"),
+                        })
+            except Exception as _tlock_exc_pt_s:  # noqa: BLE001
+                _trace(req_id, "4e.TRANSLATOR_LOCK_ERR",
+                       f"passthrough_stream:{str(_tlock_exc_pt_s)[:180]}")
+
             # 5. Final envelope (matches mobile client expected schema)
             # Phase 2.8.27 — engine_tag tells UI whether deterministic
             # engine LOCKED FACTS were injected (ans-engine) or it was a
             # pure LLM answer (ans-cosmo).
-            yield {
+            _final_envelope_pt_s = {
                 "kind":       "final",
                 "text":       _full_text_pt_s_scrubbed,
                 "topic":      "general",
@@ -16784,8 +16917,13 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 # so the answer IS engine-grounded ("ans-engine"). The
                 # legacy _marriage_block_pt_s check was a no-op since
                 # Phase 2.8.37 stubbed that block to always return "".
-                "engine_tag": "ans-engine" if _locked_facts_pt_s else "ans-cosmo",
+                # Phase 2.10.5 STEP 8B — promoted to "ans-engine" when
+                # translator_lock fires (passthrough wrap above).
+                "engine_tag": _engine_tag_pt_s,
             }
+            if _translator_lock_meta_pt_s is not None:
+                _final_envelope_pt_s["translator_lock"] = _translator_lock_meta_pt_s
+            yield _final_envelope_pt_s
             return
         except Exception as _pt_exc_s:  # noqa: BLE001
             # Pre-stream failure (chart-block build, client init, first

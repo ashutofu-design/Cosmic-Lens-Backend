@@ -49,7 +49,7 @@ Output dict shape (backward-compatible + 2 new fields):
     "primary_window":      "August - October 2027",
     "backup_window":       "March - May 2029",
     "key_trigger":         "Venus AD + Jupiter PD + Jupiter on 7H + Sandhi",
-    "confluence_strength": "STRONG" | "MODERATE",
+    "confluence_strength": "STRONG" | "MODERATE" | "WEAK",
     "ul_outlook":          None,
     "risk_flag":           str | None,
     "risk_flags":          [...],
@@ -1872,21 +1872,23 @@ def _adjusted_age_thresholds(step0_verdict: str) -> Tuple[int, int, int, int]:
     )
 
 
-def _age_filter_action(age: Optional[int], predicted_age: Optional[int],
+def _age_filter_action(age: Optional[float], predicted_age: Optional[float],
                         thresholds: Tuple[int, int, int, int]) -> str:
     """Decide STEP 5 action.
 
-    Returns: BLOCK | PUSH_LATER | FLAG_EARLY | OK | FLAG_LATE | FLAG_VERY_LATE | UNKNOWN
+    Phase 2.8.76 (FIX P): Decision is based ONLY on `predicted_age` (the age
+    at the time of the predicted window). Current `age` is now informational
+    only and is no longer used to BLOCK future windows. A 17-yr-old's
+    window at age 24 is valid; only the predicted-age check decides.
+
+    Returns: BLOCK | FLAG_EARLY | OK | FLAG_LATE | FLAG_VERY_LATE | UNKNOWN
     """
     hard_block, early_flag, late_flag, very_late = thresholds
-    if age is None:
-        return "UNKNOWN"
-    if age < hard_block:
-        return "BLOCK"
     if predicted_age is None:
         return "UNKNOWN"
     if predicted_age < hard_block:
-        return "PUSH_LATER"
+        # Predicted window itself falls before legal/practical floor -> BLOCK
+        return "BLOCK"
     if predicted_age < early_flag:
         return "FLAG_EARLY"
     if predicted_age < late_flag:
@@ -2508,6 +2510,70 @@ def _extract_birth_year(birth: Any) -> Optional[int]:
             except ValueError:
                 pass
     return None
+
+
+def _extract_birth_date(birth: Any):
+    """Phase 2.8.76 (FIX O): return birth date as datetime.date for
+    month-precise age math. Falls back to None if not derivable.
+
+    Tries: explicit y/m/d fields first, then YYYY-MM-DD style strings.
+    """
+    from datetime import date as _date  # local import to keep top clean
+    if not isinstance(birth, dict):
+        return None
+    # Path 1: explicit y/m/d
+    y = None
+    for k in ("year", "birth_year", "yr"):
+        v = birth.get(k)
+        if v:
+            try:
+                y = int(v); break
+            except (TypeError, ValueError):
+                pass
+    m = None
+    for k in ("month", "birth_month", "mon"):
+        v = birth.get(k)
+        if v:
+            try:
+                m = int(v); break
+            except (TypeError, ValueError):
+                pass
+    d = None
+    for k in ("day", "birth_day", "dd"):
+        v = birth.get(k)
+        if v:
+            try:
+                d = int(v); break
+            except (TypeError, ValueError):
+                pass
+    if y and m and d:
+        try:
+            return _date(y, m, d)
+        except ValueError:
+            pass
+    # Path 2: parse YYYY-MM-DD style string
+    for k in ("date", "dob", "birth_date", "birthDate"):
+        v = birth.get(k)
+        if isinstance(v, str) and len(v) >= 10:
+            try:
+                return _date(int(v[0:4]), int(v[5:7]), int(v[8:10]))
+            except (ValueError, IndexError):
+                pass
+    return None
+
+
+def _precise_age_at(birth_date, target_date) -> Optional[float]:
+    """Phase 2.8.76 (FIX O): fractional age in years between two dates.
+
+    Returns None if either input missing. Uses 365.25 to absorb leap years.
+    """
+    if birth_date is None or target_date is None:
+        return None
+    try:
+        delta_days = (target_date - birth_date).days
+        return delta_days / 365.25
+    except Exception:
+        return None
 
 
 def _extract_gender(birth: Any, intel: dict) -> str:
@@ -3185,42 +3251,108 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
 
     # ════════════════════════════════════════════════════════════════
     # STEP 5 — Reality Filter (STEP 0-adjusted age table)
+    # Phase 2.8.76 BATCH FIX O/P/Q/R/S/T:
+    #   O: month-precise predicted_age (window mid-date vs birth date)
+    #   P: BLOCK only on predicted_age (current age informational only)
+    #   Q: PREMATURE downgrade extends to DELAYED verdict (not just PROMISED)
+    #   R: score penalty for FLAG_LATE (-0.5) and FLAG_VERY_LATE (-1.5)
+    #   S: top-3 AD-diversity selection (prefer different ADs within 1.0 score)
+    #   T: confluence_strength: WEAK label below MEDIUM (instead of MODERATE)
     # ════════════════════════════════════════════════════════════════
     age = _get_current_age(birth, kundli, current_dasha)
     birth_year = _extract_birth_year(birth)
+    birth_date_obj = _extract_birth_date(birth)  # FIX O
     thresholds = _adjusted_age_thresholds(step0["verdict"])
     factors.append(f"STEP 5: age={age} birth_year={birth_year} "
+                   f"birth_date={birth_date_obj} "
                    f"thresholds={thresholds} (STEP 0 adj for {step0['verdict']})")
 
     valid_windows: List[dict] = []
     blocked_count = 0
+    late_penalty_count = 0
     for w in windows:
-        predicted_year = w["start"].year
-        predicted_age = (predicted_year - birth_year) if (birth_year and birth_year > 0) else None
+        # FIX O: prefer month-precise age via mid-window date; fallback to year-only
+        predicted_age: Optional[float] = None
+        if birth_date_obj is not None:
+            try:
+                w_start = w["start"].date() if hasattr(w["start"], "date") else w["start"]
+                w_end = w["end"].date() if hasattr(w["end"], "date") else w["end"]
+                mid = w_start + (w_end - w_start) / 2
+                predicted_age = _precise_age_at(birth_date_obj, mid)
+            except Exception:
+                predicted_age = None
+        if predicted_age is None and birth_year and birth_year > 0:
+            predicted_age = float(w["start"].year - birth_year)
+
         action = (_age_filter_action(age, predicted_age, thresholds)
                   if predicted_age is not None else "OK")
-        if action in ("BLOCK", "PUSH_LATER"):
+        if action == "BLOCK":  # FIX P: only BLOCK; PUSH_LATER no longer used
             blocked_count += 1
             continue
+        # FIX R: score penalty for late windows (still ranked but down-weighted)
+        if action == "FLAG_VERY_LATE":
+            w["score"] = float(w.get("score", 0)) - 1.5
+            late_penalty_count += 1
+        elif action == "FLAG_LATE":
+            w["score"] = float(w.get("score", 0)) - 0.5
+            late_penalty_count += 1
         w["age_action"] = action
-        w["predicted_age"] = predicted_age
+        w["predicted_age"] = (round(predicted_age, 2)
+                              if predicted_age is not None else None)
         valid_windows.append(w)
 
-    factors.append(f"STEP 5: {len(valid_windows)} survived (blocked={blocked_count})")
+    factors.append(f"STEP 5: {len(valid_windows)} survived "
+                   f"(blocked={blocked_count}, late_penalised={late_penalty_count})")
 
-    # If ALL windows blocked & promised -> PREMATURE downgrade
-    if windows and not valid_windows and final_verdict == "PROMISED":
+    # FIX Q: PREMATURE downgrade for PROMISED *and* DELAYED (both can be premature)
+    if windows and not valid_windows and final_verdict in ("PROMISED", "DELAYED"):
+        prev_verdict = final_verdict
         final_verdict = "PREMATURE"
-        factors.append("STEP 5 DOWNGRADE: PROMISED -> PREMATURE (age gate)")
+        factors.append(f"STEP 5 DOWNGRADE: {prev_verdict} -> PREMATURE (age gate)")
         risk_flag = risk_flag or "Below marriageable age"
         if "Below marriageable age" not in risk_flags:
             risk_flags.insert(0, "Below marriageable age")
 
     # Sort by (score desc, start asc)
-    valid_windows.sort(key=lambda w: (-w["score"], w["start"]))
+    valid_windows.sort(key=lambda w: (-float(w.get("score", 0)), w["start"]))
 
-    # Pick top 3
-    top_3 = valid_windows[:3]
+    # FIX S: AD-diversity-aware top 3 selection
+    # Greedy: pick highest. For slots 2 and 3, prefer a window with a NEW AD
+    # if its score is within 1.0 of the slot's score-rank position. This avoids
+    # showing 3 sub-windows of the same AD as "3 options".
+    _DIVERSITY_TOLERANCE = 1.0
+
+    def _select_diverse_top3(sorted_ws: List[dict]) -> List[dict]:
+        if not sorted_ws:
+            return []
+        chosen: List[dict] = [sorted_ws[0]]
+        used_ads = {sorted_ws[0].get("ad")}
+        for slot in range(1, 3):
+            if len(chosen) >= len(sorted_ws):
+                break
+            # Determine the next-best score baseline (the score-rank candidate)
+            remaining = [w for w in sorted_ws if w not in chosen]
+            if not remaining:
+                break
+            baseline_score = float(remaining[0].get("score", 0))
+            # Find first remaining window with a NEW AD whose score is within
+            # tolerance of the baseline.
+            diverse_pick = None
+            for w in remaining:
+                if w.get("ad") not in used_ads:
+                    if (baseline_score - float(w.get("score", 0))) <= _DIVERSITY_TOLERANCE:
+                        diverse_pick = w
+                    break
+            pick = diverse_pick if diverse_pick is not None else remaining[0]
+            chosen.append(pick)
+            used_ads.add(pick.get("ad"))
+        return chosen
+
+    top_3 = _select_diverse_top3(valid_windows)
+    if top_3 and len({w.get("ad") for w in top_3}) > 1:
+        factors.append(f"STEP 5 DIVERSITY: top_3 spans "
+                       f"{len({w.get('ad') for w in top_3})} ADs "
+                       f"({', '.join(sorted({w.get('ad','?') for w in top_3}))})")
 
     primary_window = None
     backup_window = None
@@ -3245,16 +3377,16 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         p = top_3[0]
         primary_window = _format_window(p["start"], p["end"])
         key_trigger = _trigger_str(p)
-        # Contract lock: confluence_strength is "STRONG" | "MODERATE" only
-        # (legacy consumers downstream do not handle "WEAK"). Below MODERATE
-        # we leave it None — the score is still in top_3_windows for
-        # consumers who want it.
+        # Phase 2.8.76 FIX T: WEAK label allowed below MEDIUM threshold.
+        # Downstream consumers (locked_facts, validator) accept Optional[str]
+        # so any string label is safe; this prevents weak windows being
+        # mislabeled MODERATE and misleading the LLM/UI.
         if p["score"] >= _WINDOW_STRONG_SCORE:
             confluence_strength = "STRONG"
         elif p["score"] >= _WINDOW_MEDIUM_SCORE:
             confluence_strength = "MODERATE"
         else:
-            confluence_strength = "MODERATE"
+            confluence_strength = "WEAK"
         factors.append(f"STEP 4 PRIMARY: {primary_window} score={p['score']} "
                        f"({confluence_strength})")
 

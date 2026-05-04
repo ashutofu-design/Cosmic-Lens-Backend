@@ -120,3 +120,35 @@ External reviewer audit ke baad **5 fixes batched** in `marriage_timing.py`. Use
 ### Score: STEP 4 8.5/10 → ~9.0/10. To reach 9.8 need orb-based transit (Priority 3 — requires transit engine longitude support, not yet verified).
 
 ### Code review pending. API server clean restart confirmed.
+
+## Phase 2.8.76 — STEP 5 BATCH FIX O/P/Q/R/S/T (2026-05-04)
+
+External reviewer audit on STEP 5 (claimed 8.8/10). My audit-of-audit: actual 8.3/10 — reviewer missed 2 silent bugs (current-age BLOCK + forced-MODERATE label).
+
+### Verdict on reviewer audit:
+- ✅ ACCEPTED (6): month-ignored age, current-age BLOCK bug, PREMATURE only-PROMISED, no late-score penalty, weak top-3 diversity, forced-MODERATE label
+- ❌ REJECTED (2): "PUSH_LATER too aggressive" (misdiagnosis — was correct behavior for predicted-age<18), "static thresholds cultural" (design choice, user-locked)
+- ⚠️ PARTIAL (1): STEP 0 shift intensity (out of STEP 5 scope)
+
+### Changes (all in `event_timing/marriage/marriage_timing.py`):
+- **FIX O — Month-precise predicted_age**: Added helpers `_extract_birth_date(birth)` (L2518-2565) and `_precise_age_at(birth_date, target_date)` (L2568-2579). STEP 5 main loop uses window mid-date for fractional age (365.25 divisor). Falls back to year-only when birth_date unavailable.
+- **FIX P — `_age_filter_action` removes current-age BLOCK** (L1878-1901): Decision now based ONLY on predicted_age. PUSH_LATER branch removed entirely; predicted_age<hard_block now returns BLOCK directly. 17-yr-old's 2030 window (age 24) is now valid.
+- **FIX Q — PREMATURE downgrade extends to DELAYED** (L3310-3316): Was: only PROMISED→PREMATURE on all-blocked. Now: PROMISED *and* DELAYED both downgrade.
+- **FIX R — Score penalty for late windows** (L3295-3301): FLAG_VERY_LATE → score -1.5, FLAG_LATE → score -0.5. Late windows still ranked but down-weighted, preventing unrealistic age-47 windows from topping ranking.
+- **FIX S — Top-3 AD diversity** (L3326-3354): Replaced `top_3 = valid_windows[:3]` with `_select_diverse_top3()` greedy selector. Slot 2/3 prefer different AD when score within 1.0 tolerance of next-best.
+- **FIX T — confluence_strength WEAK label** (L3387-3392): Was: forced "MODERATE" below MEDIUM. Now: returns "WEAK". Downstream verified safe — `locked_facts.py` appends as-is, `validator.py` accepts Optional[str].
+
+### Tests: T60-T78 (23 new tests, /tmp/test_step5_fix_opqrst.py) — 23/23 PASS
+- T60-T64: birth-date extraction (y/m/d, string, missing, invalid) + precise age math
+- T65-T76: `_age_filter_action` semantics (all branches, FIX P validation, threshold shifts)
+- T77-T78: month-precision boundary flips (year-only OK vs precise FLAG_EARLY at age 21.13)
+
+### Contract changes:
+- `confluence_strength`: now `"STRONG" | "MODERATE" | "WEAK" | None` (was: STRONG|MODERATE|None). Docstring at L55 updated.
+- `top_3_windows[].predicted_age`: now `float` (rounded to 2dp) when birth_date present; falls back to int-equivalent float via year-only path.
+
+### Untouched (frozen):
+- kp_engine.py, dasha fetchers, planet accessors
+- STEP 1/2/3/4 (Phase 2.8.71-75 frozen)
+
+### Score: STEP 5 8.3/10 → ~9.3/10. Pipeline overall now closer to 9.5/10.

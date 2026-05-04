@@ -2401,6 +2401,57 @@ def _dasha_lord_strength(planets: list, lord: str) -> float:
 
 
 # ════════════════════════════════════════════════════════════════════════
+# SECTION 12.5 — Window clustering (Phase 2.8.75 FIX J)
+# ════════════════════════════════════════════════════════════════════════
+def _merge_adjacent_windows(windows: List[dict],
+                             gap_days: int = 15) -> List[dict]:
+    """Merge candidate windows whose start is within gap_days of the
+    previous window's end. Real marriage events cluster — single event
+    activates 2-3 adjacent PDs. Without merging, user sees ONE event as
+    3 separate predictions.
+
+    Merge rules (ADD-ONLY safe — does NOT touch dasha/planet data):
+      - extend `end` to max of cluster
+      - keep highest score; that entry's MD/AD/PD becomes primary
+      - concat factors with cluster header
+      - set merged_count >= 2 for downstream display
+    """
+    if not windows:
+        return []
+    if len(windows) < 2:
+        out = dict(windows[0])
+        out["merged_count"] = 1
+        return [out]
+    sorted_w = sorted(windows, key=lambda w: w["start"])
+    merged: List[dict] = [dict(sorted_w[0])]
+    merged[0]["merged_count"] = 1
+    for w in sorted_w[1:]:
+        last = merged[-1]
+        gap = (w["start"] - last["end"]).days
+        if gap <= gap_days:
+            last["end"] = max(last["end"], w["end"])
+            if w["score"] > last["score"]:
+                # higher-score window becomes primary
+                for k in ("score", "raw_base", "strength_mult",
+                           "md", "ad", "pd",
+                           "jup", "sat", "double_transit",
+                           "mars_trigger", "mars_sat_conflict",
+                           "sandhi", "eclipse_flag"):
+                    if k in w:
+                        last[k] = w[k]
+            last["factors"] = (last.get("factors", [])
+                               + [f"--- merged with PD {w.get('pd')} "
+                                  f"({gap}d gap) ---"]
+                               + w.get("factors", []))
+            last["merged_count"] = last.get("merged_count", 1) + 1
+        else:
+            new = dict(w)
+            new["merged_count"] = 1
+            merged.append(new)
+    return merged
+
+
+# ════════════════════════════════════════════════════════════════════════
 # SECTION 13 — Internal utilities
 # ════════════════════════════════════════════════════════════════════════
 def _parse_dt(value: Any) -> Optional[datetime]:
@@ -2930,13 +2981,19 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         factors.append("STEP 4 SCAN FILTER: STEP 2 produced no approvers, "
                        "scanning raw target lords")
 
-    # Drop deniers from target set (safety filter — prevents Mars/Sat
-    # denied dashas from generating false-positive windows).
+    # Phase 2.8.75 FIX K — SOFT denier weighting (replaces hard-drop).
+    # Classical Vedic: Mars/Sat MD/AD CAN trigger marriage (delayed/conflict
+    # cases). Hard removal causes false negatives. Instead retain in
+    # target_lords but apply 0.7 score multiplier in scoring loop when
+    # MD/AD lord itself is a flagged denier.
+    denier_in_target: Set[str] = set()
     if denier_planets:
-        dropped = (raw_target_snapshot & denier_planets) - {"Venus", "Jupiter"}
-        if dropped:
-            target_lords = target_lords - dropped
-            factors.append(f"STEP 4 DENIER DROP: removed {sorted(dropped)}")
+        denier_in_target = ((raw_target_snapshot & denier_planets)
+                             - {"Venus", "Jupiter"})
+        if denier_in_target:
+            factors.append(f"STEP 4 DENIER SOFT-WEIGHT: "
+                           f"{sorted(denier_in_target)} retained, "
+                           f"x0.7 multiplier when MD/AD")
 
     # Final safety: ensure target_lords is never empty (engine invariant)
     if not target_lords:
@@ -2985,20 +3042,26 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
 
             window_factors: List[str] = []
 
-            # ── A. Cluster hit + AD/PD weight (DOMINANT base)
-            cluster_hit = 1
-            if pd_lord in target_lords:
-                cluster_hit = 2
-                window_factors.append(f"PD {pd_lord} in cluster (+1)")
-            adpd_weight = 0
-            if ad_in_target and pd_lord in target_lords:
-                adpd_weight = 3   # DOMINANT: AD+PD both in target
-                window_factors.append(f"AD+PD both in target -> DOMINANT (+3)")
-            elif md_in_target and ad_in_target:
-                adpd_weight = 2
-                window_factors.append("MD+AD both in target (+2)")
-            elif ad_in_target:
-                adpd_weight = 1
+            # ── A. Hierarchical cluster scoring (Phase 2.8.75 FIX L)
+            # Replaces binary cluster_hit + adpd_weight with proper
+            # hierarchy: PD > AD > MD. Triple-promiser bonus for full
+            # alignment. Per classical Vedic timing precision principle.
+            md_pts = 1 if md_in_target else 0
+            ad_pts = 2 if ad_in_target else 0
+            pd_pts = 3 if pd_lord in target_lords else 0
+            cluster_score = md_pts + ad_pts + pd_pts   # range 0-6
+            triple_bonus = 1 if (md_pts and ad_pts and pd_pts) else 0
+            if cluster_score > 0:
+                tags = []
+                if md_pts: tags.append(f"MD={md}")
+                if ad_pts: tags.append(f"AD={ad}")
+                if pd_pts: tags.append(f"PD={pd_lord}")
+                window_factors.append(f"+{cluster_score} cluster ({', '.join(tags)})")
+            if triple_bonus:
+                window_factors.append("+1 TRIPLE PROMISER bonus (MD+AD+PD all in target)")
+            # Backward-compat aliases (downstream consumers expect these)
+            cluster_hit = 2 if pd_pts else 1
+            adpd_weight = cluster_score   # for diagnostic display
 
             # ── B. Transits (Jupiter, Saturn, Mars)
             transit = _get_transits_at(lagna_si, moon_si, when=mid) if lagna_si is not None else {}
@@ -3024,8 +3087,12 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                 mars_bonus = 1
                 window_factors.append(f"+1 Mars TRIGGER ({mars_reason})")
                 if sat_score > 0:
+                    # Phase 2.8.75 FIX M — conflict actually neutralizes
+                    # mars_bonus (push vs delay cancel each other), not just
+                    # a flag. Previously flag was set with no score impact.
                     mars_sat_conflict = True
-                    window_factors.append("⚠ Mars+Saturn CONFLICT (push vs delay)")
+                    mars_bonus = 0
+                    window_factors.append("⚠ Mars+Saturn CONFLICT — Mars bonus neutralized (push vs delay)")
 
             # ── D. Retrograde penalty (MD/AD lord)
             retro_penalty = 0.0
@@ -3060,15 +3127,33 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                 eclipse_penalty = -1.0
                 window_factors.append(f"-1.0 ECLIPSE DELAY ({ecl_reason})")
 
-            # ── TOTAL: base components, then strength multiplier, then eclipse
-            base = (cluster_hit + adpd_weight
-                    + jup_score + sat_score
-                    + double_transit_bonus
-                    + mars_bonus
-                    + retro_penalty
-                    + bav_b + sav_b
-                    + sandhi_bonus)
-            score = base * strength_mult + eclipse_penalty
+            # ── TOTAL (Phase 2.8.75 FIX N — multiplier scope corrected).
+            # OLD bug: `score = base * strength_mult` multiplied penalties
+            # too. Strong lord (mult=1.3) -> retro -0.5 effectively -0.65.
+            # Weak lord (mult=0.5) -> retro -0.25. Counter-intuitive.
+            # NEW: strength_mult applies ONLY to positive components.
+            # Penalties (retro, eclipse, negative AV) stay additive.
+            positive_base = (cluster_score + triple_bonus
+                             + jup_score + sat_score
+                             + double_transit_bonus
+                             + mars_bonus
+                             + max(0.0, bav_b) + max(0.0, sav_b)
+                             + sandhi_bonus)
+            penalties = (retro_penalty
+                         + min(0.0, bav_b) + min(0.0, sav_b)
+                         + eclipse_penalty)
+
+            # Phase 2.8.75 FIX K — soft denier multiplier
+            denier_mult = 1.0
+            if md in denier_in_target or ad in denier_in_target:
+                denier_mult = 0.7
+                window_factors.append(
+                    f"x0.7 denier soft-penalty "
+                    f"(MD/AD has flagged denier: "
+                    f"{sorted(denier_in_target & {md, ad})})")
+
+            score = (positive_base * strength_mult * denier_mult) + penalties
+            base = positive_base + penalties   # diagnostic only
 
             if score >= _WINDOW_MIN_SCORE:
                 windows.append({
@@ -3090,6 +3175,13 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
 
     factors.append(f"STEP 4: {len(windows)} candidate PD windows above threshold "
                    f"({_WINDOW_MIN_SCORE})")
+
+    # Phase 2.8.75 FIX J — merge adjacent windows (≤15-day gap = same event)
+    pre_merge_count = len(windows)
+    windows = _merge_adjacent_windows(windows, gap_days=15)
+    if pre_merge_count != len(windows):
+        factors.append(f"STEP 4 CLUSTER MERGE: {pre_merge_count} -> "
+                       f"{len(windows)} windows (adjacent within 15d merged)")
 
     # ════════════════════════════════════════════════════════════════
     # STEP 5 — Reality Filter (STEP 0-adjusted age table)

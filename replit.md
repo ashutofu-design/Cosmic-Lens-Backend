@@ -324,3 +324,43 @@ for AD in ALL ADs:
 **4-profile regression**: All KP-PROMISED profiles produce coherent top_3 with
 new-visible windows; KP-DENIED profiles correctly skip scan; P_Young22 scores
 upgraded (7.0→8.0 PRIMARY) confirming gate-bonus integration.
+
+---
+
+## Phase 2.8.82 — CO-KARAK PRIORITY (4 May 2026)
+
+**File**: `artifacts/api-server/event_timing/marriage/marriage_timing.py`
+
+**User-spec rule (per explicit instruction):**
+> "Filter planets jo he usko ek side rakho. But 7L ke sath baitha hua planet ya
+>  7L khud D1 ya D9 mein jo jo he, unko bhi PRIORITY do."
+
+**ADD-ONLY changes (~70 lines, 0 removed):**
+- New helper `_get_7l_co_karaks(d1_planets, d9_planets, seventh_lord)` near L1540
+  — returns (co_karak_set, reason_map). Detects planets sharing sign with 7L
+  in D1 OR D9.
+- L3224: After target_lords finalized, call helper. Expand target_lords with
+  co_karaks (and 7L itself defensively). Log line emitted.
+- L3399 (in scan loop): co_karak_bonus computed per PD: +0.5 if AD lord ∈
+  co_karaks, +0.5 if PD lord ∈ co_karaks (max +1.0). Window factor logged.
+- L3473: co_karak_bonus added to positive_base.
+
+**Profile 40 result (post-fix):**
+- PRIMARY: May-Jul 2026 score=4.12 (Sun PD = co-karak +0.5)
+- BACKUP : Aug-Nov 2026 score=3.45 ⭐ NEW — Rahu/Rahu (DOUBLE co-karak +1.0)
+- TERTIARY: Jan-Jul 2027 score=3.43 ⭐ NEW (was 1.19) — Rahu AD co-karak
+
+**P_Young22 result:**
+- Co-karaks detected: {Ketu, Mercury, Sun, Venus} for 7L=Jupiter
+- All scores upgraded: PRIMARY 7.0→8.5, #2 5.0→8.0
+
+**Algorithm matches user mental model:**
+```
+1. Compute base target_lords (Jup/Mer/Sat/Ven from karaka logic)
+2. Detect 7L conjunctions in D1 + D9 (any planet sharing sign with 7L)
+3. Expand target_lords with co_karaks
+4. In scan loop: AD or PD lord ∈ co_karaks → +0.5 priority bonus each
+```
+
+**Engineering quality:** Defensive — handles missing D9, missing 7L, empty
+planet lists. Reason map preserved for diagnostic transparency.

@@ -1443,6 +1443,43 @@ def _is_saturn_aspect(sat_si: int, target_si: int) -> bool:
     return diff in (2, 6, 9)
 
 
+# Phase 2.9.1 FIX 4 — orb-based aspect strength helper.
+# Whole-sign aspect bola toh fire ho jata hai but classical Vedic me
+# close orb (planet-to-planet degree distance) ka effect zyada hota hai.
+# Tight (<3°) → 1.25x, Normal (3-9°) → 1.0x, Loose (>9°) → 0.75x.
+def _aspect_strength_mult(planets: list, src_name: str,
+                           tgt_name: Optional[str]) -> float:
+    """Return 0.75 / 1.0 / 1.25 multiplier based on planet-planet orb.
+
+    Used only for planet-on-planet aspects (e.g. Saturn->7L). For house
+    aspects (no specific target degree) returns 1.0 (neutral).
+    """
+    if not tgt_name:
+        return 1.0
+    src = _planet_record(planets, src_name)
+    tgt = _planet_record(planets, tgt_name)
+    if not src or not tgt:
+        return 1.0
+    sl = src.get("longitude")
+    tl = tgt.get("longitude")
+    if sl is None or tl is None:
+        return 1.0
+    try:
+        # Use degree-in-sign for whole-sign-aspect orb.
+        s_in = float(sl) % 30.0
+        t_in = float(tl) % 30.0
+        orb = abs(s_in - t_in)
+        if orb > 15.0:
+            orb = 30.0 - orb
+    except (TypeError, ValueError):
+        return 1.0
+    if orb < 3.0:
+        return 1.25
+    if orb > 9.0:
+        return 0.75
+    return 1.0
+
+
 def _is_mars_aspect(mars_si: int, target_si: int) -> bool:
     """Mars has 4th, 7th, 8th aspects."""
     diff = (target_si - mars_si) % 12
@@ -2189,38 +2226,62 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
     sat_aff_7l_aspect = (saturn_si is not None and seventh_lord_si is not None
                          and not sat_conj_7l
                          and _is_saturn_aspect(saturn_si, seventh_lord_si))
+    # Phase 2.9.1 FIX 4 — orb-based aspect strength applied to L1c/L1a-on-7L.
+    # Tight orb (<3°) amplifies the affliction by 1.25x, loose (>9°) by 0.75x.
+    saturn_l1_pts = 0.0   # captured for FIX 6 cancellation logic below
     if sat_in_7h:
         # L11 takes the strongest reading; L1 is folded in to avoid double penalty.
         late += 2
+        saturn_l1_pts = 2.0
         reasons.append("L11: natal Saturn IN 7H (+2 LATE; L1 folded in)")
     elif sat_conj_7l:
-        late += 1.5
+        mult = _aspect_strength_mult(planets, "Saturn", seventh_lord)
+        pts = round(1.5 * mult, 2)
+        late += pts
+        saturn_l1_pts = pts
         reasons.append(f"L1c: natal Saturn CONJUNCT 7L {seventh_lord} "
-                       "(+1.5 LATE — conj > aspect) [2.9.0 FIX 6]")
+                       f"(+{pts} LATE — conj > aspect, orb-mult {mult}) "
+                       "[2.9.1 FIX 4 + 2.9.0 FIX 6]")
     elif sat_aff_7h_aspect:
         late += 1
+        saturn_l1_pts = 1.0
         reasons.append("L1a: natal Saturn aspect on 7H (+1 LATE)")
     elif sat_aff_7l_aspect:
-        late += 1
+        mult = _aspect_strength_mult(planets, "Saturn", seventh_lord)
+        pts = round(1.0 * mult, 2)
+        late += pts
+        saturn_l1_pts = pts
         reasons.append(f"L1a: natal Saturn aspect on 7L {seventh_lord} "
-                       "(+1 LATE)")
+                       f"(+{pts} LATE — orb-mult {mult}) [2.9.1 FIX 4]")
 
-    # ── L2: 7L weakness (12H or debilitated)
-    # Phase 2.9.0 FIX 1 — weight imbalance correction. Pehle dono sub-
-    # conditions stack hoke +2 mil sakte the (silent LATE bias). Ab L2
-    # capped at +1 — 7L ek hi entity hai, weakness signal once count hoga.
-    # Yeh L3 ke cap pattern jaisa hi consistent treatment hai.
-    l2_pts = 0
-    if seventh_lord_h == 12:
-        l2_pts += 1
+    # ── L2: 7L weakness (house severity + dignity)
+    # Phase 2.9.1 FIX 1 — 7L house weight ab severity-tiered hai. Pehle
+    # 12H, 8H, 6H ko same +1 milta tha jo galat tha. Classical Vedic
+    # severity ranking:
+    #   8H → +2 (worst — sudden upheaval, breakage)
+    #   12H → +1 (withdrawal, foreign)
+    #   6H → +1 (conflict, disputes)
+    # + debilitated → +1
+    # Cap raised to +2 (single severe weakness allowed full impact).
+    l2_pts = 0.0
+    if seventh_lord_h == 8:
+        l2_pts += 2.0
+        reasons.append(f"L2: 7L {seventh_lord} in 8H — sudden upheaval "
+                       "(+2 LATE) [2.9.1 FIX 1 — 8H worst]")
+    elif seventh_lord_h == 12:
+        l2_pts += 1.0
         reasons.append(f"L2: 7L {seventh_lord} in 12H — withdrawal (+1 LATE)")
+    elif seventh_lord_h == 6:
+        l2_pts += 1.0
+        reasons.append(f"L2: 7L {seventh_lord} in 6H — conflict "
+                       "(+1 LATE) [NEW 2.9.1 FIX 1]")
     if seventh_lord_dignity == "debilitated":
-        l2_pts += 1
+        l2_pts += 1.0
         reasons.append(f"L2: 7L {seventh_lord} debilitated (+1 LATE)")
-    if l2_pts > 1:
-        reasons.append(f"L2 cap: 7L weakness capped at +1 "
-                       f"(raw {l2_pts}) [2.9.0 FIX 1 weight balance]")
-        l2_pts = 1
+    if l2_pts > 2.0:
+        reasons.append(f"L2 cap: 7L weakness capped at +2 "
+                       f"(raw {l2_pts}) [2.9.1 FIX 1 severity tier]")
+        l2_pts = 2.0
     late += l2_pts
 
     # ── L3: Venus weakness — combust + dusthana + debilitated
@@ -2245,17 +2306,19 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
 
     # ── E1: Jupiter aspect/conjunct 7H or 7L
     # Phase 2.8.69 FIX D — gate Jupiter blessing on Jupiter strength.
-    # Pehle debilitated/combust Jupiter bhi +1 EARLY deta tha (false
-    # optimism). Ab weak Jupiter ka blessing suppress hota hai:
+    # Phase 2.9.1 FIX 3 — retro Jupiter ka blessing weakened (was ignored).
     #   debilitated  → 0 EARLY (blessing weak)
     #   combust      → 0 EARLY (blessing burnt)
-    #   dusthana 6/8/12 → +1 EARLY but log warning (compromised)
-    #   normal/strong   → +1 EARLY (full blessing)
+    #   retrograde   → 0 EARLY (blessing inward, delayed) [NEW 2.9.1 FIX 3]
+    #   dusthana 6/8/12 → 0 EARLY (compromised)
+    #   normal/strong   → +1 EARLY (full blessing, x orb-mult on 7L)
+    jup_retro = _planet_is_retrograde(planets, "Jupiter")
     jup_aff_7h = jup_si is not None and (
         jup_si == h7_si or _is_jupiter_aspect(jup_si, h7_si))
     jup_aff_7l = (jup_si is not None and seventh_lord_si is not None
                   and (jup_si == seventh_lord_si
                        or _is_jupiter_aspect(jup_si, seventh_lord_si)))
+    e1_fired = False
     if jup_aff_7h or jup_aff_7l:
         target = "7H" if jup_aff_7h else f"7L {seventh_lord}"
         if jup_dignity == "debilitated":
@@ -2264,26 +2327,53 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
         elif jup_combust:
             reasons.append(f"E1 (skip): Jupiter aspect/conj {target} but "
                            "Jupiter combust — blessing burnt [2.8.69]")
+        elif jup_retro:
+            reasons.append(f"E1 (skip): Jupiter aspect/conj {target} but "
+                           "Jupiter retrograde — blessing inward/delayed "
+                           "[NEW 2.9.1 FIX 3]")
         elif jup_house in _DUSTHANA:
-            # Phase 2.9.0 FIX 1 — dusthana Jupiter ka blessing skip karo.
-            # Pehle +1 EARLY de raha tha (over-optimistic). Dusthana mein
-            # Jupiter ki shubhata wahi-of-kaaranon se compromised hai
-            # (debilitated/combust ke barabar). Treat as skip.
             reasons.append(f"E1 (skip): Jupiter aspect/conj {target} but "
                            f"Jupiter in {jup_house}H dusthana — blessing "
                            "compromised [2.9.0 FIX 1]")
         else:
-            early += 1
+            mult = (_aspect_strength_mult(planets, "Jupiter", seventh_lord)
+                    if jup_aff_7l else 1.0)
+            pts = round(1.0 * mult, 2)
+            early += pts
+            e1_fired = True
             reasons.append(f"E1: natal Jupiter aspect/conj {target} "
-                           "(+1 EARLY)")
+                           f"(+{pts} EARLY — orb-mult {mult}) [2.9.1 FIX 4]")
 
     # ── E2: Venus exalted/own sign or in 5/7H
-    if venus_dignity in ("exalted", "own", "moolatrikona"):
-        early += 1
+    # Phase 2.9.1 FIX 2 — Venus strength vs weakness imbalance correction.
+    # Pehle dignity OR house — sirf ek fire hota tha (max +1). Weak Venus
+    # cap +2 deta tha — strong Venus ka leverage half tha. Ab dono stack
+    # ho sakte hain (cap +2) so strong Venus ka peak +2 LATE ke barabar.
+    e2_pts = 0.0
+    e2_dignity_fired = False
+    if venus_dignity == "exalted":
+        e2_pts += 1.5
+        e2_dignity_fired = True
+        reasons.append("E2: Venus exalted (+1.5 EARLY) [2.9.1 FIX 2 boost]")
+    elif venus_dignity in ("own", "moolatrikona"):
+        e2_pts += 1.0
+        e2_dignity_fired = True
         reasons.append(f"E2: Venus {venus_dignity} (+1 EARLY)")
-    elif venus_house in {5, 7}:
-        early += 1
-        reasons.append(f"E2: Venus in {venus_house}H — auspicious karaka (+1 EARLY)")
+    if venus_house in {5, 7}:
+        # Allow stacking with dignity bonus (was elif before).
+        e2_pts += 0.5 if e2_dignity_fired else 1.0
+        if e2_dignity_fired:
+            reasons.append(f"E2+: Venus in {venus_house}H stacked with "
+                           "dignity (+0.5 EARLY) [2.9.1 FIX 2]")
+        else:
+            reasons.append(f"E2: Venus in {venus_house}H — auspicious karaka "
+                           "(+1 EARLY)")
+    if e2_pts > 2.0:
+        reasons.append(f"E2 cap: Venus strength capped at +2 (raw {e2_pts}) "
+                       "[2.9.1 FIX 2]")
+        e2_pts = 2.0
+    early += e2_pts
+    e2_fired = e2_pts > 0  # for FIX 7 G1 gating
 
     # ── E5: 7H sign is cardinal (quick trigger)
     if h7_si in _CARDINAL_SIGNS:
@@ -2315,8 +2405,10 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
     # Pehle 7L exalted/own/moolatrikona ka koi EARLY bonus nahi tha — sirf
     # Venus-specific E2 mein dignity check tha. Ab 7L (jo bhi planet ho) ki
     # strength count hoti hai, kyunki strong 7L = strong spouse-house promise.
+    e7_fired = False
     if seventh_lord_dignity in ("exalted", "own", "moolatrikona"):
         early += 1
+        e7_fired = True
         reasons.append(f"E7: 7L {seventh_lord} {seventh_lord_dignity} — "
                        f"strong house promise (+1 EARLY) [NEW 2.9.0 FIX 4]")
 
@@ -2328,7 +2420,14 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
     # so gender amplification is preserved for true edge cases only.
     g = (gender or "").strip().lower()
     if g in ("m", "male", "man", "boy"):
-        if venus_late >= 2:   # FIX 3: only on capped (severe) weakness
+        # Phase 2.9.1 FIX 7 — gender modifier harsh tha. Pehle severe Venus
+        # weakness pe G1 +1 LATE laga deta tha even when Venus dignity
+        # strong (E2 fired). Strong Venus + Male combo me G1 over-penalty
+        # ban gaya tha. Ab E2 fire ho toh G1 skip — Venus strength wins.
+        if e2_fired:
+            reasons.append("G1 (skip): male + Venus has E2 strength bonus — "
+                           "no over-penalty [NEW 2.9.1 FIX 7]")
+        elif venus_late >= 2:   # FIX 3: only on capped (severe) weakness
             late += 1
             reasons.append("G1: male + Venus karaka SEVERELY weak "
                            "(+1 LATE) [2.9.0 FIX 3 — gated]")
@@ -2338,9 +2437,35 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
                            "counted in L3 [2.9.0 FIX 3]")
     elif g in ("f", "female", "woman", "girl"):
         # Phase 2.8.69 — reuse hoisted jup_house / jup_dignity
-        if jup_house in _DUSTHANA or jup_dignity == "debilitated":
+        # Phase 2.9.1 FIX 7 — same gating: if E1 fired (Jupiter blessing
+        # active), G2 skip — strength signal wins over weakness.
+        if e1_fired:
+            reasons.append("G2 (skip): female + Jupiter has E1 blessing — "
+                           "no over-penalty [NEW 2.9.1 FIX 7]")
+        elif jup_house in _DUSTHANA or jup_dignity == "debilitated":
             late += 1
             reasons.append("G2: female + Jupiter karaka weak (+1 LATE)")
+
+    # ── Phase 2.9.1 FIX 5 — multi-LATE same-root cross-cap.
+    # Pehle ek hi root cause (weak 7L) se L1 (Saturn afflicting weak 7L)
+    # AND L2 (7L weakness itself) — dono fire hote the giving 2-3 LATE
+    # for ONE underlying problem. Ab dono fire ho aur L2 >= 1.0 ho toh
+    # combined contribution ko -0.5 cross-cap se reduce karo.
+    if saturn_l1_pts > 0 and l2_pts >= 1.0 and seventh_lord_si is not None:
+        late -= 0.5
+        reasons.append(f"L1+L2 cross-cap: same root (weak+afflicted 7L "
+                       f"{seventh_lord}) -> -0.5 LATE [NEW 2.9.1 FIX 5]")
+
+    # ── Phase 2.9.1 FIX 6 — strong-EARLY cancellation logic.
+    # Pehle strong 7L (E7) hone ke baad bhi Saturn ke L1 affliction
+    # full LATE deta tha — strong promise weak ho jata tha. Ab E7 fire ho
+    # aur L1 (Saturn on 7L) bhi fire ho toh L1 contribution -0.5 cancel.
+    # Logic: exalted/own 7L Saturn ki affliction ko partially absorb karta hai.
+    if e7_fired and saturn_l1_pts > 0:
+        cancel = min(0.5, saturn_l1_pts)
+        late -= cancel
+        reasons.append(f"E7 cancel: strong 7L absorbs Saturn L1 affliction "
+                       f"-> -{cancel} LATE [NEW 2.9.1 FIX 6]")
 
     # ── Phase 2.9.0 FIX 5 — Age amplification (BEFORE final score)
     # Pehle age sirf label tha (late_status reason me likhta tha but score
@@ -2360,10 +2485,14 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
             reasons.append(f"AGE-AMP: chart-EARLY leaning + user in "
                            f"{age_band} band -> +1 EARLY [2.9.0 FIX 5]")
 
-    score = late - early
-    if score >= 2:
+    # Phase 2.9.1 FIX 8 — narrow BALANCED zone from ±2 to ±1.5.
+    # Pehle ±1 cases me clarity nahi milti thi (indecisive output).
+    # 0.5/1.5 increments aane ke baad threshold tighten karna sahi hai —
+    # |score| >= 1.5 = decisive verdict, |score| < 1.5 = BALANCED.
+    score = round(late - early, 2)
+    if score >= 1.5:
         verdict = "LATE"
-    elif score <= -2:
+    elif score <= -1.5:
         verdict = "EARLY"
     else:
         verdict = "BALANCED"

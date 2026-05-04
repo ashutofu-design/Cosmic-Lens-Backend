@@ -3651,57 +3651,99 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         factors.append(f"STEP 2 D9: 7L ({seventh_lord}) in {seventh_lord_d9_sign}")
 
     # ════════════════════════════════════════════════════════════════
-    # STEP 3 — Redemption (own 7L / vargottama Venus rescue)
+    # STEP 3 — Redemption (rescue + penalty)
+    # Phase 2.9.8 (4 May 2026) — 6-fix audit batch:
+    #   FIX 1: R1+R3 dedup — 7L own sign returns dignity="own"; counting
+    #          both = double-credit on same signal. R3 now skipped when
+    #          R1 already fired.
+    #   FIX 2: Venus vargottama weight reduced 1.0 → 0.5 (real but not
+    #          decisive on its own).
+    #   FIX 3: SAV scoring gradient (5 tiers) replaces binary >=30 flip.
+    #   FIX 4: Penalty severity — 7L debilitated raised -1 → -2 (chart-
+    #          level severe affliction; should not be cancelled by 1 R-pt).
+    #   FIX 5: Floor-mask observability — track how much penalty was
+    #          masked by max(0,...) floor and emit factor + flag.
+    #   FIX 7: parashari_strength formula explicit (consolidated below).
     # ════════════════════════════════════════════════════════════════
-    redemption = 0
+    redemption = 0.0
     redemption_reasons: List[str] = []
-    # R1: 7L in own sign
-    if (seventh_lord and seventh_lord_si is not None
-            and _SIGN_LORDS.get(seventh_lord_si) == seventh_lord):
-        redemption += 1
-        redemption_reasons.append(f"R1: 7L {seventh_lord} in own sign {_SIGNS[seventh_lord_si]} (+1)")
-    # R2: Venus vargottama
-    if venus_vargottama:
-        redemption += 1
-        redemption_reasons.append("R2: Venus vargottama in D9 (+1)")
-    # R3: 7L in dignity (Phase 2.8.74 FIX I — expanded from "exalted"-only
-    # to {exalted, own, moolatrikona}. Catches strong 7L cases previously
-    # missed when 7L was in own sign or moolatrikona.)
-    seventh_lord_dignity = _planet_dignity(planets, seventh_lord)
-    if seventh_lord_dignity in ("exalted", "own", "moolatrikona"):
-        redemption += 1
-        redemption_reasons.append(
-            f"R3: 7L {seventh_lord} {seventh_lord_dignity} (+1)")
-    # R4: Strong 7H Sarvashtakavarga (>= 30)
-    sav_h7 = _sav_bonus(av, h7_si)
-    if sav_h7 > 0:
-        redemption += 1
-        redemption_reasons.append(f"R4: 7H SAV strong ({_SIGNS[h7_si]}) (+1)")
 
-    # ── Phase 2.8.74 FIX I — Negative weighting (rescue cap, anti-bias)
-    # Pure-additive STEP 3 was over-rescuing DENIED charts that had real
-    # afflictions. Penalty checks now offset rescue points so chart-level
-    # weakness can cancel positives. Floor at 0 prevents underflow into
-    # strength scoring (band still computed from non-negative redemption).
-    redemption_penalty = 0
+    # R1: 7L in own sign
+    seventh_lord_dignity = _planet_dignity(planets, seventh_lord)
+    r1_fired = bool(seventh_lord and seventh_lord_si is not None
+                    and _SIGN_LORDS.get(seventh_lord_si) == seventh_lord)
+    if r1_fired:
+        redemption += 1.0
+        redemption_reasons.append(
+            f"R1: 7L {seventh_lord} in own sign {_SIGNS[seventh_lord_si]} (+1)")
+
+    # R2: Venus vargottama (Phase 2.9.8 FIX 2 — weight 0.5 not 1.0)
+    if venus_vargottama:
+        redemption += 0.5
+        redemption_reasons.append("R2: Venus vargottama in D9 (+0.5)")
+
+    # R3: 7L in good dignity — Phase 2.9.8 FIX 1 dedup
+    # Skip R3 when dignity=="own" AND R1 already credited (same signal).
+    if seventh_lord_dignity in ("exalted", "own", "moolatrikona"):
+        if seventh_lord_dignity == "own" and r1_fired:
+            redemption_reasons.append(
+                f"R3: 7L {seventh_lord} own (skipped — R1 dedup)")
+        else:
+            redemption += 1.0
+            redemption_reasons.append(
+                f"R3: 7L {seventh_lord} {seventh_lord_dignity} (+1)")
+
+    # R4: 7H Sarvashtakavarga gradient (Phase 2.9.8 FIX 3 — 5-tier scoring)
+    sav_h7_value: int = 0
+    if av and h7_si is not None:
+        sav_list = av.get("sav") or []
+        if isinstance(sav_list, list) and 0 <= h7_si < len(sav_list):
+            try:
+                sav_h7_value = int(sav_list[h7_si])
+            except (TypeError, ValueError):
+                sav_h7_value = 0
+    sav_h7 = _sav_bonus(av, h7_si)  # legacy float for compat
+    sav_grad = 0.0
+    sav_grad_label = ""
+    if sav_h7_value >= 35:
+        sav_grad, sav_grad_label = 1.5, "very strong"
+    elif sav_h7_value >= 30:
+        sav_grad, sav_grad_label = 1.0, "strong"
+    elif sav_h7_value >= 25:
+        sav_grad, sav_grad_label = 0.0, "average"
+    elif sav_h7_value >= 20:
+        sav_grad, sav_grad_label = -1.0, "weak"
+    elif sav_h7_value > 0:
+        sav_grad, sav_grad_label = -1.5, "very weak"
+    if sav_grad > 0:
+        redemption += sav_grad
+        redemption_reasons.append(
+            f"R4: 7H SAV {sav_grad_label} ({_SIGNS[h7_si]}={sav_h7_value}) (+{sav_grad})")
+
+    # ── Penalty layer (Phase 2.8.74 FIX I + Phase 2.9.8 FIX 3+4) ──
+    redemption_penalty = 0.0
     redemption_penalty_reasons: List[str] = []
-    # P1: 7L debilitated natally
+    # P1: 7L debilitated — Phase 2.9.8 FIX 4 (severity raised -1 → -2)
     if seventh_lord_dignity == "debilitated":
-        redemption_penalty += 1
+        redemption_penalty += 2.0
         redemption_penalty_reasons.append(
-            f"P1: 7L {seventh_lord} debilitated (-1)")
+            f"P1: 7L {seventh_lord} debilitated (-2) [severity high]")
     # P2: Venus combust
     if _is_combust_local(planets, "Venus"):
-        redemption_penalty += 1
+        redemption_penalty += 1.0
         redemption_penalty_reasons.append("P2: Venus combust (-1)")
-    # P3: 7H SAV weak (< 25 -> _sav_bonus returns -0.5)
-    if sav_h7 < 0:
-        redemption_penalty += 1
+    # P3: 7H SAV weak — Phase 2.9.8 FIX 3 gradient
+    if sav_grad < 0:
+        redemption_penalty += abs(sav_grad)
         redemption_penalty_reasons.append(
-            f"P3: 7H SAV weak ({_SIGNS[h7_si]}) (-1)")
+            f"P3: 7H SAV {sav_grad_label} ({_SIGNS[h7_si]}={sav_h7_value}) ({sav_grad})")
 
     redemption_raw = redemption
-    redemption = max(0, redemption_raw - redemption_penalty)
+    # Phase 2.9.8 FIX 5 — floor-mask observability
+    redemption_net_unclamped = redemption_raw - redemption_penalty
+    redemption_masked_by_floor = max(0.0, -redemption_net_unclamped)
+    redemption_floor_masked = redemption_masked_by_floor > 0
+    redemption = max(0.0, redemption_net_unclamped)
 
     for r in redemption_reasons:
         factors.append(f"STEP 3 REDEMPTION: {r}")
@@ -3711,11 +3753,23 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         factors.append(
             f"STEP 3 NET: rescue={redemption_raw} penalty={redemption_penalty}"
             f" -> effective={redemption}")
+    # Phase 2.9.8 FIX 5 — emit floor-mask observability
+    if redemption_floor_masked:
+        factors.append(
+            f"STEP 3 FLOOR-MASK: penalty exceeded rescue by "
+            f"{redemption_masked_by_floor:.1f} (clamped to 0; chart has "
+            f"net negative redemption hidden from strength scoring)")
     if not redemption_reasons and not redemption_penalty_reasons:
         factors.append("STEP 3 REDEMPTION: no rescue or penalty factors")
 
     # ── Combine STEP 1+2+3 -> final verdict
     # KP is primary, D1+D9 cross-validate, redemption can promote
+    # Phase 2.9.8 FIX 7 — explicit parashari_strength definition:
+    #   parashari_strength = d1_score (0-3) + d9_bonus (0-2) = 0..5
+    #   d1_score components: (1) 7L not in dusthana, (2) Venus not in
+    #     dusthana, (3) Manglik not Active. Each contributes +1 if OK.
+    #   d9_bonus components: (1) Venus not debilitated in D9, (2) 7L
+    #     present in D9 (sign data found). Each contributes +1 if OK.
     parashari_strength = d1_score + d9_bonus  # max 5
     if kp_gate == "PROMISED":
         if parashari_strength >= 2:

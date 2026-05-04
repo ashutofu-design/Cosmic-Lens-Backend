@@ -437,3 +437,52 @@ if p_si == t_si:
 **Profile 40 + P_Young22 result:** scores unchanged because D9-7H signs
 happen to have no occupants in these test charts. Patch is forward-looking
 for charts where D9-7H is occupied.
+
+---
+
+## Phase 2.9.6 — STEP 2 FIVE-FIX BATCH (4 May 2026)
+
+**File**: `artifacts/api-server/event_timing/marriage/marriage_timing.py`
+**Status**: ADD-ONLY, P40 baseline preserved (May-Jul 2026 score=6.0, PROMISED/MEDIUM/STRONG)
+
+**User audit verdict** (6 problems → 5 fixes, skip parivartana):
+
+### FIX 1 — Orb-aware aspect (`_aspect_orb_mult_step2`)
+Aspect contribution scaled by planet's degree-in-sign as orb proxy:
+- Sign middle (10°-20°) → 1.25x (tight)
+- Sign edge (<3° or >27°) → 0.75x (loose/sandhi)
+- Otherwise → 1.0x (standard)
+
+### FIX 2 — D9 navamsa bonus (`_D9_NAVAMSA_BONUS = 1.25`)
+D9 link score multiplied by 1.25 (Navamsa = marriage-specific chart). Helps
+D9-only soft links cross threshold (e.g., P40 Mars/Jupiter/Saturn D9 score
+1.0 → 1.25 → soft-link tier).
+
+### FIX 4 — SOFT link tier (`_LINK_SOFT_THRESHOLD = 1.0`)
+Sub-threshold tier added: score in [1.0, 2.0) → `soft_linked=True`.
+New combined-strength labels: `BOTH_S` / `D1_S` / `D9_S`.
+Matrix entries updated: STRONG+D1_S → PASSIVE_PROMISE, MIXED+D9_S →
+PASSIVE_PROMISE, WEAK+BOTH_S → ACTIVE_DENIAL, etc.
+
+### FIX 5 — STRONG+NONE re-evaluation (`_FIX5_STRONG_PROMISE_THRESHOLD = 4.0`)
+Restored conditional PASSIVE_PROMISE for STRONG planets with zero D1/D9 link
+ONLY when STEP 1 promise_score >= 4.0 (genuine strong KP signal). Prevents
+losing real promisers while keeping 2.8.72 FIX#3 spirit.
+
+### FIX 6 — Denier severity (`_DENIER_SEVERITY` map)
+Per-planet `denier_severity`: high (STRONGEST_DENIAL) / medium (ACTIVE_DENIAL)
+/ low (PASSIVE_DENIAL). New `strong_deniers` bucket (subset of deniers, only
+high-severity). Downstream consumers can prioritize.
+
+**P40 visible changes:**
+- Mars: `D9_S` (D9 score 1.25 via bonus) → PASSIVE_PROMISE → conditional
+- Saturn (ps=5.0): `D9_S` → PASSIVE_PROMISE → conditional
+- Jupiter (WEAK): `D9_S` → PASSIVE_DENIAL → ignore (denier_severity=low)
+- Venus (WEAK): `D1_S` → PASSIVE_DENIAL → ignore
+- Moon: aspect orb=0.75 (sandhi) → score 0.75 → no link (correctly demoted)
+
+**5/5 profile baseline preserved**: P40 PROMISED, P1 DENIED, P2 DELAYED,
+P3 DELAYED, P4 PROMISED.
+
+**Skipped**: FIX 3 (parivartana weight 3) — classical KP-correct, false
+positives bahut rare.

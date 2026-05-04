@@ -1093,52 +1093,67 @@ def _aspects_target(planet: str, p_si: int, target_si: int) -> bool:
 
 # ──────────────────────────────────────────────────────────────────────
 # Phase 2.8.72 (May 3 2026) — FIX #1: WEIGHTED LINK SCORING
-#
-# Reality of KP/Vedic link strength:
-#   parivartana (sign exchange) > conjunction = occupation > aspect (loose)
-# Old code treated all 4 link types as equal booleans → aspect-only
-# planets bloated the "linked" bucket and inflated approver counts.
-#
-# Weights and threshold:
-#   parivartana = 3   (strongest — full mutual exchange of signs)
-#   conjunction = 2   (planet sits with 7L)
-#   occupation  = 2   (planet sits in 7H)
-#   aspect      = 1   (sign-only aspect — loose without orb)
-#
-# `linked` now means score >= 2 (i.e. at least one strong link, OR
-# the very strong parivartana alone). Aspect-only (score 1) no longer
-# counts as a meaningful link. `any_linked` retained for observability.
+# Phase 2.9.6 (May 4 2026) — STEP 2 FIX 1+2+4 enhancements:
+#   FIX 1: aspect gets degree-based orb-mult (sign-middle = tight,
+#          sandhi-edge = loose). Replaces flat int weight with float.
+#   FIX 2: D9 link gets ×1.25 navamsa-bonus multiplier (Navamsa is
+#          THE marriage chart in Vedic — D9 deserves more weight than D1).
+#   FIX 4: SOFT_LINK tier added — when raw score in [1, 2), planet gets
+#          partial credit (currently dropped entirely as "not linked").
 # ──────────────────────────────────────────────────────────────────────
-_LINK_WEIGHTS: Dict[str, int] = {
-    "parivartana": 3,
-    "conjunction": 2,
-    "occupation":  2,
-    "aspect":      1,
+_LINK_WEIGHTS: Dict[str, float] = {
+    "parivartana": 3.0,
+    "conjunction": 2.0,
+    "occupation":  2.0,
+    "aspect":      1.0,   # FIX 1: now scaled by orb-mult per call
 }
-_LINK_THRESHOLD: int = 2
+_LINK_THRESHOLD: float = 2.0
+_LINK_SOFT_THRESHOLD: float = 1.0   # FIX 4: soft-link if score >= 1.0
+_D9_NAVAMSA_BONUS: float = 1.25     # FIX 2: D9 link weight bonus
+
+
+def _aspect_orb_mult_step2(planet_lon: Optional[float]) -> float:
+    """STEP 2 FIX 1 — degree-based orb multiplier for aspects.
+
+    Without exact cusp longitudes, use planet's degree-in-sign as proxy:
+      - Sign middle (10°-20°) → tight aspect → 1.25
+      - Sign edges (0°-3° or 27°-30°) → loose / sandhi → 0.75
+      - Otherwise → 1.0 (standard)
+    Returns 1.0 if longitude unavailable (safe default).
+    """
+    if planet_lon is None:
+        return 1.0
+    try:
+        deg = float(planet_lon) % 30.0
+    except (TypeError, ValueError):
+        return 1.0
+    if 10.0 <= deg <= 20.0:
+        return 1.25
+    if deg < 3.0 or deg > 27.0:
+        return 0.75
+    return 1.0
 
 
 def _planet_link_in_chart(planet: str, p_si: Optional[int], p_house: Optional[int],
                            h7_si: Optional[int],
                            seventh_lord: str,
-                           seventh_lord_si: Optional[int]
+                           seventh_lord_si: Optional[int],
+                           planet_lon: Optional[float] = None,
+                           is_d9: bool = False,
                            ) -> Dict[str, Any]:
     """Check 4 link types between `planet` and 7H/7L within a single chart.
 
-    Returns dict:
-      {"occupation":  bool, "conjunction": bool, "aspect": bool,
-       "parivartana": bool, "linked": bool, "any_linked": bool,
-       "score": int, "details": [str]}
-
-    Phase 2.8.72 FIX #1: `linked` is now score-based (>= _LINK_THRESHOLD).
-    `any_linked` preserves the old "any link present" boolean for
-    diagnostic / backward inspection only.
+    Phase 2.8.72 FIX #1: `linked` score-based (>= _LINK_THRESHOLD).
+    Phase 2.9.6 STEP 2 FIX 1+2+4:
+      - planet_lon: for orb-mult on aspect (sign-middle tight, edge loose).
+      - is_d9: D9 chart gets ×_D9_NAVAMSA_BONUS multiplier on whole score.
+      - 'soft_linked': new sub-threshold tier (score in [SOFT, FULL)).
     """
     out: Dict[str, Any] = {
         "occupation": False, "conjunction": False,
         "aspect": False, "parivartana": False,
-        "linked": False, "any_linked": False, "score": 0,
-        "details": [],
+        "linked": False, "soft_linked": False, "any_linked": False,
+        "score": 0.0, "aspect_orb_mult": 1.0, "details": [],
     }
     if p_si is None or h7_si is None:
         return out
@@ -1148,7 +1163,6 @@ def _planet_link_in_chart(planet: str, p_si: Optional[int], p_house: Optional[in
         out["occupation"] = True
         out["details"].append("occ-7H")
     elif p_si == h7_si:
-        # House data missing: fall back to sign-based check
         out["occupation"] = True
         out["details"].append("occ-7H(sign)")
 
@@ -1171,7 +1185,7 @@ def _planet_link_in_chart(planet: str, p_si: Optional[int], p_house: Optional[in
             out["aspect"] = True
             out["details"].append(f"asp-7L({seventh_lord})")
 
-    # 4. Parivartana with 7L (skip Rahu/Ketu and self-7L case)
+    # 4. Parivartana with 7L
     if (seventh_lord and seventh_lord_si is not None
             and planet != seventh_lord
             and planet not in ("Rahu", "Ketu")
@@ -1182,11 +1196,27 @@ def _planet_link_in_chart(planet: str, p_si: Optional[int], p_house: Optional[in
             out["parivartana"] = True
             out["details"].append(f"pari-7L({seventh_lord})")
 
-    # Phase 2.8.72 FIX #1: weighted score replaces equal-weight boolean
+    # Phase 2.9.6 FIX 1 — orb-mult ONLY scales aspect contribution
+    aspect_orb = _aspect_orb_mult_step2(planet_lon) if out["aspect"] else 1.0
+    out["aspect_orb_mult"] = aspect_orb
+
+    raw_score = 0.0
+    if out["parivartana"]: raw_score += _LINK_WEIGHTS["parivartana"]
+    if out["conjunction"]: raw_score += _LINK_WEIGHTS["conjunction"]
+    if out["occupation"]:  raw_score += _LINK_WEIGHTS["occupation"]
+    if out["aspect"]:      raw_score += _LINK_WEIGHTS["aspect"] * aspect_orb
+
+    # Phase 2.9.6 FIX 2 — D9 navamsa bonus
+    if is_d9 and raw_score > 0:
+        raw_score *= _D9_NAVAMSA_BONUS
+        out["details"].append(f"d9-bonus×{_D9_NAVAMSA_BONUS}")
+
+    out["score"] = round(raw_score, 3)
     out["any_linked"] = bool(out["occupation"] or out["conjunction"]
                              or out["aspect"] or out["parivartana"])
-    out["score"] = sum(_LINK_WEIGHTS[k] for k in _LINK_WEIGHTS if out.get(k))
-    out["linked"] = out["score"] >= _LINK_THRESHOLD
+    out["linked"] = raw_score >= _LINK_THRESHOLD
+    # FIX 4 — soft tier (between SOFT and FULL thresholds)
+    out["soft_linked"] = (not out["linked"]) and (raw_score >= _LINK_SOFT_THRESHOLD)
     return out
 
 
@@ -1214,33 +1244,46 @@ def _d9_planet_state(d9_planets_list: list, name: str
 
 
 # Final classification matrix
-# Phase 2.8.72 FIX #3 (May 3 2026): STRONG + NONE downgraded
-# PASSIVE_PROMISE → NEUTRAL. Rationale: KP says "promise" but the planet
-# has zero meaningful link (score < 2) to 7H/7L in either D1 or D9 →
-# execution mechanism missing → not safe to count as a soft promiser.
-# Old PASSIVE_PROMISE label kept in _STEP2_FINAL_BUCKET for defensive
-# backward-compat (no longer produced by the matrix).
+# Phase 2.8.72 FIX #3: STRONG + NONE downgraded PASSIVE_PROMISE → NEUTRAL.
+# Phase 2.9.6 STEP 2 FIX 4+5 (May 4 2026):
+#   FIX 4: SOFT link tier added (BOTH_S / D1_S / D9_S — soft variants).
+#   FIX 5: STRONG+NONE → PASSIVE_PROMISE re-introduced CONDITIONALLY,
+#          gated on STEP 1 promise_score (handled in compute fn, not matrix).
 _STEP2_MATRIX: Dict[Tuple[str, str], str] = {
-    ("STRONG", "BOTH"):  "STRONGEST_PROMISE",
-    ("STRONG", "D1"):    "CONFIRMED_PROMISE",
-    ("STRONG", "D9"):    "CONFIRMED_PROMISE",
-    ("STRONG", "NONE"):  "NEUTRAL",            # was PASSIVE_PROMISE [2.8.72]
-    ("MIXED",  "BOTH"):  "STRONG_CONDITIONAL",
-    ("MIXED",  "D1"):    "CONDITIONAL",
-    ("MIXED",  "D9"):    "CONDITIONAL",
-    ("MIXED",  "NONE"):  "NEUTRAL",
-    ("WEAK",   "BOTH"):  "STRONGEST_DENIAL",
-    ("WEAK",   "D1"):    "ACTIVE_DENIAL",
-    ("WEAK",   "D9"):    "ACTIVE_DENIAL",
-    ("WEAK",   "NONE"):  "PASSIVE_DENIAL",
+    ("STRONG", "BOTH"):   "STRONGEST_PROMISE",
+    ("STRONG", "D1"):     "CONFIRMED_PROMISE",
+    ("STRONG", "D9"):     "CONFIRMED_PROMISE",
+    ("STRONG", "BOTH_S"): "CONFIRMED_PROMISE",   # FIX 4
+    ("STRONG", "D1_S"):   "PASSIVE_PROMISE",     # FIX 4
+    ("STRONG", "D9_S"):   "PASSIVE_PROMISE",     # FIX 4
+    ("STRONG", "NONE"):   "NEUTRAL",             # FIX 5 may upgrade
+    ("MIXED",  "BOTH"):   "STRONG_CONDITIONAL",
+    ("MIXED",  "D1"):     "CONDITIONAL",
+    ("MIXED",  "D9"):     "CONDITIONAL",
+    ("MIXED",  "BOTH_S"): "CONDITIONAL",         # FIX 4
+    ("MIXED",  "D1_S"):   "PASSIVE_PROMISE",     # FIX 4
+    ("MIXED",  "D9_S"):   "PASSIVE_PROMISE",     # FIX 4
+    ("MIXED",  "NONE"):   "NEUTRAL",
+    ("WEAK",   "BOTH"):   "STRONGEST_DENIAL",
+    ("WEAK",   "D1"):     "ACTIVE_DENIAL",
+    ("WEAK",   "D9"):     "ACTIVE_DENIAL",
+    ("WEAK",   "BOTH_S"): "ACTIVE_DENIAL",       # FIX 4
+    ("WEAK",   "D1_S"):   "PASSIVE_DENIAL",      # FIX 4
+    ("WEAK",   "D9_S"):   "PASSIVE_DENIAL",      # FIX 4
+    ("WEAK",   "NONE"):   "PASSIVE_DENIAL",
     # UNKNOWN STEP 1 verdict — passthrough
-    ("UNKNOWN", "BOTH"): "UNKNOWN",
-    ("UNKNOWN", "D1"):   "UNKNOWN",
-    ("UNKNOWN", "D9"):   "UNKNOWN",
-    ("UNKNOWN", "NONE"): "UNKNOWN",
+    ("UNKNOWN", "BOTH"):   "UNKNOWN",
+    ("UNKNOWN", "D1"):     "UNKNOWN",
+    ("UNKNOWN", "D9"):     "UNKNOWN",
+    ("UNKNOWN", "BOTH_S"): "UNKNOWN",
+    ("UNKNOWN", "D1_S"):   "UNKNOWN",
+    ("UNKNOWN", "D9_S"):   "UNKNOWN",
+    ("UNKNOWN", "NONE"):   "UNKNOWN",
 }
 
 # Final-bucket grouping
+# Phase 2.9.6 FIX 6: denier severity preserved via _DENIER_SEVERITY map;
+# 'strong_deniers' bucket is downstream-derivable (subset of deniers).
 _STEP2_FINAL_BUCKET: Dict[str, str] = {
     "STRONGEST_PROMISE":  "approvers",
     "CONFIRMED_PROMISE":  "approvers",
@@ -1253,6 +1296,18 @@ _STEP2_FINAL_BUCKET: Dict[str, str] = {
     "PASSIVE_DENIAL":     "ignore",
     "UNKNOWN":            "ignore",
 }
+
+# Phase 2.9.6 FIX 6 — denier severity (downstream consumers can prioritize)
+_DENIER_SEVERITY: Dict[str, str] = {
+    "STRONGEST_DENIAL": "high",
+    "ACTIVE_DENIAL":    "medium",
+    "PASSIVE_DENIAL":   "low",
+}
+
+# Phase 2.9.6 FIX 5 — STRONG+NONE re-evaluation threshold.
+# If STEP 1 promise_score >= this, the planet is a "strong KP soft promiser"
+# even with zero D1/D9 link → upgrade NEUTRAL → PASSIVE_PROMISE.
+_FIX5_STRONG_PROMISE_THRESHOLD: float = 4.0
 
 
 def compute_step2_link_filter(kundli: dict, kp: dict
@@ -1283,8 +1338,9 @@ def compute_step2_link_filter(kundli: dict, kp: dict
     out: Dict[str, Any] = {
         "d1": {}, "d9": {},
         "per_planet": [],
+        # Phase 2.9.6 FIX 6 — strong_deniers added (subset of deniers)
         "buckets": {"approvers": [], "conditional": [],
-                    "deniers": [], "ignore": []},
+                    "deniers": [], "strong_deniers": [], "ignore": []},
     }
     if not isinstance(kundli, dict):
         return out
@@ -1336,49 +1392,83 @@ def compute_step2_link_filter(kundli: dict, kp: dict
             d9_seventh_lord = ""
             d9_seventh_lord_si = None
 
-        # ---- STEP 1 verdicts (Method B per-planet) ----
+        # ---- STEP 1 verdicts + scores (Phase 2.9.6 FIX 5 needs promise_score) ----
         step1 = compute_kp_sublord_marriage_filter(kp)
-        s1_verdict_by_planet = {e["planet"]: (e.get("verdict") or "UNKNOWN")
-                                 for e in (step1.get("per_planet") or [])}
+        s1_by_planet: Dict[str, dict] = {
+            e["planet"]: e for e in (step1.get("per_planet") or [])
+        }
 
         # ---- For each of the 9 planets: link in D1 + link in D9 ----
         for pname in _KP_PLANET_NAMES:
-            s1v = s1_verdict_by_planet.get(pname, "UNKNOWN")
+            s1_entry = s1_by_planet.get(pname, {})
+            s1v = s1_entry.get("verdict") or "UNKNOWN"
+            s1_promise_score = float(s1_entry.get("promise_score") or 0.0)
 
+            # Phase 2.9.6 FIX 1 — pull longitudes for orb-mult
+            d1_rec = _planet_record(planets, pname) or {}
+            d1_lon = d1_rec.get("longitude")
             d1_si, d1_house = _d1_planet_state(planets, pname)
             d1_link = _planet_link_in_chart(
-                pname, d1_si, d1_house, h7_si, seventh_lord, seventh_lord_si)
+                pname, d1_si, d1_house, h7_si, seventh_lord, seventh_lord_si,
+                planet_lon=d1_lon, is_d9=False)
 
+            d9_rec = next((e for e in (d9_planets_list or [])
+                           if isinstance(e, dict) and e.get("name") == pname), {}) or {}
+            d9_lon = d9_rec.get("longitude")
             d9_si, d9_house = _d9_planet_state(d9_planets_list, pname)
+            # Phase 2.9.6 FIX 2 — D9 navamsa bonus inside link calc
             d9_link = _planet_link_in_chart(
                 pname, d9_si, d9_house, d9_h7_si,
-                d9_seventh_lord, d9_seventh_lord_si)
+                d9_seventh_lord, d9_seventh_lord_si,
+                planet_lon=d9_lon, is_d9=True)
 
-            d1_linked = d1_link["linked"]
-            d9_linked = d9_link["linked"]
-            if d1_linked and d9_linked:
+            # Phase 2.9.6 FIX 4 — combined strength with SOFT tier
+            d1_full, d1_soft = d1_link["linked"], d1_link["soft_linked"]
+            d9_full, d9_soft = d9_link["linked"], d9_link["soft_linked"]
+            if d1_full and d9_full:
                 strength = "BOTH"
-            elif d1_linked:
+            elif d1_full:
                 strength = "D1"
-            elif d9_linked:
+            elif d9_full:
                 strength = "D9"
+            elif d1_soft and d9_soft:
+                strength = "BOTH_S"
+            elif d1_soft:
+                strength = "D1_S"
+            elif d9_soft:
+                strength = "D9_S"
             else:
                 strength = "NONE"
 
             final = _STEP2_MATRIX.get((s1v, strength), "UNKNOWN")
+
+            # Phase 2.9.6 FIX 5 — STRONG+NONE re-evaluation by promise_score
+            fix5_upgraded = False
+            if (final == "NEUTRAL" and s1v == "STRONG" and strength == "NONE"
+                    and s1_promise_score >= _FIX5_STRONG_PROMISE_THRESHOLD):
+                final = "PASSIVE_PROMISE"
+                fix5_upgraded = True
+
             bucket = _STEP2_FINAL_BUCKET.get(final, "ignore")
+            denier_severity = _DENIER_SEVERITY.get(final)  # FIX 6
 
             out["per_planet"].append({
                 "planet": pname,
                 "step1_verdict": s1v,
+                "step1_promise_score": s1_promise_score,
                 "d1_link": d1_link,
                 "d9_link": d9_link,
                 "link_strength": strength,
                 "final": final,
                 "bucket": bucket,
+                "denier_severity": denier_severity,        # FIX 6
+                "fix5_strong_promise_upgrade": fix5_upgraded,
             })
             if bucket in out["buckets"]:
                 out["buckets"][bucket].append(pname)
+            # Phase 2.9.6 FIX 6 — strong_deniers subset
+            if denier_severity == "high":
+                out["buckets"]["strong_deniers"].append(pname)
 
         return out
     except Exception as exc:

@@ -3441,25 +3441,30 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             # FAIL -> reject window (move to next favourable dasha).
             # SINGLE -> accept (no extra bonus, existing scores already counted).
             # DTT -> accept + classical double-transit bonus already added above.
+            # Phase 2.9.0 FIX 1 — Transit gate: hard-reject -> soft penalty.
+            # Per user spec: never discard window. If neither Jup nor Sat
+            # supports the window (jup_score == 0 AND sat_score == 0),
+            # apply a -2.0 penalty to the final score instead of skipping.
+            # Legacy gate tiers (DTT/SINGLE/FAIL) preserved for diagnostics
+            # and existing gate_bonus contribution (DTT +1.0 / SINGLE +0.5).
             gate_tier, gate_reason = _user_transit_gate_check(
                 transit, h7_si, seventh_lord_si)
-            if gate_tier == "FAIL":
-                gate_fail_count += 1
-                continue   # hard reject per user rule, skip to next PD
-            # Phase 2.8.81 GATE-BONUS (architect-flagged HIGH fix):
-            # Gate accepts on Jup/Sat-aspecting-7L, but legacy
-            # _jupiter_score_on_7h / _saturn_score_on_7h only credit 7H
-            # contact. Without this bonus, gate-passed-via-7L windows could
-            # silently fall below score threshold. Bonus surfaces them.
             gate_bonus = 0.0
+            transit_penalty = 0.0
             if gate_tier == "DTT":
                 gate_dtt_count += 1
                 gate_bonus = 1.0
                 window_factors.append(f"GATE DTT: {gate_reason} (+1.0)")
-            else:
+            elif gate_tier == "SINGLE":
                 gate_single_count += 1
                 gate_bonus = 0.5
                 window_factors.append(f"GATE SINGLE: {gate_reason} (+0.5)")
+            else:
+                gate_fail_count += 1
+                # Phase 2.9.0 FIX 1: NO continue. Apply scoring penalty.
+                if jup_score == 0 and sat_score == 0:
+                    transit_penalty = -2.0
+                    window_factors.append("-2 No Jupiter/Saturn support")
 
             # Phase 2.8.82 + 2.8.83 CO-KARAK PRIORITY BONUS (ADD-ONLY):
             # +0.5 jab AD ya PD lord co-karak ho (D1/D9 conjunction OR
@@ -3542,7 +3547,8 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                              + co_karak_bonus)   # Phase 2.8.82
             penalties = (retro_penalty
                          + min(0.0, bav_b) + min(0.0, sav_b)
-                         + eclipse_penalty)
+                         + eclipse_penalty
+                         + transit_penalty)   # Phase 2.9.0 FIX 1
 
             # Phase 2.8.75 FIX K — soft denier multiplier
             denier_mult = 1.0

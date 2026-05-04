@@ -3492,10 +3492,13 @@ def _pd_seventh_link_boost(pd_lord: str,
                 f"({_SIGNS[pd_si_d9]} -> {_SIGNS[d9_h7_si]})")
 
     raw = boost
-    if boost > 4.0:
+    # Phase 2.9.10 v2 — cap tightened 4.0 -> 2.5 (user vote D).
+    # Prevents windows where multiple PDs stack (Mars=D9-7L + Rahu-conj-7L
+    # + Mercury-IS-7L) from over-shooting baseline windows.
+    if boost > 2.5:
         reasons.append(
-            f"PD-LINK CAP: raw={raw:.2f} -> 4.00 (anti-stacking)")
-        boost = 4.0
+            f"PD-LINK CAP: raw={raw:.2f} -> 2.50 (anti-stacking, v2)")
+        boost = 2.5
     return boost, raw, reasons
 
 

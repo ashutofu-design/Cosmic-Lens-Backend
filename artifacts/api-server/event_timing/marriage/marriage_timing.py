@@ -1480,6 +1480,28 @@ def _aspect_strength_mult(planets: list, src_name: str,
     return 1.0
 
 
+# Phase 2.9.3 — sandhi-degree weight multiplier.
+# Classical Vedic: planet at 0°-1° (beginning sandhi) ya 29°-30° (ending
+# sandhi) ka effect weak hota hai — transition zone me hai, na purane
+# bhav ka full effect, na naye ka. House-based scoring (L2/L5/L6) me
+# isko ×0.75 mult ke saath apply karte hain.
+def _sandhi_weight_mult(planets: list, name: str) -> Tuple[float, bool]:
+    """Return (mult, is_sandhi). mult=0.75 if sandhi, else 1.0."""
+    rec = _planet_record(planets, name)
+    if not rec:
+        return 1.0, False
+    lon = rec.get("longitude")
+    if lon is None:
+        return 1.0, False
+    try:
+        deg = float(lon) % 30.0
+    except (TypeError, ValueError):
+        return 1.0, False
+    if deg < 1.0 or deg > 29.0:
+        return 0.75, True
+    return 1.0, False
+
+
 def _is_mars_aspect(mars_si: int, target_si: int) -> bool:
     """Mars has 4th, 7th, 8th aspects."""
     diff = (target_si - mars_si) % 12
@@ -2303,18 +2325,29 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
     #   6H → +1 (conflict, disputes)
     # + debilitated → +1
     # Cap raised to +2 (single severe weakness allowed full impact).
+    # Phase 2.9.3 — sandhi-aware house weighting. 7L 0°-1° ya 29°-30°
+    # me ho toh house effect ×0.75 (transition zone, weak placement).
+    sandhi_mult, is_sandhi = (_sandhi_weight_mult(planets, seventh_lord)
+                              if seventh_lord else (1.0, False))
     l2_pts = 0.0
     if seventh_lord_h == 8:
-        l2_pts += 2.0
+        pts = round(2.0 * sandhi_mult, 2)
+        l2_pts += pts
+        tag = " (sandhi-mult 0.75)" if is_sandhi else ""
         reasons.append(f"L2: 7L {seventh_lord} in 8H — sudden upheaval "
-                       "(+2 LATE) [2.9.1 FIX 1 — 8H worst]")
+                       f"(+{pts} LATE){tag} [2.9.1 FIX 1 — 8H worst]")
     elif seventh_lord_h == 12:
-        l2_pts += 1.0
-        reasons.append(f"L2: 7L {seventh_lord} in 12H — withdrawal (+1 LATE)")
+        pts = round(1.0 * sandhi_mult, 2)
+        l2_pts += pts
+        tag = " [2.9.3 sandhi-mult 0.75]" if is_sandhi else ""
+        reasons.append(f"L2: 7L {seventh_lord} in 12H — withdrawal "
+                       f"(+{pts} LATE){tag}")
     elif seventh_lord_h == 6:
-        l2_pts += 1.0
+        pts = round(1.0 * sandhi_mult, 2)
+        l2_pts += pts
+        tag = " [2.9.3 sandhi-mult 0.75]" if is_sandhi else ""
         reasons.append(f"L2: 7L {seventh_lord} in 6H — conflict "
-                       "(+1 LATE) [NEW 2.9.1 FIX 1]")
+                       f"(+{pts} LATE){tag} [NEW 2.9.1 FIX 1]")
     if seventh_lord_dignity == "debilitated":
         l2_pts += 1.0
         reasons.append(f"L2: 7L {seventh_lord} debilitated (+1 LATE)")

@@ -181,84 +181,51 @@ _M17_MARRIAGE_KW_RX = _re_mb_M17.compile(
 
 
 def _M17_format_marriage_block(engine_result: dict) -> str:
-    """Format engine_result into a Hinglish LOCKED FACTS block that the
-    LLM must translate verbatim. Conservative — only includes fields the
-    engine actually populated."""
+    """M17 v2 — LEAN format: just MD-AD-PD | score | window for each
+    top-3 window, plus verdict and risk flags. No verbose explainer."""
     if not isinstance(engine_result, dict) or not engine_result:
         return ""
+
     parts = [
         "",
         "═══════════════════════════════════════════════════════════════",
-        "🔒 MARRIAGE ENGINE — LOCKED FACTS (DO NOT INVENT)",
+        "🔒 MARRIAGE ENGINE — LOCKED FACTS",
         "═══════════════════════════════════════════════════════════════",
-        "Ye facts deterministic 25-rule + 6-trust-layer engine se nikle hain.",
-        "Aapka kaam: in facts ko Hinglish me natural tone me translate karna.",
-        "STRICT RULES:",
-        "  • PRIMARY_WINDOW ko HAR reply me EXACTLY as-is quote karna hai.",
-        "  • Koi NAYA year ya month INVENT mat karo. Sirf neeche diye gaye",
-        "    windows + risk_flags ke baare me likho.",
-        "  • Verdict (PROMISED/DENIED/etc) badlo mat.",
-        "  • Agar kuch missing hai, kaho 'engine ne nahi diya' — guess mat karo.",
-        "───────────────────────────────────────────────────────────────",
+        "Rule: in facts ko hi quote karo. Naye date/year invent mat karo.",
+        "",
     ]
+
     verdict = engine_result.get("verdict")
-    band    = engine_result.get("band")
-    score   = engine_result.get("score")
-    conf    = engine_result.get("confluence") or engine_result.get("strength")
     if verdict:
-        v_line = f"VERDICT: {verdict}"
-        extras = []
-        if band:  extras.append(f"band={band}")
-        if score is not None:
-            try:    extras.append(f"score={float(score):.2f}")
-            except (TypeError, ValueError): pass
-        if conf:  extras.append(f"confluence={conf}")
-        if extras: v_line += f"  ({', '.join(extras)})"
-        parts.append(v_line)
-
-    pw = engine_result.get("primary_window")
-    if pw:
-        parts.append(f"PRIMARY_WINDOW: {pw}    ← MUST quote verbatim")
-        trig = engine_result.get("primary_trigger") or engine_result.get("trigger")
-        if trig:
-            parts.append(f"  trigger: {trig}")
-
-    bw = engine_result.get("backup_window")
-    if bw:
-        parts.append(f"BACKUP_WINDOW: {bw}")
+        band = engine_result.get("band")
+        v = f"VERDICT: {verdict}"
+        if band: v += f"  (band={band})"
+        parts.append(v)
+        parts.append("")
 
     top3 = engine_result.get("top_3_windows") or []
     if top3:
-        parts.append("TOP_3_WINDOWS:")
-        for i, w in enumerate(top3[:3], 1):
+        parts.append("TOP 3 WINDOWS — MD-AD-PD | score | window")
+        for w in top3[:3]:
             if not isinstance(w, dict):
                 continue
-            label = (w.get("window") or w.get("label")
-                     or f"{w.get('start_str','?')} — {w.get('end_str','?')}")
-            sc = w.get("score")
-            sc_s = ""
-            if sc is not None:
-                try:    sc_s = f"  (score={float(sc):.2f})"
-                except (TypeError, ValueError): pass
-            parts.append(f"  {i}. {label}{sc_s}")
+            md = w.get("md", "?")
+            ad = w.get("ad", "?")
+            pd = w.get("pd", "?")
+            sc = w.get("score", 0)
+            try: sc_s = f"{float(sc):.2f}"
+            except (TypeError, ValueError): sc_s = str(sc)
+            win = (w.get("window") or w.get("label")
+                   or f"{w.get('start_str','?')} - {w.get('end_str','?')}")
+            dasha = f"{md}-{ad}-{pd}"
+            parts.append(f"  {dasha:24} | {sc_s:>5} | {win}")
+        parts.append("")
 
     risks = engine_result.get("risk_flags") or []
     if risks:
-        parts.append("RISK_FLAGS:")
-        for r in risks[:6]:
-            parts.append(f"  • {r}")
-
-    factors = engine_result.get("factors") or []
-    if factors:
-        parts.append("KEY_FACTORS (context, not for direct quote):")
-        for f in factors[:5]:
-            parts.append(f"  - {str(f)[:200]}")
+        parts.append("RISK_FLAGS: " + ", ".join(str(r) for r in risks[:6]))
 
     parts.extend([
-        "───────────────────────────────────────────────────────────────",
-        "REMINDER: PRIMARY_WINDOW ko exactly quote karo. Naye dates",
-        "invent karoge to validator reject kar dega aur user ko raw",
-        "template milega (LLM polish lost).",
         "═══════════════════════════════════════════════════════════════",
         "",
     ])

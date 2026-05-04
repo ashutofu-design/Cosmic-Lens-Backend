@@ -1486,6 +1486,42 @@ def _is_mars_aspect(mars_si: int, target_si: int) -> bool:
     return diff in (3, 6, 7)
 
 
+# Phase 2.9.2 — house-aspect orb strength using KP cusp longitude.
+# Pehle planet→house aspect ka orb data nahi tha (flat 1.0 mult).
+# Ab 7H cusp ka longitude use karke orb-mult compute hota hai.
+def _house_aspect_strength_mult(planets: list, src_name: str,
+                                  kp: Optional[dict],
+                                  house_num: int) -> float:
+    """Return 0.75 / 1.0 / 1.25 based on src planet ↔ house cusp orb."""
+    if not kp:
+        return 1.0
+    src = _planet_record(planets, src_name)
+    if not src:
+        return 1.0
+    sl = src.get("longitude")
+    if sl is None:
+        return 1.0
+    try:
+        cusp = _get_kp_cusp(kp, house_num)
+        if not isinstance(cusp, dict):
+            return 1.0
+        cl = cusp.get("longitude")
+        if cl is None:
+            return 1.0
+        s_in = float(sl) % 30.0
+        c_in = float(cl) % 30.0
+        orb = abs(s_in - c_in)
+        if orb > 15.0:
+            orb = 30.0 - orb
+    except (TypeError, ValueError):
+        return 1.0
+    if orb < 3.0:
+        return 1.25
+    if orb > 9.0:
+        return 0.75
+    return 1.0
+
+
 def _jupiter_score_on_7h(transit_data: dict, h7_si: int,
                           venus_si: Optional[int]) -> Tuple[int, str]:
     """+2 conjunction (same sign as 7H or natal Venus), +1 aspect, 0 else."""
@@ -2243,9 +2279,13 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
                        f"(+{pts} LATE — conj > aspect, orb-mult {mult}) "
                        "[2.9.1 FIX 4 + 2.9.0 FIX 6]")
     elif sat_aff_7h_aspect:
-        late += 1
-        saturn_l1_pts = 1.0
-        reasons.append("L1a: natal Saturn aspect on 7H (+1 LATE)")
+        # Phase 2.9.2 — house-aspect orb-mult applied to Saturn-on-7H.
+        mult = _house_aspect_strength_mult(planets, "Saturn", kp, 7)
+        pts = round(1.0 * mult, 2)
+        late += pts
+        saturn_l1_pts = pts
+        reasons.append(f"L1a: natal Saturn aspect on 7H "
+                       f"(+{pts} LATE — house-orb-mult {mult}) [2.9.2]")
     elif sat_aff_7l_aspect:
         mult = _aspect_strength_mult(planets, "Saturn", seventh_lord)
         pts = round(1.0 * mult, 2)
@@ -2336,13 +2376,16 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
                            f"Jupiter in {jup_house}H dusthana — blessing "
                            "compromised [2.9.0 FIX 1]")
         else:
-            mult = (_aspect_strength_mult(planets, "Jupiter", seventh_lord)
-                    if jup_aff_7l else 1.0)
+            # Phase 2.9.2 — extend orb-mult to house aspect (was planet-only).
+            if jup_aff_7l:
+                mult = _aspect_strength_mult(planets, "Jupiter", seventh_lord)
+            else:
+                mult = _house_aspect_strength_mult(planets, "Jupiter", kp, 7)
             pts = round(1.0 * mult, 2)
             early += pts
             e1_fired = True
             reasons.append(f"E1: natal Jupiter aspect/conj {target} "
-                           f"(+{pts} EARLY — orb-mult {mult}) [2.9.1 FIX 4]")
+                           f"(+{pts} EARLY — orb-mult {mult}) [2.9.2]")
 
     # ── E2: Venus exalted/own sign or in 5/7H
     # Phase 2.9.1 FIX 2 — Venus strength vs weakness imbalance correction.
@@ -2411,6 +2454,59 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
         e7_fired = True
         reasons.append(f"E7: 7L {seventh_lord} {seventh_lord_dignity} — "
                        f"strong house promise (+1 EARLY) [NEW 2.9.0 FIX 4]")
+
+    # ── L5: Mars affliction on 7H/7L (Phase 2.9.2 — NEW Kuja Dosha indicator)
+    # Pehle Mars ka 7H/7L pe affliction STEP 0 me count nahi ho raha tha —
+    # classical Kuja Dosha (Mangal Dosha) ek primary late-marriage karaka hai.
+    # Severity: Mars IN 7H > Mars conj 7L > Mars aspect 7H/7L.
+    mars_si = _planet_sign_idx(planets, "Mars")
+    mars_house = _planet_house_local(planets, "Mars")
+    mars_in_7h = (mars_house == 7) or (
+        mars_si is not None and mars_si == h7_si)
+    mars_conj_7l = (mars_si is not None and seventh_lord_si is not None
+                    and mars_si == seventh_lord_si and not mars_in_7h)
+    mars_asp_7h = (mars_si is not None and not mars_in_7h
+                   and _is_mars_aspect(mars_si, h7_si))
+    mars_asp_7l = (mars_si is not None and seventh_lord_si is not None
+                   and not mars_conj_7l
+                   and _is_mars_aspect(mars_si, seventh_lord_si))
+    if mars_in_7h:
+        late += 1.5
+        reasons.append("L5: Mars IN 7H — Kuja Dosha (+1.5 LATE) [NEW 2.9.2]")
+    elif mars_conj_7l:
+        mult = _aspect_strength_mult(planets, "Mars", seventh_lord)
+        pts = round(1.5 * mult, 2)
+        late += pts
+        reasons.append(f"L5: Mars CONJUNCT 7L {seventh_lord} "
+                       f"(+{pts} LATE — orb-mult {mult}) [NEW 2.9.2]")
+    elif mars_asp_7h:
+        mult = _house_aspect_strength_mult(planets, "Mars", kp, 7)
+        pts = round(1.0 * mult, 2)
+        late += pts
+        reasons.append(f"L5: Mars aspect on 7H (Kuja Dosha) "
+                       f"(+{pts} LATE — house-orb-mult {mult}) [NEW 2.9.2]")
+    elif mars_asp_7l:
+        mult = _aspect_strength_mult(planets, "Mars", seventh_lord)
+        pts = round(1.0 * mult, 2)
+        late += pts
+        reasons.append(f"L5: Mars aspect on 7L {seventh_lord} "
+                       f"(+{pts} LATE — orb-mult {mult}) [NEW 2.9.2]")
+
+    # ── L6: Ketu on 7H/7L (Phase 2.9.2 — NEW separation karaka indicator)
+    # Ketu = moksha karaka, vairagya — 7H/7L pe ho toh detachment from
+    # marriage, separation tendency. Classically only conjunction effect
+    # (Ketu has no traditional aspects).
+    ketu_si = _planet_sign_idx(planets, "Ketu")
+    ketu_house = _planet_house_local(planets, "Ketu")
+    if ketu_house == 7 or (ketu_si is not None and ketu_si == h7_si):
+        late += 1.5
+        reasons.append("L6: Ketu IN 7H — separation karaka (+1.5 LATE) "
+                       "[NEW 2.9.2]")
+    elif (ketu_si is not None and seventh_lord_si is not None
+          and ketu_si == seventh_lord_si):
+        late += 1.0
+        reasons.append(f"L6: Ketu CONJUNCT 7L {seventh_lord} — vairagya "
+                       "(+1 LATE) [NEW 2.9.2]")
 
     # ── Gender modifier (G1/G2)
     # Phase 2.9.0 FIX 3 — G1 was double-counting Venus weakness with L3.

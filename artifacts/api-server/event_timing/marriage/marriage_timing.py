@@ -1481,6 +1481,59 @@ def _saturn_score_on_7h(transit_data: dict, h7_si: int,
     return (0, "")
 
 
+def _user_transit_gate_check(transit_data: dict,
+                              h7_si: Optional[int],
+                              seventh_lord_natal_si: Optional[int]
+                              ) -> Tuple[str, str]:
+    """Phase 2.8.80 — USER HARD TRANSIT GATE (ADD-ONLY).
+
+    User-spec rule:
+      Jupiter PASS = Jupiter in 7H sign OR Jupiter aspects natal 7L position
+      Saturn  PASS = Saturn in 7H sign OR Saturn aspects natal 7L position
+
+    Tiers:
+      DTT     -> both Jupiter AND Saturn pass  (best, classical Double Transit)
+      SINGLE  -> exactly one passes            (acceptable, accept window)
+      FAIL    -> neither passes                (reject window, move to next)
+    """
+    if h7_si is None:
+        return ("FAIL", "no 7H sign available")
+    jup_si = _transit_sign_idx(transit_data, "Jupiter")
+    sat_si = _transit_sign_idx(transit_data, "Saturn")
+
+    jup_pass = False
+    jup_why = ""
+    if jup_si is not None:
+        if jup_si == h7_si:
+            jup_pass = True
+            jup_why = f"Jup in 7H ({_SIGNS[h7_si]})"
+        elif (seventh_lord_natal_si is not None
+              and _is_jupiter_aspect(jup_si, seventh_lord_natal_si)):
+            jup_pass = True
+            jup_why = (f"Jup aspect 7L ({_SIGNS[jup_si]}->"
+                       f"{_SIGNS[seventh_lord_natal_si]})")
+
+    sat_pass = False
+    sat_why = ""
+    if sat_si is not None:
+        if sat_si == h7_si:
+            sat_pass = True
+            sat_why = f"Sat in 7H ({_SIGNS[h7_si]})"
+        elif (seventh_lord_natal_si is not None
+              and _is_saturn_aspect(sat_si, seventh_lord_natal_si)):
+            sat_pass = True
+            sat_why = (f"Sat aspect 7L ({_SIGNS[sat_si]}->"
+                       f"{_SIGNS[seventh_lord_natal_si]})")
+
+    if jup_pass and sat_pass:
+        return ("DTT", f"{jup_why} + {sat_why}")
+    if jup_pass:
+        return ("SINGLE", jup_why)
+    if sat_pass:
+        return ("SINGLE", sat_why)
+    return ("FAIL", "neither Jup nor Sat on 7H/7L")
+
+
 def _mars_trigger_check(transit_data: dict, h7_si: int,
                          venus_si: Optional[int],
                          seventh_lord_si: Optional[int]) -> Tuple[bool, str]:
@@ -3139,6 +3192,10 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
 
     today = datetime.utcnow()
     windows: List[dict] = []
+    # Phase 2.8.80 USER HARD TRANSIT GATE counters
+    gate_dtt_count = 0
+    gate_single_count = 0
+    gate_fail_count = 0
 
     for ad_blk in candidate_ads:
         md = ad_blk.get("md") or ad_blk.get("md_lord")
@@ -3209,6 +3266,23 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             if jup_score > 0 and sat_score > 0:
                 double_transit_bonus = 1
                 window_factors.append("DOUBLE TRANSIT bonus (+1)")
+
+            # ── B2. Phase 2.8.80 USER HARD TRANSIT GATE (ADD-ONLY)
+            # Per user spec: Jup+Sat must be on 7H sign or aspect natal 7L.
+            # FAIL -> reject window (move to next favourable dasha).
+            # SINGLE -> accept (no extra bonus, existing scores already counted).
+            # DTT -> accept + classical double-transit bonus already added above.
+            gate_tier, gate_reason = _user_transit_gate_check(
+                transit, h7_si, seventh_lord_si)
+            if gate_tier == "FAIL":
+                gate_fail_count += 1
+                continue   # hard reject per user rule, skip to next PD
+            if gate_tier == "DTT":
+                gate_dtt_count += 1
+                window_factors.append(f"GATE DTT: {gate_reason}")
+            else:
+                gate_single_count += 1
+                window_factors.append(f"GATE SINGLE: {gate_reason}")
 
             # ── C. Mars trigger (+1 activation only) + conflict flag
             mars_trig, mars_reason = _mars_trigger_check(
@@ -3307,6 +3381,16 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
 
     factors.append(f"STEP 4: {len(windows)} candidate PD windows above threshold "
                    f"({_WINDOW_MIN_SCORE})")
+    # Phase 2.8.80 USER HARD TRANSIT GATE summary
+    factors.append(
+        f"STEP 4 USER GATE: DTT={gate_dtt_count} SINGLE={gate_single_count} "
+        f"FAIL={gate_fail_count} (rejected windows where neither Jup nor Sat "
+        f"on 7H/7L)")
+    if not windows and gate_fail_count > 0:
+        factors.append(
+            "STEP 4 USER GATE WARNING: ALL candidate windows rejected by "
+            "transit gate — no DTT-confirmed marriage window in scan range. "
+            "User-spec rule active: dasha + transit BOTH must support.")
 
     # Phase 2.8.75 FIX J — merge adjacent windows (≤15-day gap = same event)
     pre_merge_count = len(windows)

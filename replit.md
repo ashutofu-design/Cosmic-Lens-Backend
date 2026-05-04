@@ -246,3 +246,37 @@ next-different-AD window naturally.
 - Urgency (LATE + age >= F30/M33): chronologically earliest viable wins.
 - Rationale: at urgency thresholds, missing a near-term Jupiter-on-7H window
   for a higher-confluence one 3+ years out wastes the urgency signal itself.
+
+---
+
+## Phase 2.8.80 — USER HARD TRANSIT GATE (4 May 2026)
+
+**File**: `artifacts/api-server/event_timing/marriage/marriage_timing.py`
+
+**User-spec rule (per explicit instruction):**
+> "Jupiter should aspect 7L or sit in 7H. Saturn should aspect 7L or sit in 7H.
+> Single transit pass = accept. Both pass = DTT bonus. Neither = REJECT, move to next."
+
+**ADD-ONLY change (~80 lines, 0 removed):**
+- New helper `_user_transit_gate_check()` at L1487 — returns ("DTT"|"SINGLE"|"FAIL", reason)
+- 3 counter inits at L3198 (gate_dtt_count, gate_single_count, gate_fail_count)
+- Gate check + `continue` (hard reject) inside scan loop at L3269
+- Summary factor logs after scan at L3387
+
+**Gate logic per planet:**
+- Jupiter PASS: in 7H sign OR aspects natal 7L position (5/7/9 aspects)
+- Saturn PASS: in 7H sign OR aspects natal 7L position (3/7/10 aspects)
+
+**Tier behavior:**
+- DTT (both pass): existing `double_transit_bonus +1` already credits this
+- SINGLE (one passes): accept window into scoring, no extra penalty
+- FAIL (neither): hard reject via `continue`, window dropped from candidates
+
+**Profile 40 regression result:**
+- PRIMARY: May-Jun 2026 score 3.75 ✓ HELD (Jup in 7H Gemini = SINGLE pass)
+- 16 windows REJECTED by gate (correct — Feb 2028 dropped because Jup not on 7H, Sat not aspecting 7L Mercury)
+- New BACKUP: July 2030 - March 2031 (Sat aspect 7L Scorpio)
+
+**4-profile regression sweep**: All KP-PROMISED profiles produce gate-passing top_3; KP-DENIED profiles correctly skip scan (no regression).
+
+**Fallback safety**: If `windows == [] and gate_fail_count > 0`, factor log emits clear warning "ALL candidate windows rejected by transit gate". No silent failure.

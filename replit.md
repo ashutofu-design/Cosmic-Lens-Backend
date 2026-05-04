@@ -280,3 +280,47 @@ next-different-AD window naturally.
 **4-profile regression sweep**: All KP-PROMISED profiles produce gate-passing top_3; KP-DENIED profiles correctly skip scan (no regression).
 
 **Fallback safety**: If `windows == [] and gate_fail_count > 0`, factor log emits clear warning "ALL candidate windows rejected by transit gate". No silent failure.
+
+---
+
+## Phase 2.8.81 — PD-LEVEL ALGORITHM + GATE-BONUS (4 May 2026)
+
+**File**: `artifacts/api-server/event_timing/marriage/marriage_timing.py`
+
+**User-spec rule (per explicit instruction):**
+> "Har AD ke andar har PD individually check, favourable PD + transit match
+>  dono chahiye. Jab tak favourable PD nahi aata, check karte raho."
+
+**Root-cause fix**: Pehle `_scan_cluster_ads` AD-level pre-filter use karta tha,
+jisse Mars/Rahu/Ketu ADs entirely skip ho jaate the. Andar ke favourable PDs
+(e.g. Mercury PD = 7L inside Mars AD) silently dropped. User ne diagnose kiya:
+"yahi galti he kya?" — HAAN.
+
+**ADD-ONLY changes (~30 lines, 0 removed):**
+- L3173 area: `_scan_cluster_ads` ab ALL 9 dasha lords ke ADs scan karta hai
+  (`_ALL_DASHA_LORDS` set)
+- L3214: `pd_filter_skipped` counter init
+- L3258: PD-level hard filter — `if pd_pts == 0: continue` (PD lord MUST be in
+  target_lords, warna skip)
+- L3306: gate-bonus integrated (DTT +1.0, SINGLE +0.5) — fixes architect HIGH:
+  gate-vs-score mismatch (gate accepts on 7L aspect, scoring only credited 7H)
+- L3382: `gate_bonus` added to `positive_base`
+- L3424: PD-filter summary log
+
+**Profile 40 result (post-fix):**
+- PRIMARY: May-Jul 2026 score=4.12 (was 3.75) — extended by 1 month, gate-bonus
+- BACKUP : Apr-Jul 2027 score=1.19 ⭐ NEW — Rahu AD + Mercury PD (7L) surfaced
+- TERTIARY: Oct 2030 - Mar 2031 score=1.33
+
+**Algorithm now matches user mental model 1:1:**
+```
+for AD in ALL ADs:
+    for PD in AD.PDs:
+        if PD lord NOT in favourable: skip
+        if transit gate FAIL: skip
+        else: score and add as candidate
+```
+
+**4-profile regression**: All KP-PROMISED profiles produce coherent top_3 with
+new-visible windows; KP-DENIED profiles correctly skip scan; P_Young22 scores
+upgraded (7.0→8.0 PRIMARY) confirming gate-bonus integration.

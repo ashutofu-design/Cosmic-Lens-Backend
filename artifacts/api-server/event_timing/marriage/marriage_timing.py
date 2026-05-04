@@ -3170,9 +3170,20 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         factors.append("STEP 4 SAFETY: target_lords empty after filters, "
                        "defaulting to {Venus, Jupiter}")
 
-    candidate_ads = _scan_cluster_ads(kundli, target_lords, lookback_days=30)
+    # Phase 2.8.81 USER PD-LEVEL ALGORITHM (ADD-ONLY):
+    # Per user spec — "har AD ke andar har PD individually check karo,
+    # favourable PD lord + transit match dono chahiye". Pehle AD-level pre-
+    # filter Mars/Rahu/Ketu ADs ko entirely skip karta tha, jisse andar ke
+    # favourable PDs (e.g. Mercury PD = 7L inside Mars AD) silently dropped
+    # ho jaate the. Ab saare 9 planets ke ADs scan karte hain; PD-level filter
+    # niche scan loop mein lagta hai.
+    _ALL_DASHA_LORDS = {"Sun", "Moon", "Mars", "Mercury", "Jupiter",
+                        "Venus", "Saturn", "Rahu", "Ketu"}
+    candidate_ads = _scan_cluster_ads(kundli, _ALL_DASHA_LORDS,
+                                      lookback_days=30)
     factors.append(f"STEP 4: target_lords={sorted(target_lords)}, "
-                   f"candidate_ADs={len(candidate_ads)}")
+                   f"candidate_ADs={len(candidate_ads)} "
+                   f"(2.8.81: ALL ADs scanned, PD-level filter active)")
 
     # Phase 2.8.79 (FIX X, slimmed) — in urgency mode, ensure the currently-
     # running AD is scanned (even if its MD/AD lord isn't a target_lord), so
@@ -3196,6 +3207,8 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     gate_dtt_count = 0
     gate_single_count = 0
     gate_fail_count = 0
+    # Phase 2.8.81 PD-LEVEL FILTER counter
+    pd_filter_skipped = 0
 
     for ad_blk in candidate_ads:
         md = ad_blk.get("md") or ad_blk.get("md_lord")
@@ -3238,6 +3251,16 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             md_pts = 1 if md_in_target else 0
             ad_pts = 2 if ad_in_target else 0
             pd_pts = 3 if pd_lord in target_lords else 0
+
+            # Phase 2.8.81 PD-LEVEL HARD FILTER (ADD-ONLY) — per user spec:
+            # "jab tak favourable PD nahi aata, check karte raho". PD lord
+            # MUST be in target_lords (Jup/Mer/Sat/Ven by default), warna
+            # is window ko skip karo aur next PD pe jao. Yeh AD-level pre-
+            # filter ki absence ko compensate karta hai.
+            if pd_pts == 0:
+                pd_filter_skipped += 1
+                continue
+
             cluster_score = md_pts + ad_pts + pd_pts   # range 0-6
             triple_bonus = 1 if (md_pts and ad_pts and pd_pts) else 0
             if cluster_score > 0:
@@ -3277,12 +3300,20 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             if gate_tier == "FAIL":
                 gate_fail_count += 1
                 continue   # hard reject per user rule, skip to next PD
+            # Phase 2.8.81 GATE-BONUS (architect-flagged HIGH fix):
+            # Gate accepts on Jup/Sat-aspecting-7L, but legacy
+            # _jupiter_score_on_7h / _saturn_score_on_7h only credit 7H
+            # contact. Without this bonus, gate-passed-via-7L windows could
+            # silently fall below score threshold. Bonus surfaces them.
+            gate_bonus = 0.0
             if gate_tier == "DTT":
                 gate_dtt_count += 1
-                window_factors.append(f"GATE DTT: {gate_reason}")
+                gate_bonus = 1.0
+                window_factors.append(f"GATE DTT: {gate_reason} (+1.0)")
             else:
                 gate_single_count += 1
-                window_factors.append(f"GATE SINGLE: {gate_reason}")
+                gate_bonus = 0.5
+                window_factors.append(f"GATE SINGLE: {gate_reason} (+0.5)")
 
             # ── C. Mars trigger (+1 activation only) + conflict flag
             mars_trig, mars_reason = _mars_trigger_check(
@@ -3344,7 +3375,8 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                              + double_transit_bonus
                              + mars_bonus
                              + max(0.0, bav_b) + max(0.0, sav_b)
-                             + sandhi_bonus)
+                             + sandhi_bonus
+                             + gate_bonus)   # Phase 2.8.81
             penalties = (retro_penalty
                          + min(0.0, bav_b) + min(0.0, sav_b)
                          + eclipse_penalty)
@@ -3386,6 +3418,10 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         f"STEP 4 USER GATE: DTT={gate_dtt_count} SINGLE={gate_single_count} "
         f"FAIL={gate_fail_count} (rejected windows where neither Jup nor Sat "
         f"on 7H/7L)")
+    # Phase 2.8.81 PD-LEVEL FILTER summary
+    factors.append(
+        f"STEP 4 PD FILTER: {pd_filter_skipped} PDs skipped "
+        f"(PD lord not in target_lords {sorted(target_lords)})")
     if not windows and gate_fail_count > 0:
         factors.append(
             "STEP 4 USER GATE WARNING: ALL candidate windows rejected by "

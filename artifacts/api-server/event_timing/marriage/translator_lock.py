@@ -1,5 +1,5 @@
 """
-translator_lock.py — Phase 2.10.2 STEP 7 (M1-M5) ADD-ONLY
+translator_lock.py — Phase 2.10.2 STEP 7 (M1-M5) + 2.10.3 STEP 7B (M6-M10) ADD-ONLY
 ═══════════════════════════════════════════════════════════════════════════
 Goal: Demote LLM from "free narrator" to "strict renderer".
       Engine = Truth | Renderer = Locked Template | LLM = Optional Polish
@@ -7,12 +7,19 @@ Goal: Demote LLM from "free narrator" to "strict renderer".
 Architecture role per project_goal:
   Engine = Truth(frozen) | LLM = Translator | Validator = Guard
 
-This module enforces the 4-pillar lockdown the user demanded:
+Phase 2.10.2 STEP 7 — Core Control (locked):
   M1 — Post-output fact check (LLM text MUST match engine facts)
   M2 — CRITICAL/FAIL severity → code-level hard block (skip LLM entirely)
   M3 — Locked Hinglish template (no free text drift)
   M4 — Allowed-fields whitelist (LLM can only mention engine-known facts)
   M5 — Mismatch → reject LLM output → fallback to deterministic Path A
+
+Phase 2.10.3 STEP 7B — Quality Lift:
+  M6  — Engine-result snapshot hash + in-process LRU cache (same input = same output)
+  M7  — Severity-driven auto-disclaimer (now explicit, structurally guaranteed)
+  M8  — Top-3 windows always rendered (already in template, formalized)
+  M9  — Validator severity badge in UI payload (color/icon for frontend)
+  M10 — Provenance footer (renderer version + validator status in text + payload)
 
 ADD-ONLY: This module does NOT modify existing format_marriage_response,
 ask_engine, openai_helper, or marriage_timing.  It is a wrapper that
@@ -20,20 +27,27 @@ callers may opt into.
 
 Public API:
   render_marriage_output(engine_result, lang="hinglish",
-                         llm_polish_fn=None) -> dict
+                         llm_polish_fn=None, use_cache=True) -> dict
     Returns: {
       "text":            <final Hinglish text — guaranteed fact-locked>,
-      "path_used":       "BLOCKED" | "TEMPLATE" | "LLM_POLISHED",
+      "path_used":       "BLOCKED" | "TEMPLATE" | "LLM_POLISHED" | "CACHED",
       "severity":        "OK" | "WARN" | "FAIL" | "CRITICAL",
       "llm_rejected":    bool,
       "rejection_reason": str | None,
-      "provenance":      dict (engine version, validator status),
+      "provenance":      dict (engine version, validator status, hash),
+      "ui_badge":        {severity, color, icon, label}    # M9
+      "snapshot_hash":   str  # M6
     }
 """
 
 from __future__ import annotations
 
+import copy
+import hashlib
+import json
 import re
+import threading
+from collections import OrderedDict
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 
@@ -41,8 +55,24 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 # CONSTANTS — frozen single source of truth
 # ═══════════════════════════════════════════════════════════════════════
 
-PHASE_TAG = "Phase 2.10.2 STEP 7"
-RENDERER_VERSION = "translator_lock-v1.0"
+PHASE_TAG = "Phase 2.10.3 STEP 7B"
+RENDERER_VERSION = "translator_lock-v1.1"
+
+# M6 — In-process LRU cache size (per-process, no external dep)
+# Phase 2.10.3 STEP 7B fix-up: thread-safe via _CACHE_LOCK; deep-copy on
+# get/put so callers can never mutate cached nested dicts (provenance,
+# ui_badge, etc.) and corrupt future CACHED responses.
+_CACHE_MAX_ENTRIES = 256
+_RENDER_CACHE: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
+_CACHE_LOCK = threading.Lock()
+
+# M9 — UI severity badge spec (frontend reads this verbatim)
+_SEVERITY_BADGE_MAP: Dict[str, Dict[str, str]] = {
+    "OK":       {"color": "green",  "icon": "✅", "label": "Verified"},
+    "WARN":     {"color": "yellow", "icon": "⚠️", "label": "Minor Warning"},
+    "FAIL":     {"color": "orange", "icon": "❌", "label": "Low Confidence"},
+    "CRITICAL": {"color": "red",    "icon": "🛑", "label": "Blocked"},
+}
 
 # M4 — Allowed fields whitelist. LLM output may only reference these
 # engine-known fact keys. Anything outside this set is suspect.
@@ -470,19 +500,133 @@ def whitelist_check(llm_text: str,
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# M6 — SNAPSHOT HASH + LRU CACHE (same input → same output, no jitter)
+# ═══════════════════════════════════════════════════════════════════════
+
+def snapshot_hash(engine_result: Dict[str, Any], lang: str = "hinglish") -> str:
+    """
+    Deterministic SHA-256 over the whitelisted engine fields + lang.
+
+    Only ALLOWED_ENGINE_FIELDS contribute to the hash — debug/trace
+    fields (factors, d1_d9_planet_scan, etc.) are ignored so that
+    irrelevant changes don't bust the cache.
+
+    Note: List ordering inside engine fields IS significant. The engine is
+    expected to produce stable ordering (e.g. top_3_windows in score
+    order, risk_flags in detection order). If a downstream change
+    reorders an inherently-unordered list, callers should normalize
+    BEFORE calling render_marriage_output to keep cache hits stable.
+    """
+    payload: Dict[str, Any] = {"_lang": lang, "_renderer": RENDERER_VERSION}
+    for k in ALLOWED_ENGINE_FIELDS:
+        v = engine_result.get(k)
+        if v is not None:
+            payload[k] = v
+    try:
+        blob = json.dumps(payload, sort_keys=True, default=str,
+                          ensure_ascii=False)
+    except Exception:
+        # Defensive: fall back to repr if json fails
+        blob = repr(sorted(payload.items()))
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _cache_get(key: str) -> Optional[Dict[str, Any]]:
+    """Thread-safe get; returns a deep copy so callers cannot mutate cache."""
+    with _CACHE_LOCK:
+        if key in _RENDER_CACHE:
+            _RENDER_CACHE.move_to_end(key)
+            # Deep copy: nested dicts (provenance, ui_badge) MUST be
+            # isolated so caller mutation can't corrupt future hits.
+            return copy.deepcopy(_RENDER_CACHE[key])
+        return None
+
+
+def _cache_put(key: str, value: Dict[str, Any]) -> None:
+    """Thread-safe put; stores a deep copy so subsequent caller mutations
+    of `value` cannot corrupt the cached entry."""
+    with _CACHE_LOCK:
+        _RENDER_CACHE[key] = copy.deepcopy(value)
+        _RENDER_CACHE.move_to_end(key)
+        while len(_RENDER_CACHE) > _CACHE_MAX_ENTRIES:
+            _RENDER_CACHE.popitem(last=False)
+
+
+def clear_render_cache() -> None:
+    """Test/debug helper. Resets the LRU. Thread-safe."""
+    with _CACHE_LOCK:
+        _RENDER_CACHE.clear()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# M9 — UI SEVERITY BADGE PAYLOAD
+# ═══════════════════════════════════════════════════════════════════════
+
+def build_ui_badge(severity: str) -> Dict[str, str]:
+    """Frontend-ready badge spec for the given severity."""
+    sev = (severity or SEVERITY_OK).upper()
+    spec = _SEVERITY_BADGE_MAP.get(sev, _SEVERITY_BADGE_MAP[SEVERITY_OK])
+    return {
+        "severity": sev,
+        "color":    spec["color"],
+        "icon":     spec["icon"],
+        "label":    spec["label"],
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# M10 — PROVENANCE FOOTER (text + structured)
+# ═══════════════════════════════════════════════════════════════════════
+
+def _provenance_footer_text(provenance: Dict[str, Any],
+                            snapshot_hash_str: str) -> str:
+    """
+    M10 — Compact one-liner footer appended to text output for
+    transparency / debug trail. Format:
+      ─── Computed by translator_lock-v1.1 (Phase 2.10.3 STEP 7B) ·
+          Validator: OK · hash:abc12345 ───
+    """
+    sev = provenance.get("validator_severity", "?")
+    short_hash = snapshot_hash_str[:8] if snapshot_hash_str else "—"
+    return (f"─── Computed by {provenance.get('renderer','?')} "
+            f"({provenance.get('phase','?')}) · "
+            f"Validator: {sev} · hash:{short_hash} ───")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# M7 — EXPLICIT DISCLAIMER PREPEND HELPER (structurally guaranteed)
+# ═══════════════════════════════════════════════════════════════════════
+
+def ensure_disclaimer(text: str, severity: str, disclaimer: str) -> str:
+    """
+    M7 — Always append disclaimer for FAIL/WARN. Pure helper; no substring
+    fuzziness — severity-driven, structurally guaranteed.
+    """
+    if not disclaimer:
+        return text
+    if severity not in _DISCLAIMER_SEVERITIES:
+        return text
+    body = text.rstrip()
+    return body + "\n\n" + disclaimer
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # M5 — ORCHESTRATOR (gate → template → optional LLM polish → fact-check
 #                    → fallback if mismatch)
+# Phase 2.10.3 STEP 7B: integrates M6 cache, M9 badge, M10 footer
 # ═══════════════════════════════════════════════════════════════════════
 
 def render_marriage_output(
     engine_result: Dict[str, Any],
     lang: str = "hinglish",
     llm_polish_fn: Optional[Callable[[str, Dict[str, Any]], str]] = None,
+    use_cache: bool = True,
 ) -> Dict[str, Any]:
     """
     Public entry point. Single source of truth for marriage narration.
 
     Pipeline:
+      0. M6 snapshot_hash → check cache → return CACHED if hit
       1. M2 gate_by_severity → CRITICAL? return blocked response (no LLM)
       2. M3 render_locked_template → deterministic Hinglish base text
       3. If llm_polish_fn provided AND severity allows:
@@ -491,35 +635,54 @@ def render_marriage_output(
            c. M4 whitelist_check → drift? reject
            d. If both pass → use LLM output
            e. Else fall back to template (M5)
-      4. Build provenance + return
+      4. M7 ensure_disclaimer → guarantee for FAIL/WARN
+      5. M9 build_ui_badge → attach UI payload
+      6. M10 append provenance footer to text
+      7. Cache + return
 
-    Args:
-      engine_result: dict from compute_timing_window / assess_marriage
-      lang: "hinglish" (only one supported in M3 v1)
-      llm_polish_fn: optional callable. Signature:
-                       fn(template_text: str, engine_result: dict) -> str
-                     Should return polished text (same facts, nicer tone).
-                     If None: pure template path (Path A).
-
-    Returns:
-      {
-        "text":              <final text>,
-        "path_used":         "BLOCKED" | "TEMPLATE" | "LLM_POLISHED",
-        "severity":          str,
-        "llm_rejected":      bool,
-        "rejection_reason":  str | None,
-        "provenance":        {...},
-      }
+    NOTE: When llm_polish_fn is provided, cache is bypassed (LLM may be
+    non-deterministic). Cache only applies to TEMPLATE / BLOCKED paths.
     """
+    # ── M6 hash + cache lookup (only for deterministic paths) ────────
+    hash_key = snapshot_hash(engine_result, lang)
+    if use_cache and llm_polish_fn is None:
+        cached = _cache_get(hash_key)
+        if cached is not None:
+            cached["path_used"] = "CACHED"
+            return cached
+
     allow_llm, severity, disclaimer = gate_by_severity(engine_result)
 
-    provenance = {
+    provenance: Dict[str, Any] = {
         "renderer":         RENDERER_VERSION,
         "phase":            PHASE_TAG,
         "validator_severity": severity,
         "validator_pass":   bool((engine_result.get("validator_report")
                                   or {}).get("pass", True)),
+        "snapshot_hash":    hash_key,
     }
+    ui_badge = build_ui_badge(severity)
+
+    def _finalize(text: str, path: str, llm_rejected: bool,
+                  rejection_reason: Optional[str]) -> Dict[str, Any]:
+        # M10 — append provenance footer
+        footer = _provenance_footer_text(provenance, hash_key)
+        text_with_footer = text.rstrip() + "\n\n" + footer
+        result = {
+            "text":             text_with_footer,
+            "path_used":        path,
+            "severity":         severity,
+            "llm_rejected":     llm_rejected,
+            "rejection_reason": rejection_reason,
+            "provenance":       provenance,
+            "ui_badge":         ui_badge,        # M9
+            "snapshot_hash":    hash_key,        # M6
+        }
+        # Cache only deterministic paths (TEMPLATE / BLOCKED), never
+        # LLM_POLISHED outputs (LLM may be non-deterministic across calls)
+        if use_cache and path in ("TEMPLATE", "BLOCKED"):
+            _cache_put(hash_key, result)
+        return result
 
     # ── M2 hard block ─────────────────────────────────────────────────
     if not allow_llm:
@@ -534,28 +697,14 @@ def render_marriage_output(
             "Action: re-verify chart inputs (DOB, TOB, place) and re-run.\n"
             "════════════════════════════════════════════"
         )
-        return {
-            "text":             blocked_text,
-            "path_used":        "BLOCKED",
-            "severity":         severity,
-            "llm_rejected":     False,
-            "rejection_reason": None,
-            "provenance":       provenance,
-        }
+        return _finalize(blocked_text, "BLOCKED", False, None)
 
     # ── M3 deterministic template (always first) ──────────────────────
     template_text = render_locked_template(engine_result, disclaimer, lang)
 
     # ── No LLM polish requested → return template directly ────────────
     if llm_polish_fn is None:
-        return {
-            "text":             template_text,
-            "path_used":        "TEMPLATE",
-            "severity":         severity,
-            "llm_rejected":     False,
-            "rejection_reason": None,
-            "provenance":       provenance,
-        }
+        return _finalize(template_text, "TEMPLATE", False, None)
 
     # ── LLM polish path: try, validate, fallback on mismatch ──────────
     llm_text = None
@@ -567,44 +716,16 @@ def render_marriage_output(
 
     if llm_text is None or not str(llm_text).strip():
         rejection_reason = rejection_reason or "llm returned empty"
-        return {
-            "text":             template_text,
-            "path_used":        "TEMPLATE",
-            "severity":         severity,
-            "llm_rejected":     True,
-            "rejection_reason": rejection_reason,
-            "provenance":       provenance,
-        }
+        return _finalize(template_text, "TEMPLATE", True, rejection_reason)
 
-    # M1 fact-check
     facts_ok, fact_reasons = fact_check_llm_output(llm_text, engine_result)
-    # M4 whitelist
     clean_ok, drift_reasons = whitelist_check(llm_text, engine_result)
 
     if not facts_ok or not clean_ok:
         all_reasons = fact_reasons + drift_reasons
-        return {
-            "text":             template_text,         # M5 fallback
-            "path_used":        "TEMPLATE",
-            "severity":         severity,
-            "llm_rejected":     True,
-            "rejection_reason": "; ".join(all_reasons),
-            "provenance":       provenance,
-        }
+        return _finalize(template_text, "TEMPLATE", True,
+                         "; ".join(all_reasons))
 
-    # All checks passed — safe to use LLM output. Phase 2.10.2 STEP 7
-    # fix-up: ALWAYS append disclaimer for FAIL/WARN regardless of any
-    # paraphrased fragments LLM may have included. Disclaimer compliance
-    # must be guaranteed structurally, not via fragile substring match.
-    final = str(llm_text).rstrip()
-    if disclaimer and severity in _DISCLAIMER_SEVERITIES:
-        final = final + "\n\n" + disclaimer
-
-    return {
-        "text":             final,
-        "path_used":        "LLM_POLISHED",
-        "severity":         severity,
-        "llm_rejected":     False,
-        "rejection_reason": None,
-        "provenance":       provenance,
-    }
+    # All checks passed — M7 ensure disclaimer (structurally guaranteed)
+    final = ensure_disclaimer(str(llm_text), severity, disclaimer)
+    return _finalize(final, "LLM_POLISHED", False, None)

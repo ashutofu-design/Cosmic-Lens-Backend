@@ -3225,6 +3225,9 @@ def _dasha_lord_strength(planets: list, lord: str) -> float:
 # ════════════════════════════════════════════════════════════════════════
 # SECTION 12.5 — Window clustering (Phase 2.8.75 FIX J)
 # ════════════════════════════════════════════════════════════════════════
+_PD_LINK_WINDOW_CAP: float = 2.0  # Phase 2.9.10 v3 (Option A)
+
+
 def _merge_adjacent_windows(windows: List[dict],
                              gap_days: int = 15) -> List[dict]:
     """Merge candidate windows whose start is within gap_days of the
@@ -3237,16 +3240,39 @@ def _merge_adjacent_windows(windows: List[dict],
       - keep highest score; that entry's MD/AD/PD becomes primary
       - concat factors with cluster header
       - set merged_count >= 2 for downstream display
+
+    Phase 2.9.10 v3 (Option A) — PER-WINDOW PD-LINK CAP:
+      Sum pd_link_boost across ALL merged PDs in this window. If sum
+      exceeds _PD_LINK_WINDOW_CAP (2.0), subtract excess from leader's
+      score (scaled by leader's strength_mult). Prevents windows where
+      multiple PDs each independently satisfy user's 7L-link rule from
+      stacking past a fair per-window ceiling.
     """
     if not windows:
         return []
     if len(windows) < 2:
         out = dict(windows[0])
         out["merged_count"] = 1
+        # Single-PD window: still apply cap (per-PD boost may exceed 2.0
+        # via stacking, e.g. Mars D9-7L 1.5 + asp 7H D9 0.75 = 2.25)
+        pd_sum = float(out.get("pd_link_boost") or 0.0)
+        if pd_sum > _PD_LINK_WINDOW_CAP:
+            excess = pd_sum - _PD_LINK_WINDOW_CAP
+            mult = float(out.get("strength_mult") or 1.0)
+            out["score"] = round(out["score"] - excess * mult, 2)
+            out.setdefault("factors", []).append(
+                f"-{excess * mult:.2f} PD-LINK WINDOW CAP "
+                f"(sum {pd_sum:.2f} > {_PD_LINK_WINDOW_CAP}; "
+                f"excess x mult {mult:.2f}; Phase 2.9.10 v3 Option A)")
         return [out]
+
     sorted_w = sorted(windows, key=lambda w: w["start"])
     merged: List[dict] = [dict(sorted_w[0])]
     merged[0]["merged_count"] = 1
+    # Track raw pd_link sum per merged group (for cap adjustment after
+    # all PDs in cluster are merged in).
+    merged[0]["_pd_link_sum_raw"] = float(merged[0].get("pd_link_boost") or 0.0)
+
     for w in sorted_w[1:]:
         last = merged[-1]
         gap = (w["start"] - last["end"]).days
@@ -3258,7 +3284,8 @@ def _merge_adjacent_windows(windows: List[dict],
                            "md", "ad", "pd",
                            "jup", "sat", "double_transit",
                            "mars_trigger", "mars_sat_conflict",
-                           "sandhi", "eclipse_flag"):
+                           "sandhi", "eclipse_flag",
+                           "pd_link_boost"):
                     if k in w:
                         last[k] = w[k]
             last["factors"] = (last.get("factors", [])
@@ -3266,10 +3293,25 @@ def _merge_adjacent_windows(windows: List[dict],
                                   f"({gap}d gap) ---"]
                                + w.get("factors", []))
             last["merged_count"] = last.get("merged_count", 1) + 1
+            last["_pd_link_sum_raw"] += float(w.get("pd_link_boost") or 0.0)
         else:
             new = dict(w)
             new["merged_count"] = 1
+            new["_pd_link_sum_raw"] = float(new.get("pd_link_boost") or 0.0)
             merged.append(new)
+
+    # Apply per-window cap to each merged group
+    for grp in merged:
+        pd_sum = grp.pop("_pd_link_sum_raw", 0.0)
+        if pd_sum > _PD_LINK_WINDOW_CAP:
+            excess = pd_sum - _PD_LINK_WINDOW_CAP
+            mult = float(grp.get("strength_mult") or 1.0)
+            grp["score"] = round(grp["score"] - excess * mult, 2)
+            grp.setdefault("factors", []).append(
+                f"-{excess * mult:.2f} PD-LINK WINDOW CAP "
+                f"(sum {pd_sum:.2f} > {_PD_LINK_WINDOW_CAP} "
+                f"across {grp.get('merged_count', 1)} PDs; "
+                f"excess x mult {mult:.2f}; Phase 2.9.10 v3 Option A)")
     return merged
 
 
@@ -4428,6 +4470,10 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                     "sandhi": sandhi,
                     "eclipse_flag": ecl_flag,
                     "factors": window_factors,
+                    # Phase 2.9.10 v3 — per-window pd_link cap (Option A).
+                    # Stored so _merge_adjacent_windows can sum across merged
+                    # PDs and cap the TOTAL pd_link contribution per window.
+                    "pd_link_boost": pd_link_boost,
                 })
 
     factors.append(f"STEP 4: {len(windows)} candidate PD windows above threshold "

@@ -489,23 +489,35 @@ def _kp_sublord_filter_planet(kp: dict, planet: str) -> Dict[str, Any]:
         nl_promise = sorted(nl_set & _KP_SB_PROMISE_HOUSES)
         nl_deny = sorted(nl_set & _KP_SB_DENY_HOUSES)
 
-        # Original FIX E: NL tie-break on residual MIXED
+        # Phase 2.9.5 STEP 1 FIX 1b — STRENGTH-GATED NL FLIP
+        # Original FIX E flipped MIXED on NL pure-promise/pure-deny without
+        # checking strength. Result: weak NL signals (e.g. NL deny = [1,10]
+        # = score 3, no 8H/12H) could override strong SB signals (e.g. SB
+        # promise = [7] = score 3, the actual marriage house).
+        # New rule: NL flip MIXED only when NL's weighted score STRICTLY
+        # exceeds the opposing SB score. Tie or weaker → keep MIXED.
+        nl_promise_score = _kp_weighted_score(nl_promise, _KP_PROMISE_WEIGHT)
+        nl_deny_score = _kp_weighted_score(nl_deny, _KP_DENY_WEIGHT)
         if verdict == "MIXED" and nl_houses:
-            if nl_promise and not nl_deny:
+            if (nl_promise and not nl_deny
+                    and nl_promise_score > d_score):
                 verdict = "STRONG"
                 reason = (
                     f"{reason}; NL tie-break {nl} ({','.join(map(str, nl_houses))}) "
-                    f"-> only promise {nl_promise} -> upgrade to STRONG [2.8.70]"
+                    f"-> only promise {nl_promise} score {nl_promise_score}>SB-deny {d_score} "
+                    f"-> upgrade STRONG [2.9.5 strength-gated]"
                 )
                 nl_tiebreak_applied = True
-            elif nl_deny and not nl_promise:
+            elif (nl_deny and not nl_promise
+                    and nl_deny_score > p_score):
                 verdict = "WEAK"
                 reason = (
                     f"{reason}; NL tie-break {nl} ({','.join(map(str, nl_houses))}) "
-                    f"-> only deny {nl_deny} -> downgrade to WEAK [2.8.70]"
+                    f"-> only deny {nl_deny} score {nl_deny_score}>SB-promise {p_score} "
+                    f"-> downgrade WEAK [2.9.5 strength-gated]"
                 )
                 nl_tiebreak_applied = True
-            # NL mixed or empty intersection → no flip, keep MIXED
+            # else: NL signal too weak to override SB → keep MIXED
 
         # Phase 2.9.4 STEP 1 FIX 1 — SYMMETRIC NL CONTRADICTION CHECK
         # NL ko sirf MIXED pe nahi, STRONG/WEAK pe bhi consult karo:

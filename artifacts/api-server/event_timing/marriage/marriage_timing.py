@@ -99,7 +99,7 @@ _AGE_SHIFT_EARLY = -2     # EARLY tendency: pull everything earlier
 _URGENCY_AGE_FEMALE = 30          # Female culturally-late floor
 _URGENCY_AGE_MALE = 33            # Male culturally-late floor
 _URGENCY_WIDTH_MONTHS = 18        # Max window width when urgency mode on
-_URGENCY_RECENCY_PENALTY_PER_YEAR = 0.5   # Score -= years_from_now * this
+_URGENCY_RECENCY_PENALTY_PER_YEAR = 1.5   # Score -= years_from_now * this (Phase 2.8.79 simplified: 0.5 -> 1.5 strong enough that nearest viable wins on its own; FIX Y removed)
 
 # Cardinal (movable) signs — quick-trigger marriages
 _CARDINAL_SIGNS: Set[int] = {0, 3, 6, 9}    # Aries, Cancer, Libra, Capricorn
@@ -3121,44 +3121,21 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     factors.append(f"STEP 4: target_lords={sorted(target_lords)}, "
                    f"candidate_ADs={len(candidate_ads)}")
 
-    # ════════════════════════════════════════════════════════════════
-    # Phase 2.8.79 (FIX X) — URGENCY-AWARE SCAN EXPANSION
-    # ----------------------------------------------------------------
-    # When URGENCY MODE applies (STEP 0 == LATE AND age >= gender threshold),
-    # the AD-lord-only scan filter can drop the currently-running AD when its
-    # MD/AD lord isn't in target_lords. But PD-level transitions inside such
-    # an AD (e.g. PD == 7L like Mercury) can still trigger marriage when
-    # Jupiter is on the 7H. To prevent missing the immediate window, inject
-    # the currently-running AD as a scan candidate. The PD-level scoring
-    # gate (_WINDOW_MIN_SCORE) still filters out weak PDs.
-    # Profile 40 trigger: Moon-MD/Mars-AD (Jan-Aug 2026) was dropped because
-    # neither Moon nor Mars is a target lord, missing the +7 May 2026 PD
-    # (Mercury 7L + Jup on 7H Gemini).
-    # ════════════════════════════════════════════════════════════════
-    _age_for_urgency = _get_current_age(birth, kundli, current_dasha)
-    _urgency_pre = _is_urgency_mode(_age_for_urgency, step0["verdict"], gender)
-    if _urgency_pre:
-        cd_now = (kundli.get("currentDasha") or {})
-        cur_md = cd_now.get("maha") or cd_now.get("mahadasha")
-        cur_ad = cd_now.get("antar") or cd_now.get("antardasha")
-        cur_s  = cd_now.get("startDate") or cd_now.get("start")
-        cur_e  = cd_now.get("endDate") or cd_now.get("end")
-        if cur_md and cur_ad and cur_s and cur_e:
-            already_in = any(
-                ((a.get("md") or a.get("md_lord")) == cur_md and
-                 (a.get("ad") or a.get("ad_lord")) == cur_ad)
-                for a in candidate_ads
-            )
-            if not already_in:
-                candidate_ads.insert(0, {
-                    "md_lord": cur_md, "ad_lord": cur_ad,
-                    "start": cur_s, "end": cur_e,
-                })
-                factors.append(
-                    f"STEP 4 URGENCY SCAN EXPANSION: injected current AD "
-                    f"{cur_md}/{cur_ad} (off-target lord but PD-level "
-                    f"scoring gate retained)"
-                )
+    # Phase 2.8.79 (FIX X, slimmed) — in urgency mode, ensure the currently-
+    # running AD is scanned (even if its MD/AD lord isn't a target_lord), so
+    # PD-level marriage triggers like Mercury(7L) inside Moon/Mars AD aren't
+    # silently dropped. PD scoring gate (>=_WINDOW_MIN_SCORE) still filters.
+    if _is_urgency_mode(_get_current_age(birth, kundli, current_dasha),
+                        step0["verdict"], gender):
+        cd = kundli.get("currentDasha") or {}
+        md, ad = cd.get("maha") or cd.get("mahadasha"), cd.get("antar") or cd.get("antardasha")
+        s, e = cd.get("startDate") or cd.get("start"), cd.get("endDate") or cd.get("end")
+        if md and ad and s and e and not any(
+            (a.get("md") or a.get("md_lord")) == md and
+            (a.get("ad") or a.get("ad_lord")) == ad for a in candidate_ads
+        ):
+            candidate_ads.insert(0, {"md_lord": md, "ad_lord": ad, "start": s, "end": e})
+            factors.append(f"STEP 4 URGENCY: injected current AD {md}/{ad}")
 
     today = datetime.utcnow()
     windows: List[dict] = []
@@ -3441,42 +3418,9 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         if "Below marriageable age" not in risk_flags:
             risk_flags.insert(0, "Below marriageable age")
 
-    # Phase 2.8.79 (FIX Y) — URGENCY CHRONOLOGICAL OVERRIDE
-    # ----------------------------------------------------------------
-    # In URGENCY MODE the user's lived priority is "earliest viable window",
-    # not "highest-scored window 3+ years away". Recency penalty alone (0.5/yr)
-    # is too gentle to overcome multi-confluence boosts in distant windows.
-    # When urgency is on, sort viable windows (score >= _URGENCY_MIN_VIABLE)
-    # CHRONOLOGICALLY (earliest first), ties broken by score. This makes the
-    # primary_window the closest actionable window, with later high-score
-    # windows shown as backups. If no window clears the viable bar, fall
-    # back to score-desc ordering (better something than nothing).
-    # ----------------------------------------------------------------
-    _URGENCY_MIN_VIABLE = 3.5  # below STRONG(6)/MEDIUM(4.5) but still actionable
-    if urgency_mode and valid_windows:
-        viable = [w for w in valid_windows
-                  if float(w.get("score", 0)) >= _URGENCY_MIN_VIABLE]
-        if viable:
-            valid_windows = sorted(
-                viable,
-                key=lambda w: (w["start"], -float(w.get("score", 0)))
-            )
-            factors.append(
-                f"STEP 5 URGENCY CHRONOLOGICAL OVERRIDE: {len(viable)} viable "
-                f"windows (score>={_URGENCY_MIN_VIABLE}) ranked earliest-first; "
-                f"primary = nearest viable, not highest-scored distant"
-            )
-        else:
-            valid_windows.sort(
-                key=lambda w: (-float(w.get("score", 0)), w["start"])
-            )
-            factors.append(
-                f"STEP 5 URGENCY CHRONOLOGICAL: no window cleared viable bar "
-                f"({_URGENCY_MIN_VIABLE}); falling back to score-desc"
-            )
-    else:
-        # Non-urgency path: classical highest-score-wins
-        valid_windows.sort(key=lambda w: (-float(w.get("score", 0)), w["start"]))
+    # Sort by (score desc, start asc). In urgency mode, recency penalty above
+    # (1.5/yr) is strong enough on its own to push nearest viable to the top.
+    valid_windows.sort(key=lambda w: (-float(w.get("score", 0)), w["start"]))
 
     # FIX S: AD-diversity-aware top 3 selection
     # Greedy: pick highest. For slots 2 and 3, prefer a window with a NEW AD

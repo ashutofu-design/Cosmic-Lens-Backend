@@ -383,10 +383,15 @@ def calculate_kundli(data):
         current_antar = current_maha["subDashas"][0]
 
     # Build planet list
+    # Phase 2.8.78 (FIX F1): each planet now carries nakshatra + pada + ruler
+    # so downstream consumers (UI, validators, narrators) don't have to recompute.
+    _nak_size = 360.0 / 27.0
     planet_list = []
     for pname in ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Rahu", "Ketu"]:
         plon = planet_positions[pname]
         spd  = planet_speeds.get(pname, 0)
+        _p_nak_idx = int(plon / _nak_size) % 27
+        _p_pos_in_nak = plon % _nak_size
         planet_list.append({
             "name":      pname,
             "sign":      sign_from_lon(plon),
@@ -395,6 +400,9 @@ def calculate_kundli(data):
             "longitude": round(plon, 4),
             "retrograde": spd < 0,
             "speed":      spd,
+            "nakshatra":      NAKSHATRAS[_p_nak_idx],
+            "nakshatraPada":  int(_p_pos_in_nak / (_nak_size / 4)) + 1,
+            "nakshatraRuler": NAKSHATRA_RULERS[_p_nak_idx],
         })
 
     # ── Divisional Charts (Vargas) ───────────────────────────────────────────
@@ -480,6 +488,20 @@ def calculate_kundli(data):
             "end": current_antar["endDate"]
         }
     }
+
+    # ── Phase 2.8.78 (FIX F4): bake current Pratyantar (PD) into currentDasha
+    # so UI / engines that read kundli["currentDasha"] see all 3 levels (MD/AD/PD)
+    # without separate compute_pratyantar() calls. Non-fatal — silently skip on error.
+    try:
+        from pratyantar import compute_pratyantar  # local import — avoid cycles
+        _pd = compute_pratyantar(result["currentDasha"]) or {}
+        _cur = _pd.get("current_pd") or {}
+        if _cur.get("lord"):
+            result["currentDasha"]["pratyantar"] = _cur["lord"]
+            result["currentDasha"]["pratyantarStart"] = _cur.get("start")
+            result["currentDasha"]["pratyantarEnd"]   = _cur.get("end")
+    except Exception as exc:
+        print(f"[kundli_engine] pratyantar bake failed (non-fatal): {exc}", flush=True)
 
     # ── KP cache (Phase 2.8.57 — bake full KP into chart_data) ─────────────
     # ADD-ONLY: same birth dict drives kp_engine.calculate_kp so the cusps +

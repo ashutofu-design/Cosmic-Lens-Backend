@@ -185,3 +185,27 @@ Otherwise normal STEP 5 logic — no change for young charts or BALANCED/EARLY t
 - STEP 1/2/3/4 (Phase 2.8.71-75 frozen)
 - STEP 5 base logic (Phase 2.8.76 fixes O/P/Q/R/S/T preserved)
 - Young charts and BALANCED/EARLY tendency unaffected
+
+## Phase 2.8.78 — DATA COMPLETENESS FIX F1 + F4 (2026-05-04)
+
+P2 audit revealed 2 gaps in `kundli_engine.py` chart output (engine logic was correct, but downstream consumers had to recompute):
+
+### FIX F1 — Per-planet nakshatra/pada/ruler
+File: `kundli_engine.py` L388-409
+Each planet in `kundli["planets"]` now carries:
+- `nakshatra` (e.g., "Anuradha")
+- `nakshatraPada` (1-4)
+- `nakshatraRuler` (Vimshottari lord)
+
+### FIX F4 — Pratyantar baked into currentDasha
+File: `kundli_engine.py` L495-507
+`kundli["currentDasha"]` now includes `pratyantar`, `pratyantarStart`, `pratyantarEnd` via `pratyantar.compute_pratyantar()` call. Non-fatal failure pattern.
+
+### Verification (Profile 40, post-fix audit):
+- Sun=Anuradha pada3 (Saturn), Moon=Mula pada1 (Ketu), Mars=Pushya pada1, Mercury(R)=Vishakha pada4, Jupiter=Hasta pada2, Venus=Purva Ashadha pada3, Saturn=Shravana pada3, Rahu(R)=Jyeshtha pada4, Ketu(R)=Mrigashira pada2
+- currentDasha: MD=Moon, AD=Mars, **PD=Mercury (2026-05-03 → 2026-06-02)**
+- Validator: 18 checks PASS, 0 mismatches, 0 warnings
+- Marriage verdict unchanged: PROMISED MEDIUM, primary Jun 2029-Apr 2030, URGENCY ON
+
+### F2 — NOT a bug (Saturn was direct on 1992-11-26)
+Initial audit flagged "Saturn retro missing" — verification confirmed Saturn was in direct motion on the birth date (retrograde started Apr 1993). Engine output was correct.

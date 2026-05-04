@@ -148,7 +148,160 @@ def _adapt_birth_for_kp(birth):
     }
 
 
-def _passthrough_marriage_block(*a, **k): return ""  # Phase 2.8.37 stub
+# ════════════════════════════════════════════════════════════════════
+# Phase 2.10.5 STEP M17 — Restore engine→LLM injection.
+#
+# This was a stub since Phase 2.8.37, which silently broke the
+# Engine=Truth | LLM=Translator | Validator=Guard contract:
+# the engine WAS still computing post-LLM (for translator_lock fact-
+# check at L13560+), but the LLM never saw the engine output BEFORE
+# generating, so it hallucinated windows freely (every reply got
+# rejected → user always saw deterministic TEMPLATE → 0% LLM
+# acceptance).
+#
+# This restoration mirrors the legacy commit-5fd8818 design but uses
+# the current direct-import path (skips the also-stubbed
+# _marriage_engine() helper). Returns "" on any miss so callers
+# remain safe.
+# ════════════════════════════════════════════════════════════════════
+import re as _re_mb_M17
+
+# Devanagari anchors sit outside \b group (\b doesn't anchor on
+# Devanagari). Mirrors the legacy 2.8.27 keyword regex.
+_M17_MARRIAGE_KW_RX = _re_mb_M17.compile(
+    r"(\b("
+    r"shaadi|shadi|marriage|marry|married|wedding|"
+    r"spouse|husband|wife|pati|patni|kalatra|"
+    r"life\s+partner|jeevan\s+saathi|jeevansathi|jeevansaathi|"
+    r"vivah|vivaah|biwi|"
+    r"love\s+marriage|arrange(d)?\s+marriage"
+    r")\b)|(शादी|विवाह|पति|पत्नी|जीवनसाथी|जीवन\s+साथी|दूल्हा|दुल्हन)",
+    _re_mb_M17.IGNORECASE,
+)
+
+
+def _M17_format_marriage_block(engine_result: dict) -> str:
+    """Format engine_result into a Hinglish LOCKED FACTS block that the
+    LLM must translate verbatim. Conservative — only includes fields the
+    engine actually populated."""
+    if not isinstance(engine_result, dict) or not engine_result:
+        return ""
+    parts = [
+        "",
+        "═══════════════════════════════════════════════════════════════",
+        "🔒 MARRIAGE ENGINE — LOCKED FACTS (DO NOT INVENT)",
+        "═══════════════════════════════════════════════════════════════",
+        "Ye facts deterministic 25-rule + 6-trust-layer engine se nikle hain.",
+        "Aapka kaam: in facts ko Hinglish me natural tone me translate karna.",
+        "STRICT RULES:",
+        "  • PRIMARY_WINDOW ko HAR reply me EXACTLY as-is quote karna hai.",
+        "  • Koi NAYA year ya month INVENT mat karo. Sirf neeche diye gaye",
+        "    windows + risk_flags ke baare me likho.",
+        "  • Verdict (PROMISED/DENIED/etc) badlo mat.",
+        "  • Agar kuch missing hai, kaho 'engine ne nahi diya' — guess mat karo.",
+        "───────────────────────────────────────────────────────────────",
+    ]
+    verdict = engine_result.get("verdict")
+    band    = engine_result.get("band")
+    score   = engine_result.get("score")
+    conf    = engine_result.get("confluence") or engine_result.get("strength")
+    if verdict:
+        v_line = f"VERDICT: {verdict}"
+        extras = []
+        if band:  extras.append(f"band={band}")
+        if score is not None:
+            try:    extras.append(f"score={float(score):.2f}")
+            except (TypeError, ValueError): pass
+        if conf:  extras.append(f"confluence={conf}")
+        if extras: v_line += f"  ({', '.join(extras)})"
+        parts.append(v_line)
+
+    pw = engine_result.get("primary_window")
+    if pw:
+        parts.append(f"PRIMARY_WINDOW: {pw}    ← MUST quote verbatim")
+        trig = engine_result.get("primary_trigger") or engine_result.get("trigger")
+        if trig:
+            parts.append(f"  trigger: {trig}")
+
+    bw = engine_result.get("backup_window")
+    if bw:
+        parts.append(f"BACKUP_WINDOW: {bw}")
+
+    top3 = engine_result.get("top_3_windows") or []
+    if top3:
+        parts.append("TOP_3_WINDOWS:")
+        for i, w in enumerate(top3[:3], 1):
+            if not isinstance(w, dict):
+                continue
+            label = (w.get("window") or w.get("label")
+                     or f"{w.get('start_str','?')} — {w.get('end_str','?')}")
+            sc = w.get("score")
+            sc_s = ""
+            if sc is not None:
+                try:    sc_s = f"  (score={float(sc):.2f})"
+                except (TypeError, ValueError): pass
+            parts.append(f"  {i}. {label}{sc_s}")
+
+    risks = engine_result.get("risk_flags") or []
+    if risks:
+        parts.append("RISK_FLAGS:")
+        for r in risks[:6]:
+            parts.append(f"  • {r}")
+
+    factors = engine_result.get("factors") or []
+    if factors:
+        parts.append("KEY_FACTORS (context, not for direct quote):")
+        for f in factors[:5]:
+            parts.append(f"  - {str(f)[:200]}")
+
+    parts.extend([
+        "───────────────────────────────────────────────────────────────",
+        "REMINDER: PRIMARY_WINDOW ko exactly quote karo. Naye dates",
+        "invent karoge to validator reject kar dega aur user ko raw",
+        "template milega (LLM polish lost).",
+        "═══════════════════════════════════════════════════════════════",
+        "",
+    ])
+    return "\n".join(parts)
+
+
+def _passthrough_marriage_block(question, kundli, intel, birth):
+    """M17 — Build LOCKED FACTS marriage block for passthrough paths.
+
+    Returns "" (safe no-op) when:
+      - question is not marriage-topic
+      - kundli is missing planets
+      - assess_marriage returns nothing usable
+      - any sub-step raises (logged, never propagates)
+    """
+    try:
+        if not isinstance(question, str) or not question.strip():
+            return ""
+        if not _M17_MARRIAGE_KW_RX.search(question):
+            return ""
+        if not isinstance(kundli, dict) or not kundli.get("planets"):
+            return ""
+
+        kp_dict = {}
+        try:
+            if isinstance(birth, dict):
+                kp_dict = _kp_calc()(birth) or {}
+        except Exception as _kp_exc:  # noqa: BLE001
+            print(f"[passthrough_marriage_block] kp skipped: "
+                  f"{str(_kp_exc)[:160]}")
+            kp_dict = {}
+
+        from event_timing.marriage import assess_marriage  # type: ignore
+        engine_result = assess_marriage(
+            kundli, intel or {}, kp_dict or {}, birth,
+            question=question or "",
+        )
+        if not isinstance(engine_result, dict) or not engine_result:
+            return ""
+        return _M17_format_marriage_block(engine_result)
+    except Exception as _exc:  # noqa: BLE001
+        print(f"[passthrough_marriage_block] err: {str(_exc)[:200]}")
+        return ""
 
 
 # ════════════════════════════════════════════════════════════════════

@@ -3999,6 +3999,12 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             mid = pd_start + (pd_end - pd_start) / 2
 
             window_factors: List[str] = []
+            # Phase 2.9.9 FIX 2 — per-planet dedup ledger.
+            # Triple-inflation root cause: same planet was scoring via
+            # cluster (MD/AD/PD), co-karak bonus, AND transit. Ledger
+            # tracks which planets have already been credited so the
+            # later sources can dedup against earlier ones.
+            credited_planets: Set[str] = set()
 
             # ── A. Hierarchical cluster scoring (Phase 2.8.75 FIX L)
             # Replaces binary cluster_hit + adpd_weight with proper
@@ -4008,14 +4014,22 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             ad_pts = 2 if ad_in_target else 0
             pd_pts = 3 if pd_lord in target_lords else 0
 
-            # Phase 2.8.81 PD-LEVEL HARD FILTER (ADD-ONLY) — per user spec:
-            # "jab tak favourable PD nahi aata, check karte raho". PD lord
-            # MUST be in target_lords (Jup/Mer/Sat/Ven by default), warna
-            # is window ko skip karo aur next PD pe jao. Yeh AD-level pre-
-            # filter ki absence ko compensate karta hai.
+            # Phase 2.9.9 FIX 6 — PD hard filter -> soft penalty.
+            # Old: pd_pts == 0 -> continue (silent drop, real events lost).
+            # New: apply -1.5 penalty (mirrors Phase 2.9.0 FIX 1 transit
+            # gate pattern). Window survives but heavily de-prioritized.
+            pd_filter_penalty = 0.0
             if pd_pts == 0:
                 pd_filter_skipped += 1
-                continue
+                pd_filter_penalty = -1.5
+                window_factors.append(
+                    f"-1.5 PD lord {pd_lord} not in target_lords "
+                    f"(Phase 2.9.9 F6 soft penalty, was hard skip)")
+
+            # Cluster ledger update — these planets are now "claimed"
+            if md_pts: credited_planets.add(md)
+            if ad_pts: credited_planets.add(ad)
+            if pd_pts: credited_planets.add(pd_lord)
 
             cluster_score = md_pts + ad_pts + pd_pts   # range 0-6
             triple_bonus = 1 if (md_pts and ad_pts and pd_pts) else 0
@@ -4045,6 +4059,23 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             if jup_score > 0 and sat_score > 0:
                 double_transit_bonus = 1
                 window_factors.append("DOUBLE TRANSIT bonus (+1)")
+
+            # Phase 2.9.9 FIX 2 — transit dedup vs cluster.
+            # If Jupiter/Saturn already credited via cluster (MD/AD/PD),
+            # halve their transit score (transit aspecting already-counted
+            # planet = same signal layer; full credit = double-count).
+            if "Jupiter" in credited_planets and jup_score > 0:
+                halved = jup_score / 2.0
+                window_factors.append(
+                    f"-{jup_score - halved:.1f} Jupiter dedup "
+                    f"(already in cluster; transit halved)")
+                jup_score = halved
+            if "Saturn" in credited_planets and sat_score > 0:
+                halved = sat_score / 2.0
+                window_factors.append(
+                    f"-{sat_score - halved:.1f} Saturn dedup "
+                    f"(already in cluster; transit halved)")
+                sat_score = halved
 
             # ── B2. Phase 2.8.80 USER HARD TRANSIT GATE (ADD-ONLY)
             # Per user spec: Jup+Sat must be on 7H sign or aspect natal 7L.
@@ -4079,14 +4110,19 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             # Phase 2.8.82 + 2.8.83 CO-KARAK PRIORITY BONUS (ADD-ONLY):
             # +0.5 jab AD ya PD lord co-karak ho (D1/D9 conjunction OR
             # D9-7L OR D9 aspect to 7H/7L). Additive bonus on cluster_score.
+            # Phase 2.9.9 FIX 4 — weight reduced 0.5 -> 0.25 (noise control).
+            # Phase 2.9.9 FIX 2 — dedup: skip if planet already credited
+            # via cluster (prevents triple-count of same 7L signal).
             co_karak_bonus = 0.0
             co_hits = []
-            if ad in co_karaks:
-                co_karak_bonus += 0.5
+            if ad in co_karaks and ad not in credited_planets:
+                co_karak_bonus += 0.25
                 co_hits.append(f"AD={ad}")
-            if pd_lord in co_karaks:
-                co_karak_bonus += 0.5
+                credited_planets.add(ad)
+            if pd_lord in co_karaks and pd_lord not in credited_planets:
+                co_karak_bonus += 0.25
                 co_hits.append(f"PD={pd_lord}")
+                credited_planets.add(pd_lord)
             if co_karak_bonus > 0:
                 window_factors.append(
                     f"+{co_karak_bonus} CO-KARAK PRIORITY ({', '.join(co_hits)} "
@@ -4127,12 +4163,12 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             if sav_b != 0:
                 window_factors.append(f"{sav_b:+} 7H SAV")
 
-            # ── G. Dasha Sandhi (HIGH WEIGHT +1.5)
+            # ── G. Dasha Sandhi (Phase 2.9.9 FIX 7 — cap 1.5 -> 1.0)
             sandhi, sandhi_reason = _is_in_md_sandhi(kundli, mid)
             sandhi_bonus = 0.0
             if sandhi:
-                sandhi_bonus = 1.5
-                window_factors.append(f"+1.5 SANDHI ACTIVATION ({sandhi_reason})")
+                sandhi_bonus = 1.0
+                window_factors.append(f"+1.0 SANDHI ACTIVATION ({sandhi_reason})")
 
             # ── H. Eclipse delay flag
             ecl_flag, ecl_reason = _eclipse_in_window(pd_start, pd_end)
@@ -4147,30 +4183,55 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             # Weak lord (mult=0.5) -> retro -0.25. Counter-intuitive.
             # NEW: strength_mult applies ONLY to positive components.
             # Penalties (retro, eclipse, negative AV) stay additive.
+            #
+            # Phase 2.9.9 FIX 3 — TRANSIT CAP (max 3.0).
+            # Old: jup + sat + double_transit + gate_bonus could stack to
+            # 5+ points (transit dominating dasha). Cap combined transit
+            # contribution at 3.0 so dasha primacy is restored.
+            transit_raw = (jup_score + sat_score
+                           + double_transit_bonus + gate_bonus)
+            transit_capped = min(3.0, transit_raw)
+            if transit_raw > 3.0:
+                window_factors.append(
+                    f"-{transit_raw - transit_capped:.1f} TRANSIT CAP "
+                    f"(raw={transit_raw:.1f} -> 3.0; dasha primacy)")
+
             positive_base = (cluster_score + triple_bonus
-                             + jup_score + sat_score
-                             + double_transit_bonus
+                             + transit_capped
                              + mars_bonus
                              + max(0.0, bav_b) + max(0.0, sav_b)
                              + sandhi_bonus
-                             + gate_bonus        # Phase 2.8.81
                              + co_karak_bonus)   # Phase 2.8.82
+
+            # Phase 2.9.9 FIX 5 — denier x0.7 -> flat -1.0 additive.
+            # Multiplicative was inconsistent (penalty magnitude varied
+            # with positive_base). Flat additive is deterministic.
+            denier_penalty = 0.0
+            if md in denier_in_target or ad in denier_in_target:
+                denier_penalty = -1.0
+                window_factors.append(
+                    f"-1.0 denier penalty "
+                    f"(MD/AD has flagged denier: "
+                    f"{sorted(denier_in_target & {md, ad})})")
+            # Backward-compat alias for downstream that may read denier_mult
+            denier_mult = 1.0
+
             penalties = (retro_penalty
                          + min(0.0, bav_b) + min(0.0, sav_b)
                          + eclipse_penalty
-                         + transit_penalty)   # Phase 2.9.0 FIX 1
+                         + transit_penalty   # Phase 2.9.0 FIX 1
+                         + pd_filter_penalty # Phase 2.9.9 FIX 6
+                         + denier_penalty)   # Phase 2.9.9 FIX 5
 
-            # Phase 2.8.75 FIX K — soft denier multiplier
-            denier_mult = 1.0
-            if md in denier_in_target or ad in denier_in_target:
-                denier_mult = 0.7
-                window_factors.append(
-                    f"x0.7 denier soft-penalty "
-                    f"(MD/AD has flagged denier: "
-                    f"{sorted(denier_in_target & {md, ad})})")
-
-            score = (positive_base * strength_mult * denier_mult) + penalties
+            score = (positive_base * strength_mult) + penalties
             base = positive_base + penalties   # diagnostic only
+
+            # Phase 2.9.9 FIX 8 — BREAKDOWN line per scored window
+            # (debuggable: pos / neg / strength_mult / final clearly split)
+            window_factors.append(
+                f"BREAKDOWN: pos={positive_base:.2f} neg={penalties:.2f} "
+                f"mult={strength_mult:.2f} -> final={score:.2f} "
+                f"(credited={sorted(credited_planets) or '[]'})")
 
             if score >= _WINDOW_MIN_SCORE:
                 windows.append({
@@ -4192,15 +4253,18 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
 
     factors.append(f"STEP 4: {len(windows)} candidate PD windows above threshold "
                    f"({_WINDOW_MIN_SCORE})")
-    # Phase 2.8.80 USER HARD TRANSIT GATE summary
+    # Phase 2.8.80 USER TRANSIT GATE summary
+    # (Phase 2.9.0 FIX 1: FAIL no longer rejects -> -2.0 soft penalty)
     factors.append(
         f"STEP 4 USER GATE: DTT={gate_dtt_count} SINGLE={gate_single_count} "
-        f"FAIL={gate_fail_count} (rejected windows where neither Jup nor Sat "
-        f"on 7H/7L)")
+        f"FAIL={gate_fail_count} (FAIL = -2.0 soft penalty, "
+        f"not rejected — Phase 2.9.0)")
     # Phase 2.8.81 PD-LEVEL FILTER summary
+    # (Phase 2.9.9 FIX 6: counter reflects soft-penalized PDs, not dropped)
     factors.append(
-        f"STEP 4 PD FILTER: {pd_filter_skipped} PDs skipped "
-        f"(PD lord not in target_lords {sorted(target_lords)})")
+        f"STEP 4 PD FILTER: {pd_filter_skipped} PDs penalized -1.5 "
+        f"(PD lord not in target_lords {sorted(target_lords)}; "
+        f"Phase 2.9.9 F6 — windows retained)")
     if not windows and gate_fail_count > 0:
         factors.append(
             "STEP 4 USER GATE WARNING: ALL candidate windows rejected by "

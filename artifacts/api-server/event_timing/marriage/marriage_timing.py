@@ -3409,6 +3409,97 @@ def _extract_gender(birth: Any, intel: dict) -> str:
 
 
 # ════════════════════════════════════════════════════════════════════════
+# Phase 2.9.10 — USER-SPEC PD-LEVEL 7L/7H LINK BOOST (ADD-ONLY)
+# ════════════════════════════════════════════════════════════════════════
+# Per user direct instruction (May 4 2026):
+#   "ad-pd check karne ke time dekho ki woh PD 7th lord ya 7th lord ke
+#    sath baitha hua planet to nehi he. Ya phir D9 me to 7th lord ya
+#    7th lord ke sath baitha hua planet to nehi he. Ya 7th H ko aspect
+#    to nehi kar raha he. Agar aisa he to score rise karega — woh time
+#    period ho sakta he."
+#
+# For each PD planet, 4 independent checks:
+#   C1: PD == 7L (D1)                       +2.0
+#   C2: PD conj 7L (D1, same sign)          +2.0
+#   C3: PD == D9-7L  OR  PD conj D9-7L      +1.5
+#   C4a: PD aspects 7H (D1)                 +1.0
+#   C4b: PD aspects 7H (D9)                 +0.75
+#
+# Cap: max +4.0 combined (anti-stacking). Additive on cluster_score.
+# ════════════════════════════════════════════════════════════════════════
+def _pd_seventh_link_boost(pd_lord: str,
+                            d1_planets: list,
+                            d9_planets: list,
+                            h7_si: Optional[int],
+                            seventh_lord: Optional[str],
+                            seventh_lord_si: Optional[int],
+                            d9_h7_si: Optional[int],
+                            d9_seventh_lord: Optional[str],
+                            d9_seventh_lord_si: Optional[int],
+                            ) -> Tuple[float, float, List[str]]:
+    """Phase 2.9.10 — User-spec PD 7L/7H link boost.
+
+    Returns: (boost_capped, raw_total, reasons_list)
+    """
+    boost = 0.0
+    reasons: List[str] = []
+    if not pd_lord:
+        return 0.0, 0.0, []
+
+    pd_si_d1 = _planet_sign_idx(d1_planets, pd_lord)
+    pd_si_d9, _ = _d9_planet_state(d9_planets, pd_lord)
+
+    # C1: PD == 7L D1
+    if seventh_lord and pd_lord == seventh_lord:
+        boost += 2.0
+        reasons.append(f"+2 PD={pd_lord} IS 7L (D1)")
+    # C2: PD conj 7L D1 (same sign, not 7L itself)
+    elif (seventh_lord and seventh_lord_si is not None
+          and pd_si_d1 is not None and pd_si_d1 == seventh_lord_si):
+        reasons.append(
+            f"+2 PD={pd_lord} conj 7L {seventh_lord} D1 "
+            f"({_SIGNS[pd_si_d1]})")
+        boost += 2.0
+
+    # C3: PD == D9-7L OR PD conj D9-7L
+    if d9_seventh_lord:
+        if pd_lord == d9_seventh_lord:
+            boost += 1.5
+            reasons.append(f"+1.5 PD={pd_lord} IS D9-7L ({d9_seventh_lord})")
+        elif (d9_seventh_lord_si is not None
+              and pd_si_d9 is not None
+              and pd_si_d9 == d9_seventh_lord_si):
+            boost += 1.5
+            reasons.append(
+                f"+1.5 PD={pd_lord} conj D9-7L {d9_seventh_lord} "
+                f"({_SIGNS[pd_si_d9]})")
+
+    # C4a: PD aspects 7H D1 (not occupying 7H sign)
+    if (h7_si is not None and pd_si_d1 is not None and pd_si_d1 != h7_si):
+        if _aspects_target(pd_lord, pd_si_d1, h7_si):
+            boost += 1.0
+            reasons.append(
+                f"+1 PD={pd_lord} aspects 7H D1 "
+                f"({_SIGNS[pd_si_d1]} -> {_SIGNS[h7_si]})")
+
+    # C4b: PD aspects 7H D9
+    if (d9_h7_si is not None and pd_si_d9 is not None
+            and pd_si_d9 != d9_h7_si):
+        if _aspects_target(pd_lord, pd_si_d9, d9_h7_si):
+            boost += 0.75
+            reasons.append(
+                f"+0.75 PD={pd_lord} aspects 7H D9 "
+                f"({_SIGNS[pd_si_d9]} -> {_SIGNS[d9_h7_si]})")
+
+    raw = boost
+    if boost > 4.0:
+        reasons.append(
+            f"PD-LINK CAP: raw={raw:.2f} -> 4.00 (anti-stacking)")
+        boost = 4.0
+    return boost, raw, reasons
+
+
+# ════════════════════════════════════════════════════════════════════════
 # PUBLIC API — VIVAH-7 PROTOCOL ORCHESTRATOR (Phase 2.8.52)
 # ════════════════════════════════════════════════════════════════════════
 def compute_timing_window(kundli: dict, intel: dict, kp: dict,
@@ -3921,6 +4012,16 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         factors.append("STEP 4 SCAN FILTER: STEP 2 produced no approvers, "
                        "scanning raw target lords")
 
+    # Phase 2.9.10 — defaults if co-karak block above didn't run
+    try:
+        d9_h7_si_for_pd
+    except NameError:
+        d9_h7_si_for_pd = None
+        d9_seventh_lord_for_pd = None
+        d9_seventh_lord_si_for_pd = None
+        d1_planets_for_co = kundli.get("planets", []) or []
+        d9_planets_for_co = ((kundli.get("divisionalCharts") or {}).get("D9") or {}).get("planets", []) or []
+
     # Phase 2.8.75 FIX K — SOFT denier weighting (replaces hard-drop).
     # Classical Vedic: Mars/Sat MD/AD CAN trigger marriage (delayed/conflict
     # cases). Hard removal causes false negatives. Instead retain in
@@ -3962,6 +4063,17 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         co_karaks, extra_targets, co_karak_reasons = _get_7l_co_karaks(
             d1_planets_for_co, d9_planets_for_co, seventh_lord,
             d9_lagna_si=d9_lagna_si_for_co)
+
+        # Phase 2.9.10 — bubble up D9 7L/7H info for PD-link boost helper
+        d9_h7_si_for_pd: Optional[int] = None
+        d9_seventh_lord_for_pd: Optional[str] = None
+        d9_seventh_lord_si_for_pd: Optional[int] = None
+        if isinstance(d9_lagna_si_for_co, int):
+            d9_h7_si_for_pd = (d9_lagna_si_for_co + 6) % 12
+            d9_seventh_lord_for_pd = _SIGN_LORDS.get(d9_h7_si_for_pd) or ""
+            if d9_seventh_lord_for_pd:
+                d9_seventh_lord_si_for_pd, _ = _d9_planet_state(
+                    d9_planets_for_co, d9_seventh_lord_for_pd)
 
         # Always include 7L itself + D9-7L + co_karaks in target_lords
         target_lords = (set(target_lords) | {seventh_lord}
@@ -4179,6 +4291,18 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                     f"+{co_karak_bonus} CO-KARAK PRIORITY ({', '.join(co_hits)} "
                     f"conjunct 7L {seventh_lord})")
 
+            # Phase 2.9.10 — USER-SPEC PD-LEVEL 7L/7H LINK BOOST (ADD-ONLY)
+            # User direct: "PD 7L ya 7L ke saath baitha planet to nehi he,
+            # ya D9 me 7L/7L-conj, ya 7H aspect — agar haan to score rise"
+            pd_link_boost, pd_link_raw, pd_link_reasons = (
+                _pd_seventh_link_boost(
+                    pd_lord, d1_planets_for_co, d9_planets_for_co,
+                    h7_si, seventh_lord, seventh_lord_si,
+                    d9_h7_si_for_pd, d9_seventh_lord_for_pd,
+                    d9_seventh_lord_si_for_pd))
+            for _r in pd_link_reasons:
+                window_factors.append(_r)
+
             # ── C. Mars trigger (+1 activation only) + conflict flag
             mars_trig, mars_reason = _mars_trigger_check(
                 transit, h7_si, venus_si, seventh_lord_si) if h7_si is not None else (False, "")
@@ -4252,7 +4376,8 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                              + mars_bonus
                              + max(0.0, bav_b) + max(0.0, sav_b)
                              + sandhi_bonus
-                             + co_karak_bonus)   # Phase 2.8.82
+                             + co_karak_bonus   # Phase 2.8.82
+                             + pd_link_boost)   # Phase 2.9.10
 
             # Phase 2.9.9 FIX 5 — denier x0.7 -> flat -1.0 additive.
             # Multiplicative was inconsistent (penalty magnitude varied

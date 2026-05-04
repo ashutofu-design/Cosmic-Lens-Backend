@@ -2320,6 +2320,153 @@ def _transit_context() -> str:
         return ""
 
 
+# Phase 2.10.5 STEP M13 — Cross-taxonomy topic alias map.
+# The codebase has THREE topic vocabularies that don't fully agree:
+#   1. `_qu_topic` (AI Ear `understand_question`):  love, children,
+#      home_property, foreign_travel, court_case, ...
+#   2. `_topic_id_s` (regex `_detect_topic`):       wealth, children,
+#      marriage_partner, ...
+#   3. `_classify_topic` (legacy `_TOPIC_KW`):      relationship, child,
+#      property, travel, litigation, finance, ...
+# When M13 compared `_qu_topic == _classify_topic(text)` directly it
+# silently over-pruned same-topic history for love/children/property/etc.
+# This map collapses every alias down to the `_classify_topic` taxonomy
+# (the ground truth used for older-turn matching). Only contains aliases
+# we KNOW differ — synonyms not listed pass through unchanged.
+_M13_TOPIC_ALIASES: dict[str, str] = {
+    # → relationship
+    "love":             "relationship",
+    "love_marriage":    "relationship",
+    # → finance
+    "money":            "finance",
+    "wealth":           "finance",
+    "dhan":             "finance",
+    # → child
+    "children":         "child",
+    "santan":           "child",
+    "santaan":          "child",
+    # → travel
+    "foreign_travel":   "travel",
+    "abroad":           "travel",
+    "videsh":           "travel",
+    # → property
+    "home_property":    "property",
+    "real_estate":      "property",
+    "ghar":             "property",
+    # → litigation
+    "court_case":       "litigation",
+    "court":            "litigation",
+    "legal":            "litigation",
+    # → marriage (close-enough collapse)
+    "marriage_partner": "marriage",
+    "spouse":           "marriage",
+    "jeevansaathi":     "marriage",
+}
+
+
+def _m13_norm_topic(topic: str | None) -> str:
+    """Normalise any topic label to the `_classify_topic` taxonomy used
+    by `_clean_history_for_topic`. Lower-cased, alias-collapsed."""
+    if not topic:
+        return ""
+    t = str(topic).lower().strip()
+    return _M13_TOPIC_ALIASES.get(t, t)
+
+
+def _clean_history_for_topic(history: list | None,
+                              current_topic: str | None,
+                              max_turns: int = 6) -> tuple[list[dict], dict]:
+    """
+    Phase 2.10.5 STEP M13 — Multi-turn history cleaner.
+
+    Returns (cleaned_msgs, stats) where:
+      cleaned_msgs : list[{"role","content"}] safe to append to LLM messages
+      stats        : {"strategy", "in", "out", "skipped", "topic",
+                      "classifier_errors"}
+
+    Strategy:
+      - If current_topic is empty/general → no filtering (preserve last N).
+      - Otherwise keep IMMEDIATE last 2 turns (follow-up continuity) plus
+        any OLDER user turn whose topic (via `_classify_topic`,
+        normalised through `_M13_TOPIC_ALIASES`) matches `current_topic`,
+        and the assistant reply that immediately follows each kept user
+        turn.
+
+    Goal: stop topic pollution (career Q sandwiched between marriage Qs)
+    from confusing the LLM about which topic the current question is on.
+
+    Both `current_topic` and `_classify_topic(text)` outputs are passed
+    through `_m13_norm_topic` so the three vocabularies (`_qu_topic`,
+    `_topic_id_s`, `_TOPIC_KW`) compare correctly.
+    """
+    if not isinstance(history, list) or not history:
+        return [], {"strategy": "empty", "in": 0, "out": 0,
+                    "skipped": 0, "topic": (current_topic or "").lower(),
+                    "classifier_errors": 0}
+
+    last_n = history[-max_turns:]
+    norm_topic = _m13_norm_topic(current_topic)
+
+    # No topic gate or "general" → preserve current behaviour (no filter).
+    if not norm_topic or norm_topic == "general":
+        out: list[dict] = []
+        for h in last_n:
+            if not isinstance(h, dict):
+                continue
+            r = h.get("role")
+            t = (h.get("content") or h.get("text") or "").strip()
+            if r in ("user", "assistant") and t:
+                out.append({"role": r, "content": t})
+        return out, {"strategy": "passthrough", "in": len(history),
+                     "out": len(out), "skipped": 0, "topic": norm_topic,
+                     "classifier_errors": 0}
+
+    # Topic-filter mode: protect last 2 turns + same-topic older turns.
+    immediate = last_n[-2:] if len(last_n) >= 2 else last_n
+    older     = last_n[:-2] if len(last_n) >= 2 else []
+    keep_idx: set[int] = set()
+    classifier_errors = 0
+    for i, h in enumerate(older):
+        if not isinstance(h, dict):
+            continue
+        r = h.get("role")
+        t = (h.get("content") or h.get("text") or "").strip()
+        if r == "user" and t:
+            try:
+                ct = _classify_topic(t)
+            except Exception:
+                ct = None
+                classifier_errors += 1
+            ct_norm = _m13_norm_topic(ct)
+            if ct_norm and ct_norm == norm_topic:
+                keep_idx.add(i)
+                if (i + 1) < len(older) and isinstance(older[i + 1], dict) \
+                        and older[i + 1].get("role") == "assistant":
+                    keep_idx.add(i + 1)
+
+    out_msgs: list[dict] = []
+    for i, h in enumerate(older):
+        if i not in keep_idx or not isinstance(h, dict):
+            continue
+        r = h.get("role")
+        t = (h.get("content") or h.get("text") or "").strip()
+        if r in ("user", "assistant") and t:
+            out_msgs.append({"role": r, "content": t})
+    for h in immediate:
+        if not isinstance(h, dict):
+            continue
+        r = h.get("role")
+        t = (h.get("content") or h.get("text") or "").strip()
+        if r in ("user", "assistant") and t:
+            out_msgs.append({"role": r, "content": t})
+
+    return out_msgs, {"strategy": "topic_filter", "in": len(history),
+                      "out": len(out_msgs),
+                      "skipped": len(older) - len(keep_idx),
+                      "topic": norm_topic,
+                      "classifier_errors": classifier_errors}
+
+
 def _summarise_history(history: list) -> tuple[str, dict]:
     """
     Returns (compact_summary, behavior_signals).
@@ -13137,11 +13284,32 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                         + _emotion_tone_pt
                     ),
                 }]
-                for _h_pt in (history or [])[-6:]:
-                    _r_pt = _h_pt.get("role")
-                    _t_pt = _h_pt.get("content") or _h_pt.get("text") or ""
-                    if _r_pt in ("user", "assistant") and _t_pt:
-                        _msgs_pt.append({"role": _r_pt, "content": _t_pt})
+                # Phase 2.10.5 STEP M13 — topic-aware history cleaning.
+                # Drops off-topic older turns to stop topic pollution
+                # (e.g. career Q sandwiched between marriage Qs). Keeps
+                # last 2 turns always (follow-up continuity) + same-topic
+                # older turns. ADD-ONLY, falls back to passthrough when
+                # current_topic is empty/general.
+                try:
+                    _hist_clean_pt, _hist_stats_pt = _clean_history_for_topic(
+                        history, _qu_topic, max_turns=6,
+                    )
+                    _msgs_pt.extend(_hist_clean_pt)
+                    if _hist_stats_pt.get("strategy") == "topic_filter":
+                        _trace(req_id, "4g.HISTORY_CLEANED", {
+                            "path": "passthrough_sync", **_hist_stats_pt,
+                        })
+                except Exception as _hist_exc_pt:  # noqa: BLE001
+                    # Defensive: fall back to original behaviour on any error.
+                    _trace(req_id, "4g.HISTORY_CLEAN_ERR",
+                           f"passthrough_sync:{str(_hist_exc_pt)[:180]}")
+                    for _h_pt in (history or [])[-6:]:
+                        if not isinstance(_h_pt, dict):
+                            continue
+                        _r_pt = _h_pt.get("role")
+                        _t_pt = _h_pt.get("content") or _h_pt.get("text") or ""
+                        if _r_pt in ("user", "assistant") and _t_pt:
+                            _msgs_pt.append({"role": _r_pt, "content": _t_pt})
                 # Phase 2.4 Tier-1.5 — PREPEND TOPIC-LOCK to user message.
                 # Phase 2.8.2 — append TRANSPARENCY DIRECTIVE on
                 # "kya kya check kiya / kaise pata" type questions.
@@ -13197,15 +13365,31 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     "messages": _msgs_pt,
                 }
                 if not _is_new_model_pt:
-                    _create_kwargs_pt["temperature"] = (
+                    # Phase 2.10.5 STEP M12 — adaptive strict mode for
+                    # marriage queries. Marginally lower temperature (0.5
+                    # → 0.4) ONLY for marriage topic — barely changes
+                    # tone but reduces invented dates/windows. translator_
+                    # lock remains the real safety net. Other topics
+                    # unchanged. ADD-ONLY, gated, falls back silently.
+                    _is_marriage_topic_pt = (
+                        (_qu_topic or "").lower() == "marriage"
+                    )
+                    _strict_temp_pt = 0.4 if _is_marriage_topic_pt else (
                         0.5 if _brevity_for_call else 0.4
                     )
+                    _create_kwargs_pt["temperature"] = _strict_temp_pt
                     if _brevity_for_call:
                         _create_kwargs_pt["top_p"] = 0.9
                         # Phase 2.8.8 — single budget; LLM picks Mode 1 vs
                         # Mode 2 based on intent, so pre-allocate enough
                         # for either (Mode 2 step format is the larger).
                         _create_kwargs_pt["max_tokens"] = 600
+                    if _is_marriage_topic_pt:
+                        _trace(req_id, "4f.LLM_STRICT_MODE", {
+                            "path": "passthrough_sync",
+                            "temperature": _strict_temp_pt,
+                            "reason": "marriage_topic",
+                        })
                 _resp_pt = _client_pt.chat.completions.create(**_create_kwargs_pt)
                 _text_pt = (_resp_pt.choices[0].message.content or "").strip()
 
@@ -16614,11 +16798,28 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                            + _locked_section_pt_s
                            + _marriage_block_pt_s,
             }]
-            for _h_pt_s in (history or [])[-6:]:
-                _r_pt_s = _h_pt_s.get("role")
-                _t_pt_s = _h_pt_s.get("content") or _h_pt_s.get("text") or ""
-                if _r_pt_s in ("user", "assistant") and _t_pt_s:
-                    _msgs_pt_s.append({"role": _r_pt_s, "content": _t_pt_s})
+            # Phase 2.10.5 STEP M13 — topic-aware history cleaning (stream).
+            # Mirror of sync passthrough. Stream uses `_topic_id_s` from
+            # `_detect_topic` regex (SQU classifier runs below this point).
+            try:
+                _hist_clean_pt_s, _hist_stats_pt_s = _clean_history_for_topic(
+                    history, _topic_id_s, max_turns=6,
+                )
+                _msgs_pt_s.extend(_hist_clean_pt_s)
+                if _hist_stats_pt_s.get("strategy") == "topic_filter":
+                    _trace(req_id, "4g.HISTORY_CLEANED", {
+                        "path": "passthrough_stream", **_hist_stats_pt_s,
+                    })
+            except Exception as _hist_exc_pt_s:  # noqa: BLE001
+                _trace(req_id, "4g.HISTORY_CLEAN_ERR",
+                       f"passthrough_stream:{str(_hist_exc_pt_s)[:180]}")
+                for _h_pt_s in (history or [])[-6:]:
+                    if not isinstance(_h_pt_s, dict):
+                        continue
+                    _r_pt_s = _h_pt_s.get("role")
+                    _t_pt_s = _h_pt_s.get("content") or _h_pt_s.get("text") or ""
+                    if _r_pt_s in ("user", "assistant") and _t_pt_s:
+                        _msgs_pt_s.append({"role": _r_pt_s, "content": _t_pt_s})
             _topic_lock_s = _build_topic_lock(_topic_rule_s, kundli) if _topic_rule_s else ""
             _is_transparent_s = _is_transparency_query(question)
             _trans_directive_s = _build_transparency_directive() if _is_transparent_s else ""
@@ -16659,15 +16860,29 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             #   max_tokens:  450 normal, 600 transparency/deep-dive
             _brevity_for_call_s = _brevity_mode_enabled()
             if not _is_new_model_pt_s:
-                _create_kwargs_pt_s["temperature"] = (
+                # Phase 2.10.5 STEP M12 — adaptive strict mode for marriage
+                # queries (mirror of sync passthrough). Stream path uses
+                # `_topic_id_s` from `_detect_topic` regex (SQU classifier
+                # runs below this point in stream flow). ADD-ONLY, gated.
+                _is_marriage_topic_pt_s = (
+                    (_topic_id_s or "").lower() == "marriage"
+                )
+                _strict_temp_pt_s = 0.4 if _is_marriage_topic_pt_s else (
                     0.5 if _brevity_for_call_s else 0.4
                 )
+                _create_kwargs_pt_s["temperature"] = _strict_temp_pt_s
                 if _brevity_for_call_s:
                     _create_kwargs_pt_s["top_p"] = 0.9
                     # Phase 2.8.8 — single budget; LLM picks Mode 1 vs
                     # Mode 2 based on intent, so pre-allocate enough
                     # for either (Mode 2 step format is the larger).
                     _create_kwargs_pt_s["max_tokens"] = 600
+                if _is_marriage_topic_pt_s:
+                    _trace(req_id, "4f.LLM_STRICT_MODE", {
+                        "path": "passthrough_stream",
+                        "temperature": _strict_temp_pt_s,
+                        "reason": "marriage_topic",
+                    })
 
             _stream_pt = _client_pt_s.chat.completions.create(**_create_kwargs_pt_s)
 

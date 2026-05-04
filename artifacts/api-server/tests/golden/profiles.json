@@ -1,0 +1,122 @@
+{
+  "_comment": "Golden test fixtures for M11 marriage regression. Add profiles by appending to the `profiles` array. Each profile needs birth_data, question, and expected_* assertions. Set `enabled: false` to skip a profile temporarily.",
+  "_schema_version": 1,
+  "profiles": [
+    {
+      "id": "P40",
+      "enabled": true,
+      "name": "Rajalaxmi",
+      "note": "LOCKED baseline — promised window May-Jul 2026",
+      "birth_data": {
+        "name": "Rajalaxmi",
+        "day": 26,
+        "month": 11,
+        "year": 1992,
+        "hour": 7,
+        "minute": 58,
+        "ampm": "AM",
+        "lat": 20.27,
+        "lon": 85.84,
+        "tz": 5.5,
+        "gender": "F",
+        "place": "Bhubaneswar"
+      },
+      "question": "Meri shaadi kab hogi?",
+      "lang": "hn",
+      "expected": {
+        "http_status": 200,
+        "engine_tag": "ans-engine",
+        "translator_lock_present": true,
+        "path_used_in": ["LLM_POLISHED", "TEMPLATE"],
+        "severity_in": ["OK", "WARN"],
+        "text_must_contain_any": ["May", "Jul", "2026"],
+        "text_must_not_contain": ["I am an AI", "as a language model"],
+        "verdict": "PROMISED"
+      }
+    },
+    {
+      "id": "P1",
+      "enabled": false,
+      "name": "PLACEHOLDER — fill birth_data + expected",
+      "note": "Expected verdict per replit.md: DENIED",
+      "birth_data": {
+        "name": "TBD",
+        "day": 1, "month": 1, "year": 1990,
+        "hour": 12, "minute": 0, "ampm": "PM",
+        "lat": 0.0, "lon": 0.0, "tz": 5.5,
+        "gender": "M", "place": "TBD"
+      },
+      "question": "Meri shaadi kab hogi?",
+      "lang": "hn",
+      "expected": {
+        "http_status": 200,
+        "engine_tag": "ans-engine",
+        "translator_lock_present": true,
+        "verdict": "DENIED"
+      }
+    },
+    {
+      "id": "P2",
+      "enabled": false,
+      "name": "PLACEHOLDER — fill birth_data + expected",
+      "note": "Expected verdict per replit.md: DELAYED",
+      "birth_data": {
+        "name": "TBD",
+        "day": 1, "month": 1, "year": 1990,
+        "hour": 12, "minute": 0, "ampm": "PM",
+        "lat": 0.0, "lon": 0.0, "tz": 5.5,
+        "gender": "M", "place": "TBD"
+      },
+      "question": "Meri shaadi kab hogi?",
+      "lang": "hn",
+      "expected": {
+        "http_status": 200,
+        "engine_tag": "ans-engine",
+        "translator_lock_present": true,
+        "verdict": "DELAYED"
+      }
+    },
+    {
+      "id": "P3",
+      "enabled": false,
+      "name": "PLACEHOLDER — fill birth_data + expected",
+      "note": "Expected verdict per replit.md: DELAYED",
+      "birth_data": {
+        "name": "TBD",
+        "day": 1, "month": 1, "year": 1990,
+        "hour": 12, "minute": 0, "ampm": "PM",
+        "lat": 0.0, "lon": 0.0, "tz": 5.5,
+        "gender": "M", "place": "TBD"
+      },
+      "question": "Meri shaadi kab hogi?",
+      "lang": "hn",
+      "expected": {
+        "http_status": 200,
+        "engine_tag": "ans-engine",
+        "translator_lock_present": true,
+        "verdict": "DELAYED"
+      }
+    },
+    {
+      "id": "P4",
+      "enabled": false,
+      "name": "PLACEHOLDER — fill birth_data + expected",
+      "note": "Expected verdict per replit.md: PROMISED",
+      "birth_data": {
+        "name": "TBD",
+        "day": 1, "month": 1, "year": 1990,
+        "hour": 12, "minute": 0, "ampm": "PM",
+        "lat": 0.0, "lon": 0.0, "tz": 5.5,
+        "gender": "M", "place": "TBD"
+      },
+      "question": "Meri shaadi kab hogi?",
+      "lang": "hn",
+      "expected": {
+        "http_status": 200,
+        "engine_tag": "ans-engine",
+        "translator_lock_present": true,
+        "verdict": "PROMISED"
+      }
+    }
+  ]
+}

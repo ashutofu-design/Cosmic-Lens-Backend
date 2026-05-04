@@ -564,3 +564,111 @@ path is reactivated.
 ### M11-M15 still pending (Phase 2.10.4 STEP 7C)
 Golden tests, LLM temp lockdown, multi-turn cleaner, i18n parity, A/B
 telemetry.
+
+---
+
+## Phase 2.10.5 STEP M11 — Golden Marriage Tests ✅
+
+Standalone Python harness for regression-proofing the marriage answer
+engine against AstroSage-frozen baselines.
+
+**Files added:**
+- `artifacts/api-server/tests/golden/profiles.json` — fixture file with 5
+  profile slots; **P40 (Rajalaxmi) is the only enabled baseline** —
+  PROMISED window May–Jul 2026 LOCKED. P1–P4 reserved for future birth
+  data (`enabled: false` placeholders, harness skips cleanly).
+- `artifacts/api-server/tests/golden/run_golden_marriage.py` — runner
+  pre-computes kundli via `_compute_kundli` helper (re-uses
+  `kundli_engine.calculate_kundli`), POSTs to `/api/ask`, classifies
+  result as **PASS / DRIFT / FAIL / SKIP** with severity colouring.
+  Drift heuristic includes Hinglish patterns (`WINDOW KHULI`, `YOG ACTIVE`,
+  `SHAADI KA YOG`, etc.).
+- `artifacts/api-server/tests/golden/README.md` — usage doc.
+
+**P40 baseline (LOCKED):** engine=ans-engine, path=LLM_POLISHED, sev=OK,
+~1.4 KB Hinglish output, translator_lock attached. Run with
+`python3 artifacts/api-server/tests/golden/run_golden_marriage.py`.
+
+---
+
+## Phase 2.10.5 STEP M12 — Adaptive LLM Strict Mode (marriage-only) ✅
+
+**Goal:** reduce hallucination temperature on marriage timing queries
+*without* making non-marriage replies feel robotic (per user concern).
+
+**Implementation (ADD-ONLY, gated):**
+- Sync passthrough (`openai_helper.py` L13197-13227): if `_qu_topic ==
+  "marriage"`, force `temperature = 0.4`; otherwise preserve existing
+  brevity-aware logic (0.5 brevity / 0.4 default). Trace event
+  `4f.LLM_STRICT_MODE` fires with reason `marriage_topic`.
+- Stream passthrough (`openai_helper.py` L16679-16703): mirror — uses
+  `_topic_id_s` from `_detect_topic` regex (SQU classifier runs below
+  this site in stream flow).
+
+**Honest disclosure — current production no-op:**
+Production `OPENAI_MODEL=gpt-5.4`. The gpt-5 family **rejects the
+`temperature` parameter** (always = 1), so the entire `if not
+_is_new_model_pt:` block is skipped and `4f.LLM_STRICT_MODE` does NOT
+fire. M12 is **future-proofed dormant code** — activates automatically if
+operator falls back to gpt-4 family. Translator_lock continues to handle
+hallucination defence on gpt-5 (proven by P40 test catching invented
+"2026-08, 2028-02" dates and falling cleanly to TEMPLATE).
+
+**Verified P40 stays GREEN with M12 wired in.**
+
+---
+
+## Phase 2.10.5 STEP M13 — Multi-turn History Cleaner ✅
+
+**Goal:** stop topic pollution — when older turns are off-topic (e.g.
+career or money Qs sandwiched between marriage Qs), strip them from the
+LLM prompt so the current question's topic isn't muddied.
+
+**Helper added** (`openai_helper.py` ~L2326): `_clean_history_for_topic(
+history, current_topic, max_turns=6) -> (cleaned_msgs, stats)`.
+
+Strategy:
+- If `current_topic` empty / "general" → no filtering (preserve last 6).
+- Else: **always keep last 2 turns** (immediate follow-up continuity) +
+  any older user turn whose `_classify_topic(text)` matches
+  `current_topic` (and the assistant reply that immediately follows).
+
+**Wired at both passthrough sites** (sync L13224-13249, stream
+L16738-16759). Try/except wrapped — falls back to original last-6
+behaviour on any error and traces `4g.HISTORY_CLEAN_ERR`. Successful
+filter traces `4g.HISTORY_CLEANED` with `{strategy, in, out, skipped,
+topic}`.
+
+**Verified live** with synthetic 4-turn off-topic history (job + money
+Qs followed by "Meri shaadi kab hogi?"):
+- `4g.HISTORY_CLEANED: strategy=topic_filter, in=4, out=2, skipped=2,
+  topic=marriage` — 2 older off-topic turns dropped, last 2 kept by
+  continuity rule.
+- Both calls returned `LLM_POLISHED`, `severity=OK`, no rejection.
+- P40 single-turn baseline still PASS (history empty → strategy=empty,
+  helper returns immediately).
+
+### M13 amendment — Cross-taxonomy alias map (architect-flagged fix)
+Architect review caught a SEVERE silent over-prune: the codebase has
+**three non-aligned topic vocabularies** that M13 was comparing directly:
+- `_qu_topic` (AI Ear) → `love`, `children`, `home_property`,
+  `foreign_travel`, `court_case`
+- `_topic_id_s` (regex `_detect_topic`) → `wealth`, `marriage_partner`
+- `_classify_topic` (legacy `_TOPIC_KW`) → `relationship`, `child`,
+  `property`, `travel`, `litigation`, `finance`
+
+For marriage queries both sides emit `"marriage"` so P40 was unaffected,
+but every other topic (love / children / property / travel / litigation)
+silently dropped same-topic older history.
+
+**Fix** (`openai_helper.py` ~L2326): added `_M13_TOPIC_ALIASES` dict and
+`_m13_norm_topic()` helper. Both `current_topic` AND
+`_classify_topic(text)` outputs now flow through normaliser before
+comparison. Also added `classifier_errors` counter to stats so silent
+classifier exceptions (previously swallowed) are now visible in
+`4g.HISTORY_CLEANED` traces.
+
+P40 baseline re-verified PASS post-fix. 5/5 alias mappings unit-tested.
+
+### M14/M15 still pending
+Pure Hindi-English language parity, A/B telemetry instrumentation.

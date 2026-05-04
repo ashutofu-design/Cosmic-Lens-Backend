@@ -409,3 +409,31 @@ planet lists. Reason map preserved for diagnostic transparency.
 (parses 'ascendant' string), preserves backward compat with extra_targets being
 empty set when D9-7L == D1-7L. Reason map tags every contribution source for
 transparency.
+
+---
+
+## Phase 2.8.83.1 — D9-7H OCCUPANTS FIX (4 May 2026)
+
+**File**: `artifacts/api-server/event_timing/marriage/marriage_timing.py` L1632-1639
+
+**User-spotted gap:**
+> "D9 me 7th H me baithne wale planets ko nehi count karta kya?"
+
+**Root cause:** Helper loop `if p_si == t_si: continue` blanket-skipped any
+conjunction (treating it as "already handled"). But the earlier conj-loop only
+covered D1-7L's D9 sign (sl_d9_si) — D9-lagna's own 7H sign (d9_h7_si) had
+no conjunction handler. Aspect to D9-7H was credited but planets SITTING IN
+D9-7H were silently dropped.
+
+**Fix:** Replace `continue` skip with explicit credit:
+```python
+if p_si == t_si:
+    co_karaks.add(name)
+    if t_si == d9_h7_si:
+        _tag(name, f"D9occ-7H ({_SIGNS[t_si]})")
+    continue
+```
+
+**Profile 40 + P_Young22 result:** scores unchanged because D9-7H signs
+happen to have no occupants in these test charts. Patch is forward-looking
+for charts where D9-7H is occupied.

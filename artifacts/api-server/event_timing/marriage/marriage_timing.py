@@ -1612,6 +1612,9 @@ def _get_7l_co_karaks(d1_planets: List[dict],
                  f"D9-7L (lord of {_SIGNS[d9_h7_si]})")
 
     # ── Phase 2.8.83 (b): D9 planets aspecting D9-7H or D9-7L ─────────
+    # Phase 2.8.83.1 FIX: D9-7H sign mein BAITHE planets ko bhi credit do
+    # (pehle conjunction skip ho jaata tha — sirf D1-7L ki D9-conjunction
+    # handle hoti thi, D9-7H sign mein occupancy miss ho raha tha).
     if d9_h7_si is not None:
         d9_targets_si = {d9_h7_si}
         if sl_d9_si is not None:
@@ -1625,7 +1628,12 @@ def _get_7l_co_karaks(d1_planets: List[dict],
                 continue
             for t_si in d9_targets_si:
                 if p_si == t_si:
-                    continue   # conjunction already handled above
+                    # Phase 2.8.83.1 — credit conjunction in D9-7H/D9-7L
+                    co_karaks.add(name)
+                    if t_si == d9_h7_si:
+                        _tag(name, f"D9occ-7H ({_SIGNS[t_si]})")
+                    # if t_si == sl_d9_si, already tagged D9conj above
+                    continue
                 if _aspects_target(name, p_si, t_si):
                     co_karaks.add(name)
                     label = ("D9asp-7H" if t_si == d9_h7_si

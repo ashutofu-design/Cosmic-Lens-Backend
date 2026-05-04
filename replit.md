@@ -209,3 +209,40 @@ File: `kundli_engine.py` L495-507
 
 ### F2 — NOT a bug (Saturn was direct on 1992-11-26)
 Initial audit flagged "Saturn retro missing" — verification confirmed Saturn was in direct motion on the birth date (retrograde started Apr 1993). Engine output was correct.
+
+## Phase 2.8.79 — URGENCY-AWARE FIX X + Y (2026-05-04)
+
+User-reported gap: Profile 40 (F, age 33, LATE+URGENCY) was showing primary
+window Jun 2029 - Apr 2030, completely missing the May 2026 immediate peak
+(Jupiter currently transiting 7H Gemini + Mercury PD = 7L active).
+
+### FIX X — STEP 4 URGENCY SCAN EXPANSION
+File: `marriage_timing.py` L3127-3164
+Root cause: `_scan_cluster_ads()` filters AD candidates by AD/MD lord ∈ target_lords.
+Profile 40 current AD = Moon/Mars (Jan-Aug 2026); neither Moon nor Mars is in
+target_lords {Mercury, Saturn, Venus, Jupiter} → entire AD dropped → Mercury(7L)
+PD inside it never scored. In URGENCY mode, inject the currently-running AD
+into candidate_ads regardless of lord. PD-level scoring gate (_WINDOW_MIN_SCORE=2.5)
+still filters weak PDs.
+
+### FIX Y — STEP 5 URGENCY CHRONOLOGICAL OVERRIDE
+File: `marriage_timing.py` L3447-3482
+Root cause: After FIX X, May 2026 PD scored +3.75 (MODERATE) but Jun 2029
+scored +6.04 (STRONG). Recency penalty 0.5/yr too gentle to flip ranking.
+At age 33 LATE, user's lived priority is "earliest viable", not "best in 3 years".
+In URGENCY mode, sort viable windows (score >= _URGENCY_MIN_VIABLE = 3.5)
+CHRONOLOGICALLY (start asc, score as tiebreaker). Backup falls out as the
+next-different-AD window naturally.
+
+### Profile 40 result (post-fix):
+- BEFORE: PRIMARY = Jun 2029 - Apr 2030 (37mo away, missed near-term Jupiter trigger)
+- AFTER:  PRIMARY = **May - June 2026** (Mars AD + Mercury PD + Jupiter on 7H)
+          BACKUP  = Feb 2028 - Apr 2029
+          TOP_3   = May 2026 (3.75) → Feb 2028 (5.10) → Jun 2029 (6.04)
+- Validator: 18/18 PASS, 0 mismatches.
+
+### Engine philosophy clarification (URGENCY MODE):
+- Non-urgency: highest score wins (classical Vedic precision).
+- Urgency (LATE + age >= F30/M33): chronologically earliest viable wins.
+- Rationale: at urgency thresholds, missing a near-term Jupiter-on-7H window
+  for a higher-confluence one 3+ years out wastes the urgency signal itself.

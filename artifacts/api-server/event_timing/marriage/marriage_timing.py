@@ -1309,6 +1309,21 @@ _DENIER_SEVERITY: Dict[str, str] = {
 # even with zero D1/D9 link → upgrade NEUTRAL → PASSIVE_PROMISE.
 _FIX5_STRONG_PROMISE_THRESHOLD: float = 4.0
 
+# Phase 2.9.7 — D9 BOTH tie-break rank score (May 4 2026).
+# Numeric ranking 0-10 for downstream sorting/tie-break. D9-only tier ranked
+# slightly above D1-only tier (Navamsa = marriage chart). BOTH gets +0.25
+# extra when D9 link score >= D1 link score (true D9-dominant confluence).
+_STEP2_RANK_BASE: Dict[str, float] = {
+    "BOTH":   10.0,
+    "D9":      8.0,    # D9-only ranked > D1-only (was equal in 2.9.6)
+    "D1":      7.0,
+    "BOTH_S":  5.0,
+    "D9_S":    4.0,    # soft D9 > soft D1
+    "D1_S":    3.0,
+    "NONE":    0.0,
+}
+_D9_BOTH_TIEBREAK_BONUS: float = 0.25
+
 
 def compute_step2_link_filter(kundli: dict, kp: dict
                                 ) -> Dict[str, Any]:
@@ -1452,6 +1467,13 @@ def compute_step2_link_filter(kundli: dict, kp: dict
             bucket = _STEP2_FINAL_BUCKET.get(final, "ignore")
             denier_severity = _DENIER_SEVERITY.get(final)  # FIX 6
 
+            # Phase 2.9.7 — D9 BOTH tie-break rank score
+            rank_score = _STEP2_RANK_BASE.get(strength, 0.0)
+            d9_dominant = False
+            if strength == "BOTH" and d9_link["score"] >= d1_link["score"]:
+                rank_score += _D9_BOTH_TIEBREAK_BONUS
+                d9_dominant = True
+
             out["per_planet"].append({
                 "planet": pname,
                 "step1_verdict": s1v,
@@ -1463,6 +1485,8 @@ def compute_step2_link_filter(kundli: dict, kp: dict
                 "bucket": bucket,
                 "denier_severity": denier_severity,        # FIX 6
                 "fix5_strong_promise_upgrade": fix5_upgraded,
+                "step2_rank_score": round(rank_score, 3),  # 2.9.7
+                "d9_dominant": d9_dominant,                # 2.9.7
             })
             if bucket in out["buckets"]:
                 out["buckets"][bucket].append(pname)

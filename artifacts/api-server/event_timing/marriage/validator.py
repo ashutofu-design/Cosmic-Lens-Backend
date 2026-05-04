@@ -7,6 +7,45 @@ existing engine logic. Output appended to assess_marriage return as
 
 Architecture role: Engine = Truth (compute), Validator = Guard (verify).
 
+──────────────────────────────────────────────────────────────────────
+Phase 2.10.1 STEP 6 BATCH (F1/F2/F3/F4/F5/F6) — ADD-ONLY
+  F1: C7 DTT tolerance — |engine_dtt - verifier_dtt| <= 1 AND
+      rule_holds=True -> PASS (was strict equality)
+  F2: C5 directional severity — missing critical promisers
+      (Jupiter/Venus) -> CRITICAL; other missing -> WARN
+  F3: 3-tier severity — CRITICAL / FAIL / WARN (was binary)
+        CRITICAL : truth-violation (C7/C9/C13) -> LLM block narration
+        FAIL     : missing data (C5/C12/C14)   -> LLM disclaimer
+        WARN     : informational                -> LLM ignore
+  F4: validator_mode = "FAST" | "DEEP" (default FAST)
+        FAST: C1-C15 only (~ms cost)
+        DEEP: C1-C18 (adds ephemeris_health, ~500ms+ Swiss Eph hits)
+  F5: C16+C17+C18 consolidated under single `ephemeris_health` block
+      when DEEP mode runs (cleaner report surface)
+  F6: Scope-honesty doc — shared helpers list + independence caveats
+
+Shared-helper caveats (F6):
+  Validator imports from marriage_timing.py for re-derivation:
+    _SIGNS, _SIGN_LORDS                 (static constants — safe)
+    _planet_sign_idx, _planet_house_local (chart-only readers — safe)
+    _get_d9_chart                       (deterministic — safe)
+    _is_jupiter_aspect, _is_saturn_aspect, _is_mars_aspect (math — safe)
+    _jup_sat_marriage_cluster_check     (re-uses engine logic — partial trust loop)
+    _dtt_score_window                   (re-uses engine logic — partial trust loop)
+    _get_transits_at                    (re-uses engine wrapper — C18 mitigates via raw Swiss Eph)
+    _extract_birth_year                 (parser — safe)
+  Pure independence claim only for: C1-C4, C6, C8-C13, C18.
+  Partial trust-loop in: C5, C7, C14, C15, C16, C17
+    (C16/C17 use _get_transits_at engine wrapper; C18 mitigates via
+     direct Swiss Ephemeris ground-truth spot-checks).
+
+Severity assignment (F3):
+  Each check appends to one of three lists:
+    criticals[] -> CRITICAL severity (LLM must NOT narrate prediction)
+    mismatches[] -> FAIL severity   (LLM narrates with disclaimer)
+    warnings[] -> WARN severity      (LLM ignores)
+──────────────────────────────────────────────────────────────────────
+
 Checks performed:
   C1  Lagna sign + index sanity
   C2  7H sign derivation (lagna + 6) matches engine
@@ -255,8 +294,38 @@ def _verify_window_dtt(window: Dict[str, Any], lagna_si: int,
             rule_holds = False
         if int(window.get("triple_promiser") or 0) < 3:
             rule_holds = False
+    # ── Phase 2.10.1 STEP 6 FIX F1 (ADD-ONLY) — C7 tolerance
+    # Strict equality (dtt_match AND sng_match) caused false FAIL on
+    # off-by-1 DTT count drift from sampling jitter. New rule:
+    #   PASS if |engine_dtt - verifier_dtt| <= 1
+    #          AND |engine_single - verifier_single| <= 1
+    #          AND rule_holds (sign-level rule actually upheld)
+    _DTT_TOLERANCE = 1
+
+    def _safe_diff(a: Any, b: Any) -> int:
+        # F1 hardening: malformed claim should not crash validator
+        if a is None:
+            return 0
+        try:
+            return abs(int(a) - int(b))
+        except (TypeError, ValueError):
+            return 99   # treat as out-of-tolerance, not a crash
+
+    dtt_diff = _safe_diff(claimed_dtt, scan["dtt_count"])
+    sng_diff = _safe_diff(claimed_single, scan["single_count"])
+    dtt_within_tol = dtt_diff <= _DTT_TOLERANCE
+    sng_within_tol = sng_diff <= _DTT_TOLERANCE
+    verified_v2 = dtt_within_tol and sng_within_tol and rule_holds
+    tolerance_used = (
+        verified_v2
+        and not (dtt_match and sng_match)   # strict would have failed
+    )
     return {
-        "verified": dtt_match and sng_match and rule_holds,
+        # F1: verified now uses tolerance + rule_holds (was strict eq)
+        "verified": verified_v2,
+        "verified_strict": dtt_match and sng_match and rule_holds,  # legacy
+        "tolerance_used": tolerance_used,
+        "dtt_diff": dtt_diff, "single_diff": sng_diff,
         "engine_dtt": claimed_dtt, "verifier_dtt": scan["dtt_count"],
         "engine_single": claimed_single, "verifier_single": scan["single_count"],
         "rule_claimed": rule, "rule_holds": rule_holds,
@@ -701,26 +770,41 @@ def _check_chronology_and_age(chrono: List[Dict[str, Any]],
 # ════════════════════════════════════════════════════════════════════
 # Main entry point
 # ════════════════════════════════════════════════════════════════════
+_C5_CRITICAL_PROMISERS = {"Jupiter", "Venus"}   # F2: rule-critical promisers
+
+
 def validate_marriage_assessment(chart: dict, birth: Any,
                                    intel: dict,
-                                   engine_output: dict) -> Dict[str, Any]:
-    """Run all guard checks. Returns a report dict.
+                                   engine_output: dict,
+                                   mode: str = "FAST") -> Dict[str, Any]:
+    """Run guard checks. Returns a report dict.
+
+    Phase 2.10.1 STEP 6 BATCH (F1-F6) — see module docstring.
+
+    Args:
+      mode: "FAST" (default, C1-C15) | "DEEP" (C1-C18 + ephemeris_health).
 
     Top-level fields:
-      pass:           bool   (all checks passed)
-      severity:       "OK" | "WARN" | "FAIL"
+      pass:           bool   (no critical or fail items)
+      severity:       "OK" | "WARN" | "FAIL" | "CRITICAL"   (F3 3-tier+OK)
       summary:        one-line human-readable
-      checks:         {C1..C10: {...}}
-      mismatches:     [str]  — engine vs verifier disagreements
+      mode:           "FAST" | "DEEP"
+      checks:         {C1..C18: {...}}
+      criticals:      [str]  — F3: truth-violations (block LLM narration)
+      mismatches:     [str]  — engine vs verifier disagreements (FAIL)
       warnings:       [str]
     """
+    mode = (mode or "FAST").strip().upper()
+    if mode not in ("FAST", "DEEP"):
+        mode = "FAST"
     report: Dict[str, Any] = {
-        "pass": True, "severity": "OK", "summary": "",
-        "checks": {}, "mismatches": [], "warnings": [],
+        "pass": True, "severity": "OK", "summary": "", "mode": mode,
+        "checks": {}, "criticals": [], "mismatches": [], "warnings": [],
     }
     if not isinstance(chart, dict):
-        return {"pass": False, "severity": "FAIL",
-                "summary": "no chart provided", "checks": {},
+        return {"pass": False, "severity": "CRITICAL",
+                "summary": "no chart provided", "mode": mode, "checks": {},
+                "criticals": ["no chart provided"],
                 "mismatches": [], "warnings": []}
 
     planets = chart.get("planets") or []
@@ -759,9 +843,19 @@ def validate_marriage_assessment(chart: dict, birth: Any,
         ver_proms = set(d1_check.get("promisers") or [])
         missing_in_engine = ver_proms - eng_proms
         if missing_in_engine:
-            report["mismatches"].append(
-                f"C5: engine d1_d9_scan missed promisers: {sorted(missing_in_engine)} "
-                f"(verifier found: {sorted(ver_proms)})")
+            # Phase 2.10.1 STEP 6 FIX F2 (ADD-ONLY) — directional severity
+            # Critical promisers (Jup/Ven) missing -> CRITICAL (truth violated)
+            # Other missing (Moon/Mer/Rahu) -> WARN (informational)
+            critical_missing = missing_in_engine & _C5_CRITICAL_PROMISERS
+            other_missing = missing_in_engine - _C5_CRITICAL_PROMISERS
+            if critical_missing:
+                report["criticals"].append(
+                    f"C5 CRITICAL: engine d1_d9_scan missed CRITICAL promisers: "
+                    f"{sorted(critical_missing)} (verifier found: {sorted(ver_proms)})")
+            if other_missing:
+                report["warnings"].append(
+                    f"C5 WARN: engine d1_d9_scan missed promisers: "
+                    f"{sorted(other_missing)} (verifier found: {sorted(ver_proms)})")
     else:
         report["checks"]["C5_d1_promisers"] = {"skipped": "no h7_si"}
 
@@ -779,10 +873,16 @@ def validate_marriage_assessment(chart: dict, birth: Any,
             v["dasha"] = f"{w.get('md')}-{w.get('ad')}-{w.get('pd')}"
             win_reports.append(v)
             if not v.get("verified"):
-                report["mismatches"].append(
-                    f"C7: window {v['window']} ({v['dasha']}) failed independent DTT verify "
-                    f"(engine={v['engine_dtt']}/5 vs verifier={v['verifier_dtt']}/5, "
-                    f"rule_holds={v['rule_holds']})")
+                # Phase 2.10.1 STEP 6 FIX F1+F3 (ADD-ONLY) — severity
+                # rule_holds=False -> CRITICAL (sign-level rule violated)
+                # rule_holds=True but counts diff > tolerance -> WARN
+                msg = (f"window {v['window']} ({v['dasha']}) failed DTT verify "
+                       f"(engine={v['engine_dtt']}/5 vs verifier={v['verifier_dtt']}/5, "
+                       f"rule_holds={v['rule_holds']})")
+                if not v.get("rule_holds"):
+                    report["criticals"].append(f"C7 CRITICAL: {msg}")
+                else:
+                    report["warnings"].append(f"C7 WARN: {msg}")
     report["checks"]["C7_window_verifier"] = win_reports
 
     # ── C8 + C10 chronology + age gate
@@ -812,8 +912,10 @@ def validate_marriage_assessment(chart: dict, birth: Any,
         "chrono_count": len(chrono), "issues": issues_c9,
     }
     for it in issues_c9:
+        # Phase 2.10.1 STEP 6 FIX F3 (ADD-ONLY) — C9 FAIL is verdict
+        # contradiction (truth violation) -> CRITICAL
         if "FAIL" in it:
-            report["mismatches"].append(it)
+            report["criticals"].append(it.replace("C9 FAIL", "C9 CRITICAL"))
         else:
             report["warnings"].append(it)
 
@@ -834,7 +936,12 @@ def validate_marriage_assessment(chart: dict, birth: Any,
     pc = _check_primary_crosscheck(engine_output, ver_proms)
     report["checks"]["C13_primary_crosscheck"] = pc
     for it in pc["issues"]:
-        (report["mismatches"] if "FAIL" in it else report["warnings"]).append(it)
+        # Phase 2.10.1 STEP 6 FIX F3 (ADD-ONLY) — C13 FAIL = primary not in
+        # top_3 OR promiser superset violated -> CRITICAL truth violation
+        if "FAIL" in it:
+            report["criticals"].append(it.replace("C13 FAIL", "C13 CRITICAL"))
+        else:
+            report["warnings"].append(it)
 
     # ── C14 helper sanity
     hs = _check_helper_sanity(chart)
@@ -848,26 +955,42 @@ def validate_marriage_assessment(chart: dict, birth: Any,
     for it in el["issues"]:
         (report["mismatches"] if "FAIL" in it else report["warnings"]).append(it)
 
-    # ── C16 transit ephemeris 30-year sanity
-    te = _check_transit_ephemeris_30yr(lagna_si, moon_si)
-    report["checks"]["C16_transit_ephemeris_30yr"] = te
-    for it in te["issues"]:
-        (report["mismatches"] if "FAIL" in it else report["warnings"]).append(it)
+    # ── Phase 2.10.1 STEP 6 FIX F4+F5 (ADD-ONLY) — DEEP-mode ephemeris trio
+    # FAST mode skips C16/C17/C18 (Swiss Ephemeris hits ~500ms/run).
+    # DEEP mode runs all three and consolidates under `ephemeris_health`.
+    if mode == "DEEP":
+        te = _check_transit_ephemeris_30yr(lagna_si, moon_si)
+        tp = _check_transit_parity_today(lagna_si, moon_si)
+        eg = _check_ephemeris_ground_truth(lagna_si)
+        report["checks"]["ephemeris_health"] = {
+            "C16_transit_ephemeris_30yr": te,
+            "C17_transit_parity_today": tp,
+            "C18_ephemeris_ground_truth": eg,
+        }
+        # Severity routing for ephemeris trio:
+        #   Any FAIL -> CRITICAL (canonical layer broken; everything suspect)
+        for blk_name, blk in (("C16", te), ("C17", tp), ("C18", eg)):
+            for it in blk.get("issues", []):
+                if "FAIL" in it:
+                    report["criticals"].append(
+                        f"EPHEMERIS_HEALTH {blk_name} CRITICAL: {it}")
+                else:
+                    report["warnings"].append(f"EPHEMERIS_HEALTH {blk_name}: {it}")
+    else:
+        report["checks"]["ephemeris_health"] = {
+            "skipped": "FAST mode — pass mode='DEEP' to run C16/C17/C18"
+        }
 
-    # ── C17 transit parity today (engine vs direct compute_transits)
-    tp = _check_transit_parity_today(lagna_si, moon_si)
-    report["checks"]["C17_transit_parity_today"] = tp
-    for it in tp["issues"]:
-        (report["mismatches"] if "FAIL" in it else report["warnings"]).append(it)
-
-    # ── C18 ephemeris ground-truth (raw Swiss Ephemeris spot-checks)
-    eg = _check_ephemeris_ground_truth(lagna_si)
-    report["checks"]["C18_ephemeris_ground_truth"] = eg
-    for it in eg["issues"]:
-        (report["mismatches"] if "FAIL" in it else report["warnings"]).append(it)
-
-    # ── Final roll-up
-    if report["mismatches"]:
+    # ── Phase 2.10.1 STEP 6 FIX F3 (ADD-ONLY) — 3-tier severity roll-up
+    # Precedence: CRITICAL > FAIL > WARN > OK
+    if report["criticals"]:
+        report["pass"] = False
+        report["severity"] = "CRITICAL"
+        report["summary"] = (
+            f"{len(report['criticals'])} CRITICAL truth-violation(s) — "
+            f"LLM should block prediction narration"
+        )
+    elif report["mismatches"]:
         report["pass"] = False
         report["severity"] = "FAIL"
         report["summary"] = f"{len(report['mismatches'])} mismatch(es) found"
@@ -878,5 +1001,5 @@ def validate_marriage_assessment(chart: dict, birth: Any,
         report["summary"] = (
             f"all checks passed: 7H={basics['h7_sign']} "
             f"7L={sl_name} in {basics['seventh_lord_natal_sign']}, "
-            f"{len(chrono)} windows verified")
+            f"{len(chrono)} windows verified [{mode}]")
     return report

@@ -2173,32 +2173,55 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
     # Phase 2.8.68 FIX A — de-duplicate L1+L11. Saturn-in-7H now scores +2
     # via L11 only; L1 occupation branch is suppressed in that case to
     # prevent the historical double-count (+2 was actually +1+1).
+    # Phase 2.9.0 FIX 6 — Saturn affliction severity differentiated.
+    # Pehle aspect aur conjunction ko same +1 milta tha. Classical Vedic:
+    # conjunction (same sign) >> aspect. Updated weights:
+    #   L11  Saturn IN 7H natally          -> +2 (strongest)
+    #   L1c  Saturn CONJUNCT 7L (same sign) -> +1.5 (NEW differentiation)
+    #   L1a  Saturn aspect on 7H or 7L     -> +1 (weakest)
     sat_in_7h = (saturn_house == 7) or (
         saturn_si is not None and saturn_si == h7_si)
+    sat_conj_7l = (saturn_si is not None and seventh_lord_si is not None
+                   and saturn_si == seventh_lord_si and not sat_in_7h)
     sat_aff_7h_aspect = (saturn_si is not None
                          and not sat_in_7h
                          and _is_saturn_aspect(saturn_si, h7_si))
-    sat_aff_7l = (saturn_si is not None and seventh_lord_si is not None
-                  and (saturn_si == seventh_lord_si
-                       or _is_saturn_aspect(saturn_si, seventh_lord_si)))
+    sat_aff_7l_aspect = (saturn_si is not None and seventh_lord_si is not None
+                         and not sat_conj_7l
+                         and _is_saturn_aspect(saturn_si, seventh_lord_si))
     if sat_in_7h:
         # L11 takes the strongest reading; L1 is folded in to avoid double penalty.
         late += 2
         reasons.append("L11: natal Saturn IN 7H (+2 LATE; L1 folded in)")
+    elif sat_conj_7l:
+        late += 1.5
+        reasons.append(f"L1c: natal Saturn CONJUNCT 7L {seventh_lord} "
+                       "(+1.5 LATE — conj > aspect) [2.9.0 FIX 6]")
     elif sat_aff_7h_aspect:
         late += 1
-        reasons.append("L1: natal Saturn aspect on 7H (+1 LATE)")
-    elif sat_aff_7l:
+        reasons.append("L1a: natal Saturn aspect on 7H (+1 LATE)")
+    elif sat_aff_7l_aspect:
         late += 1
-        reasons.append(f"L1: natal Saturn afflicting 7L {seventh_lord} (+1 LATE)")
+        reasons.append(f"L1a: natal Saturn aspect on 7L {seventh_lord} "
+                       "(+1 LATE)")
 
-    # ── L2: 7L in 12H or debilitated
+    # ── L2: 7L weakness (12H or debilitated)
+    # Phase 2.9.0 FIX 1 — weight imbalance correction. Pehle dono sub-
+    # conditions stack hoke +2 mil sakte the (silent LATE bias). Ab L2
+    # capped at +1 — 7L ek hi entity hai, weakness signal once count hoga.
+    # Yeh L3 ke cap pattern jaisa hi consistent treatment hai.
+    l2_pts = 0
     if seventh_lord_h == 12:
-        late += 1
+        l2_pts += 1
         reasons.append(f"L2: 7L {seventh_lord} in 12H — withdrawal (+1 LATE)")
     if seventh_lord_dignity == "debilitated":
-        late += 1
+        l2_pts += 1
         reasons.append(f"L2: 7L {seventh_lord} debilitated (+1 LATE)")
+    if l2_pts > 1:
+        reasons.append(f"L2 cap: 7L weakness capped at +1 "
+                       f"(raw {l2_pts}) [2.9.0 FIX 1 weight balance]")
+        l2_pts = 1
+    late += l2_pts
 
     # ── L3: Venus weakness — combust + dusthana + debilitated
     # Phase 2.8.68 FIX B — debilitated Venus now adds a LATE point (was 0

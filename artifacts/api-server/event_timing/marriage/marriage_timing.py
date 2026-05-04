@@ -1536,19 +1536,33 @@ def _user_transit_gate_check(transit_data: dict,
 
 def _get_7l_co_karaks(d1_planets: List[dict],
                       d9_planets: List[dict],
-                      seventh_lord: str) -> Tuple[Set[str], Dict[str, str]]:
-    """Phase 2.8.82 — Detect planets sitting WITH 7th lord in D1 or D9.
+                      seventh_lord: str,
+                      d9_lagna_si: Optional[int] = None
+                      ) -> Tuple[Set[str], Set[str], Dict[str, str]]:
+    """Phase 2.8.82 + 2.8.83 — Detect 7L co-karaks across D1 and D9.
 
-    Per user spec: base filter planets ek side rakho, but 7L ke saath baitha
-    hua planet ya 7L khud (D1 ya D9 mein) — unko PRIORITY do.
+    Phase 2.8.82 base: planets sharing sign with D1's 7L in D1 or D9.
+    Phase 2.8.83 ADD :
+      (a) D9-lagna ka apna 7L (D9 7H sign ka swami) — separately computed.
+      (b) D9 planets jo D9-7H ya D9-7L ko aspect karte hain (using
+          _aspects_target — 7th universal + Mars/Jup/Sat special drishti).
 
     Returns:
-        (co_karak_set, reason_map)
-        co_karak_set : planets co-located with 7L (excluding 7L itself)
-        reason_map   : planet -> "D1 Scorpio" / "D9 Cancer" / "D1+D9"
+        (co_karak_set, extra_target_lords, reason_map)
+        co_karak_set        : co-karaks for +0.5 priority bonus (D1 + D9)
+        extra_target_lords  : ADDITIONAL lords for target_lords set (e.g. D9-7L)
+        reason_map          : planet -> tagged reason string for diagnostics
     """
     if not seventh_lord:
-        return (set(), {})
+        return (set(), set(), {})
+
+    def _sign_str_to_si(s):
+        if not s:
+            return None
+        try:
+            return _SIGNS.index(s)
+        except (ValueError, AttributeError):
+            return None
 
     def _sign_of(planets, target):
         for p in planets or []:
@@ -1558,17 +1572,24 @@ def _get_7l_co_karaks(d1_planets: List[dict],
 
     sl_d1_sign = _sign_of(d1_planets, seventh_lord)
     sl_d9_sign = _sign_of(d9_planets, seventh_lord)
+    sl_d9_si = _sign_str_to_si(sl_d9_sign)
 
     co_karaks: Set[str] = set()
+    extra_targets: Set[str] = set()
     reasons: Dict[str, str] = {}
 
+    def _tag(name: str, label: str) -> None:
+        existing = reasons.get(name, "")
+        reasons[name] = (existing + "+" if existing else "") + label
+
+    # ── Phase 2.8.82 base: same-sign-as-7L conjunctions ────────────────
     for p in (d1_planets or []):
         name = p.get("name")
         if name == seventh_lord or name in (None, ""):
             continue
         if sl_d1_sign and p.get("sign") == sl_d1_sign:
             co_karaks.add(name)
-            reasons[name] = f"D1 {sl_d1_sign}"
+            _tag(name, f"D1conj {sl_d1_sign}")
 
     for p in (d9_planets or []):
         name = p.get("name")
@@ -1576,10 +1597,43 @@ def _get_7l_co_karaks(d1_planets: List[dict],
             continue
         if sl_d9_sign and p.get("sign") == sl_d9_sign:
             co_karaks.add(name)
-            existing = reasons.get(name, "")
-            reasons[name] = (existing + "+" if existing else "") + f"D9 {sl_d9_sign}"
+            _tag(name, f"D9conj {sl_d9_sign}")
 
-    return (co_karaks, reasons)
+    # ── Phase 2.8.83 (a): D9-lagna ka apna 7L ─────────────────────────
+    d9_seventh_lord: Optional[str] = None
+    d9_h7_si: Optional[int] = None
+    if isinstance(d9_lagna_si, int):
+        d9_h7_si = (d9_lagna_si + 6) % 12
+        d9_seventh_lord = _SIGN_LORDS.get(d9_h7_si)
+        if d9_seventh_lord and d9_seventh_lord != seventh_lord:
+            extra_targets.add(d9_seventh_lord)
+            co_karaks.add(d9_seventh_lord)
+            _tag(d9_seventh_lord,
+                 f"D9-7L (lord of {_SIGNS[d9_h7_si]})")
+
+    # ── Phase 2.8.83 (b): D9 planets aspecting D9-7H or D9-7L ─────────
+    if d9_h7_si is not None:
+        d9_targets_si = {d9_h7_si}
+        if sl_d9_si is not None:
+            d9_targets_si.add(sl_d9_si)
+        for p in (d9_planets or []):
+            name = p.get("name")
+            if name == seventh_lord or name in (None, ""):
+                continue
+            p_si = _sign_str_to_si(p.get("sign"))
+            if p_si is None:
+                continue
+            for t_si in d9_targets_si:
+                if p_si == t_si:
+                    continue   # conjunction already handled above
+                if _aspects_target(name, p_si, t_si):
+                    co_karaks.add(name)
+                    label = ("D9asp-7H" if t_si == d9_h7_si
+                             else "D9asp-7L")
+                    _tag(name, label)
+                    break
+
+    return (co_karaks, extra_targets, reasons)
 
 
 def _mars_trigger_check(transit_data: dict, h7_si: int,
@@ -3218,31 +3272,41 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         factors.append("STEP 4 SAFETY: target_lords empty after filters, "
                        "defaulting to {Venus, Jupiter}")
 
-    # Phase 2.8.82 CO-KARAK PRIORITY (ADD-ONLY) — per user spec:
-    # "Filter planets ek side rakho, but 7L ke saath baitha hua planet ya 7L
-    # khud D1 ya D9 mein jo jo he, unko bhi PRIORITY do."
-    # Detect planets co-located with 7L in D1 or D9 → add to target_lords
-    # → also flag as co_karaks for +0.5 priority bonus in scoring loop.
+    # Phase 2.8.82 + 2.8.83 CO-KARAK PRIORITY (ADD-ONLY) — per user spec:
+    # 2.8.82: 7L ke saath baitha hua (D1/D9 conjunction) ko priority.
+    # 2.8.83: D9 ka apna 7L + D9 mein 7H/7L ko aspect karne wale planets bhi.
     co_karaks: Set[str] = set()
     co_karak_reasons: Dict[str, str] = {}
     if seventh_lord:
         d1_planets_for_co = kundli.get("planets", []) or []
-        d9_planets_for_co = (
-            (kundli.get("divisionalCharts") or {}).get("D9") or {}
-        ).get("planets", []) or []
-        co_karaks, co_karak_reasons = _get_7l_co_karaks(
-            d1_planets_for_co, d9_planets_for_co, seventh_lord)
-        # Always include 7L itself (defensive — usually already in target_lords)
-        target_lords = set(target_lords) | {seventh_lord} | co_karaks
-        if co_karaks:
+        d9_block = (kundli.get("divisionalCharts") or {}).get("D9") or {}
+        d9_planets_for_co = d9_block.get("planets", []) or []
+        d9_lagna_si_for_co = d9_block.get("ascendantSignIndex")
+        if not isinstance(d9_lagna_si_for_co, int):
+            d9_asc_str = d9_block.get("ascendant")
+            try:
+                d9_lagna_si_for_co = (_SIGNS.index(d9_asc_str)
+                                       if d9_asc_str in _SIGNS else None)
+            except Exception:
+                d9_lagna_si_for_co = None
+
+        co_karaks, extra_targets, co_karak_reasons = _get_7l_co_karaks(
+            d1_planets_for_co, d9_planets_for_co, seventh_lord,
+            d9_lagna_si=d9_lagna_si_for_co)
+
+        # Always include 7L itself + D9-7L + co_karaks in target_lords
+        target_lords = (set(target_lords) | {seventh_lord}
+                        | co_karaks | extra_targets)
+        if co_karaks or extra_targets:
             factors.append(
-                f"STEP 4 CO-KARAK: {sorted(co_karaks)} added to target_lords "
-                f"(conjunct 7L {seventh_lord} — "
-                f"{', '.join(f'{p}={r}' for p, r in sorted(co_karak_reasons.items()))})")
+                f"STEP 4 CO-KARAK 2.8.83: D1-7L={seventh_lord}, "
+                f"D9-7L={sorted(extra_targets) or '(same as D1)'}, "
+                f"co_karaks={sorted(co_karaks)} "
+                f"[{', '.join(f'{p}={r}' for p, r in sorted(co_karak_reasons.items()))}]")
         else:
             factors.append(
-                f"STEP 4 CO-KARAK: no planets conjunct 7L {seventh_lord} "
-                f"in D1 or D9")
+                f"STEP 4 CO-KARAK 2.8.83: no co-karaks for 7L {seventh_lord} "
+                f"in D1/D9 (conj or aspect)")
 
     # Phase 2.8.81 USER PD-LEVEL ALGORITHM (ADD-ONLY):
     # Per user spec — "har AD ke andar har PD individually check karo,
@@ -3389,10 +3453,9 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                 gate_bonus = 0.5
                 window_factors.append(f"GATE SINGLE: {gate_reason} (+0.5)")
 
-            # Phase 2.8.82 CO-KARAK PRIORITY BONUS (ADD-ONLY):
-            # Per user spec — planets conjunct 7L (D1 or D9) ko PRIORITY do.
-            # +0.5 jab AD ya PD lord co-karak ho. Yeh additive bonus base
-            # cluster_score ke upar lagta hai.
+            # Phase 2.8.82 + 2.8.83 CO-KARAK PRIORITY BONUS (ADD-ONLY):
+            # +0.5 jab AD ya PD lord co-karak ho (D1/D9 conjunction OR
+            # D9-7L OR D9 aspect to 7H/7L). Additive bonus on cluster_score.
             co_karak_bonus = 0.0
             co_hits = []
             if ad in co_karaks:

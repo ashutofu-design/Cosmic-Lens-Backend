@@ -364,3 +364,48 @@ upgraded (7.0→8.0 PRIMARY) confirming gate-bonus integration.
 
 **Engineering quality:** Defensive — handles missing D9, missing 7L, empty
 planet lists. Reason map preserved for diagnostic transparency.
+
+---
+
+## Phase 2.8.83 — D9 FULL PARITY (4 May 2026)
+
+**File**: `artifacts/api-server/event_timing/marriage/marriage_timing.py`
+
+**User-spec rule (per explicit instruction):**
+> "D9 bhi to check hota he kon he 7th lord ya 7th lord ke saath kon he ya
+>  phir aspect kon kar raha he 7th house ko, unko bhi filter me samil kiya
+>  jaata he."
+
+**Gaps closed (HIGH severity from prior audit):**
+- GAP 1: D9-lagna ka APNA 7L (separately computed from D9 ascendant)
+- GAP 2: D9 planets aspecting D9-7H ya D9-7L (using _aspects_target standard
+         Vedic drishti: 7th universal + Mars/Jup/Sat special aspects)
+
+**ADD-ONLY changes (~50 lines extension):**
+- L1540 helper extended: signature now `_get_7l_co_karaks(d1, d9, sl, d9_lagna_si)`
+  returns `(co_karaks, extra_target_lords, reasons)` — 3-tuple instead of 2.
+- D9-7L = `_SIGN_LORDS[(d9_lagna_si + 6) % 12]` → added to extra_target_lords AND
+  co_karaks (gets +0.5 priority bonus).
+- D9 aspect loop: each D9 planet checked against {d9_h7_si, sl_d9_si} for
+  conjunction-or-aspect (skipping conj already handled).
+- L3278 caller updated: extracts d9_lagna_si from divisionalCharts.D9, falls
+  back to parsing ascendant string. Logs both extra_targets and co_karaks
+  with reason tags (D1conj/D9conj/D9-7L/D9asp-7H/D9asp-7L).
+
+**Profile 40 result (post-fix):**
+- D9-7L = MARS (D9 lagna's 7th = Scorpio, lord = Mars) — NEW DETECTION
+- Co-karaks expanded: {Jupiter, Mars, Rahu, Sun}
+- VERDICT UPGRADE: MODERATE → STRONG/PROMISED
+- PRIMARY May-Jul 2026: 4.12 → 6.00 (Mars AD now = D9-7L co-karak)
+- Aug-Nov 2026: Mars/Rahu PD = double co-karak (+1.0 bonus)
+- Jan-Jul 2027: 3.43 (unchanged)
+
+**P_Young22 result:**
+- D9-7L = MOON (D9 lagna's 7H sign lord)
+- Co-karaks: {Ketu, Mars, Mercury, Moon, Rahu, Sun, Venus} — almost all planets
+- Top 3 windows preserved with co-karak boosts
+
+**Engineering quality:** Defensive fallbacks for missing D9 ascendantSignIndex
+(parses 'ascendant' string), preserves backward compat with extra_targets being
+empty set when D9-7L == D1-7L. Reason map tags every contribution source for
+transparency.

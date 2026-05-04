@@ -2242,10 +2242,13 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
             reasons.append(f"E1 (skip): Jupiter aspect/conj {target} but "
                            "Jupiter combust — blessing burnt [2.8.69]")
         elif jup_house in _DUSTHANA:
-            early += 1
-            reasons.append(f"E1: Jupiter aspect/conj {target} (+1 EARLY) "
-                           f"— but Jupiter in {jup_house}H dusthana, "
-                           "blessing compromised [2.8.69]")
+            # Phase 2.9.0 FIX 1 — dusthana Jupiter ka blessing skip karo.
+            # Pehle +1 EARLY de raha tha (over-optimistic). Dusthana mein
+            # Jupiter ki shubhata wahi-of-kaaranon se compromised hai
+            # (debilitated/combust ke barabar). Treat as skip.
+            reasons.append(f"E1 (skip): Jupiter aspect/conj {target} but "
+                           f"Jupiter in {jup_house}H dusthana — blessing "
+                           "compromised [2.9.0 FIX 1]")
         else:
             early += 1
             reasons.append(f"E1: natal Jupiter aspect/conj {target} "
@@ -2264,8 +2267,11 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
         early += 1
         reasons.append(f"E5: 7H {_SIGNS[h7_si]} cardinal — quick trigger (+1 EARLY)")
     elif h7_si in _DUAL_SIGNS:
-        late += 1
-        reasons.append(f"E5 (inv): 7H {_SIGNS[h7_si]} dual — delays/multiples (+1 LATE)")
+        # Phase 2.9.0 FIX 2 — dual sign penalty too generic. Pehle +1 LATE
+        # full point milta tha jo over-impact tha (har 4 me se 1 chart pe
+        # bias). Ab sirf reason me flag karo, score me contribution 0.
+        reasons.append(f"E5 (flag): 7H {_SIGNS[h7_si]} dual — multiples/"
+                       "delays possible (no score) [2.9.0 FIX 2]")
 
     # ── E6: 7L in kendra/trikona and not retro
     # Phase 2.8.68 FIX C — 7L retrograde now adds +1 LATE independently of
@@ -2282,17 +2288,54 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
         late += 1
         reasons.append(f"L4: 7L {seventh_lord} retrograde — delay signal (+1 LATE) [NEW 2.8.68]")
 
+    # ── E7: 7L strength bonus (Phase 2.9.0 FIX 4 — NEW)
+    # Pehle 7L exalted/own/moolatrikona ka koi EARLY bonus nahi tha — sirf
+    # Venus-specific E2 mein dignity check tha. Ab 7L (jo bhi planet ho) ki
+    # strength count hoti hai, kyunki strong 7L = strong spouse-house promise.
+    if seventh_lord_dignity in ("exalted", "own", "moolatrikona"):
+        early += 1
+        reasons.append(f"E7: 7L {seventh_lord} {seventh_lord_dignity} — "
+                       f"strong house promise (+1 EARLY) [NEW 2.9.0 FIX 4]")
+
     # ── Gender modifier (G1/G2)
+    # Phase 2.9.0 FIX 3 — G1 was double-counting Venus weakness with L3.
+    # L3 already credits combust/dusthana/debilitated Venus (capped +2).
+    # G1 fired on the SAME conditions giving an extra +1 — silent over-bias
+    # for males. Now G1 only fires when Venus is SEVERELY weak (L3 hit cap)
+    # so gender amplification is preserved for true edge cases only.
     g = (gender or "").strip().lower()
     if g in ("m", "male", "man", "boy"):
-        if venus_combust or venus_house in _DUSTHANA or venus_dignity == "debilitated":
+        if venus_late >= 2:   # FIX 3: only on capped (severe) weakness
             late += 1
-            reasons.append("G1: male + Venus karaka weak (+1 LATE)")
+            reasons.append("G1: male + Venus karaka SEVERELY weak "
+                           "(+1 LATE) [2.9.0 FIX 3 — gated]")
+        elif (venus_combust or venus_house in _DUSTHANA
+              or venus_dignity == "debilitated"):
+            reasons.append("G1 (skip): male + Venus mildly weak — already "
+                           "counted in L3 [2.9.0 FIX 3]")
     elif g in ("f", "female", "woman", "girl"):
         # Phase 2.8.69 — reuse hoisted jup_house / jup_dignity
         if jup_house in _DUSTHANA or jup_dignity == "debilitated":
             late += 1
             reasons.append("G2: female + Jupiter karaka weak (+1 LATE)")
+
+    # ── Phase 2.9.0 FIX 5 — Age amplification (BEFORE final score)
+    # Pehle age sirf label tha (late_status reason me likhta tha but score
+    # me kuch nahi karta). Ab age verdict ko amplify karta hai when chart
+    # signals AGREE with age band — taki "LATE chart + already-late user"
+    # ka verdict aur strong ho, aur "EARLY chart + young user" ka verdict
+    # bhi reinforce ho. Disagreement case me amp nahi lagta (chart wins).
+    age_band = _age_band(current_age, gender) if current_age is not None else "UNKNOWN"
+    if age_band != "UNKNOWN":
+        if late > early and age_band in ("LATE", "VERY_LATE",
+                                         "DELAYED_CRITICAL"):
+            late += 1
+            reasons.append(f"AGE-AMP: chart-LATE leaning + user in "
+                           f"{age_band} band -> +1 LATE [2.9.0 FIX 5]")
+        elif early > late and age_band == "EARLY":
+            early += 1
+            reasons.append(f"AGE-AMP: chart-EARLY leaning + user in "
+                           f"{age_band} band -> +1 EARLY [2.9.0 FIX 5]")
 
     score = late - early
     if score >= 2:
@@ -2302,8 +2345,7 @@ def _step0_late_early_tendency(planets: list, intel: dict, kp: dict,
     else:
         verdict = "BALANCED"
 
-    # ── Age-band overlay (hard-coded thresholds; gender-aware) ─────
-    age_band = _age_band(current_age, gender) if current_age is not None else "UNKNOWN"
+    # ── Age-band overlay (label/status; now uses FINAL verdict) ─────
     late_status = _late_status(age_band, verdict)
     nearby, nearby_reason = _marriage_nearby(age_band, verdict)
     if current_age is not None and age_band != "UNKNOWN":

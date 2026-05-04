@@ -93,6 +93,14 @@ _AGE_VERY_LATE = 45       # 45+: flag "compromise/fast-arranged typical"
 _AGE_SHIFT_LATE = +3      # LATE tendency: push everything later
 _AGE_SHIFT_EARLY = -2     # EARLY tendency: pull everything earlier
 
+# Phase 2.8.77 — URGENCY MODE (FIX U/V/W)
+# Trigger: STEP 0 = LATE  AND  current_age >= gender-specific late threshold.
+# Effect: window width clamped + nearest-window recency boost.
+_URGENCY_AGE_FEMALE = 30          # Female culturally-late floor
+_URGENCY_AGE_MALE = 33            # Male culturally-late floor
+_URGENCY_WIDTH_MONTHS = 18        # Max window width when urgency mode on
+_URGENCY_RECENCY_PENALTY_PER_YEAR = 0.5   # Score -= years_from_now * this
+
 # Cardinal (movable) signs — quick-trigger marriages
 _CARDINAL_SIGNS: Set[int] = {0, 3, 6, 9}    # Aries, Cancer, Libra, Capricorn
 # Dual signs — multiple/delayed marriages classically
@@ -1872,6 +1880,48 @@ def _adjusted_age_thresholds(step0_verdict: str) -> Tuple[int, int, int, int]:
     )
 
 
+def _is_urgency_mode(current_age: Optional[float], step0_verdict: str,
+                      gender: str) -> bool:
+    """Phase 2.8.77 (FIX U): URGENCY mode trigger.
+
+    True ONLY when BOTH conditions hold:
+      1) STEP 0 verdict == "LATE"  (chart has late-marriage indication)
+      2) current_age >= gender-specific late threshold
+         (Female 30+, Male 33+ — classical Indian context)
+
+    When True, downstream STEP 5 will:
+      - clamp window width to _URGENCY_WIDTH_MONTHS (18 mo)
+      - apply recency penalty so nearest viable window wins ranking
+    """
+    if step0_verdict != "LATE":
+        return False
+    if current_age is None:
+        return False
+    g = (gender or "").strip().lower()
+    threshold = _URGENCY_AGE_FEMALE if g.startswith("f") else _URGENCY_AGE_MALE
+    try:
+        return float(current_age) >= float(threshold)
+    except (TypeError, ValueError):
+        return False
+
+
+def _clamp_window_to_months(start, end, max_months: int):
+    """Phase 2.8.77 (FIX V): clamp a (start, end) window to <= max_months wide.
+
+    Returns (new_end, was_clamped). Keeps original start; trims end only.
+    Uses 30.44 days/month (avg). If already within bound, returns end unchanged.
+    """
+    from datetime import timedelta
+    try:
+        actual_days = (end - start).days
+    except Exception:
+        return end, False
+    max_days = int(max_months * 30.44)
+    if actual_days <= max_days:
+        return end, False
+    return start + timedelta(days=max_days), True
+
+
 def _age_filter_action(age: Optional[float], predicted_age: Optional[float],
                         thresholds: Tuple[int, int, int, int]) -> str:
     """Decide STEP 5 action.
@@ -3263,13 +3313,22 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     birth_year = _extract_birth_year(birth)
     birth_date_obj = _extract_birth_date(birth)  # FIX O
     thresholds = _adjusted_age_thresholds(step0["verdict"])
+    # Phase 2.8.77 — URGENCY MODE detection (FIX U)
+    urgency_mode = _is_urgency_mode(age, step0["verdict"], gender)
     factors.append(f"STEP 5: age={age} birth_year={birth_year} "
                    f"birth_date={birth_date_obj} "
                    f"thresholds={thresholds} (STEP 0 adj for {step0['verdict']})")
+    if urgency_mode:
+        factors.append(
+            f"STEP 5 URGENCY MODE: ON (gender={gender or '?'}, age={age}, "
+            f"step0=LATE) -> width clamp {_URGENCY_WIDTH_MONTHS}mo, "
+            f"recency penalty {_URGENCY_RECENCY_PENALTY_PER_YEAR}/yr"
+        )
 
     valid_windows: List[dict] = []
     blocked_count = 0
     late_penalty_count = 0
+    width_clamped_count = 0
     for w in windows:
         # FIX O: prefer month-precise age via mid-window date; fallback to year-only
         predicted_age: Optional[float] = None
@@ -3296,13 +3355,43 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         elif action == "FLAG_LATE":
             w["score"] = float(w.get("score", 0)) - 0.5
             late_penalty_count += 1
+        # Phase 2.8.77 FIX V: clamp window width when urgency mode on
+        if urgency_mode:
+            new_end, clamped = _clamp_window_to_months(
+                w["start"], w["end"], _URGENCY_WIDTH_MONTHS
+            )
+            if clamped:
+                w["original_end"] = w["end"]
+                w["end"] = new_end
+                w["width_clamped"] = True
+                width_clamped_count += 1
         w["age_action"] = action
         w["predicted_age"] = (round(predicted_age, 2)
                               if predicted_age is not None else None)
         valid_windows.append(w)
 
     factors.append(f"STEP 5: {len(valid_windows)} survived "
-                   f"(blocked={blocked_count}, late_penalised={late_penalty_count})")
+                   f"(blocked={blocked_count}, late_penalised={late_penalty_count}"
+                   + (f", width_clamped={width_clamped_count}" if urgency_mode else "")
+                   + ")")
+
+    # Phase 2.8.77 FIX W: recency penalty when urgency mode (nearest wins ranking)
+    if urgency_mode and valid_windows:
+        from datetime import date as _date
+        today = _date.today()
+        recency_applied = 0
+        for w in valid_windows:
+            try:
+                w_start = w["start"].date() if hasattr(w["start"], "date") else w["start"]
+                years_from_now = max(0.0, (w_start - today).days / 365.25)
+                penalty = years_from_now * _URGENCY_RECENCY_PENALTY_PER_YEAR
+                w["score"] = float(w.get("score", 0)) - penalty
+                w["recency_penalty"] = round(penalty, 2)
+                recency_applied += 1
+            except Exception:
+                pass
+        factors.append(f"STEP 5 URGENCY: applied recency penalty to "
+                       f"{recency_applied} windows (nearest preferred)")
 
     # FIX Q: PREMATURE downgrade for PROMISED *and* DELAYED (both can be premature)
     if windows and not valid_windows and final_verdict in ("PROMISED", "DELAYED"):

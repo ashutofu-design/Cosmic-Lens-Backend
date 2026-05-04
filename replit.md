@@ -152,3 +152,36 @@ External reviewer audit on STEP 5 (claimed 8.8/10). My audit-of-audit: actual 8.
 - STEP 1/2/3/4 (Phase 2.8.71-75 frozen)
 
 ### Score: STEP 5 8.3/10 → ~9.3/10. Pipeline overall now closer to 9.5/10.
+
+## Phase 2.8.77 — STEP 5 BATCH FIX U/V/W (URGENCY MODE) (2026-05-04)
+
+User-flagged real bug on Profile 40 (Female, 33 yrs, LATE tendency): engine showing 8-yr-distant 20-month-wide window as "primary" when a near 2029 window (age 37) is more practical. Implemented URGENCY MODE.
+
+### Trigger Rule (user-locked):
+**URGENCY ON when**: STEP 0 verdict == "LATE" **AND** current_age >= gender-specific late floor:
+- **Female**: 30+
+- **Male**: 33+
+- Missing gender defaults to Male threshold (33+)
+
+Otherwise normal STEP 5 logic — no change for young charts or BALANCED/EARLY tendency.
+
+### Changes (all in `event_timing/marriage/marriage_timing.py`):
+- **Constants L99-105**: `_URGENCY_AGE_FEMALE=30`, `_URGENCY_AGE_MALE=33`, `_URGENCY_WIDTH_MONTHS=18`, `_URGENCY_RECENCY_PENALTY_PER_YEAR=0.5`
+- **FIX U — `_is_urgency_mode(current_age, step0_verdict, gender)` helper** (L1886-1908): trigger detection.
+- **FIX V — `_clamp_window_to_months(start, end, max_months)` helper** (L1911-1925): trims window end to start + max_months×30.44 days. Returns (new_end, was_clamped).
+- **STEP 5 main loop wiring** (L3315-3398):
+  - `urgency_mode = _is_urgency_mode(age, step0_verdict, gender)` after thresholds; logged in factors.
+  - Per-window: when urgency, clamp end. Stores `original_end` + `width_clamped=True`.
+  - After valid_windows built: recency penalty `score -= years_from_now × 0.5`. Stores `recency_penalty` per window.
+
+### Tests: T79-T95 (17 new tests, /tmp/test_step5_fix_uvw.py) — 17/17 PASS
+
+### Live Verification on Profile 40 (rajalaxmi):
+- **Before (Phase 2.8.76)**: Primary Jan 2033-Aug 2034 (20mo, age 41, score 9.0), Backup Jun 2029-Apr 2030 (10mo, age 37, score 7.6)
+- **After (Phase 2.8.77)**: URGENCY ON. Primary **Jun 2029-Apr 2030** (10mo, age 37, score 6.04), Backup **Jan 2033-Jul 2034** (clamped to 18mo from 20mo, age 41, score 5.65). 1 width-clamped, 13 recency-penalised, top_3 spans 3 ADs (Jupiter/Saturn/Venus).
+
+### Untouched (frozen):
+- kp_engine.py, dasha fetchers, planet accessors
+- STEP 1/2/3/4 (Phase 2.8.71-75 frozen)
+- STEP 5 base logic (Phase 2.8.76 fixes O/P/Q/R/S/T preserved)
+- Young charts and BALANCED/EARLY tendency unaffected

@@ -101,6 +101,26 @@ _URGENCY_AGE_MALE = 33            # Male culturally-late floor
 _URGENCY_WIDTH_MONTHS = 18        # Max window width when urgency mode on
 _URGENCY_RECENCY_PENALTY_PER_YEAR = 1.5   # Score -= years_from_now * this (Phase 2.8.79 simplified: 0.5 -> 1.5 strong enough that nearest viable wins on its own; FIX Y removed)
 
+# ─────────────────────────────────────────────────────────────────────
+# Phase 2.10.0 STEP 5 BATCH (F1/F2/F3/F4/F5/F7) — ADD-ONLY
+# F1: Gender-aware late thresholds (override base when gender known)
+# F2: Stronger late-window penalties (was -0.5/-1.5)
+# F3: Recency penalty hard cap
+# F4: Non-linear recency curve exponent
+# F5: AD diversity tolerance widened (was 1.0)
+# F7: STEP 0 score-strength multiplier on shift
+# ─────────────────────────────────────────────────────────────────────
+_AGE_LATE_FLAG_FEMALE = 36
+_AGE_VERY_LATE_FEMALE = 42
+_AGE_LATE_FLAG_MALE = 40
+_AGE_VERY_LATE_MALE = 46
+_LATE_PENALTY_SCORE = -2.5            # F2: was -0.5
+_VERY_LATE_PENALTY_SCORE = -4.0       # F2: was -1.5
+_URGENCY_RECENCY_CAP = 3.0            # F3: max recency penalty per window
+_URGENCY_RECENCY_EXPONENT = 1.5       # F4: non-linear curve power
+_DIVERSITY_TOLERANCE_V2 = 2.0         # F5: widened from 1.0
+_STEP0_SHIFT_STRENGTH_FACTOR = 0.2    # F7: shift_mult = 1 + 0.2*|step0_score|
+
 # Cardinal (movable) signs — quick-trigger marriages
 _CARDINAL_SIGNS: Set[int] = {0, 3, 6, 9}    # Aries, Cancer, Libra, Capricorn
 # Dual signs — multiple/delayed marriages classically
@@ -2352,22 +2372,53 @@ def _get_current_age(birth: Any, kundli: dict,
         return None
 
 
-def _adjusted_age_thresholds(step0_verdict: str) -> Tuple[int, int, int, int]:
+def _adjusted_age_thresholds(step0_verdict: str,
+                              gender: str = "",
+                              step0_score: int = 0) -> Tuple[int, int, int, int]:
     """STEP 5 — return age boundaries shifted by STEP 0 tendency.
 
     Returns (HARD_BLOCK, EARLY_FLAG, LATE_FLAG, VERY_LATE).
+
+    Phase 2.10.0 STEP 5 FIX F1 (ADD-ONLY): gender-aware LATE/VERY_LATE
+        Female: 36 / 42   |   Male: 40 / 46   (else: legacy 39 / 45)
+
+    Phase 2.10.0 STEP 5 FIX F7 (ADD-ONLY): STEP 0 score-strength multiplier
+        shift_effective = base_shift * (1 + 0.2 * |step0_score|)
+        rounded to nearest int. Cap at 2x base shift to avoid runaway.
     """
-    if step0_verdict == "LATE":
-        s = _AGE_SHIFT_LATE
-    elif step0_verdict == "EARLY":
-        s = _AGE_SHIFT_EARLY
+    # F1: gender-aware LATE/VERY_LATE base
+    g = (gender or "").strip().lower()
+    if g.startswith("f"):
+        late_base = _AGE_LATE_FLAG_FEMALE
+        vlate_base = _AGE_VERY_LATE_FEMALE
+    elif g.startswith("m"):
+        late_base = _AGE_LATE_FLAG_MALE
+        vlate_base = _AGE_VERY_LATE_MALE
     else:
-        s = 0
+        late_base = _AGE_LATE_FLAG
+        vlate_base = _AGE_VERY_LATE
+
+    # Base shift by verdict
+    if step0_verdict == "LATE":
+        base_s = _AGE_SHIFT_LATE
+    elif step0_verdict == "EARLY":
+        base_s = _AGE_SHIFT_EARLY
+    else:
+        base_s = 0
+
+    # F7: amplify shift by score strength (capped 2x to avoid runaway)
+    try:
+        strength_mult = 1.0 + _STEP0_SHIFT_STRENGTH_FACTOR * abs(float(step0_score))
+        strength_mult = min(strength_mult, 2.0)
+    except (TypeError, ValueError):
+        strength_mult = 1.0
+    s = int(round(base_s * strength_mult))
+
     return (
-        _AGE_HARD_BLOCK,                  # never shifted (legal floor)
+        _AGE_HARD_BLOCK,                                # never shifted
         max(_AGE_HARD_BLOCK, _AGE_EARLY_FLAG + s),
-        _AGE_LATE_FLAG + s,
-        _AGE_VERY_LATE + s,
+        late_base + s,
+        vlate_base + s,
     )
 
 
@@ -4291,7 +4342,10 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     age = _get_current_age(birth, kundli, current_dasha)
     birth_year = _extract_birth_year(birth)
     birth_date_obj = _extract_birth_date(birth)  # FIX O
-    thresholds = _adjusted_age_thresholds(step0["verdict"])
+    # Phase 2.10.0 STEP 5 F1+F7 (ADD-ONLY): gender-aware bands + score strength
+    thresholds = _adjusted_age_thresholds(
+        step0["verdict"], gender=gender, step0_score=step0.get("score", 0)
+    )
     # Phase 2.8.77 — URGENCY MODE detection (FIX U)
     urgency_mode = _is_urgency_mode(age, step0["verdict"], gender)
     factors.append(f"STEP 5: age={age} birth_year={birth_year} "
@@ -4328,11 +4382,15 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             blocked_count += 1
             continue
         # FIX R: score penalty for late windows (still ranked but down-weighted)
+        # Phase 2.10.0 STEP 5 FIX F2 (ADD-ONLY): stronger penalties
+        #   FLAG_LATE      : -0.5 -> -2.5
+        #   FLAG_VERY_LATE : -1.5 -> -4.0
+        # Reason: 0.5/1.5 too weak — late windows still topped ranking.
         if action == "FLAG_VERY_LATE":
-            w["score"] = float(w.get("score", 0)) - 1.5
+            w["score"] = float(w.get("score", 0)) + _VERY_LATE_PENALTY_SCORE
             late_penalty_count += 1
         elif action == "FLAG_LATE":
-            w["score"] = float(w.get("score", 0)) - 0.5
+            w["score"] = float(w.get("score", 0)) + _LATE_PENALTY_SCORE
             late_penalty_count += 1
         # Phase 2.8.77 FIX V: clamp window width when urgency mode on
         if urgency_mode:
@@ -4363,9 +4421,18 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             try:
                 w_start = w["start"].date() if hasattr(w["start"], "date") else w["start"]
                 years_from_now = max(0.0, (w_start - today).days / 365.25)
-                penalty = years_from_now * _URGENCY_RECENCY_PENALTY_PER_YEAR
+                # Phase 2.10.0 STEP 5 FIX F4 (ADD-ONLY): non-linear curve
+                #   penalty = 1.5 * years^1.5 (year 1-2 cheap, year 3+ steep)
+                # Phase 2.10.0 STEP 5 FIX F3 (ADD-ONLY): hard cap at 3.0
+                raw_penalty = (
+                    _URGENCY_RECENCY_PENALTY_PER_YEAR
+                    * (years_from_now ** _URGENCY_RECENCY_EXPONENT)
+                )
+                penalty = min(raw_penalty, _URGENCY_RECENCY_CAP)
                 w["score"] = float(w.get("score", 0)) - penalty
                 w["recency_penalty"] = round(penalty, 2)
+                w["recency_penalty_raw"] = round(raw_penalty, 2)
+                w["recency_capped"] = raw_penalty > _URGENCY_RECENCY_CAP
                 recency_applied += 1
             except Exception:
                 pass
@@ -4389,7 +4456,9 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     # Greedy: pick highest. For slots 2 and 3, prefer a window with a NEW AD
     # if its score is within 1.0 of the slot's score-rank position. This avoids
     # showing 3 sub-windows of the same AD as "3 options".
-    _DIVERSITY_TOLERANCE = 1.0
+    # Phase 2.10.0 STEP 5 FIX F5 (ADD-ONLY): widened tolerance 1.0 -> 2.0
+    # Reason: same-AD top-2 can be legitimate; allow when score gap reasonable.
+    _DIVERSITY_TOLERANCE = _DIVERSITY_TOLERANCE_V2
 
     def _select_diverse_top3(sorted_ws: List[dict]) -> List[dict]:
         if not sorted_ws:

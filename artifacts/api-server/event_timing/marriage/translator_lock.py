@@ -599,14 +599,23 @@ def _provenance_footer_text(provenance: Dict[str, Any],
 
 def ensure_disclaimer(text: str, severity: str, disclaimer: str) -> str:
     """
-    M7 — Always append disclaimer for FAIL/WARN. Pure helper; no substring
-    fuzziness — severity-driven, structurally guaranteed.
+    M7 — Append disclaimer for FAIL/WARN. Severity-driven, structurally
+    guaranteed. Phase 2.10.5 STEP 8 fix: idempotent — if the disclaimer
+    text (or its first 60 chars, robust to whitespace) is already present
+    in the body, skip the second append. Prevents user-visible double
+    disclaimer when caller's LLM snapshot already contains it.
     """
     if not disclaimer:
         return text
     if severity not in _DISCLAIMER_SEVERITIES:
         return text
     body = text.rstrip()
+    # Idempotency: cheap substring check on a stable head fragment of the
+    # disclaimer (full string match is brittle to whitespace/paraphrase
+    # variants the LLM may have echoed back).
+    head = " ".join(disclaimer.split())[:60]
+    if head and head in " ".join(body.split()):
+        return body
     return body + "\n\n" + disclaimer
 
 
@@ -621,6 +630,7 @@ def render_marriage_output(
     lang: str = "hinglish",
     llm_polish_fn: Optional[Callable[[str, Dict[str, Any]], str]] = None,
     use_cache: bool = True,
+    include_footer_in_text: bool = True,
 ) -> Dict[str, Any]:
     """
     Public entry point. Single source of truth for marriage narration.
@@ -665,11 +675,15 @@ def render_marriage_output(
 
     def _finalize(text: str, path: str, llm_rejected: bool,
                   rejection_reason: Optional[str]) -> Dict[str, Any]:
-        # M10 — append provenance footer
+        # M10 — provenance footer (text inclusion is opt-in; meta always set)
         footer = _provenance_footer_text(provenance, hash_key)
-        text_with_footer = text.rstrip() + "\n\n" + footer
+        if include_footer_in_text:
+            final_text = text.rstrip() + "\n\n" + footer
+        else:
+            final_text = text.rstrip()
         result = {
-            "text":             text_with_footer,
+            "text":             final_text,
+            "provenance_footer": footer,  # always available for callers
             "path_used":        path,
             "severity":         severity,
             "llm_rejected":     llm_rejected,

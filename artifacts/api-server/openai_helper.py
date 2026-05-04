@@ -16257,6 +16257,61 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     except Exception as _warn_exc:  # noqa: BLE001
         _trace(req_id, "4c.ENGINE_WARNING_ERR", str(_warn_exc)[:200])
 
+    # ─── Phase 2.10.5 STEP 8 — Translator Lockdown Final Wrap (sync) ───
+    # ADD-ONLY safety net for marriage topic only. Engine = Truth, LLM =
+    # polish, translator_lock = verifier. On fact mismatch falls back to
+    # deterministic engine template; on CRITICAL severity hard-blocks.
+    # Footer hidden from user text (kept in meta for ops/frontend).
+    try:
+        _mvo_sync = (out_meta or {}).get("marriage_verdict_obj") \
+            if isinstance(out_meta, dict) else None
+        if (topic == "marriage"
+                and isinstance(_mvo_sync, dict)
+                and _mvo_sync
+                and isinstance(text, str)
+                and text.strip()
+                and text.strip() != _ENGINE_HONESTY_REFUSAL_TEXT.strip()
+                and text.strip() != _POST_LOGIC_REFUSAL_TEXT.strip()):
+            from event_timing.marriage.translator_lock import (
+                render_marriage_output as _render_marriage_lock,
+            )
+            _llm_text_snapshot = text
+            # Preserve engine warn-footer across translator_lock fallback
+            # (Phase 2.10.5 fix: deterministic template path drops anything
+            # appended by upstream stages — re-attach if it was present).
+            _had_warn_footer = (_ENGINE_WARN_FOOTER_MARKER in text)
+            _locked = _render_marriage_lock(
+                engine_result          = _mvo_sync,
+                lang                   = "hinglish",
+                llm_polish_fn          = lambda _t, _e: _llm_text_snapshot,
+                include_footer_in_text = False,
+            )
+            text = _locked["text"]
+            if (_had_warn_footer
+                    and _locked["path_used"] in ("TEMPLATE", "BLOCKED")
+                    and _ENGINE_WARN_FOOTER_MARKER not in text):
+                text = text.rstrip() + _ENGINE_WARN_FOOTER_TEXT
+            if isinstance(out_meta, dict):
+                out_meta["translator_lock"] = {
+                    "path_used":         _locked["path_used"],
+                    "severity":          _locked["severity"],
+                    "llm_rejected":      _locked["llm_rejected"],
+                    "rejection_reason":  _locked.get("rejection_reason"),
+                    "snapshot_hash":     _locked["snapshot_hash"],
+                    "ui_badge":          _locked["ui_badge"],
+                    "provenance_footer": _locked["provenance_footer"],
+                }
+            _trace(req_id, "4e.TRANSLATOR_LOCK", {
+                "path":         "sync",
+                "path_used":    _locked["path_used"],
+                "severity":     _locked["severity"],
+                "llm_rejected": _locked["llm_rejected"],
+                "reason":       _locked.get("rejection_reason"),
+            })
+    except Exception as _tlock_exc:  # noqa: BLE001
+        _trace(req_id, "4e.TRANSLATOR_LOCK_ERR",
+               f"sync:{str(_tlock_exc)[:180]}")
+
     _trace(req_id, "5.FINAL_OUTPUT", text)
 
     # ── Phase 7.2 — DETERMINISTIC POST-LLM VERIFIER (sync, full path) ──
@@ -17526,6 +17581,59 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     except Exception as _warn_exc_s:  # noqa: BLE001
         _trace(req_id, "4c.ENGINE_WARNING_ERR",
                f"stream:{str(_warn_exc_s)[:180]}")
+
+    # ─── Phase 2.10.5 STEP 8 — Translator Lockdown Final Wrap (stream) ───
+    # Mirror of sync wrap above. ADD-ONLY safety net for marriage topic
+    # only. Footer hidden from user text (kept in build_meta_stream for
+    # ops/frontend badge rendering).
+    try:
+        _mvo_stream = (build_meta_stream or {}).get("marriage_verdict_obj") \
+            if isinstance(build_meta_stream, dict) else None
+        if (topic == "marriage"
+                and isinstance(_mvo_stream, dict)
+                and _mvo_stream
+                and isinstance(final_text, str)
+                and final_text.strip()
+                and final_text.strip() != _ENGINE_HONESTY_REFUSAL_TEXT.strip()
+                and final_text.strip() != _POST_LOGIC_REFUSAL_TEXT.strip()):
+            from event_timing.marriage.translator_lock import (
+                render_marriage_output as _render_marriage_lock_s,
+            )
+            _llm_text_snapshot_s = final_text
+            # Preserve engine warn-footer across translator_lock fallback
+            # (Phase 2.10.5 fix: see sync wrap above for rationale).
+            _had_warn_footer_s = (_ENGINE_WARN_FOOTER_MARKER in final_text)
+            _locked_s = _render_marriage_lock_s(
+                engine_result          = _mvo_stream,
+                lang                   = "hinglish",
+                llm_polish_fn          = lambda _t, _e: _llm_text_snapshot_s,
+                include_footer_in_text = False,
+            )
+            final_text = _locked_s["text"]
+            if (_had_warn_footer_s
+                    and _locked_s["path_used"] in ("TEMPLATE", "BLOCKED")
+                    and _ENGINE_WARN_FOOTER_MARKER not in final_text):
+                final_text = final_text.rstrip() + _ENGINE_WARN_FOOTER_TEXT
+            if isinstance(build_meta_stream, dict):
+                build_meta_stream["translator_lock"] = {
+                    "path_used":         _locked_s["path_used"],
+                    "severity":          _locked_s["severity"],
+                    "llm_rejected":      _locked_s["llm_rejected"],
+                    "rejection_reason":  _locked_s.get("rejection_reason"),
+                    "snapshot_hash":     _locked_s["snapshot_hash"],
+                    "ui_badge":          _locked_s["ui_badge"],
+                    "provenance_footer": _locked_s["provenance_footer"],
+                }
+            _trace(req_id, "4e.TRANSLATOR_LOCK", {
+                "path":         "stream",
+                "path_used":    _locked_s["path_used"],
+                "severity":     _locked_s["severity"],
+                "llm_rejected": _locked_s["llm_rejected"],
+                "reason":       _locked_s.get("rejection_reason"),
+            })
+    except Exception as _tlock_exc_s:  # noqa: BLE001
+        _trace(req_id, "4e.TRANSLATOR_LOCK_ERR",
+               f"stream:{str(_tlock_exc_s)[:180]}")
 
     _trace(req_id, "5.FINAL_OUTPUT(stream)", final_text)
 

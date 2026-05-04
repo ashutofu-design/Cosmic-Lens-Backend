@@ -486,3 +486,40 @@ P3 DELAYED, P4 PROMISED.
 
 **Skipped**: FIX 3 (parivartana weight 3) — classical KP-correct, false
 positives bahut rare.
+
+---
+
+## Phase 2.10.5 STEP 8 — Production Wiring (Translator Lockdown LIVE)
+
+`translator_lock` (M1-M10) ab production answer pipeline me wired hai —
+`openai_helper.py` ke 2 sites (sync `ai_ask` L16263, stream `ai_ask_stream`
+L17580) pe ADD-ONLY try/except wrap. Marriage topic only, refusal-text guard,
+non-empty `marriage_verdict_obj` required. Footer hidden from user text via
+new param `include_footer_in_text=False` (footer always returned in meta for
+ops/UI badge). Trace events: `4e.TRANSLATOR_LOCK` / `4e.TRANSLATOR_LOCK_ERR`.
+
+**translator_lock.py extension (ADD-ONLY)**:
+- New param: `include_footer_in_text: bool = True` (backward-compat default)
+- `provenance_footer` always returned as top-level meta key
+- `ensure_disclaimer()` made **idempotent** (Phase 2.10.5 fix) — head-fragment
+  whitespace-normalized substring check prevents double-disclaimer when
+  upstream LLM snapshot already contains it.
+
+**Architect 2 SEVERE issues fixed**:
+1. **Engine warn-footer preservation** — translator_lock fallback (TEMPLATE/
+   BLOCKED path) replaces `text` with deterministic template that drops any
+   prior `_ENGINE_WARN_FOOTER_TEXT`. Both sync & stream wraps now snapshot
+   `_had_warn_footer` BEFORE call, and re-append if fallback path AND marker
+   missing. No double-append (marker presence check).
+2. **Idempotent disclaimer** — fixed in `ensure_disclaimer()` itself (see
+   above). Verified: no-disc → 1 append; has-disc → no double; whitespace-
+   variant → no double; OK severity → no append.
+
+**Verification**:
+- 5-profile regression PASS (P40 May-Jul 2026 PROMISED preserved, all 5 profs
+  TEMPLATE path, footer correctly hidden, ui_badge meta populated)
+- API server clean restart, `/api/healthz` → `{"status":"ok"}`
+- F1 simulation: warn-footer restored on TEMPLATE fallback, no double-append
+
+**Pending (M11-M15 / Phase 2.10.4 STEP 7C)**: golden tests, LLM temp lockdown,
+multi-turn cleaner, i18n parity, A/B telemetry.

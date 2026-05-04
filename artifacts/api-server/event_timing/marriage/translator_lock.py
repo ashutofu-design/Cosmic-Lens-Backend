@@ -375,7 +375,10 @@ def fact_check_llm_output(llm_text: str,
     # ── Date check (Phase 2.10.2 STEP 7 fix-up: fail closed when engine
     # has windows BUT we couldn't parse them) ────────────────────────
     engine_pairs = set(_engine_window_pairs(engine_result))
-    llm_pairs = _extract_year_month_pairs(llm_text)
+    # M16 — combine English "Month Year" + Hinglish "Year ke Month" so
+    # invented Hinglish-order dates are also caught here.
+    llm_pairs = list(set(_extract_year_month_pairs(llm_text))
+                     | set(_extract_hinglish_year_first_pairs(llm_text)))
 
     # Detect whether engine *should* have windows (so missing-parse = bug)
     engine_has_window_text = any(
@@ -497,6 +500,207 @@ def whitelist_check(llm_text: str,
                 drift.append(f"unsupported claim: '{m.group(0)}'")
 
     return (len(drift) == 0, drift)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# M16 — STRICT WINDOW ASSERTION (Phase 2.10.5 STEP M16, ADD-ONLY)
+#
+# Closes a real hallucination loophole observed on profile P40 (May 2026):
+# the legacy _extract_year_month_pairs only matched English "Month Year"
+# order, so Hinglish "year ke Month" phrasing AND bare "2028" tokens
+# slipped past fact_check_llm_output silently.
+#
+# This block adds:
+#   1. Hinglish reverse-order extraction ("2026 ke August", "2026 ka May")
+#   2. Bare-year extraction (4-digit years that have NO month attached)
+#   3. _engine_known_years() — set of all years engine considers in scope
+#   4. check_window_assertion() — TWO new validations wired into
+#      render_marriage_output (see L735+):
+#        (a) Every BARE year mentioned by LLM must be a year the engine
+#            knows about. Catches "2028" hallucinations even with no
+#            month attached.
+#        (b) At least ONE month-year pair from engine.primary_window
+#            must appear in LLM (with ±tolerance_months month slack to
+#            allow paraphrase like "April-July 2026" for "May-July 2026").
+# ═══════════════════════════════════════════════════════════════════════
+
+# Common Hinglish/English connector tokens that may appear between a year
+# and the month it modifies (e.g. "2026 ke August", "2026 mein May",
+# "2026 ke end se August"). Conservative whitelist; multi-word fillers
+# allowed up to a small bound to avoid runaway match.
+_M16_HINGLISH_FILLER = (
+    r"(?:ke|ka|ki|me|mein|main|wala|wale|wali|"
+    r"end|start|beech|middle|mid|shuru|antim|aakhri|akhir|"
+    r"se|tak|to|ko|aur|ya|after|before|around|near|until|by)"
+)
+
+# "<4-digit-year> [filler]{0,4} <month-token>" — Hinglish reverse order.
+_M16_HINGLISH_YEAR_FIRST_RX = re.compile(
+    rf"\b(\d{{4}})(?:\s+{_M16_HINGLISH_FILLER}){{0,4}}\s+([a-zA-Z]{{3,9}})\b",
+    re.I,
+)
+
+
+def _extract_hinglish_year_first_pairs(text: str) -> List[Tuple[int, int]]:
+    """M16 — Hinglish 'year [filler]? month' reverse-order pairs.
+
+    Complements _extract_year_month_pairs which only handles the
+    English 'month year' order. Returns deduped (year, month) pairs.
+    """
+    pairs: List[Tuple[int, int]] = []
+    for m in _M16_HINGLISH_YEAR_FIRST_RX.finditer(text):
+        try:
+            year = int(m.group(1))
+        except ValueError:
+            continue
+        if year < 1900 or year > 2200:
+            continue
+        mon_s = m.group(2).lower()
+        if mon_s in _MONTH_TOKENS:
+            pairs.append((year, _MONTH_TOKENS[mon_s]))
+    seen, out = set(), []
+    for p in pairs:
+        if p not in seen:
+            seen.add(p)
+            out.append(p)
+    return out
+
+
+def _extract_bare_years(text: str) -> List[int]:
+    """M16 — All 4-digit years in valid range. Caller should subtract
+    years that already appear inside (year, month) pairs to isolate the
+    genuinely-bare references."""
+    out: List[int] = []
+    for m in re.finditer(r"\b(\d{4})\b", text):
+        try:
+            y = int(m.group(1))
+        except ValueError:
+            continue
+        if 1990 <= y <= 2100:
+            out.append(y)
+    return out
+
+
+def _engine_known_years(engine_result: Dict[str, Any]) -> set:
+    """M16 — Years the engine has any factual basis for (windows +
+    factor blob + risk_flags). Years outside this set in LLM output
+    are presumed invented."""
+    blob_parts: List[str] = []
+    for k in ("primary_window", "backup_window"):
+        v = engine_result.get(k)
+        if v:
+            blob_parts.append(str(v))
+    for w in (engine_result.get("top_3_windows") or []):
+        for kk in ("window", "label", "start_str", "end_str",
+                   "start", "end"):
+            vv = w.get(kk)
+            if vv:
+                blob_parts.append(str(vv))
+    # Factors / risk_flags often mention birth_year, current age year,
+    # threshold dates etc. Including them prevents false-positives when
+    # LLM legitimately contextualises ("janam 1992 me hua tha").
+    for f in (engine_result.get("factors") or []):
+        blob_parts.append(str(f))
+    for f in (engine_result.get("risk_flags") or []):
+        blob_parts.append(str(f))
+    blob = " ".join(blob_parts)
+    years: set = set()
+    for m in re.finditer(r"\b(\d{4})\b", blob):
+        try:
+            y = int(m.group(1))
+            if 1900 <= y <= 2200:
+                years.add(y)
+        except ValueError:
+            continue
+    return years
+
+
+def _primary_window_pairs(engine_result: Dict[str, Any]
+                          ) -> List[Tuple[int, int]]:
+    """M16 — (year, month) endpoints implied by engine.primary_window."""
+    primary = engine_result.get("primary_window")
+    if not primary:
+        return []
+    pairs_en = _extract_year_month_pairs(str(primary))
+    pairs_hi = _extract_hinglish_year_first_pairs(str(primary))
+    seen, out = set(), []
+    for p in list(pairs_en) + list(pairs_hi):
+        if p not in seen:
+            seen.add(p)
+            out.append(p)
+    return out
+
+
+def check_window_assertion(
+    llm_text: str,
+    engine_result: Dict[str, Any],
+    tolerance_months: int = 1,
+) -> Tuple[bool, List[str]]:
+    """M16 — Strict primary-window enforcement.
+
+    Two checks:
+      (a) Every BARE 4-digit year in the LLM (within 1990-2100 sanity
+          range) must be a year the engine knows about. Catches "2028"
+          hallucinations even when no month is attached.
+      (b) At least ONE (year, month) pair from engine.primary_window
+          must appear in the LLM (within ±tolerance_months month slack
+          to allow paraphrase like "April-July 2026" for "May-July
+          2026"). Without this assertion the LLM is free to ignore the
+          engine's promised window entirely.
+
+    Returns (is_match, reasons[])
+      is_match=True  → safe to use LLM text
+      is_match=False → reject LLM text, fall back to template
+    """
+    reasons: List[str] = []
+
+    # Combine year-month extraction across both regex orientations.
+    pairs_en = _extract_year_month_pairs(llm_text)
+    pairs_hi = _extract_hinglish_year_first_pairs(llm_text)
+    llm_pairs: List[Tuple[int, int]] = []
+    seen_p: set = set()
+    for p in list(pairs_en) + list(pairs_hi):
+        if p not in seen_p:
+            seen_p.add(p)
+            llm_pairs.append(p)
+    pair_years: set = {y for (y, _m) in llm_pairs}
+
+    # ── (a) Bare-year sanity ──────────────────────────────────────────
+    engine_years = _engine_known_years(engine_result)
+    if engine_years:
+        bare_years = _extract_bare_years(llm_text)
+        invented_bare = sorted({y for y in bare_years
+                                if y not in engine_years
+                                and y not in pair_years})
+        if invented_bare:
+            reasons.append(
+                "invented bare year(s) not in engine known years "
+                f"(engine={sorted(engine_years)}): {invented_bare[:5]}"
+            )
+
+    # ── (b) Primary window must be asserted ───────────────────────────
+    primary_pairs = _primary_window_pairs(engine_result)
+    if primary_pairs:
+        acceptable: set = set()
+        for (y, m) in primary_pairs:
+            for delta in range(-tolerance_months, tolerance_months + 1):
+                mm = m + delta
+                yy = y
+                if mm < 1:
+                    mm += 12
+                    yy -= 1
+                elif mm > 12:
+                    mm -= 12
+                    yy += 1
+                acceptable.add((yy, mm))
+        if not any(p in acceptable for p in llm_pairs):
+            primary_str = engine_result.get("primary_window")
+            reasons.append(
+                f"primary_window {primary_str!r} not asserted by LLM "
+                f"(no month-year pair within ±{tolerance_months}mo)"
+            )
+
+    return (len(reasons) == 0, reasons)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -734,9 +938,15 @@ def render_marriage_output(
 
     facts_ok, fact_reasons = fact_check_llm_output(llm_text, engine_result)
     clean_ok, drift_reasons = whitelist_check(llm_text, engine_result)
+    # M16 — Strict primary-window enforcement. Catches Hinglish reverse-
+    # order pairs and bare-year hallucinations that M1's English-only
+    # extractor cannot see (P40 May-2026 case).
+    window_ok, window_reasons = check_window_assertion(
+        llm_text, engine_result,
+    )
 
-    if not facts_ok or not clean_ok:
-        all_reasons = fact_reasons + drift_reasons
+    if not facts_ok or not clean_ok or not window_ok:
+        all_reasons = fact_reasons + drift_reasons + window_reasons
         return _finalize(template_text, "TEMPLATE", True,
                          "; ".join(all_reasons))
 

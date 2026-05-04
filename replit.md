@@ -765,3 +765,69 @@ The Truth/Translator/Validator triad is now:
 - **M13** Topic-aware history cleaner (cross-taxonomy fix applied)
 - **M14** Hard language lock (hi/hn/en, no mid-reply drift)
 - **M15** Observable acceptance-rate telemetry
+
+---
+
+## Phase 2.10.5 STEP M16 — Strict Window Assertion (Hinglish-aware) ✅
+
+**Problem discovered during user-requested fresh P40 audit:**
+A live re-run of P40 (`Meri shaadi kab hogi?`) showed the LLM had been
+silently inventing windows like *"2026 ke end se 2028 ke beech"* and
+*"2028-29 bhi commitment"*, while the engine's frozen truth was
+`primary_window = "May - July 2026" PROMISED STRONG`. Validator was
+passing all of it as `LLM_POLISHED severity=OK`.
+
+**Root cause:**
+`fact_check_llm_output`'s regex
+```
+\b([a-z]{3,9})(?:\s*[-–to]+\s*([a-z]{3,9}))?\s+(\d{4})\b
+```
+only matched English `Month Year` order. So Hinglish `2026 ke August`
+(YEAR→MONTH order) and bare years like `2028` (no month attached)
+extracted to `llm_pairs = []` → `invented = []` → check passed silently.
+
+**Fix (ADD-ONLY, `event_timing/marriage/translator_lock.py` L505+):**
+1. **`_extract_hinglish_year_first_pairs()`** — new regex
+   `\b(\d{4})(?:\s+<filler>){0,4}\s+([a-zA-Z]{3,9})\b` catches Hinglish
+   reverse order with whitelisted connector tokens (ke, ka, mein, end,
+   start, beech, se, tak, etc.).
+2. **`_extract_bare_years()`** — finds 4-digit years in [1990, 2100].
+3. **`_engine_known_years()`** — collects every year the engine has
+   factual basis for (primary, backup, top_3, factor blob, risk_flags).
+4. **`check_window_assertion()`** — public function with two checks:
+   - **(a) Bare-year sanity**: every bare year in LLM must be in
+     engine known years. Catches `2028`/`2027` hallucinations.
+   - **(b) Primary-window assertion**: at least one (year, month) pair
+     from `engine.primary_window` must appear in LLM (with ±1 month
+     slack for paraphrase). Catches "LLM ignored the promised window".
+5. Wired into `render_marriage_output` (L942+) alongside existing
+   `fact_check_llm_output` + `whitelist_check`. Failure → fall back to
+   deterministic TEMPLATE with explicit reason string.
+6. **Bonus hardening**: `fact_check_llm_output` itself now consumes
+   both English + Hinglish extractors (L383), so M1 catches Hinglish
+   reverse-order invented dates too.
+
+**Live verified on the EXACT same P40 question that exposed the bug:**
+- Pre-M16: `path_used=LLM_POLISHED, llm_rejected=false` — 2 fake
+  windows shipped to user, validator green.
+- Post-M16:
+  ```
+  4e.TRANSLATOR_LOCK: path_used=TEMPLATE, llm_rejected=true,
+    reason: "invented bare year(s) not in engine known years
+             (engine=[1992,2026,2028,2029,2030,2031]): [2027];
+             primary_window 'May - July 2026' not asserted by LLM
+             (no month-year pair within ±1mo)"
+  ```
+  User now sees the locked deterministic template with
+  `PRIMARY WINDOW: May - July 2026` verbatim — engine truth, no drift.
+- Telemetry: `acceptance_rate=0.0, llm_rejected=2/2, by_path={TEMPLATE:2}`.
+- P40 golden baseline still PASS.
+- Unit test: GOOD reply (`"May se July 2026"`) passes; HALLUCINATING
+  reply rejected with both reasons. No false positives.
+
+**Tradeoff:** strict mode = template falls back to deterministic block
+when LLM drifts. Less "conversational" but **factually locked**. Per
+project goal (`Engine = Truth(frozen)`), this is the correct contract.
+Future M17 could add a re-prompt loop ("LLM, you didn't quote
+primary_window May-July 2026, try again") to recover Hinglish polish
+while keeping facts locked, but that is OUT OF SCOPE for M16.

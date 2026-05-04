@@ -305,6 +305,28 @@ def _get_7c_star_lord(kp: dict) -> str:
 _KP_SB_PROMISE_HOUSES: Set[int] = {2, 7, 11}
 _KP_SB_DENY_HOUSES: Set[int] = {1, 6, 8, 10, 12}
 
+# Phase 2.9.4 (May 4 2026) — STEP 1 FIX 2 + FIX 6: TIERED HOUSE WEIGHTS
+# Classical KP/Vedic severity (not all deny houses are equal):
+#   8H = sudden upheaval / accidents / Mangalik-style danger    (worst, 3)
+#   12H = loss / withdrawal / foreign / bed-pleasure absence    (mid,   2)
+#   1H = self-focus / anti-partnership                          (mid,   2)
+#   6H = conflict / disputes / litigation (resolvable)          (mild,  1)
+#   10H = career-over-marriage                                  (mild,  1)
+# Promise tier:
+#   7H = marriage itself (kalatra-bhava)                        (top,   3)
+#   2H = family / kutumba                                       (mid,   2)
+#   11H = labha / fulfilment of desire                          (mid,   2)
+_KP_PROMISE_WEIGHT: Dict[int, int] = {2: 2, 7: 3, 11: 2}
+_KP_DENY_WEIGHT: Dict[int, int] = {1: 2, 6: 1, 8: 3, 10: 1, 12: 2}
+
+
+def _kp_weighted_score(houses: List[int],
+                        weight_map: Dict[int, int]) -> int:
+    """Sum severity weights for a set of houses. 0 if empty."""
+    if not houses:
+        return 0
+    return sum(weight_map.get(h, 0) for h in houses)
+
 _KP_PLANET_NAMES: List[str] = [
     "Sun", "Moon", "Mars", "Mercury", "Jupiter",
     "Venus", "Saturn", "Rahu", "Ketu",
@@ -441,12 +463,33 @@ def _kp_sublord_filter_planet(kp: dict, planet: str) -> Dict[str, Any]:
     nl_deny: List[int] = []
     nl_tiebreak_applied = False
 
+    # Phase 2.9.4 STEP 1 FIX 6 — WEIGHTED PROMISE/DENY DOMINANCE
+    # Before NL tie-break, when SB verdict is MIXED, check weighted
+    # severity dominance (8H deny ≠ 6H deny; 7H promise > 11H promise).
+    # Strong dominance (>=2 weight margin) flips MIXED early; tie/close
+    # falls through to NL tie-breaker as before.
+    p_score = _kp_weighted_score(promise, _KP_PROMISE_WEIGHT)
+    d_score = _kp_weighted_score(deny, _KP_DENY_WEIGHT)
+    weighted_flip = False
+    if verdict == "MIXED":
+        if p_score >= d_score + 2:
+            verdict = "STRONG"
+            reason = (f"{reason}; weighted dominance promise={p_score} "
+                      f"vs deny={d_score} -> upgrade STRONG [2.9.4 FIX 6]")
+            weighted_flip = True
+        elif d_score >= p_score + 2:
+            verdict = "WEAK"
+            reason = (f"{reason}; weighted dominance deny={d_score} "
+                      f"vs promise={p_score} -> downgrade WEAK [2.9.4 FIX 6]")
+            weighted_flip = True
+
     if nl:
         nl_houses = sorted(set(_sig_pl(kp, nl)))
         nl_set = set(nl_houses)
         nl_promise = sorted(nl_set & _KP_SB_PROMISE_HOUSES)
         nl_deny = sorted(nl_set & _KP_SB_DENY_HOUSES)
 
+        # Original FIX E: NL tie-break on residual MIXED
         if verdict == "MIXED" and nl_houses:
             if nl_promise and not nl_deny:
                 verdict = "STRONG"
@@ -464,6 +507,23 @@ def _kp_sublord_filter_planet(kp: dict, planet: str) -> Dict[str, Any]:
                 nl_tiebreak_applied = True
             # NL mixed or empty intersection → no flip, keep MIXED
 
+        # Phase 2.9.4 STEP 1 FIX 1 — SYMMETRIC NL CONTRADICTION CHECK
+        # NL ko sirf MIXED pe nahi, STRONG/WEAK pe bhi consult karo:
+        #   STRONG + NL only-deny       -> downgrade to MIXED (caution)
+        #   WEAK   + NL only-promise    -> upgrade to MIXED (hope)
+        # Marks 'nl_tiebreak_applied' too for observability. This catches
+        # cases where SB looked clean but NL strongly contradicts.
+        elif verdict == "STRONG" and nl_deny and not nl_promise:
+            verdict = "MIXED"
+            reason = (f"{reason}; NL contradict {nl} only-deny "
+                      f"{nl_deny} -> downgrade STRONG->MIXED [2.9.4 FIX 1]")
+            nl_tiebreak_applied = True
+        elif verdict == "WEAK" and nl_promise and not nl_deny:
+            verdict = "MIXED"
+            reason = (f"{reason}; NL hope {nl} only-promise "
+                      f"{nl_promise} -> upgrade WEAK->MIXED [2.9.4 FIX 1]")
+            nl_tiebreak_applied = True
+
     out.update({
         "sub_lord": sb,
         "sb_houses": sb_houses,
@@ -478,6 +538,10 @@ def _kp_sublord_filter_planet(kp: dict, planet: str) -> Dict[str, Any]:
         "nl_deny_hits": nl_deny,
         "nl_tiebreak_applied": nl_tiebreak_applied,
         "raw_sb_verdict": raw_sb_verdict,
+        # Phase 2.9.4 weighted/observability fields
+        "promise_score": p_score,
+        "deny_score": d_score,
+        "weighted_flip_applied": weighted_flip,
     })
     return out
 
@@ -543,13 +607,28 @@ def compute_kp_sublord_marriage_filter(kp: dict) -> Dict[str, Any]:
         strong_n = len(out["buckets"]["strong"])
         mixed_n = len(out["buckets"]["mixed"])
         weak_n = len(out["buckets"]["weak"])
+        unknown_n = len(out["buckets"].get("unknown", []))
 
-        # FINAL verdict (Sub-Lord priority — 7CSL leads, with contradiction guard)
-        # Contradiction guard: even if 7CSL=STRONG, severe disagreement from
-        # the 9-planet consensus (majority WEAK) downgrades the call. This
-        # prevents over-confident PROMISED when only the 7CSL agrees.
-        contradiction = (csl_v == "STRONG" and weak_n >= 5 and strong_n <= 2)
+        # Phase 2.9.4 STEP 1 FIX 3 — SOFT CONSENSUS GRADIENT
+        # Edge case: when |strong - weak| <= 1 (very close consensus,
+        # e.g. 4-3-2 split), even a STRONG 7CSL is on shaky ground.
+        # Treat as 'edge_consensus' → strength caps at MEDIUM.
+        edge_consensus = abs(strong_n - weak_n) <= 1 and (strong_n + weak_n) >= 3
 
+        # Phase 2.9.4 STEP 1 FIX 4 — RELAXED 7CSL CONTRADICTION GUARD
+        # Originally: contradiction only if (csl=STRONG, weak>=5, strong<=2).
+        # Adds two more cases:
+        #   (a) csl=STRONG but solo (strong_n == 1) AND weak_n >= 4
+        #       → 7CSL standing alone vs majority weak → contradiction.
+        #   (b) reverse upgrade: csl=WEAK BUT strong_n >= 5 (chart majority
+        #       promises) → upgrade DENIED→DELAYED, don't blanket-deny.
+        contradiction = (
+            (csl_v == "STRONG" and weak_n >= 5 and strong_n <= 2) or
+            (csl_v == "STRONG" and strong_n == 1 and weak_n >= 4)
+        )
+        reverse_upgrade = (csl_v == "WEAK" and strong_n >= 5)
+
+        # FINAL verdict (Sub-Lord priority — 7CSL leads, with guards)
         if csl_v == "STRONG" and contradiction:
             verdict = "DELAYED"
         elif csl_v == "STRONG":
@@ -557,15 +636,26 @@ def compute_kp_sublord_marriage_filter(kp: dict) -> Dict[str, Any]:
         elif csl_v == "MIXED":
             verdict = "DELAYED"
         elif csl_v == "WEAK":
-            verdict = "DENIED" if weak_n >= 5 else "DELAYED"
+            if reverse_upgrade:
+                verdict = "DELAYED"   # FIX 4 reverse — chart promises despite 7CSL
+            else:
+                verdict = "DENIED" if weak_n >= 5 else "DELAYED"
         else:
             # csl_v UNKNOWN: insufficient data on the FINAL DECIDER planet.
             # Default to DELAYED (safer than PROMISED, more actionable than UNKNOWN).
             verdict = "DELAYED"
 
-        # Strength (consensus-adjusted)
+        # Phase 2.9.4 STEP 1 FIX 5 — DATA CONFIDENCE SUB-FLAG
+        # If 7CSL itself is UNKNOWN OR >=4 of 9 planets are UNKNOWN,
+        # mark low_data_confidence — surfaces in narration so user knows
+        # KP results may shift if missing significations get filled in.
+        low_data_confidence = (csl_v == "UNKNOWN" or unknown_n >= 4)
+
+        # Strength (consensus-adjusted) — FIX 3 caps STRONG to MEDIUM on edges
         if csl_v == "STRONG" and contradiction:
             strength = "WEAK"
+        elif csl_v == "STRONG" and edge_consensus:
+            strength = "MEDIUM"   # FIX 3
         elif csl_v == "STRONG" and strong_n >= 4 and weak_n <= 2:
             strength = "STRONG"
         elif csl_v == "STRONG" and (mixed_n >= 2 or weak_n >= 3):
@@ -577,15 +667,32 @@ def compute_kp_sublord_marriage_filter(kp: dict) -> Dict[str, Any]:
         else:
             strength = "WEAK"
 
-        # Plain 2-line reason
+        # FIX 5: low data confidence caps strength to MEDIUM at most
+        if low_data_confidence and strength == "STRONG":
+            strength = "MEDIUM"
+
+        # Plain 2-line reason — now includes unknown_n + flags
         sb_summary = (out["csl_filter"] or {}).get("reason") or "n/a"
+        flag_bits = []
+        if contradiction:        flag_bits.append("contradiction")
+        if reverse_upgrade:      flag_bits.append("reverse-upgrade")
+        if edge_consensus:       flag_bits.append("edge-consensus")
+        if low_data_confidence:  flag_bits.append("low-data-confidence")
+        flags_str = (" [" + ",".join(flag_bits) + "]") if flag_bits else ""
         reason = (
             f"7CSL {csl} sub-lord filter: {sb_summary}. "
-            f"Consensus: {strong_n} strong, {mixed_n} mixed, {weak_n} weak."
+            f"Consensus: {strong_n} strong, {mixed_n} mixed, "
+            f"{weak_n} weak, {unknown_n} unknown.{flags_str}"
         )
 
         out.update({
             "verdict": verdict, "strength": strength, "reason": reason,
+            # Phase 2.9.4 observability fields
+            "unknown_n": unknown_n,
+            "edge_consensus": edge_consensus,
+            "contradiction": contradiction,
+            "reverse_upgrade": reverse_upgrade,
+            "low_data_confidence": low_data_confidence,
         })
         return out
     except Exception as exc:

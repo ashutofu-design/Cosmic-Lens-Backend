@@ -96,12 +96,21 @@ def _csl_signification_chain(
 ) -> Dict[str, Any]:
     """Compute the full KP signification chain for the CSL planet.
 
+    Phase 2.8.81 — Node Dispositor extension:
+      Rahu/Ketu, being shadow nodes, do NOT own signs. Per KP tradition
+      they "act through" the lord of the sign they occupy (dispositor).
+      So when the CSL planet is Rahu or Ketu, we additionally include
+      the dispositor's house + ownership in the signification chain.
+
     Returns dict with:
       - csl_house: house occupied by CSL planet
-      - csl_owns: houses owned by CSL planet
+      - csl_owns: houses owned by CSL planet (empty for nodes)
       - star_lord: nakshatra lord of CSL planet
       - star_lord_house: house occupied by star-lord
       - star_lord_owns: houses owned by star-lord
+      - dispositor: sign-lord of CSL planet's sign (only for Rahu/Ketu)
+      - dispositor_house: house occupied by dispositor
+      - dispositor_owns: houses owned by dispositor
       - signified: sorted list of all unique houses signified
     """
     # Step 1+2: CSL planet placement and ownership
@@ -123,6 +132,21 @@ def _csl_signification_chain(
         except (TypeError, ValueError):
             pass
 
+    # Step 5 (Phase 2.8.81): Node dispositor — Rahu/Ketu act through
+    # the lord of the sign they occupy.
+    dispositor: Optional[str] = None
+    dispositor_house: Optional[int] = None
+    dispositor_owns: List[int] = []
+    if csl_planet in ("Rahu", "Ketu") and csl_p:
+        sign_name = csl_p.get("sign")
+        si = _SIGN_IDX.get(sign_name) if sign_name else None
+        if si is not None:
+            dispositor = _SIGN_LORDS.get(si)
+            if dispositor:
+                dispositor_house = _house_of_planet(planets, dispositor)
+                if dispositor not in ("Rahu", "Ketu"):
+                    dispositor_owns = _houses_owned_by(asc_si, dispositor)
+
     signified: Set[int] = set()
     if csl_house:
         signified.add(csl_house)
@@ -130,6 +154,9 @@ def _csl_signification_chain(
     if star_lord_house:
         signified.add(star_lord_house)
     signified.update(star_lord_owns)
+    if dispositor_house:
+        signified.add(dispositor_house)
+    signified.update(dispositor_owns)
 
     return {
         "csl_house": csl_house,
@@ -137,6 +164,9 @@ def _csl_signification_chain(
         "star_lord": star_lord,
         "star_lord_house": star_lord_house,
         "star_lord_owns": star_lord_owns,
+        "dispositor": dispositor,
+        "dispositor_house": dispositor_house,
+        "dispositor_owns": dispositor_owns,
         "signified": sorted(signified),
     }
 
@@ -164,7 +194,16 @@ def compute_kp_5th_csl(kundli: dict) -> Optional[Dict[str, Any]]:
     if not cusp5:
         return None
 
-    csl_planet = cusp5.get("sl") or cusp5.get("subLord") or cusp5.get("sub_lord")
+    # Phase 2.8.81 FIELD FIX (CRITICAL):
+    # The kundli engine stores cusp data as:
+    #   sl = SIGN lord (e.g. Capricorn → Saturn)  ← NOT sub-lord
+    #   sb = SUB-lord (canonical KP CSL)          ← THIS is what we want
+    #   ss = sub-sub-lord
+    # Earlier versions read `sl` and got sign-lord by mistake, producing
+    # systematically wrong CSL verdicts (validated against Astrosage on
+    # P40: stored sb matches canonical math 12/12; sl was sign-lord).
+    csl_planet = (cusp5.get("sb") or cusp5.get("subLord")
+                  or cusp5.get("sub_lord"))
     if not csl_planet or not isinstance(csl_planet, str):
         return None
 
@@ -219,5 +258,5 @@ def compute_kp_5th_csl(kundli: dict) -> Optional[Dict[str, Any]]:
         "verdict": verdict,         # GREEN | AMBER | NEUTRAL | RED
         "score_weight": score_weight,  # +3 | +1 | 0 | -4
         "reason": reason,
-        "engine_version": "kp_5th_csl_v1.0_deterministic",
+        "engine_version": "kp_5th_csl_v1.1_sb_node_dispositor",
     }

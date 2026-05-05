@@ -63,7 +63,11 @@ def _evaluate_cusp(
     label: str,
 ) -> Optional[Dict[str, Any]]:
     """Compute signification chain + verdict for one cusp."""
-    csl_planet = (cusp.get("sl") or cusp.get("subLord")
+    # Phase 2.8.81 FIELD FIX (CRITICAL — see stock_engine.kp_5th_csl docs):
+    # `sl` in kundli = SIGN lord, NOT sub-lord. `sb` is the canonical
+    # KP sub-lord (CSL). Astrosage triple-confirmed on P40: sb matches
+    # canonical Vimshottari proportional sub-division math 12/12 cusps.
+    csl_planet = (cusp.get("sb") or cusp.get("subLord")
                   or cusp.get("sub_lord"))
     if not csl_planet or not isinstance(csl_planet, str):
         return None
@@ -175,5 +179,5 @@ def compute_kp_finance_csl(kundli: dict) -> Optional[Dict[str, Any]]:
         "kp_leak_signal": kp_leak_signal,
         "wealth_nudge": wealth_nudge,    # added to wealth_potential score
         "risk_nudge": risk_nudge,        # added to risk_leak raw count
-        "engine_version": "kp_finance_csl_v1.0_deterministic",
+        "engine_version": "kp_finance_csl_v1.1_sb_node_dispositor",
     }

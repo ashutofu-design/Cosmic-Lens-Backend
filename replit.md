@@ -37,7 +37,8 @@ A pnpm workspace monorepo for a mobile Vedic Astrology application, aiming for o
 - **LOCKED FACTS Protocol**: Deterministic data for AI responses is centralized in `locked_facts.py` to prevent hallucination.
 - **AI Orchestration**: `openai_helper.py` manages fact injection, verbatim citation, and deterministic post-injectors for safety and brand consistency.
 - **Two-Layer Prompting**: "Guided Freedom" approach for LLM prompts (80% mindset, 20% surgical guards) to balance flexibility and control.
-- **Engine-Controlled Verdicts**: For certain complex questions (e.g., comparative health, marriage timing), the final verdict line is generated deterministically by the engine, not the LLM, to ensure accuracy and prevent drift.
+- **Engine-Controlled Verdicts**: For certain complex questions (e.g., comparative health, marriage timing), the final verdict line is generated deterministically by the engine, not the LLM, to ensure accuracy and prevent drift. H2.7.16-fix2 added immunity-vs-lifestyle deterministic verdict (`_build_immunity_lifestyle_verdict` in `health_replies.py`) injected as MANDATORY first sentence; post-injector force-prepends if LLM drops it. Killswitch `HEALTH_ENGINE_VERDICT=0`.
+- **Health Reply Sanitizer (H2.7.16)**: Post-LLM regex sweep (`_sanitize_health_reply`) strips 4 leak categories — disease overgeneration, planet-pair jargon (with plain-Hinglish glossary), timing words/phrases, fear tone. Runs BEFORE word-cap (architect-mandated order). Killswitch `HEALTH_REPLY_SANITIZER=0`.
 
 ## Product
 - **Mobile App**: Daily Rashifal, Panchang, Kundli Milan, Muhurat finder, Numerology, Remedies, Vastu tips, Dosha analysis, personalized forecasts ("Risk Radar"), Life Mastery Report.

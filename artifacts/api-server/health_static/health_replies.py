@@ -561,6 +561,10 @@ _LEAKY_DISEASE_WORDS = {
     "blood pressure", "bp", "cholesterol", "ulcer",
     "constipation", "piles", "arthritis", "insomnia",
     "PCOD", "PCOS", "infertility",
+    # H2.7.16-fix2 (user audit): over-specific symptom guesses
+    "throat irritation", "throat issue", "throat infection",
+    "sinus", "bronchitis", "tuberculosis", "pneumonia",
+    "skin rash", "skin allergy",
 }
 
 # Forbidden timing words (STATIC pack must NOT mention timing).
@@ -571,6 +575,21 @@ _LEAKY_TIMING_WORDS = [
     "next few months", "upcoming months", "in coming",
     "iss period me", "is dasha me jaldi",
 ]
+# H2.7.16-fix2: regex variants the substring list misses. User caught
+# "agle kuch mahino me" — substring list only had "agle mahine".
+import re as _re_sanitize  # local alias (defined before first use)
+_LEAKY_TIMING_RX = _re_sanitize.compile(
+    r"\b("
+    r"agl[ae]\s+(kuch\s+)?mahin[oae]\w*(\s+m[ae])?|"  # agle kuch mahino me
+    r"kuch\s+mahin[oae]\w*\s+m[ae]|"                  # kuch mahino me
+    r"is(s)?\s+mahin[ae]\s+m[ae]|"                    # iss mahine me
+    r"agl[ae]\s+kuch\s+haft[oae]\w*|"                 # agle kuch hafton
+    r"jald[i]?\s+hi|"
+    r"thode\s+(hi\s+)?din\s+m[ae]|"                   # thode din me
+    r"aane\s+wal[ae]\s+(mahin|haft|din)\w*"           # aane wale mahinon
+    r")\b",
+    _re_sanitize.IGNORECASE,
+)
 
 # Forbidden fear-tone phrases.
 _LEAKY_FEAR_PHRASES = [
@@ -585,7 +604,6 @@ _LEAKY_FEAR_PHRASES = [
 # Astro jargon that leaks (planet-pair compound names without
 # translation). User shouldn't see "Chandra-Mangal" / "Surya-Shani"
 # without plain-Hinglish reframing.
-import re as _re_sanitize  # local alias to avoid top-level conflict
 _JARGON_PLANET_PAIR_RX = _re_sanitize.compile(
     r"\b(Chandra|Surya|Shani|Mangal|Budh|Guru|Shukra|Rahu|Ketu)"
     # H2.7.16-fix: separator now covers hyphen variants (-, –, —, ‑),
@@ -659,6 +677,8 @@ def _sanitize_health_reply(text: str) -> str:
                 pat = _re_sanitize.compile(
                     _re_sanitize.escape(tw), _re_sanitize.IGNORECASE)
                 s_out = pat.sub("", s_out)
+        # H2.7.16-fix2: regex variants the substring list misses.
+        s_out = _LEAKY_TIMING_RX.sub("", s_out)
         # Collapse double spaces left behind.
         s_out = _re_sanitize.sub(r"\s{2,}", " ", s_out).strip()
         if s_out:
@@ -671,6 +691,107 @@ def _sanitize_health_reply(text: str) -> str:
         return ("Overall pattern stable hai — energy aur recovery side "
                 "pe routine focus rakhne se balance maintain rahega.")
     return out
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  H2.7.16-fix2 — ENGINE-CONTROLLED VERDICT FOR IMMUNITY-VS-LIFESTYLE
+# ─────────────────────────────────────────────────────────────────────
+# User audit: when user asks comparative Q ("immunity weak ya lifestyle
+# issue?"), LLM gives indirect verdict. Fix: engine builds the verdict
+# line deterministically, LLM only explains. Post-injector prepends if
+# LLM dropped/rephrased the verdict.
+# Killswitch: env HEALTH_ENGINE_VERDICT=0 → falls back to LLM-only.
+# ─────────────────────────────────────────────────────────────────────
+
+_IMMUNITY_VS_LIFESTYLE_RX = _re_sanitize.compile(
+    # User must ask about immunity/recovery AND lifestyle/routine
+    # in the SAME question. Detected via co-occurrence within ~80 chars.
+    r"(immunity|immune|pratiraksha|recovery|baar[\s-]?baar|"
+    r"frequent|infections?|sardi|khansi|chhoti.{0,15}(bimari|illness|"
+    r"infection|problem))",
+    _re_sanitize.IGNORECASE,
+)
+_LIFESTYLE_PROBE_RX = _re_sanitize.compile(
+    r"(lifestyle|routine|aadat|habits?|stress|neend|sleep|"
+    r"khaana|khana|food|diet)",
+    _re_sanitize.IGNORECASE,
+)
+
+
+def _detect_immunity_vs_lifestyle_q(question: str) -> bool:
+    """True only if user asks BOTH immunity-side AND lifestyle-side
+    in the same question (the comparative pattern)."""
+    if not question:
+        return False
+    return bool(_IMMUNITY_VS_LIFESTYLE_RX.search(question)) and \
+           bool(_LIFESTYLE_PROBE_RX.search(question))
+
+
+def _build_immunity_lifestyle_verdict(facts: dict) -> str:
+    """Deterministic first-sentence verdict from engine dim verdicts.
+
+    Truth table (dr = disease_resistance, vit = vitality):
+      dr=RED   + vit=RED/YELLOW → immunity baseline weak + lifestyle amplifier
+      dr=RED   + vit=GREEN      → immunity weak, body strong (recovery slow)
+      dr=YELLOW                 → immunity moderate, lifestyle plays role
+      dr=GREEN + vit=GREEN      → immunity stable, lifestyle small role
+      dr=GREEN + vit=RED/YELLOW → immunity strong-baseline, lifestyle-trigger
+                                  sensitivity (user's "ideal" case)
+    """
+    dims = facts.get("dimensions") or {}
+    dr_v = (dims.get("disease_resistance") or {}).get("verdict", "?")
+    vit_v = (dims.get("vitality") or {}).get("verdict", "?")
+
+    if dr_v == "RED" and vit_v in ("RED", "YELLOW"):
+        return ("Aapke pattern me immunity baseline thodi weak side "
+                "par dikh rahi hai, aur lifestyle isko aur trigger "
+                "karta hai — dono ka mix hai, sirf ek nahi.")
+    if dr_v == "RED" and vit_v == "GREEN":
+        return ("Aapke pattern me immunity baseline weak hai, par "
+                "body strong hai — main issue recovery slow hone ka "
+                "hai, lifestyle uska amplifier hai.")
+    if dr_v == "YELLOW":
+        return ("Aapke pattern me immunity moderate hai — bilkul "
+                "weak nahi, par solid bhi nahi. Lifestyle ka role "
+                "yahan kaafi bada hai.")
+    if dr_v == "GREEN" and vit_v == "GREEN":
+        return ("Aapke pattern me immunity baseline stable hai — "
+                "primary reason lifestyle-triggered sensitivity hai, "
+                "weak immunity nahi.")
+    if dr_v == "GREEN" and vit_v in ("RED", "YELLOW"):
+        return ("Aapke pattern me immunity bilkul weak nahi hai, "
+                "lekin body thodi sensitive dikh rahi hai — primary "
+                "reason lifestyle-triggered sensitivity hai.")
+    # Unknown / partial — calm honest fallback.
+    return ("Aapke pattern me immunity aur lifestyle dono ka mix "
+            "role dikh raha hai — dono pehlu saath chalte hain.")
+
+
+def _force_engine_verdict_prefix(text: str, verdict: str) -> str:
+    """Post-injector: if LLM output doesn't already lead with the
+    engine verdict (or an equivalent claim), force-prepend it.
+
+    H2.7.16-fix2 (architect-fix): replaced word-order-sensitive 6-word
+    fingerprint with KEYWORD CO-OCCURRENCE check. Verdict always
+    contains both "immunity" and "lifestyle" concepts — if both
+    appear in the lead chunk, treat it as already-led (avoid
+    duplication when LLM rephrases word order)."""
+    if not text or not verdict:
+        return text
+    head = text[:220].lower()
+    # Both "immunity" AND ("lifestyle" OR "routine" OR "trigger") in
+    # the lead → LLM already led with verdict-equivalent. Skip prepend.
+    has_immunity = "immunity" in head or "immune" in head
+    has_lifestyle = ("lifestyle" in head or "routine" in head
+                     or "trigger" in head or "sensitivity" in head)
+    if has_immunity and has_lifestyle:
+        return text
+    # Also skip if verdict already appears verbatim ANYWHERE in text
+    # (LLM put it later instead of lead — still avoid duplication).
+    if verdict.lower() in text.lower():
+        return text
+    # LLM dropped/rewrote — prepend verdict, keep LLM body as reason.
+    return f"{verdict} {text}".strip()
 
 
 def _enforce_word_cap(text: str, max_words: int = 150) -> str:
@@ -800,6 +921,20 @@ def _render_simple_narrative_llm(facts: dict, question: str,
 
     fact_pack = _build_health_kundli_pack(kundli or {}, facts, question)
 
+    # H2.7.16-fix2: engine-decided verdict for immunity-vs-lifestyle Q.
+    # If detected, build deterministic verdict + inject into pack as
+    # MANDATORY first sentence. Killswitch: HEALTH_ENGINE_VERDICT=0.
+    _engine_verdict = ""
+    if os.environ.get("HEALTH_ENGINE_VERDICT", "1") != "0" and \
+       _detect_immunity_vs_lifestyle_q(question):
+        _engine_verdict = _build_immunity_lifestyle_verdict(facts)
+        fact_pack = (
+            "════ ENGINE-LOCKED VERDICT (use as your FIRST sentence "
+            "VERBATIM — do NOT rephrase, do NOT skip) ════\n"
+            f"{_engine_verdict}\n\n"
+            "════ END ENGINE-LOCKED VERDICT ════\n\n" + fact_pack
+        )
+
     sys_prompt = (
         "You are an EXPERT Vedic-astrology HEALTH analyst with deep "
         "knowledge of classical houses, planets, dignities, KP system, "
@@ -879,6 +1014,11 @@ def _render_simple_narrative_llm(facts: dict, question: str,
         "3d. STRUCTURE MANDATE — first sentence MUST be the verdict "
         "(major/moderate/baseline). Then reason. Then ONE category-"
         "tendency line. Then ONE remedy. No scattered flow.\n"
+        "3e. ⚠️ ENGINE-LOCKED VERDICT (if pack contains "
+        "'ENGINE-LOCKED VERDICT' block): COPY that exact sentence "
+        "VERBATIM as your first line. Do NOT rephrase, paraphrase, "
+        "soften, or skip it. Engine ne calculate kar diya hai — "
+        "tera kaam sirf reason + remedy add karna hai uske baad.\n"
         "4. NO doctor / professional / specialist / therapist / "
         "expert / counsellor / 'medical advice' mention.\n"
         "5. NO 'tumhe X hai' direct-diagnosis assertion. Use 'X ka "
@@ -927,6 +1067,9 @@ def _render_simple_narrative_llm(facts: dict, question: str,
         # ordering bug — leaks placed AFTER the truncation cut were
         # slipping through when cap ran first.
         text = _sanitize_health_reply(text)
+        # H2.7.16-fix2: force engine verdict at lead if LLM dropped it.
+        if _engine_verdict:
+            text = _force_engine_verdict_prefix(text, _engine_verdict)
         # H2.7.6 — hard word-cap guard (defense-in-depth for prompt
         # overshoot). Per user directive: 90-120 target, 150 ceiling.
         return _enforce_word_cap(text, max_words=150)
@@ -1472,6 +1615,21 @@ def _llm_narrative(facts: dict, route: str, question: str,
         route, "Summarise the 5-dim health picture in 60-80 words "
                "Hinglish supportive tone. End with 'Final: <one-line>'.")
 
+    # H2.7.16-fix2 (architect-fix #e): engine-verdict injection ALSO
+    # in this call site (NARRATIVE/HYBRID modes). Mirrors the logic
+    # in _render_simple_narrative_llm so comparative immunity-vs-
+    # lifestyle Q gets deterministic verdict regardless of mode.
+    _engine_verdict = ""
+    if os.environ.get("HEALTH_ENGINE_VERDICT", "1") != "0" and \
+       _detect_immunity_vs_lifestyle_q(question):
+        _engine_verdict = _build_immunity_lifestyle_verdict(facts)
+        fact_block = (
+            "════ ENGINE-LOCKED VERDICT (use as your FIRST sentence "
+            "VERBATIM — do NOT rephrase, do NOT skip) ════\n"
+            f"{_engine_verdict}\n"
+            "════ END ENGINE-LOCKED VERDICT ════\n\n" + fact_block
+        )
+
     bucket_note = ""
     if sensitive_bucket:
         bucket_note = (
@@ -1540,6 +1698,9 @@ def _llm_narrative(facts: dict, route: str, question: str,
             return _direct_vitality_check(facts, question=question)
         # H2.7.16-fix: SANITIZE FIRST, then word-cap (architect order fix).
         text = _sanitize_health_reply(text)
+        # H2.7.16-fix2: force engine verdict at lead if LLM dropped it.
+        if _engine_verdict:
+            text = _force_engine_verdict_prefix(text, _engine_verdict)
         # H2.7.6 — hard word-cap guard (route-format paths usually short
         # already, but guard in case a route emits free prose).
         return _enforce_word_cap(text, max_words=150)
@@ -1745,7 +1906,7 @@ def handle_health_question(question: str, kundli: dict,
     # (90-120 word target, 150 hard cap + 4-beat structure).
     # H2.7.16: bumped v7 → v8 — sanitizer + tightened prompt
     # (no disease-list, no jargon-pair, no timing words, no fear).
-    _ns = f"health_static_v8b_{_OUTPUT_STYLE}"
+    _ns = f"health_static_v9b_{_OUTPUT_STYLE}"
     cache_key = make_cache_key(birth, kundli, _ns, route,
                                 question=_q_for_key)
     cached = get_cached(cache_key)

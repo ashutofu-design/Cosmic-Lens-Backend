@@ -831,3 +831,24 @@ project goal (`Engine = Truth(frozen)`), this is the correct contract.
 Future M17 could add a re-prompt loop ("LLM, you didn't quote
 primary_window May-July 2026, try again") to recover Hinglish polish
 while keeping facts locked, but that is OUT OF SCOPE for M16.
+
+---
+
+## Phase 2.10.7 — Y2 STOCK / FINANCE Module (shipped)
+
+**Architecture: 75% Engine + 25% LLM + Cache (chart-locked).**
+
+New package: `artifacts/api-server/finance/`
+- `stock_facts.py` — **deterministic** fact pack (ZERO LLM). Computes house lords, dignities, karakas state, 4 wealth-yoga detectors (Chandra-Mangal/Dhana/Lakshmi/Vipreet-Raja), dasha→money-house links, afflictions, sub-flags, score (0-12), verdict (GREEN_GO/YELLOW_WAIT/RED_AVOID).
+- `stock_routing.py` — regex router. 3 modes: `WARNING` (5 locked) → `DIRECT` (5 routes, pure engine) → `NARRATIVE` (12 routes, engine+LLM polish). `is_stock_question()` gate.
+- `stock_warnings.py` — 5 LOCKED templates verbatim: `QUICK_MONEY`, `RISK`, `TIPS`, `LEVERAGE`, `EMOTIONAL`. LLM cannot modify.
+- `stock_replies.py` — 3 reply builders. `handle_finance_question(q, kundli, birth)` is public API.
+- `answer_cache.py` — sqlite at `finance/_finance_cache.sqlite3`. Key = `sha256(birth_norm + MD-AD + topic + route)`. Auto-invalidates on antar-dasha change.
+
+**Hookup**: `flask_app.py` `ask_route` L5864+. After quota gate, before LLM. Non-stock → returns None → normal pipeline unchanged.
+
+**P40 verdict**: RED_AVOID (score 3/12). Reasons surfaced: H5 lord Mars debilitated in H8, H12 lord active in current dasha (Mars AD = expense surge), Rahu in H12 (speculation/foreign loss risk), Jupiter enemy in Virgo. Wealth yoga: Vipreet-Raja only.
+
+**Verified routes (P40, /api/ask)**: Q3 → DIRECT/verdict_only ✅ | Q21 → DIRECT/top_dhana_karakas ✅ | Q1 → NARRATIVE/leak_facts (cached on 2nd hit) ✅ | Q18 → NARRATIVE/sector_recommendation ✅ | W1 → WARNING/QUICK_MONEY ✅ | W2 → WARNING/LEVERAGE ✅ | non-stock → brand_guard (untouched) ✅.
+
+**Cost projection (per user/month, ~25 stock Qs)**: ~$0.10 vs Y1 full-LLM ~$5-10 = 50-100x savings. Same chart + same MD-AD = same answer forever (cache hit).

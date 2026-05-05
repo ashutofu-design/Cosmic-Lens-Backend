@@ -5858,6 +5858,34 @@ def ask_route():
         # send user_id+X-API-Key so quota truly enforces.
         quota = {"used": 0, "limit": 1}
 
+    # ── Phase 2.10.7 — Y2 STOCK / FINANCE hookup ────────────────────────────
+    # Deterministic stock engine + cache + 5 locked warnings. Returns None
+    # for non-stock questions → normal pipeline continues unchanged. Runs
+    # AFTER quota gate (real question) but BEFORE LLM (cheap/cached).
+    try:
+        from finance import handle_finance_question as _fin_handle
+        _fin = _fin_handle(question, kundli or {}, birth)
+    except Exception as _fin_exc:
+        print(f"[ask] finance hookup error (non-fatal): {_fin_exc}")
+        _fin = None
+    if _fin and _fin.get("text"):
+        return jsonify({
+            "text":       _fin["text"],
+            "topic":      "stock_finance",
+            "confidence": 1.0,
+            "source":     f"finance_engine:{_fin.get('mode','')}/{_fin.get('route','')}",
+            "follow_ups": [],
+            "quota":      {"used": quota.get("used", 0),
+                            "limit": quota.get("limit", 0)},
+            "plan":       effective_plan(user) if user else "free",
+            "meta":       {
+                "verdict":   _fin.get("verdict"),
+                "cache_hit": _fin.get("cache_hit", False),
+                "mode":      _fin.get("mode"),
+                "route":     _fin.get("route"),
+            },
+        })
+
     # ── Run engine ───────────────────────────────────────────────────────────
     # Strategy: try OpenAI (richer, conversational answers). On any failure
     # — missing key, rate limit, network error — silently fall back to the

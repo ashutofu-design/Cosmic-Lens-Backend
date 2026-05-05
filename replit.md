@@ -442,6 +442,20 @@ User chose **Path B+ (full data, LLM-driven cherry-pick)** over Path A (engine r
 
 **Pending (H2.5/H2.6/H2.7 architect items, not yet permitted by user)**: tendency-intent overfires on yoga Qs, stripper edge case, cache LRU, deterministic post-formatter for emojis/bullets/labels, `.capitalize()` first-char issue, OVERALL-Q literal `[yoga not in chart]` placeholder leak, hardcoded `gpt-4o-mini` fallback (should read `OPENAI_MODEL` env).
 
+## Phase H2.7.2 — YOGAS CRASH FIX (CRITICAL, 2026-05-05)
+
+**Bug found by architect immediately after H2.7.1 ship**: `_build_health_kundli_pack` (L425-426) iterated yogas as if each item were a dict (`y.get("name")`, `y.get("description")`), but engine `compute_health_facts()` returns `yogas: List[str]` (e.g. `["Arishta", "Vipreet-Recovery", "Balarishta"]` — see `health_facts.py` L577-583). P40 had no active yogas (empty list), so the bug was latent in test runs. **Any chart with Arishta / Balarishta / Vipreet-Recovery active would have raised `AttributeError: 'str' object has no attribute 'get'` and crashed the simple-mode health request path.**
+
+**Fix (`health_replies.py` L422-438)**: Defensive yoga iteration — accepts `str`, `dict` (back-compat for any future shape change), and other types via `str(y)` fallback. Output format: `"  - Arishta"` for str, `"  - Arishta: vitality affliction"` for dict if description present.
+
+**Verification (4 yoga-shape variants)**:
+- `["Arishta","Vipreet-Recovery","Balarishta"]` (real engine shape) → ✅ no crash, all 3 listed
+- `[{"name":"X","description":"y"}]` (dict shape) → ✅ no crash
+- `[]` (empty) → ✅ "(none — no major Arishta/Balarishta detected)"
+- Mixed (str + dict + int) → ✅ all handled via type dispatch
+
+**Architectural lesson**: full-pack architecture (H2.7) creates implicit type contracts between engine output and pack builder. Any future engine shape change to `yogas` (e.g. dict with severity) will Just Work without breaking pack builder. ADD-ONLY discipline maintained.
+
 **Architectural pattern reinforced**: "Structure backend me rakho, output user-pe natural rakho" — same engine, same truth, same safety, same locked verdict computed internally. Only the **rendering layer** is now narrative-first. The LLM is once again the **translator** (H2.4 named principle); H2.4/H2.5's mistake was making the LLM also the layout-engine. H2.6 returns layout to a clean human voice and keeps engine truth as the silent source.
 
 **Reversibility**: zero engine/routing/validator/cache logic was deleted. The H2.5 4-block path is alive at `HEALTH_OUTPUT_STYLE=structured` — toggle the env var to revert instantly with no code change.

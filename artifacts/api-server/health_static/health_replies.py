@@ -416,12 +416,20 @@ def _build_health_kundli_pack(kundli: dict, facts: dict,
                 lines.append(f"     reason: {reason}")
     lines.append("")
 
-    # Active yogas
+    # Active yogas (engine returns List[str] of yoga names)
     yogas = facts.get("yogas") or []
     lines.append(f"--- YOGAS active: {len(yogas)} ---")
     if yogas:
+        # H2.7.2: defensive — accept both str and dict shapes
         for y in yogas:
-            lines.append(f"  - {y.get('name','?')}: {y.get('description','')}")
+            if isinstance(y, str):
+                lines.append(f"  - {y}")
+            elif isinstance(y, dict):
+                nm = y.get("name", "?")
+                desc = y.get("description", "")
+                lines.append(f"  - {nm}" + (f": {desc}" if desc else ""))
+            else:
+                lines.append(f"  - {str(y)}")
     else:
         lines.append("  (none — no major Arishta/Balarishta detected)")
     lines.append("")

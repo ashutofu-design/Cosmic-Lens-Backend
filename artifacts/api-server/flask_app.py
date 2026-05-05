@@ -5943,6 +5943,36 @@ def ask_route():
             },
         })
 
+    # ── Y2 FINANCE-MONEY hookup (sister to stock_engine) ────────────────────
+    # Fires only if stock_engine returned None AND question is general
+    # money/wealth (loan, saving, expense, income, business, sudden wealth).
+    # Hard-excludes stock terms in is_finance_question() so no overlap.
+    try:
+        from finance_engine import handle_finance_money_question as _fm_handle
+        _fm = _fm_handle(question, kundli or {}, birth)
+    except Exception as _fm_exc:
+        print(f"[ask] finance_money hookup error (non-fatal): {_fm_exc}")
+        _fm = None
+    if _fm and _fm.get("text"):
+        return jsonify({
+            "text":       _fm["text"],
+            "topic":      "finance_money",
+            "confidence": 1.0,
+            "source":     (f"finance_engine[{_fm.get('scope','non_timing')}]:"
+                           f"{_fm.get('mode','')}/{_fm.get('route','')}"),
+            "scope":      _fm.get("scope", "non_timing"),
+            "follow_ups": [],
+            "quota":      {"used": quota.get("used", 0),
+                            "limit": quota.get("limit", 0)},
+            "plan":       effective_plan(user) if user else "free",
+            "meta":       {
+                "dimensions": _fm.get("dimensions"),
+                "cache_hit":  _fm.get("cache_hit", False),
+                "mode":       _fm.get("mode"),
+                "route":      _fm.get("route"),
+            },
+        })
+
     # ── Run engine ───────────────────────────────────────────────────────────
     # Strategy: try OpenAI (richer, conversational answers). On any failure
     # — missing key, rate limit, network error — silently fall back to the

@@ -1661,3 +1661,37 @@ Sample output references actual placements: "Moon aapke dhan side ko support kar
 1. Apply same killswitch pattern to `health_static` (HEALTH_STATIC_BYPASS) — but FIRST inherit mandatory doctor-consult/mental-health/parent-health safety rules into LLM prompt.
 2. Apply to `stock_engine` (STOCK_STATIC_BYPASS) — but FIRST inherit 5 locked compliance warnings.
 3. Eventually delete static modules entirely once Path B+ proves stable.
+
+---
+
+## H2.7.9 — Health Static Bypass Killswitch (2026-05-05)
+
+**Trigger**: User wanted same Path B+ migration for health that H2.7.8 did for finance, **explicitly declining the safety prerequisite** ("nhi abhi koi nhi chahiye consult/helpline baad me karenge"). User's reasoning: these are static-style placement Qs, not timing/medical predictions; safety inheritance can come later.
+
+**ADD-ONLY edits** (`artifacts/api-server/flask_app.py`):
+- L5925-5949 (sync `/api/ask`): mirror of H2.7.8 finance bypass with `_hs_bypass` env-flag read, identity-fallback to False on env failure, bypass-fired trace print with ⚠️ safety caveat, then `_hs = None if _hs_bypass else _hs_handle(...)`. Existing `if _hs and _hs.get("text"):` early-return UNTOUCHED.
+- L6362-6379 (stream `/api/ask/stream`): mirror of sync.
+
+**Env flag**: `HEALTH_STATIC_BYPASS=1` set in Replit Secrets (shared). Default absent or "0" → static behaviour 100% intact.
+
+**⚠️ KNOWN SAFETY GAP (acknowledged by user, deferred)**: When bypass ON, LLM does NOT inherit health_static's mandatory:
+- Doctor-consult citation (every health reply)
+- Mental_health bucket → India helplines surfacing
+- Parent_health → no-prediction empathy frame
+- Sensitive_bucket gating
+
+User accepted this as acceptable risk for current Q types; safety inheritance is a follow-up task. Trace print on every bypass fire flags this in logs (`⚠️ doctor-consult/helpline guards NOT yet inherited`).
+
+**Pipeline state after H2.7.8 + H2.7.9**:
+| Engine | Default static gate | Bypass flag | Status |
+|---|---|---|---|
+| health_static | active | `HEALTH_STATIC_BYPASS=1` (ON) | **bypassed → Path B+** |
+| finance_static | active | `FINANCE_STATIC_BYPASS=1` (ON) | **bypassed → Path B+** |
+| stock_engine | active | (none) | UNTOUCHED (regulatory disclaimers preserved) |
+
+**Killswitch pattern proven repeatable**: Same 4-edit ADD-ONLY template (sync + stream × env-read + assignment-wrap) applies cleanly to any future static→LLM migration. Pattern checklist: (1) env read with try/except identity-fallback to False, (2) bypass-fired trace print, (3) `_x = None if _bypass else _x_handle(...)` one-liner, (4) downstream early-return blocks ZERO change.
+
+**Carried forward**:
+1. **Health safety inheritance** (HIGH PRIORITY when revisited): inject doctor-consult/mental-health-helpline/parent-empathy rules into LLM passthrough prompt before relying on bypass for sensitive Qs.
+2. Stock_engine bypass (after compliance warning inheritance).
+3. Eventually delete static modules once Path B+ proves stable across all topics.

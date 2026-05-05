@@ -5919,9 +5919,28 @@ def ask_route():
     # fallback for any health Q that the new gate did NOT claim).
     # ADD-ONLY: legacy health_engine.py untouched. New engine returns None
     # for non-health Qs so downstream engines continue unchanged.
+    # H2.7.9 — HEALTH_STATIC_BYPASS killswitch (sync /api/ask).
+    # ADD-ONLY mirror of H2.7.8 finance bypass. When env flag = "1", skip
+    # health_static gate so health Qs flow into legacy LLM pipeline → which
+    # has Path B+ passthrough at openai_helper L13611 injecting full kundli
+    # pack to LLM (Lagna+Rashi+Navamsha+Vimshottari MD/AD/PD+aspects+yogas+
+    # SAV). Default OFF → static behaviour 100% intact.
+    # ⚠️ SAFETY NOTE (per user directive 2026-05-05): bypass currently does
+    # NOT inherit health_static's mandatory doctor-consult/mental-health-
+    # helpline/parent-empathy guards into the LLM prompt. User accepted
+    # this risk for now; safety inheritance is a follow-up.
+    try:
+        _hs_bypass = (os.environ.get("HEALTH_STATIC_BYPASS", "0") == "1")
+    except Exception:
+        _hs_bypass = False
+    if _hs_bypass:
+        print(f"[ask] H2.7.9 HEALTH_STATIC_BYPASS=1 → skip health_static, "
+              f"flow to Path B+ passthrough (full kundli pack to LLM). "
+              f"⚠️ doctor-consult/helpline guards NOT yet inherited.",
+              flush=True)
     try:
         from health_static import handle_health_question as _hs_handle
-        _hs = _hs_handle(question, kundli or {}, birth)
+        _hs = None if _hs_bypass else _hs_handle(question, kundli or {}, birth)
     except Exception as _hs_exc:
         print(f"[ask] health_static hookup error (non-fatal): {_hs_exc}")
         _hs = None
@@ -6337,9 +6356,20 @@ def ask_stream_route():
     # engines return ~200-word JSON; mobile already handles JSON returns
     # via the no-OpenAI fallback below, so no SSE chunking is needed
     # for static text.  ADD-ONLY: streaming path below is untouched.
+    # H2.7.9 — HEALTH_STATIC_BYPASS killswitch (stream /api/ask/stream).
+    # Mirror of sync gate above. Same safety caveat applies.
+    try:
+        _hs_bypass = (os.environ.get("HEALTH_STATIC_BYPASS", "0") == "1")
+    except Exception:
+        _hs_bypass = False
+    if _hs_bypass:
+        print(f"[ask/stream] H2.7.9 HEALTH_STATIC_BYPASS=1 → skip "
+              f"health_static, flow to Path B+ passthrough "
+              f"(full kundli pack to LLM). ⚠️ doctor-consult/helpline "
+              f"guards NOT yet inherited.", flush=True)
     try:
         from health_static import handle_health_question as _hs_handle
-        _hs = _hs_handle(question, kundli or {}, birth)
+        _hs = None if _hs_bypass else _hs_handle(question, kundli or {}, birth)
     except Exception as _hs_exc:
         print(f"[ask/stream] health_static hookup error (non-fatal): "
               f"{_hs_exc}", flush=True)

@@ -208,6 +208,39 @@ User-policy lock-in: static health engine = preventive insight system, NOT docto
 
 If future product decision needs WARNING-tier escalation for vitality/recovery/mental-RED severities, that should be done as a **separate dedicated layer** (severity-threshold + danger-keyword detector) rather than scattering doctor mentions in static engine prose.
 
+## Phase H2.2.2 — ARCHITECT-FOUND GAPS (FAILSAFE / cache / regex tightening) (2026-05-05)
+
+**Architect review (post-H2.2.1)** flagged 3 real gaps that survived the previous phases:
+
+### Fix A — FAILSAFE no_kundli branch leaked `DOCTOR_DISCLAIMER` (`health_replies.py` L470-476)
+The "kundli missing" error path was hardcoded to append `DOCTOR_DISCLAIMER` even though it's a non-WARNING fallback for missing birth details — pure policy bypass. H2.1 had claimed this was stripped; verification proved it wasn't. **Fix**: removed the `f"{DOCTOR_DISCLAIMER}\n\n"` line from the FAILSAFE return. Error message is now neutral: `"Health analysis aapki janm-kundli ke bina possible nahi. Pehle birth details save karein. Final: Pehle kundli, fir health analysis."` Verified: zero referral words across {doctor, professional, therapist, expert, specialist, medical, clinical, psychiatrist, psychologist} ✅.
+
+### Fix B — Cache served stale pre-fix referral text (`health_replies.py` L556-563)
+`make_cache_key()` used a static namespace `"health_static"` with no policy version. SQLite cache (`_health_static_cache.sqlite3`) is persistent across runs, so any DIRECT/NARRATIVE/HYBRID reply written *before* H2.2 / H2.2.1 — containing "professional support" / "doctor consult" — would silently resurface for the same chart+route combo, defeating all upstream guards. **Fix**: bumped namespace to `"health_static_v2"`. Old entries become unreachable (different cache key); fresh policy-clean replies populate v2 namespace lazily. Comment in code instructs future maintainers to bump again on any static-engine policy change.
+- Verified: `v1_key != v2_key` (different SHA hashes), call-1 returns `cache_hit=False` (writes v2), call-2 returns `cache_hit=True` (reads v2), texts identical and clean.
+
+### Fix C — Regex false-positive risk: bare `professional` / `specialist` / `expert` (`validator.py` L174-192)
+H2.2's `_REFERRAL_TRIGGER_WORDS` matched standalone `professional` and `specialist`, which would scrub legitimate sentences like *"Aapki professional life weak phase me hai"* or *"Yeh ek specialist topic hai"*. **Fix**: tightened regex with companion-token requirements:
+- `professional` now requires referral verb: `se baat|consult|milein|milna|milo|raabta|talk|support|help|guidance|advice|consultation|opinion|ki madad`
+- `specialist` similar pattern
+- `expert` requires `guidance|advice|consult|consultation|opinion`
+- `mental[\s-]?health\s+professional` kept as fixed phrase (always referral)
+- Always-referral nouns unchanged: `doctor|physician|therapist|counsell?or|psychiatrist|psychologist`
+- Added `medical/clinical opinion` variants
+
+**Verification batteries**:
+- 5/5 false-positive control sentences ("professional life", "specialist topic", "Aap expert ho", "Medical history", "Clinical observation") → all preserved, zero scrubs ✅
+- 8/8 true-positive referral phrases ("Professional se baat", "Specialist se milein", "Expert guidance lo", "Mental health professional ki madad", "Doctor consult karein", "Therapist se baat", etc.) → all scrubbed cleanly, no leak residue ✅
+- E2E P40 original failing question ("Mujhe baar-baar thakan...") → DIRECT mode → cache miss then cache hit, texts identical, zero referral leaks ✅
+
+### Layer-3 (DIRECT-mode runtime scrub) — explicitly REJECTED
+Architect suggested wrapping DIRECT-mode output in the same scrub. User and I agreed to **skip it**. Rationale (locked in):
+> "Fix at source > patch at output."
+
+DIRECT-mode text is fully under our control; future leaks should be caught at code-review time, not runtime. Adding a runtime scrub on our own static text is maintenance burden without new signal. The four guards in place are sufficient: (1) static text source-cleaned (H2.2.1), (2) FAILSAFE source-cleaned (H2.2.2 Fix A), (3) cache versioned (H2.2.2 Fix B), (4) LLM path has prompt-guard + validator scrub with tightened regex (H2.2 + H2.2.2 Fix C).
+
+**System state**: health-static engine is now in stable "doctor-free static mode" — referral mentions appear ONLY in WARNING-tier paths (timing/death/cure-guarantee/diagnosis/crisis), nowhere else. Self-action + awareness principle fully consistent across all routes.
+
 ## Phase 2.8.82.1 — MODULE RENAME finance_engine → finance_static (2026-05-05)
 
 User-driven naming refactor in anticipation of upcoming **Finance Timing Engine** (separate module, dasha-based, future phase). Old folder name `finance_engine` was ambiguous — could mean the static chart engine OR the umbrella for all money-related logic. Renamed to `finance_static` to make the boundary explicit: this module ONLY handles non-timing chart-based finance Qs (wealth/income/saving/risk/leak/business-vs-job/debt/sudden-wealth/karakas/KP-Vedic conflicts). Timing Qs (kab paisa aayega, exact date) will live in a future `finance_timing` module.

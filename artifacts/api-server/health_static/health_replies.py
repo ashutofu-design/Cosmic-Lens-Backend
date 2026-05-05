@@ -469,7 +469,6 @@ def handle_health_question(question: str, kundli: dict,
         out = {
             "text": ("Health analysis aapki janm-kundli ke bina possible "
                       "nahi. Pehle birth details save karein.\n\n"
-                      f"{DOCTOR_DISCLAIMER}\n\n"
                       "Final: Pehle kundli, fir health analysis."),
             "mode": "FAILSAFE", "route": "no_kundli",
             "scope": _ENGINE_SCOPE,
@@ -553,7 +552,12 @@ def handle_health_question(question: str, kundli: dict,
 
     # ── Cache check ──
     _q_for_key = question if mode == "HYBRID" else None
-    cache_key = make_cache_key(birth, kundli, "health_static", route,
+    # Cache namespace bumped to v2 in Phase H2.2.2 — invalidates stale
+    # entries written before the doctor-mention/tone-guard cleanup
+    # (H2.1 + H2.2 + H2.2.1) so legacy "professional support" / "doctor
+    # consult" text cannot resurface from cache. Bump again on any
+    # future policy change to the static engine output.
+    cache_key = make_cache_key(birth, kundli, "health_static_v2", route,
                                 question=_q_for_key)
     cached = get_cached(cache_key)
     if cached:

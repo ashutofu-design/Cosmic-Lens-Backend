@@ -169,11 +169,23 @@ _FEAR_RX_LIST = [(re.compile(p, re.IGNORECASE), r) for p, r in _FEAR_REPLACE]
 # noun mid-sentence which often produces awkward "trusted person ke
 # saath consult karein" output).
 _REFERRAL_TRIGGER_WORDS = (
+    # Always-referral nouns (unambiguous)
     r"doctor|physician|therapist|counsell?or|"
-    r"(?:mental[\s-]?health\s+)?professional|"
-    r"specialist|expert\s+(?:guidance|advice|consult)|"
-    r"medical\s+(?:advice|consultation|help|professional)|"
-    r"clinical\s+(?:help|consult|advice)|psychiatrist|psychologist"
+    r"psychiatrist|psychologist|"
+    # Mental-health professional is a fixed phrase — keep it
+    r"mental[\s-]?health\s+professional|"
+    # Bare "professional" / "specialist" require referral-action context
+    # (otherwise "professional life" / "specialist topic" false-fire).
+    # Phase H2.2.2 tightening per architect review.
+    r"professional\s+(?:se\s+(?:baat|consult|milein|milna|milo|raabta)|"
+    r"talk|support|help|guidance|advice|consultation|opinion|ki\s+madad)|"
+    r"specialist\s+(?:se\s+(?:baat|consult|milein|milna|milo|raabta)|"
+    r"consult|consultation|opinion|advice|dikhaiye|dikhao|ki\s+madad)|"
+    # "expert" only as referral verb
+    r"expert\s+(?:guidance|advice|consult|consultation|opinion)|"
+    # Medical / clinical referral phrases
+    r"medical\s+(?:advice|consultation|help|professional|opinion)|"
+    r"clinical\s+(?:help|consult|advice|consultation|opinion)"
 )
 # Match a complete sentence (start-of-string|after . ! ? \n up to next
 # . ! ? \n) that contains any trigger word. Trim trailing whitespace.

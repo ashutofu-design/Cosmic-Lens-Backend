@@ -2920,6 +2920,12 @@ def _kp_context(birth: Any, topic: str) -> str:
         "general":      [1, 5, 7, 9, 10, 11],
     }.get(topic, [1, 5, 7, 9, 10, 11])
 
+    # ── KP-ALWAYS-FULL (user request, 2026-05-05): on every Q send ALL 12
+    # cusps to the LLM (not topic-filtered). Default ON; flip
+    # KP_ALWAYS_FULL=0 to revert to topic-filtered behaviour.
+    if os.environ.get("KP_ALWAYS_FULL", "1") != "0":
+        topic_houses = list(range(1, 13))
+
     cusps   = {c["house"]: c for c in kp.get("cusps", [])}
     sigs    = kp.get("significations", {})
 
@@ -3638,9 +3644,19 @@ def _build_messages(
                 _marriage_block_pt = _passthrough_marriage_block(
                     question, kundli, _intel_obj_pt, birth
                 )
+                # ── KP-ALWAYS-FULL (user request, 2026-05-05): legacy
+                # LLM_FULL_CHART_MODE path also gets full KP cuspal block.
+                _kp_block_pt = ""
+                try:
+                    if os.environ.get("KP_ALWAYS_FULL", "1") != "0":
+                        _kp_raw_pt = _kp_context(birth, "general")
+                        _kp_block_pt = f"\n\n{_kp_raw_pt}\n" if _kp_raw_pt else ""
+                except Exception as _kp_exc_pt:  # noqa: BLE001
+                    print(f"[passthrough_legacy] kp inject skipped: {str(_kp_exc_pt)[:160]}")
+                    _kp_block_pt = ""
                 _msgs_pt: list[dict] = [{
                     "role": "system",
-                    "content": _sys_intro_pt + _chart_block_pt + _marriage_block_pt,
+                    "content": _sys_intro_pt + _chart_block_pt + _kp_block_pt + _marriage_block_pt,
                 }]
                 # Last 6 conversation turns for follow-up continuity
                 # (e.g. "yeh tumne kaise bola?" type clarifiers).
@@ -4343,7 +4359,12 @@ def _build_messages(
         _orig_intel_chars = len(intel_str)
         intel_str = _slim_intel_for_narrative(intel_str)
         _orig_kp_chars = len(kp_block)
-        kp_block = ""  # KP is BACKGROUND-only in narrative mode (Phase 4.7 Fix 1+2)
+        # ── KP-ALWAYS-FULL (user request, 2026-05-05): preserve KP block in
+        # narrative mode so EVERY question (not only marriage/health) gets
+        # full KP cuspal context. Set KP_ALWAYS_FULL=0 to restore the
+        # Phase 4.7 narrative-mode wipe.
+        if os.environ.get("KP_ALWAYS_FULL", "1") == "0":
+            kp_block = ""  # KP is BACKGROUND-only in narrative mode (Phase 4.7 Fix 1+2)
         _orig_tr_chars = len(tr_block)
         tr_block = _slim_transit_for_narrative(tr_block)
         _slimmed = (_orig_lf_chars - len(locked_facts_str)) + \
@@ -14104,11 +14125,24 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 _emotion_tone_pt = _build_emotion_tone_hint(
                     _qu_emotion, _qu_urgency
                 )
+                # ── KP-ALWAYS-FULL (user request, 2026-05-05): every Q
+                # gets full KP cuspal block (all 12 cusps + planet
+                # significators) in sync passthrough. Best-effort —
+                # silently empty on any failure. KP_ALWAYS_FULL=0 → off.
+                _kp_block_pt = ""
+                try:
+                    if os.environ.get("KP_ALWAYS_FULL", "1") != "0":
+                        _kp_raw_pt = _kp_context(birth, "general")
+                        _kp_block_pt = f"\n\n{_kp_raw_pt}\n" if _kp_raw_pt else ""
+                except Exception as _kp_exc_pt:  # noqa: BLE001
+                    print(f"[passthrough_sync] kp inject skipped: {str(_kp_exc_pt)[:160]}")
+                    _kp_block_pt = ""
                 _msgs_pt: list[dict] = [{
                     "role": "system",
                     "content": (
                         _sys_intro_pt
                         + _chart_block_pt
+                        + _kp_block_pt
                         + _marriage_block_pt
                         + _emotion_tone_pt
                     ),
@@ -17668,10 +17702,23 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 f"\n\n{_locked_facts_pt_s}\n" if _locked_facts_pt_s else ""
             )
 
+            # ── KP-ALWAYS-FULL (user request, 2026-05-05): every streamed
+            # Q gets full KP cuspal block (all 12 cusps + planet
+            # significators). Best-effort — silently empty on any
+            # failure. KP_ALWAYS_FULL=0 → off.
+            _kp_block_pt_s = ""
+            try:
+                if os.environ.get("KP_ALWAYS_FULL", "1") != "0":
+                    _kp_raw_pt_s = _kp_context(birth, "general")
+                    _kp_block_pt_s = f"\n\n{_kp_raw_pt_s}\n" if _kp_raw_pt_s else ""
+            except Exception as _kp_exc_pt_s:  # noqa: BLE001
+                print(f"[passthrough_stream] kp inject skipped: {str(_kp_exc_pt_s)[:160]}")
+                _kp_block_pt_s = ""
             _msgs_pt_s: list[dict] = [{
                 "role":    "system",
                 "content": _PT_SYS_INTRO
                            + _chart_block_pt_s
+                           + _kp_block_pt_s
                            + _locked_section_pt_s
                            + _marriage_block_pt_s,
             }]

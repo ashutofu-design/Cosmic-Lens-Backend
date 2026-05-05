@@ -17,6 +17,7 @@ Public:
   handle_health_question(question, kundli, birth) -> dict | None
 """
 from __future__ import annotations
+import json
 import os
 import re
 import time as _time
@@ -727,44 +728,82 @@ def _detect_immunity_vs_lifestyle_q(question: str) -> bool:
            bool(_LIFESTYLE_PROBE_RX.search(question))
 
 
-def _build_immunity_lifestyle_verdict(facts: dict) -> str:
-    """Deterministic first-sentence verdict from engine dim verdicts.
+def _classify_immunity_lifestyle(facts: dict) -> dict:
+    """H2.7.17-fix (architect-fix #e): SINGLE SOURCE OF TRUTH for
+    immunity-vs-lifestyle classification. Returns verdict + driver
+    labels + remedy_focus from ONE truth-table. Both
+    `_build_immunity_lifestyle_verdict` and `_build_signal_pack`
+    delegate here to prevent semantic drift.
 
     Truth table (dr = disease_resistance, vit = vitality):
-      dr=RED   + vit=RED/YELLOW → immunity baseline weak + lifestyle amplifier
-      dr=RED   + vit=GREEN      → immunity weak, body strong (recovery slow)
-      dr=YELLOW                 → immunity moderate, lifestyle plays role
-      dr=GREEN + vit=GREEN      → immunity stable, lifestyle small role
-      dr=GREEN + vit=RED/YELLOW → immunity strong-baseline, lifestyle-trigger
-                                  sensitivity (user's "ideal" case)
+      dr=RED   + vit=RED/YELLOW → immunity weak + lifestyle amplifier
+      dr=RED   + vit=GREEN      → immunity weak, body strong (recovery)
+      dr=YELLOW                 → immunity moderate, lifestyle role big
+      dr=GREEN + vit=GREEN      → stable, lifestyle-triggered only
+      dr=GREEN + vit=RED/YELLOW → immunity strong, body sensitive
     """
     dims = facts.get("dimensions") or {}
     dr_v = (dims.get("disease_resistance") or {}).get("verdict", "?")
     vit_v = (dims.get("vitality") or {}).get("verdict", "?")
 
     if dr_v == "RED" and vit_v in ("RED", "YELLOW"):
-        return ("Aapke pattern me immunity baseline thodi weak side "
-                "par dikh rahi hai, aur lifestyle isko aur trigger "
-                "karta hai — dono ka mix hai, sirf ek nahi.")
+        return {
+            "verdict": ("Aapke pattern me immunity baseline thodi weak "
+                        "side par dikh rahi hai, aur lifestyle isko aur "
+                        "trigger karta hai — dono ka mix hai, sirf ek nahi."),
+            "primary_driver":   "immunity_sensitivity",
+            "secondary_driver": "lifestyle_trigger",
+            "remedy_focus":     "sleep_routine_hydration_discipline",
+        }
     if dr_v == "RED" and vit_v == "GREEN":
-        return ("Aapke pattern me immunity baseline weak hai, par "
-                "body strong hai — main issue recovery slow hone ka "
-                "hai, lifestyle uska amplifier hai.")
+        return {
+            "verdict": ("Aapke pattern me immunity baseline weak hai, par "
+                        "body strong hai — main issue recovery slow hone "
+                        "ka hai, lifestyle uska amplifier hai."),
+            "primary_driver":   "recovery_slow",
+            "secondary_driver": "lifestyle_trigger",
+            "remedy_focus":     "immunity_support_basics",
+        }
     if dr_v == "YELLOW":
-        return ("Aapke pattern me immunity moderate hai — bilkul "
-                "weak nahi, par solid bhi nahi. Lifestyle ka role "
-                "yahan kaafi bada hai.")
+        return {
+            "verdict": ("Aapke pattern me immunity moderate hai — bilkul "
+                        "weak nahi, par solid bhi nahi. Lifestyle ka role "
+                        "yahan kaafi bada hai."),
+            "primary_driver":   "lifestyle_trigger",
+            "secondary_driver": "immunity_moderate",
+            "remedy_focus":     "routine_discipline",
+        }
     if dr_v == "GREEN" and vit_v == "GREEN":
-        return ("Aapke pattern me immunity baseline stable hai — "
-                "primary reason lifestyle-triggered sensitivity hai, "
-                "weak immunity nahi.")
+        return {
+            "verdict": ("Aapke pattern me immunity baseline stable hai — "
+                        "primary reason lifestyle-triggered sensitivity "
+                        "hai, weak immunity nahi."),
+            "primary_driver":   "lifestyle_trigger",
+            "secondary_driver": "balanced_baseline",
+            "remedy_focus":     "maintenance",
+        }
     if dr_v == "GREEN" and vit_v in ("RED", "YELLOW"):
-        return ("Aapke pattern me immunity bilkul weak nahi hai, "
-                "lekin body thodi sensitive dikh rahi hai — primary "
-                "reason lifestyle-triggered sensitivity hai.")
+        return {
+            "verdict": ("Aapke pattern me immunity bilkul weak nahi hai, "
+                        "lekin body thodi sensitive dikh rahi hai — "
+                        "primary reason lifestyle-triggered sensitivity hai."),
+            "primary_driver":   "lifestyle_trigger",
+            "secondary_driver": "body_sensitivity",
+            "remedy_focus":     "routine_discipline",
+        }
     # Unknown / partial — calm honest fallback.
-    return ("Aapke pattern me immunity aur lifestyle dono ka mix "
-            "role dikh raha hai — dono pehlu saath chalte hain.")
+    return {
+        "verdict": ("Aapke pattern me immunity aur lifestyle dono ka "
+                    "mix role dikh raha hai — dono pehlu saath chalte hain."),
+        "primary_driver":   "mixed",
+        "secondary_driver": "mixed",
+        "remedy_focus":     "lifestyle_basics",
+    }
+
+
+def _build_immunity_lifestyle_verdict(facts: dict) -> str:
+    """Backward-compatible wrapper — delegates to single-source classifier."""
+    return _classify_immunity_lifestyle(facts)["verdict"]
 
 
 def _force_engine_verdict_prefix(text: str, verdict: str) -> str:
@@ -792,6 +831,164 @@ def _force_engine_verdict_prefix(text: str, verdict: str) -> str:
         return text
     # LLM dropped/rewrote — prepend verdict, keep LLM body as reason.
     return f"{verdict} {text}".strip()
+
+
+# ────────────────────────────────────────────────────────────────────
+# H2.7.17 — SIGNAL PACK LAYER  (Engine=Truth, LLM=Expression)
+# ────────────────────────────────────────────────────────────────────
+# Per user directive: engine builds compact JSON signal-pack instead
+# of dumping raw kundli at LLM. LLM gets ONLY: dim states + verdict +
+# key_factors + remedy_focus. No planets, no houses, no dignities.
+# This is "controlled freedom" — LLM owns expression, engine owns
+# truth. Killswitch: HEALTH_SIGNAL_PACK=0 (falls back to raw pack).
+# ────────────────────────────────────────────────────────────────────
+
+_DIM_STATE_MAP = {
+    "vitality":           {"RED": "weak",      "YELLOW": "moderate", "GREEN": "stable"},
+    "disease_resistance": {"RED": "sensitive", "YELLOW": "moderate", "GREEN": "strong"},
+    "mental_health":      {"RED": "stressed",  "YELLOW": "mixed",    "GREEN": "calm"},
+    "chronic_risk":       {"RED": "elevated",  "YELLOW": "moderate", "GREEN": "low"},
+    "accident_risk":      {"RED": "elevated",  "YELLOW": "moderate", "GREEN": "low"},
+}
+
+
+def _verdict_to_state(dim_key: str, verdict: str) -> str:
+    return _DIM_STATE_MAP.get(dim_key, {}).get(verdict, "unknown")
+
+
+def _build_signal_pack(facts: dict, question: str) -> Optional[dict]:
+    """Return compact signal JSON if question matches a registered
+    question_type, else None (caller falls back to raw-pack path).
+    Currently registered: compare_immunity_vs_lifestyle."""
+    if os.environ.get("HEALTH_SIGNAL_PACK", "1") == "0":
+        return None
+    dims = facts.get("dimensions", {}) or {}
+    if not dims:
+        return None
+
+    if _detect_immunity_vs_lifestyle_q(question):
+        # H2.7.17-fix (architect #e): use SINGLE SOURCE classifier
+        # so verdict + driver labels + remedy_focus stay consistent.
+        cls = _classify_immunity_lifestyle(facts)
+
+        vit_v = dims.get("vitality", {}).get("verdict", "?")
+        dr_v  = dims.get("disease_resistance", {}).get("verdict", "?")
+        mh_v  = dims.get("mental_health", {}).get("verdict", "?")
+        cr_v  = dims.get("chronic_risk", {}).get("verdict", "?")
+
+        # Top 2 plain-English attribution strings (engine reasons)
+        key_factors = []
+        for dk in ("disease_resistance", "vitality", "mental_health"):
+            r = dims.get(dk, {}).get("reason", "")
+            if r:
+                r_clean = re.split(r"\s*\[KP-VEDIC", r)[0].strip()
+                key_factors.append(r_clean)
+            if len(key_factors) >= 2:
+                break
+
+        return {
+            "question_type":    "compare_immunity_vs_lifestyle",
+            "vitality":         _verdict_to_state("vitality", vit_v),
+            "immunity":         _verdict_to_state("disease_resistance", dr_v),
+            "mental":           _verdict_to_state("mental_health", mh_v),
+            "chronic":          _verdict_to_state("chronic_risk", cr_v),
+            "primary_driver":   cls["primary_driver"],
+            "secondary_driver": cls["secondary_driver"],
+            "remedy_focus":     cls["remedy_focus"],
+            "key_factors":      key_factors,
+            "engine_verdict":   cls["verdict"],
+        }
+
+    return None
+
+
+def _render_signal_based_narrative_llm(signal_pack: dict, facts: dict,
+                                        question: str,
+                                        sensitive_bucket: Optional[str]
+                                        ) -> str:
+    """H2.7.17 — LLM call with COMPACT signal pack only.
+    LLM = expression layer; engine = truth + verdict."""
+    try:
+        import openai_helper  # type: ignore
+        client = openai_helper._get_client()
+        if client is None:
+            return _render_simple_narrative_static(facts, question)
+    except Exception:
+        return _render_simple_narrative_static(facts, question)
+
+    engine_verdict = signal_pack.get("engine_verdict", "")
+    pack_json = json.dumps(signal_pack, ensure_ascii=False, indent=2)
+
+    sys_prompt = (
+        "You are a Vedic-astrology HEALTH translator. The ENGINE has "
+        "already done all analysis and given you a SIGNAL PACK (JSON). "
+        "Your job is ONLY EXPRESSION — convert engine truth to natural "
+        "Hinglish for the user.\n\n"
+        "MANDATORY:\n"
+        "1. First sentence = engine_verdict VERBATIM (copy character-"
+        "for-character, no rephrasing, no softening).\n"
+        "2. Then 2-3 lines explaining WHY using key_factors — talk in "
+        "BODY-system terms ('baseline support', 'recovery channel', "
+        "'energy reserve'), NOT raw planet/house jargon.\n"
+        "3. End with ONE practical remedy aligned to remedy_focus.\n"
+        "4. Length: 90-120 words target, 150 hard cap.\n\n"
+        "BANS:\n"
+        "✘ NEVER name a specific disease (diabetes, cancer, asthma, "
+        "BP, thyroid, sinus, bronchitis, throat infection, etc.) — "
+        "use category zone phrasing (metabolic / respiratory / mental "
+        "/ cardiac / digestive zone).\n"
+        "✘ NEVER predict timing ('agle mahine', 'kuch mahino me', "
+        "'jaldi hi', 'aane wale dino me') — engine is non-timing.\n"
+        "✘ NEVER use fear words (danger, khatarnak, ghatak, fatal, "
+        "life-threatening).\n"
+        "✘ NEVER suggest doctor / professional / therapist / specialist "
+        "/ counsellor (reply layer adds disclaimer separately).\n"
+        "✘ NEVER contradict the engine — if immunity=sensitive you "
+        "cannot say strong; if vitality=weak you cannot say healthy.\n"
+        "✘ NEVER use planet names (Mars/Mangal/Jupiter/Guru/Saturn/"
+        "Shani/Sun/Surya/Moon/Chandra/Mercury/Budh/Venus/Shukra/Rahu/"
+        "Ketu) or house numbers (1st/6th/8th/12th house, lagna, dusthana) "
+        "ANYWHERE in your output — even if user asks. key_factors are "
+        "deliberately written in body-system terms; preserve that style.\n\n"
+        "TONE: warm, calm, direct, like a knowledgeable friend. NOT a "
+        "report. NO greetings (Beta/Pranam). NO 'I sense', 'I feel'."
+    )
+    if sensitive_bucket:
+        sys_prompt += (
+            f"\nSENSITIVE BUCKET ACTIVE: {sensitive_bucket} — extra "
+            "gentle tone, no harsh labels, no fear words, no diagnosis "
+            "phrasing. Reply layer will append a bucket-specific support "
+            "line + doctor disclaimer separately.")
+
+    user_msg = (
+        f"USER QUESTION: {question}\n\n"
+        f"ENGINE SIGNAL PACK:\n{pack_json}\n\n"
+        "Now write the answer per rules above."
+    )
+
+    try:
+        resp = client.chat.completions.create(
+            model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+            messages=[
+                {"role": "system", "content": sys_prompt},
+                {"role": "user",   "content": user_msg},
+            ],
+            temperature=0.5,
+            max_tokens=600,
+        )
+        text = (resp.choices[0].message.content or "").strip()
+        if not text:
+            return _render_simple_narrative_static(facts, question)
+        aligned, _viol = _check_engine_alignment(text, facts)
+        if not aligned:
+            return _render_simple_narrative_static(facts, question)
+        text = _sanitize_health_reply(text)
+        if engine_verdict:
+            text = _force_engine_verdict_prefix(text, engine_verdict)
+        return _enforce_word_cap(text, max_words=150)
+    except Exception as e:
+        print(f"[health_static.signal] llm failed: {e}", flush=True)
+        return _render_simple_narrative_static(facts, question)
 
 
 def _enforce_word_cap(text: str, max_words: int = 150) -> str:
@@ -918,6 +1115,15 @@ def _render_simple_narrative_llm(facts: dict, question: str,
             return _render_simple_narrative_static(facts, question)
     except Exception:
         return _render_simple_narrative_static(facts, question)
+
+    # H2.7.17 — try SIGNAL PACK path first (compact engine-curated JSON
+    # instead of raw kundli dump). If question_type is registered,
+    # delegate to signal-based path; else fall through to raw-pack
+    # path below. Killswitch: HEALTH_SIGNAL_PACK=0.
+    _signal_pack = _build_signal_pack(facts, question)
+    if _signal_pack:
+        return _render_signal_based_narrative_llm(
+            _signal_pack, facts, question, sensitive_bucket)
 
     fact_pack = _build_health_kundli_pack(kundli or {}, facts, question)
 
@@ -1610,15 +1816,19 @@ def _llm_narrative(facts: dict, route: str, question: str,
     except Exception:
         return _direct_vitality_check(facts, question=question)
 
+    # H2.7.17-fix (architect #a): signal-pack delegation in
+    # NARRATIVE/HYBRID path too — keeps parity with simple path.
+    _signal_pack = _build_signal_pack(facts, question)
+    if _signal_pack:
+        return _render_signal_based_narrative_llm(
+            _signal_pack, facts, question, sensitive_bucket)
+
     fact_block = _build_llm_fact_block(facts, route)
     instruction = _NARRATIVE_INSTRUCTIONS.get(
         route, "Summarise the 5-dim health picture in 60-80 words "
                "Hinglish supportive tone. End with 'Final: <one-line>'.")
 
-    # H2.7.16-fix2 (architect-fix #e): engine-verdict injection ALSO
-    # in this call site (NARRATIVE/HYBRID modes). Mirrors the logic
-    # in _render_simple_narrative_llm so comparative immunity-vs-
-    # lifestyle Q gets deterministic verdict regardless of mode.
+    # H2.7.16-fix2: engine-verdict injection for unregistered comparative Q.
     _engine_verdict = ""
     if os.environ.get("HEALTH_ENGINE_VERDICT", "1") != "0" and \
        _detect_immunity_vs_lifestyle_q(question):
@@ -1906,7 +2116,11 @@ def handle_health_question(question: str, kundli: dict,
     # (90-120 word target, 150 hard cap + 4-beat structure).
     # H2.7.16: bumped v7 → v8 — sanitizer + tightened prompt
     # (no disease-list, no jargon-pair, no timing words, no fear).
-    _ns = f"health_static_v9b_{_OUTPUT_STYLE}"
+    # H2.7.17-fix (architect #g): include signal-pack flag in cache
+    # namespace so toggling HEALTH_SIGNAL_PACK doesn't serve stale
+    # cross-mode entries.
+    _sp_flag = "sp1" if os.environ.get("HEALTH_SIGNAL_PACK", "1") != "0" else "sp0"
+    _ns = f"health_static_v10_{_sp_flag}_{_OUTPUT_STYLE}"
     cache_key = make_cache_key(birth, kundli, _ns, route,
                                 question=_q_for_key)
     cached = get_cached(cache_key)

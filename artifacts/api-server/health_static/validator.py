@@ -322,7 +322,13 @@ def _ensure_final_line(text: str) -> Tuple[str, bool]:
     if "Final Verdict" in text or "Primary factor:" in text:
         return text, False
     if re.search(r"(?i)\bfinal\s*:", text):
-        text = re.sub(r"(?i)([^\n])\s+(final\s*:)", r"\1\n\n\2", text, count=1)
+        # H2.7.20-fix2 — preserve engine-injected "👉 Final:" line as-is.
+        # Only insert linebreaks before bare "Final:" labels (legacy LLM
+        # output). The rewrite below would corrupt "<emoji> Final:" by
+        # turning the inner space into "\n\n", splitting our verdict.
+        if not re.search(r"👉\s*Final\s*:", text, flags=re.IGNORECASE):
+            text = re.sub(r"(?i)([^\n])\s+(final\s*:)", r"\1\n\n\2",
+                          text, count=1)
         return text, False
     parts = [p.strip() for p in re.split(r"[.!?\n]+", text) if p.strip()]
     final_line = parts[-1] if parts else "Chart picture upar di hai."

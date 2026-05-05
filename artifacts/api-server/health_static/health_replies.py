@@ -658,6 +658,29 @@ def _sanitize_health_reply(text: str) -> str:
             (a, b), "planetary connection")
     text = _JARGON_PLANET_PAIR_RX.sub(_pair_repl, text)
 
+    # H2.7.20 — Abstract metaphors → plain words. User audit: phrases
+    # like "fuel/reserve", "baseline support", "recovery channel" feel
+    # vague and report-like. Replace with concrete plain Hinglish.
+    _ABSTRACT_METAPHOR_SUBS = [
+        (r"\bbasic\s+fuel\s*/\s*reserve\b", "basic energy"),
+        (r"\bfuel\s*/\s*reserve\b",         "energy"),
+        (r"\benergy\s+reserve\b",           "energy"),
+        (r"\bbaseline\s+support\b",         "energy support"),
+        (r"\bmental\s+load\b",              "stress"),
+        (r"\brecovery\s+channel\b",         "recovery"),
+        (r"\bsupport\s+channel\b",          "support"),
+        (r"\baxis\b",                       "side"),
+        (r"\bframework\b",                  "pattern"),
+        # H2.7.20-fix1 — broader baseline strip (any context, not
+        # just "baseline support").
+        (r"\bimmunity\s+baseline\b",        "immunity"),
+        (r"\benergy\s+baseline\b",          "energy"),
+        (r"\bbaseline\b",                   "base"),
+    ]
+    for _pat, _rep in _ABSTRACT_METAPHOR_SUBS:
+        text = _re_sanitize.sub(_pat, _rep, text,
+                                flags=_re_sanitize.IGNORECASE)
+
     # 2. Split into sentences for clause-level filtering.
     # H2.7.16-fix: include Hindi danda (।) and trailing-punct cases
     # where no whitespace follows.
@@ -907,6 +930,121 @@ def _build_immunity_lifestyle_verdict(facts: dict) -> str:
     return _classify_immunity_lifestyle(facts)["verdict"]
 
 
+# ────────────────────────────────────────────────────────────────────
+# H2.7.20 — MANDATORY FINAL VERDICT (sharp + plain)
+# ────────────────────────────────────────────────────────────────────
+# User audit: LLM endings were indirect ("isliye ho sakta hai…"),
+# abstract metaphors ("fuel/reserve/baseline/channel") leaked through.
+# Fix: engine builds a SHARP "👉 Final: Main reason X + Y imbalance
+# hai. <action>." line from the universal signal pack and post-injector
+# appends it if the LLM did not already produce it. Plus sanitizer
+# rewrites abstract metaphors to plain words.
+# Killswitch: env HEALTH_FINAL_VERDICT=0 → falls back to LLM-only.
+# ────────────────────────────────────────────────────────────────────
+
+_DIM_PLAIN_LABEL = {
+    "vitality": "energy",
+    "immunity": "recovery",
+    "mental":   "stress",
+    "chronic":  "long-term load",
+}
+
+_DIM_PLAIN_ACTION = {
+    "vitality": ("Routine stable rakhiye — fixed sleep time, 1 glass "
+                 "water subah, 10 min halki walk."),
+    "immunity": ("Routine stable rakhiye — warm home food, hydration "
+                 "regular, neend 7-8 ghante."),
+    "mental":   ("Routine stable rakhiye — 10 min breathing, fixed "
+                 "sleep time, screen off raat ko."),
+    "chronic":  ("Routine stable rakhiye — diet light + steady, "
+                 "hydration regular, monthly self-check."),
+}
+
+_RED_STATES    = {"weak", "sensitive", "stressed", "elevated"}
+_YELLOW_STATES = {"moderate", "mixed"}
+
+
+def _build_final_verdict_from_pack(pack: dict) -> str:
+    """Build the MANDATORY '👉 Final:' verdict line from the
+    universal signal pack. Picks top 2 'off' dims (RED before YELLOW)
+    and constructs sharp 1-line verdict + 1 actionable.
+
+    H2.7.20-fix3 (architect #3): if pack is missing/partial/has no
+    recognized dim states at all, emit a SAFE 'signals incomplete'
+    fallback instead of a falsely confident 'overall stable' line.
+    'Stable' is only emitted when we actually saw all 4 dims AND none
+    were in RED/YELLOW (true all-green case)."""
+    if not isinstance(pack, dict):
+        return ("👉 Final: Signals incomplete hain — abhi clear pattern "
+                "nahi mil raha. Routine (sleep, hydration, light activity) "
+                "maintain rakhiye.")
+    red_hits, yellow_hits = [], []
+    seen_states = 0
+    for dk in ("vitality", "immunity", "mental", "chronic"):
+        d = pack.get(dk) or {}
+        st = d.get("state", "") if isinstance(d, dict) else ""
+        if st in _RED_STATES:
+            red_hits.append(dk); seen_states += 1
+        elif st in _YELLOW_STATES:
+            yellow_hits.append(dk); seen_states += 1
+        elif st in {"stable", "balanced", "calm", "low", "ok", "normal"}:
+            seen_states += 1
+    picked = (red_hits + yellow_hits)[:2]
+    if not picked:
+        if seen_states >= 3:
+            # Genuine all-green / mostly-green pack.
+            return ("👉 Final: Overall pattern stable hai. Routine "
+                    "(sleep, hydration, light activity) maintain rakhiye.")
+        # Pack present but states unrecognized / incomplete.
+        return ("👉 Final: Signals incomplete hain — abhi clear pattern "
+                "nahi mil raha. Routine (sleep, hydration, light activity) "
+                "maintain rakhiye.")
+    labels = [_DIM_PLAIN_LABEL.get(p, p) for p in picked]
+    if len(labels) == 1:
+        verdict_core = f"Main reason {labels[0]} imbalance hai"
+    else:
+        verdict_core = f"Main reason {labels[0]} + {labels[1]} imbalance hai"
+    action = _DIM_PLAIN_ACTION.get(
+        picked[0],
+        "Routine stable rakhiye — sleep, hydration, light activity.")
+    return f"👉 Final: {verdict_core}. {action}"
+
+
+# Pre-compiled regex used by _force_final_verdict to find ANY existing
+# "👉 Final:" line anywhere in the text (mid-body OR EOF), so we can
+# strip duplicates and force exactly one canonical line at EOF.
+import re as _re_h2720
+_FINAL_LINE_RX = _re_h2720.compile(
+    r"(?i)\s*👉\s*Final\s*:[^\n]*(?:\n|$)")
+
+
+def _force_final_verdict(text: str, pack: dict) -> str:
+    """Post-injector. Guarantees every reply ENDS with EXACTLY ONE
+    canonical '👉 Final:' verdict line at EOF.
+
+    H2.7.20-fix3 (architect #1): previously this exited if '👉 Final'
+    appeared ANYWHERE in text — that allowed mid-body Final lines to
+    pass while leaving body without a tail Final. Now:
+      1. Strip ALL existing '👉 Final:' lines (they may be mid-body
+         or duplicates from LLM/validator).
+      2. Always append the engine-built canonical Final at EOF.
+    Killswitch: HEALTH_FINAL_VERDICT=0 → return untouched.
+    """
+    import os as _os_fv
+    if _os_fv.environ.get("HEALTH_FINAL_VERDICT", "1") == "0":
+        return text
+    if not text:
+        return text
+    # Strip every existing canonical Final line (anywhere) to dedupe.
+    stripped = _FINAL_LINE_RX.sub("", text).rstrip()
+    verdict = _build_final_verdict_from_pack(pack)
+    if not verdict:
+        # Pack truly empty AND fallback couldn't build — keep stripped
+        # body to avoid emitting a half-final.
+        return stripped or text
+    return f"{stripped}\n\n{verdict}"
+
+
 def _force_engine_verdict_prefix(text: str, verdict: str) -> str:
     """Post-injector: if LLM output doesn't already lead with the
     engine verdict (or an equivalent claim), force-prepend it.
@@ -1082,12 +1220,21 @@ def _render_signal_based_narrative_llm(signal_pack: dict, facts: dict,
         "MANDATORY:\n"
         f"{verdict_rule}"
         "2. Then 1-2 short lines explaining WHY using the relevant "
-        "dim's `reason` field — talk in BODY-system terms ('baseline "
-        "support', 'energy reserve', 'mental load', 'recovery channel'), "
-        "NOT raw planet/house jargon.\n"
-        "3. End with ONE practical remedy aligned to the picked dim "
-        "(routine, breathing, hydration, simple food, sleep hygiene, etc.).\n"
-        "4. Length: 80-110 words target, 130 hard cap. SHORTER IS BETTER.\n\n"
+        "dim's `reason` field — use PLAIN WORDS ONLY: energy, stress, "
+        "support, sleep, recovery, mind, body. DO NOT use abstract "
+        "metaphors (fuel, reserve, baseline, channel, framework, "
+        "axis) — sanitizer will strip them.\n"
+        "3. End with ONE MANDATORY final line in EXACTLY this format "
+        "on its own line:\n"
+        "   👉 Final: Main reason <X> + <Y> imbalance hai. "
+        "<one short concrete action>.\n"
+        "   Where X, Y = simple words (energy, recovery, stress, "
+        "long-term load) chosen from the dims that are NOT stable. "
+        "If only ONE dim is off, write 'Main reason <X> imbalance "
+        "hai'. If ALL stable, write 'Overall pattern stable hai'.\n"
+        "   ✘ NO hedging in this final line — banned: 'ho sakta hai', "
+        "'lagta hai', 'shayad', 'almost', 'thoda sa'. Be DECISIVE.\n"
+        "4. Length: 90-120 words target, 150 hard cap. SHORTER IS BETTER.\n\n"
         "BANS:\n"
         "✘ NEVER name a specific disease (diabetes, cancer, asthma, "
         "BP, thyroid, sinus, bronchitis, throat infection, etc.) — "
@@ -1148,7 +1295,14 @@ def _render_signal_based_narrative_llm(signal_pack: dict, facts: dict,
         text = _sanitize_health_reply(text)
         if engine_verdict:
             text = _force_engine_verdict_prefix(text, engine_verdict)
-        return _enforce_word_cap(text, max_words=130)
+        # H2.7.20-fix3 (architect #2): cap BODY first with reserved
+        # budget for the final-verdict line, THEN append it. Old order
+        # (force final → cap) could chop the verdict if body+final
+        # exceeded 150 words. Verdict line is ~25-35 words; reserve 40.
+        body_only = _FINAL_LINE_RX.sub("", text).rstrip()
+        body_capped = _enforce_word_cap(body_only, max_words=110)
+        # Now force-final on the capped body — verdict goes after cap.
+        return _force_final_verdict(body_capped, signal_pack)
     except Exception as e:
         print(f"[health_static.signal] llm failed: {e}", flush=True)
         return _render_simple_narrative_static(facts, question)
@@ -2283,7 +2437,7 @@ def handle_health_question(question: str, kundli: dict,
     # namespace so toggling HEALTH_SIGNAL_PACK doesn't serve stale
     # cross-mode entries.
     _sp_flag = "sp1" if os.environ.get("HEALTH_SIGNAL_PACK", "1") != "0" else "sp0"
-    _ns = f"health_static_v12_{_sp_flag}_{_OUTPUT_STYLE}"
+    _ns = f"health_static_v13e_{_sp_flag}_{_OUTPUT_STYLE}"
     cache_key = make_cache_key(birth, kundli, _ns, route,
                                 question=_q_for_key)
     cached = get_cached(cache_key)
@@ -2342,11 +2496,12 @@ def handle_health_question(question: str, kundli: dict,
         tele_state["validator_flags"] = v_flags
         tele_state["validator_action"] = v_action
 
-        # H2.6 strict contract: NEVER end with a "Final:" label.
-        # Validator's _ensure_final_line auto-appends one — strip it
-        # back out for the simple-narrative presentation contract.
+        # H2.6 strict contract: NEVER end with a bare "Final:" label
+        # auto-appended by validator's _ensure_final_line. BUT preserve
+        # H2.7.20 engine-injected "👉 Final:" line (emoji-prefixed) —
+        # that's our deterministic verdict, not a validator artifact.
         text = re.sub(
-            r"\n+\s*Final\s*:[^\n]*\s*$", "", text,
+            r"(?<!👉\s)(?<!👉)\n+\s*Final\s*:[^\n]*\s*$", "", text,
             flags=re.IGNORECASE,
         ).rstrip()
 

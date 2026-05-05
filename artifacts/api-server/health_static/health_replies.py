@@ -1407,7 +1407,10 @@ def handle_health_question(question: str, kundli: dict,
         # Phase H2.7: pass full kundli to LLM (Path B+ — no pre-curation).
         narrative_raw = _render_simple_narrative_llm(
             facts, question, sensitive, kundli=kundli)
-        # Validator scrub for safety (referral/disease/fear words)
+        # Validator scrub for safety (referral/disease/fear words).
+        # H2.7.1: simple-mode opts into Vedic-vocab pass-through —
+        # planet/house/sign/dignity words stay (those are the
+        # attribution LLM forms from the full kundli pack).
         text, v_flags, v_action = validate_health_llm_output(
             narrative_raw,
             user_question=question,
@@ -1415,6 +1418,7 @@ def handle_health_question(question: str, kundli: dict,
             allowed_yogas=facts.get("yogas") or [],
             direct_fallback_text=_render_simple_narrative_static(
                 facts, question),
+            allow_vedic_terms=True,
         )
         tele_state["validator_flags"] = v_flags
         tele_state["validator_action"] = v_action

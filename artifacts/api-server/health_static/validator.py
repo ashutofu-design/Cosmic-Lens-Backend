@@ -368,6 +368,7 @@ def validate_health_llm_output(
     allowed_yogas: Optional[List[str]] = None,
     direct_fallback_text: str = "",
     add_doctor: bool = False,
+    allow_vedic_terms: bool = False,
 ) -> Tuple[str, List[str], str]:
     """Clean + validate LLM health output.
 
@@ -379,6 +380,15 @@ def validate_health_llm_output(
     routes pass `add_doctor=True`. Diagnosis-ban / fear-softener /
     death-strip / cure-softener / hallucinated-yoga / disease-name
     scrubbing remain ALWAYS-ON regardless of flag.
+
+    Phase H2.7.1: `allow_vedic_terms=True` (passed by simple-mode H2.7
+    Path B+ caller) keeps planet names, house numbers, sign names, and
+    dignity words intact — these are user-friendly Vedic vocabulary the
+    LLM is explicitly instructed to use for attribution. The H2.2-era
+    auto-strip remains ON for any caller that doesn't opt-in (back-
+    compat: structured-mode, marriage, etc. behave identically).
+    Disease-name / doctor / fear / death / cure / fake-yoga scrubs are
+    always ON regardless.
     """
     if not isinstance(text, str) or not text.strip():
         fb = direct_fallback_text or "Engine truth upar di hai."
@@ -388,7 +398,9 @@ def validate_health_llm_output(
 
     flags: List[str] = []
     cleaned = text
-    user_wants_tech = _user_asked_for_tech(user_question)
+    # H2.7.1: opt-in flag overrides per-question heuristic. Simple-mode
+    # always permits Vedic vocab (planet/house/sign/dignity).
+    user_wants_tech = allow_vedic_terms or _user_asked_for_tech(user_question)
 
     # 1) Engine codes — ALWAYS strip / replace
     if _ENGINE_CODES.search(cleaned):
@@ -442,10 +454,13 @@ def validate_health_llm_output(
         if not user_wants_tech:
             cleaned = _SIGN_RX.sub("", cleaned)
 
-    # 10) Dignity / dusthana — always strip
+    # 10) Dignity / dusthana — strip unless Vedic terms allowed
+    # (H2.7.1: simple-mode keeps "debilitated"/"exalted"/"dusthana" —
+    # these are part of the attribution LLM forms from the full pack)
     if _DIGNITY_RX.search(cleaned):
-        flags.append("dignity_jargon")
-        cleaned = _DIGNITY_RX.sub("", cleaned)
+        flags.append("dignity_jargon" + ("_allowed" if user_wants_tech else ""))
+        if not user_wants_tech:
+            cleaned = _DIGNITY_RX.sub("", cleaned)
 
     # 11) Timing leaks (years / month names) — strip (non-timing engine)
     if _TIMING_LEAK_RX.search(cleaned):

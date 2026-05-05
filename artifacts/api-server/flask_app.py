@@ -5928,7 +5928,9 @@ def ask_route():
             "text":       _fin["text"],
             "topic":      "stock_finance",
             "confidence": 1.0,
-            "source":     f"stock_engine:{_fin.get('mode','')}/{_fin.get('route','')}",
+            "source":     (f"stock_engine[{_fin.get('scope','non_timing')}]:"
+                           f"{_fin.get('mode','')}/{_fin.get('route','')}"),
+            "scope":      _fin.get("scope", "non_timing"),
             "follow_ups": [],
             "quota":      {"used": quota.get("used", 0),
                             "limit": quota.get("limit", 0)},

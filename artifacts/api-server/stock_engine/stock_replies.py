@@ -498,12 +498,19 @@ import os  # noqa: E402  (used in _llm_narrative)
 
 
 # ── Public entry point ──────────────────────────────────────────────
+_ENGINE_SCOPE = "non_timing"  # see stock_engine/__init__.py SCOPE block
+
+
 def handle_finance_question(question: str, kundli: dict,
                               birth: dict | None = None) -> Optional[Dict[str, Any]]:
-    """Route + serve a finance/stock question.
+    """Route + serve a NON-TIMING stock/money question.
+
+    Scope: WHAT / WHY / WHICH about stocks, trading, investing, money
+    behaviour. Timing questions ("kab paisa", "agle dasha date") are
+    NOT handled here — caller should route them to the timing engine.
 
     Returns None if not a stock question (caller should fall through to
-    normal pipeline).
+    normal pipeline). Every non-None response carries scope='non_timing'.
     """
     if not is_stock_question(question or ""):
         return None
@@ -513,6 +520,7 @@ def handle_finance_question(question: str, kundli: dict,
                       "ke bina possible nahi. Pehle birth details save karein.\n\n"
                       "Final: Pehle kundli, fir stock analysis."),
             "mode": "FAILSAFE", "route": "no_kundli",
+            "scope": _ENGINE_SCOPE,
             "verdict": None, "cache_hit": False, "engine_facts": None,
         }
 
@@ -523,6 +531,7 @@ def handle_finance_question(question: str, kundli: dict,
         text = WARNINGS.get(route, "")
         return {
             "text": text, "mode": mode, "route": route,
+            "scope": _ENGINE_SCOPE,
             "verdict": None, "cache_hit": False, "engine_facts": None,
         }
 
@@ -532,6 +541,7 @@ def handle_finance_question(question: str, kundli: dict,
     if cached:
         return {
             "text": cached["text"], "mode": mode, "route": route,
+            "scope": _ENGINE_SCOPE,
             "verdict": cached.get("meta", {}).get("verdict"),
             "cache_hit": True, "engine_facts": None,
         }
@@ -542,6 +552,7 @@ def handle_finance_question(question: str, kundli: dict,
         return {
             "text": f"Engine error: {facts['error']}\n\nFinal: Kundli check karein.",
             "mode": "FAILSAFE", "route": route,
+            "scope": _ENGINE_SCOPE,
             "verdict": None, "cache_hit": False, "engine_facts": facts,
         }
 
@@ -558,6 +569,7 @@ def handle_finance_question(question: str, kundli: dict,
 
     return {
         "text": text, "mode": mode, "route": route,
+        "scope": _ENGINE_SCOPE,
         "verdict": facts.get("verdict"), "cache_hit": False,
         "engine_facts": facts,
     }

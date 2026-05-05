@@ -89,15 +89,18 @@ _COMPARATIVE_RX = re.compile(
 # (regex, dim_keys, display_label) — order matters; first match wins per
 # concept group. Multi-key entries (e.g. body) average across channels.
 _DIM_CONCEPTS = [
-    (re.compile(r"\b(body|shareer|sharir|physical|tan|jism)\b", re.I),
+    # Phase H2.3.1 (B): expanded Hinglish lexicon
+    (re.compile(r"\b(body|shareer|sharir|physical|tan|jism|"
+                r"tabiyat|sehat|swasthya|bimari|beemari|rog)\b", re.I),
      ["vitality", "disease_resistance"], "Body (vitality + recovery)"),
     (re.compile(r"\b(mental|mann|man|mind|psych|emotional|"
-                r"stress|anxiety|peace|mood|neend|sleep)\b", re.I),
+                r"stress|anxiety|peace|mood|neend|sleep|"
+                r"dimaag|dimag|mindset|khayal)\b", re.I),
      ["mental_health"], "Mental peace"),
-    (re.compile(r"\b(thakan|fatigue|energy|stamina|kamzori|"
-                r"vitality)\b", re.I),
+    (re.compile(r"\b(thakan|fatigue|energy|stamina|kamzori|kamjor|"
+                r"weakness|vitality)\b", re.I),
      ["vitality"], "Vitality (energy)"),
-    (re.compile(r"\b(immunity|recovery|bounce|heal|"
+    (re.compile(r"\b(immunity|immune|pratiraksha|recovery|bounce|heal|"
                 r"disease[\s-]?resistance)\b", re.I),
      ["disease_resistance"], "Recovery / immunity"),
     (re.compile(r"\b(chronic|long[\s-]?term|hereditary|lambi|"
@@ -156,8 +159,9 @@ def _compare_one_liner(dims: dict, a_keys, a_label, b_keys, b_label) -> str:
     state_word = {"GREEN": "strong", "YELLOW": "mixed",
                   "RED": "weak", "MIXED": "mixed"}
 
-    # Tie band — within 0.5 average-score difference
-    if abs(a_score - b_score) < 0.5:
+    # Phase H2.3.1 (C): tie band widened to <= 0.6 to catch
+    # boundary cases on a 1-3 scale (e.g. body avg 1.5 vs mental 1.0)
+    if abs(a_score - b_score) <= 0.6:
         if a_v == "RED" and b_v == "RED":
             return (f"Is case me {a_label} aur {b_label} dono weak "
                     f"phase me hain — sirf ek nahi, dono ko saath "
@@ -253,7 +257,11 @@ def _vitality_one_liner(dims: dict, sub: dict, yogas: list) -> str:
             "health ke liye sabse achchha plan hai.")
 
 
-def _direct_yoga_check(facts: dict) -> str:
+def _direct_yoga_check(facts: dict, question: str = "") -> str:
+    # Phase H2.3.1 (D): accepts question kwarg for signature uniformity
+    # so caller can drop the try/except TypeError wrapper. yoga_check
+    # itself doesn't use comparative intent (yoga audit ≠ dim compare).
+    _ = question  # explicitly unused
     yogas = facts.get("yogas") or []
     sub = facts.get("sub_flags") or {}
     lines = ["✨ Health-yoga audit (chart se):"]
@@ -297,6 +305,40 @@ _DIRECT_FORMATTERS = {
     "vitality_check": _direct_vitality_check,
     "yoga_check":     _direct_yoga_check,
 }
+
+
+# ── Phase H2.3.1 (A3): HYBRID/NARRATIVE Final-line override ─────────
+def _force_comparative_final(text: str, facts: dict, question: str) -> str:
+    """If question is comparative, REPLACE the LLM's 'Final: ...' line
+    (or append one if missing) with the deterministic comparator
+    verdict. Guarantees the locked rule across HYBRID + NARRATIVE:
+    'comparison asked ⇒ winner/loser/tie verdict.' Single Final line
+    only — no duplication."""
+    if not text or not question:
+        return text
+    pair = _detect_compare_pair(question)
+    if not pair:
+        return text
+    dims = facts.get("dimensions") or {}
+    deterministic = _compare_one_liner(dims, *pair)
+    if not deterministic:
+        return text
+
+    lines = text.splitlines()
+    out_lines, replaced = [], False
+    for ln in lines:
+        stripped = ln.lstrip()
+        if (not replaced) and stripped.lower().startswith("final:"):
+            # preserve any leading indentation
+            indent = ln[:len(ln) - len(stripped)]
+            out_lines.append(f"{indent}Final: {deterministic}")
+            replaced = True
+        else:
+            out_lines.append(ln)
+    if not replaced:
+        out_lines.append("")
+        out_lines.append(f"Final: {deterministic}")
+    return "\n".join(out_lines)
 
 
 # ── NARRATIVE: build engine fact pack for LLM (lean) ────────────────
@@ -424,9 +466,9 @@ def _llm_narrative(facts: dict, route: str, question: str,
         import openai_helper  # type: ignore
         client = openai_helper._get_client()
         if client is None:
-            return _direct_vitality_check(facts)
+            return _direct_vitality_check(facts, question=question)
     except Exception:
-        return _direct_vitality_check(facts)
+        return _direct_vitality_check(facts, question=question)
 
     fact_block = _build_llm_fact_block(facts, route)
     instruction = _NARRATIVE_INSTRUCTIONS.get(
@@ -494,11 +536,11 @@ def _llm_narrative(facts: dict, route: str, question: str,
         )
         text = (resp.choices[0].message.content or "").strip()
         if not text:
-            return _direct_vitality_check(facts)
+            return _direct_vitality_check(facts, question=question)
         return text
     except Exception as e:
         print(f"[health_static.llm] narrative call failed: {e}", flush=True)
-        return _direct_vitality_check(facts)
+        return _direct_vitality_check(facts, question=question)
 
 
 # ── Public entry point ──────────────────────────────────────────────
@@ -712,14 +754,10 @@ def handle_health_question(question: str, kundli: dict,
     # ── Build text per mode (validator runs on every LLM-touched mode) ──
     if mode == "DIRECT":
         formatter = _DIRECT_FORMATTERS.get(route, _direct_vitality_check)
-        # Phase H2.3: thread question to vitality formatter so the
-        # comparative-intent detector can override the Final line.
-        # Other DIRECT formatters (yoga_check) ignore the kwarg via
-        # **_ — see _direct_yoga_check signature.
-        try:
-            raw_text = formatter(facts, question=question)
-        except TypeError:
-            raw_text = formatter(facts)
+        # Phase H2.3 + H2.3.1 (D): all DIRECT formatters now accept
+        # question kwarg uniformly (vitality uses it for comparative
+        # intent; yoga_check ignores). Direct call — no try/except mask.
+        raw_text = formatter(facts, question=question)
         # DIRECT text is engine-controlled deterministic — MUST NOT pass
         # through LLM-scrubbing validator (it would strip legitimate
         # words like 'dimensions' and 'Arishta'). Only attach safety
@@ -731,7 +769,7 @@ def handle_health_question(question: str, kundli: dict,
             "soft_tail" if v_flags else "none"
         )
     elif mode == "HYBRID":
-        direct_text = _direct_vitality_check(facts)
+        direct_text = _direct_vitality_check(facts, question=question)
         narrative_raw = _llm_narrative(facts, route, question, sensitive)
         narrative, v_flags, v_action = validate_health_llm_output(
             narrative_raw,
@@ -747,10 +785,16 @@ def handle_health_question(question: str, kundli: dict,
             ln for ln in direct_text.splitlines()
             if not ln.strip().lower().startswith("final:")
         )
+        # Phase H2.3.1 (A3): if question is comparative, REPLACE LLM's
+        # Final line with deterministic comparator verdict — guarantees
+        # rule "compare asked ⇒ winner/loser/tie" in HYBRID path.
+        narrative = _force_comparative_final(narrative, facts, question)
         text = direct_clean.rstrip() + "\n\n" + narrative.lstrip()
     else:  # NARRATIVE
         narrative_raw = _llm_narrative(facts, route, question, sensitive)
-        fallback_for_validator = _direct_vitality_check(facts)
+        fallback_for_validator = _direct_vitality_check(
+            facts, question=question
+        )
         text, v_flags, v_action = validate_health_llm_output(
             narrative_raw,
             user_question=question,
@@ -760,6 +804,9 @@ def handle_health_question(question: str, kundli: dict,
         )
         tele_state["validator_flags"] = v_flags
         tele_state["validator_action"] = v_action
+        # Phase H2.3.1 (A3): same deterministic Final override for
+        # NARRATIVE mode comparative intents.
+        text = _force_comparative_final(text, facts, question)
 
     # Set brand_safety_action telemetry tag (compact summary)
     bs_actions = []

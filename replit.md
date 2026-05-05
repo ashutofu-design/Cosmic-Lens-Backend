@@ -277,6 +277,32 @@ DIRECT-mode text is fully under our control; future leaks should be caught at co
 > "Jab user comparison puche, system ko winner/loser ya tie bolna hi padega."
 > Engine ab "data batane wala" se "decision dene wala" ban gaya hai for comparative intents.
 
+## Phase H2.3.1 — COMPARATIVE HANDLER HARDENING (architect-found gaps fixed) (2026-05-05)
+
+Architect review of H2.3 caught 4 gaps. All 4 approved by user (A3+B+C+D) and fixed:
+
+**Fix A3 (HYBRID/NARRATIVE deterministic override)** — `_force_comparative_final(text, facts, question)` helper added in `health_replies.py`. When question is comparative, it REPLACES the LLM's `Final: ...` line (or appends one if missing) with the deterministic `_compare_one_liner` verdict. Single Final line guaranteed — no duplication. Wired into both HYBRID branch (L760) and NARRATIVE branch (L778). This ensures the locked rule "compare asked ⇒ winner/loser/tie verdict" holds across ALL three modes (DIRECT/HYBRID/NARRATIVE), not just DIRECT.
+
+**Fix B (Hinglish lexicon expansion)** — `_DIM_CONCEPTS` widened:
+- Body group adds: `tabiyat | sehat | swasthya | bimari | beemari | rog`
+- Mental group adds: `dimaag | dimag | mindset | khayal`
+- Vitality adds: `kamjor | weakness`
+- Immunity adds: `immune | pratiraksha`
+
+**Fix C (tie band)** — threshold loosened from `< 0.5` to `<= 0.6` to correctly catch boundary cases on a 1–3 strength scale (e.g. body avg 1.5 vs mental 1.0 → Δ=0.5 was being mis-classified as a winner; now correctly tied).
+
+**Fix D (TypeError mask removal)** — `_direct_yoga_check` signature changed to `(facts, question="")` for uniformity. The `try/except TypeError` wrapper in DIRECT branch removed (was masking genuine bugs). All 4 fallback call sites in `_llm_narrative` also threaded `question=question` through. All DIRECT formatters now uniformly accept `question` kwarg.
+
+**Verification batteries (all pass)**:
+- **B (lexicon)**: 7/8 new Hinglish phrasings now detect comparative pair (only "rog vs depression" misses — "depression" intentionally not in lexicon as it's a disease-name; "rog" still matches body group correctly)
+- **C (tie)**: body=1.5 vs mental=1.0 (Δ=0.5) → correctly TIE; body=2.0 vs mental=1.0 (Δ=1.0) → correctly clear-diff
+- **D (yoga_check)**: `_direct_yoga_check(facts, question=...)` works — no TypeError
+- **A3 unit**: LLM mock with conflicting Final → deterministic override applied, exactly 1 Final line; no-Final case → appended; non-comparative Q → LLM Final preserved untouched
+- **E2E (P40)**: 5/5 comparative variants across mixed HYBRID + NARRATIVE modes all produce deterministic Final ("Is case me Body (vitality + recovery) aur Mental peace dono weak phase me hain..."); user's exact question now hits NARRATIVE mode and receives full LLM narrative + deterministic Final
+- **Safety regression**: zero referral leaks across 9 questions (5 comparative + 4 non-comparative)
+
+**System state after H2.3.1**: comparative-intent rule is fully deterministic across all 3 modes. LLM continues to handle nuanced narrative body, but the **Final line is engine-controlled** for any comparative question — guarantees the locked principle without depending on LLM behaviour. Architectural pattern: "LLM = body/explanation, Engine = verdict/Final."
+
 ## Phase 2.8.82.1 — MODULE RENAME finance_engine → finance_static (2026-05-05)
 
 User-driven naming refactor in anticipation of upcoming **Finance Timing Engine** (separate module, dasha-based, future phase). Old folder name `finance_engine` was ambiguous — could mean the static chart engine OR the umbrella for all money-related logic. Renamed to `finance_static` to make the boundary explicit: this module ONLY handles non-timing chart-based finance Qs (wealth/income/saving/risk/leak/business-vs-job/debt/sudden-wealth/karakas/KP-Vedic conflicts). Timing Qs (kab paisa aayega, exact date) will live in a future `finance_timing` module.

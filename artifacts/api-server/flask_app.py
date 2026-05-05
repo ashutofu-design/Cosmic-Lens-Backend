@@ -5913,40 +5913,13 @@ def ask_route():
             }), 402
         quota = {"used": anon_q["used"], "limit": anon_q["limit"]}
 
-    # ── Phase 2.10.7 — Y2 STOCK / FINANCE hookup ────────────────────────────
-    # Deterministic stock engine + cache + 5 locked warnings. Returns None
-    # for non-stock questions → normal pipeline continues unchanged. Runs
-    # AFTER quota gate (real question) but BEFORE LLM (cheap/cached).
-    try:
-        from stock_engine import handle_finance_question as _fin_handle
-        _fin = _fin_handle(question, kundli or {}, birth)
-    except Exception as _fin_exc:
-        print(f"[ask] finance hookup error (non-fatal): {_fin_exc}")
-        _fin = None
-    if _fin and _fin.get("text"):
-        return jsonify({
-            "text":       _fin["text"],
-            "topic":      "stock_finance",
-            "confidence": 1.0,
-            "source":     (f"stock_engine[{_fin.get('scope','non_timing')}]:"
-                           f"{_fin.get('mode','')}/{_fin.get('route','')}"),
-            "scope":      _fin.get("scope", "non_timing"),
-            "follow_ups": [],
-            "quota":      {"used": quota.get("used", 0),
-                            "limit": quota.get("limit", 0)},
-            "plan":       effective_plan(user) if user else "free",
-            "meta":       {
-                "verdict":   _fin.get("verdict"),
-                "cache_hit": _fin.get("cache_hit", False),
-                "mode":      _fin.get("mode"),
-                "route":     _fin.get("route"),
-            },
-        })
-
-    # ── Y2 FINANCE-MONEY hookup (sister to stock_engine) ────────────────────
-    # Fires only if stock_engine returned None AND question is general
-    # money/wealth (loan, saving, expense, income, business, sudden wealth).
-    # Hard-excludes stock terms in is_finance_question() so no overlap.
+    # ── Y2 FINANCE-MONEY hookup (runs FIRST per user directive) ─────────────
+    # Pipeline order: finance → stock → normal LLM pipeline.
+    # Finance has a STRICT regex with hard stock-exclusion guard, so any
+    # question mentioning stock/share/trading/intraday/equity/NSE/BSE/F&O/
+    # mutual-fund/SIP/portfolio/crypto returns None and falls through to
+    # the stock_engine block below. ADD-ONLY: stock_engine is untouched;
+    # only the call order changed.
     try:
         from finance_engine import handle_finance_money_question as _fm_handle
         _fm = _fm_handle(question, kundli or {}, birth)
@@ -5970,6 +5943,35 @@ def ask_route():
                 "cache_hit":  _fm.get("cache_hit", False),
                 "mode":       _fm.get("mode"),
                 "route":      _fm.get("route"),
+            },
+        })
+
+    # ── Phase 2.10.7 — Y2 STOCK hookup (runs AFTER finance) ─────────────────
+    # Deterministic stock engine + cache + 5 locked warnings. Returns None
+    # for non-stock questions → normal pipeline continues unchanged.
+    try:
+        from stock_engine import handle_finance_question as _fin_handle
+        _fin = _fin_handle(question, kundli or {}, birth)
+    except Exception as _fin_exc:
+        print(f"[ask] finance hookup error (non-fatal): {_fin_exc}")
+        _fin = None
+    if _fin and _fin.get("text"):
+        return jsonify({
+            "text":       _fin["text"],
+            "topic":      "stock_finance",
+            "confidence": 1.0,
+            "source":     (f"stock_engine[{_fin.get('scope','non_timing')}]:"
+                           f"{_fin.get('mode','')}/{_fin.get('route','')}"),
+            "scope":      _fin.get("scope", "non_timing"),
+            "follow_ups": [],
+            "quota":      {"used": quota.get("used", 0),
+                            "limit": quota.get("limit", 0)},
+            "plan":       effective_plan(user) if user else "free",
+            "meta":       {
+                "verdict":   _fin.get("verdict"),
+                "cache_hit": _fin.get("cache_hit", False),
+                "mode":      _fin.get("mode"),
+                "route":     _fin.get("route"),
             },
         })
 

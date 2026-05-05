@@ -380,10 +380,30 @@ def handle_finance_money_question(question: str, kundli: dict,
         "llm_mode": None, "llm_route": None,
         "llm_confidence": None, "llm_reason": None,
         "validator_flags": [], "validator_action": "none",
+        # ── Phase 2.8.82 telemetry depth ──
+        "facts": None,  # set after compute_finance_facts
     }
 
     def _emit(mode_f: str, route_f: str, cache_hit: bool) -> None:
         try:
+            # Phase 2.8.82: extract dimension + KP fields when facts present
+            f = tele_state.get("facts") or {}
+            dims = (f.get("dimensions") or {}) if isinstance(f, dict) else {}
+            kp = (f.get("kp_csl") or {}) if isinstance(f, dict) else {}
+            wp = dims.get("wealth_potential") or {}
+            inc = dims.get("income_stability") or {}
+            sav = dims.get("saving_ability") or {}
+            rl = dims.get("risk_leak") or {}
+            h2 = (kp.get("h2") or {}) if isinstance(kp, dict) else {}
+            h11 = (kp.get("h11") or {}) if isinstance(kp, dict) else {}
+            conflict_flag = any(
+                d.get("conflict_flag") for d in (wp, inc, sav, rl)
+            ) if dims else None
+            low_conf_count = sum(
+                1 for d in (wp, inc, sav, rl)
+                if d.get("confidence") == "LOW"
+            ) if dims else None
+
             _telemetry_log({
                 "ts": int(t_start),
                 "question": question or "",
@@ -400,6 +420,20 @@ def handle_finance_money_question(question: str, kundli: dict,
                 "latency_ms": int((_time.time() - t_start) * 1000),
                 "validator_flags": tele_state["validator_flags"],
                 "validator_action": tele_state["validator_action"],
+                # ── Phase 2.8.82 enrichment ──
+                "wealth_v": wp.get("verdict") if dims else None,
+                "income_v": inc.get("verdict") if dims else None,
+                "saving_v": sav.get("verdict") if dims else None,
+                "risk_v": rl.get("verdict") if dims else None,
+                "kp_h2_v": (
+                    f"{h2.get('csl_planet','?')}/{h2.get('verdict','?')}"
+                    if h2 else None),
+                "kp_h11_v": (
+                    f"{h11.get('csl_planet','?')}/{h11.get('verdict','?')}"
+                    if h11 else None),
+                "kp_engine_ver": kp.get("engine_version") if kp else None,
+                "conflict_flag": conflict_flag,
+                "confidence_low_count": low_conf_count,
             })
         except Exception:
             pass  # telemetry must never break user flow
@@ -488,6 +522,7 @@ def handle_finance_money_question(question: str, kundli: dict,
 
     # Compute facts
     facts = compute_finance_facts(kundli)
+    tele_state["facts"] = facts  # Phase 2.8.82: capture for telemetry
     if facts.get("error"):
         out = {
             "text": f"Engine error: {facts['error']}\n\nFinal: Kundli check karein.",

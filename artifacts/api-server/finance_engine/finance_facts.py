@@ -204,8 +204,82 @@ def _tier(verdict: str, strong_signal: bool, weak_signal: bool) -> str:
     return "low"
 
 
+def _apply_kp_vedic_conflict_resolver(dimensions: Dict[str, dict],
+                                        kp_csl: Optional[dict]) -> None:
+    """Phase 2.8.82 — KP↔Vedic Conflict Resolver (ADD-ONLY guard layer).
+
+    Demote/upgrade verdicts when KP and Vedic strongly disagree; mark
+    confidence=LOW + conflict_flag=True so downstream UX can differentiate
+    "stable YELLOW" from "uncertain conflict YELLOW".
+
+    Triggers (only fire when kp_csl is non-None — Vedic-only charts skipped):
+      W1 — wealth_potential GREEN (raw_score>=7) + ANY KP cusp RED
+           → demote to YELLOW (cautious — KP flags contamination)
+      W2 — wealth_potential RED + BOTH KP cusps GREEN
+           → upgrade to YELLOW (cautious — KP says channel is clean)
+      R1 — risk_leak GREEN + ANY KP loss-signal (kp_leak_signal True)
+           → upgrade to YELLOW (cautious — KP flags 8/12 contamination)
+      R2 — risk_leak RED + BOTH KP cusps GREEN AND no kp_leak_signal
+           → demote to YELLOW (cautious — KP says no leak channel)
+
+    No conflict on income_stability or saving_ability — KP layer in our
+    current design does not directly map to those dimensions.
+    """
+    if not kp_csl or not isinstance(kp_csl, dict):
+        return
+    h2 = kp_csl.get("h2") or {}
+    h11 = kp_csl.get("h11") or {}
+    h2_v = h2.get("verdict")
+    h11_v = h11.get("verdict")
+    kp_red_count = sum(1 for v in (h2_v, h11_v) if v == "RED")
+    kp_green_count = sum(1 for v in (h2_v, h11_v) if v == "GREEN")
+    kp_leak = bool(kp_csl.get("kp_leak_signal"))
+
+    # ── W1 / W2: wealth_potential ──
+    wp = dimensions.get("wealth_potential")
+    if wp:
+        if (wp["verdict"] == "GREEN"
+                and float(wp.get("raw_score", 0)) >= 7
+                and kp_red_count >= 1):
+            wp["verdict"] = "YELLOW"
+            wp["tier"] = "moderate"
+            wp["confidence"] = "LOW"
+            wp["conflict_flag"] = True
+            cusps = ", ".join(f"H{c}" for c, vv in
+                              ((2, h2_v), (11, h11_v)) if vv == "RED")
+            wp["reason"] += (f" [KP-VEDIC CONFLICT — KP CSL flags 8/12 "
+                              f"contamination on {cusps}; Vedic GREEN "
+                              "demoted to cautious YELLOW]")
+        elif wp["verdict"] == "RED" and kp_green_count == 2:
+            wp["verdict"] = "YELLOW"
+            wp["tier"] = "moderate"
+            wp["confidence"] = "LOW"
+            wp["conflict_flag"] = True
+            wp["reason"] += (" [KP-VEDIC CONFLICT — KP both cusps GREEN; "
+                              "Vedic RED upgraded to cautious YELLOW]")
+
+    # ── R1 / R2: risk_leak ──
+    rl = dimensions.get("risk_leak")
+    if rl:
+        if rl["verdict"] == "GREEN" and kp_leak:
+            rl["verdict"] = "YELLOW"
+            rl["tier"] = "low"
+            rl["confidence"] = "LOW"
+            rl["conflict_flag"] = True
+            rl["reason"] += (" [KP-VEDIC CONFLICT — KP CSL signals 8/12 "
+                              "leak; risk upgraded to cautious YELLOW]")
+        elif (rl["verdict"] == "RED"
+              and kp_green_count == 2 and not kp_leak):
+            rl["verdict"] = "YELLOW"
+            rl["tier"] = "low"
+            rl["confidence"] = "LOW"
+            rl["conflict_flag"] = True
+            rl["reason"] += (" [KP-VEDIC CONFLICT — KP both cusps clean "
+                              "GREEN; Vedic RED leak softened to YELLOW]")
+
+
 def _compute_wealth_potential(lord_states, karakas, yogas, dasha_link,
-                              kp_csl=None) -> Tuple[str, str, str]:
+                              kp_csl=None) -> Tuple[str, str, str, float]:
     h2_d = _DIGNITY_SCORE.get(lord_states["h2"]["lord_dignity"], 0)
     h11_d = _DIGNITY_SCORE.get(lord_states["h11"]["lord_dignity"], 0)
     h9_d = _DIGNITY_SCORE.get(lord_states["h9"]["lord_dignity"], 0)
@@ -214,6 +288,13 @@ def _compute_wealth_potential(lord_states, karakas, yogas, dasha_link,
     # Phase 2.8.78: dasha REMOVED from non-timing scoring — dasha is a
     # timing engine concern, not a static-chart concern. Per user policy.
     # (dasha_link param kept for signature stability — no longer read.)
+
+    # Phase 2.8.82 fix: capture pre-nudge Vedic-pure score BEFORE KP nudge
+    # is applied. This is what the conflict resolver reads to detect true
+    # disagreement (e.g. Vedic raw>=7 but KP RED). Reading post-nudge
+    # would silently miss W1/W2 in exactly the cases the resolver exists
+    # to catch (architect code-review finding, Phase 2.8.82).
+    vedic_raw = float(score)
 
     # Phase 2.8.80: KP CSL weighted nudge (Option B). Small ±2 cap, never
     # flips Vedic verdict on its own; only confirms or softens the signal.
@@ -236,11 +317,12 @@ def _compute_wealth_potential(lord_states, karakas, yogas, dasha_link,
         v, reason = "RED", "Wealth karakas weak, koi major dhan-yog active nahi"
     t = _tier(v, strong_signal=(has_strong_yoga and score >= 5),
               weak_signal=(h2_dusthana or h11_dusthana))
-    return v, reason, t
+    # Return pre-nudge vedic_raw — see Phase 2.8.82 fix comment above.
+    return v, reason, t, vedic_raw
 
 
 def _compute_income_stability(lord_states, karakas, planets, asc_si
-                                ) -> Tuple[str, str, str]:
+                                ) -> Tuple[str, str, str, float]:
     h10 = lord_states.get("h10") or {}
     h2_d = _DIGNITY_SCORE.get(lord_states["h2"]["lord_dignity"], 0)
     h10_d = _DIGNITY_SCORE.get(h10.get("lord_dignity", ""), 0)
@@ -270,11 +352,11 @@ def _compute_income_stability(lord_states, karakas, planets, asc_si
         v, reason = "RED", "Income line unstable — career-house weak"
     t = _tier(v, strong_signal=(h10_d >= 1 and not h10_in_dusthana),
               weak_signal=(h10_in_dusthana or h2_in_dusthana))
-    return v, reason, t
+    return v, reason, t, float(score)
 
 
 def _compute_saving_ability(lord_states, karakas, afflictions, dasha_link
-                              ) -> Tuple[str, str, str]:
+                              ) -> Tuple[str, str, str, float]:
     h2 = lord_states["h2"]
     h2_d = _DIGNITY_SCORE.get(h2["lord_dignity"], 0)
     sat_d = _DIGNITY_SCORE.get((karakas.get("Saturn") or {}).get("dignity", ""), 0)
@@ -302,11 +384,11 @@ def _compute_saving_ability(lord_states, karakas, afflictions, dasha_link
         v, reason = "RED", "Saving weak — paisa tikta nahi, leak active hai"
     t = _tier(v, strong_signal=(sat_d >= 1 and not h2_in_h12 and leak_count == 0),
               weak_signal=(h2_in_h12 or leak_count >= 2))
-    return v, reason, t
+    return v, reason, t, float(score)
 
 
 def _compute_risk_leak(lord_states, karakas, afflictions, dasha_link,
-                       kp_csl=None) -> Tuple[str, str, str]:
+                       kp_csl=None) -> Tuple[str, str, str, float]:
     leak_signals = sum(1 for a in afflictions
                        if any(k in a.lower() for k in
                               ("leak", "loss", "expense surge", "speculation",
@@ -334,6 +416,11 @@ def _compute_risk_leak(lord_states, karakas, afflictions, dasha_link,
     # Risk-leak = static chart only (lord placements + dusthana lords on
     # money houses + Rahu placement). Dasha activation belongs to timing.
 
+    # Phase 2.8.82 fix: capture pre-nudge Vedic-pure raw BEFORE KP nudge —
+    # conflict resolver needs the un-nudged baseline to detect true
+    # disagreement (architect code-review finding).
+    vedic_raw = float(raw)
+
     # Phase 2.8.80: KP CSL nudge — if 2nd or 11th CSL contaminated by 8/12,
     # raise raw leak signal by +1. Confirms Vedic leak verdict from KP angle.
     if kp_csl and isinstance(kp_csl, dict):
@@ -347,7 +434,8 @@ def _compute_risk_leak(lord_states, karakas, afflictions, dasha_link,
         v, reason = "GREEN", "Leak signal low — drain risk minimal"
     t = _tier(v, strong_signal=(raw <= 1),
               weak_signal=(raw >= 4 or h12_in_money))
-    return v, reason, t
+    # Return pre-nudge vedic_raw — see Phase 2.8.82 fix comment above.
+    return v, reason, t, vedic_raw
 
 
 # ── Main fact pack ──────────────────────────────────────────────────
@@ -518,23 +606,47 @@ def compute_finance_facts(kundli: dict) -> Dict[str, Any]:
         kp_csl = None
 
     # ── G. Multi-dim verdicts ───────────────────────────────────────
-    wp_v, wp_r, wp_t = _compute_wealth_potential(lord_states, karakas,
-                                                   wealth_yogas, dasha_link,
-                                                   kp_csl=kp_csl)
-    is_v, is_r, is_t = _compute_income_stability(lord_states, karakas,
-                                                   planets, asc_si)
-    sa_v, sa_r, sa_t = _compute_saving_ability(lord_states, karakas,
-                                                 afflictions, dasha_link)
-    rl_v, rl_r, rl_t = _compute_risk_leak(lord_states, karakas,
-                                            afflictions, dasha_link,
-                                            kp_csl=kp_csl)
+    wp_v, wp_r, wp_t, wp_raw = _compute_wealth_potential(
+        lord_states, karakas, wealth_yogas, dasha_link, kp_csl=kp_csl)
+    is_v, is_r, is_t, is_raw = _compute_income_stability(
+        lord_states, karakas, planets, asc_si)
+    sa_v, sa_r, sa_t, sa_raw = _compute_saving_ability(
+        lord_states, karakas, afflictions, dasha_link)
+    rl_v, rl_r, rl_t, rl_raw = _compute_risk_leak(
+        lord_states, karakas, afflictions, dasha_link, kp_csl=kp_csl)
 
     dimensions = {
-        "wealth_potential": {"verdict": wp_v, "reason": wp_r, "tier": wp_t},
-        "income_stability": {"verdict": is_v, "reason": is_r, "tier": is_t},
-        "saving_ability":   {"verdict": sa_v, "reason": sa_r, "tier": sa_t},
-        "risk_leak":        {"verdict": rl_v, "reason": rl_r, "tier": rl_t},
+        "wealth_potential": {"verdict": wp_v, "reason": wp_r, "tier": wp_t,
+                              "raw_score": wp_raw, "confidence": "NORMAL",
+                              "conflict_flag": False},
+        "income_stability": {"verdict": is_v, "reason": is_r, "tier": is_t,
+                              "raw_score": is_raw, "confidence": "NORMAL",
+                              "conflict_flag": False},
+        "saving_ability":   {"verdict": sa_v, "reason": sa_r, "tier": sa_t,
+                              "raw_score": sa_raw, "confidence": "NORMAL",
+                              "conflict_flag": False},
+        "risk_leak":        {"verdict": rl_v, "reason": rl_r, "tier": rl_t,
+                              "raw_score": rl_raw, "confidence": "NORMAL",
+                              "conflict_flag": False},
     }
+
+    # ── G2. Phase 2.8.82 KP↔Vedic Conflict Resolver ─────────────────
+    # Per ChatGPT external review: blindly merging KP nudge into Vedic
+    # score hides true disagreement. Where Vedic is strong-positive but
+    # KP signals contamination (or vice versa), demote/upgrade to YELLOW
+    # with confidence=LOW + conflict_flag=True. UX layer can later treat
+    # conflict-YELLOW differently from normal-YELLOW.
+    _apply_kp_vedic_conflict_resolver(dimensions, kp_csl)
+
+    # ── Phase 2.8.82 fix: rebind verdict locals from post-resolver
+    # dimensions so composite + sub_flags reflect final state. Without
+    # this, downstream `sub_flags.wealth_strong/leak_active/saving_strong`
+    # would lie (e.g. dimensions.wealth_potential=YELLOW but
+    # sub_flags.wealth_strong=True from stale wp_v). Architect finding.
+    wp_v = dimensions["wealth_potential"]["verdict"]
+    is_v = dimensions["income_stability"]["verdict"]
+    sa_v = dimensions["saving_ability"]["verdict"]
+    rl_v = dimensions["risk_leak"]["verdict"]
 
     # Composite (only for cache meta — never shown to user as "score")
     _vscore = {"GREEN": 2, "YELLOW": 1, "RED": 0}
@@ -618,5 +730,5 @@ def compute_finance_facts(kundli: dict) -> Dict[str, Any]:
         "d2_available": d2_available,
         "d9_available": d9_available,
         "kp_csl": kp_csl,  # Phase 2.8.80: None if KP unavailable
-        "engine_version": "finance_facts_v1.1_kp_csl",
+        "engine_version": "finance_facts_v1.2_kp_vedic_conflict_resolver",
     }

@@ -82,6 +82,29 @@ def _init_db() -> None:
                 "CREATE INDEX IF NOT EXISTS idx_telemetry_route "
                 "ON router_telemetry(final_route)"
             )
+            # ── Phase 2.8.82 schema extension (idempotent ALTER) ──
+            # Adds dimension verdicts + KP cusp verdicts + conflict
+            # tracking columns. SQLite has no "ADD COLUMN IF NOT
+            # EXISTS" so per-column try/except is the canonical pattern.
+            _new_cols = [
+                ("wealth_v", "TEXT"),
+                ("income_v", "TEXT"),
+                ("saving_v", "TEXT"),
+                ("risk_v", "TEXT"),
+                ("kp_h2_v", "TEXT"),
+                ("kp_h11_v", "TEXT"),
+                ("kp_engine_ver", "TEXT"),
+                ("conflict_flag", "INTEGER"),
+                ("confidence_low_count", "INTEGER"),
+            ]
+            for _col, _typ in _new_cols:
+                try:
+                    conn.execute(
+                        f"ALTER TABLE router_telemetry "
+                        f"ADD COLUMN {_col} {_typ}"
+                    )
+                except sqlite3.OperationalError:
+                    pass  # column already exists — idempotent
             conn.commit()
         finally:
             conn.close()
@@ -114,8 +137,12 @@ def log_event(event: Dict[str, Any]) -> None:
                 " regex_mode, regex_route, "
                 " llm_mode, llm_route, llm_confidence, llm_reason, "
                 " final_mode, final_route, cache_hit, latency_ms, "
-                " validator_flags, validator_action) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " validator_flags, validator_action, "
+                " wealth_v, income_v, saving_v, risk_v, "
+                " kp_h2_v, kp_h11_v, kp_engine_ver, "
+                " conflict_flag, confidence_low_count) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
+                "        ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     int(event.get("ts") or time.time()),
                     (event.get("question") or "")[:500],
@@ -135,6 +162,19 @@ def log_event(event: Dict[str, Any]) -> None:
                     json.dumps(event.get("validator_flags") or [],
                                ensure_ascii=False),
                     event.get("validator_action") or "none",
+                    # ── Phase 2.8.82 fields ──
+                    event.get("wealth_v"),
+                    event.get("income_v"),
+                    event.get("saving_v"),
+                    event.get("risk_v"),
+                    event.get("kp_h2_v"),
+                    event.get("kp_h11_v"),
+                    event.get("kp_engine_ver"),
+                    1 if event.get("conflict_flag") else 0
+                        if event.get("conflict_flag") is not None else None,
+                    int(event["confidence_low_count"])
+                        if event.get("confidence_low_count") is not None
+                        else None,
                 ),
             )
             conn.commit()

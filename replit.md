@@ -392,6 +392,56 @@ This is **not a rollback** of H2.4/H2.5 — engine continues to compute the lock
 - **Leak audit (4 diverse Qs across DIRECT/HYBRID/NARRATIVE routes)**: 0/4 forbidden-token leaks. Forbidden set: `🎯 💚 🔍 🟡 🔴 🟢 RED YELLOW "Primary factor" "Secondary factor" "Final:" "5 dimensions" "Tendency issues" "Recovery channel" "Vitality channel" "dimension" "vitality:" "disease_resistance" doctor professional specialist therapist`.
 - **Idempotency**: cache-hit re-run returns byte-identical text.
 
+## Phase H2.7 — PATH B+ FULL-DATA LLM CHERRY-PICK (2026-05-05)
+
+**User feedback that drove the change**: H2.6 ka simple-mode shipped, lekin user ne specific question pucha — "kundli me aisa kya combination he jo health kharap bol raha he" — output me actual planet/house attribution missing tha (sirf "body energy weak hai" type generic). Engine ke paas data **PEHLE SE** compute hota tha (`house_lords` + `karakas` + `kp_csl` chains for h1/h6/h8 with planet+house+dignity+score+verdict+reason), lekin H2.6 ka `_compute_simple_summary` sirf weak dim verdicts extract karta tha — fact-pack me planet attribution data drop ho jata tha. LLM ke paas data hi nahi → vague output ya invention. User ne brutally call kiya: *"wahi to kya bhejna chahiye kya nehi yeh kiske hath me he... LLM ke pass intelleigence he uske pass sab data agar hota to woh apne dimag ko use karke sab kuch bataa... sab kuch health me jo jo chahiye sab kuch llm ko do woh question wise check karega kya chahiye woh calcuate karke bolega"*.
+
+User chose **Path B+ (full data, LLM-driven cherry-pick)** over Path A (engine remove) and Path C (status quo). Architecture intent: **engine = data supplier + ground-truth checksum, LLM = question-aware reasoner, validator = safety guard**.
+
+**Implementation (`health_replies.py` L339-470, L472-562, L1366-1370, L1406-1425)**:
+- `_build_health_kundli_pack(kundli, facts, question)` (L339-470) — NEW. Builds full health-relevant kundli pack as structured text for LLM:
+  - Ascendant + Moon sign + Sun sign + Janma Nakshatra + ruler
+  - All 9 planets (house, sign, degrees, retrograde, dignity from karakas, nakshatra + ruler)
+  - Health house lords for h1/h6/h8/h12 (lord + lord_house + lord_dignity + dusthana flag)
+  - Key health karakas with role labels (Sun=vitality, Moon=mind/fluids, Mars=energy/wounds, Jupiter=immunity/liver, Saturn=chronic/longevity)
+  - KP CSL chains for h1/h6/h8 (csl_planet + score + verdict + signified houses + reason text)
+  - Active yogas (or explicit "none — no major Arishta/Balarishta")
+  - Current dasha (Mahadasha + Antar + Pratyantar with start/end dates) — for "kab" Qs
+  - Engine dim verdicts as ground-truth checksum (5 dims: Body energy, Immunity/recovery, Mental peace, Chronic-zone, Accident-zone)
+  - User question verbatim
+- `_render_simple_narrative_llm(facts, question, sensitive_bucket, kundli=None)` (L472-562) — REWRITTEN. New expert-analyst system prompt with **REASONING PLAYBOOK**: per-Q-type guidance for which data to cherry-pick from the pack ('kaunsa planet/why' → karakas + lords + KP RED verdicts; 'kab/timing' → CURRENT DASHA + dim verdicts; comparative → direct verdict in para 1; 'tendency' → category list from weak dims). 9 strict bans preserved + 2 new (no inventing yogas/dasha periods, no exact future dates beyond pack's dasha window). Length target 100-160 words, hard cap 200.
+- `_OUTPUT_STYLE == "simple"` branch (L1406-1425) passes `kundli=kundli` to LLM renderer — full pack flows through.
+- `max_tokens` 400 → 600 (richer attribution needs more headroom).
+- `temperature` 0.5 unchanged.
+
+**Cache namespace**: `health_static_v5_{style} → health_static_v6_{style}`. Old v5 entries are summary-only (curated weak-dim digest), structurally incompatible with new full-pack outputs.
+
+**Curated `_compute_simple_summary` retained**: still used by `_render_simple_narrative_static` (no-LLM fallback) — that path remains H2.6 behavior. Only LLM path got the upgrade.
+
+## Phase H2.7.1 — VALIDATOR VEDIC-VOCAB OPT-IN (2026-05-05, same day as H2.7)
+
+**Bug discovered immediately after H2.7 ship**: Test outputs had grammatical holes mid-sentence — "12th lord me baitha hai" (Mars dropped), "Lagna lord me hai" (Jupiter dropped), "ka heavy load:" (Mars dropped). Root cause: H2.2-era validator (`validator.py` L427-448) auto-strips planet names, house numbers, sign names, and dignity words **unless** user's question matches `_TECH_REQUEST_RX` (which includes "kyun"/"why"/"planet"/"house"/"explain"). H2.7 explicitly instructs LLM to USE planet attribution for all health Qs → validator killed those exact words for non-tech-phrased Qs. Conflict between H2.2 hide-engine policy and H2.7 expose-attribution policy.
+
+**Permission asked + granted**: User chose option (A) — simple-mode pass-through for Vedic vocab. Structured-mode + marriage + other callers behave identically (back-compat).
+
+**Implementation (`validator.py` L364-406, L460-466 + `health_replies.py` L1417-1425)**:
+- `validate_health_llm_output(...)` gained new kwarg `allow_vedic_terms: bool = False` (L374). Default OFF preserves all existing caller behavior.
+- L406: `user_wants_tech = allow_vedic_terms or _user_asked_for_tech(user_question)` — opt-in flag short-circuits per-question heuristic.
+- L460-466: `_DIGNITY_RX` strip block (was always-ON) gated behind same `user_wants_tech` flag, since dignity words ("debilitated"/"exalted"/"dusthana") are part of the attribution narrative LLM forms from the pack.
+- Simple-mode caller (`health_replies.py` L1424) opts in: `allow_vedic_terms=True`. All other callers untouched.
+- Disease-name / doctor / fear / death / cure / fake-yoga / engine-codes / timing-leak scrubs remain ALWAYS-ON regardless of flag — only Vedic-vocab strip behavior changes.
+
+**Verification (P40, fresh cache, 2026-05-05, 5 diverse Qs)**:
+- **Planet attribution now visible**: "Tumhara 12th lord Mars 8th house me serious health zone me debilitated baitha hai", "Jupiter, jo lagnesh hai, Virgo me enemy sign me hai", "Moon 1st house me hoke 8th lord bhi hai, aur ab Moon-Mars period chal raha hai", "1st house ka KP significator bhi Mars hai aur wo 8th-12th se linked hai". All sourced from engine truth — zero invention.
+- **Word counts**: 159, 160, 169, 171, 181 — all within 200 hard cap (target band 100-160 mostly hit).
+- **Leak audit (5 Qs)**: 0/5 forbidden-token leaks. 0/5 disease-name leaks (cancer/diabetes/migraine/depression/tumor/asthma/BP/arthritis). 0/5 doctor mentions.
+- **Engine alignment**: All RED dims framed as "weak"/"delicate"/"thoda strain" — never contradicted to "strong"/"healthy". No invented Arishta/yogas.
+- **Idempotency**: cache-hit re-run byte-identical.
+
+**Architectural pattern reinforced**: "validator scope = SAFETY scrubs, not architecture enforcement". H2.2 era's wholesale Vedic-vocab strip was a hide-engine policy choice; H2.7's full-data architecture inverts the choice (engine attribution IS the user value). Opt-in flag (rather than blanket policy reversal) preserves back-compat for non-health callers — ADD-ONLY discipline maintained.
+
+**Pending (H2.5/H2.6/H2.7 architect items, not yet permitted by user)**: tendency-intent overfires on yoga Qs, stripper edge case, cache LRU, deterministic post-formatter for emojis/bullets/labels, `.capitalize()` first-char issue, OVERALL-Q literal `[yoga not in chart]` placeholder leak, hardcoded `gpt-4o-mini` fallback (should read `OPENAI_MODEL` env).
+
 **Architectural pattern reinforced**: "Structure backend me rakho, output user-pe natural rakho" — same engine, same truth, same safety, same locked verdict computed internally. Only the **rendering layer** is now narrative-first. The LLM is once again the **translator** (H2.4 named principle); H2.4/H2.5's mistake was making the LLM also the layout-engine. H2.6 returns layout to a clean human voice and keeps engine truth as the silent source.
 
 **Reversibility**: zero engine/routing/validator/cache logic was deleted. The H2.5 4-block path is alive at `HEALTH_OUTPUT_STYLE=structured` — toggle the env var to revert instantly with no code change.

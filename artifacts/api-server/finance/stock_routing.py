@@ -63,6 +63,16 @@ _DIRECT_PATTERNS = [
 
 # ── NARRATIVE (engine + LLM polish) ─────────────────────────────────
 _NARRATIVE_PATTERNS = [
+    # Q0: 3-way path comparison (intraday + swing + long-term).
+    # MUST be first — beats intraday_check + trading_vs_longterm
+    # when user lists multiple horizons.
+    (r"(intraday.*swing|swing.*intraday|"
+     r"intraday.*long[\s-]?term|long[\s-]?term.*intraday|"
+     r"swing.*long[\s-]?term|long[\s-]?term.*swing|"
+     r"kaunsa\s+(type|tarika|tarah).*(stock|invest|trad)|"
+     r"konsa\s+(type|tarika|tarah).*(stock|invest|trad)|"
+     r"(intraday|swing|long[\s-]?term).{0,80}(intraday|swing|long[\s-]?term).{0,80}(intraday|swing|long[\s-]?term))",
+     "path_compare_3way"),
     # Q1: paisa tikta nahi
     (r"(paisa\s+(tikta|rukta|tikti|rukti|nikal\s+jata)|"
      r"paisa\s+nahi\s+tikta|paisa\s+ud\s+jata|wealth\s+leak|"

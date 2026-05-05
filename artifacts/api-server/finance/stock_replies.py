@@ -245,7 +245,13 @@ def _build_llm_fact_block(facts: dict, route: str) -> str:
         "═══════════════════════════════════════════════",
         "🔒 STOCK ENGINE — LOCKED FACTS (do not invent)",
         "═══════════════════════════════════════════════",
-        f"TRADING path: {vt} ({_path_word.get(vt,'?')}) — "
+        f"INTRADAY path: {facts.get('verdict_intraday','?')} "
+        f"({_path_word.get(facts.get('verdict_intraday',''),'?')}) — "
+        f"{facts.get('verdict_intraday_reason','')}",
+        f"SWING path: {facts.get('verdict_swing','?')} "
+        f"({_path_word.get(facts.get('verdict_swing',''),'?')}) — "
+        f"{facts.get('verdict_swing_reason','')}",
+        f"TRADING (general) path: {vt} ({_path_word.get(vt,'?')}) — "
         f"{facts.get('verdict_trading_reason','')}",
         f"LONG-TERM path: {vl} ({_path_word.get(vl,'?')}) — "
         f"{facts.get('verdict_longterm_reason','')}",
@@ -310,6 +316,21 @@ _NARRATIVE_INSTRUCTIONS = {
         "Use H2 lord state, H12 lord active dasha, leak/wealth-leak "
         "afflictions to explain WHY money isn't holding. "
         "60-80 words Hinglish. End with 'Final: <one-line>'."
+    ),
+    "path_compare_3way": (
+        "User asking which stock-market type suits them — "
+        "intraday vs swing vs long-term. "
+        "REQUIRED FORMAT (exactly):\n"
+        "Line 1: '• Intraday: <emoji> <one-phrase verdict>'\n"
+        "Line 2: '• Swing trading: <emoji> <one-phrase verdict>'\n"
+        "Line 3: '• Long-term investing: <emoji> <one-phrase verdict>'\n"
+        "Line 4: blank\n"
+        "Line 5: ONE short sentence (max 22 words) saying WHICH path "
+        "is best for THIS user — everyday Hinglish, NO planet names, "
+        "NO house numbers, NO dignity words.\n"
+        "Line 6: 'Final: <one clean Hinglish line — concrete decision>'.\n"
+        "Emojis: 🟢 GREEN / 🟡 YELLOW / 🔴 RED based on the three "
+        "engine path verdicts above (INTRADAY / SWING / LONG-TERM)."
     ),
     "trading_vs_longterm": (
         "User asking 'trading karu ya long-term?'. "

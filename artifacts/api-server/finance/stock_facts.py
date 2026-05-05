@@ -499,7 +499,7 @@ def compute_stock_facts(kundli: dict) -> Dict[str, Any]:
     has_vipreet = "Vipreet-Raja" in wealth_yogas
     severe_leak = leak_present and (md_bad_link or ad_bad_link)
 
-    # Trading / speculation / F&O / intraday — KP-decisive
+    # Trading (general/positional) — KP-decisive
     if (kp_v == "RED"
             or sub_flags["intraday_warning"]
             or sub_flags["quick_money_warning"]
@@ -515,6 +515,47 @@ def compute_stock_facts(kundli: dict) -> Dict[str, Any]:
     else:
         verdict_trading = "YELLOW"
         verdict_trading_reason = "Mixed — small/disciplined trades only"
+
+    # ── INTRADAY — strictest of all (day-noise + KP-decisive) ─────
+    # Intraday demands clean Mercury, sharp execution, no day-house
+    # contamination. Even small leak = avoid.
+    mercury_combust = bool((karakas.get("Mercury") or {}).get("combust"))
+    if (kp_v == "RED"
+            or sub_flags["intraday_warning"]
+            or sub_flags["quick_money_warning"]
+            or mercury_combust
+            or not sub_flags["trading_ok"]):
+        verdict_intraday = "RED"
+        verdict_intraday_reason = (
+            "Day-noise too risky — KP loss-house active" if kp_v == "RED"
+            else "Mercury weak/combust or trading karakas afflicted"
+        )
+    elif kp_v == "GREEN" and sub_flags["trading_ok"] and not mercury_combust:
+        verdict_intraday = "GREEN"
+        verdict_intraday_reason = "KP + Mercury both clean for fast moves"
+    else:
+        verdict_intraday = "YELLOW"
+        verdict_intraday_reason = "Avoid except on very clean setup days"
+
+    # ── SWING (3-30 day hold) — middle path ────────────────────────
+    # Swing absorbs day-noise so less strict than intraday, but
+    # demands at least one of KP-OK or Vipreet-recovery.
+    if not sub_flags["trading_ok"] and not sub_flags["long_term_ok"]:
+        verdict_swing = "RED"
+        verdict_swing_reason = "Both trading and holding karakas weak"
+    elif kp_v == "RED" and not has_vipreet:
+        verdict_swing = "RED"
+        verdict_swing_reason = "KP RED with no recovery yog — even swing risky"
+    elif kp_v == "GREEN" and sub_flags["trading_ok"]:
+        verdict_swing = "GREEN"
+        verdict_swing_reason = "KP + trading karakas support multi-day holds"
+    else:
+        verdict_swing = "YELLOW"
+        verdict_swing_reason = (
+            "Recovery yog tempers KP — small swings ok"
+            if (kp_v == "RED" and has_vipreet)
+            else "Mixed — small position size only"
+        )
 
     # Long-term investing — Vipreet-Rajyoga gives recovery boost
     if not sub_flags["long_term_ok"]:
@@ -589,6 +630,10 @@ def compute_stock_facts(kundli: dict) -> Dict[str, Any]:
         "verdict": verdict,
         "verdict_trading": verdict_trading,            # P7: split verdict
         "verdict_trading_reason": verdict_trading_reason,
+        "verdict_intraday": verdict_intraday,          # P7b: 3-way split
+        "verdict_intraday_reason": verdict_intraday_reason,
+        "verdict_swing": verdict_swing,                # P7b: 3-way split
+        "verdict_swing_reason": verdict_swing_reason,
         "verdict_longterm": verdict_longterm,          # P7: split verdict
         "verdict_longterm_reason": verdict_longterm_reason,
         "kp_5th_csl": kp_5th,

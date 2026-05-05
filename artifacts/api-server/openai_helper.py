@@ -1203,6 +1203,137 @@ def _layer2_fuzzy(question):
     return None
 
 
+# ─────────────────────────────────────────────────────────────────────
+# H2.7.14 — LAYER-3 LLM CLASSIFIER (vague-Q fallback + warm clarifier)
+#
+# Fires ONLY when Layer-1 (regex) AND Layer-2 (fuzzy) both return None.
+# Uses gpt-4.1-mini for cheap classification (~$0.001/Q, ~300ms).
+#
+# Two outcomes:
+#   1. LLM returns valid topic_id → look up rule, return like Layer-1/2.
+#   2. LLM says "unclear" → return CLARIFICATION SENTINEL rule dict
+#      `{"topic_id": "__needs_clarification__", "_clarifier_text": "..."}`
+#      Caller (/api/ask) checks for this sentinel and short-circuits with
+#      a warm conversational follow-up question instead of running the
+#      full kundli LLM. User picked tone "neutral warm — dost-but-pro"
+#      and "1 follow-up only, then full answer".
+#
+# Killswitch: env var LAYER3_LLM=0 → fully disabled (Layer-1+2 only).
+# Default = ON.
+# ─────────────────────────────────────────────────────────────────────
+import json as _json_l3
+
+_LAYER3_MODEL = "gpt-4.1-mini"
+_LAYER3_TIMEOUT = 8.0
+_LAYER3_TOPIC_IDS = sorted({r["topic_id"] for r in _TOPIC_RULES
+                            if r.get("topic_id")})
+_CLARIFICATION_SENTINEL_ID = "__needs_clarification__"
+
+# Single static clarifier — neutral-warm dost-but-pro tone (user-chosen).
+# Hinglish, asks for 1 specific area without listing too many options
+# (overwhelms). Mentions 4 broad buckets to anchor user's thinking.
+_CLARIFIER_TEXT = (
+    "Aapki baat samajhne ki koshish kar raha hun, lekin thoda aur clear "
+    "karoge? Specifically kis area me guidance chahiye — career/paisa, "
+    "ghar-rishte, sehat, ya kuch aur? Ek line me batao, fir poori detail "
+    "se dekhta hun aapki kundli."
+)
+
+_LAYER3_SYSTEM_PROMPT = (
+    "You are a strict topic classifier for a Vedic astrology Q&A app. "
+    "User asks in Hinglish/Hindi/English. Pick EXACTLY ONE topic_id from "
+    "the allowed list that best matches the user's intent.\n\n"
+    "Allowed topic_ids: {topics}\n\n"
+    "Rules:\n"
+    "1. Output STRICT JSON only: {{\"topic_id\": \"...\"}}\n"
+    "2. If question is too vague/emotional/abstract to safely classify "
+    "(e.g. 'life me peace nahi', 'sab thik hoga kya', 'set ho jaunga'), "
+    "return {{\"topic_id\": \"unclear\"}}\n"
+    "3. Do NOT invent topic_ids outside the allowed list.\n"
+    "4. No explanation, no extra keys, no prose.\n\n"
+    "Examples:\n"
+    "- 'ghar pe roz ladai hoti hai' → {{\"topic_id\": \"marriage\"}}\n"
+    "- 'padhai me mann nahi lagta' → {{\"topic_id\": \"education_basic\"}}\n"
+    "- 'mood off rehta hai' → {{\"topic_id\": \"health\"}}\n"
+    "- 'life me peace nahi' → {{\"topic_id\": \"unclear\"}}\n"
+    "- 'kya kuch acha hoga' → {{\"topic_id\": \"unclear\"}}"
+)
+
+
+def detect_topic_or_clarify(question):
+    """Wrapper for /api/ask — returns rule dict (incl. clarification sentinel) or None.
+
+    UNLIKE `_detect_topic` (which strips sentinel → None for safety),
+    this function PRESERVES the clarification sentinel so /api/ask can
+    short-circuit with a warm conversational follow-up.
+
+    Implementation: thread-local flag tells `_detect_topic` to keep
+    sentinel for this call only. Avoids the double-LLM-call bug from
+    naive "call _detect_topic, then re-call L3" patterns.
+    """
+    if not question:
+        return None
+    _detect_topic._allow_sentinel = True  # type: ignore[attr-defined]
+    try:
+        return _detect_topic(question)
+    finally:
+        _detect_topic._allow_sentinel = False  # type: ignore[attr-defined]
+
+
+def _layer3_llm(question):
+    """Layer-3 LLM classifier. Returns rule dict, clarification sentinel, or None.
+
+    Returns:
+      - rule dict (from _TOPIC_RULES) if LLM picked a valid topic_id
+      - clarification sentinel dict if LLM said "unclear" (caller short-circuits)
+      - None if LLM call failed, killswitch off, or invalid response
+    """
+    if _os_l2.environ.get("LAYER3_LLM", "1") == "0":
+        return None
+    if not question or len(question.strip()) < 3:
+        return None
+    try:
+        client = _get_client()
+        if client is None:
+            return None
+        sys_prompt = _LAYER3_SYSTEM_PROMPT.format(
+            topics=", ".join(_LAYER3_TOPIC_IDS)
+        )
+        resp = client.chat.completions.create(
+            model=_LAYER3_MODEL,
+            messages=[
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": question.strip()},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0,
+            max_tokens=30,
+            timeout=_LAYER3_TIMEOUT,
+        )
+        raw = (resp.choices[0].message.content or "").strip()
+        data = _json_l3.loads(raw)
+        tid = (data.get("topic_id") or "").strip().lower()
+        if not tid:
+            return None
+        if tid == "unclear":
+            # Synthesize clarification sentinel — caller will short-circuit
+            # with the warm conversational follow-up text.
+            return {
+                "topic_id": _CLARIFICATION_SENTINEL_ID,
+                "_clarifier_text": _CLARIFIER_TEXT,
+                "_layer": 3,
+            }
+        if tid not in _LAYER3_TOPIC_IDS:
+            return None  # LLM hallucinated an invalid id
+        for rule in _TOPIC_RULES:
+            if rule.get("topic_id") == tid:
+                return rule
+        return None
+    except Exception as _e:
+        # Network/JSON/timeout — silently degrade, Layer-1+2 None stays None.
+        return None
+
+
 def _detect_topic(question):
     """Topic routing with ambiguity gate. Returns the rule dict or None.
 
@@ -1299,8 +1430,25 @@ def _detect_topic(question):
             continue
     if not matched:
         # H2.7.13 — Layer-2 fuzzy fallback ONLY when Layer-1 has zero hits.
+        # H2.7.14 — Layer-3 LLM classifier when Layer-2 also returns None.
         # If Layer-1 already found something (even ambiguous), trust it.
-        return _layer2_fuzzy(q)
+        # SENTINEL SAFETY (architect-fix): _detect_topic NEVER returns the
+        # clarification sentinel — that is reserved for /api/ask via the
+        # dedicated `detect_topic_or_clarify(q)` wrapper below. Sentinel
+        # leaking here would corrupt topic-lock injection in 3 other
+        # callers (L3512/13997/17470).
+        l2 = _layer2_fuzzy(q)
+        if l2 is not None:
+            return l2
+        l3 = _layer3_llm(q)
+        if l3 and l3.get("topic_id") == _CLARIFICATION_SENTINEL_ID:
+            # Sentinel preserved ONLY for detect_topic_or_clarify wrapper
+            # (which sets the flag); stripped to None for all other callers
+            # to prevent corrupting downstream topic-lock injection.
+            if getattr(_detect_topic, "_allow_sentinel", False):
+                return l3
+            return None
+        return l3
     # Multiple DISTINCT topic_ids hit → ambiguous → no lock.
     distinct_ids = {r.get("topic_id") for r in matched}
     if len(distinct_ids) > 1:

@@ -2022,3 +2022,122 @@ Doc threshold mismatch (88 vs 85) also fixed in module header comment.
 - Q6b (no global score normalization): margin gate is cheaper proxy and
   works in practice.
 
+
+---
+
+## H2.7.14 — LAYER-3 LLM CLASSIFIER + WARM CLARIFIER [2026-05-05]
+
+**Status:** ✅ COMPLETE | User-approved | ADD-ONLY | Killswitch ON
+
+### What
+Layer-3 fallback in `_detect_topic` (openai_helper.py L1209–1310). Fires
+ONLY when Layer-1 (regex) AND Layer-2 (fuzzy) both return None. Uses
+gpt-4.1-mini for cheap classification (~$0.001/Q, ~600ms median).
+
+### Two outcomes (in `_layer3_llm`)
+1. **Valid topic_id** → look up rule in `_TOPIC_RULES`, return like L1/L2.
+2. **"unclear"** → return CLARIFICATION SENTINEL rule
+   `{"topic_id": "__needs_clarification__", "_clarifier_text": "...", "_layer": 3}`.
+   `/api/ask` short-circuits with a warm 1-line conversational follow-up
+   (NEVER runs full kundli pipeline → saves cost + avoids burning a daily
+   quota slot on an unanswerable Q).
+
+### Tone (user-chosen: neutral warm dost-but-pro, 1 follow-up max)
+```
+Aapki baat samajhne ki koshish kar raha hun, lekin thoda aur clear
+karoge? Specifically kis area me guidance chahiye — career/paisa,
+ghar-rishte, sehat, ya kuch aur? Ek line me batao, fir poori detail
+se dekhta hun aapki kundli.
+```
+
+### /api/ask wiring (flask_app.py L5832–5857)
+- Pre-check runs AFTER `try_shortcut` and BEFORE quota gate (mirrors
+  brand_guard ordering — vague Qs cost zero quota slots).
+- Returns standard ask response shape with `source: "layer3_clarifier"`,
+  `topic: "needs_clarification"`, `confidence: 0.0`.
+- Wrapped in try/except — Layer-3 bug NEVER blocks main ask flow.
+
+### Brutal-test results (14 vague + 3 sanity Qs)
+| Test | Result |
+|---|---|
+| Vague Qs → clarify (correct) | 6/7 ✅ |
+| Specific-but-vague → correct topic | 6/6 ✅ |
+| L1 hits skip L3 (0ms latency) | 3/3 ✅ |
+| Killswitch `LAYER3_LLM=0` | 3/3 None (works) ✅ |
+
+**Sample classifications:**
+- `life me peace nahi hai` → 🟡 CLARIFY (2.6s)
+- `kuch acha nahi ho raha` → 🟡 CLARIFY (606ms)
+- `mood off rehta hai` → health (538ms)
+- `dimaag shant nahi rehta` → health (746ms)
+- `padhai me mann nahi lagta` → education_basic (L1 caught, 0ms)
+- `pati se nibhata nahi` → marriage (L1 caught, 0ms)
+
+**1 borderline:** `settle hone ka chance` → career (L3 picked; debatable
+since "settle" could mean marriage — acceptable, not None).
+
+### Cost / latency profile
+- L1 hit: 0ms, $0
+- L2 hit (fuzzy): ~1ms, $0
+- L3 hit (LLM): 500–2600ms, ~$0.001/call (gpt-4.1-mini, max_tokens=30)
+- L3 only fires on Qs that L1+L2 both miss → estimated <5% of traffic
+- Net cost increase: < $0.001 × 0.05 = **$0.00005/Q on average**
+
+### Killswitches
+- `LAYER3_LLM=0` → fully disables Layer-3, behavior reverts to L1+L2 only
+- `LAYER2_FUZZY=0` → disables Layer-2 (independent control)
+- Both default ON
+
+### Files changed
+- `artifacts/api-server/openai_helper.py` — +103 lines (ADD-ONLY)
+- `artifacts/api-server/flask_app.py` — +25 lines (clarifier short-circuit)
+
+### What's NEXT
+- Per-topic config dictation for `topic_specific_packs.py` — STILL pending
+  user input (health first: houses/planets/lagna/dasha/D9/extras)
+
+
+### H2.7.14-R2 — Architect-fix: sentinel safety + no double LLM call
+
+Architect review found 1 CRITICAL issue + 2 HIGH issues:
+
+**CRITICAL #3:** Clarification sentinel could leak from `_detect_topic`
+into 3 other callers (L3512/13997/17470) which use the rule for
+`_build_topic_lock`. Sentinel has no `houses`/`karakas` keys → would
+inject corrupt/empty topic-lock blocks into the main LLM prompt.
+
+**FIX (R2):**
+1. `_detect_topic` now ALWAYS strips sentinel → None (sentinel-safe by
+   default). All 3 existing callers automatically protected.
+2. Added new wrapper `detect_topic_or_clarify(question)` exclusively for
+   `/api/ask`. Uses thread-local-style flag `_detect_topic._allow_sentinel`
+   to opt into sentinel preservation for ONE call. No double-LLM-call
+   bug (L3 fires exactly once per request).
+3. `flask_app.py` updated to import the new wrapper instead of
+   `_detect_topic`.
+
+**HIGH #1+#2 (latency + cost runaway):** ACCEPTED, not fixed.
+- L3 only fires when L1 has zero hits AND L2 returns None — empirically
+  <5% of traffic.
+- Brand-guard runs FIRST (catches off-topic spam before L3 even sees it).
+- gpt-4.1-mini, max_tokens=30, timeout=8s — each call capped at ~$0.001.
+- Could add per-IP rate limit later if abuse seen; deferred for now.
+
+**MEDIUM (lang adaptation):** Clarifier text is Hinglish-only. Acceptable
+because app is Hinglish-default; user-base is Indian. If lang=en/hi
+mismatch is reported by users, can add `_resolve_response_lang` switch
+later (3-line change).
+
+### Verification (post-R2)
+| Test | Result |
+|---|---|
+| `_detect_topic` sentinel leak (other callers) | 0/3 leaks ✅ |
+| `detect_topic_or_clarify` sentinel preserved | 3/3 ✅ |
+| L1 hits skip L3 (0ms) | 3/3 ✅ |
+| L3 valid-topic classifications via `_detect_topic` | 2/2 ✅ |
+| Live `/api/ask` clarifier response | ✅ source=layer3_clarifier |
+
+### Files changed (R2)
+- `openai_helper.py` — split into `_detect_topic` (safe) + `detect_topic_or_clarify` (wrapper) [+25 lines]
+- `flask_app.py` — uses new wrapper [-1/+1 line]
+

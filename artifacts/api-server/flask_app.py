@@ -5826,6 +5826,33 @@ def ask_route():
         _shortcut["plan"]  = "free"
         return jsonify(_shortcut)
 
+    # ── H2.7.14 — Layer-3 vague-Q clarifier short-circuit ────────────────────
+    # If Layer-1 (regex) + Layer-2 (fuzzy) both miss AND Layer-3 LLM
+    # classifier says "unclear" → return a warm 1-line follow-up Q
+    # instead of running the full kundli pipeline. Saves cost AND avoids
+    # wasting a daily quota slot on a question the engine can't answer well.
+    # Fires BEFORE quota gate (same reason as brand_guard above).
+    try:
+        from openai_helper import detect_topic_or_clarify as _ask_detect_topic
+        from openai_helper import (
+            _CLARIFICATION_SENTINEL_ID as _ask_clarif_id,
+            _CLARIFIER_TEXT as _ask_clarif_text,
+        )
+        _pre_topic = _ask_detect_topic(question)
+        if _pre_topic and _pre_topic.get("topic_id") == _ask_clarif_id:
+            return jsonify({
+                "text":       _pre_topic.get("_clarifier_text", _ask_clarif_text),
+                "topic":      "needs_clarification",
+                "confidence": 0.0,
+                "source":     "layer3_clarifier",
+                "follow_ups": [],
+                "quota":      {"used": 0, "limit": 0},
+                "plan":       "free",
+            })
+    except Exception as _clarif_exc:
+        # Layer-3 path must NEVER block the ask flow on a bug.
+        print(f"[ask] layer-3 clarifier check error (non-fatal): {_clarif_exc}")
+
     # ── Daily-quota gate (auth mandatory when user_id supplied) ──────────────
     user = None
     if user_id:

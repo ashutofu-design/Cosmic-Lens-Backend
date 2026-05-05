@@ -113,9 +113,9 @@ def _vitality_one_liner(dims: dict, sub: dict, yogas: list) -> str:
                 "preventive lifestyle (saad khana, regular sleep) "
                 "mukhya priority hai.")
     if mh == "RED":
-        return ("Mental peace zone stressed dikh raha — meditation / "
-                "talking to someone trusted / professional support "
-                "consider karna helpful rahega.")
+        return ("Mental peace zone stressed dikh raha — daily routine me "
+                "breathing, journaling aur proper rest add karo, "
+                "trusted insaan se baat karna bhi helpful rahega.")
     if vt == "RED":
         return ("Vitality channel weak — proper neend, paani aur "
                 "balanced diet pe focus karo, body ko build karne ka "
@@ -124,8 +124,8 @@ def _vitality_one_liner(dims: dict, sub: dict, yogas: list) -> str:
         return ("Accident risk zone elevated — driving, sports, sharp "
                 "objects me extra mindfulness rakho, jaldbaazi avoid.")
     if dr == "RED":
-        return ("Recovery power kam dikh raha — chhoti illness ko bhi "
-                "ignore mat karo, time pe doctor consult karo.")
+        return ("Recovery power kam dikh raha — chhoti problem ko bhi "
+                "ignore mat karo, rest aur hydration maintain karo.")
     if "Vipreet-Recovery" in yogas:
         return ("Mixed picture par Vipreet-Recovery yog active hai — "
                 "setbacks ke baad bounce-back ki capacity strong hai.")
@@ -161,7 +161,8 @@ def _direct_yoga_check(facts: dict) -> str:
                  "recovery ki capacity classical strong yog hai.")
     elif sub.get("arishta_present") or sub.get("balarishta_present"):
         final = ("Caution-marker yog active hai — preventive lifestyle + "
-                 "periodic doctor checkup aapki neend chain me rakhega.")
+                 "regular self-check (sleep, energy, routine) track karte "
+                 "raho, yeh aapki neend chain me rakhega.")
     elif yogas:
         final = ("Kuch supportive yog hain — par alone enough nahi, "
                  "lifestyle discipline + checkup zaroori.")
@@ -252,7 +253,7 @@ _NARRATIVE_INSTRUCTIONS = {
         "Line 2: '• Current state: <one-phrase, gentle>'\n"
         "Line 3: '• Mukhya theme: <one-phrase, generic — Moon/peace etc.>'\n"
         "Line 4: '• Supportive step: <one concrete action — meditation, "
-        "walk, journaling, professional talk>'\n"
+        "walk, journaling, trusted insaan se baat>'\n"
         "Line 5: blank\n"
         "Line 6: 'Final: <one warm calm sentence>'.\n"
         "NO disease/disorder names (depression/anxiety as conditions), "

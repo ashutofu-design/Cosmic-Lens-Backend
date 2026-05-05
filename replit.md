@@ -180,6 +180,34 @@ User-policy lock-in: static health engine = preventive insight system, NOT docto
 
 **Architecture lesson preserved**: when policy is enforced ONLY in narrative layer it drifts; when enforced ONLY in validator layer it produces awkward post-scrub text. Two-layer guard (prompt prevents → validator catches survivors → flags telemetry) is the durable pattern, mirroring the Phase 2.x finance anti-hallucination pipeline (prompt RAG-bypass + post-injector + validator).
 
+## Phase H2.2.1 — STATIC ENGINE TEXT CLEANUP (DIRECT-mode tone-guard gap) (2026-05-05)
+
+**Gap caught by user E2E ("thakan + low energy" question on P40)**: Phase H2.2's two-layer guard covered LLM paths (NARRATIVE/HYBRID) but DIRECT mode is **pure static engine text** — no LLM runs, no validator scrub runs. Hardcoded "professional support consider karna" / "doctor consult karo" / "periodic doctor checkup" phrases in `health_static/health_replies.py` were silently bypassing the doctor-mention policy. Same pattern as before: policy enforced in two layers, gap in the third.
+
+**User-approved direction**: 
+> "Health engine = awareness + self-correction system, not escalation system. Recovery=RED ko WARNING-tier MAT promote karo (over-trigger UX kharab karega). Static text clean karo — yeh permanent fix hai."
+
+**Surgical Option-A edits** (4 hardcoded phrases in `health_static/health_replies.py`):
+
+| Line | Before | After |
+|------|--------|-------|
+| L118-121 (`_vitality_one_liner` mh=RED branch) | "meditation / talking to someone trusted / professional support consider karna helpful rahega" | "daily routine me breathing, journaling aur proper rest add karo, trusted insaan se baat karna bhi helpful rahega" |
+| L130-131 (`_vitality_one_liner` dr=RED branch) | "chhoti illness ko bhi ignore mat karo, time pe doctor consult karo" | "chhoti problem ko bhi ignore mat karo, rest aur hydration maintain karo" |
+| L166-168 (`_direct_yoga_check` arishta/balarishta final) | "preventive lifestyle + periodic doctor checkup aapki neend chain me rakhega" | "preventive lifestyle + regular self-check (sleep, energy, routine) track karte raho, yeh aapki neend chain me rakhega" |
+| L258-259 (NARRATIVE mental_health instruction example) | "<one concrete action — meditation, walk, journaling, professional talk>" | "<one concrete action — meditation, walk, journaling, trusted insaan se baat>" |
+
+**Why L258 matters separately**: even though Phase H2.2 added Rule #12 banning referral language, the same prompt block was *example-suggesting* "professional talk" as a valid action — internal contradiction that confused the LLM and weakened the prompt-guard. Now the example aligns with the rule.
+
+**Verification on P40**:
+- Original failing question ("Mujhe baar-baar thakan aur low energy feel hoti hai...") re-run → DIRECT route → `Final: ...daily routine me breathing, journaling aur proper rest add karo, trusted insaan se baat karna bhi helpful rahega.` Zero referral leaks across {doctor, physician, therapist, counsellor, professional, specialist, expert, psychiatrist, psychologist, medical} ✅
+- 4-route regression battery (DIRECT-vitality / DIRECT-yoga / NARRATIVE-mental / NARRATIVE-recovery) on P40 → all 4 PASS, no referral leaks
+- WARNING preservation (cancer cure + suicide-crisis) → doctor/helpline mentions intact ✅ (the gated `add_doctor=True` flow continues to work)
+
+**Principle locked in (per user)**: 
+> "Health engine = awareness + self-correction system, not escalation system."
+
+If future product decision needs WARNING-tier escalation for vitality/recovery/mental-RED severities, that should be done as a **separate dedicated layer** (severity-threshold + danger-keyword detector) rather than scattering doctor mentions in static engine prose.
+
 ## Phase 2.8.82.1 — MODULE RENAME finance_engine → finance_static (2026-05-05)
 
 User-driven naming refactor in anticipation of upcoming **Finance Timing Engine** (separate module, dasha-based, future phase). Old folder name `finance_engine` was ambiguous — could mean the static chart engine OR the umbrella for all money-related logic. Renamed to `finance_static` to make the boundary explicit: this module ONLY handles non-timing chart-based finance Qs (wealth/income/saving/risk/leak/business-vs-job/debt/sudden-wealth/karakas/KP-Vedic conflicts). Timing Qs (kab paisa aayega, exact date) will live in a future `finance_timing` module.

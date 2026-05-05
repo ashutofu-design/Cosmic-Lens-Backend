@@ -76,17 +76,39 @@ def _chart_fingerprint(kundli: dict | None) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
+def _normalise_question(q: str | None) -> str:
+    """Lowercase + collapse whitespace + strip punctuation for stable
+    hashing. Two phrasings that differ only in case/spacing share key."""
+    if not isinstance(q, str):
+        return ""
+    import re as _re
+    s = q.strip().lower()
+    s = _re.sub(r"[^\w\s]+", " ", s)   # punctuation → space
+    s = _re.sub(r"\s+", " ", s).strip()
+    return s
+
+
 def make_cache_key(birth: dict | None, kundli: dict, topic: str,
-                    route: str) -> str:
+                    route: str, question: str | None = None) -> str:
+    """Cache key. If `question` is provided (HYBRID mode), its normalised
+    SHA1 prefix is mixed in so different phrasings get different cached
+    answers. For routes with deterministic per-route output (DIRECT,
+    NARRATIVE, WARNING), pass question=None to keep cache hit-rate high.
+    """
     cd = (kundli or {}).get("currentDasha") or {}
     md = cd.get("maha", "")
     ad = cd.get("antar", "")
-    raw = "||".join([
+    parts = [
         _normalise_birth(birth),
         f"chart={_chart_fingerprint(kundli)}",
         f"md={md}", f"ad={ad}",
         f"topic={topic}", f"route={route}",
-    ])
+    ]
+    if question:
+        q_norm = _normalise_question(question)
+        q_hash = hashlib.sha1(q_norm.encode("utf-8")).hexdigest()[:16]
+        parts.append(f"q={q_hash}")
+    raw = "||".join(parts)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 

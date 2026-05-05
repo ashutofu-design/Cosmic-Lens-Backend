@@ -394,8 +394,12 @@ def handle_finance_money_question(question: str, kundli: dict,
             "dimensions": None, "cache_hit": False, "engine_facts": None,
         }
 
-    # Cache check
-    cache_key = make_cache_key(birth, kundli, "finance_money", route)
+    # Cache check — HYBRID mode mixes question hash into key so each
+    # unique user phrasing gets its own personalised cached narrative.
+    # Other modes share key per-route (deterministic output per chart).
+    _q_for_key = question if mode == "HYBRID" else None
+    cache_key = make_cache_key(birth, kundli, "finance_money", route,
+                                question=_q_for_key)
     cached = get_cached(cache_key)
     if cached:
         return {

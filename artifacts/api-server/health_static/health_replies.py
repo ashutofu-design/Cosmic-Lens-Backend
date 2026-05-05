@@ -369,9 +369,10 @@ def _build_health_kundli_pack(kundli: dict, facts: dict,
         )
     lines.append("")
 
-    # Health-relevant house lords (1, 6, 8, 12)
-    lines.append("--- HEALTH HOUSE LORDS (1=self, 6=disease, 8=mrityu/chronic, 12=loss/hospital) ---")
-    for hk in ("h1", "h6", "h8", "h12"):
+    # Health-relevant house lords (1, 4, 6, 8, 12)
+    # H2.7.3: H4 added — mental peace dim depends on 4th lord state
+    lines.append("--- HEALTH HOUSE LORDS (1=self, 4=mental peace/sukha, 6=disease, 8=mrityu/chronic, 12=loss/hospital) ---")
+    for hk in ("h1", "h4", "h6", "h8", "h12"):
         hl = (facts.get("house_lords") or {}).get(hk) or {}
         if hl:
             dush = " [IN DUSTHANA 6/8/12]" if hl.get("lord_in_dusthana") else ""
@@ -445,6 +446,8 @@ def _build_health_kundli_pack(kundli: dict, facts: dict,
         )
 
     # ENGINE DIM VERDICTS (ground-truth checksum — LLM MUST align)
+    # H2.7.3: per-dim reason added — gives LLM the engine's own
+    # explanation phrase to anchor "why" answers (especially mental).
     lines.append("--- ENGINE DIM VERDICTS (ground-truth checksum — DO NOT contradict) ---")
     dim_label = {
         "vitality": "Body energy / vitality",
@@ -460,11 +463,95 @@ def _build_health_kundli_pack(kundli: dict, facts: dict,
                 f"  {dlabel}: {d.get('verdict','?')} "
                 f"(severity={d.get('severity','?')})"
             )
+            reason = d.get("reason")
+            if reason:
+                lines.append(f"     engine reason: {reason}")
     lines.append("")
 
     # User question
     lines.append(f"--- USER QUESTION ---\n  {question!r}")
     return "\n".join(lines)
+
+
+# H2.7.3 — Engine-checksum contradiction guard.
+# If engine says a dim is RED/YELLOW (weak/mixed) and LLM text makes
+# a SUBJECT-ANCHORED positive assertion about that dim ("body strong
+# hai" / "immunity perfect" / "mental peace stable"), that is a hard
+# contradiction — fall back to deterministic static narrative.
+#
+# Patterns require: (subject keyword) + optional intensifier + (positive
+# claim word) + NOT followed by negation ("nahi" / "na " / "not"). This
+# avoids false positives like "Lagna lord strong na ho to..." where
+# the subject is a planet (not a dim) AND the claim is negated.
+_DIM_CONTRADICTION_RX = {
+    "vitality": (
+        {"RED", "YELLOW"},
+        re.compile(
+            r"\b(body\s+(?:energy|stamina|vitality|strength)|"
+            r"vitality|stamina|body|sharir|sehat)\s+"
+            r"(?:bilkul\s+|fully\s+|completely\s+|totally\s+|"
+            r"perfectly\s+|kaafi\s+)?"
+            r"(strong|healthy|fit|perfect|excellent|robust|stable|"
+            r"badhiya|sahi|theek|fine)"
+            r"(?!\s+(?:nahi|nahin|na\b|not\b))",
+            re.IGNORECASE,
+        ),
+    ),
+    "disease_resistance": (
+        {"RED", "YELLOW"},
+        re.compile(
+            r"\b(immunity|recovery|resistance|"
+            r"disease[\s-]?resistance|bounce[\s-]?back)\s+"
+            r"(?:bilkul\s+|fully\s+|completely\s+|totally\s+|"
+            r"perfectly\s+|kaafi\s+)?"
+            r"(strong|fast|excellent|perfect|healthy|robust|"
+            r"badhiya|sahi)"
+            r"(?!\s+(?:nahi|nahin|na\b|not\b))",
+            re.IGNORECASE,
+        ),
+    ),
+    "mental_health": (
+        {"RED", "YELLOW"},
+        re.compile(
+            r"\b(mental\s+(?:peace|side|state|health)|mind|"
+            r"emotional\s+side)\s+"
+            r"(?:bilkul\s+|fully\s+|completely\s+|totally\s+|"
+            r"perfectly\s+|kaafi\s+)?"
+            r"(strong|stable|fine|peaceful|shaant|relaxed|"
+            r"healthy|perfect|sahi|badhiya)"
+            r"(?!\s+(?:nahi|nahin|na\b|not\b))",
+            re.IGNORECASE,
+        ),
+    ),
+}
+
+
+def _strip_idx(rx_tuple):
+    """Index helper for clarity — second element of tuple is the
+    contradiction-claim regex (subject+claim shape)."""
+    return rx_tuple[1]
+
+
+def _check_engine_alignment(text: str,
+                              facts: dict) -> Tuple[bool, List[str]]:
+    """H2.7.3 — Returns (aligned, violations). If aligned=False, caller
+    should reject LLM output and use deterministic fallback. Catches
+    cases where LLM contradicts engine ground-truth (RED→strong claim).
+    """
+    violations: List[str] = []
+    dims = facts.get("dimensions") or {}
+    for dim_key, (bad_verdicts, claim_rx) in _DIM_CONTRADICTION_RX.items():
+        d = dims.get(dim_key) or {}
+        if d.get("verdict") in bad_verdicts:
+            # Engine said this dim is weak/mixed. Check if LLM text
+            # makes a subject-anchored positive claim.
+            m = claim_rx.search(text)
+            if m:
+                violations.append(
+                    f"{dim_key}=engine:{d.get('verdict')} "
+                    f"vs llm:'{m.group(0)}'"
+                )
+    return (len(violations) == 0, violations)
 
 
 def _render_simple_narrative_llm(facts: dict, question: str,
@@ -565,6 +652,20 @@ def _render_simple_narrative_llm(facts: dict, question: str,
         )
         text = (resp.choices[0].message.content or "").strip()
         if not text:
+            return _render_simple_narrative_static(facts, question)
+        # H2.7.3 — engine-checksum guard: if LLM contradicts engine
+        # ground-truth (RED → "strong" / YELLOW → "perfect"), reject
+        # and use deterministic static narrative.
+        aligned, violations = _check_engine_alignment(text, facts)
+        if not aligned:
+            try:
+                from logger import logger as _lg  # type: ignore
+                _lg.warning(
+                    "health_engine_contradiction_rejected",
+                    extra={"violations": violations},
+                )
+            except Exception:
+                pass
             return _render_simple_narrative_static(facts, question)
         return text
     except Exception:

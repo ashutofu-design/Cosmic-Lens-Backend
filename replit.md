@@ -456,6 +456,40 @@ User chose **Path B+ (full data, LLM-driven cherry-pick)** over Path A (engine r
 
 **Architectural lesson**: full-pack architecture (H2.7) creates implicit type contracts between engine output and pack builder. Any future engine shape change to `yogas` (e.g. dict with severity) will Just Work without breaking pack builder. ADD-ONLY discipline maintained.
 
+## Phase H2.7.3 — ENGINE-CHECKSUM GUARD + H4 LORD + DIM REASONS (HIGH, 2026-05-05)
+
+**Two architect HIGH findings fixed in one batch.**
+
+### Part A — H4 lord + per-dim reason added to pack (HIGH #3)
+
+**Bug**: `_build_health_kundli_pack` only iterated `house_lords` for h1/h6/h8/h12 — but mental health dim depends on **4th house lord** state (sukha/peace karaka). For P40, H4 lord is Jupiter (in 10th, enemy sign Virgo). LLM had no access to this fact → "mental peace kyun weak hai" Q would drift or invent. Similarly, engine's per-dim `reason` (e.g. "Mental peace zone stressed — meditation/support helpful") was computed but never passed to LLM — losing the engine's own scoring rationale.
+
+**Fix (`health_replies.py` L375-385, L451-472)**:
+- House-lord iteration extended `("h1","h6","h8","h12") → ("h1","h4","h6","h8","h12")` with H4 labelled "mental peace/sukha". H4 lord + house + dignity + dusthana flag now in pack.
+- `dim_label` block extended to emit `engine reason: <text>` line for every dim — e.g. `Mental peace: RED (severity=...)\n     engine reason: Mental peace zone stressed — meditation/support helpful`.
+
+### Part B — Engine-checksum deterministic guard (HIGH #2)
+
+**Bug**: H2.7 prompt told LLM "DO NOT contradict engine verdicts" but had no enforcement. If LLM output ever claimed RED dim was strong/perfect/healthy, it would slip through validator (which only does safety scrubs, not semantic alignment).
+
+**Fix (`health_replies.py` L479-557, L644-654)**:
+- `_DIM_CONTRADICTION_RX` (L489-528): per-dim claim regex with **subject-anchored + negation-aware** shape — matches only `(dim_subject) (intensifier)? (positive_claim_word)` NOT followed by `nahi/nahin/na/not`. Subjects per dim:
+  - vitality: `body energy/stamina/vitality/strength`, `vitality`, `stamina`, `body`, `sharir`, `sehat`
+  - disease_resistance: `immunity`, `recovery`, `resistance`, `disease-resistance`, `bounce-back`
+  - mental_health: `mental peace/side/state/health`, `mind`, `emotional side`
+- Positive claim words include both English (`strong/healthy/fit/perfect/excellent/robust/stable/fine`) and Hinglish (`badhiya/sahi/theek/shaant/peaceful/relaxed`).
+- Negation lookahead `(?!\s+(?:nahi|nahin|na\b|not\b))` prevents false positives on "Lagna lord strong na ho to..." / "natural protection strong nahi" / "stable feel nahi hoti".
+- `_check_engine_alignment(text, facts)` returns `(aligned: bool, violations: List[str])`. If `not aligned`, LLM output is rejected and `_render_simple_narrative_static` deterministic fallback is returned.
+- Logged via `logger.warning("health_engine_contradiction_rejected", extra={"violations": [...]})`.
+
+**Verification (P40, fresh cache, 2026-05-05)**:
+- **Pack additions**: ✅ "H4: lord=Jupiter in house 10..." present; ✅ "engine reason: Vitality channel weak..." present for every weak dim.
+- **Guard regression suite (14 cases)**: 6/6 negation-tolerance tests PASS (planet-subject phrases like "Lagna lord strong na ho", "strength" usage, "stable feel nahi hoti" all correctly aligned=True). 8/8 true-contradiction tests CAUGHT ("body bilkul strong", "Immunity strong", "Mental peace stable", "Sharir bilkul fit", "Sehat perfect", etc. all flagged aligned=False).
+- **E2E (5 diverse Qs)**: 0/5 false-positive guard fires. Word counts 168-189 (within 200 cap). Mental-Q correctly attributes to Moon (8L in 1st), Mercury (12th retro), 4th lord Jupiter (now in pack), and current Moon-Mars dasha — full attribution chain.
+- **Idempotency**: cache-hit byte-identical.
+
+**Architectural pattern reinforced**: "soft prompt rule + hard deterministic guard". Prompt asks LLM to behave; guard enforces engine-truth alignment as a fail-closed gate. The fallback is the same `_render_simple_narrative_static` H2.6 used — no new fallback code path. Only the **trigger** for fallback is new (semantic contradiction). ADD-ONLY discipline maintained. The fact-pack and validator architectures from H2.7/H2.7.1 are unchanged.
+
 **Architectural pattern reinforced**: "Structure backend me rakho, output user-pe natural rakho" — same engine, same truth, same safety, same locked verdict computed internally. Only the **rendering layer** is now narrative-first. The LLM is once again the **translator** (H2.4 named principle); H2.4/H2.5's mistake was making the LLM also the layout-engine. H2.6 returns layout to a clean human voice and keeps engine truth as the silent source.
 
 **Reversibility**: zero engine/routing/validator/cache logic was deleted. The H2.5 4-block path is alive at `HEALTH_OUTPUT_STYLE=structured` — toggle the env var to revert instantly with no code change.

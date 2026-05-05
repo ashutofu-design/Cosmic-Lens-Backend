@@ -5913,6 +5913,39 @@ def ask_route():
             }), 402
         quota = {"used": anon_q["used"], "limit": anon_q["limit"]}
 
+    # ── Phase H2 — HEALTH STATIC hookup (runs FIRST among Y2 engines) ──────
+    # Pipeline order (Y2): health_static → finance_static → stock_engine →
+    # normal LLM pipeline (which still includes legacy health_engine as
+    # fallback for any health Q that the new gate did NOT claim).
+    # ADD-ONLY: legacy health_engine.py untouched. New engine returns None
+    # for non-health Qs so downstream engines continue unchanged.
+    try:
+        from health_static import handle_health_question as _hs_handle
+        _hs = _hs_handle(question, kundli or {}, birth)
+    except Exception as _hs_exc:
+        print(f"[ask] health_static hookup error (non-fatal): {_hs_exc}")
+        _hs = None
+    if _hs and _hs.get("text"):
+        return jsonify({
+            "text":       _hs["text"],
+            "topic":      "non_timing_health",
+            "confidence": 1.0,
+            "source":     (f"health_static[{_hs.get('scope','non_timing')}]:"
+                           f"{_hs.get('mode','')}/{_hs.get('route','')}"),
+            "scope":      _hs.get("scope", "non_timing"),
+            "follow_ups": [],
+            "quota":      {"used": quota.get("used", 0),
+                            "limit": quota.get("limit", 0)},
+            "plan":       effective_plan(user) if user else "free",
+            "meta":       {
+                "dimensions":       _hs.get("dimensions"),
+                "cache_hit":        _hs.get("cache_hit", False),
+                "mode":             _hs.get("mode"),
+                "route":            _hs.get("route"),
+                "sensitive_bucket": _hs.get("sensitive_bucket"),
+            },
+        })
+
     # ── Y2 FINANCE-MONEY hookup (runs FIRST per user directive) ─────────────
     # Pipeline order: finance → stock → normal LLM pipeline.
     # Finance has a STRICT regex with hard stock-exclusion guard, so any

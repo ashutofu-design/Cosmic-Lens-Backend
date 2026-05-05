@@ -17,7 +17,7 @@ from typing import Any, Optional
 
 _CACHE_DB = os.environ.get(
     "FINANCE_CACHE_DB",
-    os.path.join(os.path.dirname(__file__), "_finance_cache.sqlite3"),
+    os.path.join(os.path.dirname(__file__), "_stock_cache.sqlite3"),
 )
 _LOCK = threading.Lock()
 _INITED = False

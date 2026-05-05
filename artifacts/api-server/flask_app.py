@@ -5918,7 +5918,7 @@ def ask_route():
     # for non-stock questions → normal pipeline continues unchanged. Runs
     # AFTER quota gate (real question) but BEFORE LLM (cheap/cached).
     try:
-        from finance import handle_finance_question as _fin_handle
+        from stock_engine import handle_finance_question as _fin_handle
         _fin = _fin_handle(question, kundli or {}, birth)
     except Exception as _fin_exc:
         print(f"[ask] finance hookup error (non-fatal): {_fin_exc}")
@@ -5928,7 +5928,7 @@ def ask_route():
             "text":       _fin["text"],
             "topic":      "stock_finance",
             "confidence": 1.0,
-            "source":     f"finance_engine:{_fin.get('mode','')}/{_fin.get('route','')}",
+            "source":     f"stock_engine:{_fin.get('mode','')}/{_fin.get('route','')}",
             "follow_ups": [],
             "quota":      {"used": quota.get("used", 0),
                             "limit": quota.get("limit", 0)},

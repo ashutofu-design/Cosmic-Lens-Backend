@@ -7,4 +7,4 @@ LLM    = only narrative polish (60-80 words), never invents facts
 Public API:
   handle_finance_question(question, kundli, birth) -> dict | None
 """
-from finance.stock_replies import handle_finance_question  # noqa: F401
+from stock_engine.stock_replies import handle_finance_question  # noqa: F401

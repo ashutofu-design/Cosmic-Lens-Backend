@@ -13,10 +13,10 @@ Public:
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
-from finance.stock_facts import compute_stock_facts, STOCK_SECTOR_MAP
-from finance.stock_routing import is_stock_question, route_stock_question
-from finance.stock_warnings import WARNINGS
-from finance.answer_cache import make_cache_key, get_cached, put_cached
+from stock_engine.stock_facts import compute_stock_facts, STOCK_SECTOR_MAP
+from stock_engine.stock_routing import is_stock_question, route_stock_question
+from stock_engine.stock_warnings import WARNINGS
+from stock_engine.answer_cache import make_cache_key, get_cached, put_cached
 
 
 # ── DIRECT formatters (pure engine, no LLM) ─────────────────────────

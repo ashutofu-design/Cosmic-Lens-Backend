@@ -376,6 +376,48 @@ _PT_SYS_INTRO = (
       "Yahi feel chahiye — par har baar exact yahi structure mat use karo, har question ke hisaab se naturally adapt karo. "
       "Opening word vary karo, story flow rakho, closing me wisdom-line do.\n\n"
 
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # H2.7.7 — LENGTH & FOCUS LOCK (FINAL OVERRIDE — recency-effect)
+      # This block is INTENTIONALLY placed at the very end of the system
+      # prompt so the LLM reads it LAST → strongest behavioral weight.
+      # Overrides the earlier "150-200 words / 250-300 words" guidance
+      # which produced 230+ word tangential answers (user-flagged bug,
+      # H2.7.6 review). Mirrors health_static contract enforced via
+      # _enforce_word_cap (90-120 ideal, 150 hard cap).
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      "━━━ H2.7.7 LENGTH & FOCUS LOCK (FINAL OVERRIDE — sabse important) ━━━\n"
+      "Yeh rules upar ke length-guidance ko OVERRIDE karte hain:\n\n"
+
+      "1. WORD BUDGET (HARD):\n"
+      "   • Single-fact / casual / identity Q → 1-2 lines (no change)\n"
+      "   • Har baaki narrative Q (placement meaning, dasha, prediction, "
+      "love, career, health, deep/philosophical — sab) → "
+      "TARGET 80-120 words, ABSOLUTE MAX 150 words. 150+ = FAIL.\n"
+      "   • 250-300 word \"deep\" answers BANNED. Depth = clarity, not length.\n\n"
+
+      "2. STAY ON QUESTION (no tangents):\n"
+      "   • Sirf jo CURRENT question me pucha hai, sirf wahi answer karo.\n"
+      "   • Pichli history se topics MAT utha (ghar, property, marriage, "
+      "career) jab tak user IS turn me explicitly nahi puche.\n"
+      "   • \"Kyuki aapne X ka context diya hai\" — yeh phrase BANNED, "
+      "yeh tangent ka signal hai.\n"
+      "   • Agar question \"6th lord 1st house ka matlab\" hai to sirf "
+      "us placement ki baat — property/career/dasha-side-effects MAT jodho.\n\n"
+
+      "3. STRUCTURE (4-beat for placement/meaning Qs):\n"
+      "   • Beat 1: Kya hota hai (1-2 lines, direct meaning)\n"
+      "   • Beat 2: Kyun hota hai (1-2 lines, brief reasoning)\n"
+      "   • Beat 3: Kya effect/impact (1-2 lines, life me kaise dikhta hai)\n"
+      "   • Beat 4: Kya karo (1 line, actionable wisdom)\n"
+      "   Total = ~100 words. Bas. Filler closing (\"routine strong rakhiye\", "
+      "\"simple bhasha me\") repeat MAT karo.\n\n"
+
+      "4. NO EMOJI in response text (🔭 ⭐ 🪐 🌟 etc) — kabhi nahi.\n\n"
+
+      "5. AGAR AAP 150 WORDS CROSS KARTE HO → answer FAIL hai. "
+      "Pehle plan karo: \"main 100 words me kya kya cover karunga\" — "
+      "phir likho. Edit karo. Nikalo extra. Ship.\n\n"
+
       "Safety rails kundli ke ant me hain.\n\n"
   )
 
@@ -13784,6 +13826,24 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     _trace(req_id, "4e.TRANSLATOR_LOCK_ERR",
                            f"passthrough_sync:{str(_tlock_exc_pt)[:180]}")
 
+                # H2.7.7 — post-cap belt-and-braces (sync passthrough).
+                # Mirrors health_static contract. Prompt-level guidance
+                # (LENGTH & FOCUS LOCK in _PT_SYS_INTRO) is primary lever;
+                # this is the safety net for LLM overshoots. Identity
+                # fallback on any import/call failure so request never
+                # fails just because the cap helper is unavailable.
+                try:
+                    from health_static.health_replies import (  # type: ignore
+                        _enforce_word_cap as _h277_cap_sync,
+                    )
+                    _text_pt_scrubbed = _h277_cap_sync(
+                        _text_pt_scrubbed, max_words=150
+                    )
+                except Exception as _h277_exc_sync:  # noqa: BLE001
+                    _trace(req_id, "H2.7.7.CAP_SKIPPED_SYNC", {
+                        "reason": str(_h277_exc_sync)[:160],
+                    })
+
                 _ret_pt = {
                     "text":       _text_pt_scrubbed,
                     "topic":      "general",
@@ -17424,6 +17484,25 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             # Phase 2.8.27 — engine_tag tells UI whether deterministic
             # engine LOCKED FACTS were injected (ans-engine) or it was a
             # pure LLM answer (ans-cosmo).
+            # H2.7.7 — post-cap on STREAM final envelope.
+            # NOTE on UX: deltas were already streamed to the client BEFORE
+            # this point, so capping the final.text only sanitizes the
+            # canonical text that mobile uses to overwrite the streamed
+            # buffer (when present) and serves as a server-side audit
+            # surface. Prompt-level LENGTH & FOCUS LOCK is the primary
+            # lever for streaming. Identity fallback on any failure.
+            try:
+                from health_static.health_replies import (  # type: ignore
+                    _enforce_word_cap as _h277_cap_stream,
+                )
+                _full_text_pt_s_scrubbed = _h277_cap_stream(
+                    _full_text_pt_s_scrubbed, max_words=150
+                )
+            except Exception as _h277_exc_stream:  # noqa: BLE001
+                _trace(req_id, "H2.7.7.CAP_SKIPPED_STREAM", {
+                    "reason": str(_h277_exc_stream)[:160],
+                })
+
             _final_envelope_pt_s = {
                 "kind":       "final",
                 "text":       _full_text_pt_s_scrubbed,

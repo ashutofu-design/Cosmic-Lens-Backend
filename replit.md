@@ -1549,3 +1549,46 @@ Verified via E2E:
 - Trading: 🔴 RED — KP 5th-CSL loss-house contamination
 - Long-term: 🟡 YELLOW — Vipreet-Rajyoga recovery yog tempers KP
 - Final: "Trading se loss hoga, lekin disciplined long-term investing se dheere profit possible hai."
+
+---
+
+## H2.7.7 — General-LLM Length & Focus Lock (2026-05-05)
+
+**Trigger**: User flagged 231-word tangential answer to "mera 6th lord 1st house me he iska matlab kya he" — H2.7.6 cap only fixed `health_static`; general kundli/houses Qs go through `openai_helper.ai_ask` / `ai_ask_stream` LLM passthrough which had NO cap and NO tangent control. Output also had property/ghar tangent and 🔭 emoji (🔭 confirmed = mobile bot avatar, not server emit).
+
+**3 ADD-ONLY edits** (`artifacts/api-server/openai_helper.py`):
+
+1. **L382-424** — Appended `H2.7.7 LENGTH & FOCUS LOCK` block at end of `_PT_SYS_INTRO` (recency-effect placement). Rules: 80-120w target / 150w hard cap, "STAY ON QUESTION" tangent-ban, 4-beat structure for placement Qs, no-emoji directive. Overrides earlier "150-200 / 250-300 word" guidance at L318-319 (kept as documentation, ADD-ONLY style).
+
+2. **L13832-13848** — Sync passthrough (`ai_ask`) post-cap belt-and-braces: imports `health_static.health_replies._enforce_word_cap` and applies `max_words=150` to `_text_pt_scrubbed` before `_ret_pt` dict construction. Try/except identity fallback with `H2.7.7.CAP_SKIPPED_SYNC` telemetry on failure.
+
+3. **L17490-17507** — Stream passthrough (`ai_ask_stream`) same cap on `_full_text_pt_s_scrubbed` before `_final_envelope_pt_s`. UX caveat documented: deltas already streamed to client, so cap only sanitizes the canonical `final.text` (mobile uses to overwrite buffer when it implements final-replace; otherwise server-side audit only).
+
+**Live test** (P40 Rajalaxmi, exact failing question):
+- Before: 231w, property tangent, 🔭 client emoji
+- After: **149w PASS** (35% reduction), 4-beat structure largely preserved
+- ⚠️ **Property tangent STILL PRESENT** — see Architect Critical below
+
+**Architect review (H2.7.7-A)**:
+- ✅ All 3 edits: syntax clean, scope correct, fallback safe (Severity: LOW)
+- ❌ **CRITICAL**: Topic-lock is prepended to USER message at sync L13647-13652 and stream L17081-17149, AND `_PT_SYS_INTRO` L349-352 explicitly declares "TOPIC-LOCK supreme hai". This OVERRIDES the new H2.7.7 system-prompt rule. Live trace confirmed `topic_lock="home_property"` was injected for the bare placement question, pulling property/ghar/Mangal context that the LLM cannot escape.
+- ❌ **HIGH**: System-vs-user recency conflict — H2.7.7 lives in system prompt (end), topic-lock injected at user message head with "supreme" status → user-message wins.
+- Telemetry impact: low.
+
+**Carried forward (PENDING — architect-flagged, NOT in H2.7.7 scope)**:
+1. **`_detect_topic` misclassifies bare placement questions** as `home_property` even with empty history. Trace: question "mera 6th lord 1st house me he iska matlab kya he" (no property keywords, no history) → `topic_lock="home_property"`. Fix needs either:
+   - (a) add a "placement-meaning" topic class that disables topic-lock injection, OR
+   - (b) regex-tighten `_detect_topic` so "X lord Y house matlab/kya hai" returns None (no lock), OR
+   - (c) make topic-lock RESPECT the new "stay on question" rule by softening "TOPIC-LOCK supreme" wording.
+2. **Topic-lock placement vs H2.7.7 priority** — needs explicit conflict resolution: either H2.7.7 overrides topic-lock when question is a meaning/explainer Q, or topic-lock's "DO NOT cite" list is auto-extended to include the topic itself when not requested.
+
+**Architectural lesson** (extends H2.7.6's 3-step contract):
+> Contract enforcement = prompt + post-process guard + cache bump (H2.7.6).
+> **NEW**: When multiple injection points compete (system prompt vs user-prepended block vs locked-facts block), the LATEST INJECTED point in user-message order wins regardless of "supreme" wording. Recency-effect operates per-message-position, not per-rule-priority. → Future contract changes must audit ALL injection sites, not just the system prompt.
+
+**Pending items still carried forward from H2.7.6**:
+- Cap not applied to structured-mode `_force_locked_verdict` / HYBRID prepend / all-green deterministic early return in `_render_simple_narrative_static` (~50w, latent).
+- Cache cold-start stampede (perf, not correctness).
+
+**From H2.7.5**: in-flight stream abort on profile switch, logout/anon transition policy.
+**From H2.7.4**: H3 anti-tamper (HIGH security), hardcoded gpt-4o-mini fallback, validator split, E2E test matrix /api/ask + /api/ask/stream parity.

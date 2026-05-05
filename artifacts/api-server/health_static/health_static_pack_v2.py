@@ -251,14 +251,16 @@ def _derive_insights(pack: Dict[str, Any]) -> List[str]:
       Bucket 5 (5)  — Cross-signal multi-condition
     """
     insights: List[str] = []
-    # Architect-fix R1: explicit defaults guard against schema drift.
+    # Architect-fix R1: explicit defaults + type-coercion guard schema drift.
     _empty: Dict[str, Any] = {}
-    dims = pack.get("dimensions") or _empty
-    karakas = pack.get("karakas") or _empty
-    house_lords = pack.get("house_lords") or _empty
-    yogas = pack.get("yogas") or []
-    occupants = pack.get("house_occupants") or _empty
-    moon_nak = pack.get("moon_nakshatra") or _empty
+    def _as_dict(v: Any) -> Dict[str, Any]:
+        return v if isinstance(v, dict) else _empty
+    dims = _as_dict(pack.get("dimensions"))
+    karakas = _as_dict(pack.get("karakas"))
+    house_lords = _as_dict(pack.get("house_lords"))
+    yogas = pack.get("yogas") if isinstance(pack.get("yogas"), list) else []
+    occupants = _as_dict(pack.get("house_occupants"))
+    moon_nak = _as_dict(pack.get("moon_nakshatra"))
 
     vt = (dims.get("vitality") or _empty) if isinstance(dims, dict) else _empty
     dr = (dims.get("disease_resistance") or _empty) if isinstance(dims, dict) else _empty

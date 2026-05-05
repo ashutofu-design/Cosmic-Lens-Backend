@@ -330,7 +330,10 @@ def _render_simple_narrative_static(facts: dict, question: str) -> str:
             "periodic checkup aur daily mindfulness useful rahega"
         )
     paras.append(", ".join(closing_bits).capitalize() + ".")
-    return "\n\n".join(paras)
+    # H2.7.6 — apply hard cap defensively even on deterministic path.
+    # Deterministic prose rarely exceeds 150w but guard ensures uniform
+    # contract across all narrative paths (LLM + static).
+    return _enforce_word_cap("\n\n".join(paras), max_words=150)
 
 
 def _build_health_kundli_pack(kundli: dict, facts: dict,
@@ -532,6 +535,94 @@ def _strip_idx(rx_tuple):
     return rx_tuple[1]
 
 
+def _enforce_word_cap(text: str, max_words: int = 150) -> str:
+    """H2.7.6 — Production safety net for prompt overshoot.
+
+    LLMs occasionally exceed the target word count even with explicit
+    instructions. This guard enforces a STRICT word ceiling (per user
+    directive: 100-word target, 150 hard cap) using a 2-tier strategy:
+
+      Tier 1 (preferred): truncate at the last full-sentence boundary
+        <= max_words. Searches for ., !, ?, or Hindi danda (।),
+        whether at end-of-string or followed by space/newline.
+      Tier 2 (fallback): if no clean boundary exists within budget,
+        HARD-CUT at max_words and append ellipsis. The original
+        H2.7.6.0 implementation returned the over-limit text in this
+        case, which violated the "hard cap" promise (architect-flagged
+        H2.7.6 review). Now ALWAYS <= max_words+0 (ellipsis is part
+        of the last word, no extra word emitted).
+
+    Logs a warning on every truncation so we can monitor LLM compliance
+    AND boundary-detection failure rates over time.
+    """
+    if not text:
+        return text
+    words = text.split()
+    if len(words) <= max_words:
+        return text
+
+    candidate = " ".join(words[:max_words])
+
+    # Tier 1: clean sentence boundary. Use regex covering ., !, ?, ।
+    # at end-of-string OR followed by space/newline. rfind on multiple
+    # patterns; pick the latest match.
+    best_idx = -1
+    for terminator in (". ", "! ", "? ", "। ",
+                       ".\n", "!\n", "?\n", "।\n",
+                       ".", "!", "?", "।"):
+        # For end-of-string punctuation (no trailing space), only accept
+        # if it's at the absolute end of `candidate` — else mid-word
+        # like "Mr." would match.
+        if terminator in (".", "!", "?", "।"):
+            if candidate.endswith(terminator):
+                idx = len(candidate) - 1
+            else:
+                continue
+        else:
+            idx = candidate.rfind(terminator)
+        if idx > best_idx:
+            best_idx = idx
+
+    if best_idx >= 0:
+        truncated = candidate[: best_idx + 1].rstrip()
+        try:
+            from logger import logger as _lg  # type: ignore
+            _lg.warning(
+                "health_word_cap_truncation",
+                extra={
+                    "original_words":  len(words),
+                    "max_words":       max_words,
+                    "truncated_words": len(truncated.split()),
+                    "tier":            1,
+                },
+            )
+        except Exception:
+            pass
+        return truncated
+
+    # Tier 2: no clean sentence boundary within budget — HARD CUT.
+    # Replace the final word with `<word>…` so the output reads as
+    # intentionally trailing-off rather than mid-thought truncated.
+    hard = list(words[:max_words])
+    if hard:
+        hard[-1] = hard[-1].rstrip(".,;:!?।") + "…"
+    truncated = " ".join(hard)
+    try:
+        from logger import logger as _lg  # type: ignore
+        _lg.warning(
+            "health_word_cap_hard_cut",
+            extra={
+                "original_words":  len(words),
+                "max_words":       max_words,
+                "truncated_words": len(truncated.split()),
+                "tier":            2,
+            },
+        )
+    except Exception:
+        pass
+    return truncated
+
+
 def _check_engine_alignment(text: str,
                               facts: dict) -> Tuple[bool, List[str]]:
     """H2.7.3 — Returns (aligned, violations). If aligned=False, caller
@@ -603,14 +694,22 @@ def _render_simple_narrative_llm(facts: dict, question: str,
         "balanced essay).\n"
         "- 'Issues kya ho sakte hain / tendency' → category list "
         "from weak dims (no disease names).\n\n"
-        "LENGTH & SHAPE:\n"
-        "- Target 100-160 words. Hard cap 200 words — NEVER exceed.\n"
-        "- 2-3 short paragraphs. Closing line = ONE practical "
-        "takeaway (sleep / khana / hydration / routine).\n"
+        "LENGTH & SHAPE (H2.7.6 — TIGHTENED):\n"
+        "- Target 90-120 words. Hard cap 150 — NEVER exceed.\n"
+        "- 4-BEAT STRUCTURE (no labels, just flow naturally):\n"
+        "    (a) 1-2 lines = problem kya hai (core theme)\n"
+        "    (b) 2-3 lines = kyun ho raha hai (planet/house/dignity "
+        "        attribution from facts pack)\n"
+        "    (c) 1-2 lines = kya issues ho sakte hain (category-only "
+        "        tendency, no disease names)\n"
+        "    (d) 1-2 lines = kya karna hai (ONE practical takeaway — "
+        "        sleep/khana/hydration/routine)\n"
+        "- Total 6-9 short lines, 2-3 paragraphs.\n"
         "- ONE clear core message — do NOT scatter across all 5 "
         "dims unless user specifically asked for full picture.\n"
         "- Attribution-rich (planet+house+dignity) lines are GOOD; "
-        "filler/repetition is NOT — earn every word.\n\n"
+        "filler/repetition is NOT — earn every word. User scrolls fast "
+        "and wants clarity, not essays.\n\n"
         "STRICT BANS:\n"
         "1. NO emojis. NO bullet lists. NO numbered headers. NO "
         "section labels ('Final:', 'Primary factor:', 'Focus:', "
@@ -667,7 +766,9 @@ def _render_simple_narrative_llm(facts: dict, question: str,
             except Exception:
                 pass
             return _render_simple_narrative_static(facts, question)
-        return text
+        # H2.7.6 — hard word-cap guard (defense-in-depth for prompt
+        # overshoot). Per user directive: 90-120 target, 150 ceiling.
+        return _enforce_word_cap(text, max_words=150)
     except Exception:
         return _render_simple_narrative_static(facts, question)
 
@@ -1276,7 +1377,9 @@ def _llm_narrative(facts: dict, route: str, question: str,
         text = (resp.choices[0].message.content or "").strip()
         if not text:
             return _direct_vitality_check(facts, question=question)
-        return text
+        # H2.7.6 — hard word-cap guard (route-format paths usually short
+        # already, but guard in case a route emits free prose).
+        return _enforce_word_cap(text, max_words=150)
     except Exception as e:
         print(f"[health_static.llm] narrative call failed: {e}", flush=True)
         return _direct_vitality_check(facts, question=question)
@@ -1475,7 +1578,9 @@ def handle_health_question(question: str, kundli: dict,
     # health-kundli pack (planets+lords+karakas+KP chains+dasha) and
     # cherry-picks per question — answers are richer and may include
     # planet/house attribution. Old v5 entries are summary-only.
-    _ns = f"health_static_v6_{_OUTPUT_STYLE}"
+    # H2.7.6: bumped v6 → v7 to invalidate all pre-cap entries
+    # (90-120 word target, 150 hard cap + 4-beat structure).
+    _ns = f"health_static_v7_{_OUTPUT_STYLE}"
     cache_key = make_cache_key(birth, kundli, _ns, route,
                                 question=_q_for_key)
     cached = get_cached(cache_key)

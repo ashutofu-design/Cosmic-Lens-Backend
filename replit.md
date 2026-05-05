@@ -549,6 +549,51 @@ User chose **Path B+ (full data, LLM-driven cherry-pick)** over Path A (engine r
 - Validator split (MEDIUM).
 - E2E test matrix covering both `/api/ask` and `/api/ask/stream` (medium).
 
+## Phase H2.7.6 — TIGHTENED LENGTH CAP + 4-BEAT STRUCTURE (2026-05-05)
+
+**User directive**: post-H2.7.4 mobile output was 184 words — user explicit feedback: *"80-150 words = best, 100 word target ideal, 180+ = boring + token waste"*. Health-answer length contract tightened.
+
+**4 ADD-ONLY changes (`health_static/health_replies.py`)**:
+
+1. **Prompt tightened (L609-624)**: replaced *"Target 100-160 words. Hard cap 200"* + vague "2-3 paragraphs" with:
+   - *"Target 90-120 words. Hard cap 150 — NEVER exceed."*
+   - Explicit **4-beat structure** (no labels, just flow): (a) 1-2 lines = problem kya hai, (b) 2-3 lines = kyun ho raha hai (planet/house/dignity attribution), (c) 1-2 lines = kya issues ho sakte hain (category-only), (d) 1-2 lines = kya karna hai (ONE practical takeaway).
+   - *"Total 6-9 short lines, 2-3 paragraphs. User scrolls fast and wants clarity, not essays."*
+
+2. **`_enforce_word_cap()` helper added (L541-625, hardened post-architect-review)**: production safety net for prompt overshoot. **2-tier strategy** to honor the strict "hard cap" promise:
+   - **Tier 1** (preferred): truncate at last full-sentence boundary `<= max_words`. Searches `., !, ?, ।` (Hindi danda) at end-of-string OR followed by space/newline. Picks the **latest** match across all terminator patterns to maximize content kept.
+   - **Tier 2** (fallback): if NO clean boundary in budget, HARD-CUT at `max_words` and append `…` to last word. The first H2.7.6 implementation returned over-limit text in this case — architect flagged this as a contract violation ("no clean boundary" path could emit 200w with cap=150). Hardened version GUARANTEES `output_words <= max_words` always.
+   - Logs `health_word_cap_truncation` (tier 1) / `health_word_cap_hard_cut` (tier 2) so we can monitor LLM compliance AND boundary-detection failure rate.
+   - **Unit-tested**: tier 1 (200w→140w clean), tier 2 (200w→150w hard cut), passthrough (50w unchanged), danda (180w→150w ends with `।`).
+
+3. **Cap applied to 3 narrative return paths**:
+   - `_render_simple_narrative_llm` (L735) — H2.6 simple-prose LLM path (this is where 184w overshoot was happening)
+   - `_llm_narrative` (L1346) — route-format LLM path (defense-in-depth in case a route emits free prose)
+   - `_render_simple_narrative_static` (L339) — deterministic prose fallback (uniform contract across LLM + static)
+
+4. **Cache namespace bumped v6 → v7 (L1547)**: necessary because pre-existing cache entries (e.g. 182w cached `vitality_check` output) would bypass the new cap entirely (cache returns text as-is, never re-runs the cap). Bumping namespace forces cold reads → all subsequent answers go through the new cap.
+
+**Verified live (P40, direct engine call to bypass HTTP quota)**:
+- *"meri health kaisi hai overall"* → DIRECT/vitality_check, **149 words** (was 182)
+- *"batao mujshe health issue kya kya ho sakta he mujhse"* → NARRATIVE/disease_risk, **147 words** (was 185)
+- *"mera immunity strong hai ya weak"* → DIRECT/vitality_check, **144 words**
+- *"meri health overall kaisi hai aur kya issues ho sakte hain"* → HYBRID/general_health_overview, **135 words** (clean 4-beat: theme → Lagna+12L Mars+dasha → tendency → moderate close)
+- All within 80-150 user-requested band, all fresh cache (cache_hit=False after v7 bump).
+
+**Architectural pattern reinforced**: contract enforcement is a layered defense — (1) prompt tells LLM the rule (compliance ~80%), (2) hard guard catches overshoot post-LLM (compliance ~99%), (3) cache namespace bump invalidates pre-rule entries so users never see stale long output. Any future contract change (length, format, ban list) MUST follow this 3-step pattern: prompt + post-process guard + cache bump. Skipping the cache bump is the most common mistake — stale entries silently bypass the new contract for hours/days until natural eviction.
+
+**Reversibility**: all 4 changes are pure additions (prompt text, helper function, 3 cap calls, cache version bump). Revert by removing helper + cap calls + reverting prompt + namespace string. No engine/routing/validator logic touched. The cap helper is also opt-in per call — passing `max_words=999` effectively disables it without code changes.
+
+**Pending architect items (carried forward, NOT blocking H2.7.6)**:
+- **Cap not yet applied to all final-emit surfaces** (architect H2.7.6): structured-mode `_force_locked_verdict` appends prose AFTER cap; HYBRID prepends direct text. Default style is "simple" so this is latent. Future fix: cap at the final emitted text (post-validator/post-verdict assembly), not just intermediate narrative.
+- All-green early-return in `_render_simple_narrative_static` skips cap (currently ~50w deterministic, low risk).
+- Singleflight/lock for cache cold-start stampede (perf concern on namespace bump).
+- In-flight stream abort on profile switch (mobile UX, from H2.7.5).
+- Logout/anon transition policy (mobile, from H2.7.5).
+- H3 anti-tamper (HIGH security, from H2.7.4).
+- Hardcoded `gpt-4o-mini` fallback (MEDIUM).
+- E2E test matrix `/api/ask` + `/api/ask/stream` parity.
+
 ## Phase 2.8.82.1 — MODULE RENAME finance_engine → finance_static (2026-05-05)
 
 User-driven naming refactor in anticipation of upcoming **Finance Timing Engine** (separate module, dasha-based, future phase). Old folder name `finance_engine` was ambiguous — could mean the static chart engine OR the umbrella for all money-related logic. Renamed to `finance_static` to make the boundary explicit: this module ONLY handles non-timing chart-based finance Qs (wealth/income/saving/risk/leak/business-vs-job/debt/sudden-wealth/karakas/KP-Vedic conflicts). Timing Qs (kab paisa aayega, exact date) will live in a future `finance_timing` module.

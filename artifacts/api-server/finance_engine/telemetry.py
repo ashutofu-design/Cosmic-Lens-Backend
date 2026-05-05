@@ -27,6 +27,13 @@ from finance_engine.answer_cache import _CACHE_DB
 _LOCK = threading.Lock()
 _INITED = False
 
+# Phase 2.8.77 patch (Option A): non-blocking writes.
+# - WAL mode → readers don't block writers, writers don't block readers
+# - busy_timeout 50 ms → if another writer holds lock >50ms, drop the row
+#   instead of stalling the user request (telemetry is best-effort)
+# - log_event uses connect timeout=0.05s for the same reason
+_WRITE_TIMEOUT_S = 0.05  # 50 ms — drop telemetry row rather than stall reply
+
 
 def _init_db() -> None:
     global _INITED
@@ -36,8 +43,16 @@ def _init_db() -> None:
         if _INITED:
             return
         os.makedirs(os.path.dirname(_CACHE_DB), exist_ok=True)
-        conn = sqlite3.connect(_CACHE_DB)
+        conn = sqlite3.connect(_CACHE_DB, timeout=2.0)
         try:
+            # WAL once per DB file — concurrent reader/writer safe
+            try:
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA busy_timeout=50")
+                conn.execute("PRAGMA synchronous=NORMAL")
+            except Exception as _pe:
+                print(f"[finance_money.telemetry] pragma warn: {_pe}",
+                      flush=True)
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS router_telemetry ("
                 "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -79,12 +94,20 @@ def _hash_q(q: str) -> str:
 
 
 def log_event(event: Dict[str, Any]) -> None:
-    """Insert one telemetry row. Never raises — logging must not break
-    the user-facing reply path."""
+    """Insert one telemetry row. Never raises, never blocks > 50ms.
+
+    On sqlite lock contention (multi-worker writes to same file), the
+    INSERT is silently dropped rather than stalling the user-facing
+    reply path. Telemetry is best-effort by design.
+    """
     try:
         _init_db()
-        conn = sqlite3.connect(_CACHE_DB)
+        conn = sqlite3.connect(_CACHE_DB, timeout=_WRITE_TIMEOUT_S)
         try:
+            try:
+                conn.execute("PRAGMA busy_timeout=50")
+            except Exception:
+                pass
             conn.execute(
                 "INSERT INTO router_telemetry "
                 "(ts, question, q_hash, chart_fp, "
@@ -117,6 +140,12 @@ def log_event(event: Dict[str, Any]) -> None:
             conn.commit()
         finally:
             conn.close()
+    except sqlite3.OperationalError as oe:
+        # 'database is locked' under contention — drop row, don't stall
+        msg = str(oe).lower()
+        if "lock" in msg or "busy" in msg:
+            return  # silent skip, by design
+        print(f"[finance_money.telemetry] op error: {oe}", flush=True)
     except Exception as e:
         print(f"[finance_money.telemetry] log error: {e}", flush=True)
 

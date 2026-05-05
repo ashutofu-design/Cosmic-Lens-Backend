@@ -146,6 +146,90 @@ _SECONDARY_LABEL = {
     "accident_risk":      "Accident-risk slightly elevated",
 }
 
+# Phase H2.5 — TENDENCY / FUTURE-RISK intent detector.
+# When question asks for "kaun-kaun issues / future tendency / risk
+# profile", we append a 4th locked block ('👉 Tendency issues') with
+# category-based (NOT disease-name) issues drawn from each weak/
+# yellow dim. Per-spec: never name diseases, never diagnose.
+_TENDENCY_INTENT_RX = re.compile(
+    r"(kaun[\s-]?kaun|kya[\s-]?kya|kis[\s-]?kis|"
+    r"\btendency\b|\btendencies\b|"
+    r"future\s+(me|mein)?\s*(health|issues?|problems?|risk|bimari|"
+    r"tendency|tendencies)|"
+    r"aage\s+(chal\s+ke|jaake|aane\s+wale)|"
+    r"aane\s+wale\s+(samay|time|saalon)|"
+    r"(probable|possible|likely)\s+(health|issues?|risks?)|"
+    r"health\s+(risk|issue)\s+(profile|areas?|zones?)|"
+    r"chances?\s+of\s+(health|illness|issues?))",
+    re.IGNORECASE,
+)
+
+# Category-only tendency lines per dim (NO disease names per safety
+# spec). Triggered only for RED + YELLOW dims; GREEN dims skipped.
+_TENDENCY_BY_DIM = {
+    "vitality": {
+        "RED": ["fatigue / low-energy aur thakan repeat hone wali "
+                "issues", "stamina-drop, daily kaam me effort zyada "
+                "lagna"],
+        "YELLOW": ["mild low-energy spells, occasional thakan"],
+    },
+    "disease_resistance": {
+        "RED": ["immunity-related frequent minor issues (seasonal "
+                "infections, slow recovery)", "small wound / cold-flu "
+                "category issues ka late healing pattern"],
+        "YELLOW": ["recovery thodi slow, occasional minor "
+                   "infection-prone phase"],
+    },
+    "chronic_risk": {
+        "RED": ["chronic-zone me lifestyle-driven gradual buildup "
+                "(BP / sugar / metabolism category — preventive "
+                "zone)", "long-term wear-and-tear category "
+                "(joints, digestion sensitivity)"],
+        "YELLOW": ["chronic-zone me mild signal — periodic basic "
+                   "checkup useful, lifestyle preventive zone"],
+    },
+    "mental_health": {
+        "RED": ["stress-related discomfort (neend disturbance, sir "
+                "bhaari, mood dips)", "overthinking aur mental "
+                "fatigue ka tendency"],
+        "YELLOW": ["mild stress / mood-fluctuation phase, mental "
+                   "rest important"],
+    },
+    "accident_risk": {
+        "RED": ["accident-zone par caution (jaldbaazi, sharp "
+                "objects, driving me dhyan)", "physical mishap / "
+                "sports-injury category awareness"],
+        "YELLOW": ["accident-zone par mild caution — jaldbaazi "
+                   "avoid, daily mindfulness"],
+    },
+}
+
+
+def _build_tendency_block(facts: dict) -> str:
+    """4th locked block per Phase H2.5 spec. Lists category-based
+    tendencies for every RED + YELLOW dim. GREEN dims skipped.
+    Returns '' if no weak/yellow dim present (all-GREEN chart)."""
+    dims = facts.get("dimensions") or {}
+    lines = ["👉 Tendency issues:"]
+    any_added = False
+    # Order: vitality → disease_resistance → mental_health →
+    # chronic_risk → accident_risk (body first, then mind, then risk)
+    order = ["vitality", "disease_resistance", "mental_health",
+             "chronic_risk", "accident_risk"]
+    for k in order:
+        d = dims.get(k) or {}
+        v = d.get("verdict")
+        if v not in ("RED", "YELLOW"):
+            continue
+        bucket = _TENDENCY_BY_DIM.get(k, {}).get(v) or []
+        for item in bucket:
+            lines.append(f"- {item}")
+            any_added = True
+    if not any_added:
+        return ""
+    return "\n".join(lines)
+
+
 # One-line action by Primary dim (Focus block).
 _FOCUS_BY_PRIMARY = {
     "vitality":           ("Sleep, hydration aur protein-rich diet pe "
@@ -482,29 +566,47 @@ def _force_locked_verdict(text: str, facts: dict, question: str) -> str:
     if not block:
         return text
 
+    # Phase H2.5: append Tendency-issues block when intent matches.
+    tendency_block = ""
+    if question and _TENDENCY_INTENT_RX.search(question):
+        tendency_block = _build_tendency_block(facts)
+
     # Strip ALL existing 'Final:' lines (case-insensitive) AND any
-    # existing locked verdict block (idempotency on re-runs / cache).
+    # existing locked verdict block AND any existing Tendency block
+    # (idempotency on re-runs / cache rehydration).
     lines = text.splitlines()
-    cleaned, in_block = [], False
+    cleaned, in_v_block, in_t_block = [], False, False
     for ln in lines:
         stripped = ln.lstrip()
         low = stripped.lower()
         if stripped.startswith("🎯 Final Verdict"):
-            in_block = True
+            in_v_block = True
             continue
-        if in_block:
+        if stripped.startswith("👉 Tendency issues"):
+            in_t_block = True
+            continue
+        if in_v_block:
             if (low.startswith("primary factor")
                     or low.startswith("secondary factor")
                     or low.startswith("focus:")):
                 continue
             if stripped == "":
                 continue
-            in_block = False
+            in_v_block = False
+        if in_t_block:
+            if stripped.startswith("- ") or stripped.startswith("•"):
+                continue
+            if stripped == "":
+                continue
+            in_t_block = False
         if low.startswith("final:"):
             continue
         cleaned.append(ln)
 
-    return "\n".join(cleaned).rstrip() + "\n\n" + block
+    out = "\n".join(cleaned).rstrip() + "\n\n" + block
+    if tendency_block:
+        out += "\n\n" + tendency_block
+    return out
 
 
 # ── NARRATIVE: build engine fact pack for LLM (lean) ────────────────
@@ -888,13 +990,18 @@ def handle_health_question(question: str, kundli: dict,
     # detection + behaviour-keyword Secondary slot), so two NARRATIVE Qs on
     # the same route can produce different verdicts. Cache MUST not collapse
     # them. (Pre-H2.4 only HYBRID included the question.)
-    _q_for_key = question if mode in ("HYBRID", "NARRATIVE") else None
+    # Phase H2.5: include question in cache key for ALL modes (DIRECT
+    # added). Tendency-intent detection + comparative-pair detection +
+    # behaviour-keyword Secondary slot ALL depend on question. Even
+    # DIRECT mode now produces question-aware output via the locked
+    # verdict + tendency blocks. Cache must not collapse different Qs.
+    _q_for_key = question
     # Cache namespace bumped to v2 in Phase H2.2.2 — invalidates stale
     # entries written before the doctor-mention/tone-guard cleanup
     # (H2.1 + H2.2 + H2.2.1) so legacy "professional support" / "doctor
     # consult" text cannot resurface from cache. Bump again on any
     # future policy change to the static engine output.
-    cache_key = make_cache_key(birth, kundli, "health_static_v3", route,
+    cache_key = make_cache_key(birth, kundli, "health_static_v4", route,
                                 question=_q_for_key)
     cached = get_cached(cache_key)
     if cached:

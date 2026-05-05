@@ -87,6 +87,20 @@ _DIRECT_PATTERNS = [
      r"health\s+(verdict|analysis|status|picture|report)|"
      r"overall\s+health|sehat\s+kaisi)",
      "vitality_check"),
+    # Phase H2.5 — broad TENDENCY / FUTURE-RISK overview Qs.
+    # User intent: "kaun-kaun se issues" / "future me kya tendencies"
+    # / "aage chal ke kya risk" → wants multi-dim picture, NOT a
+    # narrow disease_risk close-up. Route to vitality_check (full
+    # 5-dim Truth block) so Tendency-issues block has all dims to
+    # draw from.
+    (r"(kaun[\s-]?kaun\s+(se|si)?\s*(health|swasthya|sehat|bimari|issues?|problems?|tendency|tendencies)|"
+     r"(future|aage|aane\s+wale|aage\s+chal\s+ke)\s+.{0,40}(health|swasthya|sehat|issues?|problems?|tendency|tendencies|risk|bimari)|"
+     r"health\s+tendenc(y|ies)|tendency\s+of\s+(health|illness|issues?)|"
+     r"kya[\s-]?kya\s+(health|issues?|problems?|bimari|tendency|tendencies)|"
+     r"kis[\s-]?kis\s+(health|bimari|issues?)|"
+     r"(probable|possible|likely)\s+health\s+(issues?|problems?|risks?)|"
+     r"health\s+risk\s+(profile|areas?|zones?))",
+     "vitality_check"),
     # Yoga audit (Arishta / Balarishta / Vipreet recovery)
     (r"(health\s+yog|arishta|balarishta|"
      r"vipreet\s+(recovery|health)|"

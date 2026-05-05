@@ -335,6 +335,37 @@ User-driven generalisation of H2.3.1: the deterministic-Final principle was only
 
 **System state after H2.4**: every health answer ships with the locked 3-block universal structure. Truth from engine, Samajh from LLM (or static), Verdict fully engine-controlled. The LLM is now strictly a **Samajh-writer** with zero verdict authority — matches the long-standing principle "Engine = decision-giver, LLM = translator, Validator = guard." Architect-recommended pattern: "**Locked structure across all answers > clever per-question LLM verdicts**" (consistency wins over intelligence).
 
+## Phase H2.5 — TENDENCY-ISSUES BLOCK + ROUTING FIX FOR FUTURE-RISK Qs (2026-05-05)
+
+User-driven gap caught by E2E ("Mujhe future me kaun-kaun se health issues ka tendency ho sakta hai?" on P40): H2.4 produced a structurally-locked answer but **answered the wrong question**. Engine routed broad multi-dim "tendency / kaun-kaun" Qs to `disease_risk` (single-dim recovery close-up) instead of the full 5-dim picture, AND the locked 3-block structure had no slot for the user's literal ask ("kya kya issues ho sakte hain"). Two-part fix per user-attached spec ("MANDATORY ANSWER STRUCTURE — 4 blocks").
+
+**Part 1 — Routing fix (`health_routing.py` L93-106)**: added new `_DIRECT_PATTERNS` entry mapping tendency/future-risk language to `vitality_check` route (full 5-dim picture). Pattern covers Hinglish + English variants:
+- `kaun-kaun se issues / problems / tendency / bimari`
+- `future me / aage chal ke health issues / risk / tendency`
+- `kya-kya health issues / problems`
+- `kis-kis health / bimari / issues`
+- `health tendency/tendencies` / `tendency of health/illness/issues`
+- `probable / possible / likely health issues / risks`
+- `health risk profile / areas / zones`
+
+Pattern ordered AFTER the original `vitality_check` regex but BEFORE `yoga_check` so explicit "vitality / overall health" still wins; tendency-language gets the same broad route. 7/7 sanity Qs now hit DIRECT/vitality_check.
+
+**Part 2 — 4th locked block `👉 Tendency issues` (`health_replies.py` L152-225)**:
+- New `_TENDENCY_INTENT_RX` (L157-168): detects "kaun-kaun / kya-kya / kis-kis / tendency / future health / aage chal ke / aane wale samay / probable health / health risk profile / chances of health" — 9-pattern union
+- New `_TENDENCY_BY_DIM` (L172-208): 5-dim × {RED, YELLOW} → category-only issue list. NO disease names per spec (e.g. vitality/RED → "fatigue / low-energy aur thakan repeat hone wali issues" + "stamina-drop"; chronic_risk/RED → "lifestyle-driven gradual buildup (BP / sugar / metabolism category — preventive zone)" + "long-term wear-and-tear category (joints, digestion sensitivity)"). RED dims get 2 lines, YELLOW dims get 1 line. GREEN dims skipped.
+- New `_build_tendency_block` (L211-228): orders dims body→mind→risk (vitality, disease_resistance, mental_health, chronic_risk, accident_risk), emits "👉 Tendency issues:" header + bullet list. Returns `""` for all-GREEN charts (graceful no-op).
+- `_force_locked_verdict` extended (L572-575, 588-590, 599-604, 609-612): when intent matches, builds tendency block AFTER verdict block. Idempotency-stripping logic extended to cover the new block (`👉 Tendency issues` header + bullet lines `- ` / `•`). Re-runs return identical output.
+
+**Part 3 — Cache key universal question inclusion (L1001)**: H2.4 included question in cache key for HYBRID + NARRATIVE; H2.5 extends to DIRECT too. Reason: tendency-block detection + comparative-pair detection + behaviour-keyword Secondary slot are ALL question-aware, so even DIRECT mode now produces question-dependent output. Without question in DIRECT key, the first tendency-Q result would get served to any subsequent DIRECT Q on the same chart+route. **Cache namespace bumped `v3 → v4`** to invalidate any pre-H2.5 entries.
+
+**Verification (P40, fresh cache, 2026-05-05)**:
+- **Routing sanity**: 7/7 tendency variants → `DIRECT/vitality_check` (full 5-dim Truth block) — matches user intent "kaun-kaun" (multi-dim) instead of pre-H2.5 narrow `disease_risk`
+- **E2E P40 user Q**: 4-block structure delivered — Truth (5 dims with verdicts) + Yoga note + Final Verdict (locked 3-line) + Tendency issues (8 bullets across vitality/recovery/mental RED + chronic/accident YELLOW). Zero disease names, zero referral leaks, category-only language throughout
+- **Regression**: 3/3 non-tendency Qs ("meri health kaisi hai overall", "stress aur neend kharab hai", comparative "body weak hai ya mental issue zyada") correctly do NOT get tendency block (intent regex didn't fire) — verdict block still present, structure intact
+- **Idempotency**: cache-hit re-run returns byte-identical text; exactly 1 verdict block + 1 tendency block (no duplication)
+
+**Architectural pattern reinforced**: "engine routing must match user's literal ask" — H2.5 is the same lesson as H2.3 (deterministic Final for comparative) and H2.4 (locked structure for all): when the user phrases a question with **plural/multi-dimensional intent** ("kaun-kaun" / "kya-kya"), the engine must **broaden the route** AND **expand the answer shape**, not collapse to a narrow single-dim template. ADD-ONLY discipline maintained — zero rule changes to existing scoring/dimensions, only new routing pattern + new locked block + cache-key generalisation.
+
 ## Phase 2.8.82.1 — MODULE RENAME finance_engine → finance_static (2026-05-05)
 
 User-driven naming refactor in anticipation of upcoming **Finance Timing Engine** (separate module, dasha-based, future phase). Old folder name `finance_engine` was ambiguous — could mean the static chart engine OR the umbrella for all money-related logic. Renamed to `finance_static` to make the boundary explicit: this module ONLY handles non-timing chart-based finance Qs (wealth/income/saving/risk/leak/business-vs-job/debt/sudden-wealth/karakas/KP-Vedic conflicts). Timing Qs (kab paisa aayega, exact date) will live in a future `finance_timing` module.

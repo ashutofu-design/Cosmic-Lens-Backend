@@ -1764,3 +1764,74 @@ User accepted this as acceptable risk for current Q types; safety inheritance is
 - Tune keyword dictionary based on real user Qs (telemetry me dekh ke kya keywords miss ho rahe)
 - Optional next: in-memory pack cache (Layer A from caching discussion) for 27-Q session optimization
 - Optional next: OpenAI prompt-cache hit telemetry (`usage.prompt_tokens_details.cached_tokens`)
+
+---
+
+## H2.7.11 — LEAN PACK REMOVED + topic_specific_packs scaffold (2026-05-05)
+
+**Decision**: H2.7.10 LEAN PACK fully reverted. Reason — user objection: "lean
+pack still ships all 12 house lords + all 9 planets even for health Q. Better
+to identify topic and send only relevant houses/planets per topic."
+
+### Removed
+- `kundli_full_context.py`: `build_lean_chart_context()`, `_lean_select_tiers()`,
+  `_lean_tier_summary()`, all 8 `_LEAN_KW_*` regex constants (~240 lines)
+- `openai_helper.py` sync L13624-13662: lean killswitch block → reverted to
+  direct `build_full_chart_context()` call
+- `openai_helper.py` stream L17166-17204: same revert
+- `__all__` export of lean symbols
+- `LEAN_PACK_MODE=1` env var: now a no-op (safe to leave in env)
+
+### Added — `artifacts/api-server/topic_specific_packs.py` (~470 lines, DORMANT)
+Scaffold for topic-specific ULTRA-LEAN packs. Per-topic config table dictates
+exactly which houses + planets + lagna lord + dasha + D9 + extras get emitted.
+
+**6 topic builders** (all return "" until config filled by user):
+- `build_health_pack`     — for "mera health", "kya bimari hai"
+- `build_marriage_pack`   — for "shaadi kab", "spouse kaisa"
+- `build_career_pack`     — for "naukri", "promotion", "business"
+- `build_finance_pack`    — for "paisa", "wealth", "11H gains"
+- `build_children_pack`   — for "santaan", "baby", "putra"
+- `build_general_pack`    — fallback bucket
+
+**Dispatcher**: `build_topic_specific_pack(topic_id, kundli, intel, birth, question)`
+- 10 topic aliases recognized (health/marriage/love/career/finance/wealth/money/
+  children/child/general)
+- Returns "" on unknown topic OR empty config — caller MUST fall back to
+  `build_full_chart_context()`
+- Defensive — never raises
+
+**Config dict slots per topic**: houses[], planets[], include_lagna_lord,
+include_current_dasha, include_d9, extras[] (sade_sati / mangal_dosh /
+kaal_sarp / upapada_lagna / dhan_yog / vivah_saham / d2_hora / d7_saptamsa /
+d10_dasamsa / amatyakaraka / kuber_yog).
+
+**Reused primitives** (single source of truth, no drift): `_planet_lookup`,
+`_dignity_lookup`, `_lordship_lookup`, `_aspects_lookup`, `_sign_idx`,
+`_sign_name`, `_fmt_deg`, `_naks_pada_lord`, `_functional_nature` from
+`kundli_full_context.py`.
+
+### Status
+- **NOT WIRED** to openai_helper.py (per user directive: "automatic kuch
+  mat bhejna" — user will dictate each topic's config first)
+- Default runtime behavior: full chart pack (~9,852 chars) — pre-H2.7.10
+  byte-identical baseline
+- API server restart verified green (HTTP 200 on /api/healthz)
+
+### Architecture decision (per user)
+Final target = **rock-solid topic classifier → ONE topic-specific pack call**
+(no waterfall, no double-call). Lean pack waterfall rejected as token-wasteful.
+Classifier upgrade (Layer 1 strict regex → Layer 2 fuzzy → Layer 3 LLM mini)
+deferred until per-topic configs are filled and test-ready.
+
+### Next step (BLOCKED on user input)
+User to dictate, per topic:
+1. Houses: which house lords MUST be emitted (e.g. health → 1, 6, 8, 12)
+2. Planets: which planets MUST be detailed (e.g. health → Sun, Moon, Mars, Saturn)
+3. Lagna lord: yes/no
+4. Current dasha: yes/no
+5. D9: yes/no
+6. Extras: sade_sati / mangal_dosh / etc.
+
+Once configs filled, wire-up happens at same passthrough sites under flag
+`TOPIC_SPECIFIC_MODE=1` (ADD-ONLY pattern, killswitch).

@@ -490,6 +490,29 @@ User chose **Path B+ (full data, LLM-driven cherry-pick)** over Path A (engine r
 
 **Architectural pattern reinforced**: "soft prompt rule + hard deterministic guard". Prompt asks LLM to behave; guard enforces engine-truth alignment as a fail-closed gate. The fallback is the same `_render_simple_narrative_static` H2.6 used — no new fallback code path. Only the **trigger** for fallback is new (semantic contradiction). ADD-ONLY discipline maintained. The fact-pack and validator architectures from H2.7/H2.7.1 are unchanged.
 
+## Phase H2.7.4 — STREAM ROUTE GATE (CRITICAL ARCHITECTURAL FIX, 2026-05-05)
+
+**Bug discovered via mobile production output.** User pasted live mobile response that contained 🔭 emoji, Hindi planet names (Mangal/Chandra/Shani), invented date "August 2026 tak", and ~280 words — **ALL forbidden by the H2.6/H2.7 prompt contract**. Static engine should never emit any of these.
+
+**Root cause**: `flask_app.py` `/api/ask` route had the 3-engine static gate (health_static → finance_static → stock_engine) at L5916-6009. **`/api/ask/stream` route did NOT.** Mobile uses the streaming endpoint exclusively (SSE for real-time text chunks). Every health Q from mobile bypassed the entire H2 pipeline (H2/H2.5/H2.6/H2.7/H2.7.1/H2.7.2/H2.7.3 — none active for mobile users) and went directly to the legacy 15294-char OpenAI prompt with planet-name templates and invented dasha dates.
+
+**Why it was missed**: When H2 was first hooked into `/api/ask`, the streaming route was assumed to share the same gate. It did not. All my H2.7.x test runs used direct `handle_health_question()` invocation — they validated the engine, not the route plumbing. Web `/api/ask` users got correct output; mobile (the actual production traffic) silently got legacy LLM output for ~7 phase iterations. **Architectural negligence.**
+
+**Fix (`flask_app.py` L6307-6402, +95 lines, ADD-ONLY)**: Mirrored the exact 3-engine pipeline from `/api/ask` into `/api/ask/stream`, inserted right after auth/quota and before the OpenAI streaming probe. Static engines return JSON (~200 words / ~1.5KB) instead of SSE chunks — mobile already handles JSON returns via the existing no-OpenAI fallback at `/api/ask/stream` L6307-6317, so no client change needed. Streaming pipeline below the gates is untouched.
+
+**Verification (P40, /api/ask/stream live POST, 2026-05-05)**:
+- Same exact question that produced bad output: *"batao mujshe health issue kya kya ho sakta he mujhse"*
+- Response: `source=health_static[non_timing]:NARRATIVE/disease_risk`, 185 words
+- Output starts: *"Chart me main theme yeh hai ki body energy, recovery aur mental side par extra dhyan chahiye. Iska base clear hai: Lagna ka lord Jupiter 10th me Virgo me enemy dignity me hai..."*
+- ✅ Zero emoji, zero Hindi planet names, real engine attribution (Jupiter Lagna lord, Mars 8th debilitated, KP chains, Moon-Mars-Mercury dasha — all from facts pack)
+- ✅ Within 200-word cap
+- ✅ Telemetry shows `health_static[non_timing]` source
+
+**Architectural lesson — must add to future-work checklist**:
+- Any new gate/engine added to `/api/ask` MUST simultaneously be added to `/api/ask/stream`. The two routes share auth/quota/contract but have independent pipelines.
+- E2E validation MUST exercise the actual route (HTTP POST), not just the engine function. Engine-only tests cannot detect route plumbing bugs.
+- Other potentially affected routes (not yet audited): `/api/ask/prashna` (L6508), `/api/health-analysis` (L3397). Should be checked in next sweep.
+
 **Architectural pattern reinforced**: "Structure backend me rakho, output user-pe natural rakho" — same engine, same truth, same safety, same locked verdict computed internally. Only the **rendering layer** is now narrative-first. The LLM is once again the **translator** (H2.4 named principle); H2.4/H2.5's mistake was making the LLM also the layout-engine. H2.6 returns layout to a clean human voice and keeps engine truth as the silent source.
 
 **Reversibility**: zero engine/routing/validator/cache logic was deleted. The H2.5 4-block path is alive at `HEALTH_OUTPUT_STYLE=structured` — toggle the env var to revert instantly with no code change.

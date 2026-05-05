@@ -6301,6 +6301,100 @@ def ask_stream_route():
     quota_payload = {"used": quota["used"], "limit": quota["limit"]}
     plan_payload  = effective_plan(user) if user else "free"
 
+    # ── H2.7.4 — STATIC ENGINE GATES on /api/ask/stream ───────────────────
+    # Mirror of the 3-engine pipeline at /api/ask (L5916-6009). Without
+    # this block, mobile (which uses the streaming route) bypassed the
+    # entire health_static / finance_static / stock_engine pipeline and
+    # all health Qs went to the legacy 15294-char OpenAI prompt — that
+    # produced emoji + Hindi planet names + invented dates. Static
+    # engines return ~200-word JSON; mobile already handles JSON returns
+    # via the no-OpenAI fallback below, so no SSE chunking is needed
+    # for static text.  ADD-ONLY: streaming path below is untouched.
+    try:
+        from health_static import handle_health_question as _hs_handle
+        _hs = _hs_handle(question, kundli or {}, birth)
+    except Exception as _hs_exc:
+        print(f"[ask/stream] health_static hookup error (non-fatal): "
+              f"{_hs_exc}", flush=True)
+        _hs = None
+    if _hs and _hs.get("text"):
+        out = {
+            "text":       _hs["text"],
+            "topic":      "non_timing_health",
+            "confidence": 1.0,
+            "source":     (f"health_static[{_hs.get('scope','non_timing')}]:"
+                           f"{_hs.get('mode','')}/{_hs.get('route','')}"),
+            "scope":      _hs.get("scope", "non_timing"),
+            "follow_ups": [],
+            "quota":      quota_payload,
+            "plan":       plan_payload,
+            "meta":       {
+                "dimensions":       _hs.get("dimensions"),
+                "cache_hit":        _hs.get("cache_hit", False),
+                "mode":             _hs.get("mode"),
+                "route":            _hs.get("route"),
+                "sensitive_bucket": _hs.get("sensitive_bucket"),
+            },
+        }
+        _log_question_history(user, question, out)
+        return jsonify(out)
+
+    try:
+        from finance_static import handle_finance_money_question as _fm_handle
+        _fm = _fm_handle(question, kundli or {}, birth)
+    except Exception as _fm_exc:
+        print(f"[ask/stream] finance_money hookup error (non-fatal): "
+              f"{_fm_exc}", flush=True)
+        _fm = None
+    if _fm and _fm.get("text"):
+        out = {
+            "text":       _fm["text"],
+            "topic":      "non_timing_finance",
+            "confidence": 1.0,
+            "source":     (f"non_timing_finance[{_fm.get('scope','non_timing')}]:"
+                           f"{_fm.get('mode','')}/{_fm.get('route','')}"),
+            "scope":      _fm.get("scope", "non_timing"),
+            "follow_ups": [],
+            "quota":      quota_payload,
+            "plan":       plan_payload,
+            "meta":       {
+                "dimensions": _fm.get("dimensions"),
+                "cache_hit":  _fm.get("cache_hit", False),
+                "mode":       _fm.get("mode"),
+                "route":      _fm.get("route"),
+            },
+        }
+        _log_question_history(user, question, out)
+        return jsonify(out)
+
+    try:
+        from stock_engine import handle_finance_question as _fin_handle
+        _fin = _fin_handle(question, kundli or {}, birth)
+    except Exception as _fin_exc:
+        print(f"[ask/stream] finance hookup error (non-fatal): "
+              f"{_fin_exc}", flush=True)
+        _fin = None
+    if _fin and _fin.get("text"):
+        out = {
+            "text":       _fin["text"],
+            "topic":      "stock_finance",
+            "confidence": 1.0,
+            "source":     (f"stock_engine[{_fin.get('scope','non_timing')}]:"
+                           f"{_fin.get('mode','')}/{_fin.get('route','')}"),
+            "scope":      _fin.get("scope", "non_timing"),
+            "follow_ups": [],
+            "quota":      quota_payload,
+            "plan":       plan_payload,
+            "meta":       {
+                "verdict":   _fin.get("verdict"),
+                "cache_hit": _fin.get("cache_hit", False),
+                "mode":      _fin.get("mode"),
+                "route":     _fin.get("route"),
+            },
+        }
+        _log_question_history(user, question, out)
+        return jsonify(out)
+
     # ── No OpenAI → degrade gracefully to rule-engine JSON (no streaming). ──
     if not openai_available():
         try:

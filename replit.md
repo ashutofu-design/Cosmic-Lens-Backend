@@ -2141,3 +2141,52 @@ later (3-line change).
 - `openai_helper.py` — split into `_detect_topic` (safe) + `detect_topic_or_clarify` (wrapper) [+25 lines]
 - `flask_app.py` — uses new wrapper [-1/+1 line]
 
+
+### H2.7.15 — Health Static Pack v2 (ADD-ONLY enrichment)
+
+**User decisions before build:**
+- Static pack ke saath TIMING pack alag hoga (2-section architecture)
+- KP layer hatao static se → sirf TIMING me jayega
+- Ashtakavarga bhi hatao static se → sirf TIMING me
+- Insights derivation = RULE-BASED (deterministic, free, brand-safe), NOT LLM
+
+**Built:** `health_static/health_static_pack_v2.py` (~370 lines, ADD-ONLY).
+
+Wraps existing `compute_health_facts()` (purana production code untouched)
+and ENRICHES the pack with 6 new fields + 33 rule-based insights.
+
+**Pipeline:**
+1. Call `compute_health_facts()` → 5 dims + yogas + KP + meta
+2. `_strip_kp_and_av_from_pack()` → remove KP block, reset KP-set confidence flags
+3. Add `house_occupants` (6/8/12 planets)
+4. Add `body_parts_vulnerable` (sign-based BPHS mapping)
+5. Add `d9_health` (Navamsa lagna + 6L state)
+6. Add `moon_nakshatra` (mental temperament tag)
+7. Add `primary_concerns` (laser focus: top-3 worst dims)
+8. Add `insights` (33 rules, capped at 6)
+
+**33 Insight Rules (5 buckets):**
+- Bucket 1 (10) — Dimension combinations (vit+chronic, mental+yog, etc.)
+- Bucket 2 (8)  — Driver/planet signatures (Saturn-1/6/8, Mars-6, Rahu-6/8/12, etc.)
+- Bucket 3 (6)  — Body-part / 6th-house element-sign mapping
+- Bucket 4 (4)  — Moon nakshatra temperament
+- Bucket 5 (5)  — Cross-signal multi-condition
+
+**Killswitch:** env `HEALTH_STATIC_V2=0` → returns base pack untouched.
+
+**Verified on real kundli (P40 Rajalaxmi-style):**
+- KP stripped ✅
+- 6 enrichment fields populated ✅
+- D9 Navamsa health correctly computed ✅
+- Moon Ardra → "anxiety-prone" temperament tagged ✅
+- Primary concern correctly identified as "vitality" (RED/HIGH) ✅
+- 6 contextual insights derived from 33 rules ✅
+- Killswitch returns to v1 base pack ✅
+
+**Files:**
+- `health_static/health_static_pack_v2.py` (NEW, 370 lines)
+- `health_static/__init__.py` (+2 lines, expose new function)
+
+**Not yet wired** to `health_replies.py` / `health_routing.py` — that's
+next step (replies layer can opt-in to v2 pack for richer LLM grounding).
+

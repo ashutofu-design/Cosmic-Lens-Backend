@@ -54,3 +54,5 @@ from health_static.health_facts import compute_health_facts  # noqa: F401, E402
 from health_static.kp_health_csl import compute_kp_health_csl  # noqa: F401, E402
 from health_static.health_replies import handle_health_question  # noqa: F401, E402
 from health_static.health_routing import is_health_question  # noqa: F401, E402
+# Phase H2.7.15: enriched static pack v2 (no KP, no AV, +6 fields, +33 insight rules)
+from health_static.health_static_pack_v2 import compute_health_static_pack_v2  # noqa: F401, E402

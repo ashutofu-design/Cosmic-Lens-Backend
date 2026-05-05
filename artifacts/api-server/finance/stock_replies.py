@@ -234,11 +234,21 @@ _DIRECT_FORMATTERS = {
 # ── NARRATIVE: build engine fact pack for LLM (lean) ────────────────
 def _build_llm_fact_block(facts: dict, route: str) -> str:
     """Compact facts block for LLM. <500 tokens."""
+    # P7: Split verdicts shown FIRST + in plain words, composite hidden.
+    # Engine codes (RED_AVOID etc) intentionally not exposed — user-flagged
+    # leak source.
+    _path_word = {"GREEN": "favourable", "YELLOW": "mixed/cautious",
+                   "RED": "avoid"}
+    vt = facts.get("verdict_trading", "?")
+    vl = facts.get("verdict_longterm", "?")
     lines = [
         "═══════════════════════════════════════════════",
         "🔒 STOCK ENGINE — LOCKED FACTS (do not invent)",
         "═══════════════════════════════════════════════",
-        f"VERDICT: {facts.get('verdict','?')} (score {facts.get('score','?')}/15)",
+        f"TRADING path: {vt} ({_path_word.get(vt,'?')}) — "
+        f"{facts.get('verdict_trading_reason','')}",
+        f"LONG-TERM path: {vl} ({_path_word.get(vl,'?')}) — "
+        f"{facts.get('verdict_longterm_reason','')}",
         f"Sub-flags: {facts.get('sub_flags',{})}",
         "",
     ]
@@ -302,10 +312,18 @@ _NARRATIVE_INSTRUCTIONS = {
         "60-80 words Hinglish. End with 'Final: <one-line>'."
     ),
     "trading_vs_longterm": (
-        "User asking trading vs long-term. Compare Mercury/Mars "
-        "(trading karakas) with Jupiter/Saturn (long-term karakas). "
-        "Recommend the stronger path. 60-80 words Hinglish. "
-        "End with 'Final: <one-line>'."
+        "User asking 'trading karu ya long-term?'. "
+        "REQUIRED FORMAT (exactly):\n"
+        "Line 1: '• Trading: <emoji> <one-phrase verdict>'\n"
+        "Line 2: '• Long-term investing: <emoji> <one-phrase verdict>'\n"
+        "Line 3: blank\n"
+        "Line 4: ONE short sentence (max 20 words) explaining WHY one "
+        "is better than the other — in everyday Hinglish, NO planet "
+        "names, NO house numbers, NO dignity words.\n"
+        "Line 5: 'Final: <one clean Hinglish line that gives the user "
+        "a concrete decision>'.\n"
+        "Emojis: 🟢 GREEN / 🟡 YELLOW / 🔴 RED based on TRADING path "
+        "and LONG-TERM path verdicts above."
     ),
     "risk_capacity": (
         "User asking about risk capacity. Use H5 dignity + Rahu placement "
@@ -381,10 +399,18 @@ def _llm_narrative(facts: dict, route: str, question: str) -> str:
         "RULES:\n"
         "1. Use ONLY the LOCKED FACTS below. Never invent planets, "
         "houses, dignities, or yogas not listed.\n"
-        "2. Reply in Hinglish.\n"
-        "3. 60-80 words MAX. Final line MUST start with 'Final: '.\n"
+        "2. Reply in Hinglish, friendly and direct.\n"
+        "3. End with a line starting 'Final: '.\n"
         "4. No 'Beta', 'Pranam', 'I sense', 'I understand'.\n"
-        "5. Quote engine verdict + 2-3 specific facts.\n\n"
+        "5. NEVER write engine codes like 'RED_AVOID', 'YELLOW_WAIT', "
+        "'GREEN_GO', 'verdict', 'score X/15', 'sub_flags', or any "
+        "internal label. User-facing language only.\n"
+        "6. NEVER mention specific planets, houses, signs, dignities "
+        "(Saturn, Mars, Mercury, H2, Capricorn, debilitated, retro, "
+        "Jupiter etc.) UNLESS the user explicitly asked WHY / "
+        "technical detail / planet name in their question. Default "
+        "= keep it human.\n"
+        "7. Follow the per-route format EXACTLY.\n\n"
         f"{fact_block}\n\n"
         f"INSTRUCTION: {instruction}"
     )

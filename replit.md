@@ -1621,3 +1621,43 @@ Compilation cached on `_detect_topic.<attr>` to avoid recompile per call. Local 
 Trace confirmed: `PASSTHROUGH.MESSAGES_BUILT topic_lock: null, lock_chars: 0`.
 
 **Architect lesson reinforced**: When prompt-level rules and code-level injections conflict, fix the CODE-LEVEL injection — prompts cannot beat user-message-prepended overrides regardless of "supreme" wording. The 3-step contract (prompt + post-process + cache) extends to 4-step when injection-routing is involved: **+ injection-gate audit**.
+
+---
+
+## H2.7.8 — Finance Static Bypass Killswitch (2026-05-05)
+
+**Trigger**: User wanted finance/money Qs to route to Path B+ (full kundli pack to LLM) instead of the static template reply, but without breaking existing safety/compliance code or losing rollback ability. Health_static and stock_engine intentionally left untouched (regulatory disclaimer surfaces preserved).
+
+**ADD-ONLY edits** (`artifacts/api-server/flask_app.py`):
+- L5964-5985 (sync `/api/ask`): added `_fm_bypass` env-flag read with try/except identity-fallback (defaults False), then `_fm = None if _fm_bypass else _fm_handle(...)`. When bypass fires, prints trace line so we can audit in logs.
+- L6371-6390 (stream `/api/ask/stream`): mirror of sync gate.
+- Existing `if _fm and _fm.get("text"):` early-return blocks downstream UNTOUCHED.
+- Health_static gates (L5922-5953 sync, L6336-6364 stream) UNTOUCHED.
+- Stock_engine gates UNTOUCHED.
+
+**Env flag**: `FINANCE_STATIC_BYPASS=1` set in Replit Secrets (shared env). Default absent or "0" → existing static behaviour 100% intact (rollback-safe).
+
+**Live test verified** (P40 birth, Q "mera paisa aur income kaisa rahega"):
+
+| Metric | Pre-H2.7.8 (static) | H2.7.8 ON (Path B+) |
+|---|---|---|
+| `source` | `non_timing_finance[...]` | **`ai_passthrough`** |
+| `engine_tag` | (n/a static) | **`ans-cosmo`** |
+| Trace event | static gate hit | **`PASSTHROUGH.MESSAGES_BUILT`** fired |
+| System prompt size | (template) | **17098 chars (full kundli pack)** |
+| Topic-lock chars | (n/a) | **1655 (wealth)** |
+| Output | ~200w generic template | **142w focused, planet-anchored** |
+
+Sample output references actual placements: "Moon aapke dhan side ko support karta hai aur Mars 5th ke through initiative... activate kar raha hai" — confirms full kundli (Lagna+Rashi+Navamsha+Vimshottari+aspects+yogas+SAV) reaches LLM.
+
+**Architect review**: Medium-High concerns flagged + addressed:
+1. Telemetry gap → fixed by adding bypass-fired `print()` trace lines (sync + stream).
+2. Bypass effective only when `_llm_full_chart_mode_enabled()` and `has_planets_pt_s` are both True (openai_helper L17117-17118). Both are default-True for any request with a kundli, so functionally safe.
+3. Finance_static internal telemetry/validator/cache won't run when bypass ON — acceptable cost of A/B test.
+
+**Architectural pattern**: ADD-ONLY env-flag killswitch is the cleanest A/B migration tool — zero risk to default path, instant rollback by deleting env var. Use this pattern for any future static→LLM migration (health, stock, etc.).
+
+**Carried forward**: If user satisfied with Path B+ output quality after sustained testing, follow-ups:
+1. Apply same killswitch pattern to `health_static` (HEALTH_STATIC_BYPASS) — but FIRST inherit mandatory doctor-consult/mental-health/parent-health safety rules into LLM prompt.
+2. Apply to `stock_engine` (STOCK_STATIC_BYPASS) — but FIRST inherit 5 locked compliance warnings.
+3. Eventually delete static modules entirely once Path B+ proves stable.

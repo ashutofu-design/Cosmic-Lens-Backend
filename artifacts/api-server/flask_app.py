@@ -5970,6 +5970,10 @@ def ask_route():
         _fm_bypass = (os.environ.get("FINANCE_STATIC_BYPASS", "0") == "1")
     except Exception:
         _fm_bypass = False
+    if _fm_bypass:
+        print(f"[ask] H2.7.8 FINANCE_STATIC_BYPASS=1 → skip finance_static, "
+              f"flow to Path B+ passthrough (full kundli pack to LLM)",
+              flush=True)
     try:
         from finance_static import handle_finance_money_question as _fm_handle
         _fm = None if _fm_bypass else _fm_handle(question, kundli or {}, birth)
@@ -6370,6 +6374,10 @@ def ask_stream_route():
         _fm_bypass = (os.environ.get("FINANCE_STATIC_BYPASS", "0") == "1")
     except Exception:
         _fm_bypass = False
+    if _fm_bypass:
+        print(f"[ask/stream] H2.7.8 FINANCE_STATIC_BYPASS=1 → skip "
+              f"finance_static, flow to Path B+ passthrough "
+              f"(full kundli pack to LLM)", flush=True)
     try:
         from finance_static import handle_finance_money_question as _fm_handle
         _fm = None if _fm_bypass else _fm_handle(question, kundli or {}, birth)

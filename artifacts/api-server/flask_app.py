@@ -5843,21 +5843,13 @@ def ask_route():
         if not api_key or user.api_key != api_key:
             return jsonify({"error": "Unauthorized"}), 401
 
-        quota = consume_question(user)
-        if not quota["allowed"]:
-            return jsonify({
-                "error":            "daily_limit_reached",
-                "message":          f"Aaj ka {quota['limit']} questions ka limit poora ho gaya. Pro upgrade karein for unlimited.",
-                "quota":            {"used": quota["used"], "limit": quota["limit"]},
-                "plan":             effective_plan(user),
-                "upgrade_required": True,
-            }), 402
-
         # ── Phase 2.10.7 P5 — DB-LOAD ENFORCEMENT (tamper-proof) ─────────
         # User directive: hamesha DB ke primary data se hi compute. Server
         # NEVER trusts client-supplied kundli/birth for authenticated users.
         # Loads from User.kundli.chart_data + primary Profile.birth_data.
         # Affects ALL pipelines (finance, marriage, general) — single guard.
+        # NOTE (P6 fix): runs BEFORE consume_question so users are NOT
+        # charged a daily quota slot when DB-load fails (412/500).
         try:
             import json as _j
             if user.kundli and user.kundli.chart_data:
@@ -5868,6 +5860,8 @@ def ask_route():
                     "message": ("Aapki kundli pehle save karein, "
                                  "fir question puchein."),
                 }), 412  # Precondition Failed
+            # Birth: DB-only. NEVER fall back to client-supplied request body
+            # for authenticated users (tamper-proof guarantee).
             try:
                 _prim = (Profile.query
                           .filter(Profile.user_id == user.id,
@@ -5883,11 +5877,21 @@ def ask_route():
                         "tz": k.tz, "place": k.pob,
                     }
             except Exception as _be:
-                print(f"[ask] birth db-load fallback: {_be}")
-                birth = birth or {}
+                print(f"[ask] birth db-load failed (no client fallback): {_be}")
+                birth = {}  # explicit empty — never trust client payload
         except Exception as _kde:
             print(f"[ask] kundli db-load failed: {_kde}")
             return jsonify({"error": "saved_kundli_corrupted"}), 500
+
+        quota = consume_question(user)
+        if not quota["allowed"]:
+            return jsonify({
+                "error":            "daily_limit_reached",
+                "message":          f"Aaj ka {quota['limit']} questions ka limit poora ho gaya. Pro upgrade karein for unlimited.",
+                "quota":            {"used": quota["used"], "limit": quota["limit"]},
+                "plan":             effective_plan(user),
+                "upgrade_required": True,
+            }), 402
     else:
         # Anonymous fallback — kept for legacy callers (e.g. preview/demo).
         # Phase 2.10.7 P2 fix — previously this branch served unlimited

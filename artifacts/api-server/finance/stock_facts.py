@@ -469,8 +469,21 @@ def compute_stock_facts(kundli: dict) -> Dict[str, Any]:
         if sav.get(11, 0) < 25 and sav.get(11, 0) > 0:
             score -= 1
 
+    # ── J2. KP 5th-CSL weighted factor (Phase 2.10.7 P6) ────────────
+    # Per user directive (Option B): KP rule influences final verdict
+    # as a weighted input alongside Parashar score, not a hard gate.
+    # Weights: GREEN +3, AMBER +1, NEUTRAL 0, RED -4.
+    # Graceful degrade: if KP cusps missing → kp_5th_csl=None → no impact.
+    try:
+        from .kp_5th_csl import compute_kp_5th_csl
+        kp_5th = compute_kp_5th_csl(kundli)
+    except Exception as _kpe:
+        kp_5th = None
+    if kp_5th and isinstance(kp_5th.get("score_weight"), int):
+        score += kp_5th["score_weight"]
+
     # Clamp and verdict
-    score = max(-5, min(12, score))
+    score = max(-9, min(15, score))
     if score >= 8:
         verdict = "GREEN_GO"
     elif score >= 4:
@@ -520,5 +533,6 @@ def compute_stock_facts(kundli: dict) -> Dict[str, Any]:
         "top3_sectors": top3_sectors,
         "score": score,
         "verdict": verdict,
-        "engine_version": "stock_facts_v1.0_deterministic",
+        "kp_5th_csl": kp_5th,  # P6: KP 5th-CSL block (None if cusps absent)
+        "engine_version": "stock_facts_v1.1_kp_5csl",
     }

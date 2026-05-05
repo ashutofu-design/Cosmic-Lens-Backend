@@ -886,3 +886,52 @@ New package: `artifacts/api-server/finance/`
 - Anonymous w/ valid kundli → 200 (demo path works)
 - Fake user_id 99999 → HTTP 404 User not found
 - Anonymous over 3/day → HTTP 402 daily_limit_reached
+
+### Phase 2.10.7 P6 — KP 5th CSL weighted factor (Option B)
+
+**User ask**: "5th CSL ko weighted factor banao, final verdict combined logic se nikalo"
+
+**New module**: `finance/kp_5th_csl.py` (deterministic, ZERO LLM)
+
+**Rule**:
+- 5th cusp's Sub-Lord (CSL) signifies houses via 4-step KP chain:
+  1. CSL planet's house
+  2. Houses owned by CSL planet (sign-lordship)
+  3. CSL's nakshatra-lord's house
+  4. Houses owned by CSL's nakshatra-lord
+- **Verdict**:
+  - GREEN: 2/6/11 hits ≥2 AND no 8/12 → market entry confirmed
+  - AMBER: partial gain OR 5 active → small/disciplined only
+  - RED: 8/12 hits dominant → AVOID stocks
+  - NEUTRAL: no clear signal
+
+**Weighting** (added to stock_facts composite score):
+- GREEN +3, AMBER +1, NEUTRAL 0, RED −4
+- Score range expanded: max(-9, min(15, score))
+- Verdict thresholds unchanged: ≥8 GREEN_GO, ≥4 YELLOW_WAIT, else RED_AVOID
+
+**Graceful degrade**: KP cusps absent → kp_5th_csl=None → zero impact on score.
+
+**Hooked into**:
+- `stock_facts.py` L475+ (score calculation)
+- `stock_facts.py` output dict: new `kp_5th_csl` field
+- `stock_replies.py` _direct_verdict_only: new KP line in reply
+- `engine_version` bumped: stock_facts_v1.1_kp_5csl
+
+**P40 (Rajalaxmi) verified live**:
+- 5th CSL = Venus → signifies [2, 6, 9, 11], gain hits [2,6,11], loss hits []
+- KP verdict: GREEN (+3 weight)
+- Combined Parashar+KP score: 10/12 → GREEN_GO
+
+### Phase 2.10.7 P6 — Code review fixes (post-architect)
+
+Architect flagged 4 critical issues; all fixed:
+
+1. **KP verdict strictness** (`kp_5th_csl.py` L188+): Mixed `{2,8}` now returns RED instead of AMBER. KP rule: ANY loss-house (8/12) signification by 5th CSL = AVOID, regardless of gain houses present.
+2. **Score scale display** (`stock_replies.py` L40 + L213): Updated `/12` → `/15` to match expanded clamp range (-9..15).
+3. **P5 birth tamper-proof** (`flask_app.py` L5882+): On birth DB-load exception, set `birth = {}` explicitly instead of falling back to client request body. NEVER trust client birth for authenticated users.
+4. **Quota fairness** (`flask_app.py` L5849+): Moved DB-load BEFORE `consume_question(user)` so users are NOT charged a daily quota slot when request fails with 412 (no kundli) or 500 (corrupted).
+
+Verified via E2E:
+- P40 still GREEN_GO 10/15 (Venus 5th CSL, signifies [2,6,11], no 8/12).
+- Synthetic Mars-in-8H test → RED verdict enforced ✓

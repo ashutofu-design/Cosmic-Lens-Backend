@@ -34,7 +34,17 @@ def _direct_verdict_only(facts: dict) -> str:
     afflic = facts.get("afflictions") or []
     sub = facts.get("sub_flags") or {}
 
-    lines = [v, f"\nScore: {score}/12"]
+    lines = [v, f"\nScore: {score}/15"]
+    # P6: KP 5th-CSL verdict line (skip if KP cusps unavailable)
+    kp = facts.get("kp_5th_csl")
+    if kp and isinstance(kp, dict):
+        _kp_emoji = {"GREEN": "🟢", "AMBER": "🟡",
+                      "NEUTRAL": "⚪", "RED": "🔴"}.get(kp.get("verdict", ""), "")
+        lines.append(
+            f"\nKP 5th-CSL ({kp.get('csl_planet','?')}): "
+            f"{_kp_emoji} {kp.get('verdict','?')} "
+            f"(weight {kp.get('score_weight',0):+d}) — {kp.get('reason','')}"
+        )
     if yogas:
         lines.append(f"\nWealth yogas present: {', '.join(yogas)}")
     if afflic:
@@ -197,7 +207,7 @@ def _build_llm_fact_block(facts: dict, route: str) -> str:
         "═══════════════════════════════════════════════",
         "🔒 STOCK ENGINE — LOCKED FACTS (do not invent)",
         "═══════════════════════════════════════════════",
-        f"VERDICT: {facts.get('verdict','?')} (score {facts.get('score','?')}/12)",
+        f"VERDICT: {facts.get('verdict','?')} (score {facts.get('score','?')}/15)",
         f"Sub-flags: {facts.get('sub_flags',{})}",
         "",
     ]

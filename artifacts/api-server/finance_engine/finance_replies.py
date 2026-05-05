@@ -14,11 +14,16 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, Optional
 
+import time as _time
+
 from finance_engine.finance_facts import compute_finance_facts
 from finance_engine.finance_routing import (is_finance_question,
                                               route_finance_question)
 from finance_engine.finance_warnings import WARNINGS
-from finance_engine.answer_cache import make_cache_key, get_cached, put_cached
+from finance_engine.answer_cache import (make_cache_key, get_cached,
+                                          put_cached, _chart_fingerprint)
+from finance_engine.telemetry import log_event as _telemetry_log
+from finance_engine.validator import validate_finance_llm_output
 
 
 _PATH_EMOJI = {"GREEN": "🟢", "YELLOW": "🟡", "RED": "🔴"}
@@ -363,18 +368,46 @@ def handle_finance_money_question(question: str, kundli: dict,
                                     ) -> Optional[Dict[str, Any]]:
     """Route + serve a NON-TIMING general finance/money question.
 
-    Scope: WHAT / WHY / WHICH about wealth, income, saving, expense,
-    loan, debt, business profit, sudden wealth, dhana yogas. Timing
-    questions are NOT handled. Stock-market questions are NOT handled
-    (those go to stock_engine).
-
-    Returns None if not a finance question. Every non-None response
-    carries scope='non_timing'.
+    Phase 1+2 (May 2026): every non-None return path emits a telemetry
+    row (router_telemetry table). LLM outputs (NARRATIVE/HYBRID) pass
+    through validator before returning to the user.
     """
+    t_start = _time.time()
+    chart_fp = _chart_fingerprint(kundli) if isinstance(kundli, dict) else ""
+
+    tele_state = {
+        "regex_mode": None, "regex_route": None,
+        "llm_mode": None, "llm_route": None,
+        "llm_confidence": None, "llm_reason": None,
+        "validator_flags": [], "validator_action": "none",
+    }
+
+    def _emit(mode_f: str, route_f: str, cache_hit: bool) -> None:
+        try:
+            _telemetry_log({
+                "ts": int(t_start),
+                "question": question or "",
+                "chart_fp": chart_fp,
+                "regex_mode": tele_state["regex_mode"],
+                "regex_route": tele_state["regex_route"],
+                "llm_mode": tele_state["llm_mode"],
+                "llm_route": tele_state["llm_route"],
+                "llm_confidence": tele_state["llm_confidence"],
+                "llm_reason": tele_state["llm_reason"],
+                "final_mode": mode_f,
+                "final_route": route_f,
+                "cache_hit": cache_hit,
+                "latency_ms": int((_time.time() - t_start) * 1000),
+                "validator_flags": tele_state["validator_flags"],
+                "validator_action": tele_state["validator_action"],
+            })
+        except Exception:
+            pass  # telemetry must never break user flow
+
     if not is_finance_question(question or ""):
         return None
     if not isinstance(kundli, dict) or not kundli.get("planets"):
-        return {
+        out = {
             "text": ("Beta, finance analysis aapki janm-kundli ke bina "
                       "possible nahi. Pehle birth details save karein.\n\n"
                       "Final: Pehle kundli, fir finance analysis."),
@@ -382,25 +415,26 @@ def handle_finance_money_question(question: str, kundli: dict,
             "scope": _ENGINE_SCOPE,
             "dimensions": None, "cache_hit": False, "engine_facts": None,
         }
+        _emit("FAILSAFE", "no_kundli", False)
+        return out
 
     mode, route = route_finance_question(question)
+    tele_state["regex_mode"] = mode
+    tele_state["regex_route"] = route
 
-    # WARNING mode — locked, no engine, no LLM, no cache
+    # WARNING mode — locked, no engine, no LLM, no cache, no validator
     if mode == "WARNING":
         text = WARNINGS.get(route, "")
-        return {
+        out = {
             "text": text, "mode": mode, "route": route,
             "scope": _ENGINE_SCOPE,
             "dimensions": None, "cache_hit": False, "engine_facts": None,
             "router": None,
         }
+        _emit(mode, route, False)
+        return out
 
     # ── HYBRID re-route via LLM classifier (Option A) ─────────────
-    # Regex pehle ho chuka hai upar; agar HYBRID/general_finance_overview
-    # me gir gaya matlab specific pattern miss hua. Ab gpt-5-nano se deeply
-    # samjho aur correct sub-route pe re-dispatch karo. Confidence ≥ 0.75
-    # hi accept karenge; warna HYBRID hi rakhenge.
-    #
     # IMPORTANT (architect fix): classifier MUST run BEFORE cache lookup
     # and facts compute, warna pehle se cached HYBRID answer router ko
     # permanently bypass kar dega. Order: regex → classifier → cache → facts.
@@ -415,67 +449,88 @@ def handle_finance_money_question(question: str, kundli: dict,
             cls_mode = cls_route = None
             conf = 0.0
             reason = "router exception"
+        tele_state["llm_mode"] = cls_mode
+        tele_state["llm_route"] = cls_route
+        tele_state["llm_confidence"] = conf
+        tele_state["llm_reason"] = reason
         router_meta = {"cls_mode": cls_mode, "cls_route": cls_route,
                         "confidence": conf, "reason": reason}
-        # Accept re-route only if confident AND not HYBRID→HYBRID
         if (cls_mode and cls_route and conf >= 0.75
                 and not (cls_mode == "HYBRID"
                          and cls_route == "general_finance_overview")):
             mode, route = cls_mode, cls_route
-            # WARNING re-route — locked template, no cache, no facts
             if mode == "WARNING":
                 text_w = WARNINGS.get(route, "")
-                return {
+                out = {
                     "text": text_w, "mode": mode, "route": route,
                     "scope": _ENGINE_SCOPE,
                     "dimensions": None, "cache_hit": False,
                     "engine_facts": None, "router": router_meta,
                 }
+                _emit(mode, route, False)
+                return out
 
-    # Cache check — HYBRID mode mixes question hash into key so each
-    # unique user phrasing gets its own personalised cached narrative.
-    # Other modes share key per-route (deterministic output per chart).
+    # Cache check
     _q_for_key = question if mode == "HYBRID" else None
     cache_key = make_cache_key(birth, kundli, "finance_money", route,
                                 question=_q_for_key)
     cached = get_cached(cache_key)
     if cached:
-        return {
+        out = {
             "text": cached["text"], "mode": mode, "route": route,
             "scope": _ENGINE_SCOPE,
             "dimensions": cached.get("meta", {}).get("dimensions"),
             "cache_hit": True, "engine_facts": None,
             "router": router_meta,
         }
+        _emit(mode, route, True)
+        return out
 
-    # Compute facts (only after final route is known)
+    # Compute facts
     facts = compute_finance_facts(kundli)
     if facts.get("error"):
-        return {
+        out = {
             "text": f"Engine error: {facts['error']}\n\nFinal: Kundli check karein.",
             "mode": "FAILSAFE", "route": route,
             "scope": _ENGINE_SCOPE,
             "dimensions": None, "cache_hit": False, "engine_facts": facts,
             "router": router_meta,
         }
+        _emit("FAILSAFE", route, False)
+        return out
 
+    # Build text per mode
     if mode == "DIRECT":
         formatter = _DIRECT_FORMATTERS.get(route, _direct_wealth_verdict)
         text = formatter(facts)
+        # DIRECT is engine-only — no validator needed (deterministic)
     elif mode == "HYBRID":
-        # Catch-all: DIRECT 4-dim picture + short LLM narrative addressing
-        # the user's specific question.
         direct_text = _direct_wealth_verdict(facts)
-        narrative = _llm_narrative(facts, route, question)
-        # Strip duplicated "Final:" line from direct part if narrative
-        # also produces one — keep narrative's final.
+        narrative_raw = _llm_narrative(facts, route, question)
+        narrative, v_flags, v_action = validate_finance_llm_output(
+            narrative_raw,
+            user_question=question,
+            allowed_yogas=facts.get("wealth_yogas") or [],
+            direct_fallback_text="",
+        )
+        tele_state["validator_flags"] = v_flags
+        tele_state["validator_action"] = v_action
         direct_clean = "\n".join(
             ln for ln in direct_text.splitlines()
             if not ln.strip().startswith("💡 Final:")
         )
         text = direct_clean.rstrip() + "\n\n" + narrative.lstrip()
-    else:
-        text = _llm_narrative(facts, route, question)
+    else:  # NARRATIVE
+        narrative_raw = _llm_narrative(facts, route, question)
+        fallback_for_validator = _direct_wealth_verdict(facts)
+        text, v_flags, v_action = validate_finance_llm_output(
+            narrative_raw,
+            user_question=question,
+            allowed_yogas=facts.get("wealth_yogas") or [],
+            direct_fallback_text=fallback_for_validator,
+        )
+        tele_state["validator_flags"] = v_flags
+        tele_state["validator_action"] = v_action
 
     put_cached(cache_key, text, {
         "dimensions": facts.get("dimensions"),
@@ -483,10 +538,12 @@ def handle_finance_money_question(question: str, kundli: dict,
         "mode": mode, "route": route,
     })
 
-    return {
+    out = {
         "text": text, "mode": mode, "route": route,
         "scope": _ENGINE_SCOPE,
         "dimensions": facts.get("dimensions"),
         "cache_hit": False, "engine_facts": facts,
         "router": router_meta,
     }
+    _emit(mode, route, False)
+    return out

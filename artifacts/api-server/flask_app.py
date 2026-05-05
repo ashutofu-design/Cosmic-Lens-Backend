@@ -5997,6 +5997,45 @@ def ask_route():
         _log_question_history(user, question, out)
         return jsonify(out)
 
+    # ── PROPERTY STATIC hookup (P1.0 — runs after health_static) ──────────
+    # Engine = signal-pack + LLM expression. Static (NON-TIMING) only.
+    # Killswitch: PROPERTY_STATIC_BYPASS=1 → skip, fall through to LLM.
+    try:
+        _ps_bypass = (os.environ.get("PROPERTY_STATIC_BYPASS", "0") == "1")
+    except Exception:
+        _ps_bypass = False
+    if _ps_bypass:
+        print("[ask] PROPERTY_STATIC_BYPASS=1 → skip property_static",
+              flush=True)
+    try:
+        from property_static import handle_property_question as _ps_handle
+        _ps = None if _ps_bypass else _ps_handle(question, kundli or {}, birth)
+    except Exception as _ps_exc:
+        print(f"[ask] property_static hookup error (non-fatal): {_ps_exc}",
+              flush=True)
+        _ps = None
+    if _ps and _ps.get("text"):
+        out = {
+            "text":       _ps["text"],
+            "topic":      "non_timing_property",
+            "confidence": 1.0,
+            "source":     (f"property_static[{_ps.get('scope','non_timing')}]:"
+                           f"{_ps.get('mode','')}/{_ps.get('route','')}"),
+            "scope":      _ps.get("scope", "non_timing"),
+            "follow_ups": [],
+            "quota":      {"used": quota.get("used", 0),
+                            "limit": quota.get("limit", 0)},
+            "plan":       effective_plan(user) if user else "free",
+            "meta":       {
+                "dimensions": _ps.get("dimensions"),
+                "cache_hit":  _ps.get("cache_hit", False),
+                "mode":       _ps.get("mode"),
+                "route":      _ps.get("route"),
+            },
+        }
+        _log_question_history(user, question, out)
+        return jsonify(out)
+
     # ── Y2 FINANCE-MONEY hookup (runs FIRST per user directive) ─────────────
     # Pipeline order: finance → stock → normal LLM pipeline.
     # Finance has a STRICT regex with hard stock-exclusion guard, so any
@@ -6418,6 +6457,42 @@ def ask_stream_route():
                 "mode":             _hs.get("mode"),
                 "route":            _hs.get("route"),
                 "sensitive_bucket": _hs.get("sensitive_bucket"),
+            },
+        }
+        _log_question_history(user, question, out)
+        return jsonify(out)
+
+    # ── PROPERTY STATIC hookup (P1.0 — stream parity) ─────────────────────
+    try:
+        _ps_bypass = (os.environ.get("PROPERTY_STATIC_BYPASS", "0") == "1")
+    except Exception:
+        _ps_bypass = False
+    if _ps_bypass:
+        print("[ask/stream] PROPERTY_STATIC_BYPASS=1 → skip property_static",
+              flush=True)
+    try:
+        from property_static import handle_property_question as _ps_handle
+        _ps = None if _ps_bypass else _ps_handle(question, kundli or {}, birth)
+    except Exception as _ps_exc:
+        print(f"[ask/stream] property_static hookup error (non-fatal): "
+              f"{_ps_exc}", flush=True)
+        _ps = None
+    if _ps and _ps.get("text"):
+        out = {
+            "text":       _ps["text"],
+            "topic":      "non_timing_property",
+            "confidence": 1.0,
+            "source":     (f"property_static[{_ps.get('scope','non_timing')}]:"
+                           f"{_ps.get('mode','')}/{_ps.get('route','')}"),
+            "scope":      _ps.get("scope", "non_timing"),
+            "follow_ups": [],
+            "quota":      quota_payload,
+            "plan":       plan_payload,
+            "meta":       {
+                "dimensions": _ps.get("dimensions"),
+                "cache_hit":  _ps.get("cache_hit", False),
+                "mode":       _ps.get("mode"),
+                "route":      _ps.get("route"),
             },
         }
         _log_question_history(user, question, out)

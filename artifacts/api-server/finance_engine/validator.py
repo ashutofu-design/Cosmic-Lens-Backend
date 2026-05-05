@@ -80,7 +80,9 @@ _TECH_REQUEST_RX = re.compile(
     r"\b(why|kyun|kyon|kaise|how|reason|because|technically|"
     r"planet[s]?|graha|house[s]?|sign[s]?|kundli\s+(detail|bata|"
     r"dikhao|me\s+kya)|chart\s+(detail|me\s+kya)|"
-    r"explain|samjha[oe]?|deep|detailed?)\b",
+    r"explain|samjha[oe]?|deep|detailed?|"
+    # Phase 2.8.80: KP-specific requests unlock CSL/cusp/sub-lord vocab
+    r"kp|cusp|csl|sub[\s-]?lord|signification|nakshatra)\b",
     re.IGNORECASE,
 )
 

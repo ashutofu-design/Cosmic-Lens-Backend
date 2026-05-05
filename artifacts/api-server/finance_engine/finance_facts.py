@@ -204,8 +204,8 @@ def _tier(verdict: str, strong_signal: bool, weak_signal: bool) -> str:
     return "low"
 
 
-def _compute_wealth_potential(lord_states, karakas, yogas, dasha_link
-                                ) -> Tuple[str, str, str]:
+def _compute_wealth_potential(lord_states, karakas, yogas, dasha_link,
+                              kp_csl=None) -> Tuple[str, str, str]:
     h2_d = _DIGNITY_SCORE.get(lord_states["h2"]["lord_dignity"], 0)
     h11_d = _DIGNITY_SCORE.get(lord_states["h11"]["lord_dignity"], 0)
     h9_d = _DIGNITY_SCORE.get(lord_states["h9"]["lord_dignity"], 0)
@@ -214,6 +214,11 @@ def _compute_wealth_potential(lord_states, karakas, yogas, dasha_link
     # Phase 2.8.78: dasha REMOVED from non-timing scoring — dasha is a
     # timing engine concern, not a static-chart concern. Per user policy.
     # (dasha_link param kept for signature stability — no longer read.)
+
+    # Phase 2.8.80: KP CSL weighted nudge (Option B). Small ±2 cap, never
+    # flips Vedic verdict on its own; only confirms or softens the signal.
+    if kp_csl and isinstance(kp_csl, dict):
+        score += int(kp_csl.get("wealth_nudge") or 0)
 
     has_strong_yoga = any(y in yogas for y in ("Dhana", "Lakshmi", "Kubera"))
     h2_dusthana = lord_states["h2"]["lord_in_dusthana"]
@@ -300,8 +305,8 @@ def _compute_saving_ability(lord_states, karakas, afflictions, dasha_link
     return v, reason, t
 
 
-def _compute_risk_leak(lord_states, karakas, afflictions, dasha_link
-                         ) -> Tuple[str, str, str]:
+def _compute_risk_leak(lord_states, karakas, afflictions, dasha_link,
+                       kp_csl=None) -> Tuple[str, str, str]:
     leak_signals = sum(1 for a in afflictions
                        if any(k in a.lower() for k in
                               ("leak", "loss", "expense surge", "speculation",
@@ -328,6 +333,11 @@ def _compute_risk_leak(lord_states, karakas, afflictions, dasha_link
     # Phase 2.8.78: dasha REMOVED — md/ad dusthana_link penalties dropped.
     # Risk-leak = static chart only (lord placements + dusthana lords on
     # money houses + Rahu placement). Dasha activation belongs to timing.
+
+    # Phase 2.8.80: KP CSL nudge — if 2nd or 11th CSL contaminated by 8/12,
+    # raise raw leak signal by +1. Confirms Vedic leak verdict from KP angle.
+    if kp_csl and isinstance(kp_csl, dict):
+        raw += int(kp_csl.get("risk_nudge") or 0)
 
     if raw >= 5:
         v, reason = "RED", "Strong leak signal — paisa drain ho raha"
@@ -499,15 +509,25 @@ def compute_finance_facts(kundli: dict) -> Dict[str, Any]:
     if (karakas.get("Venus") or {}).get("dignity") == "debilitated":
         afflictions.append("Venus (Lakshmi) debilitated")
 
+    # ── G1. KP CSL layer (Phase 2.8.80) — read-only nudge, ADD-ONLY ──
+    # None when KP cusps absent → dimension scorers proceed Vedic-only.
+    try:
+        from finance_engine.kp_finance_csl import compute_kp_finance_csl
+        kp_csl = compute_kp_finance_csl(kundli)
+    except Exception:
+        kp_csl = None
+
     # ── G. Multi-dim verdicts ───────────────────────────────────────
     wp_v, wp_r, wp_t = _compute_wealth_potential(lord_states, karakas,
-                                                   wealth_yogas, dasha_link)
+                                                   wealth_yogas, dasha_link,
+                                                   kp_csl=kp_csl)
     is_v, is_r, is_t = _compute_income_stability(lord_states, karakas,
                                                    planets, asc_si)
     sa_v, sa_r, sa_t = _compute_saving_ability(lord_states, karakas,
                                                  afflictions, dasha_link)
     rl_v, rl_r, rl_t = _compute_risk_leak(lord_states, karakas,
-                                            afflictions, dasha_link)
+                                            afflictions, dasha_link,
+                                            kp_csl=kp_csl)
 
     dimensions = {
         "wealth_potential": {"verdict": wp_v, "reason": wp_r, "tier": wp_t},
@@ -597,5 +617,6 @@ def compute_finance_facts(kundli: dict) -> Dict[str, Any]:
         "sub_flags": sub_flags,
         "d2_available": d2_available,
         "d9_available": d9_available,
-        "engine_version": "finance_facts_v1.0_multidim",
+        "kp_csl": kp_csl,  # Phase 2.8.80: None if KP unavailable
+        "engine_version": "finance_facts_v1.1_kp_csl",
     }

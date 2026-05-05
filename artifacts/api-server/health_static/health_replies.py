@@ -333,9 +333,139 @@ def _render_simple_narrative_static(facts: dict, question: str) -> str:
     return "\n\n".join(paras)
 
 
+def _build_health_kundli_pack(kundli: dict, facts: dict,
+                               question: str) -> str:
+    """Phase H2.7 (Path B+) — FULL health-relevant kundli pack for LLM.
+    No pre-curation: send everything health-relevant, let LLM cherry-pick
+    per question. Engine dim verdicts included as ground-truth checksum
+    LLM must align with (cannot contradict)."""
+    lines = []
+    lines.append("════ FULL HEALTH KUNDLI PACK (truth source) ════\n")
+
+    # Ascendant + basic identity
+    asc = kundli.get("ascendant") or facts.get("ascendant") or "?"
+    moon_sign = kundli.get("moonSign") or "?"
+    sun_sign = kundli.get("sunSign") or "?"
+    naksh = kundli.get("nakshatra") or "?"
+    naksh_ruler = kundli.get("nakshatraRuler") or "?"
+    lines.append(f"Ascendant (Lagna): {asc}")
+    lines.append(f"Moon sign: {moon_sign} | Sun sign: {sun_sign}")
+    lines.append(f"Janma Nakshatra: {naksh} (ruler: {naksh_ruler})\n")
+
+    # All 9 planets with full attribution
+    lines.append("--- PLANETS (house, sign, dignity, nakshatra) ---")
+    karakas = facts.get("karakas") or {}
+    for p in (kundli.get("planets") or []):
+        nm = p.get("name", "?")
+        kk = karakas.get(nm) or {}
+        dignity = kk.get("dignity") or "?"
+        retro = " R" if p.get("retrograde") else ""
+        lines.append(
+            f"  {nm}: house {p.get('house','?')}, "
+            f"{p.get('sign','?')} {p.get('degrees','')}{retro}, "
+            f"dignity={dignity}, "
+            f"nakshatra={p.get('nakshatra','?')} "
+            f"(ruler {p.get('nakshatraRuler','?')})"
+        )
+    lines.append("")
+
+    # Health-relevant house lords (1, 6, 8, 12)
+    lines.append("--- HEALTH HOUSE LORDS (1=self, 6=disease, 8=mrityu/chronic, 12=loss/hospital) ---")
+    for hk in ("h1", "h6", "h8", "h12"):
+        hl = (facts.get("house_lords") or {}).get(hk) or {}
+        if hl:
+            dush = " [IN DUSTHANA 6/8/12]" if hl.get("lord_in_dusthana") else ""
+            lines.append(
+                f"  {hk.upper()}: lord={hl.get('lord','?')} in house "
+                f"{hl.get('lord_house','?')}, dignity={hl.get('lord_dignity','?')}{dush}"
+            )
+    lines.append("")
+
+    # Health karakas (Sun=vitality, Moon=mind, Mars=energy/wounds, Jupiter=immunity, Saturn=chronic)
+    lines.append("--- KEY HEALTH KARAKAS ---")
+    karaka_role = {
+        "Sun": "vitality / atma",
+        "Moon": "mind / body fluids",
+        "Mars": "energy / wounds / inflammation",
+        "Jupiter": "immunity / liver",
+        "Saturn": "chronic / longevity",
+    }
+    for nm, role in karaka_role.items():
+        kk = karakas.get(nm) or {}
+        if kk:
+            lines.append(
+                f"  {nm} ({role}): house {kk.get('house','?')}, "
+                f"{kk.get('sign','?')}, dignity={kk.get('dignity','?')}"
+            )
+    lines.append("")
+
+    # KP CSL chains for h1, h6, h8 (deepest health signal)
+    lines.append("--- KP CSL CHAINS (1st=body, 6th=disease, 8th=chronic) ---")
+    kp_csl = facts.get("kp_csl") or {}
+    for hk in ("h1", "h6", "h8"):
+        cs = kp_csl.get(hk) or {}
+        if cs:
+            chain = cs.get("chain") or {}
+            lines.append(
+                f"  {hk.upper()} CSL: {cs.get('csl_planet','?')}, "
+                f"score={cs.get('score','?')}, verdict={cs.get('verdict','?')}, "
+                f"signified houses={chain.get('signified', [])}"
+            )
+            reason = cs.get("reason")
+            if reason:
+                lines.append(f"     reason: {reason}")
+    lines.append("")
+
+    # Active yogas
+    yogas = facts.get("yogas") or []
+    lines.append(f"--- YOGAS active: {len(yogas)} ---")
+    if yogas:
+        for y in yogas:
+            lines.append(f"  - {y.get('name','?')}: {y.get('description','')}")
+    else:
+        lines.append("  (none — no major Arishta/Balarishta detected)")
+    lines.append("")
+
+    # Current dasha — for "kab" questions
+    cd = kundli.get("currentDasha") or {}
+    if cd:
+        lines.append(
+            f"--- CURRENT DASHA: Mahadasha={cd.get('maha','?')} | "
+            f"Antar={cd.get('antar','?')} | "
+            f"Pratyantar={cd.get('pratyantar','?')} "
+            f"({cd.get('startDate','?')} → {cd.get('endDate','?')}) ---\n"
+        )
+
+    # ENGINE DIM VERDICTS (ground-truth checksum — LLM MUST align)
+    lines.append("--- ENGINE DIM VERDICTS (ground-truth checksum — DO NOT contradict) ---")
+    dim_label = {
+        "vitality": "Body energy / vitality",
+        "disease_resistance": "Immunity / recovery",
+        "mental_health": "Mental peace",
+        "chronic_risk": "Chronic-zone",
+        "accident_risk": "Accident-zone",
+    }
+    for dk, dlabel in dim_label.items():
+        d = (facts.get("dimensions") or {}).get(dk) or {}
+        if d:
+            lines.append(
+                f"  {dlabel}: {d.get('verdict','?')} "
+                f"(severity={d.get('severity','?')})"
+            )
+    lines.append("")
+
+    # User question
+    lines.append(f"--- USER QUESTION ---\n  {question!r}")
+    return "\n".join(lines)
+
+
 def _render_simple_narrative_llm(facts: dict, question: str,
-                                  sensitive_bucket: Optional[str]) -> str:
-    """LLM-driven simple narrative. Falls back to static if no client."""
+                                  sensitive_bucket: Optional[str],
+                                  kundli: Optional[dict] = None) -> str:
+    """Phase H2.7 (Path B+) — LLM gets FULL health kundli pack and
+    cherry-picks per question. Engine = data supplier + ground-truth
+    checksum. LLM = question-aware reasoning + framing.
+    Falls back to static if no client."""
     try:
         import openai_helper  # type: ignore
         client = openai_helper._get_client()
@@ -344,64 +474,73 @@ def _render_simple_narrative_llm(facts: dict, question: str,
     except Exception:
         return _render_simple_narrative_static(facts, question)
 
-    s = _compute_simple_summary(facts)
-
-    # Build internal fact pack for LLM (truth source)
-    weak_lines = []
-    for k, v in s["weak_body"] + s["weak_mind"] + s["weak_risk"]:
-        soft = _DIM_SOFT_NAME[k]
-        tend = _DIM_TENDENCY_INLINE.get((k, v), "")
-        weak_lines.append(f"  - {soft} ({v}): {tend}")
-    fact_pack = (
-        "INTERNAL CHART FACTS (truth source — DO NOT label or quote):\n"
-        + ("\n".join(weak_lines) if weak_lines
-           else "  - all dimensions in healthy range") + "\n"
-        f"  - classical health-yog active: {'yes' if s['has_arishta'] else 'no'}\n"
-        f"  - user question: {question!r}"
-    )
+    fact_pack = _build_health_kundli_pack(kundli or {}, facts, question)
 
     sys_prompt = (
-        "You are a Vedic-astrology HEALTH translator. Tone: warm, "
-        "calm, direct, Hinglish — like a knowledgeable friend giving "
-        "a tight focused samajh, NOT a report.\n\n"
-        "TASK: Convert the INTERNAL CHART FACTS into ONE concise, "
-        "focused answer that directly addresses the user's question.\n\n"
-        "LENGTH & SHAPE (strict):\n"
-        "- Total length: 70-110 words. NEVER exceed 120 words.\n"
-        "- Maximum 3 short paragraphs:\n"
-        "  Para 1: directly address the user's question (body / "
-        "immunity / chronic side as relevant) and weave in tendency "
-        "phrases naturally.\n"
-        "  Para 2: mental / stress side ONLY if relevant to question; "
-        "otherwise SKIP this paragraph.\n"
-        "  Para 3 (closing): ONE strong practical takeaway — sleep / "
-        "khana / hydration / routine discipline.\n"
-        "- ONE clear core message. Do NOT scatter focus across all "
-        "5 dims. Pick what user actually asked.\n"
-        "- If user asked a comparative Q (X vs Y), give a direct "
-        "verdict in para 1 ('X zyada impact kar raha hai' / 'dono "
-        "equally') — NOT a balanced both-sides essay.\n\n"
+        "You are an EXPERT Vedic-astrology HEALTH analyst with deep "
+        "knowledge of classical houses, planets, dignities, KP system, "
+        "and dasha-phala. Tone: warm, calm, direct, Hinglish — like a "
+        "knowledgeable friend giving a focused samajh, NOT a report.\n\n"
+        "YOU RECEIVE: a FULL health-kundli pack (planets, houses, "
+        "lords, karakas, KP CSL chains, current dasha, yogas, and "
+        "engine dim verdicts as ground-truth checksum).\n\n"
+        "YOUR JOB:\n"
+        "1. Read the user's question carefully.\n"
+        "2. Cherry-pick ONLY the relevant pieces from the pack — do "
+        "NOT dump everything. Be selective per question type.\n"
+        "3. Reason like a real Vedic analyst from the data given. "
+        "Form your own attribution-based explanation.\n"
+        "4. Stay strictly aligned with the ENGINE DIM VERDICTS — if "
+        "engine says vitality=RED, you cannot say body is healthy. "
+        "If engine says no Arishta, you cannot invent one.\n\n"
+        "REASONING PLAYBOOK (which data for which Q-type):\n"
+        "- 'Health kaisi hai / overall' → engine dim verdicts + 1-2 "
+        "key contributing planets/lords.\n"
+        "- 'Kaunsa planet / kya combination / kyun weak' → name "
+        "actual planets/lords from pack: afflicted house lords (esp "
+        "1L/6L/8L/12L), debilitated/dusthana karakas, KP CSL RED "
+        "verdicts. Quote real positions (e.g. 'Mars 8th house me "
+        "debilitated baitha hai').\n"
+        "- 'Future / kab / tendency timing' → use CURRENT DASHA "
+        "(maha/antar) + dim verdicts. Be cautious — never give exact "
+        "month/year predictions beyond what dasha pack shows.\n"
+        "- Comparative Q (X vs Y) → direct verdict in para 1 (no "
+        "balanced essay).\n"
+        "- 'Issues kya ho sakte hain / tendency' → category list "
+        "from weak dims (no disease names).\n\n"
+        "LENGTH & SHAPE:\n"
+        "- Target 80-130 words. Hard cap 160 words.\n"
+        "- 2-3 short paragraphs. Closing line = ONE practical "
+        "takeaway (sleep / khana / hydration / routine).\n"
+        "- ONE clear core message — do NOT scatter across all 5 "
+        "dims unless user specifically asked for full picture.\n\n"
         "STRICT BANS:\n"
         "1. NO emojis. NO bullet lists. NO numbered headers. NO "
         "section labels ('Final:', 'Primary factor:', 'Focus:', "
         "'Tendency issues:', '5 dimensions').\n"
-        "2. NO engine jargon ('RED'/'YELLOW'/'GREEN'/'verdict'/"
-        "'vitality'/'disease_resistance'/'channel'/'dimension'). Use "
-        "natural Hinglish: 'body energy', 'immunity', 'mental side', "
-        "'chronic-zone', 'accident-zone'.\n"
-        "3. NO disease names. Category-only language.\n"
+        "2. NO engine jargon visible to user ('RED'/'YELLOW'/"
+        "'GREEN'/'verdict'/'dim'/'channel'/'dimension'/"
+        "'disease_resistance'). Use natural Hinglish: 'body energy', "
+        "'immunity', 'mental side', 'chronic-zone', 'accident-zone'. "
+        "(Planet names, house numbers, dignities are FINE — those "
+        "are user-friendly Vedic terms.)\n"
+        "3. NO disease names (cancer / diabetes / migraine / "
+        "depression etc.). Category-only language.\n"
         "4. NO doctor / professional / specialist / therapist / "
-        "expert / counsellor / 'medical advice'.\n"
-        "5. NO 'tumhe X hai' assertion. Use 'X ka tendency ho sakta "
-        "hai' / 'X side par dikh raha hai'.\n"
+        "expert / counsellor / 'medical advice' mention.\n"
+        "5. NO 'tumhe X hai' direct-diagnosis assertion. Use 'X ka "
+        "tendency ho sakta hai' / 'X side par dikh raha hai'.\n"
         "6. NO fear words (danger / serious / khatarnak / fatal).\n"
         "7. NEVER end with a 'Final:' label.\n"
-        "8. Use ONLY the INTERNAL CHART FACTS as truth."
+        "8. NEVER invent yogas, planets, houses, or dasha periods "
+        "not present in the pack. Stay anchored to the data.\n"
+        "9. NEVER predict exact future dates beyond the CURRENT "
+        "DASHA window shown in the pack."
     )
 
     if sensitive_bucket == "mental_health":
         sys_prompt += (
-            "\n9. Mental side ko softly handle karo — gentle phrasing, "
+            "\n10. Mental side ko softly handle karo — gentle phrasing, "
             "no harsh labels.")
 
     try:
@@ -412,7 +551,7 @@ def _render_simple_narrative_llm(facts: dict, question: str,
                 {"role": "user", "content": fact_pack},
             ],
             temperature=0.5,
-            max_tokens=400,
+            max_tokens=600,
         )
         text = (resp.choices[0].message.content or "").strip()
         if not text:
@@ -1221,7 +1360,11 @@ def handle_health_question(question: str, kundli: dict,
     # Phase H2.6: namespace bumped v4→v5. Output style flipped from
     # 4-block structured to flowing narrative — old cached entries are
     # structurally incompatible with new presentation contract.
-    _ns = f"health_static_v5_{_OUTPUT_STYLE}"
+    # Phase H2.7: namespace bumped v5→v6. LLM now receives full
+    # health-kundli pack (planets+lords+karakas+KP chains+dasha) and
+    # cherry-picks per question — answers are richer and may include
+    # planet/house attribution. Old v5 entries are summary-only.
+    _ns = f"health_static_v6_{_OUTPUT_STYLE}"
     cache_key = make_cache_key(birth, kundli, _ns, route,
                                 question=_q_for_key)
     cached = get_cached(cache_key)
@@ -1261,8 +1404,9 @@ def handle_health_question(question: str, kundli: dict,
     # bullet headers, no dim labels. Set HEALTH_OUTPUT_STYLE=structured
     # to revert to H2.5 4-block output (debug/admin only).
     if _OUTPUT_STYLE == "simple":
+        # Phase H2.7: pass full kundli to LLM (Path B+ — no pre-curation).
         narrative_raw = _render_simple_narrative_llm(
-            facts, question, sensitive)
+            facts, question, sensitive, kundli=kundli)
         # Validator scrub for safety (referral/disease/fear words)
         text, v_flags, v_action = validate_health_llm_output(
             narrative_raw,

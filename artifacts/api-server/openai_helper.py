@@ -13621,12 +13621,45 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 _trace(req_id, "PASSTHROUGH.INTEL_SKIPPED", {
                     "reason": str(_intel_exc)[:200],
                 })
-            _chart_block_pt = build_full_chart_context(
-                kundli=kundli,
-                intel=_intel_obj_pt,
-                birth=birth,
-                question=question or "",
-            )
+            # ─── Phase H2.7.10 — LEAN PACK KILLSWITCH (sync) ─────────────
+            # Env var LEAN_PACK_MODE=1 swaps full-chart pack (~17k chars)
+            # for topic-aware lean variant (~7-10k chars). Default OFF →
+            # behaviour byte-identical to pre-H2.7.10. ADD-ONLY pattern.
+            _lean_mode_pt = os.environ.get("LEAN_PACK_MODE", "").strip() == "1"
+            if _lean_mode_pt:
+                try:
+                    from kundli_full_context import (  # type: ignore
+                        build_lean_chart_context, _lean_tier_summary,
+                    )
+                    _chart_block_pt = build_lean_chart_context(
+                        kundli=kundli,
+                        intel=_intel_obj_pt,
+                        birth=birth,
+                        question=question or "",
+                    )
+                    _trace(req_id, "LEAN_PACK.ACTIVE", {
+                        "path": "passthrough_sync",
+                        "chars": len(_chart_block_pt or ""),
+                        "tiers": _lean_tier_summary(question or ""),
+                    })
+                except Exception as _lean_exc:  # noqa: BLE001
+                    _trace(req_id, "LEAN_PACK.FALLBACK", {
+                        "path": "passthrough_sync",
+                        "reason": str(_lean_exc)[:200],
+                    })
+                    _chart_block_pt = build_full_chart_context(
+                        kundli=kundli,
+                        intel=_intel_obj_pt,
+                        birth=birth,
+                        question=question or "",
+                    )
+            else:
+                _chart_block_pt = build_full_chart_context(
+                    kundli=kundli,
+                    intel=_intel_obj_pt,
+                    birth=birth,
+                    question=question or "",
+                )
             if _chart_block_pt:
                 # Phase 2 — prompt now lives in module constant _PT_SYS_INTRO
                 # (top of file). Both sync passthrough + stream passthrough
@@ -17130,12 +17163,45 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 _trace(req_id, "PASSTHROUGH(stream).INTEL_SKIPPED", {
                     "reason": str(_intel_exc_s)[:200],
                 })
-            _chart_block_pt_s = build_full_chart_context(
-                kundli=kundli,
-                intel=_intel_obj_pt_s,
-                birth=birth,
-                question=question or "",
-            )
+            # ─── Phase H2.7.10 — LEAN PACK KILLSWITCH (stream) ───────────
+            # Mirror of sync passthrough killswitch. Env LEAN_PACK_MODE=1 →
+            # topic-aware lean pack (~7-10k); default OFF → full (~17k).
+            # ADD-ONLY; defensive fallback to full pack on any lean error.
+            _lean_mode_pt_s = os.environ.get("LEAN_PACK_MODE", "").strip() == "1"
+            if _lean_mode_pt_s:
+                try:
+                    from kundli_full_context import (  # local import
+                        build_lean_chart_context, _lean_tier_summary,
+                    )
+                    _chart_block_pt_s = build_lean_chart_context(
+                        kundli=kundli,
+                        intel=_intel_obj_pt_s,
+                        birth=birth,
+                        question=question or "",
+                    )
+                    _trace(req_id, "LEAN_PACK.ACTIVE", {
+                        "path": "passthrough_stream",
+                        "chars": len(_chart_block_pt_s or ""),
+                        "tiers": _lean_tier_summary(question or ""),
+                    })
+                except Exception as _lean_exc_s:  # noqa: BLE001
+                    _trace(req_id, "LEAN_PACK.FALLBACK", {
+                        "path": "passthrough_stream",
+                        "reason": str(_lean_exc_s)[:200],
+                    })
+                    _chart_block_pt_s = build_full_chart_context(
+                        kundli=kundli,
+                        intel=_intel_obj_pt_s,
+                        birth=birth,
+                        question=question or "",
+                    )
+            else:
+                _chart_block_pt_s = build_full_chart_context(
+                    kundli=kundli,
+                    intel=_intel_obj_pt_s,
+                    birth=birth,
+                    question=question or "",
+                )
             if not _chart_block_pt_s:
                 # No chart block built → fall through to legacy
                 raise RuntimeError("passthrough(stream): empty chart_block")

@@ -1695,3 +1695,72 @@ User accepted this as acceptable risk for current Q types; safety inheritance is
 1. **Health safety inheritance** (HIGH PRIORITY when revisited): inject doctor-consult/mental-health-helpline/parent-empathy rules into LLM passthrough prompt before relying on bypass for sensitive Qs.
 2. Stock_engine bypass (after compliance warning inheritance).
 3. Eventually delete static modules once Path B+ proves stable across all topics.
+
+---
+
+### H2.7.10 — LEAN PACK BUILDER (token-aware topic-tier system) — SHIPPED 2026-05-05
+
+**Problem flagged by user**: Path B+ sends same 17,098-char full kundli pack to LLM on EVERY question (all 10 sections — lagna+grahas+bhavas+dasha+future-dasha+D9+yogas+gochar+overlay+KP). 27-Q session = 27× full pack = ₹6.75. User correctly identified that simple Qs ("mera moon kahaan", "7th lord kya") don't need D9/D7/KP/SAV — only D1 + current dasha sufficient. Divisional charts should fire ONLY when explicitly requested.
+
+**Architecture**: 2-tier modular pack assembly via regex keyword detection on user question.
+
+| Tier | Sections | Trigger | Approx chars |
+|---|---|---|---|
+| **TIER 0 — ALWAYS** | birth_lagna + grahas + bhavas + current dasha | every Q | ~7,600 |
+| TIER 1: future_dasha + gochar + overlay | timing keywords (kab/when/year/saal/month/din/tak/muhurat) | conditional | +~3,000 |
+| TIER 1: future_dasha (forced) | dasha keywords (dasha/antardasha/vimshottari/pratyantar) | conditional | +~1,000 |
+| TIER 1: d9_navamsha | marriage/spouse/children keywords (shaadi/spouse/D9/santaan/d7) | conditional | +~2,000 |
+| TIER 1: yogas_doshas | yog/dosh keywords (yog/dosha/sade-sati/mangal/raj-yog/dhan-yog) | conditional | +~2,500 |
+| TIER 1: kp | KP keywords (kp/csl/sub-lord/cuspal/ruling-planet) | conditional | +~3,700 |
+| TIER 1: ALL escalation | deep/detail/vistaar/sabhi/complete/full | conditional | full pack |
+
+**Code structure** (ADD-ONLY, byte-identical fallback):
+- `kundli_full_context.py` L1868-2050 — `build_lean_chart_context()` + `_lean_select_tiers()` + `_lean_tier_summary()`. Mirrors `build_full_chart_context()` architecture (same _HEADER/_FOOTER/_MINIMAL_GUIDANCE wrappers, same defensive per-section try/except). Topic detection via 7 regex bundles (`_LEAN_KW_TIMING`, `_LEAN_KW_DASHA`, `_LEAN_KW_MARRIAGE`, `_LEAN_KW_CHILD`, `_LEAN_KW_YOGA`, `_LEAN_KW_KP`, `_LEAN_KW_DEEP`, `_LEAN_KW_GOCHAR`). Hinglish + English keywords.
+- `openai_helper.py` L13627-13665 (sync) + L17169-17207 (stream) — killswitch wire-up with defensive fallback to full pack on any lean-builder error.
+- `__all__` updated to export `build_lean_chart_context` + `_lean_tier_summary`.
+
+**Killswitch**: `LEAN_PACK_MODE=1` env var → activate; default OFF → byte-identical to pre-H2.7.10. ADD-ONLY pattern (existing full pack untouched, fallback ke liye preserved). Telemetry: `LEAN_PACK.ACTIVE` event logs selected tiers + char count; `LEAN_PACK.FALLBACK` logs any lean-builder error with auto-revert to full.
+
+**Engine preservation** (verified during design):
+- Engine 1 (`_PT_SYS_INTRO` system prompt) — UNTOUCHED, fires identically
+- Engine 2 (topic-lock prepended to user message) — UNTOUCHED
+- Engine 3 (locked-facts marriage/finance/health blocks) — UNTOUCHED, will be MORE effective with lean pack (less context noise)
+- Engine 4 (validator: word-cap, topic-check, safety) — UNTOUCHED
+
+**Smoke test results** (P40-style Qs, `_lean_tier_summary` output):
+- "mera 7th lord kaun hai" → d9 only (`\b7th\s*lord\b` keyword fires marriage tier)
+- "shaadi kab hogi" → timing+d9+overlay+gochar
+- "next dasha kab over" → future_dasha+timing+overlay+gochar
+- "mera 7th CSL kya hai" → kp only
+- "detail me batao mere yog dosh" → ALL (deep escalation)
+- "aaj ka din kaisa hai" → timing (din keyword)
+
+**Expected savings** (gpt-4.1-mini @ $0.40/1M in, $1.60/1M out):
+| Pack mode | Avg chars | Tokens | Cost/Q | 27-Q session |
+|---|---|---|---|---|
+| Full (current default) | 17,098 | ~5,000 | ₹0.25 | ₹6.75 |
+| Lean — placement Q | ~7,600 | ~2,200 | ~₹0.11 | — |
+| Lean — marriage Q (with D9+timing) | ~12,600 | ~3,700 | ~₹0.18 | — |
+| Lean — KP Q | ~11,300 | ~3,300 | ~₹0.16 | — |
+| **Lean avg (mixed Qs)** | **~10,000** | **~2,900** | **~₹0.14** | **~₹3.80** |
+| **Bachat** | **41-55%** | | **44%** | **₹2.95 per session** |
+
+**Risks + mitigations**:
+- (R1) Regex over-trigger: "din" matches timing → fires gochar+overlay even for "aaj ka din kaisa". **Mitigation**: acceptable cost (~₹0.04 extra), better answer quality with transit context.
+- (R2) Regex under-trigger: user asks "biwi kaisi hogi" in pure Hindi → "biwi" caught, but if user uses unusual term (e.g. "sahdharmini") → D9 missed → answer surface-level. **Mitigation**: keyword dictionary extensible; user follow-up "aur detail batao" fires "detail" keyword → escalates to all sections.
+- (R3) Lean pack incompatible with existing locked-facts injection: VERIFIED safe — locked-facts injection happens AFTER chart_block in stream path (L17211+), uses kundli/birth directly (not chart_block contents).
+
+**Activation procedure** (for user):
+1. Set Replit Secret: `LEAN_PACK_MODE=1`
+2. Restart `artifacts/api-server: API Server` workflow
+3. Test with P40 Qs across topics (placement, marriage, finance, health, dasha, KP)
+4. Monitor `_trace` logs for `LEAN_PACK.ACTIVE` events + char counts
+5. If any answer quality regression → unset env → instant rollback to full pack
+
+**Status**: Code shipped, killswitch DEFAULT OFF. User to enable via env var when ready to test.
+
+**Carried forward** (from H2.7.10):
+- Live A/B test: same 5 P40 Qs with lean ON vs OFF → measure answer quality + char savings
+- Tune keyword dictionary based on real user Qs (telemetry me dekh ke kya keywords miss ho rahe)
+- Optional next: in-memory pack cache (Layer A from caching discussion) for 27-Q session optimization
+- Optional next: OpenAI prompt-cache hit telemetry (`usage.prompt_tokens_details.cached_tokens`)

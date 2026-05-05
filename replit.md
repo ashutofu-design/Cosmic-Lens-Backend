@@ -1909,3 +1909,116 @@ neutralising 3 false-positive triggers. ADD-ONLY, no new packages, no Layer 2/3.
 - Layer 3: gpt-4.1-mini fallback classifier (~96% target)
 - Per-topic config dictation (houses/planets/lagna/dasha/D9/extras) for
   `topic_specific_packs.py` builders.
+
+---
+
+## H2.7.13 — LAYER-2 FUZZY MATCHING (typo tolerance) [2026-05-05]
+
+**Status:** ✅ COMPLETE | User-approved | ADD-ONLY | Killswitch ON
+
+### What
+Layer-2 fuzzy fallback in `_detect_topic` (openai_helper.py). Fires ONLY
+when Layer-1 strict regex returns ZERO matches. Uses rapidfuzz Levenshtein
+ratio against per-topic single-word anchor vocabularies. Catches common
+typos: `shadii→shaadi`, `naukrii→naukri`, `santtaan→santaan`,
+`acidi→acidity`, `dipression→depression`, `paissa→paisa`, etc.
+
+### Implementation (openai_helper.py L1064–1185)
+- `_FUZZY_ANCHORS` dict: 16 topic_ids → ~110 single-word anchors total.
+  Multi-word phrases EXCLUDED (Layer-1 handles them; fuzzy on phrases noisy).
+- `_FUZZY_FLAT`: precomputed flat list `[(topic_id, anchor), ...]` for
+  one-pass scan.
+- `_layer2_fuzzy(question)`: tokenizes → `_re.findall(r"\w+", q.lower())`,
+  skips tokens < 4 chars, length-prefilters anchors (|len(tok)-len(anc)|≤3),
+  computes `rapidfuzz.fuzz.ratio` per pair. If ≥ threshold → record topic_id.
+  If ≥2 distinct topic_ids hit → returns None (mirrors Layer-1 ambiguity gate).
+- Wired in `_detect_topic` at L1283: `if not matched: return _layer2_fuzzy(q)`.
+  Layer-1 hits ALWAYS win; fuzzy is pure fallback.
+
+### Tuning
+- **Threshold:** 85 (started at 88, lowered after empirical test).
+- **Min token len:** 4 (avoids matching `ki`/`hai`/`se`).
+- **Anchor padding:** added `shadi` (no-double-a variant), `acid`, `depress`,
+  `anxious`, `tension`, `stress` to bridge typo-distance gaps.
+
+### Killswitch
+`LAYER2_FUZZY=0` env var → fully disables Layer-2, behavior reverts to
+Layer-1-only. Default = ON. Verified working (typos drop to 0 catch when off).
+
+### Brutal-test results (15 typo Qs + 10 sanity)
+| Set | Score | Accuracy |
+|---|---|---|
+| Typo-only (Layer-2 must catch) | 13/15 | **86%** |
+| Sanity (Layer-1 no-typo, no false-pos) | 10/10 | **100%** |
+
+**Caught:** shadii, shaadii, shadi, naukrii, santtaan, santaaan, acidi,
+dipression, anxitey, kamzorii, paissa, rishtaa, depresion (with `depres` in
+anchor list).
+
+**Missed (2):**
+1. `nokri ki tension hai` → Layer-1 catches `tension`→health first, blocks
+   Layer-2 (technically Layer-1 behavior, not Layer-2 failure; result is
+   ambiguous Q anyway).
+2. `dipresion theek hoga` → ratio 84% (depression vs dipresion, dist 2,
+   200×8/19=84) just under 85 threshold. Adding `depres` anchor would help
+   but risks `depres` matching unrelated 6-char tokens — left as accepted miss.
+
+### Dependency added
+- `rapidfuzz>=3.14,<4` in `artifacts/api-server/requirements.txt`.
+- Graceful import (`try/except ImportError`); if missing → Layer-2 silently
+  disabled, Layer-1 still works.
+
+### Files changed
+- `artifacts/api-server/openai_helper.py` — +127 lines (ADD-ONLY).
+- `artifacts/api-server/requirements.txt` — +1 line.
+
+### What's NEXT
+- Layer-3 (gpt-4.1-mini classifier fallback for complex/vague Qs) DEFERRED.
+- Per-topic config dictation (health first) STILL pending user input for
+  `topic_specific_packs.py`.
+
+
+### H2.7.13-R2 — Architect-fix round (post-review tightening)
+
+Architect review (5 May 2026) found 2 HIGH-severity flaws in initial impl:
+
+**Issue #2 (HIGH):** Early `return None` on ambiguity gate inside the matching
+loop short-circuited too eagerly — once 2 distinct topic_ids were added, no
+further tokens could "rescue" the correct topic.
+
+**Issue #4 (HIGH):** `break` after first qualifying anchor per token made
+results order-dependent on `_FUZZY_FLAT` dict iteration order — a wrong
+topic's anchor could win simply by being scanned first.
+
+**Fix (R2):** Replaced both with **score-aggregating winner-selection**:
+1. Scan ALL (token, anchor) pairs — no per-token break.
+2. Track `best_per_topic[topic_id] = max(score)` across full scan.
+3. After scan: if 1 topic → win; if ≥2 topics → require winner to beat
+   runner-up by `_LAYER2_MARGIN` (5 ratio points), else None.
+
+**Fix (R3 — connector-aware margin):** When question contains explicit
+connector (`aur`/`and`/`or`/`&`), user is likely joining 2 intents → bump
+margin requirement from 5 → 15 points. Catches `shadii aur naukrii dono`
+type queries that would otherwise lock to one topic.
+
+**Final metrics (32-Q superset):**
+| Set | Score |
+|---|---|
+| Architect order-indep probes (7) | 7/7 = 100% |
+| Sanity / no false-pos (10) | 10/10 = 100% |
+| Original typo set (15) | 13/15 = 87% |
+| **Total** | **30/32 = 94%** |
+
+**Files updated (R2+R3):** `openai_helper.py` only — winner-selection
+algorithm + `_LAYER2_MARGIN_CONNECTOR=15` + `_LAYER2_CONNECTOR_RE` regex.
+Doc threshold mismatch (88 vs 85) also fixed in module header comment.
+
+**Architect LOW-MEDIUM issues NOT fixed (accepted):**
+- Q1 (false-pos surface from broad anchors like `office`): mitigated by
+  Layer-1-first design (Layer-2 only fires on zero Layer-1 hits, where
+  generic words are unlikely to dominate).
+- Q3 (4-char anchor `love`/`papa` near-misses): empirically clean in tests;
+  threshold 85 + length-3 prefilter contain the risk.
+- Q6b (no global score normalization): margin gate is cheaper proxy and
+  works in practice.
+

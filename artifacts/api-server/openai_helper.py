@@ -1058,6 +1058,151 @@ _TOPIC_RULES = [
 ]
 
 
+# ─────────────────────────────────────────────────────────────────────
+# H2.7.13 — LAYER-2 FUZZY MATCHING (typo tolerance)
+#
+# Fires ONLY when Layer-1 strict regex returns zero matches. Tries to
+# match individual question tokens against per-topic anchor vocabularies
+# using rapidfuzz (Levenshtein-based ratio). Catches common typos like
+# "shadii"→"shaadi", "naukrii"→"naukri", "santtaan"→"santaan", "acidi"→
+# "acidity", etc.
+#
+# Killswitch: env var LAYER2_FUZZY=0 → fully disabled, behavior reverts
+# to Layer-1-only. Default = ON.
+#
+# Threshold: 85 (rapidfuzz.fuzz.ratio) — chosen empirically. Lower →
+# more typos caught but more false-positives. Higher → safer but misses.
+#
+# Stop-token guard: tokens with len < 4 are skipped (avoid matching
+# "ki"/"hai"/"se" against single-char anchors).
+#
+# Winner selection (H2.7.13-R2, fix for architect HIGH issues #2+#4):
+# Instead of early-return on ambiguity OR break-on-first-anchor (both
+# order-dependent), we now scan ALL (token, anchor) pairs, track the
+# BEST score per topic_id, then pick the highest-scoring topic only if
+# its score exceeds the runner-up by _LAYER2_MARGIN. Otherwise return
+# None (genuine ambiguity). This is order-independent and gives the
+# correct topic the chance to "win" even if a wrong topic was the first
+# to cross threshold.
+# ─────────────────────────────────────────────────────────────────────
+import os as _os_l2
+import re as _re_l2
+
+try:
+    from rapidfuzz import fuzz as _rf_fuzz
+    from rapidfuzz import process as _rf_process
+    _LAYER2_AVAILABLE = True
+except ImportError:
+    _LAYER2_AVAILABLE = False
+
+# Single-word anchors per topic — chosen as STRONG, UNAMBIGUOUS markers.
+# Multi-word phrases (e.g. "notice period", "good news") deliberately
+# excluded — they're handled by Layer-1 regex; fuzzy on phrases is noisy.
+# Keep ≤ 5 chars min so very short anchors aren't typo'd into wrong topic.
+_FUZZY_ANCHORS = {
+    "marriage": [
+        "shaadi", "shadi", "marriage", "wedding", "spouse", "husband", "wife",
+        "patni", "rishta", "divorce", "talaq", "sagai", "mangetar",
+        "sasural", "vivah", "mangni",
+    ],
+    "career": [
+        "career", "naukri", "profession", "business", "office",
+        "promotion", "appraisal", "interview", "manager", "resign",
+        "layoff", "freelance", "startup", "founder",
+    ],
+    "wealth": [
+        "paisa", "dhana", "money", "income", "kamai", "finance",
+        "savings", "bachat", "loan", "kharcha", "expense", "mortgage",
+        "investment", "profit", "insurance",
+    ],
+    "health": [
+        "health", "sehat", "bimari", "illness", "neend", "sleep",
+        "weight", "wajan", "acid", "acidity", "depress", "depression",
+        "anxiety", "anxious", "kamzori", "fever", "thyroid",
+        "diabetes", "cancer", "hospital", "surgery", "tabiyat",
+        "stress", "tension",
+    ],
+    "children": [
+        "santaan", "santtaan", "bachhe", "bachche", "aulad",
+        "conceive", "pregnant", "garbh", "khushkhabri",
+    ],
+    "love": [
+        "love", "pyaar", "romance", "crush", "breakup", "dating",
+        "girlfriend", "boyfriend", "premika",
+    ],
+    "mother": ["mother", "mummy", "mata"],
+    "father": ["father", "pitaji", "papa"],
+    "home_property": ["makaan", "property", "jameen", "vehicle"],
+    "education_basic": ["padhai", "education", "school", "college", "exams"],
+    "higher_studies": ["masters", "phd", "research", "abroad"],
+    "court_case": ["mukadma", "court", "lawsuit", "litigation"],
+    "foreign_travel": ["videsh", "abroad", "foreign", "migration"],
+    "spirituality": ["spirituality", "moksha", "meditation", "sadhana"],
+}
+
+# Cache: flat list of (topic_id, anchor_word) pairs for one-shot scan.
+_FUZZY_FLAT = [(tid, anc) for tid, anchors in _FUZZY_ANCHORS.items()
+               for anc in anchors]
+
+_LAYER2_THRESHOLD = 85
+_LAYER2_MIN_TOKEN_LEN = 4
+_LAYER2_MARGIN = 5          # default winner-vs-runnerup gap
+_LAYER2_MARGIN_CONNECTOR = 15  # tighter gap when "aur/and/or/&" present
+_LAYER2_CONNECTOR_RE = _re_l2.compile(r"\b(aur|and|or)\b|&", _re_l2.IGNORECASE)
+
+
+def _layer2_fuzzy(question):
+    """Layer-2 fuzzy fallback. Returns matching rule dict or None.
+
+    Only fires when Layer-1 found zero matches. Tokenizes question,
+    fuzzy-matches every token against ALL anchors (no per-token break),
+    tracks the BEST score per topic_id across all (token, anchor) pairs,
+    then picks the top-scoring topic only if it beats the runner-up by
+    _LAYER2_MARGIN. Order-independent. Architect-fix R2.
+    """
+    if not _LAYER2_AVAILABLE:
+        return None
+    if _os_l2.environ.get("LAYER2_FUZZY", "1") == "0":
+        return None
+    if not question:
+        return None
+    tokens = _re_l2.findall(r"\w+", question.lower(), flags=_re_l2.UNICODE)
+    if not tokens:
+        return None
+    # best score seen per topic_id across all (token, anchor) pairs
+    best_per_topic = {}
+    for tok in tokens:
+        if len(tok) < _LAYER2_MIN_TOKEN_LEN:
+            continue
+        for topic_id, anchor in _FUZZY_FLAT:
+            if abs(len(tok) - len(anchor)) > 3:
+                continue  # length-prefilter for speed
+            score = _rf_fuzz.ratio(tok, anchor)
+            if score >= _LAYER2_THRESHOLD:
+                prev = best_per_topic.get(topic_id, 0)
+                if score > prev:
+                    best_per_topic[topic_id] = score
+    if not best_per_topic:
+        return None
+    if len(best_per_topic) == 1:
+        chosen_id = next(iter(best_per_topic))
+    else:
+        # Pick highest-scoring topic; require margin over runner-up.
+        # If question contains a connector (aur/and/or/&), user is likely
+        # joining 2 intents → demand a MUCH larger margin before locking.
+        ranked = sorted(best_per_topic.items(), key=lambda kv: -kv[1])
+        margin_needed = (_LAYER2_MARGIN_CONNECTOR
+                         if _LAYER2_CONNECTOR_RE.search(question)
+                         else _LAYER2_MARGIN)
+        if (ranked[0][1] - ranked[1][1]) < margin_needed:
+            return None  # genuinely ambiguous (tied/near-tied scores)
+        chosen_id = ranked[0][0]
+    for rule in _TOPIC_RULES:
+        if rule.get("topic_id") == chosen_id:
+            return rule
+    return None
+
+
 def _detect_topic(question):
     """Topic routing with ambiguity gate. Returns the rule dict or None.
 
@@ -1153,7 +1298,9 @@ def _detect_topic(question):
         except Exception:
             continue
     if not matched:
-        return None
+        # H2.7.13 — Layer-2 fuzzy fallback ONLY when Layer-1 has zero hits.
+        # If Layer-1 already found something (even ambiguous), trust it.
+        return _layer2_fuzzy(q)
     # Multiple DISTINCT topic_ids hit → ambiguous → no lock.
     distinct_ids = {r.get("topic_id") for r in matched}
     if len(distinct_ids) > 1:

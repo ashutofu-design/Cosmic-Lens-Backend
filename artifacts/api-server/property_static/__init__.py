@@ -1,5 +1,20 @@
 """Property Static Engine — Y2 architecture (sister of health_static).
 
+⛔ USER-DISABLED (P1.0-disable, 2026-05-05):
+   User explicitly turned engine OFF — wants property Qs to flow to LLM
+   passthrough with D1 (and eventually D4, once compute_d4 is built).
+   Bypass enforced here via setdefault — handle_property_question() will
+   return None for ALL property Qs, falling through to the LLM pipeline
+   with the full kundli pack injected by openai_helper.
+   To RE-ENABLE: set PROPERTY_STATIC_BYPASS=0 in environment.
+"""
+import os as _os
+_os.environ.setdefault("PROPERTY_STATIC_BYPASS", "1")
+del _os
+
+_DOC_ORIG = """
+
+
 ╔═══════════════════════════════════════════════════════════════╗
 ║  SCOPE: NON-TIMING engine                                     ║
 ║  ───────────────────────────────────────────────────────────  ║
@@ -32,6 +47,7 @@
 ║    PROPERTY_REPLY_SANITIZER=1                                 ║
 ╚═══════════════════════════════════════════════════════════════╝
 """
+
 SCOPE = "non_timing"
 
 from property_static.property_engine import compute_property_facts  # noqa: F401, E402

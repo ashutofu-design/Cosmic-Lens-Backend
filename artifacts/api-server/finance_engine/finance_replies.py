@@ -392,7 +392,45 @@ def handle_finance_money_question(question: str, kundli: dict,
             "text": text, "mode": mode, "route": route,
             "scope": _ENGINE_SCOPE,
             "dimensions": None, "cache_hit": False, "engine_facts": None,
+            "router": None,
         }
+
+    # ── HYBRID re-route via LLM classifier (Option A) ─────────────
+    # Regex pehle ho chuka hai upar; agar HYBRID/general_finance_overview
+    # me gir gaya matlab specific pattern miss hua. Ab gpt-5-nano se deeply
+    # samjho aur correct sub-route pe re-dispatch karo. Confidence ≥ 0.75
+    # hi accept karenge; warna HYBRID hi rakhenge.
+    #
+    # IMPORTANT (architect fix): classifier MUST run BEFORE cache lookup
+    # and facts compute, warna pehle se cached HYBRID answer router ko
+    # permanently bypass kar dega. Order: regex → classifier → cache → facts.
+    router_meta = None
+    if mode == "HYBRID" and route == "general_finance_overview":
+        try:
+            from finance_engine.llm_router import classify_finance_question
+            cls_mode, cls_route, conf, reason = classify_finance_question(
+                question)
+        except Exception as _re:
+            print(f"[finance_money] llm_router error: {_re}", flush=True)
+            cls_mode = cls_route = None
+            conf = 0.0
+            reason = "router exception"
+        router_meta = {"cls_mode": cls_mode, "cls_route": cls_route,
+                        "confidence": conf, "reason": reason}
+        # Accept re-route only if confident AND not HYBRID→HYBRID
+        if (cls_mode and cls_route and conf >= 0.75
+                and not (cls_mode == "HYBRID"
+                         and cls_route == "general_finance_overview")):
+            mode, route = cls_mode, cls_route
+            # WARNING re-route — locked template, no cache, no facts
+            if mode == "WARNING":
+                text_w = WARNINGS.get(route, "")
+                return {
+                    "text": text_w, "mode": mode, "route": route,
+                    "scope": _ENGINE_SCOPE,
+                    "dimensions": None, "cache_hit": False,
+                    "engine_facts": None, "router": router_meta,
+                }
 
     # Cache check — HYBRID mode mixes question hash into key so each
     # unique user phrasing gets its own personalised cached narrative.
@@ -407,9 +445,10 @@ def handle_finance_money_question(question: str, kundli: dict,
             "scope": _ENGINE_SCOPE,
             "dimensions": cached.get("meta", {}).get("dimensions"),
             "cache_hit": True, "engine_facts": None,
+            "router": router_meta,
         }
 
-    # Compute facts
+    # Compute facts (only after final route is known)
     facts = compute_finance_facts(kundli)
     if facts.get("error"):
         return {
@@ -417,15 +456,15 @@ def handle_finance_money_question(question: str, kundli: dict,
             "mode": "FAILSAFE", "route": route,
             "scope": _ENGINE_SCOPE,
             "dimensions": None, "cache_hit": False, "engine_facts": facts,
+            "router": router_meta,
         }
 
     if mode == "DIRECT":
         formatter = _DIRECT_FORMATTERS.get(route, _direct_wealth_verdict)
         text = formatter(facts)
     elif mode == "HYBRID":
-        # Per user directive (Option Z): catch-all general finance Q
-        # gets DIRECT 4-dim picture FIRST, then short LLM narrative
-        # specifically addressing the user's question.
+        # Catch-all: DIRECT 4-dim picture + short LLM narrative addressing
+        # the user's specific question.
         direct_text = _direct_wealth_verdict(facts)
         narrative = _llm_narrative(facts, route, question)
         # Strip duplicated "Final:" line from direct part if narrative
@@ -449,4 +488,5 @@ def handle_finance_money_question(question: str, kundli: dict,
         "scope": _ENGINE_SCOPE,
         "dimensions": facts.get("dimensions"),
         "cache_hit": False, "engine_facts": facts,
+        "router": router_meta,
     }

@@ -1,0 +1,3 @@
+
+# Finance engine runtime cache (sqlite, regenerated on demand)
+finance_engine/_finance_money_cache.sqlite3

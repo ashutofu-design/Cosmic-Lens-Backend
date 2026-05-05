@@ -303,6 +303,38 @@ Architect review of H2.3 caught 4 gaps. All 4 approved by user (A3+B+C+D) and fi
 
 **System state after H2.3.1**: comparative-intent rule is fully deterministic across all 3 modes. LLM continues to handle nuanced narrative body, but the **Final line is engine-controlled** for any comparative question — guarantees the locked principle without depending on LLM behaviour. Architectural pattern: "LLM = body/explanation, Engine = verdict/Final."
 
+## Phase H2.4 — LOCKED UNIVERSAL ANSWER STRUCTURE (3-block contract for ALL Qs) (2026-05-05)
+
+User-driven generalisation of H2.3.1: the deterministic-Final principle was only enforced on **comparative** questions. ChatGPT external review (80–85% rating) confirmed system was correct on math/safety/intent but exposed the same root cause as before — LLM Final lines were inconsistent in shape, sometimes too soft, sometimes wandering off-pattern. User principle: "**Consistency = Structure > Intelligence**". Solution: every health answer now ships in a fixed 3-block universal template, with the verdict block fully engine-controlled (LLM never writes Final). User pre-approved the design as **β + Y**: (β) Secondary slot is context-aware — switches to "Lifestyle / routine load" when behaviour-keywords are present in the question; (Y) Mental dim uses soft phrasing ("Mental wellbeing support") not the harsh "Mental peace zone weak".
+
+**The 3-block contract** (all health Qs, all 3 modes):
+1. **🔍 Truth** — engine-controlled 5-dim picture (existing, unchanged)
+2. **💡 Samajh** — LLM explanation (HYBRID/NARRATIVE) or static reasoning (DIRECT)
+3. **🎯 Final Verdict** — engine-controlled, exactly 3 lines:
+   - `Primary factor: <weakest dim with soft label>`
+   - `Secondary factor: <2nd-weakest OR "Lifestyle / routine load" if behaviour-Q>`
+   - `Focus: <one practical action line for the Primary dim>`
+
+**Implementation (`health_static/health_replies.py`)**:
+- New helpers (L120-300): `_BEHAVIOUR_RX` (33-keyword regex covering lifestyle/routine/sleep/diet/stress/exercise/screen/smoke/alcohol etc.), `_PRIMARY_LABEL_SOFT` (5-dim → soft user-facing labels, mental → "Mental wellbeing support"), `_SECONDARY_LABEL` (compact 2nd-slot labels), `_FOCUS_BY_PRIMARY` (one-line action per dim), `_rank_dims_by_strength` (weakest-first sort), `_build_verdict_block` (general path, handles ties at lowest score → "X & Y both equally impacting"), `_build_comparative_verdict` (comparative path, uses `_group_strength` + soft mental phrasing + 0.6 tie-band)
+- New universal entry-point `_force_locked_verdict` (L477-510): replaces H2.3.1's `_force_comparative_final`. Branch on `_detect_compare_pair(question)` → comparative or general builder. **Idempotent**: strips ANY existing `🎯 Final Verdict` block AND any `Final:` line before appending fresh block — safe to call multiple times across re-runs / cache rehydration.
+- Wired into all 3 modes: DIRECT (L932), HYBRID (L961), NARRATIVE (L979). Single function call per mode — no scattering.
+- LLM prompt Rule #3 rewritten (L662-666): "**DO NOT write any 'Final:' line yourself. The system appends a deterministic 3-line verdict block automatically — your job is ONLY the explanation (Samajh) section.**" — stops wasted LLM tokens on a line that gets stripped anyway.
+
+**Architect-found gap fixed during verification — `_ensure_final_line` regex blindspot (`validator.py` L321-326)**: `apply_safety_tail`'s `_ensure_final_line` searches for legacy `\bfinal\s*:` pattern; "🎯 Final Verdict" does NOT match (no colon directly after "final"), so validator thought no Final existed and appended `Final: <last line>` — duplicating the Focus line as a malformed Final. **Fix**: added pre-check `if "Final Verdict" in text or "Primary factor:" in text: return text, False` — locked block is the new Final contract; legacy Final-line addition is now a no-op when the block is present.
+
+**Cache-isolation gap fixed during verification — NARRATIVE cache key dropped question (`health_replies.py` L894)**: pre-H2.4 design assumed NARRATIVE replies were deterministic per (chart, route), so `_q_for_key = question if mode == "HYBRID" else None` — only HYBRID included the question hash. With H2.4, the verdict block depends on **question context** (comparative pair detection + behaviour keywords), so two different NARRATIVE Qs on the same route produce different verdicts. Without question in the key, the first reply got served for any subsequent NARRATIVE Q on the same route — silently corrupting verdicts. **Fix**: `_q_for_key = question if mode in ("HYBRID", "NARRATIVE") else None`. Cache namespace also bumped `health_static_v2 → health_static_v3` to invalidate any pre-H2.4 entries (which lack the locked block entirely).
+
+**Verification battery (P40, cache cleared)**:
+- **Unit 1** — `_build_verdict_block`: plain Q → tie at lowest score correctly produces "Body energy / vitality & Recovery / immunity both equally impacting" with no Secondary line; behaviour-Q → Secondary switches to "Lifestyle / routine load"
+- **Unit 2** — `_build_comparative_verdict`: body vs mental → tie band hit → "Body (vitality + recovery) & Mental wellbeing both equally impacting" with soft mental phrasing per Y
+- **Unit 3** — `_BEHAVIOUR_RX` sanity: 12/12 (9 positive: lifestyle/routine/kaam ka load/neend/sleep/stress/food/hydration/smoking + 3 negative: kuch nahi/body weak/mental kharab) — no false positives on dim-concept words
+- **Unit 4** — `_force_locked_verdict` idempotency: mock text with both legacy `Final:` line AND existing locked block → strips both, appends ONE fresh block; 2nd run on the output produces identical text (idempotent ✅)
+- **E2E (P40, 9 questions, mixed DIRECT/HYBRID/NARRATIVE)**: 9/9 PASS — exactly 1 verdict block, zero legacy `Final:` lines, Primary+Secondary+Focus all present, zero referral-leak words across all outputs. Cache-isolation re-run check: comparative Q after behaviour Q on same route now returns correct comparative tie verdict (not the leaked behaviour-Q output)
+- **Safety regression**: `['doctor','professional support','professional se','specialist se','expert guidance','therapist','psychiatrist','medical advice']` — zero hits across all 9 outputs
+
+**System state after H2.4**: every health answer ships with the locked 3-block universal structure. Truth from engine, Samajh from LLM (or static), Verdict fully engine-controlled. The LLM is now strictly a **Samajh-writer** with zero verdict authority — matches the long-standing principle "Engine = decision-giver, LLM = translator, Validator = guard." Architect-recommended pattern: "**Locked structure across all answers > clever per-question LLM verdicts**" (consistency wins over intelligence).
+
 ## Phase 2.8.82.1 — MODULE RENAME finance_engine → finance_static (2026-05-05)
 
 User-driven naming refactor in anticipation of upcoming **Finance Timing Engine** (separate module, dasha-based, future phase). Old folder name `finance_engine` was ambiguous — could mean the static chart engine OR the umbrella for all money-related logic. Renamed to `finance_static` to make the boundary explicit: this module ONLY handles non-timing chart-based finance Qs (wealth/income/saving/risk/leak/business-vs-job/debt/sudden-wealth/karakas/KP-Vedic conflicts). Timing Qs (kab paisa aayega, exact date) will live in a future `finance_timing` module.

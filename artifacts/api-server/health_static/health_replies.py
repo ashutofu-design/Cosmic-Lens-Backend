@@ -114,6 +114,164 @@ _DIM_CONCEPTS = [
 _STRENGTH = {"GREEN": 3, "YELLOW": 2, "RED": 1}
 
 
+# ── Phase H2.4 — Locked Universal Answer Structure ─────────────────
+# Behaviour-keyword detector for Secondary-factor logic (Q1=β):
+# if user mentions lifestyle/routine/stress/habit → Secondary becomes
+# "Lifestyle / routine load" instead of 2nd-weakest dim.
+_BEHAVIOUR_RX = re.compile(
+    r"\b(lifestyle|routine|habit|aadat|aadatein|stress|tension|"
+    r"neend|sleep|nind|food|khaana|khana|diet|paani|water|"
+    r"hydration|exercise|kasrat|workout|gym|screen|mobile|"
+    r"smoke|smoking|cigarette|sharab|alcohol|drink|sedentary|"
+    r"baith[ae]?|rehan[\s-]?sehan|daily kaam|work pressure|"
+    r"kaam ka load|chai|coffee|junk|fast[\s-]?food)\b",
+    re.IGNORECASE,
+)
+
+# Soft user-facing labels for Primary slot (Q2=Y — mental gets soft).
+_PRIMARY_LABEL_SOFT = {
+    "vitality":           "Body energy / vitality weak",
+    "disease_resistance": "Recovery / immunity weak",
+    "chronic_risk":       "Chronic-risk awareness needed",
+    "mental_health":      "Mental wellbeing support",  # soft (Y)
+    "accident_risk":      "Accident-risk awareness needed",
+}
+
+# Compact secondary labels (1st letter capital, no extra punctuation).
+_SECONDARY_LABEL = {
+    "vitality":           "Body energy bhi low side par",
+    "disease_resistance": "Recovery slow side par",
+    "chronic_risk":       "Chronic-risk slightly elevated",
+    "mental_health":      "Mental peace stressed",
+    "accident_risk":      "Accident-risk slightly elevated",
+}
+
+# One-line action by Primary dim (Focus block).
+_FOCUS_BY_PRIMARY = {
+    "vitality":           ("Sleep, hydration aur protein-rich diet pe "
+                           "focus karo, body ko build karne ka time do"),
+    "disease_resistance": ("Sleep, hydration, daily light walk + balanced "
+                           "diet — recovery channel ko support do"),
+    "chronic_risk":       ("Periodic basic checkup + preventive lifestyle, "
+                           "small issues ko early address karo"),
+    "mental_health":      ("Daily 10-min breathing, journaling, trusted "
+                           "insaan se baat — mental peace ko priority do"),
+    "accident_risk":      ("Driving / sports / sharp-object care, "
+                           "jaldbaazi avoid, daily mindfulness rakho"),
+}
+
+
+def _rank_dims_by_strength(dims: dict):
+    """Return list of (score, key) sorted ascending — weakest first."""
+    ranked = []
+    for k, d in dims.items():
+        v = (d or {}).get("verdict")
+        if v in _STRENGTH:
+            ranked.append((_STRENGTH[v], k))
+    ranked.sort(key=lambda t: t[0])
+    return ranked
+
+
+def _build_verdict_block(facts: dict, question: str) -> str:
+    """Generic 3-line locked verdict block (non-comparative path).
+    Format:
+      🎯 Final Verdict:
+      Primary factor: <soft label>
+      Secondary factor: <2nd weakest OR Lifestyle/routine load>
+      Focus: <one action line>
+    """
+    dims = facts.get("dimensions") or {}
+    ranked = _rank_dims_by_strength(dims)
+    if not ranked:
+        return ""
+
+    primary_score, primary_key = ranked[0]
+    primary_label = _PRIMARY_LABEL_SOFT.get(primary_key, primary_key)
+
+    # Tie at the lowest score level
+    tied = [k for s, k in ranked if s == primary_score]
+    has_behaviour = bool(_BEHAVIOUR_RX.search(question or ""))
+
+    if len(tied) >= 2 and not has_behaviour:
+        # Two equally weakest dims — explicit equal-impact line
+        a, b = tied[0], tied[1]
+        a_lbl = _PRIMARY_LABEL_SOFT.get(a, a).replace(" weak", "").replace(
+            " support", "").replace(" awareness needed", "")
+        b_lbl = _PRIMARY_LABEL_SOFT.get(b, b).replace(" weak", "").replace(
+            " support", "").replace(" awareness needed", "")
+        primary_line = (f"Primary factor: {a_lbl} & {b_lbl} both equally "
+                        "impacting")
+        secondary_line = ""
+    else:
+        primary_line = f"Primary factor: {primary_label}"
+        if has_behaviour:
+            secondary = "Lifestyle / routine load"
+        elif len(ranked) >= 2:
+            sec_key = ranked[1][1]
+            secondary = _SECONDARY_LABEL.get(sec_key, sec_key)
+        else:
+            secondary = "—"
+        secondary_line = f"Secondary factor: {secondary}"
+
+    focus = _FOCUS_BY_PRIMARY.get(
+        primary_key,
+        "Routine, rest, hydration aur calm habits maintain karo")
+
+    parts = ["🎯 Final Verdict:", primary_line]
+    if secondary_line:
+        parts.append(secondary_line)
+    parts.append(f"Focus: {focus}")
+    return "\n".join(parts)
+
+
+def _build_comparative_verdict(facts: dict, pair, question: str) -> str:
+    """3-line locked verdict for comparative-intent questions.
+    Uses _group_strength scoring + soft mental phrasing."""
+    a_keys, a_label, b_keys, b_label = pair
+    dims = facts.get("dimensions") or {}
+    a_score, a_v = _group_strength(dims, a_keys)
+    b_score, b_v = _group_strength(dims, b_keys)
+    has_behaviour = bool(_BEHAVIOUR_RX.search(question or ""))
+
+    def soft_label(label, keys):
+        # Apply Y rule: mental_health → soft phrasing
+        if "mental_health" in keys:
+            return "Mental wellbeing"
+        return label
+
+    a_disp = soft_label(a_label, a_keys)
+    b_disp = soft_label(b_label, b_keys)
+
+    if abs(a_score - b_score) <= 0.6:
+        primary_line = (f"Primary factor: {a_disp} & {b_disp} both "
+                        "equally impacting")
+        secondary_line = ""
+        focus_key = a_keys[0]
+    else:
+        if a_score < b_score:
+            weak_disp, strong_disp = a_disp, b_disp
+            focus_key = a_keys[0]
+        else:
+            weak_disp, strong_disp = b_disp, a_disp
+            focus_key = b_keys[0]
+        primary_line = f"Primary factor: {weak_disp} weak"
+        if has_behaviour:
+            secondary_line = "Secondary factor: Lifestyle / routine load"
+        else:
+            secondary_line = (f"Secondary factor: {strong_disp} relatively "
+                              "better but support needed")
+
+    focus = _FOCUS_BY_PRIMARY.get(
+        focus_key,
+        "Routine, rest, hydration aur calm habits maintain karo")
+
+    parts = ["🎯 Final Verdict:", primary_line]
+    if secondary_line:
+        parts.append(secondary_line)
+    parts.append(f"Focus: {focus}")
+    return "\n".join(parts)
+
+
 def _detect_compare_pair(question: str):
     """Return (a_keys, a_label, b_keys, b_label) if question is a true
     comparative with two distinct concept groups. Else None."""
@@ -307,38 +465,46 @@ _DIRECT_FORMATTERS = {
 }
 
 
-# ── Phase H2.3.1 (A3): HYBRID/NARRATIVE Final-line override ─────────
-def _force_comparative_final(text: str, facts: dict, question: str) -> str:
-    """If question is comparative, REPLACE the LLM's 'Final: ...' line
-    (or append one if missing) with the deterministic comparator
-    verdict. Guarantees the locked rule across HYBRID + NARRATIVE:
-    'comparison asked ⇒ winner/loser/tie verdict.' Single Final line
-    only — no duplication."""
-    if not text or not question:
+# ── Phase H2.4: Locked Universal Verdict Override ──────────────────
+# Replaces H2.3.1 _force_comparative_final. Now handles BOTH paths:
+#   - comparative Q → _build_comparative_verdict
+#   - general Q    → _build_verdict_block
+# Always strips any LLM-written 'Final:' line and appends the locked
+# 3-line verdict block. Idempotent — safe to call multiple times.
+def _force_locked_verdict(text: str, facts: dict, question: str) -> str:
+    if not text:
         return text
-    pair = _detect_compare_pair(question)
-    if not pair:
-        return text
-    dims = facts.get("dimensions") or {}
-    deterministic = _compare_one_liner(dims, *pair)
-    if not deterministic:
+    pair = _detect_compare_pair(question or "")
+    if pair:
+        block = _build_comparative_verdict(facts, pair, question or "")
+    else:
+        block = _build_verdict_block(facts, question or "")
+    if not block:
         return text
 
+    # Strip ALL existing 'Final:' lines (case-insensitive) AND any
+    # existing locked verdict block (idempotency on re-runs / cache).
     lines = text.splitlines()
-    out_lines, replaced = [], False
+    cleaned, in_block = [], False
     for ln in lines:
         stripped = ln.lstrip()
-        if (not replaced) and stripped.lower().startswith("final:"):
-            # preserve any leading indentation
-            indent = ln[:len(ln) - len(stripped)]
-            out_lines.append(f"{indent}Final: {deterministic}")
-            replaced = True
-        else:
-            out_lines.append(ln)
-    if not replaced:
-        out_lines.append("")
-        out_lines.append(f"Final: {deterministic}")
-    return "\n".join(out_lines)
+        low = stripped.lower()
+        if stripped.startswith("🎯 Final Verdict"):
+            in_block = True
+            continue
+        if in_block:
+            if (low.startswith("primary factor")
+                    or low.startswith("secondary factor")
+                    or low.startswith("focus:")):
+                continue
+            if stripped == "":
+                continue
+            in_block = False
+        if low.startswith("final:"):
+            continue
+        cleaned.append(ln)
+
+    return "\n".join(cleaned).rstrip() + "\n\n" + block
 
 
 # ── NARRATIVE: build engine fact pack for LLM (lean) ────────────────
@@ -490,7 +656,11 @@ def _llm_narrative(facts: dict, route: str, question: str,
         "1. Use ONLY the LOCKED FACTS below. Never invent planets, "
         "houses, dignities, or yogas not listed.\n"
         "2. Reply in Hinglish, warm and direct.\n"
-        "3. End with a line starting 'Final: '.\n"
+        "3. ⚠️ DO NOT write any 'Final:' line yourself. The system "
+        "appends a deterministic 3-line verdict block "
+        "('🎯 Final Verdict / Primary factor / Secondary factor / "
+        "Focus') automatically — your job is ONLY the explanation "
+        "(Samajh) section.\n"
         "4. No 'Beta', 'Pranam', 'I sense', 'I understand'.\n"
         "5. NEVER write engine codes like 'RED', 'YELLOW', 'GREEN', "
         "'verdict', 'tier', 'severity', 'confidence', 'sub_flags'.\n"
@@ -713,13 +883,18 @@ def handle_health_question(question: str, kundli: dict,
                 return out
 
     # ── Cache check ──
-    _q_for_key = question if mode == "HYBRID" else None
+    # Phase H2.4: include question in cache key for ALL non-DIRECT modes.
+    # The locked verdict block is question-context-aware (comparative pair
+    # detection + behaviour-keyword Secondary slot), so two NARRATIVE Qs on
+    # the same route can produce different verdicts. Cache MUST not collapse
+    # them. (Pre-H2.4 only HYBRID included the question.)
+    _q_for_key = question if mode in ("HYBRID", "NARRATIVE") else None
     # Cache namespace bumped to v2 in Phase H2.2.2 — invalidates stale
     # entries written before the doctor-mention/tone-guard cleanup
     # (H2.1 + H2.2 + H2.2.1) so legacy "professional support" / "doctor
     # consult" text cannot resurface from cache. Bump again on any
     # future policy change to the static engine output.
-    cache_key = make_cache_key(birth, kundli, "health_static_v2", route,
+    cache_key = make_cache_key(birth, kundli, "health_static_v3", route,
                                 question=_q_for_key)
     cached = get_cached(cache_key)
     if cached:
@@ -758,6 +933,9 @@ def handle_health_question(question: str, kundli: dict,
         # question kwarg uniformly (vitality uses it for comparative
         # intent; yoga_check ignores). Direct call — no try/except mask.
         raw_text = formatter(facts, question=question)
+        # Phase H2.4: also append locked verdict block to DIRECT mode
+        # so the entire system uses one consistent answer structure.
+        raw_text = _force_locked_verdict(raw_text, facts, question)
         # DIRECT text is engine-controlled deterministic — MUST NOT pass
         # through LLM-scrubbing validator (it would strip legitimate
         # words like 'dimensions' and 'Arishta'). Only attach safety
@@ -785,10 +963,11 @@ def handle_health_question(question: str, kundli: dict,
             ln for ln in direct_text.splitlines()
             if not ln.strip().lower().startswith("final:")
         )
-        # Phase H2.3.1 (A3): if question is comparative, REPLACE LLM's
-        # Final line with deterministic comparator verdict — guarantees
-        # rule "compare asked ⇒ winner/loser/tie" in HYBRID path.
-        narrative = _force_comparative_final(narrative, facts, question)
+        # Phase H2.4: ALL questions get locked 3-line verdict block
+        # (Truth from engine + Explanation from LLM + Verdict forced).
+        # Comparative path uses _build_comparative_verdict; general
+        # path uses _build_verdict_block. LLM's Final: line stripped.
+        narrative = _force_locked_verdict(narrative, facts, question)
         text = direct_clean.rstrip() + "\n\n" + narrative.lstrip()
     else:  # NARRATIVE
         narrative_raw = _llm_narrative(facts, route, question, sensitive)
@@ -804,9 +983,9 @@ def handle_health_question(question: str, kundli: dict,
         )
         tele_state["validator_flags"] = v_flags
         tele_state["validator_action"] = v_action
-        # Phase H2.3.1 (A3): same deterministic Final override for
-        # NARRATIVE mode comparative intents.
-        text = _force_comparative_final(text, facts, question)
+        # Phase H2.4: locked 3-line verdict block on every NARRATIVE
+        # answer — comparative or general, both paths covered.
+        text = _force_locked_verdict(text, facts, question)
 
     # Set brand_safety_action telemetry tag (compact summary)
     bs_actions = []

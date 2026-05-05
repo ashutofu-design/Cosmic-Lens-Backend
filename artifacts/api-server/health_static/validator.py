@@ -316,6 +316,11 @@ def _ensure_doctor_disclaimer(text: str, sensitive_bucket: Optional[str]
 
 
 def _ensure_final_line(text: str) -> Tuple[str, bool]:
+    # Phase H2.4: locked verdict block ("🎯 Final Verdict / Primary
+    # factor / Focus") is the new contract — if present, skip adding
+    # any legacy "Final:" line (would otherwise duplicate / mangle).
+    if "Final Verdict" in text or "Primary factor:" in text:
+        return text, False
     if re.search(r"(?i)\bfinal\s*:", text):
         text = re.sub(r"(?i)([^\n])\s+(final\s*:)", r"\1\n\n\2", text, count=1)
         return text, False

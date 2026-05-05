@@ -935,3 +935,32 @@ Architect flagged 4 critical issues; all fixed:
 Verified via E2E:
 - P40 still GREEN_GO 10/15 (Venus 5th CSL, signifies [2,6,11], no 8/12).
 - Synthetic Mars-in-8H test → RED verdict enforced ✓
+
+### Phase 2.10.7 P7 — Split Verdict (Trading vs Long-term)
+
+**User-flagged real gap**: Engine treated all stock paths as one bucket. KP RED was correctly silencing speculation but ALSO silencing long-term investing — overstatement when Vipreet-Rajyoga (recovery yog) is present.
+
+**Engine fix** (`stock_facts.py` L497+):
+- New fields: `verdict_trading`, `verdict_longterm` (+ reasons)
+- **Trading verdict** (KP-decisive):
+  - KP RED OR weak Mercury/Mars/H11 → RED
+  - KP GREEN + trading_ok → GREEN, else YELLOW
+- **Long-term verdict** (Vipreet-aware):
+  - !long_term_ok → RED
+  - severe_leak in dasha → YELLOW (limit exposure)
+  - KP GREEN → GREEN
+  - **KP RED + Vipreet-Rajyoga → YELLOW** (recovery yog tempers KP)
+  - KP RED + no Vipreet → RED
+  - default → YELLOW
+
+**Reply fix** (`stock_replies.py` `_direct_verdict_only` rewritten):
+- Path-wise verdict block (Trading + Long-term shown separately)
+- Vipreet-Raja yoga explicitly tagged "(recovery yog)"
+- 9-cell `_SPLIT_FINAL` matrix maps (trading, longterm) → one-line Hinglish takeaway
+- Removed absolute "Faida nahi hoga" / "Stock market favourable hai" language
+- engine_version → stock_facts_v1.2_split_verdict
+
+**P40 expected (Vipreet-Raja present, KP RED, long_term_ok=True)**:
+- Trading: 🔴 RED — KP 5th-CSL loss-house contamination
+- Long-term: 🟡 YELLOW — Vipreet-Rajyoga recovery yog tempers KP
+- Final: "Trading se loss hoga, lekin disciplined long-term investing se dheere profit possible hai."

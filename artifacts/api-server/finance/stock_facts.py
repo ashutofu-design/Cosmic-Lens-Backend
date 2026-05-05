@@ -482,7 +482,7 @@ def compute_stock_facts(kundli: dict) -> Dict[str, Any]:
     if kp_5th and isinstance(kp_5th.get("score_weight"), int):
         score += kp_5th["score_weight"]
 
-    # Clamp and verdict
+    # Clamp and composite verdict (kept for backward compat)
     score = max(-9, min(15, score))
     if score >= 8:
         verdict = "GREEN_GO"
@@ -490,6 +490,60 @@ def compute_stock_facts(kundli: dict) -> Dict[str, Any]:
         verdict = "YELLOW_WAIT"
     else:
         verdict = "RED_AVOID"
+
+    # ── J3. SPLIT VERDICTS — Trading vs Long-term (Phase 2.10.7 P7) ──
+    # User-flagged real gap: engine treated stocks as one bucket. Per
+    # KP+Parashar tradition, speculation and disciplined investing are
+    # different vehicles with different chart signatures.
+    kp_v = (kp_5th or {}).get("verdict") if kp_5th else None
+    has_vipreet = "Vipreet-Raja" in wealth_yogas
+    severe_leak = leak_present and (md_bad_link or ad_bad_link)
+
+    # Trading / speculation / F&O / intraday — KP-decisive
+    if (kp_v == "RED"
+            or sub_flags["intraday_warning"]
+            or sub_flags["quick_money_warning"]
+            or not sub_flags["trading_ok"]):
+        verdict_trading = "RED"
+        verdict_trading_reason = (
+            "KP 5th-CSL loss-house contamination" if kp_v == "RED"
+            else "Mercury/Mars weak or H11 dignity poor"
+        )
+    elif kp_v == "GREEN" and sub_flags["trading_ok"]:
+        verdict_trading = "GREEN"
+        verdict_trading_reason = "KP confirms + Mercury/Mars/H11 strong"
+    else:
+        verdict_trading = "YELLOW"
+        verdict_trading_reason = "Mixed — small/disciplined trades only"
+
+    # Long-term investing — Vipreet-Rajyoga gives recovery boost
+    if not sub_flags["long_term_ok"]:
+        verdict_longterm = "RED"
+        verdict_longterm_reason = ("Jupiter/Saturn/H2 too weak — even "
+                                    "long-term investing not supported")
+    elif severe_leak:
+        verdict_longterm = "YELLOW"
+        verdict_longterm_reason = ("Long-term ok but current dasha shows "
+                                    "leak — limit exposure")
+    elif kp_v == "GREEN":
+        verdict_longterm = "GREEN"
+        verdict_longterm_reason = ("KP + Parashar both confirm — "
+                                    "disciplined SIP / index recommended")
+    elif kp_v == "RED" and has_vipreet:
+        # Vipreet-Rajyoga = recovery from setback. Specifically tempers
+        # KP's "no entry ever" verdict for long-term horizons.
+        verdict_longterm = "YELLOW"
+        verdict_longterm_reason = ("KP cautions but Vipreet-Rajyoga "
+                                    "gives recovery yog — long-term "
+                                    "SIP cautiously OK")
+    elif kp_v == "RED":
+        verdict_longterm = "RED"
+        verdict_longterm_reason = ("KP RED + no Vipreet recovery — "
+                                    "even long-term risky")
+    else:
+        verdict_longterm = "YELLOW"
+        verdict_longterm_reason = ("Cautious GO — disciplined SIP / "
+                                    "index funds, avoid stock-picking")
 
     # ── K. Top 3 strongest planets (for sector mapping) ─────────────
     planet_scores = []
@@ -533,6 +587,10 @@ def compute_stock_facts(kundli: dict) -> Dict[str, Any]:
         "top3_sectors": top3_sectors,
         "score": score,
         "verdict": verdict,
-        "kp_5th_csl": kp_5th,  # P6: KP 5th-CSL block (None if cusps absent)
-        "engine_version": "stock_facts_v1.1_kp_5csl",
+        "verdict_trading": verdict_trading,            # P7: split verdict
+        "verdict_trading_reason": verdict_trading_reason,
+        "verdict_longterm": verdict_longterm,          # P7: split verdict
+        "verdict_longterm_reason": verdict_longterm_reason,
+        "kp_5th_csl": kp_5th,
+        "engine_version": "stock_facts_v1.2_split_verdict",
     }

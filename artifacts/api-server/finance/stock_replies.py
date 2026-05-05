@@ -27,52 +27,83 @@ _VERDICT_HINGLISH = {
 }
 
 
+_PATH_EMOJI = {"GREEN": "🟢", "YELLOW": "🟡", "RED": "🔴"}
+_PATH_LABEL = {
+    "GREEN":  "GREEN — Cautious GO",
+    "YELLOW": "YELLOW — Mixed, disciplined only",
+    "RED":    "RED — Avoid",
+}
+
+# P7: One-line takeaway based on (trading, longterm) verdict tuple
+_SPLIT_FINAL = {
+    ("GREEN",  "GREEN"):  "Trading aur long-term dono favourable — disciplined approach se profit possible.",
+    ("GREEN",  "YELLOW"): "Trading achha, par long-term me selective rehna — mixed signals.",
+    ("YELLOW", "GREEN"):  "Long-term investing strong, trading sirf disciplined size me.",
+    ("YELLOW", "YELLOW"): "Dono paths me caution — small SIP + minimal trading.",
+    ("RED",    "GREEN"):  "Trading se loss-prone, lekin long-term SIP / index se profit possible.",
+    ("RED",    "YELLOW"): "Trading se loss hoga, lekin disciplined long-term investing se dheere profit possible hai.",
+    ("RED",    "RED"):    "Stocks abhi nahi — chart neither trading na long-term ko support karta. SIP minimum, baaki avoid.",
+    ("YELLOW", "RED"):    "Trading possible par long-term me leak — short hold prefer.",
+    ("GREEN",  "RED"):    "Sirf disciplined trading — long-term hold me leak risk.",
+}
+
+
 def _direct_verdict_only(facts: dict) -> str:
-    v = _VERDICT_HINGLISH.get(facts.get("verdict", ""), facts.get("verdict", ""))
     score = facts.get("score", 0)
     yogas = facts.get("wealth_yogas") or []
     afflic = facts.get("afflictions") or []
-    sub = facts.get("sub_flags") or {}
 
-    lines = [v, f"\nScore: {score}/15"]
-    # P6: KP 5th-CSL verdict line (skip if KP cusps unavailable)
+    v_trade = facts.get("verdict_trading", "")
+    v_long  = facts.get("verdict_longterm", "")
+    r_trade = facts.get("verdict_trading_reason", "")
+    r_long  = facts.get("verdict_longterm_reason", "")
+
+    lines = ["📊 Path-wise verdict (chart se):"]
+    lines.append(
+        f"  • Trading / Speculation: {_PATH_EMOJI.get(v_trade,'')} "
+        f"{_PATH_LABEL.get(v_trade, v_trade)}"
+    )
+    if r_trade:
+        lines.append(f"      └ {r_trade}")
+    lines.append(
+        f"  • Long-term Investing:   {_PATH_EMOJI.get(v_long,'')} "
+        f"{_PATH_LABEL.get(v_long, v_long)}"
+    )
+    if r_long:
+        lines.append(f"      └ {r_long}")
+
+    lines.append(f"\nComposite score: {score}/15")
+
+    # KP 5th-CSL line
     kp = facts.get("kp_5th_csl")
     if kp and isinstance(kp, dict):
-        _kp_emoji = {"GREEN": "🟢", "AMBER": "🟡",
-                      "NEUTRAL": "⚪", "RED": "🔴"}.get(kp.get("verdict", ""), "")
+        _kp_e = {"GREEN": "🟢", "AMBER": "🟡",
+                  "NEUTRAL": "⚪", "RED": "🔴"}.get(kp.get("verdict", ""), "")
         lines.append(
-            f"\nKP 5th-CSL ({kp.get('csl_planet','?')}): "
-            f"{_kp_emoji} {kp.get('verdict','?')} "
-            f"(weight {kp.get('score_weight',0):+d}) — {kp.get('reason','')}"
+            f"KP 5th-CSL ({kp.get('csl_planet','?')}): "
+            f"{_kp_e} {kp.get('verdict','?')} "
+            f"(weight {kp.get('score_weight',0):+d})"
         )
+
     if yogas:
-        lines.append(f"\nWealth yogas present: {', '.join(yogas)}")
+        # P7: explicit recovery-yog tag for Vipreet-Rajyoga
+        tagged = []
+        for y in yogas:
+            if y == "Vipreet-Raja":
+                tagged.append(f"{y} (recovery yog)")
+            else:
+                tagged.append(y)
+        lines.append(f"Wealth yogas: {', '.join(tagged)}")
+
     if afflic:
-        lines.append(f"Afflictions: {len(afflic)} found")
+        lines.append(f"Afflictions ({len(afflic)}):")
         for a in afflic[:3]:
             lines.append(f"  • {a}")
 
-    ok_paths = []
-    if sub.get("long_term_ok"):
-        ok_paths.append("long-term investment")
-    if sub.get("trading_ok"):
-        ok_paths.append("active trading")
-    if sub.get("speculation_ok"):
-        ok_paths.append("speculation")
-    if ok_paths:
-        lines.append(f"\nFavourable paths: {', '.join(ok_paths)}")
-
-    warns = []
-    if sub.get("crypto_warning"):
-        warns.append("crypto")
-    if sub.get("intraday_warning"):
-        warns.append("intraday")
-    if sub.get("quick_money_warning"):
-        warns.append("quick-money")
-    if warns:
-        lines.append(f"Avoid: {', '.join(warns)}")
-
-    lines.append(f"\nFinal: {v.split('—')[1].strip() if '—' in v else v}")
+    # Final one-line takeaway from split-verdict matrix
+    final = _SPLIT_FINAL.get((v_trade, v_long))
+    if final:
+        lines.append(f"\n💡 Final: {final}")
     return "\n".join(lines)
 
 

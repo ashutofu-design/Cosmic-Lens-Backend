@@ -23,6 +23,7 @@ import {
   View,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import { AcharyaTypingDots } from "@/components/AcharyaTypingDots";
@@ -191,6 +192,83 @@ export default function AskScreen() {
           },
         ]
   );
+
+  // ── Chat persistence (H2.7.5b) ──────────────────────────────────────────
+  // Save the full chat thread (Q+A bubbles) to AsyncStorage per-user +
+  // per-active-profile so the conversation survives app close/reopen.
+  // The server-side `question_history` (Recent Questions surface) is
+  // separate — it stores Q text only for the landing list. THIS layer
+  // restores the actual chat bubbles inside the thread when user
+  // returns. Keys are scoped so different users / profiles on the same
+  // device don't bleed into each other's threads.
+  // Cap at last 200 messages to prevent unbounded growth on heavy users.
+  const CHAT_STORAGE_VERSION = "v1";
+  const chatStorageKey = useMemo(() => {
+    const uid = user?.id ?? "anon";
+    const pid = primaryProfileId ?? "default";
+    return `chat_thread_${CHAT_STORAGE_VERSION}_${uid}_${pid}`;
+  }, [user?.id, primaryProfileId]);
+  // Track WHICH key we've finished hydrating. Architect-flagged race
+  // (H2.7.5b review): a single boolean was unsafe — if user/profile
+  // switched, the SAVE effect could fire on the new key before LOAD
+  // completed, writing the OLD thread under the NEW key (cross-profile
+  // contamination). Using a key-string ref means save only proceeds
+  // when hydratedKeyRef.current === current chatStorageKey.
+  const hydratedKeyRef = useRef<string | null>(null);
+
+  // LOAD on mount + whenever the storage key changes (user/profile switch).
+  useEffect(() => {
+    // Invalidate hydration flag IMMEDIATELY on key change so the SAVE
+    // effect (which runs in the same commit cycle) cannot persist
+    // pre-switch messages under the new key.
+    hydratedKeyRef.current = null;
+    if (showDemo) {
+      // Demo mode never hydrates — always shows fresh DEMO_MESSAGES.
+      // Mark hydrated under the demo key so save effect stays inert.
+      hydratedKeyRef.current = chatStorageKey;
+      return;
+    }
+    const targetKey = chatStorageKey;
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(targetKey);
+        if (cancelled) return;
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            // Reset transient flags — a stored bubble must never resume
+            // streaming/loading on reopen.
+            const cleaned: Message[] = parsed.map((m: Message) => ({
+              ...m,
+              loading: false,
+              streaming: false,
+            }));
+            setMessages(cleaned);
+          }
+        }
+      } catch {
+        // Corrupt entry — ignore, keep default greeting.
+      } finally {
+        // Only mark hydrated if the key hasn't changed during the await.
+        if (!cancelled) hydratedKeyRef.current = targetKey;
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [chatStorageKey, showDemo]);
+
+  // SAVE on every messages change. Gated on hydratedKeyRef MATCHING the
+  // current key — prevents stale overwrite during user/profile switch.
+  // Cap last 200 to prevent storage bloat. Runs async, non-blocking.
+  useEffect(() => {
+    if (showDemo) return;
+    if (hydratedKeyRef.current !== chatStorageKey) return;
+    const tail = messages.slice(-200);
+    AsyncStorage.setItem(chatStorageKey, JSON.stringify(tail)).catch(() => {
+      // Storage full / quota — non-fatal, thread keeps working in memory.
+    });
+  }, [messages, chatStorageKey, showDemo]);
+
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 

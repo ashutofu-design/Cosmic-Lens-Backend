@@ -517,6 +517,38 @@ User chose **Path B+ (full data, LLM-driven cherry-pick)** over Path A (engine r
 
 **Reversibility**: zero engine/routing/validator/cache logic was deleted. The H2.5 4-block path is alive at `HEALTH_OUTPUT_STYLE=structured` — toggle the env var to revert instantly with no code change.
 
+## Phase H2.7.5 — TELEMETRY PARITY + MOBILE CHAT PERSISTENCE (2026-05-05)
+
+**Two ADD-ONLY changes shipped together** based on architect H2.7.4 follow-up + user requirement.
+
+**Part A — Server telemetry parity (`flask_app.py` L5931-6023, +9 lines net)**:
+- Architect H2.7.4 finding: `/api/ask/stream` calls `_log_question_history(user, question, out)` after every static-gate return (so mobile Qs surface in Recent Questions UI), but `/api/ask` did NOT — web users hitting the static gate had their Q+A invisible to the history surface.
+- Fix: refactored 3 inline `return jsonify({...})` blocks (health gate L5931, finance gate L5970, stock gate L6002) to bind dict to local `out`, call `_log_question_history(user, question, out)`, then `return jsonify(out)`. Response shape, status, and content **byte-identical** to before. `_log_question_history` is anon-safe (returns early when `user is None`) and exception-swallowing (telemetry can never break Ask flow).
+- Verified live: `/api/ask` POST with anon user returns `source=health_static[non_timing]:DIRECT/vitality_check`, 182 words, no crash.
+
+**Part B — Mobile chat thread persistence (`app/(tabs)/ask.tsx` +66 lines)**:
+- User requirement: *"app jab open hoga to question automatic rehena chahiye ans ke sath kuch delete nhi hona chahiye"* — full chat bubbles (Q+A) must survive app close/reopen. Pre-fix: chat lived in `useState` only, every reopen reset to single greeting. The "Recent Questions" surface (server `/api/history`) is separate — only stores Q text for landing list, doesn't restore the in-thread bubbles.
+- Implementation: AsyncStorage 2.2.0 (already installed, was unused). Per-user + per-active-profile key `chat_thread_v1_{user.id}_{primaryProfileId}` so multi-user/multi-profile devices don't bleed threads. LOAD effect on mount + key-change, SAVE effect on every messages mutation, 200-msg cap, transient flags (`loading`/`streaming`) reset on hydrate so a stored bubble can't resume mid-stream.
+- **Architect-flagged race fix (critical)**: initial implementation used a single `chatHydratedRef` boolean — on user/profile switch, SAVE could fire on the new key BEFORE async LOAD completed, writing OLD-key messages under NEW key (cross-profile contamination). Fixed by replacing boolean with `hydratedKeyRef: useRef<string | null>` storing the actual hydrated key string. LOAD effect resets to `null` immediately on key change, sets to `targetKey` only after successful load (and only if not cancelled). SAVE effect now gates on `hydratedKeyRef.current === chatStorageKey` — strict equality prevents any stale-key writes.
+- Demo mode (`showDemo === true`) is fully inert: never hydrates from storage, never saves, always shows fresh `DEMO_MESSAGES`.
+
+**Verified**:
+- `pnpm --filter @workspace/cosmic-lens-mobile run typecheck`: clean.
+- `/api/ask` live POST: gate fires, response shape preserved.
+- Architect re-review: race fix accepted; remaining items (abort in-flight stream on profile switch, explicit logout policy) tracked as broader UX scope, not blocking H2.7.5.
+
+**Architectural lesson**: every async-load + sync-save pair in React must gate writes on a key-equality check, not a boolean — boolean races silently across key changes. This pattern should be the default for any future per-user/per-profile cached state in mobile.
+
+**Reversibility**: server change is pure addition of telemetry call, response unchanged → safe to revert by removing the 3 `_log_question_history(...)` lines. Mobile change is additive (no existing code deleted, only new `useEffect`+`useRef`+`useMemo` + import) → revert by deleting lines 199-273 + the AsyncStorage import.
+
+**Pending architect items (carried forward, NOT blocking H2.7.5)**:
+- Abort in-flight `/api/ask/stream` on `chatStorageKey`/`user.id`/`primaryProfileId` change (UX: stale answers landing in new profile's thread).
+- Explicit logout policy: clear thread or isolate anonymous thread on transition to `uid="anon"`.
+- H3 anti-tamper (HIGH security, from H2.7.4 review).
+- Hardcoded `gpt-4o-mini` fallback (MEDIUM).
+- Validator split (MEDIUM).
+- E2E test matrix covering both `/api/ask` and `/api/ask/stream` (medium).
+
 ## Phase 2.8.82.1 — MODULE RENAME finance_engine → finance_static (2026-05-05)
 
 User-driven naming refactor in anticipation of upcoming **Finance Timing Engine** (separate module, dasha-based, future phase). Old folder name `finance_engine` was ambiguous — could mean the static chart engine OR the umbrella for all money-related logic. Renamed to `finance_static` to make the boundary explicit: this module ONLY handles non-timing chart-based finance Qs (wealth/income/saving/risk/leak/business-vs-job/debt/sudden-wealth/karakas/KP-Vedic conflicts). Timing Qs (kab paisa aayega, exact date) will live in a future `finance_timing` module.

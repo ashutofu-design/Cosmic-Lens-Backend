@@ -5926,7 +5926,10 @@ def ask_route():
         print(f"[ask] health_static hookup error (non-fatal): {_hs_exc}")
         _hs = None
     if _hs and _hs.get("text"):
-        return jsonify({
+        # H2.7.5: telemetry parity with /api/ask/stream — log static-gate
+        # returns to question_history so web users' Q+A surface in the
+        # Recent Questions UI (mobile already logs via H2.7.4 mirror).
+        out = {
             "text":       _hs["text"],
             "topic":      "non_timing_health",
             "confidence": 1.0,
@@ -5944,7 +5947,9 @@ def ask_route():
                 "route":            _hs.get("route"),
                 "sensitive_bucket": _hs.get("sensitive_bucket"),
             },
-        })
+        }
+        _log_question_history(user, question, out)
+        return jsonify(out)
 
     # ── Y2 FINANCE-MONEY hookup (runs FIRST per user directive) ─────────────
     # Pipeline order: finance → stock → normal LLM pipeline.
@@ -5960,7 +5965,8 @@ def ask_route():
         print(f"[ask] finance_money hookup error (non-fatal): {_fm_exc}")
         _fm = None
     if _fm and _fm.get("text"):
-        return jsonify({
+        # H2.7.5: telemetry parity (see health gate above).
+        out = {
             "text":       _fm["text"],
             "topic":      "non_timing_finance",
             "confidence": 1.0,
@@ -5977,7 +5983,9 @@ def ask_route():
                 "mode":       _fm.get("mode"),
                 "route":      _fm.get("route"),
             },
-        })
+        }
+        _log_question_history(user, question, out)
+        return jsonify(out)
 
     # ── Phase 2.10.7 — Y2 STOCK hookup (runs AFTER finance) ─────────────────
     # Deterministic stock engine + cache + 5 locked warnings. Returns None
@@ -5989,7 +5997,8 @@ def ask_route():
         print(f"[ask] finance hookup error (non-fatal): {_fin_exc}")
         _fin = None
     if _fin and _fin.get("text"):
-        return jsonify({
+        # H2.7.5: telemetry parity (see health gate above).
+        out = {
             "text":       _fin["text"],
             "topic":      "stock_finance",
             "confidence": 1.0,
@@ -6006,7 +6015,9 @@ def ask_route():
                 "mode":      _fin.get("mode"),
                 "route":     _fin.get("route"),
             },
-        })
+        }
+        _log_question_history(user, question, out)
+        return jsonify(out)
 
     # ── Run engine ───────────────────────────────────────────────────────────
     # Strategy: try OpenAI (richer, conversational answers). On any failure

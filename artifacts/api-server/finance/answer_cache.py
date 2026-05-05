@@ -63,15 +63,43 @@ def _normalise_birth(birth: dict | None) -> str:
     return "|".join(parts)
 
 
+def _chart_fingerprint(kundli: dict | None) -> str:
+    """Phase 2.10.7 P1 fix — deterministic hash of computed chart.
+
+    Includes ascendant + every planet's name/sign/house/retrograde so
+    that two different chart pipelines (or any change in computed
+    output) produce different cache keys, even when birth-fields are
+    identical. Defends against cross-contamination from pipeline
+    upgrades or alternate ayanamsha settings.
+    """
+    if not isinstance(kundli, dict):
+        return ""
+    asc = kundli.get("ascendant", "")
+    planets = kundli.get("planets") or []
+    # Sort by name to make order-independent, then take only the
+    # fields that affect stock-engine output.
+    rows = []
+    for p in sorted(planets, key=lambda x: x.get("name", "")):
+        rows.append(
+            f"{p.get('name','')}:{p.get('sign','')}:"
+            f"H{p.get('house','')}:r{1 if p.get('retrograde') else 0}"
+        )
+    raw = f"asc={asc}||" + "|".join(rows)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
 def make_cache_key(birth: dict | None, kundli: dict, topic: str,
                     route: str) -> str:
     """Deterministic key. Includes MD-AD so cache auto-invalidates
-    when antar-dasha changes."""
+    when antar-dasha changes. P1 fix: also includes a chart fingerprint
+    so identical birth fields with different computed charts (e.g.
+    pipeline change) cannot serve stale/wrong replies."""
     cd = (kundli or {}).get("currentDasha") or {}
     md = cd.get("maha", "")
     ad = cd.get("antar", "")
     raw = "||".join([
         _normalise_birth(birth),
+        f"chart={_chart_fingerprint(kundli)}",
         f"md={md}", f"ad={ad}",
         f"topic={topic}", f"route={route}",
     ])

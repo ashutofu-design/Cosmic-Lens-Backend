@@ -5854,9 +5854,24 @@ def ask_route():
             }), 402
     else:
         # Anonymous fallback — kept for legacy callers (e.g. preview/demo).
-        # No persistence; loose 1/req behaviour. Mobile clients should always
-        # send user_id+X-API-Key so quota truly enforces.
-        quota = {"used": 0, "limit": 1}
+        # Phase 2.10.7 P2 fix — previously this branch served unlimited
+        # requests with synthetic quota={used:0,limit:1}, allowing trivial
+        # quota-bypass by simply omitting `user_id`. Now enforce a strict
+        # per-IP rolling daily limit using a tiny sqlite ledger.
+        from anon_rate_limit import check_anon_quota
+        anon_q = check_anon_quota(request.remote_addr or "unknown",
+                                   limit=int(os.environ.get("ANON_DAILY_LIMIT", "3")))
+        if not anon_q["allowed"]:
+            return jsonify({
+                "error":            "daily_limit_reached",
+                "message":          (f"Demo mode me daily {anon_q['limit']} "
+                                     "free questions allowed hain. Sign in "
+                                     "karein for full access."),
+                "quota":            {"used": anon_q["used"], "limit": anon_q["limit"]},
+                "plan":             "anonymous",
+                "upgrade_required": True,
+            }), 402
+        quota = {"used": anon_q["used"], "limit": anon_q["limit"]}
 
     # ── Phase 2.10.7 — Y2 STOCK / FINANCE hookup ────────────────────────────
     # Deterministic stock engine + cache + 5 locked warnings. Returns None

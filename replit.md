@@ -852,3 +852,20 @@ New package: `artifacts/api-server/finance/`
 **Verified routes (P40, /api/ask)**: Q3 → DIRECT/verdict_only ✅ | Q21 → DIRECT/top_dhana_karakas ✅ | Q1 → NARRATIVE/leak_facts (cached on 2nd hit) ✅ | Q18 → NARRATIVE/sector_recommendation ✅ | W1 → WARNING/QUICK_MONEY ✅ | W2 → WARNING/LEVERAGE ✅ | non-stock → brand_guard (untouched) ✅.
 
 **Cost projection (per user/month, ~25 stock Qs)**: ~$0.10 vs Y1 full-LLM ~$5-10 = 50-100x savings. Same chart + same MD-AD = same answer forever (cache hit).
+
+### Phase 2.10.7 P1 + P2 hardening (security + cache correctness)
+
+**P1 — Cache key chart fingerprint** (`finance/answer_cache.py` L69+)
+- New `_chart_fingerprint(kundli)` — sha256(asc + sorted planet:sign:house:retro)[:16]
+- `make_cache_key()` now includes `chart=<fp>` segment
+- Defends against pipeline upgrades / ayanamsha changes serving stale replies
+- Verified: P40 chart fp `8491346a0abe016d` ≠ mutated chart fp `ba95255e57cd9b25`
+
+**P2 — Anonymous quota bypass closed** (`anon_rate_limit.py` + `flask_app.py` L5858+)
+- Pre-existing bug: omitting `user_id` → synthetic quota `{used:0, limit:1}` → infinite calls
+- Fix: per-IP daily ledger (sqlite `_anon_rate.sqlite3`), `ANON_DAILY_LIMIT` env var (default 3)
+- UTC midnight reset, atomic increment-and-check under `_LOCK`
+- Failsafe: any DB error → DENY (never silently unlimited)
+- Live verified: anon calls 1-3 → 200, call 4+ → HTTP 402 daily_limit_reached
+
+**Deferred (B16-B19)**: P3 yoga detector tightness (Lakshmi/Vipreet-Raja over-trigger by ~+2 score), P4 router edges (Q5/Q9 phrasing without "stock" keyword fails gate, Q15 occasionally to loss_reasons instead of loss_planets). P40 verdict still RED_AVOID directionally correct.

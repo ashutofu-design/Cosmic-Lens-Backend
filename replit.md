@@ -366,6 +366,36 @@ Pattern ordered AFTER the original `vitality_check` regex but BEFORE `yoga_check
 
 **Architectural pattern reinforced**: "engine routing must match user's literal ask" — H2.5 is the same lesson as H2.3 (deterministic Final for comparative) and H2.4 (locked structure for all): when the user phrases a question with **plural/multi-dimensional intent** ("kaun-kaun" / "kya-kya"), the engine must **broaden the route** AND **expand the answer shape**, not collapse to a narrow single-dim template. ADD-ONLY discipline maintained — zero rule changes to existing scoring/dimensions, only new routing pattern + new locked block + cache-key generalisation.
 
+## Phase H2.6 — SIMPLE-OUTPUT MODE (structure-internal, narrative-out) (2026-05-05)
+
+**User feedback that drove the reversal**: H2.4/H2.5 produced a structurally-perfect but **report-style** answer (emojis + 5-dim list + RED/YELLOW + 🎯 Final Verdict + 👉 Tendency issues bullets). User called it "natak" — too much structure thopa on the user. Direct quote of the design ask:
+
+> "Backend complex ho sakta hai, output simple hona chahiye. Engine = same rakho (powerful hai). LLM = free bolo (human style). ❌ Structure force mat karo output me. ✅ Sirf internally use karo. Problem structure nahi hai — problem hai tum usko user pe thop rahe ho."
+
+This is **not a rollback** of H2.4/H2.5 — engine continues to compute the locked verdict + tendency dim-list internally. Only the **presentation layer** changes: instead of emitting the 4-block report, all that data becomes a fact pack fed to the LLM, which writes ONE flowing 2-3 paragraph Hinglish narrative.
+
+**Implementation (`health_replies.py` L211-411 + L1245-1299)**:
+- `_OUTPUT_STYLE` flag (env `HEALTH_OUTPUT_STYLE`, default `simple`). Setting `=structured` reverts to H2.5 4-block path for debug/admin.
+- `_DIM_SOFT_NAME` (L221-227): user-facing soft names — `vitality → "body energy"`, `disease_resistance → "immunity / recovery"`, `mental_health → "mental side"`, `chronic_risk → "chronic-zone"`, `accident_risk → "accident-zone"`. Engine dim-name jargon never reaches user.
+- `_DIM_TENDENCY_INLINE` (L231-242): per-dim × {RED, YELLOW} natural-prose phrases (e.g. vitality/RED → "baar-baar thakan, low stamina, aur chhoti energy-drop wali issues"). Used as-is by static fallback; LLM gets the same phrases as truth source in fact pack.
+- `_compute_simple_summary` (L245-271): pure function — extracts weak dims (RED/YELLOW), groups body/mind/risk, detects Arishta presence, returns dict. NO output formatting.
+- `_render_simple_narrative_static` (L274-339): no-LLM fallback. Composes 2-3 paragraphs from summary using template strings. Used when OPENAI client unavailable AND as `direct_fallback_text` for validator (so safety scrub has a safe deterministic anchor).
+- `_render_simple_narrative_llm` (L342-411): primary path. Builds INTERNAL CHART FACTS pack (truth source — never quoted to user) + 9-rule strict system prompt enforcing: NO emojis / NO bullet lists / NO section labels / NO engine jargon / NO disease names / NO doctor referral / NO fear words / NO Final: ending / use ONLY listed facts. 2-3 short paragraphs, 80-150 words. Falls back to static on any exception.
+- `handle_health_question` early branch (L1245-1299): if `_OUTPUT_STYLE == "simple"` → render simple narrative → validator scrub → strip auto-appended `Final:` (validator's `_ensure_final_line` always appends one; H2.6 contract forbids the label, so post-strip with anchored regex `\n+\s*Final\s*:[^\n]*\s*$`). Cache + telemetry like other modes; brand_safety adds `style:simple` tag.
+
+**Cache namespace**: `health_static_v4 → health_static_v5_{simple|structured}`. Style is part of namespace so toggling the flag invalidates cross-style cache hits cleanly.
+
+**Validator interaction**: simple mode passes the LLM output through the same `validate_health_llm_output` (disease-name ban, fear-softening, doctor-mention strip, sensitive-bucket helpline tail). Only the trailing `Final:` line is post-stripped — all safety scrubs remain active.
+
+**Verification (P40, fresh cache, 2026-05-05)**:
+- **User Q E2E** ("Mujhse kya kya health issue ho sakta he batao"): 2-paragraph flowing Hinglish narrative — body energy weak + immunity weak + mental fatigue + chronic-zone mild + accident-zone caution + lifestyle close. Zero structural artefacts. Reads like a knowledgeable friend, not a report.
+- **Leak audit (4 diverse Qs across DIRECT/HYBRID/NARRATIVE routes)**: 0/4 forbidden-token leaks. Forbidden set: `🎯 💚 🔍 🟡 🔴 🟢 RED YELLOW "Primary factor" "Secondary factor" "Final:" "5 dimensions" "Tendency issues" "Recovery channel" "Vitality channel" "dimension" "vitality:" "disease_resistance" doctor professional specialist therapist`.
+- **Idempotency**: cache-hit re-run returns byte-identical text.
+
+**Architectural pattern reinforced**: "Structure backend me rakho, output user-pe natural rakho" — same engine, same truth, same safety, same locked verdict computed internally. Only the **rendering layer** is now narrative-first. The LLM is once again the **translator** (H2.4 named principle); H2.4/H2.5's mistake was making the LLM also the layout-engine. H2.6 returns layout to a clean human voice and keeps engine truth as the silent source.
+
+**Reversibility**: zero engine/routing/validator/cache logic was deleted. The H2.5 4-block path is alive at `HEALTH_OUTPUT_STYLE=structured` — toggle the env var to revert instantly with no code change.
+
 ## Phase 2.8.82.1 — MODULE RENAME finance_engine → finance_static (2026-05-05)
 
 User-driven naming refactor in anticipation of upcoming **Finance Timing Engine** (separate module, dasha-based, future phase). Old folder name `finance_engine` was ambiguous — could mean the static chart engine OR the umbrella for all money-related logic. Renamed to `finance_static` to make the boundary explicit: this module ONLY handles non-timing chart-based finance Qs (wealth/income/saving/risk/leak/business-vs-job/debt/sudden-wealth/karakas/KP-Vedic conflicts). Timing Qs (kab paisa aayega, exact date) will live in a future `finance_timing` module.

@@ -205,6 +205,212 @@ _TENDENCY_BY_DIM = {
 }
 
 
+# ── Phase H2.6 — SIMPLE-OUTPUT MODE (structure-internal, narrative-out) ──
+# User feedback (2026-05-05): H2.4/H2.5 produced report-style output with
+# emojis + 5-dim list + verdict labels — felt like "natak". Engine still
+# computes the locked verdict + tendency dim-list internally; presentation
+# layer now renders ONE flowing 2-3 paragraph Hinglish narrative.
+# Default = "simple". Set HEALTH_OUTPUT_STYLE=structured (env var) to
+# revert to H2.5 4-block output (debug/admin only).
+_OUTPUT_STYLE = (os.environ.get("HEALTH_OUTPUT_STYLE") or "simple").lower()
+
+# Soft user-facing names for dims (NO labels like "vitality" / "RED").
+_DIM_SOFT_NAME = {
+    "vitality":           "body energy",
+    "disease_resistance": "immunity / recovery",
+    "mental_health":      "mental side",
+    "chronic_risk":       "chronic-zone",
+    "accident_risk":      "accident-zone",
+}
+
+# Inline tendency phrases (not bulleted) per dim+verdict — for static
+# fallback renderer. LLM gets the same data via fact pack.
+_DIM_TENDENCY_INLINE = {
+    ("vitality", "RED"):           "baar-baar thakan, low stamina, aur chhoti energy-drop wali issues",
+    ("vitality", "YELLOW"):        "kabhi-kabhi mild thakan ya energy-dip",
+    ("disease_resistance", "RED"): "frequent chhoti health problems aur slow recovery",
+    ("disease_resistance", "YELLOW"): "occasional minor infection-prone phase aur thodi slow recovery",
+    ("mental_health", "RED"):      "neend disturbance, mental fatigue ya sir bhaari lagna jaisa feel",
+    ("mental_health", "YELLOW"):   "mild stress ya mood-fluctuation phase",
+    ("chronic_risk", "RED"):       "lifestyle-driven gradual buildup zone (BP / sugar / metabolism category — preventive zone)",
+    ("chronic_risk", "YELLOW"):    "chronic-zone ka mild signal — periodic basic checkup useful",
+    ("accident_risk", "RED"):      "accident-zone par caution — jaldbaazi avoid, sharp objects aur driving me dhyan",
+    ("accident_risk", "YELLOW"):   "accident-zone par mild caution — jaldbaazi avoid",
+}
+
+
+def _compute_simple_summary(facts: dict) -> dict:
+    """Internal structured summary used by simple renderers (LLM + static).
+    Engine truth stays here; presentation layer never sees raw verdicts."""
+    dims = facts.get("dimensions") or {}
+    weak_body, weak_mind, weak_risk = [], [], []
+    for k in ("vitality", "disease_resistance"):
+        v = (dims.get(k) or {}).get("verdict")
+        if v in ("RED", "YELLOW"):
+            weak_body.append((k, v))
+    v = (dims.get("mental_health") or {}).get("verdict")
+    if v in ("RED", "YELLOW"):
+        weak_mind.append(("mental_health", v))
+    for k in ("chronic_risk", "accident_risk"):
+        v = (dims.get(k) or {}).get("verdict")
+        if v in ("RED", "YELLOW"):
+            weak_risk.append((k, v))
+    yogas = facts.get("yogas") or []
+    has_arishta = any(
+        ("arishta" in (y.get("name", "").lower())
+         or "balarishta" in (y.get("name", "").lower()))
+        for y in yogas
+    )
+    return {
+        "weak_body": weak_body, "weak_mind": weak_mind,
+        "weak_risk": weak_risk, "has_arishta": has_arishta,
+        "all_green": not (weak_body or weak_mind or weak_risk),
+    }
+
+
+def _render_simple_narrative_static(facts: dict, question: str) -> str:
+    """Static (no-LLM) fallback narrative renderer. Composes 2-3
+    natural Hinglish paragraphs from engine truth — no emojis, no
+    bullet lists, no dim/RED/YELLOW labels, no Final/Primary/Focus."""
+    s = _compute_simple_summary(facts)
+    if s["all_green"]:
+        return ("Tumhare chart ke hisaab se health side par koi major "
+                "stress nahi dikh raha. Body energy, immunity aur "
+                "mental peace teeno theek-thaak phase me hain. "
+                "Routine, neend aur balanced diet maintain rakho — "
+                "yahi consistency long-term me sabse zyada kaam aati hai.")
+
+    paras = []
+    # Para 1 — body side (vitality + immunity)
+    if s["weak_body"]:
+        body_names = " aur ".join(_DIM_SOFT_NAME[k] for k, _ in s["weak_body"])
+        body_tend = "; ".join(
+            _DIM_TENDENCY_INLINE.get((k, v), "")
+            for k, v in s["weak_body"] if _DIM_TENDENCY_INLINE.get((k, v))
+        )
+        paras.append(
+            f"Tumhare chart ke hisaab se {body_names} thodi weak side "
+            f"par dikh rahi hai, isliye tumhe {body_tend} hone ka "
+            f"tendency ho sakta hai."
+        )
+
+    # Para 2 — mind side
+    if s["weak_mind"]:
+        mind_tend = _DIM_TENDENCY_INLINE.get(s["weak_mind"][0], "")
+        paras.append(
+            f"Stress side bhi thoda zyada impact karta hai, to "
+            f"{mind_tend} aa sakta hai."
+        )
+
+    # Para 3 — risk zones (only if RED) + closing
+    risk_red = [(k, v) for k, v in s["weak_risk"] if v == "RED"]
+    risk_yellow = [(k, v) for k, v in s["weak_risk"] if v == "YELLOW"]
+    closing_bits = []
+    if risk_red:
+        rnames = " aur ".join(_DIM_SOFT_NAME[k] for k, _ in risk_red)
+        closing_bits.append(
+            f"{rnames} ke side par bhi alert phase hai, isliye "
+            f"preventive habits aur basic checkup important hain"
+        )
+    if not s["has_arishta"]:
+        closing_bits.append(
+            "overall yeh major bimari ka indication nahi hai — "
+            "routine aur lifestyle sahi rakho to easily control me "
+            "aa sakta hai"
+        )
+    else:
+        closing_bits.append(
+            "chart me ek classical health-yog active hai jo extra "
+            "dhyan deserve karta hai — routine, rest aur preventive "
+            "care priority pe rakho"
+        )
+    if risk_yellow and not risk_red:
+        closing_bits.append(
+            "chronic aur accident zones par hlka mild signal hai — "
+            "periodic checkup aur daily mindfulness useful rahega"
+        )
+    paras.append(", ".join(closing_bits).capitalize() + ".")
+    return "\n\n".join(paras)
+
+
+def _render_simple_narrative_llm(facts: dict, question: str,
+                                  sensitive_bucket: Optional[str]) -> str:
+    """LLM-driven simple narrative. Falls back to static if no client."""
+    try:
+        import openai_helper  # type: ignore
+        client = openai_helper._get_client()
+        if client is None:
+            return _render_simple_narrative_static(facts, question)
+    except Exception:
+        return _render_simple_narrative_static(facts, question)
+
+    s = _compute_simple_summary(facts)
+
+    # Build internal fact pack for LLM (truth source)
+    weak_lines = []
+    for k, v in s["weak_body"] + s["weak_mind"] + s["weak_risk"]:
+        soft = _DIM_SOFT_NAME[k]
+        tend = _DIM_TENDENCY_INLINE.get((k, v), "")
+        weak_lines.append(f"  - {soft} ({v}): {tend}")
+    fact_pack = (
+        "INTERNAL CHART FACTS (truth source — DO NOT label or quote):\n"
+        + ("\n".join(weak_lines) if weak_lines
+           else "  - all dimensions in healthy range") + "\n"
+        f"  - classical health-yog active: {'yes' if s['has_arishta'] else 'no'}\n"
+        f"  - user question: {question!r}"
+    )
+
+    sys_prompt = (
+        "You are a Vedic-astrology HEALTH translator. Tone: warm, "
+        "calm, direct, Hinglish, like a knowledgeable friend.\n\n"
+        "TASK: Convert the INTERNAL CHART FACTS into ONE flowing "
+        "natural answer (2-3 short paragraphs, 80-150 words total) "
+        "that addresses the user's question.\n\n"
+        "STRICT RULES:\n"
+        "1. NO emojis. NO bullet lists. NO numbered headers. NO "
+        "section labels like 'Final:', 'Primary factor:', 'Focus:', "
+        "'Tendency issues:', '5 dimensions'.\n"
+        "2. NO engine jargon: never write 'RED', 'YELLOW', 'GREEN', "
+        "'verdict', 'vitality', 'disease_resistance', 'channel', "
+        "'dimension'. Use natural Hinglish: 'body energy', 'immunity', "
+        "'mental side', 'chronic-zone', 'accident-zone'.\n"
+        "3. NO disease names (cancer / diabetes / migraine / "
+        "depression etc.). Use category-only language: 'low energy', "
+        "'frequent minor health issues', 'mental fatigue', "
+        "'lifestyle-driven gradual buildup'.\n"
+        "4. NO doctor / professional / specialist / therapist / "
+        "expert / counsellor mention. NO 'medical advice'.\n"
+        "5. NO 'tumhe X hai' phrasing. Use 'X ka tendency ho sakta "
+        "hai' / 'X side par dikh raha hai'.\n"
+        "6. NO fear words (danger / serious / khatarnak / fatal).\n"
+        "7. End with a calm practical line — lifestyle / routine / "
+        "preventive habit. NEVER end with a 'Final:' label.\n"
+        "8. Use ONLY the INTERNAL CHART FACTS as truth. Do not "
+        "invent dims that are not listed."
+    )
+    if sensitive_bucket == "mental_health":
+        sys_prompt += (
+            "\n9. Mental side ko softly handle karo — gentle phrasing, "
+            "no harsh labels.")
+
+    try:
+        resp = client.chat.completions.create(
+            model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+            messages=[
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": fact_pack},
+            ],
+            temperature=0.5,
+            max_tokens=400,
+        )
+        text = (resp.choices[0].message.content or "").strip()
+        if not text:
+            return _render_simple_narrative_static(facts, question)
+        return text
+    except Exception:
+        return _render_simple_narrative_static(facts, question)
+
+
 def _build_tendency_block(facts: dict) -> str:
     """4th locked block per Phase H2.5 spec. Lists category-based
     tendencies for every RED + YELLOW dim. GREEN dims skipped.
@@ -1001,7 +1207,11 @@ def handle_health_question(question: str, kundli: dict,
     # (H2.1 + H2.2 + H2.2.1) so legacy "professional support" / "doctor
     # consult" text cannot resurface from cache. Bump again on any
     # future policy change to the static engine output.
-    cache_key = make_cache_key(birth, kundli, "health_static_v4", route,
+    # Phase H2.6: namespace bumped v4→v5. Output style flipped from
+    # 4-block structured to flowing narrative — old cached entries are
+    # structurally incompatible with new presentation contract.
+    _ns = f"health_static_v5_{_OUTPUT_STYLE}"
+    cache_key = make_cache_key(birth, kundli, _ns, route,
                                 question=_q_for_key)
     cached = get_cached(cache_key)
     if cached:
@@ -1033,7 +1243,72 @@ def handle_health_question(question: str, kundli: dict,
         _emit("FAILSAFE", route, False)
         return out
 
+    # ── Phase H2.6: SIMPLE-OUTPUT branch ──
+    # Default style. Engine truth + locked verdict + tendency are
+    # computed internally (passed to LLM as fact pack); presentation
+    # layer renders one flowing Hinglish narrative — no emojis, no
+    # bullet headers, no dim labels. Set HEALTH_OUTPUT_STYLE=structured
+    # to revert to H2.5 4-block output (debug/admin only).
+    if _OUTPUT_STYLE == "simple":
+        narrative_raw = _render_simple_narrative_llm(
+            facts, question, sensitive)
+        # Validator scrub for safety (referral/disease/fear words)
+        text, v_flags, v_action = validate_health_llm_output(
+            narrative_raw,
+            user_question=question,
+            sensitive_bucket=sensitive,
+            allowed_yogas=facts.get("yogas") or [],
+            direct_fallback_text=_render_simple_narrative_static(
+                facts, question),
+        )
+        tele_state["validator_flags"] = v_flags
+        tele_state["validator_action"] = v_action
+
+        # H2.6 strict contract: NEVER end with a "Final:" label.
+        # Validator's _ensure_final_line auto-appends one — strip it
+        # back out for the simple-narrative presentation contract.
+        text = re.sub(
+            r"\n+\s*Final\s*:[^\n]*\s*$", "", text,
+            flags=re.IGNORECASE,
+        ).rstrip()
+
+        bs_actions = []
+        if "doctor_disclaimer_added" in v_flags:
+            bs_actions.append("doctor_disclaimer_added")
+        if any(f.startswith("disease_name") for f in v_flags):
+            bs_actions.append("diagnosis_ban_triggered")
+        if "diagnosis_assert_softened" in v_flags:
+            bs_actions.append("assert_softened")
+        if "fear_softened" in v_flags:
+            bs_actions.append("fear_softened")
+        if "cure_guarantee_softened" in v_flags:
+            bs_actions.append("cure_softened")
+        if "death_prediction_stripped" in v_flags:
+            bs_actions.append("death_stripped")
+        if sensitive:
+            bs_actions.append(f"sensitive:{sensitive}")
+        bs_actions.append("style:simple")
+        tele_state["brand_safety_action"] = ",".join(bs_actions) or "none"
+
+        put_cached(cache_key, text, {
+            "dimensions": facts.get("dimensions"),
+            "composite": facts.get("composite_score"),
+            "mode": mode, "route": route,
+            "sensitive_bucket": sensitive, "style": "simple",
+        })
+        out = {
+            "text": text, "mode": mode, "route": route,
+            "scope": _ENGINE_SCOPE,
+            "dimensions": facts.get("dimensions"),
+            "cache_hit": False, "engine_facts": facts,
+            "router": router_meta,
+            "sensitive_bucket": sensitive,
+        }
+        _emit(mode, route, False)
+        return out
+
     # ── Build text per mode (validator runs on every LLM-touched mode) ──
+    # (legacy structured path — only when HEALTH_OUTPUT_STYLE=structured)
     if mode == "DIRECT":
         formatter = _DIRECT_FORMATTERS.get(route, _direct_vitality_check)
         # Phase H2.3 + H2.3.1 (D): all DIRECT formatters now accept

@@ -728,6 +728,107 @@ def _detect_immunity_vs_lifestyle_q(question: str) -> bool:
            bool(_LIFESTYLE_PROBE_RX.search(question))
 
 
+# ────────────────────────────────────────────────────────────────────
+# H2.7.18 — VAGUE-DISCOMFORT question_type ("ajeeb sa feel", "bechaini")
+# ────────────────────────────────────────────────────────────────────
+# User-flagged failure: "Mujhe ajeeb sa feel hota hai body me kyun?"
+# was falling through to raw-pack path → LLM invented symptom-list,
+# planet jargon, timing leak, medical escalation. Fix: register as
+# 2nd question_type so engine builds clean signal pack instead.
+# ────────────────────────────────────────────────────────────────────
+
+_VAGUE_FEEL_RX = re.compile(
+    r"\b(ajeeb|ajib|weird|strange|uneasy|bechain[ai]?|"
+    r"khali\s*sa|khaali\s*sa|kuch\s*theek\s*nahi|"
+    r"theek\s*nahi\s*lagta|kuch\s*ho\s*raha|kuch\s*hota|"
+    r"unsettled|off\s*feel|naa?\s*samajh|naasamajh|"
+    r"man\s*nahi\s*lagta|jee\s*ghabra)\b",
+    re.IGNORECASE,
+)
+_WHY_PROBE_RX = re.compile(
+    r"\b(kyun|kyu|why|reason|wajah|kya\s*hota|kya\s*ho|"
+    r"hota\s*hai|lagta\s*hai|hota\s*kyun|feels?)\b",
+    re.IGNORECASE,
+)
+
+
+def _detect_vague_discomfort_q(question: str) -> bool:
+    """Match 'ajeeb sa feel kyun', 'bechaini kyun', etc."""
+    if not question:
+        return False
+    return bool(_VAGUE_FEEL_RX.search(question)) and \
+           bool(_WHY_PROBE_RX.search(question))
+
+
+def _classify_vague_discomfort(facts: dict) -> dict:
+    """SINGLE SOURCE OF TRUTH for vague-discomfort classification.
+    Truth table on (vitality, mental_health):
+      vit=RED + mh=RED   → body + mind dono imbalance (combined)
+      vit=RED + mh!=RED  → mainly body energy low
+      vit!=RED + mh=RED  → mainly mental load high
+      vit=GREEN + mh=GREEN → no clear imbalance, subtle adjustment
+      else (mixed YELLOWs) → mild combined effect
+    """
+    dims = facts.get("dimensions") or {}
+    vit_v = (dims.get("vitality") or {}).get("verdict", "?")
+    mh_v  = (dims.get("mental_health") or {}).get("verdict", "?")
+
+    if vit_v == "RED" and mh_v == "RED":
+        return {
+            "verdict": ("Jo 'ajeeb sa feel' aap bol rahe hain, wo aksar "
+                        "tab hota hai jab body aur mind dono thode "
+                        "imbalance me hote hain. Aapke pattern me body "
+                        "energy thodi low aur mental side par stress "
+                        "load zyada dikh raha hai, isliye kabhi-kabhi "
+                        "bina clear reason ke uneasy feel ho sakta hai."),
+            "primary_driver":   "mind_body_imbalance_combined",
+            "secondary_driver": "stress_load_high",
+            "remedy_focus":     "routine_stability_basics",
+        }
+    if vit_v == "RED" and mh_v != "RED":
+        return {
+            "verdict": ("Jo 'ajeeb sa feel' aap bol rahe hain, wo "
+                        "mainly body ki energy reserve thodi low hone "
+                        "se aata hai — mind side par koi heavy load "
+                        "nahi hai, sirf body ko thoda extra rest aur "
+                        "support chahiye."),
+            "primary_driver":   "body_energy_low",
+            "secondary_driver": "mental_baseline_ok",
+            "remedy_focus":     "rest_and_hydration",
+        }
+    if vit_v != "RED" and mh_v == "RED":
+        return {
+            "verdict": ("Jo 'ajeeb sa feel' aap bol rahe hain, wo "
+                        "mainly mental side par stress load zyada "
+                        "hone se aata hai — body baseline theek hai, "
+                        "par mind ke uthal-puthal ka asar body me "
+                        "feel hota hai."),
+            "primary_driver":   "mental_load_high",
+            "secondary_driver": "body_baseline_ok",
+            "remedy_focus":     "mind_decompression",
+        }
+    if vit_v == "GREEN" and mh_v == "GREEN":
+        return {
+            "verdict": ("Jo 'ajeeb sa feel' aap bol rahe hain, uske "
+                        "peeche aapke pattern me koi clear imbalance "
+                        "nahi dikh raha — body aur mind dono stable "
+                        "hain. Yeh aksar subtle adjustment phase ya "
+                        "temporary load ka asar hota hai."),
+            "primary_driver":   "no_clear_imbalance",
+            "secondary_driver": "subtle_adjustment",
+            "remedy_focus":     "maintenance",
+        }
+    return {
+        "verdict": ("Jo 'ajeeb sa feel' aap bol rahe hain, wo body "
+                    "aur mind ke mild combined effect se aata hai — "
+                    "koi ek bada cause nahi, dono pehlu thode role "
+                    "play karte hain."),
+        "primary_driver":   "mild_combined_effect",
+        "secondary_driver": "mixed",
+        "remedy_focus":     "routine_stability_basics",
+    }
+
+
 def _classify_immunity_lifestyle(facts: dict) -> dict:
     """H2.7.17-fix (architect-fix #e): SINGLE SOURCE OF TRUTH for
     immunity-vs-lifestyle classification. Returns verdict + driver
@@ -866,6 +967,34 @@ def _build_signal_pack(facts: dict, question: str) -> Optional[dict]:
     if not dims:
         return None
 
+    # H2.7.18 — vague-discomfort question_type (registered 2nd)
+    if _detect_vague_discomfort_q(question):
+        cls = _classify_vague_discomfort(facts)
+        vit_v = dims.get("vitality", {}).get("verdict", "?")
+        dr_v  = dims.get("disease_resistance", {}).get("verdict", "?")
+        mh_v  = dims.get("mental_health", {}).get("verdict", "?")
+        cr_v  = dims.get("chronic_risk", {}).get("verdict", "?")
+
+        key_factors = []
+        for dk in ("vitality", "mental_health"):
+            r = dims.get(dk, {}).get("reason", "")
+            if r:
+                r_clean = re.split(r"\s*\[KP-VEDIC", r)[0].strip()
+                key_factors.append(r_clean)
+
+        return {
+            "question_type":    "vague_discomfort_why",
+            "vitality":         _verdict_to_state("vitality", vit_v),
+            "immunity":         _verdict_to_state("disease_resistance", dr_v),
+            "mental":           _verdict_to_state("mental_health", mh_v),
+            "chronic":          _verdict_to_state("chronic_risk", cr_v),
+            "primary_driver":   cls["primary_driver"],
+            "secondary_driver": cls["secondary_driver"],
+            "remedy_focus":     cls["remedy_focus"],
+            "key_factors":      key_factors,
+            "engine_verdict":   cls["verdict"],
+        }
+
     if _detect_immunity_vs_lifestyle_q(question):
         # H2.7.17-fix (architect #e): use SINGLE SOURCE classifier
         # so verdict + driver labels + remedy_focus stay consistent.
@@ -924,14 +1053,22 @@ def _render_signal_based_narrative_llm(signal_pack: dict, facts: dict,
         "already done all analysis and given you a SIGNAL PACK (JSON). "
         "Your job is ONLY EXPRESSION — convert engine truth to natural "
         "Hinglish for the user.\n\n"
+        "🛑 STRICT INPUT DISCIPLINE (H2.7.18):\n"
+        "USE ONLY THE SIGNALS IN THE JSON. Do NOT infer new symptoms, "
+        "new conditions, new sensations, or new body parts that the "
+        "JSON does not mention. The user did NOT describe specific "
+        "symptoms — do NOT add a list of symptoms. If signals say "
+        "'mind_body_imbalance_combined', explain THAT — do not invent "
+        "'sleep disturbance, acidity, restlessness, headaches' etc.\n\n"
         "MANDATORY:\n"
         "1. First sentence = engine_verdict VERBATIM (copy character-"
         "for-character, no rephrasing, no softening).\n"
-        "2. Then 2-3 lines explaining WHY using key_factors — talk in "
-        "BODY-system terms ('baseline support', 'recovery channel', "
-        "'energy reserve'), NOT raw planet/house jargon.\n"
+        "2. Then 1-2 short lines explaining WHY using primary_driver + "
+        "secondary_driver — talk in BODY-system terms ('baseline "
+        "support', 'energy reserve', 'mental load'), NOT raw planet/"
+        "house jargon.\n"
         "3. End with ONE practical remedy aligned to remedy_focus.\n"
-        "4. Length: 90-120 words target, 150 hard cap.\n\n"
+        "4. Length: 80-110 words target, 130 hard cap. SHORTER IS BETTER.\n\n"
         "BANS:\n"
         "✘ NEVER name a specific disease (diabetes, cancer, asthma, "
         "BP, thyroid, sinus, bronchitis, throat infection, etc.) — "
@@ -949,7 +1086,14 @@ def _render_signal_based_narrative_llm(signal_pack: dict, facts: dict,
         "Shani/Sun/Surya/Moon/Chandra/Mercury/Budh/Venus/Shukra/Rahu/"
         "Ketu) or house numbers (1st/6th/8th/12th house, lagna, dusthana) "
         "ANYWHERE in your output — even if user asks. key_factors are "
-        "deliberately written in body-system terms; preserve that style.\n\n"
+        "deliberately written in body-system terms; preserve that style.\n"
+        "✘ NEVER list 3+ symptoms in one sentence (e.g. 'sleep "
+        "disturbance, acidity, restlessness, headache') — the user did "
+        "NOT report these. Stick to the engine's primary_driver only.\n"
+        "✘ NEVER add medical-escalation phrases ('medical check kara "
+        "lo', 'doctor se milein', 'ignore mat karo', 'check kara "
+        "lijiye', 'turant consult karo') — reply layer adds disclaimer "
+        "separately. Keep tone CALM, never escalate.\n\n"
         "TONE: warm, calm, direct, like a knowledgeable friend. NOT a "
         "report. NO greetings (Beta/Pranam). NO 'I sense', 'I feel'."
     )
@@ -985,7 +1129,7 @@ def _render_signal_based_narrative_llm(signal_pack: dict, facts: dict,
         text = _sanitize_health_reply(text)
         if engine_verdict:
             text = _force_engine_verdict_prefix(text, engine_verdict)
-        return _enforce_word_cap(text, max_words=150)
+        return _enforce_word_cap(text, max_words=130)
     except Exception as e:
         print(f"[health_static.signal] llm failed: {e}", flush=True)
         return _render_simple_narrative_static(facts, question)
@@ -2120,7 +2264,7 @@ def handle_health_question(question: str, kundli: dict,
     # namespace so toggling HEALTH_SIGNAL_PACK doesn't serve stale
     # cross-mode entries.
     _sp_flag = "sp1" if os.environ.get("HEALTH_SIGNAL_PACK", "1") != "0" else "sp0"
-    _ns = f"health_static_v10_{_sp_flag}_{_OUTPUT_STYLE}"
+    _ns = f"health_static_v11_{_sp_flag}_{_OUTPUT_STYLE}"
     cache_key = make_cache_key(birth, kundli, _ns, route,
                                 question=_q_for_key)
     cached = get_cached(cache_key)

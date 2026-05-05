@@ -197,8 +197,11 @@ _HEALTH_TOPIC_RX = re.compile(
     # Mental
     r"stress|anxiety|depression|mental|"
     r"man|mood|tension|chinta|"
-    r"ashaant|udas|udaasi|pareshan|bechain|ghabrahat|"
+    r"ashaant|udas|udaasi|pareshan|bechain[ai]?|ghabrahat|"
     r"neend|sleep|insomnia|"
+    # H2.7.18 — vague-discomfort vocabulary
+    r"ajeeb|ajib|uneasy|weird|strange|unsettled|"
+    r"khali\s*sa|khaali\s*sa|theek\s*nahi\s*lagta|"
     # Accident
     r"accident|injury|chot|durghatna|"
     # Reproductive

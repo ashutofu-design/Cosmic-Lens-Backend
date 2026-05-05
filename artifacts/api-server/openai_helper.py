@@ -916,6 +916,77 @@ def _detect_topic(question):
     q = question.strip()
     if not q:
         return None
+    # ──────────────────────────────────────────────────────────────────
+    # H2.7.7.1 — PLACEMENT-MEANING EARLY-SKIP (architect-fix follow-up).
+    #
+    # Bug surfaced by user 2026-05-05: bare placement-meaning questions
+    # like "mera 6th lord 1st house me he iska matlab kya he" were
+    # mis-classified as topic_lock="home_property" by the keyword loop
+    # below (because "1st house" or "6th lord" indirectly hit the home/
+    # career patterns). The injected topic-lock then dragged property /
+    # ghar / Mangal context into a question that asked NEITHER about
+    # property NOR career — pure placement-meaning ask.
+    #
+    # Fix: detect the meaning/explainer intent up-front and return None
+    # so caller skips topic-lock injection. The LLM then answers the
+    # bare question via free reasoning + the H2.7.7 LENGTH & FOCUS LOCK
+    # rules in _PT_SYS_INTRO (no competing user-message override).
+    #
+    # Patterns covered (case-insensitive):
+    #   • "Nth lord Mth house"  + meaning trigger
+    #   • "Nth house ka/me lord"+ meaning trigger
+    #   • "<planet> N(th) house me" + meaning trigger
+    #   • "Nth house" alone + meaning trigger
+    # Meaning triggers: matlab, meaning, kya hai, kya hota, kya batata,
+    #                   explain, samjha, samjhao, iska arth
+    #
+    # Side-effect-safe: returns None (same return-value semantics as the
+    # ambiguity gate below). Existing callers already handle None.
+    # ──────────────────────────────────────────────────────────────────
+    import re as _re_pms  # local import to avoid touching module-top
+    # Architect-flagged thread-safety: gate on a SINGLE sentinel attr that is
+    # set LAST after both compiled regexes are stored. Eliminates the race
+    # window where one worker thread sees `_pms_placement_rx` set but
+    # `_pms_meaning_rx` not yet → AttributeError on the AND-search below.
+    if not hasattr(_detect_topic, "_pms_ready"):
+        _ord = r"\d+\s*(?:st|nd|rd|th)?"
+        _planet = (r"(?:sun|moon|mars|mercury|jupiter|venus|saturn|rahu|"
+                   r"ketu|surya|chandra|chandrama|mangal|budh|guru|brihaspati|"
+                   r"shukra|shani)")
+        # Placement = a chart-tech reference (lord+house, house+lord, planet+house)
+        _placement_pat = (
+            r"(?:"
+            + _ord + r"\s+lord\s+" + _ord + r"\s+house"
+            + r"|"
+            + _ord + r"\s+house\s+(?:ka|me|mein|main)?\s*" + _ord + r"\s+lord"
+            + r"|"
+            + _planet + r"\s+" + _ord + r"\s+house"
+            + r"|"
+            + _ord + r"\s+house\s+me\s+" + _planet
+            + r"|"
+            # "5th house ka lord 9th house me" / "Nth house ka lord Mth house"
+            + _ord + r"\s+house\s+ka\s+lord\s+" + _ord + r"\s+house"
+            + r")"
+        )
+        # Meaning trigger anywhere in the question (before OR after placement).
+        # Use TWO independent searches (not one positional regex) so that
+        # "explain 7th lord 10th house" matches as well as
+        # "7th lord 10th house ka matlab".
+        _meaning_pat = (r"(?:\bmatlab\b|\bmeaning\b|\barth\b|kya\s+(?:hai|hota|"
+                        r"batata|bolta|kahta|indicat)|\bexplain\b|"
+                        r"\bsamjha(?:o|do|iye|na)?\b|"
+                        r"iska\s+kya|isko\s+kya|kya\s+kahta)")
+        _pl = _re_pms.compile(_placement_pat, _re_pms.IGNORECASE)
+        _mn = _re_pms.compile(_meaning_pat, _re_pms.IGNORECASE)
+        _detect_topic._pms_placement_rx = _pl  # type: ignore[attr-defined]
+        _detect_topic._pms_meaning_rx = _mn  # type: ignore[attr-defined]
+        # Sentinel set LAST → if another thread sees _pms_ready, both
+        # regex attrs are guaranteed already published.
+        _detect_topic._pms_ready = True  # type: ignore[attr-defined]
+    if (_detect_topic._pms_placement_rx.search(q)  # type: ignore[attr-defined]
+            and _detect_topic._pms_meaning_rx.search(q)):  # type: ignore[attr-defined]
+        return None
+
     # Phase 2.4 ambiguity gate — collect ALL matches, not just the first.
     matched = []
     for rule in _TOPIC_RULES:

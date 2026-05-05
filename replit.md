@@ -1592,3 +1592,32 @@ Verified via E2E:
 
 **From H2.7.5**: in-flight stream abort on profile switch, logout/anon transition policy.
 **From H2.7.4**: H3 anti-tamper (HIGH security), hardcoded gpt-4o-mini fallback, validator split, E2E test matrix /api/ask + /api/ask/stream parity.
+
+---
+
+## H2.7.7.1 — Placement-Meaning Topic-Lock Skip (2026-05-05)
+
+**Trigger**: After H2.7.7 capped length (231→149w), user re-tested same Q and reported "abhi bhi same ans de raha he" — property tangent persisted because architect-flagged CRITICAL bug stayed unfixed: `_detect_topic` mis-classified bare placement-meaning Qs as `home_property` and the user-message topic-lock injection beats system-prompt rules.
+
+**1 ADD-ONLY edit** (`artifacts/api-server/openai_helper.py` L922-980, in `_detect_topic`):
+
+Inserted PLACEMENT-MEANING EARLY-SKIP at top of function (after empty-string guards, before ambiguity gate). Two compiled regexes:
+- **Placement pattern** (5 alternatives): `Nth lord Mth house` | `Nth house ka/me Mth lord` | `<planet> Nth house` | `Nth house me <planet>` | `Nth house ka lord Mth house`
+- **Meaning trigger** (anywhere): `matlab` | `meaning` | `arth` | `kya hai/hota/batata/bolta/kahta` | `explain` | `samjhao/do/iye/na` | `iska/isko kya`
+
+If BOTH match → return None → caller skips topic-lock injection → LLM uses H2.7.7 system rules unopposed (no competing user-message override).
+
+Compilation cached on `_detect_topic.<attr>` to avoid recompile per call. Local `import re` to keep module-top untouched.
+
+**Unit tests** (8 SKIP-expected + 5 LOCK-expected): **8/8 SKIP PASS**, 5/5 LOCK PASS (after 5th alt added for "5th house ka lord 9th house me" pattern).
+
+**Live test** (P40, exact failing question "mera 6th lord 1st house me he iska matlab kya he"):
+| Iteration | Words | topic_lock | Property tangent |
+|-----------|-------|------------|------------------|
+| Pre-H2.7.7 | 231   | home_property | ✗ present |
+| H2.7.7    | 149   | home_property | ✗ present (cap fixed length only) |
+| **H2.7.7.1** | **132** | **null** | **✓ NONE** |
+
+Trace confirmed: `PASSTHROUGH.MESSAGES_BUILT topic_lock: null, lock_chars: 0`.
+
+**Architect lesson reinforced**: When prompt-level rules and code-level injections conflict, fix the CODE-LEVEL injection — prompts cannot beat user-message-prepended overrides regardless of "supreme" wording. The 3-step contract (prompt + post-process + cache) extends to 4-step when injection-routing is involved: **+ injection-gate audit**.

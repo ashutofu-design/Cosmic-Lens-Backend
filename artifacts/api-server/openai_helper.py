@@ -232,6 +232,136 @@ def _M17_format_marriage_block(engine_result: dict) -> str:
     return "\n".join(parts)
 
 
+# ── PROPERTY FOCUS BLOCK (P1.1, 2026-05-05) ─────────────────────────────
+# Per-topic LLM analysis checklist for property/ghar/immovable-asset Qs.
+# User request: engine OFF (property_static disabled), LLM gets D1 + D9 +
+# full KP, focus tells LLM WHICH layers to read and HOW to answer.
+# Single source of truth — used by both _build_messages narrative path
+# AND the 3 passthrough sites (sync/stream/legacy) for parity.
+#
+# Killswitch: PROPERTY_FOCUS_BLOCK ∈ {"0","false","no","off"} → disabled.
+# Default ON. Helper accepts "property", "home_property", "real_estate",
+# "ghar" topic_ids OR falls back to regex on the question text.
+_PROPERTY_FOCUS_TEXT = (
+    "FOCUS — PROPERTY / GHAR / IMMOVABLE-ASSET ANALYSIS.\n\n"
+    "4th House (Sukha-bhava) primary. You have D1 + D9 + full KP block "
+    "above.\n"
+    "Read the chart YOURSELF and check these layers in this order:\n\n"
+    "────────────── VEDIC D1 (foundation) ──────────────\n"
+    "1. 4H STATUS:\n"
+    "   • Sign on 4H cusp + lord of 4H\n"
+    "   • Planets occupying 4H (benefic Jupiter/Venus/Moon = sukha;\n"
+    "     malefic Mars/Saturn/Rahu/Ketu = obstacles, delays, disputes)\n"
+    "   • Aspects on 4H — Jupiter aspect = blessings; Saturn = delay;\n"
+    "     Rahu = unconventional/foreign property\n"
+    "2. 4H LORD placement:\n"
+    "   • Which sign + house? Own/exalted/debilitated?\n"
+    "   • In 1/4/5/9/10/11 = strong property prospect\n"
+    "   • In 6/8/12 = obstacles, loss, dispute, sale\n"
+    "   • Conjunctions and aspects on 4L\n"
+    "3. KARAKAS — name + read each:\n"
+    "   • Mars (bhumi/land) — dignity, house\n"
+    "   • Saturn (immovable, old property, rental) — dignity, house\n"
+    "   • Venus (luxury home, comfort) — dignity, house\n"
+    "   • Moon (ancestral house, emotional anchor) — dignity, house\n"
+    "4. YOGAS to mention if present:\n"
+    "   • Dhana yoga (2-11 connection) = capacity to buy\n"
+    "   • 4-10 axis strong = own property in career city\n"
+    "   • Bhagya: 9L benefic + 4L benefic = inherited / easily-acquired\n"
+    "5. RISK SIGNALS:\n"
+    "   • 6L/8L/12L on 4H or aspecting 4L = litigation/loss/forced sale\n"
+    "   • Rahu-Ketu axis on 1-7 or 4-10 = unstable property dealings\n"
+    "   • Mars + Saturn affliction on 4H = construction issues, disputes\n\n"
+    "────────────── VEDIC D9 (Navamsha — strength check) ──────────────\n"
+    "6. 4H lord in D9 — which sign? exalted/own/debilitated?\n"
+    "   • Vargottama (D1 sign = D9 sign) = STRONGLY supportive (treat as\n"
+    "     a confirming signal, NOT an absolute guarantee).\n"
+    "   • D1 strong + D9 weak = surface promise, real-life struggle.\n"
+    "   • D1 weak + D9 strong = MAY indicate Neecha-bhanga IF cancellation\n"
+    "     conditions are met (dispositor strong, exalted planet aspecting,\n"
+    "     or lord of debilitation sign in kendra). Do NOT claim\n"
+    "     neecha-bhanga without checking these.\n"
+    "7. Mars/Saturn/Venus D9 dignity (karakas).\n\n"
+    "────────────── KP (Krishnamurti Paddhati) — promise layer ──────────────\n"
+    "8. 4th CSL (Cuspal Sub-Lord) signification — IDEAL pattern:\n"
+    "   • Strong promise: signifies 4 + 11 (core); 12 is supportive\n"
+    "     (you spend on it). Different KP teachers weight 11 vs 12\n"
+    "     differently — don't dogmatically demand all of 4+11+12;\n"
+    "     the core is 4 + (11 OR 2).\n"
+    "   • If 4th CSL prominently signifies 3 (= 12th-from-4) → indicates\n"
+    "     sale / loss / disposal rather than acquisition.\n"
+    "   • If 4 is absent from significations entirely → property NOT\n"
+    "     promised in this lifetime per KP.\n"
+    "9. 11th CSL — fulfilment / gain angle.\n"
+    "10. 12th CSL — investment / expenditure angle.\n"
+    "11. 2nd CSL (optional) — accumulated assets context.\n\n"
+    "────────────── ANSWER STYLE ──────────────\n"
+    "• Pick 3-4 MOST relevant points based on EXACTLY what user asked\n"
+    "  (don't dump all 11). E.g. 'kaisa hai property yog' → 1+2+8 are core.\n"
+    "  'kya risk hai' → 5 + 8 (negative significations). 'inherited milegi'\n"
+    "  → 4 (Bhagya) + 6 + 8.\n"
+    "• Cite ACTUAL planet names + house numbers from THIS chart — NEVER\n"
+    "  invent placements. If a value is missing from the chart, say so\n"
+    "  honestly ('D9 mein 4L ka exact dignity nahi mil raha').\n"
+    "• Translate Sanskrit inline: 'Chaturthesh (4H lord)', 'Mangal (Mars)',\n"
+    "  '4th cusp ka sub-lord'.\n"
+    "• Length: 100–150 words, 2-3 short Hinglish paragraphs. NO bullets,\n"
+    "  NO headers in user-facing reply.\n"
+    "• End with ONE practical line — Vedic remedy (Mars/Saturn pacification,\n"
+    "  Vastu tip) OR a 1-line summary insight.\n"
+    "• ⚠️ TIMING REFUSAL: If user asks 'kab milega ghar / muhurat / when\n"
+    "  to buy / griha-pravesh date' → politely refuse: 'Specific date\n"
+    "  predict karna shastriya etiquette ke khilaf hai. Aapko property yog\n"
+    "  ke strength + risk + readiness ka picture de sakta hu.'\n"
+)
+_PROPERTY_TOPIC_IDS = frozenset({"property", "home_property", "real_estate", "ghar"})
+
+# Mirrors the inline regex used at L1604 ("home_property" in _detect_topic
+# keyword loop). Kept self-contained so the helper has no upward dep.
+_PROPERTY_KEYWORD_RX = re.compile(
+    r"\b(ghar|makaan|property|plot|flat|jameen|jamin|home|house|real\s+estate)\b",
+    re.IGNORECASE,
+)
+
+
+def _property_focus_enabled():
+    """True UNLESS PROPERTY_FOCUS_BLOCK explicitly disables. Default ON."""
+    val = os.environ.get("PROPERTY_FOCUS_BLOCK", "").strip().lower()
+    return val not in ("0", "false", "no", "off")
+
+
+def _is_property_topic(topic_id, question):
+    """Match property Qs by topic_id OR fallback regex on question text."""
+    t = (topic_id or "").lower().strip() if isinstance(topic_id, str) else ""
+    if t in _PROPERTY_TOPIC_IDS:
+        return True
+    try:
+        if isinstance(question, str) and _PROPERTY_KEYWORD_RX.search(question):
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _passthrough_property_focus(question, topic_id):
+    """Return SHASTRIYA FOCUS block for property Qs in passthrough paths.
+
+    Returns "" (safe no-op) when:
+      - PROPERTY_FOCUS_BLOCK killswitch off
+      - question is not a property/ghar Q (by topic_id or regex)
+      - any sub-step raises (logged, never propagates)
+    """
+    try:
+        if not _property_focus_enabled():
+            return ""
+        if not _is_property_topic(topic_id, question):
+            return ""
+        return f"\n\nSHASTRIYA FOCUS for this question:\n{_PROPERTY_FOCUS_TEXT}\n"
+    except Exception as _pf_exc:  # noqa: BLE001
+        print(f"[passthrough_property_focus] skipped: {str(_pf_exc)[:160]}")
+        return ""
+
+
 def _passthrough_marriage_block(question, kundli, intel, birth):
     """M17 — Build LOCKED FACTS marriage block for passthrough paths.
 
@@ -3654,9 +3784,21 @@ def _build_messages(
                 except Exception as _kp_exc_pt:  # noqa: BLE001
                     print(f"[passthrough_legacy] kp inject skipped: {str(_kp_exc_pt)[:160]}")
                     _kp_block_pt = ""
+                # ── PROPERTY FOCUS (P1.1) — passthrough legacy parity ─────
+                # `topic` is unavailable in this legacy block; rely purely
+                # on regex fallback inside the helper (question-text match).
+                _property_focus_pt_lg = ""
+                try:
+                    _property_focus_pt_lg = _passthrough_property_focus(
+                        question, ""
+                    )
+                except Exception as _pf_exc_pt_lg:  # noqa: BLE001
+                    print(f"[passthrough_legacy] property focus skipped: "
+                          f"{str(_pf_exc_pt_lg)[:160]}")
+                    _property_focus_pt_lg = ""
                 _msgs_pt: list[dict] = [{
                     "role": "system",
-                    "content": _sys_intro_pt + _chart_block_pt + _kp_block_pt + _marriage_block_pt,
+                    "content": _sys_intro_pt + _chart_block_pt + _kp_block_pt + _property_focus_pt_lg + _marriage_block_pt,
                 }]
                 # Last 6 conversation turns for follow-up continuity
                 # (e.g. "yeh tumne kaise bola?" type clarifiers).
@@ -4292,6 +4434,12 @@ def _build_messages(
             "     remedy template.\n"
             f"{engine_ref}"
         )
+    # ── PROPERTY FOCUS (P1.1, 2026-05-05) — narrative-path injection.
+    # Uses shared _PROPERTY_FOCUS_TEXT + _is_property_topic helper (defined
+    # near _passthrough_marriage_block) so this and the 3 passthrough sites
+    # stay byte-identical. Killswitch: PROPERTY_FOCUS_BLOCK=0/false/no/off.
+    elif _is_property_topic(topic, question) and _property_focus_enabled():
+        focus = _PROPERTY_FOCUS_TEXT
     kp_block  = _kp_context(birth, topic)
     tr_block  = _transit_context()
     _, beh    = _summarise_history(history or [])
@@ -14137,12 +14285,23 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 except Exception as _kp_exc_pt:  # noqa: BLE001
                     print(f"[passthrough_sync] kp inject skipped: {str(_kp_exc_pt)[:160]}")
                     _kp_block_pt = ""
+                # ── PROPERTY FOCUS (P1.1) — passthrough sync parity ─────
+                _property_focus_pt = ""
+                try:
+                    _property_focus_pt = _passthrough_property_focus(
+                        question, _qu_topic
+                    )
+                except Exception as _pf_exc_pt:  # noqa: BLE001
+                    print(f"[passthrough_sync] property focus skipped: "
+                          f"{str(_pf_exc_pt)[:160]}")
+                    _property_focus_pt = ""
                 _msgs_pt: list[dict] = [{
                     "role": "system",
                     "content": (
                         _sys_intro_pt
                         + _chart_block_pt
                         + _kp_block_pt
+                        + _property_focus_pt
                         + _marriage_block_pt
                         + _emotion_tone_pt
                     ),
@@ -17714,11 +17873,22 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             except Exception as _kp_exc_pt_s:  # noqa: BLE001
                 print(f"[passthrough_stream] kp inject skipped: {str(_kp_exc_pt_s)[:160]}")
                 _kp_block_pt_s = ""
+            # ── PROPERTY FOCUS (P1.1) — passthrough stream parity ─────
+            _property_focus_pt_s = ""
+            try:
+                _property_focus_pt_s = _passthrough_property_focus(
+                    question, _topic_id_s
+                )
+            except Exception as _pf_exc_pt_s:  # noqa: BLE001
+                print(f"[passthrough_stream] property focus skipped: "
+                      f"{str(_pf_exc_pt_s)[:160]}")
+                _property_focus_pt_s = ""
             _msgs_pt_s: list[dict] = [{
                 "role":    "system",
                 "content": _PT_SYS_INTRO
                            + _chart_block_pt_s
                            + _kp_block_pt_s
+                           + _property_focus_pt_s
                            + _locked_section_pt_s
                            + _marriage_block_pt_s,
             }]

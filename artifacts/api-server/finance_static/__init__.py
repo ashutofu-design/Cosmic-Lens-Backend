@@ -49,4 +49,4 @@ Engine scope tag (exposed in every response): "non_timing"
 """
 SCOPE = "non_timing"
 
-from finance_engine.finance_replies import handle_finance_money_question  # noqa: F401, E402
+from finance_static.finance_replies import handle_finance_money_question  # noqa: F401, E402

@@ -22,7 +22,7 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
-from finance_engine.answer_cache import _CACHE_DB
+from finance_static.answer_cache import _CACHE_DB
 
 _LOCK = threading.Lock()
 _INITED = False

@@ -5921,7 +5921,7 @@ def ask_route():
     # the stock_engine block below. ADD-ONLY: stock_engine is untouched;
     # only the call order changed.
     try:
-        from finance_engine import handle_finance_money_question as _fm_handle
+        from finance_static import handle_finance_money_question as _fm_handle
         _fm = _fm_handle(question, kundli or {}, birth)
     except Exception as _fm_exc:
         print(f"[ask] finance_money hookup error (non-fatal): {_fm_exc}")

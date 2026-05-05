@@ -1,4 +1,4 @@
-"""LLM-based question classifier — fallback router for finance_engine.
+"""LLM-based question classifier — fallback router for finance_static.
 
 Per user directive (Option A + gpt-5-nano):
   - Regex tries first (fast, 0-cost) in finance_routing.py
@@ -16,7 +16,7 @@ import json
 import os
 from typing import Optional, Tuple
 
-from finance_engine.answer_cache import (_normalise_question, get_cached,
+from finance_static.answer_cache import (_normalise_question, get_cached,
                                           put_cached, make_cache_key)
 
 
@@ -125,7 +125,7 @@ def _classify_via_llm(question: str) -> Optional[dict]:
             return None
         return json.loads(raw)
     except Exception as e:
-        print(f"[finance_engine.llm_router] classify failed: {e}",
+        print(f"[finance_static.llm_router] classify failed: {e}",
               flush=True)
         return None
 

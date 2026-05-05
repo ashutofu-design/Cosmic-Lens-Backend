@@ -16,14 +16,14 @@ from typing import Any, Dict, Optional
 
 import time as _time
 
-from finance_engine.finance_facts import compute_finance_facts
-from finance_engine.finance_routing import (is_finance_question,
+from finance_static.finance_facts import compute_finance_facts
+from finance_static.finance_routing import (is_finance_question,
                                               route_finance_question)
-from finance_engine.finance_warnings import WARNINGS
-from finance_engine.answer_cache import (make_cache_key, get_cached,
+from finance_static.finance_warnings import WARNINGS
+from finance_static.answer_cache import (make_cache_key, get_cached,
                                           put_cached, _chart_fingerprint)
-from finance_engine.telemetry import log_event as _telemetry_log
-from finance_engine.validator import validate_finance_llm_output
+from finance_static.telemetry import log_event as _telemetry_log
+from finance_static.validator import validate_finance_llm_output
 
 
 _PATH_EMOJI = {"GREEN": "🟢", "YELLOW": "🟡", "RED": "🔴"}
@@ -475,7 +475,7 @@ def handle_finance_money_question(question: str, kundli: dict,
     router_meta = None
     if mode == "HYBRID" and route == "general_finance_overview":
         try:
-            from finance_engine.llm_router import classify_finance_question
+            from finance_static.llm_router import classify_finance_question
             cls_mode, cls_route, conf, reason = classify_finance_question(
                 question)
         except Exception as _re:

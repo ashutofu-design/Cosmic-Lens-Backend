@@ -600,7 +600,7 @@ def compute_finance_facts(kundli: dict) -> Dict[str, Any]:
     # ── G1. KP CSL layer (Phase 2.8.80) — read-only nudge, ADD-ONLY ──
     # None when KP cusps absent → dimension scorers proceed Vedic-only.
     try:
-        from finance_engine.kp_finance_csl import compute_kp_finance_csl
+        from finance_static.kp_finance_csl import compute_kp_finance_csl
         kp_csl = compute_kp_finance_csl(kundli)
     except Exception:
         kp_csl = None

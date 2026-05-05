@@ -673,8 +673,29 @@ _TOPIC_RULES = [
         "pattern":  _re_topic.compile(
             r"\b(bachh?[ae]|bachch?[ae]|bachcha|bachha|"
             r"child(ren)?|kids?|"
-            r"santaan|santan|putra|putri|baby|babies|"
-            r"progeny|offspring|aulad)\b", _re_topic.IGNORECASE),
+            r"santaan|santan|santtaan|santtan|putra|putri|baby|babies|"
+            r"progeny|offspring|aulad|aulaad|"
+            # H2.7.11 Layer-1 vocab — fertility / IVF / pregnancy
+            r"ivf|iui|surrogacy|surrogate|"
+            r"conceive|conceiving|conception|"
+            r"pregnan(?:t|cy|cies)|pregnent|"
+            r"garbh|garbhwati|garbhpat|garbhdharan|miscarriage|"
+            r"infertil|infertility|sterility|barren|nispantan|nisantaan|"
+            r"ovul|fertility|fertile|"
+            r"good\s+news|khushkhabri|khush\s*khabri|khushkhabar|khush\s*khabar|"
+            r"twins?|jodwa|jud(?:wa|wan|wa\s+bachh)|"
+            r"godbharai|god\s+bharai|baby\s+shower|"
+            r"baby\s*plan|baby\s*planning|family\s*planning|"
+            r"matritva|maternity|paternity|"
+            # H2.7.12 architect-fix: "ladka/ladki/larka/larki" removed —
+            # they collide with love pattern (already there for romantic
+            # interest), causing ambiguity-gate kills on valid Qs like
+            # "ladki kab milegi". Keep "beta/beti" (child-specific).
+            r"beta\b|beti\b|"
+            r"adoption|adopt|gode\s+lena|"
+            r"first\s+child|second\s+child|teesra\s+bachcha|"
+            r"5(?:th|h|H)\s+(?:house|bhav|lord))\b",
+            _re_topic.IGNORECASE),
         "houses":   [5],
         "karakas":  ["Guru (putra-karaka)"],
         "banned":   [3, 7, 11],
@@ -800,7 +821,14 @@ _TOPIC_RULES = [
             r"dating|date|relationship|"
             r"breakup|break\s*up|breakdown|tooth(?:na|gaya)|"
             r"ex|ex-girlfriend|ex-boyfriend|"
-            r"affair|chakkar|premika|premi|prem\s*sambandh|"
+            r"affair|premika|premi|prem\s*sambandh|"
+            # H2.7.11 — "chakkar" was over-broad (matched "naukri ke chakkar
+            # me thak gaya" and similar idiomatic uses). Restrict to romantic
+            # context: "chakkar chal raha", "chakkar me hai", "chakkar chala".
+            r"chakkar\s+(?:chal|chala|me\s+(?:hai|ho|pad)|tha|hai\b)|"
+            r"kisi\s+se\s+chakkar|chakkar\s+chal\s+raha|"
+            # H2.7.11 — breakup metaphor "dil tut/toot/tod"
+            r"dil\s+(?:tut|toot|tod)|"
             r"sambandh|ladki|ladka|partner\s+ki\s+talash)\b",
             _re_topic.IGNORECASE),
         "houses":   [5, 7, 11],
@@ -840,7 +868,26 @@ _TOPIC_RULES = [
             # marraige etc.) for parity with _passthrough_marriage_block.
             r"\b(shaadi|shadi|marriage|marriaga|marriagea|marrige|marraige|"
             r"wedding|spouse|husband|wife|"
-            r"pati|patni|kalatra|life\s+partner|jeevan\s+saathi|jeevansathi)\b",
+            r"pati|patni|kalatra|life\s+partner|jeevan\s+saathi|jeevansathi|"
+            # H2.7.11 Layer-1 vocab — engagement / divorce / in-laws
+            r"rishta|rishte|rishton|"
+            r"engagement|sagai|sagayi|mangni|mangetar|mangwa|"
+            r"divorce|divorced|talaq|talaaq|talak|"
+            r"separation|separat|alag\s+ho|alag\s+rehna|"
+            r"in[-\s]?law|in[-\s]?laws|sasur|sasural|sasuraal|"
+            r"saas\b|bahu|damaad|damad|jamai|jeth|devar|nanad|"
+            r"extramarital|second\s+(?:shaadi|marriage)|dusri\s+shaadi|"
+            # H2.7.12 architect-fix: "affair" removed (already in love
+            # pattern). cheat/dhokha kept — they're spouse-context strong.
+            r"cheat|cheating|dhokha|dhoka|betrayal|"
+            r"vivah|vivaah|saptapadi|kanyadan|baraat|barat|"
+            r"sambandh\s+tut|rishta\s+tut|rishta\s+toot|"
+            r"shaadi\s+tut|shaadi\s+toot|"
+            # Spouse-related quality questions
+            r"compatibility|compatible|kundali\s+match|match\s+making|"
+            r"manglik|mangalik|manglik\s+dosh|"
+            r"arrange\s+marriage|love\s+marriage|"
+            r"shaadi\s+ka\s+yog|vivah\s+yog)\b",
             _re_topic.IGNORECASE),
         "houses":   [7, 5, 8],
         "karakas":  ["Shukra (kalatra-karaka, men), Guru (pati-karaka, women)"],
@@ -869,9 +916,33 @@ _TOPIC_RULES = [
         "topic_id": "career",
         "label":    "career / profession / job",
         "pattern":  _re_topic.compile(
-            r"\b(career|job|naukri|profession|business|vyaapaar|vyapar|"
+            r"\b(career|job|naukri|naukrii|nokri|profession|business|"
+            r"vyaapaar|vyapar|"
             r"work|kaam|company|office|promotion|appraisal|salary|"
-            r"vyavasaaya|vyavasaya|interview)\b", _re_topic.IGNORECASE),
+            r"vyavasaaya|vyavasaya|interview|"
+            # H2.7.11 Layer-1 vocab — workplace / role / movement
+            r"boss|manager|hr\b|colleague|teammate|team\s+lead|"
+            r"office\s+politic|workplace|work\s*place|"
+            r"notice\s*period|noticeperiod|"
+            r"resign|resignation|resigning|quit\s+job|left\s+job|chhod"
+            r"(?:na|di|de)\s+naukri|chhodni|"
+            r"layoff|laid\s+off|fired|terminated|sacked|nikal\s+diya|"
+            r"hike|increment|raise|bonus|incentive|appraisal|"
+            r"target|project|deadline|presentation|"
+            r"sarkari|govt\s+job|government\s+job|psu|"
+            r"contract|freelance|freelanc|freelancing|consultant|consult|"
+            r"startup|founder|co[-\s]?founder|"
+            r"ceo|cto|cfo|coo|md\b|director|"
+            r"partnership|business\s+partner|partnership\s+yog|"
+            # H2.7.12 architect-fix: keep burnout in career ONLY. Health's
+            # "fatigue" handles the body-only case; burnout is workplace-event.
+            r"work\s*pressure|workload|burnout|burn[-\s]*out|"
+            r"client|deal|sales|revenue|"
+            r"transfer|posting|onsite|offshore|"
+            r"resign\s+karu|naya\s+job|new\s+job|switch\s+job|job\s+switch|"
+            r"placement|campus|fresher|"
+            r"karyakshetra|kariyar|career\s+yog|"
+            r"profession\s+(?:change|switch))\b", _re_topic.IGNORECASE),
         "houses":   [10, 6, 11],
         "karakas":  ["Surya (raj-karaka), Shani (karma-karaka), Budh (vyapaar-karaka)"],
         "banned":   [4, 8, 12],
@@ -880,9 +951,35 @@ _TOPIC_RULES = [
         "topic_id": "wealth",
         "label":    "wealth / dhana / paisa",
         "pattern":  _re_topic.compile(
+            # Original anchors
             r"\b(paisa|paise|wealth|dhana|dhan|money|income|"
-            r"savings|bachat|kamai|earnings|rich|amir|finance|financial|"
-            r"investment|invest)\b", _re_topic.IGNORECASE),
+            r"savings|saving|bachat|kamai|kamayi|earnings|rich|amir|"
+            r"finance|financial|investment|invest|investing|"
+            # H2.7.11 Layer-1 vocab — debt / credit
+            r"emi|loan|loans|karz|karza|udhaar|udhar|udhari|"
+            r"mortgage|debt|credit\s+card|credit-card|"
+            # Expense / budget
+            r"kharcha|kharch|kharche|expense|expenses|expenditure|spend|spending|"
+            r"budget|bills?|bill\s+pay|"
+            # Banking / instruments
+            r"fd\b|rd\b|sip\b|mutual\s*fund|mutual-fund|fixed\s+deposit|"
+            r"share\s*market|stock\s*market|stocks?|equity|equities|"
+            r"trading|trader|crypto|bitcoin|nifty|sensex|"
+            r"profit|loss\b|nuksan|nuksaan|fayda|laabh|gain|return\s+on|"
+            # Insurance / tax
+            r"insurance|insure|premium|policy|"
+            # H2.7.12 architect-fix: bare "return" too broad (matched
+            # "return to india", "return karega"). Use refund/itr only.
+            r"tax\b|itr|gst|refund|tds|"
+            # H2.7.12 architect-fix: "salary" removed (already in career
+            # pattern; collision → ambiguity gate killed valid Qs like
+            # "salary hike kab milega"). Keep tankha/payroll variants.
+            r"tankha|tankhah|payroll|"
+            # Financial outcomes
+            r"property\s+invest|gold\s+invest|fd\s+karu|"
+            r"poor|garib|gareeb|broke|kangal|deewala|bankrupt|"
+            r"crore|lakh|lakhs|crores|million|billion)\b",
+            _re_topic.IGNORECASE),
         "houses":   [2, 11, 5],
         "karakas":  ["Guru (dhana-karaka), Shukra (bhog-karaka)"],
         "banned":   [3, 6, 8, 12],
@@ -891,9 +988,69 @@ _TOPIC_RULES = [
         "topic_id": "health",
         "label":    "health / sehat / rog",
         "pattern":  _re_topic.compile(
+            # Original anchors
             r"\b(health|sehat|tabiyat|tabiat|illness|bimari|"
             r"rog|disease|medical|body|sharir|wellness|"
-            r"hospital|surgery|operation)\b", _re_topic.IGNORECASE),
+            r"hospital|surgery|operation|"
+            # H2.7.11 Layer-1 vocab expansion — symptoms / conditions / care
+            # Sleep / fatigue
+            r"neend|nind|insomnia|sleep|sleeping|"
+            # H2.7.12 architect-fix: "burnout" moved out of health (lives in
+            # career only) so "office burnout" doesn't collide → ambiguity.
+            r"thakaan|thakawat|thaka(?:n|ne)|fatigue|exhaustion|"
+            r"kamzori|kamzor|weakness|weak\s+feel|"
+            # Weight / metabolic
+            r"weight|wajan|vajan|motapa|moti(?:\s+ho|pa)|patlapan|patla(?:\s+ho|pan)|obesity|"
+            r"sugar\b|diabet|diabetes|diabetic|"
+            r"thyroid|thairoid|cholesterol|"
+            r"bp\b|blood\s*pressure|hypertension|hypotension|"
+            # Pain / injury
+            r"dard|pain|ache|aching|chot|injur|wound|fracture|sprain|"
+            r"sirdard|sir\s*dard|sar\s*dard|headache|migraine|"
+            r"kamar|backache|back\s+pain|"
+            r"ghutna|knee|joint|jor\s+dard|joint\s+pain|"
+            r"gardan|neck|kandha|shoulder|"
+            # Digestive
+            r"acid|acidity|gas\b|gastric|gastrik|"
+            r"ulcer|constipat|kabz|diarrh|loose\s*motion|dast|"
+            r"vomit|ulti|nausea|matli|"
+            r"pet\s*dard|stomach|peptic|"
+            # Skin / hair
+            r"skin|chehr|pimple|acne|daag|rash|allergy|allergic|alergy|eczema|"
+            r"hair\s*fall|baal\s+jhad|baal\s+gir|baalon|ganjapan|baldness|"
+            # Respiratory / cardiac
+            r"asthma|saans|breath|breathing|chest\s+pain|seene|"
+            r"fever|bukhar|jukam|jhukam|cold\s+ho|sardi|cough|khansi|kafh|"
+            r"infection|virus|viral|bacteria|bacterial|"
+            r"heart\s+(?:problem|attack|pain)|hridaya|cardiac|"
+            r"kidney|gurde|liver|jigar|"
+            # Sensory
+            r"aankh|eye\s+(?:problem|pain)|vision|chashm|spectacles|"
+            r"kaan|ear\s+(?:problem|pain)|hearing|"
+            r"daant|teeth|tooth\s+pain|dental|"
+            # Mental
+            r"depress(?:ed|ion|ing)?|udaas|udasi|dukhi\s+rehna|"
+            r"anxiety|anxious|panic\s+attack|ghabra(?:hat|na|t)|"
+            r"stress|tension|chinta|fikr|fikar|pareshani|overthinking|"
+            r"mental\s+health|manasik|psychological|"
+            # Womens — H2.7.11 NOTE: bare "period" removed; it false-fires on
+            # career/legal Qs ("notice period", "trial period"). Restrict to
+            # explicit menstrual context so false-positives don't trigger
+            # ambiguity gate and silence career/finance topics.
+            # H2.7.12 fix: use \w+ after "kab" so the outer \b doesn't break
+            # mid-word ("period kab aayega" was failing because "kab\s+a"
+            # ended at a non-boundary char). \w+ consumes whole verb.
+            r"period(?:s)?\s+(?:nahi|late|miss|irregular|"
+            r"aa\s+nahi|kab\s+\w+|aayega|aaya|hoga|hoge|hua|hui|"
+            r"ka\s+pain|me\s+dard|problem|cycle|pain)|"
+            r"menstrual|menstruation|pms\b|"
+            r"pcos|pcod|menopause|hormone|hormonal|"
+            # Care
+            r"doctor|medicine|dawai|dawayi|dawa|ilaaj|ilaj|treatment|recovery|"
+            r"checkup|check[-\s]*up|test\s+karwa|cancer|tumor|gaanth|"
+            r"sujan|swelling|inflammation|"
+            r"diet|nutrition|fitness|exercise\s+karu|gym|yoga\s+karu)\b",
+            _re_topic.IGNORECASE),
         "houses":   [1, 6, 8, 12],
         "karakas":  ["Mangal (chot/surgery), Shani (chronic), Rahu (mystery), Chandra (manas)"],
         "banned":   [7, 11],
@@ -1014,11 +1171,14 @@ def _detect_topic(question):
         # like "bhai aur behen")
         chosen_id = next(iter(distinct_ids))
         OTHER_ANCHORS = {
-            "marriage":         r"\b(shaadi|vivah|marriage|marriaga|marriagea|marrige|marraige|wedding|biwi|pati|patni|spouse|jeevansaathi)\b",
-            "career":           r"\b(career|job|naukri|business|kaam|kariyar|profession|promotion)\b",
-            "wealth":           r"\b(paisa|paise|dhan|wealth|money|finance|income|salary|kamai|amir|rich)\b",
-            "children":         r"\b(bachhe|bachche|santaan|santan|child(ren)?|baby|beti|beta\s+(kab|hoga))\b",
-            "health":           r"\b(sehat|health|bimari|illness|disease|tabiyat|sharir|bp|sugar|cancer|heart)\b",
+            "marriage":         r"\b(shaadi|vivah|marriage|marriaga|marriagea|marrige|marraige|wedding|biwi|pati|patni|spouse|jeevansaathi|rishta|divorce|talaq|sagai|mangetar|sasural)\b",
+            "career":           r"\b(career|job|naukri|business|kaam|kariyar|profession|promotion|boss|office|resign|interview|hike|appraisal|notice\s*period)\b",
+            # H2.7.12 architect-fix: "salary" removed from wealth (lives in career)
+            "wealth":           r"\b(paisa|paise|dhan|wealth|money|finance|income|kamai|amir|rich|emi|loan|kharcha|saving|invest|share\s*market|mutual\s*fund)\b",
+            # H2.7.12 architect-fix: "ladka/ladki" removed (collide with love)
+            "children":         r"\b(bachhe|bachche|santaan|santan|child(ren)?|baby|beti|beta\s+(kab|hoga)|ivf|conceive|pregnan|good\s+news|khushkhabri|garbh|infertil)\b",
+            # H2.7.12 architect-fix: bare "period" → menstrual-context only (parity with main pattern)
+            "health":           r"\b(sehat|health|bimari|illness|disease|tabiyat|sharir|bp|sugar|cancer|heart|neend|sleep|weight|wajan|dard|pain|acidity|depress|anxiety|stress|kamzori|fever|thyroid|pcos|period(?:s)?\s+(?:nahi|late|miss|irregular|kab|pain|cycle))\b",
             "marriage_partner": r"\b(spouse|jeevansaathi|life\s+partner)\b",
             "father":           r"\b(pita|pitaji|father|papa|daddy|baap)\b",
             "mother":           r"\b(maa\b|mata|mummy|mother|mom)\b",

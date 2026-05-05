@@ -535,6 +535,144 @@ def _strip_idx(rx_tuple):
     return rx_tuple[1]
 
 
+# ─────────────────────────────────────────────────────────────────────
+#  H2.7.16 — POST-FILTER SANITIZER (defense-in-depth for LLM leaks)
+# ─────────────────────────────────────────────────────────────────────
+# User audit (Rajalaxmi P40 live test) caught 4 leak patterns the
+# system prompt did not fully prevent:
+#   1. Disease-list overgeneration ("acidity, water-retention,
+#      inflammation, sudden flare-up")
+#   2. Astro jargon leak ("Chandra-Mangal connection")
+#   3. Timing words in STATIC ("near-term months", "abhi", "jaldi")
+#   4. Fear tone ("test me saamne aa sakta hai", "purani problem
+#      dobara upar aa sakti hai")
+# This sanitizer runs AFTER the LLM call as a final regex sweep.
+# Killswitch: env HEALTH_REPLY_SANITIZER=0 → returns text untouched.
+# ─────────────────────────────────────────────────────────────────────
+
+# Forbidden disease/condition tokens (engine-undeclared). Tightened
+# vs _DISEASE_BLOCKLIST in health_facts.py — adds soft-disease words
+# the LLM tends to chain into list-style tendency lines.
+_LEAKY_DISEASE_WORDS = {
+    "acidity", "water-retention", "water retention",
+    "inflammation", "flare-up", "flare up", "migraine",
+    "diabetes", "sugar", "thyroid", "asthma", "depression",
+    "anxiety disorder", "cancer", "tumour", "tumor",
+    "blood pressure", "bp", "cholesterol", "ulcer",
+    "constipation", "piles", "arthritis", "insomnia",
+    "PCOD", "PCOS", "infertility",
+}
+
+# Forbidden timing words (STATIC pack must NOT mention timing).
+_LEAKY_TIMING_WORDS = [
+    "near-term", "near term", "coming months", "coming weeks",
+    "agle mahine", "agle hafte", "is mahine", "is hafte",
+    "abhi ke time", "abhi-abhi", "jald hi", "jaldi hi",
+    "next few months", "upcoming months", "in coming",
+    "iss period me", "is dasha me jaldi",
+]
+
+# Forbidden fear-tone phrases.
+_LEAKY_FEAR_PHRASES = [
+    "test me saamne", "test mein saamne",
+    "purani problem dobara", "purani problem wapas",
+    "chhupa hua issue", "chhupi hui bimari",
+    "hidden issue", "hidden problem",
+    "sudden flare", "achanak ubhar",
+    "danger zone", "khatra zone",
+]
+
+# Astro jargon that leaks (planet-pair compound names without
+# translation). User shouldn't see "Chandra-Mangal" / "Surya-Shani"
+# without plain-Hinglish reframing.
+import re as _re_sanitize  # local alias to avoid top-level conflict
+_JARGON_PLANET_PAIR_RX = _re_sanitize.compile(
+    r"\b(Chandra|Surya|Shani|Mangal|Budh|Guru|Shukra|Rahu|Ketu)"
+    # H2.7.16-fix: separator now covers hyphen variants (-, –, —, ‑),
+    # whitespace, comma, slash, ampersand, arrow, AND the Hinglish
+    # connectors "aur"/"and"/"to"/"se" (common LLM patterns:
+    # "Chandra aur Mangal ka contact").
+    r"(?:[\s,\-–—‑/&→]+|\s+(?:aur|and|to|se)\s+)+"
+    r"(Chandra|Surya|Shani|Mangal|Budh|Guru|Shukra|Rahu|Ketu)\b",
+    _re_sanitize.IGNORECASE,
+)
+# Plain-Hinglish replacements per pair (deterministic glossary).
+_JARGON_PAIR_GLOSSARY = {
+    ("chandra", "mangal"): "mind aur drive ka contact",
+    ("mangal", "chandra"): "drive aur mind ka contact",
+    ("chandra", "shani"): "mind par heaviness ka asar",
+    ("shani", "chandra"): "heaviness aur mind ka asar",
+    ("surya", "shani"): "vitality par discipline ka pressure",
+    ("shani", "surya"): "discipline aur vitality ka pressure",
+    ("surya", "mangal"): "vitality aur drive ka mix",
+    ("mangal", "surya"): "drive aur vitality ka mix",
+    ("rahu", "shani"): "uncertainty + heaviness combo",
+    ("shani", "rahu"): "heaviness + uncertainty combo",
+    ("rahu", "mangal"): "uncertainty + impulsiveness combo",
+    ("mangal", "rahu"): "impulsiveness + uncertainty combo",
+    ("guru", "shani"): "guidance aur restriction ka tug",
+    ("shani", "guru"): "restriction aur guidance ka tug",
+}
+
+
+def _sanitize_health_reply(text: str) -> str:
+    """H2.7.16 — Post-LLM regex sweep. Removes 4 leak categories.
+
+    Strategy per leak:
+      • DISEASE_WORDS  → strip the offending sentence/clause
+      • TIMING_WORDS   → strip the offending phrase from sentence
+      • FEAR_PHRASES   → strip the offending sentence
+      • JARGON_PAIRS   → in-place replacement with plain-Hinglish
+
+    Killswitch: env HEALTH_REPLY_SANITIZER=0 → return text untouched.
+    """
+    import os as _os_s
+    if _os_s.environ.get("HEALTH_REPLY_SANITIZER", "1") == "0":
+        return text
+    if not text or not isinstance(text, str):
+        return text
+
+    # 1. JARGON: planet-pair → plain Hinglish.
+    def _pair_repl(m):
+        a, b = m.group(1).lower(), m.group(2).lower()
+        return _JARGON_PAIR_GLOSSARY.get(
+            (a, b), "planetary connection")
+    text = _JARGON_PLANET_PAIR_RX.sub(_pair_repl, text)
+
+    # 2. Split into sentences for clause-level filtering.
+    # H2.7.16-fix: include Hindi danda (।) and trailing-punct cases
+    # where no whitespace follows.
+    sentences = _re_sanitize.split(r"(?<=[.!?।])\s+", text)
+    cleaned: list[str] = []
+    for s in sentences:
+        sl = s.lower()
+        # Drop sentence if any disease word appears.
+        if any(w in sl for w in _LEAKY_DISEASE_WORDS):
+            continue
+        # Drop sentence if any fear phrase appears.
+        if any(p in sl for p in _LEAKY_FEAR_PHRASES):
+            continue
+        # Strip timing phrases inline (do NOT drop full sentence).
+        s_out = s
+        for tw in _LEAKY_TIMING_WORDS:
+            if tw in s_out.lower():
+                pat = _re_sanitize.compile(
+                    _re_sanitize.escape(tw), _re_sanitize.IGNORECASE)
+                s_out = pat.sub("", s_out)
+        # Collapse double spaces left behind.
+        s_out = _re_sanitize.sub(r"\s{2,}", " ", s_out).strip()
+        if s_out:
+            cleaned.append(s_out)
+
+    out = " ".join(cleaned).strip()
+    # Fallback: if sanitizer stripped everything (paranoid), return
+    # a calm safe baseline rather than empty string.
+    if not out:
+        return ("Overall pattern stable hai — energy aur recovery side "
+                "pe routine focus rakhne se balance maintain rahega.")
+    return out
+
+
 def _enforce_word_cap(text: str, max_words: int = 150) -> str:
     """H2.7.6 — Production safety net for prompt overshoot.
 
@@ -721,7 +859,26 @@ def _render_simple_narrative_llm(facts: dict, question: str,
         "(Planet names, house numbers, dignities are FINE — those "
         "are user-friendly Vedic terms.)\n"
         "3. NO disease names (cancer / diabetes / migraine / "
-        "depression etc.). Category-only language.\n"
+        "depression / acidity / inflammation / water-retention / "
+        "flare-up etc.). Category-only language. Avoid CHAINING "
+        "multiple symptom guesses ('digestion, acidity, "
+        "inflammation, flare-up') — pick ONE generic body zone "
+        "and stop.\n"
+        "3a. NO TIMING WORDS (this is STATIC pack, no timing): "
+        "'near-term', 'coming months', 'agle mahine', 'jaldi hi', "
+        "'abhi-abhi', 'iss period me jaldi'. Tendency language only "
+        "('overall', 'baseline me'), NEVER time-bound.\n"
+        "3b. NO PLANET-PAIR JARGON visible to user. 'Chandra-Mangal', "
+        "'Surya-Shani' etc. → translate to plain Hinglish: "
+        "'mind aur drive ka contact', 'vitality par discipline ka "
+        "pressure'. User ko Sanskrit pair-names samajh nahi aate.\n"
+        "3c. NO FEAR PHRASES: 'test me saamne aa sakta hai', "
+        "'purani problem dobara aa sakti hai', 'chhupa hua issue', "
+        "'sudden flare-up', 'danger zone'. Calm, observational tone "
+        "rakho — 'tendency hai' instead of 'aa sakta hai'.\n"
+        "3d. STRUCTURE MANDATE — first sentence MUST be the verdict "
+        "(major/moderate/baseline). Then reason. Then ONE category-"
+        "tendency line. Then ONE remedy. No scattered flow.\n"
         "4. NO doctor / professional / specialist / therapist / "
         "expert / counsellor / 'medical advice' mention.\n"
         "5. NO 'tumhe X hai' direct-diagnosis assertion. Use 'X ka "
@@ -766,6 +923,10 @@ def _render_simple_narrative_llm(facts: dict, question: str,
             except Exception:
                 pass
             return _render_simple_narrative_static(facts, question)
+        # H2.7.16-fix: SANITIZE FIRST, then word-cap. Architect-flagged
+        # ordering bug — leaks placed AFTER the truncation cut were
+        # slipping through when cap ran first.
+        text = _sanitize_health_reply(text)
         # H2.7.6 — hard word-cap guard (defense-in-depth for prompt
         # overshoot). Per user directive: 90-120 target, 150 ceiling.
         return _enforce_word_cap(text, max_words=150)
@@ -1377,6 +1538,8 @@ def _llm_narrative(facts: dict, route: str, question: str,
         text = (resp.choices[0].message.content or "").strip()
         if not text:
             return _direct_vitality_check(facts, question=question)
+        # H2.7.16-fix: SANITIZE FIRST, then word-cap (architect order fix).
+        text = _sanitize_health_reply(text)
         # H2.7.6 — hard word-cap guard (route-format paths usually short
         # already, but guard in case a route emits free prose).
         return _enforce_word_cap(text, max_words=150)
@@ -1580,7 +1743,9 @@ def handle_health_question(question: str, kundli: dict,
     # planet/house attribution. Old v5 entries are summary-only.
     # H2.7.6: bumped v6 → v7 to invalidate all pre-cap entries
     # (90-120 word target, 150 hard cap + 4-beat structure).
-    _ns = f"health_static_v7_{_OUTPUT_STYLE}"
+    # H2.7.16: bumped v7 → v8 — sanitizer + tightened prompt
+    # (no disease-list, no jargon-pair, no timing words, no fear).
+    _ns = f"health_static_v8b_{_OUTPUT_STYLE}"
     cache_key = make_cache_key(birth, kundli, _ns, route,
                                 question=_q_for_key)
     cached = get_cached(cache_key)

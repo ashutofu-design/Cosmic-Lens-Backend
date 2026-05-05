@@ -5852,6 +5852,42 @@ def ask_route():
                 "plan":             effective_plan(user),
                 "upgrade_required": True,
             }), 402
+
+        # ── Phase 2.10.7 P5 — DB-LOAD ENFORCEMENT (tamper-proof) ─────────
+        # User directive: hamesha DB ke primary data se hi compute. Server
+        # NEVER trusts client-supplied kundli/birth for authenticated users.
+        # Loads from User.kundli.chart_data + primary Profile.birth_data.
+        # Affects ALL pipelines (finance, marriage, general) — single guard.
+        try:
+            import json as _j
+            if user.kundli and user.kundli.chart_data:
+                kundli = _j.loads(user.kundli.chart_data)
+            else:
+                return jsonify({
+                    "error":   "no_kundli_saved",
+                    "message": ("Aapki kundli pehle save karein, "
+                                 "fir question puchein."),
+                }), 412  # Precondition Failed
+            try:
+                _prim = (Profile.query
+                          .filter(Profile.user_id == user.id,
+                                  Profile.is_primary.is_(True),
+                                  Profile.deleted_at.is_(None))
+                          .first())
+                if _prim and _prim.birth_data:
+                    birth = _j.loads(_prim.birth_data) or {}
+                else:
+                    k = user.kundli
+                    birth = {
+                        "name": k.name, "lat": k.lat, "lon": k.lon,
+                        "tz": k.tz, "place": k.pob,
+                    }
+            except Exception as _be:
+                print(f"[ask] birth db-load fallback: {_be}")
+                birth = birth or {}
+        except Exception as _kde:
+            print(f"[ask] kundli db-load failed: {_kde}")
+            return jsonify({"error": "saved_kundli_corrupted"}), 500
     else:
         # Anonymous fallback — kept for legacy callers (e.g. preview/demo).
         # Phase 2.10.7 P2 fix — previously this branch served unlimited

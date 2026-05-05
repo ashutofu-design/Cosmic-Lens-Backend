@@ -869,3 +869,20 @@ New package: `artifacts/api-server/finance/`
 - Live verified: anon calls 1-3 → 200, call 4+ → HTTP 402 daily_limit_reached
 
 **Deferred (B16-B19)**: P3 yoga detector tightness (Lakshmi/Vipreet-Raja over-trigger by ~+2 score), P4 router edges (Q5/Q9 phrasing without "stock" keyword fails gate, Q15 occasionally to loss_reasons instead of loss_planets). P40 verdict still RED_AVOID directionally correct.
+
+### Phase 2.10.7 P5 — DB-LOAD ENFORCEMENT (tamper-proof primary data)
+
+**User directive**: "Hamesha DB ke primary data se hi compute. Server NEVER trusts client-supplied kundli/birth."
+
+**Implementation** (`flask_app.py` ask_route L5859+):
+- Authenticated user → kundli **always** loaded from `User.kundli.chart_data`, birth from primary `Profile.birth_data` (fallback to Kundli row fields).
+- No saved kundli → HTTP 412 "Aapki kundli pehle save karein".
+- Corrupted kundli → HTTP 500.
+- Anonymous (demo) → still uses client-provided kundli (rate-limited 3/day per IP).
+
+**Coverage**: Single guard placed BEFORE all pipelines (finance, marriage, general). One change → full platform-wide tamper-proofing for authenticated /api/ask.
+
+**Verified live**:
+- Anonymous w/ valid kundli → 200 (demo path works)
+- Fake user_id 99999 → HTTP 404 User not found
+- Anonymous over 3/day → HTTP 402 daily_limit_reached

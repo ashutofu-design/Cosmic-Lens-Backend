@@ -161,6 +161,32 @@ _FEAR_REPLACE = [
 _FEAR_RX_LIST = [(re.compile(p, re.IGNORECASE), r) for p, r in _FEAR_REPLACE]
 
 
+# ── Referral / doctor-mention scrub (Phase H2.2 backup tone-guard) ──
+# Catches LLM tone-drift like "professional se baat karo" /
+# "expert guidance lo" / "therapist consult karein" that bypass the
+# doctor-disclaimer policy. Active ONLY when add_doctor=False.
+# Strategy: drop the entire referral SENTENCE (cleaner than swapping
+# noun mid-sentence which often produces awkward "trusted person ke
+# saath consult karein" output).
+_REFERRAL_TRIGGER_WORDS = (
+    r"doctor|physician|therapist|counsell?or|"
+    r"(?:mental[\s-]?health\s+)?professional|"
+    r"specialist|expert\s+(?:guidance|advice|consult)|"
+    r"medical\s+(?:advice|consultation|help|professional)|"
+    r"clinical\s+(?:help|consult|advice)|psychiatrist|psychologist"
+)
+# Match a complete sentence (start-of-string|after . ! ? \n up to next
+# . ! ? \n) that contains any trigger word. Trim trailing whitespace.
+_REFERRAL_SENTENCE_RX = re.compile(
+    rf"(?:(?<=^)|(?<=[\.!?\n]))\s*[^\.!?\n]*?\b(?:{_REFERRAL_TRIGGER_WORDS})\b[^\.!?\n]*[\.!?]?",
+    re.IGNORECASE,
+)
+# Looser scan to flag (telemetry) even if scrub fails to remove cleanly
+_REFERRAL_TRIGGER_RX = re.compile(
+    rf"\b(?:{_REFERRAL_TRIGGER_WORDS})\b", re.IGNORECASE,
+)
+
+
 # ── Cure / guarantee language → soften ──────────────────────────────
 _CURE_RX = re.compile(
     r"\b(100\s*%|guaranteed?|definitely\s+cure|surely\s+cure|"
@@ -409,6 +435,23 @@ def validate_health_llm_output(
         flags.append("timing_leak")
         cleaned = _TIMING_LEAK_RX.sub("[timing alag engine ka]", cleaned)
 
+    # 11.5) Referral / doctor-mention scrub (Phase H2.2 tone-guard)
+    #       Active only when add_doctor=False. Drops sentences that
+    #       suggest doctor / professional / therapist / expert / etc.
+    #       — these would silently bypass the H2.1 default-OFF doctor
+    #       policy. WARNING path (add_doctor=True) keeps such language.
+    if not add_doctor and _REFERRAL_TRIGGER_RX.search(cleaned):
+        flags.append("referral_scrubbed")
+        cleaned = _REFERRAL_SENTENCE_RX.sub("", cleaned)
+        # Tidy trailing/leading punctuation noise
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+        cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
+        # Belt-and-suspenders: if any trigger word still remains
+        # (e.g. embedded mid-clause), neutralise it inline.
+        if _REFERRAL_TRIGGER_RX.search(cleaned):
+            cleaned = _REFERRAL_TRIGGER_RX.sub("trusted person", cleaned)
+            flags.append("referral_neutralised_inline")
+
     # 12) Yoga hallucination check (small list — only the 3 we expose)
     if allowed_yogas is not None:
         yoga_mentions = re.findall(
@@ -461,7 +504,8 @@ def validate_health_llm_output(
         hard_flags = {"disease_name_stripped", "diagnosis_assert_softened",
                        "death_prediction_stripped", "engine_codes",
                        "cure_guarantee_softened", "timing_leak",
-                       "dignity_jargon"}
+                       "dignity_jargon", "referral_scrubbed",
+                       "referral_neutralised_inline"}
         if any(f in hard_flags or f.startswith("hallucinated_yoga")
                for f in flags):
             action = "hard_clean"

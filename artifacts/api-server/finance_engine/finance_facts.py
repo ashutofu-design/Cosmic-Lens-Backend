@@ -211,10 +211,9 @@ def _compute_wealth_potential(lord_states, karakas, yogas, dasha_link
     h9_d = _DIGNITY_SCORE.get(lord_states["h9"]["lord_dignity"], 0)
     jup_d = _DIGNITY_SCORE.get((karakas.get("Jupiter") or {}).get("dignity", ""), 0)
     score = h2_d + h11_d + h9_d + jup_d + min(4, len(yogas) * 2)
-    if dasha_link.get("md_money_link"):
-        score += 1
-    if dasha_link.get("ad_money_link"):
-        score += 1
+    # Phase 2.8.78: dasha REMOVED from non-timing scoring — dasha is a
+    # timing engine concern, not a static-chart concern. Per user policy.
+    # (dasha_link param kept for signature stability — no longer read.)
 
     has_strong_yoga = any(y in yogas for y in ("Dhana", "Lakshmi", "Kubera"))
     h2_dusthana = lord_states["h2"]["lord_in_dusthana"]
@@ -276,20 +275,14 @@ def _compute_saving_ability(lord_states, karakas, afflictions, dasha_link
     sat_d = _DIGNITY_SCORE.get((karakas.get("Saturn") or {}).get("dignity", ""), 0)
 
     h2_in_h12 = h2["lord_house"] == 12
-    # FIX (architect MEDIUM): match the specific dasha-activation
-    # affliction, not any text that mentions H12 lord. Earlier "H12 lord"
-    # substring also matched the placement affliction "H12 lord (X) in H2"
-    # which is a separate signal — caused double-penalty / false RED.
-    h12_active_dasha = any(("H12 lord" in a and "active in current dasha" in a)
-                            for a in afflictions)
+    # Phase 2.8.78: dasha REMOVED — h12_active_dasha penalty dropped.
+    # Saving = static chart only (lord placement + Saturn dignity + leak placements).
     leak_count = sum(1 for a in afflictions
                      if "leak" in a.lower() or "expense surge" in a.lower())
 
     score = h2_d + max(0, sat_d) - leak_count
     if h2_in_h12:
         score -= 2
-    if h12_active_dasha:
-        score -= 1
     if h2["lord_in_dusthana"]:
         score -= 1
     # Saturn in own/exalted = excellent saving discipline
@@ -303,7 +296,7 @@ def _compute_saving_ability(lord_states, karakas, afflictions, dasha_link
     else:
         v, reason = "RED", "Saving weak — paisa tikta nahi, leak active hai"
     t = _tier(v, strong_signal=(sat_d >= 1 and not h2_in_h12 and leak_count == 0),
-              weak_signal=(h2_in_h12 or leak_count >= 2 or h12_active_dasha))
+              weak_signal=(h2_in_h12 or leak_count >= 2))
     return v, reason, t
 
 
@@ -332,10 +325,9 @@ def _compute_risk_leak(lord_states, karakas, afflictions, dasha_link
         raw += 1
     if rahu_on_money:
         raw += 1
-    if dasha_link.get("md_dusthana_link"):
-        raw += 1
-    if dasha_link.get("ad_dusthana_link"):
-        raw += 1
+    # Phase 2.8.78: dasha REMOVED — md/ad dusthana_link penalties dropped.
+    # Risk-leak = static chart only (lord placements + dusthana lords on
+    # money houses + Rahu placement). Dasha activation belongs to timing.
 
     if raw >= 5:
         v, reason = "RED", "Strong leak signal — paisa drain ho raha"
@@ -491,10 +483,11 @@ def compute_finance_facts(kundli: dict) -> Dict[str, Any]:
         afflictions.append(f"H6 lord ({lord_states['h6']['lord']}) in H{h6_lh} "
                             "(debt pressure on income/savings)")
 
-    # 12L active in dasha
-    h12_lord = lord_states["h12"]["lord"]
-    if h12_lord and h12_lord in (md_lord, ad_lord):
-        afflictions.append(f"H12 lord ({h12_lord}) active in current dasha (expense surge)")
+    # Phase 2.8.78: dasha REMOVED from afflictions — non-timing Q me dasha
+    # ka koi role nahi. Yeh "H12 lord active in current dasha" line saving
+    # + risk-leak dimensions me leak signal banta tha; ab static-only.
+    # (md_lord/ad_lord/pd_lord still computed below for current_dasha
+    # return field — purely informational for downstream/debug.)
 
     rahu_h = (karakas.get("Rahu") or {}).get("house")
     if rahu_h in (8, 12):

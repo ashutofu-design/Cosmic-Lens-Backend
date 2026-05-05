@@ -5958,9 +5958,21 @@ def ask_route():
     # mutual-fund/SIP/portfolio/crypto returns None and falls through to
     # the stock_engine block below. ADD-ONLY: stock_engine is untouched;
     # only the call order changed.
+    # H2.7.8 — FINANCE_STATIC_BYPASS killswitch (sync /api/ask).
+    # ADD-ONLY: when env flag set to "1", skip the finance_static gate so
+    # finance/money Qs flow into the legacy LLM pipeline → which has the
+    # Path B+ passthrough that injects the full kundli pack (Lagna+Rashi+
+    # Navamsha+Vimshottari MD/AD/PD+aspects+yogas+SAV) at openai_helper
+    # L13611. Default OFF → existing static behaviour unchanged. Stock
+    # engine + health_static remain UNTOUCHED. Identity-fallback on any
+    # env read failure.
+    try:
+        _fm_bypass = (os.environ.get("FINANCE_STATIC_BYPASS", "0") == "1")
+    except Exception:
+        _fm_bypass = False
     try:
         from finance_static import handle_finance_money_question as _fm_handle
-        _fm = _fm_handle(question, kundli or {}, birth)
+        _fm = None if _fm_bypass else _fm_handle(question, kundli or {}, birth)
     except Exception as _fm_exc:
         print(f"[ask] finance_money hookup error (non-fatal): {_fm_exc}")
         _fm = None
@@ -6350,9 +6362,17 @@ def ask_stream_route():
         _log_question_history(user, question, out)
         return jsonify(out)
 
+    # H2.7.8 — FINANCE_STATIC_BYPASS killswitch (stream /api/ask/stream).
+    # Mirror of sync gate above. Default OFF → no behaviour change. ON →
+    # finance/money Qs skip static and flow to Path B+ passthrough at
+    # openai_helper L17124 (stream) which injects full kundli pack to LLM.
+    try:
+        _fm_bypass = (os.environ.get("FINANCE_STATIC_BYPASS", "0") == "1")
+    except Exception:
+        _fm_bypass = False
     try:
         from finance_static import handle_finance_money_question as _fm_handle
-        _fm = _fm_handle(question, kundli or {}, birth)
+        _fm = None if _fm_bypass else _fm_handle(question, kundli or {}, birth)
     except Exception as _fm_exc:
         print(f"[ask/stream] finance_money hookup error (non-fatal): "
               f"{_fm_exc}", flush=True)

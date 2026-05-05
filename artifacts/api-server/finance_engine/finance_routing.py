@@ -128,11 +128,16 @@ _NARRATIVE_PATTERNS = [
      r"debt\s+(clear|free|kaise))",
      "loan_debt"),
     # INCOME source / what work
+    # Phase 2.8.81 BUG-2 fix: catches "salary karu ya business",
+    # "job karu ya business", "salary lu ya kaarobaar" etc. — common
+    # Hindi phrasing where verb sits between salary and ya.
     (r"(income\s+source|kaun\s*sa\s+(income|kaam|work)|"
-     r"salary\s+(vs|ya)\s+business|"
-     r"job\s+(vs|ya)\s+(business|kaarobaar)|"
+     r"salary\s+(vs|ya)\s+(business|kaarobaar|kaam)|"
+     r"salary\s+\w+\s+ya\s+(business|kaarobaar|kaam)|"
+     r"job\s+(vs|ya)\s+(business|kaarobaar|kaam)|"
+     r"job\s+\w+\s+ya\s+(business|kaarobaar|kaam)|"
      r"main\s+(salary|job)\s+karu\s+ya|"
-     r"(business|kaam)\s+(achha|sahi)\s+rahega)",
+     r"(business|kaam|kaarobaar)\s+(achha|sahi|theek)\s+rahega)",
      "income_source"),
     # BUSINESS profit
     (r"(business\s+(profit|fayda|chalega|aayega)|"
@@ -156,6 +161,11 @@ _FINANCE_TOPIC_RX = re.compile(
     r"loan|karz|kar(?:j|z)a|udhaar|debt|emi|"
     r"income|salary|kamai|earnings|earning|kamana|kamai|"
     r"business(?!\s*market)|kaarobaar|startup|partnership|"
+    # Phase 2.8.81 BUG-3 fix: "apna kaam" / "kaam start karu" / "khud ka
+    # kaam" — Hindi-first phrasing for self-employment/own-work Qs that
+    # should reach business_profit / income_source narratives.
+    r"(?:apna|khud\s+ka|self|own)\s+(?:kaam|work|business)|"
+    r"kaam\s+(?:start|shuru|kholu|chalu|chalega|achha)|"
     r"lottery|jackpot|inheritance|virasat|windfall|"
     r"rich|ameer|amir|crorepati|garib|gareeb|poor|"
     r"lakshmi|kubera|"
@@ -171,15 +181,25 @@ _FINANCE_TOPIC_RX = re.compile(
 def is_finance_question(question: str) -> bool:
     """True if the question is about general (NON-TIMING) money AND not stock.
 
-    Three guards in order:
+    Guard order (Phase 2.8.81 ordering fix):
       1. Stock terms        -> stock_engine handles it (return False)
-      2. Timing terms       -> timing engine handles it (return False)
-      3. Finance keyword    -> we own it (return True)
+      2. WARNING patterns   -> ALWAYS handled by us, even if Q has timing
+                                words (e.g. "kitne lakh agle saal milenge"
+                                must trigger GUARANTEE_AMOUNT warning, not
+                                silently fall through to timing engine).
+      3. Timing terms       -> timing engine handles it (return False)
+      4. Finance keyword    -> we own it (return True)
     """
     if not isinstance(question, str) or not question.strip():
         return False
     if _STOCK_EXCLUDE_RX.search(question):
         return False  # stock_engine territory
+    # Phase 2.8.81 BUG-1 fix: WARNING patterns bypass timing exclusion so
+    # rupee-amount/lottery/debt-trap Qs always reach our locked templates
+    # even when the user phrases them with timing words.
+    for pat, _key in _WARN_PATTERNS:
+        if re.search(pat, question, re.IGNORECASE):
+            return True
     if _TIMING_EXCLUDE_RX.search(question):
         return False  # timing engine territory
     return bool(_FINANCE_TOPIC_RX.search(question))

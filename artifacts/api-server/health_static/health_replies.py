@@ -18,6 +18,7 @@ Public:
 """
 from __future__ import annotations
 import os
+import re
 import time as _time
 from typing import Any, Dict, Optional
 
@@ -71,8 +72,122 @@ def _verdict_word(dim: dict) -> str:
     return table.get(dim.get("verdict", "?"), dim.get("verdict", "?"))
 
 
+# ── Comparative-intent helpers (Phase H2.3) ────────────────────────
+# Detects "X ya Y", "body vs mental", "thakan ya stress", "kaunsa zyada
+# weak", etc. — and answers with an explicit winner / loser / tie
+# verdict instead of leaving the user to read a 5-dim table themselves.
+# Principle: "Jab user comparison puche, system ko winner/loser ya tie
+# bolna hi padega."
+_COMPARATIVE_RX = re.compile(
+    r"(\bya\b|\bvs\b|\bversus\b|\bkaunsa\b|\bkaunsi\b|\bkaunsi\s+zyada\b|"
+    r"\bzyada\s+(weak|strong|kam|jyada|dominant|prabhal)\b|"
+    r"\b(better|worse|more|less|dominant)\s+(kya|kaunsa|hai)\b|"
+    r"\bcompare\b|\bcomparison\b|\bdifference\b)",
+    re.IGNORECASE,
+)
+
+# (regex, dim_keys, display_label) — order matters; first match wins per
+# concept group. Multi-key entries (e.g. body) average across channels.
+_DIM_CONCEPTS = [
+    (re.compile(r"\b(body|shareer|sharir|physical|tan|jism)\b", re.I),
+     ["vitality", "disease_resistance"], "Body (vitality + recovery)"),
+    (re.compile(r"\b(mental|mann|man|mind|psych|emotional|"
+                r"stress|anxiety|peace|mood|neend|sleep)\b", re.I),
+     ["mental_health"], "Mental peace"),
+    (re.compile(r"\b(thakan|fatigue|energy|stamina|kamzori|"
+                r"vitality)\b", re.I),
+     ["vitality"], "Vitality (energy)"),
+    (re.compile(r"\b(immunity|recovery|bounce|heal|"
+                r"disease[\s-]?resistance)\b", re.I),
+     ["disease_resistance"], "Recovery / immunity"),
+    (re.compile(r"\b(chronic|long[\s-]?term|hereditary|lambi|"
+                r"purani|permanent)\b", re.I),
+     ["chronic_risk"], "Chronic risk zone"),
+    (re.compile(r"\b(accident|chot|injury|sudden|sharp|"
+                r"durghatna)\b", re.I),
+     ["accident_risk"], "Accident risk zone"),
+]
+
+_STRENGTH = {"GREEN": 3, "YELLOW": 2, "RED": 1}
+
+
+def _detect_compare_pair(question: str):
+    """Return (a_keys, a_label, b_keys, b_label) if question is a true
+    comparative with two distinct concept groups. Else None."""
+    if not question or not _COMPARATIVE_RX.search(question):
+        return None
+    matched = []
+    seen_sigs = set()
+    for rx, keys, label in _DIM_CONCEPTS:
+        if rx.search(question):
+            sig = tuple(sorted(keys))
+            if sig in seen_sigs:
+                continue
+            seen_sigs.add(sig)
+            matched.append((keys, label))
+    if len(matched) < 2:
+        return None
+    a_keys, a_label = matched[0]
+    b_keys, b_label = matched[1]
+    return a_keys, a_label, b_keys, b_label
+
+
+def _group_strength(dims: dict, keys):
+    """Average strength score across a group of dim keys.
+    Returns (avg_score, consensus_verdict) — verdicts already
+    inverted-aware in engine, so GREEN==strong regardless of dim type."""
+    scores, verdicts = [], []
+    for k in keys:
+        d = dims.get(k) or {}
+        v = d.get("verdict", "?")
+        if v in _STRENGTH:
+            scores.append(_STRENGTH[v])
+            verdicts.append(v)
+    if not scores:
+        return (0.0, "?")
+    avg = sum(scores) / len(scores)
+    label = verdicts[0] if all(v == verdicts[0] for v in verdicts) else "MIXED"
+    return (avg, label)
+
+
+def _compare_one_liner(dims: dict, a_keys, a_label, b_keys, b_label) -> str:
+    a_score, a_v = _group_strength(dims, a_keys)
+    b_score, b_v = _group_strength(dims, b_keys)
+    state_word = {"GREEN": "strong", "YELLOW": "mixed",
+                  "RED": "weak", "MIXED": "mixed"}
+
+    # Tie band — within 0.5 average-score difference
+    if abs(a_score - b_score) < 0.5:
+        if a_v == "RED" and b_v == "RED":
+            return (f"Is case me {a_label} aur {b_label} dono weak "
+                    f"phase me hain — sirf ek nahi, dono ko saath "
+                    f"improve karna padega (rest, hydration, breathing, "
+                    f"routine sab parallel chalein).")
+        if a_v == "GREEN" and b_v == "GREEN":
+            return (f"{a_label} aur {b_label} dono supportive hain — "
+                    f"balanced state, regular discipline maintain karo.")
+        a_st = state_word.get(a_v, "uncertain")
+        b_st = state_word.get(b_v, "uncertain")
+        return (f"{a_label} aur {b_label} dono {a_st}/{b_st} similar "
+                f"level pe — koi ek dominant nahi, balanced approach "
+                f"better hai.")
+
+    # Clear difference — name the weaker/stronger channel
+    if a_score < b_score:
+        weak_l, weak_v = a_label, a_v
+        strong_l, strong_v = b_label, b_v
+    else:
+        weak_l, weak_v = b_label, b_v
+        strong_l, strong_v = a_label, a_v
+    return (f"Comparison me {weak_l} {state_word.get(weak_v,'?')} side "
+            f"pe hai aur {strong_l} relatively "
+            f"{state_word.get(strong_v,'?')} — primary focus "
+            f"{weak_l} restoration pe rakho, doosre channel ko "
+            f"maintenance mode me chalao.")
+
+
 # ── DIRECT formatters ──────────────────────────────────────────────
-def _direct_vitality_check(facts: dict) -> str:
+def _direct_vitality_check(facts: dict, question: str = "") -> str:
     dims = facts.get("dimensions") or {}
     yogas = facts.get("yogas") or []
     sub = facts.get("sub_flags") or {}
@@ -92,7 +207,12 @@ def _direct_vitality_check(facts: dict) -> str:
     else:
         lines.append("\nKoi major Arishta / Balarishta yog active nahi mila.")
 
-    final = _vitality_one_liner(dims, sub, yogas)
+    # Phase H2.3: comparative intent overrides single-dim Final line
+    pair = _detect_compare_pair(question) if question else None
+    if pair:
+        final = _compare_one_liner(dims, *pair)
+    else:
+        final = _vitality_one_liner(dims, sub, yogas)
     if final:
         lines.append(f"\nFinal: {final}")
     return "\n".join(lines)
@@ -592,7 +712,14 @@ def handle_health_question(question: str, kundli: dict,
     # ── Build text per mode (validator runs on every LLM-touched mode) ──
     if mode == "DIRECT":
         formatter = _DIRECT_FORMATTERS.get(route, _direct_vitality_check)
-        raw_text = formatter(facts)
+        # Phase H2.3: thread question to vitality formatter so the
+        # comparative-intent detector can override the Final line.
+        # Other DIRECT formatters (yoga_check) ignore the kwarg via
+        # **_ — see _direct_yoga_check signature.
+        try:
+            raw_text = formatter(facts, question=question)
+        except TypeError:
+            raw_text = formatter(facts)
         # DIRECT text is engine-controlled deterministic — MUST NOT pass
         # through LLM-scrubbing validator (it would strip legitimate
         # words like 'dimensions' and 'Arishta'). Only attach safety

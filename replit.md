@@ -241,6 +241,42 @@ DIRECT-mode text is fully under our control; future leaks should be caught at co
 
 **System state**: health-static engine is now in stable "doctor-free static mode" — referral mentions appear ONLY in WARNING-tier paths (timing/death/cure-guarantee/diagnosis/crisis), nowhere else. Self-action + awareness principle fully consistent across all routes.
 
+## Phase H2.3 — COMPARATIVE INTENT HANDLER (decision-layer for "X ya Y" questions) (2026-05-05)
+
+**Gap caught by user E2E** ("kya mera body weak hai ya mental issue zyada hai?"): engine reported all 5 dimensions truthfully but the Final line picked a single dim by priority order — never gave the user a direct **comparative verdict**. User principle:
+> "Engine 'data batata hai' par 'decision (kaunsa zyada strong/weak)' nahi batata. Jab user comparison puche, system ko winner/loser ya tie bolna hi padega."
+
+**Fix — comparative-intent handler in `health_static/health_replies.py`** (DIRECT path):
+
+1. **`_COMPARATIVE_RX`**: detects comparison triggers — `ya | vs | versus | kaunsa | kaunsi | zyada (weak/strong/dominant) | better/worse/more/less (kya/kaunsa/hai) | compare | comparison | difference`.
+2. **`_DIM_CONCEPTS`**: 6 keyword groups → engine dim keys mapping:
+   - `body|shareer|sharir|physical|tan|jism` → `[vitality, disease_resistance]` (multi-key average)
+   - `mental|mann|man|mind|psych|emotional|stress|anxiety|peace|mood|neend|sleep` → `[mental_health]`
+   - `thakan|fatigue|energy|stamina|kamzori|vitality` → `[vitality]`
+   - `immunity|recovery|bounce|heal|disease-resistance` → `[disease_resistance]`
+   - `chronic|long-term|hereditary|lambi|purani|permanent` → `[chronic_risk]`
+   - `accident|chot|injury|sudden|sharp|durghatna` → `[accident_risk]`
+3. **`_detect_compare_pair(question)`**: returns the first two distinct concept groups matched (ignores duplicates), else `None`.
+4. **`_group_strength(dims, keys)`**: averages strength scores (`GREEN=3, YELLOW=2, RED=1`) across a multi-key group; verdicts already inverted-aware in engine so GREEN==strong regardless of dim type. Returns `(avg_score, consensus_verdict)` where consensus is the verdict if all keys agree, else `MIXED`.
+5. **`_compare_one_liner(dims, a_keys, a_label, b_keys, b_label)`**: 3-branch verdict generator:
+   - **Tie band** (|Δ| < 0.5): if both RED → "dono weak phase me hain — sirf ek nahi, dono ko saath improve karna padega"; if both GREEN → "balanced state"; else "similar level pe — koi ek dominant nahi"
+   - **Clear difference**: names weaker channel as primary focus, stronger as maintenance mode
+6. **Wiring** (`_direct_vitality_check` signature changed to accept optional `question=""`): when `_detect_compare_pair()` returns a pair, comparative Final overrides `_vitality_one_liner`. Caller in `handle_health_question` (DIRECT branch L716-724) threads `question` via `try/except TypeError` so other DIRECT formatters (yoga_check) without the param keep working.
+
+**Verification batteries (P40 chart — body=RED, recovery=RED, mental=RED)**:
+
+- **Detection (9 cases)**: 6/6 comparative questions correctly detected pair; 3/3 non-comparative correctly returned None ✅
+- **Functional DIRECT**: 4/4 comparative questions produced explicit tie verdict ("Is case me Body (vitality + recovery) aur Mental peace dono weak phase me hain — sirf ek nahi, dono ko saath improve karna padega") instead of single-dim Final
+- **Non-comparative regression**: 3/3 fell back to `_vitality_one_liner` correctly (no false-fire on plain questions)
+- **HYBRID/NARRATIVE behaviour**: complex comparative questions get classifier-upgraded to HYBRID where the LLM (governed by H2.2 prompt-guard + Rule #12) organically produces clean comparison ("Zyada weight mental stress side par dikh raha hai, jo body weakness jaisi feeling ko amplify kar raha hai") — no DIRECT-path patch needed, but H2.3 catches the deterministic fallback path
+- **Safety regression**: zero referral leaks across all 9 questions ✅
+
+**Architectural note**: H2.3 deliberately patches **only DIRECT path**. HYBRID/NARRATIVE comparison is handled organically by the LLM under existing prompt-guard rules — the LLM is good at nuanced comparison ("mental dominates body" vs "tie") and can use chart context the rules-based comparator can't. DIRECT path needed the explicit handler because it's purely deterministic with no LLM reasoning. Minor consistency note: LLM (HYBRID) may give a more nuanced verdict than the rules-based DIRECT comparator on the same chart (e.g. LLM names a winner, DIRECT calls it tie when verdicts are equal). Both are policy-compliant; LLM uses inference, DIRECT stays conservative to engine truth.
+
+**Principle locked in**: 
+> "Jab user comparison puche, system ko winner/loser ya tie bolna hi padega."
+> Engine ab "data batane wala" se "decision dene wala" ban gaya hai for comparative intents.
+
 ## Phase 2.8.82.1 — MODULE RENAME finance_engine → finance_static (2026-05-05)
 
 User-driven naming refactor in anticipation of upcoming **Finance Timing Engine** (separate module, dasha-based, future phase). Old folder name `finance_engine` was ambiguous — could mean the static chart engine OR the umbrella for all money-related logic. Renamed to `finance_static` to make the boundary explicit: this module ONLY handles non-timing chart-based finance Qs (wealth/income/saving/risk/leak/business-vs-job/debt/sudden-wealth/karakas/KP-Vedic conflicts). Timing Qs (kab paisa aayega, exact date) will live in a future `finance_timing` module.

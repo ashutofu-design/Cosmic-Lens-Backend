@@ -202,6 +202,12 @@ _HEALTH_TOPIC_RX = re.compile(
     # H2.7.18 — vague-discomfort vocabulary
     r"ajeeb|ajib|uneasy|weird|strange|unsettled|"
     r"khali\s*sa|khaali\s*sa|theek\s*nahi\s*lagta|"
+    # H2.7.19 — common ailment vocab
+    r"sardi|zukam|jukam|khansi|kha?ansi|cold|cough|fever|"
+    r"bukhar|jukham|gala|throat|"
+    r"pet|stomach|acidity|gas|digest|"
+    r"sirdard|headache|migraine|"
+    r"thakan|fatigue|tiredness|kamzori|weakness|"
     # Accident
     r"accident|injury|chot|durghatna|"
     # Reproductive

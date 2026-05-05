@@ -957,78 +957,83 @@ def _verdict_to_state(dim_key: str, verdict: str) -> str:
     return _DIM_STATE_MAP.get(dim_key, {}).get(verdict, "unknown")
 
 
+def _clean_reason(r: str) -> str:
+    """Strip [KP-VEDIC ...] tail from engine reason strings."""
+    if not r:
+        return ""
+    return re.split(r"\s*\[KP-VEDIC", r)[0].strip()
+
+
+def _build_overall_snapshot(dims: dict) -> str:
+    """Plain-Hinglish 1-line snapshot of all dim states.
+    Example: "vitality+mental thoda weak side; immunity sensitive; chronic stable"
+    """
+    label = {
+        "vitality":           "vitality",
+        "disease_resistance": "immunity",
+        "mental_health":      "mental",
+        "chronic_risk":       "chronic",
+    }
+    red, yellow, green = [], [], []
+    for dk, lbl in label.items():
+        v = (dims.get(dk) or {}).get("verdict", "?")
+        if   v == "RED":    red.append(lbl)
+        elif v == "YELLOW": yellow.append(lbl)
+        elif v == "GREEN":  green.append(lbl)
+    parts = []
+    if red:    parts.append(f"{'+'.join(red)} weak side")
+    if yellow: parts.append(f"{'+'.join(yellow)} moderate")
+    if green:  parts.append(f"{'+'.join(green)} stable")
+    return "; ".join(parts) if parts else "data not available"
+
+
 def _build_signal_pack(facts: dict, question: str) -> Optional[dict]:
-    """Return compact signal JSON if question matches a registered
-    question_type, else None (caller falls back to raw-pack path).
-    Currently registered: compare_immunity_vs_lifestyle."""
+    """H2.7.19 — UNIVERSAL SIGNAL PACK (Engine=DataSupplier, LLM=Reasoner).
+
+    Returns ONE pack with ALL dims (state + plain reason) + overall
+    snapshot. LLM intelligently picks relevant signals per question.
+
+    Special case: comparative questions where engine has a math
+    advantage (e.g. "immunity vs lifestyle, kya stronger?") — engine
+    adds deterministic `engine_verdict` that LLM must lead with verbatim.
+    For all other Qs, NO verdict — LLM owns expression freely (within
+    signal-pack constraints + sys-prompt bans + sanitizer).
+
+    Killswitch: HEALTH_SIGNAL_PACK=0 → falls back to raw-pack path.
+    """
     if os.environ.get("HEALTH_SIGNAL_PACK", "1") == "0":
         return None
     dims = facts.get("dimensions", {}) or {}
     if not dims:
         return None
 
-    # H2.7.18 — vague-discomfort question_type (registered 2nd)
-    if _detect_vague_discomfort_q(question):
-        cls = _classify_vague_discomfort(facts)
-        vit_v = dims.get("vitality", {}).get("verdict", "?")
-        dr_v  = dims.get("disease_resistance", {}).get("verdict", "?")
-        mh_v  = dims.get("mental_health", {}).get("verdict", "?")
-        cr_v  = dims.get("chronic_risk", {}).get("verdict", "?")
-
-        key_factors = []
-        for dk in ("vitality", "mental_health"):
-            r = dims.get(dk, {}).get("reason", "")
-            if r:
-                r_clean = re.split(r"\s*\[KP-VEDIC", r)[0].strip()
-                key_factors.append(r_clean)
-
+    def dim_block(dim_key: str) -> dict:
+        d = dims.get(dim_key) or {}
         return {
-            "question_type":    "vague_discomfort_why",
-            "vitality":         _verdict_to_state("vitality", vit_v),
-            "immunity":         _verdict_to_state("disease_resistance", dr_v),
-            "mental":           _verdict_to_state("mental_health", mh_v),
-            "chronic":          _verdict_to_state("chronic_risk", cr_v),
-            "primary_driver":   cls["primary_driver"],
-            "secondary_driver": cls["secondary_driver"],
-            "remedy_focus":     cls["remedy_focus"],
-            "key_factors":      key_factors,
-            "engine_verdict":   cls["verdict"],
+            "state":  _verdict_to_state(dim_key, d.get("verdict", "?")),
+            "reason": _clean_reason(d.get("reason", "")),
         }
 
+    pack: dict = {
+        "question_type":     "universal",
+        "vitality":          dim_block("vitality"),
+        "immunity":          dim_block("disease_resistance"),
+        "mental":            dim_block("mental_health"),
+        "chronic":           dim_block("chronic_risk"),
+        "overall_snapshot":  _build_overall_snapshot(dims),
+    }
+
+    # ── Special case: comparative immunity-vs-lifestyle ──
+    # Engine math decides which is stronger; LLM cannot guess this.
     if _detect_immunity_vs_lifestyle_q(question):
-        # H2.7.17-fix (architect #e): use SINGLE SOURCE classifier
-        # so verdict + driver labels + remedy_focus stay consistent.
         cls = _classify_immunity_lifestyle(facts)
+        pack["question_type"]    = "compare_immunity_vs_lifestyle"
+        pack["engine_verdict"]   = cls["verdict"]
+        pack["primary_driver"]   = cls["primary_driver"]
+        pack["secondary_driver"] = cls["secondary_driver"]
+        pack["remedy_focus"]     = cls["remedy_focus"]
 
-        vit_v = dims.get("vitality", {}).get("verdict", "?")
-        dr_v  = dims.get("disease_resistance", {}).get("verdict", "?")
-        mh_v  = dims.get("mental_health", {}).get("verdict", "?")
-        cr_v  = dims.get("chronic_risk", {}).get("verdict", "?")
-
-        # Top 2 plain-English attribution strings (engine reasons)
-        key_factors = []
-        for dk in ("disease_resistance", "vitality", "mental_health"):
-            r = dims.get(dk, {}).get("reason", "")
-            if r:
-                r_clean = re.split(r"\s*\[KP-VEDIC", r)[0].strip()
-                key_factors.append(r_clean)
-            if len(key_factors) >= 2:
-                break
-
-        return {
-            "question_type":    "compare_immunity_vs_lifestyle",
-            "vitality":         _verdict_to_state("vitality", vit_v),
-            "immunity":         _verdict_to_state("disease_resistance", dr_v),
-            "mental":           _verdict_to_state("mental_health", mh_v),
-            "chronic":          _verdict_to_state("chronic_risk", cr_v),
-            "primary_driver":   cls["primary_driver"],
-            "secondary_driver": cls["secondary_driver"],
-            "remedy_focus":     cls["remedy_focus"],
-            "key_factors":      key_factors,
-            "engine_verdict":   cls["verdict"],
-        }
-
-    return None
+    return pack
 
 
 def _render_signal_based_narrative_llm(signal_pack: dict, facts: dict,
@@ -1048,26 +1053,40 @@ def _render_signal_based_narrative_llm(signal_pack: dict, facts: dict,
     engine_verdict = signal_pack.get("engine_verdict", "")
     pack_json = json.dumps(signal_pack, ensure_ascii=False, indent=2)
 
-    sys_prompt = (
-        "You are a Vedic-astrology HEALTH translator. The ENGINE has "
-        "already done all analysis and given you a SIGNAL PACK (JSON). "
-        "Your job is ONLY EXPRESSION — convert engine truth to natural "
-        "Hinglish for the user.\n\n"
-        "🛑 STRICT INPUT DISCIPLINE (H2.7.18):\n"
-        "USE ONLY THE SIGNALS IN THE JSON. Do NOT infer new symptoms, "
-        "new conditions, new sensations, or new body parts that the "
-        "JSON does not mention. The user did NOT describe specific "
-        "symptoms — do NOT add a list of symptoms. If signals say "
-        "'mind_body_imbalance_combined', explain THAT — do not invent "
-        "'sleep disturbance, acidity, restlessness, headaches' etc.\n\n"
-        "MANDATORY:\n"
+    has_engine_verdict = bool(engine_verdict)
+    verdict_rule = (
         "1. First sentence = engine_verdict VERBATIM (copy character-"
         "for-character, no rephrasing, no softening).\n"
-        "2. Then 1-2 short lines explaining WHY using primary_driver + "
-        "secondary_driver — talk in BODY-system terms ('baseline "
-        "support', 'energy reserve', 'mental load'), NOT raw planet/"
-        "house jargon.\n"
-        "3. End with ONE practical remedy aligned to remedy_focus.\n"
+        if has_engine_verdict else
+        "1. Read the question. Pick ONLY the dim(s) relevant to it "
+        "from the SIGNAL PACK. Lead with the user-relevant insight in "
+        "1 sentence using those dim states + reasons.\n"
+    )
+    sys_prompt = (
+        "You are a Vedic-astrology HEALTH translator. The ENGINE has "
+        "already done all analysis and given you a UNIVERSAL SIGNAL "
+        "PACK (JSON) with all dims pre-classified. Your job: read the "
+        "user's question, pick the RELEVANT signals, and answer using "
+        "ONLY those signals.\n\n"
+        "🛑 STRICT INPUT DISCIPLINE:\n"
+        "• USE ONLY signals in the JSON. The JSON is the COMPLETE truth.\n"
+        "• Do NOT infer new symptoms, new conditions, new sensations, "
+        "new body parts, new diseases, or new severity that the JSON "
+        "does not state.\n"
+        "• If user did NOT describe specific symptoms, do NOT invent a "
+        "symptom list. Speak in patterns, not diagnoses.\n"
+        "• If a dim is not relevant to the question, IGNORE it (don't "
+        "stuff every dim into the answer).\n"
+        "• If signals are insufficient to answer, say so honestly in "
+        "1 calm line — do NOT fabricate to fill space.\n\n"
+        "MANDATORY:\n"
+        f"{verdict_rule}"
+        "2. Then 1-2 short lines explaining WHY using the relevant "
+        "dim's `reason` field — talk in BODY-system terms ('baseline "
+        "support', 'energy reserve', 'mental load', 'recovery channel'), "
+        "NOT raw planet/house jargon.\n"
+        "3. End with ONE practical remedy aligned to the picked dim "
+        "(routine, breathing, hydration, simple food, sleep hygiene, etc.).\n"
         "4. Length: 80-110 words target, 130 hard cap. SHORTER IS BETTER.\n\n"
         "BANS:\n"
         "✘ NEVER name a specific disease (diabetes, cancer, asthma, "
@@ -2264,7 +2283,7 @@ def handle_health_question(question: str, kundli: dict,
     # namespace so toggling HEALTH_SIGNAL_PACK doesn't serve stale
     # cross-mode entries.
     _sp_flag = "sp1" if os.environ.get("HEALTH_SIGNAL_PACK", "1") != "0" else "sp0"
-    _ns = f"health_static_v11_{_sp_flag}_{_OUTPUT_STYLE}"
+    _ns = f"health_static_v12_{_sp_flag}_{_OUTPUT_STYLE}"
     cache_key = make_cache_key(birth, kundli, _ns, route,
                                 question=_q_for_key)
     cached = get_cached(cache_key)

@@ -246,15 +246,18 @@ def _build_llm_fact_block(facts: dict, route: str) -> str:
         "🔒 STOCK ENGINE — LOCKED FACTS (do not invent)",
         "═══════════════════════════════════════════════",
         f"INTRADAY path: {facts.get('verdict_intraday','?')} "
-        f"({_path_word.get(facts.get('verdict_intraday',''),'?')}) — "
+        f"[reliability={facts.get('verdict_intraday_tier','?')}] — "
         f"{facts.get('verdict_intraday_reason','')}",
         f"SWING path: {facts.get('verdict_swing','?')} "
-        f"({_path_word.get(facts.get('verdict_swing',''),'?')}) — "
+        f"[reliability={facts.get('verdict_swing_tier','?')}] — "
         f"{facts.get('verdict_swing_reason','')}",
-        f"TRADING (general) path: {vt} ({_path_word.get(vt,'?')}) — "
+        f"TRADING (general): {vt} — "
         f"{facts.get('verdict_trading_reason','')}",
-        f"LONG-TERM path: {vl} ({_path_word.get(vl,'?')}) — "
+        f"LONG-TERM path: {vl} "
+        f"[reliability={facts.get('verdict_longterm_tier','?')}] — "
         f"{facts.get('verdict_longterm_reason','')}",
+        f"PREFERRED PATH ORDER (best→worst): "
+        f"{' > '.join(facts.get('preferred_path') or [])}",
         f"Sub-flags: {facts.get('sub_flags',{})}",
         "",
     ]
@@ -328,9 +331,19 @@ _NARRATIVE_INSTRUCTIONS = {
         "Line 5: ONE short sentence (max 22 words) saying WHICH path "
         "is best for THIS user — everyday Hinglish, NO planet names, "
         "NO house numbers, NO dignity words.\n"
-        "Line 6: 'Final: <one clean Hinglish line — concrete decision>'.\n"
-        "Emojis: 🟢 GREEN / 🟡 YELLOW / 🔴 RED based on the three "
-        "engine path verdicts above (INTRADAY / SWING / LONG-TERM)."
+        "Line 6: 'Final: <one clean Hinglish line — concrete decision>'.\n\n"
+        "EMOJIS: 🟢 GREEN / 🟡 YELLOW / 🔴 RED from engine verdicts.\n"
+        "HIERARCHY RULE (CRITICAL): When two paths share the same "
+        "color (e.g., both YELLOW), the one ranked HIGHER in "
+        "PREFERRED PATH ORDER must use stronger/safer wording, and "
+        "the lower-ranked one must use weaker wording.\n"
+        "WORDING by reliability tier:\n"
+        "  - 'high'     → 'reliable / safe option'\n"
+        "  - 'moderate' → 'workable with discipline'\n"
+        "  - 'low'      → 'unreliable / occasional only / not consistent'\n"
+        "  - 'none'     → 'avoid karo'\n"
+        "Use the reliability tag from facts to pick wording — never "
+        "two paths with identical phrasing."
     ),
     "trading_vs_longterm": (
         "User asking 'trading karu ya long-term?'. "

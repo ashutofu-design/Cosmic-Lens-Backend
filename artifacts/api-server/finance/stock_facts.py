@@ -540,6 +540,12 @@ def compute_stock_facts(kundli: dict) -> Dict[str, Any]:
     # ── SWING (3-30 day hold) — middle path ────────────────────────
     # Swing absorbs day-noise so less strict than intraday, but
     # demands at least one of KP-OK or Vipreet-recovery.
+    mercury_house = (karakas.get("Mercury") or {}).get("house")
+    mercury_in_dusthana = mercury_house in {6, 8, 12}
+    mars_dignity = (karakas.get("Mars") or {}).get("dignity")
+    mars_weak = ((not sub_flags["trading_ok"])
+                 or mars_dignity in {"debilitated", "enemy"})
+
     if not sub_flags["trading_ok"] and not sub_flags["long_term_ok"]:
         verdict_swing = "RED"
         verdict_swing_reason = "Both trading and holding karakas weak"
@@ -585,6 +591,61 @@ def compute_stock_facts(kundli: dict) -> Dict[str, Any]:
         verdict_longterm = "YELLOW"
         verdict_longterm_reason = ("Cautious GO — disciplined SIP / "
                                     "index funds, avoid stock-picking")
+
+    # ── RELIABILITY TIERS (P7c) — disambiguate same-color verdicts ─
+    # User-flagged: Swing and Long-term both YELLOW shouldn't read as
+    # equal. Tier differentiates inside same color.
+    def _tier(vd: str, ok_when_yellow: bool, weak_signal: bool) -> str:
+        if vd == "GREEN":
+            return "high"
+        if vd == "RED":
+            return "none"
+        # YELLOW
+        if weak_signal:
+            return "low"
+        return "moderate" if ok_when_yellow else "low"
+
+    verdict_intraday_tier = _tier(
+        verdict_intraday,
+        ok_when_yellow=(sub_flags["trading_ok"]
+                        and not mercury_in_dusthana
+                        and not mercury_combust),
+        weak_signal=(mercury_in_dusthana or mercury_combust or mars_weak),
+    )
+    verdict_swing_tier = _tier(
+        verdict_swing,
+        ok_when_yellow=(sub_flags["trading_ok"] and not mercury_in_dusthana),
+        weak_signal=(mercury_in_dusthana or mars_weak),
+    )
+    verdict_longterm_tier = _tier(
+        verdict_longterm,
+        ok_when_yellow=(sub_flags["long_term_ok"] and not severe_leak),
+        weak_signal=severe_leak,
+    )
+
+    # If swing tier dropped to "low" because Mercury/Mars weak, sharpen
+    # the reason text so the LLM doesn't oversell it.
+    if (verdict_swing == "YELLOW" and verdict_swing_tier == "low"):
+        verdict_swing_reason = ("Mercury/Mars weak — swing trades only "
+                                "occasionally workable, not reliable")
+
+    # Preferred-path ordering (best → worst). Sort by:
+    #   1) verdict color (GREEN > YELLOW > RED)
+    #   2) reliability tier (high > moderate > low > none)
+    #   3) horizon tiebreaker (longterm > swing > intraday) — chart
+    #      strength being equal, longer horizon survives noise better.
+    _vscore = {"GREEN": 2, "YELLOW": 1, "RED": 0}
+    _tscore = {"high": 3, "moderate": 2, "low": 1, "none": 0}
+    _candidates = [
+        ("longterm", verdict_longterm, verdict_longterm_tier, 3),
+        ("swing",    verdict_swing,    verdict_swing_tier,    2),
+        ("intraday", verdict_intraday, verdict_intraday_tier, 1),
+    ]
+    _candidates.sort(
+        key=lambda c: (_vscore[c[1]], _tscore[c[2]], c[3]),
+        reverse=True,
+    )
+    preferred_path = [c[0] for c in _candidates]
 
     # ── K. Top 3 strongest planets (for sector mapping) ─────────────
     planet_scores = []
@@ -632,10 +693,14 @@ def compute_stock_facts(kundli: dict) -> Dict[str, Any]:
         "verdict_trading_reason": verdict_trading_reason,
         "verdict_intraday": verdict_intraday,          # P7b: 3-way split
         "verdict_intraday_reason": verdict_intraday_reason,
+        "verdict_intraday_tier": verdict_intraday_tier,   # P7c
         "verdict_swing": verdict_swing,                # P7b: 3-way split
         "verdict_swing_reason": verdict_swing_reason,
+        "verdict_swing_tier": verdict_swing_tier,         # P7c
         "verdict_longterm": verdict_longterm,          # P7: split verdict
         "verdict_longterm_reason": verdict_longterm_reason,
+        "verdict_longterm_tier": verdict_longterm_tier,   # P7c
+        "preferred_path": preferred_path,                 # P7c: hierarchy
         "kp_5th_csl": kp_5th,
-        "engine_version": "stock_facts_v1.2_split_verdict",
+        "engine_version": "stock_facts_v1.3_path_hierarchy",
     }

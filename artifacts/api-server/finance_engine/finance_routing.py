@@ -27,6 +27,31 @@ _STOCK_EXCLUDE_RX = re.compile(
     re.IGNORECASE
 )
 
+# ── HARD EXCLUSION — TIMING questions defer to timing engine ────────
+# Per user directive: "non_timing_finance" — ANY money-related Q comes
+# here UNLESS it's a timing Q (kab/when/which year/dasha period etc.).
+# Timing engine owns those; we don't double-handle.
+_TIMING_EXCLUDE_RX = re.compile(
+    r"\b("
+    r"kab|kab\s+tak|kab\s+(milega|hoga|hogi|aayega|aayegi)|"
+    r"when|when\s+will|by\s+when|"
+    r"kis\s+(saal|year|mahine|month|date|tarikh|samay|time)|"
+    r"kaun[\s-]?se\s+(saal|year|mahine|month)|"
+    r"\d{4}\s+me|"                  # "2026 me", "2027 me"
+    r"(this|next|coming|aane[\s-]?wala)\s+(year|month|saal|mahina)|"
+    r"is\s+(saal|mahine)|agle\s+(saal|mahine)|"
+    r"dasha\s+(kab|me|change|period|timing|chal\s+rahi)|"
+    r"antar(?:dasha)?\s+(kab|me|period|timing|chal\s+rahi)|"
+    r"mahadasha\s+(kab|me|period|timing)|"
+    r"transit\s+(kab|me|effect|period)|"
+    r"gochar\s+(kab|me|effect)|"
+    r"period\s+(of|kab|when)|"
+    r"date\s+(bata|tell|of)|"
+    r"timing\s+(bata|tell|kya)"
+    r")\b",
+    re.IGNORECASE
+)
+
 
 # ── WARNINGS — checked FIRST (highest priority) ─────────────────────
 _WARN_PATTERNS = [
@@ -123,35 +148,50 @@ _NARRATIVE_PATTERNS = [
 ]
 
 # ── Finance topic detection (gate) — NON-stock money keywords ───────
+# BROAD — per user directive: any money/wealth word qualifies.
 _FINANCE_TOPIC_RX = re.compile(
-    r"\b(paisa|paise|dhan|dhana|wealth|money|"
+    r"\b(paisa|paise|paiso|dhan|dhana|wealth|money|"
     r"saving|savings|bachat|"
     r"kharcha|kharch|expense|expenses|fizul|"
     r"loan|karz|kar(?:j|z)a|udhaar|debt|emi|"
-    r"income|salary|kamai|earnings|"
+    r"income|salary|kamai|earnings|earning|kamana|kamai|"
     r"business(?!\s*market)|kaarobaar|startup|partnership|"
     r"lottery|jackpot|inheritance|virasat|windfall|"
-    r"rich|ameer|amir|crorepati|"
+    r"rich|ameer|amir|crorepati|garib|gareeb|poor|"
     r"lakshmi|kubera|"
-    r"financial|finance(?!\s*market))\b",
+    r"financial|finance(?!\s*market)|"
+    r"property|real[\s-]*estate|jameen|zameen|plot|"
+    r"gold|sona|jewellery|jewelry|"
+    r"mindset|abundance|prosperity|samriddhi"
+    r")\b",
     re.IGNORECASE
 )
 
 
 def is_finance_question(question: str) -> bool:
-    """True only if the question is about general money AND not stock."""
+    """True if the question is about general (NON-TIMING) money AND not stock.
+
+    Three guards in order:
+      1. Stock terms        -> stock_engine handles it (return False)
+      2. Timing terms       -> timing engine handles it (return False)
+      3. Finance keyword    -> we own it (return True)
+    """
     if not isinstance(question, str) or not question.strip():
         return False
     if _STOCK_EXCLUDE_RX.search(question):
         return False  # stock_engine territory
+    if _TIMING_EXCLUDE_RX.search(question):
+        return False  # timing engine territory
     return bool(_FINANCE_TOPIC_RX.search(question))
 
 
 def route_finance_question(question: str) -> Tuple[str, str]:
-    """Returns (mode, route_id) where mode in {WARNING, DIRECT, NARRATIVE}.
+    """Returns (mode, route_id) where mode in
+    {WARNING, DIRECT, NARRATIVE, HYBRID}.
 
-    Falls back to NARRATIVE:wealth_verdict for finance questions that
-    don't match any specific pattern.
+    Catch-all fallback (per user directive "har finance Q yahan se"):
+      ('HYBRID', 'general_finance_overview') — DIRECT 4-dim picture
+      + short LLM narrative line. Used when no specific pattern fires.
     """
     q = (question or "").lower()
 
@@ -167,5 +207,5 @@ def route_finance_question(question: str) -> Tuple[str, str]:
         if re.search(pat, q, re.IGNORECASE):
             return ("NARRATIVE", route)
 
-    # Fallback: full multi-dim verdict via DIRECT
-    return ("DIRECT", "wealth_verdict")
+    # Catch-all — broad finance Q with no specific match.
+    return ("HYBRID", "general_finance_overview")

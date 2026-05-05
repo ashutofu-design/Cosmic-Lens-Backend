@@ -251,6 +251,27 @@ _NARRATIVE_INSTRUCTIONS = {
         "60-80 words Hinglish. NO planet names, NO house numbers. "
         "End with 'Final: <one-line>'."
     ),
+    "general_finance_overview": (
+        "User ne general finance/money/dhan related question pucha hai "
+        "jo specific pattern (saving/loan/business/kharcha etc.) me fit "
+        "nahi hota. Engine ne already 4-dimension picture (Wealth, "
+        "Income, Saving, Risk) DIRECT format me upar print kar di hai. "
+        "Aapka kaam: us picture ke neeche 50-70 word ka short Hinglish "
+        "narrative add karo jo:\n"
+        "  1. User ki actual question ko address kare (paraphrase mat karo, "
+        "     direct answer do)\n"
+        "  2. 4-dim verdict ke 1-2 strongest signals ko plain language me "
+        "     concrete behaviour ya guidance me convert kare\n"
+        "  3. Ek practical takeaway de\n"
+        "Format:\n"
+        "  Line 1: blank\n"
+        "  Line 2: '✏️ Aapke sawal pe focus:'\n"
+        "  Line 3-5: 50-70 word narrative\n"
+        "  Line 6: blank\n"
+        "  Line 7: 'Final: <one direct sentence>'\n"
+        "NO planet names, NO house numbers, NO RED/YELLOW/GREEN words, "
+        "NO dignity terms, NO timing/date predictions."
+    ),
     "loss_reasons": (
         "User asking 'paisa nahi tikta / ud jata / kharch ho jata'. "
         "CRITICAL: Convert chart signals into CONCRETE BEHAVIORAL "
@@ -397,6 +418,19 @@ def handle_finance_money_question(question: str, kundli: dict,
     if mode == "DIRECT":
         formatter = _DIRECT_FORMATTERS.get(route, _direct_wealth_verdict)
         text = formatter(facts)
+    elif mode == "HYBRID":
+        # Per user directive (Option Z): catch-all general finance Q
+        # gets DIRECT 4-dim picture FIRST, then short LLM narrative
+        # specifically addressing the user's question.
+        direct_text = _direct_wealth_verdict(facts)
+        narrative = _llm_narrative(facts, route, question)
+        # Strip duplicated "Final:" line from direct part if narrative
+        # also produces one — keep narrative's final.
+        direct_clean = "\n".join(
+            ln for ln in direct_text.splitlines()
+            if not ln.strip().startswith("💡 Final:")
+        )
+        text = direct_clean.rstrip() + "\n\n" + narrative.lstrip()
     else:
         text = _llm_narrative(facts, route, question)
 

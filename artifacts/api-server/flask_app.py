@@ -5929,9 +5929,9 @@ def ask_route():
     if _fm and _fm.get("text"):
         return jsonify({
             "text":       _fm["text"],
-            "topic":      "finance_money",
+            "topic":      "non_timing_finance",
             "confidence": 1.0,
-            "source":     (f"finance_engine[{_fm.get('scope','non_timing')}]:"
+            "source":     (f"non_timing_finance[{_fm.get('scope','non_timing')}]:"
                            f"{_fm.get('mode','')}/{_fm.get('route','')}"),
             "scope":      _fm.get("scope", "non_timing"),
             "follow_ups": [],

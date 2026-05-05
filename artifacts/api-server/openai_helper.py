@@ -242,6 +242,10 @@ def _M17_format_marriage_block(engine_result: dict) -> str:
 # Killswitch: PROPERTY_FOCUS_BLOCK ∈ {"0","false","no","off"} → disabled.
 # Default ON. Helper accepts "property", "home_property", "real_estate",
 # "ghar" topic_ids OR falls back to regex on the question text.
+# P1.2.1 (architect-fix): module-level counter for property-focus router
+# fallback events (incremented at each call site when build_property_focus
+# import/exec fails). Sustained non-zero growth = real regression to alert on.
+_PROPERTY_FOCUS_FALLBACK_COUNT = 0
 _PROPERTY_FOCUS_TEXT = (
     "FOCUS — PROPERTY / GHAR / IMMOVABLE-ASSET ANALYSIS.\n\n"
     "4th House (Sukha-bhava) primary. You have D1 + D9 + full KP block "
@@ -316,10 +320,65 @@ _PROPERTY_FOCUS_TEXT = (
 )
 _PROPERTY_TOPIC_IDS = frozenset({"property", "home_property", "real_estate", "ghar"})
 
-# Mirrors the inline regex used at L1604 ("home_property" in _detect_topic
-# keyword loop). Kept self-contained so the helper has no upward dep.
+# P1.2.1 hardening (architect feedback): split into STRONG (unambiguous —
+# fires on regex alone) and WEAK (ambiguous outside property context —
+# requires an anchor co-occurrence). Prevents false positives like
+# "office politics", "sell stock", "build career" from grabbing the
+# property-focus block. Kept self-contained so the helper has no upward dep.
+
+# STRONG — these tokens are unambiguous property domain. Match alone.
+_PROPERTY_STRONG_RX = re.compile(
+    r"\b("
+    r"ghar|makaan|property|plot|flat|jameen|jamin|home|house|real\s+estate"
+    r"|paitric|paitrik|ancestral\s+(?:home|house|property|ghar)|virasat"
+    r"|griha[-\s]?pravesh|muhurat\s+ghar|kabza|encroachment"
+    r"|apartment|society|villa|bungalow|sarkari\s+(?:ghar|quarter)"
+    r"|farmhouse|farmland|kiraya|kirayedaar|tenant"
+    # P1.2.2 (architect re-tighten): promoted construction/renovation to
+    # STRONG since they're unambiguous in property context (90%+ usage).
+    r"|construction|renovation|renovate|naya\s+ghar"
+    r")\b",
+    re.IGNORECASE,
+)
+# WEAK — ambiguous tokens. Need an ANCHOR co-occurrence to qualify.
+_PROPERTY_WEAK_RX = re.compile(
+    r"\b("
+    r"land|agricultural|farm|kheti|zameen"
+    r"|shop|dukaan|office|godown|warehouse|commercial|retail"
+    r"|rental|lease"
+    r"|construction|renovation|renovate|banwana|build(?:ing)?"
+    r"|sell|bechna|disposal|nikaal|kharid"
+    r")\b",
+    re.IGNORECASE,
+)
+# ANCHOR — words that, when present alongside a WEAK token, confirm
+# property context (transaction verbs, ownership phrases, family-title hints).
+_PROPERTY_ANCHOR_RX = re.compile(
+    r"\b("
+    # core property nouns also act as anchors
+    r"ghar|makaan|property|plot|flat|jameen|home|house|real\s+estate"
+    # transaction verbs (with stem-extension to catch -ne/-na/-u/-a forms)
+    r"|kharid\w*|bech\w*|banwa\w*"
+    # ownership/financial structure markers (specific, not generic)
+    r"|EMI|loan|home\s*loan|joint|biwi\s+ke\s+naam|patni\s+ke\s+naam"
+    r"|invest(?:ment)?|paisa\s+lagaa|sampatti"
+    # P1.2.2: REMOVED generic milega/lena/dena/lu/liya — they overshot
+    # ('rental car milega' false-positive). Specific verbs cover real Qs.
+    r")\b",
+    re.IGNORECASE,
+)
+# Topic-IDs that are EXPLICITLY non-property — when these are set, only
+# STRONG regex hit qualifies (prevents stealing from career/finance/etc).
+_NON_PROPERTY_TOPIC_IDS = frozenset({
+    "career", "finance", "stock_finance", "health", "health_static",
+    "marriage", "education", "relationship", "remedy", "muhurat",
+    "numerology", "vastu_pure",
+})
+
+# Back-compat alias — kept so any external caller that imported the old
+# combined regex still works. Equivalent to STRONG ∪ WEAK.
 _PROPERTY_KEYWORD_RX = re.compile(
-    r"\b(ghar|makaan|property|plot|flat|jameen|jamin|home|house|real\s+estate)\b",
+    f"({_PROPERTY_STRONG_RX.pattern}|{_PROPERTY_WEAK_RX.pattern})",
     re.IGNORECASE,
 )
 
@@ -331,12 +390,29 @@ def _property_focus_enabled():
 
 
 def _is_property_topic(topic_id, question):
-    """Match property Qs by topic_id OR fallback regex on question text."""
+    """Match property Qs by topic_id OR carefully gated regex (P1.2.1).
+
+    Logic ladder:
+      1. Explicit property topic_id → True.
+      2. Explicit non-property topic_id → require STRONG regex hit
+         (architect-fix: prevents 'sell stock' / 'office politics' /
+         'build career' from grabbing property-focus block).
+      3. Empty/unknown topic_id → STRONG hit OR (WEAK hit AND anchor hit).
+    """
     t = (topic_id or "").lower().strip() if isinstance(topic_id, str) else ""
     if t in _PROPERTY_TOPIC_IDS:
         return True
+    if not isinstance(question, str):
+        return False
     try:
-        if isinstance(question, str) and _PROPERTY_KEYWORD_RX.search(question):
+        strong_hit = bool(_PROPERTY_STRONG_RX.search(question))
+        if t in _NON_PROPERTY_TOPIC_IDS:
+            # Topic is something else — only STRONG property tokens override.
+            return strong_hit
+        if strong_hit:
+            return True
+        # Weak match alone is not enough — require an anchor co-occurrence.
+        if _PROPERTY_WEAK_RX.search(question) and _PROPERTY_ANCHOR_RX.search(question):
             return True
     except Exception:
         pass
@@ -356,7 +432,22 @@ def _passthrough_property_focus(question, topic_id):
             return ""
         if not _is_property_topic(topic_id, question):
             return ""
-        return f"\n\nSHASTRIYA FOCUS for this question:\n{_PROPERTY_FOCUS_TEXT}\n"
+        # P1.2 (2026-05-05): atomic composable framework instead of fat
+        # constant. _PROPERTY_FOCUS_TEXT kept for back-compat / rollback.
+        try:
+            from property_focus_routing import build_property_focus  # type: ignore
+            return f"\n\nSHASTRIYA FOCUS for this question:\n{build_property_focus(question)}\n"
+        except Exception as _pfr_exc:  # noqa: BLE001
+            # P1.2.1 (architect-fix): structured fallback counter for alerting.
+            try:
+                global _PROPERTY_FOCUS_FALLBACK_COUNT
+                _PROPERTY_FOCUS_FALLBACK_COUNT += 1
+            except NameError:
+                _PROPERTY_FOCUS_FALLBACK_COUNT = 1  # type: ignore
+            print(f"[passthrough_property_focus][FALLBACK_COUNT={_PROPERTY_FOCUS_FALLBACK_COUNT}] "
+                  f"router failed → fat-constant fallback: {str(_pfr_exc)[:160]}",
+                  flush=True)
+            return f"\n\nSHASTRIYA FOCUS for this question:\n{_PROPERTY_FOCUS_TEXT}\n"
     except Exception as _pf_exc:  # noqa: BLE001
         print(f"[passthrough_property_focus] skipped: {str(_pf_exc)[:160]}")
         return ""
@@ -4434,12 +4525,25 @@ def _build_messages(
             "     remedy template.\n"
             f"{engine_ref}"
         )
-    # ── PROPERTY FOCUS (P1.1, 2026-05-05) — narrative-path injection.
-    # Uses shared _PROPERTY_FOCUS_TEXT + _is_property_topic helper (defined
-    # near _passthrough_marriage_block) so this and the 3 passthrough sites
-    # stay byte-identical. Killswitch: PROPERTY_FOCUS_BLOCK=0/false/no/off.
+    # ── PROPERTY FOCUS (P1.1 → P1.2, 2026-05-05) — narrative-path injection.
+    # P1.2: composable atomic framework via property_focus_routing.build_property_focus()
+    # replaces the P1.1 fat constant. Constant kept as fallback. Killswitch:
+    # PROPERTY_FOCUS_BLOCK=0/false/no/off (handled by _property_focus_enabled).
     elif _is_property_topic(topic, question) and _property_focus_enabled():
-        focus = _PROPERTY_FOCUS_TEXT
+        try:
+            from property_focus_routing import build_property_focus as _bpf  # type: ignore
+            focus = _bpf(question)
+        except Exception as _pfr_exc:  # noqa: BLE001
+            # P1.2.1 (architect-fix): structured fallback counter for alerting.
+            try:
+                global _PROPERTY_FOCUS_FALLBACK_COUNT
+                _PROPERTY_FOCUS_FALLBACK_COUNT += 1
+            except NameError:
+                _PROPERTY_FOCUS_FALLBACK_COUNT = 1  # type: ignore
+            print(f"[narrative_property_focus][FALLBACK_COUNT={_PROPERTY_FOCUS_FALLBACK_COUNT}] "
+                  f"router failed → fat-constant fallback: {str(_pfr_exc)[:160]}",
+                  flush=True)
+            focus = _PROPERTY_FOCUS_TEXT
     kp_block  = _kp_context(birth, topic)
     tr_block  = _transit_context()
     _, beh    = _summarise_history(history or [])

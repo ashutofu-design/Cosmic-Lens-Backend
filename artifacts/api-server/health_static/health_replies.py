@@ -473,12 +473,14 @@ def handle_health_question(question: str, kundli: dict,
     # ── WARNING — locked safe template (no engine, no LLM, no cache) ──
     if mode == "WARNING":
         raw_text = WARNINGS.get(route, "")
-        # MANDATORY doctor disclaimer guarantee on every WARNING reply
-        # (architect H2 fix — CRISIS_REDIRECT lacked it before). Other
-        # warnings already include disclaimer text so apply_safety_tail
-        # detects it and is a no-op.
+        # WARNING (timing/serious) is the ONLY path that gets the doctor
+        # disclaimer + sensitive-bucket extra (Phase H2.1 user policy).
+        # Other modes (DIRECT/NARRATIVE/HYBRID) skip doctor mention to
+        # keep the static engine positioned as preventive insight, not
+        # doctor replacement.
         text, w_flags = apply_safety_tail(raw_text,
-                                           sensitive_bucket=sensitive)
+                                           sensitive_bucket=sensitive,
+                                           add_doctor=True)
         bs = [f"warning:{route}"]
         if "doctor_disclaimer_added" in w_flags:
             bs.append("doctor_disclaimer_added")
@@ -520,7 +522,7 @@ def handle_health_question(question: str, kundli: dict,
             if mode == "WARNING":
                 raw_w = WARNINGS.get(route, "")
                 text_w, w_flags = apply_safety_tail(
-                    raw_w, sensitive_bucket=sensitive)
+                    raw_w, sensitive_bucket=sensitive, add_doctor=True)
                 bs = [f"warning:{route}", "via_llm_router"]
                 if "doctor_disclaimer_added" in w_flags:
                     bs.append("doctor_disclaimer_added")
@@ -558,9 +560,9 @@ def handle_health_question(question: str, kundli: dict,
     facts = compute_health_facts(kundli)
     tele_state["facts"] = facts
     if facts.get("error"):
+        # Phase H2.1: failsafe also drops doctor disclaimer (per policy).
         out = {
             "text": (f"Engine error: {facts['error']}\n\n"
-                      f"{DOCTOR_DISCLAIMER}\n\n"
                       "Final: Kundli check karein."),
             "mode": "FAILSAFE", "route": route,
             "scope": _ENGINE_SCOPE,

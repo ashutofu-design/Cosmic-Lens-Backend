@@ -290,26 +290,31 @@ def _ensure_final_line(text: str) -> Tuple[str, bool]:
 
 
 def apply_safety_tail(text: str,
-                      sensitive_bucket: Optional[str] = None
+                      sensitive_bucket: Optional[str] = None,
+                      add_doctor: bool = False,
                       ) -> Tuple[str, List[str]]:
     """Light-touch safety tail for engine-deterministic DIRECT output.
 
-    DIRECT text is fully engine-controlled (no LLM hallucination risk),
-    so we MUST NOT scrub it (validator was stripping the literal word
-    'dimensions' and listing 'Arishta/Balarishta' yogas as
-    '[yoga not in chart]'). We only:
+    Per user policy (Phase H2.1): default-OFF doctor disclaimer.
+    Static engine = preventive insight, NOT doctor replacement.
+    Doctor mention reserved for WARNING (timing/serious) routes only.
+
+    Always:
       - guarantee a 'Final:' tail (if missing)
-      - add sensitive-bucket helpline / specialist note
-      - append the mandatory doctor disclaimer
+    Only when `add_doctor=True` (WARNING path):
+      - sensitive-bucket helpline / specialist note
+      - mandatory doctor disclaimer line
     """
     flags: List[str] = []
     cleaned = text
     cleaned, added_final = _ensure_final_line(cleaned)
     if added_final:
         flags.append("final_line_added")
-    cleaned, added_doc = _ensure_doctor_disclaimer(cleaned, sensitive_bucket)
-    if added_doc:
-        flags.append("doctor_disclaimer_added")
+    if add_doctor:
+        cleaned, added_doc = _ensure_doctor_disclaimer(
+            cleaned, sensitive_bucket)
+        if added_doc:
+            flags.append("doctor_disclaimer_added")
     return cleaned, flags
 
 
@@ -319,17 +324,24 @@ def validate_health_llm_output(
     sensitive_bucket: Optional[str] = None,
     allowed_yogas: Optional[List[str]] = None,
     direct_fallback_text: str = "",
+    add_doctor: bool = False,
 ) -> Tuple[str, List[str], str]:
     """Clean + validate LLM health output.
 
     Returns (cleaned_text, flags, action).
     Action: 'none' | 'soft_clean' | 'hard_clean' | 'fallback'.
+
+    Per Phase H2.1 user policy: doctor disclaimer + sensitive-bucket
+    extras gated behind `add_doctor` flag (default OFF). Only WARNING
+    routes pass `add_doctor=True`. Diagnosis-ban / fear-softener /
+    death-strip / cure-softener / hallucinated-yoga / disease-name
+    scrubbing remain ALWAYS-ON regardless of flag.
     """
     if not isinstance(text, str) or not text.strip():
-        # Even fallback gets doctor-disclaimer attached
         fb = direct_fallback_text or "Engine truth upar di hai."
-        fb_with_doc, _ = _ensure_doctor_disclaimer(fb, sensitive_bucket)
-        return (fb_with_doc, ["empty_llm_output"], "fallback")
+        if add_doctor:
+            fb, _ = _ensure_doctor_disclaimer(fb, sensitive_bucket)
+        return (fb, ["empty_llm_output"], "fallback")
 
     flags: List[str] = []
     cleaned = text
@@ -425,10 +437,14 @@ def validate_health_llm_output(
     if added_final:
         flags.append("final_line_added")
 
-    # 14) MANDATORY doctor disclaimer (HARD rule — always present)
-    cleaned, added_doc = _ensure_doctor_disclaimer(cleaned, sensitive_bucket)
-    if added_doc:
-        flags.append("doctor_disclaimer_added")
+    # 14) Doctor disclaimer (Phase H2.1: gated, default OFF — only WARNING
+    #     path opts in via add_doctor=True). Sensitive-bucket extras share
+    #     the same gate (they are also doctor-mention by nature).
+    if add_doctor:
+        cleaned, added_doc = _ensure_doctor_disclaimer(
+            cleaned, sensitive_bucket)
+        if added_doc:
+            flags.append("doctor_disclaimer_added")
 
     # Decide action
     if not flags:
@@ -439,8 +455,9 @@ def validate_health_llm_output(
     else:
         if len(cleaned) < 60:
             fb = direct_fallback_text or cleaned
-            fb_with_doc, _ = _ensure_doctor_disclaimer(fb, sensitive_bucket)
-            return (fb_with_doc, flags + ["mangled_after_clean"], "fallback")
+            if add_doctor:
+                fb, _ = _ensure_doctor_disclaimer(fb, sensitive_bucket)
+            return (fb, flags + ["mangled_after_clean"], "fallback")
         hard_flags = {"disease_name_stripped", "diagnosis_assert_softened",
                        "death_prediction_stripped", "engine_codes",
                        "cure_guarantee_softened", "timing_leak",

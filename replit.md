@@ -148,6 +148,22 @@ User-approved continuation of H1. Built the full reply layer on top of the froze
 
 **Env vars**: `HEALTH_LLM_MODEL` (default `gpt-5.4`), `HEALTH_ROUTER_MODEL` (default `gpt-5-nano`). Both via openai_helper replit-proxy. Cache file: `health_static/_health_static_cache.sqlite3` (covered by `.gitignore` from H1).
 
+## Phase H2.1 — DOCTOR-MENTION POLICY GATE (2026-05-05)
+
+User-policy lock-in: static health engine = preventive insight system, NOT doctor replacement. Default-OFF doctor disclaimer to avoid UX irritation; reserved ONLY for WARNING (timing/serious) routes.
+
+**Policy**:
+- ❌ NO doctor disclaimer on DIRECT (vitality_check, yoga_check), NARRATIVE (disease_risk, chronic_risk, mental_health, accident_risk), HYBRID (general_health_overview), FAILSAFE.
+- ✅ Doctor disclaimer ONLY on WARNING routes (CRISIS_REDIRECT, DEATH_PREDICTION_BLOCKED, TIMING_HEALTH_DECLINE, TIMING_RECOVERY, TIMING_SURGERY, DIAGNOSIS_DEMAND, CURE_GUARANTEE_BLOCKED).
+- ✅ MUST KEEP (always-on, regardless of doctor-flag): diagnosis-ban (12 disease names → category terms), diagnosis-assert softener ("tumhe X hai" → risk-zone language), fear-language softener (danger/khatarnak/fatal → calm equivalents), death-prediction strip, cure-guarantee softener, hallucinated-yoga replacer, engine-code strip, planet/house/sign jargon strip, timing-leak strip.
+- ✅ Sensitive-bucket extras (mental_health iCall helpline, repro/parent/addiction specialist mentions) gated under same `add_doctor` flag — they're doctor-mention by nature; only fire on WARNING path.
+
+**Implementation**: added `add_doctor: bool = False` parameter to BOTH `apply_safety_tail()` and `validate_health_llm_output()` in `health_static/validator.py`. Default `False` everywhere. Only the two WARNING call sites in `health_static/health_replies.py` (regex-WARNING at L484 and llm-router-WARNING at L527) pass `add_doctor=True`. FAILSAFE block also stripped of `DOCTOR_DISCLAIMER` reference.
+
+**Verification (10-case smoke on P40 chart)**: 5 non-WARNING routes (DIRECT-vitality, DIRECT-yoga, NARRATIVE-mental, NARRATIVE-chronic, HYBRID-general) → no doctor mention ✅. 5 WARNING routes (crisis, death, timing, diagnosis, cure) → doctor mention present ✅. Diagnosis-ban + fear-softener still firing on LLM-touched modes (verified: zero disease-name leaks across all narrative outputs).
+
+**Note**: LLM-narrative may organically use phrases like "trusted professional se baat karna" in supportive contexts — this is allowed (user banned boilerplate "doctor consult" tail, not organic empathetic language). Validator only enforces the structural disclaimer; in-narrative natural mentions are not stripped.
+
 ## Phase 2.8.82.1 — MODULE RENAME finance_engine → finance_static (2026-05-05)
 
 User-driven naming refactor in anticipation of upcoming **Finance Timing Engine** (separate module, dasha-based, future phase). Old folder name `finance_engine` was ambiguous — could mean the static chart engine OR the umbrella for all money-related logic. Renamed to `finance_static` to make the boundary explicit: this module ONLY handles non-timing chart-based finance Qs (wealth/income/saving/risk/leak/business-vs-job/debt/sudden-wealth/karakas/KP-Vedic conflicts). Timing Qs (kab paisa aayega, exact date) will live in a future `finance_timing` module.

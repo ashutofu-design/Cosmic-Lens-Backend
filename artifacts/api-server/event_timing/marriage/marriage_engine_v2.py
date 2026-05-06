@@ -501,8 +501,16 @@ def _step2_d9_verify(kundli: dict, lagna_si: int,
 # ════════════════════════════════════════════════════════════════════════
 # STEP 3 — KP verification (VERIFY)
 # ════════════════════════════════════════════════════════════════════════
-def _step3_kp_verify(kp: dict, filtered: Set[str]) -> Dict[str, Any]:
+def _step3_kp_verify(kp: dict, filtered: Set[str],
+                      d9_7l: Optional[str] = None) -> Dict[str, Any]:
     """Verify filtered planets via KP signification + 7CSL gate.
+
+    v2.3 — D9 7L (supreme marriage karaka in Navamsa) gets boosted KP
+    treatment: (1) +15 flat KP-floor bonus when it has any marriage
+    signification at all, (2) extra +10 when it specifically signifies
+    7H, (3) if the 7th-cusp sub-lord IS the D9 7L, csl_verdict is
+    upgraded from PARTIAL/UNKNOWN to CONFIRMS — but DENIES is never
+    overridden (hard-stop per v2.1 architect contract).
 
     Returns:
       {
@@ -512,6 +520,7 @@ def _step3_kp_verify(kp: dict, filtered: Set[str]) -> Dict[str, Any]:
         "csl_verdict": "CONFIRMS" | "PARTIAL" | "DENIES" | "UNKNOWN",
         "csl_promise_h": [int],
         "csl_deny_h": [int],
+        "csl_is_d9_7l": bool,
       }
     """
     per_planet: Dict[str, Dict[str, Any]] = {}
@@ -519,7 +528,8 @@ def _step3_kp_verify(kp: dict, filtered: Set[str]) -> Dict[str, Any]:
         for p in _PLANETS_9:
             per_planet[p] = {"kp": 0.0, "promise_h": [], "deny_h": [], "notes": []}
         return {"per_planet": per_planet, "csl_planet": None,
-                "csl_verdict": "UNKNOWN", "csl_promise_h": [], "csl_deny_h": []}
+                "csl_verdict": "UNKNOWN", "csl_promise_h": [], "csl_deny_h": [],
+                "csl_is_d9_7l": False}
 
     # Per-planet scoring
     for pname in _PLANETS_9:
@@ -546,6 +556,19 @@ def _step3_kp_verify(kp: dict, filtered: Set[str]) -> Dict[str, Any]:
 
         # Floor at 0, ceiling at 100
         score = max(0.0, min(100.0, score + 30.0))   # +30 baseline so 0-deny ≈ 30, strong promise ≈ 90
+
+        # v2.3 — D9 7L supreme treatment in KP layer.
+        # (a) +15 flat bonus to any D9 7L (recognises classical supremacy
+        #     even when its KP signification is modest).
+        # (b) +10 extra when D9 7L specifically signifies 7H (the
+        #     marriage house) — this is the strongest classical confluence.
+        if d9_7l and pname == d9_7l:
+            score = min(100.0, score + 15.0)
+            notes.append("D9 7L (KP-supreme +15)")
+            if 7 in promise:
+                score = min(100.0, score + 10.0)
+                notes.append("D9 7L signifies 7H (KP-confluence +10)")
+
         per_planet[pname] = {"kp": score, "promise_h": promise,
                               "deny_h": deny, "notes": notes}
 
@@ -569,12 +592,22 @@ def _step3_kp_verify(kp: dict, filtered: Set[str]) -> Dict[str, Any]:
         else:
             csl_verdict = "UNKNOWN"
 
+    # v2.3 — Ultimate classical confluence: if 7th-cusp sub-lord IS the
+    # D9 7L, the marriage promise is doubly confirmed (Krishnamurti's
+    # CSL gate AND Parashari D9-7L supremacy point to the same planet).
+    # Upgrade PARTIAL/UNKNOWN → CONFIRMS. DENIES is NEVER overridden
+    # (architect-locked hard-stop from v2.1).
+    csl_is_d9_7l = bool(d9_7l and csl_planet and csl_planet == d9_7l)
+    if csl_is_d9_7l and csl_verdict in ("PARTIAL", "UNKNOWN"):
+        csl_verdict = "CONFIRMS"
+
     return {
         "per_planet": per_planet,
         "csl_planet": csl_planet,
         "csl_verdict": csl_verdict,
         "csl_promise_h": csl_promise,
         "csl_deny_h": csl_deny,
+        "csl_is_d9_7l": csl_is_d9_7l,
     }
 
 
@@ -1289,12 +1322,15 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     factors.append(f"STEP2 d9_strong={sorted(d9_strong)}")
 
     # ── STEP 3 ────────────────────────────────────────────────────────
-    kp_result = _step3_kp_verify(kp, filtered_set)
+    kp_result = _step3_kp_verify(kp, filtered_set, d9_7l=d9_7l)
     kp_per = kp_result["per_planet"]
     csl_verdict = kp_result["csl_verdict"]
+    csl_is_d9_7l = kp_result.get("csl_is_d9_7l", False)
     factors.append(f"STEP3 7CSL={kp_result.get('csl_planet')}/{csl_verdict} "
                     f"promise={kp_result.get('csl_promise_h')} "
-                    f"deny={kp_result.get('csl_deny_h')}")
+                    f"deny={kp_result.get('csl_deny_h')}"
+                    + (f" [7CSL IS D9 7L — ultimate confluence]"
+                       if csl_is_d9_7l else ""))
 
     # ── STEP 4 ────────────────────────────────────────────────────────
     ranked = _step4_rank(d1_map, d9_map, kp_per, lagna_si, is_female,

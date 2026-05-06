@@ -595,10 +595,349 @@ def build_property_focus(question: str = "") -> str:
         return _FRAMEWORK_HEADER + _atomic_blocks_dump() + "\n" + _ANSWER_STYLE
 
 
+# ── P1.2.7 TOPIC-AWARE CHART SLICE: drop irrelevant planet+house rows ──
+# After P1.2.5 trims dasha sections (4/5/8/9), Sec 2 (all 9 planets) and
+# Sec 3 (all 12 bhavas) still bloat the prompt with rows the LLM doesn't
+# need for property STATIC/QUALITY answers (e.g. 7H Mithun details, Sun
+# in 12H deep, Mercury retrograde — irrelevant when asking "ghar yog").
+#
+# slice_chart_for_topic(chart_block, question) parses Sec 2 + Sec 3
+# tables and keeps ONLY the rows relevant to property analysis:
+#   - Houses kept: 1 (Lagna), 2 (kutumba/wealth), 4 (ghar/sukh primary),
+#     11 (gains) + ANY house occupied by a karaka.
+#   - Planets kept: Mars/Venus/Jupiter (karakas) + Lagnesh (parsed from
+#     Sec 1 header) + ANY planet occupying a relevant house + ANY planet
+#     whose Sec-2 "status" column contains "asp H<N>" where N ∈ relevant.
+#
+# Aspect detection uses the EXISTING "asp HX,HY(...)" suffix already
+# rendered in Sec 2 status column — NO swisseph re-computation. If the
+# table format ever changes (no `|` columns / missing Sec 2 header), the
+# slicer no-ops gracefully and returns the input unchanged.
+#
+# NO-OP for: TIMING intent, empty input, format mismatch, killswitch off,
+# any parsing error → defensive try/except. NEVER blocks the request.
+#
+# KILLSWITCH: PROPERTY_CHART_SLICE=0/false/no/off (independent killswitch
+# from PROPERTY_FOCUS_BLOCK / PROPERTY_FOCUS_AXES — granular rollback).
+
+# Topic config: extend per-topic later (marriage / career / health each
+# get their own RELEVANT_HOUSES + KARAKAS set).
+#
+# P1.2.7.1 (architect-fix): broadened defaults for classical correctness.
+#   - Added 12H to relevant houses: vyaya bhava covers FOREIGN property,
+#     property-loss, EMI burden — relevant whenever P1.2.6 axes detect
+#     FOREIGN/LOAN_EMI/RISK appendices (chart slice should not strip the
+#     row the framework will reason about).
+#   - Added Saturn to karakas: classical bhumi-karaka alongside Mars
+#     (Brihat Parashara — Saturn rules durable assets, agricultural
+#     land, old buildings). Was previously kept only by H2-lord
+#     accident; now unconditional for all charts (e.g. Lagnas where
+#     Saturn does not rule any of {1,2,4,11,12}).
+_PROPERTY_RELEVANT_HOUSES = frozenset({1, 2, 4, 11, 12})
+_PROPERTY_KARAKAS = frozenset({"Mars", "Venus", "Jupiter", "Saturn"})
+
+# Sec 1 header line: "Lagna: Dhanu 245.21° | Lagnesh: Jupiter in H10 (Kanya)"
+_LAGNESH_RX = _re.compile(
+    r"Lagnesh:\s*([A-Z][a-z]+)\s+in\s+H(\d+)", _re.IGNORECASE
+)
+# Sec 2 / 3 boundary headers
+_SEC2_HEADER = "## 2. SAARE 9 GRAHAS"
+_SEC3_HEADER = "## 3. SAARE 12 BHAVAS"
+# Sec 2 row: "Sun     | H12  | Vrishchik  | 10.33  | Anuradha-3 | Saturn | - | FB | asp H6(Ketu)"
+# Sec 3 row: "H1   | Dhanu | Jupiter | H10 (Kanya) | Moon, Venus"
+_PLANET_ROW_RX = _re.compile(
+    r"^\s*([A-Z][a-z]+)\s*\|\s*H(\d+)\s*\|", _re.MULTILINE
+)
+_HOUSE_ROW_RX = _re.compile(r"^\s*H(\d+)\s*\|", _re.MULTILINE)
+# Aspect-suffix in status column. The Sec-2 rendering uses "asp H10(...),H12(...),H2(...)"
+# — only the FIRST house after the literal "asp " keyword has the "asp " prefix; the
+# rest are comma-joined H<N>(occupants) tokens. So we first locate the "asp " keyword,
+# then extract ALL H<N> tokens to end-of-line. Two-step extraction below.
+_ASP_KEYWORD_RX = _re.compile(r"\basp\s+(.+)$", _re.IGNORECASE)
+_HOUSE_TOKEN_RX = _re.compile(r"H(\d+)")
+# Section boundary: "\n## " starts a new section.
+_NEXT_SEC_RX = _re.compile(r"\n## \d+\.")
+
+
+def _property_chart_slice_enabled() -> bool:
+    """True UNLESS PROPERTY_CHART_SLICE explicitly disables. Default ON.
+
+    Independent killswitch from PROPERTY_FOCUS_BLOCK / PROPERTY_FOCUS_AXES
+    so granular rollback is possible (you can disable chart slicing
+    while keeping the focus block + axes routing enabled).
+    """
+    val = _os.environ.get("PROPERTY_CHART_SLICE", "").strip().lower()
+    return val not in ("0", "false", "no", "off")
+
+
+def _parse_planet_rows(sec2_body: str) -> list:
+    """Parse Sec 2 planet rows. Returns list of dicts:
+        {raw, planet, house, asp_houses (set of int)}
+    Header / divider / legend rows are skipped (no leading planet name).
+    """
+    rows = []
+    for line in sec2_body.split("\n"):
+        m = _re.match(r"^\s*([A-Z][a-z]+)\s*\|\s*H(\d+)\s*\|", line)
+        if not m:
+            continue
+        planet = m.group(1)
+        house = int(m.group(2))
+        # Two-step aspect extraction: locate "asp " keyword first, then
+        # collect ALL H<N> tokens in the remainder. This catches multi-aspect
+        # rows like "asp H10(Jupiter),H12(Sun,Mercury,Rahu),H2(Saturn)" where
+        # only the first house has the "asp " prefix.
+        asp_match = _ASP_KEYWORD_RX.search(line)
+        if asp_match:
+            asp_houses = {int(x) for x in _HOUSE_TOKEN_RX.findall(asp_match.group(1))}
+        else:
+            asp_houses = set()
+        rows.append({
+            "raw": line,
+            "planet": planet,
+            "house": house,
+            "asp_houses": asp_houses,
+        })
+    return rows
+
+
+def _parse_house_rows(sec3_body: str) -> list:
+    """Parse Sec 3 house rows. Returns list of dicts: {raw, house}."""
+    rows = []
+    for line in sec3_body.split("\n"):
+        m = _re.match(r"^\s*H(\d+)\s*\|", line)
+        if not m:
+            continue
+        rows.append({"raw": line, "house": int(m.group(1))})
+    return rows
+
+
+def _split_section(chart_block: str, header: str) -> tuple:
+    """Find a section by header marker. Returns (before, header_line,
+    body, after) or None if header not found. `body` excludes the
+    header line and ends at the start of the next `## N.` section.
+    """
+    idx = chart_block.find(header)
+    if idx < 0:
+        return None
+    before = chart_block[:idx]
+    rest = chart_block[idx:]
+    # Find end of section = next "\n## N." marker
+    nm = _NEXT_SEC_RX.search(rest, 1)  # start search past the current header
+    if nm:
+        section = rest[:nm.start()]
+        after = rest[nm.start():]
+    else:
+        section = rest
+        after = ""
+    # Header line ends at first newline
+    nl = section.find("\n")
+    if nl < 0:
+        return None
+    header_line = section[:nl + 1]
+    body = section[nl + 1:]
+    return (before, header_line, body, after)
+
+
+def slice_chart_for_topic(chart_block: str, question: str) -> tuple:
+    """Slice Sec 2 (planets) + Sec 3 (bhavas) for property STATIC/QUALITY
+    answers. Returns (sliced_block, stats_dict) where stats_dict has
+    {planets_dropped, houses_dropped, before_chars, after_chars,
+     kept_planets, kept_houses}.
+
+    NO-OP returns (chart_block, {"planets_dropped": 0, "houses_dropped": 0,
+    "before_chars": len, "after_chars": len, ...}) when:
+      - input not non-empty string
+      - intent is TIMING (full chart preserved)
+      - chart format doesn't match (Sec 2 / Sec 3 headers not found, or
+        no planet rows parseable)
+      - any parsing exception (defensive — never blocks request)
+    """
+    if not isinstance(chart_block, str) or not chart_block.strip():
+        return chart_block, {
+            "planets_dropped": 0, "houses_dropped": 0,
+            "before_chars": 0, "after_chars": 0,
+            "kept_planets": [], "kept_houses": [], "skipped": "empty",
+        }
+    intent = _detect_property_intent(question)
+    if intent == "TIMING":
+        return chart_block, {
+            "planets_dropped": 0, "houses_dropped": 0,
+            "before_chars": len(chart_block), "after_chars": len(chart_block),
+            "kept_planets": [], "kept_houses": [], "skipped": "timing",
+        }
+    try:
+        # ── Section locate + parse ──
+        s2 = _split_section(chart_block, _SEC2_HEADER)
+        s3 = _split_section(chart_block, _SEC3_HEADER)
+        if not s2 or not s3:
+            return chart_block, {
+                "planets_dropped": 0, "houses_dropped": 0,
+                "before_chars": len(chart_block),
+                "after_chars": len(chart_block),
+                "kept_planets": [], "kept_houses": [],
+                "skipped": "no_sec2_or_sec3",
+            }
+        planet_rows = _parse_planet_rows(s2[2])
+        house_rows = _parse_house_rows(s3[2])
+        if not planet_rows or not house_rows:
+            return chart_block, {
+                "planets_dropped": 0, "houses_dropped": 0,
+                "before_chars": len(chart_block),
+                "after_chars": len(chart_block),
+                "kept_planets": [], "kept_houses": [],
+                "skipped": "no_rows_parsed",
+            }
+
+        # ── Compute kept set ──
+        # 1. Parse Lagnesh from Sec 1 header
+        lagnesh_match = _LAGNESH_RX.search(chart_block[:1000])
+        lagnesh = lagnesh_match.group(1).capitalize() if lagnesh_match else None
+
+        # 2. Houses occupied by karakas → auto-include (so e.g. if Mars
+        #    is in 8H, we keep H8's bhava details too)
+        karaka_houses = {
+            r["house"] for r in planet_rows if r["planet"] in _PROPERTY_KARAKAS
+        }
+        kept_houses = set(_PROPERTY_RELEVANT_HOUSES) | karaka_houses
+
+        # 3. Lords of relevant houses → parse from Sec 3 "Lord" column
+        relevant_lords = set()
+        for line in s3[2].split("\n"):
+            m = _re.match(
+                r"^\s*H(\d+)\s*\|\s*[A-Za-z]+\s*\|\s*([A-Z][a-z]+)", line)
+            if m and int(m.group(1)) in _PROPERTY_RELEVANT_HOUSES:
+                relevant_lords.add(m.group(2))
+
+        # 4. Build kept_planets:
+        #    - karakas always
+        #    - Lagnesh (always; primary chart anchor)
+        #    - lords of relevant houses
+        #    - any planet OCCUPYING a relevant house
+        #    - any planet ASPECTING a relevant house (from "asp HX" suffix)
+        kept_planets = set(_PROPERTY_KARAKAS)
+        if lagnesh:
+            kept_planets.add(lagnesh)
+        kept_planets |= relevant_lords
+        for r in planet_rows:
+            if r["house"] in _PROPERTY_RELEVANT_HOUSES:
+                kept_planets.add(r["planet"])
+            if r["asp_houses"] & _PROPERTY_RELEVANT_HOUSES:
+                kept_planets.add(r["planet"])
+
+        # ── Defensive floor: if we'd drop too many, abort to no-op ──
+        # (Rare: malformed chart with all 9 planets in non-relevant places
+        # and no aspects — keep at least 4 planets to avoid empty Sec 2.)
+        if len(kept_planets) < 4:
+            return chart_block, {
+                "planets_dropped": 0, "houses_dropped": 0,
+                "before_chars": len(chart_block),
+                "after_chars": len(chart_block),
+                "kept_planets": sorted(kept_planets),
+                "kept_houses": sorted(kept_houses),
+                "skipped": "floor_violation_kept<4_planets",
+            }
+        if len(kept_houses) < 3:
+            return chart_block, {
+                "planets_dropped": 0, "houses_dropped": 0,
+                "before_chars": len(chart_block),
+                "after_chars": len(chart_block),
+                "kept_planets": sorted(kept_planets),
+                "kept_houses": sorted(kept_houses),
+                "skipped": "floor_violation_kept<3_houses",
+            }
+
+        # ── Reconstruct Sec 2 with only kept planet rows ──
+        # Strategy: keep all NON-data lines (header / divider / legend),
+        # and only filter the planet rows (which match _PLANET_ROW_RX).
+        new_sec2_lines = []
+        planets_dropped = 0
+        for line in s2[2].split("\n"):
+            m = _re.match(r"^\s*([A-Z][a-z]+)\s*\|\s*H\d+\s*\|", line)
+            if m:
+                if m.group(1) in kept_planets:
+                    new_sec2_lines.append(line)
+                else:
+                    planets_dropped += 1
+            else:
+                # header / divider / legend / empty — keep as-is
+                new_sec2_lines.append(line)
+        new_sec2_body = "\n".join(new_sec2_lines)
+
+        # ── Reconstruct Sec 3 with only kept house rows ──
+        new_sec3_lines = []
+        houses_dropped = 0
+        for line in s3[2].split("\n"):
+            m = _re.match(r"^\s*H(\d+)\s*\|", line)
+            if m:
+                if int(m.group(1)) in kept_houses:
+                    new_sec3_lines.append(line)
+                else:
+                    houses_dropped += 1
+            else:
+                new_sec3_lines.append(line)
+        new_sec3_body = "\n".join(new_sec3_lines)
+
+        # ── Re-assemble chart block ──
+        # IMPORTANT: Sec 3 lives AFTER Sec 2 in `s2[3]` (the "after"
+        # of Sec 2 = chart from Sec 3 onwards). So we must rebuild
+        # using Sec 2's split: before + header2 + new_body2 + after2.
+        # And then within after2 (which starts at Sec 3), replace
+        # Sec 3's body. Easiest: use `s3` split on `s2[3]`.
+        s3_in_after = _split_section(s2[3], _SEC3_HEADER)
+        if not s3_in_after:
+            # Should not happen since s3 was found globally, but safe.
+            return chart_block, {
+                "planets_dropped": 0, "houses_dropped": 0,
+                "before_chars": len(chart_block),
+                "after_chars": len(chart_block),
+                "kept_planets": sorted(kept_planets),
+                "kept_houses": sorted(kept_houses),
+                "skipped": "sec3_not_in_after_sec2",
+            }
+        new_after2 = (
+            s3_in_after[0]  # text between end-of-Sec2 and start-of-Sec3
+            + s3_in_after[1]  # Sec 3 header line
+            + new_sec3_body  # filtered house rows
+            + s3_in_after[3]  # everything after Sec 3
+        )
+        new_chart = s2[0] + s2[1] + new_sec2_body + new_after2
+
+        return new_chart, {
+            "planets_dropped": planets_dropped,
+            "houses_dropped": houses_dropped,
+            "before_chars": len(chart_block),
+            "after_chars": len(new_chart),
+            "kept_planets": sorted(kept_planets),
+            "kept_houses": sorted(kept_houses),
+            "skipped": None,
+        }
+    except Exception as _slice_exc:  # noqa: BLE001
+        # Counter for crude alerting (matches axes-fallback pattern).
+        try:
+            global _CHART_SLICE_FALLBACK_COUNT
+            _CHART_SLICE_FALLBACK_COUNT += 1
+        except NameError:
+            _CHART_SLICE_FALLBACK_COUNT = 1  # type: ignore[name-defined]
+        print(
+            f"[slice_chart_for_topic][FALLBACK_COUNT={_CHART_SLICE_FALLBACK_COUNT}] "
+            f"slice failed → no-op fallback: "
+            f"{type(_slice_exc).__name__}: {str(_slice_exc)[:160]}",
+            flush=True,
+        )
+        return chart_block, {
+            "planets_dropped": 0, "houses_dropped": 0,
+            "before_chars": len(chart_block) if isinstance(chart_block, str) else 0,
+            "after_chars": len(chart_block) if isinstance(chart_block, str) else 0,
+            "kept_planets": [], "kept_houses": [],
+            "skipped": f"exception:{type(_slice_exc).__name__}",
+        }
+
+
 __all__ = [
     "ATOMIC_CHECKS",
     "build_property_focus",
     "detect_property_axes",
+    "slice_chart_for_topic",
     "strip_dasha_leak",
     "trim_dasha_sections",
     "_detect_property_intent",

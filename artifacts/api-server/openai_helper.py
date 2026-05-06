@@ -3866,6 +3866,26 @@ def _build_messages(
                         print(f"[passthrough_legacy] chart trimmed: dropped {_n_lg} dasha sections")
             except Exception as _tds_exc_lg:  # noqa: BLE001
                 print(f"[passthrough_legacy] chart trim skipped: {str(_tds_exc_lg)[:160]}")
+            # P1.2.7 — chart slice (Sec 2 + Sec 3) for property STATIC/QUALITY (legacy).
+            try:
+                if _chart_block_pt and _is_property_topic("", question) \
+                        and _property_focus_enabled():
+                    from property_focus_routing import (
+                        slice_chart_for_topic as _scs_lg,
+                        _property_chart_slice_enabled as _scs_en_lg,
+                    )  # type: ignore
+                    if _scs_en_lg():
+                        _chart_block_pt, _scs_st_lg = _scs_lg(_chart_block_pt, question)
+                        if (_scs_st_lg.get("planets_dropped", 0) > 0
+                                or _scs_st_lg.get("houses_dropped", 0) > 0):
+                            print(
+                                f"[passthrough_legacy] chart sliced: "
+                                f"-{_scs_st_lg['planets_dropped']} planets, "
+                                f"-{_scs_st_lg['houses_dropped']} houses, "
+                                f"{_scs_st_lg['before_chars']}→{_scs_st_lg['after_chars']} chars"
+                            )
+            except Exception as _scs_exc_lg:  # noqa: BLE001
+                print(f"[passthrough_legacy] chart slice skipped: {str(_scs_exc_lg)[:160]}")
             if _chart_block_pt:
                 # Phase 2 — prompt now lives in module constant _PT_SYS_INTRO
                 # (top of file). Both sync passthrough + stream passthrough
@@ -14385,6 +14405,34 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                         })
             except Exception as _tds_exc_pt:  # noqa: BLE001
                 _trace(req_id, "PASSTHROUGH.CHART_TRIM_SKIP", str(_tds_exc_pt)[:160])
+            # P1.2.7 — slice Sec 2 (planets) + Sec 3 (bhavas) by topic relevance.
+            # Runs AFTER P1.2.5 dasha-trim so we operate on the already-trimmed
+            # chart. NO-OP for TIMING + non-property + format-mismatch + killswitch.
+            try:
+                if _chart_block_pt and _is_property_topic(_qu_topic, question) \
+                        and _property_focus_enabled():
+                    from property_focus_routing import (
+                        slice_chart_for_topic as _scs_pt,
+                        _property_chart_slice_enabled as _scs_en_pt,
+                    )  # type: ignore
+                    if _scs_en_pt():
+                        _before_chars_scs = len(_chart_block_pt)
+                        _chart_block_pt, _scs_st = _scs_pt(_chart_block_pt, question)
+                        if (_scs_st.get("planets_dropped", 0) > 0
+                                or _scs_st.get("houses_dropped", 0) > 0):
+                            _trace(req_id, "PASSTHROUGH.CHART_SLICED", {
+                                "planets_dropped": _scs_st["planets_dropped"],
+                                "houses_dropped": _scs_st["houses_dropped"],
+                                "before_chars": _before_chars_scs,
+                                "after_chars":  len(_chart_block_pt),
+                                "kept_planets": _scs_st.get("kept_planets", []),
+                                "kept_houses":  _scs_st.get("kept_houses", []),
+                            })
+                        elif _scs_st.get("skipped"):
+                            _trace(req_id, "PASSTHROUGH.CHART_SLICE_NOOP",
+                                   _scs_st.get("skipped"))
+            except Exception as _scs_exc_pt:  # noqa: BLE001
+                _trace(req_id, "PASSTHROUGH.CHART_SLICE_SKIP", str(_scs_exc_pt)[:160])
             if _chart_block_pt:
                 # Phase 2 — prompt now lives in module constant _PT_SYS_INTRO
                 # (top of file). Both sync passthrough + stream passthrough
@@ -17958,6 +18006,33 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                         })
             except Exception as _tds_exc_s:  # noqa: BLE001
                 _trace(req_id, "PASSTHROUGH(stream).CHART_TRIM_SKIP", str(_tds_exc_s)[:160])
+            # P1.2.7 — slice Sec 2 (planets) + Sec 3 (bhavas) by topic relevance (stream).
+            try:
+                if _chart_block_pt_s and _is_property_topic(_topic_id_s, question) \
+                        and _property_focus_enabled():
+                    from property_focus_routing import (
+                        slice_chart_for_topic as _scs_s,
+                        _property_chart_slice_enabled as _scs_en_s,
+                    )  # type: ignore
+                    if _scs_en_s():
+                        _before_chars_scs_s = len(_chart_block_pt_s)
+                        _chart_block_pt_s, _scs_st_s = _scs_s(_chart_block_pt_s, question)
+                        if (_scs_st_s.get("planets_dropped", 0) > 0
+                                or _scs_st_s.get("houses_dropped", 0) > 0):
+                            _trace(req_id, "PASSTHROUGH(stream).CHART_SLICED", {
+                                "planets_dropped": _scs_st_s["planets_dropped"],
+                                "houses_dropped": _scs_st_s["houses_dropped"],
+                                "before_chars": _before_chars_scs_s,
+                                "after_chars":  len(_chart_block_pt_s),
+                                "kept_planets": _scs_st_s.get("kept_planets", []),
+                                "kept_houses":  _scs_st_s.get("kept_houses", []),
+                            })
+                        elif _scs_st_s.get("skipped"):
+                            _trace(req_id, "PASSTHROUGH(stream).CHART_SLICE_NOOP",
+                                   _scs_st_s.get("skipped"))
+            except Exception as _scs_exc_s:  # noqa: BLE001
+                _trace(req_id, "PASSTHROUGH(stream).CHART_SLICE_SKIP",
+                       str(_scs_exc_s)[:160])
             if not _chart_block_pt_s:
                 # No chart block built → fall through to legacy
                 raise RuntimeError("passthrough(stream): empty chart_block")

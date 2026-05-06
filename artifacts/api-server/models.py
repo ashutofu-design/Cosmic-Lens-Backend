@@ -479,3 +479,130 @@ def compute_birth_key(birth_data) -> str:
         return f"{y:04d}-{m:02d}-{d:02d}|{h:02d}:{mn:02d}{ampm}|{lat:.4f},{lon:.4f}"
     except (TypeError, ValueError):
         return ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# User Context Memory Layer (UCML) — Phase 1
+#
+# Three additive tables that build a "digital mirror" of every user from
+# their question history. STRICTLY READ-ONLY for the LLM — only the engine
+# (deterministic Python) accesses these tables. The LLM receives a curated
+# enrichment bundle as silent prompt context, never the raw rows.
+#
+# L1: UserFact          — atomic facts (~50 keys/user, dedup-on-update)
+# L2: UserBehavior      — behavioral aggregates (1 row/user, refreshed nightly)
+# L3: UserPersonality   — 8-dim personality vector (1 row/user, refreshed weekly)
+#
+# Storage: ~5 KB/user lifetime. Scales to millions of users on commodity DB.
+# Cost: free (regex-based extraction; optional cheap LLM only for L3 weekly).
+# ─────────────────────────────────────────────────────────────────────────────
+
+class UserFact(db.Model):
+    """L1 — Atomic, deduplicated facts about a user.
+
+    One row per (user_id, fact_key). Insert-or-update semantics: a fact_key
+    that already exists for a user gets its value/confidence/source refreshed,
+    NOT a new row appended. This bounds storage at ~40-60 rows per user
+    regardless of how many questions they ask.
+
+    Examples of fact_key:
+      marital_status, has_children, child_gender, profession_hint,
+      location_city, language_pref, health_concern, recurring_topic,
+      mood_baseline, technical_interest_astrology, etc.
+
+    confidence (0.0-1.0): below 0.85 → use silently for routing only,
+                          never surface in user-facing output.
+    """
+    __tablename__ = "user_facts"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    user_id     = db.Column(db.Integer,
+                            db.ForeignKey("users.id", ondelete="CASCADE"),
+                            nullable=False, index=True)
+    fact_key    = db.Column(db.String(48),  nullable=False)
+    fact_value  = db.Column(db.String(200), nullable=False)
+    confidence  = db.Column(db.Float,       nullable=False, default=0.5)
+    source_type = db.Column(db.String(20),  nullable=False, default="regex")
+    # e.g. "user_question:<uuid>" or "profile_field:dob" or "engine:marriage"
+    source_ref  = db.Column(db.String(80),  nullable=True)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow,
+                            nullable=False)
+    updated_at  = db.Column(db.DateTime, default=datetime.utcnow,
+                            onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "fact_key",
+                             name="uq_user_facts_user_key"),
+        db.Index("ix_user_facts_user_key", "user_id", "fact_key"),
+    )
+
+
+class UserBehavior(db.Model):
+    """L2 — Behavioral aggregates derived from question telemetry.
+
+    One row per user, refreshed by a nightly aggregator over UserQuestion
+    rows. Captures HOW the user interacts with the app: when they ask,
+    what topics obsess them, how long their questions are, etc.
+
+    JSON fields keep schema flexible without per-metric column sprawl.
+    """
+    __tablename__ = "user_behavior"
+
+    user_id            = db.Column(db.Integer,
+                                    db.ForeignKey("users.id",
+                                                  ondelete="CASCADE"),
+                                    primary_key=True)
+    total_questions    = db.Column(db.Integer, default=0, nullable=False)
+    # {"health":0.6, "career":0.25, "general":0.15} — sum=1.0
+    topic_distribution = db.Column(db.JSON, nullable=True)
+    avg_question_len   = db.Column(db.Float, nullable=True)
+    # "morning" / "afternoon" / "evening" / "late_night" — modal hour-band
+    pref_time_band     = db.Column(db.String(20), nullable=True)
+    # 0.0-1.0 — share of questions that triggered a follow-up within 30min
+    followup_rate      = db.Column(db.Float, nullable=True)
+    # "hindi" / "english" / "hinglish" / "mixed_devanagari"
+    language_pref      = db.Column(db.String(20), nullable=True)
+    # Topic asked most often → likely user's #1 concern
+    obsession_topic    = db.Column(db.String(40), nullable=True)
+    obsession_count    = db.Column(db.Integer, nullable=True)
+    last_active_at     = db.Column(db.DateTime, nullable=True)
+    last_refreshed_at  = db.Column(db.DateTime, default=datetime.utcnow,
+                                    nullable=False)
+
+
+class UserPersonality(db.Model):
+    """L3 — 8-dimensional personality vector inferred from question patterns.
+
+    One row per user, refreshed weekly (or on-demand if >20 new questions
+    since last refresh). Each dimension is a 0.0-1.0 score where 0.5 is
+    neutral / unknown. sample_size tracks how many questions informed the
+    current vector — drives confidence weighting at consumption time.
+
+    Dimensions (per design lock):
+      analytical       0=intuitive,  1=analytical
+      anxious          0=confident,  1=anxious
+      self_focus       0=family/other, 1=self
+      formal           0=casual,     1=formal
+      brief            0=verbose,    1=brief
+      action_oriented  0=understanding, 1=action
+      skeptical        0=trusting,   1=skeptical
+      future_focused   0=past,       1=future
+    """
+    __tablename__ = "user_personality"
+
+    user_id         = db.Column(db.Integer,
+                                 db.ForeignKey("users.id",
+                                               ondelete="CASCADE"),
+                                 primary_key=True)
+    analytical      = db.Column(db.Float, default=0.5, nullable=False)
+    anxious         = db.Column(db.Float, default=0.5, nullable=False)
+    self_focus      = db.Column(db.Float, default=0.5, nullable=False)
+    formal          = db.Column(db.Float, default=0.5, nullable=False)
+    brief           = db.Column(db.Float, default=0.5, nullable=False)
+    action_oriented = db.Column(db.Float, default=0.5, nullable=False)
+    skeptical       = db.Column(db.Float, default=0.5, nullable=False)
+    future_focused  = db.Column(db.Float, default=0.5, nullable=False)
+    # How many questions informed this vector
+    sample_size     = db.Column(db.Integer, default=0, nullable=False)
+    last_refreshed_at = db.Column(db.DateTime, default=datetime.utcnow,
+                                    nullable=False)

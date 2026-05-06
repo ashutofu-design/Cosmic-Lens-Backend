@@ -20,9 +20,10 @@ A mobile Vedic Astrology application delivering accurate astrological analyses a
 - `apps/mobile`: Expo React Native application.
 - `artifacts/api-server`: Flask backend.
 - `packages/`: Shared utilities and components.
-- **DB Schema**: `artifacts/api-server/database.py`
+- **DB Schema**: `artifacts/api-server/database.py` (+ models in `models.py`)
 - **API Contracts**: Implicitly defined by Flask routes in `flask_app.py`
 - **Theme Files**: `apps/mobile/src/theme/`
+- **User Memory Layer (UCML)**: `artifacts/api-server/user_memory.py` — silent fact extraction + bundle assembly. Tables: `user_facts` (L1 atomic), `user_behavior` (L2 aggregates), `user_personality` (L3 vector).
 
 ## Architecture decisions
 - **Monorepo Structure**: Uses pnpm workspaces for dependency management and code sharing.
@@ -36,6 +37,7 @@ A mobile Vedic Astrology application delivering accurate astrological analyses a
 - **Health Focus Block (CAFB-health)**: Replaces legacy health rule-engine with atomic checks, a 4-axis detector, chart-slicer, and hard-guards for sensitive health topics.
 - **KP opt-in enrichment for raw_passthrough**: Appends cuspal-sub-lord verdict block to chart context for explicit KP terminology, hard yes/no event markers, OR plain timing markers (`kab hoga/hogi`, `when will`) in questions.
 - **Marriage Engine v2.3**: D9 7th Lord (D9 7L) is a supreme propagation across the entire pipeline, influencing every step from D1 marriage planet filtering to dasha activation and double-transit confirmation, ensuring its weight in predictions.
+- **User Context Memory Layer (UCML) v1 — "Digital Mirror"**: Silent, deterministic memory module (`user_memory.py`) that builds a per-user profile from question history with ZERO user-facing footprint. Three tiers — L1 `user_facts` (atomic regex-extracted facts like marital_status, has_children, profession_hint, location_city, health_concern, mood_baseline — ~50 keys, dedup-on-update), L2 `user_behavior` (aggregates: topic distribution, avg question length, time-of-day pattern), L3 `user_personality` (8-dim vector: analytical/anxious/self-focus/formal/brief/action-oriented/skeptical/future-focused). DESIGN LOCKS: (a) ENGINE accesses DB, LLM never touches it; (b) silent enrichment — bundle injected via `inject_into_prompt()` with explicit DO-NOT-RECITE directive, the LLM must NEVER expose memory ("aapne pichli baar..." is forbidden); (c) free — pure regex + DB, no per-call LLM cost; (d) self-correcting — every new Q refines existing facts via confidence-merge upsert; (e) ~5 KB lifetime per user. Phase 1 ships L1 extractor + storage + bundle assembly + prompt injection. Phases 2-7 (backfill, behavioral aggregator, personality scorer, real-time context, telemetry) pending.
 - **Marriage Engine v2.4 — Age Sanity Guard**: Two real-life "akal" fixes. (1) Multi-format DOB parser (`_parse_dob_string` + `_extract_dob_dt`) handles Indian formats (`26 Nov 1992`, `26-11-1992`, `26/11/1992`, etc.) and falls back to `kundli` dict — fixes silent v2.3 bug where ISO-only parser made `user_age=None` for most profiles, killing the entire age system. (2) Practical-age floor (Female ≥19, Male ≥22, Neutral ≥20) demotes any candidate window starting before user reaches that age, so a 17-year-old whose dasha/PD aligns next month no longer gets "shaadi 3 mahine mein" — engine pushes primary window past the floor and emits an `AGE_GUARD` LLM directive instructing the model to lead with study/career framing. New output fields: `min_practical_age`, `too_young_for_marriage`, `earliest_practical_window_start_iso`, `windows_suppressed_too_young`.
 
 ## Product

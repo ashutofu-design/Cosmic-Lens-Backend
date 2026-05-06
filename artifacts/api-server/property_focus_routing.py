@@ -306,24 +306,299 @@ def trim_dasha_sections(chart_block: str, question: str) -> tuple[str, int]:
     return ''.join(kept).rstrip() + '\n', dropped
 
 
-def build_property_focus(question: str = "") -> str:
-    """Return the composable property-focus block.
+# ── P1.2.6 AXES PRE-ROUTING: server-side detect → minimal atomics ────
+# Original build_property_focus dumps ALL 25 atomic blocks (~8 KB) into
+# every property prompt. The LLM picks the relevant 2-4 itself. Wasteful:
+# ~6 KB of unused atomics per Q × millions of Qs.
+#
+# P1.2.6 detects axes server-side (regex) and emits ONLY the matched
+# atomic blocks (typical 3-5) → ~2 KB block, ~75% token savings, same
+# answer quality (LLM gets the SAME doctrinal text for the matched axes,
+# just without the noise of 20+ unrelated blocks).
+#
+# KILLSWITCH: PROPERTY_FOCUS_AXES=0/false/no/off → fallback to fat dump.
+# Defensive: any detection error → fallback to fat dump (NEVER blocks).
+import os as _os
 
-    Args:
-        question: user's question text. Reserved for future use (e.g. light
-                  keyword hint injection); current implementation returns a
-                  question-agnostic framework + atomic-blocks dump.
+# ── ACTION axis (pick ONE) ────────────────────────────────────────────
+# Order matters for tie-break: more specific verbs first. INHERIT before
+# BUY (paitric ghar mil-jaata is inherit, not buy). DISPUTE before all
+# (because "padosi se ghar" mentions ghar but is dispute).
+_ACTION_PATTERNS = (
+    ("DISPUTE", _re.compile(
+        r"\b(dispute|vivad|jhagda|jhagra|jhagad|case|court|kachehri|"
+        r"padosi|tenant\s+(?:nahi\s+)?vacat|kabza|illegal|"
+        r"legal\s+(?:problem|issue|fight))\b", _re.IGNORECASE)),
+    ("INHERIT", _re.compile(
+        r"\b(paitrik|paitric|paitruk|inherit(?:ance|ed)?|ancestral|"
+        r"papa\s+ka|papaji\s+ka|dada\s+ka|nana\s+ka|"
+        r"family\s+(?:property|ghar)|virasat)\b", _re.IGNORECASE)),
+    ("BUILD", _re.compile(
+        r"\b(banwa|banwana|banwaun|banaun|banaungi|banayenge|construct|"
+        r"construction|build|building|under\s+construction|"
+        r"new\s+construction|naya\s+ghar\s+ban)\b", _re.IGNORECASE)),
+    ("RENT", _re.compile(
+        r"\b(rent|rental|kiraye|kiraya|lease|leased|leasing|tenant|"
+        r"paying\s+guest|pg\b|let\s+out)\b", _re.IGNORECASE)),
+    ("SELL", _re.compile(
+        r"\b(bech|bechu|bechna|bechni|bechunga|sell|selling|sold|"
+        r"disposal|liquidate|dispose|exit\s+(?:property|investment))\b",
+        _re.IGNORECASE)),
+    ("BUY", _re.compile(
+        # P1.2.6.1 fixes:
+        #   - khar[ie]+d* → catches kharid/khareed/khareedu spellings
+        #   - lene/leni/lena/lenge → "ghar lene", "property leni chahiye"
+        #   - invest\s+kar → Hinglish "invest karu/karna/karunga"
+        r"\b(khar[ie]+d\w*|"
+        r"buy|buying|purchase|"
+        r"invest(?:ment)?\s+(?:in\s+(?:property|real)|kar\w*)|"
+        r"le\s+lu|le\s+lun|lelu|lelun|lega|legi|le\s+rahe|"
+        r"lene|leni|lena|lenge|lengi|"
+        r"acquire|acquir)\b", _re.IGNORECASE)),
+)
 
-    Returns:
-        ~2.2 KB framework string ready to slot into the system prompt
-        (caller wraps with 'SHASTRIYA FOCUS for this question:\\n...').
+# ── SCOPE axis (0+ matches, ADD modifiers) ────────────────────────────
+_SCOPE_PATTERNS = (
+    ("FOREIGN", _re.compile(
+        r"\b(foreign|abroad|overseas|videsh|videshi|nri|"
+        r"dubai|usa|uk|canada|london|america|singapore|australia|"
+        r"germany|europe|gulf)\b", _re.IGNORECASE)),
+    ("LAND", _re.compile(
+        # P1.2.6.1: drop trailing \b — "agricultural" extends "agricultur"
+        # so trailing \b fails. Use prefix match for "agricultur*".
+        r"\b(agricultur\w*|farmland|farm\s+land|khet|kheti|"
+        r"plot|empty\s+land|raw\s+land|jameen|zameen)\b",
+        _re.IGNORECASE)),
+    ("COMMERCIAL", _re.compile(
+        r"\b(commercial|shop|dukaan|dukan|office|office\s+space|"
+        r"showroom|warehouse|godown|business\s+property|"
+        r"retail|industrial)\b", _re.IGNORECASE)),
+    ("MULTIPLE", _re.compile(
+        r"\b(ek\s+aur|another|second|teesra|teesri|dusra|dusri|"
+        r"multiple\s+propert|second\s+home|additional\s+propert|"
+        r"kai\s+propert|investment\s+property)\b", _re.IGNORECASE)),
+)
+
+# ── EDGE axis (0+ matches, ADD edge concerns) ─────────────────────────
+_EDGE_PATTERNS = (
+    ("JOINT_TITLE", _re.compile(
+        r"\b(joint|co[-\s]?own|biwi\s+ke\s+naam|wife[''s]+\s+name|"
+        r"partner\s+ke\s+saath|partner[''s]+\s+name|together|"
+        r"husband[''s]+\s+name|pati\s+ke\s+naam|saath\s+me\s+lena)\b",
+        _re.IGNORECASE)),
+    ("LOAN_EMI", _re.compile(
+        r"\b(loan|emi|mortgage|karz|karza|finance|financ(?:ed|ing)|"
+        r"installment|qist|kist|home\s+loan|housing\s+loan|"
+        r"property\s+loan|down\s+payment)\b", _re.IGNORECASE)),
+)
+
+# ── APPENDIX axis (0+ matches) ────────────────────────────────────────
+# RISK: fires on negative-tone keywords. REMEDY: always-on unless
+# explicit refusal-only Q. REFUSE_TIMING: fires when intent=TIMING +
+# explicit "exact"/"specific" hint.
+_RISK_RX = _re.compile(
+    # P1.2.6.2 (architect-fix): dropped "safe hai" / "theek hai" — those
+    # are POSITIVE phrasings ("ghar safe hai?") and were causing RISK
+    # false positives. Bare "safe" / "theek" also dropped to avoid
+    # ambiguous matches; explicit risk vocabulary remains.
+    r"\b(dikkat|nuksan|nuqsan|risk|risky|jokhim|loss|"
+    r"problem|issue|trouble|danger|fraud|cheat|dhokha|"
+    r"galat|wrong|unsafe|insecure)\b", _re.IGNORECASE)
+_REFUSE_TIMING_RX = _re.compile(
+    r"\b(exact\s+(?:date|day|tareekh|tarikh|month)|"
+    r"specific\s+(?:date|day|tareekh|tarikh|month)|"
+    r"griha[\s-]*pravesh\s+(?:date|muhurat|tareekh)|"
+    r"tareekh\s+batao|tarikh\s+batao|"
+    r"kab\s+(?:exact|exactly)|exactly\s+kab)\b", _re.IGNORECASE)
+
+
+def _property_focus_axes_enabled() -> bool:
+    """True UNLESS PROPERTY_FOCUS_AXES explicitly disables. Default ON.
+
+    Independent killswitch from PROPERTY_FOCUS_BLOCK so granular rollback
+    possible (you can disable axes-routing while keeping the property
+    focus block enabled — falls back to fat dump).
     """
-    return _FRAMEWORK_HEADER + _atomic_blocks_dump() + "\n" + _ANSWER_STYLE
+    val = _os.environ.get("PROPERTY_FOCUS_AXES", "").strip().lower()
+    return val not in ("0", "false", "no", "off")
+
+
+def detect_property_axes(question: str) -> dict:
+    """Detect property Q axes server-side. Returns a dict with keys:
+
+      action:    str   — exactly one of ATOMIC_CHECKS ACTION keys.
+      scopes:    list  — 0+ ATOMIC_CHECKS SCOPE keys (FOREIGN/LAND/...).
+      intent:    str   — STATIC_YOG | YOG_QUALITY | TIMING | REFUSE_TIMING.
+      edges:     list  — 0+ ATOMIC_CHECKS EDGE keys (JOINT_TITLE/LOAN_EMI).
+      appendix:  list  — 0+ of {RISK, REMEDY} (REMEDY default-on).
+
+    Defensive: invalid input → ANALYZE + STATIC_YOG + REMEDY (safest
+    minimal block — covers a generic property Q without timing risk).
+    """
+    safe_default = {
+        "action":   "ANALYZE",
+        "scopes":   [],
+        "intent":   "STATIC_YOG",
+        "edges":    [],
+        "appendix": ["REMEDY"],
+    }
+    if not isinstance(question, str) or not question.strip():
+        return safe_default
+    q = question
+
+    # ── ACTION (first match wins; ANALYZE if none match) ──
+    action = "ANALYZE"
+    for tag, rx in _ACTION_PATTERNS:
+        if rx.search(q):
+            action = tag
+            break
+
+    # ── SCOPES (collect ALL matches; preserve declaration order) ──
+    scopes = [tag for tag, rx in _SCOPE_PATTERNS if rx.search(q)]
+
+    # ── EDGES (collect ALL matches) ──
+    edges = [tag for tag, rx in _EDGE_PATTERNS if rx.search(q)]
+
+    # P1.2.6.1: LOAN_EMI strongly implies BUY action ("home loan approve
+    # hoga? EMI bharne ka yog?" — no explicit buy verb but intent is buy).
+    # Only override default ANALYZE; never overwrite an explicit verb.
+    if action == "ANALYZE" and "LOAN_EMI" in edges:
+        action = "BUY"
+
+    # ── INTENT (TIMING > QUALITY > STATIC; REFUSE_TIMING overrides) ──
+    base_intent = _detect_property_intent(q)
+    if base_intent == "TIMING" and _REFUSE_TIMING_RX.search(q):
+        intent = "REFUSE_TIMING"
+    elif base_intent == "TIMING":
+        intent = "TIMING"
+    elif base_intent == "QUALITY":
+        intent = "YOG_QUALITY"
+    else:
+        intent = "STATIC_YOG"
+
+    # ── APPENDIX ──
+    # REMEDY: always-on (cheap safety; cosmic remedy line at closer).
+    # Skip REMEDY for REFUSE_TIMING (refuse line is the closer).
+    appendix = []
+    if _RISK_RX.search(q):
+        appendix.append("RISK")
+    if intent != "REFUSE_TIMING":
+        appendix.append("REMEDY")
+
+    return {
+        "action":   action,
+        "scopes":   scopes,
+        "intent":   intent,
+        "edges":    edges,
+        "appendix": appendix,
+    }
+
+
+# ── Compact framework header for axes-routed mode ─────────────────────
+# When axes are pre-routed, the LLM does NOT need the full STEP 1 / STEP 2
+# composition logic + 16 worked-examples (~5 KB). Just tell it which
+# blocks to apply. ~400 chars vs 5 KB.
+_AXES_FRAMEWORK_HEADER = """FOCUS — PROPERTY ANALYSIS (server pre-routed for this Q).
+
+You have D1 + D9 + KP cusps + Vimshottari Dasha + Transit in chart above.
+Server has detected this Q's axes and selected the relevant CHECK blocks
+below. Apply ONLY these blocks (not the full property doctrine). Cite
+ACTUAL planet names + house numbers from THIS chart — never invent.
+
+ROUTED CHECK BLOCKS for this Q:
+"""
+
+
+def _picked_atomic_blocks_dump(picked: list) -> str:
+    """Render a subset of ATOMIC_CHECKS as [TAG] lines, preserving the
+    CALLER-PROVIDED picked order (so REFUSE_TIMING / closer blocks land
+    last as intended). Unknown tags silently skipped (defensive).
+
+    P1.2.6.2 (architect-fix): previous version iterated ATOMIC_CHECKS
+    declaration order, defeating the build_property_focus assembly
+    ordering (REFUSE_TIMING was placed BEFORE later-declared blocks like
+    JOINT_TITLE). Caller is now responsible for picked order; this
+    renderer just respects it.
+    """
+    return "\n".join(
+        f"  [{k}] {ATOMIC_CHECKS[k]}" for k in picked if k in ATOMIC_CHECKS
+    )
+
+
+def build_property_focus(question: str = "") -> str:
+    """Return the property-focus block.
+
+    P1.2.6: when PROPERTY_FOCUS_AXES is enabled (default ON) AND a non-
+    empty question is provided, returns a COMPACT axes-routed block
+    (~1.5-2.5 KB) containing only the matched atomic CHECK blocks.
+
+    When disabled OR question is empty, returns the original FAT block
+    (~8 KB) with all 25 atomic blocks for the LLM to self-route.
+
+    Defensive: any detection error → fat-block fallback (NEVER blocks).
+    """
+    # Killswitch + empty-question fallback to original behavior
+    if not _property_focus_axes_enabled() or not (
+        isinstance(question, str) and question.strip()
+    ):
+        return _FRAMEWORK_HEADER + _atomic_blocks_dump() + "\n" + _ANSWER_STYLE
+
+    try:
+        axes = detect_property_axes(question)
+        picked = [axes["action"]]
+        picked.extend(axes["scopes"])
+        # P1.2.6.2 (architect-fix): REFUSE_TIMING MUST be the closer-line
+        # block (refuse-message replaces remedy/closer). For other intents
+        # (STATIC_YOG/YOG_QUALITY/TIMING) intent block goes mid-stack so
+        # appendix RISK/REMEDY can still close. Assembly:
+        #   non-refuse → action, scopes, intent, edges, appendix
+        #   refuse     → action, scopes, edges, appendix, REFUSE_TIMING (last)
+        if axes["intent"] == "REFUSE_TIMING":
+            picked.extend(axes["edges"])
+            picked.extend(axes["appendix"])
+            picked.append("REFUSE_TIMING")
+        else:
+            picked.append(axes["intent"])
+            picked.extend(axes["edges"])
+            picked.extend(axes["appendix"])
+        # Dedup while preserving order (in case action == intent == ...)
+        seen = set()
+        picked_unique = []
+        for tag in picked:
+            if tag in ATOMIC_CHECKS and tag not in seen:
+                seen.add(tag)
+                picked_unique.append(tag)
+        if not picked_unique:
+            # Should never happen, but defensive: fallback to fat dump.
+            return _FRAMEWORK_HEADER + _atomic_blocks_dump() + "\n" + _ANSWER_STYLE
+        return (
+            _AXES_FRAMEWORK_HEADER
+            + _picked_atomic_blocks_dump(picked_unique)
+            + "\n"
+            + _ANSWER_STYLE
+        )
+    except Exception as _axes_exc:  # noqa: BLE001
+        # P1.2.6.2 (architect-fix): log fallback so silent quality
+        # regressions become visible. Counter for crude alerting.
+        try:
+            global _AXES_FALLBACK_COUNT
+            _AXES_FALLBACK_COUNT += 1
+        except NameError:
+            _AXES_FALLBACK_COUNT = 1  # type: ignore[name-defined]
+        print(
+            f"[property_focus_axes][FALLBACK_COUNT={_AXES_FALLBACK_COUNT}] "
+            f"axes detection failed → fat-dump fallback: "
+            f"{type(_axes_exc).__name__}: {str(_axes_exc)[:160]}",
+            flush=True,
+        )
+        # Any unexpected error → fall back to original fat dump (safe).
+        return _FRAMEWORK_HEADER + _atomic_blocks_dump() + "\n" + _ANSWER_STYLE
 
 
 __all__ = [
     "ATOMIC_CHECKS",
     "build_property_focus",
+    "detect_property_axes",
     "strip_dasha_leak",
     "trim_dasha_sections",
     "_detect_property_intent",

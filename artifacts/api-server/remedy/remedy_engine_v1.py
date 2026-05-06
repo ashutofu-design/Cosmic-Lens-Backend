@@ -32,7 +32,7 @@ from .substitutions import apply_substitutions
 from .stack_builder import build_stack
 
 
-_VALID_TOPICS = ("health", "marriage", "career")
+_VALID_TOPICS = ("health", "marriage", "career", "money", "business")
 
 # tier_note keyed by topic+severity. Health has explicit medical-safety
 # tone; marriage/career use action-orientation tone.
@@ -54,6 +54,18 @@ _TIER_NOTES: Dict[str, Dict[str, str]] = {
         "supportive":      "Push applications/networking — Sun/Mercury active windows compound.",
         "celebratory":     "Take the offer/promotion — but read contract carefully (Mercury-due-diligence).",
     },
+    "money": {
+        "watchful":        "Tighten the leak first — savings rate + debt-clearance > new investments.",
+        "supportive":      "Window favourable — auto-debit SIP + emergency fund are highest-ROI moves.",
+        "celebratory":     "Strong dhan-yog — but lock-in via long-corpus (NPS/index/SGB), avoid hot tips.",
+        "consult":         "SEBI-registered advisor 1 hr = highest ROI in this band; skip free WhatsApp tips.",
+    },
+    "business": {
+        "watchful":        "Cashflow + 18-mo runway first — don't scale a leaky bucket.",
+        "supportive":      "Push customer convos + hiring carefully + brand basics — Sun/Mercury compound.",
+        "celebratory":     "Strong window — but founder-fitness + clean books matter MORE now, not less.",
+        "consult":         "Cofounder/legal/CA advisor 2 sessions = highest ROI; verbal deals = top killer.",
+    },
 }
 
 # Universal disclaimer per topic
@@ -68,6 +80,14 @@ _DISCLAIMERS: Dict[str, str] = {
     "career":   ("Remedies amplify effort — they don't replace it. "
                   "Skill, applications, and networking remain the primary drivers. "
                   "Avoid get-rich-quick schemes (Rahu's classic trap)."),
+    "money":    ("Remedies SUPPORT financial discipline, never replace it. "
+                  "Auto-debit + emergency fund + low-cost index investing are the primary levers. "
+                  "Skip 'guaranteed return' schemes and paid 'guaranteed remedy' fees > ₹5,000 — "
+                  "both are predatory. SEBI-registered advisor > WhatsApp tips."),
+    "business": ("Remedies SUPPORT founder discipline, never replace it. "
+                  "Cashflow, customer conversations, founder fitness, and clean books remain "
+                  "the primary drivers. Verbal-only deals + over-fundraising + vanity-metric "
+                  "obsession are the top killers — engine warns; user decides."),
 }
 
 
@@ -81,6 +101,8 @@ def _normalize_severity(topic: str, severity: Optional[str]) -> str:
         "health":   "consult",
         "marriage": "watchful",
         "career":   "watchful",
+        "money":    "watchful",
+        "business": "watchful",
     }.get(topic, "watchful")
 
 

@@ -25,7 +25,7 @@ class TestCatalogCoverage(unittest.TestCase):
     def test_all_topics_have_9_grahas(self):
         expected = {"Sun", "Moon", "Mars", "Mercury", "Jupiter",
                       "Venus", "Saturn", "Rahu", "Ketu"}
-        for topic in ("health", "marriage", "career"):
+        for topic in ("health", "marriage", "career", "money", "business"):
             self.assertEqual(set(CATALOG[topic].keys()), expected,
                               f"{topic} missing planets")
 
@@ -133,6 +133,72 @@ class TestGetRemediesMarriageCareer(unittest.TestCase):
     def test_unknown_topic_returns_unavailable(self):
         r = get_remedies("astronaut", [{"name": "Mars"}], [], "any")
         self.assertFalse(r["available"])
+
+
+class TestGetRemediesMoneyBusiness(unittest.TestCase):
+    def test_money_basic(self):
+        r = get_remedies("money",
+                            [{"name": "Jupiter", "score": 12.0},
+                             {"name": "Venus",   "score": 9.0},
+                             {"name": "Mercury", "score": 8.0}],
+                            ["savings", "investing", "expense_control"],
+                            severity="supportive")
+        self.assertTrue(r["available"])
+        self.assertEqual(r["topic"], "money")
+        self.assertEqual(len(r["planet_remedies"]), 3)
+        names = [p["planet"] for p in r["planet_remedies"]]
+        self.assertEqual(names, ["Jupiter", "Venus", "Mercury"])
+        # Engine-wide promise: practical action present on every planet
+        for pr in r["planet_remedies"]:
+            self.assertTrue(pr["practical"]["action"])
+            self.assertTrue(pr["practical"]["kpi"])
+        # Money disclaimer + no medical referral
+        self.assertIn("financial discipline", r["universal_disclaimer"])
+        self.assertIsNone(r["doctor_referral_hint"])
+        # System practices (money areas) wired
+        sys_keys = [s["system"] for s in r["system_practices"]]
+        self.assertIn("savings", sys_keys)
+
+    def test_business_basic(self):
+        r = get_remedies("business",
+                            [{"name": "Mercury", "score": 11.0},
+                             {"name": "Saturn",  "score": 10.0},
+                             {"name": "Jupiter", "score": 9.0}],
+                            ["cashflow", "scaling", "founders_fit"],
+                            severity="watchful")
+        self.assertTrue(r["available"])
+        self.assertEqual(r["topic"], "business")
+        names = [p["planet"] for p in r["planet_remedies"]]
+        self.assertEqual(names, ["Mercury", "Saturn", "Jupiter"])
+        self.assertIn("founder discipline", r["universal_disclaimer"])
+        sys_keys = [s["system"] for s in r["system_practices"]]
+        self.assertIn("cashflow", sys_keys)
+
+    def test_money_unknown_severity_normalises_to_watchful(self):
+        r = get_remedies("money",
+                            [{"name": "Jupiter", "score": 5}],
+                            ["savings"], severity="garbage")
+        self.assertEqual(r["severity"], "watchful")
+
+    def test_business_render_contains_practical_first(self):
+        r = get_remedies("business",
+                            [{"name": "Mercury", "score": 11.0}],
+                            ["cashflow"], severity="supportive")
+        text = render_for_locked_facts(r)
+        self.assertIn("BUSINESS REMEDIES", text)
+        idx_p = text.find("1️⃣ practical")
+        idx_v = text.find("3️⃣ vedic")
+        self.assertGreater(idx_p, 0)
+        self.assertGreater(idx_v, idx_p)
+
+    def test_money_render_contains_disclaimer_and_tier_note(self):
+        r = get_remedies("money",
+                            [{"name": "Mars", "score": 8}],
+                            ["debt"], severity="watchful")
+        text = render_for_locked_facts(r)
+        self.assertIn("MONEY REMEDIES", text)
+        self.assertIn("TIER NOTE", text)
+        self.assertIn("financial discipline", text)
 
 
 class TestConflicts(unittest.TestCase):

@@ -160,6 +160,103 @@ def _atomic_blocks_dump() -> str:
     return "\n".join(f"  [{k}] {v}" for k, v in ATOMIC_CHECKS.items())
 
 
+import re as _re
+
+# ── P1.2.4 POST-INJECTOR: dasha-leak strip for STATIC/QUALITY answers ────
+# Even with framework guards, LLM occasionally slips dasha mentions
+# ("Moon-Mars phase chal raha hai") into pure STATIC_YOG / YOG_QUALITY
+# answers. This deterministic post-processor strips such sentences
+# AFTER the LLM call (belt-and-braces). NO-OP for TIMING Qs.
+
+_PLANET_TOKENS = (
+    r"(?:Sun|Moon|Mars|Mercury|Jupiter|Venus|Saturn|Rahu|Ketu"
+    r"|Surya|Soorya|Chandra|Mangal|Budh|Budha|Guru|Brihaspati|Shukra"
+    r"|Shani|Sani)"
+)
+# Sentence-killer patterns — if a sentence matches ANY, drop it.
+_DASHA_LEAK_RX = _re.compile(
+    r"("
+    # "Moon-Mars phase chal raha hai" / "Sun/Moon ka phase" / "Jupiter-Rahu dasha"
+    rf"{_PLANET_TOKENS}\s*[-–/]\s*{_PLANET_TOKENS}\s+(?:ka\s+|ki\s+)?"
+    rf"(?:phase|dasha|dasa|antardasha|antar[\s-]*dasha|maha[\s-]*dasha|mahadasha|mahadasa)"
+    # "X mahadasha" / "Y antardasha" / "Saturn sub-period"
+    rf"|{_PLANET_TOKENS}\s+(?:maha[\s-]*dasha|antar[\s-]*dasha|mahadasha|antardasha|sub[\s-]?period)"
+    # P1.2.4.1 (architect-fix) — single-planet dasha forms LLMs commonly use:
+    # "Rahu dasha chal rahi hai", "Moon ki dasha", "Jupiter ka dasha",
+    # "currently in Saturn dasha", "Venus dasa me"
+    rf"|{_PLANET_TOKENS}\s+(?:ka|ki)\s+(?:dasha|dasa)"
+    rf"|{_PLANET_TOKENS}\s+(?:dasha|dasa)\s+(?:chal|me|mein|active|running|chalu)"
+    rf"|(?:currently\s+in|abhi)\s+{_PLANET_TOKENS}\s+(?:dasha|dasa|phase|period)"
+    # "abhi jo X-Y phase" / "abhi jo Moon ka phase chal raha"
+    rf"|abhi\s+jo\s+{_PLANET_TOKENS}"
+    # explicit timing-flavor phrases
+    r"|near\s+term\s+me\s+movement"
+    r"|this\s+phase\s+me"
+    r")",
+    _re.IGNORECASE,
+)
+# Question-intent triggers
+_TIMING_Q_TRIGGER_RX = _re.compile(
+    r"\b(kab|kab\s+tak|when|by\s+when|abhi|turant|"
+    r"next\s+(?:month|year|week)|this\s+year|is\s+(?:saal|mahine|hafte)|"
+    r"agle\s+(?:saal|mahine|hafte|year|month|week)|kitne\s+time|kitna\s+time|"
+    r"upcoming|near\s+future|muhurat|exact\s+date|tareekh|tarikh|"
+    r"by\s+(?:january|february|march|april|may|june|july|august|"
+    r"september|october|november|december|\d{4}))\b",
+    _re.IGNORECASE,
+)
+_QUALITY_Q_TRIGGER_RX = _re.compile(
+    r"\b(delay|early|jaldi|late|slow|fast|smooth|friction|delayed|"
+    r"matured?|nature)\b",
+    _re.IGNORECASE,
+)
+
+
+def _detect_property_intent(question: str) -> str:
+    """Classify the property Q intent → STATIC | QUALITY | TIMING."""
+    if not isinstance(question, str):
+        return "STATIC"
+    if _TIMING_Q_TRIGGER_RX.search(question):
+        return "TIMING"
+    if _QUALITY_Q_TRIGGER_RX.search(question):
+        return "QUALITY"
+    return "STATIC"
+
+
+def strip_dasha_leak(text: str, question: str) -> tuple[str, int]:
+    """Drop dasha-mention sentences from STATIC/QUALITY property answers.
+
+    Returns (cleaned_text, sentences_stripped). NO-OP for TIMING Qs
+    (where dasha mentions are expected and correct). NO-OP if input is
+    not a non-empty string.
+
+    Sentence boundary uses period / exclaim / question / Devanagari
+    danda (। U+0964). Multiple whitespaces are collapsed after stripping.
+    """
+    if not isinstance(text, str) or not text.strip():
+        return text, 0
+    intent = _detect_property_intent(question)
+    if intent == "TIMING":
+        return text, 0
+    # Roughly split into sentences (keep the punctuation with each piece)
+    sentences = _re.split(r'(?<=[.!?।])\s+', text)
+    if len(sentences) <= 1:
+        return text, 0
+    kept = []
+    stripped = 0
+    for s in sentences:
+        if _DASHA_LEAK_RX.search(s):
+            stripped += 1
+            continue
+        kept.append(s)
+    if stripped == 0:
+        return text, 0
+    cleaned = ' '.join(kept).strip()
+    cleaned = _re.sub(r'\s+', ' ', cleaned)
+    cleaned = _re.sub(r'\s+([.,;!?।])', r'\1', cleaned)
+    return cleaned, stripped
+
+
 def build_property_focus(question: str = "") -> str:
     """Return the composable property-focus block.
 
@@ -178,4 +275,6 @@ def build_property_focus(question: str = "") -> str:
 __all__ = [
     "ATOMIC_CHECKS",
     "build_property_focus",
+    "strip_dasha_leak",
+    "_detect_property_intent",
 ]

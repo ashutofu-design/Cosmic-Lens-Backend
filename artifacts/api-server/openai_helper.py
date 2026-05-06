@@ -14562,6 +14562,28 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                         "after_chars":  len(_text_pt_scrubbed),
                     })
 
+                # P1.2.4 — property dasha-leak strip (sync passthrough).
+                # NO-OP for non-property + non-STATIC/QUALITY Qs. Prevents
+                # "Moon-Mars phase chal raha hai" leaks into STATIC_YOG /
+                # YOG_QUALITY answers. Wrapped in try so any failure is
+                # logged but never breaks the response.
+                if _is_property_topic(_qu_topic, question) and _property_focus_enabled():
+                    try:
+                        from property_focus_routing import strip_dasha_leak as _sdl_pt  # type: ignore
+                        _before_dl_pt = _text_pt_scrubbed
+                        _text_pt_scrubbed, _stripped_pt = _sdl_pt(
+                            _text_pt_scrubbed, question
+                        )
+                        if _stripped_pt > 0:
+                            _trace(req_id, "PASSTHROUGH.DASHA_LEAK_STRIPPED", {
+                                "stripped_sentences": _stripped_pt,
+                                "before_chars": len(_before_dl_pt),
+                                "after_chars":  len(_text_pt_scrubbed),
+                            })
+                    except Exception as _sdl_exc_pt:  # noqa: BLE001
+                        _trace(req_id, "PASSTHROUGH.DASHA_LEAK_SKIP",
+                               str(_sdl_exc_pt)[:160])
+
                 # Phase 2.8.28 — marriage answer validator (post-injector).
                 # Strip invented phrases + auto-append missing confidence
                 # band / UL line. Only runs when marriage engine fired.
@@ -18200,6 +18222,27 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                     "before_chars": len(_full_text_pt_s),
                     "after_chars":  len(_full_text_pt_s_scrubbed),
                 })
+
+            # P1.2.4 — property dasha-leak strip (stream final).
+            # Stream chunks already left the wire, but mobile commits the
+            # `done.text` to local history + DB, so cleaning the canonical
+            # final text keeps persisted/displayed answer leak-free.
+            if _is_property_topic(_topic_id_s, question) and _property_focus_enabled():
+                try:
+                    from property_focus_routing import strip_dasha_leak as _sdl_s  # type: ignore
+                    _before_dl_s = _full_text_pt_s_scrubbed
+                    _full_text_pt_s_scrubbed, _stripped_s = _sdl_s(
+                        _full_text_pt_s_scrubbed, question
+                    )
+                    if _stripped_s > 0:
+                        _trace(req_id, "PASSTHROUGH(stream).DASHA_LEAK_STRIPPED", {
+                            "stripped_sentences": _stripped_s,
+                            "before_chars": len(_before_dl_s),
+                            "after_chars":  len(_full_text_pt_s_scrubbed),
+                        })
+                except Exception as _sdl_exc_s:  # noqa: BLE001
+                    _trace(req_id, "PASSTHROUGH(stream).DASHA_LEAK_SKIP",
+                           str(_sdl_exc_s)[:160])
 
             # Phase 2.8.28 — marriage answer validator on stream FINAL.
             # Stream chunks already left the wire, but mobile commits the

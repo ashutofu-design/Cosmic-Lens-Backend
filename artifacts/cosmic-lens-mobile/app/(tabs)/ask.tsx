@@ -170,7 +170,7 @@ export default function AskScreen() {
   // it to a small visual gap so the input sits flush above the kb.
   const inputRowBottomPad = kbVisible ? 10 : botPad + TAB_BAR_HEIGHT;
 
-  // Mode picker: null = show 2-option landing, "chat" = open Acharya chat
+  // Mode picker: null = show 2-option landing, "chat" = open Cosmic Intelligence chat
   const [mode, setMode] = useState<"chat" | null>(null);
 
   // ── Request ownership ────────────────────────────────────────────────────
@@ -188,7 +188,7 @@ export default function AskScreen() {
           {
             id: "init",
             role: "assistant",
-            text: `Pranam beta 🙏 Mai Acharya Vidyasagar — Kashi se. Aapki kundli mere saamne hai. Vivah, karya, swasthya, dhan — jo bhi prashna ho, nishankoch poochiye.`,
+            text: `Cosmic Intelligence ready. Aapka chart load ho chuka hai — career, marriage, health, money, timing — koi bhi prashna sharp aur evidence-based mil jayega.`,
           },
         ]
   );
@@ -1142,8 +1142,12 @@ export default function AskScreen() {
           </Pressable>
         )}
         <View style={s.headerDot} />
-        <Text style={[s.headerTitle, { color: C.text }]}>Acharya Vidyasagar</Text>
-        <Text style={[s.headerSub, { color: C.textMuted }]}>Powered by Advanced Cosmic Intelligence</Text>
+        <View style={s.headerTitleRow}>
+          <Feather name="cpu" size={15} color={C.accent} style={{ marginRight: 6 }} />
+          <Text style={[s.headerTitle, { color: C.text }]}>Cosmic Intelligence</Text>
+          <View style={[s.headerLiveDot, { backgroundColor: "#10b981" }]} />
+        </View>
+        <Text style={[s.headerSub, { color: C.textMuted }]}>Vedic chart analyst · Online</Text>
       </View>
 
       {/* ── Mode switcher pill (only in chat mode) ───────────────────────── */}
@@ -1180,10 +1184,20 @@ export default function AskScreen() {
 
       {/* ───── Mode Picker (default landing) ────────────────────────────── */}
       {mode === null && (
-        <View style={s.pickerWrap}>
-          <Text style={[s.pickerHi, { color: C.text }]}>Pranam beta 🙏</Text>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={s.pickerWrap}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={s.heroBadgeRow}>
+            <View style={[s.heroBadge, { backgroundColor: `${C.accent}18`, borderColor: `${C.accent}55` }]}>
+              <Feather name="cpu" size={11} color={C.accent} />
+              <Text style={[s.heroBadgeText, { color: C.accent }]}>AI · Vedic Chart Analyst</Text>
+            </View>
+          </View>
+          <Text style={[s.pickerHi, { color: C.text }]}>How can I help today?</Text>
           <Text style={[s.pickerSub, { color: C.textMid }]}>
-            Aaj kis vidhi se margdarshan chahte hain?
+            Sharp, evidence-based answers from your unique birth chart — career, marriage, health, money, timing.
           </Text>
 
           {/* Card 1: Ask Anything (Chat) */}
@@ -1204,11 +1218,11 @@ export default function AskScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={s.modeTitle}>Ask Anything</Text>
                 <Text style={s.modeBody}>
-                  Acharya se seedhi baat — kundli, dasha, vivah, karya, swasthya — koi bhi prashna poochho.
+                  Direct chat with Cosmic Intelligence — chart, dasha, marriage, career, health, money. Plain-language answers.
                 </Text>
                 <View style={s.modeMeta}>
-                  <Feather name="message-circle" size={11} color="#ffffffcc" />
-                  <Text style={s.modeMetaText}>Personalized chat · BPHS aadhar</Text>
+                  <Feather name="zap" size={11} color="#ffffffcc" />
+                  <Text style={s.modeMetaText}>Personalized · Evidence-based · BPHS</Text>
                 </View>
               </View>
               <Feather name="chevron-right" size={20} color="#fff" />
@@ -1309,7 +1323,7 @@ export default function AskScreen() {
               Time-based Divya Prashna (current moment)
             </Text>
           </Pressable>
-        </View>
+        </ScrollView>
       )}
 
       {/* ───── Chat Mode ────────────────────────────────────────────────── */}
@@ -1570,8 +1584,13 @@ const s = StyleSheet.create({
     width: 8, height: 8, borderRadius: 4, backgroundColor: "#22c55e",
     marginBottom: 4,
   },
-  headerTitle: { color: "#dde8f4", fontSize: 16, fontWeight: "700" },
+  headerTitle: { color: "#dde8f4", fontSize: 16, fontWeight: "700", letterSpacing: -0.2 },
   headerSub:   { color: "#3d5a7a", fontSize: 11 },
+  headerTitleRow: { flexDirection: "row", alignItems: "center" },
+  headerLiveDot:  { width: 7, height: 7, borderRadius: 4, marginLeft: 8 },
+  heroBadgeRow:   { flexDirection: "row", marginTop: 4 },
+  heroBadge:      { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1 },
+  heroBadgeText:  { fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
 
   modeSwitch: {
     flexDirection: "row",

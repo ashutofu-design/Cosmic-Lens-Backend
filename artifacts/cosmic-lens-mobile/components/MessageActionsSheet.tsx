@@ -62,7 +62,7 @@ export function MessageActionsSheet({
       await FileSystem.writeAsStringAsync(path, text, {
         encoding: FileSystem.EncodingType.UTF8,
       });
-      await Sharing.shareAsync(path, { mimeType: "text/plain", dialogTitle: "Share Acharya ji's reply" });
+      await Sharing.shareAsync(path, { mimeType: "text/plain", dialogTitle: "Share Cosmic Intelligence reply" });
     } catch {
       try { await Clipboard.setStringAsync(text); } catch {}
     }

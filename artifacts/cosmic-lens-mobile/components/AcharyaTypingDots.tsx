@@ -1,7 +1,9 @@
 /**
  * AcharyaTypingDots — three dots that fade-pulse in sequence to convey
- * "Acharya ji is composing a reply". Replaces a plain ActivityIndicator
- * for a more chat-app-native feel (ChatGPT / Gemini / WhatsApp parity).
+ * "Cosmic Intelligence is composing a reply". Replaces a plain
+ * ActivityIndicator for a more chat-app-native feel (ChatGPT / Gemini
+ * / WhatsApp parity). NOTE: filename retained for git-history continuity;
+ * the persona was rebranded from "Acharya ji" to "Cosmic Intelligence".
  */
 import React, { useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";

@@ -5846,6 +5846,44 @@ def ask_route():
         _shortcut["plan"]  = "free"
         return jsonify(_shortcut)
 
+    # ── H3-SAFETY (2026-05-06) — CRISIS hard-guard MUST fire BEFORE
+    # Layer-3 clarifier. Self-harm / suicide phrasing was previously
+    # being intercepted by the clarifier ("khatam kar lu life" →
+    # "thoda aur clear karoge?") which is a serious safety violation.
+    # CAFB engine owns CRISIS_REDIRECT detection — call it first and
+    # return the helpline message immediately if matched. Anything
+    # else (REFUSE_*) continues into the normal pipeline so health_focus
+    # postinjectors can run. Killswitch: HEALTH_CRISIS_PREGATE=0 disables.
+    try:
+        if os.environ.get("HEALTH_CRISIS_PREGATE", "1") != "0":
+            from health_focus_routing import (
+                detect_hard_guard as _hfr_detect_hg,
+                ATOMIC_CHECKS as _hfr_atomic,
+            )  # type: ignore
+            _hg = _hfr_detect_hg(question)
+            if _hg == "CRISIS_REDIRECT":
+                _crisis_msg = (
+                    "Bhai aap ke alfaz se lag raha hai aap bahut tough phase "
+                    "me ho. Please abhi *iCall +91-9152987821* ya "
+                    "*Vandrevala +91-1860-2662-345* pe baat karo — ye trained "
+                    "log 24/7 free me sun-te hain. Aap akele nahi ho. "
+                    "Chart baad me dekhenge — pehle aap safe."
+                )
+                print(f"[ask] H3 CRISIS_REDIRECT pre-gate fired (pre-layer3) "
+                      f"for q={question[:60]!r}", flush=True)
+                return jsonify({
+                    "text":       _crisis_msg,
+                    "topic":      "crisis_redirect",
+                    "confidence": 1.0,
+                    "source":     "health_focus[CRISIS_REDIRECT]",
+                    "follow_ups": [],
+                    "quota":      {"used": 0, "limit": 0},
+                    "plan":       "free",
+                })
+    except Exception as _crisis_exc:
+        print(f"[ask] H3 crisis pre-gate error (non-fatal): {_crisis_exc}",
+              flush=True)
+
     # ── H2.7.14 — Layer-3 vague-Q clarifier short-circuit ────────────────────
     # If Layer-1 (regex) + Layer-2 (fuzzy) both miss AND Layer-3 LLM
     # classifier says "unclear" → return a warm 1-line follow-up Q
@@ -5977,7 +6015,7 @@ def ask_route():
     # helpline/parent-empathy guards into the LLM prompt. User accepted
     # this risk for now; safety inheritance is a follow-up.
     try:
-        _hs_bypass = (os.environ.get("HEALTH_STATIC_BYPASS", "0") == "1")
+        _hs_bypass = (os.environ.get("HEALTH_STATIC_BYPASS", "1") != "0")
     except Exception:
         _hs_bypass = False
     if _hs_bypass:
@@ -5985,12 +6023,11 @@ def ask_route():
               f"flow to Path B+ passthrough (full kundli pack to LLM). "
               f"⚠️ doctor-consult/helpline guards NOT yet inherited.",
               flush=True)
-    try:
-        from health_static import handle_health_question as _hs_handle
-        _hs = None if _hs_bypass else _hs_handle(question, kundli or {}, birth)
-    except Exception as _hs_exc:
-        print(f"[ask] health_static hookup error (non-fatal): {_hs_exc}")
-        _hs = None
+    # H3 (2026-05-06): health_static engine DELETED. CAFB engine
+    # (health_focus_routing) handles all health Qs via Path B+ passthrough.
+    # _hs always None — code path below is dead-but-kept for telemetry shape
+    # parity (any future re-introduction can flip this back).
+    _hs = None
     if _hs and _hs.get("text"):
         # H2.7.5: telemetry parity with /api/ask/stream — log static-gate
         # returns to question_history so web users' Q+A surface in the
@@ -6516,7 +6553,7 @@ def ask_stream_route():
     # H2.7.9 — HEALTH_STATIC_BYPASS killswitch (stream /api/ask/stream).
     # Mirror of sync gate above. Same safety caveat applies.
     try:
-        _hs_bypass = (os.environ.get("HEALTH_STATIC_BYPASS", "0") == "1")
+        _hs_bypass = (os.environ.get("HEALTH_STATIC_BYPASS", "1") != "0")
     except Exception:
         _hs_bypass = False
     if _hs_bypass:
@@ -6524,13 +6561,8 @@ def ask_stream_route():
               f"health_static, flow to Path B+ passthrough "
               f"(full kundli pack to LLM). ⚠️ doctor-consult/helpline "
               f"guards NOT yet inherited.", flush=True)
-    try:
-        from health_static import handle_health_question as _hs_handle
-        _hs = None if _hs_bypass else _hs_handle(question, kundli or {}, birth)
-    except Exception as _hs_exc:
-        print(f"[ask/stream] health_static hookup error (non-fatal): "
-              f"{_hs_exc}", flush=True)
-        _hs = None
+    # H3 (2026-05-06): health_static engine DELETED — see /api/ask gate above.
+    _hs = None
     if _hs and _hs.get("text"):
         out = {
             "text":       _hs["text"],

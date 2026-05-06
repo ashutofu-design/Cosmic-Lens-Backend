@@ -453,6 +453,73 @@ def _passthrough_property_focus(question, topic_id):
         return ""
 
 
+# ─────────────────────────────────────────────────────────────────────
+# HEALTH FOCUS (H3, 2026-05-06) — CAFB engine wiring.
+# Mirrors property focus structure. Replaces health_static engine
+# when HEALTH_STATIC_BYPASS=1 (default ON in flask_app).
+# Killswitch: HEALTH_FOCUS_BLOCK=0/false/no/off (handled by helper).
+# ─────────────────────────────────────────────────────────────────────
+_HEALTH_TOPIC_IDS = frozenset({"health", "swasthya", "vitality", "wellness"})
+
+_HEALTH_FOCUS_FALLBACK_COUNT = 0
+
+
+def _health_focus_enabled():
+    """True UNLESS HEALTH_FOCUS_BLOCK explicitly disables. Default ON."""
+    val = os.environ.get("HEALTH_FOCUS_BLOCK", "").strip().lower()
+    return val not in ("0", "false", "no", "off")
+
+
+def _is_health_topic(topic_id, question):
+    """Match health Qs by topic_id OR question-text gate.
+
+    Logic:
+      1. Explicit health topic_id → True.
+      2. Otherwise delegate to health_focus_routing.is_health_question
+         (which handles hard-guards, ambiguous-token + animal context).
+    """
+    t = (topic_id or "").lower().strip() if isinstance(topic_id, str) else ""
+    if t in _HEALTH_TOPIC_IDS:
+        return True
+    if not isinstance(question, str):
+        return False
+    try:
+        from health_focus_routing import is_health_question  # type: ignore
+        return is_health_question(question)
+    except Exception:
+        return False
+
+
+def _passthrough_health_focus(question, topic_id):
+    """Return HEALTH FOCUS block for health Qs in passthrough paths.
+
+    Returns "" (safe no-op) when:
+      - HEALTH_FOCUS_BLOCK killswitch off
+      - question is not a health Q (by topic_id or regex gate)
+      - any sub-step raises (logged, never propagates)
+    """
+    try:
+        if not _health_focus_enabled():
+            return ""
+        if not _is_health_topic(topic_id, question):
+            return ""
+        try:
+            from health_focus_routing import build_health_focus  # type: ignore
+            return f"\n\nHEALTH FOCUS for this question:\n{build_health_focus(question)}\n"
+        except Exception as _hfr_exc:  # noqa: BLE001
+            try:
+                global _HEALTH_FOCUS_FALLBACK_COUNT
+                _HEALTH_FOCUS_FALLBACK_COUNT += 1
+            except NameError:
+                _HEALTH_FOCUS_FALLBACK_COUNT = 1  # type: ignore
+            print(f"[passthrough_health_focus][FALLBACK_COUNT={_HEALTH_FOCUS_FALLBACK_COUNT}] "
+                  f"router failed: {str(_hfr_exc)[:160]}", flush=True)
+            return ""
+    except Exception as _hf_exc:  # noqa: BLE001
+        print(f"[passthrough_health_focus] skipped: {str(_hf_exc)[:160]}")
+        return ""
+
+
 def _passthrough_marriage_block(question, kundli, intel, birth):
     """M17 — Build LOCKED FACTS marriage block for passthrough paths.
 
@@ -3919,9 +3986,28 @@ def _build_messages(
                     print(f"[passthrough_legacy] property focus skipped: "
                           f"{str(_pf_exc_pt_lg)[:160]}")
                     _property_focus_pt_lg = ""
+                # ── HEALTH FOCUS (H3) — passthrough legacy parity ─────
+                _health_focus_pt_lg = ""
+                try:
+                    _health_focus_pt_lg = _passthrough_health_focus(
+                        question, ""
+                    )
+                except Exception as _hf_exc_pt_lg:  # noqa: BLE001
+                    print(f"[passthrough_legacy] health focus skipped: "
+                          f"{str(_hf_exc_pt_lg)[:160]}")
+                    _health_focus_pt_lg = ""
+                # ── HEALTH chart-trim (drop dasha sections) ───────────
+                try:
+                    if _chart_block_pt and _health_focus_pt_lg:
+                        from health_focus_routing import trim_dasha_sections as _htds_lg  # type: ignore
+                        _chart_block_pt, _hn_lg = _htds_lg(_chart_block_pt, question)
+                        if _hn_lg > 0:
+                            print(f"[passthrough_legacy] health chart trimmed: dropped {_hn_lg} dasha sections")
+                except Exception as _htds_exc_lg:  # noqa: BLE001
+                    print(f"[passthrough_legacy] health chart trim skipped: {str(_htds_exc_lg)[:160]}")
                 _msgs_pt: list[dict] = [{
                     "role": "system",
-                    "content": _sys_intro_pt + _chart_block_pt + _kp_block_pt + _property_focus_pt_lg + _marriage_block_pt,
+                    "content": _sys_intro_pt + _chart_block_pt + _kp_block_pt + _property_focus_pt_lg + _health_focus_pt_lg + _marriage_block_pt,
                 }]
                 # Last 6 conversation turns for follow-up continuity
                 # (e.g. "yeh tumne kaise bola?" type clarifiers).
@@ -4576,6 +4662,21 @@ def _build_messages(
                   f"router failed → fat-constant fallback: {str(_pfr_exc)[:160]}",
                   flush=True)
             focus = _PROPERTY_FOCUS_TEXT
+    # ── HEALTH FOCUS (H3) — narrative-path injection (CAFB) ──
+    # Replaces fat health_static engine. Killswitch: HEALTH_FOCUS_BLOCK.
+    elif _is_health_topic(topic, question) and _health_focus_enabled():
+        try:
+            from health_focus_routing import build_health_focus as _bhf  # type: ignore
+            focus = _bhf(question)
+        except Exception as _hfr_exc:  # noqa: BLE001
+            try:
+                global _HEALTH_FOCUS_FALLBACK_COUNT
+                _HEALTH_FOCUS_FALLBACK_COUNT += 1
+            except NameError:
+                _HEALTH_FOCUS_FALLBACK_COUNT = 1  # type: ignore
+            print(f"[narrative_health_focus][FALLBACK_COUNT={_HEALTH_FOCUS_FALLBACK_COUNT}] "
+                  f"router failed: {str(_hfr_exc)[:160]}", flush=True)
+            focus = ""
     kp_block  = _kp_context(birth, topic)
     tr_block  = _transit_context()
     _, beh    = _summarise_history(history or [])
@@ -11057,9 +11158,14 @@ def _build_phase76_findings_payload(
     try:
         # Lazy imports keep openai_helper import-safe even if these new
         # modules trip on something at startup.
-        import health_topic_matcher as _p76_matcher
-        import health_recipe_composer as _p76_composer
-        import health_rules as _p76_rules
+        # 2026-05-06: phase76 health rule-engine (health_topic_matcher /
+        # health_recipe_composer / health_rules) was DELETED alongside
+        # health_static. The CAFB engine (health_focus_routing) replaces
+        # it via Path B+ passthrough. Keeping import-shape so the outer
+        # try/except catches ModuleNotFoundError → returns None below.
+        import health_topic_matcher as _p76_matcher  # type: ignore
+        import health_recipe_composer as _p76_composer  # type: ignore
+        import health_rules as _p76_rules  # type: ignore
 
         catalog = _p76_matcher.load_catalog()
         matches = _p76_matcher.match_topics(question, qu, catalog)
@@ -14626,6 +14732,24 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     print(f"[passthrough_sync] property focus skipped: "
                           f"{str(_pf_exc_pt)[:160]}")
                     _property_focus_pt = ""
+                # ── HEALTH FOCUS (H3) — passthrough sync parity ─────
+                _health_focus_pt = ""
+                try:
+                    _health_focus_pt = _passthrough_health_focus(
+                        question, _qu_topic
+                    )
+                except Exception as _hf_exc_pt:  # noqa: BLE001
+                    print(f"[passthrough_sync] health focus skipped: "
+                          f"{str(_hf_exc_pt)[:160]}")
+                    _health_focus_pt = ""
+                try:
+                    if _chart_block_pt and _health_focus_pt:
+                        from health_focus_routing import trim_dasha_sections as _htds_pt  # type: ignore
+                        _chart_block_pt, _hn_pt = _htds_pt(_chart_block_pt, question)
+                        if _hn_pt > 0:
+                            print(f"[passthrough_sync] health chart trimmed: dropped {_hn_pt} dasha sections")
+                except Exception as _htds_exc_pt:  # noqa: BLE001
+                    print(f"[passthrough_sync] health chart trim skipped: {str(_htds_exc_pt)[:160]}")
                 _msgs_pt: list[dict] = [{
                     "role": "system",
                     "content": (
@@ -14633,6 +14757,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                         + _chart_block_pt
                         + _kp_block_pt
                         + _property_focus_pt
+                        + _health_focus_pt
                         + _marriage_block_pt
                         + _emotion_tone_pt
                     ),
@@ -14907,18 +15032,32 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 # this is the safety net for LLM overshoots. Identity
                 # fallback on any import/call failure so request never
                 # fails just because the cap helper is unavailable.
+                # H2.7.7 word-cap (post-deletion of health_static, 2026-05-06):
+                # inlined the simple word-counter previously imported from
+                # health_static.health_replies._enforce_word_cap. Identity
+                # fallback on any failure (request never blocked by capper).
                 try:
-                    from health_static.health_replies import (  # type: ignore
-                        _enforce_word_cap as _h277_cap_sync,
-                    )
-                    _text_pt_scrubbed = _h277_cap_sync(
-                        _text_pt_scrubbed, max_words=150
-                    )
+                    _w = (_text_pt_scrubbed or "").split()
+                    if len(_w) > 150:
+                        _text_pt_scrubbed = " ".join(_w[:150]).rstrip(",;:")
                 except Exception as _h277_exc_sync:  # noqa: BLE001
                     _trace(req_id, "H2.7.7.CAP_SKIPPED_SYNC", {
                         "reason": str(_h277_exc_sync)[:160],
                     })
 
+                # ── HEALTH POST-INJECTORS (H3) — mandatory medical
+                # disclaimer + forbidden-vocab strip + (sensitive bucket
+                # → helpline / specialist line). Idempotent + killswitch-
+                # gated (HEALTH_DISCLAIMER). Only fires for health Qs.
+                try:
+                    if _is_health_topic(_qu_topic, question):
+                        from health_focus_routing import (
+                            apply_health_postinjectors as _ahpi_sync,
+                        )  # type: ignore
+                        _text_pt_scrubbed = _ahpi_sync(_text_pt_scrubbed, question)
+                except Exception as _hpi_exc_sync:  # noqa: BLE001
+                    print(f"[passthrough_sync] health postinj skipped: "
+                          f"{str(_hpi_exc_sync)[:160]}")
                 _ret_pt = {
                     "text":       _text_pt_scrubbed,
                     "topic":      "general",
@@ -18282,12 +18421,31 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 print(f"[passthrough_stream] property focus skipped: "
                       f"{str(_pf_exc_pt_s)[:160]}")
                 _property_focus_pt_s = ""
+            # ── HEALTH FOCUS (H3) — passthrough stream parity ─────
+            _health_focus_pt_s = ""
+            try:
+                _health_focus_pt_s = _passthrough_health_focus(
+                    question, _topic_id_s
+                )
+            except Exception as _hf_exc_pt_s:  # noqa: BLE001
+                print(f"[passthrough_stream] health focus skipped: "
+                      f"{str(_hf_exc_pt_s)[:160]}")
+                _health_focus_pt_s = ""
+            try:
+                if _chart_block_pt_s and _health_focus_pt_s:
+                    from health_focus_routing import trim_dasha_sections as _htds_s  # type: ignore
+                    _chart_block_pt_s, _hn_s = _htds_s(_chart_block_pt_s, question)
+                    if _hn_s > 0:
+                        print(f"[passthrough_stream] health chart trimmed: dropped {_hn_s} dasha sections")
+            except Exception as _htds_exc_s:  # noqa: BLE001
+                print(f"[passthrough_stream] health chart trim skipped: {str(_htds_exc_s)[:160]}")
             _msgs_pt_s: list[dict] = [{
                 "role":    "system",
                 "content": _PT_SYS_INTRO
                            + _chart_block_pt_s
                            + _kp_block_pt_s
                            + _property_focus_pt_s
+                           + _health_focus_pt_s
                            + _locked_section_pt_s
                            + _marriage_block_pt_s,
             }]
@@ -18660,13 +18818,12 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             # buffer (when present) and serves as a server-side audit
             # surface. Prompt-level LENGTH & FOCUS LOCK is the primary
             # lever for streaming. Identity fallback on any failure.
+            # H2.7.7 word-cap (post-deletion of health_static, 2026-05-06):
+            # inlined word-counter — see sync site for rationale.
             try:
-                from health_static.health_replies import (  # type: ignore
-                    _enforce_word_cap as _h277_cap_stream,
-                )
-                _full_text_pt_s_scrubbed = _h277_cap_stream(
-                    _full_text_pt_s_scrubbed, max_words=150
-                )
+                _w_s = (_full_text_pt_s_scrubbed or "").split()
+                if len(_w_s) > 150:
+                    _full_text_pt_s_scrubbed = " ".join(_w_s[:150]).rstrip(",;:")
             except Exception as _h277_exc_stream:  # noqa: BLE001
                 _trace(req_id, "H2.7.7.CAP_SKIPPED_STREAM", {
                     "reason": str(_h277_exc_stream)[:160],
@@ -18677,6 +18834,18 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 _full_text_pt_s_scrubbed, question,
                 lang=lang, req_id=req_id, path="passthrough_stream"
             )
+            # ── HEALTH POST-INJECTORS (H3) — passthrough stream parity.
+            try:
+                if _is_health_topic(_topic_id_s, question):
+                    from health_focus_routing import (
+                        apply_health_postinjectors as _ahpi_stream,
+                    )  # type: ignore
+                    _full_text_pt_s_scrubbed = _ahpi_stream(
+                        _full_text_pt_s_scrubbed, question
+                    )
+            except Exception as _hpi_exc_stream:  # noqa: BLE001
+                print(f"[passthrough_stream] health postinj skipped: "
+                      f"{str(_hpi_exc_stream)[:160]}")
             _final_envelope_pt_s = {
                 "kind":       "final",
                 "text":       _full_text_pt_s_scrubbed,

@@ -363,8 +363,17 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   const setPrimaryProfile = useCallback((id: string) => {
     _setPrimaryId(id);
+    primaryIdRef.current = id;
     AsyncStorage.setItem(KEYS.primaryId, id).catch(() => {});
-  }, []);
+    // CRITICAL (May 6 2026 fix): backend /api/ask{,/stream} loads kundli
+    // from the legacy `kundlis` table, which is mirrored from the primary
+    // profile by /api/user/<id>/profiles/sync. Local-only state change
+    // would leave Ask answering for the OLD primary chart. FLUSH the
+    // sync IMMEDIATELY (skip 600ms debounce) so the next /api/ask call
+    // sees the correct chart with no race window.
+    if (syncTimerRef.current) { clearTimeout(syncTimerRef.current); syncTimerRef.current = null; }
+    pushProfilesToCloud(profilesRef.current, id);
+  }, [pushProfilesToCloud]);
 
   const setUser = useCallback((u: AuthUser | null) => {
     _setUser(u);

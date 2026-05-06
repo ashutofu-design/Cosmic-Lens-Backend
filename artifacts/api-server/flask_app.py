@@ -1908,6 +1908,55 @@ def sync_user_profiles(user_id):
         row.deleted_at = None  # incoming = active
 
     db.session.commit()
+
+    # ── CRITICAL MIRROR (May 6 2026 fix) ──────────────────────────────────────
+    # /api/ask + /api/ask/stream RAW PASSTHROUGH path reads chart from the
+    # legacy `kundlis` table (`user.kundli.chart_data`) for fail-closed DB-load
+    # enforcement. When the user switches their primary profile in the mobile
+    # app, that flag flips here in `profiles` — but `kundlis` row stays stale,
+    # so Ask answers for the OLD primary chart. Mirror the new primary's
+    # chart_data + birth metadata into `user.kundli` atomically so the next
+    # /api/ask call sees the correct chart. Best-effort: failure here doesn't
+    # roll back the profile sync (profiles is the canonical source going fwd).
+    try:
+        new_primary = (Profile.query
+                       .filter_by(user_id=user_id, deleted_at=None, is_primary=True)
+                       .first())
+        if new_primary and new_primary.chart_data:
+            user_row = User.query.get(user_id)
+            if user_row:
+                kun = user_row.kundli
+                if not kun:
+                    kun = Kundli(user_id=user_id)
+                    db.session.add(kun)
+                kun.name       = new_primary.name or kun.name
+                kun.chart_data = new_primary.chart_data
+                bd_p = None
+                if new_primary.birth_data:
+                    try:
+                        bd_p = _json.loads(new_primary.birth_data)
+                    except Exception:
+                        bd_p = None
+                if isinstance(bd_p, dict):
+                    try:
+                        kun.dob = (f"{int(bd_p.get('day',0)):02d}/"
+                                   f"{int(bd_p.get('month',0)):02d}/"
+                                   f"{int(bd_p.get('year',0))}")
+                        kun.tob = (f"{int(bd_p.get('hour',0)):02d}:"
+                                   f"{int(bd_p.get('minute',0)):02d} "
+                                   f"{str(bd_p.get('ampm') or 'AM').upper()}")
+                    except Exception:
+                        pass
+                    kun.pob = bd_p.get("place") or kun.pob
+                    if bd_p.get("lat") is not None: kun.lat = float(bd_p.get("lat") or 0)
+                    if bd_p.get("lon") is not None: kun.lon = float(bd_p.get("lon") or 0)
+                    if bd_p.get("tz")  is not None: kun.tz  = float(bd_p.get("tz")  or 5.5)
+                db.session.commit()
+    except Exception as _mirror_exc:
+        db.session.rollback()
+        print(f"[profiles/sync] primary→kundli mirror failed (non-fatal): {_mirror_exc}",
+              flush=True)
+
     rows = (Profile.query
             .filter_by(user_id=user_id, deleted_at=None)
             .order_by(Profile.is_primary.desc(), Profile.created_at.asc())

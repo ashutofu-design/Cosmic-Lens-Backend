@@ -63,7 +63,7 @@ A mobile Vedic Astrology application delivering accurate astrological analyses a
 - **Cache Invalidation**: Any policy change requires bumping the cache namespace (`_vX`).
 - **Vedic Vocab Stripping**: The validator strips Vedic terms unless explicitly opted in or the user's question contains a "tech-request" keyword.
 - **Topic-Lock Conflicts**: When multiple injection points compete, the latest injected point in the user message order wins.
-- **DB-Load Enforcement**: For authenticated users, `kundli` is always loaded from the database; client-supplied `kundli` is for anonymous demo mode only.
+- **DB-Load Enforcement**: For authenticated users, `kundli` is always loaded from the database (legacy `kundlis` table) by `/api/ask{,/stream}`; client-supplied `kundli` is for anonymous demo mode only. **CRITICAL**: `/api/user/<id>/profiles/sync` mirrors the new primary profile's `chart_data` + birth metadata into `kundlis` row atomically (May 6 2026 fix) so primary-switch in mobile app immediately changes which chart Ask answers for. Mobile `setPrimaryProfile` flushes cloud sync immediately (no debounce) to eliminate race window. Ask UI's "Kis ke liye?" pill selector removed — primary is now set only via Profile/My-Kundli screen, ensuring deterministic single-chart answers.
 - **LLM Temperature**: The `temperature` parameter is often rejected by `gpt-5` models, meaning LLM strict mode is currently dormant for those models.
 - **Telemetry Best-Effort**: Telemetry inserts are wrapped in `try/except` and silently drop rows on contention.
 

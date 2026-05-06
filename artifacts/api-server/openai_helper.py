@@ -3069,8 +3069,9 @@ _RAW_LANG_INSTR = {
 }
 
 
-def _raw_compact_chart(kundli: Any) -> str:
-    """Build a compact text block of D1 + D9 + current dasha for the LLM.
+def _raw_compact_chart(kundli: Any, include_dasha: bool = True) -> str:
+    """Build a compact text block of D1 + D9 (+ current dasha if TIMING) for LLM.
+    include_dasha=False → STATIC mode: chart-only, no dasha/timing data sent.
     Tries to be defensive — missing keys are silently skipped."""
     if not isinstance(kundli, dict):
         return "(no chart data available)"
@@ -3121,7 +3122,9 @@ def _raw_compact_chart(kundli: Any) -> str:
                 if not isinstance(p, dict): continue
                 lines.append(f"  • {p.get('name','?')}: {p.get('sign','?')} "
                              f"(House {p.get('house','?')})")
-    # ── Current Dasha ───────────────────────────────────────────────────
+    # ── Current Dasha (TIMING-only) ─────────────────────────────────────
+    if not include_dasha:
+        return "\n".join(lines)
     cd = kundli.get("currentDasha") or {}
     if isinstance(cd, dict) and cd:
         lines.append("\n=== CURRENT DASHA ===")
@@ -3158,20 +3161,51 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             "source":     "raw_passthrough_unavailable",
             "follow_ups": [],
         }
-    chart_text = _raw_compact_chart(kundli)
+    # ── Classify: STATIC (chart-only) vs TIMING (chart + dasha) ────────
+    try:
+        from question_type import classify_question_type
+        qtype = classify_question_type(question)  # "TIMING" or "STATIC"
+    except Exception:
+        qtype = "STATIC"
+    is_timing = (qtype == "TIMING")
+    chart_text = _raw_compact_chart(kundli, include_dasha=is_timing)
     lang_instr = _RAW_LANG_INSTR.get((lang or "en").lower().strip(),
                                       _RAW_LANG_INSTR["en"])
-    system_prompt = (
-        "You are an experienced Vedic astrologer. The user has shared their "
-        "birth chart below (D1 Lagna + D9 Navamsa + current Dasha). Read it "
-        "carefully and answer their question naturally, citing specific "
-        "chart factors (planets, houses, signs, dasha lords) where relevant. "
-        "Be direct and specific — no vague generalities, no hedging filler. "
-        f"{lang_instr} "
-        "Keep the answer focused (around 150-220 words). End with one short "
-        "actionable suggestion when appropriate.\n\n"
-        f"USER'S BIRTH CHART:\n{chart_text}"
-    )
+    if is_timing:
+        # TIMING: D1 + D9 + current Dasha. Ask for a time window.
+        system_prompt = (
+            "You are an experienced Vedic astrologer. The user has shared "
+            "their birth chart (D1 Lagna + D9 Navamsa) AND their current "
+            "Dasha period. The question is a TIMING question (asks WHEN). "
+            "Use BOTH the natal chart AND the dasha sequence to give a "
+            "concrete time window (month/year range or dasha period). "
+            "Cite the specific planets / houses / dasha lords driving your "
+            "answer. Be direct — no vague 'in due time' filler. "
+            f"{lang_instr} "
+            "Keep it focused (around 150-220 words). End with one short "
+            "actionable suggestion when appropriate.\n\n"
+            f"USER'S BIRTH CHART (D1 + D9 + DASHA):\n{chart_text}"
+        )
+    else:
+        # STATIC: D1 + D9 only. NO dasha, NO timing speculation.
+        system_prompt = (
+            "You are an experienced Vedic astrologer. The user has shared "
+            "their birth chart below (D1 Lagna + D9 Navamsa ONLY — no "
+            "dasha data is provided because this is a STATIC question, "
+            "not a timing question). Answer based purely on the chart's "
+            "natal placements (planets, houses, signs, yogas, aspects, "
+            "navamsa strength). "
+            "DO NOT invent any dasha or planetary period. DO NOT predict "
+            "any 'when' / time window. If the user asks 'when', remind "
+            "them this is a static reading and answer the underlying "
+            "quality/yes-no aspect from the chart instead. "
+            "Cite specific chart factors where relevant. Be direct — no "
+            "vague generalities. "
+            f"{lang_instr} "
+            "Keep it focused (around 150-220 words). End with one short "
+            "actionable suggestion when appropriate.\n\n"
+            f"USER'S BIRTH CHART (D1 + D9 ONLY):\n{chart_text}"
+        )
     model = os.environ.get("RAW_PASSTHROUGH_MODEL",
                             os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"))
     try:
@@ -3187,16 +3221,16 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         if not text:
             text = "Maaf kijiye, abhi response generate nahi ho paya. Phir try karein."
         try:
-            print(f"[raw_passthrough] model={model} q={question[:60]!r} "
-                  f"chart_chars={len(chart_text)} resp_chars={len(text)}",
-                  flush=True)
+            print(f"[raw_passthrough] qtype={qtype} model={model} "
+                  f"q={question[:60]!r} chart_chars={len(chart_text)} "
+                  f"resp_chars={len(text)}", flush=True)
         except Exception:
             pass
         return {
             "text":       text,
-            "topic":      "general",
+            "topic":      qtype.lower(),
             "confidence": 1.0,
-            "source":     "raw_passthrough",
+            "source":     f"raw_passthrough_{qtype.lower()}",
             "follow_ups": [],
         }
     except Exception as exc:

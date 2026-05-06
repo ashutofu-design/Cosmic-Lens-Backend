@@ -5813,14 +5813,28 @@ def ask_route():
             _ak = request.headers.get("X-API-Key", "").strip()
             if not _ak or rp_user.api_key != _ak:
                 return jsonify({"error": "Unauthorized"}), 401
-            # DB-load kundli for authenticated users (tamper-proof)
+            # DB-load kundli for authenticated users (tamper-proof, FAIL-CLOSED)
+            # Architect-fix: never fall back to client-supplied kundli for
+            # authenticated users — that would break the tamper-proof contract.
+            if not (rp_user.kundli and rp_user.kundli.chart_data):
+                return jsonify({
+                    "error":   "kundli_missing",
+                    "message": ("Aapki kundli database me save nahi hai. "
+                                "Profile me birth details bharke save karein."),
+                }), 412
             try:
-                if rp_user.kundli and rp_user.kundli.chart_data:
-                    import json as _j
-                    kundli = _j.loads(rp_user.kundli.chart_data) or kundli
+                import json as _j
+                kundli = _j.loads(rp_user.kundli.chart_data)
+                if not isinstance(kundli, dict) or not kundli:
+                    raise ValueError("empty/invalid kundli payload")
             except Exception as _kde:
-                print(f"[ask:RP] kundli db-load failed (non-fatal): {_kde}",
+                print(f"[ask:RP] kundli db-load FAILED (fail-closed): {_kde}",
                       flush=True)
+                return jsonify({
+                    "error":   "kundli_load_failed",
+                    "message": ("Aapki saved kundli read nahi ho payi. "
+                                "Profile me dobara save karein."),
+                }), 500
             rp_q = consume_question(rp_user)
             if not rp_q.get("allowed"):
                 return jsonify({
@@ -5858,8 +5872,14 @@ def ask_route():
                             "limit": _aq.get("limit", 3)}
                 rp_plan = "anon"
             except Exception as _aqe:
-                print(f"[ask:RP] anon quota check failed (non-fatal): {_aqe}",
+                # Architect-fix: FAIL-CLOSED. Letting anon Qs through when
+                # the quota backend is broken is an abuse vector.
+                print(f"[ask:RP] anon quota check FAILED (fail-closed): {_aqe}",
                       flush=True)
+                return jsonify({
+                    "error":   "quota_unavailable",
+                    "message": "Service temporarily unavailable. Try again shortly.",
+                }), 503
         # ── Single LLM call ──
         out = _rp_ask(question, kundli, lang, birth=birth)
         out["quota"] = rp_quota
@@ -6570,13 +6590,26 @@ def ask_stream_route():
             _ak_s = request.headers.get("X-API-Key", "").strip()
             if not _ak_s or rp_user_s.api_key != _ak_s:
                 return jsonify({"error": "Unauthorized"}), 401
+            # Architect-fix: FAIL-CLOSED tamper-proof DB-load (parity with /api/ask).
+            if not (rp_user_s.kundli and rp_user_s.kundli.chart_data):
+                return jsonify({
+                    "error":   "kundli_missing",
+                    "message": ("Aapki kundli database me save nahi hai. "
+                                "Profile me birth details save karein."),
+                }), 412
             try:
-                if rp_user_s.kundli and rp_user_s.kundli.chart_data:
-                    import json as _js
-                    kundli = _js.loads(rp_user_s.kundli.chart_data) or kundli
+                import json as _js
+                kundli = _js.loads(rp_user_s.kundli.chart_data)
+                if not isinstance(kundli, dict) or not kundli:
+                    raise ValueError("empty/invalid kundli payload")
             except Exception as _kde_s:
-                print(f"[ask/stream:RP] kundli db-load failed: {_kde_s}",
+                print(f"[ask/stream:RP] kundli db-load FAILED (fail-closed): {_kde_s}",
                       flush=True)
+                return jsonify({
+                    "error":   "kundli_load_failed",
+                    "message": ("Saved kundli read nahi ho payi. "
+                                "Profile me dobara save karein."),
+                }), 500
             rp_q_s = consume_question(rp_user_s)
             if not rp_q_s.get("allowed"):
                 return jsonify({
@@ -6612,8 +6645,13 @@ def ask_stream_route():
                               "limit": _aq_s.get("limit", 3)}
                 rp_plan_s = "anon"
             except Exception as _aqe_s:
-                print(f"[ask/stream:RP] anon quota failed: {_aqe_s}",
+                # Architect-fix: FAIL-CLOSED on quota backend failure.
+                print(f"[ask/stream:RP] anon quota FAILED (fail-closed): {_aqe_s}",
                       flush=True)
+                return jsonify({
+                    "error":   "quota_unavailable",
+                    "message": "Service temporarily unavailable. Try again shortly.",
+                }), 503
         out_s = _rp_ask_s(question, kundli, lang, birth=birth)
         out_s["quota"] = rp_quota_s
         out_s["plan"] = rp_plan_s

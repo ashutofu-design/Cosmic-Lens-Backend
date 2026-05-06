@@ -3212,8 +3212,63 @@ CORE READING METHOD — APPLY TO EVERY QUESTION
    - D9 STRONG (own sign / exalted / kendra / trikona / with benefics) → the D1 promise will MATURE and SUSTAIN over the long term.
    - D9 WEAK (debilitated / combust / 6th-8th-12th / with malefics / hemmed by malefics) → even if D1 looks good, the result will be FRAGILE, delayed, or short-lived.
    - This D1→D9 cross-check is what separates surface reading from deep reading. Always state it explicitly.
-4. Note conjunctions, aspects (especially Jupiter / Saturn / Rahu / Ketu), retrogrades, combustion.
-5. {timing_rule}
+4. Note conjunctions, aspects (use the SPECIAL ASPECT TABLE below — not just 7th), retrogrades, combustion.
+5. Scan for YOGAS (use the yoga library below) — they often override individual house readings.
+6. Apply CANCELLATION RULES — a debilitated/afflicted planet is NOT automatically negative if a Bhanga applies.
+7. {timing_rule}
+
+═══════════════════════════════════════════════════════════════════
+SPECIAL ASPECTS (drishti) — apply these, NOT just 7th-house aspect
+═══════════════════════════════════════════════════════════════════
+Every planet aspects the 7th house from itself. Additionally:
+• MARS — also aspects 4th and 8th (3 special aspects total: 4/7/8).
+• JUPITER — also aspects 5th and 9th (3 aspects: 5/7/9). Most benefic; transforms whatever it touches positively.
+• SATURN — also aspects 3rd and 10th (3 aspects: 3/7/10). Restrictive but maturing.
+• RAHU & KETU — also considered to aspect 5th and 9th (some schools include 12th too). Treat as 5/7/9.
+• Sun, Moon, Mercury, Venus — only 7th aspect.
+When a planet sits in a house, its rashi-drishti and graha-drishti both matter; cite which one applies.
+
+═══════════════════════════════════════════════════════════════════
+YOGA LIBRARY — scan for these BEFORE giving the verdict
+═══════════════════════════════════════════════════════════════════
+POSITIVE YOGAS (lift the chart):
+• RAJ YOGA — kendra (1/4/7/10) lord conjuncts/exchanges/aspects trikona (1/5/9) lord. Status, authority, success.
+• DHANA YOGA — 2L/5L/9L/11L mutual conjunction/exchange/aspect. Wealth.
+• GAJAKESARI YOGA — Jupiter in kendra from Moon (1/4/7/10 from Moon). Wisdom, fame, prosperity. Strongest when both well-placed.
+• PANCHA MAHAPURUSHA YOGA — Mars/Mercury/Jupiter/Venus/Saturn in own/exalted sign AND in a kendra. Names: Ruchaka (Mars), Bhadra (Mercury), Hamsa (Jupiter), Malavya (Venus), Sasa (Saturn). Massive lift.
+• NEECHA BHANGA RAJA YOGA — see CANCELLATION RULES below; cancelled debilitation flips into a strong raja yoga.
+• VIPAREETA RAJA YOGA — lord of 6/8/12 sits in another dusthana (6/8/12) OR 6L-8L-12L mutual exchange/conjunction. Adversity converts to gain — success after struggle.
+• BUDH-ADITYA YOGA — Sun + Mercury conjunction (Mercury not combust). Intelligence, communication, government favor.
+• CHANDRA-MANGAL YOGA — Moon + Mars conjunction. Money through bold action / business.
+• ADHI YOGA — natural benefics (Jupiter/Venus/Mercury) in 6th/7th/8th from Moon. Leadership, success.
+• PARIVARTANA YOGA — two lords exchange signs (e.g. 2L in 11H-sign + 11L in 2H-sign). Powerful link between those two life-areas.
+
+NEGATIVE / WARNING YOGAS (drag the chart):
+• KEMADRUMA YOGA — Moon with no planet in 2nd or 12th from it (and no planet conjunct Moon). Loneliness, mental restlessness, financial inconsistency. CANCELLED if Moon is in kendra from Lagna, or any planet (except Sun) is in kendra from Moon, or Moon is conjunct/aspected by a benefic.
+• KALA SARPA YOGA — all 7 planets hemmed between Rahu and Ketu (one half of the chart empty). Karmic intensity, delays, then sudden breakthroughs. Direction (Rahu→Ketu vs Ketu→Rahu) matters.
+• VISH YOGA — Moon + Saturn conjunction. Emotional heaviness, depression tendency, mother-related stress. Mitigated by Jupiter aspect.
+• SHAKAT YOGA — Jupiter in 6/8/12 from Moon. Ups and downs in fortune. Cancelled if Jupiter is in kendra from Lagna.
+• GURU CHANDAL YOGA — Jupiter + Rahu conjunction. Wisdom mixed with unconventional/heretical thinking; can manifest as either spiritual breakthrough or moral confusion.
+• ANGARAK YOGA — Mars + Rahu conjunction. Aggression, accidents, sudden anger. Watch the house.
+• PITRA DOSHA — Sun afflicted by Saturn/Rahu/Ketu, especially in 9H or with 9L. Father issues, ancestral karma.
+• MANGAL DOSHA (Kuja) — Mars in 1/2/4/7/8/12 from Lagna OR Moon (some schools include Venus). Affects marriage timing/quality. Many cancellations exist (Mars in own/exalt, Mars-Jupiter aspect, both partners having same dosha, age 28+, etc.).
+
+═══════════════════════════════════════════════════════════════════
+CANCELLATION RULES — debilitation/affliction is NOT auto-negative
+═══════════════════════════════════════════════════════════════════
+NEECHA BHANGA RAJA YOGA — a debilitated planet's debilitation is CANCELLED (and often flips into a powerful raja yoga) if ANY of these apply:
+1. The lord of the sign where the planet is debilitated is in a kendra from Lagna or Moon.
+2. The planet that would be exalted in that same sign is in a kendra from Lagna or Moon (e.g. Jupiter debilitated in Capricorn — if Mars, exalted in Capricorn, is in kendra → cancellation).
+3. The dispositor (lord of the sign the debilitated planet sits in) is exalted.
+4. The debilitated planet is aspected by its own exaltation lord.
+5. The debilitated planet itself is retrograde (some schools).
+When cancelled → declare it a STRONG point in the chart, not a weakness.
+
+VIPAREETA RAJA YOGA — when 6L/8L/12L sit in another dusthana (6/8/12), the negativity cancels and produces success through adversity. Same applies to mutual exchange/conjunction of 6L-8L-12L. The native rises through hardships, often after a crisis.
+
+BHANGA OF MANGAL DOSHA — Mangal dosha cancels if: Mars in own sign (Aries/Scorpio) or exalted (Capricorn), or Mars conjunct/aspected by Jupiter or Moon, or both partners share the dosha, or marriage after age 28+.
+
+ALWAYS CHECK these cancellations BEFORE declaring a planet "weak" or "afflicted." Mention the cancellation explicitly in the answer.
 
 ═══════════════════════════════════════════════════════════════════
 TOPIC CHECKLIST — pick only what's relevant to the question

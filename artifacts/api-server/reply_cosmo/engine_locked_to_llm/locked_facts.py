@@ -1534,6 +1534,70 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             except Exception:
                 pass
 
+        # ── HEALTH REMEDIES sub-block (Phase 2.1, May 6 2026) ───────
+        # Built off the same engine result that produced `health_line`.
+        # Output is a separate "▸ HEALTH REMEDIES" section appended
+        # AFTER the timing block so Rule M (anti-hallucination remedy
+        # quoting) picks it up: LLM must cite mantras/donations/gems
+        # verbatim, never invent. Always paired with the universal
+        # disclaimer ("SUPPLEMENT, never substitute" + "qualified
+        # doctor"). Falls back silently — no remedies section shown
+        # when engine result is missing or empty.
+        health_remedies_block = ""
+        try:
+            from event_timing.health.health_engine_v1 import (  # type: ignore
+                get_last_health_result,
+            )
+            _hres = get_last_health_result() or {}
+            _rem = _hres.get("remedies") or {}
+            _planet_rems = _rem.get("planet_remedies") or []
+            _sys_pract = _rem.get("system_practices") or []
+            # FIX (architect H1): always emit disclaimer+tier_note when the
+            # engine produced ANY remedies dict — even if planet/system
+            # lists are empty. This guarantees the safety policy
+            # ("SUPPLEMENT, never substitute" + qualified-doctor) is never
+            # silently dropped on edge cases (e.g. UNKNOWN verdict, or
+            # all-unknown planet names).
+            if _rem:
+                _rem_lines = [
+                    "",
+                    "▸ HEALTH REMEDIES (engine-only, Rule M — quote verbatim, NEVER invent mantras/gems):",
+                ]
+                for pr in _planet_rems[:3]:
+                    _rem_lines.append(
+                        f"   ◦ {pr.get('planet')} — {pr.get('day')}: "
+                        f"\"{pr.get('mantra')}\" × {pr.get('count')}"
+                    )
+                    _rem_lines.append(
+                        f"     free : {pr.get('free')}"
+                    )
+                    _rem_lines.append(
+                        f"     paid : {pr.get('paid')}"
+                    )
+                    _rem_lines.append(
+                        f"     daan : {pr.get('donation')}"
+                    )
+                    _rem_lines.append(
+                        f"     for  : {pr.get('for_systems')}"
+                    )
+                if _sys_pract:
+                    _rem_lines.append("   ◦ Daily practices (affected systems):")
+                    for sp in _sys_pract[:3]:
+                        _rem_lines.append(
+                            f"     · {sp.get('system')}: {sp.get('practice')}"
+                        )
+                if _rem.get("universal_disclaimer"):
+                    _rem_lines.append(
+                        f"   ⚠ {_rem.get('universal_disclaimer')}"
+                    )
+                if _rem.get("tier_note"):
+                    _rem_lines.append(
+                        f"   ⚐ TIER NOTE: {_rem.get('tier_note')}"
+                    )
+                health_remedies_block = "\n".join(_rem_lines)
+        except Exception as _rem_exc:  # noqa: BLE001
+            print(f"[locked_facts] health remedies block failed: {_rem_exc}")
+
         _t_lines = ["▸ TIMING ENGINE (Sprint-51 — engine-only, AI MUST mirror verbatim, NEVER invent dates):"]
         if marriage_line:
             _t_lines.append(marriage_line)
@@ -1552,6 +1616,8 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             "use ONLY the window above. NO date may appear in the answer "
             "that is not in this block."
         )
+        if health_remedies_block:
+            _t_lines.append(health_remedies_block)
         timing_str = "\n".join(_t_lines)
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] timing_engine failed: {exc}")

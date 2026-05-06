@@ -124,6 +124,95 @@ class TestHealthPostinjector(unittest.TestCase):
         self.assertEqual(result["verdict"], "UNKNOWN")
         self.assertEqual(get_last_health_result()["verdict"], "UNKNOWN")
 
+    def test_remedies_compute_dedupes_and_caps(self):
+        """`_compute_health_remedies` must dedupe repeated planets, cap
+        at 3 planet-remedies, cap at 3 system-practices, normalize bad
+        tier values, and tolerate None / malformed inputs."""
+        from event_timing.health.health_engine_v1 import (
+            _compute_health_remedies,
+        )
+        # None inputs → empty lists, but disclaimer + tier_note present
+        out = _compute_health_remedies(None, None, None)
+        self.assertEqual(out["planet_remedies"], [])
+        self.assertEqual(out["system_practices"], [])
+        self.assertIn("doctor", out["universal_disclaimer"].lower())
+        self.assertEqual(out["tier"], "consult")  # bad tier → 'consult'
+
+        # Dedupe + cap: Mars repeated 4× + 4 valid planets → only 3 unique
+        ranked = [
+            {"name": "Mars", "score": 14.0},
+            {"name": "Mars", "score": 13.0},  # dupe
+            {"name": None,   "score": 12.0},  # malformed
+            "garbage",                          # not a dict
+            {"name": "Saturn", "score": 11.0},
+            {"name": "Mars", "score": 10.0},  # dupe again
+            {"name": "Sun",  "score": 9.0},
+            {"name": "Moon", "score": 8.0},   # 4th unique → must NOT appear
+        ]
+        out = _compute_health_remedies(ranked,
+                                         ["blood", "blood", "muscles",
+                                          "unknown_tag", "inflammation",
+                                          "liver"],  # 5 unique, cap 3
+                                         "urgent_consult")
+        names = [p["planet"] for p in out["planet_remedies"]]
+        self.assertEqual(names, ["Mars", "Saturn", "Sun"])
+        self.assertEqual(len(out["planet_remedies"]), 3)
+        sysnames = [s["system"] for s in out["system_practices"]]
+        self.assertEqual(sysnames, ["blood", "muscles", "inflammation"])
+        self.assertEqual(out["tier"], "urgent_consult")
+        self.assertIn("First a qualified doctor", out["tier_note"])
+
+    def test_remedies_locked_facts_emission(self):
+        """End-to-end: after `compute_health_window` populates the cache,
+        `build_locked_facts` must emit a `▸ HEALTH REMEDIES` block AFTER
+        the `⚐ HARD RULE` line, preserve the universal disclaimer
+        verbatim (including the gemstone-trial caveat), and never raise."""
+        from reply_cosmo.engine_locked_to_llm.locked_facts import (
+            build_locked_facts,
+        )
+        # Cache already populated by setUp via compute_health_window
+        text = build_locked_facts(self.k,
+                                    birth={"dob": self.k.get("dob")}) or ""
+        self.assertIn("▸ HEALTH REMEDIES", text,
+                        "HEALTH REMEDIES block missing from locked_facts")
+        # Ordering: HEALTH REMEDIES must come AFTER the HARD RULE line so
+        # Rule M (anti-hallucination remedy quoting) sees it as a
+        # downstream REMEDIES section, not a timing-window override.
+        idx_hard = text.find("⚐ HARD RULE")
+        idx_rem  = text.find("▸ HEALTH REMEDIES")
+        self.assertGreater(idx_rem, idx_hard,
+                              "HEALTH REMEDIES must appear AFTER HARD RULE")
+        # Verbatim disclaimer + gemstone-trial caveat must survive
+        self.assertIn("Remedies SUPPLEMENT action, never substitute it.",
+                        text)
+        self.assertIn("Gemstones (paid) require a 3-day trial first.", text)
+        # Tier note label must be present
+        self.assertIn("TIER NOTE", text)
+
+    def test_remedies_block_present(self):
+        """Engine output must include `remedies` with planet_remedies +
+        system_practices + universal_disclaimer + tier_note."""
+        rem = self.cached.get("remedies")
+        self.assertIsInstance(rem, dict, "remedies block missing")
+        self.assertIn("planet_remedies", rem)
+        self.assertIn("system_practices", rem)
+        self.assertIn("universal_disclaimer", rem)
+        self.assertIn("tier_note", rem)
+        # At least one planet remedy when engine produced ranked planets
+        if self.cached.get("top_health_planets"):
+            self.assertTrue(len(rem["planet_remedies"]) >= 1,
+                              "no planet remedies for ranked planets")
+        # Each planet remedy has all required fields
+        for pr in rem["planet_remedies"]:
+            for k in ("planet", "day", "mantra", "count", "free",
+                      "paid", "donation", "for_systems"):
+                self.assertIn(k, pr,
+                                f"planet remedy missing field {k}: {pr}")
+        # Disclaimer mentions doctor + supplement
+        disc = rem["universal_disclaimer"].lower()
+        self.assertIn("doctor", disc)
+        self.assertIn("supplement", disc)
+
     def test_duplicate_final_reconciled(self):
         """If the LLM already wrote a '👉 Final: ...' line, the
         post-injector must strip it before appending the engine line so

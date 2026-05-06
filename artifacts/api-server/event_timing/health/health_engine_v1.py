@@ -80,6 +80,213 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 _LAST_RESULT = threading.local()
 
 
+# ════════════════════════════════════════════════════════════════════════
+# HEALTH REMEDIES — deterministic, classical-source consensus
+# ════════════════════════════════════════════════════════════════════════
+# BPHS / Phaladeepika / Lal-Kitab consensus + Charaka/Sushruta lifestyle
+# (for affected-system layer). Per user policy: every entry MUST carry
+# (a) a FREE alternative, (b) a PAID/gemstone option with caveat, and
+# (c) the universal "remedies SUPPLEMENT, never substitute action +
+# qualified doctor" disclaimer (added by locked_facts + post-injector).
+#
+# Format kept tight so the LLM cites verbatim under Rule M
+# (anti-hallucination remedy quoting). Mantras use Sanskrit with
+# Hinglish transliteration for accessibility.
+
+_HEALTH_REMEDIES_BY_PLANET: Dict[str, Dict[str, str]] = {
+    "Sun": {
+        "day":         "Sunday",
+        "mantra":      "Om Hraam Hreem Hraum Sah Suryaya Namah",
+        "count":       "108",
+        "free":        "Surya namaskar 12 rounds at sunrise + Aditya Hridaya Stotra path",
+        "paid":        "Manik (Ruby) 3-5 ct, copper, ring finger — astrologer-fitted",
+        "donation":    "Wheat + jaggery to a temple Sunday morning",
+        "for_systems": "heart, eyes, vitality, bones",
+    },
+    "Moon": {
+        "day":         "Monday",
+        "mantra":      "Om Som Somaya Namah",
+        "count":       "108",
+        "free":        "Chandra namaskar at moonrise + Shiva Panchakshari japa; cool head water-bath",
+        "paid":        "Moti (Pearl) 4-6 ct, silver, ring finger — astrologer-fitted",
+        "donation":    "Milk + white rice + white cloth to a needy person Monday",
+        "for_systems": "mind, sleep, fluids, digestion, mother",
+    },
+    "Mars": {
+        "day":         "Tuesday",
+        "mantra":      "Om Ang Angarakaya Namah",
+        "count":       "108",
+        "free":        "Hanuman Chalisa daily + Mangal-stotra Tuesday; avoid red meat & spicy on Tuesday",
+        "paid":        "Moonga (Red Coral) 6-8 ct, copper, ring finger — TRIAL 3 days first",
+        "donation":    "Red lentils (masoor) + red cloth Tuesday",
+        "for_systems": "blood, muscles, inflammation, accident-risk, surgery",
+    },
+    "Mercury": {
+        "day":         "Wednesday",
+        "mantra":      "Om Bum Budhaya Namah",
+        "count":       "108",
+        "free":        "Vishnu Sahasranama path + green moong / amla in diet daily",
+        "paid":        "Panna (Emerald) 4-6 ct, gold, little finger — TRIAL 3 days first",
+        "donation":    "Green moong + green cloth + camphor at a Vishnu temple Wednesday",
+        "for_systems": "skin, nervous system, speech, lungs, intellect",
+    },
+    "Jupiter": {
+        "day":         "Thursday",
+        "mantra":      "Om Brim Brihaspataye Namah",
+        "count":       "108",
+        "free":        "Vishnu Sahasranama or Guru-stotra Thursday + turmeric milk at night",
+        "paid":        "Pukhraj (Yellow Sapphire) 4-6 ct, gold, index finger — generally safe but get astrologer fit",
+        "donation":    "Chana dal + turmeric + yellow cloth Thursday",
+        "for_systems": "liver, pancreas, fat metabolism, immunity",
+    },
+    "Venus": {
+        "day":         "Friday",
+        "mantra":      "Om Shum Shukraya Namah",
+        "count":       "108",
+        "free":        "Lakshmi-stotra Friday + cow ghee in food + clean white clothes Friday",
+        "paid":        "Heera (Diamond) 0.5-1 ct OR Opal 4-6 ct, silver, middle finger — TRIAL first",
+        "donation":    "White sweets + curd + white cloth to a girl Friday",
+        "for_systems": "kidneys, reproductive, hormones, eyes, throat",
+    },
+    "Saturn": {
+        "day":         "Saturday",
+        "mantra":      "Om Sham Shanaishcharaya Namah",
+        "count":       "108",
+        "free":        "Hanuman Chalisa Saturday + Shani-stotra + sesame-oil massage; serve elderly",
+        "paid":        "Neelam (Blue Sapphire) 4-6 ct, silver/panchdhatu, middle finger — STRICT 3-day TRIAL first; suits don't suit varies sharply",
+        "donation":    "Mustard oil + black urad + black cloth + iron at Shani temple Saturday",
+        "for_systems": "joints, bones, chronic conditions, teeth, knees, longevity",
+    },
+    "Rahu": {
+        "day":         "Saturday (or Wednesday)",
+        "mantra":      "Om Bhram Bhrim Bhraum Sah Rahave Namah",
+        "count":       "108",
+        "free":        "Durga Saptashati or Bhairav-stotra + avoid taamasic food + keep silver under pillow",
+        "paid":        "Gomed (Hessonite) 5-7 ct, silver, middle finger — TRIAL first",
+        "donation":    "Black urad + black cloth + coconut Saturday",
+        "for_systems": "anxiety, sudden ailments, skin allergies, addiction, mystery diagnoses",
+    },
+    "Ketu": {
+        "day":         "Tuesday (or Saturday)",
+        "mantra":      "Om Sram Srim Sraum Sah Ketave Namah",
+        "count":       "108",
+        "free":        "Ganesh Atharvashirsha + til (sesame) daan + spiritual sadhana / silence",
+        "paid":        "Lehsunia (Cat's Eye) 5-7 ct, silver, middle finger — TRIAL first",
+        "donation":    "Sesame seeds + multi-coloured cloth + blanket Saturday",
+        "for_systems": "auto-immune, infections, mysterious/idiopathic, spine, eyes",
+    },
+}
+
+# Lifestyle / Ayurveda / pranayama practices keyed by affected-system tag
+# from `_affected_systems()`. Used as a SECOND remedy layer so the user
+# gets actionable habits, not just mantra+gemstone.
+_HEALTH_PRACTICES_BY_SYSTEM: Dict[str, str] = {
+    "heart":            "Anulom-vilom 10 min/day + walking 30 min + reduce salt/saturated fat",
+    "eyes":             "Trataka (candle gaze) 5 min + screen breaks 20-20-20 rule + triphala water eye-wash",
+    "vitality":         "Surya namaskar + ashwagandha (consult vaidya for dose) + 7-8 hr sleep",
+    "bones":            "Calcium-rich diet (sesame, ragi) + sun exposure 15 min morning + weight-bearing exercise",
+    "mind":             "Bhramari pranayama 10 rounds + 10-min meditation + reduce caffeine",
+    "sleep":            "Brahmi/jatamansi at night (vaidya consult) + screen off 1 hr before bed + warm milk",
+    "fluids":           "Adequate water (per body) + jeera-saunf-ajwain water + reduce cold drinks",
+    "digestion":        "Triphala at night + ginger before meals + eat sitting, slowly",
+    "blood":            "Anar/beetroot juice + tulsi water + iron-rich greens (palak, methi)",
+    "muscles":          "Light yoga + ashwagandha + warm sesame oil massage twice a week",
+    "inflammation":     "Turmeric-pepper-warm-water + omega-3 (flax/walnut) + reduce sugar+maida",
+    "accident_risk":    "Hanuman Chalisa daily + Mahamrityunjaya 11x + extra mindfulness driving/sharp tools",
+    "liver":            "Bhastrika pranayama + bitter greens (karela, methi) + skip alcohol completely",
+    "skin":             "Neem-tulsi water bath + amla daily + reduce night-out fried/oily",
+    "nervous":          "Brahmi + abhyanga (oil massage) 2x/week + nadi shodhana pranayama",
+    "kidneys":          "Adequate hydration + reduce salt + coriander seed water",
+    "reproductive":     "Shatavari (women) / ashwagandha (men) — vaidya consult; pelvic yoga",
+    "joints":           "Light weight-bearing + Vata-pacifying diet (warm, oily, cooked) + Mahanarayan oil massage",
+    "chronic":          "Same daily routine (dincharya) + Mahamrityunjaya jaap + slow consistent recovery; no shortcuts",
+    "anxiety":          "Bhramari + Sheetali pranayama + reduce social-media + grounding walks barefoot on grass",
+    "auto-immune":      "Anti-inflammatory diet + stress management + qualified physician monitoring (do NOT self-medicate)",
+}
+
+
+_VALID_TIERS = ("monitor", "preventive", "consult", "urgent_consult")
+
+
+def _compute_health_remedies(ranked: Optional[List[Dict[str, Any]]],
+                              affected_systems: Optional[List[str]],
+                              recommendation_tier: Optional[str]) -> Dict[str, Any]:
+    """Build deterministic remedies block for the engine output.
+
+    Returns:
+        {
+          "planet_remedies": [ {planet, day, mantra, count, free, paid,
+                                donation, for_systems} ... up to 3 ],
+          "system_practices": [ {system, practice} ... up to 3 ],
+          "universal_disclaimer": "Remedies SUPPLEMENT, never substitute
+                                    action — qualified doctor consultation
+                                    is the primary path.",
+          "tier_note": <action-grade hint based on recommendation_tier>,
+        }
+
+    Top remedies are derived from the top-3 ranked health planets so the
+    user gets remedies for the planets actively contributing to current
+    risk. Practices are derived from the affected-systems list so the
+    user gets concrete daily habits.
+    """
+    planet_remedies: List[Dict[str, Any]] = []
+    seen_planets: Set[str] = set()
+    # Iterate the FULL ranked list (defensive: dedupe can shrink top-3
+    # window if a planet is repeated, so we scan more and break at 3)
+    for r in (ranked or []):
+        if len(planet_remedies) >= 3:
+            break
+        if not isinstance(r, dict):
+            continue
+        name = r.get("name")
+        if not name or name in seen_planets:
+            continue
+        rem = _HEALTH_REMEDIES_BY_PLANET.get(name)
+        if not rem:
+            continue
+        seen_planets.add(name)
+        planet_remedies.append({
+            "planet":       name,
+            "score":        r.get("score"),
+            **rem,
+        })
+
+    system_practices: List[Dict[str, str]] = []
+    seen_systems: Set[str] = set()
+    for sys_tag in (affected_systems or []):
+        if sys_tag in seen_systems:
+            continue
+        practice = _HEALTH_PRACTICES_BY_SYSTEM.get(sys_tag)
+        if not practice:
+            continue
+        seen_systems.add(sys_tag)
+        system_practices.append({"system": sys_tag, "practice": practice})
+        if len(system_practices) >= 3:
+            break
+
+    tier_note_map = {
+        "monitor":         "Routine check-up enough — keep these as preventive habits.",
+        "preventive":      "Add these on TOP of regular check-ups; do not wait for symptoms.",
+        "consult":         "Start these alongside a doctor visit — remedies are SUPPORT, not substitute.",
+        "urgent_consult":  "First a qualified doctor visit, THEN add these. NEVER delay medical care for remedies.",
+    }
+    # Normalize tier defensively: unknown / None → 'consult' (safe middle
+    # ground, never the most permissive 'monitor'). This avoids silently
+    # masking upstream bugs the way a 'preventive' fallback would.
+    norm_tier = (recommendation_tier
+                  if recommendation_tier in _VALID_TIERS
+                  else "consult")
+    return {
+        "planet_remedies":      planet_remedies,
+        "system_practices":     system_practices,
+        "universal_disclaimer": ("Remedies SUPPLEMENT action, never substitute it. "
+                                  "Qualified doctor consultation is the primary path. "
+                                  "Gemstones (paid) require a 3-day trial first."),
+        "tier_note":            tier_note_map[norm_tier],
+        "tier":                 norm_tier,
+    }
+
+
 def get_last_health_result() -> Optional[Dict[str, Any]]:
     """Return the engine result from the most recent `compute_health_window`
     call on this thread, or None if none has run yet (or it was cleared).
@@ -1294,13 +1501,15 @@ def _compute_health_window_impl(kundli: dict,
         for r in ranked
     }
 
+    affected = _affected_systems(ranked)
+    remedies = _compute_health_remedies(ranked, affected, rec_tier)
     return {
         "verdict": verdict,
         "band": band,
         "current_window": current_window,
         "next_3_windows": formatted_top3,
         "protection_windows": protection_windows,
-        "affected_systems": _affected_systems(ranked),
+        "affected_systems": affected,
         "recommendation_tier": rec_tier,
         "top_health_planets": ranked[:5],
         "weighted_breakdown": breakdown,
@@ -1311,6 +1520,7 @@ def _compute_health_window_impl(kundli: dict,
         "risk_flags": risk_flags,
         "factors": factors,
         "llm_directives": llm_directives,
+        "remedies": remedies,
         "engine_version": "v1.0.0",
         "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER",
     }

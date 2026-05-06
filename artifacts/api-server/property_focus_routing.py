@@ -201,13 +201,23 @@ _TIMING_Q_TRIGGER_RX = _re.compile(
     r"next\s+(?:month|year|week)|this\s+year|is\s+(?:saal|mahine|hafte)|"
     r"agle\s+(?:saal|mahine|hafte|year|month|week)|kitne\s+time|kitna\s+time|"
     r"upcoming|near\s+future|muhurat|exact\s+date|tareekh|tarikh|"
+    # P1.2.7.2 (bug-fix): "delay/early/jaldi/late/soon/delayed" are TIMING
+    # keywords (asking WHEN), not QUALITY (asking HOW). Were previously in
+    # QUALITY regex causing "property me delay hoga ya early yog?" to be
+    # misclassified as QUALITY → P1.2.5 dasha-trim wrongly fired → answer
+    # missed Moon-Mars phase context. User-flagged Q "Mujshe property Lene
+    # me delay hoga ya early yog he" reproduces this. Now correctly TIMING.
+    r"delay|delayed|early|jaldi|late|soon|"
     r"by\s+(?:january|february|march|april|may|june|july|august|"
     r"september|october|november|december|\d{4}))\b",
     _re.IGNORECASE,
 )
+# QUALITY keywords describe NATURE/HOW (smooth/friction/matured), distinct
+# from TIMING keywords which describe WHEN. "fast/slow" kept here as they
+# more often describe deal-pace quality than calendar timing in property
+# context (e.g. "fast process" = QUALITY; for timing user says "kab/jaldi").
 _QUALITY_Q_TRIGGER_RX = _re.compile(
-    r"\b(delay|early|jaldi|late|slow|fast|smooth|friction|delayed|"
-    r"matured?|nature)\b",
+    r"\b(slow|fast|smooth|friction|matured?|nature)\b",
     _re.IGNORECASE,
 )
 

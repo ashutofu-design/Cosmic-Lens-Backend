@@ -3164,7 +3164,11 @@ _KP_TRIGGER_RE = _re_kp.compile(
     r"lagega\s+ya\s+nahi|lagegi\s+ya\s+nahi|"
     r"banega\s+ya\s+nahi|banegi\s+ya\s+nahi|"
     r"yes\s+or\s+no|pakka\s+batao|definite|definitive\s+answer|"
-    r"sure[-\s]*shot|promise|fructify"
+    r"sure[-\s]*shot|promise|fructify|"
+    # Plain timing markers (KP gives precise window via cuspal sub-lord)
+    r"kab\s+hoga|kab\s+hogi|kab\s+milega|kab\s+milegi|"
+    r"kab\s+banega|kab\s+banegi|kab\s+lagegi|kab\s+lagega|"
+    r"when\s+will|when\s+is|exact\s+date|exact\s+month|exact\s+year"
     r")\b",
     _re_kp.IGNORECASE,
 )
@@ -3285,6 +3289,31 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     if kp_block:
         chart_text = chart_text + kp_block
 
+    # ── MARRIAGE TIMING enrichment (VIVAH-7 KP-first engine) ───────────
+    # Fires only when question is marriage-topic. Architect-guard: regex
+    # gate FIRST so analyze_chart() never runs for non-marriage Qs (cost
+    # regression fix). Engine returns top-3 DBA windows × KP-gated ×
+    # Jupiter trigger confluence + locked verdict.
+    marriage_block = ""
+    is_marriage_engine = False
+    try:
+        if (isinstance(question, str)
+                and _M17_MARRIAGE_KW_RX.search(question or "")):
+            _intel_for_marriage = {}
+            try:
+                _analyze, _ = _chart_intel()
+                _intel_for_marriage = _analyze(kundli, birth) or {}
+            except Exception as _ie:
+                print(f"[raw_passthrough] intel build skipped: {str(_ie)[:160]}")
+            marriage_block = _passthrough_marriage_block(
+                question, kundli, _intel_for_marriage, birth
+            ) or ""
+            if marriage_block:
+                is_marriage_engine = True
+                chart_text = chart_text + "\n" + marriage_block
+    except Exception as _me:
+        print(f"[raw_passthrough] marriage enrichment skipped: {_me}")
+
     lang_instr = _RAW_LANG_INSTR.get((lang or "en").lower().strip(),
                                       _RAW_LANG_INSTR["en"])
     # ════════════════════════════════════════════════════════════════════
@@ -3317,6 +3346,37 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     chart_label = "D1 + D9 + ACTIVE DASHA" if is_timing else "D1 + D9 ONLY (no dasha)"
     if is_kp:
         chart_label += " + KP CUSPAL SUB-LORD"
+    if is_marriage_engine:
+        chart_label += " + MARRIAGE ENGINE (VIVAH-7)"
+
+    # Marriage engine reading rule — injected only when MARRIAGE block present.
+    # Authority resolution: marriage engine ALREADY internally KP-gates its
+    # windows (Step 1 KP filter + cuspal sub-lord validation). When this rule
+    # is active, it SUPERSEDES the KP cross-check rule for marriage timing
+    # (no double-authority conflict). KP rule is suppressed below for parity.
+    marriage_reading_rule = (
+        "\n\n=== MARRIAGE ENGINE READING RULE (this question triggered VIVAH-7 enrichment) ===\n"
+        "A LOCKED-FACTS MARRIAGE ENGINE block is appended to the chart. It contains: "
+        "verdict (band), TOP-3 windows with scores (already KP-gated × Jupiter-trigger × "
+        "Ashtakavarga validated internally), and risk_flags. THIS BLOCK IS THE SOLE TIMING "
+        "AUTHORITY for marriage — its windows already incorporate the KP cuspal sub-lord "
+        "verdict, so do NOT independently re-derive timing from any other block.\n"
+        "  • DATE / YEAR / MONTH ranges from the engine windows MUST be quoted EXACTLY (no "
+        "off-by-one, no rounding, no invention). If engine says 'January–June 2030', use "
+        "that exact range. NEVER invent a different month or year.\n"
+        "  • Dasha labels (e.g. 'Saturn-Mercury-Venus' or 'MD-AD-PD') are INTERNAL — translate "
+        "into plain language for the user ('next 6-18 months', 'aane wala phase'). The DATES "
+        "stay exact; only the dasha terminology gets translated.\n"
+        "  • If the question is timing ('kab hoga / when'): cite TOP-1 window as primary, "
+        "TOP-2 as alternate.\n"
+        "  • If verdict is UNKNOWN/WEAK or top_3_windows is empty: say 'window clearly "
+        "visible nahi ho raha — chart mixed signals de raha hai' instead of fabricating a date.\n"
+        "  • If risk_flags present: mention the risk gently in 1 line.\n"
+        "  • USER-FACING TEXT MUST CONTAIN ZERO of these tokens: 'engine', 'VIVAH', "
+        "'VIVAH-7', 'KP', 'KP gate', 'Ashtakavarga', 'DBA', 'MD-AD-PD', 'pratyantar', "
+        "'antardasha', 'mahadasha', 'cuspal', 'sub-lord', 'CSL', 'Krishnamurti', 'D9', "
+        "'navamsa', 'Jupiter trigger'. Translate per GOLDEN RULE.\n"
+    ) if is_marriage_engine else ""
 
     # KP reading rule — injected only when KP block is present. Tells the
     # LLM how to weight the KP cross-check against the Parashari D1/D9 read.
@@ -3329,7 +3389,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         "  • If KP says PARTIAL → YES with delay/struggle (cite the obstruction houses).\n"
         "  • If KP says DENIES → NO or substantially delayed.\n"
         "Reasoning order: (1) Parashari D1/D9 read → (2) KP cuspal sub-lord cross-check → (3) Final verdict reconciles both. If they conflict, KP wins on hard yes/no event timing; D1/D9 wins on quality/nature/character traits. NEVER mention the words 'KP', 'cusp', 'sub-lord', 'CSL', 'Krishnamurti' in the user-facing reply — translate to plain language per the GOLDEN RULE.\n"
-    ) if is_kp else ""
+    ) if (is_kp and not is_marriage_engine) else ""  # marriage rule supersedes for marriage Qs
 
     system_prompt = f"""You are an experienced Vedic astrologer (Parashari + KP-aware). The user has shared their birth chart below ({chart_label}). Read it carefully and answer their question with specific, cited reasoning.
 
@@ -3654,7 +3714,7 @@ HARD RULES (apply to every answer)
 ═══════════════════════════════════════════════════════════════════
 USER'S BIRTH CHART
 ═══════════════════════════════════════════════════════════════════
-{chart_text}{kp_reading_rule}"""
+{chart_text}{kp_reading_rule}{marriage_reading_rule}"""
     model = os.environ.get("RAW_PASSTHROUGH_MODEL",
                             os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"))
     try:
@@ -3689,7 +3749,7 @@ USER'S BIRTH CHART
         cache_hit_pct = (round(100 * cached_tok / prompt_tok, 1)
                          if prompt_tok else 0.0)
         try:
-            print(f"[raw_passthrough] qtype={qtype} kp={is_kp} model={model} "
+            print(f"[raw_passthrough] qtype={qtype} kp={is_kp} marriage={is_marriage_engine} model={model} "
                   f"q={question[:60]!r} chart_chars={len(chart_text)} "
                   f"resp_chars={len(text)} | tokens: prompt={prompt_tok} "
                   f"cached={cached_tok} ({cache_hit_pct}%) "

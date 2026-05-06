@@ -34,7 +34,8 @@ A mobile Vedic Astrology application delivering accurate astrological analyses a
 - **User-Facing Translation Layer (GOLDEN RULE)**: Bans all astrology jargon from user-facing output, using plain language.
 - **Mandatory Final Verdict**: Enforces a sharp, engine-built final verdict line (`👉 Final:`) in responses.
 - **Health Focus Block (CAFB-health)**: Replaces legacy health rule-engine with atomic checks, a 4-axis detector, chart-slicer, and hard-guards for sensitive health topics.
-- **KP opt-in enrichment for raw_passthrough**: Appends cuspal-sub-lord verdict block to chart context for explicit KP terminology or hard yes/no event markers in questions.
+- **KP opt-in enrichment for raw_passthrough**: Appends cuspal-sub-lord verdict block to chart context for explicit KP terminology, hard yes/no event markers, OR plain timing markers (`kab hoga/hogi`, `when will`) in questions.
+- **Marriage Engine wiring (VIVAH-7) in raw_passthrough**: `_passthrough_marriage_block` (calls `event_timing.marriage.assess_marriage`) is invoked from `raw_passthrough_ask`. Returns top-3 KP-gated × Jupiter-trigger × Ashtakavarga DBA windows + verdict + risk_flags as a LOCKED-FACTS block the LLM must quote verbatim. Marriage reading rule appended to system prompt; chart_label gets `+ MARRIAGE ENGINE (VIVAH-7)`. Telemetry `[raw_passthrough] marriage=True/False`.
 
 ## Product
 - **Mobile App**: Daily Rashifal, Panchang, Kundli Milan, Muhurat finder, Numerology, Remedies, Vastu tips, Dosha analysis, personalized forecasts ("Risk Radar"), Life Mastery Report.

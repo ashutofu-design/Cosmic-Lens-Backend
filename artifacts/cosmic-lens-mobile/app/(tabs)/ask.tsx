@@ -1192,7 +1192,7 @@ export default function AskScreen() {
           <View style={s.heroBadgeRow}>
             <View style={[s.heroBadge, { backgroundColor: `${C.accent}18`, borderColor: `${C.accent}55` }]}>
               <Feather name="cpu" size={11} color={C.accent} />
-              <Text style={[s.heroBadgeText, { color: C.accent }]}>AI · Vedic Chart Analyst</Text>
+              <Text style={[s.heroBadgeText, { color: C.accent }]}>Cosmic Advance Intelligence</Text>
             </View>
           </View>
           <Text style={[s.pickerHi, { color: C.text }]}>How can I help today?</Text>

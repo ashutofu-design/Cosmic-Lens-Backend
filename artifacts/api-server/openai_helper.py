@@ -3271,18 +3271,81 @@ BHANGA OF MANGAL DOSHA — Mangal dosha cancels if: Mars in own sign (Aries/Scor
 ALWAYS CHECK these cancellations BEFORE declaring a planet "weak" or "afflicted." Mention the cancellation explicitly in the answer.
 
 ═══════════════════════════════════════════════════════════════════
+PLANET ROLE QUICK-REF (always available for internal reasoning)
+═══════════════════════════════════════════════════════════════════
+| Planet  | Health role                                  | Career role                                | Relationship role                             |
+|---------|----------------------------------------------|--------------------------------------------|-----------------------------------------------|
+| SUN     | Vitality, heart, eyes, bones, immunity       | Govt, authority, leadership, admin         | Father, ego, self-respect                     |
+| MOON    | Mind, fluids, blood, lungs, stomach          | Public-facing, hospitality, fluids         | Mother, emotions, comfort, mass-appeal        |
+| MARS    | Blood, muscle, surgery, accidents, BP, heat  | Engineering, defence, sports, real-estate  | Brother, passion, drive, anger, attraction    |
+| MERCURY | Nervous system, skin, speech                 | Comm, IT, finance, writing, trading        | Friends, intellect-match, communication ease  |
+| JUPITER | Liver, fat, sugar, digestion                 | Teaching, law, advisory, finance, religion | Husband (women's chart), guru, kids, wisdom   |
+| VENUS   | Reproductive, kidneys, hormones, sugar       | Arts, luxury, beauty, vehicles, media      | Wife (men's chart), love, romance, marriage   |
+| SATURN  | Chronic, bones, joints, depression, longevity| Service, labour, mining, slow-grind work   | Delays, distance, duty in relations, elders   |
+| RAHU    | Mystery illness, addictions, poisoning       | Foreign, tech, unconventional, speculation | Forbidden/unusual bonds, sudden attractions   |
+| KETU    | Surgical, skin, immune disorders, mystery    | Spirituality, research, occult, healing    | Detachment, breakups, past-life karma         |
+
+═══════════════════════════════════════════════════════════════════
+HOUSE ROLE QUICK-REF (always available for internal reasoning)
+═══════════════════════════════════════════════════════════════════
+| House | Health                       | Career / Money                           | Relationship / Family                |
+|-------|------------------------------|------------------------------------------|--------------------------------------|
+| 1H    | Body, vitality, head         | Self-identity, self-employment           | How you show up in relations         |
+| 2H    | Face, mouth, food, throat    | Income, savings, family business         | Family wealth, spouse-family ties    |
+| 3H    | Arms, throat, lungs          | Skills, communication, short trips       | Younger siblings, courage in bonds   |
+| 4H    | Heart, chest, breast         | Property, vehicle, real-estate           | Mother, home life, emotional base    |
+| 5H    | Stomach, mind, creativity    | Speculation, creativity, education       | Children, romance, love affairs      |
+| 6H    | Disease, debts, infections   | Service-job, competition, daily-grind    | Enemies, conflicts, maternal-uncle   |
+| 7H    | Reproductive, kidneys        | Business partnership, public dealings    | **Spouse, marriage — primary house** |
+| 8H    | Chronic, surgical, hidden    | Inheritance, occult, research, insurance | Spouse-wealth, intimacy, transformation|
+| 9H    | Hips, thighs                 | Higher edu, advisory, foreign, dharma    | Father-luck, guru, dharmic bonds     |
+| 10H   | Knees, joints                | **Career — primary house**, status       | Public reputation, in-laws status    |
+| 11H   | Calves, ankles               | Gains, networks, big income              | Friends, elder siblings, social circle|
+| 12H   | Feet, sleep, hospital        | Foreign-residence, isolation, expenses   | Bed pleasures, separation, losses    |
+
+═══════════════════════════════════════════════════════════════════
 TOPIC CHECKLIST — pick only what's relevant to the question
 ═══════════════════════════════════════════════════════════════════
-• WEALTH / MONEY / FINANCE — 2H+2L (accumulated wealth), 11H+11L (income/gains), 5H+5L (speculative gains, sudden money), 9H+9L (fortune, big money), Jupiter (Dhana karaka). Look for Dhana yogas: 2L–11L, 2L–5L, 5L–9L, 9L–11L exchanges/conjunctions. **D9 check:** where does D1's 2L and 11L sit in D9? D9-strong = lasting wealth; D9-weak = money comes but slips away.
+• WEALTH / MONEY / FINANCE — 2H+2L (accumulated wealth), 11H+11L (income/gains), 5H+5L (speculative/sudden money), 9H+9L (big fortune), Jupiter (Dhana karaka), Venus (luxury/comfort wealth), Mercury (business/trading money). Look for Dhana yogas: 2L–11L, 2L–5L, 5L–9L, 9L–11L exchanges/conjunctions. **Money-source by planet ruling 2L/11L:** Sun=govt/authority income, Moon=public/liquids/women-related, Mars=land/sports/engineering, Mercury=trading/comm, Jupiter=advisory/teaching, Venus=arts/luxury, Saturn=service/long-grind, Rahu=foreign/speculative, Ketu=research/occult. **D9 check:** D1's 2L and 11L in D9 — D9-strong = lasting wealth; D9-weak = money slips away. **Negative**: 2L/11L in 6/8/12, Kemadruma, Saturn-Rahu on 2H/11H.
 
-• MARRIAGE — yes/no, quality, count: 7H+7L (spouse), Venus (kalatra karaka for males) / Jupiter (for females), 8H (in-laws/spouse longevity), Mars placement (Mangal/Kuja dosha — 1/2/4/7/8/12 from Lagna or Moon). **D9 check (most important here — D9 IS the marriage chart):** D9 Lagna lord, D9 7H + 7L strength, where D1's 7L sits in D9, Venus position in D9. Strong D9 7H = good marriage; weak D9 7L = trouble even if D1 looks fine. Upapada (UL) if you can derive it.
+• MARRIAGE — yes/no, quality, count, timing, spouse-type:
+  - **Spouse house & lord:** 7H+7L (primary spouse + relationship style), 8H+8L (in-laws, spouse-longevity, intimacy depth), 2H+2L (family stability after marriage).
+  - **Karaka:** Venus (for males = wife karaka), Jupiter (for females = husband karaka), Mars (Mangal/Kuja dosha: Mars in 1/2/4/7/8/12 from Lagna or Moon).
+  - **D9 (most important — D9 IS the marriage chart):** D9 Lagna + lord, D9 7H + 7L strength, D1's 7L position in D9, Venus/Jupiter in D9, Upapada (UL) if derivable. Strong D9 7H = good marriage; weak D9 7L = trouble even if D1 fine.
+  - **Spouse-character by 7L planet:** Sun=authoritative/govt-type, Moon=emotional/caring, Mars=energetic/dominant, Mercury=intellectual/young-looking, Jupiter=wise/traditional/older-or-mature, Venus=beautiful/refined/artistic, Saturn=serious/older/disciplined, Rahu=foreigner/unconventional/mixed-background, Ketu=spiritual/detached.
+  - **Love vs arranged:** LOVE = Venus-Mars conjunction/aspect, 5L-7L exchange, 5H-7H link, Rahu/Moon in 5H or 7H, Venus in 5/7/11. ARRANGED = Jupiter on 7H/7L, clean benefic 7L without 5H link, Saturn in 7H (delayed-traditional), Sun-Jupiter prominence on 7H.
+  - **Marriage QUALITY dimensions:** *emotional bond* (Moon-Venus harmony, 4H), *physical/intimacy* (8H, Venus-Mars), *understanding/communication* (Mercury, 3H-7H), *commitment/loyalty* (Saturn-Jupiter on 7H), *passion* (Mars on 7H/Venus), *peace at home* (4H lord + benefics on 4H).
+  - **Manglik bhanga:** Mars in own (Aries/Scorpio) or exalted (Capricorn), Mars-Jupiter aspect, both partners same dosha, age 28+.
 
 • LOVE vs ARRANGED MARRIAGE:
    - LOVE indicators: Venus-Mars conjunction or mutual aspect, 5L-7L exchange/conjunction (love → marriage), 5H + 7H link, Rahu/Moon in 5H or 7H, Venus in 5/7/11.
    - ARRANGED indicators: Jupiter aspecting 7H or 7L, 7L clean and benefic without 5H link, Saturn in 7H (delayed/traditional), Sun-Jupiter prominence in 7H.
    - **D9 confirms** which pattern actually fructifies — check D9 7H sign and its lord.
 
-• CAREER / PROFESSION — 10H+10L (karma/career), Sun (authority), Saturn (karma karaka), Mercury (skill), 6H+6L (job/service), 7H+7L (business/partnership), 2H (income from work), 11H (gains). Amatyakaraka if computed. **D9 check:** where is D1's 10L in D9? D9-strong = stable rising career; D9-weak = ups and downs, frequent changes.
+• CAREER / PROFESSION — direction, sector, success-level, job-vs-business, timing:
+  - **Core houses:** 10H+10L (karma/profession/status), 6H+6L (job/service/competition), 7H+7L (business/public-dealing/partnership), 2H+2L (income from work), 11H+11L (gains/network/big income), 1H (self-drive/identity).
+  - **Karakas:** Sun (authority/govt), Saturn (karma karaka — labour/discipline), Mercury (skill/intellect), Jupiter (wisdom/advisory). **Amatyakaraka** (Jaimini) if computed = soul's chosen profession.
+  - **CAREER-FIELD by 10L planet** (LLM picks ONE matching the chart):
+      • Sun-ruled 10 → govt, IAS/IPS, leadership, politics, admin, medicine (authority side), VIP-roles
+      • Moon-ruled 10 → public dealing, hospitality, food, dairy, water, women-products, nursing, mass-media
+      • Mars-ruled 10 → engineering, defence/army/police, sports, surgery, real-estate, mechanical, chemicals
+      • Mercury-ruled 10 → IT/coding, accounts, journalism, writing, trading, BPO, communication, finance
+      • Jupiter-ruled 10 → teaching, law, advisory, banking, religion, finance, counselling, BD/strategy
+      • Venus-ruled 10 → arts, design, music, beauty, fashion, luxury goods, entertainment, vehicles
+      • Saturn-ruled 10 → labour-intensive, mining, oil, construction, civil-service, structured corporate, agriculture
+      • Rahu-ruled 10 → foreign jobs, tech-startups, aviation, speculation, unconventional/digital fields, marketing
+      • Ketu-ruled 10 → research, occult, spirituality, healing, IT-back-office, archeology, pharma
+  - **JOB vs BUSINESS detector:**
+      • JOB indicators = Saturn/Sun in 10H, 6L strong, 10L in 6H/2H/11H, Saturn-Sun on 10H, Moon-Saturn on 10H
+      • BUSINESS indicators = Mars/Rahu/Mercury in 10H, 7L strong, 10L in 7H, Mars-Mercury exchange, exalted Rahu, 5H-9H link
+      • Mixed = both signatures present → consultancy/freelance/own-practice within structured field
+  - **Success-LEVEL gauge:**
+      • RAJ YOGA active (kendra-trikona link involving 10L) → high status, leadership
+      • Vipareeta yoga (6L/8L/12L exchange) → success after struggle, late peak
+      • 10L debilitated/combust without bhanga → struggle, frequent changes
+      • Pancha Mahapurusha touching 10H → exceptional public profile
+  - **D9 check:** D1's 10L in D9 — D9-strong = stable rising career; D9-weak = ups & downs, frequent shifts.
+  - **Timing windows:** dasha/antardasha of 10L, 9L, 11L, 2L, Yogakaraka. Saturn transit on 10H = career-shift / promotion / restructure phase.
 
 • HEALTH (be responsible — never diagnose a specific disease, never predict death, never name a body part as "definitely diseased"; speak in tendencies, not verdicts).
 

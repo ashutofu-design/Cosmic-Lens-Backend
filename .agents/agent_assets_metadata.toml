@@ -528,3 +528,9 @@ id = "tZKxeRRoB8ndN_f4XdguB"
 uri = "file://attached_assets/screenshots/expo_go_qr.png"
 type = "image"
 title = "Expo Go QR — phone se scan karo (Cosmic Lens)"
+
+[[outputs]]
+id = "PX0WxgqSsh4Cxt8bMtZ-3"
+uri = "file://.local/qr/expo-latest.png"
+type = "image"
+title = "Cosmic Lens — Expo Go QR (latest tunnel)"

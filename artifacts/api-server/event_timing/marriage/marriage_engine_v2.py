@@ -464,9 +464,13 @@ def _step2_d9_verify(kundli: dict, lagna_si: int,
             notes.append("in 7H of D9")
 
         # IS D9's 7L (planet rules D9 7H sign)
+        # v2.2 — D9 7L is the SUPREME marriage karaka in Navamsa.
+        # Bumped from +18 to +30 (parity with D1 7H occupancy) to reflect
+        # classical weight: D9 IS the marriage varga, so its 7L outranks
+        # most other D9 signals.
         if d9_seventh_lord and pname == d9_seventh_lord:
-            score += 18.0
-            notes.append(f"IS D9 7L ({d9_seventh_lord})")
+            score += 30.0
+            notes.append(f"IS D9 7L ({d9_seventh_lord}) — supreme")
 
         # Conjunct another filtered marriage planet in D9
         for other in filtered:
@@ -577,41 +581,53 @@ def _step3_kp_verify(kp: dict, filtered: Set[str]) -> Dict[str, Any]:
 # ════════════════════════════════════════════════════════════════════════
 # STEP 4 — Weighted ranking (D1·30 + D9·25 + KP·30 + karaka·15)
 # ════════════════════════════════════════════════════════════════════════
-def _karaka_score(pname: str, lagna_si: int, is_female: Optional[bool]) -> float:
-    """Natural marriage-karaka contribution (0-100)."""
+def _karaka_score(pname: str, lagna_si: int, is_female: Optional[bool],
+                   d9_7l: Optional[str] = None) -> float:
+    """Natural marriage-karaka contribution (0-100).
+
+    v2.2 — D9 7L gets parity with D1 7L (90), or stays at its higher
+    natural-karaka tier if it's also Venus/Jupiter (max wins). This
+    ensures D9 7L always carries strong karaka weight in STEP 4
+    weighted ranking even when its D1 marriage links are weak.
+    """
     seventh_lord = _house_lord(lagna_si, 7)
+    base = 15.0
     if pname == "Venus":
-        return 100.0
-    if pname == "Jupiter":
+        base = 100.0
+    elif pname == "Jupiter":
         # Higher for women (stree-karaka), still strong for men
-        return 95.0 if is_female else 75.0
-    if pname == seventh_lord:
-        return 90.0
-    if pname == _house_lord(lagna_si, 2):
-        return 50.0
-    if pname == _house_lord(lagna_si, 11):
-        return 50.0
-    if pname == "Mars":
-        return 40.0   # passion / initiation
-    if pname == "Moon":
-        return 35.0   # mind / emotional bond
-    if pname in ("Mercury", "Sun"):
-        return 25.0
-    return 15.0
+        base = 95.0 if is_female else 75.0
+    elif pname == seventh_lord:
+        base = 90.0
+    elif pname == _house_lord(lagna_si, 2):
+        base = 50.0
+    elif pname == _house_lord(lagna_si, 11):
+        base = 50.0
+    elif pname == "Mars":
+        base = 40.0   # passion / initiation
+    elif pname == "Moon":
+        base = 35.0   # mind / emotional bond
+    elif pname in ("Mercury", "Sun"):
+        base = 25.0
+    # D9 7L floor — supreme marriage significator in Navamsa.
+    if d9_7l and pname == d9_7l:
+        base = max(base, 90.0)
+    return base
 
 
 def _step4_rank(d1_map: Dict[str, Dict[str, Any]],
                 d9_map: Dict[str, Dict[str, Any]],
                 kp_map: Dict[str, Dict[str, Any]],
                 lagna_si: int,
-                is_female: Optional[bool]) -> List[Dict[str, Any]]:
+                is_female: Optional[bool],
+                d9_7l: Optional[str] = None) -> List[Dict[str, Any]]:
     """Combine 4 dimensions into final weighted score, return top-5."""
     ranked: List[Dict[str, Any]] = []
     for pname in _PLANETS_9:
         d1 = float((d1_map.get(pname) or {}).get("d1", 0.0))
         d9 = float((d9_map.get(pname) or {}).get("d9", 0.0))
         kp = float((kp_map.get(pname) or {}).get("kp", 0.0))
-        kk = _karaka_score(pname, lagna_si, is_female)
+        kk = _karaka_score(pname, lagna_si, is_female, d9_7l=d9_7l)
 
         total = (_WEIGHT_D1 * d1
                  + _WEIGHT_D9 * d9
@@ -718,8 +734,15 @@ def _flatten_dasha_chain(kundli: dict) -> List[Dict[str, Any]]:
 
 def _step5_dasha_activation(chain: List[Dict[str, Any]],
                              target_lords: Set[str],
-                             now: datetime) -> Dict[str, Any]:
-    """Find current MD-AD-PD; check overlap with target_lords."""
+                             now: datetime,
+                             d9_7l: Optional[str] = None) -> Dict[str, Any]:
+    """Find current MD-AD-PD; check overlap with target_lords.
+
+    v2.2 — When the active MD/AD/PD is the D9 7L (supreme marriage
+    significator), add a +2 bonus to active_score so its dasha
+    correctly elevates verdict tier (PROMISED→STRONG) without needing
+    other coincident triggers.
+    """
     current = None
     for c in chain:
         if c["start"] <= now < c["end"]:
@@ -739,6 +762,10 @@ def _step5_dasha_activation(chain: List[Dict[str, Any]],
     if current["pd"] in target_lords:
         score += _DASHA_SCORE_PD
         active_lords.append(f"{current['pd']} (PD)")
+    # D9 7L dasha bonus — supreme significator amplifies activation.
+    if d9_7l and d9_7l in {current["md"], current["ad"], current["pd"]}:
+        score += 2
+        active_lords.append(f"{d9_7l} (D9 7L bonus)")
     return {"current": current, "active_score": score,
             "active_lords": active_lords}
 
@@ -1270,7 +1297,8 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                     f"deny={kp_result.get('csl_deny_h')}")
 
     # ── STEP 4 ────────────────────────────────────────────────────────
-    ranked = _step4_rank(d1_map, d9_map, kp_per, lagna_si, is_female)
+    ranked = _step4_rank(d1_map, d9_map, kp_per, lagna_si, is_female,
+                          d9_7l=d9_7l)
     top_planet_names = [r["name"] for r in ranked[:5]]
     target_lords = set(top_planet_names)
     # v2.2 — D9 7L is mandatory in target_lords. Even if its weighted
@@ -1290,7 +1318,8 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     # ── STEP 5 / 5.5 ──────────────────────────────────────────────────
     chain = _flatten_dasha_chain(kundli)
     now = datetime.utcnow()
-    activation = _step5_dasha_activation(chain, target_lords, now)
+    activation = _step5_dasha_activation(chain, target_lords, now,
+                                          d9_7l=d9_7l)
     cur_score = activation["active_score"]
     factors.append(f"STEP5 current_active_score={cur_score} "
                     f"lords={activation['active_lords']}")
@@ -1309,6 +1338,14 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         s = _planet_sign_idx(planets, n)
         if s is not None:
             top_planet_signs.add(s)
+    # v2.2 — Always include D9 7L's natal D1 sign in transit targets,
+    # even if D9 7L isn't in top-5 ranked. Jupiter/Saturn transiting
+    # over (or aspecting) the D9 7L's natal sign is a classical
+    # marriage trigger that must not be silently dropped.
+    if d9_7l:
+        d9_7l_si = _planet_sign_idx(planets, d9_7l)
+        if d9_7l_si is not None:
+            top_planet_signs.add(d9_7l_si)
 
     for c in future_candidates:
         dt_info = _step6_double_transit(c, h7_si, seventh_lord_si,
@@ -1432,7 +1469,9 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         "age_band": age_band,
         "urgency": urgency,
         "recent_year_focus": recent_focus,
+        # v2.3 — D9 7L exposure (supreme marriage karaka, Navamsa)
+        "d9_seventh_lord": d9_7l,
         # Engine metadata
-        "engine_version": "v2.1.0",
-        "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER",
+        "engine_version": "v2.3.0",
+        "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER + D9-7L supreme",
     }

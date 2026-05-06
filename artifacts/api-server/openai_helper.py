@@ -203,6 +203,17 @@ def _M17_format_marriage_block(engine_result: dict) -> str:
         parts.append(v)
         parts.append("")
 
+    # v2.3 — Surface D9 7L (supreme marriage karaka in Navamsa) so the
+    # LLM cites it explicitly when it drives the verdict/window. D9 IS
+    # the marriage varga; its 7L is classically the most important
+    # marriage significator after Venus/Jupiter.
+    d9_7l = engine_result.get("d9_seventh_lord")
+    if d9_7l:
+        parts.append(f"D9 7L (supreme marriage karaka in Navamsa): {d9_7l}")
+        parts.append("Rule: agar D9 7L active dasha mein hai ya transit "
+                      "trigger kar raha hai, usko prominently mention karo.")
+        parts.append("")
+
     # Age + urgency context (v2.1) — LLM uses this to set tone + pick
     # whether to lead with near-term window vs. long-term cascade.
     user_age = engine_result.get("user_age")

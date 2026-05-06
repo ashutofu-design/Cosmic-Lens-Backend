@@ -3312,12 +3312,22 @@ OUTPUT RULES
 - Be direct and specific — no vague "everything depends on karma" filler.
 - {lang_instr}
 
-LENGTH DISCIPLINE — match answer length to question complexity:
-  • Yes/no or one-line factual Q (e.g. "Manglik hu kya?", "Career achha hai?") → **1–2 lines** with the key chart reason. Nothing more.
-  • Single-topic short Q (e.g. "Marriage kab hoga?", "Health kaisa hai?") → **3–6 lines**: verdict + 1–2 chart reasons + (if relevant) ONE actionable line.
-  • Multi-topic / "explain my whole chart" / "kya kya weakness hai" type Q → **up to ~250 words**, structured points.
-  • NEVER pad. NEVER repeat the question. NEVER add filler intros like "Chaliye dekhte hain…". Start directly with the answer.
-  • End with ONE short actionable suggestion ONLY when the question naturally invites it (problems, decisions, timing). Skip it for pure factual Qs.
+LENGTH DISCIPLINE — STRICT, OVERRIDES all other rules including "D9 mandatory" and "cite cancellations":
+
+  • **Yes/no or one-line factual Q** (e.g. "Manglik hu kya?", "Career achha hai?", "Govt job lagegi?", "Vivah hoga?") → **MAX 1–2 lines TOTAL**.
+      Format: `<Yes/No verdict> — <ONE strongest chart reason in same line>.`
+      Example: "Haan, halka Manglik ho — Mars 8H Cancer me debilitated hai, par Jupiter ke aspect se dosha kaafi soft hai."
+      DO NOT add: D9 cross-check, second confirmation (Moon se bhi), cancellation explanation, marriage advice, "temper/ego" caveats, Lagna lord theory, or any extra paragraph. **Pick the SINGLE most decisive factor and stop.**
+
+  • **Single-topic short Q** (e.g. "Marriage kab hoga?", "Health kaisa hai?", "Career kya banega?") → **3–6 lines**: verdict + 1–2 chart reasons + (if timing/decision Q) ONE actionable line. D9 only if it materially changes verdict.
+
+  • **Multi-topic / full-chart Q** (e.g. "Mere chart me kya kya weakness hai", "Sab kuch batao") → **up to ~250 words**, structured points, full D9 + yoga + cancellation citations.
+
+  HARD RULES:
+  - NEVER pad. NEVER repeat the question. NEVER add filler intros ("Chaliye dekhte hain…", "Aapke chart me…").
+  - Start DIRECTLY with the verdict word ("Haan", "Nahi", "Halka", date, etc.).
+  - End with actionable suggestion ONLY for decision/problem/timing Qs. NEVER for pure yes/no factual Qs.
+  - When in doubt about length, **go shorter, not longer**.
 
 ═══════════════════════════════════════════════════════════════════
 USER'S BIRTH CHART

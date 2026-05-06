@@ -139,7 +139,7 @@ function prettyAgo(iso: string): string {
 export default function AskScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
-  const { kundli, birthData, language, user, profiles, primaryProfileId, setPrimaryProfile } = useUser();
+  const { kundli, birthData, language, user, primaryProfileId } = useUser();
   const t = useT();
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
@@ -1361,51 +1361,11 @@ export default function AskScreen() {
         </View>
       )}
 
-      {/* Phase 6.1.1 — Kundli selector pill row above the input.
-          Visible only when 2+ saved profiles exist (most users start
-          with just "Self"); tapping a pill switches the active kundli
-          via setPrimaryProfile, which updates the useUser() context
-          and routes the next /api/ask/stream call to that chart. */}
-      {profiles.length > 1 && !showDemo && !kbVisible && (
-        <View style={[s.kundliRow, { backgroundColor: C.bg, borderTopColor: C.border }]}>
-          <Text style={[s.kundliRowLabel, { color: C.textMuted }]}>Kis ke liye?</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8, paddingRight: 16 }}
-          >
-            {profiles.map((p) => {
-              const active = p.id === primaryProfileId;
-              const label = p.relation || p.name || "Self";
-              return (
-                <Pressable
-                  key={p.id}
-                  onPress={() => setPrimaryProfile(p.id)}
-                  style={[
-                    s.kundliPill,
-                    {
-                      backgroundColor: active ? `${C.accent}22` : C.bgCard,
-                      borderColor: active ? C.accent : C.border,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      s.kundliPillText,
-                      {
-                        color: active ? C.accent : C.text,
-                        fontWeight: active ? "700" : "500",
-                      },
-                    ]}
-                  >
-                    {active ? "★ " : ""}{label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-      )}
+      {/* Phase 6.1.1 selector REMOVED (May 6 2026) — Ask section ab
+          hamesha primary kundli use karega. Profile switching ab sirf
+          Profile/My-Kundli screen se hota hai. Reason: users confuse
+          ho rahe the ki kis profile pe answer aaya — ek primary chart
+          = ek deterministic answer. */}
 
       {/* Input row — dynamic bottom padding:
           • keyboard hidden → clear the tab bar (botPad + TAB_BAR_HEIGHT)

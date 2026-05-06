@@ -82,7 +82,8 @@ _DOMAIN_KEYWORDS: Dict[str, List[str]] = {
         "employment", "business job", "transfer order",
         "job change", "career change", "naukri change",
     ],
-    # finance / money / wealth — bare "share/business" removed (ambiguous)
+    # finance / money / wealth (Gap-2 widened: bare "business/dukaan" added back
+    # since they consistently denote finance-domain in this app's user base).
     "finance": [
         "paisa", "paise", "money", "wealth", "dhan", "income", "saving",
         "savings", "loan", "debt", "karza", "kharcha", "kharch", "expense",
@@ -90,6 +91,8 @@ _DOMAIN_KEYWORDS: Dict[str, List[str]] = {
         "stocks", "trade", "trading", "earning", "kamai",
         "profit", "loss", "muafa", "nuksan", "amir", "ameer",
         "business loss", "business growth", "intraday",
+        "business", "dukaan", "dukan", "shop", "venture",
+        "startup", "freelance income",
     ],
     # health / wellness / illness
     "health": [
@@ -119,12 +122,14 @@ _DOMAIN_KEYWORDS: Dict[str, List[str]] = {
         "puja room", "puja-room", "mandir room", "main door",
         "kitchen direction", "bed direction",
     ],
-    # dasha / planetary periods — bare "shani/rahu/transit" removed
+    # dasha / planetary periods (Gap-2 widened: "gochar" added — it's a pure
+    # astro-Sanskrit word for transit, no overload risk).
     "dasha": [
         "dasha", "mahadasha", "antardasha", "pratyantar",
         "rahu kaal", "shani saade saati", "saade saati", "sade sati",
         "dhaiya", "shani dasha", "rahu dasha", "guru dasha",
         "shani period", "rahu period", "guru period",
+        "gochar", "vimshottari", "yogini dasha",
     ],
     # remedies / upay / spiritual practice
     "remedies": [
@@ -303,6 +308,49 @@ def extract_domains(question: str) -> List[DomainHit]:
 
     # Sort: confidence desc, first_pos asc
     hits.sort(key=lambda h: (-h.confidence, h.first_pos))
+    # P1.2.10 Gap-2 conflict guard: suppress weak-only finance hits when a
+    # stronger career signal co-occurs (architect-flagged regression on
+    # `business job kab milegi`, `startup job switch`, `dukaan promotion`).
+    hits = _apply_conflict_guards(hits)
+    return hits
+
+
+# Tokens whose finance-domain match is AMBIGUOUS — they often appear in
+# career-context phrases. If a domain's only matched keywords are all in this
+# set AND a competing domain has a non-weak hit, the weak domain is dropped.
+_FINANCE_WEAK_TOKENS = {
+    "business", "dukaan", "dukan", "shop", "venture",
+    "startup", "freelance income",
+}
+# Career markers that, when present, override weak finance hits.
+_CAREER_STRONG_MARKERS = re.compile(
+    r"\b(job|naukri|naukari|promotion|interview|salary|"
+    r"boss|company|appointment|transfer order|"
+    r"job change|career change|naukri change)\b",
+    re.IGNORECASE,
+)
+
+
+def _apply_conflict_guards(hits: List[DomainHit]) -> List[DomainHit]:
+    """Drop low-signal hits that conflict with stronger co-occurring hits.
+
+    Currently handles:
+      • finance-vs-career: weak-only finance + strong career marker → drop finance.
+    """
+    if not hits or len(hits) < 2:
+        return hits
+    by_name = {h.name: h for h in hits}
+    fin = by_name.get("finance")
+    car = by_name.get("career")
+    if fin and car:
+        # Are ALL of finance's matched kws in the weak-set?
+        # Pattern strings are stored as `\b...\b` regex source — strip bounds.
+        def _norm(p: str) -> str:
+            return p.replace(r"\b", "").lower()
+        fin_kws_norm = {_norm(p) for p in fin.keywords}
+        if fin_kws_norm and fin_kws_norm.issubset(_FINANCE_WEAK_TOKENS):
+            # Drop finance — career wins this collision
+            hits = [h for h in hits if h.name != "finance"]
     return hits
 
 

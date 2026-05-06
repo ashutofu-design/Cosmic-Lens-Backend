@@ -23,12 +23,14 @@ _LOCK = threading.Lock()
 _INITED = False
 
 
-def _init() -> None:
+def _init(force: bool = False) -> None:
+    """Idempotent table creation. Use force=True after detecting a missing
+    table mid-process (e.g., DB file was deleted out from under us)."""
     global _INITED
-    if _INITED:
+    if _INITED and not force:
         return
     with _LOCK:
-        if _INITED:
+        if _INITED and not force:
             return
         os.makedirs(os.path.dirname(_DB), exist_ok=True)
         conn = sqlite3.connect(_DB)
@@ -117,8 +119,47 @@ def check_anon_quota(ip: str, limit: int = 3) -> Dict:
                         "limit": limit, "reset_at": reset_at}
             finally:
                 conn.close()
+    except sqlite3.OperationalError as e:
+        # Gap-3 fix: if the DB file was deleted out from under us mid-process
+        # (race after `rm _anon_rate.sqlite3`), the cached _INITED flag lies.
+        # Force re-init once and retry. Only catches "no such table" class of
+        # errors; anything else still falls through to the generic deny path.
+        msg = str(e).lower()
+        if "no such table" in msg or "unable to open" in msg:
+            try:
+                _init(force=True)
+                with _LOCK:
+                    conn = sqlite3.connect(_DB)
+                    try:
+                        row = conn.execute(
+                            "SELECT used FROM anon_usage WHERE ip=? AND day=?",
+                            (ip, day)
+                        ).fetchone()
+                        current = int(row[0]) if row else 0
+                        if current >= limit:
+                            return {"allowed": False, "used": current,
+                                    "limit": limit, "reset_at": reset_at}
+                        if row:
+                            conn.execute(
+                                "UPDATE anon_usage SET used=used+1 "
+                                "WHERE ip=? AND day=?", (ip, day))
+                        else:
+                            conn.execute(
+                                "INSERT INTO anon_usage(ip,day,used) "
+                                "VALUES(?,?,1)", (ip, day))
+                        conn.commit()
+                        print("[anon_rate_limit] recovered from missing-table "
+                              "via force-reinit", flush=True)
+                        return {"allowed": True, "used": current + 1,
+                                "limit": limit, "reset_at": reset_at}
+                    finally:
+                        conn.close()
+            except Exception as e2:
+                print(f"[anon_rate_limit] retry failed: {e2}", flush=True)
+        print(f"[anon_rate_limit] error: {e}", flush=True)
+        return {"allowed": False, "used": 0, "limit": limit,
+                "reset_at": reset_at}
     except Exception as e:
-        # Failsafe: on any DB error, deny (safer than silent unlimited).
         print(f"[anon_rate_limit] error: {e}", flush=True)
         return {"allowed": False, "used": 0, "limit": limit,
                 "reset_at": reset_at}

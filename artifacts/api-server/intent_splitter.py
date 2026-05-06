@@ -45,7 +45,7 @@ def _env_on(name: str, default: bool = True) -> bool:
 SPLITTER_ENABLED: bool = _env_on("MULTI_INTENT_SPLIT", True)
 
 # Maximum secondary domains to mention in the ack line. Beyond 3 reads weird.
-_MAX_SECONDARIES: int = 3
+_MAX_SECONDARIES: int = 5
 
 
 # ── MultiIntent ─────────────────────────────────────────────────────────────
@@ -143,7 +143,11 @@ def build_acknowledge_line(secondaries: List[str],
         return ""
     lang_resolved = _resolve_lang(lang)
     label_map = DOMAIN_LABELS.get(lang_resolved) or DOMAIN_LABELS["hinglish"]
-    labels = [label_map.get(s, s) for s in secondaries[:3]]
+    # Gap-5: support up to 5 secondaries — first 3 named, rest summarised
+    # as "+N aur" (lang-aware) so user knows ALL their topics were noticed.
+    full_labels = [label_map.get(s, s) for s in secondaries[:5]]
+    labels = full_labels[:3]
+    extra = len(full_labels) - len(labels)
 
     n = len(labels)
     template_set = _ACK_TEMPLATES.get(lang_resolved) or _ACK_TEMPLATES["hinglish"]
@@ -152,12 +156,27 @@ def build_acknowledge_line(secondaries: List[str],
         return ""
 
     if n == 1:
-        return template.format(a=labels[0])
-    if n == 2:
-        return template.format(a=labels[0], b=labels[1])
-    if n == 3:
-        return template.format(a=labels[0], b=labels[1], c=labels[2])
-    return ""
+        line = template.format(a=labels[0])
+    elif n == 2:
+        line = template.format(a=labels[0], b=labels[1])
+    elif n == 3:
+        line = template.format(a=labels[0], b=labels[1], c=labels[2])
+    else:
+        return ""
+
+    if extra > 0:
+        suffix_map = {
+            "hinglish": f" (+{extra} aur)",
+            "hi":       f" (+{extra} aur)",
+            "en":       f" (+{extra} more)",
+        }
+        suffix = suffix_map.get(lang_resolved, suffix_map["hinglish"])
+        # Insert suffix before the closing "*" if template ends with markdown bold
+        if line.endswith("*"):
+            line = line[:-1] + suffix + "*"
+        else:
+            line = line + suffix
+    return line
 
 
 def is_already_acknowledged(text: str, secondaries: List[str]) -> bool:

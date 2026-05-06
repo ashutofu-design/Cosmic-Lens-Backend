@@ -45,10 +45,10 @@ def _read_int_env(name: str, default: int) -> int:
 
 
 # Hard cap (chars). 0 = killswitch (disabled, legacy unbounded behavior).
-MAX_QUESTION_CHARS: int = _read_int_env("MAX_QUESTION_CHARS", 300)
+MAX_QUESTION_CHARS: int = _read_int_env("MAX_QUESTION_CHARS", 500)
 
 # Soft warn threshold (chars) — currently advisory only, used in telemetry.
-SOFT_WARN_CHARS: int = _read_int_env("SOFT_WARN_QUESTION_CHARS", 200)
+SOFT_WARN_CHARS: int = _read_int_env("SOFT_WARN_QUESTION_CHARS", 350)
 
 
 # ── Reject messages (per language) ──────────────────────────────────────────

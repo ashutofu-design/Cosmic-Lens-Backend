@@ -11573,7 +11573,19 @@ _PHASE48_TIMING_KEYWORDS = (
 
 def _phase48_is_timing_question(question: str) -> bool:
     """True if the user's question is asking about WHEN/timing — in
-    which case dates in the answer ARE the answer and must survive."""
+    which case dates in the answer ARE the answer and must survive.
+
+    P1.2.8: Now delegates to the unified question_type gate (single
+    source of truth). Killswitch UNIFIED_QTYPE_GATE=off reverts to
+    the legacy substring body byte-identically.
+    """
+    try:
+        from question_type import classify_question_type, _gate_enabled
+        if _gate_enabled():
+            return classify_question_type(question) == "TIMING"
+    except Exception:
+        pass
+    # Legacy substring body (killswitch OFF or import failure)
     if not isinstance(question, str):
         return False
     q = question.lower()
@@ -11620,7 +11632,17 @@ def _phase2855_is_timing_question_strict(question: str) -> bool:
     Word-boundary regex avoids substring false positives like
     'date' in 'update', 'din' in 'finding', 'tak' in 'stake',
     'year' in 'yearn', 'month' in '6-month-old', etc.
-    Returns True only when question contains a real timing cue."""
+    Returns True only when question contains a real timing cue.
+
+    P1.2.8: Delegates to unified question_type gate. Killswitch
+    UNIFIED_QTYPE_GATE=off reverts to legacy regex byte-identically.
+    """
+    try:
+        from question_type import classify_question_type, _gate_enabled
+        if _gate_enabled():
+            return classify_question_type(question) == "TIMING"
+    except Exception:
+        pass
     if not isinstance(question, str) or not question:
         return False
     return _PHASE2855_TIMING_RX.search(question) is not None
@@ -14283,6 +14305,52 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # add a new INTENTS enum value (which would ripple into supertype/router
     # changes) — it's a sibling flag the relevant consumers read.
     _qu["has_recovery_subask"] = has_recovery_subask(question)
+    # ── P1.2.8: Unified question_type gate override ─────────────────────
+    # If the LLM classifier set intent="timing" but the deterministic
+    # gate sees no explicit timing cue (kab/when/by when/kis saal/agle
+    # saal/muhurat/...), force intent → "analysis". Honors the user-rule
+    # "timing tab tak nahi bolna jab tak user na pooche kab/when".
+    # Killswitch UNIFIED_QTYPE_GATE=off skips the override.
+    #
+    # ARCHITECT-FIX (P1.2.8 review): if Phase 4.1 sanity layer already set
+    # `intent_overridden_from`, do NOT stomp its attribution — instead
+    # chain via separate field `p128_intent_demoted` so both overrides
+    # can coexist with full audit trail.
+    try:
+        from question_type import classify_question_type, _gate_enabled
+        if (_gate_enabled() and (_qu.get("intent") or "").lower() == "timing"
+                and classify_question_type(question) == "STATIC"):
+            _prior_from = _qu.get("intent_overridden_from")
+            _prior_reason = _qu.get("intent_override_reason")
+            _prior_phase = _qu.get("intent_override_phase")
+            _qu["intent"] = "analysis"
+            _qu["p128_intent_demoted"] = True
+            _qu["p128_demoted_from"] = "timing"
+            _qu["p128_reason"] = (
+                "P1.2.8 unified gate: no explicit timing cue "
+                "(kab/when/by when/kis saal/agle saal/muhurat/...)"
+            )
+            if not _prior_from:
+                # No prior sanity-layer override → set canonical fields too
+                # so 1b.CLASSIFIER_OVERRIDE telemetry fires for P1.2.8.
+                _qu["intent_overridden_from"] = "timing"
+                _qu["intent_override_reason"] = _qu["p128_reason"]
+                _qu["intent_override_phase"] = "P1.2.8"
+            # else: prior sanity-layer attribution preserved as-is; P1.2.8
+            # demotion recorded in p128_* fields. The canonical
+            # 1b.CLASSIFIER_OVERRIDE will report sanity-layer's reason; the
+            # P1.2.8 demotion is captured by the explicit trace below.
+            _trace(req_id, "1c.P128_INTENT_DEMOTED", {
+                "from":            "timing",
+                "to":              "analysis",
+                "reason":          _qu["p128_reason"],
+                "prior_override":  bool(_prior_from),
+                "prior_from":      _prior_from,
+                "prior_reason":    _prior_reason,
+                "prior_phase":     _prior_phase,
+            })
+    except Exception:
+        pass
     _trace(req_id, "1.UNDERSTANDING", _qu)
     # Phase 4.1 Fix-P — surface classifier sanity-layer override decisions
     # as a separate, easy-to-grep telemetry event. Fires only when the
@@ -18570,6 +18638,40 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
     # Sprint-26: SINGLE AI understanding call — same source of truth as ai_ask.
     from ask_cosmo import understand_question, supertype_for
     _qu = understand_question(question)
+    # ── P1.2.8: Unified question_type gate override (stream parity) ─────
+    # Same logic as ai_ask non-stream path. Architect-fix: preserve any
+    # prior sanity-layer attribution; record P1.2.8 demotion in p128_*
+    # fields so both overrides coexist with full audit trail.
+    try:
+        from question_type import classify_question_type, _gate_enabled
+        if (_gate_enabled() and (_qu.get("intent") or "").lower() == "timing"
+                and classify_question_type(question) == "STATIC"):
+            _prior_from = _qu.get("intent_overridden_from")
+            _prior_reason = _qu.get("intent_override_reason")
+            _prior_phase = _qu.get("intent_override_phase")
+            _qu["intent"] = "analysis"
+            _qu["p128_intent_demoted"] = True
+            _qu["p128_demoted_from"] = "timing"
+            _qu["p128_reason"] = (
+                "P1.2.8 unified gate: no explicit timing cue "
+                "(kab/when/by when/kis saal/agle saal/muhurat/...)"
+            )
+            if not _prior_from:
+                _qu["intent_overridden_from"] = "timing"
+                _qu["intent_override_reason"] = _qu["p128_reason"]
+                _qu["intent_override_phase"] = "P1.2.8"
+            _trace(req_id, "1c.P128_INTENT_DEMOTED", {
+                "from":            "timing",
+                "to":              "analysis",
+                "reason":          _qu["p128_reason"],
+                "prior_override":  bool(_prior_from),
+                "prior_from":      _prior_from,
+                "prior_reason":    _prior_reason,
+                "prior_phase":     _prior_phase,
+                "path":            "stream",
+            })
+    except Exception:
+        pass
     # Phase 4.1 Fix-P — telemetry parity with ai_ask (non-stream) for the
     # classifier sanity-layer override decision. Stream path does not yet
     # run POST_LOGIC (Phase 4.4 backlog), but it benefits from the same

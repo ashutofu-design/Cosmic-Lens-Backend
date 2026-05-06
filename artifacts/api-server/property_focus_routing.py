@@ -220,10 +220,27 @@ _QUALITY_Q_TRIGGER_RX = _re.compile(
 
 
 def _detect_property_intent(question: str) -> str:
-    """Classify the property Q intent → STATIC | QUALITY | TIMING."""
+    """Classify the property Q intent → STATIC | QUALITY | TIMING.
+
+    P1.2.8: TIMING leg now delegates to the unified question_type gate
+    (single source of truth across the codebase). QUALITY/STATIC legs
+    remain property-domain-specific (smooth/friction/delay/early are
+    QUALITY-coloring keywords for property only). Killswitch
+    UNIFIED_QTYPE_GATE=off reverts the TIMING leg to the local regex.
+    """
     if not isinstance(question, str):
         return "STATIC"
-    if _TIMING_Q_TRIGGER_RX.search(question):
+    # TIMING via unified gate (with killswitch fallback)
+    _is_timing = False
+    try:
+        from question_type import classify_question_type, _gate_enabled
+        if _gate_enabled():
+            _is_timing = classify_question_type(question) == "TIMING"
+        else:
+            _is_timing = bool(_TIMING_Q_TRIGGER_RX.search(question))
+    except Exception:
+        _is_timing = bool(_TIMING_Q_TRIGGER_RX.search(question))
+    if _is_timing:
         return "TIMING"
     if _QUALITY_Q_TRIGGER_RX.search(question):
         return "QUALITY"

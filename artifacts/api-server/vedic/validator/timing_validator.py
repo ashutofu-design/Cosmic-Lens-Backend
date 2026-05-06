@@ -49,6 +49,16 @@ TOPIC_KEYWORDS = {
 
 
 def is_timing_question(text: str) -> bool:
+    """P1.2.8: Delegates to unified question_type gate (single source
+    of truth across the whole codebase). Killswitch UNIFIED_QTYPE_GATE=off
+    reverts to the legacy substring body byte-identically.
+    """
+    try:
+        from question_type import classify_question_type, _gate_enabled
+        if _gate_enabled():
+            return classify_question_type(text) == "TIMING"
+    except Exception:
+        pass
     if not text: return False
     t = text.lower()
     for c in TIMING_CUES_EN + TIMING_CUES_HI:

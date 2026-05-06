@@ -1147,7 +1147,7 @@ export default function AskScreen() {
           <Text style={[s.headerTitle, { color: C.text }]}>Cosmic Intelligence</Text>
           <View style={[s.headerLiveDot, { backgroundColor: "#10b981" }]} />
         </View>
-        <Text style={[s.headerSub, { color: C.textMuted }]}>Vedic chart analyst · Online</Text>
+        <Text style={[s.headerSub, { color: C.textMuted }]}>Multi System Pattern Engine V2.0</Text>
       </View>
 
       {/* ── Mode switcher pill (only in chat mode) ───────────────────────── */}

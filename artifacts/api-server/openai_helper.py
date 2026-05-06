@@ -15032,14 +15032,23 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 # this is the safety net for LLM overshoots. Identity
                 # fallback on any import/call failure so request never
                 # fails just because the cap helper is unavailable.
-                # H2.7.7 word-cap (post-deletion of health_static, 2026-05-06):
-                # inlined the simple word-counter previously imported from
-                # health_static.health_replies._enforce_word_cap. Identity
-                # fallback on any failure (request never blocked by capper).
+                # H2.7.7 word-cap (post-deletion of health_static, 2026-05-06,
+                # 2026-05-06 PATCH: sentence-boundary trim to fix mid-sentence
+                # truncation reported by user — "Sabse zaroori baat: routine"
+                # was getting chopped). Cap bumped 150→260 words and trim
+                # snaps to last sentence terminator (. ! ? ।) within window.
+                # Identity fallback on any failure.
                 try:
+                    _MAX_W = 260
                     _w = (_text_pt_scrubbed or "").split()
-                    if len(_w) > 150:
-                        _text_pt_scrubbed = " ".join(_w[:150]).rstrip(",;:")
+                    if len(_w) > _MAX_W:
+                        _slice = " ".join(_w[:_MAX_W])
+                        _last = max(_slice.rfind("."), _slice.rfind("!"),
+                                    _slice.rfind("?"), _slice.rfind("।"))
+                        if _last >= int(len(_slice) * 0.55):
+                            _text_pt_scrubbed = _slice[:_last + 1]
+                        else:
+                            _text_pt_scrubbed = _slice.rstrip(",;:") + "…"
                 except Exception as _h277_exc_sync:  # noqa: BLE001
                     _trace(req_id, "H2.7.7.CAP_SKIPPED_SYNC", {
                         "reason": str(_h277_exc_sync)[:160],
@@ -18818,12 +18827,19 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             # buffer (when present) and serves as a server-side audit
             # surface. Prompt-level LENGTH & FOCUS LOCK is the primary
             # lever for streaming. Identity fallback on any failure.
-            # H2.7.7 word-cap (post-deletion of health_static, 2026-05-06):
-            # inlined word-counter — see sync site for rationale.
+            # H2.7.7 word-cap (post-deletion of health_static, 2026-05-06,
+            # 2026-05-06 PATCH: sentence-boundary trim — see sync site).
             try:
+                _MAX_W_S = 260
                 _w_s = (_full_text_pt_s_scrubbed or "").split()
-                if len(_w_s) > 150:
-                    _full_text_pt_s_scrubbed = " ".join(_w_s[:150]).rstrip(",;:")
+                if len(_w_s) > _MAX_W_S:
+                    _slice_s = " ".join(_w_s[:_MAX_W_S])
+                    _last_s = max(_slice_s.rfind("."), _slice_s.rfind("!"),
+                                  _slice_s.rfind("?"), _slice_s.rfind("।"))
+                    if _last_s >= int(len(_slice_s) * 0.55):
+                        _full_text_pt_s_scrubbed = _slice_s[:_last_s + 1]
+                    else:
+                        _full_text_pt_s_scrubbed = _slice_s.rstrip(",;:") + "…"
             except Exception as _h277_exc_stream:  # noqa: BLE001
                 _trace(req_id, "H2.7.7.CAP_SKIPPED_STREAM", {
                     "reason": str(_h277_exc_stream)[:160],

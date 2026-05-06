@@ -1,77 +1,116 @@
 /**
  * Cosmic Lens — Push Notification client (Expo).
  *
- * Flow:
+ * SDK 53+ NOTE: expo-notifications removed Android push support in Expo Go.
+ * Importing the module on Android Expo Go throws at module-init time, so we
+ * use a guarded lazy require + a global IS_PUSH_SUPPORTED gate. All exports
+ * become safe no-ops when push is unsupported (Expo Go on Android, web, etc.).
+ *
+ * Flow on a real dev build / iOS Expo Go:
  *   1) registerForPushAsync() — asks permission, returns ExpoPushToken or null
  *   2) registerTokenWithServer(userId, token) — POSTs to /api/notifications/register
  *   3) configureForeground() — sets handler so notifications show in-app too
  *   4) attachTapHandler(router) — on tap, navigate to data.screen
- *
- * Works on iOS + Android. On web/Expo Go (SDK 53+) gracefully no-ops.
  */
 
 import Constants from "expo-constants";
-import * as Device from "expo-device";
-import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { API_BASE, apiFetch } from "./apiConfig";
 
+// ── Detect Expo Go (push removed in SDK 53 on Android) ──────────────────────
+const IS_EXPO_GO = (Constants as any)?.appOwnership === "expo";
+const IS_WEB     = Platform.OS === "web";
+const IS_PUSH_SUPPORTED =
+  !IS_WEB && !(IS_EXPO_GO && Platform.OS === "android");
+
+// ── Lazy guarded loader for expo-notifications + expo-device ────────────────
+let _Notifications: any = null;
+let _Device: any = null;
+let _loadAttempted = false;
+
+function loadModules(): boolean {
+  if (_loadAttempted) return _Notifications != null;
+  _loadAttempted = true;
+  if (!IS_PUSH_SUPPORTED) {
+    console.log("[push] disabled — Expo Go on Android / web");
+    return false;
+  }
+  try {
+    _Notifications = require("expo-notifications");
+    _Device        = require("expo-device");
+    return true;
+  } catch (e: any) {
+    console.warn("[push] expo-notifications unavailable:", e?.message || e);
+    return false;
+  }
+}
+
 // ── Foreground handler: show banner + sound even when app is open ────────────
 export function configureForeground() {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList:   true,
-      shouldPlaySound:  true,
-      shouldSetBadge:   false,
-      shouldShowAlert:  true,   // legacy SDKs
-    } as any),
-  });
+  if (!loadModules()) return;
+  try {
+    _Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList:   true,
+        shouldPlaySound:  true,
+        shouldSetBadge:   false,
+        shouldShowAlert:  true,
+      } as any),
+    });
+  } catch (e: any) {
+    console.warn("[push] configureForeground failed:", e?.message || e);
+  }
 }
 
 // ── Android channel — required for heads-up notifications ───────────────────
 async function ensureAndroidChannel() {
   if (Platform.OS !== "android") return;
-  await Notifications.setNotificationChannelAsync("default", {
-    name:              "Cosmic Lens",
-    importance:        Notifications.AndroidImportance.HIGH,
-    vibrationPattern:  [0, 250, 250, 250],
-    lightColor:        "#a78bfa",
-    sound:             "default",
-  });
+  if (!loadModules()) return;
+  try {
+    await _Notifications.setNotificationChannelAsync("default", {
+      name:              "Cosmic Lens",
+      importance:        _Notifications.AndroidImportance.HIGH,
+      vibrationPattern:  [0, 250, 250, 250],
+      lightColor:        "#a78bfa",
+      sound:             "default",
+    });
+  } catch (e: any) {
+    console.warn("[push] android channel failed:", e?.message || e);
+  }
 }
 
 /**
  * Ask permission and obtain an ExpoPushToken. Returns null if:
  *  - running on a simulator/emulator (won't get a real token)
  *  - user denied permission
- *  - running on web
+ *  - running on web or Expo Go (Android)
  */
 export async function registerForPushAsync(): Promise<string | null> {
-  if (Platform.OS === "web") return null;
-  if (!Device.isDevice) {
+  if (!loadModules()) return null;
+  if (!_Device?.isDevice) {
     console.log("[push] skip — not a physical device");
     return null;
   }
 
   await ensureAndroidChannel();
 
-  const { status: existing } = await Notifications.getPermissionsAsync();
-  let finalStatus = existing;
-  if (existing !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-  if (finalStatus !== "granted") {
-    console.log("[push] permission not granted");
-    return null;
-  }
-
   try {
+    const { status: existing } = await _Notifications.getPermissionsAsync();
+    let finalStatus = existing;
+    if (existing !== "granted") {
+      const { status } = await _Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== "granted") {
+      console.log("[push] permission not granted");
+      return null;
+    }
+
     const projectId =
       (Constants.expoConfig as any)?.extra?.eas?.projectId ||
       (Constants as any)?.easConfig?.projectId;
-    const tokenData = await Notifications.getExpoPushTokenAsync(
+    const tokenData = await _Notifications.getExpoPushTokenAsync(
       projectId ? { projectId } : undefined,
     );
     return tokenData.data || null;
@@ -136,12 +175,18 @@ export async function sendTestNotification(userId: number): Promise<any> {
   }
 }
 
-/** Listen for taps and navigate to data.screen if provided. */
+/** Listen for taps and navigate to data.screen if provided. Returns null on unsupported platforms. */
 export function attachTapHandler(navigate: (path: string) => void) {
-  return Notifications.addNotificationResponseReceivedListener(resp => {
-    const screen = (resp.notification.request.content.data as any)?.screen;
-    if (typeof screen === "string" && screen.startsWith("/")) {
-      try { navigate(screen); } catch (e) { console.warn("[push] nav failed", e); }
-    }
-  });
+  if (!loadModules()) return null;
+  try {
+    return _Notifications.addNotificationResponseReceivedListener((resp: any) => {
+      const screen = (resp.notification.request.content.data as any)?.screen;
+      if (typeof screen === "string" && screen.startsWith("/")) {
+        try { navigate(screen); } catch (e) { console.warn("[push] nav failed", e); }
+      }
+    });
+  } catch (e: any) {
+    console.warn("[push] attachTapHandler failed:", e?.message || e);
+    return null;
+  }
 }

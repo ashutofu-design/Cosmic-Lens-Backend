@@ -53,11 +53,13 @@ ATOMIC_CHECKS = {
     "COMMERCIAL":"ADD: Mercury (business/contracts) → 10H connection to 4H → Saturn karaka (long-term hold) → 11H gain stack.",
     "MULTIPLE": "ADD: Saturn strong (own/exalted) for accumulation → Dhana yoga (2-11) → 11H + upachaya stack → multiple benefics on/aspecting 4H.",
 
-    # ── ALWAYS-APPEND blocks (apply per intent context) ───────────────
-    "TIMING":   "ALWAYS APPEND: name CURRENT Maha+Antar dasha lord, mark if = 4H/4L/Mars/Venus/Saturn. Saturn/Jupiter transit on 4H = supportive/indicative window (NOT a guarantee). NO SPECIFIC DATES.",
-    "RISK":     "APPEND when -ve tone or 'kya dikkat/nuksan/risk' asked: 6/8/12 lords on 4H, Rahu-Ketu axis, Mars-Saturn affliction, malefic transit on 4H.",
-    "REMEDY":   "APPEND in CLOSER (last line): ONE Vedic remedy specific to the weakest factor — Mars/Saturn pacification mantra, 4H Vastu tip, gemstone for 4L.",
-    "REFUSE_TIMING": "If user asks SPECIFIC date / muhurat / griha-pravesh date / 'kab milega exact' → REFUSE: 'Specific date predict karna shastriya etiquette ke khilaf hai. Aapko property yog ke strength + risk + readiness ka picture de sakta hu.'",
+    # ── INTENT blocks (P1.2.3 — pick based on what user is asking) ────
+    "STATIC_YOG":   "If pure existence Q ('property yog hai? milega kya? kaisa hai?') → YES/NO + strength rating (weak/moderate/strong) + 4H sign + 4L placement + Mars/Venus karaka strength. NO dasha. NO transit. NO 'when'.",
+    "YOG_QUALITY":  "If 'delay vs early / slow vs fast / smooth vs friction' yog-NATURE Q → describe MATURATION character (which factors slow it: Saturn link to 4H/4L, malefic on 4H; which speed it: benefic on 4H, 4L in own/exalted, vargottama). Frame as yog ki nature, NOT 'kab milega'. NO dasha forecasting. NO 'near term movement' phrases.",
+    "TIMING":       "ONLY IF explicit timing trigger ('kab/when/abhi/turant/next month/year/this year/upcoming/near future/muhurat'): name CURRENT Maha+Antar dasha lord, mark if = 4H/4L/Mars/Venus/Saturn. Saturn/Jupiter transit on 4H = supportive/indicative window (NOT a guarantee). NO SPECIFIC DATES. DO NOT fire on 'delay/early/slow/fast' alone — that is YOG_QUALITY.",
+    "RISK":         "APPEND when -ve tone or 'kya dikkat/nuksan/risk' asked: 6/8/12 lords on 4H, Rahu-Ketu axis, Mars-Saturn affliction, malefic transit on 4H.",
+    "REMEDY":       "APPEND in CLOSER (last line): ONE Vedic remedy specific to the weakest factor — Mars/Saturn pacification mantra, 4H Vastu tip, gemstone for 4L.",
+    "REFUSE_TIMING":"If user asks SPECIFIC date / muhurat / griha-pravesh date / 'kab milega exact' → REFUSE: 'Specific date predict karna shastriya etiquette ke khilaf hai. Aapko property yog ke strength + risk + readiness ka picture de sakta hu.'",
 
     # ── EDGE-CASE blocks (architect-suggested for completeness) ───────
     "JOINT_TITLE":  "If joint ownership / 'biwi ke naam' / 'partner ke saath' → 7H + 7L dignity (partner) + 4H combined reading. Indicative only — practical reasoning > pure chart.",
@@ -76,34 +78,57 @@ framework — do NOT try to apply every block.
 STEP 1 — Read user's Q and detect axes:
   ACTION:  buy | sell | inherit | rent | build | dispute | analyze (general)
   SCOPE:   first-home | additional | multiple | foreign | commercial | land
-  INTENT:  yog? (will it happen) | quality? (how good) | risk? | timing? | remedy?
+  INTENT:  STATIC (yog hai/nahi/kaisa) | QUALITY (delay/early/slow/fast)
+           | TIMING (kab/exact/abhi/this year) | RISK | REMEDY
   ASSET:   residential | land | commercial | agricultural
 
 STEP 2 — Pick atomic CHECK BLOCKS that match the detected axes:
   • Pick ONE primary ACTION block (BUY / SELL / INHERIT / RENT / BUILD /
     DISPUTE / ANALYZE).
   • If a SCOPE block applies (FOREIGN / LAND / COMMERCIAL / MULTIPLE), ADD it.
-  • TIMING block is always relevant unless user explicitly asks "kab milega
-    exact date" (then use REFUSE_TIMING instead).
-  • RISK block: add if user's tone is worried OR asks "dikkat / nuksan / risk".
-  • REMEDY block: always add ONE remedy in the closer.
+  • INTENT routing (P1.2.3 — CRITICAL, do NOT mix):
+      - STATIC ('yog hai? milega kya? kaisa hai? strong hai?')
+            → ADD [STATIC_YOG]. DO NOT ADD [TIMING].
+      - QUALITY ('delay ya early? jaldi ya late? smooth ya friction?')
+            → ADD [YOG_QUALITY]. DO NOT ADD [TIMING].
+            (delay/early are NATURE words, not timing words.)
+      - TIMING ('kab milega? abhi sahi hai? this year? next month? muhurat?')
+            → ADD [TIMING]. (Or [REFUSE_TIMING] if 'exact date'.)
+  • RISK block: add if user's tone is worried OR asks 'dikkat / nuksan / risk'.
+  • REMEDY block: add ONE remedy in the closer (skip for pure STATIC yes/no Qs).
 
 STEP 3 — Apply ONLY the picked blocks (typical: 2-4 total). IGNORE the rest.
+        NEVER stack STATIC_YOG + YOG_QUALITY + TIMING together — pick ONE
+        intent block based on what user actually asked.
 
 WORKED EXAMPLES (do NOT copy verbatim — use to calibrate routing):
-  Q: "kya mujhe paitric ghar milega?"            → INHERIT + TIMING + REMEDY
-  Q: "commercial property me invest karu?"        → BUY + COMMERCIAL + RISK + TIMING
-  Q: "rent pe ghar dena chahiye abhi?"            → RENT + TIMING + REMEDY
-  Q: "ghar bechu ya rakhu?"                       → SELL + RISK + TIMING
-  Q: "foreign me ghar lene ka yog hai?"           → BUY + FOREIGN + TIMING
-  Q: "naya ghar banwa raha hu, suitable hai?"     → BUILD + TIMING + REMEDY
-  Q: "padosi se property dispute chal raha hai"   → DISPUTE + RISK + REMEDY
+  ── STATIC (yog existence) ──
+  Q: "property yog hai mere chart me?"            → ANALYZE + STATIC_YOG
+  Q: "kya mujhe ghar milega life me?"             → BUY + STATIC_YOG + REMEDY
+  Q: "mera property yog kaisa hai?"               → ANALYZE + STATIC_YOG
+  Q: "paitric ghar milega kya?"                   → INHERIT + STATIC_YOG
+
+  ── QUALITY (yog nature: delay/early/smooth) ──
+  Q: "property me delay hoga ya early yog hai?"   → BUY + YOG_QUALITY
+  Q: "ghar lene me jaldi yog hai ya late?"        → BUY + YOG_QUALITY
+  Q: "smooth closure hogi ya friction?"           → BUY + YOG_QUALITY + RISK
+
+  ── TIMING (when / explicit time-trigger) ──
+  Q: "ghar kab milega next year tak?"             → BUY + TIMING
+  Q: "abhi property lene ka time hai?"            → BUY + TIMING
+  Q: "rent pe ghar dena chahiye abhi?"            → RENT + TIMING
   Q: "kab milega ghar exact date batao"           → REFUSE_TIMING
-  Q: "agricultural land buy karu?"                → BUY + LAND + RISK + TIMING
-  Q: "ek aur property leni chahiye?"              → BUY + MULTIPLE + RISK + TIMING
+
+  ── ACTION + SCOPE composites ──
+  Q: "commercial property me invest karu?"        → BUY + COMMERCIAL + RISK
+  Q: "ghar bechu ya rakhu?"                       → SELL + RISK
+  Q: "foreign me ghar lene ka yog hai?"           → BUY + FOREIGN + STATIC_YOG
+  Q: "naya ghar banwa raha hu, suitable hai?"     → BUILD + REMEDY
+  Q: "padosi se property dispute chal raha hai"   → DISPUTE + RISK + REMEDY
+  Q: "agricultural land buy karu?"                → BUY + LAND + RISK
+  Q: "ek aur property leni chahiye?"              → BUY + MULTIPLE + STATIC_YOG
   Q: "biwi ke naam property kharidu?"             → BUY + JOINT_TITLE + REMEDY
-  Q: "shop business ke liye property?"            → BUY + COMMERCIAL + TIMING
-  Q: "home loan approve hoga? EMI bharne ka yog?" → BUY + LOAN_EMI + RISK + TIMING
+  Q: "home loan approve hoga? EMI bharne ka yog?" → BUY + LOAN_EMI + RISK
   Q: "joint property partner ke saath safe hai?"  → JOINT_TITLE + RISK + REMEDY
 
 ATOMIC CHECK BLOCKS (pick from these only):
@@ -120,6 +145,9 @@ ANSWER STYLE (mandatory):
     '4th cusp ka sub-lord'.
   • End with ONE practical line — Vedic remedy OR a 1-line summary insight.
   • For TIMING: name current Maha+Antar lord plainly, NEVER specific dates.
+  • For STATIC_YOG / YOG_QUALITY: do NOT name dasha periods or use phrases
+    like 'near term me movement', 'this phase me', 'abhi chal raha hai' —
+    those are TIMING-only. Stay on chart structure (4H, 4L, karakas, D9).
   • DOCTRINAL HEDGES (do NOT overstate):
       - Vargottama = STRONGLY supportive, not a guarantee.
       - Neecha-bhanga only IF cancellation conditions verified.

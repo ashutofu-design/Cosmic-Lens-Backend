@@ -3311,7 +3311,13 @@ OUTPUT RULES
 - For any major life question, ALWAYS state the D9 cross-check finding explicitly — not just D1.
 - Be direct and specific — no vague "everything depends on karma" filler.
 - {lang_instr}
-- Keep it focused (~180–250 words). End with ONE short actionable suggestion (remedy / mindset / practical step) when appropriate.
+
+LENGTH DISCIPLINE — match answer length to question complexity:
+  • Yes/no or one-line factual Q (e.g. "Manglik hu kya?", "Career achha hai?") → **1–2 lines** with the key chart reason. Nothing more.
+  • Single-topic short Q (e.g. "Marriage kab hoga?", "Health kaisa hai?") → **3–6 lines**: verdict + 1–2 chart reasons + (if relevant) ONE actionable line.
+  • Multi-topic / "explain my whole chart" / "kya kya weakness hai" type Q → **up to ~250 words**, structured points.
+  • NEVER pad. NEVER repeat the question. NEVER add filler intros like "Chaliye dekhte hain…". Start directly with the answer.
+  • End with ONE short actionable suggestion ONLY when the question naturally invites it (problems, decisions, timing). Skip it for pure factual Qs.
 
 ═══════════════════════════════════════════════════════════════════
 USER'S BIRTH CHART

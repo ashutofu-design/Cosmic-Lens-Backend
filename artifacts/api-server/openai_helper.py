@@ -3144,6 +3144,100 @@ def _raw_compact_chart(kundli: Any, include_dasha: bool = True) -> str:
     return "\n".join(lines)
 
 
+# ── KP enrichment (opt-in, only on KP-style questions) ─────────────────────
+# Keep raw_passthrough lean: D1+D9+dasha is the default. KP cusps + CSL
+# verdicts are heavy + only useful when the user explicitly asks a KP-style
+# question (Krishnamurti Paddhati cusp sub-lord reading, or a hard yes/no
+# event verdict where KP is the stronger system). When the trigger fires,
+# we append the cuspal-sub-lord verdict block (built by the existing
+# `kp_locked_facts.format_kp_summary`) to the chart context. Default flow
+# is unchanged — zero token overhead for non-KP questions.
+import re as _re_kp
+_KP_TRIGGER_RE = _re_kp.compile(
+    r"\b("
+    # Explicit KP terminology
+    r"kp|krishnamurti|cusp|cuspal|sub[-\s]?lord|sublord|csl|"
+    r"ruling\s*planet|prashna|"
+    # Hard yes/no event markers (KP's specialty: definitive verdict)
+    r"hoga\s+ya\s+nahi|hogi\s+ya\s+nahi|hogaa\s+ya\s+nahi|"
+    r"milega\s+ya\s+nahi|milegi\s+ya\s+nahi|"
+    r"lagega\s+ya\s+nahi|lagegi\s+ya\s+nahi|"
+    r"banega\s+ya\s+nahi|banegi\s+ya\s+nahi|"
+    r"yes\s+or\s+no|pakka\s+batao|definite|definitive\s+answer|"
+    r"sure[-\s]*shot|promise|fructify"
+    r")\b",
+    _re_kp.IGNORECASE,
+)
+
+
+def _raw_kp_block(kundli: Any) -> str:
+    """Build a compact KP cuspal-sub-lord block for the LLM.
+
+    Returns "" when KP cannot be computed (missing lat/lon/tz, swisseph
+    failure, etc.) — in that case the caller silently falls back to the
+    default D1+D9 flow with no KP context.
+
+    Two-path strategy:
+      1) FAST PATH — kundli already carries a full ``kp`` cache (cusps +
+         significations) from /api/kundli. Skip Swiss-Ephemeris recompute
+         and run the verdict logic directly on the cached payload. This
+         is the common case (lat/lon/tz are not echoed back at the root,
+         so ``_to_kp_input`` would otherwise return None and the legacy
+         ``_phase55_safe_compute_kp_summary`` path would silently fail).
+      2) LEGACY FALLBACK — for kundlis without a ``kp`` cache, defer to
+         ``_phase55_safe_compute_kp_summary`` (which needs lat/lon/tz on
+         the root or a structured ``birth`` dict).
+    """
+    try:
+        from reply_cosmo.engine_locked_to_llm.kp_locked_facts import (
+            format_kp_summary, _verdict_for, _KEY_HOUSES,
+        )  # type: ignore
+    except Exception:
+        return ""
+
+    # ── FAST PATH: cached kp on the kundli payload ───────────────────────
+    try:
+        kp_cache = (kundli or {}).get("kp") if isinstance(kundli, dict) else None
+        cusps_raw = kp_cache.get("cusps") if isinstance(kp_cache, dict) else None
+        sigs      = kp_cache.get("significations") if isinstance(kp_cache, dict) else None
+        if isinstance(cusps_raw, list) and isinstance(sigs, dict):
+            cusps: dict = {}
+            for c in cusps_raw:
+                if isinstance(c, dict) and isinstance(c.get("house"), int):
+                    cusps[c["house"]] = c
+            houses_out: dict = {}
+            for h in _KEY_HOUSES:
+                c = cusps.get(h)
+                if not isinstance(c, dict):
+                    continue
+                sb = c.get("sb")
+                if not isinstance(sb, str):
+                    continue
+                verdict, ev_over, neg_over = _verdict_for(h, sb, sigs)
+                houses_out[h] = {
+                    "cusp_sign":  c.get("sign"),
+                    "cusp_deg":   c.get("degree"),
+                    "sub_lord":   sb,
+                    "verdict":    verdict,
+                    "signifies":  ev_over,
+                    "obstructs":  neg_over,
+                }
+            if houses_out:
+                return format_kp_summary({
+                    "houses":   houses_out,
+                    "ayanamsa": kp_cache.get("ayanamsa"),
+                }) or ""
+    except Exception:
+        pass
+
+    # ── LEGACY FALLBACK ──────────────────────────────────────────────────
+    try:
+        kp_summary = _phase55_safe_compute_kp_summary(kundli)
+        return format_kp_summary(kp_summary) if kp_summary else ""
+    except Exception:
+        return ""
+
+
 def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         birth: Any = None) -> dict:
     """Pure raw passthrough: D1 + D9 + dasha + question → LLM → answer.
@@ -3169,6 +3263,28 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         qtype = "STATIC"
     is_timing = (qtype == "TIMING")
     chart_text = _raw_compact_chart(kundli, include_dasha=is_timing)
+
+    # ── KP enrichment (opt-in by question content) ─────────────────────────
+    # Only fire when the user's question contains an explicit KP term or a
+    # hard yes/no event marker. Default Qs get D1+D9 only (lean + cheap).
+    kp_block = ""
+    is_kp = False
+    try:
+        if question and _KP_TRIGGER_RE.search(question):
+            kp_text = _raw_kp_block(kundli)
+            if kp_text:
+                kp_block = (
+                    "\n\n=== KP CUSPAL SUB-LORD CROSS-CHECK "
+                    "(Krishnamurti Paddhati — strongest system for hard "
+                    "yes/no event verdicts) ===\n" + kp_text
+                )
+                is_kp = True
+    except Exception as _e:
+        print(f"[raw_passthrough] KP enrichment skipped: {_e}")
+
+    if kp_block:
+        chart_text = chart_text + kp_block
+
     lang_instr = _RAW_LANG_INSTR.get((lang or "en").lower().strip(),
                                       _RAW_LANG_INSTR["en"])
     # ════════════════════════════════════════════════════════════════════
@@ -3199,6 +3315,21 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         "underlying aspect instead."
     )
     chart_label = "D1 + D9 + ACTIVE DASHA" if is_timing else "D1 + D9 ONLY (no dasha)"
+    if is_kp:
+        chart_label += " + KP CUSPAL SUB-LORD"
+
+    # KP reading rule — injected only when KP block is present. Tells the
+    # LLM how to weight the KP cross-check against the Parashari D1/D9 read.
+    kp_reading_rule = (
+        "\n\n=== KP CROSS-CHECK READING RULE (this question triggered KP enrichment) ===\n"
+        "A Krishnamurti Paddhati (KP) cuspal-sub-lord block has been "
+        "appended to the chart. Use it as the FINAL VERDICT layer for "
+        "yes/no event questions:\n"
+        "  • If KP says CONFIRMS for the relevant house → strong YES.\n"
+        "  • If KP says PARTIAL → YES with delay/struggle (cite the obstruction houses).\n"
+        "  • If KP says DENIES → NO or substantially delayed.\n"
+        "Reasoning order: (1) Parashari D1/D9 read → (2) KP cuspal sub-lord cross-check → (3) Final verdict reconciles both. If they conflict, KP wins on hard yes/no event timing; D1/D9 wins on quality/nature/character traits. NEVER mention the words 'KP', 'cusp', 'sub-lord', 'CSL', 'Krishnamurti' in the user-facing reply — translate to plain language per the GOLDEN RULE.\n"
+    ) if is_kp else ""
 
     system_prompt = f"""You are an experienced Vedic astrologer (Parashari + KP-aware). The user has shared their birth chart below ({chart_label}). Read it carefully and answer their question with specific, cited reasoning.
 
@@ -3523,7 +3654,7 @@ HARD RULES (apply to every answer)
 ═══════════════════════════════════════════════════════════════════
 USER'S BIRTH CHART
 ═══════════════════════════════════════════════════════════════════
-{chart_text}"""
+{chart_text}{kp_reading_rule}"""
     model = os.environ.get("RAW_PASSTHROUGH_MODEL",
                             os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"))
     try:
@@ -3558,7 +3689,7 @@ USER'S BIRTH CHART
         cache_hit_pct = (round(100 * cached_tok / prompt_tok, 1)
                          if prompt_tok else 0.0)
         try:
-            print(f"[raw_passthrough] qtype={qtype} model={model} "
+            print(f"[raw_passthrough] qtype={qtype} kp={is_kp} model={model} "
                   f"q={question[:60]!r} chart_chars={len(chart_text)} "
                   f"resp_chars={len(text)} | tokens: prompt={prompt_tok} "
                   f"cached={cached_tok} ({cache_hit_pct}%) "

@@ -1469,9 +1469,76 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             "Foreign":   foreign_timing(kundli),
             "Property":  property_timing(kundli),
         }
+
+        # ── Health: HEALTH-TIMING-V1 path (mirror of VIVAH-7) ─────────
+        # Computes the 9-step health-risk timing engine and emits a
+        # verdict + current-window + top-3 risk-window line. Stashes
+        # full result on a thread-local so the deterministic
+        # `inject_health_engine_verdict()` post-injector can enforce
+        # verbatim citation downstream. Falls back silently if the
+        # engine raises so the timing block never collapses.
+        health_line = None
+        try:
+            from event_timing.health.health_engine_v1 import (  # type: ignore
+                compute_health_window,
+            )
+            kp_for_health: dict = {}
+            try:
+                kp_for_health = (kundli.get("kp")
+                                  if isinstance(kundli, dict) else {}) or {}
+            except Exception:
+                kp_for_health = {}
+            h = compute_health_window(kundli, intel, kp_for_health, birth) or {}
+            verdict = h.get("verdict") or "—"
+            band = h.get("band") or "—"
+            tier = h.get("recommendation_tier") or "—"
+            cw = h.get("current_window") or {}
+            cw_str = ""
+            if isinstance(cw, dict) and cw.get("md"):
+                cw_str = (f" | now: {cw.get('md')}-{cw.get('ad')}-"
+                           f"{cw.get('pd')}/{cw.get('severity','?')}")
+            risk_str = ""
+            if h.get("risk_flags"):
+                risk_str = f" | risk: {','.join(h['risk_flags'][:3])}"
+            health_line = (
+                f"   • Health     verdict: {verdict}/{band}  "
+                f"tier: {tier}{cw_str}{risk_str}"
+            )
+            top3_h = h.get("next_3_windows") or []
+            if isinstance(top3_h, list) and top3_h:
+                _trace_h = []
+                for i, w in enumerate(top3_h[:3], 1):
+                    if not isinstance(w, dict):
+                        continue
+                    ws = w.get("window") or "—"
+                    sc = w.get("score")
+                    sev = w.get("severity") or "—"
+                    sc_str = (f" (score: {sc:.1f}, sev: {sev})"
+                              if isinstance(sc, (int, float))
+                              else f" ({sev})")
+                    _trace_h.append(f"     trace {i}: {ws}{sc_str}")
+                if _trace_h:
+                    health_line += "\n" + "\n".join(_trace_h)
+            try:
+                _record_phase("phase-D health-timing-v1", "ok")
+            except Exception:
+                pass
+        except Exception as _h_exc:  # noqa: BLE001
+            print(f"[locked_facts] health-timing-v1 failed: {_h_exc}")
+            health_line = (
+                "   • Health     verdict: — (engine unavailable)"
+            )
+            try:
+                _record_phase("phase-D health-timing-v1", "failed",
+                                str(_h_exc))
+            except Exception:
+                pass
+
         _t_lines = ["▸ TIMING ENGINE (Sprint-51 — engine-only, AI MUST mirror verbatim, NEVER invent dates):"]
         if marriage_line:
             _t_lines.append(marriage_line)
+        if health_line:
+            _t_lines.append(health_line)
         for topic, r in _ks.items():
             if r and r.get("available"):
                 _t_lines.append(

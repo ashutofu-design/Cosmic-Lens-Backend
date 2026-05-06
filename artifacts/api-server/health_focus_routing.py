@@ -881,11 +881,84 @@ def inject_medical_disclaimer(answer_text: str, question: str) -> str:
     return (answer_text or "").rstrip() + disc
 
 
+def inject_health_engine_verdict(answer_text: str,
+                                   question: str = "") -> str:
+    """Deterministic Health Engine v1 post-injector.
+
+    If the most recent `compute_health_window()` produced a verdict on
+    this thread (stashed by `health_engine_v1.get_last_health_result()`),
+    enforce a `👉 Final:` line near the end of the answer carrying the
+    engine verdict + recommendation tier verbatim. This is the safety
+    net for cases where the LLM either skips the verdict or paraphrases
+    it (mirrors the Marriage NARRATOR-MODE enforcement).
+
+    Idempotent: if the engine line already appears, no change. If no
+    engine result is cached (engine wasn't run for this Q), no-op.
+    Killswitch: HEALTH_DISCLAIMER off → no-op (same env as the rest of
+    the H3 post-injector pipeline).
+    """
+    if not answer_text:
+        return answer_text or ""
+    if not _disclaimer_enabled():
+        return answer_text
+    try:
+        from event_timing.health.health_engine_v1 import (  # type: ignore
+            get_last_health_result,
+        )
+    except Exception:
+        return answer_text
+    res = get_last_health_result()
+    if not isinstance(res, dict) or not res.get("verdict"):
+        return answer_text
+    verdict = str(res.get("verdict") or "").strip()
+    tier = str(res.get("recommendation_tier") or "").strip()
+    if not verdict:
+        return answer_text
+    # Architect-fix: never inject for UNKNOWN gates (data missing /
+    # engine exception) — those should fall through to the LLM's own
+    # framing rather than nailing a generic "saaf reading nahi" line
+    # onto every answer where the engine couldn't compute.
+    if verdict == "UNKNOWN":
+        return answer_text
+    # Idempotency — bail if our exact tag already present
+    tag = "[engine: health-v1]"
+    if tag in answer_text:
+        return answer_text
+    # Architect-fix: if the LLM already produced a "👉 Final:" line, strip
+    # it so the engine line becomes the authoritative final (avoid
+    # duplicate finals stacking).
+    body = answer_text
+    try:
+        import re as _re
+        body = _re.sub(r"(?m)^\s*👉\s*Final:.*(?:\n|$)", "", body).rstrip()
+    except Exception:
+        body = answer_text
+    # Gentle, non-clinical phrasing (CAFB-health translation rules).
+    verdict_label = {
+        "STRONG_VITALITY":   "swasthya bal majboot dikh raha hai",
+        "STABLE":            "swasthya stable lag raha hai",
+        "VULNERABLE":        "swasthya pe abhi extra dhyan ki zarurat hai",
+        "HIGH_RISK_WINDOW":  "swasthya ko abhi sambhal ke chalna chahiye",
+        "UNKNOWN":           "swasthya ki saaf reading nahi mil rahi",
+    }.get(verdict, verdict.lower())
+    tier_label = {
+        "monitor":         "rozmarra ki monitoring kafi hai",
+        "preventive":      "preventive habits + routine check-up rakhein",
+        "consult":         "ek bar professional doctor se baat kar lijiye",
+        "urgent_consult":  "jaldi kisi qualified doctor se mil lijiye",
+    }.get(tier, tier)
+    line = f"\n\n👉 Final: {verdict_label} — {tier_label}. {tag}"
+    return body.rstrip() + line
+
+
 def apply_health_postinjectors(answer_text: str, question: str) -> str:
     """Convenience: run all health post-injectors in correct order.
     1. strip_forbidden_vocab (clean body)
-    2. inject_medical_disclaimer (append safety footer)"""
+    2. inject_health_engine_verdict (engine-fact citation safety net)
+    3. inject_medical_disclaimer (append safety footer)
+    """
     cleaned, _ = strip_forbidden_vocab(answer_text)
+    cleaned = inject_health_engine_verdict(cleaned, question)
     return inject_medical_disclaimer(cleaned, question)
 
 
@@ -900,5 +973,6 @@ __all__ = [
     "trim_dasha_sections",
     "strip_forbidden_vocab",
     "inject_medical_disclaimer",
+    "inject_health_engine_verdict",
     "apply_health_postinjectors",
 ]

@@ -66,8 +66,35 @@ Hard guards reused from CAFB-health (`health_focus_routing.py`):
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple
+
+# ── Thread-local cache for the most recent engine result. Used by the
+# post-injector pipeline (`health_focus_routing.apply_health_postinjectors`)
+# to enforce verbatim verdict citation without recomputing the engine.
+# Keyed per-request via Python's threading.local because the Flask app
+# uses a per-request worker thread; the cache is reset on every fresh
+# `compute_health_window()` call so stale values cannot leak across
+# requests.
+_LAST_RESULT = threading.local()
+
+
+def get_last_health_result() -> Optional[Dict[str, Any]]:
+    """Return the engine result from the most recent `compute_health_window`
+    call on this thread, or None if none has run yet (or it was cleared).
+    """
+    return getattr(_LAST_RESULT, "value", None)
+
+
+def _store_last_result(result: Dict[str, Any]) -> None:
+    _LAST_RESULT.value = result
+
+
+def clear_last_health_result() -> None:
+    """Explicit reset between requests (defensive)."""
+    if hasattr(_LAST_RESULT, "value"):
+        _LAST_RESULT.value = None
 
 # ── External helpers (graceful degradation if unavailable) ──
 try:
@@ -1056,7 +1083,40 @@ def _data_sufficiency(kundli: dict, kp: dict) -> Tuple[bool, List[str]]:
 def compute_health_window(kundli: dict, intel: Optional[dict] = None,
                            kp: Optional[dict] = None,
                            birth: Optional[Any] = None) -> dict:
-    """Run the full 9-step Health Timing Engine v1 pipeline."""
+    """Run the full 9-step Health Timing Engine v1 pipeline.
+
+    Architect-fix (Phase 2 hardening, May 6 2026): single-exit wrapper
+    that GUARANTEES the thread-local cache is reset at entry and
+    populated on EVERY exit path (including early-return UNKNOWN gates
+    and exceptions). Without this, prior-request results could leak to a
+    new request on a reused worker thread (Flask threaded dev / gunicorn
+    threaded workers).
+    """
+    # Clear at entry — defensive against thread reuse + any code path
+    # below that might fail to populate cache before returning.
+    clear_last_health_result()
+    result: Dict[str, Any]
+    try:
+        result = _compute_health_window_impl(kundli, intel, kp, birth)
+    except Exception as exc:  # noqa: BLE001
+        result = {
+            "verdict": "UNKNOWN", "band": "WEAK",
+            "factors": [f"ENGINE_EXCEPTION {type(exc).__name__}: {str(exc)[:160]}"],
+            "risk_flags": ["ENGINE_EXCEPTION"],
+            "engine_version": "v1.0.0",
+            "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER",
+        }
+    _store_last_result(result)
+    return result
+
+
+def _compute_health_window_impl(kundli: dict,
+                                  intel: Optional[dict] = None,
+                                  kp: Optional[dict] = None,
+                                  birth: Optional[Any] = None) -> dict:
+    """Inner implementation — see `compute_health_window` for the public
+    contract. Do not call directly from outside the engine module; the
+    public wrapper handles cache lifecycle."""
     if not isinstance(kundli, dict) or not kundli:
         return {"verdict": "UNKNOWN", "band": "WEAK",
                 "factors": ["GATE kundli empty"],

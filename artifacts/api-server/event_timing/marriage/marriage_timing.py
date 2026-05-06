@@ -2310,6 +2310,28 @@ def _chronological_dtt_top3_strict(kundli: dict,
     # Rank: DTT count desc, then chronological asc
     candidates.sort(key=lambda c: (-c["dtt_count"], -c["triple_promiser"], c["start"]))
     # Dedupe by AD (keep best PD per AD for top-3 spread)
+    # Phase 2.10.1 USER-REQUESTED ACCURACY FILTER: also enforce ≥60-day
+    # gap between selected windows (no overlap, no back-to-back duplicates).
+    _CHRONO_MIN_GAP_DAYS = 60
+    def _chrono_gap_ok(cand: Dict[str, Any], picked: List[Dict[str, Any]]) -> bool:
+        try:
+            cs = cand["start"]; ce = cand["end"]
+        except Exception:
+            return True
+        for w in picked:
+            try:
+                ws = w["start"]; we = w["end"]
+            except Exception:
+                continue
+            if cs >= we:
+                gap = (cs - we).days
+            elif ws >= ce:
+                gap = (ws - ce).days
+            else:
+                return False
+            if gap < _CHRONO_MIN_GAP_DAYS:
+                return False
+        return True
     seen_ads: Set[Tuple[str, str]] = set()
     top3: List[Dict[str, Any]] = []
     for c in candidates:
@@ -2317,6 +2339,8 @@ def _chronological_dtt_top3_strict(kundli: dict,
         if key in seen_ads and len(top3) >= 1:
             # allow same-AD only if no other ADs left to fill top-3
             continue
+        if not _chrono_gap_ok(c, top3):
+            continue  # too close to an already-picked window
         top3.append(c)
         seen_ads.add(key)
         if len(top3) >= 3:
@@ -4634,6 +4658,35 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     # Reason: same-AD top-2 can be legitimate; allow when score gap reasonable.
     _DIVERSITY_TOLERANCE = _DIVERSITY_TOLERANCE_V2
 
+    # USER-REQUESTED ACCURACY FILTER (Phase 2.10.1):
+    # Windows ke beech minimum 60 din (~2 mahine) ka gap mandatory.
+    # Reason: back-to-back/overlapping windows cosmetic dikhte hain par
+    # accuracy kam karte hain — same DBA phase ka double-counting hota hai.
+    # 60 days = ek lunar month ka 2x ≈ pratyantar shift threshold.
+    _MIN_WINDOW_GAP_DAYS = 60
+
+    def _gap_ok(candidate: dict, chosen: List[dict]) -> bool:
+        """True iff candidate is ≥ _MIN_WINDOW_GAP_DAYS away from every
+        already-chosen window (measured edge-to-edge, both directions)."""
+        try:
+            c_start = candidate["start"]; c_end = candidate["end"]
+        except Exception:
+            return True  # missing data → don't block
+        for w in chosen:
+            try:
+                w_start = w["start"]; w_end = w["end"]
+            except Exception:
+                continue
+            if c_start >= w_end:
+                gap_days = (c_start - w_end).days
+            elif w_start >= c_end:
+                gap_days = (w_start - c_end).days
+            else:
+                return False  # overlap
+            if gap_days < _MIN_WINDOW_GAP_DAYS:
+                return False
+        return True
+
     def _select_diverse_top3(sorted_ws: List[dict]) -> List[dict]:
         if not sorted_ws:
             return []
@@ -4646,16 +4699,19 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             remaining = [w for w in sorted_ws if w not in chosen]
             if not remaining:
                 break
-            baseline_score = float(remaining[0].get("score", 0))
-            # Find first remaining window with a NEW AD whose score is within
+            # Apply gap-filter FIRST so we don't pick adjacent/overlapping wins.
+            gap_filtered = [w for w in remaining if _gap_ok(w, chosen)]
+            pool = gap_filtered if gap_filtered else remaining  # fallback if all too close
+            baseline_score = float(pool[0].get("score", 0))
+            # Find first pool window with a NEW AD whose score is within
             # tolerance of the baseline.
             diverse_pick = None
-            for w in remaining:
+            for w in pool:
                 if w.get("ad") not in used_ads:
                     if (baseline_score - float(w.get("score", 0))) <= _DIVERSITY_TOLERANCE:
                         diverse_pick = w
                     break
-            pick = diverse_pick if diverse_pick is not None else remaining[0]
+            pick = diverse_pick if diverse_pick is not None else pool[0]
             chosen.append(pick)
             used_ads.add(pick.get("ad"))
         return chosen

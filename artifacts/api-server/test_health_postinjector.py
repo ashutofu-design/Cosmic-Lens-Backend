@@ -136,7 +136,7 @@ class TestHealthPostinjector(unittest.TestCase):
         self.assertEqual(out["planet_remedies"], [])
         self.assertEqual(out["system_practices"], [])
         self.assertIn("doctor", out["universal_disclaimer"].lower())
-        self.assertEqual(out["tier"], "consult")  # bad tier → 'consult'
+        self.assertEqual(out["severity"], "consult")  # bad tier → 'consult'
 
         # Dedupe + cap: Mars repeated 4× + 4 valid planets → only 3 unique
         ranked = [
@@ -159,7 +159,7 @@ class TestHealthPostinjector(unittest.TestCase):
         self.assertEqual(len(out["planet_remedies"]), 3)
         sysnames = [s["system"] for s in out["system_practices"]]
         self.assertEqual(sysnames, ["blood", "muscles", "inflammation"])
-        self.assertEqual(out["tier"], "urgent_consult")
+        self.assertEqual(out["severity"], "urgent_consult")
         self.assertIn("First a qualified doctor", out["tier_note"])
 
     def test_remedies_locked_facts_emission(self):
@@ -202,12 +202,21 @@ class TestHealthPostinjector(unittest.TestCase):
         if self.cached.get("top_health_planets"):
             self.assertTrue(len(rem["planet_remedies"]) >= 1,
                               "no planet remedies for ranked planets")
-        # Each planet remedy has all required fields
+        # Phase 2.2 (May 6 2026) — schema migrated to standalone Remedy
+        # Engine v1.0 (3-tier hybrid). Each planet remedy now nests
+        # `practical` + `ayurvedic` + `vedic` sub-dicts. Vedic carries
+        # the legacy day/mantra/count/donation fields.
         for pr in rem["planet_remedies"]:
-            for k in ("planet", "day", "mantra", "count", "free",
-                      "paid", "donation", "for_systems"):
+            for k in ("planet", "for_areas", "practical", "ayurvedic", "vedic"):
                 self.assertIn(k, pr,
                                 f"planet remedy missing field {k}: {pr}")
+            # Practical tier MUST carry KPI (user-mandated outcome metric)
+            self.assertIn("kpi", pr["practical"])
+            self.assertTrue(pr["practical"]["kpi"])
+            # Vedic tier MUST carry mantra + day + free_alt
+            for vk in ("day", "mantra", "count", "donation", "free_alt"):
+                self.assertIn(vk, pr["vedic"],
+                                f"vedic tier missing {vk}: {pr['vedic']}")
         # Disclaimer mentions doctor + supplement
         disc = rem["universal_disclaimer"].lower()
         self.assertIn("doctor", disc)

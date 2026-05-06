@@ -211,80 +211,33 @@ _VALID_TIERS = ("monitor", "preventive", "consult", "urgent_consult")
 def _compute_health_remedies(ranked: Optional[List[Dict[str, Any]]],
                               affected_systems: Optional[List[str]],
                               recommendation_tier: Optional[str]) -> Dict[str, Any]:
-    """Build deterministic remedies block for the engine output.
+    """DELEGATES to standalone Remedy Engine v1.0 (May 6 2026).
 
-    Returns:
-        {
-          "planet_remedies": [ {planet, day, mantra, count, free, paid,
-                                donation, for_systems} ... up to 3 ],
-          "system_practices": [ {system, practice} ... up to 3 ],
-          "universal_disclaimer": "Remedies SUPPLEMENT, never substitute
-                                    action — qualified doctor consultation
-                                    is the primary path.",
-          "tier_note": <action-grade hint based on recommendation_tier>,
-        }
+    Migrated from inline `_HEALTH_REMEDIES_BY_PLANET` /
+    `_HEALTH_PRACTICES_BY_SYSTEM` tables to the unified hybrid 3-tier
+    engine at `remedy/remedy_engine_v1.py`. The legacy inline tables are
+    kept above for back-compat reference but are NO LONGER consulted.
 
-    Top remedies are derived from the top-3 ranked health planets so the
-    user gets remedies for the planets actively contributing to current
-    risk. Practices are derived from the affected-systems list so the
-    user gets concrete daily habits.
+    The new engine returns a richer block (practical/ayurvedic/vedic per
+    planet, KPI, cost, conflicts, stack, substitutions) — see
+    `remedy.get_remedies` docstring. The shape is a superset of the old
+    one, so downstream consumers reading `planet_remedies` / `system_practices`
+    / `universal_disclaimer` / `tier_note` continue to work; new fields
+    (`stack`, `conflicts`, `doctor_referral_hint`, etc) are additive.
     """
-    planet_remedies: List[Dict[str, Any]] = []
-    seen_planets: Set[str] = set()
-    # Iterate the FULL ranked list (defensive: dedupe can shrink top-3
-    # window if a planet is repeated, so we scan more and break at 3)
-    for r in (ranked or []):
-        if len(planet_remedies) >= 3:
-            break
-        if not isinstance(r, dict):
-            continue
-        name = r.get("name")
-        if not name or name in seen_planets:
-            continue
-        rem = _HEALTH_REMEDIES_BY_PLANET.get(name)
-        if not rem:
-            continue
-        seen_planets.add(name)
-        planet_remedies.append({
-            "planet":       name,
-            "score":        r.get("score"),
-            **rem,
-        })
-
-    system_practices: List[Dict[str, str]] = []
-    seen_systems: Set[str] = set()
-    for sys_tag in (affected_systems or []):
-        if sys_tag in seen_systems:
-            continue
-        practice = _HEALTH_PRACTICES_BY_SYSTEM.get(sys_tag)
-        if not practice:
-            continue
-        seen_systems.add(sys_tag)
-        system_practices.append({"system": sys_tag, "practice": practice})
-        if len(system_practices) >= 3:
-            break
-
-    tier_note_map = {
-        "monitor":         "Routine check-up enough — keep these as preventive habits.",
-        "preventive":      "Add these on TOP of regular check-ups; do not wait for symptoms.",
-        "consult":         "Start these alongside a doctor visit — remedies are SUPPORT, not substitute.",
-        "urgent_consult":  "First a qualified doctor visit, THEN add these. NEVER delay medical care for remedies.",
-    }
-    # Normalize tier defensively: unknown / None → 'consult' (safe middle
-    # ground, never the most permissive 'monitor'). This avoids silently
-    # masking upstream bugs the way a 'preventive' fallback would.
-    norm_tier = (recommendation_tier
-                  if recommendation_tier in _VALID_TIERS
-                  else "consult")
-    return {
-        "planet_remedies":      planet_remedies,
-        "system_practices":     system_practices,
-        "universal_disclaimer": ("Remedies SUPPLEMENT action, never substitute it. "
-                                  "Qualified doctor consultation is the primary path. "
-                                  "Gemstones (paid) require a 3-day trial first."),
-        "tier_note":            tier_note_map[norm_tier],
-        "tier":                 norm_tier,
-    }
+    from remedy import get_remedies  # type: ignore
+    return get_remedies(
+        topic    = "health",
+        planets  = ranked or [],
+        areas    = affected_systems or [],
+        severity = recommendation_tier,
+        # UCML hooks intentionally None here — locked_facts can re-call
+        # with user_facts when they're available in that context. Engine
+        # output stored on _LAST_RESULT remains the basic personalisation-
+        # free result.
+        user_facts    = None,
+        duration_days = 21,
+    )
 
 
 def get_last_health_result() -> Optional[Dict[str, Any]]:

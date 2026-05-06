@@ -1534,69 +1534,90 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             except Exception:
                 pass
 
-        # ── HEALTH REMEDIES sub-block (Phase 2.1, May 6 2026) ───────
-        # Built off the same engine result that produced `health_line`.
-        # Output is a separate "▸ HEALTH REMEDIES" section appended
-        # AFTER the timing block so Rule M (anti-hallucination remedy
-        # quoting) picks it up: LLM must cite mantras/donations/gems
-        # verbatim, never invent. Always paired with the universal
-        # disclaimer ("SUPPLEMENT, never substitute" + "qualified
-        # doctor"). Falls back silently — no remedies section shown
-        # when engine result is missing or empty.
-        health_remedies_block = ""
+        # ── REMEDIES sub-blocks (Phase 2.2, May 6 2026) ─────────────
+        # Standalone hybrid Remedy Engine v1.0 (3-tier: practical →
+        # ayurvedic → vedic). Emits parallel "▸ <TOPIC> REMEDIES"
+        # sections for HEALTH, MARRIAGE, CAREER. Each is rendered by
+        # `remedy.render_for_locked_facts(...)` which guarantees:
+        #   - PRACTICAL row first, VEDIC row last (anti-superstition)
+        #   - KPI + cost-ballpark + caveats on every paid item
+        #   - Conflict warnings (gemstone enemy pairs, overload)
+        #   - Universal disclaimer + tier-note ALWAYS injected
+        #   - Doctor referral hint (health only) when severity ≥ consult
+        # Rule M (anti-hallucination remedy quoting) auto-picks these up
+        # so LLM cites mantras/donations/gems verbatim.
+        # Falls back silently per topic — a single failure doesn't
+        # collapse the timing block or the other topics' remedies.
+        health_remedies_block   = ""
+        marriage_remedies_block = ""
+        career_remedies_block   = ""
         try:
-            from event_timing.health.health_engine_v1 import (  # type: ignore
-                get_last_health_result,
+            from remedy import (  # type: ignore
+                get_remedies as _get_remedies,
+                render_for_locked_facts as _render_remedies,
             )
-            _hres = get_last_health_result() or {}
-            _rem = _hres.get("remedies") or {}
-            _planet_rems = _rem.get("planet_remedies") or []
-            _sys_pract = _rem.get("system_practices") or []
-            # FIX (architect H1): always emit disclaimer+tier_note when the
-            # engine produced ANY remedies dict — even if planet/system
-            # lists are empty. This guarantees the safety policy
-            # ("SUPPLEMENT, never substitute" + qualified-doctor) is never
-            # silently dropped on edge cases (e.g. UNKNOWN verdict, or
-            # all-unknown planet names).
-            if _rem:
-                _rem_lines = [
-                    "",
-                    "▸ HEALTH REMEDIES (engine-only, Rule M — quote verbatim, NEVER invent mantras/gems):",
-                ]
-                for pr in _planet_rems[:3]:
-                    _rem_lines.append(
-                        f"   ◦ {pr.get('planet')} — {pr.get('day')}: "
-                        f"\"{pr.get('mantra')}\" × {pr.get('count')}"
+
+            # ── HEALTH ─────────────────────────────────────────────
+            try:
+                from event_timing.health.health_engine_v1 import (  # type: ignore
+                    get_last_health_result,
+                )
+                _hres = get_last_health_result() or {}
+                _hrem = _hres.get("remedies") or {}
+                if _hrem:
+                    health_remedies_block = _render_remedies(_hrem) or ""
+            except Exception as _h_rem_exc:  # noqa: BLE001
+                print(f"[locked_facts] health remedies block failed: {_h_rem_exc}")
+
+            # ── MARRIAGE ───────────────────────────────────────────
+            # Sourced from `assess_marriage().top_marriage_planets`
+            # which is shaped [{name, score, ...}, ...].
+            try:
+                _m_planets = []
+                if 'v' in locals() and isinstance(v, dict):
+                    _m_planets = v.get("top_marriage_planets") or []
+                # Severity heuristic from VIVAH-7 band (None → safe default).
+                # Architect-fix May 6 2026: VIVAH-7 emits STRONG|MEDIUM|WEAK
+                # — old 'FAVOUR' branch was dead code. Now MEDIUM correctly
+                # maps to supportive (not collapsing to watchful).
+                _m_band = (v.get("band") if 'v' in locals() and isinstance(v, dict)
+                             else None) or ""
+                _m_band_u = str(_m_band).upper()
+                _m_sev = ("celebratory" if "STRONG" in _m_band_u
+                          else "supportive" if ("MEDIUM" in _m_band_u
+                                                or "FAVOUR" in _m_band_u)
+                          else "watchful")
+                if _m_planets:
+                    _mres = _get_remedies(
+                        topic    = "marriage",
+                        planets  = _m_planets,
+                        areas    = ["communication", "harmony", "trust"],
+                        severity = _m_sev,
                     )
-                    _rem_lines.append(
-                        f"     free : {pr.get('free')}"
+                    marriage_remedies_block = _render_remedies(_mres) or ""
+            except Exception as _m_rem_exc:  # noqa: BLE001
+                print(f"[locked_facts] marriage remedies block failed: {_m_rem_exc}")
+
+            # ── CAREER ─────────────────────────────────────────────
+            # Sourced from legacy `career_timing(kundli).house_lords`
+            # which is shaped [str, ...]; promoted to {name, score=None}.
+            try:
+                _c_res = (_ks.get("Career") if isinstance(_ks, dict) else {}) or {}
+                _c_lords = _c_res.get("house_lords") or []
+                _c_planets = [{"name": x} for x in _c_lords if isinstance(x, str)]
+                if _c_planets:
+                    _cres = _get_remedies(
+                        topic    = "career",
+                        planets  = _c_planets,
+                        areas    = ["skill_depth", "networking", "stability"],
+                        severity = "watchful",
                     )
-                    _rem_lines.append(
-                        f"     paid : {pr.get('paid')}"
-                    )
-                    _rem_lines.append(
-                        f"     daan : {pr.get('donation')}"
-                    )
-                    _rem_lines.append(
-                        f"     for  : {pr.get('for_systems')}"
-                    )
-                if _sys_pract:
-                    _rem_lines.append("   ◦ Daily practices (affected systems):")
-                    for sp in _sys_pract[:3]:
-                        _rem_lines.append(
-                            f"     · {sp.get('system')}: {sp.get('practice')}"
-                        )
-                if _rem.get("universal_disclaimer"):
-                    _rem_lines.append(
-                        f"   ⚠ {_rem.get('universal_disclaimer')}"
-                    )
-                if _rem.get("tier_note"):
-                    _rem_lines.append(
-                        f"   ⚐ TIER NOTE: {_rem.get('tier_note')}"
-                    )
-                health_remedies_block = "\n".join(_rem_lines)
+                    career_remedies_block = _render_remedies(_cres) or ""
+            except Exception as _c_rem_exc:  # noqa: BLE001
+                print(f"[locked_facts] career remedies block failed: {_c_rem_exc}")
+
         except Exception as _rem_exc:  # noqa: BLE001
-            print(f"[locked_facts] health remedies block failed: {_rem_exc}")
+            print(f"[locked_facts] remedy engine import failed: {_rem_exc}")
 
         _t_lines = ["▸ TIMING ENGINE (Sprint-51 — engine-only, AI MUST mirror verbatim, NEVER invent dates):"]
         if marriage_line:
@@ -1618,6 +1639,10 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         )
         if health_remedies_block:
             _t_lines.append(health_remedies_block)
+        if marriage_remedies_block:
+            _t_lines.append(marriage_remedies_block)
+        if career_remedies_block:
+            _t_lines.append(career_remedies_block)
         timing_str = "\n".join(_t_lines)
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] timing_engine failed: {exc}")

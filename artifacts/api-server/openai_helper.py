@@ -3854,6 +3854,18 @@ def _build_messages(
                 birth=birth,
                 question=question or "",  # not echoed inside the block (see security note)
             )
+            # P1.2.5 — drop dasha/transit sections (4,5,8,9) for property
+            # STATIC/QUALITY Qs. Property-only + intent-gated. NO-OP for
+            # TIMING + non-property. try/except — never block request.
+            try:
+                if _chart_block_pt and _is_property_topic("", question) \
+                        and _property_focus_enabled():
+                    from property_focus_routing import trim_dasha_sections as _tds_lg  # type: ignore
+                    _chart_block_pt, _n_lg = _tds_lg(_chart_block_pt, question)
+                    if _n_lg > 0:
+                        print(f"[passthrough_legacy] chart trimmed: dropped {_n_lg} dasha sections")
+            except Exception as _tds_exc_lg:  # noqa: BLE001
+                print(f"[passthrough_legacy] chart trim skipped: {str(_tds_exc_lg)[:160]}")
             if _chart_block_pt:
                 # Phase 2 — prompt now lives in module constant _PT_SYS_INTRO
                 # (top of file). Both sync passthrough + stream passthrough
@@ -14358,6 +14370,21 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 birth=birth,
                 question=question or "",
             )
+            # P1.2.5 — drop dasha sections (4,5,8,9) for property STATIC/QUALITY.
+            try:
+                if _chart_block_pt and _is_property_topic(_qu_topic, question) \
+                        and _property_focus_enabled():
+                    from property_focus_routing import trim_dasha_sections as _tds_pt  # type: ignore
+                    _before_chars_tds = len(_chart_block_pt)
+                    _chart_block_pt, _n_pt = _tds_pt(_chart_block_pt, question)
+                    if _n_pt > 0:
+                        _trace(req_id, "PASSTHROUGH.CHART_TRIMMED", {
+                            "dropped_sections": _n_pt,
+                            "before_chars": _before_chars_tds,
+                            "after_chars":  len(_chart_block_pt),
+                        })
+            except Exception as _tds_exc_pt:  # noqa: BLE001
+                _trace(req_id, "PASSTHROUGH.CHART_TRIM_SKIP", str(_tds_exc_pt)[:160])
             if _chart_block_pt:
                 # Phase 2 — prompt now lives in module constant _PT_SYS_INTRO
                 # (top of file). Both sync passthrough + stream passthrough
@@ -17916,6 +17943,21 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                 birth=birth,
                 question=question or "",
             )
+            # P1.2.5 — drop dasha sections (4,5,8,9) for property STATIC/QUALITY (stream).
+            try:
+                if _chart_block_pt_s and _is_property_topic(_topic_id_s, question) \
+                        and _property_focus_enabled():
+                    from property_focus_routing import trim_dasha_sections as _tds_s  # type: ignore
+                    _before_chars_tds_s = len(_chart_block_pt_s)
+                    _chart_block_pt_s, _n_s = _tds_s(_chart_block_pt_s, question)
+                    if _n_s > 0:
+                        _trace(req_id, "PASSTHROUGH(stream).CHART_TRIMMED", {
+                            "dropped_sections": _n_s,
+                            "before_chars": _before_chars_tds_s,
+                            "after_chars":  len(_chart_block_pt_s),
+                        })
+            except Exception as _tds_exc_s:  # noqa: BLE001
+                _trace(req_id, "PASSTHROUGH(stream).CHART_TRIM_SKIP", str(_tds_exc_s)[:160])
             if not _chart_block_pt_s:
                 # No chart block built → fall through to legacy
                 raise RuntimeError("passthrough(stream): empty chart_block")

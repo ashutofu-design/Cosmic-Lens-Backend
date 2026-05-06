@@ -257,6 +257,55 @@ def strip_dasha_leak(text: str, question: str) -> tuple[str, int]:
     return cleaned, stripped
 
 
+# ── P1.2.5 CHART TRIMMER: drop dasha/transit sections for STATIC/QUALITY ──
+# User feedback: dasha tree (Sec 4), upcoming dasha (Sec 5), gochar (Sec 8),
+# and dasha+transit overlay (Sec 9) are TIMING-only data. STATIC_YOG and
+# YOG_QUALITY answers don't need them, and feeding them to the LLM only
+# tempts dasha-leak (the very leak P1.2.4 strips post-hoc). Trim BEFORE
+# the LLM call → cleaner prompt + lower tokens + less leak surface.
+#
+# Sections kept for STATIC/QUALITY: 1 (Janm/Lagna), 2 (Grahas),
+# 3 (Bhavas), 6 (D9 Navamsha), 15 (Niyam), KP block (separate).
+# Sections dropped: 4, 5, 8, 9.
+# NO-OP for TIMING intent (full chart preserved).
+
+# Section header pattern from kundli_full_context.py: "## N. TITLE"
+# We split on `\n## ` boundaries, keep section headers we want, drop
+# sections matching the drop-list. Defensive: if pattern doesn't match
+# (format changed), return input unchanged (NO-OP, never blocks request).
+_DASHA_SECTION_NUMS = frozenset({"4", "5", "8", "9"})
+_SECTION_BOUNDARY_RX = _re.compile(r'(?=^## \d+\.)', _re.MULTILINE)
+_SECTION_NUM_RX = _re.compile(r'^## (\d+)\.')
+
+
+def trim_dasha_sections(chart_block: str, question: str) -> tuple[str, int]:
+    """Drop dasha/transit sections from chart-context for STATIC/QUALITY
+    property answers. Returns (trimmed_block, sections_dropped).
+
+    NO-OP for TIMING intent, empty input, or when the section pattern
+    doesn't match (defensive — never breaks the request).
+    """
+    if not isinstance(chart_block, str) or not chart_block.strip():
+        return chart_block, 0
+    intent = _detect_property_intent(question)
+    if intent == "TIMING":
+        return chart_block, 0
+    parts = _SECTION_BOUNDARY_RX.split(chart_block)
+    if len(parts) <= 1:
+        return chart_block, 0
+    kept = []
+    dropped = 0
+    for p in parts:
+        m = _SECTION_NUM_RX.match(p)
+        if m and m.group(1) in _DASHA_SECTION_NUMS:
+            dropped += 1
+            continue
+        kept.append(p)
+    if dropped == 0:
+        return chart_block, 0
+    return ''.join(kept).rstrip() + '\n', dropped
+
+
 def build_property_focus(question: str = "") -> str:
     """Return the composable property-focus block.
 
@@ -276,5 +325,6 @@ __all__ = [
     "ATOMIC_CHECKS",
     "build_property_focus",
     "strip_dasha_leak",
+    "trim_dasha_sections",
     "_detect_property_intent",
 ]

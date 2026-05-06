@@ -3331,10 +3331,31 @@ USER'S BIRTH CHART
         text = (resp.choices[0].message.content or "").strip()
         if not text:
             text = "Maaf kijiye, abhi response generate nahi ho paya. Phir try karein."
+        # ── Prompt-cache telemetry ──────────────────────────────────────
+        # OpenAI auto-caches static system prompts ≥1024 tokens. The full
+        # mega-prompt is well above that threshold, so 2nd+ requests with
+        # the same prefix should report a non-zero `cached_tokens`. Cached
+        # input is billed at 25% of the normal input rate (~75% off).
+        usage = getattr(resp, "usage", None)
+        prompt_tok = getattr(usage, "prompt_tokens", 0) if usage else 0
+        completion_tok = getattr(usage, "completion_tokens", 0) if usage else 0
+        cached_tok = 0
+        try:
+            ptd = getattr(usage, "prompt_tokens_details", None) if usage else None
+            if ptd is not None:
+                cached_tok = (getattr(ptd, "cached_tokens", 0)
+                              or (ptd.get("cached_tokens", 0)
+                                  if isinstance(ptd, dict) else 0))
+        except Exception:
+            cached_tok = 0
+        cache_hit_pct = (round(100 * cached_tok / prompt_tok, 1)
+                         if prompt_tok else 0.0)
         try:
             print(f"[raw_passthrough] qtype={qtype} model={model} "
                   f"q={question[:60]!r} chart_chars={len(chart_text)} "
-                  f"resp_chars={len(text)}", flush=True)
+                  f"resp_chars={len(text)} | tokens: prompt={prompt_tok} "
+                  f"cached={cached_tok} ({cache_hit_pct}%) "
+                  f"completion={completion_tok}", flush=True)
         except Exception:
             pass
         return {

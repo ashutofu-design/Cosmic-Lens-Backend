@@ -203,6 +203,38 @@ def _house_lord(lagna_si: int, house: int) -> str:
     return _SIGN_LORDS[sign_at_house]
 
 
+def _compute_d9_seventh_lord(kundli: dict) -> Optional[str]:
+    """Return D9 (Navamsa) 7th-lord planet name, or None if D9 unavailable.
+
+    Classical rule: D9 7L is the supreme marriage karaka. Even if a planet
+    has zero D1 marriage linkage, being D9-7L makes it indispensable for
+    STEP 2 (D9 verify) and STEP 4 (weighted ranking). Used as karaka-floor
+    in STEP 1 so the planet survives filtering.
+    """
+    if compute_d9 is None:
+        return None
+    planets = kundli.get("planets") or []
+    if not planets:
+        return None
+    lagna_lon = (kundli.get("ascendantLon")
+                 or kundli.get("ascendantLongitude")
+                 or kundli.get("lagnaLon")
+                 or kundli.get("ascendantDeg"))
+    try:
+        lagna_lon = float(lagna_lon) if lagna_lon is not None else None
+    except (TypeError, ValueError):
+        lagna_lon = None
+    try:
+        d9 = compute_d9(planets, lagna_lon=lagna_lon) or {}
+    except Exception:
+        return None
+    d9_lagna = (d9.get("_lagna") or {}).get("sign_idx")
+    if not isinstance(d9_lagna, int):
+        return None
+    d9_h7_si = (d9_lagna + 6) % 12
+    return _SIGN_LORDS.get(d9_h7_si)
+
+
 def _house_of_sign(sign_si: int, lagna_si: int) -> int:
     return ((sign_si - lagna_si) % 12) + 1
 
@@ -1207,6 +1239,23 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     filtered_set = {p for p, info in d1_map.items() if info.get("in_filter")}
     factors.append(f"STEP1 filtered={sorted(filtered_set)}")
 
+    # ── STEP 1.5 — D9-7L karaka floor (v2.2, May 6 2026) ──────────────
+    # Classical Parashari rule: D9 (Navamsa) 7L is the SUPREME marriage
+    # significator — even more critical than D1 7L for marriage timing
+    # because D9 IS the marriage varga. A planet that has zero D1 link
+    # but rules D9's 7H must still be evaluated (D9 score, KP signification,
+    # weighted rank, dasha activation). Without this floor the engine
+    # silently drops the most important Navamsa planet.
+    d9_7l = _compute_d9_seventh_lord(kundli)
+    if d9_7l and d9_7l not in filtered_set:
+        filtered_set.add(d9_7l)
+        if d9_7l in d1_map:
+            d1_map[d9_7l]["in_filter"] = True
+            d1_map[d9_7l]["links"].append("D9 7L (karaka floor)")
+        factors.append(f"STEP1.5 D9_7L_FLOOR added={d9_7l}")
+    else:
+        factors.append(f"STEP1.5 D9_7L={d9_7l} (already in filter or unavailable)")
+
     # ── STEP 2 ────────────────────────────────────────────────────────
     d9_map = _step2_d9_verify(kundli, lagna_si, filtered_set)
     d9_strong = [p for p, info in d9_map.items() if info.get("d9", 0.0) >= 30.0]
@@ -1224,6 +1273,14 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     ranked = _step4_rank(d1_map, d9_map, kp_per, lagna_si, is_female)
     top_planet_names = [r["name"] for r in ranked[:5]]
     target_lords = set(top_planet_names)
+    # v2.2 — D9 7L is mandatory in target_lords. Even if its weighted
+    # rank doesn't reach top-5 (e.g. because D1 link is absent), its
+    # dasha period MUST still trigger marriage windows. Without this
+    # line, STEP 5/5.5 cascade would silently skip the most important
+    # Navamsa lord's dashas.
+    if d9_7l and d9_7l not in target_lords:
+        target_lords.add(d9_7l)
+        factors.append(f"STEP4+ target_lords force-added D9_7L={d9_7l}")
     factors.append(f"STEP4 top5={[(r['name'], r['score']) for r in ranked]}")
     weighted_breakdown = {r["name"]: {"d1": r["d1"], "d9": r["d9"],
                                         "kp": r["kp"], "karaka": r["karaka"],

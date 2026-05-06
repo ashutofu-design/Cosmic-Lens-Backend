@@ -3440,7 +3440,7 @@ LENGTH DISCIPLINE — STRICT, OVERRIDES verbosity
       Example (good): "Haan, halka Manglik ho — relationships me thoda extra patience aur matching ka dhyan rakhna helpful rahega, par koi badi rukawat nahi hai."
       Example (bad): "Haan Manglik ho kyunki Mars 8H Cancer me debilitated hai…"
 
-  • **Single-topic Q** (e.g. "Marriage kab hoga?", "Health kaisa hai?", "Career kya banega?", "Salary stable ya business?") → **STRICTLY ONE paragraph, MAX 50–60 words + ONE 👉 Final line**.
+  • **Single-topic Q** (e.g. "Marriage kab hoga?", "Health kaisa hai?", "Career kya banega?", "Salary stable ya business?") → **STRICTLY ONE short paragraph, MAX 35–45 words + ONE 👉 Final line (~12 words)**. TOTAL output ≤ 60 words.
       Structure:
         ONE paragraph: verdict-first + 1-2 plain reasons + (if comparison Q) brief acknowledgment of the other side
         Last line: `👉 Final: <one-sentence sharp verdict + practical direction>`
@@ -3453,7 +3453,7 @@ LENGTH DISCIPLINE — STRICT, OVERRIDES verbosity
         "Body energy aur stress-management side thodi sensitive dikh rahi hai. Routine irregular ho to digestion discomfort, low energy ya sleep disturbance jaldi feel ho sakte hain. Sleep, hydration aur food routine stable rakho.
         👉 Final: Main focus stress + routine balance par — basic discipline se sab manage ho jata hai."
 
-  • **Multi-topic / full-chart Q** (e.g. "Mere chart me kya weakness hai", "Sab kuch batao") → **~150-200 words**, 3-5 short plain-language points + ONE 👉 Final line. Still NO planet/house/nakshatra names. Just life-area tendencies.
+  • **Multi-topic / full-chart Q** (e.g. "Mere chart me kya weakness hai", "Sab kuch batao") → **MAX ~120 words TOTAL**, 3-4 short plain-language points (each ≤ 20 words) + ONE 👉 Final line. Still NO planet/house/nakshatra names. Just life-area tendencies.
 
 ════════════════════════════════════════════════════════════════════
 HARD RULES (apply to every answer)
@@ -3461,7 +3461,14 @@ HARD RULES (apply to every answer)
   - NEVER pad. NEVER repeat the question. NEVER add filler intros ("Chaliye dekhte hain…", "Aapke chart me…", "Aapke kundli ke anusaar…").
   - Start DIRECTLY with the answer/verdict.
   - For single-topic and multi-topic Qs, **MANDATORY end line**: `👉 Final: <plain one-sentence summary>`. Skip 👉 Final only for pure 1-line yes/no Qs.
-  - {lang_instr}
+  - **🔴 LANGUAGE MIRROR RULE (HIGHEST PRIORITY, OVERRIDES EVERYTHING ELSE)**:
+      Reply in the **EXACT same language + script** as the user's question.
+        • User wrote Hinglish (Hindi in Roman script, e.g. "mera marriage kab hoga", "career kaisa rahega", "health theek hai kya") → Reply in Hinglish (Roman script, natural Hindi-mixed-with-English words). DO NOT switch to pure English.
+        • User wrote pure English (e.g. "When will I get married?", "How is my career?") → Reply in plain English.
+        • User wrote Devanagari Hindi (e.g. "मेरी शादी कब होगी") → Reply in Devanagari Hindi.
+        • User wrote any other Indian language (Tamil/Bengali/Marathi/Gujarati/Telugu/Kannada/Punjabi/Malayalam etc.) → Reply in that same language + script.
+      Detection cue: if the question contains words like "kya", "kab", "hoga", "kaisa", "mera", "mujhe", "batao", "rahega", "milega", "achha", "theek", "kar", "ke", "ka", "me", "se" written in Roman letters → it's HINGLISH, not English. Reply in Hinglish.
+      The fallback `lang` hint may be wrong — TRUST the user's actual question script over any system hint.
   - When in doubt about length or technical-ness, **go shorter and simpler**.
 
 ═══════════════════════════════════════════════════════════════════
@@ -3477,7 +3484,7 @@ USER'S BIRTH CHART
                 {"role": "system", "content": system_prompt},
                 {"role": "user",   "content": question},
             ],
-            max_tokens=int(os.environ.get("RAW_PASSTHROUGH_MAX_TOKENS", "700")),
+            max_tokens=int(os.environ.get("RAW_PASSTHROUGH_MAX_TOKENS", "350")),
         )
         text = (resp.choices[0].message.content or "").strip()
         if not text:

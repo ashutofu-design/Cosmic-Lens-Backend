@@ -3054,6 +3054,172 @@ def is_available() -> bool:
     return _get_client() is not None
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# RAW PASSTHROUGH MODE (2026-05-06) — user-requested nuclear simplification.
+# Strips ALL static engines / focus-routing / brand-guards / classifier /
+# disclaimers / multi-intent ack / crisis-redirect. Just: D1+D9 chart +
+# current dasha + question → LLM → answer. Killswitch: env
+# RAW_PASSTHROUGH_MODE=0 reverts to the legacy multi-stage pipeline.
+# ════════════════════════════════════════════════════════════════════════════
+
+_RAW_LANG_INSTR = {
+    "hi": "Reply in Hinglish (Hindi written in Roman script). Natural conversational tone.",
+    "hn": "Reply in Hinglish (Hindi written in Roman script). Natural conversational tone.",
+    "en": "Reply in plain English.",
+}
+
+
+def _raw_compact_chart(kundli: Any) -> str:
+    """Build a compact text block of D1 + D9 + current dasha for the LLM.
+    Tries to be defensive — missing keys are silently skipped."""
+    if not isinstance(kundli, dict):
+        return "(no chart data available)"
+    lines: list[str] = []
+    # ── D1 (Lagna chart) ────────────────────────────────────────────────
+    asc = kundli.get("ascendant") or kundli.get("lagna")
+    asc_deg = kundli.get("ascendantDeg")
+    moon_sign = kundli.get("moonSign")
+    sun_sign = kundli.get("sunSign")
+    nak = kundli.get("nakshatra")
+    nak_pada = kundli.get("nakshatraPada")
+    nak_lord = kundli.get("nakshatraRuler")
+    lines.append("=== D1 (LAGNA / RASHI CHART) ===")
+    if asc:
+        lines.append(f"Ascendant (Lagna): {asc}"
+                     + (f" {asc_deg:.2f}°" if isinstance(asc_deg, (int, float)) else ""))
+    if moon_sign: lines.append(f"Moon sign (Rashi): {moon_sign}")
+    if sun_sign: lines.append(f"Sun sign: {sun_sign}")
+    if nak:
+        lines.append(f"Janma Nakshatra: {nak}"
+                     + (f" pada {nak_pada}" if nak_pada else "")
+                     + (f" (lord: {nak_lord})" if nak_lord else ""))
+    planets = kundli.get("planets") or []
+    if isinstance(planets, list) and planets:
+        lines.append("\nPlanets in D1:")
+        for p in planets:
+            if not isinstance(p, dict): continue
+            name = p.get("name", "?")
+            sign = p.get("sign", "?")
+            house = p.get("house", "?")
+            deg = p.get("degrees", "")
+            retro = " [R]" if p.get("retrograde") else ""
+            pn = p.get("nakshatra", "")
+            ppada = p.get("nakshatraPada", "")
+            pn_str = f", nak: {pn}" + (f"-{ppada}" if ppada else "") if pn else ""
+            lines.append(f"  • {name}: {sign} (House {house}) {deg}{retro}{pn_str}")
+    # ── D9 (Navamsa) ────────────────────────────────────────────────────
+    div = kundli.get("divisionalCharts") or {}
+    d9 = div.get("D9") or div.get("d9") or kundli.get("navamsa")
+    if isinstance(d9, dict):
+        lines.append("\n=== D9 (NAVAMSA — marriage / dharma / planetary strength) ===")
+        d9_asc = d9.get("ascendant") or d9.get("lagna")
+        if d9_asc: lines.append(f"D9 Ascendant: {d9_asc}")
+        d9_planets = d9.get("planets") or []
+        if isinstance(d9_planets, list) and d9_planets:
+            lines.append("Planets in D9:")
+            for p in d9_planets:
+                if not isinstance(p, dict): continue
+                lines.append(f"  • {p.get('name','?')}: {p.get('sign','?')} "
+                             f"(House {p.get('house','?')})")
+    # ── Current Dasha ───────────────────────────────────────────────────
+    cd = kundli.get("currentDasha") or {}
+    if isinstance(cd, dict) and cd:
+        lines.append("\n=== CURRENT DASHA ===")
+        if cd.get("maha"):
+            lines.append(f"Mahadasha: {cd.get('maha')} "
+                         f"({cd.get('startDate','?')} → {cd.get('endDate','?')})")
+        if cd.get("antar"):
+            lines.append(f"Antardasha: {cd.get('antar')}")
+        if cd.get("pratyantar"):
+            lines.append(f"Pratyantar: {cd.get('pratyantar')} "
+                         f"({cd.get('pratyantarStart','?')} → "
+                         f"{cd.get('pratyantarEnd','?')})")
+    cp = kundli.get("currentPhase") or {}
+    if isinstance(cp, dict) and cp.get("name"):
+        lines.append(f"Current Phase: {cp.get('name')} "
+                     f"({cp.get('start','?')} → {cp.get('end','?')})")
+    return "\n".join(lines)
+
+
+def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
+                        birth: Any = None) -> dict:
+    """Pure raw passthrough: D1 + D9 + dasha + question → LLM → answer.
+
+    No classifiers, no static engines, no post-injectors, no disclaimers.
+    Returns a dict shaped like the legacy ai_ask response so the route
+    layer can drop it straight into jsonify().
+    """
+    client = _get_client()
+    if client is None:
+        return {
+            "text":       "AI service abhi available nahi hai. Thodi der baad try karo.",
+            "topic":      "general",
+            "confidence": 0.0,
+            "source":     "raw_passthrough_unavailable",
+            "follow_ups": [],
+        }
+    chart_text = _raw_compact_chart(kundli)
+    lang_instr = _RAW_LANG_INSTR.get((lang or "en").lower().strip(),
+                                      _RAW_LANG_INSTR["en"])
+    system_prompt = (
+        "You are an experienced Vedic astrologer. The user has shared their "
+        "birth chart below (D1 Lagna + D9 Navamsa + current Dasha). Read it "
+        "carefully and answer their question naturally, citing specific "
+        "chart factors (planets, houses, signs, dasha lords) where relevant. "
+        "Be direct and specific — no vague generalities, no hedging filler. "
+        f"{lang_instr} "
+        "Keep the answer focused (around 150-220 words). End with one short "
+        "actionable suggestion when appropriate.\n\n"
+        f"USER'S BIRTH CHART:\n{chart_text}"
+    )
+    model = os.environ.get("RAW_PASSTHROUGH_MODEL",
+                            os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"))
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": question},
+            ],
+            max_tokens=int(os.environ.get("RAW_PASSTHROUGH_MAX_TOKENS", "700")),
+        )
+        text = (resp.choices[0].message.content or "").strip()
+        if not text:
+            text = "Maaf kijiye, abhi response generate nahi ho paya. Phir try karein."
+        try:
+            print(f"[raw_passthrough] model={model} q={question[:60]!r} "
+                  f"chart_chars={len(chart_text)} resp_chars={len(text)}",
+                  flush=True)
+        except Exception:
+            pass
+        return {
+            "text":       text,
+            "topic":      "general",
+            "confidence": 1.0,
+            "source":     "raw_passthrough",
+            "follow_ups": [],
+        }
+    except Exception as exc:
+        try:
+            print(f"[raw_passthrough] OpenAI call failed: {exc}", flush=True)
+        except Exception:
+            pass
+        return {
+            "text":       f"AI service me temporary issue: {str(exc)[:120]}. "
+                          f"Thodi der baad try karein.",
+            "topic":      "general",
+            "confidence": 0.0,
+            "source":     "raw_passthrough_error",
+            "follow_ups": [],
+        }
+
+
+def raw_passthrough_enabled() -> bool:
+    """Killswitch helper. Default ON (=1). Set RAW_PASSTHROUGH_MODE=0 to revert
+    to the legacy multi-stage classifier+static+focus pipeline."""
+    return os.environ.get("RAW_PASSTHROUGH_MODE", "1") == "1"
+
+
 # ── Prompt building ───────────────────────────────────────────────────────────
 
 _LANG_NAME = {

@@ -5780,6 +5780,92 @@ def ask_route():
     if not question:
         return jsonify({"error": "question is required"}), 400
 
+    # ════════════════════════════════════════════════════════════════════════
+    # RAW PASSTHROUGH MODE (2026-05-06) — user-requested nuclear path.
+    # Skips ALL gates: length-cap, brand-guard, layer3-clarifier,
+    # crisis-pregate, shortcut, all static engines (health/property/finance),
+    # classifier, signal-packs, post-injectors, multi-intent ack.
+    # Just: auth + quota + DB-load → D1+D9 chart + question → LLM → answer.
+    # Killswitch: env RAW_PASSTHROUGH_MODE=0 → legacy multi-stage pipeline.
+    # ════════════════════════════════════════════════════════════════════════
+    try:
+        from openai_helper import (
+            raw_passthrough_enabled as _rp_enabled,
+            raw_passthrough_ask as _rp_ask,
+        )
+    except Exception as _rp_imp_exc:
+        print(f"[ask] raw_passthrough import failed: {_rp_imp_exc}", flush=True)
+        _rp_enabled = lambda: False  # noqa: E731
+        _rp_ask = None
+    if _rp_enabled() and _rp_ask is not None:
+        from subscription_helper import consume_question, effective_plan
+        rp_user = None
+        rp_quota = {"used": 0, "limit": 0}
+        rp_plan = "free"
+        if user_id:
+            try:
+                _uid = int(str(user_id).strip())
+            except (TypeError, ValueError):
+                _uid = None
+            rp_user = User.query.get(_uid) if _uid is not None else None
+            if not rp_user:
+                return jsonify({"error": "User not found"}), 404
+            _ak = request.headers.get("X-API-Key", "").strip()
+            if not _ak or rp_user.api_key != _ak:
+                return jsonify({"error": "Unauthorized"}), 401
+            # DB-load kundli for authenticated users (tamper-proof)
+            try:
+                if rp_user.kundli and rp_user.kundli.chart_data:
+                    import json as _j
+                    kundli = _j.loads(rp_user.kundli.chart_data) or kundli
+            except Exception as _kde:
+                print(f"[ask:RP] kundli db-load failed (non-fatal): {_kde}",
+                      flush=True)
+            rp_q = consume_question(rp_user)
+            if not rp_q.get("allowed"):
+                return jsonify({
+                    "error":            "daily_limit_reached",
+                    "message":          (f"Aaj ka {rp_q.get('limit',0)} questions "
+                                          f"ka limit poora ho gaya. Pro upgrade "
+                                          f"karein for unlimited."),
+                    "quota":            {"used": rp_q.get("used", 0),
+                                          "limit": rp_q.get("limit", 0)},
+                    "plan":             effective_plan(rp_user),
+                    "upgrade_required": True,
+                }), 402
+            rp_quota = {"used": rp_q.get("used", 0), "limit": rp_q.get("limit", 0)}
+            rp_plan = effective_plan(rp_user)
+        else:
+            # Anonymous IP-based daily limit (same as legacy path)
+            try:
+                from anon_rate_limit import check_anon_quota
+                _aq = check_anon_quota(
+                    request.remote_addr or "unknown",
+                    limit=int(os.environ.get("ANON_DAILY_LIMIT", "3")),
+                )
+                if not _aq.get("allowed"):
+                    return jsonify({
+                        "error":            "daily_limit_reached",
+                        "message":          (f"Anonymous daily limit "
+                                              f"({_aq.get('limit',3)}) reached. "
+                                              f"Sign in for higher quota."),
+                        "quota":            {"used": _aq.get("used", 0),
+                                              "limit": _aq.get("limit", 3)},
+                        "plan":             "anon",
+                        "upgrade_required": True,
+                    }), 402
+                rp_quota = {"used": _aq.get("used", 0),
+                            "limit": _aq.get("limit", 3)}
+                rp_plan = "anon"
+            except Exception as _aqe:
+                print(f"[ask:RP] anon quota check failed (non-fatal): {_aqe}",
+                      flush=True)
+        # ── Single LLM call ──
+        out = _rp_ask(question, kundli, lang, birth=birth)
+        out["quota"] = rp_quota
+        out["plan"] = rp_plan
+        return jsonify(out)
+
     # ── P1.2.9 (A1) — Question length cap ───────────────────────────────────
     # Hard cap on input length to prevent multi-paragraph essay-style asks
     # from burning unnecessary tokens. Default cap = 300 chars / ~50 words.
@@ -6451,6 +6537,87 @@ def ask_stream_route():
 
     if not question:
         return jsonify({"error": "question is required"}), 400
+
+    # ════════════════════════════════════════════════════════════════════════
+    # RAW PASSTHROUGH MODE (2026-05-06, stream parity) — see /api/ask above
+    # for full rationale. Stream route returns ONE single jsonify chunk
+    # (no SSE deltas) when RAW_PASSTHROUGH_MODE=1, since the helper does a
+    # single non-streaming completion. Mobile client handles both shapes.
+    # ════════════════════════════════════════════════════════════════════════
+    try:
+        from openai_helper import (
+            raw_passthrough_enabled as _rp_enabled_s,
+            raw_passthrough_ask as _rp_ask_s,
+        )
+    except Exception as _rp_imp_exc_s:
+        print(f"[ask/stream] raw_passthrough import failed: {_rp_imp_exc_s}",
+              flush=True)
+        _rp_enabled_s = lambda: False  # noqa: E731
+        _rp_ask_s = None
+    if _rp_enabled_s() and _rp_ask_s is not None:
+        from subscription_helper import consume_question, effective_plan
+        rp_user_s = None
+        rp_quota_s = {"used": 0, "limit": 0}
+        rp_plan_s = "free"
+        if user_id:
+            try:
+                _uid_s = int(str(user_id).strip())
+            except (TypeError, ValueError):
+                _uid_s = None
+            rp_user_s = User.query.get(_uid_s) if _uid_s is not None else None
+            if not rp_user_s:
+                return jsonify({"error": "User not found"}), 404
+            _ak_s = request.headers.get("X-API-Key", "").strip()
+            if not _ak_s or rp_user_s.api_key != _ak_s:
+                return jsonify({"error": "Unauthorized"}), 401
+            try:
+                if rp_user_s.kundli and rp_user_s.kundli.chart_data:
+                    import json as _js
+                    kundli = _js.loads(rp_user_s.kundli.chart_data) or kundli
+            except Exception as _kde_s:
+                print(f"[ask/stream:RP] kundli db-load failed: {_kde_s}",
+                      flush=True)
+            rp_q_s = consume_question(rp_user_s)
+            if not rp_q_s.get("allowed"):
+                return jsonify({
+                    "error":            "daily_limit_reached",
+                    "message":          (f"Aaj ka {rp_q_s.get('limit',0)} "
+                                          f"questions ka limit poora ho gaya."),
+                    "quota":            {"used": rp_q_s.get("used", 0),
+                                          "limit": rp_q_s.get("limit", 0)},
+                    "plan":             effective_plan(rp_user_s),
+                    "upgrade_required": True,
+                }), 402
+            rp_quota_s = {"used": rp_q_s.get("used", 0),
+                          "limit": rp_q_s.get("limit", 0)}
+            rp_plan_s = effective_plan(rp_user_s)
+        else:
+            try:
+                from anon_rate_limit import check_anon_quota as _caq_s
+                _aq_s = _caq_s(
+                    request.remote_addr or "unknown",
+                    limit=int(os.environ.get("ANON_DAILY_LIMIT", "3")),
+                )
+                if not _aq_s.get("allowed"):
+                    return jsonify({
+                        "error":            "daily_limit_reached",
+                        "message":          (f"Anonymous daily limit "
+                                              f"({_aq_s.get('limit',3)}) reached."),
+                        "quota":            {"used": _aq_s.get("used", 0),
+                                              "limit": _aq_s.get("limit", 3)},
+                        "plan":             "anon",
+                        "upgrade_required": True,
+                    }), 402
+                rp_quota_s = {"used": _aq_s.get("used", 0),
+                              "limit": _aq_s.get("limit", 3)}
+                rp_plan_s = "anon"
+            except Exception as _aqe_s:
+                print(f"[ask/stream:RP] anon quota failed: {_aqe_s}",
+                      flush=True)
+        out_s = _rp_ask_s(question, kundli, lang, birth=birth)
+        out_s["quota"] = rp_quota_s
+        out_s["plan"] = rp_plan_s
+        return jsonify(out_s)
 
     # ── P1.2.9 (A1) — Question length cap (stream parity) ───────────────────
     # Same hard cap as /api/ask. Killswitch: env MAX_QUESTION_CHARS=0.

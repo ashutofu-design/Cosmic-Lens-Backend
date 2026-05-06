@@ -135,6 +135,18 @@ _DT_ONE_BOOST = 0.75
 
 # Window selection
 _MIN_WINDOW_GAP_DAYS = 60   # ≈ 2 months between top-3 windows
+
+# ── Age-band thresholds (Indian classical, indicative) ──────────────
+# Male:   <24 EARLY | 24-30 ON_TIME | 31-35 LATE | 36+ VERY_LATE
+# Female: <21 EARLY | 21-28 ON_TIME | 29-32 LATE | 33+ VERY_LATE
+_AGE_BANDS_MALE   = [(24, "EARLY"), (31, "ON_TIME"), (36, "LATE"), (999, "VERY_LATE")]
+_AGE_BANDS_FEMALE = [(21, "EARLY"), (29, "ON_TIME"), (33, "LATE"), (999, "VERY_LATE")]
+_AGE_BANDS_NEUTRAL = [(23, "EARLY"), (30, "ON_TIME"), (35, "LATE"), (999, "VERY_LATE")]
+
+# When user is at/past marriageable age, boost windows that fall within
+# next N days so engine surfaces near-term candidates first.
+_RECENT_WINDOW_DAYS = 365
+_RECENT_BOOST       = 3.0
 _FUTURE_CASCADE_MAX_WINDOWS = 3
 _FUTURE_SCAN_HORIZON_YEARS = 25
 
@@ -1025,6 +1037,66 @@ def _data_sufficiency_check(kundli: dict, kp: dict) -> Tuple[bool, List[str]]:
     return (len(reasons) == 0, reasons)
 
 
+def _compute_age_at(birth: Any, ref: datetime) -> Optional[int]:
+    """Compute age in years from birth dict at ref date.
+
+    Birth dict can carry: dob/birthDate (ISO string) OR year/month/day OR
+    birthYear/yearOfBirth (year-only). Returns None if nothing usable.
+    """
+    if not isinstance(birth, dict):
+        return None
+    dob_str = birth.get("dob") or birth.get("birthDate") or birth.get("date")
+    if isinstance(dob_str, str) and len(dob_str) >= 10:
+        try:
+            d = datetime.strptime(dob_str[:10], "%Y-%m-%d")
+            yrs = ref.year - d.year - (
+                (ref.month, ref.day) < (d.month, d.day))
+            return max(0, yrs)
+        except ValueError:
+            pass
+    y = birth.get("year") or birth.get("birthYear") or birth.get("yearOfBirth")
+    m = birth.get("month")
+    day = birth.get("day")
+    if isinstance(y, int) and 1900 <= y <= 2100:
+        if isinstance(m, int) and isinstance(day, int):
+            try:
+                d = datetime(y, m, day)
+                yrs = ref.year - d.year - (
+                    (ref.month, ref.day) < (d.month, d.day))
+                return max(0, yrs)
+            except ValueError:
+                pass
+        return max(0, ref.year - y)
+    return None
+
+
+def _classify_age_band(age: Optional[int], is_female: Optional[bool]
+                        ) -> Optional[str]:
+    """Return EARLY / ON_TIME / LATE / VERY_LATE for given age + gender."""
+    if age is None:
+        return None
+    if is_female is True:
+        ladder = _AGE_BANDS_FEMALE
+    elif is_female is False:
+        ladder = _AGE_BANDS_MALE
+    else:
+        ladder = _AGE_BANDS_NEUTRAL
+    for cutoff, label in ladder:
+        if age < cutoff:
+            return label
+    return "VERY_LATE"
+
+
+def _urgency_from_band(band: Optional[str]) -> str:
+    """Map age band → urgency tier consumed by LLM tone selection."""
+    return {
+        "EARLY":     "RELAXED",
+        "ON_TIME":   "ACTIVE",
+        "LATE":      "URGENT",
+        "VERY_LATE": "VERY_URGENT",
+    }.get(band or "", "UNKNOWN")
+
+
 def _confluence_label(score: float) -> str:
     if score >= 10.0:
         return "STRONG"
@@ -1119,6 +1191,17 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         elif g.startswith("m"):
             is_female = False
 
+    # ── Age + age-band (used for urgency + recent-window boost) ───────
+    _now_for_age = datetime.utcnow()
+    user_age = _compute_age_at(birth, _now_for_age)
+    age_band = _classify_age_band(user_age, is_female)
+    urgency = _urgency_from_band(age_band)
+    gender_label = "female" if is_female is True else (
+        "male" if is_female is False else "unknown")
+    factors.append(
+        f"AGE user_age={user_age} gender={gender_label} "
+        f"band={age_band} urgency={urgency}")
+
     # ── STEP 1 ────────────────────────────────────────────────────────
     d1_map = _step1_d1_filter(kundli, lagna_si)
     filtered_set = {p for p, info in d1_map.items() if info.get("in_filter")}
@@ -1196,6 +1279,28 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         if av_label:
             factors.append(f"STEP7 {av_label}")
 
+    # ── Recency boost: if user is already at/past marriageable age,
+    # boost windows starting within next _RECENT_WINDOW_DAYS so the
+    # engine surfaces near-term candidates first instead of distant ones.
+    recent_focus = age_band in ("ON_TIME", "LATE", "VERY_LATE")
+    if recent_focus:
+        recent_cutoff = now + timedelta(days=_RECENT_WINDOW_DAYS)
+        boost_per_band = {
+            "ON_TIME":   _RECENT_BOOST,           # 3.0
+            "LATE":      _RECENT_BOOST + 1.5,     # 4.5
+            "VERY_LATE": _RECENT_BOOST + 3.0,     # 6.0
+        }.get(age_band or "", 0.0)
+        boosted_n = 0
+        for c in future_candidates:
+            if c["start"] <= recent_cutoff:
+                c["score"] = float(c["score"]) + boost_per_band
+                c["recent_boost"] = boost_per_band
+                boosted_n += 1
+        if boosted_n:
+            factors.append(
+                f"AGE_RECENCY boosted {boosted_n} window(s) within "
+                f"{_RECENT_WINDOW_DAYS}d by +{boost_per_band}")
+
     # Re-sort after STEP 6/7 adjustments
     future_candidates.sort(key=lambda x: (x["priority"], -x["score"], x["start"]))
 
@@ -1264,7 +1369,13 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         "top_marriage_planets": ranked,
         "weighted_breakdown": weighted_breakdown,
         "future_cascade_narrative": cascade_narrative,
+        # Age + urgency context (NEW)
+        "user_age": user_age,
+        "user_gender": gender_label,
+        "age_band": age_band,
+        "urgency": urgency,
+        "recent_year_focus": recent_focus,
         # Engine metadata
-        "engine_version": "v2.0.0",
+        "engine_version": "v2.1.0",
         "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER",
     }

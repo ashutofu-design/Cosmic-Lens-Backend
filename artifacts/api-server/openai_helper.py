@@ -203,6 +203,20 @@ def _M17_format_marriage_block(engine_result: dict) -> str:
         parts.append(v)
         parts.append("")
 
+    # Age + urgency context (v2.1) — LLM uses this to set tone + pick
+    # whether to lead with near-term window vs. long-term cascade.
+    user_age = engine_result.get("user_age")
+    age_band = engine_result.get("age_band")
+    urgency = engine_result.get("urgency")
+    if user_age is not None and age_band:
+        gen = engine_result.get("user_gender", "unknown")
+        line = f"USER: age={user_age} gender={gen} band={age_band} urgency={urgency}"
+        parts.append(line)
+        if engine_result.get("recent_year_focus"):
+            parts.append("FOCUS: user marriageable-age band hai — agle 12 "
+                          "mahine ki window pe pehle baat karo, fir long-term.")
+        parts.append("")
+
     top3 = engine_result.get("top_3_windows") or []
     if top3:
         parts.append("TOP 3 WINDOWS — MD-AD-PD | score | window")

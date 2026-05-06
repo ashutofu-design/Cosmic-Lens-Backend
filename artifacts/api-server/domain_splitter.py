@@ -1,0 +1,339 @@
+"""
+domain_splitter.py — P1.2.10 (B1)
+==================================
+Deterministic regex-based domain extractor for the multi-intent splitter.
+
+Public API
+----------
+    from domain_splitter import (
+        extract_domains, is_jyotish_anchored, DomainHit, DOMAIN_LABELS,
+    )
+
+    hits = extract_domains("ghar lene ka yog kab aur shaadi ka bhi")
+    # → [DomainHit(name="property", ...), DomainHit(name="marriage", ...)]
+
+Design notes
+------------
+- ENGINE-FIRST: pure regex, no LLM. Same Q = same hits, fully deterministic.
+- Word-boundary strict to avoid substring traps (e.g. "rajaani" must not
+  match "naani"; "bharosa" must not match "rosa"). All patterns use `\b`.
+- Hinglish-first vocabulary; English synonyms included.
+- Confidence = count of distinct keyword hits per domain (capped at 3).
+- Used by: intent_splitter (B1 acknowledge), brand_guard escape hatch.
+- Killswitch: env DOMAIN_SPLITTER=off → extract_domains returns [].
+"""
+from __future__ import annotations
+
+import os
+import re
+from typing import Dict, List, Optional
+
+
+# ── Configuration ───────────────────────────────────────────────────────────
+def _env_on(name: str, default: bool = True) -> bool:
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return default
+    return raw.strip().lower() not in ("0", "off", "false", "no", "")
+
+
+SPLITTER_ENABLED: bool = _env_on("DOMAIN_SPLITTER", True)
+
+
+# ── Domain → keyword list ───────────────────────────────────────────────────
+# Each keyword is a literal token (case-insensitive). Multi-word phrases use
+# `\s+` allowance via _phrase(). Order within a domain doesn't matter.
+#
+# CRITICAL: keep these tight. False positives in domain_splitter cascade into:
+#   1. brand_guard escape hatch firing on non-jyotish Qs (off-topic leak)
+#   2. multi-intent splitter wrongly splitting a single-intent Q
+#
+# The comments next to each domain show what user-facing label appears in the
+# B1 acknowledge line (DOMAIN_LABELS dict below).
+# Architect-tightened (P1.2.10 review):
+#   - removed `house` from property (chart-house asks like "7th house me venus")
+#   - removed bare `shani` from dasha (planet name appears in many natal asks)
+#   - removed bare `transit/gochar` from dasha (too generic — only `mahadasha/
+#     antardasha/saade saati` etc. are unambiguous dasha words)
+#   - removed `business` and bare `share/shares` from finance (overlap with
+#     career-business and chart-house "share" / brand-guard share-trading)
+#   - removed bare `travel` from travel (too generic English word)
+#   - removed bare `kaam/work` from career (too generic)
+#   - removed bare `case/law/court` from legal (too overloaded)
+_DOMAIN_KEYWORDS: Dict[str, List[str]] = {
+    # property / housing / real estate
+    "property": [
+        "ghar", "makaan", "makan", "property", "real estate", "plot",
+        "flat", "zameen", "apartment", "housing", "real-estate",
+        "ghar lena", "property lena", "ghar lene", "ghar kab",
+    ],
+    # marriage / spouse / relationship
+    "marriage": [
+        "shaadi", "shadi", "vivah", "vivaah", "marriage", "patni", "pati",
+        "biwi", "husband", "wife", "spouse", "partner", "rishta",
+        "kundli match", "kundli milan", "milan",
+        "love marriage", "arranged marriage", "girlfriend", "boyfriend",
+        "sagai", "engagement",
+    ],
+    # career / job / work — must be employment-specific (not bare "kaam")
+    "career": [
+        "job", "naukri", "naukari", "career", "kaam-kaaj",
+        "boss", "salary", "promotion", "interview", "company",
+        "employment", "business job", "transfer order",
+        "job change", "career change", "naukri change",
+    ],
+    # finance / money / wealth — bare "share/business" removed (ambiguous)
+    "finance": [
+        "paisa", "paise", "money", "wealth", "dhan", "income", "saving",
+        "savings", "loan", "debt", "karza", "kharcha", "kharch", "expense",
+        "investment", "invest", "investing", "share market", "stock market",
+        "stocks", "trade", "trading", "earning", "kamai",
+        "profit", "loss", "muafa", "nuksan", "amir", "ameer",
+        "business loss", "business growth", "intraday",
+    ],
+    # health / wellness / illness
+    "health": [
+        "health", "swasthya", "bimari", "bimaari", "illness", "rog",
+        "sickness", "tabiyat", "tabiyyat", "sehat", "dard", "pain",
+        "headache", "sar dard", "neend", "sleep", "insomnia", "stress",
+        "tension", "anxiety", "depression", "weak", "kamzor", "kamzori",
+        "thakaan", "thakavat", "fatigue",
+    ],
+    # education / studies / exams
+    "education": [
+        "padhai", "padhaai", "studies", "study", "exam", "exams",
+        "education", "school", "college", "university", "degree",
+        "course", "result", "marks", "rank", "competitive exam",
+        "neet", "jee", "upsc", "ssc", "ielts", "gate", "cat exam",
+    ],
+    # family / parents / siblings / children
+    "family": [
+        "maa", "maa-baap", "papa", "father", "mother", "bhai", "behen",
+        "behan", "brother", "sister", "parivar", "family", "beta",
+        "beti", "child", "santaan", "santan", "putra", "putri",
+        "daughter", "son", "kids", "bachche", "bacche",
+    ],
+    # vastu / directional / home setup
+    "vastu": [
+        "vastu", "vaastu", "disha", "bedroom", "ghar ki disha",
+        "puja room", "puja-room", "mandir room", "main door",
+        "kitchen direction", "bed direction",
+    ],
+    # dasha / planetary periods — bare "shani/rahu/transit" removed
+    "dasha": [
+        "dasha", "mahadasha", "antardasha", "pratyantar",
+        "rahu kaal", "shani saade saati", "saade saati", "sade sati",
+        "dhaiya", "shani dasha", "rahu dasha", "guru dasha",
+        "shani period", "rahu period", "guru period",
+    ],
+    # remedies / upay / spiritual practice
+    "remedies": [
+        "upay", "remedy", "remedies", "totka", "pooja", "puja", "havan",
+        "yantra", "mantra", "japa", "rudraksha", "ratna", "gemstone",
+        "kavach", "vrat", "donation", "daan",
+    ],
+    # travel / abroad / migration — bare "travel" removed
+    "travel": [
+        "videsh", "videsh yatra", "abroad", "foreign settlement",
+        "yatra", "visa", "immigration", "migration", "settlement abroad",
+        "settle abroad", "us visa", "canada visa", "uk visa",
+    ],
+    # legal / litigation — bare "case/court/law" removed
+    "legal": [
+        "court case", "kanoon", "kanooni", "kanooni mamla", "lawsuit",
+        "muqadma", "muqaddma", "fir", "vakil", "lawyer",
+        "judgment", "judgement", "police case",
+    ],
+}
+
+
+# ── Explicit astro-anchor lexicon (used by brand-guard escape) ──────────────
+# These are pure-jyotish words that cannot belong to any non-astro topic.
+# Brand-guard escape requires either >=2 domain hits OR >=1 explicit anchor.
+_ASTRO_ANCHOR_PATTERNS: List[re.Pattern] = [
+    re.compile(rf"\b{p}\b", re.IGNORECASE) for p in (
+        "kundli", "kundali", "janam patri", "janam-patri", "horoscope",
+        "rashi", "raashi", "lagna", "lagn", "navamsa", "navamsh",
+        "bhava", "bhav", "nakshatra", "nakshatr",
+        "graha", "grah dosha", "yog", "dosh", "dosha",
+        "jyotish", "astrology", "astrologer",
+        "mahadasha", "antardasha", "saade saati", "sade sati",
+        "kal sarp", "kalsarp", "mangal dosh", "manglik",
+        "navagraha", "panchang", "panchaang",
+        "rashifal", "raashifal", "varshphal",
+        "guru chandal", "vish yog", "raj yog", "raj-yog",
+    )
+]
+
+
+def has_astro_anchor(question: str) -> bool:
+    """True if question contains an unambiguous jyotish-anchor word."""
+    if not question:
+        return False
+    return any(rx.search(question) for rx in _ASTRO_ANCHOR_PATTERNS)
+
+
+# ── User-facing labels (what appears in B1 acknowledge line) ────────────────
+DOMAIN_LABELS: Dict[str, Dict[str, str]] = {
+    # Hinglish (default)
+    "hinglish": {
+        "property":  "ghar/property",
+        "marriage":  "shaadi",
+        "career":    "job/career",
+        "finance":   "paisa/business",
+        "health":    "health",
+        "education": "padhai",
+        "family":    "parivar",
+        "vastu":     "vastu",
+        "dasha":     "dasha",
+        "remedies":  "upay",
+        "travel":    "videsh",
+        "legal":     "kanooni mamla",
+    },
+    # English
+    "en": {
+        "property":  "property",
+        "marriage":  "marriage",
+        "career":    "career",
+        "finance":   "money/business",
+        "health":    "health",
+        "education": "studies",
+        "family":    "family",
+        "vastu":     "vastu",
+        "dasha":     "dasha",
+        "remedies":  "remedies",
+        "travel":    "travel/abroad",
+        "legal":     "legal matter",
+    },
+    # Hindi
+    "hi": {
+        "property":  "ghar",
+        "marriage":  "vivaah",
+        "career":    "naukri",
+        "finance":   "dhan",
+        "health":    "swasthya",
+        "education": "shiksha",
+        "family":    "parivar",
+        "vastu":     "vastu",
+        "dasha":     "dasha",
+        "remedies":  "upay",
+        "travel":    "videsh-yatra",
+        "legal":     "kanooni mamla",
+    },
+}
+
+
+# ── Compile patterns once (word-boundary strict) ────────────────────────────
+def _compile_keyword(kw: str) -> re.Pattern:
+    """Compile a keyword as a word-bounded, whitespace-tolerant pattern."""
+    parts = kw.strip().split()
+    if not parts:
+        return re.compile(r"(?!x)x")  # never matches
+    escaped = r"\s+".join(re.escape(p) for p in parts)
+    return re.compile(rf"\b{escaped}\b", re.IGNORECASE)
+
+
+_DOMAIN_PATTERNS: Dict[str, List[re.Pattern]] = {
+    name: [_compile_keyword(k) for k in kws]
+    for name, kws in _DOMAIN_KEYWORDS.items()
+}
+
+
+# ── DomainHit ───────────────────────────────────────────────────────────────
+class DomainHit:
+    """One domain match with its hit-keywords list and confidence score."""
+
+    __slots__ = ("name", "keywords", "first_pos", "confidence")
+
+    def __init__(self, name: str, keywords: List[str], first_pos: int,
+                 confidence: int):
+        self.name = name
+        self.keywords = keywords
+        self.first_pos = first_pos
+        self.confidence = confidence
+
+    def __repr__(self) -> str:
+        return (f"DomainHit(name={self.name!r}, kws={self.keywords!r}, "
+                f"pos={self.first_pos}, conf={self.confidence})")
+
+    def to_dict(self) -> dict:
+        return {
+            "name":       self.name,
+            "keywords":   self.keywords,
+            "first_pos":  self.first_pos,
+            "confidence": self.confidence,
+        }
+
+
+# ── Public API ──────────────────────────────────────────────────────────────
+def extract_domains(question: str) -> List[DomainHit]:
+    """
+    Scan `question` for jyotish domains. Returns list sorted by:
+      1. confidence DESC
+      2. first_pos ASC (earlier mention wins ties)
+
+    Killswitch: DOMAIN_SPLITTER=off → returns [].
+    """
+    if not SPLITTER_ENABLED or not question:
+        return []
+
+    q = question.strip()
+    if not q:
+        return []
+
+    hits: List[DomainHit] = []
+    for domain, patterns in _DOMAIN_PATTERNS.items():
+        matched_kws: List[str] = []
+        first_pos: Optional[int] = None
+        for pat in patterns:
+            m = pat.search(q)
+            if m:
+                matched_kws.append(pat.pattern)
+                if first_pos is None or m.start() < first_pos:
+                    first_pos = m.start()
+        if matched_kws:
+            # Confidence cap at 3 — beyond that adds no signal
+            conf = min(len(matched_kws), 3)
+            hits.append(DomainHit(
+                name=domain,
+                keywords=matched_kws,
+                first_pos=first_pos if first_pos is not None else 0,
+                confidence=conf,
+            ))
+
+    # Sort: confidence desc, first_pos asc
+    hits.sort(key=lambda h: (-h.confidence, h.first_pos))
+    return hits
+
+
+
+
+def is_jyotish_anchored(question: str) -> bool:
+    """
+    DEPRECATED for safety-critical use. True if question hits >=1 jyotish
+    domain. Retained for backwards compatibility only — too lenient for
+    brand-guard escape gating. Use is_jyotish_anchored_strict() instead.
+    """
+    return len(extract_domains(question)) >= 1
+
+
+def is_jyotish_anchored_strict(question: str) -> bool:
+    """
+    STRICT anchor for brand-guard escape (P1.2.10 architect-tightened).
+    True only when EITHER:
+      (a) question contains an explicit astro-anchor word (kundli/dasha/
+          yog/rashi/lagna/jyotish/...), OR
+      (b) question hits >=2 distinct jyotish DOMAINS (genuine hybrid).
+    A single domain hit (e.g. bare "share market kal buy or sell") is NOT
+    enough — that's exactly what the negative-list is meant to catch.
+    """
+    if not question:
+        return False
+    if has_astro_anchor(question):
+        return True
+    return len(extract_domains(question)) >= 2
+
+
+def is_enabled() -> bool:
+    """True if DOMAIN_SPLITTER killswitch is on (default ON)."""
+    return SPLITTER_ENABLED

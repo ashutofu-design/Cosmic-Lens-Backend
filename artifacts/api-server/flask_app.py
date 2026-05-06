@@ -6015,6 +6015,16 @@ def ask_route():
             },
         }
         _log_question_history(user, question, out)
+        # P1.2.10 B1 - Multi-intent ack (engine early-return chokepoint)
+        try:
+            if isinstance(out, dict) and isinstance(out.get("text"), str) and out["text"].strip():
+                from openai_helper import _maybe_inject_multi_intent_ack as _ack_p1210e
+                out["text"] = _ack_p1210e(
+                    out["text"], question, lang=lang,
+                    req_id="route_engine", path="route_engine_early",
+                )
+        except Exception as _ack_e_exc:
+            print(f"[ask] P1210 engine-early ack failed (non-fatal): {_ack_e_exc}")
         return jsonify(out)
 
     # ── PROPERTY STATIC hookup (P1.0 — runs after health_static) ──────────
@@ -6054,6 +6064,16 @@ def ask_route():
             },
         }
         _log_question_history(user, question, out)
+        # P1.2.10 B1 - Multi-intent ack (engine early-return chokepoint)
+        try:
+            if isinstance(out, dict) and isinstance(out.get("text"), str) and out["text"].strip():
+                from openai_helper import _maybe_inject_multi_intent_ack as _ack_p1210e
+                out["text"] = _ack_p1210e(
+                    out["text"], question, lang=lang,
+                    req_id="route_engine", path="route_engine_early",
+                )
+        except Exception as _ack_e_exc:
+            print(f"[ask] P1210 engine-early ack failed (non-fatal): {_ack_e_exc}")
         return jsonify(out)
 
     # ── Y2 FINANCE-MONEY hookup (runs FIRST per user directive) ─────────────
@@ -6106,6 +6126,16 @@ def ask_route():
             },
         }
         _log_question_history(user, question, out)
+        # P1.2.10 B1 - Multi-intent ack (engine early-return chokepoint)
+        try:
+            if isinstance(out, dict) and isinstance(out.get("text"), str) and out["text"].strip():
+                from openai_helper import _maybe_inject_multi_intent_ack as _ack_p1210e
+                out["text"] = _ack_p1210e(
+                    out["text"], question, lang=lang,
+                    req_id="route_engine", path="route_engine_early",
+                )
+        except Exception as _ack_e_exc:
+            print(f"[ask] P1210 engine-early ack failed (non-fatal): {_ack_e_exc}")
         return jsonify(out)
 
     # ── Phase 2.10.7 — Y2 STOCK hookup (runs AFTER finance) ─────────────────
@@ -6138,6 +6168,16 @@ def ask_route():
             },
         }
         _log_question_history(user, question, out)
+        # P1.2.10 B1 - Multi-intent ack (engine early-return chokepoint)
+        try:
+            if isinstance(out, dict) and isinstance(out.get("text"), str) and out["text"].strip():
+                from openai_helper import _maybe_inject_multi_intent_ack as _ack_p1210e
+                out["text"] = _ack_p1210e(
+                    out["text"], question, lang=lang,
+                    req_id="route_engine", path="route_engine_early",
+                )
+        except Exception as _ack_e_exc:
+            print(f"[ask] P1210 engine-early ack failed (non-fatal): {_ack_e_exc}")
         return jsonify(out)
 
     # ── Run engine ───────────────────────────────────────────────────────────
@@ -6234,6 +6274,21 @@ def ask_route():
             # Defensive — save_user_question() already swallows; this is a
             # second belt-and-braces guard for the kundli FK lookup.
             print(f"[ask] question_history save failed (non-fatal): {exc}")
+
+    # P1.2.10 B1 - Multi-intent acknowledge (route-level chokepoint).
+    # Catches ALL engine paths (ai_passthrough / health_static / stock_engine
+    # / marriage / general LLM / rule fallback) in ONE place. Idempotent via
+    # is_already_acknowledged(). Killswitch: MULTI_INTENT_SPLIT=off.
+    if isinstance(result, dict) and isinstance(result.get("text"), str) and result["text"].strip():
+        try:
+            from openai_helper import _maybe_inject_multi_intent_ack as _ack_p1210
+            result["text"] = _ack_p1210(
+                result["text"], question, lang=lang,
+                req_id="route_ask", path="route_sync",
+            )
+        except Exception as _ack_route_exc:
+            print(f"[ask] P1210 route-level ack injection failed (non-fatal): {_ack_route_exc}")
+
     return jsonify(result)
 
 
@@ -6496,6 +6551,16 @@ def ask_stream_route():
             },
         }
         _log_question_history(user, question, out)
+        # P1.2.10 B1 - Multi-intent ack (engine early-return chokepoint)
+        try:
+            if isinstance(out, dict) and isinstance(out.get("text"), str) and out["text"].strip():
+                from openai_helper import _maybe_inject_multi_intent_ack as _ack_p1210e
+                out["text"] = _ack_p1210e(
+                    out["text"], question, lang=lang,
+                    req_id="route_engine", path="route_engine_early",
+                )
+        except Exception as _ack_e_exc:
+            print(f"[ask] P1210 engine-early ack failed (non-fatal): {_ack_e_exc}")
         return jsonify(out)
 
     # ── PROPERTY STATIC hookup (P1.0 — stream parity) ─────────────────────
@@ -6532,6 +6597,16 @@ def ask_stream_route():
             },
         }
         _log_question_history(user, question, out)
+        # P1.2.10 B1 - Multi-intent ack (engine early-return chokepoint)
+        try:
+            if isinstance(out, dict) and isinstance(out.get("text"), str) and out["text"].strip():
+                from openai_helper import _maybe_inject_multi_intent_ack as _ack_p1210e
+                out["text"] = _ack_p1210e(
+                    out["text"], question, lang=lang,
+                    req_id="route_engine", path="route_engine_early",
+                )
+        except Exception as _ack_e_exc:
+            print(f"[ask] P1210 engine-early ack failed (non-fatal): {_ack_e_exc}")
         return jsonify(out)
 
     # H2.7.8 — FINANCE_STATIC_BYPASS killswitch (stream /api/ask/stream).
@@ -6572,6 +6647,16 @@ def ask_stream_route():
             },
         }
         _log_question_history(user, question, out)
+        # P1.2.10 B1 - Multi-intent ack (engine early-return chokepoint)
+        try:
+            if isinstance(out, dict) and isinstance(out.get("text"), str) and out["text"].strip():
+                from openai_helper import _maybe_inject_multi_intent_ack as _ack_p1210e
+                out["text"] = _ack_p1210e(
+                    out["text"], question, lang=lang,
+                    req_id="route_engine", path="route_engine_early",
+                )
+        except Exception as _ack_e_exc:
+            print(f"[ask] P1210 engine-early ack failed (non-fatal): {_ack_e_exc}")
         return jsonify(out)
 
     try:
@@ -6600,6 +6685,16 @@ def ask_stream_route():
             },
         }
         _log_question_history(user, question, out)
+        # P1.2.10 B1 - Multi-intent ack (engine early-return chokepoint)
+        try:
+            if isinstance(out, dict) and isinstance(out.get("text"), str) and out["text"].strip():
+                from openai_helper import _maybe_inject_multi_intent_ack as _ack_p1210e
+                out["text"] = _ack_p1210e(
+                    out["text"], question, lang=lang,
+                    req_id="route_engine", path="route_engine_early",
+                )
+        except Exception as _ack_e_exc:
+            print(f"[ask] P1210 engine-early ack failed (non-fatal): {_ack_e_exc}")
         return jsonify(out)
 
     # ── No OpenAI → degrade gracefully to rule-engine JSON (no streaming). ──
@@ -6613,6 +6708,15 @@ def ask_stream_route():
             result["quota"]  = quota_payload
             result["plan"]   = plan_payload
             result["source"] = result.get("source", "rules")
+        # P1.2.10 B1 — ack on no-OpenAI rule-engine fallback
+        try:
+            if isinstance(result, dict) and isinstance(result.get("text"), str) and result["text"].strip():
+                from openai_helper import _maybe_inject_multi_intent_ack as _ack_p1210s1
+                result["text"] = _ack_p1210s1(
+                    result["text"], question, lang=lang,
+                    req_id="stream_no_openai", path="stream_no_openai_fallback",
+                )
+        except Exception as _ack_e_s1: print(f"[ask/stream] P1210 no-openai ack failed (non-fatal): {_ack_e_s1}")
         _log_question_history(user, question, result)
         return jsonify(result)
 
@@ -6655,6 +6759,15 @@ def ask_stream_route():
             # Phase 2.8.27 — default engine_tag for non-stream fallbacks.
             # If ai_ask sync passthrough already set it, keep that value.
             result["engine_tag"] = result.get("engine_tag", "ans-cosmo")
+        # P1.2.10 B1 — ack on stream-setup-failed JSON fallback
+        try:
+            if isinstance(result, dict) and isinstance(result.get("text"), str) and result["text"].strip():
+                from openai_helper import _maybe_inject_multi_intent_ack as _ack_p1210s2
+                result["text"] = _ack_p1210s2(
+                    result["text"], question, lang=lang,
+                    req_id="stream_setup_fail", path="stream_setup_fail_fallback",
+                )
+        except Exception as _ack_e_s2: print(f"[ask/stream] P1210 stream-setup-fail ack failed (non-fatal): {_ack_e_s2}")
         _log_question_history(user, question, result)
         return jsonify(result)
 
@@ -6703,6 +6816,19 @@ def ask_stream_route():
                     ) + "\n\n"
                 elif kind == "final":
                     final_topic = evt.get("topic", "general")
+                    # P1.2.10 B1 - Multi-intent acknowledge (route-level
+                    # chokepoint, stream). Catches all engine paths.
+                    # Killswitch: MULTI_INTENT_SPLIT=off.
+                    try:
+                        _evt_text_p1210 = evt.get("text", "")
+                        if isinstance(_evt_text_p1210, str) and _evt_text_p1210.strip():
+                            from openai_helper import _maybe_inject_multi_intent_ack as _ack_p1210s
+                            evt["text"] = _ack_p1210s(
+                                _evt_text_p1210, question, lang=lang,
+                                req_id="route_ask_stream", path="route_stream",
+                            )
+                    except Exception as _ack_stream_exc:
+                        print(f"[ask/stream] P1210 ack injection failed (non-fatal): {_ack_stream_exc}")
                     # Phase 7.5 — pass clarifier payload through the SSE
                     # `done` envelope. Helper attaches `clarification`
                     # only when the env-gated builder returned non-None;

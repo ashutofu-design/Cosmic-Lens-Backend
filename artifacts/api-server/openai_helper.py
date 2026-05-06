@@ -6866,7 +6866,91 @@ _BRAND_UNSAFE_RE = [re.compile(p, re.IGNORECASE) for p in _BRAND_UNSAFE_PATTERNS
 def _is_brand_unsafe(question: str) -> bool:
     if not question:
         return False
-    return any(rx.search(question) for rx in _BRAND_UNSAFE_RE)
+    matched = any(rx.search(question) for rx in _BRAND_UNSAFE_RE)
+    if not matched:
+        return False
+    # ── P1.2.10 — POSITIVE-LIST ESCAPE HATCH ────────────────────────────────
+    # Negative-list patterns above include broad keywords like
+    # `(stock|share)...(buy|sell|kal|target)`. Cross-domain jyotish Qs like
+    # "Property me invest karu ya share market me, aur health bhi theek nahi
+    # rehti aaj kal" match `share + kal` and get falsely refused as off-topic.
+    # Fix: if the question is anchored to >=1 jyotish domain (per
+    # domain_splitter), bypass the refusal -- engine-side topic router will
+    # focus the answer on the genuine astro intent.
+    # Killswitch: BRAND_GUARD_POSITIVE_ESCAPE=off -> skip escape (legacy).
+    try:
+        import os as _os_p1210
+        _esc = (_os_p1210.getenv("BRAND_GUARD_POSITIVE_ESCAPE") or "on").strip().lower()
+        if _esc not in ("0", "off", "false", "no"):
+            from domain_splitter import is_jyotish_anchored_strict as _is_anc_p1210
+            from domain_splitter import extract_domains as _ext_p1210
+            if _is_anc_p1210(question):
+                try:
+                    _hits_p1210 = _ext_p1210(question)
+                    print("[brand_guard] P1210_ESCAPE: jyotish-anchored Q "
+                          f"allowed through. domains="
+                          f"{[h.name for h in _hits_p1210]}")
+                except Exception:
+                    pass
+                return False
+    except Exception:
+        pass
+    return True
+
+
+# ── P1.2.10 — Multi-intent acknowledge post-injector ────────────────────────
+# B1 strategy: when a question hits >=2 distinct jyotish domains, append a
+# 1-line acknowledge note at the end of the LLM answer naming the secondary
+# domains the user also asked about. Keeps token cost flat (1 LLM call) while
+# letting the user know their other questions weren't silently dropped.
+# Killswitch: MULTI_INTENT_SPLIT=off -> no-op (legacy single-intent answer).
+def _maybe_inject_multi_intent_ack(text, question, lang="hinglish",
+                                   req_id="", path=""):
+    """ADD-ONLY post-injector. Returns possibly-augmented `text`. Always safe."""
+    try:
+        if not text or not isinstance(text, str):
+            return text
+        if not question or not isinstance(question, str):
+            return text
+        from intent_splitter import (
+            analyze as _ins_analyze,
+            build_acknowledge_line as _ins_build_ack,
+            is_already_acknowledged as _ins_already,
+        )
+        mi = _ins_analyze(question)
+        if not mi:
+            return text
+        if _ins_already(text, mi.secondaries):
+            try:
+                _trace(req_id, "P1210.MULTI_INTENT_SKIP_ALREADY_ACK", {
+                    "path": path, "primary": mi.primary,
+                    "secondaries": mi.secondaries,
+                })
+            except Exception:
+                pass
+            return text
+        ack = _ins_build_ack(mi.secondaries, lang or "hinglish")
+        if not ack:
+            return text
+        out = text.rstrip() + "\n\n" + ack
+        try:
+            _trace(req_id, "P1210.MULTI_INTENT_ACK_INJECTED", {
+                "path":        path,
+                "primary":     mi.primary,
+                "secondaries": mi.secondaries,
+                "n_domains":   len(mi.all_hits),
+                "ack_chars":   len(ack),
+            })
+        except Exception:
+            pass
+        return out
+    except Exception as _ack_exc:  # noqa: BLE001
+        try:
+            _trace(req_id, "P1210.MULTI_INTENT_ERROR",
+                   {"path": path, "error": str(_ack_exc)[:200]})
+        except Exception:
+            pass
+        return text
 
 
 _BRAND_SAFE_REDIRECT = {
@@ -17956,6 +18040,10 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                     "the NEXT user turn is reclassified independently — "
                     "mode does NOT inherit from this turn",
     })
+    # ── P1.2.10 B1 — Multi-intent acknowledge (sync_full path) ──
+    text = _maybe_inject_multi_intent_ack(
+        text, question, lang=eff_lang, req_id=req_id, path="sync_full"
+    )
     _result = {
         "text":       text,
         "topic":      topic,
@@ -18584,6 +18672,11 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                     "reason": str(_h277_exc_stream)[:160],
                 })
 
+            # ── P1.2.10 B1 — Multi-intent acknowledge (passthrough stream) ──
+            _full_text_pt_s_scrubbed = _maybe_inject_multi_intent_ack(
+                _full_text_pt_s_scrubbed, question,
+                lang=lang, req_id=req_id, path="passthrough_stream"
+            )
             _final_envelope_pt_s = {
                 "kind":       "final",
                 "text":       _full_text_pt_s_scrubbed,
@@ -19517,6 +19610,10 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                     "the NEXT user turn is reclassified independently — "
                     "mode does NOT inherit from this turn",
     })
+    # ── P1.2.10 B1 — Multi-intent acknowledge (stream main path) ──
+    final_text = _maybe_inject_multi_intent_ack(
+        final_text, question, lang=eff_lang, req_id=req_id, path="stream_main"
+    )
     _final_evt = {
         "kind":                  "final",
         "text":                  final_text,

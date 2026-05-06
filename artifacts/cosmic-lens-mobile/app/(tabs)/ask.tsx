@@ -72,25 +72,25 @@ const DEMO_MESSAGES: Message[] = [
   {
     id: "d1",
     role: "assistant",
-    text: "Pranam beta 🙏 Mai Acharya Vidyasagar — 35 saal se kundli padh raha hu Kashi mein. Aap apni kundli, dasha, vivah, karya, swasthya — kuch bhi pooch sakte hain, mai margdarshan dunga.",
+    text: "Welcome. I'm Cosmic Intelligence — your personal Vedic chart analyst. Sharp, evidence-based answers from your unique birth chart. Career, marriage, health, money — ask anything.",
   },
   {
     id: "d2",
     role: "user",
-    text: "How will my career be this year?",
+    text: "How will my career shape up this year?",
   },
   {
     id: "d3",
     role: "assistant",
-    text: "Beta, bina kundli dekhe mai sirf saamanya baat keh sakta hu. Aap pehle apni janm-kundli banaiye — phir mai aapke graha, dasha aur yog dekh ke ekdum personalized margdarshan dunga.",
+    text: "Personalized analysis aapki birth-chart se hota hai. Pehle quick kundli setup kar lo (1 minute) — phir exact timing, strengths aur risk areas mil jayenge.",
   },
 ];
 
 const STARTERS = [
-  "Mera vivah kab hoga?",
-  "Career mein safalta kab milegi?",
-  "Mere swasthya ke baare mein bataiye",
-  "Dhan-laabh kab hoga mujhe?",
+  "Marriage kab hoga?",
+  "Career growth kab milegi?",
+  "Health kaisi rahegi?",
+  "Paisa kab aayega?",
 ];
 
 // ── Recent-Questions formatters ──────────────────────────────────────────

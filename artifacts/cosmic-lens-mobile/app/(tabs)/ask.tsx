@@ -431,7 +431,14 @@ export default function AskScreen() {
 
         // Use raw fetch (not apiFetch) — apiFetch's network-retry can re-issue
         // the request mid-stream; SSE responses must not be retried.
-        const res = await fetch(`${API_BASE}/api/ask/stream`, {
+        // INITIAL-CONNECT RETRY (May 6 2026): the first TLS handshake to
+        // a fresh cloudflare tunnel host occasionally hiccups (HTTP/2 RST
+        // or DNS warm-up), causing fetch() to throw before any response
+        // is received. Retrying ONLY the initial fetch (before we touch
+        // res.body) is safe because no stream bytes have been consumed
+        // yet — this is identical to apiFetch's policy. Mid-stream errors
+        // still fail to the user as before.
+        const _reqInit: RequestInit = {
           method: "POST",
           headers,
           body: JSON.stringify({
@@ -443,7 +450,23 @@ export default function AskScreen() {
             user_id: user?.id,
           }),
           signal: ctrl.signal,
-        });
+        };
+        let res: Response;
+        try {
+          res = await fetch(`${API_BASE}/api/ask/stream`, _reqInit);
+        } catch (_initErr: any) {
+          // Bail immediately on user-cancel / supersede / unmount.
+          if (_initErr?.name === "AbortError") throw _initErr;
+          if (!isCurrent()) throw _initErr;
+          const _msg = String(_initErr?.message || "");
+          // Only retry on classic transient network failures.
+          if (!/Network request failed|TypeError|fetch|Failed to fetch|Load failed/i.test(_msg)) {
+            throw _initErr;
+          }
+          await new Promise(r => setTimeout(r, 600));
+          if (!isCurrent()) throw _initErr;
+          res = await fetch(`${API_BASE}/api/ask/stream`, _reqInit);
+        }
 
         // Stale completion — a newer send superseded us; drop quietly.
         if (!isCurrent()) return;

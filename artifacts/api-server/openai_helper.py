@@ -226,6 +226,25 @@ def _M17_format_marriage_block(engine_result: dict) -> str:
         if engine_result.get("recent_year_focus"):
             parts.append("FOCUS: user marriageable-age band hai — agle 12 "
                           "mahine ki window pe pehle baat karo, fir long-term.")
+        # v2.4 — Age-sanity directive when user is below practical floor.
+        # Prevents engine from telling a 17-year-old "shaadi 3 mahine mein"
+        # even if dasha/PD perfectly aligns. Engine has already suppressed
+        # pre-floor windows; LLM must frame this gently and lead with
+        # study/career first.
+        if engine_result.get("too_young_for_marriage"):
+            min_age = engine_result.get("min_practical_age")
+            ep = engine_result.get("earliest_practical_window_start_iso")
+            sup = engine_result.get("windows_suppressed_too_young", 0)
+            parts.append(
+                f"AGE_GUARD: user abhi sirf {user_age} saal ka/ki hai — "
+                f"practical marriage-age floor {min_age}+ hai. "
+                f"Engine ne {sup} near-term window suppress kiye "
+                f"(pehla acceptable window {ep} ke baad start hota hai). "
+                "TONE: pehle padhai/career stability + self-growth ki baat "
+                "karo, fir long-term marriage timing dikhao. "
+                "STRICTLY DO NOT say shaadi agle kuch mahine mein hogi — "
+                "chahe dasha/PD kitni bhi strong ho. Real-life mein "
+                "user-jaise abhi marriage-ready nahi hote.")
         parts.append("")
 
     top3 = engine_result.get("top_3_windows") or []

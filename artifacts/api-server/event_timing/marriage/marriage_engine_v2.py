@@ -143,6 +143,43 @@ _AGE_BANDS_MALE   = [(24, "EARLY"), (31, "ON_TIME"), (36, "LATE"), (999, "VERY_L
 _AGE_BANDS_FEMALE = [(21, "EARLY"), (29, "ON_TIME"), (33, "LATE"), (999, "VERY_LATE")]
 _AGE_BANDS_NEUTRAL = [(23, "EARLY"), (30, "ON_TIME"), (35, "LATE"), (999, "VERY_LATE")]
 
+# v2.4 — Practical-age floor (absolute lower bound below which engine
+# WILL NOT recommend a near-term marriage window, even if dasha/transits
+# perfectly align). This is the "akal" (sense) layer: a 17-year-old
+# whose Mars-AD lights up next month is still studying — surfacing
+# "shaadi 3 mahine mein" as primary window is a real-life bug. Below
+# these floors, near-term windows get suppressed (pushed to backup
+# bucket) and the LLM is told to lead with study/career framing.
+# Indian legal minimum: 18 (F), 21 (M); we add a small practical
+# buffer above legal so the engine doesn't sit exactly on the wire.
+_MIN_PRACTICAL_AGE_FEMALE  = 19
+_MIN_PRACTICAL_AGE_MALE    = 22
+# Unknown gender → use the STRICTER of the two floors (safety-first).
+# A 20-year-old male profile with missing gender field should NOT slip
+# through with windows that would be blocked if gender were known.
+_MIN_PRACTICAL_AGE_NEUTRAL = max(_MIN_PRACTICAL_AGE_FEMALE,
+                                  _MIN_PRACTICAL_AGE_MALE)  # = 22
+
+# Multi-format DOB parser. Real-world Indian DOB strings come in many
+# shapes ("26 Nov 1992", "26-11-1992", "1992-11-26", "26/11/1992", etc).
+# v2.3 only handled ISO YYYY-MM-DD which silently dropped most DOBs →
+# user_age = None → entire age system dead. v2.4 fixes this.
+_DOB_FORMATS = (
+    "%Y-%m-%d",       # 1992-11-26
+    "%Y/%m/%d",       # 1992/11/26
+    "%d-%m-%Y",       # 26-11-1992
+    "%d/%m/%Y",       # 26/11/1992
+    "%d.%m.%Y",       # 26.11.1992
+    "%d %b %Y",       # 26 Nov 1992
+    "%d %B %Y",       # 26 November 1992
+    "%d-%b-%Y",       # 26-Nov-1992
+    "%d-%B-%Y",       # 26-November-1992
+    "%b %d %Y",       # Nov 26 1992
+    "%B %d %Y",       # November 26 1992
+    "%b %d, %Y",      # Nov 26, 1992
+    "%B %d, %Y",      # November 26, 1992
+)
+
 # When user is at/past marriageable age, boost windows that fall within
 # next N days so engine surfaces near-term candidates first.
 _RECENT_WINDOW_DAYS = 365
@@ -1129,37 +1166,103 @@ def _data_sufficiency_check(kundli: dict, kp: dict) -> Tuple[bool, List[str]]:
     return (len(reasons) == 0, reasons)
 
 
-def _compute_age_at(birth: Any, ref: datetime) -> Optional[int]:
-    """Compute age in years from birth dict at ref date.
-
-    Birth dict can carry: dob/birthDate (ISO string) OR year/month/day OR
-    birthYear/yearOfBirth (year-only). Returns None if nothing usable.
+def _parse_dob_string(s: Any) -> Optional[datetime]:
+    """v2.4 — Robust DOB string parser. Handles Indian formats like
+    '26 Nov 1992', '26-11-1992', plus ISO and US variants. Returns
+    None if no format matches. Tries all _DOB_FORMATS in order.
     """
-    if not isinstance(birth, dict):
+    if not isinstance(s, str):
         return None
-    dob_str = birth.get("dob") or birth.get("birthDate") or birth.get("date")
-    if isinstance(dob_str, str) and len(dob_str) >= 10:
+    s = s.strip()
+    if not s:
+        return None
+    for fmt in _DOB_FORMATS:
         try:
-            d = datetime.strptime(dob_str[:10], "%Y-%m-%d")
-            yrs = ref.year - d.year - (
-                (ref.month, ref.day) < (d.month, d.day))
-            return max(0, yrs)
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    # Last-ditch: ISO with time/timezone — try first 10 chars
+    if len(s) >= 10:
+        try:
+            return datetime.strptime(s[:10], "%Y-%m-%d")
         except ValueError:
             pass
-    y = birth.get("year") or birth.get("birthYear") or birth.get("yearOfBirth")
-    m = birth.get("month")
-    day = birth.get("day")
-    if isinstance(y, int) and 1900 <= y <= 2100:
-        if isinstance(m, int) and isinstance(day, int):
-            try:
-                d = datetime(y, m, day)
-                yrs = ref.year - d.year - (
-                    (ref.month, ref.day) < (d.month, d.day))
-                return max(0, yrs)
-            except ValueError:
-                pass
-        return max(0, ref.year - y)
     return None
+
+
+def _extract_dob_dt(birth: Any, kundli: Any = None) -> Optional[datetime]:
+    """v2.4 — Extract a parsed datetime from birth dict OR kundli dict.
+    Tries every common field name and every supported string format.
+    Falls back to year/month/day numeric fields. Returns None if
+    nothing usable.
+    """
+    sources = []
+    if isinstance(birth, dict):
+        sources.append(birth)
+    if isinstance(kundli, dict):
+        sources.append(kundli)
+        # Some payloads nest birth metadata under 'birth' / 'birthDetails'
+        for nest in ("birth", "birthDetails", "birth_data"):
+            if isinstance(kundli.get(nest), dict):
+                sources.append(kundli[nest])
+
+    # Try string DOB across all sources/field-names
+    string_keys = ("dob", "birthDate", "birth_date", "date", "dateOfBirth",
+                   "DOB", "birthday")
+    for src in sources:
+        for k in string_keys:
+            v = src.get(k)
+            d = _parse_dob_string(v)
+            if d is not None:
+                return d
+
+    # Try numeric year/month/day across all sources
+    for src in sources:
+        y = src.get("year") or src.get("birthYear") or src.get("yearOfBirth")
+        m = src.get("month") or src.get("birthMonth")
+        day = src.get("day") or src.get("birthDay")
+        if isinstance(y, int) and 1900 <= y <= 2100:
+            if isinstance(m, int) and isinstance(day, int):
+                try:
+                    return datetime(y, m, day)
+                except ValueError:
+                    pass
+            # Year-only — assume mid-year for age math
+            return datetime(y, 6, 30)
+    return None
+
+
+def _compute_age_at(birth: Any, ref: datetime,
+                     kundli: Any = None) -> Optional[int]:
+    """Compute age in years at `ref` from birth dict (or kundli fallback).
+    v2.4 — Now uses _extract_dob_dt for multi-format/multi-source parsing.
+    """
+    d = _extract_dob_dt(birth, kundli=kundli)
+    if d is None:
+        return None
+    yrs = ref.year - d.year - ((ref.month, ref.day) < (d.month, d.day))
+    return max(0, yrs)
+
+
+def _min_practical_age(is_female: Optional[bool]) -> int:
+    """v2.4 — Absolute floor age below which marriage windows are
+    suppressed regardless of how strong dashas/transits are."""
+    if is_female is True:
+        return _MIN_PRACTICAL_AGE_FEMALE
+    if is_female is False:
+        return _MIN_PRACTICAL_AGE_MALE
+    return _MIN_PRACTICAL_AGE_NEUTRAL
+
+
+def _earliest_practical_dt(birth_dt: Optional[datetime],
+                             min_age: int) -> Optional[datetime]:
+    """Compute the calendar date when user reaches `min_age` years."""
+    if birth_dt is None:
+        return None
+    try:
+        return birth_dt.replace(year=birth_dt.year + min_age)
+    except ValueError:   # Feb 29 + leap-year edge
+        return birth_dt.replace(year=birth_dt.year + min_age, day=28)
 
 
 def _classify_age_band(age: Optional[int], is_female: Optional[bool]
@@ -1284,15 +1387,25 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             is_female = False
 
     # ── Age + age-band (used for urgency + recent-window boost) ───────
+    # v2.4: pass kundli as fallback source so DOBs stored in chart payload
+    # are picked up even when birth dict is empty/sparse. Multi-format
+    # parser handles "26 Nov 1992" / "26-11-1992" / ISO / numeric.
     _now_for_age = datetime.utcnow()
-    user_age = _compute_age_at(birth, _now_for_age)
+    user_age = _compute_age_at(birth, _now_for_age, kundli=kundli)
     age_band = _classify_age_band(user_age, is_female)
     urgency = _urgency_from_band(age_band)
     gender_label = "female" if is_female is True else (
         "male" if is_female is False else "unknown")
+    # v2.4 — practical-age floor + earliest acceptable window
+    min_practical_age = _min_practical_age(is_female)
+    birth_dt = _extract_dob_dt(birth, kundli=kundli)
+    earliest_practical = _earliest_practical_dt(birth_dt, min_practical_age)
+    too_young = (user_age is not None
+                 and user_age < min_practical_age)
     factors.append(
         f"AGE user_age={user_age} gender={gender_label} "
-        f"band={age_band} urgency={urgency}")
+        f"band={age_band} urgency={urgency} "
+        f"min_practical={min_practical_age} too_young={too_young}")
 
     # ── STEP 1 ────────────────────────────────────────────────────────
     d1_map = _step1_d1_filter(kundli, lagna_si)
@@ -1438,8 +1551,44 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     risk_flags = _step8_obstacles(kundli, lagna_si, kp, csl_verdict)
     factors.append(f"STEP8 risks={len(risk_flags)}")
 
+    # ── v2.4 AGE-SANITY GUARD — suppress windows that start before the
+    # user reaches the practical-age floor. Without this, a 17-year-old
+    # whose dasha/PD lights up next month would still see "shaadi 3
+    # mahine mein" as primary window — a real-life bug ("akal" missing).
+    # We DON'T delete those windows entirely (they remain visible to the
+    # cascade narrative), but we demote their priority so they cannot
+    # claim the top-3 slots ahead of post-floor windows.
+    windows_suppressed_too_young = 0
+    if too_young and earliest_practical is not None:
+        for c in future_candidates:
+            if c["start"] < earliest_practical:
+                # Demote to lowest priority bucket + nuke score
+                c["priority"] = max(c.get("priority", 0), 99)
+                c["score"] = -1000.0  # ensures it sorts to bottom
+                c["suppressed_too_young"] = True
+                windows_suppressed_too_young += 1
+        # Re-sort after demotion so top-3 picker sees post-floor windows
+        future_candidates.sort(
+            key=lambda x: (x["priority"], -x["score"], x["start"]))
+        if windows_suppressed_too_young:
+            factors.append(
+                f"AGE_GUARD suppressed {windows_suppressed_too_young} "
+                f"window(s) before age={min_practical_age} "
+                f"(reaches on {earliest_practical.strftime('%Y-%m-%d')})")
+
     # ── Window selection (gap-filter + diversity) ─────────────────────
     top_3 = _select_top_3(future_candidates)
+    # Filter out any suppressed windows that may have leaked through
+    if too_young:
+        top_3 = [w for w in top_3 if not w.get("suppressed_too_young")]
+        # Deterministic flag for the LLM/UI when nothing acceptable exists
+        # in scan horizon after the practical-age floor — prevents the LLM
+        # from inventing a window or misreading an empty top-3.
+        if not top_3:
+            factors.append(
+                "AGE_GUARD no_acceptable_window_in_horizon — all "
+                "candidate windows fall before practical-age floor; "
+                "engine returns empty top-3 by design.")
 
     # ── Output assembly ────────────────────────────────────────────────
     top_3_serial: List[Dict[str, Any]] = []
@@ -1507,7 +1656,15 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         "recent_year_focus": recent_focus,
         # v2.3 — D9 7L exposure (supreme marriage karaka, Navamsa)
         "d9_seventh_lord": d9_7l,
+        # v2.4 — Age-sanity guard fields
+        "min_practical_age": min_practical_age,
+        "too_young_for_marriage": bool(too_young),
+        "earliest_practical_window_start_iso": (
+            earliest_practical.strftime("%Y-%m-%d")
+            if earliest_practical is not None else None),
+        "windows_suppressed_too_young": windows_suppressed_too_young,
         # Engine metadata
-        "engine_version": "v2.3.0",
-        "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER + D9-7L supreme",
+        "engine_version": "v2.4.0",
+        "engine_arch": (
+            "FILTER→VERIFY→ACTIVATE→TRIGGER + D9-7L supreme + age-sanity"),
     }

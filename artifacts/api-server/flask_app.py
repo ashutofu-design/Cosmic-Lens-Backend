@@ -5780,6 +5780,26 @@ def ask_route():
     if not question:
         return jsonify({"error": "question is required"}), 400
 
+    # ── P1.2.9 (A1) — Question length cap ───────────────────────────────────
+    # Hard cap on input length to prevent multi-paragraph essay-style asks
+    # from burning unnecessary tokens. Default cap = 300 chars / ~50 words.
+    # Killswitch: env MAX_QUESTION_CHARS=0 disables (legacy unbounded).
+    # Fires FIRST (before brand-guard) so over-cap inputs cost zero work.
+    # ARCHITECT-FIX: returns HTTP 200 (not 400) to match the brand_guard
+    # soft-reject pattern; mobile client (ask.tsx) only specializes 401/402
+    # and would otherwise show a generic error instead of our friendly text.
+    try:
+        from question_length_gate import check_question_length as _qlg_check
+        _qlg_verdict = _qlg_check(question, lang=lang)
+        if _qlg_verdict.too_long:
+            print(f"[ask] P1.2.9 question_too_long {_qlg_verdict.telemetry()}")
+            return jsonify(_qlg_verdict.payload())
+        if _qlg_verdict.soft_warn:
+            print(f"[ask] P1.2.9 soft_warn {_qlg_verdict.telemetry()}")
+    except Exception as _qlg_exc:
+        # Gate must never block the ask flow on internal failure.
+        print(f"[ask] P1.2.9 length-gate error (non-fatal): {_qlg_exc}")
+
     # ── Strict astrology-only gate (route-level) ─────────────────────────────
     # Refuse off-topic questions BEFORE auth/quota so we never charge a user a
     # daily-question slot for a question we will not answer. Mirrored inside
@@ -6339,6 +6359,22 @@ def ask_stream_route():
 
     if not question:
         return jsonify({"error": "question is required"}), 400
+
+    # ── P1.2.9 (A1) — Question length cap (stream parity) ───────────────────
+    # Same hard cap as /api/ask. Killswitch: env MAX_QUESTION_CHARS=0.
+    # Fires FIRST so over-cap inputs cost zero work. ARCHITECT-FIX: HTTP 200
+    # (not 400) to match brand_guard soft-reject pattern — mobile only
+    # specializes 401/402; any other non-OK shows a generic error.
+    try:
+        from question_length_gate import check_question_length as _qlg_check
+        _qlg_verdict = _qlg_check(question, lang=lang)
+        if _qlg_verdict.too_long:
+            print(f"[ask/stream] P1.2.9 question_too_long {_qlg_verdict.telemetry()}")
+            return jsonify(_qlg_verdict.payload())
+        if _qlg_verdict.soft_warn:
+            print(f"[ask/stream] P1.2.9 soft_warn {_qlg_verdict.telemetry()}")
+    except Exception as _qlg_exc:
+        print(f"[ask/stream] P1.2.9 length-gate error (non-fatal): {_qlg_exc}")
 
     # ── Strict astrology-only gate (route-level) ─────────────────────────────
     # Refuse off-topic asks BEFORE auth/quota so we never charge a daily slot

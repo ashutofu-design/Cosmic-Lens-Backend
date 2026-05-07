@@ -165,6 +165,125 @@ class TestKpLayer(unittest.TestCase):
         out = _step3_kp_layer({}, lagna_si=0)
         self.assertEqual(out["verdict_6"], "UNKNOWN")
         self.assertEqual(out["verdict_8"], "UNKNOWN")
+        self.assertEqual(out["verdict_12"], "UNKNOWN")
+        self.assertEqual(out["at_risk_planets"], [])
+        self.assertEqual(out["active_csl_planets"], [])
+
+    # ── Phase 2.5.11.10 — STEP 3 v2 tests ──────────────────────────────
+    def test_kp_v2_12th_csl_hospital_yes(self):
+        kp = {
+            "cusps": [{"house": 6,  "sl": "Mars"},
+                       {"house": 8,  "sl": "Saturn"},
+                       {"house": 12, "sl": "Rahu"}],
+            "significations": {"Mars": [6, 11], "Saturn": [8, 12],
+                                "Rahu":  [12, 6, 8]},
+        }
+        out = _step3_kp_layer(kp, lagna_si=0)
+        self.assertEqual(out["csl_12"], "Rahu")
+        self.assertEqual(out["verdict_12"], "HOSPITAL_YES")
+
+    def test_kp_v2_12th_csl_hospital_no(self):
+        kp = {
+            "cusps": [{"house": 12, "sl": "Jupiter"}],
+            "significations": {"Jupiter": [1, 5, 11]},
+        }
+        out = _step3_kp_layer(kp, lagna_si=0)
+        self.assertEqual(out["verdict_12"], "HOSPITAL_NO")
+
+    def test_kp_v2_at_risk_convergence(self):
+        kp = {
+            "cusps": [{"house": 6, "sl": "Saturn"},
+                       {"house": 8, "sl": "Mars"},
+                       {"house": 12, "sl": "Rahu"}],
+            "significations": {
+                "Saturn": [6, 8, 12],   # KP dusthana → at-risk
+                "Mars":   [6, 8],        # KP dusthana → at-risk
+                "Jupiter": [1, 5, 9],    # benefic → NOT at-risk
+                "Rahu":   [12, 8],
+            },
+        }
+        d1_map = {
+            "Saturn":  {"in_filter": True, "d1": 40},
+            "Mars":    {"in_filter": True, "d1": 25},
+            "Jupiter": {"in_filter": True, "d1": 18},
+            "Mercury": {"in_filter": False, "d1": 5},  # didn't survive
+        }
+        d9_scores = {"Saturn": 22.0, "Mars": 8.0, "Jupiter": 18.0}
+        # Saturn currently runs as MD → triggers active_csl gate
+        current = {"md": "Saturn", "ad": "Venus", "pd": "Sun"}
+        out = _step3_kp_layer(kp, lagna_si=0,
+                                d1_map=d1_map, d9_scores=d9_scores,
+                                current_dasha=current)
+        names = [r["planet"] for r in out["at_risk_planets"]]
+        self.assertIn("Saturn", names)
+        self.assertIn("Mars", names)
+        self.assertNotIn("Jupiter", names)   # benefic, no dusthana sig
+        self.assertNotIn("Mercury", names)   # didn't survive D1
+        # Saturn convergence = 20(D1) + 20(D9>=12) + 30(KP) + 30(active CSL) = 100
+        sat = next(r for r in out["at_risk_planets"]
+                    if r["planet"] == "Saturn")
+        self.assertEqual(sat["convergence_score"], 100)
+        self.assertTrue(sat["is_active_csl_now"])
+        self.assertIn("Saturn", out["active_csl_planets"])
+        # Mars: 20(D1) + 0(D9 weak) + 30(KP) + 0(not active) = 50
+        mar = next(r for r in out["at_risk_planets"]
+                    if r["planet"] == "Mars")
+        self.assertEqual(mar["convergence_score"], 50)
+
+    def test_kp_v2_active_csl_without_dusthana_sig(self):
+        # Planet is CSL of 6th but its OWN sig is benefic — still
+        # qualifies as at-risk because it's actively running NOW.
+        kp = {
+            "cusps": [{"house": 6, "sl": "Mercury"}],
+            "significations": {"Mercury": [3, 5, 9]},  # no 6/8/12
+        }
+        d1_map = {"Mercury": {"in_filter": True, "d1": 30}}
+        out = _step3_kp_layer(kp, lagna_si=0,
+                                d1_map=d1_map, d9_scores={"Mercury": 15.0},
+                                current_dasha={"md": "Mercury",
+                                                "ad": None, "pd": None})
+        names = [r["planet"] for r in out["at_risk_planets"]]
+        self.assertIn("Mercury", names)
+        merc = out["at_risk_planets"][0]
+        self.assertTrue(merc["is_active_csl_now"])
+        self.assertEqual(merc["active_csl_of"], [6])
+
+    def test_kp_v2_case_insensitive_active_csl_match(self):
+        # Architect-flagged regression: mixed-case planet names across
+        # CSL ('mercury'), current_dasha md ('Mercury'), and d1_map key
+        # ('MERCURY') must all match → Mercury appears in active_csl
+        # AND at_risk via the active-only branch.
+        kp = {
+            "cusps": [{"house": 6, "sl": "mercury"}],   # lowercase
+            "significations": {"mercury": [3, 5, 9]},   # no dusthana
+        }
+        d1_map = {"MERCURY": {"in_filter": True, "d1": 30}}  # uppercase
+        out = _step3_kp_layer(
+            kp, lagna_si=0,
+            d1_map=d1_map,
+            d9_scores={"MERCURY": 15.0},
+            current_dasha={"md": "Mercury",         # title-case
+                            "ad": None, "pd": None},
+        )
+        self.assertEqual(out["active_csl_planets"], ["Mercury"])
+        names = [r["planet"] for r in out["at_risk_planets"]]
+        self.assertIn("Mercury", names)
+        merc = out["at_risk_planets"][0]
+        self.assertTrue(merc["is_active_csl_now"])
+        self.assertEqual(merc["active_csl_of"], [6])
+        # 20(D1) + 20(D9>=12) + 0(no KP dusthana) + 30(active CSL) = 70
+        self.assertEqual(merc["convergence_score"], 70)
+
+    def test_kp_v2_backward_compat_no_convergence_args(self):
+        # When d1_map/d9_scores/current_dasha are None, only Layer A runs.
+        kp = {
+            "cusps": [{"house": 6, "sl": "Saturn"}],
+            "significations": {"Saturn": [6, 8]},
+        }
+        out = _step3_kp_layer(kp, lagna_si=0)
+        self.assertEqual(out["verdict_6"], "ILLNESS_YES")
+        self.assertEqual(out["at_risk_planets"], [])
+        self.assertEqual(out["active_csl_planets"], [])
 
 
 class TestYogas(unittest.TestCase):

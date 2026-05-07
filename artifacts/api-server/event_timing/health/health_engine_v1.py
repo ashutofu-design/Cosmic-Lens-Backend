@@ -33,6 +33,12 @@ D30 layer removed per user decision May 7 2026 — KP CSL of 6/8 cusps
            (Pre-2.5.11.9 STEP 8 was a duplicate KP layer — removed
             since KP is now the canonical STEP 3 disease-verify layer.)
 
+Phase 2.5.11.10 — STEP 3 v2 (KP convergence layer):
+  • 12th cusp CSL added (was 6th + 8th only) → hospitalization detector
+  • Per-survivor KP signification check (NL→sub→sub-sub composite)
+  • Currently-active CSL gate (MD/AD/PD lord ∩ 6/8/12 CSL)
+  • Final at_risk_planets list with convergence_score (0-100)
+
 Public function:
   compute_health_window(kundli, intel, kp, birth) -> dict
 
@@ -51,7 +57,11 @@ Output dict (back-compat with marriage-style consumers):
     "top_health_planets":   [{name, score, d1, d9, kp, karaka,
                                significations[]}],
     "weighted_breakdown":   {planet: {d1, d9, kp, karaka, total}},
-    "kp_layer":             {csl_6, csl_8, verdict_6, verdict_8},
+    "kp_layer":             {csl_6, csl_8, csl_12, verdict_6,
+                             verdict_8, verdict_12, active_csl_planets[],
+                             at_risk_planets[{planet, kp_signifies,
+                              kp_dusthana_houses, is_active_csl_now,
+                              active_csl_of, d9_score, convergence_score}]},
     "transits":             {saturn, rahu, ketu, mars, jupiter, sade_sati},
     "ashtakavarga":         {sav_lagna, sav_6, vitality_band},
     "yogas":                [{name, severity, planets}],
@@ -628,45 +638,133 @@ def _step2_d9_verify(kundli: dict, candidates: Set[str]) -> Dict[str, float]:
 # STEP 3 — KP layer (cuspal sub lord of 6th & 8th)
 # (Phase 2.5.11.9: was STEP 3.5; D30 step deleted, KP promoted to STEP 3.)
 # ════════════════════════════════════════════════════════════════════════
-def _step3_kp_layer(kp: dict, lagna_si: int) -> Dict[str, Any]:
-    """KP cuspal sub lord of 6th & 8th cusps.
-    Verdict rules (KP standard for health):
-      6 CSL signifies 6/8/12 → illness yes
-      6 CSL signifies 1/5/11 → recovery / good immunity
-      8 CSL signifies 6/8/12 → chronic/surgery yes
-      8 CSL signifies 1/5/11 → chronic risk low
+def _step3_kp_layer(kp: dict, lagna_si: int,
+                    d1_map: Optional[Dict[str, Dict[str, Any]]] = None,
+                    d9_scores: Optional[Dict[str, float]] = None,
+                    current_dasha: Optional[Dict[str, Optional[str]]] = None
+                    ) -> Dict[str, Any]:
+    """KP cuspal sub-lord verify + convergence at-risk planet list.
+
+    Phase 2.5.11.10 — STEP 3 v2 (3 layers + final list):
+
+      Layer A — CSL verdict for 6th, 8th, 12th cusps (12th NEW):
+          CSL signifies 6/8/12 → <ILLNESS|CHRONIC|HOSPITAL>_YES
+          CSL signifies 1/5/11 → <...>_NO
+          else                  → NEUTRAL
+
+      Layer B — For each D1+D9 survivor, deep KP signification check.
+          (significations are NL→sub→sub-sub aggregated upstream by the
+          KP module, so this single lookup represents the composite
+          star→sub→sub-sub verdict per Krishnamurti standard.)
+
+      Layer C — Active-CSL detection: which 6/8/12 CSL planet is
+          currently the user's MD / AD / PD lord right now?
+          A CSL "fires" only when its planet runs in the dasha chain.
+
+      Final  — at_risk_planets: D1+D9 survivors that EITHER
+          (a) signify 6/8/12 in KP, OR
+          (b) are an active CSL of 6/8/12 right now.
+          Sorted by convergence_score (0-100):
+            +20 D1 survivor  +20 D9 verified (>=12)
+            +30 KP dusthana  +30 active CSL now
+
+    Backward-compat: when d1_map / d9_scores / current_dasha are None,
+    only Layer A runs (legacy 2-cusp behavior, no convergence list).
     """
-    out = {"csl_6": None, "csl_8": None,
-           "verdict_6": "UNKNOWN", "verdict_8": "UNKNOWN",
-           "csl_6_signifies": [], "csl_8_signifies": []}
+    # Architect-fix (2.5.11.10): canonicalize ALL planet names to
+    # Title-case at every comparison boundary so Layer-C matching
+    # survives mixed-case data sources (kp.cusps.sl='mercury' vs
+    # dasha lord='Mercury' vs d1_map key='MERCURY').
+    def _norm(p: Any) -> Optional[str]:
+        if not p or not isinstance(p, str):
+            return None
+        return p.strip().title() or None
+
+    out: Dict[str, Any] = {
+        "csl_6": None,  "csl_8": None,  "csl_12": None,
+        "verdict_6": "UNKNOWN", "verdict_8": "UNKNOWN",
+        "verdict_12": "UNKNOWN",
+        "csl_6_signifies": [], "csl_8_signifies": [], "csl_12_signifies": [],
+        "active_csl_planets": [],
+        "at_risk_planets": [],
+    }
     if not kp:
         return out
-    c6 = _kp_cusp(kp, 6)
-    c8 = _kp_cusp(kp, 8)
-    if c6:
-        csl = c6.get("sl") or c6.get("subLord") or c6.get("sub_lord")
-        out["csl_6"] = csl
-        if csl:
-            sig = _planet_signified_houses(kp, csl)
-            out["csl_6_signifies"] = sig
-            if any(h in _DUSTHANA for h in sig):
-                out["verdict_6"] = "ILLNESS_YES"
-            elif any(h in (1, 5, 11) for h in sig):
-                out["verdict_6"] = "ILLNESS_NO"
-            else:
-                out["verdict_6"] = "NEUTRAL"
-    if c8:
-        csl = c8.get("sl") or c8.get("subLord") or c8.get("sub_lord")
-        out["csl_8"] = csl
-        if csl:
-            sig = _planet_signified_houses(kp, csl)
-            out["csl_8_signifies"] = sig
-            if any(h in _DUSTHANA for h in sig):
-                out["verdict_8"] = "CHRONIC_YES"
-            elif any(h in (1, 5, 11) for h in sig):
-                out["verdict_8"] = "CHRONIC_NO"
-            else:
-                out["verdict_8"] = "NEUTRAL"
+
+    # ── Layer A: cusp-CSL verdicts (6 / 8 / 12) ────────────────────────
+    cusp_specs = [
+        (6,  "csl_6",  "verdict_6",  "csl_6_signifies",  "ILLNESS"),
+        (8,  "csl_8",  "verdict_8",  "csl_8_signifies",  "CHRONIC"),
+        (12, "csl_12", "verdict_12", "csl_12_signifies", "HOSPITAL"),
+    ]
+    csl_to_cusp: Dict[str, List[int]] = {}   # keys = NORMALIZED names
+    for h, k_csl, k_verdict, k_sig, label in cusp_specs:
+        c = _kp_cusp(kp, h)
+        if not c:
+            continue
+        csl_raw = c.get("sl") or c.get("subLord") or c.get("sub_lord")
+        csl = _norm(csl_raw)
+        out[k_csl] = csl
+        if not csl:
+            continue
+        # _planet_signified_houses already tolerates case (.lower fallback)
+        sig = _planet_signified_houses(kp, csl) or \
+              _planet_signified_houses(kp, csl_raw)
+        out[k_sig] = sig
+        csl_to_cusp.setdefault(csl, []).append(h)
+        if any(x in _DUSTHANA for x in sig):
+            out[k_verdict] = f"{label}_YES"
+        elif any(x in (1, 5, 11) for x in sig):
+            out[k_verdict] = f"{label}_NO"
+        else:
+            out[k_verdict] = "NEUTRAL"
+
+    # ── Layer C: which CSL planets are currently in MD / AD / PD? ─────
+    active_now: Set[str] = set()
+    if current_dasha:
+        for slot in ("md", "ad", "pd"):
+            lord = _norm(current_dasha.get(slot))
+            if lord and lord in csl_to_cusp:
+                active_now.add(lord)
+    out["active_csl_planets"] = sorted(active_now)
+
+    # ── Final: at_risk_planets convergence list ───────────────────────
+    if d1_map:
+        survivors = [(p, _norm(p)) for p, info in d1_map.items()
+                      if info.get("in_filter")]
+        d9 = d9_scores or {}
+        at_risk: List[Dict[str, Any]] = []
+        for pname_raw, pname in survivors:
+            if not pname:
+                continue
+            sig_p = (_planet_signified_houses(kp, pname) or
+                      _planet_signified_houses(kp, pname_raw))
+            kp_dusthana_hits = [h for h in sig_p if h in _DUSTHANA]
+            kp_signifies_dusthana = bool(kp_dusthana_hits)
+            is_active_csl = pname in active_now
+            # Qualification gate
+            if not (kp_signifies_dusthana or is_active_csl):
+                continue
+            score = 20  # D1 survivor base
+            if d9.get(pname_raw, d9.get(pname, 0.0)) >= 12.0:
+                score += 20
+            if kp_signifies_dusthana:
+                score += 30
+            if is_active_csl:
+                score += 30
+            at_risk.append({
+                "planet": pname,    # always emit normalized form
+                "kp_signifies": sig_p,
+                "kp_dusthana_houses": kp_dusthana_hits,
+                "is_active_csl_now": is_active_csl,
+                "active_csl_of": (csl_to_cusp.get(pname, [])
+                                    if is_active_csl else []),
+                "d9_score": round(d9.get(pname_raw,
+                                          d9.get(pname, 0.0)), 1),
+                "convergence_score": score,
+            })
+        at_risk.sort(key=lambda r: r["convergence_score"], reverse=True)
+        out["at_risk_planets"] = at_risk
     return out
 
 
@@ -775,6 +873,22 @@ def _dasha_children(node: dict) -> List[dict]:
         if isinstance(v, list):
             return v
     return []
+
+
+def _current_dasha_lords(chain: List[Dict[str, Any]],
+                          now: datetime) -> Dict[str, Optional[str]]:
+    """Return {md, ad, pd} of the dasha window containing `now`.
+    Used by STEP 3 v2 to gate CSL "active" status.
+    """
+    for w in chain:
+        try:
+            if w["start"] <= now <= w["end"]:
+                return {"md": w.get("md"),
+                        "ad": w.get("ad"),
+                        "pd": w.get("pd")}
+        except (KeyError, TypeError):
+            continue
+    return {"md": None, "ad": None, "pd": None}
 
 
 def _flatten_dasha_chain(kundli: dict) -> List[Dict[str, Any]]:
@@ -1286,18 +1400,31 @@ def _compute_health_window_impl(kundli: dict,
     factors.append(f"STEP2 D9_scores=" +
                     ",".join(f"{p}:{s:.1f}" for p, s in d9_scores.items()))
 
-    # ── STEP 3 — KP layer (Phase 2.5.11.9: was STEP 3.5; D30 deleted) ─
-    kp_layer = _step3_kp_layer(kp, lagna_si)
-    factors.append(f"STEP3 KP csl_6={kp_layer['csl_6']}/{kp_layer['verdict_6']} "
-                    f"csl_8={kp_layer['csl_8']}/{kp_layer['verdict_8']}")
+    # ── Pre-STEP3: dasha chain + current MD/AD/PD (needed by STEP3 v2) ─
+    chain = _flatten_dasha_chain(kundli)
+    current_dasha = _current_dasha_lords(chain, now)
+
+    # ── STEP 3 v2 — KP layer + convergence at-risk list ───────────────
+    # (Phase 2.5.11.10: 12th CSL added; per-survivor KP convergence;
+    #  active-CSL gate via current MD/AD/PD; final at_risk_planets list.)
+    kp_layer = _step3_kp_layer(kp, lagna_si,
+                                d1_map=d1_map,
+                                d9_scores=d9_scores,
+                                current_dasha=current_dasha)
+    factors.append(
+        f"STEP3 KP csl_6={kp_layer['csl_6']}/{kp_layer['verdict_6']} "
+        f"csl_8={kp_layer['csl_8']}/{kp_layer['verdict_8']} "
+        f"csl_12={kp_layer['csl_12']}/{kp_layer['verdict_12']} "
+        f"active_csl={kp_layer['active_csl_planets']} "
+        f"at_risk={[r['planet']+':'+str(r['convergence_score']) for r in kp_layer['at_risk_planets']]}"
+    )
 
     # ── STEP 4 — Weighted ranking ─────────────────────────────────────
     ranked = _step4_rank(d1_map, d9_scores, kp, lagna_si)
     factors.append("STEP4 ranked=" +
                     ",".join(f"{r['name']}:{r['score']}" for r in ranked[:5]))
 
-    # ── STEP 5 — Dasha activation ─────────────────────────────────────
-    chain = _flatten_dasha_chain(kundli)
+    # ── STEP 5 — Dasha activation (chain already computed pre-STEP3) ──
     dasha_windows = _step5_dasha_activation(chain, ranked, lagna_si, now)
     factors.append(f"STEP5 dasha_windows_in_horizon={len(dasha_windows)}")
 
@@ -1397,6 +1524,14 @@ def _compute_health_window_impl(kundli: dict,
         risk_flags.append("KP_6CSL_DUSTHANA")
     if kp_layer.get("verdict_8") == "CHRONIC_YES":
         risk_flags.append("KP_8CSL_DUSTHANA")
+    if kp_layer.get("verdict_12") == "HOSPITAL_YES":
+        risk_flags.append("KP_12CSL_DUSTHANA")
+    if kp_layer.get("active_csl_planets"):
+        risk_flags.append("KP_CSL_ACTIVE_NOW")
+    # Strong convergence: any at-risk planet with >=70/100
+    if any(r["convergence_score"] >= 70
+            for r in kp_layer.get("at_risk_planets", [])):
+        risk_flags.append("KP_CONVERGENCE_STRONG")
 
     # Weighted breakdown (engine audit) — Phase 2.5.11.9: d30 dropped
     breakdown = {

@@ -1411,6 +1411,13 @@ def _compute_health_window_impl(kundli: dict,
 
     # ── STEP 1 ────────────────────────────────────────────────────────
     d1_map = _step1_d1_filter(kundli, lagna_si, user_age=age)
+    try:
+        from event_timing._shared.kp_significator_scan import kp_promote_survivors
+        _kp_prom = kp_promote_survivors(d1_map, kp, "health")
+        if _kp_prom:
+            factors.append(f"STEP1 KP-promoted={sorted(_kp_prom)}")
+    except Exception as _e:
+        factors.append(f"STEP1 KP-promote-error={type(_e).__name__}")
     survivors = {p for p, info in d1_map.items() if info["in_filter"]}
     factors.append(f"STEP1 survivors={sorted(survivors)}")
 

@@ -190,6 +190,57 @@ def compute_kp_planet_scan(kp: Optional[dict],
     }
 
 
+def kp_promote_survivors(d1_map: Dict[str, Dict[str, Any]],
+                          kp: Optional[dict],
+                          domain: str,
+                          threshold: int = 2,
+                          ) -> List[str]:
+    """Phase 2.5.11.18 — KP-driven promotion of STEP1 survivors.
+
+    Mutates `d1_map` in place: any planet whose KP NL→SB→SS chain
+    signifies ≥ `threshold` of the domain houses is promoted to
+    `in_filter=True` with a `kp-promoted (hits=[...])` link tag.
+
+    This replaces the hardcoded `_KARAKA_FLOOR_SURVIVORS` constant as
+    primary signal — the engine-internal floor is retained ONLY as a
+    safety-net for charts where KP data is missing/empty (otherwise
+    the KP-driven promotion is data-adaptive per chart).
+
+    Args:
+      d1_map:    engine STEP1 output, shape {planet: {in_filter, links, ...}}.
+      kp:        engine's KP block (significations + cusps).
+      domain:    one of CONCERN_HOUSES keys.
+      threshold: minimum domain-hit count to qualify (default 2 = at least
+                 2 of the domain houses signified across the full chain).
+
+    Returns:
+      list of newly-promoted planet names (was filtered=False before this
+      call). Used by orchestrators for trace/audit.
+    """
+    scan = compute_kp_planet_scan(kp, domain)
+    if not scan.get("kp_available"):
+        return []
+    promoted: List[str] = []
+    for s in scan.get("planets") or []:
+        score = s.get("domain_score") or 0
+        if score < threshold:
+            continue
+        p = s.get("planet")
+        entry = d1_map.get(p)
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("in_filter"):
+            continue  # already in filter — skip
+        entry["in_filter"] = True
+        links = entry.get("links") or []
+        if not isinstance(links, list):
+            links = []
+        links.append(f"kp-promoted (hits={s.get('domain_hits') or []})")
+        entry["links"] = links
+        promoted.append(p)
+    return promoted
+
+
 def render_scan_lines(scan: Dict[str, Any], max_lines: int = 9) -> List[str]:
     """Render scan into compact human/LLM-readable lines for locked_facts.
 

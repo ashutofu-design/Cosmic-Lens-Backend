@@ -108,5 +108,49 @@ class TestLiveChartIntegration(unittest.TestCase):
             self.assertIn("Moon", r["missed_by_filter"])
 
 
+class TestKpPromoteSurvivors(unittest.TestCase):
+    """Phase 2.5.11.18 — KP-driven STEP1 promotion."""
+
+    def _mk_d1_map(self):
+        return {p: {"in_filter": False, "links": [], "d1": 0.0}
+                for p in ["Sun", "Moon", "Mars", "Mercury", "Jupiter",
+                         "Venus", "Saturn", "Rahu", "Ketu"]}
+
+    def test_promotes_planets_meeting_threshold(self):
+        from event_timing._shared.kp_significator_scan import kp_promote_survivors
+        d1_map = self._mk_d1_map()
+        # All 9 are out-of-filter to start.
+        promoted = kp_promote_survivors(d1_map, _DICT_KP, "travel", threshold=2)
+        # Sun: NL=Saturn(travel houses inferred from fixture) — should qualify
+        self.assertGreater(len(promoted), 0)
+        for p in promoted:
+            self.assertTrue(d1_map[p]["in_filter"])
+            self.assertTrue(any("kp-promoted" in lk for lk in d1_map[p]["links"]))
+
+    def test_does_not_repromote_already_in_filter(self):
+        from event_timing._shared.kp_significator_scan import kp_promote_survivors
+        d1_map = self._mk_d1_map()
+        d1_map["Sun"]["in_filter"] = True
+        d1_map["Sun"]["links"] = ["pre-existing"]
+        promoted = kp_promote_survivors(d1_map, _DICT_KP, "travel")
+        self.assertNotIn("Sun", promoted)
+        # link untouched
+        self.assertEqual(d1_map["Sun"]["links"], ["pre-existing"])
+
+    def test_empty_kp_safe_noop(self):
+        from event_timing._shared.kp_significator_scan import kp_promote_survivors
+        d1_map = self._mk_d1_map()
+        promoted = kp_promote_survivors(d1_map, None, "travel")
+        self.assertEqual(promoted, [])
+        self.assertFalse(any(d1_map[p]["in_filter"] for p in d1_map))
+
+    def test_threshold_respected(self):
+        from event_timing._shared.kp_significator_scan import kp_promote_survivors
+        d1_map = self._mk_d1_map()
+        # threshold=99 → impossible to hit
+        promoted = kp_promote_survivors(d1_map, _DICT_KP, "travel", threshold=99)
+        self.assertEqual(promoted, [])
+
+
 if __name__ == "__main__":
     unittest.main()

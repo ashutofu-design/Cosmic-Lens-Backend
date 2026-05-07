@@ -1409,6 +1409,13 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
 
     # ── STEP 1 ────────────────────────────────────────────────────────
     d1_map = _step1_d1_filter(kundli, lagna_si)
+    try:
+        from event_timing._shared.kp_significator_scan import kp_promote_survivors
+        _kp_prom = kp_promote_survivors(d1_map, kp, "marriage")
+        if _kp_prom:
+            factors.append(f"STEP1 KP-promoted={sorted(_kp_prom)}")
+    except Exception as _e:
+        factors.append(f"STEP1 KP-promote-error={type(_e).__name__}")
     filtered_set = {p for p, info in d1_map.items() if info.get("in_filter")}
     factors.append(f"STEP1 filtered={sorted(filtered_set)}")
 

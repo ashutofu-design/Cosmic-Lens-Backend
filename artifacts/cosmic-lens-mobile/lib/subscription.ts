@@ -56,9 +56,11 @@ export type FeatureKey =
   | "kundli_milan"
   | "unlimited_profiles";
 
-export const FEATURE_REQUIREMENT: Record<FeatureKey, "basic" | "pro"> = {
+export const FEATURE_REQUIREMENT: Record<FeatureKey, "free" | "basic" | "pro"> = {
   ask_unlimited:        "pro",
-  marriage_compat_full: "pro",
+  // Marriage compatibility + Kundli Milan opened up to free tier (May 2026)
+  // — user feedback: lock was blocking the primary CTA on /relationship.
+  marriage_compat_full: "free",
   love_reality_full:    "pro",
   career_deep:          "pro",
   health_deep:          "pro",
@@ -67,7 +69,7 @@ export const FEATURE_REQUIREMENT: Record<FeatureKey, "basic" | "pro"> = {
   dasha_deep:           "pro",
   karmic_insights:      "pro",
   pdf_report:           "pro",
-  kundli_milan:         "basic",
+  kundli_milan:         "free",
   unlimited_profiles:   "pro",
 };
 

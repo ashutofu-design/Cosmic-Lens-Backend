@@ -198,6 +198,163 @@ class TestStep1Filter(unittest.TestCase):
         self.assertGreaterEqual(per.get("confirmations", 0), 2)
         self.assertIn("D1", per.get("confirmed_in", []))
 
+    def test_step4c_kp_unavailable_when_only_planets(self):
+        """Architect-fix: gate must DISABLE when only kp.planets is
+        present without significations (or vice-versa). Otherwise
+        signified-house lookups resolve empty and over-block.
+        """
+        kundli = _mk_kundli("Aries", {
+            "Sun": 5, "Moon": 4, "Mars": 7, "Mercury": 6,
+            "Jupiter": 11, "Venus": 2, "Saturn": 10,
+            "Rahu": 12, "Ketu": 6,
+        }, dashas=_mk_dashas())
+        kp_planets_only = {
+            "planets": [{"name": "Jupiter", "nl": "Venus",
+                          "sb": "Mercury"}],
+            "significations": {},  # missing!
+            "cusps": [],
+        }
+        result = compute_baby_window(kundli, intel={},
+                                       kp=kp_planets_only,
+                                       birth={"dob": "1990-05-15"})
+        kpf = result.get("kp_significator_filter") or {}
+        self.assertFalse(kpf.get("available"),
+            f"Gate must auto-disable with empty significations; got {kpf}")
+
+        kp_sig_only = {
+            "planets": [],  # missing!
+            "significations": {"Venus": [5, 11]},
+            "cusps": [],
+        }
+        result2 = compute_baby_window(kundli, intel={},
+                                        kp=kp_sig_only,
+                                        birth={"dob": "1990-05-15"})
+        kpf2 = result2.get("kp_significator_filter") or {}
+        self.assertFalse(kpf2.get("available"),
+            f"Gate must auto-disable with empty planets; got {kpf2}")
+
+    def test_step4c_kp_unknown_does_not_hard_block(self):
+        """Architect-fix: when a ranked planet has missing NL/SBL or
+        is absent from kp.planets, it must be marked UNKNOWN (tri-
+        state) and NOT contribute to `blocked` — degraded data must
+        never collapse legitimate promoter classifications.
+        """
+        kundli = _mk_kundli("Aries", {
+            "Sun": 5, "Moon": 4, "Mars": 7, "Mercury": 6,
+            "Jupiter": 11, "Venus": 2, "Saturn": 10,
+            "Rahu": 12, "Ketu": 6,
+        }, dashas=_mk_dashas())
+        # Only Jupiter has KP data; everyone else is absent.
+        kp = {
+            "planets": [
+                {"name": "Jupiter", "nl": "Venus", "sb": "Mercury"},
+            ],
+            "significations": {
+                "Venus":   [5, 11],
+                "Mercury": [2, 5],
+            },
+            "cusps": [],
+        }
+        result = compute_baby_window(kundli, intel={}, kp=kp,
+                                       birth={"dob": "1990-05-15"})
+        kpf = result.get("kp_significator_filter") or {}
+        self.assertTrue(kpf.get("available"))
+        per = kpf.get("per_planet", {})
+        # Jupiter must pass
+        self.assertEqual(per.get("Jupiter", {}).get("kp_status"),
+                          "pass")
+        self.assertIn("Jupiter", kpf["passed"])
+        # Other survivors must be unknown (not blocked)
+        for p in per:
+            if p == "Jupiter":
+                continue
+            self.assertEqual(per[p].get("kp_status"), "unknown",
+                f"{p} must be UNKNOWN, not blocked; got {per[p]}")
+        self.assertNotIn("Jupiter", kpf["blocked"])
+        # Verdict must NOT be UNKNOWN purely because KP partial
+        self.assertIn(result.get("verdict"),
+            ("CHILD_PROMISED", "FAVORABLE", "DELAYED",
+             "OBSTRUCTED", "UNKNOWN"))
+
+    def test_step4c_kp_filter_unavailable_when_no_kp(self):
+        """When no KP block is supplied, Step 4c must mark itself
+        unavailable and NOT block any planet. Final gate falls back to
+        Step 3c only (or legacy D1 if both off).
+        """
+        kundli = _mk_kundli("Aries", {
+            "Sun": 5, "Moon": 4, "Mars": 7, "Mercury": 6,
+            "Jupiter": 11, "Venus": 2, "Saturn": 10,
+            "Rahu": 12, "Ketu": 6,
+        }, dashas=_mk_dashas())
+        result = compute_baby_window(kundli, intel={}, kp={},
+                                       birth={"dob": "1990-05-15"})
+        kpf = result.get("kp_significator_filter") or {}
+        self.assertFalse(kpf.get("available", True),
+            f"KP filter must be unavailable with empty kp; got {kpf}")
+        self.assertEqual(kpf.get("passed"), [])
+        self.assertEqual(kpf.get("blocked"), [])
+
+    def test_step4c_kp_filter_strict_and_rule(self):
+        """KP gate must require BOTH nakshatra-lord AND sub-lord to
+        each signify ≥1 of {2,5,11}. Synthesize a KP block where
+        Jupiter's NL signifies {5,11} and SBL signifies {2,5} →
+        passes; Saturn's NL signifies {6,8} and SBL signifies {12} →
+        blocked.
+        """
+        kundli = _mk_kundli("Aries", {
+            "Sun": 5, "Moon": 4, "Mars": 7, "Mercury": 6,
+            "Jupiter": 11, "Venus": 2, "Saturn": 10,
+            "Rahu": 12, "Ketu": 6,
+        }, dashas=_mk_dashas())
+        # Synthesize KP block: assign NL/SBL per planet, plus
+        # significations for those lords so 2-5-11 logic fires.
+        kp = {
+            "planets": [
+                {"name": "Jupiter", "nl": "Venus",   "sb": "Mercury"},
+                {"name": "Saturn",  "nl": "Mars",    "sb": "Rahu"},
+                {"name": "Sun",     "nl": "Jupiter", "sb": "Jupiter"},
+                {"name": "Moon",    "nl": "Sun",     "sb": "Sun"},
+                {"name": "Venus",   "nl": "Moon",    "sb": "Moon"},
+                {"name": "Mercury", "nl": "Saturn",  "sb": "Saturn"},
+                {"name": "Mars",    "nl": "Ketu",    "sb": "Ketu"},
+                {"name": "Rahu",    "nl": "Mercury", "sb": "Venus"},
+                {"name": "Ketu",    "nl": "Mars",    "sb": "Saturn"},
+            ],
+            "significations": {
+                "Venus":   [5, 11],   # → Jupiter NL passes
+                "Mercury": [2, 5],    # → Jupiter SBL passes
+                "Mars":    [6, 8],    # → Saturn NL fails (no 2/5/11)
+                "Rahu":    [12],      # → Saturn SBL fails
+                "Jupiter": [5, 11],   # → Sun NL+SBL pass
+                "Sun":     [2, 5],    # → Moon passes
+                "Moon":    [11],      # → Venus passes
+                "Saturn":  [4, 10],   # negation only — Mercury blocked
+                "Ketu":    [6, 12],   # → Mars blocked
+            },
+            "cusps": [],
+        }
+        result = compute_baby_window(kundli, intel={}, kp=kp,
+                                       birth={"dob": "1990-05-15"})
+        kpf = result.get("kp_significator_filter") or {}
+        self.assertTrue(kpf.get("available"))
+        # Jupiter must pass (NL=Venus signifies {5,11}, SBL=Mercury {2,5})
+        per = kpf.get("per_planet", {})
+        if "Jupiter" in per:
+            self.assertTrue(per["Jupiter"]["kp_promotes_child"],
+                f"Jupiter must pass KP 2-5-11 gate; got {per['Jupiter']}")
+            self.assertIn("Jupiter", kpf["passed"])
+        # Saturn must be blocked (NL=Mars→{6,8}, SBL=Rahu→{12})
+        if "Saturn" in per:
+            self.assertFalse(per["Saturn"]["kp_promotes_child"],
+                f"Saturn must be blocked by KP gate; got {per['Saturn']}")
+            self.assertIn("Saturn", kpf["blocked"])
+        # Mercury whose NL=Saturn signifies only negation {4,10}
+        # must be flagged kp_negated=True
+        if "Mercury" in per:
+            self.assertTrue(per["Mercury"].get("kp_negated"),
+                f"Mercury NL signifies only negation; expected "
+                f"kp_negated=True; got {per['Mercury']}")
+
     def test_cross_chart_gate_disabled_when_d9_and_d7_unavailable(self):
         """Edge case (architect-flagged): if both D9 and D7 are
         unavailable (e.g. missing longitudes), the ≥2/3 rule is

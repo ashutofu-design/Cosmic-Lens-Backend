@@ -176,6 +176,17 @@ _CHILD_HOUSES       = [5, 9, 11]   # primary fertility/progeny
 _OBSTRUCTION_HOUSES = [6, 8, 12]   # delay / loss / miscarriage
 _FAMILY_HOUSES      = [2, 7]       # support (kutumb / partner)
 
+# KP classical childbirth significator houses (2-5-11 rule).
+#   2  = family expansion (kutumb-vridhi)
+#   5  = progeny (putrasthana)
+#   11 = fulfillment of desire / gain of children
+# Negation houses for child = 1 (self only), 4 (home stillness),
+# 10 (career-opposite-family). A planet whose star-lord OR sub-lord
+# signifies ONLY negation houses with zero 2-5-11 link cannot promise
+# a child in its dasha — classical Krishnamurti Paddhati rule.
+_KP_CHILD_HOUSES    = {2, 5, 11}
+_KP_NEGATION_HOUSES = {1, 4, 10}
+
 _WEIGHT_D1     = 0.30
 _WEIGHT_D9     = 0.20
 _WEIGHT_D7     = 0.25
@@ -327,6 +338,29 @@ def _planet_signified_houses(kp: dict, planet: str) -> List[int]:
         except (TypeError, ValueError):
             continue
     return out
+
+
+def _get_planet_kp_lords(kp: dict,
+                          planet: str
+                          ) -> Tuple[Optional[str], Optional[str]]:
+    """Return (nakshatra_lord, sub_lord) for a planet from the KP block.
+    Tolerant of multiple key spellings (`nl`/`nakshatra_lord`,
+    `sb`/`sub_lord`/`subLord`). Returns (None, None) when KP data
+    is missing or the planet isn't found.
+    """
+    if not kp:
+        return None, None
+    for p in (kp.get("planets") or []):
+        if not isinstance(p, dict):
+            continue
+        if str(p.get("name", "")).lower() != planet.lower():
+            continue
+        nl = (p.get("nl") or p.get("nakshatra_lord")
+                or p.get("starLord") or p.get("star_lord"))
+        sb = (p.get("sb") or p.get("sub_lord")
+                or p.get("subLord") or p.get("sl"))
+        return nl, sb
+    return None, None
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -1008,6 +1042,117 @@ def _step4_rank(d1_map: Dict[str, Dict[str, Any]],
         })
     ranked.sort(key=lambda r: r["score"], reverse=True)
     return ranked
+
+
+# ════════════════════════════════════════════════════════════════════════
+# STEP 4c — KP 2-5-11 significator filter (final pre-dasha gate)
+# ════════════════════════════════════════════════════════════════════════
+def _step4c_kp_significator_filter(
+        ranked: List[Dict[str, Any]],
+        kp: dict,
+        ) -> Dict[str, Any]:
+    """Classical KP childbirth significator filter.
+
+    KP rule (Krishnamurti Paddhati, Childbirth chapter):
+      A planet PROMISES a child in its dasha only if BOTH its
+      nakshatra-lord (star-lord / NL) AND its sub-lord (SBL)
+      signify at least one of the child houses {2, 5, 11}.
+
+    Houses:
+      • 2  = family expansion (kutumb-vridhi)
+      • 5  = primary progeny (putrasthana)
+      • 11 = fulfillment of desire / gain of children
+
+    Negation flag (informational): a planet whose NL/SBL signifies
+    ONLY {1, 4, 10} (no 2/5/11 link at all) is recorded as
+    `kp_negated=True`. The hard gate is the AND-of-positive rule
+    above; negation is exposed for trace transparency.
+
+    Returns:
+      {
+        "available":   bool,
+        "rule":        str,
+        "passed":      [planet, ...],   # planets where BOTH NL+SBL signify ≥1 of {2,5,11}
+        "blocked":     [planet, ...],
+        "per_planet":  {planet: {nl, sbl, nl_houses, sbl_houses,
+                                 nl_signifies_child, sbl_signifies_child,
+                                 kp_promotes_child, kp_negated}, ...},
+      }
+    """
+    out: Dict[str, Any] = {
+        "available":   False,
+        "rule":        ("KP childbirth: planet promises child only if "
+                        "BOTH nakshatra-lord AND sub-lord signify "
+                        "≥1 of houses {2,5,11}"),
+        "passed":      [],
+        "blocked":     [],
+        "unknown":     [],
+        "per_planet":  {},
+    }
+    # Architect-fix: require BOTH kp.planets AND kp.significations to
+    # be present and non-empty. Activating with only one side present
+    # leaves NL/SBL or significations resolution empty and produces
+    # phantom hard-blocks that can collapse legitimate child windows.
+    if (not kp
+            or not (kp.get("planets") or [])
+            or not (kp.get("significations") or {})):
+        return out
+    out["available"] = True
+
+    for r in ranked:
+        pname = r["name"]
+        nl, sbl = _get_planet_kp_lords(kp, pname)
+        nl_houses  = _planet_signified_houses(kp, nl)  if nl  else []
+        sbl_houses = _planet_signified_houses(kp, sbl) if sbl else []
+        nl_child  = bool(set(nl_houses)  & _KP_CHILD_HOUSES)
+        sbl_child = bool(set(sbl_houses) & _KP_CHILD_HOUSES)
+        # Tri-state result (architect-fix). UNKNOWN when data is
+        # genuinely missing (NL/SBL absent or signified-houses lookup
+        # empty) — these are data-quality gaps, NOT true KP negatives.
+        # Unknown planets are treated as neutral (not hard-blocked) by
+        # the final-gate composition layer, so degraded KP input can
+        # never zero out promoter eligibility on its own.
+        nl_known  = bool(nl)  and bool(nl_houses)
+        sbl_known = bool(sbl) and bool(sbl_houses)
+        if not (nl_known and sbl_known):
+            kp_status = "unknown"
+            kp_promotes_child: Optional[bool] = None
+        elif nl_child and sbl_child:
+            kp_status = "pass"
+            kp_promotes_child = True
+        else:
+            kp_status = "fail"
+            kp_promotes_child = False
+        # Strict-only negation (architect-fix): true ONLY when
+        # signified-houses set is a non-empty subset of {1,4,10},
+        # i.e. it has zero overlap with anything outside the
+        # negation set (so no child link AND no other "neutral"
+        # house mitigates it). Diagnostic only.
+        def _neg_only(houses: List[int]) -> bool:
+            s = set(houses)
+            return bool(s) and s.issubset(_KP_NEGATION_HOUSES)
+        kp_negated = _neg_only(nl_houses) or _neg_only(sbl_houses)
+        out["per_planet"][pname] = {
+            "nl":                    nl,
+            "sbl":                   sbl,
+            "nl_houses":             nl_houses,
+            "sbl_houses":            sbl_houses,
+            "nl_signifies_child":    nl_child,
+            "sbl_signifies_child":   sbl_child,
+            "kp_promotes_child":     kp_promotes_child,
+            "kp_status":             kp_status,
+            "kp_negated":            kp_negated,
+        }
+        if kp_status == "pass":
+            out["passed"].append(pname)
+        elif kp_status == "fail":
+            out["blocked"].append(pname)
+        else:
+            out["unknown"].append(pname)
+    out["passed"].sort()
+    out["blocked"].sort()
+    out["unknown"].sort()
+    return out
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -1837,10 +1982,63 @@ def _compute_baby_window_impl(kundli: dict,
     factors.append("STEP4 ranked=" +
                     ",".join(f"{r['name']}:{r['score']}" for r in ranked[:5]))
 
+    # ── STEP 4c — KP 2-5-11 significator filter (final pre-dasha gate) ──
+    # Classical Krishnamurti Paddhati childbirth rule: a planet only
+    # promises a child in its AD/PD if BOTH its nakshatra-lord AND
+    # sub-lord signify houses 2/5/11. We AND this with the Step 3c
+    # cross-chart gate to build the FINAL promoter eligibility set
+    # passed into Step 5.
+    kp_filter = _step4c_kp_significator_filter(ranked, kp)
+    if kp_filter["available"]:
+        factors.append("STEP4c KP_2-5-11 passed=" +
+                        (",".join(kp_filter["passed"]) or "<none>") +
+                        " blocked=" +
+                        (",".join(kp_filter["blocked"]) or "<none>") +
+                        " unknown=" +
+                        (",".join(kp_filter.get("unknown") or [])
+                          or "<none>"))
+    else:
+        factors.append("STEP4c KP_2-5-11=DISABLED (KP data unavailable)")
+
+    # Build the FINAL gate map combining Step 3c + Step 4c.
+    # Each gate is independently safety-disabled when its data is
+    # unavailable (Step 3c → cross_map_for_gate; Step 4c → kp_filter).
+    # Final rule: promoter eligibility = (cross_confirmed if gate
+    # active else True) AND (kp_promotes_child if KP gate active
+    # else True). If BOTH gates are disabled we fall back to legacy
+    # D1-only promoter logic by passing cross_map=None to Step 5.
+    cross_active = cross_map_for_gate is not None
+    kp_active    = kp_filter["available"]
+    if cross_active or kp_active:
+        final_gate_map: Dict[str, Dict[str, Any]] = {}
+        for r in ranked:
+            pname = r["name"]
+            base = (cross_map.get(pname, {}) if cross_map else {})
+            cross_pass = (bool(base.get("cross_confirmed"))
+                           if cross_active else True)
+            kp_info = kp_filter["per_planet"].get(pname, {})
+            # Tri-state aware: pass=True / fail=False / unknown=True
+            # (do not hard-block on missing per-planet KP data).
+            if kp_active:
+                kp_status = kp_info.get("kp_status", "unknown")
+                kp_pass = (kp_status != "fail")
+            else:
+                kp_pass = True
+            final_pass = cross_pass and kp_pass
+            final_gate_map[pname] = {
+                **base,
+                "cross_confirmed":   final_pass,
+                "cross_pass":        cross_pass,
+                "kp_pass":           kp_pass,
+            }
+        gate_for_step5 = final_gate_map
+    else:
+        gate_for_step5 = None
+
     # ── STEP 5 ──
     chain = _flatten_dasha_chain(kundli)
     dasha_windows = _step5_dasha_activation(chain, ranked, lagna_si, now,
-                                                cross_map=cross_map_for_gate)
+                                                cross_map=gate_for_step5)
     factors.append(f"STEP5 dasha_windows_in_horizon={len(dasha_windows)}")
 
     # ── STEP 6 ──
@@ -2001,6 +2199,7 @@ def _compute_baby_window_impl(kundli: dict,
                                   "D7": d7_available},
             "gate_active": cross_map_for_gate is not None,
         },
+        "kp_significator_filter": kp_filter,
         "transits": transits,
         "ashtakavarga": ashta,
         "yogas": yogas,

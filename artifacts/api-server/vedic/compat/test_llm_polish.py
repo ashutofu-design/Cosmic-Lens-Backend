@@ -199,6 +199,75 @@ class TestValidator(unittest.TestCase):
         self.assertFalse(ok)
         self.assertTrue(reason.startswith("unknown_nakshatra"), reason)
 
+    def test_anchor_accepts_shortened_nakshatra_token(self):
+        # Phase 2.5.11.20-B: anchor logic mirrors vocab logic — when LLM
+        # references only "Bhadrapada" (no name, no rashi), it should still
+        # count as a valid anchor for partner whose nakshatra is "Purva Bhadrapada".
+        facts = _sample_facts()
+        facts["p2"]["nakshatra"] = "Purva Bhadrapada"
+        facts["p2"]["name"] = "X"  # 1-char → too short to anchor by name
+        out = _good_llm_output()
+        # Wipe every reference to p2 except the shortened "Bhadrapada"
+        for k in ("compatibility_insight", "marriage_outlook"):
+            out[k] = out[k].replace("Mula", "Bhadrapada").replace(" r ", " X ").replace("Sagittarius", "Pisces-area")
+        out["strengths"] = [s.replace("Sagittarius", "the second sign") for s in out["strengths"]]
+        ok, reason = _validate(out, facts)
+        self.assertTrue(ok, f"shortened-token anchor rejected: {reason}")
+
+    def test_max_tokens_higher_for_non_latin_lang(self):
+        # Phase 2.5.11.20-B: non-Latin languages must request 900 tokens
+        # to avoid mid-JSON truncation; Latin scripts stay at 600.
+        facts = _sample_facts()
+        captured: dict = {}
+
+        class _FakeResp:
+            class _Choice:
+                class _Msg:
+                    content = '{"compatibility_insight":"x","strengths":["y"],"challenges":["z"],"marriage_outlook":"w"}'
+                message = _Msg()
+            choices = [_Choice()]
+
+        class _FakeClient:
+            class chat:
+                class completions:
+                    @staticmethod
+                    def create(**kwargs):
+                        captured.update(kwargs)
+                        return _FakeResp()
+
+        import openai_helper  # type: ignore
+        with patch.dict(os.environ, {"COMPAT_LLM_POLISH": "1"}, clear=False), \
+             patch.object(openai_helper, "_get_client", return_value=_FakeClient()), \
+             patch.object(_polish_mod, "_validate", return_value=(False, "ok")), \
+             patch.object(_polish_mod, "_db_cache_get", return_value=None), \
+             patch.object(_polish_mod, "_db_cache_put", return_value=None):
+            with _cache_lock:
+                _cache.clear()
+            polish_compat_analysis(facts, {"compatibility_insight": "fb"}, lang="hi")
+            self.assertEqual(captured.get("max_tokens"), 900, "non-Latin lang must use 900")
+            captured.clear()
+            polish_compat_analysis(facts, {"compatibility_insight": "fb"}, lang="en")
+            self.assertEqual(captured.get("max_tokens"), 600, "Latin lang must use 600")
+
+    def test_accepts_shortened_multiword_nakshatra(self):
+        # Phase 2.5.11.20-B regression: facts have "Purva Bhadrapada" but LLM
+        # commonly shortens to just "Bhadrapada". Pre-fix the validator only
+        # registered the first word ("Purva"), so the shortened form was
+        # rejected as `unknown_nakshatra:Bhadrapada` and the polish silently
+        # fell back to the rule-based template (visible bug in Hinglish output).
+        facts = _sample_facts()
+        # Only change p2's nakshatra to multi-word; rashi stays Sagittarius
+        # so the existing _good_llm_output() (which references it) still passes.
+        facts["p2"]["nakshatra"] = "Purva Bhadrapada"
+        out = _good_llm_output()
+        # Replace the original "Mula" mention with a shortened "Bhadrapada"
+        # — this is the exact LLM behaviour we observed in production.
+        out["compatibility_insight"] = out["compatibility_insight"].replace(
+            "Ardra and Mula", "Ardra and Bhadrapada"
+        )
+        ok, reason = _validate(out, facts)
+        self.assertTrue(ok, f"shortened nakshatra wrongly rejected: {reason}")
+
     def test_rejects_unknown_rashi(self):
         # LLM mentions "Aries" — neither partner has it
         out = _good_llm_output()

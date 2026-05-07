@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 
 # Bumped whenever the prompt, validator, or remedy whitelist changes.
 # Included in cache fingerprint so policy changes auto-invalidate stale prose.
-_PROMPT_VERSION = "v8"
+_PROMPT_VERSION = "v9"
 
 # Classical Vedic vocabulary the LLM is allowed to reference. Anything
 # outside this set in the prose is treated as a potential hallucination.
@@ -176,6 +176,10 @@ koot_scores:
 <USER_CONTEXT>
 language: {lang}
 </USER_CONTEXT>
+
+CRITICAL — both partner names MUST appear at least once each across the
+4 fields combined: "{p1.get('name','Partner 1')}" and "{p2.get('name','Partner 2')}".
+Output that omits either name will be rejected.
 
 Generate the JSON now."""
 
@@ -367,10 +371,14 @@ def _validate(out: Any, facts: dict[str, Any]) -> tuple[bool, str]:
 
     def _has_anchor(p_key: str, label: str) -> tuple[bool, str]:
         p = facts.get(p_key, {})
-        nak = (p.get("nakshatra") or "").split()[0]
+        # Phase 2.5.11.20-B: accept ANY token of a multi-word nakshatra
+        # (e.g. "Bhadrapada" alone counts as anchor for "Purva Bhadrapada"),
+        # mirroring the vocab-allowlist logic below for symmetry.
+        nak_full = (p.get("nakshatra") or "").strip()
+        nak_tokens = [t for t in nak_full.split() if t] if nak_full else []
         rashi = (p.get("rashi") or "").strip()
         name = (p.get("name") or "").strip()
-        if _word_in(nak):
+        if any(_word_in(t) for t in nak_tokens) or (nak_full and _word_in(nak_full)):
             return True, ""
         if _word_in(rashi):
             return True, ""

@@ -119,9 +119,17 @@ def _house_of_sign(sign_si: int, lagna_si: int) -> int:
 def _aspects_house(planet_sign_si: int, target_house: int,
                     lagna_si: int, aspect_offsets) -> bool:
     """True if a planet sitting in `planet_sign_si` aspects `target_house`
-    (whole-sign Vedic aspects). Includes occupation (offset 1)."""
+    (whole-sign Vedic aspects). Includes occupation (offset 1).
+
+    Phase 2.5.11.15-c BUG FIX: previous formula
+      `((planet_house + off - 1) % 12) + 1`
+    was off-by-one — houses are 1-indexed but the modular math treated
+    them as 0-indexed. Example: Jupiter in H7, 5th aspect (off=5) returned
+    H12 instead of the correct H11 (count 5 inclusive from H7: 7,8,9,10,11).
+    Correct formula subtracts 1 first to convert 1-indexed→0-indexed,
+    adds the inclusive offset (off-1), then converts back."""
     planet_house = _house_of_sign(planet_sign_si, lagna_si)
-    return any(((planet_house + off - 1) % 12) + 1 == target_house
+    return any(((planet_house - 1 + off - 1) % 12) + 1 == target_house
                 for off in aspect_offsets)
 
 

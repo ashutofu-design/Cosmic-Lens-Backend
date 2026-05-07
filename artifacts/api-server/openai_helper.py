@@ -3149,6 +3149,50 @@ def _static_needs_current_dasha(question: str) -> bool:
     return bool(_STATIC_DASHA_TRIGGER_RE.search(question))
 
 
+# ── Sensitive question detector (Phase 2.5.11.3 — depth rule) ──────────
+# Some questions are emotionally heavy yes/no / structural Qs where a
+# 1-line answer breaks user trust ("Shaadi late hogi kya?" / "Divorce
+# hoga?" / "Bachche honge ya nahi?"). For these, override the TIER-1
+# brevity cap and force a 3-layer answer:
+#   1) Emotional reassurance
+#   2) One plain-language astrological reason (1 planet citation OK)
+#   3) Future outlook / measured timing (no fabricated dates)
+_SENSITIVE_STATIC_RE = _re_dasha_gate.compile(
+    r"\b("
+    # Marriage denial / late / never
+    r"shaadi\s+(?:late|nahi|kab\s*tak)|late\s+marriage|"
+    r"marriage\s+(?:denial|nahi)|never\s+marry|"
+    r"shaadi\s+hi\s+nahi|akela|akeli|alone\s+forever|single\s+forever|"
+    # Divorce / separation
+    r"divorce|talaq|separation|alag\s*ho|alag\s+rahenge|"
+    r"toot(?:\s*jaye(?:gi|ga))?|tut\s+jay|"
+    # Partner cheat / betrayal / loyalty
+    r"cheat|dhokha|dhoka|beimani|betray|wafa|loyal\s+rahega|"
+    r"affair|extra[-\s]?marital|2nd\s+woman|2nd\s+man|"
+    # Child / fertility
+    r"bachch?e?\s+(?:ho|nahi|kab|honge|hogi)|child(?:ren)?\s+(?:will|ho)|"
+    r"baby\s+(?:hogi|hoga|honge|kab|nahi)|"
+    r"infertil|conceive|pregnan|santan|aulad|"
+    # Money / debt stability
+    r"paisa\s+kab\s+stable|paisa\s+kab\s+aayega|money\s+stable|"
+    r"financial\s+stability|debt\s+kab|loan\s+kab|"
+    r"karz\s+(?:utre|kab)|garib(?:i)?\s+kab|"
+    # Health / longevity (heavy)
+    r"kab\s+thik|cancer\s+hoga|serious\s+illness|major\s+disease|"
+    r"life\s+span|umar\s+kitni|kitne\s+saal\s+jeeunga"
+    r")\b",
+    _re_dasha_gate.IGNORECASE,
+)
+
+
+def _is_sensitive_static_q(question: str) -> bool:
+    """True when the question is emotionally heavy and needs a 3-layer
+    minimum-depth answer instead of TIER-1 brevity."""
+    if not isinstance(question, str) or not question.strip():
+        return False
+    return bool(_SENSITIVE_STATIC_RE.search(question))
+
+
 def _raw_compact_chart(kundli: Any, include_dasha: bool = True,
                        static_dasha_hint: bool = False) -> str:
     """Build a compact text block of D1 + D9 (+ current dasha) for LLM.
@@ -3395,6 +3439,11 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         qtype = "STATIC"
     is_timing = (qtype == "TIMING")
     static_dasha_hint = (not is_timing) and _static_needs_current_dasha(question)
+    is_sensitive = (not is_timing) and _is_sensitive_static_q(question)
+    # Sensitive Qs ALSO need current dasha so the LLM has a real reason
+    # to cite in layer-2 (astrological reason). Auto-promote.
+    if is_sensitive:
+        static_dasha_hint = True
     chart_text = _raw_compact_chart(kundli, include_dasha=is_timing,
                                     static_dasha_hint=static_dasha_hint)
 
@@ -3485,6 +3534,49 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         chart_label = "D1 + D9 + CURRENT DASHA (context only)"
     else:
         chart_label = "D1 + D9 ONLY (pure structural — no dasha)"
+    if is_sensitive:
+        chart_label += " [SENSITIVE-Q: 3-layer depth required]"
+
+    # ── Sensitive-Q depth rule (Phase 2.5.11.3) ─────────────────────────
+    # When a sensitive yes/no Q hits ("late marriage?", "divorce hoga?",
+    # "bachche honge?"), OVERRIDE the TIER-1 brevity cap and demand a
+    # 3-layer answer: reassurance + one plain-language astrological
+    # reason + measured future outlook. ALSO unlocks ONE plain-context
+    # planet mention (Saturn / Venus / Moon / Jupiter / Mars / Rahu) so
+    # the answer carries real "astrologer authority" without slipping
+    # into jargon. This rule SUPERSEDES the GOLDEN RULE / TIER-1 cap.
+    sensitive_depth_rule = (
+        "\n\n=== SENSITIVE QUESTION DEPTH RULE (this Q is emotionally heavy) ===\n"
+        "This is a TRUST-CRITICAL question (late marriage / divorce / "
+        "never-marry / partner-cheat / child-or-not / money-stable / "
+        "longevity). A 1-line yes/no answer here BREAKS user trust.\n"
+        "OVERRIDE the TIER-1 brevity cap. Write a 3-LAYER answer "
+        "(60-90 words total, NOT a single sentence):\n"
+        "  LAYER 1 — Emotional reassurance + soft verdict: acknowledge "
+        "the user's worry warmly, state the verdict softly (e.g. 'Haan, "
+        "thoda delay pattern dikh raha hai...' or 'Nahi, divorce ka "
+        "fixed sanket nahi...').\n"
+        "  LAYER 2 — ONE plain-language astrological reason. You ARE "
+        "ALLOWED to mention ONE planet by name in plain context "
+        "(examples: 'Saturn ka influence commitment ko serious bana "
+        "raha hai', 'Venus emotional intensity de raha hai', 'Moon "
+        "ka phase abhi mind ko reactive kar raha hai'). MAX 1 planet "
+        "name per answer. NO house numbers, NO 'lord', NO 'aspect', "
+        "NO Sanskrit jargon, NO dasha terminology.\n"
+        "  LAYER 3 — Future outlook / measured reassurance: counter the "
+        "fear softly. For 'late marriage' → 'delay ≠ denial, mature "
+        "phase me settle hota hai'. For 'divorce' → 'rishton me "
+        "tension aata hai par tootna fixed nahi'. For 'bachche' → "
+        "'planning + medical care ke saath chance achha rehta hai'. "
+        "For 'paisa stable' → 'next phase me discipline ke saath "
+        "stability improve hoti hai'. NEVER fabricate exact future "
+        "dates — broad bands ('agle 1-2 saal', 'mature phase me') "
+        "are fine.\n"
+        "End with `👉 Final:` line summarizing the soft verdict in 1 "
+        "sentence.\n"
+        "TONE: like a wise, experienced astrologer talking gently to "
+        "a worried friend. Calm, supportive, NEVER alarmist.\n"
+    ) if is_sensitive else ""
     if is_kp:
         chart_label += " + KP CUSPAL SUB-LORD"
     if is_marriage_engine:
@@ -3855,7 +3947,7 @@ HARD RULES (apply to every answer)
 ═══════════════════════════════════════════════════════════════════
 USER'S BIRTH CHART
 ═══════════════════════════════════════════════════════════════════
-{chart_text}{kp_reading_rule}{marriage_reading_rule}"""
+{chart_text}{kp_reading_rule}{marriage_reading_rule}{sensitive_depth_rule}"""
     model = os.environ.get("RAW_PASSTHROUGH_MODEL",
                             os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"))
     try:

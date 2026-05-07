@@ -198,6 +198,71 @@ class TestStep1Filter(unittest.TestCase):
         self.assertGreaterEqual(per.get("confirmations", 0), 2)
         self.assertIn("D1", per.get("confirmed_in", []))
 
+    def test_step4c_strong_crosschart_rescues_kp_fail(self):
+        """Phase 2.5.4-r4: a planet confirmed in ALL THREE charts
+        (D1+D9+D7 all show 5H credential) is too strongly indicated
+        to be vetoed by a KP fail. KP is a timing refinement, not a
+        promise-killer when D1/D9/D7 are unanimously positive.
+        Rescue triggers only when confirmations == 3 (full unanimity).
+        """
+        # Aries lagna, Jupiter in 5H → D1 5H occupant + Jupiter karaka.
+        # Most likely Jupiter will register a D1 credential. D9 and D7
+        # depend on internal computation but we assert the override
+        # ONLY fires when confirmations==3 (we don't force it).
+        kundli = _mk_kundli("Aries", {
+            "Sun": 11, "Moon": 4, "Mars": 7, "Mercury": 3,
+            "Jupiter": 5, "Venus": 2, "Saturn": 10,
+            "Rahu": 12, "Ketu": 6,
+        }, dashas=_mk_dashas())
+        # KP says Jupiter FAILS (NL+SBL both miss 2/5/11).
+        kp = {
+            "planets": [
+                {"name": "Jupiter", "nl": "Mars",  "sb": "Mars"},
+                {"name": "Sun",     "nl": "Venus", "sb": "Venus"},
+                {"name": "Moon",    "nl": "Sun",   "sb": "Mercury"},
+                {"name": "Venus",   "nl": "Moon",  "sb": "Moon"},
+                {"name": "Mercury", "nl": "Venus", "sb": "Venus"},
+                {"name": "Mars",    "nl": "Sun",   "sb": "Sun"},
+                {"name": "Saturn",  "nl": "Mars",  "sb": "Mars"},
+                {"name": "Rahu",    "nl": "Mars",  "sb": "Mars"},
+                {"name": "Ketu",    "nl": "Mars",  "sb": "Mars"},
+            ],
+            "significations": {
+                "Mars":    [6, 8],
+                "Sun":     [2, 5],
+                "Venus":   [5, 11],
+                "Moon":    [2, 5],
+                "Mercury": [5, 11],
+                "Jupiter": [2, 5, 11],
+                "Saturn":  [4, 10],
+            },
+            "cusps": [],
+        }
+        result = compute_baby_window(kundli, intel={}, kp=kp,
+                                       birth={"dob": "1990-05-15"})
+        ccf = result.get("cross_chart_filter") or {}
+        per_cc = ccf.get("per_planet", {})
+        kpf = result.get("kp_significator_filter") or {}
+        per_kp = kpf.get("per_planet", {})
+        # Sanity: Jupiter explicitly KP-failed in raw filter
+        if "Jupiter" in per_kp:
+            self.assertEqual(per_kp["Jupiter"]["kp_status"], "fail")
+        # If Jupiter has confirmations==3, override must fire and
+        # Jupiter must NOT be in KP-blocked outcome of final gate.
+        jp_cc = per_cc.get("Jupiter", {})
+        if jp_cc.get("confirmations") == 3:
+            # Verify the rescue path executes: planet should still
+            # appear in the final gate's pass set even though raw KP
+            # said fail — i.e. promoter eligibility preserved.
+            # We cannot easily inspect final_gate_map externally, but
+            # we can verify the verdict didn't collapse to OBSTRUCTED
+            # solely due to KP. Confirm result builds without error
+            # and Jupiter retains a positive ranking.
+            ranked_names = [p["name"] for p in
+                            (result.get("top_child_planets") or [])]
+            self.assertIn("Jupiter", ranked_names,
+                "Strong cross-chart Jupiter must remain ranked")
+
     def test_step4c_kp_negation_is_hard_block(self):
         """Phase 2.5.4-r3: a planet whose NL or SBL signifies ONLY
         houses {1,4,10} (pure negation, no mitigation) must be

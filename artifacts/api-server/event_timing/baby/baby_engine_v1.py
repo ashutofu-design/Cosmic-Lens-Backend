@@ -2029,15 +2029,36 @@ def _compute_baby_window_impl(kundli: dict,
             # (do not hard-block on missing per-planet KP data).
             if kp_active:
                 kp_status = kp_info.get("kp_status", "unknown")
-                kp_pass = (kp_status != "fail")
+                kp_pass_raw = (kp_status != "fail")
             else:
-                kp_pass = True
+                kp_status = "unknown"
+                kp_pass_raw = True
+            # Phase 2.5.4-r4 — STRONG-CROSS-CHART RESCUE:
+            # If a planet is confirmed in ALL THREE charts (D1+D9+D7
+            # all show a 5H credential — 5L of that chart / occupant
+            # of 5H / aspecting 5H / Jupiter karaka), it is too
+            # strong a child-significator to be vetoed by a KP fail.
+            # Classical rule: KP is a TIMING refinement, not a
+            # promise-killer when D1/D9/D7 are unanimously positive.
+            # Override applies only when:
+            #   - cross gate is active (we have D9/D7 to count),
+            #   - KP gate is active and says "fail",
+            #   - confirmations == 3 (full cross-chart unanimity).
+            confirmations = int(base.get("confirmations", 0))
+            kp_override_by_strength = (
+                cross_active and kp_active
+                and kp_status == "fail"
+                and confirmations >= 3
+            )
+            kp_pass = kp_pass_raw or kp_override_by_strength
             final_pass = cross_pass and kp_pass
             final_gate_map[pname] = {
                 **base,
-                "cross_confirmed":   final_pass,
-                "cross_pass":        cross_pass,
-                "kp_pass":           kp_pass,
+                "cross_confirmed":          final_pass,
+                "cross_pass":               cross_pass,
+                "kp_pass":                  kp_pass,
+                "kp_status":                kp_status,
+                "kp_override_by_strength":  kp_override_by_strength,
             }
         gate_for_step5 = final_gate_map
     else:

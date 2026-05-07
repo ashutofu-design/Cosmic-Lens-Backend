@@ -444,10 +444,17 @@ def _validate(out: Any, facts: dict[str, Any]) -> tuple[bool, str]:
     # when neither partner has it).
     p1 = facts.get("p1", {}) or {}
     p2 = facts.get("p2", {}) or {}
-    allowed_naks = {
-        (p1.get("nakshatra") or "").split()[0].lower() if p1.get("nakshatra") else "",
-        (p2.get("nakshatra") or "").split()[0].lower() if p2.get("nakshatra") else "",
-    } - {""}
+    # Include EVERY word of each multi-word nakshatra so e.g. "Purva Bhadrapada"
+    # allows both "Purva" and "Bhadrapada" tokens (LLM commonly shortens to
+    # the second word). Previously we kept only the first word, which made
+    # the validator reject the LLM's natural shortening with `unknown_nakshatra:Bhadrapada`.
+    allowed_naks: set[str] = set()
+    for _p in (p1, p2):
+        _nak = (_p.get("nakshatra") or "").strip().lower()
+        if _nak:
+            for _tok in _nak.split():
+                allowed_naks.add(_tok)
+            allowed_naks.add(_nak)  # also the full multi-word form
     allowed_rashis = {
         (p1.get("rashi") or "").lower(), (p2.get("rashi") or "").lower(),
     } - {""}
@@ -524,9 +531,15 @@ def polish_compat_analysis(
                 {"role": "user", "content": user_prompt},
             ],
             "response_format": {"type": "json_object"},
-            # Phase 2.5.11.20-A: trimmed 900 → 600 (real outputs ~480 tokens;
-            # 600 leaves headroom while cutting worst-case cost ~33%).
-            "max_tokens": 600,
+            # Phase 2.5.11.20-A/B: dynamic by language. Latin-script langs (en,
+            # romanized hn, es, fr, de, pt, id, tr) fit easily in 600 tokens
+            # (~480 typical). Non-Latin scripts (Devanagari, Bengali, Tamil,
+            # Telugu, Kannada, Malayalam, Gujarati, Punjabi, Odia, Assamese,
+            # Chinese, Arabic, Russian, Japanese, Korean) cost 2-3x more
+            # tokens per character, so they need 900 to avoid mid-JSON truncation.
+            "max_tokens": 600 if lang in {
+                "en", "hn", "es", "fr", "de", "pt", "id", "tr"
+            } else 900,
         }
         # gpt-5.x rejects temperature; only set for non-gpt-5 models
         if not model.lower().startswith("gpt-5"):

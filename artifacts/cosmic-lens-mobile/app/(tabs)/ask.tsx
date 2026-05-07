@@ -66,6 +66,12 @@ interface Message {
   // Rendered as a tiny badge below the action row so the user/dev can
   // see provenance at a glance. Absent on legacy / pre-tag responses.
   engineTag?: "ans-engine" | "ans-cosmo";
+  // Phase 2.5.11.6 — partner CTA. When the user asks about an existing
+  // partner ("mere bf se shaadi hogi") but no partner profile is saved,
+  // server returns this payload so we render an inline "Add partner
+  // details" button below the bubble that opens profile-edit pre-set
+  // to the right relation slot.
+  partnerCta?: { label: string; relation: string };
 }
 
 const DEMO_MESSAGES: Message[] = [
@@ -561,6 +567,26 @@ export default function AskScreen() {
           const oneShotEngineTag: "ans-engine" | "ans-cosmo" | undefined =
             (_et === "ans-engine" || _et === "ans-cosmo") ? _et : undefined;
 
+          // Phase 2.5.11.6 — partner CTA. Server returns this when the Q
+          // refers to a specific partner ("mere bf se shaadi hogi") but
+          // no partner profile is saved yet. We render an inline button
+          // below the bubble that opens profile-edit pre-set to the
+          // detected relation slot.
+          let partnerCta: { label: string; relation: string } | undefined;
+          if (
+            (json as any).requires_partner_profile === true &&
+            (json as any).partner_cta &&
+            typeof (json as any).partner_cta === "object" &&
+            typeof (json as any).partner_cta.relation === "string"
+          ) {
+            const _pc = (json as any).partner_cta;
+            partnerCta = {
+              label:    typeof _pc.label === "string" && _pc.label.trim().length > 0
+                          ? String(_pc.label) : "Add partner details",
+              relation: String(_pc.relation),
+            };
+          }
+
           const newAssistantId = Date.now().toString() + "_a";
           setMessages(prev =>
             prev.filter(m => m.id !== "thinking").concat({
@@ -573,6 +599,7 @@ export default function AskScreen() {
               responseSchema: isV2 ? "v2" : undefined,
               clarification: clar,
               engineTag: oneShotEngineTag,
+              partnerCta,
             })
           );
           return;
@@ -1107,6 +1134,35 @@ export default function AskScreen() {
               ))}
             </ScrollView>
           </View>
+        )}
+
+        {/* Phase 2.5.11.6 — Partner CTA card. Server returns this when
+            the user asks about an existing partner ("mere bf se shaadi
+            hogi") but no partner profile is saved. Tapping the button
+            opens profile-edit pre-set to the right relation slot so the
+            user can add DOB/TOB/place; coming back & re-asking triggers
+            the real synastry flow. */}
+        {item.role === "assistant" && item.partnerCta && !item.streaming && !loading && (
+          <Pressable
+            onPress={() => {
+              try { Haptics.selectionAsync(); } catch {}
+              router.push({
+                pathname: "/profile-edit",
+                params:   { relation: item.partnerCta!.relation },
+              } as any);
+            }}
+            style={({ pressed }) => [
+              s.partnerCtaBtn,
+              { backgroundColor: C.accent, borderColor: C.accent },
+              pressed && { opacity: 0.85 },
+            ]}
+          >
+            <Feather name="user-plus" size={14} color="#FFFFFF" />
+            <Text style={s.partnerCtaText}>
+              {item.partnerCta.label || "Add partner details"}
+            </Text>
+            <Feather name="arrow-right" size={14} color="#FFFFFF" />
+          </Pressable>
         )}
 
         {/* Follow-up suggestion chips — only on the latest assistant reply */}
@@ -1715,6 +1771,24 @@ const s = StyleSheet.create({
     borderWidth: 1,
   },
   followUpText: { fontSize: 12, fontWeight: "600" },
+
+  // Phase 2.5.11.6 — Partner-CTA button. Sits below the assistant
+  // bubble on the special "requires_partner_profile" reply. Tapping
+  // routes to /profile-edit?relation=<hint> so the user lands in the
+  // Add-profile modal pre-set to the right slot.
+  partnerCtaBtn: {
+    flexDirection:    "row",
+    alignItems:       "center",
+    justifyContent:   "center",
+    gap:              8,
+    marginHorizontal: 16,
+    marginTop:        8,
+    paddingHorizontal: 14,
+    paddingVertical:  10,
+    borderRadius:     12,
+    borderWidth:      1,
+  },
+  partnerCtaText: { fontSize: 13, fontWeight: "700", color: "#FFFFFF" },
 
   // Phase 7.5 — Clarifier UX styles. Banner sits below the assistant
   // bubble, above the follow-up chips, on the latest reply only.

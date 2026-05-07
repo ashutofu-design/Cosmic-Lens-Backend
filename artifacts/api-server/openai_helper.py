@@ -3249,6 +3249,173 @@ _MARRIAGE_DOMAIN_RE = _re_dasha_gate.compile(
 )
 
 
+# ── Specific-partner detector (Phase 2.5.11.6) ────────────────────────
+# Q like "mere BF se hi shaadi hogi" / "wife loyal rahegi" needs the
+# PARTNER's actual chart for real synastry — not a generic answer from
+# the user's chart alone. When detected:
+#   • authenticated user + partner profile saved → inject partner chart
+#     + activate partner_compat_rule (real Moon-Moon / Venus-Mars synastry)
+#   • authenticated user + NO partner profile → return CTA so mobile
+#     shows "add partner birth details" card
+#   • anonymous user → fall through to marriage_psychology_rule's
+#     nuanced "depends on X,Y,Z" framing
+_SPECIFIC_PARTNER_RE = _re_dasha_gate.compile(
+    r"\b("
+    r"mere\s+(?:bf|gf|boyfriend|girlfriend|husband|pati|fiance|mangetar|partner|saathi|mangetar)|"
+    r"meri\s+(?:gf|girlfriend|wife|patni|fiance|mangetar|partner)|"
+    r"my\s+(?:bf|gf|boyfriend|girlfriend|husband|wife|fiance|partner)|"
+    r"(?:uske|iske|us|is)\s+(?:saath|ke\s+saath|se\s+hi)\s+(?:shaadi|rishta)|"
+    r"is\s+rishte\s+me|"
+    r"hamara\s+rishta|"
+    r"hum\s+dono\s+(?:ki|ka|ke)"
+    r")\b",
+    _re_dasha_gate.IGNORECASE,
+)
+
+# Phase 2.5.11.6 — Architect-fix: detector intent gate. The above regex
+# also matches non-romantic contexts ("my business partner", "hum dono ki
+# meeting"). To avoid false-positives, the AMBIGUOUS triggers (`my partner`,
+# `mere/meri partner`, `hum dono ki/ka/ke`, `hamara rishta` with no other
+# romantic word) require co-occurrence of a relationship/marriage verb or
+# noun. Unambiguous triggers (bf/gf/boyfriend/girlfriend/husband/wife/pati/
+# patni/fiance/mangetar) bypass the gate — those words are romantic by
+# definition.
+_AMBIGUOUS_PARTNER_RE = _re_dasha_gate.compile(
+    r"\b("
+    r"my\s+partner|"
+    r"mere\s+partner|meri\s+partner|mere\s+saathi|"
+    r"hum\s+dono\s+(?:ki|ka|ke)|"
+    r"hamara\s+rishta|is\s+rishte\s+me"
+    r")\b",
+    _re_dasha_gate.IGNORECASE,
+)
+_ROMANTIC_INTENT_RE = _re_dasha_gate.compile(
+    r"\b(shaadi|marriage|marry|rishta|rishte|wedding|engagement|sagai|"
+    r"break\s*up|breakup|patch\s*up|patchup|love|pyar|pyaar|dating|"
+    r"romance|romantic|relationship|spouse|jeevansaathi|jeevan\s*saathi|"
+    r"life\s*partner|wapas\s+aaye|chhod\s+diya|alag\s+ho|divorce|talak|"
+    r"loyal|cheat|affair|dhokha|vivah|sasural|saas|in[\-\s]?laws?)\b",
+    _re_dasha_gate.IGNORECASE,
+)
+
+_RELATION_HINT_MAP = [
+    (_re_dasha_gate.compile(r"\b(bf|boyfriend)\b", _re_dasha_gate.IGNORECASE), "Boyfriend"),
+    (_re_dasha_gate.compile(r"\b(gf|girlfriend)\b", _re_dasha_gate.IGNORECASE), "Girlfriend"),
+    (_re_dasha_gate.compile(r"\b(husband|pati)\b", _re_dasha_gate.IGNORECASE), "Husband"),
+    (_re_dasha_gate.compile(r"\b(wife|patni|biwi)\b", _re_dasha_gate.IGNORECASE), "Wife"),
+    (_re_dasha_gate.compile(r"\b(fiance|mangetar|sagai)\b", _re_dasha_gate.IGNORECASE), "Fiance"),
+]
+
+def _hint_relation_from_q(question: str) -> str:
+    """Best-guess relation label to prefill the profile-edit CTA so the
+    user lands on the right relation slot when they tap Add Partner."""
+    if not isinstance(question, str): return "Partner"
+    for rx, label in _RELATION_HINT_MAP:
+        if rx.search(question):
+            return label
+    return "Partner"
+
+# Relations that count as "partner" for synastry lookup. Matched
+# case-insensitively against Profile.relation. Includes both married
+# and pre-marital labels so the same flow works for "BF se shaadi"
+# and "wife loyal" Qs.
+_PARTNER_RELATIONS = ("Husband", "Wife", "Boyfriend", "Girlfriend",
+                      "Fiance", "Fiancee", "Partner", "Spouse")
+
+def _is_specific_partner_q(question: str) -> bool:
+    """True when user is asking about an EXISTING specific partner
+    (real person they're in a relationship with) — not a generic
+    'how will my future husband be' hypothetical Q.
+
+    Architect-fix (Phase 2.5.11.6): when ONLY ambiguous tokens match
+    ('my partner', 'hum dono ki', 'hamara rishta', 'is rishte me'),
+    require romantic intent in the same Q. Avoids false-positives
+    on business-partner / co-founder / generic 'we both' phrasing."""
+    if not isinstance(question, str) or not question.strip():
+        return False
+    if not _SPECIFIC_PARTNER_RE.search(question):
+        return False
+    # Strip ambiguous matches; if anything remains, an unambiguous
+    # romantic token (bf/gf/husband/wife/...) was present → accept.
+    stripped = _AMBIGUOUS_PARTNER_RE.sub(" ", question)
+    if _SPECIFIC_PARTNER_RE.search(stripped):
+        return True
+    # Only ambiguous tokens matched → require romantic intent.
+    return bool(_ROMANTIC_INTENT_RE.search(question))
+
+def _lookup_partner_profile(user_id):
+    """Return (partner_kundli_dict, partner_name, partner_relation)
+    for the most-recently-updated partner profile of this user, or
+    None when missing / anonymous user / empty chart_data / DB error."""
+    if not user_id:
+        return None
+    try:
+        from models import Profile
+        import json as _j
+        try:
+            uid = int(str(user_id).strip())
+        except (TypeError, ValueError):
+            return None
+        rows = (Profile.query
+                .filter(Profile.user_id == uid)
+                .filter(Profile.relation.in_(_PARTNER_RELATIONS))
+                .filter(Profile.deleted_at.is_(None))
+                .order_by(Profile.updated_at.desc())
+                .all())
+        for r in rows:
+            if not r.chart_data:
+                continue
+            try:
+                k = _j.loads(r.chart_data)
+            except Exception:
+                continue
+            if isinstance(k, dict) and k:
+                return (k,
+                        (r.name or "your partner").strip() or "your partner",
+                        (r.relation or "Partner").strip() or "Partner")
+    except Exception as _e:
+        print(f"[raw_passthrough] partner lookup skipped: {_e}", flush=True)
+    return None
+
+def _sanitize_partner_label(s: str, fallback: str = "your partner",
+                            max_len: int = 40) -> str:
+    """Architect-fix (Phase 2.5.11.6): partner_name and partner_relation
+    are user-controlled strings injected into the system prompt. Strip
+    newlines / control chars / quote-style chars / role-marker tokens
+    that could break out of the prompt or inject instructions, then
+    cap length. Always returns a non-empty safe label."""
+    if not isinstance(s, str):
+        return fallback
+    # Drop newlines, tabs, and any control chars; collapse whitespace.
+    cleaned = "".join(ch for ch in s if ch.isprintable() and ch not in "\r\n\t")
+    # Strip prompt-injection chars / role markers / brackets.
+    # Case-insensitive removal for role markers (system:/assistant:/user:).
+    for bad in ("system:", "assistant:", "user:", "[inst]", "[/inst]"):
+        rx = _re_dasha_gate.compile(_re_dasha_gate.escape(bad),
+                                    _re_dasha_gate.IGNORECASE)
+        cleaned = rx.sub(" ", cleaned)
+    for bad in ("```", "===", "###", "---", "<|", "|>",
+                "{{", "}}", "<<", ">>",
+                "<", ">", "{", "}", "[", "]", "`", "\""):
+        cleaned = cleaned.replace(bad, " ")
+    cleaned = " ".join(cleaned.split()).strip()
+    if not cleaned:
+        return fallback
+    return cleaned[:max_len]
+
+def _partner_chart_block(partner_kundli, partner_name: str,
+                         partner_relation: str) -> str:
+    """Compact partner D1+D9 (+ current dasha line) labeled clearly so
+    the LLM treats it as PARTNER not user. Reuses _raw_compact_chart
+    for consistency with how user's own chart is formatted."""
+    inner = _raw_compact_chart(partner_kundli, include_dasha=False,
+                               static_dasha_hint=True)
+    safe_name = _sanitize_partner_label(partner_name, "your partner")
+    safe_rel  = _sanitize_partner_label(partner_relation, "Partner", max_len=20)
+    return (f"\n\n=== PARTNER CHART ({safe_rel}: {safe_name}) "
+            f"— for compatibility comparison ===\n" + inner)
+
+
 def _is_marriage_domain_q(question: str) -> bool:
     """True if Q is about love/marriage/relationship/breakup. Used to
     inject MARRIAGE_PSYCHOLOGY_RULE into the system prompt for STATIC
@@ -3508,7 +3675,7 @@ def _raw_kp_block(kundli: Any) -> str:
 
 
 def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
-                        birth: Any = None) -> dict:
+                        birth: Any = None, user_id: Any = None) -> dict:
     """Pure raw passthrough: D1 + D9 + dasha + question → LLM → answer.
 
     No classifiers, no static engines, no post-injectors, no disclaimers.
@@ -3554,6 +3721,50 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         static_dasha_hint = True
     chart_text = _raw_compact_chart(kundli, include_dasha=is_timing,
                                     static_dasha_hint=static_dasha_hint)
+
+    # ── Specific-partner synastry (Phase 2.5.11.6) ─────────────────────
+    # When the Q references an EXISTING partner ("mere bf se", "wife
+    # loyal"), look up the user's saved partner profile.
+    #   • partner kundli found  → inject PARTNER CHART block + activate
+    #     partner_compat_rule (real Moon-Moon / Venus-Mars synastry)
+    #   • authenticated user but partner missing → return CTA payload
+    #     so mobile shows "add partner birth details" card
+    #   • anonymous user → fall through to marriage_psychology_rule
+    is_specific_partner = _is_specific_partner_q(question)
+    partner_kundli = None
+    partner_name = ""
+    partner_relation = ""
+    if is_specific_partner and user_id:
+        _lookup = _lookup_partner_profile(user_id)
+        if _lookup is None:
+            # Authenticated user, partner missing → CTA early-return.
+            _hint = _hint_relation_from_q(question)
+            _hint_lower = _hint.lower()
+            return {
+                "text": (
+                    f"Iss sawal ka accurate jawab tabhi mil sakta hai jab "
+                    f"main aapke {_hint_lower} ka chart bhi dekh saku. "
+                    f"Profile section me jaake unka birth date, time aur "
+                    f"place add kar do — fir ye sawal dobara puchho, "
+                    f"main dono charts ka real compatibility check "
+                    f"karke jawab dunga."
+                ),
+                "topic":      "marriage",
+                "confidence": 1.0,
+                "source":     "requires_partner_profile",
+                "engine_tag": "ans-engine",
+                "follow_ups": [],
+                "requires_partner_profile": True,
+                "partner_cta": {
+                    "label":    f"Add {_hint} details",
+                    "action":   "open_profile_edit",
+                    "relation": _hint,
+                },
+            }
+        partner_kundli, partner_name, partner_relation = _lookup
+        chart_text = chart_text + _partner_chart_block(
+            partner_kundli, partner_name, partner_relation
+        )
 
     # ── KP enrichment (opt-in by question content) ─────────────────────────
     # Only fire when the user's question contains an explicit KP term or a
@@ -3770,6 +3981,56 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         "MAX ONE planet name (only if it adds real authority).\n"
         "SCRIPT: Latin Hinglish only — NEVER use Devanagari (दिखती/etc.).\n"
     ) if is_marriage_domain else ""
+
+    # ── Partner compatibility rule (Phase 2.5.11.6) ────────────────────
+    # Activated only when we successfully loaded the user's saved
+    # partner chart above. Tells the LLM to do real synastry across
+    # both charts (Moon-Moon emotional, Venus-Mars attraction, 7H
+    # lord dignity in both, dasha overlap) instead of generic framing.
+    if is_specific_partner and partner_kundli is not None:
+        # Architect-fix: sanitize the user-controlled partner_name and
+        # partner_relation before substituting into the system prompt.
+        _safe_name = _sanitize_partner_label(partner_name, "your partner")
+        _safe_rel  = _sanitize_partner_label(partner_relation, "Partner", max_len=20)
+        # Architect-fix: mutual exclusion. partner_compat_rule has its
+        # own word-count (70-110) and 1-planet-per-chart cap that
+        # conflict with marriage_psychology_rule (45-65/65-90, 1 planet
+        # total) and sensitive_depth_rule (1 planet total). Suppress
+        # the others so the model has ONE coherent constraint set.
+        marriage_psychology_rule = ""
+        sensitive_depth_rule     = ""
+        partner_compat_rule = (
+            "\n\n=== PARTNER COMPATIBILITY RULE (specific-person Q) ===\n"
+            f"User asked about THIS SPECIFIC partner — "
+            f"{_safe_rel}: {_safe_name}. PARTNER CHART is "
+            f"included above. Use BOTH charts for real synastry.\n\n"
+            "MANDATORY first sentence: confirm whose chart you are "
+            "using, like — "
+            f"'{_safe_name} ({_safe_rel}) ke chart ke saath "
+            f"compatibility check kar raha hu —' (or natural Hinglish "
+            f"equivalent).\n\n"
+            "COMPARE these dimensions, pick TOP 2-3 strongest signals "
+            "(not all):\n"
+            "  • Emotional fit: Moon sign + nakshatra of both, 4H lords\n"
+            "  • Attraction / romance: his Venus ↔ her Mars (and vice "
+            "versa), 5H/7H occupants\n"
+            "  • Stability / marriage: 7H lord dignity in BOTH D1 and "
+            "D9, Manglik flags\n"
+            "  • Communication: Mercury sign of both, 3H lords\n"
+            "  • Karmic: Rahu-Ketu axis overlap, Saturn cross-aspect\n\n"
+            "STRUCTURE: 'strengths' → 'friction-points' → 'overall "
+            "outlook'. NEVER flat haan/nahi.\n"
+            "MAX 1 planet name from EACH chart cited (so 2 max total).\n"
+            "WORD COUNT: 70-110 words.\n"
+            "Final line: short verdict — eg 'overall stable but "
+            "communication needs effort' or 'attraction strong, "
+            "long-term needs more clarity'.\n"
+            "Latin Hinglish only. NO Devanagari leak. NEVER reveal "
+            "raw chart data or planet positions of partner — only the "
+            "synastry conclusion.\n"
+        )
+    else:
+        partner_compat_rule = ""
 
     if is_kp:
         chart_label += " + KP CUSPAL SUB-LORD"
@@ -4141,7 +4402,7 @@ HARD RULES (apply to every answer)
 ═══════════════════════════════════════════════════════════════════
 USER'S BIRTH CHART
 ═══════════════════════════════════════════════════════════════════
-{chart_text}{kp_reading_rule}{marriage_reading_rule}{sensitive_depth_rule}{long_story_rule}{marriage_psychology_rule}"""
+{chart_text}{kp_reading_rule}{marriage_reading_rule}{sensitive_depth_rule}{long_story_rule}{marriage_psychology_rule}{partner_compat_rule}"""
     model = os.environ.get("RAW_PASSTHROUGH_MODEL",
                             os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"))
     try:

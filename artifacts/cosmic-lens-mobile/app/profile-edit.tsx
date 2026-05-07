@@ -1,8 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import React, { useRef, useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -46,17 +46,21 @@ const MINS_L   = Array.from({ length: 60 }, (_, i) => ({ label: String(i).padSta
 const C_SUCCESS = "#16A34A";
 
 const RELATIONS = [
-  { key: "Self",      emoji: "🧘" },
-  { key: "Husband",   emoji: "👨" },
-  { key: "Wife",      emoji: "👩" },
-  { key: "Son",       emoji: "👦" },
-  { key: "Daughter",  emoji: "👧" },
-  { key: "Father",    emoji: "👴" },
-  { key: "Mother",    emoji: "👵" },
-  { key: "Brother",   emoji: "🧑" },
-  { key: "Sister",    emoji: "👱‍♀️" },
-  { key: "Friend",    emoji: "🤝" },
-  { key: "Other",     emoji: "👥" },
+  { key: "Self",       emoji: "🧘" },
+  { key: "Husband",    emoji: "👨" },
+  { key: "Wife",       emoji: "👩" },
+  { key: "Boyfriend",  emoji: "💑" },
+  { key: "Girlfriend", emoji: "💑" },
+  { key: "Fiance",     emoji: "💍" },
+  { key: "Partner",    emoji: "🤝" },
+  { key: "Son",        emoji: "👦" },
+  { key: "Daughter",   emoji: "👧" },
+  { key: "Father",     emoji: "👴" },
+  { key: "Mother",     emoji: "👵" },
+  { key: "Brother",    emoji: "🧑" },
+  { key: "Sister",     emoji: "👱‍♀️" },
+  { key: "Friend",     emoji: "🤝" },
+  { key: "Other",      emoji: "👥" },
 ];
 
 // Map a stored relation key (English, used as DB value) → localized display label
@@ -322,17 +326,35 @@ export default function ProfileEditScreen() {
   const fmSet = (key: keyof FormState) => (val: string) =>
     setFmForm(prev => ({ ...prev, [key]: val }));
 
-  function openFmAdd() {
+  function openFmAdd(prefillRelation?: string) {
     const isFirstEver = profiles.length === 0;
     setFmEditId(null);
     setFmIsPrimary(isFirstEver);
     setFmForm(blank());
-    setFmRelation(isFirstEver ? "Self" : "Father");
+    const _valid = prefillRelation && RELATIONS.some(r => r.key === prefillRelation)
+      ? prefillRelation : null;
+    setFmRelation(_valid ?? (isFirstEver ? "Self" : "Father"));
     setFmPlaceQuery("");
     setFmGeoResults([]);
     setFmError("");
     setFmVisible(true);
   }
+
+  // Phase 2.5.11.6 — when launched from the chat partner-CTA card with
+  // ?relation=Boyfriend (etc.), auto-open the Add-profile modal with
+  // the right relation slot preselected so the user lands directly on
+  // the form and can start entering DOB/TOB/place.
+  const _params = useLocalSearchParams<{ relation?: string }>();
+  const _relParam = typeof _params?.relation === "string" ? _params.relation : "";
+  const _autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (_autoOpenedRef.current) return;
+    if (_relParam && RELATIONS.some(r => r.key === _relParam)) {
+      _autoOpenedRef.current = true;
+      openFmAdd(_relParam);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_relParam]);
 
   function openPrimaryEdit() {
     if (!primaryProfile) return;

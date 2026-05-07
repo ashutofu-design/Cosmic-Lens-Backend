@@ -5930,7 +5930,8 @@ def ask_route():
                     "message": "Service temporarily unavailable. Try again shortly.",
                 }), 503
         # ── Single LLM call ──
-        out = _rp_ask(question, kundli, lang, birth=birth)
+        out = _rp_ask(question, kundli, lang, birth=birth,
+                      user_id=(rp_user.id if rp_user else None))
         out["quota"] = rp_quota
         out["plan"] = rp_plan
         return jsonify(out)
@@ -6701,7 +6702,8 @@ def ask_stream_route():
                     "error":   "quota_unavailable",
                     "message": "Service temporarily unavailable. Try again shortly.",
                 }), 503
-        out_s = _rp_ask_s(question, kundli, lang, birth=birth)
+        out_s = _rp_ask_s(question, kundli, lang, birth=birth,
+                          user_id=(rp_user_s.id if rp_user_s else None))
         out_s["quota"] = rp_quota_s
         out_s["plan"] = rp_plan_s
         return jsonify(out_s)

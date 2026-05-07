@@ -198,6 +198,64 @@ class TestStep1Filter(unittest.TestCase):
         self.assertGreaterEqual(per.get("confirmations", 0), 2)
         self.assertIn("D1", per.get("confirmed_in", []))
 
+    def test_step4c_kp_negation_is_hard_block(self):
+        """Phase 2.5.4-r3: a planet whose NL or SBL signifies ONLY
+        houses {1,4,10} (pure negation, no mitigation) must be
+        hard-blocked even if the other lord signifies 2/5/11.
+        """
+        kundli = _mk_kundli("Aries", {
+            "Sun": 5, "Moon": 4, "Mars": 7, "Mercury": 6,
+            "Jupiter": 11, "Venus": 2, "Saturn": 10,
+            "Rahu": 12, "Ketu": 6,
+        }, dashas=_mk_dashas())
+        # Jupiter: NL strong (5,11) BUT SBL = pure negation (4,10)
+        # → must be BLOCKED (was passing in earlier soft-rule).
+        # Moon: NL strong (2,5) AND SBL strong (5,11) → passes.
+        kp = {
+            "planets": [
+                {"name": "Jupiter", "nl": "Venus",   "sb": "Saturn"},
+                {"name": "Moon",    "nl": "Sun",     "sb": "Mercury"},
+                {"name": "Sun",     "nl": "Jupiter", "sb": "Jupiter"},
+                {"name": "Venus",   "nl": "Moon",    "sb": "Moon"},
+                {"name": "Mercury", "nl": "Venus",   "sb": "Venus"},
+                {"name": "Mars",    "nl": "Sun",     "sb": "Sun"},
+                {"name": "Saturn",  "nl": "Mars",    "sb": "Rahu"},
+                {"name": "Rahu",    "nl": "Mercury", "sb": "Venus"},
+                {"name": "Ketu",    "nl": "Mars",    "sb": "Saturn"},
+            ],
+            "significations": {
+                "Venus":   [5, 11],
+                "Saturn":  [4, 10],   # PURE negation
+                "Sun":     [2, 5],
+                "Mercury": [5, 11],
+                "Jupiter": [2, 5, 11],
+                "Moon":    [2, 5],
+                "Mars":    [6, 8],
+                "Rahu":    [12],
+                "Ketu":    [6, 12],
+            },
+            "cusps": [],
+        }
+        result = compute_baby_window(kundli, intel={}, kp=kp,
+                                       birth={"dob": "1990-05-15"})
+        kpf = result.get("kp_significator_filter") or {}
+        per = kpf.get("per_planet", {})
+        # Jupiter: SBL is pure negation → must be blocked
+        if "Jupiter" in per:
+            self.assertTrue(per["Jupiter"]["kp_negated"],
+                f"Jupiter SBL=Saturn→[4,10] must flag kp_negated; "
+                f"got {per['Jupiter']}")
+            self.assertEqual(per["Jupiter"]["kp_status"], "fail",
+                f"Jupiter must be hard-blocked by negation; "
+                f"got {per['Jupiter']}")
+            self.assertIn("Jupiter", kpf["blocked"])
+            self.assertNotIn("Jupiter", kpf["passed"])
+        # Moon: clean pass
+        if "Moon" in per:
+            self.assertEqual(per["Moon"]["kp_status"], "pass")
+            self.assertFalse(per["Moon"]["kp_negated"])
+            self.assertIn("Moon", kpf["passed"])
+
     def test_step4c_kp_unavailable_when_only_planets(self):
         """Architect-fix: gate must DISABLE when only kp.planets is
         present without significations (or vice-versa). Otherwise

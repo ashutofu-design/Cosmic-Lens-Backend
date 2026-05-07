@@ -1114,24 +1114,32 @@ def _step4c_kp_significator_filter(
         # never zero out promoter eligibility on its own.
         nl_known  = bool(nl)  and bool(nl_houses)
         sbl_known = bool(sbl) and bool(sbl_houses)
+        # Strict-only negation: true ONLY when signified-houses set
+        # is a non-empty subset of {1,4,10} (pure negation, no
+        # mitigation from any other house). Phase 2.5.4-r3: this is
+        # now a HARD BLOCK — if NL or SBL is purely in negation
+        # houses, the planet cannot promise a child even if the
+        # other lord signifies 2/5/11.
+        def _neg_only(houses: List[int]) -> bool:
+            s = set(houses)
+            return bool(s) and s.issubset(_KP_NEGATION_HOUSES)
+        nl_neg  = _neg_only(nl_houses)
+        sbl_neg = _neg_only(sbl_houses)
+        kp_negated = nl_neg or sbl_neg
         if not (nl_known and sbl_known):
             kp_status = "unknown"
             kp_promotes_child: Optional[bool] = None
+        elif kp_negated:
+            # Pure-negation planet — hard block regardless of any
+            # 2/5/11 link on the OTHER lord.
+            kp_status = "fail"
+            kp_promotes_child = False
         elif nl_child and sbl_child:
             kp_status = "pass"
             kp_promotes_child = True
         else:
             kp_status = "fail"
             kp_promotes_child = False
-        # Strict-only negation (architect-fix): true ONLY when
-        # signified-houses set is a non-empty subset of {1,4,10},
-        # i.e. it has zero overlap with anything outside the
-        # negation set (so no child link AND no other "neutral"
-        # house mitigates it). Diagnostic only.
-        def _neg_only(houses: List[int]) -> bool:
-            s = set(houses)
-            return bool(s) and s.issubset(_KP_NEGATION_HOUSES)
-        kp_negated = _neg_only(nl_houses) or _neg_only(sbl_houses)
         out["per_planet"][pname] = {
             "nl":                    nl,
             "sbl":                   sbl,

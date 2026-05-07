@@ -1321,25 +1321,25 @@ function getDeepSections(lang: string): DeepSection[] {
     { title: "भावनात्मक तालमेल",  tease: "एक साथी सब कुछ चुपचाप महसूस करता है, दूसरा पूछे जाने का इंतज़ार करता है — दोनों ख़ुद को सब्र वाला मानते हैं —" },
     { title: "विश्वास और वफ़ादारी", tease: "इस रिश्ते में भरोसे की असली परीक्षा एक ख़ास पड़ाव पर आती है — और वो पड़ाव है —" },
     { title: "टकराव का स्वरूप",     tease: "आपके झगड़े वो नहीं होते जो ऊपर से दिखते हैं — असली ट्रिगर एक ख़ास जगह बैठा है —" },
-    { title: "विवाह की स्थिरता",    tease: "शादी चलेगी — पर उस तरह नहीं जैसा अभी दोनों सोच रहे हैं। असली मोड़ आता है —" },
+    { title: "विवाह की स्थिरता",    tease: "यह रिश्ता दीर्घकाल स्थिर बन सकता है — बस एक ख़ास बदलाव के बाद, जिसका दोनों पहले विरोध करेंगे।" },
     { title: "प्रतिबद्धता की गहराई", tease: "एक का जुड़ाव गहरा है, दूसरे का इरादा पक्का — पर एक चीज़ है जो अभी दिख नहीं रही —" },
-    { title: "आगे की दिशा",         tease: "यह रिश्ता टूटता नहीं — झुकता है उस तरह जो ज़्यादातर जोड़े झेल नहीं पाते, पर आप शायद —" },
+    { title: "आगे की दिशा",         tease: "यह रिश्ता दोनों को इस तरह बदलता है जो किसी ने सोचा भी नहीं था — असली नतीजा एक चुप-से फ़ैसले पर टिका है।" },
   ];
   if (code === "hn") return [
     { title: "Emotional Alignment", tease: "Ek partner sab kuch chuppi mein feel karta hai, doosra poochhe jaane ka wait karta hai — dono khud ko patient maante hain —" },
     { title: "Trust & Loyalty",     tease: "Is rishte mein bharose ka asli imtihaan ek specific phase pe aata hai — aur woh phase hai —" },
     { title: "Conflict Patterns",   tease: "Aapke fights woh nahi hote jo upar se dikhte hain — asli trigger ek specific jagah baitha hai —" },
-    { title: "Marriage Stability",  tease: "Shaadi chalegi — par us tarah nahi jaisa abhi dono soch rahe hain. Asli turning point aata hai —" },
+    { title: "Marriage Stability",  tease: "Yeh rishta long-term stable ban sakta hai — bas ek specific adjustment ke baad, jise dono pehle resist karenge." },
     { title: "Commitment Strength", tease: "Ek ka attachment gehra hai, doosre ka iraada pakka — par ek cheez hai jo abhi dikh nahi rahi —" },
-    { title: "Future Direction",    tease: "Yeh rishta tootta nahi — bend hota hai us tarah jo zyadatar couples nahi jhel paate, par aap shayad —" },
+    { title: "Future Direction",    tease: "Yeh rishta dono ko us tarah badalta hai jo dono ne socha bhi nahi tha — asli outcome ek chuppi-bhare faisle pe tika hai." },
   ];
   return [
     { title: "Emotional Alignment", tease: "One of you feels everything in silence. The other waits to be asked. Both think they're the patient one —" },
     { title: "Trust & Loyalty",     tease: "Trust faces its real test at one specific phase in this bond — and that phase is —" },
     { title: "Conflict Patterns",   tease: "Your fights aren't really about what they look like. The real trigger sits in one specific area of —" },
-    { title: "Marriage Stability",  tease: "Marriage will work — but not the way either of you is currently imagining. The shift comes in —" },
+    { title: "Marriage Stability",  tease: "This bond can become stable long-term — but only after one specific adjustment that both of you will resist at first." },
     { title: "Commitment Strength", tease: "One of you is deeply attached, the other quietly committed — but one thing isn't visible yet —" },
-    { title: "Future Direction",    tease: "This relationship doesn't break. It bends in a way most couples don't survive — but you might, if —" },
+    { title: "Future Direction",    tease: "This relationship changes both of you in ways neither expected — the real outcome depends on one quiet choice." },
   ];
 }
 

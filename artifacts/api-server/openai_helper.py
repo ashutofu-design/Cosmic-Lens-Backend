@@ -3113,9 +3113,50 @@ _RAW_LANG_INSTR = {
 }
 
 
-def _raw_compact_chart(kundli: Any, include_dasha: bool = True) -> str:
-    """Build a compact text block of D1 + D9 (+ current dasha if TIMING) for LLM.
-    include_dasha=False → STATIC mode: chart-only, no dasha/timing data sent.
+# ── STATIC-mode dasha gate (Phase 2.5.11.2) ────────────────────────────
+# Only inject the current MD/AD/PD line into STATIC questions when the
+# question shows a "present-tense / current-life-pattern" flavor (kyu /
+# kaise / abhi / baar baar / chal raha / problem etc.). Pure character
+# questions ("partner kaisa hoga", "love ya arranged") get NO dasha —
+# they are about natal structure, not current activation. Explicit
+# timing questions ("kab") follow the TIMING path which always includes
+# the full 5-yr horizon plus dedicated engines (marriage / baby / etc).
+import re as _re_dasha_gate
+_STATIC_DASHA_TRIGGER_RE = _re_dasha_gate.compile(
+    r"\b("
+    # Hinglish present-tense / pattern markers
+    r"kyu|kyun|kyon|kaise|kaisi|kaisa|"
+    r"abhi|aaj|aajkal|filhal|currently|aaj\s*kal|"
+    r"baar[-\s]?baar|repeatedly|hamesha|always|"
+    r"chal\s*raha|chal\s*rahi|ho\s*raha|ho\s*rahi|chal\s*rahe|"
+    r"problems?|issues?|stress|tension|dukh|pareshani|trouble|"
+    r"fights?|jhagda|jhagde|ladai|fight\s*ho|"
+    r"toot(?:ta|ti|te)?|breakup|break[-\s]?up|"
+    r"phases?|daur|samay|time\s*pe|"
+    r"recently|haal|ab\s+kya|ab\s+sab|"
+    r"why|how|what'?s\s+happening|going\s+on"
+    r")\b",
+    _re_dasha_gate.IGNORECASE,
+)
+
+
+def _static_needs_current_dasha(question: str) -> bool:
+    """Decide whether a STATIC-mode question deserves the current MD/AD/PD
+    context line. Returns True for present-tense / pattern-flavored Qs;
+    False for pure structural/character Qs."""
+    if not isinstance(question, str) or not question.strip():
+        return False
+    return bool(_STATIC_DASHA_TRIGGER_RE.search(question))
+
+
+def _raw_compact_chart(kundli: Any, include_dasha: bool = True,
+                       static_dasha_hint: bool = False) -> str:
+    """Build a compact text block of D1 + D9 (+ current dasha) for LLM.
+    include_dasha=True   → TIMING mode: full current MD/AD/PD + 5-yr horizon.
+    include_dasha=False + static_dasha_hint=True
+                          → STATIC pattern Q: current MD/AD/PD line only.
+    include_dasha=False + static_dasha_hint=False
+                          → Pure structural STATIC: chart-only, no dasha.
     Tries to be defensive — missing keys are silently skipped."""
     if not isinstance(kundli, dict):
         return "(no chart data available)"
@@ -3166,12 +3207,12 @@ def _raw_compact_chart(kundli: Any, include_dasha: bool = True) -> str:
                 if not isinstance(p, dict): continue
                 lines.append(f"  • {p.get('name','?')}: {p.get('sign','?')} "
                              f"(House {p.get('house','?')})")
-    # ── Current Dasha (ALWAYS included; full 5-yr horizon only in TIMING) ──
-    # Phase 2.5.11.1 — STATIC questions also receive current MD/AD/PD line so
-    # the LLM can cite the active dasha lord when explaining WHY a current
-    # behavioural pattern (fights, restlessness, attachment style) is showing
-    # up right now. Full 5-yr timeline still gated to TIMING (avoids token
-    # bloat on character/quality questions).
+    # ── Current Dasha (Phase 2.5.11.2 — question-aware gating) ──
+    # TIMING question                  → full current MD/AD/PD + 5-yr horizon
+    # STATIC + present-tense pattern Q → current MD/AD/PD line only
+    # STATIC + pure structural Q       → no dasha at all (LLM reads natal
+    #                                    structure only, no temporal noise)
+    emit_static_dasha = (not include_dasha) and bool(static_dasha_hint)
     try:
         from reply_cosmo.engine_locked_to_llm.locked_facts import (
             _format_dasha_block as _ldf_dasha,
@@ -3183,8 +3224,8 @@ def _raw_compact_chart(kundli: Any, include_dasha: bool = True) -> str:
             if block:
                 lines.append("\n=== DASHA (current + next 5 years) ===")
                 lines.append(block)
-        else:
-            # STATIC: just the current MD/AD/PD line (no horizon)
+        elif emit_static_dasha:
+            # STATIC pattern Q: just the current MD/AD/PD line (no horizon)
             from datetime import datetime
             now = datetime.utcnow()
             chain = _ldf_norm(kundli)
@@ -3353,7 +3394,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     except Exception:
         qtype = "STATIC"
     is_timing = (qtype == "TIMING")
-    chart_text = _raw_compact_chart(kundli, include_dasha=is_timing)
+    static_dasha_hint = (not is_timing) and _static_needs_current_dasha(question)
+    chart_text = _raw_compact_chart(kundli, include_dasha=is_timing,
+                                    static_dasha_hint=static_dasha_hint)
 
     # ── KP enrichment (opt-in by question content) ─────────────────────────
     # Only fire when the user's question contains an explicit KP term or a
@@ -3436,8 +3479,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         "character/quality reading cannot fix a date and answer the "
         "underlying aspect instead."
     )
-    chart_label = ("D1 + D9 + ACTIVE DASHA + 5-YR HORIZON" if is_timing
-                   else "D1 + D9 + CURRENT DASHA (context only)")
+    if is_timing:
+        chart_label = "D1 + D9 + ACTIVE DASHA + 5-YR HORIZON"
+    elif static_dasha_hint:
+        chart_label = "D1 + D9 + CURRENT DASHA (context only)"
+    else:
+        chart_label = "D1 + D9 ONLY (pure structural — no dasha)"
     if is_kp:
         chart_label += " + KP CUSPAL SUB-LORD"
     if is_marriage_engine:

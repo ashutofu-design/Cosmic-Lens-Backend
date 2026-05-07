@@ -55,8 +55,10 @@ Output dict (back-compat with marriage-style consumers):
     "recommendation_tier":  "monitor" | "preventive" | "consult" |
                             "urgent_consult",
     "top_health_planets":   [{name, score, d1, d9, kp, karaka,
+                               convergence_score, at_risk,
                                significations[]}],
-    "weighted_breakdown":   {planet: {d1, d9, kp, karaka, total}},
+    "weighted_breakdown":   {planet: {d1, d9, kp, karaka, total,
+                                       convergence_score, at_risk}},
     "kp_layer":             {csl_6, csl_8, csl_12, verdict_6,
                              verdict_8, verdict_12, active_csl_planets[],
                              at_risk_planets[{planet, kp_signifies,
@@ -784,7 +786,9 @@ def _karaka_score(pname: str, lagna_si: int) -> float:
 
 def _step4_rank(d1_map: Dict[str, Dict[str, Any]],
                 d9_scores: Dict[str, float],
-                kp: dict, lagna_si: int) -> List[Dict[str, Any]]:
+                kp: dict, lagna_si: int,
+                kp_layer: Optional[Dict[str, Any]] = None
+                ) -> List[Dict[str, Any]]:
     """Rank surviving candidates by weighted score.
     Score = D1·40% + D9·30% + KP·20% + Karaka·10%
     (Phase 2.5.11.9: D30 layer removed, weight redistributed.)
@@ -792,7 +796,20 @@ def _step4_rank(d1_map: Dict[str, Dict[str, Any]],
 
     D1 normalization (architect fix): true min-max scale to 0-25 so
     different high-D1 planets don't collapse to the same clipped value.
+
+    Phase 2.5.11.10 (Option A wiring): when `kp_layer` is provided,
+    each ranked planet carries its STEP 3 `convergence_score` (0-100)
+    as a cross-reference column for downstream LLM context — does NOT
+    affect the rank order (separation of concerns preserved).
     """
+    # Build O(1) lookup from STEP 3 at-risk list (case-insensitive)
+    convergence_lookup: Dict[str, int] = {}
+    if kp_layer:
+        for r in kp_layer.get("at_risk_planets", []):
+            key = (r.get("planet") or "").strip().title()
+            if key:
+                convergence_lookup[key] = r.get("convergence_score", 0)
+
     survivors = [p for p, info in d1_map.items() if info.get("in_filter")]
     if not survivors:
         return []
@@ -818,12 +835,16 @@ def _step4_rank(d1_map: Dict[str, Dict[str, Any]],
         total = (d1 * _WEIGHT_D1 + d9 * _WEIGHT_D9 +
                  kp_score * _WEIGHT_KP +
                  karaka * _WEIGHT_KARAKA)
+        # Phase 2.5.11.10 (Option A): cross-reference STEP 3 convergence
+        conv = convergence_lookup.get(pname.strip().title(), 0)
         ranked.append({
             "name": pname,
             "score": round(total, 2),
             "d1": round(d1, 2), "d9": round(d9, 2),
             "kp": round(kp_score, 2),
             "karaka": round(karaka, 2),
+            "convergence_score": conv,           # 0-100 from STEP 3
+            "at_risk": conv > 0,                  # boolean shortcut
             "links": list(info["links"]),
             "significations": _SYSTEM_OF_PLANET.get(pname, []),
         })
@@ -1419,10 +1440,12 @@ def _compute_health_window_impl(kundli: dict,
         f"at_risk={[r['planet']+':'+str(r['convergence_score']) for r in kp_layer['at_risk_planets']]}"
     )
 
-    # ── STEP 4 — Weighted ranking ─────────────────────────────────────
-    ranked = _step4_rank(d1_map, d9_scores, kp, lagna_si)
+    # ── STEP 4 — Weighted ranking (now cross-refs STEP 3 convergence) ─
+    ranked = _step4_rank(d1_map, d9_scores, kp, lagna_si,
+                          kp_layer=kp_layer)
     factors.append("STEP4 ranked=" +
-                    ",".join(f"{r['name']}:{r['score']}" for r in ranked[:5]))
+                    ",".join(f"{r['name']}:{r['score']}/conv={r['convergence_score']}"
+                              for r in ranked[:5]))
 
     # ── STEP 5 — Dasha activation (chain already computed pre-STEP3) ──
     dasha_windows = _step5_dasha_activation(chain, ranked, lagna_si, now)
@@ -1537,7 +1560,9 @@ def _compute_health_window_impl(kundli: dict,
     breakdown = {
         r["name"]: {"d1": r["d1"], "d9": r["d9"],
                      "kp": r["kp"], "karaka": r["karaka"],
-                     "total": r["score"]}
+                     "total": r["score"],
+                     "convergence_score": r.get("convergence_score", 0),
+                     "at_risk": r.get("at_risk", False)}
         for r in ranked
     }
 

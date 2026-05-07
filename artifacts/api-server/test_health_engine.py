@@ -274,6 +274,39 @@ class TestKpLayer(unittest.TestCase):
         # 20(D1) + 20(D9>=12) + 0(no KP dusthana) + 30(active CSL) = 70
         self.assertEqual(merc["convergence_score"], 70)
 
+    def test_step4_carries_step3_convergence_score(self):
+        # Phase 2.5.11.10 (Option A): STEP 4 ranked entries must carry
+        # the STEP 3 at-risk convergence_score as cross-reference.
+        from event_timing.health.health_engine_v1 import _step4_rank
+        d1_map = {
+            "Saturn":  {"in_filter": True, "d1": 40, "links": ["6L"]},
+            "Jupiter": {"in_filter": True, "d1": 18, "links": ["1L"]},
+        }
+        d9_scores = {"Saturn": 22.0, "Jupiter": 18.0}
+        kp = {
+            "cusps": [{"house": 6, "sl": "Saturn"}],
+            "significations": {"Saturn": [6, 8, 12], "Jupiter": [1, 5, 9]},
+        }
+        kp_layer = _step3_kp_layer(
+            kp, lagna_si=0,
+            d1_map=d1_map, d9_scores=d9_scores,
+            current_dasha={"md": "Saturn", "ad": None, "pd": None},
+        )
+        ranked = _step4_rank(d1_map, d9_scores, kp, lagna_si=0,
+                              kp_layer=kp_layer)
+        sat = next(r for r in ranked if r["name"] == "Saturn")
+        jup = next(r for r in ranked if r["name"] == "Jupiter")
+        # Saturn at-risk in STEP 3 → carries convergence + at_risk=True
+        self.assertEqual(sat["convergence_score"], 100)
+        self.assertTrue(sat["at_risk"])
+        # Jupiter NOT at-risk → 0 + False
+        self.assertEqual(jup["convergence_score"], 0)
+        self.assertFalse(jup["at_risk"])
+        # Backward compat: no kp_layer → defaults to 0/False
+        ranked2 = _step4_rank(d1_map, d9_scores, kp, lagna_si=0)
+        self.assertEqual(ranked2[0]["convergence_score"], 0)
+        self.assertFalse(ranked2[0]["at_risk"])
+
     def test_kp_v2_backward_compat_no_convergence_args(self):
         # When d1_map/d9_scores/current_dasha are None, only Layer A runs.
         kp = {

@@ -1808,6 +1808,27 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
                     _trace_t.append(f"     trace {i}: {ws}{sc_str}")
                 if _trace_t:
                     travel_line += "\n" + "\n".join(_trace_t)
+            # Past windows (Phase 2.5.11.14) — historical favorable
+            # foreign/travel windows. MUST be framed as "opportunity
+            # existed" NEVER "user actually traveled" (UCML confirms
+            # real events). Engine attaches PAST_WINDOW_IS_OPPORTUNITY_
+            # NOT_EVENT directive whenever past_windows non-empty.
+            past_t = t.get("past_windows") or []
+            if isinstance(past_t, list) and past_t:
+                _past_t = ["     past_windows (FAVORABLE OPPORTUNITY ONLY — NOT confirmed travel; UCML must verify):"]
+                for i, w in enumerate(past_t[:3], 1):
+                    if not isinstance(w, dict):
+                        continue
+                    ws = w.get("window") or "—"
+                    sc = w.get("score")
+                    knd = w.get("kind") or "—"
+                    md_ad_pd = (f"{w.get('md','?')}-{w.get('ad','?')}-"
+                                 f"{w.get('pd','?')}")
+                    sc_str = (f" (score: {sc:.1f}, kind: {knd}, dasha: {md_ad_pd})"
+                              if isinstance(sc, (int, float))
+                              else f" (kind: {knd}, dasha: {md_ad_pd})")
+                    _past_t.append(f"       past {i}: {ws}{sc_str}")
+                travel_line += "\n" + "\n".join(_past_t)
             try:
                 _record_phase("phase-D travel-timing-v1", "ok")
             except Exception:

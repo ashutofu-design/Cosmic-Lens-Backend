@@ -510,5 +510,87 @@ class TestArchitectPatternRegressions(unittest.TestCase):
                            result["llm_directives"])
 
 
+# ════════════════════════════════════════════════════════════════════════
+# Past-Window Lookback (Phase 2.5.11.14)
+# ════════════════════════════════════════════════════════════════════════
+class TestPastWindowLookback(unittest.TestCase):
+    """STEP 5 must scan dasha chain backward when direction='past'."""
+
+    def test_past_windows_present_in_output(self):
+        """compute_travel_window must always emit `past_windows` key."""
+        kundli = _mk_kundli("Aries", {
+            "Sun": 1, "Moon": 4, "Mars": 7, "Mercury": 11,
+            "Jupiter": 5, "Venus": 2, "Saturn": 10,
+            "Rahu": 3, "Ketu": 9,
+        }, dashas=_mk_dashas())
+        result = compute_travel_window(kundli, intel={}, kp={},
+                                         birth={"dob": "1990-05-15"})
+        self.assertIn("past_windows", result)
+        self.assertIsInstance(result["past_windows"], list)
+
+    def test_past_windows_are_strictly_in_the_past(self):
+        """Every past_window must end before now."""
+        from datetime import datetime
+        kundli = _mk_kundli("Sagittarius", {
+            "Sun": 12, "Moon": 1, "Mars": 8, "Mercury": 12,
+            "Jupiter": 10, "Venus": 1, "Saturn": 2,
+            "Rahu": 12, "Ketu": 6,
+        }, dashas=_mk_dashas())
+        result = compute_travel_window(kundli, intel={}, kp={},
+                                         birth={"dob": "1992-11-26"})
+        now = datetime.utcnow()
+        for w in result.get("past_windows") or []:
+            end = datetime.fromisoformat(w["end_iso"])
+            self.assertLess(end, now,
+                f"past_window {w['window']} ended at {w['end_iso']} "
+                f"but now is {now.isoformat()} — must be strictly past")
+
+    def test_past_windows_carry_opportunity_directive(self):
+        """When past windows exist, directive must flag them as
+        opportunities (not events) to prevent LLM hallucination."""
+        kundli = _mk_kundli("Sagittarius", {
+            "Sun": 12, "Moon": 1, "Mars": 8, "Mercury": 12,
+            "Jupiter": 10, "Venus": 1, "Saturn": 2,
+            "Rahu": 12, "Ketu": 6,
+        }, dashas=_mk_dashas())
+        result = compute_travel_window(kundli, intel={}, kp={},
+                                         birth={"dob": "1992-11-26"})
+        if result.get("past_windows"):
+            self.assertIn("PAST_WINDOW_IS_OPPORTUNITY_NOT_EVENT",
+                           result["llm_directives"])
+
+    def test_step5_direction_param_filters_correctly(self):
+        """Direct unit-level: _step5_dasha_activation must respect
+        direction kwarg (past vs future)."""
+        from datetime import datetime, timedelta
+        from event_timing.travel.travel_engine_v1 import (
+            _step5_dasha_activation, _flatten_dasha_chain,
+        )
+        kundli = _mk_kundli("Sagittarius", {
+            "Sun": 12, "Moon": 1, "Mars": 8, "Mercury": 12,
+            "Jupiter": 10, "Venus": 1, "Saturn": 2,
+            "Rahu": 12, "Ketu": 6,
+        }, dashas=_mk_dashas())
+        chain = _flatten_dasha_chain(kundli)
+        # Build a dummy ranked list from anything the chain references
+        ranked = [{"name": "Rahu", "score": 15.0,
+                    "links": ["foreign-settlement karaka (Rahu)",
+                              "occupies 12H (travel-house)"]},
+                   {"name": "Sun", "score": 13.0,
+                    "links": ["9L (long-distance/dharma travel)",
+                              "occupies 12H (travel-house)"]}]
+        now = datetime.utcnow()
+        future = _step5_dasha_activation(chain, ranked, 8, now,
+                                            direction="future")
+        past   = _step5_dasha_activation(chain, ranked, 8, now,
+                                            direction="past")
+        for w in future:
+            self.assertGreaterEqual(w["end"], now,
+                "future-direction window must not end before now")
+        for w in past:
+            self.assertLess(w["end"], now,
+                "past-direction window must end strictly before now")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -708,9 +708,11 @@ def _step5_dasha_activation(chain: List[Dict[str, Any]],
                               ranked: List[Dict[str, Any]],
                               lagna_si: int,
                               now: datetime,
-                              horizon_years: int = 10
+                              horizon_years: int = 10,
+                              direction: str = "future",
+                              lookback_years: int = 15,
                               ) -> List[Dict[str, Any]]:
-    """Score each upcoming dasha window.
+    """Score dasha windows in either direction.
 
     SIGN CONVENTION: For travel, "stress" = travel-promoter activation
     (more is more travel-likely). Anchor planets (4L strong, no travel
@@ -718,6 +720,14 @@ def _step5_dasha_activation(chain: List[Dict[str, Any]],
     travel houses) raise risk_score separately.
 
     AD=5, PD=6, MD=1.
+
+    Phase 2.5.11.14: `direction` kwarg added.
+      • direction="future" (default) — windows from `now` to
+        `now + horizon_years`. Sorted by (-score, start) so highest-
+        score upcoming window is first.
+      • direction="past" — windows from `now - lookback_years` to
+        `now`. Sorted by (-score, -start) so the MOST RECENT
+        high-score past window is first (recency wins ties).
 
     NOTE — architect-pattern (mirrors finance v1): "functional malefic
     for lagna" tag is INTENTIONALLY EXCLUDED from anchor classification.
@@ -768,11 +778,25 @@ def _step5_dasha_activation(chain: List[Dict[str, Any]],
                 if "occupies 12H" in l or "occupies 9H" in l:
                     risk_lords.add(r["name"])
 
-    horizon_end = now + timedelta(days=365 * horizon_years)
+    if direction == "past":
+        window_lo = now - timedelta(days=365 * lookback_years)
+        window_hi = now
+    else:
+        window_lo = now
+        window_hi = now + timedelta(days=365 * horizon_years)
     windows: List[Dict[str, Any]] = []
     for w in chain:
-        if w["end"] < now or w["start"] > horizon_end:
-            continue
+        if direction == "past":
+            # Past = interval-overlap with [window_lo, now). Window
+            # must end strictly before now AND end after lookback floor.
+            # (architect-flagged fix: do NOT gate on start, otherwise
+            # long MD windows that started >15y ago but ended recently
+            # would be silently dropped.)
+            if w["end"] >= now or w["end"] <= window_lo:
+                continue
+        else:
+            if w["end"] < window_lo or w["start"] > window_hi:
+                continue
         travel_score = 0.0
         anchor_score = 0.0
         risk_score = 0.0
@@ -815,7 +839,11 @@ def _step5_dasha_activation(chain: List[Dict[str, Any]],
             "kind": kind,
             "triggers": triggers,
         })
-    windows.sort(key=lambda x: (-x["score"], x["start"]))
+    if direction == "past":
+        # Recency wins ties: most recent high-score past window first
+        windows.sort(key=lambda x: (-x["score"], -x["start"].timestamp()))
+    else:
+        windows.sort(key=lambda x: (-x["score"], x["start"]))
     return windows
 
 
@@ -1335,10 +1363,14 @@ def _compute_travel_window_impl(kundli: dict,
     factors.append("STEP4 ranked=" +
                     ",".join(f"{r['name']}:{r['score']}" for r in ranked[:5]))
 
-    # ── STEP 5 ──
+    # ── STEP 5 (future + past, Phase 2.5.11.14) ──
     chain = _flatten_dasha_chain(kundli)
-    dasha_windows = _step5_dasha_activation(chain, ranked, lagna_si, now)
-    factors.append(f"STEP5 dasha_windows_in_horizon={len(dasha_windows)}")
+    dasha_windows = _step5_dasha_activation(chain, ranked, lagna_si, now,
+                                              direction="future")
+    past_dasha_windows = _step5_dasha_activation(chain, ranked, lagna_si, now,
+                                                   direction="past")
+    factors.append(f"STEP5 dasha_windows_in_horizon={len(dasha_windows)} "
+                    f"past_windows={len(past_dasha_windows)}")
 
     # ── STEP 6 ──
     planets_d1 = kundli.get("planets") or []
@@ -1457,12 +1489,30 @@ def _compute_travel_window_impl(kundli: dict,
 
     affected = _affected_areas(ranked)
     remedies = _compute_travel_remedies(ranked, affected, rec_tier)
+    # Past windows (Phase 2.5.11.14) — top 3 historical favorable windows.
+    # IMPORTANT: these are "favorable opportunities astrologically", NEVER
+    # confirmation that the user actually traveled. UCML must confirm event.
+    formatted_past3: List[Dict[str, Any]] = []
+    for w in past_dasha_windows[:3]:
+        formatted_past3.append({
+            "md": w["md"], "ad": w["ad"], "pd": w["pd"],
+            "score": w["score"],
+            "kind": w.get("kind", "general"),
+            "window": _format_window(w["start"], w["end"]),
+            "start_iso": w["start"].isoformat(),
+            "end_iso": w["end"].isoformat(),
+            "triggers": w["triggers"],
+        })
+    if formatted_past3:
+        llm_directives.append("PAST_WINDOW_IS_OPPORTUNITY_NOT_EVENT")
+
     return {
         "verdict": verdict,
         "band": band,
         "foreign_promised": foreign_promised,
         "current_window": current_window,
         "next_3_windows": formatted_top3,
+        "past_windows": formatted_past3,
         "protection_windows": protection_windows,
         "affected_areas": affected,
         "recommendation_tier": rec_tier,

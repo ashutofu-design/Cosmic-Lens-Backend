@@ -1597,6 +1597,72 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             except Exception:
                 pass
 
+        # ── Travel: TRAVEL-TIMING-V1 path (mirror of finance v1) ─────
+        # Computes the 9-step travel/foreign-travel timing engine and
+        # emits a verdict + current-window + top-3 travel-window line.
+        # Stashes full result on a thread-local for the travel remedy
+        # block (travel topic, falls back to career). Falls back
+        # silently if the engine raises.
+        travel_line = None
+        try:
+            from event_timing.travel.travel_engine_v1 import (  # type: ignore
+                compute_travel_window,
+            )
+            kp_for_travel: dict = {}
+            try:
+                kp_for_travel = (kundli.get("kp")
+                                  if isinstance(kundli, dict) else {}) or {}
+            except Exception:
+                kp_for_travel = {}
+            t = compute_travel_window(kundli, intel, kp_for_travel, birth) or {}
+            t_verdict = t.get("verdict") or "—"
+            t_band = t.get("band") or "—"
+            t_tier = t.get("recommendation_tier") or "—"
+            t_foreign = "✓" if t.get("foreign_promised") else "✗"
+            t_cw = t.get("current_window") or {}
+            t_cw_str = ""
+            if isinstance(t_cw, dict) and t_cw.get("md"):
+                t_cw_str = (f" | now: {t_cw.get('md')}-{t_cw.get('ad')}-"
+                             f"{t_cw.get('pd')}/{t_cw.get('severity','?')}"
+                             f"/{t_cw.get('kind','?')}")
+            t_risk_str = ""
+            if t.get("risk_flags"):
+                t_risk_str = f" | risk: {','.join(t['risk_flags'][:3])}"
+            travel_line = (
+                f"   • Travel     verdict: {t_verdict}/{t_band}  "
+                f"foreign: {t_foreign}  tier: {t_tier}{t_cw_str}{t_risk_str}"
+            )
+            top3_t = t.get("next_3_windows") or []
+            if isinstance(top3_t, list) and top3_t:
+                _trace_t = []
+                for i, w in enumerate(top3_t[:3], 1):
+                    if not isinstance(w, dict):
+                        continue
+                    ws = w.get("window") or "—"
+                    sc = w.get("score")
+                    sev = w.get("severity") or "—"
+                    knd = w.get("kind") or "—"
+                    sc_str = (f" (score: {sc:.1f}, sev: {sev}, kind: {knd})"
+                              if isinstance(sc, (int, float))
+                              else f" ({sev}, {knd})")
+                    _trace_t.append(f"     trace {i}: {ws}{sc_str}")
+                if _trace_t:
+                    travel_line += "\n" + "\n".join(_trace_t)
+            try:
+                _record_phase("phase-D travel-timing-v1", "ok")
+            except Exception:
+                pass
+        except Exception as _t_exc:  # noqa: BLE001
+            print(f"[locked_facts] travel-timing-v1 failed: {_t_exc}")
+            travel_line = (
+                "   • Travel     verdict: — (engine unavailable)"
+            )
+            try:
+                _record_phase("phase-D travel-timing-v1", "failed",
+                                str(_t_exc))
+            except Exception:
+                pass
+
         # ── REMEDIES sub-blocks (Phase 2.2, May 6 2026) ─────────────
         # Standalone hybrid Remedy Engine v1.0 (3-tier: practical →
         # ayurvedic → vedic). Emits parallel "▸ <TOPIC> REMEDIES"
@@ -1615,6 +1681,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         marriage_remedies_block = ""
         career_remedies_block   = ""
         finance_remedies_block  = ""
+        travel_remedies_block   = ""
         try:
             from remedy import (  # type: ignore
                 get_remedies as _get_remedies,
@@ -1697,6 +1764,21 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             except Exception as _f_rem_exc:  # noqa: BLE001
                 print(f"[locked_facts] finance remedies block failed: {_f_rem_exc}")
 
+            # ── TRAVEL (Phase 2.4, May 7 2026) ─────────────────────
+            # Sourced from travel engine's thread-local result.
+            # Engine internally delegates to remedy.get_remedies(
+            # topic="travel") with graceful fallback to career.
+            try:
+                from event_timing.travel.travel_engine_v1 import (  # type: ignore
+                    get_last_travel_result,
+                )
+                _tres = get_last_travel_result() or {}
+                _trem = _tres.get("remedies") or {}
+                if _trem:
+                    travel_remedies_block = _render_remedies(_trem) or ""
+            except Exception as _t_rem_exc:  # noqa: BLE001
+                print(f"[locked_facts] travel remedies block failed: {_t_rem_exc}")
+
         except Exception as _rem_exc:  # noqa: BLE001
             print(f"[locked_facts] remedy engine import failed: {_rem_exc}")
 
@@ -1707,6 +1789,8 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             _t_lines.append(health_line)
         if finance_line:
             _t_lines.append(finance_line)
+        if travel_line:
+            _t_lines.append(travel_line)
         for topic, r in _ks.items():
             if r and r.get("available"):
                 _t_lines.append(
@@ -1728,6 +1812,8 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             _t_lines.append(career_remedies_block)
         if finance_remedies_block:
             _t_lines.append(finance_remedies_block)
+        if travel_remedies_block:
+            _t_lines.append(travel_remedies_block)
         timing_str = "\n".join(_t_lines)
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] timing_engine failed: {exc}")

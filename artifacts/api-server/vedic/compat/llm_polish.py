@@ -418,6 +418,18 @@ def polish_compat_analysis(
         resp = client.chat.completions.create(**kwargs)
         raw = (resp.choices[0].message.content or "").strip()
         try:
+            usage = getattr(resp, "usage", None)
+            if usage is not None:
+                pt = getattr(usage, "prompt_tokens", "?")
+                ct = getattr(usage, "completion_tokens", "?")
+                tt = getattr(usage, "total_tokens", "?")
+                log.info(
+                    "[compat_llm] tokens model=%s prompt=%s completion=%s total=%s",
+                    model, pt, ct, tt,
+                )
+        except Exception:
+            pass
+        try:
             parsed = json.loads(raw)
         except json.JSONDecodeError as exc:
             log.warning("[compat_llm] JSON parse fail: %s | raw=%.200s", exc, raw)

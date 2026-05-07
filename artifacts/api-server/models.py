@@ -383,6 +383,14 @@ class UserQuestion(db.Model):
     # Short structured verdict — e.g. "unstable", "yellow_wait", "leaning_love",
     # "manglik", "answered". NEVER the full LLM explanation. Capped to 120 chars.
     verdict_summary   = db.Column(db.String(120), nullable=False, default="answered")
+    # Phase 2.5.11.19 (May 7 2026) — full LLM answer text persisted for the
+    # Ask section so every Q&A exchange is traceable in one place. Capped to
+    # 8000 chars at the helper level to prevent token-runaway rows. Nullable
+    # so legacy rows (and edge-case empty answers) remain valid.
+    answer_text       = db.Column(db.Text, nullable=True)
+    # Source of the answer: timing/static/brand_guard/shortcut/etc. — mirrors
+    # the `source` field on the JSON response so analytics can group by path.
+    answer_source     = db.Column(db.String(40), nullable=True, index=True)
     created_at        = db.Column(db.DateTime, default=datetime.utcnow,
                                   nullable=False, index=True)
 
@@ -398,6 +406,8 @@ class UserQuestion(db.Model):
             "topic":             self.topic,
             "primary_kundli_id": self.primary_kundli_id,
             "verdict_summary":   self.verdict_summary,
+            "answer_text":       self.answer_text,
+            "answer_source":     self.answer_source,
             "created_at":        self.created_at.isoformat() if self.created_at else None,
         }
 

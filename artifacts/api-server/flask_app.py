@@ -5934,6 +5934,25 @@ def ask_route():
                       user_id=(rp_user.id if rp_user else None))
         out["quota"] = rp_quota
         out["plan"] = rp_plan
+        # Phase 2.5.11.19 — Ask Q&A persistence (sync raw passthrough exit).
+        # Authenticated users only (UserQuestion.user_id is NOT NULL).
+        # Fire-and-forget — save_user_question() swallows all errors so a
+        # logging failure can never break the user's Ask flow.
+        if rp_user is not None:
+            try:
+                save_user_question(
+                    user_id           = rp_user.id,
+                    question_text     = question,
+                    topic             = (out.get("topic") or "general"),
+                    primary_kundli_id = (rp_user.kundli.id
+                                         if rp_user.kundli else None),
+                    verdict_summary   = (out.get("source") or "answered"),
+                    answer_text       = (out.get("text") or ""),
+                    answer_source     = out.get("source"),
+                )
+            except Exception as _qh_exc:
+                print(f"[ask:RP] question_history save failed (non-fatal): "
+                      f"{_qh_exc}", flush=True)
         return jsonify(out)
 
     # ── P1.2.9 (A1) — Question length cap ───────────────────────────────────
@@ -6706,6 +6725,23 @@ def ask_stream_route():
                           user_id=(rp_user_s.id if rp_user_s else None))
         out_s["quota"] = rp_quota_s
         out_s["plan"] = rp_plan_s
+        # Phase 2.5.11.19 — Ask Q&A persistence (stream raw passthrough exit).
+        # Same fire-and-forget contract as the sync path above.
+        if rp_user_s is not None:
+            try:
+                save_user_question(
+                    user_id           = rp_user_s.id,
+                    question_text     = question,
+                    topic             = (out_s.get("topic") or "general"),
+                    primary_kundli_id = (rp_user_s.kundli.id
+                                         if rp_user_s.kundli else None),
+                    verdict_summary   = (out_s.get("source") or "answered"),
+                    answer_text       = (out_s.get("text") or ""),
+                    answer_source     = out_s.get("source"),
+                )
+            except Exception as _qh_exc_s:
+                print(f"[ask/stream:RP] question_history save failed "
+                      f"(non-fatal): {_qh_exc_s}", flush=True)
         return jsonify(out_s)
 
     # ── P1.2.9 (A1) — Question length cap (stream parity) ───────────────────

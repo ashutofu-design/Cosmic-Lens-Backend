@@ -94,6 +94,9 @@ def _truncate(s: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # Save (mutator)
 # ─────────────────────────────────────────────────────────────────────────────
+_MAX_ANSWER_LEN = 8000  # hard cap for full LLM answer_text persistence
+
+
 def save_user_question(
     *,
     user_id: int,
@@ -101,12 +104,19 @@ def save_user_question(
     topic: str,
     primary_kundli_id: Optional[int] = None,
     verdict_summary: str = "answered",
+    answer_text: Optional[str] = None,
+    answer_source: Optional[str] = None,
     created_at: Optional[datetime] = None,
 ) -> Optional[str]:
     """Persist one question row. Returns the new row id, or None on failure.
 
     NEVER raises — a logging failure must NEVER break the user's Ask flow.
     All inputs are normalised + length-capped before insert.
+
+    `answer_text` is capped to _MAX_ANSWER_LEN (8000 chars) — long enough for
+    any realistic Ask narration, short enough to keep rows lean. `answer_source`
+    is the response's `source` field (timing/static/brand_guard/etc.) for
+    analytics grouping.
     """
     if not user_id or not isinstance(user_id, int):
         return None
@@ -119,6 +129,18 @@ def save_user_question(
     topic_norm = (topic or "general").strip().lower()[:40] or "general"
     verdict_norm = _truncate(verdict_summary or "answered")
 
+    atext: Optional[str] = None
+    if answer_text:
+        atext = str(answer_text).strip()
+        if len(atext) > _MAX_ANSWER_LEN:
+            atext = atext[: _MAX_ANSWER_LEN - 1] + "…"
+        if not atext:
+            atext = None
+
+    asrc: Optional[str] = None
+    if answer_source:
+        asrc = str(answer_source).strip().lower()[:40] or None
+
     row_id = str(uuid.uuid4())
     try:
         row = UserQuestion(
@@ -128,6 +150,8 @@ def save_user_question(
             topic             = topic_norm,
             primary_kundli_id = primary_kundli_id,
             verdict_summary   = verdict_norm,
+            answer_text       = atext,
+            answer_source     = asrc,
             created_at        = created_at or datetime.utcnow(),
         )
         db.session.add(row)

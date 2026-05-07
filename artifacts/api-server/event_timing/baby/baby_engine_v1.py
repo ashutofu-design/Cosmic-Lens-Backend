@@ -1357,6 +1357,38 @@ def _step5_dasha_activation(chain: List[Dict[str, Any]],
         elif (w["ad"] in ("Saturn", "Rahu")
               or w["pd"] in ("Saturn", "Rahu")):
             kind = "assisted_or_delayed"
+        # Phase 2.5.5 — ACTIVE-WINDOW MARKING (user-requested):
+        # Beyond the weighted score, explicitly mark windows where
+        # the FINAL-GATE-PASSED promoter planets (survived Step 3c
+        # cross-chart ∩ Step 4c KP) become MD/AD/PD lord. This is
+        # the simple, classical "kab promoter dasha aa rahi hai"
+        # check the user wants surfaced cleanly, separate from the
+        # weighted scoring noise. Priority hierarchy:
+        #   PEAK    = AD AND PD both gate-passed promoters
+        #   STRONG  = AD is a gate-passed promoter
+        #   TRIGGER = PD is a gate-passed promoter (short pulse)
+        #   BACKGROUND = only MD is a gate-passed promoter
+        #   None    = no gate-passed promoter ruling this window
+        ad_active = w["ad"] in promoter_lords
+        pd_active = w["pd"] in promoter_lords
+        md_active = w["md"] in promoter_lords
+        if ad_active and pd_active:
+            active_priority = "PEAK"
+        elif ad_active:
+            active_priority = "STRONG"
+        elif pd_active:
+            active_priority = "TRIGGER"
+        elif md_active:
+            active_priority = "BACKGROUND"
+        else:
+            active_priority = None
+        active_lords_in_window = [
+            f"{role}={lord}"
+            for role, lord in (("MD", w["md"]),
+                                ("AD", w["ad"]),
+                                ("PD", w["pd"]))
+            if lord in promoter_lords
+        ]
         windows.append({
             "md": w["md"], "ad": w["ad"], "pd": w["pd"],
             "start": w["start"], "end": w["end"],
@@ -1366,6 +1398,9 @@ def _step5_dasha_activation(chain: List[Dict[str, Any]],
             "risk_raw": round(risk_score, 2),
             "kind": kind,
             "triggers": triggers,
+            "active_window":          active_priority is not None,
+            "active_priority":        active_priority,
+            "active_lords_in_window": active_lords_in_window,
         })
     windows.sort(key=lambda x: (-x["score"], x["start"]))
     return windows
@@ -2206,12 +2241,45 @@ def _compute_baby_window_impl(kundli: dict,
 
     affected = _affected_areas(ranked)
     remedies = _compute_baby_remedies(ranked, affected, rec_tier)
+
+    # Phase 2.5.5 — CHILD-ACTIVE WINDOWS (user-requested simple view):
+    # Chronological list of upcoming dasha windows where a final-gate-
+    # passed promoter planet is ruling at AD/PD/MD level. Distinct from
+    # `next_3_windows` (which is score-sorted and may include non-active
+    # high-score windows) — this list answers "kab filter-passed planet
+    # dasha me aa raha hai" directly. Priority order: PEAK > STRONG >
+    # TRIGGER > BACKGROUND. Capped at next 8 to keep result lean.
+    _PRIORITY_RANK = {"PEAK": 0, "STRONG": 1, "TRIGGER": 2,
+                       "BACKGROUND": 3}
+    active_chrono = sorted(
+        (w for w in dasha_windows if w.get("active_window")),
+        key=lambda x: x["start"]
+    )
+    child_active_windows = [{
+        "md": w["md"], "ad": w["ad"], "pd": w["pd"],
+        "priority":              w["active_priority"],
+        "active_lords":          w["active_lords_in_window"],
+        "window":                _format_window(w["start"], w["end"]),
+        "start_iso":             w["start"].isoformat(),
+        "end_iso":               w["end"].isoformat(),
+        "score":                 w["score"],
+        "kind":                  w.get("kind", "general"),
+        "risk_raw":              w.get("risk_raw", 0.0),
+    } for w in active_chrono[:8]]
+    next_child_window = child_active_windows[0] if child_active_windows else None
+    factors.append(
+        f"STEP5b active_windows_in_horizon={len(active_chrono)} "
+        f"next_priority={next_child_window['priority'] if next_child_window else '<none>'}"
+    )
+
     return {
         "verdict": verdict,
         "band": band,
         "child_promised": child_promised,
         "current_window": current_window,
         "next_3_windows": formatted_top3,
+        "child_active_windows": child_active_windows,
+        "next_child_window": next_child_window,
         "protection_windows": protection_windows,
         "affected_areas": affected,
         "recommendation_tier": rec_tier,

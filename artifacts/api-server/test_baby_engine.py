@@ -198,6 +198,50 @@ class TestStep1Filter(unittest.TestCase):
         self.assertGreaterEqual(per.get("confirmations", 0), 2)
         self.assertIn("D1", per.get("confirmed_in", []))
 
+    def test_step5b_active_window_marking(self):
+        """Phase 2.5.5: each dasha window must be marked with
+        `active_window` / `active_priority` / `active_lords_in_window`
+        when a FINAL-GATE-PASSED promoter planet rules it at MD/AD/PD.
+        Top-level result must expose `child_active_windows`
+        (chronological) and `next_child_window`. Priority order
+        PEAK > STRONG > TRIGGER > BACKGROUND.
+        """
+        kundli = _mk_kundli("Aries", {
+            "Sun": 11, "Moon": 4, "Mars": 7, "Mercury": 3,
+            "Jupiter": 5, "Venus": 2, "Saturn": 10,
+            "Rahu": 12, "Ketu": 6,
+        }, dashas=_mk_dashas())
+        result = compute_baby_window(kundli, intel={},
+                                       birth={"dob": "1990-05-15"})
+        # Top-level keys must exist
+        self.assertIn("child_active_windows", result)
+        self.assertIn("next_child_window", result)
+        cwins = result["child_active_windows"]
+        self.assertIsInstance(cwins, list)
+        self.assertLessEqual(len(cwins), 8, "active windows capped at 8")
+        # Every entry must have required structure
+        valid_priorities = {"PEAK", "STRONG", "TRIGGER", "BACKGROUND"}
+        for w in cwins:
+            for k in ("md", "ad", "pd", "priority", "active_lords",
+                       "window", "start_iso", "end_iso"):
+                self.assertIn(k, w, f"missing key {k} in active window")
+            self.assertIn(w["priority"], valid_priorities)
+            # active_lords must reference the marked roles
+            self.assertGreater(len(w["active_lords"]), 0,
+                "active window must list at least one active lord")
+        # Chronological invariant
+        if len(cwins) >= 2:
+            for a, b in zip(cwins, cwins[1:]):
+                self.assertLessEqual(a["start_iso"], b["start_iso"],
+                    "child_active_windows must be chronological")
+        # next_child_window matches first entry
+        if cwins:
+            self.assertEqual(result["next_child_window"]["start_iso"],
+                              cwins[0]["start_iso"])
+        # Factor trace must surface the count
+        factor_str = " ".join(result.get("factors", []))
+        self.assertIn("STEP5b active_windows_in_horizon=", factor_str)
+
     def test_step4c_strong_crosschart_rescues_kp_fail(self):
         """Phase 2.5.4-r4: a planet confirmed in ALL THREE charts
         (D1+D9+D7 all show 5H credential) is too strongly indicated

@@ -1486,8 +1486,26 @@ def _planet_position_at(planet_id: int,
 def _step6_transits(kundli: dict, lagna_si: int,
                      planets_d1: List[dict],
                      now: datetime) -> Dict[str, Any]:
-    out = {"jupiter": None, "saturn": None, "rahu": None,
-           "mars": None, "sade_sati": None,
+    """Phase 2.5.7 — CLASSICAL DOUBLE TRANSIT (Jupiter + Saturn only).
+
+    Per K.N. Rao's Double Transit Theory: for any event to fructify,
+    BOTH Jupiter AND Saturn must transit either the relevant BHAVA
+    (house) OR its LORD (sign). For child = 5H + 5L (PUTRASTHANA).
+
+    Trigger taxonomy:
+      DOUBLE_TRANSIT  → Jupiter AND Saturn each on 5H-sign OR 5L-sign
+                        (strongest classical conception window)
+      SINGLE_JUPITER  → Jupiter only on 5H-sign or 5L-sign
+      SINGLE_SATURN   → Saturn only on 5H-sign or 5L-sign
+      NONE            → neither
+
+    Other transit bodies (Rahu/Mars/Sade Sati/Sun/Moon/Venus/Mercury)
+    are deliberately EXCLUDED — user-requested narrowing to keep the
+    transit layer aligned with one classical, validated rule rather
+    than scattering noise across multiple unverified heuristics.
+    """
+    out = {"jupiter": None, "saturn": None,
+           "double_transit": None,
            "active_triggers": [],
            "positions": {},
            "as_of_utc": now.isoformat()}
@@ -1495,17 +1513,9 @@ def _step6_transits(kundli: dict, lagna_si: int,
         out["note"] = "swisseph unavailable; transit layer skipped"
         return out
 
-    moon_si = _planet_sign_idx(planets_d1, "Moon")
-    # Exact positions (sidereal Lahiri). Single source of truth — sign
-    # indices are derived from the same position dicts (no double-call).
-    pos_jup = _planet_position_at(swe.JUPITER,    now)
-    pos_sat = _planet_position_at(swe.SATURN,     now)
-    pos_rah = _planet_position_at(swe.MEAN_NODE,  now)
-    pos_mar = _planet_position_at(swe.MARS,       now)
-    pos_sun = _planet_position_at(swe.SUN,        now)
-    pos_mer = _planet_position_at(swe.MERCURY,    now)
-    pos_ven = _planet_position_at(swe.VENUS,      now)
-    pos_moon_now = _planet_position_at(swe.MOON,  now)
+    # Exact sidereal positions — Jupiter + Saturn only.
+    pos_jup = _planet_position_at(swe.JUPITER, now)
+    pos_sat = _planet_position_at(swe.SATURN,  now)
 
     def _enrich(pos):
         if not pos: return None
@@ -1513,69 +1523,65 @@ def _step6_transits(kundli: dict, lagna_si: int,
         return {**pos, "house_from_lagna": h}
 
     out["positions"] = {
-        "Sun":     _enrich(pos_sun),
-        "Moon":    _enrich(pos_moon_now),
-        "Mars":    _enrich(pos_mar),
-        "Mercury": _enrich(pos_mer),
         "Jupiter": _enrich(pos_jup),
-        "Venus":   _enrich(pos_ven),
         "Saturn":  _enrich(pos_sat),
-        "Rahu":    _enrich(pos_rah),
     }
 
-    saturn_si  = pos_sat["sign_idx"] if pos_sat else None
-    rahu_si    = pos_rah["sign_idx"] if pos_rah else None
-    mars_si    = pos_mar["sign_idx"] if pos_mar else None
-    jupiter_si = pos_jup["sign_idx"] if pos_jup else None
+    jup_si = pos_jup["sign_idx"] if pos_jup else None
+    sat_si = pos_sat["sign_idx"] if pos_sat else None
 
-    def _h(si):
-        return _house_of_sign(si, lagna_si) if si is not None else None
+    # 5H sign (whole-sign from lagna) and 5L's natal sign.
+    h5_sign  = (lagna_si + 4) % 12
+    h5_lord  = _house_lord(lagna_si, 5)
+    h5l_sign = _planet_sign_idx(planets_d1, h5_lord)
 
-    sat_h = _h(saturn_si); rahu_h = _h(rahu_si)
-    mars_h = _h(mars_si); jup_h = _h(jupiter_si)
+    def _on_5h_or_5l(si):
+        if si is None:
+            return None
+        if si == h5_sign and h5l_sign is not None and si == h5l_sign:
+            return "5H+5L (same sign)"
+        if si == h5_sign:
+            return "5H (PUTRASTHANA)"
+        if h5l_sign is not None and si == h5l_sign:
+            return f"5L sign ({h5_lord} natal sign)"
+        return None
 
-    if jup_h == 5:
-        out["jupiter"] = "Jupiter transiting 5H — primary conception window (PUTRA-KARAKA on PUTRASTHANA)"
-        out["active_triggers"].append(("jupiter_putra", 5, +1.2))
-    elif jup_h == 9:
-        out["jupiter"] = "Jupiter transiting 9H — dharma support for progeny"
-        out["active_triggers"].append(("jupiter_support", 9, +0.8))
-    elif jup_h == 11:
-        out["jupiter"] = "Jupiter transiting 11H — fulfillment of family-desire"
-        out["active_triggers"].append(("jupiter_fulfill", 11, +0.7))
+    jup_hit = _on_5h_or_5l(jup_si)
+    sat_hit = _on_5h_or_5l(sat_si)
 
-    if sat_h == 5:
-        out["saturn"] = "Saturn transiting 5H — delay/postponement in conception"
-        out["active_triggers"].append(("saturn_delay", 5, -0.5))
-    elif sat_h == 8:
-        out["saturn"] = "Saturn transiting 8H — extended care needed"
-        out["active_triggers"].append(("saturn_care", 8, +0.3))
+    if jup_hit:
+        out["jupiter"] = (f"Jupiter transiting {jup_hit} — "
+                           f"karaka activation of progeny axis")
+    if sat_hit:
+        out["saturn"] = (f"Saturn transiting {sat_hit} — "
+                          f"maturation/timing of progeny axis")
 
-    if rahu_h == 5:
-        out["rahu"] = "Rahu transit on 5H — unconventional/IVF route indicated"
-        out["active_triggers"].append(("rahu_ivf", 5, +0.5))
-    elif rahu_h == 11:
-        out["rahu"] = "Rahu transit on 11H — sudden gain of progeny news"
-        out["active_triggers"].append(("rahu_news", 11, +0.4))
-
-    if mars_h in (8, 12):
-        out["mars"] = f"Mars transit in {mars_h}H — miscarriage/medical risk window"
-        out["active_triggers"].append(("mars_risk", mars_h, +0.4))
-    elif mars_h == 5:
-        out["mars"] = "Mars transit in 5H — heightened procreative vigor (with caution)"
-        out["active_triggers"].append(("mars_vigor", 5, +0.3))
-
-    if moon_si is not None and saturn_si is not None:
-        delta = (saturn_si - moon_si) % 12
-        if delta == 11:
-            out["sade_sati"] = "first_phase (Saturn 12th from Moon — emotional stress)"
-            out["active_triggers"].append(("sade_sati", 12, +0.3))
-        elif delta == 0:
-            out["sade_sati"] = "peak_phase"
-            out["active_triggers"].append(("sade_sati", 1, +0.4))
-        elif delta == 1:
-            out["sade_sati"] = "exit_phase"
-            out["active_triggers"].append(("sade_sati", 2, +0.2))
+    # Double Transit verdict + trigger emission
+    if jup_hit and sat_hit:
+        out["double_transit"] = {
+            "active":          True,
+            "rule":            "Jupiter+Saturn both on 5H or 5L",
+            "jupiter_anchor":  jup_hit,
+            "saturn_anchor":   sat_hit,
+            "h5_sign":         _SIGNS[h5_sign],
+            "h5_lord":         h5_lord,
+            "h5_lord_sign":    (_SIGNS[h5l_sign]
+                                  if h5l_sign is not None else None),
+        }
+        out["active_triggers"].append(
+            ("DOUBLE_TRANSIT_5H_5L", 5, +1.5))
+    elif jup_hit:
+        out["double_transit"] = {"active": False,
+                                   "partial": "JUPITER_ONLY"}
+        out["active_triggers"].append(
+            ("SINGLE_TRANSIT_JUPITER", 5, +0.6))
+    elif sat_hit:
+        out["double_transit"] = {"active": False,
+                                   "partial": "SATURN_ONLY"}
+        out["active_triggers"].append(
+            ("SINGLE_TRANSIT_SATURN", 5, +0.4))
+    else:
+        out["double_transit"] = {"active": False, "partial": None}
 
     return out
 

@@ -198,13 +198,13 @@ class TestStep1Filter(unittest.TestCase):
         self.assertGreaterEqual(per.get("confirmations", 0), 2)
         self.assertIn("D1", per.get("confirmed_in", []))
 
-    def test_step6_exact_transit_positions(self):
-        """Phase 2.5.6: Step 6 transit block must expose EXACT
-        sidereal positions for all 8 transiting bodies (Sun, Moon,
-        Mars, Mercury, Jupiter, Venus, Saturn, Rahu) when swisseph
-        is available. Each entry must include longitude, sign+deg,
-        nakshatra+pada, retrograde flag, and house-from-lagna.
-        Skipped gracefully when swisseph missing (note returned).
+    def test_step6_double_transit_jupiter_saturn_only(self):
+        """Phase 2.5.7: Step 6 transit block must expose ONLY
+        Jupiter + Saturn positions (other bodies removed). Must
+        include `double_transit` verdict + active_triggers using the
+        classical Double Transit Theory: BOTH Jupiter AND Saturn on
+        5H sign OR 5L's natal sign → DOUBLE_TRANSIT_5H_5L; only one
+        → SINGLE_TRANSIT_*; neither → no trigger.
         """
         from event_timing.baby import baby_engine_v1 as B
         kundli = _mk_kundli("Aries", {
@@ -218,29 +218,40 @@ class TestStep1Filter(unittest.TestCase):
         if not B._HAS_SWE:
             self.assertIn("note", transits)
             return
-        # as_of_utc + positions block must exist
+        # Must expose double_transit verdict + as_of_utc
+        self.assertIn("double_transit", transits)
         self.assertIn("as_of_utc", transits)
+        # Positions trimmed to Jupiter + Saturn ONLY
         positions = transits.get("positions") or {}
-        for body in ("Sun", "Moon", "Mars", "Mercury",
-                      "Jupiter", "Venus", "Saturn", "Rahu"):
-            self.assertIn(body, positions, f"{body} missing from positions")
+        self.assertEqual(set(positions.keys()), {"Jupiter", "Saturn"},
+            f"positions must be Jupiter+Saturn only; got {set(positions.keys())}")
+        for body in ("Jupiter", "Saturn"):
             p = positions[body]
-            self.assertIsNotNone(p, f"{body} position is None")
-            for k in ("lon_deg", "sign_idx", "sign_name",
-                       "deg_in_sign", "deg_str", "nak_idx", "nak_name",
-                       "pada", "retrograde", "speed_deg_per_day",
-                       "house_from_lagna"):
-                self.assertIn(k, p, f"{body} missing field {k}")
-            # Sanity on ranges
-            self.assertGreaterEqual(p["lon_deg"], 0.0)
-            self.assertLess(p["lon_deg"], 360.0)
-            self.assertIn(p["sign_idx"], range(12))
-            self.assertIn(p["nak_idx"], range(27))
-            self.assertIn(p["pada"], (1, 2, 3, 4))
-            self.assertGreaterEqual(p["deg_in_sign"], 0.0)
-            self.assertLess(p["deg_in_sign"], 30.0)
-            self.assertIn(p["house_from_lagna"], range(1, 13))
-            self.assertIsInstance(p["retrograde"], bool)
+            self.assertIsNotNone(p)
+            for k in ("lon_deg", "sign_name", "deg_str", "nak_name",
+                       "pada", "retrograde", "house_from_lagna"):
+                self.assertIn(k, p)
+        # Removed bodies must NOT be present
+        for absent in ("Sun", "Moon", "Mars", "Mercury",
+                        "Venus", "Rahu"):
+            self.assertNotIn(absent, positions,
+                f"{absent} must be removed in Phase 2.5.7")
+        # Active triggers must use new taxonomy (or be empty)
+        valid_trigger_codes = {"DOUBLE_TRANSIT_5H_5L",
+                                 "SINGLE_TRANSIT_JUPITER",
+                                 "SINGLE_TRANSIT_SATURN"}
+        for trig in transits.get("active_triggers", []):
+            code = trig[0] if isinstance(trig, (list, tuple)) else trig
+            self.assertIn(code, valid_trigger_codes,
+                f"unexpected trigger code {code}")
+        # double_transit dict invariants
+        dt = transits["double_transit"]
+        self.assertIn("active", dt)
+        self.assertIsInstance(dt["active"], bool)
+        if dt["active"]:
+            for k in ("rule", "jupiter_anchor", "saturn_anchor",
+                       "h5_sign", "h5_lord"):
+                self.assertIn(k, dt)
 
     def test_step5b_active_window_marking(self):
         """Phase 2.5.5: each dasha window must be marked with

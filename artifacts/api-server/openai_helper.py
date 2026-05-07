@@ -3166,21 +3166,64 @@ def _raw_compact_chart(kundli: Any, include_dasha: bool = True) -> str:
                 if not isinstance(p, dict): continue
                 lines.append(f"  • {p.get('name','?')}: {p.get('sign','?')} "
                              f"(House {p.get('house','?')})")
-    # ── Current Dasha (TIMING-only) ─────────────────────────────────────
-    if not include_dasha:
-        return "\n".join(lines)
-    cd = kundli.get("currentDasha") or {}
-    if isinstance(cd, dict) and cd:
-        lines.append("\n=== CURRENT DASHA ===")
-        if cd.get("maha"):
-            lines.append(f"Mahadasha: {cd.get('maha')} "
-                         f"({cd.get('startDate','?')} → {cd.get('endDate','?')})")
-        if cd.get("antar"):
-            lines.append(f"Antardasha: {cd.get('antar')}")
-        if cd.get("pratyantar"):
-            lines.append(f"Pratyantar: {cd.get('pratyantar')} "
-                         f"({cd.get('pratyantarStart','?')} → "
-                         f"{cd.get('pratyantarEnd','?')})")
+    # ── Current Dasha (ALWAYS included; full 5-yr horizon only in TIMING) ──
+    # Phase 2.5.11.1 — STATIC questions also receive current MD/AD/PD line so
+    # the LLM can cite the active dasha lord when explaining WHY a current
+    # behavioural pattern (fights, restlessness, attachment style) is showing
+    # up right now. Full 5-yr timeline still gated to TIMING (avoids token
+    # bloat on character/quality questions).
+    try:
+        from reply_cosmo.engine_locked_to_llm.locked_facts import (
+            _format_dasha_block as _ldf_dasha,
+            _normalize_dasha_array as _ldf_norm,
+        )
+        if include_dasha:
+            # Full block: current MD/AD/PD + window + 5-yr horizon
+            block = _ldf_dasha(kundli)
+            if block:
+                lines.append("\n=== DASHA (current + next 5 years) ===")
+                lines.append(block)
+        else:
+            # STATIC: just the current MD/AD/PD line (no horizon)
+            from datetime import datetime
+            now = datetime.utcnow()
+            chain = _ldf_norm(kundli)
+            cur_md = next((m for m in chain
+                           if m["start"] and m["end"]
+                           and m["start"] <= now <= m["end"]), None)
+            cur_ad = cur_pd = None
+            if cur_md:
+                cur_ad = next((a for a in cur_md["ads"]
+                               if a["start"] and a["end"]
+                               and a["start"] <= now <= a["end"]), None)
+                if cur_ad:
+                    cur_pd = next((p for p in cur_ad["pds"]
+                                   if p["start"] and p["end"]
+                                   and p["start"] <= now <= p["end"]), None)
+            if cur_md:
+                parts = [f"{cur_md['lord']} Mahadasha"]
+                if cur_ad: parts.append(f"→ {cur_ad['lord']} Antardasha")
+                if cur_pd: parts.append(f"→ {cur_pd['lord']} Pratyantar")
+                lines.append("\n=== CURRENT DASHA (context only — no future dates) ===")
+                lines.append(" ".join(parts))
+            else:
+                # Fallback to legacy compact form
+                cd = kundli.get("currentDasha") or {}
+                if isinstance(cd, dict) and cd and cd.get("maha"):
+                    lines.append("\n=== CURRENT DASHA (context only — no future dates) ===")
+                    bits = [f"{cd.get('maha')} Mahadasha"]
+                    if cd.get("antar"):      bits.append(f"→ {cd.get('antar')} Antardasha")
+                    if cd.get("pratyantar"): bits.append(f"→ {cd.get('pratyantar')} Pratyantar")
+                    lines.append(" ".join(bits))
+    except Exception as _e:
+        print(f"[_raw_compact_chart] dasha block skipped: {_e}", flush=True)
+        # Last-resort legacy fallback so we still emit something
+        cd = kundli.get("currentDasha") or {}
+        if isinstance(cd, dict) and cd:
+            lines.append("\n=== CURRENT DASHA ===")
+            if cd.get("maha"):       lines.append(f"Mahadasha: {cd.get('maha')}")
+            if cd.get("antar"):      lines.append(f"Antardasha: {cd.get('antar')}")
+            if cd.get("pratyantar"): lines.append(f"Pratyantar: {cd.get('pratyantar')}")
     cp = kundli.get("currentPhase") or {}
     if isinstance(cp, dict) and cp.get("name"):
         lines.append(f"Current Phase: {cp.get('name')} "
@@ -3381,13 +3424,20 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         "exact dasha period."
     ) if is_timing else (
         "STATIC QUESTION (user did NOT ask 'when'): DO NOT give any "
-        "month/year window. DO NOT invent dashas — none is provided. "
-        "Answer the underlying quality / yes-no / how / why from the "
-        "chart's natal structure only. If the user asks 'when' anyway, "
-        "say a static reading cannot fix a date and answer the "
+        "month/year window for future events. DO NOT invent any future "
+        "dasha not shown. The CURRENT DASHA line is provided ONLY as "
+        "present-tense context — you MAY cite the current Mahadasha / "
+        "Antardasha lord by NAME when explaining WHY the user is "
+        "experiencing a pattern RIGHT NOW (e.g. 'abhi Moon Mahadasha + "
+        "Mars Antardasha chal raha hai — Mars sub-period emotional "
+        "friction surface karwata hai'). NEVER quote a future start/end "
+        "date and NEVER predict 'X will happen in Y month/year' on a "
+        "static question. If the user asks 'when' anyway, say a "
+        "character/quality reading cannot fix a date and answer the "
         "underlying aspect instead."
     )
-    chart_label = "D1 + D9 + ACTIVE DASHA" if is_timing else "D1 + D9 ONLY (no dasha)"
+    chart_label = ("D1 + D9 + ACTIVE DASHA + 5-YR HORIZON" if is_timing
+                   else "D1 + D9 + CURRENT DASHA (context only)")
     if is_kp:
         chart_label += " + KP CUSPAL SUB-LORD"
     if is_marriage_engine:

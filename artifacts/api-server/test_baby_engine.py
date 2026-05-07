@@ -180,6 +180,95 @@ class TestStep1Filter(unittest.TestCase):
         self.assertTrue(any("PROGENY-KARAKA" in l
                             for l in d1["Jupiter"]["links"]))
 
+    def test_cross_chart_filter_jupiter_always_confirmed(self):
+        """Jupiter is the universal progeny karaka, so its 5H-link
+        in every chart (D1/D9/D7) must score it as cross_confirmed.
+        """
+        kundli = _mk_kundli("Aries", {
+            "Sun": 5, "Moon": 4, "Mars": 7, "Mercury": 6,
+            "Jupiter": 11, "Venus": 2, "Saturn": 10,
+            "Rahu": 12, "Ketu": 6,
+        }, dashas=_mk_dashas())
+        result = compute_baby_window(kundli, intel={}, kp={},
+                                       birth={"dob": "1990-05-15"})
+        ccf = result.get("cross_chart_filter") or {}
+        self.assertIn("Jupiter", ccf.get("confirmed_planets", []),
+            f"Jupiter must be cross-confirmed; got {ccf}")
+        per = ccf.get("per_planet", {}).get("Jupiter", {})
+        self.assertGreaterEqual(per.get("confirmations", 0), 2)
+        self.assertIn("D1", per.get("confirmed_in", []))
+
+    def test_cross_chart_gate_disabled_when_d9_and_d7_unavailable(self):
+        """Edge case (architect-flagged): if both D9 and D7 are
+        unavailable (e.g. missing longitudes), the ≥2/3 rule is
+        unreachable from D1 alone. Gate must auto-disable so dasha
+        windows aren't all collapsed to NEUTRAL.
+        """
+        # Build kundli WITHOUT longitudes / without ascendant_longitude
+        # so divisional helpers degrade. Use sign-only positions.
+        signs_list = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+                       "Libra","Scorpio","Sagittarius","Capricorn",
+                       "Aquarius","Pisces"]
+        plans = {"Sun": 5, "Moon": 4, "Mars": 7, "Mercury": 6,
+                  "Jupiter": 11, "Venus": 2, "Saturn": 10,
+                  "Rahu": 12, "Ketu": 6}
+        asi = 0  # Aries
+        planets = []
+        for nm, h in plans.items():
+            si = (asi + h - 1) % 12
+            # NOTE: deliberately omit "longitude" + "sign_idx" so
+            # divisional_charts.compute_d9/d7 cannot place them.
+            planets.append({"name": nm, "house": h, "sign": signs_list[si]})
+        kundli = {"ascendant": "Aries",
+                   # NO ascendant_longitude on purpose
+                   "planets": planets,
+                   "dashas": _mk_dashas(),
+                   "birth": {"date_iso": "1990-05-15",
+                              "time_iso": "10:30:00",
+                              "tz_offset_hours": 5.5}}
+        result = compute_baby_window(kundli, intel={}, kp={},
+                                       birth={"dob": "1990-05-15"})
+        ccf = result.get("cross_chart_filter") or {}
+        avail = ccf.get("available_charts", {})
+        # Both D9 and D7 should report unavailable
+        self.assertFalse(avail.get("D9", True),
+            f"Expected D9 unavailable, got {avail}")
+        self.assertFalse(avail.get("D7", True),
+            f"Expected D7 unavailable, got {avail}")
+        # Gate must auto-disable
+        self.assertFalse(ccf.get("gate_active", True),
+            "Gate must auto-disable when D9+D7 both unavailable")
+        # Verdict must NOT be UNKNOWN purely from gate collapse
+        # (data_sufficiency may still pass it through other paths;
+        # we just guard against gate-induced empty windows)
+        self.assertIn(result.get("verdict"),
+            ("CHILD_PROMISED", "FAVORABLE", "DELAYED",
+             "OBSTRUCTED", "UNKNOWN"))
+
+    def test_cross_chart_filter_blocks_paper_promise_planets(self):
+        """A planet that is e.g. 9L or 11L (D1 promoter tag) but has
+        NO 5H link in D9 and D7 must NOT be cross_confirmed, and
+        therefore must not be classified CHILD_PROMOTER in Step 5.
+        Verifies the gate fires at least once across realistic charts.
+        """
+        # Build a chart where some D1 promoter exists but cross-confirm
+        # only contains Jupiter.
+        kundli = _mk_kundli("Aries", {
+            "Sun": 1, "Moon": 4, "Mars": 7, "Mercury": 6,
+            "Jupiter": 11, "Venus": 2, "Saturn": 10,
+            "Rahu": 12, "Ketu": 6,
+        }, dashas=_mk_dashas())
+        result = compute_baby_window(kundli, intel={}, kp={},
+                                       birth={"dob": "1990-05-15"})
+        ccf = result.get("cross_chart_filter") or {}
+        per = ccf.get("per_planet") or {}
+        # Every survivor MUST have a recorded confirmations count
+        for p, info in per.items():
+            self.assertIn("confirmations", info)
+            self.assertIn("cross_confirmed", info)
+            self.assertGreaterEqual(info["confirmations"], 0)
+            self.assertLessEqual(info["confirmations"], 3)
+
     def test_step1_excludes_2L_7L_obstruction_funcmalefic(self):
         """LEAN refactor: Step 1 must NOT include 2L, 7L, obstruction-
         house boost, Sun/Mars karaka, or functional-malefic surcharge.

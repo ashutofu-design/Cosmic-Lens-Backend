@@ -403,19 +403,75 @@ def _step1_d1_filter(kundli: dict, lagna_si: int
 # ════════════════════════════════════════════════════════════════════════
 # STEP 2 — D9 dignity verification
 # ════════════════════════════════════════════════════════════════════════
-def _step2_d9_verify(kundli: dict, candidates: Set[str]) -> Dict[str, float]:
+def _build_d9_chart(kundli: dict) -> Optional[Dict[str, Any]]:
+    """Compute the full D9 Navamsha chart once, with proper D9 lagna +
+    D9-house assignment per planet. Mirrors `_build_d7_chart` shape so
+    Step 2 (dignity), Step 3c (cross-chart filter), and any future D9
+    consumer use the same structure.
+
+    Returns:
+        {"lagna_si": int, "planets": [{name, sign, sign_idx, house}], ...}
+        or None if D9 helper unavailable / longitudes missing.
+    """
+    if compute_d9 is None:
+        return None
+    d1_planets = kundli.get("planets") or []
+    if not d1_planets:
+        return None
+    asc_lon = kundli.get("ascendant_longitude")
+    try:
+        ext = compute_d9(d1_planets,
+                          float(asc_lon)
+                          if isinstance(asc_lon, (int, float)) else None)
+    except Exception:
+        return None
+    if not isinstance(ext, dict) or not ext:
+        return None
+
+    d9_lagna_si: Optional[int] = None
+    d9_planet_map: Dict[str, int] = {}
+    for k, v in ext.items():
+        if k == "_lagna" and isinstance(v, dict):
+            si = v.get("sign_idx")
+            if isinstance(si, int):
+                d9_lagna_si = si % 12
+            continue
+        if isinstance(v, dict):
+            si = v.get("sign_idx")
+            if isinstance(si, int) and k in _PLANETS_9:
+                d9_planet_map[k] = si % 12
+
+    if d9_lagna_si is None or not d9_planet_map:
+        return None
+
+    planets_list: List[Dict[str, Any]] = []
+    for nm in _PLANETS_9:
+        if nm in d9_planet_map:
+            si = d9_planet_map[nm]
+            planets_list.append({
+                "name":     nm,
+                "sign":     _SIGNS[si],
+                "sign_idx": si,
+                "house":    _house_of_sign(si, d9_lagna_si),
+            })
+    return {"lagna_si": d9_lagna_si, "planets": planets_list}
+
+
+def _step2_d9_verify(kundli: dict, candidates: Set[str],
+                       d9_chart: Optional[Dict[str, Any]] = None
+                       ) -> Dict[str, float]:
+    """Verify D1 survivors via D9 dignity (exalted 25 / own 20 /
+    neutral 12 / debilitated 5 / unknown 8 fallback). Uses pre-built
+    `d9_chart` when supplied — same chart Step 3c consumes for
+    cross-chart confirmation, so dignity and confirmation can never
+    disagree.
+    """
     out: Dict[str, float] = {p: 0.0 for p in candidates}
     if not candidates:
         return out
-    d9 = None
-    if compute_d9 is not None:
-        try:
-            d9 = compute_d9(kundli)
-        except Exception:
-            d9 = None
-    if not d9:
-        return {p: 8.0 for p in candidates}
-    d9_planets = d9.get("planets") if isinstance(d9, dict) else None
+    if d9_chart is None:
+        d9_chart = _build_d9_chart(kundli)
+    d9_planets = (d9_chart or {}).get("planets") or []
     if not d9_planets:
         return {p: 8.0 for p in candidates}
     for pname in candidates:
@@ -762,6 +818,103 @@ def _step3b_d7_picture(d7_chart: Optional[Dict[str, Any]],
 
 
 # ════════════════════════════════════════════════════════════════════════
+# STEP 3c — Cross-chart 5H confirmation filter (D1 ∩ D9 ∩ D7)
+# ════════════════════════════════════════════════════════════════════════
+def _has_5h_link(planet: str, lagna_si: int,
+                  planets: List[Dict[str, Any]]) -> List[str]:
+    """Return list of 5H-connection labels for a planet inside ANY chart
+    (D1 / D9 / D7). Connection counts if planet is:
+      • the 5L of that chart's lagna
+      • occupant of that chart's 5H
+      • aspecting that chart's 5H
+      • Jupiter (always — natural progeny karaka)
+    """
+    links: List[str] = []
+    if planet == "Jupiter":
+        links.append("karaka")
+    if _house_lord(lagna_si, 5) == planet:
+        links.append("5L")
+    h = _planet_house(planets, planet)
+    if h == 5:
+        links.append("in_5H")
+    if h and _aspects_house(planet, h, 5):
+        links.append("aspects_5H")
+    return links
+
+
+def _step3c_cross_chart_filter(
+        d1_map: Dict[str, Dict[str, Any]],
+        kundli: dict,
+        lagna_si: int,
+        d9_chart: Optional[Dict[str, Any]],
+        d7_chart: Optional[Dict[str, Any]],
+) -> Dict[str, Dict[str, Any]]:
+    """Cross-chart 5H confirmation — a planet truly "gives baby in its
+    AD/PD" only when its progeny credentials show up in MULTIPLE charts.
+
+    For each Step-1 survivor, count 5H-connections across:
+      • D1 — derived from existing d1_map (5L / occupies 5 / aspects 5
+              / Jupiter karaka)
+      • D9 — using the pre-built D9 chart (D9 5L of D9 lagna, D9 5H
+              occupant, D9 5H aspector, Jupiter)
+      • D7 — using the pre-built D7 chart (D7 5L of D7 lagna, D7 5H
+              occupant, D7 5H aspector, Jupiter)
+
+    A planet is `cross_confirmed` when confirmations ≥ 2 of 3.
+    Returns a dict per planet with `confirmations`, `confirmed_in`,
+    `chart_links`, and `cross_confirmed`. Planets unavailable in D9 or
+    D7 fall back to the available subset (so a missing D7 doesn't auto-
+    fail an otherwise strong D1+D9 planet).
+    """
+    out: Dict[str, Dict[str, Any]] = {}
+    survivors = [p for p, info in d1_map.items() if info.get("in_filter")]
+
+    d1_planets = kundli.get("planets") or []
+    d9_planets = (d9_chart or {}).get("planets") or []
+    d7_planets = (d7_chart or {}).get("planets") or []
+    d9_lagna = (d9_chart or {}).get("lagna_si")
+    d7_lagna = (d7_chart or {}).get("lagna_si")
+
+    for p in survivors:
+        chart_links: Dict[str, List[str]] = {}
+
+        # D1 — read from d1_map (already computed)
+        info = d1_map[p]
+        d1_links: List[str] = []
+        if 5 in (info.get("is_lord_of") or []):
+            d1_links.append("5L")
+        if info.get("occupies") == 5:
+            d1_links.append("in_5H")
+        if info.get("aspects_5"):
+            d1_links.append("aspects_5H")
+        if p == "Jupiter":
+            d1_links.append("karaka")
+        if d1_links:
+            chart_links["D1"] = d1_links
+
+        # D9
+        if d9_planets and d9_lagna is not None:
+            d9_links = _has_5h_link(p, d9_lagna, d9_planets)
+            if d9_links:
+                chart_links["D9"] = d9_links
+
+        # D7
+        if d7_planets and d7_lagna is not None:
+            d7_links = _has_5h_link(p, d7_lagna, d7_planets)
+            if d7_links:
+                chart_links["D7"] = d7_links
+
+        confirmed_in = sorted(chart_links.keys())
+        out[p] = {
+            "confirmations":     len(confirmed_in),
+            "confirmed_in":      confirmed_in,
+            "chart_links":       chart_links,
+            "cross_confirmed":   len(confirmed_in) >= 2,
+        }
+    return out
+
+
+# ════════════════════════════════════════════════════════════════════════
 # STEP 3.5 — KP layer (cuspal sub lord of 5 / 11)
 # ════════════════════════════════════════════════════════════════════════
 def _step3_5_kp_layer(kp: dict, lagna_si: int) -> Dict[str, Any]:
@@ -938,7 +1091,9 @@ def _step5_dasha_activation(chain: List[Dict[str, Any]],
                               ranked: List[Dict[str, Any]],
                               lagna_si: int,
                               now: datetime,
-                              horizon_years: int = 10
+                              horizon_years: int = 10,
+                              cross_map: Optional[Dict[str, Dict[str, Any]]]
+                                  = None,
                               ) -> List[Dict[str, Any]]:
     """Score each upcoming dasha window.
 
@@ -953,6 +1108,14 @@ def _step5_dasha_activation(chain: List[Dict[str, Any]],
     NOTE — architect-pattern (mirrors travel v1 / finance v1):
     "functional malefic for lagna" tag is INTENTIONALLY EXCLUDED from
     obstruction classification. It is a Step-1 ranking modifier only.
+
+    Phase 2.5.3 — Cross-Chart Gate: when `cross_map` is supplied
+    (Step 3c result), a planet is admitted to `promoter_lords` only if
+    it is `cross_confirmed` (5H credentials in ≥2 of D1/D9/D7).
+    Otherwise its dasha contribution is NEUTRAL even if it carries
+    promoter tags. This blocks "D1-only paper promise" planets from
+    masquerading as true child-givers in their AD/PD. Obstructor /
+    risk classifications are unaffected (they always apply).
     """
     if not chain or not ranked:
         return []
@@ -979,12 +1142,18 @@ def _step5_dasha_activation(chain: List[Dict[str, Any]],
                 promoter_count += 1
             if any(t in l for t in _OBSTRUCTOR_TAGS):
                 obstruct_count += 1
+        # Cross-chart gate: only admit as PROMOTER when D1∩D9∩D7
+        # cross-confirmation is satisfied (or cross_map not supplied).
+        cross_ok = True
+        if cross_map is not None:
+            cross_ok = bool(cross_map.get(r["name"], {})
+                              .get("cross_confirmed"))
         if promoter_count and obstruct_count:
-            if promoter_count >= obstruct_count:
+            if promoter_count >= obstruct_count and cross_ok:
                 promoter_lords.add(r["name"])
             else:
                 obstructor_lords.add(r["name"])
-        elif promoter_count:
+        elif promoter_count and cross_ok:
             promoter_lords.add(r["name"])
         elif obstruct_count:
             obstructor_lords.add(r["name"])
@@ -1601,7 +1770,10 @@ def _compute_baby_window_impl(kundli: dict,
     factors.append(f"STEP1 survivors={sorted(survivors)}")
 
     # ── STEP 2 ──
-    d9_scores = _step2_d9_verify(kundli, survivors)
+    # Build D9 chart once and reuse for both dignity (Step 2) and
+    # cross-chart filter (Step 3c). Single source of truth.
+    d9_chart = _build_d9_chart(kundli)
+    d9_scores = _step2_d9_verify(kundli, survivors, d9_chart=d9_chart)
     factors.append(f"STEP2 D9_scores=" +
                     ",".join(f"{p}:{s:.1f}" for p, s in d9_scores.items()))
 
@@ -1630,6 +1802,31 @@ def _compute_baby_window_impl(kundli: dict,
     else:
         factors.append("STEP3b D7_picture=unavailable (D1-dignity fallback)")
 
+    # ── STEP 3c — Cross-chart 5H confirmation (D1 ∩ D9 ∩ D7) ──
+    cross_map = _step3c_cross_chart_filter(d1_map, kundli, lagna_si,
+                                              d9_chart, d7_chart)
+    cross_confirmed = sorted(p for p, c in cross_map.items()
+                              if c.get("cross_confirmed"))
+    # Availability-aware gate: if BOTH D9 and D7 are unavailable, the
+    # ≥2/3 rule is unreachable from D1 alone, which would collapse all
+    # promoter classifications. In that degraded-data case we disable
+    # the gate (cross_map_for_gate=None) so Step 5 falls back to the
+    # legacy D1-only promoter logic — partial data must not flip a
+    # valid chart into "no windows". The cross_chart_filter block in
+    # the result still reports the partial confirmations transparently.
+    d9_available = bool((d9_chart or {}).get("planets"))
+    d7_available = bool((d7_chart or {}).get("planets"))
+    cross_map_for_gate: Optional[Dict[str, Dict[str, Any]]] = cross_map
+    if not (d9_available or d7_available):
+        cross_map_for_gate = None
+        factors.append("STEP3c cross_chart_gate=DISABLED "
+                        "(D9+D7 both unavailable — degraded data)")
+    else:
+        factors.append("STEP3c cross_confirmed=" + (",".join(
+            f"{p}({len(cross_map[p]['confirmed_in'])}/3:{','.join(cross_map[p]['confirmed_in'])})"
+            for p in cross_confirmed) or "<none>") +
+            f" [D9={d9_available} D7={d7_available}]")
+
     # ── STEP 3.5 ──
     kp_layer = _step3_5_kp_layer(kp, lagna_si)
     factors.append(f"STEP3.5 KP csl_5={kp_layer['csl_5']}/{kp_layer['verdict_5']} "
@@ -1642,7 +1839,8 @@ def _compute_baby_window_impl(kundli: dict,
 
     # ── STEP 5 ──
     chain = _flatten_dasha_chain(kundli)
-    dasha_windows = _step5_dasha_activation(chain, ranked, lagna_si, now)
+    dasha_windows = _step5_dasha_activation(chain, ranked, lagna_si, now,
+                                                cross_map=cross_map_for_gate)
     factors.append(f"STEP5 dasha_windows_in_horizon={len(dasha_windows)}")
 
     # ── STEP 6 ──
@@ -1794,6 +1992,15 @@ def _compute_baby_window_impl(kundli: dict,
         "weighted_breakdown": breakdown,
         "kp_layer": kp_layer,
         "d7_picture": d7_picture,
+        "cross_chart_filter": {
+            "confirmed_planets": cross_confirmed,
+            "per_planet": cross_map,
+            "rule": "≥2 of {D1,D9,D7} 5H-link required for CHILD_PROMOTER",
+            "available_charts": {"D1": True,
+                                  "D9": d9_available,
+                                  "D7": d7_available},
+            "gate_active": cross_map_for_gate is not None,
+        },
         "transits": transits,
         "ashtakavarga": ashta,
         "yogas": yogas,

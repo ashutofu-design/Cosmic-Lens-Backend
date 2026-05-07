@@ -1314,20 +1314,39 @@ function LockedHook({ item, isDark }:{ item:HookItem; isDark:boolean }) {
   );
 }
 
+type DeepSection = { title: string; tease: string };
+function getDeepSections(lang: string): DeepSection[] {
+  const code = (lang || "en").toLowerCase();
+  if (code === "hi") return [
+    { title: "भावनात्मक तालमेल",       tease: "एक साथी गहराई से जुड़ता है, दूसरे को पहले अपनी जगह चाहिए — दोनों सच्चे हैं।" },
+    { title: "विवाह की स्थिरता",        tease: "दीर्घकाल साथ संभव है — बस कुछ खास पड़ावों पर धैर्य ही असली कसौटी बनेगा।" },
+    { title: "टकराव का स्वरूप",         tease: "चुप्पी और ज़्यादा सोचना धीरे-धीरे दूरी बना सकता है — संवाद ही असली पुल है।" },
+    { title: "कर्मिक सबक",              tease: "यह रिश्ता दोनों को भावनात्मक रूप से बदलने आया है, सिर्फ़ ख़ुश रखने नहीं।" },
+    { title: "परिवार और व्यावहारिक जीवन", tease: "परिवार और ज़िम्मेदारियाँ चुपचाप अगले अध्याय की दिशा तय करेंगी।" },
+    { title: "आगे की दिशा",              tease: "यह जुड़ाव टूटने वाला नहीं — यह परिपक्वता माँगता है, परिपूर्णता नहीं।" },
+  ];
+  if (code === "hn") return [
+    { title: "Emotional Alignment", tease: "Ek partner gehrai se judta hai, doosra pehle thoda space chahta hai — dono asli hain." },
+    { title: "Marriage Stability",  tease: "Long-term saath sambhav hai — bas kuch khaas phases mein sabr asli imtihaan banega." },
+    { title: "Conflict Pattern",    tease: "Chuppi aur zyada sochna dheere-dheere doori bana sakti hai — baat-cheet hi asli pul hai." },
+    { title: "Karmic Lesson",       tease: "Yeh rishta dono ko emotionally transform karne aaya hai, sirf khush rakhne nahi." },
+    { title: "Family & Practical Life", tease: "Ghar aur zimmedariyaan chupchaap agle chapter ki disha tay karengi." },
+    { title: "Future Direction",    tease: "Yeh connection toot-ne wala nahi — yeh maturity maangta hai, perfection nahi." },
+  ];
+  return [
+    { title: "Emotional Alignment",     tease: "One partner attaches deeply; the other guards space first — both are genuine." },
+    { title: "Marriage Stability",      tease: "A long-term bond is possible — patience in two key phases is the real test." },
+    { title: "Conflict Pattern",        tease: "Silence and overthinking can quietly create distance — dialogue is the real bridge." },
+    { title: "Karmic Lesson",           tease: "This bond is here to emotionally transform both of you, not merely to please." },
+    { title: "Family & Practical Life", tease: "Family duties will quietly shape the tone of the next chapter together." },
+    { title: "Future Direction",        tease: "This connection won't break — it asks for maturity, not perfection." },
+  ];
+}
+
 function ProKundliSection({ p1, p2, isDark, t }:{ p1:PersonData|null; p2:PersonData|null; isDark:boolean; t:any }) {
   const canBuild = !!p1 && !!p2;
   const hooks: HookItem[] = canBuild ? buildProHooks(buildSignals(p1!, p2!), t) : [];
-
-  const unlockList = [
-    t.km3_unlEmotional,
-    t.km3_unlMarriage,
-    t.km3_unlRisks,
-    t.km3_unlKarmic,
-    t.km3_unlStrength,
-    t.km3_unlTriggers,
-    t.km3_unlStability,
-    t.km3_unlFinal,
-  ];
+  const deepSections = getDeepSections(t.lang);
 
   return (
     <View style={{gap:14}}>
@@ -1362,13 +1381,21 @@ function ProKundliSection({ p1, p2, isDark, t }:{ p1:PersonData|null; p2:PersonD
             {t.km3_whatYouUnlock}
           </Text>
         </View>
-        <View style={{gap:6}}>
-          {unlockList.map((txt,i)=>(
-            <View key={i} style={{flexDirection:"row",alignItems:"flex-start",gap:8}}>
-              <Text style={{color:isDark?"#f59e0b":"#7C3AED",fontSize:12,fontFamily:"Nunito_700Bold",marginTop:1}}>•</Text>
-              <Text style={{color:isDark?"rgba(226,232,240,0.82)":"#334155",fontSize:11.5,fontFamily:"Nunito_500Medium",flex:1,lineHeight:17}}>
-                {txt}
-              </Text>
+        <View style={{gap:11}}>
+          {deepSections.map((sec,i)=>(
+            <View key={i} style={{gap:3}}>
+              <View style={{flexDirection:"row",alignItems:"center",gap:7}}>
+                <Text style={{color:isDark?"#f59e0b":"#7C3AED",fontSize:11,fontFamily:"Nunito_800ExtraBold",marginTop:0}}>✓</Text>
+                <Text style={{color:isDark?"#f5e6c8":"#1e293b",fontSize:12.5,fontFamily:"Nunito_800ExtraBold",letterSpacing:0.15,flex:1}}>
+                  {sec.title}
+                </Text>
+              </View>
+              <View style={{flexDirection:"row",alignItems:"flex-start",gap:7,paddingLeft:18}}>
+                <Text style={{color:isDark?"rgba(245,158,11,0.7)":"rgba(124,58,237,0.65)",fontSize:11,fontFamily:"Nunito_700Bold",marginTop:1}}>→</Text>
+                <Text style={{color:isDark?"rgba(226,232,240,0.72)":"#475569",fontSize:11.5,fontFamily:"Nunito_400Regular",flex:1,lineHeight:17,fontStyle:"italic"}}>
+                  {sec.tease}
+                </Text>
+              </View>
             </View>
           ))}
         </View>

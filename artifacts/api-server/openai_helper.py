@@ -3550,8 +3550,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         "This is a TRUST-CRITICAL question (late marriage / divorce / "
         "never-marry / partner-cheat / child-or-not / money-stable / "
         "longevity). A 1-line yes/no answer here BREAKS user trust.\n"
-        "OVERRIDE the TIER-1 brevity cap. Write a 3-LAYER answer "
-        "(60-90 words total, NOT a single sentence):\n"
+        "OVERRIDE the TIER-1 brevity cap. Write a TIGHT 3-LAYER answer "
+        "(45-60 words total — each layer ~1 short sentence, NOT padded):\n"
         "  LAYER 1 — Emotional reassurance + soft verdict: acknowledge "
         "the user's worry warmly, state the verdict softly (e.g. 'Haan, "
         "thoda delay pattern dikh raha hai...' or 'Nahi, divorce ka "
@@ -3885,14 +3885,14 @@ TOTAL: 1 line, 15-20 words. **NO 👉 Final**. **NO 2nd sentence**. **NO paragra
 🚫 Bad: any answer that crosses 25 words for a yes/no Q.
 
 ──────────────────────────────────────────────────────────────────────
-TIER 2 — SINGLE-TOPIC Q (open-ended, 1 life area)  →  MAX 50-60 WORDS + 👉 Final
+TIER 2 — SINGLE-TOPIC Q (open-ended, 1 life area)  →  MAX 35-45 WORDS + 👉 Final
 ──────────────────────────────────────────────────────────────────────
 Triggers: Q asks "kab/kaise/kaisa/why/how/when" about ONE life area
   Examples: "Marriage kab hoga?", "Health kaisi rahegi?", "Career kya banega?",
     "Paisa kab aayega?", "Salary stable ya business?", "How is my career?"
 
-Format: ONE short paragraph (35-45 words) + ONE `👉 Final:` line (~12 words).
-TOTAL: ≤ 60 words. **NEVER 2 paragraphs.**
+Format: ONE tight paragraph (25-32 words) + ONE `👉 Final:` line (~10 words).
+TOTAL: ≤ 45 words. **NEVER 2 paragraphs. NO filler clauses.**
 
 🚫 BANNED FILLER: "Deeper pattern bhi yehi support karta hai", "Yeh chart batata hai", "Aapke chart me dekha jaye to", "Long-term me dekha jaye to", "Overall picture yeh hai", "Chart ke anusaar", "Astrologically dekhe to".
 
@@ -3900,7 +3900,7 @@ TOTAL: ≤ 60 words. **NEVER 2 paragraphs.**
 👉 Final: Main focus routine + stress balance par — basic discipline se manage ho jata hai."
 
 ──────────────────────────────────────────────────────────────────────
-TIER 3 — MULTI-TOPIC / FULL-CHART Q  →  MAX 120 WORDS + 👉 Final
+TIER 3 — MULTI-TOPIC / FULL-CHART Q  →  MAX 80 WORDS + 👉 Final
 ──────────────────────────────────────────────────────────────────────
 Triggers: "Sab kuch batao", "Mere chart me kya weakness hai", "Career + marriage + health teeno batao".
 Format: 3-4 short plain-language bullets (each ≤ 20 words) + ONE `👉 Final:` line.

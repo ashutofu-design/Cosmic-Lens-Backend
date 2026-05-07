@@ -448,6 +448,33 @@ class KundliCache(db.Model):
     access_count   = db.Column(db.Integer, default=1, nullable=False)
 
 
+class KundliMilanCache(db.Model):
+    """
+    Phase 2.5.11.20-A — Persistent cache for Kundli Milan LLM-polished prose.
+
+    Keyed by `fingerprint` (sha1 of facts + lang + prompt_version) so two
+    different users with identical compat facts share the same row, and a
+    bump in `_PROMPT_VERSION` auto-invalidates stale prose (new fingerprint).
+
+    Stores the 4 polished narrative sections as JSON. Engine still computes
+    all numeric facts (Ashtakoot/koots) on every request — only the prose
+    rewrite step is cached. Validator runs ONCE before the row is written,
+    so reads are guaranteed safe.
+
+    Best-effort writes: failures are swallowed (engine prose still served).
+    """
+    __tablename__ = "kundli_milan_cache"
+
+    fingerprint    = db.Column(db.String(64), primary_key=True)  # sha1 hex = 40 chars
+    polished_json  = db.Column(db.JSON, nullable=False)
+    model          = db.Column(db.String(40), nullable=False)
+    prompt_version = db.Column(db.String(8), nullable=False, index=True)
+
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    last_hit_at    = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    hits           = db.Column(db.Integer, default=0, nullable=False)
+
+
 class DailyTransitCache(db.Model):
     """
     Per-day transit snapshot for a given natal chart.

@@ -217,6 +217,101 @@ def _cache_put(key: str, value: dict) -> None:
             _cache.popitem(last=False)
 
 
+# ── Phase 2.5.11.20-A: Persistent DB cache (cross-process, cross-restart) ────
+# In-memory cache above is L1 (per-process, fast). DB cache is L2 (shared,
+# survives restarts/deploys). Both are best-effort: any DB error → fall
+# through to LLM call, never raise.
+def _db_cache_get(fingerprint: str) -> dict | None:
+    try:
+        from models import KundliMilanCache  # type: ignore
+        from database import db as _db  # type: ignore
+        from datetime import datetime as _dt
+        row = _db.session.get(KundliMilanCache, fingerprint)
+        if row is None:
+            return None
+        # Defense-in-depth: even though _PROMPT_VERSION is in the fingerprint,
+        # also reject any row whose stored version mismatches the current one
+        # (e.g. legacy rows written before we added the version-in-fingerprint).
+        if (row.prompt_version or "") != _PROMPT_VERSION:
+            return None
+        # Best-effort hit-counter bump (don't fail the read if this fails)
+        try:
+            row.hits = (row.hits or 0) + 1
+            row.last_hit_at = _dt.utcnow()
+            _db.session.commit()
+        except Exception:
+            try:
+                _db.session.rollback()
+            except Exception:
+                pass
+        return dict(row.polished_json) if row.polished_json else None
+    except Exception as exc:
+        log.warning("[compat_llm] db cache read failed: %s", exc)
+        # Architect 2.5.11.20-A: rollback on outer failure so a poisoned
+        # session doesn't break unrelated DB work later in the same request.
+        try:
+            from database import db as _db  # type: ignore
+            _db.session.rollback()
+        except Exception:
+            pass
+        return None
+
+
+def _db_cache_put(fingerprint: str, polished: dict, model: str) -> None:
+    """Race-safe upsert. On Postgres uses ON CONFLICT DO UPDATE so concurrent
+    misses for the same fingerprint don't produce noisy IntegrityError logs.
+    Falls back to read-then-write for SQLite (dev) or any unexpected dialect."""
+    try:
+        from models import KundliMilanCache  # type: ignore
+        from database import db as _db  # type: ignore
+        from datetime import datetime as _dt
+
+        now = _dt.utcnow()
+        dialect = _db.session.bind.dialect.name if _db.session.bind else ""
+
+        if dialect == "postgresql":
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+            stmt = pg_insert(KundliMilanCache).values(
+                fingerprint=fingerprint,
+                polished_json=polished,
+                model=model,
+                prompt_version=_PROMPT_VERSION,
+                created_at=now,
+                last_hit_at=now,
+                hits=0,
+            ).on_conflict_do_update(
+                index_elements=["fingerprint"],
+                set_={
+                    "polished_json": polished,
+                    "model": model,
+                    "prompt_version": _PROMPT_VERSION,
+                    "last_hit_at": now,
+                },
+            )
+            _db.session.execute(stmt)
+        else:
+            # SQLite dev path (or anything non-PG): read-modify-write.
+            existing = _db.session.get(KundliMilanCache, fingerprint)
+            if existing is not None:
+                existing.polished_json = polished
+                existing.model = model
+                existing.prompt_version = _PROMPT_VERSION
+                existing.last_hit_at = now
+            else:
+                _db.session.add(KundliMilanCache(
+                    fingerprint=fingerprint, polished_json=polished,
+                    model=model, prompt_version=_PROMPT_VERSION, hits=0,
+                ))
+        _db.session.commit()
+    except Exception as exc:
+        log.warning("[compat_llm] db cache write failed: %s", exc)
+        try:
+            from database import db as _db  # type: ignore
+            _db.session.rollback()
+        except Exception:
+            pass
+
+
 # ── Validator ────────────────────────────────────────────────────────────────
 def _validate(out: Any, facts: dict[str, Any]) -> tuple[bool, str]:
     """Return (ok, reason). ok=False means caller must use fallback."""
@@ -384,9 +479,17 @@ def polish_compat_analysis(
 
     try:
         key = _fingerprint(facts, lang)
+
+        # L1: in-process LRU (fast, per-worker, lost on restart)
         hit = _cache_get(key)
         if hit is not None:
             return hit
+
+        # L2: persistent DB (shared across workers, survives restarts/deploys)
+        db_hit = _db_cache_get(key)
+        if db_hit is not None:
+            _cache_put(key, db_hit)  # warm L1 from L2
+            return db_hit
 
         # Lazy import — avoid loading openai_helper at module-import time
         try:
@@ -409,7 +512,9 @@ def polish_compat_analysis(
                 {"role": "user", "content": user_prompt},
             ],
             "response_format": {"type": "json_object"},
-            "max_tokens": 900,
+            # Phase 2.5.11.20-A: trimmed 900 → 600 (real outputs ~480 tokens;
+            # 600 leaves headroom while cutting worst-case cost ~33%).
+            "max_tokens": 600,
         }
         # gpt-5.x rejects temperature; only set for non-gpt-5 models
         if not model.lower().startswith("gpt-5"):
@@ -448,6 +553,7 @@ def polish_compat_analysis(
             "marriage_outlook": str(parsed["marriage_outlook"]).strip(),
         }
         _cache_put(key, polished)
+        _db_cache_put(key, polished, model)  # persist for cross-restart reuse
         return polished
 
     except Exception as exc:

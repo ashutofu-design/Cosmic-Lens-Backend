@@ -376,5 +376,79 @@ class TestPolishWithMockedLLM(unittest.TestCase):
         self.assertIs(out, fallback)
 
 
+class TestDbCacheLayer(unittest.TestCase):
+    """Phase 2.5.11.20-A — verify L2 (persistent DB) cache integration.
+    Both helpers must be best-effort: no app context = swallow + return None,
+    never raise into the orchestrator."""
+
+    def setUp(self):
+        with _cache_lock:
+            _cache.clear()
+
+    def test_db_cache_get_no_app_context_returns_none(self):
+        # No Flask app context here; must NOT raise.
+        from vedic.compat.llm_polish import _db_cache_get
+        self.assertIsNone(_db_cache_get("nonexistent_fp_xyz"))
+
+    def test_db_cache_put_no_app_context_swallows(self):
+        from vedic.compat.llm_polish import _db_cache_put
+        # Must NOT raise even without app context
+        try:
+            _db_cache_put("fp_test", {"compatibility_insight": "x",
+                                       "strengths": [], "challenges": [],
+                                       "marriage_outlook": "y"}, "gpt-4o-mini")
+        except Exception as exc:
+            self.fail(f"_db_cache_put raised unexpectedly: {exc}")
+
+    def test_db_cache_put_concurrent_duplicate_does_not_raise(self):
+        """Architect 2.5.11.20-A: simulate the concurrent-write path —
+        the helper must NEVER raise even if the underlying upsert/insert
+        produces an IntegrityError under a real race."""
+        from vedic.compat import llm_polish as _lp
+        from sqlalchemy.exc import IntegrityError
+
+        class _BoomSession:
+            bind = None
+            def get(self, *a, **kw): return None
+            def add(self, *a, **kw): pass
+            def execute(self, *a, **kw): pass
+            def commit(self): raise IntegrityError("dup", {}, Exception())
+            def rollback(self): pass
+
+        class _BoomDB:
+            session = _BoomSession()
+
+        with patch.dict(
+            "sys.modules",
+            {"database": type("M", (), {"db": _BoomDB()})()},
+        ):
+            try:
+                _lp._db_cache_put("fp_dup", {"compatibility_insight": "x",
+                                              "strengths": [], "challenges": [],
+                                              "marriage_outlook": "y"}, "gpt-4o-mini")
+            except Exception as exc:
+                self.fail(f"_db_cache_put leaked exception under race: {exc}")
+
+    def test_polish_db_cache_hit_skips_llm(self):
+        """Even with empty L1, a populated L2 should short-circuit the LLM call."""
+        good = _good_llm_output()
+        from vedic.compat import llm_polish as _lp
+
+        with patch.object(_lp, "_db_cache_get", return_value=good) as mocked_get, \
+             patch.object(_lp, "_db_cache_put") as mocked_put:
+            client = MagicMock()
+            with patch("openai_helper._get_client", return_value=client), \
+                 patch.dict(os.environ, {"COMPAT_LLM_POLISH": "1"}):
+                facts = _sample_facts()
+                fallback = {"compatibility_insight": "FB", "strengths": ["a"],
+                            "challenges": ["b"], "marriage_outlook": "FB-out"}
+                out = polish_compat_analysis(facts, fallback, lang="en")
+        self.assertEqual(out["compatibility_insight"], good["compatibility_insight"])
+        # LLM was never called — DB hit short-circuited
+        self.assertEqual(client.chat.completions.create.call_count, 0)
+        mocked_get.assert_called_once()
+        mocked_put.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

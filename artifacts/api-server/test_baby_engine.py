@@ -198,6 +198,47 @@ class TestStep1Filter(unittest.TestCase):
         self.assertGreaterEqual(per.get("confirmations", 0), 2)
         self.assertIn("D1", per.get("confirmed_in", []))
 
+    def test_step7_jupiter_bav_on_progeny_axis(self):
+        """Phase 2.5.8: Step 7 SAV block must surface Jupiter's
+        own BAV bindus on 5H + 11H plus a `jupiter_putra_strength`
+        verdict (STRONG/MODERATE/WEAK/UNKNOWN). Existing aggregate
+        santan_band must remain (backward compat).
+        """
+        kundli = _mk_kundli("Aries", {
+            "Sun": 11, "Moon": 4, "Mars": 7, "Mercury": 3,
+            "Jupiter": 5, "Venus": 2, "Saturn": 10,
+            "Rahu": 12, "Ketu": 6,
+        }, dashas=_mk_dashas())
+        result = compute_baby_window(kundli, intel={},
+                                       birth={"dob": "1990-05-15"})
+        ashta = result.get("ashtakavarga") or {}
+        # Original keys still present
+        for k in ("sav_5", "sav_11", "santan_band"):
+            self.assertIn(k, ashta, f"original key {k} missing")
+        # New Phase 2.5.8 keys
+        for k in ("jup_bav_5", "jup_bav_11",
+                   "jupiter_putra_strength"):
+            self.assertIn(k, ashta, f"new key {k} missing")
+        self.assertIn(ashta["jupiter_putra_strength"],
+                       {"STRONG", "MODERATE", "WEAK", "UNKNOWN"})
+        # If BAV computed, must be in valid range 0-7 per house
+        if isinstance(ashta["jup_bav_5"], (int, float)):
+            self.assertGreaterEqual(ashta["jup_bav_5"], 0)
+            self.assertLessEqual(ashta["jup_bav_5"], 7)
+        if isinstance(ashta["jup_bav_11"], (int, float)):
+            self.assertGreaterEqual(ashta["jup_bav_11"], 0)
+            self.assertLessEqual(ashta["jup_bav_11"], 7)
+        # Strength verdict consistency check
+        if (isinstance(ashta["jup_bav_5"], (int, float))
+                and isinstance(ashta["jup_bav_11"], (int, float))):
+            avg = (ashta["jup_bav_5"] + ashta["jup_bav_11"]) / 2.0
+            if avg >= 5.0:
+                self.assertEqual(ashta["jupiter_putra_strength"], "STRONG")
+            elif avg >= 3.0:
+                self.assertEqual(ashta["jupiter_putra_strength"], "MODERATE")
+            else:
+                self.assertEqual(ashta["jupiter_putra_strength"], "WEAK")
+
     def test_step6_double_transit_jupiter_saturn_only(self):
         """Phase 2.5.7: Step 6 transit block must expose ONLY
         Jupiter + Saturn positions (other bodies removed). Must

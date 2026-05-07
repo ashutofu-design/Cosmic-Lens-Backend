@@ -1733,6 +1733,102 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
                     _trace_b.append(f"     trace {i}: {ws}{sc_str}")
                 if _trace_b:
                     baby_line += "\n" + "\n".join(_trace_b)
+            # ── Phase 2.5.8 — SAV bindus + Jupiter PUTRA-karaka BAV ──
+            # Surfaces both aggregate SAV (santan band — overall
+            # support from all 7 grahas) and Jupiter's own BAV on
+            # 5H+11H (specific PUTRA-KARAKA strength).
+            b_av = b.get("ashtakavarga") or {}
+            if isinstance(b_av, dict) and (b_av.get("sav_5") is not None
+                                              or b_av.get("jup_bav_5")
+                                                 is not None):
+                _line = (
+                    f"     SAV: 5H={b_av.get('sav_5','—')}"
+                    f" / 11H={b_av.get('sav_11','—')}"
+                    f" → santan_band: {b_av.get('santan_band','—')}"
+                )
+                if b_av.get("jup_bav_5") is not None:
+                    _line += (
+                        f" | Jupiter BAV: 5H={b_av.get('jup_bav_5')}"
+                        f"/7, 11H={b_av.get('jup_bav_11')}/7"
+                        f" → PUTRA-KARAKA: "
+                        f"{b_av.get('jupiter_putra_strength','—')}"
+                    )
+                baby_line += "\n" + _line
+            # ── Phase 2.5.4 — KP 2-5-11 significator filter ──────────
+            # Surfaces which planets PROMISE child via KP NL∧SBL rule
+            # vs which are blocked or pure-negation. Lets the AI mirror
+            # the engine's classical KP verdict verbatim.
+            b_kp = b.get("kp_significator_filter") or {}
+            if isinstance(b_kp, dict) and b_kp.get("available"):
+                _passed  = b_kp.get("passed")  or []
+                _blocked = b_kp.get("blocked") or []
+                _unknown = b_kp.get("unknown") or []
+                _line = (f"     KP 2-5-11: passed={_passed or '—'}"
+                          f" | blocked={_blocked or '—'}")
+                if _unknown:
+                    _line += f" | unknown={_unknown}"
+                baby_line += "\n" + _line
+            # ── Phase 2.5.5 — active-window marking ──────────────────
+            # The simple classical "kab promoter dasha aa rahi hai"
+            # surfaced cleanly: next AD/PD ruled by FINAL-GATE-PASSED
+            # promoter planets, with priority PEAK > STRONG > TRIGGER.
+            b_next = b.get("next_child_window")
+            if isinstance(b_next, dict) and b_next.get("window"):
+                _lords = b_next.get("active_lords_in_window") or []
+                _lords_str = (",".join(_lords) if _lords else "—")
+                baby_line += (
+                    f"\n     next promoter window: "
+                    f"{b_next.get('window')} "
+                    f"[{b_next.get('active_priority','?')}] "
+                    f"lords={_lords_str}"
+                )
+            elif b.get("child_active_windows") == []:
+                baby_line += ("\n     next promoter window: "
+                                "none in horizon")
+            # ── Phase 2.5.7 — Jupiter+Saturn Double Transit ──────────
+            # Classical K.N. Rao Double Transit Theory verdict +
+            # exact transit positions (sign, deg, nakshatra, house).
+            b_tr = b.get("transits") or {}
+            if isinstance(b_tr, dict) and not b_tr.get("note"):
+                _pos = b_tr.get("positions") or {}
+                _jp = _pos.get("Jupiter") or {}
+                _sp = _pos.get("Saturn")  or {}
+                if _jp and _sp:
+                    baby_line += (
+                        f"\n     Transit (Jup+Sat only): "
+                        f"Jupiter {_jp.get('sign_name')} "
+                        f"{_jp.get('deg_str')} "
+                        f"{_jp.get('nak_name')} pada{_jp.get('pada')}"
+                        f" → H{_jp.get('house_from_lagna')}"
+                        f"{' (R)' if _jp.get('retrograde') else ''}"
+                        f" | Saturn {_sp.get('sign_name')} "
+                        f"{_sp.get('deg_str')} "
+                        f"{_sp.get('nak_name')} pada{_sp.get('pada')}"
+                        f" → H{_sp.get('house_from_lagna')}"
+                        f"{' (R)' if _sp.get('retrograde') else ''}"
+                    )
+                _dt = b_tr.get("double_transit") or {}
+                if isinstance(_dt, dict):
+                    if _dt.get("active"):
+                        baby_line += (
+                            f"\n     ★ DOUBLE TRANSIT ACTIVE: "
+                            f"Jupiter→{_dt.get('jupiter_anchor')}; "
+                            f"Saturn→{_dt.get('saturn_anchor')} "
+                            f"(5H={_dt.get('h5_sign')}, "
+                            f"5L={_dt.get('h5_lord')}"
+                            f"@{_dt.get('h5_lord_sign')}) "
+                            f"— classical conception window"
+                        )
+                    elif _dt.get("partial"):
+                        baby_line += (
+                            f"\n     Double Transit: partial "
+                            f"({_dt.get('partial')}) — not yet"
+                        )
+                    else:
+                        baby_line += (
+                            "\n     Double Transit: not active "
+                            "(neither Jup nor Sat on 5H/5L)"
+                        )
             try:
                 _record_phase("phase-D baby-timing-v1", "ok")
             except Exception:

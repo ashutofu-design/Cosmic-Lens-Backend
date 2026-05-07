@@ -1590,7 +1590,28 @@ def _step6_transits(kundli: dict, lagna_si: int,
 # STEP 7 — Ashtakavarga support (SAV bindus on 5H + 11H)
 # ════════════════════════════════════════════════════════════════════════
 def _step7_ashtakavarga(kundli: dict, lagna_si: int) -> Dict[str, Any]:
-    out = {"sav_5": None, "sav_11": None, "santan_band": "UNKNOWN"}
+    """STEP 7 — Sarvashtakavarga + Jupiter BAV on progeny axis.
+
+    Phase 2.5.8 enhancement: in addition to the aggregate SAV bindus
+    on 5H + 11H (santan band — overall progeny support from all 7
+    grahas), surface **Jupiter's own BAV (Bhinna Ashtakavarga)** on
+    those same houses. Jupiter is the PUTRA-KARAKA (significator of
+    children), so his individual contribution is more diagnostic
+    than the aggregate.
+
+    Per BPHS, Jupiter's own bindus per house range 0-7. Classical
+    thresholds for child-promise strength on 5H + 11H:
+      ≥ 5 = STRONG (strong PUTRA-KARAKA support)
+      3-4 = MODERATE
+      ≤ 2 = WEAK (PUTRA-KARAKA itself withholds support)
+
+    `jupiter_putra_strength` aggregates the 5H+11H combined view
+    (max 14 between two houses). Existing `santan_band` (aggregate
+    SAV) untouched for backward-compat with all 54 tests.
+    """
+    out = {"sav_5": None, "sav_11": None, "santan_band": "UNKNOWN",
+           "jup_bav_5": None, "jup_bav_11": None,
+           "jupiter_putra_strength": "UNKNOWN"}
     if compute_ashtakavarga is None:
         return out
     try:
@@ -1613,6 +1634,26 @@ def _step7_ashtakavarga(kundli: dict, lagna_si: int) -> Dict[str, Any]:
             out["santan_band"] = "STRONG"
         else:
             out["santan_band"] = "MEDIUM"
+
+    # Jupiter's own BAV on 5H + 11H (PUTRA-karaka diagnostic)
+    bav = av.get("bav")
+    if isinstance(bav, dict):
+        jup_bav = bav.get("Jupiter")
+        if isinstance(jup_bav, list) and len(jup_bav) == 12:
+            out["jup_bav_5"]  = jup_bav[4]
+            out["jup_bav_11"] = jup_bav[10]
+            if (isinstance(out["jup_bav_5"], (int, float))
+                    and isinstance(out["jup_bav_11"], (int, float))):
+                combined = out["jup_bav_5"] + out["jup_bav_11"]
+                # Combined max = 14 (7+7). Per-house thresholds
+                # ≥5 STRONG / 3-4 MODERATE / ≤2 WEAK → averaged.
+                avg_jup = combined / 2.0
+                if avg_jup >= 5.0:
+                    out["jupiter_putra_strength"] = "STRONG"
+                elif avg_jup >= 3.0:
+                    out["jupiter_putra_strength"] = "MODERATE"
+                else:
+                    out["jupiter_putra_strength"] = "WEAK"
     return out
 
 

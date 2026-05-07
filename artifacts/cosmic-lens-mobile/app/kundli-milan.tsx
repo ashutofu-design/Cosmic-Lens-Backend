@@ -1513,6 +1513,7 @@ export default function KundliMilanScreen(){
         body:JSON.stringify({
           p1:{...bd1,name:person1.name},
           p2:{...bd2,name:p2.name},
+          lang:t.lang,
         }),
         signal:ctrl.signal,
       });

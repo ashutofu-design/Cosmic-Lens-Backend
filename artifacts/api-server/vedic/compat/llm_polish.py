@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 
 # Bumped whenever the prompt, validator, or remedy whitelist changes.
 # Included in cache fingerprint so policy changes auto-invalidate stale prose.
-_PROMPT_VERSION = "v7"
+_PROMPT_VERSION = "v8"
 
 # Classical Vedic vocabulary the LLM is allowed to reference. Anything
 # outside this set in the prose is treated as a potential hallucination.
@@ -94,7 +94,19 @@ The reader should feel: "Someone genuinely understood this relationship deeply."
 3. Use exact nakshatra/rashi names from facts. No synonyms, no transliteration variants.
 4. NEVER predict: specific dates, lifespan, death, gender of children, guaranteed outcomes.
 5. Recommend ONLY remedies from <ALLOWED_REMEDIES>. No gemstones, no tantrik kriyas, no expensive yagnas outside the list.
-6. If user_lang="hi", mix natural Hinglish ("yeh rishta", "samay ke saath"). If "en", pure English.
+6. LANGUAGE CONTRACT — write the entire prose in the user's language as specified by `language` in <USER_CONTEXT>:
+   • "en" = pure English.
+   • "hn" = Hinglish (Hindi written in Roman/English script — "yeh rishta", "samay ke saath", "thoda dhyan rakhna").
+   • "hi" = Hindi in Devanagari script (देवनागरी).
+   • "bn" = Bengali (বাংলা). "mr" = Marathi (मराठी). "ta" = Tamil (தமிழ்). "te" = Telugu (తెలుగు). "gu" = Gujarati (ગુજરાતી). "kn" = Kannada (ಕನ್ನಡ). "ml" = Malayalam (മലയാളം). "pa" = Punjabi (ਪੰਜਾਬੀ). "or" = Odia (ଓଡ଼ିଆ). "as" = Assamese (অসমীয়া).
+   • "zh" = Chinese (中文). "es" = Spanish. "ar" = Arabic (العربية). "fr" = French. "pt" = Portuguese. "de" = German. "ru" = Russian (Русский). "ja" = Japanese (日本語). "id" = Indonesian. "ko" = Korean (한국어). "tr" = Turkish.
+   • CRITICAL EXCEPTIONS — even in non-English languages, keep these tokens VERBATIM in their original English form (never translate or transliterate):
+     - All nakshatra names (Ashwini, Bharani, Krittika, ... Revati)
+     - All rashi names (Aries, Taurus, ... Pisces)
+     - All koot labels (Varna, Vasya, Tara, Yoni, Maitri, Gana, Bhakut, Nadi)
+     - All remedy names from <ALLOWED_REMEDIES>
+     - The numeric total like "14.5 out of 36"
+     This is so the validator and downstream UI can match these exact strings.
 
 ═══ OUTPUT (JSON only, no markdown, no preamble) ═══
 {

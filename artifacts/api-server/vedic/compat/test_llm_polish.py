@@ -244,10 +244,13 @@ class TestValidator(unittest.TestCase):
             with _cache_lock:
                 _cache.clear()
             polish_compat_analysis(facts, {"compatibility_insight": "fb"}, lang="hi")
-            self.assertEqual(captured.get("max_tokens"), 900, "non-Latin lang must use 900")
+            self.assertEqual(captured.get("max_tokens"), 900, "non-en lang must use 900")
+            captured.clear()
+            polish_compat_analysis(facts, {"compatibility_insight": "fb"}, lang="hn")
+            self.assertEqual(captured.get("max_tokens"), 900, "hn (Hinglish) must use 900 — empirically verbose")
             captured.clear()
             polish_compat_analysis(facts, {"compatibility_insight": "fb"}, lang="en")
-            self.assertEqual(captured.get("max_tokens"), 600, "Latin lang must use 600")
+            self.assertEqual(captured.get("max_tokens"), 600, "plain en uses 600")
 
     def test_accepts_shortened_multiword_nakshatra(self):
         # Phase 2.5.11.20-B regression: facts have "Purva Bhadrapada" but LLM

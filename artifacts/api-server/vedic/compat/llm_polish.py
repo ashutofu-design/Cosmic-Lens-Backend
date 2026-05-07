@@ -539,15 +539,12 @@ def polish_compat_analysis(
                 {"role": "user", "content": user_prompt},
             ],
             "response_format": {"type": "json_object"},
-            # Phase 2.5.11.20-A/B: dynamic by language. Latin-script langs (en,
-            # romanized hn, es, fr, de, pt, id, tr) fit easily in 600 tokens
-            # (~480 typical). Non-Latin scripts (Devanagari, Bengali, Tamil,
-            # Telugu, Kannada, Malayalam, Gujarati, Punjabi, Odia, Assamese,
-            # Chinese, Arabic, Russian, Japanese, Korean) cost 2-3x more
-            # tokens per character, so they need 900 to avoid mid-JSON truncation.
-            "max_tokens": 600 if lang in {
-                "en", "hn", "es", "fr", "de", "pt", "id", "tr"
-            } else 900,
+            # Phase 2.5.11.20-B (revised): only plain English fits 600 tokens.
+            # Hinglish (`hn`) — Hindi spelled in Latin — is verbose ("samvedansheel
+            # sambandh" vs "sensitive bond") and was empirically truncating mid-JSON
+            # at ~char 1361. Indic/CJK/Arabic scripts cost 2-3x more tokens per
+            # character. So default to 900 for everything except `en` to be safe.
+            "max_tokens": 600 if (lang or "en").lower() == "en" else 900,
         }
         # gpt-5.x rejects temperature; only set for non-gpt-5 models
         if not model.lower().startswith("gpt-5"):

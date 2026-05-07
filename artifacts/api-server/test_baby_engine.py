@@ -170,26 +170,37 @@ class TestStep1Filter(unittest.TestCase):
         self.assertTrue(d1["Sun"]["in_filter"])
         self.assertTrue(d1["Jupiter"]["in_filter"])
 
-    def test_jupiter_always_putra_karaka(self):
+    def test_jupiter_always_progeny_karaka(self):
         kundli = _mk_kundli("Aries", {
             "Sun": 1, "Moon": 4, "Mars": 7, "Mercury": 6,
             "Jupiter": 11, "Venus": 2, "Saturn": 10,
             "Rahu": 12, "Ketu": 6,
         })
         d1 = _step1_d1_filter(kundli, 0)
-        self.assertTrue(any("PUTRA-KARAKA" in l
+        self.assertTrue(any("PROGENY-KARAKA" in l
                             for l in d1["Jupiter"]["links"]))
 
-    def test_obstruction_house_occupants_tagged(self):
+    def test_step1_excludes_2L_7L_obstruction_funcmalefic(self):
+        """LEAN refactor: Step 1 must NOT include 2L, 7L, obstruction-
+        house boost, Sun/Mars karaka, or functional-malefic surcharge.
+        These were over-engineering; obstruction signal lives in Step 5,
+        dignity in Step 4, and 7L/2L/Sun/Mars are out of scope here.
+        """
+        # Aries lagna: 7L=Venus, 2L=Venus, so we test by checking link
+        # vocabulary — none of the removed labels should appear.
         kundli = _mk_kundli("Aries", {
-            "Sun": 1, "Moon": 4, "Mars": 8, "Mercury": 6,
-            "Jupiter": 11, "Venus": 2, "Saturn": 10,
+            "Sun": 8, "Moon": 4, "Mars": 6, "Mercury": 6,
+            "Jupiter": 11, "Venus": 7, "Saturn": 10,
             "Rahu": 12, "Ketu": 6,
         })
         d1 = _step1_d1_filter(kundli, 0)
-        # Mars in 8H — obstruction-bearer tag
-        self.assertTrue(any("OBSTRUCTION" in l
-                            for l in d1["Mars"]["links"]))
+        all_links = [l for info in d1.values() for l in info["links"]]
+        joined = " | ".join(all_links)
+        for forbidden in ("7L (", "2L (", "OBSTRUCTION",
+                           "lineage-vitality", "procreative-vigor",
+                           "functional malefic"):
+            self.assertNotIn(forbidden, joined,
+                f"Step 1 still contains removed signal: {forbidden!r}")
 
 
 # ════════════════════════════════════════════════════════════════════════

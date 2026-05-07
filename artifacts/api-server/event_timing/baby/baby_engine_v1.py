@@ -345,17 +345,22 @@ def _planet_signified_houses(kp: dict, planet: str) -> List[int]:
 # ════════════════════════════════════════════════════════════════════════
 def _step1_d1_filter(kundli: dict, lagna_si: int
                        ) -> Dict[str, Dict[str, Any]]:
-    """Identify child-significant planets in D1.
+    """Identify child-significant planets in D1 — LEAN core only.
 
-    Inclusion (Parashara + practical lens):
+    Inclusion (Parashara minimum-viable, no over-engineering):
       • 5L (PUTRASTHANA — primary children house)  — highest weight
-      • 9L (dharma/grace, secondary support)        — high weight
-      • 11L (gain/fulfillment of desires)           — medium weight
-      • 7L (partner / conception)                   — medium weight
-      • 2L (family expansion / kutumb)              — low weight
-      • Occupants of 5 / 9 / 11
-      • Planets aspecting 5H                         — most powerful
-      • Karakas: Jupiter (PUTRA), Sun, Moon (fertility), Venus, Mars
+      • 9L (dharma / grace — bhagya support)        — high weight
+      • 11L (gain / fulfillment of desires)         — medium weight
+      • Occupants of 5 / 9 / 11                      — direct evidence
+      • Planets aspecting 5H                         — most powerful trigger
+      • Karakas: Jupiter (PRIMARY) + Moon + Venus    — natural significators
+
+    Deliberately EXCLUDED (handled elsewhere or low-signal):
+      • 7L, 2L                — out of scope for baby; over-engineering
+      • 6/8/12 occupant boost — fertility-leak handled in Step 5
+                                 (dasha obstruction-bearer classification)
+      • Sun, Mars karaka      — double-counts lordship/occupancy
+      • Functional-malefic    — Step 4 ranking handles dignity already
     """
     planets = kundli.get("planets") or []
     out: Dict[str, Dict[str, Any]] = {}
@@ -364,20 +369,18 @@ def _step1_d1_filter(kundli: dict, lagna_si: int
                    "is_lord_of": [], "occupies": None,
                    "aspects_5": False}
 
-    # Lordship checks
+    # 1) Lordship — 5L / 9L / 11L only
     for h, weight, label in (
         (5,  18.0, "5L (PUTRASTHANA — primary children house)"),
         (9,  12.0, "9L (dharma/grace, secondary support)"),
         (11, 10.0, "11L (gain/fulfillment of desires)"),
-        (7,   8.0, "7L (spouse/conception partner)"),
-        (2,   6.0, "2L (family expansion / kutumb)"),
     ):
         lord = _house_lord(lagna_si, h)
         out[lord]["is_lord_of"].append(h)
         out[lord]["d1"] += weight
         out[lord]["links"].append(label)
 
-    # Occupants of child houses
+    # 2) Occupants of child houses 5 / 9 / 11
     for h in (5, 9, 11):
         for pname in _planets_in_house(planets, h):
             out[pname]["occupies"] = h
@@ -385,17 +388,7 @@ def _step1_d1_filter(kundli: dict, lagna_si: int
             out[pname]["d1"] += bump
             out[pname]["links"].append(f"occupies {h}H (child-house)")
 
-    # Occupants of obstruction houses (6/8/12) — boost ranking but
-    # tag as obstruction-bearer for Step 5 classification
-    for h in (6, 8, 12):
-        for pname in _planets_in_house(planets, h):
-            if out[pname]["occupies"] is None:
-                out[pname]["occupies"] = h
-            out[pname]["d1"] += 4.0
-            out[pname]["links"].append(
-                f"occupies {h}H (OBSTRUCTION — fertility-leak signal)")
-
-    # Planets aspecting the 5th house (most powerful trigger)
+    # 3) Planets aspecting the 5th house (most powerful trigger)
     for pname in _PLANETS_9:
         ap_house = _planet_house(planets, pname)
         if ap_house and _aspects_house(pname, ap_house, 5):
@@ -403,23 +396,14 @@ def _step1_d1_filter(kundli: dict, lagna_si: int
             out[pname]["d1"] += 9.0
             out[pname]["links"].append("aspects 5H (child-house activation)")
 
-    # Child karakas — Jupiter is PRIMARY putra karaka
+    # 4) Child karakas — Jupiter PRIMARY, Moon + Venus secondary
     for karaka, bonus, role in (
-        ("Jupiter", 14.0, "PUTRA-KARAKA (primary progeny karaka — Jupiter)"),
+        ("Jupiter", 14.0, "PROGENY-KARAKA (primary — Jupiter)"),
         ("Moon",     8.0, "fertility/maternal karaka (Moon)"),
-        ("Sun",      6.0, "lineage-vitality karaka (Sun)"),
         ("Venus",    7.0, "reproductive-health karaka (Venus)"),
-        ("Mars",     6.0, "procreative-vigor karaka (Mars)"),
     ):
         out[karaka]["d1"] += bonus
         out[karaka]["links"].append(role)
-
-    # Functional malefic surcharge (used in ranking, NOT in dasha
-    # promoter/obstruction classification — see Step5 architect-fix note)
-    fm = _FUNC_MALEFICS.get(lagna_si, set())
-    for pname in fm:
-        out[pname]["d1"] += 4.0
-        out[pname]["links"].append("functional malefic for lagna")
 
     for pname, info in out.items():
         info["in_filter"] = info["d1"] >= _D1_FILTER_MIN_SCORE

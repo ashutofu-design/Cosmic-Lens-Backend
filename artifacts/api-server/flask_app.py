@@ -8779,7 +8779,7 @@ def kundli_milan():
         + f"Nakshatra of {pp2['name']}: {pp2['nak_name']} (Pada {pp2['pada']}, {pp2['rashi_name']})."
     )
 
-    return jsonify({
+    response_payload = {
         "p1": {
             "name": pp1["name"],
             "nakshatra": pp1["nak_name"],
@@ -8807,7 +8807,28 @@ def kundli_milan():
             "challenges": challenges,
             "marriage_outlook": marriage_outlook,
         }
-    })
+    }
+
+    # Phase 2.5.11.20 — Optional LLM prose polish over deterministic facts.
+    # Toggled via COMPAT_LLM_POLISH env. Falls back silently to rule-based
+    # templates above on any failure (validator reject, LLM down, parse error).
+    try:
+        from vedic.compat.llm_polish import polish_compat_analysis
+        lang_pref = (data.get("lang") or "en").lower()
+        polished = polish_compat_analysis(
+            facts=response_payload,
+            fallback=response_payload["analysis"],
+            lang=lang_pref,
+        )
+        response_payload["analysis"] = polished
+    except Exception as _polish_exc:
+        # Never fail the endpoint over polish issues.
+        try:
+            print(f"[kundli_milan] llm_polish skipped: {_polish_exc}", flush=True)
+        except Exception:
+            pass
+
+    return jsonify(response_payload)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

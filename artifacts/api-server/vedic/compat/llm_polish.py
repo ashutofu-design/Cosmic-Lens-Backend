@@ -1,0 +1,416 @@
+"""
+Phase 2.5.11.20 — Kundli Milan LLM Prose Polish (HYBRID)
+========================================================
+
+Takes deterministic Ashtakoot facts (computed by /api/kundli-milan via
+Swiss Ephemeris) and asks an LLM to rewrite the 4 narrative sections
+(insight, strengths, challenges, marriage_outlook) in a warm, mature
+"experienced Vedic astrologer" voice.
+
+Architecture (matches existing locked_facts pattern):
+  Engine = source of truth (numbers, koots, nakshatras, doshas)
+  LLM    = language layer ONLY (rephrases facts, never invents)
+  Validator = rejects output that drops/changes any fact
+  Fallback  = current rule-based templates (zero risk)
+  Cache     = in-process LRU keyed on fact-fingerprint
+
+Toggle:    env COMPAT_LLM_POLISH=1   (default off)
+Model:     env COMPAT_LLM_MODEL  (default gpt-4o-mini)
+Cache cap: env COMPAT_LLM_CACHE_SIZE (default 1024)
+
+Public API:
+  polish_compat_analysis(facts, fallback) -> dict   # never raises
+"""
+from __future__ import annotations
+
+import os
+import re
+import json
+import hashlib
+import logging
+from collections import OrderedDict
+from threading import Lock
+from typing import Any
+
+log = logging.getLogger(__name__)
+
+# Bumped whenever the prompt, validator, or remedy whitelist changes.
+# Included in cache fingerprint so policy changes auto-invalidate stale prose.
+_PROMPT_VERSION = "v2"
+
+# Classical Vedic vocabulary the LLM is allowed to reference. Anything
+# outside this set in the prose is treated as a potential hallucination.
+_KNOWN_NAKSHATRAS = {
+    "ashwini", "bharani", "krittika", "rohini", "mrigashira", "ardra",
+    "punarvasu", "pushya", "ashlesha", "magha", "purva phalguni",
+    "uttara phalguni", "phalguni", "hasta", "chitra", "swati", "vishakha",
+    "anuradha", "jyeshtha", "mula", "purva ashadha", "uttara ashadha",
+    "ashadha", "shravana", "dhanishtha", "shatabhisha", "purva bhadrapada",
+    "uttara bhadrapada", "bhadrapada", "revati",
+}
+_KNOWN_RASHIS = {
+    "aries", "taurus", "gemini", "cancer", "leo", "virgo",
+    "libra", "scorpio", "sagittarius", "capricorn", "aquarius", "pisces",
+}
+
+# ── Allowed remedies whitelist (single source of truth) ──────────────────────
+ALLOWED_REMEDIES = [
+    "Maha Mrityunjaya Jaap",
+    "Kumbh Vivah",
+    "Navagraha Shanti",
+    "Mangal Shanti puja",
+    "Vivah Yog ritual",
+    "joint daily prayers",
+    "gratitude practice",
+    "Ayurvedic Vata-balancing diet",
+    "Ayurvedic Pitta-balancing diet",
+    "Ayurvedic Kapha-balancing diet",
+    "consult a qualified Jyotishi",
+]
+
+# ── Banned phrases (safety mandate) ──────────────────────────────────────────
+BANNED_TERMS = [
+    "lifespan", "life span", "will die", "guaranteed to",
+    "definitely will", "gender of child", "gender of children",
+    "boy or girl", "death prediction",
+]
+
+# ── Prompts ──────────────────────────────────────────────────────────────────
+SYSTEM_PROMPT = """You are an experienced Vedic astrologer who has studied thousands of real relationships. You speak like a wise family pandit: calm, grounded, emotionally intelligent — never theatrical.
+
+═══ STYLE ═══
+• First explain the emotional/relationship dynamic in real-life terms.
+• Then the practical impact on marriage compatibility.
+• Mention both strengths and challenges honestly.
+• Frame challenges as manageable patterns — not doom.
+• Avoid textbook astrology jargon unless you immediately translate it.
+• No generic motivational lines, no fear-based language.
+
+The reader should feel: "Someone genuinely understood this relationship deeply." NOT: "A machine generated astrology text."
+
+═══ ABSOLUTE RULES (violation = response rejected) ═══
+1. Use ONLY the facts inside <ENGINE_FACTS>. Do not invent any nakshatra, koot score, dosha, percentage, or planet.
+2. Cite numbers VERBATIM. Write "14.5 out of 36", never "around 40%" or "roughly half". The exact total must appear in compatibility_insight.
+3. Use exact nakshatra/rashi names from facts. No synonyms, no transliteration variants.
+4. NEVER predict: specific dates, lifespan, death, gender of children, guaranteed outcomes.
+5. Recommend ONLY remedies from <ALLOWED_REMEDIES>. No gemstones, no tantrik kriyas, no expensive yagnas outside the list.
+6. If user_lang="hi", mix natural Hinglish ("yeh rishta", "samay ke saath"). If "en", pure English.
+
+═══ OUTPUT (JSON only, no markdown, no preamble) ═══
+{
+  "compatibility_insight": "<3-4 sentences, ~80-110 words. Open with the emotional dynamic, anchor with the exact total score, end with grounded hope.>",
+  "strengths": ["<2-4 bullets, each 2-3 sentences. Explain what each strong koot FEELS like in daily life.>"],
+  "challenges": ["<2-4 bullets, each 2-3 sentences. Describe the real friction pattern, end with ONE specific remedy from the allowed list. Never doom-frame.>"],
+  "marriage_outlook": "<4-5 sentences, ~120-150 words. Practical, non-fatalistic. Acknowledge any cancellation factors. Mention 2-3 specific allowed remedies.>"
+}
+
+═══ OUTPUT CHECKLIST (verify before responding — non-negotiable) ═══
+Before you submit, confirm:
+☐ The exact total score (e.g. "14.5 out of 36") appears literally inside compatibility_insight.
+☐ BOTH partner nakshatra OR rashi names from <ENGINE_FACTS> appear at least once across the full output (each partner needs at least one chart-anchor).
+☐ Any "X / Y" or "X out of Y" numeric pair you write MUST exactly match a real koot score from <ENGINE_FACTS> (or the total/max). Do not invent or round koot numbers.
+☐ Do NOT name any nakshatra or rashi other than the ones in <ENGINE_FACTS>. Generic words like "stars", "signs", "Moon" are fine.
+☐ Every entry in "challenges" ends with ONE remedy phrase copied verbatim from <ALLOWED_REMEDIES> (e.g. "Maha Mrityunjaya Jaap", "consult a qualified Jyotishi"). Do not invent gemstones, stones, or rituals outside the list.
+☐ No banned terms: lifespan, death, gender of children, "guaranteed to", "definitely will".
+☐ Output is valid JSON, no markdown fences, no commentary outside the JSON object."""
+
+
+def _build_user_prompt(facts: dict[str, Any], lang: str = "en") -> str:
+    koots = facts.get("koots", [])
+    koot_lines = []
+    for k in koots:
+        marker = ""
+        s, mx = k.get("score", 0), k.get("max", 0)
+        if s == 0 and mx > 0:
+            marker = "  ← DOSHA"
+        elif s == mx and mx >= 4:
+            marker = "  ← STRENGTH"
+        koot_lines.append(
+            f"  {k.get('label','?'):<8} {s} / {mx}   ({k.get('detail','')}){marker}"
+        )
+
+    p1, p2 = facts.get("p1", {}), facts.get("p2", {})
+    p1_mang = p1.get("manglik", False)
+    p2_mang = p2.get("manglik", False)
+    if p1_mang and p2_mang:
+        mang_line = "manglik_status: both_manglik (mutual cancellation applies)"
+    elif p1_mang or p2_mang:
+        mang_line = f"manglik_status: only_{'p1' if p1_mang else 'p2'}_manglik (imbalance — remedy advised)"
+    else:
+        mang_line = "manglik_status: neither (no Mangal dosha)"
+
+    return f"""<ENGINE_FACTS>
+p1_name: {p1.get('name','Partner 1')}
+p1_nakshatra: {p1.get('nakshatra','?')} (Pada {p1.get('pada','?')}, {p1.get('rashi','?')})
+p1_manglik: {p1_mang}
+
+p2_name: {p2.get('name','Partner 2')}
+p2_nakshatra: {p2.get('nakshatra','?')} (Pada {p2.get('pada','?')}, {p2.get('rashi','?')})
+p2_manglik: {p2_mang}
+
+total_guna: {facts.get('total','?')} / {facts.get('max',36)} ({facts.get('percent','?')}%)
+grade: {facts.get('grade',{}).get('label','?')}
+
+koot_scores:
+{chr(10).join(koot_lines)}
+
+{mang_line}
+</ENGINE_FACTS>
+
+<ALLOWED_REMEDIES>
+{', '.join(ALLOWED_REMEDIES)}
+</ALLOWED_REMEDIES>
+
+<USER_CONTEXT>
+language: {lang}
+</USER_CONTEXT>
+
+Generate the JSON now."""
+
+
+# ── Fingerprint + cache ──────────────────────────────────────────────────────
+def _fingerprint(facts: dict[str, Any], lang: str) -> str:
+    """Deterministic cache key from the facts that drive the prose.
+
+    Includes _PROMPT_VERSION so prompt/validator/whitelist changes
+    automatically invalidate stale cache entries.
+    """
+    p1 = facts.get("p1", {})
+    p2 = facts.get("p2", {})
+    grade = facts.get("grade", {}) or {}
+    parts = [
+        f"v={_PROMPT_VERSION}",
+        f"lang={lang}",
+        p1.get("nakshatra", ""), str(p1.get("pada", "")), p1.get("rashi", ""),
+        p2.get("nakshatra", ""), str(p2.get("pada", "")), p2.get("rashi", ""),
+        f"total={facts.get('total','')}",
+        f"max={facts.get('max','')}",
+        f"pct={facts.get('percent','')}",
+        f"grade={grade.get('label','')}",
+        f"m1={p1.get('manglik','')}", f"m2={p2.get('manglik','')}",
+        f"mdosh={facts.get('manglik_dosh','')}",
+    ]
+    for k in facts.get("koots", []):
+        parts.append(f"{k.get('key','')}={k.get('score','')}/{k.get('max','')}")
+    raw = "|".join(parts).encode("utf-8")
+    return hashlib.sha1(raw).hexdigest()
+
+
+_CACHE_CAP = int(os.environ.get("COMPAT_LLM_CACHE_SIZE", "1024"))
+_cache: "OrderedDict[str, dict]" = OrderedDict()
+_cache_lock = Lock()
+
+
+def _cache_get(key: str) -> dict | None:
+    with _cache_lock:
+        if key in _cache:
+            _cache.move_to_end(key)
+            return _cache[key]
+    return None
+
+
+def _cache_put(key: str, value: dict) -> None:
+    with _cache_lock:
+        _cache[key] = value
+        _cache.move_to_end(key)
+        while len(_cache) > _CACHE_CAP:
+            _cache.popitem(last=False)
+
+
+# ── Validator ────────────────────────────────────────────────────────────────
+def _validate(out: Any, facts: dict[str, Any]) -> tuple[bool, str]:
+    """Return (ok, reason). ok=False means caller must use fallback."""
+    if not isinstance(out, dict):
+        return False, "not_dict"
+    required = ["compatibility_insight", "strengths", "challenges", "marriage_outlook"]
+    for k in required:
+        if k not in out:
+            return False, f"missing_key:{k}"
+    if not isinstance(out["strengths"], list) or not isinstance(out["challenges"], list):
+        return False, "lists_expected"
+    if not (1 <= len(out["strengths"]) <= 5):
+        return False, "strengths_count"
+    if not (1 <= len(out["challenges"]) <= 5):
+        return False, "challenges_count"
+
+    insight = str(out["compatibility_insight"])
+    outlook = str(out["marriage_outlook"])
+    full_text = " ".join(
+        [insight, outlook] + [str(x) for x in out["strengths"]]
+        + [str(x) for x in out["challenges"]]
+    )
+    full_lower = full_text.lower()
+
+    # Verbatim total score must appear
+    total = facts.get("total")
+    if total is not None and str(total) not in insight:
+        return False, "total_not_cited"
+
+    # Each partner must be anchored to their own chart — accept either
+    # nakshatra OR rashi appearing somewhere in the prose. This is looser
+    # than nakshatra-only because LLMs (especially gpt-4o-mini) often
+    # prefer the rashi name; both are equally chart-specific anchors.
+    def _has_anchor(p_key: str, label: str) -> tuple[bool, str]:
+        p = facts.get(p_key, {})
+        nak = (p.get("nakshatra") or "").split()[0]
+        rashi = (p.get("rashi") or "").strip()
+        if nak and nak in full_text:
+            return True, ""
+        if rashi and rashi in full_text:
+            return True, ""
+        return False, f"{label}_anchor_missing"
+
+    ok1, reason1 = _has_anchor("p1", "p1")
+    if not ok1:
+        return False, reason1
+    ok2, reason2 = _has_anchor("p2", "p2")
+    if not ok2:
+        return False, reason2
+
+    # No banned terms
+    for b in BANNED_TERMS:
+        if b in full_lower:
+            return False, f"banned_term:{b}"
+
+    # Each challenge must reference an allowed remedy. Match on the
+    # distinctive multi-word anchor from each whitelist entry so we
+    # catch verbatim citations but reject vague single-word mentions.
+    REMEDY_ANCHORS = [
+        "maha mrityunjaya jaap", "kumbh vivah", "navagraha shanti",
+        "mangal shanti puja", "vivah yog ritual", "joint daily prayer",
+        "gratitude practice", "vata-balancing diet",
+        "pitta-balancing diet", "kapha-balancing diet",
+        "qualified jyotishi",
+    ]
+    for ch in out["challenges"]:
+        ch_l = str(ch).lower()
+        if not any(anchor in ch_l for anchor in REMEDY_ANCHORS):
+            return False, "challenge_missing_remedy"
+
+    # Fact-lock: any "X / Y" or "X out of Y" numeric pair the LLM uses
+    # MUST correspond to a real koot score (or the total) from facts.
+    # This catches hallucinated koot scores even when overall narrative
+    # passes other checks.
+    real_pairs = {(str(facts.get("total", "")), str(facts.get("max", 36)))}
+    for k in facts.get("koots", []):
+        real_pairs.add((str(k.get("score", "")), str(k.get("max", ""))))
+    pair_re = re.compile(r"(\d+(?:\.\d+)?)\s*(?:/|out of)\s*(\d+)", re.I)
+    for m in pair_re.finditer(full_text):
+        if (m.group(1), m.group(2)) not in real_pairs:
+            return False, f"hallucinated_score:{m.group(0)}"
+
+    # Vocabulary-lock: any nakshatra or rashi name appearing in the
+    # prose must match either p1 or p2's actual chart. Catches LLMs
+    # that name-drop unrelated nakshatras/rashis (e.g. invents "Krittika"
+    # when neither partner has it).
+    p1 = facts.get("p1", {}) or {}
+    p2 = facts.get("p2", {}) or {}
+    allowed_naks = {
+        (p1.get("nakshatra") or "").split()[0].lower() if p1.get("nakshatra") else "",
+        (p2.get("nakshatra") or "").split()[0].lower() if p2.get("nakshatra") else "",
+    } - {""}
+    allowed_rashis = {
+        (p1.get("rashi") or "").lower(), (p2.get("rashi") or "").lower(),
+    } - {""}
+    # Tokenize on word boundaries; check each capitalized term against
+    # the known vocabularies.
+    for word_match in re.finditer(r"\b([A-Z][a-z]+)\b", full_text):
+        token = word_match.group(1).lower()
+        if token in _KNOWN_NAKSHATRAS and token not in allowed_naks:
+            return False, f"unknown_nakshatra:{word_match.group(1)}"
+        if token in _KNOWN_RASHIS and token not in allowed_rashis:
+            return False, f"unknown_rashi:{word_match.group(1)}"
+
+    # Length sanity — reject blatantly long/short
+    if not (50 <= len(insight) <= 1200):
+        return False, "insight_length"
+    if not (80 <= len(outlook) <= 1500):
+        return False, "outlook_length"
+
+    return True, "ok"
+
+
+# ── Public entrypoint ────────────────────────────────────────────────────────
+def polish_compat_analysis(
+    facts: dict[str, Any],
+    fallback: dict[str, Any],
+    lang: str = "en",
+) -> dict[str, Any]:
+    """
+    Main entrypoint. Returns a polished analysis dict shaped like `fallback`:
+      { compatibility_insight, strengths, challenges, marriage_outlook }
+
+    Behaviour:
+      • Toggle off → returns fallback as-is.
+      • Cache hit → returns cached prose (no LLM call).
+      • LLM call success + validator pass → cache + return.
+      • Any failure → returns fallback (never raises).
+    """
+    if os.environ.get("COMPAT_LLM_POLISH", "0") not in ("1", "true", "True"):
+        return fallback
+
+    try:
+        key = _fingerprint(facts, lang)
+        hit = _cache_get(key)
+        if hit is not None:
+            return hit
+
+        # Lazy import — avoid loading openai_helper at module-import time
+        try:
+            from openai_helper import _get_client  # type: ignore
+        except Exception as exc:
+            log.warning("[compat_llm] openai_helper import failed: %s", exc)
+            return fallback
+
+        client = _get_client()
+        if client is None:
+            return fallback
+
+        model = os.environ.get("COMPAT_LLM_MODEL", "gpt-4o-mini")
+        user_prompt = _build_user_prompt(facts, lang=lang)
+
+        kwargs = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            "response_format": {"type": "json_object"},
+            "max_tokens": 900,
+        }
+        # gpt-5.x rejects temperature; only set for non-gpt-5 models
+        if not model.lower().startswith("gpt-5"):
+            kwargs["temperature"] = 0.6
+
+        resp = client.chat.completions.create(**kwargs)
+        raw = (resp.choices[0].message.content or "").strip()
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            log.warning("[compat_llm] JSON parse fail: %s | raw=%.200s", exc, raw)
+            return fallback
+
+        ok, reason = _validate(parsed, facts)
+        if not ok:
+            log.warning("[compat_llm] validator rejected: %s", reason)
+            return fallback
+
+        # Coerce to plain dict in fallback shape
+        polished = {
+            "compatibility_insight": str(parsed["compatibility_insight"]).strip(),
+            "strengths": [str(x).strip() for x in parsed["strengths"]],
+            "challenges": [str(x).strip() for x in parsed["challenges"]],
+            "marriage_outlook": str(parsed["marriage_outlook"]).strip(),
+        }
+        _cache_put(key, polished)
+        return polished
+
+    except Exception as exc:
+        log.exception("[compat_llm] unexpected failure, returning fallback: %s", exc)
+        return fallback
+
+
+def cache_stats() -> dict[str, int]:
+    """Diagnostic helper for tests / health endpoint."""
+    with _cache_lock:
+        return {"size": len(_cache), "cap": _CACHE_CAP}

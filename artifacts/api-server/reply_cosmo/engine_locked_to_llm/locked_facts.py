@@ -303,24 +303,184 @@ def _format_strength_block(verdicts: dict,
     return "\n".join(lines)
 
 
+# ── Dasha helpers (Phase 2.5.11 — current + next-5-yr horizon) ──────
+# Tolerantly normalize either of the two known dasha-array shapes so
+# the LLM block can compute the active MD/AD/PD AND list every dasha
+# transition over the next 5 years from a single normalized chain.
+#   Shape A (Vimshottari export): {planet, startDate, endDate, years,
+#                                  subDashas: [{planet, startDate, ...}]}
+#   Shape B (engine internal):    {lord, start, end,
+#                                  antardashas: [{lord, start, end,
+#                                                 pratyantar: [...]}]}
+def _parse_iso(v):
+    """Parse 'YYYY-MM-DD' or 'YYYY-MM-DDTHH:MM:SS' → datetime, else None."""
+    from datetime import datetime
+    if v is None:
+        return None
+    if hasattr(v, "isoformat"):
+        return v
+    s = str(v).strip()
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M",
+                "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    # Last-resort: strip a trailing Z / fractional seconds
+    try:
+        return datetime.fromisoformat(s.rstrip("Z").split(".")[0])
+    except Exception:
+        return None
+
+
+def _normalize_dasha_array(kundli: dict) -> list:
+    """Return list of MD dicts: {lord, start, end, ads:[{lord, start, end,
+    pds:[{lord, start, end}]}]}. Tolerates both export shapes."""
+    raw = kundli.get("dashas") or []
+    if not isinstance(raw, list):
+        return []
+    out = []
+    for md in raw:
+        if not isinstance(md, dict):
+            continue
+        lord = md.get("planet") or md.get("lord")
+        s = _parse_iso(md.get("startDate") or md.get("start"))
+        e = _parse_iso(md.get("endDate") or md.get("end"))
+        ads_raw = md.get("subDashas") or md.get("antardashas") or []
+        ads = []
+        for ad in ads_raw:
+            if not isinstance(ad, dict):
+                continue
+            pds_raw = (ad.get("subDashas") or ad.get("pratyantar")
+                       or ad.get("pratyantardashas") or [])
+            pds = []
+            for pd in pds_raw:
+                if not isinstance(pd, dict):
+                    continue
+                pds.append({
+                    "lord":  pd.get("planet") or pd.get("lord"),
+                    "start": _parse_iso(pd.get("startDate") or pd.get("start")),
+                    "end":   _parse_iso(pd.get("endDate")   or pd.get("end")),
+                })
+            ads.append({
+                "lord":  ad.get("planet") or ad.get("lord"),
+                "start": _parse_iso(ad.get("startDate") or ad.get("start")),
+                "end":   _parse_iso(ad.get("endDate")   or ad.get("end")),
+                "pds":   pds,
+            })
+        out.append({"lord": lord, "start": s, "end": e, "ads": ads})
+    return out
+
+
+def _fmt_d(dt) -> str:
+    if dt is None:
+        return "?"
+    return dt.strftime("%Y-%m-%d")
+
+
 def _format_dasha_block(kundli: dict) -> str:
-    cd = kundli.get("currentDasha") or {}
-    if not isinstance(cd, dict) or not cd:
-        return "▸ CURRENT DASHA: (unavailable)"
-    md  = cd.get("maha") or cd.get("mahadasha") or cd.get("md") or cd.get("planet")
-    ad  = cd.get("antar") or cd.get("antardasha") or cd.get("ad")
-    pd_ = cd.get("pratyantar") or cd.get("pd")
-    start = cd.get("startDate") or cd.get("start")
-    end   = cd.get("endDate") or cd.get("end")
-    parts = []
-    if md: parts.append(f"{md} Mahadasha")
-    if ad: parts.append(f"→ {ad} Antardasha")
-    if pd_: parts.append(f"→ {pd_} Pratyantar")
-    line = " ".join(parts) if parts else "(unavailable)"
-    extra = ""
-    if start or end:
-        extra = f"\n▸ DASHA WINDOW: {start or '?'} to {end or '?'}"
-    return f"▸ CURRENT DASHA: {line}{extra}"
+    """Phase 2.5.11 — emit current MD/AD/PD + every dasha transition
+    in the next 5 years (MD changes + AD changes within current MD).
+    Also accepts a `currentDasha` compact form as a fallback when the
+    full `dashas` array is missing."""
+    from datetime import datetime, timedelta
+
+    md_chain = _normalize_dasha_array(kundli)
+
+    # ── Fallback: compact currentDasha-only form (no horizon possible) ──
+    if not md_chain:
+        cd = kundli.get("currentDasha") or {}
+        if not isinstance(cd, dict) or not cd:
+            return "▸ CURRENT DASHA: (unavailable)"
+        md  = cd.get("maha") or cd.get("mahadasha") or cd.get("md") or cd.get("planet")
+        ad  = cd.get("antar") or cd.get("antardasha") or cd.get("ad")
+        pd_ = cd.get("pratyantar") or cd.get("pd")
+        start = cd.get("startDate") or cd.get("start")
+        end   = cd.get("endDate") or cd.get("end")
+        parts = []
+        if md: parts.append(f"{md} Mahadasha")
+        if ad: parts.append(f"→ {ad} Antardasha")
+        if pd_: parts.append(f"→ {pd_} Pratyantar")
+        line = " ".join(parts) if parts else "(unavailable)"
+        extra = (f"\n▸ DASHA WINDOW: {start or '?'} to {end or '?'}"
+                 if (start or end) else "")
+        return (f"▸ CURRENT DASHA: {line}{extra}\n"
+                f"▸ DASHA TIMELINE (next 5 years): "
+                f"(unavailable — full dasha array missing)")
+
+    now = datetime.utcnow()
+    horizon_end = now + timedelta(days=int(5 * 365.25))
+
+    # ── Locate current MD / AD / PD ─────────────────────────────────
+    cur_md = next((m for m in md_chain
+                   if m["start"] and m["end"]
+                   and m["start"] <= now <= m["end"]), None)
+    cur_ad = cur_pd = None
+    if cur_md:
+        cur_ad = next((a for a in cur_md["ads"]
+                       if a["start"] and a["end"]
+                       and a["start"] <= now <= a["end"]), None)
+        if cur_ad:
+            cur_pd = next((p for p in cur_ad["pds"]
+                           if p["start"] and p["end"]
+                           and p["start"] <= now <= p["end"]), None)
+
+    head_parts = []
+    if cur_md: head_parts.append(f"{cur_md['lord']} Mahadasha")
+    if cur_ad: head_parts.append(f"→ {cur_ad['lord']} Antardasha")
+    if cur_pd: head_parts.append(f"→ {cur_pd['lord']} Pratyantar")
+    head = " ".join(head_parts) if head_parts else "(unavailable)"
+
+    pd_window = ""
+    if cur_pd and (cur_pd["start"] or cur_pd["end"]):
+        pd_window = (f"\n▸ DASHA WINDOW (current PD): "
+                     f"{_fmt_d(cur_pd['start'])} → {_fmt_d(cur_pd['end'])}")
+    elif cur_ad and (cur_ad["start"] or cur_ad["end"]):
+        pd_window = (f"\n▸ DASHA WINDOW (current AD): "
+                     f"{_fmt_d(cur_ad['start'])} → {_fmt_d(cur_ad['end'])}")
+
+    # ── Build next-5-yr timeline ────────────────────────────────────
+    # Show: every MD that overlaps [now, horizon_end] with its window,
+    # and within each shown MD list every AD that overlaps the horizon.
+    # Cap total lines so we don't spam — prefer MD changes over AD.
+    timeline_lines = []
+    md_in_horizon = [m for m in md_chain
+                      if m["end"] and m["start"]
+                      and m["end"] >= now
+                      and m["start"] <= horizon_end]
+    for m in md_in_horizon:
+        # Mark which segment of this MD overlaps the horizon
+        seg_start = max(m["start"], now)
+        seg_end   = min(m["end"],   horizon_end)
+        marker = "now"  if m is cur_md else "starts"
+        timeline_lines.append(
+            f"   • {m['lord']} MD ({_fmt_d(m['start'])} → {_fmt_d(m['end'])}) "
+            f"[{marker}]")
+        # ADs inside the visible segment of this MD
+        for a in m["ads"]:
+            if not (a["start"] and a["end"]):
+                continue
+            if a["end"] < seg_start or a["start"] > seg_end:
+                continue
+            ad_marker = ""
+            if a is cur_ad:
+                ad_marker = " ← current"
+            timeline_lines.append(
+                f"       – {m['lord']}-{a['lord']} AD "
+                f"({_fmt_d(a['start'])} → {_fmt_d(a['end'])}){ad_marker}")
+        # Hard cap to keep block size bounded for the LLM
+        if len(timeline_lines) >= 60:
+            timeline_lines.append("   … (truncated — showing 5-yr horizon only)")
+            break
+
+    timeline_block = ""
+    if timeline_lines:
+        timeline_block = ("\n▸ DASHA TIMELINE (next 5 years — MD + AD changes):\n"
+                          + "\n".join(timeline_lines))
+
+    return f"▸ CURRENT DASHA: {head}{pd_window}{timeline_block}"
 
 
 def _format_house_lords(intel: dict) -> str:

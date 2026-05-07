@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 
 # Bumped whenever the prompt, validator, or remedy whitelist changes.
 # Included in cache fingerprint so policy changes auto-invalidate stale prose.
-_PROMPT_VERSION = "v4"
+_PROMPT_VERSION = "v7"
 
 # Classical Vedic vocabulary the LLM is allowed to reference. Anything
 # outside this set in the prose is treated as a potential hallucination.
@@ -250,16 +250,27 @@ def _validate(out: Any, facts: dict[str, Any]) -> tuple[bool, str]:
     # nakshatra, rashi, OR partner name appearing in the prose. Name is
     # a valid anchor because it proves the LLM is grounded in this
     # specific request (cannot be hallucinated; comes from <ENGINE_FACTS>).
+    # All checks are case-insensitive AND word-boundary anchored to
+    # avoid substring collisions (e.g. "Mula" ⊂ "formula", "Leo" ⊂
+    # "chameleon", short name "an" ⊂ "and").
+    def _word_in(term: str) -> bool:
+        if not term:
+            return False
+        return re.search(r"\b" + re.escape(term.lower()) + r"\b", full_lower) is not None
+
     def _has_anchor(p_key: str, label: str) -> tuple[bool, str]:
         p = facts.get(p_key, {})
         nak = (p.get("nakshatra") or "").split()[0]
         rashi = (p.get("rashi") or "").strip()
         name = (p.get("name") or "").strip()
-        if nak and nak in full_text:
+        if _word_in(nak):
             return True, ""
-        if rashi and rashi in full_text:
+        if _word_in(rashi):
             return True, ""
-        if name and len(name) >= 2 and name in full_text:
+        # Names shorter than 3 chars are too collision-prone even with
+        # word boundaries (e.g. "An" still matches the standalone word
+        # "an"). Fall back to nakshatra/rashi only in that case.
+        if name and len(name) >= 3 and _word_in(name):
             return True, ""
         return False, f"{label}_anchor_missing"
 
@@ -275,21 +286,23 @@ def _validate(out: Any, facts: dict[str, Any]) -> tuple[bool, str]:
         if b in full_lower:
             return False, f"banned_term:{b}"
 
-    # Each challenge must reference an allowed remedy. We accept
-    # natural LLM paraphrases (mantra/jaap/recitation, prayer/prayers,
-    # puja/ritual) so long as the distinctive whitelist keyword is
-    # present.
-    REMEDY_KEYWORDS = [
-        "mrityunjaya", "kumbh vivah", "navagraha", "mangal shanti",
-        "vivah yog", "joint daily prayer", "gratitude practice",
-        "vata-balancing", "pitta-balancing", "kapha-balancing",
-        "vata balancing", "pitta balancing", "kapha balancing",
-        "jyotishi",
-    ]
-    # And NO challenge may recommend anything outside the whitelist —
-    # specifically gemstones, yantra products, tantrik rituals, etc.
-    # This is the actual hole architect flagged: LLM tacking on a valid
-    # keyword while also pushing unapproved advice.
+    # Whitelist enforcement (positive contract):
+    # At least ONE entry from ALLOWED_REMEDIES must appear verbatim
+    # (case-insensitive) somewhere across the challenges block or the
+    # marriage_outlook. Keyword-only matching previously allowed
+    # paraphrases like "spiritual healer" to slip through; we now
+    # require the exact whitelisted phrase. The user is guaranteed to
+    # see at least one approved remedy.
+    challenges_text = " ".join(str(c) for c in out["challenges"]).lower()
+    outlook_lower = outlook.lower()
+    remedy_zone = challenges_text + " " + outlook_lower
+    allowed_lower = [r.lower() for r in ALLOWED_REMEDIES]
+    if not any(r in remedy_zone for r in allowed_lower):
+        return False, "challenge_missing_remedy"
+    # Negative contract: no banned remedy term anywhere in the
+    # remedy-bearing sections (per-bullet to localise the failure
+    # reason). This is a denylist safety net — the positive contract
+    # above is the actual whitelist guarantee.
     BANNED_REMEDY_TERMS = [
         "gemstone", "ratna", "ruby", "emerald", "pearl", "blue sapphire",
         "yellow sapphire", "coral", "topaz", "diamond ring",
@@ -299,11 +312,12 @@ def _validate(out: Any, facts: dict[str, Any]) -> tuple[bool, str]:
     ]
     for ch in out["challenges"]:
         ch_l = str(ch).lower()
-        if not any(kw in ch_l for kw in REMEDY_KEYWORDS):
-            return False, "challenge_missing_remedy"
         for banned in BANNED_REMEDY_TERMS:
             if banned in ch_l:
                 return False, f"banned_remedy:{banned}"
+    for banned in BANNED_REMEDY_TERMS:
+        if banned in outlook_lower:
+            return False, f"banned_remedy_in_outlook:{banned}"
 
     # Fact-lock: any "X / Y" or "X out of Y" numeric pair the LLM uses
     # MUST correspond to a real koot score (or the total) from facts.
@@ -330,9 +344,10 @@ def _validate(out: Any, facts: dict[str, Any]) -> tuple[bool, str]:
     allowed_rashis = {
         (p1.get("rashi") or "").lower(), (p2.get("rashi") or "").lower(),
     } - {""}
-    # Tokenize on word boundaries; check each capitalized term against
-    # the known vocabularies.
-    for word_match in re.finditer(r"\b([A-Z][a-z]+)\b", full_text):
+    # Whole-word, case-insensitive scan. Previously we only matched
+    # capitalized tokens which let lowercase hallucinations slip
+    # through ("yeh shravana wali energy ...") in Hinglish output.
+    for word_match in re.finditer(r"\b([A-Za-z][A-Za-z]+)\b", full_text):
         token = word_match.group(1).lower()
         if token in _KNOWN_NAKSHATRAS and token not in allowed_naks:
             return False, f"unknown_nakshatra:{word_match.group(1)}"

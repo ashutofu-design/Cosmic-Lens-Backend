@@ -161,8 +161,13 @@ class TestValidator(unittest.TestCase):
         self.assertTrue(reason.startswith("banned_term"))
 
     def test_rejects_challenge_without_remedy(self):
+        # Validator now accepts a remedy keyword anywhere in the
+        # challenges block OR in the outlook (per-bullet check was too
+        # strict for gpt-4o-mini). To trigger this rejection both
+        # surfaces must be remedy-free.
         out = _good_llm_output()
         out["challenges"] = ["Generic friction with no path forward described."]
+        out["marriage_outlook"] = "The future of this union is uncertain."
         ok, reason = _validate(out, self.facts)
         self.assertFalse(ok)
         self.assertEqual(reason, "challenge_missing_remedy")
@@ -221,6 +226,77 @@ class TestValidator(unittest.TestCase):
         ok, reason = _validate(out, self.facts)
         self.assertFalse(ok)
         self.assertTrue(reason.startswith("banned_remedy"), reason)
+
+    # ── Architect-flagged blind spots (Phase 2.5.11.20 v7) ──────────────
+    def test_anchor_rejects_substring_collision(self):
+        # p1 nakshatra "Mula" must not be matched by the substring
+        # inside "formula"; the prose must contain a real anchor.
+        facts = _sample_facts()
+        facts["p1"]["nakshatra"] = "Mula"
+        facts["p1"]["rashi"] = "Sagittarius"  # also won't appear
+        facts["p1"]["name"] = "x"  # too short to qualify (len < 3)
+        # Build a bad output where p1 has NO real anchor but the
+        # prose accidentally contains "formula" (which contains "mula").
+        out = _good_llm_output()
+        out["compatibility_insight"] = (
+            "This relationship totals 14.5 out of 36. Together you can find a "
+            "formula for understanding each other's needs over time, with patience."
+        )
+        out["strengths"] = ["The dynamic between you both is steady and warm."]
+        out["challenges"] = [
+            "Some friction may surface; consult a qualified Jyotishi for guidance."
+        ]
+        out["marriage_outlook"] = (
+            "The path ahead requires effort. Both being Manglik creates mutual "
+            "cancellation. Consider Kumbh Vivah and Navagraha Shanti to strengthen "
+            "the bond. Sustained intention can carry this union far."
+        )
+        # p2 is still anchored via Mula/Sagittarius elsewhere? No — we
+        # explicitly stripped the prose. So p1 is the first to fail.
+        ok, reason = _validate(out, facts)
+        self.assertFalse(ok)
+        self.assertTrue(reason.endswith("_anchor_missing"), reason)
+
+    def test_vocab_lock_catches_lowercase_hallucination(self):
+        # LLM writes "shravana" (lowercase) — neither partner has it.
+        # Old regex only matched capitalized tokens and would miss this.
+        out = _good_llm_output()
+        out["marriage_outlook"] += " Yeh shravana energy bhi influence karti hai."
+        ok, reason = _validate(out, self.facts)
+        self.assertFalse(ok)
+        self.assertTrue(reason.startswith("unknown_nakshatra"), reason)
+
+    def test_rejects_paraphrase_only_remedy(self):
+        # LLM says "consult a spiritual healer" — no whitelisted phrase.
+        # Old keyword-only check would have falsely passed because
+        # "healer" was never on the list either way; this guards the
+        # tighter exact-phrase contract for any future paraphrase like
+        # "spiritual jyotishi" → must remain "qualified Jyotishi".
+        out = _good_llm_output()
+        out["challenges"] = [
+            "Friction may arise; consult a spiritual healer for clarity over time."
+        ]
+        out["marriage_outlook"] = (
+            "The path ahead requires effort. Both being Manglik creates mutual "
+            "cancellation. Trust the process and stay rooted in shared intention. "
+            "Time and patience are your greatest allies in this union."
+        )
+        ok, reason = _validate(out, self.facts)
+        self.assertFalse(ok)
+        self.assertEqual(reason, "challenge_missing_remedy")
+
+    def test_rejects_banned_remedy_in_outlook(self):
+        # Banned-remedy denylist must also cover marriage_outlook,
+        # not just challenges (LLM often shifts advice into outlook).
+        out = _good_llm_output()
+        out["marriage_outlook"] = (
+            "The match has its difficulties but is workable. Both being Manglik "
+            "creates mutual cancellation. We strongly recommend you wear a yellow "
+            "sapphire pendant and complete Kumbh Vivah. Time will smoothen the rest."
+        )
+        ok, reason = _validate(out, self.facts)
+        self.assertFalse(ok)
+        self.assertTrue(reason.startswith("banned_remedy_in_outlook"), reason)
 
 
 class TestFingerprintVersioning(unittest.TestCase):

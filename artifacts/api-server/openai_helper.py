@@ -3226,7 +3226,26 @@ _SENSITIVE_STATIC_RE = _re_dasha_gate.compile(
     # One-sided / unrequited love
     r"\bone[-\s]?sided|\bunrequited|"
     r"\b(?:pyar|like|chahta|chahti)\s+(?:hu|hoon)\s+.{0,30}\bwo\s+(?:mujhe\s+)?nahi|"
-    r"\bjise\s+(?:pyar|like|pasand)\s+(?:karta|karti)\s+(?:hu|hoon)\s+.{0,30}\bnahi"
+    r"\bjise\s+(?:pyar|like|pasand)\s+(?:karta|karti)\s+(?:hu|hoon)\s+.{0,30}\bnahi|"
+    # ── Phase 2.5.11.7 abandonment / existential-love-doubt fears ──
+    # Fear of being LEFT by partner (future tense, generic "partner",
+    # spouse, etc.) — wave-1 F02 surfaced this gap.
+    r"\b(?:partner|husband|wife|biwi|pati|patni|bf\b|gf\b|"
+    r"boyfriend|girlfriend|saathi|spouse|fianc(?:e|ee))\b"
+    r".{0,20}?\b(?:chhod|chodd|leave|leaves|leaving|abandon|"
+    r"chala\s+jaye|chali\s+jaye|chhod\s+(?:de|deg|jaye))\b|"
+    # Existential love-doubt: "kya kabhi loved feel paunga"
+    # / "kabhi pyar milega kya"
+    r"\b(?:kabhi(?:\s+bhi)?|jeevan\s+bhar|life\s+bhar|jindagi\s+bhar)\b"
+    r".{0,30}?\b(?:loved|pyar|pyaar|love)\b"
+    r".{0,20}?\b(?:milega|milegi|paunga|paungi|paaunga|paungi|"
+    r"feel|hoga|hogi|naseeb|samjhega|samjhegi)\b|"
+    # Lifelong-loneliness fear
+    r"\bakela\s+(?:reh\s+jaunga|rahunga|hi\s+rahunga|reh\s+jaaunga)|"
+    r"\bakeli\s+(?:reh\s+jaungi|rahungi|hi\s+rahungi)|"
+    r"\balone\s+for(?:ever|\s+life)|"
+    r"\bkoi\s+(?:nahi|kabhi)\s+(?:milega|milegi|aayega|aayegi|"
+    r"samjhega|samjhegi|pasand\s+karega|pasand\s+karegi)\b"
     r")",
     _re_dasha_gate.IGNORECASE,
 )

@@ -30,65 +30,9 @@ from .catalog import CATALOG, SYSTEM_PRACTICES
 from .conflict_check import check_conflicts
 from .substitutions import apply_substitutions
 from .stack_builder import build_stack
-from .practical_resources import (
-    get_practical_resources,
-    render_practical_resources,
-)
 
 
 _VALID_TOPICS = ("health", "marriage", "career", "money", "business")
-
-# Deterministic crisis fallback if practical_resources lookup throws.
-# Architect-fix May 7 2026 (Phase 3.0 HIGH #3): never let a runtime
-# error hide a reachable real-world lever from the user. Police-112
-# works on locked SIMs / no balance; topic line is the safest add-on.
-_CRISIS_FALLBACK: Dict[str, List[Dict[str, Any]]] = {
-    "health": [{
-        "id":       "fallback_telemanas",
-        "label":    "Tele-MANAS (NIMHANS-backed mental health)",
-        "kind":     "helpline",
-        "value":    "14416 OR 1-800-891-4416 (24×7, free)",
-        "why":      "Govt-of-India + NIMHANS clinical backbone.",
-        "free":     True,
-        "cost_inr": 0,
-    }, {
-        "id":       "fallback_112",
-        "label":    "All-India Emergency",
-        "kind":     "helpline",
-        "value":    "112 (24×7, free)",
-        "why":      "Single-number ERSS — works on locked SIM / no balance.",
-        "free":     True,
-        "cost_inr": 0,
-    }],
-    "marriage": [{
-        "id":       "fallback_181",
-        "label":    "Women in Distress — National Helpline",
-        "kind":     "helpline",
-        "value":    "181 (24×7, free)",
-        "why":      "Domestic violence, harassment — direct OSC + police escort.",
-        "free":     True,
-        "cost_inr": 0,
-    }],
-    "money": [{
-        "id":       "fallback_1930",
-        "label":    "Cybercrime / Financial Fraud Helpline",
-        "kind":     "helpline",
-        "value":    "1930 (24×7) | cybercrime.gov.in",
-        "why":      "Report fraud within 1 hour → 80%+ chance of freezing transaction.",
-        "free":     True,
-        "cost_inr": 0,
-    }],
-    "business": [{
-        "id":       "fallback_1930",
-        "label":    "Cybercrime / Financial Fraud Helpline",
-        "kind":     "helpline",
-        "value":    "1930 (24×7) | cybercrime.gov.in",
-        "why":      "Report fraud within 1 hour → 80%+ chance of freezing transaction.",
-        "free":     True,
-        "cost_inr": 0,
-    }],
-    "career": [],
-}
 
 # tier_note keyed by topic+severity. Health has explicit medical-safety
 # tone; marriage/career use action-orientation tone.
@@ -290,33 +234,6 @@ def get_remedies(topic: str,
                 + ". Ask your primary care doctor for a referral."
             )
 
-    # ── Phase 3.0 Practical Booster Pack: verified India resources ──
-    # Helplines, govt schemes, free tools — surfaced ALONGSIDE the
-    # planet-keyed stack so the user always has a real-world lever.
-    # Crisis resources rank-first when triggered (per practical_resources
-    # module). Limit kept tight (3) so locked_facts block stays scannable.
-    #
-    # Architect-fix May 7 2026 (Phase 3.0 HIGH #3): on unexpected error
-    # we LOG and fall back to a topic-keyed deterministic crisis row
-    # (police-112 always reachable, plus topic-specific crisis line)
-    # instead of returning [] — the engine's promise is "always a
-    # real-world lever", and silent emptiness violates that.
-    try:
-        practical_resources = get_practical_resources(
-            topic        = topic,
-            areas        = areas,
-            severity     = norm_sev,
-            user_facts   = user_facts,
-            limit        = 3,
-        )
-    except Exception as _pr_exc:  # noqa: BLE001
-        try:
-            print(f"[remedy.practical_resources] FAILED for "
-                  f"topic={topic} severity={norm_sev}: {_pr_exc}")
-        except Exception:
-            pass
-        practical_resources = _CRISIS_FALLBACK.get(topic, [])
-
     return {
         "topic":                  topic,
         "available":              bool(selected or system_practices),
@@ -326,7 +243,6 @@ def get_remedies(topic: str,
         "tier":                   norm_sev,
         "planet_remedies":        selected,
         "system_practices":       system_practices,
-        "practical_resources":    practical_resources,
         "stack":                  stack,
         "conflicts":              conflicts,
         "substitutions_applied":  swaps,
@@ -336,7 +252,7 @@ def get_remedies(topic: str,
         "follow_up_prompt":       (f"After {stack['duration_days']} days, "
                                      "rate (1-5) which remedies actually helped "
                                      "so the engine can refine future advice."),
-        "engine_version":         "v1.1.0",
+        "engine_version":         "v1.0.0",
     }
 
 
@@ -414,14 +330,6 @@ def render_for_locked_facts(result: Dict[str, Any]) -> str:
         lines.append("   ◦ Daily practices (areas):")
         for sp in sps[:3]:
             lines.append(f"     · {sp.get('system')}: {sp.get('practice')}")
-
-    # Phase 3.0 Practical Booster Pack — verified India resources
-    # (helplines, govt schemes, free tools). Always rendered AFTER the
-    # planet stack but BEFORE conflicts/disclaimer so the user sees the
-    # real-world action lever in the same scan.
-    pres = result.get("practical_resources") or []
-    if pres:
-        lines.extend(render_practical_resources(pres))
 
     # Stack summary (compact)
     stack = result.get("stack") or {}

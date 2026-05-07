@@ -1667,4 +1667,14 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         "engine_version": "v2.4.0",
         "engine_arch": (
             "FILTER→VERIFY→ACTIVATE→TRIGGER + D9-7L supreme + age-sanity"),
+        "kp_planet_scan": _kp_planet_scan_safe(kp, "marriage", filtered_set),
     }
+
+
+def _kp_planet_scan_safe(kp, domain, survivors):
+    try:
+        from event_timing._shared.kp_significator_scan import compute_kp_planet_scan
+        return compute_kp_planet_scan(kp, domain, set(survivors or []))
+    except Exception:
+        return {"domain": domain, "kp_available": False,
+                 "planets": [], "deliverers": [], "missed_by_filter": []}

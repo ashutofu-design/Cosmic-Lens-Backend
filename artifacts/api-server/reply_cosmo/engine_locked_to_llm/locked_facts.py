@@ -2248,6 +2248,50 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             _t_lines.append(travel_remedies_block)
         if baby_remedies_block:
             _t_lines.append(baby_remedies_block)
+        # ── Phase 2.5.11.17 — KP planet scan per engine ───────────
+        # User mandate: "Har event ke planets ek separate section me
+        # rakho — sab planet, NL/SL/SS chain, kaun deliver kar raha
+        # hai (travel/health/finance/marriage/baby), aur agar engine
+        # filter me nahi aaye phir bhi ek nazar dena."
+        try:
+            from event_timing._shared.kp_significator_scan import (  # type: ignore
+                render_scan_lines,
+            )
+            _scan_sources = []
+            try:
+                from event_timing.travel.travel_engine_v1 import get_last_travel_result  # type: ignore
+                _scan_sources.append(("travel", (get_last_travel_result() or {}).get("kp_planet_scan")))
+            except Exception: pass
+            try:
+                from event_timing.health.health_engine_v1 import get_last_health_result  # type: ignore
+                _scan_sources.append(("health", (get_last_health_result() or {}).get("kp_planet_scan")))
+            except Exception: pass
+            try:
+                from event_timing.finance.finance_engine_v1 import get_last_finance_result  # type: ignore
+                _scan_sources.append(("finance", (get_last_finance_result() or {}).get("kp_planet_scan")))
+            except Exception: pass
+            try:
+                from event_timing.baby.baby_engine_v1 import get_last_baby_result  # type: ignore
+                _scan_sources.append(("baby", (get_last_baby_result() or {}).get("kp_planet_scan")))
+            except Exception: pass
+            # Marriage: pulled from `v` (assess_marriage result) if available.
+            try:
+                if 'v' in locals() and isinstance(v, dict):
+                    _scan_sources.append(("marriage", v.get("kp_planet_scan")))
+            except Exception: pass
+            for _domain, _scan in _scan_sources:
+                if isinstance(_scan, dict) and _scan.get("planets"):
+                    for _ln in render_scan_lines(_scan, max_lines=9):
+                        _t_lines.append(_ln)
+            _t_lines.append(
+                "   ⚐ KP-SCAN RULE: For 'kaun planet de raha hai <domain>' "
+                "questions, the LLM MUST cite STRONG/PARTIAL deliverers from "
+                "the scan above. AUDIT-FLAG planets (delivered-but-dropped-"
+                "by-filter) signal an engine-filter gap — narrate as "
+                "secondary support, not primary."
+            )
+        except Exception as _scan_exc:  # noqa: BLE001
+            print(f"[locked_facts] kp_planet_scan render failed: {_scan_exc}")
         timing_str = "\n".join(_t_lines)
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] timing_engine failed: {exc}")

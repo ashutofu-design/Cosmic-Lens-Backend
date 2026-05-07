@@ -350,6 +350,16 @@ def _planet_signified_houses(kp: dict, planet: str) -> List[int]:
 # ════════════════════════════════════════════════════════════════════════
 # STEP 1 — D1 travel-significator filter
 # ════════════════════════════════════════════════════════════════════════
+def _kp_planet_scan_safe(kp, domain, survivors):
+    """Wrap shared scan in try/except so engine never breaks if helper missing."""
+    try:
+        from event_timing._shared.kp_significator_scan import compute_kp_planet_scan
+        return compute_kp_planet_scan(kp, domain, set(survivors or []))
+    except Exception:
+        return {"domain": domain, "kp_available": False,
+                 "planets": [], "deliverers": [], "missed_by_filter": []}
+
+
 def _step1_d1_filter(kundli: dict, lagna_si: int
                        ) -> Dict[str, Dict[str, Any]]:
     """Identify travel-significant planets in D1.
@@ -1843,6 +1853,8 @@ def _compute_travel_window_impl(kundli: dict,
         "remedies": remedies,
         "engine_version": "v1.0.0",
         "engine_arch": "FILTER→VERIFY→KP-GATE→ACTIVATE→TRIGGER",
+        # Phase 2.5.11.17 — per-domain KP planet scan (audit / "kaun de raha hai")
+        "kp_planet_scan": _kp_planet_scan_safe(kp, "travel", survivors),
     }
 
 

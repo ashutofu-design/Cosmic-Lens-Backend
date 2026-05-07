@@ -1394,7 +1394,17 @@ def _compute_finance_window_impl(kundli: dict,
         "remedies": remedies,
         "engine_version": "v1.0.0",
         "engine_arch": "FILTER→VERIFY→KP-GATE→ACTIVATE",
+        "kp_planet_scan": _kp_planet_scan_safe(kp, "finance", survivors),
     }
+
+
+def _kp_planet_scan_safe(kp, domain, survivors):
+    try:
+        from event_timing._shared.kp_significator_scan import compute_kp_planet_scan
+        return compute_kp_planet_scan(kp, domain, set(survivors or []))
+    except Exception:
+        return {"domain": domain, "kp_available": False,
+                 "planets": [], "deliverers": [], "missed_by_filter": []}
 
 
 # ════════════════════════════════════════════════════════════════════════

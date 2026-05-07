@@ -8832,6 +8832,50 @@ def kundli_milan():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# ── /api/kundli-milan/pdf — Phase 2.5.11.21 (PDF download) ────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+@app.route("/api/kundli-milan/pdf", methods=["POST"])
+def kundli_milan_pdf():
+    """Render a Kundli Milan compatibility PDF.
+
+    Accepts the JSON payload returned by `/api/kundli-milan` (or any
+    object with the same shape: p1, p2, total, max, grade, koots,
+    analysis{...}). We deliberately do NOT recompute the milan here —
+    the client should call `/api/kundli-milan` first (which is cached
+    via L1 LRU + L2 DB) and post the result back. This avoids paying
+    Swiss Ephemeris + LLM polish costs twice for the same chart.
+    """
+    data = request.get_json(silent=True) or {}
+    if not isinstance(data, dict) or "p1" not in data or "p2" not in data:
+        return jsonify({"error": "expected_milan_payload"}), 400
+
+    lang = (data.get("lang") or "en").lower()
+    try:
+        from milan_pdf import render_milan_pdf
+        pdf_bytes = render_milan_pdf(data, lang=lang)
+    except Exception as exc:
+        try:
+            print(f"[milan_pdf] render failed: {exc}", flush=True)
+        except Exception:
+            pass
+        return jsonify({"error": "pdf_render_failed", "detail": str(exc)}), 500
+
+    p1n = (data.get("p1") or {}).get("name") or "p1"
+    p2n = (data.get("p2") or {}).get("name") or "p2"
+    safe = lambda s: "".join(c for c in str(s) if c.isalnum() or c in "_-")[:32] or "x"
+    fname = f"Kundli_Milan_{safe(p1n)}_{safe(p2n)}.pdf"
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": f"inline; filename=\"{fname}\"",
+            "Content-Length": str(len(pdf_bytes)),
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # ── Cashfree Payment Gateway ──────────────────────────────────────────────────
 # ═══════════════════════════════════════════════════════════════════════════════
 

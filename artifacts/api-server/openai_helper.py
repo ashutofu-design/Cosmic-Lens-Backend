@@ -3263,7 +3263,18 @@ _MARRIAGE_DOMAIN_RE = _re_dasha_gate.compile(
     r"dating|propose|commit(?:ment)?|engagement|sagai|"
     r"saas|sasural|mangetar|fianc|arranged|"
     r"akela|akeli|single|unmarried|widow|widower|"
-    r"affair|cheat|dhokha|loyal\s+rahega)\b",
+    r"affair|cheat|dhokha|loyal\s+rahega|"
+    # ── Phase 2.5.11.8 introspective / repeated-pattern broadening ──
+    # Self-referential relationship Qs that lack obvious keywords but
+    # are clearly love/marriage-domain (e.g. "har ladki bored ho jati",
+    # "connection nahi banta", "koi mujhse jud nahi pata").
+    r"ladki|ladka|girl|boy|female|male|"
+    r"bored\s+ho|bore\s+ho|"
+    r"connection|attraction|chemistry|attached|attachment|"
+    r"intim(?:acy|ate)|bond\b|bonding|couple|date\b|"
+    r"har\s+(?:rishta|relation|date|ladki|ladka|baar|connection)|"
+    r"koi\s+mujhe\s+(?:samjh|chah|pasand)|"
+    r"mujhse\s+(?:jud|connect|attach))\b",
     _re_dasha_gate.IGNORECASE,
 )
 
@@ -3958,6 +3969,29 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         "\n\n=== MARRIAGE / LOVE / RELATIONSHIP DEPTH RULE ===\n"
         "User asked a relationship Q. Generic 'haan/nahi chance hai' "
         "= FAILURE. Apply this psychology framework before answering:\n\n"
+        "▸ STEP 0 — EMOTIONAL-INTENT SELF-CLASSIFY (silently, before "
+        "writing answer). Read the user's Q and tag yourself which of "
+        "these are present (one Q can carry multiple):\n"
+        "  • emotional pain  ('dard', 'kyu mere saath', 'samjh nahi aata')\n"
+        "  • fear            ('chhod dega', 'kabhi nahi', 'akela', 'darr')\n"
+        "  • self-blame      ('mujhme kya kami', 'meri galti', 'har koi mujhse')\n"
+        "  • repeated-pattern('har baar', 'sab', 'pichhle N', 'phir wahi')\n"
+        "  • confusion       ('samjh nahi', 'kya karu', 'dimaag kaam nahi')\n"
+        "  • relationship-trauma ('toxic', 'abuse', 'betrayal', 'recent breakup')\n"
+        "  • practical-decision  ('A vs B', 'wapas jau ya', 'kaunsa choose')\n"
+        "MODE SELECTION based on tags:\n"
+        "  → ANY of (pain/fear/self-blame/repeated/trauma/confusion) "
+        "present → DEEP MODE: 55-90 words, MUST open with 1-line empathy "
+        "acknowledgment ('samajh sakta hu...' / 'yeh tough phase hai...' / "
+        "'yeh pattern dard deta hai...'), then WHY (1 plain astro reason "
+        "with max 1 planet), then FUTURE-SHIFT (when/how it improves — "
+        "name a window from active dasha or upcoming transit), then 1 "
+        "ACTIONABLE reflection + 1 'Final:' line.\n"
+        "  → ONLY practical-decision (no emotional weight) → CRISP MODE: "
+        "35-55 words, direct A vs B framing with reasoning, astro-context "
+        "naturally woven, still close with 'Final:' line.\n"
+        "ABSOLUTE FLOOR: NEVER answer in <30 words for ANY relationship "
+        "Q. <30w on emotional/fear/self-blame Q = trust failure.\n\n"
         "▸ DELAY questions ('shaadi late kyu', '30 ki ho gayi'): "
         "Always classify the delay TYPE — pick the strongest one from chart:\n"
         "  (a) Saturn-mature delay = serious-selective, late but stable\n"

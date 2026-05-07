@@ -72,12 +72,14 @@ class TestHelpers(unittest.TestCase):
 
 class TestSeverityVerdict(unittest.TestCase):
     def test_severity_bands(self):
-        self.assertEqual(_severity_of_window(2.0, 0.0), "stable")
-        self.assertEqual(_severity_of_window(4.0, 0.0), "mild")
-        self.assertEqual(_severity_of_window(7.0, 0.0), "moderate")
-        self.assertEqual(_severity_of_window(10.0, 0.0), "serious")
-        # Transit load can push moderate→serious
-        self.assertEqual(_severity_of_window(7.0, 2.5), "serious")
+        # Phase 2.5.11.11: severity now keys off score only
+        # (transit_load param kept as no-op default for back-compat).
+        self.assertEqual(_severity_of_window(2.0), "stable")
+        self.assertEqual(_severity_of_window(4.0), "mild")
+        self.assertEqual(_severity_of_window(7.0), "moderate")
+        self.assertEqual(_severity_of_window(10.0), "serious")
+        # transit_load arg ignored
+        self.assertEqual(_severity_of_window(7.0, 2.5), "moderate")
 
     def test_recommendation_tier(self):
         self.assertEqual(_recommendation_tier("stable", 0, 30), "monitor")
@@ -88,16 +90,17 @@ class TestSeverityVerdict(unittest.TestCase):
                           "urgent_consult")
 
     def test_derive_verdict_high_risk(self):
+        # Phase 2.5.11.11: signature reduced to (score, yogas)
         yogas = [{"name": "Arishta-X", "severity": "high",
                    "planets": ["Moon"]}]
-        v, b = _derive_verdict(8.5, "WEAK", yogas, 0.0)
+        v, b = _derive_verdict(8.5, yogas)
         self.assertEqual(v, "HIGH_RISK_WINDOW")
         self.assertEqual(b, "WEAK")
 
     def test_derive_verdict_strong(self):
         yogas = [{"name": "Subhakartari", "severity": "protective",
                    "planets": ["Jupiter"]}]
-        v, b = _derive_verdict(2.0, "STRONG", yogas, 0.0)
+        v, b = _derive_verdict(2.0, yogas)
         self.assertEqual(v, "STRONG_VITALITY")
 
 
@@ -362,7 +365,7 @@ class TestFullPipeline(unittest.TestCase):
                        "next_3_windows", "protection_windows",
                        "affected_systems", "recommendation_tier",
                        "top_health_planets", "weighted_breakdown",
-                       "kp_layer", "transits", "ashtakavarga",
+                       "kp_layer",
                        "yogas", "risk_flags", "factors",
                        "llm_directives", "engine_version"):
             self.assertIn(field, out, f"Missing field: {field}")

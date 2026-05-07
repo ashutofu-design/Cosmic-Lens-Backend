@@ -20,18 +20,14 @@ D30 layer removed per user decision May 7 2026 — KP CSL of 6/8 cusps
            redistributed to D1/D9/KP)
   STEP 5   Dasha activation (AD/PD primary; MD low-weight)
            AD=5, PD=6, MD=1  (per user spec: AD/PD lead, MD background)
-  STEP 6   Transit triggers
-           Saturn over 1/6/8, Rahu/Ketu over Lagna or Moon,
-           Mars over 6/8 (acute), Jupiter over 6 (protective),
-           Sade Sati phase
-  STEP 7   Ashtakavarga support
-           SAV bindus on Lagna (<25 = weak vitality)
-           SAV bindus on 6th  (high = better disease-fighting)
-  STEP 8   Yoga + hard-guard layer
+  STEP 6   Yoga + hard-guard layer
            Arishta / Balarishta / Papakartari / age-floor
            (CAFB-health post-injectors stay authoritative for output)
-           (Pre-2.5.11.9 STEP 8 was a duplicate KP layer — removed
-            since KP is now the canonical STEP 3 disease-verify layer.)
+           (Phase 2.5.11.11: STEP 6 transits + STEP 7 SAV bindus
+            permanently REMOVED per user decision — natal D1+D9+KP
+            convergence + dasha activation is the canonical pipeline.
+            Live-sky transits remain available globally via the
+            `current_transits` block injected by openai_helper.)
 
 Phase 2.5.11.10 — STEP 3 v2 (KP convergence layer):
   • 12th cusp CSL added (was 6th + 8th only) → hospitalization detector
@@ -64,8 +60,6 @@ Output dict (back-compat with marriage-style consumers):
                              at_risk_planets[{planet, kp_signifies,
                               kp_dusthana_houses, is_active_csl_now,
                               active_csl_of, d9_score, convergence_score}]},
-    "transits":             {saturn, rahu, ketu, mars, jupiter, sade_sati},
-    "ashtakavarga":         {sav_lagna, sav_6, vitality_band},
     "yogas":                [{name, severity, planets}],
     "risk_flags":           [str],
     "factors":              [str],   # full audit trail
@@ -1046,23 +1040,22 @@ def _step5_dasha_activation(chain: List[Dict[str, Any]],
 
 
 # ════════════════════════════════════════════════════════════════════════
-# STEP 6 — Transit triggers
+# STEP 6 / STEP 7 — REMOVED (Phase 2.5.11.11)
 # ════════════════════════════════════════════════════════════════════════
-def _planet_sign_at(planet_id: int, when: datetime) -> Optional[int]:
-    if not _HAS_SWE:
-        return None
-    try:
-        jd = swe.julday(when.year, when.month, when.day,
-                         when.hour + when.minute / 60.0)
-        lon = swe.calc_ut(jd, planet_id, _SWE_FLAGS)[0][0]
-        return int(lon // 30) % 12
-    except Exception:
-        return None
-
-
-def _step6_transits(kundli: dict, lagna_si: int,
-                     planets_d1: List[dict],
-                     now: datetime) -> Dict[str, Any]:
+# Transit overlay (formerly STEP 6) and Ashtakavarga SAV bindus
+# (formerly STEP 7) were permanently dropped per user decision on
+# May 7 2026. Rationale: live-sky transits are already injected
+# globally by openai_helper's `current_transits` block, and SAV
+# vitality bands rarely flipped severity tiers in practice.
+# The canonical health pipeline is now 6 steps: D1 → D9 → KP → rank
+# → dasha → yogas. The block below is kept commented for archival
+# context only — the orchestrator no longer calls these helpers.
+#
+# def _step6_transits(...): ...   # removed
+# def _step7_ashtakavarga(...): ...  # removed
+def _DELETED_step6_transits(kundli: dict, lagna_si: int,
+                             planets_d1: List[dict],
+                             now: datetime) -> Dict[str, Any]:
     """Compute current transit triggers."""
     out = {"saturn": None, "rahu": None, "ketu": None,
            "mars": None, "jupiter": None, "sade_sati": None,
@@ -1123,9 +1116,9 @@ def _step6_transits(kundli: dict, lagna_si: int,
 
 
 # ════════════════════════════════════════════════════════════════════════
-# STEP 7 — Ashtakavarga support
+# (STEP 7 helper removed — see archival note above)
 # ════════════════════════════════════════════════════════════════════════
-def _step7_ashtakavarga(kundli: dict, lagna_si: int) -> Dict[str, Any]:
+def _DELETED_step7_ashtakavarga(kundli: dict, lagna_si: int) -> Dict[str, Any]:
     out = {"sav_lagna": None, "sav_6": None, "vitality_band": "UNKNOWN"}
     if compute_ashtakavarga is None:
         return out
@@ -1155,7 +1148,9 @@ def _step7_ashtakavarga(kundli: dict, lagna_si: int) -> Dict[str, Any]:
 
 
 # ════════════════════════════════════════════════════════════════════════
-# STEP 8 — Yoga + hard guards (Phase 2.5.11.9: was STEP 9)
+# STEP 6 — Yoga + hard guards
+# (Phase 2.5.11.9: renumbered from STEP 9 → STEP 8)
+# (Phase 2.5.11.11: renumbered from STEP 8 → STEP 6 after STEP 6/7 removal)
 # ════════════════════════════════════════════════════════════════════════
 def _detect_yogas(kundli: dict, lagna_si: int,
                    planets: List[dict]) -> List[Dict[str, Any]]:
@@ -1248,13 +1243,15 @@ def _compute_age(birth_dt: Optional[datetime], ref: datetime) -> Optional[int]:
     return max(0, age)
 
 
-def _severity_of_window(score: float, transit_load: float) -> str:
-    combined = score + max(0.0, transit_load)
-    if combined >= 9.0:
+def _severity_of_window(score: float, transit_load: float = 0.0) -> str:
+    # Phase 2.5.11.11: transit_load kept as no-op default for backward
+    # compat (older external callers may still pass it). Severity now
+    # depends purely on the dasha-activation score.
+    if score >= 9.0:
         return "serious"
-    if combined >= 6.0:
+    if score >= 6.0:
         return "moderate"
-    if combined >= 3.5:
+    if score >= 3.5:
         return "mild"
     return "stable"
 
@@ -1271,16 +1268,17 @@ def _recommendation_tier(severity: str, confirmations: int,
 
 
 def _derive_verdict(top_window_score: float,
-                     ashta_band: str,
-                     yogas: List[Dict[str, Any]],
-                     transit_load: float) -> Tuple[str, str]:
+                     yogas: List[Dict[str, Any]]) -> Tuple[str, str]:
+    # Phase 2.5.11.11: transit_load + ashta_band inputs removed.
+    # Verdict now keys off (a) top dasha-activation score and
+    # (b) presence of high-severity / protective yogas only.
     has_arishta = any(y["severity"] == "high" for y in yogas)
     has_protect = any(y["severity"] == "protective" for y in yogas)
-    if (top_window_score >= 8.0 and has_arishta) or transit_load >= 2.0:
+    if top_window_score >= 8.0 and has_arishta:
         return ("HIGH_RISK_WINDOW", "WEAK")
-    if top_window_score >= 5.0 or ashta_band == "WEAK":
+    if top_window_score >= 5.0:
         return ("VULNERABLE", "MEDIUM")
-    if has_protect or ashta_band == "STRONG":
+    if has_protect:
         return ("STRONG_VITALITY", "STRONG")
     return ("STABLE", "MEDIUM")
 
@@ -1451,27 +1449,18 @@ def _compute_health_window_impl(kundli: dict,
     dasha_windows = _step5_dasha_activation(chain, ranked, lagna_si, now)
     factors.append(f"STEP5 dasha_windows_in_horizon={len(dasha_windows)}")
 
-    # ── STEP 6 — Transits ─────────────────────────────────────────────
+    # ── STEP 6 — Yogas (Phase 2.5.11.11: STEP 6/7 transits+SAV removed,
+    #                   yogas renumbered from STEP 8 → STEP 6) ──────────
     planets_d1 = kundli.get("planets") or []
-    transits = _step6_transits(kundli, lagna_si, planets_d1, now)
-    transit_load = sum(w for _, _, w in transits.get("active_triggers", []))
-    factors.append(f"STEP6 transit_load={transit_load:.2f}")
-
-    # ── STEP 7 — Ashtakavarga ─────────────────────────────────────────
-    ashta = _step7_ashtakavarga(kundli, lagna_si)
-    factors.append(f"STEP7 SAV_lagna={ashta['sav_lagna']} "
-                    f"band={ashta['vitality_band']}")
-
-    # ── STEP 8 — Yogas (Phase 2.5.11.9: was STEP 9) ───────────────────
     yogas = _detect_yogas(kundli, lagna_si, planets_d1)
-    factors.append(f"STEP8 yogas={[y['name'] for y in yogas]}")
+    factors.append(f"STEP6 yogas={[y['name'] for y in yogas]}")
 
     # ── Window selection + severity ───────────────────────────────────
     top3 = _select_top_3(dasha_windows)
     formatted_top3: List[Dict[str, Any]] = []
     confirmations_severe = 0
     for w in top3:
-        sev = _severity_of_window(w["score"], transit_load)
+        sev = _severity_of_window(w["score"])
         if sev == "serious":
             confirmations_severe += 1
         formatted_top3.append({
@@ -1488,7 +1477,7 @@ def _compute_health_window_impl(kundli: dict,
                      if w["start"] <= now <= w["end"]), None)
     current_window = None
     if current:
-        sev = _severity_of_window(current["score"], transit_load)
+        sev = _severity_of_window(current["score"])
         current_window = {
             "md": current["md"], "ad": current["ad"], "pd": current["pd"],
             "start_iso": current["start"].isoformat(),
@@ -1514,10 +1503,9 @@ def _compute_health_window_impl(kundli: dict,
         if len(protection_windows) >= 3:
             break
 
-    # Verdict + tier
+    # Verdict + tier (Phase 2.5.11.11: transit_load + SAV band dropped)
     top_score = formatted_top3[0]["score"] if formatted_top3 else 0.0
-    verdict, band = _derive_verdict(top_score, ashta["vitality_band"],
-                                       yogas, transit_load)
+    verdict, band = _derive_verdict(top_score, yogas)
     severity_now = (current_window["severity"]
                      if current_window else "stable")
     rec_tier = _recommendation_tier(severity_now, confirmations_severe, age)
@@ -1535,14 +1523,11 @@ def _compute_health_window_impl(kundli: dict,
     llm_directives.append("NO_DIAGNOSIS_NAMING")
     llm_directives.append("NO_CURE_GUARANTEE")
 
-    # Risk flags
+    # Risk flags (Phase 2.5.11.11: LOW_SAV_LAGNA_VITALITY +
+    # HEAVY_TRANSIT_LOAD removed alongside their source steps)
     risk_flags: List[str] = []
-    if ashta["vitality_band"] == "WEAK":
-        risk_flags.append("LOW_SAV_LAGNA_VITALITY")
     if any(y["severity"] == "high" for y in yogas):
         risk_flags.append("ARISHTA_OR_PAPAKARTARI_MOON")
-    if transit_load >= 1.5:
-        risk_flags.append("HEAVY_TRANSIT_LOAD")
     if kp_layer.get("verdict_6") == "ILLNESS_YES":
         risk_flags.append("KP_6CSL_DUSTHANA")
     if kp_layer.get("verdict_8") == "CHRONIC_YES":
@@ -1579,8 +1564,6 @@ def _compute_health_window_impl(kundli: dict,
         "top_health_planets": ranked[:5],
         "weighted_breakdown": breakdown,
         "kp_layer": kp_layer,
-        "transits": transits,
-        "ashtakavarga": ashta,
         "yogas": yogas,
         "risk_flags": risk_flags,
         "factors": factors,

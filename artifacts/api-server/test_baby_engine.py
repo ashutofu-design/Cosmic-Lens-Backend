@@ -198,6 +198,50 @@ class TestStep1Filter(unittest.TestCase):
         self.assertGreaterEqual(per.get("confirmations", 0), 2)
         self.assertIn("D1", per.get("confirmed_in", []))
 
+    def test_step6_exact_transit_positions(self):
+        """Phase 2.5.6: Step 6 transit block must expose EXACT
+        sidereal positions for all 8 transiting bodies (Sun, Moon,
+        Mars, Mercury, Jupiter, Venus, Saturn, Rahu) when swisseph
+        is available. Each entry must include longitude, sign+deg,
+        nakshatra+pada, retrograde flag, and house-from-lagna.
+        Skipped gracefully when swisseph missing (note returned).
+        """
+        from event_timing.baby import baby_engine_v1 as B
+        kundli = _mk_kundli("Aries", {
+            "Sun": 11, "Moon": 4, "Mars": 7, "Mercury": 3,
+            "Jupiter": 5, "Venus": 2, "Saturn": 10,
+            "Rahu": 12, "Ketu": 6,
+        }, dashas=_mk_dashas())
+        result = compute_baby_window(kundli, intel={},
+                                       birth={"dob": "1990-05-15"})
+        transits = result.get("transits") or {}
+        if not B._HAS_SWE:
+            self.assertIn("note", transits)
+            return
+        # as_of_utc + positions block must exist
+        self.assertIn("as_of_utc", transits)
+        positions = transits.get("positions") or {}
+        for body in ("Sun", "Moon", "Mars", "Mercury",
+                      "Jupiter", "Venus", "Saturn", "Rahu"):
+            self.assertIn(body, positions, f"{body} missing from positions")
+            p = positions[body]
+            self.assertIsNotNone(p, f"{body} position is None")
+            for k in ("lon_deg", "sign_idx", "sign_name",
+                       "deg_in_sign", "deg_str", "nak_idx", "nak_name",
+                       "pada", "retrograde", "speed_deg_per_day",
+                       "house_from_lagna"):
+                self.assertIn(k, p, f"{body} missing field {k}")
+            # Sanity on ranges
+            self.assertGreaterEqual(p["lon_deg"], 0.0)
+            self.assertLess(p["lon_deg"], 360.0)
+            self.assertIn(p["sign_idx"], range(12))
+            self.assertIn(p["nak_idx"], range(27))
+            self.assertIn(p["pada"], (1, 2, 3, 4))
+            self.assertGreaterEqual(p["deg_in_sign"], 0.0)
+            self.assertLess(p["deg_in_sign"], 30.0)
+            self.assertIn(p["house_from_lagna"], range(1, 13))
+            self.assertIsInstance(p["retrograde"], bool)
+
     def test_step5b_active_window_marking(self):
         """Phase 2.5.5: each dasha window must be marked with
         `active_window` / `active_priority` / `active_lords_in_window`

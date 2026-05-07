@@ -150,6 +150,20 @@ _SIGNS = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
           "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"]
 _SIGN_IDX = {s: i for i, s in enumerate(_SIGNS)}
 
+# 27 nakshatras spanning 360° (each = 13°20′ = 13.3333…°). Used by
+# Step 6 for exact transit position labelling (no extra computation —
+# straight longitude → nakshatra + pada lookup).
+_NAK_NAMES = [
+    "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira",
+    "Ardra", "Punarvasu", "Pushya", "Ashlesha", "Magha",
+    "Purva Phalguni", "Uttara Phalguni", "Hasta", "Chitra", "Swati",
+    "Vishakha", "Anuradha", "Jyeshtha", "Mula", "Purva Ashadha",
+    "Uttara Ashadha", "Shravana", "Dhanishta", "Shatabhisha",
+    "Purva Bhadrapada", "Uttara Bhadrapada", "Revati",
+]
+_NAK_SPAN = 360.0 / 27.0  # 13.3333…°
+_PADA_SPAN = _NAK_SPAN / 4.0  # 3.3333…°
+
 _SIGN_LORDS: Dict[int, str] = {
     0: "Mars", 1: "Venus", 2: "Mercury", 3: "Moon", 4: "Sun",
     5: "Mercury", 6: "Venus", 7: "Mars", 8: "Jupiter",
@@ -1421,21 +1435,98 @@ def _planet_sign_at(planet_id: int, when: datetime) -> Optional[int]:
         return None
 
 
+def _planet_position_at(planet_id: int,
+                          when: datetime) -> Optional[Dict[str, Any]]:
+    """Phase 2.5.6 — EXACT transit position helper.
+
+    Returns rich position dict for `planet_id` at `when` UT:
+      { lon_deg, sign_idx, sign_name, deg_in_sign, deg_str,
+        nak_idx, nak_name, pada, retrograde, speed_deg_per_day }
+
+    Sidereal (Lahiri) longitude. Pure swisseph passthrough — no
+    derived/interpretive fields, no future projections.
+    """
+    if not _HAS_SWE:
+        return None
+    try:
+        jd = swe.julday(when.year, when.month, when.day,
+                         when.hour + when.minute / 60.0)
+        # FLG_SPEED gives us instantaneous angular velocity → retro detect
+        flags = _SWE_FLAGS | swe.FLG_SPEED
+        result = swe.calc_ut(jd, planet_id, flags)
+        lon = float(result[0][0]) % 360.0
+        speed = float(result[0][3])  # deg / day in longitude
+        sign_idx = int(lon // 30) % 12
+        deg_in_sign = lon - (sign_idx * 30.0)
+        deg_int = int(deg_in_sign)
+        deg_min = int(round((deg_in_sign - deg_int) * 60.0))
+        if deg_min == 60:
+            deg_min = 0
+            deg_int += 1
+        nak_idx = int(lon // _NAK_SPAN) % 27
+        nak_offset = lon - (nak_idx * _NAK_SPAN)
+        pada = int(nak_offset // _PADA_SPAN) + 1
+        if pada > 4: pada = 4
+        return {
+            "lon_deg":             round(lon, 4),
+            "sign_idx":            sign_idx,
+            "sign_name":           _SIGNS[sign_idx],
+            "deg_in_sign":         round(deg_in_sign, 4),
+            "deg_str":             f"{deg_int:02d}°{deg_min:02d}′",
+            "nak_idx":             nak_idx,
+            "nak_name":            _NAK_NAMES[nak_idx],
+            "pada":                pada,
+            "retrograde":          speed < 0.0,
+            "speed_deg_per_day":   round(speed, 4),
+        }
+    except Exception:
+        return None
+
+
 def _step6_transits(kundli: dict, lagna_si: int,
                      planets_d1: List[dict],
                      now: datetime) -> Dict[str, Any]:
     out = {"jupiter": None, "saturn": None, "rahu": None,
            "mars": None, "sade_sati": None,
-           "active_triggers": []}
+           "active_triggers": [],
+           "positions": {},
+           "as_of_utc": now.isoformat()}
     if not _HAS_SWE:
         out["note"] = "swisseph unavailable; transit layer skipped"
         return out
 
     moon_si = _planet_sign_idx(planets_d1, "Moon")
-    saturn_si = _planet_sign_at(swe.SATURN, now)
-    rahu_si = _planet_sign_at(swe.MEAN_NODE, now)
-    mars_si = _planet_sign_at(swe.MARS, now)
-    jupiter_si = _planet_sign_at(swe.JUPITER, now)
+    # Exact positions (sidereal Lahiri). Single source of truth — sign
+    # indices are derived from the same position dicts (no double-call).
+    pos_jup = _planet_position_at(swe.JUPITER,    now)
+    pos_sat = _planet_position_at(swe.SATURN,     now)
+    pos_rah = _planet_position_at(swe.MEAN_NODE,  now)
+    pos_mar = _planet_position_at(swe.MARS,       now)
+    pos_sun = _planet_position_at(swe.SUN,        now)
+    pos_mer = _planet_position_at(swe.MERCURY,    now)
+    pos_ven = _planet_position_at(swe.VENUS,      now)
+    pos_moon_now = _planet_position_at(swe.MOON,  now)
+
+    def _enrich(pos):
+        if not pos: return None
+        h = _house_of_sign(pos["sign_idx"], lagna_si)
+        return {**pos, "house_from_lagna": h}
+
+    out["positions"] = {
+        "Sun":     _enrich(pos_sun),
+        "Moon":    _enrich(pos_moon_now),
+        "Mars":    _enrich(pos_mar),
+        "Mercury": _enrich(pos_mer),
+        "Jupiter": _enrich(pos_jup),
+        "Venus":   _enrich(pos_ven),
+        "Saturn":  _enrich(pos_sat),
+        "Rahu":    _enrich(pos_rah),
+    }
+
+    saturn_si  = pos_sat["sign_idx"] if pos_sat else None
+    rahu_si    = pos_rah["sign_idx"] if pos_rah else None
+    mars_si    = pos_mar["sign_idx"] if pos_mar else None
+    jupiter_si = pos_jup["sign_idx"] if pos_jup else None
 
     def _h(si):
         return _house_of_sign(si, lagna_si) if si is not None else None

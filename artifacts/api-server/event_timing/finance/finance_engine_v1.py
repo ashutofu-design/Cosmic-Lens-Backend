@@ -4,9 +4,11 @@ event_timing/finance/finance_engine_v1.py
 COSMIC LENS FINANCE TIMING ENGINE v1.0 — clean build, mirrors
 Health v1 / Marriage v2.4 architecture.
 
-Architecture: FILTER → VERIFY → ACTIVATE → TRIGGER (9-step pipeline,
-locked May 7 2026 per user spec "finance ka same structure jaise
-health/marriage timing kiya he").
+Architecture: FILTER → VERIFY → ACTIVATE (5-step pipeline,
+trimmed May 7 2026 per Phase 2.5.11.12 user spec — D2 Hora,
+transits, Ashtakavarga, yogas all REMOVED. KP promoted from
+STEP 3.5 → STEP 3 as the FINAL filter that picks the best
+wealth-giving planet).
 
   STEP 1   D1 wealth-significator filter            (FILTER)
            - 2L (income/family-wealth), 5L (Lakshmi/speculation),
@@ -19,27 +21,15 @@ health/marriage timing kiya he").
            - Karakas: Jupiter (wealth wisdom), Venus (luxury),
              Mercury (commerce), Sun (income authority/PSU),
              Moon (passive/comfort wealth)
-  STEP 2   D9 dignity verification                  (VERIFY)
-  STEP 3   D2 Hora wealth verification              (VERIFY)
-           Parashara: D2 is THE wealth chart. Sun-Hora (Leo) =
-           active income; Moon-Hora (Cancer) = passive/inherited.
+  STEP 2   D9 dignity verification                  (VERIFY/FILTER)
+  STEP 3   KP cuspal sub lord of 2 & 11             (FINAL FILTER)
+           "Sabse last filter — kis planet sabse acha he paisa
+           dene me". Income (2H) + Gains (11H) CSL signification.
   STEP 4   Weighted ranking
-           D1·30 + D9·20 + D2·25 + KP·15 + karaka·10
+           D1·40 + D9·30 + KP·20 + karaka·10
   STEP 5   Dasha activation (AD/PD primary; MD low-weight)
-           AD=5, PD=6, MD=1. Signed contribution: benefic AD/PD
-           lowers stress (= relief).
-  STEP 6   Transit triggers
-           Jupiter over 2/5/11 (gain/protection),
-           Saturn over 2 (income discipline) or 12 (drain warning),
-           Rahu over 11 (sudden gain) or 6 (debt warning),
-           Sade Sati on 2H/2L (income squeeze)
-  STEP 7   Ashtakavarga support
-           SAV bindus on 2H (income strength),
-           SAV bindus on 11H (gain strength)
-  STEP 8   KP cuspal sub lord of 2 & 11 (wealth fulfillment)
-  STEP 9   Yoga + hard-guard layer
-           Dhana / Lakshmi / Kubera / Gaja-Kesari / Adhi /
-           Vipreet-Rajyoga (positive), Daridra / Kemadruma (negative)
+           AD=5, PD=6, MD=1. Emits next_3_windows (upcoming
+           dasha periods where the top-ranked planet fires).
 
 Public function:
   compute_finance_window(kundli, intel, kp, birth) -> dict
@@ -57,19 +47,16 @@ Output dict (back-compat with health/marriage-style consumers):
                               "expenses", ...],
     "recommendation_tier":  "watchful" | "supportive" |
                             "celebratory" | "consult",
-    "top_finance_planets":  [{name, score, d1, d9, d2, kp, karaka,
+    "top_finance_planets":  [{name, score, d1, d9, kp, karaka,
                                significations[]}],
-    "weighted_breakdown":   {planet: {d1, d9, d2, kp, karaka, total}},
+    "weighted_breakdown":   {planet: {d1, d9, kp, karaka, total}},
     "kp_layer":             {csl_2, csl_11, verdict_2, verdict_11},
-    "transits":             {saturn, rahu, ketu, mars, jupiter, sade_sati},
-    "ashtakavarga":         {sav_2, sav_11, wealth_band},
-    "yogas":                [{name, severity, planets}],
     "risk_flags":           [str],
     "factors":              [str],   # full audit trail
     "llm_directives":       [str],   # FINANCIAL_DISCLAIMER, etc
     "remedies":             {...},   # delegated to remedy engine money topic
     "engine_version":       "v1.0.0",
-    "engine_arch":          "FILTER→VERIFY→ACTIVATE→TRIGGER",
+    "engine_arch":          "FILTER→VERIFY→KP-GATE→ACTIVATE",
   }
 
 Hard guards (per user policy + replit.md):
@@ -107,10 +94,10 @@ def clear_last_finance_result() -> None:
 
 # ── External helpers (graceful degradation if unavailable) ──
 try:
-    from divisional_charts import compute_d9, compute_d2  # type: ignore
+    from divisional_charts import compute_d9  # type: ignore  # compute_d2 dropped Phase 2.5.11.12
 except Exception:
     compute_d9 = None  # type: ignore
-    compute_d2 = None  # type: ignore
+    pass  # compute_d2 removed Phase 2.5.11.12
 
 try:
     from ashtakavarga import compute_ashtakavarga  # type: ignore
@@ -161,10 +148,9 @@ _WEALTH_HOUSES = [2, 5, 9, 11]    # income, Lakshmi, luck, gains
 _LEAK_HOUSES   = [6, 8, 12]       # debt, sudden, loss/expense
 
 # Finance-significator weights (Step 4)
-_WEIGHT_D1     = 0.30
-_WEIGHT_D9     = 0.20
-_WEIGHT_D2     = 0.25
-_WEIGHT_KP     = 0.15
+_WEIGHT_D1     = 0.40
+_WEIGHT_D9     = 0.30
+_WEIGHT_KP     = 0.20
 _WEIGHT_KARAKA = 0.10
 
 # Dasha scores (per user spec: AD/PD lead, MD background)
@@ -451,7 +437,7 @@ def _step2_d9_verify(kundli: dict, candidates: Set[str]) -> Dict[str, float]:
 # ════════════════════════════════════════════════════════════════════════
 # STEP 3 — D2 Hora wealth verification (Parashara's wealth chart)
 # ════════════════════════════════════════════════════════════════════════
-def _step3_d2_hora(kundli: dict, candidates: Set[str]) -> Dict[str, float]:
+def _DELETED_step3_d2_hora(kundli: dict, candidates: Set[str]) -> Dict[str, float]:
     """D2 Hora is THE wealth chart per Parashara. Each sign is split in
     half: odd-sign 0-15° = Sun-Hora (Leo), 15-30° = Moon-Hora (Cancer);
     reversed for even signs. A wealth-significator landing in Sun-Hora
@@ -494,7 +480,7 @@ def _step3_d2_hora(kundli: dict, candidates: Set[str]) -> Dict[str, float]:
 # ════════════════════════════════════════════════════════════════════════
 # STEP 3.5 — KP layer (cuspal sub lord of 2nd & 11th)
 # ════════════════════════════════════════════════════════════════════════
-def _step3_5_kp_layer(kp: dict, lagna_si: int) -> Dict[str, Any]:
+def _step3_kp_layer(kp: dict, lagna_si: int) -> Dict[str, Any]:
     """KP cuspal sub lord of 2nd & 11th cusps.
     Verdict rules (KP standard for wealth):
       2 CSL signifies 2/11/9/5 → income YES
@@ -552,23 +538,42 @@ def _karaka_score(pname: str, lagna_si: int) -> float:
 
 def _step4_rank(d1_map: Dict[str, Dict[str, Any]],
                 d9_scores: Dict[str, float],
-                d2_scores: Dict[str, float],
                 kp: dict, lagna_si: int) -> List[Dict[str, Any]]:
-    """Rank surviving candidates by weighted score.
-    Score = D1·30% + D9·20% + D2·25% + KP·15% + Karaka·10%
+    """Rank candidates after KP-as-final-filter narrows the survivor set.
+    Score = D1·40% + D9·30% + KP·20% + Karaka·10%
     All sub-scores normalized to 0-25 first.
+
+    Phase 2.5.11.12: D2 Hora removed; weight redistributed
+    (D2's 25 → +10 D1, +10 D9, +5 KP). KP promoted to a HARD GATE
+    (per user spec "Step 3.5 me sabse last filter kp me hoga"):
+    survivors must have KP signification touching at least one wealth
+    house (2/5/9/11). Safe fallback: if KP data is empty OR no survivor
+    qualifies, fall back to all D1+D9 survivors so the engine never
+    returns an empty ranking on a chart with valid wealth lords.
     """
     survivors = [p for p, info in d1_map.items() if info.get("in_filter")]
     if not survivors:
         return []
-    raw_d1 = {p: d1_map[p]["d1"] for p in survivors}
+
+    # ── KP final filter (gated; safe fallback) ────────────────────
+    kp_qualified = []
+    kp_data_present = bool(kp.get("significations") or kp.get("cusps"))
+    for pname in survivors:
+        sig = _planet_signified_houses(kp, pname)
+        if any(h in _WEALTH_HOUSES for h in sig):
+            kp_qualified.append(pname)
+    if kp_data_present and kp_qualified:
+        ranking_pool = kp_qualified
+    else:
+        ranking_pool = survivors  # fallback: KP missing OR nobody passes
+
+    raw_d1 = {p: d1_map[p]["d1"] for p in ranking_pool}
     max_d1 = max(raw_d1.values()) or 1.0
     ranked: List[Dict[str, Any]] = []
-    for pname in survivors:
+    for pname in ranking_pool:
         info = d1_map[pname]
         d1 = (raw_d1[pname] / max_d1) * 25.0
         d9 = d9_scores.get(pname, 8.0)
-        d2 = d2_scores.get(pname, 8.0)
         # KP signification of wealth/leak
         sig = _planet_signified_houses(kp, pname)
         kp_score = 0.0
@@ -581,14 +586,15 @@ def _step4_rank(d1_map: Dict[str, Dict[str, Any]],
         kp_score = min(25.0, kp_score) if kp_score > 0 else 6.0
         karaka = _karaka_score(pname, lagna_si) * 2.5  # scale to 0-25
         total = (d1 * _WEIGHT_D1 + d9 * _WEIGHT_D9 +
-                 d2 * _WEIGHT_D2 + kp_score * _WEIGHT_KP +
+                 kp_score * _WEIGHT_KP +
                  karaka * _WEIGHT_KARAKA)
         ranked.append({
             "name": pname,
             "score": round(total, 2),
             "d1": round(d1, 2), "d9": round(d9, 2),
-            "d2": round(d2, 2), "kp": round(kp_score, 2),
+            "kp": round(kp_score, 2),
             "karaka": round(karaka, 2),
+            "kp_qualified": pname in kp_qualified,
             "links": list(info["links"]),
             "significations": _AREA_OF_PLANET.get(pname, []),
         })
@@ -812,7 +818,7 @@ def _planet_sign_at(planet_id: int, when: datetime) -> Optional[int]:
         return None
 
 
-def _step6_transits(kundli: dict, lagna_si: int,
+def _DELETED_step6_transits(kundli: dict, lagna_si: int,
                      planets_d1: List[dict],
                      now: datetime) -> Dict[str, Any]:
     """Compute current transit triggers — finance lens."""
@@ -894,7 +900,7 @@ def _step6_transits(kundli: dict, lagna_si: int,
 # ════════════════════════════════════════════════════════════════════════
 # STEP 7 — Ashtakavarga support (SAV bindus on 2H + 11H)
 # ════════════════════════════════════════════════════════════════════════
-def _step7_ashtakavarga(kundli: dict, lagna_si: int) -> Dict[str, Any]:
+def _DELETED_step7_ashtakavarga(kundli: dict, lagna_si: int) -> Dict[str, Any]:
     out = {"sav_2": None, "sav_11": None, "wealth_band": "UNKNOWN"}
     if compute_ashtakavarga is None:
         return out
@@ -925,7 +931,7 @@ def _step7_ashtakavarga(kundli: dict, lagna_si: int) -> Dict[str, Any]:
 # ════════════════════════════════════════════════════════════════════════
 # STEP 9 — Yoga + hard guards
 # ════════════════════════════════════════════════════════════════════════
-def _detect_yogas(kundli: dict, lagna_si: int,
+def _DELETED_detect_yogas(kundli: dict, lagna_si: int,
                    planets: List[dict]) -> List[Dict[str, Any]]:
     """Detect classical wealth-relevant yogas.
 
@@ -1089,7 +1095,7 @@ def _compute_age(birth_dt: Optional[datetime], ref: datetime) -> Optional[int]:
     return None
 
 
-def _severity_of_window(score: float, transit_load: float) -> str:
+def _severity_of_window(score: float, transit_load: float = 0.0) -> str:
     """Map raw stress score to a finance severity tier.
 
     Tiers (matching money topic in remedy engine):
@@ -1097,8 +1103,9 @@ def _severity_of_window(score: float, transit_load: float) -> str:
       supportive  : positive flow, low stress
       watchful    : moderate stress, action needed
       consult     : serious stress / heavy leak
+    Phase 2.5.11.12: transit_load kept as no-op default for back-compat.
     """
-    s = score + max(0.0, transit_load)
+    s = score
     if s < 2.0:
         return "celebratory"
     if s < 4.5:
@@ -1121,35 +1128,22 @@ def _recommendation_tier(severity: str, confirmations: int,
 
 
 def _derive_verdict(top_window_score: float,
-                     wealth_band: str,
-                     yogas: List[Dict[str, Any]],
-                     transit_load: float
+                     wealth_band: str = "MEDIUM",
+                     yogas: Optional[List[Dict[str, Any]]] = None,
+                     transit_load: float = 0.0,
                      ) -> Tuple[str, str]:
-    """Combine top-window stress, ashtakavarga band, yogas and transits
-    into a single verdict + band.
+    """Derive verdict + band from top-window score alone.
+    Phase 2.5.11.12: yogas + transit_load + ashtakavarga band REMOVED.
+    Optional kwargs preserved as no-ops for backward-compat with any
+    external caller / older test harness.
     """
-    # CRITICAL (architect-fix May 7 2026): old logic let any single
-    # `has_high_neg` yoga (e.g. one Daridra ribbon) hard-override verdict
-    # to HIGH_LEAK regardless of stress. Now `has_high_neg` only forces
-    # HIGH_LEAK when stress is also elevated AND no protective yoga
-    # rescues the chart.
     band = wealth_band if wealth_band in {"WEAK", "MEDIUM", "STRONG"} else "MEDIUM"
-    has_high_neg = any(y.get("severity") == "high" for y in yogas)
-    has_protect = any(y.get("severity") == "protective" for y in yogas)
-
-    s = top_window_score + max(0.0, transit_load)
+    s = top_window_score
     if s >= 8.0:
         return "HIGH_LEAK_WINDOW", "WEAK"
-    if s >= 4.5 and has_high_neg and not has_protect:
-        return "HIGH_LEAK_WINDOW", "WEAK"
     if s >= 4.5:
-        verdict = "STRESSED"
-        if has_protect:
-            verdict = "STABLE"
-        return verdict, band
-    if has_high_neg and not has_protect:
         return "STRESSED", band
-    if has_protect or band == "STRONG":
+    if s < 2.0:
         return "WEALTH_PROMISED", "STRONG"
     return "STABLE", band
 
@@ -1204,7 +1198,7 @@ def _data_sufficiency(kundli: dict, kp: dict) -> Tuple[bool, List[str]]:
 def compute_finance_window(kundli: dict, intel: Optional[dict] = None,
                             kp: Optional[dict] = None,
                             birth: Optional[Any] = None) -> dict:
-    """Run the full 9-step Finance Timing Engine v1 pipeline.
+    """Run the 5-step Finance Timing Engine v1 pipeline (Phase 2.5.11.12).
 
     Single-exit wrapper that GUARANTEES the thread-local cache is reset
     at entry and populated on EVERY exit path (early-return UNKNOWN
@@ -1220,7 +1214,7 @@ def compute_finance_window(kundli: dict, intel: Optional[dict] = None,
             "factors": [f"ENGINE_EXCEPTION {type(exc).__name__}: {str(exc)[:160]}"],
             "risk_flags": ["ENGINE_EXCEPTION"],
             "engine_version": "v1.0.0",
-            "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER",
+            "engine_arch": "FILTER→VERIFY→KP-GATE→ACTIVATE",
         }
     _store_last_result(result)
     return result
@@ -1235,7 +1229,7 @@ def _compute_finance_window_impl(kundli: dict,
         return {"verdict": "UNKNOWN", "band": "WEAK",
                 "factors": ["GATE kundli empty"],
                 "engine_version": "v1.0.0",
-                "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER"}
+                "engine_arch": "FILTER→VERIFY→KP-GATE→ACTIVATE"}
     kp = kp or kundli.get("kp") or {}
     intel = intel or {}
 
@@ -1255,7 +1249,7 @@ def _compute_finance_window_impl(kundli: dict,
         return {"verdict": "UNKNOWN", "band": "WEAK",
                 "factors": ["GATE lagna_si is None"],
                 "engine_version": "v1.0.0",
-                "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER"}
+                "engine_arch": "FILTER→VERIFY→KP-GATE→ACTIVATE"}
 
     ok, reasons = _data_sufficiency(kundli, kp)
     factors: List[str] = []
@@ -1265,7 +1259,7 @@ def _compute_finance_window_impl(kundli: dict,
         return {"verdict": "UNKNOWN", "band": "WEAK",
                 "risk_flags": reasons, "factors": factors,
                 "engine_version": "v1.0.0",
-                "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER"}
+                "engine_arch": "FILTER→VERIFY→KP-GATE→ACTIVATE"}
 
     now = datetime.utcnow()
     birth_dt = _parse_dob_dt(birth, kundli=kundli)
@@ -1282,47 +1276,27 @@ def _compute_finance_window_impl(kundli: dict,
     factors.append(f"STEP2 D9_scores=" +
                     ",".join(f"{p}:{s:.1f}" for p, s in d9_scores.items()))
 
-    # ── STEP 3 ──
-    d2_scores = _step3_d2_hora(kundli, survivors)
-    factors.append(f"STEP3 D2_Hora=" +
-                    ",".join(f"{p}:{s:.1f}" for p, s in d2_scores.items()))
-
-    # ── STEP 3.5 — KP layer ──
-    kp_layer = _step3_5_kp_layer(kp, lagna_si)
-    factors.append(f"STEP3.5 KP csl_2={kp_layer['csl_2']}/{kp_layer['verdict_2']} "
+    # ── STEP 3 — KP layer (FINAL FILTER: kis planet sabse acha paisa dene me) ──
+    kp_layer = _step3_kp_layer(kp, lagna_si)
+    factors.append(f"STEP3 KP csl_2={kp_layer['csl_2']}/{kp_layer['verdict_2']} "
                     f"csl_11={kp_layer['csl_11']}/{kp_layer['verdict_11']}")
 
     # ── STEP 4 — Weighted ranking ──
-    ranked = _step4_rank(d1_map, d9_scores, d2_scores, kp, lagna_si)
+    ranked = _step4_rank(d1_map, d9_scores, kp, lagna_si)
     factors.append("STEP4 ranked=" +
                     ",".join(f"{r['name']}:{r['score']}" for r in ranked[:5]))
 
-    # ── STEP 5 — Dasha activation ──
+    # ── STEP 5 — Dasha activation (upcoming AD/PD windows) ──
     chain = _flatten_dasha_chain(kundli)
     dasha_windows = _step5_dasha_activation(chain, ranked, lagna_si, now)
-    factors.append(f"STEP5 dasha_windows_in_horizon={len(dasha_windows)}")
-
-    # ── STEP 6 — Transits ──
-    planets_d1 = kundli.get("planets") or []
-    transits = _step6_transits(kundli, lagna_si, planets_d1, now)
-    transit_load = sum(w for _, _, w in transits.get("active_triggers", []))
-    factors.append(f"STEP6 transit_load={transit_load:.2f}")
-
-    # ── STEP 7 — Ashtakavarga ──
-    ashta = _step7_ashtakavarga(kundli, lagna_si)
-    factors.append(f"STEP7 SAV_2={ashta['sav_2']} SAV_11={ashta['sav_11']} "
-                    f"band={ashta['wealth_band']}")
-
-    # ── STEP 9 — Yogas ──
-    yogas = _detect_yogas(kundli, lagna_si, planets_d1)
-    factors.append(f"STEP9 yogas={[y['name'] for y in yogas]}")
+    factors.append(f"STEP5 upcoming_dasha_windows={len(dasha_windows)}")
 
     # ── Window selection + severity ──
     top3 = _select_top_3(dasha_windows)
     formatted_top3: List[Dict[str, Any]] = []
     confirmations_severe = 0
     for w in top3:
-        sev = _severity_of_window(w["score"], transit_load)
+        sev = _severity_of_window(w["score"])
         if sev == "consult":
             confirmations_severe += 1
         formatted_top3.append({
@@ -1339,7 +1313,7 @@ def _compute_finance_window_impl(kundli: dict,
                      if w["start"] <= now <= w["end"]), None)
     current_window = None
     if current:
-        sev = _severity_of_window(current["score"], transit_load)
+        sev = _severity_of_window(current["score"])
         current_window = {
             "md": current["md"], "ad": current["ad"], "pd": current["pd"],
             "start_iso": current["start"].isoformat(),
@@ -1354,8 +1328,6 @@ def _compute_finance_window_impl(kundli: dict,
     protection_windows = []
     for w in dasha_windows[:30]:
         if w["ad"] in benefics or w["pd"] in benefics:
-            if any(y.get("severity") == "high" for y in yogas):
-                continue
             protection_windows.append({
                 "md": w["md"], "ad": w["ad"], "pd": w["pd"],
                 "window": _format_window(w["start"], w["end"]),
@@ -1367,8 +1339,7 @@ def _compute_finance_window_impl(kundli: dict,
 
     # Verdict + tier
     top_score = formatted_top3[0]["score"] if formatted_top3 else 0.0
-    verdict, band = _derive_verdict(top_score, ashta["wealth_band"],
-                                       yogas, transit_load)
+    verdict, band = _derive_verdict(top_score)
     severity_now = (current_window["severity"]
                      if current_window else "supportive")
     rec_tier = _recommendation_tier(severity_now, confirmations_severe, age)
@@ -1391,12 +1362,6 @@ def _compute_finance_window_impl(kundli: dict,
 
     # Risk flags
     risk_flags: List[str] = []
-    if ashta["wealth_band"] == "WEAK":
-        risk_flags.append("LOW_SAV_WEALTH_BAND")
-    if any(y.get("severity") == "high" for y in yogas):
-        risk_flags.append("DARIDRA_OR_KEMADRUMA_YOGA")
-    if transit_load >= 1.5:
-        risk_flags.append("HEAVY_TRANSIT_LOAD")
     if kp_layer.get("verdict_2") == "INCOME_BLOCKED":
         risk_flags.append("KP_2CSL_DUSTHANA")
     if kp_layer.get("verdict_11") == "GAINS_BLOCKED":
@@ -1404,7 +1369,7 @@ def _compute_finance_window_impl(kundli: dict,
 
     # Weighted breakdown (engine audit)
     breakdown = {
-        r["name"]: {"d1": r["d1"], "d9": r["d9"], "d2": r["d2"],
+        r["name"]: {"d1": r["d1"], "d9": r["d9"],
                      "kp": r["kp"], "karaka": r["karaka"],
                      "total": r["score"]}
         for r in ranked
@@ -1423,15 +1388,12 @@ def _compute_finance_window_impl(kundli: dict,
         "top_finance_planets": ranked[:5],
         "weighted_breakdown": breakdown,
         "kp_layer": kp_layer,
-        "transits": transits,
-        "ashtakavarga": ashta,
-        "yogas": yogas,
         "risk_flags": risk_flags,
         "factors": factors,
         "llm_directives": llm_directives,
         "remedies": remedies,
         "engine_version": "v1.0.0",
-        "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER",
+        "engine_arch": "FILTER→VERIFY→KP-GATE→ACTIVATE",
     }
 
 

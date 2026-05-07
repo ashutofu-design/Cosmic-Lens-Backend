@@ -19,8 +19,7 @@ from event_timing.finance.finance_engine_v1 import (
     get_last_finance_result,
     clear_last_finance_result,
     _step1_d1_filter,
-    _step3_5_kp_layer,
-    _detect_yogas,
+    _step3_kp_layer,
     _aspects_house,
     _house_lord,
     _severity_of_window,
@@ -124,12 +123,13 @@ class TestHelpers(unittest.TestCase):
 # ════════════════════════════════════════════════════════════════════════
 class TestSeverityVerdict(unittest.TestCase):
     def test_severity_bands(self):
-        self.assertEqual(_severity_of_window(1.0, 0.0), "celebratory")
-        self.assertEqual(_severity_of_window(3.0, 0.0), "supportive")
-        self.assertEqual(_severity_of_window(6.0, 0.0), "watchful")
-        self.assertEqual(_severity_of_window(9.0, 0.0), "consult")
-        # Transit load can push watchful → consult
-        self.assertEqual(_severity_of_window(7.0, 1.5), "consult")
+        # Phase 2.5.11.12: transit_load is no-op default kwarg.
+        self.assertEqual(_severity_of_window(1.0), "celebratory")
+        self.assertEqual(_severity_of_window(3.0), "supportive")
+        self.assertEqual(_severity_of_window(6.0), "watchful")
+        self.assertEqual(_severity_of_window(9.0), "consult")
+        # Transit load is no-op now (back-compat); score-only governs.
+        self.assertEqual(_severity_of_window(7.0, 1.5), "watchful")
 
     def test_recommendation_tier(self):
         # consult only with 3+ confirmations
@@ -145,24 +145,22 @@ class TestSeverityVerdict(unittest.TestCase):
                           "watchful")
 
     def test_derive_verdict_high_leak(self):
-        yogas = [{"name": "Daridra Yoga (11L in dusthana)",
-                   "severity": "high", "planets": ["Saturn"]}]
-        v, b = _derive_verdict(8.5, "WEAK", yogas, 0.0)
+        # Phase 2.5.11.12: yogas + transit_load are no-op kwargs now.
+        v, b = _derive_verdict(8.5)
         self.assertEqual(v, "HIGH_LEAK_WINDOW")
         self.assertEqual(b, "WEAK")
 
     def test_derive_verdict_promised(self):
-        yogas = [{"name": "Dhana Yoga (2L+11L conjunction)",
-                   "severity": "protective", "planets": ["Venus", "Saturn"]}]
-        v, b = _derive_verdict(2.0, "STRONG", yogas, 0.0)
+        v, b = _derive_verdict(1.5)
         self.assertEqual(v, "WEALTH_PROMISED")
         self.assertEqual(b, "STRONG")
 
-    def test_derive_verdict_stressed_with_protection(self):
-        # Stressed score but a protective yoga rescues to STABLE
-        yogas = [{"name": "Gaja-Kesari Yoga",
-                   "severity": "protective", "planets": ["Jupiter", "Moon"]}]
-        v, _ = _derive_verdict(5.0, "MEDIUM", yogas, 0.0)
+    def test_derive_verdict_stressed(self):
+        v, _ = _derive_verdict(5.0)
+        self.assertEqual(v, "STRESSED")
+
+    def test_derive_verdict_stable_midband(self):
+        v, _ = _derive_verdict(3.0)
         self.assertEqual(v, "STABLE")
 
 
@@ -224,71 +222,82 @@ class TestKpLayer(unittest.TestCase):
                 "Mars":    [6, 8],       # all leak  → GAINS_BLOCKED
             },
         }
-        out = _step3_5_kp_layer(kp, 0)
+        out = _step3_kp_layer(kp, 0)
         self.assertEqual(out["verdict_2"], "INCOME_YES")
         self.assertEqual(out["verdict_11"], "GAINS_BLOCKED")
 
     def test_kp_empty_safe_default(self):
-        out = _step3_5_kp_layer({}, 0)
+        out = _step3_kp_layer({}, 0)
         self.assertEqual(out["verdict_2"], "UNKNOWN")
         self.assertEqual(out["verdict_11"], "UNKNOWN")
 
 
 # ════════════════════════════════════════════════════════════════════════
-# Step 9 — Yoga detection
+# Step 4 — KP-as-final-filter gate (Phase 2.5.11.12)
 # ════════════════════════════════════════════════════════════════════════
-class TestYogas(unittest.TestCase):
-    def test_dhana_yoga_conjunction(self):
-        # Aries lagna → 2L=Venus, 11L=Saturn. Place both in 5H.
+class TestStep4KpGate(unittest.TestCase):
+    def test_kp_gate_narrows_pool_to_qualified_planets(self):
+        # Aries lagna; 4 D1 survivors but only 2 KP-qualified
         kundli = _mk_kundli("Aries", {
-            "Sun": 1, "Moon": 4, "Mars": 7, "Mercury": 6,
-            "Jupiter": 9, "Venus": 5, "Saturn": 5,
+            "Sun": 1, "Moon": 4, "Mars": 7, "Mercury": 11,
+            "Jupiter": 5, "Venus": 2, "Saturn": 10,
             "Rahu": 3, "Ketu": 9,
         })
-        yg = _detect_yogas(kundli, 0, kundli["planets"])
-        names = [y["name"] for y in yg]
-        self.assertTrue(any("Dhana Yoga" in n for n in names))
+        from event_timing.finance.finance_engine_v1 import _step4_rank
+        d1 = _step1_d1_filter(kundli, 0)
+        d9 = {p: 12.0 for p in d1}
+        kp = {
+            "cusps": [{"house": 2, "sl": "Venus"},
+                      {"house": 11, "sl": "Mercury"}],
+            "significations": {
+                "Venus":   [2, 11, 5],   # qualified (touches wealth)
+                "Mercury": [2, 9],       # qualified
+                "Saturn":  [6, 8],       # NOT qualified (only leak)
+                "Jupiter": [12],         # NOT qualified
+            },
+        }
+        ranked = _step4_rank(d1, d9, kp, 0)
+        names = {r["name"] for r in ranked}
+        self.assertIn("Venus", names)
+        self.assertIn("Mercury", names)
+        self.assertNotIn("Saturn", names)
+        for r in ranked:
+            self.assertTrue(r["kp_qualified"])
 
-    def test_gaja_kesari(self):
-        # Jupiter-Moon kendra (1/4/7/10 from each other)
-        # Aries lagna; Jupiter in 1H, Moon in 7H → kendra
+    def test_kp_empty_falls_back_to_all_survivors(self):
+        # No KP data → fallback to all D1 survivors (engine never empty)
         kundli = _mk_kundli("Aries", {
-            "Sun": 5, "Moon": 7, "Mars": 8, "Mercury": 6,
-            "Jupiter": 1, "Venus": 11, "Saturn": 10,
+            "Sun": 1, "Moon": 4, "Mars": 7, "Mercury": 11,
+            "Jupiter": 5, "Venus": 2, "Saturn": 10,
             "Rahu": 3, "Ketu": 9,
         })
-        yg = _detect_yogas(kundli, 0, kundli["planets"])
-        names = [y["name"] for y in yg]
-        self.assertTrue(any("Gaja-Kesari" in n for n in names))
+        from event_timing.finance.finance_engine_v1 import _step4_rank
+        d1 = _step1_d1_filter(kundli, 0)
+        d9 = {p: 12.0 for p in d1}
+        ranked = _step4_rank(d1, d9, {}, 0)
+        self.assertGreater(len(ranked), 0)
+        for r in ranked:
+            self.assertFalse(r["kp_qualified"])  # nobody qualified
 
-    def test_daridra_yoga_11L_dusthana(self):
-        # Aries lagna → 11L = Saturn. Place Saturn in 8H (dusthana).
+    def test_kp_no_qualifier_falls_back(self):
+        # KP present but NO survivor signifies wealth → fallback to all
         kundli = _mk_kundli("Aries", {
-            "Sun": 1, "Moon": 4, "Mars": 7, "Mercury": 6,
-            "Jupiter": 5, "Venus": 2, "Saturn": 8,
+            "Sun": 1, "Moon": 4, "Mars": 7, "Mercury": 11,
+            "Jupiter": 5, "Venus": 2, "Saturn": 10,
             "Rahu": 3, "Ketu": 9,
         })
-        yg = _detect_yogas(kundli, 0, kundli["planets"])
-        names = [y["name"] for y in yg]
-        self.assertTrue(any("Daridra Yoga (11L" in n for n in names))
-        # Severity should be HIGH for daridra
-        for y in yg:
-            if "Daridra" in y["name"]:
-                self.assertEqual(y["severity"], "high")
-
-    def test_kemadruma_yoga(self):
-        # Moon alone, no benefic in 2nd/12th from Moon, not in kendra
-        # Aries lagna; Moon in 5H, no planets in 4H/6H, Sun excluded
-        kundli = _mk_kundli("Aries", {
-            "Moon": 5, "Sun": 12, "Mars": 8, "Mercury": 9,
-            "Jupiter": 11, "Venus": 1, "Saturn": 10,
-            "Rahu": 3, "Ketu": 9,
-        })
-        yg = _detect_yogas(kundli, 0, kundli["planets"])
-        names = [y["name"] for y in yg]
-        self.assertTrue(any("Kemadruma" in n for n in names))
+        from event_timing.finance.finance_engine_v1 import _step4_rank
+        d1 = _step1_d1_filter(kundli, 0)
+        d9 = {p: 12.0 for p in d1}
+        kp = {"cusps": [{"house": 2, "sl": "Mars"}],
+              "significations": {p: [6, 8, 12] for p in d1}}  # all leak
+        ranked = _step4_rank(d1, d9, kp, 0)
+        self.assertGreater(len(ranked), 0)
 
 
+# ════════════════════════════════════════════════════════════════════════
+# Step 9 — Yoga detection
+# Phase 2.5.11.12: TestYogas removed — _detect_yogas orphaned (STEP 9 removed).
 # ════════════════════════════════════════════════════════════════════════
 # Affected areas
 # ════════════════════════════════════════════════════════════════════════
@@ -333,8 +342,8 @@ class TestPublicAPI(unittest.TestCase):
                                          birth={"dob": "1990-05-15"})
         # Required keys
         for k in ("verdict", "band", "next_3_windows", "top_finance_planets",
-                  "weighted_breakdown", "kp_layer", "ashtakavarga",
-                  "yogas", "risk_flags", "factors", "llm_directives",
+                  "weighted_breakdown", "kp_layer",
+                  "risk_flags", "factors", "llm_directives",
                   "remedies", "engine_version", "engine_arch"):
             self.assertIn(k, result, f"missing key: {k}")
         self.assertEqual(result["engine_version"], "v1.0.0")
@@ -438,31 +447,13 @@ class TestArchitectRegressions(unittest.TestCase):
                     self.assertNotIn("LEAK_LORD", trig,
                         f"Saturn (11L for Aries) wrongly tagged as leak: {trig}")
 
-    def test_protective_yoga_rescues_from_high_leak(self):
-        """Architect bug #2: Old `has_high_neg` was a hard gate. Now a
-        protective yoga at moderate stress (4.5-8.0) must rescue the
-        verdict from HIGH_LEAK_WINDOW.
-        """
-        yogas = [
-            {"name": "Daridra Yoga (11L in dusthana)",
-             "severity": "high", "planets": ["Saturn"]},
-            {"name": "Dhana Yoga (2L+11L conjunction)",
-             "severity": "protective", "planets": ["Venus", "Saturn"]},
-        ]
-        # Mid-stress (5.0) with both high-neg AND protective
-        v, _ = _derive_verdict(5.0, "MEDIUM", yogas, 0.0)
-        self.assertNotEqual(v, "HIGH_LEAK_WINDOW",
-            "Protective yoga must rescue mid-stress chart from HIGH_LEAK")
-        self.assertIn(v, {"STABLE", "STRESSED"})
-
     def test_high_leak_only_when_stress_is_actually_high(self):
-        """A `has_high_neg` yoga alone (without elevated stress) must NOT
-        force HIGH_LEAK_WINDOW.
+        """Phase 2.5.11.12: yogas removed. HIGH_LEAK now keys off score
+        only (>=8.0). Mid-stress (5.0) → STRESSED, not HIGH_LEAK.
         """
-        yogas = [{"name": "Daridra Yoga (11L in dusthana)",
-                   "severity": "high", "planets": ["Saturn"]}]
-        # Low stress (1.5) — must NOT be HIGH_LEAK
-        v, _ = _derive_verdict(1.5, "MEDIUM", yogas, 0.0)
+        v, _ = _derive_verdict(5.0)
+        self.assertNotEqual(v, "HIGH_LEAK_WINDOW")
+        v, _ = _derive_verdict(1.5)
         self.assertNotEqual(v, "HIGH_LEAK_WINDOW")
 
     def test_high_leak_verdict_forces_consult_tier(self):

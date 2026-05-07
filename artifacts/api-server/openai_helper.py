@@ -3202,10 +3202,60 @@ _SENSITIVE_STATIC_RE = _re_dasha_gate.compile(
     r"\balcohol(?:ic)?|\bsharab|\bdrug|\bnasha|\babuse|\bgambling|"
     # Job loss / career crisis
     r"\bjob\s+chali\s+gayi|\bnokri\s+gayi|\bfired|\blaid\s+off|"
-    r"\bberozgar|\bunemploy"
+    r"\bberozgar|\bunemploy|"
+    # ── Phase 2.5.11.5 marriage-domain emotional triggers ──
+    # Recent / fresh breakup (TRUST-CRITICAL — never reply 1-liner)
+    r"\bbreakup\b|\bbrek[\s-]?up\b|\brishta\s+toot|\brelationship\s+toot|"
+    r"\b(?:bf|gf|boyfriend|girlfriend)\s+(?:ne|ko)?\s*chhod|"
+    r"\b(?:chhod\s+(?:diya|gaya|gayi)|left\s+me)\b|"
+    # Toxic / controlling / abusive partner
+    r"\btoxic\s+(?:relation|bf|gf|partner|husband|wife)|"
+    r"\bcontrol(?:ling|s\s+me)\b|\bdominate(?:s|ing)?\s+me|"
+    r"\bemotionally\s+abus|\bgaslighting?|"
+    # Age-anxiety + marriage (3X+ unmarried worry)
+    r"\b(?:3[0-9]|[4-9][0-9])\s+(?:ki|saal\s+ki|saal\s+ka).{0,40}\b"
+    r"(?:shaadi|marriage|single|akela|akeli|unmarried)|"
+    r"\b(?:shaadi|marriage|single|akela|akeli)\b.{0,40}\b"
+    r"(?:3[0-9]|[4-9][0-9])\s+(?:ki|saal)|"
+    # Family-pressure / force-marriage conflict (allow filler gap)
+    r"\bfamily\b.{0,30}\b(pressure|force|maan\s+nahi|zabardasti|nahi\s+maan)|"
+    r"\bzabardasti\s+(?:shaadi|marriage|kar\s+rah)|\bforced\s+marriage|"
+    r"\bghar\s+wale\b.{0,30}\b(force|pressure|nahi\s+maan|zabardasti)|"
+    r"\b(?:maa|papa|mummy)\b.{0,30}\b(force|pressure|zabardasti).{0,30}\b(shaadi|marriage|rishta)|"
+    r"\b(arranged)\b.{0,30}\b(force|pressure|nahi\s+karni|nahi\s+chahti)|"
+    # One-sided / unrequited love
+    r"\bone[-\s]?sided|\bunrequited|"
+    r"\b(?:pyar|like|chahta|chahti)\s+(?:hu|hoon)\s+.{0,30}\bwo\s+(?:mujhe\s+)?nahi|"
+    r"\bjise\s+(?:pyar|like|pasand)\s+(?:karta|karti)\s+(?:hu|hoon)\s+.{0,30}\bnahi"
     r")",
     _re_dasha_gate.IGNORECASE,
 )
+
+
+# ── Marriage-domain detector (Phase 2.5.11.5) ────────────────────────
+# Fires for ANY love/marriage/relationship STATIC Q so the LLM gets
+# the marriage-psychology depth rule (delay-type classification,
+# breakup-type classification, partner psychology vocabulary, gender-
+# neutral framing, autonomy validation).
+_MARRIAGE_DOMAIN_RE = _re_dasha_gate.compile(
+    r"\b(shaadi|marriage|wedding|biwi|wife|husband|pati|patni|spouse|"
+    r"partner|boyfriend|girlfriend|bf\b|gf\b|crush|relationship|"
+    r"rishta|love|pyar|pyaar|breakup|brek[\s-]?up|divorce|talaq|"
+    r"dating|propose|commit(?:ment)?|engagement|sagai|"
+    r"saas|sasural|mangetar|fianc|arranged|"
+    r"akela|akeli|single|unmarried|widow|widower|"
+    r"affair|cheat|dhokha|loyal\s+rahega)\b",
+    _re_dasha_gate.IGNORECASE,
+)
+
+
+def _is_marriage_domain_q(question: str) -> bool:
+    """True if Q is about love/marriage/relationship/breakup. Used to
+    inject MARRIAGE_PSYCHOLOGY_RULE into the system prompt for STATIC
+    Qs that aren't already sensitive (sensitive has its own deeper
+    rule that supersedes)."""
+    if not isinstance(question, str): return False
+    return bool(_MARRIAGE_DOMAIN_RE.search(question))
 
 
 # ── Long-story detector (Phase 2.5.11.4) ─────────────────────────────
@@ -3484,6 +3534,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     static_dasha_hint = (not is_timing) and _static_needs_current_dasha(question)
     is_sensitive = (not is_timing) and _is_sensitive_static_q(question)
     is_long_story = (not is_timing) and (not is_sensitive) and _is_long_story_q(question)
+    # Marriage-domain Qs (NOT sensitive — sensitive supersedes; NOT
+    # long-story — long_story supersedes; NOT timing — engine handles
+    # timing) get the marriage-psychology depth rule so partner /
+    # delay / breakup framing has psychological intelligence.
+    is_marriage_domain = (not is_timing) and (not is_sensitive) and \
+                         (not is_long_story) and _is_marriage_domain_q(question)
     # Sensitive Qs ALSO need current dasha so the LLM has a real reason
     # to cite in layer-2 (astrological reason). Auto-promote.
     if is_sensitive:
@@ -3491,6 +3547,10 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     # Long-story Qs (user invested narration) deserve current dasha
     # context too so the answer can reference the active phase.
     if is_long_story:
+        static_dasha_hint = True
+    # Marriage-domain Qs need current dasha so partner/delay/timing
+    # framing references the active phase naturally.
+    if is_marriage_domain:
         static_dasha_hint = True
     chart_text = _raw_compact_chart(kundli, include_dasha=is_timing,
                                     static_dasha_hint=static_dasha_hint)
@@ -3658,6 +3718,59 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         "TONE: like a wise friend who actually listened, not a search "
         "engine. NEVER reply with just 'haan/nahi' to a long story.\n"
     ) if is_long_story else ""
+
+    # ── Marriage psychology depth rule (Phase 2.5.11.5) ──────────────
+    # For STATIC marriage/love/relationship Qs that aren't already
+    # sensitive or long-story, inject psychological-intelligence
+    # framing so answers feel like a real experienced astrologer
+    # not a generic chatbot.
+    marriage_psychology_rule = (
+        "\n\n=== MARRIAGE / LOVE / RELATIONSHIP DEPTH RULE ===\n"
+        "User asked a relationship Q. Generic 'haan/nahi chance hai' "
+        "= FAILURE. Apply this psychology framework before answering:\n\n"
+        "▸ DELAY questions ('shaadi late kyu', '30 ki ho gayi'): "
+        "Always classify the delay TYPE — pick the strongest one from chart:\n"
+        "  (a) Saturn-mature delay = serious-selective, late but stable\n"
+        "  (b) Family/social blockage = external resistance\n"
+        "  (c) Self-focus delay = career/independence priority\n"
+        "  (d) Karmic / past-pattern = repeating emotional lesson\n"
+        "Frame as 'delay ≠ denial' + name the type + give next-window hint.\n\n"
+        "▸ BREAKUP questions ('breakup hua', 'wapas aayega'): "
+        "Classify the phase — pick ONE:\n"
+        "  (a) Temporary distance (patch-up window visible)\n"
+        "  (b) Unstable on-off phase (cycle will repeat)\n"
+        "  (c) Karmic-lesson relationship (taught something, time to release)\n"
+        "  (d) Real separation (closure phase, new chapter ahead)\n"
+        "NEVER reply 1-line 'nahi' to a fresh breakup — minimum 40w with "
+        "empathy + classification + healing-window outlook.\n\n"
+        "▸ PARTNER-TRAIT questions ('husband kaisa hoga', 'wife loyal'): "
+        "Use psychology vocabulary not stereotypes —\n"
+        "  attachment style (secure/anxious/avoidant/guarded), "
+        "emotional availability, communication style "
+        "(direct/measured/expressive), conflict approach "
+        "(withdraw/engage), values (practical/spiritual/career/family).\n"
+        "FORBIDDEN: gendered framing like 'wife ghar sambhalegi' or "
+        "'husband kamayega' — always neutral, equal, modern.\n\n"
+        "▸ SPECIFIC-PERSON questions ('mere bf se hi shaadi hogi'): "
+        "Don't flat 'haan/nahi'. Give nuanced 'depends on X, Y, Z' "
+        "format — name the 2-3 factors that decide it (clarity, "
+        "family alignment, practical compatibility, communication).\n\n"
+        "▸ FAMILY-CONFLICT questions ('family force kar rahi'): "
+        "VALIDATE user autonomy first, then suggest one practical "
+        "boundary-setting step. Never tell them to just obey family.\n\n"
+        "▸ AGE-ANXIETY ('35 ki hu shaadi possible'): Reassure that late "
+        "marriage chart-pattern often = more stable + better-matched "
+        "partner. Name the next supportive window if visible.\n\n"
+        "▸ FUTURE WINDOW SEARCH: If current MD/AD/PD looks weak for "
+        "marriage/love, scan the upcoming 2-5 yr dasha changes from "
+        "the timeline and name the next supportive window naturally.\n\n"
+        "TONE: like an experienced astrologer who's heard this story "
+        "100 times — calm, observant, never preachy, never therapy-speak.\n"
+        "WORD COUNT: 45-65 words for normal Qs, 65-90 for emotional ones.\n"
+        "MAX ONE planet name (only if it adds real authority).\n"
+        "SCRIPT: Latin Hinglish only — NEVER use Devanagari (दिखती/etc.).\n"
+    ) if is_marriage_domain else ""
+
     if is_kp:
         chart_label += " + KP CUSPAL SUB-LORD"
     if is_marriage_engine:
@@ -4028,7 +4141,7 @@ HARD RULES (apply to every answer)
 ═══════════════════════════════════════════════════════════════════
 USER'S BIRTH CHART
 ═══════════════════════════════════════════════════════════════════
-{chart_text}{kp_reading_rule}{marriage_reading_rule}{sensitive_depth_rule}{long_story_rule}"""
+{chart_text}{kp_reading_rule}{marriage_reading_rule}{sensitive_depth_rule}{long_story_rule}{marriage_psychology_rule}"""
     model = os.environ.get("RAW_PASSTHROUGH_MODEL",
                             os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"))
     try:

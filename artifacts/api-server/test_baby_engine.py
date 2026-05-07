@@ -21,6 +21,9 @@ from event_timing.baby.baby_engine_v1 import (
     _step1_d1_filter,
     _step3_d7_progeny,
     _step3_5_kp_layer,
+    _step5d_delivery_chart_check,
+    _step5e_gestation_safety_scan,
+    _step5f_viable_rerank,
     _detect_yogas,
     _detect_child_promised,
     _aspects_house,
@@ -30,6 +33,7 @@ from event_timing.baby.baby_engine_v1 import (
     _derive_verdict,
     _affected_areas,
     _compute_d7_sign,
+    _GESTATION_DAYS,
     _SIGN_IDX,
     _SIGNS,
     _CHILD_HOUSES,
@@ -1239,6 +1243,173 @@ class TestArchitectPatternRegressions(unittest.TestCase):
             self.assertIn("NO_GENDER_PREDICTION",
                            result["llm_directives"],
                            f"NO_GENDER_PREDICTION missing for {asc} lagna")
+
+
+# ════════════════════════════════════════════════════════════════════════
+# Phase 2.5.10 — Gestation-Aware Window Validation
+# ════════════════════════════════════════════════════════════════════════
+class TestGestationAware(unittest.TestCase):
+    """Step 5d/5e/5f + gate-fallback regressions."""
+
+    def test_5d_delivery_chart_returns_full_shape(self):
+        from datetime import datetime
+        # Aries lagna with Sun in 5H (synthetic natal planets)
+        kundli = _mk_kundli("Aries", {
+            "Sun": 5, "Moon": 4, "Mars": 7, "Mercury": 11,
+            "Jupiter": 11, "Venus": 2, "Saturn": 10,
+            "Rahu": 12, "Ketu": 6,
+        })
+        out = _step5d_delivery_chart_check(
+            datetime(2026, 6, 15), 0, kundli["planets"])
+        # Conception + 270d = expected delivery
+        self.assertIn("delivery_dt", out)
+        self.assertIn("conception_dt", out)
+        self.assertIn("delivery_score", out)
+        self.assertIsInstance(out["delivery_score"], float)
+        # Either swisseph computed positions OR we got a graceful note
+        if "note" not in out:
+            self.assertIn("jupiter_at_delivery", out)
+            self.assertIn("saturn_at_delivery", out)
+            jup = out["jupiter_at_delivery"]
+            self.assertIn(jup["house"], range(1, 13))
+
+    def test_5e_gestation_scan_counts_pulses(self):
+        from datetime import datetime
+        out = _step5e_gestation_safety_scan(datetime(2026, 6, 15), 0)
+        # Structural invariants — risk_score is non-negative, pulses
+        # are integers, and we always sample the configured count
+        self.assertEqual(out["samples"], 9)
+        self.assertGreaterEqual(out["risk_score"], 0.0)
+        for k in ("mars_8h_pulses", "mars_12h_pulses",
+                  "saturn_5h_pulses", "rahu_5h_pulses"):
+            self.assertIsInstance(out[k], int)
+            self.assertGreaterEqual(out[k], 0)
+        # Sum-of-pulses × 0.5 == risk_score (formula contract)
+        total = (out["mars_8h_pulses"] + out["mars_12h_pulses"]
+                 + out["saturn_5h_pulses"] + out["rahu_5h_pulses"])
+        self.assertAlmostEqual(out["risk_score"], total * 0.5, places=3)
+
+    def test_5f_viable_rerank_attaches_keys_and_preserves_tail(self):
+        from datetime import datetime, timedelta
+        # Synthetic candidate windows
+        base = datetime(2027, 1, 1)
+        windows = []
+        for i in range(12):  # 12 windows; only top 8 should be enriched
+            windows.append({
+                "md": "Jupiter", "ad": "Venus", "pd": "Moon",
+                "start": base + timedelta(days=i * 60),
+                "end":   base + timedelta(days=i * 60 + 30),
+                "score": 10.0 - i * 0.1,
+                "kind": "general", "triggers": [],
+                "risk_raw": 0.0,
+            })
+        kundli = _mk_kundli("Aries", {
+            "Sun": 5, "Moon": 4, "Mars": 7, "Mercury": 11,
+            "Jupiter": 11, "Venus": 2, "Saturn": 10,
+            "Rahu": 12, "Ketu": 6,
+        })
+        out = _step5f_viable_rerank(windows, 0, kundli["planets"], top_n=8)
+        self.assertEqual(len(out), 12)
+        # First 8 (after re-sort) carry viable_score; last 4 (tail) don't
+        annotated = [w for w in out if "viable_score" in w]
+        unannotated = [w for w in out if "viable_score" not in w]
+        self.assertEqual(len(annotated), 8)
+        self.assertEqual(len(unannotated), 4)
+        # Annotated subset is monotonically non-increasing in viable_score
+        scores = [w["viable_score"] for w in annotated]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+        # Each annotated window has delivery_check + gestation_scan
+        for w in annotated:
+            self.assertIn("delivery_check", w)
+            self.assertIn("gestation_scan", w)
+
+    def test_5f_empty_windows_returns_empty(self):
+        kundli = _mk_kundli("Aries", {"Sun": 5, "Moon": 4})
+        self.assertEqual(_step5f_viable_rerank([], 0, kundli["planets"]), [])
+
+    def test_gate_fallback_only_when_strict_yields_zero(self):
+        """Phase 2.5.10 architect-fix regression: outcome-based
+        fallback. Fallback MUST trigger only when strict gating
+        produces 0 windows AND KP is unavailable. If strict gating
+        produces ≥1 window, fallback must NOT fire even when only
+        1 planet is cross-confirmed.
+        """
+        kundli = _mk_kundli("Aries", {
+            "Sun": 5, "Moon": 4, "Mars": 7, "Mercury": 11,
+            "Jupiter": 11, "Venus": 2, "Saturn": 10,
+            "Rahu": 12, "Ketu": 6,
+        }, dashas=_mk_dashas())
+        result = compute_baby_window(kundli, intel={}, kp={},
+                                       birth={"dob": "1990-05-15"})
+        factors = result.get("factors", [])
+        windows = result.get("next_3_windows", [])
+        had_strict_zero = any("strict_gate_returned_0_windows" in f
+                               for f in factors)
+        had_fallback = any("GATE_FALLBACK" in f for f in factors)
+        # Implication contract: fallback ↔ strict-zero. Either both
+        # traces appear together (fallback fired) or neither does
+        # (strict gate produced windows on its own).
+        self.assertEqual(had_strict_zero, had_fallback,
+            f"Fallback must trigger if-and-only-if strict gate yields 0; "
+            f"strict_zero={had_strict_zero} fallback={had_fallback}")
+        if had_fallback:
+            # When fallback fired, we must end up with ≥1 window
+            self.assertGreater(
+                len(windows), 0,
+                "Fallback must produce ≥1 window when triggered")
+
+    def test_gate_fallback_does_not_fire_when_kp_available(self):
+        """Phase 2.5.10 architect-fix: even if strict gate yields 0,
+        do NOT relax when KP is available — KP is the corroborator
+        and a real OBSTRUCTED verdict must be allowed to stand.
+        """
+        kundli = _mk_kundli("Aries", {
+            "Sun": 6, "Moon": 8, "Mars": 8, "Mercury": 6,
+            "Jupiter": 12, "Venus": 12, "Saturn": 8,
+            "Rahu": 6, "Ketu": 12,
+        }, dashas=_mk_dashas())
+        # Provide KP so kp_active=True → fallback ineligible
+        kp = {
+            "cusps": [{"house": 5, "sl": "Saturn"},
+                      {"house": 11, "sl": "Mars"}],
+            "planets": {
+                "Saturn": {"nl": "Saturn", "sb": "Saturn"},
+                "Mars":   {"nl": "Mars",   "sb": "Saturn"},
+            },
+            "significations": {
+                "Saturn": [6, 8, 12],   # pure dusthana → fail
+                "Mars":   [6, 8],
+            },
+        }
+        result = compute_baby_window(kundli, intel={}, kp=kp,
+                                       birth={"dob": "1990-05-15"})
+        factors = result.get("factors", [])
+        # Fallback must NOT have fired even if windows is empty —
+        # KP is available and a strict OBSTRUCTED verdict must hold
+        self.assertFalse(
+            any("GATE_FALLBACK" in f for f in factors),
+            f"Fallback must NOT fire when KP available; "
+            f"factors={[f for f in factors if 'GATE' in f or 'STEP5' in f]}")
+
+    def test_compute_baby_window_emits_viable_top_3(self):
+        """End-to-end: viable_top_3 key present in result, structurally
+        valid when populated, and present alongside next_3_windows."""
+        kundli = _mk_kundli("Aries", {
+            "Sun": 5, "Moon": 4, "Mars": 7, "Mercury": 11,
+            "Jupiter": 11, "Venus": 2, "Saturn": 10,
+            "Rahu": 12, "Ketu": 6,
+        }, dashas=_mk_dashas())
+        result = compute_baby_window(kundli, intel={}, kp={},
+                                       birth={"dob": "1990-05-15"})
+        self.assertIn("viable_top_3", result)
+        self.assertIsInstance(result["viable_top_3"], list)
+        for w in result["viable_top_3"]:
+            self.assertIn("conception_score", w)
+            self.assertIn("delivery_score",   w)
+            self.assertIn("gestation_risk",   w)
+            self.assertIn("viable_score",     w)
+            self.assertIn("expected_delivery_iso", w)
+            self.assertIn("gestation_pulses", w)
 
 
 if __name__ == "__main__":

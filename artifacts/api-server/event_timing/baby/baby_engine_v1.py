@@ -1422,6 +1422,210 @@ def _step5_dasha_activation(chain: List[Dict[str, Any]],
 
 
 # ════════════════════════════════════════════════════════════════════════
+# STEP 5d / 5e / 5f — Gestation-Aware Window Validation (Phase 2.5.10)
+# ────────────────────────────────────────────────────────────────────────
+# A window where a promoter planet rules at AD/PD level is the engine's
+# "conception trigger". But conception ≠ delivery: human gestation is
+# ~270 days. A real-world childbirth verdict requires also checking:
+#   (a) Step 5d — DELIVERY-CHART projection: at conception_dt + 270d,
+#       are Jupiter/Saturn supportive of the natal 5H/9H/1H axis?
+#   (b) Step 5e — GESTATION SAFETY scan: across the 9-month gestation,
+#       count miscarriage-risk transit pulses (Mars on natal 8H/12H,
+#       Saturn on 5H, Rahu on 5H).
+#   (c) Step 5f — VIABLE re-rank: combine conception score + delivery
+#       score - gestation risk into one "viable_score" and re-rank.
+#
+# Output is ADDITIVE — original conception-ranked windows preserved as
+# `next_3_windows`; gestation-aware ranking surfaced as
+# `viable_top_3` so the LLM can present BOTH views.
+# ════════════════════════════════════════════════════════════════════════
+_GESTATION_DAYS    = 270           # ~40 weeks, classical full-term
+_GESTATION_SAMPLES = 9             # monthly samples across gestation
+_VIABLE_W_CONCEPT  = 0.60          # conception score weight
+_VIABLE_W_DELIVERY = 0.20          # delivery-chart weight
+_VIABLE_W_RISK     = 0.20          # gestation-risk subtractive weight
+
+
+def _step5d_delivery_chart_check(conception_dt: datetime,
+                                   lagna_si: int,
+                                   planets_d1: List[dict]
+                                   ) -> Dict[str, Any]:
+    """At conception_dt + 270 days, check if Jupiter/Saturn are
+    supportive over the natal progeny axis (5H/9H/1H from natal lagna).
+
+    Score logic (range roughly -1.5 .. +2.5):
+      Jupiter on natal 5H or 9H or 1H  → +1.0 each
+      Jupiter on natal 5L sign         → +0.5
+      Saturn on natal 5H               → -1.0 (heaviness/delay at delivery)
+      Saturn on natal 9H               → -0.3
+      (Saturn elsewhere is neutral — natural "maturation" significator)
+    """
+    delivery_dt = conception_dt + timedelta(days=_GESTATION_DAYS)
+    out: Dict[str, Any] = {
+        "conception_dt": conception_dt.isoformat(),
+        "delivery_dt":   delivery_dt.isoformat(),
+        "delivery_score": 0.0,
+        "jupiter_at_delivery": None,
+        "saturn_at_delivery":  None,
+        "blessings": [],
+        "stresses":  [],
+    }
+    if not _HAS_SWE:
+        out["note"] = "swisseph unavailable — delivery check skipped"
+        return out
+
+    pos_jup = _planet_position_at(swe.JUPITER, delivery_dt)
+    pos_sat = _planet_position_at(swe.SATURN,  delivery_dt)
+    if not pos_jup or not pos_sat:
+        out["note"] = "could not compute delivery-day positions"
+        return out
+
+    jup_si, sat_si = pos_jup["sign_idx"], pos_sat["sign_idx"]
+    jup_h = _house_of_sign(jup_si, lagna_si)
+    sat_h = _house_of_sign(sat_si, lagna_si)
+    out["jupiter_at_delivery"] = {
+        "sign":     pos_jup["sign_name"], "deg": pos_jup["deg_str"],
+        "house":    jup_h, "retrograde": pos_jup["retrograde"],
+    }
+    out["saturn_at_delivery"] = {
+        "sign":     pos_sat["sign_name"], "deg": pos_sat["deg_str"],
+        "house":    sat_h, "retrograde": pos_sat["retrograde"],
+    }
+
+    h5_lord  = _house_lord(lagna_si, 5)
+    h5l_sign = _planet_sign_idx(planets_d1, h5_lord)
+
+    score = 0.0
+    if jup_h in (1, 5, 9):
+        score += 1.0
+        out["blessings"].append(
+            f"Jupiter on natal {jup_h}H at delivery — "
+            f"{'progeny axis' if jup_h == 5 else 'dharma/lagna'} blessing")
+    if h5l_sign is not None and jup_si == h5l_sign:
+        score += 0.5
+        out["blessings"].append(
+            f"Jupiter on 5L ({h5_lord}) natal sign at delivery")
+    if sat_h == 5:
+        score -= 1.0
+        out["stresses"].append(
+            "Saturn on natal 5H at delivery — heaviness / labour delay")
+    elif sat_h == 9:
+        score -= 0.3
+        out["stresses"].append(
+            "Saturn on natal 9H at delivery — fortune-axis stress")
+
+    out["delivery_score"] = round(score, 3)
+    return out
+
+
+def _step5e_gestation_safety_scan(conception_dt: datetime,
+                                    lagna_si: int
+                                    ) -> Dict[str, Any]:
+    """Walk monthly across gestation (9 samples) and count miscarriage-
+    risk transit pulses. NOT an aspect-orb engine — uses whole-sign
+    presence from natal lagna.
+
+    Counted pulses (each adds +0.5 to risk_score):
+      Mars   on natal 8H  — classical miscarriage / surgical-risk
+      Mars   on natal 12H — hospitalisation / loss
+      Saturn on natal 5H  — heaviness / threatened pregnancy
+      Rahu   on natal 5H  — unconventional / IVF / complications
+    """
+    out: Dict[str, Any] = {
+        "conception_dt":    conception_dt.isoformat(),
+        "delivery_dt":      (conception_dt + timedelta(days=_GESTATION_DAYS)
+                              ).isoformat(),
+        "samples":          _GESTATION_SAMPLES,
+        "mars_8h_pulses":   0,
+        "mars_12h_pulses":  0,
+        "saturn_5h_pulses": 0,
+        "rahu_5h_pulses":   0,
+        "risk_score":       0.0,
+        "pulse_log":        [],
+    }
+    if not _HAS_SWE:
+        out["note"] = "swisseph unavailable — gestation scan skipped"
+        return out
+
+    h5  = (lagna_si + 4)  % 12
+    h8  = (lagna_si + 7)  % 12
+    h12 = (lagna_si + 11) % 12
+
+    step_days = _GESTATION_DAYS / _GESTATION_SAMPLES
+    for i in range(_GESTATION_SAMPLES):
+        when = conception_dt + timedelta(days=step_days * i)
+        mars_si = _planet_sign_at(swe.MARS, when)
+        sat_si  = _planet_sign_at(swe.SATURN, when)
+        rahu_si = _planet_sign_at(swe.MEAN_NODE, when)
+
+        if mars_si == h8:
+            out["mars_8h_pulses"]   += 1
+            out["pulse_log"].append(
+                f"month {i+1}: Mars→natal 8H ({_SIGNS[h8]})")
+        if mars_si == h12:
+            out["mars_12h_pulses"]  += 1
+            out["pulse_log"].append(
+                f"month {i+1}: Mars→natal 12H ({_SIGNS[h12]})")
+        if sat_si == h5:
+            out["saturn_5h_pulses"] += 1
+            out["pulse_log"].append(
+                f"month {i+1}: Saturn→natal 5H ({_SIGNS[h5]})")
+        if rahu_si == h5:
+            out["rahu_5h_pulses"]   += 1
+            out["pulse_log"].append(
+                f"month {i+1}: Rahu→natal 5H ({_SIGNS[h5]})")
+
+    pulses = (out["mars_8h_pulses"] + out["mars_12h_pulses"]
+              + out["saturn_5h_pulses"] + out["rahu_5h_pulses"])
+    out["risk_score"] = round(pulses * 0.5, 3)
+    return out
+
+
+def _step5f_viable_rerank(windows: List[Dict[str, Any]],
+                            lagna_si: int,
+                            planets_d1: List[dict],
+                            top_n: int = 8
+                            ) -> List[Dict[str, Any]]:
+    """For each of the top-N conception-scored windows, compute Step 5d
+    delivery-chart score + Step 5e gestation-risk score, attach them,
+    and produce a NEW list re-ranked by `viable_score`.
+
+    viable_score = conception × 0.6 + delivery × 0.2 - risk × 0.2
+
+    Returns a new list (does NOT mutate input). Each entry is the
+    original window dict plus keys: `delivery_check`, `gestation_scan`,
+    `viable_score`. Only top_n windows get the expensive scan; the
+    rest are returned unannotated at the end (preserving old behaviour
+    for callers that read all windows).
+    """
+    if not windows:
+        return []
+    out: List[Dict[str, Any]] = []
+    for i, w in enumerate(windows):
+        if i >= top_n:
+            out.append(w)
+            continue
+        # Conception ≈ window midpoint (window may be 1 day to many
+        # months long; midpoint is the most defensible single instant).
+        midpoint = w["start"] + (w["end"] - w["start"]) / 2
+        delivery = _step5d_delivery_chart_check(midpoint, lagna_si, planets_d1)
+        gestation = _step5e_gestation_safety_scan(midpoint, lagna_si)
+        viable = (w["score"] * _VIABLE_W_CONCEPT
+                  + delivery["delivery_score"] * _VIABLE_W_DELIVERY
+                  - gestation["risk_score"]    * _VIABLE_W_RISK)
+        enriched = dict(w)
+        enriched["delivery_check"] = delivery
+        enriched["gestation_scan"] = gestation
+        enriched["viable_score"]   = round(viable, 3)
+        out.append(enriched)
+    # Re-rank only the annotated subset; preserve tail order.
+    annotated = [w for w in out if "viable_score" in w]
+    tail      = [w for w in out if "viable_score" not in w]
+    annotated.sort(key=lambda x: (-x["viable_score"], x["start"]))
+    return annotated + tail
+
+
+# ════════════════════════════════════════════════════════════════════════
 # STEP 6 — Transit triggers (baby lens)
 # ════════════════════════════════════════════════════════════════════════
 def _planet_sign_at(planet_id: int, when: datetime) -> Optional[int]:
@@ -2197,8 +2401,51 @@ def _compute_baby_window_impl(kundli: dict,
                                                 cross_map=gate_for_step5)
     factors.append(f"STEP5 dasha_windows_in_horizon={len(dasha_windows)}")
 
-    # ── STEP 6 ──
+    # Phase 2.5.10 — OUTCOME-BASED GATE FALLBACK (architect-fix):
+    # The earlier heuristic ("relax when ≤1 cross-confirmed AND no
+    # KP") was too blunt — it could disable cross-chart gating even
+    # when strict gating still produced useful windows, masking
+    # genuinely low-promise charts. New rule is purely outcome-based:
+    # only relax when strict gating returns ZERO windows AND KP is
+    # unavailable to corroborate. This preserves architectural intent
+    # (D1∩D9∩D7 unanimity) whenever it produces non-empty results,
+    # and only trades it for legacy D1-only mode when the strict
+    # gate has structurally starved Step 5 with no other layer to
+    # rescue it. If KP is available we never relax — KP is the
+    # sufficient corroborator.
+    if (gate_for_step5 is not None
+            and not dasha_windows
+            and not kp_active):
+        factors.append("STEP5 strict_gate_returned_0_windows "
+                        "→ retrying with relaxed gate")
+        dasha_windows = _step5_dasha_activation(
+            chain, ranked, lagna_si, now, cross_map=None)
+        factors.append(
+            f"GATE_FALLBACK strict_gate_relaxed (0 strict windows, "
+            f"KP unavailable) → D1-only promoter set "
+            f"yielded {len(dasha_windows)} windows")
+
+    # ── STEP 5d/5e/5f — Phase 2.5.10 GESTATION-AWARE VALIDATION ──
+    # Run delivery-chart projection + gestation safety scan on the top
+    # conception-scored windows and re-rank by viable_score. Pure
+    # additive — original `dasha_windows` order preserved for the
+    # legacy `next_3_windows` path; gestation-aware ordering exposed
+    # separately as `viable_windows` (and `viable_top_3` below).
     planets_d1 = kundli.get("planets") or []
+    viable_windows = _step5f_viable_rerank(
+        dasha_windows, lagna_si, planets_d1, top_n=8)
+    if viable_windows and "viable_score" in viable_windows[0]:
+        top_v = viable_windows[0]
+        factors.append(
+            f"STEP5f viable_top={top_v['md']}-{top_v['ad']}-{top_v['pd']} "
+            f"viable={top_v['viable_score']} "
+            f"(conc={top_v['score']} "
+            f"deliv={top_v['delivery_check']['delivery_score']} "
+            f"risk={top_v['gestation_scan']['risk_score']})")
+    else:
+        factors.append("STEP5f viable_rerank=SKIPPED (no scored windows)")
+
+    # ── STEP 6 ──
     transits = _step6_transits(kundli, lagna_si, planets_d1, now)
     transit_load = sum(w for _, _, w in transits.get("active_triggers", []))
     factors.append(f"STEP6 transit_load={transit_load:.2f}")
@@ -2238,6 +2485,43 @@ def _compute_baby_window_impl(kundli: dict,
             "window": _format_window(w["start"], w["end"]),
             "start_iso": w["start"].isoformat(),
             "end_iso": w["end"].isoformat(),
+            "triggers": w["triggers"],
+        })
+
+    # Phase 2.5.10 — viable_top_3 (gestation-aware re-rank). Built
+    # from the SAME enriched window dicts as next_3_windows but using
+    # the viable_score order. Each entry carries the conception score,
+    # delivery-chart snapshot, gestation-risk profile, and the final
+    # viable_score so the LLM can present a "smart" childbirth window
+    # rather than a naive conception trigger.
+    viable_top_3: List[Dict[str, Any]] = []
+    for w in viable_windows[:3]:
+        if "viable_score" not in w:
+            continue
+        sev = _severity_of_window(w["score"], transit_load,
+                                    w.get("risk_raw", 0.0))
+        dc = w.get("delivery_check") or {}
+        gs = w.get("gestation_scan") or {}
+        viable_top_3.append({
+            "md": w["md"], "ad": w["ad"], "pd": w["pd"],
+            "conception_score": w["score"],
+            "delivery_score":   dc.get("delivery_score", 0.0),
+            "gestation_risk":   gs.get("risk_score",     0.0),
+            "viable_score":     w["viable_score"],
+            "severity":         sev,
+            "kind":             w.get("kind", "general"),
+            "window":           _format_window(w["start"], w["end"]),
+            "start_iso":        w["start"].isoformat(),
+            "end_iso":          w["end"].isoformat(),
+            "expected_delivery_iso": dc.get("delivery_dt"),
+            "delivery_blessings":    dc.get("blessings", []),
+            "delivery_stresses":     dc.get("stresses",  []),
+            "gestation_pulses": {
+                "mars_8h":   gs.get("mars_8h_pulses",   0),
+                "mars_12h":  gs.get("mars_12h_pulses",  0),
+                "saturn_5h": gs.get("saturn_5h_pulses", 0),
+                "rahu_5h":   gs.get("rahu_5h_pulses",   0),
+            },
             "triggers": w["triggers"],
         })
 
@@ -2300,6 +2584,14 @@ def _compute_baby_window_impl(kundli: dict,
             or "Bandhya" in (y.get("name") or "")
             for y in yogas):
         llm_directives.append("MEDICAL_PRECAUTION_RECOMMENDED")
+    # Phase 2.5.10 — gestation-aware safeguards
+    if viable_top_3:
+        top_v = viable_top_3[0]
+        if top_v["gestation_risk"] >= 1.5:
+            llm_directives.append("GESTATION_RISK_FLAGGED")
+            llm_directives.append("PRENATAL_CARE_EMPHASIS")
+        if top_v["delivery_score"] <= -0.5:
+            llm_directives.append("DELIVERY_STRESS_INDICATED")
     # Age guard for medical realism
     if age is not None:
         if age < 20:
@@ -2370,6 +2662,7 @@ def _compute_baby_window_impl(kundli: dict,
         "child_promised": child_promised,
         "current_window": current_window,
         "next_3_windows": formatted_top3,
+        "viable_top_3": viable_top_3,
         "child_active_windows": child_active_windows,
         "next_child_window": next_child_window,
         "protection_windows": protection_windows,

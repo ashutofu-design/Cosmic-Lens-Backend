@@ -1,0 +1,1602 @@
+"""
+event_timing/baby/baby_engine_v1.py
+====================================
+COSMIC LENS BABY (CHILDBIRTH) TIMING ENGINE v1.0 — clean build,
+mirrors Health v1 / Marriage v2.4 / Finance v1 / Travel v1
+architecture.
+
+Architecture: FILTER → VERIFY → ACTIVATE → TRIGGER (9-step pipeline,
+locked May 7 2026 per user spec "baby timing ke liye d1 d7 kp ko mila
+kar timing engine").
+
+  STEP 1   D1 child-significator filter             (FILTER)
+           - 5L  (PUTRASTHANA — primary children house)
+           - 9L  (dharma/grace, secondary support)
+           - 11L (gain/fulfillment of desires)
+           - 7L  (spouse/conception partner)
+           - 2L  (family expansion / kutumb)
+           - Occupants of 5 / 9 / 11
+           - Planets ASPECTING the 5th house (most powerful trigger)
+           - Karakas: Jupiter (PRIMARY putra karaka), Sun, Moon
+             (fertility/water), Venus (procreative seed), Mars (vigor)
+  STEP 2   D9 dignity verification                  (VERIFY)
+  STEP 3   D7 Saptamsha (children chart)            (VERIFY)
+           Parashara: D7 governs children & progeny. Each sign divides
+           into 7 parts (~4°17'). Odd signs count from same sign;
+           even signs count from 7th sign. Falls back to D1-dignity
+           when divisional_charts.compute_d7 helper missing.
+  STEP 3.5 KP CSL of 5 & 11 cusps
+  STEP 4   Weighted ranking
+           D1·30 + D9·20 + D7·25 + KP·15 + karaka·10
+  STEP 5   Dasha activation (AD/PD primary; MD low-weight)
+           AD=5, PD=6, MD=1. Signed contribution: pure child-promoter
+           (5L/9L/Jupiter) raises score; obstruction-bearer
+           (6L/8L/12L) lowers it.
+  STEP 6   Transit triggers
+           Jupiter on 5/9/11 = conception window (PRIMARY trigger),
+           Saturn on 5H = delay/postponement,
+           Rahu on 5H = unconventional (IVF/adoption) route,
+           Mars on 8/12 = miscarriage risk,
+           Sade Sati on Moon = emotional family stress
+  STEP 7   Ashtakavarga support (SAV bindus on 5H + 11H — santan band)
+  STEP 8   KP cuspal sub lord of 5 (child verdict)
+  STEP 9   Yoga + hard-guard layer
+           POSITIVE: Putra Yoga (5L+9L conjunction/exchange),
+           Santan-Prapti (Jupiter aspects 5H or 5L),
+           Putra-Karaka-Bala (Jupiter exalted/own sign)
+           NEGATIVE: Bandhya Yoga (5L in 6/8/12 + Jupiter weak),
+           Putra-Dosha (5H surrounded by malefics, no Jupiter aspect),
+           Miscarriage-Yoga (8L+5L conjunction with malefic),
+           Adoption-Indicated (5L in 12H + Rahu on 5H)
+
+Public function:
+  compute_baby_window(kundli, intel, kp, birth) -> dict
+
+Output dict (back-compat with health/finance/travel-style consumers):
+  {
+    "verdict":              "CHILD_PROMISED" | "FAVORABLE" |
+                            "DELAYED" | "OBSTRUCTED" | "UNKNOWN",
+    "band":                 "WEAK" | "MEDIUM" | "STRONG",
+    "child_promised":       bool,                      # composite flag
+    "current_window":       {start_iso, end_iso, severity, triggers[]},
+    "next_3_windows":       [{md, ad, pd, score, severity, window,
+                              start_iso, end_iso, kind}],
+    "protection_windows":   [{md, ad, pd, window, start_iso, end_iso}],
+    "affected_areas":       ["natural_conception", "ivf_route",
+                              "adoption_path", ...],
+    "recommendation_tier":  "watchful" | "supportive" |
+                            "celebratory" | "consult",
+    "top_child_planets":    [{name, score, d1, d9, d7, kp, karaka,
+                               significations[]}],
+    "weighted_breakdown":   {planet: {d1, d9, d7, kp, karaka, total}},
+    "kp_layer":             {csl_5, csl_11, verdict_5, verdict_11},
+    "transits":             {jupiter, saturn, rahu, mars,
+                              sade_sati, active_triggers[]},
+    "ashtakavarga":         {sav_5, sav_11, santan_band},
+    "yogas":                [{name, severity, planets}],
+    "risk_flags":           [str],
+    "factors":              [str],
+    "llm_directives":       [str],
+    "remedies":             {...},
+    "engine_version":       "v1.0.0",
+    "engine_arch":          "FILTER→VERIFY→ACTIVATE→TRIGGER",
+  }
+
+Hard guards (per user policy + replit.md):
+  - Mandatory BABY_DISCLAIMER (medical fertility outcome cannot be
+    guaranteed by astrology)
+  - NOT_MEDICAL_ADVICE / NO_GUARANTEED_CONCEPTION / NO_GUARANTEED_DATE
+  - **NO_GENDER_PREDICTION** — engine NEVER predicts boy/girl
+    (PCPNDT Act compliance + global ethical norm)
+  - 3-confirmation rule for `consult` tier (high-risk fertility)
+  - Conditional CONSULT_FERTILITY_SPECIALIST when OBSTRUCTED
+"""
+
+from __future__ import annotations
+
+import threading
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+# Thread-local cache for the most recent engine result.
+_LAST_RESULT = threading.local()
+
+
+def get_last_baby_result() -> Optional[Dict[str, Any]]:
+    return getattr(_LAST_RESULT, "value", None)
+
+
+def _store_last_result(result: Dict[str, Any]) -> None:
+    _LAST_RESULT.value = result
+
+
+def clear_last_baby_result() -> None:
+    if hasattr(_LAST_RESULT, "value"):
+        _LAST_RESULT.value = None
+
+
+# ── External helpers ──
+try:
+    from divisional_charts import compute_d9  # type: ignore
+except Exception:
+    compute_d9 = None  # type: ignore
+
+try:
+    # D7 (Saptamsha) — children chart. Optional; may not exist.
+    from divisional_charts import compute_d7  # type: ignore
+except Exception:
+    compute_d7 = None  # type: ignore
+
+try:
+    from ashtakavarga import compute_ashtakavarga  # type: ignore
+except Exception:
+    compute_ashtakavarga = None  # type: ignore
+
+try:
+    import swisseph as swe  # type: ignore
+    swe.set_sid_mode(swe.SIDM_LAHIRI)
+    _SWE_FLAGS = swe.FLG_SWIEPH | swe.FLG_SIDEREAL
+    _HAS_SWE = True
+except Exception:
+    _HAS_SWE = False
+    swe = None  # type: ignore
+    _SWE_FLAGS = 0
+
+
+# ════════════════════════════════════════════════════════════════════════
+# Constants
+# ════════════════════════════════════════════════════════════════════════
+_SIGNS = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+          "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"]
+_SIGN_IDX = {s: i for i, s in enumerate(_SIGNS)}
+
+_SIGN_LORDS: Dict[int, str] = {
+    0: "Mars", 1: "Venus", 2: "Mercury", 3: "Moon", 4: "Sun",
+    5: "Mercury", 6: "Venus", 7: "Mars", 8: "Jupiter",
+    9: "Saturn", 10: "Saturn", 11: "Jupiter",
+}
+
+_EXALT: Dict[str, int] = {"Sun": 0, "Moon": 1, "Mars": 9, "Mercury": 5,
+                           "Jupiter": 3, "Venus": 11, "Saturn": 6}
+_DEBIL: Dict[str, int] = {"Sun": 6, "Moon": 7, "Mars": 3, "Mercury": 11,
+                           "Jupiter": 9, "Venus": 5, "Saturn": 0}
+
+_OWN_SIGNS: Dict[str, Set[int]] = {
+    "Sun":     {4},
+    "Moon":    {3},
+    "Mars":    {0, 7},
+    "Mercury": {2, 5},
+    "Jupiter": {8, 11},
+    "Venus":   {1, 6},
+    "Saturn":  {9, 10},
+}
+
+# Child-significant houses
+_CHILD_HOUSES       = [5, 9, 11]   # primary fertility/progeny
+_OBSTRUCTION_HOUSES = [6, 8, 12]   # delay / loss / miscarriage
+_FAMILY_HOUSES      = [2, 7]       # support (kutumb / partner)
+
+_WEIGHT_D1     = 0.30
+_WEIGHT_D9     = 0.20
+_WEIGHT_D7     = 0.25
+_WEIGHT_KP     = 0.15
+_WEIGHT_KARAKA = 0.10
+
+_DASHA_SCORE_MD = 1
+_DASHA_SCORE_AD = 5
+_DASHA_SCORE_PD = 6
+
+_D1_FILTER_MIN_SCORE = 12.0
+_MIN_WINDOW_GAP_DAYS = 45
+
+# SAV bands (avg of 5H + 11H — santan strength)
+_SAV_SANTAN_WEAK   = 25
+_SAV_SANTAN_STRONG = 32
+
+_CONFIRMATIONS_FOR_CONSULT = 3
+
+_PLANETS_9 = ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus",
+               "Saturn", "Rahu", "Ketu"]
+
+# Child-area signification per planet (NEVER includes gender)
+_AREA_OF_PLANET: Dict[str, List[str]] = {
+    "Sun":     ["family_lineage_continuation", "vitality_for_conception"],
+    "Moon":    ["fertility_emotional_readiness", "maternal_health",
+                 "natural_conception"],
+    "Mars":    ["procreative_vigor", "blood_health_for_conception"],
+    "Mercury": ["nervous_system_balance",
+                 "communication_with_fertility_team"],
+    "Jupiter": ["progeny_grace", "natural_conception",
+                 "spiritual_blessing_for_child"],
+    "Venus":   ["reproductive_health", "harmonious_relationship_for_child"],
+    "Saturn":  ["delayed_conception", "ivf_or_assisted_route",
+                 "structured_family_planning"],
+    "Rahu":    ["unconventional_route", "ivf_route",
+                 "surrogacy_or_adoption_consideration"],
+    "Ketu":    ["spiritual_detachment_phase", "miscarriage_history_check",
+                 "adoption_path"],
+}
+
+# Functional malefics by lagna sign (fertility-stress lens)
+_FUNC_MALEFICS: Dict[int, Set[str]] = {
+    0:  {"Mercury", "Venus", "Saturn"},
+    1:  {"Moon", "Jupiter", "Venus"},
+    2:  {"Mars", "Jupiter", "Sun"},
+    3:  {"Mars", "Mercury", "Venus"},
+    4:  {"Mercury", "Venus", "Saturn"},
+    5:  {"Moon", "Mars", "Jupiter"},
+    6:  {"Sun", "Jupiter", "Mars"},
+    7:  {"Mercury", "Venus", "Saturn"},
+    8:  {"Venus", "Mercury"},
+    9:  {"Mars", "Jupiter", "Moon"},
+    10: {"Sun", "Mars", "Jupiter"},
+    11: {"Mercury", "Venus", "Saturn"},
+}
+
+_FUNC_BENEFICS: Dict[int, Set[str]] = {
+    0:  {"Sun", "Mars", "Jupiter"},
+    1:  {"Sun", "Mercury", "Saturn"},
+    2:  {"Mercury", "Venus"},
+    3:  {"Mars", "Jupiter", "Moon"},
+    4:  {"Sun", "Mars", "Jupiter"},
+    5:  {"Mercury", "Venus"},
+    6:  {"Saturn", "Mercury", "Venus"},
+    7:  {"Sun", "Moon", "Jupiter"},
+    8:  {"Sun", "Jupiter", "Mars"},
+    9:  {"Venus", "Mercury", "Saturn"},
+    10: {"Venus", "Mercury", "Saturn"},
+    11: {"Moon", "Mars", "Jupiter"},
+}
+
+
+# ════════════════════════════════════════════════════════════════════════
+# Low-level helpers (aligned with travel v1 / finance v1 / health v1)
+# ════════════════════════════════════════════════════════════════════════
+def _sign_idx(name_or_str: Any) -> Optional[int]:
+    if isinstance(name_or_str, int):
+        return name_or_str % 12
+    if isinstance(name_or_str, str):
+        return _SIGN_IDX.get(name_or_str)
+    return None
+
+
+def _planet_house(planets: List[dict], pname: str) -> Optional[int]:
+    for p in planets or []:
+        if isinstance(p, dict) and p.get("name") == pname:
+            h = p.get("house")
+            if isinstance(h, int):
+                return h
+    return None
+
+
+def _planet_sign_idx(planets: List[dict], pname: str) -> Optional[int]:
+    for p in planets or []:
+        if isinstance(p, dict) and p.get("name") == pname:
+            si = p.get("sign_idx")
+            if isinstance(si, int):
+                return si % 12
+            return _sign_idx(p.get("sign"))
+    return None
+
+
+def _planet_longitude(planets: List[dict], pname: str) -> Optional[float]:
+    for p in planets or []:
+        if isinstance(p, dict) and p.get("name") == pname:
+            lon = p.get("longitude")
+            if isinstance(lon, (int, float)):
+                return float(lon)
+    return None
+
+
+def _house_lord(lagna_si: int, house: int) -> str:
+    sign_at_house = (lagna_si + house - 1) % 12
+    return _SIGN_LORDS[sign_at_house]
+
+
+def _house_of_sign(sign_si: int, lagna_si: int) -> int:
+    return ((sign_si - lagna_si) % 12) + 1
+
+
+def _planets_in_house(planets: List[dict], house: int) -> List[str]:
+    return [p["name"] for p in (planets or [])
+            if isinstance(p, dict) and p.get("house") == house
+            and p.get("name") in _PLANETS_9]
+
+
+def _aspects_house(aspector: str, ap_house: int, target_house: int) -> bool:
+    if not (1 <= ap_house <= 12 and 1 <= target_house <= 12):
+        return False
+    diff = ((target_house - ap_house) % 12) + 1
+    if diff == 7:
+        return True
+    extras = {
+        "Mars":    {4, 8},
+        "Jupiter": {5, 9},
+        "Saturn":  {3, 10},
+        "Rahu":    {3, 10},
+        "Ketu":    {3, 10},
+    }
+    return diff in extras.get(aspector, set())
+
+
+def _kp_cusp(kp: dict, house: int) -> Optional[dict]:
+    for c in (kp or {}).get("cusps", []) or []:
+        if isinstance(c, dict) and c.get("house") == house:
+            return c
+    return None
+
+
+def _planet_signified_houses(kp: dict, planet: str) -> List[int]:
+    sig = (kp or {}).get("significations") or {}
+    raw = sig.get(planet) or sig.get(planet.lower()) or []
+    out: List[int] = []
+    for v in raw:
+        try:
+            h = int(v)
+            if 1 <= h <= 12:
+                out.append(h)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+# ════════════════════════════════════════════════════════════════════════
+# STEP 1 — D1 child-significator filter
+# ════════════════════════════════════════════════════════════════════════
+def _step1_d1_filter(kundli: dict, lagna_si: int
+                       ) -> Dict[str, Dict[str, Any]]:
+    """Identify child-significant planets in D1.
+
+    Inclusion (Parashara + practical lens):
+      • 5L (PUTRASTHANA — primary children house)  — highest weight
+      • 9L (dharma/grace, secondary support)        — high weight
+      • 11L (gain/fulfillment of desires)           — medium weight
+      • 7L (partner / conception)                   — medium weight
+      • 2L (family expansion / kutumb)              — low weight
+      • Occupants of 5 / 9 / 11
+      • Planets aspecting 5H                         — most powerful
+      • Karakas: Jupiter (PUTRA), Sun, Moon (fertility), Venus, Mars
+    """
+    planets = kundli.get("planets") or []
+    out: Dict[str, Dict[str, Any]] = {}
+    for p in _PLANETS_9:
+        out[p] = {"d1": 0.0, "in_filter": False, "links": [],
+                   "is_lord_of": [], "occupies": None,
+                   "aspects_5": False}
+
+    # Lordship checks
+    for h, weight, label in (
+        (5,  18.0, "5L (PUTRASTHANA — primary children house)"),
+        (9,  12.0, "9L (dharma/grace, secondary support)"),
+        (11, 10.0, "11L (gain/fulfillment of desires)"),
+        (7,   8.0, "7L (spouse/conception partner)"),
+        (2,   6.0, "2L (family expansion / kutumb)"),
+    ):
+        lord = _house_lord(lagna_si, h)
+        out[lord]["is_lord_of"].append(h)
+        out[lord]["d1"] += weight
+        out[lord]["links"].append(label)
+
+    # Occupants of child houses
+    for h in (5, 9, 11):
+        for pname in _planets_in_house(planets, h):
+            out[pname]["occupies"] = h
+            bump = {5: 14.0, 9: 10.0, 11: 8.0}[h]
+            out[pname]["d1"] += bump
+            out[pname]["links"].append(f"occupies {h}H (child-house)")
+
+    # Occupants of obstruction houses (6/8/12) — boost ranking but
+    # tag as obstruction-bearer for Step 5 classification
+    for h in (6, 8, 12):
+        for pname in _planets_in_house(planets, h):
+            if out[pname]["occupies"] is None:
+                out[pname]["occupies"] = h
+            out[pname]["d1"] += 4.0
+            out[pname]["links"].append(
+                f"occupies {h}H (OBSTRUCTION — fertility-leak signal)")
+
+    # Planets aspecting the 5th house (most powerful trigger)
+    for pname in _PLANETS_9:
+        ap_house = _planet_house(planets, pname)
+        if ap_house and _aspects_house(pname, ap_house, 5):
+            out[pname]["aspects_5"] = True
+            out[pname]["d1"] += 9.0
+            out[pname]["links"].append("aspects 5H (child-house activation)")
+
+    # Child karakas — Jupiter is PRIMARY putra karaka
+    for karaka, bonus, role in (
+        ("Jupiter", 14.0, "PUTRA-KARAKA (primary progeny karaka — Jupiter)"),
+        ("Moon",     8.0, "fertility/maternal karaka (Moon)"),
+        ("Sun",      6.0, "lineage-vitality karaka (Sun)"),
+        ("Venus",    7.0, "reproductive-health karaka (Venus)"),
+        ("Mars",     6.0, "procreative-vigor karaka (Mars)"),
+    ):
+        out[karaka]["d1"] += bonus
+        out[karaka]["links"].append(role)
+
+    # Functional malefic surcharge (used in ranking, NOT in dasha
+    # promoter/obstruction classification — see Step5 architect-fix note)
+    fm = _FUNC_MALEFICS.get(lagna_si, set())
+    for pname in fm:
+        out[pname]["d1"] += 4.0
+        out[pname]["links"].append("functional malefic for lagna")
+
+    for pname, info in out.items():
+        info["in_filter"] = info["d1"] >= _D1_FILTER_MIN_SCORE
+
+    return out
+
+
+# ════════════════════════════════════════════════════════════════════════
+# STEP 2 — D9 dignity verification
+# ════════════════════════════════════════════════════════════════════════
+def _step2_d9_verify(kundli: dict, candidates: Set[str]) -> Dict[str, float]:
+    out: Dict[str, float] = {p: 0.0 for p in candidates}
+    if not candidates:
+        return out
+    d9 = None
+    if compute_d9 is not None:
+        try:
+            d9 = compute_d9(kundli)
+        except Exception:
+            d9 = None
+    if not d9:
+        return {p: 8.0 for p in candidates}
+    d9_planets = d9.get("planets") if isinstance(d9, dict) else None
+    if not d9_planets:
+        return {p: 8.0 for p in candidates}
+    for pname in candidates:
+        si = _planet_sign_idx(d9_planets, pname)
+        if si is None:
+            out[pname] = 8.0
+            continue
+        if pname in _EXALT and si == _EXALT[pname]:
+            out[pname] = 25.0
+        elif pname in _OWN_SIGNS and si in _OWN_SIGNS[pname]:
+            out[pname] = 20.0
+        elif pname in _DEBIL and si == _DEBIL[pname]:
+            out[pname] = 5.0
+        else:
+            out[pname] = 12.0
+    return out
+
+
+# ════════════════════════════════════════════════════════════════════════
+# STEP 3 — D7 Saptamsha (children chart)
+# ════════════════════════════════════════════════════════════════════════
+def _compute_d7_sign(longitude: float, natal_sign_si: int) -> int:
+    """Compute Saptamsha sign for a given longitude.
+
+    Rule (Parashara): each sign (30°) divides into 7 parts of ~4°17'8".
+    For ODD signs (Aries, Gemini, Leo, ...): D7 count starts from
+        the same sign.
+    For EVEN signs (Taurus, Cancer, ...): D7 count starts from the
+        7th sign from the natal sign.
+    """
+    deg_in_sign = longitude % 30.0
+    part = int(deg_in_sign / (30.0 / 7.0))   # 0-6
+    # Sign-numbering convention: Aries = sign #1 (ODD), Taurus = #2 (EVEN),
+    # Gemini = #3 (ODD), etc. In 0-indexed `_SIGN_IDX`, those map to:
+    #   ODD signs (1,3,5,7,9,11)  → idx 0,2,4,6,8,10  → idx % 2 == 0
+    #   EVEN signs (2,4,6,8,10,12) → idx 1,3,5,7,9,11 → idx % 2 == 1
+    # So `natal_sign_si % 2 == 0` correctly classifies an ODD-NUMBERED sign.
+    # Verified by tests: Aries@0° → Aries (D7 part 0 of odd sign).
+    if natal_sign_si % 2 == 0:               # odd-numbered natal sign
+        start = natal_sign_si
+    else:                                     # even-numbered natal sign
+        start = (natal_sign_si + 6) % 12      # count from 7th
+    return (start + part) % 12
+
+
+def _step3_d7_progeny(kundli: dict, candidates: Set[str],
+                        lagna_si: int) -> Dict[str, float]:
+    """D7 governs children & progeny — Parashara's children chart.
+
+    Tries `divisional_charts.compute_d7` first; falls back to internal
+    longitude-based computation; then to D1-dignity proxy as last
+    resort. Range 0-25.
+    """
+    out: Dict[str, float] = {p: 0.0 for p in candidates}
+    if not candidates:
+        return out
+
+    # Tier-1: external compute_d7 helper
+    d7 = None
+    if compute_d7 is not None:
+        try:
+            d7 = compute_d7(kundli)
+        except Exception:
+            d7 = None
+
+    # Tier-2: internal computation from longitudes
+    if (not d7 or not isinstance(d7, dict) or not d7.get("planets")):
+        d1_planets = kundli.get("planets") or []
+        d7_planets = []
+        d7_lagna_si = lagna_si
+        any_lon = False
+        for pname in candidates:
+            lon = _planet_longitude(d1_planets, pname)
+            si = _planet_sign_idx(d1_planets, pname)
+            if lon is not None and si is not None:
+                any_lon = True
+                d7_si = _compute_d7_sign(lon, si)
+                d7_planets.append({"name": pname, "sign": _SIGNS[d7_si],
+                                    "sign_idx": d7_si})
+        if any_lon:
+            # Compute D7 lagna from ascendant longitude if available
+            asc_lon = kundli.get("ascendant_longitude")
+            if isinstance(asc_lon, (int, float)):
+                d7_lagna_si = _compute_d7_sign(float(asc_lon), lagna_si)
+            d7 = {"planets": d7_planets,
+                   "ascendant": _SIGNS[d7_lagna_si]}
+
+    # Tier-3: D1-dignity fallback proxy
+    if not d7 or not isinstance(d7, dict) or not d7.get("planets"):
+        d1_planets = kundli.get("planets") or []
+        for pname in candidates:
+            si = _planet_sign_idx(d1_planets, pname)
+            if si is None:
+                out[pname] = 8.0; continue
+            if pname in _EXALT and si == _EXALT[pname]:
+                out[pname] = 22.0
+            elif pname in _OWN_SIGNS and si in _OWN_SIGNS[pname]:
+                out[pname] = 18.0
+            elif pname in _DEBIL and si == _DEBIL[pname]:
+                out[pname] = 6.0
+            else:
+                out[pname] = 12.0
+        return out
+
+    d7_planets = d7.get("planets") or []
+    d7_lagna_str = d7.get("ascendant")
+    d7_lagna = (_sign_idx(d7_lagna_str)
+                 if isinstance(d7_lagna_str, str) else lagna_si)
+    if d7_lagna is None:
+        d7_lagna = lagna_si
+    for pname in candidates:
+        si = _planet_sign_idx(d7_planets, pname)
+        if si is None:
+            out[pname] = 8.0; continue
+        h_in_d7 = _house_of_sign(si, d7_lagna)
+        score = 8.0
+        # Child-promise boost: 5H/9H/11H of D7
+        if h_in_d7 == 5:
+            score = 22.0
+        elif h_in_d7 == 9:
+            score = 18.0
+        elif h_in_d7 == 11:
+            score = 16.0
+        elif h_in_d7 in (6, 8, 12):
+            # Obstruction houses in D7 → score down
+            score = 5.0
+        # Dignity adjustment
+        if pname in _EXALT and si == _EXALT[pname]:
+            score = min(25.0, score + 4.0)
+        elif pname in _DEBIL and si == _DEBIL[pname]:
+            score = max(3.0, score - 4.0)
+        out[pname] = score
+    return out
+
+
+# ════════════════════════════════════════════════════════════════════════
+# STEP 3.5 — KP layer (cuspal sub lord of 5 / 11)
+# ════════════════════════════════════════════════════════════════════════
+def _step3_5_kp_layer(kp: dict, lagna_si: int) -> Dict[str, Any]:
+    """KP cuspal sub lord of 5 & 11 cusps.
+
+    Verdict precedence (architect-pattern from travel v1):
+      OBSTRUCTED (6/8/12 dusthana) > ANCHORED (only 1H static) >
+      CHILD_YES (5/9/11) > NEUTRAL.
+    """
+    out = {"csl_5": None, "csl_11": None,
+           "verdict_5": "UNKNOWN", "verdict_11": "UNKNOWN",
+           "csl_5_signifies": [], "csl_11_signifies": []}
+    if not kp:
+        return out
+    for h, key in ((5, "5"), (11, "11")):
+        c = _kp_cusp(kp, h)
+        if not c:
+            continue
+        csl = c.get("sl") or c.get("subLord") or c.get("sub_lord")
+        out[f"csl_{key}"] = csl
+        if not csl:
+            continue
+        sig = _planet_signified_houses(kp, csl)
+        out[f"csl_{key}_signifies"] = sig
+        # Precedence: obstruction dominates
+        has_obstruct = any(x in (6, 8, 12) for x in sig)
+        has_static = sig == [1] or sig == []
+        has_child = any(x in _CHILD_HOUSES for x in sig)
+        if has_obstruct:
+            out[f"verdict_{key}"] = "OBSTRUCTED"
+        elif has_static:
+            out[f"verdict_{key}"] = "ANCHORED"
+        elif has_child:
+            out[f"verdict_{key}"] = "CHILD_YES"
+        else:
+            out[f"verdict_{key}"] = "NEUTRAL"
+    return out
+
+
+# ════════════════════════════════════════════════════════════════════════
+# STEP 4 — Weighted ranking
+# ════════════════════════════════════════════════════════════════════════
+def _karaka_score(pname: str, lagna_si: int) -> float:
+    base = {"Jupiter": 10.0, "Moon": 7.0, "Venus": 6.0,
+            "Sun": 5.0, "Mars": 5.0, "Mercury": 4.0,
+            "Saturn": 4.0, "Rahu": 4.0, "Ketu": 3.0}.get(pname, 0.0)
+    if pname in _FUNC_BENEFICS.get(lagna_si, set()):
+        base += 2.0
+    return min(10.0, base)
+
+
+def _step4_rank(d1_map: Dict[str, Dict[str, Any]],
+                d9_scores: Dict[str, float],
+                d7_scores: Dict[str, float],
+                kp: dict, lagna_si: int) -> List[Dict[str, Any]]:
+    """Score = D1·30% + D9·20% + D7·25% + KP·15% + Karaka·10%
+    All sub-scores normalized to 0-25.
+    """
+    survivors = [p for p, info in d1_map.items() if info.get("in_filter")]
+    if not survivors:
+        return []
+    raw_d1 = {p: d1_map[p]["d1"] for p in survivors}
+    max_d1 = max(raw_d1.values()) or 1.0
+    ranked: List[Dict[str, Any]] = []
+    for pname in survivors:
+        info = d1_map[pname]
+        d1 = (raw_d1[pname] / max_d1) * 25.0
+        d9 = d9_scores.get(pname, 8.0)
+        d7 = d7_scores.get(pname, 8.0)
+        sig = _planet_signified_houses(kp, pname)
+        kp_score = 0.0
+        if any(h in _CHILD_HOUSES for h in sig):
+            kp_score = 18.0
+        if 5 in sig:
+            kp_score += 5.0
+        if 11 in sig:
+            kp_score += 3.0
+        kp_score = min(25.0, kp_score) if kp_score > 0 else 6.0
+        karaka = _karaka_score(pname, lagna_si) * 2.5
+        total = (d1 * _WEIGHT_D1 + d9 * _WEIGHT_D9 +
+                 d7 * _WEIGHT_D7 + kp_score * _WEIGHT_KP +
+                 karaka * _WEIGHT_KARAKA)
+        ranked.append({
+            "name": pname,
+            "score": round(total, 2),
+            "d1": round(d1, 2), "d9": round(d9, 2),
+            "d7": round(d7, 2), "kp": round(kp_score, 2),
+            "karaka": round(karaka, 2),
+            "links": list(info["links"]),
+            "significations": _AREA_OF_PLANET.get(pname, []),
+        })
+    ranked.sort(key=lambda r: r["score"], reverse=True)
+    return ranked
+
+
+# ════════════════════════════════════════════════════════════════════════
+# STEP 5 — Dasha activation
+# ════════════════════════════════════════════════════════════════════════
+def _parse_iso(s: Any) -> Optional[datetime]:
+    if not s:
+        return None
+    if isinstance(s, datetime):
+        return s
+    if isinstance(s, str):
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S.%f"):
+            try:
+                return datetime.strptime(s.split("+")[0].split("Z")[0], fmt)
+            except (ValueError, TypeError):
+                continue
+    return None
+
+
+def _dasha_lord(node: dict) -> Optional[str]:
+    for k in ("lord", "planet", "name", "ruler"):
+        v = node.get(k)
+        if v:
+            return v
+    return None
+
+
+def _dasha_start_end(node: dict) -> Tuple[Optional[datetime], Optional[datetime]]:
+    s = (node.get("start") or node.get("startDate") or
+         node.get("from") or node.get("start_date"))
+    e = (node.get("end") or node.get("endDate") or
+         node.get("to") or node.get("end_date"))
+    return _parse_iso(s), _parse_iso(e)
+
+
+def _dasha_children(node: dict) -> List[dict]:
+    for k in ("subDashas", "antardashas", "ad", "sub_dashas",
+              "pratyantar", "pd", "children"):
+        v = node.get(k)
+        if isinstance(v, list):
+            return v
+    return []
+
+
+def _flatten_dasha_chain(kundli: dict) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    dashas = kundli.get("dashas") or []
+    if not isinstance(dashas, list):
+        return out
+    for md in dashas:
+        if not isinstance(md, dict): continue
+        md_lord = _dasha_lord(md)
+        ads = _dasha_children(md)
+        if not ads:
+            ms, me = _dasha_start_end(md)
+            if ms and me:
+                out.append({"md": md_lord, "ad": None, "pd": None,
+                             "start": ms, "end": me})
+            continue
+        for ad in ads:
+            if not isinstance(ad, dict): continue
+            ad_lord = _dasha_lord(ad)
+            pds = _dasha_children(ad)
+            if not pds:
+                ads_, ade_ = _dasha_start_end(ad)
+                if ads_ and ade_:
+                    out.append({"md": md_lord, "ad": ad_lord, "pd": None,
+                                 "start": ads_, "end": ade_})
+                continue
+            for pd in pds:
+                if not isinstance(pd, dict): continue
+                pds_, pde_ = _dasha_start_end(pd)
+                if not (pds_ and pde_): continue
+                out.append({"md": md_lord, "ad": ad_lord,
+                             "pd": _dasha_lord(pd),
+                             "start": pds_, "end": pde_})
+    return out
+
+
+def _step5_dasha_activation(chain: List[Dict[str, Any]],
+                              ranked: List[Dict[str, Any]],
+                              lagna_si: int,
+                              now: datetime,
+                              horizon_years: int = 10
+                              ) -> List[Dict[str, Any]]:
+    """Score each upcoming dasha window.
+
+    SIGN CONVENTION: For baby/conception, "flow" = child-promoter
+    activation (more is more conception-favorable). Obstruction-bearer
+    planets (6L/8L/12L, occupants of 6/8/12) lower the flow. Risk
+    planets (Mars/Saturn in 8H, Ketu on 5H) raise risk_score
+    separately.
+
+    AD=5, PD=6, MD=1.
+
+    NOTE — architect-pattern (mirrors travel v1 / finance v1):
+    "functional malefic for lagna" tag is INTENTIONALLY EXCLUDED from
+    obstruction classification. It is a Step-1 ranking modifier only.
+    """
+    if not chain or not ranked:
+        return []
+    score_map = {r["name"]: r["score"] for r in ranked}
+    max_score = max(score_map.values()) or 1.0
+
+    promoter_lords: Set[str] = set()
+    obstructor_lords: Set[str] = set()
+    risk_lords: Set[str] = set()
+    _PROMOTER_TAGS = ("5L (PUTRASTHANA", "9L (dharma", "11L (gain",
+                       "occupies 5H", "occupies 9H", "occupies 11H",
+                       "PUTRA-KARAKA", "fertility/maternal karaka",
+                       "reproductive-health karaka",
+                       "procreative-vigor karaka",
+                       "lineage-vitality karaka")
+    _OBSTRUCTOR_TAGS = ("occupies 6H (OBSTRUCTION",
+                         "occupies 8H (OBSTRUCTION",
+                         "occupies 12H (OBSTRUCTION")
+    for r in ranked:
+        promoter_count = 0
+        obstruct_count = 0
+        for l in r["links"]:
+            if any(t in l for t in _PROMOTER_TAGS):
+                promoter_count += 1
+            if any(t in l for t in _OBSTRUCTOR_TAGS):
+                obstruct_count += 1
+        if promoter_count and obstruct_count:
+            if promoter_count >= obstruct_count:
+                promoter_lords.add(r["name"])
+            else:
+                obstructor_lords.add(r["name"])
+        elif promoter_count:
+            promoter_lords.add(r["name"])
+        elif obstruct_count:
+            obstructor_lords.add(r["name"])
+        # Risk: Saturn/Mars in 8H = miscarriage risk; Ketu on 5H = loss
+        if r["name"] in ("Saturn", "Mars"):
+            for l in r["links"]:
+                if "occupies 8H" in l or "occupies 12H" in l:
+                    risk_lords.add(r["name"])
+        if r["name"] == "Ketu":
+            for l in r["links"]:
+                if "occupies 5H" in l:
+                    risk_lords.add("Ketu")
+
+    horizon_end = now + timedelta(days=365 * horizon_years)
+    windows: List[Dict[str, Any]] = []
+    for w in chain:
+        if w["end"] < now or w["start"] > horizon_end:
+            continue
+        promoter_score = 0.0
+        obstruct_score = 0.0
+        risk_score = 0.0
+        triggers: List[str] = []
+        for role, lord, weight in (("MD", w["md"], _DASHA_SCORE_MD),
+                                    ("AD", w["ad"], _DASHA_SCORE_AD),
+                                    ("PD", w["pd"], _DASHA_SCORE_PD)):
+            if not (lord and lord in score_map):
+                continue
+            rel = score_map[lord] / max_score
+            contrib = weight * rel
+            if lord in promoter_lords:
+                promoter_score += contrib
+                triggers.append(f"{role}={lord}(CHILD_PROMOTER,+{contrib:.2f})")
+            elif lord in obstructor_lords:
+                obstruct_score += contrib
+                triggers.append(f"{role}={lord}(OBSTRUCTOR,-{contrib:.2f})")
+            else:
+                triggers.append(f"{role}={lord}(NEUTRAL,0)")
+            if lord in risk_lords:
+                risk_score += contrib * 0.5
+                triggers.append(f"  ↳ RISK_TAG:{lord}(+{contrib*0.5:.2f})")
+        net = max(0.0, promoter_score - obstruct_score)
+        if net <= 0 and promoter_score == 0 and risk_score == 0:
+            continue
+        # Heuristic kind: natural vs assisted vs delayed
+        kind = "general"
+        if w["ad"] == "Jupiter" or w["pd"] == "Jupiter":
+            kind = "natural_grace"
+        elif (w["ad"] in ("Saturn", "Rahu")
+              or w["pd"] in ("Saturn", "Rahu")):
+            kind = "assisted_or_delayed"
+        windows.append({
+            "md": w["md"], "ad": w["ad"], "pd": w["pd"],
+            "start": w["start"], "end": w["end"],
+            "score": round(net, 2),
+            "promoter_raw": round(promoter_score, 2),
+            "obstruct_raw": round(obstruct_score, 2),
+            "risk_raw": round(risk_score, 2),
+            "kind": kind,
+            "triggers": triggers,
+        })
+    windows.sort(key=lambda x: (-x["score"], x["start"]))
+    return windows
+
+
+# ════════════════════════════════════════════════════════════════════════
+# STEP 6 — Transit triggers (baby lens)
+# ════════════════════════════════════════════════════════════════════════
+def _planet_sign_at(planet_id: int, when: datetime) -> Optional[int]:
+    if not _HAS_SWE:
+        return None
+    try:
+        jd = swe.julday(when.year, when.month, when.day,
+                         when.hour + when.minute / 60.0)
+        lon = swe.calc_ut(jd, planet_id, _SWE_FLAGS)[0][0]
+        return int(lon // 30) % 12
+    except Exception:
+        return None
+
+
+def _step6_transits(kundli: dict, lagna_si: int,
+                     planets_d1: List[dict],
+                     now: datetime) -> Dict[str, Any]:
+    out = {"jupiter": None, "saturn": None, "rahu": None,
+           "mars": None, "sade_sati": None,
+           "active_triggers": []}
+    if not _HAS_SWE:
+        out["note"] = "swisseph unavailable; transit layer skipped"
+        return out
+
+    moon_si = _planet_sign_idx(planets_d1, "Moon")
+    saturn_si = _planet_sign_at(swe.SATURN, now)
+    rahu_si = _planet_sign_at(swe.MEAN_NODE, now)
+    mars_si = _planet_sign_at(swe.MARS, now)
+    jupiter_si = _planet_sign_at(swe.JUPITER, now)
+
+    def _h(si):
+        return _house_of_sign(si, lagna_si) if si is not None else None
+
+    sat_h = _h(saturn_si); rahu_h = _h(rahu_si)
+    mars_h = _h(mars_si); jup_h = _h(jupiter_si)
+
+    if jup_h == 5:
+        out["jupiter"] = "Jupiter transiting 5H — primary conception window (PUTRA-KARAKA on PUTRASTHANA)"
+        out["active_triggers"].append(("jupiter_putra", 5, +1.2))
+    elif jup_h == 9:
+        out["jupiter"] = "Jupiter transiting 9H — dharma support for progeny"
+        out["active_triggers"].append(("jupiter_support", 9, +0.8))
+    elif jup_h == 11:
+        out["jupiter"] = "Jupiter transiting 11H — fulfillment of family-desire"
+        out["active_triggers"].append(("jupiter_fulfill", 11, +0.7))
+
+    if sat_h == 5:
+        out["saturn"] = "Saturn transiting 5H — delay/postponement in conception"
+        out["active_triggers"].append(("saturn_delay", 5, -0.5))
+    elif sat_h == 8:
+        out["saturn"] = "Saturn transiting 8H — extended care needed"
+        out["active_triggers"].append(("saturn_care", 8, +0.3))
+
+    if rahu_h == 5:
+        out["rahu"] = "Rahu transit on 5H — unconventional/IVF route indicated"
+        out["active_triggers"].append(("rahu_ivf", 5, +0.5))
+    elif rahu_h == 11:
+        out["rahu"] = "Rahu transit on 11H — sudden gain of progeny news"
+        out["active_triggers"].append(("rahu_news", 11, +0.4))
+
+    if mars_h in (8, 12):
+        out["mars"] = f"Mars transit in {mars_h}H — miscarriage/medical risk window"
+        out["active_triggers"].append(("mars_risk", mars_h, +0.4))
+    elif mars_h == 5:
+        out["mars"] = "Mars transit in 5H — heightened procreative vigor (with caution)"
+        out["active_triggers"].append(("mars_vigor", 5, +0.3))
+
+    if moon_si is not None and saturn_si is not None:
+        delta = (saturn_si - moon_si) % 12
+        if delta == 11:
+            out["sade_sati"] = "first_phase (Saturn 12th from Moon — emotional stress)"
+            out["active_triggers"].append(("sade_sati", 12, +0.3))
+        elif delta == 0:
+            out["sade_sati"] = "peak_phase"
+            out["active_triggers"].append(("sade_sati", 1, +0.4))
+        elif delta == 1:
+            out["sade_sati"] = "exit_phase"
+            out["active_triggers"].append(("sade_sati", 2, +0.2))
+
+    return out
+
+
+# ════════════════════════════════════════════════════════════════════════
+# STEP 7 — Ashtakavarga support (SAV bindus on 5H + 11H)
+# ════════════════════════════════════════════════════════════════════════
+def _step7_ashtakavarga(kundli: dict, lagna_si: int) -> Dict[str, Any]:
+    out = {"sav_5": None, "sav_11": None, "santan_band": "UNKNOWN"}
+    if compute_ashtakavarga is None:
+        return out
+    try:
+        planets = kundli.get("planets") or []
+        av = compute_ashtakavarga(planets, lagna_si)
+    except Exception:
+        return out
+    if not isinstance(av, dict):
+        return out
+    sav = av.get("sav")
+    if isinstance(sav, list) and len(sav) == 12:
+        out["sav_5"] = sav[4]    # 5th house
+        out["sav_11"] = sav[10]   # 11th house
+    if (isinstance(out["sav_5"], (int, float))
+            and isinstance(out["sav_11"], (int, float))):
+        avg = (out["sav_5"] + out["sav_11"]) / 2.0
+        if avg < _SAV_SANTAN_WEAK:
+            out["santan_band"] = "WEAK"
+        elif avg >= _SAV_SANTAN_STRONG:
+            out["santan_band"] = "STRONG"
+        else:
+            out["santan_band"] = "MEDIUM"
+    return out
+
+
+# ════════════════════════════════════════════════════════════════════════
+# STEP 9 — Yoga + hard guards
+# ════════════════════════════════════════════════════════════════════════
+def _detect_yogas(kundli: dict, lagna_si: int,
+                   planets: List[dict]) -> List[Dict[str, Any]]:
+    """Detect classical baby/progeny-relevant yogas.
+
+    POSITIVE:
+      - Putra Yoga (5L+9L conjunction OR exchange OR mutual aspect)
+      - Santan-Prapti Yoga (Jupiter aspects 5H or 5L)
+      - Putra-Karaka-Bala (Jupiter exalted/own-sign)
+    NEGATIVE:
+      - Bandhya Yoga (5L in 6/8/12 + Jupiter in dusthana)
+      - Putra-Dosha (5H surrounded by malefics, NO Jupiter aspect)
+      - Miscarriage-Yoga (8L+5L conjunction)
+      - Adoption-Indicated (5L in 12H + Rahu/Ketu on 5H — neutral
+        severity — describes route, not obstruction)
+    """
+    out: List[Dict[str, Any]] = []
+
+    h5_lord  = _house_lord(lagna_si, 5)
+    h9_lord  = _house_lord(lagna_si, 9)
+    h8_lord  = _house_lord(lagna_si, 8)
+
+    # CRITICAL ETHICAL NOTE (architect-fix May 7 2026): yoga labels MUST
+    # be gender-neutral. "Putra" literally means "son" in Sanskrit; using
+    # it leaks gender vocabulary downstream even though the engine carries
+    # NO_GENDER_PREDICTION directive. We use "Progeny" / "Child-Promise"
+    # / "Child-Karaka" labels instead. "Santan" (offspring), "Bandhya"
+    # (barren), "Miscarriage", "Adoption" are gender-neutral classical
+    # terms and may be retained.
+    # Progeny Yoga: 5L+9L conjunction / exchange / mutual aspect
+    h5_h = _planet_house(planets, h5_lord)
+    h9_h = _planet_house(planets, h9_lord)
+    if h5_lord != h9_lord and h5_h and h9_h:
+        if h5_h == 9 and h9_h == 5:
+            out.append({"name": "Progeny Yoga (5L↔9L parivartana)",
+                        "severity": "protective",
+                        "planets": [h5_lord, h9_lord]})
+        elif h5_h == h9_h:
+            out.append({"name": "Progeny Yoga (5L+9L conjunction)",
+                        "severity": "protective",
+                        "planets": [h5_lord, h9_lord]})
+        elif (_aspects_house(h5_lord, h5_h, h9_h)
+              and _aspects_house(h9_lord, h9_h, h5_h)):
+            out.append({"name": "Progeny Yoga (5L↔9L mutual aspect)",
+                        "severity": "protective",
+                        "planets": [h5_lord, h9_lord]})
+
+    # Santan-Prapti Yoga: Jupiter aspects 5H or 5L
+    jup_h = _planet_house(planets, "Jupiter")
+    if jup_h:
+        if jup_h == 5:
+            out.append({"name": "Santan-Prapti Yoga (Jupiter in 5H)",
+                        "severity": "protective",
+                        "planets": ["Jupiter"]})
+        elif _aspects_house("Jupiter", jup_h, 5):
+            out.append({"name": "Santan-Prapti Yoga (Jupiter aspects 5H)",
+                        "severity": "protective",
+                        "planets": ["Jupiter"]})
+        elif h5_h and _aspects_house("Jupiter", jup_h, h5_h):
+            out.append({"name": "Santan-Prapti Yoga (Jupiter aspects 5L)",
+                        "severity": "protective",
+                        "planets": ["Jupiter", h5_lord]})
+
+    # Child-Karaka-Bala: Jupiter exalted or own-sign
+    jup_si = _planet_sign_idx(planets, "Jupiter")
+    if jup_si is not None:
+        if jup_si == _EXALT["Jupiter"]:
+            out.append({"name": "Child-Karaka-Bala (Jupiter exalted)",
+                        "severity": "protective",
+                        "planets": ["Jupiter"]})
+        elif jup_si in _OWN_SIGNS["Jupiter"]:
+            out.append({"name": "Child-Karaka-Bala (Jupiter own-sign)",
+                        "severity": "protective",
+                        "planets": ["Jupiter"]})
+
+    # Bandhya Yoga: 5L in 6/8/12 AND Jupiter in dusthana
+    if h5_h in (6, 8, 12) and jup_h in (6, 8, 12):
+        out.append({"name": "Bandhya Yoga (5L+Jupiter both in dusthana)",
+                    "severity": "high",
+                    "planets": [h5_lord, "Jupiter"]})
+
+    # Progeny-Dosha: 5H surrounded by malefics with NO Jupiter aspect
+    malefics = {"Sun", "Mars", "Saturn", "Rahu", "Ketu"}
+    occupants_5 = set(_planets_in_house(planets, 5))
+    aspecting_5 = set()
+    for pname in _PLANETS_9:
+        ap_h = _planet_house(planets, pname)
+        if ap_h and _aspects_house(pname, ap_h, 5):
+            aspecting_5.add(pname)
+    afflicting = (occupants_5 | aspecting_5) & malefics
+    jup_protects = ("Jupiter" in occupants_5
+                     or "Jupiter" in aspecting_5)
+    if len(afflicting) >= 2 and not jup_protects:
+        out.append({"name": "Progeny-Dosha (5H afflicted by malefics, no Jupiter rescue)",
+                    "severity": "high",
+                    "planets": list(afflicting)})
+
+    # Miscarriage-Yoga: 8L+5L conjunction
+    h8_h = _planet_house(planets, h8_lord)
+    if h5_lord != h8_lord and h5_h and h8_h and h5_h == h8_h:
+        out.append({"name": "Miscarriage-Yoga (5L+8L conjunction)",
+                    "severity": "high",
+                    "planets": [h5_lord, h8_lord]})
+
+    # Adoption-Indicated (informational — neutral severity)
+    rahu_h = _planet_house(planets, "Rahu")
+    ketu_h = _planet_house(planets, "Ketu")
+    if h5_h == 12 and (rahu_h == 5 or ketu_h == 5):
+        out.append({"name": "Adoption-Indicated Yoga (5L in 12H + Rahu/Ketu on 5H)",
+                    "severity": "informational",
+                    "planets": [h5_lord, "Rahu" if rahu_h == 5 else "Ketu"]})
+
+    return out
+
+
+# ════════════════════════════════════════════════════════════════════════
+# Helpers — verdict / severity / age
+# ════════════════════════════════════════════════════════════════════════
+def _parse_dob_dt(birth: Any, kundli: Any = None) -> Optional[datetime]:
+    candidates = []
+    for src in (birth, kundli):
+        if isinstance(src, dict):
+            for k in ("dob", "birth_date", "birthDate", "DOB", "date"):
+                v = src.get(k)
+                if v: candidates.append(v)
+            try:
+                d = src.get("day"); m = src.get("month"); y = src.get("year")
+                if d and m and y:
+                    candidates.append(f"{int(y):04d}-{int(m):02d}-{int(d):02d}")
+            except Exception:
+                pass
+    fmts = ("%Y-%m-%d", "%Y/%m/%d", "%d-%m-%Y", "%d/%m/%Y", "%d.%m.%Y",
+            "%d %b %Y", "%d %B %Y", "%d-%b-%Y", "%d-%B-%Y")
+    for c in candidates:
+        if isinstance(c, datetime): return c
+        if not isinstance(c, str): continue
+        s = c.split("T")[0].strip()
+        for fmt in fmts:
+            try: return datetime.strptime(s, fmt)
+            except ValueError: continue
+    return None
+
+
+def _compute_age(birth_dt: Optional[datetime], ref: datetime) -> Optional[int]:
+    if not birth_dt: return None
+    age = ref.year - birth_dt.year - (
+        (ref.month, ref.day) < (birth_dt.month, birth_dt.day))
+    return age if 0 <= age <= 120 else None
+
+
+def _severity_of_window(score: float, transit_load: float,
+                          risk_score: float = 0.0) -> str:
+    """Map child-promoter score + risk to a severity tier.
+    Tiers (matches `baby` topic in remedy engine):
+      celebratory : strong flow, low risk
+      supportive  : moderate flow
+      watchful    : weak flow OR mild risk
+      consult     : high-risk fertility (Bandhya, miscarriage, etc.)
+    """
+    s = score + max(0.0, transit_load)
+    if risk_score >= 2.0:
+        return "consult"
+    if s >= 6.0 and risk_score < 0.5:
+        return "celebratory"
+    if s >= 3.5:
+        return "supportive"
+    if s >= 1.5:
+        return "watchful"
+    return "watchful"
+
+
+def _recommendation_tier(severity: str, confirmations: int,
+                          age: Optional[int]) -> str:
+    if severity == "consult" and confirmations >= _CONFIRMATIONS_FOR_CONSULT:
+        return "consult"
+    if severity == "consult":
+        return "watchful"
+    return severity
+
+
+def _derive_verdict(top_window_score: float,
+                     santan_band: str,
+                     yogas: List[Dict[str, Any]],
+                     transit_load: float,
+                     child_promised: bool,
+                     kp_layer: Optional[Dict[str, Any]] = None
+                     ) -> Tuple[str, str]:
+    """Combine top-window flow, ashtakavarga band, yogas, transits,
+    child-promised flag and KP layer into a single verdict + band.
+
+    Mirrors travel v1 architect-fix pattern, plus baby-specific
+    safeguards (architect HIGH#5 — May 7 2026):
+      - `child_promised=True` alone with low flow does NOT elevate
+        verdict (houses promised ≠ timing promised; flow gate s>=3.5).
+      - `has_high_neg` yoga doesn't hard-override; must coincide with
+        low flow AND no protective rescue.
+      - Progeny-Dosha / Bandhya / Miscarriage at moderate flow →
+        OBSTRUCTED (not just DELAYED).
+      - **NEW**: Bandhya/Miscarriage yoga + KP 5-CSL = OBSTRUCTED
+        forces OBSTRUCTED REGARDLESS of flow. A natal medical-block
+        signature combined with a KP confirmation should never surface
+        as CHILD_PROMISED — flow merely indicates active dasha, not a
+        clinical green light. This protects the user from medically
+        unsafe framing.
+    """
+    band = santan_band if santan_band in {"WEAK", "MEDIUM", "STRONG"} else "MEDIUM"
+    has_high_neg = any(y.get("severity") == "high" for y in yogas)
+    has_protect = any(y.get("severity") == "protective" for y in yogas)
+
+    s = top_window_score + max(0.0, transit_load)
+
+    # Specific high-severity yoga
+    obstructive_yoga = any(
+        any(tag in (y.get("name") or "") for tag in
+             ("Bandhya", "Progeny-Dosha", "Miscarriage"))
+        and y.get("severity") == "high"
+        for y in yogas
+    )
+    kp_5_obstructed = bool(kp_layer
+                            and kp_layer.get("verdict_5") == "OBSTRUCTED")
+
+    # NEW: clinical-block override — Bandhya/Miscarriage + KP_5_OBSTRUCTED
+    # forces OBSTRUCTED regardless of dasha flow. A natal medical-block
+    # signature with a KP confirmation should never surface as
+    # CHILD_PROMISED. This is the safest framing for a fertility user.
+    if obstructive_yoga and kp_5_obstructed:
+        return "OBSTRUCTED", "WEAK"
+
+    # OBSTRUCTED takes precedence when negative yogas + low flow
+    if s < 2.0 and has_high_neg and not has_protect:
+        return "OBSTRUCTED", "WEAK"
+
+    if obstructive_yoga and s < 4.0:
+        return "OBSTRUCTED", band
+
+    # CHILD_PROMISED: strong flow OR (composite flag + minimum flow)
+    if s >= 6.0 or (child_promised and s >= 3.5):
+        verdict = "CHILD_PROMISED"
+        if child_promised:
+            band = "STRONG"
+        return verdict, band
+
+    if s >= 3.5:
+        return "FAVORABLE", band
+
+    # DELAYED: protective yoga but low flow
+    if has_protect and s < 3.5:
+        return "DELAYED", band
+
+    if has_high_neg and not has_protect:
+        return "DELAYED", band
+
+    return "FAVORABLE", band if s >= 1.5 else "WEAK"
+
+
+def _detect_child_promised(yogas: List[Dict[str, Any]],
+                              kp_layer: Dict[str, Any],
+                              santan_band: str,
+                              ranked: List[Dict[str, Any]]) -> bool:
+    """A composite flag — TRUE only when multiple progeny-indicators
+    coincide: positive Putra/Santan yoga + KP 5-cusp signifies child
+    houses + at least medium SAV santan band + Jupiter in top-3 ranked.
+    """
+    has_putra_yoga = any(
+        any(tag in (y.get("name") or "") for tag in
+             ("Progeny Yoga", "Santan-Prapti", "Child-Karaka-Bala"))
+        and y.get("severity") == "protective"
+        for y in yogas
+    )
+    kp_5_yes = kp_layer.get("verdict_5") == "CHILD_YES"
+    sav_ok = santan_band in ("MEDIUM", "STRONG")
+    top3_names = {r["name"] for r in ranked[:3]}
+    jupiter_top = "Jupiter" in top3_names
+    confirmations = sum([has_putra_yoga, kp_5_yes, sav_ok, jupiter_top])
+    return confirmations >= 3
+
+
+def _affected_areas(top_planets: List[Dict[str, Any]]) -> List[str]:
+    seen: List[str] = []
+    for p in top_planets[:5]:
+        for a in p.get("significations", []):
+            if a not in seen:
+                seen.append(a)
+    return seen[:6]
+
+
+def _gap_ok(cand: Dict[str, Any], chosen: List[Dict[str, Any]]) -> bool:
+    for c in chosen:
+        gap = abs((cand["start"] - c["start"]).days)
+        if gap < _MIN_WINDOW_GAP_DAYS:
+            return False
+    return True
+
+
+def _select_top_3(scored: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    chosen: List[Dict[str, Any]] = []
+    for w in scored:
+        if _gap_ok(w, chosen):
+            chosen.append(w)
+        if len(chosen) >= 3: break
+    return chosen
+
+
+def _format_window(start: datetime, end: datetime) -> str:
+    return f"{start.strftime('%b %Y')} → {end.strftime('%b %Y')}"
+
+
+def _data_sufficiency(kundli: dict, kp: dict) -> Tuple[bool, List[str]]:
+    notes: List[str] = []
+    ok = True
+    if not kundli.get("planets"):
+        notes.append("MISSING planets list"); ok = False
+    if not kundli.get("dashas"):
+        notes.append("MISSING dasha chain")
+    if not kp:
+        notes.append("MISSING KP layer (KP weights default to flat)")
+    return ok, notes
+
+
+# ════════════════════════════════════════════════════════════════════════
+# Public entry point
+# ════════════════════════════════════════════════════════════════════════
+def compute_baby_window(kundli: dict, intel: Optional[dict] = None,
+                          kp: Optional[dict] = None,
+                          birth: Optional[Any] = None) -> dict:
+    """Run the full 9-step Baby (Childbirth) Timing Engine v1 pipeline.
+
+    Single-exit wrapper that resets and populates the thread-local
+    cache on every code path (mirror of travel v1).
+    """
+    clear_last_baby_result()
+    result: Dict[str, Any]
+    try:
+        result = _compute_baby_window_impl(kundli, intel, kp, birth)
+    except Exception as exc:  # noqa: BLE001
+        result = {
+            "verdict": "UNKNOWN", "band": "WEAK",
+            "factors": [f"ENGINE_EXCEPTION {type(exc).__name__}: {str(exc)[:160]}"],
+            "risk_flags": ["ENGINE_EXCEPTION"],
+            "engine_version": "v1.0.0",
+            "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER",
+        }
+    _store_last_result(result)
+    return result
+
+
+def _compute_baby_window_impl(kundli: dict,
+                                intel: Optional[dict] = None,
+                                kp: Optional[dict] = None,
+                                birth: Optional[Any] = None) -> dict:
+    if not isinstance(kundli, dict) or not kundli:
+        return {"verdict": "UNKNOWN", "band": "WEAK",
+                "factors": ["GATE kundli empty"],
+                "engine_version": "v1.0.0",
+                "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER"}
+    kp = kp or kundli.get("kp") or {}
+    intel = intel or {}
+
+    asc = kundli.get("ascendant")
+    lagna_si = _sign_idx(asc) if isinstance(asc, str) else None
+    if lagna_si is None:
+        for key in ("lagnaSign", "ascendant_sign", "ascendantSign"):
+            v = kundli.get(key)
+            if isinstance(v, str):
+                lagna_si = _sign_idx(v)
+            elif isinstance(v, int):
+                lagna_si = v % 12
+            if lagna_si is not None:
+                break
+    if lagna_si is None:
+        return {"verdict": "UNKNOWN", "band": "WEAK",
+                "factors": ["GATE lagna_si is None"],
+                "engine_version": "v1.0.0",
+                "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER"}
+
+    ok, reasons = _data_sufficiency(kundli, kp)
+    factors: List[str] = []
+    if reasons:
+        factors.append(f"DATA_NOTES {reasons}")
+    if not ok:
+        return {"verdict": "UNKNOWN", "band": "WEAK",
+                "risk_flags": reasons, "factors": factors,
+                "engine_version": "v1.0.0",
+                "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER"}
+
+    now = datetime.utcnow()
+    birth_dt = _parse_dob_dt(birth, kundli=kundli)
+    age = _compute_age(birth_dt, now)
+    factors.append(f"AGE user_age={age} lagna={_SIGNS[lagna_si]}")
+
+    # ── STEP 1 ──
+    d1_map = _step1_d1_filter(kundli, lagna_si)
+    survivors = {p for p, info in d1_map.items() if info["in_filter"]}
+    factors.append(f"STEP1 survivors={sorted(survivors)}")
+
+    # ── STEP 2 ──
+    d9_scores = _step2_d9_verify(kundli, survivors)
+    factors.append(f"STEP2 D9_scores=" +
+                    ",".join(f"{p}:{s:.1f}" for p, s in d9_scores.items()))
+
+    # ── STEP 3 ──
+    d7_scores = _step3_d7_progeny(kundli, survivors, lagna_si)
+    factors.append(f"STEP3 D7_progeny=" +
+                    ",".join(f"{p}:{s:.1f}" for p, s in d7_scores.items()))
+
+    # ── STEP 3.5 ──
+    kp_layer = _step3_5_kp_layer(kp, lagna_si)
+    factors.append(f"STEP3.5 KP csl_5={kp_layer['csl_5']}/{kp_layer['verdict_5']} "
+                    f"csl_11={kp_layer['csl_11']}/{kp_layer['verdict_11']}")
+
+    # ── STEP 4 ──
+    ranked = _step4_rank(d1_map, d9_scores, d7_scores, kp, lagna_si)
+    factors.append("STEP4 ranked=" +
+                    ",".join(f"{r['name']}:{r['score']}" for r in ranked[:5]))
+
+    # ── STEP 5 ──
+    chain = _flatten_dasha_chain(kundli)
+    dasha_windows = _step5_dasha_activation(chain, ranked, lagna_si, now)
+    factors.append(f"STEP5 dasha_windows_in_horizon={len(dasha_windows)}")
+
+    # ── STEP 6 ──
+    planets_d1 = kundli.get("planets") or []
+    transits = _step6_transits(kundli, lagna_si, planets_d1, now)
+    transit_load = sum(w for _, _, w in transits.get("active_triggers", []))
+    factors.append(f"STEP6 transit_load={transit_load:.2f}")
+
+    # ── STEP 7 ──
+    ashta = _step7_ashtakavarga(kundli, lagna_si)
+    factors.append(f"STEP7 SAV_5={ashta['sav_5']} SAV_11={ashta['sav_11']} "
+                    f"santan_band={ashta['santan_band']}")
+
+    # ── STEP 9 ──
+    yogas = _detect_yogas(kundli, lagna_si, planets_d1)
+    factors.append(f"STEP9 yogas={[y['name'] for y in yogas]}")
+
+    # Child-promised composite flag
+    child_promised = _detect_child_promised(yogas, kp_layer,
+                                              ashta["santan_band"], ranked)
+    factors.append(f"CHILD_PROMISED={child_promised}")
+
+    # ── Window selection + severity ──
+    top3 = _select_top_3(dasha_windows)
+    formatted_top3: List[Dict[str, Any]] = []
+    confirmations_severe = 0
+    for w in top3:
+        sev = _severity_of_window(w["score"], transit_load,
+                                    w.get("risk_raw", 0.0))
+        if sev == "consult":
+            confirmations_severe += 1
+        formatted_top3.append({
+            "md": w["md"], "ad": w["ad"], "pd": w["pd"],
+            "score": w["score"], "severity": sev,
+            "kind": w.get("kind", "general"),
+            "window": _format_window(w["start"], w["end"]),
+            "start_iso": w["start"].isoformat(),
+            "end_iso": w["end"].isoformat(),
+            "triggers": w["triggers"],
+        })
+
+    current = next((w for w in dasha_windows
+                     if w["start"] <= now <= w["end"]), None)
+    current_window = None
+    if current:
+        sev = _severity_of_window(current["score"], transit_load,
+                                    current.get("risk_raw", 0.0))
+        current_window = {
+            "md": current["md"], "ad": current["ad"], "pd": current["pd"],
+            "start_iso": current["start"].isoformat(),
+            "end_iso": current["end"].isoformat(),
+            "severity": sev,
+            "kind": current.get("kind", "general"),
+            "triggers": current["triggers"],
+        }
+
+    # Protection windows = upcoming where Jupiter / 5L / 9L rules
+    h5_lord = _house_lord(lagna_si, 5)
+    h9_lord = _house_lord(lagna_si, 9)
+    benefics = {"Jupiter", h5_lord, h9_lord}
+    protection_windows = []
+    for w in dasha_windows[:30]:
+        if w["ad"] in benefics or w["pd"] in benefics:
+            protection_windows.append({
+                "md": w["md"], "ad": w["ad"], "pd": w["pd"],
+                "window": _format_window(w["start"], w["end"]),
+                "start_iso": w["start"].isoformat(),
+                "end_iso": w["end"].isoformat(),
+            })
+        if len(protection_windows) >= 3:
+            break
+
+    top_score = formatted_top3[0]["score"] if formatted_top3 else 0.0
+    verdict, band = _derive_verdict(top_score, ashta["santan_band"],
+                                       yogas, transit_load, child_promised,
+                                       kp_layer=kp_layer)
+    severity_now = (current_window["severity"]
+                     if current_window else "supportive")
+    rec_tier = _recommendation_tier(severity_now, confirmations_severe, age)
+    # Consistency rules: OBSTRUCTED forces consult tier
+    if verdict == "OBSTRUCTED":
+        rec_tier = "consult"
+
+    # LLM directives — mandatory baby/fertility safeguards
+    llm_directives = ["BABY_DISCLAIMER",
+                       "NOT_MEDICAL_ADVICE",
+                       "NO_GUARANTEED_CONCEPTION",
+                       "NO_GUARANTEED_DATE",
+                       "NO_GENDER_PREDICTION",   # PCPNDT Act + global ethics
+                       f"SEVERITY_TIER:{rec_tier}"]
+    if child_promised:
+        llm_directives.append("CHILD_PROMISED_INDICATED")
+    if confirmations_severe >= _CONFIRMATIONS_FOR_CONSULT:
+        llm_directives.append("CONSULT_TIER")
+    if verdict == "OBSTRUCTED":
+        llm_directives.append("CONSULT_FERTILITY_SPECIALIST")
+    if any("Miscarriage" in (y.get("name") or "")
+            or "Bandhya" in (y.get("name") or "")
+            for y in yogas):
+        llm_directives.append("MEDICAL_PRECAUTION_RECOMMENDED")
+    # Age guard for medical realism
+    if age is not None:
+        if age < 20:
+            llm_directives.append("USER_TOO_YOUNG_FRAMING")
+        elif age >= 45:
+            llm_directives.append("ADVANCED_AGE_FERTILITY_CONTEXT")
+
+    risk_flags: List[str] = []
+    if ashta["santan_band"] == "WEAK":
+        risk_flags.append("LOW_SAV_SANTAN_BAND")
+    if any(y.get("severity") == "high" for y in yogas):
+        risk_flags.append("NEGATIVE_PROGENY_YOGA")
+    if any("Miscarriage" in (y.get("name") or "") for y in yogas):
+        risk_flags.append("MISCARRIAGE_RISK_YOGA")
+    if any("Bandhya" in (y.get("name") or "") for y in yogas):
+        risk_flags.append("BANDHYA_YOGA")
+    if any("Progeny-Dosha" in (y.get("name") or "") for y in yogas):
+        risk_flags.append("PROGENY_DOSHA")
+    if transit_load >= 1.5 and any("risk" in t[0]
+                                     for t in transits.get("active_triggers", [])):
+        risk_flags.append("HEAVY_RISK_TRANSIT")
+    if kp_layer.get("verdict_5") == "OBSTRUCTED":
+        risk_flags.append("KP_5CSL_DUSTHANA")
+
+    breakdown = {
+        r["name"]: {"d1": r["d1"], "d9": r["d9"], "d7": r["d7"],
+                     "kp": r["kp"], "karaka": r["karaka"],
+                     "total": r["score"]}
+        for r in ranked
+    }
+
+    affected = _affected_areas(ranked)
+    remedies = _compute_baby_remedies(ranked, affected, rec_tier)
+    return {
+        "verdict": verdict,
+        "band": band,
+        "child_promised": child_promised,
+        "current_window": current_window,
+        "next_3_windows": formatted_top3,
+        "protection_windows": protection_windows,
+        "affected_areas": affected,
+        "recommendation_tier": rec_tier,
+        "top_child_planets": ranked[:5],
+        "weighted_breakdown": breakdown,
+        "kp_layer": kp_layer,
+        "transits": transits,
+        "ashtakavarga": ashta,
+        "yogas": yogas,
+        "risk_flags": risk_flags,
+        "factors": factors,
+        "llm_directives": llm_directives,
+        "remedies": remedies,
+        "engine_version": "v1.0.0",
+        "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER",
+    }
+
+
+# ════════════════════════════════════════════════════════════════════════
+# Remedy delegation — baby topic
+# ════════════════════════════════════════════════════════════════════════
+def _compute_baby_remedies(ranked: Optional[List[Dict[str, Any]]],
+                              affected_areas: Optional[List[str]],
+                              recommendation_tier: Optional[str]
+                              ) -> Dict[str, Any]:
+    """Delegates to Remedy Engine v1.1 with topic="baby".
+
+    If the remedy engine doesn't yet have a "baby" topic catalog,
+    falls back to topic="health" with progeny-area tags so a sensible
+    PRACTICAL row (e.g. "consult fertility specialist", "track
+    ovulation") is still surfaced. Returns {} if remedy module
+    missing entirely.
+    """
+    try:
+        from remedy import get_remedies  # type: ignore
+    except Exception:
+        return {}
+    try:
+        out = get_remedies(
+            topic    = "baby",
+            planets  = ranked or [],
+            areas    = affected_areas or [],
+            severity = recommendation_tier,
+            user_facts    = None,
+            duration_days = 21,
+        )
+        if out:
+            return out
+    except Exception:
+        pass
+    # Graceful fallback — health topic with progeny-area context
+    try:
+        return get_remedies(
+            topic    = "health",
+            planets  = ranked or [],
+            areas    = (affected_areas or []) + ["progeny_context"],
+            severity = recommendation_tier or "watchful",
+            user_facts    = None,
+            duration_days = 21,
+        )
+    except Exception:
+        return {}

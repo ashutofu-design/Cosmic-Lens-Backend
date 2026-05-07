@@ -1663,6 +1663,72 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             except Exception:
                 pass
 
+        # ── Baby (Childbirth): BABY-TIMING-V1 path (mirror of travel v1) ─
+        # Computes the 9-step baby/conception/progeny timing engine and
+        # emits a verdict + current-window + top-3 baby-window line.
+        # Stashes full result on a thread-local for the baby remedy
+        # block (baby topic, falls back to health). Falls back silently
+        # if the engine raises.
+        baby_line = None
+        try:
+            from event_timing.baby.baby_engine_v1 import (  # type: ignore
+                compute_baby_window,
+            )
+            kp_for_baby: dict = {}
+            try:
+                kp_for_baby = (kundli.get("kp")
+                                if isinstance(kundli, dict) else {}) or {}
+            except Exception:
+                kp_for_baby = {}
+            b = compute_baby_window(kundli, intel, kp_for_baby, birth) or {}
+            b_verdict = b.get("verdict") or "—"
+            b_band = b.get("band") or "—"
+            b_tier = b.get("recommendation_tier") or "—"
+            b_promised = "✓" if b.get("child_promised") else "✗"
+            b_cw = b.get("current_window") or {}
+            b_cw_str = ""
+            if isinstance(b_cw, dict) and b_cw.get("md"):
+                b_cw_str = (f" | now: {b_cw.get('md')}-{b_cw.get('ad')}-"
+                             f"{b_cw.get('pd')}/{b_cw.get('severity','?')}"
+                             f"/{b_cw.get('kind','?')}")
+            b_risk_str = ""
+            if b.get("risk_flags"):
+                b_risk_str = f" | risk: {','.join(b['risk_flags'][:3])}"
+            baby_line = (
+                f"   • Baby       verdict: {b_verdict}/{b_band}  "
+                f"child_promised: {b_promised}  tier: {b_tier}{b_cw_str}{b_risk_str}"
+            )
+            top3_b = b.get("next_3_windows") or []
+            if isinstance(top3_b, list) and top3_b:
+                _trace_b = []
+                for i, w in enumerate(top3_b[:3], 1):
+                    if not isinstance(w, dict):
+                        continue
+                    ws = w.get("window") or "—"
+                    sc = w.get("score")
+                    sev = w.get("severity") or "—"
+                    knd = w.get("kind") or "—"
+                    sc_str = (f" (score: {sc:.1f}, sev: {sev}, kind: {knd})"
+                              if isinstance(sc, (int, float))
+                              else f" ({sev}, {knd})")
+                    _trace_b.append(f"     trace {i}: {ws}{sc_str}")
+                if _trace_b:
+                    baby_line += "\n" + "\n".join(_trace_b)
+            try:
+                _record_phase("phase-D baby-timing-v1", "ok")
+            except Exception:
+                pass
+        except Exception as _b_exc:  # noqa: BLE001
+            print(f"[locked_facts] baby-timing-v1 failed: {_b_exc}")
+            baby_line = (
+                "   • Baby       verdict: — (engine unavailable)"
+            )
+            try:
+                _record_phase("phase-D baby-timing-v1", "failed",
+                                str(_b_exc))
+            except Exception:
+                pass
+
         # ── REMEDIES sub-blocks (Phase 2.2, May 6 2026) ─────────────
         # Standalone hybrid Remedy Engine v1.0 (3-tier: practical →
         # ayurvedic → vedic). Emits parallel "▸ <TOPIC> REMEDIES"
@@ -1682,6 +1748,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         career_remedies_block   = ""
         finance_remedies_block  = ""
         travel_remedies_block   = ""
+        baby_remedies_block     = ""
         try:
             from remedy import (  # type: ignore
                 get_remedies as _get_remedies,
@@ -1779,6 +1846,21 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             except Exception as _t_rem_exc:  # noqa: BLE001
                 print(f"[locked_facts] travel remedies block failed: {_t_rem_exc}")
 
+            # ── BABY (Phase 2.5, May 7 2026) ───────────────────────
+            # Sourced from baby engine's thread-local result.
+            # Engine internally delegates to remedy.get_remedies(
+            # topic="baby") with graceful fallback to health.
+            try:
+                from event_timing.baby.baby_engine_v1 import (  # type: ignore
+                    get_last_baby_result,
+                )
+                _bres = get_last_baby_result() or {}
+                _brem = _bres.get("remedies") or {}
+                if _brem:
+                    baby_remedies_block = _render_remedies(_brem) or ""
+            except Exception as _b_rem_exc:  # noqa: BLE001
+                print(f"[locked_facts] baby remedies block failed: {_b_rem_exc}")
+
         except Exception as _rem_exc:  # noqa: BLE001
             print(f"[locked_facts] remedy engine import failed: {_rem_exc}")
 
@@ -1791,6 +1873,8 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             _t_lines.append(finance_line)
         if travel_line:
             _t_lines.append(travel_line)
+        if baby_line:
+            _t_lines.append(baby_line)
         for topic, r in _ks.items():
             if r and r.get("available"):
                 _t_lines.append(
@@ -1814,6 +1898,8 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             _t_lines.append(finance_remedies_block)
         if travel_remedies_block:
             _t_lines.append(travel_remedies_block)
+        if baby_remedies_block:
+            _t_lines.append(baby_remedies_block)
         timing_str = "\n".join(_t_lines)
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] timing_engine failed: {exc}")

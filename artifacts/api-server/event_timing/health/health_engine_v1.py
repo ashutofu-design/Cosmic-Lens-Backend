@@ -3,18 +3,21 @@ event_timing/health/health_engine_v1.py
 ========================================
 COSMIC LENS HEALTH TIMING ENGINE v1.0 — clean build, mirrors Marriage v2.4.
 
-Architecture: FILTER → VERIFY → ACTIVATE → TRIGGER (9-step pipeline,
-locked by user spec May 6 2026).
+Architecture: FILTER → VERIFY → ACTIVATE → TRIGGER (8-step pipeline,
+D30 layer removed per user decision May 7 2026 — KP CSL of 6/8 cusps
++ D9 dignity now carry the disease-verify load).
 
   STEP 1   D1 health-significator filter             (FILTER)
            - 1L/6L/8L/12L + 2L/7L marakas
            - Occupants of 6th/8th/12th houses
            - Planets ASPECTING the 6th house
   STEP 2   D9 dignity verification                   (VERIFY)
-  STEP 3   D30 (Trimshamsa) disease verification     (VERIFY)
-           Parashara: D30 is THE disease/misfortune chart.
+  STEP 3   KP cuspal sub lord of 6th & 8th cusps    (VERIFY)
+           (was STEP 3.5 pre-2.5.11.9; now the sole disease-verify
+            layer after Parashari D1/D9.)
   STEP 4   Weighted ranking
-           D1·30 + D9·20 + D30·25 + KP·15 + karaka·10
+           D1·40 + D9·30 + KP·20 + karaka·10  (D30 weight removed,
+           redistributed to D1/D9/KP)
   STEP 5   Dasha activation (AD/PD primary; MD low-weight)
            AD=5, PD=6, MD=1  (per user spec: AD/PD lead, MD background)
   STEP 6   Transit triggers
@@ -24,10 +27,11 @@ locked by user spec May 6 2026).
   STEP 7   Ashtakavarga support
            SAV bindus on Lagna (<25 = weak vitality)
            SAV bindus on 6th  (high = better disease-fighting)
-  STEP 8   KP cuspal sub lord of 6th & 8th houses
-  STEP 9   Yoga + hard-guard layer
+  STEP 8   Yoga + hard-guard layer
            Arishta / Balarishta / Papakartari / age-floor
            (CAFB-health post-injectors stay authoritative for output)
+           (Pre-2.5.11.9 STEP 8 was a duplicate KP layer — removed
+            since KP is now the canonical STEP 3 disease-verify layer.)
 
 Public function:
   compute_health_window(kundli, intel, kp, birth) -> dict
@@ -44,9 +48,9 @@ Output dict (back-compat with marriage-style consumers):
     "affected_systems":     ["digestive", "respiratory", ...],
     "recommendation_tier":  "monitor" | "preventive" | "consult" |
                             "urgent_consult",
-    "top_health_planets":   [{name, score, d1, d9, d30, kp, karaka,
+    "top_health_planets":   [{name, score, d1, d9, kp, karaka,
                                significations[]}],
-    "weighted_breakdown":   {planet: {d1, d9, d30, kp, karaka, total}},
+    "weighted_breakdown":   {planet: {d1, d9, kp, karaka, total}},
     "kp_layer":             {csl_6, csl_8, verdict_6, verdict_8},
     "transits":             {saturn, rahu, ketu, mars, jupiter, sade_sati},
     "ashtakavarga":         {sav_lagna, sav_6, vitality_band},
@@ -263,11 +267,6 @@ except Exception:
     compute_d9 = None  # type: ignore
 
 try:
-    from divisional_charts import compute_d30  # type: ignore
-except Exception:
-    compute_d30 = None  # type: ignore
-
-try:
     from ashtakavarga import compute_ashtakavarga  # type: ignore
 except Exception:
     compute_ashtakavarga = None  # type: ignore
@@ -321,11 +320,12 @@ _DUSTHANA  = [6, 8, 12]            # disease/chronic/hospitalization
 _VITALITY  = [1]                   # body strength
 _MARAKA    = [2, 7]                # life-end markers (low weight, age-gated)
 
-# Health-significator weights (Step 4)
-_WEIGHT_D1     = 0.30
-_WEIGHT_D9     = 0.20
-_WEIGHT_D30    = 0.25
-_WEIGHT_KP     = 0.15
+# Health-significator weights (Step 4) — Phase 2.5.11.9: D30 removed,
+# its 0.25 weight redistributed across D1 (+0.10), D9 (+0.10), KP (+0.05).
+# Sum = 1.00.
+_WEIGHT_D1     = 0.40
+_WEIGHT_D9     = 0.30
+_WEIGHT_KP     = 0.20
 _WEIGHT_KARAKA = 0.10
 
 # Dasha scores (per user spec: AD/PD lead, MD background)
@@ -625,52 +625,10 @@ def _step2_d9_verify(kundli: dict, candidates: Set[str]) -> Dict[str, float]:
 
 
 # ════════════════════════════════════════════════════════════════════════
-# STEP 3 — D30 (Trimshamsa) disease verification
+# STEP 3 — KP layer (cuspal sub lord of 6th & 8th)
+# (Phase 2.5.11.9: was STEP 3.5; D30 step deleted, KP promoted to STEP 3.)
 # ════════════════════════════════════════════════════════════════════════
-def _step3_d30_verify(kundli: dict, lagna_si: int,
-                       candidates: Set[str]) -> Dict[str, float]:
-    """D30 (Trimshamsa) is Parashara's dedicated disease/misfortune chart.
-    A planet placed in 6/8/12 of D30 is a confirmed disease significator.
-    Score range 0-25.
-    """
-    out: Dict[str, float] = {p: 0.0 for p in candidates}
-    if not candidates:
-        return out
-    d30 = None
-    if compute_d30 is not None:
-        try:
-            d30 = compute_d30(kundli)
-        except Exception:
-            d30 = None
-    if not d30:
-        return {p: 8.0 for p in candidates}
-    d30_planets = d30.get("planets") if isinstance(d30, dict) else None
-    d30_lagna = (d30.get("ascendantSign") or d30.get("ascendant")
-                 if isinstance(d30, dict) else None)
-    d30_lagna_si = _sign_idx(d30_lagna) if d30_lagna else lagna_si
-    if not d30_planets or d30_lagna_si is None:
-        return {p: 8.0 for p in candidates}
-    for pname in candidates:
-        si = _planet_sign_idx(d30_planets, pname)
-        if si is None:
-            out[pname] = 8.0
-            continue
-        h = _house_of_sign(si, d30_lagna_si)
-        if h in _DUSTHANA:
-            out[pname] = 22.0      # confirmed disease significator
-        elif h in (1, 4, 7, 10):
-            out[pname] = 6.0       # kendras = stable
-        elif h in (5, 9):
-            out[pname] = 4.0       # trikona = protective
-        else:
-            out[pname] = 10.0
-    return out
-
-
-# ════════════════════════════════════════════════════════════════════════
-# STEP 3.5 — KP layer (cuspal sub lord of 6th & 8th)
-# ════════════════════════════════════════════════════════════════════════
-def _step3_5_kp_layer(kp: dict, lagna_si: int) -> Dict[str, Any]:
+def _step3_kp_layer(kp: dict, lagna_si: int) -> Dict[str, Any]:
     """KP cuspal sub lord of 6th & 8th cusps.
     Verdict rules (KP standard for health):
       6 CSL signifies 6/8/12 → illness yes
@@ -728,10 +686,10 @@ def _karaka_score(pname: str, lagna_si: int) -> float:
 
 def _step4_rank(d1_map: Dict[str, Dict[str, Any]],
                 d9_scores: Dict[str, float],
-                d30_scores: Dict[str, float],
                 kp: dict, lagna_si: int) -> List[Dict[str, Any]]:
     """Rank surviving candidates by weighted score.
-    Score = D1·30% + D9·20% + D30·25% + KP·15% + Karaka·10%
+    Score = D1·40% + D9·30% + KP·20% + Karaka·10%
+    (Phase 2.5.11.9: D30 layer removed, weight redistributed.)
     All sub-scores normalized to 0-25 first.
 
     D1 normalization (architect fix): true min-max scale to 0-25 so
@@ -748,7 +706,6 @@ def _step4_rank(d1_map: Dict[str, Dict[str, Any]],
         # True normalization: scale relative to the strongest candidate
         d1 = (raw_d1[pname] / max_d1) * 25.0
         d9 = d9_scores.get(pname, 8.0)
-        d30 = d30_scores.get(pname, 8.0)
         # KP signification of dusthanas
         sig = _planet_signified_houses(kp, pname)
         kp_score = 0.0
@@ -761,13 +718,13 @@ def _step4_rank(d1_map: Dict[str, Dict[str, Any]],
         kp_score = min(25.0, kp_score) if kp_score > 0 else 6.0
         karaka = _karaka_score(pname, lagna_si) * 2.5  # scale to 0-25
         total = (d1 * _WEIGHT_D1 + d9 * _WEIGHT_D9 +
-                 d30 * _WEIGHT_D30 + kp_score * _WEIGHT_KP +
+                 kp_score * _WEIGHT_KP +
                  karaka * _WEIGHT_KARAKA)
         ranked.append({
             "name": pname,
             "score": round(total, 2),
             "d1": round(d1, 2), "d9": round(d9, 2),
-            "d30": round(d30, 2), "kp": round(kp_score, 2),
+            "kp": round(kp_score, 2),
             "karaka": round(karaka, 2),
             "links": list(info["links"]),
             "significations": _SYSTEM_OF_PLANET.get(pname, []),
@@ -1063,7 +1020,7 @@ def _step7_ashtakavarga(kundli: dict, lagna_si: int) -> Dict[str, Any]:
 
 
 # ════════════════════════════════════════════════════════════════════════
-# STEP 9 — Yoga + hard guards
+# STEP 8 — Yoga + hard guards (Phase 2.5.11.9: was STEP 9)
 # ════════════════════════════════════════════════════════════════════════
 def _detect_yogas(kundli: dict, lagna_si: int,
                    planets: List[dict]) -> List[Dict[str, Any]]:
@@ -1329,18 +1286,13 @@ def _compute_health_window_impl(kundli: dict,
     factors.append(f"STEP2 D9_scores=" +
                     ",".join(f"{p}:{s:.1f}" for p, s in d9_scores.items()))
 
-    # ── STEP 3 ────────────────────────────────────────────────────────
-    d30_scores = _step3_d30_verify(kundli, lagna_si, survivors)
-    factors.append(f"STEP3 D30_scores=" +
-                    ",".join(f"{p}:{s:.1f}" for p, s in d30_scores.items()))
-
-    # ── STEP 3.5 — KP layer ───────────────────────────────────────────
-    kp_layer = _step3_5_kp_layer(kp, lagna_si)
-    factors.append(f"STEP3.5 KP csl_6={kp_layer['csl_6']}/{kp_layer['verdict_6']} "
+    # ── STEP 3 — KP layer (Phase 2.5.11.9: was STEP 3.5; D30 deleted) ─
+    kp_layer = _step3_kp_layer(kp, lagna_si)
+    factors.append(f"STEP3 KP csl_6={kp_layer['csl_6']}/{kp_layer['verdict_6']} "
                     f"csl_8={kp_layer['csl_8']}/{kp_layer['verdict_8']}")
 
     # ── STEP 4 — Weighted ranking ─────────────────────────────────────
-    ranked = _step4_rank(d1_map, d9_scores, d30_scores, kp, lagna_si)
+    ranked = _step4_rank(d1_map, d9_scores, kp, lagna_si)
     factors.append("STEP4 ranked=" +
                     ",".join(f"{r['name']}:{r['score']}" for r in ranked[:5]))
 
@@ -1360,9 +1312,9 @@ def _compute_health_window_impl(kundli: dict,
     factors.append(f"STEP7 SAV_lagna={ashta['sav_lagna']} "
                     f"band={ashta['vitality_band']}")
 
-    # ── STEP 9 — Yogas ────────────────────────────────────────────────
+    # ── STEP 8 — Yogas (Phase 2.5.11.9: was STEP 9) ───────────────────
     yogas = _detect_yogas(kundli, lagna_si, planets_d1)
-    factors.append(f"STEP9 yogas={[y['name'] for y in yogas]}")
+    factors.append(f"STEP8 yogas={[y['name'] for y in yogas]}")
 
     # ── Window selection + severity ───────────────────────────────────
     top3 = _select_top_3(dasha_windows)
@@ -1446,9 +1398,9 @@ def _compute_health_window_impl(kundli: dict,
     if kp_layer.get("verdict_8") == "CHRONIC_YES":
         risk_flags.append("KP_8CSL_DUSTHANA")
 
-    # Weighted breakdown (engine audit)
+    # Weighted breakdown (engine audit) — Phase 2.5.11.9: d30 dropped
     breakdown = {
-        r["name"]: {"d1": r["d1"], "d9": r["d9"], "d30": r["d30"],
+        r["name"]: {"d1": r["d1"], "d9": r["d9"],
                      "kp": r["kp"], "karaka": r["karaka"],
                      "total": r["score"]}
         for r in ranked

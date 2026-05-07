@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from event_timing.health.health_engine_v1 import (
     compute_health_window,
     _step1_d1_filter,
-    _step3_5_kp_layer,
+    _step3_kp_layer,
     _detect_yogas,
     _aspects_house,
     _house_lord,
@@ -155,14 +155,14 @@ class TestKpLayer(unittest.TestCase):
                        {"house": 8, "sl": "Jupiter"}],
             "significations": {"Saturn": [6, 8], "Jupiter": [5, 9, 11]},
         }
-        out = _step3_5_kp_layer(kp, lagna_si=0)
+        out = _step3_kp_layer(kp, lagna_si=0)
         self.assertEqual(out["csl_6"], "Saturn")
         self.assertEqual(out["verdict_6"], "ILLNESS_YES")
         self.assertEqual(out["csl_8"], "Jupiter")
         self.assertEqual(out["verdict_8"], "CHRONIC_NO")
 
     def test_kp_missing_cusps_unknown(self):
-        out = _step3_5_kp_layer({}, lagna_si=0)
+        out = _step3_kp_layer({}, lagna_si=0)
         self.assertEqual(out["verdict_6"], "UNKNOWN")
         self.assertEqual(out["verdict_8"], "UNKNOWN")
 
@@ -233,7 +233,7 @@ class TestFullPipeline(unittest.TestCase):
         out = compute_health_window(self.kundli, intel={},
                                       kp=self.kundli.get("kp"))
         for r in out["top_health_planets"]:
-            for k in ("name", "score", "d1", "d9", "d30", "kp",
+            for k in ("name", "score", "d1", "d9", "kp",
                        "karaka", "links", "significations"):
                 self.assertIn(k, r)
 

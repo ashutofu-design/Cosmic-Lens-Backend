@@ -40,14 +40,15 @@ kar timing engine").
            Sade Sati on Moon = emotional family stress
   STEP 7   Ashtakavarga support (SAV bindus on 5H + 11H — santan band)
   STEP 8   KP cuspal sub lord of 5 (child verdict)
-  STEP 9   Yoga + hard-guard layer
-           POSITIVE: Putra Yoga (5L+9L conjunction/exchange),
-           Santan-Prapti (Jupiter aspects 5H or 5L),
-           Putra-Karaka-Bala (Jupiter exalted/own sign)
-           NEGATIVE: Bandhya Yoga (5L in 6/8/12 + Jupiter weak),
-           Putra-Dosha (5H surrounded by malefics, no Jupiter aspect),
-           Miscarriage-Yoga (8L+5L conjunction with malefic),
-           Adoption-Indicated (5L in 12H + Rahu on 5H)
+  STEP 9   Yoga hard-denial layer (Phase 2.5.9 trim — denial-only)
+           NEGATIVE-ONLY: Bandhya Yoga (5L in 6/8/12 + Jupiter in dusthana),
+           Progeny-Dosha (5H surrounded by ≥2 malefics, no Jupiter rescue),
+           Miscarriage-Yoga (5L+8L conjunction),
+           D7-Bandhya (D7 5L in D7 dusthana, no Jupiter rescue).
+           Removed (redundant w/ earlier steps): Progeny Yoga (5L+9L),
+           Santan-Prapti (Jupiter aspects 5H/5L), Child-Karaka-Bala
+           (Jupiter exalted/own), Adoption-Indicated, D7-Progeny-Yoga,
+           D7-Lagna-Activation.
 
 Public function:
   compute_baby_window(kundli, intel, kp, birth) -> dict
@@ -1662,77 +1663,38 @@ def _step7_ashtakavarga(kundli: dict, lagna_si: int) -> Dict[str, Any]:
 # ════════════════════════════════════════════════════════════════════════
 def _detect_yogas(kundli: dict, lagna_si: int,
                    planets: List[dict]) -> List[Dict[str, Any]]:
-    """Detect classical baby/progeny-relevant yogas.
+    """Detect classical HARD-DENIAL progeny yogas only.
 
-    POSITIVE:
-      - Putra Yoga (5L+9L conjunction OR exchange OR mutual aspect)
-      - Santan-Prapti Yoga (Jupiter aspects 5H or 5L)
-      - Putra-Karaka-Bala (Jupiter exalted/own-sign)
-    NEGATIVE:
-      - Bandhya Yoga (5L in 6/8/12 + Jupiter in dusthana)
-      - Putra-Dosha (5H surrounded by malefics, NO Jupiter aspect)
-      - Miscarriage-Yoga (8L+5L conjunction)
-      - Adoption-Indicated (5L in 12H + Rahu/Ketu on 5H — neutral
-        severity — describes route, not obstruction)
+    Phase 2.5.9 surgical-trim (per user "Hm remove karo step 9 delete →
+    Option Y"): protective/promise yogas (Progeny Yoga, Santan-Prapti,
+    Child-Karaka-Bala, Adoption-Indicated) were REMOVED because they
+    are redundant with earlier-step granular detection:
+      • 5L+9L combos → already caught by Step 1 lordship + Step 4
+        weighted ranking
+      • Jupiter aspects 5H/5L → already in Step 1 aspects + Step 6
+        Double Transit on 5H/5L lord
+      • Jupiter exalted/own-sign → already in Step 2 D9 dignity +
+        Step 7 Jupiter BAV (jupiter_putra_strength)
+      • Adoption (5L in 12H + Rahu/Ketu on 5H) → leaked gender-tinged
+        framing; better surfaced as a remedy-engine note than a yoga
+
+    Only HARD-DENIAL yogas remain — these are the ONE thing earlier
+    steps cannot infer (a yoga is a structural classical veto on the
+    promise itself, separate from timing/strength):
+      • Bandhya Yoga (5L in 6/8/12 + Jupiter in dusthana)
+      • Progeny-Dosha (5H afflicted by ≥2 malefics + no Jupiter rescue)
+      • Miscarriage-Yoga (5L+8L conjunction)
+
+    These three drive the OBSTRUCTED verdict path in `_derive_verdict`
+    and the clinical-block override (Bandhya/Miscarriage + KP_5_OBSTR).
     """
     out: List[Dict[str, Any]] = []
 
     h5_lord  = _house_lord(lagna_si, 5)
-    h9_lord  = _house_lord(lagna_si, 9)
     h8_lord  = _house_lord(lagna_si, 8)
 
-    # CRITICAL ETHICAL NOTE (architect-fix May 7 2026): yoga labels MUST
-    # be gender-neutral. "Putra" literally means "son" in Sanskrit; using
-    # it leaks gender vocabulary downstream even though the engine carries
-    # NO_GENDER_PREDICTION directive. We use "Progeny" / "Child-Promise"
-    # / "Child-Karaka" labels instead. "Santan" (offspring), "Bandhya"
-    # (barren), "Miscarriage", "Adoption" are gender-neutral classical
-    # terms and may be retained.
-    # Progeny Yoga: 5L+9L conjunction / exchange / mutual aspect
     h5_h = _planet_house(planets, h5_lord)
-    h9_h = _planet_house(planets, h9_lord)
-    if h5_lord != h9_lord and h5_h and h9_h:
-        if h5_h == 9 and h9_h == 5:
-            out.append({"name": "Progeny Yoga (5L↔9L parivartana)",
-                        "severity": "protective",
-                        "planets": [h5_lord, h9_lord]})
-        elif h5_h == h9_h:
-            out.append({"name": "Progeny Yoga (5L+9L conjunction)",
-                        "severity": "protective",
-                        "planets": [h5_lord, h9_lord]})
-        elif (_aspects_house(h5_lord, h5_h, h9_h)
-              and _aspects_house(h9_lord, h9_h, h5_h)):
-            out.append({"name": "Progeny Yoga (5L↔9L mutual aspect)",
-                        "severity": "protective",
-                        "planets": [h5_lord, h9_lord]})
-
-    # Santan-Prapti Yoga: Jupiter aspects 5H or 5L
     jup_h = _planet_house(planets, "Jupiter")
-    if jup_h:
-        if jup_h == 5:
-            out.append({"name": "Santan-Prapti Yoga (Jupiter in 5H)",
-                        "severity": "protective",
-                        "planets": ["Jupiter"]})
-        elif _aspects_house("Jupiter", jup_h, 5):
-            out.append({"name": "Santan-Prapti Yoga (Jupiter aspects 5H)",
-                        "severity": "protective",
-                        "planets": ["Jupiter"]})
-        elif h5_h and _aspects_house("Jupiter", jup_h, h5_h):
-            out.append({"name": "Santan-Prapti Yoga (Jupiter aspects 5L)",
-                        "severity": "protective",
-                        "planets": ["Jupiter", h5_lord]})
-
-    # Child-Karaka-Bala: Jupiter exalted or own-sign
-    jup_si = _planet_sign_idx(planets, "Jupiter")
-    if jup_si is not None:
-        if jup_si == _EXALT["Jupiter"]:
-            out.append({"name": "Child-Karaka-Bala (Jupiter exalted)",
-                        "severity": "protective",
-                        "planets": ["Jupiter"]})
-        elif jup_si in _OWN_SIGNS["Jupiter"]:
-            out.append({"name": "Child-Karaka-Bala (Jupiter own-sign)",
-                        "severity": "protective",
-                        "planets": ["Jupiter"]})
 
     # Bandhya Yoga: 5L in 6/8/12 AND Jupiter in dusthana
     if h5_h in (6, 8, 12) and jup_h in (6, 8, 12):
@@ -1763,54 +1725,33 @@ def _detect_yogas(kundli: dict, lagna_si: int,
                     "severity": "high",
                     "planets": [h5_lord, h8_lord]})
 
-    # Adoption-Indicated (informational — neutral severity)
-    rahu_h = _planet_house(planets, "Rahu")
-    ketu_h = _planet_house(planets, "Ketu")
-    if h5_h == 12 and (rahu_h == 5 or ketu_h == 5):
-        out.append({"name": "Adoption-Indicated Yoga (5L in 12H + Rahu/Ketu on 5H)",
-                    "severity": "informational",
-                    "planets": [h5_lord, "Rahu" if rahu_h == 5 else "Ketu"]})
-
     return out
 
 
 def _detect_d7_yogas(d7_picture: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """D7-Saptamsha-specific yogas, derived from the Step 3b picture.
+    """D7-Saptamsha hard-denial yoga only (Phase 2.5.9 surgical trim).
 
-    Mirrors the gender-neutral labelling rule used in `_detect_yogas`.
-    Emits:
-      • "D7-Progeny-Yoga" (protective) when the D7 5L is well-placed in
-        D7 (kendra/trine, non-debilitated, not in dusthana) AND either
-        Jupiter aspects/occupies D7 5H or a benefic occupies it.
-      • "D7-Bandhya" (high) when the D7 5L sits in D7 6/8/12 AND there
-        is no Jupiter aspect/occupation of D7 5H (no rescue).
-      • "D7-Lagna-Activation" (protective) when D7 1L aspects D7 5H
-        (lagna lord lending strength to the children house).
+    D7-Progeny-Yoga (protective) and D7-Lagna-Activation (protective)
+    were REMOVED — both are redundant with the Step 3b D7 picture
+    flags themselves, the Step 3c cross-chart confirmation gate, and
+    the Step 7 Jupiter BAV strength signal.
+
+    Only D7-Bandhya remains — a structural classical veto on the
+    progeny promise from the children-chart that earlier steps don't
+    independently veto: D7 5L in D7 6/8/12 AND no Jupiter rescue on
+    D7 5H. Drives the OBSTRUCTED verdict alongside D1 Bandhya.
     """
     out: List[Dict[str, Any]] = []
     if not d7_picture or not d7_picture.get("available"):
         return out
     flags = d7_picture.get("flags", {}) or {}
-    fl  = d7_picture.get("first_lord")  or {}
     fih = d7_picture.get("fifth_lord")  or {}
-
-    if (flags.get("d7_5l_well_placed")
-        and (flags.get("jupiter_aspects_d7_5h")
-              or flags.get("benefic_in_d7_5h"))):
-        out.append({"name": "D7-Progeny-Yoga (D7 5L well-placed + benefic on D7 5H)",
-                    "severity": "protective",
-                    "planets": [fih.get("planet"), "Jupiter"]})
 
     if (flags.get("d7_5l_in_dusthana")
         and not flags.get("jupiter_aspects_d7_5h")):
         out.append({"name": "D7-Bandhya (D7 5L in D7 dusthana, no Jupiter rescue)",
                     "severity": "high",
                     "planets": [fih.get("planet")]})
-
-    if flags.get("d7_1l_aspects_5h"):
-        out.append({"name": "D7-Lagna-Activation (D7 1L aspects D7 5H — progeny strength)",
-                    "severity": "protective",
-                    "planets": [fl.get("planet")]})
 
     return out
 
@@ -1907,6 +1848,11 @@ def _derive_verdict(top_window_score: float,
     """
     band = santan_band if santan_band in {"WEAK", "MEDIUM", "STRONG"} else "MEDIUM"
     has_high_neg = any(y.get("severity") == "high" for y in yogas)
+    # `has_protect` is intentionally DORMANT after Phase 2.5.9 — no
+    # protective yoga emitter remains in `_detect_yogas` / `_detect_d7_yogas`.
+    # The branch is kept for forward-compat: if a future phase reintroduces
+    # protective yogas, the DELAYED path will reactivate automatically
+    # without further verdict-logic changes.
     has_protect = any(y.get("severity") == "protective" for y in yogas)
 
     s = top_window_score + max(0.0, transit_load)
@@ -1955,25 +1901,33 @@ def _derive_verdict(top_window_score: float,
     return "FAVORABLE", band if s >= 1.5 else "WEAK"
 
 
-def _detect_child_promised(yogas: List[Dict[str, Any]],
-                              kp_layer: Dict[str, Any],
-                              santan_band: str,
+def _detect_child_promised(kp_layer: Dict[str, Any],
+                              ashta: Dict[str, Any],
                               ranked: List[Dict[str, Any]]) -> bool:
-    """A composite flag — TRUE only when multiple progeny-indicators
-    coincide: positive Putra/Santan yoga + KP 5-cusp signifies child
-    houses + at least medium SAV santan band + Jupiter in top-3 ranked.
+    """A composite flag — TRUE only when ≥3 progeny-indicators coincide.
+
+    Phase 2.5.9: protective `has_putra_yoga` slot was removed alongside
+    the protective-yoga deletion. Replaced with `jupiter_putra_strong`
+    derived from Step 7 Jupiter BAV — `jupiter_putra_strength == "STRONG"`
+    means Jupiter's own bindus on 5H + 11H avg ≥ 5/7, the BPHS
+    classical signature for PUTRA-KARAKA promising progeny. This is
+    a more direct, granular promise-of-progeny check than the
+    yoga-label proxy it replaces.
+
+    Four confirmation slots (need ≥3):
+      1. Jupiter PUTRA-KARAKA strong (BAV avg ≥5)
+      2. KP 5-cusp signifies child (CHILD_YES)
+      3. SAV santan band MEDIUM or STRONG
+      4. Jupiter in top-3 weighted-ranked planets
     """
-    has_putra_yoga = any(
-        any(tag in (y.get("name") or "") for tag in
-             ("Progeny Yoga", "Santan-Prapti", "Child-Karaka-Bala"))
-        and y.get("severity") == "protective"
-        for y in yogas
-    )
+    jupiter_putra_strong = (ashta.get("jupiter_putra_strength")
+                              == "STRONG")
     kp_5_yes = kp_layer.get("verdict_5") == "CHILD_YES"
-    sav_ok = santan_band in ("MEDIUM", "STRONG")
+    sav_ok = ashta.get("santan_band") in ("MEDIUM", "STRONG")
     top3_names = {r["name"] for r in ranked[:3]}
     jupiter_top = "Jupiter" in top3_names
-    confirmations = sum([has_putra_yoga, kp_5_yes, sav_ok, jupiter_top])
+    confirmations = sum([jupiter_putra_strong, kp_5_yes,
+                          sav_ok, jupiter_top])
     return confirmations >= 3
 
 
@@ -2263,9 +2217,9 @@ def _compute_baby_window_impl(kundli: dict,
     yogas.extend(_detect_d7_yogas(d7_picture))
     factors.append(f"STEP9 yogas={[y['name'] for y in yogas]}")
 
-    # Child-promised composite flag
-    child_promised = _detect_child_promised(yogas, kp_layer,
-                                              ashta["santan_band"], ranked)
+    # Child-promised composite flag (Phase 2.5.9 — yogas dropped,
+    # Jupiter PUTRA-KARAKA strength from Step 7 BAV used instead)
+    child_promised = _detect_child_promised(kp_layer, ashta, ranked)
     factors.append(f"CHILD_PROMISED={child_promised}")
 
     # ── Window selection + severity ──

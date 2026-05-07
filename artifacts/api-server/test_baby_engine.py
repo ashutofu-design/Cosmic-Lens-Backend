@@ -132,9 +132,9 @@ class TestSeverityVerdict(unittest.TestCase):
                           "celebratory")
 
     def test_derive_verdict_child_promised(self):
-        yogas = [{"name": "Progeny Yoga (5L+9L conjunction)",
-                   "severity": "protective", "planets": ["Sun", "Jupiter"]}]
-        v, b = _derive_verdict(7.0, "STRONG", yogas, 0.0, True)
+        # Phase 2.5.9: protective yogas removed; CHILD_PROMISED now
+        # driven by composite flag (set externally) + flow gate.
+        v, b = _derive_verdict(7.0, "STRONG", [], 0.0, True)
         self.assertEqual(v, "CHILD_PROMISED")
         self.assertEqual(b, "STRONG")
 
@@ -143,12 +143,6 @@ class TestSeverityVerdict(unittest.TestCase):
                    "severity": "high", "planets": ["Sun", "Jupiter"]}]
         v, _ = _derive_verdict(2.0, "WEAK", yogas, 0.0, False)
         self.assertEqual(v, "OBSTRUCTED")
-
-    def test_derive_verdict_delayed_with_protection_low_flow(self):
-        yogas = [{"name": "Santan-Prapti Yoga (Jupiter aspects 5H)",
-                   "severity": "protective", "planets": ["Jupiter"]}]
-        v, _ = _derive_verdict(2.0, "MEDIUM", yogas, 0.0, False)
-        self.assertEqual(v, "DELAYED")
 
     def test_derive_verdict_favorable_with_moderate_flow(self):
         v, _ = _derive_verdict(4.0, "MEDIUM", [], 0.0, False)
@@ -747,42 +741,30 @@ class TestKpLayer(unittest.TestCase):
 # Yoga detection
 # ════════════════════════════════════════════════════════════════════════
 class TestYogas(unittest.TestCase):
-    def test_progeny_yoga_5L_9L_conjunction(self):
-        # Aries lagna → 5L=Sun (Leo), 9L=Jupiter (Sagittarius)
-        # Place both in 11H → conjunction
+    def test_phase_2_5_9_only_hard_denial_yogas_emitted(self):
+        """Phase 2.5.9: protective yogas (Progeny Yoga, Santan-Prapti,
+        Child-Karaka-Bala) and Adoption-Indicated were REMOVED.
+        Only HARD-DENIAL yogas (Bandhya, Progeny-Dosha,
+        Miscarriage-Yoga) may be emitted now.
+        """
+        # Aries lagna with Jupiter in 5H + 5L+9L conjunction etc
+        # — historically would emit 2-3 protective yogas, must now
+        # emit zero protective yogas.
         kundli = _mk_kundli("Aries", {
             "Sun": 11, "Moon": 4, "Mars": 7, "Mercury": 6,
-            "Jupiter": 11, "Venus": 2, "Saturn": 10,
+            "Jupiter": 5, "Venus": 2, "Saturn": 10,
             "Rahu": 12, "Ketu": 6,
         })
         yg = _detect_yogas(kundli, 0, kundli["planets"])
-        names = [y["name"] for y in yg]
-        self.assertTrue(any("Progeny Yoga" in n for n in names))
-
-    def test_santan_prapti_jupiter_aspects_5H(self):
-        # Aries lagna → 5H is Leo (count from 1H Aries: 5th house)
-        # Jupiter in 11H aspects 5H (7th aspect 11→5)
-        kundli = _mk_kundli("Aries", {
-            "Sun": 1, "Moon": 4, "Mars": 7, "Mercury": 6,
-            "Jupiter": 11, "Venus": 2, "Saturn": 10,
-            "Rahu": 12, "Ketu": 6,
-        })
-        yg = _detect_yogas(kundli, 0, kundli["planets"])
-        names = [y["name"] for y in yg]
-        self.assertTrue(any("Santan-Prapti" in n for n in names))
-
-    def test_child_karaka_bala_jupiter_exalted(self):
-        # Place Jupiter in Cancer (sign idx 3 — exalted)
-        # For Aries lagna, Cancer is 4H
-        kundli = _mk_kundli("Aries", {
-            "Sun": 1, "Moon": 1, "Mars": 7, "Mercury": 6,
-            "Jupiter": 4, "Venus": 2, "Saturn": 10,
-            "Rahu": 12, "Ketu": 6,
-        })
-        yg = _detect_yogas(kundli, 0, kundli["planets"])
-        names = [y["name"] for y in yg]
-        self.assertTrue(any("Child-Karaka-Bala (Jupiter exalted)" in n
-                             for n in names))
+        for y in yg:
+            self.assertNotEqual(y.get("severity"), "protective",
+                f"protective yoga should not be emitted: {y.get('name')}")
+            self.assertNotEqual(y.get("severity"), "informational",
+                f"informational yoga should not be emitted: {y.get('name')}")
+            for banned in ("Progeny Yoga", "Santan-Prapti",
+                            "Child-Karaka-Bala", "Adoption-Indicated"):
+                self.assertNotIn(banned, y.get("name", ""),
+                    f"removed yoga still firing: {y.get('name')}")
 
     def test_progeny_dosha(self):
         # 5H heavily afflicted by malefics (Sun in 5H + Mars aspects 5H)
@@ -813,33 +795,57 @@ class TestYogas(unittest.TestCase):
 # ════════════════════════════════════════════════════════════════════════
 class TestChildPromised(unittest.TestCase):
     def test_requires_three_confirmations(self):
-        yogas = [{"name": "Progeny Yoga (5L+9L conjunction)",
-                   "severity": "protective", "planets": ["Sun", "Jupiter"]}]
+        """Phase 2.5.9: confirmation slots are now
+        (jupiter_putra_strong, kp_5_yes, sav_ok, jupiter_top3).
+        """
         kp_layer = {"verdict_5": "CHILD_YES"}
+        ashta_strong = {"santan_band": "MEDIUM",
+                          "jupiter_putra_strength": "STRONG"}
         ranked = [{"name": "Jupiter", "score": 20.0},
                   {"name": "Sun", "score": 15.0},
                   {"name": "Venus", "score": 12.0}]
         # 4 confirmations → True
-        self.assertTrue(_detect_child_promised(yogas, kp_layer,
-                                                  "MEDIUM", ranked))
+        self.assertTrue(_detect_child_promised(kp_layer, ashta_strong,
+                                                  ranked))
         # Drop to 1 confirmation → False
-        self.assertFalse(_detect_child_promised([], {"verdict_5": "OBSTRUCTED"},
-                                                   "WEAK",
-                                                   [{"name": "Sun", "score": 5}]))
+        self.assertFalse(_detect_child_promised(
+            {"verdict_5": "OBSTRUCTED"},
+            {"santan_band": "WEAK", "jupiter_putra_strength": "WEAK"},
+            [{"name": "Sun", "score": 5}]))
 
-    def test_negative_progeny_yoga_does_not_count(self):
-        """Architect-pattern HIGH#2 carry-over: a Progeny-Yoga match
-        with non-protective severity must NOT count toward
-        confirmations.
+    def test_unknown_jupiter_putra_strength_does_not_count(self):
+        """Phase 2.5.9 regression: degraded Step 7 BAV data
+        (`jupiter_putra_strength="UNKNOWN"`) must NOT count as a
+        confirmation — same treatment as MODERATE/WEAK. This protects
+        against silent over-promising when Ashtakavarga is unavailable.
         """
-        yogas_neg = [{"name": "Progeny Yoga (artifact name reuse)",
-                       "severity": "high", "planets": ["Sun"]}]
         kp_layer = {"verdict_5": "CHILD_YES"}
+        ashta_unknown = {"santan_band": "MEDIUM",
+                          "jupiter_putra_strength": "UNKNOWN"}
         ranked = [{"name": "Saturn", "score": 20.0},
                   {"name": "Mars", "score": 15.0}]
-        # No Jupiter in top3, no protective putra-yoga, kp+sav only = 2 → False
-        self.assertFalse(_detect_child_promised(
-            yogas_neg, kp_layer, "MEDIUM", ranked))
+        # Only kp_5_yes + sav_ok = 2 confirmations → False
+        self.assertFalse(_detect_child_promised(kp_layer, ashta_unknown,
+                                                   ranked))
+        # Adding Jupiter to top-3 lifts to 3 confirmations → True
+        ranked_with_jup = [{"name": "Jupiter", "score": 22.0},
+                            {"name": "Saturn", "score": 20.0},
+                            {"name": "Mars", "score": 15.0}]
+        self.assertTrue(_detect_child_promised(kp_layer, ashta_unknown,
+                                                  ranked_with_jup))
+
+    def test_jupiter_bav_weak_drops_one_confirmation(self):
+        """Phase 2.5.9: jupiter_putra_strength must be STRONG to
+        count — MODERATE or WEAK do NOT contribute to confirmations.
+        """
+        kp_layer = {"verdict_5": "CHILD_YES"}
+        ashta_mod = {"santan_band": "MEDIUM",
+                       "jupiter_putra_strength": "MODERATE"}
+        # No Jupiter in top3 → only kp_5_yes + sav_ok = 2 → False
+        ranked = [{"name": "Saturn", "score": 20.0},
+                  {"name": "Mars", "score": 15.0}]
+        self.assertFalse(_detect_child_promised(kp_layer, ashta_mod,
+                                                   ranked))
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -1017,17 +1023,16 @@ class TestArchitectPatternRegressions(unittest.TestCase):
                     self.assertNotIn("OBSTRUCTOR", trig,
                         f"Jupiter (9L+putra-karaka for Aries) wrongly tagged as obstructor: {trig}")
 
-    def test_protective_yoga_does_not_force_child_promised_at_low_flow(self):
+    def test_child_promised_does_not_force_verdict_at_low_flow(self):
         """child_promised=True with s<3.5 must NOT elevate verdict to
         CHILD_PROMISED. Houses promised ≠ timing promised.
+        Phase 2.5.9: yogas list now empty (protective yogas removed).
         """
-        yogas = [{"name": "Progeny Yoga (5L+9L conjunction)",
-                   "severity": "protective", "planets": ["Sun", "Jupiter"]}]
-        v, _ = _derive_verdict(1.0, "MEDIUM", yogas, 0.0, True)
+        v, _ = _derive_verdict(1.0, "MEDIUM", [], 0.0, True)
         self.assertNotEqual(v, "CHILD_PROMISED",
             "child_promised must require flow >= 3.5 to elevate verdict")
         # At s=4.0 with child_promised → should now elevate
-        v2, _ = _derive_verdict(4.0, "MEDIUM", yogas, 0.0, True)
+        v2, _ = _derive_verdict(4.0, "MEDIUM", [], 0.0, True)
         self.assertEqual(v2, "CHILD_PROMISED")
 
     def test_obstructive_yoga_at_moderate_flow_yields_obstructed(self):
@@ -1125,35 +1130,40 @@ class TestArchitectPatternRegressions(unittest.TestCase):
         self.assertEqual(pic["source"], "none")
         self.assertIn("unavailable", pic["note"])
 
-    def test_d7_yogas_emitted_when_picture_strong(self):
-        """`_detect_d7_yogas` must emit D7-Progeny-Yoga when 5L is
-        well-placed and Jupiter aspects D7 5H."""
+    def test_d7_yogas_phase_2_5_9_only_bandhya_remains(self):
+        """Phase 2.5.9: D7-Progeny-Yoga and D7-Lagna-Activation
+        (both protective) were REMOVED. Only D7-Bandhya remains.
+        Strong D7 picture must therefore yield ZERO D7 yogas.
+        """
         from event_timing.baby.baby_engine_v1 import _detect_d7_yogas
-        pic = {
+        # Picture with all "good" flags → must yield empty list
+        pic_strong = {
             "available": True,
-            "first_lord":  {"planet": "Mars",
-                             "aspects_d7_5h": True,
-                             "house_in_d7": 1, "dignity": "own"},
-            "fifth_lord":  {"planet": "Sun",
-                             "house_in_d7": 5, "dignity": "neutral",
-                             "well_placed": True, "in_dusthana": False},
-            "fifth_house_occupants": ["Jupiter"],
-            "aspects_to_fifth_house": [],
+            "first_lord":  {"planet": "Mars"},
+            "fifth_lord":  {"planet": "Sun"},
             "flags": {
-                "d7_5l_well_placed":     True,
+                "d7_5l_well_placed": True,
                 "jupiter_aspects_d7_5h": True,
-                "benefic_in_d7_5h":      True,
-                "malefic_in_d7_5h":      False,
-                "d7_5l_in_dusthana":     False,
-                "d7_5l_in_child_house":  True,
-                "d7_1l_aspects_5h":      True,
+                "benefic_in_d7_5h": True,
+                "d7_1l_aspects_5h": True,
+                "d7_5l_in_dusthana": False,
             },
         }
-        yg = _detect_d7_yogas(pic)
-        names = [y["name"] for y in yg]
-        self.assertTrue(any("D7-Progeny-Yoga" in n for n in names))
-        self.assertTrue(any("D7-Lagna-Activation" in n
-                              for n in names))
+        self.assertEqual(_detect_d7_yogas(pic_strong), [],
+            "no protective D7 yogas should fire after Phase 2.5.9 trim")
+        # D7-Bandhya signature → must still fire
+        pic_bandhya = {
+            "available": True,
+            "first_lord": {"planet": "Mars"},
+            "fifth_lord": {"planet": "Sun"},
+            "flags": {
+                "d7_5l_in_dusthana": True,
+                "jupiter_aspects_d7_5h": False,
+            },
+        }
+        yg = _detect_d7_yogas(pic_bandhya)
+        self.assertEqual(len(yg), 1)
+        self.assertIn("D7-Bandhya", yg[0]["name"])
 
     def test_d7_bandhya_yoga_when_5l_in_dusthana_no_jupiter(self):
         """`_detect_d7_yogas` must emit D7-Bandhya when 5L is in D7

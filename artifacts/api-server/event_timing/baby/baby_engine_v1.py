@@ -217,22 +217,11 @@ _AREA_OF_PLANET: Dict[str, List[str]] = {
                  "adoption_path"],
 }
 
-# Functional malefics by lagna sign (fertility-stress lens)
-_FUNC_MALEFICS: Dict[int, Set[str]] = {
-    0:  {"Mercury", "Venus", "Saturn"},
-    1:  {"Moon", "Jupiter", "Venus"},
-    2:  {"Mars", "Jupiter", "Sun"},
-    3:  {"Mars", "Mercury", "Venus"},
-    4:  {"Mercury", "Venus", "Saturn"},
-    5:  {"Moon", "Mars", "Jupiter"},
-    6:  {"Sun", "Jupiter", "Mars"},
-    7:  {"Mercury", "Venus", "Saturn"},
-    8:  {"Venus", "Mercury"},
-    9:  {"Mars", "Jupiter", "Moon"},
-    10: {"Sun", "Mars", "Jupiter"},
-    11: {"Mercury", "Venus", "Saturn"},
-}
-
+# Functional benefics by lagna sign (used by Step 4 karaka boost).
+# Functional MALEFICS table was removed in Phase 2.5.2 lean refactor —
+# obstruction signal lives in Step 5 (6/8/12 occupancy + Saturn/Mars/Ketu
+# risk tags) and dignity lives in Step 2 (D9) + Step 3 (D7); a separate
+# malefic surcharge double-counted both.
 _FUNC_BENEFICS: Dict[int, Set[str]] = {
     0:  {"Sun", "Mars", "Jupiter"},
     1:  {"Sun", "Mercury", "Saturn"},

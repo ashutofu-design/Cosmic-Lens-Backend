@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 
 # Bumped whenever the prompt, validator, or remedy whitelist changes.
 # Included in cache fingerprint so policy changes auto-invalidate stale prose.
-_PROMPT_VERSION = "v3"
+_PROMPT_VERSION = "v4"
 
 # Classical Vedic vocabulary the LLM is allowed to reference. Anything
 # outside this set in the prose is treated as a potential hallucination.
@@ -246,17 +246,20 @@ def _validate(out: Any, facts: dict[str, Any]) -> tuple[bool, str]:
     if total is not None and str(total) not in insight:
         return False, "total_not_cited"
 
-    # Each partner must be anchored to their own chart — accept either
-    # nakshatra OR rashi appearing somewhere in the prose. This is looser
-    # than nakshatra-only because LLMs (especially gpt-4o-mini) often
-    # prefer the rashi name; both are equally chart-specific anchors.
+    # Each partner must be anchored to their own chart — accept any of:
+    # nakshatra, rashi, OR partner name appearing in the prose. Name is
+    # a valid anchor because it proves the LLM is grounded in this
+    # specific request (cannot be hallucinated; comes from <ENGINE_FACTS>).
     def _has_anchor(p_key: str, label: str) -> tuple[bool, str]:
         p = facts.get(p_key, {})
         nak = (p.get("nakshatra") or "").split()[0]
         rashi = (p.get("rashi") or "").strip()
+        name = (p.get("name") or "").strip()
         if nak and nak in full_text:
             return True, ""
         if rashi and rashi in full_text:
+            return True, ""
+        if name and len(name) >= 2 and name in full_text:
             return True, ""
         return False, f"{label}_anchor_missing"
 

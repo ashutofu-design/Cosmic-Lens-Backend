@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 
 # Bumped whenever the prompt, validator, or remedy whitelist changes.
 # Included in cache fingerprint so policy changes auto-invalidate stale prose.
-_PROMPT_VERSION = "v10"
+_PROMPT_VERSION = "v11"
 
 # Classical Vedic vocabulary the LLM is allowed to reference. Anything
 # outside this set in the prose is treated as a potential hallucination.
@@ -108,21 +108,64 @@ The reader should feel: "Someone genuinely understood this relationship deeply."
      - The numeric total like "14.5 out of 36"
      This is so the validator and downstream UI can match these exact strings.
 
+═══ STRUCTURE ═══
+The user paid to see 6 specific dimensions of this relationship. Each section must answer a different psychological question. Do NOT repeat the same insight across sections — each one stands alone.
+
+The 6 dimensions, mapped to psychological questions the reader is silently asking:
+1. Emotional Alignment   → "Do we actually FEEL the same things?"
+2. Trust & Loyalty       → "Will this person stay loyal? When does trust face its hardest test?"
+3. Conflict Patterns     → "When we fight, what is REALLY happening underneath?"
+4. Marriage Stability    → "Will this marriage last? What is the ONE adjustment both must accept?"
+5. Commitment Strength   → "Who invests more? Who commits permanently?"
+6. Future Direction      → "Where is this heading in the next 2-3 years? What ONE quiet choice decides the outcome?"
+
+Plus a top snapshot — a 1-line soul-summary of the bond + 3 tags.
+
 ═══ OUTPUT (JSON only, no markdown, no preamble) ═══
 {
-  "compatibility_insight": "<3-4 sentences, ~80-110 words. Open with the emotional dynamic, anchor with the exact total score, end with grounded hope.>",
-  "strengths": ["<2-4 bullets, each 2-3 sentences. Explain what each strong koot FEELS like in daily life.>"],
-  "challenges": ["<2-4 bullets, each 2-3 sentences. Describe the real friction pattern, end with ONE specific remedy from the allowed list. Never doom-frame.>"],
-  "marriage_outlook": "<4-5 sentences, ~120-150 words. Practical, non-fatalistic. Acknowledge any cancellation factors. Mention 2-3 specific allowed remedies.>"
+  "relationship_snapshot": {
+    "summary": "<1 sentence, ~15-30 words. Captures the core energy of the bond. Example: 'A high-emotion, slow-maturity bond — strong attachment exists, but emotional timing between both differs.'>",
+    "tags": {
+      "emotional_pull":      "<one of: Very Strong | Strong | Medium | Mild>",
+      "marriage_potential":  "<one of: High | Medium-High | Medium | Medium-Low | Low>",
+      "long_term_stability": "<short phrase, 3-7 words. Example: 'Depends on communication maturity'>"
+    }
+  },
+  "emotional_alignment": {
+    "text": "<3-4 sentences, ~70-110 words. Attachment styles, who feels deeper, who withdraws, who needs reassurance. Real behavioral observations, not textbook astrology. Should make the reader think: 'How does it know this about us?'>",
+    "grounding": "<1 short line, 8-18 words. Example: 'Based on Moon-sign harmony, Maitri (mental friendship), and Gana koot.'>"
+  },
+  "trust_loyalty": {
+    "text": "<3-4 sentences, ~70-110 words. Insecurity patterns, what erodes vs builds trust, when trust faces its real test. Anchor with a specific emotional phase if possible (not specific dates).>",
+    "grounding": "<1 short line, 8-18 words. Example: 'Based on Bhakut, Mangal balance, and 7th-house loyalty indicators.'>"
+  },
+  "conflict_patterns": {
+    "text": "<3-4 sentences, ~70-110 words. HOW fights actually start, HOW they escalate, HOW they heal. NEVER 'Mars causes fights'. Always behavioral pattern. End with ONE practical de-escalation cue, not a remedy.>",
+    "grounding": "<1 short line, 8-18 words. Example: 'Based on Yoni, Gana, and Mars-Mercury behavioral indicators.'>"
+  },
+  "marriage_stability": {
+    "text": "<4-5 sentences, ~100-140 words. Marriage probability, family acceptance, the ONE specific adjustment both partners will resist at first but must accept for stability. End with ONE verbatim remedy from <ALLOWED_REMEDIES>.>",
+    "grounding": "<1 short line, 8-18 words. Example: 'Based on total Ashtakoot score, Bhakut, and Nadi compatibility.'>"
+  },
+  "commitment_strength": {
+    "text": "<3-4 sentences, ~70-110 words. Who invests faster, who commits more permanently, breakup-reconciliation tendency, long-term effort balance.>",
+    "grounding": "<1 short line, 8-18 words. Example: 'Based on Maitri (planetary friendship), Vasya, and 7th-lord placement.'>"
+  },
+  "future_direction": {
+    "text": "<4-5 sentences, ~100-140 words. Next 2-3 year direction, relationship evolution, how the bond matures, the ONE quiet choice the real outcome depends on. End with ONE verbatim remedy from <ALLOWED_REMEDIES>.>",
+    "grounding": "<1 short line, 8-18 words. Example: 'Based on overall compatibility score, dasha context, and 7th-house yogas.'>"
+  }
 }
 
 ═══ OUTPUT CHECKLIST (verify before responding — non-negotiable) ═══
 Before you submit, confirm:
-☐ The exact total score (e.g. "14.5 out of 36") appears literally inside compatibility_insight.
-☐ BOTH partner nakshatra OR rashi names from <ENGINE_FACTS> appear at least once across the full output (each partner needs at least one chart-anchor).
+☐ The exact total score (e.g. "14.5 out of 36") appears literally inside relationship_snapshot.summary OR marriage_stability.text (at least one).
+☐ BOTH partner nakshatra OR rashi names from <ENGINE_FACTS> appear at least once across the 6 section texts (each partner needs at least one chart-anchor).
 ☐ Any "X / Y" or "X out of Y" numeric pair you write MUST exactly match a real koot score from <ENGINE_FACTS> (or the total/max). Do not invent or round koot numbers.
 ☐ Do NOT name any nakshatra or rashi other than the ones in <ENGINE_FACTS>. Generic words like "stars", "signs", "Moon" are fine.
-☐ Every entry in "challenges" ends with ONE remedy phrase copied verbatim from <ALLOWED_REMEDIES> (e.g. "Maha Mrityunjaya Jaap", "consult a qualified Jyotishi"). Do not invent gemstones, stones, or rituals outside the list.
+☐ At least ONE remedy phrase from <ALLOWED_REMEDIES> appears verbatim across marriage_stability.text + future_direction.text combined. No gemstones, no tantrik kriyas, no expensive yagnas outside the list.
+☐ Each grounding line is short (8-18 words), references 2-3 real Vedic concepts subtly, and starts with "Based on" or "Derived from".
+☐ Each of the 6 section texts answers a DIFFERENT psychological question — no repetition, no overlap.
 ☐ No banned terms: lifespan, death, gender of children, "guaranteed to", "definitely will".
 ☐ Output is valid JSON, no markdown fences, no commentary outside the JSON object."""
 
@@ -376,33 +419,125 @@ def _db_cache_put(fingerprint: str, polished: dict, model: str) -> None:
 
 
 # ── Validator ────────────────────────────────────────────────────────────────
-def _validate(out: Any, facts: dict[str, Any]) -> tuple[bool, str]:
-    """Return (ok, reason). ok=False means caller must use fallback."""
+_TEXT_SECTIONS = (
+    "emotional_alignment",
+    "trust_loyalty",
+    "conflict_patterns",
+    "marriage_stability",
+    "commitment_strength",
+    "future_direction",
+)
+_REMEDY_BEARING_SECTIONS = ("marriage_stability", "future_direction")
+
+
+_LATIN_LANGS = {"en", "hn", "es", "fr", "de", "pt", "id", "tr"}
+
+
+# Map of common non-Latin digit codepoints → ASCII '0'-'9'. Covers
+# Devanagari, Bengali, Gurmukhi, Gujarati, Tamil, Telugu, Kannada,
+# Malayalam, Oriya, Arabic-Indic and Eastern-Arabic-Indic. Used to
+# normalize LLM output before searching for verbatim numeric tokens
+# like the koot total ("14.5", "24") which the model often re-renders
+# in the target script's native digits.
+_DIGIT_TRANSLATE = {}
+for _base in (
+    0x0966,  # Devanagari ०-९
+    0x09E6,  # Bengali
+    0x0A66,  # Gurmukhi
+    0x0AE6,  # Gujarati
+    0x0BE6,  # Tamil
+    0x0C66,  # Telugu
+    0x0CE6,  # Kannada
+    0x0D66,  # Malayalam
+    0x0B66,  # Oriya
+    0x0660,  # Arabic-Indic ٠-٩
+    0x06F0,  # Eastern Arabic-Indic ۰-۹
+):
+    for _i in range(10):
+        _DIGIT_TRANSLATE[_base + _i] = ord('0') + _i
+
+
+def _normalize_digits(s: str) -> str:
+    """Map Indic/Arabic digits to ASCII '0'-'9' so str(total) checks
+    succeed against LLM output that re-rendered numerals in the target
+    script (e.g. Devanagari "२४" → "24")."""
+    if not s:
+        return s
+    return s.translate(_DIGIT_TRANSLATE)
+
+
+def _validate(out: Any, facts: dict[str, Any], lang: str = "en") -> tuple[bool, str]:
+    """Return (ok, reason). ok=False means caller must use fallback.
+
+    Phase 2.5.11.21 — schema upgraded from 4 flat keys to:
+      relationship_snapshot: { summary, tags: {emotional_pull, marriage_potential, long_term_stability} }
+      <6 text sections>:    { text, grounding }
+    matching the 6 paywall promises 1:1 + a top snapshot.
+
+    Anchor + vocab checks use Latin word-boundary regex; for non-Latin
+    scripts (Devanagari/CJK/Arabic/Indic) the LLM commonly transliterates
+    every name into the target script, making Latin anchor matching
+    impossible. For those languages we skip the anchor + vocab checks
+    and rely on (a) total citation + (b) verbatim koot-pair fact-lock
+    + (c) banned-term + (d) banned-remedy + (e) remedy-whitelist as
+    sufficient grounding signals.
+    """
     if not isinstance(out, dict):
         return False, "not_dict"
-    required = ["compatibility_insight", "strengths", "challenges", "marriage_outlook"]
-    for k in required:
-        if k not in out:
-            return False, f"missing_key:{k}"
-    if not isinstance(out["strengths"], list) or not isinstance(out["challenges"], list):
-        return False, "lists_expected"
-    if not (1 <= len(out["strengths"]) <= 5):
-        return False, "strengths_count"
-    if not (1 <= len(out["challenges"]) <= 5):
-        return False, "challenges_count"
 
-    insight = str(out["compatibility_insight"])
-    outlook = str(out["marriage_outlook"])
-    full_text = " ".join(
-        [insight, outlook] + [str(x) for x in out["strengths"]]
-        + [str(x) for x in out["challenges"]]
-    )
+    # ── relationship_snapshot shape ───────────────────────────────────────
+    snap = out.get("relationship_snapshot")
+    if not isinstance(snap, dict):
+        return False, "missing_or_bad:relationship_snapshot"
+    snap_summary = snap.get("summary")
+    if not isinstance(snap_summary, str) or not (15 <= len(snap_summary) <= 400):
+        return False, "snapshot_summary_bad"
+    snap_tags = snap.get("tags")
+    if not isinstance(snap_tags, dict):
+        return False, "snapshot_tags_bad"
+    for tk in ("emotional_pull", "marriage_potential", "long_term_stability"):
+        v = snap_tags.get(tk)
+        if not isinstance(v, str) or not (2 <= len(v) <= 80):
+            return False, f"snapshot_tag_bad:{tk}"
+
+    # ── per-section text + grounding shape + length ───────────────────────
+    section_texts: dict[str, str] = {}
+    for sec in _TEXT_SECTIONS:
+        s = out.get(sec)
+        if not isinstance(s, dict):
+            return False, f"missing_or_bad:{sec}"
+        text = s.get("text")
+        grounding = s.get("grounding")
+        if not isinstance(text, str):
+            return False, f"{sec}_text_bad"
+        if not isinstance(grounding, str):
+            return False, f"{sec}_grounding_bad"
+        # Length sanity per section
+        long_secs = {"marriage_stability", "future_direction"}
+        lo, hi = (80, 1200) if sec in long_secs else (50, 1000)
+        if not (lo <= len(text) <= hi):
+            return False, f"{sec}_text_length"
+        if not (10 <= len(grounding) <= 240):
+            return False, f"{sec}_grounding_length"
+        section_texts[sec] = text
+
+    full_text = " ".join([snap_summary] + list(section_texts.values()))
     full_lower = full_text.lower()
 
-    # Verbatim total score must appear
+    # Verbatim total score must appear SOMEWHERE in the deep schema
+    # (snapshot.summary or any of the 6 section texts). Normalize Indic
+    # digits to ASCII first — Devanagari/Tamil/etc LLM output frequently
+    # re-renders "24" as "२४"/"௨௪" which would otherwise false-fail.
     total = facts.get("total")
-    if total is not None and str(total) not in insight:
-        return False, "total_not_cited"
+    if total is not None:
+        if str(total) not in _normalize_digits(full_text):
+            return False, "total_not_cited"
+
+    # Per-language Latin-anchor toggle.
+    is_latin_lang = (lang or "en").lower() in _LATIN_LANGS
+    # Alias kept for downstream checks below (was used to gate insight-length etc.)
+    insight = snap_summary
+    outlook = section_texts["future_direction"]
 
     # Each partner must be anchored to their own chart — accept any of:
     # nakshatra, rashi, OR partner name appearing in the prose. Name is
@@ -436,12 +571,13 @@ def _validate(out: Any, facts: dict[str, Any]) -> tuple[bool, str]:
             return True, ""
         return False, f"{label}_anchor_missing"
 
-    ok1, reason1 = _has_anchor("p1", "p1")
-    if not ok1:
-        return False, reason1
-    ok2, reason2 = _has_anchor("p2", "p2")
-    if not ok2:
-        return False, reason2
+    if is_latin_lang:
+        ok1, reason1 = _has_anchor("p1", "p1")
+        if not ok1:
+            return False, reason1
+        ok2, reason2 = _has_anchor("p2", "p2")
+        if not ok2:
+            return False, reason2
 
     # No banned terms
     for b in BANNED_TERMS:
@@ -450,21 +586,16 @@ def _validate(out: Any, facts: dict[str, Any]) -> tuple[bool, str]:
 
     # Whitelist enforcement (positive contract):
     # At least ONE entry from ALLOWED_REMEDIES must appear verbatim
-    # (case-insensitive) somewhere across the challenges block or the
-    # marriage_outlook. Keyword-only matching previously allowed
-    # paraphrases like "spiritual healer" to slip through; we now
-    # require the exact whitelisted phrase. The user is guaranteed to
-    # see at least one approved remedy.
-    challenges_text = " ".join(str(c) for c in out["challenges"]).lower()
+    # across marriage_stability.text + future_direction.text combined.
+    remedy_zone_raw = " ".join(section_texts[s] for s in _REMEDY_BEARING_SECTIONS)
+    remedy_zone = remedy_zone_raw.lower()
     outlook_lower = outlook.lower()
-    remedy_zone = challenges_text + " " + outlook_lower
     allowed_lower = [r.lower() for r in ALLOWED_REMEDIES]
     if not any(r in remedy_zone for r in allowed_lower):
-        return False, "challenge_missing_remedy"
-    # Negative contract: no banned remedy term anywhere in the
-    # remedy-bearing sections (per-bullet to localise the failure
-    # reason). This is a denylist safety net — the positive contract
-    # above is the actual whitelist guarantee.
+        return False, "remedy_missing"
+    # Negative contract: no banned remedy term anywhere in any of the 6
+    # section texts. Denylist safety net — the positive contract above
+    # is the actual whitelist guarantee.
     BANNED_REMEDY_TERMS = [
         "gemstone", "ratna", "ruby", "emerald", "pearl", "blue sapphire",
         "yellow sapphire", "coral", "topaz", "diamond ring",
@@ -472,14 +603,11 @@ def _validate(out: Any, facts: dict[str, Any]) -> tuple[bool, str]:
         "tantrik", "tantra ritual", "black magic", "vashikaran",
         "pendant", "amulet", "talisman", "kavach",
     ]
-    for ch in out["challenges"]:
-        ch_l = str(ch).lower()
+    for sec_name, sec_text in section_texts.items():
+        sec_lower = sec_text.lower()
         for banned in BANNED_REMEDY_TERMS:
-            if banned in ch_l:
-                return False, f"banned_remedy:{banned}"
-    for banned in BANNED_REMEDY_TERMS:
-        if banned in outlook_lower:
-            return False, f"banned_remedy_in_outlook:{banned}"
+            if banned in sec_lower:
+                return False, f"banned_remedy_in_{sec_name}:{banned}"
 
     # Fact-lock: any "X / Y" or "X out of Y" numeric pair the LLM uses
     # MUST correspond to a real koot score (or the total) from facts.
@@ -488,8 +616,10 @@ def _validate(out: Any, facts: dict[str, Any]) -> tuple[bool, str]:
     real_pairs = {(str(facts.get("total", "")), str(facts.get("max", 36)))}
     for k in facts.get("koots", []):
         real_pairs.add((str(k.get("score", "")), str(k.get("max", ""))))
+    # Normalize Indic digits before regex scan so Devanagari/Tamil/etc
+    # outputs like "१४.५ out of ३६" are validated against ASCII koots.
     pair_re = re.compile(r"(\d+(?:\.\d+)?)\s*(?:/|out of)\s*(\d+)", re.I)
-    for m in pair_re.finditer(full_text):
+    for m in pair_re.finditer(_normalize_digits(full_text)):
         if (m.group(1), m.group(2)) not in real_pairs:
             return False, f"hallucinated_score:{m.group(0)}"
 
@@ -516,6 +646,10 @@ def _validate(out: Any, facts: dict[str, Any]) -> tuple[bool, str]:
     # Whole-word, case-insensitive scan. Previously we only matched
     # capitalized tokens which let lowercase hallucinations slip
     # through ("yeh shravana wali energy ...") in Hinglish output.
+    # The vocab-lock is Latin-word-boundary based so it has nothing to
+    # check on transliterated non-Latin output — but if LLM mixes in
+    # Latin nakshatra/rashi tokens (which it sometimes does even in
+    # Devanagari output), we still want to catch hallucinations.
     for word_match in re.finditer(r"\b([A-Za-z][A-Za-z]+)\b", full_text):
         token = word_match.group(1).lower()
         if token in _KNOWN_NAKSHATRAS and token not in allowed_naks:
@@ -523,12 +657,7 @@ def _validate(out: Any, facts: dict[str, Any]) -> tuple[bool, str]:
         if token in _KNOWN_RASHIS and token not in allowed_rashis:
             return False, f"unknown_rashi:{word_match.group(1)}"
 
-    # Length sanity — reject blatantly long/short
-    if not (50 <= len(insight) <= 1200):
-        return False, "insight_length"
-    if not (80 <= len(outlook) <= 1500):
-        return False, "outlook_length"
-
+    # Per-section length sanity already enforced above during shape check.
     return True, "ok"
 
 
@@ -586,12 +715,11 @@ def polish_compat_analysis(
                 {"role": "user", "content": user_prompt},
             ],
             "response_format": {"type": "json_object"},
-            # Phase 2.5.11.20-B (revised): only plain English fits 600 tokens.
-            # Hinglish (`hn`) — Hindi spelled in Latin — is verbose ("samvedansheel
-            # sambandh" vs "sensitive bond") and was empirically truncating mid-JSON
-            # at ~char 1361. Indic/CJK/Arabic scripts cost 2-3x more tokens per
-            # character. So default to 900 for everything except `en` to be safe.
-            "max_tokens": 600 if (lang or "en").lower() == "en" else 900,
+            # Phase 2.5.11.21: 7-section schema is ~3x larger than the old 4-key
+            # output (snapshot + 6 sections × text+grounding). Empirical sizing:
+            # • en full output ~1400-1700 tokens → cap 2000.
+            # • Hinglish/non-Latin 2-3× more tokens per char → cap 2800.
+            "max_tokens": 2000 if (lang or "en").lower() == "en" else 2800,
         }
         # gpt-5.x rejects temperature; only set for non-gpt-5 models
         if not model.lower().startswith("gpt-5"):
@@ -617,17 +745,60 @@ def polish_compat_analysis(
             log.warning("[compat_llm] JSON parse fail: %s | raw=%.200s", exc, raw)
             return fallback
 
-        ok, reason = _validate(parsed, facts)
+        ok, reason = _validate(parsed, facts, lang=lang)
         if not ok:
-            log.warning("[compat_llm] validator rejected: %s", reason)
+            # Surface the offending fragment to make non-Latin failures
+            # diagnosable without re-running with debug instrumentation.
+            try:
+                log.warning(
+                    "[compat_llm] validator rejected: %s | lang=%s | snap_summary=%.180s",
+                    reason, lang, str((parsed or {}).get("relationship_snapshot", {}).get("summary", "")),
+                )
+            except Exception:
+                log.warning("[compat_llm] validator rejected: %s", reason)
             return fallback
 
-        # Coerce to plain dict in fallback shape
+        # Coerce to plain dict — emit BOTH the new 7-section deep schema
+        # AND the legacy 4-key flat schema (derived) for backward-compat
+        # with mobile clients that haven't been updated yet.
+        # Defensive: _validate already guarantees these keys exist, but use
+        # .get() throughout so a malformed-but-validator-passed payload
+        # (or any future validator regression) cannot crash the request —
+        # outer try/except would catch but would log noisy stack traces
+        # and return fallback; explicit .get() returns a usable shape.
+        snap = parsed.get("relationship_snapshot", {}) or {}
+        snap_tags = snap.get("tags", {}) or {}
+        snap_clean = {
+            "summary": str(snap.get("summary", "")).strip(),
+            "tags": {
+                "emotional_pull":      str(snap_tags.get("emotional_pull", "")).strip(),
+                "marriage_potential":  str(snap_tags.get("marriage_potential", "")).strip(),
+                "long_term_stability": str(snap_tags.get("long_term_stability", "")).strip(),
+            },
+        }
+        sections_clean: dict[str, dict[str, str]] = {}
+        for sec in _TEXT_SECTIONS:
+            sec_obj = parsed.get(sec, {}) or {}
+            sections_clean[sec] = {
+                "text":      str(sec_obj.get("text", "")).strip(),
+                "grounding": str(sec_obj.get("grounding", "")).strip(),
+            }
+
         polished = {
-            "compatibility_insight": str(parsed["compatibility_insight"]).strip(),
-            "strengths": [str(x).strip() for x in parsed["strengths"]],
-            "challenges": [str(x).strip() for x in parsed["challenges"]],
-            "marriage_outlook": str(parsed["marriage_outlook"]).strip(),
+            # ── New 7-section deep schema (primary) ──
+            "relationship_snapshot": snap_clean,
+            **sections_clean,
+            # ── Legacy 4-key flat schema (derived for backward-compat) ──
+            "compatibility_insight": snap_clean["summary"],
+            "strengths": [
+                sections_clean["emotional_alignment"]["text"],
+                sections_clean["commitment_strength"]["text"],
+            ],
+            "challenges": [
+                sections_clean["trust_loyalty"]["text"],
+                sections_clean["conflict_patterns"]["text"],
+            ],
+            "marriage_outlook": sections_clean["future_direction"]["text"],
         }
         _cache_put(key, polished)
         _db_cache_put(key, polished, model)  # persist for cross-restart reuse

@@ -1411,6 +1411,58 @@ def _compute_travel_window_impl(kundli: dict,
             "triggers": w["triggers"],
         })
 
+    # Phase 2.5.11.15 — UNIVERSAL DOUBLE TRANSIT (K.N.Rao classical rule).
+    # For ANY timing window (past/present/future), annotate with Jupiter+
+    # Saturn double-transit verdict on travel concern houses [3, 9, 12].
+    # User mandate: "Jab bhi event prediction ki baat aayega — kab hoga,
+    # kab gaya tha, kab jaaunga — Jupiter+Sani ka double transit COMPULSORY."
+    from event_timing._shared.double_transit import (
+        check_double_transit, midpoint, CONCERN_HOUSES,
+    )
+    _TRAVEL_CONCERN = CONCERN_HOUSES["travel"]   # [3, 9, 12]
+
+    # Phase 2.5.11.15-b (architect MAJOR fix) — multi-sample (start/mid/end)
+    # so a Jupiter or Saturn sign-crossing within the window does not
+    # misclassify the verdict. Take the BEST sample (highest score) since
+    # classical rule: event can fructify any time the double-transit is
+    # active during the favorable dasha window. `samples_varied` flag
+    # surfaces in output for transparency when sky changed mid-window.
+    _DT_VERDICT_RANK = {"STRONG": 4, "PARTIAL_J": 3, "PARTIAL_S": 2,
+                         "ABSENT": 1, "UNAVAILABLE": 0}
+
+    def _attach_dt(window_start, window_end):
+        try:
+            mid = midpoint(window_start, window_end)
+            samples = [
+                ("start", check_double_transit(kundli, window_start, lagna_si,
+                                                 planets_d1, _TRAVEL_CONCERN)),
+                ("mid",   check_double_transit(kundli, mid,           lagna_si,
+                                                 planets_d1, _TRAVEL_CONCERN)),
+                ("end",   check_double_transit(kundli, window_end,   lagna_si,
+                                                 planets_d1, _TRAVEL_CONCERN)),
+            ]
+            # Pick the strongest verdict (tie-broken by score).
+            label_best, best = max(samples,
+                key=lambda s: (s[1].get("score", 0),
+                                _DT_VERDICT_RANK.get(s[1].get("verdict"), 0)))
+            verdicts = {s[1].get("verdict") for s in samples}
+            best["sample_used"]    = label_best
+            best["samples_varied"] = len(verdicts) > 1
+            if best["samples_varied"]:
+                best["all_samples"] = [
+                    {"at": lbl, "verdict": s.get("verdict"),
+                     "score": s.get("score", 0)}
+                    for lbl, s in samples
+                ]
+            return best
+        except Exception as e:
+            return {"verdict": "UNAVAILABLE", "active": False,
+                     "score": 0, "note": f"dt_calc_error: {e}"}
+
+    # Annotate next_3 windows
+    for fw, raw in zip(formatted_top3, top3):
+        fw["double_transit"] = _attach_dt(raw["start"], raw["end"])
+
     current = next((w for w in dasha_windows
                      if w["start"] <= now <= w["end"]), None)
     current_window = None
@@ -1424,6 +1476,8 @@ def _compute_travel_window_impl(kundli: dict,
             "severity": sev,
             "kind": current.get("kind", "general"),
             "triggers": current["triggers"],
+            "double_transit": check_double_transit(
+                kundli, now, lagna_si, planets_d1, _TRAVEL_CONCERN),
         }
 
     # Protection windows = upcoming where Jupiter/Venus/9L rules
@@ -1502,9 +1556,16 @@ def _compute_travel_window_impl(kundli: dict,
             "start_iso": w["start"].isoformat(),
             "end_iso": w["end"].isoformat(),
             "triggers": w["triggers"],
+            # Phase 2.5.11.15 — double transit AT the past window's midpoint
+            # (NOT today). This tells us whether sky was actually supporting
+            # travel during that historical window.
+            "double_transit": _attach_dt(w["start"], w["end"]),
         })
     if formatted_past3:
         llm_directives.append("PAST_WINDOW_IS_OPPORTUNITY_NOT_EVENT")
+    # Phase 2.5.11.15 — universal directive: LLM MUST cite double-transit
+    # verdict whenever it discusses any timing window.
+    llm_directives.append("DOUBLE_TRANSIT_TIMING_RULE_APPLIED")
 
     return {
         "verdict": verdict,

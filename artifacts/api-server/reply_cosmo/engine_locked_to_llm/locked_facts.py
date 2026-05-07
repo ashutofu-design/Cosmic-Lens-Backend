@@ -1805,7 +1805,18 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
                     sc_str = (f" (score: {sc:.1f}, sev: {sev}, kind: {knd})"
                               if isinstance(sc, (int, float))
                               else f" ({sev}, {knd})")
-                    _trace_t.append(f"     trace {i}: {ws}{sc_str}")
+                    # Phase 2.5.11.15 — double-transit annotation per
+                    # K.N.Rao classical rule (compulsory for ALL timing
+                    # narration). Verdict tells LLM whether sky actually
+                    # supports the dasha-favorable window or not.
+                    dt = w.get("double_transit") or {}
+                    dt_str = ""
+                    if dt.get("verdict"):
+                        anc = dt.get("anchors") or []
+                        anc_short = "; ".join(anc[:2]) if anc else "—"
+                        dt_str = (f" | DOUBLE-TRANSIT: {dt['verdict']} "
+                                   f"(score {dt.get('score', 0)}; {anc_short})")
+                    _trace_t.append(f"     trace {i}: {ws}{sc_str}{dt_str}")
                 if _trace_t:
                     travel_line += "\n" + "\n".join(_trace_t)
             # Past windows (Phase 2.5.11.14) — historical favorable
@@ -1827,8 +1838,26 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
                     sc_str = (f" (score: {sc:.1f}, kind: {knd}, dasha: {md_ad_pd})"
                               if isinstance(sc, (int, float))
                               else f" (kind: {knd}, dasha: {md_ad_pd})")
-                    _past_t.append(f"       past {i}: {ws}{sc_str}")
+                    # Phase 2.5.11.15 — past-window double-transit @ midpoint
+                    # date (NOT today). STRONG = sky actually supported the
+                    # window historically; PARTIAL/ABSENT = dasha-only
+                    # candidate (likely no real event).
+                    dt = w.get("double_transit") or {}
+                    dt_str = ""
+                    if dt.get("verdict"):
+                        anc = dt.get("anchors") or []
+                        anc_short = "; ".join(anc[:2]) if anc else "—"
+                        dt_str = (f" | DOUBLE-TRANSIT: {dt['verdict']} "
+                                   f"(score {dt.get('score', 0)}; {anc_short})")
+                    _past_t.append(f"       past {i}: {ws}{sc_str}{dt_str}")
                 travel_line += "\n" + "\n".join(_past_t)
+                # Phase 2.5.11.15 — universal hard reminder for LLM:
+                # K.N.Rao Double Transit is the compulsory fructification
+                # filter for ANY timing claim (past/present/future).
+                travel_line += ("\n     RULE: Double-Transit STRONG = "
+                                 "sky-confirmed fructification window. "
+                                 "PARTIAL = opportunity-only. ABSENT = "
+                                 "dasha-favorable but unlikely to fructify.")
             try:
                 _record_phase("phase-D travel-timing-v1", "ok")
             except Exception:

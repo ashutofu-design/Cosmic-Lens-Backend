@@ -592,5 +592,72 @@ class TestPastWindowLookback(unittest.TestCase):
                 "past-direction window must end strictly before now")
 
 
+class TestDoubleTransit(unittest.TestCase):
+    """Phase 2.5.11.15 — K.N.Rao Double Transit (Jupiter+Saturn) is the
+    compulsory fructification filter for ANY timing window. Past, present,
+    and future windows must each carry a `double_transit` annotation,
+    and the universal directive must always be appended."""
+
+    def _kundli(self):
+        return _mk_kundli("Sagittarius", {
+            "Sun": 12, "Moon": 1, "Mars": 8, "Mercury": 12,
+            "Jupiter": 10, "Venus": 1, "Saturn": 2,
+            "Rahu": 12, "Ketu": 6,
+        }, dashas=_mk_dashas())
+
+    def test_universal_directive_always_appended(self):
+        result = compute_travel_window(self._kundli(), intel={}, kp={},
+                                         birth={"dob": "1992-11-26"})
+        self.assertIn("DOUBLE_TRANSIT_TIMING_RULE_APPLIED",
+                       result["llm_directives"])
+
+    def test_past_windows_carry_double_transit_field(self):
+        result = compute_travel_window(self._kundli(), intel={}, kp={},
+                                         birth={"dob": "1992-11-26"})
+        for w in (result.get("past_windows") or []):
+            self.assertIn("double_transit", w,
+                "every past_window must carry a double_transit annotation")
+            dt = w["double_transit"]
+            self.assertIn(dt["verdict"],
+                {"STRONG", "PARTIAL_J", "PARTIAL_S", "ABSENT", "UNAVAILABLE"})
+            self.assertIsInstance(dt["score"], int)
+
+    def test_next_3_windows_carry_double_transit_field(self):
+        result = compute_travel_window(self._kundli(), intel={}, kp={},
+                                         birth={"dob": "1992-11-26"})
+        for w in (result.get("next_3_windows") or []):
+            self.assertIn("double_transit", w,
+                "every next_3 window must carry a double_transit annotation")
+            self.assertIn(w["double_transit"]["verdict"],
+                {"STRONG", "PARTIAL_J", "PARTIAL_S", "ABSENT", "UNAVAILABLE"})
+
+    def test_current_window_carries_double_transit_field(self):
+        result = compute_travel_window(self._kundli(), intel={}, kp={},
+                                         birth={"dob": "1992-11-26"})
+        cw = result.get("current_window")
+        if cw:  # may be None if no dasha contains "now"
+            self.assertIn("double_transit", cw)
+
+    def test_shared_helper_returns_well_formed_dict(self):
+        """Direct unit test of the shared helper itself."""
+        from datetime import datetime
+        from event_timing._shared.double_transit import (
+            check_double_transit, CONCERN_HOUSES, midpoint,
+        )
+        planets = [
+            {"name": "Sun",     "sign_idx": 7, "house": 12},
+            {"name": "Saturn",  "sign_idx": 0, "house": 2},
+            {"name": "Jupiter", "sign_idx": 9, "house": 10},
+        ]
+        out = check_double_transit({}, datetime(2025, 6, 15), 8,
+                                     planets, CONCERN_HOUSES["travel"])
+        self.assertIn(out["verdict"],
+            {"STRONG", "PARTIAL_J", "PARTIAL_S", "ABSENT", "UNAVAILABLE"})
+        self.assertEqual(out["concern_houses"], [3, 9, 12])
+        # Midpoint helper symmetry
+        a = datetime(2020, 1, 1); b = datetime(2020, 1, 11)
+        self.assertEqual(midpoint(a, b), datetime(2020, 1, 6))
+
+
 if __name__ == "__main__":
     unittest.main()

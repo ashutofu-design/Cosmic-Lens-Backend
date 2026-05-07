@@ -1318,28 +1318,28 @@ type DeepSection = { title: string; tease: string };
 function getDeepSections(lang: string): DeepSection[] {
   const code = (lang || "en").toLowerCase();
   if (code === "hi") return [
-    { title: "भावनात्मक तालमेल",       tease: "एक साथी गहराई से जुड़ता है, दूसरे को पहले अपनी जगह चाहिए — दोनों सच्चे हैं।" },
-    { title: "विवाह की स्थिरता",        tease: "दीर्घकाल साथ संभव है — बस कुछ खास पड़ावों पर धैर्य ही असली कसौटी बनेगा।" },
-    { title: "टकराव का स्वरूप",         tease: "चुप्पी और ज़्यादा सोचना धीरे-धीरे दूरी बना सकता है — संवाद ही असली पुल है।" },
-    { title: "कर्मिक सबक",              tease: "यह रिश्ता दोनों को भावनात्मक रूप से बदलने आया है, सिर्फ़ ख़ुश रखने नहीं।" },
-    { title: "परिवार और व्यावहारिक जीवन", tease: "परिवार और ज़िम्मेदारियाँ चुपचाप अगले अध्याय की दिशा तय करेंगी।" },
-    { title: "आगे की दिशा",              tease: "यह जुड़ाव टूटने वाला नहीं — यह परिपक्वता माँगता है, परिपूर्णता नहीं।" },
+    { title: "भावनात्मक तालमेल",  tease: "एक साथी सब कुछ चुपचाप महसूस करता है, दूसरा पूछे जाने का इंतज़ार करता है — दोनों ख़ुद को सब्र वाला मानते हैं —" },
+    { title: "विश्वास और वफ़ादारी", tease: "इस रिश्ते में भरोसे की असली परीक्षा एक ख़ास पड़ाव पर आती है — और वो पड़ाव है —" },
+    { title: "टकराव का स्वरूप",     tease: "आपके झगड़े वो नहीं होते जो ऊपर से दिखते हैं — असली ट्रिगर एक ख़ास जगह बैठा है —" },
+    { title: "विवाह की स्थिरता",    tease: "शादी चलेगी — पर उस तरह नहीं जैसा अभी दोनों सोच रहे हैं। असली मोड़ आता है —" },
+    { title: "प्रतिबद्धता की गहराई", tease: "एक का जुड़ाव गहरा है, दूसरे का इरादा पक्का — पर एक चीज़ है जो अभी दिख नहीं रही —" },
+    { title: "आगे की दिशा",         tease: "यह रिश्ता टूटता नहीं — झुकता है उस तरह जो ज़्यादातर जोड़े झेल नहीं पाते, पर आप शायद —" },
   ];
   if (code === "hn") return [
-    { title: "Emotional Alignment", tease: "Ek partner gehrai se judta hai, doosra pehle thoda space chahta hai — dono asli hain." },
-    { title: "Marriage Stability",  tease: "Long-term saath sambhav hai — bas kuch khaas phases mein sabr asli imtihaan banega." },
-    { title: "Conflict Pattern",    tease: "Chuppi aur zyada sochna dheere-dheere doori bana sakti hai — baat-cheet hi asli pul hai." },
-    { title: "Karmic Lesson",       tease: "Yeh rishta dono ko emotionally transform karne aaya hai, sirf khush rakhne nahi." },
-    { title: "Family & Practical Life", tease: "Ghar aur zimmedariyaan chupchaap agle chapter ki disha tay karengi." },
-    { title: "Future Direction",    tease: "Yeh connection toot-ne wala nahi — yeh maturity maangta hai, perfection nahi." },
+    { title: "Emotional Alignment", tease: "Ek partner sab kuch chuppi mein feel karta hai, doosra poochhe jaane ka wait karta hai — dono khud ko patient maante hain —" },
+    { title: "Trust & Loyalty",     tease: "Is rishte mein bharose ka asli imtihaan ek specific phase pe aata hai — aur woh phase hai —" },
+    { title: "Conflict Patterns",   tease: "Aapke fights woh nahi hote jo upar se dikhte hain — asli trigger ek specific jagah baitha hai —" },
+    { title: "Marriage Stability",  tease: "Shaadi chalegi — par us tarah nahi jaisa abhi dono soch rahe hain. Asli turning point aata hai —" },
+    { title: "Commitment Strength", tease: "Ek ka attachment gehra hai, doosre ka iraada pakka — par ek cheez hai jo abhi dikh nahi rahi —" },
+    { title: "Future Direction",    tease: "Yeh rishta tootta nahi — bend hota hai us tarah jo zyadatar couples nahi jhel paate, par aap shayad —" },
   ];
   return [
-    { title: "Emotional Alignment",     tease: "One partner attaches deeply; the other guards space first — both are genuine." },
-    { title: "Marriage Stability",      tease: "A long-term bond is possible — patience in two key phases is the real test." },
-    { title: "Conflict Pattern",        tease: "Silence and overthinking can quietly create distance — dialogue is the real bridge." },
-    { title: "Karmic Lesson",           tease: "This bond is here to emotionally transform both of you, not merely to please." },
-    { title: "Family & Practical Life", tease: "Family duties will quietly shape the tone of the next chapter together." },
-    { title: "Future Direction",        tease: "This connection won't break — it asks for maturity, not perfection." },
+    { title: "Emotional Alignment", tease: "One of you feels everything in silence. The other waits to be asked. Both think they're the patient one —" },
+    { title: "Trust & Loyalty",     tease: "Trust faces its real test at one specific phase in this bond — and that phase is —" },
+    { title: "Conflict Patterns",   tease: "Your fights aren't really about what they look like. The real trigger sits in one specific area of —" },
+    { title: "Marriage Stability",  tease: "Marriage will work — but not the way either of you is currently imagining. The shift comes in —" },
+    { title: "Commitment Strength", tease: "One of you is deeply attached, the other quietly committed — but one thing isn't visible yet —" },
+    { title: "Future Direction",    tease: "This relationship doesn't break. It bends in a way most couples don't survive — but you might, if —" },
   ];
 }
 

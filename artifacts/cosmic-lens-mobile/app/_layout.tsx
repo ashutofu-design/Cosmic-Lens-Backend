@@ -39,7 +39,8 @@ function RootLayoutNav() {
       <Stack.Screen name="planet-position"  options={{ headerShown: false }} />
       <Stack.Screen name="profile-edit"     options={{ headerShown: false }} />
       <Stack.Screen name="dosh"             options={{ headerShown: false }} />
-      <Stack.Screen name="kundli-milan"     options={{ headerShown: false }} />
+      <Stack.Screen name="kundli-milan"        options={{ headerShown: false }} />
+      <Stack.Screen name="kundli-milan-result" options={{ headerShown: false }} />
       <Stack.Screen name="vastu"            options={{ headerShown: false }} />
       <Stack.Screen name="astrovastu"               options={{ headerShown: false }} />
       <Stack.Screen name="astrovastu-pro-options"   options={{ headerShown: false }} />

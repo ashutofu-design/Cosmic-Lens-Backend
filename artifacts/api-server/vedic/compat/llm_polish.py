@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 
 # Bumped whenever the prompt, validator, or remedy whitelist changes.
 # Included in cache fingerprint so policy changes auto-invalidate stale prose.
-_PROMPT_VERSION = "v9"
+_PROMPT_VERSION = "v10"
 
 # Classical Vedic vocabulary the LLM is allowed to reference. Anything
 # outside this set in the prose is treated as a potential hallucination.
@@ -127,6 +127,51 @@ Before you submit, confirm:
 ☐ Output is valid JSON, no markdown fences, no commentary outside the JSON object."""
 
 
+_SCRIPT_BY_LANG = {
+    "hi": ("Devanagari (देवनागरी)", "देवनागरी"),
+    "mr": ("Devanagari (मराठी)", "देवनागरी"),
+    "bn": ("Bengali (বাংলা)", "বাংলা"),
+    "ta": ("Tamil (தமிழ்)", "தமிழ்"),
+    "te": ("Telugu (తెలుగు)", "తెలుగు"),
+    "gu": ("Gujarati (ગુજરાતી)", "ગુજરાતી"),
+    "kn": ("Kannada (ಕನ್ನಡ)", "ಕನ್ನಡ"),
+    "ml": ("Malayalam (മലയാളം)", "മലയാളം"),
+    "pa": ("Gurmukhi (ਪੰਜਾਬੀ)", "ਪੰਜਾਬੀ"),
+    "or": ("Odia (ଓଡ଼ିଆ)", "ଓଡ଼ିଆ"),
+    "as": ("Assamese (অসমীয়া)", "অসমীয়া"),
+    "zh": ("Chinese (中文)", "中文"),
+    "ar": ("Arabic (العربية)", "العربية"),
+    "ru": ("Russian (Кириллица)", "Кириллица"),
+    "ja": ("Japanese (日本語)", "日本語"),
+    "ko": ("Korean (한국어)", "한국어"),
+}
+
+
+def _script_enforcement_line(lang: str) -> str:
+    """Loud per-language script enforcement appended at end of user prompt.
+    Empirically, gpt-4o-mini ignores SYSTEM-prompt language rules for non-Latin
+    scripts (e.g. returns Hinglish/Latin for `hi`). Repeating the rule LAST in
+    the user message dramatically improves compliance (recency effect)."""
+    code = (lang or "en").lower()
+    if code in _SCRIPT_BY_LANG:
+        full, native = _SCRIPT_BY_LANG[code]
+        return (
+            f"SCRIPT MANDATE — Write EVERY word of all 4 fields in {full} script ONLY. "
+            f"Do NOT use Latin/Roman/English letters anywhere except for these verbatim-keep tokens "
+            f"(which MUST stay in original Latin spelling, never transliterated): "
+            f"PARTNER NAMES (p1_name, p2_name) + nakshatra/rashi/koot/remedy names + the numeric total. "
+            f"Example for hi: 'Ashu और Animesh के बीच Bhakut Koot 7/7 है — Maha Mrityunjaya Jaap उपयुक्त रहेगा।' "
+            f"If any sentence is in a different script (other than the verbatim-keep words), output is discarded. "
+            f"Confirm: each name appears in Latin letters; surrounding prose is in {native}."
+        )
+    if code == "hn":
+        return (
+            "SCRIPT MANDATE — Write EVERY word in HINGLISH (Hindi spelled in Roman/Latin letters, "
+            "e.g. 'yeh rishta', 'samay ke saath'). Do NOT use Devanagari (देवनागरी) anywhere."
+        )
+    return ""  # en and others: no extra constraint
+
+
 def _build_user_prompt(facts: dict[str, Any], lang: str = "en") -> str:
     koots = facts.get("koots", [])
     koot_lines = []
@@ -180,6 +225,8 @@ language: {lang}
 CRITICAL — both partner names MUST appear at least once each across the
 4 fields combined: "{p1.get('name','Partner 1')}" and "{p2.get('name','Partner 2')}".
 Output that omits either name will be rejected.
+
+{_script_enforcement_line(lang)}
 
 Generate the JSON now."""
 

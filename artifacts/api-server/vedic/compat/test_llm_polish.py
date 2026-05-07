@@ -202,16 +202,25 @@ class TestValidator(unittest.TestCase):
         self.assertFalse(ok)
         self.assertTrue(reason.startswith("unknown_rashi"), reason)
 
-    def test_rejects_loose_remedy_keyword(self):
-        # New tighter validator: bare "Jyotishi" without "qualified"
-        # should NOT count as a valid remedy reference.
+    def test_rejects_banned_gemstone_remedy(self):
+        # Architect's actual concern: LLM tacks on valid keyword
+        # ("jyotishi") but also pushes unapproved gemstone advice.
         out = _good_llm_output()
         out["challenges"] = [
-            "Generic friction here. See a Jyotishi about it.",
+            "Friction may arise; consult a qualified Jyotishi and wear a blue sapphire ring."
         ]
         ok, reason = _validate(out, self.facts)
         self.assertFalse(ok)
-        self.assertEqual(reason, "challenge_missing_remedy")
+        self.assertTrue(reason.startswith("banned_remedy"), reason)
+
+    def test_rejects_tantrik_remedy(self):
+        out = _good_llm_output()
+        out["challenges"] = [
+            "Energetic conflict suggests a tantrik ritual along with Maha Mrityunjaya Jaap."
+        ]
+        ok, reason = _validate(out, self.facts)
+        self.assertFalse(ok)
+        self.assertTrue(reason.startswith("banned_remedy"), reason)
 
 
 class TestFingerprintVersioning(unittest.TestCase):

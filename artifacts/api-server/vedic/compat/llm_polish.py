@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 
 # Bumped whenever the prompt, validator, or remedy whitelist changes.
 # Included in cache fingerprint so policy changes auto-invalidate stale prose.
-_PROMPT_VERSION = "v2"
+_PROMPT_VERSION = "v3"
 
 # Classical Vedic vocabulary the LLM is allowed to reference. Anything
 # outside this set in the prose is treated as a potential hallucination.
@@ -272,20 +272,35 @@ def _validate(out: Any, facts: dict[str, Any]) -> tuple[bool, str]:
         if b in full_lower:
             return False, f"banned_term:{b}"
 
-    # Each challenge must reference an allowed remedy. Match on the
-    # distinctive multi-word anchor from each whitelist entry so we
-    # catch verbatim citations but reject vague single-word mentions.
-    REMEDY_ANCHORS = [
-        "maha mrityunjaya jaap", "kumbh vivah", "navagraha shanti",
-        "mangal shanti puja", "vivah yog ritual", "joint daily prayer",
-        "gratitude practice", "vata-balancing diet",
-        "pitta-balancing diet", "kapha-balancing diet",
-        "qualified jyotishi",
+    # Each challenge must reference an allowed remedy. We accept
+    # natural LLM paraphrases (mantra/jaap/recitation, prayer/prayers,
+    # puja/ritual) so long as the distinctive whitelist keyword is
+    # present.
+    REMEDY_KEYWORDS = [
+        "mrityunjaya", "kumbh vivah", "navagraha", "mangal shanti",
+        "vivah yog", "joint daily prayer", "gratitude practice",
+        "vata-balancing", "pitta-balancing", "kapha-balancing",
+        "vata balancing", "pitta balancing", "kapha balancing",
+        "jyotishi",
+    ]
+    # And NO challenge may recommend anything outside the whitelist —
+    # specifically gemstones, yantra products, tantrik rituals, etc.
+    # This is the actual hole architect flagged: LLM tacking on a valid
+    # keyword while also pushing unapproved advice.
+    BANNED_REMEDY_TERMS = [
+        "gemstone", "ratna", "ruby", "emerald", "pearl", "blue sapphire",
+        "yellow sapphire", "coral", "topaz", "diamond ring",
+        "wear a", "wear the",            # "wear a ruby", "wear the pearl"
+        "tantrik", "tantra ritual", "black magic", "vashikaran",
+        "pendant", "amulet", "talisman", "kavach",
     ]
     for ch in out["challenges"]:
         ch_l = str(ch).lower()
-        if not any(anchor in ch_l for anchor in REMEDY_ANCHORS):
+        if not any(kw in ch_l for kw in REMEDY_KEYWORDS):
             return False, "challenge_missing_remedy"
+        for banned in BANNED_REMEDY_TERMS:
+            if banned in ch_l:
+                return False, f"banned_remedy:{banned}"
 
     # Fact-lock: any "X / Y" or "X out of Y" numeric pair the LLM uses
     # MUST correspond to a real koot score (or the total) from facts.

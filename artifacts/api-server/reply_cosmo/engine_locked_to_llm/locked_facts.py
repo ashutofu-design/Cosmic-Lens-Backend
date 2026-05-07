@@ -1698,6 +1698,25 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
                 f"   • Baby       verdict: {b_verdict}/{b_band}  "
                 f"child_promised: {b_promised}  tier: {b_tier}{b_cw_str}{b_risk_str}"
             )
+            # D7 picture trace — surfaces 1L / 5L / 5H occupants so the
+            # AI can mirror the engine's progeny-chart reading verbatim.
+            b_d7 = b.get("d7_picture") or {}
+            if isinstance(b_d7, dict) and b_d7.get("available"):
+                _fl  = b_d7.get("first_lord") or {}
+                _fih = b_d7.get("fifth_lord") or {}
+                _occ5 = b_d7.get("fifth_house_occupants") or []
+                _asp5 = b_d7.get("aspects_to_fifth_house") or []
+                baby_line += (
+                    f"\n     D7 lagna: {b_d7.get('d7_lagna')}"
+                    f" | 1L: {_fl.get('planet')}@H{_fl.get('house_in_d7')}"
+                    f"/{_fl.get('dignity')}/{_fl.get('sign')}"
+                    f" | 5L: {_fih.get('planet')}@H{_fih.get('house_in_d7')}"
+                    f"/{_fih.get('dignity')}/{_fih.get('sign')}"
+                    f" | 5H_occ: {_occ5 or '—'}"
+                    f" | 5H_asp: {_asp5 or '—'}"
+                )
+            elif isinstance(b_d7, dict):
+                baby_line += "\n     D7 picture: unavailable (D1-dignity proxy)"
             top3_b = b.get("next_3_windows") or []
             if isinstance(top3_b, list) and top3_b:
                 _trace_b = []

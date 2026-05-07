@@ -47,7 +47,12 @@ def _mk_kundli(asc: str, plan_houses: dict, dashas: list = None) -> dict:
             "sign": _SIGNS[sign_si], "sign_idx": sign_si,
             "longitude": sign_si * 30.0 + 5.0,
         })
-    return {"ascendant": asc, "planets": planets, "dashas": dashas or []}
+    # Seed ascendant_longitude so the D7 chart can compute its own
+    # lagna sign via Parashara odd/even partitioning. Without this the
+    # `_build_d7_chart` helper degrades to `available=False`.
+    return {"ascendant": asc,
+             "ascendant_longitude": asc_si * 30.0 + 10.0,
+             "planets": planets, "dashas": dashas or []}
 
 
 def _mk_dashas() -> list:
@@ -534,6 +539,130 @@ class TestArchitectPatternRegressions(unittest.TestCase):
                                   kp_layer={"verdict_5": "CHILD_YES"})
         self.assertEqual(v2, "CHILD_PROMISED")
 
+    def test_d7_picture_emits_first_and_fifth_lord(self):
+        """Step 3b: the D7 picture must capture D7 lagna, 1L, 5L
+        positions, occupants of D7 1H + 5H, and aspects to D7 1H + 5H.
+        """
+        from event_timing.baby.baby_engine_v1 import (
+            _build_d7_chart, _step3b_d7_picture,
+        )
+        # Build a kundli with explicit longitudes so D7 chart resolves
+        # via the internal longitude tier.
+        kundli = _mk_kundli("Aries", {
+            "Sun": 11, "Moon": 4, "Mars": 7, "Mercury": 6,
+            "Jupiter": 11, "Venus": 2, "Saturn": 10,
+            "Rahu": 12, "Ketu": 6,
+        })
+        # _mk_kundli already seeds longitude per planet
+        d7_chart = _build_d7_chart(kundli, 0)
+        self.assertIsNotNone(d7_chart, "D7 chart must build from longitudes")
+        pic = _step3b_d7_picture(d7_chart, 0)
+        self.assertTrue(pic["available"])
+        self.assertIn(pic["d7_lagna"],
+                       ["Aries", "Taurus", "Gemini", "Cancer", "Leo",
+                        "Virgo", "Libra", "Scorpio", "Sagittarius",
+                        "Capricorn", "Aquarius", "Pisces"])
+        # First-lord block
+        fl = pic["first_lord"]
+        self.assertIn(fl["dignity"],
+                       ["exalted", "own", "debilitated", "neutral",
+                        "unknown"])
+        self.assertIsNotNone(fl["planet"])
+        # Fifth-lord block
+        fih = pic["fifth_lord"]
+        self.assertIn(fih["dignity"],
+                       ["exalted", "own", "debilitated", "neutral",
+                        "unknown"])
+        self.assertIsNotNone(fih["planet"])
+        # House lists must exist (may be empty)
+        self.assertIsInstance(pic["first_house_occupants"], list)
+        self.assertIsInstance(pic["fifth_house_occupants"], list)
+        self.assertIsInstance(pic["aspects_to_first_house"], list)
+        self.assertIsInstance(pic["aspects_to_fifth_house"], list)
+        # Flags block must include all the consumer-facing keys
+        for k in ("jupiter_aspects_d7_5h", "benefic_in_d7_5h",
+                   "malefic_in_d7_5h", "d7_5l_in_dusthana",
+                   "d7_5l_well_placed", "d7_5l_in_child_house",
+                   "d7_1l_aspects_5h"):
+            self.assertIn(k, pic["flags"])
+
+    def test_d7_picture_unavailable_without_longitudes(self):
+        """When no longitudes are present, _build_d7_chart returns None
+        and the picture must report `available=False` with a graceful
+        note (no exception, no blank fields)."""
+        from event_timing.baby.baby_engine_v1 import (
+            _build_d7_chart, _step3b_d7_picture,
+        )
+        kundli = {
+            "ascendant": "Aries",
+            "planets": [{"name": n, "house": 1, "sign": "Aries",
+                          "sign_idx": 0} for n in ("Sun",)],
+        }
+        chart = _build_d7_chart(kundli, 0)
+        self.assertIsNone(chart)
+        pic = _step3b_d7_picture(chart, 0)
+        self.assertFalse(pic["available"])
+        self.assertEqual(pic["source"], "none")
+        self.assertIn("unavailable", pic["note"])
+
+    def test_d7_yogas_emitted_when_picture_strong(self):
+        """`_detect_d7_yogas` must emit D7-Progeny-Yoga when 5L is
+        well-placed and Jupiter aspects D7 5H."""
+        from event_timing.baby.baby_engine_v1 import _detect_d7_yogas
+        pic = {
+            "available": True,
+            "first_lord":  {"planet": "Mars",
+                             "aspects_d7_5h": True,
+                             "house_in_d7": 1, "dignity": "own"},
+            "fifth_lord":  {"planet": "Sun",
+                             "house_in_d7": 5, "dignity": "neutral",
+                             "well_placed": True, "in_dusthana": False},
+            "fifth_house_occupants": ["Jupiter"],
+            "aspects_to_fifth_house": [],
+            "flags": {
+                "d7_5l_well_placed":     True,
+                "jupiter_aspects_d7_5h": True,
+                "benefic_in_d7_5h":      True,
+                "malefic_in_d7_5h":      False,
+                "d7_5l_in_dusthana":     False,
+                "d7_5l_in_child_house":  True,
+                "d7_1l_aspects_5h":      True,
+            },
+        }
+        yg = _detect_d7_yogas(pic)
+        names = [y["name"] for y in yg]
+        self.assertTrue(any("D7-Progeny-Yoga" in n for n in names))
+        self.assertTrue(any("D7-Lagna-Activation" in n
+                              for n in names))
+
+    def test_d7_bandhya_yoga_when_5l_in_dusthana_no_jupiter(self):
+        """`_detect_d7_yogas` must emit D7-Bandhya when 5L is in D7
+        dusthana with no Jupiter aspect/occupation rescue."""
+        from event_timing.baby.baby_engine_v1 import _detect_d7_yogas
+        pic = {
+            "available": True,
+            "first_lord":  {"planet": "Mars", "aspects_d7_5h": False,
+                             "house_in_d7": 1, "dignity": "neutral"},
+            "fifth_lord":  {"planet": "Sun", "house_in_d7": 8,
+                             "dignity": "neutral",
+                             "well_placed": False, "in_dusthana": True},
+            "fifth_house_occupants": [],
+            "aspects_to_fifth_house": ["Saturn"],
+            "flags": {
+                "d7_5l_well_placed":     False,
+                "jupiter_aspects_d7_5h": False,
+                "benefic_in_d7_5h":      False,
+                "malefic_in_d7_5h":      False,
+                "d7_5l_in_dusthana":     True,
+                "d7_5l_in_child_house":  False,
+                "d7_1l_aspects_5h":      False,
+            },
+        }
+        yg = _detect_d7_yogas(pic)
+        names = [y["name"] for y in yg]
+        self.assertTrue(any("D7-Bandhya" in n for n in names))
+        self.assertTrue(any(y["severity"] == "high" for y in yg))
+
     def test_no_putra_token_in_any_yoga_label(self):
         """CRITICAL ETHICAL: yoga labels must NOT contain 'Putra'
         (Sanskrit for 'son') — gender-vocabulary leakage prevention.
@@ -544,8 +673,13 @@ class TestArchitectPatternRegressions(unittest.TestCase):
             "Rahu": 12, "Ketu": 6,
         })
         yg = _detect_yogas(kundli, 0, kundli["planets"])
-        for y in yg:
-            name = y.get("name", "")
+        # Also cover the FULL pipeline (D9/D7 yogas merged in) — this
+        # is the surface that ever reaches LLM / locked_facts.
+        from event_timing.baby.baby_engine_v1 import compute_baby_window
+        full = compute_baby_window(kundli)
+        all_names = ([y.get("name", "") for y in yg]
+                      + [y.get("name", "") for y in full.get("yogas", [])])
+        for name in all_names:
             self.assertNotIn("Putra", name,
                 f"'Putra' (Sanskrit 'son') leaked into yoga label: {name!r}")
             self.assertNotIn("Putri", name,

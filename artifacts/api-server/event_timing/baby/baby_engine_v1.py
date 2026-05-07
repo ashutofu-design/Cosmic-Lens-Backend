@@ -488,50 +488,117 @@ def _compute_d7_sign(longitude: float, natal_sign_si: int) -> int:
     return (start + part) % 12
 
 
+def _build_d7_chart(kundli: dict, lagna_si: int
+                     ) -> Optional[Dict[str, Any]]:
+    """Compute the full D7 Saptamsha chart once and return a structured
+    snapshot reusable by Step 3 (scoring) and Step 3b (picture).
+
+    Returns:
+        {
+          "lagna_si": int,                       # D7 ascendant sign idx
+          "planets":  [{name, sign, sign_idx, house}],  # all D7 positions
+          "source":   "external"|"internal"
+        }
+        or None if longitudes are unavailable for all 9 planets.
+
+    Tier-1: try external `divisional_charts.compute_d7`.
+    Tier-2: internal longitude-based computation (Parashara odd/even rule).
+    """
+    d1_planets = kundli.get("planets") or []
+    asc_lon = kundli.get("ascendant_longitude")
+
+    # Tier-1: external compute_d7 helper. divisional_charts returns a
+    # dict keyed by planet name with {sign, sign_idx, vargottama} +
+    # an optional `_lagna` key.
+    d7_lagna_si: Optional[int] = None
+    d7_planet_map: Dict[str, int] = {}      # name → D7 sign_idx
+    if compute_d7 is not None:
+        try:
+            ext = compute_d7(d1_planets,
+                              float(asc_lon)
+                              if isinstance(asc_lon, (int, float))
+                              else None)
+            if isinstance(ext, dict) and ext:
+                for k, v in ext.items():
+                    if k == "_lagna" and isinstance(v, dict):
+                        si = v.get("sign_idx")
+                        if isinstance(si, int):
+                            d7_lagna_si = si % 12
+                        continue
+                    if isinstance(v, dict):
+                        si = v.get("sign_idx")
+                        if isinstance(si, int) and k in _PLANETS_9:
+                            d7_planet_map[k] = si % 12
+        except Exception:
+            d7_planet_map = {}
+
+    source = "external" if d7_planet_map else "internal"
+
+    # Tier-2: internal longitude-based computation as fallback / primary
+    # for any planet missing from the external map.
+    for p in d1_planets:
+        if not isinstance(p, dict):
+            continue
+        nm = p.get("name")
+        if nm not in _PLANETS_9 or nm in d7_planet_map:
+            continue
+        lon = p.get("longitude")
+        si = p.get("sign_idx")
+        if isinstance(si, str):
+            si = _sign_idx(si)
+        if isinstance(lon, (int, float)) and isinstance(si, int):
+            d7_planet_map[nm] = _compute_d7_sign(float(lon), si % 12)
+
+    # D7 lagna fallback. We DO NOT silently default to natal lagna_si
+    # when neither the external `_lagna` key nor `ascendant_longitude`
+    # is available — D7 lagna depends on ascendant longitude (Parashara
+    # odd/even partitioning), so a sign-only fallback would silently
+    # mis-place the D7 1L / 5L. Degrade the chart instead, letting Step
+    # 3 fall through to its D1-dignity proxy and the picture report
+    # `available=False`.
+    if d7_lagna_si is None:
+        if isinstance(asc_lon, (int, float)):
+            d7_lagna_si = _compute_d7_sign(float(asc_lon), lagna_si)
+        else:
+            return None
+
+    if not d7_planet_map:
+        return None
+
+    planets_list: List[Dict[str, Any]] = []
+    for nm in _PLANETS_9:
+        if nm in d7_planet_map:
+            si = d7_planet_map[nm]
+            planets_list.append({
+                "name":     nm,
+                "sign":     _SIGNS[si],
+                "sign_idx": si,
+                "house":    _house_of_sign(si, d7_lagna_si),
+            })
+    return {"lagna_si": d7_lagna_si,
+            "planets":  planets_list,
+            "source":   source}
+
+
 def _step3_d7_progeny(kundli: dict, candidates: Set[str],
-                        lagna_si: int) -> Dict[str, float]:
+                        lagna_si: int,
+                        d7_chart: Optional[Dict[str, Any]] = None
+                        ) -> Dict[str, float]:
     """D7 governs children & progeny — Parashara's children chart.
 
-    Tries `divisional_charts.compute_d7` first; falls back to internal
-    longitude-based computation; then to D1-dignity proxy as last
-    resort. Range 0-25.
+    Uses pre-built `d7_chart` if provided (preferred — same chart as the
+    Step 3b picture). Falls back to a fresh build, then to D1-dignity
+    proxy if no longitudes are available. Range 0-25.
     """
     out: Dict[str, float] = {p: 0.0 for p in candidates}
     if not candidates:
         return out
 
-    # Tier-1: external compute_d7 helper
-    d7 = None
-    if compute_d7 is not None:
-        try:
-            d7 = compute_d7(kundli)
-        except Exception:
-            d7 = None
+    if d7_chart is None:
+        d7_chart = _build_d7_chart(kundli, lagna_si)
 
-    # Tier-2: internal computation from longitudes
-    if (not d7 or not isinstance(d7, dict) or not d7.get("planets")):
-        d1_planets = kundli.get("planets") or []
-        d7_planets = []
-        d7_lagna_si = lagna_si
-        any_lon = False
-        for pname in candidates:
-            lon = _planet_longitude(d1_planets, pname)
-            si = _planet_sign_idx(d1_planets, pname)
-            if lon is not None and si is not None:
-                any_lon = True
-                d7_si = _compute_d7_sign(lon, si)
-                d7_planets.append({"name": pname, "sign": _SIGNS[d7_si],
-                                    "sign_idx": d7_si})
-        if any_lon:
-            # Compute D7 lagna from ascendant longitude if available
-            asc_lon = kundli.get("ascendant_longitude")
-            if isinstance(asc_lon, (int, float)):
-                d7_lagna_si = _compute_d7_sign(float(asc_lon), lagna_si)
-            d7 = {"planets": d7_planets,
-                   "ascendant": _SIGNS[d7_lagna_si]}
-
-    # Tier-3: D1-dignity fallback proxy
-    if not d7 or not isinstance(d7, dict) or not d7.get("planets"):
+    # Tier-3: D1-dignity fallback proxy if D7 unavailable
+    if not d7_chart or not d7_chart.get("planets"):
         d1_planets = kundli.get("planets") or []
         for pname in candidates:
             si = _planet_sign_idx(d1_planets, pname)
@@ -547,17 +614,12 @@ def _step3_d7_progeny(kundli: dict, candidates: Set[str],
                 out[pname] = 12.0
         return out
 
-    d7_planets = d7.get("planets") or []
-    d7_lagna_str = d7.get("ascendant")
-    d7_lagna = (_sign_idx(d7_lagna_str)
-                 if isinstance(d7_lagna_str, str) else lagna_si)
-    if d7_lagna is None:
-        d7_lagna = lagna_si
+    d7_planets = d7_chart["planets"]
     for pname in candidates:
         si = _planet_sign_idx(d7_planets, pname)
         if si is None:
             out[pname] = 8.0; continue
-        h_in_d7 = _house_of_sign(si, d7_lagna)
+        h_in_d7 = _planet_house(d7_planets, pname) or 0
         score = 8.0
         # Child-promise boost: 5H/9H/11H of D7
         if h_in_d7 == 5:
@@ -575,6 +637,154 @@ def _step3_d7_progeny(kundli: dict, candidates: Set[str],
         elif pname in _DEBIL and si == _DEBIL[pname]:
             score = max(3.0, score - 4.0)
         out[pname] = score
+    return out
+
+
+# ════════════════════════════════════════════════════════════════════════
+# STEP 3b — D7 Picture (lord positions, occupants, aspects, dignity)
+# ════════════════════════════════════════════════════════════════════════
+def _dignity_label(pname: str, sign_si: int) -> str:
+    """Avastha label for a planet in a sign.
+
+    Returns one of: "exalted" | "own" | "debilitated" | "neutral".
+    """
+    if pname in _EXALT and sign_si == _EXALT[pname]:
+        return "exalted"
+    if pname in _OWN_SIGNS and sign_si in _OWN_SIGNS[pname]:
+        return "own"
+    if pname in _DEBIL and sign_si == _DEBIL[pname]:
+        return "debilitated"
+    return "neutral"
+
+
+def _step3b_d7_picture(d7_chart: Optional[Dict[str, Any]],
+                         lagna_si: int) -> Dict[str, Any]:
+    """User-requested D7 progeny snapshot.
+
+    Captures, *inside* the D7 Saptamsha chart:
+      • D7 lagna sign + D7 1L (lord of D7 lagna): which sign, which D7
+        house, dignity (exalted/own/debilitated/neutral), aspecting-or-
+        not the D7 5H.
+      • D7 5L (lord of D7 5H): which sign, which D7 house, dignity,
+        and whether it occupies a child-house (5/9/11) of the D7.
+      • D7 1H occupants and D7 5H occupants.
+      • Planets aspecting D7 1H and D7 5H.
+      • A small `flags` block summarising the picture for verdict use:
+          - jupiter_aspects_d7_5h  (strong protective signal)
+          - benefic_in_d7_5h       (Jupiter / Venus / Mercury / Moon)
+          - malefic_in_d7_5h       (Sun / Mars / Saturn / Rahu / Ketu)
+          - d7_5l_in_dusthana      (D7 5L in D7 6/8/12 — Bandhya signal)
+          - d7_5l_well_placed      (D7 5L in D7 1/5/9/11 with non-debil)
+
+    Returns an `available` flag (False when no D7 longitudes exist) so
+    downstream consumers can render a graceful fallback.
+    """
+    out: Dict[str, Any] = {
+        "available":              False,
+        "source":                 "none",
+        "d7_lagna":               None,
+        "d7_lagna_sign_idx":      None,
+        "first_lord":             None,
+        "fifth_lord":             None,
+        "first_house_occupants":  [],
+        "fifth_house_occupants":  [],
+        "aspects_to_first_house": [],
+        "aspects_to_fifth_house": [],
+        "flags":                  {},
+        "note":                   "",
+    }
+    if not d7_chart or not d7_chart.get("planets"):
+        out["note"] = ("D7 Saptamsha chart unavailable (no planet "
+                        "longitudes); progeny analysis falling back "
+                        "to D1 dignity proxy.")
+        return out
+
+    d7_lagna_si = d7_chart["lagna_si"]
+    d7_planets = d7_chart["planets"]
+    out["available"] = True
+    out["source"] = d7_chart.get("source", "internal")
+    out["d7_lagna"] = _SIGNS[d7_lagna_si]
+    out["d7_lagna_sign_idx"] = d7_lagna_si
+
+    # ── D7 1L (lord of D7 lagna sign) ──
+    first_lord = _SIGN_LORDS[d7_lagna_si]
+    fl_si = _planet_sign_idx(d7_planets, first_lord)
+    fl_h  = _planet_house(d7_planets, first_lord)
+    out["first_lord"] = {
+        "planet":         first_lord,
+        "sign":           _SIGNS[fl_si] if fl_si is not None else None,
+        "sign_idx":       fl_si,
+        "house_in_d7":    fl_h,
+        "dignity":        (_dignity_label(first_lord, fl_si)
+                           if fl_si is not None else "unknown"),
+        "aspects_d7_5h":  (_aspects_house(first_lord, fl_h, 5)
+                            if fl_h else False),
+    }
+
+    # ── D7 5L (lord of D7 5th sign from D7 lagna) ──
+    fifth_sign_si = (d7_lagna_si + 4) % 12
+    fifth_lord = _SIGN_LORDS[fifth_sign_si]
+    fih_si = _planet_sign_idx(d7_planets, fifth_lord)
+    fih_h  = _planet_house(d7_planets, fifth_lord)
+    fih_dignity = (_dignity_label(fifth_lord, fih_si)
+                    if fih_si is not None else "unknown")
+    in_dusthana = fih_h in _OBSTRUCTION_HOUSES if fih_h else False
+    in_child_house = fih_h in _CHILD_HOUSES if fih_h else False
+    in_kendra_or_trine = fih_h in (1, 4, 5, 7, 9, 10) if fih_h else False
+    well_placed = (in_kendra_or_trine
+                    and fih_dignity != "debilitated"
+                    and not in_dusthana)
+    out["fifth_lord"] = {
+        "planet":         fifth_lord,
+        "sign":           _SIGNS[fih_si] if fih_si is not None else None,
+        "sign_idx":       fih_si,
+        "house_in_d7":    fih_h,
+        "dignity":        fih_dignity,
+        "in_child_house": in_child_house,
+        "in_dusthana":    in_dusthana,
+        "well_placed":    well_placed,
+    }
+
+    # ── D7 1H + 5H occupants ──
+    out["first_house_occupants"] = _planets_in_house(d7_planets, 1)
+    out["fifth_house_occupants"] = _planets_in_house(d7_planets, 5)
+
+    # ── Aspects to D7 1H and D7 5H ──
+    asp_1h: List[str] = []
+    asp_5h: List[str] = []
+    for pname in _PLANETS_9:
+        ph = _planet_house(d7_planets, pname)
+        if not ph:
+            continue
+        if ph != 1 and _aspects_house(pname, ph, 1):
+            asp_1h.append(pname)
+        if ph != 5 and _aspects_house(pname, ph, 5):
+            asp_5h.append(pname)
+    out["aspects_to_first_house"] = asp_1h
+    out["aspects_to_fifth_house"] = asp_5h
+
+    # ── Summary flags for verdict / yoga consumers ──
+    benefics = {"Jupiter", "Venus", "Mercury", "Moon"}
+    malefics = {"Sun", "Mars", "Saturn", "Rahu", "Ketu"}
+    occ5 = set(out["fifth_house_occupants"])
+    asp5 = set(asp_5h)
+    flags = {
+        "jupiter_aspects_d7_5h": ("Jupiter" in asp5
+                                    or "Jupiter" in occ5),
+        "benefic_in_d7_5h":      bool(occ5 & benefics),
+        "malefic_in_d7_5h":      bool(occ5 & malefics),
+        "d7_5l_in_dusthana":     in_dusthana,
+        "d7_5l_well_placed":     well_placed,
+        "d7_5l_in_child_house":  in_child_house,
+        "d7_1l_aspects_5h":      out["first_lord"]["aspects_d7_5h"],
+    }
+    out["flags"] = flags
+    out["note"] = (
+        f"D7 lagna {out['d7_lagna']} → 1L {first_lord} "
+        f"({out['first_lord']['dignity']}, "
+        f"H{fl_h or '?'}); 5L {fifth_lord} "
+        f"({fih_dignity}, H{fih_h or '?'})."
+    )
     return out
 
 
@@ -1096,6 +1306,47 @@ def _detect_yogas(kundli: dict, lagna_si: int,
     return out
 
 
+def _detect_d7_yogas(d7_picture: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """D7-Saptamsha-specific yogas, derived from the Step 3b picture.
+
+    Mirrors the gender-neutral labelling rule used in `_detect_yogas`.
+    Emits:
+      • "D7-Progeny-Yoga" (protective) when the D7 5L is well-placed in
+        D7 (kendra/trine, non-debilitated, not in dusthana) AND either
+        Jupiter aspects/occupies D7 5H or a benefic occupies it.
+      • "D7-Bandhya" (high) when the D7 5L sits in D7 6/8/12 AND there
+        is no Jupiter aspect/occupation of D7 5H (no rescue).
+      • "D7-Lagna-Activation" (protective) when D7 1L aspects D7 5H
+        (lagna lord lending strength to the children house).
+    """
+    out: List[Dict[str, Any]] = []
+    if not d7_picture or not d7_picture.get("available"):
+        return out
+    flags = d7_picture.get("flags", {}) or {}
+    fl  = d7_picture.get("first_lord")  or {}
+    fih = d7_picture.get("fifth_lord")  or {}
+
+    if (flags.get("d7_5l_well_placed")
+        and (flags.get("jupiter_aspects_d7_5h")
+              or flags.get("benefic_in_d7_5h"))):
+        out.append({"name": "D7-Progeny-Yoga (D7 5L well-placed + benefic on D7 5H)",
+                    "severity": "protective",
+                    "planets": [fih.get("planet"), "Jupiter"]})
+
+    if (flags.get("d7_5l_in_dusthana")
+        and not flags.get("jupiter_aspects_d7_5h")):
+        out.append({"name": "D7-Bandhya (D7 5L in D7 dusthana, no Jupiter rescue)",
+                    "severity": "high",
+                    "planets": [fih.get("planet")]})
+
+    if flags.get("d7_1l_aspects_5h"):
+        out.append({"name": "D7-Lagna-Activation (D7 1L aspects D7 5H — progeny strength)",
+                    "severity": "protective",
+                    "planets": [fl.get("planet")]})
+
+    return out
+
+
 # ════════════════════════════════════════════════════════════════════════
 # Helpers — verdict / severity / age
 # ════════════════════════════════════════════════════════════════════════
@@ -1382,9 +1633,29 @@ def _compute_baby_window_impl(kundli: dict,
                     ",".join(f"{p}:{s:.1f}" for p, s in d9_scores.items()))
 
     # ── STEP 3 ──
-    d7_scores = _step3_d7_progeny(kundli, survivors, lagna_si)
+    # Build D7 chart once and reuse for both the score (Step 3) and the
+    # picture (Step 3b). Same chart guarantees the score and the picture
+    # never disagree.
+    d7_chart = _build_d7_chart(kundli, lagna_si)
+    d7_scores = _step3_d7_progeny(kundli, survivors, lagna_si,
+                                     d7_chart=d7_chart)
     factors.append(f"STEP3 D7_progeny=" +
                     ",".join(f"{p}:{s:.1f}" for p, s in d7_scores.items()))
+
+    # ── STEP 3b — D7 picture (1L/5L positions, 1H/5H occupants, aspects) ──
+    d7_picture = _step3b_d7_picture(d7_chart, lagna_si)
+    if d7_picture.get("available"):
+        fl = d7_picture["first_lord"]
+        fih = d7_picture["fifth_lord"]
+        factors.append(
+            f"STEP3b D7_lagna={d7_picture['d7_lagna']} "
+            f"1L={fl['planet']}@H{fl['house_in_d7']}/{fl['dignity']} "
+            f"5L={fih['planet']}@H{fih['house_in_d7']}/{fih['dignity']} "
+            f"5H_occ={d7_picture['fifth_house_occupants']} "
+            f"5H_asp={d7_picture['aspects_to_fifth_house']}"
+        )
+    else:
+        factors.append("STEP3b D7_picture=unavailable (D1-dignity fallback)")
 
     # ── STEP 3.5 ──
     kp_layer = _step3_5_kp_layer(kp, lagna_si)
@@ -1414,6 +1685,11 @@ def _compute_baby_window_impl(kundli: dict,
 
     # ── STEP 9 ──
     yogas = _detect_yogas(kundli, lagna_si, planets_d1)
+    # Merge in D7-specific yogas derived from the Step 3b picture. These
+    # share the same severity vocabulary (protective/high/informational)
+    # so all downstream consumers (verdict, child_promised, risk_flags,
+    # remedies) handle them identically without special-casing.
+    yogas.extend(_detect_d7_yogas(d7_picture))
     factors.append(f"STEP9 yogas={[y['name'] for y in yogas]}")
 
     # Child-promised composite flag
@@ -1544,6 +1820,7 @@ def _compute_baby_window_impl(kundli: dict,
         "top_child_planets": ranked[:5],
         "weighted_breakdown": breakdown,
         "kp_layer": kp_layer,
+        "d7_picture": d7_picture,
         "transits": transits,
         "ashtakavarga": ashta,
         "yogas": yogas,

@@ -82,7 +82,7 @@ Output dict (back-compat with health/finance-style consumers):
     "llm_directives":       [str],
     "remedies":             {...},
     "engine_version":       "v1.0.0",
-    "engine_arch":          "FILTER→VERIFY→ACTIVATE→TRIGGER",
+    "engine_arch":          "FILTER→VERIFY→KP-GATE→ACTIVATE→TRIGGER",
   }
 
 Hard guards (per user policy + replit.md):
@@ -189,6 +189,21 @@ _DASHA_SCORE_PD = 6
 
 _D1_FILTER_MIN_SCORE = 12.0
 _MIN_WINDOW_GAP_DAYS = 45
+
+# Phase 2.5.11.16 — strong-karaka floor. These planets ALWAYS survive
+# STEP 1 (even if D1 score < threshold) because they are natural travel
+# karakas; dropping them silently zeroes out their entire dasha period
+# (e.g. Moon as MD lord for 10 years → no MD/AD contribution at all).
+_KARAKA_FLOOR_SURVIVORS: Set[str] = {"Moon", "Rahu", "Mercury", "Jupiter"}
+
+# Phase 2.5.11.16 — KP dasha-significator gate weight per role.
+# A planet's KP travel-house signification (NL→SB→SS chain hits on
+# 3/9/12) gives a deterministic bonus when the planet runs MD/AD/PD.
+# Calibrated so Sep-2025 Moon-Moon-Mercury (Moon: 3 KP hits,
+# Mercury: 2 hits) gains ~+5–7 absolute score and lifts into top-10.
+_KP_DASHA_BOOST_MD = 0.4
+_KP_DASHA_BOOST_AD = 1.2
+_KP_DASHA_BOOST_PD = 1.5
 
 # SAV bands (avg of 9H + 12H)
 _SAV_FOREIGN_WEAK   = 25
@@ -418,6 +433,21 @@ def _step1_d1_filter(kundli: dict, lagna_si: int
     for pname, info in out.items():
         info["in_filter"] = info["d1"] >= _D1_FILTER_MIN_SCORE
 
+    # Phase 2.5.11.16 — Karaka-floor: natural travel karakas
+    # (Moon=movement, Rahu=foreign, Mercury=short-trips, Jupiter=visa)
+    # ALWAYS survive even if D1 placement-score < threshold. Without
+    # this, e.g. a chart with Moon in lagna (no travel-house hit, not
+    # 3/9/12-lord) would have its 10-year Moon Mahadasha contribute
+    # ZERO to MD/AD scoring — silently breaking the engine for an
+    # entire dasha period. Adds a small floor d1 score so downstream
+    # ranking still differentiates floor-survivors from strong ones.
+    for kp in _KARAKA_FLOOR_SURVIVORS:
+        if not out[kp]["in_filter"]:
+            out[kp]["in_filter"] = True
+            out[kp]["links"].append("karaka-floor (natural travel karaka)")
+            if out[kp]["d1"] < _D1_FILTER_MIN_SCORE:
+                out[kp]["d1"] = _D1_FILTER_MIN_SCORE
+
     return out
 
 
@@ -572,6 +602,96 @@ def _step3_5_kp_layer(kp: dict, lagna_si: int) -> Dict[str, Any]:
 
 
 # ════════════════════════════════════════════════════════════════════════
+# STEP 3.6 — KP dasha-significator gate (Phase 2.5.11.16)
+# ════════════════════════════════════════════════════════════════════════
+def _kp_dasha_signifies_travel(kp: dict, planet: str,
+                                target_houses: List[int] = None,
+                                ) -> Dict[str, Any]:
+    """Classical KP fructification rule: an event happens in the dasha
+    of significators of relevant houses. For each planet, compute the
+    UNION of houses it signifies via the NL→SB→SS chain (own placement
+    + own ownership + star lord's houses + sub-lord's houses + sub-sub
+    lord's houses) intersected with the travel houses [3, 9, 12].
+
+    Returns:
+      {"hits": sorted list of unique travel-house signification hits,
+       "score": count of unique hits (0..3),
+       "layers": list of layer-name strings that fired (for trace)}
+
+    Why this matters (the bug it fixes — Phase 2.5.11.16):
+      Sep 2025 Moon-Moon-Mercury on Rajalaxmi chart was a real foreign-
+      travel month, but ranked #30+ in past_windows because Moon-MD
+      contribution was tiny. Yet KP-wise BOTH Moon and Mercury
+      strongly signify H9 + H12 via their full chain (Moon: pl=[8,12]
+      + sl(Ketu)=...9... + ss(Moon)=[8,12]; Mercury: sb(Mars)=...12...
+      + ss(Ketu)=...9...). This helper surfaces that signal so STEP 5
+      can boost such windows.
+    """
+    if target_houses is None:
+        target_houses = _TRAVEL_HOUSES
+    out: Dict[str, Any] = {"hits": [], "score": 0, "layers": []}
+    if not isinstance(kp, dict):
+        return out
+    sig_all = (kp.get("significations") or kp.get("significators") or {})
+    if not isinstance(sig_all, dict):
+        return out
+    sig = sig_all.get(planet) or sig_all.get(planet.lower())
+    if sig is None:
+        return out
+    target_set = set(target_houses)
+    hits: Set[int] = set()
+    # Schema adapter (Phase 2.5.11.16 architect-followup):
+    #   Repo has TWO KP signification shapes in the wild —
+    #   (a) DICT shape (Raj-style): {pl:[...], sl:[...], sb_houses:[...], ss_houses:[...]}
+    #   (b) LIST shape (legacy):    [h1, h2, h3, ...]  (flat union, used by `_planet_signified_houses`)
+    #   Without an adapter, list-shape charts would silently get score=0 here
+    #   even when valid travel-house signification exists.
+    if isinstance(sig, dict):
+        # Layer keys in the upstream KP module:
+        #   pl         = planet's own placement + ownership houses
+        #   sl         = star-lord's signified houses
+        #   sb_houses  = sub-lord's signified houses
+        #   ss_houses  = sub-sub-lord's signified houses
+        for layer_key in ("pl", "sl", "sb_houses", "ss_houses"):
+            layer_houses = sig.get(layer_key) or []
+            if not isinstance(layer_houses, list):
+                continue
+            layer_hits = [h for h in layer_houses if h in target_set]
+            if layer_hits:
+                for h in layer_hits:
+                    hits.add(int(h))
+                out["layers"].append(f"{layer_key}={sorted(set(layer_hits))}")
+    elif isinstance(sig, list):
+        # Legacy flat-list shape — treat as a single union layer "flat".
+        # Score is degraded (no layer breakdown), but at least non-zero
+        # when any travel house is present in the planet's combined chain.
+        flat_hits: List[int] = []
+        for v in sig:
+            try:
+                h = int(v)
+            except (TypeError, ValueError):
+                continue
+            if h in target_set:
+                hits.add(h)
+                flat_hits.append(h)
+        if flat_hits:
+            out["layers"].append(f"flat={sorted(set(flat_hits))}")
+    out["hits"] = sorted(hits)
+    out["score"] = len(hits)
+    return out
+
+
+def _step3_6_kp_dasha_map(kp: dict) -> Dict[str, Dict[str, Any]]:
+    """Compute KP travel-significator map for ALL 9 vimshottari planets.
+    Used by STEP 5 to boost windows whose MD/AD/PD lords KP-significate
+    travel houses regardless of D1 ranking."""
+    out: Dict[str, Dict[str, Any]] = {}
+    for p in _PLANETS_9:
+        out[p] = _kp_dasha_signifies_travel(kp, p)
+    return out
+
+
+# ════════════════════════════════════════════════════════════════════════
 # STEP 4 — Weighted ranking
 # ════════════════════════════════════════════════════════════════════════
 def _karaka_score(pname: str, lagna_si: int) -> float:
@@ -711,6 +831,7 @@ def _step5_dasha_activation(chain: List[Dict[str, Any]],
                               horizon_years: int = 10,
                               direction: str = "future",
                               lookback_years: int = 15,
+                              kp_dasha_map: Optional[Dict[str, Dict[str, Any]]] = None,
                               ) -> List[Dict[str, Any]]:
     """Score dasha windows in either direction.
 
@@ -800,27 +921,50 @@ def _step5_dasha_activation(chain: List[Dict[str, Any]],
         travel_score = 0.0
         anchor_score = 0.0
         risk_score = 0.0
+        kp_boost = 0.0
+        kp_hits_total: Set[int] = set()
         triggers: List[str] = []
+        _KP_BOOST_BY_ROLE = {"MD": _KP_DASHA_BOOST_MD,
+                              "AD": _KP_DASHA_BOOST_AD,
+                              "PD": _KP_DASHA_BOOST_PD}
         for role, lord, weight in (("MD", w["md"], _DASHA_SCORE_MD),
                                     ("AD", w["ad"], _DASHA_SCORE_AD),
                                     ("PD", w["pd"], _DASHA_SCORE_PD)):
-            if not (lord and lord in score_map):
+            if not lord:
                 continue
-            rel = score_map[lord] / max_score
-            contrib = weight * rel
-            if lord in travel_lords:
-                travel_score += contrib
-                triggers.append(f"{role}={lord}(TRAVEL_LORD,+{contrib:.2f})")
-            elif lord in anchor_lords:
-                anchor_score += contrib
-                triggers.append(f"{role}={lord}(ANCHOR,-{contrib:.2f})")
-            else:
-                triggers.append(f"{role}={lord}(NEUTRAL,0)")
-            if lord in risk_lords:
-                risk_score += contrib * 0.5
-                triggers.append(f"  ↳ RISK_TAG:{lord}(+{contrib*0.5:.2f})")
-        net = max(0.0, travel_score - anchor_score)
-        if net <= 0 and travel_score == 0 and risk_score == 0:
+            # D1-derived contribution (existing behaviour).
+            if lord in score_map:
+                rel = score_map[lord] / max_score
+                contrib = weight * rel
+                if lord in travel_lords:
+                    travel_score += contrib
+                    triggers.append(f"{role}={lord}(TRAVEL_LORD,+{contrib:.2f})")
+                elif lord in anchor_lords:
+                    anchor_score += contrib
+                    triggers.append(f"{role}={lord}(ANCHOR,-{contrib:.2f})")
+                else:
+                    triggers.append(f"{role}={lord}(NEUTRAL,0)")
+                if lord in risk_lords:
+                    risk_score += contrib * 0.5
+                    triggers.append(f"  ↳ RISK_TAG:{lord}(+{contrib*0.5:.2f})")
+            # Phase 2.5.11.16 — KP dasha-significator boost. Fires
+            # INDEPENDENTLY of D1 ranking so a planet that's missing
+            # from `ranked` (or floored low) but KP-significates 3/9/12
+            # still contributes when it runs as MD/AD/PD. Classical
+            # KP rule: events fructify in dasha of significators.
+            if kp_dasha_map:
+                kp_info = kp_dasha_map.get(lord) or {}
+                hits = kp_info.get("score") or 0
+                if hits:
+                    boost = hits * _KP_BOOST_BY_ROLE[role]
+                    kp_boost += boost
+                    for h in (kp_info.get("hits") or []):
+                        kp_hits_total.add(int(h))
+                    triggers.append(
+                        f"  ↳ KP-DASHA:{role}={lord}"
+                        f"(hits={kp_info.get('hits')},+{boost:.2f})")
+        net = max(0.0, travel_score - anchor_score) + kp_boost
+        if net <= 0 and travel_score == 0 and risk_score == 0 and kp_boost == 0:
             continue
         # Heuristic kind: foreign vs short trip vs business
         kind = "general"
@@ -836,6 +980,8 @@ def _step5_dasha_activation(chain: List[Dict[str, Any]],
             "travel_raw": round(travel_score, 2),
             "anchor_raw": round(anchor_score, 2),
             "risk_raw": round(risk_score, 2),
+            "kp_boost": round(kp_boost, 2),
+            "kp_hits": sorted(kp_hits_total),
             "kind": kind,
             "triggers": triggers,
         })
@@ -862,15 +1008,31 @@ def _planet_sign_at(planet_id: int, when: datetime) -> Optional[int]:
         return None
 
 
+_SWE_PLANET_IDS: Dict[str, int] = {}
+def _init_swe_planet_ids():
+    if not _HAS_SWE or _SWE_PLANET_IDS:
+        return
+    _SWE_PLANET_IDS.update({
+        "Sun": swe.SUN, "Moon": swe.MOON, "Mars": swe.MARS,
+        "Mercury": swe.MERCURY, "Jupiter": swe.JUPITER,
+        "Venus": swe.VENUS, "Saturn": swe.SATURN,
+        "Rahu": swe.MEAN_NODE,  # Ketu = Rahu+180°
+    })
+
+
 def _step6_transits(kundli: dict, lagna_si: int,
                      planets_d1: List[dict],
-                     now: datetime) -> Dict[str, Any]:
-    out = {"saturn": None, "rahu": None, "ketu": None,
+                     now: datetime,
+                     current_dasha_lords: Optional[Dict[str, Optional[str]]] = None,
+                     ) -> Dict[str, Any]:
+    out: Dict[str, Any] = {"saturn": None, "rahu": None, "ketu": None,
            "mars": None, "jupiter": None, "sade_sati": None,
+           "dasha_lord_transits": [],
            "active_triggers": []}
     if not _HAS_SWE:
         out["note"] = "swisseph unavailable; transit layer skipped"
         return out
+    _init_swe_planet_ids()
 
     moon_si = _planet_sign_idx(planets_d1, "Moon")
     saturn_si = _planet_sign_at(swe.SATURN, now)
@@ -937,6 +1099,39 @@ def _step6_transits(kundli: dict, lagna_si: int,
         elif delta == 1:
             out["sade_sati"] = "exit_phase"
             out["active_triggers"].append(("sade_sati", 2, +0.3))
+
+    # Phase 2.5.11.16 — Current MD/AD/PD lords' LIVE transit through
+    # travel houses 3/9/12. The classical generic-malefic transit
+    # checks above (Saturn/Rahu/Jupiter) miss the case where the
+    # *active dasha lord itself* (e.g. PD lord Mercury for Sep-2025)
+    # is currently transiting a foreign house. This is a textbook
+    # KP/Vedic fructification trigger.
+    if current_dasha_lords:
+        for role in ("MD", "AD", "PD"):
+            lord = current_dasha_lords.get(role)
+            if not lord:
+                continue
+            if lord == "Ketu":
+                # Ketu = Rahu + 180° (sign-wise: opposite sign)
+                rahu_id = _SWE_PLANET_IDS.get("Rahu")
+                if rahu_id is None:
+                    continue
+                rahu_sii = _planet_sign_at(rahu_id, now)
+                lord_si = (rahu_sii + 6) % 12 if rahu_sii is not None else None
+            else:
+                pid = _SWE_PLANET_IDS.get(lord)
+                lord_si = _planet_sign_at(pid, now) if pid is not None else None
+            if lord_si is None:
+                continue
+            lord_h = _h(lord_si)
+            if lord_h in (3, 9, 12):
+                weight_by_role = {"MD": 0.4, "AD": 0.7, "PD": 1.0}[role]
+                msg = (f"{role}-lord {lord} transiting {lord_h}H "
+                        f"(travel-house) — dasha-lord active in foreign axis")
+                out["dasha_lord_transits"].append(msg)
+                out["active_triggers"].append(
+                    (f"dasha_lord_{role.lower()}_in_travel_h",
+                     lord_h, +weight_by_role))
 
     return out
 
@@ -1287,7 +1482,7 @@ def compute_travel_window(kundli: dict, intel: Optional[dict] = None,
             "factors": [f"ENGINE_EXCEPTION {type(exc).__name__}: {str(exc)[:160]}"],
             "risk_flags": ["ENGINE_EXCEPTION"],
             "engine_version": "v1.0.0",
-            "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER",
+            "engine_arch": "FILTER→VERIFY→KP-GATE→ACTIVATE→TRIGGER",
         }
     _store_last_result(result)
     return result
@@ -1301,7 +1496,7 @@ def _compute_travel_window_impl(kundli: dict,
         return {"verdict": "UNKNOWN", "band": "WEAK",
                 "factors": ["GATE kundli empty"],
                 "engine_version": "v1.0.0",
-                "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER"}
+                "engine_arch": "FILTER→VERIFY→KP-GATE→ACTIVATE→TRIGGER"}
     kp = kp or kundli.get("kp") or {}
     intel = intel or {}
 
@@ -1320,7 +1515,7 @@ def _compute_travel_window_impl(kundli: dict,
         return {"verdict": "UNKNOWN", "band": "WEAK",
                 "factors": ["GATE lagna_si is None"],
                 "engine_version": "v1.0.0",
-                "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER"}
+                "engine_arch": "FILTER→VERIFY→KP-GATE→ACTIVATE→TRIGGER"}
 
     ok, reasons = _data_sufficiency(kundli, kp)
     factors: List[str] = []
@@ -1330,7 +1525,7 @@ def _compute_travel_window_impl(kundli: dict,
         return {"verdict": "UNKNOWN", "band": "WEAK",
                 "risk_flags": reasons, "factors": factors,
                 "engine_version": "v1.0.0",
-                "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER"}
+                "engine_arch": "FILTER→VERIFY→KP-GATE→ACTIVATE→TRIGGER"}
 
     now = datetime.utcnow()
     birth_dt = _parse_dob_dt(birth, kundli=kundli)
@@ -1358,23 +1553,41 @@ def _compute_travel_window_impl(kundli: dict,
                     f"csl_9={kp_layer['csl_9']}/{kp_layer['verdict_9']} "
                     f"csl_12={kp_layer['csl_12']}/{kp_layer['verdict_12']}")
 
+    # ── STEP 3.6 — KP dasha-significator gate (Phase 2.5.11.16) ──
+    kp_dasha_map = _step3_6_kp_dasha_map(kp)
+    _kp_summary = ",".join(
+        f"{p}:{kp_dasha_map[p]['hits']}"
+        for p in _PLANETS_9 if kp_dasha_map[p]['score'] > 0)
+    factors.append(f"STEP3.6 KP_dasha_travel_hits={{{_kp_summary}}}")
+
     # ── STEP 4 ──
     ranked = _step4_rank(d1_map, d9_scores, d4_scores, kp, lagna_si)
     factors.append("STEP4 ranked=" +
                     ",".join(f"{r['name']}:{r['score']}" for r in ranked[:5]))
 
-    # ── STEP 5 (future + past, Phase 2.5.11.14) ──
+    # ── STEP 5 (future + past, Phase 2.5.11.14; KP-boosted 2.5.11.16) ──
     chain = _flatten_dasha_chain(kundli)
     dasha_windows = _step5_dasha_activation(chain, ranked, lagna_si, now,
-                                              direction="future")
+                                              direction="future",
+                                              kp_dasha_map=kp_dasha_map)
     past_dasha_windows = _step5_dasha_activation(chain, ranked, lagna_si, now,
-                                                   direction="past")
+                                                   direction="past",
+                                                   kp_dasha_map=kp_dasha_map)
     factors.append(f"STEP5 dasha_windows_in_horizon={len(dasha_windows)} "
                     f"past_windows={len(past_dasha_windows)}")
 
     # ── STEP 6 ──
     planets_d1 = kundli.get("planets") or []
-    transits = _step6_transits(kundli, lagna_si, planets_d1, now)
+    # Phase 2.5.11.16 — find current MD/AD/PD lords from chain so STEP 6
+    # can detect dasha-lord transit through travel houses 3/9/12.
+    _current_row = next((c for c in chain
+                          if c["start"] <= now <= c["end"]), None)
+    _current_lords = ({"MD": _current_row["md"],
+                        "AD": _current_row["ad"],
+                        "PD": _current_row["pd"]}
+                       if _current_row else None)
+    transits = _step6_transits(kundli, lagna_si, planets_d1, now,
+                                 current_dasha_lords=_current_lords)
     transit_load = sum(w for _, _, w in transits.get("active_triggers", []))
     factors.append(f"STEP6 transit_load={transit_load:.2f}")
 
@@ -1405,6 +1618,8 @@ def _compute_travel_window_impl(kundli: dict,
             "md": w["md"], "ad": w["ad"], "pd": w["pd"],
             "score": w["score"], "severity": sev,
             "kind": w.get("kind", "general"),
+            "kp_boost": w.get("kp_boost", 0.0),
+            "kp_hits": w.get("kp_hits", []),
             "window": _format_window(w["start"], w["end"]),
             "start_iso": w["start"].isoformat(),
             "end_iso": w["end"].isoformat(),
@@ -1475,6 +1690,8 @@ def _compute_travel_window_impl(kundli: dict,
             "end_iso": current["end"].isoformat(),
             "severity": sev,
             "kind": current.get("kind", "general"),
+            "kp_boost": current.get("kp_boost", 0.0),
+            "kp_hits": current.get("kp_hits", []),
             "triggers": current["triggers"],
             "double_transit": check_double_transit(
                 kundli, now, lagna_si, planets_d1, _TRAVEL_CONCERN),
@@ -1543,15 +1760,43 @@ def _compute_travel_window_impl(kundli: dict,
 
     affected = _affected_areas(ranked)
     remedies = _compute_travel_remedies(ranked, affected, rec_tier)
-    # Past windows (Phase 2.5.11.14) — top 3 historical favorable windows.
-    # IMPORTANT: these are "favorable opportunities astrologically", NEVER
-    # confirmation that the user actually traveled. UCML must confirm event.
+    # Past windows (Phase 2.5.11.14, expanded to top-10 in 2.5.11.16) —
+    # historical favorable windows. IMPORTANT: these are "favorable
+    # opportunities astrologically", NEVER confirmation that the user
+    # actually traveled. UCML must confirm event. Cap raised from 3→10
+    # so legitimate KP-fortified windows (e.g. Sep-2025 Moon-Moon-Mercury
+    # on Rajalaxmi chart) aren't truncated by higher-scoring older
+    # windows that may not have actually fructified.
+    # Phase 2.5.11.16 — MD-diversity cap so a single dominant MD (e.g.
+    # 6yr Sun-MD with 12H stack) cannot monopolize all 10 past slots
+    # and bury legitimate KP-fortified windows from other MDs (e.g.
+    # Moon-MD's Sep-2025 Moon-Moon-Mercury). Cap each MD to ≤3 slots
+    # while preserving global score order.
+    # MD_CAP=4 guarantees that Moon-MD's 4th-best window (e.g.
+    # Sep-2025 Moon-Moon-Mercury) can surface even when 6yr Sun-MD
+    # has many higher-scoring competitors. Total cap raised 10 → 12
+    # to absorb the diversified slate; locked_facts trace mirror is
+    # also [:12] (still well under the 60-line hard cap).
+    _MD_CAP = 4
+    _PAST_TOTAL_CAP = 12
+    _md_count: Dict[str, int] = {}
+    _diversified: List[Dict[str, Any]] = []
+    for w in past_dasha_windows:
+        md = w["md"] or "?"
+        if _md_count.get(md, 0) >= _MD_CAP:
+            continue
+        _md_count[md] = _md_count.get(md, 0) + 1
+        _diversified.append(w)
+        if len(_diversified) >= _PAST_TOTAL_CAP:
+            break
     formatted_past3: List[Dict[str, Any]] = []
-    for w in past_dasha_windows[:3]:
+    for w in _diversified:
         formatted_past3.append({
             "md": w["md"], "ad": w["ad"], "pd": w["pd"],
             "score": w["score"],
             "kind": w.get("kind", "general"),
+            "kp_boost": w.get("kp_boost", 0.0),
+            "kp_hits": w.get("kp_hits", []),
             "window": _format_window(w["start"], w["end"]),
             "start_iso": w["start"].isoformat(),
             "end_iso": w["end"].isoformat(),
@@ -1563,6 +1808,15 @@ def _compute_travel_window_impl(kundli: dict,
         })
     if formatted_past3:
         llm_directives.append("PAST_WINDOW_IS_OPPORTUNITY_NOT_EVENT")
+    # Phase 2.5.11.16 — surface KP-dasha-fortification when ANY emitted
+    # window (past/current/next) carries a non-empty KP boost.
+    _has_kp_boost = (
+        any(w.get("kp_boost", 0) > 0 for w in formatted_past3) or
+        any(w.get("kp_boost", 0) > 0 for w in top3) or
+        (current is not None and current.get("kp_boost", 0) > 0)
+    )
+    if _has_kp_boost:
+        llm_directives.append("KP_DASHA_FORTIFIES_TRAVEL")
     # Phase 2.5.11.15 — universal directive: LLM MUST cite double-transit
     # verdict whenever it discusses any timing window.
     llm_directives.append("DOUBLE_TRANSIT_TIMING_RULE_APPLIED")
@@ -1588,7 +1842,7 @@ def _compute_travel_window_impl(kundli: dict,
         "llm_directives": llm_directives,
         "remedies": remedies,
         "engine_version": "v1.0.0",
-        "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER",
+        "engine_arch": "FILTER→VERIFY→KP-GATE→ACTIVATE→TRIGGER",
     }
 
 

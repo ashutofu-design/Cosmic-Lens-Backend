@@ -1816,7 +1816,18 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
                         anc_short = "; ".join(anc[:2]) if anc else "—"
                         dt_str = (f" | DOUBLE-TRANSIT: {dt['verdict']} "
                                    f"(score {dt.get('score', 0)}; {anc_short})")
-                    _trace_t.append(f"     trace {i}: {ws}{sc_str}{dt_str}")
+                    # Phase 2.5.11.16 — KP-DASHA significator annotation:
+                    # surfaces whether MD/AD/PD lord's KP NL→SB→SS chain
+                    # touches travel houses 3/9/12 (independent of D1/D9
+                    # weighted score). High kp_boost = strong KP fortify.
+                    kpb = w.get("kp_boost") or 0.0
+                    kph = w.get("kp_hits") or []
+                    kp_str = ""
+                    if kpb and kpb > 0.5:
+                        hits_short = ",".join(str(h) for h in sorted(set(kph))[:4])
+                        kp_str = (f" | KP-DASHA: hits=[{hits_short}] "
+                                   f"boost={kpb:.1f}")
+                    _trace_t.append(f"     trace {i}: {ws}{sc_str}{dt_str}{kp_str}")
                 if _trace_t:
                     travel_line += "\n" + "\n".join(_trace_t)
             # Past windows (Phase 2.5.11.14) — historical favorable
@@ -1827,7 +1838,11 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             past_t = t.get("past_windows") or []
             if isinstance(past_t, list) and past_t:
                 _past_t = ["     past_windows (FAVORABLE OPPORTUNITY ONLY — NOT confirmed travel; UCML must verify):"]
-                for i, w in enumerate(past_t[:3], 1):
+                # Phase 2.5.11.16 — cap raised [:3] → [:10] so KP-fortified
+                # windows (e.g. Sep-2025 Moon-Moon-Mercury) that scored
+                # below the top-3 weighted-rank but carry strong KP
+                # significator chain are still surfaced to the LLM.
+                for i, w in enumerate(past_t[:12], 1):
                     if not isinstance(w, dict):
                         continue
                     ws = w.get("window") or "—"
@@ -1849,7 +1864,15 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
                         anc_short = "; ".join(anc[:2]) if anc else "—"
                         dt_str = (f" | DOUBLE-TRANSIT: {dt['verdict']} "
                                    f"(score {dt.get('score', 0)}; {anc_short})")
-                    _past_t.append(f"       past {i}: {ws}{sc_str}{dt_str}")
+                    # Phase 2.5.11.16 — KP-DASHA significator annotation.
+                    kpb = w.get("kp_boost") or 0.0
+                    kph = w.get("kp_hits") or []
+                    kp_str = ""
+                    if kpb and kpb > 0.5:
+                        hits_short = ",".join(str(h) for h in sorted(set(kph))[:4])
+                        kp_str = (f" | KP-DASHA: hits=[{hits_short}] "
+                                   f"boost={kpb:.1f}")
+                    _past_t.append(f"       past {i}: {ws}{sc_str}{dt_str}{kp_str}")
                 travel_line += "\n" + "\n".join(_past_t)
                 # Phase 2.5.11.15 — universal hard reminder for LLM:
                 # K.N.Rao Double Transit is the compulsory fructification

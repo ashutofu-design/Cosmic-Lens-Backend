@@ -659,5 +659,163 @@ class TestDoubleTransit(unittest.TestCase):
         self.assertEqual(midpoint(a, b), datetime(2020, 1, 6))
 
 
+class TestPhase2_5_11_16_KpDashaGate(unittest.TestCase):
+    """Phase 2.5.11.16 — Moon karaka-floor + KP-dasha significator gate
+    (NL→SB→SS chain hits on travel houses 3/9/12) + past_windows[:10] cap
+    + PD-lord transit-on-travel-house in STEP 6."""
+
+    def _kundli(self):
+        return _mk_kundli("Sagittarius", {
+            "Sun": 12, "Moon": 1, "Mars": 8, "Mercury": 12,
+            "Jupiter": 10, "Venus": 1, "Saturn": 2,
+            "Rahu": 12, "Ketu": 6,
+        }, dashas=_mk_dashas())
+
+    def test_moon_karaka_floor_always_survives_step1(self):
+        """Moon must ALWAYS appear in STEP1 survivors (movement karaka),
+        even when it does not lord or occupy a travel house."""
+        # Aries lagna: Moon in 5H (not 3/9/12, not lord of any travel
+        # house — Moon lords Cancer, which is 4H from Aries lagna, NOT
+        # a travel house). Pre-fix it would be filtered out.
+        k = _mk_kundli("Aries", {
+            "Sun": 5, "Moon": 5, "Mars": 1, "Mercury": 5,
+            "Jupiter": 9, "Venus": 4, "Saturn": 7,
+            "Rahu": 12, "Ketu": 6,
+        })
+        d1_map = _step1_d1_filter(k, lagna_si=_SIGN_IDX["Aries"])
+        self.assertIn("Moon", d1_map)
+        moon = d1_map["Moon"]
+        self.assertTrue(moon["in_filter"],
+            "Moon must always survive STEP1 (karaka-floor)")
+        self.assertGreater(moon.get("d1", 0), 0,
+            "Moon karaka-floor entry must carry non-zero d1 score")
+        # Karaka-floor link tag must be present
+        self.assertTrue(
+            any("karaka" in (lnk or "").lower() for lnk in moon.get("links", [])),
+            "Moon must carry a karaka link tag")
+
+    def test_kp_dasha_signifies_travel_helper(self):
+        """Helper unions pl + sl + sb_houses + ss_houses and counts
+        intersection with target_houses [3,9,12]."""
+        from event_timing.travel.travel_engine_v1 import (
+            _kp_dasha_signifies_travel,
+        )
+        kp_sig = {"significations": {
+            "Moon": {
+                "pl": [9],
+                "sl": [12],
+                "sb_houses": [9, 1],
+                "ss_houses": [12, 4],
+            },
+            "Saturn": {
+                "pl": [10],
+                "sl": [10],
+                "sb_houses": [11],
+                "ss_houses": [2],
+            },
+        }}
+        moon_out = _kp_dasha_signifies_travel(kp_sig, "Moon")
+        self.assertEqual(sorted(set(moon_out["hits"])), [9, 12])
+        self.assertGreaterEqual(moon_out["score"], 2)
+        sat_out = _kp_dasha_signifies_travel(kp_sig, "Saturn")
+        self.assertEqual(sat_out["hits"], [])
+        self.assertEqual(sat_out["score"], 0)
+        absent = _kp_dasha_signifies_travel(kp_sig, "Mars")
+        self.assertEqual(absent["hits"], [])
+        self.assertEqual(absent["score"], 0)
+
+    def test_kp_dasha_helper_supports_list_shape(self):
+        """Architect-followup: legacy list-shape KP significations
+        (flat list of house ints) must NOT silently score 0."""
+        from event_timing.travel.travel_engine_v1 import _kp_dasha_signifies_travel
+        kp_list = {"significations": {"Mercury": [9, 12, 3, 4, 5]}}
+        r = _kp_dasha_signifies_travel(kp_list, "Mercury")
+        self.assertEqual(r["hits"], [3, 9, 12])
+        self.assertEqual(r["score"], 3)
+        self.assertTrue(any("flat=" in lay for lay in r["layers"]))
+
+    def test_past_windows_cap_raised_to_twelve(self):
+        """past_windows length must be ≤ 12 (was [:3], lifted to [:12]
+        in Phase 2.5.11.16 with MD-diversity cap of 4 per MD)."""
+        result = compute_travel_window(self._kundli(), intel={}, kp={},
+                                         birth={"dob": "1992-11-26"})
+        past = result.get("past_windows") or []
+        self.assertLessEqual(len(past), 12,
+            "past_windows must be capped at 12 (Phase 2.5.11.16)")
+
+    def test_past_windows_md_diversity_cap(self):
+        """No single MD lord may occupy more than 4 past_windows slots."""
+        result = compute_travel_window(self._kundli(), intel={}, kp={},
+                                         birth={"dob": "1992-11-26"})
+        past = result.get("past_windows") or []
+        from collections import Counter
+        md_counts = Counter(w.get("md") for w in past)
+        for md, n in md_counts.items():
+            self.assertLessEqual(n, 4,
+                f"MD {md} has {n} past_windows slots (cap is 4)")
+
+    def test_kp_boost_field_present_on_windows(self):
+        """Every past/next window must carry kp_boost + kp_hits fields
+        (default 0.0 / [] when no KP data supplied)."""
+        result = compute_travel_window(self._kundli(), intel={}, kp={},
+                                         birth={"dob": "1992-11-26"})
+        for w in (result.get("past_windows") or []):
+            self.assertIn("kp_boost", w)
+            self.assertIn("kp_hits", w)
+        for w in (result.get("next_3_windows") or []):
+            self.assertIn("kp_boost", w)
+            self.assertIn("kp_hits", w)
+
+    def test_kp_boost_promotes_window_when_dasha_lord_signifies(self):
+        """When MD/AD/PD lord's KP chain hits travel houses ≥2 times,
+        window's kp_boost > 0 and score is raised vs no-KP baseline."""
+        kp_with_moon_travel = {
+            "significations": {
+                "Moon": {
+                    "pl": [9], "sl": [12],
+                    "sb_houses": [9], "ss_houses": [12],
+                },
+                "Mercury": {
+                    "pl": [12], "sl": [12],
+                    "sb_houses": [9], "ss_houses": [12],
+                },
+            },
+        }
+        with_kp = compute_travel_window(self._kundli(), intel={},
+                                          kp=kp_with_moon_travel,
+                                          birth={"dob": "1992-11-26"})
+        no_kp = compute_travel_window(self._kundli(), intel={}, kp={},
+                                        birth={"dob": "1992-11-26"})
+        # At least one window in with_kp should carry kp_boost > 0
+        all_w = ((with_kp.get("next_3_windows") or [])
+                 + (with_kp.get("past_windows") or []))
+        boosted = [w for w in all_w
+                   if isinstance(w.get("kp_boost"), (int, float))
+                   and w["kp_boost"] > 0]
+        self.assertTrue(boosted,
+            "with KP travel-significators wired, at least one Moon/Mercury "
+            "dasha window must carry kp_boost > 0")
+        # Sanity: no-KP baseline has all windows at boost == 0
+        all_no = ((no_kp.get("next_3_windows") or [])
+                  + (no_kp.get("past_windows") or []))
+        self.assertTrue(all(w.get("kp_boost", 0) == 0 for w in all_no))
+
+    def test_step6_dasha_lord_transit_field_present(self):
+        """STEP 6 transits dict must carry `dasha_lord_transits` list
+        (may be empty if no current dasha lord transits 3/9/12 today)."""
+        result = compute_travel_window(self._kundli(), intel={}, kp={},
+                                         birth={"dob": "1992-11-26"})
+        transits = result.get("transits") or {}
+        self.assertIn("dasha_lord_transits", transits,
+            "STEP 6 must always emit dasha_lord_transits key")
+        self.assertIsInstance(transits["dasha_lord_transits"], list)
+
+    def test_engine_arch_label_updated(self):
+        """engine_arch should reflect the new KP-GATE step."""
+        result = compute_travel_window(self._kundli(), intel={}, kp={},
+                                         birth={"dob": "1992-11-26"})
+        self.assertIn("KP-GATE", result.get("engine_arch", ""))
+
+
 if __name__ == "__main__":
     unittest.main()

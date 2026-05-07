@@ -688,18 +688,32 @@ export default function RelationshipScreen() {
                 onBlocked={() => {
                   const missingSelf    = !primaryProfile?.kundli;
                   const missingPartner = !selectedP2 || !selectedP2.kundli;
-                  const msg =
-                    missingSelf && missingPartner
-                      ? t.rl_kundliReqBoth
-                    : missingSelf
-                      ? t.rl_kundliReqSelf
-                    : !selectedP2
-                      ? t.rl_kundliReqSelectFirst
-                      : t.rl_kundliReqPartnerMissing;
-                  Alert.alert(t.rl_kundliReqTitle, msg, [
-                    { text: t.rl_kundliReqCancel, style: "cancel" },
-                    { text: t.rl_kundliReqAddBtn, onPress: () => router.push("/profile-edit" as any) },
-                  ]);
+                  // ─── In-app routing (replaces Alert.alert which silently
+                  // no-ops in react-native-web / Expo browser preview).
+                  // 1) Self kundli missing → straight to profile-edit.
+                  // 2) Partner not yet picked but saved partners exist →
+                  //    open the picker modal already on this screen.
+                  // 3) Partner missing entirely (or picked but no kundli) →
+                  //    profile-edit with relation=partner pre-fill.
+                  if (missingSelf) {
+                    router.push("/profile-edit" as any);
+                    return;
+                  }
+                  if (!selectedP2 && otherProfiles.length > 0) {
+                    setPickerOpen(true);
+                    return;
+                  }
+                  if (missingPartner) {
+                    router.push("/profile-edit?relation=partner" as any);
+                    return;
+                  }
+                  // Native-only fallback alert (web no-ops silently).
+                  if (Platform.OS !== "web") {
+                    Alert.alert(t.rl_kundliReqTitle, t.rl_kundliReqPartnerMissing, [
+                      { text: t.rl_kundliReqCancel, style: "cancel" },
+                      { text: t.rl_kundliReqAddBtn, onPress: () => router.push("/profile-edit" as any) },
+                    ]);
+                  }
                 }}
               />
             );

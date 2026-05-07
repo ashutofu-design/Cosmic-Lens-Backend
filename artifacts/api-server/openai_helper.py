@@ -3158,31 +3158,74 @@ def _static_needs_current_dasha(question: str) -> bool:
 #   2) One plain-language astrological reason (1 planet citation OK)
 #   3) Future outlook / measured timing (no fabricated dates)
 _SENSITIVE_STATIC_RE = _re_dasha_gate.compile(
-    r"\b("
+    r"("
     # Marriage denial / late / never
-    r"shaadi\s+(?:late|nahi|kab\s*tak)|late\s+marriage|"
-    r"marriage\s+(?:denial|nahi)|never\s+marry|"
-    r"shaadi\s+hi\s+nahi|akela|akeli|alone\s+forever|single\s+forever|"
+    r"\bshaadi\s+(?:late|nahi|kab\s*tak)\b|\blate\s+marriage\b|"
+    r"\bmarriage\s+(?:denial|nahi)\b|\bnever\s+marry\b|"
+    r"\bshaadi\s+hi\s+nahi\b|\bakela\b|\bakeli\b|\balone\s+forever\b|\bsingle\s+forever\b|"
     # Divorce / separation
-    r"divorce|talaq|separation|alag\s*ho|alag\s+rahenge|"
-    r"toot(?:\s*jaye(?:gi|ga))?|tut\s+jay|"
+    r"\bdivorce\b|\btalaq\b|\bseparation\b|\balag\s*ho\b|\balag\s+rahenge\b|"
+    r"\btoot(?:\s*jaye(?:gi|ga))?\b|\btut\s+jay\b|"
     # Partner cheat / betrayal / loyalty
-    r"cheat|dhokha|dhoka|beimani|betray|wafa|loyal\s+rahega|"
-    r"affair|extra[-\s]?marital|2nd\s+woman|2nd\s+man|"
+    r"\bcheat\b|\bdhokha\b|\bdhoka\b|\bbeimani\b|\bbetray\b|\bwafa\b|\bloyal\s+rahega\b|"
+    r"\baffair\b|\bextra[-\s]?marital\b|\b2nd\s+woman\b|\b2nd\s+man\b|"
     # Child / fertility
-    r"bachch?e?\s+(?:ho|nahi|kab|honge|hogi)|child(?:ren)?\s+(?:will|ho)|"
-    r"baby\s+(?:hogi|hoga|honge|kab|nahi)|"
-    r"infertil|conceive|pregnan|santan|aulad|"
+    r"\bbachch?e?\s+(?:ho|nahi|kab|honge|hogi)\b|\bchild(?:ren)?\s+(?:will|ho)\b|"
+    r"\bbaby\s+(?:hogi|hoga|honge|kab|nahi)\b|"
+    r"\binfertil|\bconceive\b|\bpregnan|\bsantan\b|\baulad\b|"
     # Money / debt stability
-    r"paisa\s+kab\s+stable|paisa\s+kab\s+aayega|money\s+stable|"
-    r"financial\s+stability|debt\s+kab|loan\s+kab|"
-    r"karz\s+(?:utre|kab)|garib(?:i)?\s+kab|"
-    # Health / longevity (heavy)
-    r"kab\s+thik|cancer\s+hoga|serious\s+illness|major\s+disease|"
-    r"life\s+span|umar\s+kitni|kitne\s+saal\s+jeeunga"
-    r")\b",
+    r"\bpaisa\s+kab\s+stable\b|\bpaisa\s+kab\s+aayega\b|\bmoney\s+stable\b|"
+    r"\bfinancial\s+stability\b|\bdebt\s+kab\b|\bloan\s+kab\b|"
+    r"\bkarz\s+(?:utre|kab)\b|\bgarib(?:i)?\s+kab\b|"
+    # Health / longevity (heavy, self)
+    r"\bkab\s+thik\b|\bcancer\s+hoga\b|\bserious\s+illness\b|\bmajor\s+disease\b|"
+    r"\blife\s+span\b|\bumar\s+kitni\b|\bkitne\s+saal\s+jeeunga\b|"
+    # ── Phase 2.5.11.4 additions ──
+    # Parent / family member illness (high-anxiety topic — ALWAYS 3-layer)
+    # Allow up to 40 chars (any filler words like "bohut", "ko abhi", etc.)
+    # between the subject and the illness keyword in EITHER direction.
+    r"\b(papa|mummy|maa\b|mom|dad|father|mother|parent|bhai\b|behen|sister|"
+    r"brother|husband|wife|biwi|partner|family|ghar\s+me)\b.{0,40}?\b"
+    r"(beemar|bimar|sick|illness|hospital|cancer|operation|surgery|"
+    r"heart\s+attack|stroke|paralysis|tumor|kidney|liver|chinta|"
+    r"admit|icu|coma|treatment|medicine|tablet)\b|"
+    # Reverse direction: "beemar hai mere papa"
+    r"\b(beemar|bimar|hospital|cancer|surgery|operation|admit|icu|tumor)\b"
+    r".{0,40}?\b"
+    r"(papa|mummy|maa\b|mom|dad|father|mother|husband|wife|bhai\b|behen)\b|"
+    # Anxiety / depression / panic / mental health crises
+    r"\banxiety\s+attack|\bpanic\s+attack|\bsuicid|\bself[-\s]?harm|"
+    r"\bdepress(?:ed|ion)|\bbahut\s+udaas|\bsab\s+kuch\s+ulta|"
+    r"\bsone\s+nahi|\bneend\s+nahi|\bmind\s+pe\s+control\s+nahi|"
+    r"\bbreakdown|\bmental(?:ly)?\s+(?:tired|exhaust|broken)|"
+    # Addiction / abuse situations
+    r"\balcohol(?:ic)?|\bsharab|\bdrug|\bnasha|\babuse|\bgambling|"
+    # Job loss / career crisis
+    r"\bjob\s+chali\s+gayi|\bnokri\s+gayi|\bfired|\blaid\s+off|"
+    r"\bberozgar|\bunemploy"
+    r")",
     _re_dasha_gate.IGNORECASE,
 )
+
+
+# ── Long-story detector (Phase 2.5.11.4) ─────────────────────────────
+# Stories like "2 saal se X chal raha hai..." or "pichhle 6 mahine se..."
+# deserve at least TIER-2 depth (35-45w) instead of TIER-1 brevity. The
+# user has invested effort in narration; a 1-line reply feels dismissive.
+_LONG_STORY_RE = _re_dasha_gate.compile(
+    r"\b(\d+\s*(?:saal|mahine|month|year|years?)\s+(?:se|pehle|baad|tak)|"
+    r"pichhle\s+\d|pichle\s+\d|last\s+\d+\s+(?:month|year)|"
+    r"har\s+(?:mahine|hafte|din)|baar\s+baar|repeat\s+ho)\b",
+    _re_dasha_gate.IGNORECASE,
+)
+
+
+def _is_long_story_q(question: str) -> bool:
+    """True if the user has narrated a multi-period story (deserves
+    TIER-2 minimum depth, not TIER-1 brevity)."""
+    if not isinstance(question, str): return False
+    if len(question.split()) < 12: return False
+    return bool(_LONG_STORY_RE.search(question))
 
 
 def _is_sensitive_static_q(question: str) -> bool:
@@ -3440,9 +3483,14 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     is_timing = (qtype == "TIMING")
     static_dasha_hint = (not is_timing) and _static_needs_current_dasha(question)
     is_sensitive = (not is_timing) and _is_sensitive_static_q(question)
+    is_long_story = (not is_timing) and (not is_sensitive) and _is_long_story_q(question)
     # Sensitive Qs ALSO need current dasha so the LLM has a real reason
     # to cite in layer-2 (astrological reason). Auto-promote.
     if is_sensitive:
+        static_dasha_hint = True
+    # Long-story Qs (user invested narration) deserve current dasha
+    # context too so the answer can reference the active phase.
+    if is_long_story:
         static_dasha_hint = True
     chart_text = _raw_compact_chart(kundli, include_dasha=is_timing,
                                     static_dasha_hint=static_dasha_hint)
@@ -3576,7 +3624,40 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         "sentence.\n"
         "TONE: like a wise, experienced astrologer talking gently to "
         "a worried friend. Calm, supportive, NEVER alarmist.\n"
+        "🚫 ABSOLUTE HARD CAP: You may name AT MOST ONE planet in the "
+        "entire answer. If you want to mention Saturn, do NOT also "
+        "mention Venus/Moon/Jupiter/Mars/Rahu/Mercury/Sun/Ketu. ONE "
+        "planet only — no exceptions. Violating this breaks the "
+        "answer.\n"
+        "🛟 SAFETY-NET (mandatory for these triggers): If the Q is "
+        "about anxiety/panic/depression/suicidal/self-harm OR a family "
+        "member's serious illness (cancer/surgery/hospital/heart-attack) "
+        "OR addiction/abuse — your answer MUST include one short "
+        "sentence pointing to professional help (e.g. 'agar 2+ weeks "
+        "se feel ho raha hai to mental-health professional se baat "
+        "karo' or 'doctor follow-up skip mat karo'). NEVER replace "
+        "professional help with astrology.\n"
     ) if is_sensitive else ""
+
+    # ── Long-story depth rule (Phase 2.5.11.4) ────────────────────────
+    # When the user has narrated a multi-period story (e.g. "5 saal se
+    # X chal raha hai", "pichhle 6 mahine se Y", "har mahine Z aata
+    # hai"), a 1-line TIER-1 answer feels dismissive of their effort.
+    # Force a TIER-2 minimum (35-45w) with WHY-pattern + outlook.
+    long_story_rule = (
+        "\n\n=== LONG-STORY QUESTION RULE (user has narrated a story) ===\n"
+        "User has invested effort describing a multi-period situation. "
+        "A 1-line answer here feels DISMISSIVE.\n"
+        "OVERRIDE TIER-1 brevity. Write 35-50 words structured as:\n"
+        "  • Acknowledge the pattern they described (1 sentence — show "
+        "you actually read the story).\n"
+        "  • WHY this pattern keeps repeating (1 plain-language reason "
+        "from chart — NO planet names needed unless natural).\n"
+        "  • What changes / when shift comes / one actionable next step.\n"
+        "End with `👉 Final:` line.\n"
+        "TONE: like a wise friend who actually listened, not a search "
+        "engine. NEVER reply with just 'haan/nahi' to a long story.\n"
+    ) if is_long_story else ""
     if is_kp:
         chart_label += " + KP CUSPAL SUB-LORD"
     if is_marriage_engine:
@@ -3947,7 +4028,7 @@ HARD RULES (apply to every answer)
 ═══════════════════════════════════════════════════════════════════
 USER'S BIRTH CHART
 ═══════════════════════════════════════════════════════════════════
-{chart_text}{kp_reading_rule}{marriage_reading_rule}{sensitive_depth_rule}"""
+{chart_text}{kp_reading_rule}{marriage_reading_rule}{sensitive_depth_rule}{long_story_rule}"""
     model = os.environ.get("RAW_PASSTHROUGH_MODEL",
                             os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"))
     try:

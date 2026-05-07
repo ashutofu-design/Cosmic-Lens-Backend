@@ -1534,6 +1534,69 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             except Exception:
                 pass
 
+        # ── Finance: FINANCE-TIMING-V1 path (mirror of health v1) ────
+        # Computes the 9-step finance/wealth timing engine and emits
+        # a verdict + current-window + top-3 stress-window line.
+        # Stashes full result on a thread-local so the finance remedy
+        # block (money topic) and any future post-injector can read it.
+        # Falls back silently if the engine raises.
+        finance_line = None
+        try:
+            from event_timing.finance.finance_engine_v1 import (  # type: ignore
+                compute_finance_window,
+            )
+            kp_for_finance: dict = {}
+            try:
+                kp_for_finance = (kundli.get("kp")
+                                   if isinstance(kundli, dict) else {}) or {}
+            except Exception:
+                kp_for_finance = {}
+            f = compute_finance_window(kundli, intel, kp_for_finance, birth) or {}
+            f_verdict = f.get("verdict") or "—"
+            f_band = f.get("band") or "—"
+            f_tier = f.get("recommendation_tier") or "—"
+            f_cw = f.get("current_window") or {}
+            f_cw_str = ""
+            if isinstance(f_cw, dict) and f_cw.get("md"):
+                f_cw_str = (f" | now: {f_cw.get('md')}-{f_cw.get('ad')}-"
+                             f"{f_cw.get('pd')}/{f_cw.get('severity','?')}")
+            f_risk_str = ""
+            if f.get("risk_flags"):
+                f_risk_str = f" | risk: {','.join(f['risk_flags'][:3])}"
+            finance_line = (
+                f"   • Finance    verdict: {f_verdict}/{f_band}  "
+                f"tier: {f_tier}{f_cw_str}{f_risk_str}"
+            )
+            top3_f = f.get("next_3_windows") or []
+            if isinstance(top3_f, list) and top3_f:
+                _trace_f = []
+                for i, w in enumerate(top3_f[:3], 1):
+                    if not isinstance(w, dict):
+                        continue
+                    ws = w.get("window") or "—"
+                    sc = w.get("score")
+                    sev = w.get("severity") or "—"
+                    sc_str = (f" (score: {sc:.1f}, sev: {sev})"
+                              if isinstance(sc, (int, float))
+                              else f" ({sev})")
+                    _trace_f.append(f"     trace {i}: {ws}{sc_str}")
+                if _trace_f:
+                    finance_line += "\n" + "\n".join(_trace_f)
+            try:
+                _record_phase("phase-D finance-timing-v1", "ok")
+            except Exception:
+                pass
+        except Exception as _f_exc:  # noqa: BLE001
+            print(f"[locked_facts] finance-timing-v1 failed: {_f_exc}")
+            finance_line = (
+                "   • Finance    verdict: — (engine unavailable)"
+            )
+            try:
+                _record_phase("phase-D finance-timing-v1", "failed",
+                                str(_f_exc))
+            except Exception:
+                pass
+
         # ── REMEDIES sub-blocks (Phase 2.2, May 6 2026) ─────────────
         # Standalone hybrid Remedy Engine v1.0 (3-tier: practical →
         # ayurvedic → vedic). Emits parallel "▸ <TOPIC> REMEDIES"
@@ -1551,6 +1614,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
         health_remedies_block   = ""
         marriage_remedies_block = ""
         career_remedies_block   = ""
+        finance_remedies_block  = ""
         try:
             from remedy import (  # type: ignore
                 get_remedies as _get_remedies,
@@ -1616,6 +1680,23 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             except Exception as _c_rem_exc:  # noqa: BLE001
                 print(f"[locked_facts] career remedies block failed: {_c_rem_exc}")
 
+            # ── FINANCE / MONEY (Phase 2.3, May 7 2026) ────────────
+            # Sourced from finance engine's thread-local result.
+            # Engine internally delegates to remedy.get_remedies(
+            # topic="money") with severity already mapped to
+            # watchful/supportive/celebratory/consult, so we just
+            # render the pre-built remedies dict.
+            try:
+                from event_timing.finance.finance_engine_v1 import (  # type: ignore
+                    get_last_finance_result,
+                )
+                _fres = get_last_finance_result() or {}
+                _frem = _fres.get("remedies") or {}
+                if _frem:
+                    finance_remedies_block = _render_remedies(_frem) or ""
+            except Exception as _f_rem_exc:  # noqa: BLE001
+                print(f"[locked_facts] finance remedies block failed: {_f_rem_exc}")
+
         except Exception as _rem_exc:  # noqa: BLE001
             print(f"[locked_facts] remedy engine import failed: {_rem_exc}")
 
@@ -1624,6 +1705,8 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             _t_lines.append(marriage_line)
         if health_line:
             _t_lines.append(health_line)
+        if finance_line:
+            _t_lines.append(finance_line)
         for topic, r in _ks.items():
             if r and r.get("available"):
                 _t_lines.append(
@@ -1643,6 +1726,8 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
             _t_lines.append(marriage_remedies_block)
         if career_remedies_block:
             _t_lines.append(career_remedies_block)
+        if finance_remedies_block:
+            _t_lines.append(finance_remedies_block)
         timing_str = "\n".join(_t_lines)
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] timing_engine failed: {exc}")

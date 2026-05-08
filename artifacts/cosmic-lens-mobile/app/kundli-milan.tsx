@@ -2126,6 +2126,19 @@ export default function KundliMilanScreen(){
               {/* Pro: Full 12-section report */}
               {isPro&&g&&<ProResultReport result={result} g={g} C={C}/>}
 
+              {/* Pro: Download Full PDF CTA — visible AFTER result so user can
+                  re-download even at 36/36 compatibility. (Phase 2.5.11.24-fix2) */}
+              {isPro&&(
+                <View style={{marginTop:14,marginBottom:6}}>
+                  <ShineButton
+                    colors={["#6366F1","#8B5CF6","#a855f7"]}
+                    disabled={!canCalculate||pdfLoading}
+                    loading={pdfLoading}
+                    text={pdfLoading?"PDF generate ho raha hai…":(t.km2_unlockFullAnal||"Download Full PDF Report")}
+                    onPress={confirmAndDownloadProPdf}/>
+                </View>
+              )}
+
               {/* Recalculate */}
               <Pressable onPress={()=>{setResult(null);Haptics.selectionAsync();}}
                 style={[ms.recalcBtn,{borderColor:C.border,backgroundColor:C.bgCard}]}>
@@ -2559,6 +2572,12 @@ export default function KundliMilanScreen(){
                           });
                         }
                       } catch {/* ignore */}
+                      // Phase 2.5.11.24-fix2: after the share/save dialog
+                      // dismisses, close the success modal and jump straight
+                      // to My Reports so user immediately sees the saved PDF
+                      // in their library. (Previously stayed on the modal.)
+                      setPdfDoneVisible(false);
+                      try { router.push("/my-reports"); } catch {}
                     }}
                     style={({ pressed }) => [cd.changeBtn, { backgroundColor: C.isDark ? "rgba(255,255,255,0.05)" : "#F3F4F6", borderColor: C.isDark ? "rgba(255,255,255,0.12)" : "#E5E7EB", opacity: pressed ? 0.7 : 1 }]}
                   >

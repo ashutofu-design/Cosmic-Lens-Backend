@@ -816,7 +816,6 @@ export default function ProfileEditScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
         </KeyboardAvoidingView>
 
         {/* FM picker modals — MUST be inside the sheet Modal so they present on top on iOS */}

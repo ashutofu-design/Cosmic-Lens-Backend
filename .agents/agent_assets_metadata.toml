@@ -539,16 +539,16 @@ title = "Cosmic Lens — Expo Go QR (fresh tunnel, notifications-fix applied)"
 id = "b_lFRTjSN4VlUrM61JH_j"
 uri = "file://tmp_pdfs/km_en.pdf"
 type = "pdf"
-title = "Kundli Milan — Vikram & Sanya (English, 23.5/36)"
+title = "Kundli Milan — English (Vikram & Sanya)"
 
 [[outputs]]
 id = "5ZfYnwZGvWwnemxBIeBc9"
 uri = "file://tmp_pdfs/km_hi.pdf"
 type = "pdf"
-title = "Kundli Milan — Arjun & Meera (हिन्दी, 24/36)"
+title = "Kundli Milan — Hindi Devanagari (Arjun & Meera)"
 
 [[outputs]]
 id = "VJ6ItF4heWcwufuhyX6xt"
 uri = "file://tmp_pdfs/km_hn.pdf"
 type = "pdf"
-title = "Kundli Milan — Rohit & Anjali (Hinglish, 9/36)"
+title = "Kundli Milan — Hinglish (Rohit & Anjali)"

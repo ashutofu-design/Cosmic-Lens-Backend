@@ -67,29 +67,56 @@ _DEVA_BOLD: str | None = None
 
 
 def _find_devanagari_fonts() -> tuple[str, str] | None:
-    candidates = [
-        "/nix/store/share/fonts/truetype/noto",
+    """Locate a registerable (regular, bold) pair of Devanagari TTFs.
+
+    We try `glob.glob('/nix/store/*noto-fonts*/share/fonts/truetype/noto')`
+    rather than `os.listdir('/nix/store')` because the nix store can hold
+    tens of thousands of entries and `listdir` blocks for many seconds.
+    Glob's wildcard match completes in milliseconds.
+    """
+    # /nix/store has tens of thousands of entries; glob with a wildcard
+    # scans them all (slow). Use scandir with early break — stop at the
+    # first noto-fonts-extra and the first noto-fonts hit.
+    nix_extra: list[str] = []
+    nix_plain: list[str] = []
+    try:
+        with os.scandir("/nix/store") as it:
+            for e in it:
+                n = e.name
+                if "noto-fonts-extra" in n and not nix_extra:
+                    nix_extra.append(
+                        f"{e.path}/share/fonts/truetype/noto"
+                    )
+                elif "noto-fonts" in n and not nix_plain and "extra" not in n:
+                    nix_plain.append(
+                        f"{e.path}/share/fonts/truetype/noto"
+                    )
+                # Break only after `noto-fonts-extra` is found — that
+                # family is the one that actually ships the Devanagari
+                # TTFs. Plain `noto-fonts` rarely contains them on
+                # NixOS; treating it as "good enough" caused Helvetica
+                # fallback (■■■ tofu boxes) when scandir order put
+                # plain before extra.
+                if nix_extra:
+                    break
+    except Exception:
+        pass
+    candidates = nix_extra + nix_plain + [
         "/usr/share/fonts/truetype/noto",
         "/usr/share/fonts/noto",
     ]
-    try:
-        # Reuse the same nix-store discovery trick as numerology_pdf.py
-        import subprocess
-        for line in subprocess.check_output(
-            ["ls", "/nix/store"], text=True, stderr=subprocess.DEVNULL
-        ).splitlines():
-            if "noto-fonts-extra" in line:
-                candidates.insert(
-                    0, f"/nix/store/{line}/share/fonts/truetype/noto"
-                )
-                break
-    except Exception:
-        pass
+    # Try the most-common filename pairs in priority order.
+    name_pairs = [
+        ("NotoSansDevanagari-Medium.ttf",  "NotoSansDevanagari-ExtraBold.ttf"),
+        ("NotoSansDevanagari-Regular.ttf", "NotoSansDevanagari-Bold.ttf"),
+        ("NotoSansDevanagari-Regular.ttf", "NotoSansDevanagari-ExtraBold.ttf"),
+    ]
     for d in candidates:
-        reg  = f"{d}/NotoSansDevanagari-Medium.ttf"
-        bold = f"{d}/NotoSansDevanagari-ExtraBold.ttf"
-        if os.path.exists(reg) and os.path.exists(bold):
-            return reg, bold
+        for reg_name, bold_name in name_pairs:
+            reg  = f"{d}/{reg_name}"
+            bold = f"{d}/{bold_name}"
+            if os.path.exists(reg) and os.path.exists(bold):
+                return reg, bold
     return None
 
 
@@ -221,73 +248,96 @@ def _styles(lang: str = "en") -> dict[str, ParagraphStyle]:
 
 
 # ── Builders ────────────────────────────────────────────────────────────
-def _cover(s: dict[str, ParagraphStyle], p1: dict, p2: dict,
-           total: float, mx: int, grade: dict) -> list[Any]:
-    out: list[Any] = [Spacer(1, 30 * mm)]
+def _header_block(s: dict[str, ParagraphStyle], p1: dict, p2: dict,
+                  total: float, mx: int, grade: dict,
+                  lang: str = "en") -> list[Any]:
+    """Compact header at top of page 1.
 
-    # Title bar
+    No dedicated cover page — content flows continuously below this so
+    user just scrolls top-to-bottom. Header carries: title strip + couple
+    names + score + grade label + date.
+    """
+    out: list[Any] = []
+    H_REG, H_BOLD = _font_pair(lang)  # localized fonts for partner names
+
+    # Slim title strip
     title = Table(
-        [[Paragraph("✦  KUNDLI  MILAN  ✦", ParagraphStyle(
-            "ct", fontName="Helvetica-Bold", fontSize=26, leading=32,
-            textColor=BRAND_PURPLE, alignment=TA_CENTER))],
-         [Paragraph("Vedic Compatibility Report", ParagraphStyle(
-            "cs", fontName="Helvetica", fontSize=12, leading=15,
-            textColor=TEXT_MID, alignment=TA_CENTER))]],
+        [[Paragraph("✦  KUNDLI MILAN  ✦", ParagraphStyle(
+            "ct", fontName=H_BOLD, fontSize=18, leading=22,
+            textColor=BRAND_PURPLE, alignment=TA_CENTER))]],
         colWidths=[180 * mm],
     )
     title.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 1.2, BRAND_GOLD),
-        ("LINEABOVE", (0, 0), (-1, 0), 4, BRAND_PURPLE),
-        ("LINEBELOW", (0, -1), (-1, -1), 4, BRAND_PURPLE),
+        ("BOX",        (0, 0), (-1, -1), 1.0, BRAND_GOLD),
+        ("LINEABOVE",  (0, 0), (-1, 0), 2.5, BRAND_PURPLE),
+        ("LINEBELOW",  (0, -1), (-1, -1), 2.5, BRAND_PURPLE),
         ("BACKGROUND", (0, 0), (-1, -1), BG_TINT),
-        ("TOPPADDING", (0, 0), (-1, -1), 12),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
     ]))
     out.append(title)
-    out.append(Spacer(1, 18 * mm))
+    out.append(Spacer(1, 6))
 
-    # Couple names
-    names = Paragraph(
-        f"<b>{_safe(p1.get('name'))}</b>"
-        f"<font color='#94A3B8'>  &nbsp;&  &nbsp;</font>"
-        f"<b>{_safe(p2.get('name'))}</b>",
-        ParagraphStyle(
-            "cn", fontName="Helvetica-Bold", fontSize=20, leading=26,
-            textColor=TEXT_DARK, alignment=TA_CENTER,
-        ),
-    )
-    out.append(names)
-    out.append(Spacer(1, 14 * mm))
-
-    # Big score
-    score_para = Paragraph(
-        f"<b>{_safe(total)}</b>"
-        f"<font color='#94A3B8' size=18> / {_safe(mx)}</font>",
-        s["score_big"],
-    )
-    out.append(score_para)
+    # Couple names + score in a single row (left: names, right: score)
     grade_label = (grade or {}).get("label") or ""
     grade_color = (grade or {}).get("color") or "#7C3AED"
-    if grade_label:
-        gp = Paragraph(
-            f"<b>{_safe(grade_label)}</b>",
-            ParagraphStyle(
-                "gl", fontName="Helvetica-Bold", fontSize=12, leading=16,
-                textColor=colors.HexColor(grade_color),
-                alignment=TA_CENTER, spaceBefore=4,
-            ),
-        )
-        out.append(gp)
-    out.append(Spacer(1, 22 * mm))
 
-    # Date strip
-    ds = datetime.utcnow().strftime("%d %B %Y")
-    out.append(Paragraph(
-        f"Generated on {ds}",
-        ParagraphStyle("dt", fontName="Helvetica", fontSize=9,
-                       textColor=TEXT_SOFT, alignment=TA_CENTER),
-    ))
-    out.append(PageBreak())
+    names_p = Paragraph(
+        f"<b>{_safe(p1.get('name'))}</b>"
+        f"<font color='#94A3B8'>  &nbsp;&amp;  &nbsp;</font>"
+        f"<b>{_safe(p2.get('name'))}</b>",
+        ParagraphStyle(
+            "cn", fontName=H_BOLD, fontSize=16, leading=20,
+            textColor=TEXT_DARK, alignment=TA_LEFT,
+        ),
+    )
+    sub_p = Paragraph(
+        f"<font color='#94A3B8'>Vedic Compatibility Report  ·  "
+        f"{datetime.utcnow().strftime('%d %B %Y')}</font>",
+        ParagraphStyle("sub", fontName=H_REG, fontSize=9,
+                       textColor=TEXT_MID, alignment=TA_LEFT),
+    )
+    left_cell = Table([[names_p], [sub_p]], colWidths=[110 * mm])
+    left_cell.setStyle(TableStyle([
+        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING",   (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 2),
+    ]))
+
+    score_p = Paragraph(
+        f"<b>{_safe(total)}</b>"
+        f"<font color='#94A3B8' size=12> / {_safe(mx)}</font>",
+        ParagraphStyle("scn", fontName="Helvetica-Bold", fontSize=22,
+                       leading=26, textColor=BRAND_PURPLE,
+                       alignment=TA_CENTER),
+    )
+    grade_p = Paragraph(
+        f"<b>{_safe(grade_label)}</b>" if grade_label else "",
+        ParagraphStyle("gln", fontName="Helvetica-Bold", fontSize=9,
+                       leading=12,
+                       textColor=colors.HexColor(grade_color),
+                       alignment=TA_CENTER),
+    )
+    right_cell = Table([[score_p], [grade_p]], colWidths=[60 * mm])
+    right_cell.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (-1, -1), BG_TINT),
+        ("BOX",          (0, 0), (-1, -1), 0.6, BRAND_GOLD),
+        ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING",   (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 4),
+    ]))
+
+    row = Table([[left_cell, right_cell]],
+                colWidths=[115 * mm, 65 * mm])
+    row.setStyle(TableStyle([
+        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    out.append(row)
+    out.append(Spacer(1, 10))
     return out
 
 
@@ -532,10 +582,11 @@ def render_milan_pdf(payload: dict, lang: str = "en") -> bytes:
     )
     story: list[Any] = []
 
-    # Page 1 — cover
-    story.extend(_cover(s, p1, p2, total, mx, grade))
+    # Compact header at top of page 1 — no dedicated cover page so
+    # everything flows top-to-bottom continuously.
+    story.extend(_header_block(s, p1, p2, total, mx, grade, lang=lang))
 
-    # Page 2+ — partners + Ashtakoot table
+    # Partners + Ashtakoot table flow right below the header.
     story.append(Paragraph("Partners", s["h2"]))
     story.append(_partners_row(s, p1, p2))
     story.append(Spacer(1, 8))

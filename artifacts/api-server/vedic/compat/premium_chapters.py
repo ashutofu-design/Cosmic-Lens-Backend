@@ -445,22 +445,38 @@ def _validate_premium(out: Any, milan_facts: dict, chapter_scores: dict) -> tupl
 
     # Hallucinated koot scores: any "X out of Y" or "X / Y" must match a real
     # koot pair, total/max, OR an engine-derived chapter score ("X/10").
+    # Koot pairs + total/max stay STRICT (catches genuine hallucination like "7/7" when
+    # engine emitted "0/7"). Chapter scores allow ±0.5 tolerance because LLMs
+    # naturally cite "7.8/10" when engine emits 7.5 — minor decimal drift is not
+    # hallucination, fabricated koot scores are.
     real_pairs = {(str(milan_facts.get("total", "")), str(milan_facts.get("max", 36)))}
     for k in milan_facts.get("koots", []) or []:
         real_pairs.add((str(k.get("score", "")), str(k.get("max", ""))))
+    chapter_scores_10: list[float] = []
     for c in (chapter_scores or {}).get("chapters", {}).values():
         sc = c.get("score_0_10")
         if sc is not None:
-            # Each chapter score is /10 — accept both "8.7/10" and "8/10" forms
             real_pairs.add((str(sc), "10"))
             try:
-                real_pairs.add((str(int(round(float(sc)))), "10"))
+                fsc = float(sc)
+                chapter_scores_10.append(fsc)
+                real_pairs.add((str(int(round(fsc))), "10"))
             except Exception:
                 pass
     pair_re = re.compile(r"(\d+(?:\.\d+)?)\s*(?:/|out of)\s*(\d+)", re.I)
     for m in pair_re.finditer(full_norm):
-        if (m.group(1), m.group(2)) not in real_pairs:
-            return False, f"hallucinated_pair:{m.group(0)}"
+        num_s, den_s = m.group(1), m.group(2)
+        if (num_s, den_s) in real_pairs:
+            continue
+        # Tolerance only for chapter-style "X/10" pairs.
+        if den_s == "10" and chapter_scores_10:
+            try:
+                num_f = float(num_s)
+                if any(abs(num_f - sc) <= 0.5 for sc in chapter_scores_10):
+                    continue
+            except Exception:
+                pass
+        return False, f"hallucinated_pair:{m.group(0)}"
 
     return True, "ok"
 

@@ -552,3 +552,9 @@ id = "VJ6ItF4heWcwufuhyX6xt"
 uri = "file://tmp_pdfs/km_hn.pdf"
 type = "pdf"
 title = "Cosmic Relationship Blueprint — Hinglish (Rohit & Anjali, 12.5/36)"
+
+[[outputs]]
+id = "AIv829raiRhnKm4V7b5f2"
+uri = "file://exports/Aditya_Ishita_Pro.pdf"
+type = "pdf"
+title = "Pro PDF — Aditya & Ishita (gpt-5-mini live, Hinglish, 24 pages)"

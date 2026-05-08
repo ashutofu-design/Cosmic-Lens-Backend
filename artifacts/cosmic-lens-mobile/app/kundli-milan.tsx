@@ -2557,46 +2557,16 @@ export default function KundliMilanScreen(){
                   </View>
                 </View>
 
-                {/* Action buttons */}
+                {/* Action button — single "View Now" CTA below the
+                    "PDF Downloaded" message (Phase 2.5.11.24-fix3) */}
                 <View style={cd.actions}>
-                  <Pressable
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      // Phase 2.5.11.24-fix2: INSTANT redirect to My Reports
-                      // on Download tap. The PDF is already persisted to the
-                      // device library by confirmAndDownloadProPdf BEFORE
-                      // this modal opens (pdfShareUriRef points to the saved
-                      // file). So we close the modal + navigate first, and
-                      // fire the OS share/save sheet AFTER redirect — sheet
-                      // appears over /my-reports, user dismisses, lands on
-                      // their library with the new PDF visible.
-                      setPdfDoneVisible(false);
-                      try { router.push("/my-reports"); } catch {}
-                      (async () => {
-                        try {
-                          const can = await Sharing.isAvailableAsync();
-                          if (can && pdfShareUriRef.current) {
-                            await Sharing.shareAsync(pdfShareUriRef.current, {
-                              mimeType: "application/pdf",
-                              dialogTitle: pdfFileNameRef.current,
-                              UTI: "com.adobe.pdf",
-                            });
-                          }
-                        } catch {/* ignore */}
-                      })();
-                    }}
-                    style={({ pressed }) => [cd.changeBtn, { backgroundColor: C.isDark ? "rgba(255,255,255,0.05)" : "#F3F4F6", borderColor: C.isDark ? "rgba(255,255,255,0.12)" : "#E5E7EB", opacity: pressed ? 0.7 : 1 }]}
-                  >
-                    <Feather name="download" size={14} color={C.text} />
-                    <Text style={[cd.changeTxt, { color: C.text }]}>Download</Text>
-                  </Pressable>
                   <Pressable
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       setPdfDoneVisible(false);
                       try { router.push("/my-reports"); } catch {}
                     }}
-                    style={({ pressed }) => [cd.continueBtn, { opacity: pressed ? 0.85 : 1 }]}
+                    style={({ pressed }) => [cd.continueBtn, { flex: 1, opacity: pressed ? 0.85 : 1 }]}
                   >
                     <LinearGradient
                       colors={["#8B5CF6", "#EC4899", "#F59E0B"]}
@@ -2604,7 +2574,7 @@ export default function KundliMilanScreen(){
                       style={cd.continueGrad}
                     >
                       <Feather name="eye" size={15} color="#fff" />
-                      <Text style={cd.continueTxt}>View Report</Text>
+                      <Text style={cd.continueTxt}>View Now</Text>
                     </LinearGradient>
                   </Pressable>
                 </View>

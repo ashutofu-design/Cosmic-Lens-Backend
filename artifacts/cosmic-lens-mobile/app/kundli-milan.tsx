@@ -2429,9 +2429,11 @@ export default function KundliMilanScreen(){
               <View style={[cd.card, { backgroundColor: C.isDark ? "#0F0A1F" : "#FFFFFF" }]}>
 
                 {/* Header — swaps from spinning loader to green check
-                    once pdfPct hits 100 (Phase 2.5.11.24-fix4) */}
+                    once backend returns (pdfLoading=false). Decoupled from
+                    pdfPct so listener race conditions can't hide the
+                    success state. (Phase 2.5.11.24-fix5) */}
                 <View style={cd.progHeader}>
-                  {pdfPct >= 100 ? (
+                  {!pdfLoading ? (
                     <LinearGradient
                       colors={["#10B981", "#059669"]}
                       start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
@@ -2460,10 +2462,10 @@ export default function KundliMilanScreen(){
                     </LinearGradient>
                   )}
                   <Text style={[cd.progTitle, { color: C.text }]}>
-                    {pdfPct >= 100 ? "PDF Downloaded!" : "Generating Your Pro Report"}
+                    {!pdfLoading ? "PDF Downloaded!" : "Generating Your Pro Report"}
                   </Text>
                   <Text style={[cd.progSub, { color: C.textDim }]}>
-                    {pdfPct >= 100
+                    {!pdfLoading
                       ? `Aapki Kundli Milan PRO report tayyar hai aur "My Reports" mein safe save ho gayi hai`
                       : pdfStage}
                   </Text>
@@ -2529,11 +2531,10 @@ export default function KundliMilanScreen(){
                   })}
                 </View>
 
-                {/* View Now CTA — appears only when bar reaches 100%
-                    (Phase 2.5.11.24-fix4). Replaces the separate
-                    pdfDoneVisible modal — eliminates iOS modal-stacking
-                    handoff and the perceived "cut at 92%". */}
-                {pdfPct >= 100 && (
+                {/* View Now CTA — appears as soon as backend returns
+                    (pdfLoading=false). Decoupled from pdfPct so listener
+                    race conditions can't hide it. (Phase 2.5.11.24-fix5) */}
+                {!pdfLoading && progressVisible && (
                   <View style={[cd.actions, { marginTop: 14 }]}>
                     <Pressable
                       onPress={() => {

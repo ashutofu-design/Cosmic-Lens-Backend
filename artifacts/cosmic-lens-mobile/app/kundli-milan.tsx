@@ -2560,24 +2560,30 @@ export default function KundliMilanScreen(){
                 {/* Action buttons */}
                 <View style={cd.actions}>
                   <Pressable
-                    onPress={async () => {
+                    onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      try {
-                        const can = await Sharing.isAvailableAsync();
-                        if (can && pdfShareUriRef.current) {
-                          await Sharing.shareAsync(pdfShareUriRef.current, {
-                            mimeType: "application/pdf",
-                            dialogTitle: pdfFileNameRef.current,
-                            UTI: "com.adobe.pdf",
-                          });
-                        }
-                      } catch {/* ignore */}
-                      // Phase 2.5.11.24-fix2: after the share/save dialog
-                      // dismisses, close the success modal and jump straight
-                      // to My Reports so user immediately sees the saved PDF
-                      // in their library. (Previously stayed on the modal.)
+                      // Phase 2.5.11.24-fix2: INSTANT redirect to My Reports
+                      // on Download tap. The PDF is already persisted to the
+                      // device library by confirmAndDownloadProPdf BEFORE
+                      // this modal opens (pdfShareUriRef points to the saved
+                      // file). So we close the modal + navigate first, and
+                      // fire the OS share/save sheet AFTER redirect — sheet
+                      // appears over /my-reports, user dismisses, lands on
+                      // their library with the new PDF visible.
                       setPdfDoneVisible(false);
                       try { router.push("/my-reports"); } catch {}
+                      (async () => {
+                        try {
+                          const can = await Sharing.isAvailableAsync();
+                          if (can && pdfShareUriRef.current) {
+                            await Sharing.shareAsync(pdfShareUriRef.current, {
+                              mimeType: "application/pdf",
+                              dialogTitle: pdfFileNameRef.current,
+                              UTI: "com.adobe.pdf",
+                            });
+                          }
+                        } catch {/* ignore */}
+                      })();
                     }}
                     style={({ pressed }) => [cd.changeBtn, { backgroundColor: C.isDark ? "rgba(255,255,255,0.05)" : "#F3F4F6", borderColor: C.isDark ? "rgba(255,255,255,0.12)" : "#E5E7EB", opacity: pressed ? 0.7 : 1 }]}
                   >

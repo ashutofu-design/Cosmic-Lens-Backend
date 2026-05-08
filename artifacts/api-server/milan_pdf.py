@@ -2468,15 +2468,20 @@ def _blueprint_depth_blocks(s: dict, d9: dict | None,
     ))
 
     # 1) What marriage actually means (7th-lord translated — fix10 corrected).
+    # Phase soul-v5: rewritten in astrologer-notes voice — first-person
+    # observation, lived-practice framing, slightly hesitant. The reader
+    # should feel a human astrologer is talking, not an AI summarising.
     _h(f"What marriage means to {p1n} vs {p2n}")
     p1_mean = _PLANET_MARRIAGE_MEANING.get(p1_7l, _PLANET_MARRIAGE_MEANING["jupiter"])
     p2_mean = _PLANET_MARRIAGE_MEANING.get(p2_7l, _PLANET_MARRIAGE_MEANING["venus"])
     out.append(Paragraph(
-        f"For <b>{_safe(p1n)}</b>, marriage is read as {p1_mean}. "
-        f"For <b>{_safe(p2n)}</b>, marriage is read as {p2_mean}. "
-        f"Both definitions are valid — the friction (and the magic) lives "
-        f"in the small, daily places where these two definitions don't "
-        f"perfectly overlap.",
+        f"Jab main yeh dono kundli saath rakhke padhta hoon, mujhe ek "
+        f"baat sabse pehle dikhti hai — <b>{_safe(p1n)}</b> ke liye "
+        f"shaadi andar se {p1_mean} hai. Aur <b>{_safe(p2n)}</b> ke "
+        f"liye yeh {p2_mean} hai. Dono samajh sahi hain. Maine aksar "
+        f"dekha hai — actual friction (aur actual magic) inhi do "
+        f"definitions ke beech ki chhoti, rozmarra ki jagah me rehti "
+        f"hai, jahan dono perfectly overlap nahi karte.",
         body_st))
 
     # 2) Affection style (lagna-lord translated).
@@ -2485,17 +2490,20 @@ def _blueprint_depth_blocks(s: dict, d9: dict | None,
     p2_aff = _PLANET_AFFECTION.get(p2_lord, _PLANET_AFFECTION["venus"])
     if p1_lord == p2_lord:
         aff_line = (
-            f"Both of you express care in nearly the same shape — "
-            f"{p1_aff}. The risk: this can quietly turn into echo, "
-            f"not exchange. The gift: deep recognition without translation."
+            f"Yeh interesting hai — tum dono pyaar lagbhag ek hi shape "
+            f"me dete ho: {p1_aff}. Meri practice me aise jode aksar "
+            f"chup-chap ek doosre ko deeply samajh lete hain — par "
+            f"khatra yeh hai ki yeh exchange nahi, echo ban jaata hai. "
+            f"Kabhi-kabhi koi alag flavour bhi chahiye hota hai."
         )
     else:
         aff_line = (
-            f"<b>{_safe(p1n)}</b> shows love with {p1_aff}. "
-            f"<b>{_safe(p2n)}</b> shows love with {p2_aff}. "
-            f"Neither is more loving — they are different dialects of the "
-            f"same emotion, and most early arguments here are translation "
-            f"failures, not lack of feeling."
+            f"<b>{_safe(p1n)}</b> pyaar dikhata/dikhati hai {p1_aff} "
+            f"se. <b>{_safe(p2n)}</b> ka tareeka alag hai — {p2_aff}. "
+            f"Aise charts me main hamesha yeh kehta hoon: koi zyada "
+            f"pyaar nahi karta, sirf dono ki emotional language alag "
+            f"hai. Shuru ke kayi jhagde meri experience me sirf "
+            f"translation ki gaadbad hote hain, feeling ki kami nahi."
         )
     out.append(Paragraph(aff_line, body_st))
 
@@ -2506,32 +2514,37 @@ def _blueprint_depth_blocks(s: dict, d9: dict | None,
     if rel_lagna in ("friend", "friendly", "great_friend", "mutual_friend",
                      "mutual", "best_friend"):
         conf_line = (
-            "When friction starts, both of you lean — almost instinctively "
-            "— toward repair within 24-48 hours. The chart shows a "
-            "natural willingness to soften first; the danger is taking "
-            "this for granted and skipping the actual conversation."
+            "Jab jhagda hota hai, tum dono ki natural aadat hoti hai "
+            "repair within 24-48 hours — yeh maine kafi clearly dekha "
+            "is jodi me. Soft ho jaane ki willingness andar baithi hai. "
+            "Ek hi cheez ka dhyan rakhna: isse for-granted mat lena, "
+            "warna asli baat unfinished reh jaayegi."
         )
     elif rel_lagna in ("enemy", "hostile", "great_enemy", "mutual_enemy",
                        "worst_enemy", "bitter_enemy"):
         conf_line = (
-            "When a fight begins, both of you tend to retreat into "
-            "separate emotional rooms and wait for the other to come "
-            "first. The chart calls this the 'cold war' instinct — it is "
-            "the single biggest pattern this marriage has to outgrow."
+            "Yeh thoda honestly bolna padega — jab fight shuru hoti "
+            "hai, tum dono ki instinct hai apne-apne emotional kamre "
+            "me chale jaane ki, aur wait karne ki ki doosra pehle aaye. "
+            "Main isko 'cold war' pattern bolta hoon. Aise charts "
+            "kayi dekhe hain — yahi ek aadat hai jo is shaadi ko "
+            "consciously todni padegi."
         )
     elif rel_lagna in ("own", "swakshetra", "self"):
         conf_line = (
-            "Each of you fights from your own ground — clear, principled, "
-            "rarely apologising for the position itself. Disagreements "
-            "here aren't loud, they are slow. The work is meeting in the "
-            "shared middle, not winning the argument."
+            "Tum dono apni-apni zameen pe khade hoke ladte ho — clear, "
+            "principled, position chhodne wale nahi. Mujhe yeh "
+            "respect-able lagta hai par yeh bhi kehna padega: aise "
+            "jodon ke jhagde loud nahi hote, slow hote hain. Asli kaam "
+            "argument jeetna nahi — beech me milna hai, jo mushkil hai."
         )
     else:
         conf_line = (
-            "Conflict here is not explosive — it tends to move sideways, "
-            "showing up as small withdrawals rather than big arguments. "
-            "The risk: unsaid hurt accumulating quietly. The gift: neither "
-            "of you wounds with words easily."
+            "Conflict yahan loud nahi hota — sideways move karta hai. "
+            "Chhote-chhote silent withdrawals, badi screaming nahi. "
+            "Risk yahi hai ki unsaid hurt chup-chap jamta jaata hai. "
+            "Achchi baat — koi bhi shabdon se aasani se chot nahi "
+            "pahuncha sakta. Yeh kam log realize karte hain."
         )
     out.append(Paragraph(conf_line, body_st))
 
@@ -2539,24 +2552,28 @@ def _blueprint_depth_blocks(s: dict, d9: dict | None,
     _h("The daily emotional rhythm of this bond")
     if avg_m >= 7.0:
         day_line = (
-            "On most ordinary days this marriage will feel calibrated — "
-            "small companionable rituals (chai, late-night silence, "
-            "weekend errands) will quietly do the heavy lifting that "
-            "grand gestures get the credit for."
+            "Aam dinon me yeh shaadi calibrated lagti hai — maine kayi "
+            "aise jodon me yeh notice kiya hai. Subah ki chai, raat ka "
+            "silence, weekend ke errands — chhote rituals chup-chap "
+            "wo heavy-lifting karte hain jiska credit aksar grand "
+            "gestures le jaate hain. Believe me, yeh chhoti baat lagti "
+            "hai par nahi hai."
         )
     elif avg_m >= 4.0:
         day_line = (
-            "On most days, one of you will be the emotional thermostat "
-            "while the other catches up — and the role will quietly "
-            "switch every few weeks. The maturity here lies in noticing "
-            "the switch without scoring it."
+            "Most days me ek tum me se emotional thermostat banega/"
+            "banegi, doosra/doosri catch up karega/karegi — aur yeh "
+            "role har few weeks me chup-chap switch hoga. Maturity "
+            "yahan yeh hai ki switch ko notice karo, score mat karo. "
+            "Mostly aise jodon me yahi pattern dikhta hai mujhe."
         )
     else:
         day_line = (
-            "On many ordinary days you will move in parallel orbits — "
-            "present in the same room, occupied by separate inner worlds. "
-            "This is not coldness; it is the chart asking for conscious, "
-            "named effort to keep the line warm."
+            "Honestly bol raha hoon — kayi din tum dono parallel "
+            "orbits me chaloge: ek hi kamre me, alag-alag andar ke "
+            "duniya me. Yeh coldness nahi hai, yeh chart conscious, "
+            "named effort maang raha hai line ko warm rakhne ke liye. "
+            "Aam taur pe yeh awareness se hi shuru hota hai."
         )
     out.append(Paragraph(day_line, body_st))
 

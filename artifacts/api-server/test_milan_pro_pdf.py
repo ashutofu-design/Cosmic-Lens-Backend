@@ -241,6 +241,68 @@ def test_pro_pdf_blueprint_accepts_engine_native_relation_friendly():
     assert "repair within 24-48 hours" in text
 
 
+def test_pro_pdf_blueprint_depth_uses_astrologer_voice_soul_v5():
+    """Phase 2.5.11.24-soul-v5 regression: the deterministic blueprint
+    depth blocks (which fire whenever the LLM polish doesn't write them)
+    MUST read in human astrologer-notes voice — first-person, hesitant,
+    lived-practice anchored — NOT in AI / audit-report tone. User-flagged:
+    'PDF padhne ke baad real astrologer ne likha lagna chahiye'."""
+    import io, pypdf
+    payload = _milan(); payload["pro_premium"] = _pro()
+    payload["d9_marriage"] = {
+        "p1": {"d9_lagna_lord": "Mars",  "d9_7h_lord": "Saturn",
+               "marriage_maturity_0_10": 6},
+        "p2": {"d9_lagna_lord": "Venus", "d9_7h_lord": "Mercury",
+               "marriage_maturity_0_10": 6},
+        "sync": {"lagna_lord_relation": "friendly",
+                 "seven_lord_relation": "neutral"},
+    }
+    pdf = render_milan_pro_pdf(payload, lang="en")
+    text = "\n".join((p.extract_text() or "")
+                     for p in pypdf.PdfReader(io.BytesIO(pdf)).pages).lower()
+    # Astrologer-voice markers MUST appear at least 3 times across
+    # the 4 deterministic depth blocks (one per block ideally).
+    voice_markers = [
+        "maine",                    # first-person (Hinglish)
+        "meri practice",            # lived-practice anchor
+        "believe me",               # human aside
+        "honestly bol",             # direct astrologer voice
+        "main yeh",                 # first-person stem
+        "kayi aise",                # "many such" — pattern recognition
+        "is jodi me",               # direct address to the couple
+    ]
+    hits = sum(1 for m in voice_markers if m in text)
+    assert hits >= 3, f"Astrologer voice too thin: only {hits} markers found"
+    # AI-tell phrases MUST be absent from deterministic depth prose.
+    for ai_tell in ["The chart shows", "Analysis reveals",
+                    "It is observed that", "Studies show",
+                    "data indicates"]:
+        assert ai_tell not in text, f"AI-tell leaked: {ai_tell!r}"
+
+
+def test_premium_prompt_carries_astrologer_voice_law_soul_v5():
+    """Phase 2.5.11.24-soul-v5 regression: SYSTEM_PROMPT_PREMIUM must
+    carry the new ASTROLOGER VOICE LAW + AI-tell ban list, and the
+    cache version must bump (p6 → p7) so existing polished outputs
+    are invalidated."""
+    from vedic.compat.premium_chapters import (
+        SYSTEM_PROMPT_PREMIUM, _PREMIUM_VERSION,
+    )
+    assert _PREMIUM_VERSION == "p7"
+    assert "ASTROLOGER VOICE LAW" in SYSTEM_PROMPT_PREMIUM
+    assert "25+ years of practice" in SYSTEM_PROMPT_PREMIUM
+    assert "You are NOT an AI" in SYSTEM_PROMPT_PREMIUM
+    # AI-tell ban list must explicitly call out the worst offenders.
+    for tell in ["the chart shows", "analysis reveals",
+                 "it is observed that", "in conclusion",
+                 "to summarise"]:
+        assert tell in SYSTEM_PROMPT_PREMIUM
+    # First-person Hinglish markers must be exemplified for the model.
+    for cue in ["jab maine yeh chart dekha", "meri practice me",
+                "I have seen this pattern many times"]:
+        assert cue in SYSTEM_PROMPT_PREMIUM
+
+
 def test_pro_pdf_chapter_grounding_card_dropped_fix10():
     """Phase 2.5.11.24-fix10 regression: 'Why we say this' card MUST
     be removed from the 7 chapter pages (the chip + REAL-LIFE MOMENT +

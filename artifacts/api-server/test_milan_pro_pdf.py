@@ -1,4 +1,4 @@
-"""Tests for the Phase 2.5.11.24-fix9 19-page Pro PDF renderer.
+"""Tests for the Phase 2.5.11.24-soul-v6 20-page Pro PDF renderer.
 
 Builds on fix8 (visual-density rewrite, 7 chapters consolidated to 1
 dense rich page each). Fix9 adds depth + hierarchy:
@@ -66,28 +66,28 @@ def _count_pages(pdf: bytes) -> int:
     return len(re.findall(rb'/Type\s*/Page(?!s)', pdf))
 
 
-def test_pro_pdf_emits_exactly_19_pages_en():
+def test_pro_pdf_emits_exactly_20_pages_en():
     payload = _milan(); payload["pro_premium"] = _pro()
     pdf = render_milan_pro_pdf(payload, lang="en")
     assert pdf.startswith(b"%PDF-")
-    assert _count_pages(pdf) == 19
+    assert _count_pages(pdf) == 20
 
 
-def test_pro_pdf_emits_exactly_19_pages_with_empty_pro():
+def test_pro_pdf_emits_exactly_20_pages_with_empty_pro():
     payload = _milan(); payload["pro_premium"] = {}
     pdf = render_milan_pro_pdf(payload, lang="en")
-    assert _count_pages(pdf) == 19
+    assert _count_pages(pdf) == 20
 
 
-def test_pro_pdf_emits_exactly_19_pages_hi_devanagari():
+def test_pro_pdf_emits_exactly_20_pages_hi_devanagari():
     payload = _milan("Arjun", "Meera", 26); payload["pro_premium"] = _pro(7.2)
     pdf = render_milan_pro_pdf(payload, lang="hi")
-    assert _count_pages(pdf) == 19
+    assert _count_pages(pdf) == 20
 
 
 def test_pro_pdf_never_raises_on_completely_empty_payload():
     pdf = render_milan_pro_pdf({}, lang="en")
-    assert _count_pages(pdf) == 19
+    assert _count_pages(pdf) == 20
 
 
 def test_pro_pdf_carries_fix8_visual_blocks():
@@ -121,7 +121,7 @@ def test_pro_pdf_unknown_koot_keys_must_not_crash():
         {"key": "baz_unknown", "score": 0, "max": 8},
     ]
     pdf = render_milan_pro_pdf(payload, lang="en")
-    assert _count_pages(pdf) == 19
+    assert _count_pages(pdf) == 20
 
 
 def test_pro_pdf_non_latin_lang_keeps_latin_chip_text_readable():
@@ -132,7 +132,7 @@ def test_pro_pdf_non_latin_lang_keeps_latin_chip_text_readable():
     import io, pypdf
     payload = _milan(); payload["pro_premium"] = _pro()
     pdf = render_milan_pro_pdf(payload, lang="bn")
-    assert _count_pages(pdf) == 19
+    assert _count_pages(pdf) == 20
     reader = pypdf.PdfReader(io.BytesIO(pdf))
     text = "\n".join((p.extract_text() or "") for p in reader.pages)
     # Latin labels must survive the Bengali font selection.
@@ -167,9 +167,9 @@ def test_pro_pdf_carries_fix10_blueprint_depth_blocks():
     assert "How affection actually shows up" in text
     assert "How conflict actually plays out" in text
     assert "daily emotional rhythm" in text
-    # 7th-lord translation surfaces (Mars → fight FOR, Venus → sanctuary).
-    assert "partnership to fight FOR" in text
-    assert "private sanctuary" in text
+    # 7th-lord translation surfaces (soul-v6 Hinglish maps).
+    assert "lade jaane ka jazba" in text       # Mars → "...jiske liye lade jaane ka jazba"
+    assert "private sanctuary" in text          # Venus → "ek private sanctuary..."
     # Friend relation translates to the repair-within-48h line.
     assert "repair within 24-48 hours" in text
     # Sharper Hinglish closer (any band variant).
@@ -200,12 +200,13 @@ def test_pro_pdf_blueprint_uses_7th_lord_not_lagna_lord_for_marriage_meaning():
     pdf = render_milan_pro_pdf(payload, lang="en")
     text = "\n".join((p.extract_text() or "")
                      for p in pypdf.PdfReader(io.BytesIO(pdf)).pages)
-    # Marriage-meaning block (driven by d9_7h_lord = Saturn / Mercury).
-    assert "long-horizon construction project" in text
-    assert "never-finished conversation between two intelligent equals" in text
+    # Marriage-meaning block (driven by d9_7h_lord = Saturn / Mercury) —
+    # soul-v6 Hinglish maps.
+    assert "lambi-chodi imaarat banane jaisi" in text       # Saturn marriage
+    assert "lambi, kabhi khatam na hone wali baatcheet" in text  # Mercury marriage
     # Affection block (driven by d9_lagna_lord = Mars / Venus) still works.
-    assert "direct, protective intensity" in text
-    assert "aesthetic warmth" in text
+    assert "seedha, protective intensity" in text   # Mars affection
+    assert "narm, sundar warmth" in text            # Venus affection
 
 
 def test_pro_pdf_blueprint_handles_malformed_nested_d9_marriage():
@@ -219,7 +220,7 @@ def test_pro_pdf_blueprint_handles_malformed_nested_d9_marriage():
         "sync": 42,               # int, not dict
     }
     pdf = render_milan_pro_pdf(payload, lang="en")
-    assert _count_pages(pdf) == 19
+    assert _count_pages(pdf) == 20
 
 
 def test_pro_pdf_blueprint_accepts_engine_native_relation_friendly():
@@ -395,3 +396,135 @@ def test_end_to_end_polisher_to_renderer_chapter_keys_match():
     # Plain-language KP signature reaches P3; jargon must not.
     assert "CSL" not in text
     assert "signifies houses" not in text
+
+
+# ── Phase 2.5.11.24-soul-v6 regressions ───────────────────────────────
+
+def test_pro_pdf_carries_d1_d9_chart_page_soul_v6():
+    """soul-v6 P4: visual D1 (Rasi) + D9 (Navamsa) chart page must
+    appear with both partners labelled. Renderer reads `kundli_p1` /
+    `kundli_p2` from the merged payload (flask_app injects them)."""
+    import io, pypdf
+    payload = _milan(); payload["pro_premium"] = _pro()
+    payload["kundli_p1"] = {
+        "name": "Vikram", "ascendant": "Cancer",
+        "planets": [
+            {"name": "Sun",     "sign": "Taurus"},
+            {"name": "Moon",    "sign": "Sagittarius"},
+            {"name": "Mars",    "sign": "Aquarius"},
+            {"name": "Mercury", "sign": "Aries"},
+            {"name": "Jupiter", "sign": "Cancer"},
+            {"name": "Venus",   "sign": "Aries"},
+            {"name": "Saturn",  "sign": "Capricorn"},
+        ],
+        "divisionalCharts": {"D9": {
+            "ascendant": "Cancer",
+            "planets": [
+                {"name": "Sun",     "sign": "Capricorn"},
+                {"name": "Moon",    "sign": "Sagittarius"},
+                {"name": "Mars",    "sign": "Taurus"},
+                {"name": "Jupiter", "sign": "Aquarius"},
+            ],
+        }},
+    }
+    payload["kundli_p2"] = {
+        "name": "Sanya", "ascendant": "Libra",
+        "planets": [{"name": "Venus", "sign": "Libra"},
+                    {"name": "Moon", "sign": "Pisces"}],
+        "divisionalCharts": {"D9": {"ascendant": "Aries", "planets": []}},
+    }
+    pdf = render_milan_pro_pdf(payload, lang="en")
+    text = "\n".join((p.extract_text() or "")
+                     for p in pypdf.PdfReader(io.BytesIO(pdf)).pages)
+    assert "YOUR ACTUAL CHART POSITIONS" in text
+    assert "Your Charts at a Glance" in text
+    assert "RASI" in text and "NAVAMSA" in text
+    assert "VIKRAM" in text and "SANYA" in text
+    # Reading legend must explain abbreviations.
+    assert "Su" in text and "Mo" in text and "Ma" in text
+
+
+def test_pro_pdf_chart_page_handles_missing_kundli_data():
+    """soul-v6 robustness: if kundli_p1 / kundli_p2 are absent (mobile
+    pre-soul-v6 client), the chart page must still render — empty grids
+    instead of crashing."""
+    payload = _milan(); payload["pro_premium"] = _pro()
+    # Intentionally do NOT set kundli_p1 / kundli_p2.
+    pdf = render_milan_pro_pdf(payload, lang="en")
+    assert _count_pages(pdf) == 20
+
+
+def test_pro_pdf_carries_koot_action_strip_for_weak_koots_soul_v6():
+    """soul-v6: weak koots (score/max < 0.5) must each surface a
+    practical 1-line action below the koot decoded table."""
+    import io, pypdf
+    payload = _milan(); payload["pro_premium"] = _pro()
+    # Override koots so a couple are weak — should trigger action lines.
+    payload["koots"] = [
+        {"label": "Bhakoot", "score": 0, "max": 7},   # weak → trigger
+        {"label": "Nadi",    "score": 0, "max": 8},   # weak → trigger
+        {"label": "Gana",    "score": 6, "max": 6},   # strong → silent
+        {"label": "Yoni",    "score": 1, "max": 4},   # weak → trigger
+    ]
+    pdf = render_milan_pro_pdf(payload, lang="en")
+    text = "\n".join((p.extract_text() or "")
+                     for p in pypdf.PdfReader(io.BytesIO(pdf)).pages)
+    assert "WEAK SPOTS" in text and "PRACTICAL" in text
+    # Bhakoot weak → 5-year-goals action line.
+    assert "agle 5 saal ke 3 specific goals" in text
+    # Nadi weak → morning rituals action line.
+    assert "Subah" in text and "rituals" in text
+    # Yoni weak → pressure-free closeness line.
+    assert "Pressure-free physical closeness" in text
+
+
+def test_pro_pdf_drops_dikhata_dikhati_slash_hack_soul_v6():
+    """soul-v6: the awkward 'dikhata/dikhati' gender-slash hack from
+    the affection block has been replaced with a gender-neutral phrasing
+    'ka pyaar aata hai ... ke roop me'. The slash form must NOT appear
+    anywhere in the rendered PDF."""
+    import io, pypdf
+    payload = _milan(); payload["pro_premium"] = _pro()
+    payload["d9_marriage"] = {
+        "p1": {"d9_lagna_lord": "Mars",  "d9_7h_lord": "Saturn",
+               "marriage_maturity_0_10": 6},
+        "p2": {"d9_lagna_lord": "Venus", "d9_7h_lord": "Mercury",
+               "marriage_maturity_0_10": 6},
+        "sync": {"lagna_lord_relation": "neutral",
+                 "seven_lord_relation": "neutral"},
+    }
+    pdf = render_milan_pro_pdf(payload, lang="en")
+    text = "\n".join((p.extract_text() or "")
+                     for p in pypdf.PdfReader(io.BytesIO(pdf)).pages)
+    assert "dikhata/dikhati" not in text
+    # New gender-neutral phrasing must surface.
+    assert "ka pyaar aata hai" in text
+    assert "ke roop me" in text
+
+
+def test_pro_pdf_planet_meaning_maps_are_hinglish_soul_v6():
+    """soul-v6: planet maps were rewritten English → Hinglish so the
+    deterministic depth blocks read like a real human astrologer's
+    notes instead of code-mixed 'AI translator' output."""
+    import io, pypdf
+    payload = _milan(); payload["pro_premium"] = _pro()
+    # Cover all 9 planets across both partners' 7th-lord + lagna-lord.
+    payload["d9_marriage"] = {
+        "p1": {"d9_lagna_lord": "Jupiter", "d9_7h_lord": "Moon",
+               "marriage_maturity_0_10": 6},
+        "p2": {"d9_lagna_lord": "Saturn",  "d9_7h_lord": "Sun",
+               "marriage_maturity_0_10": 6},
+        "sync": {"lagna_lord_relation": "neutral",
+                 "seven_lord_relation": "neutral"},
+    }
+    pdf = render_milan_pro_pdf(payload, lang="en")
+    text = "\n".join((p.extract_text() or "")
+                     for p in pypdf.PdfReader(io.BytesIO(pdf)).pages)
+    # Marriage meaning — Moon → "emotional ghar"; Sun → "identity-anchor".
+    # PDF text extraction can split "ek " across line boundaries; assert
+    # only the distinctive Hinglish noun phrase.
+    assert "emotional ghar" in text
+    assert "identity-anchor" in text
+    # Affection — Jupiter → "udaar, bada-dil"; Saturn → "shaant bharosa".
+    assert "udaar, bada-dil" in text
+    assert "shaant bharosa-driven" in text

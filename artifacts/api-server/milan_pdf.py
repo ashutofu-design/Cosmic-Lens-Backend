@@ -2367,37 +2367,286 @@ def _pro_koot_decoded_page(s: dict, num: int, koots: list[dict]) -> list[Any]:
         ("BOTTOMPADDING",(0, 0), (-1, -1), 8),
     ]))
     out.append(t)
+    # Phase 2.5.11.24-soul-v6: weak-koot practical action strip.
+    out.extend(_pro_koot_action_strip(koots))
     out.append(PageBreak())
     return out
 
 
 _PLANET_AFFECTION = {
-    "mars":    "direct, protective intensity — affection arrives as action",
-    "venus":   "tender, aesthetic warmth — soft touch, small beautiful gestures",
-    "jupiter": "expansive, generous guidance — affection as wisdom and presence",
-    "mercury": "playful, witty banter — words and shared jokes are the love-language",
-    "saturn":  "committed restraint — affection through quiet reliability, not loud display",
-    "sun":     "loyal, proud devotion — affection that is publicly visible and unwavering",
-    "moon":    "emotional, nurturing care — mood-mirroring, deep listening",
-    "rahu":    "unconventional, magnetic chase — intensity that bends the usual rules",
-    "ketu":    "detached, almost spiritual presence — affection through silent companionship",
+    "mars":    "seedha, protective intensity — pyaar action ke through aata hai",
+    "venus":   "narm, sundar warmth — halki choo, chhote pyaare gestures",
+    "jupiter": "udaar, bada-dil care — guidance aur saath dene wala pyaar",
+    "mercury": "khilandda, witty andaz — words aur jokes hi love-language hain",
+    "saturn":  "shaant bharosa-driven pyaar — quietly reliable, dikhawa nahi",
+    "sun":     "wafadar, garv-bhara pyaar — sabke saamne visible aur unwavering",
+    "moon":    "emotional, palan-poshne wala pyaar — mood mirror, deep sunna",
+    "rahu":    "alag-thalag, magnetic intensity — rules todne wali warmth",
+    "ketu":    "dhyaan-dhara, almost spiritual saath — chup-chap saath nibhaana",
 }
 
 _PLANET_MARRIAGE_MEANING = {
-    "mars":    "a partnership to fight FOR — shared territory, shared mission",
-    "venus":   "a private sanctuary of beauty, comfort, and emotional refinement",
-    "jupiter": "a dharmic path — marriage as a vehicle for growth and meaning",
-    "mercury": "a long, never-finished conversation between two intelligent equals",
-    "saturn":  "a long-horizon construction project — patience, duty, slow trust",
-    "sun":     "an identity-anchor — visible commitment that defines who they are",
-    "moon":    "an emotional home — safety and nurture above everything else",
-    "rahu":    "a transformative bond — marriage as a portal into a new self",
-    "ketu":    "a lighter attachment — companionship without grasping, room to breathe",
+    "mars":    "ek aisi partnership jiske liye lade jaane ka jazba ho — shared mission, shared zameen",
+    "venus":   "ek private sanctuary — sundar, comfortable, emotional refinement wala",
+    "jupiter": "ek dharmic raasta — shaadi growth aur meaning ka vaahan",
+    "mercury": "ek lambi, kabhi khatam na hone wali baatcheet do samajhdaar logon ki",
+    "saturn":  "ek lambi-chodi imaarat banane jaisi cheez — patience, duty, dheere bharosa",
+    "sun":     "ek identity-anchor — visible commitment jo dono ki pehchaan banti hai",
+    "moon":    "ek emotional ghar — safety aur palan-poshan sabse upar",
+    "rahu":    "ek transform karne wala bandhan — shaadi naye self ka dwaar",
+    "ketu":    "ek halki attachment — saath rehna par pakad nahi, saans lene ki jagah",
 }
 
 
 def _planet_key(name: str | None) -> str:
     return (name or "").strip().lower()
+
+
+# ── Phase 2.5.11.24-soul-v6: D1 + D9 chart visualization ──────────────
+# South Indian style — sign positions are fixed in a 4×4 grid; the
+# centre 2×2 carries the chart label. House numbers are computed from
+# the ascendant. Defensive: if planets/asc are missing the helper still
+# emits a grid (sign abbreviations only) so the page never breaks.
+_SIGN_ORDER = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+               "Libra", "Scorpio", "Sagittarius", "Capricorn",
+               "Aquarius", "Pisces"]
+_SIGN_INDEX = {s: i for i, s in enumerate(_SIGN_ORDER)}
+_SIGN_ABBR = {"Aries": "Ar", "Taurus": "Ta", "Gemini": "Ge",
+              "Cancer": "Ca", "Leo": "Le", "Virgo": "Vi", "Libra": "Li",
+              "Scorpio": "Sc", "Sagittarius": "Sg", "Capricorn": "Cp",
+              "Aquarius": "Aq", "Pisces": "Pi"}
+_PLANET_ABBR = {"Sun": "Su", "Moon": "Mo", "Mars": "Ma",
+                "Mercury": "Me", "Jupiter": "Ju", "Venus": "Ve",
+                "Saturn": "Sa", "Rahu": "Ra", "Ketu": "Ke"}
+# South Indian fixed-position grid — Pisces top-left, clockwise.
+_SI_GRID: list[list[str | None]] = [
+    ["Pisces",      "Aries",   "Taurus", "Gemini"],
+    ["Aquarius",    None,      None,     "Cancer"],
+    ["Capricorn",   None,      None,     "Leo"],
+    ["Sagittarius", "Scorpio", "Libra",  "Virgo"],
+]
+
+
+def _south_indian_chart(planets: list, asc_sign: str | None,
+                         label: str, sub_label: str,
+                         width_mm: float = 82.0) -> Table:
+    """Render a South Indian style 12-house chart as a ReportLab Table.
+    `planets` is a list of {name, sign} dicts; `asc_sign` is the sign
+    name of the ascendant (e.g. 'Cancer'). Centre 2×2 cells are merged
+    and carry the chart label."""
+    asc_norm = (asc_sign or "").strip().title()
+    asc_idx = _SIGN_INDEX.get(asc_norm)
+    by_sign: dict[str, list[str]] = {}
+    for p in planets or []:
+        if not isinstance(p, dict):
+            continue
+        sign = (p.get("sign") or "").strip().title()
+        name = (p.get("name") or "").strip().title()
+        abbr = _PLANET_ABBR.get(name)
+        if sign and abbr:
+            by_sign.setdefault(sign, []).append(abbr)
+
+    cell_w = (width_mm * mm) / 4.0
+    cell_h = (width_mm * mm) / 4.0
+    cells: list[list[Any]] = []
+    cell_st = ParagraphStyle("si_cell", fontName="Helvetica",
+                              fontSize=7, leading=9, alignment=TA_CENTER)
+    for r in range(4):
+        row: list[Any] = []
+        for c in range(4):
+            sign = _SI_GRID[r][c]
+            if sign is None:
+                row.append("")
+                continue
+            house_num = ""
+            if asc_idx is not None:
+                h = ((_SIGN_INDEX[sign] - asc_idx) % 12) + 1
+                house_num = str(h)
+            planets_in = " ".join(by_sign.get(sign, []))
+            asc_marker = " ★" if sign == asc_norm else ""
+            top = (f"<font size='6' color='{_hex(TEXT_SOFT)}'>"
+                   f"{_SIGN_ABBR.get(sign, '')}{asc_marker}  "
+                   f"<b>H{house_num}</b></font>")
+            body = ""
+            if planets_in:
+                body = (f"<br/><font size='8' color='{_hex(TEXT_DARK)}'>"
+                        f"<b>{planets_in}</b></font>")
+            row.append(Paragraph(top + body, cell_st))
+        cells.append(row)
+
+    # Centre label across the merged 2×2.
+    label_para = Paragraph(
+        f"<font size='10' color='{_hex(BRAND_PURPLE)}'><b>{_safe(label)}</b></font>"
+        f"<br/><font size='7' color='{_hex(TEXT_SOFT)}'>{_safe(sub_label)}</font>",
+        ParagraphStyle("si_lbl", fontName="Helvetica-Bold",
+                        fontSize=10, leading=13, alignment=TA_CENTER),
+    )
+    cells[1][1] = label_para
+    cells[1][2] = ""
+    cells[2][1] = ""
+    cells[2][2] = ""
+
+    t = Table(cells, colWidths=[cell_w] * 4, rowHeights=[cell_h] * 4)
+    t.setStyle(TableStyle([
+        ("GRID",         (0, 0), (-1, -1), 0.5, BORDER),
+        ("VALIGN",       (0, 0), (-1, -1), "TOP"),
+        ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING",   (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 3),
+        ("SPAN",         (1, 1), (2, 2)),
+        ("BACKGROUND",   (1, 1), (2, 2), _BG_HERO),
+    ]))
+    return t
+
+
+def _pro_d1_d9_chart_page(s: dict, num: int, k1: dict | None,
+                           k2: dict | None) -> list[Any]:
+    """Phase 2.5.11.24-soul-v6: visual D1 (Rasi) + D9 (Navamsa) chart
+    page for both partners. Side-by-side South Indian style. Defensive
+    against missing kundli data — page renders with empty grids if so,
+    never crashes."""
+    out: list[Any] = []
+    out.append(_chapter_eyebrow(num, "YOUR ACTUAL CHART POSITIONS"))
+    out.extend(_chapter_title_block(
+        "Your Charts at a Glance",
+        "Rasi (D1) — your outer life. Navamsa (D9) — your married "
+        "life. South Indian fixed-sign style.",
+    ))
+    for who, kundli in (("Partner 1", k1), ("Partner 2", k2)):
+        if not isinstance(kundli, dict):
+            kundli = {}
+        name = (kundli.get("name") or who).strip()
+        d1_planets = kundli.get("planets") or []
+        d1_asc = kundli.get("ascendant")
+        d9 = (kundli.get("divisionalCharts") or {}).get("D9") or {}
+        d9_planets = d9.get("planets") if isinstance(d9, dict) else []
+        d9_asc = (d9.get("ascendant") if isinstance(d9, dict)
+                  else None) or d1_asc
+        out.append(Paragraph(
+            f"<font color='{_hex(BRAND_PURPLE)}'><b>"
+            f"{_safe(name.upper())}</b></font>",
+            ParagraphStyle("dchart_name", fontName="Helvetica-Bold",
+                            fontSize=10, leading=14,
+                            spaceBefore=8, spaceAfter=4),
+        ))
+        d1 = _south_indian_chart(d1_planets, d1_asc, "RASI",
+                                  "D1 chart", width_mm=82)
+        d9c = _south_indian_chart(d9_planets, d9_asc, "NAVAMSA",
+                                   "D9 chart", width_mm=82)
+        side = Table([[d1, d9c]], colWidths=[90 * mm, 90 * mm])
+        side.setStyle(TableStyle([
+            ("VALIGN",       (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING",  (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        out.append(side)
+        out.append(Spacer(1, 4))
+    out.append(Spacer(1, 6))
+    out.append(Paragraph(
+        f"<font color='{_hex(TEXT_SOFT)}' size='8'><b>READING THIS:</b> "
+        f"Each box is a zodiac sign — fixed position. The H-number is "
+        f"the house counted from your ascendant (marked ★). Planet "
+        f"abbreviations: Su Sun, Mo Moon, Ma Mars, Me Mercury, Ju "
+        f"Jupiter, Ve Venus, Sa Saturn, Ra Rahu, Ke Ketu.</font>",
+        ParagraphStyle("dchart_legend", fontName="Helvetica",
+                        fontSize=8, leading=11, textColor=TEXT_SOFT,
+                        spaceBefore=2),
+    ))
+    out.append(PageBreak())
+    return out
+
+
+# ── Phase 2.5.11.24-soul-v6: weak-koot practical action strip ─────────
+_KOOT_ACTION_LINE = {
+    "bhakoot":      "Saal me ek baar — ek shaant evening — agle 5 "
+                     "saal ke 3 specific goals saath baith ke likho. "
+                     "Yahi single conversation Bhakoot ka asli tod hai.",
+    "nadi":         "Subah ke shuru rituals (chai, naashta, walk) "
+                     "aaj se planned-together rakho. Yahi physical "
+                     "ritual care Nadi ki kami ko balance karta hai.",
+    "gana":         "Ek doosre ke mood-shifts ko convert karne ki "
+                     "bajaye 'translate' karna seekho — har person ka "
+                     "rhythm alag hai, kisi ek ko galat mat samjho.",
+    "graha_maitri": "Kisi bhi disagreement me pehle 5 minute sirf "
+                     "'main samjha/samjhi' bolo — solution dene se "
+                     "pehle. Mental friendship yahin se banti hai.",
+    "yoni":         "Pressure-free physical closeness rakho weekly — "
+                     "sex ya intimacy expectation ke bina simple touch "
+                     "(haath pakadna, gale lagna). Yoni mismatch isi "
+                     "tarah balance hota hai.",
+    "tara":         "Chhote 'kaisa lag raha hai aaj?' check-ins har "
+                     "2-3 din me — ek doosre ka emotional weather "
+                     "track karte raho. Tara wellness se bhi kaam "
+                     "karta hai.",
+    "vashya":       "Decision-making me dono ka equal voice rakho — "
+                     "'main bolun aur tu sun le' dynamic se bachna. "
+                     "Vashya weak ho to dominance se crack aati hai.",
+    "varna":        "Mahine me ek baar koi spiritual ya philosophical "
+                     "baat — book, podcast, satsang share karo. Inner "
+                     "alignment yahin se banta hai.",
+}
+
+
+def _pro_koot_action_strip(koots: list[dict]) -> list[Any]:
+    """Phase 2.5.11.24-soul-v6: callout strip — for each koot scoring
+    < 0.5 of max, give one concrete practical action. Bridges the gap
+    between 'we see Bhakut 0/7' and 'so what do we actually DO about
+    it'. Returns [] if no weak koots so the strip never appears empty."""
+    weak = []
+    for k in (koots or []):
+        if not isinstance(k, dict):
+            continue
+        canon = _canon_koot_key(k)
+        try:
+            sc = int(k.get("score") or 0)
+            mx = int(k.get("max") or 0)
+        except Exception:
+            continue
+        if mx and (sc / mx) < 0.5:
+            action = _KOOT_ACTION_LINE.get(canon)
+            if action:
+                label = (k.get("label") or canon or "—").strip().title()
+                weak.append((label, sc, mx, action))
+    if not weak:
+        return []
+    out: list[Any] = []
+    out.append(Spacer(1, 10))
+    out.append(Paragraph(
+        f"<font color='{_hex(TEXT_SOFT)}' size='8'>"
+        f"<b>WEAK SPOTS · PRACTICAL TOD</b></font>",
+        ParagraphStyle("kact_eye", fontName="Helvetica-Bold",
+                        fontSize=8, leading=11, spaceAfter=4),
+    ))
+    rows = []
+    for (label, sc, mx, action) in weak[:5]:
+        rows.append([
+            Paragraph(
+                f"<b>{_safe(label)}</b><br/>"
+                f"<font size='8' color='{_hex(TEXT_SOFT)}'>{sc}/{mx}</font>",
+                ParagraphStyle("kact_l", fontName="Helvetica-Bold",
+                                fontSize=9, leading=12,
+                                textColor=BRAND_PURPLE),
+            ),
+            Paragraph(_safe(action),
+                       ParagraphStyle("kact_a", fontName="Helvetica",
+                                       fontSize=9, leading=13,
+                                       textColor=TEXT_DARK)),
+        ])
+    t = Table(rows, colWidths=[28 * mm, 152 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (-1, -1), _BG_MOMENT),
+        ("LINEABOVE",    (0, 0), (-1, 0), 1.2, BRAND_GOLD),
+        ("LINEBELOW",    (0, -1), (-1, -1), 0.4, BORDER),
+        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING",   (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 8),
+    ]))
+    out.append(t)
+    return out
 
 
 def _blueprint_depth_blocks(s: dict, d9: dict | None,
@@ -2497,13 +2746,16 @@ def _blueprint_depth_blocks(s: dict, d9: dict | None,
             f"Kabhi-kabhi koi alag flavour bhi chahiye hota hai."
         )
     else:
+        # Phase soul-v6: dropped the `dikhata/dikhati` slash hack — gender-
+        # neutral phrasing reads cleaner and credibly human.
         aff_line = (
-            f"<b>{_safe(p1n)}</b> pyaar dikhata/dikhati hai {p1_aff} "
-            f"se. <b>{_safe(p2n)}</b> ka tareeka alag hai — {p2_aff}. "
-            f"Aise charts me main hamesha yeh kehta hoon: koi zyada "
-            f"pyaar nahi karta, sirf dono ki emotional language alag "
-            f"hai. Shuru ke kayi jhagde meri experience me sirf "
-            f"translation ki gaadbad hote hain, feeling ki kami nahi."
+            f"<b>{_safe(p1n)}</b> ka pyaar aata hai {p1_aff} ke roop "
+            f"me. <b>{_safe(p2n)}</b> ka tareeka thoda alag hai — "
+            f"{p2_aff}. Aise charts me main hamesha yeh kehta hoon: "
+            f"koi zyada pyaar nahi karta, sirf dono ki emotional "
+            f"language alag hai. Shuru ke kayi jhagde meri experience "
+            f"me sirf translation ki gaadbad hote hain, feeling ki "
+            f"kami nahi."
         )
     out.append(Paragraph(aff_line, body_st))
 
@@ -2874,20 +3126,29 @@ def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
     # the trust signal "we actually deeply read your kundli" before the
     # reader hits the interpretive chapters.
     story.extend(_pro_analysis_layers_page(s, 3))
-    # P4 — Hidden Truth + Quiet Patterns (Phase 2.5.11.24-fix9 wrapper).
+    # P4 — Your Actual Chart Positions (Phase 2.5.11.24-soul-v6).
+    # Visual South Indian D1 + D9 charts for both partners — the single
+    # biggest perceived-value upgrade ("AI bhi chart dikha raha hai,
+    # template nahi"). k1 / k2 arrive via payload["kundli_p1"|"_p2"]
+    # (merged in by the flask /pro-pdf endpoint).
+    story.extend(_pro_d1_d9_chart_page(
+        s, 4, payload.get("kundli_p1"), payload.get("kundli_p2"),
+    ))
+    # P5 — Hidden Truth + Quiet Patterns (Phase 2.5.11.24-fix9 wrapper;
+    # was P4 before the soul-v6 chart insertion).
     story.extend(_pro_hidden_truth_page_with_patterns(
-        s, 4, pro.get("hidden_truth") or "",
+        s, 5, pro.get("hidden_truth") or "",
         meta, p1.get("name") or "Partner 1", p2.get("name") or "Partner 2",
         payload,
     ))
-    # P5–11 — 7 chapters × 1 dense rich page each.
+    # P6–12 — 7 chapters × 1 dense rich page each.
     # Each page carries: title + score + CHART LAYER chip (fix9) +
     # pull-quote + main insight + real-life moment box + WHY-IN-CHARTS
     # chips + keep-in-mind + grounding. Polisher emits ch1..ch7 by
     # contract; renderer accepts either canonical key or ch1..ch7 by
     # index so a future contract change cannot silently regress to
     # placeholder text.
-    page_num = 5
+    page_num = 6
     for i, (key, eyebrow, title, subtitle) in enumerate(_PRO_CHAPTER_MAP, start=1):
         ch = by_key.get(key) or by_key.get(f"ch{i}") or {}
         if not ch:

@@ -8958,8 +8958,12 @@ def kundli_milan_pro_pdf():
         cs  = compute_chapter_scores(milan, d9, syn, kp)
         pro = polish_premium_chapters(milan, cs, d9, syn, kp, lang=lang)
         # Attach the premium block onto the milan payload for the renderer.
+        # Phase 2.5.11.24-soul-v6: also attach raw kundlis so the new D1+D9
+        # chart visualization page can read planet positions / ascendant.
         merged = dict(milan)
         merged["pro_premium"] = pro
+        merged["kundli_p1"] = k1
+        merged["kundli_p2"] = k2
         pdf_bytes = render_milan_pro_pdf(merged, lang=lang)
     except Exception as exc:
         try:

@@ -1813,7 +1813,7 @@ export default function KundliMilanScreen(){
               colors={["#6366F1","#8B5CF6","#a855f7"]}
               disabled={!canCalculate} loading={calcLoading}
               text={canCalculate?t.km2_unlockFullAnal:!person1&&!p2?t.km2_addBothFirst:!person1?t.km_addYourKundli:t.km_addPartnerKundli}
-              onPress={handleCalculate}/>
+              onPress={()=>{}}/>
           )}
 
           {/* ── Results ── */}

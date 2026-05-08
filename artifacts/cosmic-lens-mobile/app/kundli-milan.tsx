@@ -1460,6 +1460,11 @@ export default function KundliMilanScreen(){
   const [progressVisible,setProgressVisible]=useState(false);
   const pdfShareUriRef = useRef<string | null>(null);
   const pdfFileNameRef = useRef<string>("Kundli_Milan_Pro.pdf");
+  // When success path completes BEFORE progress overlay closes, defer the
+  // success modal — opening two RN <Modal>s simultaneously fails on iOS
+  // (the first dismiss kills the second). We open success only after the
+  // progress overlay fully closes.
+  const pdfDonePendingRef = useRef(false);
 
   /* ── Premium PDF progress overlay (animated) ──
    *  Server takes ~60-77s end-to-end (engine ~10s + gpt-5-mini polish ~50-67s).
@@ -1502,7 +1507,10 @@ export default function KundliMilanScreen(){
     } else if (progressVisible) {
       // pdfLoading turned false → backend finished. Snap to 100%, hold for
       // 800ms so user clearly sees "Done!", then close progress overlay.
-      // Success modal (if any) is opened by the success path itself.
+      // After progress overlay's dismiss animation (~350ms on iOS), open
+      // the success modal if a success was pending. This sequencing avoids
+      // the iOS bug where opening Modal B while Modal A is dismissing kills
+      // both.
       Animated.timing(pdfProgress, {
         toValue: 1,
         duration: 400,
@@ -1511,6 +1519,12 @@ export default function KundliMilanScreen(){
         setTimeout(() => {
           setProgressVisible(false);
           pdfProgress.setValue(0);
+          // Wait for RN Modal dismiss animation to finish before opening
+          // the next modal — otherwise iOS swallows the second modal.
+          if (pdfDonePendingRef.current) {
+            pdfDonePendingRef.current = false;
+            setTimeout(() => setPdfDoneVisible(true), 450);
+          }
         }, 800);
       });
     }
@@ -1779,11 +1793,10 @@ export default function KundliMilanScreen(){
       pdfFileNameRef.current = fileName;
 
       if(savedToRegistry){
-        // Saved into documentDirectory/reports/ — show beautiful success
-        // modal with "View Report" → /my-reports redirect.
-        // (Progress overlay snaps to 100% then closes; success modal opens
-        // immediately and stacks on top — both Modals coexist briefly.)
-        setPdfDoneVisible(true);
+        // Saved into documentDirectory/reports/ — flag success as pending.
+        // The progress overlay's completion handler will open the success
+        // modal AFTER it fully dismisses (avoids iOS Modal stacking bug).
+        pdfDonePendingRef.current = true;
       }else{
         // Save failed → tempPath is the ONLY copy and `finally` will delete
         // it. Open the share sheet INLINE so tempPath stays alive long
@@ -2390,8 +2403,8 @@ export default function KundliMilanScreen(){
                     }}
                     style={({ pressed }) => [cd.changeBtn, { backgroundColor: C.isDark ? "rgba(255,255,255,0.05)" : "#F3F4F6", borderColor: C.isDark ? "rgba(255,255,255,0.12)" : "#E5E7EB", opacity: pressed ? 0.7 : 1 }]}
                   >
-                    <Feather name="share-2" size={14} color={C.text} />
-                    <Text style={[cd.changeTxt, { color: C.text }]}>Share</Text>
+                    <Feather name="download" size={14} color={C.text} />
+                    <Text style={[cd.changeTxt, { color: C.text }]}>Download</Text>
                   </Pressable>
                   <Pressable
                     onPress={() => {

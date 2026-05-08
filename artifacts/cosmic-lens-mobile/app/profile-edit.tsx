@@ -601,23 +601,26 @@ export default function ProfileEditScreen() {
 
       </KeyboardAvoidingView>
 
-      {/* ── Edit / Add Bottom Sheet ── */}
-      <Modal visible={fmVisible} transparent animationType="slide" onRequestClose={() => setFmVisible(false)}>
+      {/* ── Edit / Add Full-Page Screen ── */}
+      <Modal visible={fmVisible} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setFmVisible(false)}>
         <KeyboardAvoidingView
-          style={{ flex: 1 }}
+          style={{ flex: 1, backgroundColor: C.isDark ? C.bgCard : "#FFFFFF" }}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
-        <View style={bs.overlay}>
-          <Pressable
-            style={StyleSheet.absoluteFillObject}
-            onPress={() => { if (!fmSaving) setFmVisible(false); }}
-          />
-          <View style={[bs.sheet, { backgroundColor: C.isDark ? C.bgCard : "#FFFFFF" }]}>
-            <View style={[bs.handle, { backgroundColor: C.isDark ? C.border2 : "#D4D4D8" }]} />
-
-            <Text style={[bs.title, { color: C.text }]}>
-              {fmIsPrimary ? t.pe_editProfile : fmEditId ? t.pe_editFamily : t.pe_addFamily}
-            </Text>
+        <View style={[bs.sheet, { backgroundColor: C.isDark ? C.bgCard : "#FFFFFF" }]}>
+            <View style={bs.headerRow}>
+              <Pressable
+                onPress={() => { if (!fmSaving) setFmVisible(false); }}
+                hitSlop={12}
+                style={[bs.backBtn, { backgroundColor: C.isDark ? C.bgCard2 : "#F3F4F6", borderColor: C.border }]}
+              >
+                <Feather name="arrow-left" size={18} color={C.text} />
+              </Pressable>
+              <Text style={[bs.title, { color: C.text }]}>
+                {fmIsPrimary ? t.pe_editProfile : fmEditId ? t.pe_editFamily : t.pe_addFamily}
+              </Text>
+              <View style={{ width: 36 }} />
+            </View>
 
             <ScrollView
               showsVerticalScrollIndicator={false}
@@ -998,12 +1001,24 @@ const fab = StyleSheet.create({
 
 const bs = StyleSheet.create({
   overlay: {
-    flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end",
+    flex: 1,
   },
   sheet: {
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingHorizontal: 18, paddingBottom: 28, paddingTop: 12,
-    maxHeight: "85%",
+    flex: 1,
+    paddingHorizontal: 18,
+    paddingBottom: 28,
+    paddingTop: Platform.OS === "ios" ? 56 : 20,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 18,
+  },
+  backBtn: {
+    width: 36, height: 36, borderRadius: 10,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1,
   },
   handle: {
     width: 36, height: 4, borderRadius: 2,
@@ -1011,7 +1026,7 @@ const bs = StyleSheet.create({
   },
   title: {
     fontSize: 17, fontFamily: F.bold, letterSpacing: -0.3,
-    marginBottom: 16,
+    flex: 1, textAlign: "center",
   },
   btnRow: {
     flexDirection: "row", gap: 10, marginTop: 14,

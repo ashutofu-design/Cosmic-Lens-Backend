@@ -38,6 +38,11 @@ export default function AstroVastuChooser() {
     router.push("/astrovastu-pro-options" as any);
   };
 
+  const goReports = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push("/my-reports" as any);
+  };
+
   return (
     <View style={[s.root, { backgroundColor: C.isDark ? "#050709" : C.bg }]}>
       {C.isDark && (
@@ -139,6 +144,23 @@ export default function AstroVastuChooser() {
           </View>
         </Pressable>
 
+        {/* ── My Reports — saari saved PDFs ek jagah ── */}
+        <Pressable
+          onPress={goReports}
+          style={[s.reportsCard, { backgroundColor: C.bgCard, borderColor: C.border }]}
+        >
+          <View style={[s.reportsIcon, { backgroundColor: "#f6c45322", borderColor: "#f6c453" }]}>
+            <Feather name="folder" size={20} color="#f6c453" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.reportsTitle, { color: C.text }]}>My Reports</Text>
+            <Text style={[s.reportsSub, { color: C.textMuted }]}>
+              Saari saved PDFs — Milan, Numerology, AstroVastu Pro, Business Vastu
+            </Text>
+          </View>
+          <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={18} color={C.textMuted} />
+        </Pressable>
+
         {/* Branding */}
         <Text style={[s.branding, { color: C.textDim }]}>
           {t.vt_appBranding}
@@ -187,5 +209,9 @@ const s = StyleSheet.create({
   bulletText:  { fontSize: 12, lineHeight: 17, flex: 1 },
   ctaRow:      { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 11, borderRadius: 10, marginTop: 6 },
   ctaText:     { fontSize: 13, fontWeight: "800", letterSpacing: 0.3 },
+  reportsCard: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1, marginTop: 4 },
+  reportsIcon: { width: 40, height: 40, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  reportsTitle:{ fontSize: 14, fontWeight: "800" },
+  reportsSub:  { fontSize: 11, marginTop: 2, lineHeight: 15 },
   branding:    { fontSize: 10, textAlign: "center", marginTop: 8, letterSpacing: 1.2, fontWeight: "600" },
 });

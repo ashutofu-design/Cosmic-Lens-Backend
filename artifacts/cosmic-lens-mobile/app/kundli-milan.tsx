@@ -1456,6 +1456,10 @@ export default function KundliMilanScreen(){
   const [pdfLoading,setPdfLoading]=useState(false);
   const [calcLoading,setCalcLoading]=useState(false);
   const [confirmVisible,setConfirmVisible]=useState(false);
+  const [pdfDoneVisible,setPdfDoneVisible]=useState(false);
+  const [progressVisible,setProgressVisible]=useState(false);
+  const pdfShareUriRef = useRef<string | null>(null);
+  const pdfFileNameRef = useRef<string>("Kundli_Milan_Pro.pdf");
 
   /* ── Premium PDF progress overlay (animated) ──
    *  Server takes ~60-77s end-to-end (engine ~10s + gpt-5-mini polish ~50-67s).
@@ -1484,21 +1488,30 @@ export default function KundliMilanScreen(){
 
   useEffect(() => {
     if (pdfLoading) {
+      // PDF generation started — show progress overlay & ramp the bar.
+      setProgressVisible(true);
       pdfProgress.setValue(0);
+      // Ramp slowly to 92% over ~85s. If backend takes longer, holds at 92%
+      // until real PDF arrives. If shorter, success path snaps to 100%.
       Animated.timing(pdfProgress, {
-        toValue: 0.95,
-        duration: 70000, // ramp to 95% over 70s
+        toValue: 0.92,
+        duration: 85000,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: false,
       }).start();
-    } else if (pdfPct > 0) {
-      // PDF arrived — snap to 100 then reset
+    } else if (progressVisible) {
+      // pdfLoading turned false → backend finished. Snap to 100%, hold for
+      // 800ms so user clearly sees "Done!", then close progress overlay.
+      // Success modal (if any) is opened by the success path itself.
       Animated.timing(pdfProgress, {
         toValue: 1,
-        duration: 350,
+        duration: 400,
         useNativeDriver: false,
       }).start(() => {
-        setTimeout(() => pdfProgress.setValue(0), 600);
+        setTimeout(() => {
+          setProgressVisible(false);
+          pdfProgress.setValue(0);
+        }, 800);
       });
     }
   }, [pdfLoading]);
@@ -1761,30 +1774,16 @@ export default function KundliMilanScreen(){
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+      // Save share metadata for the success modal's "Share" / "View" buttons
+      pdfShareUriRef.current = shareUri;
+      pdfFileNameRef.current = fileName;
+
       if(savedToRegistry){
-        // Saved into documentDirectory/reports/ — shareUri is persistent,
-        // so we can defer the share to a user-chosen Alert button.
-        Alert.alert(
-          "Kundli Milan PRO",
-          "PDF generated! Aapki 'My Reports' me save ho gayi hai.",
-          [
-            {text:"My Reports",onPress:()=>{ try{ router.push("/my-reports"); }catch{} }},
-            {text:"Share",onPress:async()=>{
-              try{
-                const can=await Sharing.isAvailableAsync();
-                if(can){
-                  await Sharing.shareAsync(shareUri,{
-                    mimeType:"application/pdf",
-                    dialogTitle:fileName,
-                    UTI:"com.adobe.pdf",
-                  });
-                }
-              }catch{/* ignore — file is safely in My Reports */}
-            }},
-            {text:"OK",style:"cancel"},
-          ],
-          {cancelable:true},
-        );
+        // Saved into documentDirectory/reports/ — show beautiful success
+        // modal with "View Report" → /my-reports redirect.
+        // (Progress overlay snaps to 100% then closes; success modal opens
+        // immediately and stacks on top — both Modals coexist briefly.)
+        setPdfDoneVisible(true);
       }else{
         // Save failed → tempPath is the ONLY copy and `finally` will delete
         // it. Open the share sheet INLINE so tempPath stays alive long
@@ -1798,11 +1797,14 @@ export default function KundliMilanScreen(){
               UTI:"com.adobe.pdf",
             });
           }else{
-            Alert.alert("Kundli Milan PRO","PDF generated.",[{text:t.km_okBtn||"OK"}]);
+            setPdfDoneVisible(true);
           }
         }catch{/* ignore — error already shown by share sheet */}
       }
     }catch(e:any){
+      // Close progress immediately on error (no 100% snap)
+      setProgressVisible(false);
+      pdfProgress.setValue(0);
       const msg=e?.name==="AbortError"
         ? "PDF download timeout. Internet check kar ke phir try kare."
         : (e?.message ?? "PDF download fail hua. Phir try kare.");
@@ -2229,7 +2231,7 @@ export default function KundliMilanScreen(){
       </Modal>
 
       {/* ── Premium PDF Generation Progress Overlay ── */}
-      <Modal visible={pdfLoading} transparent animationType="fade" onRequestClose={() => {}}>
+      <Modal visible={progressVisible} transparent animationType="fade" onRequestClose={() => {}}>
         <View style={cd.backdrop}>
           <BlurView intensity={Platform.OS === "ios" ? 35 : 90} tint="dark" style={StyleSheet.absoluteFillObject} />
           <View style={cd.cardWrap}>
@@ -2329,6 +2331,91 @@ export default function KundliMilanScreen(){
           </View>
         </View>
       </Modal>
+
+      {/* ── PDF Downloaded Success Modal ── */}
+      <Modal visible={pdfDoneVisible} transparent animationType="fade" onRequestClose={() => setPdfDoneVisible(false)}>
+        <View style={cd.backdrop}>
+          <BlurView intensity={Platform.OS === "ios" ? 35 : 90} tint="dark" style={StyleSheet.absoluteFillObject} />
+          <View style={cd.cardWrap}>
+            <LinearGradient
+              colors={["#10B981", "#8B5CF6", "#EC4899"]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={cd.borderGradient}
+            >
+              <View style={[cd.card, { backgroundColor: C.isDark ? "#0F0A1F" : "#FFFFFF" }]}>
+
+                {/* Big success check icon */}
+                <View style={cd.doneHeader}>
+                  <LinearGradient
+                    colors={["#10B981", "#059669"]}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    style={cd.doneIconCircle}
+                  >
+                    <Feather name="check" size={36} color="#fff" />
+                  </LinearGradient>
+                  <Text style={[cd.doneTitle, { color: C.text }]}>PDF Downloaded!</Text>
+                  <Text style={[cd.doneSub, { color: C.textDim }]}>
+                    Aapki Kundli Milan PRO report ready hai aur "My Reports" mein safe save ho gayi hai
+                  </Text>
+                </View>
+
+                {/* File card */}
+                <View style={[cd.fileCard, { backgroundColor: C.isDark ? "rgba(139,92,246,0.08)" : "#F5F3FF", borderColor: C.isDark ? "rgba(139,92,246,0.25)" : "#DDD6FE" }]}>
+                  <LinearGradient colors={["#8B5CF6", "#EC4899"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={cd.fileIcon}>
+                    <Feather name="file-text" size={20} color="#fff" />
+                  </LinearGradient>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[cd.fileName, { color: C.text }]} numberOfLines={1}>
+                      {person1?.name || "Partner 1"} & {p2?.name || "Partner 2"}
+                    </Text>
+                    <Text style={[cd.fileMeta, { color: C.textDim }]}>Kundli Milan PRO · 24 pages</Text>
+                  </View>
+                </View>
+
+                {/* Action buttons */}
+                <View style={cd.actions}>
+                  <Pressable
+                    onPress={async () => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      try {
+                        const can = await Sharing.isAvailableAsync();
+                        if (can && pdfShareUriRef.current) {
+                          await Sharing.shareAsync(pdfShareUriRef.current, {
+                            mimeType: "application/pdf",
+                            dialogTitle: pdfFileNameRef.current,
+                            UTI: "com.adobe.pdf",
+                          });
+                        }
+                      } catch {/* ignore */}
+                    }}
+                    style={({ pressed }) => [cd.changeBtn, { backgroundColor: C.isDark ? "rgba(255,255,255,0.05)" : "#F3F4F6", borderColor: C.isDark ? "rgba(255,255,255,0.12)" : "#E5E7EB", opacity: pressed ? 0.7 : 1 }]}
+                  >
+                    <Feather name="share-2" size={14} color={C.text} />
+                    <Text style={[cd.changeTxt, { color: C.text }]}>Share</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      setPdfDoneVisible(false);
+                      try { router.push("/my-reports"); } catch {}
+                    }}
+                    style={({ pressed }) => [cd.continueBtn, { opacity: pressed ? 0.85 : 1 }]}
+                  >
+                    <LinearGradient
+                      colors={["#8B5CF6", "#EC4899", "#F59E0B"]}
+                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                      style={cd.continueGrad}
+                    >
+                      <Feather name="eye" size={15} color="#fff" />
+                      <Text style={cd.continueTxt}>View Report</Text>
+                    </LinearGradient>
+                  </Pressable>
+                </View>
+              </View>
+            </LinearGradient>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -2376,6 +2463,16 @@ const cd = StyleSheet.create({
   stageRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   stageDot: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
   stageTxt: { fontSize: 13, fontFamily: "Nunito_500Medium", flex: 1 },
+
+  // PDF Downloaded success modal
+  doneHeader: { alignItems: "center", marginBottom: 18 },
+  doneIconCircle: { width: 78, height: 78, borderRadius: 39, alignItems: "center", justifyContent: "center", marginBottom: 14, shadowColor: "#10B981", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.55, shadowRadius: 18, elevation: 12 },
+  doneTitle: { fontSize: 22, fontFamily: "Nunito_700Bold", letterSpacing: -0.4, marginBottom: 8 },
+  doneSub: { fontSize: 13, fontFamily: "Nunito_400Regular", textAlign: "center", lineHeight: 19, paddingHorizontal: 6 },
+  fileCard: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 16, borderWidth: 1, marginBottom: 18 },
+  fileIcon: { width: 42, height: 42, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  fileName: { fontSize: 14.5, fontFamily: "Nunito_700Bold", letterSpacing: -0.2, marginBottom: 3 },
+  fileMeta: { fontSize: 11.5, fontFamily: "Nunito_500Medium" },
 });
 
 // ── Styles ────────────────────────────────────────────────────────────────────

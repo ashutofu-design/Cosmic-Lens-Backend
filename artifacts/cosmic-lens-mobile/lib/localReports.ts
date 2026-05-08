@@ -16,8 +16,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
+import { Platform } from "react-native";
 
 const STORAGE_KEY = "cosmic.localReports.v1";
+const IS_WEB = Platform.OS === "web";
 
 export type LocalReportKind =
   | "milan"
@@ -99,6 +101,34 @@ function genId(kind: LocalReportKind): string {
 export async function saveLocalReport(
   input: SaveLocalReportInput,
 ): Promise<LocalReport | null> {
+  // WEB path (Phase 2.5.11.24-fix7): browsers don't expose a writable file
+  // system through expo-file-system, but AsyncStorage is backed by
+  // localStorage on web — so we store the PDF as a base64 `data:` URL right
+  // in the registry entry's `localUri`. listLocalReports/openLocalReport
+  // both detect the data:/blob: scheme and skip FileSystem.getInfoAsync.
+  // Caller passes input.sourceUri = "data:application/pdf;base64,…" on web.
+  if (IS_WEB) {
+    return withWriteLock(async () => {
+      try {
+        const id = genId(input.kind);
+        const entry: LocalReport = {
+          id,
+          kind: input.kind,
+          title: input.title,
+          subtitle: input.subtitle,
+          localUri: input.sourceUri,
+          remoteUrl: input.remoteUrl,
+          createdAt: Date.now(),
+        };
+        const all = await readAll();
+        all.unshift(entry);
+        await writeAll(all);
+        return entry;
+      } catch {
+        return null;
+      }
+    });
+  }
   if (!REPORTS_DIR) return null;
   return withWriteLock(async () => {
     try {
@@ -185,6 +215,8 @@ export async function saveLocalReport(
 export async function listLocalReports(): Promise<LocalReport[]> {
   const all = await readAll();
   if (all.length === 0) return all;
+  // Web: localUri is a data: URL embedded in localStorage; nothing to stat.
+  if (IS_WEB) return all;
   const survivors: LocalReport[] = [];
   let pruned = false;
   for (const r of all) {
@@ -227,9 +259,12 @@ export async function deleteLocalReport(id: string): Promise<boolean> {
       const idx = all.findIndex((r) => r.id === id);
       if (idx < 0) return false;
       const entry = all[idx];
-      try {
-        await FileSystem.deleteAsync(entry.localUri, { idempotent: true });
-      } catch { /* ignore */ }
+      // Web: nothing to delete on disk; localStorage entry removal is enough.
+      if (!IS_WEB) {
+        try {
+          await FileSystem.deleteAsync(entry.localUri, { idempotent: true });
+        } catch { /* ignore */ }
+      }
       all.splice(idx, 1);
       await writeAll(all);
       return true;
@@ -239,8 +274,30 @@ export async function deleteLocalReport(id: string): Promise<boolean> {
   });
 }
 
+/**
+ * On web: trigger an in-browser <a download> click from the embedded
+ * data:/blob: URL. On native: open the OS share sheet.
+ */
+function _safeFileName(title: string, kind: LocalReportKind): string {
+  const safe = (title || kind).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60) || "report";
+  return `${safe}.pdf`;
+}
+
+function _webDownload(report: LocalReport): void {
+  try {
+    if (typeof document === "undefined") return;
+    const a = document.createElement("a");
+    a.href = report.localUri;
+    a.download = _safeFileName(report.title, report.kind);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch { /* ignore */ }
+}
+
 /** Open the OS share sheet for a saved report. */
 export async function shareLocalReport(report: LocalReport): Promise<void> {
+  if (IS_WEB) { _webDownload(report); return; }
   try {
     const can = await Sharing.isAvailableAsync();
     if (!can) return;
@@ -254,5 +311,6 @@ export async function shareLocalReport(report: LocalReport): Promise<void> {
 
 /** Re-open a saved report via the OS share sheet (lets user view/save). */
 export async function openLocalReport(report: LocalReport): Promise<void> {
+  if (IS_WEB) { _webDownload(report); return; }
   await shareLocalReport(report);
 }

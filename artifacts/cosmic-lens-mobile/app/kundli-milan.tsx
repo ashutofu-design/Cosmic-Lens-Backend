@@ -1793,6 +1793,27 @@ export default function KundliMilanScreen(){
       // URI), but the user gets the actual PDF and a clean "Downloaded!"
       // confirmation — which is the whole user-facing requirement.
       if(Platform.OS==="web"){
+        // Build a base64 data: URL once. We use it for BOTH the immediate
+        // browser download AND for persistent storage in the local reports
+        // registry (AsyncStorage on web == localStorage; PDFs ~50-80 KB
+        // base64-inflate to ~70-110 KB, comfortably under the 5 MB cap).
+        let dataUrl="";
+        try{
+          const wbytes=new Uint8Array(buf);
+          const WCHUNK=0x4000;
+          const wparts:string[]=[];
+          for(let i=0;i<wbytes.length;i+=WCHUNK){
+            const slice=wbytes.subarray(i,Math.min(i+WCHUNK,wbytes.length));
+            let s="";
+            for(let j=0;j<slice.length;j++) s+=String.fromCharCode(slice[j]);
+            wparts.push(s);
+          }
+          if(typeof globalThis.btoa==="function"){
+            dataUrl=`data:application/pdf;base64,${globalThis.btoa(wparts.join(""))}`;
+          }
+        }catch{/* dataUrl stays empty — download still works via blob */}
+
+        // 1. Immediate browser download (Downloads folder).
         try{
           const blob=new Blob([buf],{type:"application/pdf"});
           const url=(globalThis as any).URL?.createObjectURL?.(blob);
@@ -1806,6 +1827,24 @@ export default function KundliMilanScreen(){
             setTimeout(()=>{ try{ (globalThis as any).URL?.revokeObjectURL?.(url); }catch{} },2000);
           }
         }catch{/* ignore — user still sees success modal */}
+
+        // 2. Persist to local "My Reports" registry so /my-reports lists it.
+        // localReports.saveLocalReport detects Platform.OS==="web" and stores
+        // the data: URL in localStorage under cosmic.localReports.v1.
+        if(dataUrl){
+          const milanJson:any = (MilanResultStore.get() as any) || {};
+          const total=milanJson?.total ?? 0;
+          const max=milanJson?.max ?? 36;
+          try{
+            await saveLocalReport({
+              kind:"milan",
+              title:`${person1.name||"Partner 1"} & ${p2.name||"Partner 2"} — Kundli Milan PRO`,
+              subtitle:`${total}/${max} · ${new Date().toLocaleDateString()}`,
+              sourceUri:dataUrl,
+            });
+          }catch{/* ignore */}
+        }
+
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         pdfShareUriRef.current=null as any;
         pdfFileNameRef.current=fileName;

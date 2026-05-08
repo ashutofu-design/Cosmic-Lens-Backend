@@ -166,9 +166,12 @@ export default function MyReportsScreen() {
   };
 
   const renderLocalCard = (r: LocalReport) => {
-    const kb = r.bytes ? `${Math.round(r.bytes / 102.4) / 10} KB` : "";
-    const date = new Date(r.createdAt).toLocaleDateString("en-IN", {
+    const created = new Date(r.createdAt);
+    const date = created.toLocaleDateString("en-IN", {
       day: "numeric", month: "short", year: "numeric",
+    });
+    const time = created.toLocaleTimeString("en-IN", {
+      hour: "numeric", minute: "2-digit", hour12: true,
     });
     return (
       <View
@@ -187,7 +190,7 @@ export default function MyReportsScreen() {
               {r.title}
             </Text>
             <Text style={[s.subMeta, { color: C.textMuted }]} numberOfLines={1}>
-              {r.subtitle ? `${r.subtitle} · ` : ""}{date}{kb ? ` · ${kb}` : ""}
+              {date} · {time}
             </Text>
           </View>
         </View>

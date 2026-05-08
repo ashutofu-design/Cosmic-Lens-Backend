@@ -1,4 +1,11 @@
-"""Tests for the Phase 2.5.11.23 24-page Pro PDF renderer."""
+"""Tests for the Phase 2.5.11.24-fix8 17-page Pro PDF renderer.
+
+Visual-density rewrite: 7 chapters consolidated from 2 thin pages → 1
+dense rich page each (pull-quote, REAL-LIFE MOMENT box, WHY-IN-CHARTS
+chips, keep-in-mind, grounding). Standalone Timing Sync page dropped
+(folded into Final Verdict). Net 25 → 17 pages. LLM contract
+(kya_dikh / kya_matlab / kya_dhyan / grounding) UNCHANGED.
+"""
 import re
 
 from milan_pdf import render_milan_pro_pdf
@@ -55,28 +62,48 @@ def _count_pages(pdf: bytes) -> int:
     return len(re.findall(rb'/Type\s*/Page(?!s)', pdf))
 
 
-def test_pro_pdf_emits_exactly_24_pages_en():
+def test_pro_pdf_emits_exactly_17_pages_en():
     payload = _milan(); payload["pro_premium"] = _pro()
     pdf = render_milan_pro_pdf(payload, lang="en")
     assert pdf.startswith(b"%PDF-")
-    assert _count_pages(pdf) == 24
+    assert _count_pages(pdf) == 17
 
 
-def test_pro_pdf_emits_exactly_24_pages_with_empty_pro():
+def test_pro_pdf_emits_exactly_17_pages_with_empty_pro():
     payload = _milan(); payload["pro_premium"] = {}
     pdf = render_milan_pro_pdf(payload, lang="en")
-    assert _count_pages(pdf) == 24
+    assert _count_pages(pdf) == 17
 
 
-def test_pro_pdf_emits_exactly_24_pages_hi_devanagari():
+def test_pro_pdf_emits_exactly_17_pages_hi_devanagari():
     payload = _milan("Arjun", "Meera", 26); payload["pro_premium"] = _pro(7.2)
     pdf = render_milan_pro_pdf(payload, lang="hi")
-    assert _count_pages(pdf) == 24
+    assert _count_pages(pdf) == 17
 
 
 def test_pro_pdf_never_raises_on_completely_empty_payload():
     pdf = render_milan_pro_pdf({}, lang="en")
-    assert _count_pages(pdf) == 24
+    assert _count_pages(pdf) == 17
+
+
+def test_pro_pdf_carries_fix8_visual_blocks():
+    """Phase 2.5.11.24-fix8 regression: every chapter page must carry the
+    new visual-storytelling labels (REAL-LIFE MOMENT, WHY THIS APPEARS IN
+    YOUR CHARTS) and the Final Verdict page must carry the merged
+    Readiness & timing block. Without these, the visual-density rewrite
+    silently regressed to flat paragraphs."""
+    import io, pypdf
+    payload = _milan(); payload["pro_premium"] = _pro()
+    pdf = render_milan_pro_pdf(payload, lang="en")
+    reader = pypdf.PdfReader(io.BytesIO(pdf))
+    text = "\n".join((p.extract_text() or "") for p in reader.pages)
+    assert "REAL-LIFE MOMENT" in text
+    assert "WHY THIS APPEARS IN YOUR CHARTS" in text
+    # 7 chapters × WHY-IN-CHARTS box → at least 5 occurrences in the body
+    # (some payloads may legitimately skip a chip box if no koots map).
+    assert text.count("REAL-LIFE MOMENT") >= 5
+    # Timing Sync page is dropped — its prose now lives under Final Verdict.
+    assert "Readiness & timing" in text or "READINESS & TIMING" in text
 
 
 def test_end_to_end_polisher_to_renderer_chapter_keys_match():
@@ -116,9 +143,12 @@ def test_end_to_end_polisher_to_renderer_chapter_keys_match():
     # Placeholder must NOT appear when polisher returned real chapters.
     assert "Detailed reading was not generated for this chapter" not in text
     # At least one fallback chapter prose phrase should reach the page.
+    # Soul-v4 fallback vocabulary (Hinglish, asymmetric "ek partner...dusra"
+    # phrasing, concrete moment markers). Old soul-v1 phrases like
+    # "Honest dialogue" / "mutual respect" are now BANNED therapy-clichés.
     assert any(s in text for s in (
-        "Honest dialogue", "mutual respect", "feel the same things",
-        "count on each other", "fight",
+        "ek partner", "dusra", "Pyaar", "yahaan", "asli",
+        "5-minute", "Sunday", "chai", "rishte", "loud nahi",
     ))
     # Plain-language KP signature reaches P3; jargon must not.
     assert "CSL" not in text

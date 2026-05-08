@@ -1568,12 +1568,221 @@ def _pro_hidden_truth_page(s: dict, num: int, hidden_truth: str,
     return out
 
 
+# ── Phase 2.5.11.24-fix8 — Visual rhythm blocks ──────────────────
+# Critique-driven rewrite: chapters were 2 thin pages with low density.
+# These helpers add real visual storytelling — quote pull-outs, signal
+# chips, real-life-moment cards, why-in-charts grounding chips — so each
+# chapter becomes ONE dense rich page instead of 2 half-empty ones.
+
+# Soft brand-tint surfaces (kept local — used only by Pro chapter blocks).
+_BG_QUOTE   = colors.HexColor("#F4EEFF")  # purple wash for pull-quotes
+_BG_MOMENT  = colors.HexColor("#FFF8EC")  # gold wash for real-life box
+_BG_CHARTS  = colors.HexColor("#F1F5F9")  # cool slate wash for signals
+_LINE_QUOTE = colors.HexColor("#A78BFA")  # soft purple rule
+_LINE_GOLD  = colors.HexColor("#E8B86A")  # soft gold rule
+
+# Map each Pro chapter key → 2-3 canonical koot keys whose engine scores
+# get rendered as the "Why this appears in your charts" chips. Pulled
+# from the same _KOOT_STRENGTH_LANG/_KOOT_DAMAGE_LANG vocabulary already
+# in this module so wording stays consistent across the report.
+_CHAPTER_KOOT_MAP: dict[str, tuple[str, ...]] = {
+    "emotional_compatibility": ("gana", "bhakoot", "graha"),
+    "trust_loyalty":           ("bhakoot", "varna", "graha"),
+    "communication_conflict":  ("gana", "vashya", "graha"),
+    "marriage_stability":      ("bhakoot", "nadi", "varna"),
+    "physical_chemistry":      ("yoni", "tara", "graha"),
+    "family_practical":        ("vashya", "varna", "bhakoot"),
+    "future_direction":        ("nadi", "bhakoot", "tara"),
+}
+
+
+def _extract_quote(text: str, max_chars: int = 170) -> str:
+    """Pull a punchy 1-sentence quote from prose for a highlight block.
+
+    Tries the first ≥40-char sentence so we skip throwaway openers like
+    "Yeh interesting hai." Falls back to first 160 chars on no boundary.
+    Works on Hindi/Tamil/Bengali too (they end on । or .).
+    """
+    t = (text or "").strip()
+    if not t:
+        return ""
+    # Devanagari danda (।) + standard ASCII sentence enders.
+    parts: list[str] = []
+    cur = ""
+    for ch in t:
+        cur += ch
+        if ch in (".", "।", "!", "?"):
+            parts.append(cur.strip())
+            cur = ""
+    if cur.strip():
+        parts.append(cur.strip())
+    for p in parts:
+        if 40 <= len(p) <= max_chars:
+            return p
+    # Fall back to longest <=max_chars or first sentence truncated.
+    if parts:
+        if len(parts[0]) <= max_chars:
+            return parts[0]
+        return parts[0][: max_chars - 1].rstrip() + "…"
+    return t[: max_chars - 1] + "…"
+
+
+def _pro_quote_block(text: str, s: dict) -> Table:
+    """Highlighted pull-quote — large italic line in a soft purple card
+    with a left accent rule. Anchors visual storytelling on every chapter."""
+    fname = s.get("body").fontName if "body" in s else "Helvetica"
+    q = Paragraph(
+        f'<font color="{_hex(BRAND_PURPLE)}"><b><i>“{_safe(text)}”</i></b></font>',
+        ParagraphStyle("pro_quote", fontName=fname, fontSize=12,
+                       leading=18, alignment=TA_LEFT,
+                       leftIndent=10, rightIndent=6),
+    )
+    t = Table([[q]], colWidths=[180 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (-1, -1), _BG_QUOTE),
+        ("LINEBEFORE",   (0, 0), (0, -1), 3.0, _LINE_QUOTE),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 14),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        ("TOPPADDING",   (0, 0), (-1, -1), 12),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 12),
+    ]))
+    return t
+
+
+def _pro_real_life_moment(text: str, s: dict) -> list[Any]:
+    """Boxed 'REAL-LIFE MOMENT' callout — uses kya_matlab prose, soft
+    gold wash + a tiny eyebrow label. Replaces the flat paragraph that
+    made chapters feel like report sections instead of immersive reads."""
+    fname = s.get("body").fontName if "body" in s else "Helvetica"
+    label = Paragraph(
+        f"<font color='{_hex(BRAND_GOLD)}'><b>REAL-LIFE MOMENT</b></font>",
+        ParagraphStyle("pro_moment_lbl", fontName="Helvetica-Bold",
+                       fontSize=8.5, leading=11),
+    )
+    body = Paragraph(
+        _safe(text) or "—",
+        ParagraphStyle("pro_moment_body", fontName=fname, fontSize=10.5,
+                       leading=15.5, textColor=TEXT_MID, spaceBefore=4),
+    )
+    t = Table([[label], [body]], colWidths=[180 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (-1, -1), _BG_MOMENT),
+        ("LINEBELOW",    (0, 0), (-1, 0), 0.6, _LINE_GOLD),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 14),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+        ("TOPPADDING",   (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 12),
+    ]))
+    return [t]
+
+
+def _pro_why_in_charts(chapter_key: str, koots: list[dict],
+                       manglik: bool) -> Table | None:
+    """Small clean grounding chips — 'WHY THIS APPEARS IN YOUR CHARTS' —
+    for the 2-3 koots most relevant to this chapter. Each chip shows
+    label + score + tiny meaning. Returns None if no signals available."""
+    rel_keys = _CHAPTER_KOOT_MAP.get(chapter_key, ())
+    if not rel_keys:
+        return None
+    by_canon: dict[str, dict] = {}
+    for k in (koots or []):
+        canon = _canon_koot_key(k)
+        if canon and canon not in by_canon:
+            by_canon[canon] = k
+
+    chip_rows: list[list[Any]] = []
+    for canon in rel_keys:
+        k = by_canon.get(canon)
+        if not k:
+            continue
+        try:
+            sc = int(k.get("score") or 0); mx = int(k.get("max") or 0)
+        except Exception:
+            sc, mx = 0, 0
+        ratio = (sc / mx) if mx else 0.0
+        if ratio >= 0.6:
+            meaning = _KOOT_STRENGTH_LANG.get(canon, "supportive area")
+            tone    = ACCENT_GREEN
+        elif ratio > 0:
+            meaning = _KOOT_DAMAGE_LANG.get(canon, "needs gentle attention")
+            tone    = colors.HexColor("#B45309")
+        else:
+            meaning = _KOOT_DAMAGE_LANG.get(canon, "weakest area")
+            tone    = colors.HexColor("#B91C1C")
+        label = (k.get("label") or canon).strip().title()
+        label_p = Paragraph(
+            f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(label)}</b></font>"
+            f"<font color='{_hex(TEXT_SOFT)}'>  {sc}/{mx}</font>",
+            ParagraphStyle("wic_l", fontName="Helvetica-Bold",
+                           fontSize=9.5, leading=13),
+        )
+        meaning_p = Paragraph(
+            f"<font color='{_hex(tone)}'>{_safe(meaning)}</font>",
+            ParagraphStyle("wic_m", fontName="Helvetica", fontSize=9,
+                           leading=12),
+        )
+        chip_rows.append([label_p, meaning_p])
+
+    # Add manglik signal where it matters (chapters that name it as a driver).
+    if manglik and chapter_key in ("trust_loyalty", "marriage_stability",
+                                   "communication_conflict", "physical_chemistry"):
+        amber_hex = _hex(colors.HexColor("#B45309"))
+        chip_rows.append([
+            Paragraph(
+                f"<font color='{_hex(BRAND_PURPLE)}'><b>Mangal Signal</b></font>"
+                f"<font color='{_hex(TEXT_SOFT)}'>  active</font>",
+                ParagraphStyle("wic_l2", fontName="Helvetica-Bold",
+                               fontSize=9.5, leading=13)),
+            Paragraph(
+                f"<font color='{amber_hex}'>Mars-driven intensity in one "
+                "chart asks for ritual balance.</font>",
+                ParagraphStyle("wic_m2", fontName="Helvetica", fontSize=9,
+                               leading=12)),
+        ])
+
+    if not chip_rows:
+        return None
+
+    header = Paragraph(
+        f"<font color='{_hex(TEXT_MID)}'><b>"
+        "WHY THIS APPEARS IN YOUR CHARTS</b></font>",
+        ParagraphStyle("wic_h", fontName="Helvetica-Bold", fontSize=8.5,
+                       leading=11),
+    )
+    inner = Table(chip_rows, colWidths=[42 * mm, 130 * mm])
+    inner.setStyle(TableStyle([
+        ("VALIGN",       (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING",   (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 3),
+    ]))
+    wrap = Table([[header], [inner]], colWidths=[180 * mm])
+    wrap.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (-1, -1), _BG_CHARTS),
+        ("LINEABOVE",    (0, 0), (-1, 0), 0.4, BORDER),
+        ("LINEBELOW",    (0, -1), (-1, -1), 0.4, BORDER),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 12),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        ("TOPPADDING",   (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 8),
+    ]))
+    return wrap
+
+
 def _pro_chapter_pages(s: dict, num_a: int, num_b: int,
                        eyebrow: str, title: str, subtitle: str,
-                       ch: dict) -> list[Any]:
-    """Two pages per chapter:
-       Page A: eyebrow + title + score card + 'Aapke chart me kya dikh raha hai'.
-       Page B: 'Iska matlab kya hai' + 'Kya dhyan rakhna' + grounding.
+                       ch: dict, ch_key: str = "",
+                       koots: list[dict] | None = None,
+                       manglik: bool = False) -> list[Any]:
+    """ONE dense rich page per chapter (Phase 2.5.11.24-fix8 visual rewrite).
+
+    Order: eyebrow → title row + score card → quote pull-out → main insight
+    (kya_dikh) → REAL-LIFE MOMENT card (kya_matlab) → WHY-IN-CHARTS chips
+    → "What to keep in mind" (kya_dhyan) → optional grounding card. Drops
+    one full PageBreak vs the old 2-page-per-chapter layout (25→17 pages).
+    `num_b` is preserved as a parameter for backward call-compat but no
+    longer used — second page is gone.
     """
     out: list[Any] = []
     score = ch.get("score_0_10")
@@ -1581,13 +1790,11 @@ def _pro_chapter_pages(s: dict, num_a: int, num_b: int,
     kya_matlab = (ch.get("kya_matlab") or "").strip()
     kya_dhyan  = (ch.get("kya_dhyan") or "").strip()
     grounding  = (ch.get("grounding") or "").strip()
+    _ = num_b  # kept for backward signature compat
 
-    # ── Page A ─────────────────────────────────────────────────────
+    # Header — eyebrow + title row + score card (compact, single block).
     out.append(_chapter_eyebrow(num_a, eyebrow))
     out.extend(_chapter_title_block(title, subtitle, s))
-    # Score card — right-aligned 60mm card next to a brief lead label
-    # Phase 2.5.11.24: lead label is currently English-only, but using the
-    # lang font keeps things consistent if it's ever translated; safe op.
     pl_bold = s["h1"].fontName if "h1" in s else "Helvetica-Bold"
     lead = Paragraph(
         f"<font color='{_hex(TEXT_MID)}'><b>"
@@ -1605,22 +1812,42 @@ def _pro_chapter_pages(s: dict, num_a: int, num_b: int,
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
     ]))
     out.append(score_row)
-    out.append(Spacer(1, 12))
-    _lang = s.get("_lang", "en")
-    out.append(_pro_block_heading("What your chart shows here"))
-    out.append(Paragraph(_safe(kya_dikh) or "—", _pick_body(kya_dikh or "", s, _lang)))
-    out.append(PageBreak())
+    out.append(Spacer(1, 10))
 
-    # ── Page B ─────────────────────────────────────────────────────
-    out.append(_chapter_eyebrow(num_b, eyebrow + "  ·  contd."))
-    out.append(_pro_block_heading("What this means for both of you"))
-    out.append(Paragraph(_safe(kya_matlab) or "—", _pick_body(kya_matlab or "", s, _lang)))
-    out.append(Spacer(1, 8))
+    _lang = s.get("_lang", "en")
+
+    # Highlighted pull-quote — extracted from kya_dikh first sentence.
+    quote = _extract_quote(kya_dikh)
+    if quote:
+        out.append(_pro_quote_block(quote, s))
+        out.append(Spacer(1, 10))
+
+    # Main insight paragraph (kya_dikh).
+    out.append(_pro_block_heading("What your chart shows here"))
+    out.append(Paragraph(_safe(kya_dikh) or "—",
+                         _pick_body(kya_dikh or "", s, _lang)))
+    out.append(Spacer(1, 10))
+
+    # Real-life moment box (kya_matlab as immersive scene).
+    if kya_matlab:
+        out.extend(_pro_real_life_moment(kya_matlab, s))
+        out.append(Spacer(1, 10))
+
+    # Why-in-charts grounding chips (engine signals — astrology made visible).
+    wic = _pro_why_in_charts(ch_key, koots or [], manglik)
+    if wic is not None:
+        out.append(wic)
+        out.append(Spacer(1, 10))
+
+    # What to keep in mind.
     out.append(_pro_block_heading("What to keep in mind"))
-    out.append(Paragraph(_safe(kya_dhyan) or "—", _pick_body(kya_dhyan or "", s, _lang)))
+    out.append(Paragraph(_safe(kya_dhyan) or "—",
+                         _pick_body(kya_dhyan or "", s, _lang)))
+
     if grounding:
-        out.append(Spacer(1, 12))
+        out.append(Spacer(1, 10))
         out.append(_grounding_card(s, grounding))
+
     out.append(PageBreak())
     return out
 
@@ -1791,8 +2018,14 @@ def _pro_timing_sync_page(s: dict, num: int,
 
 
 def _pro_final_verdict_page(s: dict, num: int, verdict: str,
-                            total: float, mx: int) -> list[Any]:
-    """P23 — Final Verdict (premium engine prose, mature 2-3 lines)."""
+                            total: float, mx: int,
+                            p1_name: str = "Partner 1",
+                            p2_name: str = "Partner 2") -> list[Any]:
+    """Final Verdict + Timing-context (Phase 2.5.11.24-fix8 merged page).
+
+    Premium engine verdict prose followed by a "READINESS & TIMING" block
+    that carries the standalone-Timing-Sync paragraph (now folded in to
+    drop a near-empty boilerplate page from the report)."""
     out: list[Any] = []
     out.append(_chapter_eyebrow(num, "FINAL VERDICT"))
     out.extend(_chapter_title_block(
@@ -1805,7 +2038,18 @@ def _pro_final_verdict_page(s: dict, num: int, verdict: str,
         "plant, water, and protect together."
     )
     out.append(Paragraph(_safe(txt), s["body"]))
-    out.append(Spacer(1, 16))
+    out.append(Spacer(1, 14))
+
+    # Timing-context block (folded in from the old Timing Sync page).
+    out.append(_pro_block_heading("Readiness & timing"))
+    out.append(Paragraph(
+        f"Both {_safe(p1_name)} and {_safe(p2_name)} are moving through "
+        f"their own larger life cycles. Real readiness is rarely a single "
+        f"auspicious date — it is the gradual overlap of life-phases where "
+        f"both feel ready to build something together. Use the chapter "
+        f"scores in this report as your honest mirror, not the calendar.",
+        s["body"]))
+    out.append(Spacer(1, 14))
     out.append(_grounding_card(
         s, "This verdict is a synthesis of all 7 chapters above plus the "
            "deeper KP marriage-promise reading — not a prediction."))
@@ -1847,15 +2091,20 @@ def _pro_closing_page(s: dict) -> list[Any]:
 
 
 def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
-    """Phase 2.5.11.23-soul-v3 — Pro 25-page renderer.
+    """Phase 2.5.11.24-fix8 — Pro 17-page renderer (visual-density rewrite).
 
     Renders the "Premium Relationship Truth" report using the
     `payload["pro_premium"]` block produced by `polish_premium_chapters`.
-    Always emits exactly 25 pages, even when the premium block is missing
-    or partial — falls back to engine-derived content per page.
+    Always emits ≈17 pages even when the premium block is missing or
+    partial — falls back to engine-derived content per page.
 
-    Phase soul-v3 added the Marriage Blueprint section (P22), shifting
-    Timing Sync → P23, Final Verdict → P24, Closing → P25.
+    Phase 2.5.11.24-fix8 (visual rhythm): each chapter is now ONE dense
+    page (was 2 thin pages) carrying a pull-quote + main insight + boxed
+    REAL-LIFE MOMENT + WHY-IN-CHARTS koot chips + keep-in-mind + grounding.
+    Standalone Timing Sync page dropped — its prose is folded into Final
+    Verdict as a "Readiness & timing" block. Net: 25 → 17 pages, every
+    page substantially denser. LLM contract (kya_dikh / kya_matlab /
+    kya_dhyan / grounding) UNCHANGED — all changes are renderer-only.
     """
     payload = payload or {}
     p1   = payload.get("p1") or {}
@@ -1899,15 +2148,17 @@ def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
         s, 3, pro.get("hidden_truth") or "",
         meta, p1.get("name") or "Partner 1", p2.get("name") or "Partner 2",
     ))
-    # P4–17 — 7 chapters × 2 pages each. Polisher emits ch1..ch7 by
-    # contract; renderer accepts either canonical key or ch1..ch7 by
-    # index so a future contract change cannot silently regress to
-    # placeholder text.
+    # P4–10 — 7 chapters × 1 dense rich page each (Phase 2.5.11.24-fix8).
+    # Each page now carries: title + score + pull-quote + main insight +
+    # real-life moment box + why-in-charts chips + keep-in-mind + grounding.
+    # Polisher emits ch1..ch7 by contract; renderer accepts either canonical
+    # key or ch1..ch7 by index so a future contract change cannot silently
+    # regress to placeholder text.
     page_num = 4
     for i, (key, eyebrow, title, subtitle) in enumerate(_PRO_CHAPTER_MAP, start=1):
         ch = by_key.get(key) or by_key.get(f"ch{i}") or {}
         if not ch:
-            # Deterministic placeholder so page count stays locked at 24.
+            # Deterministic placeholder so page count stays locked.
             # Soul-rich language even in the broken-payload case — never
             # exposes "engine"/"chapter not generated" wording to the user.
             ch = {
@@ -1927,16 +2178,17 @@ def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
                 "grounding":  "",
             }
         story.extend(_pro_chapter_pages(
-            s, page_num, page_num + 1, eyebrow, title, subtitle, ch,
+            s, page_num, page_num, eyebrow, title, subtitle, ch,
+            ch_key=key, koots=koots, manglik=manglik,
         ))
-        page_num += 2
+        page_num += 1
 
-    # P18 — What Makes This Bond Special (premium engine `special`)
+    # P11 — What Makes This Bond Special (premium engine `special`)
     special = [b for b in (pro.get("special") or []) if b][:3]
     if not special:
         special = _derive_special_bullets(payload)[:3]
     story.extend(_bullets_page(
-        s, 18, "WHAT MAKES THIS BOND SPECIAL",
+        s, page_num, "WHAT MAKES THIS BOND SPECIAL",
         "What Makes This Bond Special",
         "The quiet strengths most couples never realise they have.",
         special,
@@ -1948,35 +2200,40 @@ def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
     if not damage:
         damage = ["No major damage pattern was detected from the engine "
                   "facts — keep nurturing the strengths above."]
+    page_num += 1
     story.extend(_bullets_page(
-        s, 19, "WHAT CAN QUIETLY DAMAGE THIS BOND",
+        s, page_num, "WHAT CAN QUIETLY DAMAGE THIS BOND",
         "What Can Quietly Damage This Bond",
         "The patterns that create distance — slowly, almost invisibly.",
         damage,
     ))
-    # P20 — Practical Married Life (3 paragraphs)
+    page_num += 1
+    # Practical Married Life (3 paragraphs)
     practical = [p for p in (pro.get("practical") or []) if p]
     if not practical:
         practical = _practical_paragraphs(payload)
-    story.extend(_pro_practical_page(s, 20, practical[:3]))
-    # P21 — Koot Decoded
-    story.extend(_pro_koot_decoded_page(s, 21, koots))
-    # P22 — Marriage Blueprint (Phase soul-v3, NEW)
+    story.extend(_pro_practical_page(s, page_num, practical[:3]))
+    page_num += 1
+    # Koot Decoded
+    story.extend(_pro_koot_decoded_page(s, page_num, koots))
+    page_num += 1
+    # Marriage Blueprint (Phase soul-v3)
     story.extend(_pro_marriage_blueprint_page(
-        s, 22, pro.get("marriage_blueprint") or {},
+        s, page_num, pro.get("marriage_blueprint") or {},
         p1.get("name") or "Partner 1",
         p2.get("name") or "Partner 2",
     ))
-    # P23 — Timing Sync
-    story.extend(_pro_timing_sync_page(
-        s, 23, p1.get("name") or "Partner 1",
-        p2.get("name") or "Partner 2",
-    ))
-    # P24 — Final Verdict
+    page_num += 1
+    # Final Verdict (Phase 2.5.11.24-fix8: Timing Sync prose merged here —
+    # standalone Timing Sync page was pure boilerplate with zero engine
+    # signal, dropped per critique on visual density. Final Verdict page
+    # now carries the timing-context paragraph as a closing block.)
     story.extend(_pro_final_verdict_page(
-        s, 24, pro.get("verdict") or "", total, mx,
+        s, page_num, pro.get("verdict") or "", total, mx,
+        p1_name=p1.get("name") or "Partner 1",
+        p2_name=p2.get("name") or "Partner 2",
     ))
-    # P25 — Closing
+    # Closing
     story.extend(_pro_closing_page(s))
 
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)

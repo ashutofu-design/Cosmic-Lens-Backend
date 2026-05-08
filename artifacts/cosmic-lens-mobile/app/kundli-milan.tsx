@@ -1614,6 +1614,43 @@ export default function KundliMilanScreen(){
    *  cache) — never names AI; brand: "Powered by Advanced Cosmic
    *  Intelligence".
    */
+  /** Show a "are you sure these are the right details?" confirmation
+   *  BEFORE generating the Pro PDF. User sees the two selected kundlis
+   *  (name + DOB + birth place) and can either Confirm to proceed or
+   *  Change to go back and pick different profiles. Prevents accidental
+   *  PDF generation on the wrong couple. */
+  function confirmAndDownloadProPdf(){
+    if(!person1||!p2){ handleDownloadProPdf(); return; }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    const fmtBd=(src:any)=>{
+      if(!src) return "—";
+      const d=src.day, m=src.month, y=src.year;
+      const h=src.hour, mi=src.minute, ap=(src.ampm||"").toUpperCase();
+      const dt=(d&&m&&y)?`${d}/${m}/${y}`:"";
+      const tm=(h!=null&&mi!=null)?` · ${h}:${String(mi).padStart(2,"0")}${ap?" "+ap:""}`:"";
+      const pl=src.place?` · ${src.place}`:"";
+      return `${dt}${tm}${pl}`||"—";
+    };
+    const bd1Src=p1Profile?.birthData ?? person1._rawBirth ?? null;
+    const bd2Src=p2Profile?.birthData ?? p2._rawBirth ?? null;
+
+    const body=
+      `Aap 1: ${person1.name||"Partner 1"}\n${fmtBd(bd1Src)}\n\n`+
+      `Aap 2: ${p2.name||"Partner 2"}\n${fmtBd(bd2Src)}\n\n`+
+      `Kya aap inhi details ke saath aage badhna chahte hain?`;
+
+    Alert.alert(
+      "Confirm Details",
+      body,
+      [
+        {text:"Change",style:"cancel"},
+        {text:"Yes, Continue",onPress:()=>{ handleDownloadProPdf(); }},
+      ],
+      {cancelable:true},
+    );
+  }
+
   async function handleDownloadProPdf(){
     if(!person1||!p2)return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -2025,7 +2062,7 @@ export default function KundliMilanScreen(){
               colors={["#6366F1","#8B5CF6","#a855f7"]}
               disabled={!canCalculate||pdfLoading} loading={calcLoading||pdfLoading}
               text={pdfLoading?"PDF generate ho raha hai…":(canCalculate?t.km2_unlockFullAnal:!person1&&!p2?t.km2_addBothFirst:!person1?t.km_addYourKundli:t.km_addPartnerKundli)}
-              onPress={handleDownloadProPdf}/>
+              onPress={confirmAndDownloadProPdf}/>
           )}
 
           {/* ── Results ── */}

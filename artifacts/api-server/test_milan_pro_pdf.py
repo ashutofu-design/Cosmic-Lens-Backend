@@ -142,6 +142,120 @@ def test_pro_pdf_non_latin_lang_keeps_latin_chip_text_readable():
     assert "WHY THIS BOND FORMED" in text
 
 
+def test_pro_pdf_carries_fix10_blueprint_depth_blocks():
+    """Phase 2.5.11.24-fix10 regression: Marriage Blueprint must carry
+    the 4 deterministic D1+D9 depth blocks (7th-lord meaning, affection
+    style, conflict instinct, daily emotional rhythm), the chapter
+    grounding card must be DROPPED, and the verdict closer must use the
+    sharper Hinglish phrasing — together these address the critique
+    that the blueprint was 'gold but too short' and chapter even-pages
+    looked empty."""
+    import io, pypdf
+    payload = _milan(); payload["pro_premium"] = _pro()
+    payload["d9_marriage"] = {
+        "p1": {"d9_lagna_lord": "Mars",  "marriage_maturity_0_10": 6},
+        "p2": {"d9_lagna_lord": "Venus", "marriage_maturity_0_10": 7},
+        "sync": {"lagna_lord_relation": "friend",
+                 "seven_lord_relation": "neutral"},
+    }
+    pdf = render_milan_pro_pdf(payload, lang="en")
+    reader = pypdf.PdfReader(io.BytesIO(pdf))
+    text = "\n".join((p.extract_text() or "") for p in reader.pages)
+    # 4 new depth labels.
+    assert "DEEPER MARRIAGE LAYER" in text
+    assert "What marriage means to" in text
+    assert "How affection actually shows up" in text
+    assert "How conflict actually plays out" in text
+    assert "daily emotional rhythm" in text
+    # 7th-lord translation surfaces (Mars → fight FOR, Venus → sanctuary).
+    assert "partnership to fight FOR" in text
+    assert "private sanctuary" in text
+    # Friend relation translates to the repair-within-48h line.
+    assert "repair within 24-48 hours" in text
+    # Sharper Hinglish closer (any band variant).
+    assert any(p in text for p in [
+        "Is shaadi ki strength", "Yeh shaadi isliye",
+        "Yeh bond tab tikega",   "Yeh shaadi tab gehri",
+    ])
+
+
+def test_pro_pdf_blueprint_uses_7th_lord_not_lagna_lord_for_marriage_meaning():
+    """Phase 2.5.11.24-fix10 architect-flagged correctness regression:
+    'What marriage means to X' MUST be keyed by `d9_7h_lord` (7th-lord),
+    NOT `d9_lagna_lord`. Previous version incorrectly used lagna lord
+    for both the affection block and the marriage-meaning block."""
+    import io, pypdf
+    payload = _milan(); payload["pro_premium"] = _pro()
+    # 7th lord = Saturn (long-horizon construction project), lagna lord =
+    # Mars (direct, protective intensity affection). The two MUST surface
+    # on different blocks — proves correct field separation.
+    payload["d9_marriage"] = {
+        "p1": {"d9_lagna_lord": "Mars",  "d9_7h_lord": "Saturn",
+               "marriage_maturity_0_10": 6},
+        "p2": {"d9_lagna_lord": "Venus", "d9_7h_lord": "Mercury",
+               "marriage_maturity_0_10": 6},
+        "sync": {"lagna_lord_relation": "neutral",
+                 "seven_lord_relation": "neutral"},
+    }
+    pdf = render_milan_pro_pdf(payload, lang="en")
+    text = "\n".join((p.extract_text() or "")
+                     for p in pypdf.PdfReader(io.BytesIO(pdf)).pages)
+    # Marriage-meaning block (driven by d9_7h_lord = Saturn / Mercury).
+    assert "long-horizon construction project" in text
+    assert "never-finished conversation between two intelligent equals" in text
+    # Affection block (driven by d9_lagna_lord = Mars / Venus) still works.
+    assert "direct, protective intensity" in text
+    assert "aesthetic warmth" in text
+
+
+def test_pro_pdf_blueprint_handles_malformed_nested_d9_marriage():
+    """Phase 2.5.11.24-fix10 architect-flagged robustness regression:
+    `d9_marriage` may arrive with non-dict nested values (lists, strings,
+    numbers) from a malformed payload — renderer must NEVER crash."""
+    payload = _milan(); payload["pro_premium"] = _pro()
+    payload["d9_marriage"] = {
+        "p1": [1, 2, 3],          # list, not dict
+        "p2": "broken",           # string, not dict
+        "sync": 42,               # int, not dict
+    }
+    pdf = render_milan_pro_pdf(payload, lang="en")
+    assert _count_pages(pdf) == 19
+
+
+def test_pro_pdf_blueprint_accepts_engine_native_relation_friendly():
+    """Phase 2.5.11.24-fix10 architect-flagged regression: the engine
+    `compute_d9_marriage` emits `lagna_lord_relation='friendly'` (not
+    `friend`) — the conflict-instinct block must recognise that variant
+    and emit the repair-within-48h line, not the neutral fallback."""
+    import io, pypdf
+    payload = _milan(); payload["pro_premium"] = _pro()
+    payload["d9_marriage"] = {
+        "p1": {"d9_lagna_lord": "Jupiter", "marriage_maturity_0_10": 6},
+        "p2": {"d9_lagna_lord": "Moon",    "marriage_maturity_0_10": 6},
+        "sync": {"lagna_lord_relation": "Friendly",  # engine variant + caps
+                 "seven_lord_relation": "neutral"},
+    }
+    pdf = render_milan_pro_pdf(payload, lang="en")
+    text = "\n".join((p.extract_text() or "")
+                     for p in pypdf.PdfReader(io.BytesIO(pdf)).pages)
+    assert "repair within 24-48 hours" in text
+
+
+def test_pro_pdf_chapter_grounding_card_dropped_fix10():
+    """Phase 2.5.11.24-fix10 regression: 'Why we say this' card MUST
+    be removed from the 7 chapter pages (the chip + REAL-LIFE MOMENT +
+    WHY-IN-CHARTS chips already provide grounding). It may still
+    appear on blueprint takeaway / verdict / hidden-truth grounding."""
+    import io, pypdf
+    payload = _milan(); payload["pro_premium"] = _pro()
+    pdf = render_milan_pro_pdf(payload, lang="en")
+    reader = pypdf.PdfReader(io.BytesIO(pdf))
+    text = "\n".join((p.extract_text() or "") for p in reader.pages)
+    # In fix9 every chapter shipped a grounding card → 7+ instances.
+    # In fix10 only blueprint takeaway + verdict + hidden_truth keep it.
+    assert text.count("Why we say this") <= 4
+
+
 def test_pro_pdf_carries_fix9_depth_blocks():
     """Phase 2.5.11.24-fix9 regression: report must carry the depth +
     hierarchy additions — analysis-layers checklist, per-chapter CHART

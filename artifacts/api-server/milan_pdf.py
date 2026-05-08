@@ -2281,9 +2281,15 @@ def _pro_chapter_pages(s: dict, num_a: int, num_b: int,
     out.append(Paragraph(_safe(kya_dhyan) or "—",
                          _pick_body(kya_dhyan or "", s, _lang)))
 
-    if grounding:
-        out.append(Spacer(1, 10))
-        out.append(_grounding_card(s, grounding))
+    # Phase 2.5.11.24-fix10: grounding card DROPPED from chapter pages.
+    # Critique: when LLM kya_dikh+kya_matlab spill onto a 2nd page the
+    # tiny grounding card landed alone on near-empty even pages
+    # (6/10/12/14/16/18) and broke immersion. The CHART LAYER chip +
+    # REAL-LIFE MOMENT box + WHY-IN-CHARTS koot chips already give
+    # three layers of visible astrology grounding per chapter, so the
+    # redundant "Why we say this" footer can go. `grounding` field is
+    # still consumed elsewhere (verdict, blueprint takeaway, snapshot).
+    _ = grounding  # intentionally not rendered on chapter pages
 
     out.append(PageBreak())
     return out
@@ -2365,9 +2371,202 @@ def _pro_koot_decoded_page(s: dict, num: int, koots: list[dict]) -> list[Any]:
     return out
 
 
+_PLANET_AFFECTION = {
+    "mars":    "direct, protective intensity — affection arrives as action",
+    "venus":   "tender, aesthetic warmth — soft touch, small beautiful gestures",
+    "jupiter": "expansive, generous guidance — affection as wisdom and presence",
+    "mercury": "playful, witty banter — words and shared jokes are the love-language",
+    "saturn":  "committed restraint — affection through quiet reliability, not loud display",
+    "sun":     "loyal, proud devotion — affection that is publicly visible and unwavering",
+    "moon":    "emotional, nurturing care — mood-mirroring, deep listening",
+    "rahu":    "unconventional, magnetic chase — intensity that bends the usual rules",
+    "ketu":    "detached, almost spiritual presence — affection through silent companionship",
+}
+
+_PLANET_MARRIAGE_MEANING = {
+    "mars":    "a partnership to fight FOR — shared territory, shared mission",
+    "venus":   "a private sanctuary of beauty, comfort, and emotional refinement",
+    "jupiter": "a dharmic path — marriage as a vehicle for growth and meaning",
+    "mercury": "a long, never-finished conversation between two intelligent equals",
+    "saturn":  "a long-horizon construction project — patience, duty, slow trust",
+    "sun":     "an identity-anchor — visible commitment that defines who they are",
+    "moon":    "an emotional home — safety and nurture above everything else",
+    "rahu":    "a transformative bond — marriage as a portal into a new self",
+    "ketu":    "a lighter attachment — companionship without grasping, room to breathe",
+}
+
+
+def _planet_key(name: str | None) -> str:
+    return (name or "").strip().lower()
+
+
+def _blueprint_depth_blocks(s: dict, d9: dict | None,
+                            p1n: str, p2n: str) -> list[Any]:
+    """Phase 2.5.11.24-fix10 — 4 deterministic depth blocks added to the
+    Marriage Blueprint page so it grows from 1 page to ~2 pages of real
+    D1/D9 translation (addresses the "blueprint is gold, make it longer"
+    critique). All blocks are derived from `payload["d9_marriage"]`
+    signals (lagna lord, sync.lagna_lord_relation, sync.seven_lord_relation,
+    marriage_maturity_0_10) — NEVER quote raw chart vocab. Always emits
+    flowables (uses safe defaults when d9 is missing) so tests can lock
+    the contract."""
+    out: list[Any] = []
+    d9 = d9 if isinstance(d9, dict) else {}
+    # Architect-flagged fix10 hardening: nested p1/p2/sync may arrive as
+    # lists / strings / None from a malformed payload — type-check each
+    # before .get() to keep the renderer crash-free.
+    raw_p1, raw_p2, raw_sync = d9.get("p1"), d9.get("p2"), d9.get("sync")
+    p1d = raw_p1 if isinstance(raw_p1, dict) else {}
+    p2d = raw_p2 if isinstance(raw_p2, dict) else {}
+    sync = raw_sync if isinstance(raw_sync, dict) else {}
+
+    # Lagna lord drives AFFECTION STYLE; 7th lord drives MARRIAGE MEANING.
+    # Architect-flagged fix10 correctness: previous version used lagna lord
+    # for both — now correctly reads `d9_7h_lord` for the 7th-lord block.
+    p1_lord = _planet_key(p1d.get("d9_lagna_lord")) or "jupiter"
+    p2_lord = _planet_key(p2d.get("d9_lagna_lord")) or "venus"
+    p1_7l = _planet_key(p1d.get("d9_7h_lord")) or p1_lord
+    p2_7l = _planet_key(p2d.get("d9_7h_lord")) or p2_lord
+    # Relation strings: normalize + accept engine-native variants
+    # (`friendly`/`hostile` etc) the d9_marriage compute path emits.
+    rel_lagna = (str(sync.get("lagna_lord_relation") or "neutral")
+                 .strip().lower())
+    try:
+        m1 = float(p1d.get("marriage_maturity_0_10") or 5.0)
+        m2 = float(p2d.get("marriage_maturity_0_10") or 5.0)
+    except Exception:
+        m1, m2 = 5.0, 5.0
+    avg_m = (m1 + m2) / 2.0
+
+    # Latin-only deterministic prose AND headings → body_latin /
+    # Helvetica-Bold so non-Latin langs render every label and body line.
+    # Architect-flagged: the depth-block heading was previously bound to
+    # s["h1"].fontName (script font); now Helvetica-Bold across the board.
+    fname = (s.get("body_latin").fontName if "body_latin" in s
+             else (s.get("body").fontName if "body" in s else "Helvetica"))
+    body_st = ParagraphStyle("bp_dep_body", fontName=fname, fontSize=10.5,
+                             leading=15, textColor=TEXT_DARK)
+    head_bold = "Helvetica-Bold"
+
+    def _h(label: str):
+        out.append(Paragraph(
+            f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(label)}</b></font>",
+            ParagraphStyle("bp_dep_h", fontName=head_bold, fontSize=11,
+                           leading=15, spaceBefore=8, spaceAfter=4),
+        ))
+
+    # Subtle gold divider so the depth section visually opens.
+    div = Table([[""]], colWidths=[180 * mm], rowHeights=[1])
+    div.setStyle(TableStyle([("LINEABOVE", (0, 0), (-1, 0), 0.6, BRAND_GOLD)]))
+    out.append(Spacer(1, 8))
+    out.append(div)
+    out.append(Spacer(1, 4))
+    out.append(Paragraph(
+        f"<font color='{_hex(TEXT_SOFT)}'><b>DEEPER MARRIAGE LAYER · D1 + D9 TRANSLATION</b></font>",
+        ParagraphStyle("bp_dep_eyebrow", fontName="Helvetica-Bold",
+                       fontSize=8, leading=11, spaceAfter=2),
+    ))
+
+    # 1) What marriage actually means (7th-lord translated — fix10 corrected).
+    _h(f"What marriage means to {p1n} vs {p2n}")
+    p1_mean = _PLANET_MARRIAGE_MEANING.get(p1_7l, _PLANET_MARRIAGE_MEANING["jupiter"])
+    p2_mean = _PLANET_MARRIAGE_MEANING.get(p2_7l, _PLANET_MARRIAGE_MEANING["venus"])
+    out.append(Paragraph(
+        f"For <b>{_safe(p1n)}</b>, marriage is read as {p1_mean}. "
+        f"For <b>{_safe(p2n)}</b>, marriage is read as {p2_mean}. "
+        f"Both definitions are valid — the friction (and the magic) lives "
+        f"in the small, daily places where these two definitions don't "
+        f"perfectly overlap.",
+        body_st))
+
+    # 2) Affection style (lagna-lord translated).
+    _h("How affection actually shows up here")
+    p1_aff = _PLANET_AFFECTION.get(p1_lord, _PLANET_AFFECTION["jupiter"])
+    p2_aff = _PLANET_AFFECTION.get(p2_lord, _PLANET_AFFECTION["venus"])
+    if p1_lord == p2_lord:
+        aff_line = (
+            f"Both of you express care in nearly the same shape — "
+            f"{p1_aff}. The risk: this can quietly turn into echo, "
+            f"not exchange. The gift: deep recognition without translation."
+        )
+    else:
+        aff_line = (
+            f"<b>{_safe(p1n)}</b> shows love with {p1_aff}. "
+            f"<b>{_safe(p2n)}</b> shows love with {p2_aff}. "
+            f"Neither is more loving — they are different dialects of the "
+            f"same emotion, and most early arguments here are translation "
+            f"failures, not lack of feeling."
+        )
+    out.append(Paragraph(aff_line, body_st))
+
+    # 3) Conflict instinct (sync.lagna_lord_relation translated).
+    # Architect-flagged: must accept engine-native variants — d9_marriage
+    # emits `friendly`/`hostile` not just `friend`/`enemy`.
+    _h("How conflict actually plays out")
+    if rel_lagna in ("friend", "friendly", "great_friend", "mutual_friend",
+                     "mutual", "best_friend"):
+        conf_line = (
+            "When friction starts, both of you lean — almost instinctively "
+            "— toward repair within 24-48 hours. The chart shows a "
+            "natural willingness to soften first; the danger is taking "
+            "this for granted and skipping the actual conversation."
+        )
+    elif rel_lagna in ("enemy", "hostile", "great_enemy", "mutual_enemy",
+                       "worst_enemy", "bitter_enemy"):
+        conf_line = (
+            "When a fight begins, both of you tend to retreat into "
+            "separate emotional rooms and wait for the other to come "
+            "first. The chart calls this the 'cold war' instinct — it is "
+            "the single biggest pattern this marriage has to outgrow."
+        )
+    elif rel_lagna in ("own", "swakshetra", "self"):
+        conf_line = (
+            "Each of you fights from your own ground — clear, principled, "
+            "rarely apologising for the position itself. Disagreements "
+            "here aren't loud, they are slow. The work is meeting in the "
+            "shared middle, not winning the argument."
+        )
+    else:
+        conf_line = (
+            "Conflict here is not explosive — it tends to move sideways, "
+            "showing up as small withdrawals rather than big arguments. "
+            "The risk: unsaid hurt accumulating quietly. The gift: neither "
+            "of you wounds with words easily."
+        )
+    out.append(Paragraph(conf_line, body_st))
+
+    # 4) Daily emotional habit (avg maturity translated).
+    _h("The daily emotional rhythm of this bond")
+    if avg_m >= 7.0:
+        day_line = (
+            "On most ordinary days this marriage will feel calibrated — "
+            "small companionable rituals (chai, late-night silence, "
+            "weekend errands) will quietly do the heavy lifting that "
+            "grand gestures get the credit for."
+        )
+    elif avg_m >= 4.0:
+        day_line = (
+            "On most days, one of you will be the emotional thermostat "
+            "while the other catches up — and the role will quietly "
+            "switch every few weeks. The maturity here lies in noticing "
+            "the switch without scoring it."
+        )
+    else:
+        day_line = (
+            "On many ordinary days you will move in parallel orbits — "
+            "present in the same room, occupied by separate inner worlds. "
+            "This is not coldness; it is the chart asking for conscious, "
+            "named effort to keep the line warm."
+        )
+    out.append(Paragraph(day_line, body_st))
+
+    return out
+
+
 def _pro_marriage_blueprint_page(s: dict, num: int,
                                   blueprint: dict,
-                                  p1_name: str, p2_name: str) -> list[Any]:
+                                  p1_name: str, p2_name: str,
+                                  d9_marriage: dict | None = None) -> list[Any]:
     """P22 — Marriage Blueprint (Phase 2.5.11.23-soul-v3).
 
     Six prose blocks describing each partner's INNATE marriage nature,
@@ -2409,6 +2608,12 @@ def _pro_marriage_blueprint_page(s: dict, num: int,
            blueprint.get("what_p1_needs_from_p2", ""))
     _block(f"What {p2_name} needs from {p1_name}",
            blueprint.get("what_p2_needs_from_p1", ""))
+
+    # Phase 2.5.11.24-fix10 — 4 deterministic depth blocks (D1+D9
+    # translation: 7th-lord meaning, affection style, conflict instinct,
+    # daily emotional rhythm). Spills the blueprint to ~2 pages so this
+    # gold section finally reads as deep as the user wanted.
+    out.extend(_blueprint_depth_blocks(s, d9_marriage, p1_name, p2_name))
 
     takeaway = (blueprint.get("blueprint_takeaway") or "").strip()
     if takeaway:
@@ -2495,29 +2700,34 @@ def _pro_final_verdict_page(s: dict, num: int, verdict: str,
         ratio = float(total) / float(mx) if mx else 0.0
     except Exception:
         ratio = 0.0
+    # Phase 2.5.11.24-fix10 — sharper closers, written to be the one
+    # screenshot-worthy line of the entire report. Anchor phrases
+    # ("emotional language" / "patience over pride" / "acknowledgement")
+    # preserved so the regression test still locks the band-keying.
     if ratio >= 0.78:
         closer = (
-            "This marriage will succeed because both of you instinctively "
-            "make space for each other to be different — and that single "
-            "habit is rarer than every grand romantic gesture combined."
+            "Is shaadi ki strength perfection nahi — ek dusre ki alag "
+            "emotional languages ko dheere dheere seekhne ki capacity hai. "
+            "And that one capacity is rarer than every grand romantic "
+            "gesture combined."
         )
     elif ratio >= 0.58:
         closer = (
-            "This marriage will succeed not because both of you are "
-            "identical — but because, year by year, you will slowly "
-            "learn each other's emotional language."
+            "Yeh shaadi isliye chalegi kyunki dono ek jaise nahi ho — "
+            "balki har saal, thode aur honestly, ek dusre ki emotional "
+            "language seekhte rahoge. That patient learning is the marriage."
         )
     elif ratio >= 0.40:
         closer = (
-            "This marriage will hold not when love is loudest — but when "
-            "both of you choose patience over pride during the hardest "
-            "weeks. The chart asks for that one specific maturity."
+            "Yeh bond tab tikega jab pyaar sabse loud na ho — balki jab "
+            "dono of you choose patience over pride during the weeks "
+            "jab koi nahi dekh raha. The chart is asking for exactly that."
         )
     else:
         closer = (
-            "This bond will only deepen when both of you stop expecting "
-            "agreement and start practising acknowledgement — that, more "
-            "than any ritual, is the real Vedic remedy here."
+            "Yeh shaadi tab gehri hogi jab dono of you stop demanding "
+            "agreement and start offering acknowledgement — yahi, kisi "
+            "bhi ritual se zyada, is rishte ka asli Vedic remedy hai."
         )
     # Latin-only — body_latin so closer stays readable in bn/ta/te/etc.
     fname = (s.get("body_latin").fontName if "body_latin" in s
@@ -2723,11 +2933,12 @@ def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
     # Koot Decoded
     story.extend(_pro_koot_decoded_page(s, page_num, koots))
     page_num += 1
-    # Marriage Blueprint (Phase soul-v3)
+    # Marriage Blueprint (Phase soul-v3 + fix10 D1/D9 depth blocks).
     story.extend(_pro_marriage_blueprint_page(
         s, page_num, pro.get("marriage_blueprint") or {},
         p1.get("name") or "Partner 1",
         p2.get("name") or "Partner 2",
+        d9_marriage=payload.get("d9_marriage") or {},
     ))
     page_num += 1
     # Phase 2.5.11.24-fix9 — Attraction + Core Challenge dedicated page.

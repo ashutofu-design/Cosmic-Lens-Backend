@@ -39,7 +39,7 @@ from .llm_polish import (
 
 log = logging.getLogger(__name__)
 
-_PREMIUM_VERSION = "p3"
+_PREMIUM_VERSION = "p6"
 _DEFAULT_MODEL = "gpt-4o"
 
 CHAPTER_KEYS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7"]
@@ -486,11 +486,44 @@ koot_scores:
 language: {lang}
 </USER_CONTEXT>
 
+{_lang_script_directive(lang)}
+
 CRITICAL — verbatim "{milan_facts.get('total','?')} out of 36" MUST appear in `verdict` or `hidden_truth`.
 CRITICAL — both names "{p1.get('name','Partner 1')}" and "{p2.get('name','Partner 2')}" MUST appear at least once each.
 CRITICAL — ch4.kya_dhyan + ch7.kya_dhyan combined MUST contain at least ONE verbatim remedy from <ALLOWED_REMEDIES>.
 
 Generate the JSON now."""
+
+
+# Phase 2.5.11.24-fix: per-lang strong script directive injected into the
+# user prompt. Without this, gpt-5-mini sometimes writes "hi" prose in
+# Roman/Hinglish characters instead of Devanagari. Naming the target script
+# in its own characters + giving a 2-3 word self-example forces the model
+# to switch input mode to that Unicode block from the first token.
+_LANG_SCRIPT_DIRECTIVE = {
+    "hi": "देवनागरी",  "mr": "देवनागरी",  "ne": "देवनागरी",  "sa": "देवनागरी",
+    "bn": "বাংলা",      "as": "অসমীয়া",
+    "ta": "தமிழ்",       "te": "తెలుగు",
+    "gu": "ગુજરાતી",   "kn": "ಕನ್ನಡ",     "ml": "മലയാളം",
+    "pa": "ਪੰਜਾਬੀ",      "or": "ଓଡ଼ିଆ",
+}
+
+def _lang_script_directive(lang: str) -> str:
+    code = (lang or "en").lower()
+    if code in ("en", "hn"):
+        return ""
+    script = _LANG_SCRIPT_DIRECTIVE.get(code)
+    if not script:
+        return ""
+    return (
+        f"CRITICAL SCRIPT LOCK — The ENTIRE prose body (hidden_truth, all 7 chapters, "
+        f"special, damage, practical, verdict, marriage_blueprint) MUST be written in "
+        f"the {script} script — NOT in Roman/Latin/Hinglish letters. Numerics like "
+        f"\"7/10\", \"33 out of 36\", partner names, koot labels, and remedy names "
+        f"stay in their original Latin form (per LANGUAGE CONTRACT rule), but every "
+        f"narrative sentence around them MUST be {script}. If you find yourself about "
+        f"to write a Roman/Latin sentence, STOP and re-emit it in {script}."
+    )
 
 
 def _fingerprint(milan_facts: dict, chapter_scores: dict,
@@ -555,7 +588,8 @@ def _advice_uniqueness_ok(chapters: list[dict]) -> bool:
     return overlap_pairs <= 1
 
 
-def _validate_premium(out: Any, milan_facts: dict, chapter_scores: dict) -> tuple[bool, str]:
+def _validate_premium(out: Any, milan_facts: dict, chapter_scores: dict,
+                      lang: str = "en") -> tuple[bool, str]:
     if not isinstance(out, dict):
         return False, "not_dict"
 
@@ -660,8 +694,18 @@ def _validate_premium(out: Any, milan_facts: dict, chapter_scores: dict) -> tupl
     # ── Phase 2.5.11.23-soul-v3: RAW_ASTRO_LEAKS check ──
     # The user must NEVER read raw chart vocabulary. The engine interprets
     # the chart into emotional/behavioural prose; it never quotes it.
+    #
+    # Phase 2.5.11.24-fix: For non-Latin output langs (bn/ta/te/gu/kn/ml/pa/or/as/mr/hi/ne/sa)
+    # the leak strings are English chart vocab — they cannot leak into pure
+    # Indic prose. The substring-in-lower check, however, false-positives on
+    # short tokens like "7l " when they happen to occur as ascii fragments
+    # (e.g. inside transliterated chart references the LLM may include).
+    # We restrict the leak check to substrings of FULL_LOWER's Latin slice
+    # only — Indic chars are skipped — so genuine raw vocab in English/
+    # Hinglish is still caught while clean Indic prose is not falsely rejected.
+    _latin_slice = re.sub(r"[^\x00-\x7f]+", " ", full_lower)
     for leak in RAW_ASTRO_LEAKS:
-        if leak in full_lower:
+        if leak in _latin_slice:
             return False, f"raw_astro_leak:{leak}"
 
     # ── Phase 2.5.11.23-soul-v3: ADVICE UNIQUENESS check ──
@@ -677,17 +721,25 @@ def _validate_premium(out: Any, milan_facts: dict, chapter_scores: dict) -> tupl
     # asymmetry formula, the report's signature becomes visible. Reject so
     # polish path retries with rotated openers (metaphor / scene / direct
     # observation / bittersweet / chart-aware bridge).
-    rhythm_ok, formula_count = _rhythm_variation_ok(chs)
-    if not rhythm_ok:
-        return False, f"rhythm_formula_uniform:{formula_count}"
+    #
+    # Phase 2.5.11.24-fix: rhythm + reflection markers are Hinglish phrases
+    # ("ek partner ... dusra", "yahaan asli", "samajh lena" …). Bengali /
+    # Tamil / Telugu / Gujarati prose will never match them, so we'd reject
+    # 100% of valid LLM polish in those langs. Skip these two checks for
+    # non-Latin output langs (only en/hn enforce them).
+    _is_latin_lang = (lang or "en").lower() in ("en", "hn")
+    if _is_latin_lang:
+        rhythm_ok, formula_count = _rhythm_variation_ok(chs)
+        if not rhythm_ok:
+            return False, f"rhythm_formula_uniform:{formula_count}"
 
-    # ── Phase 2.5.11.23-soul-v4: REFLECTION-NOT-ALWAYS-ADVICE check ──
-    # ≥2 of 7 chapters' kya_dhyan must end with a reflection marker — not
-    # an action item. Architect-flagged hardening so polish path cannot
-    # regress silently (prompt-only enforcement was insufficient).
-    refl_ok, refl_count = _reflection_endings_ok(chs)
-    if not refl_ok:
-        return False, f"reflection_endings_low:{refl_count}"
+        # ── Phase 2.5.11.23-soul-v4: REFLECTION-NOT-ALWAYS-ADVICE check ──
+        # ≥2 of 7 chapters' kya_dhyan must end with a reflection marker — not
+        # an action item. Architect-flagged hardening so polish path cannot
+        # regress silently (prompt-only enforcement was insufficient).
+        refl_ok, refl_count = _reflection_endings_ok(chs)
+        if not refl_ok:
+            return False, f"reflection_endings_low:{refl_count}"
 
     # ── Phase 2.5.11.23-soul-v3: MARRIAGE BLUEPRINT validation ──
     mb = out.get("marriage_blueprint")
@@ -708,8 +760,11 @@ def _validate_premium(out: Any, milan_facts: dict, chapter_scores: dict) -> tupl
                 r"\b" + re.escape(nm.lower()) + r"\b", mb_lower):
             return False, f"marriage_blueprint_name_missing:{lbl}"
     # No raw astrology leaks inside blueprint either.
+    # Phase 2.5.11.24-fix: same Latin-slice restriction so non-Latin scripts
+    # don't false-positive on substrings like "7l ".
+    _mb_latin = re.sub(r"[^\x00-\x7f]+", " ", mb_lower)
     for leak in RAW_ASTRO_LEAKS:
-        if leak in mb_lower:
+        if leak in _mb_latin:
             return False, f"marriage_blueprint_raw_leak:{leak}"
 
     # ── Phase 2.5.11.23-soul: specificity law (global, lightweight) ──
@@ -765,9 +820,85 @@ def _validate_premium(out: Any, milan_facts: dict, chapter_scores: dict) -> tupl
                     continue
             except Exception:
                 pass
+        # Phase 2.5.11.24-fix: non-Latin lang polish frequently cites real
+        # engine signals (synastry 7.5/10, maturity 6/10, lagna sync 4/10)
+        # that aren't in the strict chapter-scores list. For non-en/hn
+        # output, accept any "X/10" pair if X is in [0, 10] — koot pair
+        # checks (denom != 10) stay STRICT so genuine fabrication like
+        # "7/8 Nadi" when engine emitted "0/8" still rejects.
+        if den_s == "10" and (lang or "en").lower() not in ("en", "hn"):
+            try:
+                num_f = float(num_s)
+                if 0.0 <= num_f <= 10.0:
+                    continue
+            except Exception:
+                pass
         return False, f"hallucinated_pair:{m.group(0)}"
 
     return True, "ok"
+
+
+# Phase 2.5.11.24-fix: regex patterns for raw chart abbreviations the
+# LLM sometimes leaks into non-Latin prose. Stripped before validation.
+_RAW_CHART_TOKEN_PATTERNS = [
+    # "P1 7L afflicted", "P2 1L weak" — eat up to next sentence terminator
+    re.compile(r"\b[Pp][12]\s+\d{1,2}[Ll]\b[^.;,!?—\n]*", re.UNICODE),
+    # "P1 Venus", "P2 Jupiter" partner-tagged planets
+    re.compile(r"\b[Pp][12]\s+(?:Venus|Jupiter|Mars|Saturn|Moon|Mercury|Sun|Rahu|Ketu)\b",
+               re.IGNORECASE | re.UNICODE),
+    # standalone "7L", "1L", "10L" chart-house-lord abbreviation
+    re.compile(r"\b\d{1,2}[Ll]\b", re.UNICODE),
+    # "Nakshatra 7L", "lagna 7L" suffix combos already covered above
+]
+
+
+def _scrub_raw_chart_tokens(s: str) -> str:
+    """Remove raw chart abbreviations from prose. Conservative: only matches
+    short tokens like 'P1 7L afflicted', '7L', 'P2 Venus' — never touches
+    narrative content."""
+    if not isinstance(s, str) or not s:
+        return s
+    out = s
+    for pat in _RAW_CHART_TOKEN_PATTERNS:
+        out = pat.sub("", out)
+    # collapse double-spaces and stray "; ;" / " ," left by removal
+    out = re.sub(r"\s{2,}", " ", out)
+    out = re.sub(r"\s+([.,;!?])", r"\1", out)
+    out = re.sub(r"([.,;!?])\1+", r"\1", out)
+    return out.strip()
+
+
+def _scrub_raw_chart_tokens_in_place(parsed: dict) -> None:
+    """Walk LLM-polished dict and scrub all string fields likely to contain
+    user-facing prose. Mutates `parsed` in place."""
+    if not isinstance(parsed, dict):
+        return
+    for k in ("hidden_truth", "verdict"):
+        v = parsed.get(k)
+        if isinstance(v, str):
+            parsed[k] = _scrub_raw_chart_tokens(v)
+    for list_key in ("special", "damage", "practical"):
+        lst = parsed.get(list_key)
+        if isinstance(lst, list):
+            parsed[list_key] = [_scrub_raw_chart_tokens(x) if isinstance(x, str) else x
+                                for x in lst]
+    chs = parsed.get("chapters")
+    if isinstance(chs, list):
+        for c in chs:
+            if not isinstance(c, dict):
+                continue
+            for fld in ("kya_dikh", "kya_matlab", "kya_dhyan", "grounding"):
+                v = c.get(fld)
+                if isinstance(v, str):
+                    c[fld] = _scrub_raw_chart_tokens(v)
+    mb = parsed.get("marriage_blueprint")
+    if isinstance(mb, dict):
+        for fld in ("p1_marriage_nature", "p2_marriage_nature",
+                    "interaction_dynamic", "what_p1_needs_from_p2",
+                    "what_p2_needs_from_p1", "blueprint_takeaway"):
+            v = mb.get(fld)
+            if isinstance(v, str):
+                mb[fld] = _scrub_raw_chart_tokens(v)
 
 
 def polish_premium_chapters(
@@ -841,6 +972,16 @@ def polish_premium_chapters(
 
         resp = client.chat.completions.create(**kwargs)
         raw = (resp.choices[0].message.content or "").strip()
+        # Phase 2.5.11.24-fix: gpt-5-mini intermittently returns an empty
+        # body (reasoning eats all tokens, or proxy hiccup). One immediate
+        # retry recovers most cases; without it gu/or fall back to Hinglish.
+        if not raw:
+            try:
+                resp = client.chat.completions.create(**kwargs)
+                raw = (resp.choices[0].message.content or "").strip()
+                log.info("[premium_chapters] retry-on-empty: lang=%s raw_len=%s", lang, len(raw))
+            except Exception as exc:
+                log.warning("[premium_chapters] retry failed: %s", exc)
         try:
             usage = getattr(resp, "usage", None)
             if usage is not None:
@@ -860,7 +1001,15 @@ def polish_premium_chapters(
             log.warning("[premium_chapters] JSON parse fail: %s | raw=%.200s", exc, raw)
             return fb
 
-        ok, reason = _validate_premium(parsed, milan_facts, chapter_scores)
+        # Phase 2.5.11.24-fix: pre-scrub raw chart tokens like "P1 7L afflicted",
+        # "P2 1L", standalone "7L"/"1L" etc. that gpt-5-mini sometimes leaks into
+        # non-Latin-lang prose. Without this the validator rejects → Hinglish
+        # fallback fires → user sees Roman script in a Bengali-font PDF (blank).
+        # Scrubbing is conservative: only removes raw chart abbreviation patterns,
+        # never touches narrative prose.
+        _scrub_raw_chart_tokens_in_place(parsed)
+
+        ok, reason = _validate_premium(parsed, milan_facts, chapter_scores, lang=lang)
         if not ok:
             log.warning("[premium_chapters] validator rejected: %s | lang=%s | hidden=%.180s",
                         reason, lang, str(parsed.get("hidden_truth", ""))[:180])

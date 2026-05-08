@@ -255,10 +255,52 @@ def _on_page(canvas, doc):
 
 
 # ── Style sheet ─────────────────────────────────────────────────────────
+_INDIC_RANGES = (
+    (0x0900, 0x097F),  # Devanagari
+    (0x0980, 0x09FF),  # Bengali (+ Assamese)
+    (0x0A00, 0x0A7F),  # Gurmukhi
+    (0x0A80, 0x0AFF),  # Gujarati
+    (0x0B00, 0x0B7F),  # Oriya
+    (0x0B80, 0x0BFF),  # Tamil
+    (0x0C00, 0x0C7F),  # Telugu
+    (0x0C80, 0x0CFF),  # Kannada
+    (0x0D00, 0x0D7F),  # Malayalam
+)
+
+
+def _has_indic(text: str) -> bool:
+    """True if text contains at least one Indic codepoint."""
+    if not text:
+        return False
+    for ch in text:
+        cp = ord(ch)
+        for lo, hi in _INDIC_RANGES:
+            if lo <= cp <= hi:
+                return True
+    return False
+
+
+def _pick_body(text: str, s: dict, lang: str = "en") -> ParagraphStyle:
+    """Phase 2.5.11.24-fix: pick body style based on actual TEXT script.
+
+    When polish-LLM succeeds for non-Latin lang the body is Indic →
+    use the lang-specific Noto font. When the deterministic Hinglish
+    fallback fires (Roman script) but lang=bn/ta/etc, the lang's Noto
+    font has no Latin glyphs → glyphs render blank. Detect this case and
+    use the Helvetica body style so Hinglish stays readable.
+    """
+    if (lang or "en").lower() in ("en", "hn"):
+        return s["body"]
+    return s["body"] if _has_indic(text) else s["body_latin"]
+
+
 def _styles(lang: str = "en") -> dict[str, ParagraphStyle]:
     base = getSampleStyleSheet()
     H_REG, H_BOLD = _font_pair(lang)
+    # Stash lang on the returned dict so _pick_body() can be called without
+    # threading lang through every render helper signature.
     return {
+        "_lang": lang,
         "h1": ParagraphStyle(
             "h1", parent=base["Heading1"], fontName=H_BOLD,
             fontSize=24, leading=30, textColor=BRAND_PURPLE,
@@ -276,6 +318,14 @@ def _styles(lang: str = "en") -> dict[str, ParagraphStyle]:
         ),
         "body": ParagraphStyle(
             "body", parent=base["BodyText"], fontName=H_REG,
+            fontSize=10, leading=14.5, textColor=TEXT_DARK,
+            spaceAfter=4,
+        ),
+        # Phase 2.5.11.24-fix: Latin-only body style for Hinglish/Roman
+        # fallback content when lang is non-Latin (NotoBeng/NotoTaml/etc
+        # have no Latin glyphs → fallback prose would render blank).
+        "body_latin": ParagraphStyle(
+            "body_latin", parent=base["BodyText"], fontName="Helvetica",
             fontSize=10, leading=14.5, textColor=TEXT_DARK,
             spaceAfter=4,
         ),
@@ -1556,17 +1606,18 @@ def _pro_chapter_pages(s: dict, num_a: int, num_b: int,
     ]))
     out.append(score_row)
     out.append(Spacer(1, 12))
-    out.append(_pro_block_heading("Aapke chart me kya dikh raha hai"))
-    out.append(Paragraph(_safe(kya_dikh) or "—", s["body"]))
+    _lang = s.get("_lang", "en")
+    out.append(_pro_block_heading("What your chart shows here"))
+    out.append(Paragraph(_safe(kya_dikh) or "—", _pick_body(kya_dikh or "", s, _lang)))
     out.append(PageBreak())
 
     # ── Page B ─────────────────────────────────────────────────────
     out.append(_chapter_eyebrow(num_b, eyebrow + "  ·  contd."))
-    out.append(_pro_block_heading("Iska matlab kya hai"))
-    out.append(Paragraph(_safe(kya_matlab) or "—", s["body"]))
+    out.append(_pro_block_heading("What this means for both of you"))
+    out.append(Paragraph(_safe(kya_matlab) or "—", _pick_body(kya_matlab or "", s, _lang)))
     out.append(Spacer(1, 8))
-    out.append(_pro_block_heading("Kya dhyan rakhna"))
-    out.append(Paragraph(_safe(kya_dhyan) or "—", s["body"]))
+    out.append(_pro_block_heading("What to keep in mind"))
+    out.append(Paragraph(_safe(kya_dhyan) or "—", _pick_body(kya_dhyan or "", s, _lang)))
     if grounding:
         out.append(Spacer(1, 12))
         out.append(_grounding_card(s, grounding))

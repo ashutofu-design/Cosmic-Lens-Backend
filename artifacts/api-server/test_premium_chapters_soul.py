@@ -349,7 +349,7 @@ def _payload_with(chapters_kya_dhyan: list[str], extra: dict | None = None):
 
 
 def test_v3_premium_version_bumped():
-    assert _PREMIUM_VERSION in ("p2", "p3"), "Cache namespace must bump to p2 (v3) or higher"
+    assert _PREMIUM_VERSION in ("p2", "p3", "p4", "p5", "p6"), "Cache namespace must bump to p2 (v3) or higher"
 
 
 def test_v3_system_prompt_has_v3_markers():
@@ -514,7 +514,7 @@ from vedic.compat.premium_chapters import (
 def test_v4_premium_version_bumped_to_p3():
     """Cache namespace must bump to p3 so all p2 (v3) cached payloads are
     re-generated under the new rhythm + reflection rules."""
-    assert _PREMIUM_VERSION == "p3", \
+    assert _PREMIUM_VERSION in ("p3", "p4", "p5", "p6"), \
         f"Expected v4 cache namespace 'p3', got {_PREMIUM_VERSION!r}"
 
 

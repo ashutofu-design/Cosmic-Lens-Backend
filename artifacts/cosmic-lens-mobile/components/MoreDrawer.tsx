@@ -71,6 +71,12 @@ export default function MoreDrawer({
         { id: "vastu",     icon: "home",        emoji: "🏠", title: t.mdVastuTitle,     subtitle: t.mdVastuSub,    route: "/astrovastu-pro", accent: "#06b6d4" },
       ],
     },
+    {
+      title: "My Library",
+      items: [
+        { id: "my-reports", icon: "folder", emoji: "📁", title: "My Reports", subtitle: "Saved PDFs — Milan, Numerology, AstroVastu Pro, Business Vastu", route: "/my-reports", accent: "#f6c453" },
+      ],
+    },
   ];
   const insets = useSafeAreaInsets();
   const slideX = useRef(new Animated.Value(DRAWER_W)).current;

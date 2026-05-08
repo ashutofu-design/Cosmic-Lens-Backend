@@ -1713,28 +1713,71 @@ export default function KundliMilanScreen(){
       await FileSystem.writeAsStringAsync(dest,b64,{encoding:FileSystem.EncodingType.Base64});
       tempPath=dest;
 
-      // Step 3 — register in local "My Reports" + open share sheet.
+      // Step 3 — register in local "My Reports" FIRST (it copies the PDF
+      // into documentDirectory/reports/ and best-effort deletes the cache
+      // copy). We MUST share from the persistent saved URI, not tempPath —
+      // tempPath may have been deleted by the registry's cleanup, which
+      // would make Sharing.shareAsync fail with "you don't have access to
+      // the provided file" on iOS.
       const total=milanJson?.total ?? 0;
       const max=milanJson?.max ?? 36;
+      let shareUri:string=tempPath;
       try{
-        await saveLocalReport({
+        const saved=await saveLocalReport({
           kind:"milan",
           title:`${person1.name||"Partner 1"} & ${p2.name||"Partner 2"} — Kundli Milan PRO`,
           subtitle:`${total}/${max} · ${new Date().toLocaleDateString()}`,
           sourceUri:tempPath,
         });
-        savedToRegistry=true;
-      }catch{/* ignore — share still works */}
+        if(saved && saved.localUri){
+          shareUri=saved.localUri;
+          savedToRegistry=true;
+        }
+      }catch{/* ignore — share still works from tempPath if it survived */}
 
-      const can=await Sharing.isAvailableAsync();
-      if(can){
-        await Sharing.shareAsync(tempPath,{
-          mimeType:"application/pdf",
-          dialogTitle:fileName,
-          UTI:"com.adobe.pdf",
-        });
-      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      if(savedToRegistry){
+        // Saved into documentDirectory/reports/ — shareUri is persistent,
+        // so we can defer the share to a user-chosen Alert button.
+        Alert.alert(
+          "Kundli Milan PRO",
+          "PDF generated! Aapki 'My Reports' me save ho gayi hai.",
+          [
+            {text:"My Reports",onPress:()=>{ try{ router.push("/my-reports"); }catch{} }},
+            {text:"Share",onPress:async()=>{
+              try{
+                const can=await Sharing.isAvailableAsync();
+                if(can){
+                  await Sharing.shareAsync(shareUri,{
+                    mimeType:"application/pdf",
+                    dialogTitle:fileName,
+                    UTI:"com.adobe.pdf",
+                  });
+                }
+              }catch{/* ignore — file is safely in My Reports */}
+            }},
+            {text:"OK",style:"cancel"},
+          ],
+          {cancelable:true},
+        );
+      }else{
+        // Save failed → tempPath is the ONLY copy and `finally` will delete
+        // it. Open the share sheet INLINE so tempPath stays alive long
+        // enough for the OS to copy/preview the file.
+        try{
+          const can=await Sharing.isAvailableAsync();
+          if(can){
+            await Sharing.shareAsync(shareUri,{
+              mimeType:"application/pdf",
+              dialogTitle:fileName,
+              UTI:"com.adobe.pdf",
+            });
+          }else{
+            Alert.alert("Kundli Milan PRO","PDF generated.",[{text:t.km_okBtn||"OK"}]);
+          }
+        }catch{/* ignore — error already shown by share sheet */}
+      }
     }catch(e:any){
       const msg=e?.name==="AbortError"
         ? "PDF download timeout. Internet check kar ke phir try kare."

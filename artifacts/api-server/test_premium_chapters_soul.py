@@ -312,3 +312,187 @@ def test_v2_signature_insight_specificity_heuristic():
         if not any(s in full for s in specifics):
             weak.append(c.get("title"))
     assert not weak, f"Chapters missing concrete-moment specificity: {weak}"
+
+
+# ─────────────────────────────────────────────────────────────────────────
+#  Phase 2.5.11.23-soul-v3 regression tests
+# ─────────────────────────────────────────────────────────────────────────
+from vedic.compat.premium_chapters import (
+    RAW_ASTRO_LEAKS, _PREMIUM_VERSION, SYSTEM_PROMPT_PREMIUM,
+    _safe_fallback_blueprint, _advice_uniqueness_ok,
+)
+
+
+def _payload_with(chapters_kya_dhyan: list[str], extra: dict | None = None):
+    """Build a validator-passing premium payload from the fallback, varying
+    kya_dhyan per chapter. Trims fallback's hidden_truth (which can exceed
+    the 600-char LLM-output ceiling) so we can isolate v3 rejection paths."""
+    base = _safe_fallback(MILAN_FACTS, CH_SCORES_FULL,
+                          kp_promise={"couple_verdict": "PARTIAL"},
+                          d9_marriage={"p1": {"d9_lagna_lord": "Jupiter",
+                                              "marriage_maturity_0_10": 7.0},
+                                       "p2": {"d9_lagna_lord": "Venus",
+                                              "marriage_maturity_0_10": 6.0},
+                                       "sync": {"lagna_lord_relation": "friendly",
+                                                "seven_lord_relation": "neutral",
+                                                "score_0_10": 6.5}})
+    if len(base.get("hidden_truth", "")) > 580:
+        base["hidden_truth"] = base["hidden_truth"][:580].rsplit(" ", 1)[0] + "."
+    # Validator demands exactly 3 practical paragraphs; fallback may emit 4.
+    base["practical"] = base.get("practical", [])[:3]
+    for i, ch in enumerate(base["chapters"]):
+        if i < len(chapters_kya_dhyan):
+            ch["kya_dhyan"] = chapters_kya_dhyan[i]
+    if extra:
+        base.update(extra)
+    return base
+
+
+def test_v3_premium_version_bumped():
+    assert _PREMIUM_VERSION == "p2", "Cache namespace must bump to p2 for v3"
+
+
+def test_v3_system_prompt_has_v3_markers():
+    p = SYSTEM_PROMPT_PREMIUM
+    assert "INTERPRET-NEVER-QUOTE LAW" in p, "v3 INTERPRET-NEVER-QUOTE law missing"
+    assert "UNIQUE BEHAVIOURAL ANCHOR LAW" in p, "v3 unique anchor law missing"
+    assert "MARRIAGE BLUEPRINT" in p, "v3 marriage blueprint section missing"
+    assert "marriage_blueprint" in p, "v3 JSON schema for marriage_blueprint missing"
+
+
+def test_v3_validator_rejects_each_raw_astro_leak():
+    """Every entry in RAW_ASTRO_LEAKS must trigger a rejection."""
+    for leak in RAW_ASTRO_LEAKS:
+        out = _payload_with([])
+        # Inject the leak into ch1.kya_dikh foreground prose.
+        out["chapters"][0]["kya_dikh"] = (
+            f"Vikram aur Sanya ke beech {leak} kuch baat karta hai, "
+            f"yeh ek important signal hai jo dono ki dynamic me dikhta hai."
+        )
+        ok, reason = _validate_premium(out, MILAN_FACTS, CH_SCORES_FULL)
+        assert not ok, f"Validator failed to reject leak {leak!r}"
+        # Some entries are already caught by the pre-existing banned_jargon
+        # check (Vimshottari, etc); others fire the v3 raw_astro_leak path.
+        # Either rejection is acceptable — what matters is the leak is blocked.
+        assert (reason.startswith("raw_astro_leak:")
+                or reason.startswith("banned_jargon:")
+                or reason.startswith("ch1_")), \
+            f"Wrong rejection reason for {leak!r}: {reason}"
+
+
+def test_v3_validator_rejects_repeated_advice():
+    """If ≥2 chapter pairs share the same substantive 4-gram advice
+    phrasing, the response must be rejected."""
+    repeated = ("Vikram Sanya ko har Sunday subah chai pe baith ke "
+                "ek dusre ki feelings honestly share karein bina interrupt kiye.")
+    out = _payload_with([repeated] * 7)
+    ok, reason = _validate_premium(out, MILAN_FACTS, CH_SCORES_FULL)
+    assert not ok, "Validator must reject identical advice across all chapters"
+    assert "advice_uniqueness" in reason or "raw_astro_leak" in reason, reason
+
+
+def test_v3_advice_uniqueness_accepts_diverse_chapters():
+    """Diverse, distinct kya_dhyan blocks must pass the uniqueness check."""
+    diverse = [
+        {"kya_dhyan": "Sunday subah chai pe ek signal phrase decide karo, jaise 'paani'."},
+        {"kya_dhyan": "Har shaam state-of-us check-in karo bina phone ke."},
+        {"kya_dhyan": "Conflict me 24-hour rule lagao, koi bhi badi baat next day."},
+        {"kya_dhyan": "Yearly anniversary ritual rakho — koi joint daily prayers wala moment."},
+        {"kya_dhyan": "Mahine me ek low-pressure dinner date plan karo bina expectations."},
+        {"kya_dhyan": "Quarterly division-of-labour reset karo — kaun kya kar raha hai."},
+        {"kya_dhyan": "5-saal ka map session ek baar saal me karo together."},
+    ]
+    assert _advice_uniqueness_ok(diverse), \
+        "Diverse advice across chapters should pass uniqueness check"
+
+
+def test_v3_fallback_emits_marriage_blueprint():
+    out = _safe_fallback(MILAN_FACTS, CH_SCORES_FULL,
+                         kp_promise={"couple_verdict": "PARTIAL"},
+                         d9_marriage={"p1": {"d9_lagna_lord": "Sun",
+                                             "marriage_maturity_0_10": 7.5},
+                                      "p2": {"d9_lagna_lord": "Moon",
+                                             "marriage_maturity_0_10": 5.0},
+                                      "sync": {"lagna_lord_relation": "friendly",
+                                               "seven_lord_relation": "friendly",
+                                               "score_0_10": 7.5}})
+    mb = out.get("marriage_blueprint")
+    assert isinstance(mb, dict), "marriage_blueprint missing from fallback"
+    for fld in ("p1_marriage_nature", "p2_marriage_nature", "interaction_dynamic",
+                "what_p1_needs_from_p2", "what_p2_needs_from_p1", "blueprint_takeaway"):
+        v = mb.get(fld)
+        assert isinstance(v, str) and 60 <= len(v) <= 700, \
+            f"marriage_blueprint.{fld} invalid: len={len(v) if isinstance(v,str) else 'X'}"
+
+
+def test_v3_fallback_blueprint_references_both_names():
+    out = _safe_fallback(MILAN_FACTS, CH_SCORES_FULL,
+                         d9_marriage={"p1": {"d9_lagna_lord": "Mars"},
+                                      "p2": {"d9_lagna_lord": "Saturn"},
+                                      "sync": {"lagna_lord_relation": "neutral",
+                                               "seven_lord_relation": "hostile"}})
+    mb_text = " ".join(out["marriage_blueprint"].values()).lower()
+    assert "vikram" in mb_text, "p1 name (Vikram) missing from blueprint"
+    assert "sanya" in mb_text, "p2 name (Sanya) missing from blueprint"
+
+
+def test_v3_blueprint_helper_handles_missing_d9():
+    """Helper must never raise on None / empty / malformed d9 input."""
+    for bad in (None, {}, {"p1": None}, {"p1": "string"}, {"sync": []}):
+        mb = _safe_fallback_blueprint(bad, "Aarav", "Riya")
+        assert isinstance(mb, dict)
+        assert all(isinstance(mb.get(f), str) and len(mb[f]) >= 60
+                   for f in ("p1_marriage_nature", "p2_marriage_nature",
+                             "interaction_dynamic", "what_p1_needs_from_p2",
+                             "what_p2_needs_from_p1", "blueprint_takeaway"))
+
+
+def test_v3_blueprint_helper_differentiates_partner_natures():
+    """Different lagna lords must yield different p1/p2 nature prose."""
+    mb = _safe_fallback_blueprint(
+        {"p1": {"d9_lagna_lord": "Mars", "marriage_maturity_0_10": 8.0},
+         "p2": {"d9_lagna_lord": "Saturn", "marriage_maturity_0_10": 4.0},
+         "sync": {"lagna_lord_relation": "hostile",
+                  "seven_lord_relation": "neutral"}},
+        "Aditya", "Ishita")
+    assert mb["p1_marriage_nature"] != mb["p2_marriage_nature"]
+    # Mars + Saturn should produce contrasting tonal anchors
+    assert "directness" in mb["p1_marriage_nature"].lower() or \
+           "protective" in mb["p1_marriage_nature"].lower()
+    assert "discipline" in mb["p2_marriage_nature"].lower() or \
+           "patience" in mb["p2_marriage_nature"].lower()
+
+
+def test_v3_validator_rejects_malformed_blueprint():
+    """Missing field, wrong type, too short, missing names — all must reject."""
+    base = _payload_with([])
+
+    # Case 1: blueprint missing entirely
+    out = copy.deepcopy(base); out.pop("marriage_blueprint", None)
+    ok, reason = _validate_premium(out, MILAN_FACTS, CH_SCORES_FULL)
+    assert not ok and reason == "marriage_blueprint_missing"
+
+    # Case 2: one field too short
+    out = copy.deepcopy(base)
+    out["marriage_blueprint"]["interaction_dynamic"] = "too short"
+    ok, reason = _validate_premium(out, MILAN_FACTS, CH_SCORES_FULL)
+    assert not ok and reason.startswith("marriage_blueprint_field:")
+
+    # Case 3: blueprint contains a raw astrology leak
+    out = copy.deepcopy(base)
+    out["marriage_blueprint"]["blueprint_takeaway"] = (
+        "Vikram aur Sanya ki shaadi me Venus debilitated wala signal hai "
+        "jo dono ko slowly samjhna hoga aur honour karna hoga.")
+    ok, reason = _validate_premium(out, MILAN_FACTS, CH_SCORES_FULL)
+    assert not ok and (reason.startswith("marriage_blueprint_raw_leak:")
+                       or reason.startswith("raw_astro_leak:")), reason
+
+    # Case 4: blueprint missing one partner's name entirely
+    out = copy.deepcopy(base)
+    for f in out["marriage_blueprint"]:
+        out["marriage_blueprint"][f] = (
+            "Vikram is doing fine here in this whole interaction layer, "
+            "leading with care and warmth, which is a beautiful baseline "
+            "to keep on building things in the longer run together always.")
+    ok, reason = _validate_premium(out, MILAN_FACTS, CH_SCORES_FULL)
+    assert not ok and reason.startswith("marriage_blueprint_name_missing:"), reason

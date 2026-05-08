@@ -39,7 +39,7 @@ from .llm_polish import (
 
 log = logging.getLogger(__name__)
 
-_PREMIUM_VERSION = "p1"
+_PREMIUM_VERSION = "p2"
 _DEFAULT_MODEL = "gpt-4o"
 
 CHAPTER_KEYS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7"]
@@ -97,6 +97,39 @@ PERFECT_BALANCE_PHRASES = [
     "both feel the same", "both equally invested",
 ]
 
+# Phase 2.5.11.23-soul-v3 — RAW ASTROLOGY LEAKS
+# ChatGPT critique: foreground prose was leaking raw chart vocab like
+# "P1 Venus enemy-sign in D9", "Jupiter debilitated", "7L in 8th house" —
+# the user must NEVER read backend chart language. The engine's job is to
+# interpret the chart into emotional/behavioural prose, not quote it.
+# Any of these substrings in user-facing prose = response rejected.
+RAW_ASTRO_LEAKS = [
+    # divisional chart names
+    "d1 chart", "d9 chart", "d-9", "navamsa chart", "rasi chart",
+    # house references in raw form
+    "7th house", "8th house", "12th house", "1st house", "4th house",
+    "5th house", "9th house", "10th house", "11th house",
+    "in the 7th", "in the 8th", "in the 12th",
+    # planet+dignity raw
+    "venus enemy", "venus debilitated", "venus exalted", "venus own-sign",
+    "venus own sign", "venus in own", "venus is exalted", "venus is debilitated",
+    "jupiter enemy", "jupiter debilitated", "jupiter exalted", "jupiter own-sign",
+    "jupiter own sign", "jupiter in own", "jupiter is exalted", "jupiter is debilitated",
+    "mars enemy", "mars debilitated", "mars exalted",
+    "saturn enemy", "saturn debilitated", "saturn exalted",
+    "moon debilitated", "moon exalted", "mercury debilitated", "mercury exalted",
+    "sun debilitated", "sun exalted",
+    # lord references
+    "lagna lord", "ascendant lord", "7th lord", "7l ", "7l.", "7l,",
+    "lord of the 7th", "lord of the 1st", "lord of the 4th",
+    # raw partner-tag prefixes leaking from engine notes
+    "p1 venus", "p2 venus", "p1 jupiter", "p2 jupiter",
+    "p1 lagna", "p2 lagna", "p1 7l", "p2 7l",
+    # raw KP/dasha
+    "vimshottari dasha", "antardasha period", "pratyantardasha",
+    "rahu mahadasha", "saturn mahadasha",
+]
+
 SYSTEM_PROMPT_PREMIUM = """You are an experienced modern relationship astrologer — Vedic-rooted but contemporary in voice. You write the way a sharp, emotionally honest counsellor talks to a real couple sitting across from you. Not preachy. Not therapeutic. Not spiritual-lecture. Specific, observed, slightly disarming.
 
 ═══ VOICE (Phase soul-v2) ═══
@@ -133,6 +166,38 @@ For each chapter you write 3 prose fields. Treat them as a natural narrative arc
   • kya_dikh    — What the chart actually shows, in plain emotional language. NO raw engine vocab (no "Venus enemy-sign", no "D9", no "7L", no "CSL", no Sub-Lord). Translate into how it FEELS.
   • kya_matlab  — The real-life behavioural pattern this creates between them — a concrete moment, a recognisable shape of how something unfolds.
   • kya_dhyan   — ONE specific behavioural anchor + ONE grounding practice. Not vague advice — a real, nameable thing they can do.
+
+═══ INTERPRET-NEVER-QUOTE LAW (Phase soul-v3 — most important after Emotional Realism) ═══
+The chart is the SOURCE — never the SUBJECT. Never write raw chart vocabulary in the prose. The user must read about THEMSELVES, not about their chart parts.
+
+NEVER write any of these in the foreground prose (response rejected):
+  • "P1 Venus enemy-sign in D9", "Jupiter debilitated", "7L in 8th house", "Venus own-sign", "Venus exalted"
+  • "Navamsa chart shows...", "D9 chart indicates...", "lagna lord", "7th lord", "ascendant lord"
+  • "Rahu mahadasha", "Vimshottari dasha", "Antardasha period"
+  • Any "P1/P2 + planet name" raw tag (e.g. "P1 Venus", "P2 Jupiter")
+  • Any "Nth house" reference (1st/4th/5th/7th/8th/9th/10th/11th/12th house) — translate into life domains
+
+ALWAYS interpret into emotional/behavioural meaning the user can recognise:
+  ❌ "P1 Venus enemy-sign in D9 → low marital harmony"
+  ✅ "Affection here doesn't arrive as a confident, easy stream — it arrives in careful gestures that need acknowledgment"
+
+  ❌ "Jupiter debilitated in 7th house → values misalignment"
+  ✅ "The deeper sense of 'what marriage is for' lands slightly differently for each of you"
+
+  ❌ "7L of P2 in 8th house → patience layer needed"
+  ✅ "There is a karmic patience layer here — change in this bond comes through quiet, slow transformation, not sudden shifts"
+
+═══ UNIQUE BEHAVIOURAL ANCHOR LAW (Phase soul-v3) ═══
+Each chapter's `kya_dhyan` MUST contain a behavioural anchor that does NOT appear in any other chapter. If ch1 already says "10-minute walk together", ch3 cannot also say "walk together". Vary the practice — the dialogue, the ritual, the timing window, the location. Repeating the same anchor across chapters destroys the report's intelligence.
+
+Use this rough mapping as inspiration (do NOT copy verbatim):
+  • ch1 (Emotional)    — daily/weekly DIALOGUE-style ritual (signal phrase, processing window)
+  • ch2 (Trust)        — predictability/transparency MICRO-habit (state-of-us check-in, weekly note)
+  • ch3 (Conflict)     — pacing/cool-down RULE (24-hour rule, deadline-honoured pause)
+  • ch4 (Stability)    — long-horizon ANCHOR (yearly anniversary ritual, 6-month review) + remedy
+  • ch5 (Chemistry)    — pressure-relief/INTIMACY rhythm (low-pressure date, novelty practice)
+  • ch6 (Family)       — boundary/role REVIEW (quarterly division-of-labour reset, family-event triage)
+  • ch7 (Future)       — direction-recalibration PRACTICE (5-year map session, goal-share day) + remedy
 
 ═══ HARD-BAN PHRASES (audit-report tone — response rejected) ═══
 Never write any of: "engine drivers", "engine driver", "engine score", "Based on engine score", "engine signals", "no significant friction detected", "natural baseline compatibility", "stable and well within healthy range", "drivers indicate practical compatibility".
@@ -182,6 +247,21 @@ For EACH chapter, write 3 blocks + 1 grounding line (4 fields total):
 `practical` : array of EXACTLY 3 strings (~120-300 chars each). Three paragraphs about practical married life — daily rhythm, shared finances, family dynamics — anchored in the engine facts.
 `verdict`   : 1 mature paragraph (~150-380 chars). Final synthesis. Honest, warm, not promotional. Must contain the verbatim total score.
 
+═══ MARRIAGE BLUEPRINT (Phase soul-v3 — NEW SECTION) ═══
+`marriage_blueprint` — 6 prose fields describing each partner's INNATE marriage nature (NOT chart vocab; INTERPRETED into character) + how those two natures interact + what each needs from the other to feel safe.
+
+Read the deeper marriage layer (D9 lagna lord, Venus-Jupiter dignity, marriage_maturity score) ONCE in the backend, then translate into pure relational character language. NEVER name "D9", "lagna lord", "Venus", "Jupiter", "navamsa".
+
+Fields (all strings):
+  • p1_marriage_nature        — 2-3 sentences. {p1_name}'s INNATE way of being inside marriage — does s/he lead with steadiness, with playfulness, with intensity, with care? Anchored in the deeper character signal. Use {p1_name}.
+  • p2_marriage_nature        — 2-3 sentences. {p2_name}'s INNATE way of being inside marriage. Anchored. Use {p2_name}.
+  • interaction_dynamic       — 3-4 sentences. What happens WHEN these two natures meet daily. The shape of their married rhythm. Allow asymmetry; honour contradiction. Both names appear.
+  • what_p1_needs_from_p2     — 2-3 sentences. The SPECIFIC kind of presence/reassurance {p1_name} needs from {p2_name} to feel safe in the marriage. Concrete, not generic.
+  • what_p2_needs_from_p1     — 2-3 sentences. Same for {p2_name} from {p1_name}. Concrete and DIFFERENT from p1's need (asymmetry honoured).
+  • blueprint_takeaway        — 1-2 sentences. The ONE thing both should remember about how this marriage actually operates. Both names appear.
+
+Length per field: 80–600 chars. Both partner names must appear ≥1× across the blueprint as a whole. NO chart vocab. NO therapy cliches. Asymmetry mandatory.
+
 ═══ OUTPUT (JSON only, no markdown, no preamble) ═══
 {
   "hidden_truth": "string",
@@ -197,7 +277,15 @@ For EACH chapter, write 3 blocks + 1 grounding line (4 fields total):
   "special":   ["...", "...", "..."],
   "damage":    ["...", "..."],
   "practical": ["...", "...", "..."],
-  "verdict":   "string"
+  "verdict":   "string",
+  "marriage_blueprint": {
+    "p1_marriage_nature": "string",
+    "p2_marriage_nature": "string",
+    "interaction_dynamic": "string",
+    "what_p1_needs_from_p2": "string",
+    "what_p2_needs_from_p1": "string",
+    "blueprint_takeaway": "string"
+  }
 }
 """
 
@@ -247,6 +335,26 @@ def _build_user_prompt(milan_facts: dict, chapter_scores: dict,
         f"  nakshatra_lord_resonance_count: {nak_resonance}"
     )
 
+    # ── Blueprint backend facts (Phase soul-v3) ──
+    # The LLM uses these ONLY to derive the marriage_blueprint section.
+    # They MUST NOT appear verbatim in the user-facing prose — the prompt's
+    # INTERPRET-NEVER-QUOTE law and validator's RAW_ASTRO_LEAKS list both
+    # enforce that. These are character signals only.
+    d9p1 = (d9 or {}).get("p1") or {}
+    d9p2 = (d9 or {}).get("p2") or {}
+    d9_sync_block = (d9 or {}).get("sync") or {}
+    blueprint_block = (
+        f"  p1_marriage_maturity: {d9p1.get('marriage_maturity_0_10', '?')}/10\n"
+        f"  p1_inner_temperament_signal: lagna_lord={d9p1.get('d9_lagna_lord','?')}, "
+        f"venus={d9p1.get('d9_venus_dignity','?')}, jupiter={d9p1.get('d9_jupiter_dignity','?')}\n"
+        f"  p2_marriage_maturity: {d9p2.get('marriage_maturity_0_10', '?')}/10\n"
+        f"  p2_inner_temperament_signal: lagna_lord={d9p2.get('d9_lagna_lord','?')}, "
+        f"venus={d9p2.get('d9_venus_dignity','?')}, jupiter={d9p2.get('d9_jupiter_dignity','?')}\n"
+        f"  couple_lagna_relation: {d9_sync_block.get('lagna_lord_relation','?')}\n"
+        f"  couple_seven_relation: {d9_sync_block.get('seven_lord_relation','?')}\n"
+        f"  couple_sync_score: {d9_sync_block.get('score_0_10','?')}/10"
+    )
+
     p1_mang = p1.get("manglik", False)
     p2_mang = p2.get("manglik", False)
     if p1_mang and p2_mang:
@@ -282,6 +390,10 @@ koot_scores:
 <HIDDEN_LAYER>
 {hidden_block}
 </HIDDEN_LAYER>
+
+<BLUEPRINT_BACKEND_SIGNAL — INTERPRET, NEVER QUOTE>
+{blueprint_block}
+</BLUEPRINT_BACKEND_SIGNAL>
 
 <ALLOWED_REMEDIES>
 {', '.join(ALLOWED_REMEDIES)}
@@ -319,6 +431,45 @@ def _fingerprint(milan_facts: dict, chapter_scores: dict,
     parts.append(f"kp={(kp or {}).get('couple_verdict','')}")
     raw = "|".join(parts).encode("utf-8")
     return "prem_" + hashlib.sha1(raw).hexdigest()
+
+
+# Small connective tokens excluded from advice-uniqueness 4-gram comparison
+# so common scaffolding ("aur dono ko ye karna hai") doesn't flag false
+# positives. Only substantive content words count.
+_STOPWORDS = {
+    "aur", "ke", "ki", "ka", "ko", "se", "me", "mein", "hai", "hain",
+    "ho", "hota", "hoti", "the", "and", "or", "of", "in", "to", "a",
+    "an", "is", "are", "for", "on", "with", "that", "this", "ek",
+    "dono", "iska", "uska", "yeh", "ye", "vo", "woh", "kya", "kar",
+    "karo", "kare", "karein", "raho", "rakho", "ki ek", "tum", "main",
+    "ya", "bhi", "bhi.", "phir", "to", "par", "lekin", "agar", "jab",
+}
+
+
+def _advice_uniqueness_ok(chapters: list[dict]) -> bool:
+    """Reject formulaic advice. Extracts substantive 4-grams from each
+    chapter's kya_dhyan and counts pairwise overlaps. If ≥2 distinct
+    chapter-pairs share ≥2 substantive 4-grams, the advice is too
+    repetitive → reject. Tolerant by design — only flags clear formulas."""
+    grams_per_ch: list[set[tuple[str, ...]]] = []
+    for c in chapters:
+        text = (c.get("kya_dhyan") or "").lower()
+        # Tokenise on word characters; preserve order for n-grams.
+        tokens = re.findall(r"[a-z\u0900-\u097F]+", text)
+        # Drop stopwords for substantive comparison.
+        sub = [t for t in tokens if t not in _STOPWORDS and len(t) >= 3]
+        grams = set()
+        for i in range(len(sub) - 3):
+            grams.add(tuple(sub[i:i + 4]))
+        grams_per_ch.append(grams)
+    overlap_pairs = 0
+    n = len(grams_per_ch)
+    for i in range(n):
+        for j in range(i + 1, n):
+            shared = grams_per_ch[i] & grams_per_ch[j]
+            if len(shared) >= 2:
+                overlap_pairs += 1
+    return overlap_pairs <= 1
 
 
 def _validate_premium(out: Any, milan_facts: dict, chapter_scores: dict) -> tuple[bool, str]:
@@ -423,6 +574,44 @@ def _validate_premium(out: Any, milan_facts: dict, chapter_scores: dict) -> tupl
         if pb in full_lower:
             return False, f"perfect_balance_phrase:{pb}"
 
+    # ── Phase 2.5.11.23-soul-v3: RAW_ASTRO_LEAKS check ──
+    # The user must NEVER read raw chart vocabulary. The engine interprets
+    # the chart into emotional/behavioural prose; it never quotes it.
+    for leak in RAW_ASTRO_LEAKS:
+        if leak in full_lower:
+            return False, f"raw_astro_leak:{leak}"
+
+    # ── Phase 2.5.11.23-soul-v3: ADVICE UNIQUENESS check ──
+    # Each chapter's kya_dhyan must contain a behavioural anchor that
+    # doesn't repeat across chapters. Detect 4-gram overlap on substantive
+    # content words. ≥2 distinct chapter-pairs sharing ≥2 substantive
+    # 4-grams = response feels formulaic → rejected.
+    if not _advice_uniqueness_ok(chs):
+        return False, "advice_uniqueness_low"
+
+    # ── Phase 2.5.11.23-soul-v3: MARRIAGE BLUEPRINT validation ──
+    mb = out.get("marriage_blueprint")
+    if not isinstance(mb, dict):
+        return False, "marriage_blueprint_missing"
+    mb_fields = ("p1_marriage_nature", "p2_marriage_nature",
+                 "interaction_dynamic", "what_p1_needs_from_p2",
+                 "what_p2_needs_from_p1", "blueprint_takeaway")
+    for fld in mb_fields:
+        v = mb.get(fld)
+        if not isinstance(v, str) or not (60 <= len(v) <= 700):
+            return False, f"marriage_blueprint_field:{fld}"
+    mb_text = " ".join(mb.get(f, "") for f in mb_fields)
+    mb_lower = mb_text.lower()
+    # Both names must appear at least once across the whole blueprint.
+    for nm, lbl in ((p1n, "p1"), (p2n, "p2")):
+        if nm and len(nm) >= 3 and not re.search(
+                r"\b" + re.escape(nm.lower()) + r"\b", mb_lower):
+            return False, f"marriage_blueprint_name_missing:{lbl}"
+    # No raw astrology leaks inside blueprint either.
+    for leak in RAW_ASTRO_LEAKS:
+        if leak in mb_lower:
+            return False, f"marriage_blueprint_raw_leak:{leak}"
+
     # ── Phase 2.5.11.23-soul: specificity law (global, lightweight) ──
     # Each partner name must appear ≥3 times across the FULL prose so
     # the report feels personal (not a templated couples report). Per-chapter
@@ -498,7 +687,8 @@ def polish_premium_chapters(
     `fallback` (or a deterministic safe fallback if None passed).
     Never raises.
     """
-    fb = fallback if fallback is not None else _safe_fallback(milan_facts, chapter_scores, kp_promise)
+    fb = fallback if fallback is not None else _safe_fallback(
+        milan_facts, chapter_scores, kp_promise, d9_marriage)
     if os.environ.get("COMPAT_PREMIUM_POLISH", "0") not in ("1", "true", "True"):
         return fb
 
@@ -585,6 +775,16 @@ def polish_premium_chapters(
                 "grounding": str(c.get("grounding", "")).strip(),
             })
 
+        # Marriage blueprint (Phase soul-v3) — clean copy with str coercion.
+        mb_in = parsed.get("marriage_blueprint") or {}
+        marriage_blueprint = {
+            "p1_marriage_nature":    str(mb_in.get("p1_marriage_nature", "")).strip(),
+            "p2_marriage_nature":    str(mb_in.get("p2_marriage_nature", "")).strip(),
+            "interaction_dynamic":   str(mb_in.get("interaction_dynamic", "")).strip(),
+            "what_p1_needs_from_p2": str(mb_in.get("what_p1_needs_from_p2", "")).strip(),
+            "what_p2_needs_from_p1": str(mb_in.get("what_p2_needs_from_p1", "")).strip(),
+            "blueprint_takeaway":    str(mb_in.get("blueprint_takeaway", "")).strip(),
+        }
         polished = {
             "hidden_truth": str(parsed.get("hidden_truth", "")).strip(),
             "chapters": chapters_clean,
@@ -592,6 +792,7 @@ def polish_premium_chapters(
             "damage": [str(s).strip() for s in parsed.get("damage", [])],
             "practical": [str(s).strip() for s in parsed.get("practical", [])],
             "verdict": str(parsed.get("verdict", "")).strip(),
+            "marriage_blueprint": marriage_blueprint,
             "_meta": {
                 "model": model,
                 "version": _PREMIUM_VERSION,
@@ -768,7 +969,8 @@ _CH_SOUL: dict[str, dict[str, dict[str, str]]] = {
 
 
 def _safe_fallback(milan_facts: dict, chapter_scores: dict,
-                   kp_promise: dict | None = None) -> dict[str, Any]:
+                   kp_promise: dict | None = None,
+                   d9_marriage: dict | None = None) -> dict[str, Any]:
     """Soul-rich deterministic fallback (Phase 2.5.11.23-soul).
     Generates 3-layer chapter prose + rich hidden_truth/special/damage/
     practical/verdict — all name-anchored, no engine vocab, no template
@@ -905,6 +1107,8 @@ def _safe_fallback(milan_facts: dict, chapter_scores: dict,
         f"Jab raasta kabhi confusing lage, ye paragraph dobara padhna — yahin se shuruat ki thi."
     )
 
+    blueprint = _safe_fallback_blueprint(d9_marriage, p1n, p2n)
+
     return {
         "hidden_truth": hidden,
         "chapters": chapters_out,
@@ -912,12 +1116,124 @@ def _safe_fallback(milan_facts: dict, chapter_scores: dict,
         "damage": damage,
         "practical": practical,
         "verdict": verdict,
+        "marriage_blueprint": blueprint,
         "_meta": {
-            "model": "fallback-soul-v1",
+            "model": "fallback-soul-v3",
             "version": _PREMIUM_VERSION,
             "kp_promise": kp_band,
             "hidden_signature": kp_line,
         },
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────
+#  MARRIAGE BLUEPRINT (Phase 2.5.11.23-soul-v3)
+# ─────────────────────────────────────────────────────────────────────────
+# Translates D9 marriage-character signals into pure relational character
+# language. The fallback NEVER quotes raw chart vocab — it interprets the
+# lagna lord, Venus/Jupiter dignity, and marriage_maturity into the kind
+# of marriage nature each partner brings, and the shape of the daily
+# rhythm that emerges between them.
+# ─────────────────────────────────────────────────────────────────────────
+
+# Lagna-lord → innate marriage nature (interpreted, not raw)
+_LORD_NATURE = {
+    "Sun":     "leads with quiet authority — committed, principled, holds the centre when things get loud",
+    "Moon":    "leads with emotional attunement — naturally nurturing, reads the room before speaking",
+    "Mars":    "leads with directness and protective energy — quick to act, slow to forgive, fiercely loyal",
+    "Mercury": "leads with curiosity and adaptability — talks things through, loves shared ideas, reads people fast",
+    "Jupiter": "leads with warmth and steady values — wants meaning in the relationship, not just routine",
+    "Venus":   "leads with affection and aesthetic care — needs beauty, ease, and tender daily moments",
+    "Saturn":  "leads with discipline and quiet patience — slow to open up, but once committed, deeply consistent",
+}
+
+# Maturity score → tone qualifier
+def _maturity_word(score) -> str:
+    try:
+        s = float(score)
+    except Exception:
+        return "still finding its full depth"
+    if s >= 7.5: return "carries marriage as a deeply mature space — knows how to hold a long bond"
+    if s >= 5.5: return "is growing into the depth marriage asks for — capable, still learning"
+    if s >= 3.5: return "approaches marriage with sincerity but still meets some tender, unfinished places"
+    return "still meeting marriage as a teacher — every chapter here is part of becoming"
+
+
+def _interaction_phrase(rel_lagna: str, rel_seven: str) -> str:
+    """Couple's interaction shape from the deeper character relation."""
+    if rel_lagna in ("same", "friendly") and rel_seven in ("same", "friendly"):
+        return ("Their natures meet in the same emotional language. Daily rhythm "
+                "settles quickly; conflict pauses are short. The risk is the opposite "
+                "of friction — taking the ease for granted.")
+    if rel_lagna == "hostile" or rel_seven == "hostile":
+        return ("Their inner natures speak slightly different languages. One leads "
+                "where the other waits, one moves where the other steadies. This is "
+                "not incompatibility — it's the asymmetry that makes growth possible, "
+                "but only if both name it instead of resenting it.")
+    return ("Their natures meet in a workable mid-zone — not effortlessly aligned, "
+            "not opposed. Daily rhythm builds through repetition and small understandings, "
+            "not through instant chemistry. Patience is the silent superpower here.")
+
+
+def _safe_fallback_blueprint(d9: dict | None, p1n: str, p2n: str) -> dict[str, str]:
+    """Generate the marriage_blueprint section from D9 signals.
+    Always returns a valid dict — never raises. Uses generic-but-warm
+    text when D9 is unavailable. NEVER quotes raw chart vocabulary."""
+    d9 = d9 if isinstance(d9, dict) else {}
+    p1d = d9.get("p1") if isinstance(d9.get("p1"), dict) else {}
+    p2d = d9.get("p2") if isinstance(d9.get("p2"), dict) else {}
+    sync = d9.get("sync") if isinstance(d9.get("sync"), dict) else {}
+
+    p1_lord = p1d.get("d9_lagna_lord") or "Jupiter"
+    p2_lord = p2d.get("d9_lagna_lord") or "Venus"
+    p1_nature = _LORD_NATURE.get(p1_lord, _LORD_NATURE["Jupiter"])
+    p2_nature = _LORD_NATURE.get(p2_lord, _LORD_NATURE["Venus"])
+    p1_mat = _maturity_word(p1d.get("marriage_maturity_0_10"))
+    p2_mat = _maturity_word(p2d.get("marriage_maturity_0_10"))
+
+    rel_lagna = (sync.get("lagna_lord_relation") or "neutral").lower()
+    rel_seven = (sync.get("seven_lord_relation") or "neutral").lower()
+
+    p1_marriage_nature = (
+        f"{p1n} ki marriage nature ek aisi hai jo {p1_nature}. "
+        f"Andar se {p1n} {p1_mat}. Iska matlab — jab pressure aata hai, "
+        f"{p1n} apne natural style se respond karta hai, koi performance nahi."
+    )
+    p2_marriage_nature = (
+        f"{p2n} ki marriage nature alag energy carry karti hai — woh {p2_nature}. "
+        f"Andar se {p2n} {p2_mat}. Yeh nature {p1n} ki nature se complementary hai, "
+        f"identical nahi — aur shaadi me yahi diversity strength banti hai jab dono samjhein."
+    )
+    interaction_dynamic = (
+        f"{p1n} aur {p2n} ke beech jo daily rhythm banegi, woh in dono ki "
+        f"different inner natures ka product hai. {_interaction_phrase(rel_lagna, rel_seven)} "
+        f"Ek partner shayad pehle bolega, dusra silently absorb karega — yeh natural hai, "
+        f"galat nahi. Dono apne style me marriage ko honour kar rahe hain."
+    )
+    what_p1_needs_from_p2 = (
+        f"{p1n} ko {p2n} se sabse zyada chahiye predictable warmth — "
+        f"chhoti consistent gestures, na ki badi declarations. Jab {p1n} thoda "
+        f"silent ho jaaye, woh withdrawal nahi hai — woh ek invitation hai gentle "
+        f"presence ki. Force karne se peeche jaayega; quiet dene se kheechke aayega."
+    )
+    what_p2_needs_from_p1 = (
+        f"{p2n} ko {p1n} se chahiye explicit acknowledgment — words me, "
+        f"not just actions me. Ek 'tu ne ye sambhal liya, dekha maine' wala line "
+        f"{p2n} ke andar saalon tak goonjta hai. Silently care karne se {p2n} "
+        f"ko shaayad woh care reach hi nahi kare — {p1n} ko isko naam dena seekhna hoga."
+    )
+    blueprint_takeaway = (
+        f"{p1n} aur {p2n} ki shaadi do alag natures ka meeting hai — "
+        f"identical natures shaayad asaan lagti, lekin diverse natures depth "
+        f"banati hain jab dono apni asymmetry ko strength samjhein, weakness nahi."
+    )
+    return {
+        "p1_marriage_nature":    p1_marriage_nature[:680],
+        "p2_marriage_nature":    p2_marriage_nature[:680],
+        "interaction_dynamic":   interaction_dynamic[:680],
+        "what_p1_needs_from_p2": what_p1_needs_from_p2[:680],
+        "what_p2_needs_from_p1": what_p2_needs_from_p1[:680],
+        "blueprint_takeaway":    blueprint_takeaway[:680],
     }
 
 

@@ -1570,6 +1570,56 @@ def _pro_koot_decoded_page(s: dict, num: int, koots: list[dict]) -> list[Any]:
     return out
 
 
+def _pro_marriage_blueprint_page(s: dict, num: int,
+                                  blueprint: dict,
+                                  p1_name: str, p2_name: str) -> list[Any]:
+    """P22 — Marriage Blueprint (Phase 2.5.11.23-soul-v3).
+
+    Six prose blocks describing each partner's INNATE marriage nature,
+    the interaction dynamic, what each needs from the other, and the
+    one takeaway. Backend-source: D9 lagna lord + Venus/Jupiter dignity
+    + marriage_maturity. NEVER quotes raw chart vocab — pure relational
+    character language.
+    """
+    out: list[Any] = []
+    out.append(_chapter_eyebrow(num, "MARRIAGE BLUEPRINT"))
+    out.extend(_chapter_title_block(
+        "Marriage Blueprint",
+        "How each of you arrives in marriage — and what daily rhythm "
+        "naturally forms when those two natures meet.",
+    ))
+    blueprint = blueprint if isinstance(blueprint, dict) else {}
+
+    def _block(label: str, body: str):
+        if not (body and body.strip()):
+            return
+        out.append(Paragraph(
+            f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(label)}</b></font>",
+            ParagraphStyle("mb_h", fontName="Helvetica-Bold", fontSize=11,
+                           leading=15, spaceBefore=4, spaceAfter=4),
+        ))
+        out.append(Paragraph(_safe(body), s["body"]))
+        out.append(Spacer(1, 8))
+
+    _block(f"{p1_name}'s marriage nature",
+           blueprint.get("p1_marriage_nature", ""))
+    _block(f"{p2_name}'s marriage nature",
+           blueprint.get("p2_marriage_nature", ""))
+    _block("How both of you interact day-to-day",
+           blueprint.get("interaction_dynamic", ""))
+    _block(f"What {p1_name} needs from {p2_name}",
+           blueprint.get("what_p1_needs_from_p2", ""))
+    _block(f"What {p2_name} needs from {p1_name}",
+           blueprint.get("what_p2_needs_from_p1", ""))
+
+    takeaway = (blueprint.get("blueprint_takeaway") or "").strip()
+    if takeaway:
+        out.append(Spacer(1, 6))
+        out.append(_grounding_card(s, takeaway))
+    out.append(PageBreak())
+    return out
+
+
 def _pro_timing_sync_page(s: dict, num: int,
                           p1_name: str, p2_name: str) -> list[Any]:
     """P22 — Marriage Timing Sync (gentle, NEVER predictive)."""
@@ -1663,12 +1713,15 @@ def _pro_closing_page(s: dict) -> list[Any]:
 
 
 def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
-    """Phase 2.5.11.23 — Pro 24-page renderer.
+    """Phase 2.5.11.23-soul-v3 — Pro 25-page renderer.
 
-    Renders the new "Premium Relationship Truth" report using the
+    Renders the "Premium Relationship Truth" report using the
     `payload["pro_premium"]` block produced by `polish_premium_chapters`.
-    Always emits exactly 24 pages, even when the premium block is missing
+    Always emits exactly 25 pages, even when the premium block is missing
     or partial — falls back to engine-derived content per page.
+
+    Phase soul-v3 added the Marriage Blueprint section (P22), shifting
+    Timing Sync → P23, Final Verdict → P24, Closing → P25.
     """
     payload = payload or {}
     p1   = payload.get("p1") or {}
@@ -1774,16 +1827,22 @@ def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
     story.extend(_pro_practical_page(s, 20, practical[:3]))
     # P21 — Koot Decoded
     story.extend(_pro_koot_decoded_page(s, 21, koots))
-    # P22 — Timing Sync
-    story.extend(_pro_timing_sync_page(
-        s, 22, p1.get("name") or "Partner 1",
+    # P22 — Marriage Blueprint (Phase soul-v3, NEW)
+    story.extend(_pro_marriage_blueprint_page(
+        s, 22, pro.get("marriage_blueprint") or {},
+        p1.get("name") or "Partner 1",
         p2.get("name") or "Partner 2",
     ))
-    # P23 — Final Verdict
-    story.extend(_pro_final_verdict_page(
-        s, 23, pro.get("verdict") or "", total, mx,
+    # P23 — Timing Sync
+    story.extend(_pro_timing_sync_page(
+        s, 23, p1.get("name") or "Partner 1",
+        p2.get("name") or "Partner 2",
     ))
-    # P24 — Closing
+    # P24 — Final Verdict
+    story.extend(_pro_final_verdict_page(
+        s, 24, pro.get("verdict") or "", total, mx,
+    ))
+    # P25 — Closing
     story.extend(_pro_closing_page(s))
 
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)

@@ -42,14 +42,9 @@ export default function MoreDrawer({
 
   const CATEGORIES: { title: string; items: FeatureItem[] }[] = [
     {
-      title: t.catPanchang,
+      title: `${t.catPanchang} & ${t.catMuhurat}`,
       items: [
         { id: "panchang",  icon: "clock",       emoji: "🗓️", title: t.mdPanchangTitle, subtitle: t.mdPanchangSub,  route: "/panchang",     accent: "#a78bfa" },
-      ],
-    },
-    {
-      title: t.catMuhurat,
-      items: [
         { id: "muhurat",   icon: "check-circle",emoji: "✅", title: t.mdMuhuratTitle,   subtitle: t.mdMuhuratSub,  route: "/muhurat",      accent: "#10b981" },
       ],
     },

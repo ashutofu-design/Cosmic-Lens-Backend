@@ -1651,7 +1651,7 @@ export default function KundliMilanScreen(){
       // Server computes milan + both kundlis + hidden Vedic+KP fusion +
       // premium prose internally (milan/polish caches reused server-side).
       const ctrl2=new AbortController();
-      timer2=setTimeout(()=>ctrl2.abort(),45000); // gpt-4o premium polish needs more time
+      timer2=setTimeout(()=>ctrl2.abort(),120000); // gpt-5-mini premium polish via Replit AI proxy ~50-77s end-to-end (server OPENAI_TIMEOUT=120)
       const safe=(s:string)=>(s||"x").replace(/[^a-zA-Z0-9_-]+/g,"_").slice(0,32)||"x";
       const fileName=`Kundli_Milan_Pro_${safe(person1.name||"p1")}_${safe(p2.name||"p2")}.pdf`;
       const dest=(FileSystem.cacheDirectory||"")+fileName;

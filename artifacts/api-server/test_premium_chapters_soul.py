@@ -46,7 +46,7 @@ def _all_text(payload: dict) -> str:
 
 
 def test_no_banned_phrases_full_payload():
-    out = _safe_fallback(MILAN_FACTS, CH_SCORES_FULL, kp_promise={"couple_verdict": "PARTIAL"})
+    out = _safe_fallback(MILAN_FACTS, CH_SCORES_FULL, kp_promise=None)
     text = _all_text(out)
     for phrase in BANNED_PHRASES:
         assert phrase not in text, f"Banned phrase leaked into soul fallback: {phrase!r}"
@@ -328,7 +328,7 @@ def _payload_with(chapters_kya_dhyan: list[str], extra: dict | None = None):
     kya_dhyan per chapter. Trims fallback's hidden_truth (which can exceed
     the 600-char LLM-output ceiling) so we can isolate v3 rejection paths."""
     base = _safe_fallback(MILAN_FACTS, CH_SCORES_FULL,
-                          kp_promise={"couple_verdict": "PARTIAL"},
+                          kp_promise=None,
                           d9_marriage={"p1": {"d9_lagna_lord": "Jupiter",
                                               "marriage_maturity_0_10": 7.0},
                                        "p2": {"d9_lagna_lord": "Venus",
@@ -349,7 +349,7 @@ def _payload_with(chapters_kya_dhyan: list[str], extra: dict | None = None):
 
 
 def test_v3_premium_version_bumped():
-    assert _PREMIUM_VERSION == "p2", "Cache namespace must bump to p2 for v3"
+    assert _PREMIUM_VERSION in ("p2", "p3"), "Cache namespace must bump to p2 (v3) or higher"
 
 
 def test_v3_system_prompt_has_v3_markers():
@@ -408,7 +408,7 @@ def test_v3_advice_uniqueness_accepts_diverse_chapters():
 
 def test_v3_fallback_emits_marriage_blueprint():
     out = _safe_fallback(MILAN_FACTS, CH_SCORES_FULL,
-                         kp_promise={"couple_verdict": "PARTIAL"},
+                         kp_promise=None,
                          d9_marriage={"p1": {"d9_lagna_lord": "Sun",
                                              "marriage_maturity_0_10": 7.5},
                                       "p2": {"d9_lagna_lord": "Moon",
@@ -496,3 +496,207 @@ def test_v3_validator_rejects_malformed_blueprint():
             "to keep on building things in the longer run together always.")
     ok, reason = _validate_premium(out, MILAN_FACTS, CH_SCORES_FULL)
     assert not ok and reason.startswith("marriage_blueprint_name_missing:"), reason
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 2.5.11.23-soul-v4 regression tests
+# ChatGPT critique fixes:
+#   (1) Rhythm monotony — every chapter opens "ek partner ... dusra ..."
+#   (2) Too much advice — every kya_dhyan ends with ritual / homework
+#   (3) Astrology not deeply felt in prose
+# ─────────────────────────────────────────────────────────────────────────────
+from vedic.compat.premium_chapters import (
+    _PREMIUM_VERSION, SYSTEM_PROMPT_PREMIUM,
+    _RHYTHM_FORMULA_OPENER_RE, _rhythm_variation_ok,
+)
+
+
+def test_v4_premium_version_bumped_to_p3():
+    """Cache namespace must bump to p3 so all p2 (v3) cached payloads are
+    re-generated under the new rhythm + reflection rules."""
+    assert _PREMIUM_VERSION == "p3", \
+        f"Expected v4 cache namespace 'p3', got {_PREMIUM_VERSION!r}"
+
+
+def test_v4_system_prompt_has_v4_markers():
+    """The 3 new v4 sections must be present in the polish-path prompt."""
+    p = SYSTEM_PROMPT_PREMIUM
+    assert "RHYTHM VARIATION LAW" in p
+    assert "REFLECTION-NOT-ALWAYS-ADVICE LAW" in p
+    assert "CHART-AWARE LANGUAGE LAW" in p
+    # The 5 opener shapes must be enumerated
+    assert "METAPHOR opening" in p
+    assert "CONCRETE SCENE" in p
+    assert "DIRECT OBSERVATION" in p
+    assert "BITTERSWEET TRUTH" in p
+    assert "CHART-AWARE BRIDGE" in p
+    # Must explicitly call out the formula being banned
+    assert "ek partner ... dusra" in p
+
+
+def test_v4_fallback_rhythm_varies_across_chapters():
+    """In the deterministic fallback, fewer than 5 of 7 chapters should open
+    kya_dikh with the 'ek partner ... dusra ...' formula — i.e. our hand-
+    written ch1/ch3/ch5/ch7 templates must use varied openers."""
+    out = _safe_fallback(MILAN_FACTS, CH_SCORES_FULL,
+                         kp_promise=None)
+    ok, formula_count = _rhythm_variation_ok(out["chapters"])
+    assert ok, (
+        f"Fallback opens {formula_count}/7 chapters with the formula — "
+        f"v4 requires < 5. Templates regressed."
+    )
+
+
+def test_v4_validator_rejects_uniform_rhythm_payload():
+    """Construct a payload where 5+ chapters open with the formula — validator
+    must reject with 'rhythm_formula_uniform:N'."""
+    out = _payload_with([])
+    formulaic_opener = (
+        "Vikram aur Sanya ke beech ek baat dikhti hai — ek partner zyada "
+        "dikhata hai apni feelings, dusra silently andar process karta hai "
+        "aur baad me share karta hai jab safe lage."
+    )
+    # Force 6 of 7 chapters to start with the banned formula
+    for ch in out["chapters"][:6]:
+        ch["kya_dikh"] = formulaic_opener + " " + ch["kya_dikh"]
+    ok, reason = _validate_premium(out, MILAN_FACTS, CH_SCORES_FULL)
+    assert not ok, "Validator must reject 6/7 formulaic openers"
+    assert reason.startswith("rhythm_formula_uniform:"), \
+        f"Expected rhythm_formula_uniform:N, got {reason!r}"
+
+
+def test_v4_validator_accepts_varied_rhythm_payload():
+    """The default fallback (after trimming oversized fields) must satisfy
+    the v4 rhythm-variation gate cleanly along with all other validator
+    branches (raw leaks, advice uniqueness, blueprint)."""
+    out = _payload_with([])
+    ok, reason = _validate_premium(out, MILAN_FACTS, CH_SCORES_FULL)
+    assert ok, (
+        f"Fallback must pass v4 validator (rhythm + advice uniqueness + raw "
+        f"leaks + blueprint). Got reject reason: {reason!r}"
+    )
+
+
+def test_v4_at_least_two_chapters_end_in_reflection():
+    """At least 2 of 7 chapters' kya_dhyan should END with a reflection /
+    realization sentence rather than a pure action / homework prescription.
+    Heuristic: last sentence does NOT begin with an imperative-style opener
+    AND contains a reflective marker ('samajh', 'secret', 'matter', 'hai —',
+    'reward', 'truth', 'baat', 'realize', 'understand')."""
+    out = _safe_fallback(MILAN_FACTS, CH_SCORES_FULL)
+    REFLECTION_MARKERS = (
+        "samajh lo", "samajh lena", "secret", "asli reward",
+        "honour ho sakte", "yahi is bond", "realize", "understanding",
+        "baat samajh", "thakaata sabse zyada",
+    )
+    reflection_endings = 0
+    for c in out["chapters"]:
+        kd = (c.get("kya_dhyan") or "").strip()
+        # Look at the last ~120 chars (final sentence-ish)
+        tail = kd[-150:].lower()
+        if any(m.lower() in tail for m in REFLECTION_MARKERS):
+            reflection_endings += 1
+    assert reflection_endings >= 2, (
+        f"Only {reflection_endings}/7 chapters end in reflection — "
+        f"v4 REFLECTION-NOT-ALWAYS-ADVICE LAW requires ≥2."
+    )
+
+
+def test_v4_chart_word_not_treated_as_raw_leak():
+    """The CHART-AWARE LANGUAGE LAW permits subtle 'one chart...' / 'this
+    chart...' bridge phrasing. The validator's RAW_ASTRO_LEAKS denylist must
+    NOT trigger on the bare word 'chart' used as a bridge."""
+    out = _payload_with([])
+    # Inject a chart-aware bridge sentence into one chapter
+    out["chapters"][0]["kya_dikh"] = (
+        "One chart adapts quickly during life transitions, while the other "
+        "seeks emotional continuity before change feels safe. "
+        + out["chapters"][0]["kya_dikh"]
+    )
+    ok, reason = _validate_premium(out, MILAN_FACTS, CH_SCORES_FULL)
+    assert ok, (
+        f"Chart-aware bridge must NOT be flagged as a raw astrology leak. "
+        f"Got reject: {reason!r}"
+    )
+
+
+def test_v4_rhythm_regex_matches_exact_formula():
+    """The regex must catch the exact 'ek partner ... dusra/dusre/dusri'
+    pattern (case-insensitive) but NOT plain 'ek dusre' (no 'partner' before)."""
+    # Should match
+    assert _RHYTHM_FORMULA_OPENER_RE.search(
+        "Ek partner zyada dikhata hai, dusra silently andar process karta hai"
+    )
+    assert _RHYTHM_FORMULA_OPENER_RE.search(
+        "ek partner X karta hai aur dusre ko Y feel hota hai"
+    )
+    # Should NOT match (no 'partner' anchor before dusra/dusre)
+    assert not _RHYTHM_FORMULA_OPENER_RE.search(
+        "Dono ek dusre ke against nahi hain — repair pe focused hain"
+    )
+    assert not _RHYTHM_FORMULA_OPENER_RE.search(
+        "Pyaar yahaan loud nahi hai — emotional language background me baji rehti hai"
+    )
+
+
+# ─── Phase 2.5.11.23-soul-v4 hardening tests (architect-flagged) ───
+from vedic.compat.premium_chapters import _reflection_endings_ok
+
+
+def test_v4_validator_rejects_low_reflection_endings():
+    """Validator must reject if <2 of 7 chapters' kya_dhyan ends with a
+    reflection marker. Architect-flagged hardening — prompt-only enforcement
+    was insufficient; polish path could regress silently."""
+    base = _payload_with([])
+    # Overwrite each kya_dhyan with a UNIQUE pure action-item ending (no
+    # reflection markers) — varied to avoid tripping advice_uniqueness check.
+    actions = [
+        "Hafte me 20-minute Sunday walk plan karo bina phone, bina agenda — paas paas chalna baat ko softer banata hai.",
+        "Friday raat ko transparency-minute rakho — har koi ek choti baat batayega jo aaj process karni reh gayi thi.",
+        "Conflict ke time '30 minute pause' rule lagao, phir wapas baith ke explicit reasons batao bina blame ke.",
+        "Joint daily prayers ek 5-minute window me karo subah chai ke saath, regularity zyada matter karti hai.",
+        "Mahine me ek planned long date — koi performance pressure nahi, sirf saath ka time aur slow conversation.",
+        "Quarterly written list banao — kaun kya primary, kaun backup; review karo aur honestly batao kya overwhelming.",
+        "Yearly anniversary ritual — temple ya nature spot me ek ghanta shukran-cheer ke liye reserved rakho.",
+    ]
+    for ch, act in zip(base["chapters"], actions):
+        ch["kya_dhyan"] = act
+    ok, reason = _validate_premium(base, MILAN_FACTS, CH_SCORES_FULL)
+    assert not ok
+    assert reason.startswith("reflection_endings_low:"), \
+        f"expected reflection_endings_low but got {reason!r}"
+
+
+def test_v4_validator_accepts_two_reflection_endings():
+    """Exactly 2 reflection-ending chapters out of 7 must pass."""
+    base = _payload_with([])
+    # Strip all reflection markers from every chapter first
+    for ch in base["chapters"]:
+        ch["kya_dhyan"] = (
+            "Hafte me ek 30-minute walk dono saath karo bina phone bina agenda. "
+            "Calendar pe daily reminder daal lo. Joint daily prayers ek option hai."
+        )
+    # Re-add reflection ending to exactly 2 chapters
+    base["chapters"][0]["kya_dhyan"] += (
+        " Aur ye samajh lena — yahaan asli intimacy ki definition alag hai."
+    )
+    base["chapters"][5]["kya_dhyan"] += (
+        " Acknowledgment hi yahaan asli reward ban jaata hai."
+    )
+    ok2, count2 = _reflection_endings_ok(base["chapters"])
+    assert ok2 and count2 == 2
+    ok, reason = _validate_premium(base, MILAN_FACTS, CH_SCORES_FULL)
+    # May fail for OTHER reasons but NOT reflection_endings_low
+    assert not (reason or "").startswith("reflection_endings_low:"), \
+        f"unexpected reflection rejection: {reason}"
+
+
+def test_v4_rhythm_regex_catches_doosra_variant():
+    """Architect-flagged: regex must also catch 'doosra/doosre/doosri'
+    transliteration variants of dusra."""
+    assert _RHYTHM_FORMULA_OPENER_RE.search(
+        "Ek partner zyada dikhata hai, doosra silently andar process karta hai"
+    )
+    assert _RHYTHM_FORMULA_OPENER_RE.search(
+        "ek partner X karta hai aur doosre ko Y feel hota hai"
+    )

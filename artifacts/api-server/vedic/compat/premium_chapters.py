@@ -39,7 +39,7 @@ from .llm_polish import (
 
 log = logging.getLogger(__name__)
 
-_PREMIUM_VERSION = "p2"
+_PREMIUM_VERSION = "p3"
 _DEFAULT_MODEL = "gpt-4o"
 
 CHAPTER_KEYS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7"]
@@ -96,6 +96,56 @@ PERFECT_BALANCE_PHRASES = [
     "dono ko ek hi tarah", "perfectly aligned",
     "both feel the same", "both equally invested",
 ]
+
+# Phase 2.5.11.23-soul-v4 — RHYTHM FORMULA PATTERNS
+# ChatGPT critique: every chapter opens with the same "ek partner ... dusra ..."
+# asymmetry pattern. Subconsciously the LLM/template signature becomes visible
+# after a few pages. Validator counts how many chapters' kya_dikh OPEN (first
+# ~180 chars) with this formulaic asymmetry framing — if ≥5 of 7 chapters do,
+# the response is rejected as "too rhythmically uniform". Asymmetry itself is
+# still encouraged everywhere — but the OPENING delivery must vary across
+# chapters: sometimes a metaphor, sometimes a concrete scene, sometimes a
+# direct observation, sometimes a bittersweet truth.
+_RHYTHM_FORMULA_OPENER_RE = re.compile(
+    r"\bek\s+partner\b.{0,160}\b(?:dusr[aeio]|doosr[aeio])\b", re.I | re.S
+)
+
+# Phase 2.5.11.23-soul-v4 — REFLECTION ENDING MARKERS
+# Architect-flagged hardening: the prompt's REFLECTION-NOT-ALWAYS-ADVICE LAW
+# was previously enforced ONLY by the prompt (LLM honour-system) — fallback
+# was strengthened deterministically but polish path could still regress
+# silently. Validator now counts how many of 7 chapters' kya_dhyan END (last
+# 180 chars) with a reflection / realization / emotional truth marker. If
+# fewer than 2, the response is rejected as "reflection_endings_low:N".
+_REFLECTION_END_MARKERS = (
+    "samajh lo", "samajh lena", "secret", "asli reward", "asli intimacy",
+    "asli baat", "honour ho sakte", "realize", "realisation", "understand",
+    "understanding", "truth is", "that matters", "thakaata sabse zyada",
+    "is bond ka", "is rishte ka", "yahaan asli",
+)
+
+
+def _reflection_endings_ok(chapters: list[dict]) -> tuple[bool, int]:
+    """Return (ok, count). ok=True iff ≥2 of 7 chapters' kya_dhyan ends with
+    a reflection marker in the last 180 chars."""
+    count = 0
+    for c in chapters:
+        tail = (c.get("kya_dhyan") or "")[-180:].lower()
+        if any(m in tail for m in _REFLECTION_END_MARKERS):
+            count += 1
+    return (count >= 2), count
+
+
+def _rhythm_variation_ok(chapters: list[dict]) -> tuple[bool, int]:
+    """Return (ok, formula_count). ok=True iff <5 of 7 chapters open with the
+    'ek partner ... dusra ...' formula in the first ~180 chars of kya_dikh."""
+    formula = 0
+    for c in chapters:
+        head = (c.get("kya_dikh") or "")[:180]
+        if _RHYTHM_FORMULA_OPENER_RE.search(head):
+            formula += 1
+    return (formula < 5), formula
+
 
 # Phase 2.5.11.23-soul-v3 — RAW ASTROLOGY LEAKS
 # ChatGPT critique: foreground prose was leaking raw chart vocab like
@@ -160,6 +210,39 @@ EXAMPLES of signature insights (write your own — do not copy these):
   • "Both want closeness — but one wants it through words, the other through being left alone in the same room."
 
 If a chapter could be the same chapter for any other couple, you have failed.
+
+═══ RHYTHM VARIATION LAW (Phase soul-v4 — ChatGPT critique fix) ═══
+Across the 7 chapters, the OPENING delivery of `kya_dikh` must vary. Do NOT begin every chapter with the same "ek partner ... dusra partner ..." asymmetry frame. After 2 or 3 chapters that pattern becomes a visible signature and the report stops feeling like observation, starts feeling like a template.
+
+Rotate among at least 4 of these opening shapes across the 7 chapters:
+  1. METAPHOR opening   — "Pyaar yahaan loud nahi hai — yahaan emotional language ek background hum ki tarah baji rehti hai..."
+  2. CONCRETE SCENE     — "9 baje ki chai, dono sofa pe, ek bole 'main theek hoon' aur baat khatm. {p1} ke liye yeh line literal hoti hai..."
+  3. DIRECT OBSERVATION — "This relationship becomes strongest during ordinary days, not dramatic moments..."
+  4. BITTERSWEET TRUTH  — "Sabse purane silent friction-points emotional speed se start hote hain, topic se nahi..."
+  5. CHART-AWARE BRIDGE — "One chart adapts quickly during life transitions, while the other seeks emotional continuity before change feels safe..." (see CHART-AWARE LANGUAGE LAW below).
+
+Asymmetry inside the prose is still mandatory — but it must EMERGE, not OPEN. If 5 or more chapters open with "ek partner ... dusra ...", response is rejected.
+
+═══ REFLECTION-NOT-ALWAYS-ADVICE LAW (Phase soul-v4) ═══
+Every chapter does NOT need to end with a ritual / check-in / scheduled practice. After a while the report starts feeling like therapy homework. AT LEAST TWO chapters' `kya_dhyan` should END (last sentence) with a reflection / realization / emotional truth — NOT an action item.
+
+Examples of reflection endings (write your own):
+  • "Understanding this difference early can save years of silent misunderstanding."
+  • "Calmness yahaan unaffected hone ka naam nahi — sirf processing alag jagah ho rahi hai."
+  • "Ye samajh lo — emotional rhythms match nahi karte, sirf honour ho sakte hain. Yahi is bond ka secret hai."
+
+Suggested mapping (NOT mandatory): ch1 + ch6 lend themselves to reflection endings; ch3 + ch5 to action; ch4 + ch7 ALWAYS end with one verbatim ALLOWED_REMEDIES phrase. Any 2 of 7 minimum must end in reflection.
+
+═══ CHART-AWARE LANGUAGE LAW (Phase soul-v4) ═══
+The astrology backbone must be FELT in the language without quoting raw chart vocab. Use subtle "one chart..." or "this chart..." phrasing as a permitted bridge — it carries astrological weight without being raw vocab.
+
+  ❌ "P1 Venus enemy-sign in D9" (raw vocab — banned by RAW_ASTRO_LEAKS)
+  ❌ "One partner naturally adjusts..." (psychology only — astrology hidden)
+  ✅ "One chart adapts quickly during life transitions, while the other seeks emotional continuity before change feels safe."
+  ✅ "This chart carries a long emotional memory — old gestures still echo years later."
+  ✅ "{p1}'s chart leans toward steady continuity; {p2}'s leans toward catalytic change."
+
+Use this bridge sparingly — at least 2-3 times across the full report — so the reader subconsciously feels "yeh kundli ki baat hai", not "yeh ek psychology blog hai". The word "chart" used this way is NOT a raw leak.
 
 ═══ STRUCTURAL ARC (kept internally — do NOT label or segment) ═══
 For each chapter you write 3 prose fields. Treat them as a natural narrative arc, NOT as labeled bullet sections. The reader must NOT feel "Layer 1, Layer 2, Layer 3" — they must read it as flowing observation.
@@ -589,6 +672,23 @@ def _validate_premium(out: Any, milan_facts: dict, chapter_scores: dict) -> tupl
     if not _advice_uniqueness_ok(chs):
         return False, "advice_uniqueness_low"
 
+    # ── Phase 2.5.11.23-soul-v4: RHYTHM VARIATION check ──
+    # If ≥5 of 7 chapters open kya_dikh with the "ek partner ... dusra ..."
+    # asymmetry formula, the report's signature becomes visible. Reject so
+    # polish path retries with rotated openers (metaphor / scene / direct
+    # observation / bittersweet / chart-aware bridge).
+    rhythm_ok, formula_count = _rhythm_variation_ok(chs)
+    if not rhythm_ok:
+        return False, f"rhythm_formula_uniform:{formula_count}"
+
+    # ── Phase 2.5.11.23-soul-v4: REFLECTION-NOT-ALWAYS-ADVICE check ──
+    # ≥2 of 7 chapters' kya_dhyan must end with a reflection marker — not
+    # an action item. Architect-flagged hardening so polish path cannot
+    # regress silently (prompt-only enforcement was insufficient).
+    refl_ok, refl_count = _reflection_endings_ok(chs)
+    if not refl_ok:
+        return False, f"reflection_endings_low:{refl_count}"
+
     # ── Phase 2.5.11.23-soul-v3: MARRIAGE BLUEPRINT validation ──
     mb = out.get("marriage_blueprint")
     if not isinstance(mb, dict):
@@ -726,7 +826,15 @@ def polish_premium_chapters(
             # Premium output is ~3-4× the polished_compat schema. Empirical sizing:
             # • en  full output ~2400-3200 tokens → cap 3500.
             # • non-Latin scripts cost 2-3× more tokens per char → cap 5000.
-            "max_tokens": 3500 if (lang or "en").lower() == "en" else 5000,
+            # gpt-5 family (gpt-5, gpt-5-mini) consumes a chunk of completion
+            # tokens for hidden reasoning before emitting visible content.
+            # With 3500, reasoning eats the budget and the visible body is
+            # empty → JSON parse fail → silent fallback. Bump to 8000 for
+            # gpt-5* so visible JSON has room. (Phase soul-v4 fix.)
+            "max_tokens": (
+                8000 if model.lower().startswith("gpt-5")
+                else (3500 if (lang or "en").lower() == "en" else 5000)
+            ),
         }
         if not model.lower().startswith("gpt-5"):
             kwargs["temperature"] = 0.55
@@ -848,19 +956,19 @@ def _band(score: float | None) -> str:
 _CH_SOUL: dict[str, dict[str, dict[str, str]]] = {
     "ch1": {
         "HIGH": {
-            "kya_dikh":   "{p1} aur {p2} ke beech ek quiet emotional rhythm hai — but dekho dhyaan se: ek partner feelings ko apne face pe pehle dikhata hai, dusra unhe pehle internally process karta hai aur phir share karta hai. Same emotion, do alag delivery times. Ye gap pyaar ke saath baith jaata hai, lekin jab thakaan zyada hoti hai tab ye chhota gap suddenly bada feel hota hai.",
+            "kya_dikh":   "Pyaar yahaan loud nahi hai — emotional language ek background hum ki tarah baji rehti hai. {p1} aur {p2} ke andar same emotion alag delivery times pe surface karta hai: kuch face pe pehle, kuch andar baad me. Same pyaar, do delivery rhythms. Jab thakaan zyada hoti hai tab ye chhota gap suddenly bada feel hota hai aur naam diye bina misunderstanding ban jaata hai.",
             "kya_matlab": "Real life me iska shape aisa hai — Sunday raat ko, jab dono thake hain, ek koi chhoti baat bolega aur dusra silent rahega. Silent waala 'naraz' nahi hai, woh actually andar feeling sort kar raha hai. Lekin bolne wala us silence ko reject samajh sakta hai. Ye misunderstanding fight nahi banti — ye dheere se distance banti hai jo agle din tak rehti hai.",
-            "kya_dhyan":  "Ek chhota signal-phrase decide kar lo — jaise '5 minute', meaning 'main yahin hoon, bas process kar raha hoon.' Ye ek phrase saalon ke chhote silent rifts cancel karta hai. Hafte me ek 20-minute walk dono saath karo — bina phone, bina agenda. Walking se pace match hoti hai jo ghar me kabhi nahi hoti.",
+            "kya_dhyan":  "Ek chhota signal-phrase decide kar lo — jaise '5 minute', meaning 'main yahin hoon, bas process kar raha hoon.' Ye ek phrase saalon ke chhote silent rifts cancel karta hai. Hafte me ek 20-minute walk dono saath karo — bina phone, bina agenda. Aur ye samajh lo — emotional rhythms match nahi karte, sirf honour ho sakte hain. Yahi is bond ka secret hai.",
         },
         "MID": {
-            "kya_dikh":   "{p1} aur {p2} ke emotional volumes alag-alag hain. Ek partner ke liye 'main theek hoon' ka matlab actually theek hota hai. Dusre ke liye wahi line ka matlab 'mujhe poochho dobara, but gently.' Ye sirf style nahi hai — ye childhood me kaise express karna seekha tha uska imprint hai, aur dono apni truth me sahi hain.",
+            "kya_dikh":   "Imagine 9 baje ki chai, dono sofa pe, ek bole 'main theek hoon' aur baat khatm. {p1} ke liye yeh line literal hoti hai — sach me theek hai. {p2} ke liye wahi line ka matlab hota hai 'mujhe gently dobara poochho.' Ye sirf style nahi hai — ye childhood me kaise express karna seekha tha uska imprint hai, aur dono apni truth me sahi hain.",
             "kya_matlab": "Iska matlab — ek partner zyada bar 'main thik hoon' suntega aur bharosa kar lega; dusre ko lagega 'tujhe parwah hi nahi ki main andar kya feel kar raha hoon.' Distance yahaan gusse se nahi banti, ek kaafi-na-poochhne aur ek zyada-poochhne ke loop se banti hai. Reassurance dono ko chahiye, bas alag languages me.",
-            "kya_dhyan":  "Hafte me ek 10-minute baith ke baat — bina solving, sirf describing. Bolne wala bole 'aaj is cheez ne mujhe kheecha tha', sunne wala sirf 'aur?' bole, advice nahi. Ek joint daily prayers ya gratitude minute raat ko — chhota emotional reset hota hai jo unkahe hurts ko subah tak nahi pahunchne deta.",
+            "kya_dhyan":  "Hafte me ek 10-minute baith ke baat — bina solving, sirf describing. Bolne wala bole 'aaj is cheez ne mujhe kheecha tha', sunne wala sirf 'aur?' bole, advice nahi. Ek joint daily prayers ya gratitude minute raat ko — chhota emotional reset. Aur ye samajh lena — 'main thik hoon' do alag languages me bola jaata hai; isko translate karna seekhna hi yahaan asli intimacy hai.",
         },
         "LOW": {
-            "kya_dikh":   "{p1} aur {p2} ke emotional clocks alag rhythm pe chalte hain. Ek intense aur immediate hai — feeling aayi, abhi process karni hai, abhi baat karni hai. Dusra delayed processor — ek upset moment ko 12 ghante andar baith ke samajhta hai phir bolta hai. Ye personality hai, dosh nahi — but jab tak naam nahi diya jaata, dono ek dusre ki speed ko 'galat' samajhte rehte hain.",
+            "kya_dikh":   "Sabse purane silent friction-points emotional speed se start hote hain, topic se nahi. {p1} aur {p2} ke andar do alag emotional clocks chal rahe hain — kabhi {p1} intense aur immediate hota hai (feeling aayi, abhi baat karni hai), kabhi {p2} delayed processor jo ek upset moment ko 12 ghante andar baith ke samajhta hai. Ye personality hai, dosh nahi — but jab tak naam nahi diya jaata, dono apni speed ko 'sahi' aur dusre ki ko 'galat' samajhte rehte hain.",
             "kya_matlab": "Roz ke jeevan me iska matlab — fast processor ko lagta hai 'tu avoid kar raha hai, tujhe parwah nahi'; slow processor ko lagta hai 'tu emotional pressure daal raha hai, mujhe saans lene de.' Dono apni jagah pe sahi hain, aur dono ek dusre ko 'galat' label kar dete hain. Ye sabse common silent friction-zone hai shaadi ke pehle 5 saalon me.",
-            "kya_dhyan":  "Ek single line jo bahut rishton ko bachati hai — '30 minute, phir baat'. Slow waala bole, fast waala honour kare. Aur 30 minute baad sach me wapas aana padta hai — varna ye line bhi avoidance ban jaati hai. Hafte me ek 30-minute walk dono saath — chalna baat ko softer banata hai aur eye-contact ka pressure hata deta hai.",
+            "kya_dhyan":  "Ek single line jo bahut rishton ko bachati hai — '30 minute, phir baat'. Slow waala bole, fast waala honour kare. Aur 30 minute baad sach me wapas aana padta hai — varna ye line bhi avoidance ban jaati hai. Hafte me ek 30-minute walk dono saath — chalna baat ko softer banata hai. Aur ek baat samajh lena — emotional speed ek personality trait hai, character flaw nahi; jab tak isko 'galat' label nahi karna chhodte, fight ki asli baat kabhi hath nahi aati.",
         },
     },
     "ch2": {
@@ -882,17 +990,17 @@ _CH_SOUL: dict[str, dict[str, dict[str, str]]] = {
     },
     "ch3": {
         "HIGH": {
-            "kya_dikh":   "Jab {p1} aur {p2} disagree karte hain, ek rare baat hoti hai — issue ek third entity ban jaata hai jise dono milke dekh rahe hote hain, ek dusre ke against nahi. Ek partner shayad pehle defensive feel karta hai aur baad me soften hota hai; dusra straight calm rehta hai. Lekin dono ka final destination same hai — repair, attack nahi.",
+            "kya_dikh":   "Is rishte ki sabse rare quality conflict ke time pe dikhti hai — issue ek third entity ban jaata hai jise {p1} aur {p2} milke dekh rahe hote hain, ek dusre ke against nahi. Defensive flash kabhi-kabhi aata hai aur soften ho jaata hai; final destination repair hai, attack nahi. Calmness ka matlab unaffected nahi — sirf processing alag jagah ho rahi hai.",
             "kya_matlab": "Real life me iska faayda — bade decisions (career change, city change, parenting timing) pe dono ek table pe baith sakte ho bina personal attack ke. Aur ek aur baat: jo calm dikhta hai woh actually argument ke 4 ghante baad bhi mind me conversation re-run kar raha hota hai. Calmness ka matlab unaffected nahi hai — sirf processing alag jagah ho rahi hai.",
             "kya_dhyan":  "Stress periods me is strength ko erode mat hone do. Ek 24-hour rule banao — koi bhi badi cheez (shift, big purchase, in-laws ka decision) raat ko thake hue mind me decide nahi karenge. Subah chai ke saath. Ek hafte me 1 ghanta — jaise Sunday morning walk — sirf 'hum kaise jaa rahe hain' ke liye reserved rakho.",
         },
         "MID": {
-            "kya_dikh":   "{p1} aur {p2} ke conflict-style alag-alag hain — aur yeh wahi spot hai jahaan zyadatar arguments actually mudde se nahi, pace se start hote hain. Ek partner 'abhi resolve karo' camp me hai — issues ko pending nahi rakh sakta, raat bhar woh weight uthata rehta hai. Dusra 'pehle thanda hone do, kal subah baat' camp me — usko fresh head se baat karne ki adat hai.",
+            "kya_dikh":   "Zyadatar arguments {p1} aur {p2} ke beech topic pe nahi, pace pe shuru hote hain. Kabhi {p1} 'abhi resolve karo' camp me hota hai — issues ko pending nahi rakh sakta, raat bhar weight uthata rehta hai. Kabhi {p2} 'pehle thanda hone do, kal subah baat' camp me — fresh head se baat karne ki adat hai. Real topic side me chhoot jaata hai aur fight pace pe ho jaati hai.",
             "kya_matlab": "Aam jhagde isi clash se start hote hain — 'tu avoid kar raha hai' bolne wala, aur 'tu pressure daal raha hai' sunne wala. Real topic side me chhoot jaata hai aur fight pace pe ho jaati hai. Funny baat — har fight ke baad dono apne friend ko kahenge 'argument was about X', actually X kabhi address hi nahi hua. Ye pattern jab tak dikha nahi jaata, ye repeat hota rehta hai.",
             "kya_dhyan":  "Ek seedha rule — jab gussa peak pe ho, koi response 30 minute ke andar nahi dega. Lekin (ye hissa important hai) jo cool down karta hai, woh deadline rakhe — 'main 7 baje tak wapas baat karunga.' Dono apni speed honour karte hain bina dusre ko abandon kiye. Ye chhoti si discipline 70% domestic friction silently hata deti hai.",
         },
         "LOW": {
-            "kya_dikh":   "{p1} aur {p2} ke beech kuch fights repeat ho rahe hain — wahi topic, alag wrapping me, alag Monday ko. Surface pe baat bartan ki ya time-table ki hoti hai. Andar ek older feeling-pattern hai jo ek partner ne kabhi naam nahi diya — shayad 'main hamesha akela sambhalta hoon' ka hurt, ya 'mujhe sach me suna nahi jaata' ka quiet resignation. Jab tak woh underground feeling label nahi hoti, fight surface pe roz dohrayi jaati hai.",
+            "kya_dikh":   "Wahi Tuesday raat, wahi bartan, wahi line — fight ka topic surface pe naya lagta hai, andar same purana hurt khada hai jo {p1} aur {p2} ne abhi tak naam nahi diya. Shayad 'main hamesha akela sambhalta hoon' ka hurt, ya 'mujhe sach me suna nahi jaata' ka quiet resignation. Jab tak woh underground feeling label nahi hoti, fight surface pe roz dohrayi jaati hai.",
             "kya_matlab": "Iska matlab — fight 'jeetne' se raahat nahi aati, kyunki jeeti hui baat woh nahi thi jo actually hurt kar rahi thi. Ek partner ko lagega 'main har baar effort dikhata hoon, fir bhi enough nahi hota'; dusre ko lagega 'mujhe meri reasons sunne ka mauka hi nahi milta.' Dono apni truth me sahi hain. Lekin same shape ki fight 4 baar repeat hoti hai — woh signal hai ki real conversation kabhi hui hi nahi.",
             "kya_dhyan":  "Agar same fight 3 baar ho chuki hai, woh fight ke baare me nahi hai. Ek calm waqt me baith ke ek line poochho — 'is fight me main actually kis cheez se dar raha hoon?' Jawab fight ke topic se completely alag hoga. Ek neutral teesra perspective — couples counselling ka 1 session — patterns ko unlock karta hai jo ghar ke andar se nahi dikhte. Stigma waala kuch nahi hai isme.",
         },
@@ -916,17 +1024,17 @@ _CH_SOUL: dict[str, dict[str, dict[str, str]]] = {
     },
     "ch5": {
         "HIGH": {
-            "kya_dikh":   "{p1} aur {p2} ke beech ek natural physical aur emotional pull hai jo time ke saath erode nahi hota. Bahut couples ke liye initial chemistry honeymoon-phase ke baad fade hoti hai — yahaan woh pull deeper layer se aata hai, sirf novelty se nahi. Lekin ek baat — chemistry ek partner ke liye zyada physical dimension me jeeti hai, dusre ke liye zyada emotional safety me. Dono real hain, aur dono ek dusre ke without missing rehte hain.",
+            "kya_dikh":   "Kuch chemistries time ke saath fade hoti hain; kuch deeper layer se khinchti hain, novelty se nahi. {p1} aur {p2} ke beech jo pull hai woh dusra type hai — physical aur emotional dono surface se jude. Kabhi {p1} ke liye chemistry zyada physical dimension me jeeti hai, kabhi {p2} ke liye zyada emotional safety me. Dono real hain, aur dono ek dusre ke without missing rehte hain.",
             "kya_matlab": "Real life me — long-distance phases, busy career years, parenting years me bhi connection survive karega. Touch, eye-contact, shared humor — easy aur consistent rahenge. Lekin ek subtle sach — jab life sabse busy hoti hai, ye chemistry pehli cheez hoti hai jo silently sideline ho jaati hai, kyunki dono assume kar lete hain ki 'ye to natural hai, ye nahi jaayegi.' Aur woh assumption hi sabse mehngi padti hai.",
             "kya_dhyan":  "Routine ko mat barbaad karne do — hafte me ek 'no-screen, no-kids, no-work' evening rakho. Touch ko sirf bedroom tak limit mat rakho — chai dete waqt haath mila lo, ek kandhe pe haath rakh do baith ke. Chhoti continuity badi chemistry banaye rakhti hai — bade gestures se zyada.",
         },
         "MID": {
-            "kya_dikh":   "{p1} aur {p2} ke beech connection real hai, lekin physical aur emotional needs alag languages me express hoti hain. Ek partner ke liye intimacy = words, presence, baat-cheet ka time. Dusre ke liye intimacy = touch, action, silent saath. Dono valid hain — lekin jab ek apni language me dikhata hai, dusre ki language me woh translate nahi hota, aur 'enough' nahi feel hota dono ko.",
+            "kya_dikh":   "Connection real hai, lekin intimacy ki languages alag hain. {p1} ke liye intimacy = words, presence, baat-cheet ka time. {p2} ke liye intimacy = touch, action, silent saath. Dono valid hain — lekin jab ek apni language me dikhata hai, dusri language me woh translate nahi hota, aur 'enough' nahi feel hota dono ko.",
             "kya_matlab": "Iska matlab — kabhi-kabhi ek partner ko lagega 'isme woh feeling nahi hai jaisi hona chahiye'. Lekin partner is showing it — bas tumhari language me nahi, apni language me. Ye gap silently bahut shaadiyan distance me dhakelta hai. Naam diye bina ye nazar bhi nahi aata — dono apni wajah se hurt mehsoos karte hain bina samjhe ki dusra actually showing up hai.",
             "kya_dhyan":  "Ek baar khulkar baat karo — 'mujhe X way me feel hota hai loved, tujhe kis way me feel hota hai loved?' Ye conversation pehli baar awkward lagti hai aur saalon ki silence ko ek ghante me reset kar deti hai. Hafte me ek dedicated couple-time block calendar pe daal do — non-negotiable, even ek ghanta. Walk, dinner, kuch bhi — bas dono ka.",
         },
         "LOW": {
-            "kya_dikh":   "{p1} aur {p2} ke beech physical aur emotional rhythms ko deliberately tune karna padega. Ye normal hai — bahut couples me natural chemistry waqt aur safety ke saath build hoti hai, instant nahi. Ek partner shayad isse 'mismatch' samajhta hai aur internalize kar raha hai ki 'kuch galat hai humme'. Dusra shayad practical hai — 'theek hai, kaam karenge isko.' Dono interpretations dono ko weight de rahi hain.",
+            "kya_dikh":   "Bahut couples ke liye natural chemistry instant nahi hoti — woh waqt aur safety ke saath build hoti hai. {p1} aur {p2} abhi wahi build-up ke phase me hain. Kabhi {p1} isse 'mismatch' samajh ke internalize karta hai ki 'kuch galat hai humme'; kabhi {p2} zyada practical — 'theek hai, kaam karenge isko.' Dono interpretations dono ko weight de rahi hain.",
             "kya_matlab": "Real life me — agar dono assume karenge ki 'should be natural', frustration silently build hoga. Ye area pressure se kabhi nahi sudharta — sirf openness, low-pressure exploration, aur time se sudharta hai. Aur ek important sach — comparison social media couples se mat karna. Woh actors hain. Real chemistry private, slow, aur often awkward shuruat se grow hoti hai.",
             "kya_dhyan":  "Pressure utaaro — 'perfect intimacy' ka concept hi gira do. Hafte me ek long, slow, planned date — koi performance-expectation nahi, sirf presence. Counselling ek option hai agar conversations stuck feel hon — koi stigma waala kaam nahi hai, aur chhoti window me kaafi safe baat khul jaati hai.",
         },
@@ -935,32 +1043,32 @@ _CH_SOUL: dict[str, dict[str, dict[str, str]]] = {
         "HIGH": {
             "kya_dikh":   "{p1} aur {p2} ke beech jo daily-life partnership hai, woh quietly efficient hai. Dono naturally apna apna lane samajhte hain — kaun kya sambhalta hai, kab support deni hai, kab step back karna hai. Family dynamics me bhi dono ek dusre ki side me khade dikhte hain. Lekin dekho — ek partner shayad zyada visible labor karta hai (jo dikhta hai), dusra zyada invisible labor (mental load, planning, remembering). Dono ke contributions equal hain, sirf visibility alag hai.",
             "kya_matlab": "Real life me iska faayda — chhoti chizein (bills, schedules, household, in-laws) silent rehti hain, energy bachi rehti hai bigger things ke liye. Ye couples ka 'silent superpower' hai. Lekin ek hidden risk — invisible labor karne wala dheere thakega, aur uski thakaan dikhegi nahi jab tak woh bahut baad me bahar nahi aati ek unexpected outburst ke shape me. Acknowledgment yahaan trust se zyada important hai.",
-            "kya_dhyan":  "Roles ko rigid mat banao — har 6 mahine ek 'who does what now' check kar lo. Life shift hoti hai, distribution bhi shift karna chahiye. Ek hafte ek joint family dinner — apne ghar ke saare logon ka — ek beautiful continuity ritual hai. Aur invisible labor karne wale ko explicit acknowledgment do, weekly — naam le ke, kaam batake.",
+            "kya_dhyan":  "Roles ko rigid mat banao — har 6 mahine ek 'who does what now' check kar lo. Life shift hoti hai, distribution bhi shift karna chahiye. Invisible labor karne wale ko explicit acknowledgment do, weekly — naam le ke, kaam batake. Aur ek baat samajh lena: jo dikhta nahi hai, woh thakaata sabse zyada hai — acknowledgment hi yahaan asli reward ban jaata hai.",
         },
         "MID": {
             "kya_dikh":   "{p1} aur {p2} ke beech daily life smoothly chal sakti hai, lekin family expectations dono pe alag pressure dalti hain. Dono apne parivaar ki rhythms se aaye hain — gift-giving, festival celebrating, parents ko visit karne ki frequency, even chhoti baatein jaise 'kaun kisko phone karta hai pehle'. Dono ke ghar me normal alag tha. Aur jab tak woh 'normal' explicitly compare nahi hota, dono assume karte hain ki dusra unka normal samajhta hai.",
             "kya_matlab": "Iska matlab — shaadi sirf tum dono ke beech nahi hoti, do families ke beech hoti hai. Jo expectations spoken nahi hain, woh built-in disappointment banti hain. Aur ek subtle baat — ek partner shayad apne family ke saath zyada loyalty feel karta hai (kyunki woh emotional anchor hai), dusra apni family se thoda distance pasand karta hai (kyunki freedom anchor hai). Dono valid, dono ek dusre ke truth ko 'cold' ya 'enmeshed' label kar dete hain.",
-            "kya_dhyan":  "Saal ki shuruat me ek baar baith ke decide karo — 'is saal ke major family events kaun-kaun se hain, kis pe priority?' Decisions emotional moment me nahi, calm planning me lo. Joint family dinner monthly — neutral occasion, sab logon ka — ek beautiful boundary-friendly ritual ban sakta hai jisme dono families equally feel honoured.",
+            "kya_dhyan":  "Saal ki shuruat me ek baar baith ke decide karo — 'is saal ke major family events kaun-kaun se hain, kis pe priority?' Decisions emotional moment me nahi, calm planning me lo. Joint family dinner monthly — neutral occasion, sab logon ka — ek boundary-friendly ritual ban sakta hai. Aur ye samajh lena — do alag 'normal' ek ghar me jab tak silently coexist karte hain, dono partners apne family ko 'mis-respected' feel karwate rehte hain bina jaane.",
         },
         "LOW": {
             "kya_dikh":   "{p1} aur {p2} ke daily life partnership ko deliberately design karna padega — auto-pilot pe ye nahi chalegi. Natural division of labour smooth nahi hai; small things (groceries, bills, who cooks, kis ke parents ka kaam pehle) chronic stress points ban sakte hain. Ek partner shayad zyada uthane lagta hai aur silently resentful hota jaata hai; dusra notice nahi karta, kyunki uske liye 'sab to chal raha hai.'",
             "kya_matlab": "Real life me iska impact — household tension grow karti hai jab unspoken expectations clash karti hain. Family side ke pressures bhi ek partner pe disproportionately gir sakte hain. Ye saalon me silently relationship ko khaata hai — fight ek bartan pe hoti hai, lekin actual feeling 'main akela sambhal raha hoon' wali hoti hai. Aur woh feeling jab tak labelled nahi, naya bartan har hafte phir wahi fight banayega.",
-            "kya_dhyan":  "Ek written list banao — har task kis ka primary, kis ka backup. Awkward lagega start me, lekin clarity se peace aati hai. Quarterly review karo aur honestly batao kya overwhelming feel ho raha hai. Joint family dinner — mahine me ek baar — neutral ground pe positive memories banata hai, jab daily life me thakaan zyada hai.",
+            "kya_dhyan":  "Ek written list banao — har task kis ka primary, kis ka backup. Awkward lagega start me, lekin clarity se peace aati hai. Quarterly review karo aur honestly batao kya overwhelming feel ho raha hai. Aur ek baat samajh lena — silent fairness koi nahi dekhta; jo dikha ke acknowledge hota hai, wahi long-run me asli reward ban jaata hai.",
         },
     },
     "ch7": {
         "HIGH": {
-            "kya_dikh":   "{p1} aur {p2} ek aise direction me badh rahe hain jahaan dono individually grow honge aur saath bhi. Ye relationship dono ko shrink nahi karta. Lekin dekho — ek partner shayad apni growth zyada visible tareeke se kar raha hai (career, social, achievement), dusra silently andar grow ho raha hai (depth, perspective, calm). Dono growth real hai. Lekin agar dono 'visible' growth ko hi growth maan ke compare karne lagein, ek partner unfairly piche feel karega.",
+            "kya_dikh":   "5 saal baad, 10 saal baad ki tasveer me, {p1} aur {p2} dono individually grow hue dikhte hain — aur saath bhi. One chart leans toward outward, visible expansion (career, social, achievement); the other carries a quieter, inward growth — depth, perspective, calm. Bahut few couples is direction me jaa paate hain. Dono growth real hai. Agar 'visible' growth ko hi growth maan ke compare karne lagein, kisi ek ko unfairly piche feel ho jaata hai.",
             "kya_matlab": "Real life me — 5 saal baad, 10 saal baad, dono shayad alag-alag heights pe honge — career, social circle, even spiritually. Aur ek dusre ke liye proud aur supportive rahenge. Bahut few couples is direction me jaa paate hain. Lekin ek choti chetawni — comparison ko consciously block karna padega. 'Tumne to ye nahi kiya' jaisa ek bhi line, brick by brick, foundation hila deta hai.",
             "kya_dhyan":  "Har New Year ek baith ke 'individual aur joint goals' likhna ek practice bana lo. Ek dusre ke goals me invested raho — small ways me, jaise interview wale din ek motivating message bhej dena. Yearly anniversary ritual — ek temple ya nature spot pe ek ghanta sirf shukran — direction ko anchor karta hai. Joint daily prayers — chhote duration ke — long-term shared meaning banaye rakhte hain.",
         },
         "MID": {
-            "kya_dikh":   "{p1} aur {p2} ka long-term direction shape ho raha hai, lekin abhi tak fully aligned nahi hai. Ek partner stability + steady growth chahta hai — predictable ghar, slow-build career. Dusra adventure + change chahta hai — naye experiences, bold moves. Dono valid life-paths hain, lekin same shaadi me alag direction me kheechte hain. Aur is mismatch ko dono abhi tak directly naam nahi de rahe — chhoti baaton me ye gap silently dikhta hai.",
+            "kya_dikh":   "Future ki tasveer abhi {p1} aur {p2} ke beech fully aligned nahi hai. {p1} stability + steady growth chahta hai — predictable ghar, slow-build career. {p2} adventure + change chahta hai — naye experiences, bold moves. Dono valid life-paths hain, lekin same shaadi me alag direction me kheechte hain. Aur is mismatch ko dono abhi tak directly naam nahi de rahe — chhoti baaton me ye gap silently dikhta hai.",
             "kya_matlab": "Iska matlab — agle 5 saal me ek major decision (city, career, kids ka timing, lifestyle) pe dono ko khulkar baat karni hi padegi. Avoid karne se gap kam nahi hota, badhta hai. Jo couples ye conversation jaldi karte hain — even when answers don't match — woh saath grow karte hain kyunki kam-se-kam dono jaante hain ki kahaan negotiate karna hai. Jo nahi karte, woh same ghar me alag jeevan jeene lagte hain — ek baat khaane ki table pe sirf weather pe hoti hai.",
             "kya_dhyan":  "Ek 'next 5 years' map saath baith ke draw karo — kahaan rehna hai, kya kamana hai, kya skip karna hai. Disagreement aaye to negotiate karo, dabao mat. Yearly anniversary ritual — long walk + uninterrupted talk — direction-recalibration ka time hai. Ek 90-minute Sunday brunch ek baar mahine me dedicated rakho — sirf future ki baat ke liye.",
         },
         "LOW": {
-            "kya_dikh":   "{p1} aur {p2} ka long-term direction abhi blurry hai. Dono ek phase me hain jahaan personal clarity bhi shayad puri tarah aayi nahi hai — ek apne baare me figure out kar raha hai, dusra bhi. Ye normal hai aur is umar pe expected hai, lekin shaadi me ek subtle 'kahaan jaa rahe hain hum' wala question silently chodta hai. Aur ek partner shayad is uncertainty se kam comfortable hai, dusra zyada — woh asymmetry bhi friction add karti hai.",
+            "kya_dikh":   "Long-term direction abhi blurry hai — aur ye fault kisi ka nahi, life-stage hai. {p1} aur {p2} dono apni individual clarity dhundh rahe hain — har koi apne baare me figure out kar raha hai. Shaadi me ek subtle 'kahaan jaa rahe hain hum' wala question silently chodta hai. Asymmetry ye hai ki kisi ek ko is uncertainty se kam comfort hota hai, kisi ko zyada — aur woh asymmetry bhi friction add karti hai.",
             "kya_matlab": "Real life me — shared decisions tough lagengi kyunki dono ke individual paths abhi unclear hain. Ye 'fault' kisi ka nahi hai, life-stage hai. Lekin agar address na ho, drift silently grow karti hai — ek din uthke realize hota hai 'hum ek hi ghar me alag log ho gaye.' Ye dramatic event nahi hai, ye 100 chhote uncommunicated decisions ka cumulative effect hota hai. Aur isse rok-na possible hai, lekin awareness mein.",
             "kya_dhyan":  "Pehle individual clarity pe kaam karo — har partner apne 3-saal goals likhe alag se. Phir saath baith ke overlap dhundo. Ek counsellor ya life-coach ek session bhi helpful — joint future-planning ko structure deta hai. Yearly anniversary ritual — ek shanti-bhare place pe quiet day saath — drift ko slowly heal karta hai. Joint daily prayers — even 5 minute — silent reset ka kaam karte hain jab paths divergent feel ho rahe hon.",
         },

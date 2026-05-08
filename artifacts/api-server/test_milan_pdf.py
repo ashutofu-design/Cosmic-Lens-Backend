@@ -107,3 +107,66 @@ class TestMilanPdfRenderer(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMilanPdf21CRegressions(unittest.TestCase):
+    """Phase 2.5.11.21-C architect-flagged regressions."""
+
+    def _page_count(self, pdf_bytes: bytes) -> int:
+        import subprocess, tempfile, os
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            f.write(pdf_bytes); fn = f.name
+        try:
+            out = subprocess.check_output(["pdfinfo", fn]).decode()
+        finally:
+            os.unlink(fn)
+        for line in out.splitlines():
+            if line.startswith("Pages:"):
+                return int(line.split()[1])
+        return -1
+
+    def test_empty_payload_emits_exactly_12_pages(self):
+        from milan_pdf import render_milan_pdf
+        self.assertEqual(self._page_count(render_milan_pdf({}, "en")), 12)
+
+    def test_legacy_only_payload_emits_exactly_12_pages(self):
+        from milan_pdf import render_milan_pdf
+        payload = {
+            "p1": {"name": "A"}, "p2": {"name": "B"},
+            "total": 18, "max": 36,
+            "koots": [
+                {"key": "vasya",  "label": "Vasya",        "score": 2, "max": 2, "bad": False},
+                {"key": "maitri", "label": "Graha Maitri", "score": 5, "max": 5, "bad": False},
+                {"key": "bhakut", "label": "Bhakut",       "score": 0, "max": 7, "bad": True},
+            ],
+            "analysis": {
+                "compatibility_insight": "x",
+                "strengths": ["s1"],
+                "challenges": ["c1"],
+                "marriage_outlook": "y",
+            },
+        }
+        self.assertEqual(self._page_count(render_milan_pdf(payload, "en")), 12)
+
+    def test_canon_koot_key_resolves_real_payload_aliases(self):
+        from milan_pdf import _canon_koot_key
+        self.assertEqual(_canon_koot_key({"key": "vasya"}),  "vashya")
+        self.assertEqual(_canon_koot_key({"key": "maitri"}), "graha")
+        self.assertEqual(_canon_koot_key({"key": "bhakut"}), "bhakoot")
+        # label fallback when key blank/unknown
+        self.assertEqual(_canon_koot_key({"key": "", "label": "Graha Maitri"}), "graha")
+        self.assertEqual(_canon_koot_key({"key": "?", "label": "Bhakut"}),      "bhakoot")
+        # totally unknown returns ""
+        self.assertEqual(_canon_koot_key({"key": "xyz", "label": "Xyz"}), "")
+
+    def test_is_manglik_unified_across_partner_flags(self):
+        from milan_pdf import _is_manglik
+        self.assertFalse(_is_manglik({}))
+        self.assertTrue(_is_manglik({"manglik_dosh": True}))
+        self.assertTrue(_is_manglik({"p1": {"manglik": True}}))
+        self.assertTrue(_is_manglik({"p2": {"manglik": True}}))
+        self.assertFalse(_is_manglik({"p1": {"manglik": False}, "p2": {"manglik": False}}))
+
+
+if __name__ == "__main__":
+    unittest.main()

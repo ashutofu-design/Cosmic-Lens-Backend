@@ -553,6 +553,644 @@ def _disclaimer(s: dict) -> Table:
     return t
 
 
+# ── Premium 12-page Cosmic Relationship Blueprint helpers ─────────────
+# Phase 2.5.11.21-C: redesign per attached spec — "emotionally
+# intelligent, modern, screenshot-worthy, premium." Pages 9-12 derive
+# content deterministically from existing data (no extra LLM calls).
+
+_BG_HERO     = colors.HexColor("#FAF7FF")  # very light purple wash
+_BG_DARK_TXT = colors.HexColor("#1E1B3A")  # near-black with a purple bias
+_HAIR_GOLD   = colors.HexColor("#E5C97B")
+_PILL_BG     = colors.HexColor("#F3EDFF")
+
+
+def _hex(c: colors.Color) -> str:
+    """Return ReportLab Color as `#RRGGBB` for HTML <font color=...>."""
+    return "#" + c.hexval()[2:].upper().rjust(6, "0")[-6:]
+
+
+def _relationship_type_tag(grade: dict, snap: dict, total: float, mx: int,
+                           manglik: bool) -> str:
+    """Derive a 2-3 word relationship descriptor for the cover page."""
+    pct = (float(total) / max(float(mx), 1)) * 100 if mx else 0
+    tags = (snap or {}).get("tags") or {}
+    pull = (tags.get("emotional_pull") or "").lower()
+    stab = (tags.get("long_term_stability") or "").lower()
+
+    if any(w in pull for w in ("high", "strong", "deep", "intense")):
+        first = "Emotionally Intense"
+    elif "low" in pull or "weak" in pull:
+        first = "Quietly Steady"
+    else:
+        first = "Emotionally Layered"
+
+    if pct >= 75:
+        second = "Naturally Harmonious Bond"
+    elif pct >= 50:
+        if "adjust" in stab or "delay" in stab or manglik:
+            second = "Slow-Maturing Bond"
+        else:
+            second = "Growth-Oriented Bond"
+    else:
+        second = "Karmic Lesson Bond"
+    return f"{first}  •  {second}"
+
+
+def _relationship_tags(snap: dict, koots: list, manglik: bool) -> list[str]:
+    """Up to 3 short emotional descriptor tags for the snapshot page."""
+    out: list[str] = []
+    snap_tags = (snap or {}).get("tags") or {}
+    pull = (snap_tags.get("emotional_pull") or "").lower()
+    if any(w in pull for w in ("high", "strong", "deep")):
+        out.append("Deep Attachment")
+    elif "medium" in pull:
+        out.append("Steady Affection")
+    else:
+        out.append("Quiet Pull")
+
+    gana = next((k for k in (koots or [])
+                 if (k.get("key") or "").lower() == "gana"), None)
+    if gana and gana.get("score", 0) < gana.get("max", 1):
+        out.append("Communication Sensitive")
+
+    stab = (snap_tags.get("long_term_stability") or "").lower()
+    if "adjust" in stab or "delay" in stab or manglik:
+        out.append("Delayed Stability")
+    elif "strong" in stab or "natural" in stab:
+        out.append("Naturally Stable")
+    else:
+        out.append("Growth Through Effort")
+    return out[:3]
+
+
+_KOOT_STRENGTH_LANG = {
+    "varna":   "natural ego harmony — neither dominates the other",
+    "vashya":  "genuine mutual influence and pull",
+    "tara":    "naturally supportive timing for each other",
+    "yoni":    "deep physical and instinctive comfort",
+    "graha":   "friendly natural temperaments",
+    "gana":    "shared inner nature and emotional rhythm",
+    "bhakoot": "compatible life-directions and shared goals",
+    "nadi":    "complementary biological/emotional energies",
+}
+_KOOT_DAMAGE_LANG = {
+    "varna":   "subtle ego friction — one feels less respected over time",
+    "vashya":  "imbalance in who pulls and who follows",
+    "tara":    "mistimed moments — wrong words at vulnerable times",
+    "yoni":    "mismatched physical or emotional rhythms",
+    "graha":   "natural temperament clashes during stress",
+    "gana":    "different inner nature — one playful, one serious",
+    "bhakoot": "different life-directions creating quiet drift",
+    "nadi":    "hidden energetic friction (often health-related)",
+}
+# Map common koot key/label spellings → canonical lookup keys above.
+# Real /api/kundli-milan payloads use `vasya`, `maitri`, `bhakut` etc.
+_KOOT_KEY_ALIASES = {
+    "vasya":          "vashya",
+    "vashya":         "vashya",
+    "maitri":         "graha",
+    "graha maitri":   "graha",
+    "graha":          "graha",
+    "bhakut":         "bhakoot",
+    "bhakoot":        "bhakoot",
+    "bhakuta":        "bhakoot",
+    "varna":          "varna",
+    "tara":           "tara",
+    "yoni":           "yoni",
+    "gana":           "gana",
+    "nadi":           "nadi",
+}
+
+
+def _canon_koot_key(k: dict) -> str:
+    """Resolve a koot dict to a canonical lookup key for the LANG maps.
+
+    Tries the raw `key` first, then the lowercased `label`. Returns ""
+    when neither matches a known alias (caller will skip).
+    """
+    raw = (k.get("key") or "").strip().lower()
+    if raw in _KOOT_KEY_ALIASES:
+        return _KOOT_KEY_ALIASES[raw]
+    label = (k.get("label") or "").strip().lower()
+    if label in _KOOT_KEY_ALIASES:
+        return _KOOT_KEY_ALIASES[label]
+    # last-ditch: first word of label (e.g. "Graha Maitri" → "graha")
+    first = label.split()[0] if label else ""
+    return _KOOT_KEY_ALIASES.get(first, "")
+
+
+def _is_manglik(payload: dict) -> bool:
+    """Single source of truth for manglik flag across all builders."""
+    if not isinstance(payload, dict):
+        return False
+    if payload.get("manglik_dosh"):
+        return True
+    p1 = payload.get("p1") or {}
+    p2 = payload.get("p2") or {}
+    return bool(p1.get("manglik") or p2.get("manglik"))
+
+
+def _derive_special_bullets(payload: dict) -> list[str]:
+    """Bullets for 'What makes this bond special' — top koots + first strength."""
+    out: list[str] = []
+    koots = payload.get("koots") or []
+    strong = [k for k in koots
+              if k.get("max", 0) >= 4 and k.get("score", 0) == k.get("max", 0)]
+    for k in strong[:3]:
+        key = _canon_koot_key(k)
+        line = _KOOT_STRENGTH_LANG.get(key)
+        if line:
+            out.append(f"<b>{_safe(k.get('label', ''))}</b>: {line}.")
+    strengths = (payload.get("analysis") or {}).get("strengths") or []
+    if isinstance(strengths, list) and strengths:
+        first = str(strengths[0]).strip()
+        if first:
+            out.append(_safe(first[:300]))
+    if not out:
+        out.append(
+            "Even where formal scores are modest, the chart "
+            "shows real emotional pull and willingness to grow together."
+        )
+    return out[:5]
+
+
+def _derive_damage_bullets(payload: dict) -> list[str]:
+    """Bullets for 'What can quietly damage' — doshas + low koots + challenges."""
+    out: list[str] = []
+    koots = payload.get("koots") or []
+    doshas = [k for k in koots
+              if k.get("score", 0) == 0 and k.get("max", 0) > 0]
+    weak = sorted(
+        [k for k in koots
+         if k.get("max", 0) >= 4
+         and 0 < k.get("score", 0) <= k.get("max", 1) / 2],
+        key=lambda k: k.get("score", 0),
+    )
+    for k in (doshas + weak)[:3]:
+        key = _canon_koot_key(k)
+        line = _KOOT_DAMAGE_LANG.get(key)
+        if line:
+            label = "Dosha" if k.get("score", 0) == 0 else "Low score"
+            out.append(
+                f"<b>{_safe(k.get('label', ''))} ({label})</b>: {line}."
+            )
+    chal = (payload.get("analysis") or {}).get("challenges") or []
+    if isinstance(chal, list) and chal:
+        first = str(chal[0]).strip()
+        if first:
+            out.append(_safe(first[:300]))
+    if _is_manglik(payload):
+        out.append(
+            "<b>Manglik energy</b>: needs careful timing of marriage — "
+            "rushing can trigger early friction. Wait for the bond to "
+            "settle before major joint commitments."
+        )
+    if not out:
+        out.append(
+            "Unspoken expectations and silent withdrawal are the "
+            "biggest quiet risks here. Speak early, even when it feels small."
+        )
+    return out[:5]
+
+
+def _practical_paragraphs(payload: dict) -> list[str]:
+    """Page 11 prose — money, family, lifestyle (derived from score + section)."""
+    pct = (float(payload.get("total", 0))
+           / max(float(payload.get("max", 36)), 1)) * 100
+    paras: list[str] = []
+    if pct >= 70:
+        paras.append(
+            "Day-to-day practical life flows naturally between you. Money "
+            "decisions, family pressures, and household responsibilities "
+            "tend to be discussed openly rather than fought over silently."
+        )
+    elif pct >= 50:
+        paras.append(
+            "Practical life will require conscious teamwork. Money "
+            "handling and family pressure can become flashpoints unless "
+            "you decide early how to share decisions and where each of "
+            "you holds final say."
+        )
+    else:
+        paras.append(
+            "Practical life will demand active negotiation. Joint "
+            "financial planning, household roles, and family-side "
+            "expectations need explicit conversations long before they "
+            "become resentments."
+        )
+    if _is_manglik(payload):
+        paras.append(
+            "Manglik influence here suggests delaying major joint "
+            "commitments — large loans, joint property, business "
+            "ventures — until at least one full year after marriage. "
+            "Let the bond settle first."
+        )
+    ms = (payload.get("analysis") or {}).get("marriage_stability") or {}
+    if isinstance(ms, dict):
+        ms_text = ms.get("text") or ""
+    else:
+        ms_text = str(ms or "")
+    if ms_text:
+        paras.append(_safe(ms_text[:420]))
+    return paras
+
+
+def _final_paragraphs(payload: dict) -> list[str]:
+    """Page 12 prose — closing wisdom (future_direction + universal close)."""
+    paras: list[str] = []
+    fd = (payload.get("analysis") or {}).get("future_direction") or {}
+    if isinstance(fd, dict):
+        fd_text = fd.get("text") or ""
+    else:
+        fd_text = str(fd or "")
+    if fd_text:
+        paras.append(_safe(fd_text[:600]))
+    paras.append(
+        "<b>The deeper truth:</b> this relationship is not defined by "
+        "perfection — but by how both of you choose to grow through it. "
+        "The chart shows tendencies, never destinies."
+    )
+    return paras
+
+
+# ── Premium page builders ───────────────────────────────────────────────
+def _gold_rule(width_mm: float = 40) -> Table:
+    """A thin gold underline rule used below chapter titles."""
+    r = Table([[""]], colWidths=[width_mm * mm], rowHeights=[2.5])
+    r.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), BRAND_GOLD)]))
+    return r
+
+
+def _cover_page(s: dict, p1: dict, p2: dict, total: float, mx: int,
+                grade: dict, snap: dict, manglik: bool,
+                lang: str) -> list[Any]:
+    """PAGE 1 — premium cover. Brand wordmark + couple + score + type tag."""
+    H_REG, H_BOLD = _font_pair(lang)
+    out: list[Any] = []
+    grade_label = (grade or {}).get("label") or ""
+    grade_color = (grade or {}).get("color") or _hex(BRAND_PURPLE)
+
+    out.append(Spacer(1, 18 * mm))
+
+    out.append(Paragraph(
+        f"<font color='{_hex(BRAND_GOLD)}'><b>COSMIC LENS</b></font>",
+        ParagraphStyle("brand", fontName="Helvetica-Bold", fontSize=10,
+                       leading=14, alignment=TA_CENTER, spaceAfter=8),
+    ))
+    out.append(Paragraph(
+        "Cosmic Relationship Blueprint",
+        ParagraphStyle("hero_title", fontName="Helvetica-Bold", fontSize=22,
+                       leading=28, alignment=TA_CENTER,
+                       textColor=BRAND_PURPLE, spaceAfter=2),
+    ))
+    out.append(Paragraph(
+        f"<font color='{_hex(TEXT_SOFT)}'>A Vedic Relationship "
+        f"Intelligence Report</font>",
+        ParagraphStyle("hero_sub", fontName="Helvetica", fontSize=10,
+                       leading=14, alignment=TA_CENTER, spaceAfter=20),
+    ))
+
+    out.append(Spacer(1, 8 * mm))
+
+    out.append(Paragraph(
+        f"<b>{_safe(p1.get('name'))}</b>"
+        f"<font color='{_hex(TEXT_SOFT)}'>  &nbsp;&amp;  &nbsp;</font>"
+        f"<b>{_safe(p2.get('name'))}</b>",
+        ParagraphStyle("hero_names", fontName=H_BOLD, fontSize=28,
+                       leading=34, alignment=TA_CENTER,
+                       textColor=TEXT_DARK, spaceAfter=4),
+    ))
+    out.append(Paragraph(
+        f"<font color='{_hex(TEXT_MID)}'>Generated "
+        f"{datetime.utcnow().strftime('%d %B %Y')}</font>",
+        ParagraphStyle("hero_date", fontName="Helvetica", fontSize=10,
+                       leading=12, alignment=TA_CENTER, spaceAfter=18),
+    ))
+
+    out.append(Spacer(1, 8 * mm))
+
+    score_p = Paragraph(
+        f"<b>{_safe(total)}</b>"
+        f"<font color='{_hex(TEXT_SOFT)}' size=18> / {_safe(mx)}</font>",
+        ParagraphStyle("hero_score", fontName="Helvetica-Bold", fontSize=48,
+                       leading=56, alignment=TA_CENTER,
+                       textColor=BRAND_PURPLE),
+    )
+    grade_p = Paragraph(
+        f"<b>{_safe(grade_label).upper()}</b>" if grade_label else "",
+        ParagraphStyle("hero_grade", fontName="Helvetica-Bold", fontSize=11,
+                       leading=14, alignment=TA_CENTER,
+                       textColor=colors.HexColor(grade_color)),
+    )
+    card = Table([[score_p], [Spacer(1, 2)], [grade_p]],
+                 colWidths=[110 * mm])
+    card.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (-1, -1), _BG_HERO),
+        ("BOX",          (0, 0), (-1, -1), 1.5, BRAND_GOLD),
+        ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING",   (0, 0), (-1, -1), 18),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 18),
+    ]))
+    centered = Table([[card]], colWidths=[180 * mm])
+    centered.setStyle(TableStyle([
+        ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    out.append(centered)
+    out.append(Spacer(1, 16))
+
+    rt = _relationship_type_tag(grade, snap, total, mx, manglik)
+    out.append(Paragraph(
+        f"<font color='{_hex(TEXT_MID)}'><b>{_safe(rt)}</b></font>",
+        ParagraphStyle("hero_tag", fontName="Helvetica-Bold", fontSize=12,
+                       leading=18, alignment=TA_CENTER, spaceAfter=10),
+    ))
+
+    out.append(Spacer(1, 32 * mm))
+    out.append(Paragraph(
+        f"<font color='{_hex(BRAND_GOLD)}'><b>"
+        f"Powered by Advanced Cosmic Intelligence</b></font>",
+        ParagraphStyle("hero_brand", fontName="Helvetica-Bold", fontSize=9,
+                       leading=12, alignment=TA_CENTER),
+    ))
+    out.append(PageBreak())
+    return out
+
+
+def _chapter_eyebrow(num: int, label: str) -> Paragraph:
+    return Paragraph(
+        f"<font color='{_hex(TEXT_SOFT)}'><b>"
+        f"CHAPTER {num:02d}  ·  {label.upper()}</b></font>",
+        ParagraphStyle("eyebrow", fontName="Helvetica-Bold", fontSize=9,
+                       leading=12, spaceAfter=6),
+    )
+
+
+def _chapter_title_block(title: str, subtitle: str) -> list[Any]:
+    out: list[Any] = []
+    out.append(Paragraph(
+        f"<b>{_safe(title)}</b>",
+        ParagraphStyle("chap_title", fontName="Helvetica-Bold", fontSize=24,
+                       leading=30, textColor=BRAND_PURPLE, spaceAfter=4),
+    ))
+    out.append(_gold_rule(40))
+    out.append(Spacer(1, 8))
+    if subtitle:
+        out.append(Paragraph(
+            f"<font color='{_hex(TEXT_MID)}'><i>{_safe(subtitle)}</i></font>",
+            ParagraphStyle("chap_sub", fontName="Helvetica", fontSize=11,
+                           leading=15, spaceAfter=14),
+        ))
+    return out
+
+
+def _grounding_card(s: dict, grounding: str) -> Table:
+    gp = Paragraph(
+        f"<font color='{_hex(TEXT_SOFT)}'><b>Why we say this →</b></font>  "
+        f"<font color='{_hex(TEXT_MID)}'><i>{_safe(grounding)}</i></font>",
+        ParagraphStyle("ground_pretty", fontName="Helvetica", fontSize=8.5,
+                       leading=12, textColor=TEXT_MID),
+    )
+    t = Table([[gp]], colWidths=[180 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (-1, -1), BG_TINT),
+        ("LINEABOVE",    (0, 0), (-1, 0), 0.6, BRAND_GOLD),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 12),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        ("TOPPADDING",   (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 8),
+    ]))
+    return t
+
+
+def _chapter_page(s: dict, num: int, eyebrow: str, title: str,
+                  subtitle: str, body: str,
+                  grounding: str = "") -> list[Any]:
+    """One full premium chapter page: eyebrow + title + subtitle + body."""
+    out: list[Any] = []
+    out.append(_chapter_eyebrow(num, eyebrow))
+    out.extend(_chapter_title_block(title, subtitle))
+    if body:
+        out.append(Paragraph(_safe(body), s["body"]))
+        out.append(Spacer(1, 10))
+    if grounding:
+        out.append(_grounding_card(s, grounding))
+    out.append(PageBreak())
+    return out
+
+
+def _bullets_page(s: dict, num: int, eyebrow: str, title: str,
+                  subtitle: str, bullets: list[str]) -> list[Any]:
+    """Page with a bulleted list (used for Special / Damage pages)."""
+    out: list[Any] = []
+    out.append(_chapter_eyebrow(num, eyebrow))
+    out.extend(_chapter_title_block(title, subtitle))
+    for b in bullets or []:
+        if not b:
+            continue
+        body = Paragraph(
+            f"<font color='{_hex(BRAND_GOLD)}'><b>◆</b></font>"
+            f"&nbsp;&nbsp;{b}",
+            ParagraphStyle("bul", fontName=s["body"].fontName, fontSize=10.5,
+                           leading=15, textColor=TEXT_DARK,
+                           leftIndent=6, spaceAfter=8),
+        )
+        wrap = Table([[body]], colWidths=[180 * mm])
+        wrap.setStyle(TableStyle([
+            ("BACKGROUND",   (0, 0), (-1, -1), colors.white),
+            ("LINEBELOW",    (0, 0), (-1, -1), 0.3, BORDER),
+            ("LEFTPADDING",  (0, 0), (-1, -1), 12),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+            ("TOPPADDING",   (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING",(0, 0), (-1, -1), 8),
+        ]))
+        out.append(wrap)
+        out.append(Spacer(1, 4))
+    out.append(PageBreak())
+    return out
+
+
+def _snapshot_page(s: dict, num: int, snap: dict, koots: list,
+                   manglik: bool, total: float, mx: int) -> list[Any]:
+    """PAGE 2 — Relationship Snapshot. The most important page."""
+    out: list[Any] = []
+    out.append(_chapter_eyebrow(num, "SNAPSHOT"))
+    out.extend(_chapter_title_block(
+        "Relationship Snapshot",
+        "How this bond actually feels in real life.",
+    ))
+
+    summary = (snap or {}).get("summary") or ""
+    if summary:
+        soul = Paragraph(
+            f"<font color='{_hex(TEXT_DARK)}'>"
+            f"{_safe(summary)}</font>",
+            ParagraphStyle("soul", fontName=s["body"].fontName, fontSize=12.5,
+                           leading=18, textColor=TEXT_DARK,
+                           alignment=TA_LEFT),
+        )
+        wrap = Table([[soul]], colWidths=[180 * mm])
+        wrap.setStyle(TableStyle([
+            ("BACKGROUND",   (0, 0), (-1, -1), _BG_HERO),
+            ("LINEBEFORE",   (0, 0), (0, -1), 3, BRAND_GOLD),
+            ("LEFTPADDING",  (0, 0), (-1, -1), 14),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+            ("TOPPADDING",   (0, 0), (-1, -1), 12),
+            ("BOTTOMPADDING",(0, 0), (-1, -1), 12),
+        ]))
+        out.append(wrap)
+        out.append(Spacer(1, 14))
+
+    # 3 indicator cards
+    tags = (snap or {}).get("tags") or {}
+    if tags:
+        def _ind(label: str, value: str) -> Table:
+            t = Table(
+                [[Paragraph(_safe(label.upper()), s["tag_label"])],
+                 [Paragraph(f"<b>{_safe(value)}</b>", s["tag_value"])]],
+                colWidths=[58 * mm],
+            )
+            t.setStyle(TableStyle([
+                ("BACKGROUND",   (0, 0), (-1, -1), colors.white),
+                ("BOX",          (0, 0), (-1, -1), 0.6, BORDER),
+                ("LINEABOVE",    (0, 0), (-1, 0), 2, BRAND_PURPLE),
+                ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING",   (0, 0), (-1, -1), 10),
+                ("BOTTOMPADDING",(0, 0), (-1, -1), 10),
+            ]))
+            return t
+        row = Table([[
+            _ind("Emotional Pull",     tags.get("emotional_pull",     "—")),
+            _ind("Marriage Potential", tags.get("marriage_potential", "—")),
+            _ind("Long-term Stability",tags.get("long_term_stability","—")),
+        ]], colWidths=[60 * mm, 60 * mm, 60 * mm])
+        row.setStyle(TableStyle([
+            ("LEFTPADDING",  (0, 0), (-1, -1), 1),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 1),
+            ("VALIGN",       (0, 0), (-1, -1), "TOP"),
+        ]))
+        out.append(row)
+        out.append(Spacer(1, 14))
+
+    # Relationship pill tags
+    pill_tags = _relationship_tags(snap, koots, manglik)
+    if pill_tags:
+        cells = []
+        for tag in pill_tags:
+            pill = Table(
+                [[Paragraph(
+                    f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(tag)}</b></font>",
+                    ParagraphStyle("pill", fontName="Helvetica-Bold",
+                                   fontSize=9.5, leading=12,
+                                   alignment=TA_CENTER),
+                )]],
+                colWidths=[55 * mm],
+            )
+            pill.setStyle(TableStyle([
+                ("BACKGROUND",   (0, 0), (-1, -1), _PILL_BG),
+                ("BOX",          (0, 0), (-1, -1), 0.4, BRAND_PURPLE),
+                ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
+                ("TOPPADDING",   (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
+                ("LEFTPADDING",  (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ]))
+            cells.append(pill)
+        # pad to 3 cells
+        while len(cells) < 3:
+            cells.append(Spacer(1, 1))
+        row = Table([cells], colWidths=[60 * mm, 60 * mm, 60 * mm])
+        row.setStyle(TableStyle([
+            ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING",  (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        out.append(row)
+        out.append(Spacer(1, 14))
+
+    # Mini Ashtakoot card row — 8 score badges
+    if koots:
+        badge_cells = []
+        for k in koots[:8]:
+            sc = k.get("score", 0)
+            mx_k = k.get("max", 0)
+            color = ACCENT_GREEN if (mx_k and sc == mx_k) else (
+                ACCENT_RED if sc == 0 else BRAND_PURPLE
+            )
+            cell = Table(
+                [[Paragraph(
+                    f"<font color='{_hex(color)}'><b>{_safe(sc)}</b>"
+                    f"<font color='{_hex(TEXT_SOFT)}' size=8>/{_safe(mx_k)}</font></font>",
+                    ParagraphStyle("badge_n", fontName="Helvetica-Bold",
+                                   fontSize=12, leading=14,
+                                   alignment=TA_CENTER))],
+                 [Paragraph(
+                    f"<font color='{_hex(TEXT_MID)}'>"
+                    f"{_safe(k.get('label',''))}</font>",
+                    ParagraphStyle("badge_l", fontName="Helvetica",
+                                   fontSize=7.5, leading=10,
+                                   alignment=TA_CENTER))]],
+                colWidths=[20 * mm],
+            )
+            cell.setStyle(TableStyle([
+                ("BACKGROUND",   (0, 0), (-1, -1), BG_CARD),
+                ("BOX",          (0, 0), (-1, -1), 0.4, BORDER),
+                ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING",   (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
+            ]))
+            badge_cells.append(cell)
+        while len(badge_cells) < 8:
+            badge_cells.append(Spacer(1, 1))
+        strip = Table([badge_cells],
+                      colWidths=[22 * mm] * 8)
+        strip.setStyle(TableStyle([
+            ("LEFTPADDING",  (0, 0), (-1, -1), 1),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 1),
+            ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        out.append(Paragraph(
+            f"<font color='{_hex(TEXT_SOFT)}'><b>"
+            f"ASHTAKOOT  ·  {_safe(total)} / {_safe(mx)}</b></font>",
+            ParagraphStyle("ash_lbl", fontName="Helvetica-Bold", fontSize=8,
+                           leading=10, spaceAfter=4),
+        ))
+        out.append(strip)
+        out.append(Spacer(1, 6))
+
+    out.append(Paragraph(
+        f"<font color='{_hex(TEXT_SOFT)}'><i>Derived from emotional and "
+        f"marriage combinations in both charts (Ashtakoot + Vedic "
+        f"compatibility analysis).</i></font>",
+        ParagraphStyle("snap_note", fontName="Helvetica", fontSize=8.5,
+                       leading=12, textColor=TEXT_SOFT),
+    ))
+    out.append(PageBreak())
+    return out
+
+
+# Chapter map for the 6 deep schema sections (subtitles per spec)
+_CHAPTER_MAP = [
+    ("emotional_alignment", "EMOTIONAL ALIGNMENT", "Emotional Alignment",
+     "How both of you feel, express, and process love."),
+    ("trust_loyalty",       "TRUST & LOYALTY",     "Trust & Loyalty",
+     "What strengthens trust — and what quietly tests it."),
+    ("conflict_patterns",   "CONFLICT PATTERNS",   "Conflict Patterns",
+     "How arguments begin, escalate, and resolve between you."),
+    ("commitment_strength", "COMMITMENT STRENGTH", "Commitment Strength",
+     "Who commits faster, who hesitates, and why."),
+    ("marriage_stability",  "MARRIAGE STABILITY",  "Marriage Stability",
+     "Long-term potential measured with realism, not absolutes."),
+    ("future_direction",    "FUTURE DIRECTION",    "Future Direction",
+     "Where this relationship is heading over the next 2–3 years."),
+]
+
+
 # ── Public entry-point ─────────────────────────────────────────────────
 def render_milan_pdf(payload: dict, lang: str = "en") -> bytes:
     """Render a /api/kundli-milan response payload to a PDF byte string.
@@ -580,71 +1218,99 @@ def render_milan_pdf(payload: dict, lang: str = "en") -> bytes:
         title=f"Kundli Milan — {p1.get('name','?')} & {p2.get('name','?')}",
         author="Cosmic Lens",
     )
+    manglik = _is_manglik(payload)
+    snapshot = analysis.get("relationship_snapshot") \
+        if isinstance(analysis.get("relationship_snapshot"), dict) else {}
+
+    # Legacy 4-key fallback shimmed onto the deep-schema shape so the
+    # chapter loop below ALWAYS emits exactly 6 pages (P3–P8).
+    legacy_fallbacks = {
+        "emotional_alignment":  analysis.get("compatibility_insight") or "",
+        "trust_loyalty":        " ".join(analysis.get("strengths") or [])
+                                if isinstance(analysis.get("strengths"), list)
+                                else "",
+        "conflict_patterns":    " ".join(analysis.get("challenges") or [])
+                                if isinstance(analysis.get("challenges"), list)
+                                else "",
+        "commitment_strength":  analysis.get("compatibility_insight") or "",
+        "marriage_stability":   analysis.get("marriage_outlook") or "",
+        "future_direction":     analysis.get("marriage_outlook") or "",
+    }
+    _PLACEHOLDER = (
+        "Detailed analysis for this section was not available for this "
+        "chart. The other sections of this report still cover the core "
+        "Vedic compatibility findings between both partners."
+    )
+
     story: list[Any] = []
 
-    # Compact header at top of page 1 — no dedicated cover page so
-    # everything flows top-to-bottom continuously.
-    story.extend(_header_block(s, p1, p2, total, mx, grade, lang=lang))
+    # ── PAGE 1 — Cover ──────────────────────────────────────────────
+    story.extend(_cover_page(
+        s, p1, p2, total, mx, grade, snapshot, manglik, lang,
+    ))
 
-    # Partners + Ashtakoot table flow right below the header.
-    story.append(Paragraph("Partners", s["h2"]))
-    story.append(_partners_row(s, p1, p2))
-    story.append(Spacer(1, 8))
-    if payload.get("manglik_dosh"):
-        story.append(Paragraph(
-            "<font color='#B45309'><b>⚠ Manglik Dosha is present.</b></font> "
-            "Cancellation rules and remedies are discussed in the analysis below.",
-            s["body"],
+    # ── PAGE 2 — Relationship Snapshot ──────────────────────────────
+    story.extend(_snapshot_page(
+        s, 2, snapshot, koots, manglik, total, mx,
+    ))
+
+    # ── PAGES 3–8 — always exactly 6 chapter pages ──────────────────
+    # Per chapter: prefer deep-schema {text, grounding}; else legacy
+    # fallback text; else a deterministic placeholder. Page count is
+    # locked at 12 regardless of which schema the LLM polish returned.
+    chap_num = 3
+    for key, eyebrow, title, subtitle in _CHAPTER_MAP:
+        sec = analysis.get(key)
+        body = ""
+        grounding = ""
+        if isinstance(sec, dict):
+            body = (sec.get("text") or "").strip()
+            grounding = (sec.get("grounding") or "").strip()
+        if not body:
+            body = (legacy_fallbacks.get(key) or "").strip() or _PLACEHOLDER
+        story.extend(_chapter_page(
+            s, chap_num, eyebrow, title, subtitle, body, grounding,
         ))
-        story.append(Spacer(1, 4))
-    story.append(Paragraph("Ashtakoot Guna Milan (8 Koots)", s["h2"]))
-    story.append(_koot_table(s, koots))
-    story.append(Spacer(1, 8))
+        chap_num += 1
 
-    # Snapshot (deep schema only)
-    snapshot = analysis.get("relationship_snapshot")
-    if isinstance(snapshot, dict):
-        story.append(Paragraph("Relationship Snapshot", s["h2"]))
-        story.extend(_snapshot_block(s, snapshot))
+    # ── PAGE 9 — What Makes This Bond Special (derived) ─────────────
+    story.extend(_bullets_page(
+        s, chap_num, "WHAT MAKES THIS BOND SPECIAL",
+        "What Makes This Bond Special",
+        "The quiet strengths most couples never realise they have.",
+        _derive_special_bullets(payload),
+    )); chap_num += 1
+
+    # ── PAGE 10 — What Can Quietly Damage (derived) ─────────────────
+    story.extend(_bullets_page(
+        s, chap_num, "WHAT CAN QUIETLY DAMAGE THIS RELATIONSHIP",
+        "What Can Quietly Damage This Bond",
+        "The patterns that create distance — slowly, almost invisibly.",
+        _derive_damage_bullets(payload),
+    )); chap_num += 1
+
+    # ── PAGE 11 — Practical Life Together (derived) ─────────────────
+    practical_paras = _practical_paragraphs(payload)
+    story.append(_chapter_eyebrow(chap_num, "PRACTICAL LIFE TOGETHER"))
+    story.extend(_chapter_title_block(
+        "Practical Life Together",
+        "Money, family pressure, and lifestyle compatibility — in real life.",
+    ))
+    for para in practical_paras:
+        story.append(Paragraph(_safe(para), s["body"]))
         story.append(Spacer(1, 8))
+    story.append(PageBreak()); chap_num += 1
 
-    # Deep schema sections — render only those present
-    has_deep = any(
-        isinstance(analysis.get(k), dict) and "text" in analysis.get(k, {})
-        for k, _ in _SECTION_TITLES
-    )
-    if has_deep:
-        story.append(Paragraph("Detailed Analysis", s["h2"]))
-        for key, title in _SECTION_TITLES:
-            sec = analysis.get(key)
-            if not isinstance(sec, dict):
-                continue
-            body = sec.get("text") or ""
-            grounding = sec.get("grounding") or ""
-            if not body:
-                continue
-            story.append(_section_block(s, title, body, grounding))
-    else:
-        # Legacy 4-key flat schema fallback
-        story.append(Paragraph("Detailed Analysis", s["h2"]))
-        story.append(_legacy_section_block(
-            s, "Compatibility Insight",
-            analysis.get("compatibility_insight") or "",
-        ))
-        story.append(_legacy_section_block(
-            s, "Strengths",
-            analysis.get("strengths") or [],
-        ))
-        story.append(_legacy_section_block(
-            s, "Challenges",
-            analysis.get("challenges") or [],
-        ))
-        story.append(_legacy_section_block(
-            s, "Marriage Outlook",
-            analysis.get("marriage_outlook") or "",
-        ))
-
-    story.append(Spacer(1, 10))
+    # ── PAGE 12 — Final Relationship Outlook (derived) ──────────────
+    story.append(_chapter_eyebrow(chap_num, "FINAL RELATIONSHIP OUTLOOK"))
+    story.extend(_chapter_title_block(
+        "Final Relationship Outlook",
+        "A measured, mature reading of where this bond stands.",
+    ))
+    for para in _final_paragraphs(payload):
+        story.append(Paragraph(_safe(para), s["body"]))
+        story.append(Spacer(1, 8))
+    story.append(Spacer(1, 12))
     story.append(_disclaimer(s))
 
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)

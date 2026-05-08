@@ -539,16 +539,16 @@ title = "Cosmic Lens — Expo Go QR (fresh tunnel, notifications-fix applied)"
 id = "b_lFRTjSN4VlUrM61JH_j"
 uri = "file://tmp_pdfs/km_en.pdf"
 type = "pdf"
-title = "Kundli Milan — English (Vikram & Sanya)"
+title = "Cosmic Relationship Blueprint — English (Vikram & Sanya, 21.5/36)"
 
 [[outputs]]
 id = "5ZfYnwZGvWwnemxBIeBc9"
 uri = "file://tmp_pdfs/km_hi.pdf"
 type = "pdf"
-title = "Kundli Milan — Hindi Devanagari (Arjun & Meera)"
+title = "Cosmic Relationship Blueprint — Hindi/Devanagari (Arjun & Meera, 26.5/36)"
 
 [[outputs]]
 id = "VJ6ItF4heWcwufuhyX6xt"
 uri = "file://tmp_pdfs/km_hn.pdf"
 type = "pdf"
-title = "Kundli Milan — Hinglish (Rohit & Anjali)"
+title = "Cosmic Relationship Blueprint — Hinglish (Rohit & Anjali, 12.5/36)"

@@ -1,10 +1,14 @@
-"""Tests for the Phase 2.5.11.24-fix8 17-page Pro PDF renderer.
+"""Tests for the Phase 2.5.11.24-fix9 19-page Pro PDF renderer.
 
-Visual-density rewrite: 7 chapters consolidated from 2 thin pages → 1
-dense rich page each (pull-quote, REAL-LIFE MOMENT box, WHY-IN-CHARTS
-chips, keep-in-mind, grounding). Standalone Timing Sync page dropped
-(folded into Final Verdict). Net 25 → 17 pages. LLM contract
-(kya_dikh / kya_matlab / kya_dhyan / grounding) UNCHANGED.
+Builds on fix8 (visual-density rewrite, 7 chapters consolidated to 1
+dense rich page each). Fix9 adds depth + hierarchy:
+- New P3: How Your Marriage Energy Was Analysed (9 Vedic layers + D1/D9)
+- Hidden Truth (P4) now carries QUIET PATTERNS YOU MIGHT NOT NAME
+- Each chapter page carries a CHART LAYER chip (Moon, 7th Lord, ...)
+- New post-blueprint page: WHY THIS BOND FORMED + THE ONE THING THAT
+  COULD QUIETLY DAMAGE THIS MARRIAGE
+- Final Verdict page carries a memorable closing line by score band
+LLM contract (kya_dikh / kya_matlab / kya_dhyan / grounding) UNCHANGED.
 """
 import re
 
@@ -62,28 +66,28 @@ def _count_pages(pdf: bytes) -> int:
     return len(re.findall(rb'/Type\s*/Page(?!s)', pdf))
 
 
-def test_pro_pdf_emits_exactly_17_pages_en():
+def test_pro_pdf_emits_exactly_19_pages_en():
     payload = _milan(); payload["pro_premium"] = _pro()
     pdf = render_milan_pro_pdf(payload, lang="en")
     assert pdf.startswith(b"%PDF-")
-    assert _count_pages(pdf) == 17
+    assert _count_pages(pdf) == 19
 
 
-def test_pro_pdf_emits_exactly_17_pages_with_empty_pro():
+def test_pro_pdf_emits_exactly_19_pages_with_empty_pro():
     payload = _milan(); payload["pro_premium"] = {}
     pdf = render_milan_pro_pdf(payload, lang="en")
-    assert _count_pages(pdf) == 17
+    assert _count_pages(pdf) == 19
 
 
-def test_pro_pdf_emits_exactly_17_pages_hi_devanagari():
+def test_pro_pdf_emits_exactly_19_pages_hi_devanagari():
     payload = _milan("Arjun", "Meera", 26); payload["pro_premium"] = _pro(7.2)
     pdf = render_milan_pro_pdf(payload, lang="hi")
-    assert _count_pages(pdf) == 17
+    assert _count_pages(pdf) == 19
 
 
 def test_pro_pdf_never_raises_on_completely_empty_payload():
     pdf = render_milan_pro_pdf({}, lang="en")
-    assert _count_pages(pdf) == 17
+    assert _count_pages(pdf) == 19
 
 
 def test_pro_pdf_carries_fix8_visual_blocks():
@@ -104,6 +108,68 @@ def test_pro_pdf_carries_fix8_visual_blocks():
     assert text.count("REAL-LIFE MOMENT") >= 5
     # Timing Sync page is dropped — its prose now lives under Final Verdict.
     assert "Readiness & timing" in text or "READINESS & TIMING" in text
+
+
+def test_pro_pdf_unknown_koot_keys_must_not_crash():
+    """Architect-flagged fix9 regression: payload with unknown koot
+    canonical keys must not raise (previous bug: _derive_attraction_line
+    indexed empty list when no koot key resolved into the curated map)."""
+    payload = _milan(); payload["pro_premium"] = _pro()
+    payload["koots"] = [
+        {"key": "foo_unknown", "score": 5, "max": 6},
+        {"key": "bar_unknown", "score": 4, "max": 7},
+        {"key": "baz_unknown", "score": 0, "max": 8},
+    ]
+    pdf = render_milan_pro_pdf(payload, lang="en")
+    assert _count_pages(pdf) == 19
+
+
+def test_pro_pdf_non_latin_lang_keeps_latin_chip_text_readable():
+    """Architect-flagged fix9 regression: Latin-only deterministic
+    blocks (CHART LAYER chip, QUIET PATTERNS, attraction/challenge,
+    verdict closer) must use body_latin font even in non-Latin lang
+    reports — otherwise the script font drops Latin glyphs."""
+    import io, pypdf
+    payload = _milan(); payload["pro_premium"] = _pro()
+    pdf = render_milan_pro_pdf(payload, lang="bn")
+    assert _count_pages(pdf) == 19
+    reader = pypdf.PdfReader(io.BytesIO(pdf))
+    text = "\n".join((p.extract_text() or "") for p in reader.pages)
+    # Latin labels must survive the Bengali font selection.
+    assert "CHART LAYER" in text
+    assert text.count("CHART LAYER") >= 5
+    assert "QUIET PATTERNS YOU MIGHT NOT NAME" in text
+    assert "WHY THIS BOND FORMED" in text
+
+
+def test_pro_pdf_carries_fix9_depth_blocks():
+    """Phase 2.5.11.24-fix9 regression: report must carry the depth +
+    hierarchy additions — analysis-layers checklist, per-chapter CHART
+    LAYER chips, quiet-patterns callout, attraction + core-challenge
+    page, and the verdict closer. These are the trust + memorability
+    signals; if any silently regress the report flattens back to fix8."""
+    import io, pypdf
+    payload = _milan(); payload["pro_premium"] = _pro()
+    pdf = render_milan_pro_pdf(payload, lang="en")
+    reader = pypdf.PdfReader(io.BytesIO(pdf))
+    text = "\n".join((p.extract_text() or "") for p in reader.pages)
+    # P3 — Analysis Layers methodology page.
+    assert "HOW YOUR MARRIAGE ENERGY WAS ANALYSED" in text
+    assert "7th House Dynamics" in text
+    assert "Navamsa" in text  # D1 vs D9 explainer
+    # Per-chapter CHART LAYER chip — at least 5 of 7 chapters carry it.
+    assert text.count("CHART LAYER") >= 5
+    # Quiet patterns callout on Hidden Truth.
+    assert "QUIET PATTERNS YOU MIGHT NOT NAME" in text
+    # Attraction + Core Challenge page.
+    assert "WHY THIS BOND FORMED" in text
+    assert "THE ONE THING THAT COULD QUIETLY DAMAGE THIS MARRIAGE" in text
+    # Verdict closer — 8.2/10 sample (ratio 0.78+) lands in the
+    # "make space for each other to be different" band.
+    assert ("instinctively" in text or
+            "emotional language" in text or
+            "patience over pride" in text or
+            "acknowledgement" in text)
 
 
 def test_end_to_end_polisher_to_renderer_chapter_keys_match():

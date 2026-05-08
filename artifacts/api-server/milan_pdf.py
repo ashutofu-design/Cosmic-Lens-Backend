@@ -1568,6 +1568,436 @@ def _pro_hidden_truth_page(s: dict, num: int, hidden_truth: str,
     return out
 
 
+def _pro_hidden_truth_page_with_patterns(
+    s: dict, num: int, hidden_truth: str, kp_meta: dict,
+    p1_name: str, p2_name: str, payload: dict,
+) -> list[Any]:
+    """Phase 2.5.11.24-fix9 wrapper: same as _pro_hidden_truth_page but
+    appends the QUIET PATTERNS callout BEFORE the page break, so the
+    deepest insight in the report sits next to the KP promise reading."""
+    out: list[Any] = []
+    out.append(_chapter_eyebrow(num, "WHAT'S HIDDEN UNDERNEATH"))
+    out.extend(_chapter_title_block(
+        "What's Hidden Underneath",
+        "The deeper Vedic+KP signature most charts miss.",
+    ))
+    if hidden_truth:
+        out.append(Paragraph(_safe(hidden_truth), s["body"]))
+        out.append(Spacer(1, 12))
+    promise = (kp_meta or {}).get("kp_promise") or ""
+    sig     = (kp_meta or {}).get("hidden_signature") or ""
+    if promise:
+        promise_color = (
+            _hex(ACCENT_GREEN) if promise == "STRONG" else
+            _hex(ACCENT_AMBER) if promise == "PARTIAL" else
+            _hex(ACCENT_RED)
+        )
+        hp_reg = s.get("body").fontName if "body" in s else "Helvetica"
+        out.append(Paragraph(
+            f"<font color='{_hex(TEXT_SOFT)}'><b>"
+            f"Marriage promise reading →</b></font>  "
+            f"<font color='{promise_color}'><b>{_safe(promise)}</b></font>"
+            f"<font color='{_hex(TEXT_MID)}'>"
+            f" — for {_safe(p1_name)} &amp; {_safe(p2_name)}, "
+            f"the deeper marriage signal in both charts is read together.</font>",
+            ParagraphStyle("hid_promise2", fontName=hp_reg, fontSize=10.5,
+                           leading=15, spaceAfter=10),
+        ))
+    if sig:
+        out.append(_grounding_card(s, sig))
+    out.append(Spacer(1, 12))
+    inv = _derive_invisible_patterns(payload)
+    if inv:
+        out.append(_pro_invisible_patterns_block(s, inv))
+    out.append(PageBreak())
+    return out
+
+
+# ── Phase 2.5.11.24-fix9 — Astrology depth + analysis hierarchy ─
+# Critique-driven additions on top of fix8: users want VISIBLE Vedic
+# reasoning (planet → meaning → effect), a clear analysis hierarchy that
+# proves "we deeply read your kundli", and the two psychologically-
+# charged sections users remember most: WHY THIS BOND FORMED + THE ONE
+# THING THAT COULD QUIETLY DAMAGE IT. All deterministic — no LLM
+# contract change. Adds 2 new pages: Analysis Layers (P3) and
+# Attraction + Core Challenge (post-chapters). Per-chapter pages now
+# carry a small "CHART LAYER" chip above the pull-quote that names the
+# real Vedic factor (Moon, 7th Lord, Navamsa Venus, etc.).
+
+# Per-chapter Vedic factor labels — the planets/houses/koots that
+# genuinely drive each chapter. Worded so they feel like a guided
+# explanation (NEVER raw jargon dump). Used by the small CHART LAYER
+# chip on each chapter page so the "we actually read your kundli" trust
+# signal is visible without breaking the prose flow.
+_CHAPTER_ASTRO_FACTORS: dict[str, str] = {
+    "emotional_compatibility": "Moon (mind), 4th House (inner home), Gana-koota",
+    "trust_loyalty":           "Jupiter (dharma), 7th Lord, Bhakoot-koota",
+    "communication_conflict":  "Mercury (speech), 3rd House (effort), Gana + Vasya",
+    "marriage_stability":      "Navamsa Lagna lord, 7th House, Bhakoot + Nadi",
+    "physical_chemistry":      "Venus (rasa), Mars (drive), Yoni-koota",
+    "family_practical":        "2nd House (kutumba), 4th House (home), Vasya-koota",
+    "future_direction":        "Jupiter (long-term), Saturn (commitment), Nadi-koota",
+}
+
+
+def _pro_chart_layer_chip(chapter_key: str, s: dict) -> Table | None:
+    """Small 'CHART LAYER →' chip naming the real Vedic factors driving
+    this chapter. Provides visible astrology grounding without raw jargon
+    — addresses the "feels too AI-psychology" critique."""
+    factors = _CHAPTER_ASTRO_FACTORS.get(chapter_key)
+    if not factors:
+        return None
+    # Architect-flagged: fix9 deterministic strings are pure Latin.
+    # In non-Latin-lang reports (bn/ta/te/etc) the script font has no
+    # Latin glyphs — must use body_latin (Helvetica) so the chip stays
+    # readable across all 13 supported langs.
+    fname = (s.get("body_latin").fontName if "body_latin" in s
+             else (s.get("body").fontName if "body" in s else "Helvetica"))
+    p = Paragraph(
+        f"<font color='{_hex(BRAND_GOLD)}'><b>CHART LAYER →</b></font>"
+        f"<font color='{_hex(TEXT_MID)}'>  {_safe(factors)}</font>",
+        ParagraphStyle("pro_layer", fontName=fname, fontSize=9,
+                       leading=12, leftIndent=2),
+    )
+    t = Table([[p]], colWidths=[180 * mm])
+    t.setStyle(TableStyle([
+        ("LINEBELOW",    (0, 0), (-1, -1), 0.4, BORDER),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING",   (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
+    ]))
+    return t
+
+
+def _pro_analysis_layers_page(s: dict, num: int) -> list[Any]:
+    """How Your Marriage Energy Was Analysed — checklist of 9 Vedic
+    layers + small D1-vs-D9 explainer. Deterministic, no payload deps —
+    same every report (intentionally — proves the methodology)."""
+    out: list[Any] = []
+    out.append(_chapter_eyebrow(num, "HOW YOUR MARRIAGE ENERGY WAS ANALYSED"))
+    out.extend(_chapter_title_block(
+        "How Your Marriage Energy Was Analysed",
+        "The 9 Vedic layers we read across both kundlis to produce this report.",
+    ))
+    out.append(Spacer(1, 6))
+
+    layers = [
+        ("7th House Dynamics",            "the house of marriage in both charts"),
+        ("7th Lord Condition",            "where the marriage-significator sits and what it touches"),
+        ("Venus & Emotional Harmony",     "Venus dignity, aspects and partner-resonance"),
+        ("Navamsa (D9) Marriage Stability","the deeper marriage-destiny chart, read separately"),
+        ("Bhakoot & Nadi Compatibility",  "long-term life-direction + biological/energetic match"),
+        ("Trust & Conflict Indicators",   "Jupiter-Saturn-Mars influences on commitment"),
+        ("Family-Life Compatibility",     "2nd + 4th house signals for daily married rhythm"),
+        ("Physical + Emotional Chemistry","Yoni-koota + Venus-Mars cross-resonance"),
+        ("KP Marriage Promise",           "the deepest sub-lord layer most reports skip"),
+    ]
+    rows: list[list[Any]] = []
+    for label, sub in layers:
+        check = Paragraph(
+            f"<font color='{_hex(ACCENT_GREEN)}'><b>✓</b></font>",
+            ParagraphStyle("al_chk", fontName="Helvetica-Bold",
+                           fontSize=12, leading=14, alignment=TA_CENTER),
+        )
+        body = Paragraph(
+            f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(label)}</b></font>"
+            f"<font color='{_hex(TEXT_MID)}'>  —  {_safe(sub)}</font>",
+            ParagraphStyle("al_b", fontName="Helvetica", fontSize=10,
+                           leading=14),
+        )
+        rows.append([check, body])
+    t = Table(rows, colWidths=[10 * mm, 170 * mm])
+    t.setStyle(TableStyle([
+        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING",   (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
+        ("LINEBELOW",    (0, 0), (-1, -2), 0.3, BORDER),
+    ]))
+    out.append(t)
+    out.append(Spacer(1, 14))
+
+    # D1 vs D9 explainer — small premium-trust block.
+    out.append(_pro_block_heading("D1 vs D9 — why both matter"))
+    fname = s.get("body").fontName if "body" in s else "Helvetica"
+    out.append(Paragraph(
+        "Your <b>D1 (birth chart)</b> shows how relationship energy "
+        "appears externally — attraction, dating, the early texture of "
+        "the bond. The <b>D9 (Navamsa)</b> shows how marriage actually "
+        "behaves over time — daily married rhythm, the years after "
+        "passion settles, the quiet long-term shape. A truthful Vedic "
+        "marriage reading needs both layers. This report fuses them.",
+        ParagraphStyle("d1d9", fontName=fname, fontSize=10.5,
+                       leading=15.5, textColor=TEXT_MID),
+    ))
+    out.append(PageBreak())
+    return out
+
+
+def _derive_invisible_patterns(payload: dict) -> list[str]:
+    """1-3 'holy shit' realism lines derived from koot/manglik/sync
+    asymmetries. The viral-truth block users remember — purely
+    deterministic from engine signals."""
+    out: list[str] = []
+    koots = payload.get("koots") or []
+    by_canon: dict[str, dict] = {}
+    for k in koots:
+        canon = _canon_koot_key(k)
+        if canon and canon not in by_canon:
+            by_canon[canon] = k
+
+    def _ratio(canon: str) -> float | None:
+        k = by_canon.get(canon)
+        if not k:
+            return None
+        try:
+            sc = float(k.get("score") or 0); mx = float(k.get("max") or 0)
+            return (sc / mx) if mx else None
+        except Exception:
+            return None
+
+    bh = _ratio("bhakoot"); mt = _ratio("graha"); na = _ratio("nadi")
+    yn = _ratio("yoni"); gn = _ratio("gana")
+
+    # Bhakoot weak + Maitri strong → friends but different life maps
+    if bh is not None and mt is not None and bh < 0.3 and mt >= 0.6:
+        out.append(
+            "You click as friends almost effortlessly, yet the chart "
+            "quietly shows two different long-term life maps — neither "
+            "of you names this out loud, but both feel it on slow Sundays."
+        )
+    # Yoni mismatch + Gana strong → emotional sync, physical timing differs
+    if yn is not None and gn is not None and yn < 0.5 and gn >= 0.6:
+        out.append(
+            "Emotionally you read each other quickly — physical rhythm "
+            "and the timing of intimacy may not match the same way, "
+            "and most couples mistake this for a deeper problem."
+        )
+    # Nadi 0 + everything else generally fine → invisible health-energy
+    # friction. Architect-flagged: original rule fired on any nadi=0,
+    # over-asserting on broadly weak charts. Now requires the average of
+    # the other resolved koot ratios ≥ 0.5 so this only triggers when
+    # nadi is the OUTLIER, not just one of many weak signals.
+    other_ratios = [r for r in (bh, mt, yn, gn) if r is not None]
+    other_avg = (sum(other_ratios) / len(other_ratios)) if other_ratios else 0.0
+    if na is not None and na <= 0.0 and other_avg >= 0.5:
+        out.append(
+            "Both of you can be doing everything right and still feel a "
+            "subtle, hard-to-name fatigue around each other — that is "
+            "Nadi's quiet signature; it asks for ritual care, not blame."
+        )
+    # Manglik asymmetry — one carries it, the other doesn't
+    p1m = bool((payload.get("p1") or {}).get("manglik"))
+    p2m = bool((payload.get("p2") or {}).get("manglik"))
+    if p1m ^ p2m:
+        out.append(
+            "One of you carries Mars-driven intensity the other simply "
+            "does not — during stress, this asymmetry becomes the "
+            "invisible script behind almost every flare-up."
+        )
+    if not out:
+        out.append(
+            "Neither of you likes emotional drama — yet both silently "
+            "expect the other to understand without being asked. That "
+            "single unspoken expectation runs underneath most of the "
+            "small distances you'll feel over the years."
+        )
+    return out[:3]
+
+
+def _pro_invisible_patterns_block(s: dict, lines: list[str]) -> Table:
+    """Boxed 'QUIET PATTERNS YOU MIGHT NOT NAME' callout — appended to
+    the Hidden Truth page so the deepest insight lives next to the KP
+    promise reading where users dwell longest. Latin-only deterministic
+    text → uses body_latin font so non-Latin-lang reports stay readable."""
+    fname = (s.get("body_latin").fontName if "body_latin" in s
+             else (s.get("body").fontName if "body" in s else "Helvetica"))
+    label = Paragraph(
+        f"<font color='{_hex(BRAND_PURPLE)}'><b>"
+        "QUIET PATTERNS YOU MIGHT NOT NAME</b></font>",
+        ParagraphStyle("inv_l", fontName="Helvetica-Bold",
+                       fontSize=9, leading=12),
+    )
+    body_paras: list[Any] = [label]
+    for ln in lines:
+        body_paras.append(Paragraph(
+            f"<font color='{_hex(BRAND_GOLD)}'>•</font>  {_safe(ln)}",
+            ParagraphStyle("inv_b", fontName=fname, fontSize=10.5,
+                           leading=15, textColor=TEXT_MID,
+                           leftIndent=10, spaceBefore=6),
+        ))
+    t = Table([[p] for p in body_paras], colWidths=[180 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (-1, -1), _BG_QUOTE),
+        ("LINEBEFORE",   (0, 0), (0, -1), 3.0, _LINE_QUOTE),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 14),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        ("TOPPADDING",   (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 10),
+    ]))
+    return t
+
+
+def _derive_attraction_line(payload: dict) -> str:
+    """Why this bond formed — from the strongest koot scores."""
+    koots = payload.get("koots") or []
+    strong = sorted(
+        [k for k in koots if k.get("max", 0) > 0],
+        key=lambda k: (k.get("score", 0) / max(k.get("max", 1), 1)),
+        reverse=True,
+    )[:2]
+    if not strong:
+        return ("This bond forms because both charts carry a quiet "
+                "willingness to grow together — even the formal scores "
+                "cannot fully explain that pull.")
+    lines = []
+    for k in strong:
+        canon = _canon_koot_key(k)
+        if canon == "gana":
+            lines.append("a shared inner emotional rhythm")
+        elif canon == "bhakoot":
+            lines.append("aligned long-term life directions")
+        elif canon == "yoni":
+            lines.append("deep instinctive physical comfort")
+        elif canon == "graha":
+            lines.append("naturally friendly temperaments")
+        elif canon == "nadi":
+            lines.append("complementary biological energies")
+        elif canon == "varna":
+            lines.append("mutual ego-respect without dominance")
+        elif canon == "vashya":
+            lines.append("a real magnetic pull and influence")
+        elif canon == "tara":
+            lines.append("naturally supportive timing for each other")
+    # Architect-flagged crash fix (fix9): if every "strong" koot resolved
+    # to an unknown canonical key, `lines` is empty — fall back to the
+    # generic line instead of indexing.
+    if not lines:
+        return ("This bond forms because both charts carry a quiet "
+                "willingness to grow together — even the formal scores "
+                "cannot fully explain that pull.")
+    if len(lines) >= 2:
+        body = f"{lines[0]} from one chart, and {lines[1]} from the other"
+    else:
+        body = lines[0]
+    return (f"This bond forms because both kundlis bring something the "
+            f"other instinctively recognises — {body}. Attraction here "
+            f"is not random; it's the chart's way of pairing two "
+            f"complementary natures.")
+
+
+def _derive_core_challenge_line(payload: dict) -> str:
+    """The ONE thing that could quietly damage this marriage —
+    derived from the weakest koot in the report."""
+    koots = payload.get("koots") or []
+    weak = sorted(
+        [k for k in koots if k.get("max", 0) > 0],
+        key=lambda k: (k.get("score", 0) / max(k.get("max", 1), 1)),
+    )
+    if not weak:
+        return ("The single biggest risk for this bond is silent "
+                "expectation — both of you assuming the other will "
+                "understand without being asked.")
+    k = weak[0]
+    canon = _canon_koot_key(k)
+    base_map = {
+        "bhakoot": ("a slow, almost invisible drift in life-directions",
+                    "Without one honest yearly conversation about where you BOTH actually want the next 5 years to go, you'll wake up at 35 in two parallel lives."),
+        "nadi":    ("a hidden energetic friction that often surfaces as health or fatigue",
+                    "Don't dismiss the slow tiredness around each other — it asks for ritual care, gentle routines, NOT blame or therapy speeches."),
+        "gana":    ("a mismatch in inner nature — one playful, one serious",
+                    "Stop trying to convert each other's mood. Make space for both rhythms in the SAME week — that is the real fix."),
+        "yoni":    ("mismatched physical or emotional rhythms",
+                    "Confusing intimacy timing with love itself will quietly poison this bond — separate the two early."),
+        "graha":   ("natural temperament clashes during stress",
+                    "Your fights won't be about the topic — they'll be about temperament under stress. Build a 24-hour cool-down rule before EVERY major conversation."),
+        "vashya":  ("an imbalance in who pulls and who follows",
+                    "If one of you keeps quietly leading and the other keeps quietly resisting, resentment will grow without either of you naming it."),
+        "tara":    ("mistimed moments — wrong words at vulnerable times",
+                    "Learn each other's bad-days. Saying the right thing at the wrong moment will land worse than saying nothing at all."),
+        "varna":   ("a subtle ego friction where one feels less respected",
+                    "Track who feels invisible at family gatherings — that's where this risk shows up first, not in arguments."),
+    }
+    label, advice = base_map.get(canon, (
+        "a recurring subtle pattern this report has flagged",
+        "Name it together when calm — not during a fight."))
+    return (f"The single thing most likely to quietly damage this marriage "
+            f"is {label}. {advice}")
+
+
+def _pro_attraction_and_challenge_page(s: dict, num: int,
+                                        payload: dict) -> list[Any]:
+    """One dense page carrying the two psychologically-charged sections
+    users remember most: WHY THIS BOND FORMED + THE ONE THING THAT
+    COULD QUIETLY DAMAGE IT."""
+    out: list[Any] = []
+    out.append(_chapter_eyebrow(num, "WHAT DRAWS YOU · WHAT TESTS YOU"))
+    out.extend(_chapter_title_block(
+        "Why This Bond Formed — and the One Thing That Will Test It",
+        "The two truths most reports skip. Both pulled from your charts.",
+    ))
+    out.append(Spacer(1, 6))
+
+    # Latin-only deterministic content — must use body_latin so non-Latin
+    # lang reports (bn/ta/te/etc) don't drop glyphs.
+    fname = (s.get("body_latin").fontName if "body_latin" in s
+             else (s.get("body").fontName if "body" in s else "Helvetica"))
+
+    # WHAT DRAWS YOU TOGETHER — soft purple wash card.
+    out.append(Paragraph(
+        f"<font color='{_hex(BRAND_PURPLE)}'><b>WHY THIS BOND FORMED</b></font>",
+        ParagraphStyle("at_h1", fontName="Helvetica-Bold", fontSize=10,
+                       leading=13, spaceAfter=4),
+    ))
+    attraction = _derive_attraction_line(payload)
+    out.append(_pro_quote_block(attraction[:200], s))
+    out.append(Paragraph(
+        _safe(attraction),
+        ParagraphStyle("at_b1", fontName=fname, fontSize=10.5,
+                       leading=15.5, textColor=TEXT_MID,
+                       spaceBefore=10, spaceAfter=14),
+    ))
+
+    # THE ONE THING — gold-accented warning card.
+    out.append(Paragraph(
+        f"<font color='{_hex(BRAND_GOLD)}'><b>"
+        f"THE ONE THING THAT COULD QUIETLY DAMAGE THIS MARRIAGE</b></font>",
+        ParagraphStyle("at_h2", fontName="Helvetica-Bold", fontSize=10,
+                       leading=13, spaceBefore=8, spaceAfter=4),
+    ))
+    challenge = _derive_core_challenge_line(payload)
+    body_q = Paragraph(
+        f'<font color="{_hex(colors.HexColor("#B45309"))}"><b><i>'
+        f'“{_safe(challenge[:220])}”</i></b></font>',
+        ParagraphStyle("at_q2", fontName=fname, fontSize=11.5,
+                       leading=17, leftIndent=10, rightIndent=6),
+    )
+    cq = Table([[body_q]], colWidths=[180 * mm])
+    cq.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (-1, -1), _BG_MOMENT),
+        ("LINEBEFORE",   (0, 0), (0, -1), 3.0, _LINE_GOLD),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 14),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        ("TOPPADDING",   (0, 0), (-1, -1), 12),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 12),
+    ]))
+    out.append(cq)
+    out.append(Spacer(1, 10))
+    out.append(Paragraph(
+        _safe(challenge),
+        ParagraphStyle("at_b2", fontName=fname, fontSize=10.5,
+                       leading=15.5, textColor=TEXT_MID),
+    ))
+    out.append(Spacer(1, 14))
+    out.append(_grounding_card(
+        s, "These two truths are derived from your strongest and "
+           "weakest koot scores — engine-locked, not a guess."))
+    out.append(PageBreak())
+    return out
+
+
 # ── Phase 2.5.11.24-fix8 — Visual rhythm blocks ──────────────────
 # Critique-driven rewrite: chapters were 2 thin pages with low density.
 # These helpers add real visual storytelling — quote pull-outs, signal
@@ -1814,6 +2244,13 @@ def _pro_chapter_pages(s: dict, num_a: int, num_b: int,
     out.append(score_row)
     out.append(Spacer(1, 10))
 
+    # Phase 2.5.11.24-fix9 — small CHART LAYER chip naming the real
+    # Vedic factors driving this chapter (planet → meaning → effect).
+    chip = _pro_chart_layer_chip(ch_key, s)
+    if chip is not None:
+        out.append(chip)
+        out.append(Spacer(1, 8))
+
     _lang = s.get("_lang", "en")
 
     # Highlighted pull-quote — extracted from kya_dikh first sentence.
@@ -2050,6 +2487,61 @@ def _pro_final_verdict_page(s: dict, num: int, verdict: str,
         f"scores in this report as your honest mirror, not the calendar.",
         s["body"]))
     out.append(Spacer(1, 14))
+
+    # Phase 2.5.11.24-fix9 — ONE memorable closing truth line by score
+    # band. The single sentence users will remember + screenshot. The
+    # whole report leads here.
+    try:
+        ratio = float(total) / float(mx) if mx else 0.0
+    except Exception:
+        ratio = 0.0
+    if ratio >= 0.78:
+        closer = (
+            "This marriage will succeed because both of you instinctively "
+            "make space for each other to be different — and that single "
+            "habit is rarer than every grand romantic gesture combined."
+        )
+    elif ratio >= 0.58:
+        closer = (
+            "This marriage will succeed not because both of you are "
+            "identical — but because, year by year, you will slowly "
+            "learn each other's emotional language."
+        )
+    elif ratio >= 0.40:
+        closer = (
+            "This marriage will hold not when love is loudest — but when "
+            "both of you choose patience over pride during the hardest "
+            "weeks. The chart asks for that one specific maturity."
+        )
+    else:
+        closer = (
+            "This bond will only deepen when both of you stop expecting "
+            "agreement and start practising acknowledgement — that, more "
+            "than any ritual, is the real Vedic remedy here."
+        )
+    # Latin-only — body_latin so closer stays readable in bn/ta/te/etc.
+    fname = (s.get("body_latin").fontName if "body_latin" in s
+             else (s.get("body").fontName if "body" in s else "Helvetica"))
+    closer_p = Paragraph(
+        f"<font color='{_hex(BRAND_PURPLE)}'><b><i>"
+        f"“{_safe(closer)}”</i></b></font>",
+        ParagraphStyle("verdict_closer", fontName=fname, fontSize=12,
+                       leading=18, alignment=TA_CENTER,
+                       leftIndent=10, rightIndent=10),
+    )
+    closer_t = Table([[closer_p]], colWidths=[180 * mm])
+    closer_t.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (-1, -1), _BG_QUOTE),
+        ("LINEABOVE",    (0, 0), (-1, 0), 1.5, _LINE_QUOTE),
+        ("LINEBELOW",    (0, -1), (-1, -1), 1.5, _LINE_QUOTE),
+        ("TOPPADDING",   (0, 0), (-1, -1), 16),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 16),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 16),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 16),
+    ]))
+    out.append(closer_t)
+    out.append(Spacer(1, 12))
+
     out.append(_grounding_card(
         s, "This verdict is a synthesis of all 7 chapters above plus the "
            "deeper KP marriage-promise reading — not a prediction."))
@@ -2091,7 +2583,14 @@ def _pro_closing_page(s: dict) -> list[Any]:
 
 
 def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
-    """Phase 2.5.11.24-fix8 — Pro 17-page renderer (visual-density rewrite).
+    """Phase 2.5.11.24-fix9 — Pro renderer (depth + hierarchy, ≈19-26pp).
+
+    Page count scales with content density:
+    - Synthetic / short fixture: exactly 19 pages (locked by tests).
+    - Live LLM-polished content: ~24-26 pages because rich kya_dikh +
+      kya_matlab paragraphs naturally spill 7 chapter pages onto a
+      second page. That spillover is content-driven, never boilerplate
+      — every overflow page carries real reading.
 
     Renders the "Premium Relationship Truth" report using the
     `payload["pro_premium"]` block produced by `polish_premium_chapters`.
@@ -2143,18 +2642,25 @@ def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
                              manglik, lang))
     # P2 — Snapshot card (reuses existing 12-page helper, num=2)
     story.extend(_snapshot_page(s, 2, snapshot, koots, manglik, total, mx))
-    # P3 — Hidden Truth
-    story.extend(_pro_hidden_truth_page(
-        s, 3, pro.get("hidden_truth") or "",
+    # P3 — How Your Marriage Energy Was Analysed (Phase 2.5.11.24-fix9).
+    # 9-layer Vedic methodology checklist + D1-vs-D9 explainer. Builds
+    # the trust signal "we actually deeply read your kundli" before the
+    # reader hits the interpretive chapters.
+    story.extend(_pro_analysis_layers_page(s, 3))
+    # P4 — Hidden Truth + Quiet Patterns (Phase 2.5.11.24-fix9 wrapper).
+    story.extend(_pro_hidden_truth_page_with_patterns(
+        s, 4, pro.get("hidden_truth") or "",
         meta, p1.get("name") or "Partner 1", p2.get("name") or "Partner 2",
+        payload,
     ))
-    # P4–10 — 7 chapters × 1 dense rich page each (Phase 2.5.11.24-fix8).
-    # Each page now carries: title + score + pull-quote + main insight +
-    # real-life moment box + why-in-charts chips + keep-in-mind + grounding.
-    # Polisher emits ch1..ch7 by contract; renderer accepts either canonical
-    # key or ch1..ch7 by index so a future contract change cannot silently
-    # regress to placeholder text.
-    page_num = 4
+    # P5–11 — 7 chapters × 1 dense rich page each.
+    # Each page carries: title + score + CHART LAYER chip (fix9) +
+    # pull-quote + main insight + real-life moment box + WHY-IN-CHARTS
+    # chips + keep-in-mind + grounding. Polisher emits ch1..ch7 by
+    # contract; renderer accepts either canonical key or ch1..ch7 by
+    # index so a future contract change cannot silently regress to
+    # placeholder text.
+    page_num = 5
     for i, (key, eyebrow, title, subtitle) in enumerate(_PRO_CHAPTER_MAP, start=1):
         ch = by_key.get(key) or by_key.get(f"ch{i}") or {}
         if not ch:
@@ -2223,6 +2729,13 @@ def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
         p1.get("name") or "Partner 1",
         p2.get("name") or "Partner 2",
     ))
+    page_num += 1
+    # Phase 2.5.11.24-fix9 — Attraction + Core Challenge dedicated page.
+    # The two psychologically-charged sections users remember most:
+    # WHY THIS BOND FORMED (from strongest koots) + THE ONE THING THAT
+    # COULD QUIETLY DAMAGE IT (from weakest koot). Sits right before
+    # Final Verdict so the closing arc is: blueprint → why/risk → verdict.
+    story.extend(_pro_attraction_and_challenge_page(s, page_num, payload))
     page_num += 1
     # Final Verdict (Phase 2.5.11.24-fix8: Timing Sync prose merged here —
     # standalone Timing Sync page was pure boilerplate with zero engine

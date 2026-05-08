@@ -8539,6 +8539,12 @@ def kundli_milan():
     data = request.get_json(force=True, silent=True)
     if not data or "p1" not in data or "p2" not in data:
         return jsonify({"error": "Missing p1 or p2"}), 400
+    # Defensive 400 instead of 500 (KeyError at swe.houses) when client forgets lat/lon.
+    for _who in ("p1", "p2"):
+        _p = data.get(_who) or {}
+        for _k in ("day", "month", "year", "hour", "lat", "lon"):
+            if _p.get(_k) is None:
+                return jsonify({"error": f"{_who} missing field: {_k}"}), 400
 
     # ── Nakshatra / Rashi tables ──────────────────────────────────────────────
     NAKSHATRAS = [

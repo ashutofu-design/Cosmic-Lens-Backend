@@ -74,7 +74,7 @@ interface Result{
   yoni:KootItem;tara:KootItem;vasya:KootItem;varna:KootItem;
   total:number;manglik:boolean;
 }
-interface RawBirth{day:number;month:number;year:number;hour:number;minute:number;ampm:string;place:string;}
+interface RawBirth{day:number;month:number;year:number;hour:number;minute:number;ampm:string;place:string;lat:number;lon:number;tz:number;}
 interface PersonData{name:string;nakshatra:string;moonSign:string;manglik:boolean;_rawBirth?:RawBirth;}
 
 function compute(p1:PersonData,p2:PersonData):Result{
@@ -194,8 +194,22 @@ function AddKundliForm({title,onDone,onCancel}:FormProps){
       const[hm,ap]=time.trim().split(" ");
       const[h,m]=(hm??"").split(":").map(Number);
       if(!day||!month||!year||!h)throw new Error("Format: DD/MM/YYYY & HH:MM AM");
+      // ── Geocode the place to obtain lat/lon/tz (required by /api/kundli AND /api/kundli-milan) ──
+      const geoRes=await apiFetch(`${API_BASE}/api/geocode?q=${encodeURIComponent(place)}`);
+      if(!geoRes.ok) throw new Error(t.km3_errTryAgain);
+      const geoRows=await geoRes.json();
+      const geo=Array.isArray(geoRows)?geoRows[0]:null;
+      if(!geo||typeof geo.lat!=="number"||typeof geo.lon!=="number"){
+        throw new Error(t.km3_errTryAgain);
+      }
+      const lat=geo.lat as number, lon=geo.lon as number;
+      const tz=typeof geo.tz==="number" ? geo.tz : Math.round((lon/15)*2)/2;
       const res=await apiFetch(`${API_BASE}/api/kundli`,{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({name:name||t.km3_personFallback,day,month,year,hour:h,minute:m??0,ampm:ap??"AM",place})});
+        body:JSON.stringify({name:name||t.km3_personFallback,day,month,year,hour:h,minute:m??0,ampm:ap??"AM",place,lat,lon,tz})});
+      if(!res.ok){
+        const errData=await res.json().catch(()=>({}));
+        throw new Error((errData as any)?.error||t.km3_errTryAgain);
+      }
       const json=await res.json();
       const marsH=(json.planets as any[])?.find((p:any)=>p.name==="Mars")?.house??0;
       onDone({
@@ -203,7 +217,7 @@ function AddKundliForm({title,onDone,onCancel}:FormProps){
         nakshatra:json.nakshatra,
         moonSign:json.moonSign,
         manglik:[1,4,7,8,12].includes(marsH),
-        _rawBirth:{day,month,year,hour:h,minute:m??0,ampm:ap??"AM",place},
+        _rawBirth:{day,month,year,hour:h,minute:m??0,ampm:ap??"AM",place,lat,lon,tz},
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }catch(e:any){setErr(e?.message??t.km3_errTryAgain);}
@@ -1515,15 +1529,15 @@ export default function KundliMilanScreen(){
     const bd1=p1Profile?.birthData ?? (person1._rawBirth ? {
       day:person1._rawBirth.day, month:person1._rawBirth.month, year:person1._rawBirth.year,
       hour:person1._rawBirth.hour, minute:person1._rawBirth.minute, ampm:person1._rawBirth.ampm,
-      place:person1._rawBirth.place,
+      place:person1._rawBirth.place, lat:person1._rawBirth.lat, lon:person1._rawBirth.lon, tz:person1._rawBirth.tz,
     } : undefined);
     const bd2=p2Profile?.birthData ?? (p2._rawBirth ? {
       day:p2._rawBirth.day, month:p2._rawBirth.month, year:p2._rawBirth.year,
       hour:p2._rawBirth.hour, minute:p2._rawBirth.minute, ampm:p2._rawBirth.ampm,
-      place:p2._rawBirth.place,
+      place:p2._rawBirth.place, lat:p2._rawBirth.lat, lon:p2._rawBirth.lon, tz:p2._rawBirth.tz,
     } : undefined);
 
-    if(!bd1||!bd2){
+    if(!bd1||!bd2||(bd1 as any).lat==null||(bd1 as any).lon==null||(bd2 as any).lat==null||(bd2 as any).lon==null){
       Alert.alert(
         t.km_birthMissing,
         t.km2_birthMissingBody,
@@ -1531,6 +1545,9 @@ export default function KundliMilanScreen(){
       );
       return;
     }
+    // Backfill tz from lon when legacy profiles miss it (server defaults to 0 silently → wrong results).
+    if((bd1 as any).tz==null) (bd1 as any).tz=Math.round(((bd1 as any).lon/15)*2)/2;
+    if((bd2 as any).tz==null) (bd2 as any).tz=Math.round(((bd2 as any).lon/15)*2)/2;
 
     setCalcLoading(true);
     MilanResultStore.clear();
@@ -1604,17 +1621,19 @@ export default function KundliMilanScreen(){
     const bd1=p1Profile?.birthData ?? (person1._rawBirth ? {
       day:person1._rawBirth.day, month:person1._rawBirth.month, year:person1._rawBirth.year,
       hour:person1._rawBirth.hour, minute:person1._rawBirth.minute, ampm:person1._rawBirth.ampm,
-      place:person1._rawBirth.place,
+      place:person1._rawBirth.place, lat:person1._rawBirth.lat, lon:person1._rawBirth.lon, tz:person1._rawBirth.tz,
     } : undefined);
     const bd2=p2Profile?.birthData ?? (p2._rawBirth ? {
       day:p2._rawBirth.day, month:p2._rawBirth.month, year:p2._rawBirth.year,
       hour:p2._rawBirth.hour, minute:p2._rawBirth.minute, ampm:p2._rawBirth.ampm,
-      place:p2._rawBirth.place,
+      place:p2._rawBirth.place, lat:p2._rawBirth.lat, lon:p2._rawBirth.lon, tz:p2._rawBirth.tz,
     } : undefined);
-    if(!bd1||!bd2){
+    if(!bd1||!bd2||(bd1 as any).lat==null||(bd1 as any).lon==null||(bd2 as any).lat==null||(bd2 as any).lon==null){
       Alert.alert(t.km_birthMissing,t.km2_birthMissingBody,[{text:t.km_okBtn}]);
       return;
     }
+    if((bd1 as any).tz==null) (bd1 as any).tz=Math.round(((bd1 as any).lon/15)*2)/2;
+    if((bd2 as any).tz==null) (bd2 as any).tz=Math.round(((bd2 as any).lon/15)*2)/2;
 
     setPdfLoading(true);
 

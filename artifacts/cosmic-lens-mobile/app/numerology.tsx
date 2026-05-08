@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system/legacy";
+import { saveLocalReport } from "@/lib/localReports";
 import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
 import { router } from "expo-router";
@@ -587,6 +588,17 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
       if (res.status !== 200) {
         throw new Error(`Server returned HTTP ${res.status}`);
       }
+      // Auto-save into the local "My Reports" registry (silent).
+      try {
+        await saveLocalReport({
+          kind: "numerology",
+          title: fileName.replace(/\.pdf$/i, "").replace(/_/g, " "),
+          subtitle: `Numerology Pro · ${new Date().toLocaleDateString()}`,
+          sourceUri: res.uri,
+          remoteUrl: url,
+        });
+      } catch { /* ignore */ }
+
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
         await Sharing.shareAsync(res.uri, {

@@ -2,8 +2,24 @@ import { Alert, Linking, Platform } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as WebBrowser from "expo-web-browser";
+import {
+  saveLocalReport,
+  type LocalReportKind,
+} from "./localReports";
 
 export type PdfLang = "en" | "hinglish" | "hi";
+
+/**
+ * Metadata for auto-saving a downloaded PDF to the local "My Reports"
+ * registry. Pass to `openReportPdfWithLanguageChoice` (or `openPdfUrl`)
+ * and the picker will register the file after a successful native
+ * download — no extra caller code needed.
+ */
+export interface PdfReportMeta {
+  kind: LocalReportKind;
+  title: string;
+  subtitle?: string;
+}
 
 const appendLang = (url: string, lang: PdfLang): string => {
   const sep = url.includes("?") ? "&" : "?";
@@ -28,7 +44,7 @@ const safeFileName = (url: string, lang: PdfLang): string => {
  * page), then hand the local file to the OS share sheet so the user can save
  * it, open it in any PDF viewer, or share it. On web we just open the URL.
  */
-const openPdfUrl = async (urlWithLang: string) => {
+const openPdfUrl = async (urlWithLang: string, meta?: PdfReportMeta) => {
   // Web: just open the URL — browser handles PDF natively.
   if (Platform.OS === "web") {
     try {
@@ -72,6 +88,19 @@ const openPdfUrl = async (urlWithLang: string) => {
       throw new Error("Tunnel interstitial received instead of PDF. Please try again.");
     }
 
+    // Auto-save into the local "My Reports" registry (silent, never throws).
+    if (meta) {
+      try {
+        await saveLocalReport({
+          kind: meta.kind,
+          title: meta.title,
+          subtitle: meta.subtitle,
+          sourceUri: dl.uri,
+          remoteUrl: urlWithLang,
+        });
+      } catch { /* ignore */ }
+    }
+
     // Hand off to the OS share sheet — user can save to Files, open in any
     // PDF reader, or forward to WhatsApp etc.
     const canShare = await Sharing.isAvailableAsync();
@@ -104,20 +133,23 @@ const openPdfUrl = async (urlWithLang: string) => {
  *   hinglish → Hinglish only (Roman-script Hindi, e.g. "Gas chulha SE…")
  *   hi       → Hindi (currently rendered bilingual until Devanagari font ships)
  */
-export const openReportPdfWithLanguageChoice = (baseUrl: string) => {
+export const openReportPdfWithLanguageChoice = (
+  baseUrl: string,
+  meta?: PdfReportMeta,
+) => {
   // Web Alert with multiple buttons doesn't reliably fire onPress on Expo web —
   // skip the language picker on web and go straight to bilingual.
   if (Platform.OS === "web") {
-    openPdfUrl(appendLang(baseUrl, "hinglish"));
+    openPdfUrl(appendLang(baseUrl, "hinglish"), meta);
     return;
   }
   Alert.alert(
     "Report ki bhasha chunein",
     "Aap report kis bhasha mein chahte hain?",
     [
-      { text: "English",  onPress: () => openPdfUrl(appendLang(baseUrl, "en")) },
-      { text: "Hinglish", onPress: () => openPdfUrl(appendLang(baseUrl, "hinglish")) },
-      { text: "हिंदी",     onPress: () => openPdfUrl(appendLang(baseUrl, "hi")) },
+      { text: "English",  onPress: () => openPdfUrl(appendLang(baseUrl, "en"),       meta) },
+      { text: "Hinglish", onPress: () => openPdfUrl(appendLang(baseUrl, "hinglish"), meta) },
+      { text: "हिंदी",     onPress: () => openPdfUrl(appendLang(baseUrl, "hi"),       meta) },
       { text: "Cancel", style: "cancel" },
     ],
     { cancelable: true },

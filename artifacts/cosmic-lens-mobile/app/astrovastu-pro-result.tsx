@@ -144,7 +144,11 @@ export default function AstroVastuProResultScreen() {
   const openPdf = () => {
     if (!pdfFull) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    openReportPdfWithLanguageChoice(pdfFull);
+    openReportPdfWithLanguageChoice(pdfFull, {
+      kind: "astrovastu_pro",
+      title: `AstroVastu Home Pro · Score ${Math.round(overall.score)}/100`,
+      subtitle: `Grade ${overall.grade} · ${new Date().toLocaleDateString()}`,
+    });
   };
 
   const shareWhatsApp = async () => {

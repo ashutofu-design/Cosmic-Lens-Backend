@@ -435,7 +435,11 @@ export default function AstroVastuProScreen() {
             `${API_BASE}${result.pdf_url}?t=${encodeURIComponent(result.pdf_token)}`;
           const openPdf = () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            openReportPdfWithLanguageChoice(pdfFullUrl);
+            openReportPdfWithLanguageChoice(pdfFullUrl, {
+              kind: "astrovastu_pro",
+              title: `AstroVastu Home Pro · Score ${score}/100`,
+              subtitle: `Grade ${grade} · ${new Date().toLocaleDateString()}`,
+            });
           };
           return (
             <View style={{ marginTop: 18 }}>

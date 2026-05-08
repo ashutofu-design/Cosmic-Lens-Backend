@@ -34,6 +34,13 @@ import {
   openReportPdfWithLanguageChoice,
   pickReportPdfLanguage,
 } from "@/lib/pdfLanguagePicker";
+import {
+  deleteLocalReport,
+  listLocalReports,
+  openLocalReport,
+  shareLocalReport,
+  type LocalReport,
+} from "@/lib/localReports";
 
 type HistoryItem = {
   kind: "business" | "pro";
@@ -78,9 +85,14 @@ export default function MyReportsScreen() {
   const { user } = useUser();
 
   const [items, setItems]       = useState<HistoryItem[]>([]);
+  const [localItems, setLocal]  = useState<LocalReport[]>([]);
   const [loading, setLoading]   = useState(false);
   const [refreshing, setRefresh]= useState(false);
   const [error, setError]       = useState<string | null>(null);
+
+  const loadLocal = useCallback(async () => {
+    try { setLocal(await listLocalReports()); } catch { setLocal([]); }
+  }, []);
 
   const load = useCallback(async (silent = false) => {
     if (!user?.id || !user?.api_key) {
@@ -108,7 +120,144 @@ export default function MyReportsScreen() {
     }
   }, [user?.id, user?.api_key]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => { load(); loadLocal(); }, [load, loadLocal]));
+
+  const onOpenLocal = async (r: LocalReport) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await openLocalReport(r);
+  };
+  const onShareLocal = async (r: LocalReport) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await shareLocalReport(r);
+  };
+  const onDeleteLocal = (r: LocalReport) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      "Delete report?",
+      `${r.title}\n\nYeh PDF aapke device se hata di jayegi.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete", style: "destructive",
+          onPress: async () => {
+            await deleteLocalReport(r.id);
+            await loadLocal();
+          },
+        },
+      ],
+    );
+  };
+
+  const KIND_LABEL: Record<LocalReport["kind"], string> = {
+    milan:           "Kundli Milan",
+    numerology:      "Numerology",
+    astrovastu_pro:  "AstroVastu Pro",
+    business_vastu:  "Business Vastu",
+    face_reading:    "Face Reading",
+    other:           "Report",
+  };
+  const KIND_ICON: Record<LocalReport["kind"], React.ComponentProps<typeof Feather>["name"]> = {
+    milan:           "heart",
+    numerology:      "hash",
+    astrovastu_pro:  "home",
+    business_vastu:  "briefcase",
+    face_reading:    "user",
+    other:           "file-text",
+  };
+
+  const renderLocalCard = (r: LocalReport) => {
+    const kb = r.bytes ? `${Math.round(r.bytes / 102.4) / 10} KB` : "";
+    const date = new Date(r.createdAt).toLocaleDateString("en-IN", {
+      day: "numeric", month: "short", year: "numeric",
+    });
+    return (
+      <View
+        key={r.id}
+        style={[s.card, { backgroundColor: C.isDark ? "#0e1318" : "#ffffff", borderColor: C.border, marginBottom: 12 }]}
+      >
+        <View style={s.cardTop}>
+          <View style={[s.scoreBadge, { backgroundColor: (C.accent || "#f6c453") + "22", borderColor: C.accent || "#f6c453" }]}>
+            <Feather name={KIND_ICON[r.kind]} size={26} color={C.accent || "#f6c453"} />
+          </View>
+          <View style={s.cardMeta}>
+            <Text style={[s.kindLabel, { color: C.textMuted }]} numberOfLines={1}>
+              {KIND_LABEL[r.kind]}
+            </Text>
+            <Text style={[s.propName, { color: C.text }]} numberOfLines={2}>
+              {r.title}
+            </Text>
+            <Text style={[s.subMeta, { color: C.textMuted }]} numberOfLines={1}>
+              {r.subtitle ? `${r.subtitle} · ` : ""}{date}{kb ? ` · ${kb}` : ""}
+            </Text>
+          </View>
+        </View>
+        <View style={s.btnRow}>
+          <Pressable
+            onPress={() => onOpenLocal(r)}
+            style={({ pressed }) => [
+              s.actionBtn,
+              { backgroundColor: C.isDark ? "#1a2330" : "#eef3fb", opacity: pressed ? 0.85 : 1, borderColor: C.border },
+            ]}
+          >
+            <Feather name="file-text" size={16} color={C.text} />
+            <Text style={[s.actionText, { color: C.text }]}>Open</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => onShareLocal(r)}
+            style={({ pressed }) => [
+              s.actionBtn,
+              { backgroundColor: "#25D366", opacity: pressed ? 0.85 : 1, borderColor: "#1ebe5b" },
+            ]}
+          >
+            <Feather name="share-2" size={16} color="#ffffff" />
+            <Text style={[s.actionText, { color: "#ffffff" }]}>Share</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => onDeleteLocal(r)}
+            style={({ pressed }) => [
+              s.actionBtn,
+              { backgroundColor: "rgba(239,68,68,0.10)", opacity: pressed ? 0.85 : 1, borderColor: "rgba(239,68,68,0.4)", flex: 0, paddingHorizontal: 14 },
+            ]}
+          >
+            <Feather name="trash-2" size={16} color="#ef4444" />
+          </Pressable>
+        </View>
+      </View>
+    );
+  };
+
+  const LocalHeader = () => {
+    if (localItems.length === 0 && !error) return null;
+    return (
+      <View style={{ marginBottom: 18 }}>
+        {error ? (
+          <View
+            style={{
+              borderRadius: 10, borderWidth: 1, borderColor: "rgba(239,68,68,0.4)",
+              backgroundColor: "rgba(239,68,68,0.08)", paddingVertical: 10, paddingHorizontal: 12,
+              flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14,
+            }}
+          >
+            <Feather name="alert-circle" size={16} color="#ef4444" />
+            <Text style={{ color: C.text, fontSize: 12, flex: 1 }} numberOfLines={2}>
+              Server reports load nahi hue · {error}
+            </Text>
+            <Pressable onPress={() => load()} hitSlop={8}>
+              <Text style={{ color: "#ef4444", fontWeight: "700", fontSize: 12 }}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {localItems.length > 0 ? (
+          <>
+            <Text style={[s.kindLabel, { color: C.textMuted, marginBottom: 10, letterSpacing: 1 }]}>
+              SAVED ON THIS DEVICE · {localItems.length}
+            </Text>
+            {localItems.map(renderLocalCard)}
+          </>
+        ) : null}
+      </View>
+    );
+  };
 
   const onOpenPdf = (it: HistoryItem) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -240,7 +389,7 @@ export default function MyReportsScreen() {
             {t.mr_loading}
           </Text>
         </View>
-      ) : error ? (
+      ) : error && localItems.length === 0 ? (
         <View style={s.center}>
           <Feather name="alert-circle" size={36} color={C.textMuted} />
           <Text style={[s.muted, { color: C.textMuted, marginTop: 12, textAlign: "center" }]}>
@@ -253,12 +402,12 @@ export default function MyReportsScreen() {
             <Text style={{ color: C.text, fontWeight: "600" }}>Retry</Text>
           </Pressable>
         </View>
-      ) : items.length === 0 ? (
+      ) : items.length === 0 && localItems.length === 0 ? (
         <View style={s.center}>
           <Feather name="inbox" size={48} color={C.textMuted} />
           <Text style={[s.empty, { color: C.text }]}>{t.mr_emptyTitle}</Text>
           <Text style={[s.muted, { color: C.textMuted, textAlign: "center", marginTop: 6 }]}>
-            Your AstroVastu PRO and Business Vastu deep-scan reports will appear here.
+            Aapke saare generated PDF reports — Kundli Milan, Numerology, AstroVastu Pro, Business Vastu — yahan automatically save honge.
           </Text>
         </View>
       ) : (
@@ -268,10 +417,11 @@ export default function MyReportsScreen() {
           renderItem={renderItem}
           contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          ListHeaderComponent={<LocalHeader />}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => { setRefresh(true); load(true); }}
+              onRefresh={() => { setRefresh(true); load(true); loadLocal(); }}
               tintColor={C.textMuted}
             />
           }

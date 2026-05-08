@@ -669,6 +669,16 @@ export default function ProfileScreen() {
           <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>{L.myData}</Text>
           <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
             <SettingRow
+              icon="home"
+              label="AstroVastu Pro"
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/astrovastu-pro-options" as any); }}
+            />
+            <SettingRow
+              icon="folder"
+              label="My Reports"
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/my-reports" as any); }}
+            />
+            <SettingRow
               icon="book-open"
               label={L.myKundli}
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/my-kundli"); }}

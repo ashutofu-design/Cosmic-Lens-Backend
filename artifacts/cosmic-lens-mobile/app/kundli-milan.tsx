@@ -1748,7 +1748,14 @@ export default function KundliMilanScreen(){
       // Server computes milan + both kundlis + hidden Vedic+KP fusion +
       // premium prose internally (milan/polish caches reused server-side).
       const ctrl2=new AbortController();
-      timer2=setTimeout(()=>ctrl2.abort(),120000); // gpt-5-mini premium polish via Replit AI proxy ~50-77s end-to-end (server OPENAI_TIMEOUT=120)
+      // Phase 2.5.11.24-fix5: bumped 120s → 240s. Live backend logs show
+      // gpt-5-mini polish + retries can take up to ~220s end-to-end on a
+      // cold cache (engine ~10s + LLM polish ~60-180s + 1 retry on empty
+      // body). 120s was aborting valid requests mid-flight, which closed
+      // the progress modal via the catch path before View Now could
+      // appear. Server-side OPENAI_TIMEOUT remains 120 per LLM call but
+      // 1 retry doubles the worst-case window.
+      timer2=setTimeout(()=>ctrl2.abort(),240000);
       const safe=(s:string)=>(s||"x").replace(/[^a-zA-Z0-9_-]+/g,"_").slice(0,32)||"x";
       const fileName=`Kundli_Milan_Pro_${safe(person1.name||"p1")}_${safe(p2.name||"p2")}.pdf`;
       const dest=(FileSystem.cacheDirectory||"")+fileName;

@@ -27,6 +27,9 @@ import { useT } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 import { MilanResultStore } from "@/lib/milanResultStore";
 import { useFeatureGate } from "@/components/FeatureGate";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
+import { saveLocalReport } from "@/lib/localReports";
 
 // ── Ashtakoot tables ──────────────────────────────────────────────────────────
 const NAKSHATRAS=["Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra","Punarvasu","Pushya","Ashlesha","Magha","Purva Phalguni","Uttara Phalguni","Hasta","Chitra","Swati","Vishakha","Anuradha","Jyeshtha","Mula","Purva Ashadha","Uttara Ashadha","Shravana","Dhanishtha","Shatabhisha","Purva Bhadrapada","Uttara Bhadrapada","Revati"];
@@ -1450,6 +1453,7 @@ export default function KundliMilanScreen(){
   const [p2,setP2]=useState<PersonData|null>(null);
   const [p2Profile,setP2Profile]=useState<any|null>(null);
   const [result,setResult]=useState<Result|null>(null);
+  const [pdfLoading,setPdfLoading]=useState(false);
   const [calcLoading,setCalcLoading]=useState(false);
 
   // Auto-load partner from relationship page selection (URL param)
@@ -1582,6 +1586,152 @@ export default function KundliMilanScreen(){
       Alert.alert(t.km_calcFailed,msg,[{text:t.km_okBtn}]);
     }finally{
       setCalcLoading(false);
+    }
+  }
+
+  /** Generate the premium 12-page PRO PDF and share/save it.
+   *  Flow: POST /api/kundli-milan (cached server-side via L1+L2) →
+   *  POST /api/kundli-milan/pdf with the JSON → download bytes →
+   *  save into local "My Reports" registry → open share sheet.
+   *  Fact-locked engine + LLM polish (gpt-4o-mini, Phase 2.5.11.20-A
+   *  cache) — never names AI; brand: "Powered by Advanced Cosmic
+   *  Intelligence".
+   */
+  async function handleDownloadProPdf(){
+    if(!person1||!p2)return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    const bd1=p1Profile?.birthData ?? (person1._rawBirth ? {
+      day:person1._rawBirth.day, month:person1._rawBirth.month, year:person1._rawBirth.year,
+      hour:person1._rawBirth.hour, minute:person1._rawBirth.minute, ampm:person1._rawBirth.ampm,
+      place:person1._rawBirth.place,
+    } : undefined);
+    const bd2=p2Profile?.birthData ?? (p2._rawBirth ? {
+      day:p2._rawBirth.day, month:p2._rawBirth.month, year:p2._rawBirth.year,
+      hour:p2._rawBirth.hour, minute:p2._rawBirth.minute, ampm:p2._rawBirth.ampm,
+      place:p2._rawBirth.place,
+    } : undefined);
+    if(!bd1||!bd2){
+      Alert.alert(t.km_birthMissing,t.km2_birthMissingBody,[{text:t.km_okBtn}]);
+      return;
+    }
+
+    setPdfLoading(true);
+
+    // Stable fingerprint of (p1 + p2 + lang) — prevents stale MilanResultStore
+    // cached for a previous couple from being reused for this download.
+    const fp=(bd:any,nm:string)=>[
+      nm||"",bd.day,bd.month,bd.year,bd.hour,bd.minute,(bd.ampm||"").toUpperCase(),
+      bd.lat??"",bd.lon??bd.lng??"",bd.tz??"",
+    ].join("|");
+    const wantFp=`${fp(bd1,person1.name||"")}::${fp(bd2,p2.name||"")}::${t.lang}`;
+
+    let timer1:ReturnType<typeof setTimeout>|null=null;
+    let timer2:ReturnType<typeof setTimeout>|null=null;
+    let tempPath:string|null=null;
+    let savedToRegistry=false;
+
+    try{
+      // Step 1 — get (or reuse) the milan analysis JSON.
+      let milanJson:any = null;
+      const cached=MilanResultStore.get() as any;
+      if(cached && cached.__cosmicFp===wantFp) milanJson=cached;
+
+      if(!milanJson){
+        const ctrl1=new AbortController();
+        timer1=setTimeout(()=>ctrl1.abort(),22000);
+        const r1=await fetch(`${API_BASE}/api/kundli-milan`,{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({
+            p1:{...bd1,name:person1.name},
+            p2:{...bd2,name:p2.name},
+            lang:t.lang,
+          }),
+          signal:ctrl1.signal,
+        });
+        if(!r1.ok){
+          const e=await r1.json().catch(()=>({}));
+          throw new Error(e.error||`Server error ${r1.status}`);
+        }
+        milanJson=await r1.json();
+        try{ (milanJson as any).__cosmicFp=wantFp; }catch{/* frozen */}
+        MilanResultStore.set(milanJson);
+      }
+
+      // Step 2 — POST it to the PDF renderer and write the response bytes to disk.
+      const ctrl2=new AbortController();
+      timer2=setTimeout(()=>ctrl2.abort(),28000);
+      const safe=(s:string)=>(s||"x").replace(/[^a-zA-Z0-9_-]+/g,"_").slice(0,32)||"x";
+      const fileName=`Kundli_Milan_${safe(person1.name||"p1")}_${safe(p2.name||"p2")}.pdf`;
+      const dest=(FileSystem.cacheDirectory||"")+fileName;
+
+      const r2=await fetch(`${API_BASE}/api/kundli-milan/pdf`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json","Accept":"application/pdf"},
+        body:JSON.stringify(milanJson),
+        signal:ctrl2.signal,
+      });
+      if(!r2.ok){
+        const e=await r2.json().catch(()=>({}));
+        throw new Error(e.error||`PDF render failed ${r2.status}`);
+      }
+
+      // ArrayBuffer → base64 → disk. Smaller (16 KB) chunks + sub-array indexing
+      // to avoid stack overflow / huge intermediate strings on PDFs >1 MB.
+      const buf=await r2.arrayBuffer();
+      const bytes=new Uint8Array(buf);
+      const CHUNK=0x4000;
+      const parts:string[]=[];
+      for(let i=0;i<bytes.length;i+=CHUNK){
+        const slice=bytes.subarray(i,Math.min(i+CHUNK,bytes.length));
+        let s="";
+        for(let j=0;j<slice.length;j++) s+=String.fromCharCode(slice[j]);
+        parts.push(s);
+      }
+      if(typeof globalThis.btoa!=="function") throw new Error("encoding_failed");
+      const b64=globalThis.btoa(parts.join(""));
+      await FileSystem.writeAsStringAsync(dest,b64,{encoding:FileSystem.EncodingType.Base64});
+      tempPath=dest;
+
+      // Step 3 — register in local "My Reports" + open share sheet.
+      const total=milanJson?.total ?? 0;
+      const max=milanJson?.max ?? 36;
+      try{
+        await saveLocalReport({
+          kind:"milan",
+          title:`${person1.name||"Partner 1"} & ${p2.name||"Partner 2"} — Kundli Milan PRO`,
+          subtitle:`${total}/${max} · ${new Date().toLocaleDateString()}`,
+          sourceUri:tempPath,
+        });
+        savedToRegistry=true;
+      }catch{/* ignore — share still works */}
+
+      const can=await Sharing.isAvailableAsync();
+      if(can){
+        await Sharing.shareAsync(tempPath,{
+          mimeType:"application/pdf",
+          dialogTitle:fileName,
+          UTI:"com.adobe.pdf",
+        });
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }catch(e:any){
+      const msg=e?.name==="AbortError"
+        ? "PDF download timeout. Internet check kar ke phir try kare."
+        : (e?.message ?? "PDF download fail hua. Phir try kare.");
+      Alert.alert("PDF Error",msg,[{text:t.km_okBtn||"OK"}]);
+    }finally{
+      // Always clear abort timers — early throws would otherwise leak them.
+      if(timer1) clearTimeout(timer1);
+      if(timer2) clearTimeout(timer2);
+      // If write succeeded but registry-save AND share both failed mid-way,
+      // best-effort delete the temp to avoid cache bloat. saveLocalReport
+      // copies into documentDirectory/reports/ so this is safe when saved.
+      if(tempPath && !savedToRegistry){
+        try{ await FileSystem.deleteAsync(tempPath,{idempotent:true}); }catch{/* ignore */}
+      }
+      setPdfLoading(false);
     }
   }
 
@@ -1811,9 +1961,9 @@ export default function KundliMilanScreen(){
           {isPro&&!result&&(
             <ShineButton
               colors={["#6366F1","#8B5CF6","#a855f7"]}
-              disabled={!canCalculate} loading={calcLoading}
-              text={canCalculate?t.km2_unlockFullAnal:!person1&&!p2?t.km2_addBothFirst:!person1?t.km_addYourKundli:t.km_addPartnerKundli}
-              onPress={()=>{}}/>
+              disabled={!canCalculate||pdfLoading} loading={calcLoading||pdfLoading}
+              text={pdfLoading?"PDF generate ho raha hai…":(canCalculate?t.km2_unlockFullAnal:!person1&&!p2?t.km2_addBothFirst:!person1?t.km_addYourKundli:t.km_addPartnerKundli)}
+              onPress={handleDownloadProPdf}/>
           )}
 
           {/* ── Results ── */}

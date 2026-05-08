@@ -2152,7 +2152,11 @@ export default function KundliMilanScreen(){
                 {/* Action buttons */}
                 <View style={cd.actions}>
                   <Pressable
-                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setConfirmVisible(false); }}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setConfirmVisible(false);
+                      try { router.push("/profile-edit" as any); } catch {}
+                    }}
                     style={({ pressed }) => [cd.changeBtn, { backgroundColor: C.isDark ? "rgba(255,255,255,0.05)" : "#F3F4F6", borderColor: C.isDark ? "rgba(255,255,255,0.12)" : "#E5E7EB", opacity: pressed ? 0.7 : 1 }]}
                   >
                     <Feather name="edit-3" size={14} color={C.text} />

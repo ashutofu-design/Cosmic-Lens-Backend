@@ -1606,13 +1606,12 @@ export default function KundliMilanScreen(){
     }
   }
 
-  /** Generate the premium 12-page PRO PDF and share/save it.
-   *  Flow: POST /api/kundli-milan (cached server-side via L1+L2) →
-   *  POST /api/kundli-milan/pdf with the JSON → download bytes →
-   *  save into local "My Reports" registry → open share sheet.
-   *  Fact-locked engine + LLM polish (gpt-4o-mini, Phase 2.5.11.20-A
-   *  cache) — never names AI; brand: "Powered by Advanced Cosmic
-   *  Intelligence".
+  /** Generate the premium 24-page PRO PDF and share/save it.
+   *  Flow: POST /api/kundli-milan/pro-pdf {p1, p2, lang} → server
+   *  computes milan + both kundlis + hidden Vedic+KP fusion + premium
+   *  prose → returns PDF bytes → save into local "My Reports" registry
+   *  → open share sheet. Phase 2.5.11.23 — "Cosmic Relationship
+   *  Blueprint Pro". Brand: "Powered by Advanced Cosmic Intelligence".
    */
   /** Show a "are you sure these are the right details?" confirmation
    *  BEFORE generating the Pro PDF. User sees the two selected kundlis
@@ -1682,56 +1681,37 @@ export default function KundliMilanScreen(){
     ].join("|");
     const wantFp=`${fp(bd1,person1.name||"")}::${fp(bd2,p2.name||"")}::${t.lang}`;
 
-    let timer1:ReturnType<typeof setTimeout>|null=null;
     let timer2:ReturnType<typeof setTimeout>|null=null;
     let tempPath:string|null=null;
     let savedToRegistry=false;
 
     try{
-      // Step 1 — get (or reuse) the milan analysis JSON.
-      let milanJson:any = null;
-      const cached=MilanResultStore.get() as any;
-      if(cached && cached.__cosmicFp===wantFp) milanJson=cached;
-
-      if(!milanJson){
-        const ctrl1=new AbortController();
-        timer1=setTimeout(()=>ctrl1.abort(),22000);
-        const r1=await fetch(`${API_BASE}/api/kundli-milan`,{
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({
-            p1:{...bd1,name:person1.name},
-            p2:{...bd2,name:p2.name},
-            lang:t.lang,
-          }),
-          signal:ctrl1.signal,
-        });
-        if(!r1.ok){
-          const e=await r1.json().catch(()=>({}));
-          throw new Error(e.error||`Server error ${r1.status}`);
-        }
-        milanJson=await r1.json();
-        try{ (milanJson as any).__cosmicFp=wantFp; }catch{/* frozen */}
-        MilanResultStore.set(milanJson);
-      }
-
-      // Step 2 — POST it to the PDF renderer and write the response bytes to disk.
+      // Phase 2.5.11.23 — single call to /api/kundli-milan/pro-pdf.
+      // Server computes milan + both kundlis + hidden Vedic+KP fusion +
+      // premium prose internally (milan/polish caches reused server-side).
       const ctrl2=new AbortController();
-      timer2=setTimeout(()=>ctrl2.abort(),28000);
+      timer2=setTimeout(()=>ctrl2.abort(),45000); // gpt-4o premium polish needs more time
       const safe=(s:string)=>(s||"x").replace(/[^a-zA-Z0-9_-]+/g,"_").slice(0,32)||"x";
-      const fileName=`Kundli_Milan_${safe(person1.name||"p1")}_${safe(p2.name||"p2")}.pdf`;
+      const fileName=`Kundli_Milan_Pro_${safe(person1.name||"p1")}_${safe(p2.name||"p2")}.pdf`;
       const dest=(FileSystem.cacheDirectory||"")+fileName;
 
-      const r2=await fetch(`${API_BASE}/api/kundli-milan/pdf`,{
+      const r2=await fetch(`${API_BASE}/api/kundli-milan/pro-pdf`,{
         method:"POST",
         headers:{"Content-Type":"application/json","Accept":"application/pdf"},
-        body:JSON.stringify(milanJson),
+        body:JSON.stringify({
+          p1:{...bd1,name:person1.name},
+          p2:{...bd2,name:p2.name},
+          lang:t.lang,
+        }),
         signal:ctrl2.signal,
       });
       if(!r2.ok){
         const e=await r2.json().catch(()=>({}));
         throw new Error(e.error||`PDF render failed ${r2.status}`);
       }
+      // Pro PDF doesn't pre-fetch milan JSON; total used in registry meta below
+      // is best-effort read from any previously cached milan response.
+      const milanJson:any = (MilanResultStore.get() as any) || {};
 
       // ArrayBuffer → base64 → disk. Smaller (16 KB) chunks + sub-array indexing
       // to avoid stack overflow / huge intermediate strings on PDFs >1 MB.
@@ -1822,7 +1802,6 @@ export default function KundliMilanScreen(){
       Alert.alert("PDF Error",msg,[{text:t.km_okBtn||"OK"}]);
     }finally{
       // Always clear abort timers — early throws would otherwise leak them.
-      if(timer1) clearTimeout(timer1);
       if(timer2) clearTimeout(timer2);
       // If write succeeded but registry-save AND share both failed mid-way,
       // best-effort delete the temp to avoid cache bloat. saveLocalReport

@@ -8888,26 +8888,57 @@ def kundli_milan_pdf():
 def kundli_milan_pro_pdf():
     """Render the Premium "Cosmic Relationship Blueprint Pro" 24-page PDF.
 
-    Body:
-      {
-        "milan":     <full /api/kundli-milan response payload>,
-        "kundli_p1": <full kundli dict for partner 1>,
-        "kundli_p2": <full kundli dict for partner 2>,
-        "lang":      "en" | "hi" | "hn" | ...
-      }
+    Body — TWO accepted shapes:
+      (A) Simple (mobile-friendly, default):
+          { "p1": {name, day, month, year, hour, minute, ampm, lat, lon, tz, place},
+            "p2": {... same ...}, "lang": "en"|"hi"|"hn"|... }
+          Server computes both kundlis + milan internally (no extra round-trips).
+      (B) Pre-computed (advanced):
+          { "milan": <full /api/kundli-milan response>,
+            "kundli_p1": <full kundli>, "kundli_p2": <full kundli>,
+            "lang": ... }
 
-    Computes the hidden Vedic+KP fusion engines (D9 marriage destiny,
-    7L synastry, KP 7th-CSL marriage promise) → derives 7 chapter scores
-    → calls the premium chapter polisher (gpt-4o, gated by
-    COMPAT_PREMIUM_POLISH env; safe fallback if disabled or LLM fails)
-    → renders the 24-page Pro PDF. Always returns valid PDF bytes on the
-    success path, or a JSON error otherwise.
+    Both paths flow into the same hidden engine fusion (D9 marriage destiny +
+    7L synastry + KP 7th-CSL promise) → 7 chapter scores → premium polisher
+    (gpt-4o, gated by COMPAT_PREMIUM_POLISH; always-safe fallback) → 24-page
+    Pro PDF. Always returns valid PDF bytes on success or JSON error otherwise.
     """
     data = request.get_json(silent=True) or {}
+    lang  = (data.get("lang") or "en").lower()
     milan = data.get("milan") or {}
     k1    = data.get("kundli_p1") or {}
     k2    = data.get("kundli_p2") or {}
-    lang  = (data.get("lang") or "en").lower()
+
+    # Shape A: simple {p1, p2, lang} → compute milan + kundlis server-side.
+    if (not milan or not k1 or not k2) and isinstance(data.get("p1"), dict) and isinstance(data.get("p2"), dict):
+        try:
+            from cache_helpers import get_or_compute_kundli
+            p1_in = dict(data["p1"]); p2_in = dict(data["p2"])
+            # /api/kundli requires name+place; tolerate mobile sending without.
+            for p in (p1_in, p2_in):
+                p.setdefault("name",  "Partner")
+                p.setdefault("place", "")
+                p.setdefault("minute", 0)
+                p.setdefault("ampm",  "AM")
+            k1 = get_or_compute_kundli(p1_in) or {}
+            k2 = get_or_compute_kundli(p2_in) or {}
+            # Compute milan via internal request to /api/kundli-milan
+            with app.test_request_context(
+                "/api/kundli-milan", method="POST",
+                json={"p1": p1_in, "p2": p2_in, "lang": lang},
+            ):
+                milan_resp = kundli_milan()
+                # Flask handlers may return Response or (Response, status) tuples.
+                if isinstance(milan_resp, tuple):
+                    milan_resp = milan_resp[0]
+                milan = milan_resp.get_json() or {}
+        except Exception as exc:
+            try:
+                print(f"[milan_pro_pdf] shape-A compute failed: {exc}", flush=True)
+            except Exception:
+                pass
+            return jsonify({"error": "pro_pdf_compute_failed"}), 500
+
     if not isinstance(milan, dict) or "p1" not in milan or "p2" not in milan:
         return jsonify({"error": "expected_milan_payload"}), 400
     if not isinstance(k1, dict) or not isinstance(k2, dict):

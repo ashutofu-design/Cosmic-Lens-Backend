@@ -558,3 +558,9 @@ id = "AIv829raiRhnKm4V7b5f2"
 uri = "file://exports/Aditya_Ishita_Pro.pdf"
 type = "pdf"
 title = "Pro PDF — Aditya & Ishita (gpt-5-mini live, Hinglish, 24 pages)"
+
+[[outputs]]
+id = "0_Zq7n5abtlzgJ-HFKOqt"
+uri = "file://exports/Aarav_Riya_Bhubaneswar.pdf"
+type = "pdf"
+title = "Aarav (29 Oct 1999, Bhubaneswar) & Riya (3 Jun 2000, Bhubaneswar) — Live gpt-5-mini Pro PDF"

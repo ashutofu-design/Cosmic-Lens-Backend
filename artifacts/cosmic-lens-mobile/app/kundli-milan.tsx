@@ -1474,7 +1474,7 @@ export default function KundliMilanScreen(){
       if (pct < 15) setPdfStage("Reading both kundlis…");
       else if (pct < 30) setPdfStage("Analyzing 36 koot factors…");
       else if (pct < 50) setPdfStage("Cross-checking Vedic + KP fusion…");
-      else if (pct < 75) setPdfStage("AI is writing your personalized report…");
+      else if (pct < 75) setPdfStage("Writing your personalized report…");
       else if (pct < 92) setPdfStage("Crafting beautiful insights…");
       else if (pct < 100) setPdfStage("Almost ready, finalizing PDF…");
       else setPdfStage("Done! Opening your report…");
@@ -2298,7 +2298,7 @@ export default function KundliMilanScreen(){
                 <View style={[cd.stageList, { borderTopColor: C.isDark ? "rgba(255,255,255,0.06)" : "#F3F4F6" }]}>
                   {[
                     { label: "Kundli analyzed", at: 30 },
-                    { label: "AI report generated", at: 75 },
+                    { label: "Personalized report ready", at: 75 },
                     { label: "PDF ready", at: 100 },
                   ].map((s, i) => {
                     const done = pdfPct >= s.at;

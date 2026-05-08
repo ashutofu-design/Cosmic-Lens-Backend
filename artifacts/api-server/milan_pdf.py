@@ -1315,3 +1315,468 @@ def render_milan_pdf(payload: dict, lang: str = "en") -> bytes:
 
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Phase 2.5.11.23 — "Premium Relationship Truth" 24-page Pro renderer
+# ──────────────────────────────────────────────────────────────────────
+# Public entry-point: render_milan_pro_pdf(payload, lang)
+#
+# Expects payload to carry standard /api/kundli-milan fields PLUS a
+# `pro_premium` block produced by `vedic/compat/premium_chapters.py`:
+#   pro_premium = {
+#     hidden_truth: str,
+#     chapters: [ {key, title, score_0_10, kya_dikh, kya_matlab,
+#                  kya_dhyan, grounding}, ... 7 ],
+#     special: [3 strs], damage: [strs], practical: [3 strs],
+#     verdict: str,
+#     _meta: { kp_promise: STRONG|PARTIAL|WEAK, hidden_signature: str }
+#   }
+# Always emits exactly 24 pages, even on partial/missing payloads.
+# ══════════════════════════════════════════════════════════════════════
+
+# Locked 7-chapter map for Pro (titles match score_0_10 derivation).
+_PRO_CHAPTER_MAP = [
+    ("emotional_compatibility",  "EMOTIONAL COMPATIBILITY",
+     "Emotional Compatibility",
+     "How both of you feel, express, and absorb each other emotionally."),
+    ("trust_loyalty",            "TRUST & LOYALTY",
+     "Trust & Loyalty",
+     "What strengthens trust between you — and what quietly tests it."),
+    ("communication_conflict",   "COMMUNICATION & CONFLICT",
+     "Communication & Conflict",
+     "How arguments begin, escalate, and finally resolve between you."),
+    ("marriage_stability",       "MARRIAGE STABILITY",
+     "Marriage Stability",
+     "Long-term commitment potential — read with realism, not absolutes."),
+    ("physical_chemistry",       "PHYSICAL + EMOTIONAL CHEMISTRY",
+     "Physical + Emotional Chemistry",
+     "The natural pull, comfort, and intimate rhythm between you."),
+    ("family_practical",         "FAMILY + PRACTICAL LIFE",
+     "Family + Practical Life",
+     "Day-to-day life — money, family, lifestyle, shared decisions."),
+    ("future_direction",         "LONG-TERM FUTURE DIRECTION",
+     "Long-Term Future Direction",
+     "Where this bond is heading over the next 2–3 years and beyond."),
+]
+
+
+def _pro_score_card(score: float | int | None) -> Table:
+    """Large score badge: '8.7 / 10' inside a soft purple-gold card."""
+    try:
+        s_val = float(score) if score is not None else 0.0
+    except Exception:
+        s_val = 0.0
+    big = Paragraph(
+        f"<b>{s_val:.1f}</b>"
+        f"<font color='{_hex(TEXT_SOFT)}' size=14> / 10</font>",
+        ParagraphStyle("pro_score_big", fontName="Helvetica-Bold",
+                       fontSize=34, leading=40, alignment=TA_CENTER,
+                       textColor=BRAND_PURPLE),
+    )
+    label = "STRONG" if s_val >= 8 else (
+        "BALANCED" if s_val >= 6 else (
+        "WORKABLE" if s_val >= 4 else "NEEDS CARE"))
+    sub = Paragraph(
+        f"<font color='{_hex(BRAND_GOLD)}'><b>{label}</b></font>",
+        ParagraphStyle("pro_score_lbl", fontName="Helvetica-Bold",
+                       fontSize=9, leading=12, alignment=TA_CENTER),
+    )
+    card = Table([[big], [sub]], colWidths=[60 * mm])
+    card.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (-1, -1), _BG_HERO),
+        ("BOX",          (0, 0), (-1, -1), 1.2, BRAND_GOLD),
+        ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING",   (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 10),
+    ]))
+    return card
+
+
+def _pro_block_heading(label: str) -> Paragraph:
+    return Paragraph(
+        f"<font color='{_hex(BRAND_PURPLE)}'><b>{label.upper()}</b></font>",
+        ParagraphStyle("pro_block_h", fontName="Helvetica-Bold",
+                       fontSize=10.5, leading=14, spaceBefore=8,
+                       spaceAfter=4),
+    )
+
+
+def _pro_hidden_truth_page(s: dict, num: int, hidden_truth: str,
+                           kp_meta: dict, p1_name: str, p2_name: str
+                           ) -> list[Any]:
+    """P3 — What's Hidden Underneath: KP marriage promise + signature."""
+    out: list[Any] = []
+    out.append(_chapter_eyebrow(num, "WHAT'S HIDDEN UNDERNEATH"))
+    out.extend(_chapter_title_block(
+        "What's Hidden Underneath",
+        "The deeper Vedic+KP signature most charts miss.",
+    ))
+    if hidden_truth:
+        out.append(Paragraph(_safe(hidden_truth), s["body"]))
+        out.append(Spacer(1, 12))
+    promise = (kp_meta or {}).get("kp_promise") or ""
+    sig     = (kp_meta or {}).get("hidden_signature") or ""
+    if promise:
+        promise_color = (
+            _hex(ACCENT_GREEN) if promise == "STRONG" else
+            _hex(ACCENT_AMBER) if promise == "PARTIAL" else
+            _hex(ACCENT_RED)
+        )
+        ptxt = Paragraph(
+            f"<font color='{_hex(TEXT_SOFT)}'><b>"
+            f"Marriage promise reading →</b></font>  "
+            f"<font color='{promise_color}'><b>{_safe(promise)}</b></font>"
+            f"<font color='{_hex(TEXT_MID)}'>"
+            f" — for {_safe(p1_name)} &amp; {_safe(p2_name)}, "
+            f"the deeper marriage signal in both charts is read together.</font>",
+            ParagraphStyle("hid_promise", fontName="Helvetica", fontSize=10.5,
+                           leading=15, spaceAfter=10),
+        )
+        out.append(ptxt)
+    if sig:
+        out.append(_grounding_card(s, sig))
+    out.append(PageBreak())
+    return out
+
+
+def _pro_chapter_pages(s: dict, num_a: int, num_b: int,
+                       eyebrow: str, title: str, subtitle: str,
+                       ch: dict) -> list[Any]:
+    """Two pages per chapter:
+       Page A: eyebrow + title + score card + 'Aapke chart me kya dikh raha hai'.
+       Page B: 'Iska matlab kya hai' + 'Kya dhyan rakhna' + grounding.
+    """
+    out: list[Any] = []
+    score = ch.get("score_0_10")
+    kya_dikh   = (ch.get("kya_dikh") or "").strip()
+    kya_matlab = (ch.get("kya_matlab") or "").strip()
+    kya_dhyan  = (ch.get("kya_dhyan") or "").strip()
+    grounding  = (ch.get("grounding") or "").strip()
+
+    # ── Page A ─────────────────────────────────────────────────────
+    out.append(_chapter_eyebrow(num_a, eyebrow))
+    out.extend(_chapter_title_block(title, subtitle))
+    # Score card — right-aligned 60mm card next to a brief lead label
+    lead = Paragraph(
+        f"<font color='{_hex(TEXT_MID)}'><b>"
+        f"Compatibility score for this chapter</b></font>",
+        ParagraphStyle("pro_lead", fontName="Helvetica-Bold", fontSize=10,
+                       leading=14),
+    )
+    score_row = Table(
+        [[lead, _pro_score_card(score)]],
+        colWidths=[110 * mm, 70 * mm],
+    )
+    score_row.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    out.append(score_row)
+    out.append(Spacer(1, 12))
+    out.append(_pro_block_heading("Aapke chart me kya dikh raha hai"))
+    out.append(Paragraph(_safe(kya_dikh) or "—", s["body"]))
+    out.append(PageBreak())
+
+    # ── Page B ─────────────────────────────────────────────────────
+    out.append(_chapter_eyebrow(num_b, eyebrow + "  ·  contd."))
+    out.append(_pro_block_heading("Iska matlab kya hai"))
+    out.append(Paragraph(_safe(kya_matlab) or "—", s["body"]))
+    out.append(Spacer(1, 8))
+    out.append(_pro_block_heading("Kya dhyan rakhna"))
+    out.append(Paragraph(_safe(kya_dhyan) or "—", s["body"]))
+    if grounding:
+        out.append(Spacer(1, 12))
+        out.append(_grounding_card(s, grounding))
+    out.append(PageBreak())
+    return out
+
+
+def _pro_practical_page(s: dict, num: int, paragraphs: list[str]) -> list[Any]:
+    """P20 — Practical Married Life (3 paragraphs from premium engine)."""
+    out: list[Any] = []
+    out.append(_chapter_eyebrow(num, "PRACTICAL MARRIED LIFE"))
+    out.extend(_chapter_title_block(
+        "Practical Married Life",
+        "Money, family pressure, lifestyle — what daily life will actually feel like.",
+    ))
+    paras = [p for p in (paragraphs or []) if p]
+    if not paras:
+        paras = ["Practical detail was not generated for this report."]
+    for para in paras:
+        out.append(Paragraph(_safe(para), s["body"]))
+        out.append(Spacer(1, 8))
+    out.append(PageBreak())
+    return out
+
+
+def _pro_koot_decoded_page(s: dict, num: int, koots: list[dict]) -> list[Any]:
+    """P21 — Compatibility Numbers Decoded: every koot in plain language."""
+    out: list[Any] = []
+    out.append(_chapter_eyebrow(num, "COMPATIBILITY NUMBERS DECODED"))
+    out.extend(_chapter_title_block(
+        "Compatibility Numbers Decoded",
+        "Each of the 8 koots, explained in plain everyday language.",
+    ))
+    rows = [["KOOT", "SCORE", "WHAT IT MEANS"]]
+    for k in (koots or []):
+        canon = _canon_koot_key(k)
+        try:
+            sc = int(k.get("score") or 0); mx = int(k.get("max") or 0)
+        except Exception:
+            sc, mx = 0, 0
+        # Ratio drives strength vs damage language.
+        ratio = (sc / mx) if mx else 0.0
+        if ratio >= 0.6:
+            meaning = _KOOT_STRENGTH_LANG.get(canon, "supportive area")
+        elif ratio > 0:
+            meaning = _KOOT_DAMAGE_LANG.get(canon, "needs gentle attention")
+        else:
+            meaning = _KOOT_DAMAGE_LANG.get(canon, "weakest area — needs care")
+        label = (k.get("label") or canon or "—").strip().title()
+        rows.append([
+            Paragraph(f"<b>{_safe(label)}</b>",
+                      ParagraphStyle("kdec_l", fontName="Helvetica-Bold",
+                                     fontSize=10, leading=13)),
+            Paragraph(f"<b>{sc}</b>"
+                      f"<font color='{_hex(TEXT_SOFT)}'> / {mx}</font>",
+                      ParagraphStyle("kdec_s", fontName="Helvetica-Bold",
+                                     fontSize=10, leading=13,
+                                     alignment=TA_CENTER,
+                                     textColor=BRAND_PURPLE)),
+            Paragraph(_safe(meaning),
+                      ParagraphStyle("kdec_m", fontName="Helvetica",
+                                     fontSize=9.5, leading=13,
+                                     textColor=TEXT_MID)),
+        ])
+    t = Table(rows, colWidths=[34 * mm, 26 * mm, 120 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (-1, 0), _BG_HERO),
+        ("LINEBELOW",    (0, 0), (-1, 0), 0.8, BRAND_GOLD),
+        ("LINEBELOW",    (0, 1), (-1, -1), 0.3, BORDER),
+        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+        ("FONTNAME",     (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE",     (0, 0), (-1, 0), 9),
+        ("TEXTCOLOR",    (0, 0), (-1, 0), TEXT_SOFT),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING",   (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 8),
+    ]))
+    out.append(t)
+    out.append(PageBreak())
+    return out
+
+
+def _pro_timing_sync_page(s: dict, num: int,
+                          p1_name: str, p2_name: str) -> list[Any]:
+    """P22 — Marriage Timing Sync (gentle, NEVER predictive)."""
+    out: list[Any] = []
+    out.append(_chapter_eyebrow(num, "MARRIAGE TIMING SYNC"))
+    out.extend(_chapter_title_block(
+        "Marriage Timing Sync",
+        "How both partners' larger life cycles align — without predicting dates.",
+    ))
+    body = (
+        f"Both {_safe(p1_name)} and {_safe(p2_name)} are moving through "
+        f"their own larger life cycles. When two people commit to each "
+        f"other, the meaningful sync is rarely a single auspicious date — "
+        f"it is the gradual overlap of life-phases where both feel ready "
+        f"to build something together."
+    )
+    body2 = (
+        "Vedic timing tools can highlight broadly supportive seasons, but "
+        "real readiness depends on lived choices — emotional clarity, "
+        "career stability, family alignment, and the quiet confidence that "
+        "you both want the same shape of life. Use the chapter scores in "
+        "this report as your honest mirror, not the calendar."
+    )
+    body3 = (
+        "If you are considering a near-term commitment, the most reliable "
+        "compass is a long, unhurried conversation about the next 5 years — "
+        "money, family roles, location, children, ambitions. Timing then "
+        "follows naturally."
+    )
+    for para in (body, body2, body3):
+        out.append(Paragraph(_safe(para), s["body"]))
+        out.append(Spacer(1, 8))
+    out.append(PageBreak())
+    return out
+
+
+def _pro_final_verdict_page(s: dict, num: int, verdict: str,
+                            total: float, mx: int) -> list[Any]:
+    """P23 — Final Verdict (premium engine prose, mature 2-3 lines)."""
+    out: list[Any] = []
+    out.append(_chapter_eyebrow(num, "FINAL VERDICT"))
+    out.extend(_chapter_title_block(
+        "Final Verdict",
+        f"Read together with the {_safe(total)}/{_safe(mx)} headline score.",
+    ))
+    txt = (verdict or "").strip() or (
+        "Every relationship is a daily choice. The numbers in this report "
+        "describe the soil — the harvest still depends on what both of you "
+        "plant, water, and protect together."
+    )
+    out.append(Paragraph(_safe(txt), s["body"]))
+    out.append(Spacer(1, 16))
+    out.append(_grounding_card(
+        s, "This verdict is a synthesis of all 7 chapters above plus the "
+           "deeper KP marriage-promise reading — not a prediction."))
+    out.append(PageBreak())
+    return out
+
+
+def _pro_closing_page(s: dict) -> list[Any]:
+    """P24 — Closing + branding (NEVER mention AI/LLM)."""
+    out: list[Any] = []
+    out.append(Spacer(1, 50 * mm))
+    out.append(Paragraph(
+        f"<font color='{_hex(BRAND_PURPLE)}'><b>Thank You</b></font>",
+        ParagraphStyle("close_h", fontName="Helvetica-Bold", fontSize=26,
+                       leading=32, alignment=TA_CENTER, spaceAfter=10),
+    ))
+    out.append(Paragraph(
+        "<font color='#475569'>Every chart is a beginning, not a verdict. "
+        "May this reading help both of you walk into your shared life "
+        "with clearer eyes and a softer heart.</font>",
+        ParagraphStyle("close_b", fontName="Helvetica", fontSize=11,
+                       leading=17, alignment=TA_CENTER, spaceAfter=24),
+    ))
+    out.append(Spacer(1, 30 * mm))
+    out.append(Paragraph(
+        f"<font color='{_hex(BRAND_GOLD)}'><b>"
+        f"Powered by Advanced Cosmic Intelligence</b></font>",
+        ParagraphStyle("close_brand", fontName="Helvetica-Bold", fontSize=10,
+                       leading=14, alignment=TA_CENTER),
+    ))
+    out.append(Spacer(1, 6))
+    out.append(Paragraph(
+        f"<font color='{_hex(TEXT_SOFT)}'>COSMIC LENS  ·  "
+        f"Cosmic Relationship Blueprint Pro</font>",
+        ParagraphStyle("close_meta", fontName="Helvetica", fontSize=8,
+                       leading=11, alignment=TA_CENTER),
+    ))
+    return out
+
+
+def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
+    """Phase 2.5.11.23 — Pro 24-page renderer.
+
+    Renders the new "Premium Relationship Truth" report using the
+    `payload["pro_premium"]` block produced by `polish_premium_chapters`.
+    Always emits exactly 24 pages, even when the premium block is missing
+    or partial — falls back to engine-derived content per page.
+    """
+    payload = payload or {}
+    p1   = payload.get("p1") or {}
+    p2   = payload.get("p2") or {}
+    total = payload.get("total", 0)
+    mx    = payload.get("max", 36)
+    grade = payload.get("grade") or {}
+    koots = payload.get("koots") or []
+    pro   = payload.get("pro_premium") or {}
+    chapters_in = pro.get("chapters") or []
+    meta = pro.get("_meta") or {}
+
+    # Map chapter outputs by key — premium engine emits in arbitrary order.
+    by_key = {(c.get("key") or "").strip().lower(): c
+              for c in chapters_in if isinstance(c, dict)}
+
+    s = _styles(lang)
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=15 * mm, rightMargin=15 * mm,
+        topMargin=18 * mm, bottomMargin=20 * mm,
+        title=(f"Cosmic Relationship Blueprint Pro — "
+               f"{p1.get('name','?')} & {p2.get('name','?')}"),
+        author="Cosmic Lens",
+    )
+    manglik = _is_manglik(payload)
+    snapshot = (payload.get("analysis") or {}).get("relationship_snapshot")
+    if not isinstance(snapshot, dict):
+        snapshot = {}
+
+    story: list[Any] = []
+
+    # P1 — Cover
+    story.extend(_cover_page(s, p1, p2, total, mx, grade, snapshot,
+                             manglik, lang))
+    # P2 — Snapshot card (reuses existing 12-page helper, num=2)
+    story.extend(_snapshot_page(s, 2, snapshot, koots, manglik, total, mx))
+    # P3 — Hidden Truth
+    story.extend(_pro_hidden_truth_page(
+        s, 3, pro.get("hidden_truth") or "",
+        meta, p1.get("name") or "Partner 1", p2.get("name") or "Partner 2",
+    ))
+    # P4–17 — 7 chapters × 2 pages each. Polisher emits ch1..ch7 by
+    # contract; renderer accepts either canonical key or ch1..ch7 by
+    # index so a future contract change cannot silently regress to
+    # placeholder text.
+    page_num = 4
+    for i, (key, eyebrow, title, subtitle) in enumerate(_PRO_CHAPTER_MAP, start=1):
+        ch = by_key.get(key) or by_key.get(f"ch{i}") or {}
+        if not ch:
+            # Deterministic placeholder so page count stays locked at 24.
+            ch = {
+                "score_0_10": None,
+                "kya_dikh":  "Detailed reading was not generated for "
+                             "this chapter on this chart.",
+                "kya_matlab": "The other chapters of this report still "
+                              "cover the core compatibility findings.",
+                "kya_dhyan":  "Read the surrounding chapters together "
+                              "for the most balanced picture.",
+                "grounding":  "",
+            }
+        story.extend(_pro_chapter_pages(
+            s, page_num, page_num + 1, eyebrow, title, subtitle, ch,
+        ))
+        page_num += 2
+
+    # P18 — What Makes This Bond Special (premium engine `special`)
+    special = [b for b in (pro.get("special") or []) if b][:3]
+    if not special:
+        special = _derive_special_bullets(payload)[:3]
+    story.extend(_bullets_page(
+        s, 18, "WHAT MAKES THIS BOND SPECIAL",
+        "What Makes This Bond Special",
+        "The quiet strengths most couples never realise they have.",
+        special,
+    ))
+    # P19 — What Can Quietly Damage
+    damage = [b for b in (pro.get("damage") or []) if b]
+    if not damage:
+        damage = _derive_damage_bullets(payload)
+    if not damage:
+        damage = ["No major damage pattern was detected from the engine "
+                  "facts — keep nurturing the strengths above."]
+    story.extend(_bullets_page(
+        s, 19, "WHAT CAN QUIETLY DAMAGE THIS BOND",
+        "What Can Quietly Damage This Bond",
+        "The patterns that create distance — slowly, almost invisibly.",
+        damage,
+    ))
+    # P20 — Practical Married Life (3 paragraphs)
+    practical = [p for p in (pro.get("practical") or []) if p]
+    if not practical:
+        practical = _practical_paragraphs(payload)
+    story.extend(_pro_practical_page(s, 20, practical[:3]))
+    # P21 — Koot Decoded
+    story.extend(_pro_koot_decoded_page(s, 21, koots))
+    # P22 — Timing Sync
+    story.extend(_pro_timing_sync_page(
+        s, 22, p1.get("name") or "Partner 1",
+        p2.get("name") or "Partner 2",
+    ))
+    # P23 — Final Verdict
+    story.extend(_pro_final_verdict_page(
+        s, 23, pro.get("verdict") or "", total, mx,
+    ))
+    # P24 — Closing
+    story.extend(_pro_closing_page(s))
+
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()

@@ -8882,6 +8882,78 @@ def kundli_milan_pdf():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# ── /api/kundli-milan/pro-pdf — Phase 2.5.11.23 (Premium 24-page PDF) ─────────
+# ═══════════════════════════════════════════════════════════════════════════════
+@app.route("/api/kundli-milan/pro-pdf", methods=["POST"])
+def kundli_milan_pro_pdf():
+    """Render the Premium "Cosmic Relationship Blueprint Pro" 24-page PDF.
+
+    Body:
+      {
+        "milan":     <full /api/kundli-milan response payload>,
+        "kundli_p1": <full kundli dict for partner 1>,
+        "kundli_p2": <full kundli dict for partner 2>,
+        "lang":      "en" | "hi" | "hn" | ...
+      }
+
+    Computes the hidden Vedic+KP fusion engines (D9 marriage destiny,
+    7L synastry, KP 7th-CSL marriage promise) → derives 7 chapter scores
+    → calls the premium chapter polisher (gpt-4o, gated by
+    COMPAT_PREMIUM_POLISH env; safe fallback if disabled or LLM fails)
+    → renders the 24-page Pro PDF. Always returns valid PDF bytes on the
+    success path, or a JSON error otherwise.
+    """
+    data = request.get_json(silent=True) or {}
+    milan = data.get("milan") or {}
+    k1    = data.get("kundli_p1") or {}
+    k2    = data.get("kundli_p2") or {}
+    lang  = (data.get("lang") or "en").lower()
+    if not isinstance(milan, dict) or "p1" not in milan or "p2" not in milan:
+        return jsonify({"error": "expected_milan_payload"}), 400
+    if not isinstance(k1, dict) or not isinstance(k2, dict):
+        return jsonify({"error": "expected_both_kundlis"}), 400
+
+    try:
+        from vedic.compat.d9_marriage import compute_d9_marriage
+        from vedic.compat.synastry_7l import compute_synastry_7l
+        from vedic.compat.kp_marriage_promise import compute_kp_couple_promise
+        from vedic.compat.chapter_scores import compute_chapter_scores
+        from vedic.compat.premium_chapters import polish_premium_chapters
+        from milan_pdf import render_milan_pro_pdf
+
+        d9  = compute_d9_marriage(k1, k2)
+        syn = compute_synastry_7l(k1, k2)
+        kp  = compute_kp_couple_promise(k1, k2)
+        cs  = compute_chapter_scores(milan, d9, syn, kp)
+        pro = polish_premium_chapters(milan, cs, d9, syn, kp, lang=lang)
+        # Attach the premium block onto the milan payload for the renderer.
+        merged = dict(milan)
+        merged["pro_premium"] = pro
+        pdf_bytes = render_milan_pro_pdf(merged, lang=lang)
+    except Exception as exc:
+        try:
+            print(f"[milan_pro_pdf] render failed: {exc}", flush=True)
+        except Exception:
+            pass
+        # Never leak provider/internal exception detail to the client.
+        return jsonify({"error": "pro_pdf_render_failed"}), 500
+
+    p1n = (milan.get("p1") or {}).get("name") or "p1"
+    p2n = (milan.get("p2") or {}).get("name") or "p2"
+    safe = lambda s: "".join(c for c in str(s) if c.isalnum() or c in "_-")[:32] or "x"
+    fname = f"Cosmic_Relationship_Blueprint_Pro_{safe(p1n)}_{safe(p2n)}.pdf"
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": f"inline; filename=\"{fname}\"",
+            "Content-Length": str(len(pdf_bytes)),
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # ── Cashfree Payment Gateway ──────────────────────────────────────────────────
 # ═══════════════════════════════════════════════════════════════════════════════
 

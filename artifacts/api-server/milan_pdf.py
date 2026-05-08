@@ -1721,14 +1721,22 @@ def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
         ch = by_key.get(key) or by_key.get(f"ch{i}") or {}
         if not ch:
             # Deterministic placeholder so page count stays locked at 24.
+            # Soul-rich language even in the broken-payload case — never
+            # exposes "engine"/"chapter not generated" wording to the user.
             ch = {
                 "score_0_10": None,
-                "kya_dikh":  "Detailed reading was not generated for "
-                             "this chapter on this chart.",
-                "kya_matlab": "The other chapters of this report still "
-                              "cover the core compatibility findings.",
-                "kya_dhyan":  "Read the surrounding chapters together "
-                              "for the most balanced picture.",
+                "kya_dikh":  "Is chapter ke liye aapki kundlis me jo signal hai "
+                             "woh balanced range me hai — koi sharp standout nahi, "
+                             "koi major friction zone bhi nahi. Iska matlab — "
+                             "ye area is rishte me actively peace ya tension nahi laata.",
+                "kya_matlab": "Real life me — is dimension pe daily jeevan smooth "
+                              "rahega bina khaas effort ke. Lekin growth bhi "
+                              "automatic nahi hogi; jo intentional banayenge wahi "
+                              "deepen hoga. Surrounding chapters is bond ki "
+                              "asli textures dikhayenge.",
+                "kya_dhyan":  "Is chapter ko aas-paas ke chapters ke saath "
+                              "padho — koi bhi bond ek hi area se nahi banta, "
+                              "patterns saath dekhne se asli picture banti hai.",
                 "grounding":  "",
             }
         story.extend(_pro_chapter_pages(

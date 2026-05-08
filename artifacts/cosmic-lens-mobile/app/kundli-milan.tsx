@@ -11,6 +11,7 @@ import {
   Easing,
   I18nManager,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -1454,6 +1455,7 @@ export default function KundliMilanScreen(){
   const [result,setResult]=useState<Result|null>(null);
   const [pdfLoading,setPdfLoading]=useState(false);
   const [calcLoading,setCalcLoading]=useState(false);
+  const [confirmVisible,setConfirmVisible]=useState(false);
 
   // Auto-load partner from relationship page selection (URL param)
   useEffect(()=>{
@@ -1606,33 +1608,7 @@ export default function KundliMilanScreen(){
   function confirmAndDownloadProPdf(){
     if(!person1||!p2){ handleDownloadProPdf(); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    const fmtBd=(src:any)=>{
-      if(!src) return "—";
-      const d=src.day, m=src.month, y=src.year;
-      const h=src.hour, mi=src.minute, ap=(src.ampm||"").toUpperCase();
-      const dt=(d&&m&&y)?`${d}/${m}/${y}`:"";
-      const tm=(h!=null&&mi!=null)?` · ${h}:${String(mi).padStart(2,"0")}${ap?" "+ap:""}`:"";
-      const pl=src.place?` · ${src.place}`:"";
-      return `${dt}${tm}${pl}`||"—";
-    };
-    const bd1Src=p1Profile?.birthData ?? person1._rawBirth ?? null;
-    const bd2Src=p2Profile?.birthData ?? p2._rawBirth ?? null;
-
-    const body=
-      `Aap 1: ${person1.name||"Partner 1"}\n${fmtBd(bd1Src)}\n\n`+
-      `Aap 2: ${p2.name||"Partner 2"}\n${fmtBd(bd2Src)}\n\n`+
-      `Kya aap inhi details ke saath aage badhna chahte hain?`;
-
-    Alert.alert(
-      "Confirm Details",
-      body,
-      [
-        {text:"Change",style:"cancel"},
-        {text:"Yes, Continue",onPress:()=>{ handleDownloadProPdf(); }},
-      ],
-      {cancelable:true},
-    );
+    setConfirmVisible(true);
   }
 
   async function handleDownloadProPdf(){
@@ -2093,9 +2069,145 @@ export default function KundliMilanScreen(){
       </View>
 
       {LockOverlay}
+
+      {/* ── Beautiful Confirm Details Modal (replaces native Alert) ── */}
+      <Modal visible={confirmVisible} transparent animationType="fade" onRequestClose={() => setConfirmVisible(false)}>
+        <Pressable style={cd.backdrop} onPress={() => setConfirmVisible(false)}>
+          <BlurView intensity={Platform.OS === "ios" ? 30 : 80} tint="dark" style={StyleSheet.absoluteFillObject} />
+          <Pressable style={cd.cardWrap} onPress={(e) => e.stopPropagation?.()}>
+            <LinearGradient
+              colors={["#8B5CF6", "#EC4899", "#F59E0B"]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={cd.borderGradient}
+            >
+              <View style={[cd.card, { backgroundColor: C.isDark ? "#0F0A1F" : "#FFFFFF" }]}>
+
+                {/* Header */}
+                <View style={cd.header}>
+                  <LinearGradient
+                    colors={["#8B5CF6", "#EC4899"]}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    style={cd.iconCircle}
+                  >
+                    <Feather name="check-circle" size={22} color="#fff" />
+                  </LinearGradient>
+                  <Text style={[cd.title, { color: C.text }]}>Confirm Details</Text>
+                  <Text style={[cd.sub, { color: C.textDim }]}>Please verify both kundli details before generating your Pro report</Text>
+                </View>
+
+                {/* Partner cards */}
+                {(() => {
+                  const fmtBd = (src: any) => {
+                    if (!src) return { date: "—", time: "—", place: "—" };
+                    const d = src.day, m = src.month, y = src.year;
+                    const h = src.hour, mi = src.minute, ap = (src.ampm || "").toUpperCase();
+                    return {
+                      date: (d && m && y) ? `${d}/${m}/${y}` : "—",
+                      time: (h != null && mi != null) ? `${h}:${String(mi).padStart(2, "0")}${ap ? " " + ap : ""}` : "—",
+                      place: src.place || "—",
+                    };
+                  };
+                  const bd1Src = p1Profile?.birthData ?? person1?._rawBirth ?? null;
+                  const bd2Src = p2Profile?.birthData ?? p2?._rawBirth ?? null;
+                  const b1 = fmtBd(bd1Src);
+                  const b2 = fmtBd(bd2Src);
+                  const PartnerCard = ({ idx, name, b, gradient }: any) => (
+                    <View style={[cd.partnerCard, { backgroundColor: C.isDark ? "rgba(255,255,255,0.03)" : "#F9FAFB", borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "#E5E7EB" }]}>
+                      <View style={cd.partnerHeader}>
+                        <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={cd.partnerBadge}>
+                          <Text style={cd.partnerBadgeTxt}>{idx}</Text>
+                        </LinearGradient>
+                        <Text style={[cd.partnerName, { color: C.text }]} numberOfLines={1}>{name}</Text>
+                      </View>
+                      <View style={cd.detailRow}>
+                        <Feather name="calendar" size={12} color={C.textDim} />
+                        <Text style={[cd.detailTxt, { color: C.textDim }]}>{b.date}</Text>
+                      </View>
+                      <View style={cd.detailRow}>
+                        <Feather name="clock" size={12} color={C.textDim} />
+                        <Text style={[cd.detailTxt, { color: C.textDim }]}>{b.time}</Text>
+                      </View>
+                      <View style={cd.detailRow}>
+                        <Feather name="map-pin" size={12} color={C.textDim} />
+                        <Text style={[cd.detailTxt, { color: C.textDim }]} numberOfLines={2}>{b.place}</Text>
+                      </View>
+                    </View>
+                  );
+                  return (
+                    <View style={cd.partnersWrap}>
+                      <PartnerCard idx="1" name={person1?.name || "Partner 1"} b={b1} gradient={["#8B5CF6", "#6366F1"]} />
+                      <View style={cd.heartWrap}>
+                        <LinearGradient colors={["#EC4899", "#F59E0B"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={cd.heartCircle}>
+                          <Feather name="heart" size={12} color="#fff" />
+                        </LinearGradient>
+                      </View>
+                      <PartnerCard idx="2" name={p2?.name || "Partner 2"} b={b2} gradient={["#EC4899", "#F472B6"]} />
+                    </View>
+                  );
+                })()}
+
+                {/* Question */}
+                <Text style={[cd.question, { color: C.text }]}>Kya aap inhi details ke saath aage badhna chahte hain?</Text>
+
+                {/* Action buttons */}
+                <View style={cd.actions}>
+                  <Pressable
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setConfirmVisible(false); }}
+                    style={({ pressed }) => [cd.changeBtn, { backgroundColor: C.isDark ? "rgba(255,255,255,0.05)" : "#F3F4F6", borderColor: C.isDark ? "rgba(255,255,255,0.12)" : "#E5E7EB", opacity: pressed ? 0.7 : 1 }]}
+                  >
+                    <Feather name="edit-3" size={14} color={C.text} />
+                    <Text style={[cd.changeTxt, { color: C.text }]}>Change</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setConfirmVisible(false); handleDownloadProPdf(); }}
+                    style={({ pressed }) => [cd.continueBtn, { opacity: pressed ? 0.85 : 1 }]}
+                  >
+                    <LinearGradient
+                      colors={["#8B5CF6", "#EC4899", "#F59E0B"]}
+                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                      style={cd.continueGrad}
+                    >
+                      <Feather name="check" size={15} color="#fff" />
+                      <Text style={cd.continueTxt}>Yes, Continue</Text>
+                    </LinearGradient>
+                  </Pressable>
+                </View>
+              </View>
+            </LinearGradient>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
+
+const cd = StyleSheet.create({
+  backdrop: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20 },
+  cardWrap: { width: "100%", maxWidth: 420 },
+  borderGradient: { borderRadius: 26, padding: 1.5 },
+  card: { borderRadius: 24, padding: 22 },
+  header: { alignItems: "center", marginBottom: 20 },
+  iconCircle: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", marginBottom: 12, shadowColor: "#8B5CF6", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 8 },
+  title: { fontSize: 20, fontFamily: "Nunito_700Bold", letterSpacing: -0.4, marginBottom: 6 },
+  sub: { fontSize: 12, fontFamily: "Nunito_400Regular", textAlign: "center", lineHeight: 17, paddingHorizontal: 8 },
+  partnersWrap: { gap: 8, marginBottom: 18 },
+  partnerCard: { borderRadius: 16, borderWidth: 1, padding: 14, gap: 7 },
+  partnerHeader: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 },
+  partnerBadge: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  partnerBadgeTxt: { color: "#fff", fontSize: 12, fontFamily: "Nunito_700Bold" },
+  partnerName: { flex: 1, fontSize: 15, fontFamily: "Nunito_700Bold", letterSpacing: -0.2 },
+  detailRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 2 },
+  detailTxt: { fontSize: 12.5, fontFamily: "Nunito_500Medium", flex: 1 },
+  heartWrap: { alignItems: "center", marginVertical: -4, zIndex: 2 },
+  heartCircle: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", shadowColor: "#EC4899", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.5, shadowRadius: 6, elevation: 4 },
+  question: { fontSize: 13.5, fontFamily: "Nunito_500Medium", textAlign: "center", lineHeight: 19, marginBottom: 18, paddingHorizontal: 4 },
+  actions: { flexDirection: "row", gap: 10 },
+  changeBtn: { flex: 0.8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, height: 48, borderRadius: 14, borderWidth: 1 },
+  changeTxt: { fontSize: 14, fontFamily: "Nunito_700Bold" },
+  continueBtn: { flex: 1.2, height: 48, borderRadius: 14, overflow: "hidden", shadowColor: "#8B5CF6", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10, elevation: 6 },
+  continueGrad: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  continueTxt: { color: "#fff", fontSize: 14, fontFamily: "Nunito_700Bold", letterSpacing: 0.2 },
+});
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const ms=StyleSheet.create({

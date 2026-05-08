@@ -209,3 +209,106 @@ def test_fallback_never_raises_on_malformed_milan_facts():
         assert isinstance(out, dict)
         assert "verdict" in out and "hidden_truth" in out
         assert len(out["chapters"]) == 7
+
+
+# ──────────────────────────────────────────────────────────
+#  Phase 2.5.11.23-soul-v2: ChatGPT-critique-driven regressions
+# ──────────────────────────────────────────────────────────
+from vedic.compat.premium_chapters import (
+    THERAPY_CLICHES, PERFECT_BALANCE_PHRASES, SYSTEM_PROMPT_PREMIUM,
+)
+
+
+def test_v2_no_therapy_cliche_density_in_fallback():
+    """Fallback prose must not feel like a generic relationship-coaching app.
+    Allow up to 1 cliche (some are nearly unavoidable in passing) but not ≥2."""
+    out = _safe_fallback(MILAN_FACTS, CH_SCORES_FULL)
+    text = _all_text(out).lower()
+    hits = [c for c in THERAPY_CLICHES if c in text]
+    assert len(hits) <= 1, f"Therapy-cliche density too high in fallback: {hits}"
+
+
+def test_v2_no_perfect_balance_language_in_fallback():
+    """Real relationships are uneven. Fallback must never claim both
+    partners always feel the same thing equally."""
+    out = _safe_fallback(MILAN_FACTS, CH_SCORES_FULL)
+    text = _all_text(out).lower()
+    for pb in PERFECT_BALANCE_PHRASES:
+        assert pb not in text, f"Perfect-balance phrase leaked into fallback: {pb}"
+
+
+def test_v2_validator_rejects_therapy_cliche_density():
+    """Validator must reject polish-path output dense with therapy-app phrases."""
+    base = _build_valid_polish_payload()
+    base["chapters"][0]["kya_dhyan"] = (
+        "Vikram aur Sanya ko honest dialogue karna chahiye, mutual respect "
+        "aur consistent care dikhana, build trust ke liye communicate openly. "
+        "Joint daily prayers ka time fix karo aur yearly anniversary ritual rakho."
+    )
+    ok, reason = _validate_premium(base, MILAN_FACTS, CH_SCORES_FULL)
+    assert not ok and reason and reason.startswith("therapy_cliche_density"), reason
+
+
+def test_v2_validator_rejects_perfect_balance_language():
+    """Each PERFECT_BALANCE phrase, when injected, must trigger rejection."""
+    for pb in PERFECT_BALANCE_PHRASES:
+        base = _build_valid_polish_payload()
+        base["chapters"][0]["kya_matlab"] = base["chapters"][0]["kya_matlab"][:300] + f" {pb}."
+        ok, reason = _validate_premium(base, MILAN_FACTS, CH_SCORES_FULL)
+        assert not ok and reason and reason.startswith("perfect_balance_phrase"), \
+            f"Validator failed to reject perfect-balance phrase '{pb}': {reason}"
+
+
+def test_v2_fallback_carries_emotional_asymmetry():
+    """Each chapter prose must contain asymmetry markers — 'ek partner...
+    dusra...' or 'ek...dusre...'. This is the signal that we're honouring
+    real-relationship unevenness, not pretending perfect balance."""
+    out = _safe_fallback(MILAN_FACTS, CH_SCORES_FULL)
+    asym_markers = ["ek partner", "ek ko", "dusra", "dusre", "alag-alag", "alag rhythm", "alag languages"]
+    chapters_with_asymmetry = 0
+    for c in out["chapters"]:
+        full = (c.get("kya_dikh", "") + " " + c.get("kya_matlab", "") + " " + c.get("kya_dhyan", "")).lower()
+        if any(m in full for m in asym_markers):
+            chapters_with_asymmetry += 1
+    assert chapters_with_asymmetry >= 6, f"Only {chapters_with_asymmetry}/7 chapters carry asymmetry — soul-v2 regression"
+
+
+def test_v2_validator_accepts_one_isolated_cliche():
+    """ONE therapy phrase in passing is allowed — only ≥2 triggers rejection.
+    This prevents over-aggressive rejection of otherwise-soulful prose."""
+    base = _build_valid_polish_payload()
+    base["chapters"][0]["kya_dhyan"] = base["chapters"][0]["kya_dhyan"][:400] + \
+        " Vikram aur Sanya should communicate openly when stuck."
+    ok, reason = _validate_premium(base, MILAN_FACTS, CH_SCORES_FULL)
+    assert ok, f"Validator over-rejected single isolated cliche: {reason}"
+
+
+def test_v2_system_prompt_carries_v2_rules():
+    """SYSTEM_PROMPT_PREMIUM must mention all v2 critical sections so
+    gpt-4o is governed by the same laws the validator enforces."""
+    p = SYSTEM_PROMPT_PREMIUM
+    assert "EMOTIONAL REALISM RULES" in p, "v2 emotional realism section missing"
+    assert "SIGNATURE INSIGHT RULE" in p, "v2 signature insight rule missing"
+    assert "THERAPY-CLICHE BAN" in p, "v2 therapy-cliche ban missing"
+    assert "experienced modern relationship astrologer" in p, "v2 archetype change missing"
+    assert "wise family elder" not in p, "v1 archetype must be removed in v2"
+    # Per-chapter name density rule must be dropped in v2
+    assert "≥3 times across the FULL prose" in p or "≥3 times across the full prose" in p.lower(), \
+        "v2 must keep global ≥3 name density (not per-chapter)"
+
+
+def test_v2_signature_insight_specificity_heuristic():
+    """Each chapter must contain at least one concrete-image phrase that
+    couldn't apply generically. Heuristic: detect specific moments like
+    'Sunday raat', '5 minute', '12 ghante', '3 mahine', 'subah chai' etc."""
+    out = _safe_fallback(MILAN_FACTS, CH_SCORES_FULL)
+    specifics = [
+        "minute", "ghante", "ghanta", "raat", "subah", "sunday", "monday",
+        "hafte", "mahine", "saal", "hour", "chai", "dinner", "walk", "evening",
+    ]
+    weak = []
+    for c in out["chapters"]:
+        full = (c.get("kya_dikh", "") + c.get("kya_matlab", "") + c.get("kya_dhyan", "")).lower()
+        if not any(s in full for s in specifics):
+            weak.append(c.get("title"))
+    assert not weak, f"Chapters missing concrete-moment specificity: {weak}"

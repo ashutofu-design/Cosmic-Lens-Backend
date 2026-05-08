@@ -1534,28 +1534,18 @@ export default function KundliMilanScreen(){
         }),
       ]).start();
     } else if (progressVisible) {
-      // pdfLoading turned false → backend finished. Snap to 100%, hold for
-      // 800ms so user clearly sees "Done!", then close progress overlay.
-      // After progress overlay's dismiss animation (~350ms on iOS), open
-      // the success modal if a success was pending. This sequencing avoids
-      // the iOS bug where opening Modal B while Modal A is dismissing kills
-      // both.
+      // pdfLoading turned false → backend finished. Slowly climb to 100%
+      // (1500ms ease-out so user clearly SEES the bar reach 100, not a
+      // sudden jump from 92→100). We do NOT auto-dismiss the overlay; the
+      // overlay UI itself swaps to a success state ("PDF Downloaded! /
+      // View Now") once pdfPct hits 100. User taps View Now → closes
+      // overlay + jumps to /my-reports. (Phase 2.5.11.24-fix4)
       Animated.timing(pdfProgress, {
         toValue: 1,
-        duration: 400,
+        duration: 1500,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: false,
-      }).start(() => {
-        setTimeout(() => {
-          setProgressVisible(false);
-          pdfProgress.setValue(0);
-          // Wait for RN Modal dismiss animation to finish before opening
-          // the next modal — otherwise iOS swallows the second modal.
-          if (pdfDonePendingRef.current) {
-            pdfDonePendingRef.current = false;
-            setTimeout(() => setPdfDoneVisible(true), 450);
-          }
-        }, 800);
-      });
+      }).start();
     }
   }, [pdfLoading]);
 
@@ -2438,28 +2428,45 @@ export default function KundliMilanScreen(){
             >
               <View style={[cd.card, { backgroundColor: C.isDark ? "#0F0A1F" : "#FFFFFF" }]}>
 
-                {/* Animated rotating sparkle icon */}
+                {/* Header — swaps from spinning loader to green check
+                    once pdfPct hits 100 (Phase 2.5.11.24-fix4) */}
                 <View style={cd.progHeader}>
-                  <LinearGradient
-                    colors={["#8B5CF6", "#EC4899"]}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                    style={cd.progIconCircle}
-                  >
-                    <Animated.View
-                      style={{
-                        transform: [{
-                          rotate: pdfProgress.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: ["0deg", "1080deg"],
-                          }),
-                        }],
-                      }}
+                  {pdfPct >= 100 ? (
+                    <LinearGradient
+                      colors={["#10B981", "#059669"]}
+                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                      style={cd.progIconCircle}
                     >
-                      <Feather name="loader" size={28} color="#fff" />
-                    </Animated.View>
-                  </LinearGradient>
-                  <Text style={[cd.progTitle, { color: C.text }]}>Generating Your Pro Report</Text>
-                  <Text style={[cd.progSub, { color: C.textDim }]}>{pdfStage}</Text>
+                      <Feather name="check" size={32} color="#fff" />
+                    </LinearGradient>
+                  ) : (
+                    <LinearGradient
+                      colors={["#8B5CF6", "#EC4899"]}
+                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                      style={cd.progIconCircle}
+                    >
+                      <Animated.View
+                        style={{
+                          transform: [{
+                            rotate: pdfProgress.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: ["0deg", "1080deg"],
+                            }),
+                          }],
+                        }}
+                      >
+                        <Feather name="loader" size={28} color="#fff" />
+                      </Animated.View>
+                    </LinearGradient>
+                  )}
+                  <Text style={[cd.progTitle, { color: C.text }]}>
+                    {pdfPct >= 100 ? "PDF Downloaded!" : "Generating Your Pro Report"}
+                  </Text>
+                  <Text style={[cd.progSub, { color: C.textDim }]}>
+                    {pdfPct >= 100
+                      ? `Aapki Kundli Milan PRO report tayyar hai aur "My Reports" mein safe save ho gayi hai`
+                      : pdfStage}
+                  </Text>
                 </View>
 
                 {/* Progress bar */}
@@ -2521,6 +2528,34 @@ export default function KundliMilanScreen(){
                     );
                   })}
                 </View>
+
+                {/* View Now CTA — appears only when bar reaches 100%
+                    (Phase 2.5.11.24-fix4). Replaces the separate
+                    pdfDoneVisible modal — eliminates iOS modal-stacking
+                    handoff and the perceived "cut at 92%". */}
+                {pdfPct >= 100 && (
+                  <View style={[cd.actions, { marginTop: 14 }]}>
+                    <Pressable
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        setProgressVisible(false);
+                        pdfProgress.setValue(0);
+                        pdfDonePendingRef.current = false;
+                        try { router.push("/my-reports"); } catch {}
+                      }}
+                      style={({ pressed }) => [cd.continueBtn, { flex: 1, opacity: pressed ? 0.85 : 1 }]}
+                    >
+                      <LinearGradient
+                        colors={["#8B5CF6", "#EC4899", "#F59E0B"]}
+                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                        style={cd.continueGrad}
+                      >
+                        <Feather name="eye" size={15} color="#fff" />
+                        <Text style={cd.continueTxt}>View Now</Text>
+                      </LinearGradient>
+                    </Pressable>
+                  </View>
+                )}
 
               </View>
             </LinearGradient>

@@ -1781,9 +1781,41 @@ export default function KundliMilanScreen(){
       // is best-effort read from any previously cached milan response.
       const milanJson:any = (MilanResultStore.get() as any) || {};
 
-      // ArrayBuffer → base64 → disk. Smaller (16 KB) chunks + sub-array indexing
-      // to avoid stack overflow / huge intermediate strings on PDFs >1 MB.
       const buf=await r2.arrayBuffer();
+
+      // Phase 2.5.11.24-fix6: WEB path. expo-file-system's documentDirectory
+      // and cacheDirectory are both null in browsers, so writeAsStringAsync
+      // throws → catch closes the progress overlay → user sees "section gayab".
+      // On web we skip FileSystem entirely: trigger an in-browser <a download>
+      // click so the PDF lands in the user's Downloads folder, then mark
+      // savedToRegistry=true so the success branch fires and the View Now
+      // button renders. /my-reports won't list it on web (no persistent file
+      // URI), but the user gets the actual PDF and a clean "Downloaded!"
+      // confirmation — which is the whole user-facing requirement.
+      if(Platform.OS==="web"){
+        try{
+          const blob=new Blob([buf],{type:"application/pdf"});
+          const url=(globalThis as any).URL?.createObjectURL?.(blob);
+          if(url && typeof document!=="undefined"){
+            const a=document.createElement("a");
+            a.href=url;
+            a.download=fileName;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(()=>{ try{ (globalThis as any).URL?.revokeObjectURL?.(url); }catch{} },2000);
+          }
+        }catch{/* ignore — user still sees success modal */}
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        pdfShareUriRef.current=null as any;
+        pdfFileNameRef.current=fileName;
+        savedToRegistry=true;
+        return; // jump to finally → setPdfLoading(false) → overlay shows "PDF Downloaded!" + View Now
+      }
+
+      // Native (iOS / Android) path. ArrayBuffer → base64 → disk. Smaller
+      // (16 KB) chunks + sub-array indexing to avoid stack overflow / huge
+      // intermediate strings on PDFs >1 MB.
       const bytes=new Uint8Array(buf);
       const CHUNK=0x4000;
       const parts:string[]=[];

@@ -1457,6 +1457,52 @@ export default function KundliMilanScreen(){
   const [calcLoading,setCalcLoading]=useState(false);
   const [confirmVisible,setConfirmVisible]=useState(false);
 
+  /* ── Premium PDF progress overlay (animated) ──
+   *  Server takes ~60-77s end-to-end (engine ~10s + gpt-5-mini polish ~50-67s).
+   *  We animate a fake-but-believable progress bar 0→95% over 70s so the user
+   *  feels work is happening. When real PDF arrives, snap to 100% then dismiss.
+   *  Stages chosen to mirror the real backend pipeline so it feels honest. */
+  const pdfProgress = useRef(new Animated.Value(0)).current;
+  const [pdfPct, setPdfPct] = useState(0);
+  const [pdfStage, setPdfStage] = useState("Preparing your kundli…");
+
+  useEffect(() => {
+    const sub = pdfProgress.addListener(({ value }) => {
+      const pct = Math.round(value * 100);
+      setPdfPct(pct);
+      // Stage labels mirror real backend pipeline
+      if (pct < 15) setPdfStage("Reading both kundlis…");
+      else if (pct < 30) setPdfStage("Analyzing 36 koot factors…");
+      else if (pct < 50) setPdfStage("Cross-checking Vedic + KP fusion…");
+      else if (pct < 75) setPdfStage("AI is writing your personalized report…");
+      else if (pct < 92) setPdfStage("Crafting beautiful insights…");
+      else if (pct < 100) setPdfStage("Almost ready, finalizing PDF…");
+      else setPdfStage("Done! Opening your report…");
+    });
+    return () => pdfProgress.removeListener(sub);
+  }, []);
+
+  useEffect(() => {
+    if (pdfLoading) {
+      pdfProgress.setValue(0);
+      Animated.timing(pdfProgress, {
+        toValue: 0.95,
+        duration: 70000, // ramp to 95% over 70s
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+    } else if (pdfPct > 0) {
+      // PDF arrived — snap to 100 then reset
+      Animated.timing(pdfProgress, {
+        toValue: 1,
+        duration: 350,
+        useNativeDriver: false,
+      }).start(() => {
+        setTimeout(() => pdfProgress.setValue(0), 600);
+      });
+    }
+  }, [pdfLoading]);
+
   // Auto-load partner from relationship page selection (URL param)
   useEffect(()=>{
     if(!params.partnerId)return;
@@ -2181,6 +2227,108 @@ export default function KundliMilanScreen(){
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* ── Premium PDF Generation Progress Overlay ── */}
+      <Modal visible={pdfLoading} transparent animationType="fade" onRequestClose={() => {}}>
+        <View style={cd.backdrop}>
+          <BlurView intensity={Platform.OS === "ios" ? 35 : 90} tint="dark" style={StyleSheet.absoluteFillObject} />
+          <View style={cd.cardWrap}>
+            <LinearGradient
+              colors={["#8B5CF6", "#EC4899", "#F59E0B"]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={cd.borderGradient}
+            >
+              <View style={[cd.card, { backgroundColor: C.isDark ? "#0F0A1F" : "#FFFFFF" }]}>
+
+                {/* Animated rotating sparkle icon */}
+                <View style={cd.progHeader}>
+                  <LinearGradient
+                    colors={["#8B5CF6", "#EC4899"]}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    style={cd.progIconCircle}
+                  >
+                    <Animated.View
+                      style={{
+                        transform: [{
+                          rotate: pdfProgress.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ["0deg", "1080deg"],
+                          }),
+                        }],
+                      }}
+                    >
+                      <Feather name="loader" size={28} color="#fff" />
+                    </Animated.View>
+                  </LinearGradient>
+                  <Text style={[cd.progTitle, { color: C.text }]}>Generating Your Pro Report</Text>
+                  <Text style={[cd.progSub, { color: C.textDim }]}>{pdfStage}</Text>
+                </View>
+
+                {/* Progress bar */}
+                <View style={[cd.progTrack, { backgroundColor: C.isDark ? "rgba(255,255,255,0.06)" : "#F3F4F6" }]}>
+                  <Animated.View
+                    style={[
+                      cd.progFillWrap,
+                      {
+                        width: pdfProgress.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: ["0%", "100%"],
+                        }),
+                      },
+                    ]}
+                  >
+                    <LinearGradient
+                      colors={["#8B5CF6", "#EC4899", "#F59E0B"]}
+                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                      style={cd.progFill}
+                    />
+                  </Animated.View>
+                </View>
+
+                {/* Percentage + tip row */}
+                <View style={cd.progBottom}>
+                  <Text style={[cd.progPct, { color: C.text }]}>{pdfPct}%</Text>
+                  <View style={cd.progTip}>
+                    <Feather name="zap" size={11} color="#F59E0B" />
+                    <Text style={[cd.progTipTxt, { color: C.textDim }]}>Powered by Advanced Cosmic Intelligence</Text>
+                  </View>
+                </View>
+
+                {/* Stage checklist */}
+                <View style={[cd.stageList, { borderTopColor: C.isDark ? "rgba(255,255,255,0.06)" : "#F3F4F6" }]}>
+                  {[
+                    { label: "Kundli analyzed", at: 30 },
+                    { label: "AI report generated", at: 75 },
+                    { label: "PDF ready", at: 100 },
+                  ].map((s, i) => {
+                    const done = pdfPct >= s.at;
+                    const active = !done && (i === 0 || pdfPct >= ([0, 30, 75][i] || 0));
+                    return (
+                      <View key={i} style={cd.stageRow}>
+                        {done ? (
+                          <LinearGradient colors={["#10B981", "#059669"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={cd.stageDot}>
+                            <Feather name="check" size={10} color="#fff" />
+                          </LinearGradient>
+                        ) : active ? (
+                          <View style={[cd.stageDot, { backgroundColor: "#8B5CF6" }]}>
+                            <ActivityIndicator size="small" color="#fff" />
+                          </View>
+                        ) : (
+                          <View style={[cd.stageDot, { backgroundColor: C.isDark ? "rgba(255,255,255,0.08)" : "#E5E7EB" }]} />
+                        )}
+                        <Text style={[cd.stageTxt, { color: done ? C.text : C.textDim, opacity: done || active ? 1 : 0.6 }]}>
+                          {s.label}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+
+              </View>
+            </LinearGradient>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -2211,6 +2359,23 @@ const cd = StyleSheet.create({
   continueBtn: { flex: 1.2, height: 48, borderRadius: 14, overflow: "hidden", shadowColor: "#8B5CF6", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10, elevation: 6 },
   continueGrad: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   continueTxt: { color: "#fff", fontSize: 14, fontFamily: "Nunito_700Bold", letterSpacing: 0.2 },
+
+  // Progress overlay
+  progHeader: { alignItems: "center", marginBottom: 22 },
+  progIconCircle: { width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center", marginBottom: 14, shadowColor: "#8B5CF6", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.55, shadowRadius: 16, elevation: 10 },
+  progTitle: { fontSize: 19, fontFamily: "Nunito_700Bold", letterSpacing: -0.3, marginBottom: 6 },
+  progSub: { fontSize: 13, fontFamily: "Nunito_500Medium", textAlign: "center", lineHeight: 18, paddingHorizontal: 4, minHeight: 36 },
+  progTrack: { height: 10, borderRadius: 5, overflow: "hidden" },
+  progFillWrap: { height: "100%", borderRadius: 5, overflow: "hidden" },
+  progFill: { flex: 1 },
+  progBottom: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 10, marginBottom: 18 },
+  progPct: { fontSize: 22, fontFamily: "Nunito_700Bold", letterSpacing: -0.5 },
+  progTip: { flexDirection: "row", alignItems: "center", gap: 5, flex: 1, justifyContent: "flex-end" },
+  progTipTxt: { fontSize: 10.5, fontFamily: "Nunito_500Medium", letterSpacing: 0.1 },
+  stageList: { gap: 10, paddingTop: 14, borderTopWidth: 1 },
+  stageRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  stageDot: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  stageTxt: { fontSize: 13, fontFamily: "Nunito_500Medium", flex: 1 },
 });
 
 // ── Styles ────────────────────────────────────────────────────────────────────

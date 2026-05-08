@@ -1514,14 +1514,25 @@ export default function KundliMilanScreen(){
       // PDF generation started — show progress overlay & ramp the bar.
       setProgressVisible(true);
       pdfProgress.setValue(0);
-      // Ramp slowly to 92% over ~85s. If backend takes longer, holds at 92%
-      // until real PDF arrives. If shorter, success path snaps to 100%.
-      Animated.timing(pdfProgress, {
-        toValue: 0.92,
-        duration: 85000,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }).start();
+      // Two-phase ramp so the bar NEVER visually freezes:
+      //   Phase A: 0 → 0.85 over 70s (fast, believable engine+polish window)
+      //   Phase B: 0.85 → 0.98 over another 90s (very slow creep — covers
+      //   slow networks / gpt-5-mini retries up to ~160s total without ever
+      //   stalling). Real PDF arrival snaps to 100% in the else branch.
+      Animated.sequence([
+        Animated.timing(pdfProgress, {
+          toValue: 0.85,
+          duration: 70000,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        }),
+        Animated.timing(pdfProgress, {
+          toValue: 0.98,
+          duration: 90000,
+          easing: Easing.linear,
+          useNativeDriver: false,
+        }),
+      ]).start();
     } else if (progressVisible) {
       // pdfLoading turned false → backend finished. Snap to 100%, hold for
       // 800ms so user clearly sees "Done!", then close progress overlay.

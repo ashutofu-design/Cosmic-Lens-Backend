@@ -1458,6 +1458,24 @@ export default function KundliMilanScreen(){
   const [confirmVisible,setConfirmVisible]=useState(false);
   const [pdfDoneVisible,setPdfDoneVisible]=useState(false);
   const [progressVisible,setProgressVisible]=useState(false);
+  // Phase 2.5.11.24 — PDF language picker (shown FIRST on Unlock Full Analysis).
+  // 13 Indian languages map 1:1 with INDIA_LANG_CODES from lib/i18n.ts; backend
+  // milan_pdf.py registers 8 Indian-script Noto fonts so the chosen language
+  // renders natively (Devanagari/Bengali/Tamil/Telugu/Gujarati/Kannada/
+  // Malayalam/Gurmukhi/Oriya). Defaults to current app UI language so the
+  // first option highlighted matches what the user is already reading in.
+  const [langPickerVisible,setLangPickerVisible]=useState(false);
+  // Phase 2.5.11.24: only the 13 codes below are guaranteed to render with a
+  // real Indic Noto font on the backend. Anything outside this list (e.g.
+  // global UI langs zh/ar/ja/etc) MUST coerce to "en" so the PDF doesn't
+  // silently fall back to Helvetica tofu boxes for text the LLM tried to
+  // write in an unsupported script.
+  const PRO_PDF_LANG_CODES = ["en","hn","hi","bn","mr","ta","te","gu","kn","ml","pa","or","as"] as const;
+  const coerceProLang = (code: string|undefined): string => {
+    const c = (code||"en").toLowerCase();
+    return (PRO_PDF_LANG_CODES as readonly string[]).includes(c) ? c : "en";
+  };
+  const [selectedPdfLang,setSelectedPdfLang]=useState<string>(coerceProLang(t.lang));
   const pdfShareUriRef = useRef<string | null>(null);
   const pdfFileNameRef = useRef<string>("Kundli_Milan_Pro.pdf");
   // When success path completes BEFORE progress overlay closes, defer the
@@ -1681,7 +1699,12 @@ export default function KundliMilanScreen(){
   function confirmAndDownloadProPdf(){
     if(!person1||!p2){ handleDownloadProPdf(); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setConfirmVisible(true);
+    // Phase 2.5.11.24: show language picker FIRST. After user picks a
+    // language, we open the existing "confirm details" modal, which in
+    // turn fires handleDownloadProPdf — using selectedPdfLang for the
+    // /api/kundli-milan/pro-pdf request body.
+    setSelectedPdfLang(coerceProLang(t.lang)); // pre-select supported UI lang or fall back to en
+    setLangPickerVisible(true);
   }
 
   async function handleDownloadProPdf(){
@@ -1735,7 +1758,10 @@ export default function KundliMilanScreen(){
         body:JSON.stringify({
           p1:{...bd1,name:person1.name},
           p2:{...bd2,name:p2.name},
-          lang:t.lang,
+          // Phase 2.5.11.24 — user-picked PDF language. Always coerced to
+          // one of the 13 supported Indian codes; anything else degrades
+          // to "en" so non-Devanagari scripts don't render as tofu.
+          lang:coerceProLang(selectedPdfLang||t.lang),
         }),
         signal:ctrl2.signal,
       });
@@ -2237,6 +2263,139 @@ export default function KundliMilanScreen(){
                     </LinearGradient>
                   </Pressable>
                 </View>
+              </View>
+            </LinearGradient>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── PDF Language Picker (shown FIRST on Unlock Full Analysis) ── */}
+      {/* Phase 2.5.11.24 — 13 Indian languages, native script labels.
+          Pre-selects current UI language. On confirm, opens the existing
+          "Confirm Details" modal which then fires handleDownloadProPdf
+          using selectedPdfLang for the /api/kundli-milan/pro-pdf body. */}
+      <Modal visible={langPickerVisible} transparent animationType="fade" onRequestClose={() => setLangPickerVisible(false)}>
+        <Pressable style={cd.backdrop} onPress={() => setLangPickerVisible(false)}>
+          <BlurView intensity={Platform.OS === "ios" ? 30 : 80} tint="dark" style={StyleSheet.absoluteFillObject} />
+          <Pressable style={[cd.cardWrap, { maxWidth: 420 }]} onPress={(e) => e.stopPropagation?.()}>
+            <LinearGradient
+              colors={["#8B5CF6", "#EC4899", "#F59E0B"]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={cd.borderGradient}
+            >
+              <View style={[cd.card, { backgroundColor: C.isDark ? "#0F0A1F" : "#FFFFFF", paddingHorizontal: 18, paddingVertical: 22 }]}>
+
+                {/* Header */}
+                <View style={cd.header}>
+                  <LinearGradient
+                    colors={["#8B5CF6", "#EC4899"]}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    style={cd.iconCircle}
+                  >
+                    <Feather name="globe" size={22} color="#fff" />
+                  </LinearGradient>
+                  <Text style={[cd.title, { color: C.text }]}>PDF Language Chunein</Text>
+                  <Text style={[cd.sub, { color: C.textDim }]}>
+                    Aapki Pro report kis bhasha mein generate ho? Sab Indian local languages support hain.
+                  </Text>
+                </View>
+
+                {/* Scrollable language grid — 13 Indian langs */}
+                <ScrollView
+                  style={{ maxHeight: 340, marginTop: 14, marginBottom: 14 }}
+                  contentContainerStyle={{ paddingVertical: 4 }}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {([
+                    { code: "en", native: "English",     english: "English" },
+                    { code: "hn", native: "Hinglish",    english: "Roman Hindi" },
+                    { code: "hi", native: "हिन्दी",        english: "Hindi" },
+                    { code: "bn", native: "বাংলা",         english: "Bengali" },
+                    { code: "mr", native: "मराठी",        english: "Marathi" },
+                    { code: "ta", native: "தமிழ்",         english: "Tamil" },
+                    { code: "te", native: "తెలుగు",        english: "Telugu" },
+                    { code: "gu", native: "ગુજરાતી",       english: "Gujarati" },
+                    { code: "kn", native: "ಕನ್ನಡ",         english: "Kannada" },
+                    { code: "ml", native: "മലയാളം",        english: "Malayalam" },
+                    { code: "pa", native: "ਪੰਜਾਬੀ",         english: "Punjabi" },
+                    { code: "or", native: "ଓଡ଼ିଆ",          english: "Odia" },
+                    { code: "as", native: "অসমীয়া",        english: "Assamese" },
+                  ] as const).map((L) => {
+                    const sel = selectedPdfLang === L.code;
+                    return (
+                      <Pressable
+                        key={L.code}
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          setSelectedPdfLang(L.code);
+                        }}
+                        style={({ pressed }) => ({
+                          flexDirection: "row",
+                          alignItems: "center",
+                          paddingVertical: 12,
+                          paddingHorizontal: 14,
+                          marginBottom: 8,
+                          borderRadius: 12,
+                          borderWidth: sel ? 1.5 : 1,
+                          borderColor: sel ? "#8B5CF6" : (C.isDark ? "rgba(255,255,255,0.10)" : "#E5E7EB"),
+                          backgroundColor: sel
+                            ? (C.isDark ? "rgba(139,92,246,0.18)" : "rgba(139,92,246,0.08)")
+                            : (C.isDark ? "rgba(255,255,255,0.03)" : "#F9FAFB"),
+                          opacity: pressed ? 0.85 : 1,
+                        })}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: C.text, fontSize: 16, fontFamily: "Nunito_700Bold" }} numberOfLines={1}>
+                            {L.native}
+                          </Text>
+                          <Text style={{ color: C.textDim, fontSize: 11, fontFamily: "Nunito_400Regular", marginTop: 2 }} numberOfLines={1}>
+                            {L.english}
+                          </Text>
+                        </View>
+                        {sel ? (
+                          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#8B5CF6", alignItems: "center", justifyContent: "center" }}>
+                            <Feather name="check" size={13} color="#fff" />
+                          </View>
+                        ) : (
+                          <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: C.isDark ? "rgba(255,255,255,0.18)" : "#D1D5DB" }} />
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+
+                {/* Action buttons */}
+                <View style={cd.actions}>
+                  <Pressable
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setLangPickerVisible(false);
+                    }}
+                    style={({ pressed }) => [cd.changeBtn, { backgroundColor: C.isDark ? "rgba(255,255,255,0.05)" : "#F3F4F6", borderColor: C.isDark ? "rgba(255,255,255,0.12)" : "#E5E7EB", opacity: pressed ? 0.7 : 1 }]}
+                  >
+                    <Feather name="x" size={14} color={C.text} />
+                    <Text style={[cd.changeTxt, { color: C.text }]}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      setLangPickerVisible(false);
+                      // Open existing "Confirm Details" modal next.
+                      setTimeout(() => setConfirmVisible(true), 250);
+                    }}
+                    style={({ pressed }) => [cd.continueBtn, { opacity: pressed ? 0.85 : 1 }]}
+                  >
+                    <LinearGradient
+                      colors={["#8B5CF6", "#EC4899", "#F59E0B"]}
+                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                      style={cd.continueGrad}
+                    >
+                      <Feather name="arrow-right" size={15} color="#fff" />
+                      <Text style={cd.continueTxt}>Continue</Text>
+                    </LinearGradient>
+                  </Pressable>
+                </View>
+
               </View>
             </LinearGradient>
           </Pressable>

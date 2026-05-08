@@ -61,22 +61,66 @@ ACCENT_AMBER = colors.HexColor("#B45309")
 ACCENT_BLUE  = colors.HexColor("#1D4ED8")
 
 
-# ── Devanagari font registration (best-effort, mirrors numerology_pdf) ──
-_DEVA_REG: str | None = None
-_DEVA_BOLD: str | None = None
+# ── Indian-script font registration (best-effort) ──────────────────────
+# Phase 2.5.11.24: extended from Devanagari-only to all 8 Indian scripts
+# shipped by noto-fonts-extra so the Pro PDF can render in any of the 13
+# Indian languages exposed in the mobile language picker.
+#
+# Maps native PDF font alias → (regular .ttf, bold .ttf). Bold falls back
+# to ExtraBold (Noto's bold flavour for these scripts) and finally Black
+# when nothing heavier exists (Oriya only ships display weights on this
+# nix-store snapshot, so we use Black for both regular and bold).
+_INDIC_FONT_FAMILIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    # alias_prefix : ((regular candidates), (bold candidates))
+    "NotoDeva": (
+        ("NotoSansDevanagari-Medium.ttf", "NotoSansDevanagari-Regular.ttf"),
+        ("NotoSansDevanagari-ExtraBold.ttf", "NotoSansDevanagari-Bold.ttf"),
+    ),
+    "NotoBeng": (
+        ("NotoSansBengali-Medium.ttf", "NotoSansBengali-Regular.ttf"),
+        ("NotoSansBengali-ExtraBold.ttf", "NotoSansBengali-Bold.ttf"),
+    ),
+    "NotoTaml": (
+        ("NotoSansTamil-Medium.ttf", "NotoSansTamil-Regular.ttf"),
+        ("NotoSansTamil-ExtraBold.ttf", "NotoSansTamil-Bold.ttf"),
+    ),
+    "NotoTelu": (
+        ("NotoSansTelugu-Medium.ttf", "NotoSansTelugu-Regular.ttf"),
+        ("NotoSansTelugu-ExtraBold.ttf", "NotoSansTelugu-Bold.ttf"),
+    ),
+    "NotoGujr": (
+        ("NotoSansGujarati-Medium.ttf", "NotoSansGujarati-Regular.ttf"),
+        ("NotoSansGujarati-ExtraBold.ttf", "NotoSansGujarati-Bold.ttf"),
+    ),
+    "NotoKnda": (
+        ("NotoSansKannada-Medium.ttf", "NotoSansKannada-Regular.ttf"),
+        ("NotoSansKannada-ExtraBold.ttf", "NotoSansKannada-Bold.ttf"),
+    ),
+    "NotoMlym": (
+        ("NotoSansMalayalam-Medium.ttf", "NotoSansMalayalam-Regular.ttf"),
+        ("NotoSansMalayalam-ExtraBold.ttf", "NotoSansMalayalam-Bold.ttf"),
+    ),
+    "NotoGuru": (
+        ("NotoSansGurmukhi-Medium.ttf", "NotoSansGurmukhi-Regular.ttf"),
+        ("NotoSansGurmukhi-ExtraBold.ttf", "NotoSansGurmukhi-Bold.ttf"),
+    ),
+    "NotoOrya": (
+        # Oriya on this nix snapshot only ships display weights — Black is
+        # the closest readable variant; we use it for both reg + bold.
+        ("NotoSansOriya-Black.ttf",),
+        ("NotoSansOriya-Black.ttf",),
+    ),
+}
+
+# Resolved (alias, alias_bold) pair per family — populated at import time.
+# `None` means font not found on this system → Helvetica fallback.
+_INDIC_REGISTERED: dict[str, tuple[str, str] | None] = {
+    k: None for k in _INDIC_FONT_FAMILIES
+}
 
 
-def _find_devanagari_fonts() -> tuple[str, str] | None:
-    """Locate a registerable (regular, bold) pair of Devanagari TTFs.
-
-    We try `glob.glob('/nix/store/*noto-fonts*/share/fonts/truetype/noto')`
-    rather than `os.listdir('/nix/store')` because the nix store can hold
-    tens of thousands of entries and `listdir` blocks for many seconds.
-    Glob's wildcard match completes in milliseconds.
-    """
-    # /nix/store has tens of thousands of entries; glob with a wildcard
-    # scans them all (slow). Use scandir with early break — stop at the
-    # first noto-fonts-extra and the first noto-fonts hit.
+def _find_noto_dirs() -> list[str]:
+    """Return likely directories containing Noto TTFs, fastest path first."""
     nix_extra: list[str] = []
     nix_plain: list[str] = []
     try:
@@ -91,52 +135,69 @@ def _find_devanagari_fonts() -> tuple[str, str] | None:
                     nix_plain.append(
                         f"{e.path}/share/fonts/truetype/noto"
                     )
-                # Break only after `noto-fonts-extra` is found — that
-                # family is the one that actually ships the Devanagari
-                # TTFs. Plain `noto-fonts` rarely contains them on
-                # NixOS; treating it as "good enough" caused Helvetica
-                # fallback (■■■ tofu boxes) when scandir order put
-                # plain before extra.
                 if nix_extra:
                     break
     except Exception:
         pass
-    candidates = nix_extra + nix_plain + [
+    return nix_extra + nix_plain + [
         "/usr/share/fonts/truetype/noto",
         "/usr/share/fonts/noto",
     ]
-    # Try the most-common filename pairs in priority order.
-    name_pairs = [
-        ("NotoSansDevanagari-Medium.ttf",  "NotoSansDevanagari-ExtraBold.ttf"),
-        ("NotoSansDevanagari-Regular.ttf", "NotoSansDevanagari-Bold.ttf"),
-        ("NotoSansDevanagari-Regular.ttf", "NotoSansDevanagari-ExtraBold.ttf"),
-    ]
-    for d in candidates:
-        for reg_name, bold_name in name_pairs:
-            reg  = f"{d}/{reg_name}"
-            bold = f"{d}/{bold_name}"
-            if os.path.exists(reg) and os.path.exists(bold):
-                return reg, bold
+
+
+def _resolve_font_file(dirs: list[str], names: tuple[str, ...]) -> str | None:
+    for d in dirs:
+        for name in names:
+            p = f"{d}/{name}"
+            if os.path.exists(p):
+                return p
     return None
 
 
 try:
-    _paths = _find_devanagari_fonts()
-    if _paths:
+    _noto_dirs = _find_noto_dirs()
+    for _alias, (_reg_names, _bold_names) in _INDIC_FONT_FAMILIES.items():
         try:
-            pdfmetrics.registerFont(TTFont("NotoDeva", _paths[0]))
-            pdfmetrics.registerFont(TTFont("NotoDeva-Bold", _paths[1]))
-            _DEVA_REG, _DEVA_BOLD = "NotoDeva", "NotoDeva-Bold"
+            _reg_path  = _resolve_font_file(_noto_dirs, _reg_names)
+            _bold_path = _resolve_font_file(_noto_dirs, _bold_names)
+            if _reg_path and _bold_path:
+                pdfmetrics.registerFont(TTFont(_alias, _reg_path))
+                pdfmetrics.registerFont(TTFont(f"{_alias}-Bold", _bold_path))
+                _INDIC_REGISTERED[_alias] = (_alias, f"{_alias}-Bold")
         except Exception:
+            # Don't let one font failure cascade — keep registering rest.
             pass
 except Exception:
     pass
 
 
+# Backwards-compat: prior code referenced these symbols directly.
+_DEVA_PAIR = _INDIC_REGISTERED.get("NotoDeva")
+_DEVA_REG  = _DEVA_PAIR[0] if _DEVA_PAIR else None
+_DEVA_BOLD = _DEVA_PAIR[1] if _DEVA_PAIR else None
+
+
 # Languages whose script is fully covered by Helvetica (Latin).
 _LATIN_LANGS = {"en", "hn", "es", "fr", "de", "pt", "id", "tr", "it", "nl"}
-# Languages whose script needs the Devanagari font we ship.
-_DEVA_LANGS = {"hi", "mr", "ne", "sa"}
+
+# Map ISO lang code → font-family alias key in _INDIC_FONT_FAMILIES.
+# Multi-language scripts: hi/mr/ne/sa share Devanagari; bn/as share Bengali
+# (Assamese is a Bengali-script Indo-Aryan language with 2 extra letters
+# that Noto Bengali covers); pa uses Gurmukhi.
+_LANG_TO_FONT: dict[str, str] = {
+    # Devanagari
+    "hi": "NotoDeva", "mr": "NotoDeva", "ne": "NotoDeva", "sa": "NotoDeva",
+    # Bengali (also covers Assamese)
+    "bn": "NotoBeng", "as": "NotoBeng",
+    # Tamil / Telugu / Gujarati / Kannada / Malayalam / Gurmukhi / Oriya
+    "ta": "NotoTaml",
+    "te": "NotoTelu",
+    "gu": "NotoGujr",
+    "kn": "NotoKnda",
+    "ml": "NotoMlym",
+    "pa": "NotoGuru",
+    "or": "NotoOrya",
+}
 
 
 def _font_pair(lang: str) -> tuple[str, str]:
@@ -144,12 +205,16 @@ def _font_pair(lang: str) -> tuple[str, str]:
 
     Falls back to Helvetica when the native font isn't registered — text
     will render as boxes for unsupported scripts, but the document will
-    still build (no crash). Hindi/Marathi/Sanskrit get NotoDeva when
-    available.
+    still build (no crash). All 8 Indian scripts (Devanagari, Bengali,
+    Tamil, Telugu, Gujarati, Kannada, Malayalam, Gurmukhi, Oriya) are
+    covered when noto-fonts-extra is present.
     """
     code = (lang or "en").lower()
-    if code in _DEVA_LANGS and _DEVA_REG and _DEVA_BOLD:
-        return _DEVA_REG, _DEVA_BOLD
+    fam = _LANG_TO_FONT.get(code)
+    if fam:
+        pair = _INDIC_REGISTERED.get(fam)
+        if pair:
+            return pair
     return "Helvetica", "Helvetica-Bold"
 
 
@@ -928,11 +993,16 @@ def _chapter_eyebrow(num: int, label: str) -> Paragraph:
     )
 
 
-def _chapter_title_block(title: str, subtitle: str) -> list[Any]:
+def _chapter_title_block(title: str, subtitle: str, s: dict | None = None) -> list[Any]:
+    # Phase 2.5.11.24: title + subtitle carry user-facing dynamic text
+    # (often partner names + chapter names) — must respect the lang font
+    # so Indic scripts don't render as tofu boxes.
+    h_bold = (s or {}).get("h1").fontName if (s and "h1" in s) else "Helvetica-Bold"
+    h_reg  = (s or {}).get("body").fontName if (s and "body" in s) else "Helvetica"
     out: list[Any] = []
     out.append(Paragraph(
         f"<b>{_safe(title)}</b>",
-        ParagraphStyle("chap_title", fontName="Helvetica-Bold", fontSize=24,
+        ParagraphStyle("chap_title", fontName=h_bold, fontSize=24,
                        leading=30, textColor=BRAND_PURPLE, spaceAfter=4),
     ))
     out.append(_gold_rule(40))
@@ -940,17 +1010,21 @@ def _chapter_title_block(title: str, subtitle: str) -> list[Any]:
     if subtitle:
         out.append(Paragraph(
             f"<font color='{_hex(TEXT_MID)}'><i>{_safe(subtitle)}</i></font>",
-            ParagraphStyle("chap_sub", fontName="Helvetica", fontSize=11,
+            ParagraphStyle("chap_sub", fontName=h_reg, fontSize=11,
                            leading=15, spaceAfter=14),
         ))
     return out
 
 
 def _grounding_card(s: dict, grounding: str) -> Table:
+    # Phase 2.5.11.24: `grounding` is dynamic prose written by the LLM in
+    # the target language — use the lang-correct font from the styles dict
+    # so Bengali/Tamil/Telugu/etc. don't render as Helvetica tofu.
+    g_reg = (s.get("body").fontName if s and "body" in s else "Helvetica")
     gp = Paragraph(
         f"<font color='{_hex(TEXT_SOFT)}'><b>Why we say this →</b></font>  "
         f"<font color='{_hex(TEXT_MID)}'><i>{_safe(grounding)}</i></font>",
-        ParagraphStyle("ground_pretty", fontName="Helvetica", fontSize=8.5,
+        ParagraphStyle("ground_pretty", fontName=g_reg, fontSize=8.5,
                        leading=12, textColor=TEXT_MID),
     )
     t = Table([[gp]], colWidths=[180 * mm])
@@ -971,7 +1045,7 @@ def _chapter_page(s: dict, num: int, eyebrow: str, title: str,
     """One full premium chapter page: eyebrow + title + subtitle + body."""
     out: list[Any] = []
     out.append(_chapter_eyebrow(num, eyebrow))
-    out.extend(_chapter_title_block(title, subtitle))
+    out.extend(_chapter_title_block(title, subtitle, s))
     if body:
         out.append(Paragraph(_safe(body), s["body"]))
         out.append(Spacer(1, 10))
@@ -986,7 +1060,7 @@ def _bullets_page(s: dict, num: int, eyebrow: str, title: str,
     """Page with a bulleted list (used for Special / Damage pages)."""
     out: list[Any] = []
     out.append(_chapter_eyebrow(num, eyebrow))
-    out.extend(_chapter_title_block(title, subtitle))
+    out.extend(_chapter_title_block(title, subtitle, s))
     for b in bullets or []:
         if not b:
             continue
@@ -1424,6 +1498,9 @@ def _pro_hidden_truth_page(s: dict, num: int, hidden_truth: str,
             _hex(ACCENT_AMBER) if promise == "PARTIAL" else
             _hex(ACCENT_RED)
         )
+        # Phase 2.5.11.24: hidden-truth promise text contains dynamic
+        # partner names + LLM prose — use the lang font from styles dict.
+        hp_reg = s.get("body").fontName if "body" in s else "Helvetica"
         ptxt = Paragraph(
             f"<font color='{_hex(TEXT_SOFT)}'><b>"
             f"Marriage promise reading →</b></font>  "
@@ -1431,7 +1508,7 @@ def _pro_hidden_truth_page(s: dict, num: int, hidden_truth: str,
             f"<font color='{_hex(TEXT_MID)}'>"
             f" — for {_safe(p1_name)} &amp; {_safe(p2_name)}, "
             f"the deeper marriage signal in both charts is read together.</font>",
-            ParagraphStyle("hid_promise", fontName="Helvetica", fontSize=10.5,
+            ParagraphStyle("hid_promise", fontName=hp_reg, fontSize=10.5,
                            leading=15, spaceAfter=10),
         )
         out.append(ptxt)
@@ -1457,12 +1534,15 @@ def _pro_chapter_pages(s: dict, num_a: int, num_b: int,
 
     # ── Page A ─────────────────────────────────────────────────────
     out.append(_chapter_eyebrow(num_a, eyebrow))
-    out.extend(_chapter_title_block(title, subtitle))
+    out.extend(_chapter_title_block(title, subtitle, s))
     # Score card — right-aligned 60mm card next to a brief lead label
+    # Phase 2.5.11.24: lead label is currently English-only, but using the
+    # lang font keeps things consistent if it's ever translated; safe op.
+    pl_bold = s["h1"].fontName if "h1" in s else "Helvetica-Bold"
     lead = Paragraph(
         f"<font color='{_hex(TEXT_MID)}'><b>"
         f"Compatibility score for this chapter</b></font>",
-        ParagraphStyle("pro_lead", fontName="Helvetica-Bold", fontSize=10,
+        ParagraphStyle("pro_lead", fontName=pl_bold, fontSize=10,
                        leading=14),
     )
     score_row = Table(
@@ -1590,12 +1670,15 @@ def _pro_marriage_blueprint_page(s: dict, num: int,
     ))
     blueprint = blueprint if isinstance(blueprint, dict) else {}
 
+    # Phase 2.5.11.24: marriage-blueprint headings include partner names
+    # and translated label text — use the lang-correct bold font.
+    mbh_bold = s["h1"].fontName if "h1" in s else "Helvetica-Bold"
     def _block(label: str, body: str):
         if not (body and body.strip()):
             return
         out.append(Paragraph(
             f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(label)}</b></font>",
-            ParagraphStyle("mb_h", fontName="Helvetica-Bold", fontSize=11,
+            ParagraphStyle("mb_h", fontName=mbh_bold, fontSize=11,
                            leading=15, spaceBefore=4, spaceAfter=4),
         ))
         out.append(Paragraph(_safe(body), s["body"]))

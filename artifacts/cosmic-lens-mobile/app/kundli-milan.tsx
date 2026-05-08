@@ -1418,8 +1418,8 @@ function ProKundliSection({ p1, p2, isDark, t }:{ p1:PersonData|null; p2:PersonD
         </View>
       </View>
 
-      {/* LAYER 3 — LOCKED DYNAMIC HOOKS */}
-      {canBuild ? (
+      {/* LAYER 3 — LOCKED DYNAMIC HOOKS (only when both kundlis present) */}
+      {canBuild && (
         <View style={{gap:10}}>
           <View style={{flexDirection:"row",alignItems:"center",gap:10,marginTop:2}}>
             <View style={{flex:1,height:1,backgroundColor:isDark?"rgba(245,158,11,0.3)":"rgba(124,58,237,0.2)"}}/>
@@ -1429,21 +1429,6 @@ function ProKundliSection({ p1, p2, isDark, t }:{ p1:PersonData|null; p2:PersonD
             <View style={{flex:1,height:1,backgroundColor:isDark?"rgba(245,158,11,0.3)":"rgba(124,58,237,0.2)"}}/>
           </View>
           {hooks.map(h => <LockedHook key={h.key} item={h} isDark={isDark}/>)}
-        </View>
-      ) : (
-        <View style={{
-          backgroundColor:isDark?"rgba(245,158,11,0.08)":"rgba(124,58,237,0.06)",
-          borderWidth:1,borderStyle:"dashed" as any,
-          borderColor:isDark?"rgba(245,158,11,0.35)":"rgba(124,58,237,0.3)",
-          borderRadius:14,padding:14,alignItems:"center",gap:6,
-        }}>
-          <Text style={{fontSize:22}}>💑</Text>
-          <Text style={{color:isDark?"#fcd34d":"#6d28d9",fontSize:13,fontFamily:"Nunito_800ExtraBold"}}>
-            {t.km3_addBothToUnlock}
-          </Text>
-          <Text style={{color:isDark?"rgba(255,255,255,0.6)":"rgba(0,0,0,0.55)",fontSize:11,fontFamily:"Nunito_500Medium",textAlign:"center"}}>
-            {t.km3_addBothSubtext}
-          </Text>
         </View>
       )}
     </View>

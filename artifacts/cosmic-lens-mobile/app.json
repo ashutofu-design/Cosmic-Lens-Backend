@@ -23,7 +23,13 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#0B1220"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -59,25 +65,34 @@
           "locationWhenInUsePermission": "Cosmic Lens needs location to provide a calibrated compass heading (matching the iOS Compass app) so room directions are accurate."
         }
       ],
-      "@react-native-firebase/app",
-      "@react-native-firebase/auth",
       [
         "expo-build-properties",
         {
-          "ios": { "useFrameworks": "static" }
+          "ios": {
+            "useFrameworks": "static",
+            "forceStaticLinking": ["RNFBApp", "RNFBAuth"]
+          },
+          "android": {
+            "minSdkVersion": 24,
+            "usesCleartextTraffic": true
+          }
         }
-      ]
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "owner": "cosmiclens",
     "extra": {
       "eas": {
-        "projectId": "1d64e5c6-e079-4d42-909c-de8484fe015d"
+        "projectId": "781866fe-35d7-4023-8b96-793f099eb824"
       }
-    },
-    "runtimeVersion": { "policy": "sdkVersion" },
-    "owner": "satyayatra"
+    }
   }
 }

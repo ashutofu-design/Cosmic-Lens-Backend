@@ -1,0 +1,45 @@
+# EAS uploads from monorepo root — exclude everything not needed for mobile Android build.
+
+# Dependencies (reinstalled on EAS)
+**/node_modules
+.pnpm-store
+.npm-cache
+
+# Git / IDE
+.git
+.vscode
+.cursor
+
+# Other workspace apps (not mobile)
+artifacts/api-server
+artifacts/admin-web
+artifacts/mockup-sandbox
+scripts
+
+# Shared libs (mobile build does not need these sources on EAS)
+lib
+
+# Python / backend artifacts
+**/.venv
+**/venv
+**/__pycache__
+**/*.pyc
+
+# Native folders (generated during prebuild on EAS)
+**/android
+**/ios
+
+# Expo / build output
+**/.expo
+**/dist
+**/web-build
+
+# Env secrets (use EAS env for production)
+**/.env
+**/.env.*
+!**/.env.example
+
+# Large / local-only
+terminals
+agent-transcripts
+**/*.log

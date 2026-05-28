@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "887649003708",
+    "project_id": "cosmic-lens-42b49",
+    "storage_bucket": "cosmic-lens-42b49.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:887649003708:android:29a06d769a1440951e88b9",
+        "android_client_info": {
+          "package_name": "com.cosmiclens.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCszzLxjDjdePJFe1dVa6Hktr1wMHjCE50"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

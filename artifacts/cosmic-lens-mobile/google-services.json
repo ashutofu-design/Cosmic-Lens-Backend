@@ -12,7 +12,20 @@
           "package_name": "com.cosmiclens.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "887649003708-5a6avvg06dln4vs6s9v4iqsat27rim7s.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cosmiclens.app",
+            "certificate_hash": "bb699dd22c6f86ce08364a3a6e6b2e1b02270d8b"
+          }
+        },
+        {
+          "client_id": "887649003708-eu2mr5vafg2mvaerbk9j9d67iomrku9r.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCszzLxjDjdePJFe1dVa6Hktr1wMHjCE50"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "887649003708-eu2mr5vafg2mvaerbk9j9d67iomrku9r.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

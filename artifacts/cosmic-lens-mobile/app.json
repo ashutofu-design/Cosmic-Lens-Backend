@@ -15,7 +15,8 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.cosmiclens.app"
+      "bundleIdentifier": "com.cosmiclens.app",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "package": "com.cosmiclens.app",
@@ -35,6 +36,31 @@
       "favicon": "./assets/images/icon.png"
     },
     "plugins": [
+      [
+        "@react-native-firebase/app",
+        {
+          "android": {
+            "googleServicesFile": "./google-services.json"
+          },
+          "ios": {
+            "googleServicesFile": "./GoogleService-Info.plist"
+          }
+        }
+      ],
+      "@react-native-firebase/auth",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static",
+            "forceStaticLinking": ["RNFBApp", "RNFBAuth"]
+          },
+          "android": {
+            "minSdkVersion": 24,
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
       [
         "expo-router",
         {
@@ -64,22 +90,7 @@
           "locationAlwaysAndWhenInUsePermission": "Cosmic Lens needs location to provide a calibrated compass heading (matching the iOS Compass app) so room directions are accurate.",
           "locationWhenInUsePermission": "Cosmic Lens needs location to provide a calibrated compass heading (matching the iOS Compass app) so room directions are accurate."
         }
-      ],
-      [
-        "expo-build-properties",
-        {
-          "ios": {
-            "useFrameworks": "static",
-            "forceStaticLinking": ["RNFBApp", "RNFBAuth"]
-          },
-          "android": {
-            "minSdkVersion": 24,
-            "usesCleartextTraffic": true
-          }
-        }
-      ],
-      "@react-native-firebase/app",
-      "@react-native-firebase/auth"
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

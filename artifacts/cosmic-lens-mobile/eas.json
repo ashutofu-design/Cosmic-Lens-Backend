@@ -14,11 +14,32 @@
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://187.127.174.55:8080",
+        "EXPO_PUBLIC_ALLOW_HTTP_API": "1",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCszzLxjDjdePJFe1dVa6Hktr1wMHjCE50",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "cosmic-lens-42b49.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "cosmic-lens-42b49",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:887649003708:android:29a06d769a1440951e88b9",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "887649003708",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "cosmic-lens-42b49.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_WEB_OAUTH_CLIENT_ID": "887649003708-eu2mr5vafg2mvaerbk9j9d67iomrku9r.apps.googleusercontent.com"
+      },
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.cosmiclens.app",
+        "EXPO_PUBLIC_ENABLE_DEMO_LOGIN": "0",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyALXoUuzlTnOwTsZmcGMAtDIqR8c6-nSAs",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "cosmic-lens-62cc2.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "cosmic-lens-62cc2",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:759826116071:android:25c81a6d6a725289d2a142",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "759826116071",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "cosmic-lens-62cc2.firebasestorage.app"
+      },
       "android": {
         "buildType": "app-bundle"
       }

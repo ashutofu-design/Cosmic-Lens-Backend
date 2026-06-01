@@ -6,11 +6,14 @@ import {
   type Dashboard,
   type LoginActivityItem,
   type UserDetail,
+  deleteGmailAccount,
   deleteUser,
   downloadCsv,
   fetchDashboard,
+  fetchGmailProfiles,
   fetchLoginActivity,
   fetchStats,
+  type GmailProfileSimple,
   fetchTransactions,
   fetchUserDetail,
   fetchUsers,
@@ -55,6 +58,15 @@ export default function App() {
   const [loginTotal, setLoginTotal] = useState(0);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginSuccess, setLoginSuccess] = useState("");
+  const [deletingLoginKey, setDeletingLoginKey] = useState<string | null>(null);
+  const [gmailProfileView, setGmailProfileView] = useState<{
+    email: string;
+    userId: number | null;
+    userName: string;
+  } | null>(null);
+  const [gmailProfiles, setGmailProfiles] = useState<GmailProfileSimple[]>([]);
+  const [gmailProfilesLoading, setGmailProfilesLoading] = useState(false);
+  const [gmailProfilesError, setGmailProfilesError] = useState<string | null>(null);
 
   const loadDashboard = useCallback(async () => {
     const [d, s] = await Promise.all([fetchDashboard(), fetchStats()]);
@@ -169,8 +181,9 @@ export default function App() {
   }
 
   async function onDelete(user: AdminUser) {
+    const label = user.email || user.name || `#${user.id}`;
     const ok = window.confirm(
-      `Delete user #${user.id} (${user.name || user.email})? This cannot be undone.`,
+      `Delete "${label}" completely?\n\nRemoves user account, all profiles, kundli, and Gmail login history. Cannot be undone.`,
     );
     if (!ok) return;
     setDeletingId(user.id);
@@ -181,10 +194,83 @@ export default function App() {
         setDetail(null);
       }
       await loadUsers();
+      if (tab === "logins") await loadLogins();
+      if (tab === "dashboard") await loadDashboard();
     } catch (e) {
       alert(e instanceof Error ? e.message : "Delete failed");
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function openGmailProfilesView(row: LoginActivityItem) {
+    const email = (row.email || "").trim();
+    if (!email && !row.user_id) {
+      alert("No Gmail on this row.");
+      return;
+    }
+    setGmailProfileView({
+      email,
+      userId: row.user_id,
+      userName: row.user_name || "",
+    });
+    setGmailProfiles([]);
+    setGmailProfilesLoading(true);
+    setGmailProfilesError(null);
+    try {
+      const data = await fetchGmailProfiles({
+        email,
+        userId: row.user_id ?? undefined,
+      });
+      setGmailProfiles(data.profiles);
+      setGmailProfileView({
+        email: data.email || email,
+        userId: data.user_id,
+        userName: data.user_name || row.user_name || "",
+      });
+    } catch (e) {
+      setGmailProfilesError(e instanceof Error ? e.message : "Failed to load profiles");
+    } finally {
+      setGmailProfilesLoading(false);
+    }
+  }
+
+  function closeGmailProfilesView() {
+    setGmailProfileView(null);
+    setGmailProfiles([]);
+    setGmailProfilesError(null);
+  }
+
+  async function onDeleteGmailLogin(row: LoginActivityItem) {
+    const email = (row.email || "").trim();
+    const label = email || (row.user_id ? `user #${row.user_id}` : "this entry");
+    const ok = window.confirm(
+      `Delete "${label}" completely?\n\nRemoves the user account (if linked), ALL profiles, kundli data, and every login row for this Gmail. Cannot be undone.`,
+    );
+    if (!ok) return;
+    const key = `${row.id}-${row.user_id ?? ""}-${email}`;
+    setDeletingLoginKey(key);
+    try {
+      if (row.user_id) {
+        await deleteUser(row.user_id);
+        if (detailUserId === row.user_id) {
+          setDetailUserId(null);
+          setDetail(null);
+        }
+      } else if (email) {
+        await deleteGmailAccount(email);
+      } else {
+        alert("No user id or email on this row.");
+        return;
+      }
+      await loadLogins();
+      if (tab === "users") await loadUsers();
+      if (tab === "dashboard") await loadDashboard();
+      alert("Deleted.");
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeletingLoginKey(null);
     }
   }
 
@@ -369,6 +455,61 @@ export default function App() {
             </tbody>
           </table>
         )}
+      </div>
+    );
+  }
+
+  if (gmailProfileView) {
+    return (
+      <div className="app">
+        <header>
+          <button type="button" className="back-btn" onClick={closeGmailProfilesView}>
+            ← Back to Gmail logins
+          </button>
+          <h1>Profiles</h1>
+          <p className="detail-muted">
+            {gmailProfileView.email}
+            {gmailProfileView.userId ? ` · user #${gmailProfileView.userId}` : ""}
+            {gmailProfileView.userName ? ` · ${gmailProfileView.userName}` : ""}
+          </p>
+        </header>
+
+        {gmailProfilesLoading ? <p className="detail-muted">Loading profiles…</p> : null}
+        {gmailProfilesError ? <div className="error">{gmailProfilesError}</div> : null}
+
+        {!gmailProfilesLoading && !gmailProfilesError ? (
+          <section className="section">
+            <h2>
+              {gmailProfiles.length} profile{gmailProfiles.length === 1 ? "" : "s"}
+            </h2>
+            {gmailProfiles.length === 0 ? (
+              <p className="detail-muted">No profiles saved for this Gmail yet.</p>
+            ) : (
+              <div className="card" style={{ padding: 0, overflow: "auto" }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>DOB</th>
+                      <th>Birth time</th>
+                      <th>Place</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gmailProfiles.map((p, i) => (
+                      <tr key={`gp-${i}-${p.name}`}>
+                        <td>{p.name || "—"}</td>
+                        <td>{p.dob || "—"}</td>
+                        <td>{p.tob || "—"}</td>
+                        <td>{p.place || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        ) : null}
       </div>
     );
   }
@@ -581,10 +722,15 @@ export default function App() {
                   <th>Gmail</th>
                   <th>IP</th>
                   <th>OK</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {logins.map((row) => (
+                {logins.map((row) => {
+                  const rowKey = `${row.id}-${row.user_id ?? ""}-${row.email ?? ""}`;
+                  const busy = deletingLoginKey === rowKey;
+                  const canView = !!(row.email?.trim() || row.user_id);
+                  return (
                   <tr key={row.id}>
                     <td>{formatDate(row.created_at)}</td>
                     <td>
@@ -605,8 +751,28 @@ export default function App() {
                     <td>{row.email || "—"}</td>
                     <td>{row.ip || "—"}</td>
                     <td>{row.success ? "✓" : "✗"}</td>
+                    <td>
+                      <div className="row-actions">
+                        <button
+                          type="button"
+                          disabled={!canView}
+                          onClick={() => openGmailProfilesView(row)}
+                        >
+                          View
+                        </button>
+                        <button
+                          type="button"
+                          className="danger"
+                          disabled={busy || (!row.user_id && !row.email)}
+                          onClick={() => onDeleteGmailLogin(row)}
+                        >
+                          {busy ? "…" : "Delete"}
+                        </button>
+                      </div>
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

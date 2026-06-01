@@ -191,6 +191,30 @@ export function fetchTransactions(
   }>(`/api/admin/transactions?${q}`);
 }
 
+export interface GmailProfileSimple {
+  name: string;
+  dob: string;
+  tob: string;
+  place: string;
+}
+
+export interface GmailProfilesResponse {
+  email: string;
+  user_id: number | null;
+  user_name: string;
+  profiles: GmailProfileSimple[];
+}
+
+export function fetchGmailProfiles(opts: {
+  email?: string;
+  userId?: number;
+}) {
+  const q = new URLSearchParams();
+  if (opts.email?.trim()) q.set("email", opts.email.trim());
+  if (opts.userId) q.set("user_id", String(opts.userId));
+  return adminFetch<GmailProfilesResponse>(`/api/admin/gmail-profiles?${q}`);
+}
+
 export function fetchLoginActivity(opts?: {
   offset?: number;
   limit?: number;
@@ -219,9 +243,25 @@ export function fetchUsers(page: number, search: string, plan: string) {
 }
 
 export function deleteUser(id: number) {
-  return adminFetch<{ success: boolean }>(`/api/admin/users/${id}`, {
+  return adminFetch<{
+    success: boolean;
+    user_id?: number;
+    email?: string;
+    name?: string;
+  }>(`/api/admin/users/${id}`, {
     method: "DELETE",
   });
+}
+
+/** Full delete by Gmail — user + profiles + kundli + login history (or login rows only). */
+export function deleteGmailAccount(email: string) {
+  const q = new URLSearchParams({ email: email.trim().toLowerCase() });
+  return adminFetch<{
+    success: boolean;
+    user_id?: number | null;
+    email?: string;
+    login_rows_deleted?: number;
+  }>(`/api/admin/gmail-account?${q}`, { method: "DELETE" });
 }
 
 export function fetchUserDetail(userId: number) {

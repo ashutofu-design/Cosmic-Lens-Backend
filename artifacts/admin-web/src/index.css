@@ -213,6 +213,20 @@ ul.product-list li:last-child {
   flex-wrap: wrap;
 }
 
+.row-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.back-btn {
+  margin-bottom: 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
 .detail-row td {
   background: rgba(139, 92, 246, 0.08);
   padding: 16px 14px !important;

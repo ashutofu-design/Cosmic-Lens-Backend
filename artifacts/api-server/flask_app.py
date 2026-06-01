@@ -2959,6 +2959,23 @@ def admin_login_activity():
     )
 
 
+@app.route("/api/admin/gmail-profiles", methods=["GET"])
+def admin_gmail_profiles():
+    """Profiles for a Gmail account (name, DOB, time, place only)."""
+    err = require_admin()
+    if err:
+        return err
+
+    from admin_dashboard import build_gmail_profiles_view
+
+    email = (request.args.get("email") or "").strip()
+    user_id = request.args.get("user_id", type=int)
+    if not email and not user_id:
+        return jsonify({"error": "email or user_id required"}), 400
+
+    return jsonify(build_gmail_profiles_view(email=email, user_id=user_id))
+
+
 @app.route("/api/admin/users/<int:user_id>", methods=["GET"])
 def admin_user_detail(user_id):
     """Get full detail of one user."""
@@ -3032,9 +3049,33 @@ def admin_reset_kundli_quota(user_id):
     )
 
 
+def _admin_purge_user_row(user: User) -> dict:
+    """Permanently remove user + kundli + profiles + related login rows."""
+    user_id = int(user.id)
+    email_norm = (user.email or "").strip().lower()
+
+    Kundli.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+    Profile.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+    LoginActivity.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+    if email_norm:
+        LoginActivity.query.filter(
+            db.func.lower(LoginActivity.email) == email_norm
+        ).delete(synchronize_session=False)
+
+    deleted_email = user.email
+    deleted_name = user.name
+    db.session.delete(user)
+    db.session.commit()
+    return {
+        "user_id": user_id,
+        "email": deleted_email,
+        "name": deleted_name,
+    }
+
+
 @app.route("/api/admin/users/<int:user_id>", methods=["DELETE"])
 def admin_delete_user(user_id):
-    """Delete a user and their kundli."""
+    """Delete user and all personal data (profiles, kundli, login history for that Gmail)."""
     err = require_admin()
     if err:
         return err
@@ -3043,9 +3084,37 @@ def admin_delete_user(user_id):
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    db.session.delete(user)
+    info = _admin_purge_user_row(user)
+    return jsonify({"success": True, **info})
+
+
+@app.route("/api/admin/gmail-account", methods=["DELETE"])
+def admin_delete_gmail_account():
+    """Delete by Gmail address — user row (if any) + all login_activity rows for that email."""
+    err = require_admin()
+    if err:
+        return err
+
+    email = (request.args.get("email") or "").strip().lower()
+    if not email or "@" not in email:
+        return jsonify({"error": "Valid email query param required"}), 400
+
+    user = User.query.filter(db.func.lower(User.email) == email).first()
+    if user:
+        info = _admin_purge_user_row(user)
+        return jsonify({"success": True, **info})
+
+    deleted_logins = (
+        LoginActivity.query.filter(db.func.lower(LoginActivity.email) == email)
+        .delete(synchronize_session=False)
+    )
     db.session.commit()
-    return jsonify({"success": True})
+    return jsonify({
+        "success": True,
+        "user_id": None,
+        "email": email,
+        "login_rows_deleted": deleted_logins,
+    })
 
 
 # ── Existing routes ────────────────────────────────────────────────────────────

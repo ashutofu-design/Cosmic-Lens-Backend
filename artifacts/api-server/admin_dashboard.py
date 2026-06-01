@@ -545,3 +545,69 @@ def build_user_detail(user_id: int) -> dict[str, Any] | None:
         ],
         "cached_reports": reports,
     }
+
+
+def build_gmail_profiles_view(
+    *,
+    email: str = "",
+    user_id: int | None = None,
+) -> dict[str, Any]:
+    """Minimal profile list for admin Gmail logins → View (name, DOB, time, place only)."""
+    from database import db
+    from models import Kundli, Profile, User
+
+    email_norm = (email or "").strip()
+    user = None
+    if user_id:
+        user = db.session.get(User, user_id)
+    elif email_norm:
+        user = User.query.filter(
+            db.func.lower(User.email) == email_norm.lower()
+        ).first()
+
+    profiles_out: list[dict[str, str]] = []
+    legacy_dict: dict[str, Any] | None = None
+
+    if user:
+        legacy_k = Kundli.query.filter_by(user_id=user.id).first()
+        if legacy_k:
+            legacy_dict = {
+                "name": legacy_k.name or "",
+                "dob": legacy_k.dob or "",
+                "tob": legacy_k.tob or "",
+                "place": legacy_k.pob or "",
+                "has_chart": bool(legacy_k.chart_data),
+            }
+
+        active = (
+            Profile.query.filter_by(user_id=user.id, deleted_at=None)
+            .order_by(Profile.is_primary.desc(), Profile.updated_at.desc())
+            .all()
+        )
+        for p in active:
+            row = _profile_admin_row(p, legacy_dict)
+            profiles_out.append(
+                {
+                    "name": row["name"] or "—",
+                    "dob": row["dob"] or "—",
+                    "tob": row["tob"] or "—",
+                    "place": row["place"] or "—",
+                }
+            )
+
+        if not profiles_out and legacy_dict:
+            profiles_out.append(
+                {
+                    "name": legacy_dict.get("name") or user.name or "—",
+                    "dob": legacy_dict.get("dob") or "—",
+                    "tob": legacy_dict.get("tob") or "—",
+                    "place": legacy_dict.get("place") or "—",
+                }
+            )
+
+    return {
+        "email": email_norm or (user.email if user else ""),
+        "user_id": user.id if user else None,
+        "user_name": (user.name or "") if user else "",
+        "profiles": profiles_out,
+    }

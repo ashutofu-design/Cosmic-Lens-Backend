@@ -35,7 +35,7 @@ const DEFAULT_SUB: SubscriptionInfo = {
     questions_per_day: 1,
     questions_used:    0,
     timeline_months:   0,
-    profile_limit:     1,
+    profile_limit:     -1,
   },
   prices: PRICES,
   trial_days: TRIAL_DAYS,
@@ -61,7 +61,8 @@ export const FEATURE_REQUIREMENT: Record<FeatureKey, "free" | "basic" | "pro"> =
   // Marriage compatibility + Kundli Milan opened up to free tier (May 2026)
   // — user feedback: lock was blocking the primary CTA on /relationship.
   marriage_compat_full: "free",
-  love_reality_full:    "pro",
+  // Love Reality tools (compat, breakup, loyalty, will-return) — free for all users.
+  love_reality_full:    "free",
   career_deep:          "pro",
   health_deep:          "pro",
   finance_deep:         "pro",

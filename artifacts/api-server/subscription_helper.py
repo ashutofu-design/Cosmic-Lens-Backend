@@ -12,10 +12,21 @@ Everything plan-related (effective plan, feature gates, daily quota) goes here.
 Daily reset uses IST (Asia/Kolkata) so India users get a clean midnight reset.
 """
 
+import os
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from sqlalchemy import update
 from database import db
+
+
+def ask_quota_bypass() -> bool:
+    """Testing/dev: unlimited Ask questions (no daily cap). Prod: set ASK_QUOTA_BYPASS=0."""
+    return os.environ.get("ASK_QUOTA_BYPASS", "1") != "0"
+
+
+def kundli_quota_bypass() -> bool:
+    """Testing/dev: unlimited kundli generation. Prod: set KUNDLI_QUOTA_BYPASS=0 (default)."""
+    return os.environ.get("KUNDLI_QUOTA_BYPASS", "0") != "0"
 
 
 # ── Tunables (single place to change pricing/limits) ─────────────────────────
@@ -38,12 +49,12 @@ QUESTION_LIMITS = {
     "elite": -1,
 }
 
-# Daily Kundli generation limits — counts only NEW kundlis (dedup handled at API layer)
+# Daily Kundli generation limits (-1 = unlimited). Same birth data = cached, no quota cost.
 KUNDLI_LIMITS = {
-    "free":  1,
-    "trial": 5,    # trial = same as Basic
-    "basic": 5,
-    "pro":  -1,
+    "free":  -1,
+    "trial": -1,
+    "basic": -1,
+    "pro":   -1,
     "elite": -1,
 }
 
@@ -56,12 +67,12 @@ TIMELINE_MONTHS = {
     "elite": 6,
 }
 
-# Saved profiles (active, excluding soft-deleted)
+# Saved profiles / family kundlis (-1 = unlimited)
 PROFILE_LIMIT = {
-    "free":  1,
-    "trial": 5,    # trial = same as Basic
-    "basic": 5,
-    "pro":  -1,
+    "free":  -1,
+    "trial": -1,
+    "basic": -1,
+    "pro":   -1,
     "elite": -1,
 }
 
@@ -88,6 +99,10 @@ def effective_plan(user) -> str:
     # Active paid plan
     if user.plan in ("basic", "pro", "elite") and user.plan_expiry and user.plan_expiry > now:
         return "pro" if user.plan == "elite" else user.plan
+
+    # Legacy/admin flag — treat as pro until plan field is set explicitly.
+    if getattr(user, "is_pro", False):
+        return "pro"
 
     # Active trial
     if user.trial_started_at:
@@ -290,6 +305,9 @@ def can_ask_question(user) -> dict:
     if not user:
         return {"allowed": False, "used": 0, "limit": 0, "reason": "Login required"}
 
+    if ask_quota_bypass():
+        return {"allowed": True, "used": user.daily_questions_used, "limit": -1}
+
     reset_daily_quota_if_needed(user)
     limit = question_limit(user)
 
@@ -313,6 +331,9 @@ def consume_question(user) -> dict:
     """
     if not user:
         return {"allowed": False, "used": 0, "limit": 0, "reason": "Login required"}
+
+    if ask_quota_bypass():
+        return {"allowed": True, "used": user.daily_questions_used, "limit": -1}
 
     reset_daily_quota_if_needed(user)
     limit = question_limit(user)
@@ -359,6 +380,9 @@ def can_generate_kundli(user) -> dict:
     if not user:
         return {"allowed": False, "used": 0, "limit": 0, "reason": "Login required"}
 
+    if kundli_quota_bypass():
+        return {"allowed": True, "used": user.daily_kundlis_used, "limit": -1}
+
     reset_daily_quota_if_needed(user)
     limit = kundli_limit(user)
 
@@ -379,6 +403,9 @@ def consume_kundli(user) -> dict:
     """ATOMIC check + increment for kundli generation."""
     if not user:
         return {"allowed": False, "used": 0, "limit": 0, "reason": "Login required"}
+
+    if kundli_quota_bypass():
+        return {"allowed": True, "used": user.daily_kundlis_used, "limit": -1}
 
     reset_daily_quota_if_needed(user)
     limit = kundli_limit(user)
@@ -458,24 +485,100 @@ def subscription_status(user) -> dict:
 # ║                                                                          ║
 # ║  Replaces strict monthly quota with three independent paths:             ║
 # ║   1) Pro plan (₹499/mo)  → unlimited everything                          ║
-# ║   2) Property unlock     → unlimited PRO scans for a single named home   ║
-# ║      (₹2,999 Full Home / ₹999 Shop / ₹1,499 Office / ₹2,999 Factory)     ║
-# ║   3) Room credits        → 1-room (₹199) or 3-room bundle (₹499) for     ║
-# ║      one-off BASIC checks                                                ║
+# ║   3) Room credits        → pay-per-room photo (₹99 / 3-pack / 5-pack)     ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
-#  ₹199 / ₹499 / ₹2,999 are all AstroVastu PRO (Home) tiers now.
-#  Basic AstroVastu is fully free — no SKU needed.
-#  Credits granted by 1room_199 / bundle_499 are PRO scan credits (consumed
-#  by /api/astrovastu-pro), NOT Basic credits.
+#  Room photo credits — consumed on Upload Photo (single room image) only.
+#  Complete floor plan (PDF · all rooms) — coming in a later release.
 SKU_CATALOG = {
-    "1room_199":       {"price": 199,  "grants": "credits", "credits": 1, "label": "1 PRO Home Scan"},
-    "bundle_499":      {"price": 499,  "grants": "credits", "credits": 3, "label": "3 PRO Home Scans Bundle"},
-    "full_home_2999":  {"price": 2999, "grants": "unlock",  "label": "Full Home PRO Lifetime"},
+    "1room_99":      {"price": 99,  "grants": "credits", "credits": 1, "label": "1 Room Scan"},
+    "bundle_249":    {"price": 249, "grants": "credits", "credits": 3, "label": "3 Room Scans"},
+    "bundle_399":    {"price": 399, "grants": "credits", "credits": 5, "label": "5 Room Scans"},
+    # Business Vastu (separate screen) — unchanged for now
     "shop_999":        {"price": 999,  "grants": "unlock",  "label": "Shop Vastu Lifetime"},
     "office_1499":     {"price": 1499, "grants": "unlock",  "label": "Office Vastu Lifetime"},
     "factory_2999":    {"price": 2999, "grants": "unlock",  "label": "Factory Vastu Lifetime"},
+    # Complete floor plan (one scan per purchase, per plan type)
+    "home_floor_799":    {"price": 799,  "grants": "floor_scan", "plan_kind": "home",    "label": "Home · Full Floor Plan"},
+    "shop_floor_1499":   {"price": 1499, "grants": "floor_scan", "plan_kind": "shop",    "label": "Shop · Full Floor Plan"},
+    "office_floor_2499": {"price": 2499, "grants": "floor_scan", "plan_kind": "office",  "label": "Office · Full Floor Plan"},
+    "factory_floor_4999":{"price": 4999, "grants": "floor_scan", "plan_kind": "factory", "label": "Factory · Full Floor Plan"},
 }
+
+FLOOR_PLAN_SKU_BY_KIND = {
+    "home":    "home_floor_799",
+    "shop":    "shop_floor_1499",
+    "office":  "office_floor_2499",
+    "factory": "factory_floor_4999",
+}
+
+_FLOOR_SCAN_KINDS = ("home", "shop", "office", "factory")
+
+
+def _parse_floor_scan_wallet(raw) -> dict:
+    import json
+    if not raw:
+        return {k: 0 for k in _FLOOR_SCAN_KINDS}
+    try:
+        data = json.loads(raw) if isinstance(raw, str) else (raw or {})
+    except Exception:
+        data = {}
+    out = {k: 0 for k in _FLOOR_SCAN_KINDS}
+    if isinstance(data, dict):
+        for k in _FLOOR_SCAN_KINDS:
+            try:
+                out[k] = max(0, int(data.get(k) or 0))
+            except (TypeError, ValueError):
+                out[k] = 0
+    return out
+
+
+def get_floor_scan_wallet(user) -> dict:
+    if not user:
+        return {k: 0 for k in _FLOOR_SCAN_KINDS}
+    return _parse_floor_scan_wallet(getattr(user, "astrovastu_floor_scan_wallet", None))
+
+
+def floor_scan_credits(user, plan_kind: str) -> int:
+    k = (plan_kind or "").strip().lower()
+    if k not in _FLOOR_SCAN_KINDS:
+        return 0
+    return get_floor_scan_wallet(user).get(k, 0)
+
+
+def _persist_floor_scan_wallet(user_id: int, wallet: dict) -> None:
+    import json
+    from models import User as _U
+    db.session.execute(
+        update(_U).where(_U.id == user_id).values(
+            astrovastu_floor_scan_wallet=json.dumps(wallet, ensure_ascii=False)
+        )
+    )
+    db.session.commit()
+
+
+def add_floor_scan_credit(user, plan_kind: str, amount: int = 1) -> dict:
+    k = (plan_kind or "").strip().lower()
+    if k not in _FLOOR_SCAN_KINDS:
+        return get_floor_scan_wallet(user)
+    w = get_floor_scan_wallet(user)
+    w[k] = w.get(k, 0) + max(1, int(amount))
+    _persist_floor_scan_wallet(user.id, w)
+    db.session.refresh(user)
+    return w
+
+
+def consume_floor_scan_credit(user, plan_kind: str) -> bool:
+    k = (plan_kind or "").strip().lower()
+    if k not in _FLOOR_SCAN_KINDS:
+        return False
+    w = get_floor_scan_wallet(user)
+    if w.get(k, 0) < 1:
+        return False
+    w[k] = w.get(k, 0) - 1
+    _persist_floor_scan_wallet(user.id, w)
+    db.session.refresh(user)
+    return True
 
 
 def is_property_unlocked(user, property_name: str) -> bool:
@@ -538,12 +641,18 @@ def consume_astrovastu_basic_v2(user, property_name: str = "") -> dict:
     }
 
 
-def can_use_astrovastu_pro_v2(user, property_name: str = "") -> dict:
+def can_use_astrovastu_pro_v2(
+    user,
+    property_name: str = "",
+    *,
+    allow_room_photo_credit: bool = True,
+    plan_kind: str | None = None,
+) -> dict:
     """
     Gate for AstroVastu PRO (Home) deep-scan. Allows if ANY of:
       - Pro monthly plan (unlimited)
       - Property unlocked via Full Home Lifetime (₹2,999) — unlimited for that home
-      - PRO Home scan credits (₹199 = 1, ₹499 = 3) — consumed per scan
+      - PRO Home scan credits (₹99 = 1, ₹249 = 3, ₹399 = 5) — ONLY for single room photo uploads
       - Legacy basic plan monthly quota (1/mo)
     """
     if not user:
@@ -561,7 +670,7 @@ def can_use_astrovastu_pro_v2(user, property_name: str = "") -> dict:
         return {"allowed": True, "via": "property_unlock",
                 "credits": credits, "unlocks": unlocks}
 
-    if credits > 0:
+    if credits > 0 and allow_room_photo_credit:
         return {"allowed": True, "via": "scan_credit",
                 "credits": credits, "unlocks": unlocks}
 
@@ -572,19 +681,73 @@ def can_use_astrovastu_pro_v2(user, property_name: str = "") -> dict:
                 "used": legacy.get("used"), "limit": legacy.get("limit"),
                 "credits": credits, "unlocks": unlocks}
 
+    pk = (plan_kind or "").strip().lower()
+    floor_wallet = get_floor_scan_wallet(user)
+    if not allow_room_photo_credit and pk in _FLOOR_SCAN_KINDS:
+        if floor_scan_credits(user, pk) > 0:
+            return {
+                "allowed": True,
+                "via": "floor_scan_credit",
+                "credits": credits,
+                "unlocks": unlocks,
+                "floor_scan_wallet": floor_wallet,
+                "plan_kind": pk,
+            }
+        sku = FLOOR_PLAN_SKU_BY_KIND.get(pk)
+        price = SKU_CATALOG.get(sku, {}).get("price") if sku else None
+        label = SKU_CATALOG.get(sku, {}).get("label", "Full floor plan") if sku else "Full floor plan"
+        return {
+            "allowed": False,
+            "reason": (
+                f"Buy a {label} scan"
+                + (f" for ₹{price}" if price else "")
+                + " to run your uploaded floor plan."
+            ),
+            "credits": credits,
+            "unlocks": unlocks,
+            "via": "none",
+            "upgrade_required": True,
+            "error": "floor_plan_payment_required",
+            "plan_kind": pk,
+            "suggested_skus": [sku] if sku else [],
+            "floor_scan_wallet": floor_wallet,
+        }
+
+    if credits > 0 and not allow_room_photo_credit:
+        return {
+            "allowed": False,
+            "reason": (
+                "Your room scan balance applies only to Upload Photo (one room image). "
+                "Choose a plan type and buy a full floor plan scan below."
+            ),
+            "credits": credits,
+            "unlocks": unlocks,
+            "via": "none",
+            "upgrade_required": True,
+            "error": "room_photo_credit_only",
+            "floor_scan_wallet": floor_wallet,
+        }
+
     return {"allowed": False,
-            "reason": "Buy a PRO Home Scan (₹199), 3-Scan Bundle (₹499), "
-                      "or Full Home Lifetime (₹2,999).",
+            "reason": "Buy a room scan (₹99), 3-room bundle (₹249), or 5-room bundle (₹399).",
             "credits": credits, "unlocks": unlocks,
-            "via": "none", "upgrade_required": True}
+            "via": "none", "upgrade_required": True,
+            "suggested_skus": ["1room_99", "bundle_249", "bundle_399"],
+            "floor_scan_wallet": floor_wallet}
 
 
-def consume_astrovastu_pro_v2(user, property_name: str = "") -> dict:
+def consume_astrovastu_pro_v2(
+    user,
+    property_name: str = "",
+    *,
+    allow_room_photo_credit: bool = True,
+    plan_kind: str | None = None,
+) -> dict:
     """
     Atomic consume for PRO Home. Resolution order mirrors the gate:
       pro_plan       → no charge
       property_unlock→ no charge (lifetime)
-      scan_credit    → atomic decrement of astrovastu_room_credits
+      scan_credit    → atomic decrement (room photo upload only)
       monthly_quota  → legacy 1/mo basic-plan counter
     """
     if not user:
@@ -599,9 +762,8 @@ def consume_astrovastu_pro_v2(user, property_name: str = "") -> dict:
         return {"allowed": True, "via": "property_unlock",
                 "credits": user.astrovastu_room_credits or 0}
 
-    # Try scan credit (atomic conditional UPDATE — repurposed Basic credit
-    # column, unchanged DB schema, just new meaning).
-    if (user.astrovastu_room_credits or 0) > 0:
+    # Room-photo credits — never spent on floor-plan-only scans.
+    if allow_room_photo_credit and (user.astrovastu_room_credits or 0) > 0:
         from models import User as _U
         result = db.session.execute(
             update(_U).where(_U.id == user.id)
@@ -614,6 +776,17 @@ def consume_astrovastu_pro_v2(user, property_name: str = "") -> dict:
             return {"allowed": True, "via": "scan_credit",
                     "credits": user.astrovastu_room_credits or 0}
 
+    pk = (plan_kind or "").strip().lower()
+    if not allow_room_photo_credit and pk in _FLOOR_SCAN_KINDS:
+        if consume_floor_scan_credit(user, pk):
+            return {
+                "allowed": True,
+                "via": "floor_scan_credit",
+                "credits": user.astrovastu_room_credits or 0,
+                "floor_scan_wallet": get_floor_scan_wallet(user),
+                "plan_kind": pk,
+            }
+
     # Legacy monthly quota fallback
     consumed = consume_astrovastu_pro(user)
     if consumed.get("allowed"):
@@ -622,8 +795,7 @@ def consume_astrovastu_pro_v2(user, property_name: str = "") -> dict:
                 "used": consumed.get("used"), "limit": consumed.get("limit")}
 
     return {"allowed": False,
-            "reason": "Out of credits. Buy a PRO Home Scan (₹199), Bundle (₹499), "
-                      "or Full Home Lifetime (₹2,999).",
+            "reason": "Out of credits. Buy a room scan (₹99), 3-pack (₹249), or 5-pack (₹399).",
             "credits": user.astrovastu_room_credits or 0,
             "upgrade_required": True}
 
@@ -749,6 +921,15 @@ def grant_purchase_idempotent(purchase) -> dict:
             # again (atomic claim will short-circuit cleanly).
             return {"granted": True, "sku": purchase.sku, "via": spec["grants"],
                     "note": "credits_side_effect_failed"}
+    elif spec["grants"] == "floor_scan":
+        try:
+            user_row = db.session.get(_U, purchase.user_id)
+            if user_row:
+                add_floor_scan_credit(user_row, spec.get("plan_kind") or "home", 1)
+        except Exception:
+            db.session.rollback()
+            return {"granted": True, "sku": purchase.sku, "via": spec["grants"],
+                    "note": "floor_scan_side_effect_failed"}
     else:  # "unlock"
         try:
             with db.session.begin_nested():

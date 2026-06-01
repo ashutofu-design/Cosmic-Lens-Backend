@@ -1,0 +1,398 @@
+import { Fragment, useCallback, useEffect, useState } from "react";
+import {
+  type AdminUser,
+  type Dashboard,
+  type UserDetail,
+  deleteUser,
+  fetchDashboard,
+  fetchUserDetail,
+  fetchUsers,
+  formatDate,
+  formatInr,
+} from "./api";
+
+export default function App() {
+  const [dash, setDash] = useState<Dashboard | null>(null);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [detailUserId, setDetailUserId] = useState<number | null>(null);
+  const [detail, setDetail] = useState<UserDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [d, u] = await Promise.all([
+        fetchDashboard(),
+        fetchUsers(page, search),
+      ]);
+      setDash(d);
+      setUsers(u.users);
+      setPages(u.pages);
+      setTotal(u.total);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, [page, search]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function onShowDetail(user: AdminUser) {
+    if (detailUserId === user.id) {
+      setDetailUserId(null);
+      setDetail(null);
+      setDetailError(null);
+      return;
+    }
+    setDetailUserId(user.id);
+    setDetail(null);
+    setDetailError(null);
+    setDetailLoading(true);
+    try {
+      const d = await fetchUserDetail(user.id);
+      setDetail(d);
+    } catch (e) {
+      setDetailError(e instanceof Error ? e.message : "Failed to load details");
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  async function onDelete(user: AdminUser) {
+    const ok = window.confirm(
+      `Delete user #${user.id} (${user.name || user.phone})? This cannot be undone.`,
+    );
+    if (!ok) return;
+    setDeletingId(user.id);
+    try {
+      await deleteUser(user.id);
+      await load();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  return (
+    <div className="app">
+      <header>
+        <h1>Cosmic Lens Admin</h1>
+        <p>
+          Local dashboard — connects to VPS API. Set <code>VITE_ADMIN_SECRET</code> in{" "}
+          <code>.env</code> (same as server <code>ADMIN_SECRET</code>).
+        </p>
+      </header>
+
+      {error && <div className="error">{error}</div>}
+
+      {loading && !dash ? (
+        <p style={{ marginTop: 24, color: "var(--muted)" }}>Loading…</p>
+      ) : null}
+
+      {dash ? (
+        <>
+          <div className="grid stats">
+            <div className="card">
+              <h3>Total users</h3>
+              <div className="value">{dash.total_users}</div>
+            </div>
+            <div className="card">
+              <h3>Today</h3>
+              <div className="value">{formatInr(dash.payments.today_inr)}</div>
+            </div>
+            <div className="card">
+              <h3>This week</h3>
+              <div className="value">{formatInr(dash.payments.week_inr)}</div>
+            </div>
+            <div className="card">
+              <h3>This month</h3>
+              <div className="value">{formatInr(dash.payments.month_inr)}</div>
+            </div>
+            <div className="card">
+              <h3>Lifetime</h3>
+              <div className="value">{formatInr(dash.payments.lifetime_inr)}</div>
+            </div>
+            <div className="card">
+              <h3>Reports generated</h3>
+              <div className="value">{dash.reports.total_generated}</div>
+            </div>
+          </div>
+
+          <section className="section">
+            <h2>Reports sold (PDF cache)</h2>
+            <div className="two-col">
+              <div className="card">
+                {dash.reports.highest ? (
+                  <p>
+                    <strong>Highest:</strong> {dash.reports.highest.label} (
+                    {dash.reports.highest.count})
+                  </p>
+                ) : null}
+                {dash.reports.lowest && dash.reports.by_kind.length > 1 ? (
+                  <p>
+                    <strong>Lowest:</strong> {dash.reports.lowest.label} (
+                    {dash.reports.lowest.count})
+                  </p>
+                ) : null}
+                <ul className="product-list">
+                  {dash.reports.by_kind.map((r) => (
+                    <li key={r.kind}>
+                      <span>{r.label}</span>
+                      <span>{r.count}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="card">
+                <h3 style={{ marginTop: 0 }}>Paid products (DB)</h3>
+                <ul className="product-list">
+                  {dash.purchases_by_product.length === 0 ? (
+                    <li>No paid couple/report orders yet</li>
+                  ) : (
+                    dash.purchases_by_product.map((p) => (
+                      <li key={p.key}>
+                        <span>{p.label}</span>
+                        <span>{p.count}×</span>
+                      </li>
+                    ))
+                  )}
+                </ul>
+                <h3>AstroVastu purchases</h3>
+                <ul className="product-list">
+                  {dash.astrovastu_purchases.length === 0 ? (
+                    <li>No AstroVastu payments yet</li>
+                  ) : (
+                    dash.astrovastu_purchases.map((p) => (
+                      <li key={p.sku}>
+                        <span>{p.label}</span>
+                        <span>{p.count}×</span>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <section className="section card placeholder">
+            <h2>Subscriptions</h2>
+            <p>{dash.subscriptions.message}</p>
+            <ul className="product-list">
+              {Object.entries(dash.subscriptions.plan_counts).map(([plan, n]) => (
+                <li key={plan}>
+                  <span className="badge">{plan}</span>
+                  <span>{n} users</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </>
+      ) : null}
+
+      <section className="section">
+        <h2>Users ({total})</h2>
+        <p style={{ color: "var(--muted)", fontSize: "0.85rem", margin: "0 0 8px" }}>
+          Kundli count = active profiles only (deleted profiles are not counted).
+        </p>
+        <div className="toolbar">
+          <input
+            type="search"
+            placeholder="Search name, email or phone…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                setPage(1);
+                setSearch(searchInput);
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="primary"
+            onClick={() => {
+              setPage(1);
+              setSearch(searchInput);
+            }}
+          >
+            Search
+          </button>
+          <button type="button" onClick={load} disabled={loading}>
+            Refresh
+          </button>
+        </div>
+
+        <div className="card" style={{ padding: 0, overflow: "auto" }}>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Gmail / Email</th>
+                <th>Last login</th>
+                <th>Plan</th>
+                <th>Kundlis</th>
+                <th>Love PDF</th>
+                <th>Milan PDF</th>
+                <th>Face</th>
+                <th>Num.</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <Fragment key={u.id}>
+                  <tr>
+                    <td>{u.id}</td>
+                    <td>{u.name || "—"}</td>
+                    <td>{u.email || u.phone || "—"}</td>
+                    <td>{formatDate(u.last_login)}</td>
+                    <td>
+                      <span className="badge">{u.plan}</span>
+                    </td>
+                    <td>{u.kundli_profiles_count}</td>
+                    <td>{u.purchases.love_compatibility_pdf}</td>
+                    <td>{u.purchases.milan_pro_pdf}</td>
+                    <td>{u.purchases.face_reading_pro}</td>
+                    <td>{u.purchases.life_mastery_pdf}</td>
+                    <td className="actions-cell">
+                      <button
+                        type="button"
+                        className={detailUserId === u.id ? "primary" : ""}
+                        onClick={() => onShowDetail(u)}
+                      >
+                        {detailUserId === u.id ? "Hide" : "Details"}
+                      </button>
+                      <button
+                        type="button"
+                        className="danger"
+                        disabled={deletingId === u.id}
+                        onClick={() => onDelete(u)}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                  {detailUserId === u.id ? (
+                    <tr key={`${u.id}-detail`} className="detail-row">
+                      <td colSpan={11}>
+                        {detailLoading ? (
+                          <p className="detail-muted">Loading kundli details…</p>
+                        ) : detailError ? (
+                          <p className="detail-error">{detailError}</p>
+                        ) : detail ? (
+                          <div className="user-detail-panel">
+                            <p className="detail-summary">
+                              <strong>{detail.kundli_profiles.active_count}</strong> active
+                              profile(s)
+                              {detail.kundli_profiles.deleted_count > 0
+                                ? ` · ${detail.kundli_profiles.deleted_count} in trash`
+                                : ""}
+                            </p>
+                            {detail.kundli_profiles.profiles.length === 0 &&
+                            !detail.legacy_kundli ? (
+                              <p className="detail-muted">No kundli / birth data saved yet.</p>
+                            ) : (
+                              <table className="detail-table">
+                                <thead>
+                                  <tr>
+                                    <th>Name</th>
+                                    <th>Relation</th>
+                                    <th>DOB</th>
+                                    <th>Time</th>
+                                    <th>Place</th>
+                                    <th>Chart</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {detail.kundli_profiles.profiles.map((p, i) => (
+                                    <tr key={`p-${i}`}>
+                                      <td>
+                                        {p.name || "—"}
+                                        {p.is_primary ? (
+                                          <span className="badge" style={{ marginLeft: 6 }}>
+                                            primary
+                                          </span>
+                                        ) : null}
+                                      </td>
+                                      <td>{p.relation || "—"}</td>
+                                      <td>{p.dob || "—"}</td>
+                                      <td>{p.tob || "—"}</td>
+                                      <td>
+                                        {p.place || "—"}
+                                        {p.lat != null && p.lon != null ? (
+                                          <span className="detail-muted">
+                                            {" "}
+                                            ({p.lat}, {p.lon})
+                                          </span>
+                                        ) : null}
+                                      </td>
+                                      <td>{p.has_chart ? "✓" : "—"}</td>
+                                    </tr>
+                                  ))}
+                                  {detail.legacy_kundli ? (
+                                    <tr>
+                                      <td>
+                                        {detail.legacy_kundli.name || "—"}
+                                        <span className="badge" style={{ marginLeft: 6 }}>
+                                          legacy
+                                        </span>
+                                      </td>
+                                      <td>Self</td>
+                                      <td>{detail.legacy_kundli.dob || "—"}</td>
+                                      <td>{detail.legacy_kundli.tob || "—"}</td>
+                                      <td>{detail.legacy_kundli.place || "—"}</td>
+                                      <td>{detail.legacy_kundli.has_chart ? "✓" : "—"}</td>
+                                    </tr>
+                                  ) : null}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="pager">
+          <button
+            type="button"
+            disabled={page <= 1 || loading}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            Previous
+          </button>
+          <span>
+            Page {page} / {pages || 1}
+          </span>
+          <button
+            type="button"
+            disabled={page >= pages || loading}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}

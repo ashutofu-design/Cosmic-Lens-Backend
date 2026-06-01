@@ -2933,12 +2933,19 @@ def admin_login_activity():
     )
 
     total = q.count()
+
+    from admin_dashboard import batch_profile_counts
+
+    login_user_ids = [int(r.user_id) for r in rows if r.user_id]
+    profile_counts = batch_profile_counts(db.session, login_user_ids)
+
     items = []
     for r in rows:
         uname = ""
         if r.user_id:
             u = User.query.get(r.user_id)
             uname = (u.name or "") if u else ""
+        uid = int(r.user_id) if r.user_id else None
         items.append(
             {
                 "id": r.id,
@@ -2952,6 +2959,7 @@ def admin_login_activity():
                 "success": bool(r.success),
                 "error": r.error,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
+                "profile_count": profile_counts.get(uid, 0) if uid else 0,
             }
         )
     return jsonify(
@@ -2974,6 +2982,40 @@ def admin_gmail_profiles():
         return jsonify({"error": "email or user_id required"}), 400
 
     return jsonify(build_gmail_profiles_view(email=email, user_id=user_id))
+
+
+@app.route("/api/admin/profiles/<int:profile_id>", methods=["DELETE"])
+def admin_delete_profile(profile_id):
+    """Permanently delete one profile (admin). User account stays; app syncs on next open."""
+    err = require_admin()
+    if err:
+        return err
+
+    profile = Profile.query.get(profile_id)
+    if not profile:
+        return jsonify({"error": "Profile not found"}), 404
+
+    user_id = int(profile.user_id)
+    db.session.delete(profile)
+    db.session.commit()
+    return jsonify({"success": True, "profile_id": profile_id, "user_id": user_id})
+
+
+@app.route("/api/admin/users/<int:user_id>/legacy-kundli", methods=["DELETE"])
+def admin_delete_legacy_kundli(user_id):
+    """Remove legacy single-kundli row when no Profile rows exist."""
+    err = require_admin()
+    if err:
+        return err
+
+    if not User.query.get(user_id):
+        return jsonify({"error": "User not found"}), 404
+
+    deleted = Kundli.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+    db.session.commit()
+    if not deleted:
+        return jsonify({"error": "No legacy kundli"}), 404
+    return jsonify({"success": True, "user_id": user_id})
 
 
 @app.route("/api/admin/users/<int:user_id>", methods=["GET"])

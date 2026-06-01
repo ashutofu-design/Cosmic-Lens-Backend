@@ -166,6 +166,36 @@ def _apply_legacy_birth_fallback(row: dict[str, Any], legacy: dict[str, Any] | N
     return out
 
 
+def batch_profile_counts(db_session, user_ids: list[int]) -> dict[int, int]:
+    """Active profile count per user (legacy kundli alone counts as 1)."""
+    if not user_ids:
+        return {}
+    from models import Kundli, Profile
+    from sqlalchemy import func
+
+    ids = [int(x) for x in user_ids]
+    rows = (
+        db_session.query(Profile.user_id, func.count(Profile.id))
+        .filter(Profile.user_id.in_(ids), Profile.deleted_at.is_(None))
+        .group_by(Profile.user_id)
+        .all()
+    )
+    counts: dict[int, int] = {int(uid): int(cnt) for uid, cnt in rows}
+    legacy_rows = (
+        db_session.query(Kundli.user_id)
+        .filter(Kundli.user_id.in_(ids))
+        .distinct()
+        .all()
+    )
+    for (uid,) in legacy_rows:
+        u = int(uid)
+        if counts.get(u, 0) == 0:
+            counts[u] = 1
+    for uid in ids:
+        counts.setdefault(uid, 0)
+    return counts
+
+
 def _profile_admin_row(profile, legacy: dict[str, Any] | None = None) -> dict[str, Any]:
     birth = _parse_birth_data(getattr(profile, "birth_data", None))
     row = {
@@ -362,27 +392,7 @@ def build_users_list(
         )
 
     user_ids = [u.id for u in paginated.items]
-    profile_counts: dict[int, int] = {}
-    if user_ids:
-        from sqlalchemy import func
-
-        rows = (
-            db_session.query(Profile.user_id, func.count(Profile.id))
-            .filter(Profile.user_id.in_(user_ids), Profile.deleted_at.is_(None))
-            .group_by(Profile.user_id)
-            .all()
-        )
-        profile_counts = {int(uid): int(cnt) for uid, cnt in rows}
-
-    legacy_kundli_users: set[int] = set()
-    if user_ids:
-        legacy_rows = (
-            db_session.query(Kundli.user_id)
-            .filter(Kundli.user_id.in_(user_ids))
-            .distinct()
-            .all()
-        )
-        legacy_kundli_users = {int(r[0]) for r in legacy_rows}
+    profile_counts = batch_profile_counts(db_session, user_ids) if user_ids else {}
 
     # Per-user paid purchase summary
     purchase_summary: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
@@ -412,8 +422,7 @@ def build_users_list(
                 if (u.last_active or u.created_at)
                 else None,
                 "created_at": u.created_at.isoformat() if u.created_at else None,
-                "kundli_profiles_count": profile_counts.get(u.id, 0)
-                or (1 if u.id in legacy_kundli_users else 0),
+                "kundli_profiles_count": profile_counts.get(u.id, 0),
                 "purchases": {
                     "love_compatibility_pdf": ps.get("love_reality_pro", 0),
                     "milan_pro_pdf": ps.get("milan_pro", 0),
@@ -574,7 +583,7 @@ def build_gmail_profiles_view(
             db.func.lower(User.email) == email_norm.lower()
         ).first()
 
-    profiles_out: list[dict[str, str]] = []
+    profiles_out: list[dict[str, Any]] = []
     legacy_dict: dict[str, Any] | None = None
 
     if user:
@@ -597,6 +606,8 @@ def build_gmail_profiles_view(
             row = _profile_admin_row(p, legacy_dict)
             profiles_out.append(
                 {
+                    "id": p.id,
+                    "legacy": False,
                     "name": row["name"] or "—",
                     "dob": row["dob"] or "—",
                     "tob": row["tob"] or "—",
@@ -607,6 +618,8 @@ def build_gmail_profiles_view(
         if not profiles_out and legacy_dict:
             profiles_out.append(
                 {
+                    "id": None,
+                    "legacy": True,
                     "name": legacy_dict.get("name") or user.name or "—",
                     "dob": legacy_dict.get("dob") or "—",
                     "tob": legacy_dict.get("tob") or "—",

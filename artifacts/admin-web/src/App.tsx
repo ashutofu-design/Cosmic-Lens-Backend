@@ -6,8 +6,11 @@ import {
   type Dashboard,
   type LoginActivityItem,
   type UserDetail,
+  deleteAdminProfile,
   deleteGmailAccount,
+  deleteLegacyKundli,
   deleteUser,
+  type GmailProfileSimple,
   downloadCsv,
   fetchDashboard,
   fetchGmailProfiles,
@@ -67,6 +70,7 @@ export default function App() {
   const [gmailViewData, setGmailViewData] = useState<GmailProfilesResponse | null>(null);
   const [gmailProfilesLoading, setGmailProfilesLoading] = useState(false);
   const [gmailProfilesError, setGmailProfilesError] = useState<string | null>(null);
+  const [deletingProfileKey, setDeletingProfileKey] = useState<string | null>(null);
 
   const loadDashboard = useCallback(async () => {
     const [d, s] = await Promise.all([fetchDashboard(), fetchStats()]);
@@ -239,13 +243,53 @@ export default function App() {
     setGmailProfileView(null);
     setGmailViewData(null);
     setGmailProfilesError(null);
+    setDeletingProfileKey(null);
+  }
+
+  async function reloadGmailView() {
+    if (!gmailProfileView) return;
+    const data = await fetchGmailProfiles({
+      email: gmailProfileView.email,
+      userId: gmailProfileView.userId ?? undefined,
+    });
+    setGmailViewData(data);
+    if (tab === "logins") await loadLogins();
+  }
+
+  async function onDeleteAdminProfileRow(p: GmailProfileSimple) {
+    const label = p.name || "this profile";
+    const ok = window.confirm(
+      `Delete profile "${label}" only?\n\nOther profiles and the Gmail account stay. The app will remove this profile on next sync.`,
+    );
+    if (!ok) return;
+
+    const key =
+      p.id != null
+        ? `p-${p.id}`
+        : `legacy-${gmailProfileView?.userId ?? "x"}-${p.name}`;
+    setDeletingProfileKey(key);
+    try {
+      if (p.legacy && gmailProfileView?.userId) {
+        await deleteLegacyKundli(gmailProfileView.userId);
+      } else if (p.id != null) {
+        await deleteAdminProfile(p.id);
+      } else {
+        alert("Cannot delete this row.");
+        return;
+      }
+      await reloadGmailView();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeletingProfileKey(null);
+    }
   }
 
   async function onDeleteGmailLogin(row: LoginActivityItem) {
     const email = (row.email || "").trim();
     const label = email || (row.user_id ? `user #${row.user_id}` : "this entry");
     const ok = window.confirm(
-      `Delete "${label}" completely?\n\nRemoves the user account (if linked), ALL profiles, kundli data, and every login row for this Gmail. Cannot be undone.`,
+      `Delete Gmail "${label}" completely?\n\nRemoves the user account, ALL profiles, kundli data, and login history. The user will be logged out on the app and must sign in again. Cannot be undone.`,
     );
     if (!ok) return;
     const key = `${row.id}-${row.user_id ?? ""}-${email}`;
@@ -540,17 +584,37 @@ export default function App() {
                         <th>DOB</th>
                         <th>Birth time</th>
                         <th>Place</th>
+                        <th></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {profiles.map((p, i) => (
-                        <tr key={`gp-${i}-${p.name}`}>
+                      {profiles.map((p, i) => {
+                        const pKey =
+                          p.id != null
+                            ? `p-${p.id}`
+                            : `legacy-${gmailViewData?.user_id ?? i}-${p.name}`;
+                        const pBusy = deletingProfileKey === pKey;
+                        const canDel =
+                          p.id != null || (p.legacy && !!gmailViewData?.user_id);
+                        return (
+                        <tr key={`gp-${pKey}`}>
                           <td>{p.name || "—"}</td>
                           <td>{p.dob || "—"}</td>
                           <td>{p.tob || "—"}</td>
                           <td>{p.place || "—"}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="danger"
+                              disabled={!canDel || pBusy}
+                              onClick={() => onDeleteAdminProfileRow(p)}
+                            >
+                              {pBusy ? "…" : "Delete"}
+                            </button>
+                          </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -769,7 +833,7 @@ export default function App() {
                   <th>User</th>
                   <th>Gmail</th>
                   <th>IP</th>
-                  <th>OK</th>
+                  <th>Profiles</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -798,7 +862,7 @@ export default function App() {
                     </td>
                     <td>{row.email || "—"}</td>
                     <td>{row.ip || "—"}</td>
-                    <td>{row.success ? "✓" : "✗"}</td>
+                    <td>{row.user_id ? row.profile_count ?? 0 : "—"}</td>
                     <td>
                       <div className="row-actions">
                         <button

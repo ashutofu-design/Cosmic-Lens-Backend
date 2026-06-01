@@ -99,6 +99,7 @@ export interface LoginActivityItem {
   success: boolean;
   error: string;
   created_at: string | null;
+  profile_count: number;
 }
 
 export interface PurchaseLine {
@@ -192,6 +193,8 @@ export function fetchTransactions(
 }
 
 export interface GmailProfileSimple {
+  id: number | null;
+  legacy?: boolean;
   name: string;
   dob: string;
   tob: string;
@@ -268,6 +271,20 @@ export function deleteUser(id: number) {
 }
 
 /** Full delete by Gmail — user + profiles + kundli + login history (or login rows only). */
+export function deleteAdminProfile(profileId: number) {
+  return adminFetch<{ success: boolean; profile_id: number; user_id: number }>(
+    `/api/admin/profiles/${profileId}`,
+    { method: "DELETE" },
+  );
+}
+
+export function deleteLegacyKundli(userId: number) {
+  return adminFetch<{ success: boolean; user_id: number }>(
+    `/api/admin/users/${userId}/legacy-kundli`,
+    { method: "DELETE" },
+  );
+}
+
 export function deleteGmailAccount(email: string) {
   const q = new URLSearchParams({ email: email.trim().toLowerCase() });
   return adminFetch<{

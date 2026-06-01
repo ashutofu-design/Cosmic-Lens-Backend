@@ -36,7 +36,7 @@ import re
 import secrets
 import sys
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timedelta
 from datetime import timezone as _UTC_TZ
 
 from flask import Flask, Response, jsonify, request
@@ -2623,6 +2623,18 @@ def list_user_profiles(user_id):
     )
 
 
+@app.route("/api/user/<int:user_id>/purchases", methods=["GET"])
+def list_user_purchases(user_id):
+    """Paid purchase history — subscriptions, PDFs, AstroVastu, career unlock."""
+    user, err = get_authed_user(user_id)
+    if err:
+        return err
+
+    from purchase_history import build_user_purchase_history
+
+    return jsonify({"purchases": build_user_purchase_history(user_id)})
+
+
 @app.route("/api/user/<int:user_id>/profiles/deleted", methods=["GET"])
 def list_deleted_profiles(user_id):
     """Recently Deleted (last 24 hrs) — restorable without quota cost."""
@@ -2850,6 +2862,20 @@ def admin_users():
     return jsonify(build_users_list(db.session, page=page, per_page=per_page, search=search))
 
 
+@app.route("/api/admin/transactions", methods=["GET"])
+def admin_transactions():
+    """All users' paid purchases — for admin transaction history."""
+    err = require_admin()
+    if err:
+        return err
+
+    from purchase_history import build_admin_transactions
+
+    page = int(request.args.get("page", 1))
+    per_page = int(request.args.get("per_page", 50))
+    return jsonify(build_admin_transactions(page=page, per_page=per_page))
+
+
 @app.route("/api/admin/login-activity", methods=["GET"])
 def admin_login_activity():
     """List authentication attempts for admin panel."""
@@ -2931,9 +2957,50 @@ def admin_toggle_pro(user_id):
         return jsonify({"error": "User not found"}), 404
 
     data = request.get_json(force=True, silent=True) or {}
-    user.is_pro = data.get("is_pro", not user.is_pro)
+    enable = data.get("is_pro", not user.is_pro)
+    user.is_pro = bool(enable)
+    if enable:
+        user.plan = "pro"
+        user.plan_expiry = datetime.utcnow() + timedelta(days=3650)
+    elif user.plan == "pro" and not data.get("keep_plan"):
+        user.plan = "free"
+        user.plan_expiry = None
     db.session.commit()
-    return jsonify({"success": True, "user_id": user_id, "is_pro": user.is_pro})
+    return jsonify(
+        {
+            "success": True,
+            "user_id": user_id,
+            "is_pro": user.is_pro,
+            "plan": user.plan,
+            "plan_expiry": user.plan_expiry.isoformat() if user.plan_expiry else None,
+        }
+    )
+
+
+@app.route("/api/admin/users/<int:user_id>/reset-kundli-quota", methods=["POST"])
+def admin_reset_kundli_quota(user_id):
+    """Reset today's kundli generation counter (admin support)."""
+    err = require_admin()
+    if err:
+        return err
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    from subscription_helper import _today_str
+
+    user.daily_kundlis_used = 0
+    user.daily_kundlis_date = _today_str()
+    db.session.commit()
+    return jsonify(
+        {
+            "success": True,
+            "user_id": user_id,
+            "kundlis_used": 0,
+            "kundlis_date": user.daily_kundlis_date,
+        }
+    )
 
 
 @app.route("/api/admin/users/<int:user_id>", methods=["DELETE"])

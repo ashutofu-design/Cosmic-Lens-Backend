@@ -4,7 +4,9 @@ import {
   type Dashboard,
   type UserDetail,
   deleteUser,
+  type AdminTransaction,
   fetchDashboard,
+  fetchTransactions,
   fetchUserDetail,
   fetchUsers,
   formatDate,
@@ -27,25 +29,33 @@ export default function App() {
   const [detail, setDetail] = useState<UserDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [txPage, setTxPage] = useState(1);
+  const [txPages, setTxPages] = useState(1);
+  const [txTotal, setTxTotal] = useState(0);
+  const [transactions, setTransactions] = useState<AdminTransaction[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [d, u] = await Promise.all([
+      const [d, u, tx] = await Promise.all([
         fetchDashboard(),
         fetchUsers(page, search),
+        fetchTransactions(txPage),
       ]);
       setDash(d);
       setUsers(u.users);
       setPages(u.pages);
       setTotal(u.total);
+      setTransactions(tx.transactions);
+      setTxPages(tx.pages);
+      setTxTotal(tx.total);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [page, search, txPage]);
 
   useEffect(() => {
     load();
@@ -200,6 +210,78 @@ export default function App() {
                 </li>
               ))}
             </ul>
+          </section>
+
+          <section className="section">
+            <h2>Transaction history ({txTotal})</h2>
+            <p style={{ color: "var(--muted)", fontSize: "0.85rem", margin: "0 0 12px" }}>
+              Kis user ne kya purchase kiya — server database se (paid orders).
+            </p>
+            <div className="card" style={{ padding: 0, overflow: "auto" }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>When (IST)</th>
+                    <th>User</th>
+                    <th>Email</th>
+                    <th>Item</th>
+                    <th>₹</th>
+                    <th>Order ID</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: 16, color: "var(--muted)" }}>
+                        No paid transactions yet
+                      </td>
+                    </tr>
+                  ) : (
+                    transactions.map((row) => (
+                      <tr key={row.id}>
+                        <td>{formatDate(row.paid_at)}</td>
+                        <td>
+                          #{row.user_id} {row.user_name || "—"}
+                        </td>
+                        <td>{row.user_email || "—"}</td>
+                        <td>
+                          {row.title}
+                          {row.subtitle ? (
+                            <span style={{ color: "var(--muted)", fontSize: "0.8em" }}>
+                              {" "}
+                              · {row.subtitle}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td>{row.amount_inr > 0 ? formatInr(row.amount_inr) : "—"}</td>
+                        <td style={{ fontSize: "0.75rem", maxWidth: 140, wordBreak: "break-all" }}>
+                          {row.order_id || "—"}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="pager" style={{ marginTop: 12 }}>
+              <button
+                type="button"
+                disabled={txPage <= 1 || loading}
+                onClick={() => setTxPage((p) => Math.max(1, p - 1))}
+              >
+                Prev
+              </button>
+              <span>
+                Page {txPage} / {txPages}
+              </span>
+              <button
+                type="button"
+                disabled={txPage >= txPages || loading}
+                onClick={() => setTxPage((p) => p + 1)}
+              >
+                Next
+              </button>
+            </div>
           </section>
         </>
       ) : null}

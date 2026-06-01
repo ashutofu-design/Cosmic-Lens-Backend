@@ -67,8 +67,32 @@ export interface AdminUser {
   career_unlocked: boolean;
 }
 
+export interface AdminTransaction {
+  id: string;
+  user_id: number;
+  user_name: string;
+  user_email: string;
+  kind: string;
+  title: string;
+  subtitle: string;
+  amount_inr: number;
+  order_id: string;
+  status: string;
+  paid_at: string | null;
+}
+
 export function fetchDashboard() {
   return adminFetch<Dashboard>("/api/admin/dashboard");
+}
+
+export function fetchTransactions(page: number) {
+  const q = new URLSearchParams({ page: String(page), per_page: "50" });
+  return adminFetch<{
+    transactions: AdminTransaction[];
+    total: number;
+    page: number;
+    pages: number;
+  }>(`/api/admin/transactions?${q}`);
 }
 
 export function fetchUsers(page: number, search: string) {

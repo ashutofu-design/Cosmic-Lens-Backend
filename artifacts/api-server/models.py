@@ -49,11 +49,18 @@ class User(db.Model):
     monthly_astrovastu_pro_month = db.Column(db.String(7),  default="", nullable=False)  # YYYY-MM
 
     # ── AstroVastu one-time room credits (Phase 2 unlock model) ──────────────
-    # PRO Home scan credits. ₹199 grants +1, ₹499 bundle grants +3. Decrements on each
+    # PRO Home scan credits. ₹99 grants +1, ₹249 bundle +3, ₹399 bundle +5.
     # AstroVastu PRO scan. (Basic AstroVastu is free — does not consume credits.)
     # Column name kept for backward-compat; semantic is now "PRO Home scan credits".
     # BASIC scan only when user has neither Pro plan nor unlocked property.
     astrovastu_room_credits = db.Column(db.Integer, default=0, nullable=False)
+    # Per-type full floor plan scan credits: {"home":0,"shop":0,"office":0,"factory":0}
+    astrovastu_floor_scan_wallet = db.Column(db.Text, nullable=False, default="{}")
+
+    # ── Career Life Map unlock (one-time) ─────────────────────────────────────
+    career_unlocked       = db.Column(db.Boolean, default=False, nullable=False)
+    career_unlock_order_id = db.Column(db.String(200), nullable=True)
+    career_unlocked_at    = db.Column(db.DateTime, nullable=True)
 
     created_at     = db.Column(db.DateTime, default=datetime.utcnow)
     last_active    = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -82,6 +89,7 @@ class User(db.Model):
             "plan":         self.plan if plan_active else "free",
             "plan_expiry":  self.plan_expiry.isoformat() if self.plan_expiry else None,
             "preferred_language": self.preferred_language,   # null → auto-detect
+            "career_unlocked": bool(getattr(self, "career_unlocked", False)),
             "created_at":   self.created_at.isoformat() if self.created_at else None,
         }
 
@@ -192,6 +200,39 @@ class OtpRequest(db.Model):
     created_at  = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
+class LoginActivity(db.Model):
+    """
+    One row per authentication attempt (success or failure).
+    Used by admin panel to show: who logged in, when, from where.
+    """
+    __tablename__ = "login_activity"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    user_id     = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    provider    = db.Column(db.String(20), nullable=False, default="firebase")  # firebase/google
+    firebase_uid= db.Column(db.String(128), nullable=True, index=True)
+    email       = db.Column(db.String(255), nullable=True, index=True)
+
+    ip          = db.Column(db.String(64), nullable=False, default="")
+    user_agent  = db.Column(db.String(255), nullable=False, default="")
+
+    success     = db.Column(db.Boolean, nullable=False, default=False, index=True)
+    error       = db.Column(db.String(200), nullable=False, default="")
+
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index("ix_login_activity_user_created", "user_id", "created_at"),
+        db.Index("ix_login_activity_email_created", "email", "created_at"),
+    )
+
+
 class AstroVastuBasicLog(db.Model):
     """
     One row per BASIC AstroVastu check. Used for analytics + future ML training.
@@ -253,7 +294,7 @@ class AstroVastuPurchase(db.Model):
     id            = db.Column(db.Integer, primary_key=True)
     user_id       = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"),
                               nullable=False, index=True)
-    sku           = db.Column(db.String(40),  nullable=False)        # 1room_199 / bundle_499 / full_home_2999 / shop_999 / office_1499 / factory_2999
+    sku           = db.Column(db.String(40),  nullable=False)        # 1room_99 / bundle_249 / bundle_399 / shop_999 …
     amount        = db.Column(db.Integer,     nullable=False)        # INR rupees
     property_name = db.Column(db.String(120), nullable=True)         # required for unlock-tier SKUs
     order_id      = db.Column(db.String(200), nullable=True, unique=True)
@@ -261,6 +302,31 @@ class AstroVastuPurchase(db.Model):
     granted       = db.Column(db.Boolean,     nullable=False, default=False)      # idempotent grant flag
     created_at    = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
     paid_at       = db.Column(db.DateTime, nullable=True)
+
+
+class CoupleReportPurchase(db.Model):
+    """
+    One-time payment for a unique couple + product (Milan Pro / Love Reality Pro).
+    params_hash = hash(birth p1 + p2 + lang). Same hash → no second charge.
+  """
+    __tablename__ = "couple_report_purchases"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    user_id     = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"),
+                             nullable=False, index=True)
+    product     = db.Column(db.String(40), nullable=False, index=True)  # milan_pro | love_reality_pro
+    params_hash = db.Column(db.String(40), nullable=False, index=True)
+    params_json = db.Column(db.Text, nullable=False, default="{}")
+    lang        = db.Column(db.String(8), nullable=False, default="en")
+    amount      = db.Column(db.Integer, nullable=False, default=0)
+    order_id    = db.Column(db.String(200), nullable=True, unique=True)
+    status      = db.Column(db.String(20), nullable=False, default="created")  # created/paid/failed
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    paid_at     = db.Column(db.DateTime, nullable=True)
+
+    __table_args__ = (
+        db.Index("ix_couple_report_user_product_hash", "user_id", "product", "params_hash"),
+    )
 
 
 class BusinessVastuLog(db.Model):

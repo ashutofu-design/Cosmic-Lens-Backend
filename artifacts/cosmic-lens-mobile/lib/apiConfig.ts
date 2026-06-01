@@ -5,29 +5,43 @@ import { Platform } from "react-native";
 // API endpoint resolution.
 //
 // Priority (highest first):
-//   1. EXPO_PUBLIC_API_URL    → full URL override (e.g. https://my-api.replit.app)
-//   2. EXPO_PUBLIC_DOMAIN     → just the hostname (legacy, https:// auto-prepended)
-//   3. PRODUCTION_API_URL     → baked-in production fallback
-//   4. DEV fallback           → Replit dev server domain (only for local testing)
+//   1. EXPO_PUBLIC_API_URL (from .env — baked in at Metro start)
+//   2. expo.extra.apiUrl (from app.config.js — VPS default)
+//   3. PRODUCTION_API_URL (HTTPS store builds)
+//   4. DEV VPS fallback (never localhost unless EXPO_PUBLIC_USE_LOCAL_API=1)
 //
-// For Play Store builds, set EXPO_PUBLIC_API_URL in EAS production env to the
-// deployed HTTPS API URL (e.g. `https://api.cosmiclens.app`).
+// Set in artifacts/cosmic-lens-mobile/.env:
+//   EXPO_PUBLIC_API_URL=http://187.127.174.55:8080
+// After changing .env: stop Metro (Ctrl+C) and run `npx expo start` again.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// VPS / production API base. Override at runtime with EXPO_PUBLIC_API_URL.
 const PRODUCTION_API_URL = "https://api.cosmiclens.app";
 
-// Replit dev server (used only when running `expo start` locally, never in
-// production builds). This is intentionally kept as a fallback so local dev
-// keeps working.
-const DEV_REPLIT_DOMAIN = "18370deb-aa55-4d9f-8391-57df5a15cf7a-00-phjaov5qh4np.kirk.replit.dev";
+/** Hostinger VPS — default for dev so laptop/phone always hit live API. */
+const DEFAULT_DEV_VPS_API = "http://187.127.174.55:8080";
+
+const DEV_REPLIT_DOMAIN =
+  "18370deb-aa55-4d9f-8391-57df5a15cf7a-00-phjaov5qh4np.kirk.replit.dev";
+
+function useLocalBackend(): boolean {
+  return (process.env.EXPO_PUBLIC_USE_LOCAL_API || "").trim() === "1";
+}
+
+function configuredApiUrl(): string | undefined {
+  const fromEnv = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (fromEnv) return fromEnv;
+  const fromExtra = (
+    Constants.expoConfig?.extra as { apiUrl?: string } | undefined
+  )?.apiUrl?.trim();
+  return fromExtra || undefined;
+}
 
 function isWeb(): boolean {
   return typeof window !== "undefined" && typeof document !== "undefined";
 }
 
 function localDevApiBaseFromLocation(): string | null {
-  if (!isWeb()) return null;
+  if (!isWeb() || !useLocalBackend()) return null;
   const host = window.location?.hostname;
   if (!host) return null;
   if (host === "localhost" || host === "127.0.0.1") return "http://127.0.0.1:8080";
@@ -35,7 +49,6 @@ function localDevApiBaseFromLocation(): string | null {
   return null;
 }
 
-/** Metro / Expo Go exposes the dev PC's LAN IP (e.g. 192.168.1.5:18987). */
 function expoDevMachineHost(): string | null {
   try {
     const extra = Constants.expoConfig?.extra as
@@ -55,10 +68,8 @@ function expoDevMachineHost(): string | null {
   }
 }
 
-/** Physical device / Expo Go cannot reach the PC via localhost — use LAN IP. */
 function rewriteLocalDevHost(base: string): string {
   if (!__DEV__ || !/localhost|127\.0\.0\.1/i.test(base)) return base;
-  // Browser on the same machine can use localhost.
   if (typeof window !== "undefined" && typeof document !== "undefined") return base;
 
   const lan = expoDevMachineHost();
@@ -81,38 +92,31 @@ function normalizeApiUrl(raw?: string): string | null {
 }
 
 function resolveApiBase(): string {
-  const fullUrl   = process.env.EXPO_PUBLIC_API_URL;
-  const hostOnly  = process.env.EXPO_PUBLIC_DOMAIN;
+  const fullUrl = configuredApiUrl();
+  const hostOnly = process.env.EXPO_PUBLIC_DOMAIN;
 
-  // ── Web platform (workspace preview / EAS web build) ──
-  // localtunnel (.loca.lt) blocks browser fetches with a "click to continue"
-  // interstitial — fine for native fetch (we send `bypass-tunnel-reminder`
-  // header), but the iframe preview can't bypass it. So on web we always
-  // prefer the direct Replit dev domain instead of the lt tunnel.
-  if (isWeb()) {
-    // Local web dev convenience: if you're running the UI on your machine and
-    // also running the Flask backend on :8080, auto-default there even if env
-    // vars weren't picked up by the bundler.
-    if (__DEV__) {
-      const local = localDevApiBaseFromLocation();
-      if (local) return local;
-    }
-    if (fullUrl && /\.loca\.lt/i.test(fullUrl)) {
-      // ignore lt tunnel on web — fall through to dev/prod fallback
-    } else {
-      const normalized = normalizeApiUrl(fullUrl);
-      if (normalized) return normalized;
-    }
-    if (hostOnly) return `https://${hostOnly}`;
-    if (!__DEV__) return PRODUCTION_API_URL;
-    return `https://${DEV_REPLIT_DOMAIN}`;
+  if (fullUrl && /\.loca\.lt/i.test(fullUrl) && isWeb()) {
+    // localtunnel interstitial breaks web iframe — fall through
+  } else {
+    const normalized = normalizeApiUrl(fullUrl);
+    if (normalized) return normalized;
   }
 
-  // ── Native (iOS / Android via Expo Go or EAS build) ──
-  const normalized = normalizeApiUrl(fullUrl);
-  if (normalized) return normalized;
-  if (hostOnly) return rewriteLocalDevHost(`https://${hostOnly}`);
+  if (useLocalBackend()) {
+    const local = localDevApiBaseFromLocation();
+    if (local) return local;
+  }
+
+  if (hostOnly) {
+    return rewriteLocalDevHost(`https://${hostOnly}`);
+  }
+
   if (!__DEV__) return PRODUCTION_API_URL;
+
+  // Dev: VPS by default (not localhost)
+  const vps = normalizeApiUrl(DEFAULT_DEV_VPS_API);
+  if (vps) return vps;
+
   return `https://${DEV_REPLIT_DOMAIN}`;
 }
 
@@ -122,88 +126,111 @@ function installDevFetchInterceptor(): void {
   if (!__DEV__ || !isWeb()) return;
 
   const forced = (() => {
-    try { return window.localStorage?.getItem("cl_force_api_base") || ""; } catch { return ""; }
+    try {
+      return window.localStorage?.getItem("cl_force_api_base") || "";
+    } catch {
+      return "";
+    }
   })();
   const verbose = (() => {
-    try { return window.localStorage?.getItem("cl_verbose_network") === "1"; } catch { return false; }
+    try {
+      return window.localStorage?.getItem("cl_verbose_network") === "1";
+    } catch {
+      return false;
+    }
   })();
-  const local = localDevApiBaseFromLocation();
-  const preferred = forced && /^https?:\/\//.test(forced) ? forced.replace(/\/$/, "") : (local ?? "");
+  const preferred =
+    forced && /^https?:\/\//.test(forced)
+      ? forced.replace(/\/$/, "")
+      : API_BASE;
 
   const shouldRewrite = (url: string) =>
-    !!preferred && (
-      url.includes("api.cosmiclens.app") ||
-      url.startsWith(PRODUCTION_API_URL)
-    );
+    !!preferred &&
+    (url.includes("api.cosmiclens.app") ||
+      url.startsWith(PRODUCTION_API_URL));
 
   const orig = globalThis.fetch?.bind(globalThis);
   if (!orig) return;
-  // Avoid double-install.
-  if ((globalThis as any).__cosmic_fetch_wrapped) return;
-  (globalThis as any).__cosmic_fetch_wrapped = true;
+  if ((globalThis as { __cosmic_fetch_wrapped?: boolean }).__cosmic_fetch_wrapped) return;
+  (globalThis as { __cosmic_fetch_wrapped?: boolean }).__cosmic_fetch_wrapped = true;
 
-  globalThis.fetch = (async (input: any, init?: any) => {
-    const method = (init?.method || (typeof input === "object" && input?.method) || "GET").toUpperCase();
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const method = (
+      init?.method ||
+      (typeof input === "object" && "method" in input ? input.method : undefined) ||
+      "GET"
+    ).toUpperCase();
     const urlStr =
       typeof input === "string"
         ? input
-        : (input?.url ? String(input.url) : String(input));
+        : input instanceof URL
+          ? input.href
+          : String((input as Request).url);
 
-    let nextInput = input;
+    let nextInput: RequestInfo | URL = input;
     if (typeof urlStr === "string" && shouldRewrite(urlStr)) {
       const rewritten = urlStr
         .replace(/^https?:\/\/api\.cosmiclens\.app/i, preferred)
-        .replace(new RegExp(`^${PRODUCTION_API_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"), preferred);
+        .replace(
+          new RegExp(
+            `^${PRODUCTION_API_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+            "i",
+          ),
+          preferred,
+        );
       console.warn("[CosmicLens][dev] Rewriting fetch URL:", urlStr, "→", rewritten);
       nextInput = rewritten;
     }
 
     try {
       if (verbose) console.log("[CosmicLens][dev] fetch", method, urlStr);
-      const res = await orig(nextInput as any, init);
+      const res = await orig(nextInput, init);
       if (!res.ok) {
         console.warn("[CosmicLens][dev] HTTP", res.status, method, urlStr);
       }
       return res;
-    } catch (e: any) {
-      console.error("[CosmicLens][dev] fetch failed:", method, urlStr, e?.message || e);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[CosmicLens][dev] fetch failed:", method, urlStr, msg);
       throw e;
     }
-  }) as any;
-
-  // Log if something still resolved to prod during local web dev.
-  if (local && API_BASE.includes("api.cosmiclens.app")) {
-    console.warn("[CosmicLens][dev] API_BASE resolved to production unexpectedly:", API_BASE, "Local preferred:", preferred);
-  }
+  }) as typeof fetch;
 }
 
-/** Demo login tries these in order when the primary base is unreachable. */
+/** Bases to try for login (VPS first — no silent localhost unless opted in). */
 export function demoLoginApiBases(): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   const add = (b: string) => {
     const n = b.replace(/\/$/, "");
-    if (!seen.has(n)) {
+    if (n && !seen.has(n)) {
       seen.add(n);
       out.push(n);
     }
   };
+
   add(API_BASE);
-  if (__DEV__) {
-    const raw = process.env.EXPO_PUBLIC_API_URL;
-    if (raw && /^https?:\/\//.test(raw)) add(raw.replace(/\/$/, ""));
-    const lan = expoDevMachineHost();
-    if (lan) add(`http://${lan}:8080`);
+  const configured = configuredApiUrl();
+  if (configured && /^https?:\/\//.test(configured)) {
+    add(configured.replace(/\/$/, ""));
   }
-  if (API_BASE !== PRODUCTION_API_URL) add(PRODUCTION_API_URL);
+  if (__DEV__) {
+    add(DEFAULT_DEV_VPS_API);
+    if (useLocalBackend()) {
+      add("http://127.0.0.1:8080");
+      const lan = expoDevMachineHost();
+      if (lan) add(`http://${lan}:8080`);
+    }
+  }
+  if (!__DEV__ || API_BASE !== PRODUCTION_API_URL) {
+    add(PRODUCTION_API_URL);
+  }
   return out;
 }
 
 export const API_HEADERS: Record<string, string> = {
   "Content-Type": "application/json",
-  "Accept":       "application/json",
-  // Bypass localtunnel's "Click to continue" interstitial that otherwise
-  // returns HTML instead of JSON on the first request from a fresh client IP.
+  Accept: "application/json",
   "bypass-tunnel-reminder": "true",
   "User-Agent": "CosmicLensMobile/1.0",
 };
@@ -216,16 +243,13 @@ export async function apiFetch(url: string, init?: RequestInit): Promise<Respons
       ...(init?.headers as Record<string, string> | undefined),
     },
   };
-  // Retry once on transient "Network request failed" — common on cellular networks
-  // when the first TLS handshake to a fresh host hiccups. We don't retry on AbortError
-  // (timeout/cancel), HTTP errors, or other failure modes.
   try {
     return await fetch(url, merged);
-  } catch (e: any) {
-    if (e?.name === "AbortError") throw e;
-    const msg = String(e?.message || "");
+  } catch (e: unknown) {
+    if (e instanceof Error && e.name === "AbortError") throw e;
+    const msg = String(e instanceof Error ? e.message : e);
     if (!/Network request failed|TypeError|fetch/i.test(msg)) throw e;
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 600));
     return fetch(url, merged);
   }
 }
@@ -233,14 +257,25 @@ export async function apiFetch(url: string, init?: RequestInit): Promise<Respons
 if (__DEV__) {
   installDevFetchInterceptor();
   console.log("[CosmicLens] API_BASE resolved to:", API_BASE);
+  if (/localhost|127\.0\.0\.1/i.test(API_BASE) && !useLocalBackend()) {
+    console.warn(
+      "[CosmicLens] API is localhost but EXPO_PUBLIC_USE_LOCAL_API is not set. " +
+        "Use EXPO_PUBLIC_API_URL=http://187.127.174.55:8080 in .env and restart Metro.",
+    );
+  }
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
-  // Use apiFetch so the bypass-tunnel-reminder header is sent — otherwise
-  // loca.lt returns an HTML interstitial that breaks `.json()` parsing.
   apiFetch(`${API_BASE}/api/healthz`, { signal: ctrl.signal })
-    .then(r => r.json())
-    .then(d => console.log("[CosmicLens] healthz OK ✓", JSON.stringify(d)))
-    .catch(e => console.error("[CosmicLens] healthz FAILED:", e?.message || e, "→", `${API_BASE}/api/healthz`))
+    .then((r) => r.json())
+    .then((d) => console.log("[CosmicLens] healthz OK ✓", JSON.stringify(d)))
+    .catch((e) =>
+      console.error(
+        "[CosmicLens] healthz FAILED:",
+        e instanceof Error ? e.message : e,
+        "→",
+        `${API_BASE}/api/healthz`,
+      ),
+    )
     .finally(() => clearTimeout(timer));
 }

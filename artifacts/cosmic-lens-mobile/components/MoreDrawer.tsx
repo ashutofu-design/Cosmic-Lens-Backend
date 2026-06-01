@@ -18,6 +18,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
+import { buildMoreDrawerCategories } from "@/lib/moreMenuData";
 
 const DRAWER_W = 320;
 const FOUNDER_WHATSAPP = "919040524394";
@@ -40,39 +42,7 @@ export default function MoreDrawer({
   const C = useC();
   const t = useT();
 
-  const CATEGORIES: { title: string; items: FeatureItem[] }[] = [
-    {
-      title: `${t.catPanchang} & ${t.catMuhurat}`,
-      items: [
-        { id: "panchang",  icon: "clock",       emoji: "🗓️", title: t.mdPanchangTitle, subtitle: t.mdPanchangSub,  route: "/panchang",     accent: "#a78bfa" },
-        { id: "muhurat",   icon: "check-circle",emoji: "✅", title: t.mdMuhuratTitle,   subtitle: t.mdMuhuratSub,  route: "/muhurat",      accent: "#10b981" },
-      ],
-    },
-    {
-      title: t.catNumerology,
-      items: [
-        { id: "numerology",icon: "hash",        emoji: "🔢", title: t.mdNumerologyTitle,subtitle: t.mdNumerologySub,route: "/numerology",  accent: "#8b5cf6" },
-      ],
-    },
-    {
-      title: t.catFaceReading,
-      items: [
-        { id: "face-reading", icon: "eye", emoji: "👁️", title: t.mdFaceReadingTitle, subtitle: t.mdFaceReadingSub, route: "/face-reading", accent: "#ec4899", badge: t.badgeNew },
-      ],
-    },
-    {
-      title: t.catVastu,
-      items: [
-        { id: "vastu",     icon: "home",        emoji: "🏠", title: t.mdVastuTitle,     subtitle: t.mdVastuSub,    route: "/astrovastu-pro", accent: "#06b6d4" },
-      ],
-    },
-    {
-      title: "My Library",
-      items: [
-        { id: "my-reports", icon: "folder", emoji: "📁", title: "My Reports", subtitle: "Saved PDFs — Milan, Numerology, AstroVastu Pro, Business Vastu", route: "/my-reports", accent: "#f6c453" },
-      ],
-    },
-  ];
+  const CATEGORIES = buildMoreDrawerCategories(t) as { title: string; items: FeatureItem[] }[];
   const insets = useSafeAreaInsets();
   const slideX = useRef(new Animated.Value(DRAWER_W)).current;
   const overlayOp = useRef(new Animated.Value(0)).current;
@@ -94,7 +64,16 @@ export default function MoreDrawer({
   function navigate(route: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onClose();
-    setTimeout(() => router.push(route as any), 200);
+    setTimeout(() => {
+      const q = route.indexOf("?");
+      if (q >= 0) {
+        const pathname = route.slice(0, q);
+        const params = Object.fromEntries(new URLSearchParams(route.slice(q + 1)));
+        router.push({ pathname: pathname as any, params } as any);
+      } else {
+        router.push(route as any);
+      }
+    }, 200);
   }
 
   async function openFounderWhatsApp() {
@@ -144,7 +123,7 @@ export default function MoreDrawer({
           {/* Header */}
           <View style={s.header}>
             <View>
-              <Text style={[s.headerTitle, { color: C.text }]}>{t.moreExplore}</Text>
+              <Text style={[s.headerTitle, { color: C.text }]}>More</Text>
               <Text style={[s.headerSub, { color: C.textMuted }]}>{t.moreSubtitle}</Text>
             </View>
             <Pressable
@@ -160,6 +139,7 @@ export default function MoreDrawer({
             contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20, gap: 22 }}
           >
             {/* ── Talk to Founder (WhatsApp) ───────────────────────────── */}
+            <FadeInView delay={visible ? 60 : 0} resetKey={visible ? "open" : "closed"}>
             <Pressable
               onPress={openFounderWhatsApp}
               style={({ pressed }) => [
@@ -187,11 +167,17 @@ export default function MoreDrawer({
                 <Feather name="message-circle" size={14} color="#fff" />
               </View>
             </Pressable>
+            </FadeInView>
 
-            {CATEGORIES.map(cat => {
+            {CATEGORIES.map((cat, catIdx) => {
               const accent = cat.items[0]?.accent ?? "#a78bfa";
               return (
-                <View key={cat.title}>
+                <FadeInView
+                  key={cat.title}
+                  delay={visible ? staggerDelay(catIdx + 1, 55, 100) : 0}
+                  resetKey={visible ? "open" : "closed"}
+                >
+                <View>
                   <Text style={[s.catLabel, { color: accent }]}>{cat.title}</Text>
                   <View
                     style={[
@@ -245,6 +231,7 @@ export default function MoreDrawer({
                     ))}
                   </View>
                 </View>
+                </FadeInView>
               );
             })}
           </ScrollView>

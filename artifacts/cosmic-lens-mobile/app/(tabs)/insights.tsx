@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { CosmicBg } from "@/components/CosmicBg";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import Svg, { Circle, Defs, Line, LinearGradient as SvgGrad, Path, Stop, Text as SvgText } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
@@ -210,11 +211,14 @@ export default function InsightsScreen() {
       showsVerticalScrollIndicator={false}
     >
       {/* Header */}
-      <Text style={[s.heading, { color: C.text }]}>{t.futureTitle}</Text>
-      <Text style={[s.subtitle, { color: C.textDim }]}>{t.futureSubtitle}</Text>
+      <FadeInView delay={0}>
+        <Text style={[s.heading, { color: C.text }]}>{t.futureTitle}</Text>
+        <Text style={[s.subtitle, { color: C.textDim }]}>{t.futureSubtitle}</Text>
+      </FadeInView>
 
       {/* Demo lock banner */}
       {showDemo && (
+        <FadeInView delay={70}>
         <Pressable
           style={[s.demoBanner, { backgroundColor: C.warningBg, borderColor: C.warningBorder }]}
           onPress={() => router.push("/onboarding")}
@@ -225,10 +229,12 @@ export default function InsightsScreen() {
           </Text>
           <Feather name="chevron-right" size={12} color={C.warningText} />
         </Pressable>
+        </FadeInView>
       )}
 
       {/* Demo empty state */}
       {showDemo && (
+        <FadeInView delay={140}>
         <View style={[s.emptyState, { borderColor: C.border, backgroundColor: C.bgCard }]}>
           <Text style={s.emptyEmoji}>🪐</Text>
           <Text style={[s.emptyTitle, { color: C.text }]}>{t.kundliRequired}</Text>
@@ -242,12 +248,14 @@ export default function InsightsScreen() {
             <Text style={s.emptyBtnText}>{t.createKundli}</Text>
           </Pressable>
         </View>
+        </FadeInView>
       )}
 
       {/* ── Real data section ── */}
       {!showDemo && (
         <>
           {/* Dasha Phase card */}
+          <FadeInView delay={staggerDelay(1)}>
           {insight && (
             <View style={[s.dashaCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               <Text style={[s.dashaLabel, { color: C.textMuted }]}>{t.activeDashaPhase}</Text>
@@ -275,8 +283,10 @@ export default function InsightsScreen() {
               )}
             </View>
           )}
+          </FadeInView>
 
           {/* 6-Month Future card — month-by-month MD/AD/PD outlook */}
+          <FadeInView delay={staggerDelay(2)}>
           <Pressable
             onPress={() => { Haptics.selectionAsync(); router.push("/six-month-future"); }}
             style={({ pressed }) => [
@@ -305,8 +315,10 @@ export default function InsightsScreen() {
             </View>
             <Feather name="chevron-right" size={18} color={C.textDim} />
           </Pressable>
+          </FadeInView>
 
           {/* Category tabs */}
+          <FadeInView delay={staggerDelay(3)} key={cat} resetKey={cat}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tabsScroll} contentContainerStyle={s.tabs}>
             {CATEGORIES.map(c => {
               const active = c.key === cat;
@@ -430,6 +442,7 @@ export default function InsightsScreen() {
               )}
             </View>
           )}
+          </FadeInView>
         </>
       )}
     </ScrollView>

@@ -18,6 +18,7 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
+import { finalizeCoupleReportPayment } from "@/lib/coupleReportCheckoutFlow";
 import { PRICES } from "@/lib/subscription";
 
 const F = {
@@ -80,11 +81,14 @@ export default function PaymentWebviewScreen() {
   const plan  = params.plan  ?? "pro";
   const cycle = params.cycle ?? "monthly";
   const isAstroVastu  = (params.kind === "astrovastu") || plan === "astrovastu";
+  const isCoupleReport = params.kind === "couple_report" || plan === "couple_report";
   const avPurchaseId  = params.purchaseId ? Number(params.purchaseId) : 0;
-  const avLabel       = params.label || "AstroVastu Unlock";
+  const avLabel       = params.label || (isCoupleReport ? "Love Reality Pro" : "AstroVastu Unlock");
   const avPropName    = params.propertyName || "";
   const avAmount      = params.amount ? Number(params.amount) : 0;
-  const price = isAstroVastu ? avAmount : (PLAN_PRICES[`${plan}_${cycle}`] ?? 0);
+  const price = (isAstroVastu || isCoupleReport)
+    ? avAmount
+    : (PLAN_PRICES[`${plan}_${cycle}`] ?? 0);
 
   const [phase,       setPhase]       = useState<Phase>("creating");
   const [errMsg,      setErrMsg]      = useState("");
@@ -187,6 +191,15 @@ export default function PaymentWebviewScreen() {
   }
 
   async function _createOrder() {
+    if (isCoupleReport || isAstroVastu) {
+      if (params.orderId && params.sessionId) {
+        setOrderId(params.orderId);
+        setSessionId(params.sessionId);
+        setPaymentLink(params.paymentLink || "");
+        setPhase("paying");
+        return;
+      }
+    }
     if (!user?.id) {
       setErrMsg("Please login to purchase a plan.");
       setPhase("failed");
@@ -368,15 +381,17 @@ export default function PaymentWebviewScreen() {
     pending_verify: "⌛",
   };
 
-  const successCopy = isAstroVastu
-    ? `${PLAN_ICONS.astrovastu} ${avLabel}${avPropName ? ` for "${avPropName}"` : ""} unlocked!`
-    : `${PLAN_ICONS[plan]} ${PLAN_LABELS[plan]} ${CYCLE_LABELS[cycle]} plan is now active!`;
+  const successCopy = isCoupleReport
+    ? `💞 ${avLabel} unlocked — return to generate your PDF.`
+    : isAstroVastu
+      ? `${PLAN_ICONS.astrovastu} ${avLabel}${avPropName ? ` for "${avPropName}"` : ""} unlocked!`
+      : `${PLAN_ICONS[plan]} ${PLAN_LABELS[plan]} ${CYCLE_LABELS[cycle]} plan is now active!`;
 
   const phaseTitle: Record<Phase, string> = {
     creating:       "Creating Your Order…",
     paying:         "Complete Your Payment",
     verifying:      "Verifying Payment…",
-    success:        isAstroVastu ? "Unlocked!" : "Plan Activated!",
+    success:        isCoupleReport ? "Payment Successful!" : isAstroVastu ? "Unlocked!" : "Plan Activated!",
     failed:         "Payment Failed",
     cancelled:      "Payment Cancelled",
     pending_verify: "Verification Pending",
@@ -418,9 +433,11 @@ export default function PaymentWebviewScreen() {
             <Text style={{ fontSize: 28 }}>{PLAN_ICONS[plan] ?? "⭐"}</Text>
             <View style={{ flex: 1 }}>
               <Text style={[s.planName, { color: isDark ? "#f59e0b" : "#d97706" }]}>
-                {PLAN_LABELS[plan]} {CYCLE_LABELS[cycle]}
+                {isCoupleReport ? avLabel : `${PLAN_LABELS[plan]} ${CYCLE_LABELS[cycle]}`}
               </Text>
-              <Text style={[s.planSub, { color: C.textMuted }]}>Cosmic Lens Premium</Text>
+              <Text style={[s.planSub, { color: C.textMuted }]}>
+                {isCoupleReport ? "One-time couple report" : "Cosmic Lens Premium"}
+              </Text>
             </View>
             <Text style={[s.price, { color: isDark ? "#f59e0b" : "#d97706" }]}>
               ₹{price.toLocaleString("en-IN")}
@@ -499,10 +516,19 @@ export default function PaymentWebviewScreen() {
 
           {phase === "success" && (
             <Pressable
-              onPress={() => { Haptics.selectionAsync(); router.replace("/"); }}
+              onPress={() => {
+                Haptics.selectionAsync();
+                if (isCoupleReport) {
+                  router.back();
+                } else {
+                  router.replace("/");
+                }
+              }}
               style={({ pressed }) => [s.primaryBtn, { backgroundColor: ac, opacity: pressed ? 0.85 : 1 }]}
             >
-              <Text style={s.primaryBtnText}>Go to Home ✨</Text>
+              <Text style={s.primaryBtnText}>
+                {isCoupleReport ? "Continue to PDF →" : "Go to Home ✨"}
+              </Text>
             </Pressable>
           )}
 

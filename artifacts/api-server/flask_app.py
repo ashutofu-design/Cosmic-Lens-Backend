@@ -1963,19 +1963,19 @@ def panchang_vivah_muhurat():
 # AUTH — Phone OTP via Firebase Phone Authentication.
 # OTP send + confirm happens entirely on the client (Firebase SDK).
 # Backend only verifies the resulting Firebase ID token below.
-# Legacy email/password and MSG91 OTP endpoints have been removed.
+# Legacy email/password, MSG91 OTP, and Firebase phone OTP login have been removed.
+# Client + /api/auth/firebase-verify accept Google Sign-In only.
 # ─────────────────────────────────────────────────────────────────────────────
 
 
 @app.route("/api/auth/firebase-verify", methods=["POST"])
 def firebase_verify_route():
     """
-    Firebase Authentication login (phone OTP or Google Sign-In).
+    Firebase Authentication login — Google Sign-In only.
 
     Body: { "id_token": "<Firebase ID token from client SDK>", "name?": "..." }
 
-    Phone flow: token contains phone_number (+91 only).
-    Google flow: token contains email (any verified Gmail / Google account).
+    Phone OTP is not accepted; token must be from Google (verified email).
 
     On success: 200 (existing user) or 201 (new user).
     On failure: 401 with { ok: False, error: "..." }.
@@ -2037,12 +2037,20 @@ def firebase_verify_route():
             subscription_status=subscription_status,
         )
 
-    if phone_e164 and phone_e164.startswith("+"):
-        return _firebase_verify_phone_user(
-            phone_e164=phone_e164,
-            name=display_name,
-            auto_start_trial_on_signup=auto_start_trial_on_signup,
-            subscription_status=subscription_status,
+    if sign_in_provider == "phone" or (phone_e164 and phone_e164.startswith("+")):
+        _record_login_activity(
+            success=False,
+            provider="firebase",
+            error="phone_login_disabled",
+        )
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": "Phone OTP login is disabled. Please sign in with Google.",
+                }
+            ),
+            403,
         )
 
     if email and "@" in email:

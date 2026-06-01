@@ -1,10 +1,10 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import {
-  FlatList,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -27,11 +27,26 @@ interface Props {
   onClose: () => void;
 }
 
+const ITEM_HEIGHT = 52;
+const LIST_HEIGHT = 320;
+
 export default function PickerModal({
   visible, title, items, selected, onSelect, onClose,
 }: Props) {
   const C = useC();
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (!visible || items.length === 0) return;
+    const idx = items.findIndex(i => i.value === selected);
+    const target = idx >= 0 ? idx : 0;
+    const y = Math.max(0, target * ITEM_HEIGHT - LIST_HEIGHT * 0.35);
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollTo({ y, animated: false });
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [visible, selected, items]);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -51,17 +66,19 @@ export default function PickerModal({
             <Feather name="x" size={18} color={C.textMuted} />
           </Pressable>
         </View>
-        <FlatList
-          data={items}
-          keyExtractor={i => i.value}
-          initialScrollIndex={Math.max(0, items.findIndex(i => i.value === selected))}
-          getItemLayout={(_, index) => ({ length: 52, offset: 52 * index, index })}
-          showsVerticalScrollIndicator={false}
-          style={{ maxHeight: 320 }}
-          renderItem={({ item }) => {
+        <ScrollView
+          ref={scrollRef}
+          style={s.list}
+          contentContainerStyle={s.listContent}
+          showsVerticalScrollIndicator
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+        >
+          {items.map(item => {
             const active = item.value === selected;
             return (
               <Pressable
+                key={item.value}
                 style={({ pressed }) => [
                   s.item,
                   { borderBottomColor: C.border3 },
@@ -81,8 +98,8 @@ export default function PickerModal({
                 )}
               </Pressable>
             );
-          }}
-        />
+          })}
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -114,9 +131,15 @@ const s = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Nunito_700Bold", letterSpacing: 1.5, textTransform: "uppercase",
   },
+  list: {
+    height: LIST_HEIGHT,
+  },
+  listContent: {
+    flexGrow: 1,
+  },
   item: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 20, height: 52,
+    paddingHorizontal: 20, height: ITEM_HEIGHT,
     borderBottomWidth: 1,
   },
   itemText: {

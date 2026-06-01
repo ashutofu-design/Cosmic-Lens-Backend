@@ -1,7 +1,7 @@
 // ────────────────────────────────────────────────────────────────────────────
 // AstroVastu — Page 1 chooser
 // LEFT: AstroVastu (FREE)        → /vastu (compass + ROOMS guide)
-// RIGHT: AstroVastu Pro Premium  → /astrovastu-pro-options (Page 2)
+// RIGHT: AstroVastu Pro Premium  → /astrovastu-pro (Smart Scan — camera / upload / whole plan)
 // ────────────────────────────────────────────────────────────────────────────
 import React from "react";
 import {
@@ -35,7 +35,7 @@ export default function AstroVastuChooser() {
 
   const goPro = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.push("/astrovastu-pro-options" as any);
+    router.push("/astrovastu-pro" as any);
   };
 
   const goReports = () => {
@@ -139,7 +139,7 @@ export default function AstroVastuChooser() {
           </View>
 
           <View style={[s.ctaRow, { backgroundColor: "#f9d76b22" }]}>
-            <Text style={[s.ctaText, { color: "#f9d76b" }]}>{t.vt_ctaViewPremiumOptions}</Text>
+            <Text style={[s.ctaText, { color: "#f9d76b" }]}>{t.vt_ctaRunSmartScan}</Text>
             <Feather name={I18nManager.isRTL ? "arrow-left" : "arrow-right"} size={16} color="#f9d76b" />
           </View>
         </Pressable>

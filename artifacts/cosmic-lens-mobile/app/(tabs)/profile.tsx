@@ -10,6 +10,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC, useTheme } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { INDIA_LANG_CODES, GLOBAL_LANG_CODES } from "@/lib/i18n";
@@ -504,6 +505,7 @@ export default function ProfileScreen() {
       >
 
         {/* ── USER HEADER ──────────────────────────────────────────────── */}
+        <FadeInView delay={0}>
         <LinearGradient
           colors={C.isDark ? ["#040e20","#071525"] : ["#F8F7FC","#F0EDF8"]}
           style={[s.header,{ borderColor: C.border }]}
@@ -527,8 +529,10 @@ export default function ProfileScreen() {
             <Text style={{ color: C.textMuted, fontSize: 9.5, fontFamily: F.bold, letterSpacing: 1 }}>{L.freePlan}</Text>
           </View>
         </LinearGradient>
+        </FadeInView>
 
         {/* ── SETTINGS ─────────────────────────────────────────────────── */}
+        <FadeInView delay={staggerDelay(1)}>
         <View>
           <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>{t.settings.toUpperCase()}</Text>
           <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
@@ -576,8 +580,10 @@ export default function ProfileScreen() {
 
           </View>
         </View>
+        </FadeInView>
 
         {/* ── SUPPORT ──────────────────────────────────────────────────── */}
+        <FadeInView delay={staggerDelay(2)}>
         <View>
           <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>{t.sectionSupport}</Text>
           <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
@@ -604,8 +610,10 @@ export default function ProfileScreen() {
             />
           </View>
         </View>
+        </FadeInView>
 
         {/* ── LEGAL ────────────────────────────────────────────────────── */}
+        <FadeInView delay={staggerDelay(3)}>
         <View>
           <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>{t.sectionLegal}</Text>
           <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
@@ -617,8 +625,10 @@ export default function ProfileScreen() {
             />
           </View>
         </View>
+        </FadeInView>
 
         {/* ── NOTIFICATIONS ────────────────────────────────────────────── */}
+        <FadeInView delay={staggerDelay(4)}>
         <View>
           <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>
             NOTIFICATIONS
@@ -671,7 +681,7 @@ export default function ProfileScreen() {
             <SettingRow
               icon="home"
               label="AstroVastu Pro"
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/astrovastu-pro-options" as any); }}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/astrovastu-pro" as any); }}
             />
             <SettingRow
               icon="folder"
@@ -694,7 +704,7 @@ export default function ProfileScreen() {
         </View>
 
         {/* ── APP VERSION + LOGOUT ─────────────────────────────────────── */}
-        <View style={s.bottomSection}>
+        <View style={[s.bottomSection, { marginTop: 8 }]}>
           <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.medium }}>{t.prof_madeWith}</Text>
 
           <Pressable
@@ -719,6 +729,7 @@ export default function ProfileScreen() {
             <Text style={s.logoutText}>{t.logOut}</Text>
           </Pressable>
         </View>
+        </FadeInView>
 
       </ScrollView>
     </CosmicBg>

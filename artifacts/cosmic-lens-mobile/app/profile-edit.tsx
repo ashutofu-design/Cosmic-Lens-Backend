@@ -23,6 +23,7 @@ import { fetchKundliFromAPI } from "@/lib/kundliAPI";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
+import { BirthTimeRectificationLink } from "@/components/BirthTimeRectificationLink";
 import PickerModal from "@/components/PickerModal";
 import type { BirthData } from "@/types";
 
@@ -729,6 +730,7 @@ export default function ProfileEditScreen() {
                       </View>
                     </View>
                   </View>
+                  <BirthTimeRectificationLink />
                 </View>
 
                 <View style={s.fieldWrap}>

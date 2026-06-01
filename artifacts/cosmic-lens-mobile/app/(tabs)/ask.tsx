@@ -26,6 +26,7 @@ import * as Clipboard from "expo-clipboard";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { AcharyaTypingDots } from "@/components/AcharyaTypingDots";
 import { CardsCarousel, type CardData } from "@/components/CardsCarousel";
 import { MarkdownReply } from "@/components/MarkdownReply";
@@ -1210,7 +1211,8 @@ export default function AskScreen() {
       keyboardVerticalOffset={Platform.OS === "ios" ? botPad + TAB_BAR_HEIGHT : 0}
     >
       {/* Header */}
-      <View style={[s.header, { paddingTop: topPad + 12, borderBottomColor: C.border }]}>
+      <FadeInView delay={0}>
+        <View style={[s.header, { paddingTop: topPad + 12, borderBottomColor: C.border }]}>
         {mode === "chat" && (
           <Pressable
             onPress={() => { Haptics.selectionAsync(); setMode(null); }}
@@ -1227,7 +1229,8 @@ export default function AskScreen() {
           <View style={[s.headerLiveDot, { backgroundColor: "#10b981" }]} />
         </View>
         <Text style={[s.headerSub, { color: C.textMuted }]}>Multi System Pattern Engine V2.0</Text>
-      </View>
+        </View>
+      </FadeInView>
 
       {/* ── Mode switcher pill (only in chat mode) ───────────────────────── */}
       {mode === "chat" && (
@@ -1268,6 +1271,8 @@ export default function AskScreen() {
           contentContainerStyle={s.pickerWrap}
           showsVerticalScrollIndicator={false}
         >
+          <FadeInView delay={staggerDelay(0, 55, 40)}>
+            <View>
           <View style={s.heroBadgeRow}>
             <View style={[s.heroBadge, { backgroundColor: `${C.accent}18`, borderColor: `${C.accent}55` }]}>
               <Feather name="cpu" size={11} color={C.accent} />
@@ -1278,9 +1283,12 @@ export default function AskScreen() {
           <Text style={[s.pickerSub, { color: C.textMid }]}>
             Sharp, evidence-based answers from your unique birth chart — career, marriage, health, money, timing.
           </Text>
+            </View>
+          </FadeInView>
 
           {/* Card 1: Ask Anything (Chat) */}
-          <Pressable
+          <FadeInView delay={staggerDelay(1, 70, 80)}>
+            <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               if (showDemo) { router.push("/onboarding"); return; }
@@ -1306,10 +1314,12 @@ export default function AskScreen() {
               </View>
               <Feather name="chevron-right" size={20} color="#fff" />
             </LinearGradient>
-          </Pressable>
+            </Pressable>
+          </FadeInView>
 
           {/* Card 2: Prashna Kundli (KP 1-249) */}
-          <Pressable
+          <FadeInView delay={staggerDelay(2, 70, 80)}>
+            <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               if (showDemo) { router.push("/onboarding"); return; }
@@ -1340,15 +1350,17 @@ export default function AskScreen() {
               </View>
               <Feather name="chevron-right" size={20} color="#fff" />
             </LinearGradient>
-          </Pressable>
+            </Pressable>
+          </FadeInView>
 
           {/* ─── Recent Questions ──────────────────────────────────────
               Read-only history strip. Logged server-side after every
               Ask flow (storage layer only — no full kundli, no full
               LLM text persisted). Tap an item to refill the input
               for re-asking. */}
-          {!showDemo && history.length > 0 && (
-            <View style={s.historyWrap}>
+          {!showDemo && history.length > 0 ? (
+            <FadeInView delay={staggerDelay(3, 70, 100)}>
+              <View style={s.historyWrap}>
               <View style={s.historyHeader}>
                 <Feather name="clock" size={13} color={C.textMid} />
                 <Text style={[s.historyTitle, { color: C.textMid }]}>Recent Questions</Text>
@@ -1385,11 +1397,13 @@ export default function AskScreen() {
                   <Feather name="chevron-right" size={16} color={C.textMuted} />
                 </Pressable>
               ))}
-            </View>
-          )}
+              </View>
+            </FadeInView>
+          ) : null}
 
           {/* Optional: small Divya Prashna link (legacy, less prominent) */}
-          <Pressable
+          <FadeInView delay={staggerDelay(4, 70, 120)}>
+            <Pressable
             onPress={() => {
               Haptics.selectionAsync();
               if (showDemo) { router.push("/onboarding"); return; }
@@ -1401,7 +1415,8 @@ export default function AskScreen() {
             <Text style={[s.legacyLinkText, { color: C.textMuted }]}>
               Time-based Divya Prashna (current moment)
             </Text>
-          </Pressable>
+            </Pressable>
+          </FadeInView>
         </ScrollView>
       )}
 

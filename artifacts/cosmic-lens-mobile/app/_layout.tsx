@@ -30,13 +30,21 @@ function RootLayoutNav() {
   const { language } = useUser();
   const t = getT(language);
   return (
-    <Stack screenOptions={{ headerBackTitle: t.back }}>
+    <Stack
+      screenOptions={{
+        headerBackTitle: t.back,
+        animation: "slide_from_right",
+        animationDuration: 280,
+      }}
+    >
       <Stack.Screen name="login"            options={{ headerShown: false }} />
+      <Stack.Screen name="welcome-reveal"   options={{ headerShown: false, animation: "fade" }} />
       <Stack.Screen name="onboarding"       options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)"           options={{ headerShown: false }} />
       <Stack.Screen name="forecast"         options={{ headerShown: false }} />
       <Stack.Screen name="dasha-risk"       options={{ headerShown: false }} />
-      <Stack.Screen name="planet-position"  options={{ headerShown: false }} />
+      <Stack.Screen name="planet-position"   options={{ headerShown: false }} />
+      <Stack.Screen name="divisional-charts" options={{ headerShown: false }} />
       <Stack.Screen name="profile-edit"     options={{ headerShown: false }} />
       <Stack.Screen name="dosh"             options={{ headerShown: false }} />
       <Stack.Screen name="kundli-milan"        options={{ headerShown: false }} />
@@ -48,6 +56,7 @@ function RootLayoutNav() {
       <Stack.Screen name="astrovastu-pro"           options={{ headerShown: false }} />
       <Stack.Screen name="business-vastu"           options={{ headerShown: false }} />
       <Stack.Screen name="my-reports"                options={{ headerShown: false }} />
+      <Stack.Screen name="personalization"           options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -70,7 +79,13 @@ export default function RootLayout() {
   useEffect(() => {
     configureForeground();
     const sub = attachTapHandler((path) => router.push(path as any));
-    return () => sub.remove();
+    return () => {
+      try {
+        sub?.remove?.();
+      } catch {
+        /* push unsupported on web / Expo Go Android */
+      }
+    };
   }, []);
 
   if (!fontsLoaded && !fontError) return null;

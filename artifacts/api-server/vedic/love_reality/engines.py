@@ -213,11 +213,14 @@ def run_love_compatibility(
             payload["insight"] = None
     else:
         payload["insight"] = None
+    from vedic.love_reality.chart_proof import build_chart_proof
+
+    payload["chart_proof"] = build_chart_proof(r1, r2, sig)
     return payload
 
 
 def run_breakup_chances(p1: dict, p2: dict) -> dict[str, Any]:
-    _, _, sig = _load_couple(p1, p2)
+    r1, r2, sig = _load_couple(p1, p2)
     reasons: list[str] = []
 
     score = 38.0
@@ -263,6 +266,8 @@ def run_breakup_chances(p1: dict, p2: dict) -> dict[str, Any]:
     else:
         summary = "Break risk is present but not the only story — timing and behavior still matter."
 
+    from vedic.love_reality.chart_proof import build_chart_proof
+
     return {
         "breakup_score": score_i,
         "score": score_i,
@@ -276,6 +281,7 @@ def run_breakup_chances(p1: dict, p2: dict) -> dict[str, Any]:
         },
         "reasons": (reasons + sig.p1.notes + sig.p2.notes)[:14],
         "breakdown": {"combined_affliction": sig.combined_affliction},
+        "chart_proof": build_chart_proof(r1, r2, sig),
     }
 
 
@@ -317,7 +323,7 @@ def _person_loyalty_safe_bonus(person) -> float:
 
 
 def run_loyalty_check(p1: dict, p2: dict) -> dict[str, Any]:
-    _, _, sig = _load_couple(p1, p2)
+    r1, r2, sig = _load_couple(p1, p2)
     reasons: list[str] = []
 
     score = 48.0
@@ -399,6 +405,8 @@ def run_loyalty_check(p1: dict, p2: dict) -> dict[str, Any]:
             seen.add(r)
             unique.append(r)
 
+    from vedic.love_reality.chart_proof import build_chart_proof
+
     return {
         "loyalty_score": score_i,
         "score": score_i,
@@ -420,6 +428,7 @@ def run_loyalty_check(p1: dict, p2: dict) -> dict[str, Any]:
             "p1_loyalty_risk": sig.p1.loyalty_risk_high,
             "p2_loyalty_risk": sig.p2.loyalty_risk_high,
         },
+        "chart_proof": build_chart_proof(r1, r2, sig),
     }
 
 
@@ -474,6 +483,8 @@ def run_will_return(p1: dict, p2: dict) -> dict[str, Any]:
         reunion = "unstable"
         window = "unlikely in near term — closure energy stronger"
 
+    from vedic.love_reality.chart_proof import build_chart_proof
+
     return {
         "return_probability": score_i,
         "score": score_i,
@@ -491,6 +502,7 @@ def run_will_return(p1: dict, p2: dict) -> dict[str, Any]:
         },
         "reasons": (reasons + primary.notes[:6])[:14],
         "breakdown": {"combined_affliction": sig.combined_affliction},
+        "chart_proof": build_chart_proof(r1, r2, sig),
     }
 
 
@@ -527,6 +539,8 @@ def run_future_outcome(p1: dict, p2: dict) -> dict[str, Any]:
         summary = "Charts lean toward emotional exhaustion — long-term stability is not assured."
         phase = "Closure or distance phase strengthening"
 
+    from vedic.love_reality.chart_proof import build_chart_proof
+
     return {
         "future_score": score_i,
         "score": score_i,
@@ -547,6 +561,7 @@ def run_future_outcome(p1: dict, p2: dict) -> dict[str, Any]:
         "reasons": (reasons + sig.synastry_notes)[:12],
         "breakdown": {"combined_affliction": sig.combined_affliction},
         "generated_at": None,
+        "chart_proof": build_chart_proof(r1, r2, sig),
     }
 
 

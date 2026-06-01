@@ -72,6 +72,18 @@ export interface KundliData {
     cusps?: Array<{ house: number; longitude: number; sl: string; nl: string; sb: string; ss: string; degree?: string; sign?: string; nakshatra?: string }>;
     ayanamsa?: number;
   };
+  divisionalCharts?: Partial<Record<string, DivisionalChart>>;
+}
+
+export interface DivisionalChart {
+  ascendant: string;
+  ascendantSignIndex: number;
+  planets: Array<{
+    name: string;
+    sign: string;
+    signIndex: number;
+    house: number;
+  }>;
 }
 
 export interface MoonHistoryPoint {

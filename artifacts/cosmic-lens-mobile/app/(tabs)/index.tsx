@@ -26,6 +26,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { computeTodayEnergy } from "@/lib/todayEnergyCalc";
 import { fetchTodayEnergy, type EnergyResult, type EnergyFlag } from "@/lib/energyAPI";
 import { computeActiveDasha, type ActiveDashaResult } from "@/lib/proInsightEngine";
+import { buildPersonalSnapshot, type PersonalSnapshot } from "@/lib/personalizationSnapshot";
 import type { MoonHistoryPoint } from "@/types";
 
 // ── Localized labels (vlang-bucketed: en/hn/hi) ───────────────────────────────
@@ -391,6 +392,7 @@ const F = {
 const N = 12;
 const DEMO_PTS    = [12, 18, 25, 30, 28, 35, 42, 38, 50, 55, 48, 38];
 
+import { FadeInView } from "@/components/motion/FadeInView";
 import { API_BASE as BASE_URL, apiFetch } from "@/lib/apiConfig";
 
 function energyInsight(energy: number, L: ReturnType<typeof getHomeLabels>): { icon: string; text: string; color: string } {
@@ -425,18 +427,6 @@ function useOpacityPulse(min = 0.4, max = 1.0, dur = 1100) {
     ).start();
   }, []);
   return anim;
-}
-
-function useFadeSlideIn(delay = 0) {
-  const opacity   = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(18)).current;
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(opacity,    { toValue: 1, duration: 500, delay, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 440, delay, useNativeDriver: true }),
-    ]).start();
-  }, []);
-  return { opacity, transform: [{ translateY }] };
 }
 
 // ── Shimmer sweep — makes card feel live & active ─────────────────────────────
@@ -562,11 +552,10 @@ export default function HomeScreen() {
   }, [kundli]);
 
   // ── All hooks MUST come before any early return ───────────────────────────
-  const greetAnim = useFadeSlideIn(0);
-  const heroAnim  = useFadeSlideIn(120);
-  const card1Anim = useFadeSlideIn(220);
-  const card2Anim = useFadeSlideIn(310);
-  const card3Anim = useFadeSlideIn(400);
+  const personalSnapshot = React.useMemo(
+    () => buildPersonalSnapshot(kundli, language),
+    [kundli, language],
+  );
 
   if (!isLoading && !user) return <Redirect href="/login" />;
 
@@ -587,7 +576,7 @@ export default function HomeScreen() {
     <CosmicBg contentStyle={{ paddingTop: topPad, paddingBottom: botPad + 100 }}>
 
       {/* ── Greeting ── */}
-      <Animated.View style={[styles.greetRow, greetAnim, { paddingHorizontal: 16, paddingVertical: 8 }]}>
+      <FadeInView delay={0} style={[styles.greetRow, { paddingHorizontal: 16, paddingVertical: 8 }]}>
         <View>
           <Text style={[styles.greetSub, { color: colors.mutedForeground }]}>
             {kundli ? L.namaste : L.hello}
@@ -610,10 +599,10 @@ export default function HomeScreen() {
             <Feather name={colors.C.isDark ? "sun" : "moon"} size={15} color={colors.C.textMuted} />
           </Pressable>
         </View>
-      </Animated.View>
+      </FadeInView>
 
       {/* ── Hero Energy Card — immersive ── */}
-      <Animated.View style={[heroAnim, { flex: 6, paddingHorizontal: 8, paddingBottom: 6 }]}>
+      <FadeInView delay={120} style={{ flex: 6, paddingHorizontal: 8, paddingBottom: 6 }}>
         <Pressable
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/daily-alerts"); }}
           style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.92 : 1, transform: [{ scale: pressed ? 0.988 : 1 }] }]}
@@ -629,22 +618,29 @@ export default function HomeScreen() {
             backend={showDemo ? null : backendEnergy}
           />
         </Pressable>
-      </Animated.View>
+      </FadeInView>
 
       {/* ── 3 Feature Rows — 35% ── */}
       <View style={{ flex: 4, paddingHorizontal: 12, paddingBottom: 6, justifyContent: "space-around" }}>
 
-        <Animated.View style={card1Anim}>
+        <FadeInView delay={220}>
           <DoshMini L={L} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/dosh"); }} />
-        </Animated.View>
+        </FadeInView>
 
-        <Animated.View style={card2Anim}>
+        <FadeInView delay={310}>
           <BadTimeMini L={L} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/dasha-risk"); }} activeDasha={activeDasha} />
-        </Animated.View>
+        </FadeInView>
 
-        <Animated.View style={card3Anim}>
-          <MilanMini L={L} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/kundli-milan"); }} />
-        </Animated.View>
+        <FadeInView delay={400}>
+          <PersonalSnapshotMini
+            snapshot={personalSnapshot}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              if (kundli) router.push("/personalization");
+              else router.push("/onboarding");
+            }}
+          />
+        </FadeInView>
 
       </View>
 
@@ -836,37 +832,61 @@ function BadTimeMini({ onPress, activeDasha, L }: { onPress: () => void; activeD
   );
 }
 
-// ── Kundli Milan Mini — full-width horizontal row ─────────────────────────────
-function MilanMini({ onPress, L }: { onPress: () => void; L: ReturnType<typeof getHomeLabels> }) {
+// ── Personalization Mini — 3rd home row ───────────────────────────────────────
+function PersonalSnapshotMini({ onPress, snapshot }: { onPress: () => void; snapshot: PersonalSnapshot }) {
   const shimmerX = useShimmer(360);
+  const pulse = useOpacityPulse(0.5, 1, 900);
+  const [activeIdx, setActiveIdx] = useState(0);
   const { C } = useColors();
-  const grad = C.isDark
-    ? (["#1e0a3d","#3b1570"] as const)
-    : (["#f5f0ff","#ede0fe"] as const);
-  const titleClr = C.isDark ? "#ffffff" : "#6d28d9";
-  const subClr   = C.isDark ? "rgba(255,255,255,0.45)" : "rgba(109,40,217,0.6)";
+  const grad = C.isDark ? snapshot.darkGrad : snapshot.lightGrad;
+  const titleClr = C.isDark ? "#ffffff" : snapshot.color;
+  const subClr = C.isDark ? "rgba(255,255,255,0.52)" : "rgba(15,23,42,0.64)";
+  const metrics = snapshot.insights.filter(i => i.key !== "locked").slice(0, 5);
+  const rotateLines = metrics.length
+    ? metrics.map(m => m.line)
+    : [snapshot.identityLine];
+  const activeLine = rotateLines[activeIdx % rotateLines.length] ?? snapshot.identityLine;
+
+  useEffect(() => {
+    if (rotateLines.length <= 1) return;
+    const id = setInterval(() => setActiveIdx(i => (i + 1) % rotateLines.length), 2200);
+    return () => clearInterval(id);
+  }, [rotateLines.length]);
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [mini.row, pressed && mini.rowPressed]}>
-      <LinearGradient colors={grad} start={{x:0,y:0}} end={{x:1,y:0}} style={mini.rowGrad}>
+      <LinearGradient colors={[...grad]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={mini.rowGrad}>
         <Animated.View style={[mini.shimmer, { transform: [{ translateX: shimmerX }] }]} />
-        <View style={[mini.border, { borderColor: C.isDark ? "rgba(168,85,247,0.35)" : "rgba(168,85,247,0.22)" }]} />
+        <View style={[mini.border, { borderColor: C.isDark ? `${snapshot.color}55` : `${snapshot.color}33` }]} />
 
-        <View style={[mini.iconCircle, { backgroundColor:"rgba(168,85,247,0.18)", borderColor:"rgba(168,85,247,0.35)" }]}>
-          <Text style={mini.iconEmoji}>♥</Text>
+        <View style={[mini.iconCircle, { backgroundColor: `${snapshot.color}22`, borderColor: `${snapshot.color}44` }]}>
+          <Text style={mini.iconEmoji}>✨</Text>
         </View>
 
-        <View style={mini.textBlock}>
-          <Text style={[mini.rowTitle, { color: titleClr }]}>{L.milanTitle}</Text>
-          <Text style={[mini.rowSub, { color: subClr }]}>{L.milanSub}</Text>
+        <View style={[mini.textBlock, { flex: 1, minWidth: 0 }]}>
+          <Text style={[mini.rowTitle, { color: titleClr }]}>{snapshot.title}</Text>
+          <Text style={[mini.rowSub, { color: subClr }]} numberOfLines={1}>{activeLine}</Text>
+          {metrics.length > 0 && (
+            <View style={mini.metricRow}>
+              {metrics.map(m => (
+                <View
+                  key={m.key}
+                  style={[mini.metricPill, { borderColor: `${snapshot.color}44`, backgroundColor: `${snapshot.color}14` }]}
+                >
+                  <Text style={[mini.metricVal, { color: titleClr }]}>
+                    {m.value == null ? "--" : m.value}
+                  </Text>
+                  <Text style={[mini.metricLbl, { color: subClr }]}>{m.label}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         <View style={mini.rightBlock}>
-          <View style={[mini.badge, { backgroundColor:"rgba(168,85,247,0.18)", borderColor:"rgba(168,85,247,0.4)" }]}>
-            <Feather name="lock" size={8} color="#c084fc" />
-            <Text style={[mini.badgeTxt, { color:"#c084fc" }]}>{L.pro}</Text>
-          </View>
-          <Feather name="chevron-right" size={14} color={C.isDark ? "rgba(192,132,252,0.5)" : "rgba(109,40,217,0.5)"} />
+          <Animated.View style={{ opacity: pulse }}>
+            <Feather name="chevron-right" size={14} color={C.isDark ? `${snapshot.color}99` : `${snapshot.color}77`} />
+          </Animated.View>
         </View>
       </LinearGradient>
     </Pressable>
@@ -991,6 +1011,13 @@ const mini = StyleSheet.create({
   },
   badgeDot: { width: 5, height: 5, borderRadius: 2.5 },
   badgeTxt: { fontSize: 8.5, fontFamily: F.bold, letterSpacing: 1 },
+  metricRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4 },
+  metricPill: {
+    minWidth: 34, alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderRadius: 10, paddingVertical: 2, paddingHorizontal: 4,
+  },
+  metricVal: { fontSize: 9, fontFamily: F.bold, lineHeight: 11 },
+  metricLbl: { fontSize: 6.5, fontFamily: F.semibold, letterSpacing: 0.3 },
 });
 
 // ── Shared card layout ────────────────────────────────────────────────────────

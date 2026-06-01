@@ -1,8 +1,2 @@
-/** Firebase auth — native: phone OTP (@react-native-firebase) + Google Sign-In. */
-export {
-  sendPhoneOtp,
-  confirmPhoneOtp,
-  resetPendingVerification,
-  hasPendingVerification,
-} from "./firebaseAuth.impl";
+/** Firebase auth — native: Google Sign-In only (no phone OTP). */
 export { signInWithGoogle, signOutFromFirebase } from "./googleSignIn";

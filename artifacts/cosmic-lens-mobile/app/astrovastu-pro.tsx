@@ -626,6 +626,40 @@ export default function AstroVastuProScreen() {
           );
         })()}
 
+        {/* Business Vastu + reports (replaces old pricing chooser page) */}
+        {!loading && !result && (
+          <View style={{ gap: 10, marginTop: 8 }}>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push("/business-vastu" as any);
+              }}
+              style={[styles.altLink, { backgroundColor: C.bgCard, borderColor: "#06b6d455" }]}
+            >
+              <Text style={{ fontSize: 22 }}>🏢</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.altLinkTitle, { color: C.text }]}>{t.vt_titleBusinessVastu}</Text>
+                <Text style={[styles.altLinkSub, { color: C.textMid }]}>{t.vt_subKundliPersonalized}</Text>
+              </View>
+              <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={18} color="#06b6d4" />
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push("/my-reports" as any);
+              }}
+              style={[styles.altLink, { backgroundColor: C.bgCard, borderColor: C.border }]}
+            >
+              <Feather name="folder" size={18} color="#f6c453" />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.altLinkTitle, { color: C.text }]}>{t.vt_titleMyReports}</Text>
+                <Text style={[styles.altLinkSub, { color: C.textMid }]}>{t.vt_reportsSub}</Text>
+              </View>
+              <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={18} color={C.textMuted} />
+            </Pressable>
+          </View>
+        )}
+
         {/* ── Branding footer (NEVER reveal AI/LLM) ──────────────────── */}
         <Text style={[styles.brandingFooter, { color: C.textMid }]}>
           {t.avp_brandFooter}
@@ -706,4 +740,8 @@ const styles = StyleSheet.create({
   runScanBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center",
                  gap: 8, paddingVertical: 13, borderRadius: 10, marginTop: 10 },
   runScanText: { fontSize: 14, fontWeight: "800" },
+
+  altLink:     { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
+  altLinkTitle:{ fontSize: 14, fontWeight: "800" },
+  altLinkSub:  { fontSize: 11, marginTop: 2 },
 });

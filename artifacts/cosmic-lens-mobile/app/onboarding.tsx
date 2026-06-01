@@ -16,12 +16,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
+import { BirthTimeRectificationLink } from "@/components/BirthTimeRectificationLink";
 import PickerModal from "@/components/PickerModal";
 
-import { useUser } from "@/context/UserContext";
+import { needsProfileSetup, useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
 import { vedicLang, type VLang } from "@/lib/i18nVedic";
 import { getMonthsFull } from "@/lib/i18nContent";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { fetchKundliFromAPI, fetchTimezone, searchPlaces, type PlaceSuggestion } from "@/lib/kundliAPI";
 
 
@@ -108,7 +110,15 @@ const MINS   = Array.from({ length: 60 }, (_, i) => ({ label: String(i).padStart
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
-  const { setBirthData, setKundli, syncKundliToCloud, language, user } = useUser();
+  const {
+    addProfile,
+    setPrimaryProfile,
+    syncKundliToCloud,
+    language,
+    user,
+    profiles,
+    primaryProfileId,
+  } = useUser();
   const t = getT(language);
   const v: VLang = vedicLang(language);
   const L = getOnboardingLabels(v);
@@ -142,6 +152,17 @@ export default function OnboardingScreen() {
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
+  const required = needsProfileSetup(profiles, primaryProfileId);
+
+  React.useEffect(() => {
+    if (!user) router.replace("/login");
+  }, [user]);
+
+  React.useEffect(() => {
+    if (user?.name && !name.trim()) {
+      setName(user.name);
+    }
+  }, [user?.name]);
 
   async function doSearchPlace() {
     if (placeQuery.trim().length < 2) return;
@@ -198,9 +219,17 @@ export default function OnboardingScreen() {
       };
       const auth = user?.id && user?.api_key ? { user_id: user.id, api_key: user.api_key } : null;
       const kundli = await fetchKundliFromAPI(bd, auth);
-      setBirthData(bd);
-      setKundli(kundli);
-      syncKundliToCloud(bd, kundli).catch(() => {});
+      const relation =
+        v === "hi" ? "स्वयं" : v === "hn" ? "Self" : "Self";
+      const entry = addProfile({
+        name: bd.name,
+        gender: "",
+        relation,
+        birthData: bd,
+        kundli,
+      });
+      setPrimaryProfile(entry.id);
+      await syncKundliToCloud(bd, kundli).catch(() => {});
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace("/(tabs)");
     } catch (e: unknown) {
@@ -223,18 +252,24 @@ export default function OnboardingScreen() {
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <View style={s.header}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.5 }]}
-        >
-          <Feather name="arrow-left" size={20} color={C.textMuted} />
-        </Pressable>
-        <Pressable
-          onPress={() => router.replace("/(tabs)")}
-          style={({ pressed }) => [s.skipBtn, pressed && { opacity: 0.5 }]}
-        >
-          <Text style={[s.skipText, { color: C.textMuted }]}>{t.skip}</Text>
-        </Pressable>
+        {!required ? (
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.5 }]}
+          >
+            <Feather name="arrow-left" size={20} color={C.textMuted} />
+          </Pressable>
+        ) : (
+          <View style={s.backBtn} />
+        )}
+        {!required ? (
+          <Pressable
+            onPress={() => router.replace("/(tabs)")}
+            style={({ pressed }) => [s.skipBtn, pressed && { opacity: 0.5 }]}
+          >
+            <Text style={[s.skipText, { color: C.textMuted }]}>{t.skip}</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
@@ -245,19 +280,35 @@ export default function OnboardingScreen() {
         >
 
           {/* ── Hero section ─────────────────────────────────────────── */}
-          <View style={s.hero}>
+          <FadeInView delay={0} style={s.hero}>
             <LinearGradient
               colors={[C.accentBg, "transparent"]}
               style={[s.heroIcon, { borderColor: C.border2 }]}
             >
               <Feather name="star" size={26} color="#f59e0b" />
             </LinearGradient>
-            <Text style={[s.heroTitle, { color: C.text }]}>{t.birthDetails}</Text>
-            <Text style={[s.heroSub, { color: C.textMuted }]}>{t.birthSubtitle}</Text>
-          </View>
+            <Text style={[s.heroTitle, { color: C.text }]}>
+              {required
+                ? v === "hi"
+                  ? "अपनी कुंडली बनाएं"
+                  : v === "hn"
+                    ? "Apni kundli banayein"
+                    : "Create your kundli"
+                : t.birthDetails}
+            </Text>
+            <Text style={[s.heroSub, { color: C.textMuted }]}>
+              {required
+                ? v === "hi"
+                  ? "नाम, जन्म तिथि, समय और स्थान — यही आपकी primary कुंडली होगी।"
+                  : v === "hn"
+                    ? "Naam, DOB, time aur place — yeh aapki primary kundli banegi."
+                    : "Name, date of birth, time & place — saved as your primary chart."
+                : t.birthSubtitle}
+            </Text>
+          </FadeInView>
 
           {/* ── Section: Full Name ────────────────────────────────────── */}
-          <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+          <FadeInView delay={staggerDelay(1)} style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <View style={s.cardHeader}>
               <View style={[s.cardIcon, { backgroundColor: C.isDark ? "rgba(167,139,250,0.12)" : "#EDE9FE" }]}>
                 <Feather name="user" size={14} color="#f59e0b" />
@@ -273,10 +324,10 @@ export default function OnboardingScreen() {
               returnKeyType="next"
               autoCapitalize="words"
             />
-          </View>
+          </FadeInView>
 
           {/* ── Section: Date of Birth ────────────────────────────────── */}
-          <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+          <FadeInView delay={staggerDelay(2)} style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <View style={s.cardHeader}>
               <View style={[s.cardIcon, { backgroundColor: C.isDark ? "rgba(139,92,246,0.10)" : "#EDE9FE" }]}>
                 <Feather name="calendar" size={14} color="#f59e0b" />
@@ -326,10 +377,10 @@ export default function OnboardingScreen() {
                 </Pressable>
               </View>
             </View>
-          </View>
+          </FadeInView>
 
           {/* ── Section: Time of Birth ────────────────────────────────── */}
-          <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+          <FadeInView delay={staggerDelay(3)} style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <View style={s.cardHeader}>
               <View style={[s.cardIcon, { backgroundColor: C.isDark ? "rgba(250,204,21,0.10)" : C.warningBg }]}>
                 <Feather name="clock" size={14} color="#facc15" />
@@ -379,10 +430,11 @@ export default function OnboardingScreen() {
                 </Pressable>
               </View>
             </View>
-          </View>
+            <BirthTimeRectificationLink />
+          </FadeInView>
 
           {/* ── Section: Place of Birth ───────────────────────────────── */}
-          <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+          <FadeInView delay={staggerDelay(4)} style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <View style={s.cardHeader}>
               <View style={[s.cardIcon, { backgroundColor: C.isDark ? "rgba(16,185,129,0.10)" : "#D1FAE5" }]}>
                 <Feather name="map-pin" size={14} color="#10b981" />
@@ -443,17 +495,20 @@ export default function OnboardingScreen() {
                 </Text>
               </View>
             )}
-          </View>
+          </FadeInView>
 
           {/* ── Error ────────────────────────────────────────────────── */}
           {!!error && (
+            <FadeInView delay={staggerDelay(5)}>
             <View style={s.errorBox}>
               <Feather name="alert-circle" size={14} color="#f87171" />
               <Text style={s.errorText}>{error}</Text>
             </View>
+            </FadeInView>
           )}
 
           {/* ── Submit button ─────────────────────────────────────────── */}
+          <FadeInView delay={staggerDelay(6)}>
           <Pressable
             onPress={handleSubmit}
             disabled={!canSubmit}
@@ -477,14 +532,15 @@ export default function OnboardingScreen() {
               )}
             </LinearGradient>
           </Pressable>
+          </FadeInView>
 
           {/* ── Trust badge ───────────────────────────────────────────── */}
-          <View style={s.trustRow}>
+          <FadeInView delay={staggerDelay(7)} style={s.trustRow}>
             <Feather name="lock" size={11} color={C.textDim} />
             <Text style={[s.trustText, { color: C.textDim }]}>
               {L.trustText}
             </Text>
-          </View>
+          </FadeInView>
 
         </ScrollView>
       </KeyboardAvoidingView>

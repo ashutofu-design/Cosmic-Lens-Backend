@@ -45,6 +45,8 @@ export interface MoreT {
   mdRemediesSub:      string;
   mdVastuTitle:       string;
   mdVastuSub:         string;
+  mdDivisionalTitle:  string;
+  mdDivisionalSub:    string;
   badgeNew:           string;
 
   // ── Subscription ──────────────────────────────────────────
@@ -1731,6 +1733,8 @@ const EN: MoreT = {
   mdRemediesSub:      "Mantra, charity, gemstones",
   mdVastuTitle:       "Astrovastu Pro",
   mdVastuSub:         "Personalized vastu by your kundli",
+  mdDivisionalTitle:  "Divisional Charts",
+  mdDivisionalSub:    "D9 Navamsa, D10 Dashamsha, D7 & all vargas",
   badgeNew:           "New",
 
   // Subscription
@@ -3400,6 +3404,8 @@ const HN: Partial<MoreT> = {
   mdRemediesSub:      "Mantra, daan, ratan",
   mdVastuTitle:       "Astrovastu Pro",
   mdVastuSub:         "Aapki kundli ke hisaab se vastu",
+  mdDivisionalTitle:  "Divisional Charts",
+  mdDivisionalSub:    "D9 Navamsa, D10 Dashamsha, D7 aur saari vargas",
   badgeNew:           "New",
 
   planBasicTagline:   "Roz ke liye basics",

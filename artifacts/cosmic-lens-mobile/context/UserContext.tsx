@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AppState, type AppStateStatus } from "react-native";
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { BirthData, KundliData } from "@/types";
 import type { UILang } from "@/lib/i18n";
@@ -121,11 +122,30 @@ const KEYS = {
   profiles:   "cl_profiles_v2",
   primaryId:  "cl_primaryId_v2",
   language:   "cl_language",
+  lastUserId: "cl_last_user_id",
   // legacy keys (for migration)
   birthData:  "cl_birthData",
   kundli:     "cl_kundli",
   legacyUser: "cl_user",
 };
+
+function clearLocalProfiles(
+  setProfiles: (v: ProfileEntry[]) => void,
+  setPrimaryId: (v: string | null) => void,
+  profilesRef: React.MutableRefObject<ProfileEntry[]>,
+  primaryIdRef: React.MutableRefObject<string | null>,
+) {
+  setProfiles([]);
+  setPrimaryId(null);
+  profilesRef.current = [];
+  primaryIdRef.current = null;
+  AsyncStorage.multiRemove([
+    KEYS.profiles,
+    KEYS.primaryId,
+    KEYS.birthData,
+    KEYS.kundli,
+  ]).catch(() => {});
+}
 
 function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -152,7 +172,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const [u, ps, pid, lang, legacyBD, legacyK, legacyUser] = await Promise.all([
+        const [u, ps, pid, lang, legacyBD, legacyK, legacyUser, lastUid] = await Promise.all([
           AsyncStorage.getItem(KEYS.user),
           AsyncStorage.getItem(KEYS.profiles),
           AsyncStorage.getItem(KEYS.primaryId),
@@ -160,11 +180,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.getItem(KEYS.birthData),
           AsyncStorage.getItem(KEYS.kundli),
           AsyncStorage.getItem(KEYS.legacyUser),
+          AsyncStorage.getItem(KEYS.lastUserId),
         ]);
 
         // Load user — migrate legacy (name+email only) to new AuthUser format
+        let hydratedUser: AuthUser | null = null;
         if (u) {
-          _setUser(JSON.parse(u));
+          hydratedUser = JSON.parse(u) as AuthUser;
+          _setUser(hydratedUser);
+          AsyncStorage.setItem(KEYS.lastUserId, String(hydratedUser.id)).catch(() => {});
         } else if (legacyUser) {
           const old = JSON.parse(legacyUser);
           // Old format only had name/email — treat as guest
@@ -190,8 +214,17 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           console.warn("[UserContext] boot RTL apply failed:", err);
         }
 
+        const storedLastId = lastUid ? parseInt(lastUid, 10) : null;
+        const profileUserMismatch =
+          hydratedUser != null &&
+          storedLastId != null &&
+          !Number.isNaN(storedLastId) &&
+          storedLastId !== hydratedUser.id;
+
         let loadedProfiles: ProfileEntry[] = [];
-        if (ps) {
+        if (profileUserMismatch) {
+          await AsyncStorage.multiRemove([KEYS.profiles, KEYS.primaryId, KEYS.birthData, KEYS.kundli]);
+        } else if (ps) {
           loadedProfiles = JSON.parse(ps) as ProfileEntry[];
         } else if (legacyBD) {
           // Migrate legacy single-profile data
@@ -227,11 +260,18 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { primaryIdRef.current = primaryId; }, [primaryId]);
   useEffect(() => { profilesRef.current  = profiles;  }, [profiles]);
 
+  const invalidateDeletedAccount = useCallback(() => {
+    clearLocalProfiles(_setProfiles, _setPrimaryId, profilesRef, primaryIdRef);
+    _setUser(null);
+    userRef.current = null;
+    AsyncStorage.removeItem(KEYS.user).catch(() => {});
+  }, []);
+
   const pushProfilesToCloud = useCallback(async (list: ProfileEntry[], pid: string | null) => {
     const currentUser = userRef.current;
     if (!currentUser?.id || !currentUser?.api_key) return;
     try {
-      await fetch(`${API_BASE}/api/user/${currentUser.id}/profiles/sync`, {
+      const r = await fetch(`${API_BASE}/api/user/${currentUser.id}/profiles/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-API-Key": currentUser.api_key },
         body: JSON.stringify({
@@ -242,20 +282,31 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           primaryProfileId: pid,
         }),
       });
+      if (r.status === 404 || r.status === 401) {
+        invalidateDeletedAccount();
+      }
     } catch { /* silent — local is source of truth */ }
-  }, []);
+  }, [invalidateDeletedAccount]);
 
   const queueCloudSync = useCallback((list: ProfileEntry[], pid: string | null) => {
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     syncTimerRef.current = setTimeout(() => { pushProfilesToCloud(list, pid); }, 600);
   }, [pushProfilesToCloud]);
 
-  const pullProfilesFromCloud = useCallback(async (u: AuthUser) => {
+  const pullProfilesFromCloud = useCallback(async (
+    u: AuthUser,
+    opts?: { allowPushLocal?: boolean },
+  ) => {
     if (!u?.id || !u?.api_key) return;
+    const allowPushLocal = opts?.allowPushLocal !== false;
     try {
       const r = await fetch(`${API_BASE}/api/user/${u.id}/profiles`, {
         headers: { "X-API-Key": u.api_key },
       });
+      if (r.status === 404 || r.status === 401) {
+        invalidateDeletedAccount();
+        return;
+      }
       if (!r.ok) return;
       const data = await r.json();
       const cloudProfiles: ProfileEntry[] = (data?.profiles ?? []).map((p: any) => ({
@@ -265,20 +316,24 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       })).filter((p: ProfileEntry) => !!p.birthData);
       const cloudPrimary = data?.primaryProfileId ?? null;
 
-      // Merge with local — cloud is authoritative if non-empty, else push local up
       if (cloudProfiles.length > 0) {
         _setProfiles(cloudProfiles);
+        profilesRef.current = cloudProfiles;
         AsyncStorage.setItem(KEYS.profiles, JSON.stringify(cloudProfiles)).catch(() => {});
         const resolvedPid = cloudPrimary && cloudProfiles.find(p => p.id === cloudPrimary)
           ? cloudPrimary : cloudProfiles[0].id;
         _setPrimaryId(resolvedPid);
+        primaryIdRef.current = resolvedPid;
         AsyncStorage.setItem(KEYS.primaryId, resolvedPid).catch(() => {});
-      } else if (profilesRef.current.length > 0) {
-        // Cloud empty but local has profiles → push local up
+      } else if (allowPushLocal && profilesRef.current.length > 0) {
+        // Same account re-login: cloud empty, push saved local profiles up
         pushProfilesToCloud(profilesRef.current, primaryIdRef.current);
+      } else {
+        // New account or no local data — do not show previous user's profiles
+        clearLocalProfiles(_setProfiles, _setPrimaryId, profilesRef, primaryIdRef);
       }
     } catch { /* silent */ }
-  }, [pushProfilesToCloud]);
+  }, [pushProfilesToCloud, invalidateDeletedAccount]);
 
   // ── Derived values ─────────────────────────────────────────────────────────
   const primaryProfile = profiles.find(p => p.id === primaryId) ?? profiles[0] ?? null;
@@ -375,12 +430,27 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     pushProfilesToCloud(profilesRef.current, id);
   }, [pushProfilesToCloud]);
 
-  const setUser = useCallback((u: AuthUser | null) => {
-    _setUser(u);
+  const setUser = useCallback(async (u: AuthUser | null) => {
     if (u) {
+      let switchedAccount = false;
+      try {
+        const stored = await AsyncStorage.getItem(KEYS.lastUserId);
+        const prevId = stored ? parseInt(stored, 10) : userRef.current?.id ?? null;
+        switchedAccount = prevId != null && !Number.isNaN(prevId) && prevId !== u.id;
+      } catch { /* ignore */ }
+
+      if (switchedAccount) {
+        clearLocalProfiles(_setProfiles, _setPrimaryId, profilesRef, primaryIdRef);
+      }
+
+      _setUser(u);
+      userRef.current = u;
       AsyncStorage.setItem(KEYS.user, JSON.stringify(u)).catch(() => {});
-      pullProfilesFromCloud(u);
+      AsyncStorage.setItem(KEYS.lastUserId, String(u.id)).catch(() => {});
+      await pullProfilesFromCloud(u, { allowPushLocal: !switchedAccount });
     } else {
+      _setUser(null);
+      userRef.current = null;
       AsyncStorage.removeItem(KEYS.user).catch(() => {});
     }
   }, [pullProfilesFromCloud]);
@@ -453,15 +523,22 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    const prevId = userRef.current?.id;
     _setUser(null);
-    _setTodayEnergy(null); _setMoonData(null);
-    _setDoshData(null); doshKundliRef.current = null;
-    // Only clear auth session — keep profiles/primaryId/birthData/kundli/language
-    // so user doesn't have to re-enter kundli details after logging back in.
-    Promise.all([
+    userRef.current = null;
+    clearLocalProfiles(_setProfiles, _setPrimaryId, profilesRef, primaryIdRef);
+    _setTodayEnergy(null);
+    _setMoonData(null);
+    _setDoshData(null);
+    doshKundliRef.current = null;
+    const removals: Promise<void>[] = [
       AsyncStorage.removeItem(KEYS.user),
       AsyncStorage.removeItem(KEYS.legacyUser),
-    ]).catch(() => {});
+    ];
+    if (prevId != null) {
+      removals.push(AsyncStorage.setItem(KEYS.lastUserId, String(prevId)));
+    }
+    Promise.all(removals).catch(() => {});
   }, []);
 
   const refreshUser = useCallback(async () => {
@@ -471,6 +548,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       const r = await fetch(`${API_BASE}/api/user/${currentUser.id}/kundli`, {
         headers: { "X-API-Key": currentUser.api_key ?? "" },
       });
+      if (r.status === 404 || r.status === 401) {
+        invalidateDeletedAccount();
+        return;
+      }
       if (!r.ok) return;
       const data = await r.json();
       if (data?.user) {
@@ -479,9 +560,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         AsyncStorage.setItem(KEYS.user, JSON.stringify(updated)).catch(() => {});
       }
       // Always pull multi-profile snapshot too
-      pullProfilesFromCloud(currentUser);
+      pullProfilesFromCloud(currentUser, { allowPushLocal: false });
     } catch { /* silent */ }
-  }, [pullProfilesFromCloud]);
+  }, [pullProfilesFromCloud, invalidateDeletedAccount]);
 
   // On app start — if we hydrated a persisted user from AsyncStorage, pull cloud profiles once.
   const didInitialCloudPull = useRef(false);
@@ -490,8 +571,20 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     if (isLoading) return;
     if (!user?.id || !user?.api_key) return;
     didInitialCloudPull.current = true;
-    pullProfilesFromCloud(user);
+    pullProfilesFromCloud(user, { allowPushLocal: true });
   }, [isLoading, user, pullProfilesFromCloud]);
+
+  // When admin deletes the account, re-check server when app comes to foreground.
+  useEffect(() => {
+    const onState = (state: AppStateStatus) => {
+      if (state !== "active") return;
+      const u = userRef.current;
+      if (!u?.id || !u?.api_key) return;
+      pullProfilesFromCloud(u, { allowPushLocal: false });
+    };
+    const sub = AppState.addEventListener("change", onState);
+    return () => sub.remove();
+  }, [pullProfilesFromCloud]);
 
   return (
     <UserContext.Provider value={{

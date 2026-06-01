@@ -1,74 +1,102 @@
 """
-Image-hash → session_id dedup index (Level 1: in-memory).
+Image-hash → session_id dedup — Redis primary, in-memory fallback, DB via flask.
 
-Same image upload within TTL returns the existing session_id, skipping
-re-extraction and re-running of all 8 engines (~5-10s saved).
-
-Optionally scoped per user_id so two different users uploading the same
-photo do NOT share each other's session.
-
-Pure-Python, thread-safe, zero deps.
+Level 1: Redis face:dedup:{user_id}:{sha256}  (90d TTL)
+Level 2: in-memory OrderedDict (when Redis down)
+Level 3: FaceReadingLog in PostgreSQL (flask_app analyze)
 """
 from __future__ import annotations
 
 import hashlib
+import logging
 import threading
 import time
 from collections import OrderedDict
-from typing import Optional
+from typing import Any, Dict, Optional
+
+from . import face_cache as _fc
+from . import redis_manager as _rm
+
+log = logging.getLogger(__name__)
 
 _LOCK = threading.RLock()
-_STORE: "OrderedDict[str, dict]" = OrderedDict()
-_MAX_ENTRIES = 500
-_TTL_SECONDS = 30 * 60        # 30 minutes — matches session_cache TTL
+_MEMORY: "OrderedDict[str, dict]" = OrderedDict()
+_MEMORY_MAX = 500
+_TTL_SECONDS = int(__import__("os").environ.get("FACE_DEDUP_TTL", str(90 * 24 * 3600)))
 
 
 def hash_bytes(data: bytes) -> str:
-    """SHA-256 hex digest of raw bytes."""
     return hashlib.sha256(data).hexdigest()
 
 
-def _key(image_sha256: str, user_id: Optional[int]) -> str:
+def _mem_key(image_sha256: str, user_id: Optional[int]) -> str:
     return f"{user_id or 0}:{image_sha256}"
 
 
 def lookup(image_sha256: str, user_id: Optional[int] = None) -> Optional[str]:
-    """Return cached session_id if same image was analyzed within TTL, else None."""
-    k = _key(image_sha256, user_id)
+    """Return cached session_id if known."""
+    hit = _fc.get_dedup(image_sha256, user_id)
+    if hit and hit.get("session_id"):
+        log.debug("[dedup] Redis HIT sha=%s…", image_sha256[:8])
+        return hit["session_id"]
+    k = _mem_key(image_sha256, user_id)
     with _LOCK:
-        entry = _STORE.get(k)
+        entry = _MEMORY.get(k)
         if entry is None:
             return None
         if time.time() - entry["ts"] > _TTL_SECONDS:
-            _STORE.pop(k, None)
+            _MEMORY.pop(k, None)
             return None
-        _STORE.move_to_end(k)
-        return entry["session_id"]
+        return entry.get("session_id")
 
 
-def remember(image_sha256: str, session_id: str, user_id: Optional[int] = None) -> None:
-    """Record (image_hash, session_id) so future identical uploads dedupe."""
-    k = _key(image_sha256, user_id)
+def lookup_record(image_sha256: str, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    """Return {session_id, analysis_id?} from Redis dedup."""
+    hit = _fc.get_dedup(image_sha256, user_id)
+    if hit:
+        return hit
+    sid = lookup(image_sha256, user_id)
+    if sid:
+        return {"session_id": sid, "analysis_id": None}
+    return None
+
+
+def remember(
+    image_sha256: str,
+    session_id: str,
+    user_id: Optional[int] = None,
+    analysis_id: Optional[str] = None,
+) -> None:
+    _fc.put_dedup(image_sha256, session_id, user_id, analysis_id)
+    k = _mem_key(image_sha256, user_id)
     with _LOCK:
-        _STORE[k] = {"session_id": session_id, "ts": time.time()}
-        _STORE.move_to_end(k)
-        _evict_locked()
+        _MEMORY[k] = {
+            "session_id": session_id,
+            "analysis_id": analysis_id,
+            "ts": time.time(),
+        }
+        _MEMORY.move_to_end(k)
+        while len(_MEMORY) > _MEMORY_MAX:
+            _MEMORY.popitem(last=False)
+    log.debug(
+        "[dedup] remember sha=%s… session=%s analysis=%s",
+        image_sha256[:8],
+        session_id[:8],
+        (analysis_id or "")[:8],
+    )
 
 
 def forget(image_sha256: str, user_id: Optional[int] = None) -> None:
+    uid = user_id if user_id is not None else 0
+    prefix = (__import__("os").environ.get("FACE_REDIS_PREFIX") or "face")
+    _rm.delete(f"{prefix}:dedup:{uid}:{image_sha256}")
     with _LOCK:
-        _STORE.pop(_key(image_sha256, user_id), None)
+        _MEMORY.pop(_mem_key(image_sha256, user_id), None)
 
 
 def stats() -> dict:
-    with _LOCK:
-        return {"entries": len(_STORE), "max": _MAX_ENTRIES, "ttl_sec": _TTL_SECONDS}
-
-
-def _evict_locked() -> None:
-    now = time.time()
-    expired = [k for k, v in _STORE.items() if now - v["ts"] > _TTL_SECONDS]
-    for k in expired:
-        _STORE.pop(k, None)
-    while len(_STORE) > _MAX_ENTRIES:
-        _STORE.popitem(last=False)
+    return {
+        "backend": "redis" if _rm.is_available() else "memory_fallback",
+        "memory_entries": len(_MEMORY),
+        "ttl_sec": _TTL_SECONDS,
+    }

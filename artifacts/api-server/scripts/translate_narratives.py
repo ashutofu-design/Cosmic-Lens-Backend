@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT))
 
 from openai import OpenAI
 
-from vedic.numerology.narratives import _NARRATIVES_HG, _NARRATIVES_EN
+from numerology.core.narratives import _NARRATIVES_HG, _NARRATIVES_EN
 
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 MODEL = "gpt-4o"

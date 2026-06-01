@@ -69,14 +69,12 @@ def build_hook(sections: Dict, engines: Dict, person: Dict | None = None) -> Dic
 
     if biggest_strength and biggest_weakness:
         identity_line = (
-            f"Tum {element} element ke {archetype.lower()} ho — "
-            f"superpower: {biggest_strength.rstrip('.')}; "
-            f"hidden trap: {biggest_weakness.rstrip('.')}."
+            f"Your profile leans {element} / {archetype} — strongest signal: "
+            f"{biggest_strength.rstrip('.')}; recurring tension: {biggest_weakness.rstrip('.')}."
         )
     else:
         identity_line = (
-            f"Tum {element} element ke {archetype.lower()} ho — "
-            f"core energy: {dom_trait}."
+            f"Your profile leans {element} / {archetype} — dominant pattern: {dom_trait}."
         )
 
     # Shock line — pick the highest-confidence shock, fallback to first fused trait

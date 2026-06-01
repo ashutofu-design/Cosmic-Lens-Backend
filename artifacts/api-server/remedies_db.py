@@ -645,6 +645,28 @@ _ROOM_ALIASES: Dict[str, str] = {
     "washroom":        "bathroom",
     "wc":              "toilet",
     "lavatory":        "toilet",
+    "basement":        "basement",
+    "cellar":          "basement",
+    "garage":          "garage",
+    "car_parking":     "garage",
+    "parking":         "garage",
+    "cash_locker":     "cash_locker",
+    "locker":          "cash_locker",
+    "safe":            "cash_locker",
+    "vault":           "cash_locker",
+    "guest_room":      "bedroom",
+    "guest":           "bedroom",
+    "terrace":         "balcony",
+    "overhead_tank":   "store",
+    "water_tank":      "store",
+    "tank":            "store",
+    "septic":          "toilet",
+    "septic_tank":     "toilet",
+    "borewell":        "store",
+    "servant_room":    "store",
+    "servant_quarter": "store",
+    "home_office":     "study",
+    "office_room":     "study",
 }
 
 
@@ -938,28 +960,44 @@ def lookup_remedies(
     """
     Return a list of classical remedies for the given (room_type, verdict).
     If business_type provided, business-specific overlay is appended first.
+    Merges hand-curated _HOME_REMEDIES + vastu_remedies_catalog (500+ picks).
     Falls back to universal remedies for the verdict if no specific match.
 
     Returned remedies follow the standard schema:
         {action, english, hindi, priority, classical_ref}
     """
+    from vastu_remedies_catalog import expand_catalog
+
     v = _norm_verdict(verdict)
     raw_room, home_room = _normalize_room(room_type, business_type)
 
     out: List[Dict[str, Any]] = []
+    seen_actions: set[str] = set()
+
+    def _add(batch: List[Dict[str, Any]]) -> None:
+        for r in batch:
+            a = (r.get("action") or "").lower()
+            if not a or a in seen_actions:
+                continue
+            seen_actions.add(a)
+            out.append(r)
 
     # 1. Business overlay first (highest contextual relevance)
     if business_type:
         biz_key = (business_type.lower(), raw_room, v)
-        out.extend(_BUSINESS_REMEDIES.get(biz_key, []))
+        _add(_BUSINESS_REMEDIES.get(biz_key, []))
 
     # 2. Home base for the room+verdict
-    out.extend(_HOME_REMEDIES.get((home_room, v), []))
+    _add(_HOME_REMEDIES.get((home_room, v), []))
 
-    # 3. Universal fallback if still empty
+    # 3. Extended catalog (tape, salt, pyramid, practical folk + classical pool)
+    _add(expand_catalog(home_room, v))
+
+    # 4. Universal fallback if still empty
     if not out:
-        out.extend(_UNIVERSAL_BY_VERDICT.get(v, []))
+        _add(_UNIVERSAL_BY_VERDICT.get(v, []))
 
+    out.sort(key=lambda r: int(r.get("priority", 99)))
     return out
 
 
@@ -971,22 +1009,28 @@ def merge_remedies(
     room_type: str,
     verdict: str,
     business_type: Optional[str] = None,
-    max_total: int = 6,
+    max_total: int = 3,
+    max_db_classical: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """
     Deterministic merge of:
-      1. existing remedies from engine/vision (preserved as-is, top priority)
+      1. existing remedies from kundli/vision engine (ALWAYS first, chart-personalised)
       2. classical DB remedies for (room_type, verdict[, business_type])
 
-    Dedupes by `action` key. Sorted by priority. Capped at `max_total`.
+    Dedupes by `action` key. DB layer sorted by priority only among itself.
+    Capped at `max_total`.
     """
     existing = existing or []
     seen_actions = {(r.get("action") or "").lower() for r in existing if r}
 
     db_remedies = lookup_remedies(room_type, verdict, business_type)
-    fresh = [r for r in db_remedies
-             if (r.get("action") or "").lower() not in seen_actions]
+    fresh = [
+        r for r in db_remedies
+        if (r.get("action") or "").lower() not in seen_actions
+    ]
+    fresh.sort(key=lambda r: r.get("priority", 99))
+    if max_db_classical is not None:
+        fresh = fresh[: max(0, int(max_db_classical))]
 
     combined = list(existing) + fresh
-    combined.sort(key=lambda r: r.get("priority", 99))
     return combined[:max_total]

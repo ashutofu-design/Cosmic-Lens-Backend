@@ -1,0 +1,43 @@
+# Local dev: Redis + Celery Face PDF worker
+#   docker compose up -d redis celery-face-pdf
+#   REDIS_URL=redis://localhost:6379/0
+#   CELERY_BROKER_URL=redis://localhost:6379/1
+#   python flask_app.py
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - face_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  celery-face-pdf:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - .:/app
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      FACE_REDIS_ENABLED: "1"
+      FACE_PDF_ASYNC: "1"
+      CELERY_FACE_PDF_QUEUE: face_pdf
+      PYTHONPATH: /app
+    command: >
+      sh -c "pip install -q celery redis flask python-dotenv reportlab Pillow openai &&
+      celery -A celery_app worker -Q face_pdf -c 2 -n face_pdf@docker
+      --prefetch-multiplier=1 --loglevel=info"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  face_redis_data:

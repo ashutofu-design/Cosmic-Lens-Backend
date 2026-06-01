@@ -5,8 +5,8 @@ This is the SOLE source of truth for routing every user question.
 No regex pipeline, no AI-Ear merge, no multi-source override layers.
 
 Fallback:
-    If AI confidence < 0.6 OR the call fails, a minimal regex fires
-    purely as a safety-net so the request still lands somewhere sane.
+    If the AI call fails, a safe default dict is returned (analysis /
+    general) — no regex classification.
 
 Routing contract:
     intent ∈ {problem, timing, decision, planet, analysis}
@@ -35,7 +35,7 @@ TOPICS  = ("finance", "career", "marriage", "love", "health", "general")
 # blip, 503, queueing) the whole pipeline blocks and the user stares at
 # a blank screen. 5s gives ~3s headroom over the typical 1.5-2s response
 # time. On timeout, the existing exception handler in `_understand_
-# question_inner` falls back to `_fallback_classify` (regex). Override
+# question_inner` falls back to safe defaults (no regex). Override
 # via env: QU_TIMEOUT_S=<float>.
 try:
     _QU_TIMEOUT_S = float(os.environ.get("QU_TIMEOUT_S", "5.0"))
@@ -259,113 +259,44 @@ _PROMPT_TEMPLATE = (
     "- Do NOT explain anything\n"
     "- No extra text, only JSON\n"
     "- Choose the closest intent even if question is vague\n"
-    "- Keep it simple and accurate"
+    "- Keep it simple and accurate\n"
+    "- SUPPORTED user languages ONLY: English, Hindi (Devanagari), Hinglish "
+    "(Hindi in Roman). If the question is clearly Tamil/Bengali/Telugu/etc., "
+    "still pick the closest intent/topic but set confidence ≤ 0.3."
 )
 
 
-# ── Minimal regex fallback (only used when AI fails / low conf) ─────────────
-# Order matters — first-match wins. Patterns kept short on purpose; this is
-# a safety-net, NOT a routing layer.
-_FALLBACK_INTENT_RX: tuple[tuple[str, "re.Pattern[str]"], ...] = (
-    ("planet",   re.compile(
-        r"\b(strong|weak|powerful|kamzor|kamjor|vargottam|"
-        r"shakti|balwan|exalt|debilit|planet|grah|graha)\b", re.I)),
-    ("timing",   re.compile(
-        r"\b(when|kab|kab tak|kitne din|kitne saal|timing|date|year|month|"
-        r"saal|mahina|samay)\b", re.I)),
-    ("problem",  re.compile(
-        r"\b(problem|dosh|dosha|bura|kharab|delay|stuck|why.*not|"
-        r"kyun|kyu|nahi ho|nahi mil)\b", re.I)),
-    ("decision", re.compile(
-        r"\b(should i|kya karu|kya karoon|chahiye|sahi hai|right time|"
-        r"karna chahi|sahi rahega)\b", re.I)),
-    # 'analysis' is the implicit default
-)
-
-_FALLBACK_TOPIC_RX: tuple[tuple[str, "re.Pattern[str]"], ...] = (
-    ("marriage", re.compile(
-        r"\b(shaadi|shadi|vivah|marriage|spouse|wife|husband|patni|pati)\b", re.I)),
-    ("career",   re.compile(
-        r"\b(career|naukri|job|business|kaam|work|profession|promotion)\b", re.I)),
-    ("finance",  re.compile(
-        r"\b(money|paisa|paise|wealth|finance|dhan|loan|kamai|income|salary)\b", re.I)),
-    ("health",   re.compile(
-        r"\b(health|sehat|swasth|illness|disease|bimari|rog)\b", re.I)),
-    ("love",     re.compile(
-        # Sprint-26 Step 4 Phase 2 (architect-recommended fix): added
-        # rishta / rishtey / rishton / partner / breakup so the topic
-        # recovery post-pass can lift these out of 'general' to match
-        # what detect_domain_anchor() already recognises. Without these,
-        # a question like "rishtey mein problem hi problem" correctly
-        # bypasses the clarification gate (anchor found) but its topic
-        # would stay 'general' downstream — inconsistent.
-        r"\b(love|pyaar|pyar|relationship|girlfriend|boyfriend|crush|ishq|"
-        r"rishta|rishtey|rishton|partner|breakup)\b", re.I)),
-)
-
-
-def _fallback_classify(question: str) -> dict:
-    """Last-resort regex classification. Returns confidence=0.5."""
-    q = question or ""
-    intent = "analysis"
-    topic  = "general"
-    for name, rx in _FALLBACK_INTENT_RX:
-        if rx.search(q):
-            intent = name
-            break
-    for name, rx in _FALLBACK_TOPIC_RX:
-        if rx.search(q):
-            topic = name
-            break
-    # Sprint-26 Fix-M: minimal multi-intent shape so downstream code can rely
-    # on the new fields even when the LLM call failed. We only seed the
-    # primary entries — the AI is the one that ranks secondaries.
-    # Sprint-26 Fix-Q (post-architect-review): `has_recovery_subask` is now
-    # part of the canonical contract emitted by every code path of
-    # understand_question() (AI success, AI low-conf, AI error, regex
-    # fallback, empty input). Putting it inside the function instead of
-    # only in ai_ask() removes the silent-failure risk where a future
-    # refactor of question_understanding callers would lose the flag.
-    # Sprint-26 Step 4 Phase 2 — emit the deterministic safety flags from
-    # the regex fallback path too, so downstream gate logic in
-    # openai_helper.py never sees a missing key regardless of which return
-    # path fired.
-    _fb_anchor    = detect_domain_anchor(q) if q else False
-    _fb_sustained = detect_sustained_problem(q) if q else False
+def _ai_unavailable_defaults(question: str) -> dict:
+    """Safe defaults when the classifier LLM is unavailable. No regex routing."""
     return {
-        "intent":     intent,
-        "topic":      topic,
-        "intents_ranked":          [intent],
-        "topics_all":              [topic],
+        "intent":     "analysis",
+        "topic":      "general",
+        "intents_ranked":          ["analysis"],
+        "topics_all":              ["general"],
         "hidden_intent":           None,
         "cross_domain_root_cause": False,
-        "has_recovery_subask":     bool(_RECOVERY_SUBASK_RX.search(q)) if q else False,
-        "domain_anchor_found":      _fb_anchor,
-        "sustained_problem_pattern": _fb_sustained,
-        "clarification_needed":      _fb_sustained and not _fb_anchor,
-        # Phase 7.1 — slot defaults emitted from regex fallback so downstream
-        # consumers never KeyError regardless of which return path fired.
-        # Regex can't intelligently extract focus/keywords; use safe nulls.
+        "has_recovery_subask":     False,
+        "domain_anchor_found":      False,
+        "sustained_problem_pattern": False,
+        "clarification_needed":      False,
         "focus":                    None,
         "timeframe":                "none",
         "depth":                    "medium",
         "user_keywords":            [],
-        # Phase 7.3 — archetype derived from question text via regex
-        # heuristic; defaults EXPLAIN when no cue matches.
-        "archetype":                _archetype_from_text(q) if q else "EXPLAIN",
-        # Phase 2.8.41 — SQU extension defaults (no LLM available, use
-        # safest values). `needs_engine=True` keeps chart computation on
-        # for predictive Qs even when the AI call fails. `final_topic_lock`
-        # mirrors the regex-derived topic so engine + narrator stay aligned.
+        "archetype":                "EXPLAIN",
         "subtopic":                 None,
-        "needs_engine":             True,
+        "needs_engine":             False,
         "emotion":                  "neutral",
         "urgency":                  "medium",
-        "cleaned_q":                None,
-        "final_topic_lock":         topic,
-        "confidence":              0.5,
-        "source":                  "regex_fallback",
+        "cleaned_q":                (question or "").strip()[:200] or None,
+        "final_topic_lock":         "general",
+        "confidence":              0.0,
+        "source":                  "ai_unavailable",
     }
+
+
+# Backward-compat alias (tests / old imports).
+_fallback_classify = _ai_unavailable_defaults
 
 
 def _normalise_multi_fields(data: dict, intent: str, topic: str) -> dict:
@@ -784,7 +715,8 @@ _PERSONAL_CHART_RX = _re_why.compile(
     r"pratyantar|bhukti|"
     r"kundli|kundali|kundli|chart|"
     r"janamkundli|janmakundli|janampatri|janampatrika|"
-    r"lagna|ascendant|"
+    r"lagn+a?|ascendant|"
+    r"sha+di?|shadi|vivah|marriage|"
     r"rashi|moon\s*sign|sun\s*sign|"
     r"nakshatra|"
     r"janma|janm|birth\s*chart|birth|horoscope|"
@@ -1145,7 +1077,13 @@ def understand_question(question: str,
     Both are pure functions of fields already in the dict — no extra
     LLM cost, just consumer-side ergonomics.
     """
-    q = (question or "").strip()
+    try:
+        from ask_question_normalize import prepare_ask_question
+
+        question = prepare_ask_question(question or "")
+    except Exception:
+        question = (question or "").strip()
+    q = question
     out = _understand_question_inner(question, client=client, model=model)
     out = _apply_classifier_sanity_layer(out, q)
     # Phase 2.8.41 — defence-in-depth: every public-entry return guarantees
@@ -1188,8 +1126,8 @@ def _understand_question_inner(question: str,
           "intent":     one of INTENTS,
           "topic":      one of TOPICS,
           "confidence": float ∈ [0.0, 1.0],
-          "source":     "ai" | "ai_low_conf_regex_fallback" |
-                        "ai_error_regex_fallback" | "regex_fallback" | "empty",
+          "source":     "ai" | "ai_low_conf" | "ai_error" |
+                        "ai_unavailable" | "ai_bad_enum" | "empty",
           "latency_ms": int (when AI was called),
           # plus diagnostic echo when we fell back from AI:
           "ai_intent": ..., "ai_topic": ..., "ai_confidence": ..., "error": ...
@@ -1238,7 +1176,7 @@ def _understand_question_inner(question: str,
             client = None
 
     if client is None:
-        return _fallback_classify(q)
+        return _ai_unavailable_defaults(q)
 
     t0 = time.time()
     try:
@@ -1246,7 +1184,7 @@ def _understand_question_inner(question: str,
         # `max_tokens` to `max_completion_tokens` and reject the legacy
         # name with HTTP 400. Try the new name first, fall back to the
         # legacy name for older models. Without this guard, EVERY SQU
-        # call silently dropped to `_fallback_classify` (regex) — losing
+        # call silently dropped to defaults — losing
         # all LLM-derived fields (subtopic, emotion, urgency, cleaned_q,
         # multi-intent) for the entire request.
         _create_kwargs = dict(
@@ -1313,39 +1251,19 @@ def _understand_question_inner(question: str,
                     topic = v.strip().lower()
                     break
         if intent not in INTENTS or topic not in TOPICS:
-            fb = _fallback_classify(q)
-            fb["source"] = "ai_error_regex_fallback"
+            fb = _ai_unavailable_defaults(q)
+            fb["source"] = "ai_bad_enum"
             fb["error"] = f"bad enum: intent={intent!r} topic={topic!r}"
             fb["latency_ms"] = latency_ms
-            return fb
-
-        # Confidence floor — under 0.6 we still return AI's view but mark it
-        # as fallback so any threshold checks downstream can act.
-        if conf < 0.6:
-            fb = _fallback_classify(q)
-            fb["source"] = "ai_low_conf_regex_fallback"
             fb["ai_intent"] = intent
             fb["ai_topic"] = topic
-            fb["ai_confidence"] = conf
-            fb["latency_ms"] = latency_ms
-            # Keep AI's ranked extras even at low confidence — they're useful
-            # diagnostics even if the engine routing uses regex primaries.
-            fb.update(_normalise_multi_fields(data, intent, topic))
-            # Phase 2.8.41 — also keep the AI's SQU-extension fields when
-            # the call succeeded but confidence was below the floor. The
-            # 5 new fields are independent of intent/topic accuracy, so
-            # the AI's emotion / urgency / cleaned_q reads are still
-            # useful for the narrator. final_topic_lock follows the
-            # regex-derived `topic` already set in `fb` above.
-            fb.update(_normalise_new_squ_fields(data))
-            fb["final_topic_lock"] = fb.get("topic") or "general"
             return fb
 
         out = {
             "intent":     intent,
             "topic":      topic,
             "confidence": conf,
-            "source":     "ai",
+            "source":     "ai_low_conf" if conf < 0.6 else "ai",
             "latency_ms": latency_ms,
         }
         out.update(_normalise_multi_fields(data, intent, topic))
@@ -1377,22 +1295,6 @@ def _understand_question_inner(question: str,
         out["domain_anchor_found"]      = domain_anchor
         out["sustained_problem_pattern"] = sustained
         out["clarification_needed"]      = sustained and not domain_anchor
-        # Topic recovery — when the AI returned topic="general" but the
-        # question text contains a clear life-area anchor, override using
-        # the regex fallback so downstream domain-specific paths fire.
-        # ONLY applies when topic was the catch-all 'general' AND a
-        # specific anchor is found — never overrides an explicit AI
-        # choice between two specific topics.
-        if out.get("topic") == "general" and domain_anchor:
-            for tname, rx in _FALLBACK_TOPIC_RX:
-                if rx.search(q):
-                    out["topic_recovered_from_general"] = True
-                    out["topic_original_ai"] = "general"
-                    out["topic"] = tname
-                    existing = [t for t in (out.get("topics_all") or [])
-                                if t != tname and t != "general"]
-                    out["topics_all"] = [tname] + existing
-                    break
         # Phase 2.8.41 — final_topic_lock is the canonical post-recovery
         # topic. Engine routing + narrator topic-context both read this
         # so they never drift apart from the AI's original `topic` field.
@@ -1400,8 +1302,8 @@ def _understand_question_inner(question: str,
         return out
     except Exception as exc:
         latency_ms = int((time.time() - t0) * 1000)
-        fb = _fallback_classify(q)
-        fb["source"] = "ai_error_regex_fallback"
+        fb = _ai_unavailable_defaults(q)
+        fb["source"] = "ai_error"
         fb["error"] = str(exc)[:200]
         fb["latency_ms"] = latency_ms
         return fb

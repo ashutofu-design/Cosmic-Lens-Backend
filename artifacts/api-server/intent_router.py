@@ -1,26 +1,8 @@
 """
-AI Intent Router for Cosmic Lens.
+AI-only intent routing for legacy ai_ask paths.
 
-Replaces brittle regex-based question classification with a tiny
-gpt-4o-mini call that classifies each user question into one of a
-fixed set of routes. The main answer pipeline then picks the right
-prompt template / engine path based on this route.
-
-Routes (8 total):
-  simple_fact   — pure chart lookup: rashi/lagna/nakshatra/dasha
-  dosha_check   — yes/no dosha question (manglik, kaal sarp, pitru, etc)
-  transparency  — "kaise pata / how do you know" follow-ups
-  timing        — "kab hogi shaadi/job/promotion" (engine path)
-  remedy        — upay / mantra / jaap requests
-  analysis      — kyun / kaise / deep interpretation (full pipeline)
-  general       — concept / knowledge question, no chart needed
-  greeting      — hi / hello / namaste / thanks
-
-Design:
-  • SINGLE classifier call, ~200ms latency, ~₹0.01/query
-  • Returns a route string, never raises (falls back to "analysis")
-  • In-memory cache keyed on (lowercased question) for repeat hits
-  • Caller can opt-out via env var COSMIC_DISABLE_INTENT_ROUTER=1
+Delegates to ask_cosmo.understand_question (single classifier).
+No separate regex router and no duplicate mini-LLM call here.
 """
 
 from __future__ import annotations
@@ -31,8 +13,6 @@ from typing import Optional
 
 log = logging.getLogger(__name__)
 
-# Allowed route values — keep in sync with the prompt below and with
-# the router branches in openai_helper._build_messages.
 ROUTES = (
     "simple_fact",
     "dosha_check",
@@ -44,67 +24,41 @@ ROUTES = (
     "greeting",
 )
 
-_FALLBACK = "analysis"  # safest default — full pipeline answers anything
+_FALLBACK = "analysis"
 
 _CACHE: dict[str, str] = {}
 _CACHE_MAX = 512
 
-_CLASSIFIER_PROMPT = (
-    "You classify a single user question for a Vedic astrology chat app "
-    "into EXACTLY ONE route label. Output ONLY the label, nothing else, "
-    "no quotes, no explanation.\n\n"
-    "ROUTES (pick the SINGLE best match):\n\n"
-    "• simple_fact — pure chart lookup; user wants ONE fact about their "
-    "own chart (rashi, lagna, ascendant, sun sign, moon sign, nakshatra, "
-    "current dasha, mahadasha, antardasha). Short questions like 'mera "
-    "rashi kya hai', 'lagna batao', 'kaun sa nakshatra'.\n\n"
-    "• dosha_check — yes/no question about a specific dosh in user's own "
-    "chart: manglik, kaal sarp, pitru dosh, guru chandal, grahan, "
-    "daridra, angarak, shrapit, kemadruma. Examples: 'kya me manglik "
-    "hun', 'mujhe kaal sarp dosh hai kya', 'pitru dosh hai mera'.\n\n"
-    "• transparency — meta question: how did the system know a chart "
-    "fact. Examples: 'tumko kaise pata', 'kaise jaana', 'how do you "
-    "know', 'kahan se aaya', 'proof kya hai', 'source kya hai'.\n\n"
-    "• timing — 'when' question about a future life event: shaadi/"
-    "marriage, job/career change, promotion, baby/child, foreign travel, "
-    "house/property, business start, money/wealth gain. Hindi cues: "
-    "'kab hogi', 'kab milega', 'kab tak'. English cues: 'when will'.\n\n"
-    "• remedy — user explicitly asks for upay, mantra, jaap, ratna/gem, "
-    "puja, rudraksha, daan, totka, parihara to fix something.\n\n"
-    "• analysis — user wants interpretation, reasoning, personality "
-    "reading, relationship/career/health/finance scope, planet effect, "
-    "yoga effect, conditional 'agar X hai toh kya'. Generally needs "
-    "engine facts + AI interpretation. Default for any chart-based "
-    "question that is NOT a pure lookup, dosha check, transparency, "
-    "or timing question.\n"
-    "  IMPORTANT — these are ALL analysis (about USER's own chart):\n"
-    "    'saturn powerful hai ya weak' / 'mera saturn strong hai kya' /\n"
-    "    'jupiter achha hai ya kharab' / 'mars kaisa hai mera' /\n"
-    "    'venus weak hai kya' / 'rahu mere liye achha hai' /\n"
-    "    'mera 7th house kaisa hai' / 'mere liye career kaisa hai' /\n"
-    "    'love marriage hogi ya arrange' / 'kaisa rahega 2027'.\n"
-    "  Even when question lacks the word 'mera/my', if it asks about a\n"
-    "  specific planet/house/yoga's quality (strong/weak/good/bad) it\n"
-    "  is about the user's own chart unless they explicitly ask the\n"
-    "  generic concept ('X kya hota hai', 'X meaning'). When in doubt\n"
-    "  between analysis vs general, PREFER analysis.\n\n"
-    "• general — concept/knowledge question that needs NO personal "
-    "chart. Must be a clear definition/concept ask, not a chart "
-    "judgement. Examples: 'manglik kya hota hai', 'rahu ka matlab "
-    "kya hai', 'navagraha kaun se hain', 'difference between rashi "
-    "and lagna', 'shadbala kaise calculate hota hai'.\n"
-    "  NOT general: 'saturn strong hai ya weak', 'mars achha hai ya "
-    "kharab' — these are personal chart judgements → analysis.\n\n"
-    "• greeting — pure social opener with no question: 'hi', 'hello', "
-    "'namaste', 'pranam', 'thanks', 'thank you', 'good morning'.\n\n"
-    "OUTPUT FORMAT: exactly one of these tokens, lowercase, no quotes:\n"
-    "simple_fact | dosha_check | transparency | timing | remedy | "
-    "analysis | general | greeting"
-)
-
 
 def _normalize(q: str) -> str:
     return " ".join((q or "").strip().lower().split())[:240]
+
+
+def _route_from_understanding(u: dict) -> str:
+    intent = str(u.get("intent") or "analysis").lower().strip()
+    topic = str(u.get("topic") or "general").lower().strip()
+    cleaned = str(u.get("cleaned_q") or "").lower()
+    subtopic = str(u.get("subtopic") or "").lower()
+
+    if intent == "timing":
+        return "timing"
+    if intent == "planet":
+        return "simple_fact"
+    if intent == "problem" and any(
+        x in cleaned for x in ("manglik", "dosh", "dosha", "kaal sarp", "pitru")
+    ):
+        return "dosha_check"
+    if any(x in cleaned for x in ("kaise pata", "how do you know", "proof", "source")):
+        return "transparency"
+    if intent == "decision" and any(
+        x in cleaned + subtopic for x in ("upay", "mantra", "jaap", "remedy", "parihara")
+    ):
+        return "remedy"
+    if topic == "general" and intent == "analysis" and any(
+        x in cleaned for x in ("kya hota hai", "what is ", "matlab", "meaning")
+    ):
+        return "general"
+    return "analysis"
 
 
 def classify_intent(
@@ -112,115 +66,29 @@ def classify_intent(
     history: Optional[list] = None,
     client=None,
 ) -> str:
-    """
-    Classify a user question into one of the 8 ROUTES.
-
-    Args:
-        question: The current user message.
-        history: Recent chat turns (used only for short follow-ups).
-        client: Optional pre-built OpenAI client. If None, will lazily
-                build one via openai_helper._get_client().
-
-    Returns:
-        One of ROUTES. On any failure returns _FALLBACK ("analysis").
-    """
     q = _normalize(question)
     if not q:
         return _FALLBACK
 
-    # Kill-switch for emergencies / load tests.
     if os.environ.get("COSMIC_DISABLE_INTENT_ROUTER", "").strip() == "1":
         return _FALLBACK
 
-    # Cache hit — same question phrasing was already classified.
     cached = _CACHE.get(q)
     if cached:
         return cached
 
-    # Always prepend the LAST assistant + user turn (when available) so
-    # the classifier can disambiguate follow-ups like "saturn powerful
-    # hai ya weak" (looks general standalone, but is clearly about the
-    # user's chart given the prior assistant turn talked about their
-    # Saturn position). We only prepend for short-to-medium questions
-    # (≤ 12 words) — longer questions usually carry their own context.
-    user_msg = question.strip()
-    if history and len(question.split()) <= 12:
-        prev_user = ""
-        prev_asst = ""
-        for h in reversed(history[-6:]):
-            role = h.get("role")
-            content = (h.get("content") or h.get("text") or "").strip()
-            if not content:
-                continue
-            if role == "assistant" and not prev_asst:
-                prev_asst = content[:240]
-            elif role == "user" and not prev_user:
-                prev_user = content[:240]
-            if prev_user and prev_asst:
-                break
-        ctx_bits = []
-        if prev_user:
-            ctx_bits.append(f"[previous user question: {prev_user}]")
-        if prev_asst:
-            ctx_bits.append(f"[previous assistant reply: {prev_asst}]")
-        if ctx_bits:
-            user_msg = "\n".join(ctx_bits) + f"\n[current question: {question.strip()}]"
-
     try:
-        if client is None:
-            from openai_helper import _get_client  # type: ignore
-            client = _get_client()
-        if client is None:
-            return _FALLBACK
+        from ask_cosmo import understand_question
 
-        model = os.environ.get("COSMIC_INTENT_MODEL", "gpt-4o-mini")
-
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": _CLASSIFIER_PROMPT},
-                {"role": "user", "content": user_msg},
-            ],
-            temperature=0.0,
-            max_tokens=8,
-            timeout=8,
-        )
-        raw = ""
-        try:
-            raw = (resp.choices[0].message.content or "").strip().lower()
-        except Exception:
-            raw = ""
-
-        # Strip stray quotes / punctuation, take first token.
-        raw = raw.replace('"', "").replace("'", "").replace("`", "")
-        token = raw.split()[0] if raw else ""
-        # Some models emit hyphen variants — normalise.
-        token = token.replace("-", "_")
-
-        if token in ROUTES:
-            _remember(q, token)
-            log.info("intent_router classified %r -> %s", q[:80], token)
-            return token
-
-        # Soft fuzzy: substring match against route names.
-        for r in ROUTES:
-            if r in raw:
-                _remember(q, r)
-                log.info("intent_router fuzzy %r -> %s (raw=%r)", q[:80], r, raw)
-                return r
-
-        log.warning("intent_router unknown label %r for %r", raw, q[:80])
-        return _FALLBACK
+        u = understand_question(question, client=client)
+        route = _route_from_understanding(u)
+        if route not in ROUTES:
+            route = _FALLBACK
+        if len(_CACHE) >= _CACHE_MAX:
+            _CACHE.clear()
+        _CACHE[q] = route
+        log.info("intent_router(understand_question) %r -> %s", q[:80], route)
+        return route
     except Exception as exc:
-        log.warning("intent_router failed: %s — falling back to %s", exc, _FALLBACK)
+        log.warning("intent_router failed: %s — fallback %s", exc, _FALLBACK)
         return _FALLBACK
-
-
-def _remember(key: str, route: str) -> None:
-    if len(_CACHE) >= _CACHE_MAX:
-        # Drop one arbitrary entry — simple FIFO-ish behaviour.
-        try:
-            _CACHE.pop(next(iter(_CACHE)))
-        except StopIteration:
-            pass
-    _CACHE[key] = route

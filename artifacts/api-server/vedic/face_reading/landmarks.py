@@ -85,7 +85,8 @@ class Quality:
     pitch_deg: float = 0.0
     roll_deg: float = 0.0
     brightness: float = 0.0
-    sharpness: float = 0.0
+    sharpness: float = 0.0          # Laplacian variance on face crop (primary)
+    sharpness_global: float = 0.0   # full-frame (debug / portrait-mode check)
     portrait_blur_warning: bool = False
     edge_clipping: list = field(default_factory=list)   # which edges face touches
     distance_estimate: str = "unknown"
@@ -186,13 +187,12 @@ def extract_landmarks(image_bytes: bytes,
     for n in decoded.notes:
         q.issues.append(f"info:{n}")
 
-    # ── 2. Brightness / sharpness pre-checks ───────────────────────────────
+    # ── 2. Brightness pre-check (sharpness measured on face crop later) ─────
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
     q.brightness = float(round(gray.mean(), 2))
-    q.sharpness = float(round(cv2.Laplacian(gray, cv2.CV_64F).var(), 2))
-    if q.brightness < 50:    q.issues.append("too_dark")
-    elif q.brightness > 230: q.issues.append("too_bright")
-    if q.sharpness < 30:     q.issues.append("blurry")
+    q.sharpness_global = float(round(cv2.Laplacian(gray, cv2.CV_64F).var(), 2))
+    if q.brightness < 45:    q.issues.append("too_dark")
+    elif q.brightness > 238: q.issues.append("too_bright")
 
     # ── 3. Multi-face count (run before mesh) ──────────────────────────────
     try:
@@ -202,6 +202,9 @@ def extract_landmarks(image_bytes: bytes,
             q.issues.append(f"multiple_faces_detected (count={q.face_count})")
     except Exception as e:
         q.issues.append(f"face_detector_failed: {e}")
+
+    if q.face_count == 0:
+        q.issues.append("no_face_in_image")
 
     # ── 4. FaceMesh (do this before WB so detection isn't affected) ────────
     fm = _get_face_mesh()
@@ -229,7 +232,27 @@ def extract_landmarks(image_bytes: bytes,
     }
     if q.face_bbox["area_ratio"] < 0.05:
         q.issues.append("face_too_small")
-    edge_thresh = max(2, int(min(w, h) * 0.005))
+
+    # Face-region sharpness (phones often blur background; full-frame Laplacian is misleading)
+    try:
+        pad = max(2, int(min(bw, bh) * 0.04))
+        fy0 = max(0, by - pad)
+        fy1 = min(h, by + bh + pad)
+        fx0 = max(0, bx - pad)
+        fx1 = min(w, bx + bw + pad)
+        face_patch = gray[fy0:fy1, fx0:fx1]
+        face_var = float(cv2.Laplacian(face_patch, cv2.CV_64F).var()) if face_patch.size else 0.0
+        # Scale-normalize so distant-but-sharp faces are not penalized
+        norm = face_var * (max(bh, 80) / 200.0)
+        q.sharpness = float(round(norm, 2))
+        if norm < 28:
+            q.issues.append("blurry")
+    except Exception:
+        q.sharpness = q.sharpness_global
+        if q.sharpness_global < 22:
+            q.issues.append("blurry")
+
+    edge_thresh = max(2, int(min(w, h) * 0.008))
     if bx <= edge_thresh:           q.edge_clipping.append("left")
     if by <= edge_thresh:           q.edge_clipping.append("top")
     if (w - (bx + bw)) <= edge_thresh: q.edge_clipping.append("right")
@@ -253,15 +276,15 @@ def extract_landmarks(image_bytes: bytes,
         q.yaw_deg = round(yaw, 1)
         q.pitch_deg = round(pitch, 1)
         q.roll_deg = round(roll, 1)
-        if angle == "front" and abs(yaw) > 18:
+        if angle == "front" and abs(yaw) > 28:
             q.issues.append(f"not_frontal (yaw={yaw:.0f}°)")
-        elif angle == "left" and yaw > -25:
+        elif angle == "left" and yaw > -18:
             q.issues.append(f"left_profile_too_shallow (yaw={yaw:.0f}°)")
-        elif angle == "right" and yaw < 25:
+        elif angle == "right" and yaw < 18:
             q.issues.append(f"right_profile_too_shallow (yaw={yaw:.0f}°)")
-        if abs(roll) > 20:
+        if abs(roll) > 28:
             q.issues.append(f"head_tilted (roll={roll:.0f}°)")
-        if abs(pitch) > 25:
+        if abs(pitch) > 32:
             q.issues.append(f"head_pitched (pitch={pitch:.0f}°)")
     except Exception as e:
         q.issues.append(f"pose_estimation_failed: {e}")
@@ -363,23 +386,51 @@ def extract_landmarks(image_bytes: bytes,
     # ── 16. Cache RGB for downstream engines (in-memory only) ──────────────
     result.rgb_image = rgb
 
+    # ── 16b. Plausibility — reject obvious non-face uploads ───────────────
+    _apply_face_plausibility_checks(result)
+
     # ── 17. Final score ────────────────────────────────────────────────────
     score = 100
-    if "blurry" in q.issues: score -= 30
-    if "too_dark" in q.issues or "too_bright" in q.issues: score -= 20
-    if "face_too_small" in q.issues: score -= 25
-    if any(i.startswith("not_frontal") or i.startswith("left_profile_too_shallow")
-           or i.startswith("right_profile_too_shallow") for i in q.issues): score -= 25
-    if any(i.startswith("head_tilted") for i in q.issues): score -= 10
-    if any(i.startswith("head_pitched") for i in q.issues): score -= 8
-    if any(i.startswith("multiple_faces_detected") for i in q.issues): score -= 40
-    if any(i.startswith("non_neutral_expression") for i in q.issues): score -= 8
-    if any(i.startswith("glasses_or_occlusion_detected") for i in q.issues): score -= 10
-    if any(i.startswith("face_clipped_at") for i in q.issues): score -= 15
-    if any(i.startswith("camera_too_far") or i.startswith("camera_too_close") for i in q.issues): score -= 10
-    if any(i.startswith("portrait_mode_bokeh_detected") for i in q.issues): score -= 5
-    if any(i.startswith("beard_detected") for i in q.issues): score -= 5
+    if any(str(i).startswith("not_a_face") for i in q.issues):
+        score = 0
+    if "no_face_detected" in q.issues or "no_face_in_image" in q.issues:
+        score = 0
+    if "blurry" in q.issues:
+        score -= 18 if angle == "front" else 10
+    if "too_dark" in q.issues or "too_bright" in q.issues:
+        score -= 15
+    if "face_too_small" in q.issues:
+        score -= 20
+    if any(i.startswith("not_frontal") for i in q.issues):
+        score -= 12
+    if any(i.startswith("left_profile_too_shallow") or i.startswith("right_profile_too_shallow")
+           for i in q.issues):
+        score -= 10 if angle in ("left", "right") else 0
+    if any(i.startswith("head_tilted") for i in q.issues):
+        score -= 6
+    if any(i.startswith("head_pitched") for i in q.issues):
+        score -= 5
+    if any(i.startswith("multiple_faces_detected") for i in q.issues):
+        score -= 40
+    if any(i.startswith("non_neutral_expression") for i in q.issues):
+        score -= 4
+    if any(i.startswith("glasses_or_occlusion_detected") for i in q.issues):
+        score -= 5
+    if any(i.startswith("face_clipped_at") for i in q.issues):
+        score -= 8
+    if any(i.startswith("camera_too_far") or i.startswith("camera_too_close") for i in q.issues):
+        score -= 8
+    if any(i.startswith("portrait_mode_bokeh_detected") for i in q.issues):
+        score -= 3
+    if any(i.startswith("beard_detected") for i in q.issues):
+        score -= 3
     q.score = max(0, score)
+    # Good landmark lock → floor so accurate selfies are not rejected by stacked soft warnings
+    if q.face_detected and q.landmark_count >= 468 and not any(
+        str(i).startswith("not_a_face") for i in q.issues
+    ):
+        floor = 52 if angle == "front" else 42
+        q.score = max(q.score, floor)
 
     return result
 
@@ -387,6 +438,54 @@ def extract_landmarks(image_bytes: bytes,
 # ═══════════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════════
+def _apply_face_plausibility_checks(result: "LandmarkSet") -> None:
+    """Flag uploads that are not a plausible human face (objects, scenery, etc.)."""
+    q = result.quality
+    if not q.face_detected or not result.points_px:
+        return
+
+    bbox = q.face_bbox or {}
+    bw = float(bbox.get("w") or 0)
+    bh = float(bbox.get("h") or 0)
+    area = float(bbox.get("area_ratio") or 0)
+
+    if bw <= 0 or bh <= 0:
+        q.issues.append("not_a_face:invalid_geometry")
+        return
+
+    aspect = bw / bh
+    if aspect < 0.52 or aspect > 1.45:
+        q.issues.append("not_a_face:unnatural_face_shape")
+
+    if area < 0.035:
+        q.issues.append("not_a_face:subject_too_small")
+    elif area > 0.88:
+        q.issues.append("not_a_face:invalid_framing")
+
+    if q.face_count == 0:
+        q.issues.append("not_a_face:low_detector_confidence")
+
+    try:
+        expr = result.expression
+        if expr is not None:
+            ear = float(getattr(expr, "eyes_open_score", 0) or 0)
+            if ear < 0.05:
+                q.issues.append("not_a_face:eyes_not_visible")
+    except Exception:
+        pass
+
+    try:
+        iris = result.iris
+        if iris is not None:
+            ipd = float(getattr(iris, "inter_pupillary_distance_px", 0) or 0)
+            if ipd > 0 and bw > 0:
+                ipd_ratio = ipd / bw
+                if ipd_ratio < 0.12 or ipd_ratio > 0.55:
+                    q.issues.append("not_a_face:unnatural_eye_spacing")
+    except Exception:
+        pass
+
+
 def _estimate_pose(pts_px, img_w: int, img_h: int) -> tuple[float, float, float]:
     image_pts = np.array([
         pts_px[1], pts_px[152], pts_px[33], pts_px[263], pts_px[61], pts_px[291],
@@ -501,7 +600,7 @@ def _compute_expression_info(pts_px) -> ExpressionInfo:
 
     if info.eyes_open_score < 0.18:  info.flags.append("eyes_closed_or_squinting")
     if info.mouth_open_score > 0.15: info.flags.append("mouth_open")
-    if info.smile_score > 0.06:      info.flags.append("smiling")
+    if info.smile_score > 0.10:      info.flags.append("smiling")
     info.is_neutral = len(info.flags) == 0
     return info
 
@@ -539,7 +638,7 @@ def _compute_occlusion_info(rgb_img: np.ndarray, pts_px) -> OcclusionInfo:
     if edge_strength > 1500:      score += 0.15
     if edge_strength > 3000:      score += 0.15
     info.glasses_score = round(min(score, 1.0), 2)
-    info.glasses_likely = info.glasses_score >= 0.5
+    info.glasses_likely = info.glasses_score >= 0.62
     if info.glasses_likely:
         info.notes.append("brightness_drop_and_high_edges_in_eye_region")
     return info
@@ -571,3 +670,32 @@ def landmark_set_to_dict(ls: LandmarkSet, include_points: bool = False) -> dict:
     else:
         d["landmark_count"] = len(ls.points_norm)
     return d
+
+
+def landmark_set_from_dict(d: dict) -> LandmarkSet:
+    """Rebuild LandmarkSet from Redis/session JSON (no rgb_image)."""
+    ls = LandmarkSet(angle=d.get("angle") or "front")
+    ls.points_norm = list(d.get("points_norm") or [])
+    ls.points_px = [tuple(p) if isinstance(p, (list, tuple)) else p for p in (d.get("points_px") or [])]
+
+    qd = d.get("quality") or {}
+    if isinstance(qd, dict):
+        ls.quality = Quality(**{k: v for k, v in qd.items() if k in Quality.__dataclass_fields__})
+
+    if d.get("iris"):
+        ls.iris = IrisInfo(**{k: v for k, v in d["iris"].items() if k in IrisInfo.__dataclass_fields__})
+    if d.get("expression"):
+        ls.expression = ExpressionInfo(
+            **{k: v for k, v in d["expression"].items() if k in ExpressionInfo.__dataclass_fields__}
+        )
+    if d.get("occlusion"):
+        ls.occlusion = OcclusionInfo(
+            **{k: v for k, v in d["occlusion"].items() if k in OcclusionInfo.__dataclass_fields__}
+        )
+    for attr in (
+        "skin", "hairline", "moles", "oiliness", "wrinkles",
+        "dark_circles", "beard", "eyebrow_density", "hair_color",
+    ):
+        if d.get(attr) is not None:
+            setattr(ls, attr, d[attr])
+    return ls

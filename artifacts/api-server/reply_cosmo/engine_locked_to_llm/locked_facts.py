@@ -1198,7 +1198,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     # Sprint-44 / Phase S — Numerology + Vastu Integration (Driver/Conductor/Kua + 8 directions + chart-derived defects)
     phase_s_str = ""
     try:
-        from vedic.numerology.phase_s import compute_phase_s, format_phase_s  # type: ignore
+        from numerology.core.phase_s import compute_phase_s, format_phase_s  # type: ignore
         phase_s_str = format_phase_s(compute_phase_s(kundli, birth or {}))
     except Exception as exc:  # noqa: BLE001
         print(f"[locked_facts] phase-S numerology+vastu (Sprint-44) failed: {exc}")
@@ -1206,7 +1206,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     # Sprint 53-N1 — Numerology DEEP (Lo Shu Grid, Personal Year/Month/Day, Life-Path, Soul-Urge/Personality/Expression, Master numbers, Karmic Debt, Cheiro Compound)
     numerology_deep_str = ""
     try:
-        from vedic.numerology.extended import (  # type: ignore
+        from numerology.core.extended import (  # type: ignore
             compute_extended_numerology, format_extended_numerology,
         )
         numerology_deep_str = format_extended_numerology(
@@ -1218,7 +1218,7 @@ def build_locked_facts(kundli: Any, birth: Any = None) -> str:
     # Sprint 53-N2 — Numerology PRACTICAL (Pinnacles+Challenges, Career fit, Lucky catalog: color/gem/metal/day/direction/mantra/ishta/fast/dates)
     numerology_practical_str = ""
     try:
-        from vedic.numerology.practical import (  # type: ignore
+        from numerology.core.practical import (  # type: ignore
             compute_practical, format_practical,
         )
         numerology_practical_str = format_practical(compute_practical(birth or {}))

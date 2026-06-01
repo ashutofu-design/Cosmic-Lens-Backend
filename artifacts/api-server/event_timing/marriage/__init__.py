@@ -79,14 +79,69 @@ def assess_marriage(kundli: dict, intel: dict, kp: dict,
     return verdict
 
 
+def _format_timing_locked_facts(v: dict) -> str:
+    """Timing-only LOCKED FACTS (Steps 0–8) for LLM / narrator paths."""
+    primary = (v.get("primary_window") or "").strip()
+    if not primary:
+        top3 = v.get("top_3_windows") or []
+        if top3 and isinstance(top3[0], dict):
+            primary = (top3[0].get("window") or "").strip()
+    if not primary and not v.get("verdict"):
+        return ""
+
+    bar = "═" * 68
+    lines = [
+        "",
+        bar,
+        "🔒 MARRIAGE TIMING ENGINE — LOCKED FACTS (Steps 0–8)",
+        bar,
+        f"VERDICT        : {v.get('verdict') or 'UNKNOWN'}  (band: {v.get('band') or '?'})",
+        f"PRIMARY WINDOW : {primary or 'none'}",
+    ]
+    backup = (v.get("backup_window") or "").strip()
+    if backup:
+        lines.append(f"BACKUP WINDOW  : {backup}")
+    step0 = v.get("step0_tendency") or {}
+    if step0:
+        lines.append(
+            f"STEP0          : {step0.get('verdict')} | pace={step0.get('combined_pace')} "
+            f"| delay_vs_late={step0.get('delay_vs_late')}"
+        )
+    if v.get("chart_late_marriage"):
+        lines.append("CHART LATE     : yes — near-term current-PD mat bolo agar PRIMARY door ho")
+    ref = (v.get("step0a") or v.get("step0") or {}).get(
+        "dasha_scan_plan", {}
+    ).get("primary_reference_age")
+    if ref is not None:
+        lines.append(f"BCP PRIMARY AGE: {ref}")
+    if v.get("final_transit_support") is not None:
+        lines.append(
+            f"TRANSIT (final): support={v.get('final_transit_support')} "
+            f"double={v.get('final_double_transit')} "
+            f"({v.get('final_transit_detail') or ''})"
+        )
+    directive = (
+        (v.get("step0a") or {}).get("llm_directive")
+        or (v.get("step0") or {}).get("llm_directive")
+        or ""
+    )
+    if directive:
+        lines.append(f"DIRECTIVE      : {directive[:400]}")
+    lines.append(
+        "★ TIMING AUTHORITY: PRIMARY WINDOW ko verbatim bolo; apne se 2026 mat invent karo "
+        "jab PRIMARY 2030+ ho. ★"
+    )
+    lines.append(bar)
+    lines.append("")
+    return "\n".join(lines)
+
+
 def format_verdict_for_prompt(v: dict) -> str:
     """Render verdict dict as authoritative prompt block for LLM.
 
     Empty / falsy verdict -> empty string (openai_helper skips the block).
 
-    Phase 2.8.25 — populates the LOCKED FACTS block for the marriage_type
-    classifier so the LLM actually sees engine output (was empty stub before,
-    making the whole 25-rule + 3-trust-layer engine invisible to production).
+    Phase 2.8.25 — marriage_type block + timing LOCKED FACTS (Steps 0–8).
 
     Block contract (matches existing openai_helper.py expectations):
       - Opens with a ════ separator (so narrator-mode prefix can detect it)
@@ -101,14 +156,18 @@ def format_verdict_for_prompt(v: dict) -> str:
     """
     if not v:
         return ""
+
+    timing_block = _format_timing_locked_facts(v)
+
     mt = v.get("marriage_type") or {}
     if not mt:
-        # marriage_type engine produced nothing — fall back to whatever the
-        # timing engine put in v (currently still stub) without a block.
-        return ""
+        return timing_block
 
     bar = "═" * 68
     lines: list[str] = []
+    if timing_block.strip():
+        lines.append(timing_block.strip())
+        lines.append("")
     lines.append(bar)
     lines.append("MARRIAGE TYPE ENGINE — LOCKED FACTS (do not contradict)")
     lines.append(bar)
@@ -280,10 +339,15 @@ def extract_window_str(v: dict) -> str:
     """
     if not v:
         return ""
+    w = (v.get("primary_window") or "").strip()
+    if w:
+        return w
+    top3 = v.get("top_3_windows") or []
+    if top3 and isinstance(top3[0], dict):
+        return (top3[0].get("window") or "").strip()
     nw = v.get("next_window") or {}
-    if not nw:
-        return ""
-    # User will fill in the human-readable formatter (e.g. _ym_to_human).
+    if isinstance(nw, dict):
+        return (nw.get("window") or nw.get("label") or "").strip()
     return ""
 
 
@@ -294,6 +358,12 @@ def extract_alt_window_str(v: dict) -> str:
     """
     if not v:
         return ""
+    w = (v.get("backup_window") or "").strip()
+    if w:
+        return w
+    top3 = v.get("top_3_windows") or []
+    if len(top3) > 1 and isinstance(top3[1], dict):
+        return (top3[1].get("window") or "").strip()
     return ""
 
 

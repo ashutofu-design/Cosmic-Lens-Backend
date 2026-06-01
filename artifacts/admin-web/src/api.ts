@@ -47,6 +47,14 @@ export interface Dashboard {
   };
 }
 
+export interface AdminStats {
+  total_users: number;
+  pro_users: number;
+  active_today: number;
+  total_kundli: number;
+  payments: Dashboard["payments"];
+}
+
 export interface AdminUser {
   id: number;
   name: string;
@@ -81,35 +89,25 @@ export interface AdminTransaction {
   paid_at: string | null;
 }
 
-export function fetchDashboard() {
-  return adminFetch<Dashboard>("/api/admin/dashboard");
+export interface LoginActivityItem {
+  id: number;
+  user_id: number | null;
+  user_name: string;
+  email: string | null;
+  provider: string;
+  ip: string;
+  success: boolean;
+  error: string;
+  created_at: string | null;
 }
 
-export function fetchTransactions(page: number) {
-  const q = new URLSearchParams({ page: String(page), per_page: "50" });
-  return adminFetch<{
-    transactions: AdminTransaction[];
-    total: number;
-    page: number;
-    pages: number;
-  }>(`/api/admin/transactions?${q}`);
-}
-
-export function fetchUsers(page: number, search: string) {
-  const q = new URLSearchParams({ page: String(page), per_page: "50" });
-  if (search.trim()) q.set("search", search.trim());
-  return adminFetch<{
-    users: AdminUser[];
-    total: number;
-    page: number;
-    pages: number;
-  }>(`/api/admin/users?${q}`);
-}
-
-export function deleteUser(id: number) {
-  return adminFetch<{ success: boolean }>(`/api/admin/users/${id}`, {
-    method: "DELETE",
-  });
+export interface PurchaseLine {
+  product?: string;
+  sku?: string;
+  label?: string;
+  amount_inr: number;
+  paid_at: string | null;
+  property_name?: string;
 }
 
 export interface KundliProfileRow {
@@ -165,13 +163,88 @@ export interface UserDetail {
   };
   legacy_kundli: LegacyKundliRow | null;
   recent_logins?: LoginActivityRow[];
+  couple_report_purchases?: PurchaseLine[];
+  astrovastu_purchases?: PurchaseLine[];
+}
+
+export function fetchDashboard() {
+  return adminFetch<Dashboard>("/api/admin/dashboard");
+}
+
+export function fetchStats() {
+  return adminFetch<AdminStats>("/api/admin/stats");
+}
+
+export function fetchTransactions(
+  page: number,
+  opts?: { email?: string; userId?: number; status?: string },
+) {
+  const q = new URLSearchParams({ page: String(page), per_page: "50" });
+  if (opts?.email?.trim()) q.set("email", opts.email.trim());
+  if (opts?.userId) q.set("user_id", String(opts.userId));
+  if (opts?.status) q.set("status", opts.status);
+  return adminFetch<{
+    transactions: AdminTransaction[];
+    total: number;
+    page: number;
+    pages: number;
+  }>(`/api/admin/transactions?${q}`);
+}
+
+export function fetchLoginActivity(opts?: {
+  offset?: number;
+  limit?: number;
+  email?: string;
+  success?: string;
+}) {
+  const q = new URLSearchParams({ gmail_only: "1", limit: String(opts?.limit ?? 100) });
+  if (opts?.offset) q.set("offset", String(opts.offset));
+  if (opts?.email?.trim()) q.set("email", opts.email.trim());
+  if (opts?.success) q.set("success", opts.success);
+  return adminFetch<{ items: LoginActivityItem[]; total: number }>(
+    `/api/admin/login-activity?${q}`,
+  );
+}
+
+export function fetchUsers(page: number, search: string, plan: string) {
+  const q = new URLSearchParams({ page: String(page), per_page: "50" });
+  if (search.trim()) q.set("search", search.trim());
+  if (plan.trim()) q.set("plan", plan.trim());
+  return adminFetch<{
+    users: AdminUser[];
+    total: number;
+    page: number;
+    pages: number;
+  }>(`/api/admin/users?${q}`);
+}
+
+export function deleteUser(id: number) {
+  return adminFetch<{ success: boolean }>(`/api/admin/users/${id}`, {
+    method: "DELETE",
+  });
 }
 
 export function fetchUserDetail(userId: number) {
   return adminFetch<UserDetail>(`/api/admin/users/${userId}`);
 }
 
-/** Use legacy kundlis row when profile birth fields are empty (older API rows). */
+export function setUserPro(userId: number, enable: boolean) {
+  return adminFetch<{ success: boolean; plan: string; is_pro: boolean }>(
+    `/api/admin/users/${userId}/pro`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_pro: enable }),
+    },
+  );
+}
+
+export function resetKundliQuota(userId: number) {
+  return adminFetch<{ success: boolean }>(`/api/admin/users/${userId}/reset-kundli-quota`, {
+    method: "POST",
+  });
+}
+
 export function profileBirthFields(
   p: KundliProfileRow,
   legacy: LegacyKundliRow | null | undefined,
@@ -191,7 +264,6 @@ export function formatInr(n: number) {
   return `₹${n.toLocaleString("en-IN")}`;
 }
 
-/** Server stores naive UTC timestamps — parse as UTC, display in India time. */
 function parseServerUtc(iso: string | null): Date | null {
   if (!iso?.trim()) return null;
   const s = iso.trim();
@@ -212,4 +284,18 @@ export function formatDate(iso: string | null) {
   } catch {
     return iso ?? "—";
   }
+}
+
+export function downloadCsv(filename: string, headers: string[], rows: string[][]) {
+  const escape = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
+  const lines = [headers.map(escape).join(",")];
+  for (const row of rows) {
+    lines.push(row.map(escape).join(","));
+  }
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }

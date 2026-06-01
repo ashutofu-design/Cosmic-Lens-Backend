@@ -37,6 +37,10 @@ except ImportError:  # standalone import path
 _PLANETS_9 = ["Sun", "Moon", "Mars", "Mercury", "Jupiter",
                "Venus", "Saturn", "Rahu", "Ketu"]
 
+# Classical KP marriage triplet + Krishnamurti negation set (H7 cusp rule).
+MARRIAGE_PROMISE_HOUSES = frozenset({2, 7, 11})
+MARRIAGE_NEGATION_HOUSES = frozenset({1, 6, 8, 10, 12})
+
 
 def _to_int_house_list(raw: Any) -> List[int]:
     out: List[int] = []
@@ -49,6 +53,124 @@ def _to_int_house_list(raw: Any) -> List[int]:
             continue
         if 1 <= h <= 12:
             out.append(h)
+    return out
+
+
+def _kp_sig_for_planet(kp: dict, planet: str) -> Optional[dict]:
+    if not isinstance(kp, dict):
+        return None
+    sig_all = kp.get("significations") or kp.get("significators") or {}
+    if not isinstance(sig_all, dict):
+        return None
+    sig = sig_all.get(planet) or sig_all.get(planet.lower())
+    return sig if isinstance(sig, dict) else None
+
+
+def _verdict_from_promise_negation(
+    promise_hits: List[int],
+    negation_hits: List[int],
+) -> str:
+    """Krishnamurti gating: SB must signify promise; negation = obstruction."""
+    if not promise_hits:
+        return "DENIES"
+    if negation_hits:
+        return "PARTIAL"
+    return "CONFIRMS"
+
+
+def kp_marriage_planet_verdict(kp: Optional[dict], planet: str) -> Dict[str, Any]:
+    """Marriage KP for a natal planet — **Sub-Lord houses decide**.
+
+    Classical rule (K.S. Krishnamurti / kp_locked_facts H7):
+      - NL (``sl``) and planet ``pl`` are informational only — not used to
+        approve marriage delivery.
+      - **Sub-Lord** significations (``sb_houses`` on this planet's row) are
+        the fruit layer: must hit ≥1 of {2, 7, 11}.
+      - Negation {1, 6, 8, 10, 12} on the SB layer → PARTIAL (delay/struggle)
+        or DENIES when no promise house is signified.
+    """
+    out: Dict[str, Any] = {
+        "planet": planet,
+        "nl_lord": None,
+        "sb_lord": None,
+        "ss_lord": None,
+        "houses_pl": [],
+        "houses_nl": [],
+        "houses_sb": [],
+        "houses_ss": [],
+        "promise_hits": [],
+        "negation_hits": [],
+        "verdict": "DENIES",
+        "kp_valid": False,
+        "kp_available": False,
+    }
+    sig = _kp_sig_for_planet(kp or {}, planet)
+    if not sig:
+        return out
+
+    out["kp_available"] = True
+    out["nl_lord"] = sig.get("nl_lord")
+    out["sb_lord"] = sig.get("sb_lord")
+    out["ss_lord"] = sig.get("ss_lord")
+    out["houses_pl"] = _to_int_house_list(sig.get("pl"))
+    out["houses_nl"] = _to_int_house_list(sig.get("sl"))
+    out["houses_sb"] = _to_int_house_list(sig.get("sb_houses"))
+    out["houses_ss"] = _to_int_house_list(sig.get("ss_houses"))
+
+    sb_set = set(out["houses_sb"])
+    promise = sorted(sb_set & MARRIAGE_PROMISE_HOUSES)
+    negation = sorted(sb_set & MARRIAGE_NEGATION_HOUSES)
+    out["promise_hits"] = promise
+    out["negation_hits"] = negation
+    verdict = _verdict_from_promise_negation(promise, negation)
+    out["verdict"] = verdict
+    out["kp_valid"] = verdict in ("CONFIRMS", "PARTIAL")
+    return out
+
+
+def kp_marriage_cusp_verdict(kp: Optional[dict], house: int = 7) -> Dict[str, Any]:
+    """7th (or other) cusp sub-lord — uses **CSL planet's ``pl``** houses.
+
+    Matches ``kp_locked_facts._verdict_for`` for marriage (H7).
+    """
+    out: Dict[str, Any] = {
+        "house": house,
+        "csl_planet": None,
+        "houses_csl": [],
+        "promise_hits": [],
+        "negation_hits": [],
+        "verdict": "UNKNOWN",
+        "kp_available": False,
+    }
+    if not isinstance(kp, dict):
+        return out
+    csl: Optional[str] = None
+    for c in kp.get("cusps") or []:
+        if isinstance(c, dict) and c.get("house") == house:
+            csl = c.get("sb")
+            break
+    if not isinstance(csl, str):
+        return out
+    sig = _kp_sig_for_planet(kp, csl)
+    if not sig:
+        out["csl_planet"] = csl
+        return out
+
+    out["kp_available"] = True
+    out["csl_planet"] = csl
+    csl_houses = _to_int_house_list(sig.get("pl"))
+    out["houses_csl"] = csl_houses
+    hset = set(csl_houses)
+    promise = sorted(hset & MARRIAGE_PROMISE_HOUSES)
+    negation = sorted(hset & MARRIAGE_NEGATION_HOUSES)
+    out["promise_hits"] = promise
+    out["negation_hits"] = negation
+    if not promise:
+        out["verdict"] = "DENIES"
+    elif negation:
+        out["verdict"] = "PARTIAL"
+    else:
+        out["verdict"] = "CONFIRMS"
     return out
 
 

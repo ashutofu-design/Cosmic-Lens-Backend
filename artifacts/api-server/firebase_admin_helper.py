@@ -12,6 +12,9 @@ Configuration (env var, REQUIRED):
                                      key file downloaded from Firebase console
                                      (Project Settings → Service Accounts →
                                      Generate new private key).
+    Optional alternatives for VPS deployment:
+      FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 — base64 encoded service-account JSON
+      GOOGLE_APPLICATION_CREDENTIALS       — path to service-account JSON file
 
 The init is lazy + singleton-safe: the SDK is initialized on the first call
 and reused. If the env var is missing or malformed, a clear ValueError is
@@ -24,6 +27,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import base64
 import threading
 from typing import Any, Dict
 
@@ -35,6 +39,44 @@ log = logging.getLogger(__name__)
 
 _INIT_LOCK = threading.Lock()
 _INITIALIZED = False
+
+
+def _load_service_account() -> Dict[str, Any]:
+    """Load Firebase service account from JSON env, base64 env, or file path."""
+    raw = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "").strip()
+    if raw:
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise FirebaseAuthError(
+                f"FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON: {e}"
+            ) from e
+
+    raw_b64 = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON_BASE64", "").strip()
+    if raw_b64:
+        try:
+            decoded = base64.b64decode(raw_b64).decode("utf-8")
+            return json.loads(decoded)
+        except Exception as e:
+            raise FirebaseAuthError(
+                f"FIREBASE_SERVICE_ACCOUNT_JSON_BASE64 is invalid: {e}"
+            ) from e
+
+    cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+    if cred_path:
+        try:
+            with open(cred_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            raise FirebaseAuthError(
+                f"GOOGLE_APPLICATION_CREDENTIALS file could not be read: {e}"
+            ) from e
+
+    raise FirebaseAuthError(
+        "Firebase Admin credentials are not set. Add one of: "
+        "FIREBASE_SERVICE_ACCOUNT_JSON, FIREBASE_SERVICE_ACCOUNT_JSON_BASE64, "
+        "or GOOGLE_APPLICATION_CREDENTIALS."
+    )
 
 
 class FirebaseAuthError(Exception):
@@ -50,19 +92,7 @@ def _ensure_initialized() -> None:
         if _INITIALIZED:
             return
 
-        raw = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "").strip()
-        if not raw:
-            raise FirebaseAuthError(
-                "FIREBASE_SERVICE_ACCOUNT_JSON env var is not set. "
-                "Add the service-account JSON in Replit Secrets."
-            )
-
-        try:
-            sa_dict: Dict[str, Any] = json.loads(raw)
-        except json.JSONDecodeError as e:
-            raise FirebaseAuthError(
-                f"FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON: {e}"
-            ) from e
+        sa_dict = _load_service_account()
 
         try:
             # Reuse default app if already initialized elsewhere (hot reload safe).
@@ -110,6 +140,53 @@ def verify_id_token(id_token: str, *, check_revoked: bool = False) -> Dict[str, 
     return decoded
 
 
+def resolve_sign_in_provider(decoded: Dict[str, Any]) -> str:
+    """e.g. google.com, phone, password."""
+    firebase_meta = decoded.get("firebase") or {}
+    return str(firebase_meta.get("sign_in_provider") or "").strip()
+
+
+def resolve_email_from_decoded(decoded: Dict[str, Any]) -> str:
+    """
+    Extract a verified email from a Firebase ID token.
+    Google tokens occasionally omit top-level `email`; fall back to identities
+    and Admin SDK user lookup.
+    """
+    email = str(decoded.get("email") or "").strip().lower()
+    if email and "@" in email:
+        return email
+
+    identities = (decoded.get("firebase") or {}).get("identities") or {}
+    if isinstance(identities, dict):
+        for key in ("email", "google.com"):
+            vals = identities.get(key) or []
+            if isinstance(vals, list):
+                for v in vals:
+                    s = str(v or "").strip().lower()
+                    if "@" in s:
+                        return s
+
+    uid = str(decoded.get("uid") or "").strip()
+    provider = resolve_sign_in_provider(decoded)
+    if not uid or provider not in ("google.com", "password", "apple.com"):
+        return ""
+
+    _ensure_initialized()
+    try:
+        record = fb_auth.get_user(uid)
+        em = str(record.email or "").strip().lower()
+        if em and "@" in em:
+            return em
+    except Exception as e:
+        log.warning("[firebase] get_user(%s) failed: %s", uid, e)
+
+    return ""
+
+
 def is_configured() -> bool:
     """Lightweight check used by health endpoints / dev guards."""
-    return bool(os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "").strip())
+    return bool(
+        os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "").strip()
+        or os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON_BASE64", "").strip()
+        or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+    )

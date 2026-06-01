@@ -156,9 +156,16 @@ _DOMAIN_KEYWORDS: Dict[str, List[str]] = {
 # These are pure-jyotish words that cannot belong to any non-astro topic.
 # Brand-guard escape requires either >=2 domain hits OR >=1 explicit anchor.
 _ASTRO_ANCHOR_PATTERNS: List[re.Pattern] = [
-    re.compile(rf"\b{p}\b", re.IGNORECASE) for p in (
+    re.compile(r"\blagn+a+\b", re.IGNORECASE),
+    re.compile(r"\blagan+\b", re.IGNORECASE),
+    re.compile(r"\bshadi\b", re.IGNORECASE),
+    re.compile(r"\bsha+di+\b", re.IGNORECASE),
+] + [
+    re.compile(rf"\b{p}\b", re.IGNORECASE)
+    for p in (
         "kundli", "kundali", "janam patri", "janam-patri", "horoscope",
-        "rashi", "raashi", "lagna", "lagn", "navamsa", "navamsh",
+        "shaadi", "vivah", "vivaah", "marriage",
+        "rashi", "raashi", "navamsa", "navamsh",
         "bhava", "bhav", "nakshatra", "nakshatr",
         "graha", "grah dosha", "yog", "dosh", "dosha",
         "jyotish", "astrology", "astrologer",

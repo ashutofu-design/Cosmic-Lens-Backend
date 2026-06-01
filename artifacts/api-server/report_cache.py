@@ -16,7 +16,8 @@ Ledger row shape:
   {
     "id":           "<sha1>",
     "user_id":      123,
-    "kind":         "numerology_pro" | "face_reading" | "vastu_pro" | "business_vastu",
+    "kind":         "numerology_pro" | "face_reading" | "vastu_pro" | "business_vastu"
+                    | "milan_pro" | "love_reality_pro",
     "report_type":  "Numerology Pro",     # human label
     "name":         "Aarti Kapoor",
     "dob":          "1990-05-15",
@@ -58,6 +59,56 @@ def _ensure_dir(p: str) -> None:
         pass
 
 
+def _birth_slice(p: Dict[str, Any]) -> Dict[str, Any]:
+    """Birth inputs that affect kundli + PDF content."""
+    p = p or {}
+    return {
+        k: p.get(k)
+        for k in (
+            "name", "gender", "day", "month", "year",
+            "hour", "minute", "ampm", "lat", "lon", "tz", "place",
+        )
+    }
+
+
+def _kundli_fingerprint(k: Dict[str, Any]) -> Dict[str, Any]:
+    """Stable chart identity when full birth dict is not in the request."""
+    k = k or {}
+    return {
+        "name": k.get("name"),
+        "moonLongitude": k.get("moonLongitude"),
+        "ascendantDeg": k.get("ascendantDeg"),
+        "nakshatra": k.get("nakshatra"),
+        "nakshatraPada": k.get("nakshatraPada"),
+        "moonSign": k.get("moonSign"),
+        "ascendant": k.get("ascendant"),
+    }
+
+
+def couple_cache_params(
+    lang: str,
+    p1: Dict[str, Any] | None = None,
+    p2: Dict[str, Any] | None = None,
+    kundli_p1: Dict[str, Any] | None = None,
+    kundli_p2: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """
+    Cache key inputs for Love Reality / Milan Pro couple PDFs.
+    Prefers birth details; falls back to computed kundli fingerprints.
+    """
+    p1 = p1 or {}
+    p2 = p2 or {}
+    if p1.get("year") or p1.get("day"):
+        return {"lang": lang, "p1": _birth_slice(p1), "p2": _birth_slice(p2)}
+    if kundli_p1 and kundli_p2:
+        return {
+            "lang": lang,
+            "k1": _kundli_fingerprint(kundli_p1),
+            "k2": _kundli_fingerprint(kundli_p2),
+        }
+    return {"lang": lang, "p1": _birth_slice(p1), "p2": _birth_slice(p2)}
+
+
 def _hash_params(params: Dict[str, Any]) -> str:
     """Deterministic hash of all inputs that affect PDF content."""
     payload = json.dumps(params or {}, sort_keys=True, default=str)
@@ -66,6 +117,11 @@ def _hash_params(params: Dict[str, Any]) -> str:
 
 def _file_for(h: str) -> str:
     return os.path.join(_BASE, h[:2], f"{h}.pdf")
+
+
+def path_for_id(report_id: str) -> str:
+    """Absolute path to a cached PDF file by ledger id (sha1)."""
+    return _file_for(report_id)
 
 
 def _load_ledger() -> List[dict]:

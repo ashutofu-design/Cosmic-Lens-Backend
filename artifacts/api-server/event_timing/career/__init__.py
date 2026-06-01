@@ -34,7 +34,7 @@ Usage from openai_helper:
   )
 """
 
-from .career_timing import (
+from numerology.core.career_timing import (
     assess_career,
     format_verdict_for_prompt,
     classify_career_question,

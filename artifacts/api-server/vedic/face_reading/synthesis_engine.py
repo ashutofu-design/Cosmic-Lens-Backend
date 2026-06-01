@@ -225,7 +225,9 @@ def shock_insight_engine(engines: Dict[str, Any], sig: Dict[str, float]) -> List
     # I-1 · Suppressed-anger pattern  (high A + low E + medium-high N)
     if sig["A"] >= 60 and sig["E"] <= 50 and sig["N"] >= 45:
         out.append({
-            "insight": "Tum gussa face pe nahi laate — par andar ek list maintain karte ho. 6+ mahine purani baat ek line se trigger ho jaati hai.",
+            "insight": "Several signals suggest you may process conflict internally first — "
+                       "agreeableness stays high in public, but old disagreements can resurface "
+                       "when stress is already elevated.",
             "sources": ["agreeableness=high", "extraversion=low", "neuroticism=mid"],
             "category": "emotional_pattern",
         })
@@ -257,7 +259,9 @@ def shock_insight_engine(engines: Dict[str, Any], sig: Dict[str, float]) -> List
     # I-5 · Health early-signal  (vitality < 65 + N >= 50)
     if sig["vitality"] <= 65 and sig["N"] >= 50:
         out.append({
-            "insight": "Tumhari aankhon ke neeche aur jaw ki tightness silent stress ka signal hai — abhi medical issue nahi, par 12 mahine ignore kiya to digestive ya sleep cycle disturb hoga.",
+            "insight": "Lower vitality markers plus higher stress-sensitivity may show up as "
+                       "fatigue under load — not a diagnosis, but a cue to protect sleep and "
+                       "recovery before burnout patterns set in.",
             "sources": ["vitality_score<65", "neuroticism", "eye_dark_circle_signal"],
             "category": "health_early_warning",
         })
@@ -265,7 +269,9 @@ def shock_insight_engine(engines: Dict[str, Any], sig: Dict[str, float]) -> List
     # I-6 · Money-mindset paradox  (dhana high but C low)
     if sig["dhana"] >= 65 and sig["C"] <= 50:
         out.append({
-            "insight": "Tumhari naak wealth-attract karne wala shape hai, par discipline (C) thoda kam hai — paisa aata hai, ruk nahi pata. Investment auto-deduction tumhari single biggest hack hai.",
+            "insight": "Resource-oriented signals appear alongside softer discipline scores — "
+                       "money may flow in, but consistency in saving and follow-through could "
+                       "benefit from automated structure rather than willpower alone.",
             "sources": ["dhana_score=high", "conscientiousness=low"],
             "category": "money_pattern",
         })

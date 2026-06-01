@@ -1,15 +1,17 @@
 """
-Narrator — assembles all 22 sections into final ordered ₹1499 report
-with proper Hinglish titles, ordering (1→21 + bonus), and metadata.
+Narrator — assembles Face Intelligence report for PDF.
 
-This is a thin layer: section_mapper + new_sections do the data work,
-narrator just produces the final consumer-facing structure.
+Default layout: 12 dense blocks (v1). Legacy 21-section layout via FACE_REPORT_LAYOUT=21.
+
+Artifact pipeline uses build_report_skeleton() + enrich_report_narration() separately
+so L3 cache never re-enters assemble_report().
 """
 from __future__ import annotations
-from typing import Dict, List
+
+from typing import Dict, List, Optional
 
 
-# 21-section ordered template (with Hinglish titles matching the user's spec)
+# Legacy 21-section template (FACE_REPORT_LAYOUT=21)
 SECTION_TITLES: List[Dict[str, str]] = [
     {"key": "section_1_power_summary",          "no": "01", "title_hi": "Power Summary",                "title_en": "Power Summary"},
     {"key": "section_2_psychological_type",     "no": "02", "title_hi": "Manovigyan Prakar",            "title_en": "Psychological Type"},
@@ -36,17 +38,37 @@ SECTION_TITLES: List[Dict[str, str]] = [
 ]
 
 
-def assemble_report(sections: Dict,
-                    engines: Dict,
-                    person: Dict | None = None,
-                    front_quality: Dict | None = None,
-                    front_image_bytes: bytes | None = None,
-                    front_points_norm: list | None = None,
-                    language: str = "hinglish") -> Dict:
-    """Build the final ordered report structure."""
-    person = person or {}
+def _normalize_lang(language: str) -> str:
+    _lang = (language or "hinglish").strip().lower()
+    if _lang in ("english", "eng"):
+        return "en"
+    if _lang in ("hindi", "hin"):
+        return "hi"
+    if _lang in ("hg", "hinglish"):
+        return "hinglish"
+    if _lang not in ("en", "hi", "hinglish"):
+        return "hinglish"
+    return _lang
 
-    # Cover-page metadata
+
+def build_report_skeleton(
+    sections: Dict,
+    engines: Dict,
+    person: Dict | None = None,
+    front_quality: Dict | None = None,
+    front_image_bytes: bytes | None = None,
+    front_points_norm: list | None = None,
+    language: str = "hinglish",
+) -> Dict:
+    """Template-only report structure — no OpenAI."""
+    from .face_report_blocks import (
+        REPORT_TEMPLATE_VERSION,
+        appendix_sections,
+        build_ordered_blocks,
+        use_12_block_layout,
+    )
+
+    person = person or {}
     cover = {
         "name":             person.get("name") or "Insan",
         "gender":           person.get("gender") or "U",
@@ -65,38 +87,41 @@ def assemble_report(sections: Dict,
         "perceived_age":    (engines.get("first_impression") or {}).get("perceived_age", {}).get("value"),
     }
 
-    # Inject rich Hinglish narrative paragraphs per section
-    from .narrative_writer import write_narrative
-    person_for_writer = dict(person)
+    use_12 = use_12_block_layout()
+    if use_12:
+        ordered = build_ordered_blocks(sections, engines, person)
+        template_version = REPORT_TEMPLATE_VERSION
+    else:
+        from .narrative_writer import write_narrative
+        ordered = []
+        for spec in SECTION_TITLES:
+            content = sections.get(spec["key"])
+            if content is None:
+                continue
+            narrative = ""
+            if isinstance(content, dict):
+                narrative = write_narrative(spec["key"], content, engines, person)
+            ordered.append({
+                "no": spec["no"],
+                "key": spec["key"],
+                "title_hi": spec["title_hi"],
+                "title_en": spec["title_en"],
+                "narrative": narrative,
+                "content": content,
+            })
+        template_version = "21_section_v1"
 
-    # Ordered list of sections with titles + content + narrative
-    ordered: List[Dict] = []
-    for spec in SECTION_TITLES:
-        content = sections.get(spec["key"])
-        if content is None:
-            continue
-        narrative = ""
-        if isinstance(content, dict):
-            narrative = write_narrative(spec["key"], content, engines, person_for_writer)
-        ordered.append({
-            "no":         spec["no"],
-            "key":        spec["key"],
-            "title_hi":   spec["title_hi"],
-            "title_en":   spec["title_en"],
-            "narrative":  narrative,
-            "content":    content,
-        })
-
-    # Build hook + TL;DR + restructured final truth (Phase-1 premium upgrade)
     try:
         from .report_intro import build_hook, build_tldr, build_final_truth_v2
         _hook = build_hook(sections, engines, person)
         _tldr = build_tldr(sections, engines)
         _ft2 = build_final_truth_v2(sections, engines, _tldr)
-    except Exception as _e:
+    except Exception:
         _hook, _tldr, _ft2 = {}, {}, {}
 
-    report = {
+    appendix = appendix_sections(sections) if use_12 else []
+
+    return {
         "cover":             cover,
         "hook":              _hook,
         "tldr":              _tldr,
@@ -107,21 +132,175 @@ def assemble_report(sections: Dict,
         "engines":           engines,
         "sections_count":    len(ordered),
         "sections":          ordered,
+        "appendix_sections": appendix,
         "synthesis":         sections.get("synthesis") or {},
-        "_language":         (language or "hinglish").lower(),
+        "_language":         _normalize_lang(language),
+        "_ai_narration":     False,
         "footer_disclaimer": (
             "Yeh report educational aur self-awareness ke liye hai. "
             "Hiring, medical, ya legal nirnay ke liye use mat karo. "
             "Computer-vision aur statistical pattern matching par based hai. "
-            "— Cosmic Lens · Face Intelligence v1"
+            "— Cosmic Lens · Face Intelligence v2"
         ),
-        "report_template_version": "21_section_v1",
+        "report_template_version": template_version,
     }
 
-    # ── Apply language transformation (en / hi) — pass-through for hinglish ──
+
+def enrich_report_narration(
+    report: Dict,
+    *,
+    sections: Dict,
+    engines: Dict,
+    person: Dict,
+    lang: str,
+    session_id: Optional[str] = None,
+    analysis_id: Optional[str] = None,
+    user_id: int = 0,
+    user_plan: Optional[str] = None,
+    force_template: bool = False,
+) -> bool:
+    """Budgeted AI layer — never called when L3 narration cache hits."""
+    from .face_report_blocks import use_12_block_layout
+    from .token_budget import AIMode, resolve_ai_mode
+
+    _lang = _normalize_lang(lang)
+    ordered = report.get("sections") or []
+    _hook = report.get("hook") or {}
+    _tldr = report.get("tldr") or {}
+
+    snap = resolve_ai_mode(
+        user_id,
+        analysis_id=analysis_id,
+        lang=_lang,
+        plan=user_plan,
+        force_template=force_template,
+    )
+    report["_ai_mode"] = snap.mode.value
+    report["_budget_reason"] = snap.reason
+
+    if snap.mode == AIMode.TEMPLATE_ONLY:
+        return False
+
+    _ai_applied = False
     try:
-        from .translator import translate_report
-        translate_report(report, language)
-    except Exception as _e:
-        print(f"[narrator] translation skipped: {_e}")
+        if use_12_block_layout():
+            from .face_ai_orchestrator import enrich_12_blocks, use_two_pass, ai_enabled as orch_ai
+            if orch_ai() and use_two_pass():
+                _ai_applied = enrich_12_blocks(
+                    ordered,
+                    engines=engines,
+                    legacy_sections=sections,
+                    person=person,
+                    hook=_hook,
+                    tldr=_tldr,
+                    lang=_lang,
+                    session_id=session_id,
+                    analysis_id=analysis_id,
+                    user_id=user_id,
+                    ai_mode=snap.mode,
+                )
+            else:
+                from .ai_narrator import ai_enabled, enrich_face_narratives
+                if ai_enabled() and snap.mode != AIMode.TEMPLATE_ONLY:
+                    _ai_applied = enrich_face_narratives(
+                        ordered,
+                        engines=engines,
+                        person=person,
+                        hook=_hook,
+                        tldr=_tldr,
+                        lang=_lang,
+                        session_id=session_id,
+                        analysis_id=analysis_id,
+                        legacy_sections=sections,
+                    )
+        else:
+            from .ai_narrator import ai_enabled, enrich_face_narratives
+            if ai_enabled():
+                _ai_applied = enrich_face_narratives(
+                    ordered,
+                    engines=engines,
+                    person=person,
+                    hook=_hook,
+                    tldr=_tldr,
+                    lang=_lang,
+                    session_id=session_id,
+                    analysis_id=analysis_id,
+                    legacy_sections=sections,
+                )
+    except Exception as _ai_exc:
+        print(f"[narrator] enrich skipped: {_ai_exc}")
+
+    try:
+        from .consistency_layer import clean_internal_labels
+        for sec in ordered:
+            narr = sec.get("narrative")
+            if isinstance(narr, str) and narr.strip():
+                sec["narrative"] = clean_internal_labels(narr)
+        for block in (_hook, _tldr):
+            if isinstance(block, dict):
+                for field, val in list(block.items()):
+                    if isinstance(val, str) and val.strip():
+                        block[field] = clean_internal_labels(val)
+        ft2 = report.get("final_truth_v2")
+        if isinstance(ft2, dict):
+            for field, val in list(ft2.items()):
+                if isinstance(val, str) and val.strip():
+                    ft2[field] = clean_internal_labels(val)
+    except Exception:
+        pass
+
+    report["_ai_narration"] = _ai_applied
+    report["hook"] = _hook
+    report["tldr"] = _tldr
+
+    if not _ai_applied and snap.mode != AIMode.TEMPLATE_ONLY:
+        try:
+            from .translator import translate_report
+            translate_report(report, lang)
+        except Exception:
+            pass
+    return _ai_applied
+
+
+def assemble_report(
+    sections: Dict,
+    engines: Dict,
+    person: Dict | None = None,
+    front_quality: Dict | None = None,
+    front_image_bytes: bytes | None = None,
+    front_points_norm: list | None = None,
+    language: str = "hinglish",
+    session_id: str | None = None,
+    analysis_id: str | None = None,
+    *,
+    skip_ai: bool = False,
+    user_id: int = 0,
+    user_plan: Optional[str] = None,
+) -> Dict:
+    """
+    Full assemble (skeleton + AI). Prefer artifact_pipeline for PDF paths.
+    When skip_ai=True, only templates (render-only / L3 replay).
+    """
+    person = person or {}
+    report = build_report_skeleton(
+        sections,
+        engines,
+        person=person,
+        front_quality=front_quality,
+        front_image_bytes=front_image_bytes,
+        front_points_norm=front_points_norm,
+        language=language,
+    )
+    if not skip_ai:
+        enrich_report_narration(
+            report,
+            sections=sections,
+            engines=engines,
+            person=person,
+            lang=language,
+            session_id=session_id,
+            analysis_id=analysis_id,
+            user_id=user_id,
+            user_plan=user_plan,
+        )
     return report

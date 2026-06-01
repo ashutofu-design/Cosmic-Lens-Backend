@@ -30,7 +30,7 @@ from astrovastu_rules import (
 # Severity → number-of-remedies budget (item 23)
 # ─────────────────────────────────────────────────────────────────────────
 REMEDY_BUDGET: Dict[str, int] = {
-    "Avoid":             5,
+    "Avoid":             3,
     "Adjustment Needed": 3,
     "Acceptable":        2,
     "Ideal":             1,
@@ -64,7 +64,11 @@ SEVERITY_LABEL: Dict[str, Dict[str, str]] = {
 # Each remedy: {action, hindi, english, priority (1=highest), classical_ref}
 # ─────────────────────────────────────────────────────────────────────────
 
-def _remedy_color(ctx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _remedy_color(
+    ctx: Dict[str, Any],
+    direction: str,
+    room_type: str,
+) -> Optional[Dict[str, Any]]:
     lagna = ctx.get("lagna")
     lord  = LAGNA_LORD.get(lagna or "")
     if not lord:
@@ -72,12 +76,20 @@ def _remedy_color(ctx: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     palette = COLOR_BY_LAGNA_LORD.get(lord)
     if not palette:
         return None
+    avoid_line = palette["avoid"]
+    # Do not paste NE-only warnings into NW/SW/SE rooms (common copy-paste bug).
+    if ("NE" in avoid_line or "North-East" in avoid_line) and direction != "North-East":
+        avoid_line = "heavy or clashing colours dominating this room's walls"
+    if "couple bedroom" in avoid_line.lower() and room_type not in (
+        "bedroom", "master_bedroom",
+    ):
+        avoid_line = "colours that disturb calm in this zone"
     return {
         "action":   "color",
-        "english":  f"Use {palette['primary']} as primary palette; avoid {palette['avoid']}.",
-        "hindi":    f"Mukhya rang: {palette['primary']}. Bachein: {palette['avoid']}.",
+        "english":  f"Use {palette['primary']} as primary palette in this {direction} zone; avoid {avoid_line}.",
+        "hindi":    f"{direction} zone mein mukhya rang: {palette['primary']}. Bachein: {avoid_line}.",
         "priority": 2,
-        "classical_ref": f"Color guidance per {lagna} Lagna lord ({lord})",
+        "classical_ref": f"Color guidance per {lagna} Lagna lord ({lord}) — scoped to {direction}",
     }
 
 
@@ -269,7 +281,7 @@ def build_basic_response(
         _remedy_yantra_for_weak_planet(kundli_context, direction),
         _remedy_dasha_care(kundli_context, direction),
         _remedy_ishta_facing(kundli_context, room_type),
-        _remedy_color(kundli_context),
+        _remedy_color(kundli_context, direction, room_type),
         _remedy_directional_alternative(direction, generic_verdict, generic_room_rule or {}),
     ]
     remedies = [r for r in candidates if r is not None]

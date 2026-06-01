@@ -229,6 +229,17 @@ def build_dashboard(db_session) -> dict[str, Any]:
         if since is not None:
             career_q = career_q.filter(User.career_unlocked_at >= since)
         t += career_q.count() * career_amt
+        # Property unlock amounts
+        try:
+            from models import AstroVastuPropertyUnlock
+
+            for row in AstroVastuPropertyUnlock.query.all():
+                paid = getattr(row, "unlocked_at", None)
+                if since is not None and not _in_range(paid, since):
+                    continue
+                t += int(getattr(row, "amount_paid", 0) or 0)
+        except Exception:
+            pass
         return t
 
     payments = {
@@ -301,8 +312,8 @@ def build_dashboard(db_session) -> dict[str, Any]:
             "lowest": lowest,
         },
         "subscriptions": {
-            "enabled": False,
-            "message": "Subscription billing coming soon — counts below are current plan labels on user accounts.",
+            "enabled": True,
+            "message": "Gmail sign-in only (no OTP). Plan counts = current labels on user accounts.",
             "plan_counts": dict(plan_counts),
         },
     }
@@ -314,6 +325,7 @@ def build_users_list(
     page: int = 1,
     per_page: int = 50,
     search: str = "",
+    plan: str = "",
 ) -> dict[str, Any]:
     from models import CoupleReportPurchase, Kundli, Profile, User
 
@@ -327,6 +339,9 @@ def build_users_list(
             | (User.phone.ilike(like))
             | (User.email.ilike(like))
         )
+    plan_filter = (plan or "").strip().lower()
+    if plan_filter:
+        query = query.filter(User.plan == plan_filter)
 
     ordered = query.order_by(User.last_active.desc(), User.created_at.desc())
     # Flask-SQLAlchemy 3.x removed Query.paginate — use db.paginate instead.

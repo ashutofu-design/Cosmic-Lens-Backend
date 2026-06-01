@@ -1,3 +1,7 @@
+# Local secrets (copy from .env.example)
+.env
+.env.txt
+.env.local
 
 # Finance + Health static engine runtime caches (sqlite, regenerated on demand)
 # Folder was renamed finance_engine→finance_static in Phase 2.8.82.1; old

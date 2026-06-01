@@ -3,18 +3,21 @@ event_timing/marriage/marriage_engine_v2.py
 ============================================
 COSMIC LENS MARRIAGE ENGINE v2 — clean rewrite.
 
-Architecture: FILTER → VERIFY → ACTIVATE → TRIGGER (8-step pipeline,
-locked by user spec May 6 2026).
+Architecture: USER-SPEC PIPELINE → ACTIVATE → TRIGGER (v3).
 
-  STEP 1   D1 marriage planet filtering        (FILTER)
-  STEP 2   D9 verification                     (VERIFY)
-  STEP 3   KP verification                     (VERIFY)
-  STEP 4   Weighted ranking (D1·30 + D9·25 + KP·30 + karaka·15)
-  STEP 5   Dasha activation (MD/AD/PD)         (ACTIVATE)
-  STEP 5.5 Future activation cascade
-  STEP 6   Double transit confirmation         (TRIGGER)
-  STEP 7   Ashtakavarga support                (smooth vs delayed)
-  STEP 8   Delay / obstacle engine
+  STEP 0   BCP ages (7H, 7L placement, 7L dual-sign, D1+D9) + early/late + focus ages
+  STEP 1   D1 — names only: 7H occupants, 7H aspects, 7L, planets with 7L
+  STEP 2   D9 — same name-only rules on Navamsha
+  STEP 3   Merge D1+D9 pools (+4 if in both)
+  STEP 4   KP validation (Sub-Lord sb_houses; negation; 7L never dropped)
+  STEP 5   Rank significators (discrete points)
+  STEP 6   Dasha — EXACT MD·AD·PD from kundli dasha tree (see marriage_pipeline_rules)
+  STEP 7   Transit — Guru+Shani on FINAL dasha window only (verify, not re-pick)
+  STEP 8   Obstacle flags + final gate
+
+  Code map: user STEP 6 → _step5_* dasha; user STEP 7 → _attach_transit_to_window + SAV.
+  Full rule text: event_timing/marriage/marriage_pipeline_rules.py
+  (+ Ashtakavarga adjust, age-sanity, obstacle flags)
 
 Replaces VIVAH-7 (2.8.52 → 2.10.1) entirely. Old engine permanently
 removed per user direction.
@@ -124,17 +127,27 @@ _WEIGHT_KARAKA = 0.15
 # Step 1 D1 acceptance threshold (planets below this are filtered out)
 _D1_FILTER_MIN_SCORE = 15.0
 
-# Step 5 Dasha activation scoring
-_DASHA_SCORE_MD = 3
-_DASHA_SCORE_AD = 4
-_DASHA_SCORE_PD = 5  # PD is final trigger per spec
+# Step 6 Dasha activation — mainly AD + PD (user spec)
+_DASHA_SCORE_MD = 1
+_DASHA_SCORE_AD = 5
+_DASHA_SCORE_PD = 6
+_MIN_AD_PD_SCORE = 5  # window must have AD and/or PD marriage lord active
+_DASHA_AD_PD_CONFLUENCE_BOOST = 2.5
 
 # Step 6 Double-transit boost
 _DT_BOTH_BOOST = 2.0
 _DT_ONE_BOOST = 0.75
+_TRANSIT_JUPITER_ORB_DEG = 5.0
+_TRANSIT_SATURN_ORB_DEG = 4.0
+_TRANSIT_SAMPLE_FRACTIONS = (0.0, 0.5, 1.0)
 
 # Window selection
 _MIN_WINDOW_GAP_DAYS = 60   # ≈ 2 months between top-3 windows
+
+# Late-age urgent scan (female 34 / male 36+): search ~12 months, PD-first
+_LATE_URGENT_HORIZON_DAYS = 365
+_LATE_URGENT_PD_BOOST = 4.0
+_LATE_URGENT_NEAR_BOOST = 6.0   # extra if window starts within horizon
 
 # ── Age-band thresholds (Indian classical, indicative) ──────────────
 # Male:   <24 EARLY | 24-30 ON_TIME | 31-35 LATE | 36+ VERY_LATE
@@ -184,6 +197,12 @@ _DOB_FORMATS = (
 # next N days so engine surfaces near-term candidates first.
 _RECENT_WINDOW_DAYS = 365
 _RECENT_BOOST       = 3.0
+_BCP_FOCUS_BOOST    = 10.0   # Step-0 focus ages (e.g. 31,34) on delayed charts
+# Delayed/late chart + BCP focus 3+ years out → near-term dasha must not win
+# over the anchor age (e.g. age 26, BCP 31 → 2031 not Apr 2026).
+_BCP_ANCHOR_MIN_GAP_YEARS = 2
+_BCP_ANCHOR_GRACE_YEARS   = 1
+_BCP_PRE_FOCUS_DEMOTE     = 100.0
 _FUTURE_CASCADE_MAX_WINDOWS = 3
 _FUTURE_SCAN_HORIZON_YEARS = 25
 
@@ -282,8 +301,8 @@ def _aspects_target(aspector: str, ap_si: int, target_si: int) -> bool:
     Mars: 4th, 7th, 8th
     Jupiter: 5th, 7th, 9th
     Saturn: 3rd, 7th, 10th
-    Rahu/Ketu: same as Saturn (5/7/9 in some schools — using 3/7/10
-    which is the most-used Krishnamurti convention)
+    Rahu/Ketu: only ordinary 7th opposition is counted here; Saturn-style
+    3rd/10th special aspects are not applied to nodes.
     Others: 7th only
     """
     diff = (target_si - ap_si) % 12 + 1   # houses are 1..12
@@ -293,7 +312,7 @@ def _aspects_target(aspector: str, ap_si: int, target_si: int) -> bool:
         return True
     if aspector == "Jupiter" and diff in (5, 9):
         return True
-    if aspector in ("Saturn", "Rahu", "Ketu") and diff in (3, 10):
+    if aspector == "Saturn" and diff in (3, 10):
         return True
     return False
 
@@ -743,7 +762,12 @@ def _parse_iso(s: Any) -> Optional[datetime]:
 
 
 def _flatten_dasha_chain(kundli: dict) -> List[Dict[str, Any]]:
-    """Return flat list of {md, ad, pd, start, end} chunks ordered by start."""
+    """STEP 6 — Build exact MD·AD·PD windows from kundli['dashas'].
+
+    Prefer nested subDashas with real startDate/endDate per PD.
+    Synthesize PDs only when AD has no PD list (Vimshottari 120 proportions).
+    Each row: {md, ad, pd, start, end, pd_synthesized?}.
+    """
     out: List[Dict[str, Any]] = []
     today = datetime.utcnow()
     horizon = today + timedelta(days=365 * _FUTURE_SCAN_HORIZON_YEARS)
@@ -778,8 +802,11 @@ def _flatten_dasha_chain(kundli: dict) -> List[Dict[str, Any]]:
                             continue
                         if pd_end < today - timedelta(days=30):
                             continue
-                        out.append({"md": md_lord, "ad": ad_lord, "pd": pd_lord,
-                                     "start": pd_start, "end": pd_end})
+                        out.append({
+                            "md": md_lord, "ad": ad_lord, "pd": pd_lord,
+                            "start": pd_start, "end": pd_end,
+                            "pd_synthesized": False,
+                        })
                 else:
                     # No PD list — synthesize from AD using standard Vimshottari
                     ad_secs = (ad_end - ad_start).total_seconds()
@@ -793,19 +820,101 @@ def _flatten_dasha_chain(kundli: dict) -> List[Dict[str, Any]]:
                         frac = _VIMS_YEARS[pd_lord] / total
                         pd_end = cursor + timedelta(seconds=ad_secs * frac)
                         if pd_end >= today - timedelta(days=30):
-                            out.append({"md": md_lord, "ad": ad_lord,
-                                         "pd": pd_lord, "start": cursor,
-                                         "end": pd_end})
+                            out.append({
+                                "md": md_lord, "ad": ad_lord,
+                                "pd": pd_lord, "start": cursor,
+                                "end": pd_end,
+                                "pd_synthesized": True,
+                            })
                         cursor = pd_end
 
     out.sort(key=lambda c: c["start"])
     return out
 
 
+def _build_dasha_lord_profiles(ranked: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """Map ranked Step-5 significators to strength/KP metadata for dasha scoring."""
+    out: Dict[str, Dict[str, Any]] = {}
+    for r in ranked or []:
+        name = r.get("name")
+        if not isinstance(name, str) or not name:
+            continue
+        try:
+            score = float(r.get("score", 0.0))
+        except (TypeError, ValueError):
+            score = 0.0
+        out[name] = {
+            "score": score,
+            "kp_verdict": r.get("kp_verdict") or r.get("verdict"),
+            "kp_points": r.get("kp_points", 0),
+            "d9_points": r.get("d9_points", 0),
+            "both_divisions": bool(r.get("both_divisions")),
+        }
+    return out
+
+
+def _dasha_lord_multiplier(
+    lord: str,
+    profiles: Optional[Dict[str, Dict[str, Any]]] = None,
+    *,
+    d9_7l: Optional[str] = None,
+) -> float:
+    """Convert Step-5 planet quality into a bounded dasha score multiplier."""
+    p = (profiles or {}).get(lord) or {}
+    try:
+        score = float(p.get("score", 0.0))
+    except (TypeError, ValueError):
+        score = 0.0
+
+    if score >= 20:
+        mult = 1.45
+    elif score >= 14:
+        mult = 1.25
+    elif score >= 8:
+        mult = 1.0
+    elif score > 0:
+        mult = 0.75
+    else:
+        mult = 1.0  # Back-compat for direct helper calls without profiles.
+
+    kp_verdict = p.get("kp_verdict")
+    if kp_verdict == "CONFIRMS":
+        mult += 0.15
+    elif kp_verdict == "PARTIAL":
+        mult -= 0.10
+    elif kp_verdict == "DENIES":
+        mult -= 0.45
+
+    if p.get("both_divisions"):
+        mult += 0.10
+    try:
+        if float(p.get("d9_points", 0.0)) >= 6.0:
+            mult += 0.10
+    except (TypeError, ValueError):
+        pass
+    if d9_7l and lord == d9_7l:
+        mult += 0.10
+    return max(0.35, min(1.65, mult))
+
+
+def _dasha_hit_score(
+    lord: str,
+    base_score: float,
+    profiles: Optional[Dict[str, Dict[str, Any]]] = None,
+    *,
+    d9_7l: Optional[str] = None,
+) -> Tuple[float, str]:
+    mult = _dasha_lord_multiplier(lord, profiles, d9_7l=d9_7l)
+    score = round(base_score * mult, 2)
+    return score, f"{lord} x{mult:.2f}={score:.2f}"
+
+
 def _step5_dasha_activation(chain: List[Dict[str, Any]],
                              target_lords: Set[str],
                              now: datetime,
-                             d9_7l: Optional[str] = None) -> Dict[str, Any]:
+                             d9_7l: Optional[str] = None,
+                             lord_profiles: Optional[Dict[str, Dict[str, Any]]] = None,
+                             ) -> Dict[str, Any]:
     """Find current MD-AD-PD; check overlap with target_lords.
 
     v2.2 — When the active MD/AD/PD is the D9 7L (supreme marriage
@@ -822,131 +931,480 @@ def _step5_dasha_activation(chain: List[Dict[str, Any]],
         return {"current": None, "active_score": 0, "active_lords": []}
 
     active_lords = []
-    score = 0
+    score = 0.0
     if current["md"] in target_lords:
-        score += _DASHA_SCORE_MD
-        active_lords.append(f"{current['md']} (MD)")
+        pts, detail = _dasha_hit_score(
+            current["md"], _DASHA_SCORE_MD, lord_profiles, d9_7l=d9_7l,
+        )
+        score += pts
+        active_lords.append(f"{current['md']} (MD {detail})")
     if current["ad"] in target_lords:
-        score += _DASHA_SCORE_AD
-        active_lords.append(f"{current['ad']} (AD)")
+        pts, detail = _dasha_hit_score(
+            current["ad"], _DASHA_SCORE_AD, lord_profiles, d9_7l=d9_7l,
+        )
+        score += pts
+        active_lords.append(f"{current['ad']} (AD {detail})")
     if current["pd"] in target_lords:
-        score += _DASHA_SCORE_PD
-        active_lords.append(f"{current['pd']} (PD)")
+        pts, detail = _dasha_hit_score(
+            current["pd"], _DASHA_SCORE_PD, lord_profiles, d9_7l=d9_7l,
+        )
+        score += pts
+        active_lords.append(f"{current['pd']} (PD {detail})")
     # D9 7L dasha bonus — supreme significator amplifies activation.
-    if d9_7l and d9_7l in {current["md"], current["ad"], current["pd"]}:
+    if (d9_7l and d9_7l in target_lords
+            and d9_7l in {current["md"], current["ad"], current["pd"]}):
         score += 2
         active_lords.append(f"{d9_7l} (D9 7L bonus)")
-    return {"current": current, "active_score": score,
+    return {"current": current, "active_score": round(score, 2),
             "active_lords": active_lords}
 
 
 def _step5_5_future_cascade(chain: List[Dict[str, Any]],
                               target_lords: Set[str],
                               now: datetime,
-                              current: Optional[Dict[str, Any]]
+                              current: Optional[Dict[str, Any]],
+                              *,
+                              late_urgent: bool = False,
+                              horizon_days: int = _LATE_URGENT_HORIZON_DAYS,
+                              d9_7l: Optional[str] = None,
+                              lord_profiles: Optional[Dict[str, Dict[str, Any]]] = None,
                               ) -> List[Dict[str, Any]]:
-    """Cascade scan per spec:
-      Priority 1: remaining PDs in current AD
-      Priority 2: remaining ADs in current MD
-      Priority 3: next MD's chunks
-    Returns scored future windows (PD-aware) sorted by score desc.
+    """Cascade scan — PD-aware windows (full chain, one-by-one).
+
+    Normal mode: AD and/or PD must be marriage significators.
+    Late-urgent mode (user already late by age, e.g. female 34):
+      • Still walks the FULL future dasha chain — BCP/horizon never skips years.
+      • `horizon_days` only adds near-term score boost (priority), not exclusion.
+      • If AD is NOT a marriage significator, still keep chunk when PD is
+        (har PD check — AD support optional).
+      • Boost PD-only activations so near-term windows surface first.
     """
     candidates: List[Dict[str, Any]] = []
     if not chain:
         return candidates
 
-    # Determine current MD/AD context for priority labelling
     cur_md = current["md"] if current else None
     cur_ad = current["ad"] if current else None
-    cur_md_seen = False
-    cur_ad_seen = False
+    horizon_end = now + timedelta(days=horizon_days) if late_urgent else None
 
     for c in chain:
         if c["end"] <= now:
-            continue   # past
-        # Score: each lord present in target adds weight
-        s = 0
-        triple = 0
-        if c["md"] in target_lords:
-            s += _DASHA_SCORE_MD; triple += 1
-        if c["ad"] in target_lords:
-            s += _DASHA_SCORE_AD; triple += 1
-        if c["pd"] in target_lords:
-            s += _DASHA_SCORE_PD; triple += 1
-        if s == 0:
-            continue   # no marriage planet active in this chunk
+            continue
+        # BCP / late-urgent: never drop future chunks — scan every window;
+        # horizon_end used below for near-term boost + sort priority only.
+        beyond_near_horizon = (
+            late_urgent
+            and horizon_end is not None
+            and c["start"] > horizon_end
+        )
 
-        # Priority tag
-        if cur_md and c["md"] == cur_md and cur_ad and c["ad"] == cur_ad:
+        ad_hit = c["ad"] in target_lords
+        pd_hit = c["pd"] in target_lords
+
+        s = 0.0
+        triple = 0
+        ad_pd_score = 0.0
+        pd_only = False
+        dasha_detail: List[str] = []
+        md_score = 0.0
+        ad_score = 0.0
+        pd_score = 0.0
+
+        if late_urgent:
+            # PD-first: AD weak ho tab bhi har PD alag se
+            if pd_hit:
+                pd_score, detail = _dasha_hit_score(
+                    c["pd"], _DASHA_SCORE_PD, lord_profiles, d9_7l=d9_7l,
+                )
+                s += pd_score
+                ad_pd_score += pd_score
+                dasha_detail.append(f"PD {detail}")
+                triple += 1
+                if not ad_hit:
+                    pd_only = True
+                    s += _LATE_URGENT_PD_BOOST
+                    dasha_detail.append(f"late PD-only +{_LATE_URGENT_PD_BOOST:g}")
+            if ad_hit:
+                ad_score, detail = _dasha_hit_score(
+                    c["ad"], _DASHA_SCORE_AD, lord_profiles, d9_7l=d9_7l,
+                )
+                s += ad_score
+                ad_pd_score += ad_score
+                dasha_detail.append(f"AD {detail}")
+                triple += 1
+            if c["md"] in target_lords:
+                md_score, detail = _dasha_hit_score(
+                    c["md"], _DASHA_SCORE_MD, lord_profiles, d9_7l=d9_7l,
+                )
+                s += md_score
+                dasha_detail.append(f"MD {detail}")
+                triple += 1
+            if ad_pd_score < _MIN_AD_PD_SCORE:
+                continue
+        else:
+            if c["md"] in target_lords:
+                md_score, detail = _dasha_hit_score(
+                    c["md"], _DASHA_SCORE_MD, lord_profiles, d9_7l=d9_7l,
+                )
+                s += md_score
+                dasha_detail.append(f"MD {detail}")
+                triple += 1
+            if ad_hit:
+                ad_score, detail = _dasha_hit_score(
+                    c["ad"], _DASHA_SCORE_AD, lord_profiles, d9_7l=d9_7l,
+                )
+                s += ad_score
+                triple += 1
+                ad_pd_score += ad_score
+                dasha_detail.append(f"AD {detail}")
+            if pd_hit:
+                pd_score, detail = _dasha_hit_score(
+                    c["pd"], _DASHA_SCORE_PD, lord_profiles, d9_7l=d9_7l,
+                )
+                s += pd_score
+                triple += 1
+                ad_pd_score += pd_score
+                dasha_detail.append(f"PD {detail}")
+            if ad_pd_score < _MIN_AD_PD_SCORE:
+                continue
+
+        if s == 0:
+            continue
+
+        ad_pd_confluence = bool(ad_hit and pd_hit)
+        if ad_pd_confluence:
+            conf_boost = _DASHA_AD_PD_CONFLUENCE_BOOST
+            if c["ad"] == c["pd"]:
+                conf_boost += 1.0
+            s += conf_boost
+            dasha_detail.append(f"AD+PD confluence +{conf_boost:g}")
+
+        if late_urgent and horizon_end is not None and c["start"] <= horizon_end:
+            s += _LATE_URGENT_NEAR_BOOST
+            dasha_detail.append(f"near-horizon +{_LATE_URGENT_NEAR_BOOST:g}")
+
+        # Priority: late-urgent → soonest PD windows first; far-future demoted
+        if late_urgent and pd_only and not beyond_near_horizon:
+            priority = 0
+        elif cur_md and c["md"] == cur_md and cur_ad and c["ad"] == cur_ad:
             priority = 1
-            cur_ad_seen = True
         elif cur_md and c["md"] == cur_md:
             priority = 2
-            cur_md_seen = True
+        elif beyond_near_horizon:
+            priority = 4   # still scanned + transit-checked; lower rank only
         else:
             priority = 3
 
-        candidates.append({**c, "score": float(s), "triple": triple,
-                            "priority": priority})
+        candidates.append({
+            **c,
+            "score": round(float(s), 2),
+            "triple": triple,
+            "priority": priority,
+            "pd_only_activation": pd_only,
+            "ad_supports": ad_hit,
+            "pd_supports": pd_hit,
+            "md_score": round(md_score, 2),
+            "ad_score": round(ad_score, 2),
+            "pd_score": round(pd_score, 2),
+            "ad_pd_score": round(ad_pd_score, 2),
+            "ad_pd_confluence": ad_pd_confluence,
+            "dasha_score_detail": dasha_detail,
+            "beyond_bcp_near_horizon": beyond_near_horizon,
+        })
 
-    candidates.sort(key=lambda x: (x["priority"], -x["score"], x["start"]))
+    if late_urgent:
+        candidates.sort(key=lambda x: (x["priority"], x["start"], -x["score"]))
+    else:
+        candidates.sort(key=lambda x: (x["priority"], -x["score"], x["start"]))
     return candidates
 
 
 # ════════════════════════════════════════════════════════════════════════
 # STEP 6 — Double Transit confirmation (TRIGGER)
 # ════════════════════════════════════════════════════════════════════════
-def _planet_sign_at(planet_id: int, when: datetime) -> Optional[int]:
+def _planet_lon_at(planet_id: int, when: datetime) -> Optional[float]:
     if not _HAS_SWE:
         return None
     try:
         jd = swe.julday(when.year, when.month, when.day,
                         when.hour + when.minute / 60.0)
         pos, _ = swe.calc_ut(jd, planet_id, _SWE_FLAGS)
-        lon = float(pos[0]) % 360.0
-        return int(lon / 30.0) % 12
+        return float(pos[0]) % 360.0
     except Exception:
         return None
+
+
+def _planet_sign_at(planet_id: int, when: datetime) -> Optional[int]:
+    lon = _planet_lon_at(planet_id, when)
+    if lon is None:
+        return None
+    return int(lon / 30.0) % 12
+
+
+def _extract_asc_lon(kundli: dict) -> Optional[float]:
+    for key in ("ascendantLon", "ascendantLongitude", "lagnaLon", "ascendantDeg"):
+        v = kundli.get(key)
+        try:
+            if v is not None:
+                return float(v) % 360.0
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _planet_lon(planets: List[dict], pname: str) -> Optional[float]:
+    p = next((x for x in planets or []
+              if isinstance(x, dict) and x.get("name") == pname), None)
+    if not isinstance(p, dict):
+        return None
+    for key in ("longitude", "lon", "fullDegree", "absoluteDegree",
+                "eclipticLongitude"):
+        v = p.get(key)
+        try:
+            if v is not None:
+                return float(v) % 360.0
+        except (TypeError, ValueError):
+            pass
+    sign_si = _planet_sign_idx(planets, pname)
+    for key in ("degreeWithinSign", "normDegree", "degree", "deg"):
+        v = p.get(key)
+        try:
+            if sign_si is not None and v is not None:
+                deg = float(v)
+                if 0.0 <= deg <= 30.0:
+                    return (sign_si * 30.0 + deg) % 360.0
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+def _angular_orb(diff: float, exact: float) -> float:
+    raw = abs((diff % 360.0) - exact)
+    return min(raw, 360.0 - raw)
+
+
+def _exact_transit_hit(
+    transit_lon: float,
+    planet_name: str,
+    target_lon: float,
+) -> Optional[Dict[str, Any]]:
+    diff = (target_lon - transit_lon) % 360.0
+    if planet_name == "Jupiter":
+        aspects = (0.0, 120.0, 180.0, 240.0)
+        orb_limit = _TRANSIT_JUPITER_ORB_DEG
+    else:
+        aspects = (0.0, 60.0, 180.0, 270.0)
+        orb_limit = _TRANSIT_SATURN_ORB_DEG
+    best_exact = min(aspects, key=lambda a: _angular_orb(diff, a))
+    orb = _angular_orb(diff, best_exact)
+    if orb <= orb_limit:
+        return {"aspect_deg": int(best_exact), "orb": round(orb, 2)}
+    return None
+
+
+def _transit_sample_dates(window: Dict[str, Any]) -> List[datetime]:
+    custom = window.get("transit_sample_dates")
+    if isinstance(custom, list) and custom:
+        return [d for d in custom if isinstance(d, datetime)]
+    start = window["start"]
+    end = window["end"]
+    if end <= start:
+        return [start]
+    samples: List[datetime] = []
+    span = end - start
+    for frac in _TRANSIT_SAMPLE_FRACTIONS:
+        dt = start + span * frac
+        if not any(abs((dt - old).total_seconds()) < 60 for old in samples):
+            samples.append(dt)
+    return samples
+
+
+def _age_start_dt(birth_dt: Optional[datetime], age: int) -> Optional[datetime]:
+    if birth_dt is None:
+        return None
+    try:
+        return birth_dt.replace(year=birth_dt.year + age)
+    except ValueError:
+        return birth_dt.replace(year=birth_dt.year + age, day=28)
+
+
+def _monthly_samples(start: datetime, end: datetime) -> List[datetime]:
+    samples: List[datetime] = []
+    cur = start
+    while cur <= end:
+        samples.append(cur)
+        y = cur.year + (1 if cur.month == 12 else 0)
+        m = 1 if cur.month == 12 else cur.month + 1
+        d = min(cur.day, 28)
+        cur = cur.replace(year=y, month=m, day=d)
+    if not samples or samples[-1].date() != end.date():
+        samples.append(end)
+    return samples
+
+
+def _build_transit_targets(
+    kundli: dict,
+    planets: List[dict],
+    h7_si: int,
+    seventh_lord: str,
+    top_planet_names: List[str],
+    d9_7l: Optional[str],
+) -> List[Dict[str, Any]]:
+    _ = top_planet_names, d9_7l
+    targets: List[Dict[str, Any]] = []
+    seen: Set[Tuple[str, int]] = set()
+
+    def _add(label: str, lon: Optional[float], target_type: str) -> None:
+        if lon is None:
+            return
+        key = (label, int(round(lon * 100)))
+        if key in seen:
+            return
+        seen.add(key)
+        targets.append({
+            "label": label,
+            "target_type": target_type,
+            "lon": lon % 360.0,
+            "sign_idx": int((lon % 360.0) / 30.0) % 12,
+        })
+
+    asc_lon = _extract_asc_lon(kundli)
+    if asc_lon is not None:
+        _add("7th house", asc_lon + 180.0, "seventh_house")
+    else:
+        _add("7th house", h7_si * 30.0 + 15.0, "seventh_house")
+
+    _add(f"7th lord {seventh_lord}", _planet_lon(planets, seventh_lord), "seventh_lord")
+    return targets
+
+
+def _attach_transit_to_window(
+    window: Dict[str, Any],
+    h7_si: int,
+    seventh_lord_si: Optional[int],
+    top_planet_signs: Set[int],
+    transit_targets: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """STEP 7 — Guru+Shani check across final dasha window (verify only)."""
+    dt_info = _step6_double_transit(
+        window, h7_si, seventh_lord_si, top_planet_signs, transit_targets,
+    )
+    window["jup"] = dt_info["jup_hit"]
+    window["sat"] = dt_info["sat_hit"]
+    window["dt"] = dt_info["dt"]
+    window["transit_confirmed"] = dt_info.get("transit_confirmed", False)
+    window["dt_detail"] = dt_info["detail"]
+    window["transit_check_at"] = dt_info.get("best_check_at") or (
+        window["start"] + (window["end"] - window["start"]) / 2
+    ).isoformat()[:10]
+    window["transit_samples"] = dt_info.get("samples", [])
+    return dt_info
 
 
 def _step6_double_transit(window: Dict[str, Any],
                            h7_si: int,
                            seventh_lord_si: Optional[int],
-                           top_planet_signs: Set[int]) -> Dict[str, Any]:
-    """Sample window midpoint; check Jupiter+Saturn against marriage targets."""
+                           top_planet_signs: Set[int],
+                           transit_targets: Optional[List[Dict[str, Any]]] = None,
+                           ) -> Dict[str, Any]:
+    """Double transit over samples: only 7th house or 7th lord can validate."""
+    _ = top_planet_signs
     if not _HAS_SWE:
         return {"jup_hit": False, "sat_hit": False, "dt": False, "boost": 0.0,
                 "detail": "swisseph unavailable"}
-    mid = window["start"] + (window["end"] - window["start"]) / 2
-    jup_si = _planet_sign_at(swe.JUPITER, mid)
-    sat_si = _planet_sign_at(swe.SATURN, mid)
 
-    targets = {h7_si}
-    if seventh_lord_si is not None:
-        targets.add(seventh_lord_si)
-    targets |= top_planet_signs
+    exact_targets = [
+        t for t in (transit_targets or [])
+        if t.get("target_type") in {"seventh_house", "seventh_lord"}
+        or str(t.get("label", "")).startswith(("7th house", "7th lord", "7L"))
+    ]
 
-    # Jupiter on target sign OR aspects target sign (5/7/9)
     jup_hit = False
-    if jup_si is not None:
-        if jup_si in targets:
-            jup_hit = True
-        else:
-            for t in targets:
-                if _aspects_target("Jupiter", jup_si, t):
-                    jup_hit = True
-                    break
-
-    # Saturn on target sign OR aspects (3/7/10)
     sat_hit = False
-    if sat_si is not None:
-        if sat_si in targets:
+    samples: List[Dict[str, Any]] = []
+    detail_parts: List[str] = []
+    best_check_at = None
+
+    for sample_dt in _transit_sample_dates(window):
+        jup_lon = _planet_lon_at(swe.JUPITER, sample_dt)
+        sat_lon = _planet_lon_at(swe.SATURN, sample_dt)
+        jup_si = int(jup_lon / 30.0) % 12 if jup_lon is not None else None
+        sat_si = int(sat_lon / 30.0) % 12 if sat_lon is not None else None
+        sample = {
+            "date": sample_dt.isoformat()[:10],
+            "jupiter_lon": round(jup_lon, 3) if jup_lon is not None else None,
+            "saturn_lon": round(sat_lon, 3) if sat_lon is not None else None,
+            "jupiter_hits": [],
+            "saturn_hits": [],
+        }
+
+        def _append_sign_hits(planet_name: str, p_si: Optional[int], bucket: str) -> None:
+            if p_si is None:
+                return
+            if p_si == h7_si:
+                sample[bucket].append({
+                    "target": "7th house",
+                    "mode": "sign",
+                    "hit_type": "occupies_7th_house",
+                })
+            elif _aspects_target(planet_name, p_si, h7_si):
+                sample[bucket].append({
+                    "target": "7th house",
+                    "mode": "sign",
+                    "hit_type": "aspects_7th_house",
+                })
+            if seventh_lord_si is not None:
+                if p_si == seventh_lord_si:
+                    sample[bucket].append({
+                        "target": "7th lord sign",
+                        "mode": "sign",
+                        "hit_type": "conjunct_7th_lord",
+                    })
+                elif _aspects_target(planet_name, p_si, seventh_lord_si):
+                    sample[bucket].append({
+                        "target": "7th lord sign",
+                        "mode": "sign",
+                        "hit_type": "aspects_7th_lord",
+                    })
+
+        if exact_targets:
+            if jup_lon is not None:
+                for tgt in exact_targets:
+                    hit = _exact_transit_hit(jup_lon, "Jupiter", float(tgt["lon"]))
+                    if hit:
+                        item = {
+                            **hit,
+                            "target": tgt["label"],
+                            "target_type": tgt.get("target_type"),
+                            "mode": "exact_orb",
+                        }
+                        sample["jupiter_hits"].append(item)
+            if sat_lon is not None:
+                for tgt in exact_targets:
+                    hit = _exact_transit_hit(sat_lon, "Saturn", float(tgt["lon"]))
+                    if hit:
+                        item = {
+                            **hit,
+                            "target": tgt["label"],
+                            "target_type": tgt.get("target_type"),
+                            "mode": "exact_orb",
+                        }
+                        sample["saturn_hits"].append(item)
+
+        # Sign-level house validation is always checked, because the rule is:
+        # Jupiter/Saturn must occupy/aspect 7H or conjoin/aspect the 7L sign.
+        _append_sign_hits("Jupiter", jup_si, "jupiter_hits")
+        _append_sign_hits("Saturn", sat_si, "saturn_hits")
+
+        if sample["jupiter_hits"]:
+            jup_hit = True
+        if sample["saturn_hits"]:
             sat_hit = True
-        else:
-            for t in targets:
-                if _aspects_target("Saturn", sat_si, t):
-                    sat_hit = True
-                    break
+
+        if sample["jupiter_hits"] or sample["saturn_hits"]:
+            if best_check_at is None:
+                best_check_at = sample["date"]
+            samples.append(sample)
 
     boost = 0.0
     if jup_hit and sat_hit:
@@ -954,13 +1412,178 @@ def _step6_double_transit(window: Dict[str, Any],
     elif jup_hit or sat_hit:
         boost = _DT_ONE_BOOST
 
-    detail_parts = []
-    if jup_hit and jup_si is not None:
-        detail_parts.append(f"Jup→{_SIGNS[jup_si]}")
-    if sat_hit and sat_si is not None:
-        detail_parts.append(f"Sat→{_SIGNS[sat_si]}")
-    return {"jup_hit": jup_hit, "sat_hit": sat_hit, "dt": jup_hit and sat_hit,
-            "boost": boost, "detail": " + ".join(detail_parts) or "no transit hit"}
+    for sample in samples[:2]:
+        if sample["jupiter_hits"]:
+            h = sample["jupiter_hits"][0]
+            detail_parts.append(
+                f"{sample['date']} Jup→{h['target']}"
+                + (f" orb {h['orb']}°" if "orb" in h else "")
+            )
+        if sample["saturn_hits"]:
+            h = sample["saturn_hits"][0]
+            detail_parts.append(
+                f"{sample['date']} Sat→{h['target']}"
+                + (f" orb {h['orb']}°" if "orb" in h else "")
+            )
+    transit_ok = bool(jup_hit or sat_hit)
+    return {
+        "jup_hit": jup_hit,
+        "sat_hit": sat_hit,
+        "dt": jup_hit and sat_hit,
+        "transit_confirmed": transit_ok,
+        "boost": boost if transit_ok else 0.0,
+        "detail": " + ".join(detail_parts) or "no transit hit",
+        "best_check_at": best_check_at,
+        "samples": samples,
+    }
+
+
+def _try_bcp_year_transit_support(
+    window: Dict[str, Any],
+    *,
+    birth_dt: Optional[datetime],
+    focus_bcp_ages: Set[int],
+    h7_si: int,
+    seventh_lord_si: Optional[int],
+    top_planet_signs: Set[int],
+    transit_targets: Optional[List[Dict[str, Any]]] = None,
+) -> Optional[Dict[str, Any]]:
+    """If dasha window overlaps a BCP age, scan that whole age-year for transit."""
+    if window.get("transit_confirmed"):
+        return None
+    hits = set(window.get("bcp_age_hits") or [])
+    if focus_bcp_ages:
+        hits &= set(focus_bcp_ages)
+    if not hits or birth_dt is None:
+        return None
+
+    best: Optional[Dict[str, Any]] = None
+    for age in sorted(hits):
+        start = _age_start_dt(birth_dt, int(age))
+        end = _age_start_dt(birth_dt, int(age) + 1)
+        if start is None or end is None:
+            continue
+        end = end - timedelta(days=1)
+        scan_window = {
+            "start": start,
+            "end": end,
+            "transit_sample_dates": _monthly_samples(start, end),
+        }
+        info = _step6_double_transit(
+            scan_window, h7_si, seventh_lord_si, top_planet_signs,
+            transit_targets,
+        )
+        if info.get("transit_confirmed"):
+            info["bcp_age"] = age
+            info["bcp_scan_start"] = start.strftime("%Y-%m-%d")
+            info["bcp_scan_end"] = end.strftime("%Y-%m-%d")
+            best = info
+            break
+
+    if best:
+        window["jup"] = bool(best.get("jup_hit"))
+        window["sat"] = bool(best.get("sat_hit"))
+        window["dt"] = bool(best.get("dt"))
+        window["transit_confirmed"] = True
+        window["bcp_year_transit_support"] = True
+        window["transit_check_at"] = best.get("best_check_at")
+        window["transit_samples"] = best.get("samples", [])
+        note = (
+            f"BCP age {best.get('bcp_age')} year transit support "
+            f"{best.get('bcp_scan_start')}→{best.get('bcp_scan_end')}"
+        )
+        window["dt_detail"] = (
+            (best.get("detail") or "") + " | " + note
+        ).strip(" |")
+        window["bcp_note"] = (
+            (window.get("bcp_note") or "") + " | " + note
+        ).strip(" |")
+    return best
+
+
+def _ensure_transit_supported_primary(
+    top_3: List[Dict[str, Any]],
+    future_candidates: List[Dict[str, Any]],
+    *,
+    birth_dt: Optional[datetime],
+    focus_bcp_ages: Set[int],
+    h7_si: int,
+    seventh_lord_si: Optional[int],
+    top_planet_signs: Set[int],
+    transit_targets: Optional[List[Dict[str, Any]]] = None,
+) -> Tuple[List[Dict[str, Any]], List[str]]:
+    """Primary must have Jupiter/Saturn support; BCP-year scan can rescue it."""
+    notes: List[str] = []
+    if not top_3:
+        return top_3, notes
+
+    def _evaluate(w: Dict[str, Any]) -> None:
+        if "transit_confirmed" not in w:
+            _attach_transit_to_window(
+                w, h7_si, seventh_lord_si, top_planet_signs, transit_targets,
+            )
+        if not w.get("transit_confirmed"):
+            _try_bcp_year_transit_support(
+                w,
+                birth_dt=birth_dt,
+                focus_bcp_ages=focus_bcp_ages,
+                h7_si=h7_si,
+                seventh_lord_si=seventh_lord_si,
+                top_planet_signs=top_planet_signs,
+                transit_targets=transit_targets,
+            )
+
+    for w in top_3:
+        _evaluate(w)
+
+    if top_3[0].get("transit_confirmed"):
+        return top_3, notes
+
+    skipped = top_3[0]
+    skipped["skipped_as_primary_no_transit"] = True
+    notes.append(
+        f"STEP7 skipped primary {skipped.get('md')}-{skipped.get('ad')}-{skipped.get('pd')} "
+        "because no Jupiter/Saturn transit support"
+    )
+
+    supported: List[Dict[str, Any]] = []
+    for cand in future_candidates:
+        if cand.get("suppressed_too_young") or cand.get("suppressed_pre_bcp_focus"):
+            continue
+        _evaluate(cand)
+        if cand.get("transit_confirmed"):
+            supported.append(cand)
+            break
+
+    if not supported:
+        notes.append("STEP7 found no transit-supported alternate; keeping dasha primary as weak/backup")
+        return top_3, notes
+
+    primary = supported[0]
+    primary["promoted_by_transit_support"] = True
+    notes.append(
+        f"STEP7 promoted transit-supported window "
+        f"{primary.get('md')}-{primary.get('ad')}-{primary.get('pd')}"
+    )
+
+    selected = [primary]
+    used = {id(primary)}
+    for cand in top_3 + future_candidates:
+        if len(selected) >= 3:
+            break
+        if id(cand) in used:
+            continue
+        if cand.get("suppressed_too_young") or cand.get("suppressed_pre_bcp_focus"):
+            continue
+        if not _gap_ok(cand, selected):
+            continue
+        selected.append(cand)
+        used.add(id(cand))
+    selected.sort(key=lambda x: x["start"])
+    if primary in selected:
+        selected.remove(primary)
+        selected.insert(0, primary)
+    return selected, notes
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -1077,6 +1700,66 @@ def _gap_ok(cand: Dict[str, Any], chosen: List[Dict[str, Any]]) -> bool:
     return True
 
 
+def _apply_bcp_anchor_guard(
+    candidates: List[Dict[str, Any]],
+    *,
+    chart_delayed: bool,
+    primary_ref_age: Optional[int],
+    user_age: Optional[int],
+    focus_bcp_ages: Set[int],
+    birth_dt: Optional[datetime],
+) -> int:
+    """Demote windows that end before Step-0 BCP anchor age on delayed charts."""
+    if not (
+        chart_delayed
+        and primary_ref_age is not None
+        and user_age is not None
+        and birth_dt is not None
+        and (primary_ref_age - user_age) > _BCP_ANCHOR_MIN_GAP_YEARS
+    ):
+        return 0
+    try:
+        from event_timing.marriage.bcp_marriage_ages import _age_span_in_chunk
+    except Exception:
+        return 0
+    anchor_min_age = primary_ref_age - _BCP_ANCHOR_GRACE_YEARS
+    n = 0
+    for c in candidates:
+        focus_hits = set(c.get("bcp_age_hits") or []) & focus_bcp_ages
+        if focus_hits:
+            continue
+        _min_a, max_a = _age_span_in_chunk(birth_dt, c["start"], c["end"])
+        if max_a is not None and max_a < anchor_min_age:
+            c["priority"] = max(c.get("priority", 3), 90)
+            c["score"] = float(c.get("score", 0)) - _BCP_PRE_FOCUS_DEMOTE
+            c["suppressed_pre_bcp_focus"] = True
+            n += 1
+    return n
+
+
+def _delayed_anchor_focus_ages(
+    focus_bcp_ages: Set[int],
+    *,
+    chart_delayed: bool,
+    primary_ref_age: Optional[int],
+    user_age: Optional[int],
+) -> Tuple[Set[int], List[int]]:
+    """Delayed charts should not let early BCP hits bypass the primary anchor."""
+    focus = {int(a) for a in (focus_bcp_ages or set())}
+    if not (
+        chart_delayed
+        and primary_ref_age is not None
+        and user_age is not None
+        and (primary_ref_age - user_age) > _BCP_ANCHOR_MIN_GAP_YEARS
+    ):
+        return focus, []
+    anchor_min_age = int(primary_ref_age) - _BCP_ANCHOR_GRACE_YEARS
+    trimmed = {a for a in focus if a >= anchor_min_age}
+    trimmed.add(int(primary_ref_age))
+    removed = sorted(a for a in focus if a < anchor_min_age)
+    return trimmed, removed
+
+
 def _select_top_3(scored: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Greedy top-3 with min-gap + AD-diversity preference."""
     if not scored:
@@ -1107,42 +1790,148 @@ def _select_top_3(scored: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 # ════════════════════════════════════════════════════════════════════════
 # Verdict + band derivation
 # ════════════════════════════════════════════════════════════════════════
+def _risk_severity_score(risk_flags: List[str]) -> Tuple[float, List[str]]:
+    """Weighted severity for Step 8 risks; avoids treating all flags equally."""
+    score = 0.0
+    notes: List[str] = []
+    for flag in risk_flags or []:
+        fl = flag.lower()
+        weight = 0.0
+        if "7th cusp sub-lord denies" in fl:
+            weight = 5.0
+        elif "7th cusp sub-lord partial" in fl:
+            weight = 2.5
+        elif "saturn in 7h" in fl:
+            weight = 3.5
+        elif "saturn conjunct 7l" in fl:
+            weight = 3.0
+        elif "saturn aspects 7h" in fl:
+            weight = 2.5
+        elif "8l" in fl or "6l" in fl or "12l" in fl:
+            weight = 2.5
+        elif "rahu in 7h" in fl or "rahu in 1h" in fl:
+            weight = 2.0
+        elif "venus debilitated" in fl:
+            weight = 2.5
+        elif "combust" in fl:
+            weight = 2.0
+        elif "manglik active" in fl:
+            weight = 2.0
+        elif "manglik mild" in fl:
+            weight = 1.0
+        elif "delay" in fl or "obstacle" in fl:
+            weight = 1.0
+        if weight:
+            score += weight
+            notes.append(f"{flag} ({weight:g})")
+    return round(score, 2), notes
+
+
 def _derive_verdict(top_score: float, kp_csl: str,
-                     risk_flags: List[str]) -> Tuple[str, str]:
-    """Return (verdict, band).
+                     risk_flags: List[str],
+                     *,
+                     natal_promise: bool = True,
+                     kp_supported: bool = True,
+                     has_qualified_window: bool = True,
+                     final_transit_support: bool = False,
+                     final_double_transit: bool = False,
+                     timing_appropriate: bool = True) -> Tuple[str, str, Dict[str, Any]]:
+    """Return weighted final verdict, band, and gate diagnostics."""
+    risk_score, risk_notes = _risk_severity_score(risk_flags)
+    gate_score = float(top_score)
+    notes: List[str] = [f"dasha_score={round(top_score, 2)}"]
 
-    KP CSL DENIES is HARD-STOP per Krishnamurti doctrine — 7th cusp sub-
-    lord is the final authority on whether marriage is promised at all.
-    Even strong dasha/transit confluence cannot override CSL denial; at
-    most it can elevate DENIED→DELAYED (event possible but only with
-    enormous remedial effort).
-    """
-    # ── KP-CSL hard gate (architect-fixed May 6 2026) ──
+    if not has_qualified_window:
+        return "UNKNOWN", "WEAK", {
+            "gate_score": 0.0, "risk_score": risk_score,
+            "risk_notes": risk_notes,
+            "notes": notes + ["no qualified timing window"],
+        }
+    if not natal_promise:
+        return "UNKNOWN", "WEAK", {
+            "gate_score": 0.0, "risk_score": risk_score,
+            "risk_notes": risk_notes,
+            "notes": notes + ["natal promise missing"],
+        }
+
+    if not kp_supported:
+        gate_score -= 3.0
+        notes.append("KP support missing -3")
+
+    if kp_csl == "CONFIRMS":
+        gate_score += 2.0
+        notes.append("KP 7CSL CONFIRMS +2")
+    elif kp_csl == "PARTIAL":
+        gate_score -= 1.0
+        notes.append("KP 7CSL PARTIAL -1")
+    elif kp_csl == "DENIES":
+        gate_score -= 4.0
+        notes.append("KP 7CSL DENIES -4")
+
+    if final_double_transit:
+        gate_score += 2.5
+        notes.append("double transit +2.5")
+    elif final_transit_support:
+        gate_score += 1.0
+        notes.append("single transit support +1")
+    else:
+        gate_score -= 2.0
+        notes.append("transit support missing -2")
+
+    risk_penalty = min(6.0, risk_score * 0.65)
+    if risk_penalty:
+        gate_score -= risk_penalty
+        notes.append(f"risk penalty -{round(risk_penalty, 2)}")
+
+    if not timing_appropriate:
+        gate_score -= 5.0
+        notes.append("timing inappropriate -5")
+
     if kp_csl == "DENIES":
-        # Final authority denies. Strongest dasha confluence can only
-        # soften DENIED to DELAYED, NEVER to PROMISED.
-        if top_score >= 10.0:
-            return "DELAYED", "WEAK"   # massive effort needed; not promised
-        return "DENIED", "WEAK"
-
-    # Standard ladder (CSL is CONFIRMS / PARTIAL / UNKNOWN)
-    if top_score >= 10.0:
+        if gate_score >= 8.0 and final_double_transit and kp_supported:
+            verdict, band = "DELAYED", "MEDIUM"
+        else:
+            verdict, band = "DELAYED", "WEAK"
+    elif not kp_supported:
+        if gate_score >= 8.0 and final_transit_support:
+            verdict, band = "DELAYED", "MEDIUM"
+        else:
+            verdict, band = "DELAYED", "WEAK"
+    elif gate_score >= 12.0:
         verdict, band = "PROMISED", "STRONG"
-    elif top_score >= 6.0:
+    elif gate_score >= 8.0:
         verdict, band = "PROMISED", "MEDIUM"
-    elif top_score >= 3.0:
+    elif gate_score >= 4.0:
         verdict, band = "DELAYED", "WEAK"
     else:
         verdict, band = "UNKNOWN", "WEAK"
 
-    # KP PARTIAL caps STRONG band (mixed CSL signals → never claim STRONG)
+    if risk_score >= 6.0 and verdict == "PROMISED":
+        verdict = "DELAYED"
+        if band == "STRONG":
+            band = "MEDIUM"
+        notes.append("high risk score caps promise to delayed")
+    elif risk_score >= 4.0 and band == "STRONG":
+        band = "MEDIUM"
+        notes.append("moderate risk caps strong band")
+
     if kp_csl == "PARTIAL" and band == "STRONG":
         band = "MEDIUM"
-    # Saturn-affliction or KP PARTIAL nudges PROMISED-MEDIUM → DELAYED
-    if verdict == "PROMISED" and band == "MEDIUM":
-        if any("Saturn" in f for f in risk_flags) or kp_csl == "PARTIAL":
-            verdict = "DELAYED"
-    return verdict, band
+        notes.append("KP PARTIAL caps strong band")
+
+    diagnostics = {
+        "gate_score": round(gate_score, 2),
+        "risk_score": risk_score,
+        "risk_notes": risk_notes,
+        "risk_penalty": round(risk_penalty, 2),
+        "notes": notes,
+        "natal_promise": natal_promise,
+        "kp_supported": kp_supported,
+        "transit_support": final_transit_support,
+        "double_transit": final_double_transit,
+        "timing_appropriate": timing_appropriate,
+    }
+    return verdict, band, diagnostics
 
 
 def _data_sufficiency_check(kundli: dict, kp: dict) -> Tuple[bool, List[str]]:
@@ -1362,6 +2151,11 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER",
         }
 
+    # KP from DB chart_data (kundli["kp"]) — not birth-only recompute
+    from event_timing.marriage.kp_from_chart import resolve_kp
+
+    kp = resolve_kp(kundli, kp, birth)
+
     # ── Data sufficiency gate (architect-fix: no fail-open on partial chart) ──
     ok, reasons = _data_sufficiency_check(kundli, kp)
     if not ok:
@@ -1407,139 +2201,276 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         f"band={age_band} urgency={urgency} "
         f"min_practical={min_practical_age} too_young={too_young}")
 
-    # ── STEP 1 ────────────────────────────────────────────────────────
-    d1_map = _step1_d1_filter(kundli, lagna_si)
-    try:
-        from event_timing._shared.kp_significator_scan import kp_promote_survivors
-        _kp_prom = kp_promote_survivors(d1_map, kp, "marriage")
-        if _kp_prom:
-            factors.append(f"STEP1 KP-promoted={sorted(_kp_prom)}")
-    except Exception as _e:
-        factors.append(f"STEP1 KP-promote-error={type(_e).__name__}")
-    filtered_set = {p for p, info in d1_map.items() if info.get("in_filter")}
-    factors.append(f"STEP1 filtered={sorted(filtered_set)}")
+    # ── STEP 0: early/late + age context; STEP 0A: BCP timing plan ────
+    from event_timing.marriage.bcp_marriage_ages import apply_bcp_boost_to_candidates
+    from event_timing.marriage.marriage_step0 import run_marriage_step0
+    from event_timing.marriage.marriage_step0a import (
+        annotate_candidates_bcp_ages,
+        run_marriage_step0a,
+    )
 
-    # ── STEP 1.5 — D9-7L karaka floor (v2.2, May 6 2026) ──────────────
-    # Classical Parashari rule: D9 (Navamsa) 7L is the SUPREME marriage
-    # significator — even more critical than D1 7L for marriage timing
-    # because D9 IS the marriage varga. A planet that has zero D1 link
-    # but rules D9's 7H must still be evaluated (D9 score, KP signification,
-    # weighted rank, dasha activation). Without this floor the engine
-    # silently drops the most important Navamsa planet.
-    d9_7l = _compute_d9_seventh_lord(kundli)
-    if d9_7l and d9_7l not in filtered_set:
-        filtered_set.add(d9_7l)
-        if d9_7l in d1_map:
-            d1_map[d9_7l]["in_filter"] = True
-            d1_map[d9_7l]["links"].append("D9 7L (karaka floor)")
-        factors.append(f"STEP1.5 D9_7L_FLOOR added={d9_7l}")
-    else:
-        factors.append(f"STEP1.5 D9_7L={d9_7l} (already in filter or unavailable)")
+    step0 = run_marriage_step0(
+        kundli,
+        lagna_si,
+        user_age=user_age,
+        birth_dt=birth_dt,
+        is_female=is_female,
+        kp=kp,
+        min_practical_age=min_practical_age,
+        years_ahead=5,
+    )
+    marriage_age_ctx = step0.get("marriage_age_context") or {}
+    _combined_pace = (
+        (step0.get("marriage_pace") or {}).get("combined") or {}
+    ).get("combined_pace") or "NORMAL"
+    step0a = run_marriage_step0a(
+        kundli,
+        lagna_si,
+        combined_pace=_combined_pace,
+        age_ctx=marriage_age_ctx,
+        user_age=user_age,
+        birth_dt=birth_dt,
+        years_ahead=5,
+    )
+    bcp_ctx = step0a.get("bcp_marriage_ages") or {}
+    bcp_strategy = step0a.get("bcp_timing_strategy") or {}
+    dasha_scan = step0a.get("dasha_scan_plan") or {}
+    timing_appropriate = bool(marriage_age_ctx.get("timing_appropriate", True))
 
-    # ── STEP 2 ────────────────────────────────────────────────────────
-    d9_map = _step2_d9_verify(kundli, lagna_si, filtered_set)
-    d9_strong = [p for p, info in d9_map.items() if info.get("d9", 0.0) >= 30.0]
-    factors.append(f"STEP2 d9_strong={sorted(d9_strong)}")
+    factors.append(step0.get("reasoning_summary", "")[:220])
+    factors.append(step0a.get("reasoning_summary", "")[:220])
+    factors.append(
+        f"STEP0 verdict={step0.get('step0_tendency', {}).get('verdict')} "
+        f"chart_pace={step0.get('chart_marriage_pace', {}).get('chart_pace')}"
+    )
+    factors.append(
+        f"STEP0A BCP_mode={bcp_strategy.get('timing_mode')} "
+        f"next_bcp={bcp_ctx.get('next_activation_age')} "
+        f"bcp_5y={dasha_scan.get('bcp_ages_next_years')}"
+    )
+    factors.append(
+        f"STEP0 age life={marriage_age_ctx.get('life_status')} "
+        f"delay_vs_late={marriage_age_ctx.get('delay_vs_late')}"
+    )
 
-    # ── STEP 3 ────────────────────────────────────────────────────────
-    kp_result = _step3_kp_verify(kp, filtered_set, d9_7l=d9_7l)
-    kp_per = kp_result["per_planet"]
-    csl_verdict = kp_result["csl_verdict"]
-    csl_is_d9_7l = kp_result.get("csl_is_d9_7l", False)
-    factors.append(f"STEP3 7CSL={kp_result.get('csl_planet')}/{csl_verdict} "
-                    f"promise={kp_result.get('csl_promise_h')} "
-                    f"deny={kp_result.get('csl_deny_h')}"
-                    + (f" [7CSL IS D9 7L — ultimate confluence]"
-                       if csl_is_d9_7l else ""))
+    # ── STEPS 1–5: User-spec significator pipeline (D1/D9/KP/rank) ────
+    from event_timing.marriage.marriage_spec_pipeline import run_user_spec_pipeline
 
-    # ── STEP 4 ────────────────────────────────────────────────────────
-    ranked = _step4_rank(d1_map, d9_map, kp_per, lagna_si, is_female,
-                          d9_7l=d9_7l)
-    top_planet_names = [r["name"] for r in ranked[:5]]
-    target_lords = set(top_planet_names)
-    # v2.2 — D9 7L is mandatory in target_lords. Even if its weighted
-    # rank doesn't reach top-5 (e.g. because D1 link is absent), its
-    # dasha period MUST still trigger marriage windows. Without this
-    # line, STEP 5/5.5 cascade would silently skip the most important
-    # Navamsa lord's dashas.
-    if d9_7l and d9_7l not in target_lords:
-        target_lords.add(d9_7l)
-        factors.append(f"STEP4+ target_lords force-added D9_7L={d9_7l}")
-    factors.append(f"STEP4 top5={[(r['name'], r['score']) for r in ranked]}")
-    weighted_breakdown = {r["name"]: {"d1": r["d1"], "d9": r["d9"],
-                                        "kp": r["kp"], "karaka": r["karaka"],
-                                        "total": r["score"]}
-                            for r in ranked}
+    spec = run_user_spec_pipeline(kundli, kp, lagna_si)
+    ranked = spec.get("ranked_significators") or []
+    target_lords = set(spec.get("target_lords") or [])
+    d9_7l = spec.get("d9_seventh_lord")
+    d1_7l = spec.get("d1_seventh_lord")
+    natal_promise = bool(spec.get("natal_promise"))
+    kp_summary = spec.get("kp_summary") or {}
+    kp_supported = bool(kp_summary.get("marriage_supported"))
+    csl_verdict = kp_summary.get("csl_verdict") or "UNKNOWN"
+    csl_is_d9_7l = bool(
+        d9_7l and kp_summary.get("csl_planet") == d9_7l
+    )
+    filtered_set = set(target_lords)
+    factors.append(f"SPEC {spec.get('pipeline_version')} "
+                    f"natal_promise={natal_promise} kp_supported={kp_supported}")
+    factors.append(spec.get("reasoning_summary", ""))
+    factors.append(f"STEP5 ranked={[(r['name'], r['score']) for r in ranked[:6]]}")
+    top_planet_names = [r["name"] for r in ranked[:6]]
+    weighted_breakdown = {
+        r["name"]: {
+            "d1": r.get("d1_points", 0),
+            "d9": r.get("d9_points", 0),
+            "kp": r.get("kp_points", 0),
+            "both_bonus": r.get("both_bonus", 0),
+            "total": r.get("score", 0),
+        }
+        for r in ranked
+    }
+    dasha_lord_profiles = _build_dasha_lord_profiles(ranked)
 
-    # ── STEP 5 / 5.5 ──────────────────────────────────────────────────
+    # ── STEP 5 / 5.5 — dasha (strategy from STEP 0 BCP) ───────────────
     chain = _flatten_dasha_chain(kundli)
     now = datetime.utcnow()
     activation = _step5_dasha_activation(chain, target_lords, now,
-                                          d9_7l=d9_7l)
+                                          d9_7l=d9_7l,
+                                          lord_profiles=dasha_lord_profiles)
     cur_score = activation["active_score"]
     factors.append(f"STEP5 current_active_score={cur_score} "
                     f"lords={activation['active_lords']}")
 
-    future_candidates = _step5_5_future_cascade(chain, target_lords, now,
-                                                  activation.get("current"))
-    factors.append(f"STEP5.5 future_candidates={len(future_candidates)}")
+    late_urgent_scan = bool(
+        not too_young and dasha_scan.get("late_urgent_scan")
+    )
+    late_horizon_days = int(
+        dasha_scan.get("search_horizon_days")
+        or bcp_strategy.get("search_horizon_days")
+        or _LATE_URGENT_HORIZON_DAYS
+    )
 
-    # ── STEP 6 — Double transit on each future candidate ──────────────
+    future_candidates = _step5_5_future_cascade(
+        chain, target_lords, now, activation.get("current"),
+        late_urgent=late_urgent_scan,
+        horizon_days=late_horizon_days,
+        d9_7l=d9_7l,
+        lord_profiles=dasha_lord_profiles,
+    )
+    annotate_candidates_bcp_ages(
+        future_candidates, bcp_ctx, birth_dt, user_age=user_age,
+    )
+    factors.append(
+        "STEP0 dasha_entry: " + "; ".join(dasha_scan.get("entry_notes") or [])[:200]
+    )
+    pd_only_n = sum(1 for c in future_candidates if c.get("pd_only_activation"))
+    factors.append(
+        f"STEP5.5 future_candidates={len(future_candidates)} "
+        f"late_urgent={late_urgent_scan} horizon_days={late_horizon_days} "
+        f"pd_only_windows={pd_only_n}"
+    )
+
+    bcp_boosted_n = apply_bcp_boost_to_candidates(
+        future_candidates,
+        bcp_ctx,
+        birth_dt,
+        now=now,
+        strategy={
+            **bcp_strategy,
+            "prefer_current_dasha": dasha_scan.get("prefer_current_dasha"),
+            "bcp_boost_future_only": dasha_scan.get("bcp_boost_future_only"),
+        },
+        current_dasha=activation.get("current"),
+    )
+    if bcp_boosted_n:
+        factors.append(f"BCP boosted {bcp_boosted_n} dasha window(s)")
+        future_candidates.sort(
+            key=lambda x: (x.get("priority", 3), -x.get("score", 0), x["start"])
+        )
+
+    step0_verdict = (step0.get("step0_tendency") or {}).get("verdict") or ""
+    primary_ref_age = dasha_scan.get("primary_reference_age")
+    focus_bcp_ages = set(dasha_scan.get("bcp_focus_ages") or [])
+    # Safety: incidental BCP list hit (e.g. 2H→26) must not anchor over 7H→31.
+    if (
+        primary_ref_age is not None
+        and user_age is not None
+        and primary_ref_age == user_age
+    ):
+        _next_bcp = (bcp_ctx or {}).get("next_activation_age")
+        if _next_bcp is not None and _next_bcp > user_age + 2:
+            factors.append(
+                f"BCP primary corrected {user_age}→{_next_bcp} "
+                f"(incidental in-list age skipped)"
+            )
+            primary_ref_age = _next_bcp
+            focus_bcp_ages.add(_next_bcp)
+    chart_delayed = step0_verdict in ("DELAYED", "LATE") or bool(
+        marriage_age_ctx.get("delay_vs_late") == "chart_delay"
+        and focus_bcp_ages
+    )
+    focus_bcp_ages, _removed_early_focus = _delayed_anchor_focus_ages(
+        focus_bcp_ages,
+        chart_delayed=chart_delayed,
+        primary_ref_age=primary_ref_age,
+        user_age=user_age,
+    )
+    if _removed_early_focus:
+        factors.append(
+            f"BCP_ANCHOR removed early focus age(s) {_removed_early_focus} "
+            f"before anchor age {primary_ref_age - _BCP_ANCHOR_GRACE_YEARS}"
+        )
+    focus_boosted_n = 0
+    if chart_delayed and focus_bcp_ages:
+        for c in future_candidates:
+            hits = set(c.get("bcp_age_hits") or [])
+            overlap = hits & focus_bcp_ages
+            if overlap:
+                c["score"] = float(c["score"]) + _BCP_FOCUS_BOOST
+                c["bcp_focus_boost"] = True
+                c["bcp_note"] = (
+                    (c.get("bcp_note") or "")
+                    + f" | Step0 focus age {sorted(overlap)}"
+                ).strip(" |")
+                focus_boosted_n += 1
+        if focus_boosted_n:
+            factors.append(
+                f"STEP0 focus_boost +{_BCP_FOCUS_BOOST} on {focus_boosted_n} "
+                f"window(s) ages {sorted(focus_bcp_ages)}"
+            )
+            future_candidates.sort(
+                key=lambda x: (x.get("priority", 3), -x.get("score", 0), x["start"])
+            )
+
+    # BCP anchor guard — delayed chart + focus age years ahead (e.g. 26→31).
+    _bcp_anchor_n = _apply_bcp_anchor_guard(
+        future_candidates,
+        chart_delayed=chart_delayed,
+        primary_ref_age=primary_ref_age,
+        user_age=user_age,
+        focus_bcp_ages=focus_bcp_ages,
+        birth_dt=birth_dt,
+    )
+    if _bcp_anchor_n:
+        factors.append(
+            f"BCP_ANCHOR demoted {_bcp_anchor_n} near-term window(s) "
+            f"before age {primary_ref_age - _BCP_ANCHOR_GRACE_YEARS} "
+            f"(focus BCP {primary_ref_age})"
+        )
+        future_candidates.sort(
+            key=lambda x: (x.get("priority", 3), -x.get("score", 0), x["start"])
+        )
+
+    # ── STEP 8 — Risk flags (before window pick; used in age context) ─
     planets = kundli.get("planets") or []
+    risk_flags = _step8_obstacles(kundli, lagna_si, kp, csl_verdict)
+    factors.append(f"STEP8 risks={len(risk_flags)}")
+
     h7_si = (lagna_si + 6) % 12
     seventh_lord = _house_lord(lagna_si, 7)
     seventh_lord_si = _planet_sign_idx(planets, seventh_lord)
-    top_planet_signs: Set[int] = set()
-    for n in top_planet_names:
-        s = _planet_sign_idx(planets, n)
-        if s is not None:
-            top_planet_signs.add(s)
-    # v2.2 — Always include D9 7L's natal D1 sign in transit targets,
-    # even if D9 7L isn't in top-5 ranked. Jupiter/Saturn transiting
-    # over (or aspecting) the D9 7L's natal sign is a classical
-    # marriage trigger that must not be silently dropped.
-    if d9_7l:
-        d9_7l_si = _planet_sign_idx(planets, d9_7l)
-        if d9_7l_si is not None:
-            top_planet_signs.add(d9_7l_si)
 
-    for c in future_candidates:
-        dt_info = _step6_double_transit(c, h7_si, seventh_lord_si,
-                                          top_planet_signs)
-        c["jup"] = dt_info["jup_hit"]
-        c["sat"] = dt_info["sat_hit"]
-        c["dt"] = dt_info["dt"]
-        c["dt_detail"] = dt_info["detail"]
-        c["score"] = float(c["score"]) + dt_info["boost"]
+    # Refresh age context with full Step 8 risk flags (Step 0 used light flags)
+    from event_timing.marriage.marriage_age_context import assess_marriage_age_context
 
-    # ── STEP 7 — Ashtakavarga adjustment ──────────────────────────────
-    av: Dict[str, Any] = {}
-    if compute_ashtakavarga is not None:
-        try:
-            av = compute_ashtakavarga(planets, lagna_si) or {}
-        except Exception:
-            av = {}
-    av_label = ""
-    if av:
-        for c in future_candidates:
-            adj, label = _step7_ashtakavarga(c, av, h7_si, lagna_si)
-            c["score"] += adj
-            if label and not av_label:
-                av_label = label
-        if av_label:
-            factors.append(f"STEP7 {av_label}")
+    marriage_age_ctx = assess_marriage_age_context(
+        user_age=user_age,
+        is_female=is_female,
+        risk_flags=risk_flags,
+        kp_csl_verdict=csl_verdict,
+        too_young_engine=too_young,
+        min_practical_age=min_practical_age,
+    )
+    timing_appropriate = bool(marriage_age_ctx.get("timing_appropriate", True))
+    step0["marriage_age_context_final"] = marriage_age_ctx
+    factors.append(
+        f"AGE_CTX(final) life={marriage_age_ctx.get('life_status')} "
+        f"chart_late={marriage_age_ctx.get('chart_late_marriage')}"
+    )
 
-    # ── Recency boost: if user is already at/past marriageable age,
-    # boost windows starting within next _RECENT_WINDOW_DAYS so the
-    # engine surfaces near-term candidates first instead of distant ones.
-    recent_focus = age_band in ("ON_TIME", "LATE", "VERY_LATE")
+    # Recency boost — skip when chart is DELAYED and BCP focus is years ahead
+    # (e.g. age 26 + focus 31 → do not surface Apr 2026 over 2030).
+    _years_to_primary = None
+    if primary_ref_age is not None and user_age is not None:
+        _years_to_primary = primary_ref_age - user_age
+    recent_focus = (
+        timing_appropriate
+        and not too_young
+        and not chart_delayed
+        and (
+            late_urgent_scan
+            or (
+                age_band in ("ON_TIME", "LATE", "VERY_LATE")
+                and (_years_to_primary is None or _years_to_primary <= 2)
+            )
+        )
+    )
     if recent_focus:
-        recent_cutoff = now + timedelta(days=_RECENT_WINDOW_DAYS)
+        recent_cutoff = now + timedelta(
+            days=late_horizon_days if late_urgent_scan else _RECENT_WINDOW_DAYS
+        )
         boost_per_band = {
-            "ON_TIME":   _RECENT_BOOST,           # 3.0
-            "LATE":      _RECENT_BOOST + 1.5,     # 4.5
-            "VERY_LATE": _RECENT_BOOST + 3.0,     # 6.0
+            "ON_TIME":   _RECENT_BOOST,
+            "LATE":      _RECENT_BOOST + 1.5,
+            "VERY_LATE": _RECENT_BOOST + 3.0,
         }.get(age_band or "", 0.0)
+        if late_urgent_scan:
+            boost_per_band += _LATE_URGENT_NEAR_BOOST
         boosted_n = 0
         for c in future_candidates:
             if c["start"] <= recent_cutoff:
@@ -1550,13 +2481,8 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             factors.append(
                 f"AGE_RECENCY boosted {boosted_n} window(s) within "
                 f"{_RECENT_WINDOW_DAYS}d by +{boost_per_band}")
-
-    # Re-sort after STEP 6/7 adjustments
-    future_candidates.sort(key=lambda x: (x["priority"], -x["score"], x["start"]))
-
-    # ── STEP 8 — Risk flags (separate from window-scoring) ────────────
-    risk_flags = _step8_obstacles(kundli, lagna_si, kp, csl_verdict)
-    factors.append(f"STEP8 risks={len(risk_flags)}")
+        future_candidates.sort(
+            key=lambda x: (x["priority"], -x["score"], x["start"]))
 
     # ── v2.4 AGE-SANITY GUARD — suppress windows that start before the
     # user reaches the practical-age floor. Without this, a 17-year-old
@@ -1583,19 +2509,111 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                 f"window(s) before age={min_practical_age} "
                 f"(reaches on {earliest_practical.strftime('%Y-%m-%d')})")
 
-    # ── Window selection (gap-filter + diversity) ─────────────────────
+    # ── STEP 6 — Pick final dasha window(s) (no transit in ranking) ───
     top_3 = _select_top_3(future_candidates)
+    if (
+        chart_delayed
+        and primary_ref_age is not None
+        and user_age is not None
+        and (primary_ref_age - user_age) > _BCP_ANCHOR_MIN_GAP_YEARS
+    ):
+        _post_bcp = [w for w in top_3 if not w.get("suppressed_pre_bcp_focus")]
+        if _post_bcp:
+            top_3 = _post_bcp
+        else:
+            _eligible = [
+                c for c in future_candidates
+                if not c.get("suppressed_pre_bcp_focus")
+            ]
+            if _eligible:
+                top_3 = _select_top_3(_eligible)
+                factors.append(
+                    f"BCP_ANCHOR re-picked post-focus windows "
+                    f"(anchor age {primary_ref_age})"
+                )
+            else:
+                # No dasha chunk reaches BCP anchor — pick latest-starting window.
+                _future = sorted(
+                    [c for c in future_candidates if c["start"] > now],
+                    key=lambda x: x["start"],
+                    reverse=True,
+                )
+                if _future:
+                    top_3 = _select_top_3(_future)
+                    factors.append(
+                        f"BCP_ANCHOR fallback toward age {primary_ref_age} "
+                        f"(no window reached anchor in scan)"
+                    )
+
+    # ── STEP 7 — Transit ONLY on final dasha (verify, do not re-pick) ─
+    top_planet_signs: Set[int] = set()
+    for n in top_planet_names:
+        s = _planet_sign_idx(planets, n)
+        if s is not None:
+            top_planet_signs.add(s)
+    if d9_7l:
+        d9_7l_si = _planet_sign_idx(planets, d9_7l)
+        if d9_7l_si is not None:
+            top_planet_signs.add(d9_7l_si)
+    transit_targets = _build_transit_targets(
+        kundli, planets, h7_si, seventh_lord, top_planet_names, d9_7l,
+    )
+
+    top_3, _transit_selection_notes = _ensure_transit_supported_primary(
+        top_3,
+        future_candidates,
+        birth_dt=birth_dt,
+        focus_bcp_ages=focus_bcp_ages,
+        h7_si=h7_si,
+        seventh_lord_si=seventh_lord_si,
+        top_planet_signs=top_planet_signs,
+        transit_targets=transit_targets,
+    )
+    factors.extend(_transit_selection_notes)
+
+    for w in top_3:
+        if "transit_confirmed" not in w:
+            _attach_transit_to_window(
+                w, h7_si, seventh_lord_si, top_planet_signs, transit_targets,
+            )
+    final_transit: Dict[str, Any] = {}
+    if top_3:
+        final_transit = {
+            "transit_confirmed": bool(top_3[0].get("transit_confirmed")),
+            "dt": bool(top_3[0].get("dt")),
+            "detail": top_3[0].get("dt_detail"),
+        }
+    if top_3:
+        p = top_3[0]
+        factors.append(
+            f"STEP7 final_dasha={p['md']}-{p['ad']}-{p['pd']} "
+            f"{p['start'].date()}→{p['end'].date()} "
+            f"transit_support={final_transit.get('transit_confirmed')} "
+            f"double_transit={final_transit.get('dt')} "
+            f"detail={final_transit.get('detail')}"
+        )
+
+    av: Dict[str, Any] = {}
+    if compute_ashtakavarga is not None and top_3:
+        try:
+            av = compute_ashtakavarga(planets, lagna_si) or {}
+        except Exception:
+            av = {}
+        if av:
+            adj, av_label = _step7_ashtakavarga(top_3[0], av, h7_si, lagna_si)
+            top_3[0]["sav_adjust"] = adj
+            if av_label:
+                factors.append(f"STEP7 SAV {av_label}")
     # Filter out any suppressed windows that may have leaked through
-    if too_young:
+    if too_young or not timing_appropriate:
         top_3 = [w for w in top_3 if not w.get("suppressed_too_young")]
-        # Deterministic flag for the LLM/UI when nothing acceptable exists
-        # in scan horizon after the practical-age floor — prevents the LLM
-        # from inventing a window or misreading an empty top-3.
+        if too_young and earliest_practical is not None:
+            top_3 = [w for w in top_3 if w["start"] >= earliest_practical]
         if not top_3:
             factors.append(
-                "AGE_GUARD no_acceptable_window_in_horizon — all "
-                "candidate windows fall before practical-age floor; "
-                "engine returns empty top-3 by design.")
+                "AGE_GUARD no_acceptable_window — user too young or all "
+                "windows before practical-age floor; near-term shaadi blocked."
+            )
 
     # ── Output assembly ────────────────────────────────────────────────
     top_3_serial: List[Dict[str, Any]] = []
@@ -1611,6 +2629,20 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             "dt": bool(w.get("dt")),
             "jup": bool(w.get("jup")),
             "sat": bool(w.get("sat")),
+            "transit_confirmed": bool(w.get("transit_confirmed")),
+            "transit_check_at": w.get("transit_check_at"),
+            "dt_detail": w.get("dt_detail"),
+            "transit_samples": w.get("transit_samples") or [],
+            "bcp_year_transit_support": bool(w.get("bcp_year_transit_support")),
+            "promoted_by_transit_support": bool(w.get("promoted_by_transit_support")),
+            "skipped_as_primary_no_transit": bool(w.get("skipped_as_primary_no_transit")),
+            "pd_only_activation": bool(w.get("pd_only_activation")),
+            "ad_supports": w.get("ad_supports"),
+            "ad_pd_confluence": bool(w.get("ad_pd_confluence")),
+            "dasha_score_detail": w.get("dasha_score_detail") or [],
+            "bcp_boost": w.get("bcp_boost"),
+            "bcp_note": w.get("bcp_note"),
+            "bcp_age_hits": w.get("bcp_age_hits") or [],
         })
 
     primary_window = top_3_serial[0]["window"] if top_3_serial else None
@@ -1629,15 +2661,284 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         key_trigger = " + ".join(parts)
 
     top_score = float(top_3[0]["score"]) if top_3 else 0.0
-    # Boost top_score if current dasha already active
     if cur_score >= _DASHA_SCORE_AD:
         top_score = max(top_score, top_score + cur_score * 0.3)
 
-    verdict, band = _derive_verdict(top_score, csl_verdict, risk_flags)
+    final_transit_support = bool(
+        top_3 and top_3[0].get("transit_confirmed")
+    )
+    final_double_transit = bool(top_3 and top_3[0].get("dt"))
+
+    has_qualified = (
+        bool(top_3)
+        and natal_promise
+        and kp_supported
+        and timing_appropriate
+    )
+    factors.append(
+        f"STEP8 final_gate qualified={has_qualified} "
+        f"(natal={natal_promise} kp={kp_supported} "
+        f"dasha_final={bool(top_3)} "
+        f"transit_on_final={final_transit_support} "
+        f"double_transit={final_double_transit} "
+        f"timing_appropriate={timing_appropriate})"
+    )
+
+    verdict, band, final_gate = _derive_verdict(
+        top_score, csl_verdict, risk_flags,
+        natal_promise=natal_promise,
+        kp_supported=kp_supported,
+        has_qualified_window=has_qualified,
+        final_transit_support=final_transit_support,
+        final_double_transit=final_double_transit,
+        timing_appropriate=timing_appropriate,
+    )
+    if too_young:
+        verdict, band = "DELAYED", "WEAK"
+        final_gate["notes"].append("too young override → DELAYED/WEAK")
     confluence_strength = _confluence_label(top_score)
+    if top_3 and final_double_transit:
+        confluence_strength = "STRONG"
+    elif top_3 and final_transit_support:
+        confluence_strength = "MODERATE"
+    elif top_3:
+        confluence_strength = "WEAK"
 
     cascade_narrative = _build_cascade_narrative(future_candidates, top_3,
                                                    cur_score)
+    if too_young and not top_3_serial:
+        cascade_narrative = (
+            marriage_age_ctx.get("llm_directive")
+            or "User abhi marriage-age se kam hai — near-term timing mat do."
+        )
+
+    primary_audit = top_3_serial[0] if top_3_serial else {}
+    audit_checks: List[Dict[str, Any]] = []
+    audit_issues: List[str] = []
+
+    dasha_traced = bool(
+        primary_audit.get("md")
+        and primary_audit.get("ad")
+        and primary_audit.get("pd")
+        and primary_audit.get("start_iso")
+        and primary_audit.get("end_iso")
+    )
+    audit_checks.append({
+        "name": "dasha_trace",
+        "ok": dasha_traced,
+        "detail": (
+            f"{primary_audit.get('md')}-{primary_audit.get('ad')}-"
+            f"{primary_audit.get('pd')} "
+            f"{primary_audit.get('start_iso')}→{primary_audit.get('end_iso')}"
+            if dasha_traced else "primary window missing MD/AD/PD trace"
+        ),
+    })
+    if not dasha_traced:
+        audit_issues.append("primary window has no MD/AD/PD trace")
+
+    anchor_gap = (
+        primary_ref_age - user_age
+        if primary_ref_age is not None and user_age is not None
+        else None
+    )
+    anchor_min_age = (
+        primary_ref_age - _BCP_ANCHOR_GRACE_YEARS
+        if primary_ref_age is not None else None
+    )
+    primary_bcp_hits = set(primary_audit.get("bcp_age_hits") or [])
+    bcp_anchor_required = bool(
+        chart_delayed
+        and anchor_gap is not None
+        and anchor_gap > _BCP_ANCHOR_MIN_GAP_YEARS
+    )
+    bcp_anchor_ok = True
+    if bcp_anchor_required:
+        bcp_anchor_ok = bool(
+            anchor_min_age is not None
+            and any(int(a) >= int(anchor_min_age) for a in primary_bcp_hits)
+        )
+    audit_checks.append({
+        "name": "bcp_anchor",
+        "ok": bcp_anchor_ok,
+        "required": bcp_anchor_required,
+        "detail": (
+            f"primary_ref_age={primary_ref_age}, anchor_min_age={anchor_min_age}, "
+            f"primary_bcp_hits={sorted(primary_bcp_hits)}"
+        ),
+    })
+    if not bcp_anchor_ok:
+        audit_issues.append("delayed chart primary window did not hit BCP anchor age")
+
+    transit_ok = bool(primary_audit.get("transit_confirmed"))
+    audit_checks.append({
+        "name": "transit_support",
+        "ok": transit_ok,
+        "detail": primary_audit.get("dt_detail") or "no transit detail",
+        "double_transit": bool(primary_audit.get("dt")),
+        "bcp_year_rescue": bool(primary_audit.get("bcp_year_transit_support")),
+    })
+    if not transit_ok:
+        audit_issues.append("primary window has no Jupiter/Saturn transit support")
+
+    expected_reply = (
+        f"Aapki shaadi {primary_window} ke beech hogi."
+        if primary_window else "Abhi chart se shaadi ka clear period nahi dikh raha."
+    )
+    audit_checks.append({
+        "name": "answer_lock",
+        "ok": bool(primary_window),
+        "detail": expected_reply,
+    })
+    timing_audit = {
+        "status": "PASS" if not audit_issues else "WARN",
+        "issues": audit_issues,
+        "primary_window": primary_window,
+        "key_trigger": key_trigger,
+        "primary_dasha": {
+            "md": primary_audit.get("md"),
+            "ad": primary_audit.get("ad"),
+            "pd": primary_audit.get("pd"),
+            "start_iso": primary_audit.get("start_iso"),
+            "end_iso": primary_audit.get("end_iso"),
+            "score": primary_audit.get("score"),
+            "dasha_score_detail": primary_audit.get("dasha_score_detail") or [],
+        },
+        "bcp": {
+            "primary_reference_age": primary_ref_age,
+            "anchor_min_age": anchor_min_age,
+            "focus_ages": sorted(focus_bcp_ages),
+            "primary_bcp_hits": sorted(primary_bcp_hits),
+        },
+        "transit": {
+            "confirmed": transit_ok,
+            "double": bool(primary_audit.get("dt")),
+            "detail": primary_audit.get("dt_detail"),
+            "samples": primary_audit.get("transit_samples") or [],
+        },
+        "checks": audit_checks,
+        "expected_reply": expected_reply,
+    }
+    merged_items = sorted(
+        (spec.get("merged") or {}).items(),
+        key=lambda kv: float((kv[1] or {}).get("natal_points", 0)),
+        reverse=True,
+    )
+    kp_details = spec.get("kp_details") or {}
+    step_audit = {
+        "step0": {
+            "name": "Early/Late + age context",
+            "status": "DONE",
+            "result": step0.get("step0_tendency") or {},
+            "user_age": user_age,
+            "age_band": age_band,
+            "timing_appropriate": timing_appropriate,
+            "min_practical_age": min_practical_age,
+        },
+        "step0a": {
+            "name": "BCP ages + dasha scan plan",
+            "status": "DONE",
+            "primary_reference_age": primary_ref_age,
+            "focus_ages": sorted(focus_bcp_ages),
+            "priority_ages": (bcp_ctx or {}).get("priority_marriage_ages") or [],
+            "future_priority_ages": (bcp_ctx or {}).get("future_priority_ages") or [],
+            "entry_notes": dasha_scan.get("entry_notes") or [],
+        },
+        "step1": {
+            "name": "D1 marriage significator names",
+            "status": "DONE",
+            "result": spec.get("step1_d1") or {},
+        },
+        "step2": {
+            "name": "D9 marriage significator names",
+            "status": "DONE",
+            "result": spec.get("step2_d9") or {},
+        },
+        "step3": {
+            "name": "Merge D1+D9 weighted natal pool",
+            "status": "DONE",
+            "merged_count": len(spec.get("merged") or {}),
+            "top_merged": [
+                {
+                    "name": pname,
+                    "natal_points": row.get("natal_points", 0),
+                    "d1_points": row.get("d1_points", 0),
+                    "d9_points": row.get("d9_points", 0),
+                    "both_bonus": row.get("both_bonus", 0),
+                    "strength_adjust": row.get("strength_adjust", 0),
+                    "d1_links": row.get("d1_links") or [],
+                    "d9_links": row.get("d9_links") or [],
+                }
+                for pname, row in merged_items[:8]
+            ],
+        },
+        "step4": {
+            "name": "KP validate",
+            "status": "DONE",
+            "summary": kp_summary,
+            "top_kp": [
+                {
+                    "name": r.get("name"),
+                    "verdict": (kp_details.get(r.get("name")) or {}).get("verdict"),
+                    "kp_points": (kp_details.get(r.get("name")) or {}).get("kp_points"),
+                    "confidence": (kp_details.get(r.get("name")) or {}).get("kp_confidence"),
+                    "note": (kp_details.get(r.get("name")) or {}).get("note"),
+                }
+                for r in ranked[:8]
+            ],
+        },
+        "step5": {
+            "name": "Rank final significators + dasha targets",
+            "status": "DONE",
+            "natal_promise": natal_promise,
+            "target_lords": sorted(target_lords),
+            "ranked_top": [
+                {
+                    "name": r.get("name"),
+                    "score": r.get("score"),
+                    "d1": r.get("d1_points"),
+                    "d9": r.get("d9_points"),
+                    "kp": r.get("kp_points"),
+                    "kp_verdict": r.get("kp_verdict"),
+                    "links": r.get("links") or [],
+                }
+                for r in ranked[:8]
+            ],
+        },
+        "step6": {
+            "name": "Dasha activation + future windows",
+            "status": "DONE",
+            "current_activation": activation,
+            "future_candidates_count": len(future_candidates),
+            "selected_windows": [
+                {
+                    "window": w.get("window"),
+                    "md": w.get("md"),
+                    "ad": w.get("ad"),
+                    "pd": w.get("pd"),
+                    "score": w.get("score"),
+                    "bcp_age_hits": w.get("bcp_age_hits") or [],
+                    "dasha_score_detail": w.get("dasha_score_detail") or [],
+                }
+                for w in top_3_serial[:3]
+            ],
+        },
+        "step7": {
+            "name": "Transit verification",
+            "status": "DONE" if top_3_serial else "NO_WINDOW",
+            "transit_confirmed": final_transit_support,
+            "double_transit": final_double_transit,
+            "detail": final_transit.get("detail"),
+            "samples": primary_audit.get("transit_samples") or [],
+        },
+        "step8": {
+            "name": "Obstacles + final gate",
+            "status": "DONE",
+            "risk_flags": risk_flags,
+            "final_gate": final_gate,
+            "verdict": verdict,
+            "band": band,
+        },
+    }
 
     return {
         # Required for LLM formatter
@@ -1645,15 +2946,25 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         "band": band,
         "top_3_windows": top_3_serial,
         "risk_flags": risk_flags,
+        "final_gate": final_gate,
+        "risk_severity_score": final_gate.get("risk_score"),
         # Wider contract
         "primary_window": primary_window,
         "backup_window": backup_window,
         "key_trigger": key_trigger,
+        "timing_audit": timing_audit,
+        "step_audit": step_audit,
         "confluence_strength": confluence_strength,
         "factors": factors,
-        # NEW v2 fields
+        # Significator pipeline (user spec Steps 1–5)
         "top_marriage_planets": ranked,
+        "marriage_significators": ranked,
         "weighted_breakdown": weighted_breakdown,
+        "kp_validation": spec.get("kp_details"),
+        "kp_summary": kp_summary,
+        "d1_seventh_lord": d1_7l,
+        "natal_promise": natal_promise,
+        "reasoning_summary": spec.get("reasoning_summary"),
         "future_cascade_narrative": cascade_narrative,
         # Age + urgency context (NEW)
         "user_age": user_age,
@@ -1670,10 +2981,27 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             earliest_practical.strftime("%Y-%m-%d")
             if earliest_practical is not None else None),
         "windows_suppressed_too_young": windows_suppressed_too_young,
+        "marriage_age_context": marriage_age_ctx,
+        "timing_appropriate": timing_appropriate,
+        "chart_late_marriage": marriage_age_ctx.get("chart_late_marriage"),
+        "delay_vs_late": marriage_age_ctx.get("delay_vs_late"),
+        "life_status": marriage_age_ctx.get("life_status"),
+        "late_urgent_scan": late_urgent_scan,
+        "search_horizon_days": late_horizon_days if late_urgent_scan else None,
+        "step0": step0,
+        "step0a": step0a,
+        "step0_tendency": step0.get("step0_tendency"),
+        "dasha_scan_plan": dasha_scan,
+        "final_transit_support": final_transit_support,
+        "final_double_transit": final_double_transit,
+        "final_transit_detail": final_transit.get("detail"),
+        "bcp_marriage_ages": bcp_ctx,
+        "bcp_timing_strategy": bcp_strategy,
+        "timing_mode": bcp_strategy.get("timing_mode"),
         # Engine metadata
-        "engine_version": "v2.4.0",
+        "engine_version": "v3.6.0",
         "engine_arch": (
-            "FILTER→VERIFY→ACTIVATE→TRIGGER + D9-7L supreme + age-sanity"),
+            "STEP0(early-late)→STEP0A(BCP)→D1/D9→KP→rank→STEP6(dasha)→STEP7(transit-on-final-only)→gate"),
         "kp_planet_scan": _kp_planet_scan_safe(kp, "marriage", filtered_set),
     }
 

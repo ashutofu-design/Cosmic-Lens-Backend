@@ -2858,8 +2858,13 @@ def admin_users():
     page = int(request.args.get("page", 1))
     per_page = int(request.args.get("per_page", 50))
     search = request.args.get("search", "").strip()
+    plan = request.args.get("plan", "").strip()
 
-    return jsonify(build_users_list(db.session, page=page, per_page=per_page, search=search))
+    return jsonify(
+        build_users_list(
+            db.session, page=page, per_page=per_page, search=search, plan=plan
+        )
+    )
 
 
 @app.route("/api/admin/transactions", methods=["GET"])
@@ -2873,7 +2878,18 @@ def admin_transactions():
 
     page = int(request.args.get("page", 1))
     per_page = int(request.args.get("per_page", 50))
-    return jsonify(build_admin_transactions(page=page, per_page=per_page))
+    email = request.args.get("email", "").strip()
+    user_id = request.args.get("user_id", type=int)
+    status = request.args.get("status", "paid").strip()
+    return jsonify(
+        build_admin_transactions(
+            page=page,
+            per_page=per_page,
+            email=email,
+            user_id=user_id,
+            status=status,
+        )
+    )
 
 
 @app.route("/api/admin/login-activity", methods=["GET"])
@@ -2890,13 +2906,18 @@ def admin_login_activity():
 
     q = LoginActivity.query
 
+    # App auth is Gmail / Google only (no OTP rows in this feed by default).
+    gmail_only = (request.args.get("gmail_only") or "1").strip().lower()
+    if gmail_only not in ("0", "false", "no"):
+        q = q.filter(LoginActivity.email.isnot(None), LoginActivity.email != "")
+
     user_id = request.args.get("user_id", type=int)
     if user_id:
         q = q.filter(LoginActivity.user_id == user_id)
 
     email = (request.args.get("email") or "").strip()
     if email:
-        q = q.filter(LoginActivity.email == email)
+        q = q.filter(LoginActivity.email.ilike(f"%{email}%"))
 
     success = (request.args.get("success") or "").strip().lower()
     if success in ("1", "true", "yes"):
@@ -2911,12 +2932,18 @@ def admin_login_activity():
         .all()
     )
 
+    total = q.count()
     items = []
     for r in rows:
+        uname = ""
+        if r.user_id:
+            u = User.query.get(r.user_id)
+            uname = (u.name or "") if u else ""
         items.append(
             {
                 "id": r.id,
                 "user_id": r.user_id,
+                "user_name": uname,
                 "email": r.email,
                 "provider": r.provider,
                 "firebase_uid": r.firebase_uid,
@@ -2927,7 +2954,9 @@ def admin_login_activity():
                 "created_at": r.created_at.isoformat() if r.created_at else None,
             }
         )
-    return jsonify({"ok": True, "items": items, "limit": limit, "offset": offset})
+    return jsonify(
+        {"ok": True, "items": items, "total": total, "limit": limit, "offset": offset}
+    )
 
 
 @app.route("/api/admin/users/<int:user_id>", methods=["GET"])

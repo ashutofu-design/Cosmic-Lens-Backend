@@ -159,7 +159,21 @@ ISHTA_DEVATA_MAP: Dict[str, Dict[str, Any]] = {
 # CATEGORY 7 — House lord → room mapping
 # 2nd house lord direction = best for cash locker, etc.
 # ─────────────────────────────────────────────────────────────────────────
+# Astro-Vastu Pillar 1 — compass sector ↔ bhava (whole-sign chart from Lagna).
+# When you live in a direction, those linked houses are "triggered" in the chart.
+DIRECTION_BHAVA_GRID: Dict[str, List[int]] = {
+    "East":       [1],
+    "South-East": [2, 3],
+    "South":      [4, 5],
+    "South-West": [6, 7],
+    "West":       [8, 9],
+    "North-West": [10],
+    "North":      [11],
+    "North-East": [12],
+}
+
 HOUSE_ROOM_MAPPING: List[Dict[str, Any]] = [
+    {"house": 1,  "room": "Main door / entrance / self",       "lord_direction_used": True, "vastu_ref": "Mansara Sh.10",   "jyotish_ref": "BPHS Ch.10"},
     {"house": 2,  "room": "Cash locker / safe",                "lord_direction_used": True, "vastu_ref": "Vastu Saar Ch.8", "jyotish_ref": "BPHS Ch.10"},
     {"house": 3,  "room": "Gym / exercise room",               "lord_direction_used": True, "vastu_ref": "Mansara Sh.7",    "jyotish_ref": "BPHS Ch.10"},
     {"house": 4,  "room": "Master bedroom",                    "lord_direction_used": True, "vastu_ref": "Vastu Saar Ch.9", "jyotish_ref": "BPHS Ch.10"},
@@ -258,6 +272,10 @@ GENERIC_ROOM_IDEAL: Dict[str, Dict[str, Any]] = {
     "main_door":   {"ideal": ["North", "East", "North-East"], "acceptable": ["West"],    "avoid": ["South", "South-West"],  "vastu_ref": "Mansara Sh.10"},
     "living":      {"ideal": ["North", "East", "North-East"], "acceptable": ["North-West"], "avoid": ["South-West"],        "vastu_ref": "Brihat Samhita 53"},
     "bathroom":    {"ideal": ["North-West", "West"],    "acceptable": ["South-East"],    "avoid": ["North-East", "South-West"], "vastu_ref": "Vastu Saar Ch.11"},
+    "dining":      {"ideal": ["West", "North-West"],    "acceptable": ["East", "North", "Center"], "avoid": ["North-East", "South-West"], "vastu_ref": "Vastu Saar Ch.6"},
+    "staircase":   {"ideal": ["South", "South-West", "West"], "acceptable": ["North-West"], "avoid": ["North-East", "Center"], "vastu_ref": "Mayamatam Ch.20"},
+    "basement":    {"ideal": ["North-West", "West", "South-West"], "acceptable": ["South", "North"], "avoid": ["North-East", "Center"], "vastu_ref": "Vastu Saar Ch.11"},
+    "garage":      {"ideal": ["North-West", "West"],             "acceptable": ["South-West", "South"], "avoid": ["North-East", "Center"], "vastu_ref": "Mayamatam Ch.7"},
 }
 
 
@@ -297,6 +315,39 @@ def get_lagna_lord(lagna: str) -> Optional[str]:
 
 def get_sign_lord(sign: str) -> Optional[str]:
     return SIGN_LORD.get(sign)
+
+
+def get_bhavas_for_direction(direction: str) -> List[int]:
+    """Bhavas linked to a compass sector (Astro-Vastu direction grid)."""
+    d = (direction or "").strip()
+    aliases = {
+        "n": "North", "north": "North", "ne": "North-East", "north-east": "North-East",
+        "northeast": "North-East", "e": "East", "east": "East",
+        "se": "South-East", "south-east": "South-East", "southeast": "South-East",
+        "s": "South", "south": "South", "sw": "South-West", "south-west": "South-West",
+        "southwest": "South-West", "w": "West", "west": "West",
+        "nw": "North-West", "north-west": "North-West", "northwest": "North-West",
+    }
+    key = aliases.get(d.lower(), d)
+    for canon, bhavas in DIRECTION_BHAVA_GRID.items():
+        if canon.lower() == key.lower():
+            return list(bhavas)
+    return DIRECTION_BHAVA_GRID.get(key, [])
+
+
+def get_directions_for_bhava(bhava: int) -> List[str]:
+    out: List[str] = []
+    for direction, bhavas in DIRECTION_BHAVA_GRID.items():
+        if bhava in bhavas:
+            out.append(direction)
+    return out
+
+
+def get_house_room_catalog_entry(bhava: int) -> Optional[Dict[str, Any]]:
+    for row in HOUSE_ROOM_MAPPING:
+        if int(row.get("house") or 0) == int(bhava):
+            return row
+    return None
 
 
 def get_planet_direction(planet: str) -> Optional[str]:

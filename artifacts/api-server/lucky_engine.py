@@ -27,7 +27,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from energy_engine import NAKSHATRAS, TARA_NAMES
-from vedic.numerology.phase_s import (
+from numerology.core.phase_s import (
     NUMBER_FRIENDS, NUMBER_ENEMIES, PLANET_BY_NUMBER, _root,
 )
 

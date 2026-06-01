@@ -326,6 +326,57 @@ def _area_summary(area: str, trend: str, md: str, ad: str, pd: str) -> str:
     return f"{arrow} {base}"
 
 
+def _phase_guidance(
+    md: str,
+    ad: str,
+    pd: str,
+    md_info: dict,
+    ad_info: dict,
+    pd_info: dict,
+    month_score: int,
+) -> Dict[str, str]:
+    """Plain-language: how the phase unfolds + what to maintain (no heavy jargon)."""
+    pd_q = int(pd_info.get("quality_score") or 0)
+    ad_q = int(ad_info.get("quality_score") or 0)
+
+    if month_score >= 70:
+        how = (
+            f"{md} mahadasha · {ad} antardasha · {pd} pratyantar — "
+            "favourable stretch. Plans aage badha sakte ho; overconfidence se bachein."
+        )
+    elif month_score >= 50:
+        how = (
+            f"{md} / {ad} / {pd} chain mixed — "
+            "steady steps se progress. Jo chal raha hai use refine karein, jaldi switch na karein."
+        )
+    else:
+        how = (
+            f"{md} / {ad} / {pd} — thoda heavy phase. "
+            "Bade risky jumps avoid karein; skills aur routine pe focus."
+        )
+
+    if pd_q >= 8:
+        hold = (
+            f"{pd} pratyantar strong — discipline, promises aur close bonds "
+            "maintain karein; yahi phase ka foundation hai."
+        )
+    elif pd_q >= -4:
+        hold = (
+            "Patience, savings habit, aur ek clear priority list — "
+            "teen cheezein is phase mein mat chhodein."
+        )
+    else:
+        hold = (
+            f"{pd} pratyantar sensitive — health routine, soft speech, "
+            "aur impulsive decisions avoid karein; stability pehle."
+        )
+
+    if ad_q <= -8 and month_score < 55:
+        hold += " Antardasha mein extra care — documents aur commitments double-check karein."
+
+    return {"how_it_goes": how.strip(), "what_to_hold": hold.strip()}
+
+
 def _remedy_for_planet(planet: str) -> str:
     return {
         "Sun":     "Subah Surya ko jal arpan + 'Om Suryaya Namah' 11 baar.",
@@ -419,6 +470,10 @@ def compute_six_month_future(kundli: Dict[str, Any]) -> Dict[str, Any]:
             text = _month_text(active["md"], active["ad"], active["pd"],
                                month_score, md_info, ad_info, pd_info,
                                month_label)
+            guidance = _phase_guidance(
+                active["md"], active["ad"], active["pd"],
+                md_info, ad_info, pd_info, month_score,
+            )
 
             uniq_key = f"{active['md']}-{active['ad']}-{active['pd']}"
             months.append({
@@ -435,19 +490,49 @@ def compute_six_month_future(kundli: Dict[str, Any]) -> Dict[str, Any]:
                 "md_info":      md_info,
                 "ad_info":      ad_info,
                 "pd_info":      pd_info,
+                "how_it_goes":  guidance["how_it_goes"],
+                "what_to_hold": guidance["what_to_hold"],
                 **text,
             })
             seen.add(uniq_key)
 
+        if months:
+            phase_guidance = {
+                "how_it_goes": months[0].get("how_it_goes", ""),
+                "what_to_hold": months[0].get("what_to_hold", ""),
+            }
+        else:
+            _g = _phase_guidance(
+                md_lord, ad_lord, cd.get("pratyantar") or ad_lord,
+                _life_area_impact(md_lord, planets, asc_idx),
+                _life_area_impact(ad_lord, planets, asc_idx),
+                _life_area_impact(cd.get("pratyantar") or ad_lord, planets, asc_idx),
+                50,
+            )
+            phase_guidance = _g
+
         return {
             "available":     True,
             "generated_at":  now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "report_kind":   "life_report",
             "current_dasha": {
                 "md":       md_lord,
                 "ad":       ad_lord,
-                "pd":       cd.get("pratyantar") or "",
+                "pd":       cd.get("pratyantar") or (months[0]["pd"] if months else ""),
                 "ad_start": ad_start.strftime("%Y-%m-%d"),
                 "ad_end":   ad_end.strftime("%Y-%m-%d"),
+            },
+            "phase_guidance": {
+                "how_it_goes": phase_guidance.get("how_it_goes", ""),
+                "what_to_hold": phase_guidance.get("what_to_hold", ""),
+            },
+            "whole_life_report": {
+                "available": False,
+                "coming_soon": True,
+                "teaser": (
+                    "Complete kundli life report — personality, nature, har house lord "
+                    "ka result, D9 placement, behaviour & full life themes."
+                ),
             },
             "months":        months,
         }

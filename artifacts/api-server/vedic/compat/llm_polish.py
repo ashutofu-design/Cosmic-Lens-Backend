@@ -4,8 +4,8 @@ Phase 2.5.11.20 — Kundli Milan LLM Prose Polish (HYBRID)
 
 Takes deterministic Ashtakoot facts (computed by /api/kundli-milan via
 Swiss Ephemeris) and asks an LLM to rewrite the 4 narrative sections
-(insight, strengths, challenges, marriage_outlook) in a warm, mature
-"experienced Vedic astrologer" voice.
+(insight, strengths, challenges, marriage_outlook) in a plain,
+observational marriage-reader voice — not brochure compatibility copy.
 
 Architecture (matches existing locked_facts pattern):
   Engine = source of truth (numbers, koots, nakshatras, doshas)
@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 
 # Bumped whenever the prompt, validator, or remedy whitelist changes.
 # Included in cache fingerprint so policy changes auto-invalidate stale prose.
-_PROMPT_VERSION = "v11"
+_PROMPT_VERSION = "v13"
 
 # Classical Vedic vocabulary the LLM is allowed to reference. Anything
 # outside this set in the prose is treated as a potential hallucination.
@@ -85,8 +85,14 @@ SYSTEM_PROMPT = """You are an experienced Vedic astrologer who has studied thous
 • Frame challenges as manageable patterns — not doom.
 • Avoid textbook astrology jargon unless you immediately translate it.
 • No generic motivational lines, no fear-based language.
+• No brochure compatibility marketing: avoid destiny/cosmic/harmonious-union
+  clichés, "stars align", "strong foundation for children", "mutual welfare",
+  "deeply fulfilling lifelong partnership", "smooth married life", prosperity
+  promises, or polished "highly compatible" sales tone. Prefer domestic realism,
+  asymmetry, who withdraws first, money/family load, and restrained conclusions.
 
-The reader should feel: "Someone genuinely understood this relationship deeply." NOT: "A machine generated astrology text."
+The reader should feel: "Someone watched how this marriage actually behaves."
+NOT: "Compatibility software or a wellness pamphlet."
 
 ═══ ABSOLUTE RULES (violation = response rejected) ═══
 1. Use ONLY the facts inside <ENGINE_FACTS>. Do not invent any nakshatra, koot score, dosha, percentage, or planet.
@@ -95,6 +101,23 @@ The reader should feel: "Someone genuinely understood this relationship deeply."
 4. NEVER predict: specific dates, lifespan, death, gender of children, guaranteed outcomes.
 5. Recommend ONLY remedies from <ALLOWED_REMEDIES>. No gemstones, no tantrik kriyas, no expensive yagnas outside the list.
 6. LANGUAGE CONTRACT — write the entire prose in the user's language as specified by `language` in <USER_CONTEXT>:
+7. Astrological calculations are already pre-interpreted by the engine.
+Do NOT invent new planetary logic, yogas, aspects, houses, or technical astrology reasoning.
+If relationship drivers or engine facts explicitly mention a planetary placement, house placement, aspect, conjunction, lordship, or yoga,
+you MAY explain its emotional or relationship meaning naturally.
+
+Example:
+- "7th lord in 9th house may create emotional growth through marriage"
+- "Strong Venus influence increases affection and attachment"
+- "Saturn influence can delay emotional opening"
+
+But ONLY if that logic was already supplied by the engine facts.
+Never invent unseen chart placements.
+Only explain the emotional, behavioral, psychological, and relationship implications of the supplied facts naturally.
+
+8. Always identify WHICH partner carries a specific emotional or behavioral pattern.
+Avoid vague statements like "one partner". Use the actual partner names whenever possible.
+
    • "en" = pure English.
    • "hn" = Hinglish (Hindi written in Roman/English script — "yeh rishta", "samay ke saath", "thoda dhyan rakhna").
    • "hi" = Hindi in Devanagari script (देवनागरी).
@@ -238,7 +261,6 @@ def _build_user_prompt(facts: dict[str, Any], lang: str = "en") -> str:
         mang_line = f"manglik_status: only_{'p1' if p1_mang else 'p2'}_manglik (imbalance — remedy advised)"
     else:
         mang_line = "manglik_status: neither (no Mangal dosha)"
-
     return f"""<ENGINE_FACTS>
 p1_name: {p1.get('name','Partner 1')}
 p1_nakshatra: {p1.get('nakshatra','?')} (Pada {p1.get('pada','?')}, {p1.get('rashi','?')})
@@ -253,8 +275,19 @@ grade: {facts.get('grade',{}).get('label','?')}
 
 koot_scores:
 {chr(10).join(koot_lines)}
+relationship_drivers:
+- Mention which partner is emotionally expressive vs emotionally reserved
+- Mention who seeks reassurance more
+- Mention who delays commitment emotionally
+- Mention whether attachment style feels anxious, avoidant, practical, intense, devotional, or detached
+- Mention who gets hurt silently during conflict
+- Mention whether long-term marriage stability depends more on communication, trust, family adjustment, emotional maturity, or patience
 
 {mang_line}
+
+chart_observations:
+{facts.get('chart_observations', '')}
+
 </ENGINE_FACTS>
 
 <ALLOWED_REMEDIES>
@@ -305,6 +338,14 @@ def _fingerprint(facts: dict[str, Any], lang: str) -> str:
 _CACHE_CAP = int(os.environ.get("COMPAT_LLM_CACHE_SIZE", "1024"))
 _cache: "OrderedDict[str, dict]" = OrderedDict()
 _cache_lock = Lock()
+
+
+def _compat_env_flag(name: str, default: str = "0") -> bool:
+    """True for 1 / true / yes / on; strips whitespace and outer quotes from .env."""
+    raw = (os.environ.get(name) or default).strip()
+    if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "\"'":
+        raw = raw[1:-1].strip()
+    return raw.lower() in ("1", "true", "yes", "on")
 
 
 def _cache_get(key: str) -> dict | None:
@@ -677,22 +718,22 @@ def polish_compat_analysis(
       • LLM call success + validator pass → cache + return.
       • Any failure → returns fallback (never raises).
     """
-    if os.environ.get("COMPAT_LLM_POLISH", "0") not in ("1", "true", "True"):
+    if not _compat_env_flag("COMPAT_LLM_POLISH", "0"):
         return fallback
 
     try:
         key = _fingerprint(facts, lang)
 
-        # L1: in-process LRU (fast, per-worker, lost on restart)
-        hit = _cache_get(key)
-        if hit is not None:
-            return hit
-
-        # L2: persistent DB (shared across workers, survives restarts/deploys)
-        db_hit = _db_cache_get(key)
-        if db_hit is not None:
-            _cache_put(key, db_hit)  # warm L1 from L2
-            return db_hit
+        if not _compat_env_flag("COMPAT_LLM_CACHE_DISABLE", "0"):
+            hit = _cache_get(key)
+            if hit is not None:
+                log.info("[compat_llm] L1 cache hit fingerprint=%s", key[:12])
+                return hit
+            db_hit = _db_cache_get(key)
+            if db_hit is not None:
+                log.info("[compat_llm] L2 cache hit fingerprint=%s", key[:12])
+                _cache_put(key, db_hit)
+                return db_hit
 
         # Lazy import — avoid loading openai_helper at module-import time
         try:
@@ -724,7 +765,6 @@ def polish_compat_analysis(
         # gpt-5.x rejects temperature; only set for non-gpt-5 models
         if not model.lower().startswith("gpt-5"):
             kwargs["temperature"] = 0.6
-
         resp = client.chat.completions.create(**kwargs)
         raw = (resp.choices[0].message.content or "").strip()
         try:

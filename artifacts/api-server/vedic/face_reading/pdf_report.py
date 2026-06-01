@@ -1206,9 +1206,10 @@ def _render_cover(cover: Dict, styles,
     flowables.append(Spacer(1, 35 * mm))
     flowables.append(HRFlowable(width="30%", thickness=0.6, color=C_RULE,
                                 spaceBefore=4, spaceAfter=8, hAlign="CENTER"))
+    n_blocks = cover.get("n_blocks") or 21
     flowables.append(Paragraph(
         "Yeh report tumhare chehre se nikla hua 100% personalized truth hai.<br/>"
-        "<b>21 sections · 9 engines · Vedic Samudrika + Modern Psychology</b>",
+        f"<b>{n_blocks} dense blocks · 9 engines · Vedic Samudrika + Modern Psychology</b>",
         styles["cover_meta"]))
     return flowables
 
@@ -1250,7 +1251,7 @@ def _render_face_map_page(photo_bytes: bytes, points_norm: list, styles) -> List
     flowables.append(HRFlowable(width="20%", thickness=2, color=C_ACCENT,
                                 spaceBefore=4, spaceAfter=10, hAlign="LEFT"))
     flowables.append(Paragraph(
-        "Yeh tumhari actual photo hai jisko Engine ne 468 landmark points pe analyze kiya. "
+        "Yeh tumhari actual photo hai jisko face-reading engines ne zone-wise analyze kiya. "
         "Har zone (mastak, aankh, naak, gaal, honth, jabda, thoddi) se alag-alag insights nikle hain — "
         "is map me dekho ki kis area se kya pada gaya hai.",
         styles["narrative"]))
@@ -1367,6 +1368,81 @@ def _render_celebrity_page(engines: Dict, styles) -> List:
     return flowables
 
 
+def _is_12_block_report(report: Dict) -> bool:
+    if report.get("report_template_version") == "12_block_v1":
+        return True
+    secs = report.get("sections") or []
+    return bool(secs) and str(secs[0].get("key") or "").startswith("block_")
+
+
+def _render_block_section(sec: Dict, styles) -> List:
+    """12-block layout: narrative-first, no legacy field dump."""
+    flowables: List = []
+    key = sec.get("key", "")
+    if key == "section_6_feature_analysis":
+        return _render_section_6_deep(sec, styles)
+
+    flowables.append(SectionBanner(sec["no"]))
+    flowables.append(Spacer(1, 4 * mm))
+    flowables.append(Paragraph(_safe(sec["title_hi"]), styles["section_title_hi"]))
+    flowables.append(Paragraph(_safe(sec["title_en"]), styles["section_title_en"]))
+    goal = (sec.get("goal") or "").strip()
+    if goal:
+        flowables.append(Paragraph(
+            f"<i><font color='#7A7164'>{_safe(goal)}</font></i>",
+            styles["field_value"],
+        ))
+
+    narr = (sec.get("narrative") or "").strip()
+    if narr:
+        flowables.append(Spacer(1, 2 * mm))
+        flowables.append(Paragraph(_safe(narr), styles["narrative"]))
+
+    content = sec.get("content") or {}
+    if isinstance(content, dict):
+        fs = content.get("final_scores")
+        if isinstance(fs, dict) and fs:
+            flowables.append(Spacer(1, 3 * mm))
+            flowables.append(Paragraph("<b>Score snapshot</b>", styles["callout_label"]))
+            for sk, sv in list(fs.items())[:6]:
+                if sv is not None:
+                    flowables.append(Paragraph(
+                        f"{_safe(str(sk).replace('_', ' ').title())}: {_safe(sv)}",
+                        styles["field_value"],
+                    ))
+
+    flowables.append(Spacer(1, 8 * mm))
+    return flowables
+
+
+def _render_12_block_pdf(report: Dict, styles, story: List) -> None:
+    """Linear 12-block story + appendix tables."""
+    sections = report.get("sections") or []
+    appendix = report.get("appendix_sections") or []
+    engines = report.get("engines") or {}
+    synthesis = report.get("synthesis") or {}
+    ft2 = report.get("final_truth_v2") or {}
+
+    for sec in sections:
+        story.extend(_render_block_section(sec, styles))
+        story.append(PageBreak())
+
+    if synthesis.get("shock_insights"):
+        story.extend(_render_shock_insights_early(synthesis, styles))
+        story.append(PageBreak())
+
+    for sec in appendix:
+        story.extend(_render_section(sec, styles))
+        story.append(PageBreak())
+
+    if ft2:
+        story.extend(_render_final_truth_v2(ft2, styles))
+        story.append(PageBreak())
+
+    if engines:
+        story.extend(_render_celebrity_page(engines, styles))
+
+
 # ── Main entrypoint ───────────────────────────────────────────────────────
 def render_pdf(report: Dict) -> bytes:
     buf = BytesIO()
@@ -1390,6 +1466,10 @@ def render_pdf(report: Dict) -> bytes:
     hook        = report.get("hook") or {}
     tldr        = report.get("tldr") or {}
     ft2         = report.get("final_truth_v2") or {}
+    use_12      = _is_12_block_report(report)
+    n_blocks    = report.get("sections_count") or (12 if use_12 else 21)
+    cover_meta  = dict(report.get("cover") or {})
+    cover_meta["n_blocks"] = n_blocks
 
     def _render_by_key(key: str):
         sec = sections_dict.get(key)
@@ -1398,11 +1478,11 @@ def render_pdf(report: Dict) -> bytes:
 
     # ── Page 1 :: HOOK COVER (identity + shock + scores) ─────────────
     if hook:
-        story.extend(_render_hook_cover(hook, report.get("cover", {}), styles,
+        story.extend(_render_hook_cover(hook, cover_meta, styles,
                                         photo_bytes=photo_bytes,
                                         points_norm=points_norm))
     else:
-        story.extend(_render_cover(report.get("cover", {}), styles,
+        story.extend(_render_cover(cover_meta, styles,
                                    photo_bytes=photo_bytes,
                                    points_norm=points_norm))
     story.append(PageBreak())
@@ -1423,8 +1503,32 @@ def render_pdf(report: Dict) -> bytes:
 
     # ── Page 5 :: Visual snapshot ────────────────────────────────────
     if engines:
-        story.extend(_render_visual_snapshot_page(engines, sections_dict, styles))
+        _snap_secs = sections_dict
+        if use_12:
+            _snap_secs = {
+                **sections_dict,
+                **{
+                    a["key"]: a
+                    for a in (report.get("appendix_sections") or [])
+                    if a.get("key")
+                },
+            }
+        story.extend(_render_visual_snapshot_page(engines, _snap_secs, styles))
         story.append(PageBreak())
+
+    if use_12:
+        _render_12_block_pdf(report, styles, story)
+        story.append(PageBreak())
+        story.append(Spacer(1, 60 * mm))
+        story.append(HRFlowable(width="60%", thickness=1, color=C_ACCENT,
+                                spaceBefore=4, spaceAfter=14, hAlign="CENTER"))
+        story.append(Paragraph("Disclaimer", styles["section_title_hi"]))
+        story.append(Spacer(1, 4*mm))
+        story.append(Paragraph(_safe(report.get("footer_disclaimer", "")), styles["field_value"]))
+        doc.build(story, onFirstPage=_on_cover_page, onLaterPages=_on_page)
+        pdf_bytes = buf.getvalue()
+        buf.close()
+        return pdf_bytes
 
     # ── PERSONALITY CORE (sections 1, 2, 7) ──────────────────────────
     for k in ("section_1_power_summary",

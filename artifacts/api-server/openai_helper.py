@@ -43,7 +43,13 @@ def _chart_intel():
     return analyze_chart, format_intelligence
 
 
-def _marriage_engine(): return (lambda *a, **k: None, lambda *a, **k: "")  # Phase 2.8.37 stub
+def _marriage_engine():
+    """Lazy-load marriage timing + type engines (was Phase 2.8.37 stub)."""
+    from event_timing.marriage import (  # type: ignore
+        assess_marriage,
+        format_verdict_for_prompt,
+    )
+    return assess_marriage, format_verdict_for_prompt
 
 
 # Phase 2.8.27 (01 May 2026) — BUG FIX
@@ -168,6 +174,246 @@ import re as _re_mb_M17
 
 # Devanagari anchors sit outside \b group (\b doesn't anchor on
 # Devanagari). Mirrors the legacy 2.8.27 keyword regex.
+# User mandate (May 2026): marriage TIMING = Line1 window only + Line2 engage Q.
+_MARRIAGE_TIMING_ONLY_REPLY = (
+    "TIMING REPLY (binding) — ONE sentence only in the answer bubble:\n"
+    "  \"Aapki shaadi <WINDOW VERBATIM> ke beech hogi.\"\n"
+    "Engagement question goes in follow_ups chip (LINE-2 below), not in the bubble.\n"
+    "FORBIDDEN in answer: shall, should, may, might, ho sakta/ho sakti, shayad, "
+    "around, chance, possibly, dasha, planets, Upay, Jaimini, KP, verdict label.\n"
+    "FORBIDDEN: greeting, bullets, backup window, delay lecture.\n"
+)
+
+_MARRIAGE_ENGAGEMENT_QUESTIONS: dict[str, list[str]] = {
+    "hn": [
+        "Love marriage ya arranged?",
+        "Future partner kaisa hoga?",
+        "Delay kyun dikh rahi hai?",
+        "Mangal dosh check karun?",
+    ],
+    "hi": [
+        "क्या आप जानना चाहेंगे — आपकी शादी प्रेम विवाह होगी या arranged?",
+        "क्या आप भविष्य के जीवनसाथी के बारे में जानना चाहेंगे?",
+        "क्या देरी के कारण समझना चाहेंगे?",
+        "क्या मंगल दोष की जाँच करूँ?",
+    ],
+    "en": [
+        "Love marriage or arranged?",
+        "What will my future spouse be like?",
+        "Why does delay show in my chart?",
+        "Check manglik or other marriage obstacles?",
+    ],
+}
+
+_M17_PRIMARY_WINDOW_RX = _re_mb_M17.compile(
+    r"PRIMARY WINDOW \(verbatim in reply\):\s*(.+?)\s*(?:\n|$)",
+    _re_mb_M17.IGNORECASE,
+)
+
+
+def _pick_marriage_engagement_question(reply_idx: int, lang: str) -> str:
+    pool = _MARRIAGE_ENGAGEMENT_QUESTIONS.get(lang) or _MARRIAGE_ENGAGEMENT_QUESTIONS["hn"]
+    return pool[int(reply_idx or 0) % len(pool)]
+
+
+def _extract_primary_window_from_m17_block(block: str) -> str:
+    if not block:
+        return ""
+    m = _M17_PRIMARY_WINDOW_RX.search(block)
+    if m:
+        return m.group(1).strip()
+    return ""
+
+
+def _is_marriage_timing_question(question: str) -> bool:
+    """True for 'shaadi kab' style Qs — not analysis ('kyun delay')."""
+    if not isinstance(question, str) or not question.strip():
+        return False
+    if not _M17_MARRIAGE_KW_RX.search(question):
+        return False
+    q = question.lower()
+    if _re_mb_M17.search(
+        r"\b(kyun|why|kaise\s+hai|detail|explain|samjha|7th\s*lord|"
+        r"delay\s*kyu|kaun\s+sa\s+grah)\b",
+        q,
+    ):
+        return bool(_re_mb_M17.search(r"\b(kab|when|kitne\s+saal|time)\b", q))
+    return True
+
+
+def _marriage_timing_reply_parts(
+    window: str,
+    reply_idx: int = 0,
+    lang: str = "hn",
+) -> tuple[str, str]:
+    """Deterministic marriage timing: (one-line window answer, engage chip)."""
+    w = (window or "").strip()
+    if w:
+        line1 = f"Aapki shaadi {w} ke beech hogi."
+    else:
+        line1 = "Abhi chart se shaadi ka clear period nahi dikh raha."
+    engage = _pick_marriage_engagement_question(reply_idx, lang)
+    return line1, engage
+
+
+def _compose_marriage_timing_reply(
+    window: str,
+    reply_idx: int = 0,
+    lang: str = "hn",
+) -> str:
+    """Legacy combined text (line1 only — engage Q lives in follow_ups)."""
+    line1, _engage = _marriage_timing_reply_parts(window, reply_idx, lang)
+    return line1
+
+
+_CHECKED_TRACE_RX = re.compile(r"\[Checked:\s*[^]]+\]\s*$", re.IGNORECASE | re.DOTALL)
+
+
+def _checked_trace_from_dcr_love(meta: Any) -> str:
+    if not isinstance(meta, dict) or not meta.get("buckets"):
+        return ""
+    labels = ["D1", "D9"]
+    bucket_map = {
+        "core_love_base": ["5H/5L", "7H/7L", "Venus"],
+        "love_marriage_vs_arranged": ["Rahu", "11H", "Jupiter/Saturn"],
+        "emotional_attachment": ["Moon", "Venus", "4H/5H"],
+        "practical_relationship_approach": ["Saturn", "Mercury", "2H/9H"],
+        "attraction_chemistry": ["Venus-Mars", "Moon-Venus"],
+        "obsession_overattachment": ["Rahu", "8H", "12H"],
+        "one_sided_love": ["5H", "11H", "Saturn"],
+        "secret_relationship": ["8H", "12H", "Rahu/Ketu"],
+        "breakup_separation": ["6H", "8H", "12H", "Saturn/Rahu"],
+        "patchup_reconciliation": ["5H", "7H", "11H"],
+        "family_approval": ["2H", "9H", "Jupiter/Saturn"],
+        "partner_nature": ["7H/7L", "Venus", "Moon"],
+        "bed_comfort_private_life": ["7H", "8H", "12H", "Venus/Mars"],
+        "self_worth_boundaries": ["1H", "2H", "Venus/Saturn"],
+    }
+    for b in meta.get("buckets") or []:
+        for item in bucket_map.get(b, []):
+            if item not in labels:
+                labels.append(item)
+    return "[Checked: " + ", ".join(labels[:10]) + "]"
+
+
+def _polish_dcr_love_answer(
+    text: str,
+    hide_technical: bool = False,
+    show_trace: bool = True,
+) -> str:
+    """Keep DCR-love answers simple Hinglish and avoid truncated fragments."""
+    raw = (text or "").strip()
+    if not raw:
+        return raw
+    trace = ""
+    body = raw
+    m = _CHECKED_TRACE_RX.search(raw)
+    if m:
+        trace = m.group(0).strip()
+        body = raw[:m.start()].strip()
+
+    replacements = {
+        "prakriti": "nature",
+        "swabhav": "nature",
+        "svabhav": "nature",
+        "budhiyal": "smart",
+        "buddhiyal": "smart",
+        "samvedansheel": "emotional",
+        "rahasyapri": "private",
+        "gahra": "deep",
+        "gahara": "deep",
+        "vyaktitva": "personality",
+        "sanket deta hai": "dikhata hai",
+        "sanket deti hai": "dikhati hai",
+        "bhav dikhata hai": "nature dikhata hai",
+        "Is prakar,": "Overall,",
+    }
+    for old, new in replacements.items():
+        body = re.sub(rf"\b{re.escape(old)}\b", new, body, flags=re.IGNORECASE)
+
+    if hide_technical:
+        # User asked for the result, not the backend astrology audit. Keep the
+        # chart factors hidden unless they explicitly ask to explain.
+        body = re.sub(
+            r"\b(?:aapke|aapki|mere|meri)?\s*D[19][^.!?।;]*(?:jo|yeh|isliye|se)\s*",
+            "",
+            body,
+            flags=re.IGNORECASE,
+        )
+        body = re.sub(
+            r"\b(?:D1|D9|7H|7L|5H|5L|house|ghar|lord|swami|rashi|sign|"
+            r"Moon|Venus|Mercury|Mars|Jupiter|Saturn|Rahu|Ketu|Sun|"
+            r"Gemini|Scorpio|Leo|Aries|Taurus|Cancer|Virgo|Libra|"
+            r"Sagittarius|Capricorn|Aquarius|Pisces)\b",
+            "",
+            body,
+            flags=re.IGNORECASE,
+        )
+        body = re.sub(r"\b\d+(?:st|nd|rd|th|ve|वें)?\b", "", body, flags=re.IGNORECASE)
+        body = re.sub(r"\s{2,}", " ", body)
+        body = re.sub(r"\s+([,.;!?।])", r"\1", body).strip(" ,;:-")
+
+    # Keep at most two complete sentences; remove a trailing half sentence if
+    # the model ran out of tokens before finishing it.
+    pieces = re.split(r"(?<=[.!?।])\s+", body)
+    complete = [p.strip() for p in pieces if p.strip() and re.search(r"[.!?।]$", p.strip())]
+    if complete:
+        body = " ".join(complete[:2]).strip()
+    elif body and not re.search(r"[.!?।]$", body):
+        body = body.rstrip(" ,;:") + "."
+
+    return (body + ("\n" + trace if show_trace and trace else "")).strip()
+
+
+def _checked_trace_for_question(question: str, topic: Optional[str] = None) -> str:
+    q = (question or "").lower()
+    t = (topic or "").lower()
+    if re.search(r"\b(love\s*marriage|arrange(?:d)?|arrange\s*marriage)\b", q):
+        items = ["D1", "D9", "5H/5L", "7H/7L", "Venus", "Rahu", "Jupiter/Saturn"]
+    elif "marriage" in t or re.search(r"\b(shaadi|shadi|vivah|spouse|wife|husband|partner)\b", q):
+        items = ["D1", "D9", "7H", "7L", "Venus", "Jupiter", "UL"]
+    elif "career" in t or re.search(r"\b(career|naukri|job|business|profession|10th)\b", q):
+        items = ["D1", "D9", "10H/10L", "6H", "11H", "Saturn", "Mercury"]
+    elif "health" in t or re.search(r"\b(health|sehat|disease|illness|sleep|anxiety)\b", q):
+        items = ["D1", "D9", "Lagna", "6H", "8H", "Moon", "Saturn/Rahu"]
+    elif "wealth" in t or re.search(r"\b(paisa|money|wealth|finance|income|dhan)\b", q):
+        items = ["D1", "D9", "2H", "11H", "5H", "Jupiter", "Venus"]
+    elif re.search(r"\b(mind|mental|psychology|personality|nature|moon|emotion)\b", q):
+        items = ["D1", "D9", "Moon", "Moon nakshatra", "Lagna", "Rahu", "Saturn"]
+    elif re.search(r"\b(rahu|ketu|saturn|shani|jupiter|guru|venus|shukra|mars|mangal|moon|chandra|sun|surya|mercury|budh)\b", q):
+        planet = re.search(
+            r"\b(rahu|ketu|saturn|shani|jupiter|guru|venus|shukra|mars|mangal|moon|chandra|sun|surya|mercury|budh)\b",
+            q,
+        ).group(1)
+        items = ["D1", "D9", planet.title(), "house", "sign", "aspect"]
+    elif re.search(r"\b(house|bhav|bhaav|lagna|rashi|nakshatra|kundli|chart)\b", q):
+        items = ["D1", "D9", "house", "lord", "planet placement"]
+    else:
+        items = ["D1", "D9", "house", "lord", "karaka"]
+    return "[Checked: " + ", ".join(items[:10]) + "]"
+
+
+def _ensure_checked_trace(
+    text: str,
+    question: str,
+    topic: Optional[str] = None,
+    *,
+    skip: bool = False,
+) -> str:
+    if skip or not isinstance(text, str) or not text.strip():
+        return text
+    stripped = text.strip()
+    if _CHECKED_TRACE_RX.search(stripped):
+        return text
+    low = stripped.lower()
+    if (
+        "cosmic ask sirf" in low
+        or "please save your birth details" in low
+        or "chart se clear" in low and "dikh raha" in low
+    ):
+        return text
+    return stripped + "\n" + _checked_trace_for_question(question, topic)
+
 _M17_MARRIAGE_KW_RX = _re_mb_M17.compile(
     r"(\b("
     r"shaadi|shadi|marriage|marry|married|wedding|"
@@ -181,93 +427,55 @@ _M17_MARRIAGE_KW_RX = _re_mb_M17.compile(
 
 
 def _M17_format_marriage_block(engine_result: dict) -> str:
-    """M17 v2 — LEAN format: just MD-AD-PD | score | window for each
-    top-3 window, plus verdict and risk flags. No verbose explainer."""
+    """M17 — timing-only: PRIMARY WINDOW for the one-sentence user reply."""
     if not isinstance(engine_result, dict) or not engine_result:
         return ""
+
+    primary = (engine_result.get("primary_window") or "").strip()
+    if not primary:
+        top3 = engine_result.get("top_3_windows") or []
+        if top3 and isinstance(top3[0], dict):
+            primary = (top3[0].get("window") or "").strip()
 
     parts = [
         "",
         "═══════════════════════════════════════════════════════════════",
-        "🔒 MARRIAGE ENGINE — LOCKED FACTS",
+        "🔒 MARRIAGE ENGINE — LOCKED FACTS (timing only)",
         "═══════════════════════════════════════════════════════════════",
-        "Rule: in facts ko hi quote karo. Naye date/year invent mat karo.",
+        _MARRIAGE_TIMING_ONLY_REPLY,
         "",
     ]
 
-    verdict = engine_result.get("verdict")
-    if verdict:
-        band = engine_result.get("band")
-        v = f"VERDICT: {verdict}"
-        if band: v += f"  (band={band})"
-        parts.append(v)
+    if engine_result.get("too_young_for_marriage"):
+        ep = engine_result.get("earliest_practical_window_start_iso") or "?"
+        parts.append(
+            "AGE_GUARD (still ONE sentence): near-term shaadi mat bolo; "
+            f"pehla acceptable period {ep} ke baad — use PRIMARY WINDOW if set."
+        )
         parts.append("")
 
-    # v2.3 — Surface D9 7L (supreme marriage karaka in Navamsa) so the
-    # LLM cites it explicitly when it drives the verdict/window. D9 IS
-    # the marriage varga; its 7L is classically the most important
-    # marriage significator after Venus/Jupiter.
-    d9_7l = engine_result.get("d9_seventh_lord")
-    if d9_7l:
-        parts.append(f"D9 7L (supreme marriage karaka in Navamsa): {d9_7l}")
-        parts.append("Rule: agar D9 7L active dasha mein hai ya transit "
-                      "trigger kar raha hai, usko prominently mention karo.")
-        parts.append("")
+    if primary:
+        parts.append(f"PRIMARY WINDOW (verbatim in reply): {primary}")
+    else:
+        parts.append(
+            "PRIMARY WINDOW: none — reply ONE sentence: "
+            "\"Abhi chart se shaadi ka clear period nahi dikh raha.\""
+        )
 
-    # Age + urgency context (v2.1) — LLM uses this to set tone + pick
-    # whether to lead with near-term window vs. long-term cascade.
-    user_age = engine_result.get("user_age")
-    age_band = engine_result.get("age_band")
-    urgency = engine_result.get("urgency")
-    if user_age is not None and age_band:
-        gen = engine_result.get("user_gender", "unknown")
-        line = f"USER: age={user_age} gender={gen} band={age_band} urgency={urgency}"
-        parts.append(line)
-        if engine_result.get("recent_year_focus"):
-            parts.append("FOCUS: user marriageable-age band hai — agle 12 "
-                          "mahine ki window pe pehle baat karo, fir long-term.")
-        # v2.4 — Age-sanity directive when user is below practical floor.
-        # Prevents engine from telling a 17-year-old "shaadi 3 mahine mein"
-        # even if dasha/PD perfectly aligns. Engine has already suppressed
-        # pre-floor windows; LLM must frame this gently and lead with
-        # study/career first.
-        if engine_result.get("too_young_for_marriage"):
-            min_age = engine_result.get("min_practical_age")
-            ep = engine_result.get("earliest_practical_window_start_iso")
-            sup = engine_result.get("windows_suppressed_too_young", 0)
-            parts.append(
-                f"AGE_GUARD: user abhi sirf {user_age} saal ka/ki hai — "
-                f"practical marriage-age floor {min_age}+ hai. "
-                f"Engine ne {sup} near-term window suppress kiye "
-                f"(pehla acceptable window {ep} ke baad start hota hai). "
-                "TONE: pehle padhai/career stability + self-growth ki baat "
-                "karo, fir long-term marriage timing dikhao. "
-                "STRICTLY DO NOT say shaadi agle kuch mahine mein hogi — "
-                "chahe dasha/PD kitni bhi strong ho. Real-life mein "
-                "user-jaise abhi marriage-ready nahi hote.")
-        parts.append("")
+    backup = (engine_result.get("backup_window") or "").strip()
+    if backup:
+        parts.append(f"BACKUP WINDOW (only if user asks alternate): {backup}")
 
-    top3 = engine_result.get("top_3_windows") or []
-    if top3:
-        parts.append("TOP 3 WINDOWS — MD-AD-PD | score | window")
-        for w in top3[:3]:
-            if not isinstance(w, dict):
-                continue
-            md = w.get("md", "?")
-            ad = w.get("ad", "?")
-            pd = w.get("pd", "?")
-            sc = w.get("score", 0)
-            try: sc_s = f"{float(sc):.2f}"
-            except (TypeError, ValueError): sc_s = str(sc)
-            win = (w.get("window") or w.get("label")
-                   or f"{w.get('start_str','?')} - {w.get('end_str','?')}")
-            dasha = f"{md}-{ad}-{pd}"
-            parts.append(f"  {dasha:24} | {sc_s:>5} | {win}")
-        parts.append("")
-
-    risks = engine_result.get("risk_flags") or []
-    if risks:
-        parts.append("RISK_FLAGS: " + ", ".join(str(r) for r in risks[:6]))
+    st0 = engine_result.get("step0_tendency") or {}
+    if st0.get("verdict") in ("DELAYED", "LATE"):
+        parts.append(
+            f"STEP0 DELAYED/LATE — user abhi {engine_result.get('user_age') or '?'} "
+            f"saal; BCP primary age "
+            f"{(engine_result.get('step0a') or engine_result.get('step0') or {}).get('dasha_scan_plan', {}).get('primary_reference_age') or '?'}. "
+            "Near-term current dasha (e.g. 2026) mat bolo jab PRIMARY door ho."
+        )
+    if engine_result.get("chart_late_marriage"):
+        parts.append("CHART: late-marriage pattern — tone delay, not denial.")
 
     parts.extend([
         "═══════════════════════════════════════════════════════════════",
@@ -581,22 +789,132 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
         if not isinstance(kundli, dict) or not kundli.get("planets"):
             return ""
 
-        kp_dict = {}
-        try:
-            if isinstance(birth, dict):
-                kp_dict = _kp_calc()(birth) or {}
-        except Exception as _kp_exc:  # noqa: BLE001
-            print(f"[passthrough_marriage_block] kp skipped: "
-                  f"{str(_kp_exc)[:160]}")
-            kp_dict = {}
+        from event_timing.marriage.kp_from_chart import resolve_kp
+
+        kp_dict = resolve_kp(kundli, {}, birth)
 
         from event_timing.marriage import assess_marriage  # type: ignore
         engine_result = assess_marriage(
-            kundli, intel or {}, kp_dict or {}, birth,
+            kundli, intel or {}, kp_dict, birth,
             question=question or "",
         )
         if not isinstance(engine_result, dict) or not engine_result:
             return ""
+        _pw = (engine_result.get("primary_window") or "").strip()
+        try:
+            _s0 = engine_result.get("step0") or {}
+            _s0a = engine_result.get("step0a") or {}
+            _dsp = _s0a.get("dasha_scan_plan") or {}
+            _top = (engine_result.get("top_3_windows") or [{}])[0] or {}
+            print(
+                f"[passthrough_marriage_block] primary_window={_pw!r} "
+                f"key_trigger={engine_result.get('key_trigger')!r} "
+                f"top_dasha={_top.get('md')}-{_top.get('ad')}-{_top.get('pd')} "
+                f"score={_top.get('score')} "
+                f"transit={_top.get('transit_confirmed')} "
+                f"too_young={bool(engine_result.get('too_young_for_marriage'))} "
+                f"user_age={_s0.get('user_age')} "
+                f"bcp_primary={_dsp.get('primary_reference_age')} "
+                f"bcp_focus={_dsp.get('bcp_focus_ages')} "
+                f"step0={(_s0.get('step0_tendency') or {}).get('verdict')}",
+                flush=True,
+            )
+            for _f in (engine_result.get("factors") or []):
+                if (
+                    "BCP_ANCHOR" in _f
+                    or "STEP0 focus_boost" in _f
+                    or "STEP7 final_dasha" in _f
+                    or "STEP8 final_gate" in _f
+                ):
+                    print(f"[passthrough_marriage_block] {_f}", flush=True)
+            _audit = engine_result.get("timing_audit") or {}
+            _ad = (_audit.get("primary_dasha") or {})
+            _bcp = (_audit.get("bcp") or {})
+            _tr = (_audit.get("transit") or {})
+            print(
+                "[passthrough_marriage_block] AUDIT "
+                f"status={_audit.get('status')} "
+                f"dasha={_ad.get('md')}-{_ad.get('ad')}-{_ad.get('pd')} "
+                f"{_ad.get('start_iso')}→{_ad.get('end_iso')} "
+                f"bcp_hits={_bcp.get('primary_bcp_hits')} "
+                f"bcp_anchor={_bcp.get('anchor_min_age')} "
+                f"transit={_tr.get('confirmed')} "
+                f"issues={_audit.get('issues')}",
+                flush=True,
+            )
+            _steps = engine_result.get("step_audit") or {}
+            _s1 = ((_steps.get("step1") or {}).get("result") or {})
+            _s2 = ((_steps.get("step2") or {}).get("result") or {})
+            _s3 = (_steps.get("step3") or {})
+            _s4 = (_steps.get("step4") or {})
+            _s5 = (_steps.get("step5") or {})
+            _s6 = (_steps.get("step6") or {})
+            _s7 = (_steps.get("step7") or {})
+            _s8 = (_steps.get("step8") or {})
+            print(
+                "[passthrough_marriage_block] STEP_AUDIT 0 "
+                f"result={(_steps.get('step0') or {}).get('result')} "
+                f"age={(_steps.get('step0') or {}).get('user_age')}",
+                flush=True,
+            )
+            print(
+                "[passthrough_marriage_block] STEP_AUDIT 0A "
+                f"primary_age={(_steps.get('step0a') or {}).get('primary_reference_age')} "
+                f"focus={(_steps.get('step0a') or {}).get('focus_ages')}",
+                flush=True,
+            )
+            print(
+                "[passthrough_marriage_block] STEP_AUDIT 1 "
+                f"7L={_s1.get('seventh_lord')} "
+                f"in7={_s1.get('planets_in_7th_house')} "
+                f"asp7={_s1.get('planets_aspecting_7th_house')} "
+                f"with7L={_s1.get('planets_conjunct_or_aspecting_7th_lord')}",
+                flush=True,
+            )
+            print(
+                "[passthrough_marriage_block] STEP_AUDIT 2 "
+                f"7L={_s2.get('seventh_lord')} "
+                f"in7={_s2.get('planets_in_7th_house')} "
+                f"asp7={_s2.get('planets_aspecting_7th_house')} "
+                f"with7L={_s2.get('planets_conjunct_or_aspecting_7th_lord')}",
+                flush=True,
+            )
+            print(
+                "[passthrough_marriage_block] STEP_AUDIT 3 "
+                f"merged_count={_s3.get('merged_count')} "
+                f"top={_s3.get('top_merged')}",
+                flush=True,
+            )
+            print(
+                "[passthrough_marriage_block] STEP_AUDIT 4 "
+                f"summary={_s4.get('summary')} top_kp={_s4.get('top_kp')}",
+                flush=True,
+            )
+            print(
+                "[passthrough_marriage_block] STEP_AUDIT 5 "
+                f"targets={_s5.get('target_lords')} ranked={_s5.get('ranked_top')}",
+                flush=True,
+            )
+            print(
+                "[passthrough_marriage_block] STEP_AUDIT 6 "
+                f"current={_s6.get('current_activation')} "
+                f"selected={_s6.get('selected_windows')}",
+                flush=True,
+            )
+            print(
+                "[passthrough_marriage_block] STEP_AUDIT 7 "
+                f"transit={_s7.get('transit_confirmed')} "
+                f"double={_s7.get('double_transit')} detail={_s7.get('detail')}",
+                flush=True,
+            )
+            print(
+                "[passthrough_marriage_block] STEP_AUDIT 8 "
+                f"verdict={_s8.get('verdict')} band={_s8.get('band')} "
+                f"risks={_s8.get('risk_flags')} gate={_s8.get('final_gate')}",
+                flush=True,
+            )
+        except Exception:
+            pass
         return _M17_format_marriage_block(engine_result)
     except Exception as _exc:  # noqa: BLE001
         print(f"[passthrough_marriage_block] err: {str(_exc)[:200]}")
@@ -3107,10 +3425,88 @@ def is_available() -> bool:
 # ════════════════════════════════════════════════════════════════════════════
 
 _RAW_LANG_INSTR = {
-    "hi": "Reply in Hinglish (Hindi written in Roman script). Natural conversational tone.",
-    "hn": "Reply in Hinglish (Hindi written in Roman script). Natural conversational tone.",
-    "en": "Reply in plain English.",
+    "hi": "Reply ENTIRELY in Hindi (Devanagari script). No English except proper nouns.",
+    "hn": "Reply ENTIRELY in Hinglish (Hindi in Roman script). Natural conversational tone.",
+    "en": "Reply ENTIRELY in plain English. No Hindi words in Roman or Devanagari.",
 }
+
+# ── Ultra-brief default (token save) — explain only on explicit ask ───────
+import re as _re_explain_gate
+
+_EXPLAIN_REQUEST_RE = _re_explain_gate.compile(
+    r"(?ix)\b("
+    r"explain|explanation|"
+    r"samjha(?:o|na| do| di|iye|iye)|samjh(?:ao|a do)|"
+    r"detail(?:ed)?|vistaar|vistar|"
+    r"poori detail|pura detail|poora detail|sab kuch batao|sab batao|"
+    r"elaborate|expand|aur batao|aur samjha|step by step|step-by-step|"
+    r"detail mein|detail me |lambe me|lamba jawab|paragraph me|"
+    r"reason batao|reason do|kyun detail|why in detail|"
+    r"kya\s+check|check\s+kiya|kaise\s+pata|pata\s+chale"
+    r")\b"
+)
+
+_RAW_LENGTH_ULTRA_BRIEF = """
+════════════════════════════════════════════════════════════════════
+🛑 TOKEN-SAVE MODE — ONE LINE ONLY (DEFAULT) 🛑
+════════════════════════════════════════════════════════════════════
+The user did NOT ask to explain. Your ENTIRE reply = **ONE line only**.
+
+HARD CAPS (violating = bug):
+  • MAX **22 words** total (count before sending).
+  • **ONE sentence** only. No second sentence. No line break.
+  • **NO** `👉 Final` line. **NO** bullets. **NO** preamble.
+  • Start with the answer immediately (rashi name / haan-nahi / timing window / trait).
+
+FORMAT: `<answer> — <≤6 word reason if needed>` OR just `<answer>` for pure facts.
+  ✅ "Aapki janma rashi Kanya hai — Chand ki position se."
+  ✅ "Bade bhai supportive par thoda distant — gains house mixed."
+  ✅ "Shaadi 2027–28 ke beech zyada strong window."
+  🚫 Multi-sentence paragraphs, empathy essays, planet lists.
+
+TIMING Qs: still ONE line — squeeze window into the line (year range OK).
+YES/NO Qs: "Haan — …" or "Nahi — …" in one line.
+
+If the chart is unclear: one line "Clear signal abhi weak hai — chart mixed."
+
+DO NOT offer "agar detail chahiye to batao" — just answer in one line.
+"""
+
+_RAW_LENGTH_EXPLAIN = """
+════════════════════════════════════════════════════════════════════
+📖 EXPLAIN MODE — user explicitly asked for detail
+════════════════════════════════════════════════════════════════════
+User asked to explain / detail / samjhao. You may use **one short paragraph**
+(MAX 70 words) + optional ONE `👉 Final:` line (≤12 words).
+Still: no filler, no jargon dump, plain language. No second paragraph.
+"""
+
+
+def _user_wants_explanation(question: str) -> bool:
+    """True only when user explicitly asks for explanation/detail."""
+    if not isinstance(question, str) or not question.strip():
+        return False
+    return bool(_EXPLAIN_REQUEST_RE.search(question))
+
+
+def _enforce_one_line_answer(text: str, wants_explain: bool) -> str:
+    """Hard post-trim when ultra-brief mode — keeps first line ≤28 words."""
+    if wants_explain or not text:
+        return (text or "").strip()
+    raw = (text or "").strip()
+    # Drop 👉 Final and anything after
+    if "👉" in raw:
+        raw = raw.split("👉")[0].strip()
+    line = raw.replace("\n", " ").strip()
+    # First sentence only
+    for sep in (". ", "? ", "! ", "। "):
+        if sep in line:
+            line = line.split(sep, 1)[0] + sep.strip()
+            break
+    words = line.split()
+    if len(words) > 28:
+        line = " ".join(words[:28]) + "…"
+    return line
 
 
 # ── STATIC-mode dasha gate (Phase 2.5.11.2) ────────────────────────────
@@ -3507,6 +3903,35 @@ def _raw_compact_chart(kundli: Any, include_dasha: bool = True,
     if asc:
         lines.append(f"Ascendant (Lagna): {asc}"
                      + (f" {asc_deg:.2f}°" if isinstance(asc_deg, (int, float)) else ""))
+        try:
+            _signs = [
+                "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+                "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
+            ]
+            _lords = {
+                "Aries": "Mars", "Taurus": "Venus", "Gemini": "Mercury",
+                "Cancer": "Moon", "Leo": "Sun", "Virgo": "Mercury",
+                "Libra": "Venus", "Scorpio": "Mars", "Sagittarius": "Jupiter",
+                "Capricorn": "Saturn", "Aquarius": "Saturn", "Pisces": "Jupiter",
+            }
+            _aliases = {
+                "mesh": "Aries", "vrishabh": "Taurus", "mithun": "Gemini",
+                "kark": "Cancer", "karka": "Cancer", "simha": "Leo",
+                "kanya": "Virgo", "tula": "Libra", "vrishchik": "Scorpio",
+                "dhanu": "Sagittarius", "makar": "Capricorn",
+                "kumbh": "Aquarius", "meen": "Pisces",
+            }
+            _asc_key = str(asc).strip()
+            _asc_canon = _aliases.get(_asc_key.lower(), _asc_key.title())
+            if _asc_canon in _signs:
+                _ai = _signs.index(_asc_canon)
+                _pairs = []
+                for _h in range(1, 13):
+                    _sg = _signs[(_ai + _h - 1) % 12]
+                    _pairs.append(f"{_h}H={_sg} lord {_lords[_sg]}")
+                lines.append("House lords: " + "; ".join(_pairs))
+        except Exception:
+            pass
     if moon_sign: lines.append(f"Moon sign (Rashi): {moon_sign}")
     if sun_sign: lines.append(f"Sun sign: {sun_sign}")
     if nak:
@@ -3705,13 +4130,50 @@ def _raw_kp_block(kundli: Any) -> str:
 
 
 def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
-                        birth: Any = None, user_id: Any = None) -> dict:
+                        birth: Any = None, user_id: Any = None,
+                        reply_idx: int = 0) -> dict:
     """Pure raw passthrough: D1 + D9 + dasha + question → LLM → answer.
 
     No classifiers, no static engines, no post-injectors, no disclaimers.
     Returns a dict shaped like the legacy ai_ask response so the route
     layer can drop it straight into jsonify().
     """
+    try:
+        from ask_language_gate import assess_ask_language, language_refusal_payload
+
+        _lv = assess_ask_language(question or "")
+        if not _lv.allowed:
+            return language_refusal_payload()
+        if _lv.lang:
+            lang = _lv.lang
+    except Exception:
+        pass
+
+    try:
+        from ask_question_normalize import prepare_ask_question
+
+        question = prepare_ask_question(question or "")
+    except Exception:
+        question = question or ""
+
+    try:
+        from ask_scope_gate import assess_ask_scope, scope_refusal_payload
+
+        _sv = assess_ask_scope(question)
+        if not _sv.allowed:
+            return scope_refusal_payload(_sv.reason)
+    except Exception:
+        pass
+
+    try:
+        from chart_fact_answer import try_deterministic_chart_fact
+
+        _det = try_deterministic_chart_fact(question, kundli, lang)
+        if _det:
+            return _det
+    except Exception as _cfe:
+        print(f"[raw_passthrough] chart_fact deterministic skipped: {_cfe}", flush=True)
+
     client = _get_client()
     if client is None:
         return {
@@ -3721,22 +4183,43 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             "source":     "raw_passthrough_unavailable",
             "follow_ups": [],
         }
-    # ── Classify: STATIC (chart-only) vs TIMING (chart + dasha) ────────
+    # ── Classify: STATIC vs TIMING — AI-only (ask_cosmo) ───────────────
+    _understanding = None
     try:
+        from ask_cosmo import understand_question
         from question_type import classify_question_type
-        qtype = classify_question_type(question)  # "TIMING" or "STATIC"
-    except Exception:
+
+        _understanding = understand_question(question, client=client)
+        qtype = classify_question_type(
+            question, client=client, understanding=_understanding
+        )
+    except Exception as _qte:
+        try:
+            print(f"[raw_passthrough] qtype classify failed: {_qte}", flush=True)
+        except Exception:
+            pass
         qtype = "STATIC"
+        _understanding = None
     is_timing = (qtype == "TIMING")
+    wants_explain = _user_wants_explanation(question)
     static_dasha_hint = (not is_timing) and _static_needs_current_dasha(question)
     is_sensitive = (not is_timing) and _is_sensitive_static_q(question)
     is_long_story = (not is_timing) and (not is_sensitive) and _is_long_story_q(question)
+    # Token-save: no verbose depth overrides unless user asked to explain
+    if not wants_explain:
+        is_sensitive = False
+        is_long_story = False
     # Marriage-domain Qs (NOT sensitive — sensitive supersedes; NOT
     # long-story — long_story supersedes; NOT timing — engine handles
     # timing) get the marriage-psychology depth rule so partner /
     # delay / breakup framing has psychological intelligence.
-    is_marriage_domain = (not is_timing) and (not is_sensitive) and \
-                         (not is_long_story) and _is_marriage_domain_q(question)
+    is_marriage_domain = (
+        wants_explain
+        and (not is_timing)
+        and (not is_sensitive)
+        and (not is_long_story)
+        and _is_marriage_domain_q(question)
+    )
     # Sensitive Qs ALSO need current dasha so the LLM has a real reason
     # to cite in layer-2 (astrological reason). Auto-promote.
     if is_sensitive:
@@ -3751,6 +4234,24 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         static_dasha_hint = True
     chart_text = _raw_compact_chart(kundli, include_dasha=is_timing,
                                     static_dasha_hint=static_dasha_hint)
+    dcr_love_meta = None
+    if not is_timing:
+        try:
+            from dcr_love import build_dcr_love_context  # type: ignore
+
+            _dcr_love_block, dcr_love_meta = build_dcr_love_context(
+                kundli if isinstance(kundli, dict) else {}, question,
+            )
+            if _dcr_love_block:
+                chart_text = _dcr_love_block
+                print(
+                    f"[raw_passthrough] DCR_LOVE slice "
+                    f"buckets={dcr_love_meta.get('buckets')} "
+                    f"chart_chars={len(chart_text)}",
+                    flush=True,
+                )
+        except Exception as _dcr_love_exc:
+            print(f"[raw_passthrough] DCR_LOVE skipped: {_dcr_love_exc}", flush=True)
 
     # ── Specific-partner synastry (Phase 2.5.11.6) ─────────────────────
     # When the Q references an EXISTING partner ("mere bf se", "wife
@@ -3817,30 +4318,78 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     if kp_block:
         chart_text = chart_text + kp_block
 
-    # ── MARRIAGE TIMING enrichment (VIVAH-7 KP-first engine) ───────────
-    # Fires only when question is marriage-topic. Architect-guard: regex
-    # gate FIRST so analyze_chart() never runs for non-marriage Qs (cost
-    # regression fix). Engine returns top-3 DBA windows × KP-gated ×
-    # Jupiter trigger confluence + locked verdict.
+    # ── Deterministic timing engines OFF in raw passthrough (default) ───
+    # User path: AI understands Q + AI answers from chart. Set
+    # RAW_PASSTHROUGH_ENGINES=1 only for legacy marriage-engine inject.
     marriage_block = ""
     is_marriage_engine = False
-    try:
-        if (isinstance(question, str)
-                and _M17_MARRIAGE_KW_RX.search(question or "")):
-            _intel_for_marriage = {}
-            try:
-                _analyze, _ = _chart_intel()
-                _intel_for_marriage = _analyze(kundli, birth) or {}
-            except Exception as _ie:
-                print(f"[raw_passthrough] intel build skipped: {str(_ie)[:160]}")
-            marriage_block = _passthrough_marriage_block(
-                question, kundli, _intel_for_marriage, birth
-            ) or ""
-            if marriage_block:
-                is_marriage_engine = True
-                chart_text = chart_text + "\n" + marriage_block
-    except Exception as _me:
-        print(f"[raw_passthrough] marriage enrichment skipped: {_me}")
+    _eng_env = (os.environ.get("RAW_PASSTHROUGH_ENGINES") or "").strip()
+    if _eng_env == "":
+        # Default ON for marriage TIMING Qs (shaadi kab) — user-spec engine v3
+        _engines_on = bool(
+            is_timing
+            and isinstance(question, str)
+            and _M17_MARRIAGE_KW_RX.search(question)
+        )
+    else:
+        _engines_on = _eng_env == "1"
+    if _engines_on:
+        try:
+            if (isinstance(question, str)
+                    and _M17_MARRIAGE_KW_RX.search(question or "")):
+                _intel_for_marriage = {}
+                try:
+                    _analyze, _ = _chart_intel()
+                    _intel_for_marriage = _analyze(kundli, birth) or {}
+                except Exception as _ie:
+                    print(
+                        f"[raw_passthrough] intel build skipped: "
+                        f"{str(_ie)[:160]}"
+                    )
+                marriage_block = _passthrough_marriage_block(
+                    question, kundli, _intel_for_marriage, birth
+                ) or ""
+                if marriage_block:
+                    is_marriage_engine = True
+                    chart_text = chart_text + "\n" + marriage_block
+        except Exception as _me:
+            print(f"[raw_passthrough] marriage enrichment skipped: {_me}")
+
+    # Marriage timing — skip LLM; window comes from assess_marriage (M17).
+    if (marriage_block and is_marriage_engine
+            and _is_marriage_timing_question(question or "")
+            and not wants_explain):
+        _aw_rp = _extract_primary_window_from_m17_block(marriage_block)
+        _eff_lang_rp = _resolve_response_lang(question, lang, None)
+        _text_rp = _compose_marriage_timing_reply(_aw_rp, 0, _eff_lang_rp)
+        try:
+            print(
+                f"[raw_passthrough] marriage_timing_deterministic "
+                f"window={_aw_rp!r} q={question[:60]!r} "
+                f"resp_chars={len(_text_rp)}",
+                flush=True,
+            )
+        except Exception:
+            pass
+        _out_rp = {
+            "text": _text_rp,
+            "topic": "timing",
+            "question_type": qtype,
+            "confidence": 1.0,
+            "source": "raw_passthrough_timing",
+            "engine_tag": "ans-engine",
+            "follow_ups": [],
+        }
+        try:
+            from question_type import slim_understanding_payload
+
+            if _understanding is not None:
+                _out_rp["understanding"] = slim_understanding_payload(
+                    _understanding
+                )
+        except Exception:
+            pass
+        return _out_rp
 
     lang_instr = _RAW_LANG_INSTR.get((lang or "en").lower().strip(),
                                       _RAW_LANG_INSTR["en"])
@@ -4097,26 +4646,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     # (no double-authority conflict). KP rule is suppressed below for parity.
     marriage_reading_rule = (
         "\n\n=== MARRIAGE ENGINE READING RULE (this question triggered VIVAH-7 enrichment) ===\n"
-        "A LOCKED-FACTS MARRIAGE ENGINE block is appended to the chart. It contains: "
-        "verdict (band), TOP-3 windows with scores (already KP-gated × Jupiter-trigger × "
-        "Ashtakavarga validated internally), and risk_flags. THIS BLOCK IS THE SOLE TIMING "
-        "AUTHORITY for marriage — its windows already incorporate the KP cuspal sub-lord "
-        "verdict, so do NOT independently re-derive timing from any other block.\n"
-        "  • DATE / YEAR / MONTH ranges from the engine windows MUST be quoted EXACTLY (no "
-        "off-by-one, no rounding, no invention). If engine says 'January–June 2030', use "
-        "that exact range. NEVER invent a different month or year.\n"
-        "  • Dasha labels (e.g. 'Saturn-Mercury-Venus' or 'MD-AD-PD') are INTERNAL — translate "
-        "into plain language for the user ('next 6-18 months', 'aane wala phase'). The DATES "
-        "stay exact; only the dasha terminology gets translated.\n"
-        "  • If the question is timing ('kab hoga / when'): cite TOP-1 window as primary, "
-        "TOP-2 as alternate.\n"
-        "  • If verdict is UNKNOWN/WEAK or top_3_windows is empty: say 'window clearly "
-        "visible nahi ho raha — chart mixed signals de raha hai' instead of fabricating a date.\n"
-        "  • If risk_flags present: mention the risk gently in 1 line.\n"
-        "  • USER-FACING TEXT MUST CONTAIN ZERO of these tokens: 'engine', 'VIVAH', "
-        "'VIVAH-7', 'KP', 'KP gate', 'Ashtakavarga', 'DBA', 'MD-AD-PD', 'pratyantar', "
-        "'antardasha', 'mahadasha', 'cuspal', 'sub-lord', 'CSL', 'Krishnamurti', 'D9', "
-        "'navamsa', 'Jupiter trigger'. Translate per GOLDEN RULE.\n"
+        "A LOCKED-FACTS MARRIAGE ENGINE block is appended. THIS BLOCK IS THE SOLE TIMING "
+        "AUTHORITY — do NOT re-derive dates from chart/KP/transits.\n"
+        + _MARRIAGE_TIMING_ONLY_REPLY
+        + "\n"
+        "  • If PRIMARY WINDOW is missing or top_3 empty: ONE sentence only — "
+        "'Abhi chart se shaadi ka clear period nahi dikh raha.' Do NOT invent dates.\n"
+        "  • USER-FACING TEXT: no engine/KP/dasha/planet names.\n"
     ) if is_marriage_engine else ""
 
     # KP reading rule — injected only when KP block is present. Tells the
@@ -4132,7 +4668,76 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         "Reasoning order: (1) Parashari D1/D9 read → (2) KP cuspal sub-lord cross-check → (3) Final verdict reconciles both. If they conflict, KP wins on hard yes/no event timing; D1/D9 wins on quality/nature/character traits. NEVER mention the words 'KP', 'cusp', 'sub-lord', 'CSL', 'Krishnamurti' in the user-facing reply — translate to plain language per the GOLDEN RULE.\n"
     ) if (is_kp and not is_marriage_engine) else ""  # marriage rule supersedes for marriage Qs
 
+    length_discipline_block = (
+        _RAW_LENGTH_EXPLAIN if wants_explain else _RAW_LENGTH_ULTRA_BRIEF
+    )
+
     system_prompt = f"""You are an experienced Vedic astrologer (Parashari + KP-aware). The user has shared their birth chart below ({chart_label}). Read it carefully and answer their question with specific, cited reasoning.
+
+SPELLING / TYPOS: The user's question may have Hinglish spelling mistakes (e.g. lagnaa, shaadii, he instead of hai, carrer). Infer the intended meaning from context — never refuse or lecture about spelling. Answer the real life/astro question they meant.
+
+═══════════════════════════════════════════════════════════════════
+DEEP VEDIC REASONING CONTRACT — NO GENERIC ASTROLOGY
+═══════════════════════════════════════════════════════════════════
+You are not a generic astrology narrator. For every real chart question, reason
+like a Jyotishi: Planet → lordship → house → aspect/conjunction → sign dignity
+→ nakshatra/lord if available → affliction/strength → D9 confirmation/cancellation
+→ final synthesis. Never write shallow lines like "Rahu gives confusion" or
+"Saturn causes delay" without explaining WHY, through which house/lord/aspect,
+and whether D9 confirms, weakens, or cancels it.
+
+Always compare D1 and D9 together for life questions. Mention conflicts when
+visible: "D1 promises X but D9 weakens stability" or "D1 shows desire and D9
+confirms maturity." If chart data does not show a combination, do not invent it.
+Weigh both sides: afflictions (debilitation, combustion, papakartari, Rahu/Ketu,
+Saturn/Mars pressure, 6/8/12, enemy sign, functional malefic ownership) and
+strengths (own/exalt/friendly sign, vargottama if visible, benefic aspect,
+strong nakshatra lord, D9 support, kendra/trikona support). State whether the
+final result is strong, moderate, or weak and why.
+
+Topic anchors:
+• Marriage/relationship: 7H, 7L, Venus, Jupiter, UL if available, D9 7H/7L,
+  planets influencing 7H/7L, Venus/7H affliction, emotional compatibility,
+  obsession/separation, foreign/spiritual/karmic indicators.
+• Career: 10H/10L, 6H, 2H, 11H, Saturn, Mercury, D9 support, rajyoga/dhanayoga,
+  job vs business tendency.
+• Health: Lagna/Lagna lord, 6H, 8H, 12H, Moon, Saturn/Rahu pressure, chronic,
+  mental stress, anxiety/sleep indicators.
+• Psychology/personality: Moon sign/nakshatra, Lagna/Lagna lord, Rahu/Saturn
+  influence, D9 emotional pattern, hidden inner conflict.
+
+Response style: keep it short and information-dense. Normal answers: 80-150
+words. Deep/detail asks: max 200 words. No long intro/conclusion, no
+motivational filler, no generic astrology theory, no remedies unless asked.
+Every answer should directly answer the question using chart logic and include
+the relevant planet, house, nakshatra when important, aspect/affliction when
+relevant, D9 confirmation when relevant, and final practical interpretation.
+Avoid repeating the same meaning in different words; precision over length.
+
+Simple direct astrology questions override the depth rule. If user asks a
+single factual placement/identity question ("7th house me kaun hai", "Rahu kis
+house me hai", "strongest planet kaun hai", "lagna lord kahan hai", "Moon
+afflicted hai kya"), answer in 1 sentence preferred, maximum 2 short lines.
+Direct fact first. No lecture, no filler, no motivational wording, no extra
+analysis. Expand only if user asks "why/detail/samjhao".
+
+Final trace line is mandatory for every astrology answer. End with exactly one
+compact line in this format: [Checked: ...]. Use 8-15 keywords maximum, one
+line only, no sentence, no meanings. Mention only factors actually analyzed in
+the answer, e.g. [Checked: D1, D9, 7th lord, Venus, Saturn delay]. Do not invent
+random checked items. For simple direct questions, output can be 2 lines:
+direct answer + [Checked: ...].
+
+Question interpretation workflow before answering: identify the life area,
+primary house, house lord, karaka planet, supporting houses, and relevant
+divisional chart. Start from D1 as base reality: house, lord, placements,
+aspects, conjunctions, affliction, and strength. Then verify through D9:
+confirm, weaken, strengthen, modify, or spiritually refine the D1 promise.
+Use karaka logic by topic: marriage=7H/7L/Venus/Jupiter/D9; career=10H/10L/
+Saturn/Mercury/Sun/6H/11H; health=Lagna/LL/6H/8H/Moon/Saturn/Rahu;
+psychology=Moon/nakshatra/Rahu/Saturn/D9 emotional pattern; wealth=2H/11H/
+5H/Jupiter/Venus/dhana yogas. Always synthesize instead of isolating meanings:
+Planet → house → lordship → aspect → nakshatra → D9 confirmation → result.
 
 ═══════════════════════════════════════════════════════════════════
 CORE READING METHOD — APPLY TO EVERY QUESTION
@@ -4156,7 +4761,7 @@ Every planet aspects the 7th house from itself. Additionally:
 • MARS — also aspects 4th and 8th (3 special aspects total: 4/7/8).
 • JUPITER — also aspects 5th and 9th (3 aspects: 5/7/9). Most benefic; transforms whatever it touches positively.
 • SATURN — also aspects 3rd and 10th (3 aspects: 3/7/10). Restrictive but maturing.
-• RAHU & KETU — also considered to aspect 5th and 9th (some schools include 12th too). Treat as 5/7/9.
+• RAHU & KETU — count conjunction and ordinary 7th opposition only unless a chart-provided aspect map explicitly says otherwise. Do NOT automatically give them Saturn-style 3rd/10th or Jupiter-style 5th/9th aspects.
 • Sun, Moon, Mercury, Venus — only 7th aspect.
 When a planet sits in a house, its rashi-drishti and graha-drishti both matter; cite which one applies.
 
@@ -4193,8 +4798,8 @@ NEECHA BHANGA RAJA YOGA — a debilitated planet's debilitation is CANCELLED (an
 2. The planet that would be exalted in that same sign is in a kendra from Lagna or Moon (e.g. Jupiter debilitated in Capricorn — if Mars, exalted in Capricorn, is in kendra → cancellation).
 3. The dispositor (lord of the sign the debilitated planet sits in) is exalted.
 4. The debilitated planet is aspected by its own exaltation lord.
-5. The debilitated planet itself is retrograde (some schools).
-When cancelled → declare it a STRONG point in the chart, not a weakness.
+5. Retrograde debilitated planet may give partial recovery in some schools, but do NOT treat retrograde alone as strict Neecha Bhanga unless another cancellation rule also applies.
+When cancelled by rules 1-4 → declare it a STRONG point in the chart, not a weakness.
 
 VIPAREETA RAJA YOGA — when 6L/8L/12L sit in another dusthana (6/8/12), the negativity cancels and produces success through adversity. Same applies to mutual exchange/conjunction of 6L-8L-12L. The native rises through hardships, often after a crisis.
 
@@ -4245,14 +4850,14 @@ TOPIC CHECKLIST — pick only what's relevant to the question
   - **Karaka:** Venus (for males = wife karaka), Jupiter (for females = husband karaka), Mars (Mangal/Kuja dosha: Mars in 1/2/4/7/8/12 from Lagna or Moon).
   - **D9 (most important — D9 IS the marriage chart):** D9 Lagna + lord, D9 7H + 7L strength, D1's 7L position in D9, Venus/Jupiter in D9, Upapada (UL) if derivable. Strong D9 7H = good marriage; weak D9 7L = trouble even if D1 fine.
   - **Spouse-character by 7L planet:** Sun=authoritative/govt-type, Moon=emotional/caring, Mars=energetic/dominant, Mercury=intellectual/young-looking, Jupiter=wise/traditional/older-or-mature, Venus=beautiful/refined/artistic, Saturn=serious/older/disciplined, Rahu=foreigner/unconventional/mixed-background, Ketu=spiritual/detached.
-  - **Love vs arranged:** LOVE = Venus-Mars conjunction/aspect, 5L-7L exchange, 5H-7H link, Rahu/Moon in 5H or 7H, Venus in 5/7/11. ARRANGED = Jupiter on 7H/7L, clean benefic 7L without 5H link, Saturn in 7H (delayed-traditional), Sun-Jupiter prominence on 7H.
+  - **Love vs arranged mini-checklist (D1 + D9 both):** LOVE = 5H/5L linked to 7H/7L, Venus-Mars or Moon-Venus chemistry, Rahu on 5H/7H/Venus/7L, 11H desire fulfilment, and D9 repeating 5H/7H/Venus/Rahu links. ARRANGED = strong 7H/7L without 5H link, Jupiter/2H/9H/family influence, Saturn maturity/tradition, and D9 stable/traditional 7H/7L.
   - **Marriage QUALITY dimensions:** *emotional bond* (Moon-Venus harmony, 4H), *physical/intimacy* (8H, Venus-Mars), *understanding/communication* (Mercury, 3H-7H), *commitment/loyalty* (Saturn-Jupiter on 7H), *passion* (Mars on 7H/Venus), *peace at home* (4H lord + benefics on 4H).
   - **Manglik bhanga:** Mars in own (Aries/Scorpio) or exalted (Capricorn), Mars-Jupiter aspect, both partners same dosha, age 28+.
 
 • LOVE vs ARRANGED MARRIAGE:
-   - LOVE indicators: Venus-Mars conjunction or mutual aspect, 5L-7L exchange/conjunction (love → marriage), 5H + 7H link, Rahu/Moon in 5H or 7H, Venus in 5/7/11.
-   - ARRANGED indicators: Jupiter aspecting 7H or 7L, 7L clean and benefic without 5H link, Saturn in 7H (delayed/traditional), Sun-Jupiter prominence in 7H.
-   - **D9 confirms** which pattern actually fructifies — check D9 7H sign and its lord.
+   - LOVE indicators in D1 and D9: 5H/5L ↔ 7H/7L link, Venus-Mars, Moon-Venus, Rahu on 5H/7H/Venus/7L, Venus in 5/7/11, 11H desire fulfilment.
+   - ARRANGED indicators in D1 and D9: strong 7H/7L with weak 5H link, Jupiter on/aspecting 7H/7L/Venus, 2H family support, 9H tradition/elders, Saturn maturity/tradition.
+   - WEIGHTING: First judge 5L-7L strength, then D9 confirmation, then Rahu/Venus/Mars vs Jupiter/2H/9H/Saturn. State love-leaning, arranged-leaning, or mixed.
 
 • CAREER / PROFESSION — direction, sector, success-level, job-vs-business, timing:
   - **Core houses:** 10H+10L (karma/profession/status), 6H+6L (job/service/competition), 7H+7L (business/public-dealing/partnership), 2H+2L (income from work), 11H+11L (gains/network/big income), 1H (self-drive/identity).
@@ -4363,98 +4968,92 @@ The reader is a NORMAL PERSON, not an astrologer. ALL the topic checklists, yoga
   • USE soft framing: "thodi sensitivity", "extra dhyan dene wala area", "balance maintain karna helpful", "chance of repeat if routine slips"
   • NEVER over-promise ("aapko 100% job lagegi") or over-doom ("aapko bimari hogi")
 
-════════════════════════════════════════════════════════════════════
-🛑 LENGTH DISCIPLINE — TOP PRIORITY, NON-NEGOTIABLE 🛑
-════════════════════════════════════════════════════════════════════
-
-**🔴 GOLDEN RULE: SHORT QUESTION → SHORT ANSWER. LONG QUESTION → LONGER ANSWER.**
-You MUST match your answer length to the question's complexity. Padding a short
-question with a long answer is a BUG. Before writing, classify the question
-into ONE of the 4 tiers below and OBEY the word cap.
-
-──────────────────────────────────────────────────────────────────────
-TIER 1 — YES/NO or 1-LINE FACTUAL Q  →  MAX 15-20 WORDS, ONE LINE, NO 👉 Final
-──────────────────────────────────────────────────────────────────────
-Triggers (ANY of these = TIER 1):
-  • Q starts with "kya", "is", "am I", "do I", "will I get/have"
-  • Q ends with "kya", "hai kya", "hu kya", "hoga kya", "lagegi kya", "milegi kya"
-  • Q is < 8 words AND asks for a yes/no/single-fact answer
-  • Examples: "Manglik hu kya?", "Govt job lagegi?", "Shaadi hogi kya?",
-    "Career achha hai?", "Mera lucky number kya hai?", "Am I Manglik?",
-    "Will I get a govt job?", "Is my marriage delayed?", "Foreign jaunga kya?"
-
-Format: `<Haan/Nahi/Halka/Yes/No/Mild verdict> — <ONE short plain reason>.`
-TOTAL: 1 line, 15-20 words. **NO 👉 Final**. **NO 2nd sentence**. **NO paragraph**.
-
-✅ Good: "Haan, halka Manglik ho — par koi badi rukawat nahi, matching dhyan se ho jaye to fine."
-✅ Good: "Govt job ka chance hai, par private structured role me growth zyada strong dikh rahi hai."
-✅ Good (English): "Yes, mild Manglik tendency — manageable with careful matching, no major issue."
-🚫 Bad: writing a 60-word paragraph + 👉 Final for "Manglik hu kya?"
-🚫 Bad: any answer that crosses 25 words for a yes/no Q.
-
-──────────────────────────────────────────────────────────────────────
-TIER 2 — SINGLE-TOPIC Q (open-ended, 1 life area)  →  MAX 35-45 WORDS + 👉 Final
-──────────────────────────────────────────────────────────────────────
-Triggers: Q asks "kab/kaise/kaisa/why/how/when" about ONE life area
-  Examples: "Marriage kab hoga?", "Health kaisi rahegi?", "Career kya banega?",
-    "Paisa kab aayega?", "Salary stable ya business?", "How is my career?"
-
-Format: ONE tight paragraph (25-32 words) + ONE `👉 Final:` line (~10 words).
-TOTAL: ≤ 45 words. **NEVER 2 paragraphs. NO filler clauses.**
-
-🚫 BANNED FILLER: "Deeper pattern bhi yehi support karta hai", "Yeh chart batata hai", "Aapke chart me dekha jaye to", "Long-term me dekha jaye to", "Overall picture yeh hai", "Chart ke anusaar", "Astrologically dekhe to".
-
-✅ Example: "Body energy aur stress-management side thodi sensitive dikh rahi hai. Routine irregular ho to digestion discomfort, low energy ya sleep disturbance jaldi feel ho sakte hain. Sleep, hydration aur food routine stable rakho.
-👉 Final: Main focus routine + stress balance par — basic discipline se manage ho jata hai."
-
-──────────────────────────────────────────────────────────────────────
-TIER 3 — MULTI-TOPIC / FULL-CHART Q  →  MAX 80 WORDS + 👉 Final
-──────────────────────────────────────────────────────────────────────
-Triggers: "Sab kuch batao", "Mere chart me kya weakness hai", "Career + marriage + health teeno batao".
-Format: 3-4 short plain-language bullets (each ≤ 20 words) + ONE `👉 Final:` line.
-
-──────────────────────────────────────────────────────────────────────
-TIER 4 — SINGLE-WORD or GREETING Q  →  MAX 10 WORDS, NO 👉 Final
-──────────────────────────────────────────────────────────────────────
-Triggers: "Hi", "Hello", "Namaste", "Thanks", "Ok"
-Format: One short friendly line.
-✅ Good: "Namaste! Aap kya jaanna chahte ho — career, marriage, health?"
-
-──────────────────────────────────────────────────────────────────────
-SELF-CHECK BEFORE SENDING (apply mentally to every reply):
-──────────────────────────────────────────────────────────────────────
-  1. Was the question < 8 words AND yes/no-shaped? → Did I answer in ≤ 20 words ONE LINE no 👉 Final? If not, CUT.
-  2. Was it a single-topic open Q? → Is my answer ≤ 60 words ONE paragraph + 👉 Final? If not, CUT.
-  3. Did I add filler intros / banned phrases? → CUT them.
-  4. Did I write a 2nd paragraph for a single-topic Q? → MERGE into one para or DELETE the 2nd.
-
+{length_discipline_block}
 ════════════════════════════════════════════════════════════════════
 HARD RULES (apply to every answer)
 ════════════════════════════════════════════════════════════════════
   - NEVER pad. NEVER repeat the question. NEVER add filler intros ("Chaliye dekhte hain…", "Aapke chart me…", "Aapke kundli ke anusaar…").
   - Start DIRECTLY with the answer/verdict.
-  - **👉 Final line policy**: MANDATORY for Tier 2 (single-topic) and Tier 3 (multi-topic). FORBIDDEN for Tier 1 (yes/no) and Tier 4 (greeting) — adding 👉 Final to a 1-line yes/no answer is a BUG.
+  - **👉 Final line**: FORBIDDEN unless EXPLAIN MODE above is active.
   - **🔴 LANGUAGE MIRROR RULE (HIGHEST PRIORITY, OVERRIDES EVERYTHING ELSE)**:
       Reply in the **EXACT same language + script** as the **CURRENT user question**. Each question is judged independently — even if the previous 5 questions were in Hinglish, if THIS question is in English, reply in English. Even if previous questions were in English, if THIS one is in Hinglish, reply in Hinglish. NO carry-over bias.
       **Decision tree (apply to current Q only):**
         1. Does the question contain ANY of these Hinglish marker words (Roman script)? → "kya", "kab", "hoga", "hogi", "kaise", "kaisa", "kaisi", "mera", "meri", "mere", "mujhe", "mujhko", "batao", "bataiye", "rahega", "rahegi", "milega", "milegi", "achha", "accha", "theek", "kar", "karo", "karna", "ke", "ka", "ki", "me", "mein", "se", "ko", "hai", "hain", "ho", "lagega", "chahiye", "kyun", "kyunki", "lekin", "par", "aur", "ya", "abhi", "phir", "wala", "wali" → **HINGLISH** → reply in Hinglish (Roman script).
-        2. Else, is the question in Devanagari script (मेरी, क्या, कब, etc)? → **DEVANAGARI HINDI** → reply in Devanagari Hindi.
-        3. Else, is it in another Indian-language script (Tamil/Bengali/Marathi/Gujarati/Telugu/Kannada/Punjabi/Malayalam)? → reply in that same language + script.
-        4. Else (only standard English words, no Hinglish markers at all, e.g. "When will I get married?", "How is my career?", "Tell me about my health") → **PURE ENGLISH** → reply in plain English. NO Hindi words. NO "dikh raha hai", NO "achha", NO "kar". English vocabulary only.
-      **Examples (study these — they show symmetric behavior):**
-        Q (English): "How is my career going to shape up?"
-        A (English): "Your career looks strong but slow-built. Structured roles in operations, management, compliance or large organizations can give steady growth. Early effort pays off; recognition improves with age. A salaried path suits you better than business.
-        👉 Final: Best path = disciplined long-term salaried career, not quick-hit business risk."
-
-        Q (Hinglish): "career kaisa rahega"
-        A (Hinglish): "Career strong but slow-built dikh rahi hai. Structured roles, responsibility wali jobs, large organizations me steady growth milti hai. Shuruaat me effort lagega, par age ke saath recognition better hoti hai.
-        👉 Final: Best path = disciplined salaried career, business risk se bachna better."
+        2. Else, is the question in Devanagari script (मेरी, क्या, कब, etc)? → **DEVANAGARI HINDI** → reply in Devanagari Hindi only.
+        3. Else (only standard English words, no Hinglish markers, e.g. "When will I get married?") → **PURE ENGLISH** → plain English only. NO Hindi words.
+      **SUPPORTED LANGUAGES ONLY:** Hindi (Devanagari), Hinglish (Roman Hindi), English. NEVER reply in Tamil, Bengali, Marathi, Gujarati, Telugu, Kannada, Malayalam, Urdu, Arabic, or any other language — those questions are blocked before you see them; if one slips through, refuse once in Hinglish using the fixed line about asking in Hindi/Hinglish/English only.
+      **Default (no explain ask) — ONE LINE examples:**
+        Q: "mera rashi kya hai" → A: "Aapki janma rashi Mithun hai."
+        Q: "career kaisa rahega" → A: "Career steady growth wali — salaried structured role zyada suit."
+        Q: "shaadi kab hogi" → A: "Shaadi 2027–28 ke beech zyada favourable window."
       The fallback `lang` hint from the client may be wrong — IGNORE it and TRUST the user's actual question script.
-  - When in doubt about length or technical-ness, **go shorter and simpler**.
+  - When in doubt, **shorter** — one line beats a paragraph.
 
 ═══════════════════════════════════════════════════════════════════
 USER'S BIRTH CHART
 ═══════════════════════════════════════════════════════════════════
+{chart_text}{kp_reading_rule}{marriage_reading_rule}{sensitive_depth_rule}{long_story_rule}{marriage_psychology_rule}{partner_compat_rule}"""
+
+    # DCR compact prompt override: keep raw passthrough accurate while cutting
+    # the old mega-prompt token load. Timing engines above still remain source
+    # of truth for hard timing questions.
+    _topic_hint = ""
+    try:
+        if isinstance(_understanding, dict):
+            _topic_hint = str(_understanding.get("topic") or "")
+    except Exception:
+        _topic_hint = ""
+    dcr_love_rule = ""
+    if dcr_love_meta:
+        if wants_explain:
+            dcr_love_rule = """
+DCR LOVE/RELATIONSHIP SLICE RULES:
+- For partner/nature/love static questions, answer from D1 first and D9 second.
+- If D9 houses/planets are available, explicitly include the D9 confirmation or modification in the answer.
+- Give 2 compact sentences max, 45-70 words total. Do NOT add any [Checked] line.
+- Use simple Hinglish, not heavy Sanskrit/Hindi words. Prefer: nature, smart, talkative, emotional, private, deep thinker, practical.
+- For partner nature, prioritize D1 partner focus, D9 partner focus, Venus, Jupiter, Moon, and visible afflictions.
+- For spouse profession, prioritize spouse profession focus: 10th-from-spouse, 2nd-from-spouse, 6th-from-spouse, 11th-from-spouse, D9 support, and career karakas Mercury/Saturn/Sun/Jupiter.
+- Never treat D1 7L as D9 7L. D9 7L is only the lord shown in the "D9 partner focus" line."""
+        else:
+            dcr_love_rule = """
+DCR LOVE/RELATIONSHIP RESULT-ONLY RULES:
+- Backend chart factors are for your reasoning only. Do NOT show houses, lords, signs, planet names, D1, D9, nakshatra, or technical astrology terms.
+- Answer only the user's actual question in simple Hinglish: direct human result first.
+- For partner nature, say the nature/personality only: smart, talkative, emotional, private, deep thinker, practical, expressive, mature, etc.
+- For spouse profession, say only likely work type/field style: communication, research, teaching, business, management, technical, service, creative, finance, etc.
+- Output exactly 1 compact sentence, 25-45 words. Do NOT add any [Checked] line.
+- Bad: "D1 me 7H Gemini..." Good: "Partner smart, communicative aur emotionally sensitive nature ka dikhta hai, but thoda private/deep thinker bhi hoga." """
+    system_prompt = f"""You are Cosmo, an experienced Vedic astrologer. Answer only from the chart facts below; never invent placements, lords, aspects, signs, nakshatras, D9 facts, or timing.
+
+DYNAMIC CHART REASONING:
+- First understand the question's life area, house, lord, karaka, supporting houses, and needed divisional chart.
+- Use D1 as base reality, then verify with D9 for confirmation/weakening/modification.
+- Reason internally as: planet -> house -> lordship -> aspect/conjunction -> dignity/nakshatra if shown -> D9 -> result.
+- If the chart block lacks a needed fact, say the signal is not clear; do not guess.
+{dcr_love_rule}
+
+TOPIC MINI-CHECKLISTS:
+- Love/arranged: D1+D9 5H/5L, 7H/7L, Venus, Mars-Venus, Moon-Venus, Rahu on 5H/7H/Venus/7L, 11H, Jupiter/2H/9H/Saturn.
+- Relationship emotion vs practical: Moon/Venus/4H/5H for attachment; Saturn/Mercury/7L/2H/9H for practical/traditional approach; confirm through D9.
+- Marriage quality: 7H/7L, Venus/Jupiter, 2H/8H, UL if shown, D9 7H/7L.
+- Career: 10H/10L, 6H, 2H, 11H, Saturn, Mercury, Sun, D9 support.
+- Health: Lagna/LL, 6H, 8H, 12H, Moon, Saturn/Rahu. Tendencies only, no diagnosis.
+- Wealth: 2H, 11H, 5H, 9H, Jupiter, Venus, dhana links.
+- Psychology: Moon sign/nakshatra, Lagna/LL, Rahu, Saturn, D9 emotional pattern.
+
+STYLE:
+- Simple factual question: 1 sentence + [Checked] line.
+- Normal analysis: 80-150 words max. Deep/explain: 200 words max.
+- Direct answer first. No long intro, no motivational filler, no remedies unless asked.
+- Use technical terms only when useful or user used them. Avoid generic astrology theory.
+- End every astrology answer with one compact line: [Checked: ...] using only actual factors used.
+- Reply in the user's current language/script.
+
+QUESTION_TYPE: {qtype}
+TOPIC_HINT: {_topic_hint or "unknown"}
+
+CHART FACTS:
 {chart_text}{kp_reading_rule}{marriage_reading_rule}{sensitive_depth_rule}{long_story_rule}{marriage_psychology_rule}{partner_compat_rule}"""
     model = os.environ.get("RAW_PASSTHROUGH_MODEL",
                             os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"))
@@ -4465,11 +5064,32 @@ USER'S BIRTH CHART
                 {"role": "system", "content": system_prompt},
                 {"role": "user",   "content": question},
             ],
-            max_tokens=int(os.environ.get("RAW_PASSTHROUGH_MAX_TOKENS", "350")),
+            max_tokens=int(
+                os.environ.get(
+                    "RAW_PASSTHROUGH_MAX_TOKENS",
+                    "220" if wants_explain else ("120" if dcr_love_meta else "72"),
+                )
+            ),
         )
         text = (resp.choices[0].message.content or "").strip()
+        text = _enforce_one_line_answer(text, wants_explain or bool(dcr_love_meta))
         if not text:
             text = "Maaf kijiye, abhi response generate nahi ho paya. Phir try karein."
+        text = _ensure_checked_trace(
+            text,
+            question,
+            (_understanding or {}).get("topic") if isinstance(_understanding, dict) else None,
+            skip=bool(
+                dcr_love_meta
+                or (marriage_block and _is_marriage_timing_question(question or ""))
+            ),
+        )
+        if dcr_love_meta:
+            text = _polish_dcr_love_answer(
+                text,
+                hide_technical=not wants_explain,
+                show_trace=False,
+            )
         # ── Prompt-cache telemetry ──────────────────────────────────────
         # OpenAI auto-caches static system prompts ≥1024 tokens. The full
         # mega-prompt is well above that threshold, so 2nd+ requests with
@@ -4490,20 +5110,31 @@ USER'S BIRTH CHART
         cache_hit_pct = (round(100 * cached_tok / prompt_tok, 1)
                          if prompt_tok else 0.0)
         try:
-            print(f"[raw_passthrough] qtype={qtype} kp={is_kp} marriage={is_marriage_engine} model={model} "
+            print(f"[raw_passthrough] qtype={qtype} explain={wants_explain} "
+                  f"kp={is_kp} marriage={is_marriage_engine} model={model} "
                   f"q={question[:60]!r} chart_chars={len(chart_text)} "
                   f"resp_chars={len(text)} | tokens: prompt={prompt_tok} "
                   f"cached={cached_tok} ({cache_hit_pct}%) "
                   f"completion={completion_tok}", flush=True)
         except Exception:
             pass
-        return {
+        _out = {
             "text":       text,
             "topic":      qtype.lower(),
+            "question_type": qtype,
             "confidence": 1.0,
             "source":     f"raw_passthrough_{qtype.lower()}",
+            "engine_tag": "ans-cosmo",
             "follow_ups": [],
         }
+        try:
+            from question_type import slim_understanding_payload
+
+            if _understanding is not None:
+                _out["understanding"] = slim_understanding_payload(_understanding)
+        except Exception:
+            pass
+        return _out
     except Exception as exc:
         try:
             print(f"[raw_passthrough] OpenAI call failed: {exc}", flush=True)
@@ -4513,8 +5144,10 @@ USER'S BIRTH CHART
             "text":       f"AI service me temporary issue: {str(exc)[:120]}. "
                           f"Thodi der baad try karein.",
             "topic":      "general",
+            "question_type": "STATIC",
             "confidence": 0.0,
             "source":     "raw_passthrough_error",
+            "engine_tag": "ans-cosmo",
             "follow_ups": [],
         }
 
@@ -5094,11 +5727,6 @@ def _detect_question_lang(question: str, fallback: str) -> str:
         if "\u0900" <= ch <= "\u097F":
             return "hi"
 
-    # Other Indian scripts → respect the explicit `lang` param so we don't
-    # mis-route a Tamil/Bengali/etc. question to English.
-    if (fallback or "").lower() in {"ta", "te", "kn", "ml", "bn", "mr", "gu", "pa", "or", "as"}:
-        return fallback
-
     # Hinglish (Roman-Hindi) detection — tokenise on word boundaries
     import re
     tokens = re.findall(r"[a-zA-Z]+", q.lower())
@@ -5567,7 +6195,23 @@ def _build_messages(
     # This is the ONLY way to reliably stop the AI from padding with houses,
     # dasha implications, and "Isliye dhyan dena zaroori hai" closers.
     _route_is_minimal = intent_route in ("simple_fact", "dosha_check", "transparency")
+    try:
+        from ask_question_normalize import prepare_ask_question
+
+        question = prepare_ask_question(question)
+    except Exception:
+        pass
     if mode == "astro" and (_route_is_minimal or _is_chart_fact_question(question)):
+        try:
+            from chart_fact_answer import try_deterministic_chart_fact
+
+            _det = try_deterministic_chart_fact(question, kundli, lang)
+            if _det and isinstance(out_meta, dict):
+                out_meta["deterministic_chart_fact"] = True
+            if _det:
+                return _det
+        except Exception as _cfe:
+            print(f"[ai_ask] chart_fact deterministic skipped: {_cfe}", flush=True)
         chart_only = _kundli_summary(kundli, birth)
 
         # ── Dosha pre-compute (deterministic) ─────────────────────────────
@@ -5606,6 +6250,8 @@ def _build_messages(
             "You are Acharya Vidyasagar, a warm modern Vedic astrologer who "
             "chats like a knowledgeable friend.\n\n"
             f"REPLY ENTIRELY IN: {lang_name}.\n\n"
+            "The user may have spelling mistakes (lagnaa, he/ho, shaadii, etc.) — "
+            "answer what they MEANT, not the typo literally.\n\n"
             "The user asked a SIMPLE direct question (chart fact OR a dosha "
             "yes/no). Reply in EXACTLY 2-3 short sentences. NO MORE.\n\n"
             "FORMAT (strict):\n"
@@ -5757,41 +6403,44 @@ def _build_messages(
                 # block (instead of the legacy first-line text hack).
                 if isinstance(out_meta, dict):
                     out_meta["marriage_verdict_obj"] = marriage_verdict_obj
-                # Sprint-7: append Jaimini Upapada line so MARRIAGE NARRATOR
-                # mode (which supersedes Rules 2-6) still sees it as ground truth.
-                try:
-                    from jaimini import (compute_arudha_padas,  # type: ignore
-                                         compute_upapada)
-                    _lg = kundli.get("ascendant")
-                    if isinstance(_lg, dict):
-                        _lg = _lg.get("sign") or _lg.get("name")
-                    _ar = compute_arudha_padas(kundli.get("planets") or [], _lg)
-                    _ul = compute_upapada(_ar, kundli.get("planets") or []) if _ar else {}
-                    if _ul:
-                        ul_line = (
-                            f"  Jaimini Upapada (UL=A12): {_ul['ul_sign']} — "
-                            f"lord {_ul['ul_lord']} in {_ul.get('ul_lord_in') or '?'} "
-                            f"({_ul.get('ul_lord_house') or '?'}th from UL); "
-                            f"2nd-from-UL={_ul['second_from_ul']} "
-                            f"(occ: {', '.join(_ul['occupants_2nd']) or 'none'}); "
-                            f"12th-from-UL={_ul['twelfth_from_ul']} "
-                            f"(occ: {', '.join(_ul['occupants_12th']) or 'none'}); "
-                            f"VERDICT: {_ul['verdict']}\n"
-                            "  >>> NARRATE THIS UL VERDICT IN ONE NATURAL SENTENCE — "
-                            "MANDATORY THIS TURN. Pull the exact UL sign, UL-lord, "
-                            "and verdict tag (STABLE/STRAINED/MIXED/NEUTRAL). <<<\n"
-                        )
-                        # Insert just before the trailing ════ line of the block
-                        marker = "════════════════════════════════════════════════════════════════════\n"
-                        if marriage_verdict_block.endswith(marker):
-                            marriage_verdict_block = (
-                                marriage_verdict_block[:-len(marker)]
-                                + ul_line + marker
+                # Jaimini UL — analysis turns only (timing = one sentence, no UL).
+                if marriage_subtype not in ("timing", "remedy"):
+                    try:
+                        from jaimini import (compute_arudha_padas,  # type: ignore
+                                             compute_upapada)
+                        _lg = kundli.get("ascendant")
+                        if isinstance(_lg, dict):
+                            _lg = _lg.get("sign") or _lg.get("name")
+                        _ar = compute_arudha_padas(kundli.get("planets") or [], _lg)
+                        _ul = (compute_upapada(_ar, kundli.get("planets") or [])
+                               if _ar else {})
+                        if _ul:
+                            ul_line = (
+                                f"  Jaimini Upapada (UL=A12): {_ul['ul_sign']} — "
+                                f"lord {_ul['ul_lord']} in {_ul.get('ul_lord_in') or '?'} "
+                                f"({_ul.get('ul_lord_house') or '?'}th from UL); "
+                                f"2nd-from-UL={_ul['second_from_ul']} "
+                                f"(occ: {', '.join(_ul['occupants_2nd']) or 'none'}); "
+                                f"12th-from-UL={_ul['twelfth_from_ul']} "
+                                f"(occ: {', '.join(_ul['occupants_12th']) or 'none'}); "
+                                f"VERDICT: {_ul['verdict']}\n"
+                                "  >>> NARRATE THIS UL VERDICT IN ONE NATURAL SENTENCE — "
+                                "MANDATORY THIS TURN. Pull the exact UL sign, UL-lord, "
+                                "and verdict tag (STABLE/STRAINED/MIXED/NEUTRAL). <<<\n"
                             )
-                        else:
-                            marriage_verdict_block += ul_line
-                except Exception as _exc:
-                    print(f"[openai_helper] jaimini UL inject failed: {_exc}")
+                            marker = (
+                                "════════════════════════════════════════════════"
+                                "════════════════════\n"
+                            )
+                            if marriage_verdict_block.endswith(marker):
+                                marriage_verdict_block = (
+                                    marriage_verdict_block[:-len(marker)]
+                                    + ul_line + marker
+                                )
+                            else:
+                                marriage_verdict_block += ul_line
+                    except Exception as _exc:
+                        print(f"[openai_helper] jaimini UL inject failed: {_exc}")
                 marriage_use_alt = _detect_marriage_constraint(question, history or [])
                 # Build a CLEAN facts payload — values only, no template,
                 # no jargon labels, no "Pranam beta". The AI receives
@@ -6289,38 +6938,25 @@ def _build_messages(
             _mw = extract_window_str(marriage_verdict_obj or {})
         except Exception:
             _mw = ""
+        if not _mw and isinstance(marriage_verdict_obj, dict):
+            _mw = (marriage_verdict_obj.get("primary_window") or "").strip()
         must_window_line = (
-            f"  • The TIMING WINDOW you write MUST contain the EXACT string: \"{_mw}\".\n"
-            f"    Do NOT shorten to year-only, do NOT shift months, do NOT replace 'to' with\n"
-            f"    'around / by / late / early'. Copy those words verbatim.\n"
+            f"  • ONE sentence only. Must include verbatim: \"{_mw}\"\n"
+            f"    Shape: \"Aapki shaadi ka period {_mw} ke beech hoga.\"\n"
         ) if _mw else (
-            "  • The engine found no clear window in the next 12 years — say so honestly.\n"
-            "    Do NOT invent a year-range to fill the silence.\n"
+            "  • ONE sentence only: \"Abhi chart se shaadi ka clear period nahi dikh raha.\"\n"
+            "    Do NOT invent dates.\n"
         )
         narrator_prefix = (
             f"{marriage_verdict_block}\n"
-            "⚠️ NARRATOR MODE — THIS IS BINDING ⚠️\n"
-            "The ENGINE JSON above is the GROUND TRUTH for this turn. Treat every value\n"
-            "in it as IMMUTABLE. You are ONLY a narrator. You MUST:\n"
-            f"{must_window_line}"
-            "  • Restate the same final_verdict (do not soften, harden, or hedge it).\n"
-            "  • Cite the same 7th lord, karaka, and KP sub-lord names verbatim.\n"
-            "  • Recommend the SAME remedy planet and same mantra/donation given above.\n"
-            "  • Quote the strongest 2 supporting factors AND, if any, 1 main weakening factor —\n"
-            "    drawn ONLY from the lists above. Do not add factors not in the engine output.\n"
-            "  • BANNED hedging words for this turn (do NOT use any of these): \"around\",\n"
-            "    \"approximately\", \"roughly\", \"likely\", \"possibly\", \"perhaps\", \"maybe\",\n"
-            "    \"might\", \"could be\", \"sometime\", \"by the end of\", \"early\", \"late\",\n"
-            "    \"in or around\". The window is exact — speak with quiet certainty, not hedges.\n"
-            f"  • You may smooth language into a natural expert voice and translate to {lang_name},\n"
-            "    but NEVER change technical content (verdict, dates, planets, remedy).\n"
-            "If you contradict the engine verdict, score, or window — the answer is WRONG\n"
-            "and will be rejected.\n\n"
+            "⚠️ MARRIAGE TIMING — ONE SENTENCE ONLY ⚠️\n"
+            f"{_MARRIAGE_TIMING_ONLY_REPLY}\n"
+            f"{must_window_line}\n"
         )
         narrator_rules = (
-            "★ MARRIAGE NARRATOR OVERRIDE ★ — Rules 2,3,4,5,6 below are SUPERSEDED for this turn:\n"
-            "you do NOT do Vedic / KP / dasha / transit reasoning yourself. The engine already did.\n"
-            "Just narrate the ENGINE JSON above in a natural expert voice. Rules 0a, 1, 8, 9, 10 STILL apply.\n\n"
+            "★ MARRIAGE TIMING OVERRIDE ★ — Reply = timing window ONLY (one sentence).\n"
+            "Skip Rules 2–6, D9, Jaimini UL, KP, remedies, dasha, transits in the user reply.\n"
+            "Rules 0a (no invented dates) still apply.\n\n"
         )
 
     # ── Brand-tone blacklist (always applied, every topic) ───────────────────
@@ -6365,140 +7001,39 @@ def _build_messages(
     # data — NOT as a pre-formatted template — and is told to write its
     # own natural, conversational reply (ChatGPT-style) using only those
     # locked values. This prevents both fact drift AND robotic templating.
-    if marriage_facts and not _is_marriage_analysis:
+    if (
+        marriage_facts
+        and not _is_marriage_analysis
+    ):
         f = marriage_facts
         active_window = (
             f["alt_window_str"] if (marriage_use_alt and f["alt_window_str"])
             else f["window_str"]
         )
         if isinstance(out_meta, dict):
-            out_meta["marriage_facts"]   = marriage_facts
-            out_meta["marriage_use_alt"] = marriage_use_alt
-            out_meta["active_window"]    = active_window
+            out_meta["marriage_facts"]        = marriage_facts
+            out_meta["marriage_use_alt"]      = marriage_use_alt
+            out_meta["active_window"]         = active_window
+            out_meta["marriage_timing_only"]   = True
         constraint_note = (
-            "CONTEXT: the user just rejected the primary timing window. "
-            "Acknowledge that gently in 1 line, then deliver the alternate "
-            "window naturally.\n\n"
+            "CONTEXT: user rejected primary window — still 2 lines only; "
+            f"Line 1 period verbatim: {f['alt_window_str']}\n\n"
         ) if (marriage_use_alt and f["alt_window_str"]) else ""
 
-        # Compact, label-free facts payload — pure values.
-        # IMPORTANT: the verdict string is an internal status code for your
-        # understanding only. NEVER echo it verbatim into the reply — express
-        # the same meaning warmly in your own conversational words.
-        facts_lines = [
-            f"  • Internal status (DO NOT echo verbatim — for your understanding only): {f['verdict']}",
-            f"  • Marriage time window (USE VERBATIM in your reply): {active_window}",
-        ]
-        if (not marriage_use_alt) and f["alt_window_str"]:
-            facts_lines.append(
-                f"  • Alternate later window (mention only if naturally relevant): "
-                f"{f['alt_window_str']}"
-            )
-        if f["current_dasha"]:
-            facts_lines.append(f"  • Currently running dasha period: {f['current_dasha']}")
-        if f["seventh_lord"]:
-            facts_lines.append(f"  • Lord of the marriage house (7th): {f['seventh_lord']}")
-        if f["karaka"]:
-            facts_lines.append(f"  • Marriage significator planet: {f['karaka']}")
-        if f["remedy"]:
-            facts_lines.append(f"  • Suggested remedy text: {f['remedy']}")
-        # Sprint-7 Rule O: Jaimini UL — MANDATORY citation for marriage answers
-        jm = f.get("jaimini") or {}
-        if jm.get("ul_sign"):
-            facts_lines.append(
-                f"  • Jaimini Upapada Lagna (UL): {jm['ul_sign']} — lord {jm['ul_lord']} "
-                f"in {jm.get('ul_lord_in') or '?'} ({jm.get('ul_lord_house') or '?'}th from UL); "
-                f"2nd-from-UL={jm['second_from_ul']} (occupants: {jm['occupants_2nd']}); "
-                f"12th-from-UL={jm['twelfth_from_ul']} (occupants: {jm['occupants_12th']}); "
-                f"verdict tag: {jm['verdict_tag']} — full: \"{jm['verdict_full']}\""
-            )
-        facts_block = "\n".join(facts_lines)
+        _engage_q = _pick_marriage_engagement_question(reply_idx, detected)
+        _composed = _compose_marriage_timing_reply(
+            active_window, reply_idx=reply_idx, lang=detected,
+        )
+        if isinstance(out_meta, dict):
+            out_meta["marriage_timing_composed"] = _composed
 
+        # Timing-only: skip LLM — return minimal messages; ai_ask uses composed text.
         user = (
             f"{lang_lock_block}"
-            f"{tone_blacklist}"
-            f"{constraint_note}"
-            "═══ LOCKED ASTROLOGICAL FACTS (computed by deterministic engine) ═══\n"
-            "These are the EXACT truth for this user. You MAY freely choose how\n"
-            "to phrase the language around them, but you MUST NOT change any of\n"
-            "these values, dates, planet names, or the remedy text:\n\n"
-            f"{facts_block}\n"
-            "════════════════════════════════════════════════════════════════════\n\n"
             f"USER'S QUESTION:\n\"{question}\"\n\n"
-            "YOUR JOB:\n"
-            "Write a natural, warm, intelligent reply — exactly the way a smart\n"
-            "friend who happens to be an expert astrologer would explain this\n"
-            f"over chat. Reply entirely in {lang_name}.\n\n"
-            "HARD RULES (any violation = wrong reply):\n"
-            "  1. The marriage time window string above MUST appear VERBATIM in\n"
-            "     your reply. No rounding (\"around 2027\", \"late 2027\"), no\n"
-            "     paraphrasing, no year-only — write the exact month-year range.\n"
-            "  2. NO greetings: no \"Pranam\", \"Beta\", \"Namaste\", \"Dekhiye beta\",\n"
-            "     \"Acharya ji\", \"Pandit ji\". Speak peer-to-peer, like a friend.\n"
-            "  3. NO jargon labels — do NOT write \"Reason:\", \"Timing:\", \"Remedy:\",\n"
-            "     \"Vajah:\", \"Samay:\", \"Upay:\", \"7th lord\", \"kalatra-karaka\".\n"
-            "     Translate them into normal speech (\"shaadi ke ghar ka swami\",\n"
-            "     \"shaadi ka karak grah\" — or just say the planet's name and\n"
-            "     explain its role in 1 plain sentence).\n"
-            "  4. NO meta phrases: \"I sense\", \"I understand\", \"let me analyze\",\n"
-            "     \"based on your chart\", \"as an AI\".\n"
-            "  5. NO hedging: no \"shayad\", \"ho sakta hai\", \"lagta hai\", \"around\",\n"
-            "     \"approximately\", \"chance\", \"possibility\", \"may\", \"might\".\n"
-            "     State things as facts: \"hoga\", \"hogi\", \"yeh time strong hai\".\n"
-            "  6. NO bullet points, NO numbered lists, NO markdown headers, NO ###.\n"
-            "     Write flowing prose — short paragraphs separated by blank lines.\n"
-            "  7. Length: 100–170 words. Phone-friendly. The Jaimini UL\n"
-            "     sentence (Para 4) is MANDATORY when UL data is in the facts\n"
-            "     above — extend the word budget rather than skip it.\n\n"
-            "STYLE — modern professional astrologer over chat. Confident,\n"
-            "specific, active voice. Mix of Hindi + English (Hinglish). NO\n"
-            "philosophical fluff. NO defensive hedging. NO \"yeh aapko apne\n"
-            "aap ko samajhne ka mauka deta hai\" type vague spiritual talk.\n\n"
-            "EXACT TEMPLATE TO MATCH (this is the gold-standard delivery):\n"
-            "──────────────────────────────────────────────────────────────\n"
-            "  [Para 1 — VERDICT + WINDOW, confident & active]\n"
-            "  Aapki shaadi ka strong yog <WINDOW VERBATIM> ke beech\n"
-            "  activate ho raha hai.\n\n"
-            "  [Para 2 — DASHA pattern, specific & sharp]\n"
-            "  Is period me <Dasha name> dasha chal rahi hai, jo pehle thoda\n"
-            "  delay aur confusion de sakti hai, lekin yahi phase aapko right\n"
-            "  direction me le jaata hai.\n\n"
-            "  [Para 3 — KARAKA / 7TH LORD role, direct affirmation]\n"
-            "  Aapke chart me <Planet> strong role play kar raha hai, isliye\n"
-            "  shaadi hone ke yog confirm hai — bas timing thoda structured\n"
-            "  delay ke saath aa raha hai.\n\n"
-            "  [Para 4 — JAIMINI UPAPADA (MANDATORY when UL data provided above)]\n"
-            "  Jaimini paddhati se Upapada Lagna <UL_SIGN> mein hai (lord\n"
-            "  <UL_LORD>, <Nth> from UL) — yeh marriage signature ko\n"
-            "  <STABLE / STRAINED / MIXED / NEUTRAL> dikha rahi hai.\n\n"
-            "  Upay:\n"
-            "  Har <Day> \"<mantra>\" 108 baar jaap karein aur <donation> daan\n"
-            "  karein — yeh shaadi ke process ko smooth karega.\n"
-            "──────────────────────────────────────────────────────────────\n\n"
-            "ADAPTATION RULES:\n"
-            "  • Window string must be VERBATIM — no paraphrasing.\n"
-            "  • For DIFFICULT charts (internal status mentions denial /\n"
-            "    rukawat): keep the same confident structure but acknowledge\n"
-            "    challenges directly — \"shaadi ka pehlu thoda complex hai,\n"
-            "    lekin sahi time aur upay ke saath cheezein activate hoti\n"
-            "    hain. Yeh window <verbatim> mein cheezein open hone ka\n"
-            "    chance dikh raha hai\". Don't pretend it's all positive,\n"
-            "    don't be alarming either. Specific + honest + warm.\n"
-            "  • For POSITIVE charts: lead with confidence — \"strong yog\",\n"
-            "    \"clearly activate ho raha hai\", \"yog confirm hai\".\n"
-            "  • Use ACTIVE verbs: activate ho raha hai / play kar raha hai /\n"
-            "    le jaata hai / open ho raha hai. Avoid passive \"hai / raha\n"
-            "    hai\" alone.\n"
-            "  • Mix Hindi-English naturally: \"strong yog\", \"right direction\",\n"
-            "    \"structured delay\", \"smooth karega\", \"role play kar raha\". Don't\n"
-            "    over-translate to pure Hindi — modern Hinglish is the voice.\n"
-            "  • The single label \"Upay:\" on its own line before the remedy\n"
-            "    is ALLOWED and preferred. NO other labels (no \"Reason:\",\n"
-            "    \"Timing:\", \"Vajah:\", \"Samay:\").\n"
-            "  • Length: 100–170 words. 4 short paragraphs (Para 4 = Jaimini UL,\n"
-            "    REQUIRED when UL is in the facts) + Upay block.\n\n"
-            "Now write the reply — match the template's confident, specific,\n"
-            "active-voice delivery exactly."
+            f"{_MARRIAGE_TIMING_ONLY_REPLY}\n"
+            f"LINE-2 (engagement, verbatim): {_engage_q}\n"
+            f"SERVED REPLY (use exactly):\n{_composed}\n"
         )
         msgs: list[dict] = [{"role": "system", "content": system}]
         msgs.append({"role": "user", "content": user})
@@ -6540,8 +7075,8 @@ def _build_messages(
         "    🛡️ TRANSITS (Rule H): For ANY 'kab' / timing / 'ab kya hoga' / near-future question, you MUST consult the CURRENT TRANSITS block FIRST — this is real-time sky data, not natal. Cite by name: e.g. 'Abhi Saturn aapke 8th ghar mein chal raha hai (transit), isliye yeh ~2.5 saal restraint period hai' OR 'Jupiter abhi aapke 11H ko aspect kar raha hai — gain/network expand hoga is window mein.' If a Sade-Sati / Dhaiya phase line exists in transits, mention it explicitly when the user is stressed (it explains the 'kyun bhari lag raha hai' feeling). If a Saturn-Return or Jupiter-Return flag is present, that is a once-in-decades signal — open with it for major-life-question asks. ⚠️ If TRANSITS block is missing, do NOT invent current transit positions — fall back to dasha + natal house reasoning only.\n"
         "    🛡️ KARAKAS (Rule I): The JAIMINI CHARA KARAKAS block tells you the deepest karmic role of each planet for THIS person. AK = soul-purpose (life is fundamentally ABOUT this planet's themes); AmK = career signature; DK = spouse signature; PK = creativity/children. For 'kya banu / what should I do in life' use AK. For 'shaadi kaisi hogi / partner kaisa milega' use DK. Always cite the role name once: 'Aapka Atmakaraka Saturn hai — soul-level kaam discipline aur structure ke around hai' or 'Darakaraka Venus hai — partner artistic / refined hoga.' Never invent karakas not in the list.\n"
         "    🛡️ BHAVA BALA (Rule J): Complementary to SAV — BHAVA BALA scores combine house-lord strength + occupants + aspects + kendra-bonus, then ranked RELATIVELY within THIS chart (top-3 = STRONG, middle-6 = MODERATE, bottom-3 = WEAK). Use it as a SECOND opinion when SAV and your reasoning conflict, OR when SAV is missing. The verdict tells you which houses are RELATIVELY strongest/weakest in this chart, not absolute strength. Cite naturally: 'Bhava Bala se bhi 10H is chart ke top-3 strongest houses mein aata hai (lord+aspect support).' Never invent bhava scores.\n"
-        "    🛡️ DIVISIONAL CHARTS (Rule K): For MARRIAGE questions, MUST consult D9 NAVAMSA — specifically '7L lands in X — STRONG/EXALTED/DEBILITATED' line. The 7L's D9 strength is THE strongest predictor of marriage quality (overrides natal D1 if they conflict). For CAREER questions, MUST consult D10 DASAMSA — '10L lands in X' line is the equivalent. Vargottama planets (D1=D9 or D1=D10) act as if exalted — call them out by name. Cite naturally: 'D9 mein aapka 7L Mercury Pisces (debilitated) jaata hai — isliye natal weakness D9 mein bhi confirm hoti hai, marriage mein patience zaroori.' OR 'D10 mein aapka 10L Mercury Sagittarius (own-sign) jaata hai — career line strong support karta hai D10 mein.' If D9/D10 block missing, do NOT invent positions. "
-        "🚨 PLANET-STRENGTH RULE (extension of Rule K — MANDATORY): For ANY question that asks whether a SPECIFIC planet is powerful / weak / strong / kamzor / shaktishali (e.g. 'mera Saturn powerful hai ya weak?', 'Mars strong hai kya?', 'Guru achha hai?'), you MUST cross-check D1 dignity WITH the planet's D9 (Navamsa) placement before giving a verdict — D1 ALONE IS INSUFFICIENT to call any planet strong or weak. Combine logic: (a) D1 strong + D9 strong = TRULY STRONG; (b) D1 strong + D9 weak/debilitated = surface strength only, fragile in real life; (c) D1 debilitated + D9 exalted/own-sign = neecha-bhanga, real strength comes through effort; (d) Vargottama (same sign in D1 & D9) = STRONG regardless of dignity; (e) D1 weak + D9 weak = TRULY WEAK. Cite both placements in ONE sentence: 'Aapka Shani D1 mein Mesh (debilitated, neecha) hai aur D9 mein {SIGN} ({STATUS}) jaata hai — isliye overall {weak / strong / mixed}.' If the D9 NAVAMSA block is absent in LOCKED FACTS, say honestly: 'Saturn ki actual strength D9 ke bina precise nahi bata sakta — D1 mein debilitated dikh raha hai par D9 confirm karega ki neecha-bhanga ho raha hai ya nahi.' NEVER call a planet strong/weak from D1 alone. NEVER invent a D9 sign — only cite from the D9 NAVAMSA block.\n"
+        "    🛡️ DIVISIONAL CHARTS (Rule K): For MARRIAGE questions, MUST consult D9 NAVAMSA — specifically '7L lands in X — STRONG/EXALTED/DEBILITATED' line. The 7L's D9 strength is THE strongest predictor of marriage quality (overrides natal D1 if they conflict). For CAREER questions, MUST consult D10 DASAMSA — '10L lands in X' line is the equivalent. Vargottama planets (D1=D9 or D1=D10) are strong only when the shared sign is not debilitated; same debilitated sign = Neecha Vargottama/weak unless classical Neecha Bhanga exists. Cite naturally: 'D9 mein aapka 7L Mercury Pisces (debilitated) jaata hai — isliye natal weakness D9 mein bhi confirm hoti hai, marriage mein patience zaroori.' OR 'D10 mein aapka 10L Mercury Sagittarius (own-sign) jaata hai — career line strong support karta hai D10 mein.' If D9/D10 block missing, do NOT invent positions. "
+        "🚨 PLANET-STRENGTH RULE (extension of Rule K — MANDATORY): For ANY question that asks whether a SPECIFIC planet is powerful / weak / strong / kamzor / shaktishali (e.g. 'mera Saturn powerful hai ya weak?', 'Mars strong hai kya?', 'Guru achha hai?'), you MUST cross-check D1 dignity WITH the planet's D9 (Navamsa) placement before giving a verdict — D1 ALONE IS INSUFFICIENT to call any planet strong or weak. Combine logic: (a) D1 strong + D9 strong = TRULY STRONG; (b) D1 strong + D9 weak/debilitated = surface strength only, fragile in real life; (c) D1 debilitated + D9 exalted/own-sign = D9 SUPPORT, but call it Neecha Bhanga ONLY if a classical cancellation rule is also present (debilitation-sign lord in kendra from Lagna/Moon, planet exalted in that debilitation sign in kendra from Lagna/Moon, dispositor exalted, or exaltation-sign lord aspecting the debilitated planet); (d) Vargottama is strong only when dignity is not debilitated — same debilitated sign in D1+D9 is Neecha Vargottama/weak, not strong; (e) D1 weak + D9 weak = TRULY WEAK. Cite both placements in ONE sentence: 'Aapka Shani D1 mein Mesh (debilitated, neecha) hai aur D9 mein {SIGN} ({STATUS}) jaata hai — isliye overall {weak / strong / mixed / D9 support / neecha-bhanga}.' If the D9 NAVAMSA block is absent in LOCKED FACTS, say honestly: 'Saturn ki actual strength D9 ke bina precise nahi bata sakta — D1 mein debilitated dikh raha hai, par Neecha Bhanga ke liye classical cancellation rules bhi check karne padenge.' NEVER call a planet strong/weak from D1 alone. NEVER invent a D9 sign — only cite from the D9 NAVAMSA block.\n"
         "    🛡️ PRATYANTAR (Rule L): For PRECISE timing questions ('next 3 mahine kya hoga / next month kaisa', 'specific date / week kaisa'), use the PRATYANTAR block — it gives month-precision sub-periods. Always cite the CURRENT pratyantar lord ('abhi {MD}-{AD}-{PD} chal raha hai, jo {date} tak hai') and the next 1-2 upcoming pratyantars as 'next change-windows'. Combine with PLANET STRENGTHS — if PD lord is WEAK, that mini-window is a low-action phase; if STRONG, it's a green-light window. NEVER invent pratyantar dates not in the block.\n"
         "    🛡️ KP CROSS-CHECK (Rule N — MANDATORY citation): When the KP CROSS-CHECK block is present AND the user's question maps to a covered house (H1 vitality, H2 money, H5 children/speculation, H7 marriage/partner, H10 career/job, H11 gains/income), you MUST include one natural KP citation sentence in the answer. This is NOT optional — failing to cite is the same kind of error as inventing facts. The KP block runs PARALLEL to (not above) Vedic D1/D9/D10/Dasha logic. Verdict semantics: CONFIRMS = clean promise (event-houses signified, no negative house involved); PARTIAL = promise WITH obstruction (event AND negative houses both signified — fructification happens but with delay/struggle); DENIES = no event-house signified at all (unlikely / substantially delayed). Use it ONLY when the user's question maps to a covered house (H1 vitality, H2 money, H5 children/speculation, H7 marriage, H10 career, H11 gains). For those topics, weave ONE natural KP citation alongside Vedic reasoning: 'KP paddhati se bhi {N}th cusp ka sub-lord {planet} hai jo {CONFIRMS/PARTIAL/DENIES} karta hai.' Resolution rules when Vedic and KP disagree: (a) Vedic STRONG + KP CONFIRMS → confident green light; (b) Vedic STRONG + KP PARTIAL → 'hoga lekin patience aur effort lagega'; (c) Vedic STRONG + KP DENIES → 'natal promise hai par KP fructification support nahi karta — significant delay ya alternate timing'; (d) Vedic WEAK + KP CONFIRMS → 'natal weakness hai par KP supportive — possible with conscious effort'. Do NOT use KP for topics outside H1/H2/H5/H7/H10/H11 unless the block explicitly covers them. NEVER invent KP sub-lords if the block is absent — instead say 'KP detail ke liye accurate birth time aur location chahiye'.\n"
         "    🛡️ JAIMINI ARUDHA / UPAPADA (Rule O): When the JAIMINI ARUDHA PADAS / UPAPADA LAGNA block is present, use it ALONGSIDE Vedic D1/D9. The Arudha Pada is the IMAGE of a house — how it is PERCEIVED in the world (vs the actual house = the reality). Cite naturally only when topic-relevant: A1 = your public image (career/branding questions), A4 = home/lifestyle image, A7 = how partnerships are seen, A10 = career image / reputation, A11 = perceived gains, A12 = UL = MARRIAGE signature. For MARRIAGE questions you MUST add ONE Upapada citation: cite the UL sign + its lord + the 2nd-from-UL occupants + the verdict tag (STABLE / STRAINED / MIXED / NEUTRAL). Example: 'Jaimini paddhati se Upapada Lagna {UL_SIGN} mein hai (lord {UL_LORD} {Nth} from UL), 2nd-from-UL mein {occupants} hain — yeh marriage ko {STABLE/STRAINED} dikha rahi hai.' For non-marriage questions, use Arudha only when image-vs-reality gap is meaningful (e.g. A10 in a different sign than 10H = career REALITY differs from PERCEPTION). NEVER invent Arudha signs not in the block. NEVER use the chart-debugging 'note' field (e.g. 'adjusted from X') in user-facing language — it is internal annotation only.\n"
@@ -6825,14 +7360,9 @@ def _build_messages(
         msgs.append({
             "role": "system",
             "content": (
-                "TURN-LEVEL OVERRIDE — MARRIAGE NARRATOR MODE.\n"
-                "The following verdict was computed by the deterministic shastriya engine. "
-                "It is the GROUND TRUTH for this turn. You MUST narrate using these exact "
-                "values. The dates, dasha names, planet names, score, and remedy are NOT "
-                "negotiable — copy them verbatim into your reply. Specifically: when stating "
-                "the timing window, use ONLY the date string given on the line that begins "
-                "with '>>> NARRATE THIS WINDOW EXACTLY AS:'. Do not round to year-only, do "
-                "not shift to a different year, do not blend with surrounding dasha periods.\n\n"
+                "TURN-LEVEL OVERRIDE — MARRIAGE TIMING (ONE SENTENCE ONLY).\n"
+                + _MARRIAGE_TIMING_ONLY_REPLY
+                + "\n"
                 + marriage_verdict_block
             ),
         })
@@ -6851,19 +7381,20 @@ def _build_messages(
     reminder_lines: list[str] = []
     lf = locked_facts_str or ""
 
-    # Sprint-7 Rule O — Jaimini Upapada (PIN FIRST for marriage so recency wins)
+    # Sprint-7 Rule O — Jaimini UL: skip for marriage TIMING (one-sentence product rule)
     has_jaimini = "UPAPADA LAGNA" in lf
-    if topic == "marriage" and has_jaimini:
+    _marriage_timing_turn = (
+        topic == "marriage"
+        and marriage_subtype in ("timing", "remedy")
+        and not _is_marriage_analysis
+    )
+    if topic == "marriage" and has_jaimini and not _marriage_timing_turn:
         reminder_lines.append(
             "• 🚨 JAIMINI UL CITATION IS MANDATORY THIS TURN (Rule O — pinned first). "
             "Pull EXACT values from the 'UPAPADA LAGNA' sub-section: UL sign, UL-lord + "
             "its house-from-UL, verdict tag (STABLE/STRAINED/MIXED/NEUTRAL). Weave ONE "
             "natural sentence: 'Jaimini paddhati se Upapada {ul_sign} mein hai (lord "
-            "{ul_lord} {Nth} from UL) — marriage signature {VERDICT}.' If 12th-from-UL "
-            "has occupants (Ketu/Saturn/Rahu = separation tendency) or UL-lord is in "
-            "6/8/12 from UL, mention that nuance in the same sentence. Marriage answers "
-            "may use up to 160 words THIS TURN to fit all 4 mandatory citations (D9 + UL "
-            "+ KP + dasha) — extend, do NOT skip Jaimini."
+            "{ul_lord} {Nth} from UL) — marriage signature {VERDICT}.'"
         )
 
     # Sprint-9 Rule Q — Topic-specific vargas (D2/D3/D7/D12)
@@ -8525,6 +9056,13 @@ def _maybe_inject_multi_intent_ack(text, question, lang="hinglish",
         return text
 
 
+def astro_scope_refusal(question: str, lang: str = "en", user=None):
+    """Flask /api/ask shim — personal jyotish only; blocks GK and off-topic."""
+    from ask_scope_gate import astro_scope_refusal as _refusal
+
+    return _refusal(question, lang, user)
+
+
 _BRAND_SAFE_REDIRECT = {
     "en": ("Beta, this guide answers only jyotish (astrology) questions — your kundli, dasha, "
            "marriage, career, health, finance, family, vastu, remedies, and life-path matters. "
@@ -8641,8 +9179,8 @@ _CHART_FACT_PATTERNS = [
         r"\bmer[ai]\s+(?:rashi|raashi|rasi|moon\s*sign|sun\s*sign|chandra\s*rashi|surya\s*rashi)\b",
         r"\b(rashi|raashi|moon\s*sign|sun\s*sign)\s+(?:kya|kaun(?:\s*si)?|batao|bataiye|hai|he|kahiye|tell|what)\b",
         r"\bwhat(?:'s|\s+is)\s+my\s+(?:rashi|moon\s*sign|sun\s*sign|zodiac|sign)\b",
-        r"\bmer[ai]\s+(?:lagn[ae]?|ascendant|rising\s*sign)\b",
-        r"\b(lagn[ae]?|ascendant|rising\s*sign)\s+(?:kya|kaun(?:\s*si)?|batao|bataiye|hai|he|tell|what)\b",
+        r"\bmer[ai]\s+(?:lagn+a+|ascendant|rising\s*sign)\b",
+        r"\b(lagn+a+|ascendant|rising\s*sign)\s+(?:kya|kaun(?:\s*si)?|batao|bataiye|hai|he|tell|what)\b",
         r"\bwhat(?:'s|\s+is)\s+my\s+(?:lagna|ascendant|rising\s*sign)\b",
         r"\bmer[ai]\s+(?:nakshatra|nakshatr|janm\s*nakshatra|birth\s*star)\b",
         r"\b(nakshatra|nakshatr|birth\s*star)\s+(?:kya|kaun(?:\s*sa)?|batao|bataiye|hai|he|tell|what)\b",
@@ -8784,7 +9322,9 @@ _HOUSE_LOOKUP_RE = re.compile(
     r"\b(?:kya|what|kaunse?|which|konsa)\b.{0,20}\b(?:planet|graha|house|ghar|bhav)\b",
     re.I,
 )
-_LAGNA_RE     = re.compile(r"\b(lagna|ascendant|ascending|udaya|first\s*house\s*sign)\b", re.I)
+_LAGNA_RE     = re.compile(
+    r"\b(lagn+a+|lagan+|ascendant|ascending|udaya|first\s*house\s*sign)\b", re.I
+)
 # Sun-sign explicit (must contain Sun-token + rashi/sign keyword) — checked BEFORE moon
 _SUN_SIGN_RE  = re.compile(r"\b(surya\s*rashi|sun\s*sign|ravi\s*rashi|suraj\s*rashi)\b", re.I)
 # Moon-sign explicit. Bare "rashi/raashi" defaults to moon-sign (Vedic convention:
@@ -9208,9 +9748,21 @@ def _scrub_brand_tone(text: str) -> str:
 
 _FOLLOW_UPS_BY_TOPIC = {
     "marriage": {
-        "hn": ["Iska upay batao", "Alternate time bhi batao", "Mangal dosh hai kya?"],
-        "hi": ["इसका उपाय बताइए", "वैकल्पिक समय बताइए", "क्या मंगल दोष है?"],
-        "en": ["Suggest a remedy", "Show an alternate window", "Do I have manglik dosha?"],
+        "hn": [
+            "Love marriage ya arranged?",
+            "Future partner kaisa hoga?",
+            "Delay kyun dikh rahi hai?",
+        ],
+        "hi": [
+            "प्रेम विवाह या arranged?",
+            "भविष्य के जीवनसाथी के बारे में बताइए",
+            "देरी क्यों दिख रही है?",
+        ],
+        "en": [
+            "Love or arranged marriage?",
+            "What will my future spouse be like?",
+            "Why does delay show in my chart?",
+        ],
     },
     "career": {
         "hn": ["Job change ka time?", "Promotion kab hogi?", "Best career field batao"],
@@ -12469,7 +13021,7 @@ def _build_clarification(
     enough to skip clarification. Pure function — no I/O, no LLM call.
 
     Trigger conditions (env must be on AND one of):
-      1. classifier source == "regex_fallback" (AI failed entirely)
+      1. classifier source indicates AI unavailable / error
       2. classifier confidence < threshold (default 0.6)
     """
     if not _phase75_clarifier_enabled():
@@ -12485,9 +13037,14 @@ def _build_clarification(
         threshold = _phase75_clarifier_threshold()
 
         # Gate: only fire on genuine uncertainty.
-        is_regex_fallback = (source == "regex_fallback")
+        is_ai_failed = source in (
+            "regex_fallback",
+            "ai_unavailable",
+            "ai_error",
+            "ai_bad_enum",
+        )
         is_low_confidence = (confidence < threshold)
-        if not (is_regex_fallback or is_low_confidence):
+        if not (is_ai_failed or is_low_confidence):
             return None
 
         # Don't clarify a question that is itself a clarifier option
@@ -13233,24 +13790,13 @@ _PHASE48_TIMING_KEYWORDS = (
 
 
 def _phase48_is_timing_question(question: str) -> bool:
-    """True if the user's question is asking about WHEN/timing — in
-    which case dates in the answer ARE the answer and must survive.
-
-    P1.2.8: Now delegates to the unified question_type gate (single
-    source of truth). Killswitch UNIFIED_QTYPE_GATE=off reverts to
-    the legacy substring body byte-identically.
-    """
+    """True if the user's question is asking about WHEN/timing (AI-only gate)."""
     try:
-        from question_type import classify_question_type, _gate_enabled
-        if _gate_enabled():
-            return classify_question_type(question) == "TIMING"
+        from question_type import classify_question_type
+
+        return classify_question_type(question) == "TIMING"
     except Exception:
-        pass
-    # Legacy substring body (killswitch OFF or import failure)
-    if not isinstance(question, str):
         return False
-    q = question.lower()
-    return any(k in q for k in _PHASE48_TIMING_KEYWORDS)
 
 
 # ── Phase 2.8.55 — STRICT word-boundary timing detector ───────────────────
@@ -13289,24 +13835,13 @@ _PHASE2855_TIMING_RX = _re_phase2855.compile(
 
 
 def _phase2855_is_timing_question_strict(question: str) -> bool:
-    """STRICT timing detector for engine-injection gate (Phase 2.8.55).
-    Word-boundary regex avoids substring false positives like
-    'date' in 'update', 'din' in 'finding', 'tak' in 'stake',
-    'year' in 'yearn', 'month' in '6-month-old', etc.
-    Returns True only when question contains a real timing cue.
-
-    P1.2.8: Delegates to unified question_type gate. Killswitch
-    UNIFIED_QTYPE_GATE=off reverts to legacy regex byte-identically.
-    """
+    """Timing detector for engine-injection gate — AI-only (question_type)."""
     try:
-        from question_type import classify_question_type, _gate_enabled
-        if _gate_enabled():
-            return classify_question_type(question) == "TIMING"
+        from question_type import classify_question_type
+
+        return classify_question_type(question) == "TIMING"
     except Exception:
-        pass
-    if not isinstance(question, str) or not question:
         return False
-    return _PHASE2855_TIMING_RX.search(question) is not None
 
 
 # ── Phase 4.9 T022 — Adaptive depth classifier ────────────────────────────
@@ -15926,6 +16461,13 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     Returns: { text, topic, confidence, source, follow_ups }
     Raises:  RuntimeError on any OpenAI / config failure (caller falls back).
     """
+    try:
+        from ask_question_normalize import prepare_ask_question
+
+        question = prepare_ask_question(question or "")
+    except Exception:
+        pass
+
     req_id = _short_id()
     has_planets_in = isinstance(kundli, dict) and bool(kundli.get("planets"))
     has_dasha_in   = isinstance(kundli, dict) and bool(kundli.get("currentDasha"))
@@ -16407,10 +16949,20 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                         _trace(req_id, "PASSTHROUGH.DASHA_LEAK_SKIP",
                                str(_sdl_exc_pt)[:160])
 
-                # Phase 2.8.28 — marriage answer validator (post-injector).
-                # Strip invented phrases + auto-append missing confidence
-                # band / UL line. Only runs when marriage engine fired.
-                if _marriage_block_pt:
+                # Marriage timing — deterministic 2-line reply (window + engage Q).
+                if (_marriage_block_pt
+                        and _is_marriage_timing_question(question or "")):
+                    _aw_pt = _extract_primary_window_from_m17_block(
+                        _marriage_block_pt
+                    )
+                    _text_pt_scrubbed = _compose_marriage_timing_reply(
+                        _aw_pt, reply_idx, _eff_lang_pt,
+                    )
+                    _trace(req_id, "PASSTHROUGH.MARRIAGE_TIMING_ONLY", {
+                        "window": _aw_pt,
+                        "text": _text_pt_scrubbed,
+                    })
+                elif _marriage_block_pt:
                     _before_v = _text_pt_scrubbed
                     _text_pt_scrubbed = _validate_marriage_answer(
                         _text_pt_scrubbed, _marriage_block_pt
@@ -16538,6 +17090,15 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 except Exception as _hpi_exc_sync:  # noqa: BLE001
                     print(f"[passthrough_sync] health postinj skipped: "
                           f"{str(_hpi_exc_sync)[:160]}")
+                _text_pt_scrubbed = _ensure_checked_trace(
+                    _text_pt_scrubbed,
+                    question,
+                    _qu_topic,
+                    skip=bool(
+                        _marriage_block_pt
+                        and _is_marriage_timing_question(question or "")
+                    ),
+                )
                 _ret_pt = {
                     "text":       _text_pt_scrubbed,
                     "topic":      "general",
@@ -17306,6 +17867,21 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
             "will_n":         len(_payload.get("what_will_happen") or []),
             "do_n":           len(_payload.get("what_to_do") or []),
             "avoid_n":        len(_payload.get("what_to_avoid") or []),
+        })
+    elif build_meta.get("marriage_timing_composed"):
+        text = build_meta["marriage_timing_composed"]
+        _trace(req_id, "4.MARRIAGE_TIMING_DETERMINISTIC", {
+            "window": build_meta.get("active_window"),
+            "text": text,
+        })
+    elif (build_meta.get("marriage_timing_only")
+          and topic == "marriage"
+          and marriage_subtype in ("timing", "remedy")):
+        _aw = (build_meta.get("active_window") or "").strip()
+        _mt_lang = _resolve_response_lang(question, lang, preferred_language)
+        text = _compose_marriage_timing_reply(_aw, reply_idx, _mt_lang)
+        _trace(req_id, "4.MARRIAGE_TIMING_DETERMINISTIC", {
+            "window": _aw, "text": text,
         })
     else:
         text = _call_once()
@@ -18155,6 +18731,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
     # forbids mandatory engine-appended technical paragraphs (breaks the
     # 3-5 sentence flowing-paragraph shape).
     if (topic == "marriage"
+            and not build_meta.get("marriage_timing_only")
             and not _NARRATIVE_MODE
             and isinstance(kundli, dict) and kundli.get("planets")):
         try:
@@ -19604,6 +20181,13 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
         _trace(req_id, "4e.TRANSLATOR_LOCK_ERR",
                f"sync:{str(_tlock_exc)[:180]}")
 
+    text = _ensure_checked_trace(
+        text,
+        question,
+        topic,
+        skip=bool(topic == "marriage" and _is_marriage_timing_question(question or "")),
+    )
+
     _trace(req_id, "5.FINAL_OUTPUT", text)
 
     # ── Phase 7.2 — DETERMINISTIC POST-LLM VERIFIER (sync, full path) ──
@@ -20155,11 +20739,20 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
                     _trace(req_id, "PASSTHROUGH(stream).DASHA_LEAK_SKIP",
                            str(_sdl_exc_s)[:160])
 
-            # Phase 2.8.28 — marriage answer validator on stream FINAL.
-            # Stream chunks already left the wire, but mobile commits the
-            # `done.text` field to local history + DB. So scrubbing here
-            # ensures persisted/displayed final text is engine-faithful.
-            if _marriage_block_pt_s:
+            # Marriage timing — deterministic 2-line final (stream done.text).
+            if (_marriage_block_pt_s
+                    and _is_marriage_timing_question(question or "")):
+                _aw_s = _extract_primary_window_from_m17_block(
+                    _marriage_block_pt_s
+                )
+                _full_text_pt_s_scrubbed = _compose_marriage_timing_reply(
+                    _aw_s, reply_idx, _eff_lang_pt_s,
+                )
+                _trace(req_id, "PASSTHROUGH(stream).MARRIAGE_TIMING_ONLY", {
+                    "window": _aw_s,
+                    "text": _full_text_pt_s_scrubbed,
+                })
+            elif _marriage_block_pt_s:
                 _before_v_s = _full_text_pt_s_scrubbed
                 _full_text_pt_s_scrubbed = _validate_marriage_answer(
                     _full_text_pt_s_scrubbed, _marriage_block_pt_s
@@ -20333,6 +20926,15 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             except Exception as _hpi_exc_stream:  # noqa: BLE001
                 print(f"[passthrough_stream] health postinj skipped: "
                       f"{str(_hpi_exc_stream)[:160]}")
+            _full_text_pt_s_scrubbed = _ensure_checked_trace(
+                _full_text_pt_s_scrubbed,
+                question,
+                _topic_id_s,
+                skip=bool(
+                    _marriage_block_pt_s
+                    and _is_marriage_timing_question(question or "")
+                ),
+            )
             _final_envelope_pt_s = {
                 "kind":       "final",
                 "text":       _full_text_pt_s_scrubbed,

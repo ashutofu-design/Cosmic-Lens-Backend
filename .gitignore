@@ -10,6 +10,9 @@ out-tsc
 
 # dependencies
 node_modules
+.venv/
+venv/
+artifacts/api-server/venv/
 
 # IDEs and editors
 /.idea
@@ -53,3 +56,12 @@ Thumbs.db
 
 # Replit chat attachments (screenshots / images uploaded in chat)
 attached_assets/
+
+# Secrets — never commit (use .env.example as template)
+.env
+.env.*
+!.env.example
+artifacts/api-server/.env
+artifacts/api-server/.env.txt
+artifacts/admin-web/.env
+artifacts/cosmic-lens-mobile/.env

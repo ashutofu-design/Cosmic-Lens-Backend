@@ -7,6 +7,7 @@ ReportLab. Bilingual (EN + Hi-Latin) layout, brand-safe footer
 from __future__ import annotations
 
 import io
+import re
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -114,6 +115,15 @@ def _styles() -> Dict[str, ParagraphStyle]:
     }
 
 
+def _strip_latex_markers(text: str) -> str:
+    """Remove accidental $...$ math delimiters from engine/LLM text in PDF."""
+    t = (text or "").strip()
+    if not t:
+        return t
+    t = re.sub(r"\$([^$]+)\$", r"\1", t)
+    return t.replace("$", "")
+
+
 def _safe(s: Any) -> str:
     """Escape & truncate for ReportLab Paragraph."""
     if s is None:
@@ -128,7 +138,8 @@ def _safe(s: Any) -> str:
             s = src or kind or ""
     elif isinstance(s, (list, tuple)):
         s = ", ".join(_safe(x) for x in s)
-    t = str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    t = _strip_latex_markers(str(s))
+    t = t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     return t
 
 
@@ -286,6 +297,360 @@ def _priority_table(actions: List[Dict[str, Any]], s: ParagraphStyle) -> Table:
         style.append(("BACKGROUND", (2, r), (2, r), bg))
     t.setStyle(TableStyle(style))
     return t
+
+
+def _priority_table_premium(actions: List[Dict[str, Any]], s: ParagraphStyle) -> Table:
+    """Priority plan: current vs ideal vs action (Part A template)."""
+    if not actions:
+        return Paragraph("No urgent placement conflicts detected.", s["body"])
+    head = ["#", "Room", "Now", "Should be", "Action", "Verdict"]
+    data = [head]
+    for i, p in enumerate(actions, 1):
+        verdict = p.get("verdict", "Acceptable")
+        room = (p.get("room_type") or "").replace("_", " ").title()
+        action_txt = p.get("action_label_en", "") if _show_en() else p.get("action_label_hi", "")
+        if _show_en() and _show_hi() and p.get("action_label_hi"):
+            action_txt = f"{p.get('action_label_en', '')}<br/><i>{p.get('action_label_hi', '')}</i>"
+        data.append([
+            str(i),
+            Paragraph(_safe(room), s["body"]),
+            _safe(p.get("direction", "")),
+            _safe(p.get("ideal_directions_short", "—")),
+            Paragraph(_safe(action_txt), s["body"]),
+            Paragraph(_safe(verdict), ParagraphStyle("v", parent=s["body"],
+                       textColor=VERDICT_FG.get(verdict, TEXT_DARK), fontSize=9)),
+        ])
+    t = Table(data, colWidths=[8 * mm, 28 * mm, 14 * mm, 22 * mm, 38 * mm, 22 * mm])
+    style = [
+        ("BACKGROUND", (0, 0), (-1, 0), BRAND_PURPLE),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 8),
+        ("BOX", (0, 0), (-1, -1), 0.4, BORDER),
+        ("INNERGRID", (0, 0), (-1, -1), 0.25, BORDER),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]
+    for r, p in enumerate(actions, 1):
+        v = p.get("verdict", "Acceptable")
+        style.append(("BACKGROUND", (5, r), (5, r), VERDICT_BG.get(v, colors.white)))
+    t.setStyle(TableStyle(style))
+    return t
+
+
+def _executive_fixes_block(
+    report: Dict[str, Any],
+    s: Dict[str, ParagraphStyle],
+    *,
+    max_items: int = 3,
+) -> List[Any]:
+    out: List[Any] = []
+    fixes = (report.get("executive_fixes") or [])[: max(1, max_items)]
+    if not fixes:
+        return out
+    n = len(fixes)
+    head = "Top fix (do this first)" if n == 1 else f"Top {n} fixes (do these first)"
+    out.append(Paragraph(head, s["h2"]))
+    for i, fx in enumerate(fixes, 1):
+        en = fx.get("en", "")
+        hi = fx.get("hi", "")
+        if _show_en() and en:
+            out.append(Paragraph(f"<b>{i}.</b> {_safe(en)}", s["body"]))
+        if _show_hi() and hi:
+            out.append(Paragraph(f"<i>{_safe(hi)}</i>", s["bodyHi"]))
+    out.append(Spacer(1, 8))
+    return out
+
+
+def _floor_plan_truth_block(report: Dict[str, Any], s: Dict[str, ParagraphStyle]) -> List[Any]:
+    """Rooms detected from uploaded plan (vision facts) — must match what was scanned."""
+    out: List[Any] = []
+    vfp = report.get("vision_floor_plan") or {}
+    rooms = vfp.get("rooms") or []
+    if not rooms:
+        return out
+    out.append(Paragraph("Your floor plan (detected from upload)", s["h2"]))
+    fname = (vfp.get("upload_filename") or report.get("meta", {}).get("upload_filename") or "").strip()
+    if fname:
+        out.append(Paragraph(f"<i>File: {_safe(fname)}</i>", s["small"]))
+    plan_north = (vfp.get("plan_north_points_to") or "").strip()
+    if plan_north and plan_north != "none":
+        out.append(Paragraph(
+            f"<i>North arrow on plan points to: <b>{_safe(plan_north)}</b> of the drawing</i>",
+            s["small"],
+        ))
+    main_ent = (vfp.get("main_entrance") or "").strip()
+    if main_ent and main_ent != "unknown":
+        out.append(Paragraph(
+            f"<i>Main entrance (plan): <b>{_safe(main_ent)}</b></i>", s["small"]))
+    lines = []
+    for r in rooms[:14]:
+        if not isinstance(r, dict):
+            continue
+        rt = (r.get("room_type") or "").replace("_", " ").title()
+        d = r.get("direction") or r.get("current_direction") or "?"
+        lines.append(f"• {rt} — currently in <b>{_safe(d)}</b>")
+    if lines:
+        out.append(Paragraph("<br/>".join(lines), s["body"]))
+    notes = vfp.get("structural_notes") or []
+    if notes:
+        out.append(Paragraph(
+            "<i>Layout notes: " + _safe("; ".join(str(n) for n in notes[:4])) + "</i>",
+            s["small"],
+        ))
+    conf = vfp.get("confidence")
+    if conf:
+        out.append(Paragraph(
+            f"<i>Photo Engine confidence: {int(conf)}%</i>", s["small"]))
+    out.append(Paragraph(
+        "<i>Vastu verdicts below use these detected positions — not a generic template.</i>",
+        s["small"],
+    ))
+    out.append(Spacer(1, 8))
+    return out
+
+
+def _room_deep_dive_blocks(rooms: List[Dict[str, Any]], s: Dict[str, ParagraphStyle]) -> List[Any]:
+    """One premium block per room — template from engine placement."""
+    out: List[Any] = []
+    if not rooms:
+        return out
+    out.append(PageBreak())
+    out.append(Paragraph("Room-by-room placement guide", s["h2"]))
+    out.append(Paragraph(
+        "<i>Each section compares your uploaded plan with <b>AstroVastu</b> — "
+        "classical Vastu ideals adjusted for your Lagna, Mahadasha, and weak planets. "
+        "Verdicts are fixed by the report engine (not generic guesswork).</i>",
+        s["body"]))
+    out.append(Spacer(1, 6))
+
+    for r in rooms:
+        rt = (r.get("room_type") or "").replace("_", " ").title()
+        verdict = r.get("verdict", "Acceptable")
+        vcol = VERDICT_FG.get(verdict, TEXT_DARK)
+        out.append(Paragraph(
+            f"<font color='{vcol.hexval()}'><b>{_safe(rt)}</b></font> "
+            f"· Verdict: <b>{_safe(verdict)}</b> · Score {r.get('score', '—')}/100",
+            s["h3"]))
+
+        ideal_hdr = (
+            "Ideal for your chart"
+            if r.get("astro_personalized")
+            else "Should be (Vastu)"
+        )
+        rows = [
+            ["On your plan (now)", _safe(r.get("direction", "—"))],
+            [ideal_hdr, _safe(r.get("ideal_directions_short", "—"))],
+            ["Also acceptable", _safe((r.get("placement") or {}).get("acceptable_directions_short") or "—")],
+            ["Action", _safe(r.get("action_label_en", "") if _show_en() else r.get("action_label_hi", ""))],
+        ]
+        if r.get("astro_personalized") and r.get("classical_ideal_short"):
+            rows.insert(2, ["Classical Vastu only", _safe(r.get("classical_ideal_short", "—"))])
+        tbl = Table(rows, colWidths=[42 * mm, 128 * mm])
+        tbl.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.35, BORDER),
+            ("INNERGRID", (0, 0), (-1, -1), 0.2, BORDER),
+            ("BACKGROUND", (0, 0), (0, -1), BG_CARD),
+            ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        out.append(tbl)
+
+        if _show_en() and r.get("summary_en"):
+            out.append(Paragraph(_safe(r["summary_en"]), s["body"]))
+        if _show_hi() and r.get("summary_hi"):
+            out.append(Paragraph(f"<i>{_safe(r['summary_hi'])}</i>", s["bodyHi"]))
+
+        chart_en = (r.get("chart_note_en") or r.get("astro_note_en") or "").strip()
+        chart_hi = (r.get("chart_note_hi") or r.get("astro_note_hi") or "").strip()
+        if _show_en() and chart_en:
+            out.append(Paragraph(
+                f"<font color='#1D4ED8'><b>Your chart (kundli):</b> {_safe(chart_en)}</font>",
+                s["small"]))
+        elif not _show_en() and chart_hi:
+            out.append(Paragraph(
+                f"<font color='#1D4ED8'><b>Aapki kundli:</b> {_safe(chart_hi)}</font>",
+                s["bodyHi"]))
+
+        md = r.get("mahadasha_layer") or r.get("mahadasha")
+        if isinstance(md, dict) and md.get("applies") and md.get("reason_en"):
+            out.append(Paragraph(
+                f"<font color='#B45309'>Mahadasha: {_safe(md.get('reason_en', ''))}</font>",
+                s["small"]))
+
+        rems = r.get("remedies") or []
+        if rems:
+            out.append(Paragraph("<b>Remedies (if you cannot shift this room):</b>", s["body"]))
+            for rem in rems[:4]:
+                if _CURRENT_LANG == "en":
+                    txt = (rem.get("english") or "").strip()
+                elif _CURRENT_LANG == "hinglish":
+                    txt = (rem.get("hindi") or rem.get("english") or "").strip()
+                else:
+                    en = (rem.get("english") or "").strip()
+                    hi = (rem.get("hindi") or "").strip()
+                    txt = en + (f" / {hi}" if hi else "")
+                if txt:
+                    ref = (rem.get("classical_ref") or "").strip()
+                    tag = f" <i>[{_safe(ref)}]</i>" if ref else ""
+                    out.append(Paragraph(f"• {_safe(txt)}{tag}", s["body"]))
+        out.append(Spacer(1, 10))
+    return out
+
+
+_APPENDIX_ROOM_MATCH: Dict[str, List[str]] = {
+    "kitchen":     ["Kitchen in wrong"],
+    "bathroom":    ["Bathroom / WC"],
+    "toilet":      ["Bathroom / WC"],
+    "pooja":       ["Pooja room"],
+    "bedroom":     ["Master bedroom"],
+    "entrance":    ["Entrance / main door"],
+    "main_door":   ["Entrance / main door"],
+    "living":      ["Mirror facing"],
+}
+
+
+def _filtered_remedies_appendix(
+    rooms: List[Dict[str, Any]], s: Dict[str, ParagraphStyle],
+) -> List[Any]:
+    """Only appendix sections relevant to flagged rooms (not full dump)."""
+    flow: List[Any] = []
+    need_remedy = [
+        r for r in (rooms or [])
+        if r.get("verdict") in ("Avoid", "Adjustment Needed")
+        or (r.get("placement") or {}).get("action") in (
+            "relocate", "relocate_or_remedy", "remedy"
+        )
+    ]
+    if not need_remedy:
+        return flow
+
+    titles_wanted: set = set()
+    for r in need_remedy:
+        rt = (r.get("room_type") or "").lower()
+        for key, patterns in _APPENDIX_ROOM_MATCH.items():
+            if key in rt or rt == key:
+                titles_wanted.update(patterns)
+    titles_wanted.add("Universal everyday")
+
+    flow.append(PageBreak())
+    flow.append(Paragraph("Remedies playbook (for your flagged rooms only)", s["h2"]))
+    flow.append(Paragraph(
+        "<i>Classical upaay when physical relocation is not possible. "
+        "Apply only sections that match rooms marked above.</i>",
+        s["body"]))
+    flow.append(Spacer(1, 6))
+
+    shown = 0
+    for cat in _UNIVERSAL_REMEDIES:
+        title = cat.get("title") or ""
+        if not any(pat in title for pat in titles_wanted):
+            continue
+        flow.append(Paragraph(_safe(title), s["h3"]))
+        flow.append(Paragraph(
+            f"<font color='#7C3AED'>Reference:</font> <i>{_safe(cat.get('ref', ''))}</i>",
+            s["small"]))
+        for item in cat["items"]:
+            flow.append(Paragraph(f"• {_safe(item)}", s["body"]))
+        flow.append(Spacer(1, 5))
+        shown += 1
+        if shown >= 8:
+            break
+    return flow
+
+
+def _part_b_narrative_block(report: Dict[str, Any], s: Dict[str, ParagraphStyle]) -> List[Any]:
+    """Part B — AI personal reading (explain-only; engine facts unchanged)."""
+    nb = report.get("part_b_narrative") or {}
+    if not isinstance(nb, dict):
+        return []
+    meta = nb.get("_meta") or {}
+    pr = nb.get("personal_reading") or {}
+    en = (pr.get("en") or "").strip()
+    hi = (pr.get("hi") or "").strip()
+    if not en and not hi:
+        return []
+
+    out: List[Any] = []
+    out.append(PageBreak())
+    out.append(Paragraph("Personal reading for you", s["h2"]))
+    out.append(Paragraph(
+        "<i>This section explains your personalized engine results in plain language. "
+        "Scores, directions, and verdicts above are not changed here.</i>",
+        s["small"]))
+    if meta.get("ok"):
+        out.append(Paragraph(
+            "<i>Prepared with Cosmic Intelligence — facts locked from your chart and layout.</i>",
+            s["small"]))
+    out.append(Spacer(1, 6))
+
+    if _show_en() and en:
+        for para in en.split("\n\n"):
+            p = para.strip()
+            if p:
+                out.append(Paragraph(_safe(p), s["body"]))
+    if _show_hi() and hi:
+        for para in hi.split("\n\n"):
+            p = para.strip()
+            if p:
+                out.append(Paragraph(f"<i>{_safe(p)}</i>", s["bodyHi"]))
+
+    def _bullet_list(key: str, title: str) -> None:
+        block = nb.get(key) or {}
+        items_en = block.get("en") or []
+        items_hi = block.get("hi") or []
+        if not items_en and not items_hi:
+            return
+        out.append(Spacer(1, 4))
+        out.append(Paragraph(f"<b>{title}</b>", s["h3"]))
+        for it in items_en[:5]:
+            if it:
+                out.append(Paragraph(f"• {_safe(it)}", s["body"]))
+        if _show_hi():
+            for it in items_hi[:5]:
+                if it:
+                    out.append(Paragraph(f"• <i>{_safe(it)}</i>", s["bodyHi"]))
+
+    _bullet_list("do_first", "Do these first")
+    _bullet_list("do_avoid", "Avoid for now")
+
+    closing = nb.get("closing") or {}
+    if _show_en() and closing.get("en"):
+        out.append(Spacer(1, 4))
+        out.append(Paragraph(f"<i>{_safe(closing['en'])}</i>", s["body"]))
+    if _show_hi() and closing.get("hi"):
+        out.append(Paragraph(f"<i>{_safe(closing['hi'])}</i>", s["bodyHi"]))
+    out.append(Spacer(1, 10))
+    return out
+
+
+def _action_calendar_block(priority: List[Dict[str, Any]], s: Dict[str, ParagraphStyle]) -> List[Any]:
+    """Simple 4-week template from top priority rooms."""
+    if not priority:
+        return []
+    out: List[Any] = []
+    out.append(Paragraph("90-day action calendar (suggested order)", s["h2"]))
+    weeks = ["Week 1–2", "Week 3–4", "Week 5–8", "Week 9–12"]
+    for i, p in enumerate(priority[:4]):
+        room = (p.get("room_type") or "").replace("_", " ").title()
+        act = p.get("action_label_en", "") if _show_en() else p.get("action_label_hi", "")
+        wk = weeks[i] if i < len(weeks) else f"Phase {i + 1}"
+        line_en = (
+            f"<b>{_safe(wk)}:</b> Focus on {_safe(room)} "
+            f"({_safe(p.get('direction', ''))}) — {_safe(act)}."
+        )
+        out.append(Paragraph(line_en, s["body"]))
+    out.append(Paragraph(
+        "<i>Re-scan after remedies for an updated score.</i>", s["bodyHi"]))
+    out.append(Spacer(1, 8))
+    return out
 
 
 def _vision_block(report: Dict[str, Any], s: Dict[str, ParagraphStyle]) -> List[Any]:
@@ -784,6 +1149,22 @@ def render_business_pdf(report: Dict[str, Any], *,
 # ─────────────────────────────────────────────────────────────────────
 # PUBLIC: AstroVastu PRO PDF (residential)
 # ─────────────────────────────────────────────────────────────────────
+def _pro_report_tier(report: Dict[str, Any]) -> str:
+    """single_room | full_plan — controls PDF length."""
+    meta = report.get("meta") or {}
+    src = (meta.get("scan_source") or "").strip().lower()
+    rc = meta.get("rooms_count")
+    if rc is None:
+        rc = len(report.get("rooms") or [])
+    try:
+        rc = int(rc)
+    except (TypeError, ValueError):
+        rc = len(report.get("rooms") or [])
+    if src == "single_room_photo" or rc <= 1:
+        return "single_room"
+    return "full_plan"
+
+
 def render_pro_pdf(report: Dict[str, Any], *,
                    property_name: str = "",
                    user_name: str = "",
@@ -799,18 +1180,35 @@ def render_pro_pdf(report: Dict[str, Any], *,
     doc = SimpleDocTemplate(buf, pagesize=A4,
                             leftMargin=18 * mm, rightMargin=18 * mm,
                             topMargin=22 * mm, bottomMargin=18 * mm,
-                            title="AstroVastu PRO Report — Cosmic Lens",
+                            title="Personalized AstroVastu PRO Report — Cosmic Lens",
                             author="Cosmic Lens")
     flow: List[Any] = []
+    tier = _pro_report_tier(report)
+    is_single = tier == "single_room"
 
-    flow.append(Paragraph("AstroVastu PRO Report", s["title"]))
+    flow.append(Paragraph("Personalized AstroVastu PRO Report", s["title"]))
     sub = []
     if property_name:
         sub.append(f"Property: <b>{_safe(property_name)}</b>")
     if user_name:
-        sub.append(f"Owner: <b>{_safe(user_name)}</b>")
+        sub.append(f"Prepared for: <b>{_safe(user_name)}</b>")
     sub.append(f"Issued: {datetime.utcnow().strftime('%d %b %Y')}")
+    rid = report.get("report_id")
+    if rid:
+        sub.append(f"Report ID: <b>AVP-{rid}</b>")
     flow.append(Paragraph("  ·  ".join(sub), s["sub"]))
+    if is_single:
+        flow.append(Paragraph(
+            "<i>Confidential — chart-personalized Vastu for <b>one room</b>. "
+            "Classical rules adjusted for your Lagna and Mahadasha. "
+            "Part A: verified placement results. Part B: personalized explanation.</i>",
+            s["small"]))
+    else:
+        flow.append(Paragraph(
+            "<i>Confidential — full-property AstroVastu blended with <b>your</b> Lagna, "
+            "Mahadasha, and weak planets. Room ideals are chart-personalized, not generic-only. "
+            "Part A: verified engine results. Part B: personalized explanation.</i>",
+            s["small"]))
 
     overall = report.get("overall", {}) or {}
     summary = overall.get("summary", {}) or {}
@@ -844,29 +1242,34 @@ def render_pro_pdf(report: Dict[str, Any], *,
                                   accent=VERDICT_FG["Adjustment Needed"]))
         flow.append(Spacer(1, 6))
 
-    flow.append(Paragraph("Priority Actions", s["h2"]))
-    flow.append(_priority_table(report.get("priority_actions") or [], s))
-    flow.append(Spacer(1, 10))
+    flow.extend(_executive_fixes_block(report, s, max_items=2 if is_single else 3))
+    flow.extend(_floor_plan_truth_block(report, s))
+    flow.extend(_part_b_narrative_block(report, s))
 
-    # ── Photo Reading Findings (Phase 6, optional)
+    flow.append(Paragraph("Priority placement plan", s["h2"]))
+    flow.append(_priority_table_premium(report.get("priority_actions") or [], s))
+    flow.append(Spacer(1, 8))
+    if not is_single:
+        flow.extend(_action_calendar_block(report.get("priority_actions") or [], s))
+
     flow.extend(_vision_block(report, s))
 
     rooms = report.get("rooms") or []
-    if rooms:
-        flow.append(PageBreak())
-        flow.append(Paragraph("Room-by-room Analysis", s["h2"]))
-        flow.append(_rooms_table(rooms, s, with_business=False))
-        flow.append(Spacer(1, 10))
+    flow.extend(_room_deep_dive_blocks(rooms, s))
+    if not is_single:
+        flow.extend(_filtered_remedies_appendix(rooms, s))
+    elif any(
+        r.get("verdict") in ("Avoid", "Adjustment Needed")
+        for r in rooms
+        if isinstance(r, dict)
+    ):
+        flow.extend(_filtered_remedies_appendix(rooms, s))
 
     refs = report.get("classical_summary") or []
     if refs:
-        flow.append(Paragraph("Classical References", s["h2"]))
-        for r in refs:
+        flow.append(Paragraph("Classical references (cited in this report)", s["h2"]))
+        for r in refs[:12]:
             flow.append(Paragraph(f"• {_safe(r)}", s["body"]))
-
-    # ── Universal Vastu Remedies appendix (always shown — strong remedies
-    #    when structural shift isn't possible)
-    flow.extend(_universal_remedies_block(s))
 
     # ── Scope disclosure (what this report is NOT)
     flow.extend(_disclosure_block(s, is_business=False))

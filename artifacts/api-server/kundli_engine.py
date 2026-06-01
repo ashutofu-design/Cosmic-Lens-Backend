@@ -19,7 +19,7 @@ swe.set_sid_mode(swe.SIDM_LAHIRI)
 
 # Bumped on any math/structure change to a kundli output. Used by the
 # cache layer (cache_helpers.KundliCache) to invalidate stale rows.
-KUNDLI_CALC_VERSION = 13
+KUNDLI_CALC_VERSION = 16
 
 SIGNS = [
     "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
@@ -60,6 +60,113 @@ PLANET_IDS = {
     "Saturn": swe.SATURN,
 }
 
+SIGN_LORDS = {
+    "Aries": "Mars", "Taurus": "Venus", "Gemini": "Mercury", "Cancer": "Moon",
+    "Leo": "Sun", "Virgo": "Mercury", "Libra": "Venus", "Scorpio": "Mars",
+    "Sagittarius": "Jupiter", "Capricorn": "Saturn", "Aquarius": "Saturn", "Pisces": "Jupiter",
+}
+
+EXALT_SIGNS = {
+    "Sun": "Aries", "Moon": "Taurus", "Mars": "Capricorn", "Mercury": "Virgo",
+    "Jupiter": "Cancer", "Venus": "Pisces", "Saturn": "Libra",
+    "Rahu": "Taurus", "Ketu": "Scorpio",
+}
+
+DEBIL_SIGNS = {
+    "Sun": "Libra", "Moon": "Scorpio", "Mars": "Cancer", "Mercury": "Pisces",
+    "Jupiter": "Capricorn", "Venus": "Virgo", "Saturn": "Aries",
+    "Rahu": "Scorpio", "Ketu": "Taurus",
+}
+
+OWN_SIGNS = {
+    "Sun": ["Leo"], "Moon": ["Cancer"], "Mars": ["Aries", "Scorpio"],
+    "Mercury": ["Gemini", "Virgo"], "Jupiter": ["Sagittarius", "Pisces"],
+    "Venus": ["Taurus", "Libra"], "Saturn": ["Capricorn", "Aquarius"],
+}
+
+PLANET_FRIENDS = {
+    "Sun": {"Moon", "Mars", "Jupiter"},
+    "Moon": {"Sun", "Mercury"},
+    "Mars": {"Sun", "Moon", "Jupiter"},
+    "Mercury": {"Sun", "Venus"},
+    "Jupiter": {"Sun", "Moon", "Mars"},
+    "Venus": {"Mercury", "Saturn"},
+    "Saturn": {"Mercury", "Venus"},
+}
+
+PLANET_ENEMIES = {
+    "Sun": {"Venus", "Saturn"},
+    "Moon": set(),
+    "Mars": {"Mercury"},
+    "Mercury": {"Moon"},
+    "Jupiter": {"Mercury", "Venus"},
+    "Venus": {"Sun", "Moon"},
+    "Saturn": {"Sun", "Moon", "Mars"},
+}
+
+NATURAL_BENEFICS = {"Jupiter", "Venus", "Mercury", "Moon"}
+NATURAL_MALEFICS = {"Sun", "Mars", "Saturn", "Rahu", "Ketu"}
+CLASSICAL_DIGNITY_PLANETS = {"Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn"}
+CHART_POWER_FOCUS = {
+    "D1": "Overall life foundation, body, personality and visible strength",
+    "D2": "Wealth, resources, food and family wealth",
+    "D3": "Courage, siblings, initiative and vitality",
+    "D4": "Home, property, fixed assets and inner contentment",
+    "D7": "Children, progeny and creative continuation",
+    "D9": "Marriage, dharma, spouse and deeper planet strength",
+    "D10": "Career, profession, karma and public achievement",
+    "D12": "Parents, lineage and inherited patterns",
+    "D16": "Vehicles, comforts and luxuries",
+    "D20": "Spirituality, sadhana and devotion",
+    "D24": "Education, learning and higher knowledge",
+    "D27": "Resilience, hidden strength and weakness",
+    "D30": "Misfortune, hidden problems and suffering resistance",
+    "D40": "Maternal lineage and auspicious patterns",
+    "D45": "Paternal lineage and deep karmic inheritance",
+    "D60": "Deep karma and root karmic signature",
+}
+DEFAULT_CHART_POWER_PROFILE = {
+    "primary_houses": [1],
+    "karakas": ["Jupiter"],
+    "weights": {
+        "lagnaLord": 20,
+        "keyLords": 25,
+        "karakas": 20,
+        "dignity": 10,
+        "placement": 10,
+        "affliction": 15,
+    },
+}
+CHART_POWER_PROFILES = {
+    "D1": {
+        "primary_houses": [1, 5, 9, 10],
+        "karakas": ["Moon", "Sun", "Jupiter"],
+        "weights": {
+            "lagnaLord": 25,
+            "keyLords": 15,
+            "karakas": 15,
+            "dignity": 15,
+            "placement": 10,
+            "affliction": 20,
+        },
+    },
+    "D2": {"primary_houses": [2, 11], "karakas": ["Jupiter", "Venus"]},
+    "D3": {"primary_houses": [3], "karakas": ["Mars", "Sun"]},
+    "D4": {"primary_houses": [4], "karakas": ["Moon", "Mars", "Venus"]},
+    "D7": {"primary_houses": [5], "karakas": ["Jupiter", "Sun"]},
+    "D9": {"primary_houses": [1, 7, 9], "karakas": ["Venus", "Jupiter"]},
+    "D10": {"primary_houses": [6, 10, 11], "karakas": ["Sun", "Saturn", "Mercury"]},
+    "D12": {"primary_houses": [4, 9], "karakas": ["Sun", "Moon"]},
+    "D16": {"primary_houses": [4], "karakas": ["Venus", "Moon"]},
+    "D20": {"primary_houses": [5, 9, 12], "karakas": ["Jupiter", "Ketu"]},
+    "D24": {"primary_houses": [4, 5, 9], "karakas": ["Mercury", "Jupiter"]},
+    "D27": {"primary_houses": [1, 3, 6], "karakas": ["Mars", "Saturn"]},
+    "D30": {"primary_houses": [6, 8, 12], "karakas": ["Saturn", "Mars", "Ketu"]},
+    "D40": {"primary_houses": [4], "karakas": ["Moon", "Venus"]},
+    "D45": {"primary_houses": [9], "karakas": ["Sun", "Jupiter"]},
+    "D60": {"primary_houses": [1, 9, 12], "karakas": ["Jupiter", "Saturn", "Ketu"]},
+}
+
 
 def sign_from_lon(lon):
     return SIGNS[int(lon / 30) % 12]
@@ -77,6 +184,360 @@ def house_from_asc(planet_lon, asc_lon):
     planet_sign = int(planet_lon / 30) % 12
     house = (planet_sign - asc_sign) % 12 + 1
     return house
+
+
+def _clamp(num, lo, hi):
+    return max(lo, min(hi, num))
+
+
+def _sign_index_from_name(sign):
+    if sign in SIGNS:
+        return SIGNS.index(sign)
+    return None
+
+
+def _planet_sign_index(planet):
+    if not isinstance(planet, dict):
+        return None
+    if isinstance(planet.get("signIndex"), int):
+        return planet["signIndex"] % 12
+    if isinstance(planet.get("longitude"), (int, float)):
+        return int(planet["longitude"] / 30.0) % 12
+    return _sign_index_from_name(planet.get("sign"))
+
+
+def _planet_by_name(planets, name):
+    for planet in planets or []:
+        if isinstance(planet, dict) and planet.get("name") == name:
+            return planet
+    return None
+
+
+def _house_quality_points(planet_name, house):
+    if house in (1, 4, 5, 7, 9, 10):
+        return 1.0
+    if house == 11:
+        return 0.85
+    if house in (2, 3):
+        return 0.70
+    if house == 6:
+        return 0.62 if planet_name in NATURAL_MALEFICS else 0.48
+    if house == 8:
+        return 0.34
+    if house == 12:
+        return 0.40
+    return 0.58
+
+
+def _aspect_offsets(planet_name):
+    offsets = {6}
+    if planet_name == "Mars":
+        offsets.update({3, 7})
+    elif planet_name == "Jupiter":
+        offsets.update({4, 8})
+    elif planet_name == "Saturn":
+        offsets.update({2, 9})
+    elif planet_name in ("Rahu", "Ketu"):
+        offsets.update({4, 8})
+    return offsets
+
+
+def _aspects_sign(planet_name, from_idx, target_idx):
+    if from_idx is None or target_idx is None:
+        return False
+    return ((target_idx - from_idx) % 12) in _aspect_offsets(planet_name)
+
+
+def _ang_dist(a, b):
+    d = abs((a - b) % 360.0)
+    return 360.0 - d if d > 180.0 else d
+
+
+def _combustion_penalty(planets, planet_name):
+    planet = _planet_by_name(planets, planet_name)
+    sun = _planet_by_name(planets, "Sun")
+    if not planet or not sun or planet_name in ("Sun", "Rahu", "Ketu"):
+        return 0.0
+    if not isinstance(planet.get("longitude"), (int, float)) or not isinstance(sun.get("longitude"), (int, float)):
+        return 0.0
+    thresholds = {
+        "Moon": 12.0, "Mars": 17.0, "Mercury": 14.0,
+        "Jupiter": 11.0, "Venus": 10.0, "Saturn": 15.0,
+    }
+    threshold = thresholds.get(planet_name, 12.0)
+    return 1.0 if _ang_dist(float(planet["longitude"]), float(sun["longitude"])) <= threshold else 0.0
+
+
+def _dignity_score(planet_name, sign_name):
+    if planet_name not in CLASSICAL_DIGNITY_PLANETS:
+        return 0.55, "neutral sign"
+    if not sign_name:
+        return 0.50, "unknown"
+    if EXALT_SIGNS.get(planet_name) == sign_name:
+        return 1.00, "exalted"
+    if DEBIL_SIGNS.get(planet_name) == sign_name:
+        return 0.18, "debilitated"
+    if sign_name in OWN_SIGNS.get(planet_name, []):
+        return 0.88, "own sign"
+    sign_lord = SIGN_LORDS.get(sign_name)
+    if sign_lord in PLANET_FRIENDS.get(planet_name, set()):
+        return 0.72, "friendly sign"
+    if sign_lord in PLANET_ENEMIES.get(planet_name, set()):
+        return 0.35, "enemy sign"
+    return 0.55, "neutral sign"
+
+
+def _chart_power_label(score):
+    if score >= 90:
+        return "Very Strong", "#22c55e"
+    if score >= 75:
+        return "Strong", "#4ade80"
+    if score >= 60:
+        return "Good", "#f59e0b"
+    if score >= 40:
+        return "Average", "#fbbf24"
+    return "Weak", "#ef4444"
+
+
+def _profile_for_chart(chart_key):
+    base = {
+        "primary_houses": list(DEFAULT_CHART_POWER_PROFILE["primary_houses"]),
+        "karakas": list(DEFAULT_CHART_POWER_PROFILE["karakas"]),
+        "weights": dict(DEFAULT_CHART_POWER_PROFILE["weights"]),
+    }
+    override = CHART_POWER_PROFILES.get(chart_key, {})
+    if "primary_houses" in override:
+        base["primary_houses"] = list(override["primary_houses"])
+    if "karakas" in override:
+        base["karakas"] = list(override["karakas"])
+    if "weights" in override:
+        base["weights"].update(override["weights"])
+    return base
+
+
+def _lord_for_house(asc_idx, house):
+    return SIGN_LORDS[SIGNS[(asc_idx + house - 1) % 12]]
+
+
+def _planet_condition_score(planets, planet_name, d1_planets=None, important_houses=None):
+    planet = _planet_by_name(planets, planet_name)
+    if not planet:
+        return 0.35, f"{planet_name} missing", None
+    sign_idx = _planet_sign_index(planet)
+    sign_name = SIGNS[sign_idx] if sign_idx is not None else planet.get("sign")
+    house = int(planet.get("house") or 0)
+    dignity, dignity_label = _dignity_score(planet_name, sign_name)
+    house_q = _house_quality_points(planet_name, house)
+    if important_houses and house in important_houses:
+        house_q = min(1.0, house_q + 0.14)
+    score = dignity * 0.64 + house_q * 0.36
+    if _combustion_penalty(d1_planets or planets, planet_name):
+        score -= 0.12
+        dignity_label = f"{dignity_label}, combust"
+    return _clamp(score, 0.0, 1.0), dignity_label, planet
+
+
+def _score_lagna_lord(planets, asc_idx, max_score, strengths, challenges, d1_planets):
+    lagna_lord = _lord_for_house(asc_idx, 1)
+    score_unit, label, planet = _planet_condition_score(planets, lagna_lord, d1_planets, [1, 4, 5, 7, 9, 10])
+    if planet:
+        house = int(planet.get("house") or 0)
+        if score_unit >= 0.74:
+            strengths.append(f"Lagna lord {lagna_lord} is {label} in house {house}")
+        elif score_unit <= 0.40:
+            challenges.append(f"Lagna lord {lagna_lord} is {label} in house {house}")
+    else:
+        challenges.append(label)
+    return score_unit * max_score
+
+
+def _score_key_lords(planets, asc_idx, primary_houses, max_score, strengths, challenges, d1_planets):
+    seen = []
+    units = []
+    for house in primary_houses:
+        lord = _lord_for_house(asc_idx, house)
+        if lord in seen:
+            continue
+        seen.append(lord)
+        score_unit, label, planet = _planet_condition_score(planets, lord, d1_planets, primary_houses)
+        units.append(score_unit)
+        if planet:
+            phouse = int(planet.get("house") or 0)
+            if score_unit >= 0.74:
+                strengths.append(f"{house}th lord {lord} is {label} in house {phouse}")
+            elif score_unit <= 0.40:
+                challenges.append(f"{house}th lord {lord} is {label} in house {phouse}")
+    return (sum(units) / len(units) * max_score) if units else max_score * 0.45
+
+
+def _score_karakas(planets, karakas, primary_houses, max_score, strengths, challenges, d1_planets):
+    units = []
+    for karaka in karakas:
+        score_unit, label, planet = _planet_condition_score(planets, karaka, d1_planets, primary_houses)
+        units.append(score_unit)
+        if planet:
+            house = int(planet.get("house") or 0)
+            if score_unit >= 0.74:
+                strengths.append(f"Karaka {karaka} is {label} in house {house}")
+            elif score_unit <= 0.40:
+                challenges.append(f"Karaka {karaka} is {label} in house {house}")
+    return (sum(units) / len(units) * max_score) if units else max_score * 0.45
+
+
+def _score_selected_dignity(planets, selected_names, max_score, strengths, challenges, d1_planets):
+    units = []
+    dignified_count = 0
+    weak_count = 0
+    for name in selected_names:
+        planet = _planet_by_name(planets, name)
+        if not planet:
+            continue
+        sign_idx = _planet_sign_index(planet)
+        sign_name = SIGNS[sign_idx] if sign_idx is not None else planet.get("sign")
+        dignity, label = _dignity_score(name, sign_name)
+        if _combustion_penalty(d1_planets or planets, name):
+            dignity = max(0.0, dignity - 0.16)
+        units.append(dignity)
+        if label in ("exalted", "own sign", "friendly sign"):
+            dignified_count += 1
+        elif label in ("debilitated", "enemy sign"):
+            weak_count += 1
+    if dignified_count:
+        strengths.append(f"{dignified_count} selected planet(s) are in friendly/own/exalted dignity")
+    if weak_count:
+        challenges.append(f"{weak_count} selected planet(s) are in enemy/debilitated dignity")
+    return (sum(units) / len(units) * max_score) if units else max_score * 0.45
+
+
+def _score_selected_placements(planets, primary_houses, max_score, strengths, challenges):
+    score_unit = 0.50
+    for house in primary_houses:
+        occupants = [p for p in planets if int(p.get("house") or 0) == house]
+        if not occupants:
+            continue
+        benefics = [p.get("name") for p in occupants if p.get("name") in NATURAL_BENEFICS]
+        malefics = [p.get("name") for p in occupants if p.get("name") in NATURAL_MALEFICS]
+        score_unit += len(benefics) * 0.10
+        score_unit -= len(malefics) * 0.07
+        if benefics:
+            strengths.append(f"House {house} receives benefic occupant(s): {', '.join(benefics)}")
+        if malefics:
+            challenges.append(f"House {house} receives malefic pressure: {', '.join(malefics)}")
+    return _clamp(score_unit, 0.0, 1.0) * max_score
+
+
+def _score_affliction_balance(planets, asc_idx, primary_houses, selected_names, max_score, strengths, challenges):
+    target_signs = {asc_idx}
+    for house in primary_houses:
+        target_signs.add((asc_idx + house - 1) % 12)
+    for name in selected_names:
+        planet = _planet_by_name(planets, name)
+        pidx = _planet_sign_index(planet)
+        if pidx is not None:
+            target_signs.add(pidx)
+
+    support = 0
+    pressure = 0
+    for p in planets:
+        pname = p.get("name")
+        pidx = _planet_sign_index(p)
+        phouse = int(p.get("house") or 0)
+        for target_idx in target_signs:
+            target_house = ((target_idx - asc_idx + 12) % 12) + 1
+            hits = pidx == target_idx or _aspects_sign(pname, pidx, target_idx)
+            if not hits:
+                continue
+            if pname in NATURAL_BENEFICS:
+                support += 1
+            elif pname in NATURAL_MALEFICS:
+                pressure += 1
+            if phouse in (6, 8, 12) and pname in selected_names:
+                pressure += 1
+            if target_house in primary_houses and pname in NATURAL_BENEFICS:
+                support += 1
+
+    score_unit = 0.55 + support * 0.045 - pressure * 0.04
+    if support:
+        strengths.append(f"Benefic support count on key points: {support}")
+    if pressure:
+        challenges.append(f"Affliction pressure count on key points: {pressure}")
+    return _clamp(score_unit, 0.0, 1.0) * max_score
+
+
+def _score_chart_power(chart_key, chart, d1_planets=None):
+    planets = [p for p in (chart or {}).get("planets", []) if isinstance(p, dict)]
+    asc_idx = (chart or {}).get("ascendantSignIndex")
+    if not isinstance(asc_idx, int):
+        asc_idx = _sign_index_from_name((chart or {}).get("ascendant"))
+    if asc_idx is None or not planets:
+        label, color = _chart_power_label(0)
+        return {
+            "chart": chart_key,
+            "score": 0,
+            "label": label,
+            "color": color,
+            "focus": CHART_POWER_FOCUS.get(chart_key, "Divisional chart strength"),
+            "summary": f"{chart_key} chart power unavailable due to missing placements.",
+            "factors": [],
+            "strengths": [],
+            "challenges": ["Chart placements missing"],
+            "rules": [],
+        }
+
+    asc_idx %= 12
+    profile = _profile_for_chart(chart_key)
+    primary_houses = profile["primary_houses"]
+    karakas = profile["karakas"]
+    weights = profile["weights"]
+    selected_names = list(dict.fromkeys([_lord_for_house(asc_idx, h) for h in primary_houses] + karakas + [_lord_for_house(asc_idx, 1)]))
+    strengths = []
+    challenges = []
+
+    lagna_lord_score = _score_lagna_lord(planets, asc_idx, weights["lagnaLord"], strengths, challenges, d1_planets)
+    key_lords_score = _score_key_lords(planets, asc_idx, primary_houses, weights["keyLords"], strengths, challenges, d1_planets)
+    karakas_score = _score_karakas(planets, karakas, primary_houses, weights["karakas"], strengths, challenges, d1_planets)
+    dignity_score = _score_selected_dignity(planets, selected_names, weights["dignity"], strengths, challenges, d1_planets)
+    placement_score = _score_selected_placements(planets, primary_houses, weights["placement"], strengths, challenges)
+    affliction_score = _score_affliction_balance(planets, asc_idx, primary_houses, selected_names, weights["affliction"], strengths, challenges)
+
+    factor_rows = [
+        ("lagnaLord", "Lagna lord strength", lagna_lord_score, weights["lagnaLord"]),
+        ("keyLords", "Selected house lords", key_lords_score, weights["keyLords"]),
+        ("karakas", "Chart karaka planets", karakas_score, weights["karakas"]),
+        ("dignity", "Friend/enemy dignity", dignity_score, weights["dignity"]),
+        ("placement", "Selected house placement", placement_score, weights["placement"]),
+        ("affliction", "Affliction/support balance", affliction_score, weights["affliction"]),
+    ]
+    total = int(_clamp(round(sum(row[2] for row in factor_rows)), 0, 100))
+    label, color = _chart_power_label(total)
+    return {
+        "chart": chart_key,
+        "score": total,
+        "label": label,
+        "color": color,
+        "focus": CHART_POWER_FOCUS.get(chart_key, "Divisional chart strength"),
+        "summary": f"{chart_key} chart power is {label} ({total}/100).",
+        "primaryHouses": primary_houses,
+        "karakas": karakas,
+        "factors": [
+            {
+                "key": key,
+                "label": label_text,
+                "score": round(score, 1),
+                "max": max_score,
+                "weightPct": max_score,
+            }
+            for key, label_text, score, max_score in factor_rows
+        ],
+        "strengths": list(dict.fromkeys(strengths))[:5],
+        "challenges": list(dict.fromkeys(challenges))[:5],
+        "rules": [
+            f"Selected houses for {chart_key}: {', '.join(str(h) for h in primary_houses)}",
+            f"Selected karakas for {chart_key}: {', '.join(karakas)}",
+            "Friend/enemy/own/exalted/debilitated dignity is applied only to classical 7 planets",
+            "Affliction balance counts natural benefic/malefic occupation and aspects on selected points",
+        ],
+    }
 
 
 def date_to_iso(dt):
@@ -406,19 +867,148 @@ def calculate_kundli(data):
         })
 
     # ── Divisional Charts (Vargas) ───────────────────────────────────────────
-    # D9 Navamsha — marriage, dharma, spouse, spiritual strength
-    # D10 Dashamsha — career, profession, achievement
+    # D2..D60 vargas used by the mobile divisional-chart screen.
+    _MOVABLE_SIGNS = {0, 3, 6, 9}
+    _FIXED_SIGNS   = {1, 4, 7, 10}
+    _FIRE_SIGNS    = {0, 4, 8}
+    _EARTH_SIGNS   = {1, 5, 9}
+    _AIR_SIGNS     = {2, 6, 10}
+
+    def _sign_idx(lon):
+        return int(lon / 30.0) % 12
+
+    def _part_idx(lon, parts):
+        deg_in_sign = lon % 30.0
+        return min(parts - 1, int(deg_in_sign / (30.0 / float(parts))))
+
+    def _modality_seed(sidx):
+        if sidx in _MOVABLE_SIGNS:
+            return 0
+        if sidx in _FIXED_SIGNS:
+            return 4
+        return 8
+
+    def _d2_sign_idx(lon):
+        # Hora: odd signs Sun/Moon, even signs Moon/Sun.
+        sidx = _sign_idx(lon)
+        first_half = (lon % 30.0) < 15.0
+        if sidx % 2 == 0:
+            return 4 if first_half else 3
+        return 3 if first_half else 4
+
+    def _d3_sign_idx(lon):
+        # Drekkana: self, 5th, 9th.
+        sidx = _sign_idx(lon)
+        return (sidx + _part_idx(lon, 3) * 4) % 12
+
+    def _d4_sign_idx(lon):
+        # BPHS Chaturthamsa: 4 parts of 7°30'; kendra offsets 1-4-7-10 from natal sign
+        sidx = _sign_idx(lon)
+        p_idx = _part_idx(lon, 4)
+        return (sidx + p_idx * 3) % 12
+
+    def _d7_sign_idx(lon):
+        # BPHS Saptamsha: 7 parts per sign; odd signs count from self, even from 7th
+        sidx = _sign_idx(lon)
+        p_idx = _part_idx(lon, 7)
+        seed = sidx if sidx % 2 == 0 else (sidx + 6) % 12
+        return (seed + p_idx) % 12
+
     def _d9_sign_idx(lon):
-        # Parashari Navamsha: simple formula (108 divisions × 3°20' = 360°)
-        return int((lon * 9.0) / 30.0) % 12
+        # BPHS Navamsha: movable/fixed/dual seed signs (matches divisional_charts.py)
+        sidx = _sign_idx(lon)
+        n_idx = _part_idx(lon, 9)
+        if sidx in _MOVABLE_SIGNS:
+            seed = sidx
+        elif sidx in _FIXED_SIGNS:
+            seed = (sidx + 8) % 12
+        else:
+            seed = (sidx + 4) % 12
+        return (seed + n_idx) % 12
 
     def _d10_sign_idx(lon):
         # Parashari Dashamsha: odd signs start from self, even signs from 9th
-        sidx = int(lon / 30.0) % 12
-        pada = int((lon % 30.0) / 3.0)               # 0-9 (each 3°)
+        sidx = _sign_idx(lon)
+        pada = _part_idx(lon, 10)                    # 0-9 (each 3°)
         if sidx % 2 == 0:                            # sign_index 0,2,4... = odd signs
             return (sidx + pada) % 12
         return (sidx + 8 + pada) % 12
+
+    def _d12_sign_idx(lon):
+        sidx = _sign_idx(lon)
+        return (sidx + _part_idx(lon, 12)) % 12
+
+    def _d16_sign_idx(lon):
+        sidx = _sign_idx(lon)
+        return (_modality_seed(sidx) + _part_idx(lon, 16)) % 12
+
+    def _d20_sign_idx(lon):
+        # BPHS Vimsamsa: 20 parts of 1°30'; Movable→Aries, Fixed→Sagittarius, Dual→Leo
+        sidx = _sign_idx(lon)
+        p_idx = _part_idx(lon, 20)
+        if sidx in _MOVABLE_SIGNS:
+            seed = 0
+        elif sidx in _FIXED_SIGNS:
+            seed = 8
+        else:
+            seed = 4
+        return (seed + p_idx) % 12
+
+    def _d24_sign_idx(lon):
+        sidx = _sign_idx(lon)
+        seed = 4 if sidx % 2 == 0 else 3
+        return (seed + _part_idx(lon, 24)) % 12
+
+    def _d27_sign_idx(lon):
+        sidx = _sign_idx(lon)
+        if sidx in _FIRE_SIGNS:
+            seed = 0
+        elif sidx in _EARTH_SIGNS:
+            seed = 3
+        elif sidx in _AIR_SIGNS:
+            seed = 6
+        else:
+            seed = 9
+        return (seed + _part_idx(lon, 27)) % 12
+
+    def _d30_sign_idx(lon):
+        sidx = _sign_idx(lon)
+        deg = lon % 30.0
+        if sidx % 2 == 0:
+            if deg < 5.0:
+                return 0   # Mars: Aries
+            if deg < 10.0:
+                return 10  # Saturn: Aquarius
+            if deg < 18.0:
+                return 8   # Jupiter: Sagittarius
+            if deg < 25.0:
+                return 2   # Mercury: Gemini
+            return 6       # Venus: Libra
+        if deg < 5.0:
+            return 1       # Venus: Taurus
+        if deg < 12.0:
+            return 5       # Mercury: Virgo
+        if deg < 20.0:
+            return 11      # Jupiter: Pisces
+        if deg < 25.0:
+            return 9       # Saturn: Capricorn
+        return 7           # Mars: Scorpio
+
+    def _d40_sign_idx(lon):
+        sidx = _sign_idx(lon)
+        seed = 0 if sidx % 2 == 0 else 6
+        return (seed + _part_idx(lon, 40)) % 12
+
+    def _d45_sign_idx(lon):
+        sidx = _sign_idx(lon)
+        return (_modality_seed(sidx) + _part_idx(lon, 45)) % 12
+
+    def _d60_sign_idx(lon):
+        sidx = _sign_idx(lon)
+        p_idx = _part_idx(lon, 60)
+        if sidx % 2 == 0:
+            return (sidx + p_idx) % 12
+        return (sidx - p_idx + 120) % 12
 
     def _build_varga(sign_fn, asc_deg, positions):
         asc_idx = sign_fn(asc_deg)
@@ -438,11 +1028,60 @@ def calculate_kundli(data):
             "planets":             planets_varga,
         }
 
+    d2_chart  = _build_varga(_d2_sign_idx,  asc_lon, planet_positions)
+    d3_chart  = _build_varga(_d3_sign_idx,  asc_lon, planet_positions)
+    d4_chart  = _build_varga(_d4_sign_idx,  asc_lon, planet_positions)
+    d7_chart  = _build_varga(_d7_sign_idx,  asc_lon, planet_positions)
     d9_chart  = _build_varga(_d9_sign_idx,  asc_lon, planet_positions)
     d10_chart = _build_varga(_d10_sign_idx, asc_lon, planet_positions)
+    d12_chart = _build_varga(_d12_sign_idx, asc_lon, planet_positions)
+    d16_chart = _build_varga(_d16_sign_idx, asc_lon, planet_positions)
+    d20_chart = _build_varga(_d20_sign_idx, asc_lon, planet_positions)
+    d24_chart = _build_varga(_d24_sign_idx, asc_lon, planet_positions)
+    d27_chart = _build_varga(_d27_sign_idx, asc_lon, planet_positions)
+    d30_chart = _build_varga(_d30_sign_idx, asc_lon, planet_positions)
+    d40_chart = _build_varga(_d40_sign_idx, asc_lon, planet_positions)
+    d45_chart = _build_varga(_d45_sign_idx, asc_lon, planet_positions)
+    d60_chart = _build_varga(_d60_sign_idx, asc_lon, planet_positions)
 
-    print(f"[VARGA] D9 Lagna : {d9_chart['ascendant']}", flush=True)
-    print(f"[VARGA] D10 Lagna: {d10_chart['ascendant']}", flush=True)
+    for _varga_name, _varga_chart in [
+        ("D2", d2_chart), ("D3", d3_chart), ("D4", d4_chart), ("D7", d7_chart),
+        ("D9", d9_chart), ("D10", d10_chart), ("D12", d12_chart), ("D16", d16_chart),
+        ("D20", d20_chart), ("D24", d24_chart), ("D27", d27_chart), ("D30", d30_chart),
+        ("D40", d40_chart), ("D45", d45_chart), ("D60", d60_chart),
+    ]:
+        print(f"[VARGA] {_varga_name} Lagna: {_varga_chart['ascendant']}", flush=True)
+
+    d1_chart_for_power = {
+        "ascendant": sign_from_lon(asc_lon),
+        "ascendantSignIndex": int(asc_lon / 30.0) % 12,
+        "planets": planet_list,
+    }
+    chart_powers = {
+        "D1": _score_chart_power("D1", d1_chart_for_power, planet_list),
+        "D2": _score_chart_power("D2", d2_chart, planet_list),
+        "D3": _score_chart_power("D3", d3_chart, planet_list),
+        "D4": _score_chart_power("D4", d4_chart, planet_list),
+        "D7": _score_chart_power("D7", d7_chart, planet_list),
+        "D9": _score_chart_power("D9", d9_chart, planet_list),
+        "D10": _score_chart_power("D10", d10_chart, planet_list),
+        "D12": _score_chart_power("D12", d12_chart, planet_list),
+        "D16": _score_chart_power("D16", d16_chart, planet_list),
+        "D20": _score_chart_power("D20", d20_chart, planet_list),
+        "D24": _score_chart_power("D24", d24_chart, planet_list),
+        "D27": _score_chart_power("D27", d27_chart, planet_list),
+        "D30": _score_chart_power("D30", d30_chart, planet_list),
+        "D40": _score_chart_power("D40", d40_chart, planet_list),
+        "D45": _score_chart_power("D45", d45_chart, planet_list),
+        "D60": _score_chart_power("D60", d60_chart, planet_list),
+    }
+    for _varga_name, _varga_chart in [
+        ("D2", d2_chart), ("D3", d3_chart), ("D4", d4_chart), ("D7", d7_chart),
+        ("D9", d9_chart), ("D10", d10_chart), ("D12", d12_chart), ("D16", d16_chart),
+        ("D20", d20_chart), ("D24", d24_chart), ("D27", d27_chart), ("D30", d30_chart),
+        ("D40", d40_chart), ("D45", d45_chart), ("D60", d60_chart),
+    ]:
+        _varga_chart["power"] = chart_powers[_varga_name]
 
 
     month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -471,9 +1110,23 @@ def calculate_kundli(data):
         "dashaBalance":  birth_dasha_balance,
         "calcVersion":   KUNDLI_CALC_VERSION,
         "planets": planet_list,
+        "chartPowers": chart_powers,
         "divisionalCharts": {
+            "D2":  d2_chart,
+            "D3":  d3_chart,
+            "D4":  d4_chart,
+            "D7":  d7_chart,
             "D9":  d9_chart,
             "D10": d10_chart,
+            "D12": d12_chart,
+            "D16": d16_chart,
+            "D20": d20_chart,
+            "D24": d24_chart,
+            "D27": d27_chart,
+            "D30": d30_chart,
+            "D40": d40_chart,
+            "D45": d45_chart,
+            "D60": d60_chart,
         },
         "dashas": dashas,
         "currentDasha": {

@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT))
 
 from openai import OpenAI
 
-from vedic.numerology.narratives import _LUCKY_COLOURS, _MONTH_THEMES
+from numerology.core.narratives import _LUCKY_COLOURS, _MONTH_THEMES
 
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 MODEL = "gpt-4o"

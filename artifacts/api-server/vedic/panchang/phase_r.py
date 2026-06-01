@@ -123,10 +123,17 @@ def compute_phase_r(target: datetime | None = None) -> dict[str, Any]:
         if nak_idx > 26: nak_idx = 26
         deg_in_nak = moon_lon - nak_idx*nak_seg
         pada = int(deg_in_nak / (nak_seg/4)) + 1
+        rashi_idx = int(moon_lon // 30) % 12
+        _RASHI = [
+            "Mesha", "Vrishabha", "Mithuna", "Karka", "Simha", "Kanya",
+            "Tula", "Vrishchika", "Dhanu", "Makara", "Kumbha", "Meena",
+        ]
+        out["moon_rashi"] = _RASHI[rashi_idx]
         out["r2_nakshatra"] = {"name": NAK_NAMES[nak_idx], "pada": pada,
                                 "lord": NAK_LORD[nak_idx],
                                 "deity": NAK_DEITY[nak_idx],
-                                "deg_in_nak": round(deg_in_nak,2)}
+                                "deg_in_nak": round(deg_in_nak,2),
+                                "moon_rashi": _RASHI[rashi_idx]}
         # R3 Yoga = (sun + moon) / 13°20'
         yoga_arc = (sun_lon + moon_lon) % 360
         yoga_idx = int(yoga_arc / nak_seg)

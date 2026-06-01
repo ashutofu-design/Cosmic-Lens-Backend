@@ -464,9 +464,9 @@ class TestFingerprintVersioning(unittest.TestCase):
         f2["grade"] = {"label": "Excellent Match"}
         self.assertNotEqual(_fingerprint(f1, "en"), _fingerprint(f2, "en"))
 
-    def test_prompt_version_is_v11(self):
+    def test_prompt_version_is_v13(self):
         # Lock current schema version — bump test whenever prompt changes.
-        self.assertEqual(_PROMPT_VERSION, "v11")
+        self.assertEqual(_PROMPT_VERSION, "v13")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

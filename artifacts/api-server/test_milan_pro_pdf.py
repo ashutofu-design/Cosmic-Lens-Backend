@@ -1,18 +1,42 @@
-"""Tests for the Phase 2.5.11.24-soul-v6 20-page Pro PDF renderer.
+"""Tests for the 18-page Pro PDF renderer.
 
-Builds on fix8 (visual-density rewrite, 7 chapters consolidated to 1
-dense rich page each). Fix9 adds depth + hierarchy:
-- New P3: How Your Marriage Energy Was Analysed (9 Vedic layers + D1/D9)
-- Hidden Truth (P4) now carries QUIET PATTERNS YOU MIGHT NOT NAME
-- Each chapter page carries a CHART LAYER chip (Moon, 7th Lord, ...)
-- New post-blueprint page: WHY THIS BOND FORMED + THE ONE THING THAT
-  COULD QUIETLY DAMAGE THIS MARRIAGE
-- Final Verdict page carries a memorable closing line by score band
-LLM contract (kya_dikh / kya_matlab / kya_dhyan / grounding) UNCHANGED.
+Premium chapter pages use **p64** structured subsections when the payload
+includes the seven section fields; legacy payloads still render as one
+flowing body. Astrology data tables remain where structurally necessary.
 """
 import re
 
 from milan_pdf import render_milan_pro_pdf
+
+
+def test_premium_chapter_dense_segments_splits_for_vertical_rhythm():
+    """Short single-blob chapter_body re-chunks into more PDF rows (no invented words)."""
+    from milan_pdf import _premium_chapter_dense_segments
+
+    blob = ("Same sentence repeated for length. " * 90).strip()
+    segs = _premium_chapter_dense_segments(blob)
+    assert len(segs) >= 4
+    joined = "\n\n".join(segs)
+    assert "Same sentence" in joined
+
+
+def test_premium_prose_markup_escapes_then_paragraph_breaks():
+    from milan_pdf import _premium_prose_markup
+
+    s = "Line A\nLine B\n\nSecond para"
+    m = _premium_prose_markup(s)
+    assert "<br/><br/>" in m
+    assert "<br/>" in m
+    assert "&lt;" in _premium_prose_markup("x < y")
+    assert "Line A" in m
+
+
+def test_noto_font_search_includes_bundled_repo_dir():
+    """Bundled fonts/noto must be on the search path for Windows deployments."""
+    from milan_pdf import _bundled_noto_font_dir, _collect_noto_search_dirs
+
+    bundled = _bundled_noto_font_dir()
+    assert bundled in _collect_noto_search_dirs()
 
 
 def _milan(p1n="A", p2n="B", total=33):
@@ -45,15 +69,24 @@ def _pro(score=8.0):
         "chapters": [{
             "key": k, "title": k.replace("_", " ").title(),
             "score_0_10": score,
-            "kya_dikh":   "Engine drivers are present and stable for this chapter "
-                          "across both partners' charts in expected zones.",
-            "kya_matlab": "Daily life will reflect this strength as a quiet, "
-                          "reliable comfort that neither partner has to chase.",
-            "kya_dhyan":  "Honest dialogue, mutual respect, consistent care.",
+            "chapter_body": (
+                "Engine drivers are present and stable for this chapter "
+                "across both partners' charts in expected zones. "
+                "Daily life will reflect this strength as a quiet, "
+                "reliable comfort that neither partner has to chase. "
+                "Honest dialogue, mutual respect, consistent care."
+            ),
+            "full_read": (
+                "Engine drivers are present and stable for this chapter "
+                "across both partners' charts in expected zones. "
+                "Daily life will reflect this strength as a quiet, "
+                "reliable comfort that neither partner has to chase. "
+                "Honest dialogue, mutual respect, consistent care."
+            ),
             "grounding":  f"Engine score {score}/10.",
         } for k in keys],
         "special":   ["Strength A", "Strength B", "Strength C"],
-        "damage":    ["Caution A"],
+        "damage":    ["Caution A", "Caution B"],
         "practical": ["Para 1.", "Para 2.", "Para 3."],
         "verdict":   "A measured, warm bond worth building on patiently.",
         "_meta":     {"model": "fallback", "kp_promise": "PARTIAL",
@@ -66,48 +99,98 @@ def _count_pages(pdf: bytes) -> int:
     return len(re.findall(rb'/Type\s*/Page(?!s)', pdf))
 
 
-def test_pro_pdf_emits_exactly_20_pages_en():
+def test_pro_pdf_emits_exactly_21_pages_en():
     payload = _milan(); payload["pro_premium"] = _pro()
     pdf = render_milan_pro_pdf(payload, lang="en")
     assert pdf.startswith(b"%PDF-")
-    assert _count_pages(pdf) == 20
+    assert _count_pages(pdf) == 21
 
 
-def test_pro_pdf_emits_exactly_20_pages_with_empty_pro():
+def test_pro_pdf_sdp_consultation_multi_paragraph_smoke():
+    """Premium ``special`` / ``damage`` / ``practical`` may use ``\\n\\n``; renderer stacks paragraphs."""
+    payload = _milan()
+    pro = _pro()
+    para = (
+        "Venus and seventh-house combinations in both kundlis show warmth that is "
+        "earned through effort, not instant fusion.\n\n"
+        "A navigates closeness through Moon-ruled domestic cues while B balances "
+        "harmony with quiet boundaries — same bond, different repair scripts.\n\n"
+        "In marriage this becomes timing: cooling hours versus same-evening debriefs, "
+        "because chart-led defences differ for each map — lord aspects tie back to how "
+        "money talks and in-law weekends actually feel at home."
+    )
+    pro["special"] = [para, para, para]
+    pro["damage"] = [para, para]
+    pro["practical"] = [para, para, para]
+    payload["pro_premium"] = pro
+    pdf = render_milan_pro_pdf(payload, lang="en")
+    assert pdf.startswith(b"%PDF-")
+    assert _count_pages(pdf) >= 21
+
+
+def test_pro_pdf_emits_exactly_21_pages_with_empty_pro():
     payload = _milan(); payload["pro_premium"] = {}
     pdf = render_milan_pro_pdf(payload, lang="en")
-    assert _count_pages(pdf) == 20
+    assert _count_pages(pdf) == 21
 
 
-def test_pro_pdf_emits_exactly_20_pages_hi_devanagari():
+def test_pro_pdf_emits_exactly_21_pages_hi_devanagari():
     payload = _milan("Arjun", "Meera", 26); payload["pro_premium"] = _pro(7.2)
     pdf = render_milan_pro_pdf(payload, lang="hi")
-    assert _count_pages(pdf) == 20
+    assert _count_pages(pdf) == 21
 
 
 def test_pro_pdf_never_raises_on_completely_empty_payload():
     pdf = render_milan_pro_pdf({}, lang="en")
-    assert _count_pages(pdf) == 20
+    assert _count_pages(pdf) == 21
 
 
-def test_pro_pdf_carries_fix8_visual_blocks():
-    """Phase 2.5.11.24-fix8 regression: every chapter page must carry the
-    new visual-storytelling labels (REAL-LIFE MOMENT, WHY THIS APPEARS IN
-    YOUR CHARTS) and the Final Verdict page must carry the merged
-    Readiness & timing block. Without these, the visual-density rewrite
-    silently regressed to flat paragraphs."""
+def test_pro_pdf_chapter_pages_are_flowing_observation_not_segmented_ui():
+    """Premium chapter pages must not reintroduce fix8 segmentation UI."""
     import io, pypdf
     payload = _milan(); payload["pro_premium"] = _pro()
     pdf = render_milan_pro_pdf(payload, lang="en")
     reader = pypdf.PdfReader(io.BytesIO(pdf))
     text = "\n".join((p.extract_text() or "") for p in reader.pages)
-    assert "REAL-LIFE MOMENT" in text
-    assert "WHY THIS APPEARS IN YOUR CHARTS" in text
-    # 7 chapters × WHY-IN-CHARTS box → at least 5 occurrences in the body
-    # (some payloads may legitimately skip a chip box if no koots map).
-    assert text.count("REAL-LIFE MOMENT") >= 5
-    # Timing Sync page is dropped — its prose now lives under Final Verdict.
-    assert "Readiness & timing" in text or "READINESS & TIMING" in text
+    _tu = text.upper()
+    assert "DAY-TO-DAY ATMOSPHERE" not in text
+    assert "QUIET EMOTIONAL READ" not in _tu
+    assert "THE LONGER ARC" not in _tu
+    assert "CLASSICAL MATCH NOTES (REFERENCE)" not in text
+    # Chapter chrome + merged body still present (first map title).
+    assert "EMOTIONAL COMPATIBILITY" in _tu
+    # Timing context remains but must not appear as a labeled subsection.
+    assert "READINESS & TIMING" not in _tu
+
+
+def test_pro_pdf_chapter_body_renders_long_narrative_without_subsection_headings():
+    """Premium chapter pages render ``chapter_body`` as one narrative — no seven slot headings."""
+    import io, pypdf
+
+    body = (
+        "Chart read: Moon Venus Mars Jupiter Saturn Rahu Ketu D1 D9 navamsa synastry "
+        "7th house lord nakshatra behaviour friction repair timing. "
+    )
+    pro = _pro(8.0)
+    para = (body * 10).strip()
+    for c in pro["chapters"]:
+        c["chapter_body"] = "\n\n".join([para, para, para, para])
+        c["full_read"] = c["chapter_body"]
+        c["grounding"] = (
+            "Grounding: 7th lord + Venus tone cross-read from structured chart JSON — "
+            "behaviour-first, not a score paraphrase. "
+            "Observational tail stays compact: this line is the remainder for the bottom card."
+        )
+    payload = _milan()
+    payload["pro_premium"] = pro
+    pdf = render_milan_pro_pdf(payload, lang="en")
+    reader = pypdf.PdfReader(io.BytesIO(pdf))
+    text = "\n".join((p.extract_text() or "") for p in reader.pages)
+    assert "Core Dynamic" not in text
+    assert "Chart Bridge" not in text
+    assert "Chart read" in text or "Moon Venus Mars" in text
+    assert "Chart insight" in text
+    assert "Observational notes" in text
 
 
 def test_pro_pdf_unknown_koot_keys_must_not_crash():
@@ -121,35 +204,31 @@ def test_pro_pdf_unknown_koot_keys_must_not_crash():
         {"key": "baz_unknown", "score": 0, "max": 8},
     ]
     pdf = render_milan_pro_pdf(payload, lang="en")
-    assert _count_pages(pdf) == 20
+    assert _count_pages(pdf) == 21
 
 
 def test_pro_pdf_non_latin_lang_keeps_latin_chip_text_readable():
     """Architect-flagged fix9 regression: Latin-only deterministic
-    blocks (CHART LAYER chip, QUIET PATTERNS, attraction/challenge,
-    verdict closer) must use body_latin font even in non-Latin lang
-    reports — otherwise the script font drops Latin glyphs."""
+    blocks (Hidden Truth / attraction / verdict) must use body_latin font
+    even in non-Latin lang reports — otherwise the script font drops Latin glyphs."""
     import io, pypdf
     payload = _milan(); payload["pro_premium"] = _pro()
     pdf = render_milan_pro_pdf(payload, lang="bn")
-    assert _count_pages(pdf) == 20
+    assert _count_pages(pdf) == 21
     reader = pypdf.PdfReader(io.BytesIO(pdf))
     text = "\n".join((p.extract_text() or "") for p in reader.pages)
-    # Latin labels must survive the Bengali font selection.
-    assert "CHART LAYER" in text
-    assert text.count("CHART LAYER") >= 5
-    assert "QUIET PATTERNS YOU MIGHT NOT NAME" in text
-    assert "WHY THIS BOND FORMED" in text
+    # Snapshot page uses Latin eyebrow — must stay readable in non-Latin PDF font lane.
+    assert "SNAPSHOT" in text.upper() or "CHAPTER 02" in text.upper()
 
 
 def test_pro_pdf_carries_fix10_blueprint_depth_blocks():
     """Phase 2.5.11.24-fix10 regression: Marriage Blueprint must carry
     the 4 deterministic D1+D9 depth blocks (7th-lord meaning, affection
-    style, conflict instinct, daily emotional rhythm), the chapter
-    grounding card must be DROPPED, and the verdict closer must use the
-    sharper Hinglish phrasing — together these address the critique
-    that the blueprint was 'gold but too short' and chapter even-pages
-    looked empty."""
+    style, conflict instinct, daily emotional rhythm). p64 may restore
+    chapter grounding cards when `grounding` is present. The verdict closer
+    must use the sharper Hinglish phrasing — together these address the
+    critique that the blueprint was 'gold but too short' and chapter
+    even-pages looked empty."""
     import io, pypdf
     payload = _milan(); payload["pro_premium"] = _pro()
     payload["d9_marriage"] = {
@@ -220,7 +299,7 @@ def test_pro_pdf_blueprint_handles_malformed_nested_d9_marriage():
         "sync": 42,               # int, not dict
     }
     pdf = render_milan_pro_pdf(payload, lang="en")
-    assert _count_pages(pdf) == 20
+    assert _count_pages(pdf) == 21
 
 
 def test_pro_pdf_blueprint_accepts_engine_native_relation_friendly():
@@ -282,80 +361,77 @@ def test_pro_pdf_blueprint_depth_uses_astrologer_voice_soul_v5():
 
 
 def test_premium_prompt_carries_astrologer_voice_law_soul_v5():
-    """Phase 2.5.11.24-soul-v5 regression: SYSTEM_PROMPT_PREMIUM must
-    carry the new ASTROLOGER VOICE LAW + AI-tell ban list, and the
-    cache version must bump (p6 → p7) so existing polished outputs
-    are invalidated."""
+    """p79: chapter_body primary narrative; PDF is single-flow."""
     from vedic.compat.premium_chapters import (
-        SYSTEM_PROMPT_PREMIUM, _PREMIUM_VERSION,
+        SYSTEM_PROMPT_PREMIUM,
+        _PREMIUM_VERSION,
+        build_premium_system_prompt,
+        build_premium_regen_chapter_system_prompt,
     )
-    assert _PREMIUM_VERSION == "p7"
-    assert "ASTROLOGER VOICE LAW" in SYSTEM_PROMPT_PREMIUM
-    assert "25+ years of practice" in SYSTEM_PROMPT_PREMIUM
-    assert "You are NOT an AI" in SYSTEM_PROMPT_PREMIUM
-    # AI-tell ban list must explicitly call out the worst offenders.
-    for tell in ["the chart shows", "analysis reveals",
-                 "it is observed that", "in conclusion",
-                 "to summarise"]:
-        assert tell in SYSTEM_PROMPT_PREMIUM
-    # First-person Hinglish markers must be exemplified for the model.
-    for cue in ["jab maine yeh chart dekha", "meri practice me",
-                "I have seen this pattern many times"]:
-        assert cue in SYSTEM_PROMPT_PREMIUM
+    assert _PREMIUM_VERSION == "p79"
+    assert "PREMIUM PDF — MACHINE CONTRACT" in SYSTEM_PROMPT_PREMIUM
+    assert "AUTHORING (high intelligence, chart-grounded)" in SYSTEM_PROMPT_PREMIUM
+    assert "CONSULTATION VOICE — LIVED MARRIAGE" in SYSTEM_PROMPT_PREMIUM
+    assert "marriage_blueprint" in SYSTEM_PROMPT_PREMIUM
+    assert "chapter_body" in SYSTEM_PROMPT_PREMIUM
+    assert "LANGUAGE LOCK" in SYSTEM_PROMPT_PREMIUM
+    assert "CROSS-LANE NARRATIVE QUALITY" in SYSTEM_PROMPT_PREMIUM
+
+    ph_hn = build_premium_system_prompt("hn")
+    assert "LANGUAGE=hn" in ph_hn
+    assert "Hinglish" in ph_hn or "hinglish" in ph_hn.lower()
+
+    ph_hi = build_premium_system_prompt("hi")
+    assert "LANGUAGE=hi" in ph_hi
+    assert "देवनागरी" in ph_hi
+
+    # Pro PDF lane only supports en | hn | hi; other codes coerce to English.
+    assert build_premium_system_prompt("bn") == build_premium_system_prompt("en")
+    assert len(build_premium_regen_chapter_system_prompt("en")) < len(SYSTEM_PROMPT_PREMIUM)
 
 
-def test_pro_pdf_chapter_grounding_card_dropped_fix10():
-    """Phase 2.5.11.24-fix10 regression: 'Why we say this' card MUST
-    be removed from the 7 chapter pages (the chip + REAL-LIFE MOMENT +
-    WHY-IN-CHARTS chips already provide grounding). It may still
-    appear on blueprint takeaway / verdict / hidden-truth grounding."""
+def test_pro_pdf_chapter_grounding_card_restored_p64():
+    """p64: chapter pages show grounding bridge again when `grounding` is set."""
     import io, pypdf
     payload = _milan(); payload["pro_premium"] = _pro()
     pdf = render_milan_pro_pdf(payload, lang="en")
     reader = pypdf.PdfReader(io.BytesIO(pdf))
     text = "\n".join((p.extract_text() or "") for p in reader.pages)
-    # In fix9 every chapter shipped a grounding card → 7+ instances.
-    # In fix10 only blueprint takeaway + verdict + hidden_truth keep it.
-    assert text.count("Why we say this") <= 4
+    assert text.count("Why we say this") + text.count("Observational notes") >= 7
 
 
 def test_pro_pdf_carries_fix9_depth_blocks():
-    """Phase 2.5.11.24-fix9 regression: report must carry the depth +
-    hierarchy additions — analysis-layers checklist, per-chapter CHART
-    LAYER chips, quiet-patterns callout, attraction + core-challenge
-    page, and the verdict closer. These are the trust + memorability
-    signals; if any silently regress the report flattens back to fix8."""
+    """Phase 2.5.11.24-fix9 regression: report must carry dedicated koot decode
+    page, quiet-patterns callout, attraction + core-challenge page, and
+    the verdict closer. (Methodology checklist page removed.)"""
     import io, pypdf
     payload = _milan(); payload["pro_premium"] = _pro()
     pdf = render_milan_pro_pdf(payload, lang="en")
     reader = pypdf.PdfReader(io.BytesIO(pdf))
     text = "\n".join((p.extract_text() or "") for p in reader.pages)
-    # P3 — Analysis Layers methodology page.
-    assert "HOW YOUR MARRIAGE ENERGY WAS ANALYSED" in text
-    assert "7th House Dynamics" in text
-    assert "Navamsa" in text  # D1 vs D9 explainer
-    # Per-chapter CHART LAYER chip — at least 5 of 7 chapters carry it.
-    assert text.count("CHART LAYER") >= 5
-    # Quiet patterns callout on Hidden Truth.
-    assert "QUIET PATTERNS YOU MIGHT NOT NAME" in text
-    # Attraction + Core Challenge page.
-    assert "WHY THIS BOND FORMED" in text
-    assert "THE ONE THING THAT COULD QUIETLY DAMAGE THIS MARRIAGE" in text
-    # Verdict closer — 8.2/10 sample (ratio 0.78+) lands in the
-    # "make space for each other to be different" band.
-    assert ("instinctively" in text or
-            "emotional language" in text or
-            "patience over pride" in text or
-            "acknowledgement" in text)
+    assert "What shaped this reading" not in text
+    assert "UNDER THE HOOD (BRIEF)" not in text
+    # Koot scores still decoded on their own page (not inside chapter prose).
+    assert "Compatibility Numbers Decoded" in text
+    # Hidden Truth page still carries extra realism lines (no boxed label).
+    assert "WHAT'S HIDDEN UNDERNEATH" in text or "WHATS HIDDEN UNDERNEATH" in text.upper()
+    # Attraction + Core Challenge page remains, but without report-style labels.
+    assert "WHAT DRAWS YOU" in text
+    # Verdict closer — observational band-keyed prose (ratio tiers).
+    assert ("meri practice" in text.lower() or
+            "silent resentment" in text.lower() or
+            "uneven rhythm" in text.lower() or
+            "avoidance" in text.lower())
 
 
 def test_end_to_end_polisher_to_renderer_chapter_keys_match():
     """Architect-fix regression: the polisher emits ch1..ch7 by contract,
-    the renderer must consume them for P4-17 and NOT silently fall back
+    the renderer must consume them for the seven-chapter band (P4–P10
+    after cover/snapshot/hidden-truth) and NOT silently fall back
     to placeholder text. Without the renderer's ch{i} fallback this test
     fails (placeholder string appears in PDF body)."""
     import os
-    os.environ.pop("COMPAT_PREMIUM_POLISH", None)  # force fallback path
+    os.environ.pop("COMPAT_PREMIUM_POLISH", None)  # polish off → empty shell + PDF placeholders
     from vedic.compat.d9_marriage import compute_d9_marriage
     from vedic.compat.synastry_7l import compute_synastry_7l
     from vedic.compat.kp_marriage_promise import compute_kp_couple_promise
@@ -375,83 +451,51 @@ def test_end_to_end_polisher_to_renderer_chapter_keys_match():
         compute_kp_couple_promise(k, k),
         lang="en",
     )
-    # Confirm contract: polisher emits ch1..ch7 keys.
-    assert {c["key"] for c in pro["chapters"]} == {f"ch{i}" for i in range(1, 8)}
+    # Polish off: polisher returns an empty shell; renderer uses milan_pdf placeholders.
+    assert pro["chapters"] == []
+    assert (pro.get("_meta") or {}).get("openai_skipped") is True
     payload["pro_premium"] = pro
     pdf_bytes = render_milan_pro_pdf(payload, lang="en")
     # Extract real text via pypdf so we read past ReportLab's stream compression.
     import io, pypdf
     reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
     text = "\n".join((p.extract_text() or "") for p in reader.pages)
-    # Placeholder must NOT appear when polisher returned real chapters.
     assert "Detailed reading was not generated for this chapter" not in text
-    # At least one fallback chapter prose phrase should reach the page.
-    # Soul-v4 fallback vocabulary (Hinglish, asymmetric "ek partner...dusra"
-    # phrasing, concrete moment markers). Old soul-v1 phrases like
-    # "Honest dialogue" / "mutual respect" are now BANNED therapy-clichés.
-    assert any(s in text for s in (
-        "ek partner", "dusra", "Pyaar", "yahaan", "asli",
-        "5-minute", "Sunday", "chai", "rishte", "loud nahi",
-    ))
-    # Plain-language KP signature reaches P3; jargon must not.
+    assert "Yahan chart me signal medium range me pada hai" in text
+    # Plain-language KP signature reaches Hidden Truth page; jargon must not.
     assert "CSL" not in text
     assert "signifies houses" not in text
 
 
 # ── Phase 2.5.11.24-soul-v6 regressions ───────────────────────────────
 
-def test_pro_pdf_carries_d1_d9_chart_page_soul_v6():
-    """soul-v6 P4: visual D1 (Rasi) + D9 (Navamsa) chart page must
-    appear with both partners labelled. Renderer reads `kundli_p1` /
-    `kundli_p2` from the merged payload (flask_app injects them)."""
+def test_pro_pdf_has_no_d1_d9_chart_insert_page():
+    """Standalone Rāśi/Navāmśa diamond chart page was removed — PDF must not carry CHARTS chapter."""
     import io, pypdf
     payload = _milan(); payload["pro_premium"] = _pro()
     payload["kundli_p1"] = {
         "name": "Vikram", "ascendant": "Cancer",
-        "planets": [
-            {"name": "Sun",     "sign": "Taurus"},
-            {"name": "Moon",    "sign": "Sagittarius"},
-            {"name": "Mars",    "sign": "Aquarius"},
-            {"name": "Mercury", "sign": "Aries"},
-            {"name": "Jupiter", "sign": "Cancer"},
-            {"name": "Venus",   "sign": "Aries"},
-            {"name": "Saturn",  "sign": "Capricorn"},
-        ],
-        "divisionalCharts": {"D9": {
-            "ascendant": "Cancer",
-            "planets": [
-                {"name": "Sun",     "sign": "Capricorn"},
-                {"name": "Moon",    "sign": "Sagittarius"},
-                {"name": "Mars",    "sign": "Taurus"},
-                {"name": "Jupiter", "sign": "Aquarius"},
-            ],
-        }},
+        "planets": [{"name": "Sun", "sign": "Taurus"}],
     }
     payload["kundli_p2"] = {
         "name": "Sanya", "ascendant": "Libra",
-        "planets": [{"name": "Venus", "sign": "Libra"},
-                    {"name": "Moon", "sign": "Pisces"}],
-        "divisionalCharts": {"D9": {"ascendant": "Aries", "planets": []}},
+        "planets": [{"name": "Venus", "sign": "Libra"}],
     }
     pdf = render_milan_pro_pdf(payload, lang="en")
+    assert _count_pages(pdf) == 21
     text = "\n".join((p.extract_text() or "")
                      for p in pypdf.PdfReader(io.BytesIO(pdf)).pages)
-    assert "YOUR ACTUAL CHART POSITIONS" in text
-    assert "Your Charts at a Glance" in text
-    assert "RASI" in text and "NAVAMSA" in text
-    assert "VIKRAM" in text and "SANYA" in text
-    # Reading legend must explain abbreviations.
-    assert "Su" in text and "Mo" in text and "Ma" in text
+    tu = text.upper()
+    assert "CHARTS" not in tu
+    assert "NORTH INDIAN" not in tu
+    assert "WHAT'S HIDDEN UNDERNEATH" in tu or "WHATS HIDDEN UNDERNEATH" in tu.replace("'", "")
 
 
-def test_pro_pdf_chart_page_handles_missing_kundli_data():
-    """soul-v6 robustness: if kundli_p1 / kundli_p2 are absent (mobile
-    pre-soul-v6 client), the chart page must still render — empty grids
-    instead of crashing."""
+def test_pro_pdf_renders_without_kundli_payload_no_crash():
+    """Renderer must not require kundli_p1 / kundli_p2 (chart page removed)."""
     payload = _milan(); payload["pro_premium"] = _pro()
-    # Intentionally do NOT set kundli_p1 / kundli_p2.
     pdf = render_milan_pro_pdf(payload, lang="en")
-    assert _count_pages(pdf) == 20
+    assert _count_pages(pdf) == 21
 
 
 def test_pro_pdf_carries_koot_action_strip_for_weak_koots_soul_v6():
@@ -528,3 +572,25 @@ def test_pro_pdf_planet_meaning_maps_are_hinglish_soul_v6():
     # Affection — Jupiter → "udaar, bada-dil"; Saturn → "shaant bharosa".
     assert "udaar, bada-dil" in text
     assert "shaant bharosa-driven" in text
+
+
+def test_pro_pdf_lang_hn_chrome_is_roman_hindi_not_english_template():
+    """``lang=hn`` must swap deterministic PDF chrome (not LLM chapter bodies)."""
+    import io
+
+    import pypdf
+
+    payload = _milan()
+    payload["pro_premium"] = _pro()
+    pdf = render_milan_pro_pdf(payload, lang="hn")
+    assert pdf.startswith(b"%PDF-")
+    assert _count_pages(pdf) == 21
+    text = "\n".join((p.extract_text() or "")
+                     for p in pypdf.PdfReader(io.BytesIO(pdf)).pages)
+    assert "ADHYAY" in text
+    assert "Prishth" in text
+    assert "Final Verdict" not in text
+    assert "Relationship Snapshot" not in text
+    assert "CHAPTER " not in text
+    assert "This bond forms" not in text
+    assert "The single thing most likely" not in text

@@ -6,10 +6,11 @@ Renders a Kundli Milan compatibility report (the JSON returned by
 
 Design parity:
   * Brand palette + page chrome match `pdf_renderer.py` and `numerology_pdf.py`.
-  * Footer: "Powered by Advanced Cosmic Intelligence" (NEVER mention AI/LLM).
-  * Devanagari support via NotoDeva (auto-registered if installed). Latin
-    fallback (Helvetica) used for en/hn and any language without a
-    registered native font.
+  * Running footer: "Cosmic Lens · Kundli Milan" + page number (NEVER mention AI/LLM).
+  * Indic scripts: Noto Sans TTFs from `artifacts/api-server/fonts/noto/` (bundled),
+    then MILAN_NOTO_FONT_DIR(S), then OS font folders. Native langs **raise**
+    `MilanPdfNativeFontUnavailableError` if no fonts register — no silent tofu PDFs.
+    Tests only: set MILAN_PDF_RELAX_NATIVE_FONT_REQUIREMENT=1 (see conftest.py).
 
 Public entry-point:
     render_milan_pdf(payload: dict, lang: str = "en") -> bytes
@@ -24,9 +25,22 @@ and falls back to the legacy 4-key flat schema when only that is present.
 from __future__ import annotations
 
 import io
+import logging
+import math
 import os
+import re
 from datetime import datetime
 from typing import Any
+
+_log = logging.getLogger(__name__)
+
+from vedic.compat import milan_pdf_locale as MPL
+from vedic.compat.milan_chart_facts import enrich_milan_bundle_for_pdf
+from vedic.compat.premium_chapters import (
+    CHAPTER_BODY_KEY,
+    CHAPTER_SECTION_KEYS,
+    _chart_bridge_with_remedy_tail,
+)
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
@@ -44,6 +58,19 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+from reportlab.platypus.flowables import Flowable
+
+
+class MilanPdfNativeFontUnavailableError(RuntimeError):
+    """Raised when `lang` maps to an Indic script but no Noto fonts registered."""
+
+    pass
+
+
+def _native_font_fallback_allowed() -> bool:
+    """Allow Helvetica for Indic langs (tofu risk). Tests set this; production should not."""
+    v = (os.environ.get("MILAN_PDF_RELAX_NATIVE_FONT_REQUIREMENT") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
 
 
 # ── Brand palette (matches mobile app + sister PDFs) ────────────────────
@@ -62,65 +89,38 @@ ACCENT_BLUE  = colors.HexColor("#1D4ED8")
 
 
 # ── Indian-script font registration (best-effort) ──────────────────────
-# Phase 2.5.11.24: extended from Devanagari-only to all 8 Indian scripts
-# shipped by noto-fonts-extra so the Pro PDF can render in any of the 13
-# Indian languages exposed in the mobile language picker.
+# Pro compatibility PDF native lane: Hindi (देवनागरी) only — register Noto
+# Devanagari for `lang=hi`. Latin lanes (`en`, `hn`) use Helvetica stack.
 #
-# Maps native PDF font alias → (regular .ttf, bold .ttf). Bold falls back
-# to ExtraBold (Noto's bold flavour for these scripts) and finally Black
-# when nothing heavier exists (Oriya only ships display weights on this
-# nix-store snapshot, so we use Black for both regular and bold).
+# Maps native PDF font alias → (regular .ttf, bold .ttf). Bold falls back to
+# ExtraBold when a dedicated bold file is missing.
 _INDIC_FONT_FAMILIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
-    # alias_prefix : ((regular candidates), (bold candidates))
+    # Pro PDF native lane: Hindi (देवनागरी) only — single Noto family.
     "NotoDeva": (
-        ("NotoSansDevanagari-Medium.ttf", "NotoSansDevanagari-Regular.ttf"),
-        ("NotoSansDevanagari-ExtraBold.ttf", "NotoSansDevanagari-Bold.ttf"),
-    ),
-    "NotoBeng": (
-        ("NotoSansBengali-Medium.ttf", "NotoSansBengali-Regular.ttf"),
-        ("NotoSansBengali-ExtraBold.ttf", "NotoSansBengali-Bold.ttf"),
-    ),
-    "NotoTaml": (
-        ("NotoSansTamil-Medium.ttf", "NotoSansTamil-Regular.ttf"),
-        ("NotoSansTamil-ExtraBold.ttf", "NotoSansTamil-Bold.ttf"),
-    ),
-    "NotoTelu": (
-        ("NotoSansTelugu-Medium.ttf", "NotoSansTelugu-Regular.ttf"),
-        ("NotoSansTelugu-ExtraBold.ttf", "NotoSansTelugu-Bold.ttf"),
-    ),
-    "NotoGujr": (
-        ("NotoSansGujarati-Medium.ttf", "NotoSansGujarati-Regular.ttf"),
-        ("NotoSansGujarati-ExtraBold.ttf", "NotoSansGujarati-Bold.ttf"),
-    ),
-    "NotoKnda": (
-        ("NotoSansKannada-Medium.ttf", "NotoSansKannada-Regular.ttf"),
-        ("NotoSansKannada-ExtraBold.ttf", "NotoSansKannada-Bold.ttf"),
-    ),
-    "NotoMlym": (
-        ("NotoSansMalayalam-Medium.ttf", "NotoSansMalayalam-Regular.ttf"),
-        ("NotoSansMalayalam-ExtraBold.ttf", "NotoSansMalayalam-Bold.ttf"),
-    ),
-    "NotoGuru": (
-        ("NotoSansGurmukhi-Medium.ttf", "NotoSansGurmukhi-Regular.ttf"),
-        ("NotoSansGurmukhi-ExtraBold.ttf", "NotoSansGurmukhi-Bold.ttf"),
-    ),
-    "NotoOrya": (
-        # Oriya on this nix snapshot only ships display weights — Black is
-        # the closest readable variant; we use it for both reg + bold.
-        ("NotoSansOriya-Black.ttf",),
-        ("NotoSansOriya-Black.ttf",),
+        ("NotoSansDevanagari-Regular.ttf", "NotoSansDevanagari-Medium.ttf"),
+        ("NotoSansDevanagari-Bold.ttf", "NotoSansDevanagari-ExtraBold.ttf"),
     ),
 }
 
-# Resolved (alias, alias_bold) pair per family — populated at import time.
-# `None` means font not found on this system → Helvetica fallback.
+# Resolved (alias, alias_bold) pair per family — populated by register_indic_fonts().
+# `None` means font not found on this system → Helvetica fallback (tofu for Indic).
 _INDIC_REGISTERED: dict[str, tuple[str, str] | None] = {
     k: None for k in _INDIC_FONT_FAMILIES
 }
 
 
-def _find_noto_dirs() -> list[str]:
-    """Return likely directories containing Noto TTFs, fastest path first."""
+def _bundled_fonts_root() -> str:
+    """`artifacts/api-server/fonts/` — Noto files live in `fonts/noto/`."""
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
+
+
+def _bundled_noto_font_dir() -> str:
+    """Bundled Noto drop zone (preferred for Windows + container deploys)."""
+    return os.path.join(_bundled_fonts_root(), "noto")
+
+
+def _legacy_unix_noto_dirs() -> list[str]:
+    """NixOS / common Linux paths — scanned after bundled + OS-specific dirs."""
     nix_extra: list[str] = []
     nix_plain: list[str] = []
     try:
@@ -128,13 +128,9 @@ def _find_noto_dirs() -> list[str]:
             for e in it:
                 n = e.name
                 if "noto-fonts-extra" in n and not nix_extra:
-                    nix_extra.append(
-                        f"{e.path}/share/fonts/truetype/noto"
-                    )
+                    nix_extra.append(f"{e.path}/share/fonts/truetype/noto")
                 elif "noto-fonts" in n and not nix_plain and "extra" not in n:
-                    nix_plain.append(
-                        f"{e.path}/share/fonts/truetype/noto"
-                    )
+                    nix_plain.append(f"{e.path}/share/fonts/truetype/noto")
                 if nix_extra:
                     break
     except Exception:
@@ -145,69 +141,219 @@ def _find_noto_dirs() -> list[str]:
     ]
 
 
+def _collect_noto_search_dirs() -> list[str]:
+    """Ordered font dirs: project `fonts/noto` + `fonts/` first, then env, then OS."""
+    seen: set[str] = set()
+    out: list[str] = []
+
+    def _add(path: str | None) -> None:
+        if not path:
+            return
+        rp = os.path.abspath(os.path.expandvars(os.path.expanduser(path.strip())))
+        if rp in seen:
+            return
+        if os.path.isdir(rp):
+            seen.add(rp)
+            out.append(rp)
+
+    _add(_bundled_noto_font_dir())
+    _add(_bundled_fonts_root())
+
+    milan_one = (os.environ.get("MILAN_NOTO_FONT_DIR") or "").strip()
+    if milan_one:
+        _add(milan_one)
+    milan_many = os.environ.get("MILAN_NOTO_FONT_DIRS") or ""
+    for chunk in milan_many.split(os.pathsep):
+        _add(chunk.strip())
+
+    windir = os.environ.get("WINDIR") or os.environ.get("SystemRoot")
+    if windir:
+        _add(os.path.join(windir, "Fonts"))
+    localappdata = os.environ.get("LOCALAPPDATA") or ""
+    if localappdata:
+        _add(os.path.join(localappdata, "Microsoft", "Windows", "Fonts"))
+
+    home = os.path.expanduser("~")
+    _add(os.path.join(home, "Library", "Fonts"))
+    _add("/Library/Fonts")
+
+    for u in _legacy_unix_noto_dirs():
+        _add(u)
+
+    return out
+
+
 def _resolve_font_file(dirs: list[str], names: tuple[str, ...]) -> str | None:
     for d in dirs:
         for name in names:
-            p = f"{d}/{name}"
-            if os.path.exists(p):
+            p = os.path.join(d, name)
+            if os.path.isfile(p):
                 return p
     return None
 
 
-try:
-    _noto_dirs = _find_noto_dirs()
-    for _alias, (_reg_names, _bold_names) in _INDIC_FONT_FAMILIES.items():
+def register_indic_fonts(*, force: bool = False) -> None:
+    """Register Noto TTFonts with ReportLab (embedded subsets on save).
+
+    Safe to call multiple times. Search order: `fonts/noto/` + `fonts/` next to
+    this module, MILAN_NOTO_FONT_DIR / MILAN_NOTO_FONT_DIRS, Windows/macOS
+    font folders, then Linux/Nix paths.
+    """
+    dirs = _collect_noto_search_dirs()
+    _log.info(
+        "[milan_pdf] indic_font_search_paths count=%s first=%s bundled_noto=%s bundled_root=%s",
+        len(dirs),
+        dirs[0] if dirs else None,
+        _bundled_noto_font_dir(),
+        _bundled_fonts_root(),
+    )
+
+    reg_names = pdfmetrics.getRegisteredFontNames()
+
+    for alias, (reg_candidates, bold_candidates) in _INDIC_FONT_FAMILIES.items():
+        if not force and alias in reg_names:
+            if _INDIC_REGISTERED.get(alias) is None:
+                _INDIC_REGISTERED[alias] = (alias, f"{alias}-Bold")
+            continue
+
+        reg_path = _resolve_font_file(dirs, reg_candidates)
+        bold_path = _resolve_font_file(dirs, bold_candidates)
+        if not reg_path:
+            _log.warning(
+                "[milan_pdf] indic_font_missing alias=%s tried_dirs=%s filenames=%s",
+                alias,
+                len(dirs),
+                reg_candidates[:4],
+            )
+            continue
+
+        bold_use = bold_path or reg_path
         try:
-            _reg_path  = _resolve_font_file(_noto_dirs, _reg_names)
-            _bold_path = _resolve_font_file(_noto_dirs, _bold_names)
-            if _reg_path and _bold_path:
-                pdfmetrics.registerFont(TTFont(_alias, _reg_path))
-                pdfmetrics.registerFont(TTFont(f"{_alias}-Bold", _bold_path))
-                _INDIC_REGISTERED[_alias] = (_alias, f"{_alias}-Bold")
-        except Exception:
-            # Don't let one font failure cascade — keep registering rest.
-            pass
-except Exception:
-    pass
+            bold_alias = f"{alias}-Bold"
+            pdfmetrics.registerFont(TTFont(alias, reg_path))
+            pdfmetrics.registerFont(TTFont(bold_alias, bold_use))
+            # Map family so <b>/<i> inside <font name='NotoDeva'> resolve cleanly.
+            pdfmetrics.registerFontFamily(
+                alias,
+                normal=alias,
+                bold=bold_alias,
+                italic=alias,
+                boldItalic=bold_alias,
+            )
+            _INDIC_REGISTERED[alias] = (alias, bold_alias)
+            _log.info(
+                "[milan_pdf] indic_font_registered_ok alias=%s regular_path=%s bold_path=%s",
+                alias,
+                reg_path,
+                bold_use,
+            )
+        except Exception as exc:
+            _log.warning(
+                "[milan_pdf] indic_font_register_fail alias=%s err=%s",
+                alias,
+                exc,
+                exc_info=False,
+            )
+
+
+register_indic_fonts()
+
+
+def _normalize_milan_pdf_lang(lang: str | None) -> str:
+    """Pro / basic Milan PDF lanes: en | hn | hi only."""
+    from vedic.compat.premium_chapters import normalize_pro_pdf_lang
+
+    return normalize_pro_pdf_lang(lang)
 
 
 # Backwards-compat: prior code referenced these symbols directly.
 _DEVA_PAIR = _INDIC_REGISTERED.get("NotoDeva")
-_DEVA_REG  = _DEVA_PAIR[0] if _DEVA_PAIR else None
+_DEVA_REG = _DEVA_PAIR[0] if _DEVA_PAIR else None
 _DEVA_BOLD = _DEVA_PAIR[1] if _DEVA_PAIR else None
 
 
 # Languages whose script is fully covered by Helvetica (Latin).
 _LATIN_LANGS = {"en", "hn", "es", "fr", "de", "pt", "id", "tr", "it", "nl"}
 
-# Map ISO lang code → font-family alias key in _INDIC_FONT_FAMILIES.
-# Multi-language scripts: hi/mr/ne/sa share Devanagari; bn/as share Bengali
-# (Assamese is a Bengali-script Indo-Aryan language with 2 extra letters
-# that Noto Bengali covers); pa uses Gurmukhi.
 _LANG_TO_FONT: dict[str, str] = {
-    # Devanagari
-    "hi": "NotoDeva", "mr": "NotoDeva", "ne": "NotoDeva", "sa": "NotoDeva",
-    # Bengali (also covers Assamese)
-    "bn": "NotoBeng", "as": "NotoBeng",
-    # Tamil / Telugu / Gujarati / Kannada / Malayalam / Gurmukhi / Oriya
-    "ta": "NotoTaml",
-    "te": "NotoTelu",
-    "gu": "NotoGujr",
-    "kn": "NotoKnda",
-    "ml": "NotoMlym",
-    "pa": "NotoGuru",
-    "or": "NotoOrya",
+    "hi": "NotoDeva",
 }
 
 
-def _font_pair(lang: str) -> tuple[str, str]:
-    """Return (regular, bold) font names suitable for this language.
+def _ensure_native_pdf_fonts_registered(lang: str) -> None:
+    """Fail fast on native langs if Noto did not register (no silent tofu PDFs)."""
+    register_indic_fonts()
+    code = (lang or "en").lower()
+    if code in _LATIN_LANGS:
+        return
+    fam = _LANG_TO_FONT.get(code)
+    if not fam:
+        return
+    if _INDIC_REGISTERED.get(fam):
+        return
+    b_not = _bundled_noto_font_dir()
+    b_root = _bundled_fonts_root()
+    if _native_font_fallback_allowed():
+        _log.warning(
+            "[milan_pdf] FALLBACK_ACTIVATED Helvetica lang=%s mapped_family=%s "
+            "relax_env=MILAN_PDF_RELAX_NATIVE_FONT_REQUIREMENT is_set "
+            "bundled_noto_dir=%s fonts_root=%s",
+            code,
+            fam,
+            b_not,
+            b_root,
+        )
+        return
+    _log.error(
+        "[milan_pdf] native_font_REQUIRED_MISSING lang=%s mapped_family=%s "
+        "bundled_noto_dir=%s fonts_root=%s "
+        "fix=python scripts/download_noto_indic_for_milan_pdf.py",
+        code,
+        fam,
+        b_not,
+        b_root,
+    )
+    raise MilanPdfNativeFontUnavailableError(
+        f"Milan PDF: native Noto fonts for lang={code!r} (family {fam!r}) are not "
+        f"registered. Install .ttf files under {b_not} or set MILAN_NOTO_FONT_DIR. "
+        "Run: python scripts/download_noto_indic_for_milan_pdf.py "
+        "(from artifacts/api-server). "
+        "Dev-only escape: MILAN_PDF_RELAX_NATIVE_FONT_REQUIREMENT=1."
+    )
 
-    Falls back to Helvetica when the native font isn't registered — text
-    will render as boxes for unsupported scripts, but the document will
-    still build (no crash). All 8 Indian scripts (Devanagari, Bengali,
-    Tamil, Telugu, Gujarati, Kannada, Malayalam, Gurmukhi, Oriya) are
-    covered when noto-fonts-extra is present.
+
+def _log_pdf_font_lane(lang: str) -> None:
+    """One INFO line per PDF when native Noto resolved (or Latin lane)."""
+    register_indic_fonts()
+    code = (lang or "en").lower()
+    fam = _LANG_TO_FONT.get(code)
+    bundled_ok = os.path.isdir(_bundled_noto_font_dir())
+    if fam:
+        pair = _INDIC_REGISTERED.get(fam)
+        if pair:
+            _log.info(
+                "[milan_pdf] pdf_render_font_lane lang=%s mapped_family=%s "
+                "reportlab_regular_ps=%s reportlab_bold_ps=%s bundled_noto_exists=%s",
+                code,
+                fam,
+                pair[0],
+                pair[1],
+                bundled_ok,
+            )
+            return
+        return
+    _log.info(
+        "[milan_pdf] pdf_render_font_lane lang=%s lane=latin_Helvetica bundled_noto_exists=%s",
+        code,
+        bundled_ok,
+    )
+
+
+def _font_pair(lang: str) -> tuple[str, str]:
+    """Return (regular, bold) PostScript names for this language.
+
+    Native-script lanes use registered Noto TTFonts (embedded in PDF).
+    Falls back to Helvetica only when both regular+bold could not be loaded.
     """
     code = (lang or "en").lower()
     fam = _LANG_TO_FONT.get(code)
@@ -215,6 +361,18 @@ def _font_pair(lang: str) -> tuple[str, str]:
         pair = _INDIC_REGISTERED.get(fam)
         if pair:
             return pair
+        if _native_font_fallback_allowed():
+            _log.warning(
+                "[milan_pdf] pdf_font_pair_fallback_Helvetica lang=%s mapped_family=%s "
+                "reason=native_Noto_missing_or_failed_register",
+                code,
+                fam,
+            )
+            return "Helvetica", "Helvetica-Bold"
+        raise MilanPdfNativeFontUnavailableError(
+            f"_font_pair: lang={code!r} family={fam!r} not registered "
+            "(should have been caught by _ensure_native_pdf_fonts_registered)."
+        )
     return "Helvetica", "Helvetica-Bold"
 
 
@@ -234,6 +392,220 @@ def _safe(s: Any) -> str:
     )
 
 
+_BR_TAG_RE = re.compile(r"(?i)<br\s*/?>")
+
+
+def _premium_prose_markup(raw: str) -> str:
+    """Escape plain text, then map paragraph breaks to ReportLab `<br/>` tags.
+
+    LLM copy may use `\\n\\n`, raw newlines, or `<br/>`; normalize so the
+    PDF gets real vertical air (double break between paragraphs, single
+    break inside a paragraph) without treating user `<` as HTML.
+    """
+    t = (raw or "").strip()
+    if not t:
+        return ""
+    t = t.replace("\r\n", "\n").replace("\r", "\n")
+    t = _BR_TAG_RE.sub("\n", t)
+    t = re.sub(r"\n{3,}", "\n\n", t)
+    paras = [p.strip() for p in t.split("\n\n") if p.strip()]
+    if not paras:
+        return ""
+    chunks: list[str] = []
+    for para in paras:
+        lines = [ln.strip() for ln in para.split("\n") if ln.strip()]
+        if not lines:
+            continue
+        chunks.append("<br/>".join(_safe(ln) for ln in lines))
+    return "<br/><br/>".join(chunks)
+
+
+def _split_premium_plain_paragraphs(raw: str) -> list[str]:
+    """Same paragraph boundaries as `_premium_prose_markup`, plain text."""
+    t = (raw or "").strip()
+    if not t:
+        return []
+    t = t.replace("\r\n", "\n").replace("\r", "\n")
+    t = _BR_TAG_RE.sub("\n", t)
+    t = re.sub(r"\n{3,}", "\n\n", t)
+    return [p.strip() for p in t.split("\n\n") if p.strip()]
+
+
+def _premium_chapter_dense_segments(plain: str) -> list[str]:
+    """Split chapter prose into more stacked PDF paragraphs when the read is short.
+
+    Does not invent text — only re-chunks existing words so `_premium_body_multi_paragraph_table`
+    can apply row padding and (with ``relax`` body styles) roomier leading, which helps short
+    chapters visually fill an A4 chapter page instead of sitting as one tight block at the top.
+    """
+    combined = (plain or "").strip()
+    if not combined:
+        return [""]
+    parts = _split_premium_plain_paragraphs(combined)
+    if not parts:
+        return [combined]
+    chunk_cp = 520
+    segments: list[str] = []
+    for p in parts:
+        if len(p) > chunk_cp + 40:
+            segments.extend(_chunk_oversized_paragraph(p, max_cp=chunk_cp))
+        else:
+            segments.append(p)
+    guard = 0
+    while len(segments) < 4 and guard < 16:
+        guard += 1
+        idx = max(range(len(segments)), key=lambda i: len(segments[i]))
+        longest = segments[idx]
+        if len(longest) < 260:
+            break
+        split_at = max(220, min(420, len(longest) // 2))
+        pieces = _chunk_oversized_paragraph(longest, max_cp=split_at)
+        if len(pieces) < 2:
+            break
+        segments[idx : idx + 1] = pieces
+    out = [s.strip() for s in segments if s.strip()]
+    return out if out else [combined]
+
+
+def _chunk_oversized_paragraph(text: str, max_cp: int = 720) -> list[str]:
+    """Split a single very long paragraph into readable PDF rows (no prose invention)."""
+    t = (text or "").strip()
+    if len(t) <= max_cp:
+        return [t] if t else []
+    out: list[str] = []
+    start = 0
+    n = len(t)
+    while start < n:
+        end = min(start + max_cp, n)
+        if end < n:
+            cut = t.rfind(". ", start + 200, end)
+            if cut == -1:
+                cut = t.rfind(" ", start + 280, end)
+            if cut > start:
+                end = cut + 1
+        chunk = t[start:end].strip()
+        if chunk:
+            out.append(chunk)
+        start = end
+    return out
+
+
+def _premium_body_table(
+    markup: str, combined_plain: str, s: dict, *, relax: bool = False,
+) -> Table:
+    """Premium chapter-style body: padded column + relaxed leading."""
+    _lang = s.get("_lang", "en")
+    para = Paragraph(markup, _pick_body_premium(combined_plain, s, _lang, relax=relax))
+    tbl = Table([[para]], colWidths=[180 * mm])
+    tbl.setStyle(TableStyle([
+        ("LEFTPADDING", (0, 0), (-1, -1), 12),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    return tbl
+
+
+def _premium_body_multi_paragraph_table(
+    s: dict, combined_plain: str, *, relax: bool = False,
+) -> Table:
+    """Render body as **multiple stacked paragraphs** (visual rhythm, not one mega-cell).
+
+    Uses the same paragraph boundaries as `_premium_prose_markup`. Long single
+    blobs are chunked by length only — no invented text.
+    """
+    _lang = s.get("_lang", "en")
+    combined_plain = _latinize_pdf_plain(combined_plain, _lang)
+    max_chunk = 620 if relax else 900
+    parts: list[str] = []
+    for block in _split_premium_plain_paragraphs(combined_plain):
+        if len(block) > max_chunk:
+            parts.extend(_chunk_oversized_paragraph(block, max_cp=max_chunk))
+        else:
+            parts.append(block)
+    if not parts:
+        return _premium_body_table(
+            _premium_prose_markup(combined_plain) or _safe("—"),
+            combined_plain or "—",
+            s,
+            relax=relax,
+        )
+    if len(parts) == 1:
+        p0 = parts[0]
+        return _premium_body_table(
+            _premium_prose_markup(p0) or _safe(p0), p0, s, relax=relax,
+        )
+    rows: list[list[Any]] = []
+    style_cmds: list[tuple[Any, ...]] = [
+        ("LEFTPADDING", (0, 0), (-1, -1), 12),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]
+    for i, ptxt in enumerate(parts):
+        mk = _premium_prose_markup(ptxt) or _safe(ptxt)
+        para = Paragraph(mk, _pick_body_premium(ptxt, s, _lang, relax=relax))
+        rows.append([para])
+        top_pad = 6 if i == 0 else (12 if relax else 10)
+        bot_pad = (12 if relax else 10) if i < len(parts) - 1 else 6
+        style_cmds.append(("TOPPADDING", (0, i), (0, i), top_pad))
+        style_cmds.append(("BOTTOMPADDING", (0, i), (0, i), bot_pad))
+    tbl = Table(rows, colWidths=[180 * mm])
+    tbl.setStyle(TableStyle(style_cmds))
+    return tbl
+
+
+def _bullet_cluster_table(s: dict, plain: str) -> Table | None:
+    """If `plain` contains bullet lines, render as a tight bullet cluster; else None."""
+    lines = [ln.strip() for ln in (plain or "").split("\n") if ln.strip()]
+    bullets = [ln for ln in lines if ln.startswith(("•", "-", "–"))]
+    if len(bullets) < 2:
+        return None
+    fname = s["body"].fontName if "body" in s else "Helvetica"
+    rows: list[list[Any]] = []
+    for i, b in enumerate(bullets[:8]):
+        clean = b.lstrip("•-–").strip()
+        if not clean:
+            continue
+        rows.append([
+            Paragraph(
+                f"<font color='{_hex(BRAND_GOLD)}'><b>·</b></font>"
+                f"&nbsp;&nbsp;{_safe(clean)}",
+                ParagraphStyle(
+                    f"prem_bul_cluster_{i}",
+                    fontName=fname,
+                    fontSize=9.8,
+                    leading=14,
+                    textColor=TEXT_DARK,
+                    leftIndent=2,
+                    spaceAfter=4,
+                ),
+            ),
+        ])
+    if len(rows) < 2:
+        return None
+    t = Table(rows, colWidths=[176 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), BG_CARD),
+        ("BOX", (0, 0), (-1, -1), 0.35, BORDER),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    return t
+
+
+def _subsection_soft_rule() -> Table:
+    """Subtle horizontal gap between major blocks (layout layering)."""
+    t = Table([[""]], colWidths=[180 * mm], rowHeights=[0.01])
+    t.setStyle(TableStyle([
+        ("LINEBELOW", (0, 0), (-1, -1), 0.45, BORDER),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    return t
+
+
 # ── Page chrome (header bar + footer) ───────────────────────────────────
 def _on_page(canvas, doc):
     canvas.saveState()
@@ -246,25 +618,23 @@ def _on_page(canvas, doc):
     # Footer
     canvas.setFillColor(TEXT_SOFT)
     canvas.setFont("Helvetica", 7.5)
-    canvas.drawCentredString(
-        w / 2, 12 * mm,
-        "Cosmic Lens  ·  Powered by Advanced Cosmic Intelligence  ·  Kundli Milan",
-    )
-    canvas.drawRightString(w - 15 * mm, 12 * mm, f"Page {doc.page}")
+    lg = getattr(doc, "milan_pdf_lang", None) or "en"
+    footer_center = getattr(doc, "milan_pdf_footer_center", None)
+    if footer_center is None:
+        footer_center = (
+            MPL.page_footer_center_pro(lg)
+            if getattr(doc, "milan_pdf_footer_pro", False)
+            else MPL.page_footer_center(lg)
+        )
+    canvas.drawCentredString(w / 2, 12 * mm, footer_center)
+    pw = MPL.page_footer_page_word(lg)
+    canvas.drawRightString(w - 15 * mm, 12 * mm, f"{pw} {doc.page}")
     canvas.restoreState()
 
 
 # ── Style sheet ─────────────────────────────────────────────────────────
 _INDIC_RANGES = (
-    (0x0900, 0x097F),  # Devanagari
-    (0x0980, 0x09FF),  # Bengali (+ Assamese)
-    (0x0A00, 0x0A7F),  # Gurmukhi
-    (0x0A80, 0x0AFF),  # Gujarati
-    (0x0B00, 0x0B7F),  # Oriya
-    (0x0B80, 0x0BFF),  # Tamil
-    (0x0C00, 0x0C7F),  # Telugu
-    (0x0C80, 0x0CFF),  # Kannada
-    (0x0D00, 0x0D7F),  # Malayalam
+    (0x0900, 0x097F),  # Devanagari (Hindi PDF lane)
 )
 
 
@@ -280,23 +650,65 @@ def _has_indic(text: str) -> bool:
     return False
 
 
-def _pick_body(text: str, s: dict, lang: str = "en") -> ParagraphStyle:
-    """Phase 2.5.11.24-fix: pick body style based on actual TEXT script.
+_DEVA_STRIP_RE = re.compile(r"[\u0900-\u097F\u1CD0-\u1CFF\uA8E0-\uA8FF]+")
 
-    When polish-LLM succeeds for non-Latin lang the body is Indic →
-    use the lang-specific Noto font. When the deterministic Hinglish
-    fallback fires (Roman script) but lang=bn/ta/etc, the lang's Noto
-    font has no Latin glyphs → glyphs render blank. Detect this case and
-    use the Helvetica body style so Hinglish stays readable.
+
+def _strip_devanagari_for_latin_pdf(text: str) -> str:
+    """Remove Devanagari when Helvetica will render (avoids empty □ boxes)."""
+    if not text:
+        return ""
+    out = _DEVA_STRIP_RE.sub(" ", text)
+    return re.sub(r"\s+", " ", out).strip()
+
+
+def _latinize_pdf_plain(text: str, lang: str) -> str:
+    """Keep Indic text only when Noto Devanagari is registered; else Latin-safe."""
+    if not text or not _has_indic(text):
+        return text or ""
+    register_indic_fonts()
+    if _INDIC_REGISTERED.get("NotoDeva"):
+        return text
+    if (lang or "en").lower() in _LATIN_LANGS:
+        return _strip_devanagari_for_latin_pdf(text)
+    return text
+
+
+def _pick_body(text: str, s: dict, lang: str = "en") -> ParagraphStyle:
+    """Pick body style from actual text script.
+
+    When polish succeeds for `lang=hi`, body uses Devanagari Noto. When
+    deterministic Roman fallback fires under `hi`, Devanagari-capable fonts
+    lack Latin glyphs → use Helvetica body so labels stay readable.
     """
     if (lang or "en").lower() in ("en", "hn"):
         return s["body"]
     return s["body"] if _has_indic(text) else s["body_latin"]
 
 
+def _pick_body_premium(
+    text: str, s: dict, lang: str = "en", *, relax: bool = False,
+) -> ParagraphStyle:
+    """Same script logic as `_pick_body`, with roomier leading for long prose."""
+    register_indic_fonts()
+    if _has_indic(text) and _INDIC_REGISTERED.get("NotoDeva"):
+        key = "body_premium_indic_loose" if relax else "body_premium_indic"
+        if key in s:
+            return s[key]
+    if relax:
+        if (lang or "en").lower() in ("en", "hn"):
+            return s["body_premium_latin_loose"] if _has_indic(text) else s["body_premium_loose"]
+        return s["body_premium_loose"] if _has_indic(text) else s["body_premium_latin_loose"]
+    if (lang or "en").lower() in ("en", "hn"):
+        return s["body_premium_latin"] if _has_indic(text) else s["body_premium"]
+    return s["body_premium"] if _has_indic(text) else s["body_premium_latin"]
+
+
 def _styles(lang: str = "en") -> dict[str, ParagraphStyle]:
+    register_indic_fonts()
     base = getSampleStyleSheet()
     H_REG, H_BOLD = _font_pair(lang)
+    deva_reg = (_INDIC_REGISTERED.get("NotoDeva") or ("Helvetica", "Helvetica-Bold"))[0]
+    deva_bold = (_INDIC_REGISTERED.get("NotoDeva") or ("Helvetica", "Helvetica-Bold"))[1]
     # Stash lang on the returned dict so _pick_body() can be called without
     # threading lang through every render helper signature.
     return {
@@ -328,6 +740,42 @@ def _styles(lang: str = "en") -> dict[str, ParagraphStyle]:
             "body_latin", parent=base["BodyText"], fontName="Helvetica",
             fontSize=10, leading=14.5, textColor=TEXT_DARK,
             spaceAfter=4,
+        ),
+        # Long-form premium prose (chapters, hidden truth, verdict): more
+        # leading + paragraph tail so `<br/><br/>` blocks read as real air.
+        "body_premium": ParagraphStyle(
+            "body_premium", parent=base["BodyText"], fontName=H_REG,
+            fontSize=10.25, leading=15.25, textColor=TEXT_DARK,
+            spaceBefore=2, spaceAfter=8,
+        ),
+        "body_premium_latin": ParagraphStyle(
+            "body_premium_latin", parent=base["BodyText"], fontName="Helvetica",
+            fontSize=10.25, leading=15.25, textColor=TEXT_DARK,
+            spaceBefore=2, spaceAfter=8,
+        ),
+        # Short premium chapters: slightly larger type + leading so the same
+        # word-count occupies more vertical space on A4 (client "fill the page").
+        "body_premium_loose": ParagraphStyle(
+            "body_premium_loose", parent=base["BodyText"], fontName=H_REG,
+            fontSize=10.85, leading=16.6, textColor=TEXT_DARK,
+            spaceBefore=3, spaceAfter=11,
+        ),
+        "body_premium_latin_loose": ParagraphStyle(
+            "body_premium_latin_loose", parent=base["BodyText"], fontName="Helvetica",
+            fontSize=10.85, leading=16.6, textColor=TEXT_DARK,
+            spaceBefore=3, spaceAfter=11,
+        ),
+        "body_premium_indic": ParagraphStyle(
+            "body_premium_indic", parent=base["BodyText"],
+            fontName=deva_reg,
+            fontSize=10.25, leading=15.25, textColor=TEXT_DARK,
+            spaceBefore=2, spaceAfter=8,
+        ),
+        "body_premium_indic_loose": ParagraphStyle(
+            "body_premium_indic_loose", parent=base["BodyText"],
+            fontName=deva_reg,
+            fontSize=10.85, leading=16.6, textColor=TEXT_DARK,
+            spaceBefore=3, spaceAfter=11,
         ),
         "muted": ParagraphStyle(
             "muted", parent=base["BodyText"], fontName=H_REG,
@@ -700,15 +1148,23 @@ def _relationship_type_tag(grade: dict, snap: dict, total: float, mx: int,
         first = "Emotionally Layered"
 
     if pct >= 75:
-        second = "Naturally Harmonious Bond"
+        second = "Quiet Weeks, Loud Months"
     elif pct >= 50:
         if "adjust" in stab or "delay" in stab or manglik:
             second = "Slow-Maturing Bond"
         else:
-            second = "Growth-Oriented Bond"
+            second = "Warm but Misaligned Weeks"
     else:
-        second = "Karmic Lesson Bond"
+        second = "Thin Margin on Paper"
     return f"{first}  •  {second}"
+
+
+def _cover_score_ratio(total: float, mx: int) -> float:
+    try:
+        return float(total) / max(float(mx), 1.0)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return 0.0
+
 
 
 def _relationship_tags(snap: dict, koots: list, manglik: bool) -> list[str]:
@@ -726,37 +1182,37 @@ def _relationship_tags(snap: dict, koots: list, manglik: bool) -> list[str]:
     gana = next((k for k in (koots or [])
                  if (k.get("key") or "").lower() == "gana"), None)
     if gana and gana.get("score", 0) < gana.get("max", 1):
-        out.append("Communication Sensitive")
+        out.append("Tone Clashes First")
 
     stab = (snap_tags.get("long_term_stability") or "").lower()
     if "adjust" in stab or "delay" in stab or manglik:
         out.append("Delayed Stability")
     elif "strong" in stab or "natural" in stab:
-        out.append("Naturally Stable")
+        out.append("Steady Surface Weeks")
     else:
-        out.append("Growth Through Effort")
+        out.append("Uneven Rhythm")
     return out[:3]
 
 
 _KOOT_STRENGTH_LANG = {
-    "varna":   "natural ego harmony — neither dominates the other",
-    "vashya":  "genuine mutual influence and pull",
-    "tara":    "naturally supportive timing for each other",
-    "yoni":    "deep physical and instinctive comfort",
-    "graha":   "friendly natural temperaments",
-    "gana":    "shared inner nature and emotional rhythm",
-    "bhakoot": "compatible life-directions and shared goals",
-    "nadi":    "complementary biological/emotional energies",
+    "varna":   "social face stays even — who speaks first at gatherings rarely becomes a silent score",
+    "vashya":  "one steers small plans, the other follows without a weekly power preamble",
+    "tara":    "bad-day timing mis-fires less — apologies land before hurt hardens",
+    "yoni":    "instinctive pace of closeness rhymes more than it surprises",
+    "graha":   "under stress you still decode each other's mood faster than strangers would",
+    "gana":    "fight cadence and 'who needs people after work' annoy less than when this is weak",
+    "bhakoot": "money and in-law stress still happens — less of the stuck loop this koot flags when bad",
+    "nadi":    "body-weeks and tiredness patterns do not mirror — one crashes while the other catches second wind",
 }
 _KOOT_DAMAGE_LANG = {
-    "varna":   "subtle ego friction — one feels less respected over time",
-    "vashya":  "imbalance in who pulls and who follows",
-    "tara":    "mistimed moments — wrong words at vulnerable times",
-    "yoni":    "mismatched physical or emotional rhythms",
-    "graha":   "natural temperament clashes during stress",
-    "gana":    "different inner nature — one playful, one serious",
-    "bhakoot": "different life-directions creating quiet drift",
-    "nadi":    "hidden energetic friction (often health-related)",
+    "varna":   "ego bruises show up as cold courtesy, not raised voices",
+    "vashya":  "who leads daily micro-decisions becomes the unnamed argument",
+    "tara":    "right sentence, wrong hour — small misses stack as 'you never get me'",
+    "yoni":    "touch and irritation spike together — pace mismatch, not lack of care",
+    "graha":   "same stress week reads as attack vs shutdown depending who you are",
+    "gana":    "one wants noise after work, the other wants a cave — same evening, two needs",
+    "bhakoot": "life-direction math quietly diverges — savings, city, parents' expectations",
+    "nadi":    "mirrored fatigue weeks — both tired the same Tuesday without blaming a task",
 }
 # Map common koot key/label spellings → canonical lookup keys above.
 # Real /api/kundli-milan payloads use `vasya`, `maitri`, `bhakut` etc.
@@ -794,6 +1250,18 @@ def _canon_koot_key(k: dict) -> str:
     return _KOOT_KEY_ALIASES.get(first, "")
 
 
+def _koot_match_ratio(koots: list, canon: str) -> float | None:
+    """``score/max`` for the first koot whose canonical key matches ``canon``."""
+    for k in koots or []:
+        if _canon_koot_key(k) != canon:
+            continue
+        mx = float(k.get("max") or 0)
+        if mx <= 0:
+            return None
+        return float(k.get("score") or 0) / mx
+    return None
+
+
 def _is_manglik(payload: dict) -> bool:
     """Single source of truth for manglik flag across all builders."""
     if not isinstance(payload, dict):
@@ -823,8 +1291,9 @@ def _derive_special_bullets(payload: dict) -> list[str]:
             out.append(_safe(first[:300]))
     if not out:
         out.append(
-            "Even where formal scores are modest, the chart "
-            "shows real emotional pull and willingness to grow together."
+            "Even where scores look ordinary on paper, the lived bond "
+            "often shows up first in small habits — who texts first after "
+            "a freeze, who carries the calendar — before any big declaration."
         )
     return out[:5]
 
@@ -856,14 +1325,15 @@ def _derive_damage_bullets(payload: dict) -> list[str]:
             out.append(_safe(first[:300]))
     if _is_manglik(payload):
         out.append(
-            "<b>Manglik energy</b>: needs careful timing of marriage — "
-            "rushing can trigger early friction. Wait for the bond to "
-            "settle before major joint commitments."
+            "<b>Manglik skew</b>: one chart carries a hotter Mars edge — "
+            "ignition points cluster around travel, sleep, and who initiates "
+            "hard talks after 10 p.m., not around 'fate' headlines."
         )
     if not out:
         out.append(
-            "Unspoken expectations and silent withdrawal are the "
-            "biggest quiet risks here. Speak early, even when it feels small."
+            "Quiet risk here is the same as most kitchens — unspoken "
+            "division of labour and who goes silent first after a bad week; "
+            "the chart only maps where that silence likes to sit."
         )
     return out[:5]
 
@@ -875,30 +1345,29 @@ def _practical_paragraphs(payload: dict) -> list[str]:
     paras: list[str] = []
     if pct >= 70:
         paras.append(
-            "Day-to-day practical life flows naturally between you. Money "
-            "decisions, family pressures, and household responsibilities "
-            "tend to be discussed openly rather than fought over silently."
+            "Practical weeks here often look boring from outside — money "
+            "talk, in-laws, chores — because friction surfaces early as "
+            "irritation in tone, not as missing love."
         )
     elif pct >= 50:
         paras.append(
-            "Practical life will require conscious teamwork. Money "
-            "handling and family pressure can become flashpoints unless "
-            "you decide early how to share decisions and where each of "
-            "you holds final say."
+            "Household load and family-side pressure tend to find the same "
+            "two people on opposite sides of the calendar — who travels for "
+            "which festival, who texts the landlord — that is where this "
+            "band shows first."
         )
     else:
         paras.append(
-            "Practical life will demand active negotiation. Joint "
-            "financial planning, household roles, and family-side "
-            "expectations need explicit conversations long before they "
-            "become resentments."
+            "Lower classical totals usually mean money and extended-family "
+            "math stay tense until roles are named plainly — not because "
+            "effort is absent, but because assumptions stay unpriced."
         )
     if _is_manglik(payload):
         paras.append(
-            "Manglik influence here suggests delaying major joint "
-            "commitments — large loans, joint property, business "
-            "ventures — until at least one full year after marriage. "
-            "Let the bond settle first."
+            "Manglik skew shows up as uneven appetite for big joint bets "
+            "early — loans, shared property, one-name-on-paper moves — "
+            "one side wants speed, the other wants a season of ordinary "
+            "weeks first."
         )
     ms = (payload.get("analysis") or {}).get("marriage_stability") or {}
     if isinstance(ms, dict):
@@ -921,9 +1390,9 @@ def _final_paragraphs(payload: dict) -> list[str]:
     if fd_text:
         paras.append(_safe(fd_text[:600]))
     paras.append(
-        "<b>The deeper truth:</b> this relationship is not defined by "
-        "perfection — but by how both of you choose to grow through it. "
-        "The chart shows tendencies, never destinies."
+        "<b>The deeper read:</b> the chart maps tendencies in tone and "
+        "timing — who goes quiet first, who carries which week — not a "
+        "grade on character."
     )
     return paras
 
@@ -938,74 +1407,90 @@ def _gold_rule(width_mm: float = 40) -> Table:
 
 def _cover_page(s: dict, p1: dict, p2: dict, total: float, mx: int,
                 grade: dict, snap: dict, manglik: bool,
-                lang: str) -> list[Any]:
-    """PAGE 1 — premium cover. Brand wordmark + couple + score + type tag."""
+                lang: str, koots: list | None = None) -> list[Any]:
+    """PAGE 1 — Clean client cover: brand, title, attribution, couple, score, mood."""
     H_REG, H_BOLD = _font_pair(lang)
     out: list[Any] = []
     grade_label = (grade or {}).get("label") or ""
     grade_color = (grade or {}).get("color") or _hex(BRAND_PURPLE)
 
-    out.append(Spacer(1, 18 * mm))
+    out.append(Spacer(1, 10 * mm))
 
     out.append(Paragraph(
         f"<font color='{_hex(BRAND_GOLD)}'><b>COSMIC LENS</b></font>",
-        ParagraphStyle("brand", fontName="Helvetica-Bold", fontSize=10,
-                       leading=14, alignment=TA_CENTER, spaceAfter=8),
+        ParagraphStyle("brand", fontName="Helvetica-Bold", fontSize=11,
+                       leading=15, alignment=TA_CENTER, spaceAfter=6),
+    ))
+    out.append(_gold_rule(52))
+    out.append(Spacer(1, 10))
+
+    out.append(Paragraph(
+        MPL.cover_title(lang),
+        ParagraphStyle("hero_title", fontName="Helvetica-Bold", fontSize=24,
+                       leading=30, alignment=TA_CENTER,
+                       textColor=BRAND_PURPLE, spaceAfter=4),
     ))
     out.append(Paragraph(
-        "Cosmic Relationship Blueprint",
-        ParagraphStyle("hero_title", fontName="Helvetica-Bold", fontSize=22,
-                       leading=28, alignment=TA_CENTER,
-                       textColor=BRAND_PURPLE, spaceAfter=2),
-    ))
-    out.append(Paragraph(
-        f"<font color='{_hex(TEXT_SOFT)}'>A Vedic Relationship "
-        f"Intelligence Report</font>",
-        ParagraphStyle("hero_sub", fontName="Helvetica", fontSize=10,
-                       leading=14, alignment=TA_CENTER, spaceAfter=20),
+        f"<font color='{_hex(TEXT_SOFT)}'>{_safe(MPL.cover_subtitle(lang))}</font>",
+        ParagraphStyle("hero_sub", fontName=H_REG, fontSize=11,
+                       leading=15, alignment=TA_CENTER, spaceAfter=10),
     ))
 
-    out.append(Spacer(1, 8 * mm))
+    out.append(Paragraph(
+        f"<font color='{_hex(TEXT_SOFT)}'>{_safe(MPL.cover_prepared_line(lang))} "
+        f"<b>Ashutosh Bharadwaj</b></font>",
+        ParagraphStyle("cov_prep", fontName=H_REG, fontSize=9.2,
+                       leading=13, alignment=TA_CENTER,
+                       textColor=TEXT_SOFT, spaceAfter=4),
+    ))
+    out.append(Paragraph(
+        f"<font color='{_hex(BRAND_GOLD)}'><b>"
+        f"{_safe(MPL.cover_powered_line(lang))}</b></font>",
+        ParagraphStyle("hero_brand", fontName="Helvetica-Bold", fontSize=9,
+                       leading=12, alignment=TA_CENTER, spaceAfter=14),
+    ))
+
+    out.append(Spacer(1, 5 * mm))
 
     out.append(Paragraph(
         f"<b>{_safe(p1.get('name'))}</b>"
-        f"<font color='{_hex(TEXT_SOFT)}'>  &nbsp;&amp;  &nbsp;</font>"
+        f"<font color='{_hex(TEXT_SOFT)}'>  &nbsp;·&nbsp;  </font>"
         f"<b>{_safe(p2.get('name'))}</b>",
-        ParagraphStyle("hero_names", fontName=H_BOLD, fontSize=28,
-                       leading=34, alignment=TA_CENTER,
-                       textColor=TEXT_DARK, spaceAfter=4),
+        ParagraphStyle("hero_names", fontName=H_BOLD, fontSize=26,
+                       leading=32, alignment=TA_CENTER,
+                       textColor=TEXT_DARK, spaceAfter=6),
     ))
     out.append(Paragraph(
-        f"<font color='{_hex(TEXT_MID)}'>Generated "
+        f"<font color='{_hex(TEXT_MID)}'>{_safe(MPL.cover_generated_prefix(lang))} "
         f"{datetime.utcnow().strftime('%d %B %Y')}</font>",
-        ParagraphStyle("hero_date", fontName="Helvetica", fontSize=10,
-                       leading=12, alignment=TA_CENTER, spaceAfter=18),
+        ParagraphStyle("hero_date", fontName=H_REG, fontSize=10.5,
+                       leading=13, alignment=TA_CENTER, spaceAfter=16),
     ))
-
-    out.append(Spacer(1, 8 * mm))
 
     score_p = Paragraph(
         f"<b>{_safe(total)}</b>"
         f"<font color='{_hex(TEXT_SOFT)}' size=18> / {_safe(mx)}</font>",
-        ParagraphStyle("hero_score", fontName="Helvetica-Bold", fontSize=48,
-                       leading=56, alignment=TA_CENTER,
+        ParagraphStyle("hero_score", fontName="Helvetica-Bold", fontSize=50,
+                       leading=58, alignment=TA_CENTER,
                        textColor=BRAND_PURPLE),
     )
     grade_p = Paragraph(
         f"<b>{_safe(grade_label).upper()}</b>" if grade_label else "",
-        ParagraphStyle("hero_grade", fontName="Helvetica-Bold", fontSize=11,
-                       leading=14, alignment=TA_CENTER,
+        ParagraphStyle("hero_grade", fontName="Helvetica-Bold", fontSize=11.5,
+                       leading=15, alignment=TA_CENTER,
                        textColor=colors.HexColor(grade_color)),
     )
     card = Table([[score_p], [Spacer(1, 2)], [grade_p]],
-                 colWidths=[110 * mm])
+                 colWidths=[118 * mm])
     card.setStyle(TableStyle([
         ("BACKGROUND",   (0, 0), (-1, -1), _BG_HERO),
-        ("BOX",          (0, 0), (-1, -1), 1.5, BRAND_GOLD),
+        ("BOX",          (0, 0), (-1, -1), 1.2, BRAND_GOLD),
         ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
         ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING",   (0, 0), (-1, -1), 18),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 18),
+        ("TOPPADDING",   (0, 0), (-1, -1), 20),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 20),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 12),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
     ]))
     centered = Table([[card]], colWidths=[180 * mm])
     centered.setStyle(TableStyle([
@@ -1014,30 +1499,25 @@ def _cover_page(s: dict, p1: dict, p2: dict, total: float, mx: int,
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
     ]))
     out.append(centered)
-    out.append(Spacer(1, 16))
+    out.append(Spacer(1, 10))
 
     rt = _relationship_type_tag(grade, snap, total, mx, manglik)
     out.append(Paragraph(
-        f"<font color='{_hex(TEXT_MID)}'><b>{_safe(rt)}</b></font>",
-        ParagraphStyle("hero_tag", fontName="Helvetica-Bold", fontSize=12,
-                       leading=18, alignment=TA_CENTER, spaceAfter=10),
+        f"<font color='{_hex(TEXT_SOFT)}'><b>{_safe(rt)}</b></font>",
+        ParagraphStyle("hero_tag", fontName="Helvetica-Bold", fontSize=11,
+                       leading=16, alignment=TA_CENTER, spaceAfter=0),
     ))
 
-    out.append(Spacer(1, 32 * mm))
-    out.append(Paragraph(
-        f"<font color='{_hex(BRAND_GOLD)}'><b>"
-        f"Powered by Advanced Cosmic Intelligence</b></font>",
-        ParagraphStyle("hero_brand", fontName="Helvetica-Bold", fontSize=9,
-                       leading=12, alignment=TA_CENTER),
-    ))
     out.append(PageBreak())
     return out
 
 
-def _chapter_eyebrow(num: int, label: str) -> Paragraph:
+def _chapter_eyebrow(num: int, label: str, lang: str = "en") -> Paragraph:
+    pref = MPL.chapter_prefix(lang)
+    lab = label if MPL.pdf_ui_hn(lang) else label.upper()
     return Paragraph(
         f"<font color='{_hex(TEXT_SOFT)}'><b>"
-        f"CHAPTER {num:02d}  ·  {label.upper()}</b></font>",
+        f"{pref} {num:02d}  ·  {lab}</b></font>",
         ParagraphStyle("eyebrow", fontName="Helvetica-Bold", fontSize=9,
                        leading=12, spaceAfter=6),
     )
@@ -1047,8 +1527,15 @@ def _chapter_title_block(title: str, subtitle: str, s: dict | None = None) -> li
     # Phase 2.5.11.24: title + subtitle carry user-facing dynamic text
     # (often partner names + chapter names) — must respect the lang font
     # so Indic scripts don't render as tofu boxes.
+    lg = str((s or {}).get("_lang") or "en")
+    title = _latinize_pdf_plain(title, lg)
+    subtitle = _latinize_pdf_plain(subtitle, lg)
     h_bold = (s or {}).get("h1").fontName if (s and "h1" in s) else "Helvetica-Bold"
     h_reg  = (s or {}).get("body").fontName if (s and "body" in s) else "Helvetica"
+    if _has_indic(title) or _has_indic(subtitle):
+        pair = _INDIC_REGISTERED.get("NotoDeva")
+        if pair:
+            h_bold, h_reg = pair[1], pair[0]
     out: list[Any] = []
     out.append(Paragraph(
         f"<b>{_safe(title)}</b>",
@@ -1066,25 +1553,116 @@ def _chapter_title_block(title: str, subtitle: str, s: dict | None = None) -> li
     return out
 
 
-def _grounding_card(s: dict, grounding: str) -> Table:
-    # Phase 2.5.11.24: `grounding` is dynamic prose written by the LLM in
-    # the target language — use the lang-correct font from the styles dict
-    # so Bengali/Tamil/Telugu/etc. don't render as Helvetica tofu.
-    g_reg = (s.get("body").fontName if s and "body" in s else "Helvetica")
-    gp = Paragraph(
-        f"<font color='{_hex(TEXT_SOFT)}'><b>Why we say this →</b></font>  "
-        f"<font color='{_hex(TEXT_MID)}'><i>{_safe(grounding)}</i></font>",
-        ParagraphStyle("ground_pretty", fontName=g_reg, fontSize=8.5,
-                       leading=12, textColor=TEXT_MID),
+def _premium_chapter_primary_narrative(ch: dict | None) -> str:
+    """Single consultation body for premium chapter pages (``chapter_body`` first)."""
+    if not isinstance(ch, dict):
+        return ""
+    cb = str(ch.get(CHAPTER_BODY_KEY) or "").strip()
+    if cb:
+        return cb
+    fr = str(ch.get("full_read") or "").strip()
+    if fr:
+        return fr
+    bits = [str(ch.get(sk) or "").strip() for sk in CHAPTER_SECTION_KEYS if str(ch.get(sk) or "").strip()]
+    if bits:
+        return "\n\n".join(bits)
+    return " ".join(
+        x for x in (
+            (ch.get("kya_dikh") or "").strip(),
+            (ch.get("kya_matlab") or "").strip(),
+            (ch.get("kya_dhyan") or "").strip(),
+        ) if x
     )
+
+
+def _premium_compact_bridge_card(
+    s: dict,
+    title_label: str,
+    body: str,
+    *,
+    max_chars: int = 280,
+) -> Table:
+    """Compact premium insight strip — not a long essay card."""
+    g_reg = (s.get("body").fontName if s and "body" in s else "Helvetica")
+    txt = (body or "").strip()
+    if len(txt) > max_chars:
+        txt = txt[: max_chars - 1].rsplit(" ", 1)[0].strip() + "…"
+    gp = Paragraph(
+        f"<font color='{_hex(TEXT_SOFT)}'><b>{_safe(title_label)}</b></font>  "
+        f"<font color='{_hex(TEXT_MID)}'>{_safe(txt)}</font>",
+        ParagraphStyle(
+            "prem_bridge_compact",
+            fontName=g_reg,
+            fontSize=7.85,
+            leading=11,
+            textColor=TEXT_MID,
+        ),
+    )
+    t = Table([[gp]], colWidths=[180 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (-1, -1), BG_CARD),
+        ("LINEABOVE",    (0, 0), (-1, 0), 0.55, BRAND_GOLD),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING",   (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 5),
+    ]))
+    return t
+
+
+def _chart_note_card(s: dict, snippet: str) -> Table:
+    """Short chart-linked insight (top-of-chapter rhythm)."""
+    lg = str(s.get("_lang") or "en")
+    return _premium_compact_bridge_card(s, MPL.chart_insight_arrow(lg), snippet, max_chars=260)
+
+
+def _prose_and_bullet_lines(plain: str) -> tuple[str, list[str]]:
+    lines = [ln.strip() for ln in (plain or "").split("\n")]
+    non_bul = [ln for ln in lines if ln and not ln.startswith(("•", "-", "–"))]
+    bul = [ln for ln in lines if ln.startswith(("•", "-", "–"))]
+    return "\n\n".join(non_bul), bul
+
+
+def _grounding_card(
+    s: dict,
+    grounding: str,
+    *,
+    title: str | None = None,
+    max_body_chars: int | None = None,
+    compact: bool = False,
+) -> Table:
+    # Phase 2.5.11.24: `grounding` is dynamic prose written by the LLM in
+    # the target lane — use the styles dict font (`hi` → Noto Devanagari;
+    # `en`/`hn` → Latin stack) so Indic grounding never renders as Helvetica tofu.
+    lg = str(s.get("_lang") or "en")
+    if title is None:
+        title = MPL.grounding_why_title(lg)
+    g_reg = (s.get("body").fontName if s and "body" in s else "Helvetica")
+    body = (grounding or "").strip()
+    if max_body_chars is not None and len(body) > max_body_chars:
+        body = body[: max_body_chars - 1].rsplit(" ", 1)[0].strip() + "…"
+    fs = 7.75 if compact else 8.5
+    ld = 11 if compact else 12
+    gp = Paragraph(
+        f"<font color='{_hex(TEXT_SOFT)}'><b>{_safe(title)}</b></font>  "
+        f"<font color='{_hex(TEXT_MID)}'><i>{_safe(body)}</i></font>",
+        ParagraphStyle(
+            "ground_pretty_compact" if compact else "ground_pretty_full",
+            fontName=g_reg,
+            fontSize=fs,
+            leading=ld,
+            textColor=TEXT_MID,
+        ),
+    )
+    top_pad, bot_pad = (6, 6) if compact else (8, 8)
     t = Table([[gp]], colWidths=[180 * mm])
     t.setStyle(TableStyle([
         ("BACKGROUND",   (0, 0), (-1, -1), BG_TINT),
         ("LINEABOVE",    (0, 0), (-1, 0), 0.6, BRAND_GOLD),
         ("LEFTPADDING",  (0, 0), (-1, -1), 12),
         ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-        ("TOPPADDING",   (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 8),
+        ("TOPPADDING",   (0, 0), (-1, -1), top_pad),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), bot_pad),
     ]))
     return t
 
@@ -1093,8 +1671,9 @@ def _chapter_page(s: dict, num: int, eyebrow: str, title: str,
                   subtitle: str, body: str,
                   grounding: str = "") -> list[Any]:
     """One full premium chapter page: eyebrow + title + subtitle + body."""
+    lg = str(s.get("_lang") or "en")
     out: list[Any] = []
-    out.append(_chapter_eyebrow(num, eyebrow))
+    out.append(_chapter_eyebrow(num, eyebrow, lg))
     out.extend(_chapter_title_block(title, subtitle, s))
     if body:
         out.append(Paragraph(_safe(body), s["body"]))
@@ -1108,8 +1687,9 @@ def _chapter_page(s: dict, num: int, eyebrow: str, title: str,
 def _bullets_page(s: dict, num: int, eyebrow: str, title: str,
                   subtitle: str, bullets: list[str]) -> list[Any]:
     """Page with a bulleted list (used for Special / Damage pages)."""
+    lg = str(s.get("_lang") or "en")
     out: list[Any] = []
-    out.append(_chapter_eyebrow(num, eyebrow))
+    out.append(_chapter_eyebrow(num, eyebrow, lg))
     out.extend(_chapter_title_block(title, subtitle, s))
     for b in bullets or []:
         if not b:
@@ -1136,43 +1716,433 @@ def _bullets_page(s: dict, num: int, eyebrow: str, title: str,
     return out
 
 
-def _snapshot_page(s: dict, num: int, snap: dict, koots: list,
-                   manglik: bool, total: float, mx: int) -> list[Any]:
-    """PAGE 2 — Relationship Snapshot. The most important page."""
+def _premium_consultation_blocks_page(
+    s: dict,
+    num: int,
+    eyebrow: str,
+    title: str,
+    subtitle: str,
+    blocks: list[str],
+) -> list[Any]:
+    """Premium Pro pages for ``special`` / ``damage``: multi-paragraph consultation, not diamond bullets."""
+    lg = str(s.get("_lang") or "en")
     out: list[Any] = []
-    out.append(_chapter_eyebrow(num, "SNAPSHOT"))
+    out.append(_chapter_eyebrow(num, eyebrow, lg))
+    out.extend(_chapter_title_block(title, subtitle, s))
+    cleaned = [str(b).strip() for b in (blocks or []) if str(b).strip()]
+    if not cleaned:
+        out.append(
+            _premium_body_multi_paragraph_table(
+                s,
+                MPL.consultation_empty(lg),
+                relax=False,
+            )
+        )
+        out.append(PageBreak())
+        return out
+    for bi, block in enumerate(cleaned):
+        out.append(_premium_body_multi_paragraph_table(s, block, relax=False))
+        out.append(Spacer(1, 8))
+        bt = _bullet_cluster_table(s, block)
+        if bt is not None:
+            out.append(Spacer(1, 4))
+            out.append(bt)
+        if bi < len(cleaned) - 1:
+            out.append(Spacer(1, 8))
+            out.append(_subsection_soft_rule())
+            out.append(Spacer(1, 5))
+    out.append(PageBreak())
+    return out
+
+
+def _snapshot_clip_plain(text: str, max_chars: int = 500) -> str:
+    plain = re.sub(r"\s+", " ", (text or "").strip())
+    if len(plain) <= max_chars:
+        return plain
+    cut = plain[: max_chars - 1].rsplit(" ", 1)[0].strip()
+    return (cut or plain[: max_chars]) + "…"
+
+
+def _snapshot_opening_paragraph(
+    snap: dict,
+    koots: list,
+    manglik: bool,
+    total: float,
+    mx: int,
+    p1: dict,
+    p2: dict,
+    lang: str = "en",
+) -> str:
+    """One emotionally intelligent lede — API summary when present, else chart-grounded."""
+    raw = str((snap or {}).get("summary") or "").strip()
+    if raw:
+        return _snapshot_clip_plain(raw, 500)
+    n1 = (p1.get("name") or MPL.partner_default(lang, 1)).strip()
+    n2 = (p2.get("name") or MPL.partner_default(lang, 2)).strip()
+    tags = (snap or {}).get("tags") or {}
+    pull = str(tags.get("emotional_pull") or "").strip()
+    stab = str(tags.get("long_term_stability") or "").strip()
+    mp = str(tags.get("marriage_potential") or "").strip()
+    r = _cover_score_ratio(total, mx)
+    if MPL.pdf_ui_hn(lang):
+        mood_band = "high" if r >= 0.67 else ("mid" if r >= 0.45 else "low")
+        tag_bits: list[str] = []
+        if pull:
+            tag_bits.append(MPL.snap_tag_bit_pull(lang, pull))
+        if mp:
+            tag_bits.append(MPL.snap_tag_bit_mp(lang, mp))
+        if stab:
+            tag_bits.append(MPL.snap_tag_bit_stab(lang, stab))
+        tag_sentence = (
+            " ".join(tag_bits) if tag_bits else MPL.snap_tag_sentence_empty(lang)
+        )
+        return MPL.snap_opening(lang, n1, n2, mood_band, tag_sentence, manglik)
+    mood = (
+        "The classical tally sits in a generous band — affection has room to deepen "
+        "without every week becoming a referendum on the bond."
+        if r >= 0.67
+        else (
+            "The classical tally sits in a workable middle — love here proves itself "
+            "in patience after ordinary stress, not only in peak moments."
+            if r >= 0.45
+            else (
+                "The paper margin is modest — many enduring marriages live here when "
+                "both people name rhythms early instead of letting silence archive hurt."
+            )
+        )
+    )
+    tag_bits = []
+    if pull:
+        tag_bits.append(f"Emotional pull reads as {pull.lower()}.")
+    if mp:
+        tag_bits.append(f"Marriage potential reads as {mp.lower()}.")
+    if stab:
+        tag_bits.append(f"Long-horizon stability reads as {stab.lower()}.")
+    tag_sentence = " ".join(tag_bits) if tag_bits else (
+        "The Ashtakoot row and the chapters that follow anchor this reading in "
+        "chart-visible habits and lived marriage observation."
+    )
+    mars = (
+        " Mars heat is present on one chart — steadiness grows when storms are "
+        "named calmly, not dramatised."
+        if manglik
+        else ""
+    )
+    return (
+        f"{n1} and {n2}: {mood} {tag_sentence}"
+        f"{mars} The sections that follow translate these signals into lived "
+        f"marriage observation — tone, timing, and repair — not abstract scores."
+    )
+
+
+def _snapshot_tag_microcopy(tag: str, snap: dict, koots: list, manglik: bool,
+                            lang: str = "en") -> str:
+    """2–3 lines per snapshot descriptor; chart hooks where the tag implies them."""
+    if MPL.pdf_ui_hn(lang):
+        return MPL.snap_microcopy_body_hn(tag)
+    tags = (snap or {}).get("tags") or {}
+    pull_h = str(tags.get("emotional_pull") or "").strip()
+    stab_h = str(tags.get("long_term_stability") or "").strip()
+    tr = _koot_match_ratio(koots, "tara")
+    br = _koot_match_ratio(koots, "bhakoot")
+    yr = _koot_match_ratio(koots, "yoni")
+    gr = _koot_match_ratio(koots, "gana")
+
+    if tag == "Quiet Pull":
+        hook = ""
+        if yr is not None and yr < 0.45:
+            hook = (
+                " Your Yoni ratio supports a pace gap more than a chemistry verdict — "
+                "tenderness and irritation can share the same evening."
+            )
+        elif tr is not None and tr < 0.45:
+            hook = (
+                " With Tara throttled, the bond often needs calendar-aware repair — "
+                "the right sentence lands better on a different hour."
+            )
+        return (
+            "This is rarely coldness; it usually reads as a softer throttle on big "
+            "emotional theatre — one of you may warm up slowly after overload, or "
+            "show care through consistency before words catch up."
+            f"{hook} Naming the pace out loud prevents quiet stories of rejection."
+        )
+
+    if tag == "Delayed Stability":
+        bits = [
+            "Horizon comfort may mature in chapters rather than lightning — common when "
+            "timing, life-direction math, or Mars pacing asks for steadier sequencing "
+            "before milestones feel obvious on the outside.",
+        ]
+        if manglik:
+            bits.append(
+                " Manglik skew adds heat to ignition points — travel, sleep debt, "
+                "and who initiates hard talks late night — not a headline fate verdict."
+            )
+        if br is not None and br < 0.5:
+            bits.append(
+                " Bhakoot under strain still allows loyalty; it asks for explicit "
+                "alignment on city, savings, and parental expectations before they "
+                "become silent scorecards."
+            )
+        elif tr is not None and tr < 0.55:
+            bits.append(
+                " Tara in a middling lane means repair is learnable — lead with one "
+                "soft sentence before the full briefing so the nervous system can follow."
+            )
+        return " ".join(bits)
+
+    if tag == "Deep Attachment":
+        return (
+            "The snapshot reads a high emotional charge — affection tends to arrive "
+            "with intensity, memory, and a hunger to be mirrored. The work is not "
+            "dialing love down; it is keeping pride from hijacking vulnerable hours "
+            "when stress stacks."
+        )
+
+    if tag == "Steady Affection":
+        return (
+            "Medium pull is often the unsung marriage band — fewer fireworks, more "
+            "repeatable kindness. The bond deepens when micro-bids for connection "
+            "(a glance, a check-in) are answered more often than they are postponed."
+        )
+
+    if tag == "Tone Clashes First":
+        ghook = ""
+        if gr is not None and gr < 0.55:
+            ghook = (
+                " Gana is uneven here — one nervous system may want noise after work "
+                "while the other wants a cave; same evening, two legitimate needs."
+            )
+        return (
+            "Friction tends to show up first as tone, tired voice, or timing — before "
+            "the actual topic is fully spoken. That pattern is repairable when both "
+            "people treat the opening minute of a talk as sacred real estate."
+            f"{ghook}"
+        )
+
+    if tag == "Steady Surface Weeks":
+        return (
+            "Day-to-day life can look calm even while deeper planning is still "
+            "catching up — useful when you refuse to confuse peaceful weeks with "
+            "finished alignment on money, boundaries, or extended family."
+        )
+
+    if tag == "Uneven Rhythm":
+        return (
+            "Good weeks and wobbly weeks may alternate without a dramatic cause — "
+            f"often a Tara/Yoni echo when timing and touch do not line up cleanly. "
+            f"Pull signal: emotional pull is described as {pull_h or 'mixed'} and "
+            f"stability language as {stab_h or 'mixed'} — naming the uneven beat "
+            f"prevents catastrophising ordinary human variance."
+        )
+
+    return (
+        "This shorthand summarises a rhythm in your chart mix — the numbered "
+        "chapters later spell out the lived choreography behind the label."
+    )
+
+
+def _snapshot_ashtakoot_lived_meaning(koots: list, total: float, mx: int,
+                                      lang: str = "en") -> str:
+    """Single paragraph: what the eight scores mean in real weeks (chart-grounded)."""
+    if not koots:
+        return MPL.snap_ashtakoot_empty_koots(lang)
+    st_map = MPL._KOOT_STRENGTH_HN if MPL.pdf_ui_hn(lang) else _KOOT_STRENGTH_LANG
+    dmg_map = MPL._KOOT_DAMAGE_HN if MPL.pdf_ui_hn(lang) else _KOOT_DAMAGE_LANG
+    r_all = float(total) / max(float(mx), 1.0)
+    strong = [
+        k for k in koots
+        if int(k.get("max") or 0) >= 4 and k.get("score", 0) == k.get("max", 0)
+    ]
+    dosha = [k for k in koots if k.get("score", 0) == 0 and int(k.get("max") or 0) > 0]
+    weak = sorted(
+        [
+            k for k in koots
+            if int(k.get("max") or 0) >= 4
+            and 0 < float(k.get("score") or 0) <= float(k.get("max") or 1) / 2
+        ],
+        key=lambda k: float(k.get("score") or 0),
+    )
+    pieces = [MPL.snap_ashtakoot_open_piece(lang)]
+    if r_all >= 0.72:
+        pieces.append(MPL.snap_ashtakoot_high_total(lang))
+    elif r_all <= 0.42:
+        pieces.append(MPL.snap_ashtakoot_low_total(lang))
+    for k in strong[:2]:
+        ck = _canon_koot_key(k)
+        ln = st_map.get(ck)
+        if ln:
+            lbl = k.get("label", MPL.koot_label_this(lang))
+            pieces.append(MPL.snap_ashtakoot_koot_suffix(lang, str(lbl), ln))
+    for k in (dosha[:1] + weak[:1]):
+        ck = _canon_koot_key(k)
+        ln = dmg_map.get(ck)
+        if ln:
+            label = k.get("label", MPL.koot_label_this(lang))
+            mark = MPL.koot_score_note_dosha(lang) if k.get("score", 0) == 0 else MPL.koot_score_note_low(lang)
+            pieces.append(MPL.snap_ashtakoot_damage_suffix(lang, str(label), mark, ln))
+    return _snapshot_clip_plain(" ".join(pieces), 560)
+
+
+def _snapshot_bond_strength_paragraph(payload: dict, lang: str = "en") -> str:
+    parts: list[str] = []
+    koots = payload.get("koots") or []
+    st_map = MPL._KOOT_STRENGTH_HN if MPL.pdf_ui_hn(lang) else _KOOT_STRENGTH_LANG
+    strong = [
+        k for k in koots
+        if int(k.get("max") or 0) >= 4 and k.get("score", 0) == k.get("max", 0)
+    ]
+    for k in strong[:2]:
+        ck = _canon_koot_key(k)
+        ln = st_map.get(ck)
+        if ln:
+            parts.append(f"{k.get('label', '')} ({ln})")
+    analysis = payload.get("analysis") or {}
+    strengths = analysis.get("strengths") if isinstance(analysis.get("strengths"), list) else []
+    for st in strengths[:1]:
+        t = str(st).strip()
+        if t:
+            parts.append(t)
+    if not parts:
+        parts.append(MPL.snap_bond_strength_fallback(lang))
+    body = MPL.snap_bond_strength_wrap(lang, "; ".join(parts))
+    return _snapshot_clip_plain(body, 360)
+
+
+def _snapshot_bond_challenge_paragraph(payload: dict, lang: str = "en") -> str:
+    parts: list[str] = []
+    koots = payload.get("koots") or []
+    dmg_map = MPL._KOOT_DAMAGE_HN if MPL.pdf_ui_hn(lang) else _KOOT_DAMAGE_LANG
+    dosha = [k for k in koots if k.get("score", 0) == 0 and int(k.get("max") or 0) > 0]
+    weak = sorted(
+        [
+            k for k in koots
+            if int(k.get("max") or 0) >= 4
+            and 0 < float(k.get("score") or 0) <= float(k.get("max") or 1) / 2
+        ],
+        key=lambda k: float(k.get("score") or 0),
+    )
+    for k in (dosha[:1] + weak[:1]):
+        ck = _canon_koot_key(k)
+        ln = dmg_map.get(ck)
+        if ln:
+            parts.append(f"{k.get('label', '')}: {ln}")
+    analysis = payload.get("analysis") or {}
+    chal = analysis.get("challenges") if isinstance(analysis.get("challenges"), list) else []
+    for c in chal[:1]:
+        t = str(c).strip()
+        if t:
+            parts.append(t)
+    if _is_manglik(payload):
+        parts.append(MPL.snap_bond_challenge_manglik_extra(lang))
+    if not parts:
+        parts.append(MPL.snap_bond_challenge_fallback(lang))
+    body = MPL.snap_bond_challenge_wrap(lang, " ".join(parts))
+    return _snapshot_clip_plain(body, 380)
+
+
+def _snapshot_insight_cell(s: dict, title: str, body: str) -> Table:
+    fn = s["body"].fontName
+    p = Paragraph(
+        f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(title)}</b></font><br/>"
+        f"<font color='{_hex(TEXT_MID)}'>{_safe(body)}</font>",
+        ParagraphStyle(
+            "snap_ins_cell",
+            fontName=fn,
+            fontSize=8.65,
+            leading=12.6,
+            textColor=TEXT_MID,
+        ),
+    )
+    t = Table([[p]], colWidths=[180 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (-1, -1), BG_CARD),
+        ("LINEABOVE",    (0, 0), (-1, 0), 0.85, BRAND_GOLD),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING",   (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 7),
+        ("BOX",          (0, 0), (-1, -1), 0.45, BORDER),
+    ]))
+    return t
+
+
+def _snapshot_pair_footer(s: dict, left_title: str, left_body: str,
+                         right_title: str, right_body: str) -> Table:
+    fn = s["body"].fontName
+    ps = ParagraphStyle(
+        "snap_pair_ft",
+        fontName=fn,
+        fontSize=8.2,
+        leading=11.8,
+        textColor=TEXT_MID,
+    )
+    lp = Paragraph(
+        f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(left_title)}</b></font><br/>"
+        f"<font color='{_hex(TEXT_MID)}'>{_safe(left_body)}</font>",
+        ps,
+    )
+    rp = Paragraph(
+        f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(right_title)}</b></font><br/>"
+        f"<font color='{_hex(TEXT_MID)}'>{_safe(right_body)}</font>",
+        ps,
+    )
+    t = Table([[lp, rp]], colWidths=[88 * mm, 88 * mm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",   (0, 0), (0, -1), BG_TINT),
+        ("BACKGROUND",   (1, 0), (1, -1), BG_TINT),
+        ("BOX",          (0, 0), (-1, -1), 0.5, BORDER),
+        ("LINEABOVE",    (0, 0), (-1, 0), 0.85, BRAND_GOLD),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 9),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+        ("TOPPADDING",   (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 8),
+        ("VALIGN",       (0, 0), (-1, -1), "TOP"),
+    ]))
+    return t
+
+
+def _snapshot_page(
+    s: dict,
+    num: int,
+    snap: dict,
+    koots: list,
+    manglik: bool,
+    total: float,
+    mx: int,
+    payload: dict | None = None,
+) -> list[Any]:
+    """PAGE 2 — Relationship Snapshot: premium insight layout (chart-grounded prose)."""
+    pl: dict = payload if isinstance(payload, dict) else {}
+    p1 = pl.get("p1") or {}
+    p2 = pl.get("p2") or {}
+    lg = str(s.get("_lang") or "en")
+    out: list[Any] = []
+    out.append(_chapter_eyebrow(num, MPL.snap_eyebrow(lg), lg))
     out.extend(_chapter_title_block(
-        "Relationship Snapshot",
-        "How this bond actually feels in real life.",
+        MPL.snap_title(lg),
+        MPL.snap_subtitle(lg),
     ))
 
-    summary = (snap or {}).get("summary") or ""
-    if summary:
-        soul = Paragraph(
-            f"<font color='{_hex(TEXT_DARK)}'>"
-            f"{_safe(summary)}</font>",
-            ParagraphStyle("soul", fontName=s["body"].fontName, fontSize=12.5,
-                           leading=18, textColor=TEXT_DARK,
-                           alignment=TA_LEFT),
-        )
-        wrap = Table([[soul]], colWidths=[180 * mm])
-        wrap.setStyle(TableStyle([
-            ("BACKGROUND",   (0, 0), (-1, -1), _BG_HERO),
-            ("LINEBEFORE",   (0, 0), (0, -1), 3, BRAND_GOLD),
-            ("LEFTPADDING",  (0, 0), (-1, -1), 14),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 14),
-            ("TOPPADDING",   (0, 0), (-1, -1), 12),
-            ("BOTTOMPADDING",(0, 0), (-1, -1), 12),
-        ]))
-        out.append(wrap)
-        out.append(Spacer(1, 14))
+    open_txt = _snapshot_opening_paragraph(snap, koots, manglik, total, mx, p1, p2, lg)
+    out.append(Paragraph(
+        _safe(open_txt),
+        ParagraphStyle(
+            "snap_open",
+            fontName=s["body"].fontName,
+            fontSize=10.25,
+            leading=15,
+            textColor=TEXT_DARK,
+            spaceAfter=0,
+        ),
+    ))
+    out.append(Spacer(1, 7))
 
-    # 3 indicator cards
     tags = (snap or {}).get("tags") or {}
     if tags:
         def _ind(label: str, value: str) -> Table:
             t = Table(
-                [[Paragraph(_safe(label.upper()), s["tag_label"])],
+                [[Paragraph(_safe(label if MPL.pdf_ui_hn(lg) else label.upper()), s["tag_label"])],
                  [Paragraph(f"<b>{_safe(value)}</b>", s["tag_value"])]],
                 colWidths=[58 * mm],
             )
@@ -1182,14 +2152,14 @@ def _snapshot_page(s: dict, num: int, snap: dict, koots: list,
                 ("LINEABOVE",    (0, 0), (-1, 0), 2, BRAND_PURPLE),
                 ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
                 ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
-                ("TOPPADDING",   (0, 0), (-1, -1), 10),
-                ("BOTTOMPADDING",(0, 0), (-1, -1), 10),
+                ("TOPPADDING",   (0, 0), (-1, -1), 9),
+                ("BOTTOMPADDING",(0, 0), (-1, -1), 9),
             ]))
             return t
         row = Table([[
-            _ind("Emotional Pull",     tags.get("emotional_pull",     "—")),
-            _ind("Marriage Potential", tags.get("marriage_potential", "—")),
-            _ind("Long-term Stability",tags.get("long_term_stability","—")),
+            _ind(MPL.snap_tag_emotional_pull(lg),     tags.get("emotional_pull",     "—")),
+            _ind(MPL.snap_tag_marriage_potential(lg), tags.get("marriage_potential", "—")),
+            _ind(MPL.snap_tag_long_term(lg), tags.get("long_term_stability", "—")),
         ]], colWidths=[60 * mm, 60 * mm, 60 * mm])
         row.setStyle(TableStyle([
             ("LEFTPADDING",  (0, 0), (-1, -1), 1),
@@ -1197,46 +2167,15 @@ def _snapshot_page(s: dict, num: int, snap: dict, koots: list,
             ("VALIGN",       (0, 0), (-1, -1), "TOP"),
         ]))
         out.append(row)
-        out.append(Spacer(1, 14))
+        out.append(Spacer(1, 7))
 
-    # Relationship pill tags
     pill_tags = _relationship_tags(snap, koots, manglik)
-    if pill_tags:
-        cells = []
-        for tag in pill_tags:
-            pill = Table(
-                [[Paragraph(
-                    f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(tag)}</b></font>",
-                    ParagraphStyle("pill", fontName="Helvetica-Bold",
-                                   fontSize=9.5, leading=12,
-                                   alignment=TA_CENTER),
-                )]],
-                colWidths=[55 * mm],
-            )
-            pill.setStyle(TableStyle([
-                ("BACKGROUND",   (0, 0), (-1, -1), _PILL_BG),
-                ("BOX",          (0, 0), (-1, -1), 0.4, BRAND_PURPLE),
-                ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
-                ("TOPPADDING",   (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
-                ("LEFTPADDING",  (0, 0), (-1, -1), 8),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-            ]))
-            cells.append(pill)
-        # pad to 3 cells
-        while len(cells) < 3:
-            cells.append(Spacer(1, 1))
-        row = Table([cells], colWidths=[60 * mm, 60 * mm, 60 * mm])
-        row.setStyle(TableStyle([
-            ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
-            ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
-            ("LEFTPADDING",  (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ]))
-        out.append(row)
-        out.append(Spacer(1, 14))
+    for tag in pill_tags:
+        body = _snapshot_tag_microcopy(tag, snap, koots, manglik, lg)
+        title_disp = MPL.snap_pill_title(lg, tag)
+        out.append(_snapshot_insight_cell(s, title_disp, body))
+        out.append(Spacer(1, 5))
 
-    # Mini Ashtakoot card row — 8 score badges
     if koots:
         badge_cells = []
         for k in koots[:8]:
@@ -1254,7 +2193,7 @@ def _snapshot_page(s: dict, num: int, snap: dict, koots: list,
                                    alignment=TA_CENTER))],
                  [Paragraph(
                     f"<font color='{_hex(TEXT_MID)}'>"
-                    f"{_safe(k.get('label',''))}</font>",
+                    f"{_safe(k.get('label', ''))}</font>",
                     ParagraphStyle("badge_l", fontName="Helvetica",
                                    fontSize=7.5, leading=10,
                                    alignment=TA_CENTER))]],
@@ -1265,14 +2204,13 @@ def _snapshot_page(s: dict, num: int, snap: dict, koots: list,
                 ("BOX",          (0, 0), (-1, -1), 0.4, BORDER),
                 ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
                 ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
-                ("TOPPADDING",   (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
+                ("TOPPADDING",   (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING",(0, 0), (-1, -1), 5),
             ]))
             badge_cells.append(cell)
         while len(badge_cells) < 8:
             badge_cells.append(Spacer(1, 1))
-        strip = Table([badge_cells],
-                      colWidths=[22 * mm] * 8)
+        strip = Table([badge_cells], colWidths=[22 * mm] * 8)
         strip.setStyle(TableStyle([
             ("LEFTPADDING",  (0, 0), (-1, -1), 1),
             ("RIGHTPADDING", (0, 0), (-1, -1), 1),
@@ -1280,39 +2218,37 @@ def _snapshot_page(s: dict, num: int, snap: dict, koots: list,
         ]))
         out.append(Paragraph(
             f"<font color='{_hex(TEXT_SOFT)}'><b>"
-            f"ASHTAKOOT  ·  {_safe(total)} / {_safe(mx)}</b></font>",
+            f"{MPL.snap_ashtakoot_row_label(lg)}  ·  {_safe(total)} / {_safe(mx)}</b></font>",
             ParagraphStyle("ash_lbl", fontName="Helvetica-Bold", fontSize=8,
-                           leading=10, spaceAfter=4),
+                           leading=10, spaceAfter=3),
         ))
         out.append(strip)
-        out.append(Spacer(1, 6))
+        out.append(Spacer(1, 4))
+        ash_mean = _snapshot_ashtakoot_lived_meaning(koots, total, mx, lg)
+        out.append(Paragraph(
+            _safe(ash_mean),
+            ParagraphStyle(
+                "snap_ash_mean",
+                fontName=s["body"].fontName,
+                fontSize=8.55,
+                leading=12.4,
+                textColor=TEXT_MID,
+            ),
+        ))
 
-    out.append(Paragraph(
-        f"<font color='{_hex(TEXT_SOFT)}'><i>Derived from emotional and "
-        f"marriage combinations in both charts (Ashtakoot + Vedic "
-        f"compatibility analysis).</i></font>",
-        ParagraphStyle("snap_note", fontName="Helvetica", fontSize=8.5,
-                       leading=12, textColor=TEXT_SOFT),
+    out.append(Spacer(1, 6))
+    out.append(_snapshot_pair_footer(
+        s,
+        MPL.snap_pair_strength_title(lg),
+        _snapshot_bond_strength_paragraph(pl, lg),
+        MPL.snap_pair_challenge_title(lg),
+        _snapshot_bond_challenge_paragraph(pl, lg),
     ))
     out.append(PageBreak())
     return out
 
 
-# Chapter map for the 6 deep schema sections (subtitles per spec)
-_CHAPTER_MAP = [
-    ("emotional_alignment", "EMOTIONAL ALIGNMENT", "Emotional Alignment",
-     "How both of you feel, express, and process love."),
-    ("trust_loyalty",       "TRUST & LOYALTY",     "Trust & Loyalty",
-     "What strengthens trust — and what quietly tests it."),
-    ("conflict_patterns",   "CONFLICT PATTERNS",   "Conflict Patterns",
-     "How arguments begin, escalate, and resolve between you."),
-    ("commitment_strength", "COMMITMENT STRENGTH", "Commitment Strength",
-     "Who commits faster, who hesitates, and why."),
-    ("marriage_stability",  "MARRIAGE STABILITY",  "Marriage Stability",
-     "Long-term potential measured with realism, not absolutes."),
-    ("future_direction",    "FUTURE DIRECTION",    "Future Direction",
-     "Where this relationship is heading over the next 2–3 years."),
-]
+# Non-Pro chapter chrome: ``vedic.compat.milan_pdf_locale.basic_chapter_rows``.
 
 
 # ── Public entry-point ─────────────────────────────────────────────────
@@ -1324,6 +2260,9 @@ def render_milan_pdf(payload: dict, lang: str = "en") -> bytes:
     the new 7-section deep schema in `payload["analysis"]`; falls back to
     the legacy 4-key flat schema when only that exists.
     """
+    lang = _normalize_milan_pdf_lang(lang)
+    _ensure_native_pdf_fonts_registered(lang)
+    _log_pdf_font_lane(lang)
     payload = payload or {}
     p1   = payload.get("p1") or {}
     p2   = payload.get("p2") or {}
@@ -1360,22 +2299,18 @@ def render_milan_pdf(payload: dict, lang: str = "en") -> bytes:
         "marriage_stability":   analysis.get("marriage_outlook") or "",
         "future_direction":     analysis.get("marriage_outlook") or "",
     }
-    _PLACEHOLDER = (
-        "Detailed analysis for this section was not available for this "
-        "chart. The other sections of this report still cover the core "
-        "Vedic compatibility findings between both partners."
-    )
+    _PLACEHOLDER = MPL.basic_placeholder_section(lang)
 
     story: list[Any] = []
 
     # ── PAGE 1 — Cover ──────────────────────────────────────────────
     story.extend(_cover_page(
-        s, p1, p2, total, mx, grade, snapshot, manglik, lang,
+        s, p1, p2, total, mx, grade, snapshot, manglik, lang, koots,
     ))
 
     # ── PAGE 2 — Relationship Snapshot ──────────────────────────────
     story.extend(_snapshot_page(
-        s, 2, snapshot, koots, manglik, total, mx,
+        s, 2, snapshot, koots, manglik, total, mx, payload=payload,
     ))
 
     # ── PAGES 3–8 — always exactly 6 chapter pages ──────────────────
@@ -1383,7 +2318,8 @@ def render_milan_pdf(payload: dict, lang: str = "en") -> bytes:
     # fallback text; else a deterministic placeholder. Page count is
     # locked at 12 regardless of which schema the LLM polish returned.
     chap_num = 3
-    for key, eyebrow, title, subtitle in _CHAPTER_MAP:
+    chapter_rows = MPL.basic_chapter_rows(lang)
+    for key, eyebrow, title, subtitle in chapter_rows:
         sec = analysis.get(key)
         body = ""
         grounding = ""
@@ -1399,26 +2335,26 @@ def render_milan_pdf(payload: dict, lang: str = "en") -> bytes:
 
     # ── PAGE 9 — What Makes This Bond Special (derived) ─────────────
     story.extend(_bullets_page(
-        s, chap_num, "WHAT MAKES THIS BOND SPECIAL",
-        "What Makes This Bond Special",
-        "The quiet strengths most couples never realise they have.",
+        s, chap_num, MPL.special_eyebrow(lang),
+        MPL.special_title(lang),
+        MPL.basic_bond_special_subtitle(lang),
         _derive_special_bullets(payload),
     )); chap_num += 1
 
     # ── PAGE 10 — What Can Quietly Damage (derived) ─────────────────
     story.extend(_bullets_page(
-        s, chap_num, "WHAT CAN QUIETLY DAMAGE THIS RELATIONSHIP",
-        "What Can Quietly Damage This Bond",
-        "The patterns that create distance — slowly, almost invisibly.",
+        s, chap_num, MPL.basic_damage_eyebrow(lang),
+        MPL.damage_title(lang),
+        MPL.damage_subtitle(lang),
         _derive_damage_bullets(payload),
     )); chap_num += 1
 
     # ── PAGE 11 — Practical Life Together (derived) ─────────────────
     practical_paras = _practical_paragraphs(payload)
-    story.append(_chapter_eyebrow(chap_num, "PRACTICAL LIFE TOGETHER"))
+    story.append(_chapter_eyebrow(chap_num, MPL.basic_practical_eyebrow(lang), lang))
     story.extend(_chapter_title_block(
-        "Practical Life Together",
-        "Money, family pressure, and lifestyle compatibility — in real life.",
+        MPL.basic_practical_title(lang),
+        MPL.basic_practical_subtitle(lang),
     ))
     for para in practical_paras:
         story.append(Paragraph(_safe(para), s["body"]))
@@ -1426,10 +2362,10 @@ def render_milan_pdf(payload: dict, lang: str = "en") -> bytes:
     story.append(PageBreak()); chap_num += 1
 
     # ── PAGE 12 — Final Relationship Outlook (derived) ──────────────
-    story.append(_chapter_eyebrow(chap_num, "FINAL RELATIONSHIP OUTLOOK"))
+    story.append(_chapter_eyebrow(chap_num, MPL.basic_final_outlook_eyebrow(lang), lang))
     story.extend(_chapter_title_block(
-        "Final Relationship Outlook",
-        "A measured, mature reading of where this bond stands.",
+        MPL.basic_final_outlook_title(lang),
+        MPL.basic_final_outlook_subtitle(lang),
     ))
     for para in _final_paragraphs(payload):
         story.append(Paragraph(_safe(para), s["body"]))
@@ -1437,12 +2373,15 @@ def render_milan_pdf(payload: dict, lang: str = "en") -> bytes:
     story.append(Spacer(1, 12))
     story.append(_disclaimer(s))
 
+    doc.milan_pdf_lang = lang
+    doc.milan_pdf_footer_pro = False
+
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()
 
 
 # ══════════════════════════════════════════════════════════════════════
-# Phase 2.5.11.23 — "Premium Relationship Truth" 24-page Pro renderer
+# Phase 2.5.11.23 — "Premium Relationship Truth" Pro PDF renderer
 # ──────────────────────────────────────────────────────────────────────
 # Public entry-point: render_milan_pro_pdf(payload, lang)
 #
@@ -1450,95 +2389,31 @@ def render_milan_pdf(payload: dict, lang: str = "en") -> bytes:
 # `pro_premium` block produced by `vedic/compat/premium_chapters.py`:
 #   pro_premium = {
 #     hidden_truth: str,
-#     chapters: [ {key, title, score_0_10, kya_dikh, kya_matlab,
-#                  kya_dhyan, grounding}, ... 7 ],
+#     chapters: [ {key, title, score_0_10, full_read, grounding}, ... 7 ],
 #     special: [3 strs], damage: [strs], practical: [3 strs],
 #     verdict: str,
 #     _meta: { kp_promise: STRONG|PARTIAL|WEAK, hidden_signature: str }
 #   }
-# Always emits exactly 24 pages, even on partial/missing payloads.
+# Page count follows the story below (chart page removed — see render body).
+# Pro chapter eyebrows/titles/subtitles: ``vedic.compat.milan_pdf_locale.pro_chapter_rows``.
 # ══════════════════════════════════════════════════════════════════════
-
-# Locked 7-chapter map for Pro (titles match score_0_10 derivation).
-_PRO_CHAPTER_MAP = [
-    ("emotional_compatibility",  "EMOTIONAL COMPATIBILITY",
-     "Emotional Compatibility",
-     "How both of you feel, express, and absorb each other emotionally."),
-    ("trust_loyalty",            "TRUST & LOYALTY",
-     "Trust & Loyalty",
-     "What strengthens trust between you — and what quietly tests it."),
-    ("communication_conflict",   "COMMUNICATION & CONFLICT",
-     "Communication & Conflict",
-     "How arguments begin, escalate, and finally resolve between you."),
-    ("marriage_stability",       "MARRIAGE STABILITY",
-     "Marriage Stability",
-     "Long-term commitment potential — read with realism, not absolutes."),
-    ("physical_chemistry",       "PHYSICAL + EMOTIONAL CHEMISTRY",
-     "Physical + Emotional Chemistry",
-     "The natural pull, comfort, and intimate rhythm between you."),
-    ("family_practical",         "FAMILY + PRACTICAL LIFE",
-     "Family + Practical Life",
-     "Day-to-day life — money, family, lifestyle, shared decisions."),
-    ("future_direction",         "LONG-TERM FUTURE DIRECTION",
-     "Long-Term Future Direction",
-     "Where this bond is heading over the next 2–3 years and beyond."),
-]
-
-
-def _pro_score_card(score: float | int | None) -> Table:
-    """Large score badge: '8.7 / 10' inside a soft purple-gold card."""
-    try:
-        s_val = float(score) if score is not None else 0.0
-    except Exception:
-        s_val = 0.0
-    big = Paragraph(
-        f"<b>{s_val:.1f}</b>"
-        f"<font color='{_hex(TEXT_SOFT)}' size=14> / 10</font>",
-        ParagraphStyle("pro_score_big", fontName="Helvetica-Bold",
-                       fontSize=34, leading=40, alignment=TA_CENTER,
-                       textColor=BRAND_PURPLE),
-    )
-    label = "STRONG" if s_val >= 8 else (
-        "BALANCED" if s_val >= 6 else (
-        "WORKABLE" if s_val >= 4 else "NEEDS CARE"))
-    sub = Paragraph(
-        f"<font color='{_hex(BRAND_GOLD)}'><b>{label}</b></font>",
-        ParagraphStyle("pro_score_lbl", fontName="Helvetica-Bold",
-                       fontSize=9, leading=12, alignment=TA_CENTER),
-    )
-    card = Table([[big], [sub]], colWidths=[60 * mm])
-    card.setStyle(TableStyle([
-        ("BACKGROUND",   (0, 0), (-1, -1), _BG_HERO),
-        ("BOX",          (0, 0), (-1, -1), 1.2, BRAND_GOLD),
-        ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING",   (0, 0), (-1, -1), 10),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 10),
-    ]))
-    return card
-
-
-def _pro_block_heading(label: str) -> Paragraph:
-    return Paragraph(
-        f"<font color='{_hex(BRAND_PURPLE)}'><b>{label.upper()}</b></font>",
-        ParagraphStyle("pro_block_h", fontName="Helvetica-Bold",
-                       fontSize=10.5, leading=14, spaceBefore=8,
-                       spaceAfter=4),
-    )
 
 
 def _pro_hidden_truth_page(s: dict, num: int, hidden_truth: str,
                            kp_meta: dict, p1_name: str, p2_name: str
                            ) -> list[Any]:
     """P3 — What's Hidden Underneath: KP marriage promise + signature."""
+    lg = str(s.get("_lang") or "en")
     out: list[Any] = []
-    out.append(_chapter_eyebrow(num, "WHAT'S HIDDEN UNDERNEATH"))
+    out.append(_chapter_eyebrow(num, MPL.hidden_eyebrow(lg), lg))
     out.extend(_chapter_title_block(
-        "What's Hidden Underneath",
-        "The deeper Vedic+KP signature most charts miss.",
+        MPL.hidden_title(lg),
+        MPL.hidden_subtitle(lg),
     ))
     if hidden_truth:
-        out.append(Paragraph(_safe(hidden_truth), s["body"]))
+        ht = hidden_truth.strip()
+        mk = _premium_prose_markup(ht) or _safe(ht)
+        out.append(_premium_body_table(mk, ht, s))
         out.append(Spacer(1, 12))
     promise = (kp_meta or {}).get("kp_promise") or ""
     sig     = (kp_meta or {}).get("hidden_signature") or ""
@@ -1553,11 +2428,9 @@ def _pro_hidden_truth_page(s: dict, num: int, hidden_truth: str,
         hp_reg = s.get("body").fontName if "body" in s else "Helvetica"
         ptxt = Paragraph(
             f"<font color='{_hex(TEXT_SOFT)}'><b>"
-            f"Marriage promise reading →</b></font>  "
+            f"{_safe(MPL.hidden_promise_label(lg))}</b></font>  "
             f"<font color='{promise_color}'><b>{_safe(promise)}</b></font>"
-            f"<font color='{_hex(TEXT_MID)}'>"
-            f" — for {_safe(p1_name)} &amp; {_safe(p2_name)}, "
-            f"the deeper marriage signal in both charts is read together.</font>",
+            f"<font color='{_hex(TEXT_MID)}'>{_safe(MPL.hidden_promise_tail(lg, p1_name, p2_name))}</font>",
             ParagraphStyle("hid_promise", fontName=hp_reg, fontSize=10.5,
                            leading=15, spaceAfter=10),
         )
@@ -1573,16 +2446,19 @@ def _pro_hidden_truth_page_with_patterns(
     p1_name: str, p2_name: str, payload: dict,
 ) -> list[Any]:
     """Phase 2.5.11.24-fix9 wrapper: same as _pro_hidden_truth_page but
-    appends the QUIET PATTERNS callout BEFORE the page break, so the
+    appends a few quiet realism lines before the page break, so the
     deepest insight in the report sits next to the KP promise reading."""
+    lg = str(s.get("_lang") or "en")
     out: list[Any] = []
-    out.append(_chapter_eyebrow(num, "WHAT'S HIDDEN UNDERNEATH"))
+    out.append(_chapter_eyebrow(num, MPL.hidden_eyebrow(lg), lg))
     out.extend(_chapter_title_block(
-        "What's Hidden Underneath",
-        "The deeper Vedic+KP signature most charts miss.",
+        MPL.hidden_title(lg),
+        MPL.hidden_subtitle(lg),
     ))
     if hidden_truth:
-        out.append(Paragraph(_safe(hidden_truth), s["body"]))
+        ht = hidden_truth.strip()
+        mk = _premium_prose_markup(ht) or _safe(ht)
+        out.append(_premium_body_table(mk, ht, s))
         out.append(Spacer(1, 12))
     promise = (kp_meta or {}).get("kp_promise") or ""
     sig     = (kp_meta or {}).get("hidden_signature") or ""
@@ -1595,148 +2471,38 @@ def _pro_hidden_truth_page_with_patterns(
         hp_reg = s.get("body").fontName if "body" in s else "Helvetica"
         out.append(Paragraph(
             f"<font color='{_hex(TEXT_SOFT)}'><b>"
-            f"Marriage promise reading →</b></font>  "
+            f"{_safe(MPL.hidden_promise_label(lg))}</b></font>  "
             f"<font color='{promise_color}'><b>{_safe(promise)}</b></font>"
-            f"<font color='{_hex(TEXT_MID)}'>"
-            f" — for {_safe(p1_name)} &amp; {_safe(p2_name)}, "
-            f"the deeper marriage signal in both charts is read together.</font>",
+            f"<font color='{_hex(TEXT_MID)}'>{_safe(MPL.hidden_promise_tail(lg, p1_name, p2_name))}</font>",
             ParagraphStyle("hid_promise2", fontName=hp_reg, fontSize=10.5,
                            leading=15, spaceAfter=10),
         ))
     if sig:
         out.append(_grounding_card(s, sig))
     out.append(Spacer(1, 12))
-    inv = _derive_invisible_patterns(payload)
+    inv = _derive_invisible_patterns(payload, lg)
     if inv:
-        out.append(_pro_invisible_patterns_block(s, inv))
+        # Keep the realism lines, but render as continuous prose (no boxed callout).
+        fname = (s.get("body_latin").fontName if "body_latin" in s
+                 else (s.get("body").fontName if "body" in s else "Helvetica"))
+        for ln in inv:
+            out.append(Paragraph(
+                f"<font color='{_hex(BRAND_GOLD)}'>•</font>  {_safe(ln)}",
+                ParagraphStyle(
+                    "inv_plain",
+                    fontName=fname,
+                    fontSize=10.5,
+                    leading=15,
+                    textColor=TEXT_MID,
+                    leftIndent=10,
+                    spaceBefore=6,
+                ),
+            ))
     out.append(PageBreak())
     return out
 
 
-# ── Phase 2.5.11.24-fix9 — Astrology depth + analysis hierarchy ─
-# Critique-driven additions on top of fix8: users want VISIBLE Vedic
-# reasoning (planet → meaning → effect), a clear analysis hierarchy that
-# proves "we deeply read your kundli", and the two psychologically-
-# charged sections users remember most: WHY THIS BOND FORMED + THE ONE
-# THING THAT COULD QUIETLY DAMAGE IT. All deterministic — no LLM
-# contract change. Adds 2 new pages: Analysis Layers (P3) and
-# Attraction + Core Challenge (post-chapters). Per-chapter pages now
-# carry a small "CHART LAYER" chip above the pull-quote that names the
-# real Vedic factor (Moon, 7th Lord, Navamsa Venus, etc.).
-
-# Per-chapter Vedic factor labels — the planets/houses/koots that
-# genuinely drive each chapter. Worded so they feel like a guided
-# explanation (NEVER raw jargon dump). Used by the small CHART LAYER
-# chip on each chapter page so the "we actually read your kundli" trust
-# signal is visible without breaking the prose flow.
-_CHAPTER_ASTRO_FACTORS: dict[str, str] = {
-    "emotional_compatibility": "Moon (mind), 4th House (inner home), Gana-koota",
-    "trust_loyalty":           "Jupiter (dharma), 7th Lord, Bhakoot-koota",
-    "communication_conflict":  "Mercury (speech), 3rd House (effort), Gana + Vasya",
-    "marriage_stability":      "Navamsa Lagna lord, 7th House, Bhakoot + Nadi",
-    "physical_chemistry":      "Venus (rasa), Mars (drive), Yoni-koota",
-    "family_practical":        "2nd House (kutumba), 4th House (home), Vasya-koota",
-    "future_direction":        "Jupiter (long-term), Saturn (commitment), Nadi-koota",
-}
-
-
-def _pro_chart_layer_chip(chapter_key: str, s: dict) -> Table | None:
-    """Small 'CHART LAYER →' chip naming the real Vedic factors driving
-    this chapter. Provides visible astrology grounding without raw jargon
-    — addresses the "feels too AI-psychology" critique."""
-    factors = _CHAPTER_ASTRO_FACTORS.get(chapter_key)
-    if not factors:
-        return None
-    # Architect-flagged: fix9 deterministic strings are pure Latin.
-    # In non-Latin-lang reports (bn/ta/te/etc) the script font has no
-    # Latin glyphs — must use body_latin (Helvetica) so the chip stays
-    # readable across all 13 supported langs.
-    fname = (s.get("body_latin").fontName if "body_latin" in s
-             else (s.get("body").fontName if "body" in s else "Helvetica"))
-    p = Paragraph(
-        f"<font color='{_hex(BRAND_GOLD)}'><b>CHART LAYER →</b></font>"
-        f"<font color='{_hex(TEXT_MID)}'>  {_safe(factors)}</font>",
-        ParagraphStyle("pro_layer", fontName=fname, fontSize=9,
-                       leading=12, leftIndent=2),
-    )
-    t = Table([[p]], colWidths=[180 * mm])
-    t.setStyle(TableStyle([
-        ("LINEBELOW",    (0, 0), (-1, -1), 0.4, BORDER),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING",   (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
-    ]))
-    return t
-
-
-def _pro_analysis_layers_page(s: dict, num: int) -> list[Any]:
-    """How Your Marriage Energy Was Analysed — checklist of 9 Vedic
-    layers + small D1-vs-D9 explainer. Deterministic, no payload deps —
-    same every report (intentionally — proves the methodology)."""
-    out: list[Any] = []
-    out.append(_chapter_eyebrow(num, "HOW YOUR MARRIAGE ENERGY WAS ANALYSED"))
-    out.extend(_chapter_title_block(
-        "How Your Marriage Energy Was Analysed",
-        "The 9 Vedic layers we read across both kundlis to produce this report.",
-    ))
-    out.append(Spacer(1, 6))
-
-    layers = [
-        ("7th House Dynamics",            "the house of marriage in both charts"),
-        ("7th Lord Condition",            "where the marriage-significator sits and what it touches"),
-        ("Venus & Emotional Harmony",     "Venus dignity, aspects and partner-resonance"),
-        ("Navamsa (D9) Marriage Stability","the deeper marriage-destiny chart, read separately"),
-        ("Bhakoot & Nadi Compatibility",  "long-term life-direction + biological/energetic match"),
-        ("Trust & Conflict Indicators",   "Jupiter-Saturn-Mars influences on commitment"),
-        ("Family-Life Compatibility",     "2nd + 4th house signals for daily married rhythm"),
-        ("Physical + Emotional Chemistry","Yoni-koota + Venus-Mars cross-resonance"),
-        ("KP Marriage Promise",           "the deepest sub-lord layer most reports skip"),
-    ]
-    rows: list[list[Any]] = []
-    for label, sub in layers:
-        check = Paragraph(
-            f"<font color='{_hex(ACCENT_GREEN)}'><b>✓</b></font>",
-            ParagraphStyle("al_chk", fontName="Helvetica-Bold",
-                           fontSize=12, leading=14, alignment=TA_CENTER),
-        )
-        body = Paragraph(
-            f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(label)}</b></font>"
-            f"<font color='{_hex(TEXT_MID)}'>  —  {_safe(sub)}</font>",
-            ParagraphStyle("al_b", fontName="Helvetica", fontSize=10,
-                           leading=14),
-        )
-        rows.append([check, body])
-    t = Table(rows, colWidths=[10 * mm, 170 * mm])
-    t.setStyle(TableStyle([
-        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING",   (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
-        ("LINEBELOW",    (0, 0), (-1, -2), 0.3, BORDER),
-    ]))
-    out.append(t)
-    out.append(Spacer(1, 14))
-
-    # D1 vs D9 explainer — small premium-trust block.
-    out.append(_pro_block_heading("D1 vs D9 — why both matter"))
-    fname = s.get("body").fontName if "body" in s else "Helvetica"
-    out.append(Paragraph(
-        "Your <b>D1 (birth chart)</b> shows how relationship energy "
-        "appears externally — attraction, dating, the early texture of "
-        "the bond. The <b>D9 (Navamsa)</b> shows how marriage actually "
-        "behaves over time — daily married rhythm, the years after "
-        "passion settles, the quiet long-term shape. A truthful Vedic "
-        "marriage reading needs both layers. This report fuses them.",
-        ParagraphStyle("d1d9", fontName=fname, fontSize=10.5,
-                       leading=15.5, textColor=TEXT_MID),
-    ))
-    out.append(PageBreak())
-    return out
-
-
-def _derive_invisible_patterns(payload: dict) -> list[str]:
+def _derive_invisible_patterns(payload: dict, lang: str = "en") -> list[str]:
     """1-3 'holy shit' realism lines derived from koot/manglik/sync
     asymmetries. The viral-truth block users remember — purely
     deterministic from engine signals."""
@@ -1763,18 +2529,10 @@ def _derive_invisible_patterns(payload: dict) -> list[str]:
 
     # Bhakoot weak + Maitri strong → friends but different life maps
     if bh is not None and mt is not None and bh < 0.3 and mt >= 0.6:
-        out.append(
-            "You click as friends almost effortlessly, yet the chart "
-            "quietly shows two different long-term life maps — neither "
-            "of you names this out loud, but both feel it on slow Sundays."
-        )
+        out.append(MPL.invpat_bh_weak_maitri_strong(lang))
     # Yoni mismatch + Gana strong → emotional sync, physical timing differs
     if yn is not None and gn is not None and yn < 0.5 and gn >= 0.6:
-        out.append(
-            "Emotionally you read each other quickly — physical rhythm "
-            "and the timing of intimacy may not match the same way, "
-            "and most couples mistake this for a deeper problem."
-        )
+        out.append(MPL.invpat_yoni_gana(lang))
     # Nadi 0 + everything else generally fine → invisible health-energy
     # friction. Architect-flagged: original rule fired on any nadi=0,
     # over-asserting on broadly weak charts. Now requires the average of
@@ -1783,64 +2541,18 @@ def _derive_invisible_patterns(payload: dict) -> list[str]:
     other_ratios = [r for r in (bh, mt, yn, gn) if r is not None]
     other_avg = (sum(other_ratios) / len(other_ratios)) if other_ratios else 0.0
     if na is not None and na <= 0.0 and other_avg >= 0.5:
-        out.append(
-            "Both of you can be doing everything right and still feel a "
-            "subtle, hard-to-name fatigue around each other — that is "
-            "Nadi's quiet signature; it asks for ritual care, not blame."
-        )
+        out.append(MPL.invpat_nadi_outlier(lang))
     # Manglik asymmetry — one carries it, the other doesn't
     p1m = bool((payload.get("p1") or {}).get("manglik"))
     p2m = bool((payload.get("p2") or {}).get("manglik"))
     if p1m ^ p2m:
-        out.append(
-            "One of you carries Mars-driven intensity the other simply "
-            "does not — during stress, this asymmetry becomes the "
-            "invisible script behind almost every flare-up."
-        )
+        out.append(MPL.invpat_manglik_asym(lang))
     if not out:
-        out.append(
-            "Neither of you likes emotional drama — yet both silently "
-            "expect the other to understand without being asked. That "
-            "single unspoken expectation runs underneath most of the "
-            "small distances you'll feel over the years."
-        )
+        out.append(MPL.invpat_default(lang))
     return out[:3]
 
 
-def _pro_invisible_patterns_block(s: dict, lines: list[str]) -> Table:
-    """Boxed 'QUIET PATTERNS YOU MIGHT NOT NAME' callout — appended to
-    the Hidden Truth page so the deepest insight lives next to the KP
-    promise reading where users dwell longest. Latin-only deterministic
-    text → uses body_latin font so non-Latin-lang reports stay readable."""
-    fname = (s.get("body_latin").fontName if "body_latin" in s
-             else (s.get("body").fontName if "body" in s else "Helvetica"))
-    label = Paragraph(
-        f"<font color='{_hex(BRAND_PURPLE)}'><b>"
-        "QUIET PATTERNS YOU MIGHT NOT NAME</b></font>",
-        ParagraphStyle("inv_l", fontName="Helvetica-Bold",
-                       fontSize=9, leading=12),
-    )
-    body_paras: list[Any] = [label]
-    for ln in lines:
-        body_paras.append(Paragraph(
-            f"<font color='{_hex(BRAND_GOLD)}'>•</font>  {_safe(ln)}",
-            ParagraphStyle("inv_b", fontName=fname, fontSize=10.5,
-                           leading=15, textColor=TEXT_MID,
-                           leftIndent=10, spaceBefore=6),
-        ))
-    t = Table([[p] for p in body_paras], colWidths=[180 * mm])
-    t.setStyle(TableStyle([
-        ("BACKGROUND",   (0, 0), (-1, -1), _BG_QUOTE),
-        ("LINEBEFORE",   (0, 0), (0, -1), 3.0, _LINE_QUOTE),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 14),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-        ("TOPPADDING",   (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 10),
-    ]))
-    return t
-
-
-def _derive_attraction_line(payload: dict) -> str:
+def _derive_attraction_line(payload: dict, lang: str = "en") -> str:
     """Why this bond formed — from the strongest koot scores."""
     koots = payload.get("koots") or []
     strong = sorted(
@@ -1849,9 +2561,16 @@ def _derive_attraction_line(payload: dict) -> str:
         reverse=True,
     )[:2]
     if not strong:
-        return ("This bond forms because both charts carry a quiet "
-                "willingness to grow together — even the formal scores "
-                "cannot fully explain that pull.")
+        if MPL.pdf_ui_hn(lang):
+            return MPL.attraction_derived_body_hn([])
+        return (
+            "This bond forms in the small recognitions first — who fills "
+            "water bottles before bed, who notices the other's quiet day — "
+            "before any score explains why that matters."
+        )
+    if MPL.pdf_ui_hn(lang):
+        canons = [c for c in (_canon_koot_key(k) for k in strong) if c]
+        return MPL.attraction_derived_body_hn(canons)
     lines = []
     for k in strong:
         canon = _canon_koot_key(k)
@@ -1875,20 +2594,23 @@ def _derive_attraction_line(payload: dict) -> str:
     # to an unknown canonical key, `lines` is empty — fall back to the
     # generic line instead of indexing.
     if not lines:
-        return ("This bond forms because both charts carry a quiet "
-                "willingness to grow together — even the formal scores "
-                "cannot fully explain that pull.")
+        return (
+            "This bond forms in the small recognitions first — who fills "
+            "water bottles before bed, who notices the other's quiet day — "
+            "before any score explains why that matters."
+        )
     if len(lines) >= 2:
         body = f"{lines[0]} from one chart, and {lines[1]} from the other"
     else:
         body = lines[0]
-    return (f"This bond forms because both kundlis bring something the "
-            f"other instinctively recognises — {body}. Attraction here "
-            f"is not random; it's the chart's way of pairing two "
-            f"complementary natures.")
+    return (
+        f"This bond forms because both kundlis hand each other something "
+        f"the other half-remembers from home — {body}. Pull here is less "
+        f"'chemistry headline', more repeated ease in the same small rooms."
+    )
 
 
-def _derive_core_challenge_line(payload: dict) -> str:
+def _derive_core_challenge_line(payload: dict, lang: str = "en") -> str:
     """The ONE thing that could quietly damage this marriage —
     derived from the weakest koot in the report."""
     koots = payload.get("koots") or []
@@ -1897,46 +2619,78 @@ def _derive_core_challenge_line(payload: dict) -> str:
         key=lambda k: (k.get("score", 0) / max(k.get("max", 1), 1)),
     )
     if not weak:
-        return ("The single biggest risk for this bond is silent "
-                "expectation — both of you assuming the other will "
-                "understand without being asked.")
+        if MPL.pdf_ui_hn(lang):
+            return MPL.core_challenge_fallback_kitchen_hn()
+        return (
+            "The single biggest risk here is the same unnamed ledger most "
+            "kitchens run — who noticed the bill, who carried the apology "
+            "last time — until one week both are tired on the same Tuesday."
+        )
     k = weak[0]
-    canon = _canon_koot_key(k)
+    canon = _canon_koot_key(k) or ""
+    if MPL.pdf_ui_hn(lang):
+        return MPL.core_challenge_line_hn(canon if canon else None)
     base_map = {
-        "bhakoot": ("a slow, almost invisible drift in life-directions",
-                    "Without one honest yearly conversation about where you BOTH actually want the next 5 years to go, you'll wake up at 35 in two parallel lives."),
-        "nadi":    ("a hidden energetic friction that often surfaces as health or fatigue",
-                    "Don't dismiss the slow tiredness around each other — it asks for ritual care, gentle routines, NOT blame or therapy speeches."),
-        "gana":    ("a mismatch in inner nature — one playful, one serious",
-                    "Stop trying to convert each other's mood. Make space for both rhythms in the SAME week — that is the real fix."),
-        "yoni":    ("mismatched physical or emotional rhythms",
-                    "Confusing intimacy timing with love itself will quietly poison this bond — separate the two early."),
-        "graha":   ("natural temperament clashes during stress",
-                    "Your fights won't be about the topic — they'll be about temperament under stress. Build a 24-hour cool-down rule before EVERY major conversation."),
-        "vashya":  ("an imbalance in who pulls and who follows",
-                    "If one of you keeps quietly leading and the other keeps quietly resisting, resentment will grow without either of you naming it."),
-        "tara":    ("mistimed moments — wrong words at vulnerable times",
-                    "Learn each other's bad-days. Saying the right thing at the wrong moment will land worse than saying nothing at all."),
-        "varna":   ("a subtle ego friction where one feels less respected",
-                    "Track who feels invisible at family gatherings — that's where this risk shows up first, not in arguments."),
+        "bhakoot": (
+            "a slow, almost invisible drift in life-directions",
+            "Same calendar year, two different five-year pictures — the gap "
+            "shows up first in small money moves, not in dramatic fights.",
+        ),
+        "nadi": (
+            "a hidden energetic friction that often surfaces as health or fatigue",
+            "Both tired the same Tuesday, both irritable the same week — "
+            "mirrored fatigue reads like attitude until you see the pattern.",
+        ),
+        "gana": (
+            "a mismatch in inner nature — one playful, one serious",
+            "One wants noise after work, the other wants a cave — the living "
+            "room volume becomes the argument while the real ask stays unnamed.",
+        ),
+        "yoni": (
+            "mismatched physical or emotional rhythms",
+            "Touch and irritation spike together — one reads it as rejection, "
+            "the other as 'I am just slow today' — same bed, two clocks.",
+        ),
+        "graha": (
+            "natural temperament clashes during stress",
+            "Under load, one goes sharp, one goes flat — the fight looks "
+            "about the topic but tracks who got sleep.",
+        ),
+        "vashya": (
+            "an imbalance in who pulls and who follows",
+            "Micro-decisions pile up on one side while the other drifts late — "
+            "resentment sits in the schedule, not in speeches.",
+        ),
+        "tara": (
+            "mistimed moments — wrong words at vulnerable times",
+            "Right sentence, wrong hour — the hurt lands as 'you never get me' "
+            "even when the intent was soft.",
+        ),
+        "varna": (
+            "a subtle ego friction where one feels less respected",
+            "Family-table moments show it first — who gets introduced, who "
+            "gets interrupted — before the living room ever argues.",
+        ),
     }
     label, advice = base_map.get(canon, (
         "a recurring subtle pattern this report has flagged",
-        "Name it together when calm — not during a fight."))
+        "It shows up in repetition before it shows up in volume — same "
+        "shape, new topic.",
+    ))
     return (f"The single thing most likely to quietly damage this marriage "
             f"is {label}. {advice}")
 
 
 def _pro_attraction_and_challenge_page(s: dict, num: int,
                                         payload: dict) -> list[Any]:
-    """One dense page carrying the two psychologically-charged sections
-    users remember most: WHY THIS BOND FORMED + THE ONE THING THAT
-    COULD QUIETLY DAMAGE IT."""
+    """One dense page carrying two psychologically-charged truths
+    users remember most (rendered as flowing prose, not labeled report sections)."""
+    lg = str(s.get("_lang") or "en")
     out: list[Any] = []
-    out.append(_chapter_eyebrow(num, "WHAT DRAWS YOU · WHAT TESTS YOU"))
+    out.append(_chapter_eyebrow(num, MPL.attraction_eyebrow(lg), lg))
     out.extend(_chapter_title_block(
-        "Why This Bond Formed — and the One Thing That Will Test It",
-        "The two truths most reports skip. Both pulled from your charts.",
+        MPL.attraction_title(lg),
+        MPL.attraction_subtitle(lg),
     ))
     out.append(Spacer(1, 6))
 
@@ -1944,384 +2698,238 @@ def _pro_attraction_and_challenge_page(s: dict, num: int,
     # lang reports (bn/ta/te/etc) don't drop glyphs.
     fname = (s.get("body_latin").fontName if "body_latin" in s
              else (s.get("body").fontName if "body" in s else "Helvetica"))
-
-    # WHAT DRAWS YOU TOGETHER — soft purple wash card.
-    out.append(Paragraph(
-        f"<font color='{_hex(BRAND_PURPLE)}'><b>WHY THIS BOND FORMED</b></font>",
-        ParagraphStyle("at_h1", fontName="Helvetica-Bold", fontSize=10,
-                       leading=13, spaceAfter=4),
-    ))
-    attraction = _derive_attraction_line(payload)
-    out.append(_pro_quote_block(attraction[:200], s))
+    attraction = _derive_attraction_line(payload, lg)
+    challenge = _derive_core_challenge_line(payload, lg)
+    # Render as continuous prose (no labeled subsections / quote cards).
     out.append(Paragraph(
         _safe(attraction),
-        ParagraphStyle("at_b1", fontName=fname, fontSize=10.5,
+        ParagraphStyle("at_flow1", fontName=fname, fontSize=10.5,
                        leading=15.5, textColor=TEXT_MID,
-                       spaceBefore=10, spaceAfter=14),
+                       spaceBefore=6, spaceAfter=10),
     ))
-
-    # THE ONE THING — gold-accented warning card.
-    out.append(Paragraph(
-        f"<font color='{_hex(BRAND_GOLD)}'><b>"
-        f"THE ONE THING THAT COULD QUIETLY DAMAGE THIS MARRIAGE</b></font>",
-        ParagraphStyle("at_h2", fontName="Helvetica-Bold", fontSize=10,
-                       leading=13, spaceBefore=8, spaceAfter=4),
-    ))
-    challenge = _derive_core_challenge_line(payload)
-    body_q = Paragraph(
-        f'<font color="{_hex(colors.HexColor("#B45309"))}"><b><i>'
-        f'“{_safe(challenge[:220])}”</i></b></font>',
-        ParagraphStyle("at_q2", fontName=fname, fontSize=11.5,
-                       leading=17, leftIndent=10, rightIndent=6),
-    )
-    cq = Table([[body_q]], colWidths=[180 * mm])
-    cq.setStyle(TableStyle([
-        ("BACKGROUND",   (0, 0), (-1, -1), _BG_MOMENT),
-        ("LINEBEFORE",   (0, 0), (0, -1), 3.0, _LINE_GOLD),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 14),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-        ("TOPPADDING",   (0, 0), (-1, -1), 12),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 12),
-    ]))
-    out.append(cq)
-    out.append(Spacer(1, 10))
     out.append(Paragraph(
         _safe(challenge),
-        ParagraphStyle("at_b2", fontName=fname, fontSize=10.5,
-                       leading=15.5, textColor=TEXT_MID),
+        ParagraphStyle("at_flow2", fontName=fname, fontSize=10.5,
+                       leading=15.5, textColor=TEXT_MID,
+                       spaceBefore=0, spaceAfter=10),
     ))
     out.append(Spacer(1, 14))
-    out.append(_grounding_card(
-        s, "These two truths are derived from your strongest and "
-           "weakest koot scores — engine-locked, not a guess."))
+    out.append(_grounding_card(s, MPL.attraction_ground_card(lg)))
     out.append(PageBreak())
     return out
 
 
-# ── Phase 2.5.11.24-fix8 — Visual rhythm blocks ──────────────────
-# Critique-driven rewrite: chapters were 2 thin pages with low density.
-# These helpers add real visual storytelling — quote pull-outs, signal
-# chips, real-life-moment cards, why-in-charts grounding chips — so each
-# chapter becomes ONE dense rich page instead of 2 half-empty ones.
-
-# Soft brand-tint surfaces (kept local — used only by Pro chapter blocks).
-_BG_QUOTE   = colors.HexColor("#F4EEFF")  # purple wash for pull-quotes
-_BG_MOMENT  = colors.HexColor("#FFF8EC")  # gold wash for real-life box
-_BG_CHARTS  = colors.HexColor("#F1F5F9")  # cool slate wash for signals
-_LINE_QUOTE = colors.HexColor("#A78BFA")  # soft purple rule
-_LINE_GOLD  = colors.HexColor("#E8B86A")  # soft gold rule
-
-# Map each Pro chapter key → 2-3 canonical koot keys whose engine scores
-# get rendered as the "Why this appears in your charts" chips. Pulled
-# from the same _KOOT_STRENGTH_LANG/_KOOT_DAMAGE_LANG vocabulary already
-# in this module so wording stays consistent across the report.
-_CHAPTER_KOOT_MAP: dict[str, tuple[str, ...]] = {
-    "emotional_compatibility": ("gana", "bhakoot", "graha"),
-    "trust_loyalty":           ("bhakoot", "varna", "graha"),
-    "communication_conflict":  ("gana", "vashya", "graha"),
-    "marriage_stability":      ("bhakoot", "nadi", "varna"),
-    "physical_chemistry":      ("yoni", "tara", "graha"),
-    "family_practical":        ("vashya", "varna", "bhakoot"),
-    "future_direction":        ("nadi", "bhakoot", "tara"),
-}
+def _pro_chapter_body_markup(ch: dict) -> str:
+    """Premium chapter body: one `full_read` block (legacy 3-field merge if absent)."""
+    raw = (ch.get("full_read") or "").strip()
+    if not raw:
+        parts = [
+            (ch.get("kya_dikh") or "").strip(),
+            (ch.get("kya_matlab") or "").strip(),
+            (ch.get("kya_dhyan") or "").strip(),
+        ]
+        raw = "<br/><br/>".join(_safe(p) for p in parts if p)
+    else:
+        raw = _premium_prose_markup(raw)
+    return raw if raw else _safe("—")
 
 
-def _extract_quote(text: str, max_chars: int = 170) -> str:
-    """Pull a punchy 1-sentence quote from prose for a highlight block.
+def _pro_chapter_snippet_for_note(grounding: str, limit: int = 200) -> str:
+    g = (grounding or "").strip()
+    if len(g) <= limit:
+        return g
+    cut = g[:limit].rsplit(" ", 1)[0].strip()
+    return cut + "…"
 
-    Tries the first ≥40-char sentence so we skip throwaway openers like
-    "Yeh interesting hai." Falls back to first 160 chars on no boundary.
-    Works on Hindi/Tamil/Bengali too (they end on । or .).
+
+def _grounding_head_tail_cards(grounding: str) -> tuple[str | None, str]:
+    """Split grounding into a short chart-facing head (top strip) + remainder (bottom card).
+
+    When the read is short, returns (None, full) so only one bottom card renders.
     """
-    t = (text or "").strip()
-    if not t:
-        return ""
-    # Devanagari danda (।) + standard ASCII sentence enders.
-    parts: list[str] = []
-    cur = ""
-    for ch in t:
-        cur += ch
-        if ch in (".", "।", "!", "?"):
-            parts.append(cur.strip())
-            cur = ""
-    if cur.strip():
-        parts.append(cur.strip())
-    for p in parts:
-        if 40 <= len(p) <= max_chars:
-            return p
-    # Fall back to longest <=max_chars or first sentence truncated.
-    if parts:
-        if len(parts[0]) <= max_chars:
-            return parts[0]
-        return parts[0][: max_chars - 1].rstrip() + "…"
-    return t[: max_chars - 1] + "…"
+    g = (grounding or "").strip()
+    if not g:
+        return None, ""
+    if len(g) <= 160:
+        return None, g
+    head = ""
+    for sep in (". ", "। "):
+        idx = g.find(sep)
+        if 25 <= idx <= 240:
+            head = g[: idx + len(sep)].strip()
+            break
+    if not head:
+        head = _pro_chapter_snippet_for_note(g, 210)
+    tail = g[len(head) :].strip()
+    if len(tail) < 55:
+        return None, g
+    return head, tail
 
 
-def _pro_quote_block(text: str, s: dict) -> Table:
-    """Highlighted pull-quote — large italic line in a soft purple card
-    with a left accent rule. Anchors visual storytelling on every chapter."""
-    fname = s.get("body").fontName if "body" in s else "Helvetica"
-    q = Paragraph(
-        f'<font color="{_hex(BRAND_PURPLE)}"><b><i>“{_safe(text)}”</i></b></font>',
-        ParagraphStyle("pro_quote", fontName=fname, fontSize=12,
-                       leading=18, alignment=TA_LEFT,
-                       leftIndent=10, rightIndent=6),
-    )
-    t = Table([[q]], colWidths=[180 * mm])
-    t.setStyle(TableStyle([
-        ("BACKGROUND",   (0, 0), (-1, -1), _BG_QUOTE),
-        ("LINEBEFORE",   (0, 0), (0, -1), 3.0, _LINE_QUOTE),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 14),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-        ("TOPPADDING",   (0, 0), (-1, -1), 12),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 12),
-    ]))
-    return t
-
-
-def _pro_real_life_moment(text: str, s: dict) -> list[Any]:
-    """Boxed 'REAL-LIFE MOMENT' callout — uses kya_matlab prose, soft
-    gold wash + a tiny eyebrow label. Replaces the flat paragraph that
-    made chapters feel like report sections instead of immersive reads."""
-    fname = s.get("body").fontName if "body" in s else "Helvetica"
-    label = Paragraph(
-        f"<font color='{_hex(BRAND_GOLD)}'><b>REAL-LIFE MOMENT</b></font>",
-        ParagraphStyle("pro_moment_lbl", fontName="Helvetica-Bold",
-                       fontSize=8.5, leading=11),
-    )
-    body = Paragraph(
-        _safe(text) or "—",
-        ParagraphStyle("pro_moment_body", fontName=fname, fontSize=10.5,
-                       leading=15.5, textColor=TEXT_MID, spaceBefore=4),
-    )
-    t = Table([[label], [body]], colWidths=[180 * mm])
-    t.setStyle(TableStyle([
-        ("BACKGROUND",   (0, 0), (-1, -1), _BG_MOMENT),
-        ("LINEBELOW",    (0, 0), (-1, 0), 0.6, _LINE_GOLD),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 14),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 14),
-        ("TOPPADDING",   (0, 0), (-1, -1), 10),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 12),
-    ]))
-    return [t]
-
-
-def _pro_why_in_charts(chapter_key: str, koots: list[dict],
-                       manglik: bool) -> Table | None:
-    """Small clean grounding chips — 'WHY THIS APPEARS IN YOUR CHARTS' —
-    for the 2-3 koots most relevant to this chapter. Each chip shows
-    label + score + tiny meaning. Returns None if no signals available."""
-    rel_keys = _CHAPTER_KOOT_MAP.get(chapter_key, ())
-    if not rel_keys:
-        return None
-    by_canon: dict[str, dict] = {}
-    for k in (koots or []):
-        canon = _canon_koot_key(k)
-        if canon and canon not in by_canon:
-            by_canon[canon] = k
-
-    chip_rows: list[list[Any]] = []
-    for canon in rel_keys:
-        k = by_canon.get(canon)
-        if not k:
-            continue
-        try:
-            sc = int(k.get("score") or 0); mx = int(k.get("max") or 0)
-        except Exception:
-            sc, mx = 0, 0
-        ratio = (sc / mx) if mx else 0.0
-        if ratio >= 0.6:
-            meaning = _KOOT_STRENGTH_LANG.get(canon, "supportive area")
-            tone    = ACCENT_GREEN
-        elif ratio > 0:
-            meaning = _KOOT_DAMAGE_LANG.get(canon, "needs gentle attention")
-            tone    = colors.HexColor("#B45309")
-        else:
-            meaning = _KOOT_DAMAGE_LANG.get(canon, "weakest area")
-            tone    = colors.HexColor("#B91C1C")
-        label = (k.get("label") or canon).strip().title()
-        label_p = Paragraph(
-            f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(label)}</b></font>"
-            f"<font color='{_hex(TEXT_SOFT)}'>  {sc}/{mx}</font>",
-            ParagraphStyle("wic_l", fontName="Helvetica-Bold",
-                           fontSize=9.5, leading=13),
-        )
-        meaning_p = Paragraph(
-            f"<font color='{_hex(tone)}'>{_safe(meaning)}</font>",
-            ParagraphStyle("wic_m", fontName="Helvetica", fontSize=9,
-                           leading=12),
-        )
-        chip_rows.append([label_p, meaning_p])
-
-    # Add manglik signal where it matters (chapters that name it as a driver).
-    if manglik and chapter_key in ("trust_loyalty", "marriage_stability",
-                                   "communication_conflict", "physical_chemistry"):
-        amber_hex = _hex(colors.HexColor("#B45309"))
-        chip_rows.append([
-            Paragraph(
-                f"<font color='{_hex(BRAND_PURPLE)}'><b>Mangal Signal</b></font>"
-                f"<font color='{_hex(TEXT_SOFT)}'>  active</font>",
-                ParagraphStyle("wic_l2", fontName="Helvetica-Bold",
-                               fontSize=9.5, leading=13)),
-            Paragraph(
-                f"<font color='{amber_hex}'>Mars-driven intensity in one "
-                "chart asks for ritual balance.</font>",
-                ParagraphStyle("wic_m2", fontName="Helvetica", fontSize=9,
-                               leading=12)),
-        ])
-
-    if not chip_rows:
-        return None
-
-    header = Paragraph(
-        f"<font color='{_hex(TEXT_MID)}'><b>"
-        "WHY THIS APPEARS IN YOUR CHARTS</b></font>",
-        ParagraphStyle("wic_h", fontName="Helvetica-Bold", fontSize=8.5,
-                       leading=11),
-    )
-    inner = Table(chip_rows, colWidths=[42 * mm, 130 * mm])
-    inner.setStyle(TableStyle([
-        ("VALIGN",       (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING",   (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 3),
-    ]))
-    wrap = Table([[header], [inner]], colWidths=[180 * mm])
-    wrap.setStyle(TableStyle([
-        ("BACKGROUND",   (0, 0), (-1, -1), _BG_CHARTS),
-        ("LINEABOVE",    (0, 0), (-1, 0), 0.4, BORDER),
-        ("LINEBELOW",    (0, -1), (-1, -1), 0.4, BORDER),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 12),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-        ("TOPPADDING",   (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 8),
-    ]))
-    return wrap
-
-
-def _pro_chapter_pages(s: dict, num_a: int, num_b: int,
-                       eyebrow: str, title: str, subtitle: str,
-                       ch: dict, ch_key: str = "",
-                       koots: list[dict] | None = None,
-                       manglik: bool = False) -> list[Any]:
-    """ONE dense rich page per chapter (Phase 2.5.11.24-fix8 visual rewrite).
-
-    Order: eyebrow → title row + score card → quote pull-out → main insight
-    (kya_dikh) → REAL-LIFE MOMENT card (kya_matlab) → WHY-IN-CHARTS chips
-    → "What to keep in mind" (kya_dhyan) → optional grounding card. Drops
-    one full PageBreak vs the old 2-page-per-chapter layout (25→17 pages).
-    `num_b` is preserved as a parameter for backward call-compat but no
-    longer used — second page is gone.
-    """
+def _pro_chapter_pages(
+    s: dict,
+    num_a: int,
+    num_b: int,
+    eyebrow: str,
+    title: str,
+    subtitle: str,
+    ch: dict,
+) -> list[Any]:
+    """Premium chapter: grounding cards + one long-form narrative block (``chapter_body`` / ``full_read``)."""
+    lg = str(s.get("_lang") or "en")
     out: list[Any] = []
     score = ch.get("score_0_10")
-    kya_dikh   = (ch.get("kya_dikh") or "").strip()
-    kya_matlab = (ch.get("kya_matlab") or "").strip()
-    kya_dhyan  = (ch.get("kya_dhyan") or "").strip()
-    grounding  = (ch.get("grounding") or "").strip()
-    _ = num_b  # kept for backward signature compat
+    _ = num_b
 
-    # Header — eyebrow + title row + score card (compact, single block).
-    out.append(_chapter_eyebrow(num_a, eyebrow))
+    fname = s["body"].fontName if "body" in s else "Helvetica"
+    grounding = _latinize_pdf_plain((ch.get("grounding") or "").strip(), lg)
+    g_head, g_rest = _grounding_head_tail_cards(grounding)
+
+    out.append(_chapter_eyebrow(num_a, eyebrow, lg))
     out.extend(_chapter_title_block(title, subtitle, s))
-    pl_bold = s["h1"].fontName if "h1" in s else "Helvetica-Bold"
-    lead = Paragraph(
-        f"<font color='{_hex(TEXT_MID)}'><b>"
-        f"Compatibility score for this chapter</b></font>",
-        ParagraphStyle("pro_lead", fontName=pl_bold, fontSize=10,
-                       leading=14),
+
+    if score is not None:
+        try:
+            sv = float(score)
+            out.append(
+                Paragraph(
+                    f"<font color='{_hex(TEXT_SOFT)}'><i>{sv:.1f} / 10</i></font>",
+                    ParagraphStyle(
+                        "pro_chapter_score_line",
+                        fontName=fname,
+                        fontSize=9,
+                        leading=12,
+                        textColor=TEXT_SOFT,
+                        spaceAfter=10,
+                    ),
+                )
+            )
+        except Exception:
+            pass
+
+    if g_head:
+        out.append(_chart_note_card(s, g_head))
+        out.append(Spacer(1, 7))
+        out.append(_subsection_soft_rule())
+        out.append(Spacer(1, 4))
+
+    primary = _latinize_pdf_plain(_premium_chapter_primary_narrative(ch).strip(), lg)
+    prose, buls = _prose_and_bullet_lines(primary)
+    combined_plain = prose.strip() if prose.strip() else primary
+    if not combined_plain.strip():
+        combined_plain = " "
+    parts = _split_premium_plain_paragraphs(combined_plain)
+    # Pro PDF: one chapter ≈ one A4 page — when the model returns a short read,
+    # re-chunk into more stacked paragraphs + roomier body styles so the page
+    # fills vertically without inventing prose.
+    target_full_page_chars = 2700
+    min_paras_for_fill = 5
+    need_page_fill = (
+        len(combined_plain) < target_full_page_chars
+        or len(parts) < min_paras_for_fill
     )
-    score_row = Table(
-        [[lead, _pro_score_card(score)]],
-        colWidths=[110 * mm, 70 * mm],
-    )
-    score_row.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-    ]))
-    out.append(score_row)
-    out.append(Spacer(1, 10))
+    if not g_head:
+        out.append(Spacer(1, 2))
+    if need_page_fill:
+        segments = _premium_chapter_dense_segments(combined_plain)
+        if len(segments) >= 2:
+            mid = max(1, len(segments) // 2)
+            a = "\n\n".join(segments[:mid])
+            b = "\n\n".join(segments[mid:])
+            out.append(_premium_body_multi_paragraph_table(s, a, relax=True))
+            out.append(Spacer(1, 11))
+            out.append(_subsection_soft_rule())
+            out.append(Spacer(1, 6))
+            out.append(_premium_body_multi_paragraph_table(s, b, relax=True))
+        else:
+            out.append(_premium_body_multi_paragraph_table(s, combined_plain, relax=True))
+        if len(combined_plain) < 1400:
+            out.append(Spacer(1, 12))
+    else:
+        layout_boost = len(combined_plain) < 1900 or len(parts) < 4
+        if layout_boost and len(parts) >= 4:
+            mid = max(2, len(parts) // 2)
+            a = "\n\n".join(parts[:mid])
+            b = "\n\n".join(parts[mid:])
+            out.append(_premium_body_multi_paragraph_table(s, a, relax=False))
+            out.append(Spacer(1, 10))
+            out.append(_subsection_soft_rule())
+            out.append(Spacer(1, 5))
+            out.append(_premium_body_multi_paragraph_table(s, b, relax=False))
+        else:
+            out.append(_premium_body_multi_paragraph_table(s, combined_plain, relax=False))
+        if layout_boost and len(parts) < 4:
+            out.append(Spacer(1, 10))
+    if len(buls) >= 2:
+        bt = _bullet_cluster_table(s, "\n".join(buls))
+        if bt is not None:
+            out.append(Spacer(1, 6))
+            out.append(bt)
 
-    # Phase 2.5.11.24-fix9 — small CHART LAYER chip naming the real
-    # Vedic factors driving this chapter (planet → meaning → effect).
-    chip = _pro_chart_layer_chip(ch_key, s)
-    if chip is not None:
-        out.append(chip)
-        out.append(Spacer(1, 8))
-
-    _lang = s.get("_lang", "en")
-
-    # Highlighted pull-quote — extracted from kya_dikh first sentence.
-    quote = _extract_quote(kya_dikh)
-    if quote:
-        out.append(_pro_quote_block(quote, s))
+    if g_rest:
+        bottom_title = (
+            MPL.grounding_obs_title(lg) if g_head else MPL.grounding_why_title(lg)
+        )
         out.append(Spacer(1, 10))
-
-    # Main insight paragraph (kya_dikh).
-    out.append(_pro_block_heading("What your chart shows here"))
-    out.append(Paragraph(_safe(kya_dikh) or "—",
-                         _pick_body(kya_dikh or "", s, _lang)))
-    out.append(Spacer(1, 10))
-
-    # Real-life moment box (kya_matlab as immersive scene).
-    if kya_matlab:
-        out.extend(_pro_real_life_moment(kya_matlab, s))
-        out.append(Spacer(1, 10))
-
-    # Why-in-charts grounding chips (engine signals — astrology made visible).
-    wic = _pro_why_in_charts(ch_key, koots or [], manglik)
-    if wic is not None:
-        out.append(wic)
-        out.append(Spacer(1, 10))
-
-    # What to keep in mind.
-    out.append(_pro_block_heading("What to keep in mind"))
-    out.append(Paragraph(_safe(kya_dhyan) or "—",
-                         _pick_body(kya_dhyan or "", s, _lang)))
-
-    # Phase 2.5.11.24-fix10: grounding card DROPPED from chapter pages.
-    # Critique: when LLM kya_dikh+kya_matlab spill onto a 2nd page the
-    # tiny grounding card landed alone on near-empty even pages
-    # (6/10/12/14/16/18) and broke immersion. The CHART LAYER chip +
-    # REAL-LIFE MOMENT box + WHY-IN-CHARTS koot chips already give
-    # three layers of visible astrology grounding per chapter, so the
-    # redundant "Why we say this" footer can go. `grounding` field is
-    # still consumed elsewhere (verdict, blueprint takeaway, snapshot).
-    _ = grounding  # intentionally not rendered on chapter pages
-
+        out.append(
+            _grounding_card(
+                s,
+                g_rest,
+                title=bottom_title,
+                compact=bool(g_head),
+                max_body_chars=480 if g_head else None,
+            )
+        )
     out.append(PageBreak())
     return out
 
 
 def _pro_practical_page(s: dict, num: int, paragraphs: list[str]) -> list[Any]:
-    """P20 — Practical Married Life (3 paragraphs from premium engine)."""
+    """P20 — Practical Married Life (three premium ``practical`` blocks; ``\\n\\n`` inside each)."""
+    lg = str(s.get("_lang") or "en")
     out: list[Any] = []
-    out.append(_chapter_eyebrow(num, "PRACTICAL MARRIED LIFE"))
+    out.append(_chapter_eyebrow(num, MPL.practical_eyebrow(lg), lg))
     out.extend(_chapter_title_block(
-        "Practical Married Life",
-        "Money, family pressure, lifestyle — what daily life will actually feel like.",
+        MPL.practical_title(lg),
+        MPL.practical_subtitle(lg),
     ))
-    paras = [p for p in (paragraphs or []) if p]
-    if not paras:
-        paras = ["Practical detail was not generated for this report."]
-    for para in paras:
-        out.append(Paragraph(_safe(para), s["body"]))
+    blocks = [str(p).strip() for p in (paragraphs or []) if str(p).strip()][:3]
+    if not blocks:
+        blocks = [MPL.practical_empty_block(lg)]
+    for bi, block in enumerate(blocks):
+        out.append(_premium_body_multi_paragraph_table(s, block, relax=False))
         out.append(Spacer(1, 8))
+        bt = _bullet_cluster_table(s, block)
+        if bt is not None:
+            out.append(Spacer(1, 4))
+            out.append(bt)
+        if bi < len(blocks) - 1:
+            out.append(Spacer(1, 8))
+            out.append(_subsection_soft_rule())
+            out.append(Spacer(1, 5))
     out.append(PageBreak())
     return out
 
 
 def _pro_koot_decoded_page(s: dict, num: int, koots: list[dict]) -> list[Any]:
     """P21 — Compatibility Numbers Decoded: every koot in plain language."""
+    lg = str(s.get("_lang") or "en")
+    st_map = MPL._KOOT_STRENGTH_HN if MPL.pdf_ui_hn(lg) else _KOOT_STRENGTH_LANG
+    dmg_map = MPL._KOOT_DAMAGE_HN if MPL.pdf_ui_hn(lg) else _KOOT_DAMAGE_LANG
+    fb_st = MPL.koot_meaning_fallback_strength(lg)
+    fb_mid = MPL.koot_meaning_fallback_mid(lg)
+    fb_wk = MPL.koot_meaning_fallback_weak(lg)
     out: list[Any] = []
-    out.append(_chapter_eyebrow(num, "COMPATIBILITY NUMBERS DECODED"))
+    out.append(_chapter_eyebrow(num, MPL.koot_decoded_eyebrow(lg), lg))
     out.extend(_chapter_title_block(
-        "Compatibility Numbers Decoded",
-        "Each of the 8 koots, explained in plain everyday language.",
+        MPL.koot_decoded_title(lg),
+        MPL.koot_decoded_subtitle(lg),
     ))
-    rows = [["KOOT", "SCORE", "WHAT IT MEANS"]]
+    rows = [[
+        MPL.koot_table_header_koot(lg),
+        MPL.koot_table_header_score(lg),
+        MPL.koot_table_header_meaning(lg),
+    ]]
     for k in (koots or []):
         canon = _canon_koot_key(k)
         try:
@@ -2331,11 +2939,11 @@ def _pro_koot_decoded_page(s: dict, num: int, koots: list[dict]) -> list[Any]:
         # Ratio drives strength vs damage language.
         ratio = (sc / mx) if mx else 0.0
         if ratio >= 0.6:
-            meaning = _KOOT_STRENGTH_LANG.get(canon, "supportive area")
+            meaning = st_map.get(canon, fb_st)
         elif ratio > 0:
-            meaning = _KOOT_DAMAGE_LANG.get(canon, "needs gentle attention")
+            meaning = dmg_map.get(canon, fb_mid)
         else:
-            meaning = _KOOT_DAMAGE_LANG.get(canon, "weakest area — needs care")
+            meaning = dmg_map.get(canon, fb_wk)
         label = (k.get("label") or canon or "—").strip().title()
         rows.append([
             Paragraph(f"<b>{_safe(label)}</b>",
@@ -2367,8 +2975,6 @@ def _pro_koot_decoded_page(s: dict, num: int, koots: list[dict]) -> list[Any]:
         ("BOTTOMPADDING",(0, 0), (-1, -1), 8),
     ]))
     out.append(t)
-    # Phase 2.5.11.24-soul-v6: weak-koot practical action strip.
-    out.extend(_pro_koot_action_strip(koots))
     out.append(PageBreak())
     return out
 
@@ -2402,11 +3008,11 @@ def _planet_key(name: str | None) -> str:
     return (name or "").strip().lower()
 
 
-# ── Phase 2.5.11.24-soul-v6: D1 + D9 chart visualization ──────────────
-# South Indian style — sign positions are fixed in a 4×4 grid; the
-# centre 2×2 carries the chart label. House numbers are computed from
-# the ascendant. Defensive: if planets/asc are missing the helper still
-# emits a grid (sign abbreviations only) so the page never breaks.
+# ── Phase 2.5.11.24-soul-v6 + North-Indian diamond: D1 + D9 chart visualization ─
+# True North Indian geometry: canvas-drawn diamond with twelve quadrilateral
+# house cells on the ring between outer and inner diamonds (not a 4×4 grid).
+# House numbers follow the classical fixed order CCW from top-left (12…11);
+# signs rotate from ``ascendant``. ``planets`` = list of {name, sign} dicts.
 _SIGN_ORDER = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
                "Libra", "Scorpio", "Sagittarius", "Capricorn",
                "Aquarius", "Pisces"]
@@ -2418,103 +3024,255 @@ _SIGN_ABBR = {"Aries": "Ar", "Taurus": "Ta", "Gemini": "Ge",
 _PLANET_ABBR = {"Sun": "Su", "Moon": "Mo", "Mars": "Ma",
                 "Mercury": "Me", "Jupiter": "Ju", "Venus": "Ve",
                 "Saturn": "Sa", "Rahu": "Ra", "Ketu": "Ke"}
-# South Indian fixed-position grid — Pisces top-left, clockwise.
-_SI_GRID: list[list[str | None]] = [
-    ["Pisces",      "Aries",   "Taurus", "Gemini"],
-    ["Aquarius",    None,      None,     "Cancer"],
-    ["Capricorn",   None,      None,     "Leo"],
-    ["Sagittarius", "Scorpio", "Libra",  "Virgo"],
-]
+# Classical North Indian fixed-house topology on the outer diamond:
+# L→T→R: 12,1,2,3 · T→R already second segment — use L→T (12,1), T→Rt (2,3);
+# Rt→B: 4,5 · B→L: 6,7,8,9 · L→B: 11,10.
+_NI_INK = colors.HexColor("#0f172a")
+_NI_LINE = colors.HexColor("#334155")
+_NI_PAPER = colors.HexColor("#fffdf7")
+_NI_LAGNA_STROKE = colors.HexColor("#9a3412")
 
 
-def _south_indian_chart(planets: list, asc_sign: str | None,
-                         label: str, sub_label: str,
-                         width_mm: float = 82.0) -> Table:
-    """Render a South Indian style 12-house chart as a ReportLab Table.
-    `planets` is a list of {name, sign} dicts; `asc_sign` is the sign
-    name of the ascendant (e.g. 'Cancer'). Centre 2×2 cells are merged
-    and carry the chart label."""
-    asc_norm = (asc_sign or "").strip().title()
-    asc_idx = _SIGN_INDEX.get(asc_norm)
-    by_sign: dict[str, list[str]] = {}
-    for p in planets or []:
-        if not isinstance(p, dict):
-            continue
-        sign = (p.get("sign") or "").strip().title()
-        name = (p.get("name") or "").strip().title()
-        abbr = _PLANET_ABBR.get(name)
-        if sign and abbr:
-            by_sign.setdefault(sign, []).append(abbr)
+def _ni_split_polyline(
+    vertices: list[tuple[float, float]],
+    n_seg: int,
+) -> list[tuple[float, float]]:
+    """``n_seg`` equal-length segments along open ``vertices`` → ``n_seg+1`` points."""
+    if n_seg < 1:
+        return [vertices[0], vertices[-1]]
+    segs: list[tuple[tuple[float, float], tuple[float, float], float]] = []
+    tot = 0.0
+    for i in range(len(vertices) - 1):
+        a, b = vertices[i], vertices[i + 1]
+        le = math.hypot(b[0] - a[0], b[1] - a[1])
+        segs.append((a, b, le))
+        tot += le
+    if tot <= 1e-12:
+        return [vertices[0]] * (n_seg + 1)
+    out: list[tuple[float, float]] = []
+    for k in range(n_seg + 1):
+        dist = tot * (k / n_seg)
+        acc = 0.0
+        for a, b, le in segs:
+            if acc + le >= dist - 1e-9:
+                t = (dist - acc) / le if le > 1e-12 else 0.0
+                out.append((a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])))
+                break
+            acc += le
+        else:
+            out.append(vertices[-1])
+    return out
 
-    cell_w = (width_mm * mm) / 4.0
-    cell_h = (width_mm * mm) / 4.0
-    cells: list[list[Any]] = []
-    cell_st = ParagraphStyle("si_cell", fontName="Helvetica",
-                              fontSize=7, leading=9, alignment=TA_CENTER)
-    for r in range(4):
-        row: list[Any] = []
-        for c in range(4):
-            sign = _SI_GRID[r][c]
-            if sign is None:
-                row.append("")
+
+def _ni_classic_house_quads(
+    cx: float,
+    cy: float,
+    R: float,
+    k_inner: float,
+) -> list[tuple[int, tuple[float, float], tuple[float, float], tuple[float, float], tuple[float, float]]]:
+    """Twelve bhāvas as quads between outer diamond and inner diamond (northern chart)."""
+    L = (cx - R, cy)
+    T = (cx, cy + R)
+    Rt = (cx + R, cy)
+    B = (cx, cy - R)
+    ir = R * k_inner
+    Li, Ti, Rti, Bi = (cx - ir, cy), (cx, cy + ir), (cx + ir, cy), (cx, cy - ir)
+    quads: list[tuple[int, tuple, tuple, tuple, tuple]] = []
+    wing_spec: list[
+        tuple[list[tuple[float, float]], list[tuple[float, float]], int, tuple[int, ...]]
+    ] = [
+        ([L, T], [Li, Ti], 2, (12, 1)),
+        ([T, Rt], [Ti, Rti], 2, (2, 3)),
+        ([Rt, B], [Rti, Bi], 2, (4, 5)),
+        ([B, L], [Bi, Li], 4, (6, 7, 8, 9)),
+        ([L, B], [Li, Bi], 2, (11, 10)),
+    ]
+    for och, ich, n, houses in wing_spec:
+        o_pts = _ni_split_polyline(och, n)
+        i_pts = _ni_split_polyline(ich, n)
+        for j in range(n):
+            h = houses[j]
+            quads.append((h, o_pts[j], o_pts[j + 1], i_pts[j + 1], i_pts[j]))
+    return quads
+
+class NorthIndianDiamondChartFlowable(Flowable):
+    """Classical North Indian diamond (D-1): twelve bhāvas, inner madhya for chart name."""
+
+    def __init__(
+        self,
+        planets: list,
+        asc_sign: str | None,
+        label: str,
+        sub_label: str,
+        width_mm: float = 88.0,
+    ) -> None:
+        Flowable.__init__(self)
+        self._planets = planets or []
+        self._asc_sign = asc_sign
+        self._label = (label or "").strip()
+        self._sub_label = (sub_label or "").strip()
+        self._side = float(width_mm) * mm
+
+    def wrap(self, availWidth, availHeight):
+        return self._side, self._side
+
+    def draw(self) -> None:
+        canv = self.canv
+        w = h = self._side
+        cx, cy = w * 0.5, h * 0.5
+
+        asc_norm = (self._asc_sign or "").strip().title()
+        asc_idx = _SIGN_INDEX.get(asc_norm)
+        by_sign: dict[str, list[str]] = {}
+        for p in self._planets:
+            if not isinstance(p, dict):
                 continue
-            house_num = ""
+            sign = (p.get("sign") or "").strip().title()
+            name = (p.get("name") or "").strip().title()
+            ab = _PLANET_ABBR.get(name)
+            if sign and ab:
+                by_sign.setdefault(sign, []).append(ab)
+
+        margin = min(w, h) * 0.018
+        R = (min(w, h) * 0.5 - margin) * 0.985
+        k_inner = 0.385
+        k_lab = 0.235
+
+        L = (cx - R, cy)
+        T = (cx, cy + R)
+        Rt = (cx + R, cy)
+        B = (cx, cy - R)
+
+        ir = R * k_inner
+        Li, Ti, Rti, Bi = (cx - ir, cy), (cx, cy + ir), (cx + ir, cy), (cx, cy - ir)
+        lr = R * k_lab
+        Ll, Tl, Rtl, Bl = (cx - lr, cy), (cx, cy + lr), (cx + lr, cy), (cx, cy - lr)
+
+        house_polys = _ni_classic_house_quads(cx, cy, R, k_inner)
+
+        path_bg = canv.beginPath()
+        path_bg.moveTo(T[0], T[1])
+        path_bg.lineTo(Rt[0], Rt[1])
+        path_bg.lineTo(B[0], B[1])
+        path_bg.lineTo(L[0], L[1])
+        path_bg.close()
+        canv.setFillColor(_NI_PAPER)
+        canv.drawPath(path_bg, stroke=0, fill=1)
+
+        for house_num, o0, o1, i1, i0 in house_polys:
+            hp = canv.beginPath()
+            hp.moveTo(o0[0], o0[1])
+            hp.lineTo(o1[0], o1[1])
+            hp.lineTo(i1[0], i1[1])
+            hp.lineTo(i0[0], i0[1])
+            hp.close()
+            canv.setFillColor(colors.white)
+            canv.drawPath(hp, stroke=0, fill=1)
+            canv.setStrokeColor(_NI_LINE)
+            canv.setLineWidth(0.32)
+            canv.drawPath(hp, stroke=1, fill=0)
+
+        path_lab = canv.beginPath()
+        path_lab.moveTo(Tl[0], Tl[1])
+        path_lab.lineTo(Rtl[0], Rtl[1])
+        path_lab.lineTo(Bl[0], Bl[1])
+        path_lab.lineTo(Ll[0], Ll[1])
+        path_lab.close()
+        canv.setFillColor(colors.white)
+        canv.drawPath(path_lab, stroke=0, fill=1)
+        canv.setStrokeColor(_NI_LINE)
+        canv.setLineWidth(0.28)
+        canv.drawPath(path_lab, stroke=1, fill=0)
+
+        for house_num, o0, o1, i1, i0 in house_polys:
+            if house_num != 1:
+                continue
+            hp1 = canv.beginPath()
+            hp1.moveTo(o0[0], o0[1])
+            hp1.lineTo(o1[0], o1[1])
+            hp1.lineTo(i1[0], i1[1])
+            hp1.lineTo(i0[0], i0[1])
+            hp1.close()
+            canv.setStrokeColor(_NI_LAGNA_STROKE)
+            canv.setLineWidth(1.0)
+            canv.drawPath(hp1, stroke=1, fill=0)
+            break
+
+        path_out = canv.beginPath()
+        path_out.moveTo(T[0], T[1])
+        path_out.lineTo(Rt[0], Rt[1])
+        path_out.lineTo(B[0], B[1])
+        path_out.lineTo(L[0], L[1])
+        path_out.close()
+        canv.setStrokeColor(_NI_INK)
+        canv.setLineWidth(1.02)
+        canv.drawPath(path_out, stroke=1, fill=0)
+
+        for house_num, o0, o1, i1, i0 in house_polys:
+            tcx = (o0[0] + o1[0]) * 0.5
+            tcy = (o0[1] + o1[1]) * 0.5
+            icx = (i0[0] + i1[0]) * 0.5
+            icy = (i0[1] + i1[1]) * 0.5
+            tx, ty = (tcx + icx) * 0.5, (tcy + icy) * 0.5
+
+            sign_name = ""
             if asc_idx is not None:
-                h = ((_SIGN_INDEX[sign] - asc_idx) % 12) + 1
-                house_num = str(h)
-            planets_in = " ".join(by_sign.get(sign, []))
-            asc_marker = " ★" if sign == asc_norm else ""
-            top = (f"<font size='6' color='{_hex(TEXT_SOFT)}'>"
-                   f"{_SIGN_ABBR.get(sign, '')}{asc_marker}  "
-                   f"<b>H{house_num}</b></font>")
-            body = ""
+                sign_name = _SIGN_ORDER[(asc_idx + house_num - 1) % 12]
+            sab = _SIGN_ABBR.get(sign_name, "")
+            planets_in = " ".join(by_sign.get(sign_name, []))
+            lag_txt = " · Lg" if house_num == 1 else ""
+
+            canv.setFont("Helvetica-Bold", 6.5)
+            canv.setFillColor(_NI_LINE)
+            canv.drawCentredString(tx, ty + 5.2, f"{house_num} {sab}{lag_txt}")
+
             if planets_in:
-                body = (f"<br/><font size='8' color='{_hex(TEXT_DARK)}'>"
-                        f"<b>{planets_in}</b></font>")
-            row.append(Paragraph(top + body, cell_st))
-        cells.append(row)
+                words = planets_in.split()
+                canv.setFillColor(_NI_INK)
+                if len(words) <= 4:
+                    canv.setFont("Helvetica-Bold", 7.15)
+                    canv.drawCentredString(tx, ty - 2.2, " ".join(words))
+                else:
+                    canv.setFont("Helvetica-Bold", 6.25)
+                    canv.drawCentredString(tx, ty - 0.8, " ".join(words[:4]))
+                    canv.drawCentredString(tx, ty - 6.8, " ".join(words[4:8]))
 
-    # Centre label across the merged 2×2.
-    label_para = Paragraph(
-        f"<font size='10' color='{_hex(BRAND_PURPLE)}'><b>{_safe(label)}</b></font>"
-        f"<br/><font size='7' color='{_hex(TEXT_SOFT)}'>{_safe(sub_label)}</font>",
-        ParagraphStyle("si_lbl", fontName="Helvetica-Bold",
-                        fontSize=10, leading=13, alignment=TA_CENTER),
+        canv.setFillColor(_NI_INK)
+        canv.setFont("Helvetica-Bold", 8.4)
+        canv.drawCentredString(cx, cy + 3.8, self._label.upper())
+        canv.setFont("Helvetica", 6.35)
+        canv.setFillColor(_NI_LINE)
+        canv.drawCentredString(cx, cy - 5.2, self._sub_label)
+
+
+def _north_indian_diamond_chart(
+    planets: list,
+    asc_sign: str | None,
+    label: str,
+    sub_label: str,
+    width_mm: float = 88.0,
+) -> NorthIndianDiamondChartFlowable:
+    """Return a canvas-drawn North Indian diamond chart (not a grid Table)."""
+    return NorthIndianDiamondChartFlowable(
+        planets, asc_sign, label, sub_label, width_mm,
     )
-    cells[1][1] = label_para
-    cells[1][2] = ""
-    cells[2][1] = ""
-    cells[2][2] = ""
-
-    t = Table(cells, colWidths=[cell_w] * 4, rowHeights=[cell_h] * 4)
-    t.setStyle(TableStyle([
-        ("GRID",         (0, 0), (-1, -1), 0.5, BORDER),
-        ("VALIGN",       (0, 0), (-1, -1), "TOP"),
-        ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 2),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
-        ("TOPPADDING",   (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 3),
-        ("SPAN",         (1, 1), (2, 2)),
-        ("BACKGROUND",   (1, 1), (2, 2), _BG_HERO),
-    ]))
-    return t
 
 
 def _pro_d1_d9_chart_page(s: dict, num: int, k1: dict | None,
                            k2: dict | None) -> list[Any]:
     """Phase 2.5.11.24-soul-v6: visual D1 (Rasi) + D9 (Navamsa) chart
-    page for both partners. Side-by-side South Indian style. Defensive
-    against missing kundli data — page renders with empty grids if so,
-    never crashes."""
+    page for both partners. Side-by-side **North Indian diamond** (fixed
+    houses, signs from lagna). Defensive against missing kundli data —
+    page renders with empty grids if so, never crashes."""
+    lg = str(s.get("_lang") or "en")
     out: list[Any] = []
-    out.append(_chapter_eyebrow(num, "YOUR ACTUAL CHART POSITIONS"))
+    out.append(_chapter_eyebrow(num, MPL.charts_eyebrow(lg), lg))
     out.extend(_chapter_title_block(
-        "Your Charts at a Glance",
-        "Rasi (D1) — your outer life. Navamsa (D9) — your married "
-        "life. South Indian fixed-sign style.",
+        MPL.charts_title(lg),
+        MPL.charts_subtitle(lg),
+        s,
     ))
-    for who, kundli in (("Partner 1", k1), ("Partner 2", k2)):
+    for who, kundli in ((MPL.partner_default(lg, 1), k1), (MPL.partner_default(lg, 2), k2)):
         if not isinstance(kundli, dict):
             kundli = {}
         name = (kundli.get("name") or who).strip()
@@ -2525,33 +3283,31 @@ def _pro_d1_d9_chart_page(s: dict, num: int, k1: dict | None,
         d9_asc = (d9.get("ascendant") if isinstance(d9, dict)
                   else None) or d1_asc
         out.append(Paragraph(
-            f"<font color='{_hex(BRAND_PURPLE)}'><b>"
+            f"<font color='{_hex(_NI_INK)}'><b>"
             f"{_safe(name.upper())}</b></font>",
             ParagraphStyle("dchart_name", fontName="Helvetica-Bold",
-                            fontSize=10, leading=14,
-                            spaceBefore=8, spaceAfter=4),
+                            fontSize=10.5, leading=14,
+                            spaceBefore=6, spaceAfter=3),
         ))
-        d1 = _south_indian_chart(d1_planets, d1_asc, "RASI",
-                                  "D1 chart", width_mm=82)
-        d9c = _south_indian_chart(d9_planets, d9_asc, "NAVAMSA",
-                                   "D9 chart", width_mm=82)
-        side = Table([[d1, d9c]], colWidths=[90 * mm, 90 * mm])
+        d1 = _north_indian_diamond_chart(d1_planets, d1_asc, "Rāśi",
+                                         "D1", width_mm=88)
+        d9c = _north_indian_diamond_chart(d9_planets, d9_asc, "Navāmśa",
+                                          "D9", width_mm=88)
+        side = Table([[d1, d9c]], colWidths=[91 * mm, 91 * mm])
         side.setStyle(TableStyle([
-            ("VALIGN",       (0, 0), (-1, -1), "TOP"),
+            ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
             ("LEFTPADDING",  (0, 0), (-1, -1), 0),
             ("RIGHTPADDING", (0, 0), (-1, -1), 0),
         ]))
         out.append(side)
-        out.append(Spacer(1, 4))
-    out.append(Spacer(1, 6))
+        out.append(Spacer(1, 3))
+    out.append(Spacer(1, 4))
     out.append(Paragraph(
-        f"<font color='{_hex(TEXT_SOFT)}' size='8'><b>READING THIS:</b> "
-        f"Each box is a zodiac sign — fixed position. The H-number is "
-        f"the house counted from your ascendant (marked ★). Planet "
-        f"abbreviations: Su Sun, Mo Moon, Ma Mars, Me Mercury, Ju "
-        f"Jupiter, Ve Venus, Sa Saturn, Ra Rahu, Ke Ketu.</font>",
+        f"<font color='{_hex(_NI_LINE)}' size='8'>"
+        f"{MPL.charts_legend_note(lg)}</font>",
         ParagraphStyle("dchart_legend", fontName="Helvetica",
-                        fontSize=8, leading=11, textColor=TEXT_SOFT,
+                        fontSize=8, leading=11, textColor=_NI_LINE,
                         spaceBefore=2),
     ))
     out.append(PageBreak())
@@ -2589,66 +3345,6 @@ _KOOT_ACTION_LINE = {
 }
 
 
-def _pro_koot_action_strip(koots: list[dict]) -> list[Any]:
-    """Phase 2.5.11.24-soul-v6: callout strip — for each koot scoring
-    < 0.5 of max, give one concrete practical action. Bridges the gap
-    between 'we see Bhakut 0/7' and 'so what do we actually DO about
-    it'. Returns [] if no weak koots so the strip never appears empty."""
-    weak = []
-    for k in (koots or []):
-        if not isinstance(k, dict):
-            continue
-        canon = _canon_koot_key(k)
-        try:
-            sc = int(k.get("score") or 0)
-            mx = int(k.get("max") or 0)
-        except Exception:
-            continue
-        if mx and (sc / mx) < 0.5:
-            action = _KOOT_ACTION_LINE.get(canon)
-            if action:
-                label = (k.get("label") or canon or "—").strip().title()
-                weak.append((label, sc, mx, action))
-    if not weak:
-        return []
-    out: list[Any] = []
-    out.append(Spacer(1, 10))
-    out.append(Paragraph(
-        f"<font color='{_hex(TEXT_SOFT)}' size='8'>"
-        f"<b>WEAK SPOTS · PRACTICAL TOD</b></font>",
-        ParagraphStyle("kact_eye", fontName="Helvetica-Bold",
-                        fontSize=8, leading=11, spaceAfter=4),
-    ))
-    rows = []
-    for (label, sc, mx, action) in weak[:5]:
-        rows.append([
-            Paragraph(
-                f"<b>{_safe(label)}</b><br/>"
-                f"<font size='8' color='{_hex(TEXT_SOFT)}'>{sc}/{mx}</font>",
-                ParagraphStyle("kact_l", fontName="Helvetica-Bold",
-                                fontSize=9, leading=12,
-                                textColor=BRAND_PURPLE),
-            ),
-            Paragraph(_safe(action),
-                       ParagraphStyle("kact_a", fontName="Helvetica",
-                                       fontSize=9, leading=13,
-                                       textColor=TEXT_DARK)),
-        ])
-    t = Table(rows, colWidths=[28 * mm, 152 * mm])
-    t.setStyle(TableStyle([
-        ("BACKGROUND",   (0, 0), (-1, -1), _BG_MOMENT),
-        ("LINEABOVE",    (0, 0), (-1, 0), 1.2, BRAND_GOLD),
-        ("LINEBELOW",    (0, -1), (-1, -1), 0.4, BORDER),
-        ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 10),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-        ("TOPPADDING",   (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 8),
-    ]))
-    out.append(t)
-    return out
-
-
 def _blueprint_depth_blocks(s: dict, d9: dict | None,
                             p1n: str, p2n: str) -> list[Any]:
     """Phase 2.5.11.24-fix10 — 4 deterministic depth blocks added to the
@@ -2661,6 +3357,7 @@ def _blueprint_depth_blocks(s: dict, d9: dict | None,
     the contract."""
     out: list[Any] = []
     d9 = d9 if isinstance(d9, dict) else {}
+    lg = str(s.get("_lang") or "en")
     # Architect-flagged fix10 hardening: nested p1/p2/sync may arrive as
     # lists / strings / None from a malformed payload — type-check each
     # before .get() to keep the renderer crash-free.
@@ -2695,35 +3392,18 @@ def _blueprint_depth_blocks(s: dict, d9: dict | None,
              else (s.get("body").fontName if "body" in s else "Helvetica"))
     body_st = ParagraphStyle("bp_dep_body", fontName=fname, fontSize=10.5,
                              leading=15, textColor=TEXT_DARK)
-    head_bold = "Helvetica-Bold"
-
-    def _h(label: str):
-        out.append(Paragraph(
-            f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(label)}</b></font>",
-            ParagraphStyle("bp_dep_h", fontName=head_bold, fontSize=11,
-                           leading=15, spaceBefore=8, spaceAfter=4),
-        ))
-
-    # Subtle gold divider so the depth section visually opens.
-    div = Table([[""]], colWidths=[180 * mm], rowHeights=[1])
-    div.setStyle(TableStyle([("LINEABOVE", (0, 0), (-1, 0), 0.6, BRAND_GOLD)]))
-    out.append(Spacer(1, 8))
-    out.append(div)
-    out.append(Spacer(1, 4))
-    out.append(Paragraph(
-        f"<font color='{_hex(TEXT_SOFT)}'><b>DEEPER MARRIAGE LAYER · D1 + D9 TRANSLATION</b></font>",
-        ParagraphStyle("bp_dep_eyebrow", fontName="Helvetica-Bold",
-                       fontSize=8, leading=11, spaceAfter=2),
-    ))
+    # Keep the depth content but avoid subsection UI (no divider / eyebrow / mini-headings).
 
     # 1) What marriage actually means (7th-lord translated — fix10 corrected).
     # Phase soul-v5: rewritten in astrologer-notes voice — first-person
     # observation, lived-practice framing, slightly hesitant. The reader
     # should feel a human astrologer is talking, not an AI summarising.
-    _h(f"What marriage means to {p1n} vs {p2n}")
     p1_mean = _PLANET_MARRIAGE_MEANING.get(p1_7l, _PLANET_MARRIAGE_MEANING["jupiter"])
     p2_mean = _PLANET_MARRIAGE_MEANING.get(p2_7l, _PLANET_MARRIAGE_MEANING["venus"])
     out.append(Paragraph(
+        f"<font color='{_hex(BRAND_PURPLE)}'><b>"
+        f"{_safe(MPL.bp_heading_marriage_meaning(lg, str(p1n), str(p2n)))}"
+        f"</b></font><br/>"
         f"Jab main yeh dono kundli saath rakhke padhta hoon, mujhe ek "
         f"baat sabse pehle dikhti hai — <b>{_safe(p1n)}</b> ke liye "
         f"shaadi andar se {p1_mean} hai. Aur <b>{_safe(p2n)}</b> ke "
@@ -2734,7 +3414,6 @@ def _blueprint_depth_blocks(s: dict, d9: dict | None,
         body_st))
 
     # 2) Affection style (lagna-lord translated).
-    _h("How affection actually shows up here")
     p1_aff = _PLANET_AFFECTION.get(p1_lord, _PLANET_AFFECTION["jupiter"])
     p2_aff = _PLANET_AFFECTION.get(p2_lord, _PLANET_AFFECTION["venus"])
     if p1_lord == p2_lord:
@@ -2757,12 +3436,15 @@ def _blueprint_depth_blocks(s: dict, d9: dict | None,
             f"me sirf translation ki gaadbad hote hain, feeling ki "
             f"kami nahi."
         )
-    out.append(Paragraph(aff_line, body_st))
+    out.append(Paragraph(
+        f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(MPL.bp_heading_affection(lg))}</b></font><br/>"
+        f"{aff_line}",
+        body_st,
+    ))
 
     # 3) Conflict instinct (sync.lagna_lord_relation translated).
     # Architect-flagged: must accept engine-native variants — d9_marriage
     # emits `friendly`/`hostile` not just `friend`/`enemy`.
-    _h("How conflict actually plays out")
     if rel_lagna in ("friend", "friendly", "great_friend", "mutual_friend",
                      "mutual", "best_friend"):
         conf_line = (
@@ -2798,10 +3480,13 @@ def _blueprint_depth_blocks(s: dict, d9: dict | None,
             "Achchi baat — koi bhi shabdon se aasani se chot nahi "
             "pahuncha sakta. Yeh kam log realize karte hain."
         )
-    out.append(Paragraph(conf_line, body_st))
+    out.append(Paragraph(
+        f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(MPL.bp_heading_conflict(lg))}</b></font><br/>"
+        f"{conf_line}",
+        body_st,
+    ))
 
     # 4) Daily emotional habit (avg maturity translated).
-    _h("The daily emotional rhythm of this bond")
     if avg_m >= 7.0:
         day_line = (
             "Aam dinon me yeh shaadi calibrated lagti hai — maine kayi "
@@ -2827,7 +3512,11 @@ def _blueprint_depth_blocks(s: dict, d9: dict | None,
             "named effort maang raha hai line ko warm rakhne ke liye. "
             "Aam taur pe yeh awareness se hi shuru hota hai."
         )
-    out.append(Paragraph(day_line, body_st))
+    out.append(Paragraph(
+        f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(MPL.bp_heading_daily_rhythm(lg))}</b></font><br/>"
+        f"{day_line}",
+        body_st,
+    ))
 
     return out
 
@@ -2844,12 +3533,12 @@ def _pro_marriage_blueprint_page(s: dict, num: int,
     + marriage_maturity. NEVER quotes raw chart vocab — pure relational
     character language.
     """
+    lg = str(s.get("_lang") or "en")
     out: list[Any] = []
-    out.append(_chapter_eyebrow(num, "MARRIAGE BLUEPRINT"))
+    out.append(_chapter_eyebrow(num, MPL.blueprint_eyebrow(lg), lg))
     out.extend(_chapter_title_block(
-        "Marriage Blueprint",
-        "How each of you arrives in marriage — and what daily rhythm "
-        "naturally forms when those two natures meet.",
+        MPL.blueprint_title(lg),
+        MPL.blueprint_subtitle(lg),
     ))
     blueprint = blueprint if isinstance(blueprint, dict) else {}
 
@@ -2864,18 +3553,19 @@ def _pro_marriage_blueprint_page(s: dict, num: int,
             ParagraphStyle("mb_h", fontName=mbh_bold, fontSize=11,
                            leading=15, spaceBefore=4, spaceAfter=4),
         ))
-        out.append(Paragraph(_safe(body), s["body"]))
+        mk = _premium_prose_markup(body) or _safe(body.strip())
+        out.append(_premium_body_table(mk, body, s))
         out.append(Spacer(1, 8))
 
-    _block(f"{p1_name}'s marriage nature",
+    _block(MPL.blueprint_block_p1_nature(lg, p1_name),
            blueprint.get("p1_marriage_nature", ""))
-    _block(f"{p2_name}'s marriage nature",
+    _block(MPL.blueprint_block_p2_nature(lg, p2_name),
            blueprint.get("p2_marriage_nature", ""))
-    _block("How both of you interact day-to-day",
+    _block(MPL.blueprint_block_interaction(lg),
            blueprint.get("interaction_dynamic", ""))
-    _block(f"What {p1_name} needs from {p2_name}",
+    _block(MPL.blueprint_block_p1_needs(lg, p1_name, p2_name),
            blueprint.get("what_p1_needs_from_p2", ""))
-    _block(f"What {p2_name} needs from {p1_name}",
+    _block(MPL.blueprint_block_p2_needs(lg, p1_name, p2_name),
            blueprint.get("what_p2_needs_from_p1", ""))
 
     # Phase 2.5.11.24-fix10 — 4 deterministic depth blocks (D1+D9
@@ -2892,74 +3582,21 @@ def _pro_marriage_blueprint_page(s: dict, num: int,
     return out
 
 
-def _pro_timing_sync_page(s: dict, num: int,
-                          p1_name: str, p2_name: str) -> list[Any]:
-    """P22 — Marriage Timing Sync (gentle, NEVER predictive)."""
-    out: list[Any] = []
-    out.append(_chapter_eyebrow(num, "MARRIAGE TIMING SYNC"))
-    out.extend(_chapter_title_block(
-        "Marriage Timing Sync",
-        "How both partners' larger life cycles align — without predicting dates.",
-    ))
-    body = (
-        f"Both {_safe(p1_name)} and {_safe(p2_name)} are moving through "
-        f"their own larger life cycles. When two people commit to each "
-        f"other, the meaningful sync is rarely a single auspicious date — "
-        f"it is the gradual overlap of life-phases where both feel ready "
-        f"to build something together."
-    )
-    body2 = (
-        "Vedic timing tools can highlight broadly supportive seasons, but "
-        "real readiness depends on lived choices — emotional clarity, "
-        "career stability, family alignment, and the quiet confidence that "
-        "you both want the same shape of life. Use the chapter scores in "
-        "this report as your honest mirror, not the calendar."
-    )
-    body3 = (
-        "If you are considering a near-term commitment, the most reliable "
-        "compass is a long, unhurried conversation about the next 5 years — "
-        "money, family roles, location, children, ambitions. Timing then "
-        "follows naturally."
-    )
-    for para in (body, body2, body3):
-        out.append(Paragraph(_safe(para), s["body"]))
-        out.append(Spacer(1, 8))
-    out.append(PageBreak())
-    return out
-
-
 def _pro_final_verdict_page(s: dict, num: int, verdict: str,
                             total: float, mx: int,
                             p1_name: str = "Partner 1",
                             p2_name: str = "Partner 2") -> list[Any]:
-    """Final Verdict + Timing-context (Phase 2.5.11.24-fix8 merged page).
-
-    Premium engine verdict prose followed by a "READINESS & TIMING" block
-    that carries the standalone-Timing-Sync paragraph (now folded in to
-    drop a near-empty boilerplate page from the report)."""
+    """Final Verdict: closing prose in a single continuous flow."""
+    lg = str(s.get("_lang") or "en")
     out: list[Any] = []
-    out.append(_chapter_eyebrow(num, "FINAL VERDICT"))
+    out.append(_chapter_eyebrow(num, MPL.verdict_eyebrow(lg), lg))
     out.extend(_chapter_title_block(
-        "Final Verdict",
-        f"Read together with the {_safe(total)}/{_safe(mx)} headline score.",
+        MPL.verdict_title(lg),
+        MPL.verdict_subtitle(lg, total, mx),
     ))
-    txt = (verdict or "").strip() or (
-        "Every relationship is a daily choice. The numbers in this report "
-        "describe the soil — the harvest still depends on what both of you "
-        "plant, water, and protect together."
-    )
-    out.append(Paragraph(_safe(txt), s["body"]))
-    out.append(Spacer(1, 14))
-
-    # Timing-context block (folded in from the old Timing Sync page).
-    out.append(_pro_block_heading("Readiness & timing"))
-    out.append(Paragraph(
-        f"Both {_safe(p1_name)} and {_safe(p2_name)} are moving through "
-        f"their own larger life cycles. Real readiness is rarely a single "
-        f"auspicious date — it is the gradual overlap of life-phases where "
-        f"both feel ready to build something together. Use the chapter "
-        f"scores in this report as your honest mirror, not the calendar.",
-        s["body"]))
+    txt = (verdict or "").strip() or MPL.verdict_body_default(lg)
+    mk = _premium_prose_markup(txt) or _safe(txt)
+    out.append(_premium_body_table(mk, txt, s))
     out.append(Spacer(1, 14))
 
     # Phase 2.5.11.24-fix9 — ONE memorable closing truth line by score
@@ -2969,131 +3606,215 @@ def _pro_final_verdict_page(s: dict, num: int, verdict: str,
         ratio = float(total) / float(mx) if mx else 0.0
     except Exception:
         ratio = 0.0
-    # Phase 2.5.11.24-fix10 — sharper closers, written to be the one
-    # screenshot-worthy line of the entire report. Anchor phrases
-    # ("emotional language" / "patience over pride" / "acknowledgement")
-    # preserved so the regression test still locks the band-keying.
+    # Phase 2.5.11.24-fix10 — closers: observational, slightly uncomfortable,
+    # astrologer-not-coach. English fragments stay Latin-readable for mixed fonts.
     if ratio >= 0.78:
-        closer = (
-            "Is shaadi ki strength perfection nahi — ek dusre ki alag "
-            "emotional languages ko dheere dheere seekhne ki capacity hai. "
-            "And that one capacity is rarer than every grand romantic "
-            "gesture combined."
-        )
-    elif ratio >= 0.58:
-        closer = (
-            "Yeh shaadi isliye chalegi kyunki dono ek jaise nahi ho — "
-            "balki har saal, thode aur honestly, ek dusre ki emotional "
-            "language seekhte rahoge. That patient learning is the marriage."
-        )
+        closer = MPL.verdict_closer_high(lg)
     elif ratio >= 0.40:
-        closer = (
-            "Yeh bond tab tikega jab pyaar sabse loud na ho — balki jab "
-            "dono of you choose patience over pride during the weeks "
-            "jab koi nahi dekh raha. The chart is asking for exactly that."
-        )
+        closer = MPL.verdict_closer_mid(lg)
     else:
-        closer = (
-            "Yeh shaadi tab gehri hogi jab dono of you stop demanding "
-            "agreement and start offering acknowledgement — yahi, kisi "
-            "bhi ritual se zyada, is rishte ka asli Vedic remedy hai."
-        )
+        closer = MPL.verdict_closer_low(lg)
     # Latin-only — body_latin so closer stays readable in bn/ta/te/etc.
     fname = (s.get("body_latin").fontName if "body_latin" in s
              else (s.get("body").fontName if "body" in s else "Helvetica"))
-    closer_p = Paragraph(
-        f"<font color='{_hex(BRAND_PURPLE)}'><b><i>"
-        f"“{_safe(closer)}”</i></b></font>",
-        ParagraphStyle("verdict_closer", fontName=fname, fontSize=12,
-                       leading=18, alignment=TA_CENTER,
-                       leftIndent=10, rightIndent=10),
-    )
-    closer_t = Table([[closer_p]], colWidths=[180 * mm])
-    closer_t.setStyle(TableStyle([
-        ("BACKGROUND",   (0, 0), (-1, -1), _BG_QUOTE),
-        ("LINEABOVE",    (0, 0), (-1, 0), 1.5, _LINE_QUOTE),
-        ("LINEBELOW",    (0, -1), (-1, -1), 1.5, _LINE_QUOTE),
-        ("TOPPADDING",   (0, 0), (-1, -1), 16),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 16),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 16),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 16),
-    ]))
-    out.append(closer_t)
-    out.append(Spacer(1, 12))
+    out.append(Paragraph(
+        f"<font color='{_hex(BRAND_PURPLE)}'><b><i>{_safe(closer)}</i></b></font>",
+        ParagraphStyle(
+            "verdict_closer_plain",
+            fontName=fname,
+            fontSize=12,
+            leading=18,
+            alignment=TA_CENTER,
+            leftIndent=10,
+            rightIndent=10,
+            spaceBefore=10,
+            spaceAfter=12,
+        ),
+    ))
 
-    out.append(_grounding_card(
-        s, "This verdict is a synthesis of all 7 chapters above plus the "
-           "deeper KP marriage-promise reading — not a prediction."))
+    out.append(_grounding_card(s, MPL.verdict_grounding(lg)))
     out.append(PageBreak())
     return out
 
 
 def _pro_closing_page(s: dict) -> list[Any]:
     """P24 — Closing + branding (NEVER mention AI/LLM)."""
+    lg = str(s.get("_lang") or "en")
     out: list[Any] = []
     out.append(Spacer(1, 50 * mm))
     out.append(Paragraph(
-        f"<font color='{_hex(BRAND_PURPLE)}'><b>Thank You</b></font>",
+        f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(MPL.closing_thanks(lg))}</b></font>",
         ParagraphStyle("close_h", fontName="Helvetica-Bold", fontSize=26,
                        leading=32, alignment=TA_CENTER, spaceAfter=10),
     ))
     out.append(Paragraph(
-        "<font color='#475569'>Every chart is a beginning, not a verdict. "
-        "May this reading help both of you walk into your shared life "
-        "with clearer eyes and a softer heart.</font>",
+        f"<font color='#475569'>{_safe(MPL.closing_body(lg))}</font>",
         ParagraphStyle("close_b", fontName="Helvetica", fontSize=11,
                        leading=17, alignment=TA_CENTER, spaceAfter=24),
     ))
     out.append(Spacer(1, 30 * mm))
     out.append(Paragraph(
-        f"<font color='{_hex(BRAND_GOLD)}'><b>"
-        f"Powered by Advanced Cosmic Intelligence</b></font>",
-        ParagraphStyle("close_brand", fontName="Helvetica-Bold", fontSize=10,
-                       leading=14, alignment=TA_CENTER),
-    ))
-    out.append(Spacer(1, 6))
-    out.append(Paragraph(
-        f"<font color='{_hex(TEXT_SOFT)}'>COSMIC LENS  ·  "
-        f"Cosmic Relationship Blueprint Pro</font>",
+        f"<font color='{_hex(TEXT_SOFT)}'>{_safe(MPL.closing_footer(lg))}</font>",
         ParagraphStyle("close_meta", fontName="Helvetica", fontSize=8,
                        leading=11, alignment=TA_CENTER),
     ))
     return out
 
 
+def _mpl_score_breakdown_page(
+    s: dict, num: int, payload: dict, total: int, mx: int, lang: str,
+) -> list[Any]:
+    ledger = payload.get("ashtakoot_ledger") or []
+    lg = str(s.get("_lang") or "en")
+    H_REG = (s.get("body").fontName if s and "body" in s else "Helvetica")
+    out: list[Any] = []
+    out.append(_chapter_eyebrow(num, "SCORE", lg))
+    out.extend(_chapter_title_block(MPL.score_breakdown_title(lg), MPL.score_breakdown_subtitle(lg), s))
+    if not ledger:
+        out.append(
+            _premium_body_multi_paragraph_table(
+                s, MPL.score_ledger_fallback(lg, total, mx), relax=True,
+            )
+        )
+    else:
+        rows: list[list[Any]] = []
+        for row in ledger:
+            if not isinstance(row, dict):
+                continue
+            label = _safe(str(row.get("label") or ""))
+            delta = row.get("delta")
+            note = _safe(str(row.get("note") or ""))
+            delta_txt = ""
+            if row.get("base") is not None:
+                delta_txt = str(int(row["base"]))
+            elif delta is not None:
+                try:
+                    d = float(delta)
+                    delta_txt = f"+{int(d)}" if d > 0 else str(int(d))
+                except (TypeError, ValueError):
+                    delta_txt = str(delta)
+            rows.append([
+                Paragraph(
+                    f"<b>{label}</b><br/><font color='{_hex(TEXT_SOFT)}' size=9>{note}</font>",
+                    ParagraphStyle("mpl_sl", fontName=H_REG, fontSize=10, leading=13, textColor=TEXT_DARK),
+                ),
+                Paragraph(
+                    f"<b>{delta_txt}</b>" if delta_txt else "—",
+                    ParagraphStyle(
+                        "mpl_sd", fontName="Helvetica-Bold", fontSize=11,
+                        alignment=TA_CENTER, textColor=BRAND_PURPLE,
+                    ),
+                ),
+            ])
+        tbl = Table(rows, colWidths=[145 * mm, 35 * mm])
+        tbl.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LINEBELOW", (0, 0), (-1, -2), 0.25, TEXT_SOFT),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        out.append(tbl)
+        out.append(Spacer(1, 10))
+        out.append(
+            Paragraph(
+                f"<b>Total: {total} / {mx}</b>",
+                ParagraphStyle(
+                    "mpl_fin", fontName="Helvetica-Bold", fontSize=14,
+                    textColor=BRAND_PURPLE, spaceBefore=6,
+                ),
+            )
+        )
+    out.append(PageBreak())
+    return out
+
+
+def _mpl_chart_snapshot_page(s: dict, num: int, payload: dict, lang: str) -> list[Any]:
+    snap = payload.get("chart_snapshot") or {}
+    lines = snap.get("lines") or []
+    body = "\n".join(str(ln) for ln in lines if ln)
+    lg = str(s.get("_lang") or "en")
+    if not body.strip():
+        body = MPL.chart_snapshot_fallback(lg)
+    out: list[Any] = []
+    out.append(_chapter_eyebrow(num, "CHART", lg))
+    out.extend(_chapter_title_block(MPL.chart_snapshot_title(lg), MPL.chart_snapshot_subtitle(lg), s))
+    out.append(_premium_body_multi_paragraph_table(s, body, relax=True))
+    bridge = (payload.get("narrative_bridge") or "").strip()
+    if bridge:
+        out.append(Spacer(1, 8))
+        out.append(_grounding_card(s, _latinize_pdf_plain(bridge, lg), title=MPL.timing_note_title(lg)))
+    out.append(PageBreak())
+    return out
+
+
+def _mpl_method_note_page(s: dict, num: int, lang: str) -> list[Any]:
+    lg = str(s.get("_lang") or "en")
+    out: list[Any] = []
+    out.append(_chapter_eyebrow(num, "NOTE", lg))
+    out.extend(_chapter_title_block(MPL.method_note_title(lg), "", s))
+    out.append(_premium_body_multi_paragraph_table(s, MPL.method_note_body(lg), relax=True))
+    out.append(PageBreak())
+    return out
+
+
 def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
-    """Phase 2.5.11.24-fix9 — Pro renderer (depth + hierarchy, ≈19-26pp).
+    """Phase 2.5.11.24-fix9 — Pro renderer (depth + hierarchy, ≈21-28pp).
 
     Page count scales with content density:
-    - Synthetic / short fixture: exactly 19 pages (locked by tests).
-    - Live LLM-polished content: ~24-26 pages because rich kya_dikh +
-      kya_matlab paragraphs naturally spill 7 chapter pages onto a
-      second page. That spillover is content-driven, never boilerplate
-      — every overflow page carries real reading.
+    - Synthetic / short fixture: exactly **21** pages (locked by tests).
+    - Live LLM-polished content: ~24-26 pages because dense ``full_read``
+      chapter bodies naturally spill 7 chapter pages onto a second page.
+      That spillover is content-driven, never boilerplate — every overflow
+      page carries real reading.
 
     Renders the "Premium Relationship Truth" report using the
     `payload["pro_premium"]` block produced by `polish_premium_chapters`.
-    Always emits ≈17 pages even when the premium block is missing or
-    partial — falls back to engine-derived content per page.
+    Always emits the full Pro structure even when the premium block is missing or
+    partial — falls back to engine-derived content per page. (Standalone D1/D9 chart
+    page removed — see story assembly below.)
 
-    Phase 2.5.11.24-fix8 (visual rhythm): each chapter is now ONE dense
-    page (was 2 thin pages) carrying a pull-quote + main insight + boxed
-    REAL-LIFE MOMENT + WHY-IN-CHARTS koot chips + keep-in-mind + grounding.
-    Standalone Timing Sync page dropped — its prose is folded into Final
-    Verdict as a "Readiness & timing" block. Net: 25 → 17 pages, every
-    page substantially denser. LLM contract (kya_dikh / kya_matlab /
-    kya_dhyan / grounding) UNCHANGED — all changes are renderer-only.
+    Premium chapter pages use **p64 layered layout**: named subsection headings,
+    multi-paragraph body tables (no single mega-cell), soft dividers, optional
+    bullet clusters, compact **Chart insight →** strip plus **Observational notes →**
+    / **Why we say this →** grounding cards (split when grounding is long).
+    Legacy ``full_read`` uses the same multi-paragraph + rhythm rules.
+    Timing context is included as continuous prose on Final Verdict.
     """
+    lang = _normalize_milan_pdf_lang(lang)
+    _ensure_native_pdf_fonts_registered(lang)
+    _log_pdf_font_lane(lang)
     payload = payload or {}
+    if not payload.get("chart_snapshot"):
+        payload = enrich_milan_bundle_for_pdf(payload, lang=lang)
     p1   = payload.get("p1") or {}
     p2   = payload.get("p2") or {}
-    total = payload.get("total", 0)
-    mx    = payload.get("max", 36)
+    total = int(payload.get("total") or 0)
+    mx    = int(payload.get("max") or 36)
     grade = payload.get("grade") or {}
     koots = payload.get("koots") or []
     pro   = payload.get("pro_premium") or {}
     chapters_in = pro.get("chapters") or []
     meta = pro.get("_meta") or {}
+
+    if (os.environ.get("COMPAT_PREMIUM_TRACE") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    ):
+        _mpl = (
+            "[prem_trace] render_milan_pro_pdf "
+            f"lang={lang!r} pro_meta_model={meta.get('model')!r} "
+            f"pro_meta_version={meta.get('version')!r} "
+            f"chapter_rows={len(chapters_in)}"
+        )
+        print(_mpl, flush=True)
+        try:
+            _mtp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_prem_trace_last_run.txt")
+            with open(_mtp, "a", encoding="utf-8") as _mf:
+                _mf.write(_mpl + "\n")
+        except Exception:
+            pass
 
     # Map chapter outputs by key — premium engine emits in arbitrary order.
     by_key = {(c.get("key") or "").strip().lower(): c
@@ -3117,63 +3838,50 @@ def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
     story: list[Any] = []
 
     # P1 — Cover
-    story.extend(_cover_page(s, p1, p2, total, mx, grade, snapshot,
-                             manglik, lang))
-    # P2 — Snapshot card (reuses existing 12-page helper, num=2)
-    story.extend(_snapshot_page(s, 2, snapshot, koots, manglik, total, mx))
-    # P3 — How Your Marriage Energy Was Analysed (Phase 2.5.11.24-fix9).
-    # 9-layer Vedic methodology checklist + D1-vs-D9 explainer. Builds
-    # the trust signal "we actually deeply read your kundli" before the
-    # reader hits the interpretive chapters.
-    story.extend(_pro_analysis_layers_page(s, 3))
-    # P4 — Your Actual Chart Positions (Phase 2.5.11.24-soul-v6).
-    # Visual South Indian D1 + D9 charts for both partners — the single
-    # biggest perceived-value upgrade ("AI bhi chart dikha raha hai,
-    # template nahi"). k1 / k2 arrive via payload["kundli_p1"|"_p2"]
-    # (merged in by the flask /pro-pdf endpoint).
-    story.extend(_pro_d1_d9_chart_page(
-        s, 4, payload.get("kundli_p1"), payload.get("kundli_p2"),
+    story.extend(_cover_page(
+        s, p1, p2, total, mx, grade, snapshot, manglik, lang, koots,
     ))
-    # P5 — Hidden Truth + Quiet Patterns (Phase 2.5.11.24-fix9 wrapper;
-    # was P4 before the soul-v6 chart insertion).
+    # P2 — Snapshot card (reuses existing 12-page helper, num=2)
+    story.extend(_snapshot_page(
+        s, 2, snapshot, koots, manglik, total, mx, payload=payload,
+    ))
+    page_num = 3
+    story.extend(_mpl_score_breakdown_page(s, page_num, payload, total, mx, lang))
+    page_num += 1
+    story.extend(_mpl_chart_snapshot_page(s, page_num, payload, lang))
+    page_num += 1
+    # Hidden Truth + Quiet Patterns (D1/D9 chart page removed per product request).
     story.extend(_pro_hidden_truth_page_with_patterns(
-        s, 5, pro.get("hidden_truth") or "",
-        meta, p1.get("name") or "Partner 1", p2.get("name") or "Partner 2",
+        s, page_num, pro.get("hidden_truth") or "",
+        meta,
+        p1.get("name") or MPL.partner_default(lang, 1),
+        p2.get("name") or MPL.partner_default(lang, 2),
         payload,
     ))
-    # P6–12 — 7 chapters × 1 dense rich page each.
-    # Each page carries: title + score + CHART LAYER chip (fix9) +
-    # pull-quote + main insight + real-life moment box + WHY-IN-CHARTS
-    # chips + keep-in-mind + grounding. Polisher emits ch1..ch7 by
-    # contract; renderer accepts either canonical key or ch1..ch7 by
-    # index so a future contract change cannot silently regress to
-    # placeholder text.
-    page_num = 6
-    for i, (key, eyebrow, title, subtitle) in enumerate(_PRO_CHAPTER_MAP, start=1):
-        ch = by_key.get(key) or by_key.get(f"ch{i}") or {}
-        if not ch:
-            # Deterministic placeholder so page count stays locked.
-            # Soul-rich language even in the broken-payload case — never
-            # exposes "engine"/"chapter not generated" wording to the user.
+    page_num += 1
+    # Seven premium chapter pages (title chrome + merged observation prose).
+    _placeholder_blob = MPL.pro_placeholder_chapter_blob(lang)
+    _chapter_ph = MPL.pro_chapter_placeholder(lang)
+    engine_ground = payload.get("chapter_groundings") or {}
+    pro_rows = MPL.pro_chapter_rows(lang)
+    for i, (key, eyebrow, title, subtitle) in enumerate(pro_rows, start=1):
+        ch = dict(by_key.get(key) or by_key.get(f"ch{i}") or {})
+        if not ch.get(CHAPTER_BODY_KEY) and not ch.get("full_read"):
+            ph = _placeholder_blob if i in (4, 7) else _chapter_ph
+            if i in (4, 7):
+                ph = _chart_bridge_with_remedy_tail(ph)
             ch = {
                 "score_0_10": None,
-                "kya_dikh":  "Is chapter ke liye aapki kundlis me jo signal hai "
-                             "woh balanced range me hai — koi sharp standout nahi, "
-                             "koi major friction zone bhi nahi. Iska matlab — "
-                             "ye area is rishte me actively peace ya tension nahi laata.",
-                "kya_matlab": "Real life me — is dimension pe daily jeevan smooth "
-                              "rahega bina khaas effort ke. Lekin growth bhi "
-                              "automatic nahi hogi; jo intentional banayenge wahi "
-                              "deepen hoga. Surrounding chapters is bond ki "
-                              "asli textures dikhayenge.",
-                "kya_dhyan":  "Is chapter ko aas-paas ke chapters ke saath "
-                              "padho — koi bhi bond ek hi area se nahi banta, "
-                              "patterns saath dekhne se asli picture banti hai.",
-                "grounding":  "",
+                CHAPTER_BODY_KEY: ph,
+                "full_read": ph,
+                "grounding": MPL.pro_placeholder_grounding_bridge(lang),
             }
+        if not str(ch.get("grounding") or "").strip():
+            eg = engine_ground.get(key)
+            if eg:
+                ch["grounding"] = _latinize_pdf_plain(eg, lang)
         story.extend(_pro_chapter_pages(
             s, page_num, page_num, eyebrow, title, subtitle, ch,
-            ch_key=key, koots=koots, manglik=manglik,
         ))
         page_num += 1
 
@@ -3181,10 +3889,10 @@ def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
     special = [b for b in (pro.get("special") or []) if b][:3]
     if not special:
         special = _derive_special_bullets(payload)[:3]
-    story.extend(_bullets_page(
-        s, page_num, "WHAT MAKES THIS BOND SPECIAL",
-        "What Makes This Bond Special",
-        "The quiet strengths most couples never realise they have.",
+    story.extend(_premium_consultation_blocks_page(
+        s, page_num, MPL.special_eyebrow(lang),
+        MPL.special_title(lang),
+        MPL.special_subtitle(lang),
         special,
     ))
     # P19 — What Can Quietly Damage
@@ -3192,13 +3900,12 @@ def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
     if not damage:
         damage = _derive_damage_bullets(payload)
     if not damage:
-        damage = ["No major damage pattern was detected from the engine "
-                  "facts — keep nurturing the strengths above."]
+        damage = [MPL.damage_engine_fallback_bullet(lang)]
     page_num += 1
-    story.extend(_bullets_page(
-        s, page_num, "WHAT CAN QUIETLY DAMAGE THIS BOND",
-        "What Can Quietly Damage This Bond",
-        "The patterns that create distance — slowly, almost invisibly.",
+    story.extend(_premium_consultation_blocks_page(
+        s, page_num, MPL.damage_eyebrow(lang),
+        MPL.damage_title(lang),
+        MPL.damage_subtitle(lang),
         damage,
     ))
     page_num += 1
@@ -3214,15 +3921,14 @@ def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
     # Marriage Blueprint (Phase soul-v3 + fix10 D1/D9 depth blocks).
     story.extend(_pro_marriage_blueprint_page(
         s, page_num, pro.get("marriage_blueprint") or {},
-        p1.get("name") or "Partner 1",
-        p2.get("name") or "Partner 2",
+        p1.get("name") or MPL.partner_default(lang, 1),
+        p2.get("name") or MPL.partner_default(lang, 2),
         d9_marriage=payload.get("d9_marriage") or {},
     ))
     page_num += 1
     # Phase 2.5.11.24-fix9 — Attraction + Core Challenge dedicated page.
     # The two psychologically-charged sections users remember most:
-    # WHY THIS BOND FORMED (from strongest koots) + THE ONE THING THAT
-    # COULD QUIETLY DAMAGE IT (from weakest koot). Sits right before
+    # Two high-signal truths (from strongest vs weakest koots) sit right before
     # Final Verdict so the closing arc is: blueprint → why/risk → verdict.
     story.extend(_pro_attraction_and_challenge_page(s, page_num, payload))
     page_num += 1
@@ -3230,13 +3936,20 @@ def render_milan_pro_pdf(payload: dict, lang: str = "en") -> bytes:
     # standalone Timing Sync page was pure boilerplate with zero engine
     # signal, dropped per critique on visual density. Final Verdict page
     # now carries the timing-context paragraph as a closing block.)
+    verdict = _latinize_pdf_plain((pro.get("verdict") or "").strip(), lang)
+    if not verdict.strip():
+        verdict = _latinize_pdf_plain((payload.get("narrative_bridge") or "").strip(), lang)
     story.extend(_pro_final_verdict_page(
-        s, page_num, pro.get("verdict") or "", total, mx,
-        p1_name=p1.get("name") or "Partner 1",
-        p2_name=p2.get("name") or "Partner 2",
+        s, page_num, verdict, total, mx,
+        p1_name=p1.get("name") or MPL.partner_default(lang, 1),
+        p2_name=p2.get("name") or MPL.partner_default(lang, 2),
     ))
-    # Closing
+    page_num += 1
+    story.extend(_mpl_method_note_page(s, page_num, lang))
     story.extend(_pro_closing_page(s))
+
+    doc.milan_pdf_lang = lang
+    doc.milan_pdf_footer_pro = True
 
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()

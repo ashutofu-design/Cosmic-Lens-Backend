@@ -15,6 +15,15 @@ import report_cache as rc
 
 _UTC = timezone.utc
 
+PLAN_LABELS: dict[str, str] = {
+    "free": "Free",
+    "trial": "Trial",
+    "basic": "Basic",
+    "pro": "Pro",
+    "elite": "Elite",
+}
+
+
 PRODUCT_LABELS: dict[str, str] = {
     "milan_pro": "Kundli Milan Pro PDF",
     "love_reality_pro": "Love Compatibility PDF",
@@ -605,9 +614,39 @@ def build_gmail_profiles_view(
                 }
             )
 
+    subscription: dict[str, Any] | None = None
+    purchases_out: list[dict[str, Any]] = []
+
+    if user:
+        plan_key = (user.plan or "free").lower()
+        plan_active = (
+            plan_key != "free"
+            and user.plan_expiry is not None
+            and user.plan_expiry > _now_naive()
+        )
+        active_plan = plan_key if plan_active else "free"
+        subscription = {
+            "plan": active_plan,
+            "plan_label": PLAN_LABELS.get(active_plan, active_plan.title()),
+            "plan_expiry": user.plan_expiry.isoformat() if user.plan_expiry else None,
+        }
+
+        from purchase_history import build_user_purchase_history
+
+        for row in build_user_purchase_history(user.id):
+            purchases_out.append(
+                {
+                    "name": row.get("title") or "—",
+                    "amount_inr": int(row.get("amount_inr") or 0),
+                    "paid_at": row.get("paid_at"),
+                }
+            )
+
     return {
         "email": email_norm or (user.email if user else ""),
         "user_id": user.id if user else None,
         "user_name": (user.name or "") if user else "",
+        "subscription": subscription,
+        "purchases": purchases_out,
         "profiles": profiles_out,
     }

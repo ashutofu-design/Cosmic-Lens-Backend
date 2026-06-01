@@ -227,6 +227,12 @@ ul.product-list li:last-child {
   color: var(--text);
 }
 
+.gmail-view-section + .gmail-view-section {
+  margin-top: 8px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
 .detail-row td {
   background: rgba(139, 92, 246, 0.08);
   padding: 16px 14px !important;

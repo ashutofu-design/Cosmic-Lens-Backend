@@ -13,7 +13,7 @@ import {
   fetchGmailProfiles,
   fetchLoginActivity,
   fetchStats,
-  type GmailProfileSimple,
+  type GmailProfilesResponse,
   fetchTransactions,
   fetchUserDetail,
   fetchUsers,
@@ -64,7 +64,7 @@ export default function App() {
     userId: number | null;
     userName: string;
   } | null>(null);
-  const [gmailProfiles, setGmailProfiles] = useState<GmailProfileSimple[]>([]);
+  const [gmailViewData, setGmailViewData] = useState<GmailProfilesResponse | null>(null);
   const [gmailProfilesLoading, setGmailProfilesLoading] = useState(false);
   const [gmailProfilesError, setGmailProfilesError] = useState<string | null>(null);
 
@@ -214,7 +214,7 @@ export default function App() {
       userId: row.user_id,
       userName: row.user_name || "",
     });
-    setGmailProfiles([]);
+    setGmailViewData(null);
     setGmailProfilesLoading(true);
     setGmailProfilesError(null);
     try {
@@ -222,14 +222,14 @@ export default function App() {
         email,
         userId: row.user_id ?? undefined,
       });
-      setGmailProfiles(data.profiles);
+      setGmailViewData(data);
       setGmailProfileView({
         email: data.email || email,
         userId: data.user_id,
         userName: data.user_name || row.user_name || "",
       });
     } catch (e) {
-      setGmailProfilesError(e instanceof Error ? e.message : "Failed to load profiles");
+      setGmailProfilesError(e instanceof Error ? e.message : "Failed to load");
     } finally {
       setGmailProfilesLoading(false);
     }
@@ -237,7 +237,7 @@ export default function App() {
 
   function closeGmailProfilesView() {
     setGmailProfileView(null);
-    setGmailProfiles([]);
+    setGmailViewData(null);
     setGmailProfilesError(null);
   }
 
@@ -460,13 +460,17 @@ export default function App() {
   }
 
   if (gmailProfileView) {
+    const sub = gmailViewData?.subscription;
+    const purchases = gmailViewData?.purchases ?? [];
+    const profiles = gmailViewData?.profiles ?? [];
+
     return (
       <div className="app">
         <header>
           <button type="button" className="back-btn" onClick={closeGmailProfilesView}>
             ← Back to Gmail logins
           </button>
-          <h1>Profiles</h1>
+          <h1>User overview</h1>
           <p className="detail-muted">
             {gmailProfileView.email}
             {gmailProfileView.userId ? ` · user #${gmailProfileView.userId}` : ""}
@@ -474,41 +478,85 @@ export default function App() {
           </p>
         </header>
 
-        {gmailProfilesLoading ? <p className="detail-muted">Loading profiles…</p> : null}
+        {gmailProfilesLoading ? <p className="detail-muted">Loading…</p> : null}
         {gmailProfilesError ? <div className="error">{gmailProfilesError}</div> : null}
 
-        {!gmailProfilesLoading && !gmailProfilesError ? (
-          <section className="section">
-            <h2>
-              {gmailProfiles.length} profile{gmailProfiles.length === 1 ? "" : "s"}
-            </h2>
-            {gmailProfiles.length === 0 ? (
-              <p className="detail-muted">No profiles saved for this Gmail yet.</p>
-            ) : (
-              <div className="card" style={{ padding: 0, overflow: "auto" }}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>DOB</th>
-                      <th>Birth time</th>
-                      <th>Place</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {gmailProfiles.map((p, i) => (
-                      <tr key={`gp-${i}-${p.name}`}>
-                        <td>{p.name || "—"}</td>
-                        <td>{p.dob || "—"}</td>
-                        <td>{p.tob || "—"}</td>
-                        <td>{p.place || "—"}</td>
+        {!gmailProfilesLoading && !gmailProfilesError && gmailViewData ? (
+          <>
+            <section className="section gmail-view-section">
+              <h2>Plan &amp; purchases</h2>
+              {sub ? (
+                <p className="detail-summary">
+                  Current plan: <strong>{sub.plan_label}</strong>
+                  {sub.plan_expiry ? (
+                    <>
+                      {" "}
+                      · expires {formatDate(sub.plan_expiry)}
+                    </>
+                  ) : null}
+                </p>
+              ) : (
+                <p className="detail-muted">No linked user account.</p>
+              )}
+
+              {purchases.length === 0 ? (
+                <p className="detail-muted">No paid purchases yet.</p>
+              ) : (
+                <div className="card" style={{ padding: 0, overflow: "auto" }}>
+                  <table className="detail-table-compact">
+                    <thead>
+                      <tr>
+                        <th>Plan / product</th>
+                        <th>Amount</th>
+                        <th>Paid (IST)</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
+                    </thead>
+                    <tbody>
+                      {purchases.map((p, i) => (
+                        <tr key={`pur-${i}-${p.name}-${p.paid_at ?? ""}`}>
+                          <td>{p.name}</td>
+                          <td>{formatInr(p.amount_inr)}</td>
+                          <td>{p.paid_at ? formatDate(p.paid_at) : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
+            <section className="section gmail-view-section">
+              <h2>
+                Profiles ({profiles.length})
+              </h2>
+              {profiles.length === 0 ? (
+                <p className="detail-muted">No profiles saved for this Gmail yet.</p>
+              ) : (
+                <div className="card" style={{ padding: 0, overflow: "auto" }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>DOB</th>
+                        <th>Birth time</th>
+                        <th>Place</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {profiles.map((p, i) => (
+                        <tr key={`gp-${i}-${p.name}`}>
+                          <td>{p.name || "—"}</td>
+                          <td>{p.dob || "—"}</td>
+                          <td>{p.tob || "—"}</td>
+                          <td>{p.place || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          </>
         ) : null}
       </div>
     );

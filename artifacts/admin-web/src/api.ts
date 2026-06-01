@@ -198,10 +198,24 @@ export interface GmailProfileSimple {
   place: string;
 }
 
+export interface GmailSubscription {
+  plan: string;
+  plan_label: string;
+  plan_expiry: string | null;
+}
+
+export interface GmailPurchaseLine {
+  name: string;
+  amount_inr: number;
+  paid_at: string | null;
+}
+
 export interface GmailProfilesResponse {
   email: string;
   user_id: number | null;
   user_name: string;
+  subscription: GmailSubscription | null;
+  purchases: GmailPurchaseLine[];
   profiles: GmailProfileSimple[];
 }
 

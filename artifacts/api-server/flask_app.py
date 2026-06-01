@@ -3092,12 +3092,23 @@ def admin_reset_kundli_quota(user_id):
 
 
 def _admin_purge_user_row(user: User) -> dict:
-    """Permanently remove user + kundli + profiles + related login rows."""
+    """Permanently remove user + kundli + profiles + purchases + login rows."""
+    from models import AstroVastuPurchase, CoupleReportPurchase
+
     user_id = int(user.id)
     email_norm = (user.email or "").strip().lower()
 
     Kundli.query.filter_by(user_id=user_id).delete(synchronize_session=False)
     Profile.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+    try:
+        CoupleReportPurchase.query.filter_by(user_id=user_id).delete(
+            synchronize_session=False
+        )
+        AstroVastuPurchase.query.filter_by(user_id=user_id).delete(
+            synchronize_session=False
+        )
+    except Exception:
+        pass
     LoginActivity.query.filter_by(user_id=user_id).delete(synchronize_session=False)
     if email_norm:
         LoginActivity.query.filter(

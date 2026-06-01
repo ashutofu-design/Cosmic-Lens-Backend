@@ -295,14 +295,18 @@ export default function App() {
     const key = `${row.id}-${row.user_id ?? ""}-${email}`;
     setDeletingLoginKey(key);
     try {
-      if (row.user_id) {
+      if (email) {
+        await deleteGmailAccount(email);
+        if (row.user_id && detailUserId === row.user_id) {
+          setDetailUserId(null);
+          setDetail(null);
+        }
+      } else if (row.user_id) {
         await deleteUser(row.user_id);
         if (detailUserId === row.user_id) {
           setDetailUserId(null);
           setDetail(null);
         }
-      } else if (email) {
-        await deleteGmailAccount(email);
       } else {
         alert("No user id or email on this row.");
         return;

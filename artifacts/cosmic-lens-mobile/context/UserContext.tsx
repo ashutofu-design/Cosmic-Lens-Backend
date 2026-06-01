@@ -1,4 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { signOutFromFirebase } from "@/lib/firebaseAuth";
+import { router } from "expo-router";
 import { AppState, type AppStateStatus } from "react-native";
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { BirthData, KundliData } from "@/types";
@@ -260,12 +262,38 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { primaryIdRef.current = primaryId; }, [primaryId]);
   useEffect(() => { profilesRef.current  = profiles;  }, [profiles]);
 
-  const invalidateDeletedAccount = useCallback(() => {
-    clearLocalProfiles(_setProfiles, _setPrimaryId, profilesRef, primaryIdRef);
+  const clearAppSession = useCallback((keepLastUserId: boolean) => {
+    const prevId = userRef.current?.id;
     _setUser(null);
     userRef.current = null;
-    AsyncStorage.removeItem(KEYS.user).catch(() => {});
+    clearLocalProfiles(_setProfiles, _setPrimaryId, profilesRef, primaryIdRef);
+    _setTodayEnergy(null);
+    _setMoonData(null);
+    _setDoshData(null);
+    doshKundliRef.current = null;
+    if (syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = null;
+    }
+    const removals: Promise<void>[] = [
+      AsyncStorage.removeItem(KEYS.user),
+      AsyncStorage.removeItem(KEYS.legacyUser),
+    ];
+    if (keepLastUserId && prevId != null) {
+      removals.push(AsyncStorage.setItem(KEYS.lastUserId, String(prevId)));
+    }
+    Promise.all(removals).catch(() => {});
   }, []);
+
+  const invalidateDeletedAccount = useCallback(async () => {
+    await signOutFromFirebase().catch(() => {});
+    clearAppSession(true);
+    try {
+      router.replace("/login");
+    } catch {
+      /* navigation not ready */
+    }
+  }, [clearAppSession]);
 
   const pushProfilesToCloud = useCallback(async (list: ProfileEntry[], pid: string | null) => {
     const currentUser = userRef.current;
@@ -283,7 +311,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         }),
       });
       if (r.status === 404 || r.status === 401) {
-        invalidateDeletedAccount();
+        await invalidateDeletedAccount();
       }
     } catch { /* silent — local is source of truth */ }
   }, [invalidateDeletedAccount]);
@@ -304,7 +332,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         headers: { "X-API-Key": u.api_key },
       });
       if (r.status === 404 || r.status === 401) {
-        invalidateDeletedAccount();
+        await invalidateDeletedAccount();
         return;
       }
       if (!r.ok) return;
@@ -523,23 +551,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    const prevId = userRef.current?.id;
-    _setUser(null);
-    userRef.current = null;
-    clearLocalProfiles(_setProfiles, _setPrimaryId, profilesRef, primaryIdRef);
-    _setTodayEnergy(null);
-    _setMoonData(null);
-    _setDoshData(null);
-    doshKundliRef.current = null;
-    const removals: Promise<void>[] = [
-      AsyncStorage.removeItem(KEYS.user),
-      AsyncStorage.removeItem(KEYS.legacyUser),
-    ];
-    if (prevId != null) {
-      removals.push(AsyncStorage.setItem(KEYS.lastUserId, String(prevId)));
-    }
-    Promise.all(removals).catch(() => {});
-  }, []);
+    void signOutFromFirebase().catch(() => {});
+    clearAppSession(true);
+  }, [clearAppSession]);
 
   const refreshUser = useCallback(async () => {
     const currentUser = userRef.current;
@@ -549,7 +563,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         headers: { "X-API-Key": currentUser.api_key ?? "" },
       });
       if (r.status === 404 || r.status === 401) {
-        invalidateDeletedAccount();
+        await invalidateDeletedAccount();
         return;
       }
       if (!r.ok) return;
@@ -559,8 +573,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         _setUser(updated);
         AsyncStorage.setItem(KEYS.user, JSON.stringify(updated)).catch(() => {});
       }
-      // Always pull multi-profile snapshot too
-      pullProfilesFromCloud(currentUser, { allowPushLocal: false });
+      await pullProfilesFromCloud(currentUser, { allowPushLocal: false });
     } catch { /* silent */ }
   }, [pullProfilesFromCloud, invalidateDeletedAccount]);
 
@@ -571,19 +584,25 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     if (isLoading) return;
     if (!user?.id || !user?.api_key) return;
     didInitialCloudPull.current = true;
-    pullProfilesFromCloud(user, { allowPushLocal: true });
+    void pullProfilesFromCloud(user, { allowPushLocal: false });
   }, [isLoading, user, pullProfilesFromCloud]);
 
-  // When admin deletes the account, re-check server when app comes to foreground.
+  // Admin deleted account → re-check when app opens or returns to foreground.
   useEffect(() => {
-    const onState = (state: AppStateStatus) => {
-      if (state !== "active") return;
+    const check = () => {
       const u = userRef.current;
       if (!u?.id || !u?.api_key) return;
-      pullProfilesFromCloud(u, { allowPushLocal: false });
+      void pullProfilesFromCloud(u, { allowPushLocal: false });
+    };
+    const onState = (state: AppStateStatus) => {
+      if (state === "active") check();
     };
     const sub = AppState.addEventListener("change", onState);
-    return () => sub.remove();
+    const interval = setInterval(check, 45_000);
+    return () => {
+      sub.remove();
+      clearInterval(interval);
+    };
   }, [pullProfilesFromCloud]);
 
   return (

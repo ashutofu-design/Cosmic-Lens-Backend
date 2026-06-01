@@ -9,6 +9,7 @@ import {
   fetchUsers,
   formatDate,
   formatInr,
+  profileBirthFields,
 } from "./api";
 
 export default function App() {
@@ -243,7 +244,7 @@ export default function App() {
                 <th>ID</th>
                 <th>Name</th>
                 <th>Gmail / Email</th>
-                <th>Last login</th>
+                <th>Last login (IST)</th>
                 <th>Plan</th>
                 <th>Kundlis</th>
                 <th>Love PDF</th>
@@ -296,6 +297,41 @@ export default function App() {
                           <p className="detail-error">{detailError}</p>
                         ) : detail ? (
                           <div className="user-detail-panel">
+                            <div className="detail-account">
+                              <p>
+                                <strong>Account:</strong> {detail.user.email || detail.user.phone || "—"}{" "}
+                                · Plan: {detail.user.plan}
+                              </p>
+                              <p className="detail-muted">
+                                Joined: {formatDate(detail.user.created_at)} · Last login:{" "}
+                                {formatDate(detail.user.last_login)}
+                              </p>
+                            </div>
+                            {(detail.recent_logins ?? []).length > 0 ? (
+                              <>
+                                <p className="detail-summary">Recent Gmail logins</p>
+                                <table className="detail-table detail-table-compact">
+                                  <thead>
+                                    <tr>
+                                      <th>When (IST)</th>
+                                      <th>Email</th>
+                                      <th>IP</th>
+                                      <th>OK</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(detail.recent_logins ?? []).map((row) => (
+                                      <tr key={row.id}>
+                                        <td>{formatDate(row.created_at)}</td>
+                                        <td>{row.email || "—"}</td>
+                                        <td>{row.ip || "—"}</td>
+                                        <td>{row.success ? "✓" : "✗"}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </>
+                            ) : null}
                             <p className="detail-summary">
                               <strong>{detail.kundli_profiles.active_count}</strong> active
                               profile(s)
@@ -305,7 +341,11 @@ export default function App() {
                             </p>
                             {detail.kundli_profiles.profiles.length === 0 &&
                             !detail.legacy_kundli ? (
-                              <p className="detail-muted">No kundli / birth data saved yet.</p>
+                              <p className="detail-muted">
+                                Abhi server par koi kundli / janam data save nahi hai. User ko app
+                                mein kundli banani hogi — phir cloud sync hone par yahan DOB, time
+                                aur place dikhega.
+                              </p>
                             ) : (
                               <table className="detail-table">
                                 <thead>
@@ -319,7 +359,9 @@ export default function App() {
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {detail.kundli_profiles.profiles.map((p, i) => (
+                                  {detail.kundli_profiles.profiles.map((p, i) => {
+                                    const b = profileBirthFields(p, detail.legacy_kundli);
+                                    return (
                                     <tr key={`p-${i}`}>
                                       <td>
                                         {p.name || "—"}
@@ -330,20 +372,21 @@ export default function App() {
                                         ) : null}
                                       </td>
                                       <td>{p.relation || "—"}</td>
-                                      <td>{p.dob || "—"}</td>
-                                      <td>{p.tob || "—"}</td>
+                                      <td>{b.dob || "—"}</td>
+                                      <td>{b.tob || "—"}</td>
                                       <td>
-                                        {p.place || "—"}
-                                        {p.lat != null && p.lon != null ? (
+                                        {b.place || "—"}
+                                        {b.lat != null && b.lon != null ? (
                                           <span className="detail-muted">
                                             {" "}
-                                            ({p.lat}, {p.lon})
+                                            ({b.lat}, {b.lon})
                                           </span>
                                         ) : null}
                                       </td>
-                                      <td>{p.has_chart ? "✓" : "—"}</td>
+                                      <td>{b.has_chart ? "✓" : "—"}</td>
                                     </tr>
-                                  ))}
+                                    );
+                                  })}
                                   {detail.legacy_kundli ? (
                                     <tr>
                                       <td>
@@ -363,7 +406,11 @@ export default function App() {
                               </table>
                             )}
                           </div>
-                        ) : null}
+                        ) : (
+                          <p className="detail-error">
+                            Details load nahi hue. API restart / git pull check karein, phir Refresh.
+                          </p>
+                        )}
                       </td>
                     </tr>
                   ) : null}

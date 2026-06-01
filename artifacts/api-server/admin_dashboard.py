@@ -76,8 +76,18 @@ def _parse_birth_data(raw: str | None) -> dict[str, Any]:
         bd = json.loads(raw) if isinstance(raw, str) else raw
     except (json.JSONDecodeError, TypeError):
         bd = {}
+    # Occasionally double-encoded JSON in older rows.
+    if isinstance(bd, str):
+        try:
+            bd = json.loads(bd)
+        except (json.JSONDecodeError, TypeError):
+            bd = {}
     if not isinstance(bd, dict):
         bd = {}
+    # Some clients nest under birthData.
+    nested = bd.get("birthData")
+    if isinstance(nested, dict):
+        bd = {**nested, **{k: v for k, v in bd.items() if k != "birthData"}}
 
     dob = ""
     try:
@@ -127,9 +137,29 @@ def _parse_birth_data(raw: str | None) -> dict[str, Any]:
     }
 
 
-def _profile_admin_row(profile) -> dict[str, Any]:
+def _apply_legacy_birth_fallback(row: dict[str, Any], legacy: dict[str, Any] | None) -> dict[str, Any]:
+    """Fill missing DOB/time/place from legacy kundlis row when profile JSON parse is empty."""
+    if not legacy:
+        return row
+    out = dict(row)
+    if not out.get("dob") and legacy.get("dob"):
+        out["dob"] = legacy["dob"]
+    if not out.get("tob") and legacy.get("tob"):
+        out["tob"] = legacy["tob"]
+    if not out.get("place") and legacy.get("place"):
+        out["place"] = legacy["place"]
+    if out.get("lat") is None and legacy.get("lat") is not None:
+        out["lat"] = legacy["lat"]
+    if out.get("lon") is None and legacy.get("lon") is not None:
+        out["lon"] = legacy["lon"]
+    if not out.get("has_chart") and legacy.get("has_chart"):
+        out["has_chart"] = True
+    return out
+
+
+def _profile_admin_row(profile, legacy: dict[str, Any] | None = None) -> dict[str, Any]:
     birth = _parse_birth_data(getattr(profile, "birth_data", None))
-    return {
+    row = {
         "name": profile.name or "",
         "relation": profile.relation or "",
         "gender": profile.gender or birth.get("gender") or "",
@@ -143,6 +173,9 @@ def _profile_admin_row(profile) -> dict[str, Any]:
         "tz": birth["tz"],
         "has_chart": bool(getattr(profile, "chart_data", None)),
     }
+    if row["is_primary"] or not legacy:
+        return _apply_legacy_birth_fallback(row, legacy if row["is_primary"] else None)
+    return row
 
 
 def _sum_amount(rows: list, amount_attr: str = "amount", since: datetime | None = None) -> int:
@@ -282,7 +315,7 @@ def build_users_list(
     per_page: int = 50,
     search: str = "",
 ) -> dict[str, Any]:
-    from models import CoupleReportPurchase, Profile, User
+    from models import CoupleReportPurchase, Kundli, Profile, User
 
     from database import db
 
@@ -317,6 +350,16 @@ def build_users_list(
         )
         profile_counts = {int(uid): int(cnt) for uid, cnt in rows}
 
+    legacy_kundli_users: set[int] = set()
+    if user_ids:
+        legacy_rows = (
+            db_session.query(Kundli.user_id)
+            .filter(Kundli.user_id.in_(user_ids))
+            .distinct()
+            .all()
+        )
+        legacy_kundli_users = {int(r[0]) for r in legacy_rows}
+
     # Per-user paid purchase summary
     purchase_summary: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     if user_ids:
@@ -345,7 +388,8 @@ def build_users_list(
                 if (u.last_active or u.created_at)
                 else None,
                 "created_at": u.created_at.isoformat() if u.created_at else None,
-                "kundli_profiles_count": profile_counts.get(u.id, 0),
+                "kundli_profiles_count": profile_counts.get(u.id, 0)
+                or (1 if u.id in legacy_kundli_users else 0),
                 "purchases": {
                     "love_compatibility_pdf": ps.get("love_reality_pro", 0),
                     "milan_pro_pdf": ps.get("milan_pro", 0),
@@ -367,9 +411,17 @@ def build_users_list(
 
 
 def build_user_detail(user_id: int) -> dict[str, Any] | None:
-    from models import AstroVastuPurchase, CoupleReportPurchase, Kundli, Profile, User
+    from database import db
+    from models import (
+        AstroVastuPurchase,
+        CoupleReportPurchase,
+        Kundli,
+        LoginActivity,
+        Profile,
+        User,
+    )
 
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user:
         return None
 
@@ -382,18 +434,37 @@ def build_user_detail(user_id: int) -> dict[str, Any] | None:
         Profile.user_id == user_id, Profile.deleted_at.isnot(None)
     ).count()
 
-    couple_paid = (
-        CoupleReportPurchase.query.filter_by(user_id=user_id, status="paid")
-        .order_by(CoupleReportPurchase.paid_at.desc())
-        .all()
-    )
-    av_paid = (
-        AstroVastuPurchase.query.filter_by(user_id=user_id, status="paid")
-        .order_by(AstroVastuPurchase.paid_at.desc())
-        .all()
-    )
+    try:
+        couple_paid = (
+            CoupleReportPurchase.query.filter_by(user_id=user_id, status="paid")
+            .order_by(CoupleReportPurchase.paid_at.desc())
+            .all()
+        )
+    except Exception:
+        couple_paid = []
+    try:
+        av_paid = (
+            AstroVastuPurchase.query.filter_by(user_id=user_id, status="paid")
+            .order_by(AstroVastuPurchase.paid_at.desc())
+            .all()
+        )
+    except Exception:
+        av_paid = []
 
-    reports = rc.list_for_user(user_id, limit=100)
+    try:
+        reports = rc.list_for_user(user_id, limit=100)
+    except Exception:
+        reports = []
+
+    try:
+        recent_logins = (
+            LoginActivity.query.filter_by(user_id=user_id)
+            .order_by(LoginActivity.created_at.desc())
+            .limit(10)
+            .all()
+        )
+    except Exception:
+        recent_logins = []
 
     legacy_kundli = None
     kun = Kundli.query.filter_by(user_id=user_id).first()
@@ -420,14 +491,25 @@ def build_user_detail(user_id: int) -> dict[str, Any] | None:
             "last_login": (user.last_active or user.created_at).isoformat()
             if (user.last_active or user.created_at)
             else None,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
             "career_unlocked": bool(user.career_unlocked),
         },
         "kundli_profiles": {
             "active_count": len(profiles),
             "deleted_count": deleted_count,
-            "profiles": [_profile_admin_row(p) for p in profiles],
+            "profiles": [_profile_admin_row(p, legacy_kundli) for p in profiles],
         },
         "legacy_kundli": legacy_kundli,
+        "recent_logins": [
+            {
+                "id": row.id,
+                "email": row.email,
+                "ip": row.ip or "",
+                "success": bool(row.success),
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+            }
+            for row in recent_logins
+        ],
         "couple_report_purchases": [
             {
                 "product": r.product,

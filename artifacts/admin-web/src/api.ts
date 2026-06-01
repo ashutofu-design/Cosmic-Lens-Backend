@@ -114,6 +114,14 @@ export interface LegacyKundliRow {
   has_chart: boolean;
 }
 
+export interface LoginActivityRow {
+  id: number;
+  email: string | null;
+  ip: string;
+  success: boolean;
+  created_at: string | null;
+}
+
 export interface UserDetail {
   user: {
     id: number;
@@ -123,6 +131,7 @@ export interface UserDetail {
     plan: string;
     plan_expiry: string | null;
     last_login: string | null;
+    created_at: string | null;
     career_unlocked: boolean;
   };
   kundli_profiles: {
@@ -131,24 +140,52 @@ export interface UserDetail {
     profiles: KundliProfileRow[];
   };
   legacy_kundli: LegacyKundliRow | null;
+  recent_logins?: LoginActivityRow[];
 }
 
 export function fetchUserDetail(userId: number) {
   return adminFetch<UserDetail>(`/api/admin/users/${userId}`);
 }
 
+/** Use legacy kundlis row when profile birth fields are empty (older API rows). */
+export function profileBirthFields(
+  p: KundliProfileRow,
+  legacy: LegacyKundliRow | null | undefined,
+) {
+  const leg = p.is_primary ? legacy : null;
+  return {
+    dob: p.dob || leg?.dob || "",
+    tob: p.tob || leg?.tob || "",
+    place: p.place || leg?.place || "",
+    lat: p.lat ?? leg?.lat ?? null,
+    lon: p.lon ?? leg?.lon ?? null,
+    has_chart: p.has_chart || !!leg?.has_chart,
+  };
+}
+
 export function formatInr(n: number) {
   return `₹${n.toLocaleString("en-IN")}`;
 }
 
+/** Server stores naive UTC timestamps — parse as UTC, display in India time. */
+function parseServerUtc(iso: string | null): Date | null {
+  if (!iso?.trim()) return null;
+  const s = iso.trim();
+  const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s);
+  const d = new Date(hasTz ? s : `${s}Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 export function formatDate(iso: string | null) {
-  if (!iso) return "—";
+  const d = parseServerUtc(iso);
+  if (!d) return "—";
   try {
-    return new Date(iso).toLocaleString("en-IN", {
+    return d.toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
       dateStyle: "medium",
       timeStyle: "short",
     });
   } catch {
-    return iso;
+    return iso ?? "—";
   }
 }

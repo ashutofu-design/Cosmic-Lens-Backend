@@ -222,8 +222,22 @@ ul.product-list li:last-child {
   font-size: 0.88rem;
 }
 
+.detail-account {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-account p {
+  margin: 0 0 4px;
+}
+
 .detail-summary {
   margin: 0 0 12px;
+}
+
+.detail-table-compact {
+  margin-bottom: 14px;
 }
 
 .detail-muted {

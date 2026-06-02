@@ -3,7 +3,10 @@
 # Dependencies (reinstalled on EAS)
 **/node_modules
 .pnpm-store
+**/.pnpm-store
 .npm-cache
+.bin
+**/.bin
 
 # Git / IDE
 .git
@@ -32,7 +35,9 @@ scripts
 # Expo / build output
 **/.expo
 **/dist
+**/dist-web
 **/web-build
+**/static-build
 
 # Env secrets (use EAS env for production)
 **/.env

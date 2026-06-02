@@ -16,8 +16,8 @@ artifacts/admin-web
 artifacts/mockup-sandbox
 scripts
 
-# Shared libs (mobile build does not need these sources on EAS)
-lib
+# Shared workspace libs at repo root only (do NOT exclude artifacts/cosmic-lens-mobile/lib)
+/lib
 
 # Python / backend artifacts
 **/.venv

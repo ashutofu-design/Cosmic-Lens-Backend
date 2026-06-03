@@ -2369,6 +2369,9 @@ def _firebase_verify_phone_user(*, phone_e164, name, auto_start_trial_on_signup,
         if name and (not user.name or user.name.startswith("User ")):
             user.name = name
 
+    from cosmo_user_id import ensure_user_cosmo_id
+
+    ensure_user_cosmo_id(user)
     db.session.commit()
     _record_login_activity(
         success=True,
@@ -2437,6 +2440,9 @@ def _firebase_verify_google_user(*, email, firebase_uid, name, auto_start_trial_
         if name and (not user.name or user.name.startswith("User ")):
             user.name = name
 
+    from cosmo_user_id import ensure_user_cosmo_id
+
+    ensure_user_cosmo_id(user)
     db.session.commit()
     _record_login_activity(
         success=True,
@@ -2503,6 +2509,9 @@ def demo_login_route():
             days=365 * 10
         )
 
+    from cosmo_user_id import ensure_user_cosmo_id
+
+    ensure_user_cosmo_id(user)
     db.session.commit()
     payload = user.to_dict()
     payload["subscription"] = subscription_status(user)
@@ -2771,6 +2780,9 @@ def update_user_personal(user_id):
         }), 400
 
     try:
+        from cosmo_user_id import ensure_user_cosmo_id
+
+        ensure_user_cosmo_id(user)
         db.session.commit()
     except Exception as exc:
         db.session.rollback()
@@ -2802,6 +2814,11 @@ def get_user_kundli(user_id):
             except Exception:
                 pass
         kundli_data = d
+    if not (user.cosmo_user_id or "").strip():
+        from cosmo_user_id import ensure_user_cosmo_id
+
+        ensure_user_cosmo_id(user)
+        db.session.commit()
     return jsonify({"kundli": kundli_data, "user": user.to_dict()})
 
 
@@ -5852,12 +5869,15 @@ def dosh_analysis():
     data = request.get_json(force=True, silent=True) or {}
     planets = data.get("planets")
     nakshatra = data.get("nakshatra", "")
+    lang = (data.get("lang") or data.get("language") or "en").strip().lower()
 
     if not planets or not isinstance(planets, list):
         return jsonify({"error": "planets array is required"}), 400
 
     try:
-        result = analyze_doshas(planets, nakshatra)
+        from dosh_localize import localize_dosh_result
+
+        result = localize_dosh_result(analyze_doshas(planets, nakshatra), lang)
         return jsonify(result)
     except Exception as exc:
         import traceback

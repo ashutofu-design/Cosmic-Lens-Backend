@@ -1905,7 +1905,211 @@ def panchang_real():
     if "r1_tithi" in phase_r:
         out["paksha"] = phase_r["r1_tithi"].get("paksha")
 
+    # Bundled engines (same deploy as /api/panchang — mobile fallback when split routes 404)
+    try:
+        from vedic.panchang.daily_muhurat import compute_day_muhuratas  # type: ignore
+
+        out["muhurat_detail"] = compute_day_muhuratas(
+            target_date, lat=lat, lng=lng, tz_h=tz_h
+        )
+    except Exception as _me:
+        app.logger.info("panchang: muhurat_detail failed: %s", _me)
+
+    try:
+        from vedic.panchang.gochar import get_current_gochar  # type: ignore
+
+        out["gochar"] = get_current_gochar(
+            noon_local, lat=lat, lng=lng, tz_h=tz_h
+        )
+    except Exception as _ge:
+        app.logger.info("panchang: gochar embed failed: %s", _ge)
+
+    try:
+        from vedic.panchang.festival_vrat import festivals_on_date  # type: ignore
+
+        out["festivals_today"] = festivals_on_date(target_date, tz_h=tz_h)
+    except Exception as _fe:
+        app.logger.info("panchang: festivals_today failed: %s", _fe)
+
     return jsonify(out)
+
+
+@app.route("/api/panchang/marriage-dates", methods=["GET"])
+def panchang_marriage_dates():
+    """Swiss Ephemeris vivah dates — 5-anga + Guru/Shukra asta + solar-month filter."""
+    from datetime import date as _date
+
+    from vedic.panchang.generate_marriage_dates import generate_marriage_dates  # type: ignore
+
+    date_s = (request.args.get("from_date") or request.args.get("date") or "").strip()
+    try:
+        if date_s:
+            y, m, d = [int(x) for x in date_s.split("-")]
+            start = _date(y, m, d)
+        else:
+            start = _date.today()
+    except Exception:
+        return jsonify({"error": "bad date; use YYYY-MM-DD"}), 400
+
+    try:
+        years = int(request.args.get("years") or "5")
+        years = max(1, min(5, years))
+        tz_h = float(request.args.get("tz") or "5.5")
+    except Exception:
+        return jsonify({"error": "bad years/tz"}), 400
+
+    try:
+        from dateutil.relativedelta import relativedelta
+
+        rows = generate_marriage_dates(start, tz_h=tz_h, years=years)
+        end = start + relativedelta(years=years)
+        return jsonify({
+            "scan_from": start.isoformat(),
+            "scan_years": years,
+            "scan_to": end.isoformat(),
+            "count": len(rows),
+            "dates": rows,
+            "ephemeris": "swisseph_lahiri_sidereal",
+            "engine": "generate_marriage_dates-v1",
+        })
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 503
+    except Exception as exc:
+        app.logger.exception("marriage-dates failed: %s", exc)
+        return jsonify({"error": "scan_failed"}), 500
+
+
+@app.route("/api/panchang/daily-muhurat", methods=["GET"])
+def panchang_daily_muhurat():
+    """Sunrise/sunset, Rahu/Gulika/Abhijit muhuratas for a day."""
+    from datetime import date as _date
+
+    from vedic.panchang.daily_muhurat import compute_day_muhuratas  # type: ignore
+
+    date_s = (request.args.get("date") or "").strip()
+    try:
+        if date_s:
+            y, m, d = [int(x) for x in date_s.split("-")]
+            target = _date(y, m, d)
+        else:
+            target = _date.today()
+        lat = float(request.args.get("lat") or "28.6139")
+        lng = float(request.args.get("lng") or "77.2090")
+        tz_h = float(request.args.get("tz") or "5.5")
+    except Exception:
+        return jsonify({"error": "bad date/lat/lng/tz"}), 400
+    try:
+        return jsonify(compute_day_muhuratas(target, lat=lat, lng=lng, tz_h=tz_h))
+    except Exception as exc:
+        app.logger.exception("daily-muhurat failed: %s", exc)
+        return jsonify({"error": "muhurat_failed"}), 500
+
+
+@app.route("/api/panchang/tarabala-chandrabala", methods=["GET"])
+def panchang_tarabala_chandrabala():
+    """Personal daily tarabala + chandrabala from natal Moon sign/nakshatra."""
+    from datetime import date as _date
+
+    from vedic.panchang.daily_muhurat import get_tarabala_and_chandrabala  # type: ignore
+
+    date_s = (request.args.get("date") or "").strip()
+    natal_sign = (request.args.get("natal_moon_sign") or request.args.get("moon_sign") or "").strip()
+    natal_nak = (request.args.get("natal_nakshatra") or request.args.get("nakshatra") or "").strip()
+    if not natal_sign or not natal_nak:
+        return jsonify({"error": "natal_moon_sign and natal_nakshatra required"}), 400
+    try:
+        if date_s:
+            y, m, d = [int(x) for x in date_s.split("-")]
+            target = _date(y, m, d)
+        else:
+            target = _date.today()
+        tz_h = float(request.args.get("tz") or "5.5")
+    except Exception:
+        return jsonify({"error": "bad date/tz"}), 400
+    try:
+        return jsonify(get_tarabala_and_chandrabala(natal_sign, natal_nak, target, tz_h=tz_h))
+    except Exception as exc:
+        app.logger.exception("tarabala-chandrabala failed: %s", exc)
+        return jsonify({"error": "strength_failed"}), 500
+
+
+@app.route("/api/panchang/sankrantis", methods=["GET"])
+def panchang_sankrantis():
+    """Sun sign (Sankranti) boundary crossings in a date range."""
+    from datetime import date as _date
+
+    from vedic.panchang.daily_muhurat import detect_sankrantis  # type: ignore
+
+    start_s = (request.args.get("from_date") or request.args.get("start") or "").strip()
+    end_s = (request.args.get("to_date") or request.args.get("end") or "").strip()
+    try:
+        if start_s:
+            y, m, d = [int(x) for x in start_s.split("-")]
+            start = _date(y, m, d)
+        else:
+            start = _date.today()
+        if end_s:
+            y, m, d = [int(x) for x in end_s.split("-")]
+            end = _date(y, m, d)
+        else:
+            end = start.replace(year=start.year + 1)
+        tz_h = float(request.args.get("tz") or "5.5")
+    except Exception:
+        return jsonify({"error": "bad from_date/to_date/tz"}), 400
+    try:
+        events = detect_sankrantis(start, end, tz_h=tz_h)
+        return jsonify({"from": start.isoformat(), "to": end.isoformat(), "events": events})
+    except Exception as exc:
+        app.logger.exception("sankrantis failed: %s", exc)
+        return jsonify({"error": "sankranti_failed"}), 500
+
+
+@app.route("/api/panchang/monthly-festivals", methods=["GET"])
+def panchang_monthly_festivals():
+    """Dynamic festival/vrat calendar for a civil month."""
+    from datetime import date as _date
+
+    from vedic.panchang.festival_vrat import get_monthly_festivals  # type: ignore
+
+    try:
+        month = int(request.args.get("month") or _date.today().month)
+        year = int(request.args.get("year") or _date.today().year)
+        tz_h = float(request.args.get("tz") or "5.5")
+    except Exception:
+        return jsonify({"error": "bad month/year/tz"}), 400
+    try:
+        rows = get_monthly_festivals(month, year, tz_h=tz_h)
+        return jsonify({"month": month, "year": year, "count": len(rows), "festivals": rows})
+    except Exception as exc:
+        app.logger.exception("monthly-festivals failed: %s", exc)
+        return jsonify({"error": "festival_scan_failed"}), 500
+
+
+@app.route("/api/panchang/gochar", methods=["GET"])
+def panchang_gochar():
+    """Live planetary transits (Lahiri sidereal) with retrograde & combustion."""
+    from datetime import datetime as _dt
+
+    from vedic.panchang.gochar import get_current_gochar  # type: ignore
+
+    try:
+        lat = float(request.args.get("lat") or "28.6139")
+        lng = float(request.args.get("lng") or "77.2090")
+        tz_h = float(request.args.get("tz") or "5.5")
+    except Exception:
+        return jsonify({"error": "bad lat/lng/tz"}), 400
+    ts_s = (request.args.get("timestamp") or "").strip()
+    ts = None
+    if ts_s:
+        try:
+            ts = _dt.fromisoformat(ts_s.replace("Z", "+00:00"))
+        except Exception:
+            return jsonify({"error": "bad timestamp ISO"}), 400
+    try:
+        return jsonify(get_current_gochar(ts, lat=lat, lng=lng, tz_h=tz_h))
+    except Exception as exc:
+        app.logger.exception("gochar failed: %s", exc)
+        return jsonify({"error": "gochar_failed"}), 500
 
 
 @app.route("/api/panchang/vivah-muhurat", methods=["GET"])
@@ -2692,7 +2896,7 @@ def restore_user_profile(user_id, client_id):
 @app.route("/api/user/<int:user_id>/profiles/sync", methods=["POST"])
 def sync_user_profiles(user_id):
     """Bulk upsert — client sends full ACTIVE profile list + primaryId.
-    Removed-from-list profiles are SOFT-deleted (24-hr Recently Deleted window).
+    Removed-from-list profiles are permanently deleted.
     Body: { profiles: [{id, name, gender, relation, birthData, kundli}], primaryProfileId: str }
     """
     user, err = get_authed_user(user_id)
@@ -2713,11 +2917,10 @@ def sync_user_profiles(user_id):
 
     now = datetime.now(_UTC_TZ.utc).replace(tzinfo=None)
 
-    # SOFT-delete profiles that disappeared from the active list (skip rows
-    # already soft-deleted so we don't extend their restore window).
+    # Permanently remove profiles no longer in the active list.
     for cid, row in existing.items():
-        if cid not in incoming_ids and row.deleted_at is None:
-            row.deleted_at = now
+        if cid not in incoming_ids:
+            db.session.delete(row)
 
     # Upsert (also auto-restores any matching soft-deleted row by clearing deleted_at)
     for p in incoming:

@@ -4,28 +4,18 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from typing import Any
 
-try:
-    import swisseph as swe
+from vedic.panchang.swe_core import (
+    COMBUST_ORBS_DEG,
+    SWE_OK as _SWE_OK,
+    angular_sep,
+    calc_sun_moon,
+    combust_status,
+    jd_from_datetime,
+)
 
-    _SWE_OK = True
-except Exception:
-    _SWE_OK = False
-
-JUP_COMB_ORB = 11.0
-VEN_COMB_ORB = 10.0
+JUP_COMB_ORB = COMBUST_ORBS_DEG["jupiter"]
+VEN_COMB_ORB = COMBUST_ORBS_DEG["venus"]
 ECLIPSE_PROX_DAYS = 3
-
-
-def _jd(dt_utc: datetime) -> float:
-    return swe.julday(
-        dt_utc.year, dt_utc.month, dt_utc.day,
-        dt_utc.hour + dt_utc.minute / 60 + dt_utc.second / 3600,
-    )
-
-
-def _angular_sep(a: float, b: float) -> float:
-    d = abs(a - b) % 360
-    return min(d, 360 - d)
 
 
 def _eclipse_near_date(d: date, tz_h: float) -> bool:
@@ -33,8 +23,10 @@ def _eclipse_near_date(d: date, tz_h: float) -> bool:
     if not _SWE_OK:
         return False
     try:
+        import swisseph as swe
+
         noon = datetime(d.year, d.month, d.day, 12, 0) - timedelta(hours=tz_h)
-        jd = _jd(noon)
+        jd = jd_from_datetime(noon)
         for func in (swe.sol_eclipse_when_glob, swe.lun_eclipse_when):
             try:
                 ret = func(jd - ECLIPSE_PROX_DAYS, swe.FLG_SWIEPH, 0, backwards=True)
@@ -60,22 +52,17 @@ def day_planetary_flags(d: date, tz_h: float) -> dict[str, Any]:
         }
 
     dt_utc = noon - timedelta(hours=tz_h)
-    jd = _jd(dt_utc)
-    flag = swe.FLG_SIDEREAL | swe.FLG_SWIEPH | swe.FLG_SPEED
-    swe.set_sid_mode(swe.SIDM_LAHIRI, 0, 0)
+    jd = jd_from_datetime(dt_utc)
+    from vedic.panchang.swe_core import calc_longitude
 
-    sun, _ = swe.calc_ut(jd, swe.SUN, flag)
-    jup, _ = swe.calc_ut(jd, swe.JUPITER, flag)
-    ven, _ = swe.calc_ut(jd, swe.VENUS, flag)
-
-    sun_lon = float(sun[0]) % 360
-    jup_lon, ven_lon = float(jup[0]) % 360, float(ven[0]) % 360
-    jup_spd, ven_spd = float(jup[3]), float(ven[3])
+    sun_lon, _ = calc_sun_moon(jd)
+    jup_lon, jup_spd = calc_longitude(jd, "jupiter", with_speed=True)
+    ven_lon, ven_spd = calc_longitude(jd, "venus", with_speed=True)
 
     guru_retro = jup_spd < 0
     shukra_retro = ven_spd < 0
-    guru_combust = _angular_sep(jup_lon, sun_lon) <= JUP_COMB_ORB
-    shukra_combust = _angular_sep(ven_lon, sun_lon) <= VEN_COMB_ORB
+    guru_combust = combust_status(sun_lon, jup_lon, JUP_COMB_ORB) == "Asta"
+    shukra_combust = combust_status(sun_lon, ven_lon, VEN_COMB_ORB) == "Asta"
     guru_ast = guru_retro or guru_combust
     shukra_ast = shukra_retro or shukra_combust
     eclipse_risk = _eclipse_near_date(d, tz_h)

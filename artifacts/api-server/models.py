@@ -40,6 +40,9 @@ class User(db.Model):
     # Allowed: "en" | "hi" | "hn" | NULL (auto-detect from each question)
     preferred_language = db.Column(db.String(4), nullable=True)
 
+    # ── Public app user id (COSMO100, COSMO101, …) ───────────────────────────
+    cosmo_user_id = db.Column(db.String(16), unique=True, nullable=True, index=True)
+
     # ── Personal details (set once from app) ─────────────────────────────────
     personal_name_locked  = db.Column(db.Boolean, default=False, nullable=False)
     personal_phone_locked = db.Column(db.Boolean, default=False, nullable=False)
@@ -84,6 +87,9 @@ class User(db.Model):
         )
         return {
             "id":           self.id,
+            "cosmo_user_id": (
+                (getattr(self, "cosmo_user_id", None) or "").strip().upper() or None
+            ),
             "name":         self.name,
             "phone":        self.phone or "",
             "country_code": self.country_code or "",

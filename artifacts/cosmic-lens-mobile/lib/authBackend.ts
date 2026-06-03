@@ -25,6 +25,7 @@ function mapAuthUser(data: FirebaseVerifyResponse, name?: string): AuthUser {
   }
   return {
     id: data.id,
+    cosmo_user_id: data.cosmo_user_id ?? null,
     name: data.name || name || "",
     email: data.email || "",
     phone: data.phone,
@@ -34,6 +35,8 @@ function mapAuthUser(data: FirebaseVerifyResponse, name?: string): AuthUser {
     plan: data.plan,
     plan_expiry: data.plan_expiry ?? null,
     subscription: data.subscription,
+    personal_name_locked: !!(data as AuthUser).personal_name_locked,
+    personal_phone_locked: !!(data as AuthUser).personal_phone_locked,
   };
 }
 
@@ -89,4 +92,49 @@ export async function verifyFirebaseIdToken(idToken: string, name?: string): Pro
     `VPS health: http://187.127.174.55:8080/api/healthz\n` +
     `(Laptop par backend nahi chalana — .env mein VPS URL set karo, Metro restart karo)`,
   );
+}
+
+/** Dev / QA — POST /api/auth/demo (Pro test user, no Google). */
+export async function demoLogin(): Promise<AuthUser> {
+  let lastNetworkError = "";
+  let lastHttpError = "";
+
+  for (const base of authApiBases()) {
+    try {
+      const res = await apiFetch(`${base}/api/auth/demo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+
+      const raw = await res.text();
+      const data = parseVerifyResponse(raw);
+
+      if (!res.ok || data.ok === false) {
+        lastHttpError =
+          data.error ||
+          (data as { message?: string }).message ||
+          `HTTP ${res.status}`;
+        if (res.status >= 502 && res.status <= 504) continue;
+        throw new Error(lastHttpError);
+      }
+
+      return mapAuthUser(data, "Demo User");
+    } catch (e: unknown) {
+      const msg = String((e as Error)?.message || e || "");
+      if (/Network request failed|Failed to fetch|Load failed|fetch/i.test(msg)) {
+        lastNetworkError = msg;
+        continue;
+      }
+      throw e;
+    }
+  }
+
+  if (lastHttpError) throw new Error(lastHttpError);
+  throw new Error(lastNetworkError || "Demo login failed — check API server.");
+}
+
+export function isDemoLoginEnabled(): boolean {
+  if (__DEV__) return true;
+  return (process.env.EXPO_PUBLIC_ENABLE_DEMO_LOGIN || "").trim() === "1";
 }

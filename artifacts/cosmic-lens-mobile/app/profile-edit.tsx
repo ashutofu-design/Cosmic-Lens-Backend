@@ -22,7 +22,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fetchKundliFromAPI, fetchTimezone, searchPlaces } from "@/lib/kundliAPI";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
-import { useUser, type ProfileEntry } from "@/context/UserContext";
+import { useUser, type AuthUser, type ProfileEntry } from "@/context/UserContext";
+import { updatePersonalDetails } from "@/lib/personalDetailsAPI";
+import { useScreenLayout } from "@/lib/screenLayout";
 import { BirthTimeRectificationLink } from "@/components/BirthTimeRectificationLink";
 import PickerModal from "@/components/PickerModal";
 import type { BirthData } from "@/types";
@@ -101,6 +103,157 @@ function blank(): FormState {
 function Lbl({ text }: { text: string }) {
   const C = useC();
   return <Text style={[s.lbl, { color: C.isDark ? C.textMuted : "#64748B" }]}>{text}</Text>;
+}
+
+function PersonalDetailsPanel({
+  user,
+  onSaved,
+  pageW,
+}: {
+  user: AuthUser | null;
+  onSaved: (u: AuthUser) => void;
+  pageW: number;
+}) {
+  const C = useC();
+  const t = useT();
+  const L = useScreenLayout();
+  const ac = C.isDark ? "#f59e0b" : "#7C3AED";
+
+  const [name, setName] = useState(user?.name ?? "");
+  const [phone, setPhone] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const [savedFlash, setSavedFlash] = useState(false);
+
+  useEffect(() => {
+    setName(user?.name ?? "");
+    const ph = (user?.phone ?? "").trim();
+    setPhone(ph.startsWith("+91") ? ph.slice(3) : ph.replace(/\D/g, "").slice(-10));
+  }, [user?.id, user?.name, user?.phone]);
+
+  const nameLocked = !!user?.personal_name_locked;
+  const phoneLocked = !!user?.personal_phone_locked || !!(user?.phone || "").trim();
+  const canSave =
+    !!user?.id &&
+    ((!nameLocked && name.trim().length >= 2) || (!phoneLocked && phone.replace(/\D/g, "").length >= 10));
+
+  async function handleSave() {
+    if (!user?.id || !user.api_key) return;
+    setSaving(true);
+    setErr("");
+    try {
+      const body: { name?: string; phone?: string } = {};
+      if (!nameLocked && name.trim()) body.name = name.trim();
+      if (!phoneLocked && phone.replace(/\D/g, "").length >= 10) {
+        body.phone = phone.replace(/\D/g, "").length === 12 && phone.startsWith("91")
+          ? `+${phone.replace(/\D/g, "")}`
+          : `+91${phone.replace(/\D/g, "").slice(-10)}`;
+      }
+      const updated = await updatePersonalDetails({
+        userId: user.id,
+        apiKey: user.api_key,
+        ...body,
+      });
+      onSaved(updated);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 2000);
+    } catch (e: unknown) {
+      const ex = e as Error & { code?: string };
+      if (ex.code === "name_locked") setErr(t.pe_nameLockedHint);
+      else if (ex.code === "phone_locked") setErr(t.pe_phoneLockedHint);
+      else if (ex.code === "invalid_phone") setErr(ex.message || t.pe_phPhone);
+      else if (ex.code === "phone_taken") setErr(ex.message || "Number already registered");
+      else setErr(ex.message || String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!user) {
+    return (
+      <View style={{ padding: L.rs(24), alignItems: "center" }}>
+        <Text style={{ color: C.textMuted, fontFamily: F.medium, fontSize: L.rs(13) }}>{t.pe_loginRequired}</Text>
+      </View>
+    );
+  }
+
+  const fieldBg = C.isDark ? C.inputBg : "#F1F5F9";
+  const fieldBorder = C.isDark ? C.inputBorder : "#CBD5E1";
+
+  return (
+    <View style={{ width: pageW, alignSelf: "center", gap: L.rs(12), paddingTop: L.rs(4) }}>
+      <View style={[pd.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+        <Lbl text={t.pe_lblGmail} />
+        <View style={[pd.inputRow, { backgroundColor: fieldBg, borderColor: fieldBorder, opacity: 0.85 }]}>
+          <Feather name="mail" size={L.rs(13)} color={C.textDim} />
+          <Text style={[pd.inputTxt, { color: C.textMuted, flex: 1 }]} numberOfLines={1}>
+            {user.email || "—"}
+          </Text>
+          <Feather name="lock" size={L.rs(12)} color={C.textDim} />
+        </View>
+        <Text style={[pd.hint, { color: C.textDim }]}>{t.pe_gmailLockedHint}</Text>
+      </View>
+
+      <View style={[pd.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+        <Lbl text={t.pe_lblName} />
+        <View style={[pd.inputRow, { backgroundColor: fieldBg, borderColor: fieldBorder }]}>
+          <Feather name="user" size={L.rs(13)} color={nameLocked ? C.textDim : ac} />
+          <TextInput
+            style={[pd.inputTxt, { color: C.text, flex: 1 }]}
+            value={name}
+            onChangeText={setName}
+            editable={!nameLocked}
+            placeholder={t.pe_phName}
+            placeholderTextColor={C.textDim}
+            autoCapitalize="words"
+          />
+          {nameLocked ? <Feather name="lock" size={L.rs(12)} color={C.textDim} /> : null}
+        </View>
+        {nameLocked ? <Text style={[pd.hint, { color: C.textDim }]}>{t.pe_nameLockedHint}</Text> : null}
+      </View>
+
+      <View style={[pd.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+        <Lbl text={t.pe_lblPhone} />
+        <View style={[pd.inputRow, { backgroundColor: fieldBg, borderColor: fieldBorder }]}>
+          <Text style={{ color: C.textMuted, fontFamily: F.semibold, fontSize: L.rs(13) }}>+91</Text>
+          <TextInput
+            style={[pd.inputTxt, { color: C.text, flex: 1 }]}
+            value={phone}
+            onChangeText={(v) => setPhone(v.replace(/\D/g, "").slice(0, 12))}
+            editable={!phoneLocked}
+            placeholder={t.pe_phPhone}
+            placeholderTextColor={C.textDim}
+            keyboardType="phone-pad"
+            maxLength={12}
+          />
+          {phoneLocked ? <Feather name="lock" size={L.rs(12)} color={C.textDim} /> : null}
+        </View>
+        {phoneLocked ? <Text style={[pd.hint, { color: C.textDim }]}>{t.pe_phoneLockedHint}</Text> : null}
+      </View>
+
+      {err ? <Text style={[pd.hint, { color: "#ef4444", textAlign: "center" }]}>{err}</Text> : null}
+
+      {canSave && (
+        <Pressable
+          onPress={handleSave}
+          disabled={saving}
+          style={({ pressed }) => [{ opacity: pressed || saving ? 0.85 : 1 }]}
+        >
+          <LinearGradient colors={C.isDark ? ["#f59e0b", "#ef4444"] : ["#7C3AED", "#6D28D9"]} style={pd.saveBtn}>
+            {saving ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Feather name="check" size={16} color="#fff" />
+                <Text style={pd.saveTxt}>{savedFlash ? t.pe_personalSaved : t.pe_savePersonal}</Text>
+              </>
+            )}
+          </LinearGradient>
+        </Pressable>
+      )}
+    </View>
+  );
 }
 
 function PickerBtn({
@@ -269,8 +422,11 @@ export default function ProfileEditScreen() {
   const t = useT();
   const {
     profiles, primaryProfileId, addProfile, updateProfile, deleteProfile,
-    setBirthData, setKundli, syncKundliToCloud, setPrimaryProfile, user,
+    setBirthData, setKundli, syncKundliToCloud, setPrimaryProfile, user, setUser,
   } = useUser();
+  const L = useScreenLayout();
+  const pageW = Math.min(L.width - L.ph * 2, 520);
+  const [screenTab, setScreenTab] = useState<"kundli" | "personal">("kundli");
 
   const primaryProfile = profiles.find(p => p.id === primaryProfileId) ?? profiles[0] ?? null;
   const familyMembers = profiles.filter(p => p.id !== (primaryProfile?.id ?? ""));
@@ -481,12 +637,45 @@ export default function ProfileEditScreen() {
           </View>
         </View>
 
+        <View style={{ paddingHorizontal: L.ph, paddingBottom: L.rs(8), width: pageW, maxWidth: "100%", alignSelf: "center" }}>
+          <View style={[s.screenTabs, { backgroundColor: C.isDark ? C.bgCard2 : "#E2E8F0" }]}>
+            {(["kundli", "personal"] as const).map((id) => {
+              const active = screenTab === id;
+              return (
+                <Pressable
+                  key={id}
+                  onPress={() => { Haptics.selectionAsync(); setScreenTab(id); }}
+                  style={[s.screenTab, active && { backgroundColor: C.isDark ? C.bgCard : "#fff" }]}
+                >
+                  <Text style={[s.screenTabTxt, { color: active ? C.text : C.textMuted }]}>
+                    {id === "kundli" ? t.pe_tabKundli : t.pe_tabPersonal}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
         <ScrollView
-          contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 90 }]}
+          contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 90, alignItems: "center" }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {primaryProfile && (
+          {screenTab === "personal" ? (
+            <PersonalDetailsPanel
+              user={user}
+              pageW={pageW}
+              onSaved={(u) => {
+                void setUser(u);
+                const prim = profiles.find((p) => p.id === primaryProfileId) ?? profiles[0];
+                if (prim && u.name && u.name !== prim.name) {
+                  updateProfile(prim.id, { name: u.name });
+                }
+              }}
+            />
+          ) : null}
+
+          {screenTab === "kundli" && primaryProfile && (
             <HeroCard
               profile={primaryProfile}
               onView={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/kundli"); }}
@@ -494,7 +683,7 @@ export default function ProfileEditScreen() {
             />
           )}
 
-          {familyMembers.length > 0 && (
+          {screenTab === "kundli" && familyMembers.length > 0 && (
             <View style={{ gap: 6, marginTop: 4 }}>
               <Text style={{ color: C.textMuted, fontSize: 9, fontFamily: F.bold, letterSpacing: 1.8, marginLeft: 4, marginBottom: 0 }}>{t.pe_otherProfiles}</Text>
               {familyMembers.map((p) => (
@@ -510,7 +699,7 @@ export default function ProfileEditScreen() {
             </View>
           )}
 
-          {!primaryProfile && familyMembers.length === 0 && (
+          {screenTab === "kundli" && !primaryProfile && familyMembers.length === 0 && (
             <View style={{ alignItems: "center", paddingVertical: 40, gap: 12 }}>
               <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: `${ac}15`, alignItems: "center", justifyContent: "center" }}>
                 <Feather name="star" size={28} color={ac} />
@@ -523,7 +712,8 @@ export default function ProfileEditScreen() {
           )}
         </ScrollView>
 
-        <View style={{ position: "absolute", bottom: insets.bottom + 20, left: 16, right: 16 }}>
+        {screenTab === "kundli" ? (
+        <View style={{ position: "absolute", bottom: insets.bottom + 20, left: L.ph, right: L.ph, maxWidth: pageW, alignSelf: "center", width: "100%" }}>
           <Pressable
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); openFmAdd(); }}
             style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}
@@ -538,6 +728,7 @@ export default function ProfileEditScreen() {
             </LinearGradient>
           </Pressable>
         </View>
+        ) : null}
 
       </KeyboardAvoidingView>
 
@@ -797,7 +988,29 @@ export default function ProfileEditScreen() {
   );
 }
 
+const pd = StyleSheet.create({
+  card: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 8 },
+  inputRow: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, minHeight: 44,
+  },
+  inputTxt: { fontSize: 14, fontFamily: F.semibold },
+  hint: { fontSize: 10, fontFamily: F.medium, lineHeight: 14, marginTop: 2 },
+  saveBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, height: 48, borderRadius: 14,
+  },
+  saveTxt: { color: "#fff", fontSize: 14, fontFamily: F.bold },
+});
+
 const s = StyleSheet.create({
+  screenTabs: {
+    flexDirection: "row", borderRadius: 12, padding: 4, gap: 4,
+  },
+  screenTab: {
+    flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: "center",
+  },
+  screenTabTxt: { fontSize: 12, fontFamily: F.bold },
   header: {
     flexDirection: "row", alignItems: "center", gap: 12,
     paddingHorizontal: 16, paddingBottom: 10,

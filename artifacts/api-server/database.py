@@ -221,6 +221,18 @@ def run_schema_migrations() -> None:
 
                 ))
 
+                conn.execute(text(
+
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS personal_name_locked BOOLEAN NOT NULL DEFAULT FALSE"
+
+                ))
+
+                conn.execute(text(
+
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS personal_phone_locked BOOLEAN NOT NULL DEFAULT FALSE"
+
+                ))
+
                 if os.environ.get("COSMIC_WIPE_USERS") == "1":
 
                     try:
@@ -348,6 +360,22 @@ def run_schema_migrations() -> None:
                     conn, "users", "career_unlocked_at",
 
                     "ALTER TABLE users ADD COLUMN career_unlocked_at TIMESTAMP",
+
+                )
+
+                _sqlite_add_column(
+
+                    conn, "users", "personal_name_locked",
+
+                    "ALTER TABLE users ADD COLUMN personal_name_locked BOOLEAN DEFAULT 0",
+
+                )
+
+                _sqlite_add_column(
+
+                    conn, "users", "personal_phone_locked",
+
+                    "ALTER TABLE users ADD COLUMN personal_phone_locked BOOLEAN DEFAULT 0",
 
                 )
 

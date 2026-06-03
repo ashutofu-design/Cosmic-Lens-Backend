@@ -40,6 +40,10 @@ class User(db.Model):
     # Allowed: "en" | "hi" | "hn" | NULL (auto-detect from each question)
     preferred_language = db.Column(db.String(4), nullable=True)
 
+    # ── Personal details (set once from app) ─────────────────────────────────
+    personal_name_locked  = db.Column(db.Boolean, default=False, nullable=False)
+    personal_phone_locked = db.Column(db.Boolean, default=False, nullable=False)
+
     # ── Daily Kundli generation quota ─────────────────────────────────────────
     daily_kundlis_used = db.Column(db.Integer, default=0, nullable=False)
     daily_kundlis_date = db.Column(db.String(10), default="", nullable=False)   # YYYY-MM-DD
@@ -89,6 +93,8 @@ class User(db.Model):
             "plan":         self.plan if plan_active else "free",
             "plan_expiry":  self.plan_expiry.isoformat() if self.plan_expiry else None,
             "preferred_language": self.preferred_language,   # null → auto-detect
+            "personal_name_locked": bool(getattr(self, "personal_name_locked", False)),
+            "personal_phone_locked": bool(getattr(self, "personal_phone_locked", False)),
             "career_unlocked": bool(getattr(self, "career_unlocked", False)),
             "created_at":   self.created_at.isoformat() if self.created_at else None,
         }

@@ -2160,13 +2160,18 @@ def panchang_vivah_muhurat():
         return jsonify({"error": "bad date; use YYYY-MM-DD"}), 400
 
     try:
-        days = int(request.args.get("days") or "180")
-        days = max(30, min(180, days))
+        years_q = request.args.get("years")
+        if years_q:
+            years_i = max(1, min(5, int(years_q)))
+            days = 366 * years_i
+        else:
+            days = int(request.args.get("days") or "180")
+            days = max(30, min(366, days))
         tz_h = float(request.args.get("tz") or "5.5")
         lat = float(request.args.get("lat") or "28.6139")
         lng = float(request.args.get("lng") or "77.2090")
     except Exception:
-        return jsonify({"error": "bad days/tz/lat/lng"}), 400
+        return jsonify({"error": "bad days/years/tz/lat/lng"}), 400
 
     profile = (request.args.get("profile") or "north").strip().lower()
     bride_nak = (request.args.get("bride_nak") or request.args.get("bride_nakshatra") or "").strip() or None
@@ -2692,6 +2697,91 @@ def user_language_pref(user_id):
         user.preferred_language = v
     db.session.commit()
     return jsonify({"preferred_language": user.preferred_language})
+
+
+@app.route("/api/user/<int:user_id>/personal", methods=["PUT", "POST"])
+@app.route("/api/user/<int:user_id>/personal-details", methods=["PUT", "POST"])
+def update_user_personal(user_id):
+    """Save display name and/or mobile once (Google email stays read-only)."""
+    import re
+
+    from database import run_schema_migrations
+
+    try:
+        run_schema_migrations()
+    except Exception as mig_exc:
+        app.logger.warning("[personal] schema migration note: %s", mig_exc)
+
+    user, err = get_authed_user(user_id)
+    if err:
+        return err
+
+    data = request.get_json(force=True, silent=True) or {}
+    name_in = (data.get("name") or "").strip()[:200]
+    phone_in = (data.get("phone") or "").strip()
+
+    changed = False
+    errors: list[str] = []
+
+    if name_in:
+        if bool(getattr(user, "personal_name_locked", False)):
+            errors.append("name_locked")
+        else:
+            user.name = name_in
+            if hasattr(user, "personal_name_locked"):
+                user.personal_name_locked = True
+            changed = True
+
+    if phone_in:
+        already_phone = bool((user.phone or "").strip())
+        if bool(getattr(user, "personal_phone_locked", False)) or already_phone:
+            errors.append("phone_locked")
+        else:
+            digits = re.sub(r"\D", "", phone_in)
+            if digits.startswith("91") and len(digits) == 12:
+                phone_e164 = f"+{digits}"
+            elif len(digits) == 10:
+                phone_e164 = f"+91{digits}"
+            else:
+                return jsonify({
+                    "ok": False,
+                    "error": "invalid_phone",
+                    "message": "Use 10-digit Indian mobile number",
+                }), 400
+
+            existing = User.query.filter(User.phone == phone_e164, User.id != user.id).first()
+            if existing:
+                return jsonify({"ok": False, "error": "phone_taken", "message": "This number is already registered"}), 409
+
+            user.phone = phone_e164
+            user.country_code = "91"
+            if hasattr(user, "personal_phone_locked"):
+                user.personal_phone_locked = True
+            changed = True
+
+    if errors and not changed:
+        msg = "Name already saved" if errors[0] == "name_locked" else "Mobile already added"
+        return jsonify({"ok": False, "error": errors[0], "message": msg}), 409
+
+    if not changed:
+        return jsonify({
+            "ok": False,
+            "error": "nothing_to_save",
+            "message": "Enter name (2+ letters) or a 10-digit mobile number",
+        }), 400
+
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        app.logger.exception("[personal] save failed user_id=%s", user_id)
+        return jsonify({
+            "ok": False,
+            "error": "save_failed",
+            "message": str(exc)[:240],
+        }), 500
+
+    return jsonify({"ok": True, "user": user.to_dict()})
 
 
 @app.route("/api/user/<int:user_id>/kundli", methods=["GET"])

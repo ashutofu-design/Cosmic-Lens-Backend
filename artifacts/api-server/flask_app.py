@@ -1927,7 +1927,9 @@ def panchang_real():
     try:
         from vedic.panchang.festival_vrat import festivals_on_date  # type: ignore
 
-        out["festivals_today"] = festivals_on_date(target_date, tz_h=tz_h)
+        out["festivals_today"] = festivals_on_date(
+            target_date, lat=lat, lng=lng, tz_h=tz_h
+        )
     except Exception as _fe:
         app.logger.info("panchang: festivals_today failed: %s", _fe)
 
@@ -2102,10 +2104,12 @@ def panchang_ekadashi_schedule():
         years = int(request.args.get("years") or "5")
         years = max(1, min(5, years))
         tz_h = float(request.args.get("tz") or "5.5")
+        lat = float(request.args.get("lat") or "28.6139")
+        lng = float(request.args.get("lng") or "77.2090")
     except Exception:
-        return jsonify({"error": "bad from_date/years/tz"}), 400
+        return jsonify({"error": "bad from_date/years/tz/lat/lng"}), 400
     try:
-        return jsonify(get_ekadashi_schedule(start, years=years, tz_h=tz_h))
+        return jsonify(get_ekadashi_schedule(start, years=years, lat=lat, lng=lng, tz_h=tz_h))
     except Exception as exc:
         app.logger.exception("ekadashi-schedule failed: %s", exc)
         return jsonify({"error": "ekadashi_scan_failed"}), 500

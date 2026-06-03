@@ -11,12 +11,14 @@ from typing import Any, Literal
 
 from vedic.panchang.phase_r import compute_phase_r
 from vedic.panchang.swe_core import (
-    calc_sun_moon,
-    jd_from_datetime,
-    local_noon_utc,
     require_swe,
+    sunrise_sunset,
     tithi_from_longitudes,
 )
+from vedic.panchang.vivah_geo import local_to_phase_utc
+
+DEFAULT_LAT = 28.6139
+DEFAULT_LNG = 77.2090
 
 Paksha = Literal["Shukla", "Krishna"]
 
@@ -59,18 +61,42 @@ def _festival_flags(tithi_1to30: int, paksha: str, maasa: str | None) -> list[tu
     return out
 
 
+def _tithi_at_sunrise(
+    target: date,
+    *,
+    lat: float = DEFAULT_LAT,
+    lng: float = DEFAULT_LNG,
+    tz_h: float = 5.5,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Panchang tithi at local sunrise (standard for vrat / festival day)."""
+    require_swe()
+    sunrise, _, _ = sunrise_sunset(target, lat=lat, lng=lng, tz_h=tz_h)
+    dt_utc = local_to_phase_utc(sunrise, tz_h)
+    phase = compute_phase_r(dt_utc)
+    if "r1_tithi" not in phase:
+        raise RuntimeError("phase_r tithi unavailable")
+    t_meta = phase["r1_tithi"]
+    idx30 = int(t_meta["tithi_idx_1to30"])
+    t = {
+        "tithi_idx_1to30": idx30,
+        "tithi_num": (idx30 - 1) % 15 + 1,
+        "paksha": t_meta.get("paksha") or "Shukla",
+        "name": t_meta.get("name") or "",
+        "label": f"{t_meta.get('paksha', '')} {t_meta.get('name', '')}".strip(),
+    }
+    return t, phase
+
+
 def festivals_on_date(
     target: date,
     *,
+    lat: float = DEFAULT_LAT,
+    lng: float = DEFAULT_LNG,
     tz_h: float = 5.5,
 ) -> list[dict[str, Any]]:
-    """All festival/vrat flags for a single calendar day (local noon tithi)."""
+    """All festival/vrat flags for a calendar day (tithi at local sunrise)."""
     require_swe()
-    dt_utc = local_noon_utc(target, tz_h)
-    jd = jd_from_datetime(dt_utc)
-    sun, moon = calc_sun_moon(jd)
-    t = tithi_from_longitudes(sun, moon)
-    phase = compute_phase_r(dt_utc)
+    t, phase = _tithi_at_sunrise(target, lat=lat, lng=lng, tz_h=tz_h)
     maasa = None
     if "r6_ritu_ayana_maasa" in phase:
         maasa = phase["r6_ritu_ayana_maasa"].get("maasa")
@@ -92,6 +118,8 @@ def get_monthly_festivals(
     month: int,
     year: int,
     *,
+    lat: float = DEFAULT_LAT,
+    lng: float = DEFAULT_LNG,
     tz_h: float = 5.5,
 ) -> list[dict[str, Any]]:
     """
@@ -108,7 +136,7 @@ def get_monthly_festivals(
 
     for day in range(1, last_day + 1):
         d = date(year, month, day)
-        for row in festivals_on_date(d, tz_h=tz_h):
+        for row in festivals_on_date(d, lat=lat, lng=lng, tz_h=tz_h):
             all_rows.append({
                 "date": row["date"],
                 "festival_name": row["festival_name"],
@@ -123,6 +151,8 @@ def get_ekadashi_schedule(
     start: date,
     *,
     years: int = 5,
+    lat: float = DEFAULT_LAT,
+    lng: float = DEFAULT_LNG,
     tz_h: float = 5.5,
 ) -> dict[str, Any]:
     """
@@ -143,7 +173,7 @@ def get_ekadashi_schedule(
     cur = date(start.year, start.month, 1)
 
     while cur < end:
-        rows = get_monthly_festivals(cur.month, cur.year, tz_h=tz_h)
+        rows = get_monthly_festivals(cur.month, cur.year, lat=lat, lng=lng, tz_h=tz_h)
         ek_dates: list[dict[str, Any]] = []
         for r in rows:
             if "Ekadashi" not in r.get("festival_name", ""):

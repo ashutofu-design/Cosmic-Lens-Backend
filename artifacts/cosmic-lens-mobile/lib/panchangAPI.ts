@@ -222,6 +222,8 @@ export interface EkadashiSchedule {
 export async function fetchEkadashiSchedule(args: {
   fromDate?: Date;
   years?: number;
+  lat?: number;
+  lng?: number;
   tz?: number;
   signal?: AbortSignal;
 }): Promise<EkadashiSchedule> {
@@ -233,6 +235,8 @@ export async function fetchEkadashiSchedule(args: {
     from_date: `${yyyy}-${mm}-${dd}`,
     years: String(args.years ?? 5),
   });
+  if (args.lat !== undefined) params.set("lat", String(args.lat));
+  if (args.lng !== undefined) params.set("lng", String(args.lng));
   if (args.tz !== undefined) params.set("tz", String(args.tz));
   const url = `${API_BASE}/api/panchang/ekadashi-schedule?${params.toString()}`;
   const res = await apiFetch(url, { signal: args.signal });

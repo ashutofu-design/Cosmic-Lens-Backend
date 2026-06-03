@@ -203,7 +203,12 @@ export default function PanchangScreen() {
         setEkadashiLoading(true);
         try {
           const r = await fetchEkadashiSchedule({
-            fromDate: today, years: 5, tz: userTz, signal: ctrl.signal,
+            fromDate: today,
+            years: 5,
+            lat: userLat,
+            lng: userLng,
+            tz: userTz,
+            signal: ctrl.signal,
           });
           if (id === seq.current) {
             setEkadashi(r);
@@ -472,7 +477,10 @@ export default function PanchangScreen() {
           {tab === "Vrat" && (
             <>
               <Text style={[s.countLine, { color: C.textMuted }]}>
-                Ekadashi vrat · aaj se agle 5 saal · kul {ekadashi?.total ?? "—"} din
+                Ekadashi (sunrise tithi) · aaj se 5 saal · kul {ekadashi?.total ?? "—"} din
+              </Text>
+              <Text style={[s.hint, { color: C.textMuted, lineHeight: 14 }]}>
+                Har lunar mahine mein 2 Ekadashi hoti hai; Gregorian mahine mein kabhi 1 kabhi 2 dikhti hain.
               </Text>
 
               {ekadashiLoading ? (

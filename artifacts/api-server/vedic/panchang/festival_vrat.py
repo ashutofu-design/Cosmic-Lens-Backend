@@ -119,5 +119,67 @@ def get_monthly_festivals(
     return all_rows
 
 
+def get_ekadashi_schedule(
+    start: date,
+    *,
+    years: int = 5,
+    tz_h: float = 5.5,
+) -> dict[str, Any]:
+    """
+    Ekadashi vrat dates from start through start + years, grouped by civil month.
+    Only Shukla / Krishna Ekadashi (tithi 11 & 26).
+    """
+    from dateutil.relativedelta import relativedelta
+
+    from vedic.panchang.phase_r import WEEKDAY_NAME
+
+    require_swe()
+    if isinstance(start, str):
+        start = date.fromisoformat(start)
+    years = max(1, min(5, int(years)))
+    end = start + relativedelta(years=years)
+
+    months_out: list[dict[str, Any]] = []
+    cur = date(start.year, start.month, 1)
+
+    while cur < end:
+        rows = get_monthly_festivals(cur.month, cur.year, tz_h=tz_h)
+        ek_dates: list[dict[str, Any]] = []
+        for r in rows:
+            if "Ekadashi" not in r.get("festival_name", ""):
+                continue
+            d = date.fromisoformat(r["date"])
+            if d < start or d >= end:
+                continue
+            ek_dates.append({
+                "date": r["date"],
+                "display": d.strftime("%d %b"),
+                "weekday": WEEKDAY_NAME[d.weekday()],
+                "festival_name": r["festival_name"],
+                "paksha": r["paksha"],
+                "tithi": r["tithi"],
+            })
+        months_out.append({
+            "year": cur.year,
+            "month": cur.month,
+            "month_key": f"{cur.year}-{cur.month:02d}",
+            "label": cur.strftime("%B %Y"),
+            "dates": ek_dates,
+            "count": len(ek_dates),
+        })
+        cur += relativedelta(months=1)
+
+    total = sum(m["count"] for m in months_out)
+    return {
+        "scan_from": start.isoformat(),
+        "scan_years": years,
+        "scan_to": end.isoformat(),
+        "total": total,
+        "months": months_out,
+    }
+
+
+getEkadashiSchedule = get_ekadashi_schedule
+
 # CamelCase alias
 getMonthlyFestivals = get_monthly_festivals

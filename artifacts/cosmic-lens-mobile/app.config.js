@@ -35,7 +35,7 @@ if (
 }
 
 const defaultApiUrl =
-  process.env.EXPO_PUBLIC_API_URL || "http://187.127.174.55:8080";
+  process.env.EXPO_PUBLIC_API_URL || "https://api.cosmiclens.app";
 
 module.exports = {
   ...appJson,

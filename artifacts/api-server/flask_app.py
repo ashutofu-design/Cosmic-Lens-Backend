@@ -2085,6 +2085,32 @@ def panchang_monthly_festivals():
         return jsonify({"error": "festival_scan_failed"}), 500
 
 
+@app.route("/api/panchang/ekadashi-schedule", methods=["GET"])
+def panchang_ekadashi_schedule():
+    """Ekadashi vrat calendar — month-wise, from today for up to 5 years."""
+    from datetime import date as _date
+
+    from vedic.panchang.festival_vrat import get_ekadashi_schedule  # type: ignore
+
+    date_s = (request.args.get("from_date") or request.args.get("date") or "").strip()
+    try:
+        if date_s:
+            y, m, d = [int(x) for x in date_s.split("-")]
+            start = _date(y, m, d)
+        else:
+            start = _date.today()
+        years = int(request.args.get("years") or "5")
+        years = max(1, min(5, years))
+        tz_h = float(request.args.get("tz") or "5.5")
+    except Exception:
+        return jsonify({"error": "bad from_date/years/tz"}), 400
+    try:
+        return jsonify(get_ekadashi_schedule(start, years=years, tz_h=tz_h))
+    except Exception as exc:
+        app.logger.exception("ekadashi-schedule failed: %s", exc)
+        return jsonify({"error": "ekadashi_scan_failed"}), 500
+
+
 @app.route("/api/panchang/gochar", methods=["GET"])
 def panchang_gochar():
     """Live planetary transits (Lahiri sidereal) with retrograde & combustion."""

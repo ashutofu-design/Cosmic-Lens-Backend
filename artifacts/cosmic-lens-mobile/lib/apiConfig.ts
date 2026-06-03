@@ -197,7 +197,10 @@ function installDevFetchInterceptor(): void {
   }) as typeof fetch;
 }
 
-/** Bases to try for login (VPS first — no silent localhost unless opted in). */
+/**
+ * Ordered API bases for retries when the primary host is down or blocked.
+ * HTTPS domain first as fallback — same VPS, more reliable than raw :8080.
+ */
 export function demoLoginApiBases(): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -210,6 +213,7 @@ export function demoLoginApiBases(): string[] {
   };
 
   add(API_BASE);
+  add(PRODUCTION_API_URL);
   const configured = configuredApiUrl();
   if (configured && /^https?:\/\//.test(configured)) {
     add(configured.replace(/\/$/, ""));
@@ -222,11 +226,11 @@ export function demoLoginApiBases(): string[] {
       if (lan) add(`http://${lan}:8080`);
     }
   }
-  if (!__DEV__ || API_BASE !== PRODUCTION_API_URL) {
-    add(PRODUCTION_API_URL);
-  }
   return out;
 }
+
+/** @alias demoLoginApiBases */
+export const apiFetchBases = demoLoginApiBases;
 
 export const API_HEADERS: Record<string, string> = {
   "Content-Type": "application/json",

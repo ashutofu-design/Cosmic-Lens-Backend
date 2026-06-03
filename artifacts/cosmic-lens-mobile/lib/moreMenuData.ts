@@ -27,7 +27,7 @@ export function buildMoreDrawerCategories(t: ReturnType<typeof useT>): MoreMenuC
           icon: "calendar",
           emoji: "🗓️",
           title: `${t.catPanchang} & ${t.catMuhurat}`,
-          subtitle: `${t.mdPanchangSub} · ${t.mdMuhuratSub}`,
+          subtitle: "Panchang · Muhurat · Gochar · Vrat · Vivah",
           route: "/panchang",
           accent: "#a78bfa",
           badge: "Daily",

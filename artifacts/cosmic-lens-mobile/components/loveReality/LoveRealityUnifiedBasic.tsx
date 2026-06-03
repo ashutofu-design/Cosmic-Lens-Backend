@@ -14,7 +14,7 @@ import {
 } from "react-native";
 
 import { LoveRealityToolResultPanel } from "@/components/loveReality/LoveRealityToolResultPanel";
-import { API_BASE } from "@/lib/apiConfig";
+import { apiFetch, apiFetchBases } from "@/lib/apiConfig";
 import {
   mapLoveRealityResult,
   type LoveRealityBasicDisplay,
@@ -85,35 +85,51 @@ export function LoveRealityUnifiedBasic({
       p2: packPerson(partnerProfile.birthData),
     });
 
-    try {
-      const pairs = await Promise.all(
-        LOVE_REALITY_TOOLS.map(async tool => {
-          const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 35000);
-          try {
-            const resp = await fetch(`${API_BASE}${tool.apiPath}`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body,
-              signal: ctrl.signal,
-            });
-            clearTimeout(timer);
-            const json = await resp.json();
-            if (!resp.ok || json.error) throw new Error(json.error || tool.title);
-            return [tool.key, mapLoveRealityResult(tool.key, json as Record<string, unknown>)] as const;
-          } catch (e) {
-            clearTimeout(timer);
-            throw e;
-          }
-        }),
-      );
-      setResults(Object.fromEntries(pairs) as ResultsMap);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e: unknown) {
-      setFetchErr(e instanceof Error ? e.message : "Could not load readings");
-    } finally {
-      setLoading(false);
+    const isRetryable = (msg: string) =>
+      /Network request failed|Failed to fetch|Load failed|fetch|abort/i.test(msg);
+
+    let lastErr = "Could not load readings";
+    for (const base of apiFetchBases()) {
+      try {
+        const pairs = await Promise.all(
+          LOVE_REALITY_TOOLS.map(async tool => {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 35000);
+            try {
+              const resp = await apiFetch(`${base}${tool.apiPath}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body,
+                signal: ctrl.signal,
+              });
+              clearTimeout(timer);
+              const json = await resp.json();
+              if (!resp.ok || json.error) {
+                if (resp.status >= 502 && resp.status <= 504) {
+                  throw new Error(`Server busy (${resp.status})`);
+                }
+                throw new Error(json.error || tool.title);
+              }
+              return [tool.key, mapLoveRealityResult(tool.key, json as Record<string, unknown>)] as const;
+            } catch (e) {
+              clearTimeout(timer);
+              throw e;
+            }
+          }),
+        );
+        setResults(Object.fromEntries(pairs) as ResultsMap);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setLoading(false);
+        return;
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        lastErr = msg;
+        if (isRetryable(msg)) continue;
+        break;
+      }
     }
+    setFetchErr(lastErr);
+    setLoading(false);
   }
 
   function selectTool(tool: LoveRealityToolDef) {

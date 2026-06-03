@@ -19,15 +19,13 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { fetchKundliFromAPI } from "@/lib/kundliAPI";
+import { fetchKundliFromAPI, fetchTimezone, searchPlaces } from "@/lib/kundliAPI";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
 import { BirthTimeRectificationLink } from "@/components/BirthTimeRectificationLink";
 import PickerModal from "@/components/PickerModal";
 import type { BirthData } from "@/types";
-
-import { API_BASE as BASE_URL, apiFetch } from "@/lib/apiConfig";
 
 const F = {
   regular:  "Nunito_400Regular",
@@ -87,30 +85,6 @@ function buildRelationItems(t: ReturnType<typeof useT>) {
     label: `${r.emoji}  ${relationLabel(r.key, t)}`,
     value: r.key,
   }));
-}
-
-interface GeoResult { label: string; lat: number; lon: number; tz: number; }
-
-async function searchPlace(q: string): Promise<GeoResult[]> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 15000);
-  try {
-    const r = await apiFetch(
-      `${BASE_URL}/api/geocode?q=${encodeURIComponent(q)}`,
-      { signal: ctrl.signal },
-    );
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const rows = await r.json();
-    if (!Array.isArray(rows)) return [];
-    return rows.map((x: { label: string; lat: number; lon: number; tz: number }) => ({
-      label: x.label,
-      lat: x.lat,
-      lon: x.lon,
-      tz: x.tz,
-    }));
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 type FormState = {
@@ -396,7 +370,7 @@ export default function ProfileEditScreen() {
     if (fmPlaceQuery.trim().length < 2) return;
     setFmSearching(true); setFmGeoResults([]); setFmError("");
     try {
-      const results = await searchPlace(fmPlaceQuery);
+      const results = await searchPlaces(fmPlaceQuery);
       setFmGeoResults(results);
       if (results.length === 0) {
         setFmError("No matching place found. Try different spelling or a nearby city.");
@@ -411,18 +385,15 @@ export default function ProfileEditScreen() {
     }
   }
 
-  async function fmSelectGeo(g: GeoResult) {
+  async function fmSelectGeo(g: { label: string; lat: number; lon: number; tz: number }) {
     setFmForm(prev => ({ ...prev, place: g.label, lat: g.lat, lon: g.lon, tz: g.tz }));
     setFmPlaceQuery(g.label); setFmGeoResults([]);
     setFmTzLoading(true);
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 5000);
     try {
-      const r = await apiFetch(`${BASE_URL}/api/timezone?lat=${g.lat}&lon=${g.lon}`, { signal: ctrl.signal });
-      const d = await r.json();
-      if (typeof d.tz === "number") setFmForm(prev => ({ ...prev, tz: d.tz }));
+      const tz = await fetchTimezone(g.lat, g.lon);
+      setFmForm(prev => ({ ...prev, tz }));
     } catch {}
-    finally { clearTimeout(timer); setFmTzLoading(false); }
+    finally { setFmTzLoading(false); }
   }
 
   async function handleFmSave() {
@@ -538,38 +509,6 @@ export default function ProfileEditScreen() {
               ))}
             </View>
           )}
-
-          {/* Recently Deleted entry */}
-          <Pressable
-            onPress={() => { Haptics.selectionAsync(); router.push("/recently-deleted"); }}
-            style={({ pressed }) => [{
-              marginTop: 14,
-              padding: 14,
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: C.isDark ? C.border2 : "#E5E7EB",
-              backgroundColor: C.isDark ? C.bgCard : "#FFFFFF",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 12,
-              opacity: pressed ? 0.85 : 1,
-            }]}
-          >
-            <View style={{
-              width: 36, height: 36, borderRadius: 18,
-              backgroundColor: `${ac}15`,
-              alignItems: "center", justifyContent: "center",
-            }}>
-              <Feather name="trash-2" size={16} color={ac} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: C.text, fontSize: 14, fontFamily: F.bold }}>{t.pe_recentlyDeleted}</Text>
-              <Text style={{ color: C.textMuted, fontSize: 11.5, fontFamily: F.medium, marginTop: 2 }}>
-                Restore profiles within 24 hours
-              </Text>
-            </View>
-            <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={18} color={C.textMuted} />
-          </Pressable>
 
           {!primaryProfile && familyMembers.length === 0 && (
             <View style={{ alignItems: "center", paddingVertical: 40, gap: 12 }}>

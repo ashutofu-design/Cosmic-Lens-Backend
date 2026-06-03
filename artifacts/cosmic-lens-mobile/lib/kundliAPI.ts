@@ -1,6 +1,6 @@
 import type { BirthData, KundliData } from "@/types";
 
-import { API_BASE as BASE_URL, apiFetch } from "./apiConfig";
+import { API_BASE as BASE_URL, apiFetch, apiFetchBases } from "./apiConfig";
 
 export interface KundliAuth {
   user_id: number;
@@ -107,13 +107,6 @@ export async function fetchKundliFromAPI(bd: BirthData, auth?: KundliAuth | null
   throw lastErr;
 }
 
-interface NominatimResult {
-  display_name: string;
-  lat: string;
-  lon: string;
-  address?: { country_code?: string };
-}
-
 export interface PlaceSuggestion {
   label: string;
   lat: number;
@@ -122,34 +115,100 @@ export interface PlaceSuggestion {
   countryCode: string;
 }
 
+function mapGeocodeRows(rows: unknown): PlaceSuggestion[] {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((x: { label?: string; lat?: number; lon?: number; tz?: number }) => ({
+      label: String(x.label ?? ""),
+      lat: Number(x.lat),
+      lon: Number(x.lon),
+      tz: typeof x.tz === "number" ? x.tz : Math.round((Number(x.lon) / 15) * 2) / 2,
+      countryCode: "",
+    }))
+    .filter(p => p.label && Number.isFinite(p.lat) && Number.isFinite(p.lon));
+}
+
+/** Direct Open-Meteo when VPS geocode proxy is unreachable (browser CORS OK). */
+async function searchPlacesOpenMeteo(query: string, signal?: AbortSignal): Promise<PlaceSuggestion[]> {
+  const url =
+    `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}` +
+    "&count=6&language=en&format=json";
+  const r = await fetch(url, { signal });
+  if (!r.ok) throw new Error(`Open-Meteo HTTP ${r.status}`);
+  const data = (await r.json()) as {
+    results?: Array<{
+      name?: string;
+      admin1?: string;
+      country?: string;
+      latitude?: number;
+      longitude?: number;
+    }>;
+  };
+  const out: PlaceSuggestion[] = [];
+  for (const x of data.results ?? []) {
+    const lat = Number(x.latitude);
+    const lon = Number(x.longitude);
+    const parts = [x.name, x.admin1, x.country];
+    const label = parts.filter(Boolean).join(", ");
+    if (label && Number.isFinite(lat) && Number.isFinite(lon)) {
+      out.push({
+        label,
+        lat,
+        lon,
+        tz: Math.round((lon / 15) * 2) / 2,
+        countryCode: "",
+      });
+    }
+  }
+  return out;
+}
+
 export async function searchPlaces(query: string): Promise<PlaceSuggestion[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 15000);
+  const path = `/api/geocode?q=${encodeURIComponent(q)}`;
+
   try {
-    const r = await apiFetch(
-      `${BASE_URL}/api/geocode?q=${encodeURIComponent(query)}`,
-      { signal: ctrl.signal },
-    );
-    if (!r.ok) throw new Error(`Search failed (HTTP ${r.status})`);
-    const rows = await r.json();
-    if (!Array.isArray(rows)) return [];
-    return rows.map((x: { label: string; lat: number; lon: number; tz: number }) => ({
-      label: x.label,
-      lat: x.lat,
-      lon: x.lon,
-      tz: x.tz,
-      countryCode: "",
-    }));
+    let lastNet = "";
+    for (const base of apiFetchBases()) {
+      try {
+        const r = await apiFetch(`${base}${path}`, { signal: ctrl.signal });
+        if (!r.ok) continue;
+        const mapped = mapGeocodeRows(await r.json());
+        if (mapped.length > 0) return mapped;
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/Network request failed|Failed to fetch|Load failed|fetch|abort/i.test(msg)) {
+          lastNet = msg;
+          continue;
+        }
+        throw e;
+      }
+    }
+
+    const direct = await searchPlacesOpenMeteo(q, ctrl.signal);
+    if (direct.length > 0) return direct;
+
+    if (lastNet) throw new Error(lastNet);
+    return [];
   } finally {
     clearTimeout(timer);
   }
 }
 
 export async function fetchTimezone(lat: number, lon: number): Promise<number> {
-  try {
-    const r = await apiFetch(`${BASE_URL}/api/timezone?lat=${lat}&lon=${lon}`);
-    const d = await r.json();
-    if (typeof d.tz === "number") return d.tz;
-  } catch { /* fallback */ }
+  const path = `/api/timezone?lat=${lat}&lon=${lon}`;
+  for (const base of apiFetchBases()) {
+    try {
+      const r = await apiFetch(`${base}${path}`);
+      const d = await r.json();
+      if (typeof d.tz === "number") return d.tz;
+    } catch {
+      continue;
+    }
+  }
   return Math.round((lon / 15) * 2) / 2;
 }

@@ -1,43 +1,105 @@
 import { Feather } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
+  type ViewStyle,
 } from "react-native";
-import Svg, { Circle, Defs, Ellipse, RadialGradient, Stop } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { CosmicBg } from "@/components/CosmicBg";
+
+import { GalaxyStarfield } from "@/components/GalaxyStarfield";
+import { FadeInView } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useUser, type AuthUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
-
-import { API_BASE, apiFetch } from "@/lib/apiConfig";
-import { FadeInView } from "@/components/motion/FadeInView";
-import { ScalePressable } from "@/components/motion/ScalePressable";
 import { verifyFirebaseIdToken } from "@/lib/authBackend";
 import { signInWithGoogle } from "@/lib/firebaseAuth";
 import { isFirebaseConfigured } from "@/lib/firebaseConfig";
 
+const WEB_GLASS = Platform.OS === "web"
+  ? ({
+      backdropFilter: "blur(24px) saturate(160%)",
+      WebkitBackdropFilter: "blur(24px) saturate(160%)",
+    } as ViewStyle)
+  : {};
+
+function FrostedLoginCard({
+  width,
+  children,
+}: {
+  width: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={[s.cardShell, { width }]}>
+      {Platform.OS !== "web" ? (
+        <BlurView
+          intensity={Platform.OS === "ios" ? 42 : 72}
+          tint="dark"
+          style={StyleSheet.absoluteFill}
+        />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, WEB_GLASS]} />
+      )}
+      <View style={s.cardGlassTint} />
+      <LinearGradient
+        colors={["rgba(255,255,255,0.14)", "rgba(255,255,255,0.02)", "transparent"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={s.cardShine}
+      />
+      <View style={s.cardInner}>{children}</View>
+    </View>
+  );
+}
+
 export default function LoginScreen() {
-  const insets  = useSafeAreaInsets();
-  const C       = useC();
-  const t       = useT();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const t = useT();
   const { setUser, language } = useUser();
 
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const botPad = Platform.OS === "web" ? 34 : insets.bottom;
-  const isDark = C.isDark;
+  const topPad = Platform.OS === "web" ? Math.max(insets.top, 12) : insets.top;
+  const botPad = Platform.OS === "web" ? Math.max(insets.bottom, 24) : insets.bottom;
   const isHindi = language === "hi" || language === "hn";
+  const cardW = Math.min(width - 36, 400);
 
   const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState("");
+  const [error, setError] = useState("");
+
+  const titleGlow = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    const title = Animated.loop(
+      Animated.sequence([
+        Animated.timing(titleGlow, {
+          toValue: 0.85,
+          duration: 3200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(titleGlow, {
+          toValue: 0.35,
+          duration: 3200,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    title.start();
+    return () => title.stop();
+  }, [titleGlow]);
 
   async function finishLogin(u: AuthUser) {
     await setUser(u);
@@ -72,200 +134,285 @@ export default function LoginScreen() {
     }
   }
 
-  async function handleDemoLogin() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    setError("");
-    setLoading(true);
-    try {
-      const res = await apiFetch(`${API_BASE}/api/auth/demo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      });
-      const data = await res.json();
-      if (!res.ok || !data?.id) {
-        setError(data?.error || t.loginGenericError);
-        return;
-      }
-      finishLogin({
-        id:      data.id,
-        name:    data.name || "Demo User",
-        email:   data.email || "demo@cosmic.local",
-        api_key: data.api_key || "",
-        is_pro:  !!data.is_pro,
-      });
-    } catch {
-      setError(t.errNetwork);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
-    <CosmicBg>
-      <ScrollView
-        contentContainerStyle={[s.scroll, { paddingTop: topPad + 36, paddingBottom: botPad + 24 }]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+    <View style={s.root}>
+      <GalaxyStarfield />
+
+      <View
+        style={[
+          s.content,
+          { paddingTop: topPad + 20, paddingBottom: botPad + 12, paddingHorizontal: 18 },
+        ]}
       >
-        <FadeInView delay={0} style={s.logoWrap}>
-          <View style={[s.logoCircle, {
-            backgroundColor: isDark ? "#1a1330" : "#F1F5F9",
-            borderColor: "rgba(245,158,11,0.45)",
-            shadowColor: "#f59e0b",
-          }]}>
-            <Svg width={36} height={36} viewBox="0 0 38 38" fill="none">
-              <Defs>
-                <RadialGradient id="rg1" cx="35%" cy="35%" r="65%">
-                  <Stop offset="0%" stopColor="#f59e0b" stopOpacity="0.95" />
-                  <Stop offset="100%" stopColor="#7c3aed" />
-                </RadialGradient>
-              </Defs>
-              <Circle cx={19} cy={19} r={17} stroke="#f59e0b" strokeWidth={1} strokeOpacity={0.4} strokeDasharray="4 3" />
-              <Circle cx={19} cy={19} r={7}  fill="url(#rg1)" />
-              <Ellipse cx={19} cy={19} rx={13} ry={4} stroke="#a78bfa" strokeWidth={1} strokeOpacity={0.7} fill="none" />
-            </Svg>
-          </View>
-          <Text style={[s.title, { color: C.text }]}>Cosmic Lens</Text>
-          <Text style={[s.subtitle, { color: C.textMuted }]}>
-            {isHindi
-              ? "Gmail se login karein — OTP ki zaroorat nahi"
-              : "Sign in with Gmail — no OTP needed"}
-          </Text>
-        </FadeInView>
-
-        <FadeInView delay={140}>
-        <View style={[s.card, {
-          backgroundColor: C.bgCard,
-          borderColor: C.border2,
-          shadowColor: isDark ? "#7c3aed" : "#0F172A",
-          shadowOpacity: isDark ? 0.18 : 0.12,
-        }]}>
-          <Text style={[s.fieldLabel, { color: C.warningText }]}>
-            {isHindi ? "GOOGLE ACCOUNT" : "GOOGLE ACCOUNT"}
-          </Text>
-
-          {!!error && (
-            <View style={s.errorBox}>
-              <Feather name="alert-circle" size={13} color="#f87171" />
-              <Text style={s.errorText}>{error}</Text>
-            </View>
-          )}
-
-          <Text style={[s.note, { color: C.textMuted }]}>
-            {isHindi
-              ? "Pehli baar login par account automatic ban jayega."
-              : "First-time sign-in creates your account automatically."}
-          </Text>
-
-          <Pressable
-            onPress={handleGoogleLogin}
-            disabled={loading}
-            style={({ pressed }) => [{ opacity: loading ? 0.6 : pressed ? 0.85 : 1 }]}
-          >
-            <View style={[s.googleBtn, {
-              backgroundColor: isDark ? "#fff" : "#fff",
-              borderColor: C.border,
-            }]}>
-              {loading
-                ? <ActivityIndicator size="small" color="#4285F4" />
-                : (
-                  <>
-                    <Text style={s.googleG}>G</Text>
-                    <Text style={s.googleBtnText}>
-                      {isHindi ? "Google se continue karein" : "Continue with Google"}
-                    </Text>
-                  </>
-                )}
-            </View>
-          </Pressable>
-        </View>
-        </FadeInView>
-
-        {__DEV__ && (
-          <FadeInView delay={280} style={s.demoWrap}>
-            <View style={s.divider}>
-              <View style={[s.divLine, { backgroundColor: C.border }]} />
-              <Text style={[s.divText, { color: C.textMuted }]}>{t.orDivider}</Text>
-              <View style={[s.divLine, { backgroundColor: C.border }]} />
-            </View>
-            <Pressable
-              onPress={handleDemoLogin}
-              disabled={loading}
-              style={({ pressed }) => [{ opacity: pressed ? 0.8 : 1, width: "100%", maxWidth: 380 }]}
+        <View style={s.centerCol}>
+          <FadeInView delay={0} style={s.brandBlock}>
+            <Animated.Text
+              style={[
+                s.title,
+                {
+                  opacity: titleGlow.interpolate({
+                    inputRange: [0.35, 0.85],
+                    outputRange: [0.92, 1],
+                  }),
+                },
+              ]}
             >
-              <View style={[s.demoBtn, {
-                borderColor: isDark ? "rgba(245,158,11,0.3)" : C.warningBorder,
-                backgroundColor: isDark ? "rgba(245,158,11,0.06)" : C.warningBg,
-              }]}>
-                <Text style={{ fontSize: 14 }}>⚡</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.demoBtnTitle, { color: isDark ? "#f59e0b" : "#92400E" }]}>{t.demoLogin}</Text>
-                  <Text style={[s.demoBtnSub, { color: C.textMuted }]}>{t.demoLoginSub}</Text>
-                </View>
-              </View>
-            </Pressable>
+              Cosmic Lens
+            </Animated.Text>
+            <Text style={s.subtitle}>
+              {isHindi
+                ? "Gmail se login — OTP ki zarurat nahi"
+                : "Sign in with Gmail — no OTP needed"}
+            </Text>
+            <View style={s.trustRow}>
+              <Feather name="shield" size={11} color="#a78bfa" />
+              <Text style={s.trustText}>
+                {isHindi ? "Surakshit · Private · Vedic precision" : "Secure · Private · Vedic precision"}
+              </Text>
+            </View>
           </FadeInView>
-        )}
 
-        <FadeInView delay={360}>
-        <Text style={[s.footer, { color: C.textMuted }]}>
-          {t.termsAccept}{" "}
-          <Text style={{ color: isDark ? "#f59e0b" : "#92400E" }}>{t.termsLink}</Text>
-          {" & "}
-          <Text style={{ color: isDark ? "#f59e0b" : "#92400E" }}>{t.privacyLink}</Text>
-        </Text>
-        </FadeInView>
-      </ScrollView>
-    </CosmicBg>
+          <FadeInView delay={120} style={{ width: cardW, alignItems: "center" }}>
+            <FrostedLoginCard width={cardW}>
+              {!!error && (
+                <View style={s.errorBox}>
+                  <Feather name="alert-circle" size={13} color="#f87171" />
+                  <Text style={s.errorText}>{error}</Text>
+                </View>
+              )}
+
+              <Text style={s.note}>
+                {isHindi
+                  ? "Pehli baar sign-in par account khud ban jayega."
+                  : "Your account is created automatically on first sign-in."}
+              </Text>
+
+              <Pressable
+                onPress={handleGoogleLogin}
+                disabled={loading}
+                style={({ pressed }) => [
+                  s.googleBtnWrap,
+                  { opacity: loading ? 0.65 : pressed ? 0.9 : 1 },
+                ]}
+              >
+                <LinearGradient
+                  colors={["#ffffff", "#f8fafc"]}
+                  style={s.googleBtn}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color="#4285F4" />
+                  ) : (
+                    <>
+                      <View style={s.googleIconWrap}>
+                        <Text style={s.googleG}>G</Text>
+                      </View>
+                      <Text style={s.googleBtnText}>
+                        {isHindi ? "Google se continue karein" : "Continue with Google"}
+                      </Text>
+                    </>
+                  )}
+                </LinearGradient>
+              </Pressable>
+            </FrostedLoginCard>
+          </FadeInView>
+
+          <FadeInView delay={240} style={s.footerBlock}>
+            <View style={s.footerRule} />
+            <Text style={s.footer}>
+              {t.termsAccept}{" "}
+              <Text style={s.footerLink}>{t.termsLink}</Text>
+              {" & "}
+              <Text style={s.footerLink}>{t.privacyLink}</Text>
+            </Text>
+          </FadeInView>
+        </View>
+      </View>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
-  scroll:    { paddingHorizontal: 20, alignItems: "center", gap: 16 },
-  logoWrap:  { alignItems: "center", marginBottom: 4, gap: 8 },
-  logoCircle:{
-    width: 72, height: 72, borderRadius: 36, borderWidth: 1.5,
-    alignItems: "center", justifyContent: "center",
-    shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 8,
+  root: {
+    flex: 1,
+    backgroundColor: "#000000",
   },
-  title:    { fontSize: 26, fontFamily: "Nunito_700Bold", letterSpacing: 0.4 },
-  subtitle: { fontSize: 12, fontFamily: "Nunito_400Regular", textAlign: "center", paddingHorizontal: 24 },
-
-  card: {
-    width: "100%", maxWidth: 380, borderRadius: 24, padding: 22,
-    borderWidth: 1, gap: 14,
+  content: {
+    flex: 1,
+    zIndex: 2,
+  },
+  centerCol: {
+    flex: 1,
+    width: "100%",
+    maxWidth: 440,
+    alignSelf: "center",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 32,
+  },
+  brandBlock: {
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 8,
+  },
+  title: {
+    fontSize: 32,
+    fontFamily: "Nunito_800ExtraBold",
+    color: "#fafafa",
+    letterSpacing: 1.2,
+    textAlign: "center",
+    textShadowColor: "rgba(167,139,250,0.45)",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 18,
+  },
+  subtitle: {
+    fontSize: 14,
+    fontFamily: "Nunito_500Medium",
+    color: "rgba(226,232,240,0.82)",
+    textAlign: "center",
+    lineHeight: 21,
+    maxWidth: 320,
+    letterSpacing: 0.2,
+  },
+  trustRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginTop: 2,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(124,58,237,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(167,139,250,0.2)",
+  },
+  trustText: {
+    fontSize: 11,
+    fontFamily: "Nunito_600SemiBold",
+    color: "rgba(196,181,253,0.95)",
+    letterSpacing: 0.6,
+  },
+  cardShell: {
+    borderRadius: 28,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
     shadowColor: "#7c3aed",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.22, shadowRadius: 28, elevation: 12,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.35,
+    shadowRadius: 32,
+    elevation: 16,
   },
-  fieldLabel: { fontSize: 11, fontFamily: "Nunito_800ExtraBold", letterSpacing: 2.4 },
-
-  errorBox:  { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 4 },
-  errorText: { fontSize: 12, color: "#f87171", fontFamily: "Nunito_500Medium", flex: 1 },
-  note: { fontSize: 11, fontFamily: "Nunito_400Regular", lineHeight: 16, paddingHorizontal: 2 },
-
+  cardGlassTint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(10,6,24,0.52)",
+  },
+  cardShine: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 56,
+    zIndex: 1,
+  },
+  cardInner: {
+    paddingVertical: 30,
+    paddingHorizontal: 26,
+    gap: 20,
+    alignItems: "center",
+    zIndex: 2,
+  },
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    width: "100%",
+    paddingHorizontal: 2,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#fca5a5",
+    fontFamily: "Nunito_500Medium",
+  },
+  note: {
+    fontSize: 13,
+    fontFamily: "Nunito_400Regular",
+    color: "rgba(203,213,225,0.78)",
+    textAlign: "center",
+    lineHeight: 20,
+    paddingHorizontal: 6,
+    letterSpacing: 0.15,
+  },
+  googleBtnWrap: {
+    width: "100%",
+    alignItems: "center",
+  },
   googleBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 12, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1,
+    width: "100%",
+    maxWidth: 328,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 22,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.35)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  googleIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#4285F4",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
   googleG: {
-    fontSize: 18, fontFamily: "Nunito_700Bold", color: "#4285F4",
-    width: 24, textAlign: "center",
+    fontSize: 17,
+    fontFamily: "Nunito_800ExtraBold",
+    color: "#4285F4",
   },
   googleBtnText: {
-    fontSize: 15, fontFamily: "Nunito_700Bold", color: "#1f2937",
+    fontSize: 16,
+    fontFamily: "Nunito_700Bold",
+    color: "#0f172a",
+    letterSpacing: 0.2,
   },
-
-  demoWrap: { width: "100%", maxWidth: 380, gap: 14, alignItems: "center", marginTop: 4 },
-  divider:  { flexDirection: "row", alignItems: "center", gap: 10, width: "100%" },
-  divLine:  { flex: 1, height: 1 },
-  divText:  { fontSize: 11, fontFamily: "Nunito_500Medium" },
-  demoBtn: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    paddingHorizontal: 14, paddingVertical: 13, borderRadius: 14, borderWidth: 1,
+  footerBlock: {
+    alignItems: "center",
+    gap: 14,
+    paddingTop: 4,
+    width: "100%",
+    maxWidth: 360,
   },
-  demoBtnTitle: { fontSize: 13, fontFamily: "Nunito_700Bold" },
-  demoBtnSub:   { fontSize: 11, fontFamily: "Nunito_400Regular", marginTop: 1 },
-  footer: { fontSize: 10.5, textAlign: "center", lineHeight: 16, marginTop: 6, paddingHorizontal: 20 },
+  footerRule: {
+    width: 48,
+    height: 1,
+    backgroundColor: "rgba(167,139,250,0.35)",
+    borderRadius: 1,
+  },
+  footer: {
+    fontSize: 11.5,
+    fontFamily: "Nunito_400Regular",
+    color: "rgba(148,163,184,0.9)",
+    textAlign: "center",
+    lineHeight: 18,
+    paddingHorizontal: 20,
+    letterSpacing: 0.25,
+  },
+  footerLink: {
+    color: "#fcd34d",
+    fontFamily: "Nunito_700Bold",
+  },
 });

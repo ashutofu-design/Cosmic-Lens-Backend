@@ -13,7 +13,7 @@ Daily reset uses IST (Asia/Kolkata) so India users get a clean midnight reset.
 """
 
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from sqlalchemy import update
 from database import db
@@ -95,9 +95,12 @@ def effective_plan(user) -> str:
         return "free"
 
     now = datetime.utcnow()
+    expiry = user.plan_expiry
+    if expiry is not None and getattr(expiry, "tzinfo", None) is not None:
+        expiry = expiry.astimezone(timezone.utc).replace(tzinfo=None)
 
     # Active paid plan
-    if user.plan in ("basic", "pro", "elite") and user.plan_expiry and user.plan_expiry > now:
+    if user.plan in ("basic", "pro", "elite") and expiry and expiry > now:
         return "pro" if user.plan == "elite" else user.plan
 
     # Legacy/admin flag — treat as pro until plan field is set explicitly.

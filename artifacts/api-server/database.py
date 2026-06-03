@@ -233,6 +233,24 @@ def run_schema_migrations() -> None:
 
                 ))
 
+                conn.execute(text(
+
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS cosmo_user_id VARCHAR(16)"
+
+                ))
+
+                try:
+
+                    conn.execute(text(
+
+                        "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_cosmo_user_id ON users (cosmo_user_id)"
+
+                    ))
+
+                except Exception:
+
+                    pass
+
                 if os.environ.get("COSMIC_WIPE_USERS") == "1":
 
                     try:
@@ -379,6 +397,14 @@ def run_schema_migrations() -> None:
 
                 )
 
+                _sqlite_add_column(
+
+                    conn, "users", "cosmo_user_id",
+
+                    "ALTER TABLE users ADD COLUMN cosmo_user_id VARCHAR(16)",
+
+                )
+
             conn.commit()
 
     except Exception as e:
@@ -386,7 +412,27 @@ def run_schema_migrations() -> None:
         print(f"[DB] Migration note: {e}", flush=True)
 
 
+def ensure_user_auth_columns() -> None:
+    """Best-effort User columns for login routes (each ALTER committed separately)."""
+    url = get_database_url()
+    if "postgresql" in url:
+        statements = [
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS cosmo_user_id VARCHAR(16)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS personal_name_locked BOOLEAN NOT NULL DEFAULT FALSE",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS personal_phone_locked BOOLEAN NOT NULL DEFAULT FALSE",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS career_unlocked BOOLEAN NOT NULL DEFAULT FALSE",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_language VARCHAR(4)",
+        ]
+    else:
+        statements = []
 
+    for sql in statements:
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text(sql))
+                conn.commit()
+        except Exception as e:
+            print(f"[DB] ensure_user_auth_columns: {e}", flush=True)
 
 
 def init_db(app):
@@ -404,6 +450,14 @@ def init_db(app):
         db.create_all()
 
         run_schema_migrations()
+        try:
+            from cosmo_user_id import backfill_missing_cosmo_user_ids
+
+            n = backfill_missing_cosmo_user_ids()
+            if n:
+                print(f"[DB] Backfilled {n} cosmo_user_id(s)", flush=True)
+        except Exception as bf_exc:
+            print(f"[DB] cosmo_user_id backfill note: {bf_exc}", flush=True)
 
     db_type = "PostgreSQL" if "postgresql" in url else "SQLite"
     try:

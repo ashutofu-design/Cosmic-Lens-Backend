@@ -2464,58 +2464,11 @@ def demo_login_route():
     """Idempotent demo user — for testing only.
     Returns a real backend user with valid id + api_key so payment & quota flows work.
     """
-    from datetime import timedelta as _td
+    from demo_login_helper import perform_demo_login
 
-    from subscription_helper import subscription_status
-
-    DEMO_PHONE = "+919999000001"
     try:
-        user = User.query.filter_by(phone=DEMO_PHONE).first()
-        is_new = False
-        if not user:
-            is_new = True
-            user = User(
-                name="Demo User",
-                phone=DEMO_PHONE,
-                country_code="91",
-                api_key=secrets.token_hex(32),
-            )
-            db.session.add(user)
-        else:
-            if not user.api_key:
-                user.api_key = secrets.token_hex(32)
-            user.last_active = datetime.now(_UTC_TZ.utc).replace(tzinfo=None)
-
-        # Demo user always gets full Pro — for testing every paid feature end-to-end.
-        user.is_pro = True
-        user.plan = "pro"
-        user.plan_expiry = datetime.now(_UTC_TZ.utc).replace(tzinfo=None) + _td(
-            days=365 * 10
-        )
-        db.session.flush()
-
-        # Wipe stale profiles in a savepoint — never rollback the whole login transaction.
-        try:
-            with db.session.begin_nested():
-                Profile.query.filter_by(user_id=user.id).delete(
-                    synchronize_session=False,
-                )
-        except Exception:
-            app.logger.exception("[demo-login] profile wipe failed (non-fatal)")
-
-        try:
-            from cosmo_user_id import ensure_user_cosmo_id
-
-            ensure_user_cosmo_id(user)
-        except Exception:
-            app.logger.exception("[demo-login] cosmo_user_id assign failed (non-fatal)")
-
-        db.session.commit()
-        payload = user.to_dict()
-        payload["subscription"] = subscription_status(user)
-        payload["is_new_user"] = is_new
-        payload["ok"] = True
-        return jsonify(payload), 200
+        payload, status = perform_demo_login()
+        return jsonify(payload), status
     except Exception as exc:
         db.session.rollback()
         app.logger.exception("[demo-login] failed: %s", exc)
@@ -2525,6 +2478,7 @@ def demo_login_route():
                     "ok": False,
                     "error": "demo_login_failed",
                     "message": "Demo login could not complete. Please try again.",
+                    "detail": str(exc)[:500],
                 }
             ),
             500,

@@ -5,7 +5,19 @@ To switch databases: just change DATABASE_URL environment variable.
 """
 
 from database import db
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utc_naive_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _as_utc_naive(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
 
 
 class User(db.Model):
@@ -80,10 +92,11 @@ class User(db.Model):
     kundli = db.relationship("Kundli", backref="user", uselist=False, cascade="all, delete-orphan")
 
     def to_dict(self):
+        expiry = _as_utc_naive(self.plan_expiry)
         plan_active = (
             self.plan != "free"
-            and self.plan_expiry is not None
-            and self.plan_expiry > datetime.utcnow()
+            and expiry is not None
+            and expiry > _utc_naive_now()
         )
         return {
             "id":           self.id,

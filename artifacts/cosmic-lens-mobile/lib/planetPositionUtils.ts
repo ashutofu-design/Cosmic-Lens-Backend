@@ -9,6 +9,11 @@ export const SIGNS_SHORT = [
   "Tula", "Vrishchik", "Dhanu", "Makar", "Kumbh", "Meen",
 ];
 
+export const SIGNS_EN = [
+  "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+  "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
+];
+
 export const EN_SIGN_TO_SHORT: Record<string, string> = {
   Aries: "Mesh", Taurus: "Vrishabh", Gemini: "Mithun", Cancer: "Kark",
   Leo: "Simha", Virgo: "Kanya", Libra: "Tula", Scorpio: "Vrishchik",
@@ -79,6 +84,36 @@ export type PlanetCardData = {
 
 export function enSignToShort(sign: string): string {
   return EN_SIGN_TO_SHORT[sign] ?? sign;
+}
+
+/** Planet Position UI — always show Western sign names. */
+export function signEnFromShort(shortOrEn: string): string {
+  const idx = SIGNS_SHORT.indexOf(shortOrEn);
+  if (idx >= 0) return SIGNS_EN[idx];
+  const enIdx = SIGNS_EN.indexOf(shortOrEn as (typeof SIGNS_EN)[number]);
+  if (enIdx >= 0) return SIGNS_EN[enIdx];
+  const mapped = EN_SIGN_TO_SHORT[shortOrEn];
+  if (mapped) {
+    const i = SIGNS_SHORT.indexOf(mapped);
+    if (i >= 0) return SIGNS_EN[i];
+  }
+  return shortOrEn;
+}
+
+export function signEnFromLon(lon: number): string {
+  return SIGNS_EN[Math.floor(lon / 30) % 12];
+}
+
+export function signStatusFromSignEn(planet: string, signShort: string): { label: string; color: string } {
+  if (EXALT[planet]?.sign === signShort) return { label: "Exalted", color: "#4ade80" };
+  if (DEBIL[planet] === signShort) return { label: "Debilitated", color: "#ef4444" };
+  if (OWN[planet]?.includes(signShort)) return { label: "Own Sign", color: "#f59e0b" };
+  return { label: "Normal", color: "#3d5a7a" };
+}
+
+export function signStatusEn(planet: string, lon: number): { label: string; color: string } {
+  const sign = SIGNS_SHORT[Math.floor(lon / 30) % 12];
+  return signStatusFromSignEn(planet, sign);
 }
 
 export function nakshatra(lon: number) {

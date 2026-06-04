@@ -31,11 +31,12 @@ import { GalaxyBackground } from "@/components/reveal/GalaxyBackground";
 const AnimatedG = Animated.createAnimatedComponent(G);
 const AnimatedLine = Animated.createAnimatedComponent(Line);
 
-/** ~9.6s cinematic — calm, mobile-first pacing */
-const DURATION_MS = 9600;
-const SKIP_AFTER_MS = 4000;
+/** ~8.8s cinematic — Reanimated UI-thread easing for smooth mobile playback */
+const DURATION_MS = 8800;
+const SKIP_AFTER_MS = 3800;
 /** Stop before exit-flash range so finale + buttons stay visible */
 const PROGRESS_END = 0.92;
+const PROGRESS_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 
 /** Rich cosmic palette — higher saturation for mobile OLED */
 const C = {
@@ -165,30 +166,27 @@ export function PostLoginReveal({ userName }: Props) {
 
     progress.value = withTiming(PROGRESS_END, {
       duration: DURATION_MS,
-      easing: Easing.bezier(0.16, 0.04, 0.12, 1),
+      easing: PROGRESS_EASING,
     }, (ok) => { if (ok) runOnJS(finishAndGo)(); });
 
-    /** One full drift cycle ~100s — planets glide very slowly */
+    /** Slow ambient drift — linear, UI thread */
     drift.value = withRepeat(
-      withTiming(1, { duration: 100000, easing: Easing.linear }),
+      withTiming(1, { duration: 90000, easing: Easing.linear }),
       -1,
       false,
     );
     twinkle.value = withRepeat(
-      withTiming(1, { duration: 2600, easing: Easing.inOut(Easing.sin) }),
+      withTiming(1, { duration: 3200, easing: Easing.inOut(Easing.sin) }),
       -1,
       true,
     );
 
     schedule(() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    }, 900);
-    schedule(() => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    }, 4200);
+    }, 800);
     schedule(() => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    }, 8200);
+    }, 7600);
 
     return () => {
       timers.forEach(clearTimeout);
@@ -208,9 +206,16 @@ export function PostLoginReveal({ userName }: Props) {
 
   const trackWidth = layout.W - 96;
 
-  const progressBarStyle = useAnimatedStyle(() => ({
-    width: interpolate(progress.value, [0, PROGRESS_END], [0, trackWidth], Extrapolation.CLAMP),
-  }));
+  const progressBarFillStyle = useAnimatedStyle(() => {
+    const p = interpolate(progress.value, [0, PROGRESS_END], [0, 1], Extrapolation.CLAMP);
+    return {
+      transform: [
+        { translateX: -trackWidth * 0.5 },
+        { scaleX: Math.max(0.001, p) },
+        { translateX: trackWidth * 0.5 },
+      ],
+    };
+  });
 
   return (
     <LayoutCtx.Provider value={layout}>
@@ -248,14 +253,16 @@ export function PostLoginReveal({ userName }: Props) {
         </Animated.View>
 
         <View style={[s.progressTrack, { bottom: insets.bottom + 42 }]}>
-          <Animated.View style={[{ height: "100%", overflow: "hidden", borderRadius: 1 }, progressBarStyle]}>
-            <LinearGradient
-              colors={[C.goldDeep, C.goldBright, C.gold]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={StyleSheet.absoluteFill}
-            />
-          </Animated.View>
+          <View style={{ width: trackWidth, height: "100%", overflow: "hidden", borderRadius: 1 }}>
+            <Animated.View style={[{ width: trackWidth, height: "100%" }, progressBarFillStyle]}>
+              <LinearGradient
+                colors={[C.goldDeep, C.goldBright, C.gold]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{ width: trackWidth, height: "100%" }}
+              />
+            </Animated.View>
+          </View>
         </View>
 
         <View style={[s.controlsLayer, { paddingBottom: insets.bottom + 14 }]} pointerEvents="box-none">
@@ -600,24 +607,24 @@ function HeadlineBlock({
   const { CY, scale, isCompact, W } = useRevealLayout();
 
   const blockStyle = useAnimatedStyle(() => {
-    const enter = interpolate(progress.value, [0.26, 0.38], [0, 1], Extrapolation.CLAMP);
+    const enter = interpolate(progress.value, [0.26, 0.42], [0, 1], Extrapolation.CLAMP);
     const dimForLogo = holdFinale.value > 0
       ? 1
-      : interpolate(progress.value, [0.8, 0.88], [1, 0.92], Extrapolation.CLAMP);
+      : interpolate(progress.value, [0.8, 0.9], [1, 0.94], Extrapolation.CLAMP);
     return {
       opacity: enter * dimForLogo,
-      transform: [{ translateY: interpolate(progress.value, [0.26, 0.4], [32, 0], Extrapolation.CLAMP) }],
+      transform: [{ translateY: interpolate(progress.value, [0.26, 0.44], [18, 0], Extrapolation.CLAMP) }],
     };
   });
 
   const meetsStyle = useAnimatedStyle(() => {
-    const enter = interpolate(progress.value, [0.38, 0.5], [0, 1], Extrapolation.CLAMP);
+    const enter = interpolate(progress.value, [0.38, 0.54], [0, 1], Extrapolation.CLAMP);
     const dimForLogo = holdFinale.value > 0
       ? 1
-      : interpolate(progress.value, [0.8, 0.88], [1, 0.92], Extrapolation.CLAMP);
+      : interpolate(progress.value, [0.8, 0.9], [1, 0.94], Extrapolation.CLAMP);
     return {
       opacity: enter * dimForLogo,
-      transform: [{ translateY: interpolate(progress.value, [0.38, 0.52], [20, 0], Extrapolation.CLAMP) }],
+      transform: [{ translateY: interpolate(progress.value, [0.38, 0.56], [14, 0], Extrapolation.CLAMP) }],
     };
   });
 
@@ -793,12 +800,12 @@ function LogoFinale({
   const logoStyle = useAnimatedStyle(() => ({
     opacity: holdFinale.value > 0
       ? 1
-      : interpolate(progress.value, [0.55, 0.65, 0.9, 0.94], [0, 1, 1, 0], Extrapolation.CLAMP),
+      : interpolate(progress.value, [0.55, 0.66, 0.9, 0.94], [0, 1, 1, 0], Extrapolation.CLAMP),
     transform: [
       {
         scale: holdFinale.value > 0
           ? 1
-          : interpolate(progress.value, [0.55, 0.68], [0.8, 1], Extrapolation.CLAMP),
+          : interpolate(progress.value, [0.55, 0.72], [0.88, 1], Extrapolation.CLAMP),
       },
     ],
   }));
@@ -806,11 +813,11 @@ function LogoFinale({
   const textStyle = useAnimatedStyle(() => ({
     opacity: holdFinale.value > 0
       ? 1
-      : interpolate(progress.value, [0.62, 0.72, 0.9, 0.94], [0, 1, 1, 0], Extrapolation.CLAMP),
+      : interpolate(progress.value, [0.62, 0.74, 0.9, 0.94], [0, 1, 1, 0], Extrapolation.CLAMP),
     transform: [{
       translateY: holdFinale.value > 0
         ? 0
-        : interpolate(progress.value, [0.62, 0.7], [12, 0], Extrapolation.CLAMP),
+        : interpolate(progress.value, [0.62, 0.74], [10, 0], Extrapolation.CLAMP),
     }],
   }));
 

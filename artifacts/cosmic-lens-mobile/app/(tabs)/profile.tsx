@@ -2,10 +2,10 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import {
-  Alert, Animated, Linking, Modal, Platform, Pressable,
-  ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, View,
+  Alert, Linking, Platform, Pressable,
+  ScrollView, StatusBar, StyleSheet, Text, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -13,13 +13,8 @@ import { CosmicBg } from "@/components/CosmicBg";
 import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC, useTheme } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
-import { INDIA_LANG_CODES, GLOBAL_LANG_CODES } from "@/lib/i18n";
+import { APP_LANG_CODES, coerceUILang, getT, type UILang } from "@/lib/i18n";
 import { useT } from "@/hooks/useT";
-import {
-  sendTestNotification,
-  setPushEnabled,
-  setupPushForUser,
-} from "@/lib/notifications";
 
 // ── Font aliases ───────────────────────────────────────────────────────────────
 const F = {
@@ -38,8 +33,6 @@ function vLangFromCode(code: string): VLang {
 }
 function getProfileLabels(t: ReturnType<typeof import('@/hooks/useT').useT>) {
   return {
-    tabIndia:    t.pr_tabIndia,
-    tabGlobal:   t.pr_tabGlobal,
     active:      t.pr_active,
     free:        t.pr_free,
     freePlan:    t.pr_freePlan,
@@ -54,37 +47,11 @@ function getProfileLabels(t: ReturnType<typeof import('@/hooks/useT').useT>) {
 // ── Languages ─────────────────────────────────────────────────────────────────
 type LangItem = { code: string; native: string; name: string };
 
-const ALL_LANG_META: LangItem[] = [
-  { code:"en",  native:"English",     name:"English"    },
-  { code:"hn",  native:"Hinglish",    name:"Hinglish"   },
-  { code:"hi",  native:"हिंदी",       name:"Hindi"      },
-  { code:"bn",  native:"বাংলা",       name:"Bengali"    },
-  { code:"mr",  native:"मराठी",       name:"Marathi"    },
-  { code:"ta",  native:"தமிழ்",       name:"Tamil"      },
-  { code:"te",  native:"తెలుగు",      name:"Telugu"     },
-  { code:"gu",  native:"ગુજરાતી",    name:"Gujarati"   },
-  { code:"kn",  native:"ಕನ್ನಡ",      name:"Kannada"    },
-  { code:"ml",  native:"മലയാളം",      name:"Malayalam"  },
-  { code:"or",  native:"ଓଡ଼ିଆ",       name:"Odia"       },
-  { code:"pa",  native:"ਪੰਜਾਬੀ",     name:"Punjabi"    },
-  { code:"as",  native:"অসমীয়া",     name:"Assamese"   },
-  { code:"zh",  native:"中文",         name:"Chinese"    },
-  { code:"es",  native:"Español",     name:"Spanish"    },
-  { code:"ar",  native:"العربية",     name:"Arabic"     },
-  { code:"fr",  native:"Français",    name:"French"     },
-  { code:"pt",  native:"Português",   name:"Portuguese" },
-  { code:"de",  native:"Deutsch",     name:"German"     },
-  { code:"ru",  native:"Русский",     name:"Russian"    },
-  { code:"ja",  native:"日本語",       name:"Japanese"   },
-  { code:"id",  native:"Indonesia",   name:"Indonesian" },
-  { code:"ko",  native:"한국어",       name:"Korean"     },
-  { code:"tr",  native:"Türkçe",      name:"Turkish"    },
+const APP_LANGS: LangItem[] = [
+  { code: "en", native: "English",  name: "English"  },
+  { code: "hn", native: "Hinglish", name: "Hinglish" },
+  { code: "hi", native: "हिंदी",    name: "Hindi"    },
 ];
-
-function getLangList(isIndia: boolean): LangItem[] {
-  const codes = isIndia ? INDIA_LANG_CODES : GLOBAL_LANG_CODES;
-  return (codes as readonly string[]).map(c => ALL_LANG_META.find(m => m.code === c)!).filter(Boolean);
-}
 
 // ── Plans ─────────────────────────────────────────────────────────────────────
 type BillingCycle = "monthly" | "yearly";
@@ -122,154 +89,92 @@ const PLANS = [
   },
 ];
 
-// ── Animated row wrapper ──────────────────────────────────────────────────────
-function PressRow({ onPress, style, children }: {
-  onPress: () => void;
-  style?: object;
-  children: React.ReactNode;
+// ── Language Picker — inline floating (same screen) ───────────────────────────
+function LangFloatingPicker({
+  open,
+  current,
+  onToggle,
+  onSelect,
+}: {
+  open: boolean;
+  current: string;
+  onToggle: () => void;
+  onSelect: (code: string) => void;
 }) {
-  const sc = useRef(new Animated.Value(1)).current;
-  function pressIn()  { Animated.spring(sc, { toValue:0.97, useNativeDriver:true, speed:40 }).start(); }
-  function pressOut() { Animated.spring(sc, { toValue:1,    useNativeDriver:true, speed:40 }).start(); }
-
-  return (
-    <Pressable onPress={onPress} onPressIn={pressIn} onPressOut={pressOut}>
-      <Animated.View style={[style, { transform:[{ scale:sc }] }]}>
-        {children}
-      </Animated.View>
-    </Pressable>
-  );
-}
-
-// ── Language Picker — Full Screen Modal ───────────────────────────────────────
-function LangSheet({ visible, current, onSelect, onClose }: {
-  visible: boolean; current: string;
-  onSelect: (code: string) => void; onClose: () => void;
-}) {
-  const insets = useSafeAreaInsets();
   const C = useC();
-  const { language, isIndia } = useUser();
-  const v: VLang = vLangFromCode(language);
   const t = useT();
-  const L = getProfileLabels(t);
-  const [query, setQuery] = useState("");
-  const [tab, setTab] = useState<"india" | "global">(isIndia ? "india" : "global");
+  const accent = C.isDark ? "#f59e0b" : "#7C3AED";
 
-  const LANGUAGES = getLangList(tab === "india");
-
-  const filtered = query.trim().length > 0
-    ? LANGUAGES.filter(l =>
-        l.name.toLowerCase().includes(query.toLowerCase()) ||
-        l.native.toLowerCase().includes(query.toLowerCase())
-      )
-    : LANGUAGES;
-
-  function handleSelect(code: string) {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  function pick(code: string) {
     onSelect(code);
-    onClose();
-  }
-
-  function switchTab(t: "india" | "global") {
-    setTab(t);
-    setQuery("");
-    Haptics.selectionAsync();
+    if (open) onToggle();
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={[lm.screen, { paddingTop: insets.top, backgroundColor: C.bg }]}>
-
-        {/* ── Header ── */}
-        <View style={[lm.header, { borderColor: C.border }]}>
-          <Pressable onPress={onClose} style={[lm.backBtn, { backgroundColor: C.bgCard2 }]}>
-            <Feather name="x" size={18} color={C.textMuted} />
-          </Pressable>
-          <View style={{ flex: 1, alignItems: "center" }}>
-            <Text style={[lm.title, { color: C.text }]}>{t.selectLanguage}</Text>
-            <Text style={[lm.subtitle, { color: C.textMuted }]}>{t.langSubtitle}</Text>
+    <View>
+      <Pressable
+        onPress={onToggle}
+        style={({ pressed }) => [st.row, pressed && { backgroundColor: C.bgCard2 }]}
+      >
+        <View style={[st.iconCircle, { backgroundColor: C.bgCard2 }]}>
+          <Feather name="globe" size={14} color={C.textMuted} />
+        </View>
+        <Text style={[st.label, { flex: 1, color: C.text }]}>{t.language}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <View style={{ alignItems: "flex-end" }}>
+            <Text style={{ color: accent, fontSize: 13, fontFamily: F.semibold }}>
+              {APP_LANGS.find(l => l.code === current)?.native ?? "English"}
+            </Text>
+            <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.medium }}>
+              {APP_LANGS.find(l => l.code === current)?.name ?? "English"}
+            </Text>
           </View>
-          <View style={{ width: 36 }} />
+          <Feather name={open ? "chevron-up" : "chevron-down"} size={14} color={C.textDim} />
         </View>
+      </Pressable>
 
-        {/* ── India / Global tab switcher ── */}
-        <View style={[lm.tabRow, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
-          <Pressable
-            style={[lm.tabBtn, {
-              backgroundColor: tab === "india" ? C.bgCard : "transparent",
-              borderColor:      tab === "india" ? "#f59e0b55" : "transparent",
-            }]}
-            onPress={() => switchTab("india")}
-          >
-            <Text style={lm.tabFlag}>🇮🇳</Text>
-            <Text style={[lm.tabLabel, { color: tab === "india" ? "#f59e0b" : C.textMuted }]}>{L.tabIndia}</Text>
-          </Pressable>
-          <Pressable
-            style={[lm.tabBtn, {
-              backgroundColor: tab === "global" ? C.bgCard : "transparent",
-              borderColor:      tab === "global" ? "#6366f155" : "transparent",
-            }]}
-            onPress={() => switchTab("global")}
-          >
-            <Text style={lm.tabFlag}>🌍</Text>
-            <Text style={[lm.tabLabel, { color: tab === "global" ? "#6366f1" : C.textMuted }]}>{L.tabGlobal}</Text>
-          </Pressable>
-        </View>
-
-        {/* ── Search bar ── */}
-        <View style={[lm.searchWrap, { backgroundColor: C.inputBg, borderColor: C.border }]}>
-          <Feather name="search" size={14} color={C.textMuted} />
-          <TextInput
-            style={[lm.searchInput, { color: C.text }]}
-            value={query}
-            onChangeText={setQuery}
-            placeholder={t.langSearch}
-            placeholderTextColor={C.textDim}
-            autoCorrect={false}
-          />
-          {query.length > 0 && (
-            <Pressable onPress={() => setQuery("")}>
-              <Feather name="x-circle" size={14} color={C.textMuted} />
-            </Pressable>
-          )}
-        </View>
-
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-
-          {/* ── Language grid ── */}
-          {filtered.length > 0 ? (
-            <View style={lm.grid}>
-              {filtered.map(l => (
-                <Pressable key={l.code}
-                  onPress={() => handleSelect(l.code)}
-                  style={[
-                    lm.tile,
-                    { backgroundColor: C.bgCard, borderColor: C.border },
-                    l.code === current && lm.tileActive,
+      {open && (
+        <View
+          style={[
+            lm.floatPanel,
+            {
+              backgroundColor: C.bgCard2,
+              borderColor: C.border,
+              shadowColor: C.isDark ? "#000" : "#7C3AED",
+            },
+          ]}
+        >
+          <Text style={[lm.floatLabel, { color: C.textMuted }]}>{t.selectLanguage}</Text>
+          <View style={lm.tabRow}>
+            {APP_LANGS.map(l => {
+              const active = l.code === current;
+              return (
+                <Pressable
+                  key={l.code}
+                  onPress={() => pick(l.code)}
+                  style={({ pressed }) => [
+                    lm.tab,
+                    {
+                      backgroundColor: active ? `${accent}18` : C.bgCard,
+                      borderColor: active ? accent : C.border,
+                    },
+                    pressed && { opacity: 0.85 },
                   ]}
                 >
-                  <Text style={[lm.tileNative, { color: C.text }, l.code === current && { color: "#f59e0b" }]}>
-                    {l.native}
-                  </Text>
-                  <Text style={[lm.tileEn, { color: C.textMuted }]}>{l.name}</Text>
-                  {l.code === current && (
-                    <View style={lm.checkBadge}>
-                      <Feather name="check" size={10} color="#020d1a" />
+                  <Text style={[lm.tabNative, { color: active ? accent : C.text }]}>{l.native}</Text>
+                  <Text style={[lm.tabEn, { color: C.textMuted }]}>{l.name}</Text>
+                  {active && (
+                    <View style={[lm.tabCheck, { backgroundColor: accent }]}>
+                      <Feather name="check" size={9} color="#020d1a" />
                     </View>
                   )}
                 </Pressable>
-              ))}
-            </View>
-          ) : (
-            <View style={{ alignItems: "center", paddingVertical: 40 }}>
-              <Text style={{ color: C.textMuted, fontFamily: F.medium, fontSize: 14 }}>
-                No language found for "{query}"
-              </Text>
-            </View>
-          )}
-        </ScrollView>
-      </View>
-    </Modal>
+              );
+            })}
+          </View>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -423,50 +328,6 @@ export default function ProfileScreen() {
   const L = getProfileLabels(t);
 
   const [showLang, setShowLang] = useState(false);
-  const [pushOn, setPushOn]     = useState(true);
-  const [pushBusy, setPushBusy] = useState(false);
-
-  // Auto-register device for push on first profile mount (silent — only asks
-  // permission once; on denial pushOn flips off).
-  React.useEffect(() => {
-    if (!user?.id) return;
-    let cancelled = false;
-    (async () => {
-      const tok = await setupPushForUser(user.id);
-      if (!cancelled && !tok) setPushOn(false);
-    })();
-    return () => { cancelled = true; };
-  }, [user?.id]);
-
-  async function handlePushToggle(next: boolean) {
-    if (!user?.id || pushBusy) return;
-    setPushBusy(true);
-    setPushOn(next);
-    try {
-      if (next) {
-        // Re-trigger permission + token register
-        const tok = await setupPushForUser(user.id);
-        if (!tok) {
-          setPushOn(false);
-          Alert.alert(t.prof_alNotifOff, t.prof_alNotifOffMsg);
-        }
-      } else {
-        await setPushEnabled(user.id, false);
-      }
-    } finally {
-      setPushBusy(false);
-    }
-  }
-
-  async function handlePushTest() {
-    if (!user?.id) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const r = await sendTestNotification(user.id);
-    const ok = r?.sent > 0;
-    Alert.alert(ok ? t.prof_alTestSent : t.prof_alSendFail,
-      ok ? t.prof_alTestSentMsg
-         : (r?.skipped || r?.error || t.prof_alTokenMissing));
-  }
 
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
@@ -484,15 +345,6 @@ export default function ProfileScreen() {
 
   return (
     <CosmicBg>
-
-      {/* Language sheet */}
-      <LangSheet
-        visible={showLang}
-        current={language}
-        onSelect={code => { setLanguage(code as "hi"); Haptics.selectionAsync(); }}
-        onClose={() => setShowLang(false)}
-      />
-
 
       <ScrollView
         contentContainerStyle={{
@@ -558,25 +410,16 @@ export default function ProfileScreen() {
               right={<Feather name="chevron-right" size={14} color={C.textDim} />}
             />
 
-            <SettingRow
-              icon="globe"
-              label={t.language}
-              onPress={() => setShowLang(true)}
-              right={
-                <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
-                  <View style={{ alignItems: "flex-end" }}>
-                    <Text style={{ color: C.isDark ? "#f59e0b" : "#7C3AED", fontSize:13, fontFamily:F.semibold }}>
-                      {ALL_LANG_META.find(l=>l.code===language)?.native ?? "English"}
-                    </Text>
-                    <Text style={{ color:C.textMuted, fontSize:10, fontFamily:F.medium }}>
-                      {ALL_LANG_META.find(l=>l.code===language)?.name ?? "English"}
-                    </Text>
-                  </View>
-                  <Feather name="chevron-right" size={14} color={C.textDim} />
-                </View>
-              }
+            <LangFloatingPicker
+              open={showLang}
+              current={language}
+              onToggle={() => setShowLang(v => !v)}
+              onSelect={code => {
+                setLanguage(code);
+                Haptics.selectionAsync().catch(() => {});
+              }}
             />
-
+            <View style={[st.divider, { backgroundColor: C.border }]} />
 
           </View>
         </View>
@@ -598,11 +441,6 @@ export default function ProfileScreen() {
               onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); Linking.openURL("mailto:support@cosmiclens.app"); }}
             />
             <SettingRow
-              icon="star"
-              label={t.settingRateUs}
-              onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-            />
-            <SettingRow
               icon="share-2"
               label={t.settingShareApp}
               onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
@@ -612,98 +450,8 @@ export default function ProfileScreen() {
         </View>
         </FadeInView>
 
-        {/* ── LEGAL ────────────────────────────────────────────────────── */}
-        <FadeInView delay={staggerDelay(3)}>
-        <View>
-          <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>{t.sectionLegal}</Text>
-          <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
-            <SettingRow
-              icon="shield"
-              label={t.settingLegal}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/legal"); }}
-              last
-            />
-          </View>
-        </View>
-        </FadeInView>
-
-        {/* ── NOTIFICATIONS ────────────────────────────────────────────── */}
-        <FadeInView delay={staggerDelay(4)}>
-        <View>
-          <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>
-            NOTIFICATIONS
-          </Text>
-          <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
-            <View style={st.notifRow}>
-              <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-                <Feather name="bell" size={18} color={C.text} style={{ marginRight: 12 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[st.notifLabel, { color: C.text }]}>Daily forecast & alerts</Text>
-                  <Text style={[st.notifSub,   { color: C.textDim }]}>
-                    Aaj ka rashifal, transit shifts, dasha changes
-                  </Text>
-                </View>
-              </View>
-              <Switch
-                value={pushOn}
-                onValueChange={handlePushToggle}
-                disabled={pushBusy}
-                trackColor={{ false: "#475569", true: "#7C3AED" }}
-                thumbColor={pushOn ? "#fbbf24" : "#cbd5e1"}
-              />
-            </View>
-            <SettingRow
-              icon="send"
-              label="Send test notification"
-              onPress={handlePushTest}
-              last
-            />
-          </View>
-        </View>
-
-        {/* ── DANGER ZONE ──────────────────────────────────────────────── */}
-        <View>
-          <Text style={[s.sectionLabel,{ color: "#ef4444" }]}>{t.sectionDanger}</Text>
-          <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: "rgba(239,68,68,0.25)" }]}>
-            <SettingRow
-              icon="trash-2"
-              label={t.settingDeleteAcc}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/delete-account"); }}
-              last
-            />
-          </View>
-        </View>
-
-        {/* ── MY DATA ──────────────────────────────────────────────────── */}
-        <View>
-          <Text style={[s.sectionLabel,{ color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>{L.myData}</Text>
-          <View style={[st.card,{ backgroundColor: C.bgCard, borderColor: C.border }]}>
-            <SettingRow
-              icon="home"
-              label="AstroVastu Pro"
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/astrovastu-pro" as any); }}
-            />
-            <SettingRow
-              icon="folder"
-              label="My Reports"
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/my-reports" as any); }}
-            />
-            <SettingRow
-              icon="book-open"
-              label={L.myKundli}
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/my-kundli"); }}
-              right={
-                <View style={{ flexDirection:"row", alignItems:"center", gap:6 }}>
-                  <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.medium }}>{profiles.filter(p => p.kundli).length} {L.saved}</Text>
-                  <Feather name="chevron-right" size={14} color={C.textDim} />
-                </View>
-              }
-              last
-            />
-          </View>
-        </View>
-
         {/* ── APP VERSION + LOGOUT ─────────────────────────────────────── */}
+        <FadeInView delay={staggerDelay(3)}>
         <View style={[s.bottomSection, { marginTop: 8 }]}>
           <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.medium }}>{t.prof_madeWith}</Text>
 
@@ -800,13 +548,6 @@ const s = StyleSheet.create({
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 const st = StyleSheet.create({
-  notifRow: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 14, paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(148,163,184,0.18)",
-  },
-  notifLabel: { fontSize: 14, fontFamily: F.semibold },
-  notifSub:   { fontSize: 11, fontFamily: F.regular, marginTop: 2 },
   card: {
     backgroundColor:"#040e20", borderRadius:16,
     borderWidth:1, borderColor:"rgba(255,255,255,0.05)", overflow:"hidden",
@@ -894,73 +635,57 @@ const pl = StyleSheet.create({
   ctaBtnText: { color:"#fff", fontSize:14, fontFamily:F.bold },
 });
 
-// ── Language modal ────────────────────────────────────────────────────────────
+// ── Language floating picker ──────────────────────────────────────────────────
 const lm = StyleSheet.create({
-  screen: {
-    flex: 1, backgroundColor: "#020d1a",
+  floatPanel: {
+    marginHorizontal: 12,
+    marginBottom: 10,
+    marginTop: 2,
+    padding: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    ...Platform.select({
+      ios: {
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.22,
+        shadowRadius: 12,
+      },
+      android: { elevation: 8 },
+      default: {},
+    }),
   },
-  header: {
-    flexDirection: "row", alignItems: "center",
-    paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderColor: "rgba(255,255,255,0.05)",
+  floatLabel: {
+    fontSize: 9,
+    fontFamily: F.bold,
+    letterSpacing: 1.4,
+    marginBottom: 8,
+    marginLeft: 2,
+    textTransform: "uppercase",
   },
-  backBtn: {
-    width: 36, height: 36, borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    alignItems: "center", justifyContent: "center",
-  },
-  title:    { color: "#dde8f4", fontSize: 16, fontFamily: F.bold },
-  subtitle: { color: "#334155", fontSize: 11, fontFamily: F.regular, marginTop: 2 },
   tabRow: {
-    flexDirection: "row", marginHorizontal: 16, marginTop: 12,
-    borderRadius: 14, borderWidth: 1, padding: 4, gap: 4,
+    flexDirection: "row",
+    gap: 8,
   },
-  tabBtn: {
-    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1,
+  tab: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    alignItems: "center",
+    position: "relative",
   },
-  tabFlag: { fontSize: 16 },
-  tabLabel: { fontSize: 13, fontFamily: F.bold },
-  searchWrap: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    backgroundColor: "#040e1e", borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)", borderRadius: 12,
-    paddingHorizontal: 14, paddingVertical: 11,
-    marginHorizontal: 16, marginVertical: 12,
-  },
-  searchInput: {
-    flex: 1, color: "#dde8f4", fontSize: 13,
-    fontFamily: F.regular, padding: 0,
-  },
-  groupHeader: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 16, paddingTop: 18, paddingBottom: 10,
-  },
-  groupDot:  { width: 6, height: 6, borderRadius: 3, backgroundColor: "#f59e0b" },
-  groupLabel: {
-    color: "#f59e0b", fontSize: 9, fontFamily: F.bold, letterSpacing: 2.2,
-  },
-  grid: {
-    flexDirection: "row", flexWrap: "wrap",
-    paddingHorizontal: 12, gap: 10,
-  },
-  tile: {
-    width: "47%", backgroundColor: "#040e1e",
-    borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
-    padding: 14, position: "relative",
-  },
-  tileActive: {
-    borderColor: "#f59e0b",
-    backgroundColor: "rgba(245,158,11,0.06)",
-  },
-  tileComingSoon: { opacity: 0.55 },
-  tileNative: { color: "#dde8f4", fontSize: 18, fontFamily: F.semibold, marginBottom: 4 },
-  tileEn:     { color: "#334155", fontSize: 11, fontFamily: F.medium },
-  checkBadge: {
-    position: "absolute", top: 8, right: 8,
-    width: 18, height: 18, borderRadius: 9,
-    backgroundColor: "#f59e0b",
-    alignItems: "center", justifyContent: "center",
+  tabNative: { fontSize: 13, fontFamily: F.semibold, marginBottom: 2 },
+  tabEn: { fontSize: 9, fontFamily: F.medium },
+  tabCheck: {
+    position: "absolute",
+    top: 5,
+    right: 5,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
 

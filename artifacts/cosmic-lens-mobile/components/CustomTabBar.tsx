@@ -2,14 +2,15 @@ import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import {
-  Animated, LayoutAnimation, Platform, Pressable,
+  Platform, Pressable,
   StyleSheet, Text, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import MoreDrawer from "@/components/MoreDrawer";
+import MoreDrawer, { type MoreDrawerHandle } from "@/components/MoreDrawer";
+import { ScalePressable } from "@/components/motion/ScalePressable";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
@@ -35,6 +36,15 @@ const TAB_META: {
 
 const BAR_H = 84;
 
+/** Inactive tab icon/label — full opacity so light (white) bar stays readable. */
+function tabBarInactiveColor(C: ReturnType<typeof useC>) {
+  return C.isDark ? C.textDim : C.textMuted;
+}
+
+function tabBarActiveColor(C: ReturnType<typeof useC>) {
+  return C.isDark ? "#FCD34D" : C.accent;
+}
+
 function TabItem({
   tab, isActive, accent, onPress, onLongPress,
 }: {
@@ -45,43 +55,24 @@ function TabItem({
   onLongPress: () => void;
 }) {
   const C = useC();
-  const scaleAnim = useRef(new Animated.Value(isActive ? 1.08 : 1)).current;
-  const glowAnim = useRef(new Animated.Value(isActive ? 1 : 0)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: isActive ? 1.08 : 1,
-        useNativeDriver: true,
-        speed: 24,
-        bounciness: isActive ? 8 : 3,
-      }),
-      Animated.timing(glowAnim, {
-        toValue: isActive ? 1 : 0,
-        duration: 280,
-        useNativeDriver: false,
-      }),
-    ]).start();
-  }, [isActive]);
-
-  const activeColor = C.isDark ? "#FCD34D" : "#7C3AED";
-  const inactiveColor = C.isDark ? "rgba(148,163,184,0.55)" : "rgba(100,116,139,0.6)";
+  const activeColor = tabBarActiveColor(C);
+  const inactiveColor = tabBarInactiveColor(C);
 
   if (isActive) {
     return (
       <Pressable
-        style={({ pressed }) => [styles.tabBtn, { flex: 1.9, minWidth: 0 }, pressed && { opacity: 0.75 }]}
+        style={({ pressed }) => [styles.tabBtn, { flex: 1.9, minWidth: 0 }, pressed && { opacity: 0.82 }]}
         onPress={onPress}
         onLongPress={onLongPress}
       >
-        <Animated.View
+        <View
           style={[
             styles.pillGlow,
             {
               backgroundColor: C.isDark ? `${accent}12` : `${accent}14`,
               shadowColor: accent,
-              shadowOpacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0, C.isDark ? 0.6 : 0.4] }),
-              shadowRadius: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0, C.isDark ? 14 : 18] }),
+              shadowOpacity: C.isDark ? 0.45 : 0.28,
+              shadowRadius: C.isDark ? 10 : 12,
             },
           ]}
         >
@@ -93,11 +84,12 @@ function TabItem({
             }
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.pillGradient}
+            style={[
+              styles.pillGradient,
+              { borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(109,93,246,0.22)" },
+            ]}
           >
-            <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-              <Feather name={tab.icon as any} size={19} color={activeColor} />
-            </Animated.View>
+            <Feather name={tab.icon as any} size={19} color={activeColor} />
             {tab.dot && (
               <View style={[styles.chipDot, { borderColor: C.isDark ? "#0B1220" : "#fff" }]} />
             )}
@@ -108,7 +100,7 @@ function TabItem({
               {tab.label}
             </Text>
           </LinearGradient>
-        </Animated.View>
+        </View>
       </Pressable>
     );
   }
@@ -128,7 +120,14 @@ function TabItem({
         </View>
         <Text
           numberOfLines={1}
-          style={[styles.inactiveLabel, { color: inactiveColor, fontFamily: "Nunito_500Medium" }]}
+          style={[
+            styles.inactiveLabel,
+            {
+              color: inactiveColor,
+              fontFamily: C.isDark ? "Nunito_500Medium" : "Nunito_600SemiBold",
+              fontSize: C.isDark ? 9.5 : 10,
+            },
+          ]}
         >
           {tab.label}
         </Text>
@@ -142,42 +141,40 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
   const C = useC();
   const { language } = useUser();
   const [showMore, setStateShowMore] = useState(false);
+  const moreDrawerRef = useRef<MoreDrawerHandle>(null);
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const t    = getT(language);
   const TABS = TAB_META.map(tab => ({ ...tab, label: t[tab.labelKey] }));
-  const accent = C.isDark ? "#f59e0b" : "#7C3AED";
+  const accent = C.isDark ? "#f59e0b" : C.accent;
 
   const gradientTopColors: [string, string, string] = C.isDark
     ? ["#f59e0b88", "#8B5CF655", "#f59e0b44"]
     : ["#7C3AED55", "#6D5DF644", "#7C3AED55"];
 
-  function triggerLayoutAnim() {
-    if (Platform.OS !== "web") {
-      LayoutAnimation.configureNext({
-        duration: 220,
-        update: { type: LayoutAnimation.Types.spring, springDamping: 0.75 },
-        create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.scaleX },
-      });
-    }
-  }
-
-  const barBg = C.isDark ? "rgba(8,16,32,0.95)" : "rgba(255,255,255,0.94)";
+  const barBg = C.isDark ? "rgba(8,16,32,0.95)" : C.navBg;
   const blurTint = C.isDark ? "dark" : "light";
+  const useBlur = Platform.OS === "ios";
 
   return (
     <>
-      <MoreDrawer visible={showMore} onClose={() => setStateShowMore(false)} />
+      <MoreDrawer
+        ref={moreDrawerRef}
+        visible={showMore}
+        onClose={() => setStateShowMore(false)}
+      />
       <View
         style={[
           styles.barOuter,
           {
             paddingBottom: botPad,
             height: BAR_H + botPad,
-            shadowColor: C.isDark ? "#000" : "rgba(80,60,140,0.25)",
+            borderTopWidth: 1,
+            borderTopColor: C.isDark ? "rgba(255,255,255,0.08)" : C.navBorder,
+            shadowColor: C.isDark ? "#000" : "rgba(15,23,42,0.18)",
             shadowOffset: { width: 0, height: C.isDark ? -2 : -4 },
-            shadowOpacity: C.isDark ? 0.3 : 0.2,
-            shadowRadius: C.isDark ? 8 : 16,
+            shadowOpacity: C.isDark ? 0.3 : 0.28,
+            shadowRadius: C.isDark ? 8 : 12,
             elevation: C.isDark ? 10 : 15,
           },
         ]}
@@ -189,7 +186,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
           style={styles.topGlowLine}
         />
 
-        {Platform.OS !== "web" ? (
+        {useBlur ? (
           <BlurView
             intensity={C.isDark ? 45 : 70}
             tint={blurTint}
@@ -216,8 +213,9 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
                     type: "tabPress", target: route.key, canPreventDefault: true,
                   });
                   if (!isActive && !event.defaultPrevented) {
-                    triggerLayoutAnim();
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    if (Platform.OS !== "web") {
+                      Haptics.selectionAsync().catch(() => {});
+                    }
                     navigation.navigate(route.name);
                   }
                 }}
@@ -228,31 +226,91 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
             );
           })}
 
-          <MoreTabButton onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setStateShowMore(true);
-          }} />
+          <MoreTabButton
+            isOpen={showMore}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              if (showMore) {
+                moreDrawerRef.current?.close();
+              } else {
+                setStateShowMore(true);
+              }
+            }}
+          />
         </View>
       </View>
     </>
   );
 }
 
-function MoreTabButton({ onPress }: { onPress: () => void }) {
+function MoreTabButton({ onPress, isOpen }: { onPress: () => void; isOpen: boolean }) {
   const C = useC();
-  const inactiveColor = C.isDark ? "rgba(148,163,184,0.55)" : "rgba(100,116,139,0.6)";
+  const inactiveColor = tabBarInactiveColor(C);
+  const activeColor = tabBarActiveColor(C);
+  const accent = C.isDark ? "#f59e0b" : C.accent;
+
+  if (isOpen) {
+    return (
+      <ScalePressable
+        haptic="none"
+        onPress={onPress}
+        style={[styles.tabBtn, { flex: 1.9, minWidth: 0 }]}
+      >
+        <View
+          style={[
+            styles.pillGlow,
+            {
+              backgroundColor: C.isDark ? `${accent}12` : `${accent}14`,
+              shadowColor: accent,
+              shadowOpacity: C.isDark ? 0.45 : 0.28,
+              shadowRadius: C.isDark ? 10 : 12,
+            },
+          ]}
+        >
+          <LinearGradient
+            colors={
+              C.isDark
+                ? [`${accent}30`, `${accent}12`]
+                : [`${accent}22`, `${accent}10`]
+            }
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[
+              styles.pillGradient,
+              { borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(109,93,246,0.22)" },
+            ]}
+          >
+            <Feather name="grid" size={19} color={activeColor} />
+            <Text
+              numberOfLines={1}
+              style={[styles.chipLabel, { color: activeColor, fontFamily: "Nunito_700Bold" }]}
+            >
+              More
+            </Text>
+          </LinearGradient>
+        </View>
+      </ScalePressable>
+    );
+  }
+
   return (
-    <Pressable
-      style={({ pressed }) => [styles.tabBtn, { flex: 1, minWidth: 0 }, pressed && { opacity: 0.5 }]}
+    <ScalePressable
+      haptic="none"
       onPress={onPress}
+      style={[styles.tabBtn, { flex: 1, minWidth: 0 }]}
     >
       <View style={styles.inactiveWrap}>
         <Feather name="grid" size={20} color={inactiveColor} />
-        <Text style={[styles.inactiveLabel, { color: inactiveColor, fontFamily: "Nunito_500Medium" }]}>
+        <Text
+          style={[
+            styles.inactiveLabel,
+            { color: inactiveColor, fontFamily: "Nunito_600SemiBold", fontSize: C.isDark ? 9.5 : 10 },
+          ]}
+        >
           More
         </Text>
       </View>
-    </Pressable>
+    </ScalePressable>
   );
 }
 
@@ -295,7 +353,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "transparent",
   },
   chipLabel: {
     fontSize: 11.5,

@@ -10,28 +10,29 @@ import {
   StyleSheet,
   Text,
   View,
+  type TextStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
+import { uiDateLocale } from "@/lib/i18n";
 import { useUser } from "@/context/UserContext";
 import {
   fetchDailyMuhurat,
   fetchEkadashiSchedule,
-  fetchGochar,
-  fetchMarriageDates,
+  fetchPanchangVivahDates,
   fetchRealPanchang,
   fetchTarabalaChandrabala,
   type DailyMuhurat,
   type EkadashiSchedule,
-  type GocharResponse,
-  type MarriageDatesScan,
   type RealPanchang,
   type TarabalaStrength,
+  type VivahMuhuratDay,
 } from "@/lib/panchangAPI";
 import { FESTIVALS_BY_YEAR, type Festival } from "@/data/festivals10y";
+import { useScreenLayout, type ScreenLayout } from "@/lib/screenLayout";
 
 const NAK_NORMALIZE: Record<string, string> = {
   "P.Phalguni": "Purva Phalguni", "U.Phalguni": "Uttara Phalguni",
@@ -51,14 +52,10 @@ const F = {
   medium: "Nunito_500Medium", regular: "Nunito_400Regular",
 };
 
-const TABS = ["Aaj", "Muhurat", "Gochar", "Vrat", "Vivah"] as const;
-type TabId = (typeof TABS)[number];
+const TAB_IDS = ["Aaj", "Muhurat", "Vrat", "Vivah"] as const;
+type TabId = (typeof TAB_IDS)[number];
 
-const GOCHAR_ORDER = ["sun", "moon", "mars", "mercury", "jupiter", "venus", "saturn", "rahu", "ketu"];
-const GOCHAR_HI: Record<string, string> = {
-  sun: "Surya", moon: "Chandra", mars: "Mangal", mercury: "Budh",
-  jupiter: "Guru", venus: "Shukra", saturn: "Shani", rahu: "Rahu", ketu: "Ketu",
-};
+type AuspiciousBandKey = "excellent" | "good" | "mixed" | "caution";
 
 function getPanchang(date: Date) {
   const TITHIS = ["Pratipada","Dwitiya","Tritiya","Chaturthi","Panchami","Shashthi","Saptami","Ashtami","Navami","Dashami","Ekadashi","Dwadashi","Trayodashi","Chaturdashi","Purnima/Amavasya"];
@@ -95,28 +92,35 @@ function getAuspiciousScore(p: { tithi: string; nakshatra: string; yoga: string;
   const fest = p.iso ? festivalOn(p.iso) : undefined;
   if (fest?.major) score += 25;
   score = Math.max(8, Math.min(98, score));
-  let band: string, color: string, emoji: string;
-  if (score >= 80) { band = "Bahut Shubh"; color = "#22c55e"; emoji = "🌟"; }
-  else if (score >= 65) { band = "Shubh"; color = "#84cc16"; emoji = "✨"; }
-  else if (score >= 35) { band = "Mishrit"; color = "#f59e0b"; emoji = "⚖️"; }
-  else { band = "Asubh"; color = "#ef4444"; emoji = "⚠️"; }
-  return { score, band, color, emoji, festival: fest };
+  let bandKey: AuspiciousBandKey, color: string, emoji: string;
+  if (score >= 80) { bandKey = "excellent"; color = "#22c55e"; emoji = "🌟"; }
+  else if (score >= 65) { bandKey = "good"; color = "#84cc16"; emoji = "✨"; }
+  else if (score >= 35) { bandKey = "mixed"; color = "#f59e0b"; emoji = "⚖️"; }
+  else { bandKey = "caution"; color = "#ef4444"; emoji = "⚠️"; }
+  return { score, bandKey, color, emoji, festival: fest };
 }
 
-function formatToday(iso: string) {
-  return new Date(iso + "T12:00:00").toLocaleDateString("hi-IN", {
+function formatToday(iso: string, locale: string) {
+  return new Date(iso + "T12:00:00").toLocaleDateString(locale, {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
 }
 
-function InfoRow({ label, value, emoji, border }: { label: string; value: string; emoji: string; border: string }) {
+function InfoRow({
+  label, value, emoji, border, rowValStyle,
+}: {
+  label: string; value: string; emoji: string; border: string; rowValStyle?: TextStyle;
+}) {
   const C = useC();
+  const { rs } = useScreenLayout();
   return (
-    <View style={[pr.row, { borderBottomColor: border }]}>
-      <Text style={{ fontSize: 20 }}>{emoji}</Text>
-      <View style={{ flex: 1 }}>
-        <Text style={[pr.rowLabel, { color: C.textMuted }]}>{label}</Text>
-        <Text style={[pr.rowVal, { color: C.text }]}>{value}</Text>
+    <View style={[pr.row, { borderBottomColor: border, paddingVertical: rs(10) }]}>
+      <Text style={{ fontSize: rs(18) }}>{emoji}</Text>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[pr.rowLabel, { color: C.textMuted, fontSize: rs(10) }]}>{label}</Text>
+        <Text style={[pr.rowVal, { color: C.text, fontSize: rs(15), flexShrink: 1 }, rowValStyle]} numberOfLines={2}>
+          {value}
+        </Text>
       </View>
     </View>
   );
@@ -124,12 +128,16 @@ function InfoRow({ label, value, emoji, border }: { label: string; value: string
 
 function MuhuratLine({ label, period, danger }: { label: string; period: { start: string; end: string }; danger?: boolean }) {
   const C = useC();
+  const { rs } = useScreenLayout();
   return (
-    <View style={[pr.row, { borderBottomColor: C.border3 }]}>
-      <Text style={{ fontSize: 18 }}>{danger ? "⛔" : "🕐"}</Text>
-      <View style={{ flex: 1 }}>
-        <Text style={[pr.rowLabel, { color: C.textMuted }]}>{label}</Text>
-        <Text style={[pr.rowVal, { color: danger ? "#ef4444" : C.text }]}>
+    <View style={[pr.row, { borderBottomColor: C.border3, paddingVertical: rs(10) }]}>
+      <Text style={{ fontSize: rs(16) }}>{danger ? "⛔" : "🕐"}</Text>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[pr.rowLabel, { color: C.textMuted, fontSize: rs(10) }]}>{label}</Text>
+        <Text
+          style={[pr.rowVal, { color: danger ? "#ef4444" : C.text, fontSize: rs(14), flexShrink: 1 }]}
+          numberOfLines={2}
+        >
           {period.start} – {period.end}
         </Text>
       </View>
@@ -141,9 +149,32 @@ export default function PanchangScreen() {
   const C = useC();
   const t = useT();
   const insets = useSafeAreaInsets();
+  const L = useScreenLayout();
+  const sty = useMemo(() => makeStyles(L), [L.width, L.height, L.compact, L.narrow]);
   const [tab, setTab] = useState<TabId>("Aaj");
-
-  const { primaryProfile } = useUser() as any;
+  const dateLocale = useMemo(() => uiDateLocale(t.lang), [t.lang]);
+  const tabs = useMemo(
+    () => [
+      { id: "Aaj" as TabId, label: t.pn_tabToday },
+      { id: "Muhurat" as TabId, label: t.pn_tabMuhurat },
+      { id: "Vrat" as TabId, label: t.pn_tabVrat },
+      { id: "Vivah" as TabId, label: t.pn_tabVivah },
+    ],
+    [t],
+  );
+  const bandLabels = useMemo(
+    () => ({
+      excellent: t.pn_bandExcellent,
+      good: t.pn_bandGood,
+      mixed: t.pn_bandMixed,
+      caution: t.pn_bandCaution,
+    }),
+    [t],
+  );
+  const { primaryProfile, profiles } = useUser() as {
+    primaryProfile?: { id?: string; birthData?: { lat?: number; lon?: number; tz?: number }; kundli?: { moonSign?: string; nakshatra?: string } };
+    profiles?: { id?: string; kundli?: { moonSign?: string; nakshatra?: string } }[];
+  };
   const bd = primaryProfile?.birthData ?? null;
   const kundli = primaryProfile?.kundli ?? null;
   const userLat = bd?.lat ?? 28.6139;
@@ -151,6 +182,15 @@ export default function PanchangScreen() {
   const userTz = bd?.tz ?? 5.5;
   const natalMoon = kundli?.moonSign as string | undefined;
   const natalNak = kundli?.nakshatra as string | undefined;
+  const partnerProfile = useMemo(
+    () => (profiles ?? []).find((p) => p.id !== primaryProfile?.id && p.kundli?.nakshatra),
+    [profiles, primaryProfile?.id],
+  );
+  const coupleNaks = useMemo(() => {
+    const brideNak = natalNak;
+    const groomNak = partnerProfile?.kundli?.nakshatra as string | undefined;
+    return { brideNak, groomNak, brideMoon: natalMoon, groomMoon: partnerProfile?.kundli?.moonSign as string | undefined };
+  }, [natalNak, natalMoon, partnerProfile]);
 
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
   const todayIso = useMemo(() => {
@@ -161,8 +201,6 @@ export default function PanchangScreen() {
   const [real, setReal] = useState<RealPanchang | null>(null);
   const [muhurat, setMuhurat] = useState<DailyMuhurat | null>(null);
   const [strength, setStrength] = useState<TarabalaStrength | null>(null);
-  const [gochar, setGochar] = useState<GocharResponse | null>(null);
-  const [gocharErr, setGocharErr] = useState<string | null>(null);
   const [ekadashi, setEkadashi] = useState<EkadashiSchedule | null>(null);
   const [ekadashiLoading, setEkadashiLoading] = useState(false);
   const defaultMonthKey = useMemo(
@@ -170,7 +208,9 @@ export default function PanchangScreen() {
     [today],
   );
   const [selectedMonthKey, setSelectedMonthKey] = useState(defaultMonthKey);
-  const [vivah, setVivah] = useState<MarriageDatesScan["dates"]>([]);
+  const [vivah, setVivah] = useState<VivahMuhuratDay[]>([]);
+  const [vivahLoading, setVivahLoading] = useState(false);
+  const [vivahProgress, setVivahProgress] = useState({ y: 0, t: 5 });
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const seq = useRef(0);
@@ -187,18 +227,10 @@ export default function PanchangScreen() {
         if (id !== seq.current) return;
         setReal(d);
         if (d.muhurat_detail) setMuhurat(d.muhurat_detail);
-        if (d.gochar) { setGochar(d.gochar); setGocharErr(null); }
       }),
       fetchDailyMuhurat({ date: today, ...base })
         .then((d) => { if (id === seq.current) setMuhurat(d); })
         .catch(() => { /* fallback: muhurat_detail from /api/panchang */ }),
-      fetchGochar(base)
-        .then((d) => { if (id === seq.current) { setGochar(d); setGocharErr(null); } })
-        .catch((e) => {
-          if (id !== seq.current) return;
-          const msg = String((e as Error)?.message || e);
-          setGocharErr(msg.includes("404") ? "deploy" : msg);
-        }),
       (async () => {
         setEkadashiLoading(true);
         try {
@@ -219,8 +251,35 @@ export default function PanchangScreen() {
           if (id === seq.current) setEkadashiLoading(false);
         }
       })(),
-      fetchMarriageDates({ fromDate: today, years: 5, tz: userTz, signal: ctrl.signal })
-        .then((r) => { if (id === seq.current) setVivah(r.dates || []); }),
+      (async () => {
+        setVivahLoading(true);
+        try {
+          const r = await fetchPanchangVivahDates({
+            fromDate: today,
+            years: 5,
+            lat: userLat,
+            lng: userLng,
+            tz: userTz,
+            brideNak: coupleNaks.brideNak,
+            groomNak: coupleNaks.groomNak,
+            brideMoonRashi: coupleNaks.brideMoon,
+            groomMoonRashi: coupleNaks.groomMoon,
+            signal: ctrl.signal,
+            onProgress: (y, t) => {
+              if (id === seq.current) setVivahProgress({ y, t });
+            },
+          });
+          if (id === seq.current) {
+            setVivah(r.dates);
+            setVivahLoading(false);
+          }
+        } catch {
+          if (id === seq.current) {
+            setVivah([]);
+            setVivahLoading(false);
+          }
+        }
+      })(),
     ];
 
     if (natalMoon && natalNak) {
@@ -239,13 +298,13 @@ export default function PanchangScreen() {
       if (id !== seq.current) return;
       const failed = results.filter((r) => r.status === "rejected");
       if (failed.length === results.length) {
-        setErr("Panchang load nahi hua — server check karein");
+        setErr(t.pn_loadFail);
       }
       setLoading(false);
     });
 
     return () => ctrl.abort();
-  }, [today, todayIso, userLat, userLng, userTz, natalMoon, natalNak, defaultMonthKey]);
+  }, [today, todayIso, userLat, userLng, userTz, natalMoon, natalNak, defaultMonthKey, coupleNaks, t.pn_loadFail]);
 
   const localPanchang = useMemo(() => getPanchang(today), [today]);
   const panchang = useMemo(() => {
@@ -275,96 +334,114 @@ export default function PanchangScreen() {
   );
 
   const vivahByMonth = useMemo(() => {
-    const byMonth: Record<string, MarriageDatesScan["dates"]> = {};
+    const byMonth: Record<string, VivahMuhuratDay[]> = {};
     for (const item of vivah) {
-      const m = new Date(item.date + "T12:00:00").toLocaleString("hi-IN", { month: "long", year: "numeric" });
+      const m = new Date(item.date + "T12:00:00").toLocaleString(dateLocale, { month: "long", year: "numeric" });
       (byMonth[m] = byMonth[m] || []).push(item);
     }
     return Object.entries(byMonth);
-  }, [vivah]);
+  }, [vivah, dateLocale]);
 
-  const dateStr = formatToday(todayIso);
+  const dateStr = formatToday(todayIso, dateLocale);
+  const auspiciousBand = bandLabels[auspicious.bandKey];
+  const selectedMonthTitle = useMemo(() => {
+    if (!selectedEkadashiMonth) return "";
+    return new Date(selectedEkadashiMonth.year, selectedEkadashiMonth.month - 1, 1)
+      .toLocaleDateString(dateLocale, { month: "long", year: "numeric" })
+      .toUpperCase();
+  }, [selectedEkadashiMonth, dateLocale]);
 
   return (
-    <View style={{ flex: 1 }}>
-      <CosmicBg />
-      <View style={[s.topBar, { paddingTop: insets.top + 10 }]}>
-        <Pressable onPress={() => router.back()} style={s.backBtn}>
-          <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={C.text} />
+    <CosmicBg>
+      <View style={[sty.topBar, { paddingTop: insets.top + L.rs(8) }]}>
+        <Pressable onPress={() => router.back()} style={sty.backBtn}>
+          <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={L.rs(20)} color={C.text} />
         </Pressable>
-        <View style={{ flex: 1 }}>
-          <Text style={[s.title, { color: C.text }]}>{t.panchangTitle}</Text>
-          <Text style={[s.sub, { color: C.textMuted }]} numberOfLines={1}>{dateStr}</Text>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={[sty.title, { color: C.text }]} numberOfLines={1}>{t.panchangTitle}</Text>
+          <Text style={[sty.sub, { color: C.textMuted }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+            {dateStr}
+          </Text>
         </View>
-        <View style={{ width: 36 }} />
+        <View style={{ width: L.rs(36) }} />
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}
-        style={{ flexGrow: 0, maxHeight: 44 }}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 10 }}>
-        {TABS.map((tb) => (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ flexGrow: 0, maxHeight: L.tabRowH + L.rs(8) }}
+        contentContainerStyle={{ paddingHorizontal: L.ph, gap: L.rs(6), paddingBottom: L.rs(6) }}
+      >
+        {tabs.map((tb) => (
           <Pressable
-            key={tb}
-            onPress={() => { Haptics.selectionAsync(); setTab(tb); }}
-            style={[s.tab, { borderColor: C.border }, tab === tb && { backgroundColor: "#a78bfa", borderColor: "#a78bfa" }]}
+            key={tb.id}
+            onPress={() => { Haptics.selectionAsync(); setTab(tb.id); }}
+            style={[sty.tab, { borderColor: C.border }, tab === tb.id && { backgroundColor: "#a78bfa", borderColor: "#a78bfa" }]}
           >
-            <Text style={[s.tabText, { color: tab === tb ? "#fff" : C.textMuted }]}>{tb}</Text>
+            <Text
+              style={[sty.tabText, { color: tab === tb.id ? "#fff" : C.textMuted }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit={L.compact}
+              minimumFontScale={0.8}
+            >
+              {tb.label}
+            </Text>
           </Pressable>
         ))}
       </ScrollView>
 
+      <View style={{ flex: 1, minHeight: 0 }}>
       {loading && tab === "Aaj" ? (
-        <View style={s.centerLoad}>
+        <View style={[sty.centerLoad, { flex: 1 }]}>
           <ActivityIndicator color="#a78bfa" size="large" />
-          <Text style={[s.loadingTxt, { color: C.textMuted }]}>Panchang load ho raha hai…</Text>
+          <Text style={[sty.loadingTxt, { color: C.textMuted }]}>{t.pn_loadPanchang}</Text>
         </View>
       ) : (
         <ScrollView
+          style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 100, gap: 14 }}
+          contentContainerStyle={{ paddingHorizontal: L.ph, paddingBottom: L.padBottom, gap: L.gap, flexGrow: 1 }}
         >
           {err && tab === "Aaj" ? (
-            <Text style={[s.hint, { color: "#f59e0b", textAlign: "center" }]}>{err}</Text>
+            <Text style={[sty.hint, { color: "#f59e0b", textAlign: "center" }]}>{err}</Text>
           ) : null}
 
           {/* ── AAJ ── */}
           {tab === "Aaj" && (
             <>
-              <View style={[s.auspCard, { backgroundColor: C.bgCard, borderColor: auspicious.color + "55" }]}>
-                <Text style={[s.sectionLbl, { color: C.textMuted }]}>AAJ KI SHUBHATA</Text>
-                <View style={s.auspHeader}>
-                  <Text style={[s.auspBand, { color: auspicious.color }]}>
-                    {auspicious.emoji} {auspicious.band}
+              <View style={[sty.auspCard, { backgroundColor: C.bgCard, borderColor: auspicious.color + "55" }]}>
+                <Text style={[sty.sectionLbl, { color: C.textMuted }]}>{t.pn_auspicious}</Text>
+                <View style={sty.auspHeader}>
+                  <Text style={[sty.auspBand, { color: auspicious.color, flex: 1, flexShrink: 1 }]} numberOfLines={2}>
+                    {auspicious.emoji} {auspiciousBand}
                   </Text>
-                  <View style={[s.auspScoreCircle, { borderColor: auspicious.color }]}>
-                    <Text style={[s.auspScoreNum, { color: auspicious.color }]}>{auspicious.score}</Text>
-                    <Text style={[s.auspScorePct, { color: auspicious.color }]}>%</Text>
+                  <View style={[sty.auspScoreCircle, { borderColor: auspicious.color }]}>
+                    <Text style={[sty.auspScoreNum, { color: auspicious.color }]}>{auspicious.score}</Text>
+                    <Text style={[sty.auspScorePct, { color: auspicious.color }]}>%</Text>
                   </View>
                 </View>
-                <View style={[s.auspBarBg, { backgroundColor: C.isDark ? "#1e293b" : "#e5e7eb" }]}>
-                  <View style={[s.auspBarFg, { width: `${auspicious.score}%`, backgroundColor: auspicious.color }]} />
+                <View style={[sty.auspBarBg, { backgroundColor: C.isDark ? "#1e293b" : "#e5e7eb" }]}>
+                  <View style={[sty.auspBarFg, { width: `${auspicious.score}%`, backgroundColor: auspicious.color }]} />
                 </View>
               </View>
 
               {strength && (
-                <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border, paddingVertical: 12 }]}>
-                  <Text style={[s.sectionLbl, { color: C.textMuted, marginBottom: 8 }]}>AAPKI TARABALA / CHANDRABALA</Text>
-                  <Text style={[s.vivahDate, { color: strength.overall_ok ? "#22c55e" : "#f59e0b" }]}>
+                <View style={[sty.card, { backgroundColor: C.bgCard, borderColor: C.border, paddingVertical: L.rs(12) }]}>
+                  <Text style={[sty.sectionLbl, { color: C.textMuted, marginBottom: L.rs(8) }]}>{t.pn_tarabalaHdr}</Text>
+                  <Text style={[sty.vivahDate, { color: strength.overall_ok ? "#22c55e" : "#f59e0b" }]}>
                     {strength.strength_band} · {strength.strength_score}%
                   </Text>
-                  <Text style={[s.vivahMeta, { color: C.textMuted, marginTop: 4 }]}>
+                  <Text style={[sty.vivahMeta, { color: C.textMuted, marginTop: 4 }]} numberOfLines={3}>
                     Tarabala: {strength.tarabala.tara_name} {strength.tarabala.ok ? "✓" : "✗"}
                     {"  ·  "}Chandra: {strength.transit_moon_sign}
                   </Text>
                 </View>
               )}
               {!natalMoon && !natalNak && (
-                <Text style={[s.hint, { color: C.textMuted }]}>
-                  Tarabala ke liye profile mein kundli complete karein.
-                </Text>
+                <Text style={[sty.hint, { color: C.textMuted }]}>{t.pn_tarabalaHint}</Text>
               )}
 
-              <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <View style={[sty.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
                 <InfoRow label={t.panTithi} value={panchang.tithi} emoji="🌙" border={C.border3} />
                 <InfoRow label={t.panNakshatra} value={panchang.nakshatra} emoji="⭐" border={C.border3} />
                 <InfoRow label={t.panYoga} value={panchang.yoga} emoji="🔮" border={C.border3} />
@@ -384,11 +461,11 @@ export default function PanchangScreen() {
               </View>
 
               {todayEkadashi.length > 0 && (
-                <View style={[s.card, { backgroundColor: C.bgCard, borderColor: "#a78bfa55", padding: 14 }]}>
-                  <Text style={[s.sectionLbl, { color: "#a78bfa", marginBottom: 8 }]}>AAJ EKADASHI VRAT</Text>
+                <View style={[sty.card, { backgroundColor: C.bgCard, borderColor: "#a78bfa55", padding: L.rs(14) }]}>
+                  <Text style={[sty.sectionLbl, { color: "#a78bfa", marginBottom: 8 }]}>{t.pn_ekadashiTodayHdr}</Text>
                   {todayEkadashi.map((f) => (
-                    <Text key={f.date} style={[s.vivahDate, { color: C.text }]}>
-                      🪔 {f.festival_name} · {f.paksha} paksha
+                    <Text key={f.date} style={[sty.vivahDate, { color: C.text }]}>
+                      🪔 {f.festival_name} · {f.paksha} {t.pn_pakshaWord}
                     </Text>
                   ))}
                 </View>
@@ -398,17 +475,17 @@ export default function PanchangScreen() {
 
           {/* ── MUHURAT ── */}
           {tab === "Muhurat" && (
-            <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+            <View style={[sty.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
               {muhurat ? (
                 <>
-                  <MuhuratLine label="Brahma Muhurta" period={muhurat.brahma_muhurta} />
+                  <MuhuratLine label={t.pn_brahmaMuhurta} period={muhurat.brahma_muhurta} />
                   <MuhuratLine label={t.rahukaal} period={muhurat.rahu_kaal} danger />
-                  <MuhuratLine label="Gulika Kaal" period={muhurat.gulika_kaal} danger />
+                  <MuhuratLine label={t.pn_gulika} period={muhurat.gulika_kaal} danger />
                   <MuhuratLine label={t.panYamaghanta || "Yamaganda"} period={muhurat.yamaghanta} danger />
                   <View style={[pr.row, { borderBottomWidth: 0 }]}>
                     <Text style={{ fontSize: 18 }}>✨</Text>
                     <View style={{ flex: 1 }}>
-                      <Text style={[pr.rowLabel, { color: C.textMuted }]}>Abhijit Muhurat</Text>
+                      <Text style={[pr.rowLabel, { color: C.textMuted }]}>{t.pn_abhijit}</Text>
                       <Text style={[pr.rowVal, { color: "#22c55e" }]}>
                         {muhurat.abhijit_muhurat.start} – {muhurat.abhijit_muhurat.end}
                       </Text>
@@ -416,77 +493,26 @@ export default function PanchangScreen() {
                   </View>
                 </>
               ) : (
-                <Text style={[s.hint, { color: C.textMuted, padding: 16 }]}>
-                  Muhurat load nahi hua — location set karein.
-                </Text>
+                <Text style={[sty.hint, { color: C.textMuted, padding: 16 }]}>{t.pn_muhuratFail}</Text>
               )}
-              <Text style={[s.hint, { color: C.textMuted, padding: 12 }]}>
-                Sunrise/sunset se 8 hisse — aapke {userLat.toFixed(1)}°, {userLng.toFixed(1)}° par
+              <Text style={[sty.hint, { color: C.textMuted, padding: 12 }]}>
+                {t.pn_muhuratLoc} ({userLat.toFixed(1)}°, {userLng.toFixed(1)}°)
               </Text>
-            </View>
-          )}
-
-          {/* ── GOCHAR ── */}
-          {tab === "Gochar" && (
-            <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              {gochar ? (
-                GOCHAR_ORDER.map((key, i) => {
-                  const p = gochar.planets[key];
-                  if (!p) return null;
-                  const isLast = i === GOCHAR_ORDER.length - 1;
-                  return (
-                    <View
-                      key={key}
-                      style={[s.vivahRow, { borderBottomColor: C.border3 }, isLast && { borderBottomWidth: 0 }]}
-                    >
-                      <Text style={{ fontSize: 18, width: 28 }}>☉</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[s.vivahDate, { color: C.text }]}>{GOCHAR_HI[key] || key}</Text>
-                        <Text style={[s.vivahMeta, { color: C.textMuted }]}>
-                          {p.rashi} · {p.degree.toFixed(2)}°
-                          {p.is_retrograde ? " · Vakri" : ""}
-                        </Text>
-                      </View>
-                      {p.status ? (
-                        <Text style={[s.planetOk, { color: p.status === "Uday" ? "#22c55e" : "#ef4444" }]}>
-                          {p.status}
-                        </Text>
-                      ) : null}
-                    </View>
-                  );
-                })
-              ) : (
-                <View style={{ padding: 16, gap: 8 }}>
-                  <Text style={[s.emptyTitle, { color: C.text }]}>Gochar load nahi hua</Text>
-                  <Text style={[s.hint, { color: C.textMuted, lineHeight: 16 }]}>
-                    {gocharErr === "deploy"
-                      ? "Aapka server (VPS) purana hai — naya backend deploy karein. Tab /api/panchang/gochar chalega."
-                      : "API se connect nahi ho paya. Metro restart karke dubara try karein."}
-                  </Text>
-                  {real && !gochar ? (
-                    <Text style={[s.hint, { color: "#f59e0b" }]}>
-                      Purana /api/panchang chal raha hai; gochar usme bundled nahi hai abhi.
-                    </Text>
-                  ) : null}
-                </View>
-              )}
             </View>
           )}
 
           {/* ── VRAT ── */}
           {tab === "Vrat" && (
             <>
-              <Text style={[s.countLine, { color: C.textMuted }]}>
-                Ekadashi (sunrise tithi) · aaj se 5 saal · kul {ekadashi?.total ?? "—"} din
+              <Text style={[sty.countLine, { color: C.textMuted }]}>
+                {t.pn_ekadashiCount.replace("{n}", String(ekadashi?.total ?? "—"))}
               </Text>
-              <Text style={[s.hint, { color: C.textMuted, lineHeight: 14 }]}>
-                Har lunar mahine mein 2 Ekadashi hoti hai; Gregorian mahine mein kabhi 1 kabhi 2 dikhti hain.
-              </Text>
+              <Text style={[sty.hint, { color: C.textMuted, lineHeight: 14 }]}>{t.pn_ekadashiNote}</Text>
 
               {ekadashiLoading ? (
-                <View style={s.centerLoad}>
+                <View style={sty.centerLoad}>
                   <ActivityIndicator color="#a78bfa" />
-                  <Text style={[s.loadingTxt, { color: C.textMuted }]}>Ekadashi gin raha hai…</Text>
+                  <Text style={[sty.loadingTxt, { color: C.textMuted }]}>{t.pn_loadEkadashi}</Text>
                 </View>
               ) : (
                 <>
@@ -507,31 +533,31 @@ export default function PanchangScreen() {
                             setSelectedMonthKey(m.month_key);
                           }}
                           style={[
-                            s.monthChip,
+                            sty.monthChip,
                             { borderColor: C.border },
                             active && { backgroundColor: "#a78bfa", borderColor: "#a78bfa" },
                           ]}
                         >
-                          <Text style={[s.monthChipText, { color: active ? "#fff" : C.textMuted }]}>
-                            {new Date(m.year, m.month - 1, 1).toLocaleString("hi-IN", { month: "short", year: "2-digit" })}
+                          <Text style={[sty.monthChipText, { color: active ? "#fff" : C.textMuted }]}>
+                            {new Date(m.year, m.month - 1, 1).toLocaleString(dateLocale, { month: "short", year: "2-digit" })}
                           </Text>
-                          {isCurrent && <View style={s.monthChipDot} />}
+                          {isCurrent && <View style={sty.monthChipDot} />}
                         </Pressable>
                       );
                     })}
                   </ScrollView>
 
-                  <Text style={[s.monthHdr, { color: C.isDark ? "#a78bfa" : "#7c3aed" }]}>
-                    {(selectedEkadashiMonth?.label || "").toUpperCase()}
-                    {selectedMonthKey === defaultMonthKey ? " · ABHI KA MAHINA" : ""}
+                  <Text style={[sty.monthHdr, { color: C.isDark ? "#a78bfa" : "#7c3aed" }]}>
+                    {selectedMonthTitle}
+                    {selectedMonthKey === defaultMonthKey ? ` · ${t.pn_currentMonth}` : ""}
                   </Text>
 
                   {!selectedEkadashiMonth?.dates.length ? (
-                    <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                      <Text style={[s.emptyTitle, { color: C.text }]}>Is mahine koi Ekadashi nahi</Text>
+                    <View style={[sty.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+                      <Text style={[sty.emptyTitle, { color: C.text }]}>{t.pn_noEkadashiMonth}</Text>
                     </View>
                   ) : (
-                    <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+                    <View style={[sty.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
                       {selectedEkadashiMonth.dates.map((f, i) => {
                         const isToday = f.date === todayIso;
                         const isLast = i === selectedEkadashiMonth.dates.length - 1;
@@ -539,18 +565,18 @@ export default function PanchangScreen() {
                           <View
                             key={f.date}
                             style={[
-                              s.vivahRow,
+                              sty.vivahRow,
                               { borderBottomColor: C.border3, opacity: f.date < todayIso ? 0.55 : 1 },
                               isLast && { borderBottomWidth: 0 },
                             ]}
                           >
-                            <View style={{ flex: 1 }}>
-                              <Text style={[s.vivahDate, { color: C.text }]}>
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text style={[sty.vivahDate, { color: C.text }]} numberOfLines={2}>
                                 {f.display} · {f.weekday}
-                                {isToday ? "  ·  Aaj" : ""}
+                                {isToday ? `  ·  ${t.pn_tagToday}` : ""}
                               </Text>
-                              <Text style={[s.vivahMeta, { color: C.textMuted }]}>
-                                {f.festival_name} · {f.paksha} paksha
+                              <Text style={[sty.vivahMeta, { color: C.textMuted }]} numberOfLines={2}>
+                                {f.festival_name} · {f.paksha} {t.pn_pakshaWord}
                               </Text>
                             </View>
                           </View>
@@ -566,33 +592,53 @@ export default function PanchangScreen() {
           {/* ── VIVAH ── */}
           {tab === "Vivah" && (
             <>
-              <Text style={[s.countLine, { color: C.textMuted }]}>
-                {vivah.length} shubh vivah din · agle 5 saal
-              </Text>
-              {vivah.length === 0 ? (
-                <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                  <Text style={[s.emptyTitle, { color: C.text }]}>Abhi vivah dates load nahi hui</Text>
+              {vivahLoading ? (
+                <View style={sty.centerLoad}>
+                  <ActivityIndicator color="#a78bfa" />
+                  <Text style={[sty.loadingTxt, { color: C.textMuted }]}>
+                    {t.pn_vivahLoading.replace("{y}", String(vivahProgress.y)).replace("{t}", String(vivahProgress.t))}
+                  </Text>
+                </View>
+              ) : vivah.length === 0 ? (
+                <View style={[sty.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+                  <Text style={[sty.emptyTitle, { color: C.text }]}>{t.pn_vivahEmpty}</Text>
                 </View>
               ) : (
-                vivahByMonth.slice(0, 6).map(([month, items]) => (
+                vivahByMonth.map(([month, items]) => (
                   <View key={month}>
-                    <Text style={[s.monthHdr, { color: C.isDark ? "#a78bfa" : "#7c3aed" }]}>{month.toUpperCase()}</Text>
-                    <View style={[s.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                      {items.slice(0, 8).map((item, i) => (
-                        <View
-                          key={item.date}
-                          style={[s.vivahRow, { borderBottomColor: C.border3 }, i === Math.min(items.length, 8) - 1 && { borderBottomWidth: 0 }]}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={[s.vivahDate, { color: C.text }]}>
-                              {item.display || item.date} · {item.weekday || ""}
-                            </Text>
-                            <Text style={[s.vivahMeta, { color: C.textMuted }]}>
-                              {item.tithi}{item.nakshatra ? ` · ${item.nakshatra}` : ""}
-                            </Text>
+                    <Text style={[sty.monthHdr, { color: C.isDark ? "#a78bfa" : "#7c3aed" }]}>{month.toUpperCase()}</Text>
+                    <View style={[sty.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+                      {items.map((item, i) => {
+                        const win = item.best_windows?.[0];
+                        const isLast = i === items.length - 1;
+                        return (
+                          <View
+                            key={item.date}
+                            style={[
+                              sty.vivahRow,
+                              { borderBottomColor: C.border3, opacity: item.date < todayIso ? 0.55 : 1 },
+                              isLast && { borderBottomWidth: 0 },
+                            ]}
+                          >
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text style={[sty.vivahDate, { color: C.text }]} numberOfLines={2}>
+                                {item.display || item.date} · {item.weekday || ""}
+                                {item.tier === "highly_favorable" ? "  ★" : ""}
+                              </Text>
+                              <Text style={[sty.vivahMeta, { color: C.textMuted }]} numberOfLines={2}>
+                                {item.tithi}{item.nakshatra ? ` · ${item.nakshatra}` : ""}
+                                {item.confidence != null ? ` · ${item.confidence}% ${t.pn_vivahConf}` : ""}
+                              </Text>
+                              {win ? (
+                                <Text style={[sty.vivahMeta, { color: "#22c55e", marginTop: 2 }]} numberOfLines={3}>
+                                  {t.pn_vivahWindow}: {win.start} – {win.end}
+                                  {win.lagna ? ` · ${win.lagna}` : ""}
+                                </Text>
+                              ) : null}
+                            </View>
                           </View>
-                        </View>
-                      ))}
+                        );
+                      })}
                     </View>
                   </View>
                 ))
@@ -601,53 +647,59 @@ export default function PanchangScreen() {
           )}
         </ScrollView>
       )}
-    </View>
+      </View>
+    </CosmicBg>
   );
 }
 
 const pr = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderBottomWidth: 1 },
-  rowLabel: { fontSize: 10, fontFamily: "Nunito_600SemiBold", letterSpacing: 0.8 },
-  rowVal: { fontSize: 15, fontFamily: "Nunito_700Bold", marginTop: 2 },
+  row: { flexDirection: "row", alignItems: "center", gap: 12, borderBottomWidth: 1 },
+  rowLabel: { fontFamily: "Nunito_600SemiBold", letterSpacing: 0.8 },
+  rowVal: { fontFamily: "Nunito_700Bold", marginTop: 2 },
 });
 
-const s = StyleSheet.create({
-  topBar: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 20, paddingBottom: 10, gap: 8,
-  },
-  backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
-  title: { fontSize: 20, fontFamily: F.bold },
-  sub: { fontSize: 11, fontFamily: F.regular, marginTop: 2 },
-  tab: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
-  tabText: { fontSize: 12, fontFamily: F.semibold },
-  sectionLbl: { fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 },
-  auspCard: { borderRadius: 16, borderWidth: 1.5, padding: 16, gap: 10 },
-  auspHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  auspBand: { fontSize: 22, fontFamily: F.bold },
-  auspScoreCircle: {
-    width: 64, height: 64, borderRadius: 32, borderWidth: 3,
-    alignItems: "center", justifyContent: "center", flexDirection: "row",
-  },
-  auspScoreNum: { fontSize: 22, fontFamily: F.bold },
-  auspScorePct: { fontSize: 11, fontFamily: F.bold, marginTop: 4 },
-  auspBarBg: { height: 8, borderRadius: 4, overflow: "hidden" },
-  auspBarFg: { height: "100%", borderRadius: 4 },
-  card: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
-  hint: { fontSize: 10, fontFamily: F.semibold },
-  countLine: { fontSize: 11, fontFamily: F.medium },
-  monthHdr: { fontSize: 11, fontFamily: F.bold, letterSpacing: 1.5, paddingVertical: 6 },
-  vivahRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 1 },
-  vivahDate: { fontSize: 14, fontFamily: F.bold },
-  vivahMeta: { fontSize: 11, fontFamily: F.regular, marginTop: 2 },
-  planetOk: { fontSize: 10, fontFamily: F.bold },
-  emptyTitle: { fontSize: 14, fontFamily: F.semibold, padding: 14 },
-  centerLoad: { alignItems: "center", justifyContent: "center", gap: 12, paddingVertical: 28 },
-  loadingTxt: { fontSize: 13, fontFamily: F.medium },
-  monthChip: {
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, borderWidth: 1,
-    flexDirection: "row", alignItems: "center", gap: 6,
-  },
-  monthChipText: { fontSize: 12, fontFamily: F.semibold },
-  monthChipDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: "#22c55e" },
-});
+function makeStyles(L: ScreenLayout) {
+  const { rs, ph, compact } = L;
+  return StyleSheet.create({
+    topBar: {
+      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+      paddingHorizontal: ph, paddingBottom: rs(8), gap: rs(8),
+    },
+    backBtn: { width: rs(36), height: rs(36), alignItems: "center", justifyContent: "center" },
+    title: { fontSize: rs(compact ? 18 : 20), fontFamily: F.bold },
+    sub: { fontSize: rs(compact ? 10 : 11), fontFamily: F.regular, marginTop: 2 },
+    tab: { paddingHorizontal: rs(compact ? 10 : 14), paddingVertical: rs(6), borderRadius: rs(18), borderWidth: 1 },
+    tabText: { fontSize: rs(compact ? 11 : 12), fontFamily: F.semibold },
+    sectionLbl: { fontSize: rs(10), fontFamily: F.bold, letterSpacing: 1.2 },
+    auspCard: { borderRadius: rs(14), borderWidth: 1.5, padding: rs(14), gap: rs(8) },
+    auspHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: rs(8) },
+    auspBand: { fontSize: rs(compact ? 18 : 22), fontFamily: F.bold },
+    auspScoreCircle: {
+      width: rs(compact ? 54 : 64), height: rs(compact ? 54 : 64), borderRadius: rs(compact ? 27 : 32),
+      borderWidth: 3, alignItems: "center", justifyContent: "center", flexDirection: "row", flexShrink: 0,
+    },
+    auspScoreNum: { fontSize: rs(compact ? 18 : 22), fontFamily: F.bold },
+    auspScorePct: { fontSize: rs(10), fontFamily: F.bold, marginTop: 4 },
+    auspBarBg: { height: rs(8), borderRadius: rs(4), overflow: "hidden" },
+    auspBarFg: { height: "100%", borderRadius: rs(4) },
+    card: { borderRadius: rs(14), borderWidth: 1, overflow: "hidden" },
+    hint: { fontSize: rs(10), fontFamily: F.semibold },
+    countLine: { fontSize: rs(11), fontFamily: F.medium },
+    monthHdr: { fontSize: rs(11), fontFamily: F.bold, letterSpacing: 1.2, paddingVertical: rs(6) },
+    vivahRow: {
+      flexDirection: "row", alignItems: "flex-start", gap: rs(8),
+      paddingVertical: rs(10), paddingHorizontal: rs(12), borderBottomWidth: 1,
+    },
+    vivahDate: { fontSize: rs(compact ? 13 : 14), fontFamily: F.bold, flexShrink: 1 },
+    vivahMeta: { fontSize: rs(compact ? 10 : 11), fontFamily: F.regular, marginTop: 2, flexShrink: 1 },
+    emptyTitle: { fontSize: rs(14), fontFamily: F.semibold, padding: rs(14) },
+    centerLoad: { alignItems: "center", justifyContent: "center", gap: rs(10), paddingVertical: rs(24) },
+    loadingTxt: { fontSize: rs(13), fontFamily: F.medium, textAlign: "center", paddingHorizontal: ph },
+    monthChip: {
+      paddingHorizontal: rs(compact ? 10 : 12), paddingVertical: rs(7), borderRadius: rs(14), borderWidth: 1,
+      flexDirection: "row", alignItems: "center", gap: rs(5),
+    },
+    monthChipText: { fontSize: rs(compact ? 11 : 12), fontFamily: F.semibold },
+    monthChipDot: { width: rs(5), height: rs(5), borderRadius: rs(3), backgroundColor: "#22c55e" },
+  });
+}

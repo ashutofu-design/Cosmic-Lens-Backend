@@ -120,16 +120,25 @@ export async function registerForPushAsync(): Promise<string | null> {
   }
 }
 
+function authHeaders(apiKey: string): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    "X-API-Key": apiKey,
+  };
+}
+
 /** POST the device token to backend. Idempotent — safe to call on every login. */
 export async function registerTokenWithServer(
   userId: number,
   token: string,
+  apiKey: string,
   enabled = true,
 ): Promise<boolean> {
+  if (!apiKey) return false;
   try {
     const r = await apiFetch(`${API_BASE}/api/notifications/register`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(apiKey),
       body: JSON.stringify({ user_id: userId, push_token: token, enabled }),
     });
     return r.ok;
@@ -140,19 +149,27 @@ export async function registerTokenWithServer(
 }
 
 /** One-shot helper: ask permission, get token, send to server. */
-export async function setupPushForUser(userId: number): Promise<string | null> {
+export async function setupPushForUser(
+  userId: number,
+  apiKey: string,
+): Promise<string | null> {
   const token = await registerForPushAsync();
   if (!token) return null;
-  await registerTokenWithServer(userId, token);
-  return token;
+  const ok = await registerTokenWithServer(userId, token, apiKey);
+  return ok ? token : null;
 }
 
 /** Toggle push on/off without losing the token. */
-export async function setPushEnabled(userId: number, enabled: boolean): Promise<boolean> {
+export async function setPushEnabled(
+  userId: number,
+  apiKey: string,
+  enabled: boolean,
+): Promise<boolean> {
+  if (!apiKey) return false;
   try {
     const r = await apiFetch(`${API_BASE}/api/notifications/preferences`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(apiKey),
       body: JSON.stringify({ user_id: userId, enabled }),
     });
     return r.ok;
@@ -162,11 +179,12 @@ export async function setPushEnabled(userId: number, enabled: boolean): Promise<
 }
 
 /** Send a self-test notification (for Settings > "Send test"). */
-export async function sendTestNotification(userId: number): Promise<any> {
+export async function sendTestNotification(userId: number, apiKey: string): Promise<any> {
+  if (!apiKey) return { error: "missing_api_key" };
   try {
     const r = await apiFetch(`${API_BASE}/api/notifications/test`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(apiKey),
       body: JSON.stringify({ user_id: userId }),
     });
     return await r.json();

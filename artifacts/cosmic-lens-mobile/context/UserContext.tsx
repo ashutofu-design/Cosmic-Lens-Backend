@@ -50,6 +50,8 @@ export interface SubscriptionInfo {
 
 export interface AuthUser {
   id: number;
+  /** Public app id e.g. COSMO100 — assigned at signup */
+  cosmo_user_id?: string | null;
   name: string;
   /** Phone is the canonical identity since OTP migration. E.164 format e.g. "+919876543210". */
   phone?: string;
@@ -61,6 +63,10 @@ export interface AuthUser {
   plan?: "free" | "trial" | "basic" | "pro" | "elite";
   plan_expiry?: string | null;
   subscription?: SubscriptionInfo;
+  /** True after user saved display name once in Personal Details */
+  personal_name_locked?: boolean;
+  /** True after user saved mobile once in Personal Details */
+  personal_phone_locked?: boolean;
 }
 
 type LangCode = UILang;
@@ -182,6 +188,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [isLoading,   setIsLoading]    = useState(true);
   const [doshData,    _setDoshData]    = useState<DoshAnalysisResult | null>(null);
   const [doshLoading, _setDoshLoading] = useState(false);
+  const doshKundliRef = useRef<string | null>(null);
 
   // ── Load persisted data on mount ───────────────────────────────────────────
   useEffect(() => {
@@ -518,9 +525,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const setLanguage = useCallback((l: LangCode) => {
     _setLanguage(l);
     AsyncStorage.setItem(KEYS.language, JSON.stringify(l)).catch(() => {});
-    // ── RTL handling: when switching to/from an RTL language (e.g. Arabic),
-    // apply I18nManager.forceRTL and prompt user to restart the app so
-    // layout flips correctly. No-op if direction already matches.
     import("@/lib/rtl")
       .then(({ applyRTLForLang }) => applyRTLForLang(l))
       .catch((err) => console.warn("[UserContext] RTL apply failed:", err));
@@ -529,26 +533,31 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const setTodayEnergy = useCallback((e: number | null) => { _setTodayEnergy(e); }, []);
   const setMoonData    = useCallback((m: { longitude: number; rashiIndex: number } | null) => { _setMoonData(m); }, []);
 
-  // ── Auto dosh analysis when primary kundli changes ─────────────────────────
-  const doshKundliRef = useRef<string | null>(null);
+  // ── Auto dosh analysis when primary kundli or UI language changes ───────────
   useEffect(() => {
     const primaryProfile = profiles.find(p => p.id === primaryId) ?? profiles[0] ?? null;
     const kundli = primaryProfile?.kundli ?? null;
     if (!kundli?.planets?.length) { _setDoshData(null); return; }
 
-    // Fingerprint kundli to avoid redundant fetches
-    const fp = JSON.stringify(kundli.planets.map(p => `${p.name}:${p.house}`).sort());
+    const fp = JSON.stringify({
+      p: kundli.planets.map(pl => `${pl.name}:${pl.house}`).sort(),
+      lang: language,
+    });
     if (fp === doshKundliRef.current) return;
     doshKundliRef.current = fp;
 
     _setDoshLoading(true);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
+    const timer = setTimeout(() => controller.abort(), 30000);
 
     fetch(`${API_BASE}/api/dosh-analysis`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ planets: kundli.planets, nakshatra: kundli.nakshatra ?? "" }),
+      body: JSON.stringify({
+        planets: kundli.planets,
+        nakshatra: kundli.nakshatra ?? "",
+        lang: language,
+      }),
       signal: controller.signal,
     })
       .then(r => r.json())
@@ -557,7 +566,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       .finally(() => { clearTimeout(timer); _setDoshLoading(false); });
 
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [profiles, primaryId]);
+  }, [profiles, primaryId, language]);
 
   // ── Cloud sync (single-kundli legacy push for primary) ─────────────────────
   const syncKundliToCloud = useCallback(async (bd: BirthData, k: KundliData) => {

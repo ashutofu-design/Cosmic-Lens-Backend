@@ -181,8 +181,22 @@ function PersonalDetailsPanel({
   const fieldBg = C.isDark ? C.inputBg : "#F1F5F9";
   const fieldBorder = C.isDark ? C.inputBorder : "#CBD5E1";
 
+  const cosmoId = (user.cosmo_user_id || "").trim() || "—";
+
   return (
     <View style={{ width: pageW, alignSelf: "center", gap: L.rs(12), paddingTop: L.rs(4) }}>
+      <View style={[pd.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+        <Lbl text={t.pe_lblCosmoId} />
+        <View style={[pd.inputRow, { backgroundColor: fieldBg, borderColor: fieldBorder, opacity: 0.92 }]}>
+          <Feather name="hash" size={L.rs(13)} color={ac} />
+          <Text style={[pd.inputTxt, { color: C.text, flex: 1, fontFamily: F.bold, letterSpacing: 0.8 }]}>
+            {cosmoId}
+          </Text>
+          <Feather name="lock" size={L.rs(12)} color={C.textDim} />
+        </View>
+        <Text style={[pd.hint, { color: C.textDim }]}>{t.pe_cosmoIdHint}</Text>
+      </View>
+
       <View style={[pd.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
         <Lbl text={t.pe_lblGmail} />
         <View style={[pd.inputRow, { backgroundColor: fieldBg, borderColor: fieldBorder, opacity: 0.85 }]}>
@@ -278,6 +292,7 @@ function HeroCard({ profile, onView, onEdit }: {
 }) {
   const C = useC();
   const t = useT();
+  const L = useScreenLayout();
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const k = profile.kundli;
   const initials = profile.name.split(" ").map(w => w[0] ?? "").join("").slice(0, 2).toUpperCase() || "?";
@@ -285,8 +300,10 @@ function HeroCard({ profile, onView, onEdit }: {
   const [menuOpen, setMenuOpen] = useState(false);
   const astroLine = [k?.moonSign, k?.nakshatra, k?.ascendant].filter(Boolean).join(" \u2022 ") || "—";
 
+  const av = L.rs(48);
+
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+    <Animated.View style={{ transform: [{ scale: scaleAnim }], width: "100%" }}>
       <Pressable
         onPressIn={() => Animated.spring(scaleAnim, { toValue: 0.98, useNativeDriver: true, speed: 50, bounciness: 0 }).start()}
         onPressOut={() => Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 4 }).start()}
@@ -295,27 +312,37 @@ function HeroCard({ profile, onView, onEdit }: {
         <View style={[card.wrap, {
           backgroundColor: C.isDark ? "rgba(26,33,53,0.9)" : "#FFFFFF",
           borderColor: C.isDark ? `${ac}25` : `${ac}18`,
+          paddingVertical: L.rs(14),
+          paddingHorizontal: L.rs(16),
         }]}>
-          <View style={card.row}>
-            <LinearGradient colors={C.isDark ? ["#f59e0b", "#ef4444"] : ["#7C3AED", "#6D28D9"]} style={card.avatar}>
-              <Text style={card.avatarTxt}>{initials}</Text>
+          <View style={[card.row, { gap: L.rs(12) }]}>
+            <LinearGradient
+              colors={C.isDark ? ["#f59e0b", "#ef4444"] : ["#7C3AED", "#6D28D9"]}
+              style={[card.avatar, { width: av, height: av, borderRadius: av / 2 }]}
+            >
+              <Text style={[card.avatarTxt, { fontSize: L.rs(16) }]}>{initials}</Text>
             </LinearGradient>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text style={[card.name, { color: C.text }]} numberOfLines={1}>{profile.name}</Text>
+            <View style={card.body}>
+              <View style={card.nameRow}>
+                <Text style={[card.name, { color: C.text, fontSize: L.rs(16), flex: 1, minWidth: 0 }]} numberOfLines={2}>{profile.name}</Text>
                 <View style={[card.badge, { backgroundColor: `${ac}15` }]}>
-                  <Feather name="star" size={7} color={ac} />
-                  <Text style={[card.badgeTxt, { color: ac }]}>{t.pe_primary}</Text>
+                  <Feather name="star" size={9} color={ac} />
+                  <Text style={[card.badgeTxt, { color: ac, fontSize: L.rs(9) }]}>{t.pe_primary}</Text>
                 </View>
               </View>
-              <Text style={[card.astro, { color: C.isDark ? "rgba(250,204,21,0.8)" : "#7C3AED" }]} numberOfLines={1}>{astroLine}</Text>
+              <Text
+                style={[card.astro, { color: C.isDark ? "rgba(250,204,21,0.8)" : "#7C3AED", fontSize: L.rs(13), lineHeight: L.rs(18) }]}
+                numberOfLines={2}
+              >
+                {astroLine}
+              </Text>
             </View>
             <Pressable
               onPress={() => { Haptics.selectionAsync(); setMenuOpen(!menuOpen); }}
               hitSlop={10}
-              style={[card.menuBtn, { backgroundColor: C.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)" }]}
+              style={[card.menuBtn, { backgroundColor: C.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", width: L.rs(36), height: L.rs(36) }]}
             >
-              <Feather name="more-vertical" size={15} color={C.textMuted} />
+              <Feather name="more-vertical" size={17} color={C.textMuted} />
             </Pressable>
           </View>
 
@@ -348,6 +375,7 @@ function SecondaryCard({ profile, onView, onEdit, onDelete, onMakePrimary }: {
 }) {
   const C = useC();
   const t = useT();
+  const L = useScreenLayout();
   const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const k = profile.kundli;
   const initials = profile.name.split(" ").map(w => w[0] ?? "").join("").slice(0, 2).toUpperCase() || "?";
@@ -355,8 +383,10 @@ function SecondaryCard({ profile, onView, onEdit, onDelete, onMakePrimary }: {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const astroLine = [k?.moonSign, k?.nakshatra, k?.ascendant].filter(Boolean).join(" \u2022 ") || "—";
 
+  const av = L.rs(46);
+
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+    <Animated.View style={{ transform: [{ scale: scaleAnim }], width: "100%" }}>
       <Pressable
         onPressIn={() => Animated.spring(scaleAnim, { toValue: 0.98, useNativeDriver: true, speed: 50, bounciness: 0 }).start()}
         onPressOut={() => Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 4 }).start()}
@@ -365,26 +395,35 @@ function SecondaryCard({ profile, onView, onEdit, onDelete, onMakePrimary }: {
         <View style={[card.wrap, {
           backgroundColor: C.isDark ? "rgba(26,33,53,0.85)" : "#FFFFFF",
           borderColor: C.isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
+          paddingVertical: L.rs(14),
+          paddingHorizontal: L.rs(16),
         }]}>
-          <View style={card.row}>
-            <LinearGradient colors={C.isDark ? ["#0ea5e9", "#f59e0b"] : ["#7C3AED", "#a78bfa"]} style={card.avatar}>
-              <Text style={card.avatarTxt}>{initials}</Text>
+          <View style={[card.row, { gap: L.rs(12) }]}>
+            <LinearGradient
+              colors={C.isDark ? ["#0ea5e9", "#f59e0b"] : ["#7C3AED", "#a78bfa"]}
+              style={[card.avatar, { width: av, height: av, borderRadius: av / 2 }]}
+            >
+              <Text style={[card.avatarTxt, { fontSize: L.rs(15) }]}>{initials}</Text>
             </LinearGradient>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text style={[card.name, { color: C.text }]} numberOfLines={1}>{profile.name}</Text>
+            <View style={card.body}>
+              <View style={card.nameRow}>
+                <Text style={[card.name, { color: C.text, fontSize: L.rs(16), flex: 1 }]} numberOfLines={2}>{profile.name}</Text>
                 {profile.relation && profile.relation !== "Self" && (
-                  <Text style={[card.relTag, { color: C.textDim, borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)" }]}>{relationLabel(profile.relation, t)}</Text>
+                  <Text style={[card.relTag, { color: C.textDim, borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)", fontSize: L.rs(10) }]}>
+                    {relationLabel(profile.relation, t)}
+                  </Text>
                 )}
               </View>
-              <Text style={[card.astro, { color: C.textMuted }]} numberOfLines={1}>{astroLine}</Text>
+              <Text style={[card.astro, { color: C.textMuted, fontSize: L.rs(13), lineHeight: L.rs(18) }]} numberOfLines={2}>
+                {astroLine}
+              </Text>
             </View>
             <Pressable
               onPress={() => { Haptics.selectionAsync(); setMenuOpen(!menuOpen); }}
               hitSlop={10}
-              style={[card.menuBtn, { backgroundColor: C.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)" }]}
+              style={[card.menuBtn, { backgroundColor: C.isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)", width: L.rs(36), height: L.rs(36) }]}
             >
-              <Feather name="more-vertical" size={15} color={C.textMuted} />
+              <Feather name="more-vertical" size={17} color={C.textMuted} />
             </Pressable>
           </View>
 
@@ -425,7 +464,7 @@ export default function ProfileEditScreen() {
     setBirthData, setKundli, syncKundliToCloud, setPrimaryProfile, user, setUser,
   } = useUser();
   const L = useScreenLayout();
-  const pageW = Math.min(L.width - L.ph * 2, 520);
+  const pageW = L.width - L.ph * 2;
   const [screenTab, setScreenTab] = useState<"kundli" | "personal">("kundli");
 
   const primaryProfile = profiles.find(p => p.id === primaryProfileId) ?? profiles[0] ?? null;
@@ -657,7 +696,10 @@ export default function ProfileEditScreen() {
         </View>
 
         <ScrollView
-          contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 90, alignItems: "center" }]}
+          contentContainerStyle={[
+            s.scroll,
+            { paddingHorizontal: L.ph, paddingBottom: insets.bottom + 90, alignItems: "center" },
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -675,41 +717,47 @@ export default function ProfileEditScreen() {
             />
           ) : null}
 
-          {screenTab === "kundli" && primaryProfile && (
-            <HeroCard
-              profile={primaryProfile}
-              onView={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/kundli"); }}
-              onEdit={() => openPrimaryEdit()}
-            />
-          )}
-
-          {screenTab === "kundli" && familyMembers.length > 0 && (
-            <View style={{ gap: 6, marginTop: 4 }}>
-              <Text style={{ color: C.textMuted, fontSize: 9, fontFamily: F.bold, letterSpacing: 1.8, marginLeft: 4, marginBottom: 0 }}>{t.pe_otherProfiles}</Text>
-              {familyMembers.map((p) => (
-                <SecondaryCard
-                  key={p.id}
-                  profile={p}
-                  onView={() => { setPrimaryProfile(p.id); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/kundli"); }}
-                  onEdit={() => openFmEdit(p)}
-                  onDelete={() => handleFmDelete(p.id)}
-                  onMakePrimary={() => { setPrimaryProfile(p.id); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }}
+          {screenTab === "kundli" ? (
+            <View style={{ width: pageW, maxWidth: "100%", alignSelf: "center", gap: L.gap }}>
+              {primaryProfile ? (
+                <HeroCard
+                  profile={primaryProfile}
+                  onView={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/kundli"); }}
+                  onEdit={() => openPrimaryEdit()}
                 />
-              ))}
-            </View>
-          )}
+              ) : null}
 
-          {screenTab === "kundli" && !primaryProfile && familyMembers.length === 0 && (
-            <View style={{ alignItems: "center", paddingVertical: 40, gap: 12 }}>
-              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: `${ac}15`, alignItems: "center", justifyContent: "center" }}>
-                <Feather name="star" size={28} color={ac} />
-              </View>
-              <Text style={{ color: C.text, fontSize: 17, fontFamily: F.bold }}>{t.pe_noKundliYet}</Text>
-              <Text style={{ color: C.textMuted, fontSize: 12.5, fontFamily: F.medium, textAlign: "center", lineHeight: 19 }}>
-                Add your birth details to generate{"\n"}your first kundli chart
-              </Text>
+              {familyMembers.length > 0 ? (
+                <View style={{ gap: L.rs(10), width: "100%" }}>
+                  <Text style={[card.sectionLbl, { color: C.textMuted, fontSize: L.rs(10), marginLeft: L.rs(2) }]}>
+                    {t.pe_otherProfiles}
+                  </Text>
+                  {familyMembers.map((p) => (
+                    <SecondaryCard
+                      key={p.id}
+                      profile={p}
+                      onView={() => { setPrimaryProfile(p.id); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/(tabs)/kundli"); }}
+                      onEdit={() => openFmEdit(p)}
+                      onDelete={() => handleFmDelete(p.id)}
+                      onMakePrimary={() => { setPrimaryProfile(p.id); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }}
+                    />
+                  ))}
+                </View>
+              ) : null}
+
+              {!primaryProfile && familyMembers.length === 0 ? (
+                <View style={{ alignItems: "center", paddingVertical: L.rs(40), gap: L.rs(12), width: "100%" }}>
+                  <View style={{ width: L.rs(64), height: L.rs(64), borderRadius: L.rs(32), backgroundColor: `${ac}15`, alignItems: "center", justifyContent: "center" }}>
+                    <Feather name="star" size={L.rs(28)} color={ac} />
+                  </View>
+                  <Text style={{ color: C.text, fontSize: L.rs(17), fontFamily: F.bold }}>{t.pe_noKundliYet}</Text>
+                  <Text style={{ color: C.textMuted, fontSize: L.rs(13), fontFamily: F.medium, textAlign: "center", lineHeight: L.rs(20), paddingHorizontal: L.rs(12) }}>
+                    Add your birth details to generate{"\n"}your first kundli chart
+                  </Text>
+                </View>
+              ) : null}
             </View>
-          )}
+          ) : null}
         </ScrollView>
 
         {screenTab === "kundli" ? (
@@ -1030,7 +1078,7 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 16, fontFamily: F.bold, letterSpacing: -0.4 },
   headerSub:   { fontSize: 10.5, fontFamily: F.regular, marginLeft: 11 },
 
-  scroll: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 16, gap: 6 },
+  scroll: { paddingTop: 10, paddingBottom: 16 },
 
   fieldWrap: { gap: 5 },
   lbl: { fontSize: 9.5, fontFamily: F.bold, letterSpacing: 1.3 },
@@ -1107,29 +1155,59 @@ const s = StyleSheet.create({
 
 const card = StyleSheet.create({
   wrap: {
-    borderRadius: 14, borderWidth: 1, paddingVertical: 10, paddingHorizontal: 12,
+    width: "100%",
+    borderRadius: 16,
+    borderWidth: 1,
+    minHeight: 72,
   },
-  row: { flexDirection: "row", alignItems: "center", gap: 10 },
+  row: { flexDirection: "row", alignItems: "center" },
+  body: { flex: 1, minWidth: 0, paddingRight: 4 },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 4,
+  },
   avatar: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: "center", justifyContent: "center",
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
   },
-  avatarTxt: { color: "#fff", fontSize: 13, fontFamily: F.bold },
-  name: { fontSize: 13.5, fontFamily: F.bold, flexShrink: 1 },
+  avatarTxt: { color: "#fff", fontSize: 16, fontFamily: F.bold },
+  name: { fontFamily: F.bold, flexShrink: 1 },
   badge: {
-    flexDirection: "row", alignItems: "center", gap: 3,
-    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    flexShrink: 0,
   },
-  badgeTxt: { fontSize: 7.5, fontFamily: F.bold, letterSpacing: 0.6 },
+  badgeTxt: { fontSize: 9, fontFamily: F.bold, letterSpacing: 0.5 },
+  sectionLbl: { fontFamily: F.bold, letterSpacing: 1.6, marginBottom: 2 },
   relTag: {
-    fontSize: 9, fontFamily: F.bold, letterSpacing: 0.5,
-    borderWidth: 0.75, borderRadius: 5,
-    paddingHorizontal: 5, paddingVertical: 1,
+    fontSize: 10,
+    fontFamily: F.bold,
+    letterSpacing: 0.4,
+    borderWidth: 0.75,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    flexShrink: 0,
   },
-  astro: { fontSize: 11.5, fontFamily: F.medium, marginTop: 2 },
+  astro: { fontFamily: F.medium, marginTop: 0 },
   menuBtn: {
-    width: 30, height: 30, borderRadius: 9,
-    alignItems: "center", justifyContent: "center",
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
   },
   menuDrop: {
     borderRadius: 12, borderWidth: 1, overflow: "hidden", marginTop: 6,

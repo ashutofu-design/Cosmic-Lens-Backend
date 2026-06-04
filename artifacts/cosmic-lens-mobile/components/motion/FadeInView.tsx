@@ -1,12 +1,12 @@
-import React, { useEffect } from "react";
-import { type StyleProp, type ViewStyle } from "react-native";
-import Animated, {
+import React, { useEffect, useRef } from "react";
+import {
+  Animated,
   Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withTiming,
-} from "react-native-reanimated";
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
+
+import { enterMotion, isNativeApp, skipEnterMotion } from "@/lib/nativeMotion";
 
 type Props = {
   children: React.ReactNode;
@@ -18,6 +18,9 @@ type Props = {
   resetKey?: string | number;
 };
 
+/**
+ * Enter fade/slide — uses RN Animated so it runs on iOS/Android without Reanimated worklets.
+ */
 export function FadeInView({
   children,
   delay = 0,
@@ -26,31 +29,43 @@ export function FadeInView({
   style,
   resetKey,
 }: Props) {
-  const opacity = useSharedValue(0);
-  const translateY = useSharedValue(slide);
+  const motion = enterMotion(duration, slide);
+  const animDelay = skipEnterMotion(delay);
+  const opacity = useRef(new Animated.Value(isNativeApp ? 1 : 0)).current;
+  const translateY = useRef(new Animated.Value(isNativeApp ? 0 : slide)).current;
 
   useEffect(() => {
-    opacity.value = 0;
-    translateY.value = slide;
-    opacity.value = withDelay(
-      delay,
-      withTiming(1, { duration, easing: Easing.out(Easing.cubic) }),
-    );
-    translateY.value = withDelay(
-      delay,
-      withTiming(0, { duration: duration + 40, easing: Easing.out(Easing.cubic) }),
-    );
-  }, [delay, duration, slide, resetKey, opacity, translateY]);
+    if (isNativeApp && motion.duration <= 0) return;
+    opacity.setValue(isNativeApp ? 0.92 : 0);
+    translateY.setValue(isNativeApp ? motion.slide : slide);
+    const anim = Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: motion.duration,
+        delay: animDelay,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: motion.duration,
+        delay: animDelay,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]);
+    anim.start();
+    return () => anim.stop();
+  }, [animDelay, motion.duration, motion.slide, resetKey, opacity, translateY, slide]);
 
-  const animStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateY: translateY.value }],
-  }));
-
-  return <Animated.View style={[animStyle, style]}>{children}</Animated.View>;
+  return (
+    <Animated.View style={[{ opacity, transform: [{ translateY }] }, style]}>
+      {children}
+    </Animated.View>
+  );
 }
 
 /** Stagger helper: `delay={staggerDelay(index, 70)}` */
 export function staggerDelay(index: number, stepMs = 65, baseMs = 0): number {
-  return baseMs + index * stepMs;
+  return skipEnterMotion(baseMs + index * stepMs);
 }

@@ -3,7 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Modal, Platform, Pressable, ScrollView,
+  Dimensions, Modal, Platform, Pressable, ScrollView,
   StatusBar, StyleSheet, Text, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,13 +13,13 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
 import { useT } from "@/hooks/useT";
-import { vedicLang, NAKSHATRA, RASHI, RASHI_KEYS, pick, type VLang } from "@/lib/i18nVedic";
+import { vedicLang, NAKSHATRA, RASHI, RASHI_KEYS, pick, nakshatraName, rashiAt, type VLang } from "@/lib/i18nVedic";
 import { getMonthsShort, getTaraData, getKarakaDefs } from "@/lib/i18nContent";
 import { pName } from "@/lib/proInsightEngine";
 import type { KundliData, PlanetInfo } from "@/types";
 
-import { API_BASE as BASE_URL, apiFetch } from "@/lib/apiConfig";
 import { fetchKundliFromAPI } from "@/lib/kundliAPI";
+import { fetchGochar, type GocharResponse } from "@/lib/panchangAPI";
 
 const F = {
   regular:  "Nunito_400Regular",
@@ -79,15 +79,12 @@ function getKundliLabels(t: ReturnType<typeof useT>) {
     atmakaraka:       t.ku_atmakaraka,
     jaiminiLagna:     t.ku_jaiminiLagna,
     jaiminiLagnaDesc: t.ku_jaiminiLagnaDesc,
-    liveChandraTransit: t.ku_liveChandraTransit,
     natalConj:        t.ku_natalConj,
     whatKP:           t.ku_whatKP,
     kpSignificators:  t.ku_kpSignificators,
     birthChartSnap:   t.ku_birthChartSnap,
     planetPosition:   t.ku_planetPosition,
     planetPositionSub: t.ku_planetPositionSub,
-    dailyAlerts:      t.ku_dailyAlertsLink,
-    dailyAlertsSub:   t.ku_dailyAlertsLinkSub,
     house:            t.ku_house,
     nakshatraLabel:   t.ku_nakshatraLabel,
     btnKundli:        t.ku_btnKundli,
@@ -106,10 +103,6 @@ function getKundliLabels(t: ReturnType<typeof useT>) {
     snapMoonSign:        t.ku_snapMoonSign,
     snapNakshatra:       t.ku_snapNakshatra,
     snapNakshatraLord:   t.ku_snapNakshatraLord,
-    snapDashaBalance:    t.ku_snapDashaBalance,
-    snapLiveMoonTransit: t.ku_snapLiveMoonTransit,
-    snapLiveJupiterTransit: t.ku_snapLiveJupiterTransit ?? "LIVE JUPITER TRANSIT",
-    snapLiveSaturnTransit:  t.ku_snapLiveSaturnTransit  ?? "LIVE SANI TRANSIT",
     padaLabel:           t.ku_padaLabel,
     jaiminiDegPre:       t.ku_jaiminiDegPre,
     jaiminiDegSuf:       t.ku_jaiminiDegSuf,
@@ -134,6 +127,12 @@ function progress(s: Date | string, e: Date | string) {
   const n=Date.now(), sv=tsOf(s), ev=tsOf(e);
   if(n<=sv) return 0; if(n>=ev) return 100;
   return Math.round(((n-sv)/(ev-sv))*100);
+}
+
+function activeDashaIndex(items: { startDate: Date | string; endDate: Date | string }[]): number {
+  const now = Date.now();
+  const ai = items.findIndex((s) => tsOf(s.startDate) <= now && tsOf(s.endDate) > now);
+  return ai >= 0 ? ai : 0;
 }
 
 function calcPratyantar(antar: any): any[] {
@@ -365,35 +364,62 @@ function PratyantarCard({ planet, startDate, endDate, active, onPrev, onNext, ha
   );
 }
 
-function TimelineStrip({ dashas, selected, onSelect }: { dashas:any[];selected:number;onSelect:(i:number)=>void }) {
+function DashaInlinePanel({ tag, planet, startDate, endDate, active, color, onPrev, onNext, hasPrev, hasNext, width }: {
+  tag: string; planet: string; startDate: any; endDate: any; active: boolean; color: string;
+  onPrev: () => void; onNext: () => void; hasPrev: boolean; hasNext: boolean; width: number;
+}) {
   const C = useC();
   const { language } = useUser();
-  const v: VLang = vedicLang(language);
   const t = useT();
   const L = getKundliLabels(t);
+  const pct = progress(startDate, endDate);
+  const o = (vv: string) => oa(C.isDark, vv);
   return (
-    <View style={{ gap: 8 }}>
-      <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>{L.mahaTimeline}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={{ flexDirection: "row", gap: 8, paddingBottom: 4 }}>
-          {dashas.map((d,i) => {
-            const active=isNow(d.startDate,d.endDate), sel=i===selected, color=hue(d.planet);
-            return (
-              <Pressable key={i} onPress={() => {Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);onSelect(i);}}
-                style={{
-                  minWidth: 50, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 14,
-                  borderWidth: sel ? 2 : 1.5, alignItems: "center", gap: 3,
-                  backgroundColor: sel ? `${color}${oa(C.isDark,"18")}` : C.bgCard,
-                  borderColor: sel ? color : C.border,
-                }}>
-                <Text style={{ color: sel ? color : C.textMuted, fontSize: 13, fontFamily: F.bold }}>{d.planet.slice(0,2)}</Text>
-                <Text style={{ color: sel ? color : C.textMid, fontSize: 9, fontFamily: F.semibold }}>{new Date(d.startDate).getFullYear()}</Text>
-                {active && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />}
-              </Pressable>
-            );
-          })}
+    <View style={{
+      width, flex: 1, minWidth: width, borderRadius: 14, borderWidth: 1.5, overflow: "hidden",
+      backgroundColor: active ? `${color}${o("10")}` : C.bgCard,
+      borderColor: active ? color : C.border,
+    }}>
+      <View style={{ backgroundColor: `${color}${o("14")}`, paddingVertical: 5, paddingHorizontal: 8, alignItems: "center" }}>
+        <Text style={{ color, fontSize: 9, fontFamily: F.bold, letterSpacing: 1 }}>{tag}</Text>
+      </View>
+      <View style={{ padding: 8, gap: 6, flex: 1 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Pressable onPress={onPrev} disabled={!hasPrev} style={{ opacity: hasPrev ? 1 : 0.2, padding: 2 }}>
+            <Feather name="chevron-left" size={16} color={C.text} />
+          </Pressable>
+          <View style={{ alignItems: "center", flex: 1, gap: 2 }}>
+            <View style={{
+              width: 36, height: 36, borderRadius: 10, backgroundColor: `${color}${o("15")}`,
+              alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: `${color}${o("35")}`,
+            }}>
+              <Text style={{ color, fontSize: 13, fontFamily: F.bold }}>{planet.slice(0, 2)}</Text>
+            </View>
+            <Text style={{ color: C.text, fontSize: 12, fontFamily: F.bold }} numberOfLines={1}>{pName(planet)}</Text>
+            {active && (
+              <Text style={{ color, fontSize: 8, fontFamily: F.bold }}>{L.active}</Text>
+            )}
+          </View>
+          <Pressable
+            onPress={() => { if (hasNext) { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onNext(); } }}
+            style={{ opacity: hasNext ? 1 : 0.2, padding: 2 }}>
+            <Feather name="chevron-right" size={16} color={C.text} />
+          </Pressable>
         </View>
-      </ScrollView>
+        <View style={{ gap: 1, paddingHorizontal: 1 }}>
+          <Text style={{ color: C.textMuted, fontSize: 8.5, fontFamily: F.semibold, textAlign: "center" }} numberOfLines={2}>
+            {formatDate(startDate, language)}
+          </Text>
+          <Text style={{ color: C.textDim, fontSize: 7.5, fontFamily: F.medium, textAlign: "center" }}>–</Text>
+          <Text style={{ color: C.textMuted, fontSize: 8.5, fontFamily: F.semibold, textAlign: "center" }} numberOfLines={2}>
+            {formatDate(endDate, language)}
+          </Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <View style={{ flex: 1 }}><ProgBar pct={pct} color={color} /></View>
+          <Text style={{ color, fontSize: 9, fontFamily: F.bold, minWidth: 26 }}>{pct}%</Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -403,33 +429,98 @@ function DashaTab({ kundli, mahaIdx, setMahaIdx, antarIdx, setAntarIdx, pratIdx,
   antarIdx:number; setAntarIdx:(i:number)=>void;
   pratIdx:number; setPratIdx:(i:number)=>void;
 }) {
-  function changeMaha(i:number) {
-    setMahaIdx(i);
-    const now=Date.now();
-    const subs=kundli.dashas[i]?.subDashas??[];
-    const ai=subs.findIndex((s2:any)=>tsOf(s2.startDate)<=now&&tsOf(s2.endDate)>now);
-    setAntarIdx(ai>=0?ai:0);
-  }
-  const maha=kundli.dashas[mahaIdx];
-  const subDashas=maha?.subDashas??[];
-  const antar=subDashas[antarIdx];
-  const pratyantars=antar?calcPratyantar(antar):[];
-  const pratyantar=pratyantars[pratIdx]??pratyantars[0];
+  const t = useT();
+  const L = getKundliLabels(t);
+  const maha = kundli.dashas[mahaIdx];
+  const subDashas = maha?.subDashas ?? [];
+  const antar = subDashas[antarIdx];
+  const pratyantars = antar ? calcPratyantar(antar) : [];
+  const pratyantar = pratyantars[pratIdx] ?? pratyantars[0];
+
+  const pratIdxForAntar = (a: any, prefer?: number) => {
+    const prats = a ? calcPratyantar(a) : [];
+    if (!prats.length) return 0;
+    if (prefer != null) return Math.min(Math.max(0, prefer), prats.length - 1);
+    return activeDashaIndex(prats);
+  };
+
+  const applyLevel = (mi: number, ai: number, pi?: number) => {
+    setMahaIdx(mi);
+    setAntarIdx(ai);
+    const a = kundli.dashas[mi]?.subDashas?.[ai];
+    setPratIdx(pratIdxForAntar(a, pi));
+  };
+
+  const changeMaha = (i: number) => {
+    const subs = kundli.dashas[i]?.subDashas ?? [];
+    applyLevel(i, activeDashaIndex(subs));
+  };
+
+  const changeAntar = (ai: number, pi?: number) => {
+    applyLevel(mahaIdx, ai, pi);
+  };
+
+  const stepAntar = (delta: number) => {
+    if (delta > 0) {
+      if (antarIdx < subDashas.length - 1) changeAntar(antarIdx + 1, 0);
+      else if (mahaIdx < kundli.dashas.length - 1) applyLevel(mahaIdx + 1, 0, 0);
+    } else if (antarIdx > 0) {
+      const prevAntar = subDashas[antarIdx - 1];
+      changeAntar(antarIdx - 1, calcPratyantar(prevAntar).length - 1);
+    } else if (mahaIdx > 0) {
+      const prevSubs = kundli.dashas[mahaIdx - 1]?.subDashas ?? [];
+      const lastAi = Math.max(0, prevSubs.length - 1);
+      const lastPrats = calcPratyantar(prevSubs[lastAi]);
+      applyLevel(mahaIdx - 1, lastAi, lastPrats.length - 1);
+    }
+  };
+
+  const stepPrat = (delta: number) => {
+    if (delta > 0) {
+      if (pratIdx < pratyantars.length - 1) setPratIdx(pratIdx + 1);
+      else stepAntar(1);
+    } else if (pratIdx > 0) {
+      setPratIdx(pratIdx - 1);
+    } else {
+      stepAntar(-1);
+    }
+  };
+
+  const hasNextAntar = antarIdx < subDashas.length - 1 || mahaIdx < kundli.dashas.length - 1;
+  const hasPrevAntar = antarIdx > 0 || mahaIdx > 0;
+  const hasNextPrat = pratIdx < pratyantars.length - 1 || hasNextAntar;
+  const hasPrevPrat = pratIdx > 0 || hasPrevAntar;
+
+  const panelW = Math.max(100, Math.floor((Dimensions.get("window").width - 40 - 12) / 3));
+
   return (
-    <View style={{gap:14}}>
-      {maha && <MahadashaCard planet={maha.planet} startDate={maha.startDate} endDate={maha.endDate}
-        active={isNow(maha.startDate,maha.endDate)}
-        onPrev={()=>changeMaha(mahaIdx-1)} onNext={()=>changeMaha(mahaIdx+1)}
-        hasPrev={mahaIdx>0} hasNext={mahaIdx<kundli.dashas.length-1} />}
-      {antar && <AntardashaCard planet={antar.planet} startDate={antar.startDate} endDate={antar.endDate}
-        active={isNow(antar.startDate,antar.endDate)}
-        onPrev={()=>setAntarIdx(antarIdx-1)} onNext={()=>setAntarIdx(antarIdx+1)}
-        hasPrev={antarIdx>0} hasNext={antarIdx<subDashas.length-1} />}
-      {pratyantar && <PratyantarCard planet={pratyantar.planet} startDate={pratyantar.startDate} endDate={pratyantar.endDate}
-        active={isNow(pratyantar.startDate,pratyantar.endDate)}
-        onPrev={()=>setPratIdx(pratIdx-1)} onNext={()=>setPratIdx(pratIdx+1)}
-        hasPrev={pratIdx>0} hasNext={pratIdx<pratyantars.length-1} />}
-      <TimelineStrip dashas={kundli.dashas} selected={mahaIdx} onSelect={changeMaha} />
+    <View style={{ gap: 10 }}>
+      <View style={{ flexDirection: "row", gap: 6, alignItems: "stretch" }}>
+        {maha && (
+          <DashaInlinePanel
+            tag="MD" planet={maha.planet} startDate={maha.startDate} endDate={maha.endDate}
+            active={isNow(maha.startDate, maha.endDate)} color={hue(maha.planet)} width={panelW}
+            onPrev={() => changeMaha(mahaIdx - 1)} onNext={() => changeMaha(mahaIdx + 1)}
+            hasPrev={mahaIdx > 0} hasNext={mahaIdx < kundli.dashas.length - 1}
+          />
+        )}
+        {antar && (
+          <DashaInlinePanel
+            tag="AD" planet={antar.planet} startDate={antar.startDate} endDate={antar.endDate}
+            active={isNow(antar.startDate, antar.endDate)} color={hue(antar.planet)} width={panelW}
+            onPrev={() => stepAntar(-1)} onNext={() => stepAntar(1)}
+            hasPrev={hasPrevAntar} hasNext={hasNextAntar}
+          />
+        )}
+        {pratyantar && (
+          <DashaInlinePanel
+            tag="PD" planet={pratyantar.planet} startDate={pratyantar.startDate} endDate={pratyantar.endDate}
+            active={isNow(pratyantar.startDate, pratyantar.endDate)} color={hue(pratyantar.planet)} width={panelW}
+            onPrev={() => stepPrat(-1)} onNext={() => stepPrat(1)}
+            hasPrev={hasPrevPrat} hasNext={hasNextPrat}
+          />
+        )}
+      </View>
     </View>
   );
 }
@@ -768,7 +859,7 @@ function JaiminiTab({ kundli }: { kundli: KundliData }) {
                   <Feather name="award" size={13} color={hue(ak.name)} />
                   <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>{L.atmakaraka}</Text>
                 </View>
-                <Text style={{ color: C.text, fontSize: 20, fontFamily: F.bold, marginTop: 2 }}>{pName(ak.name)}</Text>
+                <Text style={{ color: C.text, fontSize: 20, fontFamily: F.bold, marginTop: 2 }}>{ak.name}</Text>
                 <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.semibold, marginTop: 3 }}>{ak.karaka?.desc}</Text>
               </View>
             </View>
@@ -800,7 +891,7 @@ function JaiminiTab({ kundli }: { kundli: KundliData }) {
               </View>
               <View style={{flex:1}}>
                 <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
-                  <Text style={{color:C.text,fontSize:14,fontFamily:F.bold}}>{pName(name)}</Text>
+                  <Text style={{color:C.text,fontSize:14,fontFamily:F.bold}}>{name}</Text>
                   <View style={{ backgroundColor: `${color}${o("12")}`, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: `${color}${o("18")}` }}>
                     <Text style={{color:C.textMid,fontSize:10,fontFamily:F.semibold}}>{deg.toFixed(1)}°</Text>
                   </View>
@@ -812,135 +903,196 @@ function JaiminiTab({ kundli }: { kundli: KundliData }) {
           );
         })}
       </View>
-
-      <View style={{ borderRadius: 14, borderWidth: 1, borderColor: C.isDark ? "rgba(167,139,250,0.2)" : "rgba(167,139,250,0.35)", backgroundColor: C.bgCard, overflow: "hidden" }}>
-        <View style={{ borderLeftWidth: 3, borderLeftColor: "#a78bfa", padding: 14, gap: 4 }}>
-          <Text style={{color:"#a78bfa",fontSize:13,fontFamily:F.bold}}>{L.jaiminiLagna}</Text>
-          <Text style={{color:C.textMuted,fontSize:12,fontFamily:F.medium,lineHeight:19}}>
-            {L.jaiminiLagnaDesc}
-          </Text>
-        </View>
-      </View>
     </View>
   );
 }
 
-function approxTransit(referenceDate: Date = new Date()): Record<string,number> {
-  const J2000_LON: Record<string,number> = {
-    Sun:280.46, Moon:218.32, Mars:355.43, Mercury:280.47,
-    Jupiter:34.35, Venus:181.97, Saturn:49.94,
-    Rahu:125.04, Ketu:305.04,
-  };
-  const DAILY_MOT: Record<string,number> = {
-    Sun:0.9856, Moon:13.1764, Mars:0.5240, Mercury:1.3833,
-    Jupiter:0.0831, Venus:1.6021, Saturn:0.0335,
-    Rahu:-0.0529, Ketu:-0.0529,
-  };
-  const J2000 = new Date("2000-01-01T12:00:00Z");
-  const daysSince = (referenceDate.getTime() - J2000.getTime()) / 86400000;
-  const result: Record<string,number> = {};
-  for (const p of Object.keys(J2000_LON)) {
-    result[p] = ((J2000_LON[p] + DAILY_MOT[p] * daysSince) % 360 + 360) % 360;
-  }
-  return result;
+function fmtSiderealDeg(lon: number): string {
+  const within = ((lon % 30) + 30) % 30;
+  const d = Math.floor(within);
+  const mFloat = (within - d) * 60;
+  const m = Math.floor(mFloat);
+  const s = Math.round((mFloat - m) * 60);
+  return `${String(d).padStart(2, "0")}°${String(m).padStart(2, "0")}'${String(s).padStart(2, "0")}"`;
 }
 
-function TransitTab({ kundli, moonRashi }: { kundli: KundliData; moonRashi: any }) {
+function transitHouseFromLon(lon: number, ascDeg: number): number {
+  const rashi = Math.floor(((lon % 360) + 360) % 360 / 30) % 12;
+  const ascRashi = Math.floor(((ascDeg % 360) + 360) % 360 / 30) % 12;
+  return ((rashi - ascRashi + 12) % 12) + 1;
+}
+
+const TRANSIT_PLANETS = [
+  { key: "sun", name: "Sun" },
+  { key: "moon", name: "Moon" },
+  { key: "mars", name: "Mars" },
+  { key: "mercury", name: "Mercury" },
+  { key: "jupiter", name: "Jupiter" },
+  { key: "venus", name: "Venus" },
+  { key: "saturn", name: "Saturn" },
+  { key: "rahu", name: "Rahu" },
+  { key: "ketu", name: "Ketu" },
+] as const;
+
+const GOCHAR_REFRESH_MS = 5 * 60 * 1000;
+const TRANSIT_DEG_W = 74;
+const TRANSIT_HOUSE_W = 32;
+
+function TransitTab({ kundli, lat, lng, tz, active }: {
+  kundli: KundliData;
+  lat?: number;
+  lng?: number;
+  tz?: number;
+  active: boolean;
+}) {
   const C = useC();
   const t = useT();
   const { language } = useUser();
-  const v: VLang = vedicLang(language);
   const L = getKundliLabels(t);
-  const ac = C.isDark ? "#f59e0b" : "#7C3AED";
   const o = (v2: string) => oa(C.isDark, v2);
-  const transits = useMemo(() => approxTransit(), []);
-  const ascRashi = Math.floor((kundli.ascendantDeg ?? 0) / 30) % 12;
-  const CORE = ["Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Rahu","Ketu"];
+  const ascDeg = kundli.ascendantDeg ?? 0;
+  const [gochar, setGochar] = useState<GocharResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    const load = () => {
+      fetchGochar({
+        lat: lat ?? 28.6139,
+        lng: lng ?? 77.209,
+        tz: tz ?? 5.5,
+      })
+        .then((d) => {
+          if (cancelled) return;
+          setGochar(d);
+          setLoading(false);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setLoading(false);
+        });
+    };
+    load();
+    const timer = setInterval(load, GOCHAR_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [active, lat, lng, tz]);
+
+  const rows = useMemo(() => {
+    return TRANSIT_PLANETS.map(({ key, name }) => {
+      const p = gochar?.planets[key];
+      const lon = p?.absolute_longitude ?? (p?.rashi_index != null
+        ? (p.rashi_index * 30) + (p.degree ?? 0)
+        : null);
+      if (lon == null) return null;
+
+      const rashiIdx = p?.rashi_index ?? Math.floor(((lon % 360) + 360) % 360 / 30) % 12;
+      const nIdx = Math.floor(((lon % 360) + 360) % 360 / (360 / 27)) % 27;
+      const house = transitHouseFromLon(lon, ascDeg);
+      const natal = kundli.planets.find((pl) => pl.name === name);
+      const natalR = natal ? Math.floor(natal.longitude / 30) % 12 : -1;
+      const isConj = natalR === rashiIdx && natalR >= 0;
+
+      return {
+        key,
+        name,
+        lon,
+        rashiIdx,
+        rashiLabel: rashiAt(rashiIdx, language),
+        nakLabel: nakshatraName(nIdx, language),
+        house,
+        degText: p?.degree_int != null && p.minute != null && p.second != null
+          ? `${String(p.degree_int).padStart(2, "0")}°${String(p.minute).padStart(2, "0")}'${String(p.second).padStart(2, "0")}"`
+          : fmtSiderealDeg(lon),
+        retro: !!p?.is_retrograde,
+        combust: p?.status === "Uday" || p?.status === "Asta" ? p.status : null,
+        isConj,
+      };
+    }).filter(Boolean) as Array<{
+      key: string; name: string; lon: number; rashiIdx: number; rashiLabel: string;
+      nakLabel: string; house: number; degText: string; retro: boolean;
+      combust: "Uday" | "Asta" | null; isConj: boolean;
+    }>;
+  }, [gochar, kundli.planets, ascDeg, language]);
+
+  const rowPad = { paddingHorizontal: 12, paddingVertical: 10 };
+  const hdrStyle = { color: C.textMuted, fontSize: 9, fontFamily: F.bold, letterSpacing: 0.6 };
 
   return (
-    <View style={{gap:16}}>
-      <View style={{ borderRadius: 14, borderWidth: 1, borderColor: C.warningBorder, backgroundColor: C.bgCard, overflow: "hidden" }}>
-        <View style={{ borderLeftWidth: 3, borderLeftColor: C.warningBorder, padding: 14, gap: 4 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Feather name="alert-triangle" size={13} color={C.warningText} />
-            <Text style={{ color: C.warningText, fontSize: 13, fontFamily: F.bold }}>
-              {t.ku_approxTransit}
-            </Text>
-          </View>
-          <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium, lineHeight: 19 }}>
-            {t.ku_transitDisclaimer}
+    <View style={{
+      borderRadius: 14, borderWidth: 1, borderColor: C.border, backgroundColor: C.bgCard, overflow: "hidden",
+    }}>
+      <View style={{
+        flexDirection: "row", alignItems: "center", ...rowPad, paddingVertical: 8,
+        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border, backgroundColor: C.bgCard2,
+      }}>
+        <Text style={[hdrStyle, { flex: 1, minWidth: 0 }]} numberOfLines={1}>PLANET</Text>
+        <Text style={[hdrStyle, { flex: 1.1, minWidth: 0, paddingRight: 4 }]} numberOfLines={1}>SIGN · NAK</Text>
+        <Text style={[hdrStyle, { width: TRANSIT_DEG_W, textAlign: "right" }]} numberOfLines={1}>DEG</Text>
+        <Text style={[hdrStyle, { width: TRANSIT_HOUSE_W, textAlign: "center" }]} numberOfLines={1}>H</Text>
+      </View>
+
+      {!rows.length ? (
+        <View style={{ padding: 20, alignItems: "center" }}>
+          <Text style={{ color: C.textMuted, fontSize: 12, fontFamily: F.medium }}>
+            {loading ? "Loading live transits…" : t.ku_transitDisclaimer}
           </Text>
         </View>
-      </View>
-
-      {moonRashi && (
-        <View style={{
-          borderRadius: 14, borderWidth: 1, borderColor: `${ac}${o("35")}`, backgroundColor: C.bgCard, overflow: "hidden",
-        }}>
-          <View style={{ borderLeftWidth: 3, borderLeftColor: ac, padding: 14, gap: 4 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#22c55e" }} />
-              <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.bold, letterSpacing: 1.5 }}>{L.liveChandraTransit}</Text>
+      ) : rows.map((row, idx) => {
+        const pHue = hue(row.name);
+        return (
+          <View
+            key={row.key}
+            style={{
+              flexDirection: "row", alignItems: "center", ...rowPad,
+              borderBottomWidth: idx < rows.length - 1 ? StyleSheet.hairlineWidth : 0,
+              borderBottomColor: C.border,
+              backgroundColor: row.isConj ? `${pHue}${o("06")}` : idx % 2 === 1 ? C.bgCard2 : "transparent",
+            }}
+          >
+            <View style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <View style={{
+                  width: 4, height: 4, borderRadius: 2, backgroundColor: pHue, flexShrink: 0, marginTop: 1,
+                }} />
+                <Text style={{ color: C.text, fontSize: 12, fontFamily: F.bold, flex: 1 }} numberOfLines={1}>
+                  {row.name}
+                </Text>
+                {row.retro ? (
+                  <Text style={{ color: "#ef4444", fontSize: 9, fontFamily: F.bold, flexShrink: 0 }}>R</Text>
+                ) : null}
+              </View>
+              {row.isConj ? (
+                <Text style={{ color: pHue, fontSize: 8, fontFamily: F.bold, marginTop: 2, marginLeft: 8 }} numberOfLines={1}>
+                  {L.natalConj}
+                </Text>
+              ) : null}
             </View>
-            <Text style={{color:C.text,fontSize:16,fontFamily:F.bold,marginTop:2}}>
-              {typeof moonRashi.index === "number" ? pick(v, RASHI[RASHI_KEYS[moonRashi.index]]) : moonRashi.name} · {L.house} {((moonRashi.index - ascRashi + 12)%12)+1}
+            <View style={{ flex: 1.1, minWidth: 0, paddingRight: 4 }}>
+              <Text style={{ color: C.text, fontSize: 10, fontFamily: F.semibold }} numberOfLines={1}>
+                {row.rashiLabel}
+              </Text>
+              <Text style={{ color: C.textMuted, fontSize: 9, fontFamily: F.medium, marginTop: 2 }} numberOfLines={1}>
+                {row.nakLabel}
+              </Text>
+            </View>
+            <Text
+              style={{ width: TRANSIT_DEG_W, color: pHue, fontSize: 9, fontFamily: F.bold, textAlign: "right", flexShrink: 0 }}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}
+            >
+              {row.degText}
             </Text>
-            <Text style={{color:C.textMuted,fontSize:12,fontFamily:F.semibold}}>
-              {L.nakshatraLabel}: {(() => {
-                const idx = NAKSHATRA.findIndex(n => n.en === moonRashi.nakshatra);
-                return idx >= 0 ? pick(v, NAKSHATRA[idx]) : moonRashi.nakshatra;
-              })()}
+            <Text style={{ width: TRANSIT_HOUSE_W, color: C.text, fontSize: 11, fontFamily: F.bold, textAlign: "center", flexShrink: 0 }}>
+              H{row.house}
             </Text>
           </View>
-        </View>
-      )}
-
-      <View style={{gap:10}}>
-        {CORE.map(name => {
-          const lon     = transits[name] ?? 0;
-          const rashi   = Math.floor(lon / 30) % 12;
-          const deg     = (lon % 30).toFixed(1);
-          const house   = ((rashi - ascRashi + 12) % 12) + 1;
-          const nIdx    = Math.floor(lon / (360/27)) % 27;
-          const nakName = pick(v, NAKSHATRA[nIdx]);
-          const pHue    = hue(name);
-
-          const natal   = kundli.planets.find(p => p.name === name);
-          const natalR  = natal ? Math.floor(natal.longitude/30)%12 : -1;
-          const isConj  = natalR === rashi && natalR >= 0;
-
-          return (
-            <View key={name} style={{
-              flexDirection: "row", alignItems: "center", gap: 12,
-              borderRadius: 14, borderWidth: 1, padding: 14, overflow: "hidden",
-              backgroundColor: isConj ? `${pHue}${o("06")}` : C.bgCard,
-              borderColor: isConj ? `${pHue}${o("45")}` : C.border,
-            }}>
-              <View style={{ borderLeftWidth: 3, borderLeftColor: pHue, position: "absolute", left: 0, top: 0, bottom: 0 }} />
-              <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: `${pHue}${o("15")}`, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <Text style={{color:pHue,fontSize:13,fontFamily:F.bold}}>{name.slice(0,2)}</Text>
-              </View>
-              <View style={{flex:1}}>
-                <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
-                  <Text style={{color:C.text,fontSize:14,fontFamily:F.bold}}>{pName(name)}</Text>
-                  {isConj && (
-                    <View style={{backgroundColor:`${pHue}${o("20")}`,borderRadius:6,paddingHorizontal:6,paddingVertical:2,borderWidth:1,borderColor:`${pHue}${o("35")}`}}>
-                      <Text style={{color:pHue,fontSize:9,fontFamily:F.bold}}>{L.natalConj}</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={{color:C.textMuted,fontSize:11,fontFamily:F.semibold,marginTop:3}}>
-                  {pick(v, RASHI[RASHI_KEYS[rashi]])} · {t.ku_houseLabel} {house} · {nakName}
-                </Text>
-              </View>
-              <View style={{ alignItems: "flex-end" }}>
-                <Text style={{color:pHue,fontSize:14,fontFamily:F.bold}}>{deg}°</Text>
-                <Text style={{color:C.textMid,fontSize:10,fontFamily:F.semibold}}>H{house}</Text>
-              </View>
-            </View>
-          );
-        })}
-      </View>
+        );
+      })}
     </View>
   );
 }
@@ -1372,52 +1524,16 @@ export default function KundliScreen() {
   const [mahaIdx,   setMahaIdx]   = useState(0);
   const [antarIdx,  setAntarIdx]  = useState(0);
   const [pratIdx,   setPratIdx]   = useState(0);
-  const [moonRashi, setMoonRashi] = useState<any>(null);
-  // Phase 2.8.59: live Jupiter + Saturn transit (real Swiss Ephemeris from
-  // /api/moon_transit response, sits under Live Moon Transit in snapshot).
-  const [jupiterT, setJupiterT] = useState<any>(null);
-  const [saturnT,  setSaturnT]  = useState<any>(null);
-
-  useEffect(() => {
-    apiFetch(`${BASE_URL}/api/moon_transit`)
-      .then(r => r.json())
-      .then(d => {
-        if (typeof d.rashiIndex === "number") {
-          const nakIdx = Math.floor(d.longitude / (360/27)) % 27;
-          setMoonRashi({ index:d.rashiIndex, name:d.rashiName, nakshatra:NAKSHATRAS[nakIdx], longitude:d.longitude });
-        }
-        if (d.jupiter && typeof d.jupiter.rashiIndex === "number") {
-          setJupiterT({
-            index:      d.jupiter.rashiIndex,
-            name:       d.jupiter.rashiName,
-            nakshatra:  d.jupiter.nakshatra,
-            retrograde: d.jupiter.retrograde,
-            degInSign:  d.jupiter.degInSign,
-          });
-        }
-        if (d.saturn && typeof d.saturn.rashiIndex === "number") {
-          setSaturnT({
-            index:      d.saturn.rashiIndex,
-            name:       d.saturn.rashiName,
-            nakshatra:  d.saturn.nakshatra,
-            retrograde: d.saturn.retrograde,
-            degInSign:  d.saturn.degInSign,
-          });
-        }
-      }).catch(()=>{});
-  }, []);
 
   useEffect(() => {
     if (!kundli) return;
-    const now=Date.now();
-    const mi=kundli.dashas.findIndex((d:any)=>tsOf(d.startDate)<=now&&tsOf(d.endDate)>now);
-    const mI=mi>=0?mi:0; setMahaIdx(mI);
-    const subs=kundli.dashas[mI]?.subDashas??[];
-    const ai=subs.findIndex((s2:any)=>tsOf(s2.startDate)<=now&&tsOf(s2.endDate)>now);
-    const aI=ai>=0?ai:0; setAntarIdx(aI);
-    const prats=subs[aI]?calcPratyantar(subs[aI]):[];
-    const pi=prats.findIndex((p:any)=>tsOf(p.startDate)<=now&&tsOf(p.endDate)>now);
-    setPratIdx(pi>=0?pi:0);
+    const mi = activeDashaIndex(kundli.dashas);
+    setMahaIdx(mi);
+    const subs = kundli.dashas[mi]?.subDashas ?? [];
+    const ai = activeDashaIndex(subs);
+    setAntarIdx(ai);
+    const prats = subs[ai] ? calcPratyantar(subs[ai]) : [];
+    setPratIdx(activeDashaIndex(prats));
   }, [kundli]);
 
   if (!kundli) {
@@ -1442,42 +1558,11 @@ export default function KundliScreen() {
     );
   }
 
-  const dashaBalance = kundli.dashaBalance;
-  const ruler        = kundli.nakshatraRuler ?? "?";
-  const dbText = dashaBalance != null ? (() => {
-    const y=Math.floor(dashaBalance);
-    const mo=Math.floor((dashaBalance-y)*12);
-    const d=Math.round(((dashaBalance-y)*12-mo)*30);
-    return `${ruler} — ${y}y ${mo}m ${d}d`;
-  })() : null;
-  const lagnaSign = Math.floor((kundli.ascendantDeg??0)/30)%12;
-  const moonTransitText = moonRashi
-    ? (() => { const h=((moonRashi.index-lagnaSign+12)%12)+1; return `${moonRashi.name} · H${h} · ${moonRashi.nakshatra}`; })()
-    : null;
-  // Phase 2.8.59 — live Jupiter & Saturn transit rows under Live Moon Transit
-  const jupiterTransitText = jupiterT
-    ? (() => {
-        const h = ((jupiterT.index - lagnaSign + 12) % 12) + 1;
-        const r = jupiterT.retrograde ? " · R" : "";
-        return `${jupiterT.name} · H${h} · ${jupiterT.nakshatra}${r}`;
-      })()
-    : null;
-  const saturnTransitText = saturnT
-    ? (() => {
-        const h = ((saturnT.index - lagnaSign + 12) % 12) + 1;
-        const r = saturnT.retrograde ? " · R" : "";
-        return `${saturnT.name} · H${h} · ${saturnT.nakshatra}${r}`;
-      })()
-    : null;
   const snapshotRows = [
     { label:L.snapAscendant,  value:kundli.ascendant,  icon:"sunrise" },
     { label:L.snapMoonSign,   value:kundli.moonSign,   icon:"moon" },
     ...(kundli.nakshatra?[{ label:L.snapNakshatra, value:`${kundli.nakshatra} (${L.padaLabel} ${kundli.nakshatraPada??"?"})`, icon:"star" }]:[]),
     ...(kundli.nakshatraRuler?[{ label:L.snapNakshatraLord, value:kundli.nakshatraRuler, icon:"shield" }]:[]),
-    ...(dbText?[{ label:L.snapDashaBalance, value:dbText, icon:"clock" }]:[]),
-    ...(moonTransitText?[{ label:L.snapLiveMoonTransit, value:moonTransitText, icon:"radio" }]:[]),
-    ...(jupiterTransitText?[{ label:L.snapLiveJupiterTransit, value:jupiterTransitText, icon:"trending-up" }]:[]),
-    ...(saturnTransitText?[{ label:L.snapLiveSaturnTransit, value:saturnTransitText, icon:"clock" }]:[]),
   ];
 
   return (
@@ -1653,26 +1738,6 @@ export default function KundliScreen() {
           </View>
           <Feather name="chevron-right" size={16} color={C.textMuted} />
         </Pressable>
-
-        <Pressable
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/daily-alerts"); }}
-          style={({ pressed }) => [{
-            flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-            borderRadius: 14, borderWidth: 1, paddingVertical: 14, paddingHorizontal: 16,
-            borderColor: `${ac}${o("35")}`, backgroundColor: `${ac}${o("08")}`,
-          }, pressed && { opacity: 0.75, transform: [{ scale: 0.98 }] }]}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View style={{ width: 38, height: 38, borderRadius: 11, borderWidth: 1, alignItems: "center", justifyContent: "center", backgroundColor: `${ac}${o("12")}`, borderColor: `${ac}${o("30")}` }}>
-              <Feather name="bell" size={16} color={ac} />
-            </View>
-            <View>
-              <Text style={{ color: ac, fontSize: 14, fontFamily: F.bold }}>{L.dailyAlerts}</Text>
-              <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.medium, marginTop: 2 }}>{L.dailyAlertsSub}</Text>
-            </View>
-          </View>
-          <Feather name="chevron-right" size={16} color={ac} style={{ opacity: 0.7 }} />
-        </Pressable>
       </View>
 
       </>)}
@@ -1691,7 +1756,15 @@ export default function KundliScreen() {
       {activeTab === "Ashtakavarga" && <AshtakavargaTab kundli={kundli} />}
       {activeTab === "Navatara"     && <NavataraTab kundli={kundli} />}
       {activeTab === "Jaimini"      && <JaiminiTab kundli={kundli} />}
-      {activeTab === "Transit"      && <TransitTab kundli={kundli} moonRashi={moonRashi} />}
+      {activeTab === "Transit"      && (
+        <TransitTab
+          kundli={kundli}
+          lat={primaryProfile?.birthData?.lat}
+          lng={primaryProfile?.birthData?.lon}
+          tz={primaryProfile?.birthData?.tz}
+          active={activeTab === "Transit"}
+        />
+      )}
       {activeTab === "KP"           && <KPTab kundli={kundli} />}
     </ScrollView>
     </CosmicBg>

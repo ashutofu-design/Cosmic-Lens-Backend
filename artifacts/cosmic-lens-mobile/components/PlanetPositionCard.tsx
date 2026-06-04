@@ -1,8 +1,15 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { LayoutAnimation, Platform, StyleSheet, Text, UIManager, View } from "react-native";
+import Animated, {
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
 
+import { ScalePressable } from "@/components/motion/ScalePressable";
 import { useC } from "@/context/ThemeContext";
 import {
   angDist,
@@ -12,13 +19,16 @@ import {
   nakshatra,
   PLANET_CLR,
   PLANET_GLYPH,
-  SIGNS,
+  signEnFromShort,
+  signStatusEn,
+  signStatusFromSignEn,
   SIGNS_SHORT,
-  signStatus,
-  signStatusFromSign,
   type PlanetCardData,
 } from "@/lib/planetPositionUtils";
-import { pName } from "@/lib/proInsightEngine";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 type Props = {
   planet: PlanetCardData;
@@ -40,11 +50,13 @@ function DetailRow({ label, value, clrValue }: { label: string; value: string; c
 export function PlanetPositionCard({ planet, sunLon = 0, mode = "d1", vargaLabel }: Props) {
   const C = useC();
   const [open, setOpen] = useState(false);
+  const expand = useSharedValue(0);
   const clr = PLANET_CLR[planet.name] ?? "#f59e0b";
   const signShort = planet.sign || SIGNS_SHORT[Math.floor(planet.longitude / 30) % 12];
+  const signEn = signEnFromShort(signShort);
   const status = mode === "varga"
-    ? signStatusFromSign(planet.name, signShort)
-    : signStatus(planet.name, planet.longitude);
+    ? signStatusFromSignEn(planet.name, signShort)
+    : signStatusEn(planet.name, planet.longitude);
   const houseCat = houseCategory(planet.house);
   const karaka = KARAKA[planet.name] ?? [];
   const nak = mode === "d1" ? nakshatra(planet.longitude) : null;
@@ -56,16 +68,30 @@ export function PlanetPositionCard({ planet, sunLon = 0, mode = "d1", vargaLabel
       Moon: 12, Mars: 17, Mercury: 14, Jupiter: 11, Venus: 10, Saturn: 15,
     };
     const thr = thresholds[planet.name] ?? 12;
-    if (dist <= thr) combustLabel = `☁️ Asta (${dist.toFixed(1)}° from Sun)`;
+    if (dist <= thr) combustLabel = `Combust (${dist.toFixed(1)}° from Sun)`;
   }
 
   const degFmt = degreeInSign(planet.longitude);
-  const signIdx = SIGNS_SHORT.indexOf(signShort);
+
+  useEffect(() => {
+    expand.value = withSpring(open ? 1 : 0, { damping: 16, stiffness: 240 });
+  }, [open, expand]);
+
+  const chevronStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${interpolate(expand.value, [0, 1], [0, 180])}deg` }],
+  }));
+
+  function toggleOpen() {
+    LayoutAnimation.configureNext(LayoutAnimation.create(280, "easeInEaseOut", "opacity"));
+    Haptics.selectionAsync();
+    setOpen((v) => !v);
+  }
 
   return (
-    <Pressable
+    <ScalePressable
+      onPress={toggleOpen}
+      haptic="none"
       style={[s.card, { backgroundColor: C.bgCard, borderColor: open ? `${clr}55` : C.border }]}
-      onPress={() => { setOpen(!open); Haptics.selectionAsync(); }}
     >
       <View style={s.cardHeader}>
         <View style={[s.glyph, { backgroundColor: `${clr}15`, borderColor: `${clr}30` }]}>
@@ -73,19 +99,21 @@ export function PlanetPositionCard({ planet, sunLon = 0, mode = "d1", vargaLabel
         </View>
         <View style={s.cardInfo}>
           <View style={s.nameRow}>
-            <Text style={[s.planetName, { color: clr }]}>{pName(planet.name)}</Text>
+            <Text style={[s.planetName, { color: clr }]}>{planet.name}</Text>
             {planet.retrograde && <Text style={s.retroBadge}>℞</Text>}
-            {combustLabel !== "" && <Text style={s.combustBadge}>☁️ Asta</Text>}
+            {combustLabel !== "" && <Text style={s.combustBadge}>Combust</Text>}
           </View>
           <Text style={[s.cardSub, { color: C.textMuted }]}>
-            {signShort} · {degFmt} · H{planet.house}
+            {signEn} · {degFmt} · H{planet.house}
           </Text>
         </View>
         <View style={s.cardRight}>
           <View style={[s.statusBadge, { borderColor: `${status.color}44` }]}>
-            <Text style={[s.statusText, { color: status.color }]}>{status.label.split(" ")[0]}</Text>
+            <Text style={[s.statusText, { color: status.color }]}>{status.label}</Text>
           </View>
-          <Feather name={open ? "chevron-up" : "chevron-down"} size={14} color={C.textMuted} />
+          <Animated.View style={chevronStyle}>
+            <Feather name="chevron-down" size={14} color={C.textMuted} />
+          </Animated.View>
         </View>
       </View>
 
@@ -93,17 +121,14 @@ export function PlanetPositionCard({ planet, sunLon = 0, mode = "d1", vargaLabel
         <View style={s.details}>
           <View style={[s.divider, { backgroundColor: C.border }]} />
 
-          <DetailRow
-            label="Rashi (Sign)"
-            value={signIdx >= 0 ? SIGNS[signIdx] : signShort}
-          />
+          <DetailRow label="Sign" value={signEn} />
           {mode === "varga" && vargaLabel ? (
             <DetailRow label="Varga" value={vargaLabel} clrValue="#a78bfa" />
           ) : null}
           {nak ? (
             <>
               <DetailRow label="Nakshatra" value={`${nak.name} Pada ${nak.pada}`} />
-              <DetailRow label="Nakshatra Swami" value={pName(nak.lord)} />
+              <DetailRow label="Nakshatra Lord" value={nak.lord} />
             </>
           ) : null}
           <DetailRow label="Longitude" value={`${planet.longitude.toFixed(2)}°`} />
@@ -114,23 +139,23 @@ export function PlanetPositionCard({ planet, sunLon = 0, mode = "d1", vargaLabel
             />
           ) : null}
           <DetailRow
-            label="Gati"
-            value={planet.retrograde ? "Vakri (Retrograde)" : "Margi (Direct)"}
+            label="Motion"
+            value={planet.retrograde ? "Retrograde" : "Direct"}
             clrValue={planet.retrograde ? "#fbbf24" : "#4ade80"}
           />
-          <DetailRow label="Avastha (House)" value={houseCat.label} clrValue={houseCat.color} />
+          <DetailRow label="House Type" value={houseCat.label} clrValue={houseCat.color} />
           <DetailRow label="Dignity" value={status.label} clrValue={status.color} />
-          {combustLabel !== "" && <DetailRow label="Asta" value={combustLabel} clrValue="#ef4444" />}
+          {combustLabel !== "" && <DetailRow label="Combust" value={combustLabel} clrValue="#ef4444" />}
 
           {karaka.length > 0 && (
             <View style={s.karakaRow}>
-              <Text style={[s.karakaLabel, { color: C.textMuted }]}>Karaka:</Text>
+              <Text style={[s.karakaLabel, { color: C.textMuted }]}>Significations:</Text>
               <Text style={[s.karakaValue, { color: C.textMid }]}>{karaka.join(", ")}</Text>
             </View>
           )}
         </View>
       )}
-    </Pressable>
+    </ScalePressable>
   );
 }
 

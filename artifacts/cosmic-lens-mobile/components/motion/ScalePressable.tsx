@@ -39,6 +39,7 @@ export function ScalePressable({
     <Pressable
       {...rest}
       disabled={disabled}
+      style={{ alignSelf: "stretch" }}
       onPressIn={(e) => {
         scale.value = withTiming(0.97, { duration: 70 });
         onPressIn?.(e);

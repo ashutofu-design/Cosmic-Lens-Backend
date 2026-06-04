@@ -1,6 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useMemo } from "react";
-import { StyleSheet, View } from "react-native";
+import React, { memo, useMemo } from "react";
+import { Platform, StyleSheet, View } from "react-native";
 import Animated, {
   Extrapolation,
   interpolate,
@@ -33,6 +33,9 @@ const BG_PLANETS: BgPlanet[] = [
   { kind: "mercury", x: 0.55, y: 0.12, scale: 0.4, driftX: 4, driftY: 6, speed: 0.036, phase: 1.8, opacity: 0.4 },
 ];
 
+const STAR_COUNT = Platform.OS === "web" ? 110 : 58;
+const STAR_SHADOW = Platform.OS === "ios";
+
 type Props = {
   progress: SharedValue<number>;
   drift: SharedValue<number>;
@@ -41,10 +44,16 @@ type Props = {
   height: number;
 };
 
-export function GalaxyBackground({ progress, drift, twinkle, width, height }: Props) {
+export const GalaxyBackground = memo(function GalaxyBackground({
+  progress,
+  drift,
+  twinkle,
+  width,
+  height,
+}: Props) {
   const stars = useMemo(
     () =>
-      Array.from({ length: 110 }, (_, i) => ({
+      Array.from({ length: STAR_COUNT }, (_, i) => ({
         x: ((i * 73 + 11) % 100) / 100,
         y: ((i * 41 + 29) % 100) / 100,
         size: 1 + (i % 4) * 0.6,
@@ -55,7 +64,7 @@ export function GalaxyBackground({ progress, drift, twinkle, width, height }: Pr
   );
 
   const wrapStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0.04, 0.18], [0, 1], Extrapolation.CLAMP),
+    opacity: interpolate(progress.value, [0.04, 0.2], [0, 1], Extrapolation.CLAMP),
   }));
 
   return (
@@ -72,9 +81,17 @@ export function GalaxyBackground({ progress, drift, twinkle, width, height }: Pr
       ))}
     </Animated.View>
   );
-}
+});
 
-function GalaxyNebula({ width, height, progress }: { width: number; height: number; progress: SharedValue<number> }) {
+const GalaxyNebula = memo(function GalaxyNebula({
+  width,
+  height,
+  progress,
+}: {
+  width: number;
+  height: number;
+  progress: SharedValue<number>;
+}) {
   const clouds = [
     { cx: 0.25, cy: 0.35, r: 0.55, colors: ["rgba(88,28,135,0.55)", "rgba(88,28,135,0)"] as const },
     { cx: 0.75, cy: 0.45, r: 0.5, colors: ["rgba(30,58,138,0.45)", "rgba(30,58,138,0)"] as const },
@@ -84,7 +101,7 @@ function GalaxyNebula({ width, height, progress }: { width: number; height: numb
   ];
 
   const style = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0.05, 0.2], [0, 1], Extrapolation.CLAMP),
+    opacity: interpolate(progress.value, [0.05, 0.22], [0, 1], Extrapolation.CLAMP),
   }));
 
   return (
@@ -110,9 +127,17 @@ function GalaxyNebula({ width, height, progress }: { width: number; height: numb
       })}
     </Animated.View>
   );
-}
+});
 
-function GalaxyBand({ width, height, drift }: { width: number; height: number; drift: SharedValue<number> }) {
+const GalaxyBand = memo(function GalaxyBand({
+  width,
+  height,
+  drift,
+}: {
+  width: number;
+  height: number;
+  drift: SharedValue<number>;
+}) {
   const style = useAnimatedStyle(() => ({
     position: "absolute",
     left: -width * 0.2,
@@ -136,10 +161,17 @@ function GalaxyBand({ width, height, drift }: { width: number; height: number; d
       />
     </Animated.View>
   );
-}
+});
 
-function Star({
-  x, y, size, phase, bright, twinkle, width, height,
+const Star = memo(function Star({
+  x,
+  y,
+  size,
+  phase,
+  bright,
+  twinkle,
+  width,
+  height,
 }: {
   x: number;
   y: number;
@@ -152,26 +184,31 @@ function Star({
 }) {
   const style = useAnimatedStyle(() => {
     const t = (twinkle.value + phase) % 1;
-    const blink = 0.35 + t * 0.65;
+    const blink = 0.4 + t * 0.6;
+    const dim = bright ? 2.2 : 1;
     return {
       position: "absolute",
       left: width * x,
       top: height * y,
-      width: size * (bright ? 2.2 : 1),
-      height: size * (bright ? 2.2 : 1),
+      width: size * dim,
+      height: size * dim,
       borderRadius: size,
       backgroundColor: bright ? "#fff7c2" : "#e2e8f0",
-      opacity: blink * (bright ? 0.95 : 0.65),
-      shadowColor: bright ? "#fde047" : "#fff",
-      shadowOpacity: bright ? 0.9 : 0.4,
-      shadowRadius: bright ? 4 : 2,
+      opacity: blink * (bright ? 0.92 : 0.62),
+      ...(STAR_SHADOW
+        ? {
+            shadowColor: bright ? "#fde047" : "#fff",
+            shadowOpacity: bright ? 0.75 : 0.35,
+            shadowRadius: bright ? 3 : 1.5,
+          }
+        : {}),
     };
   });
 
   return <Animated.View style={style} />;
-}
+});
 
-function BgPlanet({
+const BgPlanet = memo(function BgPlanet({
   planet,
   drift,
   width,
@@ -196,7 +233,7 @@ function BgPlanet({
       left: width * planet.x + dx - visualW / 2,
       top: height * planet.y + dy - visualH / 2,
       opacity: planet.opacity,
-      transform: [{ scale: 0.96 + Math.sin(t * 0.35) * 0.03 }],
+      transform: [{ scale: 0.97 + Math.sin(t * 0.35) * 0.025 }],
     };
   });
 
@@ -205,7 +242,7 @@ function BgPlanet({
       <PlanetDot kind={planet.kind} diameter={baseD} />
     </Animated.View>
   );
-}
+});
 
 function PlanetDot({ kind, diameter }: { kind: PlanetKind; diameter: number }) {
   const d = diameter;

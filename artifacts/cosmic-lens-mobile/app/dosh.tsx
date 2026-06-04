@@ -16,8 +16,23 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
-import type { DoshItem } from "@/context/UserContext";
+import type { DoshAnalysisResult, DoshItem } from "@/context/UserContext";
+import { useT } from "@/hooks/useT";
+import { API_BASE } from "@/lib/apiConfig";
+import { fmtTemplate } from "@/lib/fmtTemplate";
 import Svg, { Circle } from "react-native-svg";
+
+const DEMO_PLANETS = [
+  { name: "Sun", house: 1, longitude: 192.57, retrograde: false },
+  { name: "Moon", house: 4, longitude: 275.3, retrograde: false },
+  { name: "Mars", house: 11, longitude: 140.17, retrograde: false },
+  { name: "Mercury", house: 1, longitude: 183.75, retrograde: true },
+  { name: "Jupiter", house: 6, longitude: 345.37, retrograde: false },
+  { name: "Venus", house: 12, longitude: 158.83, retrograde: false },
+  { name: "Saturn", house: 5, longitude: 302.5, retrograde: true },
+  { name: "Rahu", house: 8, longitude: 48.0, retrograde: true },
+  { name: "Ketu", house: 2, longitude: 228.0, retrograde: true },
+];
 
 // ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
@@ -26,8 +41,7 @@ const STATUS_CONFIG = {
   None:   { color: "#22c55e", bg: "rgba(34,197,94,0.08)",   dot: "#22c55e", label: "Clear",   emoji: "🟢" },
 };
 
-// ── Demo data (14 doshas) shown when no kundli ────────────────────────────────
-// Dosh section is HARDCODED ENGLISH — language toggle has no effect here.
+// Offline fallback when demo API fails (English only).
 function getDemoDoshList(): DoshItem[] {
   return [
     { key:"manglik",        name:"Manglik Dosh",         name_hindi:"मांगलिक दोष",       icon:"🔴", status:"Active", headline:"Mars in 4th House — Strong Manglik Dosh",                    description:"Mars in houses 1, 4, 7, 8, or 12 creates Manglik Dosh, strongly affecting marriage and relationships.",                        remedies:["Perform Kumbh Vivah before marriage","Offer sindoor to Hanuman ji on Tuesdays"],         planet_note:"Mars → House 4" },
@@ -64,19 +78,32 @@ function usePulse(active: boolean) {
 }
 
 // ── Single Dosh Card ──────────────────────────────────────────────────────────
-function DoshCard({ item, defaultOpen }: { item: DoshItem; defaultOpen?: boolean }) {
+function DoshCard({
+  item,
+  defaultOpen,
+  statusLabel,
+  remediesLabel,
+}: {
+  item: DoshItem;
+  defaultOpen?: boolean;
+  statusLabel: string;
+  remediesLabel: string;
+}) {
   const [open, setOpen] = useState(defaultOpen ?? false);
   const C = useC();
+  const t = useT();
   const cfg = STATUS_CONFIG[item.status];
   const pulse = usePulse(item.status === "Active");
-  // HARDCODED ENGLISH — dosh section ignores the user's language preference.
-  const statusLabel =
-    item.status === "Active" ? "Active" :
-    item.status === "Mild"   ? "Mild"   :
-                               "Clear";
-  const primaryName = item.name;
-  const secondaryName: string | null = null;
-  const remediesLabel = "REMEDIES";
+  const primaryName =
+    t.lang === "hi" && item.name_hindi
+      ? item.name_hindi
+      : item.name;
+  const secondaryName =
+    t.lang === "en" &&
+    item.name_hindi &&
+    item.name_hindi !== primaryName
+      ? item.name_hindi
+      : null;
 
   return (
     <Pressable
@@ -192,43 +219,47 @@ function SummaryRing({ active, mild, total, labels }: { active: number; mild: nu
 export default function DoshScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
+  const t = useT();
   const { kundli, doshData, doshLoading } = useUser();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const showDemo = !kundli;
-  const demoList = React.useMemo(() => getDemoDoshList(), []);
-  const list: DoshItem[] = showDemo
-    ? demoList
-    : (doshData?.dosh_list ?? demoList);
+  const [demoDosh, setDemoDosh] = useState<DoshAnalysisResult | null>(null);
+  const [demoLoading, setDemoLoading] = useState(false);
+
+  useEffect(() => {
+    if (!showDemo) {
+      setDemoDosh(null);
+      return;
+    }
+    const controller = new AbortController();
+    setDemoLoading(true);
+    fetch(`${API_BASE}/api/dosh-analysis`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ planets: DEMO_PLANETS, nakshatra: "", lang: t.lang }),
+      signal: controller.signal,
+    })
+      .then(r => r.json())
+      .then(data => setDemoDosh(data as DoshAnalysisResult))
+      .catch(() => setDemoDosh(null))
+      .finally(() => setDemoLoading(false));
+    return () => controller.abort();
+  }, [showDemo, t.lang]);
+
+  const fallbackDemo = React.useMemo(() => getDemoDoshList(), []);
+  const source = showDemo ? demoDosh : doshData;
+  const loading = showDemo ? demoLoading : doshLoading;
+  const list: DoshItem[] = source?.dosh_list ?? (showDemo ? fallbackDemo : []);
 
   const total = list.length;
-  const active = showDemo
-    ? list.filter(it => it.status === "Active").length
-    : (doshData?.active_count ?? 0);
-  const mild = showDemo
-    ? list.filter(it => it.status === "Mild").length
-    : (doshData?.mild_count ?? 0);
+  const active = source?.active_count ?? list.filter(it => it.status === "Active").length;
+  const mild = source?.mild_count ?? list.filter(it => it.status === "Mild").length;
   const clear = Math.max(total - active - mild, 0);
 
-  // HARDCODED ENGLISH labels — dosh section is locked to English regardless of UI language.
-  const LBL = {
-    title:      "Dosh Analysis",
-    subtitle:   `Complete Dosha Analysis (${total} Doshas)`,
-    demo:       "Demo",
-    totalDosh:  "Total Dosh",
-    present:    "Present",
-    notPresent: "Not Present",
-    scanning:   "Scanning…",
-    analyzing:  "Analysing your kundli…",
-    checking:   `Checking all ${total} dosh conditions`,
-    analysis:   "Dosh Analysis",
-    active:     "Active",
-    mild:       "Mild",
-    clear:      "Clear",
-    detected:   `${active + mild} of ${total} doshas detected`,
-    disclaimer: "Dosh analysis is based on classical Vedic astrology principles. Always consult a qualified Jyotishi for important life decisions.",
-  };
+  const statusLabel = (status: DoshItem["status"]) =>
+    status === "Active" ? t.ds_active : status === "Mild" ? t.ds_mild : t.ds_clear;
 
   return (
     <ScrollView
@@ -242,14 +273,16 @@ export default function DoshScreen() {
           <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={C.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={[d.title, { color: C.text }]}>{LBL.title}</Text>
-          <Text style={[d.subtitle, { color: C.textMuted }]}>{LBL.subtitle}</Text>
+          <Text style={[d.title, { color: C.text }]}>{t.ds_title}</Text>
+          <Text style={[d.subtitle, { color: C.textMuted }]}>
+            {fmtTemplate(t.ds_subtitle, { count: total })}
+          </Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          {doshLoading && <ActivityIndicator size="small" color="#f59e0b" />}
+          {loading && <ActivityIndicator size="small" color="#f59e0b" />}
           {showDemo && (
             <View style={[d.demoBadge, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
-              <Text style={[d.demoBadgeText, { color: C.textMuted }]}>{LBL.demo}</Text>
+              <Text style={[d.demoBadgeText, { color: C.textMuted }]}>{t.ds_demo}</Text>
             </View>
           )}
         </View>
@@ -259,26 +292,26 @@ export default function DoshScreen() {
       <View style={[d.statsBar, { backgroundColor: C.bgCard, borderBottomColor: C.border }]}>
         <View style={d.statTab}>
           <Text style={[d.statTabNum, { color: C.text }]}>{total}</Text>
-          <Text style={[d.statTabLabel, { color: C.textMuted }]}>{LBL.totalDosh}</Text>
+          <Text style={[d.statTabLabel, { color: C.textMuted }]}>{t.ds_totalDosh}</Text>
         </View>
         <View style={[d.statTabDivider, { backgroundColor: C.border }]} />
         <View style={d.statTab}>
           <Text style={[d.statTabNum, { color: active + mild > 0 ? "#ef4444" : "#22c55e" }]}>
             {active + mild}
           </Text>
-          <Text style={[d.statTabLabel, { color: C.textMuted }]}>{LBL.present}</Text>
+          <Text style={[d.statTabLabel, { color: C.textMuted }]}>{t.ds_present}</Text>
         </View>
         <View style={[d.statTabDivider, { backgroundColor: C.border }]} />
         <View style={d.statTab}>
           <Text style={[d.statTabNum, { color: "#22c55e" }]}>{clear}</Text>
-          <Text style={[d.statTabLabel, { color: C.textMuted }]}>{LBL.notPresent}</Text>
+          <Text style={[d.statTabLabel, { color: C.textMuted }]}>{t.ds_notPresent}</Text>
         </View>
-        {doshLoading && (
+        {loading && (
           <>
             <View style={[d.statTabDivider, { backgroundColor: C.border }]} />
             <View style={[d.statTab, { flexDirection: "row", gap: 5 }]}>
               <ActivityIndicator size="small" color="#f59e0b" />
-              <Text style={[d.statTabLabel, { color: "#f59e0b" }]}>{LBL.scanning}</Text>
+              <Text style={[d.statTabLabel, { color: "#f59e0b" }]}>{t.ds_scanning}</Text>
             </View>
           </>
         )}
@@ -286,17 +319,28 @@ export default function DoshScreen() {
 
       <View style={d.content}>
         {/* ── Summary ring ── */}
-        <SummaryRing active={active} mild={mild} total={total} labels={{ analysis: LBL.analysis, active: LBL.active, mild: LBL.mild, clear: LBL.clear, detected: LBL.detected }} />
+        <SummaryRing
+          active={active}
+          mild={mild}
+          total={total}
+          labels={{
+            analysis: t.ds_analysis,
+            active: t.ds_active,
+            mild: t.ds_mild,
+            clear: t.ds_clear,
+            detected: fmtTemplate(t.ds_detected, { found: active + mild, total }),
+          }}
+        />
 
         {/* ── Loading skeleton or cards ── */}
         {!showDemo && doshLoading && !doshData && (
           <View style={[d.loadingCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
             <ActivityIndicator size="large" color="#f59e0b" />
             <Text style={{ color: C.textMuted, marginTop: 12, fontFamily: "Nunito_500Medium", fontSize: 13 }}>
-              {LBL.analyzing}
+              {t.ds_analyzing}
             </Text>
             <Text style={{ color: C.textDim, marginTop: 4, fontSize: 11, fontFamily: "Nunito_400Regular" }}>
-              {LBL.checking}
+              {fmtTemplate(t.ds_checking, { count: total })}
             </Text>
           </View>
         )}
@@ -309,7 +353,13 @@ export default function DoshScreen() {
             return order[a.status] - order[b.status];
           })
           .map((item, i) => (
-            <DoshCard key={item.key} item={item} defaultOpen={i === 0 && item.status !== "None"} />
+            <DoshCard
+              key={item.key}
+              item={item}
+              defaultOpen={i === 0 && item.status !== "None"}
+              statusLabel={statusLabel(item.status)}
+              remediesLabel={t.ds_remedies}
+            />
           ))
         }
 
@@ -317,7 +367,7 @@ export default function DoshScreen() {
         <View style={[d.disclaimer, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
           <Feather name="info" size={11} color={C.textDim} />
           <Text style={{ color: C.textDim, fontSize: 10, fontFamily: "Nunito_400Regular", flex: 1, lineHeight: 14 }}>
-            {LBL.disclaimer}
+            {t.ds_disclaimer}
           </Text>
         </View>
       </View>

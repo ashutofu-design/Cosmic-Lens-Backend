@@ -54,6 +54,15 @@ export async function fetchRealPanchang(args: {
   return (await res.json()) as RealPanchang;
 }
 
+export type VivahMuhuratWindow = {
+  start: string;
+  end: string;
+  score?: number;
+  lagna?: string;
+  tithi?: string;
+  nakshatra?: string;
+};
+
 export type VivahMuhuratDay = {
   date: string;
   display?: string;
@@ -67,17 +76,34 @@ export type VivahMuhuratDay = {
   nakshatra?: string;
   jupiter_status?: "Uday" | "Asta";
   venus_status?: "Uday" | "Asta";
+  best_windows?: VivahMuhuratWindow[];
+  engine_version?: string;
+  sunrise?: string;
 };
 
 export interface VivahMuhuratScan {
   scan_from: string;
   scan_days: number;
+  lat?: number;
+  lng?: number;
+  tz?: number;
   highly_favorable_count: number;
   favorable_count: number;
   all_shubh_dates: VivahMuhuratDay[];
   highly_favorable: VivahMuhuratDay[];
   favorable: VivahMuhuratDay[];
   disclaimer?: string;
+  engine_version?: string;
+  estimated_accuracy?: Record<string, string>;
+}
+
+/** Minimum slot score for “favorable” tier in vivah-3.0 engine */
+export const VIVAH_FAVORABLE_MIN_SCORE = 88;
+
+export function isPremiumVivahDay(d: VivahMuhuratDay): boolean {
+  if (d.tier === "highly_favorable") return true;
+  if (d.tier === "favorable" && (d.score ?? 0) >= VIVAH_FAVORABLE_MIN_SCORE) return true;
+  return false;
 }
 
 export interface MarriageDatesScan {
@@ -267,6 +293,9 @@ export interface GocharPlanet {
   degree_int?: number;
   minute?: number;
   second?: number;
+  absolute_longitude?: number;
+  rashi_index?: number;
+  speed_deg_per_day?: number;
   is_retrograde: boolean;
   motion: string;
   status?: "Uday" | "Asta";
@@ -294,7 +323,93 @@ export async function fetchGochar(args: {
   return (await res.json()) as GocharResponse;
 }
 
-/** @deprecated Prefer fetchMarriageDates — kept for legacy vivah-muhurat payloads */
+export async function fetchVivahMuhuratScan(args: {
+  fromDate?: Date;
+  days?: number;
+  years?: number;
+  lat: number;
+  lng: number;
+  tz?: number;
+  profile?: string;
+  brideNak?: string;
+  groomNak?: string;
+  brideMoonRashi?: string;
+  groomMoonRashi?: string;
+  signal?: AbortSignal;
+}): Promise<VivahMuhuratScan> {
+  const from = args.fromDate ?? new Date();
+  const yyyy = from.getFullYear();
+  const mm = String(from.getMonth() + 1).padStart(2, "0");
+  const dd = String(from.getDate()).padStart(2, "0");
+  const params = new URLSearchParams({
+    from_date: `${yyyy}-${mm}-${dd}`,
+    lat: String(args.lat),
+    lng: String(args.lng),
+  });
+  if (args.years != null) params.set("years", String(args.years));
+  else params.set("days", String(args.days ?? 366));
+  if (args.tz !== undefined) params.set("tz", String(args.tz));
+  if (args.profile) params.set("profile", args.profile);
+  if (args.brideNak) params.set("bride_nak", args.brideNak);
+  if (args.groomNak) params.set("groom_nak", args.groomNak);
+  if (args.brideMoonRashi) params.set("bride_moon_rashi", args.brideMoonRashi);
+  if (args.groomMoonRashi) params.set("groom_moon_rashi", args.groomMoonRashi);
+  const url = `${API_BASE}/api/panchang/vivah-muhurat?${params.toString()}`;
+  const res = await apiFetch(url, { signal: args.signal });
+  if (!res.ok) throw new Error(`vivah-muhurat ${res.status}`);
+  return (await res.json()) as VivahMuhuratScan;
+}
+
+/** Panchang Vivah tab — 5-year scan in yearly chunks (avoids gateway timeout). */
+export async function fetchPanchangVivahDates(args: {
+  fromDate?: Date;
+  years?: number;
+  lat: number;
+  lng: number;
+  tz?: number;
+  profile?: string;
+  brideNak?: string;
+  groomNak?: string;
+  brideMoonRashi?: string;
+  groomMoonRashi?: string;
+  signal?: AbortSignal;
+  onProgress?: (yearIndex: number, totalYears: number) => void;
+}): Promise<{ dates: VivahMuhuratDay[]; meta: VivahMuhuratScan | null }> {
+  const years = args.years ?? 5;
+  const from = args.fromDate ?? new Date();
+  const byDate = new Map<string, VivahMuhuratDay>();
+  let meta: VivahMuhuratScan | null = null;
+
+  for (let i = 0; i < years; i++) {
+    args.onProgress?.(i + 1, years);
+    const chunkStart = new Date(from);
+    chunkStart.setFullYear(from.getFullYear() + i);
+    const scan = await fetchVivahMuhuratScan({
+      fromDate: chunkStart,
+      days: 366,
+      lat: args.lat,
+      lng: args.lng,
+      tz: args.tz,
+      profile: args.profile,
+      brideNak: args.brideNak,
+      groomNak: args.groomNak,
+      brideMoonRashi: args.brideMoonRashi,
+      groomMoonRashi: args.groomMoonRashi,
+      signal: args.signal,
+    });
+    if (!meta) meta = scan;
+    for (const d of [...(scan.highly_favorable || []), ...(scan.favorable || [])]) {
+      if (!isPremiumVivahDay(d)) continue;
+      const prev = byDate.get(d.date);
+      if (!prev || (d.score ?? 0) > (prev.score ?? 0)) byDate.set(d.date, d);
+    }
+  }
+
+  const dates = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+  return { dates, meta };
+}
+
+/** @deprecated Legacy simple scanner — use fetchPanchangVivahDates */
 export async function fetchVivahMuhurat(args: {
   fromDate?: Date;
   days?: number;
@@ -303,28 +418,12 @@ export async function fetchVivahMuhurat(args: {
   tz?: number;
   signal?: AbortSignal;
 }): Promise<VivahMuhuratScan> {
-  const scan = await fetchMarriageDates({
+  return fetchVivahMuhuratScan({
     fromDate: args.fromDate,
-    years: 5,
+    days: args.days ?? 180,
+    lat: args.lat ?? 28.6139,
+    lng: args.lng ?? 77.2090,
     tz: args.tz,
     signal: args.signal,
   });
-  const dates = scan.dates.map((d) => ({
-    ...d,
-    tier: "favorable" as const,
-    tier_label: "Shubh",
-    display: d.date.slice(8, 10) + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(d.date.slice(5, 7), 10) - 1],
-    weekday: "",
-    confidence: 90,
-    score: 85,
-  }));
-  return {
-    scan_from: scan.scan_from,
-    scan_days: scan.scan_years * 365,
-    highly_favorable_count: 0,
-    favorable_count: scan.count,
-    all_shubh_dates: dates,
-    highly_favorable: [],
-    favorable: dates,
-  };
 }

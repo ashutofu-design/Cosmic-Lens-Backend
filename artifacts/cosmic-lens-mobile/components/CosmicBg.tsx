@@ -1,6 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
-import React from "react";
-import { Dimensions, StyleSheet, View, ViewStyle } from "react-native";
+import React, { memo } from "react";
+import { Dimensions, Platform, StyleSheet, View, ViewStyle } from "react-native";
 
 import { useC } from "@/context/ThemeContext";
 
@@ -49,13 +49,16 @@ const STARS: [number, number, number, number][] = [
   [0.87, 0.58, 4, 0.72], [0.11, 0.88, 4, 0.76],
 ];
 
+const STAR_STEP = Platform.OS === "web" ? 1 : 2;
+const VISIBLE_STARS = STARS.filter((_, i) => i % STAR_STEP === 0);
+
 const MILKY: [number, number, number][] = [
   [0.20, 0.15, 0.03], [0.28, 0.22, 0.04], [0.35, 0.29, 0.03],
   [0.42, 0.36, 0.04], [0.50, 0.44, 0.03], [0.57, 0.51, 0.03],
   [0.64, 0.58, 0.03], [0.71, 0.65, 0.02], [0.78, 0.72, 0.03],
 ];
 
-export function CosmicBg({ children, style, contentStyle }: Props) {
+export const CosmicBg = memo(function CosmicBg({ children, style, contentStyle }: Props) {
   const C = useC();
 
   return (
@@ -140,7 +143,7 @@ export function CosmicBg({ children, style, contentStyle }: Props) {
         </>
       )}
 
-      {STARS.map(([x, y, size, opacity], i) => (
+      {VISIBLE_STARS.map(([x, y, size, opacity], i) => (
         <View
           key={`st${i}`}
           style={{
@@ -179,7 +182,7 @@ export function CosmicBg({ children, style, contentStyle }: Props) {
       <View style={[s.content, contentStyle]}>{children}</View>
     </View>
   );
-}
+});
 
 const s = StyleSheet.create({
   root: {

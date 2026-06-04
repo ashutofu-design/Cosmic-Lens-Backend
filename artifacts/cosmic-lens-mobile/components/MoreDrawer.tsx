@@ -1,9 +1,11 @@
 import { Feather } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useEffect, useRef } from "react";
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import {
   Animated,
+  Easing,
   I18nManager,
   Linking,
   Modal,
@@ -16,12 +18,20 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { drawerStagger, SlideInFromRight } from "@/components/motion/SlideInFromRight";
+import { ScalePressable } from "@/components/motion/ScalePressable";
 import { useC } from "@/context/ThemeContext";
+
 import { useT } from "@/hooks/useT";
-import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { buildMoreDrawerCategories } from "@/lib/moreMenuData";
 
 const DRAWER_W = 320;
+const OPEN_OVERLAY_MS = 340;
+const CLOSE_MS = 280;
+const CONTENT_BASE_MS = 120;
+const CONTENT_STEP_MS = 100;
+const CONTENT_DURATION = 520;
+const CONTENT_SLIDE = 80;
 const FOUNDER_WHATSAPP = "919040524394";
 const FOUNDER_MSG = "Namaste 🙏 Main Cosmic Lens app se aa raha hu. Mujhe apni kundli / rashifal ke baare mein aapse personally baat karni hai.";
 
@@ -36,9 +46,13 @@ type FeatureItem = {
   badge?: string;
 };
 
-export default function MoreDrawer({
+export type MoreDrawerHandle = {
+  close: (onDone?: () => void) => void;
+};
+
+export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => void }>(function MoreDrawer({
   visible, onClose,
-}: { visible: boolean; onClose: () => void }) {
+}, ref) {
   const C = useC();
   const t = useT();
 
@@ -46,25 +60,66 @@ export default function MoreDrawer({
   const insets = useSafeAreaInsets();
   const slideX = useRef(new Animated.Value(DRAWER_W)).current;
   const overlayOp = useRef(new Animated.Value(0)).current;
+  const closingRef = useRef(false);
+  const [animKey, setAnimKey] = useState(0);
 
   useEffect(() => {
     if (visible) {
+      closingRef.current = false;
+      setAnimKey(k => k + 1);
+      slideX.setValue(0);
+      overlayOp.setValue(0);
+      Animated.timing(overlayOp, {
+        toValue: 1,
+        duration: OPEN_OVERLAY_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    } else if (!closingRef.current) {
       Animated.parallel([
-        Animated.spring(slideX, { toValue: 0, useNativeDriver: true, speed: 18, bounciness: 0 }),
-        Animated.timing(overlayOp, { toValue: 1, duration: 220, useNativeDriver: true }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.spring(slideX, { toValue: DRAWER_W, useNativeDriver: true, speed: 22, bounciness: 0 }),
-        Animated.timing(overlayOp, { toValue: 0, duration: 180, useNativeDriver: true }),
+        Animated.timing(slideX, {
+          toValue: DRAWER_W,
+          duration: CLOSE_MS,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(overlayOp, {
+          toValue: 0,
+          duration: CLOSE_MS,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
       ]).start();
     }
-  }, [visible]);
+  }, [visible, overlayOp, slideX]);
+
+  function closeDrawer(onDone?: () => void) {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    Animated.parallel([
+      Animated.timing(slideX, {
+        toValue: DRAWER_W,
+        duration: CLOSE_MS,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(overlayOp, {
+        toValue: 0,
+        duration: CLOSE_MS,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      onClose();
+      if (finished) onDone?.();
+    });
+  }
+
+  useImperativeHandle(ref, () => ({ close: closeDrawer }));
 
   function navigate(route: string) {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onClose();
-    setTimeout(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    closeDrawer(() => {
       const q = route.indexOf("?");
       if (q >= 0) {
         const pathname = route.slice(0, q);
@@ -73,7 +128,7 @@ export default function MoreDrawer({
       } else {
         router.push(route as any);
       }
-    }, 200);
+    });
   }
 
   async function openFounderWhatsApp() {
@@ -100,14 +155,15 @@ export default function MoreDrawer({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={() => closeDrawer()}>
       <View style={s.root}>
-        {/* Overlay */}
         <Animated.View style={[s.overlay, { opacity: overlayOp }]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+          {Platform.OS === "ios" ? (
+            <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFill} />
+          ) : null}
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => closeDrawer()} />
         </Animated.View>
 
-        {/* Drawer panel */}
         <Animated.View
           style={[
             s.drawer,
@@ -120,33 +176,43 @@ export default function MoreDrawer({
             },
           ]}
         >
-          {/* Header */}
-          <View style={s.header}>
+          <SlideInFromRight
+            active={visible}
+            resetKey={animKey}
+            delay={drawerStagger(0, CONTENT_STEP_MS, CONTENT_BASE_MS)}
+            duration={CONTENT_DURATION}
+            slide={44}
+            style={s.header}
+          >
             <View>
               <Text style={[s.headerTitle, { color: C.text }]}>More</Text>
               <Text style={[s.headerSub, { color: C.textMuted }]}>{t.moreSubtitle}</Text>
             </View>
-            <Pressable
-              onPress={onClose}
+            <ScalePressable
+              haptic="light"
+              onPress={() => closeDrawer()}
               style={[s.closeBtn, { backgroundColor: C.bgCard2, borderColor: C.border }]}
             >
               <Feather name="x" size={16} color={C.textMuted} />
-            </Pressable>
-          </View>
+            </ScalePressable>
+          </SlideInFromRight>
 
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20, gap: 22 }}
           >
             {/* ── Talk to Founder (WhatsApp) ───────────────────────────── */}
-            <FadeInView delay={visible ? 60 : 0} resetKey={visible ? "open" : "closed"}>
-            <Pressable
+            <SlideInFromRight
+              active={visible}
+              resetKey={animKey}
+              delay={drawerStagger(1, CONTENT_STEP_MS, CONTENT_BASE_MS)}
+              duration={CONTENT_DURATION}
+              slide={CONTENT_SLIDE}
+            >
+            <ScalePressable
+              haptic="medium"
               onPress={openFounderWhatsApp}
-              style={({ pressed }) => [
-                s.founderCard,
-                { borderColor: "#25D36640", backgroundColor: C.bgCard },
-                pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] },
-              ]}
+              style={[s.founderCard, { borderColor: "#25D36640", backgroundColor: C.bgCard }]}
             >
               <View style={[s.founderGlow, { backgroundColor: "#25D36612" }]} />
               <View style={[s.founderIconWrap, { backgroundColor: "#25D36620", borderColor: "#25D36655" }]}>
@@ -166,16 +232,19 @@ export default function MoreDrawer({
               <View style={[s.founderArrow, { backgroundColor: "#25D366" }]}>
                 <Feather name="message-circle" size={14} color="#fff" />
               </View>
-            </Pressable>
-            </FadeInView>
+            </ScalePressable>
+            </SlideInFromRight>
 
             {CATEGORIES.map((cat, catIdx) => {
               const accent = cat.items[0]?.accent ?? "#a78bfa";
               return (
-                <FadeInView
+                <SlideInFromRight
                   key={cat.title}
-                  delay={visible ? staggerDelay(catIdx + 1, 55, 100) : 0}
-                  resetKey={visible ? "open" : "closed"}
+                  active={visible}
+                  resetKey={animKey}
+                  delay={drawerStagger(catIdx + 2, CONTENT_STEP_MS, CONTENT_BASE_MS)}
+                  duration={CONTENT_DURATION}
+                  slide={CONTENT_SLIDE}
                 >
                 <View>
                   <Text style={[s.catLabel, { color: accent }]}>{cat.title}</Text>
@@ -200,16 +269,16 @@ export default function MoreDrawer({
                       ]}
                     />
                     {cat.items.map((item, idx) => (
-                      <Pressable
+                      <ScalePressable
                         key={item.id}
+                        haptic="none"
                         onPress={() => navigate(item.route)}
-                        style={({ pressed }) => [
+                        style={[
                           s.item,
                           idx < cat.items.length - 1 && [
                             s.itemBorder,
                             { borderBottomColor: `${accent}22` },
                           ],
-                          pressed && { opacity: 0.7 },
                         ]}
                       >
                         <View style={[s.iconCircle, { backgroundColor: `${item.accent}28`, borderWidth: 1, borderColor: `${item.accent}55` }]}>
@@ -227,11 +296,11 @@ export default function MoreDrawer({
                           <Text style={[s.itemSub, { color: "#9aa3c7" }]}>{item.subtitle}</Text>
                         </View>
                         <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={14} color={`${accent}99`} />
-                      </Pressable>
+                      </ScalePressable>
                     ))}
                   </View>
                 </View>
-                </FadeInView>
+                </SlideInFromRight>
               );
             })}
           </ScrollView>
@@ -239,19 +308,20 @@ export default function MoreDrawer({
       </View>
     </Modal>
   );
-}
+});
 
 const s = StyleSheet.create({
   root: { flex: 1, flexDirection: "row", justifyContent: "flex-end" },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: Platform.OS === "ios" ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0.55)",
   },
   drawer: {
     width: DRAWER_W,
     height: "100%",
     borderLeftWidth: 1,
     borderLeftColor: "rgba(255,255,255,0.06)",
+    overflow: "hidden",
   },
   header: {
     flexDirection: "row", alignItems: "center",

@@ -1,3 +1,6 @@
+import "react-native-gesture-handler";
+import "react-native-reanimated";
+
 import {
   Nunito_400Regular,
   Nunito_500Medium,
@@ -6,6 +9,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/nunito";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Platform } from "react-native";
 import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
@@ -33,18 +37,19 @@ function RootLayoutNav() {
     <Stack
       screenOptions={{
         headerBackTitle: t.back,
-        animation: "slide_from_right",
-        animationDuration: 280,
+        animation: Platform.OS === "android" ? "fade_from_bottom" : "slide_from_right",
+        animationDuration: Platform.OS === "web" ? 280 : 200,
       }}
     >
       <Stack.Screen name="login"            options={{ headerShown: false }} />
-      <Stack.Screen name="welcome-reveal"   options={{ headerShown: false, animation: "fade" }} />
+      <Stack.Screen name="welcome-reveal"   options={{ headerShown: false, animation: "fade", animationDuration: 220 }} />
       <Stack.Screen name="onboarding"       options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)"           options={{ headerShown: false }} />
       <Stack.Screen name="forecast"         options={{ headerShown: false }} />
       <Stack.Screen name="dasha-risk"       options={{ headerShown: false }} />
       <Stack.Screen name="planet-position"   options={{ headerShown: false }} />
       <Stack.Screen name="divisional-charts" options={{ headerShown: false }} />
+      <Stack.Screen name="varga-chart"         options={{ headerShown: false }} />
       <Stack.Screen name="profile-edit"     options={{ headerShown: false }} />
       <Stack.Screen name="dosh"             options={{ headerShown: false }} />
       <Stack.Screen name="kundli-milan"        options={{ headerShown: false }} />
@@ -57,6 +62,7 @@ function RootLayoutNav() {
       <Stack.Screen name="business-vastu"           options={{ headerShown: false }} />
       <Stack.Screen name="my-reports"                options={{ headerShown: false }} />
       <Stack.Screen name="personalization"           options={{ headerShown: false }} />
+      <Stack.Screen name="panchang"                  options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -97,7 +103,7 @@ export default function RootLayout() {
           <ThemeProvider>
             <UserProvider>
               <ZodiacBridge />
-              <GestureHandlerRootView>
+              <GestureHandlerRootView style={{ flex: 1 }}>
                 <KeyboardProvider>
                   <RootLayoutNav />
                 </KeyboardProvider>

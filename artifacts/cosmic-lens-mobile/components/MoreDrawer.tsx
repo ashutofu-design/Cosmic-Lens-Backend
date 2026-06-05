@@ -1,11 +1,8 @@
 import { Feather } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import {
-  Animated,
-  Easing,
   I18nManager,
   Linking,
   Modal,
@@ -16,9 +13,15 @@ import {
   Text,
   View,
 } from "react-native";
+import Animated, {
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { drawerStagger, SlideInFromRight } from "@/components/motion/SlideInFromRight";
 import { ScalePressable } from "@/components/motion/ScalePressable";
 import { useC } from "@/context/ThemeContext";
 
@@ -26,12 +29,11 @@ import { useT } from "@/hooks/useT";
 import { buildMoreDrawerCategories } from "@/lib/moreMenuData";
 
 const DRAWER_W = 320;
-const OPEN_OVERLAY_MS = 340;
-const CLOSE_MS = 280;
-const CONTENT_BASE_MS = 120;
-const CONTENT_STEP_MS = 100;
-const CONTENT_DURATION = 520;
-const CONTENT_SLIDE = 80;
+/** UI-thread slide — smooth 60fps, not sluggish. */
+const OPEN_MS = 480;
+const CLOSE_MS = 340;
+const EASE_OPEN  = Easing.bezier(0.22, 1, 0.36, 1);
+const EASE_CLOSE = Easing.bezier(0.4, 0, 1, 1);
 const FOUNDER_WHATSAPP = "919040524394";
 const FOUNDER_MSG = "Namaste 🙏 Main Cosmic Lens app se aa raha hu. Mujhe apni kundli / rashifal ke baare mein aapse personally baat karni hai.";
 
@@ -56,66 +58,49 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
   const C = useC();
   const t = useT();
 
-  const CATEGORIES = buildMoreDrawerCategories(t) as { title: string; items: FeatureItem[] }[];
+  const CATEGORIES = useMemo(
+    () => buildMoreDrawerCategories(t) as { title: string; items: FeatureItem[] }[],
+    [t],
+  );
   const insets = useSafeAreaInsets();
-  const slideX = useRef(new Animated.Value(DRAWER_W)).current;
-  const overlayOp = useRef(new Animated.Value(0)).current;
+  const progress = useSharedValue(0);
   const closingRef = useRef(false);
-  const [animKey, setAnimKey] = useState(0);
+
+  const finishClose = useCallback((onDone?: () => void) => {
+    onClose();
+    onDone?.();
+  }, [onClose]);
+
+  const overlayStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+  }));
+
+  const drawerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: DRAWER_W * (1 - progress.value) }],
+  }));
 
   useEffect(() => {
     if (visible) {
       closingRef.current = false;
-      setAnimKey(k => k + 1);
-      slideX.setValue(0);
-      overlayOp.setValue(0);
-      Animated.timing(overlayOp, {
-        toValue: 1,
-        duration: OPEN_OVERLAY_MS,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
+      progress.value = withTiming(1, { duration: OPEN_MS, easing: EASE_OPEN });
     } else if (!closingRef.current) {
-      Animated.parallel([
-        Animated.timing(slideX, {
-          toValue: DRAWER_W,
-          duration: CLOSE_MS,
-          easing: Easing.in(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(overlayOp, {
-          toValue: 0,
-          duration: CLOSE_MS,
-          easing: Easing.in(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ]).start();
+      progress.value = withTiming(0, { duration: CLOSE_MS, easing: EASE_CLOSE });
     }
-  }, [visible, overlayOp, slideX]);
+  }, [visible, progress]);
 
-  function closeDrawer(onDone?: () => void) {
+  const closeDrawer = useCallback((onDone?: () => void) => {
     if (closingRef.current) return;
     closingRef.current = true;
-    Animated.parallel([
-      Animated.timing(slideX, {
-        toValue: DRAWER_W,
-        duration: CLOSE_MS,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(overlayOp, {
-        toValue: 0,
-        duration: CLOSE_MS,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
-      onClose();
-      if (finished) onDone?.();
-    });
-  }
+    progress.value = withTiming(
+      0,
+      { duration: CLOSE_MS, easing: EASE_CLOSE },
+      (finished) => {
+        if (finished) runOnJS(finishClose)(onDone);
+      },
+    );
+  }, [progress, finishClose]);
 
-  useImperativeHandle(ref, () => ({ close: closeDrawer }));
+  useImperativeHandle(ref, () => ({ close: closeDrawer }), [closeDrawer]);
 
   function navigate(route: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -157,33 +142,23 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={() => closeDrawer()}>
       <View style={s.root}>
-        <Animated.View style={[s.overlay, { opacity: overlayOp }]}>
-          {Platform.OS === "ios" ? (
-            <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFill} />
-          ) : null}
+        <Animated.View style={[s.overlay, overlayStyle]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => closeDrawer()} />
         </Animated.View>
 
         <Animated.View
           style={[
             s.drawer,
+            drawerStyle,
             {
               backgroundColor: C.bg,
               borderLeftColor: C.border,
               paddingTop: insets.top + 8,
               paddingBottom: insets.bottom + 16,
-              transform: [{ translateX: slideX }],
             },
           ]}
         >
-          <SlideInFromRight
-            active={visible}
-            resetKey={animKey}
-            delay={drawerStagger(0, CONTENT_STEP_MS, CONTENT_BASE_MS)}
-            duration={CONTENT_DURATION}
-            slide={44}
-            style={s.header}
-          >
+          <View style={s.header}>
             <View>
               <Text style={[s.headerTitle, { color: C.text }]}>More</Text>
               <Text style={[s.headerSub, { color: C.textMuted }]}>{t.moreSubtitle}</Text>
@@ -195,20 +170,13 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
             >
               <Feather name="x" size={16} color={C.textMuted} />
             </ScalePressable>
-          </SlideInFromRight>
+          </View>
 
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20, gap: 22 }}
           >
             {/* ── Talk to Founder (WhatsApp) ───────────────────────────── */}
-            <SlideInFromRight
-              active={visible}
-              resetKey={animKey}
-              delay={drawerStagger(1, CONTENT_STEP_MS, CONTENT_BASE_MS)}
-              duration={CONTENT_DURATION}
-              slide={CONTENT_SLIDE}
-            >
             <ScalePressable
               haptic="medium"
               onPress={openFounderWhatsApp}
@@ -233,20 +201,11 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
                 <Feather name="message-circle" size={14} color="#fff" />
               </View>
             </ScalePressable>
-            </SlideInFromRight>
 
-            {CATEGORIES.map((cat, catIdx) => {
+            {CATEGORIES.map((cat) => {
               const accent = cat.items[0]?.accent ?? "#a78bfa";
               return (
-                <SlideInFromRight
-                  key={cat.title}
-                  active={visible}
-                  resetKey={animKey}
-                  delay={drawerStagger(catIdx + 2, CONTENT_STEP_MS, CONTENT_BASE_MS)}
-                  duration={CONTENT_DURATION}
-                  slide={CONTENT_SLIDE}
-                >
-                <View>
+                <View key={cat.title}>
                   <Text style={[s.catLabel, { color: accent }]}>{cat.title}</Text>
                   <View
                     style={[
@@ -254,10 +213,7 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
                       {
                         backgroundColor: "#2a3358",
                         borderColor: `${accent}44`,
-                        shadowColor: accent,
-                        shadowOpacity: 0.22,
-                        shadowRadius: 12,
-                        shadowOffset: { width: 0, height: 4 },
+                        elevation: 2,
                       },
                     ]}
                   >
@@ -300,7 +256,6 @@ export default forwardRef<MoreDrawerHandle, { visible: boolean; onClose: () => v
                     ))}
                   </View>
                 </View>
-                </SlideInFromRight>
               );
             })}
           </ScrollView>
@@ -314,7 +269,7 @@ const s = StyleSheet.create({
   root: { flex: 1, flexDirection: "row", justifyContent: "flex-end" },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: Platform.OS === "ios" ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(0,0,0,0.52)",
   },
   drawer: {
     width: DRAWER_W,

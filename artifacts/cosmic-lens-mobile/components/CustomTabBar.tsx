@@ -10,7 +10,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import MoreDrawer, { type MoreDrawerHandle } from "@/components/MoreDrawer";
-import { ScalePressable } from "@/components/motion/ScalePressable";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
@@ -31,7 +30,6 @@ const TAB_META: {
   { name: "lifemap",  labelKey: "tabLifeMap",  icon: "map"            },
   { name: "ask",      labelKey: "tabAsk",      icon: "message-circle" },
   { name: "insights", labelKey: "tabFuture",   icon: "bar-chart-2"   },
-  { name: "profile",  labelKey: "tabProfile",  icon: "user"           },
 ];
 
 const BAR_H = 84;
@@ -45,94 +43,75 @@ function tabBarActiveColor(C: ReturnType<typeof useC>) {
   return C.isDark ? "#FCD34D" : C.accent;
 }
 
-function TabItem({
-  tab, isActive, accent, onPress, onLongPress,
+function TabSlot({
+  icon,
+  label,
+  isActive,
+  showDot,
+  onPress,
+  onLongPress,
 }: {
-  tab: typeof TAB_META[0] & { label: string };
+  icon: string;
+  label: string;
   isActive: boolean;
-  accent: string;
+  showDot?: boolean;
   onPress: () => void;
-  onLongPress: () => void;
+  onLongPress?: () => void;
 }) {
   const C = useC();
   const activeColor = tabBarActiveColor(C);
   const inactiveColor = tabBarInactiveColor(C);
-
-  if (isActive) {
-    return (
-      <Pressable
-        style={({ pressed }) => [styles.tabBtn, { flex: 1.9, minWidth: 0 }, pressed && { opacity: 0.82 }]}
-        onPress={onPress}
-        onLongPress={onLongPress}
-      >
-        <View
-          style={[
-            styles.pillGlow,
-            {
-              backgroundColor: C.isDark ? `${accent}12` : `${accent}14`,
-              shadowColor: accent,
-              shadowOpacity: C.isDark ? 0.45 : 0.28,
-              shadowRadius: C.isDark ? 10 : 12,
-            },
-          ]}
-        >
-          <LinearGradient
-            colors={
-              C.isDark
-                ? [`${accent}30`, `${accent}12`]
-                : [`${accent}22`, `${accent}10`]
-            }
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[
-              styles.pillGradient,
-              { borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(109,93,246,0.22)" },
-            ]}
-          >
-            <Feather name={tab.icon as any} size={19} color={activeColor} />
-            {tab.dot && (
-              <View style={[styles.chipDot, { borderColor: C.isDark ? "#0B1220" : "#fff" }]} />
-            )}
-            <Text
-              numberOfLines={1}
-              style={[styles.chipLabel, { color: activeColor, fontFamily: "Nunito_700Bold" }]}
-            >
-              {tab.label}
-            </Text>
-          </LinearGradient>
-        </View>
-      </Pressable>
-    );
-  }
+  const color = isActive ? activeColor : inactiveColor;
 
   return (
     <Pressable
-      style={({ pressed }) => [styles.tabBtn, { flex: 1, minWidth: 0 }, pressed && { opacity: 0.5 }]}
+      style={({ pressed }) => [styles.tabBtn, pressed && { opacity: isActive ? 0.82 : 0.55 }]}
       onPress={onPress}
       onLongPress={onLongPress}
     >
-      <View style={styles.inactiveWrap}>
-        <View style={{ position: "relative" }}>
-          <Feather name={tab.icon as any} size={20} color={inactiveColor} />
-          {tab.dot && (
+      <View style={styles.tabSlot}>
+        <View style={styles.iconWrap}>
+          <Feather name={icon as any} size={20} color={color} />
+          {showDot && (
             <View style={[styles.dot, { borderColor: C.isDark ? "#0B1220" : "#fff" }]} />
           )}
         </View>
         <Text
           numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.72}
           style={[
-            styles.inactiveLabel,
+            styles.tabLabel,
             {
-              color: inactiveColor,
-              fontFamily: C.isDark ? "Nunito_500Medium" : "Nunito_600SemiBold",
-              fontSize: C.isDark ? 9.5 : 10,
+              color,
+              fontFamily: isActive ? "Nunito_700Bold" : "Nunito_600SemiBold",
             },
           ]}
         >
-          {tab.label}
+          {label}
         </Text>
       </View>
     </Pressable>
+  );
+}
+
+function TabItem({
+  tab, isActive, onPress, onLongPress,
+}: {
+  tab: typeof TAB_META[0] & { label: string };
+  isActive: boolean;
+  onPress: () => void;
+  onLongPress: () => void;
+}) {
+  return (
+    <TabSlot
+      icon={tab.icon}
+      label={tab.label}
+      isActive={isActive}
+      showDot={tab.dot}
+      onPress={onPress}
+      onLongPress={onLongPress}
+    />
   );
 }
 
@@ -207,7 +186,6 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
                 key={tab.name}
                 tab={tab}
                 isActive={isActive}
-                accent={accent}
                 onPress={() => {
                   const event = navigation.emit({
                     type: "tabPress", target: route.key, canPreventDefault: true,
@@ -243,74 +221,20 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
   );
 }
 
-function MoreTabButton({ onPress, isOpen }: { onPress: () => void; isOpen: boolean }) {
-  const C = useC();
-  const inactiveColor = tabBarInactiveColor(C);
-  const activeColor = tabBarActiveColor(C);
-  const accent = C.isDark ? "#f59e0b" : C.accent;
-
-  if (isOpen) {
-    return (
-      <ScalePressable
-        haptic="none"
-        onPress={onPress}
-        style={[styles.tabBtn, { flex: 1.9, minWidth: 0 }]}
-      >
-        <View
-          style={[
-            styles.pillGlow,
-            {
-              backgroundColor: C.isDark ? `${accent}12` : `${accent}14`,
-              shadowColor: accent,
-              shadowOpacity: C.isDark ? 0.45 : 0.28,
-              shadowRadius: C.isDark ? 10 : 12,
-            },
-          ]}
-        >
-          <LinearGradient
-            colors={
-              C.isDark
-                ? [`${accent}30`, `${accent}12`]
-                : [`${accent}22`, `${accent}10`]
-            }
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[
-              styles.pillGradient,
-              { borderColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(109,93,246,0.22)" },
-            ]}
-          >
-            <Feather name="grid" size={19} color={activeColor} />
-            <Text
-              numberOfLines={1}
-              style={[styles.chipLabel, { color: activeColor, fontFamily: "Nunito_700Bold" }]}
-            >
-              More
-            </Text>
-          </LinearGradient>
-        </View>
-      </ScalePressable>
-    );
-  }
-
+function MoreTabButton({
+  onPress,
+  isOpen,
+}: {
+  onPress: () => void;
+  isOpen: boolean;
+}) {
   return (
-    <ScalePressable
-      haptic="none"
+    <TabSlot
+      icon="grid"
+      label="More"
+      isActive={isOpen}
       onPress={onPress}
-      style={[styles.tabBtn, { flex: 1, minWidth: 0 }]}
-    >
-      <View style={styles.inactiveWrap}>
-        <Feather name="grid" size={20} color={inactiveColor} />
-        <Text
-          style={[
-            styles.inactiveLabel,
-            { color: inactiveColor, fontFamily: "Nunito_600SemiBold", fontSize: C.isDark ? 9.5 : 10 },
-          ]}
-        >
-          More
-        </Text>
-      </View>
-    </ScalePressable>
+    />
   );
 }
 
@@ -329,59 +253,50 @@ const styles = StyleSheet.create({
   inner: {
     flex: 1,
     flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 3,
+    alignItems: "stretch",
+    paddingHorizontal: 4,
+    paddingTop: 6,
+    paddingBottom: 4,
   },
   tabBtn: {
+    flex: 1,
+    flexBasis: 0,
+    minWidth: 0,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 2,
+    paddingHorizontal: 1,
   },
-
-  pillGlow: {
-    borderRadius: 22,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 8,
-    maxWidth: "100%",
-  },
-  pillGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 11,
-    paddingVertical: 9,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  chipLabel: {
-    fontSize: 11.5,
-    letterSpacing: 0.1,
-    flexShrink: 1,
-  },
-  chipDot: {
-    position: "absolute", top: -2, right: -2,
-    width: 7, height: 7, borderRadius: 3.5,
-    backgroundColor: "#ef4444", borderWidth: 1.5,
-  },
-
-  inactiveWrap: {
+  tabSlot: {
+    width: "100%",
     alignItems: "center",
     justifyContent: "center",
     gap: 3,
+    paddingVertical: 7,
+    paddingHorizontal: 2,
   },
-  inactiveLabel: {
-    fontSize: 9.5,
+  iconWrap: {
+    position: "relative",
+    width: 22,
+    height: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tabLabel: {
+    fontSize: 9,
+    lineHeight: 11,
     letterSpacing: 0,
-    lineHeight: 12,
     textAlign: "center",
+    width: "100%",
     paddingHorizontal: 1,
   },
-
   dot: {
-    position: "absolute", top: -1, right: -3,
-    width: 7, height: 7, borderRadius: 3.5,
-    backgroundColor: "#ef4444", borderWidth: 1.5,
+    position: "absolute",
+    top: -1,
+    right: -4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: "#ef4444",
+    borderWidth: 1.5,
   },
 });

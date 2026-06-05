@@ -82,9 +82,14 @@ interface EnergyChartProps {
   finalEnergy: number | null;
   loading?: boolean;
   instant?: boolean;
+  nowLabel?: string;
+  live?: boolean;
 }
 
-export default function EnergyChart({ targetPts, labels, finalEnergy, loading, instant }: EnergyChartProps) {
+export default function EnergyChart({
+  targetPts, labels, finalEnergy, loading, instant,
+  nowLabel = "Now", live = true,
+}: EnergyChartProps) {
   const C = useC();
 
   const journeyPts = useMemo(() => shapeJourney(targetPts), [targetPts]);
@@ -92,11 +97,14 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
   const [animPts, setAnimPts]   = useState<number[]>(instant && journeyPts.length > 0 ? [...journeyPts] : Array(N).fill(0));
   const [animate, setAnimate]   = useState(instant && journeyPts.length > 0);
   const [areaVis, setAreaVis]   = useState(instant && journeyPts.length > 0);
+  const [livePhase, setLivePhase] = useState(0);
   const rafRef = useRef<number>(0);
+  const settledRef = useRef(instant && journeyPts.length > 0);
 
   useEffect(() => {
     if (journeyPts.length === 0) {
       cancelAnimationFrame(rafRef.current);
+      settledRef.current = false;
       setAnimPts(Array(N).fill(0));
       setAnimate(false);
       setAreaVis(false);
@@ -107,10 +115,39 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
       setAnimPts([...journeyPts]);
       setAnimate(true);
       setAreaVis(true);
+      settledRef.current = true;
       return;
     }
 
+    // Soft live update — chart already settled, only morph to new values.
+    if (settledRef.current && animate && areaVis) {
+      let cancelled = false;
+      const from = animPts;
+      const to = journeyPts;
+      const start = performance.now();
+      const MORPH_MS = 900;
+
+      function morphFrame(now: number) {
+        if (cancelled) return;
+        const t = Math.min(1, (now - start) / MORPH_MS);
+        const eased = 1 - Math.pow(1 - t, 3);
+        setAnimPts(from.map((v, i) => v + (to[i] - v) * eased));
+        if (t < 1) {
+          rafRef.current = requestAnimationFrame(morphFrame);
+        } else {
+          setAnimPts([...to]);
+        }
+      }
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(morphFrame);
+      return () => {
+        cancelled = true;
+        cancelAnimationFrame(rafRef.current);
+      };
+    }
+
     cancelAnimationFrame(rafRef.current);
+    settledRef.current = false;
     setAnimPts(Array(N).fill(0));
     setAnimate(false);
     setAreaVis(false);
@@ -143,6 +180,7 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
           rafRef.current = requestAnimationFrame(riseFrame);
         } else {
           setAnimPts([...values]);
+          settledRef.current = true;
           setTimeout(() => { if (!cancelled) setAreaVis(true); }, 80);
         }
       }
@@ -154,13 +192,38 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
       cancelAnimationFrame(rafRef.current);
       clearTimeout(tid);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- animPts read only for soft-morph snapshot
   }, [journeyPts, instant]);
 
-  const linePath = smoothPath(animPts);
-  const fillPath = areaFill(animPts);
+  // Perpetual live loop — pulse, wiggle, scan once chart is visible.
+  useEffect(() => {
+    if (!live || loading || !animate || !areaVis) return;
+    let frame = 0;
+    const tick = (now: number) => {
+      setLivePhase(now / 1000);
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [live, loading, animate, areaVis]);
+
+  const wigglePts = useMemo(() => {
+    if (!live || !animate) return animPts;
+    const pts = [...animPts];
+    const last = pts[N - 1] ?? 0;
+    const wobble = Math.sin(livePhase * 2.8) * 0.35 + Math.sin(livePhase * 5.1) * 0.15;
+    pts[N - 1] = Math.max(2, Math.min(98, last + wobble));
+    return pts;
+  }, [animPts, live, animate, livePhase]);
+
+  const linePath = smoothPath(wigglePts);
+  const fillPath = areaFill(wigglePts);
   const lx       = px(N - 1);
-  const ly       = py(animPts[N - 1] ?? 0);
+  const ly       = py(wigglePts[N - 1] ?? 0);
   const finalClr = gradColor(1);
+  const pulse    = live ? 0.5 + 0.5 * Math.sin(livePhase * 3.2) : 0;
+  const scanT    = live ? (livePhase * 0.12) % 1 : 0;
+  const scanX    = PL + scanT * GW;
 
   const gridLine   = C.isDark ? "rgba(255,255,255,0.05)" : "rgba(140,100,200,0.08)";
   const gridStrong = C.isDark ? "rgba(255,255,255,0.07)" : "rgba(140,100,200,0.12)";
@@ -225,13 +288,28 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
           );
         })}
 
+        {journeyPts.length > 0 && animate && live && (
+          <G opacity={0.35 + pulse * 0.45}>
+            <Circle cx={lx} cy={ly} r={18 + pulse * 6} fill={finalClr} opacity={0.04 + pulse * 0.06} />
+            <Circle cx={lx} cy={ly} r={12 + pulse * 4} fill={finalClr} opacity={0.07 + pulse * 0.08} />
+          </G>
+        )}
+
         {journeyPts.length > 0 && animate && (
           <G>
-            <Circle cx={lx} cy={ly} r={12}  fill={finalClr} opacity={0.07} />
-            <Circle cx={lx} cy={ly} r={7}   fill={finalClr} opacity={0.14} />
+            <Circle cx={lx} cy={ly} r={7 + pulse * 2}   fill={finalClr} opacity={0.12 + pulse * 0.12} />
             <Circle cx={lx} cy={ly} r={4.5} fill={finalClr} opacity={0.9} />
             <Circle cx={lx} cy={ly} r={1.8} fill="white"    opacity={0.95} />
           </G>
+        )}
+
+        {journeyPts.length > 0 && animate && live && (
+          <Line
+            x1={scanX} y1={PT} x2={scanX} y2={BOT}
+            stroke={finalClr} strokeWidth={1.2}
+            strokeOpacity={0.12 + pulse * 0.18}
+            strokeDasharray="2,6"
+          />
         )}
 
         {journeyPts.length > 0 && animate && finalEnergy != null && (
@@ -257,7 +335,7 @@ export default function EnergyChart({ targetPts, labels, finalEnergy, loading, i
               fontWeight={isNow ? "700" : "400"}
               opacity={animate ? 1 : 0}
             >
-              {isNow ? "Now" : lbl}
+              {isNow ? nowLabel : lbl}
             </SvgText>
           );
         })}

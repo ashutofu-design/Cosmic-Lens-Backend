@@ -30,10 +30,6 @@ function NativeTabLayout() {
         <Icon sf={{ default: "chart.line.uptrend.xyaxis", selected: "chart.line.uptrend.xyaxis" }} />
         <Label>{t.tabFuture}</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="profile">
-        <Icon sf={{ default: "person", selected: "person.fill" }} />
-        <Label>{t.tabProfile}</Label>
-      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -56,7 +52,7 @@ function ClassicTabLayout() {
       <Tabs.Screen name="ask"      options={{ title: t.tabAsk }} />
       <Tabs.Screen name="insights" options={{ title: t.tabFuture }} />
       <Tabs.Screen name="notice"   options={{ title: t.tabNotice, href: null }} />
-      <Tabs.Screen name="profile"  options={{ title: t.tabProfile }} />
+      <Tabs.Screen name="profile"  options={{ title: t.tabProfile, href: null }} />
     </Tabs>
   );
 }

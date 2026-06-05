@@ -360,7 +360,21 @@ export async function fetchVivahMuhuratScan(args: {
   return (await res.json()) as VivahMuhuratScan;
 }
 
-/** Panchang Vivah tab — 5-year scan in yearly chunks (avoids gateway timeout). */
+function classicalRowToVivahDay(row: MarriageDatesScan["dates"][number]): VivahMuhuratDay {
+  return {
+    date: row.date,
+    display: row.display,
+    weekday: row.weekday,
+    tithi: row.tithi,
+    nakshatra: row.nakshatra,
+    jupiter_status: row.jupiter_status,
+    venus_status: row.venus_status,
+    tier: "favorable",
+    tier_label: "Favorable",
+  };
+}
+
+/** Panchang Vivah tab — dense classical dates + geo ceremony-window enrichment. */
 export async function fetchPanchangVivahDates(args: {
   fromDate?: Date;
   years?: number;
@@ -373,37 +387,72 @@ export async function fetchPanchangVivahDates(args: {
   brideMoonRashi?: string;
   groomMoonRashi?: string;
   signal?: AbortSignal;
-  onProgress?: (yearIndex: number, totalYears: number) => void;
+  onProgress?: (step: number, totalSteps: number) => void;
 }): Promise<{ dates: VivahMuhuratDay[]; meta: VivahMuhuratScan | null }> {
   const years = args.years ?? 5;
   const from = args.fromDate ?? new Date();
   const byDate = new Map<string, VivahMuhuratDay>();
   let meta: VivahMuhuratScan | null = null;
 
-  for (let i = 0; i < years; i++) {
-    args.onProgress?.(i + 1, years);
-    const chunkStart = new Date(from);
-    chunkStart.setFullYear(from.getFullYear() + i);
-    const scan = await fetchVivahMuhuratScan({
-      fromDate: chunkStart,
-      days: 366,
-      lat: args.lat,
-      lng: args.lng,
-      tz: args.tz,
-      profile: args.profile,
-      brideNak: args.brideNak,
-      groomNak: args.groomNak,
-      brideMoonRashi: args.brideMoonRashi,
-      groomMoonRashi: args.groomMoonRashi,
-      signal: args.signal,
-    });
-    if (!meta) meta = scan;
-    for (const d of [...(scan.highly_favorable || []), ...(scan.favorable || [])]) {
-      if (!isPremiumVivahDay(d)) continue;
-      const prev = byDate.get(d.date);
-      if (!prev || (d.score ?? 0) > (prev.score ?? 0)) byDate.set(d.date, d);
-    }
+  // Step 1 — full 5-year classical panchang list (many shubh dates per allowed month).
+  const totalSteps = 3;
+  args.onProgress?.(1, totalSteps);
+  const classical = await fetchMarriageDates({
+    fromDate: from,
+    years,
+    tz: args.tz,
+    signal: args.signal,
+  });
+  for (const row of classical.dates) {
+    byDate.set(row.date, classicalRowToVivahDay(row));
   }
+
+  // Step 2 — enrich first year with geo-specific ceremony windows (continuous chunks, no gaps).
+  args.onProgress?.(2, totalSteps);
+  const enrichEnd = new Date(from);
+  enrichEnd.setFullYear(enrichEnd.getFullYear() + 1);
+  let cursor = new Date(from);
+
+  while (cursor < enrichEnd) {
+    const daysLeft = Math.max(0, Math.ceil((enrichEnd.getTime() - cursor.getTime()) / 86_400_000));
+    if (daysLeft <= 0) break;
+    const chunkDays = Math.min(183, daysLeft);
+
+    try {
+      const scan = await fetchVivahMuhuratScan({
+        fromDate: cursor,
+        days: chunkDays,
+        lat: args.lat,
+        lng: args.lng,
+        tz: args.tz,
+        profile: args.profile,
+        brideNak: args.brideNak,
+        groomNak: args.groomNak,
+        brideMoonRashi: args.brideMoonRashi,
+        groomMoonRashi: args.groomMoonRashi,
+        signal: args.signal,
+      });
+      if (!meta) meta = scan;
+
+      for (const d of [...(scan.highly_favorable || []), ...(scan.favorable || [])]) {
+        if (d.tier === "avoid") continue;
+        const prev = byDate.get(d.date);
+        byDate.set(d.date, {
+          ...(prev ?? {}),
+          ...d,
+          tithi: d.tithi ?? prev?.tithi,
+          nakshatra: d.nakshatra ?? prev?.nakshatra,
+        });
+      }
+    } catch {
+      break;
+    }
+
+    cursor = new Date(cursor);
+    cursor.setDate(cursor.getDate() + chunkDays);
+  }
+
+  args.onProgress?.(3, totalSteps);
 
   const dates = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
   return { dates, meta };

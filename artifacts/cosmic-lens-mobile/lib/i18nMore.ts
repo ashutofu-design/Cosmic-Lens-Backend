@@ -633,6 +633,8 @@ export interface MoreT {
   pn_vivahWindow:     string;
   pn_vivahConf:       string;
   pn_vivahCoupleHint: string;
+  pn_vivahBlockedChaturmas: string;
+  pn_vivahBlockedMeena:     string;
   pn_planetSun:       string;
   pn_planetMoon:      string;
   pn_planetMars:      string;
@@ -1767,6 +1769,23 @@ export interface MoreT {
   radarSignalPlural:          string;
   radarAllClear:              string;
   radarAllClearSub:           string;
+  radarTitle:                 string;
+  rrCardTitle:                string;
+  rrSafestChip:               string;
+  rrChallengingChip:          string;
+  rrDayOf7:                   string;
+  rrLockedTitle:              string;
+  rrLockedSub:                string;
+  rrLockedHint:               string;
+  rrLockedCta:                string;
+  rrScoreUp:                  string;
+  rrScoreMixed:               string;
+  rrScoreDown:                string;
+  rrDotPrimary:               string;
+  rrDotSecondary:             string;
+  rrDotWatch:                 string;
+  rrDotStable:                string;
+  rrDotRoutine:               string;
 }
 
 // English — primary, complete
@@ -2393,6 +2412,8 @@ const EN: MoreT = {
   pn_vivahWindow:     "Ceremony window",
   pn_vivahConf:       "confidence",
   pn_vivahCoupleHint: "Add a second profile with kundli for couple tarabala.",
+  pn_vivahBlockedChaturmas: "Chaturmas (Jul–Oct) — classical vivah not recommended. Sun in Kark–Tula; resumes when Sun enters Vrishchik (~Nov).",
+  pn_vivahBlockedMeena:     "Meena maas (Feb–Mar) — classical vivah window closed.",
   pn_planetSun:       "Sun",
   pn_planetMoon:      "Moon",
   pn_planetMars:      "Mars",
@@ -3514,6 +3535,23 @@ const EN: MoreT = {
   radarSignalPlural:          "SIGNALS",
   radarAllClear:              "ALL CLEAR",
   radarAllClearSub:           "No major signals today",
+  radarTitle:                 "Risk Radar",
+  rrCardTitle:                "Cosmic Risk Radar",
+  rrSafestChip:               "SAFEST",
+  rrChallengingChip:          "CHALLENGING",
+  rrDayOf7:                   "Day {n} of 7",
+  rrLockedTitle:              "{date} radar locked",
+  rrLockedSub:                "Unlock the full radar for upcoming days — risk level, what to do/avoid, lucky numbers, best time and remedies — with Premium.",
+  rrLockedHint:               "💡 Day 1 is free — tap to preview",
+  rrLockedCta:                "UNLOCK PREMIUM",
+  rrScoreUp:                  "Today is filled with positive energy. A great day to start new ventures.",
+  rrScoreMixed:               "A mixed day — some opportunities, some things to watch out for.",
+  rrScoreDown:                "Slightly challenging energy today. Stay patient, avoid being reactive.",
+  rrDotPrimary:               "Primary",
+  rrDotSecondary:             "Secondary",
+  rrDotWatch:                 "Watch",
+  rrDotStable:                "Stable",
+  rrDotRoutine:               "Routine check",
 };
 
 // Hinglish overrides (only differing keys)
@@ -3558,8 +3596,8 @@ const HN: Partial<MoreT> = {
   mdDivisionalSub:    "D9 Navamsa, D10 Dashamsha, D7 aur saari vargas",
   viewChart:          "Chart dekhein",
   hideChart:          "Chart chhupayein",
-  ds_title: "Dosh Vishleshan",
-  ds_subtitle: "Poora Dosha Vishleshan ({count} Dosh)",
+  ds_title: "Dosh Analysis",
+  ds_subtitle: "Poora Dosh Analysis ({count} dosh)",
   ds_demo: "Demo",
   ds_totalDosh: "Kul Dosh",
   ds_present: "Maujood",
@@ -3567,7 +3605,7 @@ const HN: Partial<MoreT> = {
   ds_scanning: "Scan ho raha…",
   ds_analyzing: "Aapki kundli analyse ho rahi…",
   ds_checking: "Saare {count} dosh conditions check ho rahe",
-  ds_analysis: "Dosh Vishleshan",
+  ds_analysis: "Dosh Analysis",
   ds_active: "Sakriya",
   ds_mild: "Halka",
   ds_clear: "Saf",
@@ -4040,6 +4078,8 @@ const HN: Partial<MoreT> = {
   pn_vivahWindow:     "Ceremony samay",
   pn_vivahConf:       "confidence",
   pn_vivahCoupleHint: "Couple tarabala ke liye doosra profile + kundli add karein.",
+  pn_vivahBlockedChaturmas: "Chaturmas (Jul–Oct) — shastriya vivah varjit. Surya Kark–Tula mein; Vrishchik (~Nov) ke baad phir shuru.",
+  pn_vivahBlockedMeena:     "Meena maas (Feb–Mar) — classical vivah band.",
   pn_planetSun:       "Surya",
   pn_planetMoon:      "Chandra",
   pn_planetMars:      "Mangal",
@@ -5038,6 +5078,23 @@ const HN: Partial<MoreT> = {
   radarSignalPlural:          "SIGNALS",
   radarAllClear:              "ALL CLEAR",
   radarAllClearSub:           "Aaj koi major signal nahi",
+  radarTitle:                 "Risk Radar",
+  rrCardTitle:                "Cosmic Risk Radar",
+  rrSafestChip:               "SAFEST",
+  rrChallengingChip:          "CHALLENGING",
+  rrDayOf7:                   "Day {n} of 7",
+  rrLockedTitle:              "{date} ka radar locked",
+  rrLockedSub:                "Aane wale dino ka full radar — risk level, kya karna/avoid karna, lucky numbers, best time aur upay — Premium se unlock karein.",
+  rrLockedHint:               "💡 Day 1 free hai — preview ke liye tap karein",
+  rrLockedCta:                "UNLOCK PREMIUM",
+  rrScoreUp:                  "Aaj positive energy bhari hai. Naye kaam shuru karne ka accha din.",
+  rrScoreMixed:               "Mixed din — kuch mauke, kuch cheezein dhyaan se.",
+  rrScoreDown:                "Aaj thodi challenging energy. Patient rahein, reactive na ho.",
+  rrDotPrimary:               "Primary",
+  rrDotSecondary:             "Secondary",
+  rrDotWatch:                 "Watch",
+  rrDotStable:                "Stable",
+  rrDotRoutine:               "Routine check",
 };
 
 // Hindi overrides (Devanagari)
@@ -6594,6 +6651,25 @@ const HI: Partial<MoreT> = {
   radarSignalPlural:          "संकेत",
   radarAllClear:              "सब सुरक्षित",
   radarAllClearSub:           "आज कोई बड़ा संकेत नहीं",
+  radarTitle:                 "जोखिम रडार",
+  rrCardTitle:                "कॉस्मिक जोखिम रडार",
+  rrSafestChip:               "सबसे सुरक्षित",
+  rrChallengingChip:          "चुनौतीपूर्ण",
+  rrDayOf7:                   "दिन {n} / ७",
+  rrLockedTitle:              "{date} का रडार लॉक",
+  rrLockedSub:                "आने वाले दिनों का पूरा रडार — जोखिम स्तर, क्या करना/टालना, शुभ अंक, शुभ समय और उपाय — प्रीमियम से अनलॉक करें।",
+  rrLockedHint:               "💡 दिन १ मुफ़्त — पूर्वावलोकन के लिए टैप करें",
+  rrLockedCta:                "प्रीमियम अनलॉक करें",
+  rrScoreUp:                  "आज सकारात्मक ऊर्जा भरी है। नए कार्य शुरू करने का अच्छा दिन।",
+  rrScoreMixed:               "मिश्रित दिन — कुछ अवसर, कुछ बातें सावधानी से।",
+  rrScoreDown:                "आज थोड़ी चुनौतीपूर्ण ऊर्जा। धैर्य रखें, प्रतिक्रियाशील न हों।",
+  rrDotPrimary:               "प्राथमिक",
+  rrDotSecondary:             "द्वितीयक",
+  rrDotWatch:                 "निगरानी",
+  rrDotStable:                "स्थिर",
+  rrDotRoutine:               "नियमित जाँच",
+  pn_vivahBlockedChaturmas: "चातुर्मास (जुलाई–अक्टूबर) — शास्त्रीय विवाह वर्जित। सूर्य कर्क–तुला में; वृश्चिक (~नवंबर) के बाद पुनः शुरू।",
+  pn_vivahBlockedMeena:     "मीन मास (फ़रवरी–मार्च) — शास्त्रीय विवाह बंद।",
 };
 
 
@@ -6806,8 +6882,13 @@ const HI: Partial<MoreT> = {
 
 
 /** Get additional strings — English, Hinglish, Hindi only. */
-export function getTM(lang: UILang): MoreT {
-  switch (lang) {
+export function getTM(lang: string): MoreT {
+  const c = (lang || "en").trim().toLowerCase();
+  const bucket =
+    c === "hn" || c === "hinglish" ? "hn" :
+    c === "hi" || c === "hindi" ? "hi" :
+    "en";
+  switch (bucket) {
     case "hn": return { ...EN, ...HN };
     case "hi": return { ...EN, ...HI };
     default:   return EN;

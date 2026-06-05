@@ -25,31 +25,32 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
+import type { UILang } from "@/lib/i18n";
+import { rashiAt } from "@/lib/i18nVedic";
 
-const SIGNS = [
-  "Mesh","Vrishabh","Mithun","Kark","Simha","Kanya",
-  "Tula","Vrishchik","Dhanu","Makar","Kumbh","Meen",
-];
-function moonSign(lon: number): string { return SIGNS[Math.floor(lon / 30) % 12]; }
-function moonPhase(date: Date): string {
+function moonSign(lon: number, lang: UILang): string {
+  return rashiAt(Math.floor(lon / 30) % 12, lang);
+}
+
+function moonPhase(date: Date, lang: UILang): string {
   const ref = new Date("2000-01-06").getTime();
   const cycle = 29.53058770576;
   const diff = (date.getTime() - ref) / (1000 * 60 * 60 * 24);
   const phase = ((diff % cycle) + cycle) % cycle;
-  if (phase < 2)  return "Amavasya";
-  if (phase < 7)  return "Shukla Paksha";
-  if (phase < 15) return "Shukla Paksha";
-  if (phase < 17) return "Purnima";
-  if (phase < 22) return "Krishna Paksha";
-  if (phase < 29) return "Krishna Paksha";
-  return "Amavasya";
+  const labels = {
+    en: { amavasya: "Amavasya", shukla: "Shukla Paksha", purnima: "Purnima", krishna: "Krishna Paksha" },
+    hn: { amavasya: "Amavasya", shukla: "Shukla Paksha", purnima: "Purnima", krishna: "Krishna Paksha" },
+    hi: { amavasya: "अमावस्या", shukla: "शुक्ल पक्ष", purnima: "पूर्णिमा", krishna: "कृष्ण पक्ष" },
+  }[lang];
+  if (phase < 2)  return labels.amavasya;
+  if (phase < 7)  return labels.shukla;
+  if (phase < 15) return labels.shukla;
+  if (phase < 17) return labels.purnima;
+  if (phase < 22) return labels.krishna;
+  if (phase < 29) return labels.krishna;
+  return labels.amavasya;
 }
 
-const SCORE_SUMMARIES: Record<string, string> = {
-  UP: "Today is filled with positive energy. A great day to start new ventures.",
-  MIXED: "A mixed day — some opportunities, some things to watch out for.",
-  DOWN: "Slightly challenging energy today. Stay patient, avoid being reactive.",
-};
 function scoreToTrend(s: number): "UP" | "MIXED" | "DOWN" {
   return s >= 65 ? "UP" : s <= 40 ? "DOWN" : "MIXED";
 }
@@ -59,6 +60,8 @@ export default function DashaRiskScreen() {
   const C = useC();
   const t = useT();
   const { kundli, moonData } = useUser();
+  const scoreSummary = (trend: "UP" | "MIXED" | "DOWN") =>
+    trend === "UP" ? t.rrScoreUp : trend === "DOWN" ? t.rrScoreDown : t.rrScoreMixed;
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
   const showDemo = !kundli;
@@ -87,10 +90,10 @@ export default function DashaRiskScreen() {
           date: dt,
           score: demoScores[i],
           moonLon: demoMoons[i],
-          moonSign: moonSign(demoMoons[i]),
-          phase: moonPhase(dt),
-          summary: SCORE_SUMMARIES[scoreToTrend(demoScores[i])],
-          ...computeRisk(demoScores[i], i, dt),
+          moonSign: moonSign(demoMoons[i], t.lang),
+          phase: moonPhase(dt, t.lang),
+          summary: scoreSummary(scoreToTrend(demoScores[i])),
+          ...computeRisk(demoScores[i], i, dt, t.lang),
         };
       }));
       return;
@@ -117,17 +120,17 @@ export default function DashaRiskScreen() {
             date:     dt,
             score,
             moonLon:  transitMoon,
-            moonSign: moonSign(transitMoon),
-            phase:    moonPhase(dt),
-            summary:  SCORE_SUMMARIES[scoreToTrend(score)],
-            ...computeRisk(score, i, dt),
+            moonSign: moonSign(transitMoon, t.lang),
+            phase:    moonPhase(dt, t.lang),
+            summary:  scoreSummary(scoreToTrend(score)),
+            ...computeRisk(score, i, dt, t.lang),
           };
         });
         setDays(built);
       })
       .catch(() => setDays([]))
       .finally(() => setLoading(false));
-  }, [kundli, moonData, showDemo]);
+  }, [kundli, moonData, showDemo, t.lang]);
 
   const back = () => {
     if (router.canGoBack()) router.back();
@@ -137,7 +140,7 @@ export default function DashaRiskScreen() {
   const dayLabel = (d: Date, i: number) => {
     if (i === 0) return t.radarDayToday;
     if (i === 1) return t.radarDayTomorrow;
-    return fmtDate(d);
+    return fmtDate(d, t.lang);
   };
 
   // Synthesize 1-3 risk dots for the cosmic radar from the selected day's data.
@@ -149,21 +152,21 @@ export default function DashaRiskScreen() {
     const lvl = day.riskLevel; // "low" | "med" | "high"
     if (lvl === "high") {
       return [
-        { level: "high",   title: "Primary",   reason: day.riskShort,    advice: day.riskKarna },
-        { level: "medium", title: "Secondary", reason: day.riskCategory, advice: day.riskAvoid },
-        { level: "low",    title: "Watch",     reason: "Routine check",  advice: day.riskRemedy },
+        { level: "high",   title: t.rrDotPrimary,   reason: day.riskShort,    advice: day.riskKarna },
+        { level: "medium", title: t.rrDotSecondary, reason: day.riskCategory, advice: day.riskAvoid },
+        { level: "low",    title: t.rrDotWatch,     reason: t.rrDotRoutine,   advice: day.riskRemedy },
       ];
     }
     if (lvl === "med") {
       return [
-        { level: "medium", title: "Primary",   reason: day.riskShort,    advice: day.riskKarna },
-        { level: "low",    title: "Secondary", reason: day.riskCategory, advice: day.riskAvoid },
+        { level: "medium", title: t.rrDotPrimary,   reason: day.riskShort,    advice: day.riskKarna },
+        { level: "low",    title: t.rrDotSecondary, reason: day.riskCategory, advice: day.riskAvoid },
       ];
     }
     return [
-      { level: "low", title: "Stable", reason: day.riskShort, advice: day.riskKarna },
+      { level: "low", title: t.rrDotStable, reason: day.riskShort, advice: day.riskKarna },
     ];
-  }, [days, selected]);
+  }, [days, selected, t]);
 
   return (
     <View style={[s.root, { paddingTop: topPad, backgroundColor: C.bg }]}>
@@ -179,7 +182,7 @@ export default function DashaRiskScreen() {
           />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={[s.headerTitle, { color: C.text }]}>Risk Radar</Text>
+          <Text style={[s.headerTitle, { color: C.text }]}>{t.radarTitle}</Text>
           <Text style={[s.headerSub,   { color: C.textMuted }]}>
             {t.radarHeaderSub}
           </Text>
@@ -187,26 +190,9 @@ export default function DashaRiskScreen() {
         {showDemo && (
           <View style={[s.demoPill, { borderColor: C.border, backgroundColor: C.bgCard }]}>
             <Feather name="lock" size={9} color={C.textDim} />
-            <Text style={[s.demoPillText, { color: C.textDim }]}>DEMO</Text>
+            <Text style={[s.demoPillText, { color: C.textDim }]}>{t.ds_demo}</Text>
           </View>
         )}
-      </View>
-
-      {/* Top tabs — Risk Radar (active) | 7 Day Forecast */}
-      <View style={[s.tabsRow, { borderBottomColor: C.border, backgroundColor: C.bg }]}>
-        <View style={[s.tabPill, s.tabPillActive, { backgroundColor: "rgba(251,191,36,0.12)", borderColor: "#fbbf24" }]}>
-          <Feather name="radio" size={12} color="#fbbf24" />
-          <Text style={[s.tabPillTxt, { color: "#fbbf24" }]}>Risk Radar</Text>
-        </View>
-        <Pressable
-          onPress={() => { Haptics.selectionAsync(); router.push("/forecast"); }}
-          style={[s.tabPill, { backgroundColor: C.bgCard, borderColor: C.border }]}
-          hitSlop={6}
-        >
-          <Feather name="calendar" size={12} color={C.textMuted} />
-          <Text style={[s.tabPillTxt, { color: C.textMuted }]}>7 Day Forecast</Text>
-          <Feather name="chevron-right" size={12} color={C.textDim} style={{ marginLeft: 2 }} />
-        </Pressable>
       </View>
 
       <ScrollView
@@ -323,7 +309,7 @@ export default function DashaRiskScreen() {
 
             {/* Footer */}
             <Text style={[s.noteFooter, { color: C.textDim }]}>
-              Powered by Advanced Cosmic Intelligence
+              {t.rrLuckyPoweredBy}
             </Text>
           </>
         )}
@@ -351,30 +337,6 @@ const s = StyleSheet.create({
     borderRadius: 8, borderWidth: 1,
   },
   demoPillText: { fontSize: 9, fontWeight: "800", letterSpacing: 1 },
-
-  // Top tabs row (Risk Radar | 7 Day Forecast)
-  tabsRow: {
-    flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-  },
-  tabPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  tabPillActive: {},
-  tabPillTxt: {
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 0.2,
-  },
 
   content: { padding: 16, gap: 14 },
 

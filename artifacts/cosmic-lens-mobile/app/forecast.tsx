@@ -396,7 +396,7 @@ export default function ForecastScreen() {
           moonSign: moonSign(demoMoons[i]),
           phase: moonPhase(dt),
           summary: SCORE_SUMMARIES[scoreToTrend(demoScores[i])],
-          ...computeRisk(demoScores[i], i, dt),
+          ...computeRisk(demoScores[i], i, dt, t.lang),
         };
       }));
       return;
@@ -430,7 +430,7 @@ export default function ForecastScreen() {
             moonSign: moonSign(transitMoon),
             phase:    moonPhase(dt),
             summary:  SCORE_SUMMARIES[scoreToTrend(score)],
-            ...computeRisk(score, i, dt),
+            ...computeRisk(score, i, dt, t.lang),
           };
         });
         setDays(built);
@@ -441,7 +441,7 @@ export default function ForecastScreen() {
         setDays([]);
       })
       .finally(() => setLoading(false));
-  }, [kundli, moonData, showDemo]);
+  }, [kundli, moonData, showDemo, t.lang]);
 
   const sel = days[selected];
   const scoreColor = sel

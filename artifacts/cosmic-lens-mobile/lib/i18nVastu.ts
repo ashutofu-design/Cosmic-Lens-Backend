@@ -698,9 +698,8 @@ const hi: VastuT = {
 // Public getter — fall back to English for non-explicit langs (no Hinglish leak)
 // ─────────────────────────────────────────────────────────────────────────────
 export function getTV(lang: UILang | string | undefined | null): VastuT {
-  switch ((lang || "en") as string) {
-    case "hn": return hn;
-    case "hi": return hi;
-    default:   return en;
-  }
+  const c = (lang || "en").trim().toLowerCase();
+  if (c === "hn" || c === "hinglish") return hn;
+  if (c === "hi" || c === "hindi") return hi;
+  return en;
 }

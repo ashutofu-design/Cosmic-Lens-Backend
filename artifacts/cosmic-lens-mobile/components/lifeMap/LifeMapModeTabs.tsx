@@ -85,9 +85,9 @@ export function LifeMapModeTabs({
 const s = StyleSheet.create({
   row: {
     flexDirection: "row",
-    gap: 10,
-    padding: 6,
-    borderRadius: 16,
+    gap: 8,
+    padding: 5,
+    borderRadius: 14,
     borderWidth: 1,
   },
   tab: {
@@ -95,13 +95,13 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderRadius: 12,
+    gap: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 8,
+    borderRadius: 10,
     borderWidth: 1,
     overflow: "hidden",
   },
-  tabIcon: { fontSize: 16 },
-  tabLabel: { fontSize: 13, letterSpacing: 0.2 },
+  tabIcon: { fontSize: 14 },
+  tabLabel: { fontSize: 12, letterSpacing: 0.15 },
 });

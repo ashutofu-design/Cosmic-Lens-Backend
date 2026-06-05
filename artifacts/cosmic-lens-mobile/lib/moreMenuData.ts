@@ -60,6 +60,15 @@ export function buildMoreDrawerCategories(t: ReturnType<typeof useT>): MoreMenuC
           route: "/my-reports",
           accent: "#f6c453",
         },
+        {
+          id: "profile",
+          icon: "user",
+          emoji: "👤",
+          title: t.tabProfile,
+          subtitle: t.pe_manageProfile,
+          route: "/(tabs)/profile",
+          accent: "#8b5cf6",
+        },
       ],
     },
   ];

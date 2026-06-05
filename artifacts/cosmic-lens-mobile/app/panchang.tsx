@@ -604,9 +604,15 @@ export default function PanchangScreen() {
                   <Text style={[sty.emptyTitle, { color: C.text }]}>{t.pn_vivahEmpty}</Text>
                 </View>
               ) : (
-                vivahByMonth.map(([month, items]) => (
+                <>
+                <Text style={[sty.vivahCountHdr, { color: C.textMuted }]}>
+                  {t.pn_vivahCount.replace("{n}", String(vivah.length))}
+                </Text>
+                {vivahByMonth.map(([month, items]) => (
                   <View key={month}>
-                    <Text style={[sty.monthHdr, { color: C.isDark ? "#a78bfa" : "#7c3aed" }]}>{month.toUpperCase()}</Text>
+                    <Text style={[sty.monthHdr, { color: C.isDark ? "#a78bfa" : "#7c3aed" }]}>
+                      {month.toUpperCase()}
+                    </Text>
                     <View style={[sty.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
                       {items.map((item, i) => {
                         const win = item.best_windows?.[0];
@@ -641,7 +647,8 @@ export default function PanchangScreen() {
                       })}
                     </View>
                   </View>
-                ))
+                ))}
+                </>
               )}
             </>
           )}
@@ -686,6 +693,7 @@ function makeStyles(L: ScreenLayout) {
     hint: { fontSize: rs(10), fontFamily: F.semibold },
     countLine: { fontSize: rs(11), fontFamily: F.medium },
     monthHdr: { fontSize: rs(11), fontFamily: F.bold, letterSpacing: 1.2, paddingVertical: rs(6) },
+    vivahCountHdr: { fontSize: rs(11), fontFamily: F.medium, paddingBottom: rs(4), paddingHorizontal: rs(2) },
     vivahRow: {
       flexDirection: "row", alignItems: "flex-start", gap: rs(8),
       paddingVertical: rs(10), paddingHorizontal: rs(12), borderBottomWidth: 1,

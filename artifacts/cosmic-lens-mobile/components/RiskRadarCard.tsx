@@ -7,9 +7,16 @@ import { I18nManager, Pressable, StyleSheet, Text, View } from "react-native";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
+import type { UILang } from "@/lib/i18n";
+import { getLuckyColors, getRiskBucket } from "@/lib/riskRadarContent";
 
-export const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-export const fmtDate = (d: Date) => `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
+const MONTHS_EN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MONTHS_HI = ["जन","फ़र","मार्च","अप्रै","मई","जून","जुल","अग","सित","अक्टू","नव","दिस"];
+
+export const fmtDate = (d: Date, lang: UILang = "en") => {
+  const months = lang === "hi" ? MONTHS_HI : MONTHS_EN;
+  return `${d.getDate()} ${months[d.getMonth()]}`;
+};
 
 export type RiskLevel = "low" | "med" | "high";
 export interface LuckyColor { name: string; emoji: string; hex: string; }
@@ -35,102 +42,6 @@ export interface DayForecast {
   avoidTime:    string;
 }
 
-const RISK_BY_LEVEL: Record<RiskLevel, {
-  shorts:  string[];
-  details: { cat: string; detail: string; avoid: string; karna: string; remedy: string; }[];
-}> = {
-  low: {
-    shorts: [
-      "Stable din — apne kaam pe focus karo",
-      "Cosmic energies aapke favor mein hain",
-      "Smooth flow ka din hai",
-    ],
-    details: [
-      {
-        cat: "Career",
-        detail: "Naye projects ya pitches start karne ka safe din. Important conversations productive rahengi.",
-        avoid:  "Negative logon ki advice, pessimistic news, ya self-doubt.",
-        karna:  "Meetings, presentations, networking, naye ideas pitch karein.",
-        remedy: "Subah 5 minute Surya Namaskar — energy boost ke liye.",
-      },
-      {
-        cat: "Money",
-        detail: "Investments aur savings ke liye accha din. Long-term financial decisions safely le sakte hain.",
-        avoid:  "Bekar ke kharch, impulse purchases, gambling.",
-        karna:  "SIP, bachat schemes, ya bills clear karein. Budget review karein.",
-        remedy: "Peeli ya golden kapde pehnna shubh rahega.",
-      },
-      {
-        cat: "Health",
-        detail: "Vitality high rahegi. Workout, meditation ya naye healthy habits build karne ka perfect time.",
-        avoid:  "Junk food, late-night screen time, alcohol.",
-        karna:  "Yoga, walk, healthy meal plan, hydration badhayein.",
-        remedy: "Subah tulsi-paani — overall wellness ke liye.",
-      },
-    ],
-  },
-  med: {
-    shorts: [
-      "Mixed signals — soch samajh ke decisions lo",
-      "Communication mein clarity rakhe",
-      "Patience aaj ka mantra hai",
-    ],
-    details: [
-      {
-        cat: "Communication",
-        detail: "Aaj misunderstandings hone ke chances zyada hain. Important messages double-check karein, clarity rakhein.",
-        avoid:  "Voice calls bina prep ke, important texts jaldi mein, gossip.",
-        karna:  "Written confirmation lein, points note karein, listen pehle.",
-        remedy: "Important call ya meeting se pehle 5 deep breaths.",
-      },
-      {
-        cat: "Decisions",
-        detail: "Bade decisions postpone karein. Routine kaam continue, naye commitments aaj avoid karein.",
-        avoid:  "Bade purchases, contracts sign karna, naye commitments.",
-        karna:  "Documents review karein, planning karein, pros-cons list banayein.",
-        remedy: "Decision se pehle paani peeke 2 min ruk jaayein.",
-      },
-      {
-        cat: "Relations",
-        detail: "Family ya partner se patience se baat karein. Choti baatein bade misunderstanding ban sakti hain.",
-        avoid:  "Sensitive topics, criticism, gussa, blame game.",
-        karna:  "Sunne ka time dein, gratitude express karein, quality time spend karein.",
-        remedy: "Shaam ko ghar mein diya jalaayein — peace ke liye.",
-      },
-    ],
-  },
-  high: {
-    shorts: [
-      "Saavdhan rahe — important decisions postpone karo",
-      "Conflicts avoid karne ki koshish kare",
-      "Energy low — apna khayal rakhe",
-    ],
-    details: [
-      {
-        cat: "Conflict",
-        detail: "Aaj arguments aur disputes hone ke chances bahut zyada hain. Confrontations avoid karein — silence is power aaj.",
-        avoid:  "Arguments, blame game, sharp words, social media debates.",
-        karna:  "Solo time lein, meditation karein, breathing exercises.",
-        remedy: "Hanuman Chalisa ya Maha Mrityunjaya 11 baar.",
-      },
-      {
-        cat: "Money",
-        detail: "Financial decisions strictly avoid. Naye loans, investments aur big purchases postpone karein.",
-        avoid:  "Loans, investments, bade purchases, kisi ko paisa udhaar dena.",
-        karna:  "Budget review karein, expenses track karein, savings safe karein.",
-        remedy: "Daan karein — chhota hi sahi, doosron ki madad.",
-      },
-      {
-        cat: "Health",
-        detail: "Energy aur immunity low rahegi. Heavy workouts skip karein, rest aur hydration priority dein.",
-        avoid:  "Heavy workouts, late nights, junk food, alcohol.",
-        karna:  "Hydration, neend, light meals, gentle stretches.",
-        remedy: "Adrak-haldi paani din mein 2 baar.",
-      },
-    ],
-  },
-};
-
 export function scoreToRiskScore(score: number): number {
   return Math.round(Math.max(0, Math.min(10, (100 - score) / 7)));
 }
@@ -139,24 +50,6 @@ export function scoreToRiskLevel(rs: number): RiskLevel {
   if (rs <= 6) return "med";
   return "high";
 }
-
-const LUCKY_COLORS: Record<RiskLevel, LuckyColor[]> = {
-  low: [
-    { name: "Hara",     emoji: "🟢", hex: "#4ade80" },
-    { name: "Pila",     emoji: "🟡", hex: "#facc15" },
-    { name: "Safed",    emoji: "⚪", hex: "#f3f4f6" },
-  ],
-  med: [
-    { name: "Neela",    emoji: "🔵", hex: "#60a5fa" },
-    { name: "Pila",     emoji: "🟡", hex: "#facc15" },
-    { name: "Suneheri", emoji: "🟠", hex: "#fb923c" },
-  ],
-  high: [
-    { name: "Safed",    emoji: "⚪", hex: "#f3f4f6" },
-    { name: "Kesari",   emoji: "🟠", hex: "#fb923c" },
-    { name: "Pila",     emoji: "🟡", hex: "#facc15" },
-  ],
-};
 
 const BEST_TIME_SLOTS = [
   "10:30 AM — 12:45 PM", "8:00 AM — 10:15 AM", "4:30 PM — 6:30 PM",
@@ -182,8 +75,8 @@ function getLuckyNumbers(dateMs: number, score: number): number[] {
   }
   return nums;
 }
-function getLuckyColor(level: RiskLevel, dateMs: number): LuckyColor {
-  const arr = LUCKY_COLORS[level];
+function getLuckyColor(level: RiskLevel, dateMs: number, lang: UILang): LuckyColor {
+  const arr = getLuckyColors(lang, level);
   return arr[dayHash(dateMs) % arr.length];
 }
 function getBestTime(dateMs: number): string {
@@ -193,10 +86,10 @@ function getAvoidTime(dateMs: number): string {
   return AVOID_TIME_SLOTS[(dayHash(dateMs) + 2) % AVOID_TIME_SLOTS.length];
 }
 
-export function computeRisk(score: number, _dayIdx: number, date: Date) {
+export function computeRisk(score: number, _dayIdx: number, date: Date, lang: UILang = "en") {
   const riskScore = scoreToRiskScore(score);
   const level     = scoreToRiskLevel(riskScore);
-  const bucket    = RISK_BY_LEVEL[level];
+  const bucket    = getRiskBucket(lang, level);
   const dateMs    = date.getTime();
   // Content is selected by date hash (not array index) so the same calendar
   // date always renders the same risk copy across screens (forecast CTA preview
@@ -215,7 +108,7 @@ export function computeRisk(score: number, _dayIdx: number, date: Date) {
     riskKarna:    det.karna,
     riskRemedy:   det.remedy,
     luckyNumbers: getLuckyNumbers(dateMs, score),
-    luckyColor:   getLuckyColor(level, dateMs),
+    luckyColor:   getLuckyColor(level, dateMs, lang),
     bestTime:     getBestTime(dateMs),
     avoidTime:    getAvoidTime(dateMs),
   };
@@ -320,7 +213,7 @@ export function RiskRadarCard({
       <View style={s.head}>
         <View style={s.titleRow}>
           <Feather name="alert-triangle" size={13} color="#fbbf24" />
-          <Text style={[s.title, { color: C.text }]}>Cosmic Risk Radar</Text>
+          <Text style={[s.title, { color: C.text }]}>{t.rrCardTitle}</Text>
         </View>
         <View style={s.headRight}>
           {streak >= 2 && (
@@ -328,7 +221,9 @@ export function RiskRadarCard({
               <Text style={s.streakPillText}>🔥 {streak}</Text>
             </View>
           )}
-          <Text style={[s.headHint, { color: C.textDim }]}>Day {selected + 1} of 7</Text>
+          <Text style={[s.headHint, { color: C.textDim }]}>
+            {t.rrDayOf7.replace("{n}", String(selected + 1))}
+          </Text>
         </View>
       </View>
 
@@ -338,15 +233,15 @@ export function RiskRadarCard({
           onPress={() => { onSelect(safestIdx); Haptics.selectionAsync(); }}
           style={[s.chip, { backgroundColor: "rgba(74,222,128,0.10)", borderColor: "rgba(74,222,128,0.30)" }]}
         >
-          <Text style={[s.chipLabel, { color: "#4ade80" }]}>SAFEST</Text>
-          <Text style={[s.chipDay,   { color: C.text }]}>{fmtDate(days[safestIdx].date)}</Text>
+          <Text style={[s.chipLabel, { color: "#4ade80" }]}>{t.rrSafestChip}</Text>
+          <Text style={[s.chipDay,   { color: C.text }]}>{fmtDate(days[safestIdx].date, t.lang)}</Text>
         </Pressable>
         <Pressable
           onPress={() => { onSelect(riskiestIdx); Haptics.selectionAsync(); }}
           style={[s.chip, { backgroundColor: "rgba(239,68,68,0.10)", borderColor: "rgba(239,68,68,0.30)" }]}
         >
-          <Text style={[s.chipLabel, { color: "#ef4444" }]}>CHALLENGING</Text>
-          <Text style={[s.chipDay,   { color: C.text }]}>{fmtDate(days[riskiestIdx].date)}</Text>
+          <Text style={[s.chipLabel, { color: "#ef4444" }]}>{t.rrChallengingChip}</Text>
+          <Text style={[s.chipDay,   { color: C.text }]}>{fmtDate(days[riskiestIdx].date, t.lang)}</Text>
         </Pressable>
       </View>
 
@@ -357,22 +252,21 @@ export function RiskRadarCard({
         >
           <View style={s.lockedTop}>
             <Feather name="lock" size={14} color="#fbbf24" />
-            <Text style={s.lockedTitle}>{fmtDate(sel.date)} ka radar locked</Text>
+            <Text style={s.lockedTitle}>
+              {t.rrLockedTitle.replace("{date}", fmtDate(sel.date, t.lang))}
+            </Text>
           </View>
-          <Text style={s.lockedSub}>
-            Aane wale dino ka full radar — risk level, kya karna/avoid karna,
-            lucky numbers, best time aur upay — Premium se unlock karein.
-          </Text>
+          <Text style={s.lockedSub}>{t.rrLockedSub}</Text>
           <Pressable
             onPress={(e) => { e.stopPropagation?.(); onSelect(0); Haptics.selectionAsync(); }}
             style={[s.lockedHint, { borderColor: C.border }]}
           >
             <Text style={[s.lockedHintText, { color: C.textMuted }]}>
-              💡 Day 1 free hai — preview ke liye tap karein
+              {t.rrLockedHint}
             </Text>
           </Pressable>
           <View style={s.lockedCta}>
-            <Text style={s.lockedCtaText}>UNLOCK PREMIUM</Text>
+            <Text style={s.lockedCtaText}>{t.rrLockedCta}</Text>
             <Feather name={I18nManager.isRTL ? "arrow-left" : "arrow-right"} size={11} color="#fbbf24" />
           </View>
         </Pressable>
@@ -415,7 +309,7 @@ export function RiskRadarCard({
                 ? t.rrSection24hToday
                 : t.rrSection24hWithDate.replace(
                     "{date}",
-                    fmtDate(sel.date).toUpperCase(),
+                    fmtDate(sel.date, t.lang).toUpperCase(),
                   )}
             </Text>
           </View>

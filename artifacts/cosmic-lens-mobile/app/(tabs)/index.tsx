@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { Redirect, router } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
   Platform,
@@ -19,12 +19,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
 import EnergyChart from "@/components/EnergyChart";
 import { useUser } from "@/context/UserContext";
-import { getT, type UILang } from "@/lib/i18n";
+import { coerceUILang, getT, type UILang } from "@/lib/i18n";
 import { getDemoLabels } from "@/lib/i18nContent";
 import { useColors } from "@/hooks/useColors";
 import { useTheme } from "@/context/ThemeContext";
+import { fetchConnectionStatus } from "@/lib/connectionStatus";
 import { computeTodayEnergy } from "@/lib/todayEnergyCalc";
-import { fetchTodayEnergy, type EnergyResult, type EnergyFlag } from "@/lib/energyAPI";
+import { fetchTodayEnergy, type EnergyResult } from "@/lib/energyAPI";
 import { computeActiveDasha, type ActiveDashaResult } from "@/lib/proInsightEngine";
 import { buildPersonalSnapshot, type PersonalSnapshot } from "@/lib/personalizationSnapshot";
 import type { MoonHistoryPoint } from "@/types";
@@ -59,6 +60,7 @@ type HomeLabels = {
   insightModerate: string;
   insightUnstable: string;
   insightLow:      string;
+  checkTomorrow:   string;
 };
 
 const HOME_EN: HomeLabels = {
@@ -83,6 +85,7 @@ const HOME_EN: HomeLabels = {
   insightModerate:"Moderate energy, stay focused",
   insightUnstable:"Energy unstable today",
   insightLow:     "Low energy — rest & introspect",
+  checkTomorrow:  "Check tomorrow's energy",
 };
 
 const HOME_LABELS: Partial<Record<UILang, HomeLabels>> = {
@@ -110,6 +113,7 @@ const HOME_LABELS: Partial<Record<UILang, HomeLabels>> = {
     insightModerate:"Moderate energy, focus rakhein",
     insightUnstable:"Aaj energy unstable hai",
     insightLow:     "Kam energy — aaram aur introspect",
+    checkTomorrow:  "Check tomorrow energy",
   },
 
   hi: {
@@ -134,12 +138,14 @@ const HOME_LABELS: Partial<Record<UILang, HomeLabels>> = {
     insightModerate:"मध्यम ऊर्जा, ध्यान केंद्रित रखें",
     insightUnstable:"आज ऊर्जा अस्थिर है",
     insightLow:     "कम ऊर्जा — विश्राम व आत्मचिंतन",
+    checkTomorrow:  "कल की ऊर्जा देखें",
   },
 
 };
 
 function getHomeLabels(lang: UILang): HomeLabels {
-  return HOME_LABELS[lang] ?? HOME_EN;
+  const bucket = coerceUILang(lang);
+  return HOME_LABELS[bucket] ?? HOME_EN;
 }
 
 // ── Font aliases ──────────────────────────────────────────────────────────────
@@ -156,6 +162,11 @@ const DEMO_PTS    = [12, 18, 25, 30, 28, 35, 42, 38, 50, 55, 48, 38];
 import { FadeInView } from "@/components/motion/FadeInView";
 import { API_BASE as BASE_URL, apiFetch } from "@/lib/apiConfig";
 
+
+function StatusDot({ ok }: { ok: boolean | null }) {
+  const color = ok === null ? "#6b7280" : ok ? "#22c55e" : "#ef4444";
+  return <View style={[styles.statusDot, { backgroundColor: color }]} />;
+}
 
 function energyInsight(energy: number, L: ReturnType<typeof getHomeLabels>): { icon: string; text: string; color: string } {
   if (energy >= 75) return { icon: "🔥", text: L.insightStrong,    color: "#22c55e" };
@@ -251,7 +262,7 @@ export default function HomeScreen() {
   // L (home-tab labels) uses the FULL UILang so Odia / Bangla / Marathi /
   // Tamil / Telugu / Gujarati / Kannada / Malayalam / Punjabi / Assamese
   // each render in their own script instead of silently bucketing to Hindi.
-  const L = getHomeLabels(language);
+  const L = getHomeLabels(coerceUILang(language));
 
   const [targetPts, setTargetPts] = useState<number[]>([]);
   const [labels,    setLabels]    = useState<string[]>([]);
@@ -260,63 +271,90 @@ export default function HomeScreen() {
   const cancelRef = useRef(false);
 
   const [backendEnergy, setBackendEnergy] = useState<EnergyResult | null>(null);
+  const [backendOk, setBackendOk] = useState<boolean | null>(null);
+  const [adminOk, setAdminOk] = useState<boolean | null>(null);
+
+  const refreshConnectionStatus = useCallback(async () => {
+    const status = await fetchConnectionStatus();
+    setBackendOk(status.backend);
+    setAdminOk(status.admin);
+  }, []);
 
   useEffect(() => {
-    if (!kundli) return;
-    cancelRef.current = false;
-    setLoading(true); setTargetPts([]); setLabels([]); setSettled(false);
-    setBackendEnergy(null);
+    refreshConnectionStatus();
+    const id = setInterval(refreshConnectionStatus, 30_000);
+    return () => clearInterval(id);
+  }, [refreshConnectionStatus]);
 
-    // Parallel fetch: moon history (for chart line) + accurate backend energy.
-    // Chart line uses the lightweight local calc (visual only), but the hero
-    // number comes from the backend Shadbala/Shodhana engine for ~92% accuracy.
+  const refreshEnergy = useCallback(async (initial: boolean) => {
+    if (!kundli) return;
+    if (initial) {
+      cancelRef.current = false;
+      setLoading(true);
+      setTargetPts([]);
+      setLabels([]);
+      setSettled(false);
+      setBackendEnergy(null);
+    }
+
     const moonHistPromise = apiFetch(`${BASE_URL}/api/moon_history?count=${N}&interval=2`)
       .then(r => r.json())
       .catch(() => null) as Promise<{ points: MoonHistoryPoint[] } | null>;
 
     const backendEnergyPromise = fetchTodayEnergy(kundli);
 
-    Promise.all([moonHistPromise, backendEnergyPromise])
-      .then(([moonHist, backend]) => {
-        if (cancelRef.current) return;
+    try {
+      const [moonHist, backend] = await Promise.all([moonHistPromise, backendEnergyPromise]);
+      if (cancelRef.current) return;
 
-        // Stash full backend result for v3 UI surface (buckets/confidence/flags).
-        if (backend) setBackendEnergy(backend);
+      if (backend) setBackendEnergy(backend);
 
-        if (!moonHist?.points?.length) {
-          setLoading(false);
-          return;
+      if (!moonHist?.points?.length) {
+        if (initial) setLoading(false);
+        return;
+      }
+
+      const Lbl = getHomeLabels(coerceUILang(language));
+      const lastIdx = moonHist.points.length - 1;
+      const values = moonHist.points.map((pt, idx) => {
+        const localScore = computeTodayEnergy(pt.longitude, pt.rashiIndex, kundli) ?? 0;
+        if (idx === lastIdx) {
+          const hero = backend?.energy_score ?? localScore;
+          setTodayEnergy(hero);
+          setMoonData({ longitude: pt.longitude, rashiIndex: pt.rashiIndex });
+          return hero;
         }
+        return localScore;
+      });
 
-        // Build chart points from local calc (used for visual line only).
-        const lastIdx = moonHist.points.length - 1;
-        const values = moonHist.points.map((pt, idx) => {
-          const localScore = computeTodayEnergy(pt.longitude, pt.rashiIndex, kundli) ?? 0;
-          if (idx === lastIdx) {
-            // Current point: prefer accurate backend score; fall back to local.
-            const hero = backend?.energy_score ?? localScore;
-            setTodayEnergy(hero);
-            setMoonData({ longitude: pt.longitude, rashiIndex: pt.rashiIndex });
-            return hero;
-          }
-          return localScore;
-        });
-
-        const lbls = moonHist.points.map((pt, idx) =>
-          idx === lastIdx ? L.now : pt.label
-        );
-        setTargetPts(values); setLabels(lbls); setLoading(false);
+      const lbls = moonHist.points.map((pt, idx) =>
+        idx === lastIdx ? Lbl.now : pt.label
+      );
+      setTargetPts(values);
+      setLabels(lbls);
+      if (initial) {
+        setLoading(false);
         setTimeout(() => { if (!cancelRef.current) setSettled(true); }, 1400);
-      })
-      .catch(() => { if (!cancelRef.current) setLoading(false); });
+      }
+    } catch {
+      if (!cancelRef.current && initial) setLoading(false);
+    }
+  }, [kundli, language, setTodayEnergy, setMoonData]);
 
-    return () => { cancelRef.current = true; };
-  }, [kundli]);
+  useEffect(() => {
+    if (!kundli) return;
+    refreshEnergy(true);
+    const pollId = setInterval(() => refreshEnergy(false), 120_000);
+    return () => {
+      cancelRef.current = true;
+      clearInterval(pollId);
+    };
+  }, [kundli, refreshEnergy]);
 
   // ── All hooks MUST come before any early return ───────────────────────────
   const personalSnapshot = React.useMemo(
-    () => buildPersonalSnapshot(kundli, language),
-    [kundli, language],
+    () => buildPersonalSnapshot(kundli),
+    [kundli],
   );
 
   if (!isLoading && !user) return <Redirect href="/login" />;
@@ -334,39 +372,39 @@ export default function HomeScreen() {
   const activeDasha: ActiveDashaResult | null =
     kundli && moonData ? computeActiveDasha(kundli, moonData.longitude) : null;
 
+  const displayName = kundli?.name ?? user?.name ?? t.yourName;
+
   return (
     <CosmicBg contentStyle={{ paddingTop: topPad, paddingBottom: botPad + 100 }}>
 
       {/* ── Greeting ── */}
       <FadeInView delay={0} style={[styles.greetRow, { paddingHorizontal: 16, paddingVertical: 8 }]}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={[styles.greetSub, { color: colors.mutedForeground }]}>
-            {kundli ? L.namaste : L.hello}
+            {L.namaste}
           </Text>
-          <Text style={[styles.greetTitle, { color: colors.foreground }]}>
-            {kundli ? kundli.name : t.todayEnergy}
-          </Text>
+          <View style={styles.greetNameRow}>
+            <Text style={[styles.greetTitle, { color: colors.foreground }]} numberOfLines={1}>
+              {displayName}
+            </Text>
+            <View style={styles.statusDots}>
+              <StatusDot ok={backendOk} />
+              <StatusDot ok={adminOk} />
+            </View>
+          </View>
         </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Pressable
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/forecast"); }}
-            style={[styles.themeToggleBtn, { backgroundColor: colors.C.bgCard2, borderColor: colors.C.border }]}
-          >
-            <Feather name="calendar" size={14} color={colors.C.textMuted} />
-          </Pressable>
-          <Pressable
-            onPress={() => { toggleTheme(); Haptics.selectionAsync(); }}
-            style={[styles.themeToggleBtn, { backgroundColor: colors.C.bgCard2, borderColor: colors.C.border }]}
-          >
-            <Feather name={colors.C.isDark ? "sun" : "moon"} size={15} color={colors.C.textMuted} />
-          </Pressable>
-        </View>
+        <Pressable
+          onPress={() => { toggleTheme(); Haptics.selectionAsync(); }}
+          style={[styles.themeToggleBtn, { backgroundColor: colors.C.bgCard2, borderColor: colors.C.border }]}
+        >
+          <Feather name={colors.C.isDark ? "sun" : "moon"} size={15} color={colors.C.textMuted} />
+        </Pressable>
       </FadeInView>
 
       {/* ── Hero Energy Card — immersive ── */}
-      <FadeInView delay={120} style={{ flex: 6, paddingHorizontal: 8, paddingBottom: 6 }}>
+      <FadeInView delay={120} style={{ flex: 6, paddingHorizontal: 8, paddingBottom: 14 }}>
         <Pressable
-          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/daily-alerts"); }}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push("/today-energy-info"); }}
           style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.92 : 1, transform: [{ scale: pressed ? 0.988 : 1 }] }]}
         >
           <HeroEnergyCard
@@ -378,12 +416,16 @@ export default function HomeScreen() {
             loading={!showDemo && loading && targetPts.length === 0}
             L={L}
             backend={showDemo ? null : backendEnergy}
+            onForecastPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/forecast");
+            }}
           />
         </Pressable>
       </FadeInView>
 
-      {/* ── 3 Feature Rows — 35% ── */}
-      <View style={{ flex: 4, paddingHorizontal: 12, paddingBottom: 6, justifyContent: "space-around" }}>
+      {/* ── 3 Feature Rows — Dosh · Risk Radar · Personalization ── */}
+      <View style={{ flex: 4, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8, gap: 11, justifyContent: "flex-start" }}>
 
         <FadeInView delay={220}>
           <DoshMini L={L} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/dosh"); }} />
@@ -418,56 +460,38 @@ function confidenceMeta(c?: string): { color: string; label: string } | null {
   return null;
 }
 
-function flagToDisplay(flag: EnergyFlag): { icon: string; text: string; color: string } {
-  // Defensive fallbacks for every optional field — never render literal "undefined".
-  switch (flag.type) {
-    case "saturn":
-      return { icon: "♄", text: String(flag.phase ?? "Saturn active"), color: "#a78bfa" };
-    case "chandrashtama":
-      return { icon: "🌑", text: "Chandrashtama — mind unsettled", color: "#ef4444" };
-    case "tithi_rikta":
-      return { icon: "📉", text: `${flag.tithi ?? "Rikta"} — energy drain`, color: "#f59e0b" };
-    case "tithi_purna":
-      return { icon: "✨", text: `${flag.tithi ?? "Purna"} — boost`, color: "#10b981" };
-    case "tara":
-      return { icon: "⭐", text: `${flag.name ?? "Tara"} Tara`, color: "#ef4444" };
-    case "md_sandhi":
-      return { icon: "🔄", text: "Mahadasha sandhi", color: "#f59e0b" };
-    case "pd_retrograde":
-      return { icon: "↺", text: `${flag.planet ?? "PD lord"} vakri`, color: "#8b5cf6" };
-  }
-  return { icon: "•", text: "Active flag", color: "#888" };
-}
-
-const BUCKET_META = {
-  physical: { icon: "💪", short: "Phy", color: "#ef4444" },
-  mental:   { icon: "🧘", short: "Mnd", color: "#3b82f6" },
-  luck:     { icon: "🍀", short: "Luk", color: "#10b981" },
-} as const;
-
-function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, loading, L, backend }: {
+function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, loading, L, backend, onForecastPress }: {
   chartPts: number[]; chartLbls: string[]; chartEnergy: number;
   insight: { icon: string; text: string; color: string };
   showDemo: boolean; loading: boolean;
   L: ReturnType<typeof getHomeLabels>;
   backend: EnergyResult | null;
+  onForecastPress: () => void;
 }) {
   const { C: Ctheme } = useColors();
+  const { width } = useWindowDimensions();
   const displayScore = useCountUp(chartEnergy, 350);
+  const blinkDot = useBlink(380, 380, 900);
+  const shimmerX = useShimmer(width - 32);
+  const scorePulse = useOpacityPulse(0.82, 1, 1400);
+  const glowPulse = usePulseScale(0.012, 2200);
 
-  const conf       = !showDemo ? confidenceMeta(backend?.confidence) : null;
-  const buckets    = !showDemo ? backend?.buckets : null;
-  const topFlag    = !showDemo && backend?.active_flags?.length
-    ? flagToDisplay(backend.active_flags[0])
-    : null;
+  const conf = !showDemo ? confidenceMeta(backend?.confidence) : null;
 
   return (
-    <View style={[hero.card, { flex: 1, backgroundColor: "#0f0a24", borderColor: `${insight.color}40`, borderWidth: 1, shadowColor: insight.color, shadowOpacity: 0.28, shadowRadius: 24, shadowOffset: { width: 0, height: 0 } } as any]}>
+    <Animated.View style={[hero.card, { flex: 1, backgroundColor: "#0f0a24", borderColor: `${insight.color}40`, borderWidth: 1, shadowColor: insight.color, shadowOpacity: 0.28, shadowRadius: 24, shadowOffset: { width: 0, height: 0 }, transform: [{ scale: glowPulse }] } as any]}>
+      <Animated.View style={[hero.shimmer, { transform: [{ translateX: shimmerX }, { skewX: "-18deg" }] }]} />
 
       {/* ── Centered score — single hero value ── */}
       <View style={hero.topRow}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <Text style={[hero.label, { color: "rgba(255,255,255,0.45)" }]}>{L.todaysEnergy}</Text>
+          {!showDemo && (
+            <View style={[hero.livePill, { borderColor: `${insight.color}44`, backgroundColor: `${insight.color}10` }]}>
+              <Animated.View style={[hero.liveDot, { backgroundColor: insight.color, opacity: blinkDot }]} />
+              <Text style={[hero.liveTxt, { color: insight.color }]}>{L.live}</Text>
+            </View>
+          )}
           {showDemo && (
             <View style={[hero.demoBadge, { backgroundColor: Ctheme.bgCard2, borderColor: Ctheme.border }]}>
               <Feather name="lock" size={8} color={Ctheme.textDim} />
@@ -482,7 +506,7 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
           )}
         </View>
         <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 2 }}>
-          <Text style={[hero.score, { color: insight.color }]}>{displayScore}</Text>
+          <Animated.Text style={[hero.score, { color: insight.color, opacity: scorePulse }]}>{displayScore}</Animated.Text>
           <Text style={[hero.scoreMax, { color: Ctheme.textDim }]}>/100</Text>
         </View>
       </View>
@@ -495,24 +519,23 @@ function HeroEnergyCard({ chartPts, chartLbls, chartEnergy, insight, showDemo, l
           finalEnergy={chartEnergy}
           loading={loading}
           instant={showDemo}
+          nowLabel={L.now}
+          live={!showDemo}
         />
       </View>
 
-      {/* ── Bottom: insight (or top flag) ── */}
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
-        {topFlag ? (
-          <View style={[hero.insightPill, { backgroundColor: `${topFlag.color}10`, borderColor: `${topFlag.color}30` }]}>
-            <Text style={hero.insightIcon}>{topFlag.icon}</Text>
-            <Text style={[hero.insightText, { color: topFlag.color }]} numberOfLines={1}>{topFlag.text}</Text>
-          </View>
-        ) : (
-          <View style={[hero.insightPill, { backgroundColor: `${insight.color}10`, borderColor: `${insight.color}20` }]}>
-            <Text style={hero.insightIcon}>{insight.icon}</Text>
-            <Text style={[hero.insightText, { color: insight.color }]}>{insight.text}</Text>
-          </View>
-        )}
-      </View>
-    </View>
+      {/* ── Bottom: forecast CTA ── */}
+      <Pressable
+        onPress={onForecastPress}
+        style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+      >
+        <View style={[hero.forecastCta, { backgroundColor: "rgba(245,158,11,0.08)", borderColor: "rgba(245,158,11,0.25)" }]}>
+          <Feather name="calendar" size={11} color="#f59e0b" />
+          <Text style={hero.forecastCtaText}>{L.checkTomorrow}</Text>
+          <Feather name="chevron-right" size={12} color="rgba(245,158,11,0.7)" />
+        </View>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -598,22 +621,11 @@ function BadTimeMini({ onPress, activeDasha, L }: { onPress: () => void; activeD
 function PersonalSnapshotMini({ onPress, snapshot }: { onPress: () => void; snapshot: PersonalSnapshot }) {
   const shimmerX = useShimmer(360);
   const pulse = useOpacityPulse(0.5, 1, 900);
-  const [activeIdx, setActiveIdx] = useState(0);
   const { C } = useColors();
   const grad = C.isDark ? snapshot.darkGrad : snapshot.lightGrad;
   const titleClr = C.isDark ? "#ffffff" : snapshot.color;
   const subClr = C.isDark ? "rgba(255,255,255,0.52)" : "rgba(15,23,42,0.64)";
-  const metrics = snapshot.insights.filter(i => i.key !== "locked").slice(0, 5);
-  const rotateLines = metrics.length
-    ? metrics.map(m => m.line)
-    : [snapshot.identityLine];
-  const activeLine = rotateLines[activeIdx % rotateLines.length] ?? snapshot.identityLine;
-
-  useEffect(() => {
-    if (rotateLines.length <= 1) return;
-    const id = setInterval(() => setActiveIdx(i => (i + 1) % rotateLines.length), 2200);
-    return () => clearInterval(id);
-  }, [rotateLines.length]);
+  const activeLine = snapshot.identityLine;
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [mini.row, pressed && mini.rowPressed]}>
@@ -628,21 +640,6 @@ function PersonalSnapshotMini({ onPress, snapshot }: { onPress: () => void; snap
         <View style={[mini.textBlock, { flex: 1, minWidth: 0 }]}>
           <Text style={[mini.rowTitle, { color: titleClr }]}>{snapshot.title}</Text>
           <Text style={[mini.rowSub, { color: subClr }]} numberOfLines={1}>{activeLine}</Text>
-          {metrics.length > 0 && (
-            <View style={mini.metricRow}>
-              {metrics.map(m => (
-                <View
-                  key={m.key}
-                  style={[mini.metricPill, { borderColor: `${snapshot.color}44`, backgroundColor: `${snapshot.color}14` }]}
-                >
-                  <Text style={[mini.metricVal, { color: titleClr }]}>
-                    {m.value == null ? "--" : m.value}
-                  </Text>
-                  <Text style={[mini.metricLbl, { color: subClr }]}>{m.label}</Text>
-                </View>
-              ))}
-            </View>
-          )}
         </View>
 
         <View style={mini.rightBlock}>
@@ -667,9 +664,18 @@ const styles = StyleSheet.create({
     color: "#3d5a7a", fontSize: 11,
     fontFamily: F.semibold, letterSpacing: 0.2,
   },
+  greetNameRow: {
+    flexDirection: "row", alignItems: "center", gap: 8, marginTop: 1,
+  },
   greetTitle: {
     color: "#dde8f4", fontSize: 17,
-    fontFamily: F.bold, marginTop: 1, letterSpacing: -0.3,
+    fontFamily: F.bold, letterSpacing: -0.3, flexShrink: 1,
+  },
+  statusDots: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+  },
+  statusDot: {
+    width: 6, height: 6, borderRadius: 3,
   },
   forecastPill: {
     flexDirection: "row", alignItems: "center", gap: 5,
@@ -702,6 +708,17 @@ const hero = StyleSheet.create({
   label:    { fontSize: 8.5, fontFamily: F.bold, letterSpacing: 2 },
   score:    { fontSize: 28, fontFamily: F.bold, letterSpacing: -1, lineHeight: 32 },
   scoreMax: { fontSize: 12, fontFamily: F.semibold, paddingBottom: 3 },
+  shimmer: {
+    position: "absolute", top: 0, bottom: 0, width: 72, zIndex: 2,
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  livePill: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    borderWidth: 1, borderRadius: 6,
+    paddingVertical: 2, paddingHorizontal: 6,
+  },
+  liveDot: { width: 5, height: 5, borderRadius: 2.5 },
+  liveTxt: { fontSize: 7, fontFamily: F.bold, letterSpacing: 1.4 },
   demoBadge: {
     flexDirection: "row", alignItems: "center", gap: 3,
     borderWidth: 1, paddingVertical: 2,
@@ -715,6 +732,15 @@ const hero = StyleSheet.create({
   },
   insightIcon: { fontSize: 11 },
   insightText: { fontSize: 9.5, fontFamily: F.semibold, maxWidth: 160 },
+  forecastCta: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    alignSelf: "flex-start",
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: 14, borderWidth: 1,
+  },
+  forecastCtaText: {
+    color: "#f59e0b", fontSize: 10.5, fontFamily: F.semibold,
+  },
   // v3 — confidence chip next to score label
   confChip: {
     flexDirection: "row", alignItems: "center", gap: 4,
@@ -773,13 +799,6 @@ const mini = StyleSheet.create({
   },
   badgeDot: { width: 5, height: 5, borderRadius: 2.5 },
   badgeTxt: { fontSize: 8.5, fontFamily: F.bold, letterSpacing: 1 },
-  metricRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4 },
-  metricPill: {
-    minWidth: 34, alignItems: "center", justifyContent: "center",
-    borderWidth: 1, borderRadius: 10, paddingVertical: 2, paddingHorizontal: 4,
-  },
-  metricVal: { fontSize: 9, fontFamily: F.bold, lineHeight: 11 },
-  metricLbl: { fontSize: 6.5, fontFamily: F.semibold, letterSpacing: 0.3 },
 });
 
 // ── Shared card layout ────────────────────────────────────────────────────────

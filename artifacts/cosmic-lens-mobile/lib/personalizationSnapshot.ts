@@ -1,4 +1,3 @@
-import type { UILang } from "@/lib/i18n";
 import { evaluateNeechaBhanga, signShortFromIndex } from "@/lib/planetStrengthRule";
 import { getVargaChart, type VargaKey } from "@/lib/vargaCompute";
 import type { KundliData, PlanetInfo } from "@/types";
@@ -31,6 +30,8 @@ export type KundliCategoryScore = {
   selected: boolean;
   reasons: string[];
   line: string;
+  meaning: string;
+  meaningPoints: string[];
   checked: string[];
   rules: string[];
   details: KundliCategoryDetailRow[];
@@ -465,6 +466,21 @@ function weighted(items: Array<[number, number]>): number {
   return Math.round(items.reduce((sum, [value, w]) => sum + value * w, 0) / totalWeight);
 }
 
+function weightedPrecise(items: Array<[number, number]>): number {
+  const totalWeight = items.reduce((sum, [, w]) => sum + w, 0) || 1;
+  return items.reduce((sum, [value, w]) => sum + value * w, 0) / totalWeight;
+}
+
+/** Quarter-point scores (e.g. 72.25, 72.75) so tied categories can be ranked. */
+function preciseCategoryScore(n: number): number {
+  return Math.max(8, Math.min(96, Math.round(n * 4) / 4));
+}
+
+export function formatCategoryScore(score: number): string {
+  const q = preciseCategoryScore(score);
+  return Number.isInteger(q) ? String(q) : q.toFixed(2);
+}
+
 function normPlanetScore(score: number): number {
   return Math.max(8, Math.min(96, Math.round(50 + score * 1.15)));
 }
@@ -699,7 +715,7 @@ function cleanCategoryResult(args: {
     ...args.planets.map(item => planetBreakdown(args.kundli, item, weightPct(item.weight, totalWeight))),
     ...(args.vargas ?? []).map(item => vargaBreakdown(args.kundli, item, weightPct(item.weight, totalWeight))),
   ];
-  const score = Math.max(8, Math.min(96, weighted(details.map(item => [item.score, item.weightPct]))));
+  const score = preciseCategoryScore(weightedPrecise(details.map(item => [item.score, item.weightPct])));
   return { score, details, checked: args.checked, rules: args.rules };
 }
 
@@ -836,7 +852,7 @@ function d1WealthPromiseResult(kundli: KundliData, specs: CleanHouseSpec[]) {
       yogaFactors.push(`${row.label} ${row.lord} aspects 11H lord`);
     }
   }
-  const yogaScore = Math.max(8, Math.min(96, yogaRaw + wealthYogaSupport(kundli)));
+  const yogaScore = Math.max(8, Math.min(96, yogaRaw));
   if (!yogaFactors.length) yogaFactors.push("No strong 2H/11H/5H/9H lord link found");
 
   let occupantRaw = 50;
@@ -1101,11 +1117,11 @@ function d10DignityPoints(chart: KundliData, planet: string) {
   return { points, label: dig.label, house: p?.house };
 }
 
-function d10IncomeEngineResult(kundli: KundliData, fallbackCareer: number) {
+function d10IncomeEngineResult(kundli: KundliData) {
   if (!hasVarga(kundli, "D10")) {
     return {
-      score: fallbackCareer,
-      factors: ["D10 missing", `Fallback from career dimension: ${fallbackCareer}%`],
+      score: 50,
+      factors: ["D10 missing", "Neutral 50% used (no career-dimension fallback)"],
     };
   }
 
@@ -1217,19 +1233,6 @@ function d10IncomeEngineResult(kundli: KundliData, fallbackCareer: number) {
   };
 }
 
-function exactCombust(kundli: KundliData, p: PlanetInfo | undefined, limit = 8): boolean {
-  if (!p || p.name === "Sun") return false;
-  const sun = getPlanet(kundli, "Sun");
-  if (!sun || typeof sun.longitude !== "number" || typeof p.longitude !== "number") return false;
-  const diff = Math.min(Math.abs(p.longitude - sun.longitude), 360 - Math.abs(p.longitude - sun.longitude));
-  return diff < limit;
-}
-
-function vipreetException(kundli: KundliData, planet: string, p: PlanetInfo | undefined): boolean {
-  if (!p || ![6, 8, 12].includes(p.house)) return false;
-  return lordedHouses(kundli, planet).some(h => [6, 8, 12].includes(h));
-}
-
 function d9WealthValidationResult(kundli: KundliData) {
   if (!hasVarga(kundli, "D9")) {
     return {
@@ -1266,27 +1269,9 @@ function d9WealthValidationResult(kundli: KundliData) {
 
 function globalWealthLeakagePenalty(kundli: KundliData) {
   let penalty = 0;
-  const factors: string[] = [];
-  for (const house of [2, 11]) {
-    const lord = houseLord(kundli, house);
-    const p = getPlanet(kundli, lord);
-    if (p && [6, 8, 12].includes(p.house)) {
-      if (vipreetException(kundli, lord, p)) {
-        factors.push(`${house}H lord ${lord} in ${p.house}H: Vipreet exception, no -5`);
-      } else {
-        penalty -= 5;
-        factors.push(`${house}H lord ${lord} in ${p.house}H: direct leakage penalty -5`);
-      }
-    } else {
-      factors.push(`${house}H lord ${lord} dusthana placement: clear`);
-    }
-    if (exactCombust(kundli, p, 8)) {
-      penalty -= 3;
-      factors.push(`${house}H lord ${lord} combust within 8 degrees: -3`);
-    } else {
-      factors.push(`${house}H lord ${lord} combustion under 8 degrees: clear`);
-    }
-  }
+  const factors: string[] = [
+    "2H/11H lord dusthana, debility and combustion: already counted in D1 wealth promise",
+  ];
   if (occupants(kundli, 2).some(p => p.name === "Ketu")) {
     penalty -= 1;
     factors.push("Ketu in 2H: savings/family expense volatility -1");
@@ -1303,243 +1288,13 @@ function globalWealthLeakagePenalty(kundli: KundliData) {
     penalty,
     score: Math.max(8, Math.min(96, Math.round(50 + penalty * 6))),
     factors: [
-      `Applied global leakage penalty: ${penalty}`,
+      `Applied residual leakage penalty: ${penalty}`,
       ...factors,
     ],
   };
 }
 
-function modernWealthModifier(kundli: KundliData) {
-  let modifier = 0;
-  const factors: string[] = [];
-  const rahu = getPlanet(kundli, "Rahu");
-  const mercury = getPlanet(kundli, "Mercury");
-  const saturn = getPlanet(kundli, "Saturn");
-
-  if (rahu && [3, 6, 10, 11].includes(rahu.house)) {
-    modifier += 2;
-    factors.push(`Rahu in ${rahu.house}H: modern scaling/upachaya ambition +2`);
-  } else if (rahu?.house === 8) {
-    modifier += 1;
-    factors.push("Rahu in 8H: hidden systems/research/speculative transformation +1");
-  } else {
-    factors.push("Rahu modern scaling: neutral");
-  }
-
-  if (mercury && [3, 6, 10, 11, 12].includes(mercury.house)) {
-    modifier += mercury.house === 12 ? 1.5 : 2;
-    factors.push(`Mercury in ${mercury.house}H: digital/trade/remote earning channel +${mercury.house === 12 ? 1.5 : 2}`);
-  } else {
-    factors.push("Mercury digital/trade channel: neutral");
-  }
-
-  if (saturn && [3, 6, 10, 11].includes(saturn.house)) {
-    modifier += 1.5;
-    factors.push(`Saturn in ${saturn.house}H: persistence/compounding work ethic +1.5`);
-  } else if (planetStrength(kundli, "Saturn").label.includes("corrected")) {
-    modifier += 1;
-    factors.push("Saturn neecha-bhanga: slow compounding recovery +1");
-  } else {
-    factors.push("Saturn persistence modifier: neutral");
-  }
-
-  if (hasVarga(kundli, "D10")) {
-    const d10 = getVarga(kundli, "D10");
-    const d10Rahu = getPlanet(d10, "Rahu");
-    const d10Saturn = getPlanet(d10, "Saturn");
-    const d10Mercury = getPlanet(d10, "Mercury");
-    if (d10Rahu && [10, 11].includes(d10Rahu.house)) {
-      modifier += 2;
-      factors.push(`D10 Rahu in ${d10Rahu.house}H: career-scale ambition +2`);
-    }
-    if (d10Rahu?.house === 11 || d10Saturn?.house === 11) {
-      modifier += 2;
-      factors.push("Grand booster: D10 Rahu/Saturn in 11H self-made scaling pattern +2");
-    }
-    if (d10Mercury && [3, 6, 10, 11, 12].includes(d10Mercury.house)) {
-      modifier += 1;
-      factors.push(`D10 Mercury in ${d10Mercury.house}H: income via systems/communication +1`);
-    }
-  }
-
-  modifier = Math.max(0, Math.min(8, modifier));
-  return {
-    modifier,
-    score: Math.max(8, Math.min(96, Math.round(50 + modifier * 6))),
-    factors: [
-      `Applied modern wealth modifier: +${Math.round(modifier * 10) / 10}`,
-      ...factors,
-    ],
-  };
-}
-
-function trajectoryResult(d1Score: number, d2Score: number, d10Score: number, modernModifier: number) {
-  const earlyFriction = Math.max(0, 60 - d1Score) * 0.12;
-  const futureScaling = Math.max(0, d2Score - 60) * 0.10 + Math.max(0, d10Score - 60) * 0.12 + modernModifier * 0.45;
-  const slope = Math.max(-4, Math.min(6, futureScaling - earlyFriction));
-  const label = slope >= 3 ? "Current friction, strong future scaling"
-    : slope >= 1 ? "Gradual upward wealth trajectory"
-      : slope <= -2 ? "Current friction needs discipline"
-        : "Stable wealth trajectory";
-  return {
-    modifier: Math.round(slope * 10) / 10,
-    score: Math.max(8, Math.min(96, Math.round(50 + slope * 7))),
-    factors: [
-      `Trajectory slope: ${slope >= 0 ? "+" : ""}${Math.round(slope * 10) / 10}`,
-      `Early friction from D1: -${Math.round(earlyFriction * 10) / 10}`,
-      `Future scaling from D2/D10/modern indicators: +${Math.round(futureScaling * 10) / 10}`,
-      label,
-    ],
-  };
-}
-
-function dashaTime(value?: string) {
-  if (!value) return NaN;
-  const time = new Date(value).getTime();
-  return Number.isFinite(time) ? time : NaN;
-}
-
-function isActiveDashaWindow(item: { startDate?: string; endDate?: string }, now: number) {
-  const start = dashaTime(item.startDate);
-  const end = dashaTime(item.endDate);
-  return Number.isFinite(start) && Number.isFinite(end) && start <= now && now <= end;
-}
-
-function resolveCurrentDasha(kundli: KundliData) {
-  const currentMaha = kundli.currentDasha?.maha || "";
-  const currentAntar = kundli.currentDasha?.antar || "";
-  if (currentMaha || currentAntar) {
-    return {
-      maha: currentMaha,
-      antar: currentAntar,
-      startDate: kundli.currentDasha?.startDate,
-      endDate: kundli.currentDasha?.endDate,
-      source: "currentDasha field",
-    };
-  }
-
-  const now = Date.now();
-  const activeMaha = kundli.dashas?.find(item => isActiveDashaWindow(item, now));
-  const activeAntar = activeMaha?.subDashas?.find(item => isActiveDashaWindow(item, now));
-  return {
-    maha: activeMaha?.planet || "",
-    antar: activeAntar?.planet || "",
-    startDate: activeAntar?.startDate ?? activeMaha?.startDate,
-    endDate: activeAntar?.endDate ?? activeMaha?.endDate,
-    source: activeMaha ? "dashas timeline fallback" : "missing",
-  };
-}
-
-function dashaPlanetMultiplier(kundli: KundliData, planet: string) {
-  if (!planet) return { multiplier: 1, factors: ["Dasha planet missing: neutral"] };
-  let multiplier = 1;
-  const factors: string[] = [];
-  const p = getPlanet(kundli, planet);
-  const d1Strength = planetStrength(kundli, planet);
-  const d1Sign = planetSign(p);
-  const d1Dignity = dignity(planet, d1Sign);
-  const lordships = lordedHouses(kundli, planet);
-
-  factors.push(`${planet} D1 strength: ${normPlanetScore(d1Strength.score)}%, ${d1Strength.label}`);
-  factors.push(p ? `${planet} D1 placement: ${p.house}H, ${d1Sign == null ? "unknown sign" : signShortFromIndex(d1Sign)}` : `${planet} D1 placement: missing`);
-  factors.push(`${planet} lordship: ${lordships.length ? lordships.map(h => `${h}H`).join(", ") : "not a classical house lord"}`);
-
-  if (p && [3, 6, 10, 11].includes(p.house)) {
-    multiplier += 0.15;
-    factors.push(`${planet} in D1 ${p.house}H upachaya: +0.15`);
-  }
-
-  let d9Strong = false;
-  if (hasVarga(kundli, "D9")) {
-    const d9 = getVarga(kundli, "D9");
-    const d9Planet = getPlanet(d9, planet);
-    const d9Dig = dignity(planet, planetSign(d9Planet));
-    factors.push(`${planet} D9 placement: ${d9Planet?.house ?? "missing"}H, ${d9Dig.label}`);
-    if (d9Dig.label === "exalted" || d9Dig.label === "own sign") {
-      d9Strong = true;
-      factors.push(`${planet} in D9 ${d9Dig.label}: strength support`);
-    }
-  } else {
-    factors.push(`${planet} D9 placement: not available`);
-  }
-  if (d1Dignity.label === "exalted" || d1Dignity.label === "own sign" || d9Strong) {
-    multiplier += 0.10;
-    factors.push(`${planet} D1/D9 dignity support: +0.10`);
-  }
-
-  if (hasVarga(kundli, "D10")) {
-    const d10 = getVarga(kundli, "D10");
-    const d10Planet = getPlanet(d10, planet);
-    factors.push(`${planet} D10 placement: ${d10Planet?.house ?? "missing"}H`);
-    if (d10Planet && [2, 10, 11].includes(d10Planet.house)) {
-      multiplier += 0.10;
-      factors.push(`${planet} in D10 ${d10Planet.house}H income node: +0.10`);
-    }
-  } else {
-    factors.push(`${planet} D10 placement: not available`);
-  }
-
-  if (hasVarga(kundli, "D2")) {
-    const d2 = getVarga(kundli, "D2");
-    const d2Planet = getPlanet(d2, planet);
-    const d2Hora = horaNameForSign(planetSign(d2Planet));
-    factors.push(`${planet} D2 placement: ${d2Planet?.house ?? "missing"}H, ${d2Hora}`);
-    const wealthLords = [houseLord(kundli, 2), houseLord(kundli, 9), houseLord(kundli, 11)];
-    if (d2Hora === "Moon Hora" && wealthLords.includes(planet)) {
-      multiplier += 0.05;
-      factors.push(`${planet} is wealth lord in D2 Moon Hora: +0.05`);
-    }
-  } else {
-    factors.push(`${planet} D2 placement: not available`);
-  }
-
-  const hasSupport = d9Strong || hasMercuryModernContext(kundli) || d1Strength.label.includes("corrected");
-  if (p && [8, 12].includes(p.house) && !hasSupport) {
-    multiplier -= 0.15;
-    factors.push(`${planet} in D1 ${p.house}H without support: -0.15`);
-  } else if (p && [8, 12].includes(p.house)) {
-    factors.push(`${planet} in D1 ${p.house}H but support present: no loss penalty`);
-  }
-
-  if (d1Dignity.label === "debilitated" && !d1Strength.label.includes("corrected")) {
-    multiplier -= 0.10;
-    factors.push(`${planet} debilitated without neecha-bhanga: -0.10`);
-  }
-
-  multiplier = Math.max(0.80, Math.min(1.25, multiplier));
-  return {
-    multiplier,
-    factors: [`${planet} multiplier: ${Math.round(multiplier * 100) / 100}`, ...factors],
-  };
-}
-
-export function calculateWealthOperationalScore(kundli: KundliData | null | undefined, baseScore: number) {
-  if (!kundli) {
-    return { score: Math.round(baseScore), multiplier: 1, factors: ["Kundli missing: neutral dasha multiplier"] };
-  }
-  const activeDasha = resolveCurrentDasha(kundli);
-  const md = activeDasha.maha;
-  const ad = activeDasha.antar;
-  const mdResult = dashaPlanetMultiplier(kundli, md);
-  const adResult = dashaPlanetMultiplier(kundli, ad);
-  const multiplier = Math.max(0.80, Math.min(1.25, mdResult.multiplier * 0.60 + adResult.multiplier * 0.40));
-  return {
-    score: Math.max(8, Math.min(96, Math.round(baseScore * multiplier))),
-    multiplier,
-    factors: [
-      `Active dasha: MD ${md || "missing"} / AD ${ad || "missing"}`,
-      activeDasha.startDate && activeDasha.endDate ? `Active dasha period: ${activeDasha.startDate} to ${activeDasha.endDate}` : "Active dasha period: missing",
-      `Dasha source: ${activeDasha.source}`,
-      `MD ${md || "missing"} weight 60%: ${Math.round(mdResult.multiplier * 100) / 100}`,
-      ...mdResult.factors,
-      `AD ${ad || "missing"} weight 40%: ${Math.round(adResult.multiplier * 100) / 100}`,
-      ...adResult.factors,
-      `Final dasha multiplier: ${Math.round(multiplier * 100) / 100}`,
-    ],
-  };
-}
-
-function wealthBuilderResult(kundli: KundliData, valueOf: (key: string) => number, wealthBase: number) {
+function wealthBuilderResult(kundli: KundliData, wealthBase: number) {
   const d1Specs: CleanHouseSpec[] = [
     { house: 2, weight: 0.30, karakas: ["Jupiter", "Venus", "Mercury"] },
     { house: 11, weight: 0.30, karakas: ["Jupiter", "Saturn"] },
@@ -1557,37 +1312,33 @@ function wealthBuilderResult(kundli: KundliData, valueOf: (key: string) => numbe
     [wealthPlanetRows[2].score, 0.24],
     [wealthPlanetRows[3].score, 0.22],
   ]);
+  const dhanYogaScore = Math.max(8, Math.min(96, Math.round(50 + wealthYogaSupport(kundli))));
   const d2Hora = d2HoraCapacityResult(kundli, wealthBase);
-  const d10Income = d10IncomeEngineResult(kundli, valueOf("career"));
+  const d10Income = d10IncomeEngineResult(kundli);
   const d9Validation = d9WealthValidationResult(kundli);
   const wealthAshtak = wealthAshtakavargaModifier(kundli);
   const globalLeakage = globalWealthLeakagePenalty(kundli);
-  const modernWealth = modernWealthModifier(kundli);
-  const trajectory = trajectoryResult(d1Wealth.score, d2Hora.score, d10Income.score, modernWealth.modifier);
   const highPotentialOverride = d2Hora.score >= 65 && d10Income.score >= 65;
 
   let score = highPotentialOverride
-    ? weighted([
+    ? weightedPrecise([
       [d1Wealth.score, 0.20],
       [d2Hora.score, 0.35],
       [d10Income.score, 0.30],
       [wealthPlanetScore, 0.10],
-      [50 + wealthYogaSupport(kundli), 0.05],
+      [dhanYogaScore, 0.05],
     ])
-    : weighted([
+    : weightedPrecise([
       [d1Wealth.score, 0.40],
       [d2Hora.score, 0.25],
       [d10Income.score, 0.20],
       [wealthPlanetScore, 0.10],
-      [50 + wealthYogaSupport(kundli), 0.05],
+      [dhanYogaScore, 0.05],
     ]);
   score += d9Validation.modifier;
   score += wealthAshtak.modifier;
-  score += modernWealth.modifier;
-  score += trajectory.modifier;
   score += globalLeakage.penalty;
-  const baseScore = Math.max(8, Math.min(96, Math.round(score)));
-  const operationalWealth = calculateWealthOperationalScore(kundli, baseScore);
+  const baseScore = preciseCategoryScore(score);
   const details: KundliCategoryDetailRow[] = [
     {
       key: "money-d1",
@@ -1622,23 +1373,11 @@ function wealthBuilderResult(kundli: KundliData, valueOf: (key: string) => numbe
       factors: wealthPlanetRows.map(row => `${row.name}: ${row.score}%, ${row.strength.label}`),
     },
     {
-      key: "money-dasha",
-      label: "Current dasha timing",
-      score: operationalWealth.score,
-      weightPct: 0,
-      detail: "Shows which Mahadasha/Antardasha is running now, their placement/strength, and the current finance operating score.",
-      factors: [
-        `Money Builder base score: ${baseScore}%`,
-        `Dasha-adjusted current score: ${operationalWealth.score}%`,
-        ...operationalWealth.factors,
-      ],
-    },
-    {
       key: "money-yoga",
       label: "Dhan-yoga links",
-      score: Math.max(8, Math.min(96, Math.round(50 + wealthYogaSupport(kundli)))),
+      score: dhanYogaScore,
       weightPct: 5,
-      detail: "Links among 2H/5H/9H/10H/11H lords add a small support only.",
+      detail: "Cross-links among 2H/5H/9H/10H/11H lords — counted once here (not inside D1 loop 2).",
       factors: [`Dhan-yoga support: +${Math.round(wealthYogaSupport(kundli))}`],
     },
   ];
@@ -1663,58 +1402,133 @@ function wealthBuilderResult(kundli: KundliData, valueOf: (key: string) => numbe
   });
   details.push({
     key: "money-global-leakage",
-    label: "Global leakage penalty",
+    label: "Residual leakage signals",
     score: globalLeakage.score,
     weightPct: 0,
-    detail: "Final absolute deduction after D1/D2/D10/D9/Ashtakavarga: dusthana wealth lords, exact combustion, Ketu/Rahu leakage.",
+    detail: "Only Ketu 2H and Rahu 8H volatility — dusthana/combust penalties stay inside D1.",
     factors: globalLeakage.factors,
-  });
-  details.push({
-    key: "money-modern",
-    label: "Modern wealth modifier",
-    score: modernWealth.score,
-    weightPct: 0,
-    detail: "Small calibration for modern wealth generation: digital work, unconventional systems, upachaya Rahu/Mercury and Saturn persistence.",
-    factors: modernWealth.factors,
-  });
-  details.push({
-    key: "money-trajectory",
-    label: "Trajectory resolver",
-    score: trajectory.score,
-    weightPct: 0,
-    detail: "Resolves contradiction between early friction and future scaling indicators.",
-    factors: [
-      highPotentialOverride
-        ? "Synthesis priority active: D2 and D10 both cross 65%, D1 weight reduced"
-        : "Synthesis priority inactive: standard D1/D2/D10 weights used",
-      ...trajectory.factors,
-    ],
   });
   return {
     score: baseScore,
     details,
     checked: [
-      "Current Mahadasha/Antardasha operational timing",
       "D1 2H/11H/10H/9H",
       "D2 Sun/Moon Hora dominance, Lagna, vault, Jupiter/Venus and D1 wealth lords",
       "D10 10L/11L relation, companion backup, upachaya occupants and D1 bridge",
       "Jupiter/Venus/Mercury/Saturn",
-      "Dhan-yoga links",
-      "D9 validation, threshold Ashtakavarga, modern wealth modifier and global leakage penalty",
+      "Dhan-yoga links (5% weight only)",
+      "D9 validation, threshold Ashtakavarga, residual Ketu/Rahu leakage",
     ],
     rules: [
       "Old backend Finance Wealth Category is not used; this Money Builder score now feeds LifeMap Finance category.",
       "D1, D2 and D10 carry the main score.",
       "D10 uses only the income engine checks: 10L/11L dignity, connection/exchange/vault, companion support, upachaya occupants and D1-to-D10 bridge.",
+      "If D10 is missing, neutral 50% is used — no career-dimension fallback.",
       "D2 uses only the 5 Hora checks; if D2 is missing, fallback uses D1 2H plus Jupiter and Venus strength.",
       "Ashtakavarga uses SAV thresholds: >32 support, 26-31 neutral, <24 friction.",
       "D9 validates D1 2L/5L/9L/11L only; each exalted/own lord gives +1.5 and each debilitated lord gives -1.5, capped at +/-5.",
-      "Modern wealth modifier adds a small capped boost for digital/unconventional earning signatures.",
-      "Synthesis resolver reduces D1 drag when both D2 vault and D10 income engine are high-potential.",
-      "Penalty stacking control follows one weakness, one punch: duplicate debility/dusthana/combustion penalties are skipped.",
-      "Global leakage is a final direct deduction, but Ketu 2H and Rahu 8H are treated as volatility rather than absolute poverty.",
-      "Current dasha uses MD 60% and AD 40% to create an operational finance score; if currentDasha is absent, active dashas timeline is used.",
+      "Dhan-yoga cross-links count once at 5% weight; D1 loop 2 keeps separate 2H/11H/5H/9H lord links.",
+      "Synthesis priority reduces D1 drag when both D2 vault and D10 income engine are high-potential.",
+      "Penalty stacking: dusthana/debility/combustion stay in D1; global layer only adds Ketu 2H / Rahu 8H volatility.",
     ],
+  };
+}
+
+const KUNDLI_CATEGORY_MEANINGS: Record<string, { meaning: string; points: string[] }> = {
+  "Powerful Kundli": {
+    meaning: "This category shows natural leadership in your chart — the ability to take charge, build authority, and move people with confidence.",
+    points: [
+      "You work best when you can lead and take responsibility.",
+      "Visibility, command, and long-term authority suit your nature.",
+      "Your chart supports building influence through action and discipline.",
+    ],
+  },
+  "Emotional Kundli": {
+    meaning: "This category reflects how deeply you feel — your inner world, sensitivity, and emotional intelligence.",
+    points: [
+      "You connect through heart and intuition, not logic alone.",
+      "Home, comfort, and inner peace matter strongly to you.",
+      "Your feelings are a strength, not a weakness.",
+    ],
+  },
+  "Intelligent Kundli": {
+    meaning: "This category highlights sharp thinking — learning, analysis, strategy, and the ability to understand complex ideas.",
+    points: [
+      "Your mind learns quickly and thinks in a structured way.",
+      "Planning, problem-solving, and skill-building come naturally.",
+      "You grow when you can study, teach, or use your intelligence.",
+    ],
+  },
+  "Spiritual Kundli": {
+    meaning: "This category points to inner seeking — dharma, surrender, meditation, and a pull toward something beyond everyday life.",
+    points: [
+      "Peace, faith, and inner growth are important themes for you.",
+      "You may feel drawn to purpose, service, or spiritual practice.",
+      "Detachment and reflection help you feel aligned.",
+    ],
+  },
+  "Fighter Kundli": {
+    meaning: "This category shows resilience — courage under pressure, the will to fight back, and strength in difficult phases.",
+    points: [
+      "Hard times can bring out your strongest side.",
+      "You have the capacity to endure, recover, and keep going.",
+      "This is about inner fight power, not suffering prediction.",
+    ],
+  },
+  "Partnership Kundli": {
+    meaning: "This category reflects how you build bonds — closeness, trust, and the ability to connect deeply with others.",
+    points: [
+      "Relationships and shared life are core themes for you.",
+      "You grow through partnership, loyalty, and emotional exchange.",
+      "This reads bonding strength, not marriage timing.",
+    ],
+  },
+  "Vitality Kundli": {
+    meaning: "This category reflects physical life force — stamina, energy, recovery, and the strength of your body.",
+    points: [
+      "Your chart supports vitality, movement, and physical drive.",
+      "Rest and recharge are important to protect this strength.",
+      "This reads life energy, not medical diagnosis.",
+    ],
+  },
+  "Wealth Builder Kundli": {
+    meaning: "This category shows money-building potential — earning capacity, saving strength, and long-term resource growth.",
+    points: [
+      "Wealth creation is a strong lifetime theme in your chart.",
+      "Income, savings, and financial discipline matter for you.",
+      "This reads financial promise, not lottery-style luck.",
+    ],
+  },
+  "Creative Kundli": {
+    meaning: "This category reflects creative expression — imagination, originality, and the urge to put ideas into the world.",
+    points: [
+      "You think differently and express yourself in unique ways.",
+      "Art, ideas, content, or innovation can be natural outlets.",
+      "Creativity grows when you give your ideas a visible form.",
+    ],
+  },
+  "Attractive Kundli": {
+    meaning: "This category reflects magnetic presence — how people respond to you, your aura, charm, and public appeal.",
+    points: [
+      "People tend to notice you and feel drawn to your presence.",
+      "Warmth, confidence, and image play a strong role for you.",
+      "This reads presence and magnetism, not beauty ranking.",
+    ],
+  },
+  "Wise Kundli": {
+    meaning: "This category reflects maturity and depth — patience, wisdom gained through life, and steady inner understanding.",
+    points: [
+      "You see life with depth rather than hurry.",
+      "Experience, reflection, and discipline shape your growth.",
+      "You become stronger when you move with patience.",
+    ],
+  },
+};
+
+function categoryMeaning(type: string) {
+  return KUNDLI_CATEGORY_MEANINGS[type] ?? {
+    meaning: "This Kundli category reflects a core life pattern in your birth chart.",
+    points: ["It is calculated from your saved kundli and stays fixed for your chart."],
   };
 }
 
@@ -1731,208 +1545,297 @@ function buildStrictPowerOptions(kundli: KundliData, valueOf: (key: string) => n
   const naturalLeader = cleanCategoryResult({
     kundli,
     d1: [
-      { house: 1, weight: 0.30, karakas: ["Sun", "Mars"] },
-      { house: 10, weight: 0.28, karakas: ["Sun", "Saturn"] },
-      { house: 3, weight: 0.14, karakas: ["Mars"] },
+      { house: 1, weight: 0.28, karakas: ["Sun", "Mars"] },
+      { house: 10, weight: 0.26, karakas: ["Sun", "Saturn"] },
+      { house: 3, weight: 0.12, karakas: ["Mars"] },
+      { house: 11, weight: 0.08, karakas: ["Jupiter", "Saturn"] },
     ],
-    planets: [{ name: "Sun", weight: 0.14 }, { name: "Mars", weight: 0.08 }, { name: lagnaLord, weight: 0.06 }],
-    vargas: [{ chart: "D10", houses: [1, 10], karakas: ["Sun", "Saturn", "Mercury"], weight: 0.18 }],
-    checked: ["D1 Lagna", "D1 10H authority", "D1 3H courage", "Sun/Mars drive", "D10 career authority"],
-    rules: ["Leadership is judged from Lagna, 10H and 3H.", "D10 validates authority only.", "Dignity, friendly/enemy sign, exalted/debilitated state and affliction are included inside each house/planet strength."],
+    planets: [
+      { name: "Sun", weight: 0.12 },
+      { name: "Mars", weight: 0.07 },
+      { name: "Saturn", weight: 0.06 },
+      { name: lagnaLord, weight: 0.05 },
+    ],
+    vargas: [{ chart: "D10", houses: [1, 10], karakas: ["Sun", "Saturn", "Mercury"], weight: 0.16 }],
+    checked: ["D1 Lagna", "D1 10H authority", "D1 3H courage", "D1 11H network", "Sun/Mars/Saturn drive", "D10 career authority"],
+    rules: ["Leadership is judged from Lagna, 10H, 3H and 11H support.", "Saturn adds sustained authority; D10 validates career command only.", "Dignity, friendly/enemy sign, exalted/debilitated state and affliction are included inside each house/planet strength."],
   });
   const emotionalSoul = cleanCategoryResult({
     kundli,
     d1: [
-      { house: 4, weight: 0.32, karakas: ["Moon", "Venus"] },
+      { house: 4, weight: 0.36, karakas: ["Moon", "Venus"] },
       { house: 1, weight: 0.18, karakas: ["Moon"] },
-      { house: 7, weight: 0.16, karakas: ["Venus", "Moon"] },
+      { house: 7, weight: 0.10, karakas: ["Venus", "Moon"] },
     ],
-    planets: [{ name: "Moon", weight: 0.22 }, { name: "Venus", weight: 0.12 }],
-    vargas: [{ chart: "D9", houses: [4, 7], karakas: ["Moon", "Venus"], weight: 0.16 }],
-    checked: ["D1 4H emotions", "D1 Lagna nature", "D1 7H bonding", "Moon/Venus", "D9 emotional validation"],
-    rules: ["Emotional category is not judged from breakup/marriage promise.", "Moon is the main karaka; Venus is secondary.", "D9 validates bonding sensitivity only."],
+    planets: [{ name: "Moon", weight: 0.24 }, { name: "Venus", weight: 0.10 }],
+    vargas: [{ chart: "D9", houses: [4], karakas: ["Moon", "Venus"], weight: 0.14 }],
+    checked: ["D1 4H emotions", "D1 Lagna sensitivity", "Moon/Venus mann", "D9 emotional depth"],
+    rules: ["Emotional category reads inner feeling, not marriage promise.", "Moon is primary; 4H is the main house.", "7H is kept light so Partnership Kundli owns partnership separately."],
   });
   const strategicThinker = cleanCategoryResult({
     kundli,
     d1: [
-      { house: 5, weight: 0.34, karakas: ["Mercury", "Jupiter"] },
-      { house: 9, weight: 0.18, karakas: ["Jupiter"] },
-      { house: 3, weight: 0.10, karakas: ["Mercury"] },
+      { house: 5, weight: 0.36, karakas: ["Mercury", "Jupiter"] },
+      { house: 3, weight: 0.14, karakas: ["Mercury"] },
+      { house: 9, weight: 0.10, karakas: ["Jupiter"] },
     ],
-    planets: [{ name: "Mercury", weight: 0.20 }, { name: "Jupiter", weight: 0.12 }],
-    vargas: [{ chart: "D24", houses: [1, 5, 9], karakas: ["Mercury", "Jupiter"], weight: 0.20 }],
-    checked: ["D1 5H intelligence", "D1 9H wisdom", "D1 3H skill", "Mercury/Jupiter", "D24 education/learning"],
-    rules: ["5H is primary for intelligence.", "Mercury handles strategy; Jupiter handles wisdom.", "D24 validates learning depth."],
+    planets: [
+      { name: "Mercury", weight: 0.24 },
+      { name: "Jupiter", weight: 0.08 },
+      { name: "Saturn", weight: 0.06 },
+    ],
+    vargas: [{ chart: "D24", houses: [1, 5], karakas: ["Mercury", "Jupiter"], weight: 0.18 }],
+    checked: ["D1 5H intelligence", "D1 3H skill", "Mercury strategy", "Saturn analysis", "D24 learning depth"],
+    rules: ["5H and Mercury are primary for sharp thinking.", "9H/Jupiter are kept light to avoid overlap with Spiritual/Wise.", "D24 validates education and learning depth only."],
   });
   const spiritualSeeker = cleanCategoryResult({
     kundli,
     d1: [
-      { house: 9, weight: 0.26, karakas: ["Jupiter", "Ketu"] },
-      { house: 12, weight: 0.30, karakas: ["Ketu", "Jupiter"] },
-      { house: 4, weight: 0.10, karakas: ["Moon"] },
+      { house: 12, weight: 0.32, karakas: ["Ketu", "Jupiter"] },
+      { house: 9, weight: 0.20, karakas: ["Jupiter", "Ketu"] },
+      { house: 4, weight: 0.06, karakas: ["Moon"] },
     ],
-    planets: [{ name: "Jupiter", weight: 0.14 }, { name: "Ketu", weight: 0.10 }],
-    vargas: [{ chart: "D20", houses: [1, 9, 12], karakas: ["Jupiter", "Ketu"], weight: 0.24 }],
-    checked: ["D1 9H dharma", "D1 12H moksha", "D1 4H inner peace", "Jupiter/Ketu", "D20 spiritual validation"],
-    rules: ["Spiritual category needs 9H/12H support.", "D20 is the main divisional validation.", "Ketu is treated as neutral dignity but important as spiritual karaka."],
+    planets: [
+      { name: "Ketu", weight: 0.12 },
+      { name: "Jupiter", weight: 0.10 },
+      { name: "Saturn", weight: 0.08 },
+    ],
+    vargas: [{ chart: "D20", houses: [1, 9, 12], karakas: ["Jupiter", "Ketu"], weight: 0.22 }],
+    checked: ["D1 12H moksha", "D1 9H dharma", "Jupiter/Ketu/Saturn sadhana", "D20 spiritual validation"],
+    rules: ["12H moksha is weighted highest.", "Saturn adds tapasya and disciplined seeking.", "Ketu is treated as neutral dignity but important as spiritual karaka."],
   });
   const survivorMindset = cleanCategoryResult({
     kundli,
     d1: [
-      { house: 3, weight: 0.24, karakas: ["Mars", "Saturn"] },
-      { house: 6, weight: 0.26, karakas: ["Mars", "Saturn"] },
-      { house: 8, weight: 0.14, karakas: ["Saturn", "Ketu"] },
+      { house: 3, weight: 0.22, karakas: ["Mars", "Saturn"] },
+      { house: 6, weight: 0.24, karakas: ["Mars", "Saturn"] },
+      { house: 8, weight: 0.12, karakas: ["Saturn", "Ketu"] },
+      { house: 1, weight: 0.08, karakas: ["Sun", "Mars"] },
     ],
-    planets: [{ name: "Mars", weight: 0.16 }, { name: "Saturn", weight: 0.16 }],
+    planets: [
+      { name: "Mars", weight: 0.14 },
+      { name: "Saturn", weight: 0.14 },
+      { name: "Sun", weight: 0.06 },
+    ],
     vargas: [
       { chart: "D27", houses: [1, 3, 6], karakas: ["Mars", "Saturn"], weight: 0.12 },
       { chart: "D30", houses: [6, 8], karakas: ["Mars", "Saturn", "Ketu"], weight: 0.10 },
     ],
-    checked: ["D1 3H courage", "D1 6H fight capacity", "D1 8H crisis handling", "Mars/Saturn", "D27/D30 resilience"],
-    rules: ["This category means pressure-handling, not suffering prediction.", "3H and 6H are primary.", "D27/D30 validate resilience only."],
+    checked: ["D1 3H courage", "D1 6H fight capacity", "D1 8H crisis handling", "D1 Lagna willpower", "Mars/Saturn/Sun", "D27/D30 resilience"],
+    rules: ["This category means pressure-handling, not suffering prediction.", "3H and 6H are primary; Sun/1H add raw willpower.", "D27/D30 validate resilience only."],
   });
-  const moneyBuilder = wealthBuilderResult(kundli, valueOf, wealthBase);
+  const bondBuilder = cleanCategoryResult({
+    kundli,
+    d1: [
+      { house: 7, weight: 0.34, karakas: ["Venus", "Moon"] },
+      { house: 4, weight: 0.12, karakas: ["Moon", "Venus"] },
+      { house: 2, weight: 0.08, karakas: ["Venus", "Mercury"] },
+    ],
+    planets: [
+      { name: "Venus", weight: 0.22 },
+      { name: "Moon", weight: 0.14 },
+      { name: "Jupiter", weight: 0.08 },
+    ],
+    vargas: [{ chart: "D9", houses: [1, 7, 4], karakas: ["Venus", "Moon", "Jupiter"], weight: 0.22 }],
+    checked: ["D1 7H partnership", "D1 4H emotional base", "Venus/Moon bonding", "Jupiter dharma support", "D9 relationship validation"],
+    rules: ["Partnership is judged from 7H and Venus, not marriage timing.", "D9 is the main divisional validator.", "This category is separate from Emotional Kundli and Attractive Kundli."],
+  });
+  const strongBody = cleanCategoryResult({
+    kundli,
+    d1: [
+      { house: 1, weight: 0.32, karakas: ["Sun", "Mars"] },
+      { house: 6, weight: 0.22, karakas: ["Mars", "Saturn"] },
+      { house: 8, weight: 0.12, karakas: ["Saturn", "Mars"] },
+    ],
+    planets: [
+      { name: "Sun", weight: 0.18 },
+      { name: "Mars", weight: 0.14 },
+      { name: "Moon", weight: 0.08 },
+    ],
+    vargas: [{ chart: "D30", houses: [1, 6], karakas: ["Mars", "Saturn", "Sun"], weight: 0.14 }],
+    checked: ["D1 Lagna vitality", "D1 6H immunity/fight", "D1 8H recovery", "Sun/Mars life force", "D30 health friction filter"],
+    rules: ["Vitality means stamina and recovery, not disease diagnosis.", "1H and Sun are primary life-force indicators.", "D30 validates health friction only."],
+  });
+  const moneyBuilder = wealthBuilderResult(kundli, wealthBase);
   const creativeMind = cleanCategoryResult({
     kundli,
     d1: [
-      { house: 5, weight: 0.32, karakas: ["Venus", "Mercury", "Moon"] },
-      { house: 3, weight: 0.20, karakas: ["Mercury", "Venus"] },
-      { house: 2, weight: 0.10, karakas: ["Mercury", "Venus"] },
+      { house: 5, weight: 0.28, karakas: ["Venus", "Mercury", "Moon"] },
+      { house: 3, weight: 0.18, karakas: ["Mercury", "Venus"] },
+      { house: 10, weight: 0.10, karakas: ["Venus", "Mercury"] },
+      { house: 2, weight: 0.08, karakas: ["Mercury", "Venus"] },
     ],
-    planets: [{ name: "Venus", weight: 0.18 }, { name: "Mercury", weight: 0.14 }, { name: "Moon", weight: 0.08 }],
+    planets: [
+      { name: "Venus", weight: 0.16 },
+      { name: "Mercury", weight: 0.12 },
+      { name: "Moon", weight: 0.07 },
+      { name: "Rahu", weight: 0.06 },
+    ],
     vargas: [
-      { chart: "D3", houses: [3], karakas: ["Mercury", "Venus"], weight: 0.10 },
-      { chart: "D10", houses: [10], karakas: ["Venus", "Mercury"], weight: 0.08 },
+      { chart: "D3", houses: [3], karakas: ["Mercury", "Venus"], weight: 0.09 },
+      { chart: "D10", houses: [10], karakas: ["Venus", "Mercury"], weight: 0.10 },
     ],
-    checked: ["D1 5H creativity", "D1 3H expression", "D1 2H voice/style", "Venus/Mercury/Moon", "D3/D10 expression validation"],
-    rules: ["5H is primary for creativity.", "3H/2H show expression and voice.", "D3 and D10 validate skill output, not fame guarantee."],
+    checked: ["D1 5H creativity", "D1 3H expression", "D1 10H public output", "Venus/Mercury/Moon/Rahu", "D3/D10 skill validation"],
+    rules: ["5H is primary for creativity.", "Rahu adds unconventional/digital creative signatures.", "D3 and D10 validate skill output, not fame guarantee."],
   });
   const magneticPresence = cleanCategoryResult({
     kundli,
     d1: [
-      { house: 1, weight: 0.34, karakas: ["Venus", "Moon"] },
-      { house: 7, weight: 0.18, karakas: ["Venus", "Moon"] },
-      { house: 2, weight: 0.10, karakas: ["Venus", "Mercury"] },
+      { house: 1, weight: 0.28, karakas: ["Venus", "Moon", "Sun"] },
+      { house: 7, weight: 0.16, karakas: ["Venus", "Moon"] },
+      { house: 10, weight: 0.10, karakas: ["Sun", "Venus"] },
+      { house: 5, weight: 0.08, karakas: ["Venus", "Moon"] },
+      { house: 2, weight: 0.08, karakas: ["Venus", "Mercury"] },
     ],
-    planets: [{ name: "Venus", weight: 0.24 }, { name: "Moon", weight: 0.14 }],
-    vargas: [{ chart: "D9", houses: [1, 7], karakas: ["Venus", "Moon"], weight: 0.16 }],
-    checked: ["D1 Lagna aura", "D1 7H public response", "D1 2H speech/face", "Venus/Moon", "D9 presence validation"],
-    rules: ["This category means presence/aura, not beauty ranking.", "Lagna and Venus are primary.", "D9 validates interpersonal magnetism."],
+    planets: [
+      { name: "Venus", weight: 0.20 },
+      { name: "Moon", weight: 0.12 },
+      { name: "Sun", weight: 0.10 },
+    ],
+    vargas: [{ chart: "D9", houses: [1, 7], karakas: ["Venus", "Moon"], weight: 0.14 }],
+    checked: ["D1 Lagna aura", "D1 7H public response", "D1 10H image", "Sun radiance", "Venus/Moon", "D9 presence validation"],
+    rules: ["This category means presence/aura, not beauty ranking.", "Sun adds radiance; 10H adds public image.", "D9 validates interpersonal magnetism."],
   });
   const matureMind = cleanCategoryResult({
     kundli,
     d1: [
-      { house: 5, weight: 0.22, karakas: ["Jupiter", "Mercury"] },
-      { house: 8, weight: 0.18, karakas: ["Saturn", "Jupiter"] },
-      { house: 9, weight: 0.18, karakas: ["Jupiter", "Saturn"] },
+      { house: 8, weight: 0.24, karakas: ["Saturn", "Jupiter"] },
+      { house: 9, weight: 0.12, karakas: ["Jupiter", "Saturn"] },
       { house: 4, weight: 0.10, karakas: ["Moon"] },
+      { house: 5, weight: 0.10, karakas: ["Jupiter", "Mercury"] },
     ],
-    planets: [{ name: "Saturn", weight: 0.16 }, { name: "Jupiter", weight: 0.14 }, { name: "Mercury", weight: 0.08 }, { name: "Moon", weight: 0.06 }],
-    vargas: [{ chart: "D9", houses: [1, 9], karakas: ["Saturn", "Jupiter"], weight: 0.12 }],
-    checked: ["D1 5H judgement", "D1 8H life-depth", "D1 9H wisdom", "D1 4H mental steadiness", "Saturn/Jupiter/Mercury/Moon", "D9 maturity validation"],
-    rules: ["Mature Mind is judged from patience, judgement and depth.", "8H is used for life-depth, not fear content.", "D9 validates inner maturity only."],
+    planets: [
+      { name: "Saturn", weight: 0.22 },
+      { name: "Jupiter", weight: 0.10 },
+      { name: "Moon", weight: 0.06 },
+      { name: "Mercury", weight: 0.04 },
+    ],
+    vargas: [{ chart: "D9", houses: [8, 9], karakas: ["Saturn", "Jupiter"], weight: 0.12 }],
+    checked: ["D1 8H life-depth", "D1 9H wisdom", "D1 4H steadiness", "Saturn patience", "Jupiter/Moon", "D9 maturity validation"],
+    rules: ["Wise Kundli is Saturn-led patience and depth.", "8H is used for life-depth, not fear content.", "5H/Mercury are kept light to avoid overlap with Intelligent Kundli."],
   });
   const options = [
     {
-      type: "Powerful Kundli → Natural Leader",
+      type: "Powerful Kundli",
       kind: "career" as const,
       score: naturalLeader.score,
-      line: "Strict read: Natural Leader uses D1 Lagna/10H/3H, Sun-Mars drive and D10 authority validation.",
-      why: ["D1 Lagna/10H/3H", "Sun-Mars drive", "D10 authority validation"],
+      line: "Powerful Kundli uses D1 Lagna/10H/3H/11H, Sun-Mars-Saturn drive and D10 authority validation.",
+      why: ["D1 Lagna/10H/3H/11H", "Sun-Mars-Saturn drive", "D10 authority validation"],
       checked: naturalLeader.checked,
       rules: naturalLeader.rules,
       details: naturalLeader.details,
     },
     {
-      type: "Emotional Kundli → Emotional Soul",
+      type: "Emotional Kundli",
       kind: "relationship" as const,
       score: emotionalSoul.score,
-      line: "Strict read: Emotional Soul uses Moon, D1 4H/7H and D9 emotional-bond validation.",
-      why: ["Moon strength", "D1 4H/7H", "D9 emotional validation"],
+      line: "Emotional Kundli uses Moon-led D1 4H/Lagna and D9 emotional depth — not partnership scoring.",
+      why: ["Moon strength", "D1 4H sukha", "D9 emotional depth"],
       checked: emotionalSoul.checked,
       rules: emotionalSoul.rules,
       details: emotionalSoul.details,
     },
     {
-      type: "Intelligent Kundli → Strategic Thinker",
+      type: "Intelligent Kundli",
       kind: "intelligence" as const,
       score: strategicThinker.score,
-      line: "Strict read: Strategic Thinker uses D1 5H/9H, Mercury-Jupiter and D24 learning validation.",
-      why: ["D1 5H/9H", "Mercury-Jupiter", "D24 learning validation"],
+      line: "Intelligent Kundli uses Mercury-led D1 5H/3H, Saturn analysis and D24 learning validation.",
+      why: ["Mercury strategy", "D1 5H/3H", "D24 learning validation"],
       checked: strategicThinker.checked,
       rules: strategicThinker.rules,
       details: strategicThinker.details,
     },
     {
-      type: "Spiritual Kundli → Spiritual Seeker",
+      type: "Spiritual Kundli",
       kind: "spiritual" as const,
       score: spiritualSeeker.score,
-      line: "Strict read: Spiritual Seeker uses D1 9H/12H, Jupiter-Ketu and D20 sadhana validation.",
-      why: ["D1 9H/12H", "Jupiter-Ketu", "D20 validation"],
+      line: "Spiritual Kundli uses D1 12H/9H moksha-dharma, Ketu-Jupiter-Saturn and D20 sadhana validation.",
+      why: ["D1 12H moksha", "Ketu-Jupiter-Saturn", "D20 validation"],
       checked: spiritualSeeker.checked,
       rules: spiritualSeeker.rules,
       details: spiritualSeeker.details,
     },
     {
-      type: "Fighter Kundli → Survivor Mindset",
+      type: "Fighter Kundli",
       kind: "fighter" as const,
       score: survivorMindset.score,
-      line: "Strict read: Survivor Mindset uses D1 3H/6H/8H, Mars-Saturn and D27/D30 resilience validation.",
-      why: ["D1 3H/6H/8H", "Mars-Saturn", "D27/D30 resilience"],
+      line: "Fighter Kundli uses D1 3H/6H/8H/Lagna, Mars-Saturn-Sun and D27/D30 resilience validation.",
+      why: ["D1 3H/6H/8H", "Mars-Saturn-Sun", "D27/D30 resilience"],
       checked: survivorMindset.checked,
       rules: survivorMindset.rules,
       details: survivorMindset.details,
     },
     {
-      type: "Wealth Builder Kundli → Money Builder",
+      type: "Partnership Kundli",
+      kind: "relationship" as const,
+      score: bondBuilder.score,
+      line: "Partnership Kundli uses D1 7H partnership, Venus-Moon bonding and D9 relationship validation.",
+      why: ["D1 7H partnership", "Venus-Moon bonding", "D9 validation"],
+      checked: bondBuilder.checked,
+      rules: bondBuilder.rules,
+      details: bondBuilder.details,
+    },
+    {
+      type: "Vitality Kundli",
+      kind: "body" as const,
+      score: strongBody.score,
+      line: "Vitality Kundli uses D1 Lagna/6H/8H vitality, Sun-Mars life force and D30 health friction filter.",
+      why: ["D1 Lagna/6H/8H", "Sun-Mars life force", "D30 health filter"],
+      checked: strongBody.checked,
+      rules: strongBody.rules,
+      details: strongBody.details,
+    },
+    {
+      type: "Wealth Builder Kundli",
       kind: "wealth" as const,
       score: moneyBuilder.score,
-      line: "Strict read: Money Builder prioritizes D1 wealth promise, D2 capacity and D10 income engine; current dasha is shown as timing-only operational score.",
-      why: ["Current dasha timing", "D1 wealth promise", "D2 vault + D10 income", "D9/SAV + leakage filter"],
+      line: "Wealth Builder Kundli prioritizes D1 wealth promise, D2 capacity and D10 income engine.",
+      why: ["D1 wealth promise", "D2 vault + D10 income", "D9/SAV + leakage filter"],
       checked: moneyBuilder.checked,
       rules: moneyBuilder.rules,
       details: moneyBuilder.details,
     },
     {
-      type: "Creative Kundli → Creative Mind",
+      type: "Creative Kundli",
       kind: "intelligence" as const,
       score: creativeMind.score,
-      line: "Strict read: Creative Mind uses D1 5H/3H/2H, Venus-Mercury-Moon and D3/D10 expression validation.",
-      why: ["D1 5H/3H/2H", "Venus-Mercury-Moon", "D3/D10 validation"],
+      line: "Creative Kundli uses D1 5H/3H/10H, Venus-Mercury-Moon-Rahu and D3/D10 expression validation.",
+      why: ["D1 5H/3H/10H", "Venus-Mercury-Rahu", "D3/D10 validation"],
       checked: creativeMind.checked,
       rules: creativeMind.rules,
       details: creativeMind.details,
     },
     {
-      type: "Attractive Kundli → Magnetic Presence",
+      type: "Attractive Kundli",
       kind: "relationship" as const,
       score: magneticPresence.score,
-      line: "Strict read: Magnetic Presence uses D1 Lagna/7H, Venus-Moon and D9 presence validation.",
-      why: ["D1 Lagna/7H", "Venus-Moon", "D9 presence validation"],
+      line: "Attractive Kundli uses D1 Lagna/7H/10H/5H, Sun-Venus-Moon and D9 presence validation.",
+      why: ["D1 Lagna/7H/10H", "Sun-Venus-Moon", "D9 presence validation"],
       checked: magneticPresence.checked,
       rules: magneticPresence.rules,
       details: magneticPresence.details,
     },
     {
-      type: "Wise Kundli → Mature Mind",
+      type: "Wise Kundli",
       kind: "identity" as const,
       score: matureMind.score,
-      line: "Strict read: Mature Mind uses D1 5H/8H/9H/4H, Saturn-Jupiter-Mercury-Moon and D9 maturity validation.",
-      why: ["D1 5H/8H/9H/4H", "Saturn-Jupiter-Mercury-Moon", "D9 validation"],
+      line: "Wise Kundli is Saturn-led from D1 8H depth, Jupiter wisdom and D9 maturity validation.",
+      why: ["Saturn-led depth", "D1 8H/9H", "D9 maturity validation"],
       checked: matureMind.checked,
       rules: matureMind.rules,
       details: matureMind.details,
     },
-  ].map(opt => ({ ...opt, score: Math.max(8, Math.min(96, Math.round(opt.score))) }));
+  ].map(opt => ({ ...opt, score: preciseCategoryScore(opt.score) }));
 
   return {
     coreIdentity,
     atmakaraka: ak?.name,
-    options: options.sort((a, b) => b.score - a.score),
+    options: options.sort((a, b) => b.score - a.score || a.type.localeCompare(b.type)),
   };
 }
 
-export function buildPersonalSnapshot(kundli: KundliData | null | undefined, _lang: UILang): PersonalSnapshot {
+/** Personalization copy is English-only; app language setting does not apply here. */
+export function buildPersonalSnapshot(kundli: KundliData | null | undefined): PersonalSnapshot {
   if (!kundli) {
     return {
       title: "Personalization",
@@ -1965,29 +1868,24 @@ export function buildPersonalSnapshot(kundli: KundliData | null | undefined, _la
   const strictPower = buildStrictPowerOptions(kundli, valueOf, wealthBase);
   const powerOptions = strictPower.options;
   const power = powerOptions[0];
-  const runnerUp = powerOptions[1];
-  const confidence = Math.max(58, Math.min(94, Math.round(62 + (power.score - (runnerUp?.score ?? 50)) * 1.4)));
-  const categoryScores = powerOptions.map(option => ({
-    type: option.type,
-    score: option.score,
-    selected: option.type === power.type,
-    reasons: option.why,
-    line: option.line,
-    checked: option.checked,
-    rules: option.rules,
-    details: option.details,
-  }));
+  const categoryScores = powerOptions.map(option => {
+    const meta = categoryMeaning(option.type);
+    return {
+      type: option.type,
+      score: option.score,
+      selected: option.type === power.type,
+      reasons: option.why,
+      line: option.line,
+      meaning: meta.meaning,
+      meaningPoints: meta.points,
+      checked: option.checked,
+      rules: option.rules,
+      details: option.details,
+    };
+  });
   const strongest = insights.reduce((best, item) => (item.value ?? 0) > (best.value ?? 0) ? item : best);
   const weakest = insights.reduce((worst, item) => (item.value ?? 100) < (worst.value ?? 100) ? item : worst);
-  const strongestLifeTheme = strongest.key === "spiritual" ? "Spiritual Seeker"
-    : strongest.key === "career" ? "Karma Builder"
-      : strongest.key === "knowledge" ? "Gyan-Oriented"
-        : strongest.key === "relationship" ? "Relationship Mirror"
-          : strongest.key === "effort" ? "Effort Warrior"
-            : "Life Pattern Reader";
-  const categoryTheme = power.type.includes("→")
-    ? power.type.split("→").pop()?.trim() || power.type
-    : power.type.replace(/\s+Kundli$/, "");
+  const categoryTheme = power.type;
 
   const color = strongest.key === "career" ? "#3b82f6"
     : strongest.key === "spiritual" ? "#a78bfa"
@@ -1997,13 +1895,13 @@ export function buildPersonalSnapshot(kundli: KundliData | null | undefined, _la
 
   return {
     title: "Personalization",
-    themeLabel: `${categoryTheme} · strict category engine`,
+    themeLabel: categoryTheme,
     powerType: power.type,
     powerScore: power.score,
-    powerLine: `${power.line} Confidence ${confidence}%.`,
-    innerType: categoryTheme,
-    innerTypeSub: `Your selected category is ${power.type}. Strongest life area: ${strongest.key}. Awareness area: ${weakest.key}.`,
-    identityLine: `Your kundli category is ${power.type}; within it, ${strongest.key} is your strongest life pattern and ${weakest.key} needs awareness.`,
+    powerLine: power.type,
+    innerType: power.type,
+    innerTypeSub: power.type,
+    identityLine: power.type,
     strongestTrait: `${strongest.key.toUpperCase()} · ${strongest.tag}`,
     pressurePoint: `${weakest.key.toUpperCase()} · ${weakest.tag}`,
     hiddenStrength: strongest.support ?? strongest.line,
@@ -2013,14 +1911,10 @@ export function buildPersonalSnapshot(kundli: KundliData | null | undefined, _la
       : strongest.key === "spiritual" ? "Reflect and detach"
         : strongest.key === "relationship" ? "Connect and listen"
           : strongest.key === "knowledge" ? "Learn and teach"
-            : "Act with awareness",
-    trustLine: "Strict lifetime engine: Lagna/Lagna lord, Moon, Sun, Atmakaraka, functional house lords, dignity, debility correction, combustion, retrograde, Ashtakavarga, benefic/malefic aspects and D9/D10/D20 validation.",
-    bullets: [
-      `${power.type} selected by: ${power.why.join(" · ")}.`,
-      `Core identity score: ${strictPower.coreIdentity}%${strictPower.atmakaraka ? ` · Atmakaraka: ${strictPower.atmakaraka}` : ""}.`,
-      runnerUp ? `Runner-up pattern: ${runnerUp.type} (${runnerUp.score}%).` : `${strongest.title} is your strongest readable pattern.`,
-      `Strongest life theme: ${strongestLifeTheme}. ${weakest.title} needs awareness because the chart shows weaker support there.`,
-    ],
+            : strongest.key === "body" ? "Protect and recharge"
+              : "Act with awareness",
+    trustLine: "",
+    bullets: [],
     insights,
     categoryScores,
     color,

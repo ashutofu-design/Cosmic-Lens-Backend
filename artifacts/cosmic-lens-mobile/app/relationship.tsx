@@ -201,7 +201,7 @@ function OptionCard({
   }
 
   const loveWarm = option.key === "love";
-  const bRadius = isHL ? 28 : 22;
+  const bRadius = isHL ? 20 : 18;
 
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }, { translateY: slideAnim }], opacity: fadeAnim }}>
@@ -347,7 +347,7 @@ function OptionCard({
                     elevation: isHL ? 10 : 6,
                   }]}
                 >
-                  <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={isHL ? 22 : 17} color="#fff" />
+                  <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={isHL ? 18 : 15} color="#fff" />
                 </LinearGradient>
               </Animated.View>
             </View>
@@ -391,9 +391,9 @@ function OptionCard({
             </View>
 
             {option.depthLine ? (
-              <View style={{flexDirection:"row",alignItems:"center",gap:5,marginTop:2,paddingHorizontal:2}}>
-                <Feather name="zap" size={10} color={option.glowColor}/>
-                <Text style={{color:"#D1D5DB",fontSize:10,fontFamily:"Nunito_700Bold"}}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 0, paddingHorizontal: 2 }}>
+                <Feather name="zap" size={9} color={option.glowColor} />
+                <Text style={{ color: "#D1D5DB", fontSize: 9, fontFamily: "Nunito_700Bold" }} numberOfLines={1}>
                   {option.depthLine}
                 </Text>
               </View>
@@ -476,14 +476,14 @@ export default function RelationshipScreen() {
             backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
             borderColor: isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.08)",
           }]}>
-            <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={isDark ? "#fff" : "#0F172A"} />
+            <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={18} color={isDark ? "#fff" : "#0F172A"} />
           </View>
         </Pressable>
       </View>
 
       <ScrollView
         style={s.root}
-        contentContainerStyle={[s.content, { paddingTop: topPad + 50, paddingBottom: botPad + 30 }]}
+        contentContainerStyle={[s.content, { paddingTop: topPad + 42, paddingBottom: botPad + 24 }]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={[s.heroWrap, { opacity: headerFade, transform: [{ translateY: headerSlide }] }]}>
@@ -505,22 +505,22 @@ export default function RelationshipScreen() {
         </Animated.View>
 
         {/* ── Smart Person Slots ── */}
-        <View style={{flexDirection:"row",gap:8,marginBottom:14}}>
+        <View style={{ flexDirection: "row", gap: 6, marginBottom: 10 }}>
 
           {/* ─ PERSON 1: Auto-loaded from primary profile ─ */}
           {hasP1 ? (
             <View style={{flex:1}}>
-              <View style={{flex:1,flexDirection:"row",alignItems:"center",height:46,
-                borderRadius:14,paddingHorizontal:10,gap:7,
+              <View style={{ flex: 1, flexDirection: "row", alignItems: "center", height: 40,
+                borderRadius: 12, paddingHorizontal: 8, gap: 6,
                 backgroundColor:"#151b2e",
                 borderWidth:1,
                 borderColor:"#2d3555"}}>
-                <View style={{width:24,height:24,borderRadius:12,
+                <View style={{ width: 22, height: 22, borderRadius: 11,
                   backgroundColor:"#1e2744",
                   alignItems:"center",justifyContent:"center"}}>
                   <Text style={{fontSize:11}}>👤</Text>
                 </View>
-                <Text style={{color:"#E5E7EB",fontSize:11,fontFamily:"Nunito_700Bold",flex:1}} numberOfLines={1}>
+                <Text style={{ color: "#E5E7EB", fontSize: 10, fontFamily: "Nunito_700Bold", flex: 1 }} numberOfLines={1}>
                   {primaryProfile?.name || "You"}
                 </Text>
                 <Feather name="check-circle" size={12} color="#818cf8"/>
@@ -528,13 +528,13 @@ export default function RelationshipScreen() {
             </View>
           ) : (
             <Pressable onPress={()=>{Haptics.selectionAsync();router.push("/profile-edit" as any);}}
-              style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
-                borderRadius:14,paddingHorizontal:10,gap:7,
+              style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:40,
+                borderRadius:12,paddingHorizontal:8,gap:6,
                 backgroundColor:"#131929",
                 borderWidth:0.5,borderStyle:"dashed" as any,
                 borderColor:"#2d3555"})}>
-              <Text style={{fontSize:13}}>👤</Text>
-              <Text style={{color:"rgba(255,255,255,0.5)",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>{t.rl_selfLabel}</Text>
+              <Text style={{fontSize:11}}>👤</Text>
+              <Text style={{color:"rgba(255,255,255,0.5)",fontSize:10,fontFamily:"Nunito_500Medium",flex:1}}>{t.rl_selfLabel}</Text>
               <Text style={{color:"#818cf8",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>
             </Pressable>
           )}
@@ -546,17 +546,17 @@ export default function RelationshipScreen() {
               if(otherProfiles.length>0) setPickerOpen(true);
               else { setSelectedP2(null); }
             }}
-              style={({pressed})=>({opacity:pressed?0.85:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
-                borderRadius:14,paddingHorizontal:10,gap:7,
+              style={({pressed})=>({opacity:pressed?0.85:1,flex:1,flexDirection:"row",alignItems:"center",height:40,
+                borderRadius:12,paddingHorizontal:8,gap:6,
                 backgroundColor:"#1a1525",
                 borderWidth:1,
                 borderColor:"#3d2545"})}>
-              <View style={{width:24,height:24,borderRadius:12,
+              <View style={{ width: 22, height: 22, borderRadius: 11,
                 backgroundColor:"#2a1a35",
                 alignItems:"center",justifyContent:"center"}}>
-                <Text style={{fontSize:11}}>💑</Text>
+                <Text style={{fontSize:10}}>💑</Text>
               </View>
-              <Text style={{color:"#E5E7EB",fontSize:11,fontFamily:"Nunito_700Bold",flex:1}} numberOfLines={1}>
+              <Text style={{ color: "#E5E7EB", fontSize: 10, fontFamily: "Nunito_700Bold", flex: 1 }} numberOfLines={1}>
                 {selectedP2.name}
               </Text>
               <Text style={{color:"#f472b6",fontSize:8,fontFamily:"Nunito_600SemiBold"}}>{t.rl_change}</Text>
@@ -566,24 +566,24 @@ export default function RelationshipScreen() {
               Haptics.selectionAsync();
               setPickerOpen(true);
             }}
-              style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
-                borderRadius:14,paddingHorizontal:10,gap:7,
+              style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:40,
+                borderRadius:12,paddingHorizontal:8,gap:6,
                 backgroundColor:"#161020",
                 borderWidth:0.5,
                 borderColor:"#2d1f3a"})}>
-              <Text style={{fontSize:13}}>💑</Text>
-              <Text style={{color:"rgba(255,255,255,0.5)",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>{t.rl_partnerSelect}</Text>
+              <Text style={{fontSize:11}}>💑</Text>
+              <Text style={{color:"rgba(255,255,255,0.5)",fontSize:10,fontFamily:"Nunito_500Medium",flex:1}}>{t.rl_partnerSelect}</Text>
               <Feather name="chevron-down" size={12} color="#f472b6"/>
             </Pressable>
           ) : (
             <Pressable onPress={()=>{Haptics.selectionAsync();router.push("/profile-edit" as any);}}
-              style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:46,
-                borderRadius:14,paddingHorizontal:10,gap:7,
+              style={({pressed})=>({opacity:pressed?0.7:1,flex:1,flexDirection:"row",alignItems:"center",height:40,
+                borderRadius:12,paddingHorizontal:8,gap:6,
                 backgroundColor:"#141020",
                 borderWidth:0.5,borderStyle:"dashed" as any,
                 borderColor:"#2d1f3a"})}>
-              <Text style={{fontSize:13}}>💑</Text>
-              <Text style={{color:"rgba(255,255,255,0.5)",fontSize:11,fontFamily:"Nunito_500Medium",flex:1}}>Person 2</Text>
+              <Text style={{fontSize:11}}>💑</Text>
+              <Text style={{color:"rgba(255,255,255,0.5)",fontSize:10,fontFamily:"Nunito_500Medium",flex:1}}>Person 2</Text>
               <Text style={{color:"#f472b6",fontSize:9,fontFamily:"Nunito_700Bold"}}>+ Add</Text>
             </Pressable>
           )}
@@ -706,50 +706,50 @@ export default function RelationshipScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1 },
-  content: { paddingHorizontal: 20 },
+  content: { paddingHorizontal: 16 },
 
   topBar: {
     position: "absolute",
     top: 0, left: 0, right: 0,
     zIndex: 20,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingHorizontal: 14,
+    paddingBottom: 6,
   },
   backBtn: { alignSelf: "flex-start" },
   backCircle: {
-    width: 42, height: 42, borderRadius: 21,
+    width: 38, height: 38, borderRadius: 19,
     alignItems: "center", justifyContent: "center",
     borderWidth: 1,
   },
 
-  heroWrap: { alignItems: "center", marginBottom: 6, gap: 4 },
-  heroEmojiWrap: { alignItems: "center", justifyContent: "center", marginBottom: 2 },
+  heroWrap: { alignItems: "center", marginBottom: 4, gap: 2 },
+  heroEmojiWrap: { alignItems: "center", justifyContent: "center", marginBottom: 1 },
   heroEmojiCircle: {
-    width: 44, height: 44, borderRadius: 22,
+    width: 38, height: 38, borderRadius: 19,
     alignItems: "center", justifyContent: "center",
     borderWidth: 1.5, borderColor: "rgba(255,255,255,0.18)",
   },
-  heroEmoji: { fontSize: 20 },
+  heroEmoji: { fontSize: 17 },
   heroEmojiGlow: {
     position: "absolute",
-    width: 76, height: 76, borderRadius: 38,
+    width: 64, height: 64, borderRadius: 32,
     backgroundColor: "rgba(255,77,141,0.15)",
     zIndex: -1,
   },
   heroEmojiGlow2: {
     position: "absolute",
-    width: 96, height: 96, borderRadius: 48,
+    width: 80, height: 80, borderRadius: 40,
     backgroundColor: "rgba(192,38,211,0.08)",
     zIndex: -2,
   },
-  heroTitle: { fontSize: 20, letterSpacing: -0.5, textAlign: "center" },
-  heroSub: { fontSize: 12, textAlign: "center", letterSpacing: 0.2, maxWidth: 270 },
+  heroTitle: { fontSize: 18, letterSpacing: -0.4, textAlign: "center" },
+  heroSub: { fontSize: 11, textAlign: "center", letterSpacing: 0.15, maxWidth: 260 },
 
-  optionsList: { gap: 14 },
+  optionsList: { gap: 10 },
 
   radialGlow: {
     position: "absolute",
-    top: -30, left: -20, right: -20, bottom: -30,
+    top: -24, left: -16, right: -16, bottom: -24,
     zIndex: -1,
   },
 
@@ -763,70 +763,70 @@ const s = StyleSheet.create({
     zIndex: 10,
   },
   badgePill: {
-    paddingHorizontal: 14, paddingVertical: 6,
-    borderBottomLeftRadius: 16,
-    borderTopRightRadius: 28,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderBottomLeftRadius: 12,
+    borderTopRightRadius: 18,
   },
   badgeText: {
     color: "#fff",
-    fontSize: 8.5,
+    fontSize: 7.5,
     fontFamily: "Nunito_800ExtraBold",
-    letterSpacing: 1.3,
+    letterSpacing: 1.1,
   },
 
-  cardContent: { padding: 16, paddingTop: 18, gap: 12 },
-  cardContentHL: { padding: 18, paddingTop: 20 },
+  cardContent: { padding: 12, paddingTop: 14, gap: 8 },
+  cardContentHL: { padding: 14, paddingTop: 16 },
 
-  cardTop: { flexDirection: "row", alignItems: "center", gap: 12 },
+  cardTop: { flexDirection: "row", alignItems: "center", gap: 10 },
 
   emojiCircle: {
-    width: 46, height: 46, borderRadius: 16,
+    width: 40, height: 40, borderRadius: 14,
     alignItems: "center", justifyContent: "center",
     borderWidth: 1, borderColor: "rgba(255,255,255,0.14)",
   },
   emojiCircleHL: {
-    width: 54, height: 54, borderRadius: 18,
+    width: 46, height: 46, borderRadius: 15,
   },
-  emoji: { fontSize: 22 },
-  emojiHL: { fontSize: 26 },
+  emoji: { fontSize: 19 },
+  emojiHL: { fontSize: 22 },
 
-  titleArea: { flex: 1, gap: 3 },
-  cardTitle: { fontSize: 16, letterSpacing: -0.2 },
-  cardTitleHL: { fontSize: 18 },
-  cardSub: { fontSize: 11, letterSpacing: 0.1 },
-  cardSubHL: { fontSize: 11.5, lineHeight: 16 },
+  titleArea: { flex: 1, gap: 2 },
+  cardTitle: { fontSize: 14.5, letterSpacing: -0.15 },
+  cardTitleHL: { fontSize: 16 },
+  cardSub: { fontSize: 10, letterSpacing: 0.08 },
+  cardSubHL: { fontSize: 10.5, lineHeight: 14 },
 
   arrowCircle: {
-    width: 38, height: 38, borderRadius: 19,
+    width: 34, height: 34, borderRadius: 17,
     alignItems: "center", justifyContent: "center",
     borderWidth: 1.5, borderColor: "rgba(255,255,255,0.2)",
   },
   arrowCircleHL: {
-    width: 44, height: 44, borderRadius: 22,
+    width: 38, height: 38, borderRadius: 19,
   },
 
-  descRow: { marginTop: -2 },
+  descRow: { marginTop: -1 },
   descTag: {
     alignSelf: "flex-start",
-    paddingHorizontal: 13, paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  descText: { fontSize: 10.5, letterSpacing: 0.2 },
-
-  itemsRow: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
-  itemChip: {
-    paddingHorizontal: 11, paddingVertical: 6,
+    paddingHorizontal: 10, paddingVertical: 4,
     borderRadius: 10,
     borderWidth: 1,
   },
-  itemText: { fontSize: 10.5, letterSpacing: 0.1 },
+  descText: { fontSize: 9.5, letterSpacing: 0.15 },
+
+  itemsRow: { flexDirection: "row", flexWrap: "wrap", gap: 5 },
+  itemChip: {
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  itemText: { fontSize: 9.5, letterSpacing: 0.08 },
 
   bottomBar: {
-    height: 3, borderRadius: 2,
-    opacity: 0.5, marginTop: 4,
+    height: 2.5, borderRadius: 2,
+    opacity: 0.5, marginTop: 2,
   },
   bottomBarHL: {
-    height: 4, opacity: 0.75,
+    height: 3, opacity: 0.75,
   },
 });

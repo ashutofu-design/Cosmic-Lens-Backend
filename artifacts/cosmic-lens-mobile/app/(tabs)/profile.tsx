@@ -27,9 +27,7 @@ const F = {
 // ── Profile labels (full 25-lang via i18n) ────────────────────────────────────
 type VLang = "en" | "hn" | "hi";
 function vLangFromCode(code: string): VLang {
-  if (code === "en") return "en";
-  if (code === "hn") return "hn";
-  return "hi";
+  return coerceUILang(code);
 }
 function getProfileLabels(t: ReturnType<typeof import('@/hooks/useT').useT>) {
   return {
@@ -104,6 +102,7 @@ function LangFloatingPicker({
   const C = useC();
   const t = useT();
   const accent = C.isDark ? "#f59e0b" : "#7C3AED";
+  const currentLang = coerceUILang(current);
 
   function pick(code: string) {
     onSelect(code);
@@ -123,10 +122,10 @@ function LangFloatingPicker({
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <View style={{ alignItems: "flex-end" }}>
             <Text style={{ color: accent, fontSize: 13, fontFamily: F.semibold }}>
-              {APP_LANGS.find(l => l.code === current)?.native ?? "English"}
+              {APP_LANGS.find(l => l.code === currentLang)?.native ?? "English"}
             </Text>
             <Text style={{ color: C.textMuted, fontSize: 10, fontFamily: F.medium }}>
-              {APP_LANGS.find(l => l.code === current)?.name ?? "English"}
+              {APP_LANGS.find(l => l.code === currentLang)?.name ?? "English"}
             </Text>
           </View>
           <Feather name={open ? "chevron-up" : "chevron-down"} size={14} color={C.textDim} />
@@ -147,7 +146,7 @@ function LangFloatingPicker({
           <Text style={[lm.floatLabel, { color: C.textMuted }]}>{t.selectLanguage}</Text>
           <View style={lm.tabRow}>
             {APP_LANGS.map(l => {
-              const active = l.code === current;
+              const active = l.code === currentLang;
               return (
                 <Pressable
                   key={l.code}
@@ -415,7 +414,7 @@ export default function ProfileScreen() {
               current={language}
               onToggle={() => setShowLang(v => !v)}
               onSelect={code => {
-                setLanguage(code);
+                setLanguage(coerceUILang(code));
                 Haptics.selectionAsync().catch(() => {});
               }}
             />

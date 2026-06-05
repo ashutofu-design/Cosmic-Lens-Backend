@@ -26,10 +26,6 @@ export default function NativeTabLayout() {
         <Icon sf={{ default: "chart.line.uptrend.xyaxis", selected: "chart.line.uptrend.xyaxis" }} />
         <Label>{t.tabFuture}</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="profile">
-        <Icon sf={{ default: "person", selected: "person.fill" }} />
-        <Label>{t.tabProfile}</Label>
-      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }

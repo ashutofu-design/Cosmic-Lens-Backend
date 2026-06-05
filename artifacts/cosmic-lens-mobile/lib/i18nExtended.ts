@@ -447,6 +447,10 @@ const TE: Record<UILang, ExtTranslations> = {
 };
 
 export function getTE(lang: string): ExtTranslations {
-  const c = lang === "hn" || lang === "hi" ? lang : "en";
+  const raw = (lang || "en").trim().toLowerCase();
+  const c =
+    raw === "hn" || raw === "hinglish" ? "hn" :
+    raw === "hi" || raw === "hindi" ? "hi" :
+    "en";
   return TE[c as UILang] ?? TE.en;
 }

@@ -124,7 +124,6 @@ export function LifeMapCategoryCard({
     career: t.career,
     health: t.health,
     finance: t.finance,
-    "divya-prashna": "Divya Prashna",
   };
 
   const title = cat.title ?? titles[cat.key] ?? cat.key;
@@ -189,12 +188,12 @@ export function LifeMapCategoryCard({
           ) : null}
           <View style={[StyleSheet.absoluteFill, {
             backgroundColor: cardBg,
-            borderRadius: isPrimary ? 26 : 22,
+            borderRadius: isPrimary ? 20 : 18,
           }]} />
 
           <Animated.View style={[
             StyleSheet.absoluteFill,
-            { overflow: "hidden", borderRadius: isPrimary ? 26 : 22, opacity: glowAnim },
+            { overflow: "hidden", borderRadius: isPrimary ? 20 : 18, opacity: glowAnim },
           ]}>
             <LinearGradient
               colors={isDark
@@ -211,12 +210,12 @@ export function LifeMapCategoryCard({
               colors={[`${cat.glowColor}08`, "transparent"]}
               start={{ x: 0.5, y: 1 }}
               end={{ x: 0.5, y: 0.3 }}
-              style={[StyleSheet.absoluteFill, { borderRadius: isPrimary ? 26 : 22 }]}
+              style={[StyleSheet.absoluteFill, { borderRadius: isPrimary ? 20 : 18 }]}
             />
           )}
 
           <View style={[StyleSheet.absoluteFill, {
-            borderRadius: isPrimary ? 26 : 22,
+            borderRadius: isPrimary ? 20 : 18,
             borderWidth: isDark ? 1.2 : 0.6,
             borderColor: isDark
               ? `${cat.glowColor}${isPrimary ? "50" : "28"}`
@@ -229,7 +228,7 @@ export function LifeMapCategoryCard({
               : ["rgba(255,255,255,0.5)", "rgba(255,255,255,0.1)", "transparent"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
-            style={[StyleSheet.absoluteFill, { borderRadius: isPrimary ? 26 : 22, height: "45%" }]}
+              style={[StyleSheet.absoluteFill, { borderRadius: isPrimary ? 20 : 18, height: "45%" }]}
           />
 
           {isPrimary && (
@@ -262,7 +261,7 @@ export function LifeMapCategoryCard({
                 end={{ x: 1, y: 1 }}
                 style={[s.iconWrap, isPrimary && s.iconWrapPrimary]}
               >
-                <Text style={[s.emoji, isPrimary && { fontSize: 30 }]}>{cat.emoji}</Text>
+                <Text style={[s.emoji, isPrimary && { fontSize: 26 }]}>{cat.emoji}</Text>
               </LinearGradient>
             </View>
 
@@ -324,12 +323,12 @@ export function LifeMapCategoryCard({
                 end={{ x: 1, y: 1 }}
                 style={[s.arrowGrad, isPrimary && s.arrowGradPrimary]}
               >
-                <Feather name="chevron-right" size={isPrimary ? 22 : 18} color="#fff" />
+                <Feather name="chevron-right" size={isPrimary ? 20 : 16} color="#fff" />
               </LinearGradient>
             </Animated.View>
           </View>
 
-          <View style={{ paddingHorizontal: isPrimary ? 22 : 18, paddingBottom: isPrimary ? 8 : 6 }}>
+          <View style={{ paddingHorizontal: isPrimary ? 18 : 14, paddingBottom: isPrimary ? 6 : 4 }}>
             <LinearGradient
               colors={[c1, c2]}
               start={{ x: 0, y: 0 }}
@@ -344,55 +343,55 @@ export function LifeMapCategoryCard({
 }
 
 const s = StyleSheet.create({
-  card: { borderRadius: 22, overflow: "hidden" },
-  cardPrimary: { borderRadius: 26 },
+  card: { borderRadius: 18, overflow: "hidden" },
+  cardPrimary: { borderRadius: 20 },
   mostUsedWrap: { position: "absolute", top: 0, right: 0, zIndex: 10 },
   mostUsedBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 13,
-    paddingVertical: 6,
-    borderBottomLeftRadius: 16,
-    borderTopRightRadius: 24,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderBottomLeftRadius: 12,
+    borderTopRightRadius: 18,
   },
-  mostUsedDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: "#fff", opacity: 0.9 },
-  mostUsedText: { color: "#fff", fontSize: 8.5, fontFamily: "Nunito_800ExtraBold", letterSpacing: 1.2 },
-  cardRow: { flexDirection: "row", alignItems: "center", padding: 20, paddingVertical: 22, gap: 16 },
-  cardRowPrimary: { paddingVertical: 28, padding: 22 },
-  iconOuter: { width: 58, height: 58, alignItems: "center", justifyContent: "center" },
-  iconOuterPrimary: { width: 68, height: 68 },
-  iconGlow: { ...StyleSheet.absoluteFillObject, borderRadius: 29 },
-  iconGlowPrimary: { borderRadius: 34 },
+  mostUsedDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: "#fff", opacity: 0.9 },
+  mostUsedText: { color: "#fff", fontSize: 7.5, fontFamily: "Nunito_800ExtraBold", letterSpacing: 1 },
+  cardRow: { flexDirection: "row", alignItems: "center", padding: 14, paddingVertical: 16, gap: 12 },
+  cardRowPrimary: { paddingVertical: 20, padding: 16 },
+  iconOuter: { width: 50, height: 50, alignItems: "center", justifyContent: "center" },
+  iconOuterPrimary: { width: 56, height: 56 },
+  iconGlow: { ...StyleSheet.absoluteFillObject, borderRadius: 25 },
+  iconGlowPrimary: { borderRadius: 28 },
   iconWrap: {
-    width: 52, height: 52, borderRadius: 17,
+    width: 44, height: 44, borderRadius: 14,
     alignItems: "center", justifyContent: "center",
     borderWidth: 1, borderColor: "rgba(255,255,255,0.12)",
   },
-  iconWrapPrimary: { width: 62, height: 62, borderRadius: 21 },
-  emoji: { fontSize: 24 },
-  cardText: { flex: 1, gap: 6 },
-  cardTitle: { fontSize: 18, letterSpacing: -0.2 },
-  cardTitlePrimary: { fontSize: 21 },
-  cardSub: { fontSize: 12.5, letterSpacing: 0.15 },
+  iconWrapPrimary: { width: 50, height: 50, borderRadius: 16 },
+  emoji: { fontSize: 21 },
+  cardText: { flex: 1, gap: 4 },
+  cardTitle: { fontSize: 16, letterSpacing: -0.15 },
+  cardTitlePrimary: { fontSize: 18 },
+  cardSub: { fontSize: 11.5, letterSpacing: 0.1 },
   pricePill: {
     alignSelf: "flex-start",
-    marginTop: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 999,
     borderWidth: 1,
   },
-  pricePillText: { fontSize: 11, fontFamily: "Nunito_700Bold", letterSpacing: 0.2 },
-  badge: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 12, borderWidth: 1 },
-  badgeLabel: { fontSize: 8, fontFamily: "Nunito_700Bold", letterSpacing: 0.5 },
-  arrowBtn: { elevation: 8 },
+  pricePillText: { fontSize: 10, fontFamily: "Nunito_700Bold", letterSpacing: 0.15 },
+  badge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10, borderWidth: 1 },
+  badgeLabel: { fontSize: 7.5, fontFamily: "Nunito_700Bold", letterSpacing: 0.4 },
+  arrowBtn: { elevation: 6 },
   arrowGrad: {
-    width: 42, height: 42, borderRadius: 21,
+    width: 36, height: 36, borderRadius: 18,
     alignItems: "center", justifyContent: "center",
     borderWidth: 1.5, borderColor: "rgba(255,255,255,0.2)",
   },
-  arrowGradPrimary: { width: 50, height: 50, borderRadius: 25 },
-  bottomBar: { height: 3, borderRadius: 2, opacity: 0.6 },
-  bottomBarPrimary: { height: 3.5, opacity: 0.8 },
+  arrowGradPrimary: { width: 42, height: 42, borderRadius: 21 },
+  bottomBar: { height: 2.5, borderRadius: 2, opacity: 0.6 },
+  bottomBarPrimary: { height: 3, opacity: 0.8 },
 });

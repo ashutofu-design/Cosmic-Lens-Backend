@@ -1,5 +1,5 @@
 import { useUser } from "@/context/UserContext";
-import { getT, type UILang } from "@/lib/i18n";
+import { coerceUILang, getT, type UILang } from "@/lib/i18n";
 import { getTE } from "@/lib/i18nExtended";
 import { getTM } from "@/lib/i18nMore";
 import { getTV } from "@/lib/i18nVastu";
@@ -16,12 +16,13 @@ export type T = ReturnType<typeof getT> & ReturnType<typeof getTE>
 
 export function useT(): T {
   const { language } = useUser();
+  const lang = coerceUILang(language);
   return {
-    ...getT(language),
-    ...getTE(language),
-    ...getTM(language),
-    ...getTV(language),
-    lang: language,
-    vlang: vedicLang(language),
+    ...getT(lang),
+    ...getTE(lang),
+    ...getTM(lang),
+    ...getTV(lang),
+    lang,
+    vlang: vedicLang(lang),
   } as T;
 }

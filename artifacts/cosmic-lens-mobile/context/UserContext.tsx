@@ -4,7 +4,7 @@ import { router } from "expo-router";
 import { AppState, type AppStateStatus } from "react-native";
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { BirthData, KundliData } from "@/types";
-import type { UILang } from "@/lib/i18n";
+import { coerceUILang, type UILang } from "@/lib/i18n";
 import { API_BASE } from "@/lib/apiConfig";
 
 // ── ProfileEntry ────────────────────────────────────────────────────────────
@@ -194,16 +194,19 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        const [u, ps, pid, lang, legacyBD, legacyK, legacyUser, lastUid] = await Promise.all([
+        const [u, ps, pid, legacyBD, legacyK, legacyUser, lastUid] = await Promise.all([
           AsyncStorage.getItem(KEYS.user),
           AsyncStorage.getItem(KEYS.profiles),
           AsyncStorage.getItem(KEYS.primaryId),
-          AsyncStorage.getItem(KEYS.language),
           AsyncStorage.getItem(KEYS.birthData),
           AsyncStorage.getItem(KEYS.kundli),
           AsyncStorage.getItem(KEYS.legacyUser),
           AsyncStorage.getItem(KEYS.lastUserId),
         ]);
+
+        // App always opens in English; user may switch language for this session only.
+        const resolvedLang: LangCode = "en";
+        _setLanguage(resolvedLang);
 
         // Load user — migrate legacy (name+email only) to new AuthUser format
         let hydratedUser: AuthUser | null = null;
@@ -217,11 +220,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        let resolvedLang: LangCode = "en";
-        if (lang) {
-          try { resolvedLang = JSON.parse(lang) as LangCode; } catch {}
-          _setLanguage(resolvedLang);
-        }
         // ── RTL boot enforcement (runs once, post-hydration) ──────────────
         // If the saved language requires a different layout direction than
         // I18nManager currently reports, silently apply forceRTL + reload.
@@ -522,11 +520,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
   }, [pullProfilesFromCloud]);
 
-  const setLanguage = useCallback((l: LangCode) => {
-    _setLanguage(l);
-    AsyncStorage.setItem(KEYS.language, JSON.stringify(l)).catch(() => {});
+  const setLanguage = useCallback((l: LangCode | string) => {
+    const resolved = coerceUILang(l);
+    _setLanguage(resolved);
     import("@/lib/rtl")
-      .then(({ applyRTLForLang }) => applyRTLForLang(l))
+      .then(({ applyRTLForLang }) => applyRTLForLang(resolved))
       .catch((err) => console.warn("[UserContext] RTL apply failed:", err));
   }, []);
 
@@ -556,7 +554,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({
         planets: kundli.planets,
         nakshatra: kundli.nakshatra ?? "",
-        lang: language,
+        lang: coerceUILang(language),
       }),
       signal: controller.signal,
     })

@@ -429,7 +429,9 @@ export function uiDateLocale(lang: UILang | string): string {
 /** Map any stored/legacy language code to en, hn, or hi. */
 export function coerceUILang(lang: string): UILang {
   const c = (lang || "en").trim().toLowerCase();
-  if (c === "en" || c === "hn" || c === "hi") return c;
+  if (c === "en" || c === "english") return "en";
+  if (c === "hn" || c === "hinglish") return "hn";
+  if (c === "hi" || c === "hindi") return "hi";
   return "en";
 }
 

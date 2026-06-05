@@ -31,7 +31,6 @@ export default function LifeMapScreen() {
   const topPad = Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
   const botPad = insets.bottom;
   const isDark = C.isDark;
-  const ac = isDark ? "#f59e0b" : "#7C3AED";
 
   const [mode, setMode] = useState<LifeMapMode>(
     params.mode === "explore" ? "explore" : "lifemap",
@@ -70,7 +69,7 @@ export default function LifeMapScreen() {
 
       <ScrollView
         style={s.root}
-        contentContainerStyle={[s.content, { paddingTop: topPad + 20, paddingBottom: botPad + 130 }]}
+        contentContainerStyle={[s.content, { paddingTop: topPad + 12, paddingBottom: botPad + 100 }]}
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={[s.headerWrap, { opacity: headerFade, transform: [{ translateY: headerSlide }] }]}>
@@ -118,39 +117,6 @@ export default function LifeMapScreen() {
           ))}
         </View>
         </FadeInView>
-
-        {!isExplore && (
-          <View style={[
-            s.footerCard,
-            {
-              borderColor: isDark ? `${ac}20` : `${ac}0C`,
-              borderWidth: isDark ? 1 : 0,
-              shadowColor: isDark ? ac : "rgba(80,60,120,0.15)",
-              shadowOpacity: isDark ? 0.08 : 0.2,
-              shadowRadius: isDark ? 10 : 18,
-              shadowOffset: { width: 0, height: isDark ? 3 : 6 },
-              elevation: isDark ? 3 : 7,
-            },
-          ]}>
-            <View style={[StyleSheet.absoluteFill, {
-              backgroundColor: isDark ? "rgba(14,22,42,0.55)" : "rgba(255,255,255,0.9)",
-              borderRadius: 22,
-            }]} />
-            <View style={s.footerRow}>
-              <View style={[s.footerIcon, { backgroundColor: isDark ? `${ac}14` : `${ac}0C` }]}>
-                <Feather name="compass" size={18} color={ac} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[s.footerTitle, { color: isDark ? "rgba(255,255,255,0.6)" : "#475569", fontFamily: "Nunito_600SemiBold" }]}>
-                  {t.lifeMapComing ?? "More dimensions coming"}
-                </Text>
-                <Text style={[s.footerSub, { color: isDark ? "rgba(255,255,255,0.3)" : "#94A3B8", fontFamily: "Nunito_400Regular" }]}>
-                  {t.lifeMapComingSub ?? "Education, Travel, Spirituality & more"}
-                </Text>
-              </View>
-            </View>
-          </View>
-        )}
       </ScrollView>
     </CosmicBg>
   );
@@ -158,41 +124,26 @@ export default function LifeMapScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1 },
-  content: { paddingHorizontal: 20, gap: 20 },
-  headerWrap: { gap: 6, marginBottom: 4 },
-  headerBadge: { alignSelf: "flex-start", marginBottom: 12 },
+  content: { paddingHorizontal: 16, gap: 12 },
+  headerWrap: { gap: 4, marginBottom: 2 },
+  headerBadge: { alignSelf: "flex-start", marginBottom: 6 },
   headerBadgeGrad: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 13,
-    paddingVertical: 6,
-    borderRadius: 20,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 16,
   },
   headerBadgeText: {
     color: "#fff",
-    fontSize: 9,
+    fontSize: 8,
     fontFamily: "Nunito_800ExtraBold",
-    letterSpacing: 1.8,
+    letterSpacing: 1.5,
   },
   headingRow: { flexDirection: "row", alignItems: "baseline", flexWrap: "wrap" },
-  heading: { fontSize: 32, letterSpacing: -0.5 },
-  headingEmoji: { fontSize: 22 },
-  subtitle: { fontSize: 13.5, letterSpacing: 0.2, marginTop: 2 },
-  grid: { gap: 20 },
-  footerCard: {
-    borderRadius: 22,
-    overflow: "hidden",
-    padding: 18,
-  },
-  footerRow: { flexDirection: "row", alignItems: "center", gap: 14 },
-  footerIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  footerTitle: { fontSize: 14 },
-  footerSub: { fontSize: 12, marginTop: 3 },
+  heading: { fontSize: 26, letterSpacing: -0.4 },
+  headingEmoji: { fontSize: 18 },
+  subtitle: { fontSize: 12, letterSpacing: 0.15, marginTop: 1 },
+  grid: { gap: 12 },
 });

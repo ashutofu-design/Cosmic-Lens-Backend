@@ -25,9 +25,11 @@ import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 import {
+  loyaltyCompareVerdict,
   mapLoveRealityResult,
   type LoveRealityBasicDisplay,
   type LoveRealityToolKey,
+  type LoyaltyCompareData,
 } from "@/lib/loveRealityToolMappers";
 import { LOVE_REALITY_PRO_UI_PRICING } from "@/lib/loveRealityProOffer";
 import type { BirthData } from "@/types";
@@ -334,16 +336,181 @@ const statusStyles = StyleSheet.create({
   label: { fontSize: 26, fontFamily: "Nunito_800ExtraBold", textAlign: "center", lineHeight: 34, letterSpacing: -0.5 },
 });
 
+function loyaltyBarColor(score: number): string {
+  if (score >= 72) return "#22c55e";
+  if (score >= 52) return "#fbbf24";
+  if (score >= 35) return "#fb923c";
+  return "#ef4444";
+}
+
+function loyaltyLevelShort(level: string): string {
+  switch (level) {
+    case "high":
+      return "Strong";
+    case "moderate":
+      return "Moderate";
+    case "unstable":
+      return "Weak";
+    case "risky":
+      return "Risky";
+    default:
+      return level || "—";
+  }
+}
+
+export function LoyaltyCompareCard({
+  compare,
+  youName,
+  partnerName,
+  isDark,
+  compact = false,
+}: {
+  compare: LoyaltyCompareData;
+  youName: string;
+  partnerName: string;
+  isDark: boolean;
+  compact?: boolean;
+}) {
+  const you = youName.trim() || "Aap";
+  const partner = partnerName.trim() || "Partner";
+  const verdict = loyaltyCompareVerdict(compare, you, partner);
+  const textHi = isDark ? "#fff" : "#0F172A";
+  const textLo = isDark ? "rgba(203,213,225,0.65)" : "#64748B";
+  const cardBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.03)";
+  const border = isDark ? "rgba(255,255,255,0.1)" : "rgba(15,23,42,0.08)";
+
+  const rows = [
+    {
+      key: "you" as const,
+      label: you,
+      sub: "Aap",
+      score: compare.youScore,
+      level: compare.youLevel,
+      isHigher: compare.higherSide === "you",
+      dutyBound: compare.youDutyBound,
+    },
+    {
+      key: "partner" as const,
+      label: partner,
+      sub: "Partner",
+      score: compare.partnerScore,
+      level: compare.partnerLevel,
+      isHigher: compare.higherSide === "partner",
+      dutyBound: compare.partnerDutyBound,
+    },
+  ];
+
+  return (
+    <View style={[loyaltyCmpStyles.wrap, compact && loyaltyCmpStyles.wrapCompact]}>
+      <Text style={[loyaltyCmpStyles.title, { color: textHi }]}>Kiska loyalty zyada?</Text>
+      {compare.estimated ? (
+        <Text style={[loyaltyCmpStyles.estBadge, { color: textLo }]}>
+          Chart stress se estimate — exact scores server update ke baad
+        </Text>
+      ) : null}
+      <View style={[loyaltyCmpStyles.card, { backgroundColor: cardBg, borderColor: border }]}>
+        {rows.map(row => {
+          const color = loyaltyBarColor(row.score);
+          return (
+            <View key={row.key} style={loyaltyCmpStyles.row}>
+              <View style={loyaltyCmpStyles.rowHead}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[loyaltyCmpStyles.name, { color: textHi }]} numberOfLines={1}>
+                    {row.label}
+                  </Text>
+                  <Text style={[loyaltyCmpStyles.sub, { color: textLo }]}>{row.sub}</Text>
+                </View>
+                <View style={loyaltyCmpStyles.scoreCol}>
+                  <Text style={[loyaltyCmpStyles.score, { color }]}>{row.score}</Text>
+                  <Text style={[loyaltyCmpStyles.level, { color: textLo }]}>
+                    {loyaltyLevelShort(row.level)}
+                  </Text>
+                </View>
+                {row.isHigher && compare.higherSide !== "tie" ? (
+                  <View style={[loyaltyCmpStyles.badge, { backgroundColor: color + "22", borderColor: color + "55" }]}>
+                    <Text style={[loyaltyCmpStyles.badgeTxt, { color }]}>Zyada</Text>
+                  </View>
+                ) : compare.higherSide === "tie" ? (
+                  <View style={[loyaltyCmpStyles.badge, { backgroundColor: border, borderColor: border }]}>
+                    <Text style={[loyaltyCmpStyles.badgeTxt, { color: textLo }]}>Barabar</Text>
+                  </View>
+                ) : (
+                  <View style={{ width: 52 }} />
+                )}
+              </View>
+              <View style={[loyaltyCmpStyles.track, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }]}>
+                <View style={[loyaltyCmpStyles.fill, { width: `${row.score}%`, backgroundColor: color }]} />
+              </View>
+              {row.dutyBound ? (
+                <Text style={[loyaltyCmpStyles.dutyNote, { color: textLo }]}>
+                  Saturn–Moon: duty-bound (dukh sahen, dhoka pattern kam)
+                </Text>
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+      <Text style={[loyaltyCmpStyles.verdict, { color: textHi }]}>{verdict}</Text>
+    </View>
+  );
+}
+
+const loyaltyCmpStyles = StyleSheet.create({
+  wrap: { width: "100%", maxWidth: 320, gap: 10, marginTop: 14 },
+  wrapCompact: { maxWidth: 280, marginTop: 10 },
+  title: { fontSize: 14, fontFamily: "Nunito_800ExtraBold", letterSpacing: 0.2, textAlign: "center" },
+  estBadge: {
+    fontSize: 10,
+    fontFamily: "Nunito_600SemiBold",
+    textAlign: "center",
+    lineHeight: 14,
+    paddingHorizontal: 8,
+  },
+  card: { borderRadius: 16, borderWidth: 1, padding: 12, gap: 14 },
+  row: { gap: 6 },
+  rowHead: { flexDirection: "row", alignItems: "center", gap: 8 },
+  name: { fontSize: 14, fontFamily: "Nunito_700Bold" },
+  sub: { fontSize: 10, fontFamily: "Nunito_600SemiBold", marginTop: 1 },
+  scoreCol: { alignItems: "flex-end", minWidth: 44 },
+  score: { fontSize: 18, fontFamily: "Nunito_800ExtraBold", letterSpacing: -0.5 },
+  level: { fontSize: 9, fontFamily: "Nunito_700Bold", letterSpacing: 0.5, textTransform: "uppercase" },
+  badge: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    minWidth: 52,
+    alignItems: "center",
+  },
+  badgeTxt: { fontSize: 10, fontFamily: "Nunito_800ExtraBold", letterSpacing: 0.3 },
+  track: { height: 8, borderRadius: 4, overflow: "hidden" },
+  fill: { height: "100%", borderRadius: 4 },
+  dutyNote: { fontSize: 10, fontFamily: "Nunito_600SemiBold", lineHeight: 14 },
+  verdict: {
+    fontSize: 13,
+    fontFamily: "Nunito_600SemiBold",
+    lineHeight: 19,
+    textAlign: "center",
+    paddingHorizontal: 4,
+  },
+});
+
 export function LoveRealityResultHero({
   display,
   isDark,
   accentGradient,
   compact = false,
+  youName,
+  partnerName,
+  hideLoyaltyCompare = false,
 }: {
   display: LoveRealityBasicDisplay;
   isDark: boolean;
   accentGradient: [string, string];
   compact?: boolean;
+  youName?: string;
+  partnerName?: string;
+  hideLoyaltyCompare?: boolean;
 }) {
   if (display.visual === "circular" && display.percent != null) {
     return (
@@ -366,12 +533,23 @@ export function LoveRealityResultHero({
     );
   }
   return (
-    <StatusDestinyCard
-      label={display.statusLabel ?? "Cosmic Reading"}
-      accent={display.statusAccent ?? accentGradient[0]}
-      isDark={isDark}
-      compact={compact}
-    />
+    <View style={{ width: "100%", alignItems: "center" }}>
+      <StatusDestinyCard
+        label={display.statusLabel ?? "Cosmic Reading"}
+        accent={display.statusAccent ?? accentGradient[0]}
+        isDark={isDark}
+        compact={compact}
+      />
+      {display.loyaltyCompare && !hideLoyaltyCompare ? (
+        <LoyaltyCompareCard
+          compare={display.loyaltyCompare}
+          youName={youName ?? "Aap"}
+          partnerName={partnerName ?? "Partner"}
+          isDark={isDark}
+          compact={compact}
+        />
+      ) : null}
+    </View>
   );
 }
 
@@ -554,16 +732,20 @@ export function LoveRealityBasicScreen({ config }: { config: LoveRealityToolConf
 
           {showResult && display && primaryProfile && partnerProfile && (
             <LoveRealityToolResultPanel
+              toolKey={config.toolKey}
               toolTitle={config.title}
               userName={primaryProfile.name || "You"}
               partnerName={partnerProfile.name || "Partner"}
               display={display}
+              loyaltyCompare={display.loyaltyCompare}
               isDark={isDark}
               bottomPad={insets.bottom}
               accentGradient={config.accentGradient}
               onOpenPro={openProPdf}
               showHeader
               onBack={() => router.back()}
+              onRefresh={runAnalysis}
+              refreshing={loading}
             />
           )}
         </View>

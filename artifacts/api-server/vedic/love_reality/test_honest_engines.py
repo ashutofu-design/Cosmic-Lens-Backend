@@ -68,6 +68,19 @@ def test_loyalty_low_score_has_narrative_locks():
     assert "naturally loyal" not in reasons
 
 
+def test_loyalty_includes_new_rule_fields():
+    ly = run_loyalty_check(P1, P2)
+    assert "is_duty_bound_loyal" in ly
+    assert isinstance(ly["is_duty_bound_loyal"], bool)
+    per = ly.get("per_person") or {}
+    assert "p1" in per and "p2" in per
+    for key in ("score", "loyalty_level", "venus_combust", "venus_afflicted"):
+        assert key in per["p1"]
+        assert key in per["p2"]
+    assert "loyalty_tie_breaker" in ly
+    assert 0 <= ly["loyalty_score"] <= 100
+
+
 def test_bundle_includes_reader_context():
     bundle = run_all_love_reality_engines(P1, P2)
     rc = bundle.get("reader_context")

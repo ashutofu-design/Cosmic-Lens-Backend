@@ -11,6 +11,19 @@ export type LoveRealityToolKey =
 
 export type LoveVisualKind = "circular" | "risk-gauge" | "status-card";
 
+/** Per-person loyalty scores from API (p1 = you, p2 = partner). */
+export type LoyaltyCompareData = {
+  youScore: number;
+  partnerScore: number;
+  youLevel: string;
+  partnerLevel: string;
+  higherSide: "you" | "partner" | "tie";
+  youDutyBound?: boolean;
+  partnerDutyBound?: boolean;
+  /** True when built from love-compat afflictions (older server without per_person). */
+  estimated?: boolean;
+};
+
 export interface LoveRealityBasicDisplay {
   visual: LoveVisualKind;
   percent?: number;
@@ -20,6 +33,7 @@ export interface LoveRealityBasicDisplay {
   statusAccent?: string;
   hookLine: string;
   chartProof?: ChartProof | null;
+  loyaltyCompare?: LoyaltyCompareData;
 }
 
 function withProof(json: Record<string, unknown>, base: LoveRealityBasicDisplay): LoveRealityBasicDisplay {
@@ -103,12 +117,195 @@ function loyaltyStatusLabel(json: Record<string, unknown>): { label: string; acc
   return { label: "Mixed Signals", accent: "#a855f7" };
 }
 
+function loyaltyLevelShort(level: string): string {
+  switch (level) {
+    case "high":
+      return "Strong";
+    case "moderate":
+      return "Moderate";
+    case "unstable":
+      return "Weak";
+    case "risky":
+      return "Risky";
+    default:
+      return level || "—";
+  }
+}
+
+function buildCompareFromScores(
+  youScore: number,
+  partnerScore: number,
+  youLevel: string,
+  partnerLevel: string,
+  tie: Record<string, unknown> | null | undefined,
+  duty?: { you?: boolean; partner?: boolean },
+): LoyaltyCompareData {
+  let higherSide: LoyaltyCompareData["higherSide"] = "tie";
+  if (youScore > partnerScore) higherSide = "you";
+  else if (partnerScore > youScore) higherSide = "partner";
+  else if (tie?.applied && tie.lower_side === "p1") higherSide = "partner";
+  else if (tie?.applied && tie.lower_side === "p2") higherSide = "you";
+
+  return {
+    youScore,
+    partnerScore,
+    youLevel,
+    partnerLevel,
+    higherSide,
+    youDutyBound: duty?.you,
+    partnerDutyBound: duty?.partner,
+  };
+}
+
+function parseLoyaltyCompare(json: Record<string, unknown>): LoyaltyCompareData | undefined {
+  const tie = json.loyalty_tie_breaker as Record<string, unknown> | null | undefined;
+
+  const pp = json.per_person as Record<string, unknown> | undefined;
+  if (pp?.p1 && pp?.p2) {
+    const p1 = pp.p1 as Record<string, unknown>;
+    const p2 = pp.p2 as Record<string, unknown>;
+    return buildCompareFromScores(
+      Math.round(Math.max(0, Math.min(100, Number(p1.score) || 0))),
+      Math.round(Math.max(0, Math.min(100, Number(p2.score) || 0))),
+      String(p1.loyalty_level || ""),
+      String(p2.loyalty_level || ""),
+      tie,
+      {
+        you: Boolean(p1.is_duty_bound_loyal),
+        partner: Boolean(p2.is_duty_bound_loyal),
+      },
+    );
+  }
+
+  const p1s = Number(json.p1_loyalty_score);
+  const p2s = Number(json.p2_loyalty_score);
+  if (Number.isFinite(p1s) && Number.isFinite(p2s)) {
+    return buildCompareFromScores(
+      Math.round(Math.max(0, Math.min(100, p1s))),
+      Math.round(Math.max(0, Math.min(100, p2s))),
+      String(json.p1_loyalty_level || ""),
+      String(json.p2_loyalty_level || ""),
+      tie,
+      {
+        you: Boolean((json.breakdown as Record<string, unknown> | undefined)?.p1_duty_bound),
+        partner: Boolean((json.breakdown as Record<string, unknown> | undefined)?.p2_duty_bound),
+      },
+    );
+  }
+
+  const bd = json.breakdown as Record<string, unknown> | undefined;
+  const b1 = Number(bd?.p1_person_score);
+  const b2 = Number(bd?.p2_person_score);
+  if (Number.isFinite(b1) && Number.isFinite(b2)) {
+    return buildCompareFromScores(
+      Math.round(Math.max(0, Math.min(100, b1))),
+      Math.round(Math.max(0, Math.min(100, b2))),
+      loyaltyLevelFromScore(b1),
+      loyaltyLevelFromScore(b2),
+      tie,
+      {
+        you: Boolean(bd?.p1_duty_bound),
+        partner: Boolean(bd?.p2_duty_bound),
+      },
+    );
+  }
+
+  return undefined;
+}
+
+function loyaltyLevelFromScore(score: number): string {
+  if (score >= 72) return "high";
+  if (score >= 52) return "moderate";
+  if (score >= 35) return "unstable";
+  return "risky";
+}
+
+/** Build compare from API JSON — used when mapped display lacks it. */
+export function buildLoyaltyCompareFromJson(json: Record<string, unknown>): LoyaltyCompareData | undefined {
+  return parseLoyaltyCompare(json);
+}
+
+/** Fallback when server lacks per_person — uses love-compat chart affliction weights. */
+export function buildLoyaltyCompareFromLoveCompat(
+  loveJson: Record<string, unknown>,
+): LoyaltyCompareData | undefined {
+  const bd = loveJson.breakdown as Record<string, unknown> | undefined;
+  if (!bd) return undefined;
+  const a1 = Number(bd.p1_affliction);
+  const a2 = Number(bd.p2_affliction);
+  if (!Number.isFinite(a1) || !Number.isFinite(a2)) return undefined;
+
+  const youScore = clampScore(Math.round(78 - a1 * 0.52));
+  const partnerScore = clampScore(Math.round(78 - a2 * 0.52));
+  return {
+    ...buildCompareFromScores(
+      youScore,
+      partnerScore,
+      loyaltyLevelFromScore(youScore),
+      loyaltyLevelFromScore(partnerScore),
+      undefined,
+    ),
+    estimated: true,
+  };
+}
+
+function clampScore(n: number): number {
+  return Math.round(Math.max(0, Math.min(100, n)));
+}
+
+/** Merge loyalty + love-compat payloads into compare data. */
+export function resolveLoyaltyCompare(
+  loyaltyJson: Record<string, unknown> | undefined,
+  loveCompatJson: Record<string, unknown> | undefined,
+): LoyaltyCompareData | undefined {
+  if (loyaltyJson) {
+    const direct = parseLoyaltyCompare(loyaltyJson);
+    if (direct) return direct;
+  }
+  if (loveCompatJson) {
+    return buildLoyaltyCompareFromLoveCompat(loveCompatJson);
+  }
+  return undefined;
+}
+
+export function loyaltyCompareVerdict(
+  compare: LoyaltyCompareData,
+  youName: string,
+  partnerName: string,
+): string {
+  const you = youName.trim() || "Aap";
+  const partner = partnerName.trim() || "Partner";
+  const yLv = loyaltyLevelShort(compare.youLevel);
+  const pLv = loyaltyLevelShort(compare.partnerLevel);
+
+  if (compare.higherSide === "you") {
+    return `${you} ki loyalty zyada hai (${compare.youScore}/100, ${yLv}) — ${partner} thodi kam stable (${compare.partnerScore}/100, ${pLv}).`;
+  }
+  if (compare.higherSide === "partner") {
+    return `${partner} ki loyalty zyada hai (${compare.partnerScore}/100, ${pLv}) — ${you} ke chart mein zyada risk signs (${compare.youScore}/100, ${yLv}).`;
+  }
+  return `${you} aur ${partner} dono ki loyalty same level par hai (${compare.youScore}/100) — behavior aur timing decide karenge.`;
+}
+
 export function mapLoyaltyCheck(json: Record<string, unknown>): LoveRealityBasicDisplay {
   const { label, accent } = loyaltyStatusLabel(json);
+  const compare = parseLoyaltyCompare(json);
+  const tie = json.loyalty_tie_breaker as Record<string, unknown> | null | undefined;
+  const dutyBound = Boolean(json.is_duty_bound_loyal);
   const hook =
     firstReason(json.reasons as string[]) ||
-    "Faithfulness has layers in this chart — surface calm can hide a karmic test in loyalty.";
-  return withProof(json, { visual: "status-card", statusLabel: label, statusAccent: accent, hookLine: hook });
+    (dutyBound
+      ? "Saturn–Moon duty-bound pattern — dukh sahen karte hain, dhoka ka pattern kam."
+      : null) ||
+    (tie?.applied && typeof tie.note === "string" ? tie.note : null) ||
+    "Dono charts mein loyalty alag-alag layer par dikhti hai — neeche compare dekho.";
+  return withProof(json, {
+    visual: "status-card",
+    statusLabel: label,
+    statusAccent: accent,
+    hookLine: hook,
+    loyaltyCompare: compare,
+  });
 }
 
 function returnStatusLabel(chance: string): { label: string; accent: string } {
@@ -162,8 +359,14 @@ export function mapLoveRealityResult(
       return mapLoveCompatibility(json);
     case "breakup":
       return mapBreakupChances(json);
-    case "loyalty":
-      return mapLoyaltyCheck(json);
+    case "loyalty": {
+      const mapped = mapLoyaltyCheck(json);
+      if (!mapped.loyaltyCompare) {
+        const compare = buildLoyaltyCompareFromJson(json);
+        if (compare) return { ...mapped, loyaltyCompare: compare };
+      }
+      return mapped;
+    }
     case "will-return":
       return mapWillReturn(json);
     case "future-outcome":

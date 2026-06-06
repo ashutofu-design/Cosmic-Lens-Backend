@@ -123,3 +123,27 @@ def register_love_reality_routes(flask_app) -> None:
                 "X-Report-Cache": "miss",
             },
         )
+
+    @flask_app.route("/api/loyalty-compare", methods=["POST", "OPTIONS"])
+    def loyalty_compare():
+        if request.method == "OPTIONS":
+            return "", 204
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data.get("p1"), dict) or not isinstance(data.get("p2"), dict):
+            return jsonify({"error": "expected_p1_p2"}), 400
+        try:
+            from vedic.love_reality.engines import run_loyalty_check
+
+            r = run_loyalty_check(data["p1"], data["p2"])
+            return jsonify({
+                "engine_version": r.get("engine_version", "loyalty_compare_v2"),
+                "per_person": r.get("per_person"),
+                "p1_loyalty_score": r.get("p1_loyalty_score"),
+                "p2_loyalty_score": r.get("p2_loyalty_score"),
+                "p1_loyalty_level": r.get("p1_loyalty_level"),
+                "p2_loyalty_level": r.get("p2_loyalty_level"),
+                "loyalty_tie_breaker": r.get("loyalty_tie_breaker"),
+                "is_duty_bound_loyal": r.get("is_duty_bound_loyal"),
+            })
+        except Exception as exc:
+            return jsonify({"error": f"loyalty_compare_failed: {exc}"}), 500

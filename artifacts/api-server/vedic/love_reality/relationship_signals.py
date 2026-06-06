@@ -32,8 +32,24 @@ class PersonSignals:
     moon_in_8th: bool = False
     moon_d9_debil: bool = False
     venus_mars_conjunct: bool = False
+    venus_mars_conjunct_tight: bool = False
     venus_surface_strong_only: bool = False
     loyalty_risk_high: bool = False
+    moon_dual_flip_risk: bool = False
+    venus_dual_flip_risk: bool = False
+    saturn_moon_duty_bound: bool = False
+    moon_rahu_afflicted: bool = False
+    fifth_lord_in_twelfth: bool = False
+    twelfth_lord_in_fifth: bool = False
+    d9_seventh_lord_weak: bool = False
+    lagna_lord_weak_or_combust: bool = False
+    venus_d9_exalted: bool = False
+    moon_d9_exalted: bool = False
+    saturn_on_7th_not_lord: bool = False
+    saturn_on_7th_as_lord: bool = False
+    venus_combust: bool = False
+    venus_afflicted: bool = False
+    venus_degree: float | None = None
     affliction_weight: int = 0
     notes: list[str] = field(default_factory=list)
 
@@ -68,11 +84,26 @@ def _analyze_person(k: KundliReader) -> PersonSignals:
             w += 2
         if venus.get("house") in DUSTHANA:
             w += 8
+            s.venus_afflicted = True
             s.notes.append(f"{k.name}'s Venus in dusthana — romance meets duty, guilt, or secrecy.")
         if "Rahu" in k.aspects_planet("Venus") or "Ketu" in k.aspects_planet("Venus"):
             w += 7
             s.emotional_instability = True
+            s.venus_afflicted = True
             s.notes.append(f"{k.name}'s Venus under nodal pull — attraction mixed with confusion.")
+        v9_si = k.d9_sign_index("Venus")
+        if v9_si is not None and k.dignity("Venus", v9_si) >= 2:
+            s.venus_d9_exalted = True
+        if k.is_combust("Venus"):
+            s.venus_combust = True
+            s.venus_afflicted = True
+        s.venus_degree = k.planet_deg_in_sign("Venus")
+        venus_aff = s.venus_debil or s.venus_afflicted
+        if k.is_dual_sign(venus.get("sign")) and venus_aff:
+            s.venus_dual_flip_risk = True
+            s.notes.append(
+                f"{k.name}'s Venus in dual sign under affliction — love intent can flip quickly."
+            )
 
     v9 = k.d9("Venus")
     if v9 is not None:
@@ -88,10 +119,16 @@ def _analyze_person(k: KundliReader) -> PersonSignals:
         s.venus_mars_conjunct = True
         s.loyalty_risk_high = True
         w += 14
-        s.notes.append(
-            f"{k.name}'s Venus-Mars conjunction — passion impulse can override loyalty; "
-            f"do NOT read as 'naturally loyal'."
-        )
+        if k.planets_within_degrees("Venus", "Mars", max_deg=10.0):
+            s.venus_mars_conjunct_tight = True
+            s.notes.append(
+                f"{k.name}'s Venus-Mars conjunction (≤10°) — passion impulse can override loyalty; "
+                f"do NOT read as 'naturally loyal'."
+            )
+        else:
+            s.notes.append(
+                f"{k.name}'s Venus-Mars share a house but orb is wide — impulse risk is milder."
+            )
 
     if moon:
         if moon.get("house") == 8:
@@ -114,14 +151,29 @@ def _analyze_person(k: KundliReader) -> PersonSignals:
             s.notes.append(
                 f"{k.name}'s Navamsa Moon debilitated — inner commitment wavers under stress."
             )
+        elif m9_si is not None and k.dignity("Moon", m9_si) >= 2:
+            s.moon_d9_exalted = True
         asp_m = k.aspects_planet("Moon")
+        if "Rahu" in asp_m:
+            s.moon_rahu_afflicted = True
         if "Saturn" in asp_m or "Rahu" in asp_m:
             s.moon_afflicted = True
             w += 9
             s.notes.append(f"{k.name}'s Moon under Saturn/Rahu — feelings held in, then erupt or detach.")
+        if k.saturn_moon_connected():
+            s.saturn_moon_duty_bound = True
+            s.notes.append(
+                f"{k.name}'s Saturn-Moon link (Punahoo) — duty-bound loyalty; may suffer in silence "
+                f"without cheating pattern."
+            )
         if moon.get("house") in DUSTHANA:
             w += 5
             s.notes.append(f"{k.name}'s Moon in dusthana — emotional peace hard to sustain in love.")
+        if k.is_dual_sign(moon.get("sign")) and (s.moon_afflicted or s.moon_debil or s.moon_rahu_afflicted):
+            s.moon_dual_flip_risk = True
+            s.notes.append(
+                f"{k.name}'s Moon in dual sign under affliction — mind flips quickly under stress."
+            )
 
     h5l = k.house_lord(5)
     p5 = k.planet(h5l)
@@ -133,6 +185,31 @@ def _analyze_person(k: KundliReader) -> PersonSignals:
         elif k.dignity(h5l, k.sidx(p5["sign"])) >= 1 and p5.get("house") in ROMANCE_HOUSES:
             s.reconnection_yoga = True
             s.notes.append(f"{k.name}'s 5th lord strong — emotional reconnection capacity present.")
+        if p5.get("house") == 12:
+            s.fifth_lord_in_twelfth = True
+            w += 8
+            s.notes.append(
+                f"{k.name}'s 5th lord in 12th — hidden desires can blur romantic intention."
+            )
+
+    h12l = k.house_lord(12)
+    p12 = k.planet(h12l)
+    if p12:
+        if p12.get("house") == 7:
+            s.third_person_risk = True
+            w += 6
+            s.notes.append(f"{k.name}'s 12th lord in 7th — hidden ties, secrecy, parallel attention.")
+        if p12.get("house") == 5:
+            s.twelfth_lord_in_fifth = True
+            w += 8
+            s.notes.append(
+                f"{k.name}'s 12th lord in 5th — secret parallel lines risk on love axis."
+            )
+            if "Rahu" in k.occupants(5) or "Rahu" in k.aspects_house(5):
+                w += 4
+                s.notes.append(
+                    f"{k.name}'s 12th lord in 5th with Rahu — extramarital / secret pull amplified."
+                )
 
     h7l = k.house_lord(7)
     p7 = k.planet(h7l)
@@ -152,7 +229,14 @@ def _analyze_person(k: KundliReader) -> PersonSignals:
         s.saturn_on_7th = True
         s.separation_yoga = True
         w += 11
-        s.notes.append(f"{k.name}'s Saturn on 7th axis — distance, delay, emotional cooling.")
+        if k.saturn_in_seventh_house() and k.saturn_is_seventh_lord():
+            s.saturn_on_7th_as_lord = True
+            s.notes.append(
+                f"{k.name}'s Saturn as 7th lord in 7th — duty-bound partnership; loyalty through obligation."
+            )
+        else:
+            s.saturn_on_7th_not_lord = True
+            s.notes.append(f"{k.name}'s Saturn on 7th axis — distance, delay, emotional cooling.")
     if "Mars" in occ7 or "Mars" in asp7:
         s.mars_on_7th = True
         w += 9
@@ -171,12 +255,36 @@ def _analyze_person(k: KundliReader) -> PersonSignals:
         s.third_person_risk = True
         w += 8
         s.notes.append(f"{k.name}'s chart shows third-person / external validation risk on love axis.")
-    h12l = k.house_lord(12)
-    p12 = k.planet(h12l)
-    if p12 and p12.get("house") == 7:
-        s.third_person_risk = True
-        w += 6
-        s.notes.append(f"{k.name}'s 12th lord in 7th — hidden ties, secrecy, parallel attention.")
+
+    h7l_d9 = k.d9_house_lord(7)
+    p7_d9 = k.d9_planet(h7l_d9)
+    if p7_d9:
+        si_d9 = p7_d9.get("signIndex")
+        if si_d9 is None and isinstance(p7_d9.get("sign"), str):
+            si_d9 = k.sidx(p7_d9["sign"])
+        if si_d9 is not None:
+            si_d9 = int(si_d9)
+            if k.dignity(h7l_d9, si_d9) <= -2 or p7_d9.get("house") in DUSTHANA:
+                s.d9_seventh_lord_weak = True
+                w += 10
+                s.notes.append(
+                    f"{k.name}'s Navamsa 7th lord weak — inner commitment cracks over long term."
+                )
+
+    lagna_lord = k.house_lord(1)
+    pl_lagna = k.planet(lagna_lord)
+    if pl_lagna:
+        ll_weak = (
+            k.dignity(lagna_lord, k.sidx(pl_lagna["sign"])) <= -2
+            or k.is_combust(lagna_lord)
+            or pl_lagna.get("house") in DUSTHANA
+        )
+        if ll_weak:
+            s.lagna_lord_weak_or_combust = True
+            w += 7
+            s.notes.append(
+                f"{k.name}'s Lagna lord weak/combust — easily swayed by external attention."
+            )
 
     md, ad, _ = k.dasha_triple()
     for pl in (md, ad):

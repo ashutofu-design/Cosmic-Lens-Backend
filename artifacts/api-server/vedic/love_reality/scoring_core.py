@@ -23,6 +23,15 @@ MALEFIC = {"Saturn", "Mars", "Rahu", "Ketu"}
 DUSTHANA = {6, 8, 12}
 ROMANCE_HOUSES = {5, 7, 11}
 MANGLIK_HOUSES = {1, 4, 7, 8, 12}
+DUAL_SIGNS = frozenset({"Gemini", "Virgo", "Sagittarius", "Pisces"})
+COMBUST_THRESHOLDS = {
+    "Moon": 12.0,
+    "Mars": 17.0,
+    "Mercury": 14.0,
+    "Jupiter": 11.0,
+    "Venus": 10.0,
+    "Saturn": 15.0,
+}
 
 
 def clamp(n: float, lo: float = 0, hi: float = 100) -> int:
@@ -201,3 +210,82 @@ class KundliReader:
     def manglik(self) -> bool:
         mars = self.planet("Mars")
         return bool(mars and mars.get("house") in MANGLIK_HOUSES)
+
+    def planet_deg_in_sign(self, name: str) -> float | None:
+        p = self.planet(name)
+        if not p:
+            return None
+        if isinstance(p.get("longitude"), (int, float)):
+            return float(p["longitude"]) % 30.0
+        deg = p.get("degreeInSign") or p.get("deg_in_sign")
+        return float(deg) if deg is not None else None
+
+    def planets_within_degrees(self, planet_a: str, planet_b: str, max_deg: float = 10.0) -> bool:
+        pa, pb = self.planet(planet_a), self.planet(planet_b)
+        if not pa or not pb:
+            return False
+        la, lb = pa.get("longitude"), pb.get("longitude")
+        if isinstance(la, (int, float)) and isinstance(lb, (int, float)):
+            d = abs(float(la) - float(lb))
+            if d > 180.0:
+                d = 360.0 - d
+            return d <= max_deg
+        if not self.share_house(planet_a, planet_b):
+            return False
+        if pa.get("sign") != pb.get("sign"):
+            return False
+        da, db = self.planet_deg_in_sign(planet_a), self.planet_deg_in_sign(planet_b)
+        if da is None or db is None:
+            return False
+        return abs(da - db) <= max_deg
+
+    def is_combust(self, planet_name: str) -> bool:
+        planet = self.planet(planet_name)
+        sun = self.planet("Sun")
+        if not planet or not sun or planet_name in ("Sun", "Rahu", "Ketu"):
+            return False
+        la, ls = planet.get("longitude"), sun.get("longitude")
+        if not isinstance(la, (int, float)) or not isinstance(ls, (int, float)):
+            return False
+        threshold = COMBUST_THRESHOLDS.get(planet_name, 12.0)
+        d = abs(float(la) - float(ls))
+        if d > 180.0:
+            d = 360.0 - d
+        return d <= threshold
+
+    def d9_chart(self) -> dict[str, Any]:
+        return (self.k.get("divisionalCharts") or {}).get("D9") or {}
+
+    def d9_asc_index(self) -> int:
+        d9 = self.d9_chart()
+        si = d9.get("ascendantSignIndex")
+        if si is not None:
+            return int(si)
+        asc = d9.get("ascendant")
+        return self.sidx(asc) if isinstance(asc, str) else self.asc_index()
+
+    def d9_house_lord(self, house: int) -> str:
+        return SIGN_LORDS[(self.d9_asc_index() + house - 1) % 12]
+
+    def d9_planet(self, name: str) -> dict | None:
+        for p in self.d9_chart().get("planets") or []:
+            if p.get("name") == name:
+                return p
+        return None
+
+    def saturn_moon_connected(self) -> bool:
+        if self.share_house("Saturn", "Moon"):
+            return True
+        moon_asps = self.aspects_planet("Moon")
+        sat_asps = self.aspects_planet("Saturn")
+        return "Saturn" in moon_asps or "Moon" in sat_asps
+
+    def saturn_is_seventh_lord(self) -> bool:
+        return self.house_lord(7) == "Saturn"
+
+    def saturn_in_seventh_house(self) -> bool:
+        sat = self.planet("Saturn")
+        return bool(sat and sat.get("house") == 7)
+
+    def is_dual_sign(self, sign_name: str | None) -> bool:
+        return bool(sign_name and sign_name in DUAL_SIGNS)

@@ -1,8 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -16,9 +16,12 @@ import {
 import { LoveRealityToolResultPanel } from "@/components/loveReality/LoveRealityToolResultPanel";
 import { apiFetch, apiFetchBases } from "@/lib/apiConfig";
 import {
+  buildLoyaltyCompareFromJson,
   mapLoveRealityResult,
+  resolveLoyaltyCompare,
   type LoveRealityBasicDisplay,
   type LoveRealityToolKey,
+  type LoyaltyCompareData,
 } from "@/lib/loveRealityToolMappers";
 import { LOVE_REALITY_TOOLS, toolDefForKey, type LoveRealityToolDef } from "@/lib/loveRealityToolsConfig";
 import type { BirthData } from "@/types";
@@ -40,6 +43,7 @@ function packPerson(bd: BirthData) {
 }
 
 type ResultsMap = Partial<Record<LoveRealityToolKey, LoveRealityBasicDisplay>>;
+type RawResultsMap = Partial<Record<LoveRealityToolKey, Record<string, unknown>>>;
 
 export function LoveRealityUnifiedBasic({
   isDark,
@@ -62,22 +66,31 @@ export function LoveRealityUnifiedBasic({
   );
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ResultsMap>({});
+  const [rawResults, setRawResults] = useState<RawResultsMap>({});
   const [fetchErr, setFetchErr] = useState<string | null>(null);
-  const didFetch = useRef(false);
+  const fetchGen = useRef(0);
 
   const active = toolDefForKey(selected);
   const display = results[selected];
+  const loyaltyCompare: LoyaltyCompareData | undefined =
+    selected === "loyalty"
+      ? resolveLoyaltyCompare(rawResults.loyalty, rawResults["love-compat"]) ??
+        display?.loyaltyCompare ??
+        (rawResults.loyalty ? buildLoyaltyCompareFromJson(rawResults.loyalty) : undefined)
+      : undefined;
   const textHi = isDark ? "#fff" : "#0F172A";
   const textLo = isDark ? "rgba(203,213,225,0.65)" : "#64748B";
 
-  useEffect(() => {
-    if (!canAnalyze || didFetch.current) return;
-    didFetch.current = true;
-    void fetchAllTools();
-  }, [canAnalyze]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!canAnalyze) return;
+      void fetchAllTools();
+    }, [canAnalyze, primaryProfile?.birthData, partnerProfile?.birthData]),
+  );
 
   async function fetchAllTools() {
     if (!primaryProfile?.birthData || !partnerProfile?.birthData) return;
+    const gen = ++fetchGen.current;
     setLoading(true);
     setFetchErr(null);
     const body = JSON.stringify({
@@ -110,14 +123,22 @@ export function LoveRealityUnifiedBasic({
                 }
                 throw new Error(json.error || tool.title);
               }
-              return [tool.key, mapLoveRealityResult(tool.key, json as Record<string, unknown>)] as const;
+              return [tool.key, mapLoveRealityResult(tool.key, json as Record<string, unknown>), json] as const;
             } catch (e) {
               clearTimeout(timer);
               throw e;
             }
           }),
         );
-        setResults(Object.fromEntries(pairs) as ResultsMap);
+        if (gen !== fetchGen.current) return;
+        const mapped = Object.fromEntries(pairs.map(([k, v]) => [k, v])) as ResultsMap;
+        const raw = Object.fromEntries(pairs.map(([k, , r]) => [k, r as Record<string, unknown>])) as RawResultsMap;
+        const loyaltyCmp = resolveLoyaltyCompare(raw.loyalty, raw["love-compat"]);
+        if (loyaltyCmp && mapped.loyalty) {
+          mapped.loyalty = { ...mapped.loyalty, loyaltyCompare: loyaltyCmp };
+        }
+        setResults(mapped);
+        setRawResults(raw);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setLoading(false);
         return;
@@ -181,6 +202,19 @@ export function LoveRealityUnifiedBasic({
         })}
       </ScrollView>
 
+      {selected === "loyalty" && canAnalyze ? (
+        <Pressable
+          onPress={() => void fetchAllTools()}
+          disabled={loading}
+          style={[u.refreshRow, { opacity: loading ? 0.6 : 1 }]}
+        >
+          <Feather name="refresh-cw" size={14} color={active.gradient[0]} />
+          <Text style={[u.refreshTxt, { color: active.gradient[0] }]}>
+            {loading ? "Refreshing…" : "Refresh loyalty reading"}
+          </Text>
+        </Pressable>
+      ) : null}
+
       <View style={u.resultZone}>
         {loading && !display && (
           <View style={u.centerState}>
@@ -192,7 +226,7 @@ export function LoveRealityUnifiedBasic({
         {fetchErr && !display && !loading && (
           <View style={u.centerState}>
             <Text style={[u.stateTxt, { color: textHi }]}>{fetchErr}</Text>
-            <Pressable onPress={() => { didFetch.current = false; void fetchAllTools(); }}>
+            <Pressable onPress={() => { void fetchAllTools(); }}>
               <Text style={{ color: active.gradient[0], fontFamily: "Nunito_700Bold", marginTop: 8 }}>Retry</Text>
             </Pressable>
           </View>
@@ -200,14 +234,18 @@ export function LoveRealityUnifiedBasic({
 
         {display && primaryProfile && partnerProfile && (
           <LoveRealityToolResultPanel
+            toolKey={selected}
             toolTitle={active.title}
             userName={primaryProfile.name || "You"}
             partnerName={partnerProfile.name || "Partner"}
             display={display}
+            loyaltyCompare={loyaltyCompare}
             isDark={isDark}
             bottomPad={bottomPad}
             accentGradient={active.gradient}
             onOpenPro={onOpenPro}
+            onRefresh={fetchAllTools}
+            refreshing={loading}
           />
         )}
       </View>
@@ -240,6 +278,16 @@ const u = StyleSheet.create({
   chipEmoji: { fontSize: 16 },
   chipLblOn: { color: "#fff", fontSize: 12, fontFamily: "Nunito_800ExtraBold" },
   chipLblOff: { fontSize: 12, fontFamily: "Nunito_700Bold" },
+  refreshRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 16,
+    marginBottom: 4,
+  },
+  refreshTxt: { fontSize: 12, fontFamily: "Nunito_700Bold" },
   resultZone: { flex: 1, minHeight: 0 },
   centerState: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, paddingHorizontal: 16 },
   stateTxt: { fontSize: 14, fontFamily: "Nunito_600SemiBold", textAlign: "center" },

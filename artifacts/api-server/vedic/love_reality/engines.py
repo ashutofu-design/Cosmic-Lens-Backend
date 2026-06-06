@@ -288,14 +288,17 @@ def run_breakup_chances(p1: dict, p2: dict) -> dict[str, Any]:
 def _person_loyalty_penalty(person) -> float:
     pen = 0.0
     if person.venus_debil:
-        pen += 18
-    if person.moon_afflicted or person.moon_debil:
-        pen += 14
+        pen += 9 if person.venus_d9_exalted else 18
+    if person.moon_debil:
+        pen += 7 if person.moon_d9_exalted else 14
+    elif person.moon_afflicted or person.moon_rahu_afflicted:
+        if not (person.saturn_moon_duty_bound and not person.moon_rahu_afflicted):
+            pen += 14
     if person.moon_in_8th:
         pen += 14
     if person.moon_d9_debil:
         pen += 12
-    if person.venus_mars_conjunct:
+    if person.venus_mars_conjunct_tight:
         pen += 16
     if person.rahu_on_7th_axis or person.third_person_risk:
         pen += 14
@@ -303,9 +306,44 @@ def _person_loyalty_penalty(person) -> float:
         pen += 8
     if person.seventh_lord_dusthana or person.seventh_lord_debil:
         pen += 10
-    if person.saturn_on_7th:
+    if person.saturn_on_7th_not_lord:
         pen += 6
     return pen
+
+
+def _person_loyalty_extra_rules(person) -> tuple[float, list[str]]:
+    """New loyalty-specific affliction queue (serial rules 1, 3–5)."""
+    delta = 0.0
+    notes: list[str] = []
+    if person.moon_dual_flip_risk:
+        delta -= 8
+        notes.append(f"{person.name}: Moon in dual sign under affliction — double-minded flip risk.")
+    if person.venus_dual_flip_risk:
+        delta -= 8
+        notes.append(f"{person.name}: Venus in dual sign under affliction — love intent can flip.")
+    if person.fifth_lord_in_twelfth or person.twelfth_lord_in_fifth:
+        delta -= 10
+        notes.append(
+            f"{person.name}: 5th–12th lord link — secret desire lines can erode loyalty."
+        )
+    if person.d9_seventh_lord_weak:
+        delta -= 12
+        notes.append(
+            f"{person.name}: Navamsa 7th lord debilitated/dusthana — inner commitment weak over time."
+        )
+    if person.lagna_lord_weak_or_combust:
+        delta -= 7
+        notes.append(
+            f"{person.name}: Lagna lord weak/combust — external influence can sway commitment."
+        )
+    return delta, notes
+
+
+def _person_loyalty_bonus(person) -> float:
+    bonus = _person_loyalty_safe_bonus(person)
+    if person.saturn_on_7th_as_lord:
+        bonus += 5
+    return bonus
 
 
 def _person_loyalty_safe_bonus(person) -> float:
@@ -322,16 +360,77 @@ def _person_loyalty_safe_bonus(person) -> float:
     return bonus
 
 
+def _compute_person_loyalty_score(person) -> int:
+    score = 48.0
+    score -= _person_loyalty_penalty(person)
+    extra, _ = _person_loyalty_extra_rules(person)
+    score += extra
+    score += _person_loyalty_bonus(person)
+    return clamp(score)
+
+
+def _loyalty_venus_tie_rank(person) -> tuple[int, float]:
+    """Higher rank = worse Venus state for loyalty tie-break."""
+    rank = 0
+    if person.venus_combust:
+        rank += 3
+    if person.venus_debil:
+        rank += 2
+    if person.venus_afflicted:
+        rank += 1
+    deg = person.venus_degree if person.venus_degree is not None else 0.0
+    return rank, deg
+
+
+def _loyalty_tie_breaker(
+    p1_score: int,
+    p2_score: int,
+    sig,
+) -> dict[str, Any] | None:
+    level1 = level_loyalty(p1_score)
+    level2 = level_loyalty(p2_score)
+    if p1_score != p2_score or level1 != level2:
+        return None
+    if level1 not in ("moderate", "unstable"):
+        return None
+    r1 = _loyalty_venus_tie_rank(sig.p1)
+    r2 = _loyalty_venus_tie_rank(sig.p2)
+    if r1 == r2:
+        return None
+    lower = "p1" if r1 > r2 else "p2"
+    worse_name = sig.p1.name if lower == "p1" else sig.p2.name
+    return {
+        "applied": True,
+        "lower_side": lower,
+        "shared_score": p1_score,
+        "shared_level": level1,
+        "note": (
+            f"Tie at {level1} ({p1_score}/100) — {worse_name}'s Venus state "
+            f"(combust/afflicted/degree) positions loyalty baseline lower."
+        ),
+        "p1_venus_rank": r1[0],
+        "p2_venus_rank": r2[0],
+        "p1_venus_degree": r1[1],
+        "p2_venus_degree": r2[1],
+    }
+
+
 def run_loyalty_check(p1: dict, p2: dict) -> dict[str, Any]:
     r1, r2, sig = _load_couple(p1, p2)
     reasons: list[str] = []
 
     score = 48.0
+    duty_bound_any = False
     for person in (sig.p1, sig.p2):
         pen = _person_loyalty_penalty(person)
         if pen > 0:
             score -= pen
-        score += _person_loyalty_safe_bonus(person)
+        extra, extra_notes = _person_loyalty_extra_rules(person)
+        score += extra
+        reasons.extend(extra_notes)
+        score += _person_loyalty_bonus(person)
+        if person.saturn_moon_duty_bound:
+            duty_bound_any = True
         for note in person.notes:
             if "do NOT read" in note or "loyalty risk" in note.lower() or "surface warmth" in note:
                 reasons.append(note)
@@ -368,9 +467,9 @@ def run_loyalty_check(p1: dict, p2: dict) -> dict[str, Any]:
                 f"NEVER describe {person.name} as 'naturally loyal', 'devoted', or 'faithful by nature'. "
                 f"Chart shows passion/hidden layers that can contradict surface Venus strength."
             )
-        if person.venus_mars_conjunct:
+        if person.venus_mars_conjunct_tight:
             narrative_locks.append(
-                f"{person.name}: Venus-Mars — impulsive attraction; NOT a loyalty guarantee."
+                f"{person.name}: Venus-Mars (≤10°) — impulsive attraction; NOT a loyalty guarantee."
             )
         if person.venus_surface_strong_only and person.loyalty_risk_high:
             narrative_locks.append(
@@ -397,6 +496,18 @@ def run_loyalty_check(p1: dict, p2: dict) -> dict[str, Any]:
         )
         behavior = "tempted" if sig.p1.third_person_risk or sig.p2.third_person_risk else "dual-nature"
 
+    if duty_bound_any and score_i >= 45:
+        summary = (
+            "Duty-bound loyalty pattern visible (Saturn–Moon) — may endure pain in silence "
+            "without a cheating signature."
+        )
+        if behavior == "dual-nature":
+            behavior = "emotionally unstable"
+
+    p1_person_score = _compute_person_loyalty_score(sig.p1)
+    p2_person_score = _compute_person_loyalty_score(sig.p2)
+    tie_breaker = _loyalty_tie_breaker(p1_person_score, p2_person_score, sig)
+
     # Dedupe reasons
     seen: set[str] = set()
     unique: list[str] = []
@@ -417,18 +528,57 @@ def run_loyalty_check(p1: dict, p2: dict) -> dict[str, Any]:
         "emotional_summary": summary,
         "narrative_locks": narrative_locks,
         "factors": {
-            "venus": "weak" if any(p.venus_debil or p.venus_mars_conjunct for p in (sig.p1, sig.p2)) else "mixed",
-            "moon": "weak" if any(p.moon_afflicted or p.moon_in_8th or p.moon_d9_debil for p in (sig.p1, sig.p2)) else "medium",
-            "7th_house": "afflicted" if any(p.saturn_on_7th or p.mars_on_7th for p in (sig.p1, sig.p2)) else "stable",
+            "venus": "weak" if any(
+                p.venus_debil or p.venus_mars_conjunct_tight or p.venus_dual_flip_risk
+                for p in (sig.p1, sig.p2)
+            ) else "mixed",
+            "moon": "weak" if any(
+                p.moon_afflicted or p.moon_in_8th or p.moon_d9_debil or p.moon_dual_flip_risk
+                for p in (sig.p1, sig.p2)
+            ) else "medium",
+            "7th_house": "afflicted" if any(
+                p.saturn_on_7th_not_lord or p.mars_on_7th for p in (sig.p1, sig.p2)
+            ) else "stable",
             "rahu": "active" if sig.cross_rahu_venus or sig.p1.rahu_on_7th_axis else "quiet",
         },
         "reasons": unique[:14],
+        "is_duty_bound_loyal": duty_bound_any,
+        "p1_loyalty_score": p1_person_score,
+        "p2_loyalty_score": p2_person_score,
+        "p1_loyalty_level": level_loyalty(p1_person_score),
+        "p2_loyalty_level": level_loyalty(p2_person_score),
+        "per_person": {
+            "p1": {
+                "name": sig.p1.name,
+                "score": p1_person_score,
+                "loyalty_level": level_loyalty(p1_person_score),
+                "is_duty_bound_loyal": sig.p1.saturn_moon_duty_bound,
+                "venus_degree": sig.p1.venus_degree,
+                "venus_combust": sig.p1.venus_combust,
+                "venus_afflicted": sig.p1.venus_afflicted,
+            },
+            "p2": {
+                "name": sig.p2.name,
+                "score": p2_person_score,
+                "loyalty_level": level_loyalty(p2_person_score),
+                "is_duty_bound_loyal": sig.p2.saturn_moon_duty_bound,
+                "venus_degree": sig.p2.venus_degree,
+                "venus_combust": sig.p2.venus_combust,
+                "venus_afflicted": sig.p2.venus_afflicted,
+            },
+        },
+        "loyalty_tie_breaker": tie_breaker,
         "breakdown": {
             "combined_affliction": sig.combined_affliction,
+            "p1_person_score": p1_person_score,
+            "p2_person_score": p2_person_score,
             "p1_loyalty_risk": sig.p1.loyalty_risk_high,
             "p2_loyalty_risk": sig.p2.loyalty_risk_high,
+            "p1_duty_bound": sig.p1.saturn_moon_duty_bound,
+            "p2_duty_bound": sig.p2.saturn_moon_duty_bound,
         },
         "chart_proof": build_chart_proof(r1, r2, sig),
+        "engine_version": "loyalty_compare_v2",
     }
 
 

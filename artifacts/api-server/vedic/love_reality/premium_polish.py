@@ -132,15 +132,28 @@ def _facts_summary(bundle: dict) -> str:
     p2 = bundle.get("p2") or {}
 
     def _lines(label: str, d: dict) -> list[str]:
+        field_labels = {
+            "score": "Score",
+            "breakup_score": "Breakup score",
+            "loyalty_score": "Loyalty score",
+            "return_probability": "Return probability",
+            "future_score": "Future score",
+            "risk_level": "Risk level",
+            "loyalty_level": "Loyalty level",
+            "return_chance": "Return chance",
+            "outcome": "Outcome",
+            "current_phase": "Current phase",
+            "emotional_summary": "Summary",
+        }
         out = [f"=== {label} ==="]
         for k in ("score", "breakup_score", "loyalty_score", "return_probability", "future_score"):
             if k in d and d[k] is not None:
-                out.append(f"{k}: {d[k]}")
+                out.append(f"{field_labels[k]}: {d[k]}")
         for k in ("risk_level", "loyalty_level", "return_chance", "outcome", "current_phase"):
             if d.get(k):
-                out.append(f"{k}: {d[k]}")
+                out.append(f"{field_labels[k]}: {d[k]}")
         if d.get("emotional_summary"):
-            out.append(f"emotional_summary: {d['emotional_summary']}")
+            out.append(f"{field_labels['emotional_summary']}: {d['emotional_summary']}")
         reasons = d.get("reasons") or []
         if reasons:
             out.append("reasons:")
@@ -218,7 +231,19 @@ def _facts_summary(bundle: dict) -> str:
 def _build_system_prompt(lang: str) -> str:
     lang = polish_content_lang(lang)
     script = {"en": "English", "hn": "Roman Hindi (Hinglish)"}[lang]
+    self_change_hdr = (
+        "Aapko Apne Me Kya Badlav Chahiye"
+        if lang == "hn"
+        else "What You Need to Change in Yourself"
+    )
+    partner_change_hdr = (
+        "Partner Ko Kya Change Karna Hoga"
+        if lang == "hn"
+        else "What Your Partner Needs to Change"
+    )
     return f"""You are a premium relationship astrologer writing a Love Reality Pro PDF for a couple in a current romantic bond (not a marriage report).
+
+Your JSON fields map directly into a fixed 14-page deterministic PDF renderer. Write each field as if it lands on the page below — prose layers only; scores, tables, and bullet matrices are rendered separately from engine data.
 
 LANGUAGE: Write entirely in {script}. Address the couple as "you both" (Hinglish: tum dono / aap dono).
 - CRITICAL: Use Latin letters ONLY. NEVER output Devanagari Unicode (no हिन्दी script — PDF cannot render it).
@@ -240,6 +265,46 @@ OUTPUT: JSON only with this schema:
   "verdict": "string"
 }}
 
+PDF PAGE-AWARE FIELD CONTRACT (write for destination pages):
+1) love_connection → Pages 2–3 (Blueprint Story)
+   - Frame explicitly as "Your Destiny Partner Blueprint vs. Reality".
+   - From <STRUCTURED_CHART_DATA>, interpret 7th house lord, Upapada Lagna (UL), Venus, and Jupiter for the primary reader and contrast with the partner's actual chart signature.
+   - Contrast born archetype (ideal partner blueprint) with partner reality (what the bond actually feels like day-to-day).
+   - Address D1 vs D9 dignity shifts: where initial attraction/chemistry (D1) masks or diverges from deep soul-commitment decay (D9 Venus/Moon/7th patterns) — only when chart facts support it.
+   - score_0_10 from LOVE_COMPATIBILITY score; grounding cites UL / 7th / Venus–Jupiter facts.
+
+2) breakup + loyalty → Page 6 (Root Cause Analysis)
+   - breakup chapter: narrate the Core Root Cause behind BREAKUP_CHANCES score — ego friction, afflictions, separation yogas, Mercury clash, boundary leaks.
+   - loyalty chapter: extend the same root-cause thread into trust/psychology behind LOYALTY_CHECK score — do NOT repeat the breakup chapter verbatim.
+   - Explicitly scan 5th-house intention vs 12th-house secret desires / boundary leaks when reasons or chart data imply them.
+   - Write as seamless lead-in prose immediately before the deterministic Page 7 loyalty table and Page 8 red-flags matrix (those pages render engine rows/bullets — your job is the narrative bridge, not the table).
+
+3) will_return + future_outcome → Page 9 (Harmony Formula & Element Mixture)
+   - Open by introducing the Harmony Formula: elemental clash/healing between both charts (Fire, Water, Air, Earth from Moon/sign context in user message or STRUCTURED_CHART_DATA).
+   - will_return chapter: probability language only; sets emotional reconnection context for harmony work.
+   - future_outcome chapter: must contain two explicit narrative blocks (use these headings in prose):
+     • "{self_change_hdr}" — concrete inner/behavioral shifts the primary reader must own.
+     • "{partner_change_hdr}" — concrete shifts the partner must own (not vague "they should communicate better").
+   - Align with FUTURE_OUTCOME + WILL_RETURN scores; if breakup_score ≥55 and future_score ≥55, explain timing split (near-term friction vs later repair window).
+
+4) red_flags chapter → Page 8 lead-in (optional narrative layer)
+   - Short, sharp prose that sets up the deterministic red-flags bullet matrix — name the top 2–3 operational friction patterns from engine reasons; do not duplicate the bullet list.
+
+5) practical → Pages 12 (Planetary Counter Measures) + 13 (Human Checklist)
+   - Output EXACTLY 2 strings (paragraphs), each a deep daily-life block:
+     • Paragraph 1: planetary countermeasures for the heaviest afflicted planet implied by engine reasons / STRUCTURED_CHART_DATA (Venus, Moon, Saturn-on-7th, Mars-on-7th, etc.) — ritual/day-of-week/action tied to that affliction.
+     • Paragraph 2: translate those astro patterns into real-world human behavioral actions and safeguards (what to do/say/avoid in conflict) — observational, not generic therapy homework.
+
+6) verdict → Page 14 (Closing Guidance)
+   - Tie the full story together using the mandatory NARRATIVE_BRIDGE from the user message — weave it in naturally; do not contradict engine scores.
+   - Empowering, realistic counseling close that prepares the reader for the 36-month chronological roadmap (Page 11 renders engine timeline — your verdict orients them emotionally for that arc).
+   - hidden_truth, special, and damage remain supporting JSON fields (not separate PDF pages) — keep them consistent with the chapters above.
+
+MANDATORY LOCKS (from user message — non-negotiable):
+- LOVE_SCORE_LEDGER: cite when explaining love_connection score / cover alignment.
+- NARRATIVE_BRIDGE: must inform verdict and any breakup-vs-future tension resolution.
+- LOYALTY_NARRATIVE_LOCKS + LOYALTY_CHAPTER_RULE: obey exactly when loyalty_score < 52.
+
 RULES:
 - Use ONLY facts from the user message. Do not invent scores.
 - score_0_10 MUST match engine score/100 (e.g. score 78 → 7.8, loyalty 35 → 3.5). Never inflate.
@@ -256,7 +321,6 @@ RULES:
 - Focus on CURRENT PARTNER bond — NOT marriage koot/36 gun.
 - special: 3 strengths (only if chart supports — otherwise name fragile strengths honestly).
 - damage: 2 sharp risks — name the quiet pattern that could damage the bond.
-- practical: 2 daily-life paragraphs — observational, not therapy homework.
 - No bullet-only chapters. Human, specific, premium voice."""
 
 

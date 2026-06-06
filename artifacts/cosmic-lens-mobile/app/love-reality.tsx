@@ -9,7 +9,6 @@ import {
   Alert,
   Animated,
   Easing,
-  I18nManager,
   Modal,
   Platform,
   Pressable,
@@ -41,77 +40,40 @@ import {
   runLoveRealityProUnlockCta,
 } from "@/lib/loveRealityProOffer";
 import { coerceProPdfLang } from "@/lib/proPdfLang";
+import {
+  LOVE_PRO_UNLOCK_ITEMS,
+  LOVE_REALITY_PRO_BENEFIT,
+  LOVE_REALITY_PRO_CTA_TITLE,
+  LOVE_REALITY_PRO_FOOTNOTE,
+  LOVE_REALITY_PRO_SECTION_LABEL,
+  LOVE_REALITY_PRO_SUBTITLE,
+} from "@/lib/loveRealityProCopy";
 
-const PRO_CHIPS = [
-  "All 5 love tools in one PDF",
-  "Breakup · Loyalty · Return · Future",
-  "Red flags & remedies chapter",
-  "Saved in My Reports",
-];
-
-const LOVE_PRO_UNLOCK = [
-  { emoji: "💘", title: "Love Compatibility", tease: "How deep your bond really runs — and what silently blocks full connection —" },
-  { emoji: "💔", title: "Breakup Chances", tease: "The real risk window isn’t random — one planetary phase can flip everything —" },
-  { emoji: "🛡️", title: "Loyalty Check", tease: "Trust looks fine on the surface, but charts reveal where doubt actually starts —" },
-  { emoji: "🪃", title: "Will X Return?", tease: "Return isn’t just hope — timing and karma both point to one answer —" },
-  { emoji: "🔮", title: "Future Outcome", tease: "Where this relationship is headed in 1–3 years — the full arc is in the PDF —" },
-  { emoji: "🚩", title: "Red Flags & Remedies", tease: "Hidden warning signs plus practical upay — only in the Pro report —" },
-];
+const PRO_CHIPS = ["6 tools · 14 pages", "Remedies · My Reports"];
 
 function LoveRealityProUnlockList({ isDark }: { isDark: boolean }) {
+  const titleColor = isDark ? "#f5e6c8" : "#1e293b";
+  const hookColor = isDark ? "rgba(226,232,240,0.65)" : "#64748B";
+  const borderColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+
   return (
-    <View style={{ gap: 14 }}>
-      <View style={{
-        backgroundColor: isDark ? "rgba(124,58,237,0.10)" : "rgba(124,58,237,0.05)",
-        borderWidth: 1,
-        borderColor: isDark ? "rgba(167,139,250,0.28)" : "rgba(124,58,237,0.20)",
-        borderRadius: 16,
-        padding: 14,
-        gap: 8,
-      }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text style={{ fontSize: 16 }}>💞</Text>
-          <Text style={{ color: isDark ? "#e9d5ff" : "#5b21b6", fontSize: 13, fontFamily: "Nunito_800ExtraBold" }}>
-            Love Reality Pro PDF
-          </Text>
-        </View>
-        <Text style={{ color: isDark ? "rgba(226,232,240,0.85)" : "#334155", fontSize: 12.5, fontFamily: "Nunito_400Regular", lineHeight: 19 }}>
-          One combined 14–16 page report — all instant checks plus red flags, remedies, and personalised truth for both partners.
+    <View style={s.unlockWrap}>
+      <View style={s.unlockHead}>
+        <Feather name="unlock" size={13} color={isDark ? "#f472b6" : "#db2777"} />
+        <Text style={[s.unlockHeadTxt, { color: isDark ? "#f472b6" : "#db2777" }]}>
+          {LOVE_REALITY_PRO_SECTION_LABEL}
         </Text>
       </View>
-
-      <View style={{
-        backgroundColor: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
-        borderWidth: 1,
-        borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
-        borderRadius: 16,
-        padding: 14,
-        gap: 10,
-      }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Feather name="unlock" size={14} color={isDark ? "#f472b6" : "#db2777"} />
-          <Text style={{ color: isDark ? "#f472b6" : "#db2777", fontSize: 12, fontFamily: "Nunito_800ExtraBold", letterSpacing: 1.2 }}>
-            WHAT YOU UNLOCK
-          </Text>
-        </View>
-        <View style={{ gap: 11 }}>
-          {LOVE_PRO_UNLOCK.map((sec, i) => (
-            <View key={i} style={{ gap: 3 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-                <Text style={{ fontSize: 13 }}>{sec.emoji}</Text>
-                <Text style={{ color: isDark ? "#f5e6c8" : "#1e293b", fontSize: 12.5, fontFamily: "Nunito_800ExtraBold", flex: 1 }}>
-                  {sec.title}
-                </Text>
-              </View>
-              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 7, paddingLeft: 22 }}>
-                <Text style={{ color: isDark ? "rgba(244,114,182,0.7)" : "rgba(219,39,119,0.65)", fontSize: 11, fontFamily: "Nunito_700Bold", marginTop: 1 }}>→</Text>
-                <Text style={{ color: isDark ? "rgba(226,232,240,0.72)" : "#475569", fontSize: 11.5, fontFamily: "Nunito_400Regular", flex: 1, lineHeight: 17, fontStyle: "italic" }}>
-                  {sec.tease}
-                </Text>
-              </View>
+      <View style={{ gap: 8 }}>
+        {LOVE_PRO_UNLOCK_ITEMS.map(sec => (
+          <View key={sec.title} style={[s.unlockRow, { borderColor }]}>
+            <Text style={s.unlockEmoji}>{sec.emoji}</Text>
+            <View style={{ flex: 1, gap: 5 }}>
+              <Text style={[s.unlockTitle, { color: titleColor }]}>{sec.title}</Text>
+              <Text style={[s.unlockHook, { color: hookColor }]}>{sec.shortHook}</Text>
             </View>
-          ))}
-        </View>
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -131,7 +93,6 @@ function LoveRealityProPanel({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const glowAnim = useRef(new Animated.Value(0.2)).current;
-  const arrowPulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -144,15 +105,8 @@ function LoveRealityProPanel({
         Animated.timing(glowAnim, { toValue: 0.2, duration: 2800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ]),
     );
-    const arrow = Animated.loop(
-      Animated.sequence([
-        Animated.timing(arrowPulse, { toValue: 1.1, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(arrowPulse, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ]),
-    );
     glow.start();
-    arrow.start();
-    return () => { glow.stop(); arrow.stop(); };
+    return () => { glow.stop(); };
   }, []);
 
   const { originalInr, offerInr, discountLabel } = LOVE_REALITY_PRO_UI_PRICING;
@@ -182,34 +136,16 @@ function LoveRealityProPanel({
           </Animated.View>
           <View style={[StyleSheet.absoluteFill, { borderRadius: 26, borderWidth: 1, borderColor: "rgba(168,85,247,0.35)" }]} />
 
-          <View style={s.proBadgeWrap}>
-            <LinearGradient colors={["#a855f7", "#ec4899"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.proBadge}>
-              <Text style={s.proBadgeText}>✨ PRO · LOVE REALITY PDF</Text>
-            </LinearGradient>
-          </View>
-
           <View style={s.proContent}>
             <LinearGradient colors={["#9333ea", "#ec4899"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.proEmojiCircle}>
-              <Text style={{ fontSize: 28 }}>💞</Text>
+              <Text style={{ fontSize: 26 }}>💞</Text>
             </LinearGradient>
 
             <View style={{ flex: 1, gap: 4 }}>
               <Text style={s.proTitle}>Love Reality Pro PDF</Text>
-              <Text style={s.proSub}>Complete relationship truth in one report</Text>
-              <View style={s.proDescTag}>
-                <Text style={s.proDescText}>14–16 pages · all 5 tools + red flags</Text>
-              </View>
+              <Text style={s.proBenefit}>{LOVE_REALITY_PRO_BENEFIT}</Text>
+              <Text style={s.proSub}>{LOVE_REALITY_PRO_SUBTITLE}</Text>
             </View>
-
-            <Animated.View style={{ transform: [{ scale: arrowPulse }] }}>
-              <LinearGradient colors={["#9333ea", "#ec4899"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.proArrow}>
-                {pdfLoading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={20} color="#fff" />
-                )}
-              </LinearGradient>
-            </Animated.View>
           </View>
 
           <View style={s.proChipsRow}>
@@ -247,19 +183,24 @@ function LoveRealityProPanel({
               {pdfLoading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <>
+                <View style={s.proCtaInner}>
                   <Feather name="file-text" size={16} color="#fff" />
-                  <Text style={s.proCtaText}>
-                    {canPro ? `Unlock Full PDF · ₹${offerInr}` : "Add partner kundli to unlock"}
-                  </Text>
-                </>
+                  <View style={{ flex: 1, alignItems: "center" }}>
+                    <Text style={s.proCtaText}>
+                      {canPro ? LOVE_REALITY_PRO_CTA_TITLE : "Add partner kundli to unlock"}
+                    </Text>
+                    {canPro ? (
+                      <Text style={s.proCtaPrice}>Only ₹{offerInr} · {discountLabel}</Text>
+                    ) : null}
+                  </View>
+                </View>
               )}
             </LinearGradient>
           </Pressable>
 
           <View style={s.proFoot}>
-            <Feather name="zap" size={10} color="#c084fc" />
-            <Text style={s.proFootText}>BPHS + Phaladeepika + KP · saved in My Reports</Text>
+            <Feather name="zap" size={11} color="#c084fc" />
+            <Text style={s.proFootText}>{LOVE_REALITY_PRO_FOOTNOTE}</Text>
           </View>
         </View>
     </Animated.View>
@@ -340,7 +281,21 @@ export default function LoveRealityScreen() {
 
   async function onLangPickerContinue() {
     setLangPickerVisible(false);
-    if (!primaryProfile?.birthData || !partnerProfile?.birthData || !user?.id) return;
+    if (!primaryProfile?.birthData || !partnerProfile?.birthData) return;
+
+    if (!user?.id) {
+      Alert.alert(
+        "Login required",
+        "Please sign in to generate your Love Reality Pro PDF.",
+        [{ text: "OK" }],
+      );
+      return;
+    }
+
+    if (LOVE_REALITY_CHECKOUT_CONFIG.bypassCheckoutForTesting) {
+      await handleDownloadProPdf({ openMyReports: true });
+      return;
+    }
 
     const p1 = { ...primaryProfile.birthData, name: primaryProfile.name };
     const p2 = { ...partnerProfile.birthData, name: partnerProfile.name };
@@ -354,12 +309,12 @@ export default function LoveRealityScreen() {
       lang,
       label: "Love Reality Pro",
       amountInr: LOVE_REALITY_PRO_UI_PRICING.offerInr,
-      bypassCheckout: LOVE_REALITY_CHECKOUT_CONFIG.bypassCheckoutForTesting,
+      bypassCheckout: false,
       onEntitled: () => setConfirmVisible(true),
     });
   }
 
-  async function handleDownloadProPdf() {
+  async function handleDownloadProPdf(opts?: { openMyReports?: boolean }) {
     if (!primaryProfile?.birthData || !partnerProfile?.birthData || !user?.id) return;
     setConfirmVisible(false);
     setPdfLoading(true);
@@ -376,6 +331,10 @@ export default function LoveRealityScreen() {
       });
       pdfShareRef.current = { uri: result.shareUri, name: result.fileName };
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (opts?.openMyReports) {
+        router.push("/my-reports" as never);
+        return;
+      }
       setPdfDoneVisible(true);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "PDF download failed";
@@ -491,13 +450,13 @@ export default function LoveRealityScreen() {
                 <Feather name="chevron-right" size={14} color="#f472b6" />
               </Pressable>
             )}
-            <LoveRealityProUnlockList isDark={isDark} />
             <LoveRealityProPanel
               isDark={isDark}
               canPro={canPro}
               pdfLoading={pdfLoading}
               onUnlock={startProUnlock}
             />
+            <LoveRealityProUnlockList isDark={isDark} />
           </ScrollView>
         )}
       </View>
@@ -509,7 +468,7 @@ export default function LoveRealityScreen() {
         onClose={() => setLangPickerVisible(false)}
         onContinue={onLangPickerContinue}
         title="PDF Language"
-        subtitle="Love Reality Pro report — English, Hinglish, or Hindi."
+        subtitle="Love Reality Pro report in English, Hinglish, or Hindi."
       />
 
       <Modal visible={confirmVisible} transparent animationType="fade" onRequestClose={() => setConfirmVisible(false)}>
@@ -559,7 +518,7 @@ export default function LoveRealityScreen() {
             <ActivityIndicator size="large" color="#a855f7" />
             <Text style={[cd.loadingTitle, { color: C.text }]}>Love Reality Pro PDF</Text>
             <Text style={{ color: C.textMuted, fontSize: 12, textAlign: "center", marginTop: 6 }}>
-              Reading both kundlis · writing your full report…
+              Reading both kundlis · writing your full report…{"\n"}This may take 1–2 minutes.
             </Text>
           </View>
         </View>
@@ -674,25 +633,13 @@ const s = StyleSheet.create({
   },
   partnerHintText: { flex: 1, fontSize: 12, fontFamily: "Nunito_600SemiBold" },
 
-  proCard: { borderRadius: 26, overflow: "hidden", marginBottom: 22, paddingBottom: 16 },
-  proBadgeWrap: { position: "absolute", top: 0, right: 0, zIndex: 2 },
-  proBadge: { paddingHorizontal: 12, paddingVertical: 6, borderBottomLeftRadius: 16, borderTopRightRadius: 24 },
-  proBadgeText: { color: "#fff", fontSize: 8, fontFamily: "Nunito_800ExtraBold", letterSpacing: 1 },
-  proContent: { flexDirection: "row", alignItems: "center", gap: 12, padding: 18, paddingTop: 22, paddingRight: 14 },
-  proEmojiCircle: { width: 56, height: 56, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  proCard: { borderRadius: 22, overflow: "hidden", marginBottom: 4, paddingBottom: 12 },
+  proContent: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, paddingTop: 14, paddingRight: 14 },
+  proEmojiCircle: { width: 50, height: 50, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   proTitle: { color: "#fff", fontSize: 17, fontFamily: "Nunito_800ExtraBold" },
-  proSub: { color: "#D1D5DB", fontSize: 12, fontFamily: "Nunito_500Medium" },
-  proDescTag: {
-    alignSelf: "flex-start",
-    marginTop: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: "rgba(168,85,247,0.2)",
-  },
-  proDescText: { color: "#e9d5ff", fontSize: 10, fontFamily: "Nunito_700Bold" },
-  proArrow: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  proChipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: 16, marginBottom: 10 },
+  proBenefit: { color: "#f9a8d4", fontSize: 12, fontFamily: "Nunito_700Bold", lineHeight: 16 },
+  proSub: { color: "#D1D5DB", fontSize: 11.5, fontFamily: "Nunito_500Medium", lineHeight: 16 },
+  proChipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: 14, marginBottom: 8 },
   proChip: {
     paddingHorizontal: 9,
     paddingVertical: 5,
@@ -701,23 +648,43 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
   },
-  proChipText: { color: "#F3F4F6", fontSize: 9, fontFamily: "Nunito_700Bold" },
-  proPriceRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, marginBottom: 8 },
+  proChipText: { color: "#F3F4F6", fontSize: 10, fontFamily: "Nunito_700Bold" },
+  proPriceRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, marginBottom: 6 },
   proStrike: { color: "rgba(255,255,255,0.4)", fontSize: 14, textDecorationLine: "line-through", fontFamily: "Nunito_600SemiBold" },
   proOffer: { color: "#fff", fontSize: 22, fontFamily: "Nunito_800ExtraBold" },
   proOffPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: "rgba(34,197,94,0.25)" },
   proOffText: { color: "#86efac", fontSize: 10, fontFamily: "Nunito_800ExtraBold" },
   proCtaGrad: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
-    marginHorizontal: 16,
+    paddingVertical: 13,
+    marginHorizontal: 14,
   },
-  proCtaText: { color: "#fff", fontSize: 14, fontFamily: "Nunito_800ExtraBold" },
-  proFoot: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 16, marginTop: 10 },
-  proFootText: { color: "#D1D5DB", fontSize: 10, fontFamily: "Nunito_600SemiBold" },
+  proCtaInner: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 4 },
+  proCtaText: { color: "#fff", fontSize: 13.5, fontFamily: "Nunito_800ExtraBold", textAlign: "center" },
+  proCtaPrice: { color: "rgba(255,255,255,0.85)", fontSize: 11, fontFamily: "Nunito_600SemiBold", marginTop: 2, textAlign: "center" },
+  proFoot: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 14, marginTop: 8 },
+  proFootText: { color: "#D1D5DB", fontSize: 10.5, fontFamily: "Nunito_600SemiBold", flex: 1, lineHeight: 15 },
+
+  unlockWrap: {
+    backgroundColor: "rgba(255,255,255,0.02)",
+    borderRadius: 14,
+    padding: 12,
+    marginTop: 4,
+  },
+  unlockHead: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 },
+  unlockHeadTxt: { fontSize: 11, fontFamily: "Nunito_800ExtraBold", letterSpacing: 0.8 },
+  unlockRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.03)",
+  },
+  unlockEmoji: { fontSize: 16, marginTop: 2 },
+  unlockTitle: { fontSize: 12.5, fontFamily: "Nunito_800ExtraBold", lineHeight: 18 },
+  unlockHook: { fontSize: 11, fontFamily: "Nunito_500Medium", lineHeight: 17, marginTop: 1 },
 
   sectionHead: { marginBottom: 12, gap: 4 },
   sectionTitle: { fontSize: 11, fontFamily: "Nunito_800ExtraBold", letterSpacing: 2 },

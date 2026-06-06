@@ -1,5 +1,5 @@
 """
-Love Reality Pro PDF renderer — Milan-style layout, love/partner focus (~14-16 pages).
+Love Reality Pro PDF renderer — 14-page premium layout (v2).
 """
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import io
 from datetime import datetime
 from typing import Any
 
-from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
@@ -19,33 +19,88 @@ from milan_pdf import (
     TEXT_DARK,
     TEXT_MID,
     TEXT_SOFT,
-    CHAPTER_BODY_KEY,
     _chapter_eyebrow,
     _chapter_title_block,
     _ensure_native_pdf_fonts_registered,
     _font_pair,
     _gold_rule,
-    _grounding_card,
     _hex,
     _latinize_pdf_plain,
     _on_page,
     _premium_body_multi_paragraph_table,
-    _premium_consultation_blocks_page,
-    _pro_chapter_pages,
-    _pro_final_verdict_page,
     _safe,
     _styles,
 )
 from vedic.love_reality.chart_facts import enrich_bundle_for_pdf
 from vedic.love_reality import pdf_locale as LRL
+from vedic.love_reality.pdf_data_v2 import build_love_reality_pdf_v2_context
 from vedic.love_reality.pdf_locale import love_reality_pdf_render_lang
 from vedic.love_reality.pdf_text_safe import sanitize_love_reality_pro_premium
 
 
-def _lr_cover_page(s: dict, p1: dict, p2: dict, love_score: int, lang: str) -> list[Any]:
+def _section_page(
+    s: dict,
+    page_num: int,
+    eyebrow: str,
+    title: str,
+    subtitle: str,
+    body: str,
+    *,
+    lang: str,
+    bullets: list[str] | None = None,
+    table_rows: list[list[str]] | None = None,
+) -> list[Any]:
     H_REG, H_BOLD = _font_pair(lang)
     out: list[Any] = []
-    out.append(Spacer(1, 10 * mm))
+    out.append(_chapter_eyebrow(page_num, eyebrow, lang))
+    out.extend(_chapter_title_block(title, subtitle, s))
+    text = _latinize_pdf_plain((body or "").strip(), lang)
+    if text:
+        out.append(_premium_body_multi_paragraph_table(s, text, relax=True))
+    if table_rows:
+        cells: list[list[Any]] = []
+        for row in table_rows:
+            cells.append([
+                Paragraph(
+                    f"<b>{_safe(row[0])}</b>",
+                    ParagraphStyle("tr0", fontName=H_BOLD, fontSize=10, textColor=TEXT_DARK),
+                ),
+                Paragraph(
+                    _safe(row[1] if len(row) > 1 else ""),
+                    ParagraphStyle("tr1", fontName=H_REG, fontSize=10, textColor=TEXT_MID, alignment=TA_CENTER),
+                ),
+                Paragraph(
+                    _safe(row[2] if len(row) > 2 else ""),
+                    ParagraphStyle("tr2", fontName=H_REG, fontSize=9, textColor=TEXT_SOFT),
+                ),
+            ])
+        tbl = Table(cells, colWidths=[78 * mm, 28 * mm, 74 * mm])
+        tbl.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LINEBELOW", (0, 0), (-1, -2), 0.25, TEXT_SOFT),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        out.append(tbl)
+    if bullets:
+        out.append(Spacer(1, 6))
+        for b in bullets:
+            out.append(
+                Paragraph(
+                    f"• {_safe(_latinize_pdf_plain(b, lang))}",
+                    ParagraphStyle("bl", fontName=H_REG, fontSize=10, leading=14, textColor=TEXT_DARK, leftIndent=8),
+                )
+            )
+    out.append(PageBreak())
+    return out
+
+
+def _cover_dashboard(s: dict, p1: dict, p2: dict, ctx: dict, lang: str) -> list[Any]:
+    H_REG, H_BOLD = _font_pair(lang)
+    dash = ctx["page1_dashboard"]
+    love = dash["love_score"]
+    out: list[Any] = []
+    out.append(Spacer(1, 8 * mm))
     out.append(
         Paragraph(
             f"<font color='{_hex(BRAND_GOLD)}'><b>COSMIC LENS</b></font>",
@@ -53,202 +108,53 @@ def _lr_cover_page(s: dict, p1: dict, p2: dict, love_score: int, lang: str) -> l
         ),
     )
     out.append(_gold_rule(52))
-    out.append(Spacer(1, 10))
     out.append(
         Paragraph(
-            LRL.cover_title(lang),
-            ParagraphStyle("t", fontName="Helvetica-Bold", fontSize=24, leading=30, alignment=TA_CENTER, textColor=BRAND_PURPLE),
+            "Love Reality Pro",
+            ParagraphStyle("t", fontName="Helvetica-Bold", fontSize=22, leading=28, alignment=TA_CENTER, textColor=BRAND_PURPLE),
         ),
     )
     out.append(
         Paragraph(
-            f"<font color='{_hex(TEXT_SOFT)}'>{_safe(LRL.cover_subtitle(lang))}</font>",
-            ParagraphStyle("sub", fontName=H_REG, fontSize=11, leading=15, alignment=TA_CENTER, spaceAfter=14),
+            f"<b>{_safe(p1.get('name'))}</b>  ·  <b>{_safe(p2.get('name'))}</b>",
+            ParagraphStyle("nm", fontName=H_BOLD, fontSize=18, alignment=TA_CENTER, spaceAfter=10),
         ),
     )
     out.append(
         Paragraph(
-            f"<b>{_safe(p1.get('name'))}</b><font color='{_hex(TEXT_SOFT)}'>  ·  </font>"
-            f"<b>{_safe(p2.get('name'))}</b>",
-            ParagraphStyle("names", fontName=H_BOLD, fontSize=22, leading=28, alignment=TA_CENTER),
+            f"<b>{love}</b><font color='{_hex(TEXT_SOFT)}'> / 100</font>  Cosmic Alignment Index",
+            ParagraphStyle("sc", fontName="Helvetica-Bold", fontSize=20, alignment=TA_CENTER, textColor=BRAND_PURPLE),
         ),
     )
-    out.append(Spacer(1, 8))
-    score_card = Table(
-        [[Paragraph(
-            f"<b>{love_score}</b><font color='{_hex(TEXT_SOFT)}' size=16> / 100</font>",
-            ParagraphStyle("sc", fontName="Helvetica-Bold", fontSize=44, alignment=TA_CENTER, textColor=BRAND_PURPLE),
-        )]],
-        colWidths=[110 * mm],
-    )
-    score_card.setStyle(TableStyle([
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("TOPPADDING", (0, 0), (-1, -1), 16),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 16),
+    out.append(Spacer(1, 6))
+    out.extend(_chapter_title_block(
+        "Cosmic Alignment Scorecard",
+        "Absolute summary index — all engine scores",
+        s,
+    ))
+    if dash.get("summary_index"):
+        out.append(_premium_body_multi_paragraph_table(s, dash["summary_index"], relax=True))
+    rows = [[r["label"], r["value"], r["band"]] for r in dash["scores"]]
+    cells: list[list[Any]] = []
+    for row in rows:
+        cells.append([
+            Paragraph(f"<b>{_safe(row[0])}</b>", ParagraphStyle("c0", fontName=H_BOLD, fontSize=10, textColor=TEXT_DARK)),
+            Paragraph(_safe(row[1]), ParagraphStyle("c1", fontName="Helvetica-Bold", fontSize=11, textColor=BRAND_PURPLE, alignment=TA_CENTER)),
+            Paragraph(_safe(row[2]), ParagraphStyle("c2", fontName=H_REG, fontSize=9, textColor=TEXT_SOFT)),
+        ])
+    tbl = Table(cells, colWidths=[78 * mm, 28 * mm, 74 * mm])
+    tbl.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LINEBELOW", (0, 0), (-1, -2), 0.25, TEXT_SOFT),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
     ]))
-    out.append(score_card)
+    out.append(tbl)
     out.append(
         Paragraph(
-            f"<font color='{_hex(TEXT_MID)}'>{LRL.cover_generated_prefix(lang)} "
-            f"{datetime.utcnow().strftime('%d %B %Y')}</font>",
-            ParagraphStyle("dt", fontName=H_REG, fontSize=10, alignment=TA_CENTER, spaceBefore=12),
+            f"<font color='{_hex(TEXT_MID)}'>{datetime.utcnow().strftime('%d %B %Y')}</font>",
+            ParagraphStyle("dt", fontName=H_REG, fontSize=9, alignment=TA_CENTER, spaceBefore=10),
         ),
     )
-    out.append(PageBreak())
-    return out
-
-
-def _lr_snapshot_page(s: dict, num: int, bundle: dict, pro: dict, lang: str) -> list[Any]:
-    lc = bundle.get("love_compatibility") or {}
-    score = int(lc.get("score") or 0)
-    insight = (lc.get("insight") or "").strip()
-    hidden = (pro.get("hidden_truth") or "").strip()
-    open_txt = insight or hidden or (
-        f"Your love compatibility reads at {score}/100 — a starting lens for the deeper chapters that follow."
-    )
-    out: list[Any] = []
-    out.append(_chapter_eyebrow(num, "SNAPSHOT", lang))
-    out.extend(_chapter_title_block(LRL.snapshot_title(lang), LRL.snapshot_subtitle(lang), s))
-    out.append(_premium_body_multi_paragraph_table(s, open_txt, relax=True))
-    out.append(PageBreak())
-    return out
-
-
-def _lr_score_breakdown_page(s: dict, num: int, bundle: dict, love_score: int, lang: str) -> list[Any]:
-    lc = bundle.get("love_compatibility") or {}
-    ledger = lc.get("score_ledger") or []
-    H_REG, _ = _font_pair(lang)
-    out: list[Any] = []
-    out.append(_chapter_eyebrow(num, "SCORE", lang))
-    out.extend(_chapter_title_block(LRL.score_breakdown_title(lang), LRL.score_breakdown_subtitle(lang), s))
-    if not ledger:
-        out.append(
-            _premium_body_multi_paragraph_table(
-                s,
-                LRL.score_ledger_fallback(lang, love_score),
-                relax=True,
-            )
-        )
-    else:
-        rows: list[list[Any]] = []
-        for row in ledger:
-            if not isinstance(row, dict):
-                continue
-            label = _safe(str(row.get("label") or ""))
-            delta = row.get("delta")
-            note = _safe(str(row.get("note") or ""))
-            delta_txt = ""
-            if row.get("base") is not None:
-                delta_txt = str(int(row["base"]))
-            elif delta is not None:
-                try:
-                    d = float(delta)
-                    delta_txt = f"+{int(d)}" if d > 0 else str(int(d))
-                except (TypeError, ValueError):
-                    delta_txt = str(delta)
-            rows.append([
-                Paragraph(
-                    f"<b>{label}</b><br/><font color='{_hex(TEXT_SOFT)}' size=9>{note}</font>",
-                    ParagraphStyle("sl", fontName=H_REG, fontSize=10, leading=13, textColor=TEXT_DARK),
-                ),
-                Paragraph(
-                    f"<b>{delta_txt}</b>" if delta_txt else "—",
-                    ParagraphStyle("sd", fontName="Helvetica-Bold", fontSize=11, alignment=TA_CENTER, textColor=BRAND_PURPLE),
-                ),
-            ])
-        tbl = Table(rows, colWidths=[145 * mm, 35 * mm])
-        tbl.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LINEBELOW", (0, 0), (-1, -2), 0.25, TEXT_SOFT),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ]))
-        out.append(tbl)
-        out.append(Spacer(1, 10))
-        out.append(
-            Paragraph(
-                f"<b>Final score: {love_score} / 100</b>",
-                ParagraphStyle("fin", fontName="Helvetica-Bold", fontSize=14, textColor=BRAND_PURPLE, spaceBefore=6),
-            )
-        )
-    out.append(PageBreak())
-    return out
-
-
-def _lr_chart_snapshot_page(s: dict, num: int, bundle: dict, lang: str) -> list[Any]:
-    snap = bundle.get("chart_snapshot") or {}
-    lines = snap.get("lines") or []
-    body = "\n".join(str(ln) for ln in lines if ln)
-    if not body.strip():
-        body = LRL.chart_snapshot_fallback(lang)
-    out: list[Any] = []
-    out.append(_chapter_eyebrow(num, "CHART", lang))
-    out.extend(_chapter_title_block(LRL.chart_snapshot_title(lang), LRL.chart_snapshot_subtitle(lang), s))
-    out.append(_premium_body_multi_paragraph_table(s, body, relax=True))
-    bridge = (bundle.get("narrative_bridge") or "").strip()
-    if bridge:
-        out.append(Spacer(1, 8))
-        out.append(_grounding_card(s, _latinize_pdf_plain(bridge, lang), title=LRL.timing_note_title(lang)))
-    out.append(PageBreak())
-    return out
-
-
-def _lr_method_note_page(s: dict, num: int, lang: str) -> list[Any]:
-    """Transparency note — advanced chart-based analysis (no AI/LLM mention)."""
-    H_REG, _ = _font_pair(lang)
-    out: list[Any] = []
-    out.append(_chapter_eyebrow(num, "NOTE", lang))
-    out.extend(_chapter_title_block(LRL.method_note_title(lang), "", s))
-    out.append(
-        _premium_body_multi_paragraph_table(
-            s, LRL.method_note_body(lang), relax=True,
-        )
-    )
-    out.append(PageBreak())
-    return out
-
-
-def _lr_closing_page(s: dict, lang: str) -> list[Any]:
-    """Love Reality closing — never mentions AI/LLM."""
-    H_REG, H_BOLD = _font_pair(lang)
-    out: list[Any] = []
-    out.append(Spacer(1, 50 * mm))
-    out.append(
-        Paragraph(
-            f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(LRL.closing_thanks(lang))}</b></font>",
-            ParagraphStyle(
-                "lr_close_h", fontName=H_BOLD, fontSize=26, leading=32,
-                alignment=TA_CENTER, spaceAfter=10,
-            ),
-        ),
-    )
-    out.append(
-        Paragraph(
-            f"<font color='{_hex(TEXT_MID)}'>{_safe(LRL.closing_body(lang))}</font>",
-            ParagraphStyle(
-                "lr_close_b", fontName=H_REG, fontSize=11, leading=17,
-                alignment=TA_CENTER, spaceAfter=24,
-            ),
-        ),
-    )
-    out.append(Spacer(1, 30 * mm))
-    out.append(
-        Paragraph(
-            f"<font color='{_hex(TEXT_SOFT)}'>{_safe(LRL.closing_footer(lang))}</font>",
-            ParagraphStyle(
-                "lr_close_meta", fontName=H_REG, fontSize=8, leading=11, alignment=TA_CENTER,
-            ),
-        ),
-    )
-    return out
-
-
-def _lr_hidden_truth_page(s: dict, num: int, text: str, lang: str) -> list[Any]:
-    out: list[Any] = []
-    out.append(_chapter_eyebrow(num, "INSIGHT", lang))
-    out.extend(_chapter_title_block(LRL.hidden_truth_title(lang), "", s))
-    body = (text or "").strip() or " "
-    out.append(_premium_body_multi_paragraph_table(s, body, relax=False))
     out.append(PageBreak())
     return out
 
@@ -266,10 +172,9 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
         payload.get("pro_premium") or {},
         bundle if isinstance(bundle, dict) else None,
     )
-    lc = bundle.get("love_compatibility") or payload.get("love_compatibility") or {}
-    love_score = int(lc.get("score") or 0)
-
+    ctx = build_love_reality_pdf_v2_context(bundle, pro, p1, p2, lang)
     s = _styles(lang)
+
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf,
@@ -282,102 +187,126 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
         author="Cosmic Lens",
     )
 
-    chapters_in = pro.get("chapters") or []
-    by_key = {(c.get("key") or "").strip().lower(): c for c in chapters_in if isinstance(c, dict)}
-
     story: list[Any] = []
-    page = 1
 
-    story.extend(_lr_cover_page(s, p1, p2, love_score, lang))
-    page += 1
+    # §1 Core Bond (1–4)
+    story.extend(_cover_dashboard(s, p1, p2, ctx, lang))
 
-    story.extend(_lr_snapshot_page(s, page, bundle, pro, lang))
-    page += 1
+    bp = ctx["page2_3_blueprint"]
+    story.extend(_section_page(
+        s, 2, "BLUEPRINT", "Destiny Partner Blueprint (You)",
+        "7th house · Upapada · Venus/Jupiter ideal signature",
+        bp["part1"], lang=lang,
+    ))
+    story.extend(_section_page(
+        s, 3, "REALITY", "Partner Blueprint vs Reality",
+        "How actual partner nature compares to your chart ideal",
+        bp["part2"], lang=lang,
+    ))
 
-    story.extend(_lr_score_breakdown_page(s, page, bundle, love_score, lang))
-    page += 1
+    dim_rows = [
+        [d["label"], f"{d['score']}/100", "Love dimension matrix"]
+        for d in ctx["page4_dimensions"]
+    ]
+    story.extend(_section_page(
+        s, 4, "DIMENSIONS", "The 5 Love Dimensions Deep-Dive",
+        "Emotional · Attraction · Communication · Karmic · Stability",
+        "Granular matrices from combined chart synastry — same bars as Basic mode.",
+        lang=lang, table_rows=dim_rows,
+    ))
 
-    story.extend(_lr_chart_snapshot_page(s, page, bundle, lang))
-    page += 1
-
-    story.extend(
-        _lr_hidden_truth_page(
-            s,
-            page,
-            _latinize_pdf_plain(pro.get("hidden_truth") or "", lang),
-            lang,
-        )
+    # §2 Triggers & Problems (5–8)
+    moon = ctx["page5_moon"]
+    moon_body = (
+        f"Your Moon: {moon['p1_moon']} · Partner Moon: {moon['p2_moon']}\n\n"
+        f"{moon['body']}"
     )
-    page += 1
+    story.extend(_section_page(
+        s, 5, "MOON", "Moon Synastry & Emotional Rhythm",
+        "Shashtashtak / 6-8 sign emotional alignment check",
+        moon_body, lang=lang, bullets=moon.get("notes"),
+    ))
 
-    placeholder = LRL.chapter_placeholder(lang)
-    engine_ground = bundle.get("chapter_groundings") or {}
-    for i, (key, eyebrow, title, subtitle) in enumerate(LRL.pro_chapter_rows(lang), start=1):
-        ch = dict(by_key.get(key) or {})
-        if not ch.get(CHAPTER_BODY_KEY) and not ch.get("full_read"):
-            ch[CHAPTER_BODY_KEY] = placeholder
-        if not str(ch.get("grounding") or "").strip():
-            eg = engine_ground.get(key)
-            if eg:
-                ch["grounding"] = _latinize_pdf_plain(eg, lang)
-        story.extend(_pro_chapter_pages(s, page, page, eyebrow, title, subtitle, ch))
-        page += 1
+    story.extend(_section_page(
+        s, 6, "ROOT CAUSE", "The Core Root Cause",
+        "What is silently breaking you apart — ego, 12th house, Mercury, afflictions",
+        ctx["page6_root_cause"], lang=lang,
+    ))
 
-    special = [
-        _latinize_pdf_plain(str(b), lang)
-        for b in (pro.get("special") or [])
-        if b
-    ][:3]
-    if not special:
-        special = ["A genuine emotional pull remains active between you when stress is named early."]
-    story.extend(
-        _premium_consultation_blocks_page(
-            s, page, "STRENGTH", LRL.special_title(lang), "", special,
-        )
+    loyalty = ctx["page7_loyalty"]
+    loy_rows = [[r["label"], r["value"], r["band"]] for r in loyalty["rows"]]
+    story.extend(_section_page(
+        s, 7, "LOYALTY", "Loyalty, Trust & Psychological Traits",
+        loyalty.get("behavior") or "Behavioral stability dashboard",
+        loyalty.get("summary") or "", lang=lang, table_rows=loy_rows,
+    ))
+
+    story.extend(_section_page(
+        s, 8, "RED FLAGS", "Red Flags Matrix",
+        "Core operational friction points",
+        "Chart-derived warning signals for this couple:",
+        lang=lang, bullets=ctx["page8_red_flags"],
+    ))
+
+    # §3 Timelines (9–11)
+    story.extend(_section_page(
+        s, 9, "HARMONY", "The Harmony Formula",
+        "Core behavioral shifts required — elemental mix solutions",
+        ctx["page9_harmony"], lang=lang,
+    ))
+
+    story.extend(_section_page(
+        s, 10, "DASHA", "Vimshottari Dasha Synchronization",
+        "Parallel time cycles for both partners",
+        "Current and upcoming dasha alignment:",
+        lang=lang, bullets=ctx["page10_dasha"],
+    ))
+
+    roadmap = ctx["page11_roadmap"]
+    rm_rows = [[r["period"], str(r["trend"]), r["note"][:120]] for r in roadmap]
+    story.extend(_section_page(
+        s, 11, "ROADMAP", "The 1–3 Year Chronological Roadmap",
+        "3 months · 12 months · 36 months trend updates",
+        "Month-by-month arc from Future + Return engines:",
+        lang=lang, table_rows=rm_rows,
+    ))
+
+    # §4 Remedies & Close (12–14)
+    story.extend(_section_page(
+        s, 12, "UPAY", "Planetary Counter Measures",
+        "Customized structural remedies for afflicted planets",
+        "Personalized upay blocks — chart-balanced actions:",
+        lang=lang, bullets=ctx["page12_remedies"],
+    ))
+
+    story.extend(_section_page(
+        s, 13, "ACTION", "Relationship Checklist",
+        "Human action plan to break negative astrology patterns",
+        "Physical communication guidelines for this bond:",
+        lang=lang, bullets=ctx["page13_checklist"],
+    ))
+
+    # Page 14 — closing (no page break after)
+    H_REG, H_BOLD = _font_pair(lang)
+    story.append(_chapter_eyebrow(14, "CLOSE", lang))
+    story.extend(_chapter_title_block(
+        "Closing Guidance & Security Guardrails",
+        "Positive closure · next check-in · disclaimer",
+        s,
+    ))
+    story.append(_premium_body_multi_paragraph_table(
+        s, _latinize_pdf_plain(ctx["page14_closing"], lang), relax=True,
+    ))
+    story.append(Spacer(1, 10))
+    story.append(
+        Paragraph(
+            f"<font color='{_hex(TEXT_SOFT)}'>{_safe(LRL.closing_footer(lang))}</font>",
+            ParagraphStyle("foot", fontName=H_REG, fontSize=8, leading=11, alignment=TA_CENTER),
+        ),
     )
-    page += 1
-
-    damage = [b for b in (pro.get("damage") or []) if b][:2]
-    if not damage:
-        damage = ["Unspoken resentment can stack if repair is always delayed to the next day."]
-    story.extend(
-        _premium_consultation_blocks_page(
-            s, page, "RISK", LRL.damage_title(lang), "", damage,
-        )
-    )
-    page += 1
-
-    practical = [
-        _latinize_pdf_plain(str(p), lang)
-        for p in (pro.get("practical") or [])
-        if p
-    ][:2]
-    if not practical:
-        practical = ["Daily rhythms matter: who reaches out first after friction shapes the whole bond."]
-    story.extend(
-        _premium_consultation_blocks_page(
-            s, page, "LIFE", LRL.practical_title(lang), "", practical,
-        )
-    )
-    page += 1
-
-    verdict = _latinize_pdf_plain((pro.get("verdict") or "").strip(), lang)
-    if not verdict.strip():
-        verdict = _latinize_pdf_plain((bundle.get("narrative_bridge") or "").strip(), lang)
-    story.extend(
-        _pro_final_verdict_page(
-            s, page, verdict, love_score, 100,
-            p1_name=p1.get("name") or "You",
-            p2_name=p2.get("name") or "Partner",
-        )
-    )
-    page += 1
-    story.extend(_lr_method_note_page(s, page, lang))
-    story.extend(_lr_closing_page(s, lang))
 
     doc.milan_pdf_lang = lang
     doc.milan_pdf_footer_pro = True
     doc.milan_pdf_footer_center = LRL.footer_label(lang)
-
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()

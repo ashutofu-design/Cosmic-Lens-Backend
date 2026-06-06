@@ -29,6 +29,27 @@ def test_params_hash_changes_with_lang():
     assert h_en != h_hi
 
 
+def test_love_reality_pro_free_entitles_by_default(monkeypatch):
+    monkeypatch.delenv("COUPLE_REPORT_PAYMENT_BYPASS", raising=False)
+    monkeypatch.delenv("LOVE_REALITY_PRO_FREE", raising=False)
+    monkeypatch.setenv("COUPLE_REPORT_PAYMENT_REQUIRED", "1")
+    assert billing.love_reality_pro_free() is True
+    cp = billing.cache_params_from_birth("en", {"day": 1, "month": 1, "year": 1990, "lat": 1, "lon": 1}, {"day": 2, "month": 2, "year": 1991, "lat": 2, "lon": 2})
+    access = billing.check_access(99, billing.PRODUCT_LOVE, cp)
+    assert access["entitled"] is True
+    assert access["payment_required"] is False
+
+
+def test_love_reality_pro_free_off_requires_pay(monkeypatch):
+    monkeypatch.setenv("LOVE_REALITY_PRO_FREE", "0")
+    monkeypatch.delenv("COUPLE_REPORT_PAYMENT_BYPASS", raising=False)
+    monkeypatch.setenv("COUPLE_REPORT_PAYMENT_REQUIRED", "1")
+    cp = billing.cache_params_from_birth("en", {"day": 1, "month": 1, "year": 1990, "lat": 1, "lon": 1}, {"day": 2, "month": 2, "year": 1991, "lat": 2, "lon": 2})
+    access = billing.check_access(99, billing.PRODUCT_LOVE, cp)
+    assert access["entitled"] is False
+    assert access["payment_required"] is True
+
+
 def test_payment_bypass_entitles(monkeypatch):
     monkeypatch.setenv("COUPLE_REPORT_PAYMENT_BYPASS", "1")
     monkeypatch.delenv("COUPLE_REPORT_PAYMENT_REQUIRED", raising=False)

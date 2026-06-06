@@ -8,8 +8,8 @@ export const LOVE_REALITY_PRO_UI_PRICING = {
 } as const;
 
 export const LOVE_REALITY_CHECKOUT_CONFIG = {
-  /** Dev only — skips Cashfree; entitlement + PDF run immediately */
-  bypassCheckoutForTesting: false,
+  /** Temporarily skip Razorpay — language pick → generate PDF → My Reports */
+  bypassCheckoutForTesting: true,
 } as const;
 
 /** Opens language picker; payment runs after language selection (see coupleReportCheckoutFlow). */

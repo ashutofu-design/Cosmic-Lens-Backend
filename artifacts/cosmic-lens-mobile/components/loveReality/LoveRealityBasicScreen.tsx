@@ -3,7 +3,7 @@ import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -18,23 +18,32 @@ import Svg, { Circle } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
-import { LoveRealityToolResultPanel } from "@/components/loveReality/LoveRealityToolResultPanel";
 import { useFeatureGate } from "@/components/FeatureGate";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 import {
+  humanizeDisplayText,
   loyaltyCompareVerdict,
   mapLoveRealityResult,
+  type LoveCompatDetail,
+  type FutureOutcomeDetail,
   type LoveRealityBasicDisplay,
   type LoveRealityToolKey,
   type LoyaltyCompareData,
 } from "@/lib/loveRealityToolMappers";
-import { LOVE_REALITY_PRO_UI_PRICING } from "@/lib/loveRealityProOffer";
+import type { ChartProof } from "@/lib/loveRealityChartProof";
+import { LOVE_REALITY_PRO_CTA_LABEL } from "@/lib/loveRealityProCopy";
 import type { BirthData } from "@/types";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+const LoveRealityToolResultPanel = lazy(() =>
+  import("@/components/loveReality/LoveRealityToolResultPanel").then(m => ({
+    default: m.LoveRealityToolResultPanel,
+  })),
+);
 
 export type LoveRealityToolConfig = {
   toolKey: LoveRealityToolKey;
@@ -212,7 +221,7 @@ function RiskGaugeMeter({
     <View style={[gaugeStyles.wrap, compact && gaugeStyles.wrapCompact]}>
       <Text style={[gaugeStyles.score, compact && gaugeStyles.scoreCompact, { color: zoneColor }]}>{score}</Text>
       <Text style={[gaugeStyles.riskTag, { color: zoneColor, borderColor: zoneColor + "55" }]}>
-        {riskLevel.replace(/\s+/g, " ").toUpperCase()} RISK
+        {humanizeDisplayText(riskLevel).toUpperCase()} RISK
       </Text>
       <View style={[gaugeStyles.track, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }]}>
         <LinearGradient
@@ -354,7 +363,7 @@ function loyaltyLevelShort(level: string): string {
     case "risky":
       return "Risky";
     default:
-      return level || "—";
+      return humanizeDisplayText(level) || "—";
   }
 }
 
@@ -387,7 +396,6 @@ export function LoyaltyCompareCard({
       score: compare.youScore,
       level: compare.youLevel,
       isHigher: compare.higherSide === "you",
-      dutyBound: compare.youDutyBound,
     },
     {
       key: "partner" as const,
@@ -396,18 +404,12 @@ export function LoyaltyCompareCard({
       score: compare.partnerScore,
       level: compare.partnerLevel,
       isHigher: compare.higherSide === "partner",
-      dutyBound: compare.partnerDutyBound,
     },
   ];
 
   return (
     <View style={[loyaltyCmpStyles.wrap, compact && loyaltyCmpStyles.wrapCompact]}>
-      <Text style={[loyaltyCmpStyles.title, { color: textHi }]}>Kiska loyalty zyada?</Text>
-      {compare.estimated ? (
-        <Text style={[loyaltyCmpStyles.estBadge, { color: textLo }]}>
-          Chart stress se estimate — exact scores server update ke baad
-        </Text>
-      ) : null}
+      <Text style={[loyaltyCmpStyles.verdict, { color: textHi }]}>{verdict}</Text>
       <View style={[loyaltyCmpStyles.card, { backgroundColor: cardBg, borderColor: border }]}>
         {rows.map(row => {
           const color = loyaltyBarColor(row.score);
@@ -441,16 +443,10 @@ export function LoyaltyCompareCard({
               <View style={[loyaltyCmpStyles.track, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }]}>
                 <View style={[loyaltyCmpStyles.fill, { width: `${row.score}%`, backgroundColor: color }]} />
               </View>
-              {row.dutyBound ? (
-                <Text style={[loyaltyCmpStyles.dutyNote, { color: textLo }]}>
-                  Saturn–Moon: duty-bound (dukh sahen, dhoka pattern kam)
-                </Text>
-              ) : null}
             </View>
           );
         })}
       </View>
-      <Text style={[loyaltyCmpStyles.verdict, { color: textHi }]}>{verdict}</Text>
     </View>
   );
 }
@@ -485,7 +481,6 @@ const loyaltyCmpStyles = StyleSheet.create({
   badgeTxt: { fontSize: 10, fontFamily: "Nunito_800ExtraBold", letterSpacing: 0.3 },
   track: { height: 8, borderRadius: 4, overflow: "hidden" },
   fill: { height: "100%", borderRadius: 4 },
-  dutyNote: { fontSize: 10, fontFamily: "Nunito_600SemiBold", lineHeight: 14 },
   verdict: {
     fontSize: 13,
     fontFamily: "Nunito_600SemiBold",
@@ -493,6 +488,178 @@ const loyaltyCmpStyles = StyleSheet.create({
     textAlign: "center",
     paddingHorizontal: 4,
   },
+});
+
+function barColor(score: number): string {
+  if (score >= 67) return "#22c55e";
+  if (score >= 45) return "#fbbf24";
+  return "#f87171";
+}
+
+function riskLevelLabel(risk?: string): string | null {
+  if (!risk) return null;
+  const r = risk.toLowerCase();
+  if (r.includes("very high")) return "High friction";
+  if (r.includes("high")) return "Some friction";
+  if (r.includes("medium")) return "Mixed bond";
+  if (r.includes("low")) return "Strong bond";
+  return risk;
+}
+
+export function LoveCompatibilityDetailCard({
+  detail,
+  isDark,
+  compact = false,
+}: {
+  detail: LoveCompatDetail;
+  isDark: boolean;
+  compact?: boolean;
+}) {
+  const textHi = isDark ? "#fff" : "#0F172A";
+  const cardBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.03)";
+  const border = isDark ? "rgba(255,255,255,0.1)" : "rgba(15,23,42,0.08)";
+
+  return (
+    <View style={[loveDetStyles.wrap, compact && loveDetStyles.wrapCompact]}>
+      <Text style={[loveDetStyles.sectionTitle, { color: textHi }]}>Love dimensions</Text>
+      <View style={[loveDetStyles.card, { backgroundColor: cardBg, borderColor: border }]}>
+        {detail.dimensions.map(dim => {
+          const color = barColor(dim.score);
+          return (
+            <View key={dim.key} style={loveDetStyles.dimRow}>
+              <View style={loveDetStyles.dimHead}>
+                <Text style={[loveDetStyles.dimLbl, { color: textHi }]}>{dim.label}</Text>
+                <Text style={[loveDetStyles.dimScore, { color }]}>{dim.score}</Text>
+              </View>
+              <View style={[loveDetStyles.track, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }]}>
+                <View style={[loveDetStyles.fill, { width: `${dim.score}%`, backgroundColor: color }]} />
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+export function FutureOutcomeDetailCard({
+  detail,
+  isDark,
+  compact = false,
+}: {
+  detail: FutureOutcomeDetail;
+  isDark: boolean;
+  compact?: boolean;
+}) {
+  const textHi = isDark ? "#fff" : "#0F172A";
+  const textLo = isDark ? "rgba(203,213,225,0.65)" : "#64748B";
+
+  return (
+    <View style={[loveDetStyles.wrap, compact && loveDetStyles.wrapCompact]}>
+      <Text style={[loveDetStyles.summary, { color: textHi }]}>{detail.verdictLine}</Text>
+      {detail.reasonLine ? (
+        <Text style={[loveDetStyles.reason, { color: textLo, textAlign: "center", paddingHorizontal: 8 }]}>
+          {detail.reasonLine}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+const loveDetStyles = StyleSheet.create({
+  wrap: { width: "100%", maxWidth: 320, gap: 10, marginTop: 12 },
+  wrapCompact: { maxWidth: 280, marginTop: 8 },
+  summary: {
+    fontSize: 13,
+    fontFamily: "Nunito_600SemiBold",
+    lineHeight: 19,
+    textAlign: "center",
+    paddingHorizontal: 6,
+  },
+  bondBadge: {
+    alignSelf: "center",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  bondTxt: { fontSize: 10, fontFamily: "Nunito_800ExtraBold", letterSpacing: 0.8, textTransform: "uppercase" },
+  sectionTitle: {
+    fontSize: 12,
+    fontFamily: "Nunito_800ExtraBold",
+    letterSpacing: 0.3,
+    textAlign: "center",
+  },
+  card: { borderRadius: 16, borderWidth: 1, padding: 12, gap: 10 },
+  dimRow: { gap: 5 },
+  dimHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  dimLbl: { fontSize: 12, fontFamily: "Nunito_700Bold" },
+  dimScore: { fontSize: 13, fontFamily: "Nunito_800ExtraBold" },
+  track: { height: 7, borderRadius: 4, overflow: "hidden" },
+  fill: { height: "100%", borderRadius: 4 },
+  reason: { fontSize: 11, fontFamily: "Nunito_600SemiBold", lineHeight: 16 },
+});
+
+export function ChartProofPanel({
+  proof,
+  isDark,
+  compact = false,
+}: {
+  proof: ChartProof;
+  isDark: boolean;
+  compact?: boolean;
+}) {
+  const textHi = isDark ? "#fff" : "#0F172A";
+  const textLo = isDark ? "rgba(203,213,225,0.65)" : "#64748B";
+  const border = isDark ? "rgba(255,255,255,0.1)" : "rgba(15,23,42,0.08)";
+  const cardBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.03)";
+
+  return (
+    <View style={[proofStyles.wrap, compact && proofStyles.wrapCompact]}>
+      <Text style={[proofStyles.title, { color: textHi }]}>Chart proof (D1 + D9)</Text>
+      {proof.aspectBadges.length > 0 ? (
+        <View style={proofStyles.badgeRow}>
+          {proof.aspectBadges.map((b, i) => (
+            <View key={i} style={[proofStyles.badge, { borderColor: border, backgroundColor: cardBg }]}>
+              <Text style={[proofStyles.badgeTxt, { color: textLo }]}>
+                {b.icon} {b.label}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+      <View style={[proofStyles.card, { borderColor: border, backgroundColor: cardBg }]}>
+        <Text style={[proofStyles.person, { color: "#f472b6" }]}>{proof.p1Name}</Text>
+        {proof.p1Rows.map((r, i) => (
+          <Text key={`p1-${i}`} style={[proofStyles.line, { color: textLo }]}>
+            {r.line}
+            {r.tag ? ` · ${r.tag}` : ""}
+          </Text>
+        ))}
+        <View style={[proofStyles.divider, { backgroundColor: border }]} />
+        <Text style={[proofStyles.person, { color: "#c084fc" }]}>{proof.p2Name}</Text>
+        {proof.p2Rows.map((r, i) => (
+          <Text key={`p2-${i}`} style={[proofStyles.line, { color: textLo }]}>
+            {r.line}
+            {r.tag ? ` · ${r.tag}` : ""}
+          </Text>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const proofStyles = StyleSheet.create({
+  wrap: { width: "100%", maxWidth: 320, gap: 8, marginTop: 10 },
+  wrapCompact: { maxWidth: 280 },
+  title: { fontSize: 12, fontFamily: "Nunito_800ExtraBold", textAlign: "center", letterSpacing: 0.3 },
+  badgeRow: { gap: 6 },
+  badge: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
+  badgeTxt: { fontSize: 10, fontFamily: "Nunito_600SemiBold", lineHeight: 14 },
+  card: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 4 },
+  person: { fontSize: 11, fontFamily: "Nunito_800ExtraBold", marginBottom: 2 },
+  line: { fontSize: 10, fontFamily: "Nunito_600SemiBold", lineHeight: 14 },
+  divider: { height: 1, marginVertical: 6 },
 });
 
 export function LoveRealityResultHero({
@@ -514,12 +681,14 @@ export function LoveRealityResultHero({
 }) {
   if (display.visual === "circular" && display.percent != null) {
     return (
-      <CircularScoreMeter
-        percent={display.percent}
-        isDark={isDark}
-        glowColor={accentGradient[0]}
-        compact={compact}
-      />
+      <View style={{ width: "100%", alignItems: "center" }}>
+        <CircularScoreMeter
+          percent={display.percent}
+          isDark={isDark}
+          glowColor={accentGradient[0]}
+          compact={compact}
+        />
+      </View>
     );
   }
   if (display.visual === "risk-gauge") {
@@ -562,7 +731,6 @@ function ProUpsellBanner({
   bottomPad: number;
   onPress: () => void;
 }) {
-  const { offerInr } = LOVE_REALITY_PRO_UI_PRICING;
   const glassBg = isDark ? "rgba(12,8,28,0.72)" : "rgba(255,255,255,0.82)";
   const borderC = isDark ? "rgba(168,85,247,0.35)" : "rgba(124,58,237,0.22)";
 
@@ -588,7 +756,7 @@ function ProUpsellBanner({
               style={upsellStyles.btn}
             >
               <Feather name="file-text" size={16} color="#fff" />
-              <Text style={upsellStyles.btnTxt}>Unlock Full Pro PDF — ₹{offerInr}</Text>
+              <Text style={upsellStyles.btnTxt}>{LOVE_REALITY_PRO_CTA_LABEL}</Text>
             </LinearGradient>
           </View>
         </View>
@@ -612,7 +780,7 @@ const upsellStyles = StyleSheet.create({
     borderRadius: 14,
     marginTop: 6,
   },
-  btnTxt: { color: "#fff", fontSize: 14, fontFamily: "Nunito_800ExtraBold", letterSpacing: 0.2 },
+  btnTxt: { color: "#fff", fontSize: 12, fontFamily: "Nunito_800ExtraBold", letterSpacing: 0.2, textAlign: "center", flexShrink: 1 },
 });
 
 export function LoveRealityBasicScreen({ config }: { config: LoveRealityToolConfig }) {
@@ -731,12 +899,19 @@ export function LoveRealityBasicScreen({ config }: { config: LoveRealityToolConf
           )}
 
           {showResult && display && primaryProfile && partnerProfile && (
-            <LoveRealityToolResultPanel
-              toolKey={config.toolKey}
-              toolTitle={config.title}
-              userName={primaryProfile.name || "You"}
-              partnerName={partnerProfile.name || "Partner"}
-              display={display}
+            <Suspense
+              fallback={
+                <View style={styles.stateBlock}>
+                  <ActivityIndicator size="large" color={config.accentGradient[0]} />
+                </View>
+              }
+            >
+              <LoveRealityToolResultPanel
+                toolKey={config.toolKey}
+                toolTitle={config.title}
+                userName={primaryProfile.name || "You"}
+                partnerName={partnerProfile.name || "Partner"}
+                display={display}
               loyaltyCompare={display.loyaltyCompare}
               isDark={isDark}
               bottomPad={insets.bottom}
@@ -747,6 +922,7 @@ export function LoveRealityBasicScreen({ config }: { config: LoveRealityToolConf
               onRefresh={runAnalysis}
               refreshing={loading}
             />
+            </Suspense>
           )}
         </View>
       </View>

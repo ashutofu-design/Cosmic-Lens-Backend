@@ -42,6 +42,16 @@ def payment_bypass() -> bool:
     )
 
 
+def love_reality_pro_free() -> bool:
+    """Temporary free Love Reality Pro PDF. Set LOVE_REALITY_PRO_FREE=0 to re-enable pay."""
+    return (os.environ.get("LOVE_REALITY_PRO_FREE") or "1").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
 def payment_required() -> bool:
     if payment_bypass():
         return False
@@ -119,6 +129,12 @@ def check_access(
         "already_paid": False,
         "cache_hit": False,
     }
+
+    if product == PRODUCT_LOVE and love_reality_pro_free():
+        out["entitled"] = True
+        out["cached_pdf"] = rc.find(user_id, product, cache_params)
+        out["cache_hit"] = bool(out["cached_pdf"])
+        return out
 
     if not payment_required():
         out["entitled"] = True

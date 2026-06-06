@@ -64,7 +64,7 @@ def test_love_reality_pro_pdf_bytes_and_page_band_en():
     pdf = render_love_reality_pro_pdf(payload, lang="en")
     assert pdf.startswith(b"%PDF-")
     pages = _count_pages(pdf)
-    assert 15 <= pages <= 24
+    assert 13 <= pages <= 16
 
 
 def test_love_reality_pro_pdf_empty_pro_still_renders():
@@ -72,7 +72,7 @@ def test_love_reality_pro_pdf_empty_pro_still_renders():
     payload["pro_premium"] = {}
     pdf = render_love_reality_pro_pdf(payload, lang="en")
     assert pdf.startswith(b"%PDF-")
-    assert _count_pages(pdf) >= 15
+    assert _count_pages(pdf) >= 13
 
 
 def test_love_reality_pro_pdf_hi_render_uses_hn_font_lane():

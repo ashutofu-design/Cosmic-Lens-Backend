@@ -1,11 +1,10 @@
 import { Feather } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,18 +12,23 @@ import {
   View,
 } from "react-native";
 
-import { LoveRealityToolResultPanel } from "@/components/loveReality/LoveRealityToolResultPanel";
+import { LoveRealityToolSectionContent } from "@/components/loveReality/LoveRealityToolResultPanel";
 import { apiFetch, apiFetchBases } from "@/lib/apiConfig";
 import {
   buildLoyaltyCompareFromJson,
+  buildLoveCompatDetailFromJson,
   mapLoveRealityResult,
   resolveLoyaltyCompare,
   type LoveRealityBasicDisplay,
   type LoveRealityToolKey,
   type LoyaltyCompareData,
 } from "@/lib/loveRealityToolMappers";
-import { LOVE_REALITY_TOOLS, toolDefForKey, type LoveRealityToolDef } from "@/lib/loveRealityToolsConfig";
+import { LOVE_REALITY_TOOLS, type LoveRealityToolDef } from "@/lib/loveRealityToolsConfig";
 import type { BirthData } from "@/types";
+import {
+  LOVE_REALITY_BASIC_LOCKED_HINT,
+  LOVE_REALITY_PRO_CTA_LABEL,
+} from "@/lib/loveRealityProCopy";
 
 function packPerson(bd: BirthData) {
   return {
@@ -45,12 +49,39 @@ function packPerson(bd: BirthData) {
 type ResultsMap = Partial<Record<LoveRealityToolKey, LoveRealityBasicDisplay>>;
 type RawResultsMap = Partial<Record<LoveRealityToolKey, Record<string, unknown>>>;
 
+function resolveLoyaltyForTool(
+  toolKey: LoveRealityToolKey,
+  rawResults: RawResultsMap,
+  display?: LoveRealityBasicDisplay,
+): LoyaltyCompareData | undefined {
+  if (toolKey !== "loyalty") return undefined;
+  return (
+    resolveLoyaltyCompare(rawResults.loyalty, rawResults["love-compat"]) ??
+    display?.loyaltyCompare ??
+    (rawResults.loyalty ? buildLoyaltyCompareFromJson(rawResults.loyalty) : undefined)
+  );
+}
+
+function ToolSectionHeader({ tool, isDark }: { tool: LoveRealityToolDef; isDark: boolean }) {
+  const textHi = isDark ? "#fff" : "#0F172A";
+  const [c1, c2] = tool.gradient;
+  return (
+    <View style={u.sectionHead}>
+      <LinearGradient colors={[c1, c2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={u.sectionBadge}>
+        <Text style={u.sectionEmoji}>{tool.emoji}</Text>
+      </LinearGradient>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={[u.sectionTitle, { color: textHi }]}>{tool.title}</Text>
+      </View>
+    </View>
+  );
+}
+
 export function LoveRealityUnifiedBasic({
   isDark,
   bottomPad,
   primaryProfile,
   partnerProfile,
-  initialToolKey,
   onOpenPro,
 }: {
   isDark: boolean;
@@ -61,25 +92,15 @@ export function LoveRealityUnifiedBasic({
   onOpenPro: () => void;
 }) {
   const canAnalyze = !!primaryProfile?.birthData && !!partnerProfile?.birthData;
-  const [selected, setSelected] = useState<LoveRealityToolKey>(
-    (toolDefForKey(initialToolKey ?? "love-compat").key),
-  );
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ResultsMap>({});
   const [rawResults, setRawResults] = useState<RawResultsMap>({});
   const [fetchErr, setFetchErr] = useState<string | null>(null);
   const fetchGen = useRef(0);
 
-  const active = toolDefForKey(selected);
-  const display = results[selected];
-  const loyaltyCompare: LoyaltyCompareData | undefined =
-    selected === "loyalty"
-      ? resolveLoyaltyCompare(rawResults.loyalty, rawResults["love-compat"]) ??
-        display?.loyaltyCompare ??
-        (rawResults.loyalty ? buildLoyaltyCompareFromJson(rawResults.loyalty) : undefined)
-      : undefined;
   const textHi = isDark ? "#fff" : "#0F172A";
   const textLo = isDark ? "rgba(203,213,225,0.65)" : "#64748B";
+  const hasResults = LOVE_REALITY_TOOLS.some(tool => results[tool.key]);
 
   useFocusEffect(
     useCallback(() => {
@@ -137,6 +158,10 @@ export function LoveRealityUnifiedBasic({
         if (loyaltyCmp && mapped.loyalty) {
           mapped.loyalty = { ...mapped.loyalty, loyaltyCompare: loyaltyCmp };
         }
+        const loveDetail = buildLoveCompatDetailFromJson(raw["love-compat"] ?? {});
+        if (loveDetail && mapped["love-compat"]) {
+          mapped["love-compat"] = { ...mapped["love-compat"], loveDetail };
+        }
         setResults(mapped);
         setRawResults(raw);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -151,11 +176,6 @@ export function LoveRealityUnifiedBasic({
     }
     setFetchErr(lastErr);
     setLoading(false);
-  }
-
-  function selectTool(tool: LoveRealityToolDef) {
-    Haptics.selectionAsync();
-    setSelected(tool.key);
   }
 
   if (!canAnalyze) {
@@ -176,121 +196,134 @@ export function LoveRealityUnifiedBasic({
   return (
     <View style={u.root}>
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={u.chipRow}
-        style={u.chipScroll}
+        style={u.scroll}
+        contentContainerStyle={[u.scrollContent, { paddingBottom: bottomPad + 24 }]}
+        showsVerticalScrollIndicator={false}
       >
-        {LOVE_REALITY_TOOLS.map(tool => {
-          const on = tool.key === selected;
-          const [c1, c2] = tool.gradient;
-          return (
-            <Pressable key={tool.key} onPress={() => selectTool(tool)} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
-              {on ? (
-                <LinearGradient colors={[c1, c2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={u.chipOn}>
-                  <Text style={u.chipEmoji}>{tool.emoji}</Text>
-                  <Text style={u.chipLblOn}>{tool.shortLabel}</Text>
-                </LinearGradient>
-              ) : (
-                <View style={[u.chipOff, { borderColor: isDark ? `${tool.iconColor}35` : `${tool.iconColor}25` }]}>
-                  <Text style={u.chipEmoji}>{tool.emoji}</Text>
-                  <Text style={[u.chipLblOff, { color: isDark ? "rgba(203,213,225,0.7)" : "#64748B" }]}>{tool.shortLabel}</Text>
-                </View>
-              )}
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+        <View style={u.topBar}>
+          <Text style={[u.modeLabel, { color: textLo }]}>You are in basic mode</Text>
+        </View>
 
-      {selected === "loyalty" && canAnalyze ? (
-        <Pressable
-          onPress={() => void fetchAllTools()}
-          disabled={loading}
-          style={[u.refreshRow, { opacity: loading ? 0.6 : 1 }]}
-        >
-          <Feather name="refresh-cw" size={14} color={active.gradient[0]} />
-          <Text style={[u.refreshTxt, { color: active.gradient[0] }]}>
-            {loading ? "Refreshing…" : "Refresh loyalty reading"}
-          </Text>
-        </Pressable>
-      ) : null}
-
-      <View style={u.resultZone}>
-        {loading && !display && (
+        {loading && !hasResults ? (
           <View style={u.centerState}>
-            <ActivityIndicator size="large" color={active.gradient[0]} />
-            <Text style={[u.stateTxt, { color: textHi }]}>Reading all 5 tools…</Text>
+            <ActivityIndicator size="large" color="#f472b6" />
+            <Text style={[u.stateTxt, { color: textHi }]}>Reading all checks…</Text>
           </View>
-        )}
+        ) : null}
 
-        {fetchErr && !display && !loading && (
+        {fetchErr && !hasResults && !loading ? (
           <View style={u.centerState}>
             <Text style={[u.stateTxt, { color: textHi }]}>{fetchErr}</Text>
             <Pressable onPress={() => { void fetchAllTools(); }}>
-              <Text style={{ color: active.gradient[0], fontFamily: "Nunito_700Bold", marginTop: 8 }}>Retry</Text>
+              <Text style={{ color: "#f472b6", fontFamily: "Nunito_700Bold", marginTop: 8 }}>Retry</Text>
             </Pressable>
           </View>
-        )}
+        ) : null}
 
-        {display && primaryProfile && partnerProfile && (
-          <LoveRealityToolResultPanel
-            toolKey={selected}
-            toolTitle={active.title}
-            userName={primaryProfile.name || "You"}
-            partnerName={partnerProfile.name || "Partner"}
-            display={display}
-            loyaltyCompare={loyaltyCompare}
-            isDark={isDark}
-            bottomPad={bottomPad}
-            accentGradient={active.gradient}
-            onOpenPro={onOpenPro}
-            onRefresh={fetchAllTools}
-            refreshing={loading}
-          />
-        )}
-      </View>
+        {primaryProfile && partnerProfile
+          ? LOVE_REALITY_TOOLS.map((tool, index) => {
+              const display = results[tool.key];
+              if (!display) return null;
+              const loyaltyCompare = resolveLoyaltyForTool(tool.key, rawResults, display);
+              const border = isDark ? "rgba(255,255,255,0.08)" : "rgba(15,23,42,0.08)";
+              return (
+                <View key={tool.key} style={u.section}>
+                  <ToolSectionHeader tool={tool} isDark={isDark} />
+                  <LoveRealityToolSectionContent
+                    toolKey={tool.key}
+                    userName={primaryProfile.name || "You"}
+                    partnerName={partnerProfile.name || "Partner"}
+                    display={display}
+                    loyaltyCompare={loyaltyCompare}
+                    isDark={isDark}
+                    accentGradient={tool.gradient}
+                  />
+                  {index < LOVE_REALITY_TOOLS.length - 1 ? (
+                    <View style={[u.sectionDivider, { backgroundColor: border }]} />
+                  ) : null}
+                </View>
+              );
+            })
+          : null}
+
+        {hasResults ? (
+          <Text style={[u.lockedHint, { color: isDark ? "rgba(203,213,225,0.42)" : "rgba(100,116,139,0.55)" }]}>
+            {LOVE_REALITY_BASIC_LOCKED_HINT}
+          </Text>
+        ) : null}
+
+        {hasResults ? (
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              onOpenPro();
+            }}
+            style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, marginTop: 4 })}
+          >
+            <LinearGradient colors={["#ec4899", "#a855f7"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={u.proTease}>
+              <Feather name="file-text" size={16} color="#fff" />
+              <Text style={u.proTeaseTxt}>{LOVE_REALITY_PRO_CTA_LABEL}</Text>
+              <Feather name="chevron-right" size={16} color="#fff" />
+            </LinearGradient>
+          </Pressable>
+        ) : null}
+      </ScrollView>
     </View>
   );
 }
 
 const u = StyleSheet.create({
   root: { flex: 1, minHeight: 0 },
-  chipScroll: { flexGrow: 0, maxHeight: 52, marginBottom: 6 },
-  chipRow: { paddingHorizontal: 16, gap: 8, alignItems: "center" },
-  chipOn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 4, gap: 4 },
+  topBar: { marginBottom: 8, alignItems: "center" },
+  modeLabel: {
+    fontSize: 12,
+    fontFamily: "Nunito_700Bold",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    textAlign: "center",
   },
-  chipOff: {
-    flexDirection: "row",
+  centerState: { alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 48, paddingHorizontal: 16 },
+  stateTxt: { fontSize: 14, fontFamily: "Nunito_600SemiBold", textAlign: "center" },
+  section: { gap: 8, paddingVertical: 8 },
+  sectionHead: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 4 },
+  sectionBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    backgroundColor: "rgba(14,22,42,0.45)",
+    justifyContent: "center",
   },
-  chipEmoji: { fontSize: 16 },
-  chipLblOn: { color: "#fff", fontSize: 12, fontFamily: "Nunito_800ExtraBold" },
-  chipLblOff: { fontSize: 12, fontFamily: "Nunito_700Bold" },
-  refreshRow: {
+  sectionEmoji: { fontSize: 18 },
+  sectionTitle: { fontSize: 16, fontFamily: "Nunito_800ExtraBold" },
+  sectionDivider: { height: 1, marginTop: 12, marginHorizontal: 8 },
+  lockedHint: {
+    fontSize: 11.5,
+    fontFamily: "Nunito_500Medium",
+    lineHeight: 17,
+    textAlign: "center",
+    marginTop: 12,
+    paddingHorizontal: 12,
+  },
+  proTease: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 16,
-    marginBottom: 4,
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 14,
   },
-  refreshTxt: { fontSize: 12, fontFamily: "Nunito_700Bold" },
-  resultZone: { flex: 1, minHeight: 0 },
-  centerState: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, paddingHorizontal: 16 },
-  stateTxt: { fontSize: 14, fontFamily: "Nunito_600SemiBold", textAlign: "center" },
+  proTeaseTxt: {
+    flex: 1,
+    flexShrink: 1,
+    color: "#fff",
+    fontSize: 12.5,
+    fontFamily: "Nunito_700Bold",
+    textAlign: "center",
+    lineHeight: 17,
+  },
   gate: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 8 },
   gateTitle: { fontSize: 16, fontFamily: "Nunito_700Bold" },
   gateSub: { fontSize: 13, textAlign: "center", fontFamily: "Nunito_500Medium" },

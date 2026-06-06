@@ -48,7 +48,7 @@ def register_love_reality_routes(flask_app) -> None:
             except Exception:
                 pass
 
-        if _billing.payment_required() and not user_id:
+        if _billing.payment_required() and not _billing.love_reality_pro_free() and not user_id:
             return jsonify(
                 {
                     "error": "auth_required",

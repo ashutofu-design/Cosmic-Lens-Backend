@@ -289,3 +289,73 @@ class KundliReader:
 
     def is_dual_sign(self, sign_name: str | None) -> bool:
         return bool(sign_name and sign_name in DUAL_SIGNS)
+
+
+def d9_cancels_debil(k: KundliReader, planet: str) -> bool:
+    """Neech-bhang: D1 debilitated but D9 exalted or in own sign."""
+    pl = k.planet(planet)
+    if not pl:
+        return False
+    if k.dignity(planet, k.sidx(pl["sign"])) > -2:
+        return False
+    si = k.d9_sign_index(planet)
+    if si is None:
+        return False
+    return k.dignity(planet, si) >= 1
+
+
+def current_jupiter_sign() -> int | None:
+    try:
+        import swisseph as swe
+        from datetime import datetime
+
+        swe.set_sid_mode(swe.SIDM_LAHIRI)
+        now = datetime.utcnow()
+        jd = swe.julday(
+            now.year, now.month, now.day,
+            now.hour + now.minute / 60.0 + now.second / 3600.0,
+        )
+        res, _ = swe.calc_ut(jd, swe.JUPITER, swe.FLG_SWIEPH | swe.FLG_SIDEREAL)
+        return int(res[0] / 30) % 12
+    except Exception:
+        return None
+
+
+def _transit_jupiter_aspects_house(jupiter_sign: int, ref_asc: int, house: int) -> bool:
+    tgt_sign = (ref_asc + house - 1) % 12
+    d = (tgt_sign - jupiter_sign + 12) % 12
+    return d in (0, 4, 6, 8)
+
+
+def jupiter_transit_protects(r1: KundliReader, r2: KundliReader, jupiter_sign: int | None) -> bool:
+    """Guru gochar on Lagna, 5th, or 7th axis — protective buffer for future bond."""
+    if jupiter_sign is None:
+        return False
+    for r in (r1, r2):
+        asc = r.asc_index()
+        for house in (1, 5, 7):
+            if _transit_jupiter_aspects_house(jupiter_sign, asc, house):
+                return True
+    return False
+
+
+def dasha_lords_inimical(r1: KundliReader, r2: KundliReader) -> bool:
+    """Shashtashtak / Dwidwadasa: running MD lords sit 6th, 8th, or 12th from each other."""
+    l1, l2 = r1.dasha_triple()[0], r2.dasha_triple()[0]
+    if not l1 or not l2:
+        return False
+    p1, p2 = r1.planet(l1), r2.planet(l2)
+    if not p1 or not p2:
+        return False
+    s1, s2 = r1.sidx(p1["sign"]), r2.sidx(p2["sign"])
+    for a, b in ((s1, s2), (s2, s1)):
+        house = ((b - a) % 12) + 1
+        if house in (6, 8, 12):
+            return True
+    return False
+
+
+def future_confidence(total_afflictions: int) -> int:
+    if total_afflictions <= 2:
+        return 90
+    return max(30, 90 - (total_afflictions * 5))

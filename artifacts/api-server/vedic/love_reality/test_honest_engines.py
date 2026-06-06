@@ -2,10 +2,12 @@
 from vedic.love_reality.engines import (
     run_all_love_reality_engines,
     run_breakup_chances,
+    run_future_outcome,
     run_love_compatibility,
     run_loyalty_check,
     run_will_return,
 )
+from vedic.love_reality.scoring_core import future_confidence
 
 # Sample birth data (Delhi-ish) — deterministic smoke only
 P1 = {
@@ -92,3 +94,21 @@ def test_pdf_bundle_skips_compat_insight():
     """Pro PDF path must not run the small compatibility AI (only premium polish)."""
     bundle = run_all_love_reality_engines(P1, P2, skip_ai_insight=True)
     assert bundle["love_compatibility"].get("insight") is None
+
+
+def test_future_outcome_v2_fields():
+    fo = run_future_outcome(P1, P2)
+    assert fo.get("engine_version") == "future_outcome_v2"
+    assert 0 <= fo["future_score"] <= 100
+    assert 30 <= fo["confidence"] <= 90
+    assert fo["confidence"] == future_confidence(fo["breakdown"]["total_afflictions"])
+    assert isinstance(fo.get("timeline_flow"), list)
+    assert fo["timeline_flow"][0]["trend"] in ("up", "down", "mixed")
+    assert "next_shift_trend" in fo
+
+
+def test_future_confidence_mapping():
+    assert future_confidence(0) == 90
+    assert future_confidence(2) == 90
+    assert future_confidence(5) == 65
+    assert future_confidence(20) == 30

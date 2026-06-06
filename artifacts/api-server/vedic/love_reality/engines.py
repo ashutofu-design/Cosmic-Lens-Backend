@@ -13,6 +13,11 @@ from vedic.love_reality.relationship_signals import CoupleSignals, analyze_coupl
 from vedic.love_reality.scoring_core import (
     KundliReader,
     clamp,
+    current_jupiter_sign,
+    d9_cancels_debil,
+    dasha_lords_inimical,
+    future_confidence,
+    jupiter_transit_protects,
     level_future,
     level_loyalty,
     level_return,
@@ -29,11 +34,38 @@ def _load_couple(p1: dict, p2: dict) -> tuple[KundliReader, KundliReader, Couple
 
 
 def _cap_by_affliction(score: int, sig: CoupleSignals, harsh_cap: int, moderate_cap: int) -> int:
+    capped = score
     if sig.combined_affliction >= 55:
-        return min(score, harsh_cap)
-    if sig.combined_affliction >= 35:
-        return min(score, moderate_cap)
-    return score
+        capped = min(score, harsh_cap)
+    elif sig.combined_affliction >= 35:
+        capped = min(score, moderate_cap)
+    return max(0, capped)
+
+
+def _compute_breakup_score(sig: CoupleSignals) -> int:
+    score = 38.0
+    for person in (sig.p1, sig.p2):
+        if person.seventh_lord_dusthana:
+            score += 14
+        if person.seventh_lord_debil:
+            score += 10
+        if person.saturn_on_7th:
+            score += 12
+        if person.mars_on_7th:
+            score += 9
+        if person.rahu_on_7th_axis:
+            score += 10
+        if person.venus_debil or person.moon_debil:
+            score += 8
+        if person.third_person_risk:
+            score += 11
+        if person.ketu_detachment:
+            score += 7
+        if person.separation_yoga:
+            score += 6
+    if sig.combined_affliction >= 50:
+        score += 10
+    return clamp(score)
 
 
 def _love_dimension_breakdown(score_i: int, sig: CoupleSignals) -> dict[str, int]:
@@ -223,39 +255,26 @@ def run_breakup_chances(p1: dict, p2: dict) -> dict[str, Any]:
     r1, r2, sig = _load_couple(p1, p2)
     reasons: list[str] = []
 
-    score = 38.0
     for person in (sig.p1, sig.p2):
         if person.seventh_lord_dusthana:
-            score += 14
             reasons.append("7th lord in dusthana — bond survives emotionally but not practically.")
-        if person.seventh_lord_debil:
-            score += 10
         if person.saturn_on_7th:
-            score += 12
             reasons.append("Saturn on 7th axis — emotional distance and break timing active.")
         if person.mars_on_7th:
-            score += 9
             reasons.append("Mars on 7th — fights escalate into rupture.")
         if person.rahu_on_7th_axis:
-            score += 10
             reasons.append("Rahu on 7th — confusion, obsession, unstable commitment.")
         if person.venus_debil or person.moon_debil:
-            score += 8
             reasons.append("Venus/Moon weakness — loyalty and affection fracture under stress.")
         if person.third_person_risk:
-            score += 11
             reasons.append("Third-person interference risk visible in chart.")
         if person.ketu_detachment:
-            score += 7
             reasons.append("Ketu detachment — ghosting / sudden emotional exit pattern.")
-        if person.separation_yoga:
-            score += 6
 
     if sig.combined_affliction >= 50:
-        score += 10
         reasons.append("Relationship carries strong breakup signatures across both charts.")
 
-    score_i = clamp(score)
+    score_i = _compute_breakup_score(sig)
     if score_i <= 35 and not reasons:
         reasons.append("Charts do not show acute break pressure in this window — friction still needs care.")
 
@@ -659,25 +678,59 @@ def run_will_return(p1: dict, p2: dict) -> dict[str, Any]:
 def run_future_outcome(p1: dict, p2: dict) -> dict[str, Any]:
     r1, r2, sig = _load_couple(p1, p2)
     reasons: list[str] = []
+    total_afflictions = 0
 
     score = 48.0
     if sig.p1.seventh_lord_dusthana and sig.p2.seventh_lord_dusthana:
         score -= 15
+        total_afflictions += 1
         reasons.append("Both charts show weak 7th-lord foundation — long-term drift likely.")
     elif sig.p1.seventh_lord_dusthana or sig.p2.seventh_lord_dusthana:
         score -= 8
+        total_afflictions += 1
 
     if sig.p1.venus_debil and sig.p2.venus_debil:
-        score -= 12
+        venus_pen = 6 if (
+            d9_cancels_debil(r1, "Venus") or d9_cancels_debil(r2, "Venus")
+        ) else 12
+        score -= venus_pen
+        total_afflictions += 1
+        if venus_pen == 6:
+            reasons.append(
+                "Both Venus debilitated in D1 — Navamsa neech-bhang softens long-term love drain."
+            )
+
     if sig.moon_mismatch:
         score -= 8
+        total_afflictions += 1
+
     if sig.p1.reconnection_yoga or sig.p2.reconnection_yoga:
         score += 8
     if not sig.p1.separation_yoga and not sig.p2.separation_yoga:
         score += 6
 
+    jup_sign = current_jupiter_sign()
+    jupiter_buffer = jupiter_transit_protects(r1, r2, jup_sign)
+    if jupiter_buffer:
+        score += 10
+        reasons.append(
+            "Transiting Jupiter aspects Lagna, 5th, or 7th axis — healing buffer against separation."
+        )
+
     score_i = _cap_by_affliction(clamp(score), sig, harsh_cap=40, moderate_cap=52)
+    if score_i < 0:
+        score_i = 0
+    score_i = clamp(score_i)
     outcome = level_future(score_i)
+
+    dasha_down = dasha_lords_inimical(r1, r2)
+    breakup_score = _compute_breakup_score(sig)
+    breakup_high = breakup_score > 55
+    strained_band = 28 <= score_i <= 41
+    timeline_warning: str | None = None
+    if strained_band and breakup_high:
+        timeline_warning = "Current timeline validation high risk zone mein chal rahi hai."
+        reasons.insert(0, timeline_warning)
 
     if score_i >= 60:
         summary = "Trajectory can grow if both stop repeating the same emotional loop."
@@ -689,6 +742,15 @@ def run_future_outcome(p1: dict, p2: dict) -> dict[str, Any]:
         summary = "Charts lean toward emotional exhaustion — long-term stability is not assured."
         phase = "Closure or distance phase strengthening"
 
+    if dasha_down:
+        next_shift = "Down trend — running dasha lords in Shashtashtak / Dwidwadasa stress window"
+        trend_3m = "down"
+        trend_6m = "down"
+    else:
+        next_shift = "3–6 months — dasha/transit will tilt the emotional tone"
+        trend_3m = "mixed"
+        trend_6m = "up" if score_i >= 55 else "down"
+
     from vedic.love_reality.chart_proof import build_chart_proof
 
     return {
@@ -696,22 +758,40 @@ def run_future_outcome(p1: dict, p2: dict) -> dict[str, Any]:
         "score": score_i,
         "risk_level": risk_band_high_is_good(score_i),
         "outcome": outcome,
-        "confidence": clamp(55 + (100 - sig.combined_affliction) // 3, 30, 88),
+        "confidence": future_confidence(total_afflictions),
         "current_phase": phase,
-        "next_shift": "3–6 months — dasha/transit will tilt the emotional tone",
+        "next_shift": next_shift,
+        "next_shift_trend": "down" if dasha_down else "mixed",
         "timeline_flow": [
             {"period": "Now", "trend": "mixed" if score_i >= 42 else "down", "reason": summary},
-            {"period": "3 months", "trend": "mixed", "reason": "Venus/Moon periods decide warmth vs withdrawal"},
-            {"period": "6+ months", "trend": "up" if score_i >= 55 else "down", "reason": outcome},
+            {
+                "period": "3 months",
+                "trend": trend_3m,
+                "reason": (
+                    "Running dasha lords clash — warmth likely fades"
+                    if dasha_down
+                    else "Venus/Moon periods decide warmth vs withdrawal"
+                ),
+            },
+            {"period": "6+ months", "trend": trend_6m, "reason": outcome},
         ],
         "emotional_summary": summary,
         "factors": {
             "combined_affliction": str(sig.combined_affliction),
+            "jupiter_transit_buffer": str(jupiter_buffer),
+            "dasha_lords_inimical": str(dasha_down),
+            "total_afflictions": str(total_afflictions),
         },
         "reasons": (reasons + sig.synastry_notes)[:12],
-        "breakdown": {"combined_affliction": sig.combined_affliction},
+        "breakdown": {
+            "combined_affliction": sig.combined_affliction,
+            "total_afflictions": total_afflictions,
+            "breakup_cross_score": breakup_score,
+        },
+        "timeline_validation_warning": timeline_warning,
         "generated_at": None,
         "chart_proof": build_chart_proof(r1, r2, sig),
+        "engine_version": "future_outcome_v2",
     }
 
 

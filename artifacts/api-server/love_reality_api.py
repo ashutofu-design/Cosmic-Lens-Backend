@@ -3,6 +3,24 @@ from __future__ import annotations
 
 from flask import Response, jsonify, request
 
+# Bump when PDF layout/renderer changes — invalidates stale server-side report cache.
+LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v2_14"
+
+
+def _love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
+    import report_cache as _rc
+
+    cp = _rc.couple_cache_params(lang, p1, p2)
+    cp["pdf_layout"] = LOVE_REALITY_PDF_LAYOUT_VER
+    return cp
+
+
+def _force_regenerate_requested() -> bool:
+    hdr = (request.headers.get("X-Force-Regenerate") or "").strip().lower()
+    body = request.get_json(silent=True) or {}
+    flag = str(body.get("force_regenerate") or "").strip().lower()
+    return hdr in ("1", "true", "yes", "on") or flag in ("1", "true", "yes", "on")
+
 
 def register_love_reality_routes(flask_app) -> None:
     """Register POST /api/love-reality/pro-pdf (idempotent if already present)."""
@@ -34,7 +52,6 @@ def register_love_reality_routes(flask_app) -> None:
 
         import report_cache as _rc
         import couple_report_billing as _billing
-        from couple_report_api import pdf_access_gate
 
         user_id = 0
         uid_hdr = (request.headers.get("X-User-Id") or "").strip()
@@ -56,16 +73,29 @@ def register_love_reality_routes(flask_app) -> None:
                 }
             ), 401
 
-        cached_pdf, pay_err = pdf_access_gate(
-            user_id, _billing.PRODUCT_LOVE, data["p1"], data["p2"], lang
-        )
-        if pay_err:
-            return pay_err
+        cache_params = _love_reality_cache_params(lang, data["p1"], data["p2"])
+        force_regen = _force_regenerate_requested()
+        access = _billing.check_access(user_id, _billing.PRODUCT_LOVE, cache_params)
+        if not access.get("entitled"):
+            spec = _billing.catalog_for(_billing.PRODUCT_LOVE) or {}
+            return (
+                jsonify(
+                    {
+                        "error": "payment_required",
+                        "product": _billing.PRODUCT_LOVE,
+                        "label": spec.get("label"),
+                        "amount_inr": access.get("amount_inr"),
+                        "params_hash": access.get("params_hash"),
+                        "message": "Payment required for this couple. Same couple after pay = free re-download.",
+                    }
+                ),
+                402,
+            )
+        cached_pdf = None if force_regen else access.get("cached_pdf")
         if cached_pdf:
             p1n = (data["p1"].get("name") or "p1")
             p2n = (data["p2"].get("name") or "p2")
             safe = lambda s: "".join(c for c in str(s) if c.isalnum() or c in "_-")[:32] or "x"
-            cache_params = _rc.couple_cache_params(lang, data["p1"], data["p2"])
             fname = f"Love_Reality_Pro_{safe(p1n)}_{safe(p2n)}.pdf"
             return Response(
                 cached_pdf,
@@ -77,8 +107,6 @@ def register_love_reality_routes(flask_app) -> None:
                     "X-Report-Cache": "hit",
                 },
             )
-
-        cache_params = _rc.couple_cache_params(lang, data["p1"], data["p2"])
 
         try:
             bundle = compute_love_reality_bundle(

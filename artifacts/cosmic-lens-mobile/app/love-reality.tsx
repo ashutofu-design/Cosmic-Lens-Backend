@@ -239,9 +239,66 @@ export default function LoveRealityScreen() {
   const [langPickerVisible, setLangPickerVisible] = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [progressVisible, setProgressVisible] = useState(false);
   const [selectedPdfLang, setSelectedPdfLang] = useState(coerceProPdfLang(t.lang));
   const [pdfDoneVisible, setPdfDoneVisible] = useState(false);
   const pdfShareRef = useRef({ uri: "", name: "" });
+  const pdfProgress = useRef(new Animated.Value(0)).current;
+  const [pdfPct, setPdfPct] = useState(0);
+  const [pdfStage, setPdfStage] = useState("Reading both kundlis…");
+
+  useEffect(() => {
+    const sub = pdfProgress.addListener(({ value }) => {
+      const pct = Math.round(value * 100);
+      setPdfPct(pct);
+      if (pct < 15) setPdfStage("Reading both kundlis…");
+      else if (pct < 30) setPdfStage("Running 6 Love Reality engines…");
+      else if (pct < 55) setPdfStage("Blueprint vs reality analysis…");
+      else if (pct < 75) setPdfStage("Writing your 14-page Pro report…");
+      else if (pct < 92) setPdfStage("Crafting remedies & roadmap…");
+      else if (pct < 100) setPdfStage("Almost ready — finalizing PDF…");
+      else setPdfStage("Saved to My Reports!");
+    });
+    return () => pdfProgress.removeListener(sub);
+  }, [pdfProgress]);
+
+  useEffect(() => {
+    if (pdfLoading) {
+      setProgressVisible(true);
+      pdfProgress.setValue(0);
+      Animated.sequence([
+        Animated.timing(pdfProgress, {
+          toValue: 0.85,
+          duration: 70000,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        }),
+        Animated.timing(pdfProgress, {
+          toValue: 0.98,
+          duration: 90000,
+          easing: Easing.linear,
+          useNativeDriver: false,
+        }),
+      ]).start();
+    } else if (progressVisible) {
+      Animated.timing(pdfProgress, {
+        toValue: 1,
+        duration: 1500,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [pdfLoading, pdfProgress, progressVisible]);
+
+  useEffect(() => {
+    if (!progressVisible || pdfLoading || pdfPct < 100) return;
+    const timer = setTimeout(() => {
+      setProgressVisible(false);
+      pdfProgress.setValue(0);
+      router.push("/my-reports" as never);
+    }, 900);
+    return () => clearTimeout(timer);
+  }, [progressVisible, pdfLoading, pdfPct, pdfProgress]);
 
   useFocusEffect(
     useCallback(() => {
@@ -328,11 +385,11 @@ export default function LoveRealityScreen() {
         p1Name: primaryProfile.name || "You",
         p2Name: partnerProfile.name || "Partner",
         lang: selectedPdfLang,
+        forceRegenerate: true,
       });
       pdfShareRef.current = { uri: result.shareUri, name: result.fileName };
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       if (opts?.openMyReports) {
-        router.push("/my-reports" as never);
         return;
       }
       setPdfDoneVisible(true);
@@ -512,14 +569,101 @@ export default function LoveRealityScreen() {
         </Pressable>
       </Modal>
 
-      <Modal visible={pdfLoading} transparent animationType="fade">
-        <View style={cd.loadingBackdrop}>
-          <View style={[cd.loadingCard, { backgroundColor: isDark ? "#1A2135" : "#fff" }]}>
-            <ActivityIndicator size="large" color="#a855f7" />
-            <Text style={[cd.loadingTitle, { color: C.text }]}>Love Reality Pro PDF</Text>
-            <Text style={{ color: C.textMuted, fontSize: 12, textAlign: "center", marginTop: 6 }}>
-              Reading both kundlis · writing your full report…{"\n"}This may take 1–2 minutes.
-            </Text>
+      <Modal visible={progressVisible} transparent animationType="fade" onRequestClose={() => {}}>
+        <View style={cd.backdrop}>
+          {Platform.OS !== "web" ? (
+            <BlurView intensity={Platform.OS === "ios" ? 35 : 90} tint="dark" style={StyleSheet.absoluteFillObject} />
+          ) : (
+            <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.75)" }]} />
+          )}
+          <View style={cd.cardWrap}>
+            <LinearGradient colors={["#9333ea", "#ec4899", "#f59e0b"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={cd.borderGradient}>
+              <View style={[cd.card, { backgroundColor: isDark ? "#0F0A1F" : "#FFFFFF" }]}>
+                <View style={cd.progHeader}>
+                  {!pdfLoading ? (
+                    <LinearGradient colors={["#10B981", "#059669"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={cd.progIconCircle}>
+                      <Feather name="check" size={32} color="#fff" />
+                    </LinearGradient>
+                  ) : (
+                    <LinearGradient colors={["#9333ea", "#ec4899"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={cd.progIconCircle}>
+                      <Animated.View
+                        style={{
+                          transform: [{
+                            rotate: pdfProgress.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: ["0deg", "1080deg"],
+                            }),
+                          }],
+                        }}
+                      >
+                        <Feather name="loader" size={28} color="#fff" />
+                      </Animated.View>
+                    </LinearGradient>
+                  )}
+                  <Text style={[cd.progTitle, { color: C.text }]}>
+                    {!pdfLoading ? "PDF Ready!" : "Generating Love Reality Pro"}
+                  </Text>
+                  <Text style={[cd.progSub, { color: C.textDim }]}>
+                    {!pdfLoading
+                      ? "Report My Reports mein save ho gayi — opening now…"
+                      : pdfStage}
+                  </Text>
+                </View>
+
+                <View style={[cd.progTrack, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "#F3F4F6" }]}>
+                  <Animated.View
+                    style={[
+                      cd.progFillWrap,
+                      {
+                        width: pdfProgress.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: ["0%", "100%"],
+                        }),
+                      },
+                    ]}
+                  >
+                    <LinearGradient colors={["#9333ea", "#ec4899", "#f59e0b"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={cd.progFill} />
+                  </Animated.View>
+                </View>
+
+                <View style={cd.progBottom}>
+                  <Text style={[cd.progPct, { color: C.text }]}>{pdfPct}%</Text>
+                  <View style={cd.progTip}>
+                    <Feather name="zap" size={11} color="#f59e0b" />
+                    <Text style={[cd.progTipTxt, { color: C.textDim }]}>14-page Pro · 6 engines</Text>
+                  </View>
+                </View>
+
+                <View style={[cd.stageList, { borderTopColor: isDark ? "rgba(255,255,255,0.06)" : "#F3F4F6" }]}>
+                  {[
+                    { label: "Kundli + engines analyzed", at: 30 },
+                    { label: "14-page report written", at: 75 },
+                    { label: "Saved to My Reports", at: 100 },
+                  ].map((step, i) => {
+                    const done = pdfPct >= step.at;
+                    const active = !done && (i === 0 || pdfPct >= ([0, 30, 75][i] || 0));
+                    return (
+                      <View key={step.label} style={cd.stageRow}>
+                        {done ? (
+                          <LinearGradient colors={["#10B981", "#059669"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={cd.stageDot}>
+                            <Feather name="check" size={10} color="#fff" />
+                          </LinearGradient>
+                        ) : active ? (
+                          <View style={[cd.stageDot, { backgroundColor: "#9333ea" }]}>
+                            <ActivityIndicator size="small" color="#fff" />
+                          </View>
+                        ) : (
+                          <View style={[cd.stageDot, { backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "#E5E7EB" }]} />
+                        )}
+                        <Text style={[cd.stageTxt, { color: done ? C.text : C.textDim, opacity: done || active ? 1 : 0.6 }]}>
+                          {step.label}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            </LinearGradient>
           </View>
         </View>
       </Modal>
@@ -582,9 +726,21 @@ const cd = StyleSheet.create({
   continueBtn: { flex: 1.4, height: 46, borderRadius: 12, overflow: "hidden" },
   continueGrad: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 12 },
   continueTxt: { color: "#fff", fontFamily: "Nunito_700Bold", fontSize: 14 },
-  loadingBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", alignItems: "center", justifyContent: "center" },
-  loadingCard: { padding: 28, borderRadius: 20, alignItems: "center", width: "80%", maxWidth: 320 },
-  loadingTitle: { marginTop: 14, fontSize: 16, fontFamily: "Nunito_700Bold" },
+  progHeader: { alignItems: "center", marginBottom: 22 },
+  progIconCircle: { width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center", marginBottom: 14 },
+  progTitle: { fontSize: 19, fontFamily: "Nunito_700Bold", letterSpacing: -0.3, marginBottom: 6 },
+  progSub: { fontSize: 13, fontFamily: "Nunito_500Medium", textAlign: "center", lineHeight: 18, paddingHorizontal: 4, minHeight: 36 },
+  progTrack: { height: 10, borderRadius: 5, overflow: "hidden" },
+  progFillWrap: { height: "100%", borderRadius: 5, overflow: "hidden" },
+  progFill: { flex: 1 },
+  progBottom: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 10, marginBottom: 18 },
+  progPct: { fontSize: 22, fontFamily: "Nunito_700Bold", letterSpacing: -0.5 },
+  progTip: { flexDirection: "row", alignItems: "center", gap: 5, flex: 1, justifyContent: "flex-end" },
+  progTipTxt: { fontSize: 10.5, fontFamily: "Nunito_500Medium" },
+  stageList: { gap: 10, paddingTop: 14, borderTopWidth: 1 },
+  stageRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  stageDot: { width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
+  stageTxt: { fontSize: 13, fontFamily: "Nunito_500Medium", flex: 1 },
 });
 
 const s = StyleSheet.create({

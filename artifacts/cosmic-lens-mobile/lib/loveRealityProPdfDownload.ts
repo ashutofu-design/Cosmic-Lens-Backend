@@ -35,6 +35,7 @@ export async function downloadLoveRealityProPdf(opts: {
   p1Name: string;
   p2Name: string;
   lang: string;
+  forceRegenerate?: boolean;
 }): Promise<{ shareUri: string; fileName: string; savedToRegistry: boolean }> {
   const bd1 = opts.p1;
   const bd2 = opts.p2;
@@ -57,11 +58,13 @@ export async function downloadLoveRealityProPdf(opts: {
       headers: {
         ...pdfAuthHeaders(opts.user),
         Accept: "application/pdf",
+        ...(opts.forceRegenerate ? { "X-Force-Regenerate": "1" } : {}),
       },
       body: JSON.stringify({
         p1: { ...packLovePerson(bd1, opts.p1Name), tz: tz1 },
         p2: { ...packLovePerson(bd2, opts.p2Name), tz: tz2 },
         lang,
+        ...(opts.forceRegenerate ? { force_regenerate: true } : {}),
       }),
       signal: ctrl.signal,
     });

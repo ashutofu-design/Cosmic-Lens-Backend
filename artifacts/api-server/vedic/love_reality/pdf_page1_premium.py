@@ -27,19 +27,47 @@ COSMIC_50 = colors.HexColor("#F5F3FF")
 COSMIC_200 = colors.HexColor("#DDD6FE")
 GLASS_BG = colors.HexColor("#FAFAFF")
 EMERALD = colors.HexColor("#059669")
+EMERALD_BG = colors.HexColor("#D1FAE5")
 AMBER = colors.HexColor("#D97706")
+AMBER_BG = colors.HexColor("#FEF3C7")
 RED = colors.HexColor("#DC2626")
+RED_BG = colors.HexColor("#FEE2E2")
+ORANGE = colors.HexColor("#EA580C")
+ORANGE_BG = colors.HexColor("#FFEDD5")
+TEAL = colors.HexColor("#0D9488")
+TEAL_BG = colors.HexColor("#CCFBF1")
 
 _CONTENT_W = 180 * mm
+_GAUGE_SIZE = 24 * mm * 1.2  # +20%
+_GAP_SM = 1.5 * mm
+_GAP_MD = 2.5 * mm
+_GAP_LG = 3 * mm
+_EMPHASIS_TITLE = 8.8
+_EMPHASIS_BODY = 8.6
+_EMPHASIS_LEADING = 11.8
 _CARD = TableStyle([
     ("BACKGROUND", (0, 0), (-1, -1), GLASS_BG),
     ("BOX", (0, 0), (-1, -1), 0.4, COSMIC_200),
-    ("LEFTPADDING", (0, 0), (-1, -1), 5),
-    ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-    ("TOPPADDING", (0, 0), (-1, -1), 4),
-    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    ("TOPPADDING", (0, 0), (-1, -1), 5),
+    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ("VALIGN", (0, 0), (-1, -1), "TOP"),
 ])
+
+
+def _alignment_verdict_band(score: int) -> tuple[str, colors.Color, colors.Color]:
+    """Return label, text color, background for cosmic alignment score."""
+    s = max(0, min(100, int(score)))
+    if s >= 81:
+        return "Excellent", EMERALD, EMERALD_BG
+    if s >= 61:
+        return "Strong", TEAL, TEAL_BG
+    if s >= 46:
+        return "Moderate", AMBER, AMBER_BG
+    if s >= 26:
+        return "Challenging", ORANGE, ORANGE_BG
+    return "Very Challenging", RED, RED_BG
 
 
 def _score_color(value: int, invert: bool = False) -> colors.Color:
@@ -88,18 +116,76 @@ class CircularGaugeFlowable(Flowable):
             c.drawCentredString(cx, 1 * mm, self.label)
 
 
-def _section_label(text: str, H_BOLD: str) -> Paragraph:
+def _section_label(text: str, H_BOLD: str, *, size: float = 7.0) -> Paragraph:
     return Paragraph(
         f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(text.upper())}</b></font>",
-        ParagraphStyle("sl", fontName=H_BOLD, fontSize=7, leading=9, textColor=BRAND_PURPLE),
+        ParagraphStyle(
+            "sl",
+            fontName=H_BOLD,
+            fontSize=size,
+            leading=size + 2,
+            textColor=BRAND_PURPLE,
+            spaceAfter=1.5,
+        ),
     )
 
 
-def _body(text: str, H_REG: str, size: float = 7.2, leading: float = 9) -> Paragraph:
+def _emphasis_section_label(text: str, H_BOLD: str) -> Paragraph:
+    return _section_label(text, H_BOLD, size=_EMPHASIS_TITLE)
+
+
+def _body(
+    text: str,
+    H_REG: str,
+    size: float = 7.2,
+    leading: float = 9,
+    *,
+    emphasis: bool = False,
+) -> Paragraph:
+    if emphasis:
+        size = _EMPHASIS_BODY
+        leading = _EMPHASIS_LEADING
     return Paragraph(
         _safe(text or ""),
         ParagraphStyle("bd", fontName=H_REG, fontSize=size, leading=leading, textColor=TEXT_MID),
     )
+
+
+def _bullet_list(items: list[str], H_REG: str, *, max_items: int = 4) -> Paragraph:
+    lines = [f"&bull; {_safe(str(x).strip())}" for x in (items or []) if str(x).strip()][:max_items]
+    return Paragraph(
+        "<br/>".join(lines) if lines else "",
+        ParagraphStyle(
+            "bl",
+            fontName=H_REG,
+            fontSize=_EMPHASIS_BODY,
+            leading=_EMPHASIS_LEADING,
+            textColor=TEXT_MID,
+            leftIndent=2,
+            bulletIndent=0,
+            spaceBefore=1,
+        ),
+    )
+
+
+def _verdict_badge(score: int, H_BOLD: str) -> Table:
+    label, fg, bg = _alignment_verdict_band(score)
+    badge = Paragraph(
+        f"<font color='{_hex(fg)}'><b>{_safe(label.upper())}</b></font>",
+        ParagraphStyle("vb", fontName=H_BOLD, fontSize=7.2, leading=9, alignment=TA_CENTER, textColor=fg),
+    )
+    tbl = Table([[badge]], colWidths=[42 * mm])
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), bg),
+        ("BOX", (0, 0), (-1, -1), 0.35, fg),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 2.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+    ]))
+    return tbl
 
 
 def _stack_card(rows: list[Any], width: float = _CONTENT_W) -> Table:
@@ -146,41 +232,53 @@ def render_premium_page1_flowables(data: dict[str, Any], lang: str = "en") -> li
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
     ]))
     out.append(header)
-    out.append(Spacer(1, 2 * mm))
+    out.append(Spacer(1, _GAP_MD))
 
-    # Hero — gauge + summary (single Paragraph in right cell, no nesting)
+    # Hero — gauge (+20%) + verdict badge + summary
     score = int(data.get("cosmic_score") or 0)
     summary_html = (
         f"<font color='{_hex(BRAND_PURPLE)}'><b>RELATIONSHIP SUMMARY</b></font><br/>"
         f"<b>{_safe(data['p1_name'])} &amp; {_safe(data['p2_name'])}</b><br/>"
         f"{_safe(data.get('relationship_summary') or '')}"
     )
+    gauge_stack = Table(
+        [
+            [CircularGaugeFlowable(score, size=_GAUGE_SIZE, label="Cosmic Alignment")],
+            [Spacer(1, 1 * mm)],
+            [_verdict_badge(score, H_BOLD)],
+        ],
+        colWidths=[50 * mm],
+    )
+    gauge_stack.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
     hero = Table(
         [[
-            CircularGaugeFlowable(score, size=24 * mm),
+            gauge_stack,
             Paragraph(
                 summary_html,
-                ParagraphStyle("sum", fontName=H_REG, fontSize=7.2, leading=9.5, textColor=TEXT_MID),
+                ParagraphStyle("sum", fontName=H_REG, fontSize=7.8, leading=10.5, textColor=TEXT_MID),
             ),
         ]],
-        colWidths=[44 * mm, 136 * mm],
+        colWidths=[52 * mm, 128 * mm],
     )
     hero.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), GLASS_BG),
         ("BOX", (0, 0), (-1, -1), 0.4, COSMIC_200),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("ALIGN", (0, 0), (0, 0), "CENTER"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
     out.append(hero)
-    out.append(Spacer(1, 2 * mm))
+    out.append(Spacer(1, _GAP_MD))
 
     # Core metrics — 4 columns, one Paragraph each
     out.append(_section_label("Core Metrics", H_BOLD))
-    out.append(Spacer(1, 1 * mm))
+    out.append(Spacer(1, _GAP_SM))
     metrics = data.get("metrics") or []
     mcells = [_metric_cell(m, H_REG, H_BOLD) for m in metrics[:4]]
     while len(mcells) < 4:
@@ -197,17 +295,18 @@ def render_premium_page1_flowables(data: dict[str, Any], lang: str = "en") -> li
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
     ]))
     out.append(mrow)
-    out.append(Spacer(1, 2 * mm))
+    out.append(Spacer(1, _GAP_MD))
 
-    # Relationship insights — stacked rows (splittable)
-    insight_rows: list[Any] = [_section_label("Relationship Insights", H_BOLD)]
-    insight_rows.append(_body(str(data.get("insights_narrative") or ""), H_REG))
+    # Relationship insights — larger type for mobile zoom-out readability
+    insight_rows: list[Any] = [_emphasis_section_label("Relationship Insights", H_BOLD)]
+    insight_rows.append(Spacer(1, 0.5 * mm))
+    insight_rows.append(_body(str(data.get("insights_narrative") or ""), H_REG, emphasis=True))
     bullets = data.get("key_insights") or []
     if bullets:
-        bl = "<br/>".join(f"- {_safe(b)}" for b in bullets[:4])
-        insight_rows.append(Paragraph(bl, ParagraphStyle("ins", fontName=H_REG, fontSize=6.8, leading=8.5, textColor=TEXT_MID)))
+        insight_rows.append(Spacer(1, 1 * mm))
+        insight_rows.append(_bullet_list([str(b) for b in bullets], H_REG, max_items=4))
     out.append(_stack_card(insight_rows))
-    out.append(Spacer(1, 2 * mm))
+    out.append(Spacer(1, _GAP_MD))
 
     # Strengths / Challenges — text + score lines (no ProgressBar flowables in nested tables)
     def comp_lines(title: str, items: list[dict], negative: bool) -> list[Any]:
@@ -231,11 +330,11 @@ def render_premium_page1_flowables(data: dict[str, Any], lang: str = "en") -> li
     )
     sc.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     out.append(sc)
-    out.append(Spacer(1, 2 * mm))
+    out.append(Spacer(1, _GAP_MD))
 
     # Deep analysis — one Paragraph per card (2x2)
     out.append(_section_label("Deep Analysis", H_BOLD))
-    out.append(Spacer(1, 1 * mm))
+    out.append(Spacer(1, _GAP_SM))
     analysis = data.get("analysis") or []
 
     def analysis_para(block: dict) -> Paragraph:
@@ -265,27 +364,28 @@ def render_premium_page1_flowables(data: dict[str, Any], lang: str = "en") -> li
             ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ]))
         out.append(atbl)
-    out.append(Spacer(1, 2 * mm))
+    out.append(Spacer(1, _GAP_MD))
 
-    # Verdict + recommendations
+    # Verdict + recommendations — emphasis typography + concise bullets
     recs = data.get("recommendations") or []
-    rec_html = "<br/>".join(f"- {_safe(r)}" for r in recs[:3])
     footer = Table(
         [[
             _stack_card([
-                _section_label("Final Cosmic Verdict", H_BOLD),
-                _body(str(data.get("verdict") or ""), H_REG, 7, 8.5),
+                _emphasis_section_label("Final Cosmic Verdict", H_BOLD),
+                Spacer(1, 0.5 * mm),
+                _body(str(data.get("verdict") or ""), H_REG, emphasis=True),
             ], 87 * mm),
             _stack_card([
-                _section_label("Recommendations", H_BOLD),
-                Paragraph(rec_html, ParagraphStyle("rc", fontName=H_REG, fontSize=6.8, leading=8.5, textColor=TEXT_MID)),
+                _emphasis_section_label("Recommendations", H_BOLD),
+                Spacer(1, 0.5 * mm),
+                _bullet_list(recs, H_REG, max_items=4),
             ], 87 * mm),
         ]],
         colWidths=[90 * mm, 90 * mm],
     )
     footer.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     out.append(footer)
-    out.append(Spacer(1, 2 * mm))
+    out.append(Spacer(1, _GAP_MD))
     out.append(Paragraph(
         f"<font color='{_hex(TEXT_SOFT)}'>Cosmic Lens · Confidential premium report</font>",
         ParagraphStyle("ft", fontName=H_REG, fontSize=6, leading=8, alignment=TA_CENTER),

@@ -1,6 +1,7 @@
 /**
  * Love Reality Pro PDF — download, save to My Reports, web + native.
  */
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
@@ -8,6 +9,10 @@ import { Platform } from "react-native";
 import { API_BASE } from "@/lib/apiConfig";
 import { pdfAuthHeaders } from "@/lib/coupleReportCheckoutFlow";
 import { saveLocalReport } from "@/lib/localReports";
+import {
+  LOVE_REALITY_PDF_LAYOUT_STORAGE_KEY,
+  LOVE_REALITY_PDF_LAYOUT_VER,
+} from "@/lib/loveRealityPdfLayout";
 import { coerceProPdfLang } from "@/lib/proPdfLang";
 import type { BirthData } from "@/types";
 
@@ -36,6 +41,52 @@ export type LoveRealityProPdfDownloadResult = {
   reportCacheHit: boolean;
 };
 
+async function needsLayoutRefresh(): Promise<boolean> {
+  try {
+    const seen = await AsyncStorage.getItem(LOVE_REALITY_PDF_LAYOUT_STORAGE_KEY);
+    return seen !== LOVE_REALITY_PDF_LAYOUT_VER;
+  } catch {
+    return true;
+  }
+}
+
+async function markLayoutRefreshed(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(LOVE_REALITY_PDF_LAYOUT_STORAGE_KEY, LOVE_REALITY_PDF_LAYOUT_VER);
+  } catch {
+    /* ignore */
+  }
+}
+
+async function fetchLoveRealityPdf(
+  opts: {
+    user: { id: number; api_key?: string | null };
+    p1: Record<string, unknown>;
+    p2: Record<string, unknown>;
+    lang: string;
+    forceRegenerate: boolean;
+  },
+  signal: AbortSignal,
+): Promise<Response> {
+  return fetch(`${API_BASE}/api/love-reality/pro-pdf`, {
+    method: "POST",
+    headers: {
+      ...pdfAuthHeaders(opts.user),
+      Accept: "application/pdf",
+      "X-Expected-PDF-Layout": LOVE_REALITY_PDF_LAYOUT_VER,
+      ...(opts.forceRegenerate ? { "X-Force-Regenerate": "1" } : {}),
+    },
+    body: JSON.stringify({
+      p1: opts.p1,
+      p2: opts.p2,
+      lang: opts.lang,
+      pdf_layout: LOVE_REALITY_PDF_LAYOUT_VER,
+      ...(opts.forceRegenerate ? { force_regenerate: true } : {}),
+    }),
+    signal,
+  });
+}
+
 export async function downloadLoveRealityProPdf(opts: {
   user: { id: number; api_key?: string | null };
   p1: BirthData;
@@ -58,25 +109,48 @@ export async function downloadLoveRealityProPdf(opts: {
   const fileName = `Love_Reality_Pro_${safe(opts.p1Name)}_${safe(opts.p2Name)}.pdf`;
   const dest = `${FileSystem.cacheDirectory || ""}${fileName}`;
   const lang = coerceProPdfLang(opts.lang);
+  const layoutRefresh = await needsLayoutRefresh();
+  const forceRegenerate = Boolean(opts.forceRegenerate || layoutRefresh);
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 240000);
   try {
-    const resp = await fetch(`${API_BASE}/api/love-reality/pro-pdf`, {
-      method: "POST",
-      headers: {
-        ...pdfAuthHeaders(opts.user),
-        Accept: "application/pdf",
-        ...(opts.forceRegenerate ? { "X-Force-Regenerate": "1" } : {}),
-      },
-      body: JSON.stringify({
+    let resp = await fetchLoveRealityPdf(
+      {
+        user: opts.user,
         p1: { ...packLovePerson(bd1, opts.p1Name), tz: tz1 },
         p2: { ...packLovePerson(bd2, opts.p2Name), tz: tz2 },
         lang,
-        ...(opts.forceRegenerate ? { force_regenerate: true } : {}),
-      }),
-      signal: ctrl.signal,
-    });
+        forceRegenerate,
+      },
+      ctrl.signal,
+    );
+
+    let reportCacheHit =
+      (resp.headers.get("X-Report-Cache") || "").trim().toLowerCase() === "hit";
+    const layoutHeader = (resp.headers.get("X-PDF-Layout-Version") || "").trim();
+
+    if (
+      resp.ok
+      && reportCacheHit
+      && layoutHeader
+      && layoutHeader !== LOVE_REALITY_PDF_LAYOUT_VER
+      && !opts.forceRegenerate
+    ) {
+      resp = await fetchLoveRealityPdf(
+        {
+          user: opts.user,
+          p1: { ...packLovePerson(bd1, opts.p1Name), tz: tz1 },
+          p2: { ...packLovePerson(bd2, opts.p2Name), tz: tz2 },
+          lang,
+          forceRegenerate: true,
+        },
+        ctrl.signal,
+      );
+      reportCacheHit =
+        (resp.headers.get("X-Report-Cache") || "").trim().toLowerCase() === "hit";
+    }
+
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
       const detail = (err as { detail?: string }).detail;
@@ -88,8 +162,9 @@ export async function downloadLoveRealityProPdf(opts: {
       );
     }
 
-    const reportCacheHit =
-      (resp.headers.get("X-Report-Cache") || "").trim().toLowerCase() === "hit";
+    if (resp.ok && !reportCacheHit) {
+      await markLayoutRefreshed();
+    }
 
     const buf = await resp.arrayBuffer();
 

@@ -3,6 +3,7 @@ Build Love Reality Pro page-1 dashboard payload (mirrors React love-reality-repo
 """
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -22,6 +23,28 @@ def _short(text: str, max_len: int = 220) -> str:
     if len(t) <= max_len:
         return t
     return t[: max_len - 1].rsplit(" ", 1)[0] + "…"
+
+
+def _to_concise_bullets(items: list[str], *, max_items: int = 4, max_len: int = 88) -> list[str]:
+    """Split long recommendation paragraphs into short, scannable bullet lines."""
+    out: list[str] = []
+    for item in items:
+        raw = str(item or "").strip()
+        if not raw:
+            continue
+        chunks = re.split(r"(?<=[.;!?])\s+|\n+|(?:\s*[-•]\s+)", raw)
+        for chunk in chunks:
+            line = chunk.strip(" \t-•·")
+            if not line or len(line) < 8:
+                continue
+            if len(line) > max_len:
+                line = _short(line, max_len)
+            if line in out:
+                continue
+            out.append(line)
+            if len(out) >= max_items:
+                return out
+    return out[:max_items]
 
 
 def build_love_reality_page1_data(
@@ -98,17 +121,17 @@ def build_love_reality_page1_data(
     rem_bullets = remedies.get("bullets") if isinstance(remedies, dict) else []
     checklist = ctx.get("page13_checklist") or {}
     chk_bullets = checklist.get("bullets") if isinstance(checklist, dict) else []
-    recommendations = [str(x).strip() for x in (rem_bullets or chk_bullets or []) if str(x).strip()][:3]
-    if not recommendations:
-        recommendations = [
+    raw_recs = [str(x).strip() for x in (rem_bullets or chk_bullets or []) if str(x).strip()]
+    practical = [str(p).strip() for p in (pro.get("practical") or []) if str(p).strip()]
+    if practical:
+        raw_recs = practical + raw_recs
+    if not raw_recs:
+        raw_recs = [
             "Repair within 24 hours after any argument",
             "Weekly 20-minute phone-free check-in",
             "Track dasha dates — avoid ultimatums in down windows",
         ]
-
-    practical = [str(p).strip() for p in (pro.get("practical") or []) if str(p).strip()]
-    if practical:
-        recommendations = (practical + recommendations)[:3]
+    recommendations = _to_concise_bullets(raw_recs, max_items=4, max_len=88)
 
     strengths = [
         {"label": "Emotional magnetism", "value": min(100, love + 8)},

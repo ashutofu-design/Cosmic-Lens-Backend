@@ -75,7 +75,12 @@ def register_couple_report_routes(app) -> None:
         p1 = data.get("p1") or {}
         p2 = data.get("p2") or {}
         lang = (data.get("lang") or "en").strip()
-        cp = billing.cache_params_from_birth(lang, p1, p2)
+        if product == billing.PRODUCT_LOVE:
+            from love_reality_api import love_reality_cache_params
+
+            cp = love_reality_cache_params(lang, p1, p2)
+        else:
+            cp = billing.cache_params_from_birth(lang, p1, p2)
         access = billing.check_access(user.id, product, cp)
         return jsonify(
             {

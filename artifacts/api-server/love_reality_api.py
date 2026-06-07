@@ -4,10 +4,10 @@ from __future__ import annotations
 from flask import Response, jsonify, request
 
 # Bump when PDF layout/renderer changes — invalidates stale server-side report cache.
-LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v4_premium_page1_flat"
+LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v6_readability_page1"
 
 
-def _love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
+def love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
     import report_cache as _rc
 
     cp = _rc.couple_cache_params(lang, p1, p2)
@@ -15,11 +15,29 @@ def _love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
     return cp
 
 
+def _love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
+    return love_reality_cache_params(lang, p1, p2)
+
+
+def _pdf_layout_headers(*, cache_hit: bool) -> dict[str, str]:
+    from love_reality_pdf import get_last_page1_style
+
+    return {
+        "X-PDF-Layout-Version": LOVE_REALITY_PDF_LAYOUT_VER,
+        "X-PDF-Page1-Style": "cached-previous" if cache_hit else get_last_page1_style(),
+    }
+
+
 def _force_regenerate_requested() -> bool:
     hdr = (request.headers.get("X-Force-Regenerate") or "").strip().lower()
     body = request.get_json(silent=True) or {}
     flag = str(body.get("force_regenerate") or "").strip().lower()
-    return hdr in ("1", "true", "yes", "on") or flag in ("1", "true", "yes", "on")
+    if hdr in ("1", "true", "yes", "on") or flag in ("1", "true", "yes", "on"):
+        return True
+    expected = (request.headers.get("X-Expected-PDF-Layout") or "").strip()
+    if not expected:
+        expected = str(body.get("pdf_layout") or "").strip()
+    return bool(expected and expected != LOVE_REALITY_PDF_LAYOUT_VER)
 
 
 def register_love_reality_routes(flask_app) -> None:
@@ -131,7 +149,7 @@ def register_love_reality_routes(flask_app) -> None:
                     "Content-Length": str(len(cached_pdf)),
                     "Cache-Control": "private, max-age=3600",
                     "X-Report-Cache": "hit",
-                    "X-PDF-Page1-Style": "cached-previous",
+                    **_pdf_layout_headers(cache_hit=True),
                 },
             )
 
@@ -148,20 +166,32 @@ def register_love_reality_routes(flask_app) -> None:
                 lambda: render_love_reality_pro_pdf(merged, lang=lang),
             )
             render_status = "SUCCESS" if pdf_bytes and not render_err else "FAILED"
+            pdf_telemetry: dict | None = None
             try:
-                from vedic.compat.openai_pdf_telemetry import update_last_pdf_generation_fields
+                from vedic.compat.openai_pdf_telemetry import (
+                    get_last_pdf_generation_telemetry,
+                    merge_pdf_generation_into_meta,
+                    republish_last_telemetry_summary,
+                    update_last_pdf_generation_fields,
+                )
 
                 update_last_pdf_generation_fields(pdf_render_status=render_status)
+                republish_last_telemetry_summary()
+                pdf_telemetry = get_last_pdf_generation_telemetry()
+                if pdf_telemetry and isinstance(pro, dict):
+                    merge_pdf_generation_into_meta(pro.setdefault("_meta", {}), pdf_telemetry)
             except Exception:
                 pass
             try:
                 import pdf_generation_log as _pgl
 
-                pg = (pro.get("_meta") or {}).get("pdf_generation") if isinstance(pro, dict) else None
+                snap = pdf_telemetry
+                if not snap and isinstance(pro, dict):
+                    snap = (pro.get("_meta") or {}).get("pdf_generation")
                 _pgl.record_from_telemetry(
                     kind=_billing.PRODUCT_LOVE,
                     user_id=user_id,
-                    pdf_gen=pg if isinstance(pg, dict) else None,
+                    pdf_gen=snap if isinstance(snap, dict) else None,
                     report_cache_hit=False,
                     force_regenerate=force_regen,
                     render_status=render_status,
@@ -189,18 +219,28 @@ def register_love_reality_routes(flask_app) -> None:
             pdf_bytes,
             fname,
         )
-        from love_reality_pdf import get_last_page1_style
+        pdf_headers: dict[str, str] = {
+            "Content-Disposition": f'inline; filename="{fname}"',
+            "Content-Length": str(len(pdf_bytes)),
+            "Cache-Control": "private, max-age=3600",
+            "X-Report-Cache": "miss",
+            **_pdf_layout_headers(cache_hit=False),
+        }
+        try:
+            from vedic.compat.openai_pdf_telemetry import (
+                get_last_pdf_generation_telemetry,
+                response_telemetry_headers,
+            )
 
+            _pg = get_last_pdf_generation_telemetry()
+            if _pg:
+                pdf_headers.update(response_telemetry_headers(_pg))
+        except Exception:
+            pass
         return Response(
             pdf_bytes,
             mimetype="application/pdf",
-            headers={
-                "Content-Disposition": f'inline; filename="{fname}"',
-                "Content-Length": str(len(pdf_bytes)),
-                "Cache-Control": "private, max-age=3600",
-                "X-Report-Cache": "miss",
-                "X-PDF-Page1-Style": get_last_page1_style(),
-            },
+            headers=pdf_headers,
         )
 
     @flask_app.route("/api/loyalty-compare", methods=["POST", "OPTIONS"])

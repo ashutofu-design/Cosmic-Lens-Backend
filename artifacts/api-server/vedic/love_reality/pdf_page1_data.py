@@ -131,7 +131,7 @@ def build_love_reality_page1_data(
             "Weekly 20-minute phone-free check-in",
             "Track dasha dates — avoid ultimatums in down windows",
         ]
-    recommendations = _to_concise_bullets(raw_recs, max_items=3, max_len=72)
+    recommendations = _to_concise_bullets(raw_recs, max_items=5, max_len=78)
 
     strengths = [
         {"label": "Emotional magnetism", "value": min(100, love + 8)},

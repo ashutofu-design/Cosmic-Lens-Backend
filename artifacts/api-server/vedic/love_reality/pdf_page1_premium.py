@@ -1,5 +1,5 @@
 """
-Love Reality Pro — premium dashboard page 1 (ReportLab, single A4 page).
+Love Reality Pro — premium executive summary (page 1) + deep analysis (page 2).
 """
 from __future__ import annotations
 
@@ -24,7 +24,9 @@ from milan_pdf import (
 )
 
 COSMIC_200 = colors.HexColor("#DDD6FE")
-GLASS_BG = colors.HexColor("#FAFAFF")
+COSMIC_300 = colors.HexColor("#C4B5FD")
+GLASS_BG = colors.HexColor("#F8F7FF")
+GLASS_STRONG = colors.HexColor("#F3F0FF")
 EMERALD = colors.HexColor("#059669")
 EMERALD_BG = colors.HexColor("#D1FAE5")
 AMBER = colors.HexColor("#D97706")
@@ -35,15 +37,18 @@ ORANGE = colors.HexColor("#EA580C")
 ORANGE_BG = colors.HexColor("#FFEDD5")
 TEAL = colors.HexColor("#0D9488")
 TEAL_BG = colors.HexColor("#CCFBF1")
+VERDICT_BG = colors.HexColor("#F5F3FF")
 
 _CONTENT_W = 180 * mm
-_GAUGE_SIZE = 22 * mm * 1.2
-_GAP = 1.2 * mm
-_TITLE = 10.0
-_BODY = 9.5
-_BODY_LEADING = 12.5
-_LABEL = 9.0
-_CARD_PAD = 4
+_GAUGE_SIZE = 38 * mm  # hero — ~45% larger than prior compact gauge
+_GAP = 2.2 * mm
+_SECTION = 12.0
+_BODY = 11.5
+_BODY_LEADING = 14.5
+_METRIC = 11.0
+_CARD_PAD = 6
+_STRENGTH_ICONS = ("★", "♥", "✦", "◆")
+_CHALLENGE_ICONS = ("⚠", "✗", "▼", "◆")
 
 
 def _short(text: str, max_len: int = 200) -> str:
@@ -53,10 +58,11 @@ def _short(text: str, max_len: int = 200) -> str:
     return t[: max_len - 1].rsplit(" ", 1)[0] + "…"
 
 
-def _glass_box() -> TableStyle:
+def _strong_card(*, accent: bool = False) -> TableStyle:
+    bg = GLASS_STRONG if accent else GLASS_BG
     return TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), GLASS_BG),
-        ("BOX", (0, 0), (-1, -1), 0.35, COSMIC_200),
+        ("BACKGROUND", (0, 0), (-1, -1), bg),
+        ("BOX", (0, 0), (-1, -1), 0.65, COSMIC_300 if accent else COSMIC_200),
         ("LEFTPADDING", (0, 0), (-1, -1), _CARD_PAD),
         ("RIGHTPADDING", (0, 0), (-1, -1), _CARD_PAD),
         ("TOPPADDING", (0, 0), (-1, -1), _CARD_PAD),
@@ -88,19 +94,21 @@ def _score_color(value: int, invert: bool = False) -> colors.Color:
 
 
 class CircularGaugeFlowable(Flowable):
-    def __init__(self, value: int, size: float = 26 * mm, label: str = "Cosmic Alignment"):
+    """Hero cosmic alignment gauge."""
+
+    def __init__(self, value: int, size: float = _GAUGE_SIZE, label: str = "Cosmic Alignment"):
         self.value = max(0, min(100, int(value)))
         self.size = size
         self.label = label
         self.width = size
-        self.height = size + 5 * mm
+        self.height = size + 4 * mm
 
     def draw(self) -> None:
         c = self.canv
         s = self.size
-        cx, cy = s / 2, s / 2 + 1.2 * mm
-        r = s / 2 - 2.2 * mm
-        stroke = 1.8 * mm
+        cx, cy = s / 2, s / 2 + 1.5 * mm
+        r = s / 2 - 3 * mm
+        stroke = 2.6 * mm
         c.setStrokeColor(COSMIC_200)
         c.setLineWidth(stroke)
         c.circle(cx, cy, r, stroke=1, fill=0)
@@ -111,37 +119,60 @@ class CircularGaugeFlowable(Flowable):
         except Exception:
             pass
         c.arc(cx - r, cy - r, cx + r, cy + r, 90, -360 * (self.value / 100.0))
-        scale = max(0.45, float(self.size) / float(26 * mm))
+        scale = max(0.55, float(self.size) / float(38 * mm))
         c.setFillColor(BRAND_PURPLE)
-        c.setFont("Helvetica-Bold", max(9, 15 * scale))
-        c.drawCentredString(cx, cy + 0.6 * mm, str(self.value))
-        c.setFont("Helvetica", max(6, 6 * scale))
+        c.setFont("Helvetica-Bold", max(14, 22 * scale))
+        c.drawCentredString(cx, cy + 1.2 * mm, str(self.value))
+        c.setFont("Helvetica", max(8, 9 * scale))
         c.setFillColor(TEXT_MID)
-        c.drawCentredString(cx, cy - 2.8 * mm, "/ 100")
+        c.drawCentredString(cx, cy - 4 * mm, "/ 100")
         if self.label:
-            c.setFont("Helvetica-Bold", max(6, 7 * scale))
+            c.setFont("Helvetica-Bold", max(8, 9.5 * scale))
             c.setFillColor(TEXT_DARK)
-            c.drawCentredString(cx, 0.8 * mm, self.label)
+            c.drawCentredString(cx, 1.2 * mm, self.label)
 
 
-def _section_label(text: str, H_BOLD: str, *, size: float = _LABEL) -> Paragraph:
+class HorizontalProgressBar(Flowable):
+    """Scan-friendly progress bar for strengths / challenges."""
+
+    def __init__(
+        self,
+        value: int,
+        width: float,
+        *,
+        height: float = 3.8 * mm,
+        fill: colors.Color,
+        track: colors.Color | None = None,
+    ):
+        self.value = max(0, min(100, int(value)))
+        self.width = width
+        self.height = height
+        self.fill = fill
+        self.track = track or COSMIC_200
+
+    def draw(self) -> None:
+        c = self.canv
+        h = self.height
+        w = self.width
+        c.setFillColor(self.track)
+        c.roundRect(0, 0, w, h, min(h / 2, 1.8 * mm), stroke=0, fill=1)
+        fw = max(h, w * (self.value / 100.0))
+        if fw > 0:
+            c.setFillColor(self.fill)
+            c.roundRect(0, 0, fw, h, min(h / 2, 1.8 * mm), stroke=0, fill=1)
+
+
+def _section_label(text: str, H_BOLD: str, *, size: float = _SECTION) -> Paragraph:
     return Paragraph(
         f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(text.upper())}</b></font>",
         ParagraphStyle(
             "sl",
             fontName=H_BOLD,
             fontSize=size,
-            leading=size + 2.5,
+            leading=size + 3,
             textColor=BRAND_PURPLE,
-            spaceAfter=0.5,
+            spaceAfter=1,
         ),
-    )
-
-
-def _body_para(text: str, H_REG: str, *, size: float = _BODY, leading: float = _BODY_LEADING) -> Paragraph:
-    return Paragraph(
-        _safe(text or ""),
-        ParagraphStyle("bd", fontName=H_REG, fontSize=size, leading=leading, textColor=TEXT_MID),
     )
 
 
@@ -149,149 +180,202 @@ def _verdict_badge(score: int, H_BOLD: str) -> Table:
     label, fg, bg = _alignment_verdict_band(score)
     badge = Paragraph(
         f"<font color='{_hex(fg)}'><b>{_safe(label.upper())}</b></font>",
-        ParagraphStyle("vb", fontName=H_BOLD, fontSize=8.5, leading=10.5, alignment=TA_CENTER, textColor=fg),
+        ParagraphStyle("vb", fontName=H_BOLD, fontSize=10.5, leading=13, alignment=TA_CENTER, textColor=fg),
     )
-    tbl = Table([[badge]], colWidths=[40 * mm])
+    tbl = Table([[badge]], colWidths=[52 * mm])
     tbl.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), bg),
-        ("BOX", (0, 0), (-1, -1), 0.35, fg),
+        ("BOX", (0, 0), (-1, -1), 0.5, fg),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("TOPPADDING", (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
     ]))
     return tbl
 
 
-def _metric_cell(metric: dict[str, Any], H_REG: str) -> Paragraph:
+def _metric_cell(metric: dict[str, Any], H_REG: str, H_BOLD: str) -> Paragraph:
     val = int(metric.get("value") or 0)
     return Paragraph(
-        f"<b>{_safe(metric.get('label') or '')}</b> "
-        f"<font color='{_hex(BRAND_PURPLE)}'><b>{val}%</b></font><br/>"
-        f"<font size='8'>{_safe(_short(metric.get('interpretation') or '', 42))}</font>",
-        ParagraphStyle("mc", fontName=H_REG, fontSize=_BODY, leading=_BODY_LEADING, textColor=TEXT_DARK),
+        f"<b>{_safe(metric.get('label') or '')}</b><br/>"
+        f"<font color='{_hex(BRAND_PURPLE)}' size='13'><b>{val}%</b></font><br/>"
+        f"<font size='9'>{_safe(_short(metric.get('interpretation') or '', 38))}</font>",
+        ParagraphStyle("mc", fontName=H_REG, fontSize=_METRIC, leading=_BODY_LEADING, textColor=TEXT_DARK),
     )
 
 
-def _score_line(label: str, value: int, H_REG: str, *, negative: bool = False) -> Paragraph:
-    col = _hex(RED if negative else _score_color(value))
-    return Paragraph(
-        f"{_safe(label)} <font color='{col}'><b>{value}%</b></font>",
-        ParagraphStyle("sc", fontName=H_REG, fontSize=_BODY, leading=_BODY_LEADING - 1, textColor=TEXT_DARK),
+def _progress_row(
+    icon: str,
+    label: str,
+    value: int,
+    H_REG: str,
+    H_BOLD: str,
+    *,
+    negative: bool = False,
+) -> Table:
+    bar_w = 52 * mm
+    fill = RED if negative else _score_color(value)
+    pct = Paragraph(
+        f"<font color='{_hex(fill)}'><b>{value}%</b></font>",
+        ParagraphStyle("pv", fontName=H_BOLD, fontSize=10.5, leading=12, alignment=TA_RIGHT, textColor=fill),
     )
+    lbl = Paragraph(
+        _safe(label),
+        ParagraphStyle("pl", fontName=H_REG, fontSize=10.5, leading=12.5, textColor=TEXT_DARK),
+    )
+    icon_p = Paragraph(
+        f"<font color='{_hex(fill)}'><b>{icon}</b></font>",
+        ParagraphStyle("pi", fontName=H_BOLD, fontSize=12, leading=12, alignment=TA_CENTER),
+    )
+    row = Table(
+        [[icon_p, lbl, HorizontalProgressBar(value, bar_w, fill=fill), pct]],
+        colWidths=[7 * mm, 24 * mm, bar_w, 12 * mm],
+    )
+    row.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]))
+    return row
 
 
-def _footer_cell(title: str, body_html: str, H_BOLD: str, H_REG: str) -> Paragraph:
-    return Paragraph(
-        f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(title.upper())}</b></font><br/>{body_html}",
-        ParagraphStyle(
-            "fc",
-            fontName=H_REG,
-            fontSize=_BODY,
-            leading=_BODY_LEADING,
-            textColor=TEXT_MID,
-        ),
+def _side_panel(title: str, items: list[dict], H_REG: str, H_BOLD: str, *, negative: bool) -> Table:
+    icons = _CHALLENGE_ICONS if negative else _STRENGTH_ICONS
+    rows: list[Any] = [_section_label(title, H_BOLD, size=11)]
+    for i, it in enumerate((items or [])[:3]):
+        rows.append(_progress_row(
+            icons[i % len(icons)],
+            str(it.get("label") or ""),
+            int(it.get("value") or 0),
+            H_REG,
+            H_BOLD,
+            negative=negative,
+        ))
+    t = Table([[r] for r in rows], colWidths=[87 * mm])
+    t.setStyle(_strong_card())
+    return t
+
+
+def _premium_verdict_card(verdict: str, score: int, H_REG: str, H_BOLD: str) -> Table:
+    _, fg, band_bg = _alignment_verdict_band(score)
+    body = Paragraph(
+        _safe(_short(verdict, 240)),
+        ParagraphStyle("vd", fontName=H_REG, fontSize=12, leading=15, textColor=TEXT_DARK),
     )
+    title = Paragraph(
+        f"<font color='{_hex(BRAND_GOLD)}'>✦</font> "
+        f"<font color='{_hex(BRAND_PURPLE)}'><b>FINAL COSMIC VERDICT</b></font>",
+        ParagraphStyle("vt", fontName=H_BOLD, fontSize=13, leading=16, textColor=BRAND_PURPLE),
+    )
+    tbl = Table([[title], [body]], colWidths=[_CONTENT_W])
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), VERDICT_BG),
+        ("BOX", (0, 0), (-1, -1), 1.0, fg),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.5, COSMIC_300),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    return tbl
+
+
+def _recommendations_card(recs: list[str], H_REG: str, H_BOLD: str) -> Table:
+    lines = [f"&bull; {_safe(_short(str(r), 78))}" for r in recs[:5] if str(r).strip()]
+    body = Paragraph(
+        "<br/>".join(lines) if lines else "—",
+        ParagraphStyle("rc", fontName=H_REG, fontSize=_BODY, leading=_BODY_LEADING, textColor=TEXT_MID, leftIndent=4),
+    )
+    title = _section_label("Recommendations", H_BOLD, size=11.5)
+    tbl = Table([[title], [body]], colWidths=[_CONTENT_W])
+    tbl.setStyle(_strong_card())
+    return tbl
 
 
 def render_premium_page1_flowables(data: dict[str, Any], lang: str = "en") -> list[Any]:
+    """Executive summary — single premium dashboard page."""
     H_REG, H_BOLD = _font_pair(lang)
     out: list[Any] = []
 
     header = Table(
         [[
             Paragraph(
-                f"<font color='{_hex(BRAND_GOLD)}'><b>* COSMIC LENS</b></font> "
-                f"<font color='{_hex(BRAND_PURPLE)}'><b>PREMIUM</b></font> "
-                f"<font size='12'><b>Love Reality Pro</b></font> "
-                f"<b>{_safe(data['p1_name'])}</b> &middot; <b>{_safe(data['p2_name'])}</b>",
-                ParagraphStyle("hdr", fontName=H_BOLD, fontSize=10, leading=12.5, textColor=TEXT_DARK),
+                f"<font color='{_hex(BRAND_GOLD)}'><b>✦ COSMIC LENS PREMIUM</b></font><br/>"
+                f"<font size='14'><b>Love Reality Pro</b></font><br/>"
+                f"<b>{_safe(data['p1_name'])}</b> &amp; <b>{_safe(data['p2_name'])}</b>",
+                ParagraphStyle("hdr", fontName=H_BOLD, fontSize=11, leading=14, textColor=TEXT_DARK),
             ),
             Paragraph(
                 f"ID <b>{_safe(data['report_id'])}</b><br/>{_safe(data['generated_at'])}",
-                ParagraphStyle("hid", fontName=H_REG, fontSize=8.5, leading=10.5, textColor=TEXT_SOFT, alignment=TA_RIGHT),
+                ParagraphStyle("hid", fontName=H_REG, fontSize=10, leading=12.5, textColor=TEXT_SOFT, alignment=TA_RIGHT),
             ),
         ]],
-        colWidths=[122 * mm, 58 * mm],
+        colWidths=[118 * mm, 62 * mm],
     )
     header.setStyle(TableStyle([
-        ("LINEBELOW", (0, 0), (-1, -1), 0.45, COSMIC_200),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.6, COSMIC_300),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
     ]))
     out.append(header)
     out.append(Spacer(1, _GAP))
 
     score = int(data.get("cosmic_score") or 0)
-    summary_html = (
-        f"<font color='{_hex(BRAND_PURPLE)}'><b>RELATIONSHIP SUMMARY</b></font><br/>"
-        f"{_safe(_short(data.get('relationship_summary') or '', 220))}"
-    )
-    gauge_stack = Table(
+    gauge_block = Table(
         [
-            [CircularGaugeFlowable(score, size=_GAUGE_SIZE, label="Cosmic Alignment")],
+            [CircularGaugeFlowable(score, size=_GAUGE_SIZE, label="Cosmic Alignment Score")],
+            [Spacer(1, 1.5 * mm)],
             [_verdict_badge(score, H_BOLD)],
         ],
-        colWidths=[46 * mm],
+        colWidths=[_CONTENT_W],
     )
-    gauge_stack.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))
-    hero = Table(
-        [[
-            gauge_stack,
-            Paragraph(summary_html, ParagraphStyle("sum", fontName=H_REG, fontSize=_BODY, leading=_BODY_LEADING, textColor=TEXT_MID)),
-        ]],
-        colWidths=[48 * mm, 132 * mm],
+    gauge_block.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))
+    summary = Paragraph(
+        f"<font color='{_hex(BRAND_PURPLE)}'><b>RELATIONSHIP SUMMARY</b></font><br/>"
+        f"{_safe(_short(data.get('relationship_summary') or '', 260))}",
+        ParagraphStyle("sum", fontName=H_REG, fontSize=_BODY, leading=_BODY_LEADING, textColor=TEXT_MID),
     )
-    hero.setStyle(_glass_box())
+    hero = Table([[gauge_block], [summary]], colWidths=[_CONTENT_W])
+    hero.setStyle(_strong_card(accent=True))
     out.append(hero)
     out.append(Spacer(1, _GAP))
 
     metrics = data.get("metrics") or []
-    mcells = [_metric_cell(m, H_REG) for m in metrics[:4]]
+    mcells = [_metric_cell(m, H_REG, H_BOLD) for m in metrics[:4]]
     while len(mcells) < 4:
         mcells.append(Paragraph("", ParagraphStyle("e", fontName=H_REG, fontSize=1, leading=1)))
     mrow = Table([mcells], colWidths=[45 * mm] * 4)
-    st = _glass_box()
-    st.add("INNERGRID", (0, 0), (-1, -1), 0.25, COSMIC_200)
+    st = _strong_card()
+    st.add("INNERGRID", (0, 0), (-1, -1), 0.35, COSMIC_200)
+    st.add("ALIGN", (0, 0), (-1, -1), "CENTER")
     mrow.setStyle(st)
     out.append(_section_label("Core Metrics", H_BOLD))
+    out.append(Spacer(1, 1 * mm))
     out.append(mrow)
     out.append(Spacer(1, _GAP))
 
-    insight_parts = [_short(str(data.get("insights_narrative") or ""), 180)]
-    bullets = [str(b).strip() for b in (data.get("key_insights") or []) if str(b).strip()][:3]
+    insight_parts = [_short(str(data.get("insights_narrative") or ""), 220)]
+    bullets = [str(b).strip() for b in (data.get("key_insights") or []) if str(b).strip()][:4]
     if bullets:
         insight_parts.append("<br/>".join(f"&bull; {_safe(b)}" for b in bullets))
     insights = Table(
-        [[
-            Paragraph(
-                f"<font color='{_hex(BRAND_PURPLE)}'><b>RELATIONSHIP INSIGHTS</b></font><br/>"
-                + "<br/>".join(insight_parts),
-                ParagraphStyle("ins", fontName=H_REG, fontSize=_BODY, leading=_BODY_LEADING, textColor=TEXT_MID),
-            ),
-        ]],
+        [[Paragraph(
+            f"<font color='{_hex(BRAND_PURPLE)}'><b>RELATIONSHIP INSIGHTS</b></font><br/>"
+            + "<br/>".join(insight_parts),
+            ParagraphStyle("ins", fontName=H_REG, fontSize=_BODY, leading=_BODY_LEADING, textColor=TEXT_MID),
+        )]],
         colWidths=[_CONTENT_W],
     )
-    insights.setStyle(_glass_box())
+    insights.setStyle(_strong_card())
     out.append(insights)
     out.append(Spacer(1, _GAP))
 
-    strengths = data.get("strengths") or []
-    challenges = data.get("challenges") or []
-
-    def side_card(title: str, items: list[dict], negative: bool) -> Table:
-        rows: list[Any] = [
-            _section_label(title, H_BOLD, size=_LABEL),
-        ]
-        for it in items[:3]:
-            rows.append(_score_line(str(it.get("label") or ""), int(it.get("value") or 0), H_REG, negative=negative))
-        t = Table([[r] for r in rows], colWidths=[87 * mm])
-        t.setStyle(_glass_box())
-        return t
-
     sc = Table(
         [[
-            side_card("Strengths in this Connection", strengths, False),
-            side_card("Challenges in this Connection", challenges, True),
+            _side_panel("Strengths in this Connection", data.get("strengths") or [], H_REG, H_BOLD, negative=False),
+            _side_panel("Challenges in this Connection", data.get("challenges") or [], H_REG, H_BOLD, negative=True),
         ]],
         colWidths=[90 * mm, 90 * mm],
     )
@@ -299,45 +383,55 @@ def render_premium_page1_flowables(data: dict[str, Any], lang: str = "en") -> li
     out.append(sc)
     out.append(Spacer(1, _GAP))
 
-    analysis = data.get("analysis") or []
-    if analysis:
-        acells = []
-        for block in analysis[:4]:
-            sc_val = int(block.get("score") or 0)
-            acells.append(Paragraph(
-                f"<b>{_safe(block.get('title') or '')}</b><br/>"
-                f"<font color='{_hex(BRAND_PURPLE)}'><b>{sc_val}/100</b></font>",
-                ParagraphStyle("an", fontName=H_REG, fontSize=8.8, leading=11, textColor=TEXT_DARK, alignment=TA_CENTER),
-            ))
-        while len(acells) < 4:
-            acells.append(Paragraph("", ParagraphStyle("e", fontName=H_REG, fontSize=1, leading=1)))
-        atbl = Table([acells], colWidths=[45 * mm] * 4)
-        st2 = _glass_box()
-        st2.add("INNERGRID", (0, 0), (-1, -1), 0.25, COSMIC_200)
-        st2.add("ALIGN", (0, 0), (-1, -1), "CENTER")
-        atbl.setStyle(st2)
-        out.append(_section_label("Deep Analysis", H_BOLD))
-        out.append(atbl)
-        out.append(Spacer(1, _GAP))
-
-    recs = data.get("recommendations") or []
-    rec_html = "<br/>".join(f"&bull; {_safe(_short(str(r), 72))}" for r in recs[:3])
-    verdict_html = _safe(_short(str(data.get("verdict") or ""), 200))
-    footer = Table(
-        [[
-            _footer_cell("Final Cosmic Verdict", verdict_html, H_BOLD, H_REG),
-            _footer_cell("Recommendations", rec_html, H_BOLD, H_REG),
-        ]],
-        colWidths=[90 * mm, 90 * mm],
-        splitInRow=1,
-    )
-    footer.setStyle(_glass_box())
-    out.append(footer)
-    out.append(Spacer(1, 0.8 * mm))
+    out.append(_premium_verdict_card(str(data.get("verdict") or ""), score, H_REG, H_BOLD))
+    out.append(Spacer(1, _GAP))
+    out.append(_recommendations_card(data.get("recommendations") or [], H_REG, H_BOLD))
+    out.append(Spacer(1, 1 * mm))
     out.append(Paragraph(
         f"<font color='{_hex(TEXT_SOFT)}'>Cosmic Lens · Confidential premium report</font>",
-        ParagraphStyle("ft", fontName=H_REG, fontSize=7.5, leading=9, alignment=TA_CENTER),
+        ParagraphStyle("ft", fontName=H_REG, fontSize=9, leading=11, alignment=TA_CENTER),
     ))
+    out.append(PageBreak())
+    return out
+
+
+def render_deep_analysis_page2_flowables(data: dict[str, Any], lang: str = "en") -> list[Any]:
+    """Four dimension deep-dives — page 2 opener."""
+    H_REG, H_BOLD = _font_pair(lang)
+    out: list[Any] = []
+
+    out.append(_section_label("Deep Connection Analysis", H_BOLD, size=13))
+    out.append(Spacer(1, 1.5 * mm))
+    out.append(Paragraph(
+        "Detailed compatibility breakdown — emotional rhythm, communication, trust, and long-term potential.",
+        ParagraphStyle("da", fontName=H_REG, fontSize=10.5, leading=13, textColor=TEXT_MID),
+    ))
+    out.append(Spacer(1, _GAP))
+
+    analysis = data.get("analysis") or []
+
+    def block_para(item: dict) -> Paragraph:
+        sc_val = int(item.get("score") or 0)
+        return Paragraph(
+            f"<b>{_safe(item.get('title') or '')}</b> "
+            f"<font color='{_hex(BRAND_PURPLE)}'><b>{sc_val}/100</b></font><br/>"
+            f"<font size='10'>{_safe(item.get('explanation') or '')}</font>",
+            ParagraphStyle("ab", fontName=H_REG, fontSize=11, leading=14, textColor=TEXT_DARK),
+        )
+
+    rows: list[list[Any]] = []
+    for i in range(0, min(4, len(analysis)), 2):
+        left = block_para(analysis[i]) if i < len(analysis) else Paragraph("", ParagraphStyle("e", fontName=H_REG, fontSize=1))
+        right = block_para(analysis[i + 1]) if i + 1 < len(analysis) else Paragraph("", ParagraphStyle("e", fontName=H_REG, fontSize=1))
+        rows.append([left, right])
+
+    if rows:
+        grid = Table(rows, colWidths=[90 * mm, 90 * mm])
+        st = _strong_card(accent=True)
+        st.add("INNERGRID", (0, 0), (-1, -1), 0.35, COSMIC_200)
+        grid.setStyle(st)
+        out.append(grid)
+
     out.append(PageBreak())
     return out
 

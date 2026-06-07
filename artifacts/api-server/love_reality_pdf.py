@@ -37,7 +37,10 @@ from vedic.love_reality.chart_facts import enrich_bundle_for_pdf
 from vedic.love_reality import pdf_locale as LRL
 from vedic.love_reality.pdf_data_v2 import build_love_reality_pdf_v2_context
 from vedic.love_reality.pdf_page1_data import build_love_reality_page1_data
-from vedic.love_reality.pdf_page1_premium import render_premium_page1_flowables
+from vedic.love_reality.pdf_page1_premium import (
+    render_deep_analysis_page2_flowables,
+    render_premium_page1_flowables,
+)
 from vedic.love_reality.pdf_locale import love_reality_pdf_render_lang
 from vedic.love_reality.pdf_text_safe import sanitize_love_reality_pro_premium
 
@@ -210,6 +213,7 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
         _last_page1_style = "premium-dashboard"
         page1_data = build_love_reality_page1_data(ctx, bundle, pro, p1, p2)
         story.extend(render_premium_page1_flowables(page1_data, lang=lang))
+        story.extend(render_deep_analysis_page2_flowables(page1_data, lang=lang))
         _log.info(
             "[love_reality_pdf] page1 renderer=%s report_id=%s",
             _last_page1_style,

@@ -9,7 +9,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
-from reportlab.platypus import Flowable, PageBreak, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import Flowable, KeepTogether, PageBreak, Paragraph, Spacer, Table, TableStyle
 
 from milan_pdf import (
     BRAND_GOLD,
@@ -60,19 +60,27 @@ class CircularGaugeFlowable(Flowable):
         pct = self.value / 100.0
         col = _score_color(self.value)
         c.setStrokeColor(col)
-        c.setLineCap(1)
+        try:
+            c.setLineCap(1)
+        except Exception:
+            pass
         start = 90
         extent = -360 * pct
         c.arc(cx - r, cy - r, cx + r, cy + r, start, extent)
+        scale = max(0.35, float(self.size) / float(28 * mm))
+        main_sz = max(6.0, 16.0 * scale)
+        sub_sz = max(5.0, 6.0 * scale)
+        lbl_sz = max(5.0, 7.0 * scale)
         c.setFillColor(BRAND_PURPLE)
-        c.setFont("Helvetica-Bold", 16)
-        c.drawCentredString(cx, cy + 1.5 * mm, str(self.value))
-        c.setFont("Helvetica", 6)
+        c.setFont("Helvetica-Bold", main_sz)
+        c.drawCentredString(cx, cy + 1.0 * mm * scale, str(self.value))
+        c.setFont("Helvetica", sub_sz)
         c.setFillColor(TEXT_MID)
-        c.drawCentredString(cx, cy - 4 * mm, "/ 100")
-        c.setFont("Helvetica-Bold", 7)
-        c.setFillColor(TEXT_DARK)
-        c.drawCentredString(cx, 1.5 * mm, self.label)
+        c.drawCentredString(cx, cy - 3.5 * mm * scale, "/ 100")
+        if (self.label or "").strip():
+            c.setFont("Helvetica-Bold", lbl_sz)
+            c.setFillColor(TEXT_DARK)
+            c.drawCentredString(cx, 1.2 * mm, self.label)
 
 
 class ProgressBarFlowable(Flowable):
@@ -103,6 +111,11 @@ class ProgressBarFlowable(Flowable):
         col = RED if self.negative else _score_color(self.value)
         c.setFillColor(col)
         c.roundRect(0, bar_y, fill_w, bar_h, 0.7 * mm, fill=1, stroke=0)
+
+
+def _cell_box(flowables: list[Any]) -> KeepTogether:
+    """Table cell content — must be flowables, not a bare Python list."""
+    return KeepTogether([f for f in flowables if f is not None])
 
 
 def _section_label(text: str, H_BOLD: str) -> Paragraph:
@@ -160,7 +173,7 @@ def render_premium_page1_flowables(data: dict[str, Any], lang: str = "en") -> li
     header = Table(
         [[
             Paragraph(
-                f"<font color='{_hex(BRAND_GOLD)}'><b>✦ COSMIC LENS</b></font> "
+                f"<font color='{_hex(BRAND_GOLD)}'><b>* COSMIC LENS</b></font> "
                 f"<font color='{_hex(BRAND_PURPLE)}'><b>PREMIUM</b></font><br/>"
                 f"<font size='14'><b>Love Reality Pro</b></font><br/>"
                 f"<b>{_safe(data['p1_name'])}</b> · <b>{_safe(data['p2_name'])}</b>",
@@ -204,7 +217,7 @@ def render_premium_page1_flowables(data: dict[str, Any], lang: str = "en") -> li
         _body(str(data.get("relationship_summary") or ""), H_REG, 7.5, 9.5),
     ]
     summary_tbl = Table(
-        [[summary_block]],
+        [[_cell_box(summary_block)]],
         colWidths=[126 * mm],
         style=TableStyle([
             ("BACKGROUND", (0, 0), (-1, -1), GLASS_BG),
@@ -239,12 +252,12 @@ def render_premium_page1_flowables(data: dict[str, Any], lang: str = "en") -> li
     ]
     bullets = data.get("key_insights") or []
     if bullets:
-        bl = "<br/>".join(f"✦ {_safe(b)}" for b in bullets[:4])
+        bl = "<br/>".join(f"- {_safe(b)}" for b in bullets[:4])
         insight_lines.append(
             Paragraph(bl, ParagraphStyle("ins", fontName=H_REG, fontSize=6.8, leading=8.5, textColor=TEXT_MID))
         )
     insights_tbl = Table(
-        [[insight_lines]],
+        [[_cell_box(insight_lines)]],
         colWidths=[174 * mm],
         style=TableStyle([
             ("BACKGROUND", (0, 0), (-1, -1), GLASS_BG),
@@ -299,14 +312,14 @@ def render_premium_page1_flowables(data: dict[str, Any], lang: str = "en") -> li
         return Table(
             [[
                 ring,
-                [
+                _cell_box([
                     Paragraph(
                         f"<b>{_safe(block.get('title') or '')}</b>  "
                         f"<font color='{_hex(BRAND_PURPLE)}'>{score}/100</font>",
                         ParagraphStyle("at", fontName=H_BOLD, fontSize=7.5, leading=9, textColor=TEXT_DARK),
                     ),
                     _body(str(block.get("explanation") or ""), H_REG, 6.8, 8.5),
-                ],
+                ]),
             ]],
             colWidths=[14 * mm, 68 * mm],
             style=TableStyle([
@@ -333,14 +346,14 @@ def render_premium_page1_flowables(data: dict[str, Any], lang: str = "en") -> li
 
     # Footer: verdict + recommendations
     recs = data.get("recommendations") or []
-    rec_html = "<br/>".join(f"▸ {_safe(r)}" for r in recs[:3])
+    rec_html = "<br/>".join(f"- {_safe(r)}" for r in recs[:3])
     footer = Table(
         [[
             Table(
-                [[
+                [[_cell_box([
                     _section_label("Final Cosmic Verdict", H_BOLD),
                     _body(str(data.get("verdict") or ""), H_REG, 7.2, 9),
-                ]],
+                ])]],
                 colWidths=[84 * mm],
                 style=TableStyle([
                     ("BACKGROUND", (0, 0), (-1, -1), COSMIC_50),
@@ -351,10 +364,10 @@ def render_premium_page1_flowables(data: dict[str, Any], lang: str = "en") -> li
                 ]),
             ),
             Table(
-                [[
+                [[_cell_box([
                     _section_label("Recommendations", H_BOLD),
                     Paragraph(rec_html, ParagraphStyle("rc", fontName=H_REG, fontSize=6.8, leading=8.5, textColor=TEXT_MID)),
-                ]],
+                ])]],
                 colWidths=[84 * mm],
                 style=TableStyle([
                     ("BACKGROUND", (0, 0), (-1, -1), GLASS_BG),

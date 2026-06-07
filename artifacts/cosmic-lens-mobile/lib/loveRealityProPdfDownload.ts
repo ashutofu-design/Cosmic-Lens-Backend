@@ -28,6 +28,14 @@ export function packLovePerson(bd: BirthData, name?: string) {
   };
 }
 
+export type LoveRealityProPdfDownloadResult = {
+  shareUri: string;
+  fileName: string;
+  savedToRegistry: boolean;
+  /** Server returned a cached PDF — no new LLM / engine run. */
+  reportCacheHit: boolean;
+};
+
 export async function downloadLoveRealityProPdf(opts: {
   user: { id: number; api_key?: string | null };
   p1: BirthData;
@@ -35,8 +43,9 @@ export async function downloadLoveRealityProPdf(opts: {
   p1Name: string;
   p2Name: string;
   lang: string;
+  /** Default false — reuse server-saved PDF when same couple + lang already generated. */
   forceRegenerate?: boolean;
-}): Promise<{ shareUri: string; fileName: string; savedToRegistry: boolean }> {
+}): Promise<LoveRealityProPdfDownloadResult> {
   const bd1 = opts.p1;
   const bd2 = opts.p2;
   if (bd1.lat == null || bd1.lon == null || bd2.lat == null || bd2.lon == null) {
@@ -70,10 +79,17 @@ export async function downloadLoveRealityProPdf(opts: {
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
-      throw new Error((err as { error?: string; message?: string }).message
+      const detail = (err as { detail?: string }).detail;
+      throw new Error(
+        detail
+        || (err as { message?: string }).message
         || (err as { error?: string }).error
-        || `PDF failed (${resp.status})`);
+        || `PDF failed (${resp.status})`,
+      );
     }
+
+    const reportCacheHit =
+      (resp.headers.get("X-Report-Cache") || "").trim().toLowerCase() === "hit";
 
     const buf = await resp.arrayBuffer();
 
@@ -120,11 +136,12 @@ export async function downloadLoveRealityProPdf(opts: {
             title: `${opts.p1Name} & ${opts.p2Name} — Love Reality PRO`,
             subtitle: `Love Compatibility PDF · ${new Date().toLocaleDateString()}`,
             sourceUri: dataUrl,
+            restored: reportCacheHit,
           });
           savedToRegistry = true;
         } catch { /* ignore */ }
       }
-      return { shareUri: dataUrl || dest, fileName, savedToRegistry };
+      return { shareUri: dataUrl || dest, fileName, savedToRegistry, reportCacheHit };
     }
 
     const bytes = new Uint8Array(buf);
@@ -149,6 +166,7 @@ export async function downloadLoveRealityProPdf(opts: {
         title: `${opts.p1Name} & ${opts.p2Name} — Love Reality PRO`,
         subtitle: `Love Compatibility PDF · ${new Date().toLocaleDateString()}`,
         sourceUri: dest,
+        restored: reportCacheHit,
       });
       if (saved?.localUri) {
         shareUri = saved.localUri;
@@ -156,7 +174,7 @@ export async function downloadLoveRealityProPdf(opts: {
       }
     } catch { /* ignore */ }
 
-    return { shareUri, fileName, savedToRegistry };
+    return { shareUri, fileName, savedToRegistry, reportCacheHit };
   } finally {
     clearTimeout(timer);
   }

@@ -4,6 +4,7 @@ Love Reality Pro PDF renderer — 14-page premium layout (v2).
 from __future__ import annotations
 
 import io
+import logging
 import os
 from datetime import datetime
 from typing import Any
@@ -39,6 +40,8 @@ from vedic.love_reality.pdf_page1_data import build_love_reality_page1_data
 from vedic.love_reality.pdf_page1_premium import render_premium_page1_flowables
 from vedic.love_reality.pdf_locale import love_reality_pdf_render_lang
 from vedic.love_reality.pdf_text_safe import sanitize_love_reality_pro_premium
+
+_log = logging.getLogger(__name__)
 
 
 def _section_page(
@@ -192,12 +195,16 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
 
     story: list[Any] = []
 
-    # §1 Premium dashboard (page 1)
+    # §1 Premium dashboard (page 1) — fallback to legacy if render fails
     if (os.environ.get("LOVE_REALITY_PDF_PAGE1_LEGACY") or "").strip().lower() in ("1", "true", "yes"):
         story.extend(_cover_dashboard(s, p1, p2, ctx, lang))
     else:
-        page1_data = build_love_reality_page1_data(ctx, bundle, pro, p1, p2)
-        story.extend(render_premium_page1_flowables(page1_data, lang=lang))
+        try:
+            page1_data = build_love_reality_page1_data(ctx, bundle, pro, p1, p2)
+            story.extend(render_premium_page1_flowables(page1_data, lang=lang))
+        except Exception as exc:
+            _log.warning("[love_reality_pdf] premium page1 failed, using legacy: %s", exc)
+            story.extend(_cover_dashboard(s, p1, p2, ctx, lang))
 
     bp = ctx["page2_3_blueprint"]
     story.extend(_section_page(

@@ -7,6 +7,36 @@ from typing import Any
 from vedic.compat.premium_chapters import CHAPTER_BODY_KEY
 
 _DEVA_RE = re.compile(r"[\u0900-\u097F\u1CD0-\u1CFF\uA8E0-\uA8FF]+")
+_SNAKE_TOKEN_RE = re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b", re.IGNORECASE)
+_KEBAB_TOKEN_RE = re.compile(r"\b[a-z][a-z0-9]*(?:-[a-z0-9]+)+\b", re.IGNORECASE)
+
+
+def humanize_display_tokens(text: str) -> str:
+    if not text:
+        return ""
+
+    def _snake_repl(match: re.Match[str]) -> str:
+        return match.group(0).replace("_", " ")
+
+    def _kebab_repl(match: re.Match[str]) -> str:
+        return match.group(0).replace("-", " ")
+
+    def _clean_inline(chunk: str) -> str:
+        chunk = _SNAKE_TOKEN_RE.sub(_snake_repl, chunk)
+        chunk = _KEBAB_TOKEN_RE.sub(_kebab_repl, chunk)
+        chunk = re.sub(r"[-–—]", " ", chunk)
+        return re.sub(r"[ \t]+", " ", chunk).strip()
+
+    if "\n" in text:
+        paras = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+        if len(paras) > 1:
+            return "\n\n".join(_clean_inline(p) for p in paras if _clean_inline(p))
+    return _clean_inline(text)
+
+
+def humanize_snake_tokens(text: str) -> str:
+    """Back-compat alias."""
+    return humanize_display_tokens(text)
 
 _CHAPTER_FALLBACK_KEYS = (
     ("love_connection", "love_compatibility"),
@@ -43,12 +73,28 @@ def _engine_fallback(bundle: dict | None, chapter_key: str) -> str:
     return ""
 
 
-def _sanitize_str(value: str, *, min_len: int = 80, fallback: str = "") -> str:
-    cleaned = strip_devanagari(value)
+def _meaningful_paragraph_count(text: str, *, min_words: int = 20) -> int:
+    parts = [p.strip() for p in re.split(r"\n\s*\n", (text or "").strip()) if p.strip()]
+    return sum(1 for p in parts if len(p.split()) >= min_words)
+
+
+def _sanitize_str(
+    value: str,
+    *,
+    min_len: int = 80,
+    fallback: str = "",
+    preserve_long_prose: bool = True,
+) -> str:
+    cleaned = humanize_snake_tokens(strip_devanagari(value))
+    if preserve_long_prose and (
+        len(cleaned) >= 500
+        or _meaningful_paragraph_count(cleaned, min_words=25) >= 2
+    ):
+        return cleaned
     if len(cleaned) >= min_len:
         return cleaned
-    fb = strip_devanagari(fallback)
-    if len(fb) >= min_len:
+    fb = humanize_snake_tokens(strip_devanagari(fallback))
+    if len(cleaned) < 120 and len(fb) >= min_len:
         return fb
     if cleaned:
         return cleaned
@@ -84,21 +130,30 @@ def sanitize_love_reality_pro_premium(pro: dict, bundle: dict | None = None) -> 
         key = str(ch.get("key") or "").strip().lower()
         body = str(ch.get(CHAPTER_BODY_KEY) or ch.get("full_read") or "").strip()
         fb = _engine_fallback(bundle, key)
-        fixed = _sanitize_str(body, min_len=120, fallback=fb)
+        fixed = _sanitize_str(body, min_len=120, fallback=fb, preserve_long_prose=True)
         ch[CHAPTER_BODY_KEY] = fixed
         if ch.get("full_read"):
             ch["full_read"] = fixed
         gr = str(ch.get("grounding") or "").strip()
         if gr:
-            ch["grounding"] = _sanitize_str(gr, min_len=20, fallback=fb[:280])
+            ch["grounding"] = _sanitize_str(
+                gr, min_len=20, fallback=fb[:280], preserve_long_prose=True
+            )
     for field in ("hidden_truth", "verdict"):
         if out.get(field):
-            out[field] = _sanitize_str(str(out[field]), min_len=40, fallback="")
+            out[field] = _sanitize_str(
+                str(out[field]), min_len=40, fallback="", preserve_long_prose=True
+            )
     for list_key in ("special", "damage", "practical"):
         items = out.get(list_key)
         if isinstance(items, list):
             out[list_key] = [
-                _sanitize_str(str(x), min_len=12, fallback="")
+                _sanitize_str(
+                    str(x),
+                    min_len=80 if list_key == "practical" else 12,
+                    fallback="",
+                    preserve_long_prose=True,
+                )
                 for x in items
                 if str(x).strip()
             ]

@@ -112,8 +112,6 @@ def _build_remedies(bundle: dict, pro: dict) -> list[str]:
             out.append(f"{name}: Saturn on 7th — Saturday sesame oil lamp; patience rituals, no ultimatums on Saturdays.")
         if r.occupants(7) and "Mars" in r.occupants(7):
             out.append(f"{name}: Mars on 7th — Tuesday Hanuman chalisa; cool-down before replying in anger.")
-    for p in (pro.get("practical") or [])[:2]:
-        out.append(str(p).strip())
     if not out:
         out.append(
             "Joint: Name friction early — one partner initiates repair within 24 hours after any argument."
@@ -162,22 +160,28 @@ def build_love_reality_pdf_v2_context(
     )
     love_narr = _chapter_body(pro, "love_connection") or lc.get("emotional_summary") or ""
 
+    breakup_narr = _chapter_body(pro, "breakup") or ""
+    loyalty_narr = _chapter_body(pro, "loyalty") or ""
     root_parts = []
-    if bu.get("reasons"):
-        root_parts.extend(str(r) for r in (bu.get("reasons") or [])[:3])
-    if ly.get("reasons"):
-        root_parts.extend(str(r) for r in (ly.get("reasons") or [])[:2])
-    occ12 = KundliReader(k1).occupants(12) or KundliReader(k2).occupants(12)
-    if occ12:
-        root_parts.append(f"Hidden desire axis (12th house): {', '.join(set(occ12))} pressure.")
-    merc1 = KundliReader(k1).planet("Mercury")
-    merc2 = KundliReader(k2).planet("Mercury")
-    if merc1 and merc2 and merc1.get("sign") != merc2.get("sign"):
-        root_parts.append(
-            f"Mercury mismatch — {merc1.get('sign')} vs {merc2.get('sign')}: communication style clash."
-        )
-    root_narr = _chapter_body(pro, "breakup") or _chapter_body(pro, "loyalty")
-    root_cause = root_narr or "\n".join(root_parts) or bu.get("emotional_summary") or ""
+    if breakup_narr:
+        root_parts.append(breakup_narr)
+    if loyalty_narr and loyalty_narr not in root_parts:
+        root_parts.append(loyalty_narr)
+    if not root_parts:
+        if bu.get("reasons"):
+            root_parts.extend(str(r) for r in (bu.get("reasons") or [])[:3])
+        if ly.get("reasons"):
+            root_parts.extend(str(r) for r in (ly.get("reasons") or [])[:2])
+        occ12 = KundliReader(k1).occupants(12) or KundliReader(k2).occupants(12)
+        if occ12:
+            root_parts.append(f"Hidden desire axis (12th house): {', '.join(set(occ12))} pressure.")
+        merc1 = KundliReader(k1).planet("Mercury")
+        merc2 = KundliReader(k2).planet("Mercury")
+        if merc1 and merc2 and merc1.get("sign") != merc2.get("sign"):
+            root_parts.append(
+                f"Mercury mismatch — {merc1.get('sign')} vs {merc2.get('sign')}: communication style clash."
+            )
+    root_cause = "\n\n".join(p for p in root_parts if p) or bu.get("emotional_summary") or ""
 
     harmony = _chapter_body(pro, "will_return") or _chapter_body(pro, "future_outcome")
     if not harmony:
@@ -219,6 +223,7 @@ def build_love_reality_pdf_v2_context(
     flags = list(rf.get("reasons") or [])[:8]
     if not flags:
         flags = ["Monitor unspoken resentment — chart shows friction under stress."]
+    red_flags_narr = _chapter_body(pro, "red_flags") or ""
 
     loyalty_rows = []
     pp = ly.get("per_person") or {}
@@ -233,6 +238,10 @@ def build_love_reality_pdf_v2_context(
     else:
         loyalty_rows.append(_score_row("Couple loyalty", loyalty, ly.get("risk_level") or ""))
 
+    practical = [str(p).strip() for p in (pro.get("practical") or []) if str(p).strip()]
+    remedies_body = practical[0] if practical else ""
+    checklist_body = practical[1] if len(practical) > 1 else ""
+
     checklist = [
         "After any fight: repair within 24 hours — chart shows delay stacks resentment.",
         "No major decisions during Mercury retrograde on communication themes.",
@@ -240,7 +249,7 @@ def build_love_reality_pdf_v2_context(
         "Name the hidden fear (ego / jealousy / distance) once per month — 12th-house pressure.",
         "Track dasha window dates above — avoid ultimatums during AD down-trend.",
     ]
-    for item in (pro.get("practical") or [])[:2]:
+    for item in practical[2:]:
         checklist.append(str(item).strip())
 
     closing = (pro.get("verdict") or "").strip() or bundle.get("narrative_bridge") or (
@@ -282,14 +291,24 @@ def build_love_reality_pdf_v2_context(
         "page6_root_cause": root_cause,
         "page7_loyalty": {
             "rows": loyalty_rows,
+            "body": loyalty_narr or ly.get("emotional_summary") or "",
             "summary": ly.get("emotional_summary") or "",
             "behavior": ly.get("behavior_type") or "",
         },
-        "page8_red_flags": flags,
+        "page8_red_flags": {
+            "body": red_flags_narr,
+            "bullets": flags,
+        },
         "page9_harmony": harmony,
         "page10_dasha": dasha_lines,
         "page11_roadmap": roadmap,
-        "page12_remedies": _build_remedies(bundle, pro),
-        "page13_checklist": checklist[:7],
+        "page12_remedies": {
+            "body": remedies_body,
+            "bullets": _build_remedies(bundle, pro),
+        },
+        "page13_checklist": {
+            "body": checklist_body,
+            "bullets": checklist[:7],
+        },
         "page14_closing": closing,
     }

@@ -238,14 +238,17 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
     story.extend(_section_page(
         s, 7, "LOYALTY", "Loyalty, Trust & Psychological Traits",
         loyalty.get("behavior") or "Behavioral stability dashboard",
-        loyalty.get("summary") or "", lang=lang, table_rows=loy_rows,
+        loyalty.get("body") or loyalty.get("summary") or "", lang=lang, table_rows=loy_rows,
     ))
 
+    red_flags = ctx["page8_red_flags"]
+    rf_body = red_flags.get("body") if isinstance(red_flags, dict) else ""
+    rf_bullets = red_flags.get("bullets") if isinstance(red_flags, dict) else red_flags
     story.extend(_section_page(
         s, 8, "RED FLAGS", "Red Flags Matrix",
         "Core operational friction points",
-        "Chart-derived warning signals for this couple:",
-        lang=lang, bullets=ctx["page8_red_flags"],
+        rf_body or "Chart-derived warning signals for this couple:",
+        lang=lang, bullets=rf_bullets,
     ))
 
     # §3 Timelines (9–11)
@@ -272,18 +275,24 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
     ))
 
     # §4 Remedies & Close (12–14)
+    remedies = ctx["page12_remedies"]
+    rem_body = remedies.get("body") if isinstance(remedies, dict) else ""
+    rem_bullets = remedies.get("bullets") if isinstance(remedies, dict) else remedies
     story.extend(_section_page(
         s, 12, "UPAY", "Planetary Counter Measures",
         "Customized structural remedies for afflicted planets",
-        "Personalized upay blocks — chart-balanced actions:",
-        lang=lang, bullets=ctx["page12_remedies"],
+        rem_body or "Personalized upay blocks — chart-balanced actions:",
+        lang=lang, bullets=rem_bullets,
     ))
 
+    checklist = ctx["page13_checklist"]
+    chk_body = checklist.get("body") if isinstance(checklist, dict) else ""
+    chk_bullets = checklist.get("bullets") if isinstance(checklist, dict) else checklist
     story.extend(_section_page(
         s, 13, "ACTION", "Relationship Checklist",
         "Human action plan to break negative astrology patterns",
-        "Physical communication guidelines for this bond:",
-        lang=lang, bullets=ctx["page13_checklist"],
+        chk_body or "Physical communication guidelines for this bond:",
+        lang=lang, bullets=chk_bullets,
     ))
 
     # Page 14 — closing (no page break after)

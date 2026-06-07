@@ -8,7 +8,6 @@ import json
 import logging
 import os
 import re
-import time
 from typing import Any
 
 from vedic.love_reality.pdf_text_safe import (
@@ -24,8 +23,6 @@ from vedic.compat.llm_polish import (
 from vedic.compat.premium_chapters import (
     CHAPTER_BODY_KEY,
     normalize_pro_pdf_lang,
-    build_premium_regen_chapter_system_prompt,
-    _chapter_body_depth_failure_reason,
     _openai_regen_chapters_depth,
     _parsed_chapter_row_for_key,
 )
@@ -38,6 +35,14 @@ _DEFAULT_MODEL = os.environ.get("LOVE_REALITY_PREMIUM_MODEL") or os.environ.get(
     "COMPAT_PREMIUM_MODEL", "gpt-4o"
 )
 LOVE_CHAPTER_KEYS = ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6"]
+LOVE_SEMANTIC_KEYS = [
+    "love_connection",
+    "breakup",
+    "loyalty",
+    "will_return",
+    "future_outcome",
+    "red_flags",
+]
 KEY_BY_CH = {
     "ch1": "love_connection",
     "ch2": "breakup",
@@ -46,6 +51,15 @@ KEY_BY_CH = {
     "ch5": "future_outcome",
     "ch6": "red_flags",
 }
+_LOVE_MIN_CHAPTER_WORDS = int(os.environ.get("LOVE_REALITY_MIN_CHAPTER_WORDS", "220"))
+_LOVE_MIN_CHAPTER_CHARS = int(os.environ.get("LOVE_REALITY_MIN_CHAPTER_CHARS", "1200"))
+_LOVE_MIN_PARAGRAPHS = int(os.environ.get("LOVE_REALITY_MIN_PARAGRAPHS", "3"))
+_LOVE_MIN_PARA_WORDS = int(os.environ.get("LOVE_REALITY_MIN_PARA_WORDS", "25"))
+_BULLET_LINE_RE = re.compile(r"^\s*[-•*]\s+", re.M)
+_CHART_SIGNAL_RE = re.compile(
+    r"\b(?:Lagna|Moon|Mercury|Venus|Jupiter|Mars|Saturn|Rahu|Ketu|7th|12th|Upapada|UL|dasha|house)\b",
+    re.I,
+)
 
 
 def _env_flag(name: str, default: str = "0") -> bool:
@@ -53,9 +67,12 @@ def _env_flag(name: str, default: str = "0") -> bool:
 
 
 def _polish_enabled() -> bool:
-    if _env_flag("LOVE_REALITY_PREMIUM_POLISH"):
+    env = (os.environ.get("LOVE_REALITY_PREMIUM_POLISH") or "").strip().lower()
+    if env in ("0", "false", "no", "off"):
+        return False
+    if env in ("1", "true", "yes", "on"):
         return True
-    return _env_flag("COMPAT_PREMIUM_POLISH", "0")
+    return _env_flag("COMPAT_PREMIUM_POLISH", "1")
 
 
 def _depth_regen_enabled() -> bool:
@@ -101,13 +118,14 @@ def _love_polish_fingerprint(bundle: dict, lang: str, model: str) -> str:
 def _love_polish_cache_depth_ok(hit: dict) -> bool:
     """Reject shallow cached polish (treat as miss)."""
     chapters = hit.get("chapters") or []
-    if len(chapters) < 4:
+    if len(chapters) < 6:
         return False
     ok_bodies = 0
     for ch in chapters:
-        if len((ch.get(CHAPTER_BODY_KEY) or ch.get("chapter_body") or "").strip()) >= 120:
+        body = (ch.get(CHAPTER_BODY_KEY) or ch.get("chapter_body") or "").strip()
+        if _love_chapter_depth_failure_reason(body) is None:
             ok_bodies += 1
-    return ok_bodies >= 4
+    return ok_bodies >= 6
 
 
 def _empty_shell(model: str, reason: str) -> dict[str, Any]:
@@ -228,6 +246,108 @@ def _facts_summary(bundle: dict) -> str:
     return "\n".join(parts)
 
 
+def _love_word_count(text: str) -> int:
+    return len(re.findall(r"\b[\w']+\b", text or ""))
+
+
+def _love_meaningful_paragraph_count(body: str) -> int:
+    parts = [p.strip() for p in re.split(r"\n\s*\n", (body or "").strip()) if p.strip()]
+    return sum(1 for p in parts if _love_word_count(p) >= _LOVE_MIN_PARA_WORDS)
+
+
+def _love_is_bullet_heavy(body: str) -> bool:
+    t = (body or "").strip()
+    if not t:
+        return False
+    lines = [ln.strip() for ln in t.splitlines() if ln.strip()]
+    if not lines:
+        return False
+    bullet_lines = sum(1 for ln in lines if _BULLET_LINE_RE.match(ln))
+    if bullet_lines >= 3 and bullet_lines >= len(lines) * 0.55:
+        return True
+    return t.count("•") >= 4 and _love_word_count(t) < _LOVE_MIN_CHAPTER_WORDS
+
+
+def _love_chapter_depth_failure_reason(body: str) -> str | None:
+    t = (body or "").strip()
+    if not t:
+        return "empty"
+    wc = _love_word_count(t)
+    if wc < _LOVE_MIN_CHAPTER_WORDS:
+        return f"words:{wc}<{_LOVE_MIN_CHAPTER_WORDS}"
+    if len(t) < _LOVE_MIN_CHAPTER_CHARS:
+        return f"chars:{len(t)}<{_LOVE_MIN_CHAPTER_CHARS}"
+    mpc = _love_meaningful_paragraph_count(t)
+    if mpc < _LOVE_MIN_PARAGRAPHS:
+        return f"paras:{mpc}<{_LOVE_MIN_PARAGRAPHS}"
+    if _love_is_bullet_heavy(t):
+        return "bullet_heavy"
+    if len(_CHART_SIGNAL_RE.findall(t)) < 2:
+        return "chart_signals<2"
+    return None
+
+
+def _normalize_chapter_body_from_llm(body: str) -> str:
+    if not body:
+        return ""
+    if isinstance(body, list):
+        body = "\n\n".join(str(x).strip() for x in body if str(x).strip())
+    text = str(body).strip()
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    if _love_is_bullet_heavy(text):
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        prose_bits = [
+            re.sub(r"^[-•*]\s+", "", ln).strip()
+            for ln in lines
+            if _BULLET_LINE_RE.match(ln)
+        ]
+        if prose_bits:
+            grouped: list[str] = []
+            for i in range(0, len(prose_bits), 2):
+                grouped.append(" ".join(prose_bits[i : i + 2]))
+            text = "\n\n".join(grouped)
+    return text
+
+
+def _parse_love_premium_response(parsed: dict) -> dict:
+    chapters = parsed.get("chapters")
+    if isinstance(chapters, list):
+        for ch in chapters:
+            if not isinstance(ch, dict):
+                continue
+            raw = ch.get(CHAPTER_BODY_KEY) or ch.get("full_read") or ch.get("body") or ""
+            normalized = _normalize_chapter_body_from_llm(raw)
+            ch[CHAPTER_BODY_KEY] = normalized
+            if ch.get("full_read"):
+                ch["full_read"] = normalized
+    practical = parsed.get("practical")
+    if isinstance(practical, str) and practical.strip():
+        parsed["practical"] = [practical.strip()]
+    elif isinstance(practical, list):
+        parsed["practical"] = [str(x).strip() for x in practical if str(x).strip()]
+    return parsed
+
+
+def _build_love_regen_system_prompt(lang: str) -> str:
+    lang = polish_content_lang(lang)
+    script = {"en": "English", "hn": "Roman Hindi (Hinglish)"}[lang]
+    return f"""You are re-expanding Love Reality Pro PDF chapters that failed depth QA.
+
+Return STRICT JSON with ONE top-level key `chapters` (array).
+Each element: {{"key": "<semantic_key>", "chapter_body": "<long prose>"}}.
+
+Valid keys ONLY: {", ".join(LOVE_SEMANTIC_KEYS)}.
+
+DEPTH CONTRACT (non-negotiable for every chapter_body):
+- Minimum {_LOVE_MIN_PARAGRAPHS} paragraphs separated by \\n\\n.
+- Minimum {_LOVE_MIN_CHAPTER_WORDS} words total (~250–350 words per chapter).
+- Continuous consultation prose — weave chart facts (Lagna, Moon, 7th lord, 12th house, Mercury, Venus, dasha) into a human story.
+- FORBIDDEN: bullet lists, one-sentence summaries, repeating engine reason strings verbatim, parameter dumps.
+- Compare both partners' charts inside the narrative (destiny blueprint vs lived reality).
+
+Write entirely in {script}. Latin letters ONLY — no Devanagari."""
+
+
 def _build_system_prompt(lang: str) -> str:
     lang = polish_content_lang(lang)
     script = {"en": "English", "hn": "Roman Hindi (Hinglish)"}[lang]
@@ -243,14 +363,14 @@ def _build_system_prompt(lang: str) -> str:
     )
     return f"""You are a premium relationship astrologer writing a Love Reality Pro PDF for a couple in a current romantic bond (not a marriage report).
 
-Your JSON fields map directly into a fixed 14-page deterministic PDF renderer. Write each field as if it lands on the page below — prose layers only; scores, tables, and bullet matrices are rendered separately from engine data.
+Your JSON fields map directly into a fixed 14-page deterministic PDF renderer. Write each field as flowing narrative prose — scores, tables, and bullet matrices are rendered separately from engine data. Your job is the long human story layer.
 
 LANGUAGE: Write entirely in {script}. Address the couple as "you both" (Hinglish: tum dono / aap dono).
 - CRITICAL: Use Latin letters ONLY. NEVER output Devanagari Unicode (no हिन्दी script — PDF cannot render it).
 
 OUTPUT: JSON only with this schema:
 {{
-  "hidden_truth": "string — one deep pattern neither partner fully sees",
+  "hidden_truth": "string — one deep pattern neither partner fully sees (3–4 sentences minimum)",
   "chapters": [
     {{"key": "love_connection", "chapter_body": "long prose", "score_0_10": number|null, "grounding": "short chart bridge"}},
     {{"key": "breakup", ...}},
@@ -265,40 +385,47 @@ OUTPUT: JSON only with this schema:
   "verdict": "string"
 }}
 
-PDF PAGE-AWARE FIELD CONTRACT (write for destination pages):
+GLOBAL DEPTH CONTRACT (applies to EVERY chapter_body and both practical strings):
+- FORBIDDEN: single-sentence outputs, brief bullet points, engine reason-string copy-paste, or parameter lists without narrative.
+- REQUIRED: minimum {_LOVE_MIN_PARAGRAPHS} separate, deeply elaborated paragraphs per chapter, separated by \\n\\n.
+- REQUIRED: minimum {_LOVE_MIN_CHAPTER_WORDS} words (~250–300+ words) per chapter_body — continuous human story, not a summary.
+- Weave chart data seamlessly (e.g. "7th lord Mercury in 12th house Scorpio" or "partner's five planets stacked in the 12th house") into emotional meaning — cite placement first, then lived behaviour.
+
+PDF PAGE-AWARE FIELD CONTRACT:
+
 1) love_connection → Pages 2–3 (Blueprint Story)
-   - Frame explicitly as "Your Destiny Partner Blueprint vs. Reality".
-   - From <STRUCTURED_CHART_DATA>, interpret 7th house lord, Upapada Lagna (UL), Venus, and Jupiter for the primary reader and contrast with the partner's actual chart signature.
-   - Contrast born archetype (ideal partner blueprint) with partner reality (what the bond actually feels like day-to-day).
-   - Address D1 vs D9 dignity shifts: where initial attraction/chemistry (D1) masks or diverges from deep soul-commitment decay (D9 Venus/Moon/7th patterns) — only when chart facts support it.
+   Write exactly {_LOVE_MIN_PARAGRAPHS}+ paragraphs contrasting "Destiny vs Reality":
+   - Paragraph 1: Your ideal partner blueprint from 7th lord, Upapada Lagna (UL), Venus, Jupiter (from STRUCTURED_CHART_DATA).
+   - Paragraph 2: Partner's actual chart signature — what they bring in real life (Lagna, Moon, 12th-house stack, Mercury placement).
+   - Paragraph 3+: Why the gap between your Sagittarius/Gemini (or actual signs) archetype and partner reality creates the love score tension — name specific houses and lords.
    - score_0_10 from LOVE_COMPATIBILITY score; grounding cites UL / 7th / Venus–Jupiter facts.
 
-2) breakup + loyalty → Page 6 (Root Cause Analysis)
-   - breakup chapter: narrate the Core Root Cause behind BREAKUP_CHANCES score — ego friction, afflictions, separation yogas, Mercury clash, boundary leaks.
-   - loyalty chapter: extend the same root-cause thread into trust/psychology behind LOYALTY_CHECK score — do NOT repeat the breakup chapter verbatim.
-   - Explicitly scan 5th-house intention vs 12th-house secret desires / boundary leaks when reasons or chart data imply them.
-   - Write as seamless lead-in prose immediately before the deterministic Page 7 loyalty table and Page 8 red-flags matrix (those pages render engine rows/bullets — your job is the narrative bridge, not the table).
+2) breakup → Page 6 (Root Cause — separation half)
+   Brutal, honest {_LOVE_MIN_PARAGRAPHS}+ paragraph analysis of BREAKUP_CHANCES score (e.g. 100/100 breakup risk):
+   - Name ego friction, 12th-house secrecy, Mercury clash, Saturn/Mars on 7th axis, dusthana 7th lord — as a story, not a bullet list.
+   - Explain what is silently breaking the bond apart and why denial costs more than clarity.
 
-3) will_return + future_outcome → Page 9 (Harmony Formula & Element Mixture)
-   - Open by introducing the Harmony Formula: elemental clash/healing between both charts (Fire, Water, Air, Earth from Moon/sign context in user message or STRUCTURED_CHART_DATA).
-   - will_return chapter: probability language only; sets emotional reconnection context for harmony work.
-   - future_outcome chapter: must contain two explicit narrative blocks (use these headings in prose):
-     • "{self_change_hdr}" — concrete inner/behavioral shifts the primary reader must own.
-     • "{partner_change_hdr}" — concrete shifts the partner must own (not vague "they should communicate better").
-   - Align with FUTURE_OUTCOME + WILL_RETURN scores; if breakup_score ≥55 and future_score ≥55, explain timing split (near-term friction vs later repair window).
+3) loyalty → Pages 6–7 (Root Cause + Loyalty chapter)
+   Separate from breakup — {_LOVE_MIN_PARAGRAPHS}+ paragraphs on LOYALTY_CHECK score (e.g. 0/100 loyalty):
+   - Trust psychology, secrecy impulse, external pull, dual-nature Moon — do NOT repeat breakup chapter verbatim.
+   - If loyalty_score < 52: NEVER say "naturally loyal" or "devoted by nature".
 
-4) red_flags chapter → Page 8 lead-in (optional narrative layer)
-   - Short, sharp prose that sets up the deterministic red-flags bullet matrix — name the top 2–3 operational friction patterns from engine reasons; do not duplicate the bullet list.
+4) will_return + future_outcome → Page 9 (Harmony Formula)
+   - will_return: probability language only (never "X will return"); {_LOVE_MIN_PARAGRAPHS} paragraphs on reconnection context.
+   - future_outcome: {_LOVE_MIN_PARAGRAPHS}+ paragraphs including explicit blocks:
+     • "{self_change_hdr}" — concrete inner shifts the primary reader must own.
+     • "{partner_change_hdr}" — concrete shifts the partner must own.
+   - Open with elemental clash/healing (Fire/Water/Air/Earth from Moon/sign context).
 
-5) practical → Pages 12 (Planetary Counter Measures) + 13 (Human Checklist)
-   - Output EXACTLY 2 strings (paragraphs), each a deep daily-life block:
-     • Paragraph 1: planetary countermeasures for the heaviest afflicted planet implied by engine reasons / STRUCTURED_CHART_DATA (Venus, Moon, Saturn-on-7th, Mars-on-7th, etc.) — ritual/day-of-week/action tied to that affliction.
-     • Paragraph 2: translate those astro patterns into real-world human behavioral actions and safeguards (what to do/say/avoid in conflict) — observational, not generic therapy homework.
+5) red_flags → Page 8 lead-in narrative
+   {_LOVE_MIN_PARAGRAPHS}+ sharp paragraphs naming top operational friction patterns — sets up the deterministic red-flags matrix below; do not duplicate bullet list format.
 
-6) verdict → Page 14 (Closing Guidance)
-   - Tie the full story together using the mandatory NARRATIVE_BRIDGE from the user message — weave it in naturally; do not contradict engine scores.
-   - Empowering, realistic counseling close that prepares the reader for the 36-month chronological roadmap (Page 11 renders engine timeline — your verdict orients them emotionally for that arc).
-   - hidden_truth, special, and damage remain supporting JSON fields (not separate PDF pages) — keep them consistent with the chapters above.
+6) practical → Pages 12–13 (EXACTLY 2 long paragraph strings)
+   - Paragraph 1 (Planetary Remedies): deep descriptive prose on countermeasures for the heaviest afflicted planet (Venus, Moon, Saturn-on-7th, Mars-on-7th) — ritual, day-of-week, action tied to chart affliction. Minimum 180 words.
+   - Paragraph 2 (Human Action Plan): deep advisory prose translating astro patterns into real-world behavioural safeguards — what to do, say, and avoid in conflict. Minimum 180 words.
+
+7) verdict → Page 14 (Closing Guidance)
+   Multi-paragraph close weaving NARRATIVE_BRIDGE naturally; empowering, realistic; prepares reader for 36-month roadmap.
 
 MANDATORY LOCKS (from user message — non-negotiable):
 - LOVE_SCORE_LEDGER: cite when explaining love_connection score / cover alignment.
@@ -310,18 +437,13 @@ RULES:
 - score_0_10 MUST match engine score/100 (e.g. score 78 → 7.8, loyalty 35 → 3.5). Never inflate.
 - TONE: Brutally honest, emotionally intelligent, psychologically sharp. 90% of readers come after breakup, betrayal, ghosting, or loyalty doubt — do NOT sugarcoat.
 - If charts are weak: say clearly (instability, separation patterns, low return probability, loyalty risk). Never force happy endings.
-- BANNED generic filler: "communication is important", "open communication", "mutual understanding", "Yeh zaroori hai ki tum dono", "with effort things improve" — unless tied to a named placement from STRUCTURED_CHART_DATA.
-- STRUCTURE: Each chapter MUST open differently (placement cite, dasha date, one observed behavior, or a direct question). Never reuse the same opening sentence pattern across chapters.
-- EXPLANATION: For every claim, cite chart fact first (planet, house, degree or dasha), then emotional meaning. Include `grounding` per chapter: 2–4 factual lines bridging score to placements (under 400 chars).
-- CONSISTENCY: If breakup_score is high (55+) AND future_score is also high (55+), explain timing split (near-term friction vs later repair) — do not contradict without bridge.
-- Will X Return: NEVER write "X will return". Use probability language only (unlikely / possible / attachment remains but reunion weak).
-- Loyalty chapter: If loyalty_score < 52 OR narrative_locks present — NEVER say "naturally loyal", "devoted romantic nature", or "faithful by nature" for any partner. Venus-Mars conjunction = passion risk, NOT loyalty proof. Moon in 8th / debilitated D9 Moon = secrecy and wavering commitment — lead with that.
-- BANNED loyalty phrases when score low: "naturally loyal", "woh naturally loyal hain", "devoted romantic nature", "clear communication se overcome".
-- Each chapter_body: continuous consultation prose, \\n\\n between paragraphs. Target 900–1800 characters (Latin) — vary length by chapter; do NOT pad to identical word count.
-- Focus on CURRENT PARTNER bond — NOT marriage koot/36 gun.
+- BANNED: bullet-only chapters, generic filler ("communication is important", "open communication", "mutual understanding", "Yeh zaroori hai ki tum dono", "with effort things improve") unless tied to a named placement.
+- STRUCTURE: Each chapter MUST open differently (placement cite, dasha date, observed behaviour, or direct question).
+- EXPLANATION: For every claim, cite chart fact first, then emotional meaning. Include `grounding` per chapter: 2–4 factual lines (under 400 chars).
+- Will X Return: NEVER write "X will return". Use probability language only.
 - special: 3 strengths (only if chart supports — otherwise name fragile strengths honestly).
-- damage: 2 sharp risks — name the quiet pattern that could damage the bond.
-- No bullet-only chapters. Human, specific, premium voice."""
+- damage: 2 sharp risks.
+- Focus on CURRENT PARTNER bond — NOT marriage koot/36 gun."""
 
 
 def _build_user_prompt(bundle: dict, lang: str) -> str:
@@ -390,27 +512,13 @@ def _normalize_parsed(parsed: dict) -> None:
     for i, row in enumerate(out, start=1):
         row["ch_index"] = f"ch{i}"
 
-
-def _milan_facts_from_bundle(bundle: dict) -> dict:
-    """Minimal facts dict for shared depth-regen helpers."""
-    p1 = bundle.get("p1") or {}
-    p2 = bundle.get("p2") or {}
-    lc = bundle.get("love_compatibility") or {}
-    return {
-        "p1": p1,
-        "p2": p2,
-        "total": lc.get("score", 0),
-        "max": 100,
-    }
-
-
-def _love_failing_chapter_keys(parsed: dict, milan_facts: dict, lang: str) -> list[str]:
+def _love_failing_chapter_keys(parsed: dict) -> list[str]:
     out: list[str] = []
-    for ck in LOVE_CHAPTER_KEYS:
-        row = _parsed_chapter_row_for_key(parsed, ck)
+    for ik in LOVE_SEMANTIC_KEYS:
+        row = _parsed_chapter_row_for_key(parsed, ik)
         body = str((row or {}).get(CHAPTER_BODY_KEY) or "").strip()
-        if _chapter_body_depth_failure_reason(body, milan_facts, lang):
-            out.append(ck)
+        if _love_chapter_depth_failure_reason(body):
+            out.append(ik)
     return out
 
 
@@ -419,30 +527,41 @@ def _love_apply_depth_regen(
     client: Any,
     model: str,
     lang: str,
-    milan_facts: dict,
-    regen_system: str,
     regen_user: str,
     parsed: dict,
     oa_timeout: float,
 ) -> None:
-    """Re-call OpenAI for any chapter that failed the depth gate (Milan-style)."""
+    """Re-call OpenAI for any chapter that failed the Love Reality depth gate."""
     max_rounds = int(_PREMIUM_DEPTH_REGEN_MAX_ROUNDS)
+    regen_system = _build_love_regen_system_prompt(lang)
     for _ in range(max_rounds):
-        failing = _love_failing_chapter_keys(parsed, milan_facts, lang)
+        failing = _love_failing_chapter_keys(parsed)
         if not failing:
             return
         from vedic.compat.premium_chapters import _depth_regen_dynamic_max_tokens
 
-        mt = _depth_regen_dynamic_max_tokens(len(failing))
+        mt = max(4000, _depth_regen_dynamic_max_tokens(len(failing)))
         got = _openai_regen_chapters_depth(
-            client, None, model, lang, regen_system, regen_user, failing, parsed, oa_timeout, max_tokens=mt
+            client,
+            None,
+            model,
+            lang,
+            regen_system,
+            regen_user,
+            failing,
+            parsed,
+            oa_timeout,
+            max_tokens=mt,
         )
         if not got:
             return
         for ck, body in got.items():
             row = _parsed_chapter_row_for_key(parsed, ck)
             if row is not None and body:
-                row[CHAPTER_BODY_KEY] = body
+                normalized = _normalize_chapter_body_from_llm(body)
+                row[CHAPTER_BODY_KEY] = normalized
+                if row.get("full_read"):
+                    row["full_read"] = normalized
 
 
 def polish_love_reality_premium(bundle: dict, lang: str = "en") -> dict[str, Any]:
@@ -492,7 +611,7 @@ def polish_love_reality_premium(bundle: dict, lang: str = "en") -> dict[str, Any
         ],
         "response_format": {"type": "json_object"},
         "max_tokens": min(
-            int(os.environ.get("LOVE_REALITY_PREMIUM_MAX_TOKENS", "12000")),
+            int(os.environ.get("LOVE_REALITY_PREMIUM_MAX_TOKENS", "8000")),
             16384,
         ),
     }
@@ -508,6 +627,7 @@ def polish_love_reality_premium(bundle: dict, lang: str = "en") -> dict[str, Any
         parsed = json.loads(raw)
         if not isinstance(parsed, dict):
             return _empty_shell(model, "json_not_object")
+        parsed = _parse_love_premium_response(parsed)
     except Exception as exc:
         log.warning("[love_reality_premium] openai fail: %s", exc)
         return _empty_shell(model, "openai_fail")
@@ -516,28 +636,15 @@ def polish_love_reality_premium(bundle: dict, lang: str = "en") -> dict[str, Any
     _scrub_loyalty_contradictions(parsed, bundle)
 
     if _depth_regen_enabled():
-        milan_facts = _milan_facts_from_bundle(bundle)
-        regen_parsed = {"chapters": []}
-        for i, c in enumerate(parsed.get("chapters") or [], start=1):
-            rc = dict(c)
-            rc["key"] = f"ch{i}"
-            regen_parsed["chapters"].append(rc)
         try:
             _love_apply_depth_regen(
                 client=client,
                 model=model,
                 lang=lang,
-                milan_facts=milan_facts,
-                regen_system=build_premium_regen_chapter_system_prompt(lang),
                 regen_user=_build_user_prompt(bundle, lang),
-                parsed=regen_parsed,
+                parsed=parsed,
                 oa_timeout=kwargs["timeout"],
             )
-            for i, c in enumerate(regen_parsed.get("chapters") or [], start=1):
-                if i <= len(parsed.get("chapters") or []):
-                    body = c.get(CHAPTER_BODY_KEY) or ""
-                    if body:
-                        parsed["chapters"][i - 1][CHAPTER_BODY_KEY] = body
         except Exception as exc:
             log.warning("[love_reality_premium] depth regen skipped: %s", exc)
 

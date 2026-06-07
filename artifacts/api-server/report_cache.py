@@ -200,6 +200,17 @@ def save(user_id: int, kind: str, report_type: str,
             if len(rows) > 5000:
                 rows = rows[:5000]
             _save_ledger(rows)
+        try:
+            import pdf_generation_log as _pgl
+
+            _pgl.record_if_missing(
+                kind=kind,
+                user_id=int(user_id or 0),
+                pdf_gen={"final_status": "REPORT_SAVED", "openai_skipped": True},
+                render_status="SUCCESS",
+            )
+        except Exception:
+            pass
         return h
     except Exception as exc:
         log.warning("[report_cache] save failed: %s", exc)

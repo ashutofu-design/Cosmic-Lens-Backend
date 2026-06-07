@@ -138,6 +138,21 @@ def admin_delete_user(user_id):
 
 '''.lstrip("\n")
 
+PDF_GENERATIONS_ROUTE = '''
+@app.route("/api/admin/pdf-generations", methods=["GET"])
+def admin_pdf_generations_route():
+    """OpenAI token + INR cost per PDF generation (audit duplicate/extra calls)."""
+    err = require_admin()
+    if err:
+        return err
+    from admin_dashboard import build_pdf_generations
+
+    page = request.args.get("page", type=int) or 1
+    kind = (request.args.get("kind") or "").strip() or None
+    return jsonify(build_pdf_generations(page=page, kind=kind))
+
+'''.lstrip("\n")
+
 
 def main() -> int:
     if not ADMIN_PY.is_file():
@@ -177,6 +192,19 @@ def main() -> int:
         if not inserted:
             print("ERROR: could not find health route anchor for admin routes", file=sys.stderr)
             return 1
+
+    if "/api/admin/pdf-generations" not in text:
+        anchor = "def admin_pdf_generations_route"
+        if anchor not in text:
+            idx = text.find("@app.route(\"/api/admin/login-activity\"")
+            if idx == -1:
+                idx = text.find("@app.route('/api/admin/login-activity'")
+            if idx != -1:
+                text = text[:idx] + PDF_GENERATIONS_ROUTE + "\n\n" + text[idx:]
+                changed = True
+                print("OK: inserted /api/admin/pdf-generations route")
+            else:
+                print("WARN: could not find anchor for pdf-generations route — deploy full flask_app.py", file=sys.stderr)
 
     if not changed:
         print("OK: admin routes already present — no changes.")

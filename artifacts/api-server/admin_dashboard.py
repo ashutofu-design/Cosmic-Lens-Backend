@@ -663,3 +663,15 @@ def build_gmail_profiles_view(
         "purchases": purchases_out,
         "profiles": profiles_out,
     }
+
+
+def build_pdf_generations(
+    *,
+    page: int = 1,
+    per_page: int = 50,
+    kind: str | None = None,
+) -> dict[str, Any]:
+    """OpenAI token + INR ledger for admin PDF cost tab."""
+    from pdf_generation_log import list_generations
+
+    return list_generations(page=page, per_page=per_page, kind=kind or None)

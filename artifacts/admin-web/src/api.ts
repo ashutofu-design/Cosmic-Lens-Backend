@@ -18,7 +18,13 @@ async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((data as { error?: string }).error || `HTTP ${res.status}`);
+    const err = (data as { error?: string }).error || `HTTP ${res.status}`;
+    if (res.status === 404 && path.includes("pdf-generations")) {
+      throw new Error(
+        "pdf-generations API not found on server — deploy latest flask_app.py + pdf_generation_log.py, then restart API",
+      );
+    }
+    throw new Error(err);
   }
   return data as T;
 }
@@ -87,6 +93,32 @@ export interface AdminTransaction {
   order_id: string;
   status: string;
   paid_at: string | null;
+}
+
+export interface PdfGenerationItem {
+  id: string;
+  kind: string;
+  label: string;
+  user_id: number;
+  generated_at: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  cost_inr: number;
+  cost_usd: number;
+  openai_call_count: number;
+  regen_count: number;
+  retry_count: number;
+  extra_calls: number;
+  report_cache_hit: boolean;
+  polish_cache_hit: boolean;
+  openai_skipped: boolean;
+  force_regenerate: boolean;
+  render_status: string;
+  final_status: string;
+  notes: string;
+  phases: string[];
 }
 
 export interface LoginActivityItem {
@@ -245,6 +277,18 @@ export function fetchLoginActivity(opts?: {
   return adminFetch<{ items: LoginActivityItem[]; total: number }>(
     `/api/admin/login-activity?${q}`,
   );
+}
+
+export function fetchPdfGenerations(opts?: { page?: number; kind?: string }) {
+  const q = new URLSearchParams({ page: String(opts?.page ?? 1), per_page: "50" });
+  if (opts?.kind?.trim()) q.set("kind", opts.kind.trim());
+  return adminFetch<{
+    items: PdfGenerationItem[];
+    total: number;
+    page: number;
+    pages: number;
+    per_page: number;
+  }>(`/api/admin/pdf-generations?${q}`);
 }
 
 export function fetchUsers(page: number, search: string, plan: string) {

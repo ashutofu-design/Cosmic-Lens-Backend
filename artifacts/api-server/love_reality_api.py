@@ -93,6 +93,32 @@ def register_love_reality_routes(flask_app) -> None:
             )
         cached_pdf = None if force_regen else access.get("cached_pdf")
         if cached_pdf:
+            try:
+                import pdf_generation_log as _pgl
+
+                _pgl.record_from_telemetry(
+                    kind=_billing.PRODUCT_LOVE,
+                    user_id=user_id,
+                    pdf_gen={
+                        "model": "—",
+                        "input_tokens": 0,
+                        "output_tokens": 0,
+                        "total_tokens": 0,
+                        "estimated_cost_inr": 0,
+                        "estimated_cost_usd": 0,
+                        "openai_call_count": 0,
+                        "regen_count": 0,
+                        "retry_count": 0,
+                        "openai_skipped": True,
+                        "cache_hit": False,
+                        "final_status": "REPORT_CACHE",
+                    },
+                    report_cache_hit=True,
+                    force_regenerate=force_regen,
+                    render_status="SUCCESS",
+                )
+            except Exception:
+                pass
             p1n = (data["p1"].get("name") or "p1")
             p2n = (data["p2"].get("name") or "p2")
             safe = lambda s: "".join(c for c in str(s) if c.isalnum() or c in "_-")[:32] or "x"
@@ -120,6 +146,27 @@ def register_love_reality_routes(flask_app) -> None:
                 "love_reality_pro",
                 lambda: render_love_reality_pro_pdf(merged, lang=lang),
             )
+            render_status = "SUCCESS" if pdf_bytes and not render_err else "FAILED"
+            try:
+                from vedic.compat.openai_pdf_telemetry import update_last_pdf_generation_fields
+
+                update_last_pdf_generation_fields(pdf_render_status=render_status)
+            except Exception:
+                pass
+            try:
+                import pdf_generation_log as _pgl
+
+                pg = (pro.get("_meta") or {}).get("pdf_generation") if isinstance(pro, dict) else None
+                _pgl.record_from_telemetry(
+                    kind=_billing.PRODUCT_LOVE,
+                    user_id=user_id,
+                    pdf_gen=pg if isinstance(pg, dict) else None,
+                    report_cache_hit=False,
+                    force_regenerate=force_regen,
+                    render_status=render_status,
+                )
+            except Exception:
+                pass
             if render_err or not pdf_bytes:
                 return jsonify({"error": "love_reality_pro_pdf_failed", "detail": render_err}), 500
         except Exception as exc:

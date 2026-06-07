@@ -482,6 +482,7 @@ def healthz():
     return jsonify({
         "status": "ok",
         "love_reality_pro_pdf": "love_reality_pro_pdf" in app.view_functions,
+        "admin_pdf_generations": "admin_pdf_generations_route" in app.view_functions,
     }), 200
 
 
@@ -3204,6 +3205,19 @@ def admin_transactions():
             status=status,
         )
     )
+
+
+@app.route("/api/admin/pdf-generations", methods=["GET"])
+def admin_pdf_generations_route():
+    """OpenAI token + INR cost per PDF generation (audit duplicate/extra calls)."""
+    err = require_admin()
+    if err:
+        return err
+    from admin_dashboard import build_pdf_generations
+
+    page = request.args.get("page", type=int) or 1
+    kind = (request.args.get("kind") or "").strip() or None
+    return jsonify(build_pdf_generations(page=page, kind=kind))
 
 
 @app.route("/api/admin/login-activity", methods=["GET"])
@@ -12540,6 +12554,30 @@ def kundli_milan_pro_pdf():
     if _pay_err:
         return _pay_err
     if _cached_pdf:
+        try:
+            import pdf_generation_log as _pgl
+
+            _pgl.record_from_telemetry(
+                kind=_crb.PRODUCT_MILAN,
+                user_id=user_id_for_cache,
+                pdf_gen={
+                    "model": "—",
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "total_tokens": 0,
+                    "estimated_cost_inr": 0,
+                    "estimated_cost_usd": 0,
+                    "openai_call_count": 0,
+                    "regen_count": 0,
+                    "retry_count": 0,
+                    "openai_skipped": True,
+                    "final_status": "REPORT_CACHE",
+                },
+                report_cache_hit=True,
+                render_status="SUCCESS",
+            )
+        except Exception:
+            pass
         p1n = (milan.get("p1") or {}).get("name") or "p1"
         p2n = (milan.get("p2") or {}).get("name") or "p2"
         _safe = lambda s: "".join(c for c in str(s) if c.isalnum() or c in "_-")[:32] or "x"
@@ -12713,6 +12751,21 @@ def kundli_milan_pro_pdf():
         _pg = get_last_pdf_generation_telemetry()
         if _pg:
             pdf_headers.update(response_telemetry_headers(_pg))
+        try:
+            import pdf_generation_log as _pgl
+
+            snap = _pg
+            if not snap and isinstance(pro, dict):
+                snap = (pro.get("_meta") or {}).get("pdf_generation")
+            _pgl.record_from_telemetry(
+                kind=_crb.PRODUCT_MILAN,
+                user_id=user_id_for_cache,
+                pdf_gen=snap if isinstance(snap, dict) else None,
+                report_cache_hit=False,
+                render_status="SUCCESS",
+            )
+        except Exception:
+            pass
     except Exception:
         pass
     return Response(

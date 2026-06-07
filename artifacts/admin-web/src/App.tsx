@@ -15,6 +15,8 @@ import {
   fetchDashboard,
   fetchGmailProfiles,
   fetchLoginActivity,
+  fetchPdfGenerations,
+  type PdfGenerationItem,
   fetchStats,
   type GmailProfilesResponse,
   fetchTransactions,
@@ -27,7 +29,7 @@ import {
   setUserPro,
 } from "./api";
 
-type Tab = "dashboard" | "transactions" | "users" | "logins";
+type Tab = "dashboard" | "transactions" | "users" | "logins" | "pdfcosts";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("dashboard");
@@ -72,6 +74,13 @@ export default function App() {
   const [gmailProfilesError, setGmailProfilesError] = useState<string | null>(null);
   const [deletingProfileKey, setDeletingProfileKey] = useState<string | null>(null);
 
+  const [pdfGenPage, setPdfGenPage] = useState(1);
+  const [pdfGenPages, setPdfGenPages] = useState(1);
+  const [pdfGenTotal, setPdfGenTotal] = useState(0);
+  const [pdfGenerations, setPdfGenerations] = useState<PdfGenerationItem[]>([]);
+  const [pdfGenKind, setPdfGenKind] = useState("");
+  const [pdfGenError, setPdfGenError] = useState<string | null>(null);
+
   const loadDashboard = useCallback(async () => {
     const [d, s] = await Promise.all([fetchDashboard(), fetchStats()]);
     setDash(d);
@@ -105,6 +114,17 @@ export default function App() {
     setLoginTotal(r.total);
   }, [loginEmail, loginSuccess]);
 
+  const loadPdfGenerations = useCallback(async () => {
+    setPdfGenError(null);
+    const data = await fetchPdfGenerations({
+      page: pdfGenPage,
+      kind: pdfGenKind || undefined,
+    });
+    setPdfGenerations(data.items);
+    setPdfGenPages(data.pages);
+    setPdfGenTotal(data.total);
+  }, [pdfGenPage, pdfGenKind]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -113,12 +133,15 @@ export default function App() {
       else if (tab === "transactions") await loadTransactions();
       else if (tab === "users") await loadUsers();
       else if (tab === "logins") await loadLogins();
+      else if (tab === "pdfcosts") await loadPdfGenerations();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
+      const msg = e instanceof Error ? e.message : "Failed to load";
+      if (tab === "pdfcosts") setPdfGenError(msg);
+      else setError(msg);
     } finally {
       setLoading(false);
     }
-  }, [tab, loadDashboard, loadTransactions, loadUsers, loadLogins]);
+  }, [tab, loadDashboard, loadTransactions, loadUsers, loadLogins, loadPdfGenerations]);
 
   useEffect(() => {
     load();
@@ -647,6 +670,7 @@ export default function App() {
             ["transactions", "Transactions"],
             ["users", "Users"],
             ["logins", "Gmail logins"],
+            ["pdfcosts", "PDF AI costs"],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -892,6 +916,132 @@ export default function App() {
               </tbody>
             </table>
           </div>
+        </section>
+      ) : null}
+
+      {tab === "pdfcosts" ? (
+        <section className="section card">
+          <h2>PDF OpenAI costs</h2>
+          <p className="detail-muted">
+            Exact tokens + INR per PDF. Extra/regen calls flagged so duplicate billing is visible.
+          </p>
+          {pdfGenError ? <div className="error">{pdfGenError}</div> : null}
+          <div className="toolbar">
+            <select
+              value={pdfGenKind}
+              onChange={(e) => {
+                setPdfGenKind(e.target.value);
+                setPdfGenPage(1);
+              }}
+            >
+              <option value="">All PDF types</option>
+              <option value="love_reality_pro">Love PDF</option>
+              <option value="milan_pro">Milan PDF</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => {
+                setPdfGenError(null);
+                loadPdfGenerations().catch((e) =>
+                  setPdfGenError(e instanceof Error ? e.message : "Failed to load"),
+                );
+              }}
+              disabled={loading}
+            >
+              Refresh
+            </button>
+            <span className="detail-muted">{pdfGenTotal} generations</span>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>PDF · cost · time</th>
+                  <th>Tokens</th>
+                  <th>Calls</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pdfGenerations.length === 0 ? (
+                  <tr>
+                    <td colSpan={4}>No PDF generations logged yet.</td>
+                  </tr>
+                ) : (
+                  pdfGenerations.map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        <strong>{row.label}</strong>
+                        {" — "}
+                        <span>{formatInr(row.cost_inr)}</span>
+                        {" — "}
+                        <span className="detail-muted">{formatDate(row.generated_at)}</span>
+                        {row.user_id ? (
+                          <div className="detail-muted">user #{row.user_id}</div>
+                        ) : null}
+                      </td>
+                      <td>
+                        {row.input_tokens.toLocaleString("en-IN")} in
+                        <br />
+                        {row.output_tokens.toLocaleString("en-IN")} out
+                        <br />
+                        <span className="detail-muted">{row.model}</span>
+                      </td>
+                      <td>
+                        {row.openai_call_count} total
+                        {row.extra_calls > 0 ? (
+                          <>
+                            <br />
+                            <span className="warn-text">{row.extra_calls} extra</span>
+                          </>
+                        ) : null}
+                        {row.regen_count > 0 ? (
+                          <>
+                            <br />
+                            {row.regen_count} regen
+                          </>
+                        ) : null}
+                        {row.report_cache_hit ? (
+                          <>
+                            <br />
+                            <span className="detail-muted">PDF cache</span>
+                          </>
+                        ) : null}
+                        {row.polish_cache_hit ? (
+                          <>
+                            <br />
+                            <span className="detail-muted">LLM cache</span>
+                          </>
+                        ) : null}
+                      </td>
+                      <td className="detail-muted">{row.notes}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          {pdfGenPages > 1 ? (
+            <div className="pager">
+              <button
+                type="button"
+                disabled={pdfGenPage <= 1 || loading}
+                onClick={() => setPdfGenPage((p) => Math.max(1, p - 1))}
+              >
+                Prev
+              </button>
+              <span>
+                Page {pdfGenPage} / {pdfGenPages}
+              </span>
+              <button
+                type="button"
+                disabled={pdfGenPage >= pdfGenPages || loading}
+                onClick={() => setPdfGenPage((p) => p + 1)}
+              >
+                Next
+              </button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 

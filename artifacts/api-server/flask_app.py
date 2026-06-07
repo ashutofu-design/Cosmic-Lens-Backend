@@ -483,7 +483,17 @@ def healthz():
         "status": "ok",
         "love_reality_pro_pdf": "love_reality_pro_pdf" in app.view_functions,
         "admin_pdf_generations": "admin_pdf_generations_route" in app.view_functions,
+        "love_reality_premium_page1": _love_reality_premium_page1_available(),
     }), 200
+
+
+def _love_reality_premium_page1_available() -> bool:
+    try:
+        from vedic.love_reality import pdf_page1_premium  # noqa: F401
+
+        return True
+    except Exception:
+        return False
 
 
 # Phase 2.10.5 STEP M15 — translator-lock A/B telemetry endpoint.

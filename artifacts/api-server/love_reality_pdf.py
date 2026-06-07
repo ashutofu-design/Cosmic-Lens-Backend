@@ -43,6 +43,12 @@ from vedic.love_reality.pdf_text_safe import sanitize_love_reality_pro_premium
 
 _log = logging.getLogger(__name__)
 
+_last_page1_style = "unknown"
+
+
+def get_last_page1_style() -> str:
+    return _last_page1_style
+
 
 def _section_page(
     s: dict,
@@ -194,17 +200,21 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
     )
 
     story: list[Any] = []
+    global _last_page1_style
 
-    # §1 Premium dashboard (page 1) — fallback to legacy if render fails
+    # §1 Premium dashboard (page 1)
     if (os.environ.get("LOVE_REALITY_PDF_PAGE1_LEGACY") or "").strip().lower() in ("1", "true", "yes"):
+        _last_page1_style = "legacy-scorecard"
         story.extend(_cover_dashboard(s, p1, p2, ctx, lang))
     else:
-        try:
-            page1_data = build_love_reality_page1_data(ctx, bundle, pro, p1, p2)
-            story.extend(render_premium_page1_flowables(page1_data, lang=lang))
-        except Exception as exc:
-            _log.warning("[love_reality_pdf] premium page1 failed, using legacy: %s", exc)
-            story.extend(_cover_dashboard(s, p1, p2, ctx, lang))
+        _last_page1_style = "premium-dashboard"
+        page1_data = build_love_reality_page1_data(ctx, bundle, pro, p1, p2)
+        story.extend(render_premium_page1_flowables(page1_data, lang=lang))
+        _log.info(
+            "[love_reality_pdf] page1 renderer=%s report_id=%s",
+            _last_page1_style,
+            page1_data.get("report_id"),
+        )
 
     bp = ctx["page2_3_blueprint"]
     story.extend(_section_page(

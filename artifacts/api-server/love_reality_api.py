@@ -4,7 +4,7 @@ from __future__ import annotations
 from flask import Response, jsonify, request
 
 # Bump when PDF layout/renderer changes — invalidates stale server-side report cache.
-LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v3_premium_page1"
+LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v4_premium_page1_flat"
 
 
 def _love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
@@ -131,6 +131,7 @@ def register_love_reality_routes(flask_app) -> None:
                     "Content-Length": str(len(cached_pdf)),
                     "Cache-Control": "private, max-age=3600",
                     "X-Report-Cache": "hit",
+                    "X-PDF-Page1-Style": "cached-previous",
                 },
             )
 
@@ -188,6 +189,8 @@ def register_love_reality_routes(flask_app) -> None:
             pdf_bytes,
             fname,
         )
+        from love_reality_pdf import get_last_page1_style
+
         return Response(
             pdf_bytes,
             mimetype="application/pdf",
@@ -196,6 +199,7 @@ def register_love_reality_routes(flask_app) -> None:
                 "Content-Length": str(len(pdf_bytes)),
                 "Cache-Control": "private, max-age=3600",
                 "X-Report-Cache": "miss",
+                "X-PDF-Page1-Style": get_last_page1_style(),
             },
         )
 

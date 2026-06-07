@@ -1,0 +1,31 @@
+{
+  "name": "@workspace/love-reality-report",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "export:pdf": "node scripts/export-pdf.mjs"
+  },
+  "dependencies": {
+    "clsx": "catalog:",
+    "lucide-react": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "tailwind-merge": "catalog:"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "puppeteer": "^24.36.1",
+    "tailwindcss": "catalog:",
+    "typescript": "^5.9.3",
+    "vite": "catalog:"
+  }
+}

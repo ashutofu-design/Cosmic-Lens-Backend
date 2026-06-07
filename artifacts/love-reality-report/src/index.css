@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-family-display: "Playfair Display", Georgia, serif;
+  --color-cosmic-50: #f5f3ff;
+  --color-cosmic-100: #ede9fe;
+  --color-cosmic-200: #ddd6fe;
+  --color-cosmic-400: #a78bfa;
+  --color-cosmic-500: #8b5cf6;
+  --color-cosmic-600: #7c3aed;
+  --color-cosmic-700: #6d28d9;
+  --color-cosmic-800: #5b21b6;
+  --color-cosmic-900: #4c1d95;
+  --color-gold: #d4a853;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: #ece8f8;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media print {
+  body {
+    background: white;
+  }
+
+  .a4-page {
+    box-shadow: none !important;
+    margin: 0 !important;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+.a4-page {
+  width: 210mm;
+  min-height: 297mm;
+  height: 297mm;
+  margin: 12px auto;
+  overflow: hidden;
+  box-shadow:
+    0 25px 50px -12px rgb(76 29 149 / 0.25),
+    0 0 0 1px rgb(139 92 246 / 0.08);
+}
+
+.glass-card {
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.92), rgb(245 243 255 / 0.78));
+  border: 1px solid rgb(139 92 246 / 0.14);
+  box-shadow:
+    0 4px 16px rgb(76 29 149 / 0.06),
+    inset 0 1px 0 rgb(255 255 255 / 0.85);
+  backdrop-filter: blur(8px);
+}
+
+.cosmic-bg {
+  background:
+    radial-gradient(ellipse 120% 80% at 100% 0%, rgb(167 139 250 / 0.22), transparent 55%),
+    radial-gradient(ellipse 90% 60% at 0% 100%, rgb(124 58 237 / 0.12), transparent 50%),
+    linear-gradient(180deg, #faf8ff 0%, #f3effc 48%, #ebe4fa 100%);
+}

@@ -4,6 +4,7 @@ Love Reality Pro PDF renderer — 14-page premium layout (v2).
 from __future__ import annotations
 
 import io
+import os
 from datetime import datetime
 from typing import Any
 
@@ -34,6 +35,8 @@ from milan_pdf import (
 from vedic.love_reality.chart_facts import enrich_bundle_for_pdf
 from vedic.love_reality import pdf_locale as LRL
 from vedic.love_reality.pdf_data_v2 import build_love_reality_pdf_v2_context
+from vedic.love_reality.pdf_page1_data import build_love_reality_page1_data
+from vedic.love_reality.pdf_page1_premium import render_premium_page1_flowables
 from vedic.love_reality.pdf_locale import love_reality_pdf_render_lang
 from vedic.love_reality.pdf_text_safe import sanitize_love_reality_pro_premium
 
@@ -189,8 +192,12 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
 
     story: list[Any] = []
 
-    # §1 Core Bond (1–4)
-    story.extend(_cover_dashboard(s, p1, p2, ctx, lang))
+    # §1 Premium dashboard (page 1)
+    if (os.environ.get("LOVE_REALITY_PDF_PAGE1_LEGACY") or "").strip().lower() in ("1", "true", "yes"):
+        story.extend(_cover_dashboard(s, p1, p2, ctx, lang))
+    else:
+        page1_data = build_love_reality_page1_data(ctx, bundle, pro, p1, p2)
+        story.extend(render_premium_page1_flowables(page1_data, lang=lang))
 
     bp = ctx["page2_3_blueprint"]
     story.extend(_section_page(

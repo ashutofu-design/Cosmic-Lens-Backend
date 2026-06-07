@@ -58,6 +58,16 @@ def _pro(score=7.5):
     }
 
 
+def test_love_reality_pro_pdf_premium_page1_markers():
+    payload = _bundle()
+    payload["pro_premium"] = _pro()
+    pdf = render_love_reality_pro_pdf(payload, lang="en")
+    assert pdf.startswith(b"%PDF-")
+    text = pdf.decode("latin-1", errors="ignore")
+    assert "Relationship Insights" in text or "RELATIONSHIP INSIGHTS" in text.upper()
+    assert "Core Metrics" in text or "CORE METRICS" in text.upper()
+
+
 def test_love_reality_pro_pdf_bytes_and_page_band_en():
     payload = _bundle()
     payload["pro_premium"] = _pro()

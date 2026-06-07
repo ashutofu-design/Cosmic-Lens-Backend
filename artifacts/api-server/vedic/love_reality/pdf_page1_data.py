@@ -131,7 +131,7 @@ def build_love_reality_page1_data(
             "Weekly 20-minute phone-free check-in",
             "Track dasha dates — avoid ultimatums in down windows",
         ]
-    recommendations = _to_concise_bullets(raw_recs, max_items=4, max_len=88)
+    recommendations = _to_concise_bullets(raw_recs, max_items=3, max_len=72)
 
     strengths = [
         {"label": "Emotional magnetism", "value": min(100, love + 8)},
@@ -159,7 +159,7 @@ def build_love_reality_page1_data(
         "p1_name": p1.get("name") or "Partner A",
         "p2_name": p2.get("name") or "Partner B",
         "cosmic_score": int(dash.get("love_score") or love),
-        "relationship_summary": _short(summary, 320),
+        "relationship_summary": _short(summary, 220),
         "metrics": [
             {
                 "label": "Love Compatibility",
@@ -182,8 +182,8 @@ def build_love_reality_page1_data(
                 "interpretation": (pick("Return") or {}).get("band") or "Return window if separated",
             },
         ],
-        "insights_narrative": _short(narrative, 360),
-        "key_insights": insights,
+        "insights_narrative": _short(narrative, 200),
+        "key_insights": insights[:3],
         "analysis": [
             analysis(
                 "Emotional Compatibility",
@@ -215,7 +215,7 @@ def build_love_reality_page1_data(
         "verdict": _short(
             (pro.get("verdict") or ctx.get("page14_closing") or "").strip()
             or f"Love {love}/100 · Breakup risk {breakup}/100 — use this as a timing map, not doom.",
-            280,
+            200,
         ),
         "recommendations": recommendations,
     }

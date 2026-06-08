@@ -74,14 +74,16 @@ async function fetchLoveRealityPdf(
       ...pdfAuthHeaders(opts.user),
       Accept: "application/pdf",
       "X-Expected-PDF-Layout": LOVE_REALITY_PDF_LAYOUT_VER,
-      ...(opts.forceRegenerate ? { "X-Force-Regenerate": "1" } : {}),
+        ...(opts.forceRegenerate ? { "X-Force-Regenerate": "1" } : {}),
+        ...(opts.forceRegenerate ? { "X-PDF-Layout-Refresh": "1" } : {}),
+        ...(opts.forceRegenerate ? { "X-Force-LLM": "1" } : {}),
     },
     body: JSON.stringify({
       p1: opts.p1,
       p2: opts.p2,
       lang: opts.lang,
       pdf_layout: LOVE_REALITY_PDF_LAYOUT_VER,
-      ...(opts.forceRegenerate ? { force_regenerate: true } : {}),
+      ...(opts.forceRegenerate ? { force_regenerate: true, force_llm: true } : {}),
     }),
     signal,
   });

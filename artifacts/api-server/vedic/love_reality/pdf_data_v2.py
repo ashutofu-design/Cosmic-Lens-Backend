@@ -162,11 +162,9 @@ def build_love_reality_pdf_v2_context(
 
     breakup_narr = _chapter_body(pro, "breakup") or ""
     loyalty_narr = _chapter_body(pro, "loyalty") or ""
-    root_parts = []
+    root_parts: list[str] = []
     if breakup_narr:
         root_parts.append(breakup_narr)
-    if loyalty_narr and loyalty_narr not in root_parts:
-        root_parts.append(loyalty_narr)
     if not root_parts:
         if bu.get("reasons"):
             root_parts.extend(str(r) for r in (bu.get("reasons") or [])[:3])

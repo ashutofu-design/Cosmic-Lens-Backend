@@ -82,6 +82,7 @@ def _resolve_pro_premium(
     user_id: int,
     p1: dict,
     p2: dict,
+    force_llm: bool = False,
 ) -> tuple[dict | None, str]:
     """
     Return (pro_premium, source).
@@ -92,7 +93,7 @@ def _resolve_pro_premium(
 
     snap_params = _snap.snapshot_params(user_id, lang, p1, p2)
     render_only = _pdf_render_only_requested()
-    force_llm = _force_llm_requested()
+    force_llm = bool(force_llm or _force_llm_requested())
 
     if not force_llm:
         cached = _snap.load(snap_params)
@@ -232,6 +233,7 @@ def register_love_reality_routes(flask_app) -> None:
                 user_id=user_id,
                 p1=data["p1"],
                 p2=data["p2"],
+                force_llm=bool(force_regen or _force_llm_requested()),
             )
             if pro is None:
                 return jsonify({

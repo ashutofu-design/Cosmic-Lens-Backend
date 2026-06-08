@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable
 
 from vedic.compat.openai_pdf_telemetry import PdfGenOpenAITelemetry, stub_meta
@@ -880,6 +881,65 @@ def _assembly_depth_ok(pro: dict) -> bool:
     return True
 
 
+def _section_body_from_hit(hit: dict, *keys: str) -> str:
+    for k in keys:
+        v = str(hit.get(k) or "").strip()
+        if v:
+            return v
+    return ""
+
+
+def _invoke_section_fn(
+    fn: Callable[..., dict[str, Any]],
+    bundle: dict,
+    lang: str,
+    force_llm: bool,
+    *,
+    chapter_key: str | None = None,
+) -> dict[str, Any]:
+    if chapter_key:
+        return polish_love_reality_chapter_only(
+            bundle, chapter_key, lang=lang, force_llm=force_llm, tel=None
+        )
+    return fn(bundle, lang=lang, force_llm=force_llm, tel=None)
+
+
+def _run_section_job(
+    label: str,
+    fn: Callable[..., dict[str, Any]],
+    bundle: dict,
+    lang: str,
+    force_llm: bool,
+    *,
+    body_keys: tuple[str, ...],
+    pro_key: str | None = None,
+    ch_key: str | None = None,
+    chapter_key: str | None = None,
+) -> tuple[str, dict[str, Any], str, str | None, str | None]:
+    """Run one section LLM call with retry; never raises."""
+    try:
+        hit = _invoke_section_fn(
+            fn, bundle, lang, force_llm, chapter_key=chapter_key
+        )
+        body = _section_body_from_hit(hit, *body_keys)
+        if not body:
+            log.warning(
+                "[assembly] %s miss (%s) — retry forced",
+                label,
+                (hit.get("_meta") or {}).get("reason"),
+            )
+            hit = _invoke_section_fn(
+                fn, bundle, lang, True, chapter_key=chapter_key
+            )
+            body = _section_body_from_hit(hit, *body_keys)
+        if not body:
+            log.warning("[assembly] %s still empty after retry", label)
+        return label, hit, body, pro_key, ch_key
+    except Exception as exc:
+        log.exception("[assembly] %s failed: %s", label, exc)
+        return label, {"_meta": {"reason": "section_exception", "error": str(exc)}}, "", pro_key, ch_key
+
+
 def assemble_love_reality_pro_premium(
     bundle: dict,
     lang: str = "en",
@@ -887,7 +947,7 @@ def assemble_love_reality_pro_premium(
     force_llm: bool = False,
     model: str = "",
 ) -> dict[str, Any]:
-    """Orchestrate all section LLM calls into one pro_premium dict."""
+    """Orchestrate all section LLM calls into one pro_premium dict. Never raises."""
     from vedic.love_reality.premium_polish import (
         _DEFAULT_MODEL,
         _scrub_loyalty_contradictions,
@@ -911,85 +971,116 @@ def assemble_love_reality_pro_premium(
     }
     section_meta: dict[str, Any] = {}
 
-    s02 = polish_love_reality_verdict_page_only(bundle, lang=lang, force_llm=force_llm)
-    if s02.get("verdict"):
-        pro["verdict"] = s02["verdict"]
-    if s02.get("practical"):
-        pro["practical"] = s02["practical"]
-    section_meta["verdict_page"] = s02.get("_meta") or {}
+    try:
+        s02 = polish_love_reality_verdict_page_only(bundle, lang=lang, force_llm=force_llm)
+        if s02.get("verdict"):
+            pro["verdict"] = s02["verdict"]
+        if s02.get("practical"):
+            pro["practical"] = s02["practical"]
+        section_meta["verdict_page"] = s02.get("_meta") or {}
 
-    s03 = polish_love_reality_deep_analysis_only(bundle, lang=lang, force_llm=force_llm)
-    if s03.get("deep_analysis"):
-        pro["deep_analysis"] = s03["deep_analysis"]
-    section_meta["deep_analysis"] = s03.get("_meta") or {}
+        s03 = polish_love_reality_deep_analysis_only(bundle, lang=lang, force_llm=force_llm)
+        if s03.get("deep_analysis"):
+            pro["deep_analysis"] = s03["deep_analysis"]
+        section_meta["deep_analysis"] = s03.get("_meta") or {}
 
-    br = polish_love_reality_blueprint_reality_only(
-        bundle, lang=lang, force_llm=force_llm, tel=tel
-    )
-    if not br.get("chapter_body"):
-        log.warning(
-            "[assembly] blueprint_reality miss (%s) — retry forced",
-            (br.get("_meta") or {}).get("reason"),
-        )
-        br = polish_love_reality_blueprint_reality_only(
-            bundle, lang=lang, force_llm=True, tel=tel
-        )
-    section_meta["blueprint_reality"] = br.get("_meta") or {}
-    if br.get("chapter_body"):
-        pro["blueprint_reality"] = br["chapter_body"]
-        _upsert_chapter(pro, _BLUEPRINT_REALITY_KEY, br["chapter_body"], br.get("grounding") or "")
-    else:
-        log.warning("[assembly] blueprint_reality still empty after retry")
+        parallel_jobs: list[tuple] = [
+            (
+                "blueprint_reality",
+                polish_love_reality_blueprint_reality_only,
+                ("chapter_body", "blueprint_reality"),
+                "blueprint_reality",
+                _BLUEPRINT_REALITY_KEY,
+                None,
+            ),
+            (
+                "breakup",
+                polish_love_reality_chapter_only,
+                ("chapter_body",),
+                None,
+                "breakup",
+                "breakup",
+            ),
+            (
+                "loyalty",
+                polish_love_reality_chapter_only,
+                ("chapter_body",),
+                None,
+                "loyalty",
+                "loyalty",
+            ),
+            (
+                "harmony",
+                polish_love_reality_harmony_only,
+                ("harmony",),
+                "harmony",
+                None,
+                None,
+            ),
+            (
+                "red_flags",
+                polish_love_reality_red_flags_only,
+                ("red_flags_narrative", "chapter_body"),
+                "red_flags_narrative",
+                _RED_FLAGS_KEY,
+                None,
+            ),
+            (
+                "dasha",
+                polish_love_reality_dasha_only,
+                ("dasha_narrative",),
+                "dasha_narrative",
+                None,
+                None,
+            ),
+            (
+                "roadmap",
+                polish_love_reality_roadmap_only,
+                ("roadmap_narrative",),
+                "roadmap_narrative",
+                None,
+                None,
+            ),
+        ]
 
-    for ck in _CHAPTER_KEYS:
-        hit = polish_love_reality_chapter_only(bundle, ck, lang=lang, force_llm=force_llm, tel=tel)
-        if not hit.get("chapter_body"):
-            log.warning(
-                "[assembly] chapter %s miss (%s) — retrying forced",
-                ck,
-                (hit.get("_meta") or {}).get("reason"),
-            )
-            hit = polish_love_reality_chapter_only(
-                bundle, ck, lang=lang, force_llm=True, tel=tel
-            )
-        section_meta[ck] = hit.get("_meta") or {}
-        if hit.get("chapter_body"):
-            _upsert_chapter(pro, ck, hit["chapter_body"], hit.get("grounding") or "")
-        else:
-            log.warning("[assembly] chapter %s still empty after retry", ck)
+        workers = min(7, int(os.environ.get("LOVE_REALITY_SECTION_WORKERS", "5")))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = [
+                pool.submit(
+                    _run_section_job,
+                    label,
+                    fn,
+                    bundle,
+                    lang,
+                    force_llm,
+                    body_keys=body_keys,
+                    pro_key=pro_key,
+                    ch_key=ch_key,
+                    chapter_key=chapter_key,
+                )
+                for label, fn, body_keys, pro_key, ch_key, chapter_key in parallel_jobs
+            ]
+            for fut in as_completed(futures):
+                label, hit, body, pro_key, ch_key = fut.result()
+                section_meta[label] = hit.get("_meta") or {}
+                if not body:
+                    continue
+                if pro_key:
+                    pro[pro_key] = body
+                if ch_key:
+                    _upsert_chapter(pro, ch_key, body, hit.get("grounding") or "")
+                if label == "harmony":
+                    _upsert_chapter(pro, "will_return", body)
+                    _upsert_chapter(pro, "future_outcome", body)
+                elif label in _CHAPTER_KEYS:
+                    _upsert_chapter(pro, label, body, hit.get("grounding") or "")
 
-    harm = polish_love_reality_harmony_only(bundle, lang=lang, force_llm=force_llm, tel=tel)
-    section_meta["harmony"] = harm.get("_meta") or {}
-    if harm.get("harmony"):
-        pro["harmony"] = harm["harmony"]
-        _upsert_chapter(pro, "will_return", harm["harmony"])
-        _upsert_chapter(pro, "future_outcome", harm["harmony"])
-
-    for label, fn, pro_key, ch_key in (
-        ("red_flags", polish_love_reality_red_flags_only, "red_flags_narrative", _RED_FLAGS_KEY),
-        ("dasha", polish_love_reality_dasha_only, "dasha_narrative", None),
-        ("roadmap", polish_love_reality_roadmap_only, "roadmap_narrative", None),
-    ):
-        hit = fn(bundle, lang=lang, force_llm=force_llm, tel=tel)
-        if not hit.get(pro_key) and not hit.get("chapter_body"):
-            log.warning(
-                "[assembly] %s miss (%s) — retry forced",
-                label,
-                (hit.get("_meta") or {}).get("reason"),
-            )
-            hit = fn(bundle, lang=lang, force_llm=True, tel=tel)
-        section_meta[label] = hit.get("_meta") or {}
-        body = hit.get(pro_key) or hit.get("chapter_body") or ""
-        if body:
-            pro[pro_key] = body
-            if ch_key:
-                _upsert_chapter(pro, ch_key, body, hit.get("grounding") or "")
-        else:
-            log.warning("[assembly] %s still empty after retry", label)
-
-    _scrub_loyalty_contradictions(pro, bundle)
-    pro = sanitize_love_reality_pro_premium(pro, bundle)
-    apply_love_premium_validation(pro, bundle, lang)
+        _scrub_loyalty_contradictions(pro, bundle)
+        pro = sanitize_love_reality_pro_premium(pro, bundle)
+        apply_love_premium_validation(pro, bundle, lang)
+    except Exception as exc:
+        log.exception("[assembly] fatal: %s", exc)
+        pro.setdefault("_meta", {})["assembly_error"] = str(exc)
 
     pro.setdefault("_meta", {})
     pro["_meta"].update({

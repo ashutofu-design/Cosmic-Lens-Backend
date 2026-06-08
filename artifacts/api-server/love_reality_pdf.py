@@ -40,8 +40,11 @@ from vedic.love_reality.pdf_page1_data import build_love_reality_page1_data
 from vedic.love_reality.pdf_page1_premium import (
     render_deep_analysis_page2_flowables,
     render_premium_page1_flowables,
-    render_verdict_page_flowables,
 )
+try:
+    from vedic.love_reality.pdf_page1_premium import render_verdict_page_flowables
+except ImportError:
+    render_verdict_page_flowables = None  # type: ignore[assignment,misc]
 from vedic.love_reality.pdf_toc import render_love_reality_toc_flowables
 from vedic.love_reality.pdf_locale import love_reality_pdf_render_lang
 from vedic.love_reality.pdf_text_safe import sanitize_love_reality_pro_premium
@@ -159,6 +162,28 @@ def _section_page(
     return out
 
 
+def _verdict_page_fallback(data: dict[str, Any], lang: str) -> list[Any]:
+    """Stubs Section 02 when pdf_page1_premium on server is behind love_reality_pdf."""
+    verdict = str(data.get("verdict") or "").strip()
+    recs = data.get("recommendation_paragraphs") or data.get("recommendations") or []
+    if isinstance(recs, list):
+        extra = "\n\n".join(str(x) for x in recs if str(x).strip())
+        if extra:
+            verdict = (verdict + "\n\n" + extra).strip() if verdict else extra
+    if not verdict:
+        verdict = "Chart-derived compatibility summary for this couple."
+    _log.warning("[love_reality_pdf] render_verdict_page_flowables missing — using fallback page")
+    return _section_page(
+        _styles(lang),
+        2,
+        "VERDICT",
+        "Astrologer's Note",
+        "Unified interpretation for this bond",
+        verdict,
+        lang=lang,
+    )
+
+
 def _cover_dashboard(s: dict, p1: dict, p2: dict, ctx: dict, lang: str) -> list[Any]:
     H_REG, H_BOLD = _font_pair(lang)
     dash = ctx["page1_dashboard"]
@@ -269,7 +294,10 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
         _last_page1_style = "premium-dashboard"
         page1_data = build_love_reality_page1_data(ctx, bundle, pro, p1, p2, report_id=report_id or None)
         story.extend(render_premium_page1_flowables(page1_data, lang=lang))
-        story.extend(render_verdict_page_flowables(page1_data, lang=lang))
+        if render_verdict_page_flowables is not None:
+            story.extend(render_verdict_page_flowables(page1_data, lang=lang))
+        else:
+            story.extend(_verdict_page_fallback(page1_data, lang=lang))
         story.extend(render_deep_analysis_page2_flowables(page1_data, lang=lang))
         _log.info(
             "[love_reality_pdf] page1 renderer=%s report_id=%s",
@@ -368,7 +396,15 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
         roadmap = roadmap_ctx if isinstance(roadmap_ctx, list) else []
     if not roadmap_body.strip():
         roadmap_body = "Month-by-month arc from Future + Return engines:"
-    rm_rows = [[r["period"], str(r["trend"]), r["note"][:120]] for r in roadmap]
+    rm_rows = [
+        [
+            str(r.get("period") or "—"),
+            str(r.get("trend") or "—"),
+            str(r.get("note") or "")[:120],
+        ]
+        for r in roadmap
+        if isinstance(r, dict)
+    ]
     story.extend(_section_page(
         s, 11, "ROADMAP", "The 1–3 Year Chronological Roadmap",
         "3 months · 12 months · 36 months trend updates",

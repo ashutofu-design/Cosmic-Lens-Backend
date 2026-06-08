@@ -45,6 +45,10 @@ def _force_llm_requested() -> bool:
     """Force fresh OpenAI polish even if a saved snapshot exists."""
     import os
 
+    layout_refresh = (request.headers.get("X-PDF-Layout-Refresh") or "").strip().lower()
+    if layout_refresh in ("1", "true", "yes", "on"):
+        return False
+
     hdr = (request.headers.get("X-Force-LLM") or "").strip().lower()
     body = request.get_json(silent=True) or {}
     flag = str(body.get("force_llm") or "").strip().lower()
@@ -107,7 +111,10 @@ def _resolve_pro_premium(
     if not isinstance(pro, dict):
         pro = {}
     if pro:
-        _snap.save(snap_params, pro)
+        from vedic.love_reality.love_section_polish import _assembly_depth_ok
+
+        if _assembly_depth_ok(pro):
+            _snap.save(snap_params, pro)
     return pro, "llm"
 
 
@@ -130,16 +137,22 @@ def register_love_reality_routes(flask_app) -> None:
             }), 200
 
         data = request.get_json(silent=True) or {}
-        from vedic.love_reality.compute_bundle import compute_love_reality_bundle
-        from vedic.love_reality.pdf_locale import normalize_love_reality_pdf_lang
-        from love_reality_pdf import render_love_reality_pro_pdf
-
-        lang = normalize_love_reality_pdf_lang(data.get("lang"))
         if not isinstance(data.get("p1"), dict) or not isinstance(data.get("p2"), dict):
             return jsonify({"error": "expected_p1_p2"}), 400
 
-        import report_cache as _rc
-        import couple_report_billing as _billing
+        try:
+            from vedic.love_reality.compute_bundle import compute_love_reality_bundle
+            from vedic.love_reality.pdf_locale import normalize_love_reality_pdf_lang
+            from love_reality_pdf import render_love_reality_pro_pdf
+            import report_cache as _rc
+            import couple_report_billing as _billing
+        except Exception as exc:
+            return jsonify({
+                "error": "love_reality_pro_pdf_failed",
+                "detail": f"import_failed: {exc}",
+            }), 500
+
+        lang = normalize_love_reality_pdf_lang(data.get("lang"))
 
         user_id = 0
         uid_hdr = (request.headers.get("X-User-Id") or "").strip()
@@ -233,7 +246,7 @@ def register_love_reality_routes(flask_app) -> None:
                 user_id=user_id,
                 p1=data["p1"],
                 p2=data["p2"],
-                force_llm=bool(force_regen or _force_llm_requested()),
+                force_llm=_force_llm_requested(),
             )
             if pro is None:
                 return jsonify({
@@ -299,49 +312,49 @@ def register_love_reality_routes(flask_app) -> None:
                 pass
             if render_err or not pdf_bytes:
                 return jsonify({"error": "love_reality_pro_pdf_failed", "detail": render_err}), 500
+
+            p1n = (bundle.get("p1") or {}).get("name") or "p1"
+            p2n = (bundle.get("p2") or {}).get("name") or "p2"
+            safe = lambda s: "".join(c for c in str(s) if c.isalnum() or c in "_-")[:32] or "x"
+            fname = f"Love_Reality_Pro_{safe(p1n)}_{safe(p2n)}.pdf"
+            _rc.save(
+                user_id,
+                "love_reality_pro",
+                "Love Reality Pro",
+                cache_params,
+                pdf_bytes,
+                fname,
+            )
+            pdf_headers: dict[str, str] = {
+                "Content-Disposition": f'inline; filename="{fname}"',
+                "Content-Length": str(len(pdf_bytes)),
+                "Cache-Control": "private, max-age=3600",
+                "X-Report-Cache": "miss",
+                "X-Polish-Source": polish_source,
+                **_pdf_layout_headers(cache_hit=False),
+            }
+            try:
+                from vedic.compat.openai_pdf_telemetry import (
+                    get_last_pdf_generation_telemetry,
+                    response_telemetry_headers,
+                )
+
+                _pg = get_last_pdf_generation_telemetry()
+                if _pg:
+                    pdf_headers.update(response_telemetry_headers(_pg))
+            except Exception:
+                pass
+            return Response(
+                pdf_bytes,
+                mimetype="application/pdf",
+                headers=pdf_headers,
+            )
         except Exception as exc:
             try:
                 print(f"[love_reality_pro_pdf] failed: {exc}", flush=True)
             except Exception:
                 pass
             return jsonify({"error": "love_reality_pro_pdf_failed", "detail": str(exc)}), 500
-
-        p1n = (bundle.get("p1") or {}).get("name") or "p1"
-        p2n = (bundle.get("p2") or {}).get("name") or "p2"
-        safe = lambda s: "".join(c for c in str(s) if c.isalnum() or c in "_-")[:32] or "x"
-        fname = f"Love_Reality_Pro_{safe(p1n)}_{safe(p2n)}.pdf"
-        _rc.save(
-            user_id,
-            "love_reality_pro",
-            "Love Reality Pro",
-            cache_params,
-            pdf_bytes,
-            fname,
-        )
-        pdf_headers: dict[str, str] = {
-            "Content-Disposition": f'inline; filename="{fname}"',
-            "Content-Length": str(len(pdf_bytes)),
-            "Cache-Control": "private, max-age=3600",
-            "X-Report-Cache": "miss",
-            "X-Polish-Source": polish_source,
-            **_pdf_layout_headers(cache_hit=False),
-        }
-        try:
-            from vedic.compat.openai_pdf_telemetry import (
-                get_last_pdf_generation_telemetry,
-                response_telemetry_headers,
-            )
-
-            _pg = get_last_pdf_generation_telemetry()
-            if _pg:
-                pdf_headers.update(response_telemetry_headers(_pg))
-        except Exception:
-            pass
-        return Response(
-            pdf_bytes,
-            mimetype="application/pdf",
-            headers=pdf_headers,
-        )
 
     @flask_app.route("/api/loyalty-compare", methods=["POST", "OPTIONS"])
     def loyalty_compare():

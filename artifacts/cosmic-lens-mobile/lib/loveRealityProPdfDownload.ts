@@ -65,6 +65,8 @@ async function fetchLoveRealityPdf(
     p2: Record<string, unknown>;
     lang: string;
     forceRegenerate: boolean;
+    /** Fresh OpenAI polish — only when user explicitly regens, not layout-only refresh. */
+    forceLlm: boolean;
   },
   signal: AbortSignal,
 ): Promise<Response> {
@@ -74,16 +76,17 @@ async function fetchLoveRealityPdf(
       ...pdfAuthHeaders(opts.user),
       Accept: "application/pdf",
       "X-Expected-PDF-Layout": LOVE_REALITY_PDF_LAYOUT_VER,
-        ...(opts.forceRegenerate ? { "X-Force-Regenerate": "1" } : {}),
-        ...(opts.forceRegenerate ? { "X-PDF-Layout-Refresh": "1" } : {}),
-        ...(opts.forceRegenerate ? { "X-Force-LLM": "1" } : {}),
+      ...(opts.forceRegenerate ? { "X-Force-Regenerate": "1" } : {}),
+      ...(opts.forceRegenerate ? { "X-PDF-Layout-Refresh": "1" } : {}),
+      ...(opts.forceLlm ? { "X-Force-LLM": "1" } : {}),
     },
     body: JSON.stringify({
       p1: opts.p1,
       p2: opts.p2,
       lang: opts.lang,
       pdf_layout: LOVE_REALITY_PDF_LAYOUT_VER,
-      ...(opts.forceRegenerate ? { force_regenerate: true, force_llm: true } : {}),
+      ...(opts.forceRegenerate ? { force_regenerate: true } : {}),
+      ...(opts.forceLlm ? { force_llm: true } : {}),
     }),
     signal,
   });
@@ -98,6 +101,8 @@ export async function downloadLoveRealityProPdf(opts: {
   lang: string;
   /** Default false — reuse server-saved PDF when same couple + lang already generated. */
   forceRegenerate?: boolean;
+  /** Default false — reuse server polish snapshot; true only for explicit full regen. */
+  forceLlm?: boolean;
 }): Promise<LoveRealityProPdfDownloadResult> {
   const bd1 = opts.p1;
   const bd2 = opts.p2;
@@ -113,6 +118,7 @@ export async function downloadLoveRealityProPdf(opts: {
   const lang = coerceProPdfLang(opts.lang);
   const layoutRefresh = await needsLayoutRefresh();
   const forceRegenerate = Boolean(opts.forceRegenerate || layoutRefresh);
+  const forceLlm = Boolean(opts.forceLlm);
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 240000);
@@ -124,6 +130,7 @@ export async function downloadLoveRealityProPdf(opts: {
         p2: { ...packLovePerson(bd2, opts.p2Name), tz: tz2 },
         lang,
         forceRegenerate,
+        forceLlm,
       },
       ctrl.signal,
     );
@@ -146,6 +153,7 @@ export async function downloadLoveRealityProPdf(opts: {
           p2: { ...packLovePerson(bd2, opts.p2Name), tz: tz2 },
           lang,
           forceRegenerate: true,
+          forceLlm: false,
         },
         ctrl.signal,
       );

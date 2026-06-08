@@ -42,10 +42,10 @@ VERDICT_BG = colors.HexColor("#F5F3FF")
 _CONTENT_W = 180 * mm
 _GAUGE_SIZE = 38 * mm  # hero — ~45% larger than prior compact gauge
 _GAP = 2.2 * mm
-_SECTION = 12.0
-_BODY = 11.5
-_BODY_LEADING = 14.5
-_METRIC = 11.0
+_SECTION = 12.5
+_BODY = 12.5
+_BODY_LEADING = 16.5
+_METRIC = 12.5
 _CARD_PAD = 6
 _STRENGTH_ICONS = ("★", "♥", "✦", "◆")
 _CHALLENGE_ICONS = ("⚠", "✗", "▼", "◆")
@@ -56,6 +56,17 @@ def _short(text: str, max_len: int = 200) -> str:
     if len(t) <= max_len:
         return t
     return t[: max_len - 1].rsplit(" ", 1)[0] + "…"
+
+
+def _prose_html(text: str, *, max_len: int | None = None) -> str:
+    """Preserve LLM paragraph breaks for ReportLab Paragraph."""
+    t = (text or "").strip()
+    if max_len and len(t) > max_len:
+        t = _short(t, max_len)
+    parts = [p.strip() for p in t.replace("\r\n", "\n").split("\n\n") if p.strip()]
+    if not parts:
+        return _safe(t)
+    return "<br/><br/>".join(_safe(p.replace("\n", " ")) for p in parts)
 
 
 def _strong_card(*, accent: bool = False) -> TableStyle:
@@ -197,8 +208,8 @@ def _metric_cell(metric: dict[str, Any], H_REG: str, H_BOLD: str) -> Paragraph:
     val = int(metric.get("value") or 0)
     return Paragraph(
         f"<b>{_safe(metric.get('label') or '')}</b><br/>"
-        f"<font color='{_hex(BRAND_PURPLE)}' size='13'><b>{val}%</b></font><br/>"
-        f"<font size='9'>{_safe(_short(metric.get('interpretation') or '', 38))}</font>",
+        f"<font size='12.5'><b>{val}%</b></font><br/>"
+        f"<font size='12.5'>{_safe(_short(metric.get('interpretation') or '', 38))}</font>",
         ParagraphStyle("mc", fontName=H_REG, fontSize=_METRIC, leading=_BODY_LEADING, textColor=TEXT_DARK),
     )
 
@@ -216,11 +227,11 @@ def _progress_row(
     fill = RED if negative else _score_color(value)
     pct = Paragraph(
         f"<font color='{_hex(fill)}'><b>{value}%</b></font>",
-        ParagraphStyle("pv", fontName=H_BOLD, fontSize=10.5, leading=12, alignment=TA_RIGHT, textColor=fill),
+        ParagraphStyle("pv", fontName=H_BOLD, fontSize=_BODY, leading=_BODY_LEADING, alignment=TA_RIGHT, textColor=fill),
     )
     lbl = Paragraph(
         _safe(label),
-        ParagraphStyle("pl", fontName=H_REG, fontSize=10.5, leading=12.5, textColor=TEXT_DARK),
+        ParagraphStyle("pl", fontName=H_REG, fontSize=_BODY, leading=_BODY_LEADING, textColor=TEXT_DARK),
     )
     icon_p = Paragraph(
         f"<font color='{_hex(fill)}'><b>{icon}</b></font>",
@@ -242,7 +253,7 @@ def _progress_row(
 
 def _side_panel(title: str, items: list[dict], H_REG: str, H_BOLD: str, *, negative: bool) -> Table:
     icons = _CHALLENGE_ICONS if negative else _STRENGTH_ICONS
-    rows: list[Any] = [_section_label(title, H_BOLD, size=11)]
+    rows: list[Any] = [_section_label(title, H_BOLD, size=_BODY)]
     for i, it in enumerate((items or [])[:3]):
         rows.append(_progress_row(
             icons[i % len(icons)],
@@ -257,40 +268,87 @@ def _side_panel(title: str, items: list[dict], H_REG: str, H_BOLD: str, *, negat
     return t
 
 
-def _premium_verdict_card(verdict: str, score: int, H_REG: str, H_BOLD: str) -> Table:
-    _, fg, band_bg = _alignment_verdict_band(score)
+def _premium_verdict_card(
+    verdict: str,
+    score: int,
+    H_REG: str,
+    H_BOLD: str,
+    *,
+    hero: bool = False,
+    lang: str = "en",
+    extra_paragraphs: list[str] | None = None,
+) -> Table:
+    parts = [verdict.strip()] if str(verdict or "").strip() else []
+    for block in extra_paragraphs or []:
+        t = str(block).strip()
+        if t:
+            parts.append(t)
+    merged = "\n\n".join(parts)
     body = Paragraph(
-        _safe(_short(verdict, 240)),
-        ParagraphStyle("vd", fontName=H_REG, fontSize=12, leading=15, textColor=TEXT_DARK),
+        _prose_html(merged, max_len=None if hero else 240),
+        ParagraphStyle("vd", fontName=H_REG, fontSize=_BODY, leading=_BODY_LEADING, textColor=TEXT_DARK),
     )
+    badge = Paragraph(
+        f"<font color='{_hex(TEXT_SOFT)}'>Overall bond · {score}/100</font>",
+        ParagraphStyle("vbd", fontName=H_REG, fontSize=9, leading=11, alignment=TA_RIGHT),
+    )
+    note_title = "Astrologer Ka Note" if lang == "hn" else "Astrologer's Note"
     title = Paragraph(
         f"<font color='{_hex(BRAND_GOLD)}'>✦</font> "
-        f"<font color='{_hex(BRAND_PURPLE)}'><b>FINAL COSMIC VERDICT</b></font>",
-        ParagraphStyle("vt", fontName=H_BOLD, fontSize=13, leading=16, textColor=BRAND_PURPLE),
+        f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(note_title.upper())}</b></font>",
+        ParagraphStyle("vt", fontName=H_BOLD, fontSize=_BODY, leading=_BODY_LEADING, textColor=BRAND_PURPLE),
     )
-    tbl = Table([[title], [body]], colWidths=[_CONTENT_W])
+    pad = 12 if hero else 6
+    tbl = Table([[title], [badge], [body]], colWidths=[_CONTENT_W])
     tbl.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), VERDICT_BG),
-        ("BOX", (0, 0), (-1, -1), 1.0, fg),
+        ("BOX", (0, 0), (-1, -1), 1.2 if hero else 1.0, BRAND_PURPLE),
         ("LINEBELOW", (0, 0), (-1, 0), 0.5, COSMIC_300),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LEFTPADDING", (0, 0), (-1, -1), pad),
+        ("RIGHTPADDING", (0, 0), (-1, -1), pad),
+        ("TOPPADDING", (0, 0), (-1, -1), pad if hero else 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), pad if hero else 6),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ALIGN", (0, 1), (-1, 1), "RIGHT"),
     ]))
     return tbl
 
 
-def _recommendations_card(recs: list[str], H_REG: str, H_BOLD: str) -> Table:
-    lines = [f"&bull; {_safe(_short(str(r), 78))}" for r in recs[:5] if str(r).strip()]
+def _recommendations_card(
+    recs: list[str],
+    H_REG: str,
+    H_BOLD: str,
+    *,
+    hero: bool = False,
+    paragraph_mode: bool = False,
+    lang: str = "en",
+) -> Table:
+    items = [str(r).strip() for r in recs if str(r).strip()]
+    use_paragraphs = paragraph_mode or (hero and any(len(x) > 100 for x in items))
+    if use_paragraphs:
+        blocks = [_prose_html(item) for item in items[:3]]
+        body_html = "<br/><br/>".join(blocks) if blocks else "—"
+    else:
+        bullet_max = 110 if hero else 78
+        lines = [f"&bull; {_safe(_short(str(r), bullet_max))}" for r in items[:5]]
+        body_html = "<br/>".join(lines) if lines else "—"
     body = Paragraph(
-        "<br/>".join(lines) if lines else "—",
-        ParagraphStyle("rc", fontName=H_REG, fontSize=_BODY, leading=_BODY_LEADING, textColor=TEXT_MID, leftIndent=4),
+        body_html,
+        ParagraphStyle(
+            "rc", fontName=H_REG, fontSize=_BODY, leading=_BODY_LEADING,
+            textColor=TEXT_DARK if hero else TEXT_MID, leftIndent=6 if hero else 4,
+        ),
     )
-    title = _section_label("Recommendations", H_BOLD, size=11.5)
+    rec_title = "Aage Kya Karein" if lang == "hn" else "What To Do Next"
+    title = _section_label(rec_title, H_BOLD, size=_BODY)
     tbl = Table([[title], [body]], colWidths=[_CONTENT_W])
-    tbl.setStyle(_strong_card())
+    st = _strong_card(accent=hero)
+    if hero:
+        st.add("TOPPADDING", (0, 0), (-1, -1), 10)
+        st.add("BOTTOMPADDING", (0, 0), (-1, -1), 10)
+        st.add("LEFTPADDING", (0, 0), (-1, -1), 10)
+        st.add("RIGHTPADDING", (0, 0), (-1, -1), 10)
+    tbl.setStyle(st)
     return tbl
 
 
@@ -381,12 +439,39 @@ def render_premium_page1_flowables(data: dict[str, Any], lang: str = "en") -> li
     )
     sc.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     out.append(sc)
-    out.append(Spacer(1, _GAP))
+    out.append(PageBreak())
+    return out
 
-    out.append(_premium_verdict_card(str(data.get("verdict") or ""), score, H_REG, H_BOLD))
-    out.append(Spacer(1, _GAP))
-    out.append(_recommendations_card(data.get("recommendations") or [], H_REG, H_BOLD))
-    out.append(Spacer(1, 1 * mm))
+
+def render_verdict_page_flowables(data: dict[str, Any], lang: str = "en") -> list[Any]:
+    """Dedicated page — one unified astrologer's note (interpretation + guidance in one flow)."""
+    H_REG, H_BOLD = _font_pair(lang)
+    score = int(data.get("cosmic_score") or 0)
+    recs = data.get("recommendation_paragraphs") or data.get("recommendations") or []
+    if isinstance(recs, str):
+        recs = [recs]
+    out: list[Any] = []
+
+    out.append(Spacer(1, 3 * mm))
+    out.append(
+        Paragraph(
+            f"<font color='{_hex(TEXT_SOFT)}'><b>02</b></font> "
+            f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(data['p1_name'])}</b> &amp; "
+            f"<b>{_safe(data['p2_name'])}</b></font>",
+            ParagraphStyle("vp_h", fontName=H_BOLD, fontSize=_BODY, leading=_BODY_LEADING, textColor=TEXT_DARK),
+        )
+    )
+    out.append(Spacer(1, 2 * mm))
+    out.append(_premium_verdict_card(
+        str(data.get("verdict") or ""),
+        score,
+        H_REG,
+        H_BOLD,
+        hero=True,
+        lang=lang,
+        extra_paragraphs=[str(x) for x in recs if str(x).strip()],
+    ))
+    out.append(Spacer(1, 3 * mm))
     out.append(Paragraph(
         f"<font color='{_hex(TEXT_SOFT)}'>Cosmic Lens · Confidential premium report</font>",
         ParagraphStyle("ft", fontName=H_REG, fontSize=9, leading=11, alignment=TA_CENTER),

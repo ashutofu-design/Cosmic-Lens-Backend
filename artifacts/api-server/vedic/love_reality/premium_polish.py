@@ -163,7 +163,8 @@ def _love_polish_fingerprint(bundle: dict, lang: str, model: str) -> str:
 def _love_polish_cache_depth_ok(hit: dict) -> bool:
     """Reject shallow cached polish (treat as miss)."""
     meta = hit.get("_meta") or {}
-    if meta.get("assembly") == "lr_sections_v1":
+    assembly = str(meta.get("assembly") or "")
+    if assembly.startswith("lr_sections_v"):
         from vedic.love_reality.love_section_polish import _assembly_depth_ok
 
         return _assembly_depth_ok(hit)
@@ -1714,9 +1715,13 @@ def polish_love_reality_premium(
                 out["_meta"] = meta
                 return out
 
-        pro = assemble_love_reality_pro_premium(
-            bundle, lang=lang, force_llm=force_llm, model=model
-        )
+        try:
+            pro = assemble_love_reality_pro_premium(
+                bundle, lang=lang, force_llm=force_llm, model=model
+            )
+        except Exception as exc:
+            log.exception("[love_reality_premium] assembly failed: %s", exc)
+            pro = _empty_shell(model, "assembly_fail")
         if not _cache_disabled() and _love_polish_cache_depth_ok(pro):
             try:
                 _l1_put(cache_key, pro)

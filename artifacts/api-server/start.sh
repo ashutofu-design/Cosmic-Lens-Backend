@@ -40,7 +40,7 @@ if [ "${PROD:-0}" = "1" ]; then
     --workers "${GUNICORN_WORKERS:-4}" \
     --threads "${GUNICORN_THREADS:-2}" \
     --worker-class gthread \
-    --timeout "${GUNICORN_TIMEOUT:-60}" \
+    --timeout "${GUNICORN_TIMEOUT:-300}" \
     --bind "0.0.0.0:$PORT" \
     --access-logfile - \
     --error-logfile - \

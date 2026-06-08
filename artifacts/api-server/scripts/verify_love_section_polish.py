@@ -20,7 +20,7 @@ _API = Path(__file__).resolve().parents[1]
 if str(_API) not in sys.path:
     sys.path.insert(0, str(_API))
 
-_REQUIRED_CHAPTERS = ("love_connection", "breakup", "loyalty", "red_flags")
+_REQUIRED_CHAPTERS = ("breakup", "loyalty")
 _MIN_WORDS = {
     "love_connection": 90,
     "breakup": 90,
@@ -77,6 +77,24 @@ def audit_pro(pro: dict) -> dict[str, dict]:
         }
     harm = str(pro.get("harmony") or _chapter_body(pro, "will_return") or "")
     rows["harmony"] = {"words": _wc(harm), "ok": _wc(harm) >= 90, "preview": harm[:120]}
+    rf = str(pro.get("red_flags_narrative") or _chapter_body(pro, "red_flags") or "")
+    rows["red_flags_narrative"] = {
+        "words": _wc(rf),
+        "ok": _wc(rf) >= _MIN_WORDS["red_flags"],
+        "preview": rf[:120] if rf else "(EMPTY — Page 12 bullets only)",
+    }
+    dasha = str(pro.get("dasha_narrative") or "")
+    rows["dasha_narrative"] = {
+        "words": _wc(dasha),
+        "ok": _wc(dasha) >= 60,
+        "preview": dasha[:120] if dasha else "(EMPTY — Dasha page engine bullets only)",
+    }
+    road = str(pro.get("roadmap_narrative") or "")
+    rows["roadmap_narrative"] = {
+        "words": _wc(road),
+        "ok": _wc(road) >= 70,
+        "preview": road[:120] if road else "(EMPTY — Roadmap table only)",
+    }
     return rows
 
 
@@ -120,6 +138,8 @@ def main() -> int:
         print("  loyalty          -> Page 10 Loyalty & Trust")
         print("  red_flags        -> Page 12 Red Flags Matrix body")
         print("  harmony          -> Page 13 Harmony Formula")
+        print("  dasha_narrative  -> Page 14 Dasha (prose) + engine bullet lines")
+        print("  roadmap_narrative-> Page 15 Roadmap (prose) + engine score table")
         print()
 
     paths: list[Path] = []

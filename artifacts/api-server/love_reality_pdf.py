@@ -40,7 +40,9 @@ from vedic.love_reality.pdf_page1_data import build_love_reality_page1_data
 from vedic.love_reality.pdf_page1_premium import (
     render_deep_analysis_page2_flowables,
     render_premium_page1_flowables,
+    render_verdict_page_flowables,
 )
+from vedic.love_reality.pdf_toc import render_love_reality_toc_flowables
 from vedic.love_reality.pdf_locale import love_reality_pdf_render_lang
 from vedic.love_reality.pdf_text_safe import sanitize_love_reality_pro_premium
 
@@ -51,6 +53,53 @@ _last_page1_style = "unknown"
 
 def get_last_page1_style() -> str:
     return _last_page1_style
+
+
+def _love_reality_doc_template(buf: io.BytesIO, title: str, lang: str) -> SimpleDocTemplate:
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=15 * mm,
+        rightMargin=15 * mm,
+        topMargin=18 * mm,
+        bottomMargin=20 * mm,
+        title=title,
+        author="Cosmic Lens",
+    )
+    doc.milan_pdf_lang = lang
+    doc.milan_pdf_footer_pro = True
+    doc.milan_pdf_footer_center = LRL.footer_label(lang)
+    return doc
+
+
+def render_love_reality_exec_summary_only_pdf(payload: dict, lang: str = "en") -> bytes:
+    """
+    Executive summary (Page 1 content) only — same ReportLab auto-pagination as production.
+    Used for local preview; content may span multiple PDF pages before deep analysis.
+    """
+    lang = love_reality_pdf_render_lang(lang)
+    _ensure_native_pdf_fonts_registered(lang)
+    payload = payload or {}
+    p1 = payload.get("p1") or {}
+    p2 = payload.get("p2") or {}
+    bundle = payload.get("engines") or payload
+    if isinstance(bundle, dict) and not bundle.get("chart_snapshot"):
+        bundle = enrich_bundle_for_pdf(bundle)
+    pro = sanitize_love_reality_pro_premium(
+        payload.get("pro_premium") or {},
+        bundle if isinstance(bundle, dict) else None,
+    )
+    ctx = build_love_reality_pdf_v2_context(bundle, pro, p1, p2, lang)
+    report_id = str(payload.get("report_id") or "LR-PREVIEW")
+    page1_data = build_love_reality_page1_data(ctx, bundle, pro, p1, p2, report_id=report_id)
+    story = render_premium_page1_flowables(page1_data, lang=lang)
+    story = [f for f in story if not isinstance(f, PageBreak)]
+
+    buf = io.BytesIO()
+    title = f"Love Reality Pro — {p1.get('name', '?')} & {p2.get('name', '?')}"
+    doc = _love_reality_doc_template(buf, title, lang)
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
 
 
 def _section_page(
@@ -191,28 +240,36 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
     s = _styles(lang)
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(
+    doc = _love_reality_doc_template(
         buf,
-        pagesize=A4,
-        leftMargin=15 * mm,
-        rightMargin=15 * mm,
-        topMargin=18 * mm,
-        bottomMargin=20 * mm,
-        title=f"Love Reality Pro — {p1.get('name', '?')} & {p2.get('name', '?')}",
-        author="Cosmic Lens",
+        f"Love Reality Pro — {p1.get('name', '?')} & {p2.get('name', '?')}",
+        lang,
     )
 
     story: list[Any] = []
     global _last_page1_style
 
-    # §1 Premium dashboard (page 1)
-    if (os.environ.get("LOVE_REALITY_PDF_PAGE1_LEGACY") or "").strip().lower() in ("1", "true", "yes"):
+    legacy_page1 = (os.environ.get("LOVE_REALITY_PDF_PAGE1_LEGACY") or "").strip().lower() in (
+        "1", "true", "yes",
+    )
+    report_id = str(payload.get("report_id") or "").strip()
+
+    # §0 Table of contents — always first physical PDF page
+    story.extend(
+        render_love_reality_toc_flowables(
+            p1, p2, report_id=report_id, lang=lang, legacy_page1=legacy_page1,
+        )
+    )
+
+    # §1 Premium dashboard
+    if legacy_page1:
         _last_page1_style = "legacy-scorecard"
         story.extend(_cover_dashboard(s, p1, p2, ctx, lang))
     else:
         _last_page1_style = "premium-dashboard"
-        page1_data = build_love_reality_page1_data(ctx, bundle, pro, p1, p2)
+        page1_data = build_love_reality_page1_data(ctx, bundle, pro, p1, p2, report_id=report_id or None)
         story.extend(render_premium_page1_flowables(page1_data, lang=lang))
+        story.extend(render_verdict_page_flowables(page1_data, lang=lang))
         story.extend(render_deep_analysis_page2_flowables(page1_data, lang=lang))
         _log.info(
             "[love_reality_pdf] page1 renderer=%s report_id=%s",
@@ -286,19 +343,36 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
         ctx["page9_harmony"], lang=lang,
     ))
 
+    dasha_ctx = ctx["page10_dasha"]
+    if isinstance(dasha_ctx, dict):
+        dasha_body = dasha_ctx.get("body") or ""
+        dasha_lines = dasha_ctx.get("lines") or []
+    else:
+        dasha_body = ""
+        dasha_lines = dasha_ctx if isinstance(dasha_ctx, list) else []
+    if not dasha_body.strip():
+        dasha_body = "Current and upcoming dasha alignment:"
     story.extend(_section_page(
         s, 10, "DASHA", "Vimshottari Dasha Synchronization",
         "Parallel time cycles for both partners",
-        "Current and upcoming dasha alignment:",
-        lang=lang, bullets=ctx["page10_dasha"],
+        dasha_body,
+        lang=lang, bullets=dasha_lines,
     ))
 
-    roadmap = ctx["page11_roadmap"]
+    roadmap_ctx = ctx["page11_roadmap"]
+    if isinstance(roadmap_ctx, dict):
+        roadmap_body = roadmap_ctx.get("body") or ""
+        roadmap = roadmap_ctx.get("rows") or []
+    else:
+        roadmap_body = ""
+        roadmap = roadmap_ctx if isinstance(roadmap_ctx, list) else []
+    if not roadmap_body.strip():
+        roadmap_body = "Month-by-month arc from Future + Return engines:"
     rm_rows = [[r["period"], str(r["trend"]), r["note"][:120]] for r in roadmap]
     story.extend(_section_page(
         s, 11, "ROADMAP", "The 1–3 Year Chronological Roadmap",
         "3 months · 12 months · 36 months trend updates",
-        "Month-by-month arc from Future + Return engines:",
+        roadmap_body,
         lang=lang, table_rows=rm_rows,
     ))
 
@@ -342,8 +416,5 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
         ),
     )
 
-    doc.milan_pdf_lang = lang
-    doc.milan_pdf_footer_pro = True
-    doc.milan_pdf_footer_center = LRL.footer_label(lang)
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()

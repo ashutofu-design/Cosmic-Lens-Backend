@@ -1,5 +1,5 @@
 """
-Love Reality Pro — per-section LLM calls (S02, S03, chapters 05/08/09/10/11).
+Love Reality Pro — per-section LLM calls (S02–S03, blueprint, chapters, harmony, dasha, roadmap).
 Shared astrologer voice; no mega-prompt.
 """
 from __future__ import annotations
@@ -17,12 +17,13 @@ from vedic.compat.premium_chapters import CHAPTER_BODY_KEY, normalize_pro_pdf_la
 
 log = logging.getLogger(__name__)
 
-_ASSEMBLY_VER = "lr_sections_v3"
+_ASSEMBLY_VER = "lr_sections_v4"
 _CHAPTER_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_CHAPTER_MIN_WORDS", "120"))
 _HARMONY_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_HARMONY_MIN_WORDS", "180"))
 
-_CHAPTER_KEYS = ("breakup", "loyalty", "red_flags")
+_CHAPTER_KEYS = ("breakup", "loyalty")
 _BLUEPRINT_REALITY_KEY = "love_connection"
+_RED_FLAGS_KEY = "red_flags"
 
 
 def _env_flag(name: str, default: str = "0") -> bool:
@@ -142,12 +143,75 @@ WRITE (sharp, minimum 3 paragraphs, use real names):
 
 def _harmony_few_shot(lang: str) -> str:
     if lang == "hn":
-        return """AISE LIKHO (long-term + reconnection — honest, p1 to):
-"Aarav, agar alag hue to chart genuine return ko kam probability deta hai — yeh mat padhna ki Riya zaroor wapas aayegi. Jo bond bacha hai usme warmth hai par repair habit ke bina 6-8 mahine ka loop wapas aata hai. Tumhe gusse ke peak par baat band karna seekhna hoga."
+        return """AISE LIKHO (honest, real p1/p2 names):
+"[p1_name], agar alag hue to chart genuine return ko kam probability deta hai — false reunion promise mat do. Repair habit ke bina 6-8 mahine ka loop wapas aata hai."
 """
-    return """WRITE (long-term + reconnection — honest, to p1):
-"Aarav, if you were apart the chart gives a low probability of a genuine return — do not read this as 'she will definitely come back.' What remains in the bond has warmth, but without repair habits the same six-to-eight month loop returns. You need to stop trying to settle every fight at peak anger."
+    return """WRITE (honest, real p1/p2 names):
+"[p1_name], if apart the chart gives low genuine-return probability — do not promise reunion. Without repair habits the same six-to-eight month loop returns."
 """
+
+
+def _red_flags_engine_facts(bundle: dict) -> str:
+    rf = bundle.get("hidden_red_flags") or {}
+    bu = bundle.get("breakup_chances") or {}
+    ly = bundle.get("loyalty_check") or {}
+    lines = [
+        f"Breakup pressure score: {bu.get('breakup_score') or bu.get('score') or '?'}/100",
+        f"Loyalty score: {ly.get('loyalty_score') or ly.get('score') or '?'}/100",
+    ]
+    for r in (rf.get("reasons") or [])[:6]:
+        lines.append(f"Red-flag signal: {r}")
+    for r in (bu.get("reasons") or [])[:3]:
+        lines.append(f"Friction signal: {r}")
+    return "ENGINE RED-FLAG FACTS (name these patterns in prose):\n" + "\n".join(lines)
+
+
+def _dasha_engine_facts(bundle: dict) -> str:
+    p1 = bundle.get("p1") or {}
+    p2 = bundle.get("p2") or {}
+    k1 = bundle.get("kundli_p1") or {}
+    k2 = bundle.get("kundli_p2") or {}
+    fo = bundle.get("future_outcome") or {}
+    lines = ["VIMSHOTTARI DASHA FACTS (explain in plain guide for p1):"]
+    for nm, kraw in ((p1.get("name") or "p1", k1), (p2.get("name") or "p2", k2)):
+        cd = kraw.get("currentDasha") or {}
+        maha, antar = cd.get("maha"), cd.get("antar")
+        start, end = cd.get("startDate"), cd.get("endDate")
+        if maha:
+            bit = f"{nm}: Mahadasha {maha}"
+            if antar:
+                bit += f", Antardasha {antar}"
+            if start and end:
+                bit += f" (window {start} → {end})"
+            lines.append(bit)
+    if fo.get("next_shift"):
+        lines.append(f"Couple dasha outlook: {fo.get('next_shift')}")
+    sig = bundle.get("couple_signals") or {}
+    for n in (sig.get("synastry_notes") or [])[:3]:
+        lines.append(f"Synastry note: {n}")
+    return "\n".join(lines)
+
+
+def _roadmap_engine_facts(bundle: dict) -> str:
+    fo = bundle.get("future_outcome") or {}
+    wr = bundle.get("will_return") or {}
+    bu = bundle.get("breakup_chances") or {}
+    lc = bundle.get("love_compatibility") or {}
+    timeline = fo.get("timeline_flow") or []
+    t3 = timeline[1] if len(timeline) > 1 else {}
+    lines = [
+        "ROADMAP ENGINE SCORES (guide p1 — do NOT invent new numbers):",
+        f"Love score: {lc.get('score') or '?'}/100",
+        f"Future outlook score: {fo.get('future_score') or fo.get('score') or '?'}/100",
+        f"Return probability: {wr.get('return_probability') or wr.get('score') or '?'}/100",
+        f"Breakup pressure: {bu.get('breakup_score') or bu.get('score') or '?'}/100",
+        f"Next 3 months trend: {t3.get('trend') or 'mixed'} — {t3.get('reason') or fo.get('emotional_summary') or ''}",
+        f"Next 12 months outlook: {fo.get('outcome') or 'mixed'} — {fo.get('current_phase') or ''}",
+        f"Next 36 months / return band: {wr.get('return_chance') or 'mixed'} — {wr.get('time_window') or fo.get('outcome') or ''}",
+    ]
+    if fo.get("next_shift"):
+        lines.append(f"Phase shift note: {fo.get('next_shift')}")
+    return "\n".join(lines)
 
 
 def _chapter_section_brief(chapter_key: str, lang: str) -> str:
@@ -329,6 +393,218 @@ def polish_love_reality_blueprint_reality_only(
         user=user,
         max_tokens=max_tok,
         temp_env="LOVE_REALITY_BLUEPRINT_REALITY_TEMPERATURE",
+        force_llm=force_llm,
+        parse_fn=_parse,
+        tel=tel,
+    )
+
+
+def _build_red_flags_system_prompt(lang: str) -> str:
+    lang = polish_content_lang(lang)
+    script = {"en": "plain conversational English", "hn": "natural Roman Hinglish"}[lang]
+    return f"""Write ONLY PDF Section — Red Flags Matrix (lead-in prose before bullet list).
+
+Return STRICT JSON:
+{{
+  "red_flags_narrative": "long sharp prose",
+  "chapter_body": "same as red_flags_narrative",
+  "grounding": "2 chart fact lines"
+}}
+
+Write entirely in {script}.
+
+TASK:
+- Name the top 2–4 friction patterns for THIS couple — chart-backed
+- Talk TO p1 (first kundli). Sharp, specific, no lecture, no bullet list in prose
+- Minimum 80 words, 3 short paragraphs (\\n\\n)
+- Match breakup/loyalty scores — if high breakup pressure, say so plainly
+
+{_love_llm_shared_voice(lang)}
+{_few_shot_name_rule(lang)}
+
+DO NOT write generic "be careful" advice.
+Use ONLY engine facts from user message."""
+
+
+def polish_love_reality_red_flags_only(
+    bundle: dict,
+    lang: str = "en",
+    *,
+    force_llm: bool = False,
+    tel: PdfGenOpenAITelemetry | None = None,
+) -> dict[str, Any]:
+    """Dedicated LLM for PDF Red Flags body (Page 12)."""
+    requested_lang = normalize_pro_pdf_lang(lang)
+    lang = polish_content_lang(requested_lang)
+    model = _section_model("LOVE_REALITY_RED_FLAGS_MODEL")
+    system = _build_red_flags_system_prompt(lang)
+    user = (
+        _build_section_user_prompt(bundle, lang, section_note="Write Red Flags lead-in for p1.")
+        + "\n\n"
+        + _red_flags_engine_facts(bundle)
+    )
+    max_tok = min(int(os.environ.get("LOVE_REALITY_RED_FLAGS_MAX_TOKENS", "2000")), 4096)
+
+    def _parse(parsed: dict) -> dict[str, Any]:
+        body = str(
+            parsed.get("red_flags_narrative")
+            or parsed.get("chapter_body")
+            or parsed.get(CHAPTER_BODY_KEY)
+            or ""
+        ).strip()
+        if _word_count(body) < 45:
+            return {}
+        return {
+            "chapter_key": _RED_FLAGS_KEY,
+            "chapter_body": body,
+            "red_flags_narrative": body,
+            "grounding": str(parsed.get("grounding") or "").strip(),
+        }
+
+    return _run_section_llm(
+        scope="red_flags",
+        bundle=bundle,
+        lang=lang,
+        model=model,
+        system=system,
+        user=user,
+        max_tokens=max_tok,
+        temp_env="LOVE_REALITY_RED_FLAGS_TEMPERATURE",
+        force_llm=force_llm,
+        parse_fn=_parse,
+        tel=tel,
+    )
+
+
+def _build_dasha_system_prompt(lang: str) -> str:
+    lang = polish_content_lang(lang)
+    script = {"en": "plain conversational English", "hn": "natural Roman Hinglish"}[lang]
+    return f"""Write ONLY PDF Section — Vimshottari Dasha Synchronization (guide for p1).
+
+Return STRICT JSON:
+{{
+  "dasha_narrative": "long prose explaining both partners' dasha cycles and what p1 should watch"
+}}
+
+Write entirely in {script}.
+
+TASK:
+- Explain p1 and p2 current MD/AD in simple words — not textbook Sanskrit
+- Say how cycles align OR clash for this couple right now
+- Guide p1: what to do / avoid in this antardasha window (repair, patience, no ultimatums)
+- Minimum 90 words, 3 paragraphs (\\n\\n)
+- Use exact dasha names and date windows from facts only
+
+{_love_llm_shared_voice(lang)}
+{_few_shot_name_rule(lang)}
+
+Example shape:
+"[p1_name], you're running Jupiter MD with Rahu AD until [date] — this stretches patience. [p2_name]'s Saturn AD slows emotional replies. When both cycles stress communication, name friction within 24 hours."
+
+Use ONLY facts from user message."""
+
+
+def polish_love_reality_dasha_only(
+    bundle: dict,
+    lang: str = "en",
+    *,
+    force_llm: bool = False,
+    tel: PdfGenOpenAITelemetry | None = None,
+) -> dict[str, Any]:
+    """Dedicated LLM for PDF Dasha page — prose guide + engine bullets at render."""
+    requested_lang = normalize_pro_pdf_lang(lang)
+    lang = polish_content_lang(requested_lang)
+    model = _section_model("LOVE_REALITY_DASHA_MODEL")
+    system = _build_dasha_system_prompt(lang)
+    user = (
+        _build_section_user_prompt(bundle, lang, section_note="Write Dasha sync guide for p1.")
+        + "\n\n"
+        + _dasha_engine_facts(bundle)
+    )
+    max_tok = min(int(os.environ.get("LOVE_REALITY_DASHA_MAX_TOKENS", "2200")), 4096)
+
+    def _parse(parsed: dict) -> dict[str, Any]:
+        body = str(parsed.get("dasha_narrative") or "").strip()
+        if _word_count(body) < 60:
+            return {}
+        return {"dasha_narrative": body}
+
+    return _run_section_llm(
+        scope="dasha",
+        bundle=bundle,
+        lang=lang,
+        model=model,
+        system=system,
+        user=user,
+        max_tokens=max_tok,
+        temp_env="LOVE_REALITY_DASHA_TEMPERATURE",
+        force_llm=force_llm,
+        parse_fn=_parse,
+        tel=tel,
+    )
+
+
+def _build_roadmap_system_prompt(lang: str) -> str:
+    lang = polish_content_lang(lang)
+    script = {"en": "plain conversational English", "hn": "natural Roman Hinglish"}[lang]
+    return f"""Write ONLY PDF Section — 1–3 Year Chronological Roadmap (p1 action guide).
+
+Return STRICT JSON:
+{{
+  "roadmap_narrative": "long prose guiding p1 through next 3, 12, and 36 months based on engine scores"
+}}
+
+Write entirely in {script}.
+
+TASK:
+- Use engine trends for Next 3 months, Next 12 months, Next 36 months from facts
+- Guide p1 what to expect and what TO DO each phase — repair habits, patience, clarity
+- If trend is down/strained/unlikely — say honestly, no false hope
+- If return probability is low — do not promise reunion
+- Minimum 100 words, 3 paragraphs mapped to 3/12/36 month windows (\\n\\n)
+- Simple English — astrologer advising face-to-face
+
+{_love_llm_shared_voice(lang)}
+{_few_shot_name_rule(lang)}
+
+DO NOT invent scores or dates not in facts.
+Use ONLY facts from user message."""
+
+
+def polish_love_reality_roadmap_only(
+    bundle: dict,
+    lang: str = "en",
+    *,
+    force_llm: bool = False,
+    tel: PdfGenOpenAITelemetry | None = None,
+) -> dict[str, Any]:
+    """Dedicated LLM for PDF Roadmap page — score-based guide for p1."""
+    requested_lang = normalize_pro_pdf_lang(lang)
+    lang = polish_content_lang(requested_lang)
+    model = _section_model("LOVE_REALITY_ROADMAP_MODEL")
+    system = _build_roadmap_system_prompt(lang)
+    user = (
+        _build_section_user_prompt(bundle, lang, section_note="Write 3/12/36 month roadmap guide for p1.")
+        + "\n\n"
+        + _roadmap_engine_facts(bundle)
+    )
+    max_tok = min(int(os.environ.get("LOVE_REALITY_ROADMAP_MAX_TOKENS", "2400")), 4096)
+
+    def _parse(parsed: dict) -> dict[str, Any]:
+        body = str(parsed.get("roadmap_narrative") or "").strip()
+        if _word_count(body) < 70:
+            return {}
+        return {"roadmap_narrative": body}
+
+    return _run_section_llm(
+        scope="roadmap",
+        bundle=bundle,
+        lang=lang,
+        model=model,
+        system=system,
+        user=user,
+        max_tokens=max_tok,
+        temp_env="LOVE_REALITY_ROADMAP_TEMPERATURE",
         force_llm=force_llm,
         parse_fn=_parse,
         tel=tel,
@@ -592,7 +868,14 @@ def _assembly_depth_ok(pro: dict) -> bool:
     for k in _CHAPTER_KEYS:
         if k not in by_key:
             return False
+    rf = str(pro.get("red_flags_narrative") or "").strip() or by_key.get(_RED_FLAGS_KEY, "")
+    if _word_count(rf) < 45:
+        return False
     if not str(pro.get("harmony") or "").strip() and "will_return" not in by_key:
+        return False
+    if _word_count(str(pro.get("dasha_narrative") or "")) < 60:
+        return False
+    if _word_count(str(pro.get("roadmap_narrative") or "")) < 70:
         return False
     return True
 
@@ -681,6 +964,28 @@ def assemble_love_reality_pro_premium(
         pro["harmony"] = harm["harmony"]
         _upsert_chapter(pro, "will_return", harm["harmony"])
         _upsert_chapter(pro, "future_outcome", harm["harmony"])
+
+    for label, fn, pro_key, ch_key in (
+        ("red_flags", polish_love_reality_red_flags_only, "red_flags_narrative", _RED_FLAGS_KEY),
+        ("dasha", polish_love_reality_dasha_only, "dasha_narrative", None),
+        ("roadmap", polish_love_reality_roadmap_only, "roadmap_narrative", None),
+    ):
+        hit = fn(bundle, lang=lang, force_llm=force_llm, tel=tel)
+        if not hit.get(pro_key) and not hit.get("chapter_body"):
+            log.warning(
+                "[assembly] %s miss (%s) — retry forced",
+                label,
+                (hit.get("_meta") or {}).get("reason"),
+            )
+            hit = fn(bundle, lang=lang, force_llm=True, tel=tel)
+        section_meta[label] = hit.get("_meta") or {}
+        body = hit.get(pro_key) or hit.get("chapter_body") or ""
+        if body:
+            pro[pro_key] = body
+            if ch_key:
+                _upsert_chapter(pro, ch_key, body, hit.get("grounding") or "")
+        else:
+            log.warning("[assembly] %s still empty after retry", label)
 
     _scrub_loyalty_contradictions(pro, bundle)
     pro = sanitize_love_reality_pro_premium(pro, bundle)

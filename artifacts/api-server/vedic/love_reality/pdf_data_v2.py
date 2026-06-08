@@ -229,7 +229,11 @@ def build_love_reality_pdf_v2_context(
     flags = list(rf.get("reasons") or [])[:8]
     if not flags:
         flags = ["Monitor unspoken resentment — chart shows friction under stress."]
-    red_flags_narr = _chapter_body(pro, "red_flags") or ""
+    red_flags_narr = (
+        str(pro.get("red_flags_narrative") or "").strip()
+        or _chapter_body(pro, "red_flags")
+        or ""
+    )
 
     loyalty_rows = []
     pp = ly.get("per_person") or {}
@@ -306,8 +310,14 @@ def build_love_reality_pdf_v2_context(
             "bullets": flags,
         },
         "page9_harmony": harmony,
-        "page10_dasha": dasha_lines,
-        "page11_roadmap": roadmap,
+        "page10_dasha": {
+            "body": str(pro.get("dasha_narrative") or "").strip(),
+            "lines": dasha_lines,
+        },
+        "page11_roadmap": {
+            "body": str(pro.get("roadmap_narrative") or "").strip(),
+            "rows": roadmap,
+        },
         "page12_remedies": {
             "body": remedies_body,
             "bullets": _build_remedies(bundle, pro),

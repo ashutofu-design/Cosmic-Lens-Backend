@@ -143,7 +143,15 @@ def sanitize_love_reality_pro_premium(pro: dict, bundle: dict | None = None) -> 
             ch["grounding"] = _sanitize_str(
                 gr, min_len=20, fallback=fb[:280], preserve_long_prose=True
             )
-    for field in ("hidden_truth", "verdict"):
+    for field in (
+        "hidden_truth",
+        "verdict",
+        "blueprint_reality",
+        "red_flags_narrative",
+        "dasha_narrative",
+        "roadmap_narrative",
+        "harmony",
+    ):
         if out.get(field):
             out[field] = _sanitize_str(
                 str(out[field]), min_len=40, fallback="", preserve_long_prose=True

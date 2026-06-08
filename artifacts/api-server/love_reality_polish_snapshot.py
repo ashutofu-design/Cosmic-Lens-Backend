@@ -59,6 +59,10 @@ def load(params: dict[str, Any]) -> dict[str, Any] | None:
             return None
         if (data.get("_meta") or {}).get("assembly") != _ASSEMBLY_VER:
             return None
+        from vedic.love_reality.love_section_polish import _assembly_depth_ok
+
+        if not _assembly_depth_ok(data):
+            return None
         return data
     except Exception as exc:
         log.warning("[love_polish_snapshot] load failed %s: %s", sid[:12], exc)
@@ -67,6 +71,11 @@ def load(params: dict[str, Any]) -> dict[str, Any] | None:
 
 def save(params: dict[str, Any], pro_premium: dict[str, Any]) -> None:
     if not isinstance(pro_premium, dict) or not pro_premium:
+        return
+    from vedic.love_reality.love_section_polish import _assembly_depth_ok
+
+    if not _assembly_depth_ok(pro_premium):
+        log.warning("[love_polish_snapshot] skip save — partial assembly (missing chapters)")
         return
     sid = snapshot_id(params)
     p = _path(sid)

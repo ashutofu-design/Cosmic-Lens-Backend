@@ -4,7 +4,7 @@ from __future__ import annotations
 from flask import Response, jsonify, request
 
 # Bump when PDF layout/renderer changes — invalidates stale server-side report cache.
-LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v8_exec_dashboard"
+LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v19_section_llm"
 
 
 def love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
@@ -29,15 +29,85 @@ def _pdf_layout_headers(*, cache_hit: bool) -> dict[str, str]:
 
 
 def _force_regenerate_requested() -> bool:
+    """Skip saved PDF file only — does NOT force a new OpenAI / LLM call."""
     hdr = (request.headers.get("X-Force-Regenerate") or "").strip().lower()
     body = request.get_json(silent=True) or {}
     flag = str(body.get("force_regenerate") or "").strip().lower()
     if hdr in ("1", "true", "yes", "on") or flag in ("1", "true", "yes", "on"):
         return True
-    expected = (request.headers.get("X-Expected-PDF-Layout") or "").strip()
-    if not expected:
-        expected = str(body.get("pdf_layout") or "").strip()
-    return bool(expected and expected != LOVE_REALITY_PDF_LAYOUT_VER)
+    layout_refresh = (request.headers.get("X-PDF-Layout-Refresh") or "").strip().lower()
+    if layout_refresh in ("1", "true", "yes", "on"):
+        return True
+    return False
+
+
+def _force_llm_requested() -> bool:
+    """Force fresh OpenAI polish even if a saved snapshot exists."""
+    import os
+
+    hdr = (request.headers.get("X-Force-LLM") or "").strip().lower()
+    body = request.get_json(silent=True) or {}
+    flag = str(body.get("force_llm") or "").strip().lower()
+    if hdr in ("1", "true", "yes", "on") or flag in ("1", "true", "yes", "on"):
+        return True
+    return (os.environ.get("LOVE_REALITY_FORCE_LLM") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def _pdf_render_only_requested() -> bool:
+    """Never call OpenAI — reuse saved polish snapshot or return 412."""
+    import os
+
+    hdr = (request.headers.get("X-PDF-Render-Only") or "").strip().lower()
+    body = request.get_json(silent=True) or {}
+    flag = str(body.get("pdf_render_only") or "").strip().lower()
+    if hdr in ("1", "true", "yes", "on") or flag in ("1", "true", "yes", "on"):
+        return True
+    return (os.environ.get("LOVE_REALITY_PDF_RENDER_ONLY") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def _resolve_pro_premium(
+    bundle: dict,
+    *,
+    lang: str,
+    user_id: int,
+    p1: dict,
+    p2: dict,
+) -> tuple[dict | None, str]:
+    """
+    Return (pro_premium, source).
+    source: polish_snapshot | llm | render_only_miss
+    """
+    import love_reality_polish_snapshot as _snap
+    from vedic.love_reality.premium_polish import polish_love_reality_premium
+
+    snap_params = _snap.snapshot_params(user_id, lang, p1, p2)
+    render_only = _pdf_render_only_requested()
+    force_llm = _force_llm_requested()
+
+    if not force_llm:
+        cached = _snap.load(snap_params)
+        if cached:
+            return cached, "polish_snapshot"
+
+    if render_only:
+        return None, "render_only_miss"
+
+    pro = polish_love_reality_premium(bundle, lang=lang, force_llm=force_llm)
+    if not isinstance(pro, dict):
+        pro = {}
+    if pro:
+        _snap.save(snap_params, pro)
+    return pro, "llm"
 
 
 def register_love_reality_routes(flask_app) -> None:
@@ -61,7 +131,6 @@ def register_love_reality_routes(flask_app) -> None:
         data = request.get_json(silent=True) or {}
         from vedic.love_reality.compute_bundle import compute_love_reality_bundle
         from vedic.love_reality.pdf_locale import normalize_love_reality_pdf_lang
-        from vedic.love_reality.premium_polish import polish_love_reality_premium
         from love_reality_pdf import render_love_reality_pro_pdf
 
         lang = normalize_love_reality_pdf_lang(data.get("lang"))
@@ -157,7 +226,21 @@ def register_love_reality_routes(flask_app) -> None:
             bundle = compute_love_reality_bundle(
                 flask_app, data["p1"], data["p2"], skip_ai_insight=True
             )
-            pro = polish_love_reality_premium(bundle, lang=lang)
+            pro, polish_source = _resolve_pro_premium(
+                bundle,
+                lang=lang,
+                user_id=user_id,
+                p1=data["p1"],
+                p2=data["p2"],
+            )
+            if pro is None:
+                return jsonify({
+                    "error": "polish_snapshot_required",
+                    "detail": (
+                        "No saved LLM text for this couple. Generate once without "
+                        "X-PDF-Render-Only, then retry layout-only renders."
+                    ),
+                }), 412
             merged = dict(bundle)
             merged["pro_premium"] = pro
             merged["pdf_lang"] = lang
@@ -167,27 +250,41 @@ def register_love_reality_routes(flask_app) -> None:
             )
             render_status = "SUCCESS" if pdf_bytes and not render_err else "FAILED"
             pdf_telemetry: dict | None = None
-            try:
-                from vedic.compat.openai_pdf_telemetry import (
-                    get_last_pdf_generation_telemetry,
-                    merge_pdf_generation_into_meta,
-                    republish_last_telemetry_summary,
-                    update_last_pdf_generation_fields,
-                )
+            if polish_source != "polish_snapshot":
+                try:
+                    from vedic.compat.openai_pdf_telemetry import (
+                        get_last_pdf_generation_telemetry,
+                        merge_pdf_generation_into_meta,
+                        republish_last_telemetry_summary,
+                        update_last_pdf_generation_fields,
+                    )
 
-                update_last_pdf_generation_fields(pdf_render_status=render_status)
-                republish_last_telemetry_summary()
-                pdf_telemetry = get_last_pdf_generation_telemetry()
-                if pdf_telemetry and isinstance(pro, dict):
-                    merge_pdf_generation_into_meta(pro.setdefault("_meta", {}), pdf_telemetry)
-            except Exception:
-                pass
+                    update_last_pdf_generation_fields(pdf_render_status=render_status)
+                    republish_last_telemetry_summary()
+                    pdf_telemetry = get_last_pdf_generation_telemetry()
+                    if pdf_telemetry and isinstance(pro, dict):
+                        merge_pdf_generation_into_meta(pro.setdefault("_meta", {}), pdf_telemetry)
+                except Exception:
+                    pass
             try:
                 import pdf_generation_log as _pgl
 
                 snap = pdf_telemetry
                 if not snap and isinstance(pro, dict):
                     snap = (pro.get("_meta") or {}).get("pdf_generation")
+                if polish_source == "polish_snapshot" and not snap:
+                    snap = {
+                        "model": "—",
+                        "input_tokens": 0,
+                        "output_tokens": 0,
+                        "total_tokens": 0,
+                        "estimated_cost_inr": 0,
+                        "estimated_cost_usd": 0,
+                        "openai_call_count": 0,
+                        "openai_skipped": True,
+                        "cache_hit": True,
+                        "final_status": "POLISH_SNAPSHOT",
+                    }
                 _pgl.record_from_telemetry(
                     kind=_billing.PRODUCT_LOVE,
                     user_id=user_id,
@@ -224,6 +321,7 @@ def register_love_reality_routes(flask_app) -> None:
             "Content-Length": str(len(pdf_bytes)),
             "Cache-Control": "private, max-age=3600",
             "X-Report-Cache": "miss",
+            "X-Polish-Source": polish_source,
             **_pdf_layout_headers(cache_hit=False),
         }
         try:

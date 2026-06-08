@@ -183,7 +183,9 @@ def build_love_reality_pdf_v2_context(
             )
     root_cause = "\n\n".join(p for p in root_parts if p) or bu.get("emotional_summary") or ""
 
-    harmony = _chapter_body(pro, "will_return") or _chapter_body(pro, "future_outcome")
+    harmony = str(pro.get("harmony") or "").strip()
+    if not harmony:
+        harmony = _chapter_body(pro, "will_return") or _chapter_body(pro, "future_outcome")
     if not harmony:
         harmony = (
             f"You ({p1_bp['element']}) need emotional pacing; partner ({p2_bp['element']}) "

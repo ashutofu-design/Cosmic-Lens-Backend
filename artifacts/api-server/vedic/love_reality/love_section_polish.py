@@ -17,11 +17,12 @@ from vedic.compat.premium_chapters import CHAPTER_BODY_KEY, normalize_pro_pdf_la
 
 log = logging.getLogger(__name__)
 
-_ASSEMBLY_VER = "lr_sections_v1"
-_CHAPTER_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_CHAPTER_MIN_WORDS", "180"))
+_ASSEMBLY_VER = "lr_sections_v3"
+_CHAPTER_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_CHAPTER_MIN_WORDS", "120"))
 _HARMONY_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_HARMONY_MIN_WORDS", "180"))
 
-_CHAPTER_KEYS = ("love_connection", "breakup", "loyalty", "red_flags")
+_CHAPTER_KEYS = ("breakup", "loyalty", "red_flags")
+_BLUEPRINT_REALITY_KEY = "love_connection"
 
 
 def _env_flag(name: str, default: str = "0") -> bool:
@@ -91,39 +92,50 @@ def _cache_dir() -> str:
     return base
 
 
+def _few_shot_name_rule(lang: str) -> str:
+    if lang == "hn":
+        return "CRITICAL: Example mein jo naam hain wo sirf style hain — user message ke ACTUAL p1/p2 naam use karo. Aarav/Riya mat likho."
+    return "CRITICAL: Example names are style only — use ACTUAL p1/p2 names from the user message. Never write Aarav or Riya."
+
+
 def _chapter_few_shot(chapter_key: str, lang: str) -> str:
+    name_rule = _few_shot_name_rule(lang)
     if chapter_key == "love_connection":
         if lang == "hn":
-            return """MAT AISE MAT LIKHO: "Chart signals for this theme are active between both partners..."
-AISE LIKHO (p1 = pehli kundli, ideal vs partner reality):
-"Aarav, tumhari kundli ke 7th house aur Upapada jo partner dikhate hain — wo tumhe stability aur warmth chahte hain. Par Riya ki chart alag rhythm laati hai — wo andar process karti hai. Tumhe lagta hai tum sunte nahi ho; unhe lagta hai tum push karte ho. Yeh mismatch destiny fail nahi karta — bas samajhna padta hai."""
-        return """DO NOT: "Chart signals for this theme are active between both partners..."
-WRITE (p1 first kundli — ideal blueprint vs partner reality):
-"Aarav, your chart's 7th house and Upapada point to a partner who brings warmth and steadiness. Riya's chart runs on a different rhythm — she processes inside first. You feel unheard when she goes quiet; she feels pushed when you chase answers. That gap is not failed destiny — it needs to be named early."
+            return f"""{name_rule}
+MAT AISE MAT LIKHO: "Chart signals for this theme are active..."
+AISE LIKHO (p1 ideal vs partner reality — real names):
+"[p1_name], tumhari 7th house aur Upapada stability chahte hain. Par [p2_name] ki chart alag rhythm laati hai. Tumhe lagta hai sunai nahi deti; unhe lagta hai tum push karte ho."
+"""
+        return f"""{name_rule}
+DO NOT: "Chart signals for this theme are active between both partners..."
+WRITE (p1 — ideal blueprint vs partner reality, use real names):
+"[p1_name], your 7th house and Upapada point to warmth and steadiness. [p2_name]'s chart runs on a different rhythm — processes inside first. You feel unheard when they go quiet; they feel pushed when you chase answers."
 """
     if chapter_key == "breakup":
         if lang == "hn":
-            return """AISE LIKHO (root cause — p1 lens, simple Hinglish):
-"Aarav, jab baat atakti hai to tum turant solve karna chahte ho — gussa jaldi aa jata hai. Riya chup ho jati hai, tum aur push karte ho. Chart yeh friction repeat hone ka pattern dikhata hai — separation tab feel hoti hai jab repair 48 ghante se delay ho."
+            return f"""{name_rule}
+AISE LIKHO: "[p1_name], jab baat atakti hai tum turant solve karna chahte ho. [p2_name] chup ho jati hai, tum push karte ho. Repair 48 ghante delay ho to separation feel hoti hai."
 """
-        return """WRITE (root cause — p1 lens):
-"Aarav, when talk stalls you move to fix it fast — anger spikes before you cool down. Riya goes quiet and you push harder. The chart shows this loop repeating — separation feels close when repair waits more than 48 hours after a fight."
+        return f"""{name_rule}
+WRITE: "[p1_name], when talk stalls you move to fix it fast. [p2_name] goes quiet and you push harder. Separation feels close when repair waits more than 48 hours."
 """
     if chapter_key == "loyalty":
         if lang == "hn":
-            return """AISE LIKHO:
-"Aarav, tum trust ko consistency se measure karte ho — jab Riya silent hoti hai, mind worst-case bharta hai. Chart keh raha hai loyalty score kam hai kyunki pause ko rejection samajh liya jata hai, pyaar kam hone par nahi."
+            return f"""{name_rule}
+AISE LIKHO: "[p1_name], trust consistency se measure karte ho — jab [p2_name] silent hoti hai mind worst-case bharta hai."
 """
-        return """WRITE:
-"Aarav, you measure trust through consistency — when Riya is silent your mind fills the gap with worst-case stories. The chart shows a weaker loyalty score because pause gets read as rejection, not because care is gone."
+        return f"""{name_rule}
+WRITE: "[p1_name], you measure trust through consistency — when [p2_name] is silent your mind fills worst-case stories."
 """
     if chapter_key == "red_flags":
         if lang == "hn":
-            return """AISE LIKHO (sharp, no lecture):
-"Aarav, do pattern bar-bar dikhte hain — gusse ke peak par ultimatum, aur silence ko ignore samajhna. Chart in dono ko high-risk friction maanta hai jab dasha communication ko stress deti hai."
+            return f"""{name_rule}
+AISE LIKHO (sharp, 3+ paragraphs): "[p1_name], do pattern bar-bar — peak gusse par ultimatum, silence ko ignore samajhna."
 """
-        return """WRITE (sharp, no lecture):
-"Aarav, two patterns keep showing up — ultimatums at peak anger, and reading silence as intentional ignore. The chart flags both as high-risk friction when dasha periods stress communication."
+        return f"""{name_rule}
+WRITE (sharp, minimum 3 paragraphs, use real names):
+"[p1_name], two patterns keep showing — ultimatums at peak anger, and reading silence as intentional ignore. Name both clearly with chart backing."
 """
     return ""
 
@@ -208,6 +220,119 @@ RULES:
 {_harmony_few_shot(lang)}
 
 Use ONLY facts from the user message."""
+
+
+def _blueprint_chart_facts(bundle: dict) -> str:
+    """Deterministic 7th/UL/Venus lines — anchor LLM for Partner Blueprint vs Reality."""
+    from vedic.love_reality.pdf_data_v2 import _partner_blueprint
+
+    p1 = bundle.get("p1") or {}
+    p2 = bundle.get("p2") or {}
+    k1 = bundle.get("kundli_p1") or {}
+    k2 = bundle.get("kundli_p2") or {}
+    lc = bundle.get("love_compatibility") or {}
+    p1_bp = _partner_blueprint(k1, p1.get("name") or "You")
+    p2_bp = _partner_blueprint(k2, p2.get("name") or "Partner")
+    love = int(lc.get("score") or 0)
+    return (
+        "CHART BLUEPRINT FACTS (cite these in prose — ideal vs actual):\n\n"
+        f"YOUR IDEAL PARTNER SIGNATURE ({p1.get('name') or 'p1'}):\n"
+        + "\n".join(p1_bp["lines"])
+        + f"\n\nPARTNER ACTUAL SIGNATURE ({p2.get('name') or 'p2'}):\n"
+        + "\n".join(p2_bp["lines"])
+        + f"\n\nElement mix: You {p1_bp['element']} · Partner {p2_bp['element']}\n"
+        f"Love compatibility score: {love}/100 — explain gap between ideal blueprint and partner reality."
+    )
+
+
+def _build_blueprint_reality_system_prompt(lang: str) -> str:
+    lang = polish_content_lang(lang)
+    script = {"en": "plain conversational English", "hn": "natural Roman Hinglish"}[lang]
+    return f"""Write ONLY PDF Section — Partner Blueprint vs Reality (love_connection).
+
+Return STRICT JSON:
+{{
+  "blueprint_reality": "long prose comparing p1 ideal partner signature vs p2 actual nature",
+  "chapter_body": "same text as blueprint_reality",
+  "grounding": "2-3 chart fact lines"
+}}
+
+Write entirely in {script}.
+
+TASK:
+- Page title: Partner Blueprint vs Reality
+- p1 chart shows IDEAL partner (7th lord, Venus, Jupiter, Upapada)
+- p2 chart shows ACTUAL partner nature
+- Explain the GAP in simple words — not generic love advice
+- Minimum 100 words, 3 paragraphs separated by \\n\\n
+- Use REAL names from user message for p1 and p2
+
+{_love_llm_shared_voice(lang)}
+
+{_few_shot_name_rule(lang)}
+DO NOT copy engine one-liner summaries verbatim.
+DO NOT write only one sentence.
+
+Example shape (use real names, not placeholders):
+"[p1_name], your 7th house points to a partner who brings steadiness. [p2_name]'s chart shows a different rhythm — Earth vs your Air. The love score shows how far ideal and reality sit apart."
+
+Use ONLY facts from the user message."""
+
+
+def polish_love_reality_blueprint_reality_only(
+    bundle: dict,
+    lang: str = "en",
+    *,
+    force_llm: bool = False,
+    tel: PdfGenOpenAITelemetry | None = None,
+) -> dict[str, Any]:
+    """Dedicated LLM for PDF Page 5 — Partner Blueprint vs Reality."""
+    requested_lang = normalize_pro_pdf_lang(lang)
+    lang = polish_content_lang(requested_lang)
+    model = _section_model("LOVE_REALITY_BLUEPRINT_REALITY_MODEL")
+    system = _build_blueprint_reality_system_prompt(lang)
+    user = (
+        _build_section_user_prompt(
+            bundle,
+            lang,
+            section_note="Write Partner Blueprint vs Reality for p1 — ideal chart vs partner actual.",
+        )
+        + "\n\n"
+        + _blueprint_chart_facts(bundle)
+        + "\n\nEmit JSON with blueprint_reality and chapter_body (same text)."
+    )
+    max_tok = min(int(os.environ.get("LOVE_REALITY_BLUEPRINT_REALITY_MAX_TOKENS", "2400")), 4096)
+
+    def _parse(parsed: dict) -> dict[str, Any]:
+        body = str(
+            parsed.get("blueprint_reality")
+            or parsed.get("chapter_body")
+            or parsed.get(CHAPTER_BODY_KEY)
+            or ""
+        ).strip()
+        if _word_count(body) < 50:
+            return {}
+        grounding = str(parsed.get("grounding") or "").strip()
+        return {
+            "chapter_key": _BLUEPRINT_REALITY_KEY,
+            "chapter_body": body,
+            "blueprint_reality": body,
+            "grounding": grounding,
+        }
+
+    return _run_section_llm(
+        scope="blueprint_reality",
+        bundle=bundle,
+        lang=lang,
+        model=model,
+        system=system,
+        user=user,
+        max_tokens=max_tok,
+        temp_env="LOVE_REALITY_BLUEPRINT_REALITY_TEMPERATURE",
+        force_llm=force_llm,
+        parse_fn=_parse,
+        tel=tel,
+    )
 
 
 def _build_section_user_prompt(bundle: dict, lang: str, *, section_note: str) -> str:
@@ -308,6 +433,23 @@ def _run_section_llm(
             return empty
         out = parse_fn(parsed)
         if not out:
+            retry_user = user + "\n\nRETRY: prior response too short. Write LONGER — minimum 3 paragraphs."
+            kwargs["messages"] = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": retry_user},
+            ]
+            try:
+                resp2 = client.chat.completions.create(**kwargs)
+                if tel is not None:
+                    tel.record(resp2, f"{scope}_retry")
+                raw2 = (resp2.choices[0].message.content or "").strip()
+                if raw2:
+                    parsed2 = json.loads(raw2)
+                    if isinstance(parsed2, dict):
+                        out = parse_fn(parsed2)
+            except Exception as exc2:
+                log.warning("[%s] retry fail: %s", scope, exc2)
+        if not out:
             empty["_meta"]["reason"] = "parse_empty"
             return empty
     except Exception as exc:
@@ -354,9 +496,11 @@ def polish_love_reality_chapter_only(
     )
     max_tok = min(int(os.environ.get("LOVE_REALITY_CHAPTER_MAX_TOKENS", "2800")), 4096)
 
+    min_words = 70 if chapter_key == "red_flags" else max(90, _CHAPTER_MIN_WORDS - 30)
+
     def _parse(parsed: dict) -> dict[str, Any]:
         body = str(parsed.get("chapter_body") or parsed.get(CHAPTER_BODY_KEY) or "").strip()
-        if _word_count(body) < max(80, _CHAPTER_MIN_WORDS - 40):
+        if _word_count(body) < min_words:
             return {}
         grounding = str(parsed.get("grounding") or "").strip()
         return {"chapter_key": chapter_key, "chapter_body": body, "grounding": grounding}
@@ -441,8 +585,10 @@ def _assembly_depth_ok(pro: dict) -> bool:
         if isinstance(ch, dict):
             k = str(ch.get("key") or "").lower()
             body = str(ch.get(CHAPTER_BODY_KEY) or ch.get("chapter_body") or "")
-            if k and _word_count(body) >= 80:
+            if k and _word_count(body) >= 70:
                 by_key[k] = body
+    if not str(pro.get("blueprint_reality") or "").strip() and _BLUEPRINT_REALITY_KEY not in by_key:
+        return False
     for k in _CHAPTER_KEYS:
         if k not in by_key:
             return False
@@ -494,11 +640,40 @@ def assemble_love_reality_pro_premium(
         pro["deep_analysis"] = s03["deep_analysis"]
     section_meta["deep_analysis"] = s03.get("_meta") or {}
 
+    br = polish_love_reality_blueprint_reality_only(
+        bundle, lang=lang, force_llm=force_llm, tel=tel
+    )
+    if not br.get("chapter_body"):
+        log.warning(
+            "[assembly] blueprint_reality miss (%s) — retry forced",
+            (br.get("_meta") or {}).get("reason"),
+        )
+        br = polish_love_reality_blueprint_reality_only(
+            bundle, lang=lang, force_llm=True, tel=tel
+        )
+    section_meta["blueprint_reality"] = br.get("_meta") or {}
+    if br.get("chapter_body"):
+        pro["blueprint_reality"] = br["chapter_body"]
+        _upsert_chapter(pro, _BLUEPRINT_REALITY_KEY, br["chapter_body"], br.get("grounding") or "")
+    else:
+        log.warning("[assembly] blueprint_reality still empty after retry")
+
     for ck in _CHAPTER_KEYS:
         hit = polish_love_reality_chapter_only(bundle, ck, lang=lang, force_llm=force_llm, tel=tel)
+        if not hit.get("chapter_body"):
+            log.warning(
+                "[assembly] chapter %s miss (%s) — retrying forced",
+                ck,
+                (hit.get("_meta") or {}).get("reason"),
+            )
+            hit = polish_love_reality_chapter_only(
+                bundle, ck, lang=lang, force_llm=True, tel=tel
+            )
         section_meta[ck] = hit.get("_meta") or {}
         if hit.get("chapter_body"):
             _upsert_chapter(pro, ck, hit["chapter_body"], hit.get("grounding") or "")
+        else:
+            log.warning("[assembly] chapter %s still empty after retry", ck)
 
     harm = polish_love_reality_harmony_only(bundle, lang=lang, force_llm=force_llm, tel=tel)
     section_meta["harmony"] = harm.get("_meta") or {}

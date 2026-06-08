@@ -130,7 +130,11 @@ def sanitize_love_reality_pro_premium(pro: dict, bundle: dict | None = None) -> 
         key = str(ch.get("key") or "").strip().lower()
         body = str(ch.get(CHAPTER_BODY_KEY) or ch.get("full_read") or "").strip()
         fb = _engine_fallback(bundle, key)
-        fixed = _sanitize_str(body, min_len=120, fallback=fb, preserve_long_prose=True)
+        # Never replace LLM blueprint/red-flags prose with thin engine one-liner
+        if key in ("love_connection", "red_flags") and len(re.findall(r"\b[\w']+\b", body)) >= 50:
+            fixed = humanize_snake_tokens(strip_devanagari(body))
+        else:
+            fixed = _sanitize_str(body, min_len=120, fallback=fb, preserve_long_prose=True)
         ch[CHAPTER_BODY_KEY] = fixed
         if ch.get("full_read"):
             ch["full_read"] = fixed

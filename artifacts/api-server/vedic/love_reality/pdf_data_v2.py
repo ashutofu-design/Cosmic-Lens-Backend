@@ -158,7 +158,13 @@ def build_love_reality_pdf_v2_context(
         f"Element mix: You {p1_bp['element']} · Partner {p2_bp['element']}\n"
         f"Love score {love}/100 validates how closely reality matches the blueprint."
     )
-    love_narr = _chapter_body(pro, "love_connection") or lc.get("emotional_summary") or ""
+    love_narr = (
+        str(pro.get("blueprint_reality") or "").strip()
+        or _chapter_body(pro, "love_connection")
+        or ""
+    )
+    if not love_narr or len(love_narr.split()) < 40:
+        love_narr = lc.get("emotional_summary") or love_narr
 
     breakup_narr = _chapter_body(pro, "breakup") or ""
     loyalty_narr = _chapter_body(pro, "loyalty") or ""

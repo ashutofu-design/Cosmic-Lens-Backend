@@ -274,6 +274,21 @@ def get_filename_for(report_id: str) -> str:
         return "report.pdf"
 
 
+def invalidate(user_id: int, kind: str, params: Dict[str, Any]) -> None:
+    """Drop cached PDF bytes so the next render uses fresh polish / layout."""
+    try:
+        h = _hash_params({**params, "kind": kind, "user_id": user_id})
+        p = _file_for(h)
+        if os.path.exists(p):
+            os.remove(p)
+        with _lock:
+            rows = _load_ledger()
+            rows = [r for r in rows if r.get("id") != h]
+            _save_ledger(rows)
+    except Exception as exc:
+        log.warning("[report_cache] invalidate failed: %s", exc)
+
+
 # ── Failsafe render wrapper ───────────────────────────────────────────────
 def safe_render(label: str, render_fn: Callable[[], bytes]) -> tuple[Optional[bytes], Optional[str]]:
     """

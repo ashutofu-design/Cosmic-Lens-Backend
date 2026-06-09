@@ -14,6 +14,12 @@ import {
   LOVE_REALITY_PDF_LAYOUT_VER,
 } from "@/lib/loveRealityPdfLayout";
 import { coerceProPdfLang } from "@/lib/proPdfLang";
+import type {
+  LovePage1Dashboard,
+  LovePdfContext,
+  LoveProPremium,
+  LoveProReportResponse,
+} from "@/lib/loveRealityProReport";
 import type { BirthData } from "@/types";
 
 export function packLovePerson(bd: BirthData, name?: string) {
@@ -67,9 +73,18 @@ async function fetchLoveRealityPdf(
     forceRegenerate: boolean;
     /** Fresh OpenAI polish — only when user explicitly regens, not layout-only refresh. */
     forceLlm: boolean;
+    /** Exact scroll-view payload — PDF uses this verbatim (no server rebuild). */
+    inAppReport?: {
+      pro_premium: LoveProPremium;
+      pdf_context?: LovePdfContext;
+      page1?: LovePage1Dashboard;
+    };
   },
   signal: AbortSignal,
 ): Promise<Response> {
+  const useClientLayout = Boolean(
+    opts.inAppReport?.pdf_context && opts.inAppReport?.page1,
+  );
   return fetch(`${API_BASE}/api/love-reality/pro-pdf`, {
     method: "POST",
     headers: {
@@ -79,6 +94,7 @@ async function fetchLoveRealityPdf(
       ...(opts.forceRegenerate ? { "X-Force-Regenerate": "1" } : {}),
       ...(opts.forceRegenerate ? { "X-PDF-Layout-Refresh": "1" } : {}),
       ...(opts.forceLlm ? { "X-Force-LLM": "1" } : {}),
+      ...(useClientLayout ? { "X-In-App-Report-Snapshot": "1" } : {}),
     },
     body: JSON.stringify({
       p1: opts.p1,
@@ -87,6 +103,13 @@ async function fetchLoveRealityPdf(
       pdf_layout: LOVE_REALITY_PDF_LAYOUT_VER,
       ...(opts.forceRegenerate ? { force_regenerate: true } : {}),
       ...(opts.forceLlm ? { force_llm: true } : {}),
+      ...(opts.inAppReport?.pro_premium
+        ? { pro_premium: opts.inAppReport.pro_premium }
+        : {}),
+      ...(opts.inAppReport?.pdf_context
+        ? { pdf_context: opts.inAppReport.pdf_context }
+        : {}),
+      ...(opts.inAppReport?.page1 ? { page1: opts.inAppReport.page1 } : {}),
     }),
     signal,
   });
@@ -103,6 +126,18 @@ export async function downloadLoveRealityProPdf(opts: {
   forceRegenerate?: boolean;
   /** Default false — reuse server polish snapshot; true only for explicit full regen. */
   forceLlm?: boolean;
+  /**
+   * Save PDF from in-app report screen — send the exact JSON shown on screen
+   * (page1 + pdf_context + pro_premium) so PDF matches scroll view byte-for-byte.
+   */
+  syncWithInAppReport?: boolean;
+  /** Required with syncWithInAppReport — full pro-report response on screen. */
+  reportSnapshot?: Pick<
+    LoveProReportResponse,
+    "pro_premium" | "pdf_context" | "page1"
+  >;
+  /** @deprecated use reportSnapshot */
+  proPremium?: LoveProPremium;
 }): Promise<LoveRealityProPdfDownloadResult> {
   const bd1 = opts.p1;
   const bd2 = opts.p2;
@@ -113,12 +148,18 @@ export async function downloadLoveRealityProPdf(opts: {
   const tz2 = bd2.tz ?? Math.round((bd2.lon / 15) * 2) / 2;
 
   const safe = (s: string) => (s || "x").replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 32) || "x";
-  const fileName = `Love_Reality_Pro_${safe(opts.p1Name)}_${safe(opts.p2Name)}.pdf`;
+  const fileName = `Love_Reality_Pro_${safe(opts.p1Name)}_${safe(opts.p2Name)}_${lang}.pdf`;
   const dest = `${FileSystem.cacheDirectory || ""}${fileName}`;
   const lang = coerceProPdfLang(opts.lang);
-  const layoutRefresh = await needsLayoutRefresh();
-  const forceRegenerate = Boolean(opts.forceRegenerate || layoutRefresh);
-  const forceLlm = Boolean(opts.forceLlm);
+  const syncPage = Boolean(opts.syncWithInAppReport);
+  const inAppReport = syncPage
+    ? (opts.reportSnapshot ?? (opts.proPremium
+      ? { pro_premium: opts.proPremium }
+      : undefined))
+    : undefined;
+  const layoutRefresh = syncPage ? false : await needsLayoutRefresh();
+  const forceRegenerate = Boolean(opts.forceRegenerate || syncPage || layoutRefresh);
+  const forceLlm = Boolean(opts.forceLlm || (!syncPage && layoutRefresh));
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 240000);
@@ -131,9 +172,25 @@ export async function downloadLoveRealityProPdf(opts: {
         lang,
         forceRegenerate,
         forceLlm,
+        inAppReport,
       },
       ctrl.signal,
     );
+
+    if (!resp.ok && resp.status === 412 && syncPage && !opts.forceLlm) {
+      resp = await fetchLoveRealityPdf(
+        {
+          user: opts.user,
+          p1: { ...packLovePerson(bd1, opts.p1Name), tz: tz1 },
+          p2: { ...packLovePerson(bd2, opts.p2Name), tz: tz2 },
+          lang,
+          forceRegenerate: true,
+          forceLlm: false,
+          inAppReport,
+        },
+        ctrl.signal,
+      );
+    }
 
     let reportCacheHit =
       (resp.headers.get("X-Report-Cache") || "").trim().toLowerCase() === "hit";
@@ -145,6 +202,7 @@ export async function downloadLoveRealityProPdf(opts: {
       && layoutHeader
       && layoutHeader !== LOVE_REALITY_PDF_LAYOUT_VER
       && !opts.forceRegenerate
+      && !syncPage
     ) {
       resp = await fetchLoveRealityPdf(
         {
@@ -153,7 +211,7 @@ export async function downloadLoveRealityProPdf(opts: {
           p2: { ...packLovePerson(bd2, opts.p2Name), tz: tz2 },
           lang,
           forceRegenerate: true,
-          forceLlm: false,
+          forceLlm: true,
         },
         ctrl.signal,
       );

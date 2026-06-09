@@ -82,6 +82,51 @@ def _pdf_render_only_requested() -> bool:
     )
 
 
+def _in_app_report_snapshot_requested() -> bool:
+    hdr = (request.headers.get("X-In-App-Report-Snapshot") or "").strip().lower()
+    body = request.get_json(silent=True) or {}
+    flag = str(body.get("in_app_report_snapshot") or "").strip().lower()
+    return hdr in ("1", "true", "yes", "on") or flag in ("1", "true", "yes", "on")
+
+
+def _client_report_layout(data: dict) -> tuple[dict | None, dict | None, bool]:
+    ctx = data.get("pdf_context")
+    page1 = data.get("page1")
+    pro = data.get("pro_premium")
+    ok = (
+        isinstance(ctx, dict)
+        and bool(ctx)
+        and isinstance(page1, dict)
+        and bool(page1)
+        and isinstance(pro, dict)
+        and bool(pro)
+    )
+    if not ok:
+        return None, None, False
+    return ctx, page1, True
+
+
+def _pro_premium_from_client_report(
+    bundle: dict,
+    *,
+    client_pro: dict,
+    lang: str,
+    user_id: int,
+    p1: dict,
+    p2: dict,
+) -> tuple[dict | None, str]:
+    """Seed polish snapshot from in-app report JSON so PDF matches the scroll view."""
+    from vedic.love_reality.pdf_text_safe import sanitize_love_reality_pro_premium
+    import love_reality_polish_snapshot as _snap
+
+    pro = sanitize_love_reality_pro_premium(client_pro, bundle, lang=lang)
+    if not isinstance(pro, dict) or not pro:
+        return None, "client_report_invalid"
+    snap_params = _snap.snapshot_params(user_id, lang, p1, p2)
+    _snap.save(snap_params, pro)
+    return pro, "client_report"
+
+
 def _resolve_pro_premium(
     bundle: dict,
     *,
@@ -176,7 +221,8 @@ def register_love_reality_routes(flask_app) -> None:
                 ), 401
 
             cache_params = _love_reality_cache_params(lang, data["p1"], data["p2"])
-            force_regen = _force_regenerate_requested()
+            client_ctx, client_page1, has_client_layout = _client_report_layout(data)
+            force_regen = _force_regenerate_requested() or has_client_layout or _in_app_report_snapshot_requested()
             access = _billing.check_access(user_id, _billing.PRODUCT_LOVE, cache_params)
             if not access.get("entitled"):
                 spec = _billing.catalog_for(_billing.PRODUCT_LOVE) or {}
@@ -241,25 +287,56 @@ def register_love_reality_routes(flask_app) -> None:
                 bundle = compute_love_reality_bundle(
                     flask_app, data["p1"], data["p2"], skip_ai_insight=True
                 )
-                pro, polish_source = _resolve_pro_premium(
-                    bundle,
-                    lang=lang,
-                    user_id=user_id,
-                    p1=data["p1"],
-                    p2=data["p2"],
-                    force_llm=_force_llm_requested(),
-                )
+                client_pro = data.get("pro_premium")
+                if has_client_layout and isinstance(client_pro, dict):
+                    pro = client_pro
+                    polish_source = "client_report_layout"
+                    try:
+                        import love_reality_polish_snapshot as _snap
+
+                        _snap.save(
+                            _snap.snapshot_params(user_id, lang, data["p1"], data["p2"]),
+                            pro,
+                        )
+                    except Exception:
+                        pass
+                elif isinstance(client_pro, dict) and client_pro:
+                    pro, polish_source = _pro_premium_from_client_report(
+                        bundle,
+                        client_pro=client_pro,
+                        lang=lang,
+                        user_id=user_id,
+                        p1=data["p1"],
+                        p2=data["p2"],
+                    )
+                else:
+                    pro, polish_source = _resolve_pro_premium(
+                        bundle,
+                        lang=lang,
+                        user_id=user_id,
+                        p1=data["p1"],
+                        p2=data["p2"],
+                        force_llm=_force_llm_requested(),
+                    )
                 if pro is None:
                     return jsonify({
                         "error": "polish_snapshot_required",
                         "detail": (
-                            "No saved LLM text for this couple. Generate once without "
-                            "X-PDF-Render-Only, then retry layout-only renders."
+                            "No saved LLM text for this couple. Open the report once, "
+                            "then tap Save PDF again."
                         ),
                     }), 412
                 merged = dict(bundle)
                 merged["pro_premium"] = pro
                 merged["pdf_lang"] = lang
+                merged["p1"] = data["p1"]
+                merged["p2"] = data["p2"]
+                if has_client_layout and client_ctx and client_page1:
+                    merged["pdf_context"] = client_ctx
+                    merged["page1"] = client_page1
+                    rid = client_page1.get("report_id")
+                    if rid:
+                        merged["report_id"] = str(rid)
                 pdf_bytes, render_err = _rc.safe_render(
                     "love_reality_pro",
                     lambda: render_love_reality_pro_pdf(merged, lang=lang),
@@ -419,6 +496,18 @@ def register_love_reality_routes(flask_app) -> None:
                     "message": "Payment required for this couple.",
                 }), 402
 
+            import love_reality_report_json_cache as _json_cache
+
+            json_cache_params = _json_cache.cache_params(user_id, lang, data["p1"], data["p2"])
+            if not _force_llm_requested() and not _force_regenerate_requested():
+                cached_json = _json_cache.load(json_cache_params)
+                if cached_json:
+                    resp = jsonify(cached_json)
+                    resp.headers["X-Report-Cache"] = "hit"
+                    return resp
+
+            import report_cache as _rc
+
             try:
                 bundle = compute_love_reality_bundle(
                     flask_app, data["p1"], data["p2"], skip_ai_insight=True
@@ -453,7 +542,7 @@ def register_love_reality_routes(flask_app) -> None:
                 fo = bundle.get("future_outcome") or {}
                 p1n = str(data["p1"].get("name") or "You")
                 p2n = str(data["p2"].get("name") or "Partner")
-                return jsonify({
+                payload = {
                     "ok": True,
                     "lang": lang,
                     "polish_source": polish_source,
@@ -469,7 +558,14 @@ def register_love_reality_routes(flask_app) -> None:
                     "pro_premium": pro,
                     "pdf_context": pdf_context,
                     "page1": page1,
-                })
+                }
+                if not _force_llm_requested() and not _force_regenerate_requested():
+                    _json_cache.save(json_cache_params, payload)
+                    _rc.invalidate(user_id, _billing.PRODUCT_LOVE, cache_params)
+                resp = jsonify(payload)
+                resp.headers["X-Report-Cache"] = "miss"
+                resp.headers["X-Polish-Source"] = polish_source
+                return resp
             except Exception as exc:
                 return jsonify({
                     "error": "love_reality_pro_report_failed",

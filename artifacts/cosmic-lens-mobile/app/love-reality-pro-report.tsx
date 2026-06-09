@@ -359,11 +359,15 @@ export default function LoveRealityProReportScreen() {
         appSections: buildLoveReportSections(report, lang),
         scores: report.scores,
       });
+      const fromCache = result.reportCacheHit ? " (server cache)" : "";
+      const mirrorNote = result.pdfSource === "app_mirror_fresh"
+        ? "Built from this page — 1–3 sec is normal, not old cache."
+        : `Source: ${result.pdfSource || "fresh render"}${fromCache}.`;
       Alert.alert(
         "PDF connected",
         result.savedToRegistry
-          ? "Fresh PDF created from this exact page — saved to My Reports."
-          : "Fresh PDF created from this exact page.",
+          ? `${mirrorNote} Saved to My Reports — open the newest entry (Connected from page).`
+          : mirrorNote,
         [
           { text: "OK", style: "cancel" },
           ...(result.savedToRegistry

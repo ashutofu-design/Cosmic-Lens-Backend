@@ -220,10 +220,12 @@ def register_love_reality_routes(flask_app) -> None:
                     }
                 ), 401
 
-            cache_params = _love_reality_cache_params(lang, data["p1"], data["p2"])
             client_ctx, client_page1, has_client_layout = _client_report_layout(data)
             app_sections = data.get("app_sections")
             has_app_mirror = isinstance(app_sections, list) and len(app_sections) > 0
+            cache_params = _love_reality_cache_params(lang, data["p1"], data["p2"])
+            if has_app_mirror:
+                cache_params = {**cache_params, "pdf_renderer": "app_mirror"}
             force_regen = (
                 _force_regenerate_requested()
                 or has_client_layout
@@ -423,6 +425,8 @@ def register_love_reality_routes(flask_app) -> None:
                     "X-Polish-Source": polish_source,
                     **_pdf_layout_headers(cache_hit=False),
                 }
+                if has_app_mirror:
+                    pdf_headers["X-PDF-Source"] = "app_mirror_fresh"
                 try:
                     from vedic.compat.openai_pdf_telemetry import (
                         get_last_pdf_generation_telemetry,

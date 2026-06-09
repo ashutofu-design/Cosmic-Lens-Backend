@@ -8,7 +8,7 @@ import { Platform } from "react-native";
 
 import { API_BASE } from "@/lib/apiConfig";
 import { pdfAuthHeaders } from "@/lib/coupleReportCheckoutFlow";
-import { saveLocalReport } from "@/lib/localReports";
+import { deleteLocalReportsByTitlePrefix, saveLocalReport } from "@/lib/localReports";
 import {
   LOVE_REALITY_PDF_LAYOUT_STORAGE_KEY,
   LOVE_REALITY_PDF_LAYOUT_VER,
@@ -199,11 +199,13 @@ export async function downloadLoveRealityProPdf(opts: {
   const tz1 = bd1.tz ?? Math.round((bd1.lon / 15) * 2) / 2;
   const tz2 = bd2.tz ?? Math.round((bd2.lon / 15) * 2) / 2;
 
-  const safe = (s: string) => (s || "x").replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 32) || "x";
-  const fileName = `Love_Reality_Pro_${safe(opts.p1Name)}_${safe(opts.p2Name)}_${lang}.pdf`;
-  const dest = `${FileSystem.cacheDirectory || ""}${fileName}`;
   const lang = coerceProPdfLang(opts.lang);
   const syncPage = Boolean(opts.syncWithInAppReport);
+  const safe = (s: string) => (s || "x").replace(/[^a-zA-Z0-9_-]+/g, "_").slice(0, 32) || "x";
+  const fileName = syncPage
+    ? `Love_Reality_Pro_${safe(opts.p1Name)}_${safe(opts.p2Name)}_${lang}_${Date.now()}.pdf`
+    : `Love_Reality_Pro_${safe(opts.p1Name)}_${safe(opts.p2Name)}_${lang}.pdf`;
+  const dest = `${FileSystem.cacheDirectory || ""}${fileName}`;
   const inAppReport = syncPage
     ? (opts.reportSnapshot ?? (opts.proPremium
       ? { pro_premium: opts.proPremium }
@@ -250,6 +252,7 @@ export async function downloadLoveRealityProPdf(opts: {
 
     let reportCacheHit =
       (resp.headers.get("X-Report-Cache") || "").trim().toLowerCase() === "hit";
+    const pdfSource = (resp.headers.get("X-PDF-Source") || "").trim() || undefined;
     const layoutHeader = (resp.headers.get("X-PDF-Layout-Version") || "").trim();
 
     if (
@@ -291,6 +294,10 @@ export async function downloadLoveRealityProPdf(opts: {
     }
 
     const buf = await resp.arrayBuffer();
+    const reportTitle = `${opts.p1Name} & ${opts.p2Name} — Love Reality PRO`;
+    if (syncPage) {
+      await deleteLocalReportsByTitlePrefix(reportTitle);
+    }
 
     if (Platform.OS === "web") {
       let dataUrl = "";
@@ -332,15 +339,15 @@ export async function downloadLoveRealityProPdf(opts: {
         try {
           await saveLocalReport({
             kind: "other",
-            title: `${opts.p1Name} & ${opts.p2Name} — Love Reality PRO`,
-            subtitle: `Love Compatibility PDF · ${new Date().toLocaleDateString()}`,
+            title: reportTitle,
+            subtitle: `Connected from page · ${new Date().toLocaleString()}`,
             sourceUri: dataUrl,
             restored: reportCacheHit,
           });
           savedToRegistry = true;
         } catch { /* ignore */ }
       }
-      return { shareUri: dataUrl || dest, fileName, savedToRegistry, reportCacheHit };
+      return { shareUri: dataUrl || dest, fileName, savedToRegistry, reportCacheHit, pdfSource };
     }
 
     const bytes = new Uint8Array(buf);
@@ -362,8 +369,10 @@ export async function downloadLoveRealityProPdf(opts: {
     try {
       const saved = await saveLocalReport({
         kind: "other",
-        title: `${opts.p1Name} & ${opts.p2Name} — Love Reality PRO`,
-        subtitle: `Love Compatibility PDF · ${new Date().toLocaleDateString()}`,
+        title: reportTitle,
+        subtitle: syncPage
+          ? `Connected from page · ${new Date().toLocaleString()}`
+          : `Love Compatibility PDF · ${new Date().toLocaleDateString()}`,
         sourceUri: dest,
         restored: reportCacheHit,
       });
@@ -373,7 +382,7 @@ export async function downloadLoveRealityProPdf(opts: {
       }
     } catch { /* ignore */ }
 
-    return { shareUri, fileName, savedToRegistry, reportCacheHit };
+    return { shareUri, fileName, savedToRegistry, reportCacheHit, pdfSource };
   } finally {
     clearTimeout(timer);
   }

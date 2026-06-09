@@ -38,6 +38,8 @@ export interface LocalReport {
   remoteUrl?: string;    // original signed URL (optional, for re-download)
   bytes?: number;        // file size if known
   createdAt: number;     // Date.now()
+  /** True when PDF came from server cache (re-download), not fresh generation. */
+  restored?: boolean;
 }
 
 export interface SaveLocalReportInput {
@@ -47,6 +49,7 @@ export interface SaveLocalReportInput {
   /** URI of the just-downloaded PDF (e.g. cacheDirectory/foo.pdf). */
   sourceUri: string;
   remoteUrl?: string;
+  restored?: boolean;
 }
 
 const REPORTS_DIR = (FileSystem.documentDirectory || FileSystem.cacheDirectory || "") + "reports/";
@@ -119,6 +122,7 @@ export async function saveLocalReport(
           localUri: input.sourceUri,
           remoteUrl: input.remoteUrl,
           createdAt: Date.now(),
+          ...(input.restored ? { restored: true } : {}),
         };
         const all = await readAll();
         all.unshift(entry);
@@ -196,6 +200,7 @@ export async function saveLocalReport(
         remoteUrl: input.remoteUrl,
         bytes,
         createdAt: Date.now(),
+        ...(input.restored ? { restored: true } : {}),
       };
       const all = await readAll();
       all.unshift(entry); // newest first
@@ -249,6 +254,35 @@ export async function listLocalReports(): Promise<LocalReport[]> {
     });
   }
   return survivors;
+}
+
+/** Remove saved reports whose title starts with prefix (e.g. same couple PDF). */
+export async function deleteLocalReportsByTitlePrefix(prefix: string): Promise<number> {
+  const needle = (prefix || "").trim().toLowerCase();
+  if (!needle) return 0;
+  return withWriteLock(async () => {
+    try {
+      const all = await readAll();
+      const keep: LocalReport[] = [];
+      let removed = 0;
+      for (const entry of all) {
+        if ((entry.title || "").toLowerCase().startsWith(needle)) {
+          if (!IS_WEB) {
+            try {
+              await FileSystem.deleteAsync(entry.localUri, { idempotent: true });
+            } catch { /* ignore */ }
+          }
+          removed += 1;
+        } else {
+          keep.push(entry);
+        }
+      }
+      if (removed > 0) await writeAll(keep);
+      return removed;
+    } catch {
+      return 0;
+    }
+  });
 }
 
 /** Delete a report (file + registry entry). Never throws. */

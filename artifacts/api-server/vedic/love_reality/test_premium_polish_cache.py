@@ -29,14 +29,14 @@ class TestLovePolishCache(unittest.TestCase):
     def test_depth_ok_requires_chapter_bodies(self):
         shallow = {"chapters": [{"chapter_body": "x" * 50}] * 6}
         self.assertFalse(_love_polish_cache_depth_ok(shallow))
-        deep = {
-            "chapters": [
-                {"chapter_body": "a" * 200},
-                {"chapter_body": "b" * 200},
-                {"chapter_body": "c" * 200},
-                {"chapter_body": "d" * 200},
-            ]
-        }
+        long_para = (
+            "Your Lagna Sagittarius and Moon Gemini create an ideal partner blueprint where Mercury "
+            "as seventh lord in Scorpio twelfth house pulls desire into hidden emotional rooms. "
+            "Partner Lagna Gemini stacks five planets in the twelfth house so reality feels nothing "
+            "like the destiny signature you were born expecting. "
+        )
+        body = (long_para * 8).strip()
+        deep = {"chapters": [{"chapter_body": body} for _ in range(6)]}
         self.assertTrue(_love_polish_cache_depth_ok(deep))
 
 

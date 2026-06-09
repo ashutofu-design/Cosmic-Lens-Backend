@@ -28,35 +28,22 @@ import os
 import threading
 from typing import Any, Optional
 
-# ── Language metadata (24 UI languages) ───────────────────────────────────────
+# ── Language metadata (English, Hinglish, Hindi only) ─────────────────────────
 LANG_NAMES: dict[str, str] = {
-    "en":  "English",
-    "hi":  "Hindi (Devanagari script)",
-    "hn":  "Hinglish (Hindi vocabulary written in Roman/Latin script using English "
-           "letters, e.g. 'Aap ka ghar bahut sundar hai' — common informal style "
-           "used in India for SMS/WhatsApp)",
-    "bn":  "Bengali",
-    "mr":  "Marathi",
-    "ta":  "Tamil",
-    "te":  "Telugu",
-    "gu":  "Gujarati",
-    "kn":  "Kannada",
-    "ml":  "Malayalam",
-    "pa":  "Punjabi (Gurmukhi)",
-    "or":  "Odia",
-    "as":  "Assamese",
-    "zh":  "Chinese (Simplified)",
-    "es":  "Spanish",
-    "ar":  "Arabic",
-    "fr":  "French",
-    "pt":  "Portuguese",
-    "de":  "German",
-    "ru":  "Russian",
-    "ja":  "Japanese",
-    "id":  "Indonesian",
-    "ko":  "Korean",
-    "tr":  "Turkish",
+    "en": "English",
+    "hi": "Hindi (Devanagari script)",
+    "hn": (
+        "Hinglish (Hindi vocabulary written in Roman/Latin script using English "
+        "letters, e.g. 'Aap ka ghar bahut sundar hai' — common informal style "
+        "used in India for SMS/WhatsApp)"
+    ),
 }
+
+
+def coerce_lang(lang: str | None) -> str:
+    from app_lang import coerce_app_lang
+
+    return coerce_app_lang(lang)
 
 # ── Translation cache ─────────────────────────────────────────────────────────
 _TRANSLATION_CACHE: dict[tuple[str, str], str] = {}
@@ -146,6 +133,9 @@ def localize_text(en: str, hi: Optional[str], lang: str) -> str:
     if not en:
         return en or ""
     lang = (lang or "en").strip().lower()
+    from app_lang import coerce_app_lang
+
+    lang = coerce_app_lang(lang)
 
     if lang == "en":
         return en
@@ -160,8 +150,10 @@ def localize_text(en: str, hi: Optional[str], lang: str) -> str:
 
     translated = _translate_via_openai(en, lang)
     if translated is None:
-        # Hard fallback: prefer hi for Indic langs, else en
-        return hi if (isinstance(hi, str) and hi) else en
+        # Only Hindi UI may fall back to Devanagari; Odia/Tamil/etc. must not show Hindi.
+        if lang == "hi" and isinstance(hi, str) and hi:
+            return hi
+        return en
 
     _cache_put(lang, en, translated)
     return translated

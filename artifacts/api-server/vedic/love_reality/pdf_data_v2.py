@@ -158,13 +158,32 @@ def build_love_reality_pdf_v2_context(
         f"Element mix: You {p1_bp['element']} · Partner {p2_bp['element']}\n"
         f"Love score {love}/100 validates how closely reality matches the blueprint."
     )
+    def _word_count(text: str) -> int:
+        return len((text or "").split())
+
     love_narr = (
         str(pro.get("blueprint_reality") or "").strip()
         or _chapter_body(pro, "love_connection")
         or ""
     )
-    if not love_narr or len(love_narr.split()) < 40:
-        love_narr = lc.get("emotional_summary") or love_narr
+    if _word_count(love_narr) < 40:
+        love_parts: list[str] = []
+        summary = str(lc.get("emotional_summary") or "").strip()
+        if summary:
+            love_parts.append(summary)
+        love_parts.append(
+            f"Your ideal partner signature (7th lord / Venus / Upapada):\n{blueprint_p1}"
+        )
+        love_parts.append(
+            f"Partner actual nature vs that blueprint:\n{blueprint_p2}"
+        )
+        reasons = [str(r).strip() for r in (lc.get("reasons") or [])[:4] if str(r).strip()]
+        if reasons:
+            love_parts.append("Chart signals:\n" + "\n".join(f"• {r}" for r in reasons))
+        love_parts.append(
+            f"Love compatibility {love}/100 — how closely reality matches your chart ideal."
+        )
+        love_narr = "\n\n".join(p for p in love_parts if p)
 
     breakup_narr = _chapter_body(pro, "breakup") or ""
     loyalty_narr = _chapter_body(pro, "loyalty") or ""
@@ -234,6 +253,15 @@ def build_love_reality_pdf_v2_context(
         or _chapter_body(pro, "red_flags")
         or ""
     )
+    if _word_count(red_flags_narr) < 30:
+        rf_summary = str(rf.get("emotional_summary") or "").strip()
+        if rf_summary:
+            red_flags_narr = rf_summary
+        else:
+            red_flags_narr = (
+                "Core operational friction points flagged by your combined charts:\n\n"
+                + "\n".join(f"• {f}" for f in flags)
+            )
 
     loyalty_rows = []
     pp = ly.get("per_person") or {}
@@ -281,7 +309,7 @@ def build_love_reality_pdf_v2_context(
         },
         "page2_3_blueprint": {
             "part1": blueprint_compare,
-            "part2": love_narr or blueprint_p2,
+            "part2": love_narr,
         },
         "page4_dimensions": [
             {"label": lbl, "score": int(dims.get(key) or 0), "key": key}

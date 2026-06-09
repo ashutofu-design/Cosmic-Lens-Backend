@@ -11,6 +11,7 @@ import re
 from typing import Any
 
 from vedic.love_reality.pdf_text_safe import (
+    love_script_directive,
     polish_content_lang,
     sanitize_love_reality_pro_premium,
 )
@@ -298,8 +299,9 @@ def _facts_summary(bundle: dict) -> str:
     return "\n".join(parts)
 
 
-def _verdict_page_facts_summary(bundle: dict) -> str:
+def _verdict_page_facts_summary(bundle: dict, lang: str = "en") -> str:
     """Plain-language couple facts for Section 02 LLM — no ledger/bonus labels to parrot."""
+    lang_lane = polish_content_lang(normalize_pro_pdf_lang(lang))
     lc = bundle.get("love_compatibility") or {}
     bu = bundle.get("breakup_chances") or {}
     ly = bundle.get("loyalty_check") or {}
@@ -337,67 +339,173 @@ def _verdict_page_facts_summary(bundle: dict) -> str:
 
     p1_name = str(p1.get("name") or "Partner A").strip()
     p2_name = str(p2.get("name") or "Partner B").strip()
-    lines = [
-        "Write for this specific couple. Sound like live consultation notes.",
-        "",
-        f"PRIMARY READER (p1 / first kundli — report owner): {p1_name}",
-        f"Partner (p2 / second kundli): {p2_name}",
-        f"~70% of prose FROM {p1_name}'s side — what they feel, how their chart reacts, what lands on them.",
-        f"Explain {p2_name} in relation to how {p1_name} experiences the bond — not equal airtime.",
-        "",
-        f"{p1_name} Moon: {p1.get('moonSign') or p1.get('rashi', '?')} · nakshatra {p1.get('nakshatra', '?')}",
-        f"{p2_name} Moon: {p2.get('moonSign') or p2.get('rashi', '?')} · nakshatra {p2.get('nakshatra', '?')}",
-    ]
+    if lang_lane == "hn":
+        lines = [
+            "OUTPUT LANGUAGE: natural Roman Hinglish ONLY (Latin script). Poori JSON output Hinglish me — English paragraphs forbidden.",
+            "Is specific couple ke liye likho. Live consultation notes jaisa.",
+            "",
+            f"PRIMARY READER (p1 / pehli kundli — report owner): {p1_name}",
+            f"Partner (p2 / doosri kundli): {p2_name}",
+            f"~70% prose {p1_name} ki side se — woh kya feel karte hain, unka chart kaise react karta hai.",
+            f"{p2_name} ko explain karo {p1_name} ke experience ke through — equal airtime nahi.",
+            "",
+            f"{p1_name} Moon: {p1.get('moonSign') or p1.get('rashi', '?')} · nakshatra {p1.get('nakshatra', '?')}",
+            f"{p2_name} Moon: {p2.get('moonSign') or p2.get('rashi', '?')} · nakshatra {p2.get('nakshatra', '?')}",
+        ]
+        if love is not None:
+            lines.append(f"Dono ke beech emotional pull: lagbhag {love}/100.")
+        for r in _reasons_plain(lc, 3):
+            lines.append(f"Chemistry note: {r}")
+        if breakup is not None:
+            lines.append(
+                f"Friction separation ki taraf badh sakti hai: lagbhag {breakup}/100 (zyada = zyada strain)."
+            )
+        for r in _reasons_plain(bu, 2):
+            lines.append(f"Friction pattern: {r}")
+        if loyalty is not None:
+            lines.append(f"Pressure me trust/consistency: lagbhag {loyalty}/100.")
+        for r in _reasons_plain(ly, 2):
+            lines.append(f"Trust note: {r}")
+        if reunion is not None:
+            lines.append(
+                f"Agar alag ho gaye to genuine reconnection: lagbhag {reunion}/100 — "
+                "honest likho; zyada cases me real return nahi hota."
+            )
+        for r in _reasons_plain(wr, 2):
+            lines.append(f"Reconnection note: {r}")
+        if future is not None:
+            lines.append(f"Long-term bond direction: lagbhag {future}/100.")
+        for r in _reasons_plain(fo, 2):
+            lines.append(f"Long-term note: {r}")
+        for r in _reasons_plain(rf, 2):
+            lines.append(f"Hidden friction (gently naam do): {r}")
+        bridge = str(bundle.get("narrative_bridge") or "").strip()
+        if bridge:
+            lines.append(f"Timing / short-term friction vs long hope: {bridge}")
+        for row in (lc.get("score_ledger") or [])[:6]:
+            if not isinstance(row, dict):
+                continue
+            note = str(row.get("note") or row.get("label") or "").strip()
+            if note:
+                lines.append(f"Background factor ('bonus' / '+N' mat bolo): {note}")
+        ly_low = loyalty is not None and loyalty < 52
+        if ly_low:
+            lines.append(
+                "Important: trust weak hai — kisi ko 'naturally loyal' ya 'devoted by nature' mat bolo."
+            )
+    elif lang_lane == "hi":
+        lines = [
+            "OUTPUT LANGUAGE: पूरी JSON output देवनागरी हिंदी में — Roman वाक्य मना (नाम/स्कोर Latin ठीक)।",
+            "इस विशिष्ट जोड़े के लिए लिखें। लाइव परामर्श नोट्स जैसा।",
+            "",
+            f"PRIMARY READER (p1 / पहली कुंडली): {p1_name}",
+            f"Partner (p2 / दूसरी कुंडली): {p2_name}",
+            f"~70% prose {p1_name} की दृष्टि से — वे क्या महसूस करते हैं, उनका चार्ट कैसे react करता है।",
+            f"{p2_name} को {p1_name} के अनुभव के ज़रिए समझाएँ — बराबर समय नहीं।",
+            "",
+            f"{p1_name} Moon: {p1.get('moonSign') or p1.get('rashi', '?')} · nakshatra {p1.get('nakshatra', '?')}",
+            f"{p2_name} Moon: {p2.get('moonSign') or p2.get('rashi', '?')} · nakshatra {p2.get('nakshatra', '?')}",
+        ]
+        if love is not None:
+            lines.append(f"दोनों के बीच भावनात्मक खिंचाव: लगभग {love}/100।")
+        for r in _reasons_plain(lc, 3):
+            lines.append(f"Chemistry note: {r}")
+        if breakup is not None:
+            lines.append(f"अलग होने का दबाव: लगभग {breakup}/100 (ज़्यादा = ज़्यादा तनाव)।")
+        for r in _reasons_plain(bu, 2):
+            lines.append(f"Friction pattern: {r}")
+        if loyalty is not None:
+            lines.append(f"दबाव में भरोसा: लगभग {loyalty}/100।")
+        for r in _reasons_plain(ly, 2):
+            lines.append(f"Trust note: {r}")
+        if reunion is not None:
+            lines.append(
+                f"अलग होने पर वापसी की संभावना: लगभग {reunion}/100 — "
+                "ईमानदार लिखें; ज़्यादातर मामलों में असली वापसी नहीं होती।"
+            )
+        for r in _reasons_plain(wr, 2):
+            lines.append(f"Reconnection note: {r}")
+        if future is not None:
+            lines.append(f"लंबी अवधि की दिशा: लगभग {future}/100।")
+        for r in _reasons_plain(fo, 2):
+            lines.append(f"Long-term note: {r}")
+        for r in _reasons_plain(rf, 2):
+            lines.append(f"छिपा हुआ तनाव (सौम्यता से नाम लें): {r}")
+        bridge = str(bundle.get("narrative_bridge") or "").strip()
+        if bridge:
+            lines.append(f"Timing / short-term vs long hope: {bridge}")
+        for row in (lc.get("score_ledger") or [])[:6]:
+            if not isinstance(row, dict):
+                continue
+            note = str(row.get("note") or row.get("label") or "").strip()
+            if note:
+                lines.append(f"Background factor ('bonus' / '+N' मत बोलें): {note}")
+        ly_low = loyalty is not None and loyalty < 52
+        if ly_low:
+            lines.append(
+                "Important: भरोसा कमज़ोर है — किसी को 'naturally loyal' मत कहें।"
+            )
+    else:
+        lines = [
+            "Write for this specific couple. Sound like live consultation notes.",
+            "",
+            f"PRIMARY READER (p1 / first kundli — report owner): {p1_name}",
+            f"Partner (p2 / second kundli): {p2_name}",
+            f"~70% of prose FROM {p1_name}'s side — what they feel, how their chart reacts, what lands on them.",
+            f"Explain {p2_name} in relation to how {p1_name} experiences the bond — not equal airtime.",
+            "",
+            f"{p1_name} Moon: {p1.get('moonSign') or p1.get('rashi', '?')} · nakshatra {p1.get('nakshatra', '?')}",
+            f"{p2_name} Moon: {p2.get('moonSign') or p2.get('rashi', '?')} · nakshatra {p2.get('nakshatra', '?')}",
+        ]
 
-    if love is not None:
-        lines.append(f"Overall emotional pull between them: roughly {love} out of 100.")
-    for r in _reasons_plain(lc, 3):
-        lines.append(f"Pull / chemistry note: {r}")
+        if love is not None:
+            lines.append(f"Overall emotional pull between them: roughly {love} out of 100.")
+        for r in _reasons_plain(lc, 3):
+            lines.append(f"Pull / chemistry note: {r}")
 
-    if breakup is not None:
-        lines.append(f"How easily friction could escalate toward separation: roughly {breakup} out of 100 (higher = more strain).")
-    for r in _reasons_plain(bu, 2):
-        lines.append(f"Friction pattern: {r}")
+        if breakup is not None:
+            lines.append(f"How easily friction could escalate toward separation: roughly {breakup} out of 100 (higher = more strain).")
+        for r in _reasons_plain(bu, 2):
+            lines.append(f"Friction pattern: {r}")
 
-    if loyalty is not None:
-        lines.append(f"Trust and consistency under pressure: roughly {loyalty} out of 100.")
-    for r in _reasons_plain(ly, 2):
-        lines.append(f"Trust note: {r}")
+        if loyalty is not None:
+            lines.append(f"Trust and consistency under pressure: roughly {loyalty} out of 100.")
+        for r in _reasons_plain(ly, 2):
+            lines.append(f"Trust note: {r}")
 
-    if reunion is not None:
-        lines.append(
-            f"If they were apart, odds of a genuine reconnection: roughly {reunion} out of 100 — "
-            "write honestly; most estranged situations do not see a real return."
-        )
-    for r in _reasons_plain(wr, 2):
-        lines.append(f"Reconnection note: {r}")
+        if reunion is not None:
+            lines.append(
+                f"If they were apart, odds of a genuine reconnection: roughly {reunion} out of 100 — "
+                "write honestly; most estranged situations do not see a real return."
+            )
+        for r in _reasons_plain(wr, 2):
+            lines.append(f"Reconnection note: {r}")
 
-    if future is not None:
-        lines.append(f"Longer-term direction of the bond: roughly {future} out of 100.")
-    for r in _reasons_plain(fo, 2):
-        lines.append(f"Long-term note: {r}")
+        if future is not None:
+            lines.append(f"Longer-term direction of the bond: roughly {future} out of 100.")
+        for r in _reasons_plain(fo, 2):
+            lines.append(f"Long-term note: {r}")
 
-    for r in _reasons_plain(rf, 2):
-        lines.append(f"Hidden friction to name gently: {r}")
+        for r in _reasons_plain(rf, 2):
+            lines.append(f"Hidden friction to name gently: {r}")
 
-    bridge = str(bundle.get("narrative_bridge") or "").strip()
-    if bridge:
-        lines.append(f"Timing / tension between short-term friction and longer hope: {bridge}")
+        bridge = str(bundle.get("narrative_bridge") or "").strip()
+        if bridge:
+            lines.append(f"Timing / tension between short-term friction and longer hope: {bridge}")
 
-    # Ledger → plain timing hints (no +12 / bonus language for LLM to copy)
-    for row in (lc.get("score_ledger") or [])[:6]:
-        if not isinstance(row, dict):
-            continue
-        note = str(row.get("note") or row.get("label") or "").strip()
-        if note:
-            lines.append(f"Background factor (do not say 'bonus' or '+N'): {note}")
+        for row in (lc.get("score_ledger") or [])[:6]:
+            if not isinstance(row, dict):
+                continue
+            note = str(row.get("note") or row.get("label") or "").strip()
+            if note:
+                lines.append(f"Background factor (do not say 'bonus' or '+N'): {note}")
 
-    ly_low = loyalty is not None and loyalty < 52
-    if ly_low:
-        lines.append(
-            "Important: trust is weak on this chart — do not call either partner "
-            "'naturally loyal' or 'devoted by nature'."
-        )
+        ly_low = loyalty is not None and loyalty < 52
+        if ly_low:
+            lines.append(
+                "Important: trust is weak on this chart — do not call either partner "
+                "'naturally loyal' or 'devoted by nature'."
+            )
 
     k1 = bundle.get("kundli_p1") or {}
     k2 = bundle.get("kundli_p2") or {}
@@ -420,7 +528,12 @@ def _verdict_page_facts_summary(bundle: dict) -> str:
                 if snippets:
                     planets_note.append(f"{label}: " + "; ".join(snippets[:8]))
         if planets_note:
-            lines.append("Key placements (interpret in plain words — do not dump as a list in output):")
+            hdr = (
+                "Key placements (plain words me interpret karo — output me list dump mat karo):"
+                if lang_lane == "hn"
+                else "Key placements (interpret in plain words — do not dump as a list in output):"
+            )
+            lines.append(hdr)
             lines.extend(f"  {x}" for x in planets_note)
     except Exception:
         pass
@@ -797,9 +910,9 @@ def _cro_verdict_page_facts_lock() -> str:
 
 
 def _cro_verdict_page_few_shot(lang: str) -> str:
-    """One golden example — tone/style only; model must NOT copy names, signs, or plot."""
+    """One golden example — tone/style only; replace placeholders with real p1/p2 names."""
     if lang == "hn":
-        return """STYLE GUIDE — sirf TONE copy karo; example ke names, signs, ya plot mat copy karo.
+        return """STYLE GUIDE — sirf TONE copy karo. [p1_name]/[p2_name] ko user message ke ACTUAL naam se replace karo. Aarav/Riya kabhi mat likho.
 
 MAT AISE LIKHNA (AI smell + contrast loop — strictly forbidden):
 "When something feels off, Aarav often wants to jump right in and fix it, while Riya tends to retreat... This contrast in emotional pacing... rhythm clash... engage honestly through those friction points."
@@ -809,27 +922,27 @@ AISE LIKHNA (p1 = pehli kundli, unse seedha — zyada waqt un par):
 
 GOLDEN JSON (p1 = pehli kundli in user facts — names/signs wahi se lo):
 {
-  "verdict": "Aarav, jab bhi rishte mein kuch alag lagta hai, aap turant kood padte ho ki abhi ke abhi isko theek karna hai. Aapka Aries Moon aapko jaldi react karwata hai — yeh kamzori nahi, aapka tareeka hai. Jab Riya chup ho jati hai, aapko andar se lagta hai ignore ho rahe ho; unhe waqt chahiye hota hai andar settle hone ka. Aap jab aur push karte ho, wo aur band ho jati hai — aur aap dono galat story padh lete ho.\\n\\nAapke chart me pull sachha hai — Venus se attraction strong hai, par jab aap turant jawab maangte ho aur wo chup hoti hai, wahi loop repeat hota hai. Aapko lagta hai pyaar kam hai; chart keh raha hai timing alag hai.",
+  "verdict": "[p1_name], jab rishte mein kuch alag lagta hai, aap turant theek karna chahte ho. Moon aapko jaldi react karwata hai — yeh aapka tareeka hai. Jab [p2_name] chup hote hain, andar se lagta hai ignore ho rahe ho; unhe settle hone ka waqt chahiye. Aap push karte ho, wo band hote hain — dono galat story padh lete ho.\\n\\nChart me pull sachha hai — attraction strong hai, par jab aap turant jawab maangte ho aur wo chup hote hain, wahi loop repeat hota hai. Pyaar kam nahi — timing alag hai.",
   "practical": [
-    "Aarav, jab aap turant closure maangte ho aur Riya andar process kar rahi hoti hai, aap pressure feel karte ho — unhe dabav. Aap silence ko rejection samajh lete ho, jabki unke liye woh pause hai. Yahi point baar-baar aapko dono ko ulajhata hai.",
-    "Aapke beech warmth hai — chart yeh bhi dikhata hai. Par jab aap apne andar sabse bura assume kar lete ho, gap khulta hai. Aapka chart aapko sikhata hai: pehle apna gussa settle karo, phir baat karo — warna wahi fight wapas aati hai."
+    "[p1_name], jab aap turant closure maangte ho aur [p2_name] andar process kar rahe hain, aap pressure feel karte ho. Silence ko rejection samajh lete ho — unke liye pause hai. Yahi point baar-baar ulajhata hai.",
+    "Warmth hai is bond me. Gap tab khulta hai jab silence me sabse bura assume kar lete ho. Pehle gussa settle, phir baat — warna wahi fight wapas."
   ]
 }
 
 Notice: No Key Takeaway. No What To Do Next. No scripted dialogue. No therapist tone."""
-    return """STYLE GUIDE — copy TONE only; do NOT copy example names, signs, or plot.
+    return """STYLE GUIDE — copy TONE only. Replace [p1_name]/[p2_name] with ACTUAL names from user message. Never write Aarav or Riya.
 
 DO NOT WRITE LIKE THIS (AI smell + contrast loop — strictly forbidden):
-"When something feels off, Aarav often wants to jump right in and fix it, while Riya tends to retreat... This contrast in emotional pacing... rhythm clash... as long as both of you are willing to engage honestly through those friction points."
+"When something feels off, one partner wants to fix it while the other retreats... This contrast in emotional pacing... rhythm clash..."
 
-WRITE IN THIS DIRECT, p1-FIRST STYLE (p1 = first kundli / report reader):
-"Aarav, when something feels off, you move to fix it right away — your chart pushes you to react fast. When Riya goes quiet, you feel ignored; she actually needs time inside. The more you push, the more she shuts down — and you read that as proof she doesn't care."
+WRITE IN THIS DIRECT, p1-FIRST STYLE:
+"[p1_name], when something feels off, you move to fix it right away — your chart pushes you to react fast. When [p2_name] goes quiet, you feel ignored; they need time inside. The more you push, the more they shut down."
 
-GOLDEN JSON (p1 = first kundli in user facts — use their name as You):
+GOLDEN JSON (ACTUAL p1/p2 names from user facts):
 {
-  "verdict": "Aarav, when something feels off, you move to fix it right away — you want the answer now. Your Aries Moon trains you to react before you cool down; that's your pattern, not a flaw. When Riya goes quiet, you feel shut out; she needs time to settle inside before she can speak. The more you push for closure, the more she pulls back — and you both end up reading the wrong story.\\n\\nYour chart shows real pull here — Venus fuels the attraction, but when you chase an answer and she goes still, the same fight returns. It can feel like she cares less; the chart says your timing clashes, not your bond.",
+  "verdict": "[p1_name], when something feels off, you want the answer now. Your Moon trains you to react before you cool down — that's your pattern. When [p2_name] goes quiet, you feel shut out; they need time inside first. The more you push for closure, the more they pull back — you both read the wrong story.\\n\\nThe chart shows real pull — attraction is strong, but when you chase an answer and they go still, the same fight returns. It can feel like they care less; the chart says timing clashes, not the bond.",
   "practical": [
-    "Aarav, when you want an answer now and Riya is still processing inside, you feel pressure building — she feels pushed. You tend to read her silence as rejection when for her it's a pause. That misread is the loop your chart keeps flagging.",
+    "[p1_name], when you want an answer now and [p2_name] is still processing inside, you feel pressure — they feel pushed. You read silence as rejection when for them it's a pause. That misread is the loop the chart keeps flagging.",
     "You carry enough warmth in this bond for small bumps to pass. The gap opens when you fill her silence with the worst guess — your chart points at your urge to fix it instantly, not at a lack of love on her side."
   ]
 }
@@ -841,11 +954,17 @@ def _cro_verdict_page_contract(lang: str) -> str:
     """
     Section 02 voice — consultation persona + JSON fields + few-shot example.
     """
+    from vedic.love_reality.love_section_polish import _human_prose_rhythm
+
     lang = polish_content_lang(lang)
     min_w = _VERDICT_PAGE_MIN_PRACTICAL_WORDS
     persona = _cro_verdict_page_consultation_persona(lang)
     if lang == "hn":
         return f"""{persona}
+
+{love_script_directive(lang)}
+
+{_human_prose_rhythm(lang)}
 
 SECTION 02 OUTPUT (Roman Hinglish):
 Fields: `verdict` (string) + `practical` (exactly 2 strings) — PDF me ek unified note banega.
@@ -860,7 +979,29 @@ Fields: `verdict` (string) + `practical` (exactly 2 strings) — PDF me ek unifi
 {_verdict_page_direct_voice(lang)}
 
 {_cro_verdict_page_few_shot(lang)}"""
+    if lang == "hi":
+        return f"""{persona}
+
+{love_script_directive(lang)}
+
+{_human_prose_rhythm(lang)}
+
+SECTION 02 OUTPUT (देवनागरी हिंदी):
+Fields: `verdict` (string) + `practical` (exactly 2 strings) — PDF में एक unified note बनेगा।
+
+`verdict`: 2–3 paragraphs (\\n\\n). Observation से शुरू — coach tone नहीं।
+`practical[0]` + `practical[1]`: आगे के paragraphs (~{min_w}+ words each)।
+
+{_cro_verdict_page_facts_lock()}
+
+{_verdict_page_primary_reader(lang)}
+
+{_verdict_page_direct_voice(lang)}
+
+{_cro_verdict_page_few_shot(lang)}"""
     return f"""{persona}
+
+{_human_prose_rhythm(lang)}
 
 SECTION 02 OUTPUT:
 Fields: `verdict` (string) + `practical` (exactly 2 strings) — rendered as ONE unified note in the PDF.
@@ -1181,15 +1322,18 @@ def _build_verdict_page_only_user_prompt(bundle: dict, lang: str) -> str:
     lang_voice = polish_content_lang(lang_norm)
     p1 = bundle.get("p1") or {}
     p1_name = str(p1.get("name") or "Partner A").strip()
-    voice_note = (
-        f"Roman Hinglish — Aap = {p1_name} (p1/pehli kundli), Unka/Unki = partner."
-        if lang_voice == "hn"
-        else f"Plain English — You = {p1_name} (p1/first kundli), They = partner."
-    )
+    if lang_voice == "hi":
+        voice_note = f"देवनागरी हिंदी — आप = {p1_name} (p1/पहली कुंडली), वे = partner।"
+    elif lang_voice == "hn":
+        voice_note = f"Roman Hinglish — Aap = {p1_name} (p1/pehli kundli), Unka/Unki = partner."
+    else:
+        voice_note = f"Plain English — You = {p1_name} (p1/first kundli), They = partner."
     return (
-        f"Write Section 02 for this couple. PRIMARY READER is {p1_name} (p1) — most airtime on them. "
+        love_script_directive(lang_norm)
+        + "\n\n"
+        + f"Write Section 02 for this couple. PRIMARY READER is {p1_name} (p1) — most airtime on them. "
         "Match the example voice in the system prompt.\n\n"
-        + _verdict_page_facts_summary(bundle)
+        + _verdict_page_facts_summary(bundle, lang_norm)
         + f"\n\nlanguage: {lang_norm}\n"
         + f"narration_style: {voice_note}\n"
         + "Emit JSON only."
@@ -1409,33 +1553,39 @@ def _deep_analysis_dimension_scores(bundle: dict) -> dict[str, int]:
 
 def _deep_analysis_few_shot(lang: str) -> str:
     if lang == "hn":
-        return """MAT AISE MAT LIKHO (generic / AI):
+        return """CRITICAL: [p1_name] aur [p2_name] placeholders hain — user message ke ACTUAL naam use karo. Aarav/Riya kabhi mat likho.
+
+MAT AISE MAT LIKHO (generic / AI):
 "Chart signals for this theme are active between both partners. Daily rhythm and repair style shape how this score lands."
 
-AISE LIKHO (p1 = pehli kundli, seedha, chart-specific):
+AISE LIKHO (p1 = pehli kundli, seedha, chart-specific — real names):
 {
   "deep_analysis": [
-    {"key": "emotional", "explanation": "Aarav, aap feelings jaldi surface par laate ho — Aries Moon aapko turant react karwata hai. Jab Riya andar process karti hai, aapko lagta hai doori badh rahi hai. Yeh pyaar ki kami nahi, bas alag emotional speed hai."},
-    {"key": "communication", "explanation": "Aarav, jab aap turant jawab maangte ho aur Riya chup hoti hai, aap galat tone padh lete ho. Mercury ke phases me chhoti baat bhi fight ban sakti hai — aapka chart aapko jaldi bolne par push karta hai."},
-    {"key": "trust", "explanation": "Aarav, aap consistency se trust measure karte ho — jab Riya silent hoti hai, aapka mind worst-case bharta hai. Chart keh raha hai trust tab toot ti hai jab aap silence ko rejection samajh lete ho."},
-    {"key": "long_term", "explanation": "Aarav, is bond me warmth hai par bina repair habit ke wahi 6-8 mahine ka loop repeat hoga. Aapka chart long-term tab hold karta hai jab aap gusse ke peak par baat karne ki jagah thoda rukna seekho."}
+    {"key": "emotional", "explanation": "[p1_name], aap feelings jaldi surface par laate ho — Moon aapko turant react karwata hai. Jab [p2_name] andar process karte hain, aapko lagta hai doori badh rahi hai. Yeh pyaar ki kami nahi, bas alag emotional speed hai."},
+    {"key": "communication", "explanation": "[p1_name], jab aap turant jawab maangte ho aur [p2_name] chup hote hain, aap galat tone padh lete ho. Mercury ke phases me chhoti baat bhi fight ban sakti hai — chart aapko jaldi bolne par push karta hai."},
+    {"key": "trust", "explanation": "[p1_name], aap consistency se trust measure karte ho — jab [p2_name] silent hote hain, mind worst-case bharta hai. Trust tab crack hoti hai jab aap silence ko rejection samajh lete ho."},
+    {"key": "long_term", "explanation": "[p1_name], is bond me warmth hai par bina repair habit ke wahi 6-8 mahine ka loop repeat hoga. Long-term tab hold hota hai jab gusse ke peak par ruk kar baat karte ho."}
   ]
 }"""
-    return """DO NOT WRITE (generic placeholder):
+    return """CRITICAL: [p1_name] and [p2_name] are placeholders — use ACTUAL names from the user message. Never write Aarav or Riya.
+
+DO NOT WRITE (generic placeholder):
 "Chart signals for this theme are active between both partners. Daily rhythm and repair style shape how this score lands."
 
-WRITE LIKE THIS (p1 = first kundli, direct, chart-specific):
+WRITE LIKE THIS (p1 = first kundli, direct, chart-specific — real names):
 {
   "deep_analysis": [
-    {"key": "emotional", "explanation": "Aarav, you bring feelings up fast — your Aries Moon pushes you to react before you cool down. When Riya needs quiet inside, you read it as distance growing. That's not less love; it's a different emotional speed."},
-    {"key": "communication", "explanation": "Aarav, when you want an answer now and Riya goes still, you often misread her tone. In Mercury-sensitive weeks a small delay can feel like disrespect — your chart trains you to speak before the heat drops."},
-    {"key": "trust", "explanation": "Aarav, you measure trust through consistency — when Riya is silent, your mind fills the gap with worst-case stories. The chart flags trust eroding when you treat pause as rejection, not processing."},
-    {"key": "long_term", "explanation": "Aarav, this bond has warmth but without repair habits the same six-to-eight month loop returns. Your chart holds long-term when you stop trying to fix everything in the peak of anger."}
+    {"key": "emotional", "explanation": "[p1_name], you bring feelings up fast — your Moon pushes you to react before you cool down. When [p2_name] needs quiet inside, you read it as distance growing. That's not less love; it's a different emotional speed."},
+    {"key": "communication", "explanation": "[p1_name], when you want an answer now and [p2_name] goes still, you often misread their tone. In Mercury-sensitive weeks a small delay can feel like disrespect — your chart trains you to speak before the heat drops."},
+    {"key": "trust", "explanation": "[p1_name], you measure trust through consistency — when [p2_name] is silent, your mind fills the gap with worst-case stories. Trust cracks when you treat pause as rejection, not processing."},
+    {"key": "long_term", "explanation": "[p1_name], this bond has warmth but without repair habits the same six-to-eight month loop returns. Long-term holds when you pause at peak anger instead of fixing everything instantly."}
   ]
 }"""
 
 
 def _build_deep_analysis_system_prompt(lang: str, *, include_dev_note: bool = True) -> str:
+    from vedic.love_reality.love_section_polish import _human_prose_rhythm
+
     lang = polish_content_lang(lang)
     script = {"en": "plain conversational English", "hn": "natural Roman Hinglish (WhatsApp-style)"}[lang]
     banned = _verdict_page_banned_block(lang)
@@ -1465,6 +1615,8 @@ RULES:
 - No contrast loop every line ("X while Y"). Talk TO p1 directly.
 - No safe counseling wrap at the end of each block.
 
+{_human_prose_rhythm(lang)}
+
 {banned}
 
 {_verdict_page_primary_reader(lang)}
@@ -1493,7 +1645,7 @@ def _build_deep_analysis_user_prompt(bundle: dict, lang: str) -> str:
     return (
         f"Write Deep Connection Analysis for {p1_name} (primary reader). "
         f"Match scores below. Match few-shot voice.\n\n"
-        + _verdict_page_facts_summary(bundle)
+        + _verdict_page_facts_summary(bundle, lang)
         + f"\n\nDIMENSION SCORES (fixed — explain these, do not change):\n{score_lines}\n\n"
         + f"language: {lang}\n"
         + f"narration_style: {voice}\n"
@@ -1893,11 +2045,11 @@ def _polish_love_reality_premium_legacy(
         except Exception as exc:
             log.warning("[love_reality_premium] depth regen skipped: %s", exc)
 
-    parsed = sanitize_love_reality_pro_premium(parsed, bundle)
+    parsed = sanitize_love_reality_pro_premium(parsed, bundle, lang=requested_lang)
 
     from vedic.love_reality.premium_validate import apply_love_premium_validation
 
-    apply_love_premium_validation(parsed, bundle, lang)
+    apply_love_premium_validation(parsed, bundle, requested_lang)
 
     parsed.setdefault("_meta", {})
     parsed["_meta"].update({

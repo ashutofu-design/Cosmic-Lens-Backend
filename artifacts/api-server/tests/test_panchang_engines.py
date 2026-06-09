@@ -14,6 +14,7 @@ from vedic.panchang.daily_muhurat import (
 )
 from vedic.panchang.festival_vrat import festivals_on_date, get_monthly_festivals
 from vedic.panchang.gochar import get_current_gochar
+from vedic.panchang.marriage_muhurta import scan_vivah_muhurat
 from vedic.panchang.swe_core import SWE_OK, sunrise_sunset, tithi_from_longitudes
 
 
@@ -75,3 +76,18 @@ def test_gochar_nine_planets():
     assert "degree" in j
     assert "is_retrograde" in j
     assert j.get("status") in ("Uday", "Asta", None) or "status" in j
+
+
+def test_vivah_muhurat_scan_windows():
+    """Geo + sunrise + lagna engine returns tiered days with optional windows."""
+    out = scan_vivah_muhurat(date(2026, 6, 1), days=45, **DELHI)
+    assert out["engine_version"]
+    assert "highly_favorable" in out
+    for key in ("highly_favorable", "favorable"):
+        for row in out[key][:3]:
+            assert row["date"]
+            assert row["tier"] == key
+            assert "tithi" in row
+            if row.get("best_windows"):
+                w = row["best_windows"][0]
+                assert w["start"] and w["end"]

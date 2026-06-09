@@ -26,6 +26,7 @@ before falling back to score-band defaults) so the description matches what
 the user actually feels.
 """
 
+import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -34,6 +35,13 @@ from shadbala import compute_shadbala, apply_shodhana, REQUIRED_MIN
 # ──────────────────────────────────────────────────────────────────────────────
 # CONSTANTS
 # ──────────────────────────────────────────────────────────────────────────────
+
+# Toggle Dasha in Today's Energy base score (25% slot).
+# False = Dasha OFF — Moon/Tara/AV weights rescale to 100%; MD sandhi + PD
+# transit overlays also skipped. Set ENERGY_DASHA_ENABLED=1 to turn back on.
+DASHA_WEIGHT_ENABLED = os.environ.get("ENERGY_DASHA_ENABLED", "0").strip().lower() in (
+    "1", "true", "yes", "on",
+)
 
 NAKSHATRAS = [
     "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra",
@@ -2017,8 +2025,13 @@ def calculate_energy(user_data: Dict[str, Any],
     # Vedic principle: Moon = mind = daily mood. Dasha (25%) gives backdrop
     # tilt. Aspect/Shadbala dropped — it's pure birth-chart strength, never
     # changes daily, was a wasted slot.
-    base_energy = (moon_sc * 0.35 + tara_sc * 0.25
-                   + dasha_sc * 0.25 + av_sc * 0.15)
+    if DASHA_WEIGHT_ENABLED:
+        base_energy = (moon_sc * 0.35 + tara_sc * 0.25
+                       + dasha_sc * 0.25 + av_sc * 0.15)
+    else:
+        # Dasha OFF — redistribute its 25% across Moon/Tara/AV proportionally.
+        base_energy = (moon_sc * (0.35 / 0.75) + tara_sc * (0.25 / 0.75)
+                       + av_sc * (0.15 / 0.75))
 
     # ── Overlays ─────────────────────────────────────────────────────────
     saturn_delta, saturn_d = compute_saturn_overlay(saturn_sign, birth_moon_sign)
@@ -2031,8 +2044,8 @@ def calculate_energy(user_data: Dict[str, Any],
     # ── Mahadasha Sandhi (transition window penalty) ─────────────────────
     dashas_list = (user_data.get("dashas")
                    or (user_data.get("chart_data") or {}).get("dashas") or [])
-    md_sandhi = _detect_md_sandhi(dashas_list, today)
-    md_sandhi_delta = -5.0 if md_sandhi else 0.0
+    md_sandhi = _detect_md_sandhi(dashas_list, today) if DASHA_WEIGHT_ENABLED else False
+    md_sandhi_delta = (-5.0 if md_sandhi else 0.0) if DASHA_WEIGHT_ENABLED else 0.0
 
     # ── STEP 1: Transit-to-natal aspects ─────────────────────────────────
     # FIX 1: when Sade Sati / Dhaiyya already firing (saturn_d.active),
@@ -2061,9 +2074,12 @@ def calculate_energy(user_data: Dict[str, Any],
 
     # ── STEP 5: PD lord current-transit house check (Lagna+Moon blend) ───
     pd_planet_for_transit = (dasha_d.get("pd") or {}).get("planet") if isinstance(dasha_d, dict) else None
-    pd_transit_delta, pd_transit_d = compute_pd_transit_overlay(
-        pd_planet_for_transit, transit_signs, lagna_sign, birth_moon_sign,
-    )
+    if DASHA_WEIGHT_ENABLED:
+        pd_transit_delta, pd_transit_d = compute_pd_transit_overlay(
+            pd_planet_for_transit, transit_signs, lagna_sign, birth_moon_sign,
+        )
+    else:
+        pd_transit_delta, pd_transit_d = 0.0, {}
 
     # ── FIX 2: Global negative-stack cap (-35) ───────────────────────────
     # Multiple penalties (Saturn + Mars + Tithi + Rahukal + ...) can crush
@@ -2141,7 +2157,7 @@ def calculate_energy(user_data: Dict[str, Any],
 
     # ── PD lord retrograde advisory (appended to advice) ─────────────────
     pd_planet = (dasha_d.get("pd") or {}).get("planet") if isinstance(dasha_d, dict) else None
-    retrograde_pd = _check_pd_retrograde(pd_planet, planets)
+    retrograde_pd = _check_pd_retrograde(pd_planet, planets) if DASHA_WEIGHT_ENABLED else None
     if retrograde_pd:
         advice = (advice + f" Note: Pratyantar lord {retrograde_pd} abhi vakri (retrograde) "
                            "hai — results thode delayed mil sakte, patience rakho.")
@@ -2216,10 +2232,27 @@ def calculate_energy(user_data: Dict[str, Any],
         "feedback_enabled": True,
         "feedback_adjustment": 0,
         "components": {
-            "moon_transit":   {"score": round(moon_sc, 1),  "weight": 0.35, **moon_d},
-            "tara_bal":       {"score": round(tara_sc, 1),  "weight": 0.25, **tara_d},
-            "dasha":          {"score": round(dasha_sc, 1), "weight": 0.25, **dasha_d},
-            "ashtakavarga":   {"score": round(av_sc, 1),    "weight": 0.15, **av_d},
+            "moon_transit":   {
+                "score": round(moon_sc, 1),
+                "weight": 0.35 if DASHA_WEIGHT_ENABLED else round(0.35 / 0.75, 4),
+                **moon_d,
+            },
+            "tara_bal":       {
+                "score": round(tara_sc, 1),
+                "weight": 0.25 if DASHA_WEIGHT_ENABLED else round(0.25 / 0.75, 4),
+                **tara_d,
+            },
+            "dasha":          {
+                "score": round(dasha_sc, 1),
+                "weight": 0.25 if DASHA_WEIGHT_ENABLED else 0.0,
+                "enabled": DASHA_WEIGHT_ENABLED,
+                **dasha_d,
+            },
+            "ashtakavarga":   {
+                "score": round(av_sc, 1),
+                "weight": 0.15 if DASHA_WEIGHT_ENABLED else round(0.15 / 0.75, 4),
+                **av_d,
+            },
         },
         "overlays": {
             "saturn":            {"delta": saturn_delta, **saturn_d},

@@ -11,6 +11,7 @@ from reportlab.platypus import PageBreak, Paragraph, Spacer, Table, TableStyle
 
 from milan_pdf import BRAND_GOLD, BRAND_PURPLE, TEXT_DARK, TEXT_MID, TEXT_SOFT, _font_pair, _gold_rule, _hex, _safe
 from vedic.compat.milan_pdf_locale import pdf_ui_hn
+from vedic.love_reality.pdf_locale import love_pdf_ui_hi
 
 
 def _toc_entries(lang: str, *, legacy_page1: bool = False) -> list[dict[str, Any]]:
@@ -108,26 +109,27 @@ def render_love_reality_toc_flowables(
     """First PDF page — serial list of everything in this report."""
     H_REG, H_BOLD = _font_pair(lang)
     hn = pdf_ui_hn(lang)
+    wrap = "CJK" if love_pdf_ui_hi(lang) else "normal"
     content_w = 180 * mm
     out: list[Any] = []
 
     out.append(Spacer(1, 2 * mm))
     out.append(
         Paragraph(
-            f"<font color='{_hex(BRAND_GOLD)}'><b>✦ COSMIC LENS PREMIUM</b></font>",
-            ParagraphStyle("toc_br", fontName=H_BOLD, fontSize=10, leading=13, alignment=TA_CENTER),
+            f"<font color='{_hex(BRAND_GOLD)}'>✦ COSMIC LENS PREMIUM</font>",
+            ParagraphStyle("toc_br", fontName=H_BOLD, fontSize=10, leading=13, alignment=TA_CENTER, wordWrap=wrap),
         )
     )
     out.append(
         Paragraph(
-            "<b>Love Reality Pro</b>",
-            ParagraphStyle("toc_t", fontName=H_BOLD, fontSize=16, leading=20, alignment=TA_CENTER, textColor=BRAND_PURPLE),
+            "Love Reality Pro",
+            ParagraphStyle("toc_t", fontName=H_BOLD, fontSize=16, leading=20, alignment=TA_CENTER, textColor=BRAND_PURPLE, wordWrap=wrap),
         )
     )
     out.append(
         Paragraph(
-            f"<b>{_safe(p1.get('name'))}</b> &amp; <b>{_safe(p2.get('name'))}</b>",
-            ParagraphStyle("toc_nm", fontName=H_BOLD, fontSize=12, leading=15, alignment=TA_CENTER, spaceAfter=2),
+            f"{_safe(p1.get('name'))} &amp; {_safe(p2.get('name'))}",
+            ParagraphStyle("toc_nm", fontName=H_BOLD, fontSize=12, leading=15, alignment=TA_CENTER, spaceAfter=2, wordWrap=wrap),
         )
     )
     rid = (report_id or "—").strip()
@@ -149,8 +151,8 @@ def render_love_reality_toc_flowables(
     )
     out.append(
         Paragraph(
-            f"<font color='{_hex(BRAND_PURPLE)}'><b>{toc_title.upper()}</b></font>",
-            ParagraphStyle("toc_h", fontName=H_BOLD, fontSize=13, leading=16, alignment=TA_CENTER, spaceAfter=2),
+            f"<font color='{_hex(BRAND_PURPLE)}'>{toc_title.upper()}</font>",
+            ParagraphStyle("toc_h", fontName=H_BOLD, fontSize=13, leading=16, alignment=TA_CENTER, spaceAfter=2, wordWrap=wrap),
         )
     )
     out.append(
@@ -162,15 +164,15 @@ def render_love_reality_toc_flowables(
 
     entries = _toc_entries(lang, legacy_page1=legacy_page1)
     rows: list[list[Any]] = []
-    num_style = ParagraphStyle("toc_n", fontName=H_BOLD, fontSize=9.5, leading=12, textColor=BRAND_PURPLE)
-    title_style = ParagraphStyle("toc_row_t", fontName=H_BOLD, fontSize=9.5, leading=12, textColor=TEXT_DARK)
-    item_style = ParagraphStyle("toc_item", fontName=H_REG, fontSize=8, leading=10.5, textColor=TEXT_MID, leftIndent=10)
+    num_style = ParagraphStyle("toc_n", fontName=H_BOLD, fontSize=9.5, leading=12, textColor=BRAND_PURPLE, wordWrap=wrap)
+    title_style = ParagraphStyle("toc_row_t", fontName=H_BOLD, fontSize=9.5, leading=12, textColor=TEXT_DARK, wordWrap=wrap)
+    item_style = ParagraphStyle("toc_item", fontName=H_REG, fontSize=8, leading=10.5, textColor=TEXT_MID, leftIndent=10, wordWrap=wrap)
 
     for i, entry in enumerate(entries, start=1):
         title = str(entry.get("title") or "")
         rows.append([
             Paragraph(f"{i:02d}", num_style),
-            Paragraph(f"<b>{_safe(title)}</b>", title_style),
+            Paragraph(_safe(title), title_style),
         ])
         for sub in entry.get("items") or []:
             rows.append([

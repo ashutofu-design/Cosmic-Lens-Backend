@@ -132,6 +132,12 @@ def build_love_reality_page1_data(
             "Track dasha dates — avoid ultimatums in down windows",
         ]
     recommendations = _to_concise_bullets(raw_recs, max_items=5, max_len=78)
+    # Verdict page: full LLM prose (practical[] = 2 long paragraphs from polish)
+    verdict_full = (
+        (pro.get("verdict") or ctx.get("page14_closing") or "").strip()
+        or f"Love {love}/100 · Breakup risk {breakup}/100 — use this as a timing map, not doom."
+    )
+    rec_paragraphs = practical[:2] if practical and any(len(p) > 100 for p in practical) else []
 
     strengths = [
         {"label": "Emotional magnetism", "value": min(100, love + 8)},
@@ -146,11 +152,33 @@ def build_love_reality_page1_data(
         {"label": "Conflict escalation", "value": min(100, max(breakup, 100 - loyalty) // 2 + 20)},
     ]
 
-    def analysis(title: str, score: int, body: str, fallback: str) -> dict[str, Any]:
+    llm_da_by_key: dict[str, str] = {}
+    llm_da = pro.get("deep_analysis")
+    if isinstance(llm_da, list):
+        for row in llm_da:
+            if not isinstance(row, dict):
+                continue
+            key = str(row.get("key") or "").strip().lower()
+            expl = str(row.get("explanation") or "").strip()
+            if key and expl:
+                llm_da_by_key[key] = expl
+
+    def analysis(
+        key: str,
+        title: str,
+        score: int,
+        body: str,
+        fallback: str,
+    ) -> dict[str, Any]:
+        llm_expl = llm_da_by_key.get(key, "")
+        if len(llm_expl) >= 40:
+            explanation = _short(llm_expl, 420)
+        else:
+            explanation = _short(body or fallback, 140)
         return {
             "title": title,
             "score": score,
-            "explanation": _short(body or fallback, 140),
+            "explanation": explanation,
         }
 
     return {
@@ -186,24 +214,28 @@ def build_love_reality_page1_data(
         "key_insights": insights[:3],
         "analysis": [
             analysis(
+                "emotional",
                 "Emotional Compatibility",
                 dims.get("emotional") or max(0, min(100, int(love * 0.9))),
                 love_narr,
                 "Feelings run deep but peak at different speeds — name needs early.",
             ),
             analysis(
+                "communication",
                 "Communication",
                 dims.get("communication") or max(20, 100 - breakup),
                 breakup_narr,
                 "Direct vs indirect styles clash under stress — use calm voice for sensitive topics.",
             ),
             analysis(
+                "trust",
                 "Trust & Loyalty",
                 loyalty,
                 loyalty_narr,
                 "Trust holds with consistency; hidden resentment erodes loyalty faster than open conflict.",
             ),
             analysis(
+                "long_term",
                 "Long-Term Potential",
                 dims.get("stability") or max(0, min(100, (love + loyalty) // 2)),
                 future_narr,
@@ -212,10 +244,7 @@ def build_love_reality_page1_data(
         ],
         "strengths": strengths,
         "challenges": challenges,
-        "verdict": _short(
-            (pro.get("verdict") or ctx.get("page14_closing") or "").strip()
-            or f"Love {love}/100 · Breakup risk {breakup}/100 — use this as a timing map, not doom.",
-            200,
-        ),
+        "verdict": verdict_full,
         "recommendations": recommendations,
+        "recommendation_paragraphs": rec_paragraphs,
     }

@@ -13,14 +13,19 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable
 
 from vedic.compat.openai_pdf_telemetry import PdfGenOpenAITelemetry, stub_meta
-from vedic.love_reality.pdf_text_safe import polish_content_lang, sanitize_love_reality_pro_premium
+from vedic.love_reality.pdf_text_safe import (
+    love_script_directive,
+    love_write_script_label,
+    polish_content_lang,
+    sanitize_love_reality_pro_premium,
+)
 from vedic.compat.premium_chapters import CHAPTER_BODY_KEY, normalize_pro_pdf_lang
 
 log = logging.getLogger(__name__)
 
-_ASSEMBLY_VER = "lr_sections_v4"
-_CHAPTER_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_CHAPTER_MIN_WORDS", "120"))
-_HARMONY_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_HARMONY_MIN_WORDS", "180"))
+_ASSEMBLY_VER = "lr_sections_v8"
+_CHAPTER_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_CHAPTER_MIN_WORDS", "95"))
+_HARMONY_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_HARMONY_MIN_WORDS", "130"))
 
 _CHAPTER_KEYS = ("breakup", "loyalty")
 _BLUEPRINT_REALITY_KEY = "love_connection"
@@ -35,6 +40,68 @@ def _word_count(text: str) -> int:
     return len(re.findall(r"\b[\w']+\b", text or ""))
 
 
+def _narrative_architecture(lang: str) -> str:
+    if lang == "hi":
+        return """NARRATIVE ARCHITECTURE (पूरी रिपोर्ट एक परामर्श जैसी — AI रिपोर्ट नहीं):
+- 25+ वर्षों के वरिष्ठ ज्योतिषी की तरह लिखें — केवल दिए गए चार्ट संकेत।
+- पहले SINGLE सबसे मजबूत मूल कारण पहचानें (user message में ROOT_CAUSE)।
+- पूरी कहानी उसी मूल कारण के इर्द-गिर्द — हर अध्याय नया कोण, एक ही निष्कर्ष दोबारा नहीं।
+- पिछले अध्यायों के निष्कर्ष / चेतावनी / स्कोर दोहराएँ नहीं।
+- हर निष्कर्ष किसी विशिष्ट ज्योतिषीय कारक से जुड़ा हो (Moon, Mercury, 7th lord, dasha)।
+- सामान्य relationship सलाह नहीं — जब तक चार्ट समर्थन न करे।
+- स्कोर एक बार बताने के बाद दोबारा नहीं — "इस स्तर" / "इस चरण" कहें।
+- पैटर्न क्यों है — सिर्फ क्या है नहीं।"""
+    if lang == "hn":
+        return """NARRATIVE ARCHITECTURE (poori report ek consultation jaisi — AI report nahi):
+- 25+ saal ke senior astrologer ki tarah likho — sirf diye gaye chart signals use karo.
+- Pehle SINGLE strongest root cause identify karo (user message me ROOT_CAUSE block).
+- Poori story us root cause ke around — har chapter alag angle, same conclusion repeat mat.
+- Har chapter pichhle sections ki conclusion / warning / score repeat NA kare — naya insight add kare.
+- Har conclusion kisi specific astrological factor se trace ho (Moon, Mercury, 7th lord, dasha, etc.).
+- Generic relationship advice mat — jab tak chart signal support na kare.
+- Score / percentage / probability ek baar establish ho chuki ho to dubara mat likho — "yeh band" / "is phase" bolo.
+- Pattern KYUN exist karta hai explain karo — sirf WHAT mat.
+- Personalized consultation tone — experienced astrologer, AI ya coach nahi."""
+    return """NARRATIVE ARCHITECTURE (one consultation, not an AI report):
+- Act as a senior astrologer with 25+ years of consulting experience — use only provided chart signals.
+- Identify the single strongest root cause first (see ROOT_CAUSE block in user message).
+- Build the entire narrative around that root cause — each chapter a new angle, never the same conclusion twice.
+- Never repeat a conclusion, score, warning, or sentence structure already stated in PRIOR_SECTIONS.
+- Every conclusion must trace to a specific astrological factor (Moon, Mercury, 7th lord, dasha, etc.).
+- No generic relationship advice unless supported by chart signals.
+- Do not repeat scores, percentages, or probabilities once already established — say "this band" / "this phase".
+- Explain WHY the pattern exists, not just what the pattern is.
+- Sound like a personalized consultation — not an AI report or coach script."""
+
+
+def _human_prose_rhythm(lang: str) -> str:
+    if lang == "hi":
+        return """HUMAN PROSE RHYTHM (देवनागरी हिंदी — जैसे ज्योतिषी सामने समझा रहे हों):
+- 100% देवनागरी — Roman वाक्य मना (नाम/स्कोर Latin में ठीक)।
+- छोटे वाक्य (8–15 शब्द)। हर पैराग्राफ 3–4 वाक्य, फिर \\n\\n।
+- हर चार्ट बिंदु के बाद बताएँ — रोज़मर्रा में कैसा दिखता है।
+- पूरे सेक्शन में अधिकतम 2 स्कोर — वाक्य में बुनें।
+- कोच / थेरेपिस्ट टोन नहीं — अंत में एक तीखा observation।"""
+    if lang == "hn":
+        return """HUMAN PROSE RHYTHM (Roman Hinglish — PDF me aisa padhe jaise astrologer ne likha):
+- 100% Latin script — kabhi Devanagari mat likho (क, ख, म forbidden).
+- Tone: samne baith kar samjha rahe ho — WhatsApp voice note jaisa, textbook nahi.
+- Sentences chhoti (8–15 words). Har paragraph 3–4 sentences max, phir \\n\\n.
+- Hindi verbs + simple English nouns: "aap push karte ho", "chart keh raha hai", "repair delay ho".
+- Har chart point ke baad likho yeh real life me kya dikhta hai — engine label mat dump karo.
+- Poori section me max 2 scores — sentence ke andar weave karo, scorecard mat banao.
+- Mat likho: dynamics, navigate, leverage, testament, underlying tension, emotional pacing.
+- Mat likho: "communication important hai", "dono ko benefit", "effort se improve" — jab tak chart fact na ho.
+- Safe counseling wrap mat — ek sharp observation par khatam karo."""
+    return """HUMAN PROSE RHYTHM (must read like a human astrologer wrote it):
+- Face-to-face tone — not a report, not a coach, not an AI summary.
+- Short sentences (8–15 words). Max 3–4 sentences per paragraph, then \\n\\n.
+- After every chart point, say what it looks like in daily life — no engine label dumps.
+- At most two scores in the whole section — woven into sentences, not a scorecard.
+- Do not use: dynamics, navigate, leverage, testament, underlying tension, emotional pacing.
+- No generic therapy wrap — end on a sharp observation that lands for p1."""
+
+
 def _love_llm_shared_voice(lang: str) -> str:
     from vedic.love_reality.premium_polish import (
         _verdict_page_banned_block,
@@ -42,7 +109,12 @@ def _love_llm_shared_voice(lang: str) -> str:
         _verdict_page_primary_reader,
     )
 
-    if lang == "hn":
+    if lang == "hi":
+        persona = (
+            "आप एक वरिष्ठ relationship ज्योतिषी हैं — सीधी, सरल देवनागरी हिंदी, "
+            "जैसे सामने बैठकर समझा रहे हों। Textbook या coach tone नहीं।"
+        )
+    elif lang == "hn":
         persona = (
             "Aap ek senior relationship astrologer hain — seedha, simple Roman Hinglish, "
             "jaise samne baith kar samjha rahe ho. Textbook ya coach tone nahi."
@@ -54,6 +126,8 @@ def _love_llm_shared_voice(lang: str) -> str:
         )
     return (
         f"{persona}\n\n"
+        f"{_narrative_architecture(lang)}\n\n"
+        f"{_human_prose_rhythm(lang)}\n\n"
         f"{_verdict_page_primary_reader(lang)}\n\n"
         f"{_verdict_page_direct_voice(lang)}\n\n"
         f"{_verdict_page_banned_block(lang)}"
@@ -117,7 +191,7 @@ WRITE (p1 — ideal blueprint vs partner reality, use real names):
     if chapter_key == "breakup":
         if lang == "hn":
             return f"""{name_rule}
-AISE LIKHO: "[p1_name], jab baat atakti hai tum turant solve karna chahte ho. [p2_name] chup ho jati hai, tum push karte ho. Repair 48 ghante delay ho to separation feel hoti hai."
+AISE LIKHO: "[p1_name], jab baat atakti hai tum turant solve karna chahte ho. [p2_name] chup ho jate hain, tum push karte ho. Repair 48 ghante delay ho to separation feel hoti hai."
 """
         return f"""{name_rule}
 WRITE: "[p1_name], when talk stalls you move to fix it fast. [p2_name] goes quiet and you push harder. Separation feels close when repair waits more than 48 hours."
@@ -125,7 +199,7 @@ WRITE: "[p1_name], when talk stalls you move to fix it fast. [p2_name] goes quie
     if chapter_key == "loyalty":
         if lang == "hn":
             return f"""{name_rule}
-AISE LIKHO: "[p1_name], trust consistency se measure karte ho — jab [p2_name] silent hoti hai mind worst-case bharta hai."
+AISE LIKHO: "[p1_name], trust consistency se measure karte ho — jab [p2_name] silent hote hain mind worst-case bharta hai."
 """
         return f"""{name_rule}
 WRITE: "[p1_name], you measure trust through consistency — when [p2_name] is silent your mind fills worst-case stories."
@@ -133,22 +207,52 @@ WRITE: "[p1_name], you measure trust through consistency — when [p2_name] is s
     if chapter_key == "red_flags":
         if lang == "hn":
             return f"""{name_rule}
-AISE LIKHO (sharp, 3+ paragraphs): "[p1_name], do pattern bar-bar — peak gusse par ultimatum, silence ko ignore samajhna."
+AISE LIKHO (sharp, 3 chhoti paragraphs):
+"[p1_name], do pattern bar-bar dikhte hain — gusse ke peak par ultimatum, aur silence ko jaan-bujhkar ignore samajhna. Chart breakup pressure high hai — matlab chhoti fight bhi separation jaisi feel ho sakti hai. Yeh lecture nahi, pattern recognition hai."
 """
         return f"""{name_rule}
-WRITE (sharp, minimum 3 paragraphs, use real names):
-"[p1_name], two patterns keep showing — ultimatums at peak anger, and reading silence as intentional ignore. Name both clearly with chart backing."
+WRITE (sharp, 3 short paragraphs, real names):
+"[p1_name], two patterns keep returning — ultimatums at peak anger, and reading silence as intentional ignore. Breakup pressure is high on the chart — small fights can feel like the end. Name both plainly; this is pattern recognition, not a lecture."
 """
     return ""
 
 
 def _harmony_few_shot(lang: str) -> str:
+    name_rule = _few_shot_name_rule(lang)
     if lang == "hn":
-        return """AISE LIKHO (honest, real p1/p2 names):
-"[p1_name], agar alag hue to chart genuine return ko kam probability deta hai — false reunion promise mat do. Repair habit ke bina 6-8 mahine ka loop wapas aata hai."
+        return f"""{name_rule}
+AISE LIKHO (honest, real names):
+"[p1_name], Fire aur Earth mix me tum jaldi react karte ho, [p2_name] slow recharge karte hain. Agar alag hue to chart genuine return ko kam probability deta hai — false reunion promise mat do. Repair habit ke bina 6-8 mahine ka loop wapas aata hai."
 """
-    return """WRITE (honest, real p1/p2 names):
-"[p1_name], if apart the chart gives low genuine-return probability — do not promise reunion. Without repair habits the same six-to-eight month loop returns."
+    return f"""{name_rule}
+WRITE (honest, real names):
+"[p1_name], your Fire and their Earth pull at different speeds — you react fast, they recharge slow. If apart the chart gives low genuine-return probability — do not promise reunion. Without repair habits the same six-to-eight month loop returns."
+"""
+
+
+def _dasha_few_shot(lang: str) -> str:
+    name_rule = _few_shot_name_rule(lang)
+    if lang == "hn":
+        return f"""{name_rule}
+AISE LIKHO:
+"[p1_name], abhi aap Jupiter MD mein ho, Rahu AD chal raha hai — patience stretch hoti hai. [p2_name] Saturn AD mein slow reply dete hain. Jab dono cycles communication ko stress karein, 24 ghante ke andar friction naam karo — ultimatum mat."
+"""
+    return f"""{name_rule}
+WRITE:
+"[p1_name], you're in Jupiter MD with Rahu AD running — patience gets stretched. [p2_name] is in Saturn AD and replies slow. When both cycles stress communication, name the friction within 24 hours — no ultimatums."
+"""
+
+
+def _roadmap_few_shot(lang: str) -> str:
+    name_rule = _few_shot_name_rule(lang)
+    if lang == "hn":
+        return f"""{name_rule}
+AISE LIKHO (3/12/36 month alag paragraphs):
+"Agle 3 mahine: trend mixed — repair habit bina wahi loop. 12 mahine: outlook strained — clarity ke liye ek baar calmly baithna. 36 mahine: return probability low — false reunion promise mat, chart honest hai."
+"""
+    return f"""{name_rule}
+WRITE (separate paragraphs for 3 / 12 / 36 months):
+"Next 3 months: mixed trend — same loop without repair habits. Next 12 months: strained outlook — one calm sit-down for clarity. Next 36 months: low return probability — no false reunion promise; the chart is honest."
 """
 
 
@@ -201,7 +305,7 @@ def _roadmap_engine_facts(bundle: dict) -> str:
     timeline = fo.get("timeline_flow") or []
     t3 = timeline[1] if len(timeline) > 1 else {}
     lines = [
-        "ROADMAP ENGINE SCORES (guide p1 — do NOT invent new numbers):",
+        "ROADMAP ENGINE SCORES (use once — elsewhere say 'this band' / 'this phase', do NOT repeat numbers):",
         f"Love score: {lc.get('score') or '?'}/100",
         f"Future outlook score: {fo.get('future_score') or fo.get('score') or '?'}/100",
         f"Return probability: {wr.get('return_probability') or wr.get('score') or '?'}/100",
@@ -215,20 +319,166 @@ def _roadmap_engine_facts(bundle: dict) -> str:
     return "\n".join(lines)
 
 
+def _pick_root_cause_text(bundle: dict) -> tuple[str, list[str]]:
+    """Engine-picked single strongest friction line + chart hooks for narrative anchor."""
+    bu = bundle.get("breakup_chances") or {}
+    rf = bundle.get("hidden_red_flags") or {}
+    lc = bundle.get("love_compatibility") or {}
+    sig = bundle.get("couple_signals") or {}
+    p1 = bundle.get("p1") or {}
+    p2 = bundle.get("p2") or {}
+
+    candidates: list[str] = []
+    summ = str(bu.get("emotional_summary") or "").strip()
+    if summ:
+        candidates.append(summ)
+    for r in (bu.get("reasons") or [])[:3]:
+        t = str(r).strip()
+        if t and t not in candidates:
+            candidates.append(t)
+    for r in (rf.get("reasons") or [])[:2]:
+        t = str(r).strip()
+        if t and t not in candidates:
+            candidates.append(t)
+    if not candidates:
+        fallback = str(lc.get("emotional_summary") or "").strip()
+        candidates.append(fallback or "Chart affliction creates recurring emotional friction between these two Moons.")
+
+    hooks: list[str] = []
+    for n in (sig.get("synastry_notes") or [])[:3]:
+        t = str(n).strip()
+        if t:
+            hooks.append(t)
+    mm = sig.get("moon_mismatch")
+    if mm:
+        hooks.append(f"Moon mismatch signal: {mm}")
+    p1m = p1.get("moonSign") or p1.get("rashi")
+    p2m = p2.get("moonSign") or p2.get("rashi")
+    if p1m and p2m:
+        hooks.append(
+            f"{p1.get('name') or 'p1'} Moon {p1m} vs {p2.get('name') or 'p2'} Moon {p2m}"
+        )
+    return candidates[0], hooks
+
+
+def _build_root_cause_anchor(bundle: dict, lang: str) -> str:
+    primary, hooks = _pick_root_cause_text(bundle)
+    hook_block = "\n".join(f"- {h}" for h in hooks[:4]) if hooks else "- Use Moon / Mercury / 7th-lord facts from chart summary below."
+    if lang == "hn":
+        return (
+            "ROOT_CAUSE (poori report isi ek reason ke around — har chapter alag angle):\n"
+            f"Primary friction: {primary}\n\n"
+            f"Chart hooks (har conclusion inme se trace ho):\n{hook_block}\n\n"
+            "Breakup chapter = root cause KYUN exist karta hai explain kare. "
+            "Baaki chapters = root cause par naya angle — same warning / score repeat mat."
+        )
+    return (
+        "ROOT_CAUSE (entire report orbits this one friction — each chapter a new angle):\n"
+        f"Primary friction: {primary}\n\n"
+        f"Chart hooks (every conclusion must trace to one of these):\n{hook_block}\n\n"
+        "Breakup chapter OWNS why this root cause exists astrologically. "
+        "Other chapters extend it — never repeat the same warning or score."
+    )
+
+
+def _build_prior_sections_digest(pro: dict, lang: str) -> str:
+    parts: list[str] = []
+    verdict = str(pro.get("verdict") or "").strip()
+    if verdict:
+        excerpt = verdict[:480] + ("…" if len(verdict) > 480 else "")
+        parts.append(excerpt)
+
+    da = pro.get("deep_analysis") or []
+    if da:
+        for row in da[:6]:
+            if not isinstance(row, dict):
+                continue
+            key = str(row.get("key") or row.get("title") or "?").strip()
+            expl = str(row.get("explanation") or row.get("body") or "").strip()
+            if expl:
+                parts.append(f"[{key}]: {expl[:140]}")
+
+    if not parts:
+        return ""
+
+    header = (
+        "PRIOR_SECTIONS (already stated — do NOT repeat conclusions, scores, warnings, or opener patterns):"
+        if lang == "en"
+        else "PRIOR_SECTIONS (yeh pehle bol chuke — conclusion / score / warning dubara mat likho):"
+    )
+    return header + "\n" + "\n".join(parts)
+
+
+def _section_angle_block(section_key: str, lang: str) -> str:
+    angles_en = {
+        "blueprint_reality": (
+            "SECTION ANGLE: Ideal partner blueprint (7th, Upapada, Venus) vs who p2 actually is — "
+            "show mismatch through ROOT_CAUSE, not a new unrelated reason."
+        ),
+        "breakup": (
+            "SECTION ANGLE: OWN the root cause — explain WHY this friction pattern exists in the charts. "
+            "Do not list generic breakup advice."
+        ),
+        "loyalty": (
+            "SECTION ANGLE: How ROOT_CAUSE erodes trust and consistency — do not re-explain the root cause from scratch."
+        ),
+        "red_flags": (
+            "SECTION ANGLE: Name the sharpest friction patterns tied to chart signals — "
+            "no repeated warnings from PRIOR_SECTIONS."
+        ),
+        "harmony": (
+            "SECTION ANGLE: Long-term element balance and what shifts the bond — connect to ROOT_CAUSE, new theory."
+        ),
+        "dasha": (
+            "SECTION ANGLE: When ROOT_CAUSE peaks or eases in dasha — timing only, no score rehash."
+        ),
+        "roadmap": (
+            "SECTION ANGLE: 3/12/36 month practical arc for p1 — refer to bands/phases, do not repeat score numbers."
+        ),
+    }
+    angles_hn = {
+        "blueprint_reality": (
+            "SECTION ANGLE: p1 ka ideal partner vs p2 ki asli nature — ROOT_CAUSE se mismatch dikhao, naya alag reason mat."
+        ),
+        "breakup": (
+            "SECTION ANGLE: ROOT_CAUSE KYUN hai — chart se explain karo. Generic breakup advice mat."
+        ),
+        "loyalty": (
+            "SECTION ANGLE: ROOT_CAUSE trust ko kaise todta hai — root cause dubara poori tarah mat samjhao."
+        ),
+        "red_flags": (
+            "SECTION ANGLE: Chart-backed red flags — PRIOR_SECTIONS ki warning repeat mat."
+        ),
+        "harmony": (
+            "SECTION ANGLE: Long-term elements + bond shift — ROOT_CAUSE se judo, naya insight."
+        ),
+        "dasha": (
+            "SECTION ANGLE: ROOT_CAUSE kab peak / ease — timing, score dubara mat."
+        ),
+        "roadmap": (
+            "SECTION ANGLE: 3/12/36 month guide — band/phase bolo, score numbers repeat mat."
+        ),
+    }
+    table = angles_hn if lang == "hn" else angles_en
+    return table.get(section_key, "")
+
+
 def _chapter_section_brief(chapter_key: str, lang: str) -> str:
     briefs = {
         "love_connection": (
             "PDF Section 05 — Partner Blueprint vs Reality. "
-            "p1 ideal signature (7th, Upapada, Venus) vs p2 actual nature. No generic placeholder."
+            "p1 ideal signature (7th, Upapada, Venus) vs p2 actual nature. "
+            "Connect to ROOT_CAUSE — no unrelated second reason."
         ),
         "breakup": (
-            "PDF Section 08 — Core Root Cause. Why friction escalates toward separation — chart-backed story."
+            "PDF Section 08 — Core Root Cause. OWN why friction escalates — every paragraph traces to a chart factor."
         ),
         "loyalty": (
-            "PDF Section 09 — Loyalty & Trust under pressure. Do NOT say 'naturally loyal' if score is low."
+            "PDF Section 09 — Loyalty & Trust under pressure. "
+            "Extend ROOT_CAUSE into trust — do NOT say 'naturally loyal' if score is low."
         ),
         "red_flags": (
-            "PDF Section 10 — Red Flags lead-in. Top friction patterns — sharp, specific, no bullet list."
+            "PDF Section 10 — Red Flags lead-in. Chart-backed patterns only — sharp, no bullet list, no generic advice."
         ),
     }
     return briefs.get(chapter_key, "")
@@ -236,8 +486,10 @@ def _chapter_section_brief(chapter_key: str, lang: str) -> str:
 
 def _build_chapter_system_prompt(chapter_key: str, lang: str) -> str:
     lang = polish_content_lang(lang)
-    script = {"en": "plain conversational English", "hn": "natural Roman Hinglish"}[lang]
+    script = love_write_script_label(lang)
     return f"""Write ONLY one Love Reality chapter — key `{chapter_key}`.
+
+{love_script_directive(lang)}
 
 Return STRICT JSON:
 {{
@@ -253,8 +505,9 @@ RULES:
 - Minimum {_CHAPTER_MIN_WORDS}+ words, {_CHAPTER_MIN_WORDS // 3}+ paragraphs (\\n\\n).
 - Simple words — no high-end English, no corporate psychology.
 - Talk TO p1 (first kundli). Partner as context.
-- Cite real chart facts from user message — Moon, houses, graha.
-- Do not repeat the same insight twice. No safe counseling wrap ending.
+- Every conclusion must trace to a specific astrological factor from user message.
+- Never repeat conclusions, scores, or warnings from PRIOR_SECTIONS — add a new angle on ROOT_CAUSE.
+- No safe counseling wrap ending.
 
 {_love_llm_shared_voice(lang)}
 
@@ -265,8 +518,10 @@ Use ONLY facts from the user message."""
 
 def _build_harmony_system_prompt(lang: str) -> str:
     lang = polish_content_lang(lang)
-    script = {"en": "plain conversational English", "hn": "natural Roman Hinglish"}[lang]
+    script = love_write_script_label(lang)
     return f"""Write ONLY PDF Section 11 — Harmony Formula (long-term + reconnection context combined).
+
+{love_script_directive(lang)}
 
 Return STRICT JSON:
 {{
@@ -312,7 +567,7 @@ def _blueprint_chart_facts(bundle: dict) -> str:
 
 def _build_blueprint_reality_system_prompt(lang: str) -> str:
     lang = polish_content_lang(lang)
-    script = {"en": "plain conversational English", "hn": "natural Roman Hinglish"}[lang]
+    script = love_write_script_label(lang)
     return f"""Write ONLY PDF Section — Partner Blueprint vs Reality (love_connection).
 
 Return STRICT JSON:
@@ -323,6 +578,8 @@ Return STRICT JSON:
 }}
 
 Write entirely in {script}.
+
+{love_script_directive(lang)}
 
 TASK:
 - Page title: Partner Blueprint vs Reality
@@ -338,8 +595,9 @@ TASK:
 DO NOT copy engine one-liner summaries verbatim.
 DO NOT write only one sentence.
 
-Example shape (use real names, not placeholders):
-"[p1_name], your 7th house points to a partner who brings steadiness. [p2_name]'s chart shows a different rhythm — Earth vs your Air. The love score shows how far ideal and reality sit apart."
+{_few_shot_name_rule(lang)}
+Example shape (replace [p1_name]/[p2_name] with ACTUAL names from user message):
+"[p1_name], tumhari 7th house steady partner maangti hai — clear baat, warmth. [p2_name] ki chart alag rhythm laati hai — pehle andar process. Tumhe lagta hai sunai nahi deti; unhe lagta hai tum dabav daal rahe ho. Love score is gap ko measure karta hai."
 
 Use ONLY facts from the user message."""
 
@@ -402,7 +660,7 @@ def polish_love_reality_blueprint_reality_only(
 
 def _build_red_flags_system_prompt(lang: str) -> str:
     lang = polish_content_lang(lang)
-    script = {"en": "plain conversational English", "hn": "natural Roman Hinglish"}[lang]
+    script = love_write_script_label(lang)
     return f"""Write ONLY PDF Section — Red Flags Matrix (lead-in prose before bullet list).
 
 Return STRICT JSON:
@@ -414,6 +672,8 @@ Return STRICT JSON:
 
 Write entirely in {script}.
 
+{love_script_directive(lang)}
+
 TASK:
 - Name the top 2–4 friction patterns for THIS couple — chart-backed
 - Talk TO p1 (first kundli). Sharp, specific, no lecture, no bullet list in prose
@@ -421,7 +681,7 @@ TASK:
 - Match breakup/loyalty scores — if high breakup pressure, say so plainly
 
 {_love_llm_shared_voice(lang)}
-{_few_shot_name_rule(lang)}
+{_chapter_few_shot("red_flags", lang)}
 
 DO NOT write generic "be careful" advice.
 Use ONLY engine facts from user message."""
@@ -479,7 +739,7 @@ def polish_love_reality_red_flags_only(
 
 def _build_dasha_system_prompt(lang: str) -> str:
     lang = polish_content_lang(lang)
-    script = {"en": "plain conversational English", "hn": "natural Roman Hinglish"}[lang]
+    script = love_write_script_label(lang)
     return f"""Write ONLY PDF Section — Vimshottari Dasha Synchronization (guide for p1).
 
 Return STRICT JSON:
@@ -489,6 +749,8 @@ Return STRICT JSON:
 
 Write entirely in {script}.
 
+{love_script_directive(lang)}
+
 TASK:
 - Explain p1 and p2 current MD/AD in simple words — not textbook Sanskrit
 - Say how cycles align OR clash for this couple right now
@@ -497,10 +759,7 @@ TASK:
 - Use exact dasha names and date windows from facts only
 
 {_love_llm_shared_voice(lang)}
-{_few_shot_name_rule(lang)}
-
-Example shape:
-"[p1_name], you're running Jupiter MD with Rahu AD until [date] — this stretches patience. [p2_name]'s Saturn AD slows emotional replies. When both cycles stress communication, name friction within 24 hours."
+{_dasha_few_shot(lang)}
 
 Use ONLY facts from user message."""
 
@@ -547,7 +806,7 @@ def polish_love_reality_dasha_only(
 
 def _build_roadmap_system_prompt(lang: str) -> str:
     lang = polish_content_lang(lang)
-    script = {"en": "plain conversational English", "hn": "natural Roman Hinglish"}[lang]
+    script = love_write_script_label(lang)
     return f"""Write ONLY PDF Section — 1–3 Year Chronological Roadmap (p1 action guide).
 
 Return STRICT JSON:
@@ -556,6 +815,8 @@ Return STRICT JSON:
 }}
 
 Write entirely in {script}.
+
+{love_script_directive(lang)}
 
 TASK:
 - Use engine trends for Next 3 months, Next 12 months, Next 36 months from facts
@@ -566,7 +827,7 @@ TASK:
 - Simple English — astrologer advising face-to-face
 
 {_love_llm_shared_voice(lang)}
-{_few_shot_name_rule(lang)}
+{_roadmap_few_shot(lang)}
 
 DO NOT invent scores or dates not in facts.
 Use ONLY facts from user message."""
@@ -618,18 +879,28 @@ def _build_section_user_prompt(bundle: dict, lang: str, *, section_note: str) ->
     p1 = bundle.get("p1") or {}
     p1_name = str(p1.get("name") or "Partner A").strip()
     lang_voice = polish_content_lang(normalize_pro_pdf_lang(lang))
-    voice = (
-        f"Aap = {p1_name} (p1/pehli kundli)."
-        if lang_voice == "hn"
-        else f"You = {p1_name} (p1/first kundli)."
-    )
-    return (
-        f"{section_note}\n\n"
-        + _verdict_page_facts_summary(bundle)
-        + f"\n\nlanguage: {lang}\n"
-        + f"narration_style: {voice}\n"
-        + "Emit JSON only."
-    )
+    if lang_voice == "hi":
+        voice = f"आप = {p1_name} (p1/पहली कुंडली)।"
+    elif lang_voice == "hn":
+        voice = f"Aap = {p1_name} (p1/pehli kundli)."
+    else:
+        voice = f"You = {p1_name} (p1/first kundli)."
+    blocks = [love_script_directive(lang_voice), section_note]
+    section_key = str(bundle.get("_lr_section_key") or "").strip()
+    angle = _section_angle_block(section_key, lang_voice) if section_key else ""
+    if angle:
+        blocks.append(angle)
+    root = str(bundle.get("_lr_root_cause") or "").strip()
+    if root:
+        blocks.append(root)
+    prior = str(bundle.get("_lr_prior_digest") or "").strip()
+    if prior:
+        blocks.append(prior)
+    blocks.append(_verdict_page_facts_summary(bundle, lang))
+    blocks.append(f"language: {lang}")
+    blocks.append(f"narration_style: {voice}")
+    blocks.append("Emit JSON only.")
+    return "\n\n".join(blocks)
 
 
 def _fingerprint(blob: str) -> str:
@@ -918,8 +1189,10 @@ def _run_section_job(
 ) -> tuple[str, dict[str, Any], str, str | None, str | None]:
     """Run one section LLM call with retry; never raises."""
     try:
+        job_bundle = dict(bundle)
+        job_bundle["_lr_section_key"] = label
         hit = _invoke_section_fn(
-            fn, bundle, lang, force_llm, chapter_key=chapter_key
+            fn, job_bundle, lang, force_llm, chapter_key=chapter_key
         )
         body = _section_body_from_hit(hit, *body_keys)
         if not body:
@@ -929,7 +1202,7 @@ def _run_section_job(
                 (hit.get("_meta") or {}).get("reason"),
             )
             hit = _invoke_section_fn(
-                fn, bundle, lang, True, chapter_key=chapter_key
+                fn, job_bundle, lang, True, chapter_key=chapter_key
             )
             body = _section_body_from_hit(hit, *body_keys)
         if not body:
@@ -983,6 +1256,10 @@ def assemble_love_reality_pro_premium(
         if s03.get("deep_analysis"):
             pro["deep_analysis"] = s03["deep_analysis"]
         section_meta["deep_analysis"] = s03.get("_meta") or {}
+
+        work_bundle = dict(bundle)
+        work_bundle["_lr_root_cause"] = _build_root_cause_anchor(bundle, lang)
+        work_bundle["_lr_prior_digest"] = _build_prior_sections_digest(pro, lang)
 
         parallel_jobs: list[tuple] = [
             (
@@ -1050,7 +1327,7 @@ def assemble_love_reality_pro_premium(
                     _run_section_job,
                     label,
                     fn,
-                    bundle,
+                    work_bundle,
                     lang,
                     force_llm,
                     body_keys=body_keys,
@@ -1076,7 +1353,7 @@ def assemble_love_reality_pro_premium(
                     _upsert_chapter(pro, label, body, hit.get("grounding") or "")
 
         _scrub_loyalty_contradictions(pro, bundle)
-        pro = sanitize_love_reality_pro_premium(pro, bundle)
+        pro = sanitize_love_reality_pro_premium(pro, bundle, lang=requested_lang)
         apply_love_premium_validation(pro, bundle, lang)
     except Exception as exc:
         log.exception("[assembly] fatal: %s", exc)

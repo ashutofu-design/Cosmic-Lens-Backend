@@ -358,6 +358,8 @@ def _font_pair(lang: str) -> tuple[str, str]:
     code = (lang or "en").lower()
     fam = _LANG_TO_FONT.get(code)
     if fam:
+        if code == "hi":
+            register_indic_fonts(force=True)
         pair = _INDIC_REGISTERED.get(fam)
         if pair:
             return pair
@@ -393,6 +395,19 @@ def _safe(s: Any) -> str:
 
 
 _BR_TAG_RE = re.compile(r"(?i)<br\s*/?>")
+_INLINE_MARKUP_RE = re.compile(r"</?(?:b|i|strong|em)\s*>", re.IGNORECASE)
+_MD_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
+_DEVA_CHAR_RE = re.compile(r"[\u0900-\u097F\u1CD0-\u1CFF\uA8E0-\uA8FF]")
+
+
+def _strip_llm_inline_markup(raw: str) -> str:
+    """Remove bold/italic tags from LLM copy — <b> forces Helvetica → □□□ for Devanagari."""
+    t = (raw or "").strip()
+    if not t:
+        return ""
+    t = _INLINE_MARKUP_RE.sub("", t)
+    t = _MD_BOLD_RE.sub(r"\1", t)
+    return t
 
 
 def _premium_prose_markup(raw: str) -> str:
@@ -402,7 +417,7 @@ def _premium_prose_markup(raw: str) -> str:
     PDF gets real vertical air (double break between paragraphs, single
     break inside a paragraph) without treating user `<` as HTML.
     """
-    t = (raw or "").strip()
+    t = _strip_llm_inline_markup(raw)
     if not t:
         return ""
     t = t.replace("\r\n", "\n").replace("\r", "\n")
@@ -417,6 +432,55 @@ def _premium_prose_markup(raw: str) -> str:
         if not lines:
             continue
         chunks.append("<br/>".join(_safe(ln) for ln in lines))
+    return "<br/><br/>".join(chunks)
+
+
+def _markup_line_mixed_script(line: str) -> str:
+    """Per-character Devanagari vs Latin font tags — fixes □□□ on Hinglish LLM lines."""
+    register_indic_fonts(force=True)
+    pair = _INDIC_REGISTERED.get("NotoDeva")
+    deva_font = pair[0] if pair else "Helvetica"
+    latin_font = "Helvetica"
+    if not line:
+        return ""
+    out: list[str] = []
+    buf = ""
+    buf_script = ""
+    for ch in line:
+        script = "deva" if _DEVA_CHAR_RE.search(ch) else "lat"
+        if buf and script != buf_script:
+            font = deva_font if buf_script == "deva" else latin_font
+            out.append(f'<font name="{font}">{_safe(buf)}</font>')
+            buf = ""
+        buf_script = script
+        buf += ch
+    if buf:
+        font = deva_font if buf_script == "deva" else latin_font
+        out.append(f'<font name="{font}">{_safe(buf)}</font>')
+    return "".join(out) if out else _safe(line)
+
+
+def _premium_body_markup(raw: str, lang: str = "en") -> str:
+    """Like `_premium_prose_markup` but Hindi uses mixed NotoDeva + Helvetica runs."""
+    t = _strip_llm_inline_markup(raw)
+    if not t:
+        return ""
+    t = t.replace("\r\n", "\n").replace("\r", "\n")
+    t = _BR_TAG_RE.sub("\n", t)
+    t = re.sub(r"\n{3,}", "\n\n", t)
+    paras = [p.strip() for p in t.split("\n\n") if p.strip()]
+    if not paras:
+        return ""
+    use_mixed = (lang or "en").lower() == "hi"
+    chunks: list[str] = []
+    for para in paras:
+        lines = [ln.strip() for ln in para.split("\n") if ln.strip()]
+        if not lines:
+            continue
+        if use_mixed:
+            chunks.append("<br/>".join(_markup_line_mixed_script(ln) for ln in lines))
+        else:
+            chunks.append("<br/>".join(_safe(ln) for ln in lines))
     return "<br/><br/>".join(chunks)
 
 
@@ -525,7 +589,7 @@ def _premium_body_multi_paragraph_table(
             parts.append(block)
     if not parts:
         return _premium_body_table(
-            _premium_prose_markup(combined_plain) or _safe("—"),
+            _premium_body_markup(combined_plain, _lang) or _safe("—"),
             combined_plain or "—",
             s,
             relax=relax,
@@ -533,7 +597,7 @@ def _premium_body_multi_paragraph_table(
     if len(parts) == 1:
         p0 = parts[0]
         return _premium_body_table(
-            _premium_prose_markup(p0) or _safe(p0), p0, s, relax=relax,
+            _premium_body_markup(p0, _lang) or _safe(p0), p0, s, relax=relax,
         )
     rows: list[list[Any]] = []
     style_cmds: list[tuple[Any, ...]] = [
@@ -542,7 +606,7 @@ def _premium_body_multi_paragraph_table(
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
     ]
     for i, ptxt in enumerate(parts):
-        mk = _premium_prose_markup(ptxt) or _safe(ptxt)
+        mk = _premium_body_markup(ptxt, _lang) or _safe(ptxt)
         para = Paragraph(mk, _pick_body_premium(ptxt, s, _lang, relax=relax))
         rows.append([para])
         top_pad = 6 if i == 0 else (12 if relax else 10)
@@ -568,7 +632,7 @@ def _bullet_cluster_table(s: dict, plain: str) -> Table | None:
             continue
         rows.append([
             Paragraph(
-                f"<font color='{_hex(BRAND_GOLD)}'><b>·</b></font>"
+                f"<font color='{_hex(BRAND_GOLD)}'>·</font>"
                 f"&nbsp;&nbsp;{_safe(clean)}",
                 ParagraphStyle(
                     f"prem_bul_cluster_{i}",
@@ -709,6 +773,7 @@ def _styles(lang: str = "en") -> dict[str, ParagraphStyle]:
     H_REG, H_BOLD = _font_pair(lang)
     deva_reg = (_INDIC_REGISTERED.get("NotoDeva") or ("Helvetica", "Helvetica-Bold"))[0]
     deva_bold = (_INDIC_REGISTERED.get("NotoDeva") or ("Helvetica", "Helvetica-Bold"))[1]
+    indic_wrap = "CJK" if (lang or "en").lower() == "hi" else "normal"
     # Stash lang on the returned dict so _pick_body() can be called without
     # threading lang through every render helper signature.
     return {
@@ -731,7 +796,7 @@ def _styles(lang: str = "en") -> dict[str, ParagraphStyle]:
         "body": ParagraphStyle(
             "body", parent=base["BodyText"], fontName=H_REG,
             fontSize=10, leading=14.5, textColor=TEXT_DARK,
-            spaceAfter=4,
+            spaceAfter=4, wordWrap=indic_wrap,
         ),
         # Phase 2.5.11.24-fix: Latin-only body style for Hinglish/Roman
         # fallback content when lang is non-Latin (NotoBeng/NotoTaml/etc
@@ -746,7 +811,7 @@ def _styles(lang: str = "en") -> dict[str, ParagraphStyle]:
         "body_premium": ParagraphStyle(
             "body_premium", parent=base["BodyText"], fontName=H_REG,
             fontSize=10.25, leading=15.25, textColor=TEXT_DARK,
-            spaceBefore=2, spaceAfter=8,
+            spaceBefore=2, spaceAfter=8, wordWrap=indic_wrap,
         ),
         "body_premium_latin": ParagraphStyle(
             "body_premium_latin", parent=base["BodyText"], fontName="Helvetica",
@@ -758,7 +823,7 @@ def _styles(lang: str = "en") -> dict[str, ParagraphStyle]:
         "body_premium_loose": ParagraphStyle(
             "body_premium_loose", parent=base["BodyText"], fontName=H_REG,
             fontSize=10.85, leading=16.6, textColor=TEXT_DARK,
-            spaceBefore=3, spaceAfter=11,
+            spaceBefore=3, spaceAfter=11, wordWrap=indic_wrap,
         ),
         "body_premium_latin_loose": ParagraphStyle(
             "body_premium_latin_loose", parent=base["BodyText"], fontName="Helvetica",
@@ -769,13 +834,13 @@ def _styles(lang: str = "en") -> dict[str, ParagraphStyle]:
             "body_premium_indic", parent=base["BodyText"],
             fontName=deva_reg,
             fontSize=10.25, leading=15.25, textColor=TEXT_DARK,
-            spaceBefore=2, spaceAfter=8,
+            spaceBefore=2, spaceAfter=8, wordWrap="CJK",
         ),
         "body_premium_indic_loose": ParagraphStyle(
             "body_premium_indic_loose", parent=base["BodyText"],
             fontName=deva_reg,
             fontSize=10.85, leading=16.6, textColor=TEXT_DARK,
-            spaceBefore=3, spaceAfter=11,
+            spaceBefore=3, spaceAfter=11, wordWrap="CJK",
         ),
         "muted": ParagraphStyle(
             "muted", parent=base["BodyText"], fontName=H_REG,
@@ -1513,13 +1578,24 @@ def _cover_page(s: dict, p1: dict, p2: dict, total: float, mx: int,
 
 
 def _chapter_eyebrow(num: int, label: str, lang: str = "en") -> Paragraph:
-    pref = MPL.chapter_prefix(lang)
-    lab = label if MPL.pdf_ui_hn(lang) else label.upper()
+    code = (lang or "en").lower()
+    if code == "hi":
+        from vedic.love_reality.pdf_locale import chapter_prefix as _lr_chapter_prefix
+
+        pref = _lr_chapter_prefix(lang)
+        register_indic_fonts(force=True)
+        _, h_bold = _font_pair("hi")
+        eyebrow_font = h_bold
+        line = f"{pref} {num:02d}  ·  {label.upper()}"
+    else:
+        pref = MPL.chapter_prefix(lang)
+        lab = label if MPL.pdf_ui_hn(lang) else label.upper()
+        eyebrow_font = "Helvetica-Bold"
+        line = f"{pref} {num:02d}  ·  {lab}"
     return Paragraph(
-        f"<font color='{_hex(TEXT_SOFT)}'><b>"
-        f"{pref} {num:02d}  ·  {lab}</b></font>",
-        ParagraphStyle("eyebrow", fontName="Helvetica-Bold", fontSize=9,
-                       leading=12, spaceAfter=6),
+        f"<font color='{_hex(TEXT_SOFT)}'>{_safe(line)}</font>",
+        ParagraphStyle("eyebrow", fontName=eyebrow_font, fontSize=9,
+                       leading=12, spaceAfter=6, wordWrap="CJK"),
     )
 
 
@@ -1537,18 +1613,20 @@ def _chapter_title_block(title: str, subtitle: str, s: dict | None = None) -> li
         if pair:
             h_bold, h_reg = pair[1], pair[0]
     out: list[Any] = []
+    wrap = "CJK" if (lg or "en").lower() == "hi" else "normal"
     out.append(Paragraph(
-        f"<b>{_safe(title)}</b>",
+        _safe(title),
         ParagraphStyle("chap_title", fontName=h_bold, fontSize=24,
-                       leading=30, textColor=BRAND_PURPLE, spaceAfter=4),
+                       leading=30, textColor=BRAND_PURPLE, spaceAfter=4,
+                       wordWrap=wrap),
     ))
     out.append(_gold_rule(40))
     out.append(Spacer(1, 8))
     if subtitle:
         out.append(Paragraph(
-            f"<font color='{_hex(TEXT_MID)}'><i>{_safe(subtitle)}</i></font>",
+            f"<font color='{_hex(TEXT_MID)}'>{_safe(subtitle)}</font>",
             ParagraphStyle("chap_sub", fontName=h_reg, fontSize=11,
-                           leading=15, spaceAfter=14),
+                           leading=15, spaceAfter=14, wordWrap=wrap),
         ))
     return out
 

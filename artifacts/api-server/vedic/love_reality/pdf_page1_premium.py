@@ -20,7 +20,12 @@ from milan_pdf import (
     TEXT_SOFT,
     _font_pair,
     _hex,
+    _pick_body_premium,
+    _premium_body_markup,
+    _premium_prose_markup,
     _safe,
+    _styles,
+    register_indic_fonts,
 )
 
 COSMIC_200 = colors.HexColor("#DDD6FE")
@@ -175,7 +180,7 @@ class HorizontalProgressBar(Flowable):
 
 def _section_label(text: str, H_BOLD: str, *, size: float = _SECTION) -> Paragraph:
     return Paragraph(
-        f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(text.upper())}</b></font>",
+        f"<font color='{_hex(BRAND_PURPLE)}'>{_safe(text.upper())}</font>",
         ParagraphStyle(
             "sl",
             fontName=H_BOLD,
@@ -190,7 +195,7 @@ def _section_label(text: str, H_BOLD: str, *, size: float = _SECTION) -> Paragra
 def _verdict_badge(score: int, H_BOLD: str) -> Table:
     label, fg, bg = _alignment_verdict_band(score)
     badge = Paragraph(
-        f"<font color='{_hex(fg)}'><b>{_safe(label.upper())}</b></font>",
+        f"<font color='{_hex(fg)}'>{_safe(label.upper())}</font>",
         ParagraphStyle("vb", fontName=H_BOLD, fontSize=10.5, leading=13, alignment=TA_CENTER, textColor=fg),
     )
     tbl = Table([[badge]], colWidths=[52 * mm])
@@ -207,9 +212,9 @@ def _verdict_badge(score: int, H_BOLD: str) -> Table:
 def _metric_cell(metric: dict[str, Any], H_REG: str, H_BOLD: str) -> Paragraph:
     val = int(metric.get("value") or 0)
     return Paragraph(
-        f"<b>{_safe(metric.get('label') or '')}</b><br/>"
-        f"<font size='12.5'><b>{val}%</b></font><br/>"
-        f"<font size='12.5'>{_safe(_short(metric.get('interpretation') or '', 38))}</font>",
+        f"<font name='{H_BOLD}'>{_safe(metric.get('label') or '')}</font><br/>"
+        f"<font size='12.5' name='{H_BOLD}'>{val}%</font><br/>"
+        f"<font size='12.5' name='{H_REG}'>{_safe(_short(metric.get('interpretation') or '', 38))}</font>",
         ParagraphStyle("mc", fontName=H_REG, fontSize=_METRIC, leading=_BODY_LEADING, textColor=TEXT_DARK),
     )
 
@@ -226,7 +231,7 @@ def _progress_row(
     bar_w = 52 * mm
     fill = RED if negative else _score_color(value)
     pct = Paragraph(
-        f"<font color='{_hex(fill)}'><b>{value}%</b></font>",
+        f"<font color='{_hex(fill)}'>{value}%</font>",
         ParagraphStyle("pv", fontName=H_BOLD, fontSize=_BODY, leading=_BODY_LEADING, alignment=TA_RIGHT, textColor=fill),
     )
     lbl = Paragraph(
@@ -234,7 +239,7 @@ def _progress_row(
         ParagraphStyle("pl", fontName=H_REG, fontSize=_BODY, leading=_BODY_LEADING, textColor=TEXT_DARK),
     )
     icon_p = Paragraph(
-        f"<font color='{_hex(fill)}'><b>{icon}</b></font>",
+        f"<font color='{_hex(fill)}'>{icon}</font>",
         ParagraphStyle("pi", fontName=H_BOLD, fontSize=12, leading=12, alignment=TA_CENTER),
     )
     row = Table(
@@ -285,18 +290,27 @@ def _premium_verdict_card(
             parts.append(t)
     merged = "\n\n".join(parts)
     body = Paragraph(
-        _prose_html(merged, max_len=None if hero else 240),
-        ParagraphStyle("vd", fontName=H_REG, fontSize=_BODY, leading=_BODY_LEADING, textColor=TEXT_DARK),
+        _prose_html(merged, max_len=None if hero else 240, lang=lang),
+        ParagraphStyle(
+            "vd", fontName=H_REG, fontSize=_BODY, leading=_BODY_LEADING, textColor=TEXT_DARK,
+            wordWrap="CJK" if lang == "hi" else "normal",
+        ),
     )
     badge = Paragraph(
         f"<font color='{_hex(TEXT_SOFT)}'>Overall bond · {score}/100</font>",
         ParagraphStyle("vbd", fontName=H_REG, fontSize=9, leading=11, alignment=TA_RIGHT),
     )
-    note_title = "Astrologer Ka Note" if lang == "hn" else "Astrologer's Note"
+    if lang == "hi":
+        note_title = "ज्योतिषी का नोट"
+    elif lang == "hn":
+        note_title = "Astrologer Ka Note"
+    else:
+        note_title = "Astrologer's Note"
     title = Paragraph(
         f"<font color='{_hex(BRAND_GOLD)}'>✦</font> "
-        f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(note_title.upper())}</b></font>",
-        ParagraphStyle("vt", fontName=H_BOLD, fontSize=_BODY, leading=_BODY_LEADING, textColor=BRAND_PURPLE),
+        f"<font color='{_hex(BRAND_PURPLE)}' name='{H_BOLD}'>{_safe(note_title.upper())}</font>",
+        ParagraphStyle("vt", fontName=H_BOLD, fontSize=_BODY, leading=_BODY_LEADING,
+                        textColor=BRAND_PURPLE, wordWrap="CJK" if lang == "hi" else "normal"),
     )
     pad = 12 if hero else 6
     tbl = Table([[title], [badge], [body]], colWidths=[_CONTENT_W])
@@ -326,17 +340,24 @@ def _recommendations_card(
     items = [str(r).strip() for r in recs if str(r).strip()]
     use_paragraphs = paragraph_mode or (hero and any(len(x) > 100 for x in items))
     if use_paragraphs:
-        blocks = [_prose_html(item) for item in items[:3]]
+        blocks = [_prose_html(item, lang=lang) for item in items[:3]]
         body_html = "<br/><br/>".join(blocks) if blocks else "—"
     else:
         bullet_max = 110 if hero else 78
-        lines = [f"&bull; {_safe(_short(str(r), bullet_max))}" for r in items[:5]]
+        if lang == "hi":
+            lines = [
+                _premium_body_markup(f"• {_short(str(r), bullet_max)}", lang)
+                for r in items[:5]
+            ]
+        else:
+            lines = [f"&bull; {_safe(_short(str(r), bullet_max))}" for r in items[:5]]
         body_html = "<br/>".join(lines) if lines else "—"
     body = Paragraph(
         body_html,
         ParagraphStyle(
             "rc", fontName=H_REG, fontSize=_BODY, leading=_BODY_LEADING,
             textColor=TEXT_DARK if hero else TEXT_MID, leftIndent=6 if hero else 4,
+            wordWrap="CJK" if lang == "hi" else "normal",
         ),
     )
     rec_title = "Aage Kya Karein" if lang == "hn" else "What To Do Next"
@@ -354,19 +375,23 @@ def _recommendations_card(
 
 def render_premium_page1_flowables(data: dict[str, Any], lang: str = "en") -> list[Any]:
     """Executive summary — single premium dashboard page."""
+    if (lang or "").lower() == "hi":
+        register_indic_fonts(force=True)
     H_REG, H_BOLD = _font_pair(lang)
+    s = _styles(lang)
     out: list[Any] = []
 
     header = Table(
         [[
             Paragraph(
-                f"<font color='{_hex(BRAND_GOLD)}'><b>✦ COSMIC LENS PREMIUM</b></font><br/>"
-                f"<font size='14'><b>Love Reality Pro</b></font><br/>"
-                f"<b>{_safe(data['p1_name'])}</b> &amp; <b>{_safe(data['p2_name'])}</b>",
+                f"<font color='{_hex(BRAND_GOLD)}'>✦ COSMIC LENS PREMIUM</font><br/>"
+                f"<font size='14' name='{H_BOLD}'>Love Reality Pro</font><br/>"
+                f"<font name='{H_BOLD}'>{_safe(data['p1_name'])}</font> &amp; "
+                f"<font name='{H_BOLD}'>{_safe(data['p2_name'])}</font>",
                 ParagraphStyle("hdr", fontName=H_BOLD, fontSize=11, leading=14, textColor=TEXT_DARK),
             ),
             Paragraph(
-                f"ID <b>{_safe(data['report_id'])}</b><br/>{_safe(data['generated_at'])}",
+                f"ID <font name='{H_BOLD}'>{_safe(data['report_id'])}</font><br/>{_safe(data['generated_at'])}",
                 ParagraphStyle("hid", fontName=H_REG, fontSize=10, leading=12.5, textColor=TEXT_SOFT, alignment=TA_RIGHT),
             ),
         ]],
@@ -390,10 +415,12 @@ def render_premium_page1_flowables(data: dict[str, Any], lang: str = "en") -> li
         colWidths=[_CONTENT_W],
     )
     gauge_block.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))
+    summ_plain = _short(data.get("relationship_summary") or "", 260)
+    summ_body = _pick_body_premium(summ_plain, s, lang, relax=True)
     summary = Paragraph(
-        f"<font color='{_hex(BRAND_PURPLE)}'><b>RELATIONSHIP SUMMARY</b></font><br/>"
-        f"{_safe(_short(data.get('relationship_summary') or '', 260))}",
-        ParagraphStyle("sum", fontName=H_REG, fontSize=_BODY, leading=_BODY_LEADING, textColor=TEXT_MID),
+        f"<font color='{_hex(BRAND_PURPLE)}' name='{summ_body.fontName}'>RELATIONSHIP SUMMARY</font><br/>"
+        f"{_premium_body_markup(summ_plain, lang) or _safe(summ_plain)}",
+        summ_body,
     )
     hero = Table([[gauge_block], [summary]], colWidths=[_CONTENT_W])
     hero.setStyle(_strong_card(accent=True))
@@ -420,9 +447,12 @@ def render_premium_page1_flowables(data: dict[str, Any], lang: str = "en") -> li
         insight_parts.append("<br/>".join(f"&bull; {_safe(b)}" for b in bullets))
     insights = Table(
         [[Paragraph(
-            f"<font color='{_hex(BRAND_PURPLE)}'><b>RELATIONSHIP INSIGHTS</b></font><br/>"
+            f"<font color='{_hex(BRAND_PURPLE)}' name='{H_BOLD}'>RELATIONSHIP INSIGHTS</font><br/>"
             + "<br/>".join(insight_parts),
-            ParagraphStyle("ins", fontName=H_REG, fontSize=_BODY, leading=_BODY_LEADING, textColor=TEXT_MID),
+            ParagraphStyle(
+                "ins", fontName=H_REG, fontSize=_BODY, leading=_BODY_LEADING, textColor=TEXT_MID,
+                wordWrap="CJK" if lang == "hi" else "normal",
+            ),
         )]],
         colWidths=[_CONTENT_W],
     )
@@ -445,6 +475,8 @@ def render_premium_page1_flowables(data: dict[str, Any], lang: str = "en") -> li
 
 def render_verdict_page_flowables(data: dict[str, Any], lang: str = "en") -> list[Any]:
     """Dedicated page — one unified astrologer's note (interpretation + guidance in one flow)."""
+    if (lang or "").lower() == "hi":
+        register_indic_fonts(force=True)
     H_REG, H_BOLD = _font_pair(lang)
     score = int(data.get("cosmic_score") or 0)
     recs = data.get("recommendation_paragraphs") or data.get("recommendations") or []
@@ -455,9 +487,9 @@ def render_verdict_page_flowables(data: dict[str, Any], lang: str = "en") -> lis
     out.append(Spacer(1, 3 * mm))
     out.append(
         Paragraph(
-            f"<font color='{_hex(TEXT_SOFT)}'><b>02</b></font> "
-            f"<font color='{_hex(BRAND_PURPLE)}'><b>{_safe(data['p1_name'])}</b> &amp; "
-            f"<b>{_safe(data['p2_name'])}</b></font>",
+            f"<font color='{_hex(TEXT_SOFT)}' name='{H_BOLD}'>02</font> "
+            f"<font color='{_hex(BRAND_PURPLE)}' name='{H_BOLD}'>{_safe(data['p1_name'])}</font> &amp; "
+            f"<font color='{_hex(BRAND_PURPLE)}' name='{H_BOLD}'>{_safe(data['p2_name'])}</font>",
             ParagraphStyle("vp_h", fontName=H_BOLD, fontSize=_BODY, leading=_BODY_LEADING, textColor=TEXT_DARK),
         )
     )
@@ -482,7 +514,10 @@ def render_verdict_page_flowables(data: dict[str, Any], lang: str = "en") -> lis
 
 def render_deep_analysis_page2_flowables(data: dict[str, Any], lang: str = "en") -> list[Any]:
     """Four dimension deep-dives — page 2 opener."""
+    if (lang or "").lower() == "hi":
+        register_indic_fonts(force=True)
     H_REG, H_BOLD = _font_pair(lang)
+    s = _styles(lang)
     out: list[Any] = []
 
     out.append(_section_label("Deep Connection Analysis", H_BOLD, size=13))
@@ -497,11 +532,14 @@ def render_deep_analysis_page2_flowables(data: dict[str, Any], lang: str = "en")
 
     def block_para(item: dict) -> Paragraph:
         sc_val = int(item.get("score") or 0)
+        expl = str(item.get("explanation") or "")
+        title = str(item.get("title") or "")
+        body_style = _pick_body_premium(expl, s, lang, relax=True)
         return Paragraph(
-            f"<b>{_safe(item.get('title') or '')}</b> "
-            f"<font color='{_hex(BRAND_PURPLE)}'><b>{sc_val}/100</b></font><br/>"
-            f"<font size='10'>{_safe(item.get('explanation') or '')}</font>",
-            ParagraphStyle("ab", fontName=H_REG, fontSize=11, leading=14, textColor=TEXT_DARK),
+            f'<font name="{H_BOLD}">{_safe(title)}</font> '
+            f'<font color="{_hex(BRAND_PURPLE)}" name="{H_BOLD}">{sc_val}/100</font><br/>'
+            f'{_premium_body_markup(expl, lang) or _safe(expl)}',
+            body_style,
         )
 
     rows: list[list[Any]] = []

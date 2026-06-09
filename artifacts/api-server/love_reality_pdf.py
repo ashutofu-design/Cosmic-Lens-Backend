@@ -16,6 +16,7 @@ from reportlab.lib.units import mm
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from milan_pdf import (
+    _premium_body_markup,
     BRAND_GOLD,
     BRAND_PURPLE,
     TEXT_DARK,
@@ -29,10 +30,12 @@ from milan_pdf import (
     _hex,
     _latinize_pdf_plain,
     _on_page,
+    _pick_body_premium,
     _premium_body_multi_paragraph_table,
     _safe,
     _styles,
 )
+from vedic.love_reality.pdf_fonts import hindi_font_pair, require_devanagari_fonts
 from vedic.love_reality.chart_facts import enrich_bundle_for_pdf
 from vedic.love_reality import pdf_locale as LRL
 from vedic.love_reality.pdf_data_v2 import build_love_reality_pdf_v2_context
@@ -80,9 +83,16 @@ def render_love_reality_exec_summary_only_pdf(payload: dict, lang: str = "en") -
     Executive summary (Page 1 content) only — same ReportLab auto-pagination as production.
     Used for local preview; content may span multiple PDF pages before deep analysis.
     """
-    lang = love_reality_pdf_render_lang(lang)
-    _ensure_native_pdf_fonts_registered(lang)
+    from vedic.love_reality.pdf_locale import normalize_love_reality_pdf_lang
+
     payload = payload or {}
+    content_lang = normalize_love_reality_pdf_lang(payload.get("pdf_lang") or lang)
+    lang = love_reality_pdf_render_lang(content_lang)
+    require_devanagari_fonts(content_lang)
+    _ensure_native_pdf_fonts_registered(lang)
+    if content_lang == "hi":
+        reg, bold = hindi_font_pair()
+        _log.info("[love_reality_pdf] hindi_font_pair regular=%s bold=%s", reg, bold)
     p1 = payload.get("p1") or {}
     p2 = payload.get("p2") or {}
     bundle = payload.get("engines") or payload
@@ -91,6 +101,7 @@ def render_love_reality_exec_summary_only_pdf(payload: dict, lang: str = "en") -
     pro = sanitize_love_reality_pro_premium(
         payload.get("pro_premium") or {},
         bundle if isinstance(bundle, dict) else None,
+        lang=content_lang,
     )
     ctx = build_love_reality_pdf_v2_context(bundle, pro, p1, p2, lang)
     report_id = str(payload.get("report_id") or "LR-PREVIEW")
@@ -127,18 +138,23 @@ def _section_page(
     if table_rows:
         cells: list[list[Any]] = []
         for row in table_rows:
+            c0 = str(row[0] if row else "")
+            c1 = str(row[1] if len(row) > 1 else "")
+            c2 = str(row[2] if len(row) > 2 else "")
+            tbl_bold = ParagraphStyle(
+                "tbl_bold",
+                parent=_pick_body_premium(c0, s, lang, relax=True),
+                fontName=H_BOLD,
+            )
             cells.append([
+                Paragraph(_safe(c0), tbl_bold),
                 Paragraph(
-                    f"<b>{_safe(row[0])}</b>",
-                    ParagraphStyle("tr0", fontName=H_BOLD, fontSize=10, textColor=TEXT_DARK),
+                    _premium_body_markup(c1, lang) or _safe(c1),
+                    _pick_body_premium(c1, s, lang, relax=True),
                 ),
                 Paragraph(
-                    _safe(row[1] if len(row) > 1 else ""),
-                    ParagraphStyle("tr1", fontName=H_REG, fontSize=10, textColor=TEXT_MID, alignment=TA_CENTER),
-                ),
-                Paragraph(
-                    _safe(row[2] if len(row) > 2 else ""),
-                    ParagraphStyle("tr2", fontName=H_REG, fontSize=9, textColor=TEXT_SOFT),
+                    _premium_body_markup(c2, lang) or _safe(c2),
+                    _pick_body_premium(c2, s, lang, relax=True),
                 ),
             ])
         tbl = Table(cells, colWidths=[78 * mm, 28 * mm, 74 * mm])
@@ -152,12 +168,12 @@ def _section_page(
     if bullets:
         out.append(Spacer(1, 6))
         for b in bullets:
-            out.append(
-                Paragraph(
-                    f"• {_safe(_latinize_pdf_plain(b, lang))}",
-                    ParagraphStyle("bl", fontName=H_REG, fontSize=10, leading=14, textColor=TEXT_DARK, leftIndent=8),
-                )
-            )
+            plain = _latinize_pdf_plain(b, lang)
+            bullet_style = _pick_body_premium(plain, s, lang, relax=True)
+            bullet_style.leftIndent = 8
+            bullet_style.spaceAfter = 3
+            bullet_mk = _premium_body_markup(f"• {plain}", lang) or f"• {_safe(plain)}"
+            out.append(Paragraph(bullet_mk, bullet_style))
     out.append(PageBreak())
     return out
 
@@ -192,8 +208,8 @@ def _cover_dashboard(s: dict, p1: dict, p2: dict, ctx: dict, lang: str) -> list[
     out.append(Spacer(1, 8 * mm))
     out.append(
         Paragraph(
-            f"<font color='{_hex(BRAND_GOLD)}'><b>COSMIC LENS</b></font>",
-            ParagraphStyle("brand", fontName="Helvetica-Bold", fontSize=11, leading=15, alignment=TA_CENTER),
+            f"<font color='{_hex(BRAND_GOLD)}'>COSMIC LENS</font>",
+            ParagraphStyle("brand", fontName=H_BOLD, fontSize=11, leading=15, alignment=TA_CENTER),
         ),
     )
     out.append(_gold_rule(52))
@@ -205,14 +221,14 @@ def _cover_dashboard(s: dict, p1: dict, p2: dict, ctx: dict, lang: str) -> list[
     )
     out.append(
         Paragraph(
-            f"<b>{_safe(p1.get('name'))}</b>  ·  <b>{_safe(p2.get('name'))}</b>",
+            f"{_safe(p1.get('name'))}  ·  {_safe(p2.get('name'))}",
             ParagraphStyle("nm", fontName=H_BOLD, fontSize=18, alignment=TA_CENTER, spaceAfter=10),
         ),
     )
     out.append(
         Paragraph(
-            f"<b>{love}</b><font color='{_hex(TEXT_SOFT)}'> / 100</font>  Cosmic Alignment Index",
-            ParagraphStyle("sc", fontName="Helvetica-Bold", fontSize=20, alignment=TA_CENTER, textColor=BRAND_PURPLE),
+            f"{love}<font color='{_hex(TEXT_SOFT)}'> / 100</font>  Cosmic Alignment Index",
+            ParagraphStyle("sc", fontName=H_BOLD, fontSize=20, alignment=TA_CENTER, textColor=BRAND_PURPLE),
         ),
     )
     out.append(Spacer(1, 6))
@@ -227,8 +243,8 @@ def _cover_dashboard(s: dict, p1: dict, p2: dict, ctx: dict, lang: str) -> list[
     cells: list[list[Any]] = []
     for row in rows:
         cells.append([
-            Paragraph(f"<b>{_safe(row[0])}</b>", ParagraphStyle("c0", fontName=H_BOLD, fontSize=10, textColor=TEXT_DARK)),
-            Paragraph(_safe(row[1]), ParagraphStyle("c1", fontName="Helvetica-Bold", fontSize=11, textColor=BRAND_PURPLE, alignment=TA_CENTER)),
+            Paragraph(_safe(row[0]), ParagraphStyle("c0", fontName=H_BOLD, fontSize=10, textColor=TEXT_DARK)),
+            Paragraph(_safe(row[1]), ParagraphStyle("c1", fontName=H_BOLD, fontSize=11, textColor=BRAND_PURPLE, alignment=TA_CENTER)),
             Paragraph(_safe(row[2]), ParagraphStyle("c2", fontName=H_REG, fontSize=9, textColor=TEXT_SOFT)),
         ])
     tbl = Table(cells, colWidths=[78 * mm, 28 * mm, 74 * mm])
@@ -249,9 +265,18 @@ def _cover_dashboard(s: dict, p1: dict, p2: dict, ctx: dict, lang: str) -> list[
 
 
 def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
-    lang = love_reality_pdf_render_lang(lang)
-    _ensure_native_pdf_fonts_registered(lang)
+    from vedic.love_reality.pdf_locale import normalize_love_reality_pdf_lang
+
     payload = payload or {}
+    content_lang = normalize_love_reality_pdf_lang(payload.get("pdf_lang") or lang)
+    lang = love_reality_pdf_render_lang(content_lang)
+    require_devanagari_fonts(content_lang)
+    _ensure_native_pdf_fonts_registered(lang)
+    if content_lang == "hi":
+        reg, bold = hindi_font_pair()
+        _log.info("[love_reality_pdf] hindi_font_pair regular=%s bold=%s", reg, bold)
+        if reg == "Helvetica":
+            _log.error("[love_reality_pdf] hi_render Helvetica_fallback — Devanagari will show as boxes")
     p1 = payload.get("p1") or {}
     p2 = payload.get("p2") or {}
     bundle = payload.get("engines") or payload
@@ -260,7 +285,17 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
     pro = sanitize_love_reality_pro_premium(
         payload.get("pro_premium") or {},
         bundle if isinstance(bundle, dict) else None,
+        lang=content_lang,
     )
+    if content_lang == "hi":
+        from milan_pdf import _has_indic
+
+        verdict_sample = str(pro.get("verdict") or "")[:120]
+        _log.info(
+            "[love_reality_pdf] hi_content verdict_sample=%r has_devanagari=%s",
+            verdict_sample,
+            _has_indic(verdict_sample),
+        )
     ctx = build_love_reality_pdf_v2_context(bundle, pro, p1, p2, lang)
     s = _styles(lang)
 

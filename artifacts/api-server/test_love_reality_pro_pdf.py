@@ -64,6 +64,7 @@ def test_love_reality_pro_pdf_premium_page1_markers():
     pdf = render_love_reality_pro_pdf(payload, lang="en")
     assert pdf.startswith(b"%PDF-")
     text = pdf.decode("latin-1", errors="ignore")
+    assert "Report Contents" in text or "IS REPORT MEIN" in text.upper()
     assert "Relationship Insights" in text or "RELATIONSHIP INSIGHTS" in text.upper()
     assert "Core Metrics" in text or "CORE METRICS" in text.upper()
 
@@ -74,7 +75,7 @@ def test_love_reality_pro_pdf_bytes_and_page_band_en():
     pdf = render_love_reality_pro_pdf(payload, lang="en")
     assert pdf.startswith(b"%PDF-")
     pages = _count_pages(pdf)
-    assert 13 <= pages <= 16
+    assert 14 <= pages <= 18
 
 
 def test_love_reality_pro_pdf_empty_pro_still_renders():
@@ -82,18 +83,18 @@ def test_love_reality_pro_pdf_empty_pro_still_renders():
     payload["pro_premium"] = {}
     pdf = render_love_reality_pro_pdf(payload, lang="en")
     assert pdf.startswith(b"%PDF-")
-    assert _count_pages(pdf) >= 13
+    assert _count_pages(pdf) >= 14
 
 
-def test_love_reality_pro_pdf_hi_render_uses_hn_font_lane():
-    """hi content lane stays hi for polish; PDF render maps to hn (Helvetica-safe)."""
+def test_love_reality_pro_pdf_hi_render_uses_devanagari_lane():
+    """hi content lane stays hi for polish and PDF render (Noto Devanagari)."""
     from vedic.love_reality.pdf_locale import (
         love_reality_pdf_render_lang,
         normalize_love_reality_pdf_lang,
     )
 
     assert normalize_love_reality_pdf_lang("hi") == "hi"
-    assert love_reality_pdf_render_lang("hi") == "hn"
+    assert love_reality_pdf_render_lang("hi") == "hi"
     payload = _bundle()
     payload["pro_premium"] = _pro()
     pdf = render_love_reality_pro_pdf(payload, lang="hi")

@@ -518,6 +518,15 @@ def register_love_reality_routes(flask_app) -> None:
             if not _force_llm_requested() and not _force_regenerate_requested():
                 cached_json = _json_cache.load(json_cache_params)
                 if cached_json:
+                    if lang in ("hn", "hi"):
+                        from vedic.love_reality.pdf_page1_data import _localize_page1_dashboard
+
+                        p1_cached = cached_json.get("page1")
+                        if isinstance(p1_cached, dict):
+                            cached_json = {
+                                **cached_json,
+                                "page1": _localize_page1_dashboard(p1_cached, lang),
+                            }
                     resp = jsonify(cached_json)
                     resp.headers["X-Report-Cache"] = "hit"
                     return resp
@@ -549,7 +558,7 @@ def register_love_reality_routes(flask_app) -> None:
                     bundle, pro, data["p1"], data["p2"], lang=lang
                 )
                 page1 = build_love_reality_page1_data(
-                    pdf_context, bundle, pro, data["p1"], data["p2"]
+                    pdf_context, bundle, pro, data["p1"], data["p2"], lang=lang
                 )
                 lc = bundle.get("love_compatibility") or {}
                 bu = bundle.get("breakup_chances") or {}

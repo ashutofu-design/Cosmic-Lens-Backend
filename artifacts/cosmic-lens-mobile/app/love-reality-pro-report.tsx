@@ -22,20 +22,33 @@ import { useUser } from "@/context/UserContext";
 import {
   buildLoveReportSections,
   fetchLoveRealityProReport,
+  loveRealityReportLabels,
   type LoveProReportResponse,
 } from "@/lib/loveRealityProReport";
 import {
-  loveReportCacheKey,
-  loadCachedLoveReport,
-  saveCachedLoveReport,
+  loveReportCacheNeedsLlm,
+  markLoveReportPdfSynced,
+  resolveLoveReportCache,
+  saveLoveReportCache,
+  touchLoveReportCacheRevision,
 } from "@/lib/loveRealityProReportCache";
+import type { LoveReportChangeKind } from "@/lib/loveRealityReportRevision";
 import { connectLoveRealityPageToPdf } from "@/lib/loveRealityProPdfDownload";
-import { coerceProPdfLang } from "@/lib/proPdfLang";
+import { coerceProPdfLang, type ProPdfLangCode } from "@/lib/proPdfLang";
+import { reportSummaryMatchesLang } from "@/lib/loveRealityReportLang";
+
+const LOVE_REALITY_LAST_LANG_KEY = "cosmic.loveRealityPro.lastLang";
+
+function routeLangParam(raw: string | string[] | undefined): ProPdfLangCode {
+  const one = Array.isArray(raw) ? raw[0] : raw;
+  return coerceProPdfLang(one);
+}
 
 const LOAD_STAGES = [
   "Loading your charts…",
   "Running compatibility engines…",
   "Writing personalized insights…",
+  "Generating Hinglish report…",
   "Almost ready…",
 ] as const;
 
@@ -45,12 +58,16 @@ function ReportLoadingView({
   isDark,
   done,
   fromCache,
+  cacheChange,
+  llmRefresh,
 }: {
   pct: number;
   stageIdx: number;
   isDark: boolean;
   done: boolean;
   fromCache: boolean;
+  cacheChange: LoveReportChangeKind;
+  llmRefresh: boolean;
 }) {
   const spinAnim = useRef(new Animated.Value(0)).current;
   const barAnim = useRef(new Animated.Value(0)).current;
@@ -155,9 +172,17 @@ function ReportLoadingView({
           <Text style={[ld.stage, { color: dim }]}>
             {done
               ? "Opening your Love Reality Pro report"
-              : fromCache
-                ? "Loading saved report…"
-                : LOAD_STAGES[stageIdx]}
+              : cacheChange === "app_layout"
+                ? "Applying layout update — same report, no AI"
+                : llmRefresh
+                  ? (lang === "hi"
+                    ? "Hindi report likh rahe hain — 1–2 min"
+                    : "Hinglish report likh rahe hain — 1–2 min")
+                  : cacheChange === "pdf_layout"
+                  ? "Refreshing report structure — no new AI text"
+                  : fromCache
+                    ? "Loading saved report…"
+                    : LOAD_STAGES[stageIdx]}
           </Text>
 
           <View style={[ld.track, { backgroundColor: trackBg }]}>
@@ -185,7 +210,15 @@ function ReportLoadingView({
             <Text style={[ld.pct, { color: text }]}>{pct}%</Text>
             {!done ? (
               <Text style={[ld.hint, { color: dim }]}>
-                {fromCache ? "No new AI call — instant replay" : "First load may take 1–2 min — please wait"}
+                {cacheChange === "app_layout"
+                  ? "Labels/sections updated — instant, no LLM"
+                  : llmRefresh
+                    ? "AI se naya report — purana English cache skip"
+                    : cacheChange === "pdf_layout"
+                    ? "Structure updated from saved text — no LLM"
+                    : fromCache
+                      ? "No new AI call — instant replay"
+                      : "First load may take 1–2 min — please wait"}
               </Text>
             ) : null}
           </View>
@@ -199,8 +232,26 @@ export default function LoveRealityProReportScreen() {
   const C = useC();
   const { user, profiles, primaryProfileId } = useUser();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ partnerId?: string; lang?: string }>();
-  const lang = coerceProPdfLang(params.lang);
+  const params = useLocalSearchParams<{ partnerId?: string; lang?: string | string[] }>();
+  const [lang, setLang] = useState<ProPdfLangCode>(() => routeLangParam(params.lang));
+  const labels = loveRealityReportLabels(lang);
+
+  useEffect(() => {
+    const fromRoute = routeLangParam(params.lang);
+    if (params.lang) {
+      setLang(fromRoute);
+      return;
+    }
+    void (async () => {
+      try {
+        const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+        const stored = await AsyncStorage.getItem(LOVE_REALITY_LAST_LANG_KEY);
+        if (stored) setLang(coerceProPdfLang(stored));
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [params.lang]);
 
   const primaryProfile = profiles.find(p => p.id === primaryProfileId) ?? profiles[0] ?? null;
   const partnerProfile = params.partnerId
@@ -215,6 +266,9 @@ export default function LoveRealityProReportScreen() {
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<LoveProReportResponse | null>(null);
   const [fromCache, setFromCache] = useState(false);
+  const [cacheChange, setCacheChange] = useState<LoveReportChangeKind>("missing");
+  const [needsPdfResync, setNeedsPdfResync] = useState(false);
+  const [llmRefresh, setLlmRefresh] = useState(false);
   const [pdfConnecting, setPdfConnecting] = useState(false);
   const loadedRef = useRef(false);
   const fetchDoneRef = useRef(false);
@@ -242,27 +296,49 @@ export default function LoveRealityProReportScreen() {
     fetchDoneRef.current = false;
     fastCacheRef.current = false;
     setFromCache(false);
+    setCacheChange("missing");
+    setNeedsPdfResync(false);
+    setLlmRefresh(false);
 
-    const cacheKey = loveReportCacheKey({
+    const cacheOpts = {
       userId: user.id,
       p1: primaryProfile.birthData,
       p2: partnerProfile.birthData,
       p1Name: primaryProfile.name || "You",
       p2Name: partnerProfile.name || "Partner",
       lang,
-    });
+    };
 
     try {
-      const cached = await loadCachedLoveReport(cacheKey);
-      if (cached) {
-        finishLoad(cached, true);
+      const resolved = await resolveLoveReportCache(cacheOpts);
+      setCacheChange(resolved.changeKind);
+      setNeedsPdfResync(resolved.needsPdfResync);
+      const mustLlm = loveReportCacheNeedsLlm(resolved.payload, lang, resolved.meta);
+      setLlmRefresh(mustLlm);
+
+      if (
+        resolved.payload
+        && !mustLlm
+        && resolved.changeKind === "app_layout"
+      ) {
+        await touchLoveReportCacheRevision({
+          ...cacheOpts,
+          polishSource: resolved.payload.polish_source,
+        });
+        finishLoad(resolved.payload, true);
+        return;
+      }
+
+      if (resolved.payload && !mustLlm && resolved.changeKind === "none") {
+        finishLoad(resolved.payload, true);
         return;
       }
 
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 240000);
       try {
-        const { data, serverCacheHit } = await fetchLoveRealityProReport({
+        const layoutRefresh = resolved.changeKind === "pdf_layout" && !mustLlm;
+        let { data, serverCacheHit } = await fetchLoveRealityProReport({
           user,
           p1: primaryProfile.birthData,
           p2: partnerProfile.birthData,
@@ -270,9 +346,28 @@ export default function LoveRealityProReportScreen() {
           p2Name: partnerProfile.name || "Partner",
           lang,
           signal: ctrl.signal,
+          layoutRefresh,
+          forceLlm: mustLlm,
         });
-        await saveCachedLoveReport(cacheKey, data);
-        finishLoad(data, serverCacheHit);
+        if (lang !== "en" && !reportSummaryMatchesLang(data, lang)) {
+          setLlmRefresh(true);
+          const retry = await fetchLoveRealityProReport({
+            user,
+            p1: primaryProfile.birthData,
+            p2: partnerProfile.birthData,
+            p1Name: primaryProfile.name || "You",
+            p2Name: partnerProfile.name || "Partner",
+            lang,
+            signal: ctrl.signal,
+            layoutRefresh: true,
+            forceLlm: true,
+          });
+          data = retry.data;
+          serverCacheHit = retry.serverCacheHit;
+        }
+        await saveLoveReportCache(cacheOpts, data);
+        finishLoad(data, mustLlm ? false : (layoutRefresh ? false : serverCacheHit));
+        if (layoutRefresh || mustLlm) setNeedsPdfResync(true);
       } finally {
         clearTimeout(timer);
       }
@@ -284,14 +379,19 @@ export default function LoveRealityProReportScreen() {
   }, [user, primaryProfile, partnerProfile, lang, finishLoad]);
 
   useEffect(() => {
+    loadedRef.current = false;
+    fetchDoneRef.current = false;
+  }, [lang, params.partnerId]);
+
+  useEffect(() => {
     if (loadedRef.current) return;
     loadedRef.current = true;
     load();
-  }, [load]);
+  }, [load, lang, params.partnerId]);
 
   useEffect(() => {
     if (!fetching || fetchDoneRef.current) return;
-    const fast = fastCacheRef.current;
+    const fast = fastCacheRef.current || cacheChange === "app_layout";
     const tickMs = fast ? 70 : 900;
     const step = fast ? 10 : 1;
     const cap = fast ? 100 : 90;
@@ -299,7 +399,7 @@ export default function LoveRealityProReportScreen() {
       setLoadPct(p => (p >= cap ? cap : Math.min(cap, p + step)));
     }, tickMs);
     return () => clearInterval(tick);
-  }, [fetching]);
+  }, [fetching, cacheChange]);
 
   useEffect(() => {
     if (!fetching || fetchDoneRef.current) return;
@@ -335,9 +435,9 @@ export default function LoveRealityProReportScreen() {
     ) {
       if (report && (!report.pdf_context || !report.page1)) {
         Alert.alert(
-          "Report refresh needed",
-          "This saved report is incomplete. Tap Retry to reload, then Connect to PDF.",
-          [{ text: "OK" }],
+          labels.alertRefreshTitle,
+          labels.alertRefreshBody,
+          [{ text: labels.ok }],
         );
       }
       return;
@@ -356,7 +456,7 @@ export default function LoveRealityProReportScreen() {
           pdf_context: report.pdf_context,
           page1: report.page1,
         },
-        appSections: buildLoveReportSections(report, lang),
+        appSections: buildLoveReportSections(report, lang, { mode: "full" }),
         scores: report.scores,
       });
       const fromCache = result.reportCacheHit ? " (server cache)" : "";
@@ -364,12 +464,12 @@ export default function LoveRealityProReportScreen() {
         ? "Built from this page — 1–3 sec is normal, not old cache."
         : `Source: ${result.pdfSource || "fresh render"}${fromCache}.`;
       Alert.alert(
-        "PDF connected",
+        labels.alertPdfSaved,
         result.savedToRegistry
-          ? `${mirrorNote} Saved to My Reports — open the newest entry (Connected from page).`
+          ? `${mirrorNote} Saved to My Reports — open the newest entry (Downloaded from page).`
           : mirrorNote,
         [
-          { text: "OK", style: "cancel" },
+          { text: labels.ok, style: "cancel" },
           ...(result.savedToRegistry
             ? [{
                 text: "Open My Reports",
@@ -378,15 +478,26 @@ export default function LoveRealityProReportScreen() {
             : []),
         ],
       );
+      if (user?.id && primaryProfile?.birthData && partnerProfile?.birthData) {
+        await markLoveReportPdfSynced({
+          userId: user.id,
+          p1: primaryProfile.birthData,
+          p2: partnerProfile.birthData,
+          p1Name: primaryProfile.name || "You",
+          p2Name: partnerProfile.name || "Partner",
+          lang,
+        });
+        setNeedsPdfResync(false);
+      }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Could not connect page to PDF";
-      Alert.alert("Connect to PDF failed", msg, [{ text: "OK" }]);
+      const msg = e instanceof Error ? e.message : "Could not download PDF";
+      Alert.alert(labels.alertPdfFailed, msg, [{ text: labels.ok }]);
     } finally {
       setPdfConnecting(false);
     }
-  }, [user, primaryProfile, partnerProfile, lang, pdfConnecting, report]);
+  }, [user, primaryProfile, partnerProfile, lang, pdfConnecting, report, labels]);
 
-  const sections = report ? buildLoveReportSections(report, lang) : [];
+  const sections = report ? buildLoveReportSections(report, lang, { mode: "page" }) : [];
   const isLoadingUi = fetching || (loadDone && !showReport);
 
   return (
@@ -410,13 +521,13 @@ export default function LoveRealityProReportScreen() {
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <>
-                  <Feather name="link" size={13} color="#fff" />
-                  <Text style={s.savePdfTxt}>Connect PDF</Text>
+                  <Feather name="download" size={13} color="#fff" />
+                  <Text style={s.savePdfTxt}>{labels.downloadPdf}</Text>
                 </>
               )}
             </Pressable>
           ) : (
-            <View style={{ width: 88 }} />
+            <View style={{ width: 96 }} />
           )}
         </View>
 
@@ -433,7 +544,7 @@ export default function LoveRealityProReportScreen() {
               }}
               style={s.retryBtn}
             >
-              <Text style={s.retryTxt}>Retry</Text>
+              <Text style={s.retryTxt}>{labels.retry}</Text>
             </Pressable>
           </View>
         ) : isLoadingUi ? (
@@ -443,6 +554,8 @@ export default function LoveRealityProReportScreen() {
             isDark={C.isDark}
             done={loadDone}
             fromCache={fromCache}
+            cacheChange={cacheChange}
+            llmRefresh={llmRefresh}
           />
         ) : report && showReport ? (
           <>
@@ -452,6 +565,7 @@ export default function LoveRealityProReportScreen() {
             >
               <LoveRealityProReportView
                 isDark={C.isDark}
+                lang={lang}
                 p1Name={report.p1_name}
                 p2Name={report.p2_name}
                 scores={report.scores}
@@ -469,7 +583,13 @@ export default function LoveRealityProReportScreen() {
               ]}
             >
               <Text style={[s.connectHint, { color: C.isDark ? "rgba(226,232,240,0.72)" : "#64748B" }]}>
-                Uses exact content from this page — fresh PDF, no old cache
+                {needsPdfResync
+                  ? (lang === "hn"
+                    ? "Layout update hua — PDF dubara download karo (same text, no AI)"
+                    : lang === "hi"
+                      ? "लेआउट अपडेट — PDF फिर डाउनलोड करें"
+                      : "Layout updated — download PDF again (same text, no AI)")
+                  : labels.downloadHint}
               </Text>
               <Pressable
                 onPress={handleConnectToPdf}
@@ -485,12 +605,12 @@ export default function LoveRealityProReportScreen() {
                   {pdfConnecting ? (
                     <>
                       <ActivityIndicator size="small" color="#fff" />
-                      <Text style={s.connectBtnTxt}>Connecting to PDF…</Text>
+                      <Text style={s.connectBtnTxt}>{labels.downloadingPdf}</Text>
                     </>
                   ) : (
                     <>
-                      <Feather name="link-2" size={18} color="#fff" />
-                      <Text style={s.connectBtnTxt}>Connect to PDF</Text>
+                      <Feather name="download" size={18} color="#fff" />
+                      <Text style={s.connectBtnTxt}>{labels.downloadPdf}</Text>
                     </>
                   )}
                 </LinearGradient>
@@ -562,10 +682,10 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    minWidth: 88,
+    minWidth: 96,
     justifyContent: "center",
   },
-  savePdfTxt: { color: "#fff", fontFamily: "Nunito_700Bold", fontSize: 10.5 },
+  savePdfTxt: { color: "#fff", fontFamily: "Nunito_700Bold", fontSize: 10 },
   connectBar: {
     position: "absolute",
     left: 0,

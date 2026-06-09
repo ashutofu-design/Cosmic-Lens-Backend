@@ -30,15 +30,18 @@ import {
   consumeCouplePaidReady,
   gateCoupleReportAfterLangPick,
 } from "@/lib/coupleReportCheckoutFlow";
+import { getPendingCoupleCheckout } from "@/lib/pendingCoupleCheckout";
+import { checkCoupleReportEntitlement } from "@/lib/coupleReportBilling";
 import {
   downloadLoveRealityProPdf,
-  shareLoveRealityPdf,
+  packLovePerson,
 } from "@/lib/loveRealityProPdfDownload";
 import {
   LOVE_REALITY_CHECKOUT_CONFIG,
   LOVE_REALITY_PRO_UI_PRICING,
   runLoveRealityProUnlockCta,
 } from "@/lib/loveRealityProOffer";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { coerceProPdfLang } from "@/lib/proPdfLang";
 import {
   LOVE_PRO_UNLOCK_ITEMS,
@@ -49,7 +52,7 @@ import {
   LOVE_REALITY_PRO_SUBTITLE,
 } from "@/lib/loveRealityProCopy";
 
-const PRO_CHIPS = ["6 tools · 14 pages", "Remedies · My Reports"];
+const PRO_CHIPS = ["6 tools · Full report", "English · Hinglish · Hindi"];
 
 function LoveRealityProUnlockList({ isDark }: { isDark: boolean }) {
   const titleColor = isDark ? "#f5e6c8" : "#1e293b";
@@ -142,7 +145,7 @@ function LoveRealityProPanel({
             </LinearGradient>
 
             <View style={{ flex: 1, gap: 4 }}>
-              <Text style={s.proTitle}>Love Reality Pro PDF</Text>
+              <Text style={s.proTitle}>Love Reality Pro Report</Text>
               <Text style={s.proBenefit}>{LOVE_REALITY_PRO_BENEFIT}</Text>
               <Text style={s.proSub}>{LOVE_REALITY_PRO_SUBTITLE}</Text>
             </View>
@@ -241,69 +244,73 @@ export default function LoveRealityScreen() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [progressVisible, setProgressVisible] = useState(false);
   const [selectedPdfLang, setSelectedPdfLang] = useState(coerceProPdfLang(t.lang));
-  const [pdfDoneVisible, setPdfDoneVisible] = useState(false);
-  const pdfShareRef = useRef({ uri: "", name: "" });
-  const pdfProgress = useRef(new Animated.Value(0)).current;
   const [pdfPct, setPdfPct] = useState(0);
-  const [pdfStage, setPdfStage] = useState("Reading both kundlis…");
+  const pdfSuccessRef = useRef(false);
+  const pdfFastProgressRef = useRef(false);
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  const barAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const sub = pdfProgress.addListener(({ value }) => {
-      const pct = Math.round(value * 100);
-      setPdfPct(pct);
-      if (pct < 15) setPdfStage("Reading both kundlis…");
-      else if (pct < 30) setPdfStage("Running 6 Love Reality engines…");
-      else if (pct < 55) setPdfStage("Blueprint vs reality analysis…");
-      else if (pct < 75) setPdfStage("Writing your 14-page Pro report…");
-      else if (pct < 92) setPdfStage("Crafting remedies & roadmap…");
-      else if (pct < 100) setPdfStage("Almost ready — finalizing PDF…");
-      else setPdfStage("Saved to My Reports!");
-    });
-    return () => pdfProgress.removeListener(sub);
-  }, [pdfProgress]);
+    Animated.timing(barAnim, {
+      toValue: pdfPct / 100,
+      duration: 350,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [pdfPct, barAnim]);
 
   useEffect(() => {
-    if (pdfLoading) {
-      setProgressVisible(true);
-      pdfProgress.setValue(0);
-      Animated.sequence([
-        Animated.timing(pdfProgress, {
-          toValue: 0.85,
-          duration: 70000,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: false,
-        }),
-        Animated.timing(pdfProgress, {
-          toValue: 0.98,
-          duration: 90000,
-          easing: Easing.linear,
-          useNativeDriver: false,
-        }),
-      ]).start();
-    } else if (progressVisible) {
-      Animated.timing(pdfProgress, {
+    if (!pdfLoading) return;
+    spinAnim.setValue(0);
+    const spin = Animated.loop(
+      Animated.timing(spinAnim, {
         toValue: 1,
-        duration: 1500,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }).start();
-    }
-  }, [pdfLoading, pdfProgress, progressVisible]);
+        duration: 1200,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    spin.start();
+    return () => spin.stop();
+  }, [pdfLoading, spinAnim]);
+
+  useEffect(() => {
+    if (!pdfLoading) return;
+    setProgressVisible(true);
+    setPdfPct(0);
+    barAnim.setValue(0);
+    const fast = pdfFastProgressRef.current;
+    const tickMs = fast ? 100 : 700;
+    const step = fast ? 6 : 1;
+    const id = setInterval(() => {
+      setPdfPct((p) => (p >= 90 ? 90 : Math.min(90, p + step)));
+    }, tickMs);
+    return () => clearInterval(id);
+  }, [pdfLoading]);
+
+  useEffect(() => {
+    if (pdfLoading || !progressVisible || !pdfSuccessRef.current) return;
+    setPdfPct(100);
+  }, [pdfLoading, progressVisible]);
 
   useEffect(() => {
     if (!progressVisible || pdfLoading || pdfPct < 100) return;
     const timer = setTimeout(() => {
       setProgressVisible(false);
-      pdfProgress.setValue(0);
+      setPdfPct(0);
+      barAnim.setValue(0);
+      pdfSuccessRef.current = false;
       router.push("/my-reports" as never);
-    }, 900);
+    }, 700);
     return () => clearTimeout(timer);
-  }, [progressVisible, pdfLoading, pdfPct, pdfProgress]);
+  }, [progressVisible, pdfLoading, pdfPct]);
 
   useFocusEffect(
     useCallback(() => {
       if (consumeCouplePaidReady()) {
-        setConfirmVisible(true);
+        const pending = getPendingCoupleCheckout();
+        if (pending?.lang) setSelectedPdfLang(coerceProPdfLang(pending.lang));
+        openProReport(pending?.lang);
       }
     }, []),
   );
@@ -320,6 +327,18 @@ export default function LoveRealityScreen() {
     if (!hasPartnerKundli) {
       router.push("/profile-edit?relation=partner" as any);
     }
+  }
+
+  function openProReport(langOverride?: string) {
+    const lang = coerceProPdfLang(langOverride ?? selectedPdfLang);
+    void AsyncStorage.setItem("cosmic.loveRealityPro.lastLang", lang);
+    router.push({
+      pathname: "/love-reality-pro-report",
+      params: {
+        partnerId: partnerId ?? "",
+        lang,
+      },
+    } as never);
   }
 
   function startProUnlock() {
@@ -343,14 +362,14 @@ export default function LoveRealityScreen() {
     if (!user?.id) {
       Alert.alert(
         "Login required",
-        "Please sign in to generate your Love Reality Pro PDF.",
+        "Please sign in to read your Love Reality Pro report.",
         [{ text: "OK" }],
       );
       return;
     }
 
     if (LOVE_REALITY_CHECKOUT_CONFIG.bypassCheckoutForTesting) {
-      await handleDownloadProPdf({ openMyReports: true });
+      openProReport();
       return;
     }
 
@@ -367,13 +386,36 @@ export default function LoveRealityScreen() {
       label: "Love Reality Pro",
       amountInr: LOVE_REALITY_PRO_UI_PRICING.offerInr,
       bypassCheckout: false,
-      onEntitled: () => setConfirmVisible(true),
+      onEntitled: () => openProReport(),
     });
   }
 
-  async function handleDownloadProPdf(opts?: { openMyReports?: boolean }) {
+  async function handleDownloadProPdf() {
     if (!primaryProfile?.birthData || !partnerProfile?.birthData || !user?.id) return;
     setConfirmVisible(false);
+
+    const lang = coerceProPdfLang(selectedPdfLang);
+    let serverHasSavedCopy = false;
+    if (user.api_key) {
+      try {
+        const check = await checkCoupleReportEntitlement(
+          user,
+          "love_reality_pro",
+          packLovePerson(primaryProfile.birthData, primaryProfile.name),
+          packLovePerson(partnerProfile.birthData, partnerProfile.name),
+          lang,
+        );
+        serverHasSavedCopy = check.cache_hit;
+      } catch {
+        /* proceed — download will miss cache if unavailable */
+      }
+    }
+
+    pdfFastProgressRef.current = serverHasSavedCopy || false;
+    pdfSuccessRef.current = false;
+    setPdfPct(0);
+    barAnim.setValue(0);
+    setProgressVisible(true);
     setPdfLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
@@ -385,16 +427,18 @@ export default function LoveRealityScreen() {
         p1Name: primaryProfile.name || "You",
         p2Name: partnerProfile.name || "Partner",
         lang: selectedPdfLang,
-        forceRegenerate: true,
       });
-      pdfShareRef.current = { uri: result.shareUri, name: result.fileName };
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if (opts?.openMyReports) {
-        return;
+      if (result.reportCacheHit) {
+        pdfFastProgressRef.current = true;
       }
-      setPdfDoneVisible(true);
+      pdfSuccessRef.current = true;
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: unknown) {
+      pdfSuccessRef.current = false;
       const msg = e instanceof Error ? e.message : "PDF download failed";
+      setProgressVisible(false);
+      setPdfPct(0);
+      barAnim.setValue(0);
       Alert.alert("PDF Error", msg, [{ text: "OK" }]);
     } finally {
       setPdfLoading(false);
@@ -524,8 +568,8 @@ export default function LoveRealityScreen() {
         onSelectLang={setSelectedPdfLang}
         onClose={() => setLangPickerVisible(false)}
         onContinue={onLangPickerContinue}
-        title="PDF Language"
-        subtitle="Love Reality Pro report in English, Hinglish, or Hindi."
+        title="Report Language"
+        subtitle="Full Love Reality Pro report — English, Hinglish, or Hindi."
       />
 
       <Modal visible={confirmVisible} transparent animationType="fade" onRequestClose={() => setConfirmVisible(false)}>
@@ -589,9 +633,9 @@ export default function LoveRealityScreen() {
                       <Animated.View
                         style={{
                           transform: [{
-                            rotate: pdfProgress.interpolate({
+                            rotate: spinAnim.interpolate({
                               inputRange: [0, 1],
-                              outputRange: ["0deg", "1080deg"],
+                              outputRange: ["0deg", "360deg"],
                             }),
                           }],
                         }}
@@ -601,12 +645,7 @@ export default function LoveRealityScreen() {
                     </LinearGradient>
                   )}
                   <Text style={[cd.progTitle, { color: C.text }]}>
-                    {!pdfLoading ? "PDF Ready!" : "Generating Love Reality Pro"}
-                  </Text>
-                  <Text style={[cd.progSub, { color: C.textDim }]}>
-                    {!pdfLoading
-                      ? "Report My Reports mein save ho gayi — opening now…"
-                      : pdfStage}
+                    {pdfLoading ? "Your report is processing" : "Opening My Reports…"}
                   </Text>
                 </View>
 
@@ -615,93 +654,29 @@ export default function LoveRealityScreen() {
                     style={[
                       cd.progFillWrap,
                       {
-                        width: pdfProgress.interpolate({
+                        width: barAnim.interpolate({
                           inputRange: [0, 1],
                           outputRange: ["0%", "100%"],
                         }),
                       },
                     ]}
                   >
-                    <LinearGradient colors={["#9333ea", "#ec4899", "#f59e0b"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={cd.progFill} />
+                    <LinearGradient
+                      colors={["#9333ea", "#ec4899", "#f59e0b"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={cd.progFill}
+                    />
                   </Animated.View>
                 </View>
 
                 <View style={cd.progBottom}>
                   <Text style={[cd.progPct, { color: C.text }]}>{pdfPct}%</Text>
-                  <View style={cd.progTip}>
-                    <Feather name="zap" size={11} color="#f59e0b" />
-                    <Text style={[cd.progTipTxt, { color: C.textDim }]}>14-page Pro · 6 engines</Text>
-                  </View>
-                </View>
-
-                <View style={[cd.stageList, { borderTopColor: isDark ? "rgba(255,255,255,0.06)" : "#F3F4F6" }]}>
-                  {[
-                    { label: "Kundli + engines analyzed", at: 30 },
-                    { label: "14-page report written", at: 75 },
-                    { label: "Saved to My Reports", at: 100 },
-                  ].map((step, i) => {
-                    const done = pdfPct >= step.at;
-                    const active = !done && (i === 0 || pdfPct >= ([0, 30, 75][i] || 0));
-                    return (
-                      <View key={step.label} style={cd.stageRow}>
-                        {done ? (
-                          <LinearGradient colors={["#10B981", "#059669"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={cd.stageDot}>
-                            <Feather name="check" size={10} color="#fff" />
-                          </LinearGradient>
-                        ) : active ? (
-                          <View style={[cd.stageDot, { backgroundColor: "#9333ea" }]}>
-                            <ActivityIndicator size="small" color="#fff" />
-                          </View>
-                        ) : (
-                          <View style={[cd.stageDot, { backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "#E5E7EB" }]} />
-                        )}
-                        <Text style={[cd.stageTxt, { color: done ? C.text : C.textDim, opacity: done || active ? 1 : 0.6 }]}>
-                          {step.label}
-                        </Text>
-                      </View>
-                    );
-                  })}
                 </View>
               </View>
             </LinearGradient>
           </View>
         </View>
-      </Modal>
-
-      <Modal visible={pdfDoneVisible} transparent animationType="fade" onRequestClose={() => setPdfDoneVisible(false)}>
-        <Pressable style={cd.backdrop} onPress={() => setPdfDoneVisible(false)}>
-          <Pressable style={cd.cardWrap} onPress={e => e.stopPropagation?.()}>
-            <View style={[cd.card, { backgroundColor: isDark ? "#0F0A1F" : "#FFFFFF", padding: 24 }]}>
-              <Text style={{ fontSize: 40, textAlign: "center" }}>✅</Text>
-              <Text style={[cd.title, { color: C.text, marginTop: 8 }]}>PDF Ready</Text>
-              <Text style={[cd.sub, { color: C.textDim }]}>
-                Saved in My Reports. You can open or share anytime.
-              </Text>
-              <View style={{ gap: 10, marginTop: 16 }}>
-                <Pressable
-                  onPress={() => {
-                    setPdfDoneVisible(false);
-                    router.push("/my-reports" as any);
-                  }}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, borderRadius: 12, overflow: "hidden" })}
-                >
-                  <LinearGradient colors={["#9333ea", "#ec4899"]} style={cd.continueGrad}>
-                    <Text style={cd.continueTxt}>View in My Reports</Text>
-                  </LinearGradient>
-                </Pressable>
-                <Pressable
-                  onPress={async () => {
-                    const { uri, name } = pdfShareRef.current;
-                    if (uri) await shareLoveRealityPdf(uri, name);
-                  }}
-                  style={[cd.changeBtn, { borderColor: C.border, marginTop: 0 }]}
-                >
-                  <Text style={{ color: C.text, fontFamily: "Nunito_700Bold" }}>Share PDF</Text>
-                </Pressable>
-              </View>
-            </View>
-          </Pressable>
-        </Pressable>
       </Modal>
     </CosmicBg>
   );
@@ -730,9 +705,9 @@ const cd = StyleSheet.create({
   progIconCircle: { width: 64, height: 64, borderRadius: 32, alignItems: "center", justifyContent: "center", marginBottom: 14 },
   progTitle: { fontSize: 19, fontFamily: "Nunito_700Bold", letterSpacing: -0.3, marginBottom: 6 },
   progSub: { fontSize: 13, fontFamily: "Nunito_500Medium", textAlign: "center", lineHeight: 18, paddingHorizontal: 4, minHeight: 36 },
-  progTrack: { height: 10, borderRadius: 5, overflow: "hidden" },
-  progFillWrap: { height: "100%", borderRadius: 5, overflow: "hidden" },
-  progFill: { flex: 1 },
+  progTrack: { height: 10, borderRadius: 5, overflow: "hidden", width: "100%", marginTop: 4 },
+  progFillWrap: { height: 10, borderRadius: 5, overflow: "hidden", minWidth: 0 },
+  progFill: { width: "100%", height: 10, borderRadius: 5 },
   progBottom: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 10, marginBottom: 18 },
   progPct: { fontSize: 22, fontFamily: "Nunito_700Bold", letterSpacing: -0.5 },
   progTip: { flexDirection: "row", alignItems: "center", gap: 5, flex: 1, justifyContent: "flex-end" },

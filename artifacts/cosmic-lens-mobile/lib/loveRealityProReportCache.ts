@@ -1,18 +1,64 @@
 /**
- * Love Reality Pro in-app report — device cache (no LLM / no API on repeat open).
+ * Love Reality Pro in-app report — device cache.
+ *
+ * Raw JSON (LLM output) is stored under a stable couple key.
+ * Revision meta tracks app/PDF layout bumps so code changes refresh
+ * presentation without a new LLM call when possible.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { LOVE_REALITY_PDF_LAYOUT_VER } from "@/lib/loveRealityPdfLayout";
 import { packLovePerson } from "@/lib/loveRealityProPdfDownload";
 import type { LoveProReportResponse } from "@/lib/loveRealityProReport";
-import { coerceProPdfLang } from "@/lib/proPdfLang";
+import { needsLoveReportLlmRefresh } from "@/lib/loveRealityReportLang";
+import {
+  currentLoveReportRevision,
+  detectLoveReportChange,
+  loveReportNeedsPdfResync,
+  loveReportRevisionString,
+  type LoveReportCacheMeta,
+  type LoveReportChangeKind,
+} from "@/lib/loveRealityReportRevision";
+import { coerceProPdfLang, type ProPdfLangCode } from "@/lib/proPdfLang";
 import type { BirthData } from "@/types";
 
-const STORAGE_PREFIX = "cosmic.loveRealityProReport.v1";
+const RAW_PREFIX = "cosmic.loveRealityProReport.raw.v2";
+const META_PREFIX = "cosmic.loveRealityProReport.meta.v2";
+const PDF_SYNC_PREFIX = "cosmic.loveRealityProReport.pdfSync.v2";
+const LEGACY_PREFIX = "cosmic.loveRealityProReport.v1";
 
-const session = new Map<string, LoveProReportResponse>();
+const sessionRaw = new Map<string, LoveProReportResponse>();
+const sessionMeta = new Map<string, LoveReportCacheMeta>();
 
+export type LoveReportCacheResolve = {
+  payload: LoveProReportResponse | null;
+  meta: LoveReportCacheMeta | null;
+  changeKind: LoveReportChangeKind;
+  needsPdfResync: boolean;
+  fromSession: boolean;
+};
+
+export function loveReportCacheKeys(opts: {
+  userId: number;
+  p1: BirthData;
+  p2: BirthData;
+  p1Name: string;
+  p2Name: string;
+  lang: string;
+}): { rawKey: string; metaKey: string; pdfSyncKey: string; coupleKey: string } {
+  const lang = coerceProPdfLang(opts.lang);
+  const a = packLovePerson(opts.p1, opts.p1Name);
+  const b = packLovePerson(opts.p2, opts.p2Name);
+  const coupleKey = `${opts.userId}:${lang}:${JSON.stringify(a)}:${JSON.stringify(b)}`;
+  return {
+    coupleKey,
+    rawKey: `${RAW_PREFIX}:${coupleKey}`,
+    metaKey: `${META_PREFIX}:${coupleKey}`,
+    pdfSyncKey: `${PDF_SYNC_PREFIX}:${coupleKey}`,
+  };
+}
+
+/** @deprecated use loveReportCacheKeys().rawKey — kept for callers migrating gradually */
 export function loveReportCacheKey(opts: {
   userId: number;
   p1: BirthData;
@@ -21,51 +67,248 @@ export function loveReportCacheKey(opts: {
   p2Name: string;
   lang: string;
 }): string {
-  const lang = coerceProPdfLang(opts.lang);
-  const a = packLovePerson(opts.p1, opts.p1Name);
-  const b = packLovePerson(opts.p2, opts.p2Name);
-  return `${STORAGE_PREFIX}:${opts.userId}:${lang}:${LOVE_REALITY_PDF_LAYOUT_VER}:${JSON.stringify(a)}:${JSON.stringify(b)}`;
+  return loveReportCacheKeys(opts).rawKey;
 }
 
-export function getSessionLoveReport(key: string): LoveProReportResponse | null {
-  return session.get(key) ?? null;
+function isCompletePayload(parsed: LoveProReportResponse | null | undefined): parsed is LoveProReportResponse {
+  return Boolean(
+    parsed?.ok
+    && parsed.pro_premium
+    && parsed.pdf_context
+    && parsed.page1,
+  );
 }
 
-export function setSessionLoveReport(key: string, data: LoveProReportResponse): void {
-  session.set(key, data);
+export function detectLoveReportCacheChange(meta: LoveReportCacheMeta | null): LoveReportChangeKind {
+  return detectLoveReportChange(meta);
 }
 
-export async function loadCachedLoveReport(key: string): Promise<LoveProReportResponse | null> {
-  const mem = getSessionLoveReport(key);
-  if (mem?.ok) return mem;
+/** Skip device cache when hn/hi body is still English. */
+export function loveReportCacheNeedsLlm(
+  payload: LoveProReportResponse | null,
+  lang: ProPdfLangCode,
+  meta?: LoveReportCacheMeta | null,
+): boolean {
+  return needsLoveReportLlmRefresh(payload, lang, meta?.contentLang);
+}
+
+async function readMeta(metaKey: string): Promise<LoveReportCacheMeta | null> {
+  const mem = sessionMeta.get(metaKey);
+  if (mem) return mem;
   try {
-    const raw = await AsyncStorage.getItem(key);
+    const raw = await AsyncStorage.getItem(metaKey);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as LoveProReportResponse;
-    if (
-      !parsed?.ok
-      || !parsed.pro_premium
-      || !parsed.pdf_context
-      || !parsed.page1
-    ) {
-      return null;
-    }
-    setSessionLoveReport(key, parsed);
+    const parsed = JSON.parse(raw) as LoveReportCacheMeta;
+    if (!parsed?.pdfLayoutVer || !parsed?.appReportVer) return null;
+    sessionMeta.set(metaKey, parsed);
     return parsed;
   } catch {
     return null;
   }
 }
 
+async function readRaw(rawKey: string): Promise<LoveProReportResponse | null> {
+  const mem = sessionRaw.get(rawKey);
+  if (isCompletePayload(mem)) return mem;
+  try {
+    const raw = await AsyncStorage.getItem(rawKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as LoveProReportResponse;
+    if (!isCompletePayload(parsed)) return null;
+    sessionRaw.set(rawKey, parsed);
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function migrateLegacyRaw(opts: {
+  userId: number;
+  p1: BirthData;
+  p2: BirthData;
+  p1Name: string;
+  p2Name: string;
+  lang: string;
+  rawKey: string;
+}): Promise<LoveProReportResponse | null> {
+  const lang = coerceProPdfLang(opts.lang);
+  const a = packLovePerson(opts.p1, opts.p1Name);
+  const b = packLovePerson(opts.p2, opts.p2Name);
+  const legacyKey = `${LEGACY_PREFIX}:${opts.userId}:${lang}:${LOVE_REALITY_PDF_LAYOUT_VER}:${JSON.stringify(a)}:${JSON.stringify(b)}`;
+  try {
+    const raw = await AsyncStorage.getItem(legacyKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as LoveProReportResponse;
+    if (!isCompletePayload(parsed)) return null;
+    sessionRaw.set(opts.rawKey, parsed);
+    await AsyncStorage.setItem(opts.rawKey, raw);
+    await AsyncStorage.removeItem(legacyKey);
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Load cached report + detect whether only layout changed (no LLM) or data is fresh.
+ */
+export async function resolveLoveReportCache(opts: {
+  userId: number;
+  p1: BirthData;
+  p2: BirthData;
+  p1Name: string;
+  p2Name: string;
+  lang: string;
+}): Promise<LoveReportCacheResolve> {
+  const { rawKey, metaKey, pdfSyncKey } = loveReportCacheKeys(opts);
+  let payload = await readRaw(rawKey);
+  if (!payload) {
+    payload = await migrateLegacyRaw({ ...opts, rawKey });
+  }
+  const [meta, pdfSyncedRevision] = await Promise.all([
+    readMeta(metaKey),
+    AsyncStorage.getItem(pdfSyncKey).catch(() => null),
+  ]);
+
+  if (!payload) {
+    return {
+      payload: null,
+      meta: null,
+      changeKind: "missing",
+      needsPdfResync: false,
+      fromSession: false,
+    };
+  }
+
+  let changeKind = detectLoveReportChange(meta);
+  if (changeKind === "missing") {
+    // Raw JSON exists but meta lost / legacy entry — reuse text, stamp revision (no LLM).
+    changeKind = "app_layout";
+  }
+  const needsPdfResync = loveReportNeedsPdfResync(meta, pdfSyncedRevision);
+
+  return {
+    payload,
+    meta,
+    changeKind,
+    needsPdfResync,
+    fromSession: sessionRaw.has(rawKey),
+  };
+}
+
+export async function saveLoveReportCache(
+  opts: {
+    userId: number;
+    p1: BirthData;
+    p2: BirthData;
+    p1Name: string;
+    p2Name: string;
+    lang: string;
+  },
+  data: LoveProReportResponse,
+): Promise<void> {
+  if (!isCompletePayload(data)) return;
+  const { rawKey, metaKey } = loveReportCacheKeys(opts);
+  const cur = currentLoveReportRevision();
+  const meta: LoveReportCacheMeta = {
+    ...cur,
+    savedAt: Date.now(),
+    polishSource: data.polish_source,
+    contentLang: coerceProPdfLang(data.lang || opts.lang),
+  };
+  sessionRaw.set(rawKey, data);
+  sessionMeta.set(metaKey, meta);
+  try {
+    await AsyncStorage.multiSet([
+      [rawKey, JSON.stringify(data)],
+      [metaKey, JSON.stringify(meta)],
+    ]);
+  } catch {
+    /* session cache still valid this visit */
+  }
+}
+
+/** After app-only layout bump — update meta without touching raw JSON or calling API. */
+export async function touchLoveReportCacheRevision(opts: {
+  userId: number;
+  p1: BirthData;
+  p2: BirthData;
+  p1Name: string;
+  p2Name: string;
+  lang: string;
+  polishSource?: string;
+}): Promise<void> {
+  const { metaKey } = loveReportCacheKeys(opts);
+  const cur = currentLoveReportRevision();
+  const meta: LoveReportCacheMeta = {
+    ...cur,
+    savedAt: Date.now(),
+    polishSource: opts.polishSource,
+  };
+  sessionMeta.set(metaKey, meta);
+  try {
+    await AsyncStorage.setItem(metaKey, JSON.stringify(meta));
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function markLoveReportPdfSynced(opts: {
+  userId: number;
+  p1: BirthData;
+  p2: BirthData;
+  p1Name: string;
+  p2Name: string;
+  lang: string;
+}): Promise<void> {
+  const { pdfSyncKey } = loveReportCacheKeys(opts);
+  const rev = loveReportRevisionString(currentLoveReportRevision());
+  try {
+    await AsyncStorage.setItem(pdfSyncKey, rev);
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function loveReportPdfNeedsResync(opts: {
+  userId: number;
+  p1: BirthData;
+  p2: BirthData;
+  p1Name: string;
+  p2Name: string;
+  lang: string;
+}): Promise<boolean> {
+  const { metaKey, pdfSyncKey } = loveReportCacheKeys(opts);
+  const [meta, pdfSyncedRevision] = await Promise.all([
+    readMeta(metaKey),
+    AsyncStorage.getItem(pdfSyncKey).catch(() => null),
+  ]);
+  return loveReportNeedsPdfResync(meta, pdfSyncedRevision);
+}
+
+/** @deprecated use resolveLoveReportCache / saveLoveReportCache */
+export async function loadCachedLoveReport(key: string): Promise<LoveProReportResponse | null> {
+  return readRaw(key);
+}
+
+/** @deprecated use saveLoveReportCache */
 export async function saveCachedLoveReport(
   key: string,
   data: LoveProReportResponse,
 ): Promise<void> {
-  if (!data?.ok) return;
-  setSessionLoveReport(key, data);
+  if (!isCompletePayload(data)) return;
+  sessionRaw.set(key, data);
   try {
     await AsyncStorage.setItem(key, JSON.stringify(data));
   } catch {
-    /* quota / web — session cache still works this visit */
+    /* ignore */
   }
+}
+
+export function getSessionLoveReport(key: string): LoveProReportResponse | null {
+  return sessionRaw.get(key) ?? null;
+}
+
+export function setSessionLoveReport(key: string, data: LoveProReportResponse): void {
+  sessionRaw.set(key, data);
 }

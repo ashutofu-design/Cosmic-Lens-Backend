@@ -47,6 +47,39 @@ def _to_concise_bullets(items: list[str], *, max_items: int = 4, max_len: int = 
     return out[:max_items]
 
 
+def _llm_summary_text(pro: dict[str, Any], love_narr: str) -> str:
+    """Prefer polished LLM prose over raw engine English."""
+    for part in (
+        love_narr,
+        str(pro.get("verdict") or "").strip(),
+        str(pro.get("hidden_truth") or "").strip(),
+        _chapter_body(pro, "blueprint_reality"),
+    ):
+        if len((part or "").strip()) >= 40:
+            return part.strip()
+    return ""
+
+
+def _insights_from_pro(pro: dict[str, Any], *, max_items: int = 4) -> list[str]:
+    out: list[str] = []
+    for row in pro.get("deep_analysis") or []:
+        if not isinstance(row, dict):
+            continue
+        expl = str(row.get("explanation") or "").strip()
+        if len(expl) >= 24:
+            out.append(_short(expl, 120))
+        if len(out) >= max_items:
+            return out
+    for bucket in ("special", "damage", "practical"):
+        for item in pro.get(bucket) or []:
+            t = str(item or "").strip()
+            if len(t) >= 16:
+                out.append(_short(t, 120))
+            if len(out) >= max_items:
+                return out
+    return out
+
+
 def build_love_reality_page1_data(
     ctx: dict[str, Any],
     bundle: dict[str, Any],
@@ -54,9 +87,14 @@ def build_love_reality_page1_data(
     p1: dict[str, Any],
     p2: dict[str, Any],
     *,
+    lang: str = "en",
     report_id: str | None = None,
 ) -> dict[str, Any]:
     """Dashboard dict for premium PDF page 1."""
+    from vedic.love_reality.pdf_locale import normalize_love_reality_pdf_lang
+
+    lang = normalize_love_reality_pdf_lang(lang)
+    localized = lang in ("hn", "hi")
     dash = ctx.get("page1_dashboard") or {}
     scores = dash.get("scores") or []
 
@@ -85,19 +123,24 @@ def build_love_reality_page1_data(
     wr = bundle.get("will_return") or {}
     fo = bundle.get("future_outcome") or {}
 
-    summary = (
-        dash.get("summary_index")
-        or lc.get("emotional_summary")
-        or lc.get("insight")
-        or "Your charts show a complex bond with strong pull and recurring friction windows."
-    )
-
     love_narr = _chapter_body(pro, "love_connection")
     loyalty_narr = _chapter_body(pro, "loyalty")
     breakup_narr = _chapter_body(pro, "breakup")
     future_narr = _chapter_body(pro, "future_outcome")
+    llm_summary = _llm_summary_text(pro, love_narr)
 
-    snapshot = _short(love_narr or summary, 280)
+    if localized and llm_summary:
+        summary = llm_summary
+    else:
+        summary = (
+            llm_summary
+            or dash.get("summary_index")
+            or lc.get("emotional_summary")
+            or lc.get("insight")
+            or "Your charts show a complex bond with strong pull and recurring friction windows."
+        )
+
+    snapshot = _short(love_narr or llm_summary or summary, 280)
     ai_bit = _short(pro.get("verdict") or bundle.get("narrative_bridge") or "", 160)
     narrative = snapshot
     if ai_bit and ai_bit not in snapshot:
@@ -105,16 +148,46 @@ def build_love_reality_page1_data(
 
     moon = ctx.get("page5_moon") or {}
     insights: list[str] = []
-    for r in (lc.get("reasons") or [])[:2]:
-        insights.append(str(r).strip())
-    if moon.get("shashtashtak"):
-        insights.append("Moon rhythm mismatch — emotional pacing differs between partners.")
-    else:
-        insights.append("Moon signs support smoother emotional rhythm when stress is named early.")
-    for r in (bu.get("reasons") or [])[:1]:
-        insights.append(str(r).strip())
-    if len(insights) < 4:
-        insights.append("Repair within 24–48 hours after conflict — silence erodes loyalty scores.")
+    if localized:
+        insights = _insights_from_pro(pro, max_items=4)
+    if not insights:
+        for r in (lc.get("reasons") or [])[:2]:
+            insights.append(str(r).strip())
+        if moon.get("shashtashtak"):
+            if lang == "hn":
+                insights.append(
+                    "Moon rhythm mismatch — emotional pace alag hai, stress pe jaldi naam do."
+                )
+            elif lang == "hi":
+                insights.append("चंद्र लय मेल नहीं — भावनात्मक गति अलग है।")
+            else:
+                insights.append(
+                    "Moon rhythm mismatch — emotional pacing differs between partners."
+                )
+        else:
+            if lang == "hn":
+                insights.append(
+                    "Moon signs smoother rhythm support karte hain jab stress jaldi naam ho."
+                )
+            elif lang == "hi":
+                insights.append("चंद्र संकेत सहज भावनात्मक लय देते हैं।")
+            else:
+                insights.append(
+                    "Moon signs support smoother emotional rhythm when stress is named early."
+                )
+        for r in (bu.get("reasons") or [])[:1]:
+            insights.append(str(r).strip())
+        if len(insights) < 4:
+            if lang == "hn":
+                insights.append(
+                    "Jhagda ke 24–48 ghante mein repair karo — chup rehna loyalty ko kam karta hai."
+                )
+            elif lang == "hi":
+                insights.append("झगड़े के २४–४८ घंटे में सुधार करें।")
+            else:
+                insights.append(
+                    "Repair within 24–48 hours after conflict — silence erodes loyalty scores."
+                )
     insights = [i for i in insights if i][:4]
 
     remedies = ctx.get("page12_remedies") or {}
@@ -126,11 +199,24 @@ def build_love_reality_page1_data(
     if practical:
         raw_recs = practical + raw_recs
     if not raw_recs:
-        raw_recs = [
-            "Repair within 24 hours after any argument",
-            "Weekly 20-minute phone-free check-in",
-            "Track dasha dates — avoid ultimatums in down windows",
-        ]
+        if lang == "hn":
+            raw_recs = [
+                "Har jhagda ke 24 ghante mein repair karo",
+                "Hafte mein 20 minute phone-free check-in",
+                "Dasha dates track karo — down window mein ultimatum mat do",
+            ]
+        elif lang == "hi":
+            raw_recs = [
+                "हर झगड़े के २४ घंटे में सुधार करें",
+                "साप्ताहिक २० मिनट फोन-मुक्त बातचीत",
+                "दशा तिथियाँ देखें — कमज़ोर अवधि में अल्टीमेटम न दें",
+            ]
+        else:
+            raw_recs = [
+                "Repair within 24 hours after any argument",
+                "Weekly 20-minute phone-free check-in",
+                "Track dasha dates — avoid ultimatums in down windows",
+            ]
     recommendations = _to_concise_bullets(raw_recs, max_items=5, max_len=78)
     # Verdict page: full LLM prose (practical[] = 2 long paragraphs from polish)
     verdict_full = (
@@ -181,7 +267,7 @@ def build_love_reality_page1_data(
             "explanation": explanation,
         }
 
-    return {
+    page1 = {
         "report_id": report_id or f"LR-{uuid.uuid4().hex[:8].upper()}",
         "generated_at": datetime.now(timezone.utc).strftime("%d %B %Y · %H:%M UTC"),
         "p1_name": p1.get("name") or "Partner A",
@@ -248,3 +334,70 @@ def build_love_reality_page1_data(
         "recommendations": recommendations,
         "recommendation_paragraphs": rec_paragraphs,
     }
+    return _localize_page1_dashboard(page1, lang)
+
+
+def _localize_page1_dashboard(page1: dict[str, Any], lang: str) -> dict[str, Any]:
+    """Roman Hinglish / Devanagari for in-app summary when engine text is still English."""
+    if lang not in ("hn", "hi"):
+        return page1
+    try:
+        from i18n_summary import localize_text
+    except Exception:
+        return page1
+
+    out = dict(page1)
+    for key in ("relationship_summary", "insights_narrative", "verdict"):
+        val = str(out.get(key) or "").strip()
+        if val:
+            out[key] = _short(localize_text(val, None, lang), 420 if key == "verdict" else 220)
+
+    bullets = []
+    for item in out.get("key_insights") or []:
+        raw = str(item or "").strip()
+        if raw:
+            bullets.append(_short(localize_text(raw, None, lang), 120))
+    if bullets:
+        out["key_insights"] = bullets
+
+    recs = []
+    for item in out.get("recommendations") or []:
+        raw = str(item or "").strip()
+        if raw:
+            recs.append(_short(localize_text(raw, None, lang), 88))
+    if recs:
+        out["recommendations"] = recs
+
+    paras = []
+    for item in out.get("recommendation_paragraphs") or []:
+        raw = str(item or "").strip()
+        if raw:
+            paras.append(localize_text(raw, None, lang))
+    if paras:
+        out["recommendation_paragraphs"] = paras
+
+    metrics = []
+    for row in out.get("metrics") or []:
+        if not isinstance(row, dict):
+            continue
+        m = dict(row)
+        interp = str(m.get("interpretation") or "").strip()
+        if interp:
+            m["interpretation"] = localize_text(interp, None, lang)
+        metrics.append(m)
+    if metrics:
+        out["metrics"] = metrics
+
+    analysis_rows = []
+    for row in out.get("analysis") or []:
+        if not isinstance(row, dict):
+            continue
+        a = dict(row)
+        expl = str(a.get("explanation") or "").strip()
+        if expl:
+            a["explanation"] = _short(localize_text(expl, None, lang), 420)
+        analysis_rows.append(a)
+    if analysis_rows:
+        out["analysis"] = analysis_rows
+
+    return out

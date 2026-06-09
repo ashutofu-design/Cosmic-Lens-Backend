@@ -105,7 +105,9 @@ def render_love_reality_exec_summary_only_pdf(payload: dict, lang: str = "en") -
     )
     ctx = build_love_reality_pdf_v2_context(bundle, pro, p1, p2, lang)
     report_id = str(payload.get("report_id") or "LR-PREVIEW")
-    page1_data = build_love_reality_page1_data(ctx, bundle, pro, p1, p2, report_id=report_id)
+    page1_data = build_love_reality_page1_data(
+        ctx, bundle, pro, p1, p2, lang=content_lang, report_id=report_id
+    )
     story = render_premium_page1_flowables(page1_data, lang=lang)
     story = [f for f in story if not isinstance(f, PageBreak)]
 
@@ -463,7 +465,7 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
             page1_data = client_page1
         else:
             page1_data = build_love_reality_page1_data(
-                ctx, bundle, pro, p1, p2, report_id=report_id or None,
+                ctx, bundle, pro, p1, p2, lang=lang, report_id=report_id or None,
             )
         story.extend(render_premium_page1_flowables(page1_data, lang=lang))
         if render_verdict_page_flowables is not None:

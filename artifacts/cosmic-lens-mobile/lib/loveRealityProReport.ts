@@ -121,38 +121,256 @@ function pushSection(sections: LoveReportSection[], sec: LoveReportSection | nul
   if (hasBody || hasBullets || hasTable) sections.push(sec);
 }
 
+function pickLabel(lang: ProPdfLangCode, en: string, hn: string, hi: string): string {
+  if (lang === "hi") return hi;
+  if (lang === "hn") return hn;
+  return en;
+}
+
 function L(lang: ProPdfLangCode) {
-  const hi = lang === "hi";
-  const hn = lang === "hn";
   return {
-    execSummary: hi ? "Executive Summary & Cosmic Alignment" : "Executive Summary & Cosmic Alignment",
-    relSummary: hi ? "Relationship Summary" : "Relationship Summary",
-    coreMetrics: hi ? "Core Metrics" : "Core Metrics",
-    insights: hi ? "Relationship Insights" : "Relationship Insights",
-    strengths: hi ? "Strengths in this Connection" : "Strengths in this Connection",
-    challenges: hi ? "Challenges in this Connection" : "Challenges in this Connection",
-    verdict: hi ? "ज्योतिषी का नोट" : hn ? "Final Cosmic Verdict" : "Final Cosmic Verdict",
-    verdictSub: hi ? "Final Verdict & Recommendations" : "Astrologer's Note",
-    recommendations: hi ? "Recommendations" : hn ? "Aage Kya Karein" : "Recommendations",
-    deepAnalysis: hi ? "Deep Connection Analysis" : "Deep Connection Analysis",
-    blueprintYou: hi ? "Destiny Partner Blueprint (You)" : "Destiny Partner Blueprint (You)",
-    blueprintVs: hi ? "Partner Blueprint vs Reality" : "Partner Blueprint vs Reality",
-    dimensions: hi ? "The 5 Love Dimensions Deep-Dive" : "The 5 Love Dimensions Deep-Dive",
-    moon: hi ? "Moon Synastry & Emotional Rhythm" : "Moon Synastry & Emotional Rhythm",
-    rootCause: hi ? "The Core Root Cause" : "The Core Root Cause",
-    loyalty: hi ? "Loyalty, Trust & Psychological Traits" : "Loyalty, Trust & Psychological Traits",
-    redFlags: hi ? "Red Flags Matrix" : "Red Flags Matrix",
-    harmony: hi ? "The Harmony Formula" : "The Harmony Formula",
-    dasha: hi ? "Vimshottari Dasha Synchronization" : "Vimshottari Dasha Synchronization",
-    roadmap: hi ? "The 1–3 Year Chronological Roadmap" : "The 1–3 Year Chronological Roadmap",
-    upay: hi ? "Planetary Counter Measures (Upay)" : "Planetary Counter Measures (Upay)",
-    checklist: hi ? "Relationship Checklist" : "Relationship Checklist",
-    closing: hi ? "Closing Guidance & Disclaimer" : "Closing Guidance & Disclaimer",
+    execSummary: pickLabel(
+      lang,
+      "Executive Summary & Cosmic Alignment",
+      "Rishte ka Summary aur Cosmic Score",
+      "कार्यकारी सारांश और कॉस्मिक संरेखण",
+    ),
+    relSummary: pickLabel(
+      lang,
+      "Relationship Summary",
+      "Stars kya keh rahe hain",
+      "रिश्ते का सारांश",
+    ),
+    coreMetrics: pickLabel(lang, "Core Metrics", "Core Scores", "मुख्य स्कोर"),
+    scorecard: pickLabel(lang, "Your Connection Scorecard", "Aapka Connection Scorecard", "आपका कनेक्शन स्कोरकार्ड"),
+    cosmicScore: (n: number) => pickLabel(
+      lang,
+      `Cosmic Alignment Score: ${n}/100`,
+      `Cosmic Score: ${n}/100`,
+      `कॉस्मिक संरेखण स्कोर: ${n}/100`,
+    ),
+    insights: pickLabel(lang, "Relationship Insights", "Rishte ki Insights", "रिश्ते की अंतर्दृष्टि"),
+    strengths: pickLabel(lang, "Strengths in this Connection", "Is Rishte ki Strengths", "इस कनेक्शन की ताकत"),
+    challenges: pickLabel(lang, "Challenges in this Connection", "Is Rishte ki Challenges", "इस कनेक्शन की चुनौतियाँ"),
+    verdict: pickLabel(lang, "Final Cosmic Verdict", "Final Cosmic Verdict", "ज्योतिषी का अंतिम नोट"),
+    verdictSub: pickLabel(lang, "Astrologer's Note", "Jyotishi ka Note", "ज्योतिषी का नोट"),
+    recommendations: pickLabel(lang, "Recommendations", "Aage Kya Karein", "आगे क्या करें"),
+    deepAnalysis: pickLabel(lang, "Deep Connection Analysis", "Gehra Connection Analysis", "गहन कनेक्शन विश्लेषण"),
+    deepCombined: pickLabel(lang, "Deep Connection Analysis", "Gehra Connection Analysis", "गहन कनेक्शन विश्लेषण"),
+    deepSub: pickLabel(
+      lang,
+      "Emotional · Communication · Trust · Long-term",
+      "Emotional · Communication · Trust · Long-term",
+      "भावनात्मक · संवाद · विश्वास · दीर्घकाल",
+    ),
+    blueprintYou: pickLabel(
+      lang,
+      "Destiny Partner Blueprint (You)",
+      "Aapka Destiny Partner Blueprint",
+      "आपका भाग्य साथी ब्लूप्रिंट",
+    ),
+    blueprintVs: pickLabel(
+      lang,
+      "Partner Blueprint vs Reality",
+      "Ideal Partner vs Asli Reality",
+      "आदर्श साथी बनाम वास्तविकता",
+    ),
+    blueprintVsSub: pickLabel(
+      lang,
+      "How your ideal partner pattern compares to reality",
+      "Aapke ideal partner pattern vs asli partner",
+      "आदर्श पैटर्न बनाम वास्तविक साथी",
+    ),
+    dimensions: pickLabel(
+      lang,
+      "The 5 Love Dimensions Deep-Dive",
+      "5 Love Dimensions — Detail",
+      "५ प्रेम आयाम — विस्तार",
+    ),
+    moon: pickLabel(
+      lang,
+      "Moon Synastry & Emotional Rhythm",
+      "Moon Match aur Emotional Rhythm",
+      "चंद्र समन्वय और भावनात्मक लय",
+    ),
+    moonSub: pickLabel(
+      lang,
+      "Emotional rhythm between you two",
+      "Aap dono ke beech emotional rhythm",
+      "आप दोनों के बीच भावनात्मक लय",
+    ),
+    moonYour: pickLabel(lang, "Your Moon", "Aapka Moon", "आपका चंद्र"),
+    moonPartner: pickLabel(lang, "Partner Moon", "Partner ka Moon", "साथी का चंद्र"),
+    rootCause: pickLabel(lang, "The Core Root Cause", "Asli Root Cause", "मूल वजह"),
+    rootCauseSub: pickLabel(
+      lang,
+      "What is silently breaking you apart",
+      "Kya chupke aapko alag kar raha hai",
+      "क्या चुपचाप आपको अलग कर रहा है",
+    ),
+    loyalty: pickLabel(
+      lang,
+      "Loyalty, Trust & Psychological Traits",
+      "Loyalty, Trust aur Traits",
+      "निष्ठा, विश्वास और लक्षण",
+    ),
+    redFlags: pickLabel(lang, "Red Flags Matrix", "Red Flags", "चेतावनी संकेत"),
+    harmony: pickLabel(lang, "The Harmony Formula", "Harmony Formula", "सामंजस्य सूत्र"),
+    dasha: pickLabel(lang, "Vimshottari Dasha Synchronization", "Dasha Sync", "विंशोत्तरी दशा"),
+    roadmap: pickLabel(lang, "The 1–3 Year Chronological Roadmap", "1–3 Saal ka Roadmap", "१–३ वर्ष का रोडमैप"),
+    upay: pickLabel(lang, "Planetary Counter Measures (Upay)", "Upay aur Remedies", "उपाय और सुझाव"),
+    checklist: pickLabel(lang, "Relationship Checklist", "Relationship Checklist", "रिश्ते की चेकलिस्ट"),
+    closing: pickLabel(lang, "Closing Guidance & Disclaimer", "Closing Note", "अंतिम मार्गदर्शन"),
+    pdfNote: pickLabel(lang, "Full chart detail in PDF", "Poori detail PDF mein", "पूरी जानकारी PDF में"),
+    pdfTeaserSub: pickLabel(
+      lang,
+      "Dasha · Roadmap · Remedies · Full blueprint",
+      "Dasha · Roadmap · Upay · Poora blueprint",
+      "दशा · रोडमैप · उपाय · पूरा ब्लूप्रिंट",
+    ),
+    pdfTeaserBody: pickLabel(
+      lang,
+      "Tap Download PDF below for the complete 18-page report with timelines, remedies, and full chart detail.",
+      "Neeche Download PDF dabao — poori 18-page report timelines, upay aur chart detail ke saath.",
+      "नीचे PDF डाउनलोड करें — पूरी १८-पृष्ठ रिपोर्ट।",
+    ),
+    scoreLove: pickLabel(lang, "Love", "Love", "प्रेम"),
+    scoreBreakup: pickLabel(lang, "Breakup", "Breakup", "ब्रेकअप"),
+    scoreLoyalty: pickLabel(lang, "Loyalty", "Loyalty", "निष्ठा"),
+    scoreReturn: pickLabel(lang, "Return", "Return", "वापसी"),
+    scoreFuture: pickLabel(lang, "Future", "Future", "भविष्य"),
+    proBadge: pickLabel(lang, "PRO REPORT", "PRO REPORT", "PRO रिपोर्ट"),
+    heroTitle: pickLabel(lang, "Love Reality Pro", "Love Reality Pro", "Love Reality Pro"),
+    downloadPdf: pickLabel(lang, "Download PDF", "PDF Download karo", "PDF डाउनलोड"),
+    downloadingPdf: pickLabel(lang, "Downloading PDF…", "PDF download ho rahi hai…", "PDF डाउनलोड…"),
+    downloadHint: pickLabel(
+      lang,
+      "Full report from this page — saved to My Reports",
+      "Is page se poori report — My Reports mein save hogi",
+      "इस पेज से पूरी रिपोर्ट — My Reports में",
+    ),
+    cosmicAlignment: pickLabel(lang, "Cosmic Alignment", "Cosmic Alignment", "कॉस्मिक संरेखण"),
+    moonDetailSub: pickLabel(
+      lang,
+      "Shashtashtak / 6-8 sign emotional alignment check",
+      "Shashtashtak / 6-8 sign emotional check",
+      "षष्ठाष्टक / ६-८ राशि भावनात्मक जाँच",
+    ),
+    chipOverview: pickLabel(lang, "Overview", "Overview", "सारांश"),
+    chipScores: pickLabel(lang, "Scores", "Scores", "स्कोर"),
+    chipFullPdf: pickLabel(lang, "Full PDF", "Poori PDF", "पूरी PDF"),
+    chipDeepDive: pickLabel(lang, "Deep Dive", "Deep Dive", "विस्तार"),
+    chipStrengths: pickLabel(lang, "Strengths", "Strengths", "ताकत"),
+    chipChallenges: pickLabel(lang, "Challenges", "Challenges", "चुनौतियाँ"),
+    chipVerdict: pickLabel(lang, "Verdict", "Verdict", "निष्कर्ष"),
+    chipActionPlan: pickLabel(lang, "Action Plan", "Action Plan", "अगला कदम"),
+    chipBlueprint: pickLabel(lang, "Blueprint", "Blueprint", "ब्लूप्रिंट"),
+    chipFiveDimensions: pickLabel(lang, "5 Dimensions", "5 Dimensions", "५ आयाम"),
+    chipMoonSync: pickLabel(lang, "Moon Sync", "Moon Sync", "चंद्र"),
+    chipRootCause: pickLabel(lang, "Root Cause", "Root Cause", "मूल वजह"),
+    chipInsight: pickLabel(lang, "Insight", "Insight", "अंतर्दृष्टि"),
+    alertRefreshTitle: pickLabel(lang, "Report refresh needed", "Report refresh chahiye", "रिपोर्ट रिफ्रेश"),
+    alertRefreshBody: pickLabel(
+      lang,
+      "This saved report is incomplete. Tap Retry to reload, then Download PDF.",
+      "Saved report incomplete hai. Retry dabao, phir PDF Download karo.",
+      "सहेजी रिपोर्ट अधूरी है। Retry करें, फिर PDF डाउनलोड।",
+    ),
+    alertPdfSaved: pickLabel(lang, "PDF saved", "PDF save ho gayi", "PDF सहेजी"),
+    alertPdfFailed: pickLabel(lang, "PDF download failed", "PDF download fail", "PDF विफल"),
+    retry: pickLabel(lang, "Retry", "Retry", "पुनः"),
+    ok: pickLabel(lang, "OK", "OK", "ठीक"),
   };
 }
 
-/** PDF-parity scroll sections — same engine + LLM mix as ReportLab PDF. */
-export function buildLoveReportSections(
+/** UI + section labels for Love Reality Pro (en / hn / hi). */
+export function loveRealityReportLabels(lang: ProPdfLangCode) {
+  return L(lang);
+}
+
+function isRiskMetric(label: string): boolean {
+  return /breakup|risk|challenge|conflict|gap|stress|escalation|misalign/i.test(label);
+}
+
+/** Human-readable band — replaces misleading server labels like "very high" on score 13. */
+export function humanScoreBand(score: number, label: string, lang: ProPdfLangCode = "en"): string {
+  const v = Math.max(0, Math.min(100, Math.round(score)));
+  if (isRiskMetric(label)) {
+    if (lang === "hn") {
+      if (v >= 70) return "Risk zyada";
+      if (v >= 45) return "Risk moderate";
+      return "Risk kam";
+    }
+    if (lang === "hi") {
+      if (v >= 70) return "जोखिम अधिक";
+      if (v >= 45) return "मध्यम जोखिम";
+      return "कम जोखिम";
+    }
+    if (v >= 70) return "High risk";
+    if (v >= 45) return "Moderate risk";
+    return "Lower risk";
+  }
+  if (lang === "hn") {
+    if (v >= 70) return "Strong";
+    if (v >= 45) return "Mixed";
+    if (v >= 25) return "Low";
+    return "Bahut kam";
+  }
+  if (lang === "hi") {
+    if (v >= 70) return "मजबूत";
+    if (v >= 45) return "मिश्रित";
+    if (v >= 25) return "कम";
+    return "बहुत कम";
+  }
+  if (v >= 70) return "Strong";
+  if (v >= 45) return "Mixed";
+  if (v >= 25) return "Low";
+  return "Very low";
+}
+
+function pickSummary(primary?: string, secondary?: string): string {
+  const a = (primary || "").trim();
+  const b = (secondary || "").trim();
+  if (!a) return b;
+  if (!b) return a;
+  const aStart = a.slice(0, 72).toLowerCase();
+  const bStart = b.slice(0, 72).toLowerCase();
+  if (aStart === bStart || a.includes(b.slice(0, 48)) || b.includes(a.slice(0, 48))) {
+    return a.length >= b.length ? a : b;
+  }
+  return a;
+}
+
+function formatMetricLine(
+  label: string,
+  value: number | undefined,
+  interpretation: string | undefined,
+  lang: ProPdfLangCode,
+): string {
+  const v = value ?? 0;
+  const band = humanScoreBand(v, label, lang);
+  if (interpretation && interpretation.toLowerCase() !== band.toLowerCase()) {
+    return `${label}: ${v}/100 — ${band}`;
+  }
+  return `${label}: ${v}/100 — ${band}`;
+}
+
+export {
+  detectLoveReportChange,
+  loveReportNeedsPdfResync,
+  type LoveReportChangeKind,
+  type LoveReportCacheMeta,
+} from "@/lib/loveRealityReportRevision";
+export {
+  needsLoveReportLlmRefresh,
+  reportContentMatchesLang,
+  reportSummaryMatchesLang,
+} from "@/lib/loveRealityReportLang";
+
+export type LoveReportBuildMode = "full" | "page";
+
+/** Full sections — used for Connect to PDF (complete report). */
+export function buildLoveReportSectionsFull(
   report: LoveProReportResponse,
   lang: ProPdfLangCode,
 ): LoveReportSection[] {
@@ -256,14 +474,14 @@ export function buildLoveReportSections(
     const moon = ctx.page5_moon || {};
     const moonBody = [
       moon.p1_moon && moon.p2_moon
-        ? `Your Moon: ${moon.p1_moon} · Partner Moon: ${moon.p2_moon}`
+        ? `${labels.moonYour}: ${moon.p1_moon} · ${labels.moonPartner}: ${moon.p2_moon}`
         : "",
       moon.body || "",
     ].filter(Boolean).join("\n\n");
     pushSection(sections, {
       id: "moon",
       title: labels.moon,
-      subtitle: "Shashtashtak / 6-8 sign emotional alignment check",
+      subtitle: labels.moonDetailSub,
       body: moonBody,
       bullets: (moon.notes || []).map(String),
     });
@@ -271,7 +489,7 @@ export function buildLoveReportSections(
     pushSection(sections, {
       id: "root_cause",
       title: labels.rootCause,
-      subtitle: "What is silently breaking you apart",
+      subtitle: labels.rootCauseSub,
       body: ctx.page6_root_cause,
     });
 
@@ -378,6 +596,137 @@ export function buildLoveReportSections(
   return sections;
 }
 
+/**
+ * Clean ~8-section scroll view — no duplicates, no dev boilerplate, fixed score labels.
+ * PDF uses buildLoveReportSectionsFull() instead.
+ */
+export function buildLoveReportSectionsForPage(
+  report: LoveProReportResponse,
+  lang: ProPdfLangCode,
+): LoveReportSection[] {
+  const labels = L(lang);
+  const sections: LoveReportSection[] = [];
+  const ctx = report.pdf_context;
+  const p1 = report.page1;
+
+  if (p1) {
+    const summary = pickSummary(p1.relationship_summary, p1.insights_narrative);
+    pushSection(sections, {
+      id: "exec_summary",
+      title: labels.execSummary,
+      subtitle: labels.relSummary,
+      body: summary || undefined,
+      bullets: (p1.key_insights || []).slice(0, 4),
+    });
+
+    const scorecardLines = [
+      ...(p1.metrics || []).map(m =>
+        formatMetricLine(m.label || "Metric", m.value, m.interpretation, lang),
+      ),
+      ...(p1.strengths || []).map(s =>
+        `${s.label}: ${s.value}/100 — ${humanScoreBand(s.value ?? 0, s.label || "", lang)}`,
+      ),
+      ...(p1.challenges || []).map(c =>
+        `${c.label}: ${c.value}/100 — ${humanScoreBand(c.value ?? 0, c.label || "challenge", lang)}`,
+      ),
+    ];
+    pushSection(sections, {
+      id: "scorecard",
+      title: labels.scorecard,
+      subtitle: p1.cosmic_score != null ? labels.cosmicScore(p1.cosmic_score) : undefined,
+      bullets: scorecardLines.length ? scorecardLines : undefined,
+    });
+
+    pushSection(sections, {
+      id: "verdict",
+      title: labels.verdict,
+      subtitle: labels.verdictSub,
+      body: p1.verdict,
+    });
+
+    const recBody = (p1.recommendation_paragraphs || []).join("\n\n").trim();
+    const recBullets = !recBody
+      ? (p1.recommendations || []).slice(0, 5)
+      : undefined;
+    pushSection(sections, {
+      id: "recommendations",
+      title: labels.recommendations,
+      body: recBody || undefined,
+      bullets: recBullets,
+    });
+
+    const deepLines = (p1.analysis || [])
+      .map(item => {
+        const expl = (item.explanation || "").trim();
+        if (!expl) return "";
+        const score = item.score != null ? ` · ${item.score}/100` : "";
+        return `${item.title || "Analysis"}${score}\n${expl}`;
+      })
+      .filter(Boolean);
+    pushSection(sections, {
+      id: "deep_connection",
+      title: labels.deepCombined,
+      subtitle: labels.deepSub,
+      body: deepLines.length ? deepLines.join("\n\n") : undefined,
+    });
+  }
+
+  if (ctx) {
+    const bp = ctx.page2_3_blueprint || {};
+    pushSection(sections, {
+      id: "blueprint_vs",
+      title: labels.blueprintVs,
+      subtitle: labels.blueprintVsSub,
+      body: (bp.part2 || bp.part1 || "").trim() || undefined,
+    });
+
+    pushSection(sections, {
+      id: "root_cause",
+      title: labels.rootCause,
+      subtitle: labels.rootCauseSub,
+      body: ctx.page6_root_cause,
+    });
+
+    const moon = ctx.page5_moon || {};
+    const moonBody = [
+      moon.p1_moon && moon.p2_moon
+        ? `${labels.moonYour}: ${moon.p1_moon} · ${labels.moonPartner}: ${moon.p2_moon}`
+        : "",
+      moon.body || "",
+    ].filter(Boolean).join("\n\n");
+    pushSection(sections, {
+      id: "moon",
+      title: labels.moon,
+      subtitle: labels.moonSub,
+      body: moonBody || undefined,
+      bullets: (moon.notes || []).slice(0, 4).map(String),
+    });
+
+    pushSection(sections, {
+      id: "pdf_teaser",
+      title: labels.pdfNote,
+      subtitle: labels.pdfTeaserSub,
+      body: labels.pdfTeaserBody,
+    });
+  }
+
+  if (sections.length > 0) return sections;
+
+  return buildLoveReportSectionsFull(report, lang);
+}
+
+/** @param mode `"page"` = clean in-app scroll · `"full"` = complete PDF mirror (default) */
+export function buildLoveReportSections(
+  report: LoveProReportResponse,
+  lang: ProPdfLangCode,
+  opts?: { mode?: LoveReportBuildMode },
+): LoveReportSection[] {
+  if (opts?.mode === "page") {
+    return buildLoveReportSectionsForPage(report, lang);
+  }
+  return buildLoveReportSectionsFull(report, lang);
+}
+
 export type LoveProReportFetchResult = {
   data: LoveProReportResponse;
   /** Server returned a saved JSON report — no LLM / no bundle rebuild. */
@@ -392,21 +741,35 @@ export async function fetchLoveRealityProReport(opts: {
   p2Name: string;
   lang: string;
   signal?: AbortSignal;
+  /**
+   * Rebuild pdf_context + page1 from saved polish — skips JSON cache, no LLM.
+   * Use when PDF layout ver changed on server.
+   */
+  layoutRefresh?: boolean;
+  /** Fresh OpenAI polish in hn/hi/en — skips server JSON cache. */
+  forceLlm?: boolean;
 }): Promise<LoveProReportFetchResult> {
   const lang = coerceProPdfLang(opts.lang);
   const tz1 = opts.p1.tz ?? Math.round((opts.p1.lon! / 15) * 2) / 2;
   const tz2 = opts.p2.tz ?? Math.round((opts.p2.lon! / 15) * 2) / 2;
+  const layoutRefresh = Boolean(opts.layoutRefresh);
+  const forceLlm = Boolean(opts.forceLlm);
 
   const resp = await fetch(`${API_BASE}/api/love-reality/pro-report`, {
     method: "POST",
     headers: {
       ...pdfAuthHeaders(opts.user),
       Accept: "application/json",
+      ...(layoutRefresh ? { "X-PDF-Layout-Refresh": "1" } : {}),
+      ...(layoutRefresh || forceLlm ? { "X-Force-Regenerate": "1" } : {}),
+      ...(forceLlm ? { "X-Force-LLM": "1" } : {}),
     },
     body: JSON.stringify({
       p1: { ...packLovePerson(opts.p1, opts.p1Name), tz: tz1 },
       p2: { ...packLovePerson(opts.p2, opts.p2Name), tz: tz2 },
       lang,
+      ...(layoutRefresh || forceLlm ? { force_regenerate: true } : {}),
+      ...(forceLlm ? { force_llm: true } : {}),
     }),
     signal: opts.signal,
   });

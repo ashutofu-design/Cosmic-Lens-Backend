@@ -437,6 +437,15 @@ def register_love_reality_routes(flask_app) -> None:
                         "detail": "No saved report text for this couple yet.",
                     }), 412
                 pro = sanitize_love_reality_pro_premium(pro, bundle, lang=lang)
+                from vedic.love_reality.pdf_data_v2 import build_love_reality_pdf_v2_context
+                from vedic.love_reality.pdf_page1_data import build_love_reality_page1_data
+
+                pdf_context = build_love_reality_pdf_v2_context(
+                    bundle, pro, data["p1"], data["p2"], lang=lang
+                )
+                page1 = build_love_reality_page1_data(
+                    pdf_context, bundle, pro, data["p1"], data["p2"]
+                )
                 lc = bundle.get("love_compatibility") or {}
                 bu = bundle.get("breakup_chances") or {}
                 ly = bundle.get("loyalty_check") or {}
@@ -458,6 +467,8 @@ def register_love_reality_routes(flask_app) -> None:
                         "future": int(fo.get("future_score") or fo.get("score") or 0),
                     },
                     "pro_premium": pro,
+                    "pdf_context": pdf_context,
+                    "page1": page1,
                 })
             except Exception as exc:
                 return jsonify({

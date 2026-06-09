@@ -29,7 +29,7 @@ import {
   loadCachedLoveReport,
   saveCachedLoveReport,
 } from "@/lib/loveRealityProReportCache";
-import { downloadLoveRealityProPdf } from "@/lib/loveRealityProPdfDownload";
+import { connectLoveRealityPageToPdf } from "@/lib/loveRealityProPdfDownload";
 import { coerceProPdfLang } from "@/lib/proPdfLang";
 
 const LOAD_STAGES = [
@@ -215,7 +215,7 @@ export default function LoveRealityProReportScreen() {
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<LoveProReportResponse | null>(null);
   const [fromCache, setFromCache] = useState(false);
-  const [pdfSaving, setPdfSaving] = useState(false);
+  const [pdfConnecting, setPdfConnecting] = useState(false);
   const loadedRef = useRef(false);
   const fetchDoneRef = useRef(false);
   const fastCacheRef = useRef(false);
@@ -323,7 +323,7 @@ export default function LoveRealityProReportScreen() {
     return () => clearTimeout(t);
   }, [loadDone, loadPct, report]);
 
-  const handleSavePdf = useCallback(async () => {
+  const handleConnectToPdf = useCallback(async () => {
     if (
       !user?.id
       || !primaryProfile?.birthData
@@ -331,52 +331,54 @@ export default function LoveRealityProReportScreen() {
       || !report?.pro_premium
       || !report.pdf_context
       || !report.page1
-      || pdfSaving
+      || pdfConnecting
     ) {
       if (report && (!report.pdf_context || !report.page1)) {
         Alert.alert(
           "Report refresh needed",
-          "This saved report is incomplete. Pull to reload the page, then tap Save PDF again.",
+          "This saved report is incomplete. Tap Retry to reload, then Connect to PDF.",
           [{ text: "OK" }],
         );
       }
       return;
     }
-    setPdfSaving(true);
+    setPdfConnecting(true);
     try {
-      const result = await downloadLoveRealityProPdf({
+      const result = await connectLoveRealityPageToPdf({
         user,
         p1: primaryProfile.birthData,
         p2: partnerProfile.birthData,
         p1Name: primaryProfile.name || "You",
         p2Name: partnerProfile.name || "Partner",
         lang,
-        syncWithInAppReport: true,
         reportSnapshot: {
           pro_premium: report.pro_premium,
           pdf_context: report.pdf_context,
           page1: report.page1,
         },
       });
-      const cacheNote = result.reportCacheHit ? " (from saved copy — no new AI)" : "";
       Alert.alert(
-        "Saved to My Reports",
-        `Your Love Reality Pro PDF is ready${cacheNote}.`,
+        "PDF connected",
+        result.savedToRegistry
+          ? "Fresh PDF created from this exact page — saved to My Reports."
+          : "Fresh PDF created from this exact page.",
         [
           { text: "OK", style: "cancel" },
-          {
-            text: "Open My Reports",
-            onPress: () => router.push("/my-reports" as never),
-          },
+          ...(result.savedToRegistry
+            ? [{
+                text: "Open My Reports",
+                onPress: () => router.push("/my-reports" as never),
+              }]
+            : []),
         ],
       );
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Could not save PDF";
-      Alert.alert("PDF Error", msg, [{ text: "OK" }]);
+      const msg = e instanceof Error ? e.message : "Could not connect page to PDF";
+      Alert.alert("Connect to PDF failed", msg, [{ text: "OK" }]);
     } finally {
-      setPdfSaving(false);
+      setPdfConnecting(false);
     }
-  }, [user, primaryProfile, partnerProfile, lang, pdfSaving, report]);
+  }, [user, primaryProfile, partnerProfile, lang, pdfConnecting, report]);
 
   const sections = report ? buildLoveReportSections(report, lang) : [];
   const isLoadingUi = fetching || (loadDone && !showReport);
@@ -393,22 +395,22 @@ export default function LoveRealityProReportScreen() {
           </Text>
           {report && showReport && !error ? (
             <Pressable
-              onPress={handleSavePdf}
-              disabled={pdfSaving}
-              style={[s.savePdfBtn, pdfSaving && { opacity: 0.7 }]}
+              onPress={handleConnectToPdf}
+              disabled={pdfConnecting}
+              style={[s.savePdfBtn, pdfConnecting && { opacity: 0.7 }]}
               hitSlop={6}
             >
-              {pdfSaving ? (
+              {pdfConnecting ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <>
-                  <Feather name="download" size={13} color="#fff" />
-                  <Text style={s.savePdfTxt}>Save PDF</Text>
+                  <Feather name="link" size={13} color="#fff" />
+                  <Text style={s.savePdfTxt}>Connect PDF</Text>
                 </>
               )}
             </Pressable>
           ) : (
-            <View style={{ width: 72 }} />
+            <View style={{ width: 88 }} />
           )}
         </View>
 
@@ -437,18 +439,58 @@ export default function LoveRealityProReportScreen() {
             fromCache={fromCache}
           />
         ) : report && showReport ? (
-          <ScrollView
-            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 28 }}
-            showsVerticalScrollIndicator={false}
-          >
-            <LoveRealityProReportView
-              isDark={C.isDark}
-              p1Name={report.p1_name}
-              p2Name={report.p2_name}
-              scores={report.scores}
-              sections={sections}
-            />
-          </ScrollView>
+          <>
+            <ScrollView
+              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 120 }}
+              showsVerticalScrollIndicator={false}
+            >
+              <LoveRealityProReportView
+                isDark={C.isDark}
+                p1Name={report.p1_name}
+                p2Name={report.p2_name}
+                scores={report.scores}
+                sections={sections}
+              />
+            </ScrollView>
+            <View
+              style={[
+                s.connectBar,
+                {
+                  paddingBottom: insets.bottom + 10,
+                  backgroundColor: C.isDark ? "rgba(15,10,31,0.96)" : "rgba(255,255,255,0.96)",
+                  borderTopColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+                },
+              ]}
+            >
+              <Text style={[s.connectHint, { color: C.isDark ? "rgba(226,232,240,0.72)" : "#64748B" }]}>
+                Uses exact content from this page — fresh PDF, no old cache
+              </Text>
+              <Pressable
+                onPress={handleConnectToPdf}
+                disabled={pdfConnecting}
+                style={[s.connectBtn, pdfConnecting && { opacity: 0.75 }]}
+              >
+                <LinearGradient
+                  colors={["#9333ea", "#ec4899"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={s.connectBtnGrad}
+                >
+                  {pdfConnecting ? (
+                    <>
+                      <ActivityIndicator size="small" color="#fff" />
+                      <Text style={s.connectBtnTxt}>Connecting to PDF…</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Feather name="link-2" size={18} color="#fff" />
+                      <Text style={s.connectBtnTxt}>Connect to PDF</Text>
+                    </>
+                  )}
+                </LinearGradient>
+              </Pressable>
+            </View>
+          </>
         ) : null}
       </View>
     </CosmicBg>
@@ -514,10 +556,36 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    minWidth: 72,
+    minWidth: 88,
     justifyContent: "center",
   },
-  savePdfTxt: { color: "#fff", fontFamily: "Nunito_700Bold", fontSize: 11 },
+  savePdfTxt: { color: "#fff", fontFamily: "Nunito_700Bold", fontSize: 10.5 },
+  connectBar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+  },
+  connectHint: {
+    fontFamily: "Nunito_500Medium",
+    fontSize: 11.5,
+    textAlign: "center",
+    lineHeight: 16,
+  },
+  connectBtn: { borderRadius: 14, overflow: "hidden" },
+  connectBtnGrad: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+  },
+  connectBtnTxt: { color: "#fff", fontFamily: "Nunito_800ExtraBold", fontSize: 16 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 12 },
   errTxt: { fontFamily: "Nunito_500Medium", fontSize: 14, textAlign: "center" },
   retryBtn: {

@@ -95,6 +95,7 @@ async function fetchLoveRealityPdf(
       ...(opts.forceRegenerate ? { "X-PDF-Layout-Refresh": "1" } : {}),
       ...(opts.forceLlm ? { "X-Force-LLM": "1" } : {}),
       ...(useClientLayout ? { "X-In-App-Report-Snapshot": "1" } : {}),
+      ...(useClientLayout ? { "X-Connect-Page-To-Pdf": "1" } : {}),
     },
     body: JSON.stringify({
       p1: opts.p1,
@@ -112,6 +113,38 @@ async function fetchLoveRealityPdf(
       ...(opts.inAppReport?.page1 ? { page1: opts.inAppReport.page1 } : {}),
     }),
     signal,
+  });
+}
+
+export async function connectLoveRealityPageToPdf(opts: {
+  user: { id: number; api_key?: string | null };
+  p1: BirthData;
+  p2: BirthData;
+  p1Name: string;
+  p2Name: string;
+  lang: string;
+  reportSnapshot: Pick<
+    LoveProReportResponse,
+    "pro_premium" | "pdf_context" | "page1"
+  >;
+}): Promise<LoveRealityProPdfDownloadResult> {
+  if (
+    !opts.reportSnapshot.pro_premium
+    || !opts.reportSnapshot.pdf_context
+    || !opts.reportSnapshot.page1
+  ) {
+    throw new Error("Report on screen is incomplete — reload the page and try again.");
+  }
+  return downloadLoveRealityProPdf({
+    user: opts.user,
+    p1: opts.p1,
+    p2: opts.p2,
+    p1Name: opts.p1Name,
+    p2Name: opts.p2Name,
+    lang: opts.lang,
+    syncWithInAppReport: true,
+    forceRegenerate: true,
+    reportSnapshot: opts.reportSnapshot,
   });
 }
 

@@ -63,14 +63,19 @@ def _short(text: str, max_len: int = 200) -> str:
     return t[: max_len - 1].rsplit(" ", 1)[0] + "…"
 
 
-def _prose_html(text: str, *, max_len: int | None = None) -> str:
+def _prose_html(text: str, *, max_len: int | None = None, lang: str = "en") -> str:
     """Preserve LLM paragraph breaks for ReportLab Paragraph."""
     t = (text or "").strip()
     if max_len and len(t) > max_len:
         t = _short(t, max_len)
     parts = [p.strip() for p in t.replace("\r\n", "\n").split("\n\n") if p.strip()]
+    use_hi = (lang or "en").lower() == "hi"
     if not parts:
-        return _safe(t)
+        return _premium_body_markup(t, lang) if use_hi else _safe(t)
+    if use_hi:
+        return "<br/><br/>".join(
+            _premium_body_markup(p.replace("\n", " "), lang) for p in parts
+        )
     return "<br/><br/>".join(_safe(p.replace("\n", " ")) for p in parts)
 
 

@@ -222,7 +222,14 @@ def register_love_reality_routes(flask_app) -> None:
 
             cache_params = _love_reality_cache_params(lang, data["p1"], data["p2"])
             client_ctx, client_page1, has_client_layout = _client_report_layout(data)
-            force_regen = _force_regenerate_requested() or has_client_layout or _in_app_report_snapshot_requested()
+            app_sections = data.get("app_sections")
+            has_app_mirror = isinstance(app_sections, list) and len(app_sections) > 0
+            force_regen = (
+                _force_regenerate_requested()
+                or has_client_layout
+                or has_app_mirror
+                or _in_app_report_snapshot_requested()
+            )
             access = _billing.check_access(user_id, _billing.PRODUCT_LOVE, cache_params)
             if not access.get("entitled"):
                 spec = _billing.catalog_for(_billing.PRODUCT_LOVE) or {}
@@ -337,6 +344,11 @@ def register_love_reality_routes(flask_app) -> None:
                     rid = client_page1.get("report_id")
                     if rid:
                         merged["report_id"] = str(rid)
+                if has_app_mirror:
+                    merged["app_sections"] = app_sections
+                    scores = data.get("scores")
+                    if isinstance(scores, dict):
+                        merged["scores"] = scores
                 pdf_bytes, render_err = _rc.safe_render(
                     "love_reality_pro",
                     lambda: render_love_reality_pro_pdf(merged, lang=lang),

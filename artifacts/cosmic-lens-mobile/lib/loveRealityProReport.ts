@@ -378,6 +378,12 @@ export function buildLoveReportSections(
   return sections;
 }
 
+export type LoveProReportFetchResult = {
+  data: LoveProReportResponse;
+  /** Server returned a saved JSON report — no LLM / no bundle rebuild. */
+  serverCacheHit: boolean;
+};
+
 export async function fetchLoveRealityProReport(opts: {
   user: { id: number; api_key?: string | null };
   p1: BirthData;
@@ -386,7 +392,7 @@ export async function fetchLoveRealityProReport(opts: {
   p2Name: string;
   lang: string;
   signal?: AbortSignal;
-}): Promise<LoveProReportResponse> {
+}): Promise<LoveProReportFetchResult> {
   const lang = coerceProPdfLang(opts.lang);
   const tz1 = opts.p1.tz ?? Math.round((opts.p1.lon! / 15) * 2) / 2;
   const tz2 = opts.p2.tz ?? Math.round((opts.p2.lon! / 15) * 2) / 2;
@@ -415,5 +421,6 @@ export async function fetchLoveRealityProReport(opts: {
       || `Report failed (${resp.status})`,
     );
   }
-  return data as LoveProReportResponse;
+  const serverCacheHit = (resp.headers.get("X-Report-Cache") || "").toLowerCase() === "hit";
+  return { data: data as LoveProReportResponse, serverCacheHit };
 }

@@ -264,10 +264,131 @@ def _cover_dashboard(s: dict, p1: dict, p2: dict, ctx: dict, lang: str) -> list[
     return out
 
 
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
+
+
+def render_love_reality_app_mirror_pdf(payload: dict, lang: str = "en") -> bytes:
+    """
+    WYSIWYG PDF — one section per in-app scroll card (same order, same text).
+    Triggered when mobile sends app_sections from buildLoveReportSections().
+    """
+    from vedic.love_reality.pdf_locale import normalize_love_reality_pdf_lang
+
+    payload = payload or {}
+    content_lang = normalize_love_reality_pdf_lang(payload.get("pdf_lang") or lang)
+    lang = love_reality_pdf_render_lang(content_lang)
+    require_devanagari_fonts(content_lang)
+    _ensure_native_pdf_fonts_registered(lang)
+
+    p1 = payload.get("p1") or {}
+    p2 = payload.get("p2") or {}
+    sections = payload.get("app_sections") or []
+    if not isinstance(sections, list):
+        sections = []
+    scores = payload.get("scores") if isinstance(payload.get("scores"), dict) else {}
+
+    s = _styles(lang)
+    H_REG, H_BOLD = _font_pair(lang)
+    buf = io.BytesIO()
+    doc = _love_reality_doc_template(
+        buf,
+        f"Love Reality Pro — {p1.get('name', '?')} & {p2.get('name', '?')}",
+        lang,
+    )
+    story: list[Any] = []
+
+    story.append(Spacer(1, 10 * mm))
+    story.append(
+        Paragraph(
+            f"<font color='{_hex(BRAND_GOLD)}'>COSMIC LENS</font>",
+            ParagraphStyle("brand", fontName=H_BOLD, fontSize=11, leading=15, alignment=TA_CENTER),
+        ),
+    )
+    story.append(_gold_rule(52))
+    story.append(
+        Paragraph(
+            "Love Reality Pro",
+            ParagraphStyle("t", fontName=H_BOLD, fontSize=20, leading=26, alignment=TA_CENTER, textColor=BRAND_PURPLE),
+        ),
+    )
+    story.append(
+        Paragraph(
+            f"{_safe(p1.get('name'))}  ·  {_safe(p2.get('name'))}",
+            ParagraphStyle("nm", fontName=H_BOLD, fontSize=16, alignment=TA_CENTER, spaceAfter=8),
+        ),
+    )
+    if scores:
+        score_bits = [
+            f"Love {int(scores.get('love') or 0)}",
+            f"Breakup {int(scores.get('breakup') or 0)}",
+            f"Loyalty {int(scores.get('loyalty') or 0)}",
+            f"Return {int(scores.get('return') or 0)}",
+            f"Future {int(scores.get('future') or 0)}",
+        ]
+        story.append(
+            Paragraph(
+                " · ".join(score_bits),
+                ParagraphStyle("sc", fontName=H_REG, fontSize=10, alignment=TA_CENTER, textColor=TEXT_MID),
+            ),
+        )
+    story.append(
+        Paragraph(
+            f"<font color='{_hex(TEXT_SOFT)}'>{datetime.utcnow().strftime('%d %B %Y')}</font>",
+            ParagraphStyle("dt", fontName=H_REG, fontSize=9, alignment=TA_CENTER, spaceBefore=10),
+        ),
+    )
+    story.append(PageBreak())
+
+    for idx, sec in enumerate(sections):
+        if not isinstance(sec, dict):
+            continue
+        title = str(sec.get("title") or "").strip()
+        if not title:
+            continue
+        body = str(sec.get("body") or "").strip()
+        bullets = sec.get("bullets") if isinstance(sec.get("bullets"), list) else None
+        table_rows = sec.get("table_rows") or sec.get("tableRows")
+        if not isinstance(table_rows, list):
+            table_rows = None
+        if not body and not bullets and not table_rows:
+            continue
+        num = idx + 1
+        story.extend(_section_page(
+            s,
+            num,
+            f"{num:02d}",
+            title,
+            str(sec.get("subtitle") or ""),
+            body,
+            lang=lang,
+            bullets=bullets,
+            table_rows=table_rows,
+        ))
+
+    while story and isinstance(story[-1], PageBreak):
+        story.pop()
+
+    story.append(Spacer(1, 10))
+    story.append(
+        Paragraph(
+            f"<font color='{_hex(TEXT_SOFT)}'>{_safe(LRL.closing_footer(lang))}</font>",
+            ParagraphStyle("foot", fontName=H_REG, fontSize=8, leading=11, alignment=TA_CENTER),
+        ),
+    )
+
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return buf.getvalue()
+
+
 def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
     from vedic.love_reality.pdf_locale import normalize_love_reality_pdf_lang
 
     payload = payload or {}
+    app_sections = payload.get("app_sections")
+    if isinstance(app_sections, list) and len(app_sections) > 0:
+        return render_love_reality_app_mirror_pdf(payload, lang=lang)
+
     content_lang = normalize_love_reality_pdf_lang(payload.get("pdf_lang") or lang)
     lang = love_reality_pdf_render_lang(content_lang)
     require_devanagari_fonts(content_lang)
@@ -282,12 +403,24 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
     bundle = payload.get("engines") or payload
     if isinstance(bundle, dict) and not bundle.get("chart_snapshot"):
         bundle = enrich_bundle_for_pdf(bundle)
-    pro = sanitize_love_reality_pro_premium(
-        payload.get("pro_premium") or {},
-        bundle if isinstance(bundle, dict) else None,
-        lang=content_lang,
-    )
-    if content_lang == "hi":
+
+    client_ctx = payload.get("pdf_context")
+    client_page1 = payload.get("page1")
+    use_client_layout = isinstance(client_ctx, dict) and bool(client_ctx)
+
+    if use_client_layout:
+        pro = payload.get("pro_premium") or {}
+        if not isinstance(pro, dict):
+            pro = {}
+        ctx = client_ctx
+    else:
+        pro = sanitize_love_reality_pro_premium(
+            payload.get("pro_premium") or {},
+            bundle if isinstance(bundle, dict) else None,
+            lang=content_lang,
+        )
+        ctx = build_love_reality_pdf_v2_context(bundle, pro, p1, p2, lang)
+    if not use_client_layout and content_lang == "hi":
         from milan_pdf import _has_indic
 
         verdict_sample = str(pro.get("verdict") or "")[:120]
@@ -296,7 +429,6 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
             verdict_sample,
             _has_indic(verdict_sample),
         )
-    ctx = build_love_reality_pdf_v2_context(bundle, pro, p1, p2, lang)
     s = _styles(lang)
 
     buf = io.BytesIO()
@@ -327,7 +459,12 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
         story.extend(_cover_dashboard(s, p1, p2, ctx, lang))
     else:
         _last_page1_style = "premium-dashboard"
-        page1_data = build_love_reality_page1_data(ctx, bundle, pro, p1, p2, report_id=report_id or None)
+        if isinstance(client_page1, dict) and client_page1:
+            page1_data = client_page1
+        else:
+            page1_data = build_love_reality_page1_data(
+                ctx, bundle, pro, p1, p2, report_id=report_id or None,
+            )
         story.extend(render_premium_page1_flowables(page1_data, lang=lang))
         if render_verdict_page_flowables is not None:
             story.extend(render_verdict_page_flowables(page1_data, lang=lang))

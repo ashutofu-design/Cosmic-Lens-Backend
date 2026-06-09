@@ -19,6 +19,7 @@ import type {
   LovePdfContext,
   LoveProPremium,
   LoveProReportResponse,
+  LoveReportSection,
 } from "@/lib/loveRealityProReport";
 import type { BirthData } from "@/types";
 
@@ -79,12 +80,16 @@ async function fetchLoveRealityPdf(
       pdf_context?: LovePdfContext;
       page1?: LovePage1Dashboard;
     };
+    /** Exact scroll-view sections — PDF mirrors these 1:1 (WYSIWYG). */
+    appSections?: LoveReportSection[];
+    scores?: LoveProReportResponse["scores"];
   },
   signal: AbortSignal,
 ): Promise<Response> {
   const useClientLayout = Boolean(
     opts.inAppReport?.pdf_context && opts.inAppReport?.page1,
   );
+  const useAppMirror = Boolean(opts.appSections && opts.appSections.length > 0);
   return fetch(`${API_BASE}/api/love-reality/pro-pdf`, {
     method: "POST",
     headers: {
@@ -96,6 +101,7 @@ async function fetchLoveRealityPdf(
       ...(opts.forceLlm ? { "X-Force-LLM": "1" } : {}),
       ...(useClientLayout ? { "X-In-App-Report-Snapshot": "1" } : {}),
       ...(useClientLayout ? { "X-Connect-Page-To-Pdf": "1" } : {}),
+      ...(useAppMirror ? { "X-App-Mirror-Pdf": "1" } : {}),
     },
     body: JSON.stringify({
       p1: opts.p1,
@@ -111,6 +117,8 @@ async function fetchLoveRealityPdf(
         ? { pdf_context: opts.inAppReport.pdf_context }
         : {}),
       ...(opts.inAppReport?.page1 ? { page1: opts.inAppReport.page1 } : {}),
+      ...(useAppMirror ? { app_sections: opts.appSections } : {}),
+      ...(opts.scores ? { scores: opts.scores } : {}),
     }),
     signal,
   });
@@ -127,6 +135,9 @@ export async function connectLoveRealityPageToPdf(opts: {
     LoveProReportResponse,
     "pro_premium" | "pdf_context" | "page1"
   >;
+  /** Sections currently shown on screen — PDF will mirror these exactly. */
+  appSections: LoveReportSection[];
+  scores: LoveProReportResponse["scores"];
 }): Promise<LoveRealityProPdfDownloadResult> {
   if (
     !opts.reportSnapshot.pro_premium
@@ -134,6 +145,9 @@ export async function connectLoveRealityPageToPdf(opts: {
     || !opts.reportSnapshot.page1
   ) {
     throw new Error("Report on screen is incomplete — reload the page and try again.");
+  }
+  if (!opts.appSections?.length) {
+    throw new Error("No report sections on screen — reload the page and try again.");
   }
   return downloadLoveRealityProPdf({
     user: opts.user,
@@ -145,6 +159,8 @@ export async function connectLoveRealityPageToPdf(opts: {
     syncWithInAppReport: true,
     forceRegenerate: true,
     reportSnapshot: opts.reportSnapshot,
+    appSections: opts.appSections,
+    scores: opts.scores,
   });
 }
 
@@ -169,6 +185,9 @@ export async function downloadLoveRealityProPdf(opts: {
     LoveProReportResponse,
     "pro_premium" | "pdf_context" | "page1"
   >;
+  /** Mirror exact scroll sections in PDF (WYSIWYG). */
+  appSections?: LoveReportSection[];
+  scores?: LoveProReportResponse["scores"];
   /** @deprecated use reportSnapshot */
   proPremium?: LoveProPremium;
 }): Promise<LoveRealityProPdfDownloadResult> {
@@ -206,6 +225,8 @@ export async function downloadLoveRealityProPdf(opts: {
         forceRegenerate,
         forceLlm,
         inAppReport,
+        appSections: syncPage ? opts.appSections : undefined,
+        scores: syncPage ? opts.scores : undefined,
       },
       ctrl.signal,
     );
@@ -220,6 +241,8 @@ export async function downloadLoveRealityProPdf(opts: {
           forceRegenerate: true,
           forceLlm: false,
           inAppReport,
+          appSections: opts.appSections,
+          scores: opts.scores,
         },
         ctrl.signal,
       );

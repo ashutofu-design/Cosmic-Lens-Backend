@@ -356,6 +356,8 @@ export default function LoveRealityProReportScreen() {
           pdf_context: report.pdf_context,
           page1: report.page1,
         },
+        appSections: buildLoveReportSections(report, lang),
+        scores: report.scores,
       });
       Alert.alert(
         "PDF connected",

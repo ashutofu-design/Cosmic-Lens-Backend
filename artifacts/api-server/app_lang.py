@@ -1,4 +1,4 @@
-                                                                                                                                                                                                    """Supported Cosmic Lens UI languages (mobile + API)."""
+"""Supported Cosmic Lens UI languages (mobile + API)."""
 
 from __future__ import annotations
 

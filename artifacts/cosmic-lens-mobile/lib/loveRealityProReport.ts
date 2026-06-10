@@ -3,7 +3,7 @@
  */
 import { API_BASE } from "@/lib/apiConfig";
 import { pdfAuthHeaders } from "@/lib/coupleReportCheckoutFlow";
-import { packLovePerson } from "@/lib/loveRealityProPdfDownload";
+import { packLovePerson } from "@/lib/loveRealityPack";
 import { coerceProPdfLang, type ProPdfLangCode } from "@/lib/proPdfLang";
 import type { BirthData } from "@/types";
 
@@ -102,6 +102,14 @@ export type LoveProReportResponse = {
   pro_premium: LoveProPremium;
   pdf_context?: LovePdfContext;
   page1?: LovePage1Dashboard;
+  /** Server-built scroll sections (Update Report) — render these, not a local rebuild. */
+  app_sections?: Array<{
+    id: string;
+    body?: string | null;
+    bullets?: string[] | null;
+  }>;
+  /** hi | hn | en | en_mismatch — server check after localize. */
+  content_script?: string;
 };
 
 export type LoveReportSection = {
@@ -111,7 +119,48 @@ export type LoveReportSection = {
   body?: string;
   bullets?: string[];
   tableRows?: string[][];
+  /** PDF section number when this card maps to a numbered PDF chapter (e.g. root_cause = 8). */
+  pdfSectionNo?: number;
 };
+
+/** In-app badge numbers aligned with Love Reality PDF chapters (not scroll index). */
+const PDF_SECTION_NO: Record<string, number> = {
+  blueprint_vs: 5,
+  moon: 7,
+  root_cause: 8,
+};
+
+export function loveReportPdfSectionNo(sectionId: string): number | undefined {
+  return PDF_SECTION_NO[String(sectionId || "").toLowerCase()];
+}
+
+function annotatePdfSectionNo(sections: LoveReportSection[]): LoveReportSection[] {
+  return sections.map(sec => {
+    const pdfNo = loveReportPdfSectionNo(sec.id);
+    return pdfNo != null ? { ...sec, pdfSectionNo: pdfNo } : sec;
+  });
+}
+
+function breakupChapterBody(report: LoveProReportResponse): string {
+  const ch = (report.pro_premium?.chapters || []).find(
+    c => String(c.key || "").trim().toLowerCase() === "breakup",
+  );
+  return String(ch?.chapter_body || ch?.full_read || "").trim();
+}
+
+/** Prefer LLM breakup chapter for Section 8 when app_sections root_cause is stale/thin. */
+export function resolveSection8RootCauseBody(report: LoveProReportResponse): string {
+  const breakup = breakupChapterBody(report);
+  const fromCtx = String(report.pdf_context?.page6_root_cause || "").trim();
+  const fromSec = (report.app_sections || [])
+    .find(s => String(s.id || "").toLowerCase() === "root_cause");
+  const root = String(fromSec?.body || "").trim() || fromCtx;
+  const wc = (t: string) => t.split(/\s+/).filter(Boolean).length;
+  if (wc(breakup) >= 80 && (wc(root) < 80 || root.length < breakup.length * 0.5)) {
+    return breakup;
+  }
+  return root || breakup;
+}
 
 function pushSection(sections: LoveReportSection[], sec: LoveReportSection | null | undefined) {
   if (!sec) return;
@@ -392,11 +441,6 @@ export {
   type LoveReportChangeKind,
   type LoveReportCacheMeta,
 } from "@/lib/loveRealityReportRevision";
-export {
-  needsLoveReportLlmRefresh,
-  reportContentMatchesLang,
-  reportSummaryMatchesLang,
-} from "@/lib/loveRealityReportLang";
 
 export type LoveReportBuildMode = "full" | "page";
 
@@ -703,13 +747,6 @@ export function buildLoveReportSectionsForPage(
       body: (bp.part2 || bp.part1 || "").trim() || undefined,
     });
 
-    pushSection(sections, {
-      id: "root_cause",
-      title: labels.rootCause,
-      subtitle: labels.rootCauseSub,
-      body: ctx.page6_root_cause,
-    });
-
     const moon = ctx.page5_moon || {};
     const moonBody = (moon.body || "").trim() || undefined;
     pushSection(sections, {
@@ -718,11 +755,76 @@ export function buildLoveReportSectionsForPage(
       subtitle: labels.moonSub,
       body: moonBody,
     });
+
+    pushSection(sections, {
+      id: "root_cause",
+      title: labels.rootCause,
+      subtitle: labels.rootCauseSub,
+      body: resolveSection8RootCauseBody(report) || ctx.page6_root_cause,
+    });
   }
 
-  if (sections.length > 0) return filterInAppReportSections(sections);
+  if (sections.length > 0) return annotatePdfSectionNo(filterInAppReportSections(sections));
 
   return filterInAppReportSections(buildLoveReportSectionsFull(report, lang));
+}
+
+/**
+ * Prefer server `app_sections` from pro-report (post Update / LLM).
+ * Falls back to local build when older API omits the field.
+ */
+export function buildReportSectionsFromPayload(
+  report: LoveProReportResponse,
+  lang: ProPdfLangCode,
+): LoveReportSection[] {
+  const local = buildLoveReportSections(report, lang, { mode: "page" });
+  const server = report.app_sections;
+  if (!Array.isArray(server) || server.length === 0) {
+    return filterInAppReportSections(local);
+  }
+  const labels = L(lang);
+  const meta: Record<string, { title: string; subtitle?: string }> = {
+    exec_summary: { title: labels.execSummary, subtitle: labels.relSummary },
+    scorecard: { title: labels.scorecard },
+    verdict: { title: labels.verdict, subtitle: labels.verdictSub },
+    recommendations: { title: labels.recommendations, subtitle: labels.recommendationsSub },
+    deep_connection: { title: labels.deepCombined, subtitle: labels.deepSub },
+    blueprint_vs: { title: labels.blueprintVs, subtitle: labels.blueprintVsSub },
+    root_cause: { title: labels.rootCause, subtitle: labels.rootCauseSub },
+    moon: { title: labels.moon, subtitle: labels.moonSub },
+  };
+  const localById = new Map(local.map(s => [s.id.toLowerCase(), s]));
+  const sections: LoveReportSection[] = [];
+  const seen = new Set<string>();
+  for (const row of server) {
+    if (!row || typeof row !== "object") continue;
+    const id = String(row.id || "").trim();
+    if (!id) continue;
+    seen.add(id.toLowerCase());
+    const fallback = localById.get(id.toLowerCase());
+    let body = String(row.body || "").trim() || fallback?.body;
+    if (id.toLowerCase() === "root_cause") {
+      const resolved = resolveSection8RootCauseBody(report);
+      if (resolved) body = resolved;
+    }
+    const bullets = Array.isArray(row.bullets) && row.bullets.length
+      ? row.bullets.map(b => String(b).trim()).filter(Boolean)
+      : fallback?.bullets;
+    const m = meta[id];
+    pushSection(sections, {
+      id,
+      title: m?.title || fallback?.title || id,
+      subtitle: m?.subtitle || fallback?.subtitle,
+      body: body || undefined,
+      bullets: bullets?.length ? bullets : undefined,
+    });
+  }
+  for (const loc of local) {
+    if (seen.has(loc.id.toLowerCase())) continue;
+    pushSection(sections, loc);
+  }
+  if (sections.length > 0) return annotatePdfSectionNo(filterInAppReportSections(sections));
+  return annotatePdfSectionNo(filterInAppReportSections(local));
 }
 
 /** @param mode `"page"` = clean in-app scroll · `"full"` = complete PDF mirror (default) */
@@ -756,10 +858,12 @@ export async function fetchLoveRealityProReport(opts: {
    * Use when PDF layout ver changed on server.
    */
   layoutRefresh?: boolean;
-  /** Fresh OpenAI polish in hn/hi/en — skips server JSON cache. */
+  /** Fresh OpenAI polish — skips polish snapshot; only when true. */
   forceLlm?: boolean;
   /** User tapped Update Report — full LLM regen, never layout-only cache. */
   fullUpdate?: boolean;
+  /** Re-run Hindi translate on saved JSON — no LLM (fast retry after Update). */
+  relocalizeOnly?: boolean;
   /** Bust CDN/proxy caches on force refresh. */
   cacheBust?: number;
 }): Promise<LoveProReportFetchResult> {
@@ -768,7 +872,8 @@ export async function fetchLoveRealityProReport(opts: {
   const tz2 = opts.p2.tz ?? Math.round((opts.p2.lon! / 15) * 2) / 2;
   const fullUpdate = Boolean(opts.fullUpdate);
   const layoutRefresh = Boolean(opts.layoutRefresh) && !fullUpdate;
-  const forceLlm = Boolean(opts.forceLlm || fullUpdate || lang !== "en");
+  const relocalizeOnly = Boolean(opts.relocalizeOnly) && !fullUpdate;
+  const forceLlm = Boolean(opts.forceLlm) && !relocalizeOnly;
   const cacheBust = opts.cacheBust ?? (fullUpdate ? Date.now() : 0);
   const bustQs = cacheBust ? `?_=${cacheBust}` : "";
 
@@ -778,17 +883,19 @@ export async function fetchLoveRealityProReport(opts: {
       ...pdfAuthHeaders(opts.user),
       Accept: "application/json",
       ...(layoutRefresh ? { "X-PDF-Layout-Refresh": "1" } : {}),
-      ...(layoutRefresh || forceLlm ? { "X-Force-Regenerate": "1" } : {}),
+      ...(fullUpdate ? { "X-Force-Regenerate": "1" } : {}),
       ...(forceLlm ? { "X-Force-LLM": "1" } : {}),
       ...(fullUpdate ? { "X-Love-Report-Full-Update": "1" } : {}),
+      ...(relocalizeOnly ? { "X-Relocalize-Sections": "1" } : {}),
     },
     body: JSON.stringify({
       p1: { ...packLovePerson(opts.p1, opts.p1Name), tz: tz1 },
       p2: { ...packLovePerson(opts.p2, opts.p2Name), tz: tz2 },
       lang,
-      ...(layoutRefresh || forceLlm ? { force_regenerate: true } : {}),
+      ...(fullUpdate ? { force_regenerate: true } : {}),
       ...(forceLlm ? { force_llm: true } : {}),
       ...(fullUpdate ? { force_update: true } : {}),
+      ...(relocalizeOnly ? { relocalize_sections: true } : {}),
       ...(cacheBust ? { cache_bust: cacheBust } : {}),
     }),
     signal: opts.signal,

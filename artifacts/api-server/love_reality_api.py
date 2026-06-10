@@ -6,7 +6,7 @@ from flask import Response, jsonify, request
 # Bump when PDF layout/renderer changes — invalidates stale server-side report cache.
 LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v24_moon_sync_llm"
 # Bump to drop all saved Hindi pro-report + polish snapshots (hi only).
-LOVE_REALITY_HI_CACHE_VER = "hi_purge_v8_root_sync"
+LOVE_REALITY_HI_CACHE_VER = "hi_purge_v9_s8_order"
 
 
 def love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
@@ -886,13 +886,24 @@ def register_love_reality_routes(flask_app) -> None:
                     from vedic.love_reality.love_section_polish import _breakup_chapter_body
 
                     bu = _breakup_chapter_body(payload.get("pro_premium") or {})
+                    root_body = ""
+                    for sec in payload.get("app_sections") or []:
+                        if isinstance(sec, dict) and str(sec.get("id") or "").lower() == "root_cause":
+                            root_body = str(sec.get("body") or "").strip()
+                            break
+                    if len(root_body.split()) < 80:
+                        root_body = bu or str(
+                            (payload.get("pdf_context") or {}).get("page6_root_cause") or ""
+                        ).strip()
                     payload = {
                         **payload,
                         "hi_cache_ver": LOVE_REALITY_HI_CACHE_VER,
                         "section8_debug": {
-                            "gate_ver": "v8",
+                            "gate_ver": "v9",
                             "breakup_words": len(bu.split()),
                             "breakup_deva": len(re.findall(r"[\u0900-\u097F]", bu)),
+                            "root_words": len(root_body.split()),
+                            "root_deva": len(re.findall(r"[\u0900-\u097F]", root_body)),
                             "polish_source": payload.get("polish_source"),
                         },
                     }

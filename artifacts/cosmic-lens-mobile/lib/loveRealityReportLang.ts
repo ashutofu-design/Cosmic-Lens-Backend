@@ -207,19 +207,11 @@ export function section8HiLoadGate(
     };
   }
 
-  const dbg = (report as {
-    section8_debug?: { gate_ver?: string; breakup_deva?: number; breakup_words?: number };
-  }).section8_debug;
-  if (
-    dbg?.gate_ver
-    && (dbg.breakup_deva ?? 0) >= 24
-    && (dbg.breakup_words ?? 0) >= SECTION8_MIN_WORDS
-  ) {
-    return { ok: true, reason: "" };
-  }
-
   const breakup = section8BreakupChapterText(report);
-  const root = section8RootCauseText(report);
+  let root = section8RootCauseText(report);
+  if (wordCount(root) < SECTION8_MIN_WORDS && wordCount(breakup) >= SECTION8_MIN_WORDS) {
+    root = breakup;
+  }
 
   const s8Meta = (
     report as { pro_premium?: { _meta?: { section8_breakup?: { source?: string; attempt?: string | number } } } }
@@ -271,6 +263,7 @@ export function section8HiLoadGate(
 
   if (!proseFullyHindi(breakup)) {
     const deva = (breakup.match(DEVANAGARI) || []).length;
+    const dbg = (report as { section8_debug?: { breakup_deva?: number } }).section8_debug;
     const srvDeva = dbg?.breakup_deva;
     return {
       ok: false,
@@ -278,6 +271,26 @@ export function section8HiLoadGate(
         "Report load nahi hua — Section 8 abhi English/mixed hai, poori देवनागरी Hindi nahi "
         + `(Devanagari chars: ${deva}${srvDeva != null ? `, server=${srvDeva}` : ""}). `
         + "«रिपोर्ट अपडेट करें» dubao.",
+    };
+  }
+
+  const rootWc = wordCount(root);
+  if (rootWc < SECTION8_MIN_WORDS) {
+    return {
+      ok: false,
+      reason:
+        `Report load nahi hua — Section 8 (मूल वजह) app mein sync nahi hua `
+        + `(${rootWc} words, kam se kam ${SECTION8_MIN_WORDS} chahiye). `
+        + "«रिपोर्ट अपडेट करें» dubao.",
+    };
+  }
+  if (!proseFullyHindi(root)) {
+    const deva = (root.match(DEVANAGARI) || []).length;
+    return {
+      ok: false,
+      reason:
+        "Report load nahi hua — Section 8 (मूल वजह) abhi English/mixed hai "
+        + `(Devanagari chars: ${deva}). «रिपोर्ट अपडेट करें» dubao.`,
     };
   }
 

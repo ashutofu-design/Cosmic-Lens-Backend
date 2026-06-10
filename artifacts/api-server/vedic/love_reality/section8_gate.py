@@ -96,6 +96,18 @@ def section8_hi_load_gate(payload: dict[str, Any]) -> tuple[bool, str]:
                 "Report load nahi hua — Section 8 LLM text abhi poori देवनागरी Hindi nahi hai "
                 f"(Devanagari chars: {deva}). Mixed/English lines hain — Update dubara dabayein."
             )
+        if _word_count(root) < _SECTION8_MIN_WORDS:
+            return False, (
+                "Report load nahi hua — Section 8 (मूल वजह) app mein sync nahi hua "
+                f"({_word_count(root)} words, kam se kam {_SECTION8_MIN_WORDS} chahiye). "
+                "«रिपोर्ट अपडेट करें» dubara dabayein."
+            )
+        if not prose_fully_hindi(root):
+            deva = len(re.findall(r"[\u0900-\u097F]", root))
+            return False, (
+                "Report load nahi hua — Section 8 (मूल वजह) abhi English/mixed hai "
+                f"(Devanagari chars: {deva}). «रिपोर्ट अपडेट करें» dubao."
+            )
     except Exception:
         from vedic.love_reality.pdf_text_safe import prose_matches_lang
 
@@ -103,6 +115,11 @@ def section8_hi_load_gate(payload: dict[str, Any]) -> tuple[bool, str]:
             return False, (
                 "Report load nahi hua — Section 8 Hindi script match nahi karti. "
                 "Update Report dubara dabayein."
+            )
+        if _word_count(root) < _SECTION8_MIN_WORDS or not prose_matches_lang(root, "hi"):
+            return False, (
+                "Report load nahi hua — Section 8 (मूल वजह) app mein sync nahi hua. "
+                "«रिपोर्ट अपडेट करें» dubara dabayein."
             )
 
     return True, ""

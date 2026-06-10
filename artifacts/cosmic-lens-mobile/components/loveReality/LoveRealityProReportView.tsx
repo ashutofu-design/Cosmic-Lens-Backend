@@ -4,7 +4,7 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import type { LoveReportSection } from "@/lib/loveRealityProReport";
-import { loveRealityReportLabels } from "@/lib/loveRealityProReport";
+import { loveRealityReportLabels, loveReportPdfSectionNo } from "@/lib/loveRealityProReport";
 import type { ProPdfLangCode } from "@/lib/proPdfLang";
 
 type Props = {
@@ -38,9 +38,6 @@ function sectionTheme(sec: LoveReportSection, lang: ProPdfLangCode): SectionThem
   }
   if (id.includes("scorecard") || id.includes("metric") || id.includes("core")) {
     return { accent: "#EC4899", soft: "rgba(236,72,153,0.14)", icon: "bar-chart-2", chip: labels.chipScores };
-  }
-  if (id.includes("pdf_teaser")) {
-    return { accent: "#9333EA", soft: "rgba(147,51,234,0.14)", icon: "file-text", chip: labels.chipFullPdf };
   }
   if (id.includes("deep_connection")) {
     return { accent: "#6366F1", soft: "rgba(99,102,241,0.14)", icon: "heart", chip: labels.chipDeepDive };
@@ -182,11 +179,12 @@ function SectionCard({
   const isVerdict = sec.id.includes("verdict");
   const isMetrics = sec.id.includes("metric") || sec.id.includes("core");
   const cosmicScoreMatch = sec.subtitle?.match(/(\d+)\s*\/\s*100/);
+  const badgeNo = sec.pdfSectionNo ?? loveReportPdfSectionNo(sec.id) ?? idx + 1;
   const inner = (
     <View style={[s.cardInner, { backgroundColor: isDark ? "rgba(15,10,31,0.72)" : "rgba(255,255,255,0.96)" }]}>
       <View style={s.cardHead}>
         <View style={[s.numBadge, { backgroundColor: theme.soft, borderColor: `${theme.accent}44` }]}>
-          <Text style={[s.secNum, { color: theme.accent }]}>{String(idx + 1).padStart(2, "0")}</Text>
+          <Text style={[s.secNum, { color: theme.accent }]}>{String(badgeNo).padStart(2, "0")}</Text>
         </View>
         <View style={{ flex: 1, gap: 4 }}>
           <View style={s.titleRow}>

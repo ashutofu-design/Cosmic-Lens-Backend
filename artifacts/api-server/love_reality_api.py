@@ -513,8 +513,13 @@ def register_love_reality_routes(flask_app) -> None:
                 }), 402
 
             import love_reality_report_json_cache as _json_cache
+            import love_reality_polish_snapshot as _snap
 
             json_cache_params = _json_cache.cache_params(user_id, lang, data["p1"], data["p2"])
+            snap_params = _snap.snapshot_params(user_id, lang, data["p1"], data["p2"])
+            if _force_llm_requested() or _force_regenerate_requested():
+                _json_cache.invalidate(json_cache_params)
+                _snap.invalidate(snap_params)
             if not _force_llm_requested() and not _force_regenerate_requested():
                 cached_json = _json_cache.load(json_cache_params)
                 if cached_json:

@@ -69,6 +69,16 @@ def load(params: dict[str, Any]) -> dict[str, Any] | None:
         return None
 
 
+def invalidate(params: dict[str, Any]) -> None:
+    sid = snapshot_id(params)
+    p = _path(sid)
+    try:
+        if os.path.isfile(p):
+            os.remove(p)
+    except Exception as exc:
+        log.warning("[love_polish_snapshot] invalidate failed %s: %s", sid[:12], exc)
+
+
 def save(params: dict[str, Any], pro_premium: dict[str, Any]) -> None:
     if not isinstance(pro_premium, dict) or not pro_premium:
         return

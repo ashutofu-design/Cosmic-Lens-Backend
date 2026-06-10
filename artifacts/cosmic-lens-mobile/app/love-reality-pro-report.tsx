@@ -270,15 +270,25 @@ export default function LoveRealityProReportScreen() {
   const [pdfConnecting, setPdfConnecting] = useState(false);
   const [updatingReport, setUpdatingReport] = useState(false);
   const [forceUpdateRun, setForceUpdateRun] = useState(false);
+  const [reportEpoch, setReportEpoch] = useState(0);
   const loadedRef = useRef(false);
   const fetchDoneRef = useRef(false);
   const fastCacheRef = useRef(false);
+  const showReportTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const finishLoad = useCallback((data: LoveProReportResponse, cached: boolean) => {
     fetchDoneRef.current = true;
     fastCacheRef.current = cached;
     setFromCache(cached);
     setReport(data);
+    setFetching(false);
+    setLoadDone(true);
+    setLoadPct(100);
+    if (showReportTimerRef.current) clearTimeout(showReportTimerRef.current);
+    showReportTimerRef.current = setTimeout(() => {
+      setShowReport(true);
+      showReportTimerRef.current = null;
+    }, cached ? 300 : 650);
   }, []);
 
   const load = useCallback(async (opts?: { forceUpdate?: boolean }) => {
@@ -289,6 +299,14 @@ export default function LoveRealityProReportScreen() {
       return;
     }
     const forceUpdate = Boolean(opts?.forceUpdate);
+    if (showReportTimerRef.current) {
+      clearTimeout(showReportTimerRef.current);
+      showReportTimerRef.current = null;
+    }
+    if (forceUpdate) {
+      setReport(null);
+      setReportEpoch(n => n + 1);
+    }
     setFetching(true);
     setLoadPct(0);
     setLoadDone(false);
@@ -336,15 +354,11 @@ export default function LoveRealityProReportScreen() {
             polishSource: resolved.payload.polish_source,
           });
           finishLoad(resolved.payload, true);
-          setUpdatingReport(false);
-          setForceUpdateRun(false);
           return;
         }
 
         if (resolved.payload && !mustLlm && resolved.changeKind === "none") {
           finishLoad(resolved.payload, true);
-          setUpdatingReport(false);
-          setForceUpdateRun(false);
           return;
         }
       }
@@ -398,6 +412,10 @@ export default function LoveRealityProReportScreen() {
     }
   }, [user, primaryProfile, partnerProfile, lang, finishLoad, labels]);
 
+  useEffect(() => () => {
+    if (showReportTimerRef.current) clearTimeout(showReportTimerRef.current);
+  }, []);
+
   useEffect(() => {
     loadedRef.current = false;
     fetchDoneRef.current = false;
@@ -429,24 +447,10 @@ export default function LoveRealityProReportScreen() {
     return () => clearInterval(tick);
   }, [fetching]);
 
-  useEffect(() => {
-    if (!fetchDoneRef.current || !report) return;
-    setFetching(false);
-    setLoadDone(true);
-    setLoadPct(100);
-  }, [report]);
-
-  useEffect(() => {
-    if (!loadDone || loadPct < 100 || !report) return;
-    const delay = fastCacheRef.current ? 300 : 650;
-    const t = setTimeout(() => setShowReport(true), delay);
-    return () => clearTimeout(t);
-  }, [loadDone, loadPct, report]);
-
   const handleUpdateReport = useCallback(() => {
-    if (updatingReport || fetching) return;
+    if (updatingReport) return;
     void load({ forceUpdate: true });
-  }, [updatingReport, fetching, load]);
+  }, [updatingReport, load]);
 
   const handleConnectToPdf = useCallback(async () => {
     if (
@@ -589,13 +593,13 @@ export default function LoveRealityProReportScreen() {
           <>
             <Pressable
               onPress={handleUpdateReport}
-              disabled={updatingReport || fetching}
+              disabled={updatingReport}
               style={[
                 s.updateBar,
                 {
                   backgroundColor: C.isDark ? "rgba(139,92,246,0.18)" : "rgba(139,92,246,0.1)",
                   borderColor: C.isDark ? "rgba(167,139,250,0.45)" : "rgba(139,92,246,0.35)",
-                  opacity: updatingReport || fetching ? 0.65 : 1,
+                  opacity: updatingReport ? 0.65 : 1,
                 },
               ]}
             >
@@ -619,6 +623,7 @@ export default function LoveRealityProReportScreen() {
               showsVerticalScrollIndicator={false}
             >
               <LoveRealityProReportView
+                key={`lr-report-${reportEpoch}`}
                 isDark={C.isDark}
                 lang={lang}
                 p1Name={report.p1_name}

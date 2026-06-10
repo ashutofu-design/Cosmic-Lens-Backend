@@ -56,6 +56,16 @@ def load(params: dict[str, Any]) -> dict[str, Any] | None:
         return None
 
 
+def invalidate(params: dict[str, Any]) -> None:
+    sid = rc._hash_params(params)
+    p = _path(sid)
+    try:
+        if os.path.isfile(p):
+            os.remove(p)
+    except Exception as exc:
+        log.warning("[love_report_json_cache] invalidate failed %s: %s", sid[:12], exc)
+
+
 def save(params: dict[str, Any], payload: dict[str, Any]) -> None:
     if not isinstance(payload, dict) or not payload.get("ok"):
         return

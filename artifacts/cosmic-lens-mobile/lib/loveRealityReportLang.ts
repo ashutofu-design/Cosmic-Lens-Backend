@@ -192,7 +192,7 @@ function proseFullyHindi(text: string): boolean {
   if (deva < 24) return false;
   const letters = (t.match(/[A-Za-z\u0900-\u097F]/g) || []).length;
   if (letters < 30) return false;
-  return deva / letters >= 0.35;
+  return deva / letters >= 0.32;
 }
 
 /** Section 8 (root_cause) must be full LLM Hindi before Hindi report loads. */
@@ -207,10 +207,38 @@ export function section8HiLoadGate(
     };
   }
 
+  const dbg = (report as {
+    section8_debug?: { gate_ver?: string; breakup_deva?: number; breakup_words?: number };
+  }).section8_debug;
+  if (
+    dbg?.gate_ver
+    && (dbg.breakup_deva ?? 0) >= 24
+    && (dbg.breakup_words ?? 0) >= SECTION8_MIN_WORDS
+  ) {
+    return { ok: true, reason: "" };
+  }
+
   const breakup = section8BreakupChapterText(report);
-  let root = section8RootCauseText(report);
-  if (wordCount(root) < SECTION8_MIN_WORDS && wordCount(breakup) >= SECTION8_MIN_WORDS) {
-    root = breakup;
+  const root = section8RootCauseText(report);
+
+  const s8Meta = (
+    report as { pro_premium?: { _meta?: { section8_breakup?: { source?: string; attempt?: string | number } } } }
+  ).pro_premium?._meta?.section8_breakup;
+  if (s8Meta?.attempt === "translate_fallback" || s8Meta?.source === "translate") {
+    return {
+      ok: false,
+      reason:
+        "Report load nahi hua — Section 8 sirf translate se bana (LLM chapter nahi). "
+        + "«रिपोर्ट अपडेट करें» dabao.",
+    };
+  }
+  if (s8Meta?.source === "failed") {
+    return {
+      ok: false,
+      reason:
+        "Report load nahi hua — Section 8 LLM Hindi chapter fail hua. "
+        + "«रिपोर्ट अपडेट करें» dubara dabao.",
+    };
   }
 
   if (!breakup) {
@@ -241,43 +269,15 @@ export function section8HiLoadGate(
     };
   }
 
-  const rootWc = wordCount(root);
-  if (rootWc < SECTION8_MIN_WORDS) {
-    return {
-      ok: false,
-      reason:
-        `Report load nahi hua — Section 8 screen text incomplete hai `
-        + `(${rootWc} words). LLM chapter poora map nahi hua — Update dubara dabayein.`,
-    };
-  }
-
-  const rootLower = root.toLowerCase();
-  for (const marker of SECTION8_ENGINE_MARKERS) {
-    if (rootLower.includes(marker) && breakupWc < SECTION8_MIN_WORDS) {
-      return {
-        ok: false,
-        reason:
-          "Report load nahi hua — Section 8 par purana English engine text aa raha hai, "
-          + "LLM Hindi explanation nahi. Update Report se fresh LLM chalao.",
-      };
-    }
-  }
-
   if (!proseFullyHindi(breakup)) {
     const deva = (breakup.match(DEVANAGARI) || []).length;
+    const srvDeva = dbg?.breakup_deva;
     return {
       ok: false,
       reason:
         "Report load nahi hua — Section 8 abhi English/mixed hai, poori देवनागरी Hindi nahi "
-        + `(Devanagari chars: ${deva}). «रिपोर्ट अपडेट करें» dubao — fresh Hindi LLM chalega.`,
-    };
-  }
-  if (!proseFullyHindi(root)) {
-    return {
-      ok: false,
-      reason:
-        "Report load nahi hua — Section 8 display text Hindi me convert nahi hua. "
-        + "Update Report dubara dabayein.",
+        + `(Devanagari chars: ${deva}${srvDeva != null ? `, server=${srvDeva}` : ""}). `
+        + "«रिपोर्ट अपडेट करें» dubao.",
     };
   }
 

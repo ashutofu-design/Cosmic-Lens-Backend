@@ -54,6 +54,20 @@ def section8_hi_load_gate(payload: dict[str, Any]) -> tuple[bool, str]:
     if _word_count(root) < _SECTION8_MIN_WORDS and _word_count(breakup) >= _SECTION8_MIN_WORDS:
         root = breakup
 
+    pro = payload.get("pro_premium") if isinstance(payload.get("pro_premium"), dict) else {}
+    s8_meta = (pro.get("_meta") or {}).get("section8_breakup") if isinstance(pro.get("_meta"), dict) else {}
+    if isinstance(s8_meta, dict):
+        if s8_meta.get("attempt") == "translate_fallback" or s8_meta.get("source") == "translate":
+            return False, (
+                "Report load nahi hua — Section 8 sirf English→Hindi translate se bana "
+                "(LLM chapter nahi). «रिपोर्ट अपडेट करें» dabao."
+            )
+        if s8_meta.get("source") == "failed":
+            return False, (
+                "Report load nahi hua — Section 8 LLM 3 baar try hua par देवनागरी Hindi "
+                "chapter nahi mila. «रिपोर्ट अपडेट करें» dubara dabao."
+            )
+
     if not breakup:
         if not root:
             return False, (
@@ -73,21 +87,6 @@ def section8_hi_load_gate(payload: dict[str, Any]) -> tuple[bool, str]:
             "OpenAI poora paragraph nahi likh paya — Update dubara try karein."
         )
 
-    root_wc = _word_count(root)
-    if root_wc < _SECTION8_MIN_WORDS:
-        return False, (
-            f"Report load nahi hua — Section 8 screen text incomplete hai "
-            f"({root_wc} words). LLM chapter poora map nahi hua — Update dubara dabayein."
-        )
-
-    root_lower = root.lower()
-    for marker in _ENGINE_FALLBACK_MARKERS:
-        if marker in root_lower and breakup_wc < _SECTION8_MIN_WORDS:
-            return False, (
-                "Report load nahi hua — Section 8 par purana English engine text aa raha hai, "
-                "LLM Hindi explanation nahi. Update Report se fresh LLM chalao."
-            )
-
     try:
         from i18n_summary import prose_fully_hindi
 
@@ -97,15 +96,10 @@ def section8_hi_load_gate(payload: dict[str, Any]) -> tuple[bool, str]:
                 "Report load nahi hua — Section 8 LLM text abhi poori देवनागरी Hindi nahi hai "
                 f"(Devanagari chars: {deva}). Mixed/English lines hain — Update dubara dabayein."
             )
-        if not prose_fully_hindi(root):
-            return False, (
-                "Report load nahi hua — Section 8 display text Hindi me convert nahi hua. "
-                "Update Report dubara dabayein."
-            )
     except Exception:
         from vedic.love_reality.pdf_text_safe import prose_matches_lang
 
-        if not prose_matches_lang(breakup, "hi") or not prose_matches_lang(root, "hi"):
+        if not prose_matches_lang(breakup, "hi"):
             return False, (
                 "Report load nahi hua — Section 8 Hindi script match nahi karti. "
                 "Update Report dubara dabayein."

@@ -6,7 +6,7 @@ from flask import Response, jsonify, request
 # Bump when PDF layout/renderer changes — invalidates stale server-side report cache.
 LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v24_moon_sync_llm"
 # Bump to drop all saved Hindi pro-report + polish snapshots (hi only).
-LOVE_REALITY_HI_CACHE_VER = "hi_purge_v7_s8_llm_retry"
+LOVE_REALITY_HI_CACHE_VER = "hi_purge_v8_root_sync"
 
 
 def love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
@@ -890,7 +890,7 @@ def register_love_reality_routes(flask_app) -> None:
                         **payload,
                         "hi_cache_ver": LOVE_REALITY_HI_CACHE_VER,
                         "section8_debug": {
-                            "gate_ver": "v7",
+                            "gate_ver": "v8",
                             "breakup_words": len(bu.split()),
                             "breakup_deva": len(re.findall(r"[\u0900-\u097F]", bu)),
                             "polish_source": payload.get("polish_source"),

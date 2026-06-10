@@ -305,18 +305,33 @@ def _localize_scorecard_line(line: str, lang: str) -> str:
     return _localize_prose_block(out, lang, force=True)
 
 
+def _breakup_hi_ready_text(pro: dict) -> str:
+    """LLM Hindi breakup chapter — not English engine fallback."""
+    breakup = _chapter_body(pro, "breakup")
+    if _word_count(breakup) < 80:
+        return ""
+    try:
+        from i18n_summary import prose_fully_hindi
+
+        if prose_fully_hindi(breakup):
+            return breakup
+    except Exception:
+        if len(re.findall(r"[\u0900-\u097F]", breakup)) >= 24:
+            return breakup
+    return ""
+
+
 def _sync_root_cause_from_breakup(
     sections: list[dict[str, Any]],
     ctx: dict[str, Any],
     pro: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Map LLM breakup chapter → Section 8 (root_cause) when page6/context missed it."""
-    breakup = _chapter_body(pro, "breakup")
+    """Map LLM breakup chapter → Section 8 (root_cause) — always replace English engine text."""
+    breakup = _breakup_hi_ready_text(pro)
     if not breakup:
         return sections, ctx
     ctx_out = dict(ctx or {})
-    if _word_count(str(ctx_out.get("page6_root_cause") or "")) < 80:
-        ctx_out["page6_root_cause"] = breakup
+    ctx_out["page6_root_cause"] = breakup
     out: list[dict[str, Any]] = []
     patched = False
     for row in sections:
@@ -324,8 +339,7 @@ def _sync_root_cause_from_breakup(
             continue
         sec = dict(row)
         if str(sec.get("id") or "").lower() == "root_cause":
-            if _word_count(str(sec.get("body") or "")) < 80:
-                sec["body"] = breakup
+            sec["body"] = breakup
             patched = True
         out.append(sec)
     if not patched:

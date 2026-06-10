@@ -415,11 +415,13 @@ export default function LoveRealityProReportScreen() {
           serverCacheHit = fresh.serverCacheHit;
         }
 
-        for (let attempt = 0; attempt < 2 && lang !== "en"; attempt += 1) {
-          if (!reportNeedsHindiRetry(data, lang)) break;
-          const retry = await fetchReport("relocalize");
-          data = retry.data;
-          serverCacheHit = retry.serverCacheHit;
+        if (!forceUpdate) {
+          for (let attempt = 0; attempt < 2 && lang !== "en"; attempt += 1) {
+            if (!reportNeedsHindiRetry(data, lang)) break;
+            const retry = await fetchReport("relocalize");
+            data = retry.data;
+            serverCacheHit = retry.serverCacheHit;
+          }
         }
 
         if (!reportHasDisplayableContent(data)) {
@@ -428,16 +430,6 @@ export default function LoveRealityProReportScreen() {
           setUpdatingReport(false);
           setForceUpdateRun(false);
           return;
-        }
-        if (lang === "hi") {
-          const s8 = section8HiLoadGate(data);
-          if (!s8.ok) {
-            setError(s8.reason);
-            setFetching(false);
-            setUpdatingReport(false);
-            setForceUpdateRun(false);
-            return;
-          }
         }
         const hindiOk = reportHindiFullyReady(data, lang);
         await saveLoveReportCache(cacheOpts, data);

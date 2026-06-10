@@ -762,6 +762,7 @@ def register_love_reality_routes(flask_app) -> None:
                     breakup_chapter_word_count,
                     bust_love_polish_section_caches,
                     ensure_breakup_section8_llm,
+                    hi_breakup_force_devanagari,
                 )
 
                 if lang in ("hi", "hn"):
@@ -786,7 +787,11 @@ def register_love_reality_routes(flask_app) -> None:
                         lang,
                         force_llm=force_full,
                     )
+                if lang == "hi":
+                    pro = hi_breakup_force_devanagari(pro, bundle)
                 pro = sanitize_love_reality_pro_premium(pro, bundle, lang=lang)
+                if lang == "hi":
+                    pro = hi_breakup_force_devanagari(pro, bundle)
                 from vedic.love_reality.pdf_data_v2 import build_love_reality_pdf_v2_context
                 from vedic.love_reality.pdf_page1_data import (
                     build_love_reality_page1_data,
@@ -852,6 +857,12 @@ def register_love_reality_routes(flask_app) -> None:
                             force_llm=True,
                         )
                         payload = _build_payload(pro, polish_source)
+                if lang == "hi":
+                    pro_hi = hi_breakup_force_devanagari(
+                        payload.get("pro_premium") if isinstance(payload.get("pro_premium"), dict) else {},
+                        bundle,
+                    )
+                    payload = _build_payload(pro_hi, polish_source)
                 payload = _with_app_sections(payload, lang)
                 if lang == "hi":
                     payload = {**payload, "hi_cache_ver": LOVE_REALITY_HI_CACHE_VER}

@@ -1530,11 +1530,47 @@ def ensure_breakup_section8_llm(
                 "words": _word_count(new_body),
             }
             return pro
+    body = _breakup_chapter_body(pro)
+    if lang == "hi" and body and not _breakup_text_hi_ok(body):
+        try:
+            from i18n_summary import localize_text_force
+
+            translated = localize_text_force(body, "hi")
+            if _breakup_text_hi_ok(translated):
+                _upsert_chapter(pro, "breakup", translated, "")
+                pro.setdefault("_meta", {})["section8_breakup"] = {
+                    **last_meta,
+                    "attempt": "translate_fallback",
+                    "words": _word_count(translated),
+                }
+                return pro
+        except Exception as exc:
+            log.warning("[breakup] hi translate fallback failed: %s", exc)
     pro.setdefault("_meta", {})["section8_breakup"] = {
         **last_meta,
         "attempts": max_attempts,
         "words": _word_count(_breakup_chapter_body(pro)),
     }
+    return pro
+
+
+def hi_breakup_force_devanagari(pro: dict, bundle: dict | None = None) -> dict:
+    """Last resort — translate English breakup chapter to देवनागरी for Section 8."""
+    if not isinstance(pro, dict):
+        return pro or {}
+    if breakup_chapter_hi_ready(pro):
+        return pro
+    body = _breakup_chapter_body(pro)
+    if _word_count(body) < 40:
+        return pro
+    try:
+        from i18n_summary import localize_text_force
+
+        translated = localize_text_force(body, "hi")
+        if _breakup_text_hi_ok(translated):
+            _upsert_chapter(pro, "breakup", translated, "")
+    except Exception as exc:
+        log.warning("[breakup] hi_breakup_force_devanagari failed: %s", exc)
     return pro
 
 

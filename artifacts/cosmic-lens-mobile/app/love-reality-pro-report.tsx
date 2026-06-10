@@ -20,14 +20,14 @@ import { LoveRealityProReportView } from "@/components/loveReality/LoveRealityPr
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import {
-  buildLoveReportSections,
-  filterInAppReportSections,
+  buildReportSectionsFromPayload,
   fetchLoveRealityProReport,
   loveRealityReportLabels,
   type LoveProReportResponse,
 } from "@/lib/loveRealityProReport";
 import {
   clearLoveReportCacheAllLangs,
+  purgeHiDeviceCacheIfNeeded,
   deviceCacheNeedsServerRefresh,
   markLoveReportPdfSynced,
   resolveLoveReportCache,
@@ -37,7 +37,14 @@ import {
 import type { LoveReportChangeKind } from "@/lib/loveRealityReportRevision";
 import { connectLoveRealityPageToPdf } from "@/lib/loveRealityProPdfDownload";
 import { coerceProPdfLang, type ProPdfLangCode } from "@/lib/proPdfLang";
-import { reportSummaryMatchesLang } from "@/lib/loveRealityReportLang";
+import {
+  reportHasDisplayableContent,
+  reportHindiFullyReady,
+  section8HiLoadGate,
+  section8HiLoadReady,
+  reportNeedsHindiRetry,
+  reportSummaryMatchesLang,
+} from "@/lib/loveRealityReportLang";
 
 const LOVE_REALITY_LAST_LANG_KEY = "cosmic.loveRealityPro.lastLang";
 
@@ -304,8 +311,9 @@ export default function LoveRealityProReportScreen() {
       showReportTimerRef.current = null;
     }
     if (forceUpdate) {
-      setReport(null);
       setReportEpoch(n => n + 1);
+    } else {
+      setReport(null);
     }
     setFetching(true);
     setLoadPct(0);
@@ -317,7 +325,7 @@ export default function LoveRealityProReportScreen() {
     fastCacheRef.current = false;
     setFromCache(false);
     setCacheChange("missing");
-    setLlmRefresh(forceUpdate || lang !== "en");
+    setLlmRefresh(forceUpdate);
     setForceUpdateRun(forceUpdate);
     if (forceUpdate) setUpdatingReport(true);
 
@@ -331,6 +339,15 @@ export default function LoveRealityProReportScreen() {
     };
 
     try {
+      if (lang === "hi") {
+        await purgeHiDeviceCacheIfNeeded({
+          userId: cacheOpts.userId,
+          p1: cacheOpts.p1,
+          p2: cacheOpts.p2,
+          p1Name: cacheOpts.p1Name,
+          p2Name: cacheOpts.p2Name,
+        });
+      }
       if (forceUpdate) {
         await clearLoveReportCacheAllLangs({
           userId: cacheOpts.userId,
@@ -341,11 +358,11 @@ export default function LoveRealityProReportScreen() {
         });
       }
 
-      let mustLlm = forceUpdate || lang !== "en";
+      let mustLlm = forceUpdate;
       if (!forceUpdate) {
         const resolved = await resolveLoveReportCache(cacheOpts);
         setCacheChange(resolved.changeKind);
-        mustLlm = mustLlm || deviceCacheNeedsServerRefresh(resolved.payload, resolved.meta, lang);
+        mustLlm = deviceCacheNeedsServerRefresh(resolved.payload, resolved.meta, lang);
         setLlmRefresh(mustLlm);
 
         if (
@@ -363,15 +380,19 @@ export default function LoveRealityProReportScreen() {
         }
 
         if (resolved.payload && !mustLlm && resolved.changeKind === "none") {
-          finishLoad(resolved.payload, true);
-          return;
+          if (lang === "hi" && !section8HiLoadReady(resolved.payload, lang)) {
+            // Stale device cache — server cache/rebuild, not silent full LLM update.
+          } else {
+            finishLoad(resolved.payload, true);
+            return;
+          }
         }
       }
 
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 240000);
+      const timer = setTimeout(() => ctrl.abort(), 360000);
       try {
-        const fetchReport = (fullUpdate: boolean, cacheBust: number) => fetchLoveRealityProReport({
+        const fetchReport = (mode: "full" | "relocalize" | "cache") => fetchLoveRealityProReport({
           user,
           p1: primaryProfile.birthData,
           p2: partnerProfile.birthData,
@@ -379,35 +400,56 @@ export default function LoveRealityProReportScreen() {
           p2Name: partnerProfile.name || "Partner",
           lang,
           signal: ctrl.signal,
-          fullUpdate,
-          cacheBust,
-          layoutRefresh: !fullUpdate && lang !== "en",
-          forceLlm: fullUpdate || mustLlm,
+          fullUpdate: mode === "full",
+          forceLlm: mode === "full",
+          relocalizeOnly: mode === "relocalize",
+          cacheBust: mode === "full" ? Date.now() : 0,
+          layoutRefresh: false,
         });
 
-        const bust = Date.now();
-        let { data, serverCacheHit } = await fetchReport(Boolean(forceUpdate), bust);
+        let { data, serverCacheHit } = await fetchReport(forceUpdate || mustLlm ? "full" : "cache");
 
-        for (let attempt = 0; attempt < 2 && forceUpdate; attempt += 1) {
-          const stale =
-            serverCacheHit
-            || data.polish_source === "polish_snapshot"
-            || (lang === "hi" && !reportSummaryMatchesLang(data, lang));
-          if (!stale) break;
-          const retry = await fetchReport(true, Date.now());
+        if (lang !== "en" && data.polish_source === "polish_snapshot") {
+          const fresh = await fetchReport("full");
+          data = fresh.data;
+          serverCacheHit = fresh.serverCacheHit;
+        }
+
+        for (let attempt = 0; attempt < 2 && lang !== "en"; attempt += 1) {
+          if (!reportNeedsHindiRetry(data, lang)) break;
+          const retry = await fetchReport("relocalize");
           data = retry.data;
           serverCacheHit = retry.serverCacheHit;
         }
 
-        if (lang !== "en" && !reportSummaryMatchesLang(data, lang)) {
-          setLlmRefresh(true);
-          const retry = await fetchReport(true, Date.now());
-          data = retry.data;
+        if (!reportHasDisplayableContent(data)) {
+          setError("Report empty — dubara Update dabayein.");
+          setFetching(false);
+          setUpdatingReport(false);
+          setForceUpdateRun(false);
+          return;
         }
+        if (lang === "hi") {
+          const s8 = section8HiLoadGate(data);
+          if (!s8.ok) {
+            setError(s8.reason);
+            setFetching(false);
+            setUpdatingReport(false);
+            setForceUpdateRun(false);
+            return;
+          }
+        }
+        const hindiOk = reportHindiFullyReady(data, lang);
         await saveLoveReportCache(cacheOpts, data);
         finishLoad(data, false);
         if (forceUpdate) {
-          Alert.alert(labels.updateDone, labels.updateHint, [{ text: labels.ok }]);
+          const script = (data.content_script || "").trim();
+          const hint = hindiOk
+            ? labels.updateHint
+            : script === "hi_partial"
+              ? "Report update hua — kuch lines abhi English hain. 30 sec baad dubara Update dabayein."
+              : "Report update hua. Agar English dikhe to dubara Update dabayein.";
+          Alert.alert(labels.updateDone, hint, [{ text: labels.ok }]);
         }
       } finally {
         clearTimeout(timer);
@@ -463,10 +505,8 @@ export default function LoveRealityProReportScreen() {
   }, [updatingReport, load]);
 
   const sections = useMemo(
-    () => (report
-      ? filterInAppReportSections(buildLoveReportSections(report, lang, { mode: "page" }))
-      : []),
-    [report, lang],
+    () => (report ? buildReportSectionsFromPayload(report, lang) : []),
+    [report, lang, reportEpoch],
   );
 
   const handleConnectToPdf = useCallback(async () => {
@@ -550,7 +590,7 @@ export default function LoveRealityProReportScreen() {
     }
   }, [user, primaryProfile, partnerProfile, lang, pdfConnecting, report, labels, sections]);
 
-  const isLoadingUi = fetching || (loadDone && !showReport);
+  const isLoadingUi = fetching && !report;
 
   return (
     <CosmicBg>
@@ -591,12 +631,15 @@ export default function LoveRealityProReportScreen() {
               onPress={() => {
                 loadedRef.current = false;
                 fetchDoneRef.current = false;
-                load();
+                const section8Blocked = /Section 8|section8_not_ready/i.test(error);
+                load({ forceUpdate: section8Blocked });
                 loadedRef.current = true;
               }}
               style={s.retryBtn}
             >
-              <Text style={s.retryTxt}>{labels.retry}</Text>
+              <Text style={s.retryTxt}>
+                {/Section 8|section8_not_ready/i.test(error) ? labels.updateReport : labels.retry}
+              </Text>
             </Pressable>
           </View>
         ) : isLoadingUi ? (

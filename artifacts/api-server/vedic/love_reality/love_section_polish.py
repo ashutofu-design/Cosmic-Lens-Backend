@@ -23,7 +23,7 @@ from vedic.compat.premium_chapters import CHAPTER_BODY_KEY, normalize_pro_pdf_la
 
 log = logging.getLogger(__name__)
 
-_ASSEMBLY_VER = "lr_sections_v13_hi_localize_fix"
+_ASSEMBLY_VER = "lr_sections_v17_section8_llm"
 _CHAPTER_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_CHAPTER_MIN_WORDS", "95"))
 _HARMONY_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_HARMONY_MIN_WORDS", "130"))
 
@@ -1404,6 +1404,92 @@ def polish_love_reality_harmony_only(
         parse_fn=_parse,
         tel=tel,
     )
+
+
+def _breakup_chapter_body(pro: dict) -> str:
+    for ch in pro.get("chapters") or []:
+        if not isinstance(ch, dict):
+            continue
+        if str(ch.get("key") or "").strip().lower() == "breakup":
+            return str(ch.get(CHAPTER_BODY_KEY) or ch.get("chapter_body") or "").strip()
+    return ""
+
+
+def breakup_chapter_word_count(pro: dict) -> int:
+    return _word_count(_breakup_chapter_body(pro))
+
+
+def _bust_chapter_scope_file_cache(bundle: dict, lang: str, chapter_key: str) -> None:
+    """Drop cached empty/short chapter_breakup LLM response so retry hits OpenAI."""
+    scope = f"chapter_{chapter_key}"
+    model = _section_model(f"LOVE_REALITY_CHAPTER_{chapter_key.upper()}_MODEL")
+    system = _build_chapter_system_prompt(chapter_key, polish_content_lang(lang))
+    prompt_fp = _fingerprint(system)
+    cache_key = _section_cache_key(bundle, polish_content_lang(lang), model, scope, prompt_fp)
+    cache_path = os.path.join(_cache_dir(), f"{scope}_{cache_key}.json")
+    try:
+        if os.path.isfile(cache_path):
+            os.remove(cache_path)
+    except OSError as exc:
+        log.warning("[%s] cache bust failed: %s", scope, exc)
+
+
+def ensure_breakup_section8_llm(
+    bundle: dict,
+    pro: dict,
+    lang: str,
+    *,
+    force_llm: bool = False,
+) -> dict:
+    """Section 08 (Core Root Cause) — LLM breakup chapter if missing or too thin."""
+    if not isinstance(pro, dict):
+        return pro or {}
+    body = _breakup_chapter_body(pro)
+    if _word_count(body) >= 80 and not force_llm:
+        return pro
+    try:
+        from vedic.love_reality.pdf_text_safe import prose_matches_lang
+
+        if (
+            not force_llm
+            and body
+            and lang in ("hi", "hn")
+            and prose_matches_lang(body, lang)
+        ):
+            return pro
+    except Exception:
+        pass
+
+    work = dict(bundle)
+    work["_lr_root_cause"] = _build_root_cause_anchor(bundle, lang)
+    work["_lr_prior_digest"] = _build_prior_sections_digest(pro, lang)
+    last_meta: dict[str, Any] = {}
+    max_attempts = max(1, int(os.environ.get("LOVE_REALITY_SECTION8_ATTEMPTS", "3")))
+    for attempt in range(max_attempts):
+        if attempt > 0:
+            _bust_chapter_scope_file_cache(bundle, lang, "breakup")
+        hit = polish_love_reality_chapter_only(
+            work,
+            "breakup",
+            lang=lang,
+            force_llm=True,
+        )
+        last_meta = hit.get("_meta") if isinstance(hit.get("_meta"), dict) else {}
+        new_body = str(hit.get("chapter_body") or "").strip()
+        if _word_count(new_body) >= 80:
+            _upsert_chapter(pro, "breakup", new_body, str(hit.get("grounding") or ""))
+            pro.setdefault("_meta", {})["section8_breakup"] = {
+                **last_meta,
+                "attempt": attempt + 1,
+                "words": _word_count(new_body),
+            }
+            return pro
+    pro.setdefault("_meta", {})["section8_breakup"] = {
+        **last_meta,
+        "attempts": max_attempts,
+        "words": _word_count(_breakup_chapter_body(pro)),
+    }
+    return pro
 
 
 def _upsert_chapter(pro: dict, key: str, body: str, grounding: str = "") -> None:

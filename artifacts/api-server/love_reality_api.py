@@ -5,6 +5,8 @@ from flask import Response, jsonify, request
 
 # Bump when PDF layout/renderer changes — invalidates stale server-side report cache.
 LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v24_moon_sync_llm"
+# Bump to drop all saved Hindi pro-report + polish snapshots (hi only).
+LOVE_REALITY_HI_CACHE_VER = "hi_purge_v2_section8_llm"
 
 
 def love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
@@ -14,11 +16,70 @@ def love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
     cp = _rc.couple_cache_params(lang, p1, p2)
     cp["pdf_layout"] = LOVE_REALITY_PDF_LAYOUT_VER
     cp["polish_assembly"] = _ASSEMBLY_VER
+    if (lang or "").strip().lower() == "hi":
+        cp["hi_cache_ver"] = LOVE_REALITY_HI_CACHE_VER
     return cp
 
 
 def _love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
     return love_reality_cache_params(lang, p1, p2)
+
+
+_PURGED_HI_CACHE_VER: str | None = None
+
+
+def _purge_hi_server_caches_once() -> None:
+    """One-time disk purge when LOVE_REALITY_HI_CACHE_VER bumps."""
+    global _PURGED_HI_CACHE_VER
+    if _PURGED_HI_CACHE_VER == LOVE_REALITY_HI_CACHE_VER:
+        return
+    try:
+        import love_reality_report_json_cache as _jcache
+        import love_reality_polish_snapshot as _psnap
+
+        n_json = _jcache.purge_all_hi_reports()
+        n_snap = _psnap.purge_all_hi_snapshots()
+        print(
+            f"[love_reality] hi cache purge ver={LOVE_REALITY_HI_CACHE_VER} "
+            f"json={n_json} snap={n_snap}",
+            flush=True,
+        )
+    except Exception as exc:
+        try:
+            print(f"[love_reality] hi cache purge failed: {exc}", flush=True)
+        except Exception:
+            pass
+    _PURGED_HI_CACHE_VER = LOVE_REALITY_HI_CACHE_VER
+
+
+def _hi_section8_block_response(payload: dict):
+    """412 when Section 8 LLM explanation not ready — exact reason for mobile."""
+    from vedic.love_reality.section8_gate import section8_hi_load_gate
+
+    ok, reason = section8_hi_load_gate(payload)
+    if ok:
+        return None
+    pro = payload.get("pro_premium") if isinstance(payload.get("pro_premium"), dict) else {}
+    llm_meta = (pro.get("_meta") or {}).get("section8_breakup") if isinstance(pro.get("_meta"), dict) else {}
+    llm_reason = str((llm_meta or {}).get("reason") or "").strip()
+    if llm_reason:
+        reason = f"{reason} (LLM: {llm_reason})"
+    return jsonify({
+        "error": "section8_not_ready",
+        "detail": reason,
+        "section": "root_cause",
+        "section8_llm": llm_meta or None,
+    }), 412
+
+
+def _hi_saved_report_stale(payload: dict) -> bool:
+    if not isinstance(payload, dict):
+        return True
+    if payload.get("polish_source") == "hn_translate":
+        return True
+    if payload.get("hi_from_hn"):
+        return True
+    return payload.get("hi_cache_ver") != LOVE_REALITY_HI_CACHE_VER
 
 
 def _pdf_layout_headers(*, cache_hit: bool) -> dict[str, str]:
@@ -80,10 +141,15 @@ def _pro_report_force_llm(data: dict | None = None) -> bool:
     flag = str(payload.get("force_update") or "").strip().lower()
     if flag in ("1", "true", "yes", "on"):
         return True
-    bust = payload.get("cache_bust")
-    if bust is not None and str(bust).strip() not in ("", "0"):
-        return True
     return False
+
+
+def _relocalize_sections_requested() -> bool:
+    """Fast path — re-translate app_sections from saved JSON, no LLM."""
+    hdr = (request.headers.get("X-Relocalize-Sections") or "").strip().lower()
+    body = request.get_json(silent=True) or {}
+    flag = str(body.get("relocalize_sections") or "").strip().lower()
+    return hdr in ("1", "true", "yes", "on") or flag in ("1", "true", "yes", "on")
 
 
 def _pdf_render_only_requested() -> bool:
@@ -108,6 +174,34 @@ def _in_app_report_snapshot_requested() -> bool:
     body = request.get_json(silent=True) or {}
     flag = str(body.get("in_app_report_snapshot") or "").strip().lower()
     return hdr in ("1", "true", "yes", "on") or flag in ("1", "true", "yes", "on")
+
+
+def _with_app_sections(payload: dict, lang: str) -> dict:
+    """In-app scroll sections — backfill LLM gaps + Hindi labels + localize."""
+    p1 = payload.get("page1")
+    ctx = payload.get("pdf_context")
+    pro = payload.get("pro_premium")
+    if not isinstance(p1, dict) or not isinstance(ctx, dict):
+        return payload
+    try:
+        from vedic.love_reality.app_report_sections import build_localized_app_sections
+
+        sections, script, p1_out, ctx_out = build_localized_app_sections(
+            p1, ctx, pro if isinstance(pro, dict) else {}, lang
+        )
+        return {
+            **payload,
+            "page1": p1_out,
+            "pdf_context": ctx_out,
+            "app_sections": sections,
+            "content_script": script,
+        }
+    except Exception as exc:
+        try:
+            print(f"[love_reality_pro_report] app_sections build failed: {exc}", flush=True)
+        except Exception:
+            pass
+        return {**payload, "content_script": "unknown"}
 
 
 def _client_report_layout(data: dict) -> tuple[dict | None, dict | None, bool]:
@@ -171,7 +265,20 @@ def _resolve_pro_premium(
     if not force_llm:
         cached = _snap.load(snap_params)
         if cached:
-            return cached, "polish_snapshot"
+            if lang in ("hn", "hi"):
+                from vedic.love_reality.pdf_text_safe import prose_matches_lang
+
+                verdict = str(cached.get("verdict") or "")
+                if not prose_matches_lang(verdict, lang):
+                    cached = None
+            if cached and lang == "hi":
+                from vedic.love_reality.love_section_polish import breakup_chapter_word_count
+
+                if breakup_chapter_word_count(cached) < 80:
+                    cached = None
+                    force_llm = True
+            if cached:
+                return cached, "polish_snapshot"
 
     if render_only:
         return None, "render_only_miss"
@@ -564,57 +671,51 @@ def register_love_reality_routes(flask_app) -> None:
 
             import love_reality_report_json_cache as _json_cache
             import love_reality_polish_snapshot as _snap
+            import report_cache as _rc
 
             json_cache_params = _json_cache.cache_params(user_id, lang, data["p1"], data["p2"])
             snap_params = _snap.snapshot_params(user_id, lang, data["p1"], data["p2"])
+
+            if lang == "hi":
+                _purge_hi_server_caches_once()
+
             force_full = _pro_report_force_llm(data)
+            relocalize_only = _relocalize_sections_requested() and not force_full
             if force_full:
                 _json_cache.invalidate(json_cache_params)
                 _snap.invalidate(snap_params)
+            if relocalize_only:
+                cached_json = _json_cache.load(json_cache_params)
+                if cached_json and lang == "hi" and _hi_saved_report_stale(cached_json):
+                    cached_json = None
+                if cached_json:
+                    payload_out = _with_app_sections(cached_json, lang)
+                    blocked = _hi_section8_block_response(payload_out)
+                    if blocked:
+                        _json_cache.invalidate(json_cache_params)
+                        _snap.invalidate(snap_params)
+                        return blocked
+                    resp = jsonify(payload_out)
+                    resp.headers["X-Report-Cache"] = "relocalize"
+                    resp.headers["X-Content-Script"] = str(payload_out.get("content_script") or "")
+                    return resp
             if not force_full:
                 cached_json = _json_cache.load(json_cache_params)
+                if cached_json and lang == "hi" and _hi_saved_report_stale(cached_json):
+                    _json_cache.invalidate(json_cache_params)
+                    _snap.invalidate(snap_params)
+                    cached_json = None
                 if cached_json:
-                    from vedic.love_reality.pdf_text_safe import love_pro_payload_matches_lang
-
-                    if not love_pro_payload_matches_lang(cached_json, lang):
-                        cached_json = None
-                    elif lang in ("hn", "hi"):
-                        from vedic.love_reality.pdf_page1_data import _localize_page1_dashboard
-
-                        p1_cached = cached_json.get("page1")
-                        if isinstance(p1_cached, dict):
-                            summary = " ".join([
-                                str(p1_cached.get("relationship_summary") or ""),
-                                str(p1_cached.get("verdict") or ""),
-                            ])
-                            import re
-
-                            already_local = (
-                                lang == "hi"
-                                and len(re.findall(r"[\u0900-\u097F]", summary)) >= 24
-                            ) or (
-                                lang == "hn"
-                                and summary
-                                and not re.search(r"[\u0900-\u097F]", summary[:400])
-                                and re.search(
-                                    r"\b(aap|rishte|kya|hai|hain|nahi)\b",
-                                    summary,
-                                    re.I,
-                                )
-                            )
-                            if not already_local:
-                                cached_json = {
-                                    **cached_json,
-                                    "page1": _localize_page1_dashboard(p1_cached, lang),
-                                }
-                                if not love_pro_payload_matches_lang(cached_json, lang):
-                                    cached_json = None
-                if cached_json:
-                    resp = jsonify(cached_json)
-                    resp.headers["X-Report-Cache"] = "hit"
-                    return resp
-
-            import report_cache as _rc
+                    payload_out = _with_app_sections(cached_json, lang)
+                    blocked = _hi_section8_block_response(payload_out)
+                    if blocked:
+                        _json_cache.invalidate(json_cache_params)
+                        _snap.invalidate(snap_params)
+                    else:
+                        resp = jsonify(payload_out)
+                        resp.headers["X-Report-Cache"] = "hit"
+                        resp.headers["X-Content-Script"] = str(payload_out.get("content_script") or "")
+                        return resp
 
             try:
                 bundle = compute_love_reality_bundle(
@@ -643,15 +744,44 @@ def register_love_reality_routes(flask_app) -> None:
                         "error": "polish_snapshot_required",
                         "detail": "No saved report text for this couple yet.",
                     }), 412
+                from vedic.love_reality.love_section_polish import (
+                    breakup_chapter_word_count,
+                    ensure_breakup_section8_llm,
+                )
+                from vedic.love_reality.premium_polish import bust_love_polish_all_caches
+
+                if lang in ("hi", "hn"):
+                    for attempt in range(3):
+                        pro = ensure_breakup_section8_llm(
+                            bundle,
+                            pro,
+                            lang,
+                            force_llm=True,
+                        )
+                        if breakup_chapter_word_count(pro) >= 80:
+                            break
+                        if attempt < 2:
+                            bust_love_polish_all_caches(bundle, lang)
+                else:
+                    pro = ensure_breakup_section8_llm(
+                        bundle,
+                        pro,
+                        lang,
+                        force_llm=force_full,
+                    )
                 pro = sanitize_love_reality_pro_premium(pro, bundle, lang=lang)
                 from vedic.love_reality.pdf_data_v2 import build_love_reality_pdf_v2_context
-                from vedic.love_reality.pdf_page1_data import build_love_reality_page1_data
+                from vedic.love_reality.pdf_page1_data import (
+                    build_love_reality_page1_data,
+                    localize_love_pdf_context,
+                )
                 from vedic.love_reality.pdf_text_safe import love_pro_payload_matches_lang
 
                 def _build_payload(pro_block: dict, source: str) -> dict:
                     pdf_ctx = build_love_reality_pdf_v2_context(
                         bundle, pro_block, data["p1"], data["p2"], lang=lang
                     )
+                    pdf_ctx = localize_love_pdf_context(pdf_ctx, lang)
                     p1_data = build_love_reality_page1_data(
                         pdf_ctx, bundle, pro_block, data["p1"], data["p2"], lang=lang
                     )
@@ -698,14 +828,27 @@ def register_love_reality_routes(flask_app) -> None:
                     )
                     if pro_retry:
                         pro = sanitize_love_reality_pro_premium(pro_retry, bundle, lang=lang)
+                        pro = ensure_breakup_section8_llm(
+                            bundle,
+                            pro,
+                            lang,
+                            force_llm=True,
+                        )
                         payload = _build_payload(pro, polish_source)
+                payload = _with_app_sections(payload, lang)
+                if lang == "hi":
+                    payload = {**payload, "hi_cache_ver": LOVE_REALITY_HI_CACHE_VER}
                 if lang in ("hn", "hi") and not love_pro_payload_matches_lang(payload, lang):
-                    resp = jsonify({
-                        "error": "love_reality_pro_report_failed",
-                        "detail": f"Report text did not match language={lang} after LLM — retry Update Report.",
-                    })
-                    resp.headers["X-Content-Lang-Mismatch"] = lang
-                    return resp, 412
+                    payload = {
+                        **payload,
+                        "lang_mismatch_recovered": True,
+                        "content_script": payload.get("content_script") or (
+                            "hi_partial" if lang == "hi" else "en_mismatch"
+                        ),
+                    }
+                blocked = _hi_section8_block_response(payload)
+                if blocked:
+                    return blocked
                 if not force_full:
                     _json_cache.save(json_cache_params, payload)
                     _rc.invalidate(user_id, _billing.PRODUCT_LOVE, cache_params)
@@ -714,6 +857,8 @@ def register_love_reality_routes(flask_app) -> None:
                 resp = jsonify(payload)
                 resp.headers["X-Report-Cache"] = "miss"
                 resp.headers["X-Polish-Source"] = polish_source
+                resp.headers["X-Report-Lang"] = lang
+                resp.headers["X-Content-Script"] = str(payload.get("content_script") or "")
                 if force_full:
                     resp.headers["X-Love-Report-Full-Update"] = "1"
                 return resp

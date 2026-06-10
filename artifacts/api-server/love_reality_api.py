@@ -6,7 +6,7 @@ from flask import Response, jsonify, request
 # Bump when PDF layout/renderer changes — invalidates stale server-side report cache.
 LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v24_moon_sync_llm"
 # Bump to drop all saved Hindi pro-report + polish snapshots (hi only).
-LOVE_REALITY_HI_CACHE_VER = "hi_purge_v10_s8_effective"
+LOVE_REALITY_HI_CACHE_VER = "hi_purge_v11_moon_llm"
 
 
 def love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
@@ -799,6 +799,8 @@ def register_love_reality_routes(flask_app) -> None:
                     breakup_chapter_word_count,
                     bust_love_polish_section_caches,
                     ensure_breakup_section8_llm,
+                    ensure_moon_sync_section7_llm,
+                    moon_sync_narrative_hi_ready,
                     strip_non_hindi_breakup_chapter,
                 )
 
@@ -811,8 +813,14 @@ def register_love_reality_routes(flask_app) -> None:
                             lang,
                             force_llm=True,
                         )
+                        pro = ensure_moon_sync_section7_llm(
+                            bundle,
+                            pro,
+                            lang,
+                            force_llm=True,
+                        )
                         if lang == "hi":
-                            if breakup_chapter_hi_ready(pro):
+                            if breakup_chapter_hi_ready(pro) and moon_sync_narrative_hi_ready(pro):
                                 break
                         elif breakup_chapter_word_count(pro) >= 80:
                             break
@@ -820,6 +828,12 @@ def register_love_reality_routes(flask_app) -> None:
                             bust_love_polish_section_caches(bundle, lang)
                 else:
                     pro = ensure_breakup_section8_llm(
+                        bundle,
+                        pro,
+                        lang,
+                        force_llm=force_full,
+                    )
+                    pro = ensure_moon_sync_section7_llm(
                         bundle,
                         pro,
                         lang,

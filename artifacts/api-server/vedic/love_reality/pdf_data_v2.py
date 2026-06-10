@@ -310,11 +310,7 @@ def build_love_reality_pdf_v2_context(
     moon_narr = str(pro.get("moon_sync_narrative") or "").strip()
     if len(moon_narr.split()) < 45:
         if lang == "hi":
-            moon_narr = (
-                "षष्ठाष्टक (६-८ राशि चंद्र टकराव) — भावनात्मक लय मेल नहीं खाती।"
-                if shash
-                else "चंद्र संकेत सहज भावनात्मक लय देते हैं — तनाव के ट्रिगर पर ध्यान दें।"
-            )
+            moon_narr = ""
         elif lang == "hn":
             moon_narr = (
                 "Shashtashtak (6-8 sign Moon clash) — emotional rhythm out of sync."

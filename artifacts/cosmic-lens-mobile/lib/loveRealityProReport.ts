@@ -27,6 +27,7 @@ export type LoveProPremium = {
   hidden_truth?: string;
   blueprint_reality?: string;
   harmony?: string;
+  moon_sync_narrative?: string;
   red_flags_narrative?: string;
   dasha_narrative?: string;
   roadmap_narrative?: string;
@@ -193,6 +194,25 @@ export function effectiveSection8HiText(report: LoveProReportResponse): string {
     }
   }
   return best;
+}
+
+const MOON_ENGINE_FALLBACK_HI =
+  /चंद्र संकेत सहज भावनात्मक लय|षष्ठाष्टक.*६-८ राशि चंद्र/;
+
+/** Prefer LLM moon_sync_narrative over engine one-liner for Section 7. */
+export function resolveMoonSyncBody(report: LoveProReportResponse): string {
+  const narr = String(report.pro_premium?.moon_sync_narrative || "").trim();
+  const fromCtx = String(report.pdf_context?.page5_moon?.body || "").trim();
+  const fromSec = (report.app_sections || [])
+    .find(s => String(s.id || "").toLowerCase() === "moon");
+  const moon = String(fromSec?.body || "").trim() || fromCtx;
+  if (wordCountText(narr) >= 55) {
+    if (wordCountText(moon) < 55 || MOON_ENGINE_FALLBACK_HI.test(moon)) {
+      return narr;
+    }
+    if (devaCount(narr) > devaCount(moon)) return narr;
+  }
+  return moon || narr;
 }
 
 /** Prefer LLM breakup chapter for Section 8 when app_sections root_cause is stale/thin. */
@@ -792,8 +812,7 @@ export function buildLoveReportSectionsForPage(
       body: (bp.part2 || bp.part1 || "").trim() || undefined,
     });
 
-    const moon = ctx.page5_moon || {};
-    const moonBody = (moon.body || "").trim() || undefined;
+    const moonBody = resolveMoonSyncBody(report) || undefined;
     pushSection(sections, {
       id: "moon",
       title: labels.moon,
@@ -850,6 +869,10 @@ export function buildReportSectionsFromPayload(
     let body = String(row.body || "").trim() || fallback?.body;
     if (id.toLowerCase() === "root_cause") {
       const resolved = resolveSection8RootCauseBody(report);
+      if (resolved) body = resolved;
+    }
+    if (id.toLowerCase() === "moon") {
+      const resolved = resolveMoonSyncBody(report);
       if (resolved) body = resolved;
     }
     const bullets = Array.isArray(row.bullets) && row.bullets.length

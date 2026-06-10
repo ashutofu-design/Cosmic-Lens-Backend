@@ -174,6 +174,7 @@ def enrich_page1_and_context(
     page1: dict[str, Any],
     pdf_context: dict[str, Any],
     pro: dict[str, Any],
+    lang: str = "en",
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Fill thin/empty bodies from pro_premium LLM before localize."""
     p1 = dict(page1 or {})
@@ -224,10 +225,9 @@ def enrich_page1_and_context(
         ]
 
     moon = dict(ctx.get("page5_moon") or {})
-    if _word_count(str(moon.get("body") or "")) < 45:
-        narr = str(pro.get("moon_sync_narrative") or "").strip()
-        if narr:
-            moon["body"] = narr
+    narr = _moon_sync_ready_text(pro, lang)
+    if narr:
+        moon["body"] = narr
     ctx["page5_moon"] = moon
 
     breakup_llm = _chapter_body(pro, "breakup")
@@ -305,6 +305,25 @@ def _localize_scorecard_line(line: str, lang: str) -> str:
     return _localize_prose_block(out, lang, force=True)
 
 
+def _moon_sync_ready_text(pro: dict, lang: str = "en") -> str:
+    """LLM Moon Sync narrative — not engine one-liner fallback."""
+    narr = str(pro.get("moon_sync_narrative") or "").strip()
+    if _word_count(narr) < 55:
+        return ""
+    lane = (lang or "en").strip().lower()
+    if lane != "hi":
+        return narr
+    try:
+        from i18n_summary import prose_fully_hindi
+
+        if prose_fully_hindi(narr):
+            return narr
+    except Exception:
+        if len(re.findall(r"[\u0900-\u097F]", narr)) >= 24:
+            return narr
+    return ""
+
+
 def _breakup_hi_ready_text(pro: dict) -> str:
     """LLM Hindi breakup chapter — not English engine fallback."""
     breakup = _chapter_body(pro, "breakup")
@@ -319,6 +338,35 @@ def _breakup_hi_ready_text(pro: dict) -> str:
         if len(re.findall(r"[\u0900-\u097F]", breakup)) >= 24:
             return breakup
     return ""
+
+
+def _sync_moon_from_narrative(
+    sections: list[dict[str, Any]],
+    ctx: dict[str, Any],
+    pro: dict[str, Any],
+    lang: str = "en",
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Map LLM moon_sync_narrative → Section 7 (moon) — replace engine one-liner."""
+    narr = _moon_sync_ready_text(pro, lang)
+    if not narr:
+        return sections, ctx
+    ctx_out = dict(ctx or {})
+    moon = dict(ctx_out.get("page5_moon") or {})
+    moon["body"] = narr
+    ctx_out["page5_moon"] = moon
+    out: list[dict[str, Any]] = []
+    patched = False
+    for row in sections:
+        if not isinstance(row, dict):
+            continue
+        sec = dict(row)
+        if str(sec.get("id") or "").lower() == "moon":
+            sec["body"] = narr
+            patched = True
+        out.append(sec)
+    if not patched:
+        out.append({"id": "moon", "body": narr})
+    return out, ctx_out
 
 
 def _sync_root_cause_from_breakup(
@@ -461,12 +509,13 @@ def build_localized_app_sections(
     if lane not in ("en", "hn", "hi"):
         lane = "en"
 
-    p1, ctx = enrich_page1_and_context(page1, pdf_context, pro)
+    p1, ctx = enrich_page1_and_context(page1, pdf_context, pro, lane)
     ctx = localize_love_pdf_context(ctx, lane)
     p1 = _localize_page1_dashboard(p1, lane)
     p1 = _apply_ui_label_locale(p1, lane)
 
     sections = build_in_app_page_sections(p1, ctx, lane)
+    sections, ctx = _sync_moon_from_narrative(sections, ctx, pro, lane)
     sections, ctx = _sync_root_cause_from_breakup(sections, ctx, pro)
     if lane in ("hn", "hi"):
         sections = [_localize_section_row(s, lane) for s in sections if isinstance(s, dict)]

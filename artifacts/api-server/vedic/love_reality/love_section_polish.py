@@ -871,6 +871,12 @@ def polish_love_reality_red_flags_only(
 def _build_moon_sync_system_prompt(lang: str) -> str:
     lang = polish_content_lang(lang)
     script = love_write_script_label(lang)
+    hi_moon_lock = ""
+    if lang == "hi":
+        hi_moon_lock = (
+            "\n\nMANDATORY FOR hi: moon_sync_narrative MUST be 100% देवनागरी Hindi. "
+            "English sentences = invalid. Partner names may stay Latin. Minimum 80 words.\n"
+        )
     return f"""Write ONLY PDF Section — Moon Sync (emotional rhythm between both Moons).
 
 Return STRICT JSON:
@@ -879,6 +885,7 @@ Return STRICT JSON:
 }}
 
 Write entirely in {script}.
+{hi_moon_lock}
 
 {love_script_directive(lang)}
 
@@ -1294,6 +1301,11 @@ def _run_section_llm(
                     "Write chapter_body entirely in देवनागरी Hindi — minimum 3 paragraphs, 90+ words. "
                     "No English sentences except partner names."
                 )
+            elif lang == "hi" and scope == "moon_sync":
+                retry_note = (
+                    "RETRY: prior response was NOT Devanagari Hindi or too short (rejected). "
+                    "Write moon_sync_narrative entirely in देवनागरी Hindi — minimum 3 paragraphs, 80+ words."
+                )
             retry_user = user + f"\n\n{retry_note}"
             kwargs["messages"] = [
                 {"role": "system", "content": system},
@@ -1335,6 +1347,16 @@ def _run_section_llm(
     if lang == "hi" and scope == "chapter_breakup":
         body = str(out.get("chapter_body") or "")
         if not _breakup_text_hi_ok(body):
+            try:
+                if os.path.isfile(cache_path):
+                    os.remove(cache_path)
+            except OSError:
+                pass
+            empty = {"_meta": {"scope": scope, "reason": "not_devanagari_hi", "openai_skipped": False}}
+            return empty
+    if lang == "hi" and scope == "moon_sync":
+        body = str(out.get("moon_sync_narrative") or "")
+        if not _moon_sync_text_hi_ok(body):
             try:
                 if os.path.isfile(cache_path):
                     os.remove(cache_path)
@@ -1471,6 +1493,43 @@ def breakup_chapter_hi_ready(pro: dict) -> bool:
     return _breakup_text_hi_ok(_breakup_chapter_body(pro))
 
 
+_MOON_SYNC_MIN_WORDS = 55
+
+
+def _moon_sync_narrative_body(pro: dict) -> str:
+    return str((pro or {}).get("moon_sync_narrative") or "").strip()
+
+
+def _moon_sync_text_hi_ok(body: str) -> bool:
+    if _word_count(body) < _MOON_SYNC_MIN_WORDS:
+        return False
+    try:
+        from i18n_summary import prose_fully_hindi
+
+        return prose_fully_hindi(body)
+    except Exception:
+        return len(re.findall(r"[\u0900-\u097F]", body)) >= 24
+
+
+def moon_sync_narrative_hi_ready(pro: dict) -> bool:
+    """Section 7 (Moon Sync) OK for Hindi — 55+ words and mostly Devanagari."""
+    return _moon_sync_text_hi_ok(_moon_sync_narrative_body(pro))
+
+
+def _bust_moon_sync_scope_file_cache(bundle: dict, lang: str) -> None:
+    scope = "moon_sync"
+    model = _section_model("LOVE_REALITY_MOON_SYNC_MODEL")
+    system = _build_moon_sync_system_prompt(polish_content_lang(lang))
+    prompt_fp = _fingerprint(system)
+    cache_key = _section_cache_key(bundle, polish_content_lang(lang), model, scope, prompt_fp)
+    cache_path = os.path.join(_cache_dir(), f"{scope}_{cache_key}.json")
+    try:
+        if os.path.isfile(cache_path):
+            os.remove(cache_path)
+    except OSError as exc:
+        log.warning("[%s] cache bust failed: %s", scope, exc)
+
+
 def _bust_chapter_scope_file_cache(bundle: dict, lang: str, chapter_key: str) -> None:
     """Drop cached empty/short chapter_breakup LLM response so retry hits OpenAI."""
     scope = f"chapter_{chapter_key}"
@@ -1572,6 +1631,77 @@ def ensure_breakup_section8_llm(
         "source": "failed",
         "attempts": max_attempts,
         "words": _word_count(_breakup_chapter_body(pro)),
+    }
+    return pro
+
+
+def ensure_moon_sync_section7_llm(
+    bundle: dict,
+    pro: dict,
+    lang: str,
+    *,
+    force_llm: bool = False,
+) -> dict:
+    """Section 07 (Moon Sync) — LLM moon_sync_narrative if missing or engine one-liner."""
+    if not isinstance(pro, dict):
+        return pro or {}
+    body = _moon_sync_narrative_body(pro)
+    if lang == "hi" and body and not _moon_sync_text_hi_ok(body):
+        pro["moon_sync_narrative"] = ""
+        body = ""
+    elif _word_count(body) >= _MOON_SYNC_MIN_WORDS and not force_llm:
+        if lang != "hi" or _moon_sync_text_hi_ok(body):
+            return pro
+    try:
+        from vedic.love_reality.pdf_text_safe import prose_matches_lang
+
+        if (
+            not force_llm
+            and body
+            and lang in ("hi", "hn")
+            and prose_matches_lang(body, lang)
+            and (lang != "hi" or _moon_sync_text_hi_ok(body))
+        ):
+            return pro
+    except Exception:
+        pass
+
+    work = dict(bundle)
+    work["_lr_prior_digest"] = _build_prior_sections_digest(pro, lang)
+    last_meta: dict[str, Any] = {}
+    max_attempts = max(1, int(os.environ.get("LOVE_REALITY_SECTION7_ATTEMPTS", "3")))
+    for attempt in range(max_attempts):
+        if attempt > 0:
+            _bust_moon_sync_scope_file_cache(bundle, lang)
+        hit = polish_love_reality_moon_sync_only(
+            work,
+            lang=lang,
+            force_llm=True,
+        )
+        last_meta = hit.get("_meta") if isinstance(hit.get("_meta"), dict) else {}
+        new_body = str(hit.get("moon_sync_narrative") or "").strip()
+        if lang == "hi" and not _moon_sync_text_hi_ok(new_body):
+            last_meta = {
+                **last_meta,
+                "reject": "not_devanagari_hi",
+                "deva": len(re.findall(r"[\u0900-\u097F]", new_body)),
+                "words": _word_count(new_body),
+            }
+            continue
+        if _word_count(new_body) >= _MOON_SYNC_MIN_WORDS:
+            pro["moon_sync_narrative"] = new_body
+            pro.setdefault("_meta", {})["section7_moon_sync"] = {
+                **last_meta,
+                "source": "llm",
+                "attempt": attempt + 1,
+                "words": _word_count(new_body),
+            }
+            return pro
+    pro.setdefault("_meta", {})["section7_moon_sync"] = {
+        **last_meta,
+        "source": "failed",
+        "attempts": max_attempts,
+        "words": _word_count(_moon_sync_narrative_body(pro)),
     }
     return pro
 

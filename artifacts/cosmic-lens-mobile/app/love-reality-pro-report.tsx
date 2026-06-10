@@ -40,6 +40,7 @@ import { coerceProPdfLang, type ProPdfLangCode } from "@/lib/proPdfLang";
 import {
   reportHasDisplayableContent,
   reportHindiFullyReady,
+  section4HiLoadReady,
   section8HiLoadGate,
   section8HiLoadReady,
   reportNeedsHindiRetry,
@@ -61,11 +62,14 @@ const LOAD_STAGES = [
   "Almost ready…",
 ] as const;
 
+/** Progress never hits 99 on timer — only when report is ready, then screen opens. */
+const OPEN_AT_PCT = 99;
+const WAIT_CAP_PCT = 88;
+
 function ReportLoadingView({
   pct,
   stageIdx,
   isDark,
-  done,
   fromCache,
   cacheChange,
   llmRefresh,
@@ -76,7 +80,6 @@ function ReportLoadingView({
   pct: number;
   stageIdx: number;
   isDark: boolean;
-  done: boolean;
   fromCache: boolean;
   cacheChange: LoveReportChangeKind;
   llmRefresh: boolean;
@@ -84,6 +87,7 @@ function ReportLoadingView({
   updateHint: string;
   lang: ProPdfLangCode;
 }) {
+  const opening = pct >= OPEN_AT_PCT;
   const spinAnim = useRef(new Animated.Value(0)).current;
   const barAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -132,7 +136,7 @@ function ReportLoadingView({
     );
     pulse.start();
     return () => pulse.stop();
-  }, [done, pulseAnim]);
+  }, [opening, pulseAnim]);
 
   const text = isDark ? "#f1f5f9" : "#0F172A";
   const dim = isDark ? "rgba(226,232,240,0.72)" : "#64748B";
@@ -148,23 +152,16 @@ function ReportLoadingView({
         style={ld.borderGrad}
       >
         <View style={[ld.card, { backgroundColor: cardBg }]}>
-          <Animated.View style={{ transform: [{ scale: done ? 1 : pulseAnim }] }}>
-            {done ? (
-              <LinearGradient
-                colors={["#10B981", "#059669"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={ld.iconCircle}
-              >
+          <Animated.View style={{ transform: [{ scale: opening ? 1 : pulseAnim }] }}>
+            <LinearGradient
+              colors={opening ? ["#10B981", "#059669"] : ["#9333ea", "#ec4899"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={ld.iconCircle}
+            >
+              {opening ? (
                 <Feather name="check" size={32} color="#fff" />
-              </LinearGradient>
-            ) : (
-              <LinearGradient
-                colors={["#9333ea", "#ec4899"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={ld.iconCircle}
-              >
+              ) : (
                 <Animated.View
                   style={{
                     transform: [{
@@ -177,16 +174,20 @@ function ReportLoadingView({
                 >
                   <Feather name="loader" size={28} color="#fff" />
                 </Animated.View>
-              </LinearGradient>
-            )}
+              )}
+            </LinearGradient>
           </Animated.View>
 
           <Text style={[ld.title, { color: text }]}>
-            {done ? "Report ready!" : forceUpdate ? "Updating report…" : "Loading…"}
+            {pct >= OPEN_AT_PCT
+              ? "Opening report…"
+              : forceUpdate
+                ? "Updating report…"
+                : "Loading…"}
           </Text>
           <Text style={[ld.stage, { color: dim }]}>
-            {done
-              ? "Opening your Love Reality Pro report"
+            {pct >= OPEN_AT_PCT
+              ? "Love Reality Pro report"
               : forceUpdate
                 ? updateHint
                 : cacheChange === "app_layout"
@@ -267,7 +268,6 @@ export default function LoveRealityProReportScreen() {
   const [fetching, setFetching] = useState(true);
   const [loadPct, setLoadPct] = useState(0);
   const [stageIdx, setStageIdx] = useState(0);
-  const [loadDone, setLoadDone] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<LoveProReportResponse | null>(null);
@@ -289,13 +289,12 @@ export default function LoveRealityProReportScreen() {
     setFromCache(cached);
     setReport(data);
     setFetching(false);
-    setLoadDone(true);
-    setLoadPct(100);
+    setLoadPct(OPEN_AT_PCT);
     if (showReportTimerRef.current) clearTimeout(showReportTimerRef.current);
     showReportTimerRef.current = setTimeout(() => {
       setShowReport(true);
       showReportTimerRef.current = null;
-    }, cached ? 300 : 650);
+    }, cached ? 200 : 340);
   }, []);
 
   const load = useCallback(async (opts?: { forceUpdate?: boolean }) => {
@@ -317,7 +316,6 @@ export default function LoveRealityProReportScreen() {
     }
     setFetching(true);
     setLoadPct(0);
-    setLoadDone(false);
     setShowReport(false);
     setStageIdx(0);
     setError(null);
@@ -348,6 +346,7 @@ export default function LoveRealityProReportScreen() {
           p2Name: cacheOpts.p2Name,
         });
       }
+      setLoadPct(p => Math.max(p, 12));
       if (forceUpdate) {
         await clearLoveReportCacheAllLangs({
           userId: cacheOpts.userId,
@@ -361,6 +360,7 @@ export default function LoveRealityProReportScreen() {
       let mustLlm = forceUpdate;
       if (!forceUpdate) {
         const resolved = await resolveLoveReportCache(cacheOpts);
+        setLoadPct(p => Math.max(p, 24));
         setCacheChange(resolved.changeKind);
         mustLlm = deviceCacheNeedsServerRefresh(resolved.payload, resolved.meta, lang);
         setLlmRefresh(mustLlm);
@@ -389,6 +389,7 @@ export default function LoveRealityProReportScreen() {
         }
       }
 
+      setLoadPct(p => Math.max(p, 36));
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 360000);
       try {
@@ -410,6 +411,7 @@ export default function LoveRealityProReportScreen() {
         let { data, serverCacheHit } = await fetchReport(
           forceUpdate || mustLlm || lang === "hi" ? "full" : "cache",
         );
+        setLoadPct(p => Math.max(p, 68));
 
         if (lang !== "en" && data.polish_source === "polish_snapshot") {
           const fresh = await fetchReport("full");
@@ -420,15 +422,19 @@ export default function LoveRealityProReportScreen() {
         if (!forceUpdate) {
           for (let attempt = 0; attempt < 2 && lang !== "en"; attempt += 1) {
             if (!reportNeedsHindiRetry(data, lang)) break;
-            const retry = await fetchReport("relocalize");
+            setLoadPct(p => Math.max(p, 74 + attempt * 4));
+            const retryMode = lang === "hi" && !section4HiLoadReady(data, lang) ? "full" : "relocalize";
+            const retry = await fetchReport(retryMode);
             data = retry.data;
             serverCacheHit = retry.serverCacheHit;
+            setLoadPct(p => Math.max(p, 78 + attempt * 4));
           }
         }
 
         if (!reportHasDisplayableContent(data)) {
           setError("Report empty — dubara Update dabayein.");
           setFetching(false);
+          setLoadPct(0);
           setUpdatingReport(false);
           setForceUpdateRun(false);
           return;
@@ -442,12 +448,14 @@ export default function LoveRealityProReportScreen() {
               : " [server purana — VPS par git pull + pm2 restart karo]";
             setError(s8.reason + extra);
             setFetching(false);
+            setLoadPct(0);
             setUpdatingReport(false);
             setForceUpdateRun(false);
             return;
           }
         }
         const hindiOk = reportHindiFullyReady(data, lang);
+        setLoadPct(p => Math.max(p, 84));
         await saveLoveReportCache(cacheOpts, data);
         finishLoad(data, false);
         if (forceUpdate) {
@@ -466,6 +474,7 @@ export default function LoveRealityProReportScreen() {
       const msg = e instanceof Error ? e.message : "Could not load report";
       setError(/abort/i.test(msg) ? "Report timed out — tap Retry." : msg);
       setFetching(false);
+      setLoadPct(0);
     } finally {
       setUpdatingReport(false);
       setForceUpdateRun(false);
@@ -490,12 +499,19 @@ export default function LoveRealityProReportScreen() {
   useEffect(() => {
     if (!fetching || fetchDoneRef.current) return;
     const fast = fastCacheRef.current || (cacheChange === "app_layout" && !forceUpdateRun);
-    const tickMs = fast ? 70 : 900;
-    const step = fast ? 10 : 1;
-    const cap = fast ? 100 : 90;
+    if (fast) {
+      const tick = setInterval(() => {
+        setLoadPct(p => (p >= OPEN_AT_PCT ? OPEN_AT_PCT : Math.min(OPEN_AT_PCT, p + 14)));
+      }, 60);
+      return () => clearInterval(tick);
+    }
     const tick = setInterval(() => {
-      setLoadPct(p => (p >= cap ? cap : Math.min(cap, p + step)));
-    }, tickMs);
+      setLoadPct(p => {
+        if (p >= WAIT_CAP_PCT) return WAIT_CAP_PCT;
+        if (p >= 55) return p + 1;
+        return Math.min(55, p + 2);
+      });
+    }, 1100);
     return () => clearInterval(tick);
   }, [fetching, cacheChange, forceUpdateRun]);
 
@@ -598,7 +614,7 @@ export default function LoveRealityProReportScreen() {
     }
   }, [user, primaryProfile, partnerProfile, lang, pdfConnecting, report, labels, sections]);
 
-  const isLoadingUi = fetching && !report;
+  const isLoadingUi = !error && !showReport;
 
   return (
     <CosmicBg>
@@ -655,7 +671,6 @@ export default function LoveRealityProReportScreen() {
             pct={loadPct}
             stageIdx={stageIdx}
             isDark={C.isDark}
-            done={loadDone}
             fromCache={fromCache}
             cacheChange={cacheChange}
             llmRefresh={llmRefresh}

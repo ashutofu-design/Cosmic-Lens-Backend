@@ -5,10 +5,13 @@
 import { LOVE_REALITY_PDF_LAYOUT_VER } from "@/lib/loveRealityPdfLayout";
 
 /** Bump when page sections, labels, or in-app layout logic changes. */
-export const LOVE_REALITY_APP_REPORT_VER = "lr_app_v28_llm_hi";
+export const LOVE_REALITY_APP_REPORT_VER = "lr_app_v30_remedies_action_fix";
 
 /** Bump to wipe device Hindi report cache once (server hi_purge_v1). */
-export const LOVE_REALITY_HI_DEVICE_CACHE_VER = "hi_purge_v7_s8_gate_fix";
+export const LOVE_REALITY_HI_DEVICE_CACHE_VER = "hi_purge_v10_remedies_action_fix";
+
+/** Must match artifacts/api-server/love_reality_api.py LOVE_REALITY_HI_CACHE_VER */
+export const LOVE_REALITY_HI_SERVER_CACHE_VER = "hi_purge_v18_remedies_action_fix";
 
 export type LoveReportChangeKind =
   /** Cached payload matches current app + PDF layout. */

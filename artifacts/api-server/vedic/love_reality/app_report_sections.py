@@ -74,16 +74,44 @@ def _word_count(text: str) -> int:
     return len((text or "").split())
 
 
-def _deep_analysis_map(pro: dict) -> dict[str, str]:
+def _deep_analysis_map(pro: dict, *, min_words: int = 55) -> dict[str, str]:
     out: dict[str, str] = {}
     for row in pro.get("deep_analysis") or []:
         if not isinstance(row, dict):
             continue
         key = str(row.get("key") or "").strip().lower()
         expl = str(row.get("explanation") or "").strip()
-        if key and len(expl) >= 40:
+        if key and _word_count(expl) >= min_words:
             out[key] = expl
     return out
+
+
+def _deep_connection_body_from_analysis(
+    analysis_rows: list[dict[str, Any]],
+    lang: str = "en",
+) -> str:
+    lines: list[str] = []
+    for row in analysis_rows:
+        if not isinstance(row, dict):
+            continue
+        expl = str(row.get("explanation") or "").strip()
+        if _word_count(expl) < 40:
+            continue
+        title = str(row.get("title") or "Analysis").strip()
+        lines.append(f"{title}\n{expl}")
+    return "\n\n".join(lines)
+
+
+def _deep_analysis_expl_hi_locked(text: str) -> bool:
+    raw = str(text or "").strip()
+    if _word_count(raw) < 55:
+        return False
+    try:
+        from i18n_summary import prose_fully_hindi
+
+        return prose_fully_hindi(raw)
+    except Exception:
+        return len(re.findall(r"[\u0900-\u097F]", raw)) >= 24
 
 
 def _match_analysis_key(title: str) -> str:
@@ -162,7 +190,10 @@ def _apply_ui_label_locale(page1: dict[str, Any], lang: str) -> dict[str, Any]:
             a["explanation"] = da_map[akey]
             expl = str(a["explanation"] or "").strip()
         if expl and lang in ("hi", "hn"):
-            a["explanation"] = _localize_prose_block(expl, lang, force=True)
+            if lang == "hi" and _deep_analysis_expl_hi_locked(expl):
+                a["explanation"] = expl
+            else:
+                a["explanation"] = _localize_prose_block(expl, lang, force=True)
         analysis_rows.append(a)
     if analysis_rows:
         out["analysis"] = analysis_rows
@@ -189,8 +220,16 @@ def enrich_page1_and_context(
         if v:
             p1["verdict"] = v
 
-    if not p1.get("recommendation_paragraphs"):
-        rn = str(pro.get("remedies_action_narrative") or "").strip()
+    rn = str(pro.get("remedies_action_narrative") or "").strip()
+    cur_para = " ".join(
+        str(p).strip() for p in (p1.get("recommendation_paragraphs") or []) if str(p).strip()
+    )
+    if rn and _word_count(rn) > _word_count(cur_para):
+        if "\n\n" in rn:
+            p1["recommendation_paragraphs"] = [p.strip() for p in rn.split("\n\n") if p.strip()]
+        else:
+            p1["recommendation_paragraphs"] = [rn]
+    elif not p1.get("recommendation_paragraphs"):
         if rn:
             p1["recommendation_paragraphs"] = [rn]
         elif pro.get("practical"):
@@ -198,7 +237,10 @@ def enrich_page1_and_context(
             if paras:
                 p1["recommendation_paragraphs"] = paras[:2]
 
-    if not p1.get("recommendations") and pro.get("practical"):
+    steps = [str(x).strip() for x in (pro.get("action_steps") or []) if str(x).strip()]
+    if steps:
+        p1["recommendations"] = steps[:7]
+    elif not p1.get("recommendations") and pro.get("practical"):
         p1["recommendations"] = [
             str(x).strip() for x in pro["practical"][:7] if str(x).strip()
         ]
@@ -270,6 +312,10 @@ def _llm_hindi_body_locked(text: str, section_id: str) -> bool:
         return wc >= 80
     if sid == "blueprint_vs":
         return wc >= 80
+    if sid == "deep_connection":
+        return wc >= 200
+    if sid == "recommendations":
+        return wc >= 80
     return False
 
 
@@ -295,6 +341,78 @@ def _blueprint_ready_text(pro: dict, lang: str = "en") -> str:
     if _blueprint_text_hi_ok(body):
         return body
     return ""
+
+
+def _sync_recommendations_from_llm(
+    sections: list[dict[str, Any]],
+    page1: dict[str, Any],
+    pro: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Map LLM remedies_action_narrative → recommendations section."""
+    rn = str(pro.get("remedies_action_narrative") or "").strip()
+    paras = [str(p).strip() for p in (page1.get("recommendation_paragraphs") or []) if str(p).strip()]
+    para_body = "\n\n".join(paras).strip()
+    body = rn if _word_count(rn) > _word_count(para_body) else (para_body or rn)
+    bullets = [str(x).strip() for x in (pro.get("action_steps") or page1.get("recommendations") or []) if str(x).strip()]
+    if not body and not bullets:
+        return sections
+    out: list[dict[str, Any]] = []
+    patched = False
+    for row in sections:
+        if not isinstance(row, dict):
+            continue
+        sec = dict(row)
+        if str(sec.get("id") or "").lower() == "recommendations":
+            if body:
+                sec["body"] = body
+            if bullets:
+                sec["bullets"] = bullets[:7]
+            patched = True
+        out.append(sec)
+    if not patched:
+        out.append({
+            "id": "recommendations",
+            "body": body or None,
+            "bullets": bullets[:7] if bullets else None,
+        })
+    return out
+
+
+def _sync_deep_connection_from_llm(
+    sections: list[dict[str, Any]],
+    page1: dict[str, Any],
+    pro: dict[str, Any],
+    lang: str = "en",
+) -> list[dict[str, Any]]:
+    """Map LLM deep_analysis → deep_connection section body."""
+    da_map = _deep_analysis_map(pro)
+    analysis_rows = list(page1.get("analysis") or [])
+    if da_map and not analysis_rows:
+        analysis_rows = [
+            {"title": _ANALYSIS_TITLES_HI.get(k, k), "explanation": v}
+            for k, v in da_map.items()
+        ]
+    body = _deep_connection_body_from_analysis(analysis_rows, lang)
+    if not body and da_map:
+        body = _deep_connection_body_from_analysis(
+            [{"title": _ANALYSIS_TITLES_HI.get(k, k), "explanation": v} for k, v in da_map.items()],
+            lang,
+        )
+    if not body:
+        return sections
+    out: list[dict[str, Any]] = []
+    patched = False
+    for row in sections:
+        if not isinstance(row, dict):
+            continue
+        sec = dict(row)
+        if str(sec.get("id") or "").lower() == "deep_connection":
+            sec["body"] = body
+            patched = True
+        out.append(sec)
+    if not patched:
+        out.append({"id": "deep_connection", "body": body})
+    return out
 
 
 def _sync_blueprint_from_llm(
@@ -601,6 +719,8 @@ def build_localized_app_sections(
     p1 = _apply_ui_label_locale(p1, lane)
 
     sections = build_in_app_page_sections(p1, ctx, lane)
+    sections = _sync_recommendations_from_llm(sections, p1, pro)
+    sections = _sync_deep_connection_from_llm(sections, p1, pro, lane)
     sections, ctx = _sync_blueprint_from_llm(sections, ctx, pro, lane)
     sections, ctx = _sync_moon_from_narrative(sections, ctx, pro, lane)
     sections, ctx = _sync_root_cause_from_breakup(sections, ctx, pro)

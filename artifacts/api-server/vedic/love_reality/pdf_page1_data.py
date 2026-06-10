@@ -132,17 +132,30 @@ def localize_love_pdf_context(ctx: dict[str, Any], lang: str) -> dict[str, Any]:
 
     bp = dict(out.get("page2_3_blueprint") or {})
     for key in ("part1", "part2"):
-        if bp.get(key):
-            bp[key] = _localize_prose_block(str(bp[key]), lang)
+        if not bp.get(key):
+            continue
+        raw = str(bp[key]).strip()
+        if lang == "hi" and key == "part2" and _already_localized(raw, lang) and len(raw.split()) >= 80:
+            bp[key] = raw
+        else:
+            bp[key] = _localize_prose_block(raw, lang)
     out["page2_3_blueprint"] = bp
 
     moon = dict(out.get("page5_moon") or {})
     if moon.get("body"):
-        moon["body"] = _localize_prose_block(str(moon["body"]), lang)
+        raw_moon = str(moon["body"]).strip()
+        if lang == "hi" and _already_localized(raw_moon, lang) and len(raw_moon.split()) >= 55:
+            moon["body"] = raw_moon
+        else:
+            moon["body"] = _localize_prose_block(raw_moon, lang)
     out["page5_moon"] = moon
 
     if out.get("page6_root_cause"):
-        out["page6_root_cause"] = _localize_prose_block(str(out["page6_root_cause"]), lang)
+        raw_root = str(out["page6_root_cause"]).strip()
+        if lang == "hi" and _already_localized(raw_root, lang) and len(raw_root.split()) >= 80:
+            out["page6_root_cause"] = raw_root
+        else:
+            out["page6_root_cause"] = _localize_prose_block(raw_root, lang)
 
     loyalty = dict(out.get("page7_loyalty") or {})
     for key in ("body", "summary", "behavior"):
@@ -305,37 +318,38 @@ def build_love_reality_page1_data(
     action_steps = [str(x).strip() for x in (pro.get("action_steps") or []) if str(x).strip()]
     practical = [str(p).strip() for p in (pro.get("practical") or []) if str(p).strip()]
 
-    if remedies_narr:
+    if remedies_narr and len(remedies_narr.split()) >= 55:
         rec_paragraphs = [p.strip() for p in remedies_narr.split("\n\n") if p.strip()]
         if len(rec_paragraphs) == 1:
             rec_paragraphs = [remedies_narr]
-        raw_recs = action_steps or []
+        raw_recs = [str(x).strip() for x in action_steps if str(x).strip()]
+        recommendations = raw_recs[:7]
     else:
         raw_recs = [str(x).strip() for x in (rem_bullets or chk_bullets or []) if str(x).strip()]
         if practical:
             raw_recs = practical + raw_recs
         rec_paragraphs = practical[:2] if practical and any(len(p) > 100 for p in practical) else []
 
-    if not raw_recs and not rec_paragraphs:
-        if lang == "hn":
-            raw_recs = [
-                "Har jhagda ke 24 ghante mein repair karo",
-                "Hafte mein 20 minute phone-free check-in",
-                "Dasha down window mein ultimatum mat do — patience rakho",
-            ]
-        elif lang == "hi":
-            raw_recs = [
-                "हर झगड़े के २४ घंटे में सुधार करें",
-                "साप्ताहिक २० मिनट फोन-मुक्त बातचीत",
-                "कमज़ोर दशा में अल्टीमेटम न दें",
-            ]
-        else:
-            raw_recs = [
-                "Repair within 24 hours after any argument",
-                "Weekly 20-minute phone-free check-in",
-                "Avoid ultimatums during strained dasha windows",
-            ]
-    recommendations = _to_concise_bullets(raw_recs, max_items=7, max_len=90)
+        if not raw_recs and not rec_paragraphs:
+            if lang == "hn":
+                raw_recs = [
+                    "Har jhagda ke 24 ghante mein repair karo",
+                    "Hafte mein 20 minute phone-free check-in",
+                    "Dasha down window mein ultimatum mat do — patience rakho",
+                ]
+            elif lang == "hi":
+                raw_recs = [
+                    "हर झगड़े के २४ घंटे में सुधार करें",
+                    "साप्ताहिक २० मिनट फोन-मुक्त बातचीत",
+                    "कमज़ोर दशा में अल्टीमेटम न दें",
+                ]
+            else:
+                raw_recs = [
+                    "Repair within 24 hours after any argument",
+                    "Weekly 20-minute phone-free check-in",
+                    "Avoid ultimatums during strained dasha windows",
+                ]
+        recommendations = _to_concise_bullets(raw_recs, max_items=7, max_len=90)
     if not rec_paragraphs and remedies_narr:
         rec_paragraphs = [remedies_narr]
     elif not rec_paragraphs and practical:
@@ -396,10 +410,12 @@ def build_love_reality_page1_data(
         fallback: str,
     ) -> dict[str, Any]:
         llm_expl = llm_da_by_key.get(key, "")
-        if len(llm_expl) >= 40:
-            explanation = _short(llm_expl, 420)
+        if len(llm_expl.split()) >= 40:
+            explanation = llm_expl.strip()
+        elif len(llm_expl) >= 40:
+            explanation = llm_expl.strip()
         else:
-            explanation = _short(body or fallback, 140)
+            explanation = _short(body or fallback, 280)
         return {
             "title": title,
             "score": score,
@@ -560,15 +576,23 @@ def _localize_page1_dashboard(page1: dict[str, Any], lang: str) -> dict[str, Any
     recs = []
     for item in out.get("recommendations") or []:
         raw = str(item or "").strip()
-        if raw:
-            recs.append(_short(localize_text_force(raw, lang), 88))
+        if not raw:
+            continue
+        if lang == "hi" and _already_localized(raw, lang):
+            recs.append(raw)
+        else:
+            recs.append(_short(localize_text_force(raw, lang), 160))
     if recs:
         out["recommendations"] = recs
 
     paras = []
     for item in out.get("recommendation_paragraphs") or []:
         raw = str(item or "").strip()
-        if raw:
+        if not raw:
+            continue
+        if lang == "hi" and _already_localized(raw, lang) and len(raw.split()) >= 70:
+            paras.append(raw)
+        else:
             paras.append(localize_text_force(raw, lang))
     if paras:
         out["recommendation_paragraphs"] = paras

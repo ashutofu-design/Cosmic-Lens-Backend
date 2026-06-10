@@ -36,6 +36,8 @@ export type LoveProPremium = {
   special?: string[];
   damage?: string[];
   practical?: string[];
+  remedies_action_narrative?: string;
+  action_steps?: string[];
 };
 
 export type LovePdfContext = {
@@ -111,7 +113,10 @@ export type LoveProReportResponse = {
   }>;
   /** hi | hn | en | en_mismatch — server check after localize. */
   content_script?: string;
-  /** Canonical Hindi Section 7 (Moon) body from server. */
+  /** Canonical Hindi deep_connection (विस्तार) body from server. */
+  section3_hi_body?: string | null;
+  /** Canonical Hindi recommendations (उपाय और आगे क्या करें) body from server. */
+  section4_hi_body?: string | null;
   section5_hi_body?: string | null;
   section7_hi_body?: string | null;
   section7_debug?: {
@@ -122,6 +127,7 @@ export type LoveProReportResponse = {
   };
   /** Canonical Hindi Section 8 body — server gate passed. */
   section8_hi_body?: string | null;
+  hi_cache_ver?: string | null;
   section8_debug?: {
     gate_ver?: string;
     breakup_words?: number;
@@ -304,6 +310,103 @@ function narrativeBodyFallback(text: string, minWords: number): string {
     return norm;
   }
   return "";
+}
+
+const DEEP_ANALYSIS_TITLES_HI: Record<string, string> = {
+  emotional: "भावनात्मक अनुकूलता",
+  communication: "संवाद",
+  trust: "विश्वास और निष्ठा",
+  long_term: "दीर्घकालिक संभावना",
+};
+
+function deepConnectionBodyReady(text: string): boolean {
+  return wordCountText(text) >= 200 && devaCount(text) >= 48 && !textLooksLikePointList(text);
+}
+
+function recommendationsBodyReady(text: string): boolean {
+  const norm = normalizeProseParagraphs(String(text || "").trim());
+  return (
+    wordCountText(norm) >= 80
+    && devaCount(norm) >= 24
+    && !textLooksLikePointList(norm)
+  );
+}
+
+/** Full LLM remedies + action plan — उपाय और आगे क्या करें (recommendations section). */
+export function resolveRecommendationsBody(report: LoveProReportResponse): string {
+  const fromSec = (report.app_sections || [])
+    .find(s => String(s.id || "").toLowerCase() === "recommendations");
+  const candidates = [
+    String(report.section4_hi_body || "").trim(),
+    String(report.pro_premium?.remedies_action_narrative || "").trim(),
+    (report.page1?.recommendation_paragraphs || [])
+      .map(p => String(p || "").trim())
+      .filter(Boolean)
+      .join("\n\n"),
+    String(fromSec?.body || "").trim(),
+  ].map(t => normalizeProseParagraphs(t));
+
+  for (const text of candidates) {
+    if (recommendationsBodyReady(text)) return text;
+  }
+  for (const text of candidates) {
+    if (wordCountText(text) >= 55 && devaCount(text) >= 24 && !textLooksLikePointList(text)) {
+      return text;
+    }
+  }
+  return candidates.find(t => t.length > 0) || "";
+}
+
+export function resolveRecommendationsBullets(report: LoveProReportResponse): string[] {
+  const steps = (report.pro_premium?.action_steps || [])
+    .map(s => String(s || "").trim())
+    .filter(Boolean);
+  if (steps.length) return steps.slice(0, 7);
+
+  const fromP1 = (report.page1?.recommendations || [])
+    .map(s => String(s || "").trim())
+    .filter(Boolean);
+  if (fromP1.length) return fromP1.slice(0, 7);
+
+  const fromSec = (report.app_sections || [])
+    .find(s => String(s.id || "").toLowerCase() === "recommendations");
+  return (fromSec?.bullets || [])
+    .map(s => String(s || "").trim())
+    .filter(Boolean)
+    .slice(0, 7);
+}
+
+/** Full LLM deep connection — 4 dimensions in Hindi prose (विस्तार section). */
+export function resolveDeepConnectionBody(report: LoveProReportResponse): string {
+  const canon = String(report.section3_hi_body || "").trim();
+  if (canon && deepConnectionBodyReady(canon)) return canon;
+
+  const fromSec = (report.app_sections || [])
+    .find(s => String(s.id || "").toLowerCase() === "deep_connection");
+  const secBody = String(fromSec?.body || "").trim();
+  if (deepConnectionBodyReady(secBody)) return secBody;
+
+  const lines: string[] = [];
+  for (const row of report.pro_premium?.deep_analysis || []) {
+    if (!row || typeof row !== "object") continue;
+    const key = String(row.key || "").toLowerCase();
+    const expl = String(row.explanation || "").trim();
+    if (wordCountText(expl) < 55) continue;
+    const title = DEEP_ANALYSIS_TITLES_HI[key] || key;
+    lines.push(`${title}\n${expl}`);
+  }
+  if (lines.length >= 2) return lines.join("\n\n");
+
+  const p1Lines: string[] = [];
+  for (const item of report.page1?.analysis || []) {
+    if (!item || typeof item !== "object") continue;
+    const expl = String(item.explanation || "").trim();
+    if (wordCountText(expl) < 40) continue;
+    const title = String(item.title || "Analysis").trim();
+    p1Lines.push(`${title}\n${expl}`);
+  }
+  if (p1Lines.length >= 2) return p1Lines.join("\n\n");
+  return secBody;
 }
 
 /** Plain Hindi blueprint — no planet/house engine dump (Section 5). */
@@ -911,8 +1014,8 @@ export function buildLoveReportSectionsForPage(
       body: p1.verdict,
     });
 
-    const recBody = (p1.recommendation_paragraphs || []).join("\n\n").trim();
-    const recBullets = (p1.recommendations || []).slice(0, 7);
+    const recBody = resolveRecommendationsBody(report);
+    const recBullets = resolveRecommendationsBullets(report);
     pushSection(sections, {
       id: "recommendations",
       title: labels.recommendations,
@@ -921,19 +1024,11 @@ export function buildLoveReportSectionsForPage(
       bullets: recBullets.length ? recBullets : undefined,
     });
 
-    const deepLines = (p1.analysis || [])
-      .map(item => {
-        const expl = (item.explanation || "").trim();
-        if (!expl) return "";
-        const title = (item.title || "Analysis").trim();
-        return `${title}\n${expl}`;
-      })
-      .filter(Boolean);
     pushSection(sections, {
       id: "deep_connection",
       title: labels.deepCombined,
       subtitle: labels.deepSub,
-      body: deepLines.length ? deepLines.join("\n\n") : undefined,
+      body: resolveDeepConnectionBody(report) || undefined,
     });
   }
 
@@ -992,11 +1087,11 @@ export function buildReportSectionsFromPayload(
   };
   const localById = new Map(local.map(s => [s.id.toLowerCase(), s]));
   const narrativeNoBullets = new Set([
+    "deep_connection",
     "blueprint_vs",
     "moon",
     "root_cause",
     "verdict",
-    "deep_connection",
   ]);
   const sections: LoveReportSection[] = [];
   const seen = new Set<string>();
@@ -1011,6 +1106,14 @@ export function buildReportSectionsFromPayload(
       const resolved = resolveSection8RootCauseBody(report);
       if (resolved) body = resolved;
     }
+    if (id.toLowerCase() === "recommendations") {
+      const resolved = resolveRecommendationsBody(report);
+      if (resolved) body = resolved;
+    }
+    if (id.toLowerCase() === "deep_connection") {
+      const resolved = resolveDeepConnectionBody(report);
+      if (resolved) body = resolved;
+    }
     if (id.toLowerCase() === "blueprint_vs") {
       const resolved = resolveBlueprintVsBody(report);
       if (resolved) body = resolved;
@@ -1019,9 +1122,13 @@ export function buildReportSectionsFromPayload(
       const resolved = resolveMoonSyncBody(report);
       if (resolved) body = resolved;
     }
-    const rawBullets = Array.isArray(row.bullets) && row.bullets.length
+    let rawBullets = Array.isArray(row.bullets) && row.bullets.length
       ? row.bullets.map(b => String(b).trim()).filter(Boolean)
       : fallback?.bullets;
+    if (id.toLowerCase() === "recommendations") {
+      const resolvedBullets = resolveRecommendationsBullets(report);
+      if (resolvedBullets.length) rawBullets = resolvedBullets;
+    }
     const bullets = narrativeNoBullets.has(id.toLowerCase()) ? undefined : rawBullets;
     const m = meta[id];
     pushSection(sections, {

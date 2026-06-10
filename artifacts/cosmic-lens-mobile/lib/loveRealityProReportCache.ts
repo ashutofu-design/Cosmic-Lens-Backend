@@ -8,12 +8,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { LOVE_REALITY_PDF_LAYOUT_VER } from "@/lib/loveRealityPdfLayout";
-import { packLovePerson } from "@/lib/loveRealityProPdfDownload";
+import { packLovePerson } from "@/lib/loveRealityPack";
 import type { LoveProReportResponse } from "@/lib/loveRealityProReport";
 import { needsLoveReportLlmRefresh } from "@/lib/loveRealityReportLang";
 import {
   currentLoveReportRevision,
   detectLoveReportChange,
+  LOVE_REALITY_HI_DEVICE_CACHE_VER,
+  LOVE_REALITY_HI_SERVER_CACHE_VER,
   loveReportNeedsPdfResync,
   loveReportRevisionString,
   type LoveReportCacheMeta,
@@ -196,6 +198,90 @@ export async function resolveLoveReportCache(opts: {
   };
 }
 
+export async function clearLoveReportCache(opts: {
+  userId: number;
+  p1: BirthData;
+  p2: BirthData;
+  p1Name: string;
+  p2Name: string;
+  lang: string;
+}): Promise<void> {
+  const { rawKey, metaKey, pdfSyncKey } = loveReportCacheKeys(opts);
+  sessionRaw.delete(rawKey);
+  sessionMeta.delete(metaKey);
+  try {
+    await AsyncStorage.multiRemove([rawKey, metaKey, pdfSyncKey]);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Update Report — wipe device cache for en + hn + hi so old Hindi cannot replay. */
+export async function clearLoveReportCacheAllLangs(opts: {
+  userId: number;
+  p1: BirthData;
+  p2: BirthData;
+  p1Name: string;
+  p2Name: string;
+}): Promise<void> {
+  for (const lang of ["en", "hn", "hi"] as const) {
+    await clearLoveReportCache({ ...opts, lang });
+  }
+}
+
+/** Wipe Hindi device cache only — used after server hi_cache_ver bump. */
+export async function clearLoveReportCacheHiOnly(opts: {
+  userId: number;
+  p1: BirthData;
+  p2: BirthData;
+  p1Name: string;
+  p2Name: string;
+}): Promise<void> {
+  await clearLoveReportCache({ ...opts, lang: "hi" });
+}
+
+/**
+ * One-time Hindi cache purge on app open (bump LOVE_REALITY_HI_DEVICE_CACHE_VER to rerun).
+ */
+export async function purgeHiDeviceCacheIfNeeded(opts: {
+  userId: number;
+  p1: BirthData;
+  p2: BirthData;
+  p1Name: string;
+  p2Name: string;
+}): Promise<boolean> {
+  try {
+    const seen = await AsyncStorage.getItem(HI_DEVICE_PURGE_KEY);
+    if (seen === LOVE_REALITY_HI_DEVICE_CACHE_VER) return false;
+    await clearLoveReportCacheHiOnly(opts);
+    await AsyncStorage.setItem(HI_DEVICE_PURGE_KEY, LOVE_REALITY_HI_DEVICE_CACHE_VER);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function deviceCacheNeedsServerRefresh(
+  payload: LoveProReportResponse | null,
+  meta: LoveReportCacheMeta | null,
+  lang: ProPdfLangCode,
+): boolean {
+  if (needsLoveReportLlmRefresh(payload, lang, meta?.contentLang)) return true;
+  if (
+    lang === "hi"
+    && payload?.hi_cache_ver
+    && payload.hi_cache_ver !== LOVE_REALITY_HI_SERVER_CACHE_VER
+  ) {
+    return true;
+  }
+  if (lang === "en") return false;
+  if (meta?.polishSource === "polish_snapshot") return true;
+  if (meta?.contentLang && coerceProPdfLang(meta.contentLang) !== lang) return true;
+  if (lang === "hi" && meta?.contentScript && meta.contentScript !== "hi") return true;
+  if (lang === "hn" && meta?.contentScript && meta.contentScript !== "hn") return true;
+  return false;
+}
+
 export async function saveLoveReportCache(
   opts: {
     userId: number;
@@ -215,6 +301,7 @@ export async function saveLoveReportCache(
     savedAt: Date.now(),
     polishSource: data.polish_source,
     contentLang: coerceProPdfLang(data.lang || opts.lang),
+    contentScript: (data.content_script || "").trim() || undefined,
   };
   sessionRaw.set(rawKey, data);
   sessionMeta.set(metaKey, meta);

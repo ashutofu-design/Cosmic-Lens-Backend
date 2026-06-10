@@ -24,7 +24,16 @@ export type LoveReportLangPayload = {
 
   lang?: string;
 
+  section4_hi_body?: string | null;
+
   section8_hi_body?: string | null;
+
+  hi_cache_ver?: string | null;
+
+  pro_premium?: {
+    remedies_action_narrative?: string;
+    action_steps?: string[];
+  };
 
   section8_debug?: {
 
@@ -55,6 +64,10 @@ export type LoveReportLangPayload = {
     verdict?: string;
 
     key_insights?: string[];
+
+    recommendation_paragraphs?: string[];
+
+    recommendations?: string[];
 
   };
 
@@ -283,6 +296,8 @@ export function reportNeedsHindiRetry(
   const script = (report.content_script || "").trim().toLowerCase();
 
   if (script === "en_mismatch" || script === "hi_partial") return true;
+
+  if (lang === "hi" && !section4HiLoadReady(report, lang)) return true;
 
   return !reportHindiFullyReady(report, lang);
 
@@ -603,6 +618,122 @@ function serverSection8Ready(report: LoveReportLangPayload): boolean {
   const words = Math.max(rootW, buW, effW);
 
   return deva >= 24 && words >= SECTION8_MIN_WORDS;
+
+}
+
+
+
+const SECTION4_MIN_WORDS = 80;
+
+const GENERIC_REC_HI_MARKERS = [
+  "हर झगड़े के २४ घंटे",
+  "साप्ताहिक २० मिनट",
+  "कमज़ोर दशा में अल्टीमेटम",
+];
+
+
+
+function section4RecommendationsText(report: LoveReportLangPayload): string {
+
+  const canon = normalizeProseParagraphs(String(report.section4_hi_body || "").trim());
+
+  if (canon) return canon;
+
+  const narr = normalizeProseParagraphs(
+    String(report.pro_premium?.remedies_action_narrative || "").trim(),
+  );
+
+  if (narr) return narr;
+
+  const paras = (report.page1?.recommendation_paragraphs || [])
+
+    .map(p => String(p || "").trim())
+
+    .filter(Boolean)
+
+    .join("\n\n");
+
+  if (paras) return normalizeProseParagraphs(paras);
+
+  const sec = (report.app_sections || [])
+
+    .find(s => String(s.id || "").toLowerCase() === "recommendations");
+
+  return normalizeProseParagraphs(String(sec?.body || "").trim());
+
+}
+
+
+
+function section4LooksGenericFallback(report: LoveReportLangPayload): boolean {
+
+  const body = section4RecommendationsText(report);
+
+  if (wordCount(body) >= SECTION4_MIN_WORDS && devaCount(body) >= 24) return false;
+
+  const sec = (report.app_sections || [])
+
+    .find(s => String(s.id || "").toLowerCase() === "recommendations");
+
+  const bullets = (sec?.bullets || report.page1?.recommendations || [])
+
+    .map(b => String(b || "").trim())
+
+    .filter(Boolean);
+
+  if (!bullets.length) return true;
+
+  if (bullets.length > 4) return false;
+
+  const hits = bullets.filter(b =>
+
+    GENERIC_REC_HI_MARKERS.some(m => b.includes(m)),
+
+  ).length;
+
+  return hits >= Math.min(2, bullets.length);
+
+}
+
+
+
+function section4LoadReady(text: string): boolean {
+
+  const t = normalizeProseParagraphs(String(text || "").trim());
+
+  return (
+
+    wordCount(t) >= SECTION4_MIN_WORDS
+
+    && devaCount(t) >= 24
+
+    && proseFullyHindi(t)
+
+    && !textLooksLikePointList(t)
+
+  );
+
+}
+
+
+
+/** Section 4 (उपाय और आगे क्या करें) — full LLM Hindi prose required. */
+
+export function section4HiLoadReady(
+
+  report: LoveReportLangPayload | null | undefined,
+
+  lang: ProPdfLangCode,
+
+): boolean {
+
+  if (lang !== "hi") return true;
+
+  if (!report) return false;
+
+  if (section4LooksGenericFallback(report)) return false;
+
+  return section4LoadReady(section4RecommendationsText(report));
 
 }
 

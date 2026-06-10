@@ -6,7 +6,7 @@ from flask import Response, jsonify, request
 # Bump when PDF layout/renderer changes — invalidates stale server-side report cache.
 LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v24_moon_sync_llm"
 # Bump to drop all saved Hindi pro-report + polish snapshots (hi only).
-LOVE_REALITY_HI_CACHE_VER = "hi_purge_v15_s8_gate_fix"
+LOVE_REALITY_HI_CACHE_VER = "hi_purge_v18_remedies_action_fix"
 
 
 def love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
@@ -57,11 +57,20 @@ def _enrich_hi_section8_meta(payload: dict) -> dict:
     if not isinstance(payload, dict) or (payload.get("lang") or "").strip().lower() != "hi":
         return payload
     import re
-    from vedic.love_reality.app_report_sections import _blueprint_ready_text, _moon_sync_ready_text
+    from vedic.love_reality.app_report_sections import (
+        _ANALYSIS_TITLES_HI,
+        _blueprint_ready_text,
+        _deep_analysis_map,
+        _deep_connection_body_from_analysis,
+        _moon_sync_ready_text,
+    )
     from vedic.love_reality.love_section_polish import _breakup_chapter_body, _moon_sync_narrative_body
+    from vedic.love_reality.premium_polish import deep_analysis_hi_ready
+    from vedic.love_reality.love_section_polish import remedies_action_hi_ready
     from vedic.love_reality.section8_gate import effective_section8_hi_text
 
     pro = payload.get("pro_premium") if isinstance(payload.get("pro_premium"), dict) else {}
+    p1 = payload.get("page1") if isinstance(payload.get("page1"), dict) else {}
     bu = _breakup_chapter_body(pro)
     moon_narr = _moon_sync_narrative_body(pro)
     moon_body = ""
@@ -73,7 +82,35 @@ def _enrich_hi_section8_meta(payload: dict) -> dict:
         moon_body = _moon_sync_ready_text(pro, "hi") or str(
             (payload.get("pdf_context") or {}).get("page5_moon", {}).get("body") or ""
         ).strip()
+    s4_hi = str(pro.get("remedies_action_narrative") or "").strip()
+    if not s4_hi or not remedies_action_hi_ready(pro):
+        for sec in payload.get("app_sections") or []:
+            if isinstance(sec, dict) and str(sec.get("id") or "").lower() == "recommendations":
+                s4_hi = str(sec.get("body") or "").strip()
+                break
     s5_hi = _blueprint_ready_text(pro, "hi")
+    s3_hi = ""
+    for sec in payload.get("app_sections") or []:
+        if isinstance(sec, dict) and str(sec.get("id") or "").lower() == "deep_connection":
+            s3_hi = str(sec.get("body") or "").strip()
+            break
+    if deep_analysis_hi_ready(pro):
+        from_page1 = _deep_connection_body_from_analysis(p1.get("analysis") or [], "hi")
+        s3_wc = lambda t: len(str(t or "").split())
+        if s3_wc(from_page1) > s3_wc(s3_hi):
+            s3_hi = from_page1
+        if not s3_hi or s3_wc(s3_hi) < 200:
+            da = _deep_analysis_map(pro)
+            if da:
+                built = _deep_connection_body_from_analysis(
+                    [
+                        {"title": _ANALYSIS_TITLES_HI.get(k, k), "explanation": v}
+                        for k, v in da.items()
+                    ],
+                    "hi",
+                )
+                if s3_wc(built) > s3_wc(s3_hi):
+                    s3_hi = built
     s7_hi = _moon_sync_ready_text(pro, "hi") or (
         moon_body if len(moon_body.split()) >= 55 else moon_narr
     )
@@ -102,6 +139,8 @@ def _enrich_hi_section8_meta(payload: dict) -> dict:
     return {
         **payload,
         "hi_cache_ver": LOVE_REALITY_HI_CACHE_VER,
+        "section3_hi_body": s3_hi or None,
+        "section4_hi_body": s4_hi or None,
         "section5_hi_body": s5_hi or None,
         "section7_hi_body": s7_hi or None,
         "section7_debug": {
@@ -150,13 +189,19 @@ def _hi_saved_report_stale(payload: dict) -> bool:
             blueprint_section_hi_ready,
             breakup_chapter_hi_ready,
             moon_sync_narrative_hi_ready,
+            remedies_action_hi_ready,
         )
+        from vedic.love_reality.premium_polish import deep_analysis_hi_ready
 
         if pro and not breakup_chapter_hi_ready(pro):
             return True
         if pro and not moon_sync_narrative_hi_ready(pro):
             return True
         if pro and not blueprint_section_hi_ready(pro):
+            return True
+        if pro and not deep_analysis_hi_ready(pro):
+            return True
+        if pro and not remedies_action_hi_ready(pro):
             return True
     except Exception:
         pass
@@ -357,12 +402,16 @@ def _resolve_pro_premium(
                     blueprint_section_hi_ready,
                     breakup_chapter_hi_ready,
                     moon_sync_narrative_hi_ready,
+                    remedies_action_hi_ready,
                 )
+                from vedic.love_reality.premium_polish import deep_analysis_hi_ready
 
                 if (
                     not breakup_chapter_hi_ready(cached)
                     or not moon_sync_narrative_hi_ready(cached)
                     or not blueprint_section_hi_ready(cached)
+                    or not deep_analysis_hi_ready(cached)
+                    or not remedies_action_hi_ready(cached)
                 ):
                     cached = None
                     force_llm = True
@@ -379,14 +428,20 @@ def _resolve_pro_premium(
         from vedic.love_reality.love_section_polish import _assembly_depth_ok
 
         if _assembly_depth_ok(pro):
-            from vedic.love_reality.love_section_polish import breakup_chapter_hi_ready
-
-            from vedic.love_reality.love_section_polish import moon_sync_narrative_hi_ready
+            from vedic.love_reality.love_section_polish import (
+                blueprint_section_hi_ready,
+                breakup_chapter_hi_ready,
+                moon_sync_narrative_hi_ready,
+                remedies_action_hi_ready,
+            )
+            from vedic.love_reality.premium_polish import deep_analysis_hi_ready
 
             if lang != "hi" or (
                 breakup_chapter_hi_ready(pro)
                 and moon_sync_narrative_hi_ready(pro)
                 and blueprint_section_hi_ready(pro)
+                and deep_analysis_hi_ready(pro)
+                and remedies_action_hi_ready(pro)
             ):
                 _snap.save(snap_params, pro)
     return pro, "llm"
@@ -853,6 +908,14 @@ def register_love_reality_routes(flask_app) -> None:
                     moon_sync_narrative_hi_ready,
                     strip_non_hindi_breakup_chapter,
                 )
+                from vedic.love_reality.premium_polish import (
+                    deep_analysis_hi_ready,
+                    ensure_deep_analysis_llm,
+                )
+                from vedic.love_reality.love_section_polish import (
+                    ensure_remedies_action_llm,
+                    remedies_action_hi_ready,
+                )
 
                 if lang in ("hi", "hn"):
                     strip_non_hindi_breakup_chapter(pro)
@@ -875,11 +938,25 @@ def register_love_reality_routes(flask_app) -> None:
                             lang,
                             force_llm=True,
                         )
+                        pro = ensure_deep_analysis_llm(
+                            bundle,
+                            pro,
+                            lang,
+                            force_llm=True,
+                        )
+                        pro = ensure_remedies_action_llm(
+                            bundle,
+                            pro,
+                            lang,
+                            force_llm=True,
+                        )
                         if lang == "hi":
                             if (
                                 breakup_chapter_hi_ready(pro)
                                 and moon_sync_narrative_hi_ready(pro)
                                 and blueprint_section_hi_ready(pro)
+                                and deep_analysis_hi_ready(pro)
+                                and remedies_action_hi_ready(pro)
                             ):
                                 break
                         elif breakup_chapter_word_count(pro) >= 80:
@@ -900,6 +977,18 @@ def register_love_reality_routes(flask_app) -> None:
                         force_llm=force_full,
                     )
                     pro = ensure_blueprint_section5_llm(
+                        bundle,
+                        pro,
+                        lang,
+                        force_llm=force_full,
+                    )
+                    pro = ensure_deep_analysis_llm(
+                        bundle,
+                        pro,
+                        lang,
+                        force_llm=force_full,
+                    )
+                    pro = ensure_remedies_action_llm(
                         bundle,
                         pro,
                         lang,
@@ -932,6 +1021,18 @@ def register_love_reality_routes(flask_app) -> None:
                         force_llm=lang == "hi",
                     )
                     pro = ensure_blueprint_section5_llm(
+                        bundle,
+                        pro,
+                        lang,
+                        force_llm=lang == "hi",
+                    )
+                    pro = ensure_deep_analysis_llm(
+                        bundle,
+                        pro,
+                        lang,
+                        force_llm=lang == "hi",
+                    )
+                    pro = ensure_remedies_action_llm(
                         bundle,
                         pro,
                         lang,
@@ -1004,6 +1105,12 @@ def register_love_reality_routes(flask_app) -> None:
                         pro = sanitize_love_reality_pro_premium(pro_retry, bundle, lang=lang)
                         strip_non_hindi_breakup_chapter(pro)
                         pro = ensure_breakup_section8_llm(
+                            bundle,
+                            pro,
+                            lang,
+                            force_llm=True,
+                        )
+                        pro = ensure_remedies_action_llm(
                             bundle,
                             pro,
                             lang,

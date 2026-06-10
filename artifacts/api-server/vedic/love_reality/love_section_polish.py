@@ -1100,6 +1100,15 @@ def _remedies_action_engine_facts(bundle: dict) -> str:
 def _build_remedies_action_system_prompt(lang: str) -> str:
     lang = polish_content_lang(lang)
     script = love_write_script_label(lang)
+    hi_lock = ""
+    if lang == "hi":
+        hi_lock = (
+            "\n\nMANDATORY FOR hi — remedies_action_narrative:\n"
+            "- 100% देवनागरी Hindi, रोज़मर्रा की भाषा\n"
+            "- 3+ paragraphs (\\n\\n) — उपाय + अगले ७–३० दिन + ३–१२ महीने का plan\n"
+            "- Real partner names — p1 को सीधे समझाएँ\n"
+            "- NO English headings like 'Upay and Aage Kya Karein' inside body\n"
+        )
     return f"""Write ONLY Section 4 — Practical Remedies & What To Do Next (in-app action plan for p1).
 
 Return STRICT JSON:
@@ -1109,8 +1118,12 @@ Return STRICT JSON:
 }}
 
 Write entirely in {script}.
+{hi_lock}
 
 {love_script_directive(lang)}
+
+EXAMPLE (hi style — real names, paragraph prose):
+"[p1_name], अगले ७–३० दिन में सबसे पहले झगड़े के २४ घंटे के अंदर repair की आदत बनाएँ — [p2_name] के चुप होने पर message flood न करें।\\n\\nसाप्ताहिक २० मिनट phone-free बातचीत रखें — यही आपका सबसे सरल उपाय है। सोमवार शाम शांत घंटा chart के अनुसार मन को स्थिर करता है।\\n\\nअगले ३–१२ महीने: जब connection कमज़ोर लगे तो ultimatum न दें — एक बार calmly बैठकर clarity लें।"
 
 TASK — focus 80% PRACTICAL, 20% simple chart-linked habits:
 1) Ab kya karein (next 7–30 days): repair habits, communication rules, conflict cooldown — specific to ROOT_CAUSE
@@ -1120,8 +1133,9 @@ TASK — focus 80% PRACTICAL, 20% simple chart-linked habits:
 5) If connection feels weak, say what improves odds — never false reunion promises
 
 RULES:
-- Minimum 110 words in remedies_action_narrative, 3–4 paragraphs (\\n\\n)
-- action_steps: exactly 5–7 bullets, each 8–18 words, verb-first ("Repair within 24h…")
+- Minimum 110 words in remedies_action_narrative, 3–4 paragraphs (\\n\\n) — flowing explanation, NOT title-only bullets
+- remedies_action_narrative = poora upay + aage kya karein guide — jaise jyotishi samjha rahe hon
+- action_steps: exactly 5–7 short lines (8–18 words each) — quick checklist AFTER the prose, verb-first
 - Do NOT repeat verdict paragraphs or moon/blueprint analysis
 - Do NOT write scores like "13/100" or "love score" — say "jab connection kamzor lagta hai"
 - No generic therapy clichés ("open communication", "mutual understanding")
@@ -1155,14 +1169,19 @@ def polish_love_reality_remedies_action_only(
     max_tok = min(int(os.environ.get("LOVE_REALITY_REMEDIES_ACTION_MAX_TOKENS", "2600")), 4096)
 
     def _parse(parsed: dict) -> dict[str, Any]:
-        body = str(parsed.get("remedies_action_narrative") or "").strip()
+        body = _normalize_prose_paragraphs(
+            str(parsed.get("remedies_action_narrative") or "").strip(),
+            min_paragraphs=2,
+        )
         steps_raw = parsed.get("action_steps")
         steps: list[str] = []
         if isinstance(steps_raw, list):
             steps = [str(x).strip() for x in steps_raw if str(x).strip()]
         elif isinstance(steps_raw, str) and steps_raw.strip():
             steps = [steps_raw.strip()]
-        if _word_count(body) < 70:
+        if _word_count(body) < _REMEDIES_ACTION_MIN_WORDS:
+            return {}
+        if lang == "hi" and not _remedies_action_text_hi_ok(body):
             return {}
         return {"remedies_action_narrative": body, "action_steps": steps[:7]}
 
@@ -1179,6 +1198,94 @@ def polish_love_reality_remedies_action_only(
         parse_fn=_parse,
         tel=tel,
     )
+
+
+_REMEDIES_ACTION_MIN_WORDS = 80
+
+
+def _remedies_action_text_hi_ok(body: str) -> bool:
+    body = _normalize_prose_paragraphs(str(body or "").strip(), min_paragraphs=2)
+    if _word_count(body) < _REMEDIES_ACTION_MIN_WORDS:
+        return False
+    if not _prose_paragraph_form_ok(body, min_paragraphs=2, min_para_words=15):
+        return False
+    try:
+        from i18n_summary import prose_fully_hindi
+
+        return prose_fully_hindi(body)
+    except Exception:
+        return len(re.findall(r"[\u0900-\u097F]", body)) >= 24
+
+
+def remedies_action_hi_ready(pro: dict) -> bool:
+    return _remedies_action_text_hi_ok(str((pro or {}).get("remedies_action_narrative") or ""))
+
+
+def _bust_remedies_action_scope_file_cache(bundle: dict, lang: str) -> None:
+    scope = "remedies_action"
+    model = _section_model("LOVE_REALITY_REMEDIES_ACTION_MODEL")
+    system = _build_remedies_action_system_prompt(polish_content_lang(lang))
+    prompt_fp = _fingerprint(system)
+    cache_key = _section_cache_key(bundle, polish_content_lang(lang), model, scope, prompt_fp)
+    cache_path = os.path.join(_cache_dir(), f"{scope}_{cache_key}.json")
+    try:
+        if os.path.isfile(cache_path):
+            os.remove(cache_path)
+    except OSError as exc:
+        log.warning("[%s] cache bust failed: %s", scope, exc)
+
+
+def ensure_remedies_action_llm(
+    bundle: dict,
+    pro: dict,
+    lang: str,
+    *,
+    force_llm: bool = False,
+) -> dict:
+    """Section 4 (उपाय और आगे क्या करें) — full Hindi LLM remedies + action plan."""
+    if not isinstance(pro, dict):
+        return pro or {}
+    narr = str(pro.get("remedies_action_narrative") or "").strip()
+    if lang == "hi" and narr and not remedies_action_hi_ready(pro):
+        pro["remedies_action_narrative"] = ""
+        pro["action_steps"] = []
+        narr = ""
+    elif lang == "hi" and remedies_action_hi_ready(pro) and not force_llm:
+        return pro
+
+    work = dict(bundle)
+    work["_lr_prior_digest"] = _build_prior_sections_digest(pro, lang)
+    last_meta: dict[str, Any] = {}
+    max_attempts = max(1, int(os.environ.get("LOVE_REALITY_REMEDIES_ACTION_ATTEMPTS", "3")))
+    for attempt in range(max_attempts):
+        if attempt > 0:
+            _bust_remedies_action_scope_file_cache(bundle, lang)
+        hit = polish_love_reality_remedies_action_only(work, lang=lang, force_llm=True)
+        last_meta = hit.get("_meta") if isinstance(hit.get("_meta"), dict) else {}
+        new_body = _normalize_prose_paragraphs(
+            str(hit.get("remedies_action_narrative") or "").strip(),
+            min_paragraphs=2,
+        )
+        steps = hit.get("action_steps") if isinstance(hit.get("action_steps"), list) else []
+        if lang == "hi" and not _remedies_action_text_hi_ok(new_body):
+            last_meta = {**last_meta, "reject": "not_hi_or_thin", "words": _word_count(new_body)}
+            continue
+        if _word_count(new_body) >= _REMEDIES_ACTION_MIN_WORDS:
+            pro["remedies_action_narrative"] = new_body
+            pro["action_steps"] = [str(x).strip() for x in steps if str(x).strip()][:7]
+            pro.setdefault("_meta", {})["section4_remedies"] = {
+                **last_meta,
+                "source": "llm",
+                "attempt": attempt + 1,
+                "words": _word_count(new_body),
+            }
+            return pro
+    pro.setdefault("_meta", {})["section4_remedies"] = {
+        **last_meta,
+        "source": "failed",
+        "attempts": max_attempts,
+    }
+    return pro
 
 
 def _build_dasha_system_prompt(lang: str) -> str:
@@ -2235,6 +2342,16 @@ def assemble_love_reality_pro_premium(
                     _upsert_chapter(pro, "will_return", body)
                     _upsert_chapter(pro, "future_outcome", body)
                 elif label == "remedies_action":
+                    use_narr = body
+                    if (
+                        requested_lang == "hi"
+                        and use_narr
+                        and not _remedies_action_text_hi_ok(use_narr)
+                    ):
+                        log.warning("[assembly] remedies_action rejected — not Devanagari Hindi")
+                        use_narr = ""
+                    if use_narr:
+                        pro["remedies_action_narrative"] = use_narr
                     steps = hit.get("action_steps")
                     if isinstance(steps, list):
                         pro["action_steps"] = [str(x).strip() for x in steps if str(x).strip()][:7]

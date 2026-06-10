@@ -6,7 +6,7 @@ from flask import Response, jsonify, request
 # Bump when PDF layout/renderer changes — invalidates stale server-side report cache.
 LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v24_moon_sync_llm"
 # Bump to drop all saved Hindi pro-report + polish snapshots (hi only).
-LOVE_REALITY_HI_CACHE_VER = "hi_purge_v11_moon_llm"
+LOVE_REALITY_HI_CACHE_VER = "hi_purge_v14_paragraph_prose"
 
 
 def love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
@@ -53,14 +53,30 @@ def _purge_hi_server_caches_once() -> None:
 
 
 def _enrich_hi_section8_meta(payload: dict) -> dict:
-    """Attach section8_debug + section8_hi_body so mobile gate matches server."""
+    """Attach section7/8 canonical Hindi bodies + debug for mobile."""
     if not isinstance(payload, dict) or (payload.get("lang") or "").strip().lower() != "hi":
         return payload
     import re
-    from vedic.love_reality.love_section_polish import _breakup_chapter_body
+    from vedic.love_reality.app_report_sections import _blueprint_ready_text, _moon_sync_ready_text
+    from vedic.love_reality.love_section_polish import _breakup_chapter_body, _moon_sync_narrative_body
     from vedic.love_reality.section8_gate import effective_section8_hi_text
 
-    bu = _breakup_chapter_body(payload.get("pro_premium") or {})
+    pro = payload.get("pro_premium") if isinstance(payload.get("pro_premium"), dict) else {}
+    bu = _breakup_chapter_body(pro)
+    moon_narr = _moon_sync_narrative_body(pro)
+    moon_body = ""
+    for sec in payload.get("app_sections") or []:
+        if isinstance(sec, dict) and str(sec.get("id") or "").lower() == "moon":
+            moon_body = str(sec.get("body") or "").strip()
+            break
+    if len(moon_body.split()) < 55:
+        moon_body = _moon_sync_ready_text(pro, "hi") or str(
+            (payload.get("pdf_context") or {}).get("page5_moon", {}).get("body") or ""
+        ).strip()
+    s5_hi = _blueprint_ready_text(pro, "hi")
+    s7_hi = _moon_sync_ready_text(pro, "hi") or (
+        moon_body if len(moon_body.split()) >= 55 else moon_narr
+    )
     root_body = ""
     for sec in payload.get("app_sections") or []:
         if isinstance(sec, dict) and str(sec.get("id") or "").lower() == "root_cause":
@@ -71,11 +87,13 @@ def _enrich_hi_section8_meta(payload: dict) -> dict:
             (payload.get("pdf_context") or {}).get("page6_root_cause") or ""
         ).strip()
     dbg = {
-        "gate_ver": "v10",
+        "gate_ver": "v12",
         "breakup_words": len(bu.split()),
         "breakup_deva": len(re.findall(r"[\u0900-\u097F]", bu)),
         "root_words": len(root_body.split()),
         "root_deva": len(re.findall(r"[\u0900-\u097F]", root_body)),
+        "moon_words": len(s7_hi.split()) if s7_hi else len(moon_body.split()),
+        "moon_deva": len(re.findall(r"[\u0900-\u097F]", s7_hi or moon_body or "")),
     }
     s8_hi = effective_section8_hi_text({**payload, "section8_debug": dbg})
     dbg["effective_words"] = len(s8_hi.split()) if s8_hi else 0
@@ -84,6 +102,14 @@ def _enrich_hi_section8_meta(payload: dict) -> dict:
     return {
         **payload,
         "hi_cache_ver": LOVE_REALITY_HI_CACHE_VER,
+        "section5_hi_body": s5_hi or None,
+        "section7_hi_body": s7_hi or None,
+        "section7_debug": {
+            "moon_narr_words": len(moon_narr.split()),
+            "moon_narr_deva": len(re.findall(r"[\u0900-\u097F]", moon_narr)),
+            "moon_body_words": dbg["moon_words"],
+            "moon_body_deva": dbg["moon_deva"],
+        },
         "section8_hi_body": s8_hi or None,
         "section8_debug": dbg,
     }
@@ -120,9 +146,17 @@ def _hi_saved_report_stale(payload: dict) -> bool:
         return True
     pro = payload.get("pro_premium") if isinstance(payload.get("pro_premium"), dict) else {}
     try:
-        from vedic.love_reality.love_section_polish import breakup_chapter_hi_ready
+        from vedic.love_reality.love_section_polish import (
+            blueprint_section_hi_ready,
+            breakup_chapter_hi_ready,
+            moon_sync_narrative_hi_ready,
+        )
 
         if pro and not breakup_chapter_hi_ready(pro):
+            return True
+        if pro and not moon_sync_narrative_hi_ready(pro):
+            return True
+        if pro and not blueprint_section_hi_ready(pro):
             return True
     except Exception:
         pass
@@ -319,9 +353,17 @@ def _resolve_pro_premium(
                 if not prose_matches_lang(verdict, lang):
                     cached = None
             if cached and lang == "hi":
-                from vedic.love_reality.love_section_polish import breakup_chapter_hi_ready
+                from vedic.love_reality.love_section_polish import (
+                    blueprint_section_hi_ready,
+                    breakup_chapter_hi_ready,
+                    moon_sync_narrative_hi_ready,
+                )
 
-                if not breakup_chapter_hi_ready(cached):
+                if (
+                    not breakup_chapter_hi_ready(cached)
+                    or not moon_sync_narrative_hi_ready(cached)
+                    or not blueprint_section_hi_ready(cached)
+                ):
                     cached = None
                     force_llm = True
             if cached:
@@ -339,7 +381,13 @@ def _resolve_pro_premium(
         if _assembly_depth_ok(pro):
             from vedic.love_reality.love_section_polish import breakup_chapter_hi_ready
 
-            if lang != "hi" or breakup_chapter_hi_ready(pro):
+            from vedic.love_reality.love_section_polish import moon_sync_narrative_hi_ready
+
+            if lang != "hi" or (
+                breakup_chapter_hi_ready(pro)
+                and moon_sync_narrative_hi_ready(pro)
+                and blueprint_section_hi_ready(pro)
+            ):
                 _snap.save(snap_params, pro)
     return pro, "llm"
 
@@ -795,9 +843,11 @@ def register_love_reality_routes(flask_app) -> None:
                         "detail": "No saved report text for this couple yet.",
                     }), 412
                 from vedic.love_reality.love_section_polish import (
+                    blueprint_section_hi_ready,
                     breakup_chapter_hi_ready,
                     breakup_chapter_word_count,
                     bust_love_polish_section_caches,
+                    ensure_blueprint_section5_llm,
                     ensure_breakup_section8_llm,
                     ensure_moon_sync_section7_llm,
                     moon_sync_narrative_hi_ready,
@@ -819,8 +869,18 @@ def register_love_reality_routes(flask_app) -> None:
                             lang,
                             force_llm=True,
                         )
+                        pro = ensure_blueprint_section5_llm(
+                            bundle,
+                            pro,
+                            lang,
+                            force_llm=True,
+                        )
                         if lang == "hi":
-                            if breakup_chapter_hi_ready(pro) and moon_sync_narrative_hi_ready(pro):
+                            if (
+                                breakup_chapter_hi_ready(pro)
+                                and moon_sync_narrative_hi_ready(pro)
+                                and blueprint_section_hi_ready(pro)
+                            ):
                                 break
                         elif breakup_chapter_word_count(pro) >= 80:
                             break
@@ -834,6 +894,12 @@ def register_love_reality_routes(flask_app) -> None:
                         force_llm=force_full,
                     )
                     pro = ensure_moon_sync_section7_llm(
+                        bundle,
+                        pro,
+                        lang,
+                        force_llm=force_full,
+                    )
+                    pro = ensure_blueprint_section5_llm(
                         bundle,
                         pro,
                         lang,
@@ -858,6 +924,26 @@ def register_love_reality_routes(flask_app) -> None:
                     }), 412
                 pro = sanitize_love_reality_pro_premium(pro, bundle, lang=lang)
                 strip_non_hindi_breakup_chapter(pro)
+                if lang in ("hi", "hn"):
+                    pro = ensure_moon_sync_section7_llm(
+                        bundle,
+                        pro,
+                        lang,
+                        force_llm=lang == "hi",
+                    )
+                    pro = ensure_blueprint_section5_llm(
+                        bundle,
+                        pro,
+                        lang,
+                        force_llm=lang == "hi",
+                    )
+                    if lang == "hi" and not breakup_chapter_hi_ready(pro):
+                        pro = ensure_breakup_section8_llm(
+                            bundle,
+                            pro,
+                            lang,
+                            force_llm=True,
+                        )
                 from vedic.love_reality.pdf_data_v2 import build_love_reality_pdf_v2_context
                 from vedic.love_reality.pdf_page1_data import (
                     build_love_reality_page1_data,

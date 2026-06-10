@@ -111,6 +111,15 @@ export type LoveProReportResponse = {
   }>;
   /** hi | hn | en | en_mismatch — server check after localize. */
   content_script?: string;
+  /** Canonical Hindi Section 7 (Moon) body from server. */
+  section5_hi_body?: string | null;
+  section7_hi_body?: string | null;
+  section7_debug?: {
+    moon_narr_words?: number;
+    moon_narr_deva?: number;
+    moon_body_words?: number;
+    moon_body_deva?: number;
+  };
   /** Canonical Hindi Section 8 body — server gate passed. */
   section8_hi_body?: string | null;
   section8_debug?: {
@@ -171,7 +180,7 @@ function wordCountText(text: string): number {
 /** Best Hindi Section 8 text — server canonical body, breakup chapter, or root_cause. */
 export function effectiveSection8HiText(report: LoveProReportResponse): string {
   const canon = String(report.section8_hi_body || "").trim();
-  if (canon) return canon;
+  if (canon && narrativeBodyReady(canon, 80)) return canon;
 
   const breakup = breakupChapterBody(report);
   const fromCtx = String(report.pdf_context?.page6_root_cause || "").trim();
@@ -179,40 +188,102 @@ export function effectiveSection8HiText(report: LoveProReportResponse): string {
     .find(s => String(s.id || "").toLowerCase() === "root_cause");
   const root = String(fromSec?.body || "").trim() || fromCtx;
 
-  let best = "";
-  let bestDeva = -1;
-  for (const raw of [breakup, root]) {
-    const text = String(raw || "").trim();
-    if (!text) continue;
-    const deva = devaCount(text);
-    const wc = wordCountText(text);
-    if (wc >= 80 && deva > bestDeva) {
-      best = text;
-      bestDeva = deva;
-    } else if (!best && wc > wordCountText(best)) {
-      best = text;
-    }
+  for (const text of [breakup, root]) {
+    if (narrativeBodyReady(text, 80)) return text;
   }
-  return best;
+  return "";
 }
 
 const MOON_ENGINE_FALLBACK_HI =
   /चंद्र संकेत सहज भावनात्मक लय|षष्ठाष्टक.*६-८ राशि चंद्र/;
 
+const BLUEPRINT_JARGON_RE =
+  /(?:7th|8th|12th)\s+house|upapada|house\s+lord|lagna|venus\s*:|jupiter\s*:|mercury\s*\(|occupants|nakshatra|उपापदा|अरुधा|लग्न|घर\s*स्वामी|७वीं?\s*भाव|शुक्र\s*:|गुरु\s*:/i;
+
+function blueprintHasJargon(text: string): boolean {
+  return BLUEPRINT_JARGON_RE.test(text || "");
+}
+
+const BULLET_LINE_RE = /^\s*(?:[•\-*►▪]|(?:\d+[.)]))\s+/m;
+
+function textLooksLikePointList(text: string): boolean {
+  const raw = String(text || "").trim();
+  if (!raw) return true;
+  if (BULLET_LINE_RE.test(raw)) return true;
+  if (/chart signals|engine facts|•\s/i.test(raw)) return true;
+  if (!raw.includes("\n\n")) {
+    const lines = raw.split("\n").map(l => l.trim()).filter(Boolean);
+    if (lines.length >= 3) {
+      const avg = lines.reduce((n, l) => n + wordCountText(l), 0) / lines.length;
+      if (avg < 22) return true;
+    }
+  }
+  return false;
+}
+
+function proseParagraphFormOk(
+  text: string,
+  minParagraphs = 3,
+  minParaWords = 18,
+): boolean {
+  const raw = String(text || "").trim();
+  if (!raw || textLooksLikePointList(raw)) return false;
+  const paras = raw.split(/\n\s*\n+/).map(p => p.trim()).filter(Boolean);
+  if (paras.length < minParagraphs) return false;
+  const good = paras.filter(p => wordCountText(p) >= minParaWords).length;
+  return good >= minParagraphs;
+}
+
+function blueprintBodyReady(text: string): boolean {
+  return (
+    wordCountText(text) >= 80
+    && !blueprintHasJargon(text)
+    && devaCount(text) >= 24
+    && proseParagraphFormOk(text, 3, 18)
+  );
+}
+
+function narrativeBodyReady(text: string, minWords: number, minParaWords = 15): boolean {
+  return (
+    wordCountText(text) >= minWords
+    && devaCount(text) >= 24
+    && proseParagraphFormOk(text, 3, minParaWords)
+  );
+}
+
+/** Plain Hindi blueprint — no planet/house engine dump (Section 5). */
+export function resolveBlueprintVsBody(report: LoveProReportResponse): string {
+  const canon = String(report.section5_hi_body || "").trim();
+  if (canon && blueprintBodyReady(canon)) return canon;
+
+  const narr = String(report.pro_premium?.blueprint_reality || "").trim();
+  const fromCtx = String(report.pdf_context?.page2_3_blueprint?.part2 || "").trim();
+  const fromSec = (report.app_sections || [])
+    .find(s => String(s.id || "").toLowerCase() === "blueprint_vs");
+  const body = String(fromSec?.body || "").trim() || fromCtx;
+
+  for (const text of [narr, body]) {
+    if (blueprintBodyReady(text)) return text;
+  }
+  return "";
+}
+
 /** Prefer LLM moon_sync_narrative over engine one-liner for Section 7. */
 export function resolveMoonSyncBody(report: LoveProReportResponse): string {
+  const canon = String(report.section7_hi_body || "").trim();
+  if (canon && narrativeBodyReady(canon, 55)) return canon;
+
   const narr = String(report.pro_premium?.moon_sync_narrative || "").trim();
   const fromCtx = String(report.pdf_context?.page5_moon?.body || "").trim();
   const fromSec = (report.app_sections || [])
     .find(s => String(s.id || "").toLowerCase() === "moon");
   const moon = String(fromSec?.body || "").trim() || fromCtx;
-  if (wordCountText(narr) >= 55) {
-    if (wordCountText(moon) < 55 || MOON_ENGINE_FALLBACK_HI.test(moon)) {
-      return narr;
-    }
-    if (devaCount(narr) > devaCount(moon)) return narr;
+
+  const candidates = [narr, moon].filter(t => t && !MOON_ENGINE_FALLBACK_HI.test(t));
+  for (const text of candidates) {
+    if (narrativeBodyReady(text, 55)) return text;
   }
-  return moon || narr;
+  return "";
 }
 
 /** Prefer LLM breakup chapter for Section 8 when app_sections root_cause is stale/thin. */
@@ -804,12 +875,11 @@ export function buildLoveReportSectionsForPage(
   }
 
   if (ctx) {
-    const bp = ctx.page2_3_blueprint || {};
     pushSection(sections, {
       id: "blueprint_vs",
       title: labels.blueprintVs,
       subtitle: labels.blueprintVsSub,
-      body: (bp.part2 || bp.part1 || "").trim() || undefined,
+      body: resolveBlueprintVsBody(report) || undefined,
     });
 
     const moonBody = resolveMoonSyncBody(report) || undefined;
@@ -858,6 +928,13 @@ export function buildReportSectionsFromPayload(
     moon: { title: labels.moon, subtitle: labels.moonSub },
   };
   const localById = new Map(local.map(s => [s.id.toLowerCase(), s]));
+  const narrativeNoBullets = new Set([
+    "blueprint_vs",
+    "moon",
+    "root_cause",
+    "verdict",
+    "deep_connection",
+  ]);
   const sections: LoveReportSection[] = [];
   const seen = new Set<string>();
   for (const row of server) {
@@ -871,13 +948,18 @@ export function buildReportSectionsFromPayload(
       const resolved = resolveSection8RootCauseBody(report);
       if (resolved) body = resolved;
     }
+    if (id.toLowerCase() === "blueprint_vs") {
+      const resolved = resolveBlueprintVsBody(report);
+      if (resolved) body = resolved;
+    }
     if (id.toLowerCase() === "moon") {
       const resolved = resolveMoonSyncBody(report);
       if (resolved) body = resolved;
     }
-    const bullets = Array.isArray(row.bullets) && row.bullets.length
+    const rawBullets = Array.isArray(row.bullets) && row.bullets.length
       ? row.bullets.map(b => String(b).trim()).filter(Boolean)
       : fallback?.bullets;
+    const bullets = narrativeNoBullets.has(id.toLowerCase()) ? undefined : rawBullets;
     const m = meta[id];
     pushSection(sections, {
       id,

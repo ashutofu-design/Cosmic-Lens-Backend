@@ -8,7 +8,7 @@ import { LOVE_REALITY_PDF_LAYOUT_VER } from "@/lib/loveRealityPdfLayout";
 export const LOVE_REALITY_APP_REPORT_VER = "lr_app_v28_llm_hi";
 
 /** Bump to wipe device Hindi report cache once (server hi_purge_v1). */
-export const LOVE_REALITY_HI_DEVICE_CACHE_VER = "hi_purge_v3_moon_llm";
+export const LOVE_REALITY_HI_DEVICE_CACHE_VER = "hi_purge_v6_paragraph_prose";
 
 export type LoveReportChangeKind =
   /** Cached payload matches current app + PDF layout. */

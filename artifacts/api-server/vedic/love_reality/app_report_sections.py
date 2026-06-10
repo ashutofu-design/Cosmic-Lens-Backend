@@ -241,20 +241,101 @@ def enrich_page1_and_context(
                 ctx["page6_root_cause"] = fb
 
     bp = dict(ctx.get("page2_3_blueprint") or {})
-    if _word_count(str(bp.get("part2") or "")) < 40:
-        br = str(pro.get("blueprint_reality") or "").strip() or _chapter_body(pro, "love_connection")
-        if br:
-            bp["part2"] = br
+    br = _blueprint_ready_text(pro, lang)
+    if br:
+        bp["part2"] = br
     ctx["page2_3_blueprint"] = bp
 
     return p1, ctx
 
 
+def _llm_hindi_body_locked(text: str, section_id: str) -> bool:
+    """Keep full LLM Hindi — force-relocalize shortens Section 7/8 to one-liners."""
+    sid = str(section_id or "").lower()
+    raw = str(text or "").strip()
+    if not raw:
+        return False
+    try:
+        from i18n_summary import prose_fully_hindi
+
+        if not prose_fully_hindi(raw):
+            return False
+    except Exception:
+        if len(re.findall(r"[\u0900-\u097F]", raw)) < 24:
+            return False
+    wc = _word_count(raw)
+    if sid == "moon":
+        return wc >= 55
+    if sid == "root_cause":
+        return wc >= 80
+    if sid == "blueprint_vs":
+        return wc >= 80
+    return False
+
+
+def _blueprint_ready_text(pro: dict, lang: str = "en") -> str:
+    """Plain-language blueprint LLM — no planet/house dump."""
+    from vedic.love_reality.love_section_polish import (
+        _blueprint_body_text,
+        _blueprint_has_chart_jargon,
+        _blueprint_text_hi_ok,
+        _prose_paragraph_form_ok,
+    )
+
+    body = _blueprint_body_text(pro)
+    if (
+        _word_count(body) < 80
+        or _blueprint_has_chart_jargon(body)
+        or not _prose_paragraph_form_ok(body, min_paragraphs=3, min_para_words=18)
+    ):
+        return ""
+    lane = (lang or "en").strip().lower()
+    if lane != "hi":
+        return body
+    if _blueprint_text_hi_ok(body):
+        return body
+    return ""
+
+
+def _sync_blueprint_from_llm(
+    sections: list[dict[str, Any]],
+    ctx: dict[str, Any],
+    pro: dict[str, Any],
+    lang: str = "en",
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Map plain Hindi blueprint LLM → Section 5 (blueprint_vs)."""
+    text = _blueprint_ready_text(pro, lang)
+    if not text:
+        return sections, ctx
+    ctx_out = dict(ctx or {})
+    bp = dict(ctx_out.get("page2_3_blueprint") or {})
+    bp["part2"] = text
+    ctx_out["page2_3_blueprint"] = bp
+    out: list[dict[str, Any]] = []
+    patched = False
+    for row in sections:
+        if not isinstance(row, dict):
+            continue
+        sec = dict(row)
+        if str(sec.get("id") or "").lower() == "blueprint_vs":
+            sec["body"] = text
+            patched = True
+        out.append(sec)
+    if not patched:
+        out.append({"id": "blueprint_vs", "body": text})
+    return out, ctx_out
+
+
 def _localize_section_row(row: dict[str, Any], lang: str) -> dict[str, Any]:
     out = dict(row)
     force = lang in ("hi", "hn")
+    sid = str(out.get("id") or "").lower()
     if out.get("body"):
-        out["body"] = _localize_prose_block(str(out["body"]), lang, force=force)
+        raw = str(out["body"]).strip()
+        if lang == "hi" and _llm_hindi_body_locked(raw, sid):
+            out["body"] = raw
+        else:
+            out["body"] = _localize_prose_block(raw, lang, force=force)
     bullets = out.get("bullets")
     if isinstance(bullets, list):
         loc_bullets = []
@@ -416,7 +497,12 @@ def _finalize_hindi_sections(sections: list[dict[str, Any]], lang: str) -> list[
         sec = dict(row)
         sid = str(sec.get("id") or "").lower()
         body = str(sec.get("body") or "").strip()
-        if body and sid != "scorecard" and _needs_force(body):
+        if (
+            body
+            and sid != "scorecard"
+            and not _llm_hindi_body_locked(body, sid)
+            and _needs_force(body)
+        ):
             sec["body"] = _localize_prose_block(body, lang, force=True)
         bullets = sec.get("bullets")
         if isinstance(bullets, list):
@@ -427,7 +513,7 @@ def _finalize_hindi_sections(sections: list[dict[str, Any]], lang: str) -> list[
                     continue
                 if sid == "scorecard" and lang == "hi":
                     fixed.append(_localize_scorecard_line(raw, lang))
-                elif _needs_force(raw):
+                elif _needs_force(raw, sid):
                     fixed.append(_localize_prose_block(raw, lang, force=True))
                 else:
                     fixed.append(raw)
@@ -515,6 +601,7 @@ def build_localized_app_sections(
     p1 = _apply_ui_label_locale(p1, lane)
 
     sections = build_in_app_page_sections(p1, ctx, lane)
+    sections, ctx = _sync_blueprint_from_llm(sections, ctx, pro, lane)
     sections, ctx = _sync_moon_from_narrative(sections, ctx, pro, lane)
     sections, ctx = _sync_root_cause_from_breakup(sections, ctx, pro)
     if lane in ("hn", "hi"):

@@ -23,7 +23,113 @@ from vedic.compat.premium_chapters import CHAPTER_BODY_KEY, normalize_pro_pdf_la
 
 log = logging.getLogger(__name__)
 
-_ASSEMBLY_VER = "lr_sections_v17_section8_llm"
+_ASSEMBLY_VER = "lr_sections_v19_paragraph_hi"
+_BLUEPRINT_MIN_WORDS = 80
+_BULLET_LINE_RE = re.compile(r"(?m)^\s*(?:[•\-\*►▪]|(?:\d+[\.\):]))\s+")
+_BLUEPRINT_JARGON_RE = re.compile(
+    r"(?:\b(?:7th|8th|12th|1st|2nd|3rd|4th|5th|6th|9th|10th|11th)\s+house\b|"
+    r"\bhouse\s+(?:lord|lords)\b|\bupapada\b|\bul\s+lord\b|\blagna\b|"
+    r"\bvenus\s*:\s*|\bjupiter\s*:\s*|\bmercury\s*\(|\boccupants\b|"
+    r"\barudha\b|\bnakshatra\b|/\s*100\b|"
+    r"उपापदा|अरुधा|लग्न|घर\s*स्वामी|७वीं?\s*भाव|८वीं?\s*भाव|१२वीं?\s*भाव|"
+    r"शुक्र\s*:\s*|गुरु\s*:\s*|बुध\s*:\s*)",
+    re.IGNORECASE,
+)
+
+
+def _blueprint_has_chart_jargon(text: str) -> bool:
+    """User-facing blueprint must not dump planet/house engine lines."""
+    return bool(_BLUEPRINT_JARGON_RE.search(text or ""))
+
+
+def _text_looks_like_point_list(text: str) -> bool:
+    """Reject bullet lines or many short single-newline facts (not paragraph prose)."""
+    raw = (text or "").strip()
+    if not raw:
+        return True
+    if _BULLET_LINE_RE.search(raw):
+        return True
+    if re.search(r"(?i)chart signals|engine facts|•\s", raw):
+        return True
+    if "\n\n" not in raw:
+        lines = [ln.strip() for ln in raw.split("\n") if ln.strip()]
+        if len(lines) >= 3:
+            avg_words = sum(_word_count(ln) for ln in lines) / len(lines)
+            if avg_words < 22:
+                return True
+    return False
+
+
+def _prose_paragraph_form_ok(
+    text: str,
+    *,
+    min_paragraphs: int = 3,
+    min_para_words: int = 18,
+) -> bool:
+    raw = (text or "").strip()
+    if not raw or _text_looks_like_point_list(raw):
+        return False
+    paras = [p.strip() for p in re.split(r"\n\s*\n+", raw) if p.strip()]
+    if len(paras) < min_paragraphs:
+        return False
+    good = sum(1 for p in paras if _word_count(p) >= min_para_words)
+    return good >= min_paragraphs
+
+
+def _normalize_prose_paragraphs(text: str, *, min_paragraphs: int = 3) -> str:
+    """Group sentence flow into \\n\\n paragraphs when LLM omits blank lines."""
+    raw = (text or "").strip()
+    if not raw:
+        return raw
+    if _prose_paragraph_form_ok(raw, min_paragraphs=min_paragraphs):
+        return raw
+    flat = re.sub(r"\s*\n\s*", " ", raw)
+    sentences = [s.strip() for s in re.split(r"(?<=[।\.!?])\s+", flat) if s.strip()]
+    if len(sentences) < min_paragraphs:
+        return raw
+    per_para = max(2, (len(sentences) + min_paragraphs - 1) // min_paragraphs)
+    paras: list[str] = []
+    for i in range(0, len(sentences), per_para):
+        chunk = sentences[i : i + per_para]
+        if chunk:
+            paras.append(" ".join(chunk))
+    out = "\n\n".join(paras)
+    if _prose_paragraph_form_ok(out, min_paragraphs=min_paragraphs):
+        return out
+    return raw
+
+
+def _blueprint_body_text(pro: dict) -> str:
+    body = str(pro.get("blueprint_reality") or "").strip()
+    if body:
+        return body
+    for ch in pro.get("chapters") or []:
+        if not isinstance(ch, dict):
+            continue
+        if str(ch.get("key") or "").strip().lower() == _BLUEPRINT_REALITY_KEY:
+            return str(ch.get(CHAPTER_BODY_KEY) or ch.get("chapter_body") or "").strip()
+    return ""
+
+
+def _blueprint_text_hi_ok(body: str) -> bool:
+    if _word_count(body) < _BLUEPRINT_MIN_WORDS:
+        return False
+    if _blueprint_has_chart_jargon(body):
+        return False
+    if not _prose_paragraph_form_ok(body, min_paragraphs=3, min_para_words=18):
+        return False
+    try:
+        from i18n_summary import prose_fully_hindi
+
+        return prose_fully_hindi(body)
+    except Exception:
+        return len(re.findall(r"[\u0900-\u097F]", body)) >= 24
+
+
+def blueprint_section_hi_ready(pro: dict) -> bool:
+    return _blueprint_text_hi_ok(_blueprint_body_text(pro))
+
+
 _CHAPTER_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_CHAPTER_MIN_WORDS", "95"))
 _HARMONY_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_HARMONY_MIN_WORDS", "130"))
 
@@ -187,9 +293,9 @@ AISE LIKHO (p1 ideal vs partner reality — real names):
 """
         if lang == "hi":
             return f"""{name_rule}
-ऐसे मत लिखो: "Chart signals for this theme are active..."
-ऐसे लिखो (p1 का ideal बनाम partner की reality — असली नाम):
-"[p1_name], आपकी 7th house और Upapada स्थिरता चाहती है। पर [p2_name] की कुंडली अलग लय लाती है। आपको लगता है सुना नहीं जाता; उन्हें लगता है आप दबाव डालते हैं।"
+ऐसे मत लिखो: "Chart signals..." / bullet (•) / numbered points / line-by-line facts / planet-house numbers।
+ऐसे लिखो (3 paragraphs, \\n\\n से अलग — रोज़मर्रा की हिंदी, असली नाम):
+"[p1_name], आपको रिश्ते में साफ बात और भरोसे भरी गर्मजोशी चाहिए — यही आपका आदर्श पैटर्न है।\\n\\n[p2_name] पहले भीतर सोचते हैं, बाहर से धीरे खुलते हैं। आपको लगता है सुना नहीं जाता; उन्हें लगता है आप जल्दी जवाब माँगते हैं।\\n\\nयही आदर्श और वास्तविकता का अंतर है — रोज़मर्रा में यह झगड़े और चुप्पी के रूप में दिखता है।"
 """
         return f"""{name_rule}
 DO NOT: "Chart signals for this theme are active between both partners..."
@@ -634,6 +740,7 @@ Write entirely in {script}.
 
 RULES:
 - Minimum {_CHAPTER_MIN_WORDS}+ words, {_CHAPTER_MIN_WORDS // 3}+ paragraphs (\\n\\n).
+- NO bullet lists, NO numbered points, NO one-fact-per-line — flowing paragraph prose only.
 - Simple words — no high-end English, no corporate psychology.
 - Talk TO p1 (first kundli). Partner as context.
 - Every conclusion must trace to a specific astrological factor from user message.
@@ -699,36 +806,48 @@ def _blueprint_chart_facts(bundle: dict) -> str:
 def _build_blueprint_reality_system_prompt(lang: str) -> str:
     lang = polish_content_lang(lang)
     script = love_write_script_label(lang)
+    plain_hi = ""
+    if lang == "hi":
+        plain_hi = (
+            "\n\nMANDATORY FOR hi — blueprint_reality / chapter_body:\n"
+            "- 100% देवनागरी Hindi, रोज़मर्रा की सरल भाषा\n"
+            "- NO planet names (Venus/Jupiter/Mercury), NO house numbers (7th/12th), "
+            "NO Upapada/Lagna/nakshatra, NO X/100 scores in body\n"
+            "- Chart facts go ONLY in grounding field — user never reads grounding\n"
+            "- Explain: p1 ka ideal partner pattern (feelings/behaviour) vs p2 ki asli nature\n"
+            "- 3+ paragraphs separated by \\n\\n — NO bullets (•), NO numbered lists, NO line-by-line points\n"
+            "- 90+ words, real partner names — flowing explanation like astrologer speaking\n"
+        )
     return f"""Write ONLY PDF Section — Partner Blueprint vs Reality (love_connection).
 
 Return STRICT JSON:
 {{
-  "blueprint_reality": "long prose comparing p1 ideal partner signature vs p2 actual nature",
+  "blueprint_reality": "long plain-language prose — ideal partner pattern vs actual partner nature",
   "chapter_body": "same text as blueprint_reality",
-  "grounding": "2-3 chart fact lines"
+  "grounding": "2-3 internal chart fact lines (NOT shown to user)"
 }}
 
 Write entirely in {script}.
+{plain_hi}
 
 {love_script_directive(lang)}
 
 TASK:
-- Page title: Partner Blueprint vs Reality
-- p1 chart shows IDEAL partner (7th lord, Venus, Jupiter, Upapada)
-- p2 chart shows ACTUAL partner nature
-- Explain the GAP in simple words — not generic love advice
-- Minimum 100 words, 3 paragraphs separated by \\n\\n
+- Title meaning: Ideal Partner vs Reality (आदर्श साथी बनाम वास्तविकता)
+- Use chart facts from user message ONLY to infer behaviour — never quote positions in body
+- Explain the GAP in daily-life words: how each feels, reacts, what mismatch looks like
+- Minimum 90 words, 3 paragraphs separated by \\n\\n
 - Use REAL names from user message for p1 and p2
+- NOT generic love advice; NOT astrology lecture
 
 {_love_llm_shared_voice(lang)}
 
 {_few_shot_name_rule(lang)}
+{_chapter_few_shot("love_connection", lang)}
+
 DO NOT copy engine one-liner summaries verbatim.
 DO NOT write only one sentence.
-
-{_few_shot_name_rule(lang)}
-Example shape (replace [p1_name]/[p2_name] with ACTUAL names from user message):
-"[p1_name], tumhari 7th house steady partner maangti hai — clear baat, warmth. [p2_name] ki chart alag rhythm laati hai — pehle andar process. Tumhe lagta hai sunai nahi deti; unhe lagta hai tum dabav daal rahe ho. Love score is gap ko measure karta hai."
+DO NOT put numbers, houses, or planet placements in blueprint_reality.
 
 Use ONLY facts from the user message."""
 
@@ -758,13 +877,18 @@ def polish_love_reality_blueprint_reality_only(
     max_tok = min(int(os.environ.get("LOVE_REALITY_BLUEPRINT_REALITY_MAX_TOKENS", "2400")), 4096)
 
     def _parse(parsed: dict) -> dict[str, Any]:
-        body = str(
-            parsed.get("blueprint_reality")
-            or parsed.get("chapter_body")
-            or parsed.get(CHAPTER_BODY_KEY)
-            or ""
-        ).strip()
+        body = _normalize_prose_paragraphs(
+            str(
+                parsed.get("blueprint_reality")
+                or parsed.get("chapter_body")
+                or parsed.get(CHAPTER_BODY_KEY)
+                or ""
+            ).strip(),
+            min_paragraphs=3,
+        )
         if _word_count(body) < 50:
+            return {}
+        if polish_content_lang(lang) == "hi" and not _blueprint_text_hi_ok(body):
             return {}
         grounding = str(parsed.get("grounding") or "").strip()
         return {
@@ -896,6 +1020,7 @@ TASK:
 - If Moons are smoother, say what still triggers stress and how to protect rhythm
 - Guide p1: what to do when partner goes quiet / when p1 reacts fast
 - Minimum 80 words, 3 paragraphs (\\n\\n)
+- NO bullet lists, NO numbered points, NO one-fact-per-line — paragraph prose only
 - Use REAL partner names from user message
 
 {_love_llm_shared_voice(lang)}
@@ -923,8 +1048,13 @@ def polish_love_reality_moon_sync_only(
     max_tok = min(int(os.environ.get("LOVE_REALITY_MOON_SYNC_MAX_TOKENS", "2200")), 4096)
 
     def _parse(parsed: dict) -> dict[str, Any]:
-        body = str(parsed.get("moon_sync_narrative") or "").strip()
+        body = _normalize_prose_paragraphs(
+            str(parsed.get("moon_sync_narrative") or "").strip(),
+            min_paragraphs=3,
+        )
         if _word_count(body) < 55:
+            return {}
+        if lang == "hi" and not _moon_sync_text_hi_ok(body):
             return {}
         return {"moon_sync_narrative": body}
 
@@ -1306,6 +1436,12 @@ def _run_section_llm(
                     "RETRY: prior response was NOT Devanagari Hindi or too short (rejected). "
                     "Write moon_sync_narrative entirely in देवनागरी Hindi — minimum 3 paragraphs, 80+ words."
                 )
+            elif lang == "hi" and scope == "blueprint_reality":
+                retry_note = (
+                    "RETRY: rejected — body had planet/house numbers OR not plain देवनागरी Hindi. "
+                    "Write blueprint_reality in simple daily Hindi only: ideal partner feelings vs partner's "
+                    "real behaviour. NO Venus, 7th house, Upapada, scores. Chart facts only in grounding."
+                )
             retry_user = user + f"\n\n{retry_note}"
             kwargs["messages"] = [
                 {"role": "system", "content": system},
@@ -1354,6 +1490,16 @@ def _run_section_llm(
                 pass
             empty = {"_meta": {"scope": scope, "reason": "not_devanagari_hi", "openai_skipped": False}}
             return empty
+    if lang == "hi" and scope == "blueprint_reality":
+        body = str(out.get("blueprint_reality") or out.get("chapter_body") or "")
+        if not _blueprint_text_hi_ok(body):
+            try:
+                if os.path.isfile(cache_path):
+                    os.remove(cache_path)
+            except OSError:
+                pass
+            empty = {"_meta": {"scope": scope, "reason": "blueprint_jargon_or_not_hi", "openai_skipped": False}}
+            return empty
     if lang == "hi" and scope == "moon_sync":
         body = str(out.get("moon_sync_narrative") or "")
         if not _moon_sync_text_hi_ok(body):
@@ -1393,6 +1539,8 @@ def polish_love_reality_chapter_only(
 
     def _parse(parsed: dict) -> dict[str, Any]:
         body = str(parsed.get("chapter_body") or parsed.get(CHAPTER_BODY_KEY) or "").strip()
+        if chapter_key == "breakup":
+            body = _normalize_prose_paragraphs(body, min_paragraphs=3)
         if _word_count(body) < min_words:
             return {}
         if lang == "hi" and chapter_key == "breakup" and not _breakup_text_hi_ok(body):
@@ -1480,6 +1628,8 @@ def breakup_chapter_word_count(pro: dict) -> int:
 def _breakup_text_hi_ok(body: str) -> bool:
     if _word_count(body) < 80:
         return False
+    if not _prose_paragraph_form_ok(body, min_paragraphs=3, min_para_words=18):
+        return False
     try:
         from i18n_summary import prose_fully_hindi
 
@@ -1502,6 +1652,8 @@ def _moon_sync_narrative_body(pro: dict) -> str:
 
 def _moon_sync_text_hi_ok(body: str) -> bool:
     if _word_count(body) < _MOON_SYNC_MIN_WORDS:
+        return False
+    if not _prose_paragraph_form_ok(body, min_paragraphs=3, min_para_words=15):
         return False
     try:
         from i18n_summary import prose_fully_hindi
@@ -1608,13 +1760,17 @@ def ensure_breakup_section8_llm(
             force_llm=True,
         )
         last_meta = hit.get("_meta") if isinstance(hit.get("_meta"), dict) else {}
-        new_body = str(hit.get("chapter_body") or "").strip()
+        new_body = _normalize_prose_paragraphs(
+            str(hit.get("chapter_body") or "").strip(),
+            min_paragraphs=3,
+        )
         if lang == "hi" and not _breakup_text_hi_ok(new_body):
             last_meta = {
                 **last_meta,
-                "reject": "not_devanagari_hi",
+                "reject": "not_devanagari_hi_or_points",
                 "deva": len(re.findall(r"[\u0900-\u097F]", new_body)),
                 "words": _word_count(new_body),
+                "points": _text_looks_like_point_list(new_body),
             }
             continue
         if _word_count(new_body) >= 80:
@@ -1679,13 +1835,17 @@ def ensure_moon_sync_section7_llm(
             force_llm=True,
         )
         last_meta = hit.get("_meta") if isinstance(hit.get("_meta"), dict) else {}
-        new_body = str(hit.get("moon_sync_narrative") or "").strip()
+        new_body = _normalize_prose_paragraphs(
+            str(hit.get("moon_sync_narrative") or "").strip(),
+            min_paragraphs=3,
+        )
         if lang == "hi" and not _moon_sync_text_hi_ok(new_body):
             last_meta = {
                 **last_meta,
-                "reject": "not_devanagari_hi",
+                "reject": "not_devanagari_hi_or_points",
                 "deva": len(re.findall(r"[\u0900-\u097F]", new_body)),
                 "words": _word_count(new_body),
+                "points": _text_looks_like_point_list(new_body),
             }
             continue
         if _word_count(new_body) >= _MOON_SYNC_MIN_WORDS:
@@ -1702,6 +1862,85 @@ def ensure_moon_sync_section7_llm(
         "source": "failed",
         "attempts": max_attempts,
         "words": _word_count(_moon_sync_narrative_body(pro)),
+    }
+    return pro
+
+
+def _bust_blueprint_scope_file_cache(bundle: dict, lang: str) -> None:
+    scope = "blueprint_reality"
+    model = _section_model("LOVE_REALITY_BLUEPRINT_REALITY_MODEL")
+    system = _build_blueprint_reality_system_prompt(polish_content_lang(lang))
+    prompt_fp = _fingerprint(system)
+    cache_key = _section_cache_key(bundle, polish_content_lang(lang), model, scope, prompt_fp)
+    cache_path = os.path.join(_cache_dir(), f"{scope}_{cache_key}.json")
+    try:
+        if os.path.isfile(cache_path):
+            os.remove(cache_path)
+    except OSError as exc:
+        log.warning("[%s] cache bust failed: %s", scope, exc)
+
+
+def ensure_blueprint_section5_llm(
+    bundle: dict,
+    pro: dict,
+    lang: str,
+    *,
+    force_llm: bool = False,
+) -> dict:
+    """Section 05 (Ideal Partner vs Reality) — plain Hindi LLM, no chart jargon in body."""
+    if not isinstance(pro, dict):
+        return pro or {}
+    body = _blueprint_body_text(pro)
+    if lang == "hi" and body and not _blueprint_text_hi_ok(body):
+        pro["blueprint_reality"] = ""
+        _upsert_chapter(pro, _BLUEPRINT_REALITY_KEY, "", "")
+        body = ""
+    elif _word_count(body) >= _BLUEPRINT_MIN_WORDS and not force_llm:
+        if lang != "hi" or _blueprint_text_hi_ok(body):
+            return pro
+
+    work = dict(bundle)
+    work["_lr_prior_digest"] = _build_prior_sections_digest(pro, lang)
+    last_meta: dict[str, Any] = {}
+    max_attempts = max(1, int(os.environ.get("LOVE_REALITY_SECTION5_ATTEMPTS", "3")))
+    for attempt in range(max_attempts):
+        if attempt > 0:
+            _bust_blueprint_scope_file_cache(bundle, lang)
+        hit = polish_love_reality_blueprint_reality_only(
+            work,
+            lang=lang,
+            force_llm=True,
+        )
+        last_meta = hit.get("_meta") if isinstance(hit.get("_meta"), dict) else {}
+        new_body = _normalize_prose_paragraphs(
+            str(hit.get("blueprint_reality") or hit.get("chapter_body") or "").strip(),
+            min_paragraphs=3,
+        )
+        if lang == "hi" and not _blueprint_text_hi_ok(new_body):
+            last_meta = {
+                **last_meta,
+                "reject": "jargon_or_not_hi_or_points",
+                "deva": len(re.findall(r"[\u0900-\u097F]", new_body)),
+                "words": _word_count(new_body),
+                "jargon": _blueprint_has_chart_jargon(new_body),
+                "points": _text_looks_like_point_list(new_body),
+            }
+            continue
+        if _word_count(new_body) >= _BLUEPRINT_MIN_WORDS:
+            pro["blueprint_reality"] = new_body
+            _upsert_chapter(pro, _BLUEPRINT_REALITY_KEY, new_body, str(hit.get("grounding") or ""))
+            pro.setdefault("_meta", {})["section5_blueprint"] = {
+                **last_meta,
+                "source": "llm",
+                "attempt": attempt + 1,
+                "words": _word_count(new_body),
+            }
+            return pro
+    pro.setdefault("_meta", {})["section5_blueprint"] = {
+        **last_meta,
+        "source": "failed",
+        "attempts": max_attempts,
+        "words": _word_count(_blueprint_body_text(pro)),
     }
     return pro
 
@@ -1958,7 +2197,25 @@ def assemble_love_reality_pro_premium(
                 if not body:
                     continue
                 if pro_key:
-                    pro[pro_key] = body
+                    use_pro = body
+                    if (
+                        pro_key == "moon_sync_narrative"
+                        and requested_lang == "hi"
+                        and use_pro
+                        and not _moon_sync_text_hi_ok(use_pro)
+                    ):
+                        log.warning("[assembly] moon_sync rejected — not Devanagari Hindi")
+                        use_pro = ""
+                    if (
+                        pro_key == "blueprint_reality"
+                        and requested_lang == "hi"
+                        and use_pro
+                        and not _blueprint_text_hi_ok(use_pro)
+                    ):
+                        log.warning("[assembly] blueprint_reality rejected — jargon or not Hindi")
+                        use_pro = ""
+                    if use_pro:
+                        pro[pro_key] = use_pro
                 if ch_key:
                     use_body = body
                     if (

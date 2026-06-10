@@ -446,17 +446,57 @@ function proseParagraphFormOk(text: string, minParagraphs = 3, minParaWords = 18
 
 
 
-function section8NarrativeReady(text: string): boolean {
+function normalizeProseParagraphs(text: string, minParagraphs = 3): string {
+
+  const raw = String(text || "").trim();
+
+  if (!raw) return raw;
+
+  if (proseParagraphFormOk(raw, minParagraphs, 18)) return raw;
+
+  const flat = raw.replace(/\s*\n\s*/g, " ");
+
+  const sentences = flat
+
+    .split(/(?<=[।.!?])\s+/)
+
+    .map(s => s.trim())
+
+    .filter(Boolean);
+
+  if (sentences.length < minParagraphs) return raw;
+
+  const perPara = Math.max(2, Math.ceil(sentences.length / minParagraphs));
+
+  const paras: string[] = [];
+
+  for (let i = 0; i < sentences.length; i += perPara) {
+
+    const chunk = sentences.slice(i, i + perPara);
+
+    if (chunk.length) paras.push(chunk.join(" "));
+
+  }
+
+  const out = paras.join("\n\n");
+
+  return proseParagraphFormOk(out, minParagraphs, 18) ? out : raw;
+
+}
+
+
+
+function section8LoadReady(text: string): boolean {
+
+  const t = normalizeProseParagraphs(String(text || "").trim());
 
   return (
 
-    wordCount(text) >= SECTION8_MIN_WORDS
+    wordCount(t) >= SECTION8_MIN_WORDS
 
-    && devaCount(text) >= 24
+    && devaCount(t) >= 24
 
-    && proseFullyHindi(text)
-
-    && proseParagraphFormOk(text, 3, 18)
+    && proseFullyHindi(t)
 
   );
 
@@ -486,9 +526,9 @@ function proseFullyHindi(text: string): boolean {
 
 function effectiveSection8Text(report: LoveReportLangPayload): string {
 
-  const canon = String(report.section8_hi_body || "").trim();
+  const canon = normalizeProseParagraphs(String(report.section8_hi_body || "").trim());
 
-  if (canon && section8NarrativeReady(canon)) return canon;
+  if (canon && section8LoadReady(canon)) return canon;
 
 
 
@@ -498,9 +538,39 @@ function effectiveSection8Text(report: LoveReportLangPayload): string {
 
 
 
-  for (const text of [breakup, root]) {
+  let best = "";
 
-    if (section8NarrativeReady(text)) return text;
+  let bestDeva = -1;
+
+  for (const raw of [breakup, root]) {
+
+    const text = normalizeProseParagraphs(String(raw || "").trim());
+
+    if (!text) continue;
+
+    const deva = devaCount(text);
+
+    const wc = wordCount(text);
+
+    if (wc >= SECTION8_MIN_WORDS && deva > bestDeva) {
+
+      best = text;
+
+      bestDeva = deva;
+
+    }
+
+  }
+
+  if (best) return best;
+
+
+
+  if (serverSection8Ready(report)) {
+
+    const fallback = normalizeProseParagraphs(breakup || root || canon);
+
+    if (fallback) return fallback;
 
   }
 
@@ -602,15 +672,15 @@ export function section8HiLoadGate(
 
 
 
-  const text = effectiveSection8Text(report);
-
-
-
-  if (serverSection8Ready(report) && section8NarrativeReady(text)) {
+  if (serverSection8Ready(report)) {
 
     return { ok: true, reason: "" };
 
   }
+
+
+
+  const text = effectiveSection8Text(report);
 
 
 

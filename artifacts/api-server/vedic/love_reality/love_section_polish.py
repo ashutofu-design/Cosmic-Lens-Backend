@@ -112,6 +112,7 @@ def _blueprint_body_text(pro: dict) -> str:
 
 
 def _blueprint_text_hi_ok(body: str) -> bool:
+    body = _normalize_prose_paragraphs(str(body or "").strip(), min_paragraphs=3)
     if _word_count(body) < _BLUEPRINT_MIN_WORDS:
         return False
     if _blueprint_has_chart_jargon(body):
@@ -1626,6 +1627,7 @@ def breakup_chapter_word_count(pro: dict) -> int:
 
 
 def _breakup_text_hi_ok(body: str) -> bool:
+    body = _normalize_prose_paragraphs(str(body or "").strip(), min_paragraphs=3)
     if _word_count(body) < 80:
         return False
     if not _prose_paragraph_form_ok(body, min_paragraphs=3, min_para_words=18):
@@ -1651,6 +1653,7 @@ def _moon_sync_narrative_body(pro: dict) -> str:
 
 
 def _moon_sync_text_hi_ok(body: str) -> bool:
+    body = _normalize_prose_paragraphs(str(body or "").strip(), min_paragraphs=3)
     if _word_count(body) < _MOON_SYNC_MIN_WORDS:
         return False
     if not _prose_paragraph_form_ok(body, min_paragraphs=3, min_para_words=15):

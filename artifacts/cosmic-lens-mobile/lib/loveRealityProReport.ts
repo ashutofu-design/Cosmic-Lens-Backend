@@ -177,10 +177,42 @@ function wordCountText(text: string): number {
   return text.split(/\s+/).filter(Boolean).length;
 }
 
+function proseFullyHindi(text: string): boolean {
+  const t = String(text || "").trim();
+  if (!t || t.length < 40) return false;
+  const deva = devaCount(t);
+  if (deva < 12) return false;
+  const letters = (t.match(/[A-Za-z\u0900-\u097F]/g) || []).length;
+  if (letters < 20) return deva >= 8;
+  return deva / letters >= 0.32;
+}
+
+function normalizeProseParagraphs(text: string, minParagraphs = 3): string {
+  const raw = String(text || "").trim();
+  if (!raw) return raw;
+  if (proseParagraphFormOk(raw, minParagraphs, 18)) return raw;
+  const flat = raw.replace(/\s*\n\s*/g, " ");
+  const sentences = flat.split(/(?<=[।.!?])\s+/).map(s => s.trim()).filter(Boolean);
+  if (sentences.length < minParagraphs) return raw;
+  const perPara = Math.max(2, Math.ceil(sentences.length / minParagraphs));
+  const paras: string[] = [];
+  for (let i = 0; i < sentences.length; i += perPara) {
+    const chunk = sentences.slice(i, i + perPara);
+    if (chunk.length) paras.push(chunk.join(" "));
+  }
+  const out = paras.join("\n\n");
+  return proseParagraphFormOk(out, minParagraphs, 18) ? out : raw;
+}
+
+function section8LoadReady(text: string): boolean {
+  const t = normalizeProseParagraphs(String(text || "").trim());
+  return wordCountText(t) >= 80 && devaCount(t) >= 24 && proseFullyHindi(t);
+}
+
 /** Best Hindi Section 8 text — server canonical body, breakup chapter, or root_cause. */
 export function effectiveSection8HiText(report: LoveProReportResponse): string {
-  const canon = String(report.section8_hi_body || "").trim();
-  if (canon && narrativeBodyReady(canon, 80)) return canon;
+  const canon = normalizeProseParagraphs(String(report.section8_hi_body || "").trim());
+  if (canon && section8LoadReady(canon)) return canon;
 
   const breakup = breakupChapterBody(report);
   const fromCtx = String(report.pdf_context?.page6_root_cause || "").trim();
@@ -188,10 +220,19 @@ export function effectiveSection8HiText(report: LoveProReportResponse): string {
     .find(s => String(s.id || "").toLowerCase() === "root_cause");
   const root = String(fromSec?.body || "").trim() || fromCtx;
 
-  for (const text of [breakup, root]) {
-    if (narrativeBodyReady(text, 80)) return text;
+  let best = "";
+  let bestDeva = -1;
+  for (const raw of [breakup, root]) {
+    const text = normalizeProseParagraphs(String(raw || "").trim());
+    if (!text) continue;
+    const deva = devaCount(text);
+    const wc = wordCountText(text);
+    if (wc >= 80 && deva > bestDeva) {
+      best = text;
+      bestDeva = deva;
+    }
   }
-  return "";
+  return best || normalizeProseParagraphs(breakup || root || canon);
 }
 
 const MOON_ENGINE_FALLBACK_HI =
@@ -244,11 +285,25 @@ function blueprintBodyReady(text: string): boolean {
 }
 
 function narrativeBodyReady(text: string, minWords: number, minParaWords = 15): boolean {
+  const norm = normalizeProseParagraphs(String(text || "").trim());
   return (
-    wordCountText(text) >= minWords
-    && devaCount(text) >= 24
-    && proseParagraphFormOk(text, 3, minParaWords)
+    wordCountText(norm) >= minWords
+    && devaCount(norm) >= 24
+    && !textLooksLikePointList(norm)
+    && proseParagraphFormOk(norm, 3, minParaWords)
   );
+}
+
+function narrativeBodyFallback(text: string, minWords: number): string {
+  const norm = normalizeProseParagraphs(String(text || "").trim());
+  if (
+    wordCountText(norm) >= minWords
+    && devaCount(norm) >= 24
+    && !textLooksLikePointList(norm)
+  ) {
+    return norm;
+  }
+  return "";
 }
 
 /** Plain Hindi blueprint — no planet/house engine dump (Section 5). */
@@ -264,6 +319,10 @@ export function resolveBlueprintVsBody(report: LoveProReportResponse): string {
 
   for (const text of [narr, body]) {
     if (blueprintBodyReady(text)) return text;
+  }
+  for (const text of [canon, narr, body]) {
+    const fallback = narrativeBodyFallback(text, 80);
+    if (fallback && !blueprintHasJargon(fallback)) return fallback;
   }
   return "";
 }
@@ -282,6 +341,10 @@ export function resolveMoonSyncBody(report: LoveProReportResponse): string {
   const candidates = [narr, moon].filter(t => t && !MOON_ENGINE_FALLBACK_HI.test(t));
   for (const text of candidates) {
     if (narrativeBodyReady(text, 55)) return text;
+  }
+  for (const text of candidates) {
+    const fallback = narrativeBodyFallback(text, 55);
+    if (fallback) return fallback;
   }
   return "";
 }

@@ -187,8 +187,20 @@ def build_love_reality_pdf_v2_context(
 
     breakup_narr = _chapter_body(pro, "breakup") or ""
     loyalty_narr = _chapter_body(pro, "loyalty") or ""
+    lane = (lang or "en").strip().lower()
     if breakup_narr:
-        root_cause = breakup_narr
+        if lane == "hi":
+            try:
+                from i18n_summary import prose_fully_hindi
+
+                root_cause = breakup_narr if prose_fully_hindi(breakup_narr) else ""
+            except Exception:
+                import re
+                root_cause = breakup_narr if len(re.findall(r"[\u0900-\u097F]", breakup_narr)) >= 24 else ""
+        else:
+            root_cause = breakup_narr
+    elif lane == "hi":
+        root_cause = ""
     else:
         root_parts: list[str] = []
         if bu.get("reasons"):

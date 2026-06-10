@@ -1406,6 +1406,16 @@ def polish_love_reality_harmony_only(
     )
 
 
+def strip_non_hindi_breakup_chapter(pro: dict) -> dict:
+    """Remove English/mixed breakup chapter — Hindi Section 8 must be LLM Devanagari only."""
+    if not isinstance(pro, dict):
+        return pro or {}
+    body = _breakup_chapter_body(pro)
+    if body and not _breakup_text_hi_ok(body):
+        _upsert_chapter(pro, "breakup", "", "")
+    return pro
+
+
 def _breakup_chapter_body(pro: dict) -> str:
     for ch in pro.get("chapters") or []:
         if not isinstance(ch, dict):
@@ -1526,51 +1536,17 @@ def ensure_breakup_section8_llm(
             _upsert_chapter(pro, "breakup", new_body, str(hit.get("grounding") or ""))
             pro.setdefault("_meta", {})["section8_breakup"] = {
                 **last_meta,
+                "source": "llm",
                 "attempt": attempt + 1,
                 "words": _word_count(new_body),
             }
             return pro
-    body = _breakup_chapter_body(pro)
-    if lang == "hi" and body and not _breakup_text_hi_ok(body):
-        try:
-            from i18n_summary import localize_text_force
-
-            translated = localize_text_force(body, "hi")
-            if _breakup_text_hi_ok(translated):
-                _upsert_chapter(pro, "breakup", translated, "")
-                pro.setdefault("_meta", {})["section8_breakup"] = {
-                    **last_meta,
-                    "attempt": "translate_fallback",
-                    "words": _word_count(translated),
-                }
-                return pro
-        except Exception as exc:
-            log.warning("[breakup] hi translate fallback failed: %s", exc)
     pro.setdefault("_meta", {})["section8_breakup"] = {
         **last_meta,
+        "source": "failed",
         "attempts": max_attempts,
         "words": _word_count(_breakup_chapter_body(pro)),
     }
-    return pro
-
-
-def hi_breakup_force_devanagari(pro: dict, bundle: dict | None = None) -> dict:
-    """Last resort — translate English breakup chapter to देवनागरी for Section 8."""
-    if not isinstance(pro, dict):
-        return pro or {}
-    if breakup_chapter_hi_ready(pro):
-        return pro
-    body = _breakup_chapter_body(pro)
-    if _word_count(body) < 40:
-        return pro
-    try:
-        from i18n_summary import localize_text_force
-
-        translated = localize_text_force(body, "hi")
-        if _breakup_text_hi_ok(translated):
-            _upsert_chapter(pro, "breakup", translated, "")
-    except Exception as exc:
-        log.warning("[breakup] hi_breakup_force_devanagari failed: %s", exc)
     return pro
 
 
@@ -1828,7 +1804,17 @@ def assemble_love_reality_pro_premium(
                 if pro_key:
                     pro[pro_key] = body
                 if ch_key:
-                    _upsert_chapter(pro, ch_key, body, hit.get("grounding") or "")
+                    use_body = body
+                    if (
+                        ch_key == "breakup"
+                        and requested_lang == "hi"
+                        and use_body
+                        and not _breakup_text_hi_ok(use_body)
+                    ):
+                        log.warning("[assembly] breakup chapter rejected — not Devanagari Hindi")
+                        use_body = ""
+                    if use_body:
+                        _upsert_chapter(pro, ch_key, use_body, hit.get("grounding") or "")
                 if label == "harmony":
                     _upsert_chapter(pro, "will_return", body)
                     _upsert_chapter(pro, "future_outcome", body)
@@ -1837,7 +1823,19 @@ def assemble_love_reality_pro_premium(
                     if isinstance(steps, list):
                         pro["action_steps"] = [str(x).strip() for x in steps if str(x).strip()][:7]
                 elif label in _CHAPTER_KEYS:
-                    _upsert_chapter(pro, label, body, hit.get("grounding") or "")
+                    use_body = body
+                    if (
+                        label == "breakup"
+                        and requested_lang == "hi"
+                        and use_body
+                        and not _breakup_text_hi_ok(use_body)
+                    ):
+                        use_body = ""
+                    if use_body:
+                        _upsert_chapter(pro, label, use_body, hit.get("grounding") or "")
+
+        if requested_lang == "hi":
+            strip_non_hindi_breakup_chapter(pro)
 
         _scrub_loyalty_contradictions(pro, bundle)
         pro = sanitize_love_reality_pro_premium(pro, bundle, lang=requested_lang)

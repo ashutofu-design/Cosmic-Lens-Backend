@@ -6,7 +6,7 @@ from flask import Response, jsonify, request
 # Bump when PDF layout/renderer changes — invalidates stale server-side report cache.
 LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v24_moon_sync_llm"
 # Bump to drop all saved Hindi pro-report + polish snapshots (hi only).
-LOVE_REALITY_HI_CACHE_VER = "hi_purge_v4_hi_breakup_only"
+LOVE_REALITY_HI_CACHE_VER = "hi_purge_v6_no_en_s8"
 
 
 def love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
@@ -762,10 +762,11 @@ def register_love_reality_routes(flask_app) -> None:
                     breakup_chapter_word_count,
                     bust_love_polish_section_caches,
                     ensure_breakup_section8_llm,
-                    hi_breakup_force_devanagari,
+                    strip_non_hindi_breakup_chapter,
                 )
 
                 if lang in ("hi", "hn"):
+                    strip_non_hindi_breakup_chapter(pro)
                     for attempt in range(3):
                         pro = ensure_breakup_section8_llm(
                             bundle,
@@ -787,11 +788,25 @@ def register_love_reality_routes(flask_app) -> None:
                         lang,
                         force_llm=force_full,
                     )
-                if lang == "hi":
-                    pro = hi_breakup_force_devanagari(pro, bundle)
+                if lang == "hi" and not breakup_chapter_hi_ready(pro):
+                    s8_meta = (pro.get("_meta") or {}).get("section8_breakup") if isinstance(pro.get("_meta"), dict) else {}
+                    llm_hint = ""
+                    if isinstance(s8_meta, dict):
+                        llm_hint = str(s8_meta.get("reject") or s8_meta.get("reason") or "").strip()
+                    detail = (
+                        "Report load nahi hua — Section 8 ke liye LLM se poori देवनागरी Hindi "
+                        "chapter nahi bani (English/mixed reject ho gaya)."
+                    )
+                    if llm_hint:
+                        detail += f" (LLM: {llm_hint})"
+                    detail += " «रिपोर्ट अपडेट करें» dubara dabao — 2–3 min wait."
+                    return jsonify({
+                        "error": "section8_not_ready",
+                        "detail": detail,
+                        "section8_llm": s8_meta or None,
+                    }), 412
                 pro = sanitize_love_reality_pro_premium(pro, bundle, lang=lang)
-                if lang == "hi":
-                    pro = hi_breakup_force_devanagari(pro, bundle)
+                strip_non_hindi_breakup_chapter(pro)
                 from vedic.love_reality.pdf_data_v2 import build_love_reality_pdf_v2_context
                 from vedic.love_reality.pdf_page1_data import (
                     build_love_reality_page1_data,
@@ -857,12 +872,6 @@ def register_love_reality_routes(flask_app) -> None:
                             force_llm=True,
                         )
                         payload = _build_payload(pro, polish_source)
-                if lang == "hi":
-                    pro_hi = hi_breakup_force_devanagari(
-                        payload.get("pro_premium") if isinstance(payload.get("pro_premium"), dict) else {},
-                        bundle,
-                    )
-                    payload = _build_payload(pro_hi, polish_source)
                 payload = _with_app_sections(payload, lang)
                 if lang == "hi":
                     payload = {**payload, "hi_cache_ver": LOVE_REALITY_HI_CACHE_VER}

@@ -66,7 +66,10 @@ def prose_matches_lang(text: str, lang: str) -> bool:
     if lane == "en":
         return True
     if lane == "hi":
-        return devanagari_char_count(sample) >= 6
+        if devanagari_char_count(sample) < 12:
+            return False
+        letters = len(re.findall(r"[A-Za-z\u0900-\u097F]", sample))
+        return letters < 24 or (devanagari_char_count(sample) / letters) >= 0.28
     if lane == "hn":
         if devanagari_char_count(sample[:400]) >= 6:
             return False
@@ -90,6 +93,7 @@ def love_pro_payload_matches_lang(payload: dict, lang: str) -> bool:
     pro = payload.get("pro_premium") if isinstance(payload.get("pro_premium"), dict) else {}
     ctx = payload.get("pdf_context") if isinstance(payload.get("pdf_context"), dict) else {}
     moon = ctx.get("page5_moon") if isinstance(ctx.get("page5_moon"), dict) else {}
+    bp = ctx.get("page2_3_blueprint") if isinstance(ctx.get("page2_3_blueprint"), dict) else {}
     sample = " ".join([
         str(p1.get("relationship_summary") or ""),
         str(p1.get("insights_narrative") or ""),
@@ -99,6 +103,7 @@ def love_pro_payload_matches_lang(payload: dict, lang: str) -> bool:
         str(pro.get("remedies_action_narrative") or ""),
         str(moon.get("body") or ""),
         str(ctx.get("page6_root_cause") or ""),
+        str(bp.get("part2") or bp.get("part1") or ""),
     ])
     return prose_matches_lang(sample, lane)
 
@@ -259,6 +264,19 @@ def sanitize_love_reality_pro_premium(
             continue
         key = str(ch.get("key") or "").strip().lower()
         body = str(ch.get(CHAPTER_BODY_KEY) or ch.get("full_read") or "").strip()
+        if key == "breakup" and lane == "hi":
+            try:
+                from i18n_summary import prose_fully_hindi
+
+                if not body or not prose_fully_hindi(body):
+                    ch[CHAPTER_BODY_KEY] = ""
+                    if ch.get("full_read"):
+                        ch["full_read"] = ""
+                    continue
+            except Exception:
+                if not body or devanagari_char_count(body) < 24:
+                    ch[CHAPTER_BODY_KEY] = ""
+                    continue
         fb = _engine_fallback(bundle, key, lang=lane)
         if key in ("love_connection", "red_flags") and len(re.findall(r"\b[\w']+\b", body)) >= 50:
             if preserve_deva:

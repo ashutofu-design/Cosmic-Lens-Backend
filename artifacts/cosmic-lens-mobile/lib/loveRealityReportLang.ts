@@ -268,8 +268,8 @@ export function section8HiLoadGate(
     return {
       ok: false,
       reason:
-        "Report load nahi hua — Section 8 LLM text abhi poori देवनागरी Hindi nahi hai "
-        + `(Devanagari chars: ${deva}). Mixed/English lines hain — Update dubara dabayein.`,
+        "Report load nahi hua — Section 8 abhi English/mixed hai, poori देवनागरी Hindi nahi "
+        + `(Devanagari chars: ${deva}). «रिपोर्ट अपडेट करें» dubao — fresh Hindi LLM chalega.`,
     };
   }
   if (!proseFullyHindi(root)) {

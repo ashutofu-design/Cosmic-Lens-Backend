@@ -6,7 +6,7 @@ from flask import Response, jsonify, request
 # Bump when PDF layout/renderer changes — invalidates stale server-side report cache.
 LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v24_moon_sync_llm"
 # Bump to drop all saved Hindi pro-report + polish snapshots (hi only).
-LOVE_REALITY_HI_CACHE_VER = "hi_purge_v2_section8_llm"
+LOVE_REALITY_HI_CACHE_VER = "hi_purge_v3_hi_breakup"
 
 
 def love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
@@ -79,7 +79,17 @@ def _hi_saved_report_stale(payload: dict) -> bool:
         return True
     if payload.get("hi_from_hn"):
         return True
-    return payload.get("hi_cache_ver") != LOVE_REALITY_HI_CACHE_VER
+    if payload.get("hi_cache_ver") != LOVE_REALITY_HI_CACHE_VER:
+        return True
+    pro = payload.get("pro_premium") if isinstance(payload.get("pro_premium"), dict) else {}
+    try:
+        from vedic.love_reality.love_section_polish import breakup_chapter_hi_ready
+
+        if pro and not breakup_chapter_hi_ready(pro):
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def _pdf_layout_headers(*, cache_hit: bool) -> dict[str, str]:
@@ -272,21 +282,9 @@ def _resolve_pro_premium(
                 if not prose_matches_lang(verdict, lang):
                     cached = None
             if cached and lang == "hi":
-                from vedic.love_reality.love_section_polish import (
-                    _breakup_chapter_body,
-                    breakup_chapter_word_count,
-                )
+                from vedic.love_reality.love_section_polish import breakup_chapter_hi_ready
 
-                bu_body = _breakup_chapter_body(cached)
-                stale_hi = breakup_chapter_word_count(cached) < 80
-                if not stale_hi and bu_body:
-                    try:
-                        from i18n_summary import prose_fully_hindi
-
-                        stale_hi = not prose_fully_hindi(bu_body)
-                    except Exception:
-                        pass
-                if stale_hi:
+                if not breakup_chapter_hi_ready(cached):
                     cached = None
                     force_llm = True
             if cached:
@@ -757,6 +755,7 @@ def register_love_reality_routes(flask_app) -> None:
                         "detail": "No saved report text for this couple yet.",
                     }), 412
                 from vedic.love_reality.love_section_polish import (
+                    breakup_chapter_hi_ready,
                     breakup_chapter_word_count,
                     bust_love_polish_section_caches,
                     ensure_breakup_section8_llm,
@@ -770,7 +769,10 @@ def register_love_reality_routes(flask_app) -> None:
                             lang,
                             force_llm=True,
                         )
-                        if breakup_chapter_word_count(pro) >= 80:
+                        if lang == "hi":
+                            if breakup_chapter_hi_ready(pro):
+                                break
+                        elif breakup_chapter_word_count(pro) >= 80:
                             break
                         if attempt < 2:
                             bust_love_polish_section_caches(bundle, lang)

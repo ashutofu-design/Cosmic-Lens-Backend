@@ -1419,6 +1419,19 @@ def breakup_chapter_word_count(pro: dict) -> int:
     return _word_count(_breakup_chapter_body(pro))
 
 
+def breakup_chapter_hi_ready(pro: dict) -> bool:
+    """Section 8 OK for Hindi — 80+ words and mostly Devanagari."""
+    body = _breakup_chapter_body(pro)
+    if _word_count(body) < 80:
+        return False
+    try:
+        from i18n_summary import prose_fully_hindi
+
+        return prose_fully_hindi(body)
+    except Exception:
+        return len(re.findall(r"[\u0900-\u097F]", body)) >= 24
+
+
 def _bust_chapter_scope_file_cache(bundle: dict, lang: str, chapter_key: str) -> None:
     """Drop cached empty/short chapter_breakup LLM response so retry hits OpenAI."""
     scope = f"chapter_{chapter_key}"
@@ -1462,8 +1475,12 @@ def ensure_breakup_section8_llm(
     if not isinstance(pro, dict):
         return pro or {}
     body = _breakup_chapter_body(pro)
-    if _word_count(body) >= 80 and not force_llm:
-        return pro
+    if lang == "hi" and body and not breakup_chapter_hi_ready(pro):
+        _upsert_chapter(pro, "breakup", "", "")
+        body = ""
+    elif _word_count(body) >= 80 and not force_llm:
+        if lang != "hi" or breakup_chapter_hi_ready(pro):
+            return pro
     try:
         from vedic.love_reality.pdf_text_safe import prose_matches_lang
 
@@ -1472,6 +1489,7 @@ def ensure_breakup_section8_llm(
             and body
             and lang in ("hi", "hn")
             and prose_matches_lang(body, lang)
+            and (lang != "hi" or breakup_chapter_hi_ready(pro))
         ):
             return pro
     except Exception:

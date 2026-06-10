@@ -121,6 +121,13 @@ function pushSection(sections: LoveReportSection[], sec: LoveReportSection | nul
   if (hasBody || hasBullets || hasTable) sections.push(sec);
 }
 
+/** In-app scroll — never show PDF teaser / download promo cards. */
+const IN_APP_HIDDEN_SECTION_IDS = new Set(["pdf_teaser"]);
+
+export function filterInAppReportSections(sections: LoveReportSection[]): LoveReportSection[] {
+  return sections.filter(s => !IN_APP_HIDDEN_SECTION_IDS.has(s.id.toLowerCase()));
+}
+
 function pickLabel(lang: ProPdfLangCode, en: string, hn: string, hi: string): string {
   if (lang === "hi") return hi;
   if (lang === "hn") return hn;
@@ -615,7 +622,7 @@ export function buildLoveReportSectionsFull(
 
 /**
  * Clean ~8-section scroll view — no duplicates, no dev boilerplate, fixed score labels.
- * PDF uses buildLoveReportSectionsFull() instead.
+ * PDF download uses the same `"page"` sections (WYSIWYG mirror).
  */
 export function buildLoveReportSectionsForPage(
   report: LoveProReportResponse,
@@ -711,18 +718,11 @@ export function buildLoveReportSectionsForPage(
       subtitle: labels.moonSub,
       body: moonBody,
     });
-
-    pushSection(sections, {
-      id: "pdf_teaser",
-      title: labels.pdfNote,
-      subtitle: labels.pdfTeaserSub,
-      body: labels.pdfTeaserBody,
-    });
   }
 
-  if (sections.length > 0) return sections;
+  if (sections.length > 0) return filterInAppReportSections(sections);
 
-  return buildLoveReportSectionsFull(report, lang);
+  return filterInAppReportSections(buildLoveReportSectionsFull(report, lang));
 }
 
 /** @param mode `"page"` = clean in-app scroll · `"full"` = complete PDF mirror (default) */
@@ -732,7 +732,7 @@ export function buildLoveReportSections(
   opts?: { mode?: LoveReportBuildMode },
 ): LoveReportSection[] {
   if (opts?.mode === "page") {
-    return buildLoveReportSectionsForPage(report, lang);
+    return filterInAppReportSections(buildLoveReportSectionsForPage(report, lang));
   }
   return buildLoveReportSectionsFull(report, lang);
 }
@@ -758,14 +758,21 @@ export async function fetchLoveRealityProReport(opts: {
   layoutRefresh?: boolean;
   /** Fresh OpenAI polish in hn/hi/en — skips server JSON cache. */
   forceLlm?: boolean;
+  /** User tapped Update Report — full LLM regen, never layout-only cache. */
+  fullUpdate?: boolean;
+  /** Bust CDN/proxy caches on force refresh. */
+  cacheBust?: number;
 }): Promise<LoveProReportFetchResult> {
   const lang = coerceProPdfLang(opts.lang);
   const tz1 = opts.p1.tz ?? Math.round((opts.p1.lon! / 15) * 2) / 2;
   const tz2 = opts.p2.tz ?? Math.round((opts.p2.lon! / 15) * 2) / 2;
-  const layoutRefresh = Boolean(opts.layoutRefresh);
-  const forceLlm = Boolean(opts.forceLlm);
+  const fullUpdate = Boolean(opts.fullUpdate);
+  const layoutRefresh = Boolean(opts.layoutRefresh) && !fullUpdate;
+  const forceLlm = Boolean(opts.forceLlm || fullUpdate || lang !== "en");
+  const cacheBust = opts.cacheBust ?? (fullUpdate ? Date.now() : 0);
+  const bustQs = cacheBust ? `?_=${cacheBust}` : "";
 
-  const resp = await fetch(`${API_BASE}/api/love-reality/pro-report`, {
+  const resp = await fetch(`${API_BASE}/api/love-reality/pro-report${bustQs}`, {
     method: "POST",
     headers: {
       ...pdfAuthHeaders(opts.user),
@@ -773,6 +780,7 @@ export async function fetchLoveRealityProReport(opts: {
       ...(layoutRefresh ? { "X-PDF-Layout-Refresh": "1" } : {}),
       ...(layoutRefresh || forceLlm ? { "X-Force-Regenerate": "1" } : {}),
       ...(forceLlm ? { "X-Force-LLM": "1" } : {}),
+      ...(fullUpdate ? { "X-Love-Report-Full-Update": "1" } : {}),
     },
     body: JSON.stringify({
       p1: { ...packLovePerson(opts.p1, opts.p1Name), tz: tz1 },
@@ -780,6 +788,8 @@ export async function fetchLoveRealityProReport(opts: {
       lang,
       ...(layoutRefresh || forceLlm ? { force_regenerate: true } : {}),
       ...(forceLlm ? { force_llm: true } : {}),
+      ...(fullUpdate ? { force_update: true } : {}),
+      ...(cacheBust ? { cache_bust: cacheBust } : {}),
     }),
     signal: opts.signal,
   });

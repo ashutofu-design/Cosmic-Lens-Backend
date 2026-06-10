@@ -23,7 +23,7 @@ from vedic.compat.premium_chapters import CHAPTER_BODY_KEY, normalize_pro_pdf_la
 
 log = logging.getLogger(__name__)
 
-_ASSEMBLY_VER = "lr_sections_v10"
+_ASSEMBLY_VER = "lr_sections_v13_hi_localize_fix"
 _CHAPTER_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_CHAPTER_MIN_WORDS", "95"))
 _HARMONY_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_HARMONY_MIN_WORDS", "130"))
 
@@ -171,6 +171,8 @@ def _cache_dir() -> str:
 def _few_shot_name_rule(lang: str) -> str:
     if lang == "hn":
         return "CRITICAL: Example mein jo naam hain wo sirf style hain — user message ke ACTUAL p1/p2 naam use karo. Aarav/Riya mat likho."
+    if lang == "hi":
+        return "CRITICAL: उदाहरण के नाम सिर्फ शैली के लिए हैं — user message के ACTUAL p1/p2 नाम लिखो। Aarav/Riya मत लिखो।"
     return "CRITICAL: Example names are style only — use ACTUAL p1/p2 names from the user message. Never write Aarav or Riya."
 
 
@@ -183,6 +185,12 @@ MAT AISE MAT LIKHO: "Chart signals for this theme are active..."
 AISE LIKHO (p1 ideal vs partner reality — real names):
 "[p1_name], tumhari 7th house aur Upapada stability chahte hain. Par [p2_name] ki chart alag rhythm laati hai. Tumhe lagta hai sunai nahi deti; unhe lagta hai tum push karte ho."
 """
+        if lang == "hi":
+            return f"""{name_rule}
+ऐसे मत लिखो: "Chart signals for this theme are active..."
+ऐसे लिखो (p1 का ideal बनाम partner की reality — असली नाम):
+"[p1_name], आपकी 7th house और Upapada स्थिरता चाहती है। पर [p2_name] की कुंडली अलग लय लाती है। आपको लगता है सुना नहीं जाता; उन्हें लगता है आप दबाव डालते हैं।"
+"""
         return f"""{name_rule}
 DO NOT: "Chart signals for this theme are active between both partners..."
 WRITE (p1 — ideal blueprint vs partner reality, use real names):
@@ -193,6 +201,10 @@ WRITE (p1 — ideal blueprint vs partner reality, use real names):
             return f"""{name_rule}
 AISE LIKHO: "[p1_name], jab baat atakti hai tum turant solve karna chahte ho. [p2_name] chup ho jate hain, tum push karte ho. Repair 48 ghante delay ho to separation feel hoti hai."
 """
+        if lang == "hi":
+            return f"""{name_rule}
+ऐसे लिखो: "[p1_name], जब बात अटकती है आप तुरंत हल चाहते हैं। [p2_name] चुप हो जाते हैं, आप दबाव बढ़ाते हैं। मरम्मत में ४८ घंटे देरी हो तो अलग होने जैसा लगता है।"
+"""
         return f"""{name_rule}
 WRITE: "[p1_name], when talk stalls you move to fix it fast. [p2_name] goes quiet and you push harder. Separation feels close when repair waits more than 48 hours."
 """
@@ -200,6 +212,10 @@ WRITE: "[p1_name], when talk stalls you move to fix it fast. [p2_name] goes quie
         if lang == "hn":
             return f"""{name_rule}
 AISE LIKHO: "[p1_name], trust consistency se measure karte ho — jab [p2_name] silent hote hain mind worst-case bharta hai."
+"""
+        if lang == "hi":
+            return f"""{name_rule}
+ऐसे लिखो: "[p1_name], आप भरोसा consistency से मापते हैं — जब [p2_name] चुप होते हैं दिमाग worst-case भर देता है।"
 """
         return f"""{name_rule}
 WRITE: "[p1_name], you measure trust through consistency — when [p2_name] is silent your mind fills worst-case stories."
@@ -209,6 +225,11 @@ WRITE: "[p1_name], you measure trust through consistency — when [p2_name] is s
             return f"""{name_rule}
 AISE LIKHO (sharp, 3 chhoti paragraphs):
 "[p1_name], do pattern bar-bar dikhte hain — gusse ke peak par ultimatum, aur silence ko jaan-bujhkar ignore samajhna. Chart breakup pressure high hai — matlab chhoti fight bhi separation jaisi feel ho sakti hai. Yeh lecture nahi, pattern recognition hai."
+"""
+        if lang == "hi":
+            return f"""{name_rule}
+ऐसे लिखो (तीखा, 3 छोटे paragraphs):
+"[p1_name], दो पैटर्न बार-बार दिखते हैं — गुस्से के peak पर ultimatum, और चुप्पी को जान-बूjhकर ignore समझना। Chart breakup pressure high है — छोटी लड़ाई भी separation जaisa feel हो सकती है। यeh lecture नहीं, pattern recognition है।"
 """
         return f"""{name_rule}
 WRITE (sharp, 3 short paragraphs, real names):
@@ -224,6 +245,11 @@ def _harmony_few_shot(lang: str) -> str:
 AISE LIKHO (honest, real names):
 "[p1_name], Fire aur Earth mix me tum jaldi react karte ho, [p2_name] slow recharge karte hain. Agar alag hue to chart genuine return ko kam probability deta hai — false reunion promise mat do. Repair habit ke bina 6-8 mahine ka loop wapas aata hai."
 """
+    if lang == "hi":
+        return f"""{name_rule}
+AISE LIKHO (honest, real names — Devanagari Hindi, hn/en jitni depth):
+"[p1_name], Fire aur Earth mix me aap jaldi react karte ho, [p2_name] slow recharge karte hain. Alag hue to chart genuine return ko kam probability deta hai — false reunion promise mat do. Repair habit ke bina 6-8 mahine ka loop wapas aata hai."
+"""
     return f"""{name_rule}
 WRITE (honest, real names):
 "[p1_name], your Fire and their Earth pull at different speeds — you react fast, they recharge slow. If apart the chart gives low genuine-return probability — do not promise reunion. Without repair habits the same six-to-eight month loop returns."
@@ -237,6 +263,11 @@ def _dasha_few_shot(lang: str) -> str:
 AISE LIKHO:
 "[p1_name], abhi aap Jupiter MD mein ho, Rahu AD chal raha hai — patience stretch hoti hai. [p2_name] Saturn AD mein slow reply dete hain. Jab dono cycles communication ko stress karein, 24 ghante ke andar friction naam karo — ultimatum mat."
 """
+    if lang == "hi":
+        return f"""{name_rule}
+AISE LIKHO (Devanagari Hindi — hn/en jitni depth):
+"[p1_name], abhi aap Jupiter MD mein ho, Rahu AD chal raha hai — patience stretch hoti hai. [p2_name] Saturn AD mein slow reply dete hain. Jab dono cycles communication ko stress karein, 24 ghante ke andar friction naam karo — ultimatum mat."
+"""
     return f"""{name_rule}
 WRITE:
 "[p1_name], you're in Jupiter MD with Rahu AD running — patience gets stretched. [p2_name] is in Saturn AD and replies slow. When both cycles stress communication, name the friction within 24 hours — no ultimatums."
@@ -248,6 +279,11 @@ def _roadmap_few_shot(lang: str) -> str:
     if lang == "hn":
         return f"""{name_rule}
 AISE LIKHO (3/12/36 month alag paragraphs):
+"Agle 3 mahine: trend mixed — repair habit bina wahi loop. 12 mahine: outlook strained — clarity ke liye ek baar calmly baithna. 36 mahine: return probability low — false reunion promise mat, chart honest hai."
+"""
+    if lang == "hi":
+        return f"""{name_rule}
+AISE LIKHO (3/12/36 month alag paragraphs — Devanagari, hn/en jitni depth):
 "Agle 3 mahine: trend mixed — repair habit bina wahi loop. 12 mahine: outlook strained — clarity ke liye ek baar calmly baithna. 36 mahine: return probability low — false reunion promise mat, chart honest hai."
 """
     return f"""{name_rule}
@@ -435,7 +471,11 @@ def _build_prior_sections_digest(pro: dict, lang: str) -> str:
     header = (
         "PRIOR_SECTIONS (already stated — do NOT repeat conclusions, scores, warnings, or opener patterns):"
         if lang == "en"
-        else "PRIOR_SECTIONS (yeh pehle bol chuke — conclusion / score / warning dubara mat likho):"
+        else (
+            "PRIOR_SECTIONS (pahle bol chuke — nishkarsh / score / chetavani dubara mat likho):"
+            if lang == "hi"
+            else "PRIOR_SECTIONS (yeh pehle bol chuke — conclusion / score / warning dubara mat likho):"
+        )
     )
     return header + "\n" + "\n".join(parts)
 
@@ -506,7 +546,44 @@ def _section_angle_block(section_key: str, lang: str) -> str:
             "Pehle daily habits / repair steps — score numbers mat likho."
         ),
     }
-    table = angles_hn if lang == "hn" else angles_en
+    angles_hi = {
+        "blueprint_reality": (
+            "SECTION ANGLE: p1 ka ideal partner vs p2 ki asli nature — ROOT_CAUSE se mismatch dikhao; "
+            "naya alag reason mat. Har chart point ke baad daily life me kya dikhta hai explain karo."
+        ),
+        "breakup": (
+            "SECTION ANGLE: ROOT_CAUSE KYUN hai — chart se explain karo. Generic breakup advice mat."
+        ),
+        "loyalty": (
+            "SECTION ANGLE: ROOT_CAUSE trust ko kaise todta hai — root cause dubara poori tarah mat samjhao."
+        ),
+        "red_flags": (
+            "SECTION ANGLE: Chart-backed red flags — PRIOR_SECTIONS ki warning repeat mat."
+        ),
+        "harmony": (
+            "SECTION ANGLE: Long-term elements + bond shift — ROOT_CAUSE se judo, naya insight."
+        ),
+        "dasha": (
+            "SECTION ANGLE: ROOT_CAUSE kab peak / ease — timing, score dubara mat."
+        ),
+        "roadmap": (
+            "SECTION ANGLE: 3/12/36 month guide — band/phase bolo, score numbers repeat mat."
+        ),
+        "moon_sync": (
+            "SECTION ANGLE: Moon emotional rhythm — p1/p2 stress me feel aur react kaise karte hain. "
+            "ROOT_CAUSE se Moon signs / nakshatra / shashtashtak se judo — generic moon list mat."
+        ),
+        "remedies_action": (
+            "SECTION ANGLE: Practical upay + ab kya karein + agle 3–12 mahine ka plan. "
+            "Pehle daily habits / repair steps — score numbers mat likho."
+        ),
+    }
+    if lang == "hn":
+        table = angles_hn
+    elif lang == "hi":
+        table = angles_hi
+    else:
+        table = angles_en
     return table.get(section_key, "")
 
 

@@ -53,6 +53,56 @@ def has_devanagari(text: str) -> bool:
     return bool(text and _DEVA_RE.search(text))
 
 
+def devanagari_char_count(text: str) -> int:
+    return len(re.findall(r"[\u0900-\u097F]", text or ""))
+
+
+def prose_matches_lang(text: str, lang: str) -> bool:
+    """Rough check that narrative prose matches en / hn / hi lane."""
+    lane = polish_content_lang(lang)
+    sample = (text or "").strip()
+    if not sample or len(sample) < 20:
+        return False
+    if lane == "en":
+        return True
+    if lane == "hi":
+        return devanagari_char_count(sample) >= 6
+    if lane == "hn":
+        if devanagari_char_count(sample[:400]) >= 6:
+            return False
+        return bool(re.search(
+            r"\b(aap|aapka|aapke|rishta|rishte|pyar|kya|hai|hain|nahi|nahin|hoga|hogi|"
+            r"saath|beech|dono|yeh|ye|aur|mein|main|upay|dasha)\b",
+            sample,
+            re.I,
+        ))
+    return True
+
+
+def love_pro_payload_matches_lang(payload: dict, lang: str) -> bool:
+    """Validate cached / fresh Love Reality Pro JSON matches requested language."""
+    if not isinstance(payload, dict):
+        return False
+    lane = polish_content_lang(lang)
+    if lane == "en":
+        return True
+    p1 = payload.get("page1") if isinstance(payload.get("page1"), dict) else {}
+    pro = payload.get("pro_premium") if isinstance(payload.get("pro_premium"), dict) else {}
+    ctx = payload.get("pdf_context") if isinstance(payload.get("pdf_context"), dict) else {}
+    moon = ctx.get("page5_moon") if isinstance(ctx.get("page5_moon"), dict) else {}
+    sample = " ".join([
+        str(p1.get("relationship_summary") or ""),
+        str(p1.get("insights_narrative") or ""),
+        str(p1.get("verdict") or ""),
+        str(pro.get("verdict") or ""),
+        str(pro.get("moon_sync_narrative") or ""),
+        str(pro.get("remedies_action_narrative") or ""),
+        str(moon.get("body") or ""),
+        str(ctx.get("page6_root_cause") or ""),
+    ])
+    return prose_matches_lang(sample, lane)
+
+
 def strip_devanagari(text: str) -> str:
     if not text:
         return ""
@@ -91,9 +141,10 @@ def love_write_script_label(lang: str) -> str:
     }[lane]
 
 
-def _engine_fallback(bundle: dict | None, chapter_key: str) -> str:
+def _engine_fallback(bundle: dict | None, chapter_key: str, *, lang: str = "en") -> str:
     if not bundle:
         return ""
+    lane = polish_content_lang(lang)
     for ck, bk in _CHAPTER_FALLBACK_KEYS:
         if ck == chapter_key:
             block = bundle.get(bk) or {}
@@ -101,8 +152,11 @@ def _engine_fallback(bundle: dict | None, chapter_key: str) -> str:
                 str(block.get("emotional_summary") or "").strip(),
                 " ".join(str(r) for r in (block.get("reasons") or [])[:4]),
             ]
-            return strip_devanagari(" ".join(p for p in parts if p))
-    return ""
+            raw = " ".join(p for p in parts if p)
+            if lane == "hi":
+                return _thin_fallback("hi")
+            return strip_devanagari(raw)
+    return _thin_fallback(lane) if lane == "hi" else ""
 
 
 def _meaningful_paragraph_count(text: str, *, min_words: int = 20) -> int:
@@ -205,7 +259,7 @@ def sanitize_love_reality_pro_premium(
             continue
         key = str(ch.get("key") or "").strip().lower()
         body = str(ch.get(CHAPTER_BODY_KEY) or ch.get("full_read") or "").strip()
-        fb = _engine_fallback(bundle, key)
+        fb = _engine_fallback(bundle, key, lang=lane)
         if key in ("love_connection", "red_flags") and len(re.findall(r"\b[\w']+\b", body)) >= 50:
             if preserve_deva:
                 fixed = humanize_snake_tokens(body)

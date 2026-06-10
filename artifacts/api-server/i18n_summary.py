@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import threading
 from typing import Any, Optional
 
@@ -97,6 +98,18 @@ def _translate_via_openai(text: str, lang: str) -> Optional[str]:
             f"IMPORTANT: Output ONLY the translated text — no quotes, no labels, "
             f"no explanations, no preamble.\n\nText to translate:\n{text}"
         )
+    elif lang == "hi":
+        prompt = (
+            "Translate the following English text into natural Hindi written in "
+            "Devanagari script (देवनागरी). Do NOT use Roman/Latin letters for Hindi "
+            "words — partner names, scores, and graha names may stay in Latin.\n"
+            "Keep proper nouns (planet names, Sanskrit/astrology terms in their "
+            "conventional form, directions like NE/SW/N/S/E/W, numbers, dates) "
+            "unchanged. Use fluent, conversational Hindi.\n\n"
+            "IMPORTANT: Output ONLY the translated text — no quotes, no labels, "
+            "no explanations, no preamble.\n\nText to translate:\n"
+            f"{text}"
+        )
     else:
         prompt = (
             f"Translate the following English text into {target_name}. "
@@ -140,7 +153,19 @@ def localize_text(en: str, hi: Optional[str], lang: str) -> str:
     if lang == "en":
         return en
     if lang == "hi":
-        return hi if (isinstance(hi, str) and hi) else en
+        if isinstance(hi, str) and hi:
+            return hi
+        # Already Devanagari (Love Reality LLM output or prior translate).
+        if len(re.findall(r"[\u0900-\u097F]", en)) >= 6:
+            return en
+        cached = _cache_get(lang, en)
+        if cached is not None:
+            return cached
+        translated = _translate_via_openai(en, lang)
+        if translated:
+            _cache_put(lang, en, translated)
+            return translated
+        return en
     if lang not in LANG_NAMES:
         return en  # unknown lang → English fallback
 

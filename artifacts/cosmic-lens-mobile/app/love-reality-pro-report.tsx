@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Easing,
@@ -21,13 +21,14 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import {
   buildLoveReportSections,
+  filterInAppReportSections,
   fetchLoveRealityProReport,
   loveRealityReportLabels,
   type LoveProReportResponse,
 } from "@/lib/loveRealityProReport";
 import {
-  clearLoveReportCache,
-  loveReportCacheNeedsLlm,
+  clearLoveReportCacheAllLangs,
+  deviceCacheNeedsServerRefresh,
   markLoveReportPdfSynced,
   resolveLoveReportCache,
   saveLoveReportCache,
@@ -265,7 +266,6 @@ export default function LoveRealityProReportScreen() {
   const [report, setReport] = useState<LoveProReportResponse | null>(null);
   const [fromCache, setFromCache] = useState(false);
   const [cacheChange, setCacheChange] = useState<LoveReportChangeKind>("missing");
-  const [needsPdfResync, setNeedsPdfResync] = useState(false);
   const [llmRefresh, setLlmRefresh] = useState(false);
   const [pdfConnecting, setPdfConnecting] = useState(false);
   const [updatingReport, setUpdatingReport] = useState(false);
@@ -317,7 +317,6 @@ export default function LoveRealityProReportScreen() {
     fastCacheRef.current = false;
     setFromCache(false);
     setCacheChange("missing");
-    setNeedsPdfResync(forceUpdate);
     setLlmRefresh(forceUpdate || lang !== "en");
     setForceUpdateRun(forceUpdate);
     if (forceUpdate) setUpdatingReport(true);
@@ -333,21 +332,27 @@ export default function LoveRealityProReportScreen() {
 
     try {
       if (forceUpdate) {
-        await clearLoveReportCache(cacheOpts);
+        await clearLoveReportCacheAllLangs({
+          userId: cacheOpts.userId,
+          p1: cacheOpts.p1,
+          p2: cacheOpts.p2,
+          p1Name: cacheOpts.p1Name,
+          p2Name: cacheOpts.p2Name,
+        });
       }
 
       let mustLlm = forceUpdate || lang !== "en";
       if (!forceUpdate) {
         const resolved = await resolveLoveReportCache(cacheOpts);
         setCacheChange(resolved.changeKind);
-        setNeedsPdfResync(resolved.needsPdfResync);
-        mustLlm = loveReportCacheNeedsLlm(resolved.payload, lang, resolved.meta);
+        mustLlm = mustLlm || deviceCacheNeedsServerRefresh(resolved.payload, resolved.meta, lang);
         setLlmRefresh(mustLlm);
 
         if (
           resolved.payload
           && !mustLlm
           && resolved.changeKind === "app_layout"
+          && lang === "en"
         ) {
           await touchLoveReportCacheRevision({
             ...cacheOpts,
@@ -366,8 +371,7 @@ export default function LoveRealityProReportScreen() {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 240000);
       try {
-        const layoutRefresh = forceUpdate || lang !== "en";
-        let { data } = await fetchLoveRealityProReport({
+        const fetchReport = (fullUpdate: boolean, cacheBust: number) => fetchLoveRealityProReport({
           user,
           p1: primaryProfile.birthData,
           p2: partnerProfile.birthData,
@@ -375,27 +379,33 @@ export default function LoveRealityProReportScreen() {
           p2Name: partnerProfile.name || "Partner",
           lang,
           signal: ctrl.signal,
-          layoutRefresh,
-          forceLlm: forceUpdate || mustLlm,
+          fullUpdate,
+          cacheBust,
+          layoutRefresh: !fullUpdate && lang !== "en",
+          forceLlm: fullUpdate || mustLlm,
         });
+
+        const bust = Date.now();
+        let { data, serverCacheHit } = await fetchReport(Boolean(forceUpdate), bust);
+
+        for (let attempt = 0; attempt < 2 && forceUpdate; attempt += 1) {
+          const stale =
+            serverCacheHit
+            || data.polish_source === "polish_snapshot"
+            || (lang === "hi" && !reportSummaryMatchesLang(data, lang));
+          if (!stale) break;
+          const retry = await fetchReport(true, Date.now());
+          data = retry.data;
+          serverCacheHit = retry.serverCacheHit;
+        }
+
         if (lang !== "en" && !reportSummaryMatchesLang(data, lang)) {
           setLlmRefresh(true);
-          const retry = await fetchLoveRealityProReport({
-            user,
-            p1: primaryProfile.birthData,
-            p2: partnerProfile.birthData,
-            p1Name: primaryProfile.name || "You",
-            p2Name: partnerProfile.name || "Partner",
-            lang,
-            signal: ctrl.signal,
-            layoutRefresh: true,
-            forceLlm: true,
-          });
+          const retry = await fetchReport(true, Date.now());
           data = retry.data;
         }
         await saveLoveReportCache(cacheOpts, data);
         finishLoad(data, false);
-        setNeedsPdfResync(true);
         if (forceUpdate) {
           Alert.alert(labels.updateDone, labels.updateHint, [{ text: labels.ok }]);
         }
@@ -452,6 +462,13 @@ export default function LoveRealityProReportScreen() {
     void load({ forceUpdate: true });
   }, [updatingReport, load]);
 
+  const sections = useMemo(
+    () => (report
+      ? filterInAppReportSections(buildLoveReportSections(report, lang, { mode: "page" }))
+      : []),
+    [report, lang],
+  );
+
   const handleConnectToPdf = useCallback(async () => {
     if (
       !user?.id
@@ -473,6 +490,14 @@ export default function LoveRealityProReportScreen() {
     }
     setPdfConnecting(true);
     try {
+      if (!sections.length) {
+        Alert.alert(
+          labels.alertRefreshTitle,
+          labels.alertRefreshBody,
+          [{ text: labels.ok }],
+        );
+        return;
+      }
       const result = await connectLoveRealityPageToPdf({
         user,
         p1: primaryProfile.birthData,
@@ -485,7 +510,7 @@ export default function LoveRealityProReportScreen() {
           pdf_context: report.pdf_context,
           page1: report.page1,
         },
-        appSections: buildLoveReportSections(report, lang, { mode: "full" }),
+        appSections: sections,
         scores: report.scores,
       });
       const fromCache = result.reportCacheHit ? " (server cache)" : "";
@@ -516,7 +541,6 @@ export default function LoveRealityProReportScreen() {
           p2Name: partnerProfile.name || "Partner",
           lang,
         });
-        setNeedsPdfResync(false);
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Could not download PDF";
@@ -524,9 +548,8 @@ export default function LoveRealityProReportScreen() {
     } finally {
       setPdfConnecting(false);
     }
-  }, [user, primaryProfile, partnerProfile, lang, pdfConnecting, report, labels]);
+  }, [user, primaryProfile, partnerProfile, lang, pdfConnecting, report, labels, sections]);
 
-  const sections = report ? buildLoveReportSections(report, lang, { mode: "page" }) : [];
   const isLoadingUi = fetching || (loadDone && !showReport);
 
   return (
@@ -619,7 +642,7 @@ export default function LoveRealityProReportScreen() {
               <Feather name="chevron-right" size={18} color="#8B5CF6" />
             </Pressable>
             <ScrollView
-              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 120 }}
+              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
               showsVerticalScrollIndicator={false}
             >
               <LoveRealityProReportView
@@ -632,50 +655,6 @@ export default function LoveRealityProReportScreen() {
                 sections={sections}
               />
             </ScrollView>
-            <View
-              style={[
-                s.connectBar,
-                {
-                  paddingBottom: insets.bottom + 10,
-                  backgroundColor: C.isDark ? "rgba(15,10,31,0.96)" : "rgba(255,255,255,0.96)",
-                  borderTopColor: C.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
-                },
-              ]}
-            >
-              <Text style={[s.connectHint, { color: C.isDark ? "rgba(226,232,240,0.72)" : "#64748B" }]}>
-                {needsPdfResync
-                  ? (lang === "hn"
-                    ? "Layout update hua — PDF dubara download karo (same text, no AI)"
-                    : lang === "hi"
-                      ? "लेआउट अपडेट — PDF फिर डाउनलोड करें"
-                      : "Layout updated — download PDF again (same text, no AI)")
-                  : labels.downloadHint}
-              </Text>
-              <Pressable
-                onPress={handleConnectToPdf}
-                disabled={pdfConnecting}
-                style={[s.connectBtn, pdfConnecting && { opacity: 0.75 }]}
-              >
-                <LinearGradient
-                  colors={["#9333ea", "#ec4899"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={s.connectBtnGrad}
-                >
-                  {pdfConnecting ? (
-                    <>
-                      <ActivityIndicator size="small" color="#fff" />
-                      <Text style={s.connectBtnTxt}>{labels.downloadingPdf}</Text>
-                    </>
-                  ) : (
-                    <>
-                      <Feather name="download" size={18} color="#fff" />
-                      <Text style={s.connectBtnTxt}>{labels.downloadPdf}</Text>
-                    </>
-                  )}
-                </LinearGradient>
-              </Pressable>
-            </View>
           </>
         ) : null}
       </View>
@@ -756,32 +735,6 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   savePdfTxt: { color: "#fff", fontFamily: "Nunito_700Bold", fontSize: 10 },
-  connectBar: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 8,
-  },
-  connectHint: {
-    fontFamily: "Nunito_500Medium",
-    fontSize: 11.5,
-    textAlign: "center",
-    lineHeight: 16,
-  },
-  connectBtn: { borderRadius: 14, overflow: "hidden" },
-  connectBtnGrad: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-  },
-  connectBtnTxt: { color: "#fff", fontFamily: "Nunito_800ExtraBold", fontSize: 16 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 12 },
   errTxt: { fontFamily: "Nunito_500Medium", fontSize: 14, textAlign: "center" },
   retryBtn: {

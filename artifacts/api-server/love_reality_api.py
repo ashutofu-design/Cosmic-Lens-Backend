@@ -53,6 +53,11 @@ def _force_llm_requested() -> bool:
     if hdr in ("1", "true", "yes", "on") or flag in ("1", "true", "yes", "on"):
         return True
 
+    full_hdr = (request.headers.get("X-Love-Report-Full-Update") or "").strip().lower()
+    full_flag = str(body.get("force_update") or "").strip().lower()
+    if full_hdr in ("1", "true", "yes", "on") or full_flag in ("1", "true", "yes", "on"):
+        return True
+
     layout_refresh = (request.headers.get("X-PDF-Layout-Refresh") or "").strip().lower()
     if layout_refresh in ("1", "true", "yes", "on"):
         return False
@@ -63,6 +68,22 @@ def _force_llm_requested() -> bool:
         "yes",
         "on",
     )
+
+
+def _pro_report_force_llm(data: dict | None = None) -> bool:
+    """In-app Update Report — always rerun LLM, never reuse L1/snapshot."""
+    payload = data if isinstance(data, dict) else (request.get_json(silent=True) or {})
+    if _force_llm_requested():
+        return True
+    if _force_regenerate_requested():
+        return True
+    flag = str(payload.get("force_update") or "").strip().lower()
+    if flag in ("1", "true", "yes", "on"):
+        return True
+    bust = payload.get("cache_bust")
+    if bust is not None and str(bust).strip() not in ("", "0"):
+        return True
+    return False
 
 
 def _pdf_render_only_requested() -> bool:
@@ -226,6 +247,33 @@ def register_love_reality_routes(flask_app) -> None:
             cache_params = _love_reality_cache_params(lang, data["p1"], data["p2"])
             if has_app_mirror:
                 cache_params = {**cache_params, "pdf_renderer": "app_mirror"}
+                if not has_client_layout:
+                    return jsonify({
+                        "error": "app_pdf_parity_failed",
+                        "detail": (
+                            "Report snapshot missing — reload Love Reality Pro on screen, "
+                            "then tap Download PDF again."
+                        ),
+                    }), 412
+                try:
+                    from vedic.love_reality.app_pdf_parity import validate_app_sections_parity
+
+                    parity_err = validate_app_sections_parity(
+                        app_sections=app_sections,
+                        page1=client_page1 or {},
+                        pdf_context=client_ctx or {},
+                        lang=lang,
+                    )
+                except Exception as exc:
+                    return jsonify({
+                        "error": "app_pdf_parity_failed",
+                        "detail": f"Parity check failed: {exc}",
+                    }), 412
+                if parity_err:
+                    return jsonify({
+                        "error": "app_pdf_parity_failed",
+                        "detail": parity_err,
+                    }), 412
             force_regen = (
                 _force_regenerate_requested()
                 or has_client_layout
@@ -249,6 +297,8 @@ def register_love_reality_routes(flask_app) -> None:
                     402,
                 )
             cached_pdf = None if force_regen else access.get("cached_pdf")
+            if cached_pdf and has_app_mirror:
+                cached_pdf = None
             if cached_pdf:
                 try:
                     import pdf_generation_log as _pgl
@@ -517,21 +567,49 @@ def register_love_reality_routes(flask_app) -> None:
 
             json_cache_params = _json_cache.cache_params(user_id, lang, data["p1"], data["p2"])
             snap_params = _snap.snapshot_params(user_id, lang, data["p1"], data["p2"])
-            if _force_llm_requested() or _force_regenerate_requested():
+            force_full = _pro_report_force_llm(data)
+            if force_full:
                 _json_cache.invalidate(json_cache_params)
                 _snap.invalidate(snap_params)
-            if not _force_llm_requested() and not _force_regenerate_requested():
+            if not force_full:
                 cached_json = _json_cache.load(json_cache_params)
                 if cached_json:
-                    if lang in ("hn", "hi"):
+                    from vedic.love_reality.pdf_text_safe import love_pro_payload_matches_lang
+
+                    if not love_pro_payload_matches_lang(cached_json, lang):
+                        cached_json = None
+                    elif lang in ("hn", "hi"):
                         from vedic.love_reality.pdf_page1_data import _localize_page1_dashboard
 
                         p1_cached = cached_json.get("page1")
                         if isinstance(p1_cached, dict):
-                            cached_json = {
-                                **cached_json,
-                                "page1": _localize_page1_dashboard(p1_cached, lang),
-                            }
+                            summary = " ".join([
+                                str(p1_cached.get("relationship_summary") or ""),
+                                str(p1_cached.get("verdict") or ""),
+                            ])
+                            import re
+
+                            already_local = (
+                                lang == "hi"
+                                and len(re.findall(r"[\u0900-\u097F]", summary)) >= 24
+                            ) or (
+                                lang == "hn"
+                                and summary
+                                and not re.search(r"[\u0900-\u097F]", summary[:400])
+                                and re.search(
+                                    r"\b(aap|rishte|kya|hai|hain|nahi)\b",
+                                    summary,
+                                    re.I,
+                                )
+                            )
+                            if not already_local:
+                                cached_json = {
+                                    **cached_json,
+                                    "page1": _localize_page1_dashboard(p1_cached, lang),
+                                }
+                                if not love_pro_payload_matches_lang(cached_json, lang):
+                                    cached_json = None
+                if cached_json:
                     resp = jsonify(cached_json)
                     resp.headers["X-Report-Cache"] = "hit"
                     return resp
@@ -542,13 +620,23 @@ def register_love_reality_routes(flask_app) -> None:
                 bundle = compute_love_reality_bundle(
                     flask_app, data["p1"], data["p2"], skip_ai_insight=True
                 )
+                if force_full:
+                    try:
+                        from vedic.love_reality.premium_polish import bust_love_polish_all_caches
+
+                        bust_love_polish_all_caches(bundle, lang)
+                    except Exception as exc:
+                        try:
+                            print(f"[love_reality_pro_report] cache bust failed: {exc}", flush=True)
+                        except Exception:
+                            pass
                 pro, polish_source = _resolve_pro_premium(
                     bundle,
                     lang=lang,
                     user_id=user_id,
                     p1=data["p1"],
                     p2=data["p2"],
-                    force_llm=_force_llm_requested(),
+                    force_llm=force_full,
                 )
                 if pro is None:
                     return jsonify({
@@ -558,43 +646,76 @@ def register_love_reality_routes(flask_app) -> None:
                 pro = sanitize_love_reality_pro_premium(pro, bundle, lang=lang)
                 from vedic.love_reality.pdf_data_v2 import build_love_reality_pdf_v2_context
                 from vedic.love_reality.pdf_page1_data import build_love_reality_page1_data
+                from vedic.love_reality.pdf_text_safe import love_pro_payload_matches_lang
 
-                pdf_context = build_love_reality_pdf_v2_context(
-                    bundle, pro, data["p1"], data["p2"], lang=lang
-                )
-                page1 = build_love_reality_page1_data(
-                    pdf_context, bundle, pro, data["p1"], data["p2"], lang=lang
-                )
-                lc = bundle.get("love_compatibility") or {}
-                bu = bundle.get("breakup_chances") or {}
-                ly = bundle.get("loyalty_check") or {}
-                wr = bundle.get("will_return") or {}
-                fo = bundle.get("future_outcome") or {}
-                p1n = str(data["p1"].get("name") or "You")
-                p2n = str(data["p2"].get("name") or "Partner")
-                payload = {
-                    "ok": True,
-                    "lang": lang,
-                    "polish_source": polish_source,
-                    "p1_name": str(p1n),
-                    "p2_name": str(p2n),
-                    "scores": {
-                        "love": int(lc.get("score") or lc.get("love_score") or 0),
-                        "breakup": int(bu.get("score") or bu.get("breakup_score") or 0),
-                        "loyalty": int(ly.get("score") or ly.get("loyalty_score") or 0),
-                        "return": int(wr.get("return_probability") or wr.get("score") or 0),
-                        "future": int(fo.get("future_score") or fo.get("score") or 0),
-                    },
-                    "pro_premium": pro,
-                    "pdf_context": pdf_context,
-                    "page1": page1,
-                }
-                if not _force_llm_requested() and not _force_regenerate_requested():
+                def _build_payload(pro_block: dict, source: str) -> dict:
+                    pdf_ctx = build_love_reality_pdf_v2_context(
+                        bundle, pro_block, data["p1"], data["p2"], lang=lang
+                    )
+                    p1_data = build_love_reality_page1_data(
+                        pdf_ctx, bundle, pro_block, data["p1"], data["p2"], lang=lang
+                    )
+                    lc = bundle.get("love_compatibility") or {}
+                    bu = bundle.get("breakup_chances") or {}
+                    ly = bundle.get("loyalty_check") or {}
+                    wr = bundle.get("will_return") or {}
+                    fo = bundle.get("future_outcome") or {}
+                    p1n = str(data["p1"].get("name") or "You")
+                    p2n = str(data["p2"].get("name") or "Partner")
+                    return {
+                        "ok": True,
+                        "lang": lang,
+                        "polish_source": source,
+                        "p1_name": str(p1n),
+                        "p2_name": str(p2n),
+                        "scores": {
+                            "love": int(lc.get("score") or lc.get("love_score") or 0),
+                            "breakup": int(bu.get("score") or bu.get("breakup_score") or 0),
+                            "loyalty": int(ly.get("score") or ly.get("loyalty_score") or 0),
+                            "return": int(wr.get("return_probability") or wr.get("score") or 0),
+                            "future": int(fo.get("future_score") or fo.get("score") or 0),
+                        },
+                        "pro_premium": pro_block,
+                        "pdf_context": pdf_ctx,
+                        "page1": p1_data,
+                    }
+
+                payload = _build_payload(pro, polish_source)
+                if lang in ("hn", "hi") and not love_pro_payload_matches_lang(payload, lang):
+                    try:
+                        from vedic.love_reality.premium_polish import bust_love_polish_all_caches
+
+                        bust_love_polish_all_caches(bundle, lang)
+                    except Exception:
+                        pass
+                    pro_retry, polish_source = _resolve_pro_premium(
+                        bundle,
+                        lang=lang,
+                        user_id=user_id,
+                        p1=data["p1"],
+                        p2=data["p2"],
+                        force_llm=True,
+                    )
+                    if pro_retry:
+                        pro = sanitize_love_reality_pro_premium(pro_retry, bundle, lang=lang)
+                        payload = _build_payload(pro, polish_source)
+                if lang in ("hn", "hi") and not love_pro_payload_matches_lang(payload, lang):
+                    resp = jsonify({
+                        "error": "love_reality_pro_report_failed",
+                        "detail": f"Report text did not match language={lang} after LLM — retry Update Report.",
+                    })
+                    resp.headers["X-Content-Lang-Mismatch"] = lang
+                    return resp, 412
+                if not force_full:
                     _json_cache.save(json_cache_params, payload)
                     _rc.invalidate(user_id, _billing.PRODUCT_LOVE, cache_params)
+                else:
+                    _json_cache.save(json_cache_params, payload)
                 resp = jsonify(payload)
                 resp.headers["X-Report-Cache"] = "miss"
                 resp.headers["X-Polish-Source"] = polish_source
+                if force_full:
+                    resp.headers["X-Love-Report-Full-Update"] = "1"
                 return resp
             except Exception as exc:
                 return jsonify({

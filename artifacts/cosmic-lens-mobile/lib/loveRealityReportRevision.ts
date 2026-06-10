@@ -5,7 +5,7 @@
 import { LOVE_REALITY_PDF_LAYOUT_VER } from "@/lib/loveRealityPdfLayout";
 
 /** Bump when page sections, labels, or in-app layout logic changes. */
-export const LOVE_REALITY_APP_REPORT_VER = "lr_app_v9_remedies_section4";
+export const LOVE_REALITY_APP_REPORT_VER = "lr_app_v17_hi_localize_fix";
 
 export type LoveReportChangeKind =
   /** Cached payload matches current app + PDF layout. */

@@ -1,6 +1,7 @@
 """PDF text sanitization for Love Reality."""
 from vedic.love_reality.pdf_text_safe import (
     has_devanagari,
+    love_pro_payload_matches_lang,
     polish_content_lang,
     sanitize_love_reality_pro_premium,
     strip_devanagari,
@@ -28,7 +29,47 @@ def test_sanitize_hi_preserves_devanagari():
     assert has_devanagari(fixed["verdict"])
 
 
-def test_sanitize_refills_chapter_from_engine():
+def test_sanitize_hi_short_chapter_not_replaced_with_english_engine():
+    bundle = {
+        "loyalty_check": {
+            "emotional_summary": "Loyalty is mixed — warmth on surface, breaks under stress.",
+            "reasons": ["Moon afflicted — secrecy risk."],
+        },
+    }
+    pro = {
+        "chapters": [
+            {
+                "key": "loyalty",
+                "chapter_body": "छोटा",
+            },
+        ],
+    }
+    fixed = sanitize_love_reality_pro_premium(pro, bundle, lang="hi")
+    body = fixed["chapters"][0]["chapter_body"]
+    assert has_devanagari(body)
+    assert "mixed" not in body.lower()
+
+
+def test_love_pro_payload_matches_lang_hi():
+    english = {
+        "page1": {
+            "relationship_summary": "Your charts show a complex bond with strong pull.",
+            "verdict": "Use this report as a timing map.",
+        },
+        "pro_premium": {"verdict": "Complex bond ahead."},
+    }
+    hindi = {
+        "page1": {
+            "relationship_summary": "आपके चार्ट में गहरा भावनात्मक बंध दिखता है।",
+            "verdict": "इस रिपोर्ट को समय-मानचित्र की तरह पढ़ें।",
+        },
+        "pro_premium": {"verdict": "आगे का रास्ता स्पष्टता से खुलेगा।"},
+    }
+    assert not love_pro_payload_matches_lang(english, "hi")
+    assert love_pro_payload_matches_lang(hindi, "hi")
+
+
+def test_sanitize_refills_chapter_from_engine_en():
     bundle = {
         "loyalty_check": {
             "emotional_summary": "Loyalty is mixed — warmth on surface, breaks under stress.",

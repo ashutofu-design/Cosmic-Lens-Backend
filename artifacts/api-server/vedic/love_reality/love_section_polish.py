@@ -611,9 +611,16 @@ def _chapter_section_brief(chapter_key: str, lang: str) -> str:
 def _build_chapter_system_prompt(chapter_key: str, lang: str) -> str:
     lang = polish_content_lang(lang)
     script = love_write_script_label(lang)
+    hi_breakup_lock = ""
+    if lang == "hi" and chapter_key == "breakup":
+        hi_breakup_lock = (
+            "\n\nMANDATORY FOR breakup + hi: chapter_body MUST be 100% देवनागरी Hindi. "
+            "English sentences = invalid. Partner names may stay Latin. Minimum 95 words.\n"
+        )
     return f"""Write ONLY one Love Reality chapter — key `{chapter_key}`.
 
 {love_script_directive(lang)}
+{hi_breakup_lock}
 
 Return STRICT JSON:
 {{
@@ -1280,7 +1287,14 @@ def _run_section_llm(
             return empty
         out = parse_fn(parsed)
         if not out:
-            retry_user = user + "\n\nRETRY: prior response too short. Write LONGER — minimum 3 paragraphs."
+            retry_note = "RETRY: prior response too short. Write LONGER — minimum 3 paragraphs."
+            if lang == "hi" and scope == "chapter_breakup":
+                retry_note = (
+                    "RETRY: prior response was NOT Devanagari Hindi (English rejected). "
+                    "Write chapter_body entirely in देवनागरी Hindi — minimum 3 paragraphs, 90+ words. "
+                    "No English sentences except partner names."
+                )
+            retry_user = user + f"\n\n{retry_note}"
             kwargs["messages"] = [
                 {"role": "system", "content": system},
                 {"role": "user", "content": retry_user},
@@ -1318,6 +1332,16 @@ def _run_section_llm(
             json.dump(out, fh, ensure_ascii=False, indent=2)
     except Exception as exc:
         log.warning("[%s] cache write failed: %s", scope, exc)
+    if lang == "hi" and scope == "chapter_breakup":
+        body = str(out.get("chapter_body") or "")
+        if not _breakup_text_hi_ok(body):
+            try:
+                if os.path.isfile(cache_path):
+                    os.remove(cache_path)
+            except OSError:
+                pass
+            empty = {"_meta": {"scope": scope, "reason": "not_devanagari_hi", "openai_skipped": False}}
+            return empty
     return out
 
 
@@ -1348,6 +1372,8 @@ def polish_love_reality_chapter_only(
     def _parse(parsed: dict) -> dict[str, Any]:
         body = str(parsed.get("chapter_body") or parsed.get(CHAPTER_BODY_KEY) or "").strip()
         if _word_count(body) < min_words:
+            return {}
+        if lang == "hi" and chapter_key == "breakup" and not _breakup_text_hi_ok(body):
             return {}
         grounding = str(parsed.get("grounding") or "").strip()
         return {"chapter_key": chapter_key, "chapter_body": body, "grounding": grounding}

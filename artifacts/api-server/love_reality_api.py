@@ -6,7 +6,7 @@ from flask import Response, jsonify, request
 # Bump when PDF layout/renderer changes — invalidates stale server-side report cache.
 LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v24_moon_sync_llm"
 # Bump to drop all saved Hindi pro-report + polish snapshots (hi only).
-LOVE_REALITY_HI_CACHE_VER = "hi_purge_v6_no_en_s8"
+LOVE_REALITY_HI_CACHE_VER = "hi_purge_v7_s8_llm_retry"
 
 
 def love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
@@ -712,7 +712,7 @@ def register_love_reality_routes(flask_app) -> None:
                     resp.headers["X-Report-Cache"] = "relocalize"
                     resp.headers["X-Content-Script"] = str(payload_out.get("content_script") or "")
                     return resp
-            if not force_full:
+            if not force_full and lang != "hi":
                 cached_json = _json_cache.load(json_cache_params)
                 if cached_json and lang == "hi" and _hi_saved_report_stale(cached_json):
                     _json_cache.invalidate(json_cache_params)
@@ -865,16 +865,37 @@ def register_love_reality_routes(flask_app) -> None:
                     )
                     if pro_retry:
                         pro = sanitize_love_reality_pro_premium(pro_retry, bundle, lang=lang)
+                        strip_non_hindi_breakup_chapter(pro)
                         pro = ensure_breakup_section8_llm(
                             bundle,
                             pro,
                             lang,
                             force_llm=True,
                         )
+                        if lang == "hi" and not breakup_chapter_hi_ready(pro):
+                            s8_meta = (pro.get("_meta") or {}).get("section8_breakup") or {}
+                            return jsonify({
+                                "error": "section8_not_ready",
+                                "detail": "Section 8 LLM Hindi retry failed after lang mismatch.",
+                                "section8_llm": s8_meta,
+                            }), 412
                         payload = _build_payload(pro, polish_source)
                 payload = _with_app_sections(payload, lang)
                 if lang == "hi":
-                    payload = {**payload, "hi_cache_ver": LOVE_REALITY_HI_CACHE_VER}
+                    import re
+                    from vedic.love_reality.love_section_polish import _breakup_chapter_body
+
+                    bu = _breakup_chapter_body(payload.get("pro_premium") or {})
+                    payload = {
+                        **payload,
+                        "hi_cache_ver": LOVE_REALITY_HI_CACHE_VER,
+                        "section8_debug": {
+                            "gate_ver": "v7",
+                            "breakup_words": len(bu.split()),
+                            "breakup_deva": len(re.findall(r"[\u0900-\u097F]", bu)),
+                            "polish_source": payload.get("polish_source"),
+                        },
+                    }
                 if lang in ("hn", "hi") and not love_pro_payload_matches_lang(payload, lang):
                     payload = {
                         **payload,

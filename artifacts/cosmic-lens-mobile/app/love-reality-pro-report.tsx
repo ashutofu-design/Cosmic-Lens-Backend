@@ -407,7 +407,9 @@ export default function LoveRealityProReportScreen() {
           layoutRefresh: false,
         });
 
-        let { data, serverCacheHit } = await fetchReport(forceUpdate || mustLlm ? "full" : "cache");
+        let { data, serverCacheHit } = await fetchReport(
+          forceUpdate || mustLlm || lang === "hi" ? "full" : "cache",
+        );
 
         if (lang !== "en" && data.polish_source === "polish_snapshot") {
           const fresh = await fetchReport("full");
@@ -430,6 +432,20 @@ export default function LoveRealityProReportScreen() {
           setUpdatingReport(false);
           setForceUpdateRun(false);
           return;
+        }
+        if (lang === "hi") {
+          const s8 = section8HiLoadGate(data);
+          if (!s8.ok) {
+            const dbg = (data as { section8_debug?: { gate_ver?: string; breakup_deva?: number } }).section8_debug;
+            const extra = dbg?.gate_ver
+              ? ` [server ${dbg.gate_ver}, deva=${dbg.breakup_deva ?? "?"}]`
+              : " [server purana — VPS par git pull + pm2 restart karo]";
+            setError(s8.reason + extra);
+            setFetching(false);
+            setUpdatingReport(false);
+            setForceUpdateRun(false);
+            return;
+          }
         }
         const hindiOk = reportHindiFullyReady(data, lang);
         await saveLoveReportCache(cacheOpts, data);

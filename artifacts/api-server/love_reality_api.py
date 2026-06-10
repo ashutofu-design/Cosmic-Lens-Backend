@@ -723,9 +723,9 @@ def register_love_reality_routes(flask_app) -> None:
                 )
                 if force_full:
                     try:
-                        from vedic.love_reality.premium_polish import bust_love_polish_all_caches
+                        from vedic.love_reality.love_section_polish import bust_love_polish_section_caches
 
-                        bust_love_polish_all_caches(bundle, lang)
+                        bust_love_polish_section_caches(bundle, lang)
                     except Exception as exc:
                         try:
                             print(f"[love_reality_pro_report] cache bust failed: {exc}", flush=True)
@@ -746,9 +746,9 @@ def register_love_reality_routes(flask_app) -> None:
                     }), 412
                 from vedic.love_reality.love_section_polish import (
                     breakup_chapter_word_count,
+                    bust_love_polish_section_caches,
                     ensure_breakup_section8_llm,
                 )
-                from vedic.love_reality.premium_polish import bust_love_polish_all_caches
 
                 if lang in ("hi", "hn"):
                     for attempt in range(3):
@@ -761,7 +761,7 @@ def register_love_reality_routes(flask_app) -> None:
                         if breakup_chapter_word_count(pro) >= 80:
                             break
                         if attempt < 2:
-                            bust_love_polish_all_caches(bundle, lang)
+                            bust_love_polish_section_caches(bundle, lang)
                 else:
                     pro = ensure_breakup_section8_llm(
                         bundle,
@@ -813,9 +813,9 @@ def register_love_reality_routes(flask_app) -> None:
                 payload = _build_payload(pro, polish_source)
                 if lang in ("hn", "hi") and not love_pro_payload_matches_lang(payload, lang):
                     try:
-                        from vedic.love_reality.premium_polish import bust_love_polish_all_caches
+                        from vedic.love_reality.love_section_polish import bust_love_polish_section_caches
 
-                        bust_love_polish_all_caches(bundle, lang)
+                        bust_love_polish_section_caches(bundle, lang)
                     except Exception:
                         pass
                     pro_retry, polish_source = _resolve_pro_premium(

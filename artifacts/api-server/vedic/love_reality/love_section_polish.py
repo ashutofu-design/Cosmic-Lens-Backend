@@ -1434,6 +1434,23 @@ def _bust_chapter_scope_file_cache(bundle: dict, lang: str, chapter_key: str) ->
         log.warning("[%s] cache bust failed: %s", scope, exc)
 
 
+def bust_love_polish_section_caches(bundle: dict, lang: str) -> None:
+    """Bust section LLM file caches — safe import from love_section_polish (always deployed with api)."""
+    for chapter_key in _CHAPTER_KEYS:
+        _bust_chapter_scope_file_cache(bundle, lang, chapter_key)
+    try:
+        base = _cache_dir()
+        if os.path.isdir(base):
+            for name in os.listdir(base):
+                if name.endswith(".json"):
+                    try:
+                        os.remove(os.path.join(base, name))
+                    except OSError:
+                        pass
+    except Exception as exc:
+        log.warning("[love_section_polish] cache dir bust failed: %s", exc)
+
+
 def ensure_breakup_section8_llm(
     bundle: dict,
     pro: dict,

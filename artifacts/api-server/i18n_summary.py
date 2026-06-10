@@ -62,6 +62,37 @@ def _cache_get(lang: str, text: str) -> Optional[str]:
         return _TRANSLATION_CACHE.get(_cache_key(lang, text))
 
 
+def devanagari_char_count(text: str) -> int:
+    return len(re.findall(r"[\u0900-\u097F]", text or ""))
+
+
+def prose_fully_hindi(text: str) -> bool:
+    """True when paragraph is mostly Devanagari (not just 6 stray chars + English)."""
+    t = (text or "").strip()
+    if len(t) < 16:
+        return False
+    deva = devanagari_char_count(t)
+    if deva < 12:
+        return False
+    letters = len(re.findall(r"[A-Za-z\u0900-\u097F]", t))
+    if letters < 20:
+        return deva >= 8
+    return (deva / letters) >= 0.32
+
+
+def prose_fully_hinglish(text: str) -> bool:
+    t = (text or "").strip()
+    if len(t) < 20:
+        return False
+    if devanagari_char_count(t) >= 8:
+        return False
+    return bool(re.search(
+        r"\b(aap|rishte|kya|hai|hain|nahi|pyar|saath|dono|yeh|aur|mein|main|upay)\b",
+        t,
+        re.I,
+    ))
+
+
 def _cache_put(lang: str, text: str, translated: str) -> None:
     with _CACHE_LOCK:
         if len(_TRANSLATION_CACHE) >= _CACHE_MAX:
@@ -122,11 +153,17 @@ def _translate_via_openai(text: str, lang: str) -> Optional[str]:
 
     try:
         model = os.environ.get("COSMIC_TRANSLATE_MODEL", "gpt-4o-mini")
+        if len(text) > 2000:
+            max_tokens = 4096
+        elif len(text) > 500:
+            max_tokens = 2048
+        else:
+            max_tokens = 1024
         resp = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
-            max_tokens=1024,
+            max_tokens=max_tokens,
         )
         out = (resp.choices[0].message.content or "").strip()
         # Strip stray surrounding quotes the model sometimes adds
@@ -136,6 +173,25 @@ def _translate_via_openai(text: str, lang: str) -> Optional[str]:
     except Exception as exc:
         print(f"[i18n_summary] OpenAI translate failed lang={lang}: {exc}")
         return None
+
+
+def localize_text_force(text: str, lang: str) -> str:
+    """Always translate mixed/partial English — used after LLM for Love Reality hi/hn."""
+    raw = (text or "").strip()
+    if not raw:
+        return text or ""
+    lang = coerce_lang(lang)
+    if lang == "en":
+        return raw
+    if lang == "hi" and prose_fully_hindi(raw):
+        return raw
+    if lang == "hn" and prose_fully_hinglish(raw):
+        return raw
+    translated = _translate_via_openai(raw, lang)
+    if translated and len(translated.strip()) >= max(12, len(raw) // 4):
+        _cache_put(lang, raw, translated)
+        return translated
+    return raw
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
@@ -153,13 +209,12 @@ def localize_text(en: str, hi: Optional[str], lang: str) -> str:
     if lang == "en":
         return en
     if lang == "hi":
-        if isinstance(hi, str) and hi:
+        if isinstance(hi, str) and hi and prose_fully_hindi(hi):
             return hi
-        # Already Devanagari (Love Reality LLM output or prior translate).
-        if len(re.findall(r"[\u0900-\u097F]", en)) >= 6:
+        if prose_fully_hindi(en):
             return en
         cached = _cache_get(lang, en)
-        if cached is not None:
+        if cached is not None and prose_fully_hindi(cached):
             return cached
         translated = _translate_via_openai(en, lang)
         if translated:

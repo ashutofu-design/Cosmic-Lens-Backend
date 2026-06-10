@@ -187,10 +187,10 @@ def build_love_reality_pdf_v2_context(
 
     breakup_narr = _chapter_body(pro, "breakup") or ""
     loyalty_narr = _chapter_body(pro, "loyalty") or ""
-    root_parts: list[str] = []
     if breakup_narr:
-        root_parts.append(breakup_narr)
-    if not root_parts:
+        root_cause = breakup_narr
+    else:
+        root_parts: list[str] = []
         if bu.get("reasons"):
             root_parts.extend(str(r) for r in (bu.get("reasons") or [])[:3])
         if ly.get("reasons"):
@@ -204,7 +204,7 @@ def build_love_reality_pdf_v2_context(
             root_parts.append(
                 f"Mercury mismatch — {merc1.get('sign')} vs {merc2.get('sign')}: communication style clash."
             )
-    root_cause = "\n\n".join(p for p in root_parts if p) or bu.get("emotional_summary") or ""
+        root_cause = "\n\n".join(p for p in root_parts if p) or bu.get("emotional_summary") or ""
 
     harmony = str(pro.get("harmony") or "").strip()
     if not harmony:
@@ -297,11 +297,24 @@ def build_love_reality_pdf_v2_context(
 
     moon_narr = str(pro.get("moon_sync_narrative") or "").strip()
     if len(moon_narr.split()) < 45:
-        moon_narr = (
-            "Shashtashtak (6-8 sign Moon clash) detected — emotional rhythm out of sync."
-            if shash
-            else "Moon signs support smoother emotional rhythm — still watch stress triggers."
-        )
+        if lang == "hi":
+            moon_narr = (
+                "षष्ठाष्टक (६-८ राशि चंद्र टकराव) — भावनात्मक लय मेल नहीं खाती।"
+                if shash
+                else "चंद्र संकेत सहज भावनात्मक लय देते हैं — तनाव के ट्रिगर पर ध्यान दें।"
+            )
+        elif lang == "hn":
+            moon_narr = (
+                "Shashtashtak (6-8 sign Moon clash) — emotional rhythm out of sync."
+                if shash
+                else "Moon signs smoother rhythm support karte hain — stress triggers par dhyan dein."
+            )
+        else:
+            moon_narr = (
+                "Shashtashtak (6-8 sign Moon clash) detected — emotional rhythm out of sync."
+                if shash
+                else "Moon signs support smoother emotional rhythm — still watch stress triggers."
+            )
 
     return {
         "page1_dashboard": {

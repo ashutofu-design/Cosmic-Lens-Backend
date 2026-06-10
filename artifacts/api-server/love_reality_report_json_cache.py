@@ -66,6 +66,29 @@ def invalidate(params: dict[str, Any]) -> None:
         log.warning("[love_report_json_cache] invalidate failed %s: %s", sid[:12], exc)
 
 
+def purge_all_hi_reports() -> int:
+    """Delete every saved pro-report JSON where lang=hi (one-time / deploy purge)."""
+    removed = 0
+    try:
+        _ensure_dir()
+        for name in os.listdir(_BASE):
+            if not name.endswith(".json"):
+                continue
+            path = os.path.join(_BASE, name)
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    data = json.load(fh)
+                if not isinstance(data, dict) or data.get("lang") != "hi":
+                    continue
+                os.remove(path)
+                removed += 1
+            except Exception:
+                continue
+    except Exception as exc:
+        log.warning("[love_report_json_cache] purge_all_hi_reports failed: %s", exc)
+    return removed
+
+
 def save(params: dict[str, Any], payload: dict[str, Any]) -> None:
     if not isinstance(payload, dict) or not payload.get("ok"):
         return

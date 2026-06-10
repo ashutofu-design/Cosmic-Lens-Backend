@@ -207,8 +207,11 @@ export function section8HiLoadGate(
     };
   }
 
-  const root = section8RootCauseText(report);
   const breakup = section8BreakupChapterText(report);
+  let root = section8RootCauseText(report);
+  if (wordCount(root) < SECTION8_MIN_WORDS && wordCount(breakup) >= SECTION8_MIN_WORDS) {
+    root = breakup;
+  }
 
   if (!breakup) {
     if (!root) {

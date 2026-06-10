@@ -49,8 +49,10 @@ def section8_hi_load_gate(payload: dict[str, Any]) -> tuple[bool, str]:
     if lang != "hi":
         return True, ""
 
-    root = _root_cause_text(payload)
     breakup = _breakup_chapter_text(payload)
+    root = _root_cause_text(payload)
+    if _word_count(root) < _SECTION8_MIN_WORDS and _word_count(breakup) >= _SECTION8_MIN_WORDS:
+        root = breakup
 
     if not breakup:
         if not root:

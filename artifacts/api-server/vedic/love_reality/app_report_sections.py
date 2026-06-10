@@ -305,6 +305,34 @@ def _localize_scorecard_line(line: str, lang: str) -> str:
     return _localize_prose_block(out, lang, force=True)
 
 
+def _sync_root_cause_from_breakup(
+    sections: list[dict[str, Any]],
+    ctx: dict[str, Any],
+    pro: dict[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Map LLM breakup chapter → Section 8 (root_cause) when page6/context missed it."""
+    breakup = _chapter_body(pro, "breakup")
+    if not breakup:
+        return sections, ctx
+    ctx_out = dict(ctx or {})
+    if _word_count(str(ctx_out.get("page6_root_cause") or "")) < 80:
+        ctx_out["page6_root_cause"] = breakup
+    out: list[dict[str, Any]] = []
+    patched = False
+    for row in sections:
+        if not isinstance(row, dict):
+            continue
+        sec = dict(row)
+        if str(sec.get("id") or "").lower() == "root_cause":
+            if _word_count(str(sec.get("body") or "")) < 80:
+                sec["body"] = breakup
+            patched = True
+        out.append(sec)
+    if not patched:
+        out.append({"id": "root_cause", "body": breakup})
+    return out, ctx_out
+
+
 def _finalize_hindi_sections(sections: list[dict[str, Any]], lang: str) -> list[dict[str, Any]]:
     """Second pass — force-translate any narrative still mostly English."""
     if lang not in ("hi", "hn"):
@@ -425,6 +453,7 @@ def build_localized_app_sections(
     p1 = _apply_ui_label_locale(p1, lane)
 
     sections = build_in_app_page_sections(p1, ctx, lane)
+    sections, ctx = _sync_root_cause_from_breakup(sections, ctx, pro)
     if lane in ("hn", "hi"):
         sections = [_localize_section_row(s, lane) for s in sections if isinstance(s, dict)]
         sections = _finalize_hindi_sections(sections, lane)

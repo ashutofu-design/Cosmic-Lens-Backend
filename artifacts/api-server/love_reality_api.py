@@ -272,9 +272,21 @@ def _resolve_pro_premium(
                 if not prose_matches_lang(verdict, lang):
                     cached = None
             if cached and lang == "hi":
-                from vedic.love_reality.love_section_polish import breakup_chapter_word_count
+                from vedic.love_reality.love_section_polish import (
+                    _breakup_chapter_body,
+                    breakup_chapter_word_count,
+                )
 
-                if breakup_chapter_word_count(cached) < 80:
+                bu_body = _breakup_chapter_body(cached)
+                stale_hi = breakup_chapter_word_count(cached) < 80
+                if not stale_hi and bu_body:
+                    try:
+                        from i18n_summary import prose_fully_hindi
+
+                        stale_hi = not prose_fully_hindi(bu_body)
+                    except Exception:
+                        pass
+                if stale_hi:
                     cached = None
                     force_llm = True
             if cached:

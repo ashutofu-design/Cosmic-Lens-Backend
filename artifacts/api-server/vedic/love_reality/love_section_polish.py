@@ -1419,9 +1419,7 @@ def breakup_chapter_word_count(pro: dict) -> int:
     return _word_count(_breakup_chapter_body(pro))
 
 
-def breakup_chapter_hi_ready(pro: dict) -> bool:
-    """Section 8 OK for Hindi — 80+ words and mostly Devanagari."""
-    body = _breakup_chapter_body(pro)
+def _breakup_text_hi_ok(body: str) -> bool:
     if _word_count(body) < 80:
         return False
     try:
@@ -1430,6 +1428,11 @@ def breakup_chapter_hi_ready(pro: dict) -> bool:
         return prose_fully_hindi(body)
     except Exception:
         return len(re.findall(r"[\u0900-\u097F]", body)) >= 24
+
+
+def breakup_chapter_hi_ready(pro: dict) -> bool:
+    """Section 8 OK for Hindi — 80+ words and mostly Devanagari."""
+    return _breakup_text_hi_ok(_breakup_chapter_body(pro))
 
 
 def _bust_chapter_scope_file_cache(bundle: dict, lang: str, chapter_key: str) -> None:
@@ -1511,6 +1514,14 @@ def ensure_breakup_section8_llm(
         )
         last_meta = hit.get("_meta") if isinstance(hit.get("_meta"), dict) else {}
         new_body = str(hit.get("chapter_body") or "").strip()
+        if lang == "hi" and not _breakup_text_hi_ok(new_body):
+            last_meta = {
+                **last_meta,
+                "reject": "not_devanagari_hi",
+                "deva": len(re.findall(r"[\u0900-\u097F]", new_body)),
+                "words": _word_count(new_body),
+            }
+            continue
         if _word_count(new_body) >= 80:
             _upsert_chapter(pro, "breakup", new_body, str(hit.get("grounding") or ""))
             pro.setdefault("_meta", {})["section8_breakup"] = {

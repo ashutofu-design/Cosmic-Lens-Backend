@@ -6,7 +6,7 @@ from flask import Response, jsonify, request
 # Bump when PDF layout/renderer changes — invalidates stale server-side report cache.
 LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v24_moon_sync_llm"
 # Bump to drop all saved Hindi pro-report + polish snapshots (hi only).
-LOVE_REALITY_HI_CACHE_VER = "hi_purge_v3_hi_breakup"
+LOVE_REALITY_HI_CACHE_VER = "hi_purge_v4_hi_breakup_only"
 
 
 def love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
@@ -300,7 +300,10 @@ def _resolve_pro_premium(
         from vedic.love_reality.love_section_polish import _assembly_depth_ok
 
         if _assembly_depth_ok(pro):
-            _snap.save(snap_params, pro)
+            from vedic.love_reality.love_section_polish import breakup_chapter_hi_ready
+
+            if lang != "hi" or breakup_chapter_hi_ready(pro):
+                _snap.save(snap_params, pro)
     return pro, "llm"
 
 
@@ -747,7 +750,7 @@ def register_love_reality_routes(flask_app) -> None:
                     user_id=user_id,
                     p1=data["p1"],
                     p2=data["p2"],
-                    force_llm=force_full,
+                    force_llm=force_full or lang == "hi",
                 )
                 if pro is None:
                     return jsonify({
@@ -861,6 +864,34 @@ def register_love_reality_routes(flask_app) -> None:
                         ),
                     }
                 blocked = _hi_section8_block_response(payload)
+                if blocked and lang == "hi":
+                    _snap.invalidate(snap_params)
+                    bust_love_polish_section_caches(bundle, lang)
+                    chapters = [
+                        c for c in (pro.get("chapters") or [])
+                        if not (
+                            isinstance(c, dict)
+                            and str(c.get("key") or "").strip().lower() == "breakup"
+                        )
+                    ]
+                    pro["chapters"] = chapters
+                    for _ in range(3):
+                        pro = ensure_breakup_section8_llm(
+                            bundle,
+                            pro,
+                            "hi",
+                            force_llm=True,
+                        )
+                        if not breakup_chapter_hi_ready(pro):
+                            bust_love_polish_section_caches(bundle, lang)
+                            continue
+                        pro = sanitize_love_reality_pro_premium(pro, bundle, lang=lang)
+                        payload = _build_payload(pro, polish_source)
+                        payload = _with_app_sections(payload, lang)
+                        payload = {**payload, "hi_cache_ver": LOVE_REALITY_HI_CACHE_VER}
+                        blocked = _hi_section8_block_response(payload)
+                        if not blocked:
+                            break
                 if blocked:
                     return blocked
                 if not force_full:

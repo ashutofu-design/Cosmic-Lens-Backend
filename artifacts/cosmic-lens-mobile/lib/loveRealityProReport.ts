@@ -110,6 +110,17 @@ export type LoveProReportResponse = {
   }>;
   /** hi | hn | en | en_mismatch — server check after localize. */
   content_script?: string;
+  /** Canonical Hindi Section 8 body — server gate passed. */
+  section8_hi_body?: string | null;
+  section8_debug?: {
+    gate_ver?: string;
+    breakup_words?: number;
+    breakup_deva?: number;
+    root_words?: number;
+    root_deva?: number;
+    effective_words?: number;
+    effective_deva?: number;
+  };
 };
 
 export type LoveReportSection = {
@@ -148,17 +159,51 @@ function breakupChapterBody(report: LoveProReportResponse): string {
   return String(ch?.chapter_body || ch?.full_read || "").trim();
 }
 
-/** Prefer LLM breakup chapter for Section 8 when app_sections root_cause is stale/thin. */
-export function resolveSection8RootCauseBody(report: LoveProReportResponse): string {
+function devaCount(text: string): number {
+  return (text.match(/[\u0900-\u097F]/g) || []).length;
+}
+
+function wordCountText(text: string): number {
+  return text.split(/\s+/).filter(Boolean).length;
+}
+
+/** Best Hindi Section 8 text — server canonical body, breakup chapter, or root_cause. */
+export function effectiveSection8HiText(report: LoveProReportResponse): string {
+  const canon = String(report.section8_hi_body || "").trim();
+  if (canon) return canon;
+
   const breakup = breakupChapterBody(report);
   const fromCtx = String(report.pdf_context?.page6_root_cause || "").trim();
   const fromSec = (report.app_sections || [])
     .find(s => String(s.id || "").toLowerCase() === "root_cause");
   const root = String(fromSec?.body || "").trim() || fromCtx;
-  const wc = (t: string) => t.split(/\s+/).filter(Boolean).length;
-  if (wc(breakup) >= 80 && (wc(root) < 80 || root.length < breakup.length * 0.5)) {
-    return breakup;
+
+  let best = "";
+  let bestDeva = -1;
+  for (const raw of [breakup, root]) {
+    const text = String(raw || "").trim();
+    if (!text) continue;
+    const deva = devaCount(text);
+    const wc = wordCountText(text);
+    if (wc >= 80 && deva > bestDeva) {
+      best = text;
+      bestDeva = deva;
+    } else if (!best && wc > wordCountText(best)) {
+      best = text;
+    }
   }
+  return best;
+}
+
+/** Prefer LLM breakup chapter for Section 8 when app_sections root_cause is stale/thin. */
+export function resolveSection8RootCauseBody(report: LoveProReportResponse): string {
+  const effective = effectiveSection8HiText(report);
+  if (effective) return effective;
+  const breakup = breakupChapterBody(report);
+  const fromCtx = String(report.pdf_context?.page6_root_cause || "").trim();
+  const fromSec = (report.app_sections || [])
+    .find(s => String(s.id || "").toLowerCase() === "root_cause");
+  const root = String(fromSec?.body || "").trim() || fromCtx;
   return root || breakup;
 }
 

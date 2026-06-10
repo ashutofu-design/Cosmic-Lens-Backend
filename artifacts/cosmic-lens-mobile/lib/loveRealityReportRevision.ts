@@ -5,7 +5,10 @@
 import { LOVE_REALITY_PDF_LAYOUT_VER } from "@/lib/loveRealityPdfLayout";
 
 /** Bump when page sections, labels, or in-app layout logic changes. */
-export const LOVE_REALITY_APP_REPORT_VER = "lr_app_v17_hi_localize_fix";
+export const LOVE_REALITY_APP_REPORT_VER = "lr_app_v28_llm_hi";
+
+/** Bump to wipe device Hindi report cache once (server hi_purge_v1). */
+export const LOVE_REALITY_HI_DEVICE_CACHE_VER = "hi_purge_v2_s8_effective";
 
 export type LoveReportChangeKind =
   /** Cached payload matches current app + PDF layout. */
@@ -24,6 +27,8 @@ export type LoveReportCacheMeta = {
   polishSource?: string;
   /** Language the saved JSON body was generated for (en / hn / hi). */
   contentLang?: string;
+  /** Server content_script after localize (hi | hi_partial | hn | en). */
+  contentScript?: string;
 };
 
 export function currentLoveReportRevision(): Pick<LoveReportCacheMeta, "pdfLayoutVer" | "appReportVer"> {

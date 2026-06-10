@@ -6,7 +6,7 @@ from flask import Response, jsonify, request
 # Bump when PDF layout/renderer changes — invalidates stale server-side report cache.
 LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v24_moon_sync_llm"
 # Bump to drop all saved Hindi pro-report + polish snapshots (hi only).
-LOVE_REALITY_HI_CACHE_VER = "hi_purge_v9_s8_order"
+LOVE_REALITY_HI_CACHE_VER = "hi_purge_v10_s8_effective"
 
 
 def love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
@@ -50,6 +50,43 @@ def _purge_hi_server_caches_once() -> None:
         except Exception:
             pass
     _PURGED_HI_CACHE_VER = LOVE_REALITY_HI_CACHE_VER
+
+
+def _enrich_hi_section8_meta(payload: dict) -> dict:
+    """Attach section8_debug + section8_hi_body so mobile gate matches server."""
+    if not isinstance(payload, dict) or (payload.get("lang") or "").strip().lower() != "hi":
+        return payload
+    import re
+    from vedic.love_reality.love_section_polish import _breakup_chapter_body
+    from vedic.love_reality.section8_gate import effective_section8_hi_text
+
+    bu = _breakup_chapter_body(payload.get("pro_premium") or {})
+    root_body = ""
+    for sec in payload.get("app_sections") or []:
+        if isinstance(sec, dict) and str(sec.get("id") or "").lower() == "root_cause":
+            root_body = str(sec.get("body") or "").strip()
+            break
+    if len(root_body.split()) < 80:
+        root_body = bu or str(
+            (payload.get("pdf_context") or {}).get("page6_root_cause") or ""
+        ).strip()
+    dbg = {
+        "gate_ver": "v10",
+        "breakup_words": len(bu.split()),
+        "breakup_deva": len(re.findall(r"[\u0900-\u097F]", bu)),
+        "root_words": len(root_body.split()),
+        "root_deva": len(re.findall(r"[\u0900-\u097F]", root_body)),
+    }
+    s8_hi = effective_section8_hi_text({**payload, "section8_debug": dbg})
+    dbg["effective_words"] = len(s8_hi.split()) if s8_hi else 0
+    dbg["effective_deva"] = len(re.findall(r"[\u0900-\u097F]", s8_hi or ""))
+    dbg["polish_source"] = payload.get("polish_source")
+    return {
+        **payload,
+        "hi_cache_ver": LOVE_REALITY_HI_CACHE_VER,
+        "section8_hi_body": s8_hi or None,
+        "section8_debug": dbg,
+    }
 
 
 def _hi_section8_block_response(payload: dict):
@@ -702,7 +739,7 @@ def register_love_reality_routes(flask_app) -> None:
                 if cached_json and lang == "hi" and _hi_saved_report_stale(cached_json):
                     cached_json = None
                 if cached_json:
-                    payload_out = _with_app_sections(cached_json, lang)
+                    payload_out = _enrich_hi_section8_meta(_with_app_sections(cached_json, lang))
                     blocked = _hi_section8_block_response(payload_out)
                     if blocked:
                         _json_cache.invalidate(json_cache_params)
@@ -719,7 +756,7 @@ def register_love_reality_routes(flask_app) -> None:
                     _snap.invalidate(snap_params)
                     cached_json = None
                 if cached_json:
-                    payload_out = _with_app_sections(cached_json, lang)
+                    payload_out = _enrich_hi_section8_meta(_with_app_sections(cached_json, lang))
                     blocked = _hi_section8_block_response(payload_out)
                     if blocked:
                         _json_cache.invalidate(json_cache_params)
@@ -882,31 +919,7 @@ def register_love_reality_routes(flask_app) -> None:
                         payload = _build_payload(pro, polish_source)
                 payload = _with_app_sections(payload, lang)
                 if lang == "hi":
-                    import re
-                    from vedic.love_reality.love_section_polish import _breakup_chapter_body
-
-                    bu = _breakup_chapter_body(payload.get("pro_premium") or {})
-                    root_body = ""
-                    for sec in payload.get("app_sections") or []:
-                        if isinstance(sec, dict) and str(sec.get("id") or "").lower() == "root_cause":
-                            root_body = str(sec.get("body") or "").strip()
-                            break
-                    if len(root_body.split()) < 80:
-                        root_body = bu or str(
-                            (payload.get("pdf_context") or {}).get("page6_root_cause") or ""
-                        ).strip()
-                    payload = {
-                        **payload,
-                        "hi_cache_ver": LOVE_REALITY_HI_CACHE_VER,
-                        "section8_debug": {
-                            "gate_ver": "v9",
-                            "breakup_words": len(bu.split()),
-                            "breakup_deva": len(re.findall(r"[\u0900-\u097F]", bu)),
-                            "root_words": len(root_body.split()),
-                            "root_deva": len(re.findall(r"[\u0900-\u097F]", root_body)),
-                            "polish_source": payload.get("polish_source"),
-                        },
-                    }
+                    payload = _enrich_hi_section8_meta(payload)
                 if lang in ("hn", "hi") and not love_pro_payload_matches_lang(payload, lang):
                     payload = {
                         **payload,

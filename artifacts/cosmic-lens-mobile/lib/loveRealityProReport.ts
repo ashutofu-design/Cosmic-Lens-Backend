@@ -133,13 +133,13 @@ function L(lang: ProPdfLangCode) {
       lang,
       "Executive Summary & Cosmic Alignment",
       "Rishte ka Summary aur Cosmic Score",
-      "कार्यकारी सारांश और कॉस्मिक संरेखण",
+      "रिश्ते का सारांश और कॉस्मिक स्कोर",
     ),
     relSummary: pickLabel(
       lang,
       "Relationship Summary",
       "Stars kya keh rahe hain",
-      "रिश्ते का सारांश",
+      "तारे क्या कह रहे हैं",
     ),
     coreMetrics: pickLabel(lang, "Core Metrics", "Core Scores", "मुख्य स्कोर"),
     scorecard: pickLabel(lang, "Your Connection Scorecard", "Aapka Connection Scorecard", "आपका कनेक्शन स्कोरकार्ड"),
@@ -152,7 +152,7 @@ function L(lang: ProPdfLangCode) {
     insights: pickLabel(lang, "Relationship Insights", "Rishte ki Insights", "रिश्ते की अंतर्दृष्टि"),
     strengths: pickLabel(lang, "Strengths in this Connection", "Is Rishte ki Strengths", "इस कनेक्शन की ताकत"),
     challenges: pickLabel(lang, "Challenges in this Connection", "Is Rishte ki Challenges", "इस कनेक्शन की चुनौतियाँ"),
-    verdict: pickLabel(lang, "Final Cosmic Verdict", "Final Cosmic Verdict", "ज्योतिषी का अंतिम नोट"),
+    verdict: pickLabel(lang, "Final Cosmic Verdict", "Final Cosmic Verdict", "अंतिम ज्योतिषीय निष्कर्ष"),
     verdictSub: pickLabel(lang, "Astrologer's Note", "Jyotishi ka Note", "ज्योतिषी का नोट"),
     recommendations: pickLabel(lang, "Recommendations", "Aage Kya Karein", "आगे क्या करें"),
     deepAnalysis: pickLabel(lang, "Deep Connection Analysis", "Gehra Connection Analysis", "गहन कनेक्शन विश्लेषण"),
@@ -256,7 +256,7 @@ function L(lang: ProPdfLangCode) {
       "Shashtashtak / 6-8 sign emotional check",
       "षष्ठाष्टक / ६-८ राशि भावनात्मक जाँच",
     ),
-    chipOverview: pickLabel(lang, "Overview", "Overview", "सारांश"),
+    chipOverview: pickLabel(lang, "Overview", "Poora Overview", "सारांश"),
     chipScores: pickLabel(lang, "Scores", "Scores", "स्कोर"),
     chipFullPdf: pickLabel(lang, "Full PDF", "Poori PDF", "पूरी PDF"),
     chipDeepDive: pickLabel(lang, "Deep Dive", "Deep Dive", "विस्तार"),
@@ -280,6 +280,15 @@ function L(lang: ProPdfLangCode) {
     alertPdfFailed: pickLabel(lang, "PDF download failed", "PDF download fail", "PDF विफल"),
     retry: pickLabel(lang, "Retry", "Retry", "पुनः"),
     ok: pickLabel(lang, "OK", "OK", "ठीक"),
+    updateReport: pickLabel(lang, "Update Report", "Report Update karo", "रिपोर्ट अपडेट करें"),
+    updatingReport: pickLabel(lang, "Updating…", "Update ho raha hai…", "अपडेट हो रहा है…"),
+    updateHint: pickLabel(
+      lang,
+      "Refresh full report — Overview and all sections",
+      "Poora report refresh — Overview aur saari sections Hinglish mein",
+      "पूरी रिपोर्ट रिफ्रेश — सारांश और सभी अनुभाग हिंदी में",
+    ),
+    updateDone: pickLabel(lang, "Report updated", "Report update ho gaya", "रिपोर्ट अपडेट हो गई"),
   };
 }
 
@@ -472,18 +481,12 @@ export function buildLoveReportSectionsFull(
     });
 
     const moon = ctx.page5_moon || {};
-    const moonBody = [
-      moon.p1_moon && moon.p2_moon
-        ? `${labels.moonYour}: ${moon.p1_moon} · ${labels.moonPartner}: ${moon.p2_moon}`
-        : "",
-      moon.body || "",
-    ].filter(Boolean).join("\n\n");
+    const moonBody = (moon.body || "").trim() || undefined;
     pushSection(sections, {
       id: "moon",
       title: labels.moon,
       subtitle: labels.moonDetailSub,
       body: moonBody,
-      bullets: (moon.notes || []).map(String),
     });
 
     pushSection(sections, {
@@ -688,18 +691,12 @@ export function buildLoveReportSectionsForPage(
     });
 
     const moon = ctx.page5_moon || {};
-    const moonBody = [
-      moon.p1_moon && moon.p2_moon
-        ? `${labels.moonYour}: ${moon.p1_moon} · ${labels.moonPartner}: ${moon.p2_moon}`
-        : "",
-      moon.body || "",
-    ].filter(Boolean).join("\n\n");
+    const moonBody = (moon.body || "").trim() || undefined;
     pushSection(sections, {
       id: "moon",
       title: labels.moon,
       subtitle: labels.moonSub,
-      body: moonBody || undefined,
-      bullets: (moon.notes || []).slice(0, 4).map(String),
+      body: moonBody,
     });
 
     pushSection(sections, {

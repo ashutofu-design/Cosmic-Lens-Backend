@@ -504,14 +504,11 @@ def render_love_reality_pro_pdf(payload: dict, lang: str = "en") -> bytes:
 
     # §2 Triggers & Problems (5–8)
     moon = ctx["page5_moon"]
-    moon_body = (
-        f"Your Moon: {moon['p1_moon']} · Partner Moon: {moon['p2_moon']}\n\n"
-        f"{moon['body']}"
-    )
+    moon_body = str(moon.get("body") or "").strip()
     story.extend(_section_page(
         s, 5, "MOON", "Moon Synastry & Emotional Rhythm",
         "Shashtashtak / 6-8 sign emotional alignment check",
-        moon_body, lang=lang, bullets=moon.get("notes"),
+        moon_body, lang=lang,
     ))
 
     story.extend(_section_page(

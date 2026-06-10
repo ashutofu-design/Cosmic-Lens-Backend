@@ -328,7 +328,7 @@ def build_love_reality_pdf_v2_context(
             "p1_moon": k1.get("moonSign") or "?",
             "p2_moon": k2.get("moonSign") or "?",
             "body": moon_narr,
-            "notes": (lc.get("reasons") or [])[:4],
+            "notes": [],
         },
         "page6_root_cause": root_cause,
         "page7_loyalty": {

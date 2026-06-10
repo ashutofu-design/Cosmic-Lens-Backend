@@ -6,7 +6,7 @@ from flask import Response, jsonify, request
 # Bump when PDF layout/renderer changes — invalidates stale server-side report cache.
 LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v24_moon_sync_llm"
 # Bump to drop all saved Hindi pro-report + polish snapshots (hi only).
-LOVE_REALITY_HI_CACHE_VER = "hi_purge_v18_remedies_action_fix"
+LOVE_REALITY_HI_CACHE_VER = "hi_purge_v19_section4_force_llm"
 
 
 def love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:
@@ -136,11 +136,18 @@ def _enrich_hi_section8_meta(payload: dict) -> dict:
     dbg["effective_words"] = len(s8_hi.split()) if s8_hi else 0
     dbg["effective_deva"] = len(re.findall(r"[\u0900-\u097F]", s8_hi or ""))
     dbg["polish_source"] = payload.get("polish_source")
+    s4_meta = (pro.get("_meta") or {}).get("section4_remedies") if isinstance(pro.get("_meta"), dict) else {}
     return {
         **payload,
         "hi_cache_ver": LOVE_REALITY_HI_CACHE_VER,
         "section3_hi_body": s3_hi or None,
         "section4_hi_body": s4_hi or None,
+        "section4_debug": {
+            "words": len(s4_hi.split()) if s4_hi else 0,
+            "deva": len(re.findall(r"[\u0900-\u097F]", s4_hi or "")),
+            "ready": bool(s4_hi and remedies_action_hi_ready(pro)),
+            "llm_source": (s4_meta or {}).get("source") if isinstance(s4_meta, dict) else None,
+        },
         "section5_hi_body": s5_hi or None,
         "section7_hi_body": s7_hi or None,
         "section7_debug": {
@@ -152,6 +159,23 @@ def _enrich_hi_section8_meta(payload: dict) -> dict:
         "section8_hi_body": s8_hi or None,
         "section8_debug": dbg,
     }
+
+
+def _hi_section4_block_response(payload: dict):
+    """412 when Section 4 LLM remedies not ready — no generic fallback report."""
+    from vedic.love_reality.section4_gate import section4_hi_load_gate
+
+    ok, reason = section4_hi_load_gate(payload)
+    if ok:
+        return None
+    pro = payload.get("pro_premium") if isinstance(payload.get("pro_premium"), dict) else {}
+    llm_meta = (pro.get("_meta") or {}).get("section4_remedies") if isinstance(pro.get("_meta"), dict) else {}
+    return jsonify({
+        "error": "section4_not_ready",
+        "detail": reason,
+        "section": "recommendations",
+        "section4_llm": llm_meta or None,
+    }), 412
 
 
 def _hi_section8_block_response(payload: dict):
@@ -992,6 +1016,19 @@ def register_love_reality_routes(flask_app) -> None:
                         lang,
                         force_llm=force_full,
                     )
+                if lang == "hi" and not remedies_action_hi_ready(pro):
+                    from vedic.love_reality.love_section_polish import _bust_remedies_action_scope_file_cache
+
+                    for _ in range(5):
+                        _bust_remedies_action_scope_file_cache(bundle, lang)
+                        pro = ensure_remedies_action_llm(
+                            bundle,
+                            pro,
+                            lang,
+                            force_llm=True,
+                        )
+                        if remedies_action_hi_ready(pro):
+                            break
                 if lang == "hi" and not breakup_chapter_hi_ready(pro):
                     s8_meta = (pro.get("_meta") or {}).get("section8_breakup") if isinstance(pro.get("_meta"), dict) else {}
                     llm_hint = ""
@@ -1133,6 +1170,9 @@ def register_love_reality_routes(flask_app) -> None:
                             "hi_partial" if lang == "hi" else "en_mismatch"
                         ),
                     }
+                blocked4 = _hi_section4_block_response(payload) if lang == "hi" else None
+                if blocked4:
+                    return blocked4
                 blocked = _hi_section8_block_response(payload)
                 if blocked and lang == "hi":
                     _snap.invalidate(snap_params)

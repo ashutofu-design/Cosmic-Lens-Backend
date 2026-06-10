@@ -42,6 +42,7 @@ import {
   reportContentMatchesLang,
   reportHasDisplayableContent,
   reportHindiFullyReady,
+  section4HiLoadGate,
   section4HiLoadReady,
   section8HiLoadGate,
   section8HiLoadReady,
@@ -448,6 +449,19 @@ export default function LoveRealityProReportScreen() {
           return;
         }
         if (lang === "hi") {
+          const s4 = section4HiLoadGate(data);
+          if (!s4.ok) {
+            const dbg = (data as { section4_debug?: { llm_source?: string; words?: number } }).section4_debug;
+            const extra = dbg?.llm_source
+              ? ` [llm=${dbg.llm_source}, words=${dbg.words ?? "?"}]`
+              : "";
+            setError(s4.reason + extra);
+            setFetching(false);
+            setLoadPct(0);
+            setUpdatingReport(false);
+            setForceUpdateRun(false);
+            return;
+          }
           const s8 = section8HiLoadGate(data);
           if (!s8.ok) {
             const dbg = (data as { section8_debug?: { gate_ver?: string; breakup_deva?: number } }).section8_debug;

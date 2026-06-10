@@ -623,7 +623,7 @@ function serverSection8Ready(report: LoveReportLangPayload): boolean {
 
 
 
-const SECTION4_MIN_WORDS = 80;
+const SECTION4_MIN_WORDS = 70;
 
 const GENERIC_REC_HI_MARKERS = [
   "हर झगड़े के २४ घंटे",
@@ -729,11 +729,97 @@ export function section4HiLoadReady(
 
   if (lang !== "hi") return true;
 
-  if (!report) return false;
+  return section4HiLoadGate(report).ok;
 
-  if (section4LooksGenericFallback(report)) return false;
+}
 
-  return section4LoadReady(section4RecommendationsText(report));
+
+
+export function section4HiLoadGate(
+
+  report: LoveReportLangPayload | null | undefined,
+
+): { ok: boolean; reason: string } {
+
+  if (!report) {
+
+    return {
+
+      ok: false,
+
+      reason:
+
+        "Report load nahi hua — Section 4 (उपाय) data missing. «रिपोर्ट अपडेट करें» dabao.",
+
+    };
+
+  }
+
+  const pro = (report as { pro_premium?: { _meta?: { section4_remedies?: { source?: string } } } }).pro_premium;
+
+  const llmMeta = pro?._meta?.section4_remedies;
+
+  if (llmMeta?.source === "failed") {
+
+    return {
+
+      ok: false,
+
+      reason:
+
+        "Report load nahi hua — Section 4 LLM Hindi fail hua. «रिपोर्ट अपडेट करें» dubara dabao — 2–3 min wait.",
+
+    };
+
+  }
+
+  if (section4LooksGenericFallback(report)) {
+
+    return {
+
+      ok: false,
+
+      reason:
+
+        "Report load nahi hua — Section 4 mein sirf chhoti generic lines hain, LLM explanation nahi bana. «रिपोर्ट अपडेट करें» dabao.",
+
+    };
+
+  }
+
+  const text = section4RecommendationsText(report);
+
+  if (!text) {
+
+    return {
+
+      ok: false,
+
+      reason:
+
+        "Report load nahi hua — Section 4 (उपाय और आगे क्या करें) khali hai. Update Report dabao.",
+
+    };
+
+  }
+
+  if (!section4LoadReady(text)) {
+
+    const wc = wordCount(text);
+
+    return {
+
+      ok: false,
+
+      reason:
+
+        `Report load nahi hua — Section 4 LLM text bahut chhota/mixed hai (${wc} words). Update dubara try karein.`,
+
+    };
+
+  }
+
+  return { ok: true, reason: "" };
 
 }
 

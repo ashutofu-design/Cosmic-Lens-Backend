@@ -324,6 +324,9 @@ def build_love_reality_page1_data(
             rec_paragraphs = [remedies_narr]
         raw_recs = [str(x).strip() for x in action_steps if str(x).strip()]
         recommendations = raw_recs[:7]
+    elif lang == "hi":
+        rec_paragraphs = []
+        recommendations = [str(x).strip() for x in action_steps if str(x).strip()][:7]
     else:
         raw_recs = [str(x).strip() for x in (rem_bullets or chk_bullets or []) if str(x).strip()]
         if practical:
@@ -337,12 +340,6 @@ def build_love_reality_page1_data(
                     "Hafte mein 20 minute phone-free check-in",
                     "Dasha down window mein ultimatum mat do — patience rakho",
                 ]
-            elif lang == "hi":
-                raw_recs = [
-                    "हर झगड़े के २४ घंटे में सुधार करें",
-                    "साप्ताहिक २० मिनट फोन-मुक्त बातचीत",
-                    "कमज़ोर दशा में अल्टीमेटम न दें",
-                ]
             else:
                 raw_recs = [
                     "Repair within 24 hours after any argument",
@@ -352,7 +349,7 @@ def build_love_reality_page1_data(
         recommendations = _to_concise_bullets(raw_recs, max_items=7, max_len=90)
     if not rec_paragraphs and remedies_narr:
         rec_paragraphs = [remedies_narr]
-    elif not rec_paragraphs and practical:
+    elif not rec_paragraphs and practical and lang != "hi":
         rec_paragraphs = practical[:2] if any(len(p) > 100 for p in practical) else []
 
     verdict_full = (

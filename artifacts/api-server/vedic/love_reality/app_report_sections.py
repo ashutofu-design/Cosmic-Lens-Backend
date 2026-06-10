@@ -232,7 +232,7 @@ def enrich_page1_and_context(
     elif not p1.get("recommendation_paragraphs"):
         if rn:
             p1["recommendation_paragraphs"] = [rn]
-        elif pro.get("practical"):
+        elif lang != "hi" and pro.get("practical"):
             paras = [str(x).strip() for x in pro["practical"] if str(x).strip() and len(str(x)) > 80]
             if paras:
                 p1["recommendation_paragraphs"] = paras[:2]

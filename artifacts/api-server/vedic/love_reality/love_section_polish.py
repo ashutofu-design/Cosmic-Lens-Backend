@@ -1200,14 +1200,16 @@ def polish_love_reality_remedies_action_only(
     )
 
 
-_REMEDIES_ACTION_MIN_WORDS = 80
+_REMEDIES_ACTION_MIN_WORDS = 70
 
 
 def _remedies_action_text_hi_ok(body: str) -> bool:
     body = _normalize_prose_paragraphs(str(body or "").strip(), min_paragraphs=2)
     if _word_count(body) < _REMEDIES_ACTION_MIN_WORDS:
         return False
-    if not _prose_paragraph_form_ok(body, min_paragraphs=2, min_para_words=15):
+    if _text_looks_like_point_list(body):
+        return False
+    if not _prose_paragraph_form_ok(body, min_paragraphs=2, min_para_words=12):
         return False
     try:
         from i18n_summary import prose_fully_hindi
@@ -1256,7 +1258,7 @@ def ensure_remedies_action_llm(
     work = dict(bundle)
     work["_lr_prior_digest"] = _build_prior_sections_digest(pro, lang)
     last_meta: dict[str, Any] = {}
-    max_attempts = max(1, int(os.environ.get("LOVE_REALITY_REMEDIES_ACTION_ATTEMPTS", "3")))
+    max_attempts = max(1, int(os.environ.get("LOVE_REALITY_REMEDIES_ACTION_ATTEMPTS", "5")))
     for attempt in range(max_attempts):
         if attempt > 0:
             _bust_remedies_action_scope_file_cache(bundle, lang)
@@ -1550,6 +1552,12 @@ def _run_section_llm(
                     "Write blueprint_reality in simple daily Hindi only: ideal partner feelings vs partner's "
                     "real behaviour. NO Venus, 7th house, Upapada, scores. Chart facts only in grounding."
                 )
+            elif lang == "hi" and scope == "remedies_action":
+                retry_note = (
+                    "RETRY: remedies_action_narrative rejected — NOT देवनागरी Hindi or too short/bullet-like. "
+                    "Write 3+ paragraphs (\\n\\n) in देवनागरी Hindi — minimum 90 words. "
+                    "Full upay + aage kya karein guide for p1. action_steps = 5-7 short checklist lines AFTER prose."
+                )
             retry_user = user + f"\n\n{retry_note}"
             kwargs["messages"] = [
                 {"role": "system", "content": system},
@@ -1617,6 +1625,23 @@ def _run_section_llm(
             except OSError:
                 pass
             empty = {"_meta": {"scope": scope, "reason": "not_devanagari_hi", "openai_skipped": False}}
+            return empty
+    if lang == "hi" and scope == "remedies_action":
+        body = str(out.get("remedies_action_narrative") or "")
+        if not _remedies_action_text_hi_ok(body):
+            try:
+                if os.path.isfile(cache_path):
+                    os.remove(cache_path)
+            except OSError:
+                pass
+            empty = {
+                "_meta": {
+                    "scope": scope,
+                    "reason": "not_devanagari_hi_or_thin",
+                    "openai_skipped": False,
+                    "words": _word_count(body),
+                },
+            }
             return empty
     return out
 

@@ -23,7 +23,7 @@ from vedic.compat.premium_chapters import CHAPTER_BODY_KEY, normalize_pro_pdf_la
 
 log = logging.getLogger(__name__)
 
-_ASSEMBLY_VER = "lr_sections_v9"
+_ASSEMBLY_VER = "lr_sections_v10"
 _CHAPTER_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_CHAPTER_MIN_WORDS", "95"))
 _HARMONY_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_HARMONY_MIN_WORDS", "130"))
 
@@ -470,6 +470,10 @@ def _section_angle_block(section_key: str, lang: str) -> str:
             "SECTION ANGLE: Moon emotional rhythm — how p1 and p2 feel, react, and repair under stress. "
             "Connect to ROOT_CAUSE through Moon signs / nakshatra / shashtashtak — no generic moon sign list."
         ),
+        "remedies_action": (
+            "SECTION ANGLE: Practical remedies + what p1 should do NOW and over next 3–12 months. "
+            "Behavior-first, simple chart-tied habits second — NO score dump, NO generic therapy clichés."
+        ),
     }
     angles_hn = {
         "blueprint_reality": (
@@ -496,6 +500,10 @@ def _section_angle_block(section_key: str, lang: str) -> str:
         "moon_sync": (
             "SECTION ANGLE: Moon emotional rhythm — p1/p2 feel aur react kaise karte hain stress mein. "
             "ROOT_CAUSE se Moon signs / nakshatra / shashtashtak se judo — generic moon list mat."
+        ),
+        "remedies_action": (
+            "SECTION ANGLE: Practical upay + ab kya karein + agle 3–12 mahine ka plan. "
+            "Pehle daily habits / repair steps — score numbers mat likho."
         ),
     }
     table = angles_hn if lang == "hn" else angles_en
@@ -838,6 +846,113 @@ def polish_love_reality_moon_sync_only(
         user=user,
         max_tokens=max_tok,
         temp_env="LOVE_REALITY_MOON_SYNC_TEMPERATURE",
+        force_llm=force_llm,
+        parse_fn=_parse,
+        tel=tel,
+    )
+
+
+def _remedies_action_engine_facts(bundle: dict) -> str:
+    from vedic.love_reality.pdf_data_v2 import _build_remedies
+
+    lc = bundle.get("love_compatibility") or {}
+    bu = bundle.get("breakup_chances") or {}
+    fo = bundle.get("future_outcome") or {}
+    wr = bundle.get("will_return") or {}
+    lines = [
+        "REMEDIES & ACTION FACTS (use for practical guidance — do NOT quote scores in prose):",
+        f"Connection band: {lc.get('risk_level') or 'mixed'} — emotional summary: {str(lc.get('emotional_summary') or '')[:200]}",
+        f"Stress pattern: {str(bu.get('emotional_summary') or '')[:180]}",
+        f"Near-term outlook: {str(fo.get('current_phase') or fo.get('emotional_summary') or '')[:180]}",
+        f"Return window note: {str(wr.get('time_window') or wr.get('return_chance') or '')[:120]}",
+    ]
+    for r in _build_remedies(bundle, {}):
+        lines.append(f"Chart-linked habit: {r}")
+    for r in (lc.get("reasons") or [])[:2]:
+        t = str(r).strip()
+        if t:
+            lines.append(f"Friction to address: {t}")
+    return "\n".join(lines)
+
+
+def _build_remedies_action_system_prompt(lang: str) -> str:
+    lang = polish_content_lang(lang)
+    script = love_write_script_label(lang)
+    return f"""Write ONLY Section 4 — Practical Remedies & What To Do Next (in-app action plan for p1).
+
+Return STRICT JSON:
+{{
+  "remedies_action_narrative": "long prose: daily practical remedies + next steps + next 3–12 month plan",
+  "action_steps": ["5–7 short practical one-liners — habits, repair rituals, timing, simple chart-tied upay"]
+}}
+
+Write entirely in {script}.
+
+{love_script_directive(lang)}
+
+TASK — focus 80% PRACTICAL, 20% simple chart-linked habits:
+1) Ab kya karein (next 7–30 days): repair habits, communication rules, conflict cooldown — specific to ROOT_CAUSE
+2) Practical remedies: daily/weekly actions p1 can actually do (not vague "communicate better")
+3) Simple upay where chart facts support it (e.g. Monday calm hour, Friday gratitude note) — NO gemstone shopping lists
+4) Agle 3 mahine + 12 mahine: what to build, what to avoid, when to seek clarity — honest if outlook is strained
+5) If connection feels weak, say what improves odds — never false reunion promises
+
+RULES:
+- Minimum 110 words in remedies_action_narrative, 3–4 paragraphs (\\n\\n)
+- action_steps: exactly 5–7 bullets, each 8–18 words, verb-first ("Repair within 24h…")
+- Do NOT repeat verdict paragraphs or moon/blueprint analysis
+- Do NOT write scores like "13/100" or "love score" — say "jab connection kamzor lagta hai"
+- No generic therapy clichés ("open communication", "mutual understanding")
+
+{_love_llm_shared_voice(lang)}
+
+Use ONLY facts from user message."""
+
+
+def polish_love_reality_remedies_action_only(
+    bundle: dict,
+    lang: str = "en",
+    *,
+    force_llm: bool = False,
+    tel: PdfGenOpenAITelemetry | None = None,
+) -> dict[str, Any]:
+    """Dedicated LLM for Section 4 — practical remedies + action plan + near future."""
+    requested_lang = normalize_pro_pdf_lang(lang)
+    lang = polish_content_lang(requested_lang)
+    model = _section_model("LOVE_REALITY_REMEDIES_ACTION_MODEL")
+    system = _build_remedies_action_system_prompt(lang)
+    user = (
+        _build_section_user_prompt(
+            bundle,
+            lang,
+            section_note="Write Section 4 practical remedies and what p1 should do next (include 3–12 month plan).",
+        )
+        + "\n\n"
+        + _remedies_action_engine_facts(bundle)
+    )
+    max_tok = min(int(os.environ.get("LOVE_REALITY_REMEDIES_ACTION_MAX_TOKENS", "2600")), 4096)
+
+    def _parse(parsed: dict) -> dict[str, Any]:
+        body = str(parsed.get("remedies_action_narrative") or "").strip()
+        steps_raw = parsed.get("action_steps")
+        steps: list[str] = []
+        if isinstance(steps_raw, list):
+            steps = [str(x).strip() for x in steps_raw if str(x).strip()]
+        elif isinstance(steps_raw, str) and steps_raw.strip():
+            steps = [steps_raw.strip()]
+        if _word_count(body) < 70:
+            return {}
+        return {"remedies_action_narrative": body, "action_steps": steps[:7]}
+
+    return _run_section_llm(
+        scope="remedies_action",
+        bundle=bundle,
+        lang=lang,
+        model=model,
+        system=system,
+        user=user,
+        max_tokens=max_tok,
+        temp_env="LOVE_REALITY_REMEDIES_ACTION_TEMPERATURE",
         force_llm=force_llm,
         parse_fn=_parse,
         tel=tel,
@@ -1410,6 +1525,14 @@ def assemble_love_reality_pro_premium(
                 None,
             ),
             (
+                "remedies_action",
+                polish_love_reality_remedies_action_only,
+                ("remedies_action_narrative",),
+                "remedies_action_narrative",
+                None,
+                None,
+            ),
+            (
                 "red_flags",
                 polish_love_reality_red_flags_only,
                 ("red_flags_narrative", "chapter_body"),
@@ -1464,6 +1587,10 @@ def assemble_love_reality_pro_premium(
                 if label == "harmony":
                     _upsert_chapter(pro, "will_return", body)
                     _upsert_chapter(pro, "future_outcome", body)
+                elif label == "remedies_action":
+                    steps = hit.get("action_steps")
+                    if isinstance(steps, list):
+                        pro["action_steps"] = [str(x).strip() for x in steps if str(x).strip()][:7]
                 elif label in _CHAPTER_KEYS:
                     _upsert_chapter(pro, label, body, hit.get("grounding") or "")
 

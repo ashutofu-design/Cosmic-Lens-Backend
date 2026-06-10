@@ -241,6 +241,7 @@ def sanitize_love_reality_pro_premium(
         "dasha_narrative",
         "roadmap_narrative",
         "moon_sync_narrative",
+        "remedies_action_narrative",
         "harmony",
     ):
         if out.get(field):

@@ -154,7 +154,13 @@ function L(lang: ProPdfLangCode) {
     challenges: pickLabel(lang, "Challenges in this Connection", "Is Rishte ki Challenges", "इस कनेक्शन की चुनौतियाँ"),
     verdict: pickLabel(lang, "Final Cosmic Verdict", "Final Cosmic Verdict", "अंतिम ज्योतिषीय निष्कर्ष"),
     verdictSub: pickLabel(lang, "Astrologer's Note", "Jyotishi ka Note", "ज्योतिषी का नोट"),
-    recommendations: pickLabel(lang, "Recommendations", "Aage Kya Karein", "आगे क्या करें"),
+    recommendations: pickLabel(lang, "Remedies & Next Steps", "Upay aur Aage Kya Karein", "उपाय और आगे क्या करें"),
+    recommendationsSub: pickLabel(
+      lang,
+      "Practical remedies · daily habits · next 3–12 months",
+      "Practical upay · daily habits · agle 3–12 mahine",
+      "व्यावहारिक उपाय · दैनिक आदत · अगले ३–१२ महीने",
+    ),
     deepAnalysis: pickLabel(lang, "Deep Connection Analysis", "Gehra Connection Analysis", "गहन कनेक्शन विश्लेषण"),
     deepCombined: pickLabel(lang, "Deep Connection Analysis", "Gehra Connection Analysis", "गहन कनेक्शन विश्लेषण"),
     deepSub: pickLabel(
@@ -337,6 +343,15 @@ export function humanScoreBand(score: number, label: string, lang: ProPdfLangCod
   return "Very low";
 }
 
+function insightBulletsWithoutScores(items: string[] | undefined, max = 4): string[] {
+  return (items || [])
+    .filter(i => {
+      const t = String(i || "").trim();
+      return t && !/\d+\s*\/\s*100/.test(t);
+    })
+    .slice(0, max);
+}
+
 function pickSummary(primary?: string, secondary?: string): string {
   const a = (primary || "").trim();
   const b = (secondary || "").trim();
@@ -442,10 +457,9 @@ export function buildLoveReportSectionsFull(
     for (const item of p1.analysis || []) {
       const expl = (item.explanation || "").trim();
       if (!expl) continue;
-      const score = item.score != null ? ` · ${item.score}/100` : "";
       sections.push({
         id: `deep_${sections.length}`,
-        title: `${item.title || "Deep Analysis"}${score}`,
+        title: item.title || "Deep Analysis",
         subtitle: labels.deepAnalysis,
         body: expl,
       });
@@ -619,7 +633,7 @@ export function buildLoveReportSectionsForPage(
       title: labels.execSummary,
       subtitle: labels.relSummary,
       body: summary || undefined,
-      bullets: (p1.key_insights || []).slice(0, 4),
+      bullets: insightBulletsWithoutScores(p1.key_insights, 4),
     });
 
     const scorecardLines = [
@@ -648,22 +662,21 @@ export function buildLoveReportSectionsForPage(
     });
 
     const recBody = (p1.recommendation_paragraphs || []).join("\n\n").trim();
-    const recBullets = !recBody
-      ? (p1.recommendations || []).slice(0, 5)
-      : undefined;
+    const recBullets = (p1.recommendations || []).slice(0, 7);
     pushSection(sections, {
       id: "recommendations",
       title: labels.recommendations,
+      subtitle: labels.recommendationsSub,
       body: recBody || undefined,
-      bullets: recBullets,
+      bullets: recBullets.length ? recBullets : undefined,
     });
 
     const deepLines = (p1.analysis || [])
       .map(item => {
         const expl = (item.explanation || "").trim();
         if (!expl) return "";
-        const score = item.score != null ? ` · ${item.score}/100` : "";
-        return `${item.title || "Analysis"}${score}\n${expl}`;
+        const title = (item.title || "Analysis").trim();
+        return `${title}\n${expl}`;
       })
       .filter(Boolean);
     pushSection(sections, {

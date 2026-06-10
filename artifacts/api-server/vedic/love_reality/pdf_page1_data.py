@@ -194,36 +194,50 @@ def build_love_reality_page1_data(
     rem_bullets = remedies.get("bullets") if isinstance(remedies, dict) else []
     checklist = ctx.get("page13_checklist") or {}
     chk_bullets = checklist.get("bullets") if isinstance(checklist, dict) else []
-    raw_recs = [str(x).strip() for x in (rem_bullets or chk_bullets or []) if str(x).strip()]
+    remedies_narr = str(pro.get("remedies_action_narrative") or "").strip()
+    action_steps = [str(x).strip() for x in (pro.get("action_steps") or []) if str(x).strip()]
     practical = [str(p).strip() for p in (pro.get("practical") or []) if str(p).strip()]
-    if practical:
-        raw_recs = practical + raw_recs
-    if not raw_recs:
+
+    if remedies_narr:
+        rec_paragraphs = [p.strip() for p in remedies_narr.split("\n\n") if p.strip()]
+        if len(rec_paragraphs) == 1:
+            rec_paragraphs = [remedies_narr]
+        raw_recs = action_steps or []
+    else:
+        raw_recs = [str(x).strip() for x in (rem_bullets or chk_bullets or []) if str(x).strip()]
+        if practical:
+            raw_recs = practical + raw_recs
+        rec_paragraphs = practical[:2] if practical and any(len(p) > 100 for p in practical) else []
+
+    if not raw_recs and not rec_paragraphs:
         if lang == "hn":
             raw_recs = [
                 "Har jhagda ke 24 ghante mein repair karo",
                 "Hafte mein 20 minute phone-free check-in",
-                "Dasha dates track karo — down window mein ultimatum mat do",
+                "Dasha down window mein ultimatum mat do — patience rakho",
             ]
         elif lang == "hi":
             raw_recs = [
                 "हर झगड़े के २४ घंटे में सुधार करें",
                 "साप्ताहिक २० मिनट फोन-मुक्त बातचीत",
-                "दशा तिथियाँ देखें — कमज़ोर अवधि में अल्टीमेटम न दें",
+                "कमज़ोर दशा में अल्टीमेटम न दें",
             ]
         else:
             raw_recs = [
                 "Repair within 24 hours after any argument",
                 "Weekly 20-minute phone-free check-in",
-                "Track dasha dates — avoid ultimatums in down windows",
+                "Avoid ultimatums during strained dasha windows",
             ]
-    recommendations = _to_concise_bullets(raw_recs, max_items=5, max_len=78)
-    # Verdict page: full LLM prose (practical[] = 2 long paragraphs from polish)
+    recommendations = _to_concise_bullets(raw_recs, max_items=7, max_len=90)
+    if not rec_paragraphs and remedies_narr:
+        rec_paragraphs = [remedies_narr]
+    elif not rec_paragraphs and practical:
+        rec_paragraphs = practical[:2] if any(len(p) > 100 for p in practical) else []
+
     verdict_full = (
         (pro.get("verdict") or ctx.get("page14_closing") or "").strip()
-        or f"Love {love}/100 · Breakup risk {breakup}/100 — use this as a timing map, not doom."
+        or "Your charts show a complex bond — use this report as a timing map, not a final verdict."
     )
-    rec_paragraphs = practical[:2] if practical and any(len(p) > 100 for p in practical) else []
 
     strengths = [
         {"label": "Emotional magnetism", "value": min(100, love + 8)},

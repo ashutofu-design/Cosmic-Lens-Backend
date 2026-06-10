@@ -5,7 +5,7 @@
 import { LOVE_REALITY_PDF_LAYOUT_VER } from "@/lib/loveRealityPdfLayout";
 
 /** Bump when page sections, labels, or in-app layout logic changes. */
-export const LOVE_REALITY_APP_REPORT_VER = "lr_app_v30_remedies_action_fix";
+export const LOVE_REALITY_APP_REPORT_VER = "lr_app_v31_en_hn_cache";
 
 /** Bump to wipe device Hindi report cache once (server hi_purge_v1). */
 export const LOVE_REALITY_HI_DEVICE_CACHE_VER = "hi_purge_v10_remedies_action_fix";

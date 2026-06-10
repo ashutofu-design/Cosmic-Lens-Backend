@@ -903,6 +903,28 @@ export function section8HiLoadReady(
 
 
 
+/** en/hn — saved report complete enough to open from device cache (no LLM). */
+
+export function enHnReportCacheReady(
+
+  report: LoveReportLangPayload | null | undefined,
+
+  lang: ProPdfLangCode,
+
+): boolean {
+
+  if (lang !== "en" && lang !== "hn") return false;
+
+  if (!report || !reportHasDisplayableContent(report)) return false;
+
+  if (lang === "en") return true;
+
+  return reportContentMatchesLang(report, lang);
+
+}
+
+
+
 /** True when saved JSON body matches the language user selected. */
 
 export function reportContentMatchesLang(

@@ -917,7 +917,7 @@ def register_love_reality_routes(flask_app) -> None:
                     remedies_action_hi_ready,
                 )
 
-                if lang in ("hi", "hn"):
+                if lang == "hi":
                     strip_non_hindi_breakup_chapter(pro)
                     for attempt in range(3):
                         pro = ensure_breakup_section8_llm(
@@ -959,8 +959,6 @@ def register_love_reality_routes(flask_app) -> None:
                                 and remedies_action_hi_ready(pro)
                             ):
                                 break
-                        elif breakup_chapter_word_count(pro) >= 80:
-                            break
                         if attempt < 2:
                             bust_love_polish_section_caches(bundle, lang)
                 else:
@@ -1013,12 +1011,12 @@ def register_love_reality_routes(flask_app) -> None:
                     }), 412
                 pro = sanitize_love_reality_pro_premium(pro, bundle, lang=lang)
                 strip_non_hindi_breakup_chapter(pro)
-                if lang in ("hi", "hn"):
+                if lang == "hi":
                     pro = ensure_moon_sync_section7_llm(
                         bundle,
                         pro,
                         lang,
-                        force_llm=lang == "hi",
+                        force_llm=True,
                     )
                     pro = ensure_blueprint_section5_llm(
                         bundle,

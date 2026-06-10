@@ -38,6 +38,8 @@ import type { LoveReportChangeKind } from "@/lib/loveRealityReportRevision";
 import { connectLoveRealityPageToPdf } from "@/lib/loveRealityProPdfDownload";
 import { coerceProPdfLang, type ProPdfLangCode } from "@/lib/proPdfLang";
 import {
+  enHnReportCacheReady,
+  reportContentMatchesLang,
   reportHasDisplayableContent,
   reportHindiFullyReady,
   section4HiLoadReady,
@@ -369,7 +371,7 @@ export default function LoveRealityProReportScreen() {
           resolved.payload
           && !mustLlm
           && resolved.changeKind === "app_layout"
-          && lang === "en"
+          && (lang === "en" || lang === "hn")
         ) {
           await touchLoveReportCacheRevision({
             ...cacheOpts,
@@ -380,9 +382,15 @@ export default function LoveRealityProReportScreen() {
         }
 
         if (resolved.payload && !mustLlm && resolved.changeKind === "none") {
-          if (lang === "hi" && !section8HiLoadReady(resolved.payload, lang)) {
-            // Stale device cache — server cache/rebuild, not silent full LLM update.
-          } else {
+          const hiStale = lang === "hi" && (
+            !section8HiLoadReady(resolved.payload, lang)
+            || !section4HiLoadReady(resolved.payload, lang)
+          );
+          const enHnReady = (lang === "en" || lang === "hn")
+            && enHnReportCacheReady(resolved.payload, lang);
+          if (hiStale) {
+            // Stale Hindi device cache — refetch from server.
+          } else if (lang === "hi" || enHnReady) {
             finishLoad(resolved.payload, true);
             return;
           }
@@ -457,7 +465,7 @@ export default function LoveRealityProReportScreen() {
         const hindiOk = reportHindiFullyReady(data, lang);
         setLoadPct(p => Math.max(p, 84));
         await saveLoveReportCache(cacheOpts, data);
-        finishLoad(data, false);
+        finishLoad(data, serverCacheHit || enHnReportCacheReady(data, lang));
         if (forceUpdate) {
           const script = (data.content_script || "").trim();
           const hint = hindiOk

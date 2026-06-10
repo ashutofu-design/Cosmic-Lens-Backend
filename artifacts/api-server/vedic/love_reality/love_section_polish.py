@@ -23,7 +23,7 @@ from vedic.compat.premium_chapters import CHAPTER_BODY_KEY, normalize_pro_pdf_la
 
 log = logging.getLogger(__name__)
 
-_ASSEMBLY_VER = "lr_sections_v8"
+_ASSEMBLY_VER = "lr_sections_v9"
 _CHAPTER_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_CHAPTER_MIN_WORDS", "95"))
 _HARMONY_MIN_WORDS = int(os.environ.get("LOVE_REALITY_SECTION_HARMONY_MIN_WORDS", "130"))
 
@@ -271,6 +271,37 @@ def _red_flags_engine_facts(bundle: dict) -> str:
     return "ENGINE RED-FLAG FACTS (name these patterns in prose):\n" + "\n".join(lines)
 
 
+def _moon_engine_facts(bundle: dict) -> str:
+    from vedic.love_reality.pdf_data_v2 import _moon_sign_idx, _shashtashtak
+
+    p1 = bundle.get("p1") or {}
+    p2 = bundle.get("p2") or {}
+    k1 = bundle.get("kundli_p1") or {}
+    k2 = bundle.get("kundli_p2") or {}
+    lc = bundle.get("love_compatibility") or {}
+    sig = bundle.get("couple_signals") or {}
+    m1, m2 = _moon_sign_idx(k1), _moon_sign_idx(k2)
+    shash = _shashtashtak(m1, m2)
+    p1m = p1.get("moonSign") or p1.get("rashi") or k1.get("moonSign") or "?"
+    p2m = p2.get("moonSign") or p2.get("rashi") or k2.get("moonSign") or "?"
+    lines = [
+        "MOON SYNC ENGINE FACTS (explain emotional rhythm for p1 in prose):",
+        f"{p1.get('name') or 'p1'} Moon: {p1m} · nakshatra {p1.get('nakshatra') or k1.get('nakshatra') or '?'}",
+        f"{p2.get('name') or 'p2'} Moon: {p2m} · nakshatra {p2.get('nakshatra') or k2.get('nakshatra') or '?'}",
+        f"Shashtashtak (6-8 Moon clash): {'yes' if shash else 'no'}",
+        f"Moon mismatch signal: {sig.get('moon_mismatch') if sig.get('moon_mismatch') is not None else 'unknown'}",
+    ]
+    for n in (sig.get("synastry_notes") or [])[:4]:
+        t = str(n).strip()
+        if t:
+            lines.append(f"Synastry note: {t}")
+    for r in (lc.get("reasons") or [])[:4]:
+        t = str(r).strip()
+        if t:
+            lines.append(f"Emotional signal: {t}")
+    return "\n".join(lines)
+
+
 def _dasha_engine_facts(bundle: dict) -> str:
     p1 = bundle.get("p1") or {}
     p2 = bundle.get("p2") or {}
@@ -435,6 +466,10 @@ def _section_angle_block(section_key: str, lang: str) -> str:
         "roadmap": (
             "SECTION ANGLE: 3/12/36 month practical arc for p1 — refer to bands/phases, do not repeat score numbers."
         ),
+        "moon_sync": (
+            "SECTION ANGLE: Moon emotional rhythm — how p1 and p2 feel, react, and repair under stress. "
+            "Connect to ROOT_CAUSE through Moon signs / nakshatra / shashtashtak — no generic moon sign list."
+        ),
     }
     angles_hn = {
         "blueprint_reality": (
@@ -457,6 +492,10 @@ def _section_angle_block(section_key: str, lang: str) -> str:
         ),
         "roadmap": (
             "SECTION ANGLE: 3/12/36 month guide — band/phase bolo, score numbers repeat mat."
+        ),
+        "moon_sync": (
+            "SECTION ANGLE: Moon emotional rhythm — p1/p2 feel aur react kaise karte hain stress mein. "
+            "ROOT_CAUSE se Moon signs / nakshatra / shashtashtak se judo — generic moon list mat."
         ),
     }
     table = angles_hn if lang == "hn" else angles_en
@@ -731,6 +770,74 @@ def polish_love_reality_red_flags_only(
         user=user,
         max_tokens=max_tok,
         temp_env="LOVE_REALITY_RED_FLAGS_TEMPERATURE",
+        force_llm=force_llm,
+        parse_fn=_parse,
+        tel=tel,
+    )
+
+
+def _build_moon_sync_system_prompt(lang: str) -> str:
+    lang = polish_content_lang(lang)
+    script = love_write_script_label(lang)
+    return f"""Write ONLY PDF Section — Moon Sync (emotional rhythm between both Moons).
+
+Return STRICT JSON:
+{{
+  "moon_sync_narrative": "long prose explaining how p1 and p2 feel, react, and repair under stress"
+}}
+
+Write entirely in {script}.
+
+{love_script_directive(lang)}
+
+TASK:
+- Section title: Moon Sync — emotional pacing, not a textbook moon-sign list
+- Explain how p1's Moon processes feelings vs p2's Moon — daily life examples
+- If shashtashtak / moon mismatch is true, say what that looks like in arguments and silence
+- If Moons are smoother, say what still triggers stress and how to protect rhythm
+- Guide p1: what to do when partner goes quiet / when p1 reacts fast
+- Minimum 80 words, 3 paragraphs (\\n\\n)
+- Use REAL partner names from user message
+
+{_love_llm_shared_voice(lang)}
+
+Use ONLY facts from user message."""
+
+
+def polish_love_reality_moon_sync_only(
+    bundle: dict,
+    lang: str = "en",
+    *,
+    force_llm: bool = False,
+    tel: PdfGenOpenAITelemetry | None = None,
+) -> dict[str, Any]:
+    """Dedicated LLM for Moon Sync — emotional rhythm prose for in-app + PDF."""
+    requested_lang = normalize_pro_pdf_lang(lang)
+    lang = polish_content_lang(requested_lang)
+    model = _section_model("LOVE_REALITY_MOON_SYNC_MODEL")
+    system = _build_moon_sync_system_prompt(lang)
+    user = (
+        _build_section_user_prompt(bundle, lang, section_note="Write Moon Sync emotional rhythm guide for p1.")
+        + "\n\n"
+        + _moon_engine_facts(bundle)
+    )
+    max_tok = min(int(os.environ.get("LOVE_REALITY_MOON_SYNC_MAX_TOKENS", "2200")), 4096)
+
+    def _parse(parsed: dict) -> dict[str, Any]:
+        body = str(parsed.get("moon_sync_narrative") or "").strip()
+        if _word_count(body) < 55:
+            return {}
+        return {"moon_sync_narrative": body}
+
+    return _run_section_llm(
+        scope="moon_sync",
+        bundle=bundle,
+        lang=lang,
+        model=model,
+        system=system,
+        user=user,
+        max_tokens=max_tok,
+        temp_env="LOVE_REALITY_MOON_SYNC_TEMPERATURE",
         force_llm=force_llm,
         parse_fn=_parse,
         tel=tel,
@@ -1291,6 +1398,14 @@ def assemble_love_reality_pro_premium(
                 polish_love_reality_harmony_only,
                 ("harmony",),
                 "harmony",
+                None,
+                None,
+            ),
+            (
+                "moon_sync",
+                polish_love_reality_moon_sync_only,
+                ("moon_sync_narrative",),
+                "moon_sync_narrative",
                 None,
                 None,
             ),

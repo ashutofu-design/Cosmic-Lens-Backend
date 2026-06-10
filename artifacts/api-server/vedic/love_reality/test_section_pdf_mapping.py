@@ -17,6 +17,7 @@ def _fake_pro() -> dict:
             {"key": "red_flags", "chapter_body": f"LLM_RED_FLAGS {long}"},
         ],
         "harmony": f"LLM_HARMONY {long}",
+        "moon_sync_narrative": f"LLM_MOON_SYNC {long}",
         "blueprint_reality": f"LLM_BLUEPRINT_REALITY {long}",
     }
 
@@ -62,6 +63,10 @@ class TestSectionPdfMapping(unittest.TestCase):
         self.assertIn("LLM_RED_FLAGS", rf_body)
 
         self.assertIn("LLM_HARMONY", ctx["page9_harmony"])
+
+        moon_body = ctx["page5_moon"]["body"]
+        self.assertIn("LLM_MOON_SYNC", moon_body)
+        self.assertNotIn("emotional rhythm out of sync", moon_body.lower())
 
 
 if __name__ == "__main__":

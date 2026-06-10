@@ -240,6 +240,7 @@ def sanitize_love_reality_pro_premium(
         "red_flags_narrative",
         "dasha_narrative",
         "roadmap_narrative",
+        "moon_sync_narrative",
         "harmony",
     ):
         if out.get(field):

@@ -26,6 +26,7 @@ import {
   type LoveProReportResponse,
 } from "@/lib/loveRealityProReport";
 import {
+  clearLoveReportCache,
   loveReportCacheNeedsLlm,
   markLoveReportPdfSynced,
   resolveLoveReportCache,
@@ -60,6 +61,9 @@ function ReportLoadingView({
   fromCache,
   cacheChange,
   llmRefresh,
+  forceUpdate,
+  updateHint,
+  lang,
 }: {
   pct: number;
   stageIdx: number;
@@ -68,6 +72,9 @@ function ReportLoadingView({
   fromCache: boolean;
   cacheChange: LoveReportChangeKind;
   llmRefresh: boolean;
+  forceUpdate: boolean;
+  updateHint: string;
+  lang: ProPdfLangCode;
 }) {
   const spinAnim = useRef(new Animated.Value(0)).current;
   const barAnim = useRef(new Animated.Value(0)).current;
@@ -167,19 +174,23 @@ function ReportLoadingView({
           </Animated.View>
 
           <Text style={[ld.title, { color: text }]}>
-            {done ? "Report ready!" : "Loading…"}
+            {done ? "Report ready!" : forceUpdate ? "Updating report…" : "Loading…"}
           </Text>
           <Text style={[ld.stage, { color: dim }]}>
             {done
               ? "Opening your Love Reality Pro report"
-              : cacheChange === "app_layout"
-                ? "Applying layout update — same report, no AI"
+              : forceUpdate
+                ? updateHint
+                : cacheChange === "app_layout"
+                ? "Updating report…"
                 : llmRefresh
                   ? (lang === "hi"
                     ? "Hindi report likh rahe hain — 1–2 min"
-                    : "Hinglish report likh rahe hain — 1–2 min")
+                    : lang === "hn"
+                      ? "Hinglish report likh rahe hain — 1–2 min"
+                      : "Writing your report — 1–2 min")
                   : cacheChange === "pdf_layout"
-                  ? "Refreshing report structure — no new AI text"
+                  ? "Preparing report…"
                   : fromCache
                     ? "Loading saved report…"
                     : LOAD_STAGES[stageIdx]}
@@ -208,19 +219,6 @@ function ReportLoadingView({
 
           <View style={ld.pctRow}>
             <Text style={[ld.pct, { color: text }]}>{pct}%</Text>
-            {!done ? (
-              <Text style={[ld.hint, { color: dim }]}>
-                {cacheChange === "app_layout"
-                  ? "Labels/sections updated — instant, no LLM"
-                  : llmRefresh
-                    ? "AI se naya report — purana English cache skip"
-                    : cacheChange === "pdf_layout"
-                    ? "Structure updated from saved text — no LLM"
-                    : fromCache
-                      ? "No new AI call — instant replay"
-                      : "First load may take 1–2 min — please wait"}
-              </Text>
-            ) : null}
           </View>
         </View>
       </LinearGradient>
@@ -270,6 +268,8 @@ export default function LoveRealityProReportScreen() {
   const [needsPdfResync, setNeedsPdfResync] = useState(false);
   const [llmRefresh, setLlmRefresh] = useState(false);
   const [pdfConnecting, setPdfConnecting] = useState(false);
+  const [updatingReport, setUpdatingReport] = useState(false);
+  const [forceUpdateRun, setForceUpdateRun] = useState(false);
   const loadedRef = useRef(false);
   const fetchDoneRef = useRef(false);
   const fastCacheRef = useRef(false);
@@ -281,12 +281,14 @@ export default function LoveRealityProReportScreen() {
     setReport(data);
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { forceUpdate?: boolean }) => {
     if (!user?.id || !primaryProfile?.birthData || !partnerProfile?.birthData) {
       setError("Complete both kundlis and sign in to read the report.");
       setFetching(false);
+      setUpdatingReport(false);
       return;
     }
+    const forceUpdate = Boolean(opts?.forceUpdate);
     setFetching(true);
     setLoadPct(0);
     setLoadDone(false);
@@ -297,8 +299,10 @@ export default function LoveRealityProReportScreen() {
     fastCacheRef.current = false;
     setFromCache(false);
     setCacheChange("missing");
-    setNeedsPdfResync(false);
-    setLlmRefresh(false);
+    setNeedsPdfResync(forceUpdate);
+    setLlmRefresh(forceUpdate || lang !== "en");
+    setForceUpdateRun(forceUpdate);
+    if (forceUpdate) setUpdatingReport(true);
 
     const cacheOpts = {
       userId: user.id,
@@ -310,35 +314,46 @@ export default function LoveRealityProReportScreen() {
     };
 
     try {
-      const resolved = await resolveLoveReportCache(cacheOpts);
-      setCacheChange(resolved.changeKind);
-      setNeedsPdfResync(resolved.needsPdfResync);
-      const mustLlm = loveReportCacheNeedsLlm(resolved.payload, lang, resolved.meta);
-      setLlmRefresh(mustLlm);
-
-      if (
-        resolved.payload
-        && !mustLlm
-        && resolved.changeKind === "app_layout"
-      ) {
-        await touchLoveReportCacheRevision({
-          ...cacheOpts,
-          polishSource: resolved.payload.polish_source,
-        });
-        finishLoad(resolved.payload, true);
-        return;
+      if (forceUpdate) {
+        await clearLoveReportCache(cacheOpts);
       }
 
-      if (resolved.payload && !mustLlm && resolved.changeKind === "none") {
-        finishLoad(resolved.payload, true);
-        return;
+      let mustLlm = forceUpdate || lang !== "en";
+      if (!forceUpdate) {
+        const resolved = await resolveLoveReportCache(cacheOpts);
+        setCacheChange(resolved.changeKind);
+        setNeedsPdfResync(resolved.needsPdfResync);
+        mustLlm = loveReportCacheNeedsLlm(resolved.payload, lang, resolved.meta);
+        setLlmRefresh(mustLlm);
+
+        if (
+          resolved.payload
+          && !mustLlm
+          && resolved.changeKind === "app_layout"
+        ) {
+          await touchLoveReportCacheRevision({
+            ...cacheOpts,
+            polishSource: resolved.payload.polish_source,
+          });
+          finishLoad(resolved.payload, true);
+          setUpdatingReport(false);
+          setForceUpdateRun(false);
+          return;
+        }
+
+        if (resolved.payload && !mustLlm && resolved.changeKind === "none") {
+          finishLoad(resolved.payload, true);
+          setUpdatingReport(false);
+          setForceUpdateRun(false);
+          return;
+        }
       }
 
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 240000);
       try {
-        const layoutRefresh = resolved.changeKind === "pdf_layout" && !mustLlm;
-        let { data, serverCacheHit } = await fetchLoveRealityProReport({
+        const layoutRefresh = forceUpdate || lang !== "en";
+        let { data } = await fetchLoveRealityProReport({
           user,
           p1: primaryProfile.birthData,
           p2: partnerProfile.birthData,
@@ -347,7 +362,7 @@ export default function LoveRealityProReportScreen() {
           lang,
           signal: ctrl.signal,
           layoutRefresh,
-          forceLlm: mustLlm,
+          forceLlm: forceUpdate || mustLlm,
         });
         if (lang !== "en" && !reportSummaryMatchesLang(data, lang)) {
           setLlmRefresh(true);
@@ -363,11 +378,13 @@ export default function LoveRealityProReportScreen() {
             forceLlm: true,
           });
           data = retry.data;
-          serverCacheHit = retry.serverCacheHit;
         }
         await saveLoveReportCache(cacheOpts, data);
-        finishLoad(data, mustLlm ? false : (layoutRefresh ? false : serverCacheHit));
-        if (layoutRefresh || mustLlm) setNeedsPdfResync(true);
+        finishLoad(data, false);
+        setNeedsPdfResync(true);
+        if (forceUpdate) {
+          Alert.alert(labels.updateDone, labels.updateHint, [{ text: labels.ok }]);
+        }
       } finally {
         clearTimeout(timer);
       }
@@ -375,8 +392,11 @@ export default function LoveRealityProReportScreen() {
       const msg = e instanceof Error ? e.message : "Could not load report";
       setError(/abort/i.test(msg) ? "Report timed out — tap Retry." : msg);
       setFetching(false);
+    } finally {
+      setUpdatingReport(false);
+      setForceUpdateRun(false);
     }
-  }, [user, primaryProfile, partnerProfile, lang, finishLoad]);
+  }, [user, primaryProfile, partnerProfile, lang, finishLoad, labels]);
 
   useEffect(() => {
     loadedRef.current = false;
@@ -391,7 +411,7 @@ export default function LoveRealityProReportScreen() {
 
   useEffect(() => {
     if (!fetching || fetchDoneRef.current) return;
-    const fast = fastCacheRef.current || cacheChange === "app_layout";
+    const fast = fastCacheRef.current || (cacheChange === "app_layout" && !forceUpdateRun);
     const tickMs = fast ? 70 : 900;
     const step = fast ? 10 : 1;
     const cap = fast ? 100 : 90;
@@ -399,7 +419,7 @@ export default function LoveRealityProReportScreen() {
       setLoadPct(p => (p >= cap ? cap : Math.min(cap, p + step)));
     }, tickMs);
     return () => clearInterval(tick);
-  }, [fetching, cacheChange]);
+  }, [fetching, cacheChange, forceUpdateRun]);
 
   useEffect(() => {
     if (!fetching || fetchDoneRef.current) return;
@@ -422,6 +442,11 @@ export default function LoveRealityProReportScreen() {
     const t = setTimeout(() => setShowReport(true), delay);
     return () => clearTimeout(t);
   }, [loadDone, loadPct, report]);
+
+  const handleUpdateReport = useCallback(() => {
+    if (updatingReport || fetching) return;
+    void load({ forceUpdate: true });
+  }, [updatingReport, fetching, load]);
 
   const handleConnectToPdf = useCallback(async () => {
     if (
@@ -556,9 +581,39 @@ export default function LoveRealityProReportScreen() {
             fromCache={fromCache}
             cacheChange={cacheChange}
             llmRefresh={llmRefresh}
+            forceUpdate={forceUpdateRun}
+            updateHint={labels.updateHint}
+            lang={lang}
           />
         ) : report && showReport ? (
           <>
+            <Pressable
+              onPress={handleUpdateReport}
+              disabled={updatingReport || fetching}
+              style={[
+                s.updateBar,
+                {
+                  backgroundColor: C.isDark ? "rgba(139,92,246,0.18)" : "rgba(139,92,246,0.1)",
+                  borderColor: C.isDark ? "rgba(167,139,250,0.45)" : "rgba(139,92,246,0.35)",
+                  opacity: updatingReport || fetching ? 0.65 : 1,
+                },
+              ]}
+            >
+              {updatingReport ? (
+                <ActivityIndicator size="small" color="#8B5CF6" />
+              ) : (
+                <Feather name="refresh-cw" size={16} color="#8B5CF6" />
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={[s.updateBarTitle, { color: C.isDark ? "#E9D5FF" : "#5B21B6" }]}>
+                  {updatingReport ? labels.updatingReport : labels.updateReport}
+                </Text>
+                <Text style={[s.updateBarSub, { color: C.isDark ? "rgba(226,232,240,0.72)" : "#64748B" }]}>
+                  {labels.updateHint}
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={18} color="#8B5CF6" />
+            </Pressable>
             <ScrollView
               contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 120 }}
               showsVerticalScrollIndicator={false}
@@ -655,13 +710,10 @@ const ld = StyleSheet.create({
   fill: { width: "100%", height: 10, borderRadius: 5 },
   pctRow: {
     width: "100%",
-    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     marginTop: 6,
   },
   pct: { fontFamily: "Nunito_700Bold", fontSize: 24, letterSpacing: -0.5 },
-  hint: { flex: 1, textAlign: "right", fontFamily: "Nunito_500Medium", fontSize: 10.5, marginLeft: 8 },
 });
 
 const s = StyleSheet.create({
@@ -674,6 +726,19 @@ const s = StyleSheet.create({
     gap: 8,
   },
   headerTitle: { flex: 1, textAlign: "center", fontFamily: "Nunito_700Bold", fontSize: 17 },
+  updateBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  updateBarTitle: { fontFamily: "Nunito_700Bold", fontSize: 14 },
+  updateBarSub: { fontFamily: "Nunito_500Medium", fontSize: 11, marginTop: 2, lineHeight: 15 },
   savePdfBtn: {
     flexDirection: "row",
     alignItems: "center",

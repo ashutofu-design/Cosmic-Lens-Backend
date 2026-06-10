@@ -4,7 +4,7 @@ from __future__ import annotations
 from flask import Response, jsonify, request
 
 # Bump when PDF layout/renderer changes — invalidates stale server-side report cache.
-LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v23_hi_mixed_script"
+LOVE_REALITY_PDF_LAYOUT_VER = "lr_pro_v24_moon_sync_llm"
 
 
 def love_reality_cache_params(lang: str, p1: dict, p2: dict) -> dict:

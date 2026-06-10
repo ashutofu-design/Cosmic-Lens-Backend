@@ -48,6 +48,7 @@ def _narrative_text_fields(parsed: dict) -> list[tuple[str, str, str]]:
         "harmony",
         "dasha_narrative",
         "roadmap_narrative",
+        "moon_sync_narrative",
     ):
         if parsed.get(key):
             out.append(("root", key, str(parsed[key])))

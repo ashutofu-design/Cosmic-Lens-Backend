@@ -738,14 +738,17 @@ export default function LoveRealityProReportScreen() {
               onPress={() => {
                 loadedRef.current = false;
                 fetchDoneRef.current = false;
-                const section8Blocked = /Section 8|section8_not_ready/i.test(error);
+                const section8Blocked =
+                  lang !== "en" && /Section 8|section8_not_ready/i.test(error);
                 load({ forceUpdate: section8Blocked });
                 loadedRef.current = true;
               }}
               style={s.retryBtn}
             >
               <Text style={s.retryTxt}>
-                {/Section 8|section8_not_ready/i.test(error) ? labels.updateReport : labels.retry}
+                {lang !== "en" && /Section 8|section8_not_ready/i.test(error)
+                  ? labels.updateReport
+                  : labels.retry}
               </Text>
             </Pressable>
           </View>
@@ -763,33 +766,35 @@ export default function LoveRealityProReportScreen() {
           />
         ) : report && showReport ? (
           <>
-            <Pressable
-              onPress={handleUpdateReport}
-              disabled={updatingReport}
-              style={[
-                s.updateBar,
-                {
-                  backgroundColor: C.isDark ? "rgba(139,92,246,0.18)" : "rgba(139,92,246,0.1)",
-                  borderColor: C.isDark ? "rgba(167,139,250,0.45)" : "rgba(139,92,246,0.35)",
-                  opacity: updatingReport ? 0.65 : 1,
-                },
-              ]}
-            >
-              {updatingReport ? (
-                <ActivityIndicator size="small" color="#8B5CF6" />
-              ) : (
-                <Feather name="refresh-cw" size={16} color="#8B5CF6" />
-              )}
-              <View style={{ flex: 1 }}>
-                <Text style={[s.updateBarTitle, { color: C.isDark ? "#E9D5FF" : "#5B21B6" }]}>
-                  {updatingReport ? labels.updatingReport : labels.updateReport}
-                </Text>
-                <Text style={[s.updateBarSub, { color: C.isDark ? "rgba(226,232,240,0.72)" : "#64748B" }]}>
-                  {labels.updateHint}
-                </Text>
-              </View>
-              <Feather name="chevron-right" size={18} color="#8B5CF6" />
-            </Pressable>
+            {lang !== "en" ? (
+              <Pressable
+                onPress={handleUpdateReport}
+                disabled={updatingReport}
+                style={[
+                  s.updateBar,
+                  {
+                    backgroundColor: C.isDark ? "rgba(139,92,246,0.18)" : "rgba(139,92,246,0.1)",
+                    borderColor: C.isDark ? "rgba(167,139,250,0.45)" : "rgba(139,92,246,0.35)",
+                    opacity: updatingReport ? 0.65 : 1,
+                  },
+                ]}
+              >
+                {updatingReport ? (
+                  <ActivityIndicator size="small" color="#8B5CF6" />
+                ) : (
+                  <Feather name="refresh-cw" size={16} color="#8B5CF6" />
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.updateBarTitle, { color: C.isDark ? "#E9D5FF" : "#5B21B6" }]}>
+                    {updatingReport ? labels.updatingReport : labels.updateReport}
+                  </Text>
+                  <Text style={[s.updateBarSub, { color: C.isDark ? "rgba(226,232,240,0.72)" : "#64748B" }]}>
+                    {labels.updateHint}
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={18} color="#8B5CF6" />
+              </Pressable>
+            ) : null}
             <ScrollView
               contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
               showsVerticalScrollIndicator={false}

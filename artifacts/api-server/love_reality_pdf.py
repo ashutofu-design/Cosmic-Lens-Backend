@@ -347,6 +347,9 @@ def render_love_reality_app_mirror_pdf(payload: dict, lang: str = "en") -> bytes
             continue
         title = str(sec.get("title") or "").strip()
         if not title:
+            sid = str(sec.get("id") or "").strip()
+            title = sid.replace("_", " ").strip().title() if sid else ""
+        if not title:
             continue
         body = str(sec.get("body") or "").strip()
         bullets = sec.get("bullets") if isinstance(sec.get("bullets"), list) else None

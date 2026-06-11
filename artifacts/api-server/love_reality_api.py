@@ -543,22 +543,20 @@ def register_love_reality_routes(flask_app) -> None:
                         ),
                     }), 412
                 try:
-                    from vedic.love_reality.app_pdf_parity import validate_app_sections_parity
+                    from vedic.love_reality.app_pdf_parity import validate_wysiwyg_screen_to_pdf
 
-                    parity_err = validate_app_sections_parity(
+                    parity_err = validate_wysiwyg_screen_to_pdf(
                         app_sections=app_sections,
-                        page1=client_page1 or {},
-                        pdf_context=client_ctx or {},
                         lang=lang,
                     )
                 except Exception as exc:
                     return jsonify({
-                        "error": "app_pdf_parity_failed",
-                        "detail": f"Parity check failed: {exc}",
+                        "error": "pdf_conversion_failed",
+                        "detail": f"Error converting to PDF — validation failed: {exc}",
                     }), 412
                 if parity_err:
                     return jsonify({
-                        "error": "app_pdf_parity_failed",
+                        "error": "pdf_conversion_failed",
                         "detail": parity_err,
                     }), 412
             force_regen = (
@@ -860,10 +858,22 @@ def register_love_reality_routes(flask_app) -> None:
                 _purge_hi_server_caches_once()
 
             force_full = _pro_report_force_llm(data)
+            prefer_server_cache = (
+                (request.headers.get("X-Prefer-Server-Cache") or "").strip() == "1"
+            )
             relocalize_only = _relocalize_sections_requested() and not force_full
             if force_full:
                 _json_cache.invalidate(json_cache_params)
                 _snap.invalidate(snap_params)
+            if prefer_server_cache and not force_full and lang in ("en", "hn"):
+                restored = _json_cache.load(json_cache_params)
+                if restored and restored.get("ok"):
+                    payload_out = _with_app_sections(restored, lang)
+                    resp = jsonify(payload_out)
+                    resp.headers["X-Report-Cache"] = "hit"
+                    resp.headers["X-Server-Restore"] = "1"
+                    resp.headers["X-Content-Script"] = str(payload_out.get("content_script") or "")
+                    return resp
             if relocalize_only:
                 cached_json = _json_cache.load(json_cache_params)
                 if cached_json and lang == "hi" and _hi_saved_report_stale(cached_json):

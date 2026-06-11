@@ -23,21 +23,49 @@ import type {
 } from "@/lib/loveRealityProReport";
 import type { BirthData } from "@/types";
 
-export function packLovePerson(bd: BirthData, name?: string) {
-  return {
-    name: name || bd.name,
-    day: bd.day,
-    month: bd.month,
-    year: bd.year,
-    hour: bd.hour,
-    minute: bd.minute,
-    ampm: bd.ampm,
-    lat: bd.lat,
-    lon: bd.lon,
-    tz: bd.tz,
-    place: bd.place,
-    gender: bd.gender,
-  };
+export { packLovePerson } from "@/lib/loveRealityPack";
+import { packLovePerson } from "@/lib/loveRealityPack";
+
+/** Client-side WYSIWYG gate — same rules as server validate_wysiwyg_screen_to_pdf. */
+export function validateAppSectionsForPdfExport(
+  sections: LoveReportSection[],
+): string | null {
+  if (!sections?.length) {
+    return "Error converting to PDF — no content on screen. Reload the report.";
+  }
+  let pageCount = 0;
+  let lineCount = 0;
+  const emptyIds: string[] = [];
+  for (const sec of sections) {
+    const title = String(sec.title || sec.id || "").trim();
+    if (!title) continue;
+    const bodyLines = String(sec.body || "")
+      .split("\n")
+      .map(l => l.trim())
+      .filter(Boolean);
+    const bulletLines = (sec.bullets || []).map(b => String(b).trim()).filter(Boolean);
+    const tableLines = (sec.tableRows || [])
+      .flat()
+      .map(c => String(c).trim())
+      .filter(Boolean);
+    const lines = [...bodyLines, ...bulletLines, ...tableLines];
+    if (!lines.length) {
+      if (sec.id) emptyIds.push(sec.id);
+      continue;
+    }
+    pageCount += 1;
+    lineCount += lines.length;
+  }
+  if (emptyIds.length) {
+    return `Error converting to PDF — empty section(s): ${emptyIds.join(", ")}.`;
+  }
+  if (pageCount === 0) {
+    return "Error converting to PDF — nothing on screen can be copied.";
+  }
+  if (lineCount < 5) {
+    return `Error converting to PDF — too little text (${lineCount} lines).`;
+  }
+  return null;
 }
 
 export type LoveRealityProPdfDownloadResult = {
@@ -149,6 +177,10 @@ export async function connectLoveRealityPageToPdf(opts: {
   if (!opts.appSections?.length) {
     throw new Error("No report sections on screen — reload the page and try again.");
   }
+  const convertErr = validateAppSectionsForPdfExport(opts.appSections);
+  if (convertErr) {
+    throw new Error(convertErr);
+  }
   return downloadLoveRealityProPdf({
     user: opts.user,
     p1: opts.p1,
@@ -158,6 +190,7 @@ export async function connectLoveRealityPageToPdf(opts: {
     lang: opts.lang,
     syncWithInAppReport: true,
     forceRegenerate: true,
+    forceLlm: false,
     reportSnapshot: opts.reportSnapshot,
     appSections: opts.appSections,
     scores: opts.scores,
@@ -340,7 +373,7 @@ export async function downloadLoveRealityProPdf(opts: {
           await saveLocalReport({
             kind: "other",
             title: reportTitle,
-            subtitle: `Connected from page · ${new Date().toLocaleString()}`,
+            subtitle: `Downloaded from page · ${new Date().toLocaleString()}`,
             sourceUri: dataUrl,
             restored: reportCacheHit,
           });
@@ -371,7 +404,7 @@ export async function downloadLoveRealityProPdf(opts: {
         kind: "other",
         title: reportTitle,
         subtitle: syncPage
-          ? `Connected from page · ${new Date().toLocaleString()}`
+          ? `Downloaded from page · ${new Date().toLocaleString()}`
           : `Love Compatibility PDF · ${new Date().toLocaleDateString()}`,
         sourceUri: dest,
         restored: reportCacheHit,

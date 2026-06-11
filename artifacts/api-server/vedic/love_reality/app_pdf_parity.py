@@ -247,6 +247,146 @@ def build_in_app_page_sections(
     return sections
 
 
+_REQUIRED_WYSIWYG_IDS_EN = frozenset({
+    "exec_summary",
+    "verdict",
+    "recommendations",
+    "root_cause",
+})
+
+
+def _mirror_section_title(sec: dict[str, Any]) -> str:
+    """Title line used by render_love_reality_app_mirror_pdf."""
+    title = str(sec.get("title") or "").strip()
+    if title:
+        return title
+    sid = str(sec.get("id") or "").strip()
+    if not sid:
+        return ""
+    return sid.replace("_", " ").strip().title()
+
+
+def plan_app_mirror_pdf_sections(app_sections: list[Any]) -> list[dict[str, Any]]:
+    """
+    Sections + content lines the PDF mirror renderer will copy from screen.
+    Same inclusion rules as render_love_reality_app_mirror_pdf (no LLM / engine).
+    """
+    planned: list[dict[str, Any]] = []
+    for sec in app_sections:
+        if not isinstance(sec, dict):
+            continue
+        title = _mirror_section_title(sec)
+        if not title:
+            continue
+        body = str(sec.get("body") or "").strip()
+        bullets = sec.get("bullets") if isinstance(sec.get("bullets"), list) else None
+        table_rows = sec.get("table_rows") or sec.get("tableRows")
+        if not isinstance(table_rows, list):
+            table_rows = None
+        if not body and not bullets and not table_rows:
+            continue
+        lines = _section_content_lines(sec)
+        if not lines:
+            continue
+        planned.append({
+            "id": str(sec.get("id") or "").strip().lower(),
+            "title": title,
+            "lines": lines,
+            "line_count": len(lines),
+        })
+    return planned
+
+
+def validate_wysiwyg_screen_to_pdf(
+    app_sections: list[Any],
+    lang: str = "en",
+) -> str | None:
+    """
+    WYSIWYG gate — screen sections must convert 1:1 to PDF pages (no LLM).
+    Returns human error starting with 'Error converting to PDF' or None if OK.
+    """
+    if not isinstance(app_sections, list) or not app_sections:
+        return "Error converting to PDF — no sections on screen. Reload the report."
+
+    lane = (lang or "en").strip().lower()
+    no_title: list[str] = []
+    empty_on_screen: list[str] = []
+    screen_by_id: dict[str, list[str]] = {}
+
+    for sec in app_sections:
+        if not isinstance(sec, dict):
+            continue
+        sid = str(sec.get("id") or "").strip().lower() or "section"
+        title = _mirror_section_title(sec)
+        lines = _section_content_lines(sec)
+        if lines:
+            screen_by_id[sid] = lines
+        if not str(sec.get("title") or "").strip() and not title:
+            no_title.append(sid)
+        elif title and not lines:
+            empty_on_screen.append(sid)
+
+    if no_title:
+        return (
+            "Error converting to PDF — section(s) missing title: "
+            + ", ".join(no_title)
+            + "."
+        )
+    if empty_on_screen:
+        return (
+            "Error converting to PDF — section(s) empty on screen: "
+            + ", ".join(empty_on_screen)
+            + ". Reload the report."
+        )
+
+    planned = plan_app_mirror_pdf_sections(app_sections)
+    if not planned:
+        return "Error converting to PDF — nothing on screen can be copied to PDF."
+
+    pdf_by_id = {str(p.get("id") or ""): p.get("lines") or [] for p in planned}
+
+    for sid, screen_lines in screen_by_id.items():
+        pdf_lines = pdf_by_id.get(sid)
+        if not pdf_lines:
+            return (
+                f'Error converting to PDF — section "{sid}" has text on screen '
+                "but would be skipped in PDF (missing title or empty body)."
+            )
+        if len(screen_lines) != len(pdf_lines):
+            return (
+                f'Error converting to PDF — section "{sid}": line count mismatch '
+                f"(screen {len(screen_lines)} vs PDF {len(pdf_lines)})."
+            )
+        for idx, (screen_line, pdf_line) in enumerate(
+            zip(screen_lines, pdf_lines), start=1
+        ):
+            if screen_line != pdf_line:
+                preview = screen_line[:100] + ("…" if len(screen_line) > 100 else "")
+                return (
+                    f'Error converting to PDF — section "{sid}" line {idx} '
+                    f'would not copy correctly.\nOn screen: {preview}'
+                )
+
+    total_lines = sum(int(p.get("line_count") or 0) for p in planned)
+    if total_lines < 5:
+        return (
+            f"Error converting to PDF — too little text ({total_lines} lines). "
+            "Reload the full report."
+        )
+
+    if lane == "en":
+        got_ids = {str(p.get("id") or "") for p in planned if p.get("id")}
+        missing = sorted(_REQUIRED_WYSIWYG_IDS_EN - got_ids)
+        if missing:
+            return (
+                "Error converting to PDF — missing section(s): "
+                + ", ".join(missing)
+                + ". Reload the full report."
+            )
+
+    return None
+
+
 def _index_by_id(sections: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     for sec in sections:

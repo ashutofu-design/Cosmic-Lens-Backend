@@ -8,12 +8,12 @@ import { Platform } from "react-native";
 
 import { API_BASE } from "@/lib/apiConfig";
 import { pdfAuthHeaders } from "@/lib/coupleReportCheckoutFlow";
-import { deleteLocalReportsByTitlePrefix, saveLocalReport } from "@/lib/localReports";
+import { saveLocalReport } from "@/lib/localReports";
 import {
   LOVE_REALITY_PDF_LAYOUT_STORAGE_KEY,
   LOVE_REALITY_PDF_LAYOUT_VER,
 } from "@/lib/loveRealityPdfLayout";
-import { coerceProPdfLang } from "@/lib/proPdfLang";
+import { coerceProPdfLang, proPdfLangDisplayName } from "@/lib/proPdfLang";
 import type {
   LovePage1Dashboard,
   LovePdfContext,
@@ -327,11 +327,9 @@ export async function downloadLoveRealityProPdf(opts: {
     }
 
     const buf = await resp.arrayBuffer();
-    const reportTitle = `${opts.p1Name} & ${opts.p2Name} — Love Reality PRO`;
-    if (syncPage) {
-      await deleteLocalReportsByTitlePrefix(reportTitle);
-    }
-
+    const langLabel = proPdfLangDisplayName(lang);
+    const reportTitle = `${opts.p1Name} & ${opts.p2Name} — Love Reality PRO (${langLabel})`;
+    const reportSubtitle = `${langLabel} · ${new Date().toLocaleString()}`;
     if (Platform.OS === "web") {
       let dataUrl = "";
       try {
@@ -373,7 +371,7 @@ export async function downloadLoveRealityProPdf(opts: {
           await saveLocalReport({
             kind: "other",
             title: reportTitle,
-            subtitle: `Downloaded from page · ${new Date().toLocaleString()}`,
+            subtitle: reportSubtitle,
             sourceUri: dataUrl,
             restored: reportCacheHit,
           });
@@ -403,9 +401,7 @@ export async function downloadLoveRealityProPdf(opts: {
       const saved = await saveLocalReport({
         kind: "other",
         title: reportTitle,
-        subtitle: syncPage
-          ? `Downloaded from page · ${new Date().toLocaleString()}`
-          : `Love Compatibility PDF · ${new Date().toLocaleDateString()}`,
+        subtitle: reportSubtitle,
         sourceUri: dest,
         restored: reportCacheHit,
       });

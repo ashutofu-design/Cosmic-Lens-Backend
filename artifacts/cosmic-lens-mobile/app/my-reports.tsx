@@ -14,7 +14,6 @@ import React, { useCallback, useState } from "react";
 import { useT } from "@/hooks/useT";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   I18nManager,
   Pressable,
@@ -27,7 +26,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useC } from "@/context/ThemeContext";
 import {
-  deleteLocalReport,
   listLocalReports,
   openLocalReport,
   shareLocalReport,
@@ -59,24 +57,6 @@ export default function MyReportsScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await shareLocalReport(r);
   };
-  const onDeleteLocal = (r: LocalReport) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert(
-      "Delete report?",
-      `${r.title}\n\nYeh PDF aapke device se hata di jayegi.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete", style: "destructive",
-          onPress: async () => {
-            await deleteLocalReport(r.id);
-            await loadLocal();
-          },
-        },
-      ],
-    );
-  };
-
   const KIND_LABEL: Record<LocalReport["kind"], string> = {
     milan:           "Kundli Milan",
     numerology:      "Numerology",
@@ -112,9 +92,20 @@ export default function MyReportsScreen() {
             <Feather name={KIND_ICON[r.kind]} size={26} color={C.accent || "#f6c453"} />
           </View>
           <View style={s.cardMeta}>
-            <Text style={[s.kindLabel, { color: C.textMuted }]} numberOfLines={1}>
-              {KIND_LABEL[r.kind]}
-            </Text>
+            <View style={s.cardMetaTop}>
+              <Text style={[s.kindLabel, { color: C.textMuted, flex: 1 }]} numberOfLines={1}>
+                {KIND_LABEL[r.kind]}
+              </Text>
+              {r.restored ? (
+                <View style={[s.restoredBadge, {
+                  backgroundColor: C.isDark ? "rgba(16,185,129,0.14)" : "rgba(16,185,129,0.10)",
+                  borderColor: C.isDark ? "rgba(16,185,129,0.35)" : "rgba(16,185,129,0.30)",
+                }]}>
+                  <Feather name="download-cloud" size={10} color="#10b981" />
+                  <Text style={s.restoredBadgeTxt}>Restored Report</Text>
+                </View>
+              ) : null}
+            </View>
             <Text style={[s.propName, { color: C.text }]} numberOfLines={2}>
               {r.title}
             </Text>
@@ -143,15 +134,6 @@ export default function MyReportsScreen() {
           >
             <Feather name="share-2" size={16} color="#ffffff" />
             <Text style={[s.actionText, { color: "#ffffff" }]}>Share</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => onDeleteLocal(r)}
-            style={({ pressed }) => [
-              s.actionBtn,
-              { backgroundColor: "rgba(239,68,68,0.10)", opacity: pressed ? 0.85 : 1, borderColor: "rgba(239,68,68,0.4)", flex: 0, paddingHorizontal: 14 },
-            ]}
-          >
-            <Feather name="trash-2" size={16} color="#ef4444" />
           </Pressable>
         </View>
       </View>
@@ -254,6 +236,12 @@ const s = StyleSheet.create({
   gradeText: { fontSize: 11, fontWeight: "700", letterSpacing: 1, marginTop: 2 },
 
   cardMeta:  { flex: 1, minWidth: 0 },
+  cardMetaTop: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 0 },
+  restoredBadge: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 1,
+  },
+  restoredBadgeTxt: { fontSize: 10, fontWeight: "700", color: "#10b981", letterSpacing: 0.2 },
   kindLabel: { fontSize: 11, fontWeight: "600", letterSpacing: 0.4, textTransform: "uppercase" },
   propName:  { fontSize: 16, fontWeight: "700", marginTop: 2 },
   subMeta:   { fontSize: 12, marginTop: 4 },

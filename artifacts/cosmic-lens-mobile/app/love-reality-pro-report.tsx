@@ -42,7 +42,6 @@ import {
   enHnReportCacheReady,
   reportContentMatchesLang,
   reportHasDisplayableContent,
-  reportHindiFullyReady,
   hindiReportPageLoadReady,
   reportNeedsHindiRetry,
   reportSummaryMatchesLang,
@@ -579,7 +578,6 @@ export default function LoveRealityProReportScreen() {
             return;
           }
         }
-        const hindiOk = reportHindiFullyReady(data, lang);
         setLoadStep(7);
         try {
           await saveLoveReportCache(cacheOpts, data);
@@ -587,22 +585,13 @@ export default function LoveRealityProReportScreen() {
           /* open report even if device save fails */
         }
         finishLoad(data, serverCacheHit || enHnReportCacheReady(data, lang));
-        if (forceUpdate) {
-          const script = (data.content_script || "").trim();
-          const hint = hindiOk
-            ? labels.updateHint
-            : script === "hi_partial"
-              ? "Report update hua — kuch lines abhi English hain. 30 sec baad dubara Update dabayein."
-              : "Report update hua. Agar English dikhe to dubara Update dabayein.";
-          Alert.alert(labels.updateDone, hint, [{ text: labels.ok }]);
-        }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Could not load report";
       const timedOut = /abort/i.test(msg);
       setError(
         timedOut
           ? (lang === "hi"
-            ? "Hindi report timeout — server 5–10 min leta hai. Retry dabayein ya «रिपोर्ट अपडेट करें»."
+            ? "Hindi report timeout — server 5–10 min leta hai. «पुनः» dabayein."
             : lang === "hn"
               ? "Hinglish report timeout — 5–8 min wait karo, phir Retry dabao."
               : "Report timed out — tap Retry.")
@@ -641,11 +630,6 @@ export default function LoveRealityProReportScreen() {
     }, LLM_CREEP_MS);
     return () => clearInterval(tick);
   }, [fetching, loadStep]);
-
-  const handleUpdateReport = useCallback(() => {
-    if (updatingReport) return;
-    void load({ forceUpdate: true });
-  }, [updatingReport, load]);
 
   const sections = useMemo(
     () => (report ? buildReportSectionsFromPayload(report, lang) : []),
@@ -768,18 +752,12 @@ export default function LoveRealityProReportScreen() {
               onPress={() => {
                 loadedRef.current = false;
                 fetchDoneRef.current = false;
-                const section8Blocked =
-                  lang !== "en" && /Section 8|section8_not_ready/i.test(error);
-                load({ forceUpdate: section8Blocked });
+                load();
                 loadedRef.current = true;
               }}
               style={s.retryBtn}
             >
-              <Text style={s.retryTxt}>
-                {lang !== "en" && /Section 8|section8_not_ready/i.test(error)
-                  ? labels.updateReport
-                  : labels.retry}
-              </Text>
+              <Text style={s.retryTxt}>{labels.retry}</Text>
             </Pressable>
           </View>
         ) : isLoadingUi ? (
@@ -795,51 +773,20 @@ export default function LoveRealityProReportScreen() {
             lang={lang}
           />
         ) : report && showReport ? (
-          <>
-            {lang !== "en" ? (
-              <Pressable
-                onPress={handleUpdateReport}
-                disabled={updatingReport}
-                style={[
-                  s.updateBar,
-                  {
-                    backgroundColor: C.isDark ? "rgba(139,92,246,0.18)" : "rgba(139,92,246,0.1)",
-                    borderColor: C.isDark ? "rgba(167,139,250,0.45)" : "rgba(139,92,246,0.35)",
-                    opacity: updatingReport ? 0.65 : 1,
-                  },
-                ]}
-              >
-                {updatingReport ? (
-                  <ActivityIndicator size="small" color="#8B5CF6" />
-                ) : (
-                  <Feather name="refresh-cw" size={16} color="#8B5CF6" />
-                )}
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.updateBarTitle, { color: C.isDark ? "#E9D5FF" : "#5B21B6" }]}>
-                    {updatingReport ? labels.updatingReport : labels.updateReport}
-                  </Text>
-                  <Text style={[s.updateBarSub, { color: C.isDark ? "rgba(226,232,240,0.72)" : "#64748B" }]}>
-                    {labels.updateHint}
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={18} color="#8B5CF6" />
-              </Pressable>
-            ) : null}
-            <ScrollView
-              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
-              showsVerticalScrollIndicator={false}
-            >
-              <LoveRealityProReportView
-                key={`lr-report-${reportEpoch}`}
-                isDark={C.isDark}
-                lang={lang}
-                p1Name={report.p1_name}
-                p2Name={report.p2_name}
-                scores={report.scores}
-                sections={sections}
-              />
-            </ScrollView>
-          </>
+          <ScrollView
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
+            showsVerticalScrollIndicator={false}
+          >
+            <LoveRealityProReportView
+              key={`lr-report-${reportEpoch}`}
+              isDark={C.isDark}
+              lang={lang}
+              p1Name={report.p1_name}
+              p2Name={report.p2_name}
+              scores={report.scores}
+              sections={sections}
+            />
+          </ScrollView>
         ) : null}
       </View>
     </CosmicBg>
@@ -901,19 +848,6 @@ const s = StyleSheet.create({
     gap: 8,
   },
   headerTitle: { flex: 1, textAlign: "center", fontFamily: "Nunito_700Bold", fontSize: 17 },
-  updateBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginHorizontal: 16,
-    marginBottom: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  updateBarTitle: { fontFamily: "Nunito_700Bold", fontSize: 14 },
-  updateBarSub: { fontFamily: "Nunito_500Medium", fontSize: 11, marginTop: 2, lineHeight: 15 },
   savePdfBtn: {
     flexDirection: "row",
     alignItems: "center",

@@ -86,10 +86,18 @@ function loadStagesForLang(lang: ProPdfLangCode): readonly string[] {
   ];
 }
 
-/** Timer creeps to SLOW_CAP while LLM runs; hits OPEN_AT_PCT only when report is ready. */
+/** Creep to MAX_WAIT while LLM runs; 99 = opening; 100 = report visible. */
 const OPEN_AT_PCT = 100;
-const WAIT_CAP_PCT = 88;
-const SLOW_CAP_PCT = 96;
+const READY_PCT = 99;
+const MAX_WAIT_PCT = 98;
+const CREEP_TICK_MS = 400;
+
+function estimateLlmBudgetMs(lang: ProPdfLangCode, fullLlm: boolean): number {
+  if (!fullLlm) return 10_000;
+  if (lang === "hi") return 360_000;
+  if (lang === "hn") return 300_000;
+  return 240_000;
+}
 
 function ReportLoadingView({
   pct,
@@ -112,7 +120,7 @@ function ReportLoadingView({
   updateHint: string;
   lang: ProPdfLangCode;
 }) {
-  const opening = pct >= OPEN_AT_PCT;
+  const opening = pct >= READY_PCT;
   const spinAnim = useRef(new Animated.Value(0)).current;
   const barAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -204,14 +212,14 @@ function ReportLoadingView({
           </Animated.View>
 
           <Text style={[ld.title, { color: text }]}>
-            {pct >= OPEN_AT_PCT
+            {pct >= READY_PCT
               ? "Opening report…"
               : forceUpdate
                 ? "Updating report…"
                 : "Loading…"}
           </Text>
           <Text style={[ld.stage, { color: dim }]}>
-            {pct >= OPEN_AT_PCT
+            {pct >= READY_PCT
               ? "Love Reality Pro report"
               : forceUpdate
                 ? updateHint
@@ -219,10 +227,10 @@ function ReportLoadingView({
                 ? "Updating report…"
                 : llmRefresh
                   ? (lang === "hi"
-                    ? "Hindi report likh rahe hain — 1–2 min"
+                    ? "Hindi report likh rahe hain — 2–5 min"
                     : lang === "hn"
-                      ? "Hinglish report likh rahe hain — 1–2 min"
-                      : "Writing your report — 1–2 min")
+                      ? "Hinglish report likh rahe hain — 2–5 min"
+                      : "Writing your report — 2–4 min")
                   : cacheChange === "pdf_layout"
                   ? "Preparing report…"
                   : fromCache
@@ -306,20 +314,32 @@ export default function LoveRealityProReportScreen() {
   const loadedRef = useRef(false);
   const fetchDoneRef = useRef(false);
   const fastCacheRef = useRef(false);
+  const progressFloorRef = useRef(0);
+  const fetchStartedAtRef = useRef(Date.now());
+  const llmBudgetMsRef = useRef(estimateLlmBudgetMs("en", true));
   const showReportTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const bumpProgressFloor = useCallback((floor: number) => {
+    progressFloorRef.current = Math.max(progressFloorRef.current, floor);
+    setLoadPct(p => Math.min(MAX_WAIT_PCT, Math.max(p, Math.min(floor, MAX_WAIT_PCT))));
+  }, []);
 
   const finishLoad = useCallback((data: LoveProReportResponse, cached: boolean) => {
     fetchDoneRef.current = true;
     fastCacheRef.current = cached;
+    progressFloorRef.current = MAX_WAIT_PCT;
     setFromCache(cached);
     setReport(data);
-    setFetching(false);
-    setLoadPct(OPEN_AT_PCT);
+    setLoadPct(READY_PCT);
     if (showReportTimerRef.current) clearTimeout(showReportTimerRef.current);
     showReportTimerRef.current = setTimeout(() => {
-      setShowReport(true);
-      showReportTimerRef.current = null;
-    }, cached ? 120 : 220);
+      setLoadPct(OPEN_AT_PCT);
+      showReportTimerRef.current = setTimeout(() => {
+        setShowReport(true);
+        setFetching(false);
+        showReportTimerRef.current = null;
+      }, cached ? 200 : 350);
+    }, cached ? 320 : 520);
   }, []);
 
   const load = useCallback(async (opts?: { forceUpdate?: boolean }) => {
@@ -346,6 +366,9 @@ export default function LoveRealityProReportScreen() {
     setError(null);
     fetchDoneRef.current = false;
     fastCacheRef.current = false;
+    progressFloorRef.current = 0;
+    fetchStartedAtRef.current = Date.now();
+    llmBudgetMsRef.current = estimateLlmBudgetMs(lang, forceUpdate || lang === "hi");
     setFromCache(false);
     setCacheChange("missing");
     setLlmRefresh(forceUpdate);
@@ -379,7 +402,7 @@ export default function LoveRealityProReportScreen() {
           p2Name: cacheOpts.p2Name,
         });
       }
-      setLoadPct(p => Math.max(p, 12));
+      bumpProgressFloor(8);
       if (forceUpdate) {
         await clearLoveReportCacheAllLangs({
           userId: cacheOpts.userId,
@@ -395,7 +418,7 @@ export default function LoveRealityProReportScreen() {
       if (!forceUpdate) {
         const resolved = await resolveLoveReportCache(cacheOpts);
         deviceCacheEmpty = !resolved.payload;
-        setLoadPct(p => Math.max(p, 24));
+        bumpProgressFloor(18);
         setCacheChange(resolved.changeKind);
         mustLlm = deviceCacheNeedsServerRefresh(resolved.payload, resolved.meta, lang);
         setLlmRefresh(mustLlm);
@@ -433,7 +456,7 @@ export default function LoveRealityProReportScreen() {
         if (!resolved.payload && (lang === "en" || lang === "hn")) {
           fastCacheRef.current = true;
           setFromCache(true);
-          setLoadPct(p => Math.max(p, 36));
+          bumpProgressFloor(28);
           try {
             const restored = await fetchLoveRealityProReport({
               user,
@@ -458,7 +481,7 @@ export default function LoveRealityProReportScreen() {
         }
       }
 
-      setLoadPct(p => Math.max(p, 36));
+      bumpProgressFloor(32);
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 360000);
       try {
@@ -478,10 +501,12 @@ export default function LoveRealityProReportScreen() {
         });
 
         const useFullFetch = forceUpdate || mustLlm || lang === "hi" || deviceCacheEmpty;
+        llmBudgetMsRef.current = estimateLlmBudgetMs(lang, useFullFetch);
+        fastCacheRef.current = !useFullFetch && !mustLlm;
         let { data, serverCacheHit } = await fetchReport(
           useFullFetch ? "full" : "cache",
         );
-        setLoadPct(p => Math.max(p, 68));
+        bumpProgressFloor(55);
 
         if (lang !== "en" && data.polish_source === "polish_snapshot") {
           const fresh = await fetchReport("full");
@@ -492,12 +517,12 @@ export default function LoveRealityProReportScreen() {
         if (!forceUpdate) {
           for (let attempt = 0; attempt < 2 && lang !== "en"; attempt += 1) {
             if (!reportNeedsHindiRetry(data, lang)) break;
-            setLoadPct(p => Math.max(p, 74 + attempt * 4));
+            bumpProgressFloor(62 + attempt * 6);
             const retryMode = lang === "hi" && !section4HiLoadReady(data, lang) ? "full" : "relocalize";
             const retry = await fetchReport(retryMode);
             data = retry.data;
             serverCacheHit = retry.serverCacheHit;
-            setLoadPct(p => Math.max(p, 78 + attempt * 4));
+            bumpProgressFloor(68 + attempt * 6);
           }
         }
 
@@ -538,7 +563,7 @@ export default function LoveRealityProReportScreen() {
           }
         }
         const hindiOk = reportHindiFullyReady(data, lang);
-        setLoadPct(p => Math.max(p, 92));
+        bumpProgressFloor(88);
         try {
           await saveLoveReportCache(cacheOpts, data);
         } catch {
@@ -566,7 +591,7 @@ export default function LoveRealityProReportScreen() {
       setUpdatingReport(false);
       setForceUpdateRun(false);
     }
-  }, [user, primaryProfile, partnerProfile, lang, finishLoad, labels]);
+  }, [user, primaryProfile, partnerProfile, lang, finishLoad, labels, bumpProgressFloor]);
 
   useEffect(() => () => {
     if (showReportTimerRef.current) clearTimeout(showReportTimerRef.current);
@@ -585,21 +610,32 @@ export default function LoveRealityProReportScreen() {
 
   useEffect(() => {
     if (!fetching || fetchDoneRef.current) return;
-    const fast = fastCacheRef.current || (cacheChange === "app_layout" && !forceUpdateRun);
-    if (fast) {
-      const tick = setInterval(() => {
-        setLoadPct(p => (p >= OPEN_AT_PCT ? OPEN_AT_PCT : Math.min(OPEN_AT_PCT, p + 14)));
-      }, 60);
-      return () => clearInterval(tick);
-    }
     const tick = setInterval(() => {
-      setLoadPct(p => {
-        if (p >= SLOW_CAP_PCT) return SLOW_CAP_PCT;
-        if (p >= WAIT_CAP_PCT) return p + 1;
-        if (p >= 55) return p + 1;
-        return Math.min(55, p + 2);
+      if (fetchDoneRef.current) return;
+      setLoadPct(prev => {
+        if (prev >= MAX_WAIT_PCT) return MAX_WAIT_PCT;
+        const elapsed = Date.now() - fetchStartedAtRef.current;
+        const budget = llmBudgetMsRef.current;
+        const isFast = fastCacheRef.current || (cacheChange === "app_layout" && !forceUpdateRun);
+        const floor = progressFloorRef.current;
+        let timePct: number;
+        if (isFast) {
+          timePct = Math.min(MAX_WAIT_PCT, (elapsed / 5_500) * MAX_WAIT_PCT);
+        } else {
+          const base = MAX_WAIT_PCT * (1 - Math.exp(-elapsed / (budget * 0.48)));
+          const overtime = Math.max(0, elapsed - budget);
+          const extra = Math.min(10, (overtime / budget) * 10);
+          timePct = Math.min(MAX_WAIT_PCT, base + extra);
+        }
+        const target = Math.max(floor, timePct);
+        const next = Math.max(prev, Math.floor(target));
+        if (next > prev) return Math.min(MAX_WAIT_PCT, next);
+        if (prev < MAX_WAIT_PCT && elapsed > 2_000) {
+          return Math.min(MAX_WAIT_PCT, prev + 1);
+        }
+        return prev;
       });
-    }, 1800);
+    }, CREEP_TICK_MS);
     return () => clearInterval(tick);
   }, [fetching, cacheChange, forceUpdateRun]);
 

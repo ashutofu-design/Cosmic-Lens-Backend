@@ -886,6 +886,18 @@ def register_love_reality_routes(flask_app) -> None:
                     _snap.invalidate(snap_params)
                     cached_json = None
                 if cached_json:
+                    if lang == "en":
+                        from vedic.love_reality.love_section_polish import breakup_chapter_lane_ready
+
+                        pro_cached = (
+                            cached_json.get("pro_premium")
+                            if isinstance(cached_json.get("pro_premium"), dict)
+                            else {}
+                        )
+                        if not breakup_chapter_lane_ready(pro_cached, "en"):
+                            _json_cache.invalidate(json_cache_params)
+                            cached_json = None
+                if cached_json:
                     payload_out = _enrich_hi_section8_meta(_with_app_sections(cached_json, lang))
                     blocked = _hi_section8_block_response(payload_out)
                     if blocked:
@@ -1046,7 +1058,8 @@ def register_love_reality_routes(flask_app) -> None:
                         "section8_llm": s8_meta or None,
                     }), 412
                 pro = sanitize_love_reality_pro_premium(pro, bundle, lang=lang)
-                strip_non_hindi_breakup_chapter(pro)
+                if lang == "hi":
+                    strip_non_hindi_breakup_chapter(pro)
                 if lang == "hi":
                     pro = ensure_moon_sync_section7_llm(
                         bundle,
@@ -1137,7 +1150,8 @@ def register_love_reality_routes(flask_app) -> None:
                     )
                     if pro_retry:
                         pro = sanitize_love_reality_pro_premium(pro_retry, bundle, lang=lang)
-                        strip_non_hindi_breakup_chapter(pro)
+                        if lang == "hi":
+                            strip_non_hindi_breakup_chapter(pro)
                         pro = ensure_breakup_section8_llm(
                             bundle,
                             pro,

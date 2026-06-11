@@ -34,6 +34,10 @@ from vedic.compat.openai_pdf_telemetry import (
     publish_and_log_pdf_generation,
     stub_meta,
 )
+from vedic.love_reality.love_section_polish import (
+    _deep_analysis_row_hi_ok,
+    deep_analysis_hi_ready,
+)
 
 log = logging.getLogger(__name__)
 
@@ -702,6 +706,14 @@ def _verdict_page_interpretation_first(lang: str) -> str:
 Mat likho jaise aapka kaam hai:
 - "practical advice dena" / "actionable guidance" / "what to do next"
 - "communication tips" / "relationship recommendations" / "check-in" suggest karna"""
+    if lang == "hi":
+        return """INTERPRETATION PEHLE, ADVICE BAAD ME (critical — hn/en jitni depth):
+- Primary goal interpretation hai, advice nahi.
+- ~80% section me chart pattern real life me kya dikhta hai — woh explain karo.
+- Kam se kam ~20% par practical implication — observation ke andar naturally weave karo.
+- Therapist/coach tone nahi — chart review karte astrologer jaisa.
+- Pehle observed dynamics describe karo. Implication chhota ho aur chart se naturally aaye.
+- Motivational ya future-hope language avoid karo."""
     return """INTERPRETATION FIRST, NOT ADVICE (critical):
 - Primary goal is interpretation, not advice.
 - Spend ~80% of the section explaining what the chart pattern means in real life.
@@ -727,6 +739,14 @@ ANTI-AI VOCABULARY (corporate/psychology buzzwords — strictly forbidden):
 {ai_words}
 - Sentences mat kholo: "However", "In contrast", "Despite", "Furthermore", "Yet".
 - Chai pe baith kar samjhane wala tone — short, direct Hinglish sentences."""
+    if lang == "hi":
+        return f"""BANNED PHRASES (coach/AI smell — kabhi mat likho):
+{phrases}
+
+ANTI-AI VOCABULARY (corporate/psychology buzzwords — strictly forbidden):
+{ai_words}
+- Sentences mat kholo: "However", "In contrast", "Despite", "Furthermore", "Yet".
+- Devanagari Hindi — short, direct sentences; hn/en jitni depth, chhota summary mat."""
     return f"""BANNED PHRASES (coach/AI smell — never write):
 {phrases}
 
@@ -801,6 +821,27 @@ Same insight repeat mat karo. Paragraphs concise aur meaningful.
 
 Reader feel kare: 'Ek real astrologer ne is relationship ko samjha aur chart se explain kiya.'
 Reader kabhi na feel kare: 'Yeh software engine ne generate kiya.'"""
+    if lang == "hi":
+        return f"""Aap ek senior relationship astrologer hain jo premium paid consultation report likh rahe ho.
+Output 100% Devanagari Hindi — Roman script sirf names/scores ke liye. Hinglish (hn) aur English reports jitni depth mandatory.
+
+Aise likho jaise aapne personally dono charts padhe hon aur real clients ko findings explain kar rahe ho.
+
+Goal: reader ko samjhana ki relationship daily life me actually kaise behave karti hai — har chart point ke baad real life example.
+
+Rules:
+- Natural, human, thoughtful — experienced astrologer, AI assistant nahi.
+- Har astrological observation ke baad likho yeh real life me kaise dikhega.
+- Focus: emotions, communication, trust, conflict patterns, timing.
+
+Avoid: software/engine language, scorecard dumps, generic motivational writing, therapy/coach tone.
+
+{interp}
+
+{banned}
+
+UNIFIED FLOW: `verdict` + `practical[]` milkar EK consultation note — hn/en jitni lambai aur detail.
+Reader feel kare: ek real astrologer ne chart se explain kiya."""
     return f"""You are a senior relationship astrologer writing a premium paid consultation report.
 
 Write as if you personally studied these two charts and are explaining your findings to real clients.
@@ -875,6 +916,12 @@ def _verdict_page_primary_reader(lang: str) -> str:
 - `p2_name` partner hai — "Unka/Unki", "wo", ya naam se; unhe equal paragraph time mat do.
 - ~70% note p1 ke lens se: unka feel, unka gussa/urge, unke chart se un par kya padta hai, jab partner doori banata hai to AAPKO kya lagta hai.
 - Partner ko p1 ke experience ke around explain karo — neutral case study nahi."""
+    if lang == "hi":
+        return """PRIMARY READER = p1 (pehli kundli — yeh report JISKE liye hai):
+- User message me `p1_name` wahi insaan hai — unse "Aap" bol kar baat karo (Devanagari).
+- `p2_name` partner hai — "Unka/Unki", "wo", ya naam se; unhe equal paragraph time mat do.
+- ~70% note p1 ke lens se: unka feel, urge, chart un par kya padta hai, partner doori par AAPKO kya lagta hai.
+- Partner ko p1 ke experience ke around explain karo — neutral case study nahi."""
     return """PRIMARY READER = p1 (first kundli — this report is FOR them):
 - In the user message, `p1_name` is the person reading the report — address them as "You" (or name + you).
 - `p2_name` is the partner — "they/their" or by name; do not give equal paragraph airtime.
@@ -890,6 +937,12 @@ def _verdict_page_direct_voice(lang: str) -> str:
 - Pehle p1 (Aap) se baat karo — partner ko unke around samjhao, dono ko barabar judge mat karo.
 - Astrologer jaisa — p1 ko samne bitha kar samjha rahe ho ki unke chart me kya chal raha hai.
 - Aakhir me safe counseling wrap mat do — ek sharp observation par khatam karo (p1 ke liye meaningful)."""
+    if lang == "hi":
+        return """DIRECT CONVERSATION (AI structure loop todna — critical):
+- Har paragraph me "X karta hai jabki Y karti hai" formula MAT repeat karo — poori note me max ek baar.
+- Pehle p1 (Aap) se baat karo — partner ko unke around samjhao, dono ko barabar judge mat karo.
+- Astrologer jaisa — p1 ko samne bitha kar chart explain karo; hn/en jitni detail.
+- Aakhir me safe counseling wrap mat do — ek sharp observation par khatam karo."""
     return """DIRECT CONVERSATION (break the AI structure loop — critical):
 - Do NOT repeat "one does X while the other does Y" in every paragraph — at most once in the whole note.
 - Talk TO p1 first (You) — frame the partner around what p1 feels and sees, not 50/50 narration.
@@ -930,6 +983,25 @@ GOLDEN JSON (p1 = pehli kundli in user facts — names/signs wahi se lo):
 }
 
 Notice: No Key Takeaway. No What To Do Next. No scripted dialogue. No therapist tone."""
+    if lang == "hi":
+        return f"""STYLE GUIDE — sirf TONE copy karo. [p1_name]/[p2_name] ko user message ke ACTUAL naam se replace karo. Output 100% Devanagari Hindi (hn/en jitni depth).
+
+MAT AISE LIKHNA (AI smell + contrast loop — forbidden):
+"When something feels off, one partner wants to fix it while the other retreats..."
+
+AISE LIKHO (p1 = pehli kundli, unse seedha — zyada waqt un par):
+"[p1_name], jab rishte mein kuch alag lagta hai, aap turant theek karna chahte ho. Moon aapko jaldi react karwata hai. Jab [p2_name] chup hote hain, andar se lagta hai ignore ho rahe ho; unhe settle hone ka waqt chahiye."
+
+GOLDEN JSON (Devanagari output — same structure as Hinglish):
+{{
+  "verdict": "[p1_name], jab rishte mein kuch alag lagta hai, aap turant theek karna chahte ho... (2-3 paragraphs, chart + daily life explain)",
+  "practical": [
+    "[p1_name], jab aap turant closure maangte ho aur [p2_name] andar process kar rahe hain...",
+    "Is bond me warmth hai. Gap tab khulta hai jab silence me sabse bura assume kar lete ho..."
+  ]
+}}
+
+Notice: No Key Takeaway. No coaching block. Same depth as Hinglish report."""
     return """STYLE GUIDE — copy TONE only. Replace [p1_name]/[p2_name] with ACTUAL names from user message. Never write Aarav or Riya.
 
 DO NOT WRITE LIKE THIS (AI smell + contrast loop — strictly forbidden):
@@ -1034,12 +1106,20 @@ def _cro_pdf_field_map(lang: str) -> str:
     self_change_hdr = (
         "Aapko Apne Me Kya Badlav Chahiye"
         if lang == "hn"
-        else "What You Need to Change in Yourself"
+        else (
+            "Aapko Apne Me Kya Badlav Chahiye"
+            if lang == "hi"
+            else "What You Need to Change in Yourself"
+        )
     )
     partner_change_hdr = (
         "Partner Ko Kya Change Karna Hoga"
         if lang == "hn"
-        else "What Your Partner Needs to Change"
+        else (
+            "Partner Ko Kya Change Karna Hoga"
+            if lang == "hi"
+            else "What Your Partner Needs to Change"
+        )
     )
     return f"""PDF PAGE-AWARE FIELD MAP (renderer ke blank pages ko fill karna mandatory):
 
@@ -1102,7 +1182,11 @@ def _cro_mandatory_locks() -> str:
 
 def _build_love_regen_system_prompt(lang: str) -> str:
     lang = polish_content_lang(lang)
-    script = {"en": "plain conversational English", "hn": "natural Roman Hinglish (WhatsApp-style)"}[lang]
+    script = {
+        "en": "plain conversational English",
+        "hn": "natural Roman Hinglish (WhatsApp-style)",
+        "hi": "natural Devanagari Hindi (same depth as Hinglish)",
+    }[lang]
     return f"""You are a Conversion Rate Optimization (CRO) relationship counselor re-expanding Love Reality Pro PDF chapters that failed depth QA.
 
 Return STRICT JSON with ONE top-level key `chapters` (array).
@@ -1123,7 +1207,11 @@ REGEN RULE: Failed chapters ko poori tarah dubara likho — previous shallow out
 
 def _build_system_prompt(lang: str) -> str:
     lang = polish_content_lang(lang)
-    script = {"en": "plain conversational English", "hn": "natural Roman Hinglish (WhatsApp-style)"}[lang]
+    script = {
+        "en": "plain conversational English",
+        "hn": "natural Roman Hinglish (WhatsApp-style)",
+        "hi": "natural Devanagari Hindi (same depth as Hinglish)",
+    }[lang]
     return f"""You are a Conversion Rate Optimization (CRO) Expert and an Elite Relationship Counselor writing a Love Reality Pro PDF for a couple in a current romantic bond (not a marriage report).
 
 Your JSON fields map directly into a fixed 14-page deterministic PDF renderer. Scores, tables, and bullet matrices render separately from engine data — aapka kaam har field me deep, continuous human story layer likhna hai taaki koi page blank na rahe.
@@ -1296,7 +1384,11 @@ def _love_apply_depth_regen(
 
 def _build_verdict_page_only_system_prompt(lang: str, *, include_dev_note: bool = True) -> str:
     lang = polish_content_lang(lang)
-    script = {"en": "plain conversational English", "hn": "natural Roman Hinglish (WhatsApp-style)"}[lang]
+    script = {
+        "en": "plain conversational English",
+        "hn": "natural Roman Hinglish (WhatsApp-style)",
+        "hi": "natural Devanagari Hindi (same depth as Hinglish)",
+    }[lang]
     dev_note = ""
     if include_dev_note and _verdict_page_dev_mode():
         dev_note = (
@@ -1510,8 +1602,9 @@ _DEEP_ANALYSIS_TITLES = {
     "trust": "Trust & Loyalty",
     "long_term": "Long-Term Potential",
 }
-_DEEP_ANALYSIS_MIN_WORDS = 50
-_DEEP_ANALYSIS_MAX_EXPL_CHARS = 420
+_DEEP_ANALYSIS_MIN_WORDS = 65
+_DEEP_ANALYSIS_HI_MIN_WORDS = 65
+_DEEP_ANALYSIS_MAX_EXPL_CHARS = 2000
 
 
 def _deep_analysis_dev_mode() -> bool:
@@ -1551,7 +1644,25 @@ def _deep_analysis_dimension_scores(bundle: dict) -> dict[str, int]:
     }
 
 
+def _deep_analysis_expl_word_count(text: str) -> int:
+    return len((text or "").split())
+
+
 def _deep_analysis_few_shot(lang: str) -> str:
+    if lang == "hi":
+        return """CRITICAL: [p1_name] / [p2_name] placeholders hain — user message ke ACTUAL naam likho.
+
+ऐसे मत लिखो: "Chart signals for this theme are active..." / bullet list / one-line facts.
+
+ऐसे लिखो (देवनागरी, हर dimension 3–4 वाक्य — real names):
+{
+  "deep_analysis": [
+    {"key": "emotional", "explanation": "[p1_name], आप भावनाएँ जल्दी सामने लाते हैं — चंद्र आपको तुरंत प्रतिक्रिया कराता है। जब [p2_name] भीतर सोचते हैं, आपको लगता है दूरी बढ़ रही है। यह प्यार कम नहीं, बस अलग भावनात्मक गति है।"},
+    {"key": "communication", "explanation": "[p1_name], जब आप तुरंत जवाब चाहते हैं और [p2_name] चुप होते हैं, आप गलत टोन पढ़ लेते हैं। बुध के फेज़ में छोटी बात भी झगड़ा बन सकती है — चार्ट आपको गर्म होने से पहले बोलने पर धकेलता है।"},
+    {"key": "trust", "explanation": "[p1_name], आप भरोसा consistency से मापते हैं — जब [p2_name] चुप होते हैं, दिमाग worst-case भर देता है। विश्वास तब दरार खाता है जब चुप्पी को अस्वीकार समझ लेते हैं।"},
+    {"key": "long_term", "explanation": "[p1_name], इस बंधन में गर्मजोशी है पर repair की आदत नहीं तो वही ६–८ महीने का loop दोहरता है। दीर्घकाल तब टिकता है जब गुस्से के peak पर रुककर बात करते हैं।"}
+  ]
+}"""
     if lang == "hn":
         return """CRITICAL: [p1_name] aur [p2_name] placeholders hain — user message ke ACTUAL naam use karo. Aarav/Riya kabhi mat likho.
 
@@ -1587,8 +1698,21 @@ def _build_deep_analysis_system_prompt(lang: str, *, include_dev_note: bool = Tr
     from vedic.love_reality.love_section_polish import _human_prose_rhythm
 
     lang = polish_content_lang(lang)
-    script = {"en": "plain conversational English", "hn": "natural Roman Hinglish (WhatsApp-style)"}[lang]
+    script = {
+        "en": "plain conversational English",
+        "hn": "natural Roman Hinglish (WhatsApp-style)",
+        "hi": "natural Devanagari Hindi (same depth as Hinglish)",
+    }[lang]
     banned = _verdict_page_banned_block(lang)
+    hi_lock = ""
+    if lang == "hi":
+        hi_lock = (
+            "\n\nMANDATORY FOR hi — each explanation:\n"
+            "- 100% देवनागरी Hindi, रोज़मर्रा की भाषा\n"
+            f"- {_DEEP_ANALYSIS_HI_MIN_WORDS}+ words per block, 3–4 complete sentences\n"
+            "- NO bullets, NO chart jargon dump, NO one-line facts\n"
+            "- Talk TO p1 with real partner names\n"
+        )
     dev_note = ""
     if include_dev_note and _deep_analysis_dev_mode():
         dev_note = "\n\nDEV MODE: each explanation ~35 words. Same JSON keys."
@@ -1609,11 +1733,13 @@ Write entirely in {script}.
 You are a senior relationship astrologer. Four short deep-dives — one per dimension. Scores are pre-set in the user message; do NOT invent scores.
 
 RULES:
-- Each explanation: {_DEEP_ANALYSIS_MIN_WORDS}+ words, max ~{_DEEP_ANALYSIS_MAX_EXPL_CHARS} characters — dense, specific, no filler.
+- Each explanation: {_DEEP_ANALYSIS_MIN_WORDS}+ words — full paragraph prose, 3–4 sentences, specific, no filler.
 - PRIMARY READER = p1 (first kundli). ~70% from their lens. Partner as context only.
 - Name chart facts (Moon, Venus, Mercury) in plain words — no generic "chart signals active" text.
 - No contrast loop every line ("X while Y"). Talk TO p1 directly.
 - No safe counseling wrap at the end of each block.
+- NO bullet lists or numbered points in any explanation.
+{hi_lock}
 
 {_human_prose_rhythm(lang)}
 
@@ -1653,19 +1779,26 @@ def _build_deep_analysis_user_prompt(bundle: dict, lang: str) -> str:
     )
 
 
-def _parse_deep_analysis_response(parsed: dict) -> dict[str, Any]:
+def _parse_deep_analysis_response(parsed: dict, *, lang: str = "en") -> dict[str, Any]:
     rows = parsed.get("deep_analysis")
     if not isinstance(rows, list):
         return {}
     out_rows: list[dict[str, str]] = []
     by_key: dict[str, dict] = {}
+    lane = polish_content_lang(lang)
     for row in rows:
         if not isinstance(row, dict):
             continue
         key = str(row.get("key") or "").strip().lower()
         expl = str(row.get("explanation") or "").strip()
-        if key and expl:
-            by_key[key] = {"key": key, "explanation": expl[:_DEEP_ANALYSIS_MAX_EXPL_CHARS]}
+        if not key or not expl:
+            continue
+        wc = _deep_analysis_expl_word_count(expl)
+        if wc < _DEEP_ANALYSIS_MIN_WORDS:
+            continue
+        if lane == "hi" and not _deep_analysis_row_hi_ok(expl):
+            continue
+        by_key[key] = {"key": key, "explanation": expl[:_DEEP_ANALYSIS_MAX_EXPL_CHARS]}
     for k in _DEEP_ANALYSIS_KEYS:
         if k in by_key:
             out_rows.append(by_key[k])
@@ -1738,7 +1871,7 @@ def polish_love_reality_deep_analysis_only(
     tel = PdfGenOpenAITelemetry(model)
     system = _build_deep_analysis_system_prompt(lang)
     user = _build_deep_analysis_user_prompt(bundle, lang)
-    default_mt = 900 if _deep_analysis_dev_mode() else 1600
+    default_mt = 900 if _deep_analysis_dev_mode() else 3200
     max_tok = min(int(os.environ.get("LOVE_REALITY_DEEP_ANALYSIS_MAX_TOKENS", str(default_mt))), 4096)
     kwargs: dict[str, Any] = {
         "model": model,
@@ -1766,7 +1899,7 @@ def polish_love_reality_deep_analysis_only(
         if not isinstance(parsed, dict):
             empty["_meta"]["reason"] = "json_not_object"
             return empty
-        out = _parse_deep_analysis_response(parsed)
+        out = _parse_deep_analysis_response(parsed, lang=lang)
         if not out.get("deep_analysis"):
             empty["_meta"]["reason"] = "missing_deep_analysis"
             return empty
@@ -1802,6 +1935,89 @@ def polish_love_reality_deep_analysis_only(
         log.warning("[love_deep_analysis] cache write failed: %s", exc)
 
     return out
+
+
+def ensure_deep_analysis_llm(
+    bundle: dict,
+    pro: dict,
+    lang: str,
+    *,
+    force_llm: bool = False,
+) -> dict:
+    """Section 03 (Deep Connection / विस्तार) — full LLM Hindi per dimension."""
+    if not isinstance(pro, dict):
+        return pro or {}
+    if lang == "hi" and deep_analysis_hi_ready(pro) and not force_llm:
+        return pro
+    last_meta: dict[str, Any] = {}
+    max_attempts = max(1, int(os.environ.get("LOVE_REALITY_DEEP_ANALYSIS_ATTEMPTS", "3")))
+    for attempt in range(max_attempts):
+        if attempt > 0:
+            try:
+                cache_key = _deep_analysis_cache_key(bundle, polish_content_lang(lang), _deep_analysis_model())
+                cache_path = _deep_analysis_cache_path(cache_key)
+                if os.path.isfile(cache_path):
+                    os.remove(cache_path)
+            except OSError:
+                pass
+        hit = polish_love_reality_deep_analysis_only(bundle, lang=lang, force_llm=True)
+        last_meta = hit.get("_meta") if isinstance(hit.get("_meta"), dict) else {}
+        rows = hit.get("deep_analysis")
+        if isinstance(rows, list) and len(rows) >= 4:
+            if lang != "hi" or deep_analysis_hi_ready({**pro, "deep_analysis": rows}):
+                pro["deep_analysis"] = rows
+                pro.setdefault("_meta", {})["section3_deep_analysis"] = {
+                    **last_meta,
+                    "source": "llm",
+                    "attempt": attempt + 1,
+                }
+                return pro
+        last_meta = {**last_meta, "reject": "thin_or_not_hi", "attempt": attempt + 1}
+    pro.setdefault("_meta", {})["section3_deep_analysis"] = {
+        **last_meta,
+        "source": "failed",
+        "attempts": max_attempts,
+    }
+    return pro
+
+
+def bust_love_polish_all_caches(bundle: dict, lang: str, *, model: str | None = None) -> None:
+    """Update Report — drop L1 + section file caches so Hindi/Hinglish cannot replay stale LLM."""
+    from vedic.compat import llm_polish as _lp
+
+    m = model or _DEFAULT_MODEL
+    l1_key = _love_polish_fingerprint(bundle, lang, m)
+    try:
+        with _lp._cache_lock:
+            _lp._cache.pop(l1_key, None)
+    except Exception as exc:
+        log.warning("[love_reality_premium] L1 bust failed: %s", exc)
+
+    for key_fn, path_fn, section_model in (
+        (_verdict_page_cache_key, _verdict_page_cache_path, _verdict_page_model()),
+        (_deep_analysis_cache_key, _deep_analysis_cache_path, _deep_analysis_model()),
+    ):
+        try:
+            sk = key_fn(bundle, lang, section_model)
+            path = path_fn(sk)
+            if os.path.isfile(path):
+                os.remove(path)
+        except Exception as exc:
+            log.warning("[love_reality_premium] section cache bust failed: %s", exc)
+
+    try:
+        from vedic.love_reality.love_section_polish import _cache_dir
+
+        base = _cache_dir()
+        if os.path.isdir(base):
+            for name in os.listdir(base):
+                if name.endswith(".json"):
+                    try:
+                        os.remove(os.path.join(base, name))
+                    except OSError:
+                        pass
+    except Exception as exc:
+        log.warning("[love_reality_premium] assembly cache dir bust failed: %s", exc)
 
 
 def polish_love_reality_premium(

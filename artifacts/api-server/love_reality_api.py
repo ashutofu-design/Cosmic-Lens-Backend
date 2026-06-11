@@ -64,9 +64,12 @@ def _enrich_hi_section8_meta(payload: dict) -> dict:
         _deep_connection_body_from_analysis,
         _moon_sync_ready_text,
     )
-    from vedic.love_reality.love_section_polish import _breakup_chapter_body, _moon_sync_narrative_body
-    from vedic.love_reality.premium_polish import deep_analysis_hi_ready
-    from vedic.love_reality.love_section_polish import remedies_action_hi_ready
+    from vedic.love_reality.love_section_polish import (
+        _breakup_chapter_body,
+        _moon_sync_narrative_body,
+        deep_analysis_hi_ready,
+        remedies_action_hi_ready,
+    )
     from vedic.love_reality.section8_gate import effective_section8_hi_text
 
     pro = payload.get("pro_premium") if isinstance(payload.get("pro_premium"), dict) else {}
@@ -212,10 +215,10 @@ def _hi_saved_report_stale(payload: dict) -> bool:
         from vedic.love_reality.love_section_polish import (
             blueprint_section_hi_ready,
             breakup_chapter_hi_ready,
+            deep_analysis_hi_ready,
             moon_sync_narrative_hi_ready,
             remedies_action_hi_ready,
         )
-        from vedic.love_reality.premium_polish import deep_analysis_hi_ready
 
         if pro and not breakup_chapter_hi_ready(pro):
             return True
@@ -425,10 +428,10 @@ def _resolve_pro_premium(
                 from vedic.love_reality.love_section_polish import (
                     blueprint_section_hi_ready,
                     breakup_chapter_hi_ready,
+                    deep_analysis_hi_ready,
                     moon_sync_narrative_hi_ready,
                     remedies_action_hi_ready,
                 )
-                from vedic.love_reality.premium_polish import deep_analysis_hi_ready
 
                 if (
                     not breakup_chapter_hi_ready(cached)
@@ -455,10 +458,10 @@ def _resolve_pro_premium(
             from vedic.love_reality.love_section_polish import (
                 blueprint_section_hi_ready,
                 breakup_chapter_hi_ready,
+                deep_analysis_hi_ready,
                 moon_sync_narrative_hi_ready,
                 remedies_action_hi_ready,
             )
-            from vedic.love_reality.premium_polish import deep_analysis_hi_ready
 
             if lang != "hi" or (
                 breakup_chapter_hi_ready(pro)
@@ -926,20 +929,16 @@ def register_love_reality_routes(flask_app) -> None:
                     breakup_chapter_hi_ready,
                     breakup_chapter_word_count,
                     bust_love_polish_section_caches,
+                    deep_analysis_hi_ready,
                     ensure_blueprint_section5_llm,
                     ensure_breakup_section8_llm,
                     ensure_moon_sync_section7_llm,
+                    ensure_remedies_action_llm,
                     moon_sync_narrative_hi_ready,
+                    remedies_action_hi_ready,
                     strip_non_hindi_breakup_chapter,
                 )
-                from vedic.love_reality.premium_polish import (
-                    deep_analysis_hi_ready,
-                    ensure_deep_analysis_llm,
-                )
-                from vedic.love_reality.love_section_polish import (
-                    ensure_remedies_action_llm,
-                    remedies_action_hi_ready,
-                )
+                from vedic.love_reality.premium_polish import ensure_deep_analysis_llm
 
                 if lang == "hi":
                     strip_non_hindi_breakup_chapter(pro)

@@ -1803,6 +1803,35 @@ def moon_sync_narrative_hi_ready(pro: dict) -> bool:
     return _moon_sync_text_hi_ok(_moon_sync_narrative_body(pro))
 
 
+_DEEP_ANALYSIS_HI_MIN_WORDS = 65
+
+
+def _deep_analysis_row_hi_ok(text: str) -> bool:
+    if _word_count(text) < _DEEP_ANALYSIS_HI_MIN_WORDS:
+        return False
+    try:
+        from i18n_summary import prose_fully_hindi
+
+        return prose_fully_hindi(text)
+    except Exception:
+        return len(re.findall(r"[\u0900-\u097F]", text)) >= 24
+
+
+def deep_analysis_hi_ready(pro: dict) -> bool:
+    """Section 3 (Deep Connection) OK for Hindi — 4 dimensions with full Devanagari prose."""
+    rows = pro.get("deep_analysis") or []
+    if not isinstance(rows, list):
+        return False
+    ok = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        expl = str(row.get("explanation") or "").strip()
+        if _deep_analysis_row_hi_ok(expl):
+            ok += 1
+    return ok >= 4
+
+
 def _bust_moon_sync_scope_file_cache(bundle: dict, lang: str) -> None:
     scope = "moon_sync"
     model = _section_model("LOVE_REALITY_MOON_SYNC_MODEL")

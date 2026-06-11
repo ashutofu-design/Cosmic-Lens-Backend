@@ -57,13 +57,33 @@ function routeLangParam(raw: string | string[] | undefined): ProPdfLangCode {
   return coerceProPdfLang(one);
 }
 
-const LOAD_STAGES = [
-  "Loading your charts…",
-  "Running compatibility engines…",
-  "Writing personalized insights…",
-  "Generating Hinglish report…",
-  "Almost ready…",
-] as const;
+function loadStagesForLang(lang: ProPdfLangCode): readonly string[] {
+  if (lang === "hi") {
+    return [
+      "Charts load ho rahe hain…",
+      "Compatibility engines chal rahe hain…",
+      "Personalized insights likh rahe hain…",
+      "Hindi report generate ho rahi hai…",
+      "Almost ready…",
+    ];
+  }
+  if (lang === "hn") {
+    return [
+      "Loading your charts…",
+      "Running compatibility engines…",
+      "Writing personalized insights…",
+      "Hinglish report likh rahe hain…",
+      "Almost ready…",
+    ];
+  }
+  return [
+    "Loading your charts…",
+    "Running compatibility engines…",
+    "Writing personalized insights…",
+    "Finalizing your report…",
+    "Almost ready…",
+  ];
+}
 
 /** Progress never hits 99 on timer — only when report is ready, then screen opens. */
 const OPEN_AT_PCT = 99;
@@ -105,7 +125,7 @@ function ReportLoadingView({
   }, [pct, barAnim]);
 
   useEffect(() => {
-    if (done) return;
+    if (opening) return;
     spinAnim.setValue(0);
     const spin = Animated.loop(
       Animated.timing(spinAnim, {
@@ -117,10 +137,10 @@ function ReportLoadingView({
     );
     spin.start();
     return () => spin.stop();
-  }, [done, spinAnim]);
+  }, [opening, spinAnim]);
 
   useEffect(() => {
-    if (done) return;
+    if (opening) return;
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
@@ -205,7 +225,7 @@ function ReportLoadingView({
                   ? "Preparing report…"
                   : fromCache
                     ? "Loading saved report…"
-                    : LOAD_STAGES[stageIdx]}
+                    : loadStagesForLang(lang)[stageIdx]}
           </Text>
 
           <View style={[ld.track, { backgroundColor: trackBg }]}>
@@ -539,11 +559,12 @@ export default function LoveRealityProReportScreen() {
 
   useEffect(() => {
     if (!fetching || fetchDoneRef.current) return;
+    const stages = loadStagesForLang(lang);
     const tick = setInterval(() => {
-      setStageIdx(i => (i + 1) % LOAD_STAGES.length);
+      setStageIdx(i => (i + 1) % stages.length);
     }, 3200);
     return () => clearInterval(tick);
-  }, [fetching]);
+  }, [fetching, lang]);
 
   const handleUpdateReport = useCallback(() => {
     if (updatingReport) return;

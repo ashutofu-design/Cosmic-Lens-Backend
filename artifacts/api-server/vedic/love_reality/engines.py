@@ -9,7 +9,7 @@ from typing import Any
 from kundli_engine import calculate_kundli
 
 from vedic.love_reality import reader_context
-from vedic.love_reality.relationship_signals import CoupleSignals, analyze_couple
+from vedic.love_reality.relationship_signals import CoupleSignals, PersonSignals, analyze_couple
 from vedic.love_reality.scoring_core import (
     KundliReader,
     clamp,
@@ -42,29 +42,39 @@ def _cap_by_affliction(score: int, sig: CoupleSignals, harsh_cap: int, moderate_
     return max(0, capped)
 
 
+def _breakup_person_pressure(person: PersonSignals) -> float:
+    """Per-chart breakup pressure — capped so two afflicted charts do not auto-sum to 100."""
+    pts = 0.0
+    if person.seventh_lord_dusthana:
+        pts += 12
+    if person.seventh_lord_debil:
+        pts += 8
+    if person.saturn_on_7th:
+        pts += 9
+    if person.mars_on_7th:
+        pts += 7
+    if person.rahu_on_7th_axis:
+        pts += 8
+    if person.venus_debil or person.moon_debil:
+        pts += 6
+    if person.third_person_risk:
+        pts += 7
+    if person.ketu_detachment:
+        pts += 5
+    if person.separation_yoga:
+        pts += 4
+    return min(pts, 28.0)
+
+
 def _compute_breakup_score(sig: CoupleSignals) -> int:
-    score = 38.0
-    for person in (sig.p1, sig.p2):
-        if person.seventh_lord_dusthana:
-            score += 14
-        if person.seventh_lord_debil:
-            score += 10
-        if person.saturn_on_7th:
-            score += 12
-        if person.mars_on_7th:
-            score += 9
-        if person.rahu_on_7th_axis:
-            score += 10
-        if person.venus_debil or person.moon_debil:
-            score += 8
-        if person.third_person_risk:
-            score += 11
-        if person.ketu_detachment:
-            score += 7
-        if person.separation_yoga:
-            score += 6
-    if sig.combined_affliction >= 50:
+    # Base ~low-moderate; two partners add capped pressure (not full double-stack to 100).
+    score = 16.0 + _breakup_person_pressure(sig.p1) + _breakup_person_pressure(sig.p2)
+    if sig.combined_affliction >= 55:
         score += 10
+    elif sig.combined_affliction >= 40:
+        score += 6
+    elif sig.combined_affliction >= 25:
+        score += 3
     return clamp(score)
 
 

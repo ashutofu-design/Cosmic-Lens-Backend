@@ -682,7 +682,7 @@ def _finalize_hindi_sections(sections: list[dict[str, Any]], lang: str) -> list[
                     continue
                 if sid == "scorecard" and lang == "hi":
                     fixed.append(_localize_scorecard_line(raw, lang))
-                elif _needs_force(raw, sid):
+                elif _needs_force(raw):
                     fixed.append(_localize_prose_block(raw, lang, force=True))
                 else:
                     fixed.append(raw)

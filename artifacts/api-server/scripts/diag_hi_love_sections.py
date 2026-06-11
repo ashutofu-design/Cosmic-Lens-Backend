@@ -54,16 +54,26 @@ def _latest_json(dir_path: Path) -> Path | None:
 def _load_payload(path: Path | None) -> dict[str, Any] | None:
     if path:
         return json.loads(path.read_text(encoding="utf-8"))
-    rep = _latest_json(_API / ".cache" / "love_report_json")
-    if not rep:
+    json_dir = _API / ".cache" / "love_report_json"
+    if not json_dir.is_dir():
         return None
-    data = json.loads(rep.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        return None
-    lang = str(data.get("lang") or "").lower()
-    if lang != "hi":
-        print(f"  [WARN] newest cache is lang={lang!r}, not hi — use --json or generate Hindi first")
-    return data
+    files = sorted(json_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for rep in files:
+        try:
+            data = json.loads(rep.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        if str(data.get("lang") or "").lower() == "hi":
+            print(f"  found Hindi cache: {rep.name}")
+            return data
+    if files:
+        newest = files[0]
+        lang = str(json.loads(newest.read_text(encoding="utf-8")).get("lang") or "").lower()
+        print(f"  [WARN] no lang=hi cache — newest is {newest.name} lang={lang!r}")
+        print("  -> App se Hindi report generate karo, phir script dubara chalao")
+    return None
 
 
 def _with_sections(payload: dict) -> dict:
@@ -212,17 +222,33 @@ def _check_deploy() -> bool:
 
 def _purge() -> None:
     print("\n=== Purge Hindi caches ===")
+    n_json = n_snap = 0
     try:
-        import love_reality_polish_snapshot as snap
         import love_reality_report_json_cache as jcache
 
-        print(f"  json={jcache.purge_all_hi_reports()} snap={snap.purge_all_hi_snapshots()}")
+        n_json = jcache.purge_all_hi_reports()
     except Exception as exc:
-        print(f"  warn: {exc}")
+        print(f"  json purge warn: {exc}")
+    try:
+        import love_reality_polish_snapshot as snap
+
+        fn = getattr(snap, "purge_all_hi_snapshots", None)
+        n_snap = int(fn()) if callable(fn) else 0
+    except Exception as exc:
+        print(f"  snap purge warn: {exc}")
+    print(f"  purged json={n_json} snap={n_snap}")
     for pat in ("love_polish", "love_report_json"):
         d = _API / ".cache" / pat
-        if d.is_dir():
-            print(f"  cache dir {d} exists ({len(list(d.glob('*.json')))} json files)")
+        if not d.is_dir():
+            continue
+        removed = 0
+        for f in d.glob("*.json"):
+            try:
+                f.unlink()
+                removed += 1
+            except OSError:
+                pass
+        print(f"  wiped {d}: {removed} json files")
 
 
 def main() -> int:

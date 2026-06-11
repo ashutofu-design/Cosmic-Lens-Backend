@@ -27,6 +27,7 @@ import {
 } from "@/lib/loveRealityProReport";
 import {
   clearLoveReportCacheAllLangs,
+  purgeEnDeviceCacheIfNeeded,
   purgeHiDeviceCacheIfNeeded,
   deviceCacheNeedsServerRefresh,
   markLoveReportPdfSynced,
@@ -85,9 +86,10 @@ function loadStagesForLang(lang: ProPdfLangCode): readonly string[] {
   ];
 }
 
-/** Progress never hits 99 on timer — only when report is ready, then screen opens. */
-const OPEN_AT_PCT = 99;
+/** Timer creeps to SLOW_CAP while LLM runs; hits OPEN_AT_PCT only when report is ready. */
+const OPEN_AT_PCT = 100;
 const WAIT_CAP_PCT = 88;
+const SLOW_CAP_PCT = 96;
 
 function ReportLoadingView({
   pct,
@@ -317,7 +319,7 @@ export default function LoveRealityProReportScreen() {
     showReportTimerRef.current = setTimeout(() => {
       setShowReport(true);
       showReportTimerRef.current = null;
-    }, cached ? 200 : 340);
+    }, cached ? 120 : 220);
   }, []);
 
   const load = useCallback(async (opts?: { forceUpdate?: boolean }) => {
@@ -368,6 +370,14 @@ export default function LoveRealityProReportScreen() {
           p1Name: cacheOpts.p1Name,
           p2Name: cacheOpts.p2Name,
         });
+      } else if (lang === "en") {
+        await purgeEnDeviceCacheIfNeeded({
+          userId: cacheOpts.userId,
+          p1: cacheOpts.p1,
+          p2: cacheOpts.p2,
+          p1Name: cacheOpts.p1Name,
+          p2Name: cacheOpts.p2Name,
+        });
       }
       setLoadPct(p => Math.max(p, 12));
       if (forceUpdate) {
@@ -381,8 +391,10 @@ export default function LoveRealityProReportScreen() {
       }
 
       let mustLlm = forceUpdate;
+      let deviceCacheEmpty = true;
       if (!forceUpdate) {
         const resolved = await resolveLoveReportCache(cacheOpts);
+        deviceCacheEmpty = !resolved.payload;
         setLoadPct(p => Math.max(p, 24));
         setCacheChange(resolved.changeKind);
         mustLlm = deviceCacheNeedsServerRefresh(resolved.payload, resolved.meta, lang);
@@ -416,6 +428,34 @@ export default function LoveRealityProReportScreen() {
             return;
           }
         }
+
+        // Reinstall / clear data — restore from server account cache (same login + couple).
+        if (!resolved.payload && (lang === "en" || lang === "hn")) {
+          fastCacheRef.current = true;
+          setFromCache(true);
+          setLoadPct(p => Math.max(p, 36));
+          try {
+            const restored = await fetchLoveRealityProReport({
+              user,
+              p1: primaryProfile.birthData,
+              p2: partnerProfile.birthData,
+              p1Name: primaryProfile.name || "You",
+              p2Name: partnerProfile.name || "Partner",
+              lang,
+              preferServerCache: true,
+            });
+            if (
+              restored.serverCacheHit
+              && reportHasDisplayableContent(restored.data)
+            ) {
+              await saveLoveReportCache(cacheOpts, restored.data);
+              finishLoad(restored.data, true);
+              return;
+            }
+          } catch {
+            /* fall through — first-time generate */
+          }
+        }
       }
 
       setLoadPct(p => Math.max(p, 36));
@@ -437,8 +477,9 @@ export default function LoveRealityProReportScreen() {
           layoutRefresh: false,
         });
 
+        const useFullFetch = forceUpdate || mustLlm || lang === "hi" || deviceCacheEmpty;
         let { data, serverCacheHit } = await fetchReport(
-          forceUpdate || mustLlm || lang === "hi" ? "full" : "cache",
+          useFullFetch ? "full" : "cache",
         );
         setLoadPct(p => Math.max(p, 68));
 
@@ -497,8 +538,12 @@ export default function LoveRealityProReportScreen() {
           }
         }
         const hindiOk = reportHindiFullyReady(data, lang);
-        setLoadPct(p => Math.max(p, 84));
-        await saveLoveReportCache(cacheOpts, data);
+        setLoadPct(p => Math.max(p, 92));
+        try {
+          await saveLoveReportCache(cacheOpts, data);
+        } catch {
+          /* open report even if device save fails */
+        }
         finishLoad(data, serverCacheHit || enHnReportCacheReady(data, lang));
         if (forceUpdate) {
           const script = (data.content_script || "").trim();
@@ -549,11 +594,12 @@ export default function LoveRealityProReportScreen() {
     }
     const tick = setInterval(() => {
       setLoadPct(p => {
-        if (p >= WAIT_CAP_PCT) return WAIT_CAP_PCT;
+        if (p >= SLOW_CAP_PCT) return SLOW_CAP_PCT;
+        if (p >= WAIT_CAP_PCT) return p + 1;
         if (p >= 55) return p + 1;
         return Math.min(55, p + 2);
       });
-    }, 1100);
+    }, 1800);
     return () => clearInterval(tick);
   }, [fetching, cacheChange, forceUpdateRun]);
 
@@ -620,20 +666,14 @@ export default function LoveRealityProReportScreen() {
         appSections: sections,
         scores: report.scores,
       });
-      const fromCache = result.reportCacheHit ? " (server cache)" : "";
-      const mirrorNote = result.pdfSource === "app_mirror_fresh"
-        ? "Built from this page — 1–3 sec is normal, not old cache."
-        : `Source: ${result.pdfSource || "fresh render"}${fromCache}.`;
       Alert.alert(
         labels.alertPdfSaved,
-        result.savedToRegistry
-          ? `${mirrorNote} Saved to My Reports — open the newest entry (Downloaded from page).`
-          : mirrorNote,
+        result.savedToRegistry ? labels.alertPdfSavedBody : labels.alertPdfSaveFailed,
         [
           { text: labels.ok, style: "cancel" },
           ...(result.savedToRegistry
             ? [{
-                text: "Open My Reports",
+                text: labels.openMyReports,
                 onPress: () => router.push("/my-reports" as never),
               }]
             : []),

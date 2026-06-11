@@ -14,8 +14,10 @@ import { enHnReportCacheReady, needsLoveReportLlmRefresh } from "@/lib/loveReali
 import {
   currentLoveReportRevision,
   detectLoveReportChange,
+  LOVE_REALITY_EN_DEVICE_CACHE_VER,
   LOVE_REALITY_HI_DEVICE_CACHE_VER,
   LOVE_REALITY_HI_SERVER_CACHE_VER,
+  LOVE_REALITY_POLISH_ASSEMBLY_VER,
   loveReportNeedsPdfResync,
   loveReportRevisionString,
   type LoveReportCacheMeta,
@@ -28,6 +30,8 @@ const RAW_PREFIX = "cosmic.loveRealityProReport.raw.v2";
 const META_PREFIX = "cosmic.loveRealityProReport.meta.v2";
 const PDF_SYNC_PREFIX = "cosmic.loveRealityProReport.pdfSync.v2";
 const LEGACY_PREFIX = "cosmic.loveRealityProReport.v1";
+const HI_DEVICE_PURGE_KEY = "cosmic.loveReality.hiDevicePurge.v1";
+const EN_DEVICE_PURGE_KEY = "cosmic.loveReality.enDevicePurge.v1";
 
 const sessionRaw = new Map<string, LoveProReportResponse>();
 const sessionMeta = new Map<string, LoveReportCacheMeta>();
@@ -243,6 +247,27 @@ export async function clearLoveReportCacheHiOnly(opts: {
 /**
  * One-time Hindi cache purge on app open (bump LOVE_REALITY_HI_DEVICE_CACHE_VER to rerun).
  */
+/**
+ * One-time English device cache purge when narrative assembly bumps.
+ */
+export async function purgeEnDeviceCacheIfNeeded(opts: {
+  userId: number;
+  p1: BirthData;
+  p2: BirthData;
+  p1Name: string;
+  p2Name: string;
+}): Promise<boolean> {
+  try {
+    const seen = await AsyncStorage.getItem(EN_DEVICE_PURGE_KEY);
+    if (seen === LOVE_REALITY_EN_DEVICE_CACHE_VER) return false;
+    await clearLoveReportCache({ ...opts, lang: "en" });
+    await AsyncStorage.setItem(EN_DEVICE_PURGE_KEY, LOVE_REALITY_EN_DEVICE_CACHE_VER);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function purgeHiDeviceCacheIfNeeded(opts: {
   userId: number;
   p1: BirthData;
@@ -266,6 +291,8 @@ export function deviceCacheNeedsServerRefresh(
   meta: LoveReportCacheMeta | null,
   lang: ProPdfLangCode,
 ): boolean {
+  // Reinstall / clear data — phone cache empty; try server JSON first (no full LLM).
+  if (!payload && (lang === "en" || lang === "hn")) return false;
   if (needsLoveReportLlmRefresh(payload, lang, meta?.contentLang)) return true;
   if (
     lang === "hi"
@@ -275,6 +302,8 @@ export function deviceCacheNeedsServerRefresh(
     return true;
   }
   if (lang === "en" || lang === "hn") {
+    const asm = (payload?.polish_assembly || "").trim();
+    if (asm && asm !== LOVE_REALITY_POLISH_ASSEMBLY_VER) return true;
     if (enHnReportCacheReady(payload, lang)) return false;
     if (meta?.contentLang && coerceProPdfLang(meta.contentLang) !== lang) return true;
     return needsLoveReportLlmRefresh(payload, lang, meta?.contentLang);

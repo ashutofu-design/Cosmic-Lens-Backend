@@ -7,6 +7,7 @@
  */
 
 import { coerceProPdfLang, type ProPdfLangCode } from "@/lib/proPdfLang";
+import { LOVE_REALITY_POLISH_ASSEMBLY_VER } from "@/lib/loveRealityReportRevision";
 
 
 
@@ -29,6 +30,8 @@ export type LoveReportLangPayload = {
   section8_hi_body?: string | null;
 
   hi_cache_ver?: string | null;
+
+  polish_assembly?: string | null;
 
   pro_premium?: {
     remedies_action_narrative?: string;
@@ -1002,6 +1005,9 @@ export function enHnReportCacheReady(
   if (lang !== "en" && lang !== "hn") return false;
 
   if (!report || !reportHasDisplayableContent(report)) return false;
+
+  const asm = String(report.polish_assembly || "").trim();
+  if (asm && asm !== LOVE_REALITY_POLISH_ASSEMBLY_VER) return false;
 
   if (lang === "en") return true;
 

@@ -636,17 +636,21 @@ const GENERIC_REC_HI_MARKERS = [
 
 
 
+function section4RemediesNarrative(report: LoveReportLangPayload): string {
+  return normalizeProseParagraphs(
+    String(report.pro_premium?.remedies_action_narrative || "").trim(),
+  );
+}
+
 function section4RecommendationsText(report: LoveReportLangPayload): string {
+
+  const narr = section4RemediesNarrative(report);
+
+  if (section4LoadReady(narr)) return narr;
 
   const canon = normalizeProseParagraphs(String(report.section4_hi_body || "").trim());
 
-  if (canon) return canon;
-
-  const narr = normalizeProseParagraphs(
-    String(report.pro_premium?.remedies_action_narrative || "").trim(),
-  );
-
-  if (narr) return narr;
+  if (canon && section4LoadReady(canon)) return canon;
 
   const paras = (report.page1?.recommendation_paragraphs || [])
 
@@ -776,6 +780,14 @@ export function section4HiLoadGate(
 
   }
 
+  const narr = section4RemediesNarrative(report);
+
+  if (section4LoadReady(narr)) {
+
+    return { ok: true, reason: "" };
+
+  }
+
   if (section4LooksGenericFallback(report)) {
 
     return {
@@ -790,7 +802,7 @@ export function section4HiLoadGate(
 
   }
 
-  const text = section4RecommendationsText(report);
+  const text = section4RecommendationsText(report) || narr;
 
   if (!text) {
 
@@ -810,13 +822,15 @@ export function section4HiLoadGate(
 
     const wc = wordCount(text);
 
+    const deva = devaCount(text);
+
     return {
 
       ok: false,
 
       reason:
 
-        `Report load nahi hua — Section 4 LLM text bahut chhota/mixed hai (${wc} words). Update dubara try karein.`,
+        `Report load nahi hua — Section 4 poori देवनागरी Hindi nahi bani (${wc} words, Devanagari=${deva}). «रिपोर्ट अपडेट करें» dabao — 2–3 min wait.`,
 
     };
 

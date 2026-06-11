@@ -85,12 +85,9 @@ def _enrich_hi_section8_meta(payload: dict) -> dict:
         moon_body = _moon_sync_ready_text(pro, "hi") or str(
             (payload.get("pdf_context") or {}).get("page5_moon", {}).get("body") or ""
         ).strip()
-    s4_hi = str(pro.get("remedies_action_narrative") or "").strip()
-    if not s4_hi or not remedies_action_hi_ready(pro):
-        for sec in payload.get("app_sections") or []:
-            if isinstance(sec, dict) and str(sec.get("id") or "").lower() == "recommendations":
-                s4_hi = str(sec.get("body") or "").strip()
-                break
+    s4_hi = ""
+    if remedies_action_hi_ready(pro):
+        s4_hi = str(pro.get("remedies_action_narrative") or "").strip()
     s5_hi = _blueprint_ready_text(pro, "hi")
     s3_hi = ""
     for sec in payload.get("app_sections") or []:
@@ -181,6 +178,16 @@ def _hi_section4_block_response(payload: dict):
     }), 412
 
 
+def _hi_report_block_response(payload: dict, lang: str):
+    """Section 4 + Section 8 gates for Hindi — used on cache hits and fresh builds."""
+    if lang != "hi":
+        return None
+    blocked4 = _hi_section4_block_response(payload)
+    if blocked4:
+        return blocked4
+    return _hi_section8_block_response(payload)
+
+
 def _hi_section8_block_response(payload: dict):
     """412 when Section 8 LLM explanation not ready — exact reason for mobile."""
     from vedic.love_reality.section8_gate import section8_hi_load_gate
@@ -199,6 +206,17 @@ def _hi_section8_block_response(payload: dict):
         "section": "root_cause",
         "section8_llm": llm_meta or None,
     }), 412
+
+
+def _en_saved_report_stale(payload: dict) -> bool:
+    """English/Hinglish saved JSON — regenerate when narrative assembly bumps."""
+    if not isinstance(payload, dict):
+        return True
+    from vedic.love_reality.love_section_polish import _ASSEMBLY_VER
+
+    if str(payload.get("polish_assembly") or "").strip() != _ASSEMBLY_VER:
+        return True
+    return False
 
 
 def _hi_saved_report_stale(payload: dict) -> bool:
@@ -867,6 +885,9 @@ def register_love_reality_routes(flask_app) -> None:
                 _snap.invalidate(snap_params)
             if prefer_server_cache and not force_full and lang in ("en", "hn"):
                 restored = _json_cache.load(json_cache_params)
+                if restored and lang in ("en", "hn") and _en_saved_report_stale(restored):
+                    restored = None
+                    _json_cache.invalidate(json_cache_params)
                 if restored and restored.get("ok"):
                     payload_out = _with_app_sections(restored, lang)
                     resp = jsonify(payload_out)
@@ -880,7 +901,7 @@ def register_love_reality_routes(flask_app) -> None:
                     cached_json = None
                 if cached_json:
                     payload_out = _enrich_hi_section8_meta(_with_app_sections(cached_json, lang))
-                    blocked = _hi_section8_block_response(payload_out)
+                    blocked = _hi_report_block_response(payload_out, lang)
                     if blocked:
                         _json_cache.invalidate(json_cache_params)
                         _snap.invalidate(snap_params)
@@ -896,7 +917,11 @@ def register_love_reality_routes(flask_app) -> None:
                     _snap.invalidate(snap_params)
                     cached_json = None
                 if cached_json:
-                    if lang == "en":
+                    if lang in ("en", "hn") and _en_saved_report_stale(cached_json):
+                        _json_cache.invalidate(json_cache_params)
+                        _snap.invalidate(snap_params)
+                        cached_json = None
+                    if cached_json and lang == "en":
                         from vedic.love_reality.love_section_polish import (
                             _remedies_mentions_religious_ritual,
                             breakup_chapter_lane_ready,
@@ -916,7 +941,7 @@ def register_love_reality_routes(flask_app) -> None:
                             cached_json = None
                 if cached_json:
                     payload_out = _enrich_hi_section8_meta(_with_app_sections(cached_json, lang))
-                    blocked = _hi_section8_block_response(payload_out)
+                    blocked = _hi_report_block_response(payload_out, lang)
                     if blocked:
                         _json_cache.invalidate(json_cache_params)
                         _snap.invalidate(snap_params)
@@ -1131,9 +1156,12 @@ def register_love_reality_routes(flask_app) -> None:
                     fo = bundle.get("future_outcome") or {}
                     p1n = str(data["p1"].get("name") or "You")
                     p2n = str(data["p2"].get("name") or "Partner")
+                    from vedic.love_reality.love_section_polish import _ASSEMBLY_VER
+
                     return {
                         "ok": True,
                         "lang": lang,
+                        "polish_assembly": _ASSEMBLY_VER,
                         "polish_source": source,
                         "p1_name": str(p1n),
                         "p2_name": str(p2n),

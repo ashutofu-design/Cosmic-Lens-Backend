@@ -1381,7 +1381,13 @@ def ensure_remedies_action_llm(
         )
         steps = hit.get("action_steps") if isinstance(hit.get("action_steps"), list) else []
         if lang == "hi" and not _remedies_action_text_hi_ok(new_body):
-            last_meta = {**last_meta, "reject": "not_hi_or_thin", "words": _word_count(new_body)}
+            deva = len(re.findall(r"[\u0900-\u097F]", new_body))
+            last_meta = {
+                **last_meta,
+                "reject": "not_hi_or_thin",
+                "words": _word_count(new_body),
+                "deva": deva,
+            }
             continue
         if lang in ("en", "hn") and _remedies_mentions_religious_ritual(new_body):
             last_meta = {**last_meta, "reject": "religious_ritual_banned", "words": _word_count(new_body)}

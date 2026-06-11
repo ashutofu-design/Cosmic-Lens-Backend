@@ -25,10 +25,12 @@ def _deva_count(text: str) -> int:
 
 
 def effective_section4_hi_text(payload: dict[str, Any]) -> str:
-    canon = str(payload.get("section4_hi_body") or "").strip()
-    if canon:
-        return canon
     pro = payload.get("pro_premium") if isinstance(payload.get("pro_premium"), dict) else {}
+    if remedies_action_hi_ready(pro):
+        return str(pro.get("remedies_action_narrative") or "").strip()
+    canon = str(payload.get("section4_hi_body") or "").strip()
+    if canon and remedies_action_hi_ready({"remedies_action_narrative": canon}):
+        return canon
     narr = str(pro.get("remedies_action_narrative") or "").strip()
     if narr:
         return narr

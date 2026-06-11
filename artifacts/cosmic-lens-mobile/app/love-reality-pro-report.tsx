@@ -558,11 +558,18 @@ export default function LoveRealityProReportScreen() {
           return;
         }
         if (lang === "hi") {
-          const s4 = section4HiLoadGate(data);
+          let s4 = section4HiLoadGate(data);
+          if (!s4.ok && !forceUpdate) {
+            setLoadStep(5);
+            const retry = await fetchReport("full");
+            data = retry.data;
+            serverCacheHit = retry.serverCacheHit;
+            s4 = section4HiLoadGate(data);
+          }
           if (!s4.ok) {
-            const dbg = (data as { section4_debug?: { llm_source?: string; words?: number } }).section4_debug;
+            const dbg = (data as { section4_debug?: { llm_source?: string; words?: number; deva?: number } }).section4_debug;
             const extra = dbg?.llm_source
-              ? ` [llm=${dbg.llm_source}, words=${dbg.words ?? "?"}]`
+              ? ` [llm=${dbg.llm_source}, words=${dbg.words ?? "?"}, deva=${dbg.deva ?? "?"}]`
               : "";
             setError(s4.reason + extra);
             setFetching(false);

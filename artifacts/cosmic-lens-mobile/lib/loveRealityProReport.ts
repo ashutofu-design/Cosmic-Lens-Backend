@@ -128,6 +128,8 @@ export type LoveProReportResponse = {
   /** Canonical Hindi Section 8 body — server gate passed. */
   section8_hi_body?: string | null;
   hi_cache_ver?: string | null;
+  /** Server LLM assembly version — bump invalidates en/hn device cache. */
+  polish_assembly?: string | null;
   section8_debug?: {
     gate_ver?: string;
     breakup_words?: number;
@@ -191,6 +193,16 @@ function proseFullyHindi(text: string): boolean {
   const letters = (t.match(/[A-Za-z\u0900-\u097F]/g) || []).length;
   if (letters < 20) return deva >= 8;
   return deva / letters >= 0.32;
+}
+
+function proseLaneOk(text: string, lang: ProPdfLangCode): boolean {
+  const t = String(text || "").trim();
+  if (!t) return false;
+  const deva = devaCount(t);
+  if (lang === "en") return deva < 3;
+  if (lang === "hi") return deva >= 12;
+  if (lang === "hn") return deva < 6;
+  return true;
 }
 
 function normalizeProseParagraphs(text: string, minParagraphs = 3): string {
@@ -281,32 +293,37 @@ function proseParagraphFormOk(
   return good >= minParagraphs;
 }
 
-function blueprintBodyReady(text: string): boolean {
+function blueprintBodyReady(text: string, lang: ProPdfLangCode): boolean {
+  const norm = normalizeProseParagraphs(String(text || "").trim());
+  const scriptOk = lang === "hi" ? devaCount(norm) >= 24 : proseLaneOk(norm, lang);
   return (
-    wordCountText(text) >= 80
-    && !blueprintHasJargon(text)
-    && devaCount(text) >= 24
-    && proseParagraphFormOk(text, 3, 18)
+    wordCountText(norm) >= 80
+    && !blueprintHasJargon(norm)
+    && scriptOk
+    && proseParagraphFormOk(norm, 3, 18)
   );
 }
 
-function narrativeBodyReady(text: string, minWords: number, minParaWords = 15): boolean {
+function narrativeBodyReady(
+  text: string,
+  minWords: number,
+  lang: ProPdfLangCode,
+  minParaWords = 15,
+): boolean {
   const norm = normalizeProseParagraphs(String(text || "").trim());
+  const scriptOk = lang === "hi" ? devaCount(norm) >= 24 : proseLaneOk(norm, lang);
   return (
     wordCountText(norm) >= minWords
-    && devaCount(norm) >= 24
+    && scriptOk
     && !textLooksLikePointList(norm)
     && proseParagraphFormOk(norm, 3, minParaWords)
   );
 }
 
-function narrativeBodyFallback(text: string, minWords: number): string {
+function narrativeBodyFallback(text: string, minWords: number, lang: ProPdfLangCode): string {
   const norm = normalizeProseParagraphs(String(text || "").trim());
-  if (
-    wordCountText(norm) >= minWords
-    && devaCount(norm) >= 24
-    && !textLooksLikePointList(norm)
-  ) {
+  const scriptOk = lang === "hi" ? devaCount(norm) >= 24 : proseLaneOk(norm, lang);
+  if (wordCountText(norm) >= minWords && scriptOk && !textLooksLikePointList(norm)) {
     return norm;
   }
   return "";
@@ -319,42 +336,60 @@ const DEEP_ANALYSIS_TITLES_HI: Record<string, string> = {
   long_term: "दीर्घकालिक संभावना",
 };
 
-function deepConnectionBodyReady(text: string): boolean {
-  return wordCountText(text) >= 200 && devaCount(text) >= 48 && !textLooksLikePointList(text);
+const DEEP_ANALYSIS_TITLES_EN: Record<string, string> = {
+  emotional: "Emotional Compatibility",
+  communication: "Communication",
+  trust: "Trust & Loyalty",
+  long_term: "Long-Term Potential",
+};
+
+function deepAnalysisTitle(key: string, lang: ProPdfLangCode): string {
+  if (lang === "hi") return DEEP_ANALYSIS_TITLES_HI[key] || key;
+  return DEEP_ANALYSIS_TITLES_EN[key] || key;
 }
 
-function recommendationsBodyReady(text: string): boolean {
+function deepConnectionBodyReady(text: string, lang: ProPdfLangCode): boolean {
   const norm = normalizeProseParagraphs(String(text || "").trim());
-  return (
-    wordCountText(norm) >= 80
-    && devaCount(norm) >= 24
-    && !textLooksLikePointList(norm)
-  );
+  if (wordCountText(norm) < 200 || textLooksLikePointList(norm)) return false;
+  if (lang === "hi") return devaCount(norm) >= 48;
+  return proseLaneOk(norm, lang);
+}
+
+function recommendationsBodyReady(text: string, lang: ProPdfLangCode): boolean {
+  const norm = normalizeProseParagraphs(String(text || "").trim());
+  const scriptOk = lang === "hi" ? devaCount(norm) >= 24 : proseLaneOk(norm, lang);
+  return wordCountText(norm) >= 80 && scriptOk && !textLooksLikePointList(norm);
 }
 
 /** Full LLM remedies + action plan — उपाय और आगे क्या करें (recommendations section). */
-export function resolveRecommendationsBody(report: LoveProReportResponse): string {
+export function resolveRecommendationsBody(
+  report: LoveProReportResponse,
+  lang: ProPdfLangCode = "en",
+): string {
   const fromSec = (report.app_sections || [])
     .find(s => String(s.id || "").toLowerCase() === "recommendations");
   const candidates = [
-    String(report.section4_hi_body || "").trim(),
+    lang === "hi" ? String(report.section4_hi_body || "").trim() : "",
     String(report.pro_premium?.remedies_action_narrative || "").trim(),
     (report.page1?.recommendation_paragraphs || [])
       .map(p => String(p || "").trim())
       .filter(Boolean)
       .join("\n\n"),
     String(fromSec?.body || "").trim(),
-  ].map(t => normalizeProseParagraphs(t));
+  ]
+    .filter(Boolean)
+    .map(t => normalizeProseParagraphs(t));
 
   for (const text of candidates) {
-    if (recommendationsBodyReady(text)) return text;
+    if (recommendationsBodyReady(text, lang)) return text;
   }
   for (const text of candidates) {
-    if (wordCountText(text) >= 55 && devaCount(text) >= 24 && !textLooksLikePointList(text)) {
+    const scriptOk = lang === "hi" ? devaCount(text) >= 24 : proseLaneOk(text, lang);
+    if (wordCountText(text) >= 55 && scriptOk && !textLooksLikePointList(text)) {
       return text;
     }
   }
-  return candidates.find(t => t.length > 0) || "";
+  return candidates.find(t => t.length > 0 && proseLaneOk(t, lang)) || "";
 }
 
 export function resolveRecommendationsBullets(report: LoveProReportResponse): string[] {
@@ -376,23 +411,32 @@ export function resolveRecommendationsBullets(report: LoveProReportResponse): st
     .slice(0, 7);
 }
 
-/** Full LLM deep connection — 4 dimensions in Hindi prose (विस्तार section). */
-export function resolveDeepConnectionBody(report: LoveProReportResponse): string {
-  const canon = String(report.section3_hi_body || "").trim();
-  if (canon && deepConnectionBodyReady(canon)) return canon;
-
+/** Full LLM deep connection — 4 dimensions (विस्तार / Deep Connection section). */
+export function resolveDeepConnectionBody(
+  report: LoveProReportResponse,
+  lang: ProPdfLangCode = "en",
+): string {
   const fromSec = (report.app_sections || [])
     .find(s => String(s.id || "").toLowerCase() === "deep_connection");
   const secBody = String(fromSec?.body || "").trim();
-  if (deepConnectionBodyReady(secBody)) return secBody;
+  const candidates: string[] = [];
+  if (lang === "hi") {
+    const canon = String(report.section3_hi_body || "").trim();
+    if (canon) candidates.push(canon);
+  }
+  if (secBody) candidates.push(secBody);
+
+  for (const text of candidates.map(t => normalizeProseParagraphs(t))) {
+    if (deepConnectionBodyReady(text, lang)) return text;
+  }
 
   const lines: string[] = [];
   for (const row of report.pro_premium?.deep_analysis || []) {
     if (!row || typeof row !== "object") continue;
     const key = String(row.key || "").toLowerCase();
     const expl = String(row.explanation || "").trim();
-    if (wordCountText(expl) < 55) continue;
-    const title = DEEP_ANALYSIS_TITLES_HI[key] || key;
+    if (wordCountText(expl) < 55 || !proseLaneOk(expl, lang)) continue;
+    const title = deepAnalysisTitle(key, lang);
     lines.push(`${title}\n${expl}`);
   }
   if (lines.length >= 2) return lines.join("\n\n");
@@ -401,52 +445,57 @@ export function resolveDeepConnectionBody(report: LoveProReportResponse): string
   for (const item of report.page1?.analysis || []) {
     if (!item || typeof item !== "object") continue;
     const expl = String(item.explanation || "").trim();
-    if (wordCountText(expl) < 40) continue;
+    if (wordCountText(expl) < 40 || !proseLaneOk(expl, lang)) continue;
     const title = String(item.title || "Analysis").trim();
     p1Lines.push(`${title}\n${expl}`);
   }
   if (p1Lines.length >= 2) return p1Lines.join("\n\n");
-  return secBody;
+
+  return candidates.find(t => proseLaneOk(t, lang)) || "";
 }
 
-/** Plain Hindi blueprint — no planet/house engine dump (Section 5). */
-export function resolveBlueprintVsBody(report: LoveProReportResponse): string {
-  const canon = String(report.section5_hi_body || "").trim();
-  if (canon && blueprintBodyReady(canon)) return canon;
-
+/** Plain blueprint narrative — no planet/house engine dump (Section 5). */
+export function resolveBlueprintVsBody(
+  report: LoveProReportResponse,
+  lang: ProPdfLangCode = "en",
+): string {
   const narr = String(report.pro_premium?.blueprint_reality || "").trim();
   const fromCtx = String(report.pdf_context?.page2_3_blueprint?.part2 || "").trim();
   const fromSec = (report.app_sections || [])
     .find(s => String(s.id || "").toLowerCase() === "blueprint_vs");
   const body = String(fromSec?.body || "").trim() || fromCtx;
+  const canon = lang === "hi" ? String(report.section5_hi_body || "").trim() : "";
 
-  for (const text of [narr, body]) {
-    if (blueprintBodyReady(text)) return text;
+  for (const text of [canon, narr, body].filter(Boolean)) {
+    if (blueprintBodyReady(text, lang)) return text;
   }
-  for (const text of [canon, narr, body]) {
-    const fallback = narrativeBodyFallback(text, 80);
+  for (const text of [canon, narr, body].filter(Boolean)) {
+    const fallback = narrativeBodyFallback(text, 80, lang);
     if (fallback && !blueprintHasJargon(fallback)) return fallback;
   }
   return "";
 }
 
 /** Prefer LLM moon_sync_narrative over engine one-liner for Section 7. */
-export function resolveMoonSyncBody(report: LoveProReportResponse): string {
-  const canon = String(report.section7_hi_body || "").trim();
-  if (canon && narrativeBodyReady(canon, 55)) return canon;
-
+export function resolveMoonSyncBody(
+  report: LoveProReportResponse,
+  lang: ProPdfLangCode = "en",
+): string {
   const narr = String(report.pro_premium?.moon_sync_narrative || "").trim();
   const fromCtx = String(report.pdf_context?.page5_moon?.body || "").trim();
   const fromSec = (report.app_sections || [])
     .find(s => String(s.id || "").toLowerCase() === "moon");
   const moon = String(fromSec?.body || "").trim() || fromCtx;
+  const canon = lang === "hi" ? String(report.section7_hi_body || "").trim() : "";
 
-  const candidates = [narr, moon].filter(t => t && !MOON_ENGINE_FALLBACK_HI.test(t));
+  const candidates = [canon, narr, moon].filter(
+    t => t && (lang === "hi" ? !MOON_ENGINE_FALLBACK_HI.test(t) : proseLaneOk(t, lang)),
+  );
   for (const text of candidates) {
-    if (narrativeBodyReady(text, 55)) return text;
+    if (narrativeBodyReady(text, 55, lang)) return text;
   }
   for (const text of candidates) {
-    const fallback = narrativeBodyFallback(text, 55);
+    const fallback = narrativeBodyFallback(text, 55, lang);
     if (fallback) return fallback;
   }
   return "";
@@ -454,10 +503,10 @@ export function resolveMoonSyncBody(report: LoveProReportResponse): string {
 
 function section8NarrativeReady(text: string, lang: ProPdfLangCode): boolean {
   const t = normalizeProseParagraphs(String(text || "").trim());
-  if (!narrativeBodyReady(t, 80, 18)) return false;
+  if (!narrativeBodyReady(t, 80, lang, 18)) return false;
   if (textLooksLikePointList(t)) return false;
   if (lang === "hi") return proseFullyHindi(t);
-  return true;
+  return proseLaneOk(t, lang);
 }
 
 /** Prefer LLM breakup chapter for Section 8 when app_sections root_cause is stale/thin. */
@@ -660,6 +709,19 @@ function L(lang: ProPdfLangCode) {
       "सहेजी रिपोर्ट अधूरी है। Retry करें, फिर PDF डाउनलोड।",
     ),
     alertPdfSaved: pickLabel(lang, "PDF saved", "PDF save ho gayi", "PDF सहेजी"),
+    alertPdfSavedBody: pickLabel(
+      lang,
+      "Saved to My Reports — English report",
+      "My Reports mein save ho gayi — Hinglish report",
+      "My Reports में सहेजी गई — Hindi रिपोर्ट",
+    ),
+    alertPdfSaveFailed: pickLabel(
+      lang,
+      "PDF downloaded but could not save to My Reports. Try again.",
+      "PDF download ho gayi par My Reports mein save nahi hui. Phir try karo.",
+      "PDF डाउनलोड हुई पर My Reports में सहेज नहीं सकी। फिर कोशिश करें।",
+    ),
+    openMyReports: pickLabel(lang, "Open My Reports", "My Reports kholo", "My Reports खोलें"),
     alertPdfFailed: pickLabel(lang, "PDF download failed", "PDF download fail", "PDF विफल"),
     retry: pickLabel(lang, "Retry", "Retry", "पुनः"),
     ok: pickLabel(lang, "OK", "OK", "ठीक"),
@@ -1033,7 +1095,7 @@ export function buildLoveReportSectionsForPage(
       body: p1.verdict,
     });
 
-    const recBody = resolveRecommendationsBody(report);
+    const recBody = resolveRecommendationsBody(report, lang);
     const recBullets = resolveRecommendationsBullets(report);
     pushSection(sections, {
       id: "recommendations",
@@ -1047,7 +1109,7 @@ export function buildLoveReportSectionsForPage(
       id: "deep_connection",
       title: labels.deepCombined,
       subtitle: labels.deepSub,
-      body: resolveDeepConnectionBody(report) || undefined,
+      body: resolveDeepConnectionBody(report, lang) || undefined,
     });
   }
 
@@ -1056,10 +1118,10 @@ export function buildLoveReportSectionsForPage(
       id: "blueprint_vs",
       title: labels.blueprintVs,
       subtitle: labels.blueprintVsSub,
-      body: resolveBlueprintVsBody(report) || undefined,
+      body: resolveBlueprintVsBody(report, lang) || undefined,
     });
 
-    const moonBody = resolveMoonSyncBody(report) || undefined;
+    const moonBody = resolveMoonSyncBody(report, lang) || undefined;
     pushSection(sections, {
       id: "moon",
       title: labels.moon,
@@ -1126,19 +1188,19 @@ export function buildReportSectionsFromPayload(
       if (resolved) body = resolved;
     }
     if (id.toLowerCase() === "recommendations") {
-      const resolved = resolveRecommendationsBody(report);
+      const resolved = resolveRecommendationsBody(report, lang);
       if (resolved) body = resolved;
     }
     if (id.toLowerCase() === "deep_connection") {
-      const resolved = resolveDeepConnectionBody(report);
+      const resolved = resolveDeepConnectionBody(report, lang);
       if (resolved) body = resolved;
     }
     if (id.toLowerCase() === "blueprint_vs") {
-      const resolved = resolveBlueprintVsBody(report);
+      const resolved = resolveBlueprintVsBody(report, lang);
       if (resolved) body = resolved;
     }
     if (id.toLowerCase() === "moon") {
-      const resolved = resolveMoonSyncBody(report);
+      const resolved = resolveMoonSyncBody(report, lang);
       if (resolved) body = resolved;
     }
     let rawBullets = Array.isArray(row.bullets) && row.bullets.length
@@ -1147,6 +1209,10 @@ export function buildReportSectionsFromPayload(
     if (id.toLowerCase() === "recommendations") {
       const resolvedBullets = resolveRecommendationsBullets(report);
       if (resolvedBullets.length) rawBullets = resolvedBullets;
+    }
+    if (body && !proseLaneOk(body, lang)) {
+      const safeFallback = fallback?.body && proseLaneOk(fallback.body, lang) ? fallback.body : "";
+      body = safeFallback || undefined;
     }
     const bullets = narrativeNoBullets.has(id.toLowerCase()) ? undefined : rawBullets;
     const m = meta[id];
@@ -1205,6 +1271,8 @@ export async function fetchLoveRealityProReport(opts: {
   relocalizeOnly?: boolean;
   /** Bust CDN/proxy caches on force refresh. */
   cacheBust?: number;
+  /** After reinstall — restore saved report from server account cache (no LLM). */
+  preferServerCache?: boolean;
 }): Promise<LoveProReportFetchResult> {
   const lang = coerceProPdfLang(opts.lang);
   const tz1 = opts.p1.tz ?? Math.round((opts.p1.lon! / 15) * 2) / 2;
@@ -1226,6 +1294,7 @@ export async function fetchLoveRealityProReport(opts: {
       ...(forceLlm ? { "X-Force-LLM": "1" } : {}),
       ...(fullUpdate ? { "X-Love-Report-Full-Update": "1" } : {}),
       ...(relocalizeOnly ? { "X-Relocalize-Sections": "1" } : {}),
+      ...(opts.preferServerCache ? { "X-Prefer-Server-Cache": "1" } : {}),
     },
     body: JSON.stringify({
       p1: { ...packLovePerson(opts.p1, opts.p1Name), tz: tz1 },

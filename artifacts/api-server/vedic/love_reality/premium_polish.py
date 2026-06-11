@@ -35,7 +35,9 @@ from vedic.compat.openai_pdf_telemetry import (
     stub_meta,
 )
 from vedic.love_reality.love_section_polish import (
+    _deep_analysis_row_en_ok,
     _deep_analysis_row_hi_ok,
+    deep_analysis_en_ready,
     deep_analysis_hi_ready,
 )
 
@@ -1860,6 +1862,8 @@ def _parse_deep_analysis_response(parsed: dict, *, lang: str = "en") -> dict[str
             continue
         if lane == "hi" and not _deep_analysis_row_hi_ok(expl):
             continue
+        if lane == "en" and not _deep_analysis_row_en_ok(expl):
+            continue
         by_key[key] = {"key": key, "explanation": expl[:_DEEP_ANALYSIS_MAX_EXPL_CHARS]}
     for k in _DEEP_ANALYSIS_KEYS:
         if k in by_key:
@@ -2015,6 +2019,8 @@ def ensure_deep_analysis_llm(
         return pro or {}
     if lang == "hi" and deep_analysis_hi_ready(pro) and not force_llm:
         return pro
+    if lang == "en" and deep_analysis_en_ready(pro) and not force_llm:
+        return pro
     last_meta: dict[str, Any] = {}
     max_attempts = max(1, int(os.environ.get("LOVE_REALITY_DEEP_ANALYSIS_ATTEMPTS", "3")))
     for attempt in range(max_attempts):
@@ -2030,7 +2036,13 @@ def ensure_deep_analysis_llm(
         last_meta = hit.get("_meta") if isinstance(hit.get("_meta"), dict) else {}
         rows = hit.get("deep_analysis")
         if isinstance(rows, list) and len(rows) >= 4:
-            if lang != "hi" or deep_analysis_hi_ready({**pro, "deep_analysis": rows}):
+            merged = {**pro, "deep_analysis": rows}
+            lang_ok = (
+                (lang == "hi" and deep_analysis_hi_ready(merged))
+                or (lang == "en" and deep_analysis_en_ready(merged))
+                or (lang not in ("hi", "en"))
+            )
+            if lang_ok:
                 pro["deep_analysis"] = rows
                 pro.setdefault("_meta", {})["section3_deep_analysis"] = {
                     **last_meta,

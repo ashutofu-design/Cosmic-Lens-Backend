@@ -12,6 +12,7 @@ from vedic.love_reality.pdf_page1_data import (
     _localize_prose_block,
     localize_love_pdf_context,
 )
+from vedic.love_reality.pdf_text_safe import polish_content_lang
 
 _ANALYSIS_KEY_BY_TITLE = {
     "emotional": ("emotional", "भावनात्मक", "compatibility"),
@@ -60,6 +61,22 @@ _ANALYSIS_TITLES_HI = {
     "long_term": "दीर्घकालिक संभावना",
 }
 
+_ANALYSIS_TITLES_EN = {
+    "emotional": "Emotional Compatibility",
+    "communication": "Communication",
+    "trust": "Trust & Loyalty",
+    "long_term": "Long-Term Potential",
+}
+
+
+def _analysis_title(key: str, lang: str) -> str:
+    lane = polish_content_lang(lang)
+    if lane == "hi":
+        return _ANALYSIS_TITLES_HI.get(key, key)
+    if lane == "en":
+        return _ANALYSIS_TITLES_EN.get(key, key)
+    return key
+
 
 def _chapter_body(pro: dict, key: str) -> str:
     for ch in pro.get("chapters") or []:
@@ -74,14 +91,16 @@ def _word_count(text: str) -> int:
     return len((text or "").split())
 
 
-def _deep_analysis_map(pro: dict, *, min_words: int = 55) -> dict[str, str]:
+def _deep_analysis_map(pro: dict, *, min_words: int = 55, lang: str = "en") -> dict[str, str]:
+    from vedic.love_reality.pdf_text_safe import prose_lane_ok
+
     out: dict[str, str] = {}
     for row in pro.get("deep_analysis") or []:
         if not isinstance(row, dict):
             continue
         key = str(row.get("key") or "").strip().lower()
         expl = str(row.get("explanation") or "").strip()
-        if key and _word_count(expl) >= min_words:
+        if key and _word_count(expl) >= min_words and prose_lane_ok(expl, lang):
             out[key] = expl
     return out
 
@@ -90,12 +109,14 @@ def _deep_connection_body_from_analysis(
     analysis_rows: list[dict[str, Any]],
     lang: str = "en",
 ) -> str:
+    from vedic.love_reality.pdf_text_safe import prose_lane_ok
+
     lines: list[str] = []
     for row in analysis_rows:
         if not isinstance(row, dict):
             continue
         expl = str(row.get("explanation") or "").strip()
-        if _word_count(expl) < 40:
+        if _word_count(expl) < 40 or not prose_lane_ok(expl, lang):
             continue
         title = str(row.get("title") or "Analysis").strip()
         lines.append(f"{title}\n{expl}")
@@ -176,15 +197,15 @@ def _apply_ui_label_locale(page1: dict[str, Any], lang: str) -> dict[str, Any]:
     if challenges:
         out["challenges"] = challenges
 
-    da_map = _deep_analysis_map(out.get("_pro_ref") or {})
+    da_map = _deep_analysis_map(out.get("_pro_ref") or {}, lang=lang)
     analysis_rows = []
     for row in out.get("analysis") or []:
         if not isinstance(row, dict):
             continue
         a = dict(row)
         akey = _match_analysis_key(str(a.get("title") or ""))
-        if lang == "hi" and akey in _ANALYSIS_TITLES_HI:
-            a["title"] = _ANALYSIS_TITLES_HI[akey]
+        if akey:
+            a["title"] = _analysis_title(akey, lang)
         expl = str(a.get("explanation") or "").strip()
         if len(expl) < 40 and akey and da_map.get(akey):
             a["explanation"] = da_map[akey]
@@ -212,7 +233,7 @@ def enrich_page1_and_context(
     ctx = dict(pdf_context or {})
     pro = pro if isinstance(pro, dict) else {}
     p1["_pro_ref"] = pro
-    da_map = _deep_analysis_map(pro)
+    da_map = _deep_analysis_map(pro, lang=lang)
 
     verdict = str(p1.get("verdict") or "").strip()
     if _word_count(verdict) < 18:
@@ -259,7 +280,7 @@ def enrich_page1_and_context(
     elif da_map:
         p1["analysis"] = [
             {
-                "title": _ANALYSIS_TITLES_HI.get(k, k),
+                "title": _analysis_title(k, lang),
                 "score": 0,
                 "explanation": v,
             }
@@ -385,17 +406,17 @@ def _sync_deep_connection_from_llm(
     lang: str = "en",
 ) -> list[dict[str, Any]]:
     """Map LLM deep_analysis → deep_connection section body."""
-    da_map = _deep_analysis_map(pro)
+    da_map = _deep_analysis_map(pro, lang=lang)
     analysis_rows = list(page1.get("analysis") or [])
     if da_map and not analysis_rows:
         analysis_rows = [
-            {"title": _ANALYSIS_TITLES_HI.get(k, k), "explanation": v}
+            {"title": _analysis_title(k, lang), "explanation": v}
             for k, v in da_map.items()
         ]
     body = _deep_connection_body_from_analysis(analysis_rows, lang)
     if not body and da_map:
         body = _deep_connection_body_from_analysis(
-            [{"title": _ANALYSIS_TITLES_HI.get(k, k), "explanation": v} for k, v in da_map.items()],
+            [{"title": _analysis_title(k, lang), "explanation": v} for k, v in da_map.items()],
             lang,
         )
     if not body:

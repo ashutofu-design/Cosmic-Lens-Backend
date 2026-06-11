@@ -64,6 +64,8 @@ def prose_matches_lang(text: str, lang: str) -> bool:
     if not sample or len(sample) < 20:
         return False
     if lane == "en":
+        if devanagari_char_count(sample[:600]) >= 3:
+            return False
         return True
     if lane == "hi":
         if devanagari_char_count(sample) < 12:
@@ -82,18 +84,36 @@ def prose_matches_lang(text: str, lang: str) -> bool:
     return True
 
 
+def prose_lane_ok(text: str, lang: str) -> bool:
+    """Per-section gate — English must not contain Devanagari."""
+    lane = polish_content_lang(lang)
+    sample = (text or "").strip()
+    if not sample:
+        return False
+    deva = devanagari_char_count(sample)
+    if lane == "en":
+        return deva < 3
+    if lane == "hi":
+        return deva >= 12
+    if lane == "hn":
+        return deva < 6
+    return True
+
+
 def love_pro_payload_matches_lang(payload: dict, lang: str) -> bool:
     """Validate cached / fresh Love Reality Pro JSON matches requested language."""
     if not isinstance(payload, dict):
         return False
     lane = polish_content_lang(lang)
-    if lane == "en":
-        return True
     p1 = payload.get("page1") if isinstance(payload.get("page1"), dict) else {}
     pro = payload.get("pro_premium") if isinstance(payload.get("pro_premium"), dict) else {}
     ctx = payload.get("pdf_context") if isinstance(payload.get("pdf_context"), dict) else {}
     moon = ctx.get("page5_moon") if isinstance(ctx.get("page5_moon"), dict) else {}
     bp = ctx.get("page2_3_blueprint") if isinstance(ctx.get("page2_3_blueprint"), dict) else {}
+    deep_bits: list[str] = []
+    for row in pro.get("deep_analysis") or []:
+        if isinstance(row, dict):
+            deep_bits.append(str(row.get("explanation") or ""))
     sample = " ".join([
         str(p1.get("relationship_summary") or ""),
         str(p1.get("insights_narrative") or ""),
@@ -104,6 +124,7 @@ def love_pro_payload_matches_lang(payload: dict, lang: str) -> bool:
         str(moon.get("body") or ""),
         str(ctx.get("page6_root_cause") or ""),
         str(bp.get("part2") or bp.get("part1") or ""),
+        *deep_bits,
     ])
     return prose_matches_lang(sample, lane)
 

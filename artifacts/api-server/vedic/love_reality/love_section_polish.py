@@ -2035,6 +2035,32 @@ def _deep_analysis_row_hi_ok(text: str) -> bool:
         return len(re.findall(r"[\u0900-\u097F]", text)) >= 24
 
 
+_DEEP_ANALYSIS_EN_MIN_WORDS = 55
+
+
+def _deep_analysis_row_en_ok(text: str) -> bool:
+    from vedic.love_reality.pdf_text_safe import prose_lane_ok
+
+    if _word_count(text) < _DEEP_ANALYSIS_EN_MIN_WORDS:
+        return False
+    return prose_lane_ok(text, "en")
+
+
+def deep_analysis_en_ready(pro: dict) -> bool:
+    """Section 3 (Deep Connection) — 4 dimensions in plain English (no Devanagari)."""
+    rows = pro.get("deep_analysis") or []
+    if not isinstance(rows, list):
+        return False
+    ok = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        expl = str(row.get("explanation") or "").strip()
+        if _deep_analysis_row_en_ok(expl):
+            ok += 1
+    return ok >= 4
+
+
 def deep_analysis_hi_ready(pro: dict) -> bool:
     """Section 3 (Deep Connection) OK for Hindi — 4 dimensions with full Devanagari prose."""
     rows = pro.get("deep_analysis") or []

@@ -49,6 +49,9 @@ class PersonSignals:
     saturn_on_7th_as_lord: bool = False
     venus_combust: bool = False
     venus_afflicted: bool = False
+    mercury_debil: bool = False
+    mercury_afflicted: bool = False
+    mercury_combust: bool = False
     venus_degree: float | None = None
     affliction_weight: int = 0
     notes: list[str] = field(default_factory=list)
@@ -173,6 +176,30 @@ def _analyze_person(k: KundliReader) -> PersonSignals:
             s.moon_dual_flip_risk = True
             s.notes.append(
                 f"{k.name}'s Moon in dual sign under affliction — mind flips quickly under stress."
+            )
+
+    merc = k.planet("Mercury")
+    if merc:
+        merc_d = k.dignity("Mercury", k.sidx(merc["sign"]))
+        if merc_d <= -2:
+            s.mercury_debil = True
+            w += 8
+            s.notes.append(f"{k.name}'s Mercury debilitated — words land wrong under stress.")
+        if k.is_combust("Mercury"):
+            s.mercury_combust = True
+            w += 5
+            s.notes.append(f"{k.name}'s Mercury combust — clarity drops in heated moments.")
+        merc_asp = k.aspects_planet("Mercury")
+        if (
+            "Rahu" in merc_asp
+            or "Ketu" in merc_asp
+            or k.share_house("Mercury", "Rahu")
+            or k.share_house("Mercury", "Ketu")
+        ):
+            s.mercury_afflicted = True
+            w += 7
+            s.notes.append(
+                f"{k.name}'s Mercury under nodal pull — mixed signals, hard to read intent."
             )
 
     h5l = k.house_lord(5)

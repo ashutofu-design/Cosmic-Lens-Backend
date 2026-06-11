@@ -36,10 +36,23 @@ def test_all_engines_return_score_and_summary():
         assert isinstance(block.get("reasons"), list)
 
 
+def test_love_compat_score_respects_floor():
+    lc = run_love_compatibility(P1, P2)
+    assert lc["score"] >= 15
+
+
+def test_love_compat_ledger_bonus_before_penalty():
+    lc = run_love_compatibility(P1, P2)
+    ledger = lc.get("score_ledger") or []
+    phases = [e.get("phase") for e in ledger if e.get("phase")]
+    if "bonus" in phases and "penalty" in phases:
+        assert phases.index("bonus") < phases.index("penalty")
+
+
 def test_afflicted_heavy_chart_not_fake_high_love():
     """Debilitated Venus/Moon patterns should cap love score — not fake 70+."""
     lc = run_love_compatibility(P1, P2)
-    assert 0 <= lc["score"] <= 100
+    assert 15 <= lc["score"] <= 100
     assert lc["emotional_summary"]
     bd = lc["breakdown"]
     for key in ("emotional", "attraction", "communication", "karmic", "stability", "dasha_transit"):

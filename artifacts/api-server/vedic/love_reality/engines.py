@@ -78,6 +78,142 @@ def _compute_breakup_score(sig: CoupleSignals) -> int:
     return clamp(score)
 
 
+_LOVE_COMPAT_BASE = 52
+_LOVE_COMPAT_FLOOR = 15
+
+
+def _partner_venus_strong(partner: PersonSignals, reader: KundliReader) -> bool:
+    """Partner Venus exalted/strong — softens other's debilitated Venus penalty."""
+    if partner.venus_d9_exalted:
+        return True
+    venus = reader.planet("Venus")
+    if venus and reader.dignity("Venus", reader.sidx(venus["sign"])) >= 2:
+        return True
+    return False
+
+
+def _venus_debil_penalty(
+    person: PersonSignals, reader: KundliReader, partner: PersonSignals, partner_reader: KundliReader,
+) -> tuple[float, str]:
+    if not person.venus_debil:
+        return 0.0, ""
+    if d9_cancels_debil(reader, "Venus"):
+        return -5.0, "Neech-bhang in Navamsa softens Venus debilitation"
+    if _partner_venus_strong(partner, partner_reader):
+        return -8.0, "Partner Venus strong — partial offset to debilitated Venus"
+    return -14.0, "Love nature unstable under stress"
+
+
+def _compute_love_compatibility_score(
+    r1: KundliReader, r2: KundliReader, sig: CoupleSignals,
+) -> tuple[int, int, list[dict[str, Any]]]:
+    """
+    Ordered pipeline: base → all bonuses → all penalties → floor → honesty cap.
+    """
+    ledger: list[dict[str, Any]] = [
+        {
+            "label": "Base compatibility anchor",
+            "delta": None,
+            "note": "Starting value 52 before chart adjustments",
+            "base": _LOVE_COMPAT_BASE,
+        },
+    ]
+    bonuses: list[tuple[str, float, str]] = []
+    penalties: list[tuple[str, float, str]] = []
+
+    if not sig.p1.separation_yoga and not sig.p2.separation_yoga:
+        bonuses.append(("No active separation yoga", 5.0, "Timing less hostile to staying together"))
+
+    person_triples = (
+        (sig.p1, r1, sig.p2, r2),
+        (sig.p2, r2, sig.p1, r1),
+    )
+    for person, reader, partner, partner_reader in person_triples:
+        if person.reconnection_yoga and not person.separation_yoga:
+            bonuses.append((f"{person.name}: Reconnection yoga", 6.0, "Emotional reopening capacity"))
+        if not person.fifth_lord_weak and not person.venus_debil:
+            bonuses.append((
+                f"{person.name}: 5th lord support", 4.0, "Romance spark can hold under pressure",
+            ))
+
+    for person, reader, partner, partner_reader in person_triples:
+        pen, note = _venus_debil_penalty(person, reader, partner, partner_reader)
+        if pen:
+            penalties.append((f"{person.name}: Venus debilitated", pen, note))
+        elif person.venus_d9_weak:
+            penalties.append((
+                f"{person.name}: Navamsa Venus weak", -6.0, "Inner commitment layer fragile",
+            ))
+        if person.moon_debil or person.moon_afflicted:
+            penalties.append((
+                f"{person.name}: Moon afflicted", -11.0, "Emotional reactions unpredictable",
+            ))
+        if person.seventh_lord_dusthana or person.seventh_lord_debil:
+            penalties.append((
+                f"{person.name}: 7th lord weak", -12.0, "Partnership structure strained",
+            ))
+        if person.saturn_on_7th:
+            penalties.append((
+                f"{person.name}: Saturn on 7th", -8.0, "Distance and delay on partnership axis",
+            ))
+        if person.venus_dual_flip_risk or person.moon_dual_flip_risk:
+            penalties.append((
+                f"{person.name}: Love intent flip risk", -5.0,
+                "Dual sign under affliction — affection intent can flip quickly",
+            ))
+        if person.mercury_debil:
+            penalties.append((
+                f"{person.name}: Mercury debilitated", -5.0, "Communication clarity drops under stress",
+            ))
+        if person.mercury_afflicted or person.mercury_combust:
+            penalties.append((
+                f"{person.name}: Mercury afflicted", -4.0, "Mixed signals / hard to read intent",
+            ))
+
+    if sig.moon_mismatch:
+        penalties.append(("Moon–Moon rhythm clash", -7.0, "One holds in, the other pushes out"))
+    if sig.cross_rahu_venus:
+        penalties.append(("Rahu on partner Venus", -9.0, "Obsession / loyalty blur between charts"))
+
+    score = float(_LOVE_COMPAT_BASE)
+    for label, delta, note in bonuses:
+        score += delta
+        ledger.append({
+            "label": label,
+            "delta": int(delta) if delta == int(delta) else delta,
+            "note": note,
+            "phase": "bonus",
+        })
+    for label, delta, note in penalties:
+        score += delta
+        ledger.append({
+            "label": label,
+            "delta": int(delta) if delta == int(delta) else delta,
+            "note": note,
+            "phase": "penalty",
+        })
+
+    if score < _LOVE_COMPAT_FLOOR:
+        ledger.append({
+            "label": "Compatibility floor",
+            "delta": _LOVE_COMPAT_FLOOR - score,
+            "note": f"Score raised to minimum {_LOVE_COMPAT_FLOOR} — bond still has workable baseline",
+            "phase": "floor",
+        })
+        score = float(_LOVE_COMPAT_FLOOR)
+
+    raw_score = clamp(score)
+    score_i = _cap_by_affliction(raw_score, sig, harsh_cap=48, moderate_cap=58)
+    if score_i < raw_score:
+        ledger.append({
+            "label": "Affliction cap applied",
+            "delta": score_i - raw_score,
+            "note": f"Combined affliction {sig.combined_affliction} — score capped for honesty",
+            "phase": "cap",
+        })
+    return score_i, raw_score, ledger
+
+
 def _love_dimension_breakdown(score_i: int, sig: CoupleSignals) -> dict[str, int]:
     """0–100 scores for Love Compatibility UI bars (mobile expects these keys)."""
     p1, p2 = sig.p1, sig.p2
@@ -113,6 +249,10 @@ def _love_dimension_breakdown(score_i: int, sig: CoupleSignals) -> dict[str, int
         communication += 8
     if p1.emotional_instability or p2.emotional_instability:
         communication -= 10
+    if p1.mercury_debil or p2.mercury_debil:
+        communication -= 8
+    if p1.mercury_afflicted or p2.mercury_afflicted or p1.mercury_combust or p2.mercury_combust:
+        communication -= 6
 
     karmic = 42.0
     if sig.cross_rahu_venus:
@@ -166,52 +306,7 @@ def run_love_compatibility(
     r1, r2, sig = _load_couple(p1, p2)
     reasons = list(sig.p1.notes[:4]) + list(sig.p2.notes[:4]) + sig.synastry_notes
 
-    score = 52.0
-    ledger: list[dict[str, Any]] = [
-        {
-            "label": "Base compatibility anchor",
-            "delta": None,
-            "note": "Starting value 52 before chart adjustments",
-            "base": 52,
-        },
-    ]
-
-    def _add(label: str, delta: float, note: str) -> None:
-        nonlocal score
-        score += delta
-        ledger.append({"label": label, "delta": int(delta) if delta == int(delta) else delta, "note": note})
-
-    for person in (sig.p1, sig.p2):
-        if person.venus_debil:
-            _add(f"{person.name}: Venus debilitated", -14, "Love nature unstable under stress")
-        elif person.venus_d9_weak:
-            _add(f"{person.name}: Navamsa Venus weak", -6, "Inner commitment layer fragile")
-        if person.moon_debil or person.moon_afflicted:
-            _add(f"{person.name}: Moon afflicted", -11, "Emotional reactions unpredictable")
-        if person.seventh_lord_dusthana or person.seventh_lord_debil:
-            _add(f"{person.name}: 7th lord weak", -12, "Partnership structure strained")
-        if person.saturn_on_7th:
-            _add(f"{person.name}: Saturn on 7th", -8, "Distance and delay on partnership axis")
-        if person.reconnection_yoga and not person.separation_yoga:
-            _add(f"{person.name}: Reconnection yoga", 6, "Emotional reopening capacity")
-        if not person.fifth_lord_weak and not person.venus_debil:
-            _add(f"{person.name}: 5th lord support", 4, "Romance spark can hold under pressure")
-
-    if sig.moon_mismatch:
-        _add("Moon–Moon rhythm clash", -7, "One holds in, the other pushes out")
-    if sig.cross_rahu_venus:
-        _add("Rahu on partner Venus", -9, "Obsession / loyalty blur between charts")
-    if not sig.p1.separation_yoga and not sig.p2.separation_yoga:
-        _add("No active separation yoga", 5, "Timing less hostile to staying together")
-
-    raw_score = clamp(score)
-    score_i = _cap_by_affliction(raw_score, sig, harsh_cap=48, moderate_cap=58)
-    if score_i < raw_score:
-        ledger.append({
-            "label": "Affliction cap applied",
-            "delta": score_i - raw_score,
-            "note": f"Combined affliction {sig.combined_affliction} — score capped for honesty",
-        })
+    score_i, raw_score, ledger = _compute_love_compatibility_score(r1, r2, sig)
     risk = risk_band_high_is_good(score_i)
 
     if score_i >= 62:
@@ -224,7 +319,15 @@ def run_love_compatibility(
     factors = {
         "emotional": "weak" if score_i < 45 else "medium" if score_i < 62 else "strong",
         "attraction": "weak" if sig.cross_rahu_venus else "medium",
-        "communication": "weak" if sig.moon_mismatch else "medium",
+        "communication": (
+            "weak"
+            if sig.moon_mismatch
+            or any(
+                p.mercury_debil or p.mercury_afflicted or p.mercury_combust
+                for p in (sig.p1, sig.p2)
+            )
+            else "medium"
+        ),
         "karmic": "strong" if sig.cross_rahu_venus or sig.p1.rahu_on_7th_axis else "medium",
         "stability": "weak" if sig.p1.seventh_lord_dusthana or sig.p2.seventh_lord_dusthana else "medium",
     }

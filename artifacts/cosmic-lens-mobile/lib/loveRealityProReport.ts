@@ -42,6 +42,9 @@ export type LoveProPremium = {
     pdf_generation?: {
       estimated_cost_inr?: number;
     };
+    sections?: Record<string, {
+      pdf_generation?: { estimated_cost_inr?: number };
+    }>;
   };
 };
 
@@ -749,6 +752,22 @@ export function loveRealityReportLabels(lang: ProPdfLangCode) {
   return L(lang);
 }
 
+function sumSectionLlmCostInr(
+  meta: { pdf_generation?: { estimated_cost_inr?: number }; sections?: Record<string, { pdf_generation?: { estimated_cost_inr?: number } }> } | undefined,
+): number {
+  if (!meta) return 0;
+  let total = 0;
+  const sections = meta.sections;
+  if (sections && typeof sections === "object") {
+    for (const row of Object.values(sections)) {
+      const inr = Number(row?.pdf_generation?.estimated_cost_inr ?? 0);
+      if (inr > 0) total += inr;
+    }
+  }
+  if (total > 0) return total;
+  return Number(meta.pdf_generation?.estimated_cost_inr ?? 0);
+}
+
 /** Rounded LLM cost in ₹ — integer only, no tokens (operator). */
 export function loveReportLlmCostInr(
   report: LoveProReportResponse | null | undefined,
@@ -756,7 +775,8 @@ export function loveReportLlmCostInr(
   if (!report) return null;
   const top = report.llm_cost_inr;
   if (typeof top === "number" && top > 0) return Math.round(top);
-  const inr = Number(report.pro_premium?._meta?.pdf_generation?.estimated_cost_inr ?? 0);
+  const meta = report.pro_premium?._meta as Parameters<typeof sumSectionLlmCostInr>[0];
+  const inr = sumSectionLlmCostInr(meta);
   if (!inr || inr <= 0) return null;
   return Math.round(inr);
 }

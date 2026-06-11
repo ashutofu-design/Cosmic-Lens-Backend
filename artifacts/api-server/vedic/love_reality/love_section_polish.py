@@ -1641,6 +1641,8 @@ def _run_section_llm(
         empty["_meta"]["reason"] = "polish_off"
         return empty
 
+    acc = tel if tel is not None else PdfGenOpenAITelemetry(model)
+
     prompt_fp = _fingerprint(system)
     cache_key = _section_cache_key(bundle, lang, model, scope, prompt_fp)
     cache_path = os.path.join(_cache_dir(), f"{scope}_{cache_key}.json")
@@ -1675,8 +1677,7 @@ def _run_section_llm(
     ]
     try:
         resp = client.chat.completions.create(**kwargs)
-        if tel is not None:
-            tel.record(resp, scope)
+        acc.record(resp, scope)
         raw = (resp.choices[0].message.content or "").strip()
         if not raw:
             empty["_meta"]["reason"] = "empty_openai_body"
@@ -1718,8 +1719,7 @@ def _run_section_llm(
             ]
             try:
                 resp2 = client.chat.completions.create(**kwargs)
-                if tel is not None:
-                    tel.record(resp2, f"{scope}_retry")
+                acc.record(resp2, f"{scope}_retry")
                 raw2 = (resp2.choices[0].message.content or "").strip()
                 if raw2:
                     parsed2 = json.loads(raw2)
@@ -1764,8 +1764,7 @@ def _run_section_llm(
                 ]
                 try:
                     resp_h = client.chat.completions.create(**kwargs)
-                    if tel is not None:
-                        tel.record(resp_h, f"{scope}_human_gate")
+                    acc.record(resp_h, f"{scope}_human_gate")
                     raw_h = (resp_h.choices[0].message.content or "").strip()
                     if raw_h:
                         parsed_h = json.loads(raw_h)
@@ -1790,6 +1789,19 @@ def _run_section_llm(
         "cache_key": cache_key[:12],
         "openai_skipped": False,
     })
+    if acc.openai_call_count > 0:
+        from vedic.compat.openai_pdf_telemetry import merge_pdf_generation_into_meta
+
+        merge_pdf_generation_into_meta(
+            out["_meta"],
+            acc.build_meta(
+                fallback_used=False,
+                final_status="OK",
+                validator_attempts=0,
+                cache_hit=False,
+                openai_skipped=False,
+            ),
+        )
     try:
         with open(cache_path, "w", encoding="utf-8") as fh:
             json.dump(out, fh, ensure_ascii=False, indent=2)
@@ -2692,6 +2704,11 @@ def assemble_love_reality_pro_premium(
         "assembly": _ASSEMBLY_VER,
         "sections": section_meta,
     })
+    from vedic.compat.openai_pdf_telemetry import absorb_pdf_phases_into_telemetry
+
+    for sm in section_meta.values():
+        if isinstance(sm, dict):
+            absorb_pdf_phases_into_telemetry(tel, sm)
     pg = tel.build_meta(
         fallback_used=not _assembly_depth_ok(pro),
         final_status="OK" if _assembly_depth_ok(pro) else "partial",

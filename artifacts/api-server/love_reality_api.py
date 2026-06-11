@@ -385,13 +385,19 @@ def _attach_llm_cost_inr(payload: dict) -> dict:
     meta = pro.get("_meta")
     if not isinstance(meta, dict):
         return payload
-    pg = meta.get("pdf_generation")
-    if not isinstance(pg, dict):
-        return payload
     try:
-        inr = float(pg.get("estimated_cost_inr") or 0)
-    except (TypeError, ValueError):
+        from vedic.compat.openai_pdf_telemetry import sum_llm_cost_inr_from_pro_meta
+
+        inr = sum_llm_cost_inr_from_pro_meta(meta)
+    except Exception:
         inr = 0.0
+    if inr <= 0:
+        pg = meta.get("pdf_generation")
+        if isinstance(pg, dict):
+            try:
+                inr = float(pg.get("estimated_cost_inr") or 0)
+            except (TypeError, ValueError):
+                inr = 0.0
     if inr > 0:
         return {**payload, "llm_cost_inr": int(round(inr))}
     return payload

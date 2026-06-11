@@ -343,6 +343,49 @@ def merge_pdf_generation_into_meta(meta_root: dict[str, Any], pdf_gen: dict[str,
     meta_root["pdf_generation"] = dict(pdf_gen)
 
 
+def absorb_pdf_phases_into_telemetry(
+    tel: PdfGenOpenAITelemetry,
+    meta: dict[str, Any] | None,
+) -> None:
+    """Merge per-section pdf_generation phases into one report-level accumulator."""
+    if not isinstance(meta, dict):
+        return
+    pg = meta.get("pdf_generation")
+    if not isinstance(pg, dict):
+        return
+    for ph in pg.get("phases") or []:
+        if isinstance(ph, dict):
+            tel.phases.append(dict(ph))
+
+
+def sum_llm_cost_inr_from_pro_meta(meta: dict[str, Any] | None) -> float:
+    """Sum section-level INR costs without double-counting report-level rollup."""
+    if not isinstance(meta, dict):
+        return 0.0
+    total = 0.0
+    sections = meta.get("sections")
+    if isinstance(sections, dict):
+        for row in sections.values():
+            if not isinstance(row, dict):
+                continue
+            pg = row.get("pdf_generation")
+            if not isinstance(pg, dict):
+                continue
+            try:
+                total += float(pg.get("estimated_cost_inr") or 0)
+            except (TypeError, ValueError):
+                continue
+    if total > 0:
+        return total
+    pg = meta.get("pdf_generation")
+    if isinstance(pg, dict):
+        try:
+            return float(pg.get("estimated_cost_inr") or 0)
+        except (TypeError, ValueError):
+            return 0.0
+    return 0.0
+
+
 def publish_and_log_pdf_generation(
     pdf_gen: dict[str, Any],
     *,

@@ -2131,15 +2131,21 @@ def polish_love_reality_premium(
                 out = dict(hit)
                 meta = dict(out.get("_meta") or {})
                 meta.setdefault("cache", "L1")
-                pg = stub_meta(
-                    model,
-                    final_status="OK",
-                    fallback_used=False,
-                    openai_skipped=True,
-                    cache_hit=True,
-                    reason="polish_L1",
+                existing = meta.get("pdf_generation")
+                has_cost = (
+                    isinstance(existing, dict)
+                    and float(existing.get("estimated_cost_inr") or 0) > 0
                 )
-                _attach_polish_telemetry(meta, pg)
+                if not has_cost:
+                    pg = stub_meta(
+                        model,
+                        final_status="OK",
+                        fallback_used=False,
+                        openai_skipped=True,
+                        cache_hit=True,
+                        reason="polish_L1",
+                    )
+                    _attach_polish_telemetry(meta, pg)
                 out["_meta"] = meta
                 return out
             db_hit = _l2_get(cache_key)
@@ -2149,15 +2155,21 @@ def polish_love_reality_premium(
                 out = dict(db_hit)
                 meta = dict(out.get("_meta") or {})
                 meta.setdefault("cache", "L2")
-                pg = stub_meta(
-                    model,
-                    final_status="OK",
-                    fallback_used=False,
-                    openai_skipped=True,
-                    cache_hit=True,
-                    reason="polish_L2",
+                existing = meta.get("pdf_generation")
+                has_cost = (
+                    isinstance(existing, dict)
+                    and float(existing.get("estimated_cost_inr") or 0) > 0
                 )
-                _attach_polish_telemetry(meta, pg)
+                if not has_cost:
+                    pg = stub_meta(
+                        model,
+                        final_status="OK",
+                        fallback_used=False,
+                        openai_skipped=True,
+                        cache_hit=True,
+                        reason="polish_L2",
+                    )
+                    _attach_polish_telemetry(meta, pg)
                 out["_meta"] = meta
                 return out
 

@@ -887,14 +887,21 @@ def register_love_reality_routes(flask_app) -> None:
                     cached_json = None
                 if cached_json:
                     if lang == "en":
-                        from vedic.love_reality.love_section_polish import breakup_chapter_lane_ready
+                        from vedic.love_reality.love_section_polish import (
+                            _remedies_mentions_religious_ritual,
+                            breakup_chapter_lane_ready,
+                        )
 
                         pro_cached = (
                             cached_json.get("pro_premium")
                             if isinstance(cached_json.get("pro_premium"), dict)
                             else {}
                         )
-                        if not breakup_chapter_lane_ready(pro_cached, "en"):
+                        s4_narr = str(pro_cached.get("remedies_action_narrative") or "")
+                        if (
+                            not breakup_chapter_lane_ready(pro_cached, "en")
+                            or _remedies_mentions_religious_ritual(s4_narr)
+                        ):
                             _json_cache.invalidate(json_cache_params)
                             cached_json = None
                 if cached_json:

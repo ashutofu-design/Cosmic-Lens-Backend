@@ -1074,27 +1074,149 @@ def polish_love_reality_moon_sync_only(
     )
 
 
-def _remedies_action_engine_facts(bundle: dict) -> str:
-    from vedic.love_reality.pdf_data_v2 import _build_remedies
+_REMEDIES_RELIGIOUS_BAN_RE = re.compile(
+    r"\b(?:puja|pooja|daan|donation|donate|charity|temple|hawan|havan|mantra|jap|jaap|"
+    r"gemstone|rudraksha|lakshmi|hanuman\s+chalisa|milk\s+offering|priest|pandit|"
+    r"oil\s+lamp|sesame\s+oil|fasting\s+for|worship|aarti|archana)\b",
+    re.I,
+)
 
+
+def _remedies_mentions_religious_ritual(text: str) -> bool:
+    return bool(_REMEDIES_RELIGIOUS_BAN_RE.search(text or ""))
+
+
+def _remedies_couple_chart_facts(bundle: dict) -> str:
+    """Both-kundli engine facts — design ONE joint behavioral remedy (no puja/daan)."""
+    from vedic.love_reality.pdf_data_v2 import KundliReader, _moon_sign_idx, _shashtashtak
+
+    primary, hooks = _pick_root_cause_text(bundle)
+    p1 = bundle.get("p1") or {}
+    p2 = bundle.get("p2") or {}
+    k1 = bundle.get("kundli_p1") or {}
+    k2 = bundle.get("kundli_p2") or {}
     lc = bundle.get("love_compatibility") or {}
     bu = bundle.get("breakup_chances") or {}
+    ly = bundle.get("loyalty_check") or {}
     fo = bundle.get("future_outcome") or {}
     wr = bundle.get("will_return") or {}
+    sig = bundle.get("couple_signals") or {}
+
     lines = [
-        "REMEDIES & ACTION FACTS (use for practical guidance — do NOT quote scores in prose):",
-        f"Connection band: {lc.get('risk_level') or 'mixed'} — emotional summary: {str(lc.get('emotional_summary') or '')[:200]}",
-        f"Stress pattern: {str(bu.get('emotional_summary') or '')[:180]}",
-        f"Near-term outlook: {str(fo.get('current_phase') or fo.get('emotional_summary') or '')[:180]}",
-        f"Return window note: {str(wr.get('time_window') or wr.get('return_chance') or '')[:120]}",
+        "COUPLE REMEDY DESIGN (both kundlis — invent ONE joint weekly practice from these facts):",
+        f"Primary friction to repair: {primary}",
     ]
-    for r in _build_remedies(bundle, {}):
-        lines.append(f"Chart-linked habit: {r}")
-    for r in (lc.get("reasons") or [])[:2]:
-        t = str(r).strip()
+    for h in hooks[:5]:
+        lines.append(f"Chart hook: {h}")
+
+    m1, m2 = _moon_sign_idx(k1), _moon_sign_idx(k2)
+    shash = _shashtashtak(m1, m2)
+    lines.append(f"Moon shashtashtak clash (6-8): {'yes' if shash else 'no'}")
+
+    r1, r2 = KundliReader(k1), KundliReader(k2)
+    for reader, person in ((r1, p1), (r2, p2)):
+        nm = str(person.get("name") or ("p1" if reader is r1 else "p2")).strip()
+        moon = reader.planet("Moon")
+        merc = reader.planet("Mercury")
+        venus = reader.planet("Venus")
+        if moon:
+            lines.append(f"{nm} Moon in {moon.get('sign')} — emotional reaction speed under stress")
+        if merc:
+            lines.append(f"{nm} Mercury in {merc.get('sign')} — how they speak when hurt")
+        if venus:
+            lines.append(f"{nm} Venus in {venus.get('sign')} — love language / affection style")
+        occ7 = reader.occupants(7) or []
+        if occ7:
+            lines.append(f"{nm} 7th-house pressure: {', '.join(occ7)} — partnership stress pattern")
+        occ12 = reader.occupants(12) or []
+        if occ12:
+            lines.append(f"{nm} 12th-house hidden pull: {', '.join(occ12)}")
+
+    for label, block, key in (
+        ("Breakup engine", bu, "reasons"),
+        ("Loyalty engine", ly, "reasons"),
+        ("Love engine", lc, "reasons"),
+    ):
+        for r in (block.get(key) or [])[:2]:
+            t = str(r).strip()
+            if t:
+                lines.append(f"{label} friction: {t}")
+
+    lines.extend([
+        f"Connection band: {lc.get('risk_level') or 'mixed'} — {str(lc.get('emotional_summary') or '')[:160]}",
+        f"Stress pattern: {str(bu.get('emotional_summary') or '')[:140]}",
+        f"Near-term outlook: {str(fo.get('current_phase') or fo.get('emotional_summary') or '')[:140]}",
+        f"Return window: {str(wr.get('time_window') or wr.get('return_chance') or '')[:100]}",
+    ])
+    for n in (sig.get("synastry_notes") or [])[:3]:
+        t = str(n).strip()
         if t:
-            lines.append(f"Friction to address: {t}")
+            lines.append(f"Synastry: {t}")
+
+    lines.append(
+        "DESIGN RULE: Name ONE weekly couple ritual BOTH partners do together — behavioral only "
+        "(no puja/daan/temple/mantra/gemstone). It must directly repair the Primary friction above."
+    )
     return "\n".join(lines)
+
+
+def _remedies_action_engine_facts(bundle: dict) -> str:
+    return _remedies_couple_chart_facts(bundle)
+
+
+def _remedies_action_few_shot(lang: str) -> str:
+    if lang == "en":
+        return """EXAMPLE (en — ONE named couple remedy, both partners, chart-specific, NO puja/daan):
+{
+  "remedies_action_narrative": "[p1_name], in the next 7–30 days stop the second-text spiral when [p2_name] goes quiet — wait 90 minutes before you follow up.\\n\\nYour charts show Moon–Mercury friction: you heat up fast, they cool down inside. Together, start the **Weekly Moon Reset** every Sunday — 20 minutes, phones in another room, one speaker finishes before the other replies. This single ritual targets your engine’s top friction (silence read as rejection) because [p2_name] finally gets uninterrupted space and you stop filling pause with panic.\\n\\nOver the next 3–12 months, keep the Moon Reset even when things feel fine; skip ultimatums in high-stress weeks and do one calm clarity check-in each quarter.",
+  "action_steps": [
+    "Start the Weekly Moon Reset this Sunday — 20 min, phones away, both partners",
+    "Wait 90 minutes before a second text when [p2_name] goes quiet",
+    "No ultimatums during Mars-heavy conflict weeks — pause 24h first",
+    "Quarterly calm sit-down for clarity — not during a fight",
+    "Repair within 24 hours after any argument — one of you names it first"
+  ]
+}"""
+    if lang == "hi":
+        return (
+            'EXAMPLE (hi — real names, paragraph prose):\n'
+            '"[p1_name], अगले ७–३० दिन में झगड़े के २४ घंटे के अंदर repair की आदत बनाएँ — '
+            '[p2_name] के चुप होने पर message flood न करें।\\n\\n'
+            'दोनों मिलकर हर रविवार **Moon Reset** — २० मिनट, फोन दूर, बारी-बारी से बात। '
+            'यही एक उपाय chart की मुख्य friction को पकड़ता है।\\n\\n'
+            'अगले ३–१२ महीने: ultimatum नहीं — शांति से clarity।"'
+        )
+    return (
+        'EXAMPLE (hn — real names):\n'
+        '"[p1_name], agle 7–30 din message flood band — [p2_name] quiet ho to 90 min wait.\\n\\n'
+        'Dono milkar har Sunday **Moon Reset** — 20 min, phone door. '
+        'Yeh ek couple ritual chart ki top friction fix karta hai."'
+    )
+
+
+def _remedies_action_en_mandate() -> str:
+    return """
+MANDATORY FOR en — Section 4 Practical Remedies:
+
+THE ONE COUPLE REMEDY (centerpiece — paragraph 2 MUST be this):
+- Invent exactly ONE named weekly ritual BOTH [p1_name] AND [p2_name] do together (e.g. "the Weekly Moon Reset").
+- Trace it to Primary friction + both charts' Moon/Mercury/7th-house facts from COUPLE REMEDY DESIGN block.
+- Explain in plain English WHY this one ritual repairs THEIR pattern — not generic advice.
+- Both partners participate equally.
+
+STRICTLY FORBIDDEN — never write:
+puja, pooja, daan, donation, charity, temple, hawan, havan, mantra, jap, gemstone, rudraksha,
+Lakshmi, Hanuman, milk offering, priest, pandit, oil lamp, sesame lamp, fasting for planets, worship.
+
+ALLOWED: behavioral habits, communication rules, conflict cooldown, phone-free time, repair talks,
+quiet reflection windows tied to chart timing (NOT religious ritual).
+
+STRUCTURE:
+- Paragraph 1: next 7–30 days habits for p1
+- Paragraph 2: THE ONE COUPLE REMEDY (named, both partners, chart-specific why)
+- Paragraph 3: next 3–12 months honest plan
+- action_steps[0] MUST restate the couple remedy in 8–18 words
+"""
 
 
 def _build_remedies_action_system_prompt(lang: str) -> str:
@@ -1105,40 +1227,48 @@ def _build_remedies_action_system_prompt(lang: str) -> str:
         hi_lock = (
             "\n\nMANDATORY FOR hi — remedies_action_narrative:\n"
             "- 100% देवनागरी Hindi, रोज़मर्रा की भाषा\n"
-            "- 3+ paragraphs (\\n\\n) — उपाय + अगले ७–३० दिन + ३–१२ महीने का plan\n"
+            "- 3+ paragraphs (\\n\\n) — एक couple ritual (दोनों करें) + अगले ७–३० दिन + ३–१२ महीने\n"
             "- Real partner names — p1 को सीधे समझाएँ\n"
+            "- NO puja/daan/temple/mantra/gemstone — केवल व्यवहारिक उपाय\n"
             "- NO English headings like 'Upay and Aage Kya Karein' inside body\n"
+        )
+    en_lock = _remedies_action_en_mandate() if lang == "en" else ""
+    hn_lock = ""
+    if lang == "hn":
+        hn_lock = (
+            "\n\nMANDATORY FOR hn — remedies_action_narrative:\n"
+            "- Ek named couple ritual jisme [p1_name] AUR [p2_name] dono weekly participate karein\n"
+            "- Chart friction se trace karo — generic advice mat\n"
+            "- NO puja/daan/temple/mantra/gemstone\n"
         )
     return f"""Write ONLY Section 4 — Practical Remedies & What To Do Next (in-app action plan for p1).
 
 Return STRICT JSON:
 {{
-  "remedies_action_narrative": "long prose: daily practical remedies + next steps + next 3–12 month plan",
-  "action_steps": ["5–7 short practical one-liners — habits, repair rituals, timing, simple chart-tied upay"]
+  "remedies_action_narrative": "long prose: habits + ONE couple remedy both partners do + 3–12 month plan",
+  "action_steps": ["5–7 short practical one-liners — first line = the couple remedy ritual"]
 }}
 
 Write entirely in {script}.
-{hi_lock}
+{hi_lock}{en_lock}{hn_lock}
 
 {love_script_directive(lang)}
 
-EXAMPLE (hi style — real names, paragraph prose):
-"[p1_name], अगले ७–३० दिन में सबसे पहले झगड़े के २४ घंटे के अंदर repair की आदत बनाएँ — [p2_name] के चुप होने पर message flood न करें।\\n\\nसाप्ताहिक २० मिनट phone-free बातचीत रखें — यही आपका सबसे सरल उपाय है। सोमवार शाम शांत घंटा chart के अनुसार मन को स्थिर करता है।\\n\\nअगले ३–१२ महीने: जब connection कमज़ोर लगे तो ultimatum न दें — एक बार calmly बैठकर clarity लें।"
+{_remedies_action_few_shot(lang)}
 
-TASK — focus 80% PRACTICAL, 20% simple chart-linked habits:
-1) Ab kya karein (next 7–30 days): repair habits, communication rules, conflict cooldown — specific to ROOT_CAUSE
-2) Practical remedies: daily/weekly actions p1 can actually do (not vague "communicate better")
-3) Simple upay where chart facts support it (e.g. Monday calm hour, Friday gratitude note) — NO gemstone shopping lists
-4) Agle 3 mahine + 12 mahine: what to build, what to avoid, when to seek clarity — honest if outlook is strained
-5) If connection feels weak, say what improves odds — never false reunion promises
+TASK:
+1) Next 7–30 days: repair habits, communication rules, conflict cooldown — tied to ROOT_CAUSE
+2) THE ONE COUPLE REMEDY: both partners, weekly, named, chart-specific — behavioral only
+3) Next 3–12 months: what to build, avoid, when to seek clarity — honest if strained
+4) Never false reunion promises
 
 RULES:
-- Minimum 110 words in remedies_action_narrative, 3–4 paragraphs (\\n\\n) — flowing explanation, NOT title-only bullets
-- remedies_action_narrative = poora upay + aage kya karein guide — jaise jyotishi samjha rahe hon
-- action_steps: exactly 5–7 short lines (8–18 words each) — quick checklist AFTER the prose, verb-first
-- Do NOT repeat verdict paragraphs or moon/blueprint analysis
-- Do NOT write scores like "13/100" or "love score" — say "jab connection kamzor lagta hai"
+- Minimum 110 words in remedies_action_narrative, 3–4 paragraphs (\\n\\n) — flowing prose, NOT bullets only
+- action_steps: exactly 5–7 lines (8–18 words each) — verb-first; line 1 = couple remedy
+- Do NOT repeat verdict / moon / blueprint paragraphs
+- Do NOT write scores like "13/100"
 - No generic therapy clichés ("open communication", "mutual understanding")
+- NEVER puja, daan, donation, temple worship, mantra, gemstone — behavioral chart-tied habits only
 
 {_love_llm_shared_voice(lang)}
 
@@ -1182,6 +1312,10 @@ def polish_love_reality_remedies_action_only(
         if _word_count(body) < _REMEDIES_ACTION_MIN_WORDS:
             return {}
         if lang == "hi" and not _remedies_action_text_hi_ok(body):
+            return {}
+        if lang in ("en", "hn") and _remedies_mentions_religious_ritual(body):
+            return {}
+        if lang in ("en", "hn") and steps and _remedies_mentions_religious_ritual(" ".join(steps)):
             return {}
         return {"remedies_action_narrative": body, "action_steps": steps[:7]}
 
@@ -1256,6 +1390,7 @@ def ensure_remedies_action_llm(
         return pro
 
     work = dict(bundle)
+    work["_lr_root_cause"] = _build_root_cause_anchor(bundle, lang)
     work["_lr_prior_digest"] = _build_prior_sections_digest(pro, lang)
     last_meta: dict[str, Any] = {}
     max_attempts = max(1, int(os.environ.get("LOVE_REALITY_REMEDIES_ACTION_ATTEMPTS", "5")))
@@ -1271,6 +1406,12 @@ def ensure_remedies_action_llm(
         steps = hit.get("action_steps") if isinstance(hit.get("action_steps"), list) else []
         if lang == "hi" and not _remedies_action_text_hi_ok(new_body):
             last_meta = {**last_meta, "reject": "not_hi_or_thin", "words": _word_count(new_body)}
+            continue
+        if lang in ("en", "hn") and _remedies_mentions_religious_ritual(new_body):
+            last_meta = {**last_meta, "reject": "religious_ritual_banned", "words": _word_count(new_body)}
+            continue
+        if lang in ("en", "hn") and steps and _remedies_mentions_religious_ritual(" ".join(str(s) for s in steps)):
+            last_meta = {**last_meta, "reject": "religious_ritual_in_steps"}
             continue
         if _word_count(new_body) >= _REMEDIES_ACTION_MIN_WORDS:
             pro["remedies_action_narrative"] = new_body

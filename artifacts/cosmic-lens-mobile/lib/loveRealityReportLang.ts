@@ -90,7 +90,7 @@ export type LoveReportLangPayload = {
 
 
 
-/** Narrative prose only — scorecard lines stay English ("Love: 75/100"). */
+/** Narrative prose — scorecard KPI labels checked separately via scorecardHiLoadGate. */
 
 const NARRATIVE_SECTION_IDS = new Set([
 
@@ -234,7 +234,7 @@ export function reportScriptMatchesLang(
 
   const script = (report.content_script || "").trim().toLowerCase();
 
-  if (lang === "hi") return script === "hi" || script === "hi_partial";
+  if (lang === "hi") return script === "hi";
 
   if (lang === "hn") return script === "hn";
 
@@ -258,15 +258,7 @@ export function reportHindiFullyReady(
 
   const script = (report.content_script || "").trim().toLowerCase();
 
-  if (lang === "hi") {
-
-    if (script === "hi") return true;
-
-    if (script && script !== "hi") return false;
-
-    return textLooksHindi(narrativeText(report));
-
-  }
+  if (lang === "hi") return script === "hi";
 
   if (lang === "hn") {
 
@@ -642,32 +634,43 @@ function section4RemediesNarrative(report: LoveReportLangPayload): string {
   );
 }
 
-function section4RecommendationsText(report: LoveReportLangPayload): string {
+/** Align with server remedies_action_hi_ready — no English paragraph fallback. */
+function section4NarrativeHiReady(text: string): boolean {
+  const t = normalizeProseParagraphs(String(text || "").trim());
+  if (wordCount(t) < SECTION4_MIN_WORDS) return false;
+  if (devaCount(t) < 24) return false;
+  if (!proseFullyHindi(t)) return false;
+  if (textLooksLikePointList(t)) return false;
+  return true;
+}
 
+function serverSection4Ready(report: LoveReportLangPayload): boolean {
+  const dbg = (report as { section4_debug?: { ready?: boolean; deva?: number; words?: number } }).section4_debug;
+  if (!dbg?.ready) return false;
+  return (dbg.deva ?? 0) >= 24 && (dbg.words ?? 0) >= SECTION4_MIN_WORDS;
+}
+
+function effectiveSection4Text(report: LoveReportLangPayload): string {
   const narr = section4RemediesNarrative(report);
-
-  if (section4LoadReady(narr)) return narr;
-
   const canon = normalizeProseParagraphs(String(report.section4_hi_body || "").trim());
-
-  if (canon && section4LoadReady(canon)) return canon;
-
-  const paras = (report.page1?.recommendation_paragraphs || [])
-
-    .map(p => String(p || "").trim())
-
-    .filter(Boolean)
-
-    .join("\n\n");
-
-  if (paras) return normalizeProseParagraphs(paras);
-
+  if (section4NarrativeHiReady(narr)) return narr;
+  if (section4NarrativeHiReady(canon)) return canon;
+  if (canon && devaCount(canon) >= 24) return canon;
+  if (narr) return narr;
   const sec = (report.app_sections || [])
-
     .find(s => String(s.id || "").toLowerCase() === "recommendations");
+  const fromSec = normalizeProseParagraphs(String(sec?.body || "").trim());
+  if (fromSec && devaCount(fromSec) >= 24) return fromSec;
+  const paras = (report.page1?.recommendation_paragraphs || [])
+    .map(p => String(p || "").trim())
+    .filter(Boolean)
+    .join("\n\n");
+  if (paras && devaCount(paras) >= 24) return normalizeProseParagraphs(paras);
+  return fromSec || normalizeProseParagraphs(paras);
+}
 
-  return normalizeProseParagraphs(String(sec?.body || "").trim());
-
+function section4RecommendationsText(report: LoveReportLangPayload): string {
+  return effectiveSection4Text(report);
 }
 
 
@@ -780,12 +783,15 @@ export function section4HiLoadGate(
 
   }
 
-  const narr = section4RemediesNarrative(report);
-
-  if (section4LoadReady(narr)) {
-
+  if (serverSection4Ready(report)) {
     return { ok: true, reason: "" };
+  }
 
+  const narr = section4RemediesNarrative(report);
+  const canon = normalizeProseParagraphs(String(report.section4_hi_body || "").trim());
+
+  if (section4NarrativeHiReady(narr) || section4NarrativeHiReady(canon)) {
+    return { ok: true, reason: "" };
   }
 
   if (section4LooksGenericFallback(report)) {
@@ -802,38 +808,31 @@ export function section4HiLoadGate(
 
   }
 
-  const text = section4RecommendationsText(report) || narr;
+  const text = effectiveSection4Text(report);
 
   if (!text) {
-
     return {
-
       ok: false,
-
       reason:
-
         "Report load nahi hua — Section 4 (उपाय और आगे क्या करें) khali hai. Update Report dabao.",
-
     };
-
   }
 
-  if (!section4LoadReady(text)) {
-
+  if (!section4NarrativeHiReady(text)) {
     const wc = wordCount(text);
-
     const deva = devaCount(text);
-
+    const canonDeva = devaCount(canon);
+    const dbg = (report as { section4_debug?: { ready?: boolean; deva?: number } }).section4_debug;
+    const hint = dbg?.deva && dbg.deva >= 24
+      ? ` (server section4_hi_body deva=${dbg.deva} — app reload karo)`
+      : canonDeva >= 24
+        ? ` (canon deva=${canonDeva} — gate mismatch, app update chahiye)`
+        : "";
     return {
-
       ok: false,
-
       reason:
-
-        `Report load nahi hua — Section 4 poori देवनागरी Hindi nahi bani (${wc} words, Devanagari=${deva}). «रिपोर्ट अपडेट करें» dabao — 2–3 min wait.`,
-
+        `Report load nahi hua — Section 4 poori देवनागरी Hindi nahi bani (${wc} words, Devanagari=${deva}). «रिपोर्ट अपडेट करें» dabao — 2–3 min wait.${hint}`,
     };
-
   }
 
   return { ok: true, reason: "" };
@@ -1001,6 +1000,182 @@ export function section8HiLoadReady(
   if (lang !== "hi") return true;
 
   return section8HiLoadGate(report).ok;
+
+}
+
+
+
+function scorecardLinesFromReport(report: LoveReportLangPayload): string[] {
+
+  const sec = (report.app_sections || []).find(
+
+    s => String(s.id || "").toLowerCase() === "scorecard",
+
+  );
+
+  const fromServer = (sec?.bullets || [])
+
+    .map(b => String(b || "").trim())
+
+    .filter(Boolean);
+
+  if (fromServer.length) return fromServer;
+
+  const p1 = report.page1;
+
+  if (!p1) return [];
+
+  return [
+
+    ...(p1.metrics || []).map(m => `${String(m.label || "").trim()}: ${m.value ?? 0}/100`),
+
+    ...(p1.strengths || []).map(s => `${String(s.label || "").trim()}: ${s.value ?? 0}/100`),
+
+    ...(p1.challenges || []).map(c => `${String(c.label || "").trim()}: ${c.value ?? 0}/100`),
+
+  ].filter(l => l.includes(":"));
+
+}
+
+
+
+function scorecardLabelHiOk(line: string): boolean {
+
+  const label = line.split(":")[0]?.trim() || "";
+
+  return Boolean(label && DEVANAGARI.test(label));
+
+}
+
+
+
+/** KPI / scorecard labels must be देवनागरी before Hindi page opens. */
+
+export function scorecardHiLoadGate(
+
+  report: LoveReportLangPayload | null | undefined,
+
+): { ok: boolean; reason: string } {
+
+  const lines = scorecardLinesFromReport(report || {});
+
+  if (!lines.length) {
+
+    return {
+
+      ok: false,
+
+      reason:
+
+        "Report load nahi hua — KPI scorecard missing hai. «रिपोर्ट अपडेट करें» dabao.",
+
+    };
+
+  }
+
+  for (const line of lines) {
+
+    if (!scorecardLabelHiOk(line)) {
+
+      const label = line.split(":")[0]?.trim().slice(0, 28) || "KPI";
+
+      return {
+
+        ok: false,
+
+        reason:
+
+          `Report load nahi hua — KPI "${label}" abhi English hai. Poori Hindi banne tak wait karo ya «रिपोर्ट अपडेट करें» dabao.`,
+
+      };
+
+    }
+
+  }
+
+  return { ok: true, reason: "" };
+
+}
+
+
+
+/** Hindi page opens only when narrative + KPI + sections are fully देवनागरी. */
+
+export function hindiReportPageLoadReady(
+
+  report: LoveReportLangPayload | null | undefined,
+
+  lang: ProPdfLangCode,
+
+): { ok: boolean; reason: string } {
+
+  if (lang !== "hi") return { ok: true, reason: "" };
+
+  const s4 = section4HiLoadGate(report);
+
+  if (!s4.ok) return s4;
+
+  const s8 = section8HiLoadGate(report);
+
+  if (!s8.ok) return s8;
+
+  const sc = scorecardHiLoadGate(report);
+
+  if (!sc.ok) return sc;
+
+  const script = (report?.content_script || "").trim().toLowerCase();
+
+  if (script === "hi_partial" || script === "en_mismatch") {
+
+    return {
+
+      ok: false,
+
+      reason:
+
+        "Report abhi poori देवनागरी Hindi nahi — kuch lines English mein hain. 1–2 min wait karke «रिपोर्ट अपडेट करें» dabao.",
+
+    };
+
+  }
+
+  if (script === "unknown") {
+    const narr = narrativeText(report || {});
+    if (textLooksHindi(narr) && scorecardHiLoadGate(report).ok) {
+      return { ok: true, reason: "" };
+    }
+    return {
+      ok: false,
+      reason:
+        "Report script unknown — server par app_sections build fail ho sakta hai. VPS: git pull + pm2 restart, phir cache clear.",
+    };
+  }
+
+  if (script !== "hi") {
+    return {
+      ok: false,
+      reason:
+        script
+          ? `Report script "${script}" — poori Hindi tayyar nahi. «रिपोर्ट अपडेट करें» dabao.`
+          : "Report abhi localize ho rahi hai — poori Hindi banne ke baad page khulega. «रिपोर्ट अपडेट करें» try karo.",
+    };
+  }
+
+  return { ok: true, reason: "" };
+
+}
+
+
+
+export function hindiReportPageLoadOk(
+
+  report: LoveReportLangPayload | null | undefined,
+
+  lang: ProPdfLangCode,
+
+): boolean {
+
+  return hindiReportPageLoadReady(report, lang).ok;
 
 }
 

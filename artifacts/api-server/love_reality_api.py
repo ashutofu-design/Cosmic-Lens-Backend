@@ -178,14 +178,42 @@ def _hi_section4_block_response(payload: dict):
     }), 412
 
 
+def _hi_script_block_response(payload: dict, lang: str):
+    """412 when report is hi_partial — KPI/narrative not fully देवनागरी."""
+    if lang != "hi":
+        return None
+    script = str(payload.get("content_script") or "").strip().lower()
+    if script == "hi":
+        return None
+    detail = (
+        "Report poori देवनागरी Hindi nahi bani — KPI ya koi section abhi English/mixed hai. "
+        "Mobile dubara LLM chalayega."
+    )
+    if script == "hi_partial":
+        detail = (
+            "Report abhi aadhi Hindi hai (hi_partial) — sab KPI labels aur sections "
+            "देवनागरी hone chahiye."
+        )
+    elif script == "en_mismatch":
+        detail = "Report English/mixed hai — Hindi localize abhi complete nahi hua."
+    return jsonify({
+        "error": "hi_not_fully_localized",
+        "detail": detail,
+        "content_script": script or "unknown",
+    }), 412
+
+
 def _hi_report_block_response(payload: dict, lang: str):
-    """Section 4 + Section 8 gates for Hindi — used on cache hits and fresh builds."""
+    """Section 4 + Section 8 + full Hindi script gates — cache hits and fresh builds."""
     if lang != "hi":
         return None
     blocked4 = _hi_section4_block_response(payload)
     if blocked4:
         return blocked4
-    return _hi_section8_block_response(payload)
+    blocked8 = _hi_section8_block_response(payload)
+    if blocked8:
+        return blocked8
+    return _hi_script_block_response(payload, lang)
 
 
 def _hi_section8_block_response(payload: dict):
@@ -905,11 +933,11 @@ def register_love_reality_routes(flask_app) -> None:
                     if blocked:
                         _json_cache.invalidate(json_cache_params)
                         _snap.invalidate(snap_params)
-                        return blocked
-                    resp = jsonify(payload_out)
-                    resp.headers["X-Report-Cache"] = "relocalize"
-                    resp.headers["X-Content-Script"] = str(payload_out.get("content_script") or "")
-                    return resp
+                    else:
+                        resp = jsonify(payload_out)
+                        resp.headers["X-Report-Cache"] = "relocalize"
+                        resp.headers["X-Content-Script"] = str(payload_out.get("content_script") or "")
+                        return resp
             if not force_full and lang != "hi":
                 cached_json = _json_cache.load(json_cache_params)
                 if cached_json and lang == "hi" and _hi_saved_report_stale(cached_json):
@@ -1262,6 +1290,15 @@ def register_love_reality_routes(flask_app) -> None:
                             break
                 if blocked:
                     return blocked
+                if lang == "hi":
+                    for _ in range(2):
+                        script = str(payload.get("content_script") or "").strip().lower()
+                        if script == "hi":
+                            break
+                        payload = _enrich_hi_section8_meta(_with_app_sections(payload, lang))
+                    blocked_script = _hi_script_block_response(payload, lang)
+                    if blocked_script:
+                        return blocked_script
                 if not force_full:
                     _json_cache.save(json_cache_params, payload)
                     _rc.invalidate(user_id, _billing.PRODUCT_LOVE, cache_params)

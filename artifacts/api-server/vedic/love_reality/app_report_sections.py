@@ -729,6 +729,11 @@ def _content_script_from_sections(
                 raw = str(b).strip()
                 if raw:
                     chunks.append(raw)
+        if sid == "scorecard":
+            for b in row.get("bullets") or []:
+                raw = str(b).strip()
+                if raw:
+                    chunks.append(raw)
 
     if not chunks:
         return "en_mismatch" if lane in ("hi", "hn") else "en"

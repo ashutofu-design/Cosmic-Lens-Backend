@@ -746,6 +746,30 @@ function isRiskMetric(label: string): boolean {
   return /breakup|risk|challenge|conflict|gap|stress|escalation|misalign/i.test(label);
 }
 
+const METRIC_LABEL_HI: Record<string, string> = {
+  "Love Compatibility": "प्रेम अनुकूलता",
+  "Breakup Risk": "ब्रेकअप जोखिम",
+  "Loyalty & Trust": "निष्ठा और विश्वास",
+  "Reunion Chance": "पुनर्मिलन की संभावना",
+  Love: "प्रेम",
+  Breakup: "ब्रेकअप",
+  Loyalty: "निष्ठा",
+  Return: "वापसी",
+  "Emotional magnetism": "भावनात्मक आकर्षण",
+  "Shared growth intent": "साझा विकास की इच्छा",
+  "Karmic pull": "कर्मिक खिंचाव",
+  "Attraction axis": "आकर्षण अक्ष",
+  "Communication gaps": "संवाद में अंतर",
+  "Trust under stress": "तनाव में विश्वास",
+  "Timing misalignment": "समय की बेतालमेल",
+  "Conflict escalation": "संघर्ष बढ़ना",
+};
+
+function localizeMetricLabel(label: string, lang: ProPdfLangCode): string {
+  if (lang !== "hi") return label;
+  return METRIC_LABEL_HI[label] || label;
+}
+
 /** Human-readable band — replaces misleading server labels like "very high" on score 13. */
 export function humanScoreBand(score: number, label: string, lang: ProPdfLangCode = "en"): string {
   const v = Math.max(0, Math.min(100, Math.round(score)));
@@ -810,12 +834,13 @@ function formatMetricLine(
   interpretation: string | undefined,
   lang: ProPdfLangCode,
 ): string {
+  const locLabel = localizeMetricLabel(label, lang);
   const v = value ?? 0;
-  const band = humanScoreBand(v, label, lang);
+  const band = humanScoreBand(v, locLabel, lang);
   if (interpretation && interpretation.toLowerCase() !== band.toLowerCase()) {
-    return `${label}: ${v}/100 — ${band}`;
+    return `${locLabel}: ${v}/100 — ${band}`;
   }
-  return `${label}: ${v}/100 — ${band}`;
+  return `${locLabel}: ${v}/100 — ${band}`;
 }
 
 export {
@@ -1070,17 +1095,27 @@ export function buildLoveReportSectionsForPage(
       bullets: insightBulletsWithoutScores(p1.key_insights, 4),
     });
 
-    const scorecardLines = [
-      ...(p1.metrics || []).map(m =>
-        formatMetricLine(m.label || "Metric", m.value, m.interpretation, lang),
-      ),
-      ...(p1.strengths || []).map(s =>
-        `${s.label}: ${s.value}/100 — ${humanScoreBand(s.value ?? 0, s.label || "", lang)}`,
-      ),
-      ...(p1.challenges || []).map(c =>
-        `${c.label}: ${c.value}/100 — ${humanScoreBand(c.value ?? 0, c.label || "challenge", lang)}`,
-      ),
-    ];
+    const serverScorecard = (report.app_sections || []).find(
+      s => String(s.id || "").toLowerCase() === "scorecard",
+    );
+    const serverBullets = (serverScorecard?.bullets || [])
+      .map(b => String(b || "").trim())
+      .filter(Boolean);
+    const scorecardLines = serverBullets.length && lang === "hi"
+      ? serverBullets
+      : [
+        ...(p1.metrics || []).map(m =>
+          formatMetricLine(m.label || "Metric", m.value, m.interpretation, lang),
+        ),
+        ...(p1.strengths || []).map(s => {
+          const lbl = localizeMetricLabel(s.label || "", lang);
+          return `${lbl}: ${s.value}/100 — ${humanScoreBand(s.value ?? 0, lbl, lang)}`;
+        }),
+        ...(p1.challenges || []).map(c => {
+          const lbl = localizeMetricLabel(c.label || "challenge", lang);
+          return `${lbl}: ${c.value}/100 — ${humanScoreBand(c.value ?? 0, lbl, lang)}`;
+        }),
+      ];
     pushSection(sections, {
       id: "scorecard",
       title: labels.scorecard,

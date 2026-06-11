@@ -43,10 +43,7 @@ import {
   reportContentMatchesLang,
   reportHasDisplayableContent,
   reportHindiFullyReady,
-  section4HiLoadGate,
-  section4HiLoadReady,
-  section8HiLoadGate,
-  section8HiLoadReady,
+  hindiReportPageLoadReady,
   reportNeedsHindiRetry,
   reportSummaryMatchesLang,
 } from "@/lib/loveRealityReportLang";
@@ -439,10 +436,7 @@ export default function LoveRealityProReportScreen() {
         }
 
         if (resolved.payload && !mustLlm && resolved.changeKind === "none") {
-          const hiStale = lang === "hi" && (
-            !section8HiLoadReady(resolved.payload, lang)
-            || !section4HiLoadReady(resolved.payload, lang)
-          );
+          const hiStale = lang === "hi" && !hindiReportPageLoadReady(resolved.payload, lang).ok;
           const enHnReady = (lang === "en" || lang === "hn")
             && enHnReportCacheReady(resolved.payload, lang);
           if (hiStale) {
@@ -520,7 +514,7 @@ export default function LoveRealityProReportScreen() {
         && lang !== "en"
         && (
           lang === "hi"
-            ? (!section4HiLoadReady(data, lang) || !section8HiLoadReady(data, lang))
+            ? !hindiReportPageLoadReady(data, lang).ok
             : !reportContentMatchesLang(data, lang)
         );
       if (snapshotNeedsRegen) {
@@ -538,8 +532,7 @@ export default function LoveRealityProReportScreen() {
       } else if (
         !forceUpdate
         && lang === "hi"
-        && reportNeedsHindiRetry(data, lang)
-        && !section4HiLoadReady(data, lang)
+        && !hindiReportPageLoadReady(data, lang).ok
       ) {
         setLoadStep(5);
         const retry = await fetchReport("full");
@@ -558,33 +551,27 @@ export default function LoveRealityProReportScreen() {
           return;
         }
         if (lang === "hi") {
-          let s4 = section4HiLoadGate(data);
-          if (!s4.ok && !forceUpdate) {
+          let hiReady = hindiReportPageLoadReady(data, lang);
+          if (!hiReady.ok && !forceUpdate) {
             setLoadStep(5);
             const retry = await fetchReport("full");
             data = retry.data;
             serverCacheHit = retry.serverCacheHit;
-            s4 = section4HiLoadGate(data);
+            hiReady = hindiReportPageLoadReady(data, lang);
           }
-          if (!s4.ok) {
-            const dbg = (data as { section4_debug?: { llm_source?: string; words?: number; deva?: number } }).section4_debug;
-            const extra = dbg?.llm_source
-              ? ` [llm=${dbg.llm_source}, words=${dbg.words ?? "?"}, deva=${dbg.deva ?? "?"}]`
-              : "";
-            setError(s4.reason + extra);
-            setFetching(false);
-            setLoadPct(0);
-            setUpdatingReport(false);
-            setForceUpdateRun(false);
-            return;
-          }
-          const s8 = section8HiLoadGate(data);
-          if (!s8.ok) {
-            const dbg = (data as { section8_debug?: { gate_ver?: string; breakup_deva?: number } }).section8_debug;
-            const extra = dbg?.gate_ver
-              ? ` [server ${dbg.gate_ver}, deva=${dbg.breakup_deva ?? "?"}]`
-              : " [server purana — VPS par git pull + pm2 restart karo]";
-            setError(s8.reason + extra);
+          if (!hiReady.ok) {
+            const dbg4 = (data as { section4_debug?: { llm_source?: string; words?: number; deva?: number } }).section4_debug;
+            const dbg8 = (data as { section8_debug?: { gate_ver?: string; breakup_deva?: number } }).section8_debug;
+            const script = (data.content_script || "").trim();
+            let extra = "";
+            if (dbg4?.llm_source) {
+              extra += ` [s4 llm=${dbg4.llm_source}, words=${dbg4.words ?? "?"}, deva=${dbg4.deva ?? "?"}]`;
+            }
+            if (dbg8?.gate_ver) {
+              extra += ` [s8 ${dbg8.gate_ver}, deva=${dbg8.breakup_deva ?? "?"}]`;
+            }
+            if (script) extra += ` [script=${script}]`;
+            setError(hiReady.reason + extra);
             setFetching(false);
             setLoadPct(0);
             setUpdatingReport(false);

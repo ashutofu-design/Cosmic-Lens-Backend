@@ -594,11 +594,24 @@ def _localize_page1_dashboard(page1: dict[str, Any], lang: str) -> dict[str, Any
     if paras:
         out["recommendation_paragraphs"] = paras
 
+    _metric_hi = {
+        "Love Compatibility": "प्रेम अनुकूलता",
+        "Breakup Risk": "ब्रेकअप जोखिम",
+        "Loyalty & Trust": "निष्ठा और विश्वास",
+        "Reunion Chance": "पुनर्मिलन की संभावना",
+        "Love": "प्रेम",
+        "Breakup": "ब्रेकअप",
+        "Loyalty": "निष्ठा",
+        "Return": "वापसी",
+    }
     metrics = []
     for row in out.get("metrics") or []:
         if not isinstance(row, dict):
             continue
         m = dict(row)
+        lbl = str(m.get("label") or "").strip()
+        if lbl and lang == "hi":
+            m["label"] = _metric_hi.get(lbl, lbl)
         interp = str(m.get("interpretation") or "").strip()
         if interp:
             m["interpretation"] = localize_text_force(interp, lang)

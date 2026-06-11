@@ -1777,6 +1777,31 @@ def breakup_chapter_hi_ready(pro: dict) -> bool:
     return _breakup_text_hi_ok(_breakup_chapter_body(pro))
 
 
+def breakup_chapter_lane_ready(pro: dict, lang: str) -> bool:
+    """Section 8 OK for requested lane — full LLM paragraph prose, not engine bullets."""
+    body = _normalize_prose_paragraphs(
+        _breakup_chapter_body(pro),
+        min_paragraphs=3,
+    )
+    if _word_count(body) < 80:
+        return False
+    if _text_looks_like_point_list(body):
+        return False
+    if not _prose_paragraph_form_ok(body, min_paragraphs=3, min_para_words=18):
+        return False
+    lane = polish_content_lang(lang)
+    if lane == "hi":
+        return _breakup_text_hi_ok(body)
+    if lane == "hn":
+        try:
+            from vedic.love_reality.pdf_text_safe import prose_matches_lang
+
+            return prose_matches_lang(body, "hn")
+        except Exception:
+            return False
+    return True
+
+
 _MOON_SYNC_MIN_WORDS = 55
 
 
@@ -1892,22 +1917,8 @@ def ensure_breakup_section8_llm(
     if lang == "hi" and body and not breakup_chapter_hi_ready(pro):
         _upsert_chapter(pro, "breakup", "", "")
         body = ""
-    elif _word_count(body) >= 80 and not force_llm:
-        if lang != "hi" or breakup_chapter_hi_ready(pro):
-            return pro
-    try:
-        from vedic.love_reality.pdf_text_safe import prose_matches_lang
-
-        if (
-            not force_llm
-            and body
-            and lang in ("hi", "hn")
-            and prose_matches_lang(body, lang)
-            and (lang != "hi" or breakup_chapter_hi_ready(pro))
-        ):
-            return pro
-    except Exception:
-        pass
+    elif not force_llm and breakup_chapter_lane_ready(pro, lang):
+        return pro
 
     work = dict(bundle)
     work["_lr_root_cause"] = _build_root_cause_anchor(bundle, lang)

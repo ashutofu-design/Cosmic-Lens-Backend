@@ -272,7 +272,7 @@ def enrich_page1_and_context(
         moon["body"] = narr
     ctx["page5_moon"] = moon
 
-    breakup_llm = _chapter_body(pro, "breakup")
+    breakup_llm = _breakup_ready_text(pro, lang)
     if breakup_llm:
         ctx["page6_root_cause"] = breakup_llm
     else:
@@ -523,20 +523,49 @@ def _moon_sync_ready_text(pro: dict, lang: str = "en") -> str:
     return ""
 
 
-def _breakup_hi_ready_text(pro: dict) -> str:
-    """LLM Hindi breakup chapter — not English engine fallback."""
+def _breakup_ready_text(pro: dict, lang: str = "en") -> str:
+    """LLM breakup chapter for Section 8 — not thin engine bullet fallback."""
     breakup = _chapter_body(pro, "breakup")
     if _word_count(breakup) < 80:
         return ""
     try:
-        from i18n_summary import prose_fully_hindi
+        from vedic.love_reality.love_section_polish import (
+            _prose_paragraph_form_ok,
+            _text_looks_like_point_list,
+        )
 
-        if prose_fully_hindi(breakup):
-            return breakup
+        if _text_looks_like_point_list(breakup):
+            return ""
+        if not _prose_paragraph_form_ok(breakup, min_paragraphs=3, min_para_words=18):
+            return ""
     except Exception:
-        if len(re.findall(r"[\u0900-\u097F]", breakup)) >= 24:
-            return breakup
-    return ""
+        pass
+    lane = (lang or "en").strip().lower()
+    if lane == "hi":
+        try:
+            from i18n_summary import prose_fully_hindi
+
+            if prose_fully_hindi(breakup):
+                return breakup
+        except Exception:
+            if len(re.findall(r"[\u0900-\u097F]", breakup)) >= 24:
+                return breakup
+        return ""
+    if lane == "hn":
+        try:
+            from vedic.love_reality.pdf_text_safe import prose_matches_lang
+
+            if prose_matches_lang(breakup, "hn"):
+                return breakup
+        except Exception:
+            pass
+        return ""
+    return breakup
+
+
+def _breakup_hi_ready_text(pro: dict) -> str:
+    """LLM Hindi breakup chapter — not English engine fallback."""
+    return _breakup_ready_text(pro, "hi")
 
 
 def _sync_moon_from_narrative(
@@ -572,9 +601,10 @@ def _sync_root_cause_from_breakup(
     sections: list[dict[str, Any]],
     ctx: dict[str, Any],
     pro: dict[str, Any],
+    lang: str = "en",
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Map LLM breakup chapter → Section 8 (root_cause) — always replace English engine text."""
-    breakup = _breakup_hi_ready_text(pro)
+    breakup = _breakup_ready_text(pro, lang)
     if not breakup:
         return sections, ctx
     ctx_out = dict(ctx or {})
@@ -723,7 +753,7 @@ def build_localized_app_sections(
     sections = _sync_deep_connection_from_llm(sections, p1, pro, lane)
     sections, ctx = _sync_blueprint_from_llm(sections, ctx, pro, lane)
     sections, ctx = _sync_moon_from_narrative(sections, ctx, pro, lane)
-    sections, ctx = _sync_root_cause_from_breakup(sections, ctx, pro)
+    sections, ctx = _sync_root_cause_from_breakup(sections, ctx, pro, lane)
     if lane in ("hn", "hi"):
         sections = [_localize_section_row(s, lane) for s in sections if isinstance(s, dict)]
         sections = _finalize_hindi_sections(sections, lane)

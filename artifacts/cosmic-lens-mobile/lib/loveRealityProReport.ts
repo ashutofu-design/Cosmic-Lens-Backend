@@ -452,16 +452,35 @@ export function resolveMoonSyncBody(report: LoveProReportResponse): string {
   return "";
 }
 
+function section8NarrativeReady(text: string, lang: ProPdfLangCode): boolean {
+  const t = normalizeProseParagraphs(String(text || "").trim());
+  if (!narrativeBodyReady(t, 80, 18)) return false;
+  if (textLooksLikePointList(t)) return false;
+  if (lang === "hi") return proseFullyHindi(t);
+  return true;
+}
+
 /** Prefer LLM breakup chapter for Section 8 when app_sections root_cause is stale/thin. */
-export function resolveSection8RootCauseBody(report: LoveProReportResponse): string {
-  const effective = effectiveSection8HiText(report);
-  if (effective) return effective;
+export function resolveSection8RootCauseBody(
+  report: LoveProReportResponse,
+  lang: ProPdfLangCode = "en",
+): string {
+  if (lang === "hi") {
+    const effective = effectiveSection8HiText(report);
+    if (effective) return effective;
+  }
   const breakup = breakupChapterBody(report);
+  if (section8NarrativeReady(breakup, lang)) {
+    return normalizeProseParagraphs(breakup);
+  }
   const fromCtx = String(report.pdf_context?.page6_root_cause || "").trim();
   const fromSec = (report.app_sections || [])
     .find(s => String(s.id || "").toLowerCase() === "root_cause");
   const root = String(fromSec?.body || "").trim() || fromCtx;
-  return root || breakup;
+  if (section8NarrativeReady(root, lang)) {
+    return normalizeProseParagraphs(root);
+  }
+  return breakup || root;
 }
 
 function pushSection(sections: LoveReportSection[], sec: LoveReportSection | null | undefined) {
@@ -1052,7 +1071,7 @@ export function buildLoveReportSectionsForPage(
       id: "root_cause",
       title: labels.rootCause,
       subtitle: labels.rootCauseSub,
-      body: resolveSection8RootCauseBody(report) || ctx.page6_root_cause,
+      body: resolveSection8RootCauseBody(report, lang) || ctx.page6_root_cause,
     });
   }
 
@@ -1103,7 +1122,7 @@ export function buildReportSectionsFromPayload(
     const fallback = localById.get(id.toLowerCase());
     let body = String(row.body || "").trim() || fallback?.body;
     if (id.toLowerCase() === "root_cause") {
-      const resolved = resolveSection8RootCauseBody(report);
+      const resolved = resolveSection8RootCauseBody(report, lang);
       if (resolved) body = resolved;
     }
     if (id.toLowerCase() === "recommendations") {

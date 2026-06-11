@@ -1410,6 +1410,12 @@ Use ONLY facts from the user message.{dev_note}"""
 
 
 def _build_verdict_page_only_user_prompt(bundle: dict, lang: str) -> str:
+    from vedic.love_reality.human_narrative_engine import (
+        build_story_cards,
+        format_global_story_block,
+        format_section_story_block,
+    )
+
     lang_norm = normalize_pro_pdf_lang(lang)
     lang_voice = polish_content_lang(lang_norm)
     p1 = bundle.get("p1") or {}
@@ -1420,11 +1426,21 @@ def _build_verdict_page_only_user_prompt(bundle: dict, lang: str) -> str:
         voice_note = f"Roman Hinglish — Aap = {p1_name} (p1/pehli kundli), Unka/Unki = partner."
     else:
         voice_note = f"Plain English — You = {p1_name} (p1/first kundli), They = partner."
+    cards = bundle.get("_lr_story_cards")
+    if not isinstance(cards, dict):
+        cards = build_story_cards(bundle, lang_norm)
+    story_block = (
+        format_global_story_block(cards)
+        + "\n\n"
+        + format_section_story_block(cards, "verdict")
+    )
     return (
         love_script_directive(lang_norm)
         + "\n\n"
         + f"Write Section 02 for this couple. PRIMARY READER is {p1_name} (p1) — most airtime on them. "
-        "Match the example voice in the system prompt.\n\n"
+        "Open with a real-life scene — NOT theory. Match the example voice in the system prompt.\n\n"
+        + story_block
+        + "\n\n"
         + _verdict_page_facts_summary(bundle, lang_norm)
         + f"\n\nlanguage: {lang_norm}\n"
         + f"narration_style: {voice_note}\n"
@@ -1516,9 +1532,13 @@ def polish_love_reality_verdict_page_only(
         empty["_meta"]["reason"] = "openai_client_none"
         return empty
 
+    from vedic.love_reality.human_narrative_engine import build_story_cards
+
     tel = PdfGenOpenAITelemetry(model)
+    work_bundle = dict(bundle)
+    work_bundle["_lr_story_cards"] = build_story_cards(bundle, lang)
     system = _build_verdict_page_only_system_prompt(lang)
-    user = _build_verdict_page_only_user_prompt(bundle, lang)
+    user = _build_verdict_page_only_user_prompt(work_bundle, lang)
     default_mt = 1200 if _verdict_page_dev_mode() else 2000
     max_tok = min(
         int(os.environ.get("LOVE_REALITY_VERDICT_PAGE_MAX_TOKENS", str(default_mt))),
@@ -1560,6 +1580,37 @@ def polish_love_reality_verdict_page_only(
         if not out.get("verdict"):
             empty["_meta"]["reason"] = "missing_verdict"
             return empty
+
+        from vedic.love_reality.love_section_polish import _human_narrative_gate_enabled
+        from vedic.love_reality.repetition_gate import (
+            check_section_human_quality,
+            human_quality_retry_note,
+        )
+
+        if _human_narrative_gate_enabled() and lang in ("en", "hn", "hi"):
+            p1_name = str((bundle.get("p1") or {}).get("name") or "")
+            gate_err = check_section_human_quality(
+                str(out.get("verdict") or ""),
+                lang,
+                section_key="verdict",
+                p1_name=p1_name,
+            )
+            if gate_err:
+                retry_user = user + "\n\n" + human_quality_retry_note(gate_err, lang)
+                kwargs["messages"] = [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": retry_user},
+                ]
+                resp2 = client.chat.completions.create(**kwargs)
+                tel.record(resp2, "verdict_page_human_gate")
+                raw2 = (resp2.choices[0].message.content or "").strip()
+                if raw2:
+                    parsed2 = json.loads(raw2)
+                    if isinstance(parsed2, dict):
+                        out2 = _parse_verdict_page_response(parsed2)
+                        if out2.get("verdict"):
+                            out = out2
+                            out.setdefault("_meta", {})["human_gate_retry"] = gate_err
     except Exception as exc:
         log.warning("[love_verdict_page] openai fail: %s", exc)
         empty["_meta"]["reason"] = "openai_fail"
@@ -1755,11 +1806,16 @@ Use ONLY facts from the user message.{dev_note}"""
 
 
 def _build_deep_analysis_user_prompt(bundle: dict, lang: str) -> str:
+    from vedic.love_reality.human_narrative_engine import (
+        build_story_cards,
+        format_global_story_block,
+    )
+
     p1 = bundle.get("p1") or {}
     p1_name = str(p1.get("name") or "Partner A").strip()
     scores = _deep_analysis_dimension_scores(bundle)
     score_lines = "\n".join(
-        f"- {_DEEP_ANALYSIS_TITLES[k]} (key={k}): score {scores[k]}/100 — write explanation matching this level"
+        f"- {_DEEP_ANALYSIS_TITLES[k]} (key={k}): score {scores[k]}/100 — weave into prose once, no scorecard tone"
         for k in _DEEP_ANALYSIS_KEYS
     )
     lang_voice = polish_content_lang(normalize_pro_pdf_lang(lang))
@@ -1768,11 +1824,17 @@ def _build_deep_analysis_user_prompt(bundle: dict, lang: str) -> str:
         if lang_voice == "hn"
         else f"You = {p1_name} (p1). They = partner."
     )
+    cards = bundle.get("_lr_story_cards")
+    if not isinstance(cards, dict):
+        cards = build_story_cards(bundle, lang)
+    story = format_global_story_block(cards)
     return (
         f"Write Deep Connection Analysis for {p1_name} (primary reader). "
-        f"Match scores below. Match few-shot voice.\n\n"
+        f"Each dimension = NEW angle on the SAME root cause — never repeat the same conclusion.\n\n"
+        + story
+        + "\n\n"
         + _verdict_page_facts_summary(bundle, lang)
-        + f"\n\nDIMENSION SCORES (fixed — explain these, do not change):\n{score_lines}\n\n"
+        + f"\n\nDIMENSION SCORES (fixed — explain in real-life scenes, not as a list):\n{score_lines}\n\n"
         + f"language: {lang}\n"
         + f"narration_style: {voice}\n"
         + "Emit JSON only."
@@ -1868,9 +1930,13 @@ def polish_love_reality_deep_analysis_only(
         empty["_meta"]["reason"] = "openai_client_none"
         return empty
 
+    from vedic.love_reality.human_narrative_engine import build_story_cards
+
     tel = PdfGenOpenAITelemetry(model)
+    work_bundle = dict(bundle)
+    work_bundle["_lr_story_cards"] = build_story_cards(bundle, lang)
     system = _build_deep_analysis_system_prompt(lang)
-    user = _build_deep_analysis_user_prompt(bundle, lang)
+    user = _build_deep_analysis_user_prompt(work_bundle, lang)
     default_mt = 900 if _deep_analysis_dev_mode() else 3200
     max_tok = min(int(os.environ.get("LOVE_REALITY_DEEP_ANALYSIS_MAX_TOKENS", str(default_mt))), 4096)
     kwargs: dict[str, Any] = {

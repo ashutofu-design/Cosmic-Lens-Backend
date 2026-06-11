@@ -23,7 +23,7 @@ from vedic.compat.premium_chapters import CHAPTER_BODY_KEY, normalize_pro_pdf_la
 
 log = logging.getLogger(__name__)
 
-_ASSEMBLY_VER = "lr_sections_v19_paragraph_hi"
+_ASSEMBLY_VER = "lr_sections_v20_human_narrative"
 _BLUEPRINT_MIN_WORDS = 80
 _BULLET_LINE_RE = re.compile(r"(?m)^\s*(?:[•\-\*►▪]|(?:\d+[\.\):]))\s+")
 _BLUEPRINT_JARGON_RE = re.compile(
@@ -495,64 +495,37 @@ def _roadmap_engine_facts(bundle: dict) -> str:
 
 def _pick_root_cause_text(bundle: dict) -> tuple[str, list[str]]:
     """Engine-picked single strongest friction line + chart hooks for narrative anchor."""
-    bu = bundle.get("breakup_chances") or {}
-    rf = bundle.get("hidden_red_flags") or {}
-    lc = bundle.get("love_compatibility") or {}
-    sig = bundle.get("couple_signals") or {}
-    p1 = bundle.get("p1") or {}
-    p2 = bundle.get("p2") or {}
+    from vedic.love_reality.human_narrative_engine import build_story_cards
 
-    candidates: list[str] = []
-    summ = str(bu.get("emotional_summary") or "").strip()
-    if summ:
-        candidates.append(summ)
-    for r in (bu.get("reasons") or [])[:3]:
-        t = str(r).strip()
-        if t and t not in candidates:
-            candidates.append(t)
-    for r in (rf.get("reasons") or [])[:2]:
-        t = str(r).strip()
-        if t and t not in candidates:
-            candidates.append(t)
-    if not candidates:
-        fallback = str(lc.get("emotional_summary") or "").strip()
-        candidates.append(fallback or "Chart affliction creates recurring emotional friction between these two Moons.")
-
+    cards = bundle.get("_lr_story_cards")
+    if not isinstance(cards, dict):
+        cards = build_story_cards(bundle, str(bundle.get("lang") or "en"))
+    primary = str(cards.get("primary_label") or "").strip()
     hooks: list[str] = []
-    for n in (sig.get("synastry_notes") or [])[:3]:
-        t = str(n).strip()
-        if t:
-            hooks.append(t)
-    mm = sig.get("moon_mismatch")
-    if mm:
-        hooks.append(f"Moon mismatch signal: {mm}")
-    p1m = p1.get("moonSign") or p1.get("rashi")
-    p2m = p2.get("moonSign") or p2.get("rashi")
-    if p1m and p2m:
-        hooks.append(
-            f"{p1.get('name') or 'p1'} Moon {p1m} vs {p2.get('name') or 'p2'} Moon {p2m}"
-        )
-    return candidates[0], hooks
+    combined = str(cards.get("combined_story") or "").strip()
+    wrong = str(cards.get("wrong_story") or "").strip()
+    if combined:
+        hooks.append(combined)
+    if wrong:
+        hooks.append(wrong)
+    if not primary:
+        bu = bundle.get("breakup_chances") or {}
+        primary = str(bu.get("emotional_summary") or "").strip()
+        if not primary:
+            primary = "Recurring emotional friction between these two charts."
+    return primary, hooks
 
 
 def _build_root_cause_anchor(bundle: dict, lang: str) -> str:
-    primary, hooks = _pick_root_cause_text(bundle)
-    hook_block = "\n".join(f"- {h}" for h in hooks[:4]) if hooks else "- Use Moon / Mercury / 7th-lord facts from chart summary below."
-    if lang == "hn":
-        return (
-            "ROOT_CAUSE (poori report isi ek reason ke around — har chapter alag angle):\n"
-            f"Primary friction: {primary}\n\n"
-            f"Chart hooks (har conclusion inme se trace ho):\n{hook_block}\n\n"
-            "Breakup chapter = root cause KYUN exist karta hai explain kare. "
-            "Baaki chapters = root cause par naya angle — same warning / score repeat mat."
-        )
-    return (
-        "ROOT_CAUSE (entire report orbits this one friction — each chapter a new angle):\n"
-        f"Primary friction: {primary}\n\n"
-        f"Chart hooks (every conclusion must trace to one of these):\n{hook_block}\n\n"
-        "Breakup chapter OWNS why this root cause exists astrologically. "
-        "Other chapters extend it — never repeat the same warning or score."
+    from vedic.love_reality.human_narrative_engine import (
+        build_root_cause_anchor_text,
+        build_story_cards,
     )
+
+    cards = bundle.get("_lr_story_cards")
+    if not isinstance(cards, dict):
+        cards = build_story_cards(bundle, lang)
+    return build_root_cause_anchor_text(bundle, lang, cards)
 
 
 def _build_prior_sections_digest(pro: dict, lang: str) -> str:
@@ -1389,8 +1362,11 @@ def ensure_remedies_action_llm(
     elif lang == "hi" and remedies_action_hi_ready(pro) and not force_llm:
         return pro
 
-    work = dict(bundle)
-    work["_lr_root_cause"] = _build_root_cause_anchor(bundle, lang)
+    from vedic.love_reality.human_narrative_engine import build_story_cards, enrich_bundle_for_section
+
+    cards = build_story_cards(bundle, lang)
+    work = enrich_bundle_for_section(bundle, "remedies_action", cards)
+    work["_lr_root_cause"] = _build_root_cause_anchor(work, lang)
     work["_lr_prior_digest"] = _build_prior_sections_digest(pro, lang)
     last_meta: dict[str, Any] = {}
     max_attempts = max(1, int(os.environ.get("LOVE_REALITY_REMEDIES_ACTION_ATTEMPTS", "5")))
@@ -1587,6 +1563,9 @@ def _build_section_user_prompt(bundle: dict, lang: str, *, section_note: str) ->
     root = str(bundle.get("_lr_root_cause") or "").strip()
     if root:
         blocks.append(root)
+    story = str(bundle.get("_lr_story_block") or "").strip()
+    if story:
+        blocks.append(story)
     prior = str(bundle.get("_lr_prior_digest") or "").strip()
     if prior:
         blocks.append(prior)
@@ -1595,6 +1574,33 @@ def _build_section_user_prompt(bundle: dict, lang: str, *, section_note: str) ->
     blocks.append(f"narration_style: {voice}")
     blocks.append("Emit JSON only.")
     return "\n\n".join(blocks)
+
+
+def _human_narrative_gate_enabled() -> bool:
+    return os.environ.get("LOVE_REALITY_HUMAN_GATE", "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )
+
+
+def _hit_prose_body(hit: dict) -> str:
+    for k in (
+        "chapter_body",
+        "verdict",
+        "blueprint_reality",
+        "moon_sync_narrative",
+        "remedies_action_narrative",
+        "red_flags_narrative",
+        "dasha_narrative",
+        "roadmap_narrative",
+        "harmony",
+    ):
+        v = str(hit.get(k) or "").strip()
+        if v:
+            return v
+    return ""
 
 
 def _fingerprint(blob: str) -> str:
@@ -1718,6 +1724,52 @@ def _run_section_llm(
         if not out:
             empty["_meta"]["reason"] = "parse_empty"
             return empty
+
+        if _human_narrative_gate_enabled() and lang in ("en", "hn", "hi"):
+            from vedic.love_reality.repetition_gate import (
+                check_section_human_quality,
+                human_quality_retry_note,
+            )
+
+            prose = _hit_prose_body(out)
+            section_key = str(bundle.get("_lr_section_key") or scope).strip()
+            cards = bundle.get("_lr_story_cards")
+            p1_name = ""
+            if isinstance(cards, dict):
+                p1_name = str(cards.get("p1_name") or "")
+            if not p1_name:
+                p1_name = str((bundle.get("p1") or {}).get("name") or "")
+            forbid = bundle.get("_lr_forbidden_themes")
+            if not isinstance(forbid, list):
+                forbid = []
+            gate_err = check_section_human_quality(
+                prose,
+                lang,
+                section_key=section_key,
+                forbidden_themes=forbid,
+                prior_text=str(bundle.get("_lr_prior_digest") or ""),
+                p1_name=p1_name,
+            )
+            if gate_err and prose:
+                retry_user = user + "\n\n" + human_quality_retry_note(gate_err, lang)
+                kwargs["messages"] = [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": retry_user},
+                ]
+                try:
+                    resp_h = client.chat.completions.create(**kwargs)
+                    if tel is not None:
+                        tel.record(resp_h, f"{scope}_human_gate")
+                    raw_h = (resp_h.choices[0].message.content or "").strip()
+                    if raw_h:
+                        parsed_h = json.loads(raw_h)
+                        if isinstance(parsed_h, dict):
+                            out2 = parse_fn(parsed_h)
+                            if out2:
+                                out = out2
+                                out.setdefault("_meta", {})["human_gate_retry"] = gate_err
+                except Exception as exc_h:
+                    log.warning("[%s] human gate retry fail: %s", scope, exc_h)
     except Exception as exc:
         log.warning("[%s] openai fail: %s", scope, exc)
         empty["_meta"]["reason"] = "openai_fail"
@@ -2061,8 +2113,11 @@ def ensure_breakup_section8_llm(
     elif not force_llm and breakup_chapter_lane_ready(pro, lang):
         return pro
 
-    work = dict(bundle)
-    work["_lr_root_cause"] = _build_root_cause_anchor(bundle, lang)
+    from vedic.love_reality.human_narrative_engine import build_story_cards, enrich_bundle_for_section
+
+    cards = build_story_cards(bundle, lang)
+    work = enrich_bundle_for_section(bundle, "breakup", cards)
+    work["_lr_root_cause"] = _build_root_cause_anchor(work, lang)
     work["_lr_prior_digest"] = _build_prior_sections_digest(pro, lang)
     last_meta: dict[str, Any] = {}
     max_attempts = max(1, int(os.environ.get("LOVE_REALITY_SECTION8_ATTEMPTS", "3")))
@@ -2343,8 +2398,14 @@ def _run_section_job(
 ) -> tuple[str, dict[str, Any], str, str | None, str | None]:
     """Run one section LLM call with retry; never raises."""
     try:
-        job_bundle = dict(bundle)
-        job_bundle["_lr_section_key"] = label
+        cards = bundle.get("_lr_story_cards")
+        if isinstance(cards, dict):
+            from vedic.love_reality.human_narrative_engine import enrich_bundle_for_section
+
+            job_bundle = enrich_bundle_for_section(bundle, label, cards)
+        else:
+            job_bundle = dict(bundle)
+            job_bundle["_lr_section_key"] = label
         hit = _invoke_section_fn(
             fn, job_bundle, lang, force_llm, chapter_key=chapter_key
         )
@@ -2411,8 +2472,13 @@ def assemble_love_reality_pro_premium(
             pro["deep_analysis"] = s03["deep_analysis"]
         section_meta["deep_analysis"] = s03.get("_meta") or {}
 
+        from vedic.love_reality.human_narrative_engine import build_story_cards
+        from vedic.love_reality.repetition_gate import audit_report_narrative
+
+        story_cards = build_story_cards(bundle, lang)
         work_bundle = dict(bundle)
-        work_bundle["_lr_root_cause"] = _build_root_cause_anchor(bundle, lang)
+        work_bundle["_lr_story_cards"] = story_cards
+        work_bundle["_lr_root_cause"] = _build_root_cause_anchor(work_bundle, lang)
         work_bundle["_lr_prior_digest"] = _build_prior_sections_digest(pro, lang)
 
         parallel_jobs: list[tuple] = [
@@ -2579,6 +2645,9 @@ def assemble_love_reality_pro_premium(
         _scrub_loyalty_contradictions(pro, bundle)
         pro = sanitize_love_reality_pro_premium(pro, bundle, lang=requested_lang)
         apply_love_premium_validation(pro, bundle, lang)
+        narrative_audit = audit_report_narrative(pro, requested_lang)
+        if narrative_audit.get("warnings"):
+            pro.setdefault("_meta", {})["narrative_audit"] = narrative_audit
     except Exception as exc:
         log.exception("[assembly] fatal: %s", exc)
         pro.setdefault("_meta", {})["assembly_error"] = str(exc)

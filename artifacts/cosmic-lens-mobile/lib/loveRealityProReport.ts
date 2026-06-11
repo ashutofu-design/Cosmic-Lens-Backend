@@ -121,7 +121,7 @@ export type LoveProReportResponse = {
   }>;
   /** hi | hn | en | en_mismatch — server check after localize. */
   content_script?: string;
-  /** Rounded OpenAI cost in INR (operator) — English UI only. */
+  /** Rounded OpenAI cost in INR (operator) — en / hn / hi header badge. */
   llm_cost_inr?: number;
   /** Canonical Hindi deep_connection (विस्तार) body from server. */
   section3_hi_body?: string | null;

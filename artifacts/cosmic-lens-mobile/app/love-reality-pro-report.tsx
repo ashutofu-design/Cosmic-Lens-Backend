@@ -638,8 +638,8 @@ export default function LoveRealityProReportScreen() {
   );
 
   const llmCostInr = useMemo(
-    () => (lang === "en" && report ? loveReportLlmCostInr(report) : null),
-    [lang, report, reportEpoch],
+    () => (report ? loveReportLlmCostInr(report) : null),
+    [report, reportEpoch],
   );
 
   const handleConnectToPdf = useCallback(async () => {

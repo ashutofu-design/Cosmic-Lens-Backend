@@ -58,50 +58,37 @@ function routeLangParam(raw: string | string[] | undefined): ProPdfLangCode {
   return coerceProPdfLang(one);
 }
 
-function loadStagesForLang(lang: ProPdfLangCode): readonly string[] {
-  if (lang === "hi") {
-    return [
-      "Charts load ho rahe hain…",
-      "Compatibility engines chal rahe hain…",
-      "Personalized insights likh rahe hain…",
-      "Hindi report generate ho rahi hai…",
-      "Almost ready…",
-    ];
-  }
-  if (lang === "hn") {
-    return [
-      "Loading your charts…",
-      "Running compatibility engines…",
-      "Writing personalized insights…",
-      "Hinglish report likh rahe hain…",
-      "Almost ready…",
-    ];
-  }
-  return [
-    "Loading your charts…",
-    "Running compatibility engines…",
-    "Writing personalized insights…",
-    "Finalizing your report…",
-    "Almost ready…",
-  ];
-}
+/** Fixed steps — % only advances when that stage completes (LLM step creeps slowly, max 82). */
+const LOAD_STEPS = [
+  { n: 1, pct: 10, label: "Preparing your report…" },
+  { n: 2, pct: 20, label: "Checking saved report…" },
+  { n: 3, pct: 30, label: "Loading birth charts…" },
+  { n: 4, pct: 40, label: "Connecting to server…" },
+  { n: 5, pct: 50, label: "Writing personalized insights…", llm: true, creepCap: 82 },
+  { n: 6, pct: 88, label: "Building report sections…" },
+  { n: 7, pct: 94, label: "Almost ready…" },
+] as const;
 
-/** Creep to MAX_WAIT while LLM runs; 99 = opening; 100 = report visible. */
 const OPEN_AT_PCT = 100;
 const READY_PCT = 99;
-const MAX_WAIT_PCT = 98;
-const CREEP_TICK_MS = 400;
+const LLM_CREEP_MS = 5_000;
 
-function estimateLlmBudgetMs(lang: ProPdfLangCode, fullLlm: boolean): number {
-  if (!fullLlm) return 10_000;
-  if (lang === "hi") return 360_000;
-  if (lang === "hn") return 300_000;
-  return 240_000;
+function loadStageLabel(lang: ProPdfLangCode, stepN: number): string {
+  const step = LOAD_STEPS.find(s => s.n === stepN);
+  const base = step?.label || "Loading…";
+  if (stepN === 5) {
+    if (lang === "hi") return "Hindi report likh rahe hain — 2–5 min…";
+    if (lang === "hn") return "Hinglish report likh rahe hain — 2–5 min…";
+    return "Writing your report — 2–4 min…";
+  }
+  if (lang === "hi" && stepN === 3) return "Charts load ho rahe hain…";
+  if (lang === "hn" && stepN === 3) return "Charts load ho rahe hain…";
+  return base;
 }
 
 function ReportLoadingView({
   pct,
-  stageIdx,
+  loadStep,
   isDark,
   fromCache,
   cacheChange,
@@ -111,7 +98,7 @@ function ReportLoadingView({
   lang,
 }: {
   pct: number;
-  stageIdx: number;
+  loadStep: number;
   isDark: boolean;
   fromCache: boolean;
   cacheChange: LoveReportChangeKind;
@@ -235,8 +222,14 @@ function ReportLoadingView({
                   ? "Preparing report…"
                   : fromCache
                     ? "Loading saved report…"
-                    : loadStagesForLang(lang)[stageIdx]}
+                    : loadStageLabel(lang, loadStep)}
           </Text>
+
+          {loadStep > 0 && pct < READY_PCT ? (
+            <Text style={[ld.stepTag, { color: dim }]}>
+              Step {loadStep} / {LOAD_STEPS.length}
+            </Text>
+          ) : null}
 
           <View style={[ld.track, { backgroundColor: trackBg }]}>
             <Animated.View
@@ -300,7 +293,7 @@ export default function LoveRealityProReportScreen() {
 
   const [fetching, setFetching] = useState(true);
   const [loadPct, setLoadPct] = useState(0);
-  const [stageIdx, setStageIdx] = useState(0);
+  const [loadStep, setLoadStepState] = useState(0);
   const [showReport, setShowReport] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<LoveProReportResponse | null>(null);
@@ -314,22 +307,24 @@ export default function LoveRealityProReportScreen() {
   const loadedRef = useRef(false);
   const fetchDoneRef = useRef(false);
   const fastCacheRef = useRef(false);
-  const progressFloorRef = useRef(0);
-  const fetchStartedAtRef = useRef(Date.now());
-  const llmBudgetMsRef = useRef(estimateLlmBudgetMs("en", true));
+  const awaitingLlmRef = useRef(false);
   const showReportTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const bumpProgressFloor = useCallback((floor: number) => {
-    progressFloorRef.current = Math.max(progressFloorRef.current, floor);
-    setLoadPct(p => Math.min(MAX_WAIT_PCT, Math.max(p, Math.min(floor, MAX_WAIT_PCT))));
+  const setLoadStep = useCallback((stepNum: number) => {
+    const step = LOAD_STEPS.find(s => s.n === stepNum);
+    if (!step) return;
+    awaitingLlmRef.current = Boolean("llm" in step && step.llm);
+    setLoadStepState(stepNum);
+    setLoadPct(prev => (step.pct > prev ? step.pct : prev));
   }, []);
 
   const finishLoad = useCallback((data: LoveProReportResponse, cached: boolean) => {
     fetchDoneRef.current = true;
+    awaitingLlmRef.current = false;
     fastCacheRef.current = cached;
-    progressFloorRef.current = MAX_WAIT_PCT;
     setFromCache(cached);
     setReport(data);
+    setLoadStepState(LOAD_STEPS.length);
     setLoadPct(READY_PCT);
     if (showReportTimerRef.current) clearTimeout(showReportTimerRef.current);
     showReportTimerRef.current = setTimeout(() => {
@@ -361,15 +356,14 @@ export default function LoveRealityProReportScreen() {
     }
     setFetching(true);
     setLoadPct(0);
+    setLoadStepState(0);
     setShowReport(false);
-    setStageIdx(0);
     setError(null);
     fetchDoneRef.current = false;
     fastCacheRef.current = false;
-    progressFloorRef.current = 0;
-    fetchStartedAtRef.current = Date.now();
-    llmBudgetMsRef.current = estimateLlmBudgetMs(lang, forceUpdate || lang === "hi");
+    awaitingLlmRef.current = false;
     setFromCache(false);
+    setLoadStep(1);
     setCacheChange("missing");
     setLlmRefresh(forceUpdate);
     setForceUpdateRun(forceUpdate);
@@ -402,7 +396,7 @@ export default function LoveRealityProReportScreen() {
           p2Name: cacheOpts.p2Name,
         });
       }
-      bumpProgressFloor(8);
+      setLoadStep(2);
       if (forceUpdate) {
         await clearLoveReportCacheAllLangs({
           userId: cacheOpts.userId,
@@ -418,7 +412,7 @@ export default function LoveRealityProReportScreen() {
       if (!forceUpdate) {
         const resolved = await resolveLoveReportCache(cacheOpts);
         deviceCacheEmpty = !resolved.payload;
-        bumpProgressFloor(18);
+        setLoadStep(3);
         setCacheChange(resolved.changeKind);
         mustLlm = deviceCacheNeedsServerRefresh(resolved.payload, resolved.meta, lang);
         setLlmRefresh(mustLlm);
@@ -433,6 +427,7 @@ export default function LoveRealityProReportScreen() {
             ...cacheOpts,
             polishSource: resolved.payload.polish_source,
           });
+          setLoadStep(7);
           finishLoad(resolved.payload, true);
           return;
         }
@@ -447,6 +442,7 @@ export default function LoveRealityProReportScreen() {
           if (hiStale) {
             // Stale Hindi device cache — refetch from server.
           } else if (lang === "hi" || enHnReady) {
+            setLoadStep(7);
             finishLoad(resolved.payload, true);
             return;
           }
@@ -456,7 +452,7 @@ export default function LoveRealityProReportScreen() {
         if (!resolved.payload && (lang === "en" || lang === "hn")) {
           fastCacheRef.current = true;
           setFromCache(true);
-          bumpProgressFloor(28);
+          setLoadStep(4);
           try {
             const restored = await fetchLoveRealityProReport({
               user,
@@ -472,6 +468,7 @@ export default function LoveRealityProReportScreen() {
               && reportHasDisplayableContent(restored.data)
             ) {
               await saveLoveReportCache(cacheOpts, restored.data);
+              setLoadStep(7);
               finishLoad(restored.data, true);
               return;
             }
@@ -481,7 +478,7 @@ export default function LoveRealityProReportScreen() {
         }
       }
 
-      bumpProgressFloor(32);
+      setLoadStep(4);
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 360000);
       try {
@@ -501,30 +498,39 @@ export default function LoveRealityProReportScreen() {
         });
 
         const useFullFetch = forceUpdate || mustLlm || lang === "hi" || deviceCacheEmpty;
-        llmBudgetMsRef.current = estimateLlmBudgetMs(lang, useFullFetch);
         fastCacheRef.current = !useFullFetch && !mustLlm;
+        setLoadStep(5);
         let { data, serverCacheHit } = await fetchReport(
           useFullFetch ? "full" : "cache",
         );
-        bumpProgressFloor(55);
 
-        if (lang !== "en" && data.polish_source === "polish_snapshot") {
+        const snapshotNeedsRegen =
+          data.polish_source === "polish_snapshot"
+          && (lang === "hi" || !reportContentMatchesLang(data, lang));
+        if (lang !== "en" && snapshotNeedsRegen) {
+          setLoadStep(5);
           const fresh = await fetchReport("full");
           data = fresh.data;
           serverCacheHit = fresh.serverCacheHit;
         }
 
-        if (!forceUpdate) {
-          for (let attempt = 0; attempt < 2 && lang !== "en"; attempt += 1) {
+        if (!forceUpdate && lang === "hn" && reportNeedsHindiRetry(data, lang)) {
+          setLoadStep(5);
+          const retry = await fetchReport("relocalize");
+          data = retry.data;
+          serverCacheHit = retry.serverCacheHit;
+        } else if (!forceUpdate && lang === "hi") {
+          for (let attempt = 0; attempt < 2; attempt += 1) {
             if (!reportNeedsHindiRetry(data, lang)) break;
-            bumpProgressFloor(62 + attempt * 6);
-            const retryMode = lang === "hi" && !section4HiLoadReady(data, lang) ? "full" : "relocalize";
+            setLoadStep(5);
+            const retryMode = !section4HiLoadReady(data, lang) ? "full" : "relocalize";
             const retry = await fetchReport(retryMode);
             data = retry.data;
             serverCacheHit = retry.serverCacheHit;
-            bumpProgressFloor(68 + attempt * 6);
           }
         }
+
+        setLoadStep(6);
 
         if (!reportHasDisplayableContent(data)) {
           setError("Report empty — dubara Update dabayein.");
@@ -563,7 +569,7 @@ export default function LoveRealityProReportScreen() {
           }
         }
         const hindiOk = reportHindiFullyReady(data, lang);
-        bumpProgressFloor(88);
+        setLoadStep(7);
         try {
           await saveLoveReportCache(cacheOpts, data);
         } catch {
@@ -591,7 +597,7 @@ export default function LoveRealityProReportScreen() {
       setUpdatingReport(false);
       setForceUpdateRun(false);
     }
-  }, [user, primaryProfile, partnerProfile, lang, finishLoad, labels, bumpProgressFloor]);
+  }, [user, primaryProfile, partnerProfile, lang, finishLoad, labels, setLoadStep]);
 
   useEffect(() => () => {
     if (showReportTimerRef.current) clearTimeout(showReportTimerRef.current);
@@ -609,44 +615,15 @@ export default function LoveRealityProReportScreen() {
   }, [load, lang, params.partnerId]);
 
   useEffect(() => {
-    if (!fetching || fetchDoneRef.current) return;
+    if (!fetching || fetchDoneRef.current || !awaitingLlmRef.current) return;
+    const llmStep = LOAD_STEPS.find(s => "llm" in s && s.llm);
+    const cap = llmStep?.creepCap ?? 82;
     const tick = setInterval(() => {
-      if (fetchDoneRef.current) return;
-      setLoadPct(prev => {
-        if (prev >= MAX_WAIT_PCT) return MAX_WAIT_PCT;
-        const elapsed = Date.now() - fetchStartedAtRef.current;
-        const budget = llmBudgetMsRef.current;
-        const isFast = fastCacheRef.current || (cacheChange === "app_layout" && !forceUpdateRun);
-        const floor = progressFloorRef.current;
-        let timePct: number;
-        if (isFast) {
-          timePct = Math.min(MAX_WAIT_PCT, (elapsed / 5_500) * MAX_WAIT_PCT);
-        } else {
-          const base = MAX_WAIT_PCT * (1 - Math.exp(-elapsed / (budget * 0.48)));
-          const overtime = Math.max(0, elapsed - budget);
-          const extra = Math.min(10, (overtime / budget) * 10);
-          timePct = Math.min(MAX_WAIT_PCT, base + extra);
-        }
-        const target = Math.max(floor, timePct);
-        const next = Math.max(prev, Math.floor(target));
-        if (next > prev) return Math.min(MAX_WAIT_PCT, next);
-        if (prev < MAX_WAIT_PCT && elapsed > 2_000) {
-          return Math.min(MAX_WAIT_PCT, prev + 1);
-        }
-        return prev;
-      });
-    }, CREEP_TICK_MS);
+      if (fetchDoneRef.current || !awaitingLlmRef.current) return;
+      setLoadPct(prev => (prev >= cap ? prev : prev + 1));
+    }, LLM_CREEP_MS);
     return () => clearInterval(tick);
-  }, [fetching, cacheChange, forceUpdateRun]);
-
-  useEffect(() => {
-    if (!fetching || fetchDoneRef.current) return;
-    const stages = loadStagesForLang(lang);
-    const tick = setInterval(() => {
-      setStageIdx(i => (i + 1) % stages.length);
-    }, 3200);
-    return () => clearInterval(tick);
-  }, [fetching, lang]);
+  }, [fetching, loadStep]);
 
   const handleUpdateReport = useCallback(() => {
     if (updatingReport) return;
@@ -791,7 +768,7 @@ export default function LoveRealityProReportScreen() {
         ) : isLoadingUi ? (
           <ReportLoadingView
             pct={loadPct}
-            stageIdx={stageIdx}
+            loadStep={loadStep}
             isDark={C.isDark}
             fromCache={fromCache}
             cacheChange={cacheChange}
@@ -878,6 +855,13 @@ const ld = StyleSheet.create({
     lineHeight: 18,
     minHeight: 36,
     paddingHorizontal: 8,
+  },
+  stepTag: {
+    fontFamily: "Nunito_600SemiBold",
+    fontSize: 12,
+    letterSpacing: 0.4,
+    marginTop: -4,
+    marginBottom: 2,
   },
   track: { height: 10, borderRadius: 5, overflow: "hidden", width: "100%", marginTop: 8 },
   fillWrap: { height: 10, borderRadius: 5, overflow: "hidden", minWidth: 0 },

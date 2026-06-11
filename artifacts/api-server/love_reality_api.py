@@ -375,32 +375,54 @@ def _in_app_report_snapshot_requested() -> bool:
     return hdr in ("1", "true", "yes", "on") or flag in ("1", "true", "yes", "on")
 
 
+def _attach_llm_cost_inr(payload: dict) -> dict:
+    """Rounded INR LLM cost for operator UI — no tokens exposed."""
+    if not isinstance(payload, dict):
+        return payload
+    pro = payload.get("pro_premium")
+    if not isinstance(pro, dict):
+        return payload
+    meta = pro.get("_meta")
+    if not isinstance(meta, dict):
+        return payload
+    pg = meta.get("pdf_generation")
+    if not isinstance(pg, dict):
+        return payload
+    try:
+        inr = float(pg.get("estimated_cost_inr") or 0)
+    except (TypeError, ValueError):
+        inr = 0.0
+    if inr > 0:
+        return {**payload, "llm_cost_inr": int(round(inr))}
+    return payload
+
+
 def _with_app_sections(payload: dict, lang: str) -> dict:
     """In-app scroll sections — backfill LLM gaps + Hindi labels + localize."""
     p1 = payload.get("page1")
     ctx = payload.get("pdf_context")
     pro = payload.get("pro_premium")
     if not isinstance(p1, dict) or not isinstance(ctx, dict):
-        return payload
+        return _attach_llm_cost_inr(payload)
     try:
         from vedic.love_reality.app_report_sections import build_localized_app_sections
 
         sections, script, p1_out, ctx_out = build_localized_app_sections(
             p1, ctx, pro if isinstance(pro, dict) else {}, lang
         )
-        return {
+        return _attach_llm_cost_inr({
             **payload,
             "page1": p1_out,
             "pdf_context": ctx_out,
             "app_sections": sections,
             "content_script": script,
-        }
+        })
     except Exception as exc:
         try:
             print(f"[love_reality_pro_report] app_sections build failed: {exc}", flush=True)
         except Exception:
             pass
-        return {**payload, "content_script": "unknown"}
+        return _attach_llm_cost_inr({**payload, "content_script": "unknown"})
 
 
 def _client_report_layout(data: dict) -> tuple[dict | None, dict | None, bool]:

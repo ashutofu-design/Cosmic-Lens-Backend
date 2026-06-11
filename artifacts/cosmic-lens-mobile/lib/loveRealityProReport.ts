@@ -38,6 +38,11 @@ export type LoveProPremium = {
   practical?: string[];
   remedies_action_narrative?: string;
   action_steps?: string[];
+  _meta?: {
+    pdf_generation?: {
+      estimated_cost_inr?: number;
+    };
+  };
 };
 
 export type LovePdfContext = {
@@ -113,6 +118,8 @@ export type LoveProReportResponse = {
   }>;
   /** hi | hn | en | en_mismatch — server check after localize. */
   content_script?: string;
+  /** Rounded OpenAI cost in INR (operator) — English UI only. */
+  llm_cost_inr?: number;
   /** Canonical Hindi deep_connection (विस्तार) body from server. */
   section3_hi_body?: string | null;
   /** Canonical Hindi recommendations (उपाय और आगे क्या करें) body from server. */
@@ -740,6 +747,18 @@ function L(lang: ProPdfLangCode) {
 /** UI + section labels for Love Reality Pro (en / hn / hi). */
 export function loveRealityReportLabels(lang: ProPdfLangCode) {
   return L(lang);
+}
+
+/** Rounded LLM cost in ₹ — integer only, no tokens (operator). */
+export function loveReportLlmCostInr(
+  report: LoveProReportResponse | null | undefined,
+): number | null {
+  if (!report) return null;
+  const top = report.llm_cost_inr;
+  if (typeof top === "number" && top > 0) return Math.round(top);
+  const inr = Number(report.pro_premium?._meta?.pdf_generation?.estimated_cost_inr ?? 0);
+  if (!inr || inr <= 0) return null;
+  return Math.round(inr);
 }
 
 function isRiskMetric(label: string): boolean {

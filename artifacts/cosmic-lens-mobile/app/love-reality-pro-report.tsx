@@ -23,6 +23,7 @@ import {
   buildReportSectionsFromPayload,
   fetchLoveRealityProReport,
   loveRealityReportLabels,
+  loveReportLlmCostInr,
   type LoveProReportResponse,
 } from "@/lib/loveRealityProReport";
 import {
@@ -636,6 +637,11 @@ export default function LoveRealityProReportScreen() {
     [report, lang, reportEpoch],
   );
 
+  const llmCostInr = useMemo(
+    () => (lang === "en" && report ? loveReportLlmCostInr(report) : null),
+    [lang, report, reportEpoch],
+  );
+
   const handleConnectToPdf = useCallback(async () => {
     if (
       !user?.id
@@ -724,21 +730,28 @@ export default function LoveRealityProReportScreen() {
             Love Reality Pro
           </Text>
           {report && showReport && !error ? (
-            <Pressable
-              onPress={handleConnectToPdf}
-              disabled={pdfConnecting}
-              style={[s.savePdfBtn, pdfConnecting && { opacity: 0.7 }]}
-              hitSlop={6}
-            >
-              {pdfConnecting ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <>
-                  <Feather name="download" size={13} color="#fff" />
-                  <Text style={s.savePdfTxt}>{labels.downloadPdf}</Text>
-                </>
-              )}
-            </Pressable>
+            <View style={s.headerRight}>
+              {llmCostInr != null ? (
+                <Text style={[s.llmCostTxt, { color: C.isDark ? "#A5B4FC" : "#6366F1" }]}>
+                  {llmCostInr}
+                </Text>
+              ) : null}
+              <Pressable
+                onPress={handleConnectToPdf}
+                disabled={pdfConnecting}
+                style={[s.savePdfBtn, pdfConnecting && { opacity: 0.7 }]}
+                hitSlop={6}
+              >
+                {pdfConnecting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Feather name="download" size={13} color="#fff" />
+                    <Text style={s.savePdfTxt}>{labels.downloadPdf}</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
           ) : (
             <View style={{ width: 96 }} />
           )}
@@ -848,6 +861,18 @@ const s = StyleSheet.create({
     gap: 8,
   },
   headerTitle: { flex: 1, textAlign: "center", fontFamily: "Nunito_700Bold", fontSize: 17 },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minWidth: 96,
+    justifyContent: "flex-end",
+  },
+  llmCostTxt: {
+    fontFamily: "Nunito_800ExtraBold",
+    fontSize: 13,
+    letterSpacing: 0.2,
+  },
   savePdfBtn: {
     flexDirection: "row",
     alignItems: "center",

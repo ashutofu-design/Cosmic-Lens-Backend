@@ -73,6 +73,12 @@ const OPEN_AT_PCT = 100;
 const READY_PCT = 99;
 const LLM_CREEP_MS = 5_000;
 
+function reportFetchTimeoutMs(lang: ProPdfLangCode): number {
+  if (lang === "hi") return 600_000;
+  if (lang === "hn") return 480_000;
+  return 300_000;
+}
+
 function loadStageLabel(lang: ProPdfLangCode, stepN: number): string {
   const step = LOAD_STEPS.find(s => s.n === stepN);
   const base = step?.label || "Loading…";
@@ -479,56 +485,67 @@ export default function LoveRealityProReportScreen() {
       }
 
       setLoadStep(4);
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 360000);
-      try {
-        const fetchReport = (mode: "full" | "relocalize" | "cache") => fetchLoveRealityProReport({
-          user,
-          p1: primaryProfile.birthData,
-          p2: partnerProfile.birthData,
-          p1Name: primaryProfile.name || "You",
-          p2Name: partnerProfile.name || "Partner",
-          lang,
-          signal: ctrl.signal,
-          fullUpdate: mode === "full",
-          forceLlm: mode === "full",
-          relocalizeOnly: mode === "relocalize",
-          cacheBust: mode === "full" ? Date.now() : 0,
-          layoutRefresh: false,
-        });
+      const fetchReport = async (mode: "full" | "relocalize" | "cache") => {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), reportFetchTimeoutMs(lang));
+        try {
+          return await fetchLoveRealityProReport({
+            user,
+            p1: primaryProfile.birthData,
+            p2: partnerProfile.birthData,
+            p1Name: primaryProfile.name || "You",
+            p2Name: partnerProfile.name || "Partner",
+            lang,
+            signal: ctrl.signal,
+            fullUpdate: mode === "full",
+            forceLlm: mode === "full",
+            relocalizeOnly: mode === "relocalize",
+            cacheBust: mode === "full" ? Date.now() : 0,
+            layoutRefresh: false,
+          });
+        } finally {
+          clearTimeout(timer);
+        }
+      };
 
-        const useFullFetch = forceUpdate || mustLlm || lang === "hi" || deviceCacheEmpty;
-        fastCacheRef.current = !useFullFetch && !mustLlm;
-        setLoadStep(5);
-        let { data, serverCacheHit } = await fetchReport(
-          useFullFetch ? "full" : "cache",
+      const useFullFetch = forceUpdate || mustLlm || deviceCacheEmpty;
+      fastCacheRef.current = !useFullFetch && !mustLlm;
+      setLoadStep(5);
+      let { data, serverCacheHit } = await fetchReport(
+        useFullFetch ? "full" : "cache",
+      );
+
+      const snapshotNeedsRegen =
+        data.polish_source === "polish_snapshot"
+        && lang !== "en"
+        && (
+          lang === "hi"
+            ? (!section4HiLoadReady(data, lang) || !section8HiLoadReady(data, lang))
+            : !reportContentMatchesLang(data, lang)
         );
+      if (snapshotNeedsRegen) {
+        setLoadStep(5);
+        const fresh = await fetchReport("full");
+        data = fresh.data;
+        serverCacheHit = fresh.serverCacheHit;
+      }
 
-        const snapshotNeedsRegen =
-          data.polish_source === "polish_snapshot"
-          && (lang === "hi" || !reportContentMatchesLang(data, lang));
-        if (lang !== "en" && snapshotNeedsRegen) {
-          setLoadStep(5);
-          const fresh = await fetchReport("full");
-          data = fresh.data;
-          serverCacheHit = fresh.serverCacheHit;
-        }
-
-        if (!forceUpdate && lang === "hn" && reportNeedsHindiRetry(data, lang)) {
-          setLoadStep(5);
-          const retry = await fetchReport("relocalize");
-          data = retry.data;
-          serverCacheHit = retry.serverCacheHit;
-        } else if (!forceUpdate && lang === "hi") {
-          for (let attempt = 0; attempt < 2; attempt += 1) {
-            if (!reportNeedsHindiRetry(data, lang)) break;
-            setLoadStep(5);
-            const retryMode = !section4HiLoadReady(data, lang) ? "full" : "relocalize";
-            const retry = await fetchReport(retryMode);
-            data = retry.data;
-            serverCacheHit = retry.serverCacheHit;
-          }
-        }
+      if (!forceUpdate && lang === "hn" && reportNeedsHindiRetry(data, lang)) {
+        setLoadStep(5);
+        const retry = await fetchReport("relocalize");
+        data = retry.data;
+        serverCacheHit = retry.serverCacheHit;
+      } else if (
+        !forceUpdate
+        && lang === "hi"
+        && reportNeedsHindiRetry(data, lang)
+        && !section4HiLoadReady(data, lang)
+      ) {
+        setLoadStep(5);
+        const retry = await fetchReport("full");
+        data = retry.data;
+        serverCacheHit = retry.serverCacheHit;
+      }
 
         setLoadStep(6);
 
@@ -585,12 +602,18 @@ export default function LoveRealityProReportScreen() {
               : "Report update hua. Agar English dikhe to dubara Update dabayein.";
           Alert.alert(labels.updateDone, hint, [{ text: labels.ok }]);
         }
-      } finally {
-        clearTimeout(timer);
-      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Could not load report";
-      setError(/abort/i.test(msg) ? "Report timed out — tap Retry." : msg);
+      const timedOut = /abort/i.test(msg);
+      setError(
+        timedOut
+          ? (lang === "hi"
+            ? "Hindi report timeout — server 5–10 min leta hai. Retry dabayein ya «रिपोर्ट अपडेट करें»."
+            : lang === "hn"
+              ? "Hinglish report timeout — 5–8 min wait karo, phir Retry dabao."
+              : "Report timed out — tap Retry.")
+          : msg,
+      );
       setFetching(false);
       setLoadPct(0);
     } finally {

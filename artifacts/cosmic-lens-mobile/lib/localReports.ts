@@ -50,6 +50,25 @@ export interface SaveLocalReportInput {
   sourceUri: string;
   remoteUrl?: string;
   restored?: boolean;
+  /** File size in bytes when known (e.g. from ArrayBuffer.byteLength). */
+  bytes?: number;
+}
+
+/** Human-readable PDF size for My Reports — e.g. "245 KB", "1.2 MB". */
+export function formatLocalReportSize(bytes?: number): string {
+  if (bytes == null || !Number.isFinite(bytes) || bytes <= 0) return "";
+  if (bytes < 1024 * 1024) {
+    const kb = bytes / 1024;
+    return kb < 10 ? `${kb.toFixed(1)} KB` : `${Math.round(kb)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function _bytesFromDataUrl(uri: string): number | undefined {
+  const m = String(uri || "").match(/^data:[^;]+;base64,(.+)$/);
+  if (!m) return undefined;
+  const pad = m[1].endsWith("==") ? 2 : m[1].endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((m[1].length * 3) / 4) - pad);
 }
 
 const REPORTS_DIR = (FileSystem.documentDirectory || FileSystem.cacheDirectory || "") + "reports/";
@@ -121,6 +140,7 @@ export async function saveLocalReport(
           subtitle: input.subtitle,
           localUri: input.sourceUri,
           remoteUrl: input.remoteUrl,
+          bytes: input.bytes ?? _bytesFromDataUrl(input.sourceUri),
           createdAt: Date.now(),
           ...(input.restored ? { restored: true } : {}),
         };
@@ -156,12 +176,12 @@ export async function saveLocalReport(
       // Decide which URI we trust. We MUST verify it actually exists on disk;
       // otherwise we'd register a broken entry that silently 404s on Open.
       let finalUri = "";
-      let bytes: number | undefined = undefined;
+      let bytes: number | undefined = input.bytes;
       try {
         const di = await FileSystem.getInfoAsync(dest);
         if (di.exists) {
           finalUri = dest;
-          if (typeof (di as any).size === "number") bytes = (di as any).size;
+          if (bytes == null && typeof (di as any).size === "number") bytes = (di as any).size;
         }
       } catch { /* ignore */ }
       if (!finalUri) {
@@ -169,7 +189,7 @@ export async function saveLocalReport(
           const si = await FileSystem.getInfoAsync(input.sourceUri);
           if (si.exists) {
             finalUri = input.sourceUri;
-            if (typeof (si as any).size === "number") bytes = (si as any).size;
+            if (bytes == null && typeof (si as any).size === "number") bytes = (si as any).size;
           }
         } catch { /* ignore */ }
       }
@@ -221,14 +241,32 @@ export async function listLocalReports(): Promise<LocalReport[]> {
   const all = await readAll();
   if (all.length === 0) return all;
   // Web: localUri is a data: URL embedded in localStorage; nothing to stat.
-  if (IS_WEB) return all;
   const survivors: LocalReport[] = [];
   let pruned = false;
+  let enriched = false;
   for (const r of all) {
+    if (IS_WEB) {
+      const size = r.bytes ?? _bytesFromDataUrl(r.localUri);
+      if (size != null && r.bytes !== size) {
+        survivors.push({ ...r, bytes: size });
+        enriched = true;
+      } else {
+        survivors.push(r);
+      }
+      continue;
+    }
     try {
       const info = await FileSystem.getInfoAsync(r.localUri);
       if (info.exists) {
-        survivors.push(r);
+        const diskSize = typeof (info as { size?: number }).size === "number"
+          ? (info as { size: number }).size
+          : undefined;
+        if (diskSize != null && r.bytes !== diskSize) {
+          survivors.push({ ...r, bytes: diskSize });
+          enriched = true;
+        } else {
+          survivors.push(r);
+        }
       } else {
         pruned = true;
       }
@@ -238,7 +276,7 @@ export async function listLocalReports(): Promise<LocalReport[]> {
       survivors.push(r);
     }
   }
-  if (pruned) {
+  if (pruned || enriched) {
     // Persist the cleaned-up list under the lock so concurrent writes
     // don't resurrect the dead entries.
     await withWriteLock(async () => {
@@ -247,9 +285,10 @@ export async function listLocalReports(): Promise<LocalReport[]> {
       // Keep any entries that were ADDED after our scan (newer than the
       // newest survivor); they may be valid even though we didn't stat them.
       const newest = survivors[0]?.createdAt ?? 0;
-      const merged = fresh.filter((r) =>
-        liveIds.has(r.id) || r.createdAt > newest
-      );
+      const survivorById = new Map(survivors.map((r) => [r.id, r]));
+      const merged = fresh
+        .filter((r) => liveIds.has(r.id) || r.createdAt > newest)
+        .map((r) => survivorById.get(r.id) ?? r);
       await writeAll(merged);
     });
   }

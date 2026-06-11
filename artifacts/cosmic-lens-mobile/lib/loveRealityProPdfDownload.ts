@@ -374,6 +374,7 @@ export async function downloadLoveRealityProPdf(opts: {
             subtitle: reportSubtitle,
             sourceUri: dataUrl,
             restored: reportCacheHit,
+            bytes: buf.byteLength,
           });
           savedToRegistry = true;
         } catch { /* ignore */ }
@@ -404,6 +405,7 @@ export async function downloadLoveRealityProPdf(opts: {
         subtitle: reportSubtitle,
         sourceUri: dest,
         restored: reportCacheHit,
+        bytes: buf.byteLength,
       });
       if (saved?.localUri) {
         shareUri = saved.localUri;

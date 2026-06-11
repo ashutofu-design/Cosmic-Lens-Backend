@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useC } from "@/context/ThemeContext";
 import {
+  formatLocalReportSize,
   listLocalReports,
   openLocalReport,
   shareLocalReport,
@@ -82,6 +83,8 @@ export default function MyReportsScreen() {
     const time = created.toLocaleTimeString("en-IN", {
       hour: "numeric", minute: "2-digit", hour12: true,
     });
+    const sizeLabel = formatLocalReportSize(r.bytes);
+    const metaLine = [date, time, sizeLabel].filter(Boolean).join(" · ");
     return (
       <View
         key={r.id}
@@ -110,7 +113,7 @@ export default function MyReportsScreen() {
               {r.title}
             </Text>
             <Text style={[s.subMeta, { color: C.textMuted }]} numberOfLines={1}>
-              {date} · {time}
+              {metaLine}
             </Text>
           </View>
         </View>

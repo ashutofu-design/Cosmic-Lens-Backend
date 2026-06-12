@@ -46,6 +46,9 @@ export async function gateCoupleReportAfterLangPick(opts: {
   label: string;
   amountInr: number;
   bypassCheckout: boolean;
+  contactMethod?: "whatsapp" | "email";
+  contactValue?: string;
+  urgent?: boolean;
   onEntitled: () => void;
 }): Promise<void> {
   if (opts.bypassCheckout) {
@@ -94,6 +97,9 @@ export async function gateCoupleReportAfterLangPick(opts: {
       p1: opts.p1,
       p2: opts.p2,
       lang: opts.lang,
+      contactMethod: opts.contactMethod,
+      contactValue: opts.contactValue,
+      urgent: opts.urgent,
     });
 
     router.push({

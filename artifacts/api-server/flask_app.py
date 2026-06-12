@@ -3230,6 +3230,20 @@ def admin_pdf_generations_route():
     return jsonify(build_pdf_generations(page=page, kind=kind))
 
 
+@app.route("/api/admin/love-reality-orders", methods=["GET"])
+def admin_love_reality_orders_route():
+    """Founder-prepared Love Reality Pro PDF orders (manual delivery queue)."""
+    err = require_admin()
+    if err:
+        return err
+    from love_reality_human_orders import list_human_orders
+
+    page = request.args.get("page", type=int) or 1
+    per_page = request.args.get("per_page", type=int) or 50
+    status = (request.args.get("status") or "").strip() or None
+    return jsonify(list_human_orders(page=page, per_page=per_page, status=status))
+
+
 @app.route("/api/admin/login-activity", methods=["GET"])
 def admin_login_activity():
     """List authentication attempts for admin panel."""

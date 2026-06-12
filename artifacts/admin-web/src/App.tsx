@@ -22,6 +22,8 @@ import {
   fetchTransactions,
   fetchUserDetail,
   fetchUsers,
+  fetchLoveRealityOrders,
+  type LoveRealityOrderItem,
   formatDate,
   formatInr,
   profileBirthFields,
@@ -29,7 +31,7 @@ import {
   setUserPro,
 } from "./api";
 
-type Tab = "dashboard" | "transactions" | "users" | "logins" | "pdfcosts";
+type Tab = "dashboard" | "transactions" | "users" | "logins" | "pdfcosts" | "lrorders";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("dashboard");
@@ -81,6 +83,12 @@ export default function App() {
   const [pdfGenKind, setPdfGenKind] = useState("");
   const [pdfGenError, setPdfGenError] = useState<string | null>(null);
 
+  const [lrOrdersPage, setLrOrdersPage] = useState(1);
+  const [lrOrdersPages, setLrOrdersPages] = useState(1);
+  const [lrOrdersTotal, setLrOrdersTotal] = useState(0);
+  const [lrOrders, setLrOrders] = useState<LoveRealityOrderItem[]>([]);
+  const [lrOrdersError, setLrOrdersError] = useState<string | null>(null);
+
   const loadDashboard = useCallback(async () => {
     const [d, s] = await Promise.all([fetchDashboard(), fetchStats()]);
     setDash(d);
@@ -125,6 +133,14 @@ export default function App() {
     setPdfGenTotal(data.total);
   }, [pdfGenPage, pdfGenKind]);
 
+  const loadLoveRealityOrders = useCallback(async () => {
+    setLrOrdersError(null);
+    const data = await fetchLoveRealityOrders({ page: lrOrdersPage });
+    setLrOrders(data.orders);
+    setLrOrdersPages(data.pages);
+    setLrOrdersTotal(data.total);
+  }, [lrOrdersPage]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -134,14 +150,16 @@ export default function App() {
       else if (tab === "users") await loadUsers();
       else if (tab === "logins") await loadLogins();
       else if (tab === "pdfcosts") await loadPdfGenerations();
+      else if (tab === "lrorders") await loadLoveRealityOrders();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load";
       if (tab === "pdfcosts") setPdfGenError(msg);
+      else if (tab === "lrorders") setLrOrdersError(msg);
       else setError(msg);
     } finally {
       setLoading(false);
     }
-  }, [tab, loadDashboard, loadTransactions, loadUsers, loadLogins, loadPdfGenerations]);
+  }, [tab, loadDashboard, loadTransactions, loadUsers, loadLogins, loadPdfGenerations, loadLoveRealityOrders]);
 
   useEffect(() => {
     load();
@@ -670,6 +688,7 @@ export default function App() {
             ["transactions", "Transactions"],
             ["users", "Users"],
             ["logins", "Gmail logins"],
+            ["lrorders", "Love Reality Orders"],
             ["pdfcosts", "PDF AI costs"],
           ] as const
         ).map(([id, label]) => (
@@ -916,6 +935,82 @@ export default function App() {
               </tbody>
             </table>
           </div>
+        </section>
+      ) : null}
+
+      {tab === "lrorders" ? (
+        <section className="section">
+          <h2>Love Reality Pro orders ({lrOrdersTotal})</h2>
+          <p className="detail-muted">
+            Founder-verified PDF queue. You also get a Telegram/SMS alert when TELEGRAM_BOT_TOKEN is set in server .env.
+          </p>
+          {lrOrdersError ? <div className="error">{lrOrdersError}</div> : null}
+          <div className="card" style={{ padding: 0, overflow: "auto" }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Couple</th>
+                  <th>Lang</th>
+                  <th>Delivery</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                  <th>Order</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lrOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={7}>No orders yet.</td>
+                  </tr>
+                ) : (
+                  lrOrders.map((row) => (
+                    <tr key={row.order_id}>
+                      <td>{formatDate(row.created_at)}</td>
+                      <td>
+                        {row.p1_name} & {row.p2_name}
+                        {row.user_id ? (
+                          <div className="detail-muted">user #{row.user_id}</div>
+                        ) : null}
+                      </td>
+                      <td>{row.lang}</td>
+                      <td>
+                        {row.contact_method}: {row.contact_value}
+                      </td>
+                      <td>{row.urgent ? "⚡ 12h" : "24–48h"}</td>
+                      <td>
+                        <span className={row.status === "pending" ? "badge warn" : "badge ok"}>
+                          {row.status}
+                        </span>
+                      </td>
+                      <td className="detail-muted">{row.order_id.slice(0, 8)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          {lrOrdersPages > 1 ? (
+            <div className="pager">
+              <button
+                type="button"
+                disabled={lrOrdersPage <= 1 || loading}
+                onClick={() => setLrOrdersPage((p) => Math.max(1, p - 1))}
+              >
+                Prev
+              </button>
+              <span>
+                Page {lrOrdersPage} / {lrOrdersPages}
+              </span>
+              <button
+                type="button"
+                disabled={lrOrdersPage >= lrOrdersPages || loading}
+                onClick={() => setLrOrdersPage((p) => p + 1)}
+              >
+                Next
+              </button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 

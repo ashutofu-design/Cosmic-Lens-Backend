@@ -10,9 +10,12 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useC } from "@/context/ThemeContext";
+import { LOVE_REALITY_DELIVERY_OPTIONS } from "@/lib/loveRealityProCopy";
+import { LOVE_REALITY_URGENT_SURCHARGE_INR } from "@/lib/loveRealityProOffer";
 import {
   coerceProPdfLang,
   PRO_PDF_LANG_OPTIONS,
@@ -20,6 +23,15 @@ import {
   proPdfLangPickerUi,
   type ProPdfLangCode,
 } from "@/lib/proPdfLang";
+
+export type ProPdfDeliveryDetails = {
+  contactMethod: "whatsapp" | "email";
+  onContactMethodChange: (method: "whatsapp" | "email") => void;
+  contactValue: string;
+  onContactValueChange: (value: string) => void;
+  priorityDelivery: boolean;
+  onPriorityDeliveryChange: (value: boolean) => void;
+};
 
 export interface ProPdfLanguagePickerModalProps {
   visible: boolean;
@@ -29,6 +41,7 @@ export interface ProPdfLanguagePickerModalProps {
   onContinue: () => void;
   title?: string;
   subtitle?: string;
+  delivery?: ProPdfDeliveryDetails;
 }
 
 /** Milan-style PDF language picker — English, Hinglish, Hindi. */
@@ -40,12 +53,14 @@ export function ProPdfLanguagePickerModal({
   onContinue,
   title,
   subtitle,
+  delivery,
 }: ProPdfLanguagePickerModalProps) {
   const C = useC();
   const uiLang = coerceProPdfLang(selectedLang);
   const ui = proPdfLangPickerUi(uiLang);
   const titleText = title ?? ui.title;
   const subtitleText = subtitle ?? ui.subtitle;
+  const priorityOption = LOVE_REALITY_DELIVERY_OPTIONS[1];
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -86,9 +101,10 @@ export function ProPdfLanguagePickerModal({
               </View>
 
               <ScrollView
-                style={{ maxHeight: 340, marginTop: 14, marginBottom: 14 }}
+                style={{ maxHeight: delivery ? 420 : 340, marginTop: 14, marginBottom: 14 }}
                 contentContainerStyle={{ paddingVertical: 4 }}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
               >
                 {PRO_PDF_LANG_OPTIONS.map(L => {
                   const sel = selectedLang === L.code;
@@ -168,6 +184,94 @@ export function ProPdfLanguagePickerModal({
                     </Pressable>
                   );
                 })}
+
+                {delivery ? (
+                  <View
+                    style={[
+                      s.deliveryCard,
+                      {
+                        borderColor: C.isDark ? "rgba(255,255,255,0.12)" : "#E5E7EB",
+                        backgroundColor: C.isDark ? "rgba(255,255,255,0.03)" : "#F9FAFB",
+                      },
+                    ]}
+                  >
+                    <Text style={[s.deliveryHead, { color: C.text }]}>{ui.deliveryHead}</Text>
+                    <View style={s.methodRow}>
+                      {(["whatsapp", "email"] as const).map(m => (
+                        <Pressable
+                          key={m}
+                          onPress={() => {
+                            delivery.onContactMethodChange(m);
+                            Haptics.selectionAsync();
+                          }}
+                          style={[
+                            s.methodBtn,
+                            {
+                              borderColor: delivery.contactMethod === m ? "#ec4899" : C.border,
+                              backgroundColor:
+                                delivery.contactMethod === m ? "rgba(236,72,153,0.12)" : "transparent",
+                            },
+                          ]}
+                        >
+                          <Feather
+                            name={m === "whatsapp" ? "message-circle" : "mail"}
+                            size={14}
+                            color="#ec4899"
+                          />
+                          <Text style={[s.methodTxt, { color: C.text }]}>
+                            {m === "whatsapp" ? ui.whatsapp : ui.email}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    <TextInput
+                      value={delivery.contactValue}
+                      onChangeText={delivery.onContactValueChange}
+                      placeholder={
+                        delivery.contactMethod === "whatsapp"
+                          ? ui.whatsappPlaceholder
+                          : ui.emailPlaceholder
+                      }
+                      placeholderTextColor={C.textMuted}
+                      keyboardType={delivery.contactMethod === "whatsapp" ? "phone-pad" : "email-address"}
+                      autoCapitalize="none"
+                      style={[
+                        s.input,
+                        { color: C.text, borderColor: C.border, backgroundColor: C.bg },
+                      ]}
+                    />
+                    <Pressable
+                      onPress={() => {
+                        delivery.onPriorityDeliveryChange(!delivery.priorityDelivery);
+                        Haptics.selectionAsync();
+                      }}
+                      style={[
+                        s.urgentRow,
+                        { borderColor: delivery.priorityDelivery ? "#f59e0b" : C.border },
+                      ]}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[s.urgentTitle, { color: C.text }]}>
+                          {priorityOption.emoji} {priorityOption.title}
+                        </Text>
+                        <Text style={[s.urgentSub, { color: C.textDim }]}>
+                          {priorityOption.eta} · +₹{LOVE_REALITY_URGENT_SURCHARGE_INR}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          s.check,
+                          {
+                            borderColor: delivery.priorityDelivery ? "#f59e0b" : C.border,
+                            backgroundColor: delivery.priorityDelivery ? "#f59e0b" : "transparent",
+                          },
+                        ]}
+                      >
+                        {delivery.priorityDelivery ? <Feather name="check" size={14} color="#fff" /> : null}
+                      </View>
+                    </Pressable>
+                  </View>
+                ) : null}
               </ScrollView>
 
               <View style={s.actions}>
@@ -240,6 +344,52 @@ const s = StyleSheet.create({
     textAlign: "center",
     lineHeight: 17,
     paddingHorizontal: 8,
+  },
+  deliveryCard: {
+    marginTop: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    gap: 10,
+  },
+  deliveryHead: { fontSize: 14, fontFamily: "Nunito_700Bold" },
+  methodRow: { flexDirection: "row", gap: 10 },
+  methodBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  methodTxt: { fontSize: 13, fontFamily: "Nunito_600SemiBold" },
+  input: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === "ios" ? 12 : 10,
+    fontFamily: "Nunito_500Medium",
+    fontSize: 15,
+  },
+  urgentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+  },
+  urgentTitle: { fontSize: 13, fontFamily: "Nunito_700Bold" },
+  urgentSub: { fontSize: 11, fontFamily: "Nunito_400Regular", marginTop: 2 },
+  check: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
   },
   actions: { flexDirection: "row", gap: 10 },
   changeBtn: {

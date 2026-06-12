@@ -414,3 +414,34 @@ export function downloadCsv(filename: string, headers: string[], rows: string[][
   a.click();
   URL.revokeObjectURL(a.href);
 }
+
+export interface LoveRealityOrderItem {
+  order_id: string;
+  created_at: string | null;
+  status: string;
+  lang: string;
+  urgent: boolean;
+  contact_method: string;
+  contact_value: string;
+  user_id: number;
+  p1_name: string;
+  p2_name: string;
+}
+
+export interface LoveRealityOrdersResponse {
+  orders: LoveRealityOrderItem[];
+  total: number;
+  page: number;
+  pages: number;
+}
+
+export async function fetchLoveRealityOrders(opts?: {
+  page?: number;
+  status?: string;
+}): Promise<LoveRealityOrdersResponse> {
+  const q = new URLSearchParams();
+  if (opts?.page) q.set("page", String(opts.page));
+  if (opts?.status) q.set("status", opts.status);
+  const qs = q.toString();
+  return adminFetch(`/api/admin/love-reality-orders${qs ? `?${qs}` : ""}`);
+}

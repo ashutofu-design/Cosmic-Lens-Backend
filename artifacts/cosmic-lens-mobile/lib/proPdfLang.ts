@@ -48,23 +48,38 @@ export function proPdfLangPickerUi(uiLang: ProPdfLangCode) {
     return {
       title: "रिपोर्ट की भाषा चुनें",
       subtitle: "Founder-verified PDF किस भाषा में चाहिए — नीचे से चुनें।",
+      deliveryHead: "डिलीवरी विवरण",
+      whatsapp: "WhatsApp",
+      email: "ईमेल",
+      whatsappPlaceholder: "10 अंकों का मोबाइल नंबर",
+      emailPlaceholder: "your@email.com",
       cancel: "रद्द करें",
-      continue: "आगे बढ़ें",
+      continue: "ऑर्डर करें",
     };
   }
   if (uiLang === "hn") {
     return {
       title: "Report Language Chunein",
       subtitle: "Poori Love Reality Pro report — English, Hinglish ya Hindi mein.",
+      deliveryHead: "Delivery details",
+      whatsapp: "WhatsApp",
+      email: "Email",
+      whatsappPlaceholder: "10-digit mobile number",
+      emailPlaceholder: "your@email.com",
       cancel: "Cancel",
-      continue: "Aage badho",
+      continue: "Order karo",
     };
   }
   return {
     title: "Report Language",
     subtitle: "Founder-verified PDF — pick English, Hinglish, or Hindi.",
+    deliveryHead: "Delivery details",
+    whatsapp: "WhatsApp",
+    email: "Email",
+    whatsappPlaceholder: "10-digit mobile number",
+    emailPlaceholder: "your@email.com",
     cancel: "Cancel",
-    continue: "Continue",
+    continue: "Place order",
   };
 }
 

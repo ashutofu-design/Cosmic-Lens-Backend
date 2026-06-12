@@ -1,4 +1,5 @@
 import { API_BASE } from "@/lib/apiConfig";
+import { humanizeContactError, normalizeIndianWhatsApp } from "@/lib/indianPhone";
 import type { ProPdfLangCode } from "@/lib/proPdfLang";
 
 export type EngineSnapshot = {
@@ -55,6 +56,11 @@ export async function submitLoveRealityHumanOrder(opts: {
   userId: number;
   apiKey?: string | null;
 }): Promise<HumanOrderResult> {
+  const contactValue =
+    opts.contactMethod === "whatsapp"
+      ? normalizeIndianWhatsApp(opts.contactValue) ?? opts.contactValue.trim()
+      : opts.contactValue.trim();
+
   const resp = await fetch(`${API_BASE}/api/love-reality/human-order`, {
     method: "POST",
     headers: authHeaders(opts.userId, opts.apiKey),
@@ -63,14 +69,14 @@ export async function submitLoveRealityHumanOrder(opts: {
       p2: opts.p2,
       lang: opts.lang,
       contact_method: opts.contactMethod,
-      contact_value: opts.contactValue.trim(),
+      contact_value: contactValue,
       urgent: opts.urgent,
     }),
   });
   const json = await resp.json().catch(() => ({}));
   if (!resp.ok) {
     const detail = typeof json.detail === "string" ? json.detail : json.error;
-    throw new Error(detail || "Could not place order");
+    throw new Error(humanizeContactError(String(detail || "Could not place order")));
   }
   return {
     order_id: String(json.order_id),

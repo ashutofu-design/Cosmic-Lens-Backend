@@ -10,6 +10,9 @@ export type PendingCoupleCheckout = {
   p1: Record<string, unknown>;
   p2: Record<string, unknown>;
   lang: string;
+  contactMethod?: "whatsapp" | "email";
+  contactValue?: string;
+  urgent?: boolean;
   /** Set true after Cashfree success — parent screen resumes PDF flow */
   paidReady?: boolean;
 };

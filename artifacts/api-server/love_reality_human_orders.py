@@ -24,6 +24,18 @@ def _ensure_dir() -> None:
         pass
 
 
+def _normalize_indian_mobile_digits(raw: str) -> str:
+    """Accept 9876543210, +91…, 919876543210, 09876543210, 0091…"""
+    digits = re.sub(r"\D", "", raw or "")
+    if digits.startswith("0091") and len(digits) >= 14:
+        digits = digits[4:]
+    elif digits.startswith("91") and len(digits) >= 12:
+        digits = digits[2:]
+    if digits.startswith("0") and len(digits) == 11:
+        digits = digits[1:]
+    return digits
+
+
 def _normalize_contact(method: str, value: str) -> tuple[str | None, str | None]:
     method = (method or "").strip().lower()
     raw = (value or "").strip()
@@ -34,9 +46,7 @@ def _normalize_contact(method: str, value: str) -> tuple[str | None, str | None]
             return None, "invalid_email"
         return raw.lower(), None
     if method == "whatsapp":
-        digits = re.sub(r"\D", "", raw)
-        if digits.startswith("91") and len(digits) == 12:
-            digits = digits[2:]
+        digits = _normalize_indian_mobile_digits(raw)
         if len(digits) != 10:
             return None, "invalid_whatsapp"
         return f"+91{digits}", None
@@ -93,7 +103,70 @@ def _save_order(record: dict) -> str:
         )
     except Exception:
         pass
+    try:
+        from order_founder_alert import notify_founder_love_reality_order
+
+        notify_founder_love_reality_order(record)
+    except Exception as exc:
+        try:
+            print(f"[love_reality_human_order] founder alert failed: {exc}", flush=True)
+        except Exception:
+            pass
     return oid
+
+
+def list_human_orders(*, page: int = 1, per_page: int = 50, status: str | None = None) -> dict[str, Any]:
+    """Admin: list founder-prepared Love Reality PDF orders (newest first)."""
+    _ensure_dir()
+    rows: list[dict[str, Any]] = []
+    try:
+        names = sorted(os.listdir(_BASE), reverse=True)
+    except OSError:
+        names = []
+    status_filter = (status or "").strip().lower()
+    for fn in names:
+        if not fn.endswith(".json"):
+            continue
+        path = os.path.join(_BASE, fn)
+        try:
+            with open(path, encoding="utf-8") as fh:
+                rec = json.load(fh)
+        except Exception:
+            continue
+        if not isinstance(rec, dict):
+            continue
+        if status_filter and str(rec.get("status") or "").lower() != status_filter:
+            continue
+        snap = rec.get("engine_snapshot") if isinstance(rec.get("engine_snapshot"), dict) else {}
+        p1 = rec.get("p1") if isinstance(rec.get("p1"), dict) else {}
+        p2 = rec.get("p2") if isinstance(rec.get("p2"), dict) else {}
+        rows.append(
+            {
+                "order_id": rec.get("order_id") or fn.replace(".json", ""),
+                "created_at": rec.get("created_at"),
+                "status": rec.get("status") or "pending",
+                "lang": rec.get("lang") or "en",
+                "urgent": bool(rec.get("urgent")),
+                "contact_method": rec.get("contact_method"),
+                "contact_value": rec.get("contact_value"),
+                "user_id": rec.get("user_id") or 0,
+                "p1_name": snap.get("p1_name") or p1.get("name") or "—",
+                "p2_name": snap.get("p2_name") or p2.get("name") or "—",
+            }
+        )
+    rows.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
+    total = len(rows)
+    page = max(1, int(page))
+    per_page = max(1, min(100, int(per_page)))
+    start = (page - 1) * per_page
+    end = start + per_page
+    return {
+        "orders": rows[start:end],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": max(1, (total + per_page - 1) // per_page),
+    }
 
 
 def register_human_order_routes(flask_app) -> None:

@@ -8,6 +8,10 @@ from vedic.love_reality.scoring_core import (
     KundliReader,
     MALEFIC,
     ROMANCE_HOUSES,
+    angular_distance_deg,
+    cross_chart_orb_distance,
+    orb_penalty_multiplier,
+    planet_longitude,
 )
 
 
@@ -18,12 +22,15 @@ class PersonSignals:
     moon_debil: bool = False
     venus_d9_weak: bool = False
     moon_afflicted: bool = False
+    moon_afflicted_orb_weight: float = 1.0
     fifth_lord_weak: bool = False
     seventh_lord_dusthana: bool = False
     seventh_lord_debil: bool = False
     saturn_on_7th: bool = False
+    saturn_on_7th_orb_weight: float = 1.0
     rahu_on_7th_axis: bool = False
     mars_on_7th: bool = False
+    mars_on_7th_orb_weight: float = 1.0
     ketu_detachment: bool = False
     third_person_risk: bool = False
     separation_yoga: bool = False
@@ -63,6 +70,7 @@ class CoupleSignals:
     p2: PersonSignals
     moon_mismatch: bool = False
     cross_rahu_venus: bool = False
+    cross_rahu_venus_orb_weight: float = 1.0
     combined_affliction: int = 0
     synastry_notes: list[str] = field(default_factory=list)
 
@@ -159,9 +167,29 @@ def _analyze_person(k: KundliReader) -> PersonSignals:
         asp_m = k.aspects_planet("Moon")
         if "Rahu" in asp_m:
             s.moon_rahu_afflicted = True
+        moon_malefic_orb: float | None = None
+        moon_sign_only = False
         if "Saturn" in asp_m or "Rahu" in asp_m:
             s.moon_afflicted = True
             w += 9
+            for malefic in ("Saturn", "Rahu"):
+                if malefic not in asp_m:
+                    continue
+                if k.share_house("Moon", malefic):
+                    la, lb = planet_longitude(k, "Moon"), planet_longitude(k, malefic)
+                    if la is not None and lb is not None:
+                        dist = angular_distance_deg(la, lb)
+                        moon_malefic_orb = (
+                            dist
+                            if moon_malefic_orb is None
+                            else min(moon_malefic_orb, dist)
+                        )
+                else:
+                    moon_sign_only = True
+            s.moon_afflicted_orb_weight = orb_penalty_multiplier(
+                moon_malefic_orb,
+                sign_only=moon_sign_only and moon_malefic_orb is None,
+            )
             s.notes.append(f"{k.name}'s Moon under Saturn/Rahu — feelings held in, then erupt or detach.")
         if k.saturn_moon_connected():
             s.saturn_moon_duty_bound = True
@@ -256,6 +284,10 @@ def _analyze_person(k: KundliReader) -> PersonSignals:
         s.saturn_on_7th = True
         s.separation_yoga = True
         w += 11
+        if "Saturn" in occ7:
+            s.saturn_on_7th_orb_weight = 1.0
+        else:
+            s.saturn_on_7th_orb_weight = orb_penalty_multiplier(None, sign_only=True)
         if k.saturn_in_seventh_house() and k.saturn_is_seventh_lord():
             s.saturn_on_7th_as_lord = True
             s.notes.append(
@@ -267,6 +299,10 @@ def _analyze_person(k: KundliReader) -> PersonSignals:
     if "Mars" in occ7 or "Mars" in asp7:
         s.mars_on_7th = True
         w += 9
+        if "Mars" in occ7:
+            s.mars_on_7th_orb_weight = 1.0
+        else:
+            s.mars_on_7th_orb_weight = orb_penalty_multiplier(None, sign_only=True)
         s.notes.append(f"{k.name}'s Mars on 7th — fights, sharp words, impulsive breaks.")
     if "Rahu" in occ7 or "Rahu" in asp7 or "Ketu" in occ7:
         s.rahu_on_7th_axis = True
@@ -360,6 +396,7 @@ def analyze_couple(k1: KundliReader, k2: KundliReader) -> CoupleSignals:
             notes.append("Moon-Moon supportive — emotional language can align when willing.")
 
     cross_rahu = False
+    cross_rahu_orb = 1.0
     for label, own, other in (
         (k1.name, k1, k2),
         (k2.name, k2, k1),
@@ -368,7 +405,17 @@ def analyze_couple(k1: KundliReader, k2: KundliReader) -> CoupleSignals:
         r = other.planet("Rahu")
         if v and r and own.sidx(v["sign"]) == other.sidx(r["sign"]):
             cross_rahu = True
-            notes.append(f"{other.name}'s Rahu on {label}'s Venus — obsession, pull, loyalty blur.")
+            dist = cross_chart_orb_distance(other, "Rahu", own, "Venus")
+            cross_rahu_orb = orb_penalty_multiplier(dist)
+            orb_note = (
+                "tight orb"
+                if cross_rahu_orb >= 1.0
+                else "wide same-sign — reduced synastry weight"
+            )
+            notes.append(
+                f"{other.name}'s Rahu on {label}'s Venus ({orb_note}) — "
+                f"obsession, pull, loyalty blur."
+            )
 
     combined = p1.affliction_weight + p2.affliction_weight
     if moon_mismatch:
@@ -381,6 +428,7 @@ def analyze_couple(k1: KundliReader, k2: KundliReader) -> CoupleSignals:
         p2=p2,
         moon_mismatch=moon_mismatch if m1 and m2 else False,
         cross_rahu_venus=cross_rahu,
+        cross_rahu_venus_orb_weight=cross_rahu_orb,
         combined_affliction=combined,
         synastry_notes=notes,
     )

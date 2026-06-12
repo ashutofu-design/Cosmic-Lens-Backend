@@ -33,9 +33,70 @@ COMBUST_THRESHOLDS = {
     "Saturn": 15.0,
 }
 
+# Love-compat orb: ≤8° full weight; wider same-sign / loose = half penalty
+ORB_TIGHT_DEG = 8.0
+ORB_MAX_DEG = 10.0
+ORB_SIGN_ONLY_WEIGHT = 0.5
+
 
 def clamp(n: float, lo: float = 0, hi: float = 100) -> int:
     return int(max(lo, min(hi, round(n))))
+
+
+def angular_distance_deg(lon_a: float, lon_b: float) -> float:
+    d = abs((float(lon_a) - float(lon_b)) % 360.0)
+    return 360.0 - d if d > 180.0 else d
+
+
+def planet_longitude(reader: "KundliReader", name: str) -> float | None:
+    p = reader.planet(name)
+    if not p:
+        return None
+    lon = p.get("longitude")
+    if isinstance(lon, (int, float)):
+        return float(lon)
+    deg = reader.planet_deg_in_sign(name)
+    if deg is None:
+        return None
+    sign = p.get("sign")
+    if not sign:
+        return None
+    return reader.sidx(sign) * 30.0 + float(deg)
+
+
+def cross_chart_orb_distance(
+    reader_a: "KundliReader",
+    planet_a: str,
+    reader_b: "KundliReader",
+    planet_b: str,
+) -> float | None:
+    la = planet_longitude(reader_a, planet_a)
+    lb = planet_longitude(reader_b, planet_b)
+    if la is None or lb is None:
+        return None
+    return angular_distance_deg(la, lb)
+
+
+def orb_penalty_multiplier(
+    distance: float | None,
+    *,
+    sign_only: bool = False,
+) -> float:
+    """
+    Scale affliction penalties by planetary closeness.
+    sign_only=True → whole-sign aspect/occupancy without tight conjunction (0.5).
+    """
+    if sign_only:
+        return ORB_SIGN_ONLY_WEIGHT
+    if distance is None:
+        return 1.0
+    if distance <= ORB_TIGHT_DEG:
+        return 1.0
+    return ORB_SIGN_ONLY_WEIGHT
+
+
+def scaled_penalty(base: float, multiplier: float) -> float:
+    return round(base * multiplier, 1)
 
 
 def risk_band_high_is_bad(score: int) -> str:

@@ -23,6 +23,7 @@ from vedic.love_reality.scoring_core import (
     level_return,
     risk_band_high_is_bad,
     risk_band_high_is_good,
+    scaled_penalty,
 )
 
 
@@ -145,16 +146,29 @@ def _compute_love_compatibility_score(
                 f"{person.name}: Navamsa Venus weak", -6.0, "Inner commitment layer fragile",
             ))
         if person.moon_debil or person.moon_afflicted:
+            moon_w = (
+                1.0
+                if person.moon_debil
+                else person.moon_afflicted_orb_weight
+            )
+            moon_pen = scaled_penalty(-11.0, moon_w)
+            moon_note = "Emotional reactions unpredictable"
+            if person.moon_afflicted and moon_w < 1.0:
+                moon_note += " (wide orb — partial weight)"
             penalties.append((
-                f"{person.name}: Moon afflicted", -11.0, "Emotional reactions unpredictable",
+                f"{person.name}: Moon afflicted", moon_pen, moon_note,
             ))
         if person.seventh_lord_dusthana or person.seventh_lord_debil:
             penalties.append((
                 f"{person.name}: 7th lord weak", -12.0, "Partnership structure strained",
             ))
         if person.saturn_on_7th:
+            sat_pen = scaled_penalty(-8.0, person.saturn_on_7th_orb_weight)
+            sat_note = "Distance and delay on partnership axis"
+            if person.saturn_on_7th_orb_weight < 1.0:
+                sat_note += " (sign-aspect only — half weight)"
             penalties.append((
-                f"{person.name}: Saturn on 7th", -8.0, "Distance and delay on partnership axis",
+                f"{person.name}: Saturn on 7th", sat_pen, sat_note,
             ))
         if person.venus_dual_flip_risk or person.moon_dual_flip_risk:
             penalties.append((
@@ -173,7 +187,11 @@ def _compute_love_compatibility_score(
     if sig.moon_mismatch:
         penalties.append(("Moon–Moon rhythm clash", -7.0, "One holds in, the other pushes out"))
     if sig.cross_rahu_venus:
-        penalties.append(("Rahu on partner Venus", -9.0, "Obsession / loyalty blur between charts"))
+        rahu_pen = scaled_penalty(-9.0, sig.cross_rahu_venus_orb_weight)
+        rahu_note = "Obsession / loyalty blur between charts"
+        if sig.cross_rahu_venus_orb_weight < 1.0:
+            rahu_note += " (wide same-sign orb — half weight)"
+        penalties.append(("Rahu on partner Venus", rahu_pen, rahu_note))
 
     score = float(_LOVE_COMPAT_BASE)
     for label, delta, note in bonuses:

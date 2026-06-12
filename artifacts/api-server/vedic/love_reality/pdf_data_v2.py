@@ -167,23 +167,26 @@ def build_love_reality_pdf_v2_context(
         or ""
     )
     if _word_count(love_narr) < 40:
-        love_parts: list[str] = []
-        summary = str(lc.get("emotional_summary") or "").strip()
-        if summary:
-            love_parts.append(summary)
-        love_parts.append(
-            f"Your ideal partner signature (7th lord / Venus / Upapada):\n{blueprint_p1}"
-        )
-        love_parts.append(
-            f"Partner actual nature vs that blueprint:\n{blueprint_p2}"
-        )
-        reasons = [str(r).strip() for r in (lc.get("reasons") or [])[:4] if str(r).strip()]
-        if reasons:
-            love_parts.append("Chart signals:\n" + "\n".join(f"• {r}" for r in reasons))
-        love_parts.append(
-            f"Love compatibility {love}/100 — how closely reality matches your chart ideal."
-        )
-        love_narr = "\n\n".join(p for p in love_parts if p)
+        if (lang or "en").strip().lower() == "hi":
+            love_narr = ""
+        else:
+            love_parts: list[str] = []
+            summary = str(lc.get("emotional_summary") or "").strip()
+            if summary:
+                love_parts.append(summary)
+            love_parts.append(
+                f"Your ideal partner signature (7th lord / Venus / Upapada):\n{blueprint_p1}"
+            )
+            love_parts.append(
+                f"Partner actual nature vs that blueprint:\n{blueprint_p2}"
+            )
+            reasons = [str(r).strip() for r in (lc.get("reasons") or [])[:4] if str(r).strip()]
+            if reasons:
+                love_parts.append("Chart signals:\n" + "\n".join(f"• {r}" for r in reasons))
+            love_parts.append(
+                f"Love compatibility {love}/100 — how closely reality matches your chart ideal."
+            )
+            love_narr = "\n\n".join(p for p in love_parts if p)
 
     breakup_narr = _chapter_body(pro, "breakup") or ""
     loyalty_narr = _chapter_body(pro, "loyalty") or ""
@@ -308,6 +311,11 @@ def build_love_reality_pdf_v2_context(
     )
 
     moon_narr = str(pro.get("moon_sync_narrative") or "").strip()
+    if lang == "hi" and moon_narr and (
+        "चंद्र संकेत सहज भावनात्मक लय" in moon_narr
+        or "षष्ठाष्टक (६-८ राशि चंद्र" in moon_narr
+    ) and len(moon_narr.split()) < 55:
+        moon_narr = ""
     if len(moon_narr.split()) < 45:
         if lang == "hi":
             moon_narr = ""

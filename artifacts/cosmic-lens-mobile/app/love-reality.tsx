@@ -45,14 +45,17 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { coerceProPdfLang } from "@/lib/proPdfLang";
 import {
   LOVE_PRO_UNLOCK_ITEMS,
+  LOVE_REALITY_CORE_QUESTIONS,
   LOVE_REALITY_PRO_BENEFIT,
   LOVE_REALITY_PRO_CTA_TITLE,
   LOVE_REALITY_PRO_FOOTNOTE,
+  LOVE_REALITY_PRO_HERO,
   LOVE_REALITY_PRO_SECTION_LABEL,
+  LOVE_REALITY_PRO_SECTION_SUB,
   LOVE_REALITY_PRO_SUBTITLE,
 } from "@/lib/loveRealityProCopy";
 
-const PRO_CHIPS = ["Founder-verified PDF", "English · Hinglish · Hindi", "Engine scores free"];
+const PRO_CHIPS = ["Return or Move On", "6 crisis sections", "Founder-verified PDF"];
 
 function LoveRealityProUnlockList({ isDark }: { isDark: boolean }) {
   const titleColor = isDark ? "#f5e6c8" : "#1e293b";
@@ -63,9 +66,20 @@ function LoveRealityProUnlockList({ isDark }: { isDark: boolean }) {
     <View style={s.unlockWrap}>
       <View style={s.unlockHead}>
         <Feather name="unlock" size={13} color={isDark ? "#f472b6" : "#db2777"} />
-        <Text style={[s.unlockHeadTxt, { color: isDark ? "#f472b6" : "#db2777" }]}>
-          {LOVE_REALITY_PRO_SECTION_LABEL}
-        </Text>
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text style={[s.unlockHeadTxt, { color: isDark ? "#f472b6" : "#db2777" }]}>
+            {LOVE_REALITY_PRO_SECTION_LABEL}
+          </Text>
+          <Text style={[s.unlockHeadSub, { color: hookColor }]}>{LOVE_REALITY_PRO_SECTION_SUB}</Text>
+        </View>
+      </View>
+      <View style={s.coreQRow}>
+        {LOVE_REALITY_CORE_QUESTIONS.map((q, i) => (
+          <View key={q} style={[s.coreQChip, { borderColor }]}>
+            <Text style={[s.coreQNum, { color: isDark ? "#c084fc" : "#9333ea" }]}>{i + 1}</Text>
+            <Text style={[s.coreQTxt, { color: titleColor }]}>{q}</Text>
+          </View>
+        ))}
       </View>
       <View style={{ gap: 8 }}>
         {LOVE_PRO_UNLOCK_ITEMS.map(sec => (
@@ -148,6 +162,20 @@ function LoveRealityProPanel({
               <Text style={s.proTitle}>Founder-Verified PDF</Text>
               <Text style={s.proBenefit}>{LOVE_REALITY_PRO_BENEFIT}</Text>
               <Text style={s.proSub}>{LOVE_REALITY_PRO_SUBTITLE}</Text>
+            </View>
+          </View>
+
+          <View style={s.proHeroBanner}>
+            <LinearGradient
+              colors={["rgba(236,72,153,0.28)", "rgba(168,85,247,0.18)"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <Text style={s.proHeroEmoji}>{LOVE_REALITY_PRO_HERO.emoji}</Text>
+            <View style={{ flex: 1, gap: 3 }}>
+              <Text style={s.proHeroTitle}>{LOVE_REALITY_PRO_HERO.title}</Text>
+              <Text style={s.proHeroLine}>{LOVE_REALITY_PRO_HERO.line}</Text>
             </View>
           </View>
 
@@ -807,8 +835,36 @@ const s = StyleSheet.create({
     padding: 12,
     marginTop: 4,
   },
-  unlockHead: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 },
+  proHeroBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginHorizontal: 14,
+    marginBottom: 10,
+    padding: 12,
+    borderRadius: 14,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(236,72,153,0.45)",
+  },
+  proHeroEmoji: { fontSize: 26 },
+  proHeroTitle: { color: "#fce7f3", fontSize: 14, fontFamily: "Nunito_800ExtraBold" },
+  proHeroLine: { color: "rgba(253,242,248,0.85)", fontSize: 11.5, fontFamily: "Nunito_500Medium", lineHeight: 16 },
+  unlockHead: { flexDirection: "row", alignItems: "flex-start", gap: 6, marginBottom: 10 },
   unlockHeadTxt: { fontSize: 11, fontFamily: "Nunito_800ExtraBold", letterSpacing: 0.8 },
+  unlockHeadSub: { fontSize: 10.5, fontFamily: "Nunito_500Medium", lineHeight: 14 },
+  coreQRow: { gap: 6, marginBottom: 10 },
+  coreQChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  coreQNum: { fontSize: 11, fontFamily: "Nunito_800ExtraBold", width: 14 },
+  coreQTxt: { flex: 1, fontSize: 12, fontFamily: "Nunito_600SemiBold", lineHeight: 16 },
   unlockRow: {
     flexDirection: "row",
     alignItems: "flex-start",

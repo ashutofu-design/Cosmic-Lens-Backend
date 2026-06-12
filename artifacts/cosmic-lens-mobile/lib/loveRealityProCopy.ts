@@ -7,50 +7,71 @@ export type LoveProUnlockItem = {
   readonly description: string;
   /** One-line hook for compact Pro screen list */
   readonly shortHook: string;
+  /** Maps to one of the 3 buyer questions (for UI grouping) */
+  readonly answersQuestion?: 1 | 2 | 3;
 };
+
+/** Top-of-Pro hero — strongest hook (wait vs move on). */
+export const LOVE_REALITY_PRO_HERO = {
+  emoji: "🔄",
+  title: "Return or Move On?",
+  line: "#1 reason people order — should you wait, reconcile, or let go?",
+} as const;
+
+/** The 3 questions in every crisis buyer's mind. */
+export const LOVE_REALITY_CORE_QUESTIONS = [
+  "Do they really love me?",
+  "Will we survive or break up?",
+  "Should I wait or move on?",
+] as const;
 
 export const LOVE_PRO_UNLOCK_ITEMS: readonly LoveProUnlockItem[] = [
   {
     emoji: "💘",
-    title: "Love Depth",
+    title: "Emotional Reality",
     description:
-      "Basic gave you the surface percentages. Unlock the exact planetary degrees causing the block—and if it's fixable.",
-    shortHook: "Degrees behind the block + fixable?",
-  },
-  {
-    emoji: "💔",
-    title: "Breakup Window",
-    description:
-      "You see the risk level is high. Get the exact critical dates and planetary transits when things can slip out of control—before it's too late.",
-    shortHook: "Critical dates before things slip",
+      "Beyond the Basic score — what they actually feel for you, where the bond is real, and where it goes cold.",
+    shortHook: "What they truly feel — not just what they show",
+    answersQuestion: 1,
   },
   {
     emoji: "🛡️",
-    title: "Loyalty Triggers",
+    title: "Loyalty & Intentions",
     description:
-      "The underlying triggers behind the behavioral scores. Understand if this instability is temporary or a permanent trait.",
-    shortHook: "Temporary doubt or permanent trait?",
+      "Intent behind their behaviour — devoted bond, mixed signals, or hidden pull elsewhere. Temporary doubt vs permanent pattern.",
+    shortHook: "Real intent — loyal, tempted, or unsure?",
+    answersQuestion: 1,
+  },
+  {
+    emoji: "💔",
+    title: "Breakup / Critical Window",
+    description:
+      "Whether this relationship can survive — critical dates and transits when things can slip before it's too late.",
+    shortHook: "Survive together or break — and when risk peaks",
+    answersQuestion: 2,
   },
   {
     emoji: "🔄",
-    title: "Return or Part?",
+    title: "Return or Move On",
     description:
-      "Timing is everything. Discover the hidden Karmic window that decides whether you will part ways permanently or patch up stronger.",
-    shortHook: "Karmic window to patch up or move on",
+      "The karmic window that decides reconciliation vs permanent parting — your clearest wait-or-go answer.",
+    shortHook: "Wait, patch up, or walk away for good",
+    answersQuestion: 3,
   },
   {
     emoji: "🔮",
-    title: "Future 1–3 Years",
+    title: "Future Timeline",
     description:
-      "A month-by-month cosmic roadmap of your relationship. Know exactly when the storm clears and when stability returns.",
-    shortHook: "Month-by-month when stability returns",
+      "Believable horizon — next 3 months, next 12 months, and key turning points (not vague 3-year guesses).",
+    shortHook: "3 mo · 12 mo · key turning points ahead",
+    answersQuestion: 3,
   },
   {
     emoji: "🚩",
-    title: "Red Flags + Upay",
+    title: "Red Flags & Remedies",
     description:
-      "The full 14-page personalized breakdown containing custom remedial measures to defuse planetary afflictions.",
-    shortHook: "Personal remedies for your charts",
+      "Hidden risks in both charts plus personalized upay to soften afflictions — action steps, not fear.",
+    shortHook: "What to watch + what you can do",
   },
 ] as const;
 
@@ -64,6 +85,9 @@ export const LOVE_REALITY_PRO_SUBTITLE =
 export const LOVE_REALITY_PRO_CTA_TITLE = "Order Verified PDF ✨" as const;
 
 export const LOVE_REALITY_PRO_SECTION_LABEL = "WHAT YOU GET" as const;
+
+export const LOVE_REALITY_PRO_SECTION_SUB =
+  "6 sections · answers all 3 questions in one verified PDF" as const;
 
 export const LOVE_REALITY_PRO_FOOTNOTE =
   "Pick language · WhatsApp or email delivery · 24–48h (urgent available)" as const;

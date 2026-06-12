@@ -21,6 +21,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
+import { LoveRealityProPurchase } from "@/components/loveReality/LoveRealityProPurchase";
 import { LoveRealityUnifiedBasic } from "@/components/loveReality/LoveRealityUnifiedBasic";
 import { ProPdfLanguagePickerModal } from "@/components/ProPdfLanguagePickerModal";
 import { useC } from "@/context/ThemeContext";
@@ -43,201 +44,6 @@ import {
 } from "@/lib/loveRealityProOffer";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { coerceProPdfLang } from "@/lib/proPdfLang";
-import {
-  LOVE_PRO_UNLOCK_ITEMS,
-  LOVE_REALITY_CORE_QUESTIONS,
-  LOVE_REALITY_PRO_BENEFIT,
-  LOVE_REALITY_PRO_CTA_TITLE,
-  LOVE_REALITY_PRO_FOOTNOTE,
-  LOVE_REALITY_PRO_HERO,
-  LOVE_REALITY_PRO_SECTION_LABEL,
-  LOVE_REALITY_PRO_SECTION_SUB,
-  LOVE_REALITY_PRO_SUBTITLE,
-} from "@/lib/loveRealityProCopy";
-
-const PRO_CHIPS = ["Return or Move On", "6 crisis sections", "Founder-verified PDF"];
-
-function LoveRealityProUnlockList({ isDark }: { isDark: boolean }) {
-  const titleColor = isDark ? "#f5e6c8" : "#1e293b";
-  const hookColor = isDark ? "rgba(226,232,240,0.65)" : "#64748B";
-  const borderColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
-
-  return (
-    <View style={s.unlockWrap}>
-      <View style={s.unlockHead}>
-        <Feather name="unlock" size={13} color={isDark ? "#f472b6" : "#db2777"} />
-        <View style={{ flex: 1, gap: 3 }}>
-          <Text style={[s.unlockHeadTxt, { color: isDark ? "#f472b6" : "#db2777" }]}>
-            {LOVE_REALITY_PRO_SECTION_LABEL}
-          </Text>
-          <Text style={[s.unlockHeadSub, { color: hookColor }]}>{LOVE_REALITY_PRO_SECTION_SUB}</Text>
-        </View>
-      </View>
-      <View style={s.coreQRow}>
-        {LOVE_REALITY_CORE_QUESTIONS.map((q, i) => (
-          <View key={q} style={[s.coreQChip, { borderColor }]}>
-            <Text style={[s.coreQNum, { color: isDark ? "#c084fc" : "#9333ea" }]}>{i + 1}</Text>
-            <Text style={[s.coreQTxt, { color: titleColor }]}>{q}</Text>
-          </View>
-        ))}
-      </View>
-      <View style={{ gap: 8 }}>
-        {LOVE_PRO_UNLOCK_ITEMS.map(sec => (
-          <View key={sec.title} style={[s.unlockRow, { borderColor }]}>
-            <Text style={s.unlockEmoji}>{sec.emoji}</Text>
-            <View style={{ flex: 1, gap: 5 }}>
-              <Text style={[s.unlockTitle, { color: titleColor }]}>{sec.title}</Text>
-              <Text style={[s.unlockHook, { color: hookColor }]}>{sec.shortHook}</Text>
-            </View>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function LoveRealityProPanel({
-  isDark,
-  canPro,
-  pdfLoading,
-  onUnlock,
-}: {
-  isDark: boolean;
-  canPro: boolean;
-  pdfLoading: boolean;
-  onUnlock: () => void;
-}) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
-  const glowAnim = useRef(new Animated.Value(0.2)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 600, delay: 120, useNativeDriver: true }),
-      Animated.spring(slideAnim, { toValue: 0, delay: 120, useNativeDriver: true, speed: 12, bounciness: 5 }),
-    ]).start();
-    const glow = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowAnim, { toValue: 0.55, duration: 2800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 0.2, duration: 2800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ]),
-    );
-    glow.start();
-    return () => { glow.stop(); };
-  }, []);
-
-  const { originalInr, offerInr, discountLabel } = LOVE_REALITY_PRO_UI_PRICING;
-
-  return (
-    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-        <View style={[s.proCard, {
-          shadowColor: "#a855f7",
-          shadowOpacity: isDark ? 0.45 : 0.2,
-          shadowRadius: 24,
-          shadowOffset: { width: 0, height: 8 },
-          elevation: 12,
-        }]}>
-          <LinearGradient
-            colors={["#1a0a2e", "#111827", "#150a20"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[StyleSheet.absoluteFill, { borderRadius: 26 }]}
-          />
-          <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: 26, opacity: glowAnim, overflow: "hidden" }]}>
-            <LinearGradient
-              colors={["rgba(168,85,247,0.22)", "rgba(236,72,153,0.12)", "transparent"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-          </Animated.View>
-          <View style={[StyleSheet.absoluteFill, { borderRadius: 26, borderWidth: 1, borderColor: "rgba(168,85,247,0.35)" }]} />
-
-          <View style={s.proContent}>
-            <LinearGradient colors={["#9333ea", "#ec4899"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.proEmojiCircle}>
-              <Text style={{ fontSize: 26 }}>💞</Text>
-            </LinearGradient>
-
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text style={s.proTitle}>Founder-Verified PDF</Text>
-              <Text style={s.proBenefit}>{LOVE_REALITY_PRO_BENEFIT}</Text>
-              <Text style={s.proSub}>{LOVE_REALITY_PRO_SUBTITLE}</Text>
-            </View>
-          </View>
-
-          <View style={s.proHeroBanner}>
-            <LinearGradient
-              colors={["rgba(236,72,153,0.28)", "rgba(168,85,247,0.18)"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-            <Text style={s.proHeroEmoji}>{LOVE_REALITY_PRO_HERO.emoji}</Text>
-            <View style={{ flex: 1, gap: 3 }}>
-              <Text style={s.proHeroTitle}>{LOVE_REALITY_PRO_HERO.title}</Text>
-              <Text style={s.proHeroLine}>{LOVE_REALITY_PRO_HERO.line}</Text>
-            </View>
-          </View>
-
-          <View style={s.proChipsRow}>
-            {PRO_CHIPS.map(chip => (
-              <View key={chip} style={s.proChip}>
-                <Text style={s.proChipText}>{chip}</Text>
-              </View>
-            ))}
-          </View>
-
-          <View style={s.proPriceRow}>
-            <Text style={s.proStrike}>₹{originalInr}</Text>
-            <Text style={s.proOffer}>₹{offerInr}</Text>
-            <View style={s.proOffPill}>
-              <Text style={s.proOffText}>{discountLabel}</Text>
-            </View>
-          </View>
-
-          <Pressable
-            onPress={onUnlock}
-            disabled={pdfLoading || !canPro}
-            style={({ pressed }) => ({
-              opacity: !canPro ? 0.55 : pressed ? 0.88 : 1,
-              marginTop: 4,
-              borderRadius: 14,
-              overflow: "hidden",
-            })}
-          >
-            <LinearGradient
-              colors={canPro ? ["#9333ea", "#ec4899", "#f59e0b"] : ["#4b5563", "#374151"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={s.proCtaGrad}
-            >
-              {pdfLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <View style={s.proCtaInner}>
-                  <Feather name="file-text" size={16} color="#fff" />
-                  <View style={{ flex: 1, alignItems: "center" }}>
-                    <Text style={s.proCtaText}>
-                      {canPro ? LOVE_REALITY_PRO_CTA_TITLE : "Add partner kundli to unlock"}
-                    </Text>
-                    {canPro ? (
-                      <Text style={s.proCtaPrice}>Only ₹{offerInr} · {discountLabel}</Text>
-                    ) : null}
-                  </View>
-                </View>
-              )}
-            </LinearGradient>
-          </Pressable>
-
-          <View style={s.proFoot}>
-            <Feather name="zap" size={11} color="#c084fc" />
-            <Text style={s.proFootText}>{LOVE_REALITY_PRO_FOOTNOTE}</Text>
-          </View>
-        </View>
-    </Animated.View>
-  );
-}
-
 export default function LoveRealityScreen() {
   const C = useC();
   const t = useT();
@@ -420,7 +226,7 @@ export default function LoveRealityScreen() {
       p2,
       lang,
       label: "Love Reality Pro",
-      amountInr: LOVE_REALITY_PRO_UI_PRICING.offerInr,
+      amountInr: LOVE_REALITY_PRO_UI_PRICING.todayInr,
       bypassCheckout: false,
       onEntitled: () => openHumanOrder(),
     });
@@ -587,13 +393,12 @@ export default function LoveRealityScreen() {
                 <Feather name="chevron-right" size={14} color="#f472b6" />
               </Pressable>
             )}
-            <LoveRealityProPanel
+            <LoveRealityProPurchase
               isDark={isDark}
               canPro={canPro}
-              pdfLoading={pdfLoading}
+              loading={pdfLoading}
               onUnlock={startProUnlock}
             />
-            <LoveRealityProUnlockList isDark={isDark} />
           </ScrollView>
         )}
       </View>
@@ -628,7 +433,7 @@ export default function LoveRealityScreen() {
                     💑 {partnerProfile?.name || "Partner"}
                   </Text>
                   <Text style={{ color: "#a855f7", fontFamily: "Nunito_800ExtraBold", fontSize: 15 }}>
-                    ₹{LOVE_REALITY_PRO_UI_PRICING.offerInr} · {LOVE_REALITY_PRO_UI_PRICING.discountLabel}
+                    Today ₹{LOVE_REALITY_PRO_UI_PRICING.todayInr} (Regular ₹{LOVE_REALITY_PRO_UI_PRICING.regularInr})
                   </Text>
                 </View>
                 <View style={cd.actions}>

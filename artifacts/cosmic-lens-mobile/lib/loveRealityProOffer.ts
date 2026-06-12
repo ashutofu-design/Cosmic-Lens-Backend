@@ -1,17 +1,21 @@
 /**
- * Love Reality Pro — unlock offer & checkout routing (mirrors Milan).
+ * Love Reality Pro — unlock offer & checkout routing.
  */
 export const LOVE_REALITY_PRO_UI_PRICING = {
-  originalInr: 499,
-  offerInr: 149,
-  discountLabel: "70% OFF",
+  regularInr: 999,
+  todayInr: 499,
+  firstTimeDiscountBadge: "First-Time User Discount Applied",
+  /** @deprecated use regularInr */
+  originalInr: 999,
+  /** @deprecated use todayInr */
+  offerInr: 499,
 } as const;
 
-export const LOVE_REALITY_URGENT_SURCHARGE_INR = 100 as const;
+export const LOVE_REALITY_URGENT_SURCHARGE_INR = 300 as const;
 
 export function loveRealityOrderTotalInr(urgent: boolean): number {
   return (
-    LOVE_REALITY_PRO_UI_PRICING.offerInr +
+    LOVE_REALITY_PRO_UI_PRICING.todayInr +
     (urgent ? LOVE_REALITY_URGENT_SURCHARGE_INR : 0)
   );
 }

@@ -26,9 +26,9 @@ import {
   type EngineSnapshot,
 } from "@/lib/loveRealityHumanOrder";
 import { packLovePerson } from "@/lib/loveRealityProPdfDownload";
+import { LOVE_REALITY_PRO_CTA_MICROCOPY, LOVE_REALITY_DELIVERY_OPTIONS } from "@/lib/loveRealityProCopy";
 import {
   LOVE_REALITY_URGENT_SURCHARGE_INR,
-  LOVE_REALITY_PRO_UI_PRICING,
   loveRealityOrderTotalInr,
 } from "@/lib/loveRealityProOffer";
 import { mapLoveRealityResult, type LoveRealityToolKey } from "@/lib/loveRealityToolMappers";
@@ -302,9 +302,11 @@ export default function LoveRealityHumanOrderScreen() {
               style={[s.urgentRow, { borderColor: urgent ? "#f59e0b" : C.border }]}
             >
               <View style={{ flex: 1 }}>
-                <Text style={[s.urgentTitle, { color: C.text }]}>⚡ Urgent delivery (12 hours)</Text>
+                <Text style={[s.urgentTitle, { color: C.text }]}>
+                  {LOVE_REALITY_DELIVERY_OPTIONS[1].emoji} {LOVE_REALITY_DELIVERY_OPTIONS[1].title}
+                </Text>
                 <Text style={[s.urgentSub, { color: C.textDim }]}>
-                  +₹{LOVE_REALITY_URGENT_SURCHARGE_INR} · priority founder review
+                  {LOVE_REALITY_DELIVERY_OPTIONS[1].eta} · +₹{LOVE_REALITY_URGENT_SURCHARGE_INR}
                 </Text>
               </View>
               <View style={[s.check, { borderColor: urgent ? "#f59e0b" : C.border, backgroundColor: urgent ? "#f59e0b" : "transparent" }]}>
@@ -318,17 +320,12 @@ export default function LoveRealityHumanOrderScreen() {
               {submitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={s.primaryTxt}>
-                  Place order · ₹{totalInr}
-                  {urgent ? "" : ` (was ₹${LOVE_REALITY_PRO_UI_PRICING.originalInr})`}
-                </Text>
+                <Text style={s.primaryTxt}>Place order · ₹{totalInr}</Text>
               )}
             </LinearGradient>
           </Pressable>
 
-          <Text style={[s.footnote, { color: C.textMuted }]}>
-            No AI report on screen — your PDF is hand-prepared by our astrologer for accuracy.
-          </Text>
+          <Text style={[s.footnote, { color: C.textMuted }]}>{LOVE_REALITY_PRO_CTA_MICROCOPY}</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </CosmicBg>

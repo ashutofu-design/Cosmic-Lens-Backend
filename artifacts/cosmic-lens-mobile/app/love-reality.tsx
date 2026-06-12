@@ -349,8 +349,16 @@ export default function LoveRealityScreen() {
     }
     runLoveRealityProUnlockCta({
       continueProExperience: () => {
-        setSelectedPdfLang(coerceProPdfLang(t.lang));
-        setLangPickerVisible(true);
+        void (async () => {
+          try {
+            const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+            const stored = await AsyncStorage.getItem("cosmic.loveRealityPro.lastLang");
+            setSelectedPdfLang(coerceProPdfLang(stored || t.lang));
+          } catch {
+            setSelectedPdfLang(coerceProPdfLang(t.lang));
+          }
+          setLangPickerVisible(true);
+        })();
       },
     });
   }
@@ -568,8 +576,6 @@ export default function LoveRealityScreen() {
         onSelectLang={setSelectedPdfLang}
         onClose={() => setLangPickerVisible(false)}
         onContinue={onLangPickerContinue}
-        title="Report Language"
-        subtitle="Full Love Reality Pro report — English, Hinglish, or Hindi."
       />
 
       <Modal visible={confirmVisible} transparent animationType="fade" onRequestClose={() => setConfirmVisible(false)}>

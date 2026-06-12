@@ -61,6 +61,14 @@ def test_prose_matches_lang_en_rejects_devanagari():
     assert not prose_lane_ok(hindi, "en")
 
 
+def test_prose_matches_lang_en_rejects_hinglish():
+    hinglish = (
+        "Aapke rishte me emotional pull strong hai lekin communication ke beech "
+        "tension barhti hai jab dono alag rhythm me chalte hain."
+    )
+    assert not prose_matches_lang(hinglish, "en")
+
+
 def test_love_pro_payload_matches_lang_en_rejects_hindi_deep_analysis():
     mixed = {
         "page1": {"relationship_summary": "Your charts show a complex bond with strong pull."},

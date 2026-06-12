@@ -13,7 +13,13 @@ import {
   View,
 } from "react-native";
 import { useC } from "@/context/ThemeContext";
-import { PRO_PDF_LANG_OPTIONS } from "@/lib/proPdfLang";
+import {
+  coerceProPdfLang,
+  PRO_PDF_LANG_OPTIONS,
+  proPdfLangOptionExplain,
+  proPdfLangPickerUi,
+  type ProPdfLangCode,
+} from "@/lib/proPdfLang";
 
 export interface ProPdfLanguagePickerModalProps {
   visible: boolean;
@@ -32,10 +38,14 @@ export function ProPdfLanguagePickerModal({
   onSelectLang,
   onClose,
   onContinue,
-  title = "PDF Language Chunein",
-  subtitle = "Pro compatibility PDF: English, Roman Hinglish, या देवनागरी Hindi।",
+  title,
+  subtitle,
 }: ProPdfLanguagePickerModalProps) {
   const C = useC();
+  const uiLang = coerceProPdfLang(selectedLang);
+  const ui = proPdfLangPickerUi(uiLang);
+  const titleText = title ?? ui.title;
+  const subtitleText = subtitle ?? ui.subtitle;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -71,8 +81,8 @@ export function ProPdfLanguagePickerModal({
                 >
                   <Feather name="globe" size={22} color="#fff" />
                 </LinearGradient>
-                <Text style={[s.title, { color: C.text }]}>{title}</Text>
-                <Text style={[s.sub, { color: C.textDim }]}>{subtitle}</Text>
+                <Text style={[s.title, { color: C.text }]}>{titleText}</Text>
+                <Text style={[s.sub, { color: C.textDim }]}>{subtitleText}</Text>
               </View>
 
               <ScrollView
@@ -126,9 +136,9 @@ export function ProPdfLanguagePickerModal({
                             fontFamily: "Nunito_400Regular",
                             marginTop: 2,
                           }}
-                          numberOfLines={1}
+                          numberOfLines={2}
                         >
-                          {L.english}
+                          {proPdfLangOptionExplain(L.code as ProPdfLangCode, uiLang)}
                         </Text>
                       </View>
                       {sel ? (
@@ -176,7 +186,7 @@ export function ProPdfLanguagePickerModal({
                   ]}
                 >
                   <Feather name="x" size={14} color={C.text} />
-                  <Text style={[s.changeTxt, { color: C.text }]}>Cancel</Text>
+                  <Text style={[s.changeTxt, { color: C.text }]}>{ui.cancel}</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => {
@@ -192,7 +202,7 @@ export function ProPdfLanguagePickerModal({
                     style={s.continueGrad}
                   >
                     <Feather name="arrow-right" size={15} color="#fff" />
-                    <Text style={s.continueTxt}>Continue</Text>
+                    <Text style={s.continueTxt}>{ui.continue}</Text>
                   </LinearGradient>
                 </Pressable>
               </View>

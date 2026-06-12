@@ -453,6 +453,8 @@ def _verdict_page_facts_summary(bundle: dict, lang: str = "en") -> str:
             )
     else:
         lines = [
+            "OUTPUT LANGUAGE: plain conversational English ONLY (Latin script). "
+            "No Roman Hinglish (aap/tum/rishta/hai). No Devanagari.",
             "Write for this specific couple. Sound like live consultation notes.",
             "",
             f"PRIMARY READER (p1 / first kundli — report owner): {p1_name}",

@@ -198,7 +198,7 @@ function textLooksEnglishOnly(text: string): boolean {
 
 
 
-/** hn/hi selected but cache/API payload is still English — need fresh LLM. */
+/** Selected lang does not match cached/API prose — need fresh LLM. */
 
 export function needsLoveReportLlmRefresh(
 
@@ -209,8 +209,6 @@ export function needsLoveReportLlmRefresh(
   metaContentLang?: string | null,
 
 ): boolean {
-
-  if (lang === "en") return false;
 
   if (!report) return true;
 
@@ -254,7 +252,7 @@ export function reportHindiFullyReady(
 
 ): boolean {
 
-  if (lang === "en") return true;
+  if (lang === "en") return reportSummaryMatchesLang(report, lang);
 
   const script = (report.content_script || "").trim().toLowerCase();
 
@@ -302,6 +300,22 @@ export function reportNeedsHindiRetry(
 
 /** Primary check — narrative prose (not English score labels). */
 
+function textLooksEnglishProse(text: string): boolean {
+
+  const t = text.trim();
+
+  if (!t || t.length < 20) return false;
+
+  if (DEVANAGARI.test(t)) return false;
+
+  if (textLooksHinglish(t)) return false;
+
+  return true;
+
+}
+
+
+
 export function reportSummaryMatchesLang(
 
   report: LoveReportLangPayload,
@@ -310,13 +324,13 @@ export function reportSummaryMatchesLang(
 
 ): boolean {
 
-  if (lang === "en") return true;
-
   if (reportScriptMatchesLang(report, lang)) return true;
 
   const text = narrativeText(report);
 
   if (!text.trim()) return false;
+
+  if (lang === "en") return textLooksEnglishProse(text);
 
   if (lang === "hi") return textLooksHindi(text);
 
@@ -1198,8 +1212,6 @@ export function enHnReportCacheReady(
   const asm = String(report.polish_assembly || "").trim();
   if (asm && asm !== LOVE_REALITY_POLISH_ASSEMBLY_VER) return false;
 
-  if (lang === "en") return true;
-
   return reportContentMatchesLang(report, lang);
 
 }
@@ -1215,8 +1227,6 @@ export function reportContentMatchesLang(
   lang: ProPdfLangCode,
 
 ): boolean {
-
-  if (lang === "en") return true;
 
   if (coerceProPdfLang(report.lang) !== lang) return false;
 

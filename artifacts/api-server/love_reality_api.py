@@ -492,11 +492,11 @@ def _resolve_pro_premium(
     if not force_llm:
         cached = _snap.load(snap_params)
         if cached:
-            if lang in ("hn", "hi"):
+            if lang in ("en", "hn", "hi"):
                 from vedic.love_reality.pdf_text_safe import prose_matches_lang
 
                 verdict = str(cached.get("verdict") or "")
-                if not prose_matches_lang(verdict, lang):
+                if verdict and not prose_matches_lang(verdict, lang):
                     cached = None
             if cached and lang == "hi":
                 from vedic.love_reality.love_section_polish import (
@@ -940,10 +940,16 @@ def register_love_reality_routes(flask_app) -> None:
                 _json_cache.invalidate(json_cache_params)
                 _snap.invalidate(snap_params)
             if prefer_server_cache and not force_full and lang in ("en", "hn"):
+                from vedic.love_reality.pdf_text_safe import love_pro_payload_matches_lang
+
                 restored = _json_cache.load(json_cache_params)
                 if restored and lang in ("en", "hn") and _en_saved_report_stale(restored):
                     restored = None
                     _json_cache.invalidate(json_cache_params)
+                if restored and not love_pro_payload_matches_lang(restored, lang):
+                    restored = None
+                    _json_cache.invalidate(json_cache_params)
+                    _snap.invalidate(snap_params)
                 if restored and restored.get("ok"):
                     payload_out = _with_app_sections(restored, lang)
                     resp = jsonify(payload_out)
@@ -995,6 +1001,13 @@ def register_love_reality_routes(flask_app) -> None:
                         ):
                             _json_cache.invalidate(json_cache_params)
                             cached_json = None
+                if cached_json:
+                    from vedic.love_reality.pdf_text_safe import love_pro_payload_matches_lang
+
+                    if not love_pro_payload_matches_lang(cached_json, lang):
+                        _json_cache.invalidate(json_cache_params)
+                        _snap.invalidate(snap_params)
+                        cached_json = None
                 if cached_json:
                     payload_out = _enrich_hi_section8_meta(_with_app_sections(cached_json, lang))
                     blocked = _hi_report_block_response(payload_out, lang)
@@ -1234,7 +1247,7 @@ def register_love_reality_routes(flask_app) -> None:
                     }
 
                 payload = _build_payload(pro, polish_source)
-                if lang in ("hn", "hi") and not love_pro_payload_matches_lang(payload, lang):
+                if lang in ("en", "hn", "hi") and not love_pro_payload_matches_lang(payload, lang):
                     try:
                         from vedic.love_reality.love_section_polish import bust_love_polish_section_caches
 
@@ -1276,7 +1289,7 @@ def register_love_reality_routes(flask_app) -> None:
                 payload = _with_app_sections(payload, lang)
                 if lang == "hi":
                     payload = _enrich_hi_section8_meta(payload)
-                if lang in ("hn", "hi") and not love_pro_payload_matches_lang(payload, lang):
+                if lang in ("en", "hn", "hi") and not love_pro_payload_matches_lang(payload, lang):
                     payload = {
                         **payload,
                         "lang_mismatch_recovered": True,

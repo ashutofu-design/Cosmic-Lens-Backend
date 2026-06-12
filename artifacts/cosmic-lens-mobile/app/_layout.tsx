@@ -54,6 +54,8 @@ function RootLayoutNav() {
       <Stack.Screen name="dosh"             options={{ headerShown: false }} />
       <Stack.Screen name="kundli-milan"        options={{ headerShown: false }} />
       <Stack.Screen name="kundli-milan-result" options={{ headerShown: false }} />
+      <Stack.Screen name="love-reality-pro-report" options={{ headerShown: false }} />
+      <Stack.Screen name="love-reality-human-order" options={{ headerShown: false }} />
       <Stack.Screen name="vastu"            options={{ headerShown: false }} />
       <Stack.Screen name="astrovastu"               options={{ headerShown: false }} />
       <Stack.Screen name="astrovastu-pro-options"   options={{ headerShown: false }} />

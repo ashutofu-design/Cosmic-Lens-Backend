@@ -13,6 +13,12 @@ export function coerceProPdfLang(code: string | undefined): ProPdfLangCode {
   return (PRO_PDF_LANG_CODES as readonly string[]).includes(c) ? (c as ProPdfLangCode) : "en";
 }
 
+/** My Reports title / success alert — English, Hinglish, or हिन्दी. */
+export function proPdfLangDisplayName(code: ProPdfLangCode): string {
+  const opt = PRO_PDF_LANG_OPTIONS.find(o => o.code === code);
+  return opt?.native ?? "English";
+}
+
 /** Numerology Pro PDF API expects english | hindi | hinglish. */
 export function numerologyPdfLangParam(
   code: ProPdfLangCode,
@@ -34,4 +40,55 @@ export function faceReadingPdfLangParam(code: ProPdfLangCode): FaceReadingPdfLan
 /** AstroVastu PRO PDF GET ?lang= (matches pdf_renderer aliases). */
 export function astrovastuPdfLangParam(code: ProPdfLangCode): FaceReadingPdfLang {
   return faceReadingPdfLangParam(code);
+}
+
+/** Language picker modal — title, subtitle, buttons follow selected highlight lang. */
+export function proPdfLangPickerUi(uiLang: ProPdfLangCode) {
+  if (uiLang === "hi") {
+    return {
+      title: "रिपोर्ट की भाषा चुनें",
+      subtitle: "Founder-verified PDF किस भाषा में चाहिए — नीचे से चुनें।",
+      cancel: "रद्द करें",
+      continue: "आगे बढ़ें",
+    };
+  }
+  if (uiLang === "hn") {
+    return {
+      title: "Report Language Chunein",
+      subtitle: "Poori Love Reality Pro report — English, Hinglish ya Hindi mein.",
+      cancel: "Cancel",
+      continue: "Aage badho",
+    };
+  }
+  return {
+    title: "Report Language",
+    subtitle: "Founder-verified PDF — pick English, Hinglish, or Hindi.",
+    cancel: "Cancel",
+    continue: "Continue",
+  };
+}
+
+/** Short explain line under each language option (in picker UI language). */
+export function proPdfLangOptionExplain(
+  optionCode: ProPdfLangCode,
+  uiLang: ProPdfLangCode,
+): string {
+  const table: Record<ProPdfLangCode, Record<ProPdfLangCode, string>> = {
+    en: {
+      en: "Full report in English",
+      hn: "Full report in Roman Hinglish",
+      hi: "Full report in Devanagari Hindi",
+    },
+    hn: {
+      en: "Poori report English mein",
+      hn: "Poori report Roman Hinglish mein",
+      hi: "Poori report Devanagari Hindi mein",
+    },
+    hi: {
+      en: "पूरी रिपोर्ट अंग्रेज़ी में",
+      hn: "पूरी रिपोर्ट रोमन हिंग्लिश में",
+      hi: "पूरी रिपोर्ट देवनागरी हिंदी में",
+    },
+  };
+  return table[uiLang][optionCode];
 }

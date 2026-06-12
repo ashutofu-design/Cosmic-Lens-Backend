@@ -52,7 +52,7 @@ import {
   LOVE_REALITY_PRO_SUBTITLE,
 } from "@/lib/loveRealityProCopy";
 
-const PRO_CHIPS = ["6 tools · Full report", "English · Hinglish · Hindi"];
+const PRO_CHIPS = ["Founder-verified PDF", "English · Hinglish · Hindi", "Engine scores free"];
 
 function LoveRealityProUnlockList({ isDark }: { isDark: boolean }) {
   const titleColor = isDark ? "#f5e6c8" : "#1e293b";
@@ -145,7 +145,7 @@ function LoveRealityProPanel({
             </LinearGradient>
 
             <View style={{ flex: 1, gap: 4 }}>
-              <Text style={s.proTitle}>Love Reality Pro Report</Text>
+              <Text style={s.proTitle}>Founder-Verified PDF</Text>
               <Text style={s.proBenefit}>{LOVE_REALITY_PRO_BENEFIT}</Text>
               <Text style={s.proSub}>{LOVE_REALITY_PRO_SUBTITLE}</Text>
             </View>
@@ -310,7 +310,7 @@ export default function LoveRealityScreen() {
       if (consumeCouplePaidReady()) {
         const pending = getPendingCoupleCheckout();
         if (pending?.lang) setSelectedPdfLang(coerceProPdfLang(pending.lang));
-        openProReport(pending?.lang);
+        openHumanOrder(pending?.lang);
       }
     }, []),
   );
@@ -329,11 +329,11 @@ export default function LoveRealityScreen() {
     }
   }
 
-  function openProReport(langOverride?: string) {
+  function openHumanOrder(langOverride?: string) {
     const lang = coerceProPdfLang(langOverride ?? selectedPdfLang);
     void AsyncStorage.setItem("cosmic.loveRealityPro.lastLang", lang);
     router.push({
-      pathname: "/love-reality-pro-report",
+      pathname: "/love-reality-human-order",
       params: {
         partnerId: partnerId ?? "",
         lang,
@@ -370,14 +370,14 @@ export default function LoveRealityScreen() {
     if (!user?.id) {
       Alert.alert(
         "Login required",
-        "Please sign in to read your Love Reality Pro report.",
+        "Please sign in to order your verified Love Reality PDF.",
         [{ text: "OK" }],
       );
       return;
     }
 
     if (LOVE_REALITY_CHECKOUT_CONFIG.bypassCheckoutForTesting) {
-      openProReport();
+      openHumanOrder();
       return;
     }
 
@@ -394,7 +394,7 @@ export default function LoveRealityScreen() {
       label: "Love Reality Pro",
       amountInr: LOVE_REALITY_PRO_UI_PRICING.offerInr,
       bypassCheckout: false,
-      onEntitled: () => openProReport(),
+      onEntitled: () => openHumanOrder(),
     });
   }
 

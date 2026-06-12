@@ -56,16 +56,17 @@ export const LOVE_PRO_UNLOCK_ITEMS: readonly LoveProUnlockItem[] = [
 
 /** Emotional bridge from Basic shock → Pro purchase */
 export const LOVE_REALITY_PRO_BENEFIT =
-  "Basic showed the score. Pro reveals why + what to do." as const;
+  "Basic showed the score. Founder verifies your full PDF personally." as const;
 
-export const LOVE_REALITY_PRO_SUBTITLE = "14-page report · both partners · remedies" as const;
+export const LOVE_REALITY_PRO_SUBTITLE =
+  "14-page couple report · astrologer-prepared · remedies included" as const;
 
-export const LOVE_REALITY_PRO_CTA_TITLE = "Unlock 14-Page Report + Remedies ⚡" as const;
+export const LOVE_REALITY_PRO_CTA_TITLE = "Order Verified PDF ✨" as const;
 
 export const LOVE_REALITY_PRO_SECTION_LABEL = "WHAT YOU GET" as const;
 
 export const LOVE_REALITY_PRO_FOOTNOTE =
-  "Pick PDF language at unlock · English, Hinglish, or Hindi · saved in My Reports" as const;
+  "Pick language · WhatsApp or email delivery · 24–48h (urgent available)" as const;
 
 /** @deprecated use LOVE_REALITY_PRO_CTA_TITLE — kept for Basic banner import */
 export const LOVE_REALITY_PRO_CTA_LABEL = LOVE_REALITY_PRO_CTA_TITLE;

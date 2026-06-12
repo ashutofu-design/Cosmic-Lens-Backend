@@ -1384,3 +1384,13 @@ def register_love_reality_routes(flask_app) -> None:
                 })
             except Exception as exc:
                 return jsonify({"error": f"loyalty_compare_failed: {exc}"}), 500
+
+    try:
+        from love_reality_human_orders import register_human_order_routes
+
+        register_human_order_routes(flask_app)
+    except Exception as _ho_exc:
+        try:
+            print(f"[love_reality_api] human order routes failed: {_ho_exc}", flush=True)
+        except Exception:
+            pass

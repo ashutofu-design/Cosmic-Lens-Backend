@@ -3,9 +3,9 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useRef } from "react";
 import {
-  ActivityIndicator,
   Animated,
   Easing,
+  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -13,29 +13,40 @@ import {
 } from "react-native";
 
 import { LoveRealitySocialProof } from "@/components/loveReality/LoveRealitySocialProof";
+import { FOUNDER_PROFILE } from "@/lib/founderProfile";
 import {
   LOVE_PRO_UNLOCK_ITEMS,
+  LOVE_REALITY_BASIC_TO_PRO_BRIDGE,
   LOVE_REALITY_CORE_QUESTIONS,
   LOVE_REALITY_CORE_QUESTIONS_TITLE,
   LOVE_REALITY_DELIVERY_OPTIONS,
   LOVE_REALITY_FOUNDER_TRUST,
   LOVE_REALITY_PRO_CTA_MICROCOPY,
-  LOVE_REALITY_PRO_CTA_TITLE,
+  LOVE_REALITY_PRO_TRUST_BAR,
   LOVE_REALITY_PRO_HERO,
   LOVE_REALITY_REPORT_SECTION_TITLE,
+  loveRealityPartnerReportTitle,
+  loveRealitySavingsMessage,
 } from "@/lib/loveRealityProCopy";
-import { LOVE_REALITY_PRO_UI_PRICING } from "@/lib/loveRealityProOffer";
+import {
+  LOVE_REALITY_PRO_UI_PRICING,
+  LOVE_REALITY_URGENT_SURCHARGE_INR,
+  loveRealityFirstTimeSavingsInr,
+  loveRealityOrderTotalInr,
+} from "@/lib/loveRealityProOffer";
 
 export function LoveRealityProPurchase({
   isDark,
-  canPro,
-  loading,
-  onUnlock,
+  primaryName,
+  partnerName,
+  priorityDelivery,
+  onPriorityDeliveryChange,
 }: {
   isDark: boolean;
-  canPro: boolean;
-  loading: boolean;
-  onUnlock: () => void;
+  primaryName?: string | null;
+  partnerName?: string | null;
+  priorityDelivery: boolean;
+  onPriorityDeliveryChange: (value: boolean) => void;
 }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -53,29 +64,28 @@ export function LoveRealityProPurchase({
   const titleColor = isDark ? "#f8fafc" : "#0f172a";
   const bodyColor = isDark ? "rgba(226,232,240,0.72)" : "#64748b";
   const { regularInr, todayInr, firstTimeDiscountBadge } = LOVE_REALITY_PRO_UI_PRICING;
+  const savingsInr = loveRealityFirstTimeSavingsInr();
+  const totalInr = loveRealityOrderTotalInr(priorityDelivery);
+  const savingsGreen = isDark ? "#86efac" : "#15803d";
+  const standardDelivery = LOVE_REALITY_DELIVERY_OPTIONS[0];
+  const priorityOption = LOVE_REALITY_DELIVERY_OPTIONS[1];
+  const showPartnerBanner = !!(primaryName?.trim() && partnerName?.trim());
 
   return (
     <Animated.View style={{ opacity: fadeAnim, gap: 14 }}>
-      {/* Founder trust */}
-      <View style={[s.card, { backgroundColor: cardBg, borderColor: border }]}>
-        <View style={s.founderHead}>
-          <View style={s.founderIcon}>
-            <Feather name="award" size={18} color="#c084fc" />
+      {showPartnerBanner ? (
+        <View style={[s.partnerBanner, { backgroundColor: cardBg, borderColor: border }]}>
+          <Feather name="heart" size={14} color="#f472b6" />
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={[s.partnerTitle, { color: titleColor }]}>
+              {loveRealityPartnerReportTitle(primaryName!.trim(), partnerName!.trim())}
+            </Text>
+            <Text style={[s.partnerBridge, { color: bodyColor }]}>{LOVE_REALITY_BASIC_TO_PRO_BRIDGE}</Text>
           </View>
-          <Text style={[s.founderTitle, { color: titleColor }]}>{LOVE_REALITY_FOUNDER_TRUST.title}</Text>
         </View>
-        <Text style={[s.founderDesc, { color: bodyColor }]}>{LOVE_REALITY_FOUNDER_TRUST.description}</Text>
-        <View style={s.bulletList}>
-          {LOVE_REALITY_FOUNDER_TRUST.bullets.map(b => (
-            <View key={b} style={s.bulletRow}>
-              <Feather name="check" size={14} color="#22c55e" />
-              <Text style={[s.bulletTxt, { color: titleColor }]}>{b}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
+      ) : null}
 
-      {/* Hero selling card */}
+      {/* Hero — top hook */}
       <View style={[s.heroCard, { borderColor: isDark ? "rgba(236,72,153,0.5)" : "rgba(236,72,153,0.35)" }]}>
         <LinearGradient
           colors={isDark ? ["rgba(236,72,153,0.22)", "rgba(168,85,247,0.14)"] : ["rgba(236,72,153,0.1)", "rgba(168,85,247,0.06)"]}
@@ -85,6 +95,33 @@ export function LoveRealityProPurchase({
         <View style={{ flex: 1, gap: 4 }}>
           <Text style={[s.heroTitle, { color: titleColor }]}>{LOVE_REALITY_PRO_HERO.title}</Text>
           <Text style={[s.heroLine, { color: bodyColor }]}>{LOVE_REALITY_PRO_HERO.line}</Text>
+        </View>
+      </View>
+
+      {/* Founder trust */}
+      <View style={[s.card, { backgroundColor: cardBg, borderColor: border }]}>
+        <View style={s.founderHead}>
+          {FOUNDER_PROFILE.photoUri ? (
+            <Image source={{ uri: FOUNDER_PROFILE.photoUri }} style={s.founderPhoto} />
+          ) : (
+            <LinearGradient colors={["#9333ea", "#ec4899"]} style={s.founderPhoto}>
+              <Text style={s.founderInitials}>{FOUNDER_PROFILE.initials}</Text>
+            </LinearGradient>
+          )}
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text style={[s.founderName, { color: titleColor }]}>{FOUNDER_PROFILE.displayName}</Text>
+            <Text style={[s.founderRole, { color: bodyColor }]}>{FOUNDER_PROFILE.roleLine}</Text>
+          </View>
+        </View>
+        <Text style={[s.founderSectionTitle, { color: titleColor }]}>{LOVE_REALITY_FOUNDER_TRUST.title}</Text>
+        <Text style={[s.founderDesc, { color: bodyColor }]}>{LOVE_REALITY_FOUNDER_TRUST.description}</Text>
+        <View style={s.bulletList}>
+          {LOVE_REALITY_FOUNDER_TRUST.bullets.map(b => (
+            <View key={b} style={s.bulletRow}>
+              <Feather name="check" size={14} color="#22c55e" />
+              <Text style={[s.bulletTxt, { color: titleColor }]}>{b}</Text>
+            </View>
+          ))}
         </View>
       </View>
 
@@ -117,24 +154,40 @@ export function LoveRealityProPurchase({
         </View>
       </View>
 
-      {/* Delivery promise */}
+      {/* Delivery */}
       <View style={[s.card, { backgroundColor: cardBg, borderColor: border }]}>
         <Text style={[s.sectionTitle, { color: titleColor }]}>Delivery</Text>
         <View style={{ gap: 10, marginTop: 12 }}>
-          {LOVE_REALITY_DELIVERY_OPTIONS.map(opt => (
-            <View key={opt.title} style={[s.deliveryRow, { borderColor: border }]}>
-              <Text style={s.deliveryEmoji}>{opt.emoji}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={[s.deliveryTitle, { color: titleColor }]}>{opt.title}</Text>
-                <Text style={[s.deliveryEta, { color: bodyColor }]}>{opt.eta}</Text>
-              </View>
-              {opt.surchargeInr > 0 ? (
-                <Text style={[s.deliverySurcharge, { color: isDark ? "#fbbf24" : "#d97706" }]}>
-                  +₹{opt.surchargeInr}
-                </Text>
-              ) : null}
+          <View style={[s.deliveryRow, { borderColor: border }]}>
+            <Text style={s.deliveryEmoji}>{standardDelivery.emoji}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.deliveryTitle, { color: titleColor }]}>{standardDelivery.title}</Text>
+              <Text style={[s.deliveryEta, { color: bodyColor }]}>{standardDelivery.eta}</Text>
             </View>
-          ))}
+          </View>
+          <Pressable
+            onPress={() => {
+              onPriorityDeliveryChange(!priorityDelivery);
+              Haptics.selectionAsync();
+            }}
+            style={[
+              s.deliveryRow,
+              {
+                borderColor: priorityDelivery ? (isDark ? "#f59e0b" : "#d97706") : border,
+                backgroundColor: priorityDelivery ? (isDark ? "rgba(245,158,11,0.08)" : "rgba(245,158,11,0.06)") : "transparent",
+              },
+            ]}
+          >
+            <View style={[s.priorityCheck, { borderColor: priorityDelivery ? "#f59e0b" : border, backgroundColor: priorityDelivery ? "#f59e0b" : "transparent" }]}>
+              {priorityDelivery ? <Feather name="check" size={12} color="#fff" /> : null}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.deliveryTitle, { color: titleColor }]}>
+                Priority Delivery (+₹{priorityOption.surchargeInr})
+              </Text>
+              <Text style={[s.deliveryEta, { color: bodyColor }]}>{priorityOption.eta}</Text>
+            </View>
+          </Pressable>
         </View>
       </View>
 
@@ -145,58 +198,53 @@ export function LoveRealityProPurchase({
         <View style={s.priceBlock}>
           <Text style={[s.priceRegularLabel, { color: bodyColor }]}>Regular Price</Text>
           <Text style={[s.priceStrike, { color: bodyColor }]}>₹{regularInr}</Text>
-          <Text style={[s.priceTodayLabel, { color: bodyColor }]}>Today</Text>
-          <Text style={[s.priceToday, { color: titleColor }]}>₹{todayInr}</Text>
+          <Text style={[s.priceTodayLabel, { color: bodyColor }]}>Total</Text>
+          <Text style={[s.priceToday, { color: titleColor }]}>₹{totalInr}</Text>
+          {priorityDelivery ? (
+            <Text style={[s.priceAddonNote, { color: bodyColor }]}>
+              Base ₹{todayInr} + Priority ₹{LOVE_REALITY_URGENT_SURCHARGE_INR}
+            </Text>
+          ) : null}
         </View>
         <View style={[s.discountBadge, { backgroundColor: isDark ? "rgba(34,197,94,0.15)" : "rgba(34,197,94,0.1)", borderColor: isDark ? "rgba(34,197,94,0.35)" : "rgba(34,197,94,0.3)" }]}>
-          <Text style={[s.discountBadgeTxt, { color: isDark ? "#86efac" : "#15803d" }]}>
+          <Text style={[s.discountBadgeTxt, { color: savingsGreen }]}>
             ✅ {firstTimeDiscountBadge}
           </Text>
+          <Text style={[s.savingsTxt, { color: savingsGreen }]}>{loveRealitySavingsMessage(savingsInr)}</Text>
         </View>
       </View>
 
-      {/* CTA */}
-      <Pressable
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          onUnlock();
-        }}
-        disabled={loading || !canPro}
-        style={({ pressed }) => ({ opacity: !canPro ? 0.55 : pressed ? 0.9 : 1 })}
-      >
-        <LinearGradient
-          colors={canPro ? ["#7c3aed", "#db2777"] : ["#4b5563", "#374151"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={s.ctaGrad}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={s.ctaText}>
-              {canPro ? LOVE_REALITY_PRO_CTA_TITLE : "Add partner kundli to unlock"}
-            </Text>
-          )}
-        </LinearGradient>
-      </Pressable>
-
+      <Text style={[s.trustBar, { color: bodyColor }]}>{LOVE_REALITY_PRO_TRUST_BAR}</Text>
       <Text style={[s.microcopy, { color: bodyColor }]}>{LOVE_REALITY_PRO_CTA_MICROCOPY}</Text>
     </Animated.View>
   );
 }
 
 const s = StyleSheet.create({
+  partnerBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  partnerTitle: { fontSize: 15, fontFamily: "Nunito_800ExtraBold", lineHeight: 21 },
+  partnerBridge: { fontSize: 12.5, fontFamily: "Nunito_500Medium", lineHeight: 18 },
   card: { borderRadius: 18, borderWidth: 1, padding: 16 },
-  founderHead: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
-  founderIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: "rgba(168,85,247,0.18)",
+  founderHead: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
+  founderPhoto: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
   },
-  founderTitle: { flex: 1, fontSize: 16, fontFamily: "Nunito_700Bold", lineHeight: 22 },
+  founderInitials: { color: "#fff", fontSize: 16, fontFamily: "Nunito_800ExtraBold" },
+  founderName: { fontSize: 15, fontFamily: "Nunito_800ExtraBold" },
+  founderRole: { fontSize: 11.5, fontFamily: "Nunito_500Medium", lineHeight: 16 },
+  founderSectionTitle: { fontSize: 14, fontFamily: "Nunito_700Bold", marginBottom: 6 },
   founderDesc: { fontSize: 13, fontFamily: "Nunito_400Regular", lineHeight: 20, marginBottom: 12 },
   bulletList: { gap: 8 },
   bulletRow: { flexDirection: "row", alignItems: "center", gap: 8 },
@@ -247,27 +295,44 @@ const s = StyleSheet.create({
   deliveryEmoji: { fontSize: 20 },
   deliveryTitle: { fontSize: 13.5, fontFamily: "Nunito_700Bold" },
   deliveryEta: { fontSize: 12, fontFamily: "Nunito_500Medium", marginTop: 2 },
-  deliverySurcharge: { fontSize: 13, fontFamily: "Nunito_700Bold" },
+  priorityCheck: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   priceBlock: { alignItems: "center", gap: 2, marginBottom: 12 },
+  priceAddonNote: { fontSize: 11, fontFamily: "Nunito_500Medium", marginTop: 4 },
   priceRegularLabel: { fontSize: 12, fontFamily: "Nunito_500Medium" },
   priceStrike: { fontSize: 16, fontFamily: "Nunito_600SemiBold", textDecorationLine: "line-through" },
   priceTodayLabel: { fontSize: 12, fontFamily: "Nunito_500Medium", marginTop: 6 },
   priceToday: { fontSize: 32, fontFamily: "Nunito_800ExtraBold", letterSpacing: -0.5 },
   discountBadge: {
     alignSelf: "center",
+    alignItems: "center",
+    gap: 3,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
     borderWidth: 1,
   },
   discountBadgeTxt: { fontSize: 12, fontFamily: "Nunito_700Bold" },
-  ctaGrad: { borderRadius: 14, paddingVertical: 16, alignItems: "center" },
-  ctaText: { color: "#fff", fontSize: 15, fontFamily: "Nunito_800ExtraBold", textAlign: "center" },
+  savingsTxt: { fontSize: 11, fontFamily: "Nunito_700Bold" },
+  trustBar: {
+    fontSize: 11,
+    fontFamily: "Nunito_600SemiBold",
+    textAlign: "center",
+    lineHeight: 16,
+    paddingHorizontal: 4,
+  },
   microcopy: {
     fontSize: 11.5,
     fontFamily: "Nunito_500Medium",
     lineHeight: 17,
     textAlign: "center",
     paddingHorizontal: 8,
+    marginBottom: 8,
   },
 });

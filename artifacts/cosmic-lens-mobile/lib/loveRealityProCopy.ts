@@ -8,6 +8,13 @@ export type LoveProUnlockItem = {
   readonly answersQuestion?: 1 | 2 | 3;
 };
 
+export function loveRealityPartnerReportTitle(p1Name: string, p2Name: string): string {
+  return `Report for ${p1Name} & ${p2Name}`;
+}
+
+export const LOVE_REALITY_BASIC_TO_PRO_BRIDGE =
+  "You saw your Basic scores — this report explains what they mean and what to do next." as const;
+
 export const LOVE_REALITY_FOUNDER_TRUST = {
   title: "Personally Prepared by Founder Astrologer",
   description:
@@ -95,7 +102,18 @@ export const LOVE_REALITY_DELIVERY_OPTIONS = [
   },
 ] as const;
 
-export const LOVE_REALITY_PRO_CTA_TITLE = "Get My Founder-Verified Report" as const;
+/** A/B Version A — swap with LOVE_REALITY_PRO_CTA_TITLE to test */
+export const LOVE_REALITY_PRO_CTA_TITLE_ALT_A = "Unlock My Founder-Verified Report" as const;
+
+/** Default CTA — Version B (personalized framing) */
+export const LOVE_REALITY_PRO_CTA_TITLE = "Get My Personalized Relationship Report" as const;
+
+export function loveRealitySavingsMessage(savingsInr: number): string {
+  return `You saved ₹${savingsInr} today`;
+}
+
+export const LOVE_REALITY_PRO_TRUST_BAR =
+  "🔒 Secure Payment • Founder Reviewed • Delivered in 24–48 Hours" as const;
 
 export const LOVE_REALITY_PRO_CTA_MICROCOPY =
   "Prepared manually after reviewing both charts. No generic AI-generated report is delivered." as const;

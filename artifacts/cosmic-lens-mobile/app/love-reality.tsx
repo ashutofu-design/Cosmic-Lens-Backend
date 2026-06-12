@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
 import { LoveRealityProPurchase } from "@/components/loveReality/LoveRealityProPurchase";
+import { LoveRealityProStickyCta } from "@/components/loveReality/LoveRealityProStickyCta";
 import { LoveRealityUnifiedBasic } from "@/components/loveReality/LoveRealityUnifiedBasic";
 import { ProPdfLanguagePickerModal } from "@/components/ProPdfLanguagePickerModal";
 import { useC } from "@/context/ThemeContext";
@@ -40,6 +41,7 @@ import {
 import {
   LOVE_REALITY_CHECKOUT_CONFIG,
   LOVE_REALITY_PRO_UI_PRICING,
+  loveRealityOrderTotalInr,
   runLoveRealityProUnlockCta,
 } from "@/lib/loveRealityProOffer";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -73,6 +75,7 @@ export default function LoveRealityScreen() {
     if (params.openPro === "1") setPlan("pro");
   }, [params.openPro]);
 
+  const [priorityDelivery, setPriorityDelivery] = useState(false);
   const [langPickerVisible, setLangPickerVisible] = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -171,6 +174,7 @@ export default function LoveRealityScreen() {
       params: {
         partnerId: partnerId ?? "",
         lang,
+        priority: priorityDelivery ? "1" : "0",
       },
     } as never);
   }
@@ -374,32 +378,42 @@ export default function LoveRealityScreen() {
             onOpenPro={() => { setPlan("pro"); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
           />
         ) : (
-          <ScrollView
-            style={s.root}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: botPad + 24, gap: 16 }}
-            showsVerticalScrollIndicator={false}
-          >
-            {!canPro && (
-              <Pressable
-                onPress={showKundliRequired}
-                style={[s.partnerHint, { borderColor: isDark ? "rgba(244,114,182,0.35)" : "rgba(236,72,153,0.25)" }]}
-              >
-                <Feather name="users" size={14} color="#f472b6" />
-                <Text style={[s.partnerHintText, { color: isDark ? "#fbcfe8" : "#9d174d" }]}>
-                  {!partnerProfile
-                    ? "Select partner on Relationship screen for Pro PDF"
-                    : "Complete both kundlis to unlock Pro PDF"}
-                </Text>
-                <Feather name="chevron-right" size={14} color="#f472b6" />
-              </Pressable>
-            )}
-            <LoveRealityProPurchase
+          <View style={{ flex: 1 }}>
+            <ScrollView
+              style={s.root}
+              contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: botPad + 100, gap: 16 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {!canPro && (
+                <Pressable
+                  onPress={showKundliRequired}
+                  style={[s.partnerHint, { borderColor: isDark ? "rgba(244,114,182,0.35)" : "rgba(236,72,153,0.25)" }]}
+                >
+                  <Feather name="users" size={14} color="#f472b6" />
+                  <Text style={[s.partnerHintText, { color: isDark ? "#fbcfe8" : "#9d174d" }]}>
+                    {!partnerProfile
+                      ? "Select partner on Relationship screen for Pro PDF"
+                      : "Complete both kundlis to unlock Pro PDF"}
+                  </Text>
+                  <Feather name="chevron-right" size={14} color="#f472b6" />
+                </Pressable>
+              )}
+              <LoveRealityProPurchase
+                isDark={isDark}
+                primaryName={primaryProfile?.name}
+                partnerName={partnerProfile?.name}
+                priorityDelivery={priorityDelivery}
+                onPriorityDeliveryChange={setPriorityDelivery}
+              />
+            </ScrollView>
+            <LoveRealityProStickyCta
               isDark={isDark}
               canPro={canPro}
               loading={pdfLoading}
+              totalInr={loveRealityOrderTotalInr(priorityDelivery)}
               onUnlock={startProUnlock}
             />
-          </ScrollView>
+          </View>
         )}
       </View>
 

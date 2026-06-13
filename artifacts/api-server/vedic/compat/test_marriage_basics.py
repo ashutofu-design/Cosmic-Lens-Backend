@@ -253,3 +253,22 @@ def test_darakaraka_depth_fields():
     assert "aspects" in dk
     assert "conjunctions" in dk
     assert "d9" in dk
+
+
+def test_marriage_signal_skips_structural_overlap():
+    """7th-axis afflictions must not penalize twice (structural + signals)."""
+    from vedic.compat.marriage_basics import _marriage_signal_adjustment, _signal_readiness_adjustment
+    from vedic.love_reality.relationship_signals import PersonSignals
+
+    sig = PersonSignals(
+        name="Test",
+        affliction_weight=33,
+        seventh_lord_dusthana=True,
+        saturn_on_7th=True,
+        mars_on_7th=True,
+    )
+    old_adj = _signal_readiness_adjustment(sig)
+    new_adj = _marriage_signal_adjustment(sig)
+    assert old_adj <= -8
+    assert new_adj >= old_adj
+    assert new_adj >= -4

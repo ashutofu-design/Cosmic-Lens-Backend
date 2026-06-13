@@ -1160,6 +1160,42 @@ def _signal_readiness_adjustment(sig: PersonSignals) -> int:
     return bonus - penalty
 
 
+def _marriage_signal_adjustment(sig: PersonSignals) -> int:
+    """
+    Loyalty/secrecy/emotional layers only — skip weights already priced in
+    D1 7th influences, 7L dignity/house, D9 maturity, KP, manglik.
+    Prevents double-negative (e.g. Saturn on 7th counted twice).
+    """
+    overlap = 0
+    if sig.seventh_lord_dusthana:
+        overlap += 12
+    if sig.seventh_lord_debil:
+        overlap += 10
+    if sig.saturn_on_7th:
+        overlap += 11
+    if sig.mars_on_7th:
+        overlap += 9
+    if sig.rahu_on_7th_axis:
+        overlap += 10
+    if sig.ketu_detachment:
+        overlap += 7
+    if sig.d9_seventh_lord_weak:
+        overlap += 10
+
+    net_weight = max(0, sig.affliction_weight - overlap)
+    penalty = min(18, int(round(net_weight * 0.35)))
+    bonus = 0
+    if sig.reconnection_yoga:
+        bonus += 3
+    if sig.venus_d9_exalted:
+        bonus += 2
+    if sig.moon_d9_exalted:
+        bonus += 2
+    if sig.saturn_on_7th_as_lord:
+        bonus += 2
+    return bonus - penalty
+
+
 def _synastry_summary(syn: dict[str, Any]) -> str:
     if not syn.get("available"):
         return "7th-lord synastry unavailable."
@@ -1522,7 +1558,7 @@ def _analyze_partner(kundli: dict, *, name: str, gender: Gender) -> dict[str, An
             score -= 10
 
     score += _manglik_score_delta(manglik)
-    score += _signal_readiness_adjustment(sig)
+    score += _marriage_signal_adjustment(sig)
     score = max(0, min(100, score))
 
     friction, remedy, strengths, pressures = _friction_and_remedy(k, gender, sig, kp, ul, manglik)

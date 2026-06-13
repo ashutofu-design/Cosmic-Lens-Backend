@@ -2,12 +2,13 @@ import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Animated,
+  BackHandler,
   Easing,
   I18nManager,
   KeyboardAvoidingView,
@@ -26,6 +27,9 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
+import { KundliMilanBasicLanding } from "@/components/kundliMilan/KundliMilanBasicLanding";
+import { KundliMilanBasicResult, milanJsonToResult } from "@/components/kundliMilan/KundliMilanBasicResult";
+import type { MarriageBasicsPayload } from "@/lib/milanMarriageBasics";
 import { MilanResultStore } from "@/lib/milanResultStore";
 import { useFeatureGate } from "@/components/FeatureGate";
 import * as FileSystem from "expo-file-system/legacy";
@@ -1453,6 +1457,7 @@ export default function KundliMilanScreen(){
   const [p2,setP2]=useState<PersonData|null>(null);
   const [p2Profile,setP2Profile]=useState<any|null>(null);
   const [result,setResult]=useState<Result|null>(null);
+  const [marriageBasics,setMarriageBasics]=useState<MarriageBasicsPayload|null>(null);
   const [pdfLoading,setPdfLoading]=useState(false);
   const [calcLoading,setCalcLoading]=useState(false);
   const [confirmVisible,setConfirmVisible]=useState(false);
@@ -1565,6 +1570,13 @@ export default function KundliMilanScreen(){
     }
   },[params.partnerId,profiles]);
 
+  useFocusEffect(useCallback(() => {
+    if (MilanResultStore.consumeProRequest()) {
+      setPlan("pro");
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+  }, []));
+
   // Pro glow animation
   const glowAnim=useRef(new Animated.Value(0)).current;
   const scaleAnim=useRef(new Animated.Value(1)).current;
@@ -1593,10 +1605,41 @@ export default function KundliMilanScreen(){
   const canCalculate=!!person1&&!!p2;
   const isPro=plan==="pro";
 
+  const handleHeaderBack=useCallback(()=>{
+    if(confirmVisible){ setConfirmVisible(false); return; }
+    if(langPickerVisible){ setLangPickerVisible(false); return; }
+    if(pdfDoneVisible){ setPdfDoneVisible(false); return; }
+    if(addingFor){ setAddingFor(null); return; }
+    if(result){
+      setResult(null);
+      setMarriageBasics(null);
+      Haptics.selectionAsync();
+      return;
+    }
+    if(marriageBasics){
+      setMarriageBasics(null);
+      Haptics.selectionAsync();
+      return;
+    }
+    router.back();
+  },[addingFor,confirmVisible,langPickerVisible,pdfDoneVisible,marriageBasics,result]);
+
+  useFocusEffect(useCallback(()=>{
+    const sub=BackHandler.addEventListener("hardwareBackPress",()=>{
+      if(result||marriageBasics||addingFor||confirmVisible||langPickerVisible||pdfDoneVisible){
+        handleHeaderBack();
+        return true;
+      }
+      return false;
+    });
+    return ()=>sub.remove();
+  },[addingFor,confirmVisible,handleHeaderBack,langPickerVisible,marriageBasics,pdfDoneVisible,result]));
+
   function handleDone(who:"self"|"partner",data:PersonData){
     if(who==="self")setP1(data); else setP2(data);
     setAddingFor(null);
     setResult(null);
+    setMarriageBasics(null);
   }
   async function handleCalculate(){
     if(!person1||!p2)return;
@@ -1638,9 +1681,10 @@ export default function KundliMilanScreen(){
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
-          p1:{...bd1,name:person1.name},
-          p2:{...bd2,name:p2.name},
+          p1:{...bd1,name:person1.name,gender:p1Profile?.gender??""},
+          p2:{...bd2,name:p2.name,gender:p2Profile?.gender??""},
           lang:t.lang,
+          skip_llm_polish:plan==="basic",
         }),
         signal:ctrl.signal,
       });
@@ -1653,28 +1697,19 @@ export default function KundliMilanScreen(){
 
       const json=await resp.json();
       MilanResultStore.set(json);
-
-      if(isPro){
-        // Pro: transform backend result for inline ProResultReport
-        const bk:Record<string,any>={};
-        for(const k of json.koots) bk[k.key]=k;
-        const r:Result={
-          nadi:   bk.nadi   ??{score:0,max:8, label:"Nadi",         detail:"-",bad:true},
-          gana:   bk.gana   ??{score:0,max:6, label:"Gana",         detail:"-",bad:true},
-          bhakut: bk.bhakut ??{score:0,max:7, label:"Bhakut",       detail:"-",bad:true},
-          maitri: bk.maitri ??{score:0,max:5, label:"Graha Maitri", detail:"-",bad:true},
-          yoni:   bk.yoni   ??{score:0,max:4, label:"Yoni",         detail:"-",bad:true},
-          tara:   bk.tara   ??{score:0,max:3, label:"Tara",         detail:"-",bad:true},
-          vasya:  bk.vasya  ??{score:0,max:2, label:"Vasya",        detail:"-",bad:false},
-          varna:  bk.varna  ??{score:0,max:1, label:"Varna",        detail:"-",bad:true},
-          total:  json.total??0,
-          manglik:json.manglik_dosh??false,
-        };
-        setResult(r);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if(plan==="basic"){
+        if(json.marriage_basics){
+          setMarriageBasics(json.marriage_basics as MarriageBasicsPayload);
+          setResult(null);
+        }else{
+          throw new Error("Marriage structure engine unavailable — try again.");
+        }
       }else{
-        router.push("/kundli-milan-result" as any);
+        const r=milanJsonToResult(json);
+        setResult(r);
+        setMarriageBasics(null);
       }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }catch(e:any){
       const msg=e?.name==="AbortError"
         ?t.km2_calcFailedBody
@@ -1962,12 +1997,14 @@ export default function KundliMilanScreen(){
             :["#EDE9FE","#F8F9FC"]}
           style={[ms.header,{paddingTop:topPad+4}]}>
           <View style={{flexDirection:"row",alignItems:"center",gap:10}}>
-            <Pressable onPress={()=>router.back()} style={ms.backBtn}>
+            <Pressable onPress={handleHeaderBack} style={ms.backBtn}>
               <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={C.isDark?"#c4b5fd":C.text}/>
             </Pressable>
             <View style={{flex:1}}>
               <Text style={{color:C.isDark?"#f3e8ff":C.text,fontSize:18,fontFamily:"Nunito_700Bold"}}>{t.kundliMilanTitle}</Text>
-              <Text style={{color:"#7c3aed",fontSize:10,fontFamily:"Nunito_400Regular"}}>अष्टकूट गुण मिलान</Text>
+              <Text style={{color:C.isDark?"#c4b5fd":"#6366f1",fontSize:10,fontFamily:"Nunito_500Medium"}}>
+                {isPro?t.kundliMilanSub:"Marriage Structure · D1/D9 Engine"}
+              </Text>
             </View>
           </View>
 
@@ -2000,162 +2037,41 @@ export default function KundliMilanScreen(){
           keyboardShouldPersistTaps="handled">
 
 
-          {/* ── BASIC MODE: Hook + Discovery (always visible) ── */}
-          {!isPro&&!result&&(
-            <View style={{gap:16}}>
-
-              {/* ── Selected Partner Pill (if loaded from relationship) ── */}
-              {p2&&(
-                <View style={{flexDirection:"row",alignItems:"center",gap:10,
-                  backgroundColor:C.isDark?"rgba(236,72,153,0.10)":"rgba(236,72,153,0.07)",
-                  borderWidth:1,borderColor:C.isDark?"rgba(236,72,153,0.28)":"rgba(236,72,153,0.20)",
-                  borderRadius:14,paddingHorizontal:12,paddingVertical:10}}>
-                  <View style={{width:32,height:32,borderRadius:16,
-                    backgroundColor:C.isDark?"rgba(236,72,153,0.18)":"rgba(236,72,153,0.12)",
-                    alignItems:"center",justifyContent:"center"}}>
-                    <Text style={{fontSize:15}}>💑</Text>
-                  </View>
-                  <View style={{flex:1}}>
-                    <Text style={{color:C.isDark?"rgba(255,255,255,0.55)":"rgba(0,0,0,0.5)",
-                      fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:0.8,textTransform:"uppercase"}}>
-                      {t.km2_matchingWith}
-                    </Text>
-                    <Text style={{color:C.text,fontSize:13,fontFamily:"Nunito_800ExtraBold"}} numberOfLines={1}>
-                      {p1Profile?.name||t.km2_youPlaceholder}  ✦  {p2.name}
-                    </Text>
-                  </View>
-                  <Pressable onPress={()=>router.back()}
-                    style={({pressed})=>({opacity:pressed?0.6:1,padding:6})}>
-                    <Feather name="edit-2" size={13} color={C.isDark?"#f472b6":"#db2777"}/>
-                  </Pressable>
-                </View>
-              )}
-
-              {/* ── No Partner Selected: CTA to Relationship page ── */}
-              {!p2&&(
-                <Pressable onPress={()=>{Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);router.push("/relationship" as any);}}
-                  style={({pressed})=>({opacity:pressed?0.85:1,
-                    backgroundColor:C.isDark?"rgba(236,72,153,0.10)":"rgba(236,72,153,0.06)",
-                    borderWidth:1,borderStyle:"dashed" as any,
-                    borderColor:C.isDark?"rgba(236,72,153,0.35)":"rgba(236,72,153,0.30)",
-                    borderRadius:16,padding:16,gap:8})}>
-                  <View style={{flexDirection:"row",alignItems:"center",gap:10}}>
-                    <View style={{width:38,height:38,borderRadius:19,
-                      backgroundColor:C.isDark?"rgba(236,72,153,0.18)":"rgba(236,72,153,0.12)",
-                      alignItems:"center",justifyContent:"center"}}>
-                      <Text style={{fontSize:18}}>💑</Text>
-                    </View>
-                    <View style={{flex:1}}>
-                      <Text style={{color:C.text,fontSize:13,fontFamily:"Nunito_800ExtraBold"}}>
-                        Partner Select Karein
-                      </Text>
-                      <Text style={{color:C.isDark?"rgba(255,255,255,0.55)":"rgba(0,0,0,0.55)",
-                        fontSize:10.5,fontFamily:"Nunito_500Medium",marginTop:2}}>
-                        Relationship page se partner chunein matching ke liye
-                      </Text>
-                    </View>
-                    <Feather name={I18nManager.isRTL ? "arrow-left" : "arrow-right"} size={16} color={C.isDark?"#f472b6":"#db2777"}/>
-                  </View>
-                </Pressable>
-              )}
-
-              {/* ── Top CTA: Check Now ── */}
-              <View>
-                <Pressable
-                  onPress={()=>{handleCalculate();}}
-                  disabled={!person1||!p2||calcLoading}
-                  style={({pressed})=>({opacity:(!person1||!p2)?0.5:pressed?0.9:1,overflow:"hidden",borderRadius:16,
-                    borderWidth:1,borderColor:"rgba(245,158,11,0.4)"})}>
-                  <LinearGradient colors={["#FFD89B","#FFB347"]} start={{x:0,y:0}} end={{x:1,y:0}}
-                    style={{paddingVertical:18,alignItems:"center",
-                      shadowColor:"#f59e0b",shadowOffset:{width:0,height:6},shadowOpacity:0.55,shadowRadius:16}}>
-                    <View style={{flexDirection:"row",alignItems:"center",gap:9}}>
-                      <Feather name="zap" size={18} color="#000000"/>
-                      <Text style={{color:"#000000",fontSize:18,fontWeight:"800",letterSpacing:0.5,
-                        textShadowColor:"rgba(0,0,0,0.15)",textShadowOffset:{width:0,height:1},textShadowRadius:1}}>
-                        Check Now
-                      </Text>
-                    </View>
-                  </LinearGradient>
-                </Pressable>
-                <Text style={{color:C.isDark?"rgba(255,255,255,0.55)":"rgba(0,0,0,0.5)",
-                  fontSize:11,fontFamily:"Nunito_500Medium",textAlign:"center",marginTop:8}}>
-                  Get your compatibility score in seconds
-                </Text>
-              </View>
-
-              {/* ── Section Title ── */}
-              <View style={{alignItems:"center",gap:6,marginTop:8}}>
-                <Text style={{color:C.isDark?"#fbbf24":"#b45309",fontSize:15,fontFamily:"Nunito_800ExtraBold",
-                  textTransform:"uppercase",letterSpacing:2.5,
-                  textShadowColor:C.isDark?"rgba(251,191,36,0.5)":"rgba(180,83,9,0.25)",
-                  textShadowOffset:{width:0,height:0},textShadowRadius:10}}>
-                  ✦ What You'll Discover ✦
-                </Text>
-                <Text style={{color:C.isDark?"rgba(255,255,255,0.6)":"rgba(0,0,0,0.55)",
-                  fontSize:11,fontFamily:"Nunito_500Medium"}}>
-                  Based on 36 Gun Milan (Ashtakoot matching)
-                </Text>
-              </View>
-
-              {/* ── 2-Column Detailed Grid ── */}
-              <View style={{flexDirection:"row",flexWrap:"wrap",gap:10}}>
-                {([
-                  {icon:"🔮",title:"Soul Sync",koot:"Varna",desc:"Spiritual & intellectual match",color:"#f59e0b"},
-                  {icon:"🧲",title:"Attraction Power",koot:"Vashya",desc:"Mutual attraction & influence",color:"#ef4444"},
-                  {icon:"⭐",title:"Destiny Link",koot:"Tara",desc:"Luck & timing alignment",color:"#8b5cf6"},
-                  {icon:"🔥",title:"Intimacy Match",koot:"Yoni",desc:"Physical & emotional chemistry",color:"#ec4899"},
-                  {icon:"🤝",title:"Emotional Bond",koot:"Graha Maitri",desc:"Heart-to-heart connection",color:"#3b82f6"},
-                  {icon:"⚡",title:"Personality Energy",koot:"Gana",desc:"Nature & temperament match",color:"#6366f1"},
-                  {icon:"🌙",title:"Life Alignment",koot:"Bhakoot",desc:"Family & life harmony",color:"#14b8a6"},
-                  {icon:"💫",title:"Energy Flow",koot:"Nadi",desc:"Deep soul compatibility",color:"#a855f7"},
-                ] as const).map((item,i)=>(
-                  <View key={i} style={{width:"48%",
-                    backgroundColor:"#111827",
-                    borderRadius:14,padding:12,gap:6,
-                    borderWidth:1,borderColor:"rgba(255,255,255,0.08)",
-                    shadowColor:"#000",shadowOffset:{width:0,height:3},
-                    shadowOpacity:0.3,shadowRadius:6,elevation:3}}>
-                    <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
-                      <View style={{width:32,height:32,borderRadius:10,alignItems:"center",justifyContent:"center",
-                        backgroundColor:`${item.color}22`}}>
-                        <Text style={{fontSize:16}}>{item.icon}</Text>
-                      </View>
-                      <View style={{flex:1}}>
-                        <Text style={{color:"#F3F4F6",fontSize:11,fontFamily:"Nunito_800ExtraBold"}} numberOfLines={1}>
-                          {item.title}
-                        </Text>
-                        <Text style={{color:item.color,fontSize:8,fontFamily:"Nunito_700Bold",
-                          textTransform:"uppercase",letterSpacing:0.6}}>
-                          {item.koot}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={{color:"#9CA3AF",fontSize:10,fontFamily:"Nunito_500Medium",lineHeight:14}}>
-                      {item.desc}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-
-              {/* ── Pro Push Line ── */}
-              <Pressable onPress={()=>{setPlan("pro");Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
-                style={({pressed})=>({opacity:pressed?0.85:1,marginTop:2,overflow:"hidden",borderRadius:14})}>
-                <LinearGradient colors={C.isDark?["rgba(124,58,237,0.18)","rgba(219,39,119,0.18)"]:["rgba(124,58,237,0.1)","rgba(219,39,119,0.1)"]}
-                  start={{x:0,y:0}} end={{x:1,y:0}}
-                  style={{paddingVertical:12,paddingHorizontal:14,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8,
-                    borderWidth:1,borderColor:C.isDark?"rgba(168,85,247,0.35)":"rgba(124,58,237,0.25)",borderRadius:14}}>
-                  <Text style={{fontSize:14}}>✨</Text>
-                  <Text style={{color:C.isDark?"#e9d5ff":"#5b21b6",fontSize:13,fontFamily:"Nunito_800ExtraBold"}}>
-                    When Vedic meets Tech
-                  </Text>
-                  <Feather name={I18nManager.isRTL ? "arrow-left" : "arrow-right"} size={14} color={C.isDark?"#e9d5ff":"#5b21b6"}/>
-                </LinearGradient>
-              </Pressable>
-
-            </View>
+          {/* ── BASIC: landing (before result) ── */}
+          {!isPro&&!result&&!marriageBasics&&(
+            <KundliMilanBasicLanding
+              isDark={C.isDark}
+              textColor={C.text}
+              mutedColor={C.textMuted}
+              youLabel={t.km_aap}
+              matchingWithLabel={t.km2_matchingWith}
+              person1Name={p1Profile?.name||person1?.name||t.km_aap}
+              partnerName={p2?.name}
+              hasPartner={!!p2}
+              canCalculate={canCalculate}
+              calcLoading={calcLoading}
+              onSelectPartner={()=>router.push("/relationship" as any)}
+              onEditPartner={()=>router.back()}
+              onCalculate={handleCalculate}
+              onOpenPro={()=>{
+                setPlan("pro");
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              }}
+            />
           )}
 
+          {marriageBasics&&!isPro&&(
+            <KundliMilanBasicResult
+              data={marriageBasics}
+              isDark={C.isDark}
+              onOpenPro={()=>{
+                setPlan("pro");
+                setMarriageBasics(null);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              }}
+              onRecalculate={()=>setMarriageBasics(null)}
+            />
+          )}
 
           {/* ── PRO SECTION: 4-Layer Personalized Hooks ── */}
           {isPro&&!result&&(
@@ -2171,8 +2087,8 @@ export default function KundliMilanScreen(){
               onPress={confirmAndDownloadProPdf}/>
           )}
 
-          {/* ── Results ── */}
-          {result&&g&&(
+          {/* ── PRO Results ── */}
+          {result&&isPro&&g&&(
             <>
               {/* Score hero */}
               <LinearGradient
@@ -2218,27 +2134,11 @@ export default function KundliMilanScreen(){
                 </View>
               )}
 
-              {/* Recalculate */}
               <Pressable onPress={()=>{setResult(null);Haptics.selectionAsync();}}
                 style={[ms.recalcBtn,{borderColor:C.border,backgroundColor:C.bgCard}]}>
                 <Feather name="refresh-cw" size={13} color={C.textMuted}/>
                 <Text style={{color:C.textMuted,fontSize:12,fontFamily:"Nunito_500Medium"}}>{t.km_recalc}</Text>
               </Pressable>
-
-              {!isPro&&(
-                <View style={[ms.upgradeNudge,{backgroundColor:C.isDark?"rgba(109,40,217,0.12)":"rgba(99,102,241,0.06)",borderColor:"rgba(139,92,246,0.2)"}]}>
-                  <Text style={{color:C.isDark?"#c4b5fd":"#4f46e5",fontSize:13,fontFamily:"Nunito_700Bold"}}>✨ Want deeper insights?</Text>
-                  <Text style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_400Regular",marginTop:4,marginBottom:12}}>
-                    Switch to Pro for detailed Koot analysis, Dosha check, Marriage timing & Remedies.
-                  </Text>
-                  <Pressable onPress={()=>{setPlan("pro");Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
-                    style={({pressed})=>({opacity:pressed?0.8:1})}>
-                    <LinearGradient colors={["#6366F1","#8B5CF6","#a855f7"]} start={{x:0,y:0}} end={{x:1,y:0}} style={ms.switchProBtn}>
-                      <Text style={{color:"#fff",fontSize:13,fontFamily:"Nunito_700Bold"}}>Switch to Pro →</Text>
-                    </LinearGradient>
-                  </Pressable>
-                </View>
-              )}
             </>
           )}
 

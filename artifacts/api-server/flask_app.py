@@ -12402,6 +12402,36 @@ def kundli_milan():
         "chart_observations": copy.deepcopy(_KUNDLI_MILAN_CHART_OBSERVATIONS_TEMPLATE),
     }
 
+    # Deterministic marriage chart engine for Basic (D1/D9/DK/KP — no LLM).
+    try:
+        from cache_helpers import get_or_compute_kundli
+        from vedic.compat.marriage_basics import compute_marriage_basics
+
+        _mb_p1 = dict(data["p1"])
+        _mb_p2 = dict(data["p2"])
+        for _bp in (_mb_p1, _mb_p2):
+            _bp.setdefault("name", "Partner")
+            _bp.setdefault("place", "")
+            _bp.setdefault("minute", 0)
+            _bp.setdefault("ampm", "AM")
+        _k1 = get_or_compute_kundli(_mb_p1) or {}
+        _k2 = get_or_compute_kundli(_mb_p2) or {}
+        if _k1 and _k2:
+            response_payload["marriage_basics"] = compute_marriage_basics(
+                _k1,
+                _k2,
+                p1_name=pp1["name"],
+                p2_name=pp2["name"],
+                p1_gender=_mb_p1.get("gender"),
+                p2_gender=_mb_p2.get("gender"),
+            )
+    except Exception as _mb_exc:
+        try:
+            print(f"[kundli_milan] marriage_basics failed: {_mb_exc}", flush=True)
+        except Exception:
+            pass
+        response_payload["marriage_basics"] = None
+
     # Phase 2.5.11.20 — Optional LLM prose polish over deterministic facts.
     # Toggled via COMPAT_LLM_POLISH env. Falls back silently to rule-based
     # templates above on any failure (validator reject, LLM down, parse error).

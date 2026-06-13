@@ -16,7 +16,12 @@ from datetime import datetime, timedelta
 from typing import Any, Literal
 
 from karakas import compute_karakas
-from vedic.compat.marriage_copy_picker import build_partner_plain_copy, partner_copy_seed
+from vedic.compat.marriage_copy_picker import (
+    build_couple_plain_copy,
+    build_partner_plain_copy,
+    couple_copy_seed,
+    partner_copy_seed,
+)
 from jaimini import compute_arudha_padas, compute_upapada
 from vedic.compat.d9_marriage import _per_partner as d9_per_partner, compute_d9_marriage, _friendship_word
 from vedic.compat.kp_marriage_promise import compute_kp_couple_promise, compute_kp_marriage_promise
@@ -1737,60 +1742,66 @@ def compute_marriage_basics(
         structural = _MARRIAGE_COUPLE_FLOOR
     couple_band = _couple_band(structural)
 
-    return {
-        "engine": "marriage_basics_v6",
-        "couple": {
-            "structural_score": structural,
-            "structural_band": couple_band,
-            "future_verdict": _couple_verdict(couple_band, person1, person2),
-            "d9_sync_note": _d9_sync_summary(d9_sync, d9_1, d9_2),
-            "d9_sync": {
-                "available": bool(d9_sync.get("available")),
-                "score_0_10": d9_sync.get("score_0_10"),
-                "lagna_lord_relation": d9_sync.get("lagna_lord_relation"),
-                "seven_lord_relation": d9_sync.get("seven_lord_relation"),
-                "notes": d9_sync.get("notes") or [],
-            },
-            "synastry": {
-                "available": bool(synastry.get("available")),
-                "score_0_10": synastry.get("score_0_10"),
-                "p1_7l": synastry.get("p1_7l"),
-                "p2_7l": synastry.get("p2_7l"),
-                "summary": _synastry_summary(synastry),
-                "drivers": synastry.get("drivers") or [],
-                "cautions": synastry.get("cautions") or [],
-                "p1_7l_in_p2_house": (synastry.get("p1_7l_in_p2_chart") or {}).get("house"),
-                "p2_7l_in_p1_house": (synastry.get("p2_7l_in_p1_chart") or {}).get("house"),
-                "pada_yoni": pada_yoni,
-            },
-            "manglik": manglik_couple,
-            "graha_maitri": graha_maitri,
-            "kp_couple": {
-                "available": bool(kp_couple.get("available")),
-                "couple_verdict": kp_couple.get("couple_verdict"),
-                "p1_verdict": (kp_couple.get("p1") or {}).get("verdict"),
-                "p2_verdict": (kp_couple.get("p2") or {}).get("verdict"),
-            },
-            "dasha_timeline": {
-                "p1": person1.get("dasha_timeline"),
-                "p2": person2.get("dasha_timeline"),
-            },
-            "couple_signals": {
-                "moon_mismatch": couple_sig.moon_mismatch,
-                "cross_rahu_venus": couple_sig.cross_rahu_venus,
-                "combined_affliction": couple_sig.combined_affliction,
-                "synastry_notes": [
-                    n for n in couple_sig.synastry_notes if not _is_sensitive_note(n)
-                ] or (
-                    [graha_maitri["note"]] if graha_maitri.get("available") else []
-                ),
-            },
-            "critical_alerts_total": (
-                int((person1.get("critical_alerts") or {}).get("count") or 0)
-                + int((person2.get("critical_alerts") or {}).get("count") or 0)
-                + (1 if couple_sig.cross_rahu_venus else 0)
+    couple_block: dict[str, Any] = {
+        "structural_score": structural,
+        "structural_band": couple_band,
+        "future_verdict": _couple_verdict(couple_band, person1, person2),
+        "d9_sync_note": _d9_sync_summary(d9_sync, d9_1, d9_2),
+        "d9_sync": {
+            "available": bool(d9_sync.get("available")),
+            "score_0_10": d9_sync.get("score_0_10"),
+            "lagna_lord_relation": d9_sync.get("lagna_lord_relation"),
+            "seven_lord_relation": d9_sync.get("seven_lord_relation"),
+            "notes": d9_sync.get("notes") or [],
+        },
+        "synastry": {
+            "available": bool(synastry.get("available")),
+            "score_0_10": synastry.get("score_0_10"),
+            "p1_7l": synastry.get("p1_7l"),
+            "p2_7l": synastry.get("p2_7l"),
+            "summary": _synastry_summary(synastry),
+            "drivers": synastry.get("drivers") or [],
+            "cautions": synastry.get("cautions") or [],
+            "p1_7l_in_p2_house": (synastry.get("p1_7l_in_p2_chart") or {}).get("house"),
+            "p2_7l_in_p1_house": (synastry.get("p2_7l_in_p1_chart") or {}).get("house"),
+            "pada_yoni": pada_yoni,
+        },
+        "manglik": manglik_couple,
+        "graha_maitri": graha_maitri,
+        "kp_couple": {
+            "available": bool(kp_couple.get("available")),
+            "couple_verdict": kp_couple.get("couple_verdict"),
+            "p1_verdict": (kp_couple.get("p1") or {}).get("verdict"),
+            "p2_verdict": (kp_couple.get("p2") or {}).get("verdict"),
+        },
+        "dasha_timeline": {
+            "p1": person1.get("dasha_timeline"),
+            "p2": person2.get("dasha_timeline"),
+        },
+        "couple_signals": {
+            "moon_mismatch": couple_sig.moon_mismatch,
+            "cross_rahu_venus": couple_sig.cross_rahu_venus,
+            "combined_affliction": couple_sig.combined_affliction,
+            "synastry_notes": [
+                n for n in couple_sig.synastry_notes if not _is_sensitive_note(n)
+            ] or (
+                [graha_maitri["note"]] if graha_maitri.get("available") else []
             ),
         },
+        "critical_alerts_total": (
+            int((person1.get("critical_alerts") or {}).get("count") or 0)
+            + int((person2.get("critical_alerts") or {}).get("count") or 0)
+            + (1 if couple_sig.cross_rahu_venus else 0)
+        ),
+    }
+    c_seed = couple_copy_seed(kundli_p1, kundli_p2, p1_name, p2_name)
+    couple_block["plain_copy"] = build_couple_plain_copy(
+        couple_block, person1, person2, c_seed
+    )
+
+    return {
+        "engine": "marriage_basics_v6",
+        "couple": couple_block,
         "p1": person1,
         "p2": person2,
     }

@@ -324,11 +324,14 @@ def test_plain_copy_shape_and_deterministic():
     pc2 = out2["p1"]["plain_copy"]
     assert pc1 == pc2
     assert pc1["headline"]
-    assert len(pc1["positives"]) >= 1
-    assert len(pc1["watchouts"]) >= 1
-    assert pc1["friction"]
-    assert pc1["remedy"]
+    assert len(pc1["positives"]) == 1
+    assert len(pc1["watchouts"]) == 1
+    assert pc1["pro_lock_teaser"]
+    assert pc1["remedy_teaser"]
+    assert pc1["pro_strip"]
     assert "copy_tags" in pc1
+    assert "plain_copy" in out1["couple"]
+    assert out1["couple"]["plain_copy"]["gap_teaser"]
 
     k3 = _sample_kundli("Amit", "Aries", moon_h=2)
     out3 = compute_marriage_basics(

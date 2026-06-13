@@ -305,5 +305,49 @@
     "Try karo: planet weekday pe chhoti daan + ek shared habit partner ke saath.",
     "Upay: weekly joint ritual rakho — yeh sabse practical remedy hai.",
     "Simple fix: daily gratitude + weekly boundary talk — chart se zyada powerful."
+  ],
+  "pro_lock_teaser": [
+    "🔒 {hidden_count} hidden chart alerts + exact marriage dasha window — Pro mein unlock.",
+    "🔒 {name} ke liye {hidden_count} deeper factors (timing, synastry, remedies) sirf Pro report mein.",
+    "🔒 Basic ne surface padha — {hidden_count} aur layers Pro PDF mein locked hain.",
+    "🔒 Marriage timing, full friction map aur remedy chain — Pro unlock karta hai.",
+    "🔒 {hidden_count} karmic/detail points chhupaye gaye — Pro se poori picture milegi."
+  ],
+  "remedy_teaser": [
+    "Ek chhoti upay hint mil gayi — poori remedy chain Pro report mein hai.",
+    "Basic mein sirf direction — exact weekday ritual + full upay Pro unlock karta hai.",
+    "Remedy ka preview yahan — personalized full remedy PDF Pro mein.",
+    "Surface tip enough nahi — complete remedy plan Pro report mein locked hai."
+  ],
+  "pro_strip_partner": [
+    "Pro for {name}: 36 Gun · dasha marriage windows · synastry · full remedies · PDF",
+    "{name} ka full read Pro mein — timing, hidden alerts, remedy chain, PDF download",
+    "Unlock {name}: deep 7th analysis + dasha + remedies — Basic sirf summary hai",
+    "Want {name}'s complete marriage consultation? Pro report mein sab kuch hai"
+  ],
+  "couple_gap_promising": [
+    "Together score {couple_score} — promising base hai, par cross-chart depth abhi locked hai.",
+    "Donon individually achhe signals, par as a couple 36 Gun + synastry Pro mein confirm hota hai.",
+    "Couple band {couple_band} — abhi surface match dikha; full together-read Pro mein."
+  ],
+  "couple_gap_workable": [
+    "Together {couple_score}/100 — workable, par donon ka combined friction map Pro mein hai.",
+    "Individual cards samajh aa gaye — ab donon saath ka poora picture Pro unlock karta hai.",
+    "Couple workable hai par exact weak points cross-chart Pro report batata hai."
+  ],
+  "couple_gap_high_effort": [
+    "Together {couple_score} — high effort match. Kitna serious hai? Full synastry + timing Pro mein.",
+    "Donon ke charts alag-alag padhe — ab combined risk score sirf Pro mein milta hai.",
+    "High effort couple — blind step mat lo; Pro PDF poora risk + remedy map deta hai."
+  ],
+  "couple_gap_alerts": [
+    "⚠ {alert_count} hidden alerts is match mein — detail sirf Pro report mein.",
+    "Together: {alert_count} locked warning(s) across both charts — Pro se unlock karo.",
+    "Cross-chart ne {alert_count} sensitive point flag kiye — Basic intentionally chhupaata hai."
+  ],
+  "couple_pro_cta": [
+    "Pro unlocks: 36 Gun · synastry · both dasha timelines · remedies · full PDF",
+    "Get Pro — poora couple consultation jo Basic intentionally short rakhta hai",
+    "Full Pro report = marriage decision ke liye complete engine read, no guesswork"
   ]
 }

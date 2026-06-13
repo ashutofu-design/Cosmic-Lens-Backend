@@ -70,13 +70,23 @@ export type PartnerPlainCopy = {
   headline: string;
   positives: string[];
   watchouts: string[];
+  pro_lock_teaser?: string;
+  remedy_teaser?: string;
+  pro_strip?: string;
   spouse_line?: string | null;
   long_term_line?: string | null;
   manglik_line?: string | null;
   timing_line?: string | null;
-  friction: string;
-  remedy: string;
+  friction?: string;
+  remedy?: string;
   copy_tags?: string[];
+};
+
+export type CouplePlainCopy = {
+  gap_teaser: string;
+  pro_cta_line: string;
+  alert_count?: number;
+  locked_highlights?: string[];
 };
 
 export type MarriagePartnerBasics = {
@@ -259,6 +269,7 @@ export type MarriageBasicsPayload = {
       p1_verdict?: string;
       p2_verdict?: string;
     };
+    plain_copy?: CouplePlainCopy;
   };
   p1: MarriagePartnerBasics;
   p2: MarriagePartnerBasics;

@@ -292,48 +292,40 @@ def _collect_from_tags(
 
 
 def build_partner_plain_copy(partner: dict[str, Any], seed: str) -> dict[str, Any]:
-    """Build human-voice plain_copy block for one partner."""
+    """Build human-voice plain_copy block for one partner (Basic = compact Pro funnel)."""
     tags = extract_copy_tags(partner)
     tag_set = set(tags)
     slots = extract_copy_slots(partner)
     band = str(partner.get("readiness_band") or "Moderate")
 
+    critical = partner.get("critical_alerts") or {}
+    alert_count = int(critical.get("count") or 0)
+    slots["alert_count"] = str(alert_count)
+    slots["hidden_count"] = str(max(alert_count, 2))
+
     headline = _pick(f"band_{band.lower()}", f"{seed}:headline", slots)
 
     positives = _collect_from_tags(
-        tag_set, _POSITIVE_PRIORITY, seed, slots, suffix="pos", limit=3
+        tag_set, _POSITIVE_PRIORITY, seed, slots, suffix="pos", limit=1
     )
     if not positives:
         positives = [_pick("positive_generic", f"{seed}:pos:fallback", slots)]
 
     watchouts = _collect_from_tags(
-        tag_set, _WATCHOUT_PRIORITY, seed, slots, suffix="watch", limit=3
+        tag_set, _WATCHOUT_PRIORITY, seed, slots, suffix="watch", limit=1
     )
     if not watchouts:
         watchouts = [_pick("watchout_generic", f"{seed}:watch:fallback", slots)]
 
-    spouse_line = (
-        _pick("dk_spouse", f"{seed}:spouse", slots) if "dk_spouse" in tag_set else None
-    )
+    if critical.get("locked") and critical.get("teaser"):
+        pro_lock_teaser = f"{critical['teaser']} — full detail in Pro."
+    else:
+        pro_lock_teaser = _pick("pro_lock_teaser", f"{seed}:lock", slots)
 
-    long_term_line = None
-    for d9_cat in ("d9_supportive", "d9_mixed", "d9_weak"):
-        if d9_cat in tag_set:
-            long_term_line = _pick(d9_cat, f"{seed}:longterm", slots)
-            break
+    remedy_teaser = _pick("remedy_teaser", f"{seed}:remedy_teaser", slots)
+    pro_strip = _pick("pro_strip_partner", f"{seed}:strip", slots)
 
-    manglik_line = None
-    if "manglik_active" in tag_set:
-        manglik_line = _pick("manglik_active", f"{seed}:manglik", slots)
-    elif "manglik_reduced" in tag_set:
-        manglik_line = _pick("manglik_reduced", f"{seed}:manglik", slots)
-
-    timing_line = None
-    for dash_cat in ("dasha_stress", "dasha_repair", "dasha_neutral"):
-        if dash_cat in tag_set:
-            timing_line = _pick(dash_cat, f"{seed}:timing", slots)
-            break
-
+    # Full friction/remedy kept for Pro PDF — not shown on Basic card.
     friction = _pick(_friction_category(partner), f"{seed}:friction", slots)
     remedy = _pick(_remedy_category(partner), f"{seed}:remedy", slots)
 
@@ -342,13 +334,67 @@ def build_partner_plain_copy(partner: dict[str, Any], seed: str) -> dict[str, An
         "headline": headline,
         "positives": positives,
         "watchouts": watchouts,
-        "spouse_line": spouse_line,
-        "long_term_line": long_term_line,
-        "manglik_line": manglik_line,
-        "timing_line": timing_line,
+        "pro_lock_teaser": pro_lock_teaser,
+        "remedy_teaser": remedy_teaser,
+        "pro_strip": pro_strip,
         "friction": friction,
         "remedy": remedy,
         "copy_tags": tags,
+    }
+
+
+_COUPLE_GAP_MAP = {
+    "Promising": "couple_gap_promising",
+    "Workable": "couple_gap_workable",
+    "High Effort": "couple_gap_high_effort",
+}
+
+
+def couple_copy_seed(
+    kundli_p1: dict,
+    kundli_p2: dict,
+    p1_name: str,
+    p2_name: str,
+) -> str:
+    return "||".join(
+        [
+            partner_copy_seed(kundli_p1, p1_name),
+            partner_copy_seed(kundli_p2, p2_name),
+        ]
+    )
+
+
+def build_couple_plain_copy(
+    couple: dict[str, Any],
+    p1: dict[str, Any],
+    p2: dict[str, Any],
+    seed: str,
+) -> dict[str, Any]:
+    """Couple-level Pro gap copy — shown after both partner cards."""
+    band = str(couple.get("structural_band") or "Workable")
+    alert_count = int(couple.get("critical_alerts_total") or 0)
+    slots = {
+        "p1_name": str(p1.get("name") or "Partner A"),
+        "p2_name": str(p2.get("name") or "Partner B"),
+        "couple_score": str(couple.get("structural_score") or "—"),
+        "couple_band": band,
+        "alert_count": str(alert_count),
+    }
+    gap_cat = _COUPLE_GAP_MAP.get(band, "couple_gap_workable")
+    gap_teaser = _pick(gap_cat, f"{seed}:gap", slots)
+    if alert_count > 0:
+        gap_teaser = _pick("couple_gap_alerts", f"{seed}:gap:alerts", slots)
+
+    return {
+        "gap_teaser": gap_teaser,
+        "pro_cta_line": _pick("couple_pro_cta", f"{seed}:cta", slots),
+        "alert_count": alert_count,
+        "locked_highlights": [
+            "36 Gun full score breakdown",
+            "Cross-chart synastry depth",
+            "Marriage dasha windows (both partners)",
+            "Full remedy chain + downloadable PDF",
+        ],
     }
 
 

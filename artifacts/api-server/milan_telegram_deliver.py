@@ -36,8 +36,12 @@ def _orders_base() -> str:
 
 
 def is_milan_telegram_command(text: str) -> bool:
+    """True when first line looks like MYMILAN / MY MILAN (multi-line body ignored)."""
     raw = (text or "").strip()
-    return bool(_CMD_RE.match(raw) or _CMD_INLINE_RE.match(raw))
+    if not raw:
+        return False
+    first = (raw.splitlines()[0] or "").strip()
+    return bool(_CMD_RE.match(first) or _CMD_INLINE_RE.match(first))
 
 
 def _load_order_json(path: str) -> dict[str, Any] | None:
@@ -312,44 +316,10 @@ def _deliver_pending(chat_id: str, *, force: bool) -> str:
 
 
 def handle_founder_milan_telegram_chat(text: str, chat_id: str) -> str:
-    raw = (text or "").strip()
-    if not raw:
-        return _format_error("empty_message")
+    """Delegate to unified Love+Marriage handler (MYREPORT / MYMILAN / MY MILAN)."""
+    from love_reality_telegram_deliver import handle_founder_telegram_chat
 
-    if _is_done_command(raw):
-        pending = _pending_get(chat_id)
-        if pending:
-            return _deliver_pending(chat_id, force=True)
-        return _format_error("not_mymilan_command")
-
-    prefix, body, parse_err = _parse_mymilan_start(raw)
-    if prefix and not parse_err:
-        order, order_err = find_milan_order_by_prefix(prefix)
-        if order_err:
-            return _format_error(order_err)
-        assert order is not None
-        if _order_is_delivered(order):
-            return _format_error("order_already_delivered")
-        _pending_append(chat_id, prefix, body or "")
-        total = len(_pending_body(chat_id))
-        return (
-            "📝 Marriage report started — order #" + prefix[:8] + "\n"
-            f"Saved {total} characters.\n"
-            "Aur parts bhejein, jab poora ho jaye to DONE likhein."
-        )
-
-    pending = _pending_get(chat_id)
-    if pending:
-        _pending_append(chat_id, str(pending.get("prefix") or ""), raw)
-        total = len(_pending_body(chat_id))
-        return (
-            f"📝 Part added — total {total} characters.\n"
-            "Aur bhej sakte ho, ya DONE likh kar PDF publish karein."
-        )
-
-    if parse_err:
-        return _format_error(parse_err)
-    return _format_error("not_mymilan_command")
+    return handle_founder_telegram_chat(text, chat_id)
 
 
 def register_milan_telegram_routes(flask_app) -> None:

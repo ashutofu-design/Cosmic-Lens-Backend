@@ -98,10 +98,11 @@ def format_love_reality_order_alert(record: dict[str, Any]) -> str:
         "📝 Deliver (paste in Telegram):",
         f"MYREPORT {oid}",
         "",
-        "(one-time — after DONE this order id expires; new report = new order)",
+        "(MY MILAN / MYMILAN bhi chalega — same command)",
+        "(one-time — after deliver this order id expires; new report = new order)",
         "",
+        "<paste full report in same message (80+ chars), or>",
         "<report part 1 — long? send part 2+ then reply DONE>",
-        "<or reply DONE when finished>",
     ])
     return "\n".join(lines)
 
@@ -147,12 +148,13 @@ def format_milan_order_alert(record: dict[str, Any]) -> str:
     lines.extend([
         "",
         "📝 Deliver (paste in Telegram):",
-        f"MYMILAN {oid}",
+        f"MYREPORT {oid}",
         "",
-        "(one-time — after DONE this order id expires; new report = new order)",
+        "(MY MILAN / MYMILAN bhi chalega — same command)",
+        "(one-time — after deliver this order id expires; new report = new order)",
         "",
+        "<paste full report in same message (80+ chars), or>",
         "<report part 1 — long? send part 2+ then reply DONE>",
-        "<or reply DONE when finished>",
     ])
     return "\n".join(lines)
 

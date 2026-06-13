@@ -15,6 +15,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
+from karakas import compute_karakas
 from vedic.compat.marriage_copy_picker import build_partner_plain_copy, partner_copy_seed
 from jaimini import compute_arudha_padas, compute_upapada
 from vedic.compat.d9_marriage import _per_partner as d9_per_partner, compute_d9_marriage, _friendship_word

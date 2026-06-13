@@ -24,8 +24,12 @@ from milan_pdf import (
     _safe,
     _styles,
 )
-from vedic.compat.milan_pdf_locale import pdf_ui_hn, pdf_ui_hi, tx
+from vedic.compat.milan_pdf_locale import tx
 from vedic.compat.premium_chapters import normalize_pro_pdf_lang
+
+
+def _pdf_ui_hi(lang: str | None) -> bool:
+    return (lang or "en").strip().lower() == "hi"
 
 
 def _pdf_lang(code: str) -> str:
@@ -33,13 +37,13 @@ def _pdf_lang(code: str) -> str:
 
 
 def _founder_title(lang: str) -> str:
-    if pdf_ui_hi(lang):
+    if _pdf_ui_hi(lang):
         return "विवाह अनुकूलता प्रो"
     return tx(lang, "Marriage Compatibility Pro", "Marriage Compatibility Pro")
 
 
 def _founder_subtitle(lang: str) -> str:
-    if pdf_ui_hi(lang):
+    if _pdf_ui_hi(lang):
         return "संस्थापक-सत्यापित विवाह परामर्श"
     return tx(
         lang,
@@ -49,7 +53,7 @@ def _founder_subtitle(lang: str) -> str:
 
 
 def _founder_meta(lang: str) -> str:
-    if pdf_ui_hi(lang):
+    if _pdf_ui_hi(lang):
         return "Cosmic Lens संस्थापक द्वारा · D1/D9 विवाह इंजन"
     return tx(
         lang,
@@ -86,7 +90,7 @@ def _founder_body_markup(plain: str) -> str:
     lines = [ln.strip() for ln in plain.split("\n") if ln.strip()]
     if not lines:
         return _safe(plain)
-    return "<br/>".join(_safe(ln) for ln in lines)
+    return "<br/>".join(_safe(ln).replace("%", "&#37;") for ln in lines)
 
 
 def render_founder_milan_pdf(

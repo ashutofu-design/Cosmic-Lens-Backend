@@ -314,6 +314,10 @@ class KundliReader:
             d = 360.0 - d
         return d <= threshold
 
+    def is_retrograde(self, planet_name: str) -> bool:
+        p = self.planet(planet_name)
+        return bool(p and p.get("retrograde"))
+
     def d9_chart(self) -> dict[str, Any]:
         return (self.k.get("divisionalCharts") or {}).get("D9") or {}
 

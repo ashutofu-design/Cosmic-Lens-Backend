@@ -12403,7 +12403,10 @@ def kundli_milan():
     }
 
     # Deterministic marriage chart engine for Basic (D1/D9/DK/KP — no LLM).
+    response_payload["marriage_basics"] = None
     try:
+        import json as _json
+
         from cache_helpers import get_or_compute_kundli
         from vedic.compat.marriage_basics import compute_marriage_basics
 
@@ -12416,8 +12419,12 @@ def kundli_milan():
             _bp.setdefault("ampm", "AM")
         _k1 = get_or_compute_kundli(_mb_p1) or {}
         _k2 = get_or_compute_kundli(_mb_p2) or {}
-        if _k1 and _k2:
-            response_payload["marriage_basics"] = compute_marriage_basics(
+        if not (_k1.get("planets") and _k2.get("planets")):
+            response_payload["marriage_basics_error"] = (
+                "Kundli chart unavailable for one or both partners"
+            )
+        else:
+            _mb_out = compute_marriage_basics(
                 _k1,
                 _k2,
                 p1_name=pp1["name"],
@@ -12425,12 +12432,18 @@ def kundli_milan():
                 p1_gender=_mb_p1.get("gender"),
                 p2_gender=_mb_p2.get("gender"),
             )
+            _json.dumps(_mb_out)
+            response_payload["marriage_basics"] = _mb_out
     except Exception as _mb_exc:
         try:
+            import traceback as _tb
+
             print(f"[kundli_milan] marriage_basics failed: {_mb_exc}", flush=True)
+            _tb.print_exc()
         except Exception:
             pass
         response_payload["marriage_basics"] = None
+        response_payload["marriage_basics_error"] = str(_mb_exc)
 
     # Phase 2.5.11.20 — Optional LLM prose polish over deterministic facts.
     # Toggled via COMPAT_LLM_POLISH env. Falls back silently to rule-based

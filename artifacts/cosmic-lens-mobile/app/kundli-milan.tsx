@@ -676,7 +676,7 @@ function ProInsightsPanel(){
 }
 
 // ── Pro Result Report — 12 sections ──────────────────────────────────────────
-function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;grad:readonly [string,string]};C:any}){
+function ProResultReport({result,g,C,marriageBasics}:{result:Result;g:{label:string;col:string;grad:readonly [string,string]};C:any;marriageBasics?:MarriageBasicsPayload|null}){
   const t=useT();
   // Derived metrics (0-100)
   const pct=(n:number,d:number)=>Math.round(Math.min((n/d)*100,100));
@@ -768,6 +768,27 @@ function ProResultReport({result,g,C}:{result:Result;g:{label:string;col:string;
               <StatusChip label={label} ok={ok} warn={warn}/>
             </View>
           ))}
+          {marriageBasics ? (
+            <View style={{marginTop:12,paddingTop:12,borderTopWidth:1,borderTopColor:"rgba(255,255,255,0.08)"}}>
+              <Text style={{color:"#fca5a5",fontSize:9,fontFamily:"Nunito_700Bold",letterSpacing:1.6,marginBottom:8}}>
+                UNLOCKED · HIDDEN KARMIC ALERTS
+              </Text>
+              {([marriageBasics.p1, marriageBasics.p2] as const).map((person)=>{
+                const alerts=person.critical_alerts?.detail??[];
+                if(!alerts.length) return null;
+                return(
+                  <View key={person.name} style={{marginBottom:10}}>
+                    <Text style={{color:C.text,fontSize:12,fontFamily:"Nunito_700Bold",marginBottom:4}}>{person.name}</Text>
+                    {alerts.map(a=>(
+                      <Text key={a.id} style={{color:C.textMuted,fontSize:11,fontFamily:"Nunito_500Medium",lineHeight:16,marginBottom:4}}>
+                        • {a.label}
+                      </Text>
+                    ))}
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
         </GlowCard>
       </Animated.View>
 
@@ -1676,7 +1697,7 @@ export default function KundliMilanScreen(){
 
     try{
       const ctrl=new AbortController();
-      const timer=setTimeout(()=>ctrl.abort(),18000);
+      const timer=setTimeout(()=>ctrl.abort(),plan==="basic"?60000:18000);
       const resp=await fetch(`${API_BASE}/api/kundli-milan`,{
         method:"POST",
         headers:{"Content-Type":"application/json"},
@@ -1702,12 +1723,15 @@ export default function KundliMilanScreen(){
           setMarriageBasics(json.marriage_basics as MarriageBasicsPayload);
           setResult(null);
         }else{
-          throw new Error("Marriage structure engine unavailable — try again.");
+          const detail=(json as {marriage_basics_error?:string}).marriage_basics_error;
+          throw new Error(detail||"Marriage structure engine unavailable — try again.");
         }
       }else{
         const r=milanJsonToResult(json);
         setResult(r);
-        setMarriageBasics(null);
+        if(json.marriage_basics){
+          setMarriageBasics(json.marriage_basics as MarriageBasicsPayload);
+        }
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }catch(e:any){
@@ -2119,7 +2143,7 @@ export default function KundliMilanScreen(){
               </LinearGradient>
 
               {/* Pro: Full 12-section report */}
-              {isPro&&g&&<ProResultReport result={result} g={g} C={C}/>}
+              {isPro&&g&&<ProResultReport result={result} g={g} C={C} marriageBasics={marriageBasics}/>}
 
               {/* Pro: Download Full PDF CTA — visible AFTER result so user can
                   re-download even at 36/36 compatibility. (Phase 2.5.11.24-fix2) */}

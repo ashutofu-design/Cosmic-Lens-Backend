@@ -196,10 +196,10 @@ export function KundliMilanBasicLanding({
           <Text style={{ fontSize: 14 }}>✨</Text>
           <View style={{ flex: 1 }}>
             <Text style={[st.proNudgeTitle, { color: isDark ? "#ddd6fe" : "#5b21b6" }]}>
-              Pro — 36 Gun + dasha timing + full PDF
+              Pro — deep marriage read + dasha timing + PDF
             </Text>
             <Text style={[st.proNudgeSub, { color: mutedColor }]}>
-              Basic = marriage house structure · Pro = full classical consultation
+              Basic = marriage house structure · Pro = full engine consultation
             </Text>
           </View>
           <Feather name={I18nManager.isRTL ? "arrow-left" : "arrow-right"} size={16} color={accent} />

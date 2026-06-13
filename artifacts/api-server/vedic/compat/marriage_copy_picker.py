@@ -364,6 +364,53 @@ def couple_copy_seed(
     )
 
 
+def _build_couple_locked_highlights(
+    couple: dict[str, Any],
+    p1: dict[str, Any],
+    p2: dict[str, Any],
+) -> list[str]:
+    """Pro PDF hooks — marriage structure engine only (no Gun Milan)."""
+    items: list[str] = []
+    alert_count = int(couple.get("critical_alerts_total") or 0)
+    if alert_count > 0:
+        items.append(f"{alert_count} hidden alert(s) across both charts")
+
+    syn = couple.get("synastry") or {}
+    if syn.get("available"):
+        items.append("Cross-chart 7th lord synastry — how you affect each other")
+
+    manglik = couple.get("manglik") or {}
+    if manglik.get("p1_has_dosh") or manglik.get("p2_has_dosh"):
+        items.append("Manglik balance & cancellation for both charts")
+
+    gm = couple.get("graha_maitri") or {}
+    if gm.get("available") and str(gm.get("relation") or "") not in ("", "neutral"):
+        items.append("Moon mood match (Graha Maitri) — daily harmony read")
+
+    kp = couple.get("kp_couple") or {}
+    if kp.get("available"):
+        items.append("KP couple marriage promise — commitment depth")
+
+    d9 = couple.get("d9_sync") or {}
+    if d9.get("available"):
+        items.append("D9 couple sync — long-term married life tone together")
+
+    items.append("Marriage dasha windows — best & risky timing (both partners)")
+    items.append("Full remedy chain + downloadable PDF")
+
+    # Dedupe while preserving order; cap at 4 for Basic end card.
+    seen: set[str] = set()
+    out: list[str] = []
+    for line in items:
+        if line in seen:
+            continue
+        seen.add(line)
+        out.append(line)
+        if len(out) >= 4:
+            break
+    return out
+
+
 def build_couple_plain_copy(
     couple: dict[str, Any],
     p1: dict[str, Any],
@@ -389,12 +436,7 @@ def build_couple_plain_copy(
         "gap_teaser": gap_teaser,
         "pro_cta_line": _pick("couple_pro_cta", f"{seed}:cta", slots),
         "alert_count": alert_count,
-        "locked_highlights": [
-            "36 Gun full score breakdown",
-            "Cross-chart synastry depth",
-            "Marriage dasha windows (both partners)",
-            "Full remedy chain + downloadable PDF",
-        ],
+        "locked_highlights": _build_couple_locked_highlights(couple, p1, p2),
     }
 
 

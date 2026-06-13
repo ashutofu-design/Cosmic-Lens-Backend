@@ -12462,6 +12462,17 @@ def kundli_milan():
     return jsonify(response_payload)
 
 
+try:
+    from milan_human_orders import register_milan_human_order_routes
+
+    register_milan_human_order_routes(app)
+except Exception as _mho_exc:
+    try:
+        print(f"[milan_human_orders] route register failed: {_mho_exc}", flush=True)
+    except Exception:
+        pass
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # ── /api/kundli-milan/pdf — Phase 2.5.11.21 (PDF download) ────────────────────
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -54,7 +54,6 @@ type Props = {
   data: MarriageBasicsPayload;
   isDark: boolean;
   onOpenPro: () => void;
-  onRecalculate: () => void;
 };
 
 type CompactPlain = {
@@ -211,22 +210,57 @@ function CoupleGapCard({ copy, isDark, onOpenPro }: { copy: CouplePlainCopy; isD
 }
 
 function defaultCoupleGap(data: MarriageBasicsPayload): CouplePlainCopy {
+  const alerts = data.couple.critical_alerts_total ?? 0;
+  const highlights: string[] = [];
+  if (alerts > 0) highlights.push(`${alerts} hidden alert(s) across both charts`);
+  if (data.couple.synastry?.available) highlights.push("Cross-chart 7th lord synastry — how you affect each other");
+  if (data.couple.manglik?.p1_has_dosh || data.couple.manglik?.p2_has_dosh) {
+    highlights.push("Manglik balance & cancellation for both charts");
+  }
+  highlights.push("Marriage dasha windows — best & risky timing (both partners)");
+  highlights.push("Full remedy chain + downloadable PDF");
+
   return {
-    gap_teaser: `Together ${data.couple.structural_score}/100 — full cross-chart read sirf Pro mein.`,
-    pro_cta_line: "Get Full Pro Report — PDF + timing + 36 Gun",
-    locked_highlights: [
-      "36 Gun full score breakdown",
-      "Cross-chart synastry depth",
-      "Marriage dasha windows (both partners)",
-      "Full remedy chain + downloadable PDF",
-    ],
+    gap_teaser: `Together ${data.couple.structural_score}/100 — full cross-chart marriage read sirf Pro mein.`,
+    pro_cta_line: "Unlock Full Match Report — synastry · dasha · remedies · PDF",
+    locked_highlights: highlights.slice(0, 4),
   };
 }
 
-export function KundliMilanBasicResult({ data, isDark, onOpenPro, onRecalculate }: Props) {
+const GUN_COPY_RE = /36\s*gun|ashtakoot|guna\s*milan|full\s*score\s*breakdown/i;
+
+/** Strip legacy Gun Milan lines from API copy (old server builds). */
+function resolveCoupleCopy(data: MarriageBasicsPayload): CouplePlainCopy {
+  const fallback = defaultCoupleGap(data);
+  const api = data.couple.plain_copy;
+  if (!api) return fallback;
+
+  const rawHighlights = api.locked_highlights ?? [];
+  const cleaned = rawHighlights.filter(line => !GUN_COPY_RE.test(line));
+  const highlights =
+    cleaned.length > 0
+      ? cleaned.slice(0, 4)
+      : (fallback.locked_highlights ?? []).slice(0, 4);
+
+  if (cleaned.length < 4 && cleaned.length < rawHighlights.length) {
+    for (const line of fallback.locked_highlights ?? []) {
+      if (highlights.length >= 4) break;
+      if (!highlights.includes(line)) highlights.push(line);
+    }
+  }
+
+  return {
+    gap_teaser: GUN_COPY_RE.test(api.gap_teaser ?? "") ? fallback.gap_teaser : (api.gap_teaser || fallback.gap_teaser),
+    pro_cta_line: GUN_COPY_RE.test(api.pro_cta_line ?? "") ? fallback.pro_cta_line : (api.pro_cta_line || fallback.pro_cta_line),
+    alert_count: api.alert_count,
+    locked_highlights: highlights.slice(0, 4),
+  };
+}
+
+export function KundliMilanBasicResult({ data, isDark, onOpenPro }: Props) {
   const fade = useRef(new Animated.Value(0)).current;
   const coupleCol = bandColor(data.couple.structural_band);
-  const coupleCopy = data.couple.plain_copy ?? defaultCoupleGap(data);
+  const coupleCopy = resolveCoupleCopy(data);
   const p1Strip = data.p1.plain_copy?.pro_strip ?? `Pro for ${data.p1.name}: full marriage consultation + PDF`;
 
   useEffect(() => {
@@ -259,34 +293,6 @@ export function KundliMilanBasicResult({ data, isDark, onOpenPro, onRecalculate 
       <PartnerCard person={data.p2} isDark={isDark} onOpenPro={onOpenPro} />
 
       <CoupleGapCard copy={coupleCopy} isDark={isDark} onOpenPro={onOpenPro} />
-
-      <View
-        style={[
-          st.proCard,
-          {
-            backgroundColor: isDark ? "rgba(124,58,237,0.12)" : "rgba(124,58,237,0.05)",
-            borderColor: isDark ? "rgba(167,139,250,0.28)" : "rgba(124,58,237,0.15)",
-          },
-        ]}
-      >
-        <Text style={[st.proEyebrow, { color: isDark ? "#c4b5fd" : "#6d28d9" }]}>Basic = summary only</Text>
-        <Text style={[st.proLead, { color: isDark ? "rgba(241,245,249,0.88)" : "#1e293b" }]}>
-          Pro gives the full marriage consultation — 36 Gun, synastry, dasha timing, remedies & PDF. Engine-only, no fluff.
-        </Text>
-        <Pressable onPress={onOpenPro} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
-          <LinearGradient colors={["#6366F1", "#8B5CF6", "#db2777"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={st.proBtn}>
-            <Text style={st.proBtnTxt}>Get Full Pro Report</Text>
-            <Feather name="arrow-right" size={16} color="#fff" />
-          </LinearGradient>
-        </Pressable>
-      </View>
-
-      <Pressable onPress={onRecalculate} style={[st.recalcBtn, { borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)" }]}>
-        <Feather name="refresh-cw" size={14} color={isDark ? "rgba(255,255,255,0.5)" : "#64748B"} />
-        <Text style={{ color: isDark ? "rgba(255,255,255,0.5)" : "#64748B", fontSize: 13, fontFamily: "Nunito_500Medium" }}>
-          Recalculate / Change Details
-        </Text>
-      </Pressable>
     </Animated.View>
   );
 }
@@ -328,20 +334,4 @@ const st = StyleSheet.create({
   gapItem: { fontSize: 10.5, fontFamily: "Nunito_500Medium", flex: 1 },
   gapBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, paddingVertical: 12, marginTop: 6 },
   gapBtnTxt: { color: "#fff", fontSize: 12, fontFamily: "Nunito_800ExtraBold", textAlign: "center", flex: 1 },
-  proCard: { borderRadius: 20, borderWidth: 1, padding: 18, gap: 10, marginTop: 4 },
-  proEyebrow: { fontSize: 11, fontFamily: "Nunito_800ExtraBold", letterSpacing: 0.8 },
-  proLead: { fontSize: 12.5, fontFamily: "Nunito_500Medium", lineHeight: 19 },
-  proBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 14, paddingVertical: 14, marginTop: 4 },
-  proBtnTxt: { color: "#fff", fontSize: 14, fontFamily: "Nunito_800ExtraBold" },
-  recalcBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingVertical: 14,
-    marginBottom: 8,
-    marginTop: 4,
-  },
 });

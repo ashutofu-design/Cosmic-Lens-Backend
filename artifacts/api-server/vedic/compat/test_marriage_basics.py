@@ -343,3 +343,22 @@ def test_plain_copy_shape_and_deterministic():
     # Different chart should usually differ (not guaranteed for all fields, but headline pool is large)
     assert out1["p1"]["plain_copy"] != out3["p1"]["plain_copy"] or out1["p1"]["readiness_score"] != out3["p1"]["readiness_score"]
 
+
+def test_couple_locked_highlights_no_gun_milan():
+    k1 = _sample_kundli("Rahul", "Leo")
+    k2 = _sample_kundli("Priya", "Cancer", moon_h=5)
+    out = compute_marriage_basics(
+        k1, k2,
+        p1_name="Rahul", p2_name="Priya",
+        p1_gender="Male", p2_gender="Female",
+    )
+    highlights = out["couple"]["plain_copy"]["locked_highlights"]
+    assert highlights
+    assert len(highlights) <= 4
+    joined = " ".join(highlights).lower()
+    assert "36 gun" not in joined
+    assert "ashtakoot" not in joined
+    assert "score breakdown" not in joined
+    cta = out["couple"]["plain_copy"]["pro_cta_line"].lower()
+    assert "36 gun" not in cta
+

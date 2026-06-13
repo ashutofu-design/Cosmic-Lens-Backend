@@ -1,31 +1,33 @@
 /**
- * Kundli Milan — Pro unlock offer & checkout routing (client).
- *
- * Temporary testing mode: show promotional sticker prices and let the user
- * continue the Pro experience (language picker → confirm → PDF) without
- * hitting the payment gateway. For production, set `bypassCheckoutForTesting`
- * to false and point `paymentEntryRoute` at your Cashfree / native checkout
- * screen instead of `/subscription`.
+ * Kundli Milan — Marriage Compatibility Pro offer & checkout (client).
  */
-
-/** Shown in the Milan Pro upgrade UI (strikethrough vs offer). */
 export const MILAN_PRO_UI_PRICING = {
-  originalInr: 699,
-  offerInr: 299,
+  regularInr: 999,
+  todayInr: 699,
 } as const;
+
+export const MILAN_URGENT_SURCHARGE_INR = 300 as const;
+
+export function milanOrderTotalInr(priorityDelivery: boolean): number {
+  return MILAN_PRO_UI_PRICING.todayInr + (priorityDelivery ? MILAN_URGENT_SURCHARGE_INR : 0);
+}
+
+export function milanFirstTimeSavingsInr(): number {
+  return MILAN_PRO_UI_PRICING.regularInr - MILAN_PRO_UI_PRICING.todayInr;
+}
 
 export const MILAN_PRO_CHECKOUT_CONFIG = {
-  /**
-   * When true, "Unlock Full Analysis" runs the in-app Pro flow immediately
-   * (same as today). When false, the CTA should send the user to checkout
-   * before generating the PDF.
-   */
-  /** Set true only for local dev without Cashfree. Production: false */
-  bypassCheckoutForTesting: false,
-
+  /** Language pick → human order (same as Love Pro). Set false for Razorpay. */
+  bypassCheckoutForTesting: true,
 } as const;
 
-/** Opens language picker; payment runs after language selection (see coupleReportCheckoutFlow). */
 export function runMilanProUnlockCta(opts: { continueProExperience: () => void }): void {
   opts.continueProExperience();
+}
+
+export function milanProRouteParams(partnerId?: string | null) {
+  return {
+    pathname: "/kundli-milan-pro" as const,
+    params: { partnerId: partnerId ?? "" },
+  };
 }

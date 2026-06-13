@@ -28,8 +28,11 @@ import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 import { KundliMilanBasicLanding } from "@/components/kundliMilan/KundliMilanBasicLanding";
-import { KundliMilanBasicResult, milanJsonToResult } from "@/components/kundliMilan/KundliMilanBasicResult";
+import { KundliMilanBasicResult } from "@/components/kundliMilan/KundliMilanBasicResult";
+import { KundliMilanProResult } from "@/components/kundliMilan/KundliMilanProResult";
 import type { MarriageBasicsPayload } from "@/lib/milanMarriageBasics";
+import { milanProRouteParams } from "@/lib/milanProOffer";
+import { getPendingCoupleCheckout, packBirthForApi, setPendingCoupleCheckout } from "@/lib/pendingCoupleCheckout";
 import { MilanResultStore } from "@/lib/milanResultStore";
 import { useFeatureGate } from "@/components/FeatureGate";
 import * as FileSystem from "expo-file-system/legacy";
@@ -1387,8 +1390,6 @@ function getDeepSections(lang: string): DeepSection[] {
 }
 
 function ProKundliSection({ p1, p2, isDark, t }:{ p1:PersonData|null; p2:PersonData|null; isDark:boolean; t:any }) {
-  const canBuild = !!p1 && !!p2;
-  const hooks: HookItem[] = canBuild ? buildProHooks(buildSignals(p1!, p2!), t) : [];
   const deepSections = getDeepSections(t.lang);
 
   return (
@@ -1443,20 +1444,6 @@ function ProKundliSection({ p1, p2, isDark, t }:{ p1:PersonData|null; p2:PersonD
           ))}
         </View>
       </View>
-
-      {/* LAYER 3 — LOCKED DYNAMIC HOOKS (only when both kundlis present) */}
-      {canBuild && (
-        <View style={{gap:10}}>
-          <View style={{flexDirection:"row",alignItems:"center",gap:10,marginTop:2}}>
-            <View style={{flex:1,height:1,backgroundColor:isDark?"rgba(245,158,11,0.3)":"rgba(124,58,237,0.2)"}}/>
-            <Text style={{color:isDark?"#f59e0b":"#7C3AED",fontSize:10,fontFamily:"Nunito_800ExtraBold",letterSpacing:1.8}}>
-              {t.km3_lockedPreview}
-            </Text>
-            <View style={{flex:1,height:1,backgroundColor:isDark?"rgba(245,158,11,0.3)":"rgba(124,58,237,0.2)"}}/>
-          </View>
-          {hooks.map(h => <LockedHook key={h.key} item={h} isDark={isDark}/>)}
-        </View>
-      )}
     </View>
   );
 }
@@ -1525,7 +1512,7 @@ export default function KundliMilanScreen(){
       setPdfPct(pct);
       // Stage labels mirror real backend pipeline
       if (pct < 15) setPdfStage("Reading both kundlis…");
-      else if (pct < 30) setPdfStage("Analyzing 36 koot factors…");
+      else if (pct < 30) setPdfStage("Analyzing marriage structure…");
       else if (pct < 50) setPdfStage("Cross-checking Vedic + KP fusion…");
       else if (pct < 75) setPdfStage("Writing your personalized report…");
       else if (pct < 92) setPdfStage("Crafting beautiful insights…");
@@ -1593,10 +1580,35 @@ export default function KundliMilanScreen(){
 
   useFocusEffect(useCallback(() => {
     if (MilanResultStore.consumeProRequest()) {
-      setPlan("pro");
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      router.push(milanProRouteParams(params.partnerId || p2Profile?.id) as never);
     }
-  }, []));
+  }, [params.partnerId, p2Profile?.id]));
+
+  function openProScreen() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const bd1 = p1Profile?.birthData ?? (person1?._rawBirth ? {
+      day: person1._rawBirth.day, month: person1._rawBirth.month, year: person1._rawBirth.year,
+      hour: person1._rawBirth.hour, minute: person1._rawBirth.minute, ampm: person1._rawBirth.ampm,
+      place: person1._rawBirth.place, lat: person1._rawBirth.lat, lon: person1._rawBirth.lon, tz: person1._rawBirth.tz,
+      gender: p1Profile?.gender,
+    } : undefined);
+    const bd2 = p2Profile?.birthData ?? (p2?._rawBirth ? {
+      day: p2._rawBirth.day, month: p2._rawBirth.month, year: p2._rawBirth.year,
+      hour: p2._rawBirth.hour, minute: p2._rawBirth.minute, ampm: p2._rawBirth.ampm,
+      place: p2._rawBirth.place, lat: p2._rawBirth.lat, lon: p2._rawBirth.lon, tz: p2._rawBirth.tz,
+      gender: p2Profile?.gender,
+    } : undefined);
+    if (bd1 && bd2 && (bd1 as any).lat != null && (bd2 as any).lat != null) {
+      setPendingCoupleCheckout({
+        product: "milan_pro",
+        p1: packBirthForApi(bd1 as any, person1?.name || p1Profile?.name || "Partner A", p1Profile?.gender),
+        p2: packBirthForApi(bd2 as any, p2?.name || p2Profile?.name || "Partner B", p2Profile?.gender),
+        lang: t.lang,
+      });
+    }
+    router.push(milanProRouteParams(params.partnerId || p2Profile?.id) as never);
+  }
 
   // Pro glow animation
   const glowAnim=useRef(new Animated.Value(0)).current;
@@ -1727,10 +1739,12 @@ export default function KundliMilanScreen(){
           throw new Error(detail||"Marriage structure engine unavailable — try again.");
         }
       }else{
-        const r=milanJsonToResult(json);
-        setResult(r);
         if(json.marriage_basics){
           setMarriageBasics(json.marriage_basics as MarriageBasicsPayload);
+          setResult(null);
+        }else{
+          const detail=(json as {marriage_basics_error?:string}).marriage_basics_error;
+          throw new Error(detail||"Marriage structure engine unavailable — try again.");
         }
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -2043,7 +2057,7 @@ export default function KundliMilanScreen(){
                 <Text style={[ms.segTxt,{color:plan==="basic"?"#fff":C.isDark?"rgba(255,255,255,0.4)":"rgba(0,0,0,0.4)"}]}>{t.km_basic}</Text>
               </Pressable>
               <Pressable
-                onPress={()=>{setPlan("pro");Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);}}
+                onPress={openProScreen}
                 style={[ms.segBtn,{overflow:"hidden"}]}>
                 <LinearGradient colors={plan==="pro"?["#7c3aed","#db2777"]:["#5b21b6","#9d174d"]} start={{x:0,y:0}} end={{x:1,y:0}}
                   style={[StyleSheet.absoluteFillObject,{borderRadius:14}]}/>
@@ -2077,10 +2091,7 @@ export default function KundliMilanScreen(){
               onSelectPartner={()=>router.push("/relationship" as any)}
               onEditPartner={()=>router.back()}
               onCalculate={handleCalculate}
-              onOpenPro={()=>{
-                setPlan("pro");
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              }}
+              onOpenPro={openProScreen}
             />
           )}
 
@@ -2088,82 +2099,42 @@ export default function KundliMilanScreen(){
             <KundliMilanBasicResult
               data={marriageBasics}
               isDark={C.isDark}
-              onOpenPro={()=>{
-                setPlan("pro");
+              onOpenPro={() => {
                 setMarriageBasics(null);
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                openProScreen();
               }}
-              onRecalculate={()=>setMarriageBasics(null)}
             />
           )}
 
-          {/* ── PRO SECTION: 4-Layer Personalized Hooks ── */}
-          {isPro&&!result&&(
+          {/* ── PRO: marriage engine (no Gun Milan UI) ── */}
+          {isPro&&!marriageBasics&&!result&&(
             <ProKundliSection p1={p1} p2={p2} isDark={C.isDark} t={t}/>
           )}
 
-          {/* ── PRO CTA Buttons ── */}
-          {isPro&&!result&&(
-            <ShineButton
-              colors={["#6366F1","#8B5CF6","#a855f7"]}
-              disabled={!canCalculate||pdfLoading} loading={calcLoading||pdfLoading}
-              text={pdfLoading?"PDF generate ho raha hai…":(canCalculate?t.km2_unlockFullAnal:!person1&&!p2?t.km2_addBothFirst:!person1?t.km_addYourKundli:t.km_addPartnerKundli)}
-              onPress={confirmAndDownloadProPdf}/>
+          {isPro&&!marriageBasics&&!result&&(
+            <>
+              <ShineButton
+                colors={["#22c55e","#16a34a","#15803d"]}
+                disabled={!canCalculate||calcLoading}
+                loading={calcLoading}
+                text={canCalculate?"Check Marriage Structure (Pro)":!person1&&!p2?t.km2_addBothFirst:!person1?t.km_addYourKundli:t.km_addPartnerKundli}
+                onPress={handleCalculate}/>
+              <View style={{height:10}}/>
+              <ShineButton
+                colors={["#6366F1","#8B5CF6","#a855f7"]}
+                disabled={!canCalculate||pdfLoading} loading={pdfLoading}
+                text={pdfLoading?"PDF generate ho raha hai…":(canCalculate?t.km2_unlockFullAnal:!person1&&!p2?t.km2_addBothFirst:!person1?t.km_addYourKundli:t.km_addPartnerKundli)}
+                onPress={confirmAndDownloadProPdf}/>
+            </>
           )}
 
-          {/* ── PRO Results ── */}
-          {result&&isPro&&g&&(
-            <>
-              {/* Score hero */}
-              <LinearGradient
-                colors={C.isDark
-                  ?isPro?["#1a003a","#0f172a"]:["#1a0533","#0f172a"]
-                  :["#f5f3ff","#ede9fe"]}
-                style={[ms.scoreHero,{
-                  borderColor:isPro?"rgba(139,92,246,0.4)":`${g.col}30`,
-                  ...(isPro?{shadowColor:"#8B5CF6",shadowOffset:{width:0,height:0},shadowOpacity:0.4,shadowRadius:20,elevation:12}:{})
-                }]}>
-                <ScoreRing total={result.total} col={g.col}/>
-                <View style={{alignItems:"center",gap:8}}>
-                  <View style={[ms.gradeBadge,{backgroundColor:`${g.col}15`,borderColor:`${g.col}35`}]}>
-                    <Text style={{color:g.col,fontSize:16,fontFamily:"Nunito_700Bold"}}>{g.label}</Text>
-                  </View>
-                  {result.manglik&&(
-                    <View style={ms.mangChip}>
-                      <View style={ms.mangDot}/>
-                      <Text style={{color:"#ef4444",fontSize:11,fontFamily:"Nunito_600SemiBold"}}>{t.km_manglikDosh}</Text>
-                    </View>
-                  )}
-                </View>
-                <View style={[ms.heroBg,{backgroundColor:"rgba(255,255,255,0.07)"}]}>
-                  <LinearGradient colors={isPro?["#6366F1","#8B5CF6","#a855f7"]:g.grad}
-                    start={{x:0,y:0}} end={{x:1,y:0}}
-                    style={[ms.heroFill,{width:`${Math.round((result.total/36)*100)}%` as any}]}/>
-                </View>
-              </LinearGradient>
-
-              {/* Pro: Full 12-section report */}
-              {isPro&&g&&<ProResultReport result={result} g={g} C={C} marriageBasics={marriageBasics}/>}
-
-              {/* Pro: Download Full PDF CTA — visible AFTER result so user can
-                  re-download even at 36/36 compatibility. (Phase 2.5.11.24-fix2) */}
-              {isPro&&(
-                <View style={{marginTop:14,marginBottom:6}}>
-                  <ShineButton
-                    colors={["#6366F1","#8B5CF6","#a855f7"]}
-                    disabled={!canCalculate||pdfLoading}
-                    loading={pdfLoading}
-                    text={pdfLoading?"PDF generate ho raha hai…":(t.km2_unlockFullAnal||"Download Full PDF Report")}
-                    onPress={confirmAndDownloadProPdf}/>
-                </View>
-              )}
-
-              <Pressable onPress={()=>{setResult(null);Haptics.selectionAsync();}}
-                style={[ms.recalcBtn,{borderColor:C.border,backgroundColor:C.bgCard}]}>
-                <Feather name="refresh-cw" size={13} color={C.textMuted}/>
-                <Text style={{color:C.textMuted,fontSize:12,fontFamily:"Nunito_500Medium"}}>{t.km_recalc}</Text>
-              </Pressable>
-            </>
+          {marriageBasics&&isPro&&(
+            <KundliMilanProResult
+              data={marriageBasics}
+              isDark={C.isDark}
+              pdfLoading={pdfLoading}
+              onDownloadPdf={confirmAndDownloadProPdf}
+            />
           )}
 
 

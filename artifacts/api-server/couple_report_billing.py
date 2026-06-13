@@ -24,7 +24,7 @@ VALID_PRODUCTS = {PRODUCT_MILAN, PRODUCT_LOVE}
 CATALOG: dict[str, dict[str, Any]] = {
     PRODUCT_MILAN: {
         "label": "Kundli Milan Pro",
-        "amount_inr": int(os.environ.get("MILAN_PRO_PRICE_INR", "299")),
+        "amount_inr": int(os.environ.get("MILAN_PRO_PRICE_INR", "699")),
     },
     PRODUCT_LOVE: {
         "label": "Love Reality Pro",

@@ -65,8 +65,6 @@ def format_love_reality_order_alert(record: dict[str, Any]) -> str:
     p1_name = snap.get("p1_name") or p1.get("name") or "Person 1"
     p2_name = snap.get("p2_name") or p2.get("name") or "Person 2"
     urgent = bool(record.get("urgent"))
-    method = str(record.get("contact_method") or "whatsapp")
-    contact = str(record.get("contact_value") or "—")
     oid = str(record.get("order_id") or "")[:8]
     lang = _lang_label(str(record.get("lang") or "en"))
 
@@ -81,12 +79,81 @@ def format_love_reality_order_alert(record: dict[str, Any]) -> str:
         "",
         f"🌐 Report language: {lang}",
         f"{'⚡ Priority — 12 hours' if urgent else '📦 Standard — 24–48 hours'}",
-        f"📲 Deliver on {method.title()}: {contact}",
+        "📁 Deliver in My Reports (in-app)",
         f"🆔 Order #{oid}",
     ]
     user_id = int(record.get("user_id") or 0)
-    if user_id:
-        lines.append(f"👥 App user ID: {user_id}")
+    cosmo_id = (str(record.get("cosmo_user_id") or "").strip().upper())
+    if not cosmo_id and user_id:
+        try:
+            from cosmo_user_id import cosmo_display_id_for_user_id
+
+            cosmo_id = cosmo_display_id_for_user_id(user_id)
+        except Exception:
+            cosmo_id = ""
+    if cosmo_id:
+        lines.append(f"👥 {cosmo_id}")
+    lines.extend([
+        "",
+        "📝 Deliver (paste in Telegram):",
+        f"MYREPORT {oid}",
+        "",
+        "(one-time — after DONE this order id expires; new report = new order)",
+        "",
+        "<report part 1 — long? send part 2+ then reply DONE>",
+        "<or reply DONE when finished>",
+    ])
+    return "\n".join(lines)
+
+
+def format_milan_order_alert(record: dict[str, Any]) -> str:
+    snap = record.get("engine_snapshot") if isinstance(record.get("engine_snapshot"), dict) else {}
+    p1 = record.get("p1") if isinstance(record.get("p1"), dict) else {}
+    p2 = record.get("p2") if isinstance(record.get("p2"), dict) else {}
+    p1_name = snap.get("p1_name") or p1.get("name") or "Person 1"
+    p2_name = snap.get("p2_name") or p2.get("name") or "Person 2"
+    urgent = bool(record.get("urgent"))
+    oid = str(record.get("order_id") or "")[:8]
+    lang = _lang_label(str(record.get("lang") or "en"))
+    couple_score = snap.get("couple_score")
+    couple_band = snap.get("couple_band") or "—"
+
+    lines = [
+        "💍 New Marriage Compatibility Pro order",
+        "",
+        f"👤 Person 1 — {p1_name}",
+        *_format_person_details(p1, str(p1_name)),
+        "",
+        f"👤 Person 2 — {p2_name}",
+        *_format_person_details(p2, str(p2_name)),
+        "",
+        f"📊 Couple score: {couple_score}/100 ({couple_band})" if couple_score is not None else f"📊 Couple band: {couple_band}",
+        f"🌐 Report language: {lang}",
+        f"{'⚡ Priority — 12 hours' if urgent else '📦 Standard — 24–48 hours'}",
+        "📁 Deliver in My Reports (in-app)",
+        f"🆔 Order #{oid}",
+    ]
+    user_id = int(record.get("user_id") or 0)
+    cosmo_id = (str(record.get("cosmo_user_id") or "").strip().upper())
+    if not cosmo_id and user_id:
+        try:
+            from cosmo_user_id import cosmo_display_id_for_user_id
+
+            cosmo_id = cosmo_display_id_for_user_id(user_id)
+        except Exception:
+            cosmo_id = ""
+    if cosmo_id:
+        lines.append(f"👥 {cosmo_id}")
+    lines.extend([
+        "",
+        "📝 Deliver (paste in Telegram):",
+        f"MYMILAN {oid}",
+        "",
+        "(one-time — after DONE this order id expires; new report = new order)",
+        "",
+        "<report part 1 — long? send part 2+ then reply DONE>",
+        "<or reply DONE when finished>",
+    ])
     return "\n".join(lines)
 
 
@@ -179,3 +246,31 @@ def notify_founder_love_reality_order(record: dict[str, Any]) -> None:
             pass
         return
     threading.Thread(target=_dispatch_alerts, args=(record,), daemon=True).start()
+
+
+def notify_founder_milan_order(record: dict[str, Any]) -> None:
+    """Non-blocking alert for Marriage Compatibility Pro orders."""
+    if not record:
+        return
+    has_telegram = bool(
+        (os.environ.get("TELEGRAM_BOT_TOKEN") or "").strip()
+        and (os.environ.get("TELEGRAM_FOUNDER_CHAT_ID") or "").strip()
+    )
+    has_sms = bool(
+        (os.environ.get("MSG91_AUTH_KEY") or "").strip()
+        and (os.environ.get("FOUNDER_ALERT_PHONE") or "").strip()
+    )
+    if not has_telegram and not has_sms:
+        return
+
+    def _run() -> None:
+        text = format_milan_order_alert(record)
+        sent = _send_telegram(text)
+        if not sent:
+            _send_msg91_sms(text)
+        try:
+            print(f"[order_alert] milan notify telegram={sent} order={record.get('order_id')}", flush=True)
+        except Exception:
+            pass
+
+    threading.Thread(target=_run, daemon=True).start()

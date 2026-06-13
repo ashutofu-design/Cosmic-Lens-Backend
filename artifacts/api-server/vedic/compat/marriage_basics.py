@@ -66,6 +66,9 @@ def normalize_gender(raw: str | None) -> Gender:
 
 
 GOOD_LORDSHIP_HOUSES = frozenset({1, 4, 5, 7, 9, 10, 11})
+_MARRIAGE_BASE = 52
+_MARRIAGE_READINESS_FLOOR = 20
+_MARRIAGE_COUPLE_FLOOR = 22
 _STRESS_DASHA_LORDS = frozenset({"Saturn", "Rahu", "Ketu", "Mars"})
 _SUPPORT_DASHA_LORDS = frozenset({"Venus", "Moon", "Jupiter"})
 _DASHA_HORIZON_YEARS = 3
@@ -1515,7 +1518,7 @@ def _analyze_partner(kundli: dict, *, name: str, gender: Gender) -> dict[str, An
             "note": f"{karaka_name} ({karaka_block['role']}) in {karaka_p.get('sign')} house {karaka_p.get('house')}.",
         })
 
-    score = 52
+    score = _MARRIAGE_BASE
     score += seventh_inf["score_delta"]
     score += empty7["score_delta"]
     score += maraka["score_delta"]
@@ -1560,6 +1563,8 @@ def _analyze_partner(kundli: dict, *, name: str, gender: Gender) -> dict[str, An
     score += _manglik_score_delta(manglik)
     score += _marriage_signal_adjustment(sig)
     score = max(0, min(100, score))
+    if score < _MARRIAGE_READINESS_FLOOR:
+        score = _MARRIAGE_READINESS_FLOOR
 
     friction, remedy, strengths, pressures = _friction_and_remedy(k, gender, sig, kp, ul, manglik)
     critical = _critical_alerts_block(sig)
@@ -1765,6 +1770,8 @@ def compute_marriage_basics(
 
     structural = int(round((person1["readiness_score"] + person2["readiness_score"]) / 2))
     structural = max(0, min(100, structural + d9_sync_bonus + syn_bonus + kp_bonus + couple_only_delta))
+    if structural < _MARRIAGE_COUPLE_FLOOR:
+        structural = _MARRIAGE_COUPLE_FLOOR
     couple_band = _couple_band(structural)
 
     return {

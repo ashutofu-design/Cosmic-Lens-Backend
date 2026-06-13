@@ -272,3 +272,32 @@ def test_marriage_signal_skips_structural_overlap():
     assert old_adj <= -8
     assert new_adj >= old_adj
     assert new_adj >= -4
+
+
+def test_marriage_score_floors():
+    """Partner ≥20, couple ≥22 — bands stay Strained / High Effort."""
+    from vedic.compat.marriage_basics import (
+        _MARRIAGE_COUPLE_FLOOR,
+        _MARRIAGE_READINESS_FLOOR,
+    )
+
+    k1 = _sample_kundli("A", "Aries")
+    k2 = _sample_kundli("B", "Aries")
+    for k in (k1, k2):
+        for p in k["planets"]:
+            if p["name"] == "Mars":
+                p["house"] = 7
+                p["sign"] = "Libra"
+                p["signIndex"] = 6
+            if p["name"] == "Saturn":
+                p["house"] = 7
+                p["sign"] = "Libra"
+                p["signIndex"] = 6
+    out = compute_marriage_basics(
+        k1, k2, p1_name="A", p2_name="B", p1_gender="Male", p2_gender="Female",
+    )
+    assert out["p1"]["readiness_score"] >= _MARRIAGE_READINESS_FLOOR
+    assert out["p2"]["readiness_score"] >= _MARRIAGE_READINESS_FLOOR
+    assert out["couple"]["structural_score"] >= _MARRIAGE_COUPLE_FLOOR
+    assert out["p1"]["readiness_band"] == "Strained"
+    assert out["couple"]["structural_band"] == "High Effort"

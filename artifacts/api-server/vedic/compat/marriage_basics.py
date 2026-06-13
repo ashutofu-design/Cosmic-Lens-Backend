@@ -4,7 +4,7 @@ Deterministic Kundli Milan Basic — marriage chart intelligence (no LLM).
 Per partner: D1 7th axis, D9 7th depth, Darakaraka, Upapada, KP 7th CSL,
 gender-aware karaka (Venus for male / Jupiter for female), friction + remedy.
 
-Couple: structural marriage band from engine scores only.
+Couple: structural marriage band = average of both partners (no overlay bonuses).
 Phase A (v3): 7L synastry, full D9 couple sync, manglik cancellation, relationship_signals.
 Phase B (v4): 7L combust/retro, Graha Maitri synastry, dasha timeline, critical-alert lock-box.
 Phase C (v5): occupant dignity, functional benefic, maraka 2/8, empty 7th, D9 occ, PD dasha, KP couple.
@@ -15,7 +15,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
-from karakas import compute_karakas
+from vedic.compat.marriage_copy_picker import build_partner_plain_copy, partner_copy_seed
 from jaimini import compute_arudha_padas, compute_upapada
 from vedic.compat.d9_marriage import _per_partner as d9_per_partner, compute_d9_marriage, _friendship_word
 from vedic.compat.kp_marriage_promise import compute_kp_couple_promise, compute_kp_marriage_promise
@@ -1598,7 +1598,7 @@ def _analyze_partner(kundli: dict, *, name: str, gender: Gender) -> dict[str, An
     if critical.get("locked") and critical.get("teaser") not in safe_pressures:
         safe_pressures = [str(critical["teaser"]), *safe_pressures[:5]]
 
-    return {
+    payload: dict[str, Any] = {
         "name": name,
         "gender": gender,
         "readiness_score": score,
@@ -1673,6 +1673,10 @@ def _analyze_partner(kundli: dict, *, name: str, gender: Gender) -> dict[str, An
         "strengths": strengths,
         "pressures": safe_pressures,
     }
+    payload["plain_copy"] = build_partner_plain_copy(
+        payload, partner_copy_seed(kundli, name)
+    )
+    return payload
 
 
 def _couple_verdict(band: CoupleBand, p1: dict, p2: dict) -> str:
@@ -1720,56 +1724,14 @@ def compute_marriage_basics(
         KundliReader({**kundli_p1, "name": p1_name}),
         KundliReader({**kundli_p2, "name": p2_name}),
     )
+    kp_couple = compute_kp_couple_promise(kundli_p1, kundli_p2)
 
     d9_1 = float(person1["d9"].get("maturity_0_10") or 5)
     d9_2 = float(person2["d9"].get("maturity_0_10") or 5)
 
-    d9_sync_bonus = 0
-    if d9_sync.get("available"):
-        d9_sync_bonus = int(round((float(d9_sync.get("score_0_10") or 5) - 5) * 2.2))
-    else:
-        d9_sync_bonus = int(round((min(d9_1, d9_2) - 5) * 1.5))
-
-    syn_bonus = 0
-    if synastry.get("available"):
-        syn_bonus = int(round((float(synastry.get("score_0_10") or 5) - 5) * 2.5))
-
-    kp_bonus = 0
-    kp_couple = compute_kp_couple_promise(kundli_p1, kundli_p2)
-    kv = kp_couple.get("couple_verdict")
-    if kv == "STRONG":
-        kp_bonus = 8
-    elif kv == "PARTIAL":
-        kp_bonus = 3
-    elif kv == "WEAK":
-        kp_bonus = -6
-    else:
-        for p in (person1, person2):
-            v = p["kp"].get("verdict")
-            if v == "STRONG":
-                kp_bonus += 4
-            elif v == "PARTIAL":
-                kp_bonus += 2
-            elif v == "WEAK":
-                kp_bonus -= 3
-
-    couple_only_delta = 0
-    if couple_sig.moon_mismatch:
-        couple_only_delta -= 4
-    elif couple_sig.synastry_notes and "supportive" in couple_sig.synastry_notes[0].lower():
-        couple_only_delta += 3
-    if couple_sig.cross_rahu_venus:
-        couple_only_delta -= int(round(6 * couple_sig.cross_rahu_venus_orb_weight))
-    if manglik_couple.get("mutual_cancellation"):
-        couple_only_delta += 2
-    elif manglik_couple.get("imbalance"):
-        couple_only_delta -= 5
-    couple_only_delta += graha_maitri.get("score_delta", 0)
-    if pada_yoni.get("available"):
-        couple_only_delta += pada_yoni.get("score_delta", 0)
-
+    # Couple structural = average of both partners (no synastry/D9/KP overlay on score).
     structural = int(round((person1["readiness_score"] + person2["readiness_score"]) / 2))
-    structural = max(0, min(100, structural + d9_sync_bonus + syn_bonus + kp_bonus + couple_only_delta))
+    structural = max(0, min(100, structural))
     if structural < _MARRIAGE_COUPLE_FLOOR:
         structural = _MARRIAGE_COUPLE_FLOOR
     couple_band = _couple_band(structural)

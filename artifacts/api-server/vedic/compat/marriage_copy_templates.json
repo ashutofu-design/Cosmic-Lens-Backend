@@ -1,0 +1,309 @@
+{
+  "band_strong": [
+    "Honestly, {name} ke chart mein shaadi ke liye achha base hai — timing aur choices ab bhi matter karte hain.",
+    "Yeh woh chart hai jahan marriage axis generally supportive lagti hai; effort se bond grow karta hai.",
+    "Good news: marriage structure strong dikhta hai. Perfect effortless nahi, par foundation solid hai.",
+    "Chart ke hisaab se long-term partnership ke liye green signals zyada hain — baaki aap dono pe depend karta hai.",
+    "Marriage readiness yahan achhi tarah reflect hoti hai — patience rakho toh relationship deepen ho sakta hai.",
+    "Aapke chart mein partnership house ko support mil raha hai — yeh naturally commitment-friendly tone deta hai.",
+    "Shaadi yahan 'possible aur promising' dono lagti hai — bas ego aur rush control mein rakho.",
+    "Marriage ke liye chart ka backbone strong hai — ab daily habits decide karenge kitna smooth rahega."
+  ],
+  "band_moderate": [
+    "Marriage yahan workable hai — perfect effortless nahi, par tootne wala bhi nahi agar dono conscious rahein.",
+    "Mixed signals hain: kuch areas strong, kuch pe thoda kaam chahiye — yeh normal hai, panic mat karo.",
+    "Chart bolta hai shaadi ho sakti hai, par baad mein patience aur clear baat-cheet dono zaroori hain.",
+    "Yeh middle-ground chart hai — achhe din aur tense din dono aayenge; communication sabse bada tool hai.",
+    "Foundation theek hai par perfect nahi — realistic expectations rakho toh marriage chal sakti hai.",
+    "Kuch planets support karte hain, kuch test karte hain — balance conscious effort se aata hai.",
+    "Shaadi yahan 'maybe with work' type feel deti hai — rush karke decision mat lo.",
+    "Chart neither very easy nor very hard — steady effort se workable match ban sakta hai."
+  ],
+  "band_strained": [
+    "Seedha bolun: marriage yahan possible hai par heavy effort maangegi — red flags ignore mat karna.",
+    "Chart strained tone deta hai — shaadi se pehle compatibility aur remedies dono seriously lo.",
+    "Yeh easy-pass chart nahi hai — patience, remedies, aur realistic talk ke bina friction badh sakti hai.",
+    "Marriage axis pe pressure zyada hai — impossible nahi, par blind optimism bhi risky hai.",
+    "High-effort zone hai — agar aage badhna hai toh dono taraf se maturity chahiye hogi.",
+    "Chart kehta hai bond ban sakta hai par test hoga — timing aur partner choice dono critical hain.",
+    "Strained band matlab marriage default easy nahi aayegi — conscious work zaroori hai.",
+    "Yahan chart warning deta hai: proceed karo, par eyes open rakho aur friction ko early handle karo."
+  ],
+  "h7_benefic_only": [
+    "Marriage zone mein supportive planets ({benefics_in_7}) hain — warmth aur cooperation naturally aati hai.",
+    "7th house pe soft influence hai ({benefics_in_7}) — partner ke saath harmony build karna relatively easier.",
+    "Achha sign: marriage house mein benefic energy ({benefics_in_7}) — relationship ko cushion milta hai.",
+    "Partner house mein {benefics_in_7} ka support hai — yeh often caring, balanced tone deta hai.",
+    "Marriage zone cushioned hai ({benefics_in_7}) — fights ho sakti hain par repair bhi usually possible.",
+    "Chart mein marriage area ko {benefics_in_7} strengthen karte hain — yeh long-term softness ka signal hai."
+  ],
+  "h7_malefic_only": [
+    "Marriage zone par tough planets ({malefics_in_7}) ka pressure hai — bina effort ke jhagde ya delay common ho sakte hain.",
+    "7th house mein {malefics_in_7} hain — temper, ego, ya distance theme handle karna padega.",
+    "Hard planets ({malefics_in_7}) marriage house ko press karte hain — rush decisions avoid karo.",
+    "Partner house mein {malefics_in_7} — relationship mein friction zyada feel ho sakti hai agar boundaries weak hon.",
+    "Chart kehta hai marriage zone tested hai ({malefics_in_7}) — patience aur cool-down rules rakho.",
+    "Malefic load ({malefics_in_7}) 7th pe — yeh dramatic ups and downs ka pattern de sakta hai."
+  ],
+  "h7_mixed": [
+    "Marriage zone mein soft aur hard dono planets mix hain — achhe din aur stressful din dono normal honge.",
+    "7th house mixed energy deti hai — ek din closeness, agle din distance; yeh chart pattern hai, personal fail nahi.",
+    "Partner house mein plus aur minus dono hain — daily communication tone decide karegi.",
+    "Mixed 7th house matlab chemistry ho sakti hai par stability conscious effort se aayegi.",
+    "Chart bolta hai marriage zone neither pure smooth nor pure harsh — balance aapke haath mein hai."
+  ],
+  "h7_empty_strong_lord": [
+    "Marriage house khali hai par ruler {seventh_lord} strong hai — bond lord pe tikta hai, clean par dependent.",
+    "7th empty + strong {seventh_lord} — partnership ka result us planet ki strength se aata hai.",
+    "Direct planets marriage zone mein nahi, par {seventh_lord} achha placed hai — yeh hidden strength hai.",
+    "Empty 7th sometimes simple rakhta hai — {seventh_lord} strong hone se promise phir bhi achhi hai.",
+    "Marriage zone empty dikhe toh bhi {seventh_lord} backbone deta hai — lord ko strong rakhna important hai."
+  ],
+  "h7_empty_weak_lord": [
+    "Marriage house khali hai aur ruler {seventh_lord} weak lagta hai — bond ko clear anchor chahiye.",
+    "Empty 7th + weak {seventh_lord} — relationship direction kabhi unclear feel ho sakti hai.",
+    "7th mein koi planet nahi aur lord under stress — shaadi se pehle clarity aur habits dono build karo.",
+    "Chart mein marriage zone aur uska ruler dono soft hain — extra structure relationship mein lao.",
+    "Empty partner house with weak {seventh_lord} — patience ke saath boundaries bhi zaroori hain."
+  ],
+  "lord_strong": [
+    "Marriage ruler {seventh_lord} (house {seventh_lord_house}) achha placed hai — commitment capacity solid hai.",
+    "{seventh_lord} aapka marriage ruler hai aur strong dikhta hai — long-term direction support milta hai.",
+    "7th lord {seventh_lord} supportive house {seventh_lord_house} mein — yeh achha marriage backbone deta hai.",
+    "Chart kehta hai {seventh_lord} marriage themes ko achhe se carry kar sakta hai.",
+    "Strong {seventh_lord} placement — partnership mein stability ka natural base hai.",
+    "{seventh_lord} well placed in house {seventh_lord_house} — shaadi ka structural promise achha hai."
+  ],
+  "lord_average": [
+    "Marriage ruler {seventh_lord} average zone mein hai — na bahut easy, na bahut hard by default.",
+    "{seventh_lord} in house {seventh_lord_house} — outcome zyada tar aapke choices aur timing pe depend karega.",
+    "7th lord neither hero nor villain — daily effort se marriage tone set hogi.",
+    "{seventh_lord} ka placement neutral-ish hai — habits aur partner match final result banayenge."
+  ],
+  "lord_weak": [
+    "{seventh_lord} marriage ruler under stress mein hai — delays ya tests partnership mein zyada common ho sakte hain.",
+    "7th lord {seventh_lord} weak zone (house {seventh_lord_house}) — unrealistic expectations avoid karo.",
+    "Chart kehta hai {seventh_lord} marriage promise ko easily carry nahi kar pa raha — remedies aur patience help karenge.",
+    "Weak marriage ruler {seventh_lord} — bond ban sakta hai par slowly aur with conscious work.",
+    "{seventh_lord} pressured in house {seventh_lord_house} — timing aur partner chart dono matter karte hain.",
+    "Marriage axis ka main planet {seventh_lord} thoda struggle zone mein — yeh effort signal hai, end nahi."
+  ],
+  "lord_combust": [
+    "Marriage ruler Sun ke paas weak ho gaya hai — promise hota hai par consistently deliver karna mushkil pad sakta hai.",
+    "Combust 7th lord matlab marriage significator thoda fade ho sakta hai — actions se prove karna padega.",
+    "Sun ne marriage ruler ko overshadow kiya hai — words se zyada steady behaviour matter karega."
+  ],
+  "lord_retrograde": [
+    "Marriage ruler retrograde hai — purane patterns repeat ya delay aane ka trend common hai.",
+    "Vakri 7th lord often karmic replay deta hai — same fight alag partner ke saath bhi aa sakti hai agar lesson miss ho.",
+    "Retrograde marriage ruler — rush nahi, slow clarity se decision lo."
+  ],
+  "d9_supportive": [
+    "Andar se (long-term) married life supportive lagti hai — saal badhne par bond deepen ho sakta hai.",
+    "Inner chart achha marriage maturity deta hai — honeymoon phase ke baad bhi growth possible hai.",
+    "Post-wedding tone generally positive dikhta hai — realistic effort ke saath relationship mature ho sakti hai.",
+    "Long-term marriage base strong hai — early friction ke baad bhi settle hone ka chance achha hai.",
+    "Navamsa level pe marriage theme supportive hai — yeh years baad ka comfort signal hai."
+  ],
+  "d9_mixed": [
+    "Long-term tone mixed hai — shuruat aur baad ka phase alag feel ho sakta hai.",
+    "Inner chart bolta hai married life mein ups and downs dono aayenge — adaptability chahiye.",
+    "Post-wedding life neither pure smooth nor pure hard — phases change hote rahenge.",
+    "D9 mixed signal deta hai — early marriage aur 5-7 saal baad alag experience ho sakta hai.",
+    "Long-term chart mein balance hai — patience rakho toh second phase better ho sakta hai."
+  ],
+  "d9_weak": [
+    "Inner marriage chart thoda strained hai — shaadi ke baad extra care aur remedies helpful rahenge.",
+    "Long-term married tone tested dikhta hai — expectations realistic rakho aur repair time do.",
+    "Navamsa level pe marriage theme weak hai — yeh years baad friction ka signal ho sakta hai.",
+    "Post-wedding life mein chart pressure dikhata hai — conscious nurturing zaroori hai.",
+    "Inner chart bolta hai bond possible hai par long run mein effort zyada lagega."
+  ],
+  "manglik_active": [
+    "Mangal dosh active hai — gussa, rush, ya timing delay theme handle karna padega; partner match important hai.",
+    "Manglik pressure chart mein hai — fiery energy ko channel karo, blind arguments se bacho.",
+    "Active Mangal dosh — partner ke chart se balance check karna smart move hai.",
+    "Mars marriage axis ko touch karta hai — remedies aur cool-down habits genuinely help karte hain.",
+    "Mangal dosh on — yeh curse nahi, warning hai: temper aur timing pe kaam karo."
+  ],
+  "manglik_reduced": [
+    "Mangal dosh hai par cancellation rules se reduce ho gaya — phir bhi partner balance check worth it hai.",
+    "Manglik present hai lekin partly cancelled — normal caution, panic nahi.",
+    "Mangal dosh reduced form mein — remedies se aur smooth ho sakta hai.",
+    "Chart mein Mangal theme hai par fully active nahi — still match consciously."
+  ],
+  "karaka_strong_male": [
+    "Venus (wife-sign planet) achha placed hai — spouse-related promise naturally supportive lagta hai.",
+    "Male chart mein Venus strong hai — partnership warmth build karne ka base achha hai.",
+    "Wife karaka Venus supportive — romance aur respect dono consciously nurture karo.",
+    "Venus placement achhi hai — marriage mein softness lane ka natural chance hai."
+  ],
+  "karaka_weak_male": [
+    "Venus (wife-sign planet) under pressure hai — appreciation aur patience consciously deni padegi.",
+    "Male chart mein Venus weak zone mein — spouse theme ko ignore mat karo.",
+    "Wife karaka stressed — small gestures regularly karo, grand promises pe depend mat karo.",
+    "Venus needs support — Friday rituals aur genuine appreciation help karte hain."
+  ],
+  "karaka_strong_female": [
+    "Jupiter (husband-sign planet) achha placed hai — pati-theme supportive lagta hai.",
+    "Female chart mein Jupiter strong hai — wisdom aur stability partner choice mein help karega.",
+    "Husband karaka Jupiter supportive — respect aur clarity dono important rahenge.",
+    "Jupiter placement achhi hai — marriage mein guidance aur growth ka base hai."
+  ],
+  "karaka_weak_female": [
+    "Jupiter (husband-sign planet) under pressure hai — partner choice mein wisdom aur patience dono chahiye.",
+    "Female chart mein Jupiter weak zone mein — rush mein commit mat karo.",
+    "Husband karaka stressed — elders ka input aur Thursday discipline help kar sakti hai.",
+    "Jupiter needs remedy support — values align karo before big decisions."
+  ],
+  "kp_strong": [
+    "Precision marriage layer strong hai — commitment time ke saath solid ho sakta hai.",
+    "KP signal achha hai — structurally marriage promise ko support milta hai.",
+    "Marriage cusp chain supportive — yeh 'serious relationship' capacity dikhata hai.",
+    "KP strong verdict — long-term lock-in potential achha hai agar behaviour match kare."
+  ],
+  "kp_weak": [
+    "Precision marriage layer weak hai — commitment ko time aur proof chahiye hoga.",
+    "KP signal soft hai — 'forever' jaldi feel nahi hoga, slowly build hoga.",
+    "Marriage promise layer tested — rush engagement avoid karo.",
+    "KP weak — structurally bond possible hai par trust earn karna padega."
+  ],
+  "upapada_stable": [
+    "Marriage manifest point stable dikhta hai — wedding real life mein translate hone ka achha chance hai.",
+    "Upapada supportive hai — paper marriage se zyada actual life partnership focus karo.",
+    "Marriage manifestation axis stable — ceremony ke baad routine mein settle hone ka trend achha hai."
+  ],
+  "upapada_strained": [
+    "Marriage manifest point strained hai — wedding se pehle practical life talk zaroori hai.",
+    "Upapada pressure dikhata hai — fantasy se zyada reality plan karo.",
+    "Marriage manifestation tested — timing aur family dynamics dono consciously handle karo."
+  ],
+  "dasha_stress": [
+    "Abhi ka phase thoda sensitive hai — trust, temper, ya confusion handle carefully karo.",
+    "Current dasha window stress deti hai — bade relationship decisions slow karo agar possible ho.",
+    "Life phase abhi testing hai — partner se fight badhane ke bajay pause useful hai.",
+    "Dasha bolti hai abhi friction zyada feel ho sakti hai — yeh permanent nahi, par real hai.",
+    "Stress window active — communication break se pehle 24-hour cool rule use karo.",
+    "Current timing thodi heated ya confusing ho sakti hai — repair baad mein easier hoga."
+  ],
+  "dasha_repair": [
+    "Abhi ka phase repair aur warmth ke liye achha window hai — baat karo, clarify karo.",
+    "Current dasha reconnection support karti hai — agar distance hai toh ab reach out worth it hai.",
+    "Life phase abhi healing-friendly hai — chhoti gestures bhi bade impact de sakte hain.",
+    "Dasha window warm hai — misunderstandings clear karne ka achha time.",
+    "Repair phase active — ego chhod ke honest conversation help karegi."
+  ],
+  "dasha_neutral": [
+    "Current life phase neutral hai — daily effort hi relationship tone decide karega.",
+    "Dasha abhi na extreme stress na extreme romance — steady habits matter karte hain.",
+    "Timing neutral zone mein — aapka behaviour final result banayega.",
+    "Life phase balanced hai — consistency rakho, drama avoid karo."
+  ],
+  "dk_spouse": [
+    "Spouse-sign planet {dk_planet} house {dk_house} theme deta hai — aap often is type ke partner attract karte ho.",
+    "{dk_planet} aapke chart mein partner ka signature hai (house {dk_house}) — yeh unki energy style hint karta hai.",
+    "Darakaraka {dk_planet} bolta hai partner energy {dk_house} house wali life area se linked feel hogi.",
+    "You tend to pull {dk_planet}-type partner energy — house {dk_house} shows where that plays out.",
+    "{dk_planet} spouse marker hai — unki nature mein {dk_house} house wale themes dikhenge.",
+    "Partner pattern: {dk_planet} influence with house {dk_house} flavour — yeh attraction style explain karta hai."
+  ],
+  "watchout_separation": [
+    "Chart mein distance/separation theme hai — repair time consciously rakho, ignore mat karo.",
+    "Separation yoga pattern — chhoti distance ko big break mat banao; talk early.",
+    "Distance theme active — physical ya emotional gap aaye toh immediately address karo."
+  ],
+  "watchout_saturn_7": [
+    "Saturn marriage zone ko press karta hai — delay, duty, ya maturity test common hai.",
+    "Saturn on 7th axis — slow burn relationship; instant fireworks expect mat karo."
+  ],
+  "positive_generic": [
+    "Koi bada structural plus missing nahi — daily trust build karte raho.",
+    "Chart mein workable positives hain — unhe ignore mat karo.",
+    "Foundation completely broken nahi — conscious love se improve hota rahega.",
+    "Supportive hints present hain — unpe focus rakho."
+  ],
+  "watchout_generic": [
+    "Koi bada red flag nahi, par open talk before big decisions smart hai.",
+    "Major warning nahi, phir bhi patience aur boundaries dono rakho.",
+    "Chart soft caution deta hai — rush mat karo.",
+    "No extreme alert — still don't ignore small friction patterns."
+  ],
+  "friction_saturn": [
+    "Main friction: delay aur distance theme — ultimatums se bacho, patience rakho.",
+    "Saturn-type friction — relationship slow feel ho sakti hai; yeh rejection nahi, timing hai.",
+    "Distance ya duty-heavy feel aa sakta hai — steady presence se improve hota hai.",
+    "Main issue patience test hai — Saturday discipline aur calm talk help karegi.",
+    "Friction Saturn jaisi hai — time do, force mat karo."
+  ],
+  "friction_mars": [
+    "Main friction: gussa aur impatience — reply se pehle cool-down rule rakho.",
+    "Mars-type heat — fights jaldi escalate ho sakti hain agar ego active ho.",
+    "Temper theme strong hai — Tuesday calm rituals genuinely help karte hain.",
+    "Main issue heated arguments — physical activity se Mars energy channel karo.",
+    "Friction fiery hai — win argument se zyada peace choose karo."
+  ],
+  "friction_rahu": [
+    "Main friction: confusion ya impulsive decisions — clarity pehle, action baad mein.",
+    "Rahu-type confusion — overthinking ya sudden choices relationship ko hurt kar sakte hain.",
+    "Trust aur clarity dono test ho sakte hain — secrets ya assumptions se bacho.",
+    "Main issue mental noise — Thursday quiet time se decision quality better hoti hai.",
+    "Friction confusion wali hai — slow down before big promises."
+  ],
+  "friction_venus": [
+    "Main friction: appreciation gap ya romance imbalance — express karo, score mat rakho.",
+    "Venus theme weak — small loving gestures regularly karo.",
+    "Friction love-language wali hai — effort dikhana padega.",
+    "Romance ya respect mein gap feel ho sakta hai — consciously fill karo."
+  ],
+  "friction_jupiter": [
+    "Main friction: wisdom ya values mismatch — elders/respect theme handle carefully.",
+    "Jupiter pressure — partner choice mein values clarity chahiye.",
+    "Friction growth-values wali hai — align karo before commit.",
+    "Husband-sign theme stressed — patience aur Thursday charity help karti hai."
+  ],
+  "friction_generic": [
+    "Main friction: daily communication — chhoti baatein bhi ignore mat karo.",
+    "Primary issue habit-based hai — consistency se improve hoga.",
+    "Friction manageable hai agar early discuss karo.",
+    "Main tension point conscious effort maangta hai — doable hai.",
+    "Yeh permanent block nahi — pattern hai jo change ho sakta hai.",
+    "Friction real hai par end nahi — realistic talk se better hota hai."
+  ],
+  "remedy_saturn": [
+    "Simple upay: Saturday sesame-oil diya, patience ritual, aur Saturdays ko ultimatum mat do.",
+    "Saturn remedy — slow steady effort, elder respect, aur Saturday discipline.",
+    "Try karo: Saturday ko calm day rakho, sesame charity, aur time do partner ko.",
+    "Upay: Saturday light + patience — force se Saturn calm nahi hota."
+  ],
+  "remedy_mars": [
+    "Simple upay: Tuesday Hanuman Chalisa, gusse mein reply mat karo, walk/cool-down pehle.",
+    "Mars remedy — Tuesday discipline aur anger pause rule.",
+    "Try karo: Tuesday ko Hanuman path + physical exercise se heat channel karo.",
+    "Upay: fight se pehle 10 minute silence — Mars energy settle hoti hai."
+  ],
+  "remedy_rahu": [
+    "Simple upay: Thursday Vishnu quiet time, impulsive relationship decisions avoid karo.",
+    "Rahu remedy — clarity pehle, social/media noise kam karo.",
+    "Try karo: Thursday ko 11 min calm + big decision 48 hours delay karo.",
+    "Upay: confusion mein commit mat karo — Thursday discipline help karti hai."
+  ],
+  "remedy_venus": [
+    "Simple upay: Friday white sweets + appreciation bolna — score-keeping band karo.",
+    "Venus remedy — Friday ritual aur genuine compliment.",
+    "Try karo: Friday ko partner ko thank karo bina reason ke.",
+    "Upay: romance ko calendar mein slot do — Venus respond karta hai."
+  ],
+  "remedy_jupiter": [
+    "Simple upay: Thursday yellow charity, wisdom aur elders ka respect partner choices mein.",
+    "Jupiter remedy — Thursday discipline + values clarity.",
+    "Try karo: Thursday ko chhoti daan + partner se honest values talk.",
+    "Upay: rush commit mat karo — Jupiter ko time aur wisdom chahiye."
+  ],
+  "remedy_generic": [
+    "Simple upay: 7th lord ke weekday ko light ritual + partner ke saath weekly 20-min honest talk.",
+    "Generic remedy — consistent small ritual + weekly check-in conversation.",
+    "Try karo: planet weekday pe chhoti daan + ek shared habit partner ke saath.",
+    "Upay: weekly joint ritual rakho — yeh sabse practical remedy hai.",
+    "Simple fix: daily gratitude + weekly boundary talk — chart se zyada powerful."
+  ]
+}

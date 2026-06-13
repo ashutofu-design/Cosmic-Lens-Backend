@@ -8,6 +8,7 @@ import {
   type MarriageBasicsPayload,
   type MarriagePartnerBasics,
 } from "@/lib/milanMarriageBasics";
+import { buildPartnerPlainView } from "@/lib/partnerPlainCopy";
 
 /** Legacy Pro / deep-link route — 36 Gun shape converter */
 export interface MilanKootItem {
@@ -64,10 +65,58 @@ function SectionHeader({ title, isDark }: { title: string; isDark: boolean }) {
   );
 }
 
-function PartnerCard({ person, isDark }: { person: MarriagePartnerBasics; isDark: boolean }) {
+function BulletList({
+  items,
+  icon,
+  iconColor,
+  isDark,
+}: {
+  items: string[];
+  icon: "check" | "alert-circle";
+  iconColor: string;
+  isDark: boolean;
+}) {
+  return (
+    <View style={st.bulletList}>
+      {items.map((item, i) => (
+        <View key={`${icon}-${i}`} style={st.bulletRow}>
+          <Feather name={icon} size={12} color={iconColor} style={st.bulletIcon} />
+          <Text style={[st.bulletTxt, { color: isDark ? "rgba(241,245,249,0.88)" : "#334155" }]}>{item}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function resolvePlainView(person: MarriagePartnerBasics) {
+  const pc = person.plain_copy;
+  if (pc?.headline && pc.positives?.length) {
+    return {
+      bandLabel: pc.band_label,
+      headline: pc.headline,
+      positives: pc.positives,
+      watchouts: pc.watchouts ?? [],
+      spouseLine: pc.spouse_line ?? null,
+      longTermLine: pc.long_term_line ?? null,
+      manglikLine: pc.manglik_line ?? null,
+      timingLine: pc.timing_line ?? null,
+      friction: pc.friction,
+      remedy: pc.remedy,
+    };
+  }
+  const fallback = buildPartnerPlainView(person);
+  return {
+    ...fallback,
+    friction: person.friction,
+    remedy: person.remedy,
+  };
+}
+
+function PartnerCard({ person, isDark, onOpenPro }: { person: MarriagePartnerBasics; isDark: boolean; onOpenPro?: () => void }) {
   const col = bandColor(person.readiness_band);
+  const plain = resolvePlainView(person);
   const genderLabel =
-    person.gender === "male" ? "Male chart" : person.gender === "female" ? "Female chart" : "Chart";
+    person.gender === "male" ? "Male" : person.gender === "female" ? "Female" : "Chart";
 
   return (
     <View
@@ -80,117 +129,68 @@ function PartnerCard({ person, isDark }: { person: MarriagePartnerBasics; isDark
       ]}
     >
       <View style={st.partnerHead}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={[st.partnerName, { color: isDark ? "#f3e8ff" : "#1e1b4b" }]}>{person.name}</Text>
           <Text style={[st.partnerGender, { color: isDark ? "#c4b5fd" : "#6366f1" }]}>{genderLabel}</Text>
         </View>
         <View style={[st.bandPill, { backgroundColor: `${col}20`, borderColor: `${col}40` }]}>
-          <Text style={[st.bandPillTxt, { color: col }]}>{person.readiness_band}</Text>
+          <Text style={[st.bandPillTxt, { color: col }]}>{plain.bandLabel}</Text>
           <Text style={[st.bandScore, { color: isDark ? "rgba(255,255,255,0.6)" : "#64748b" }]}>
             {person.readiness_score}/100
           </Text>
         </View>
       </View>
 
-      <Text style={[st.blockTitle, { color: isDark ? "#ddd6fe" : "#4338ca" }]}>D1 Marriage Axis</Text>
-      <FactRow isDark={isDark} label="7th house" value={`${person.d1.seventh_house_sign}${person.d1.planets_in_seventh.length ? ` · ${person.d1.planets_in_seventh.join(", ")}` : " · empty"}`} />
-      <FactRow
-        isDark={isDark}
-        label="Shubh / pressure"
-        value={`${person.d1.benefics_in_seventh.length} benefic · ${person.d1.malefics_in_seventh.length} malefic`}
-      />
-      {person.d1.aspects_on_seventh.length > 0 ? (
-        <FactRow isDark={isDark} label="Aspects on 7th" value={person.d1.aspects_on_seventh.join(", ")} />
-      ) : null}
-      <FactRow
-        isDark={isDark}
-        label="7th lord"
-        value={`${person.d1.seventh_lord} → ${person.d1.seventh_lord_sign ?? "?"} house ${person.d1.seventh_lord_house ?? "?"} (${person.d1.seventh_lord_strength})`}
-      />
-      <FactRow isDark={isDark} label="Lordship" value={person.d1.lordship_note} multiline />
+      <Text style={[st.headline, { color: isDark ? "rgba(241,245,249,0.82)" : "#475569" }]}>{plain.headline}</Text>
 
-      <Text style={[st.blockTitle, { color: isDark ? "#ddd6fe" : "#4338ca" }]}>D9 Married Life Base</Text>
-      {person.d9.available ? (
+      <Text style={[st.blockTitle, { color: isDark ? "#86efac" : "#15803d" }]}>What helps marriage</Text>
+      <BulletList items={plain.positives} icon="check" iconColor={isDark ? "#86efac" : "#15803d"} isDark={isDark} />
+
+      <Text style={[st.blockTitle, { color: isDark ? "#fca5a5" : "#b91c1c" }]}>What needs care</Text>
+      <BulletList items={plain.watchouts} icon="alert-circle" iconColor={isDark ? "#fca5a5" : "#dc2626"} isDark={isDark} />
+
+      {(plain.spouseLine || plain.longTermLine) ? (
         <>
-          <FactRow isDark={isDark} label="D9 7th" value={`${person.d9.seventh_house_sign} · lord ${person.d9.seventh_lord}`} />
-          <FactRow
-            isDark={isDark}
-            label="D9 7L placement"
-            value={`${person.d9.seventh_lord_sign ?? "?"} · house ${person.d9.seventh_lord_house ?? "?"} · ${person.d9.band}`}
-          />
+          <Text style={[st.blockTitle, { color: isDark ? "#ddd6fe" : "#4338ca" }]}>Partner & long-term tone</Text>
+          {plain.spouseLine ? (
+            <Text style={[st.plainLine, { color: isDark ? "rgba(241,245,249,0.88)" : "#334155" }]}>{plain.spouseLine}</Text>
+          ) : null}
+          {plain.longTermLine ? (
+            <Text style={[st.plainLine, { color: isDark ? "rgba(241,245,249,0.88)" : "#334155" }]}>{plain.longTermLine}</Text>
+          ) : null}
         </>
-      ) : (
-        <FactRow isDark={isDark} label="D9" value="Navamsa data unavailable" />
-      )}
-
-      <Text style={[st.blockTitle, { color: isDark ? "#ddd6fe" : "#4338ca" }]}>Spouse Signature</Text>
-      <FactRow isDark={isDark} label="Darakaraka" value={person.darakaraka.note} multiline />
-      <FactRow
-        isDark={isDark}
-        label={person.karaka.role}
-        value={person.karaka.note}
-        multiline
-      />
-
-      {person.upapada.available ? (
-        <FactRow
-          isDark={isDark}
-          label="Upapada"
-          value={`${person.upapada.ul_sign} · lord ${person.upapada.ul_lord} · ${person.upapada.stability}`}
-        />
       ) : null}
 
-      {person.kp.available ? (
-        <FactRow
-          isDark={isDark}
-          label="KP 7th cusp"
-          value={`${person.kp.verdict} · houses ${person.kp.signified_houses.join(", ") || "—"} · depth ${person.kp.commitment_depth}`}
-          multiline
-        />
+      {plain.manglikLine ? (
+        <>
+          <Text style={[st.blockTitle, { color: isDark ? "#fde68a" : "#b45309" }]}>Mangal dosh</Text>
+          <Text style={[st.plainLine, { color: isDark ? "rgba(241,245,249,0.88)" : "#334155" }]}>{plain.manglikLine}</Text>
+        </>
       ) : null}
 
-      {person.gender_flags.length > 0 ? (
-        <View style={st.flagWrap}>
-          {person.gender_flags.map(f => (
-            <View key={f} style={[st.flagChip, { backgroundColor: isDark ? "rgba(239,68,68,0.12)" : "rgba(239,68,68,0.08)" }]}>
-              <Text style={[st.flagTxt, { color: isDark ? "#fca5a5" : "#b91c1c" }]}>{f}</Text>
-            </View>
-          ))}
-        </View>
+      {plain.timingLine ? (
+        <>
+          <Text style={[st.blockTitle, { color: isDark ? "#ddd6fe" : "#4338ca" }]}>Current life phase</Text>
+          <Text style={[st.plainLine, { color: isDark ? "rgba(241,245,249,0.88)" : "#334155" }]}>{plain.timingLine}</Text>
+        </>
+      ) : null}
+
+      {person.critical_alerts?.locked ? (
+        <Pressable onPress={onOpenPro} style={[st.lockBox, { backgroundColor: isDark ? "rgba(239,68,68,0.12)" : "rgba(239,68,68,0.08)", borderColor: isDark ? "rgba(239,68,68,0.28)" : "rgba(239,68,68,0.2)" }]}>
+          <Feather name="lock" size={14} color={isDark ? "#fca5a5" : "#b91c1c"} />
+          <Text style={[st.lockTxt, { color: isDark ? "#fecaca" : "#991b1b" }]}>{person.critical_alerts.teaser}</Text>
+          <Text style={[st.lockSub, { color: isDark ? "rgba(255,255,255,0.5)" : "#64748b" }]}>Unlock in Pro →</Text>
+        </Pressable>
       ) : null}
 
       <View style={[st.insightBox, { backgroundColor: isDark ? "rgba(251,191,36,0.1)" : "rgba(251,191,36,0.08)" }]}>
-        <Text style={[st.insightLabel, { color: isDark ? "#fde68a" : "#b45309" }]}>Friction</Text>
-        <Text style={[st.insightBody, { color: isDark ? "#f8fafc" : "#334155" }]}>{person.friction}</Text>
+        <Text style={[st.insightLabel, { color: isDark ? "#fde68a" : "#b45309" }]}>Main friction</Text>
+        <Text style={[st.insightBody, { color: isDark ? "#f8fafc" : "#334155" }]}>{plain.friction}</Text>
       </View>
       <View style={[st.insightBox, { backgroundColor: isDark ? "rgba(34,197,94,0.1)" : "rgba(34,197,94,0.08)" }]}>
-        <Text style={[st.insightLabel, { color: isDark ? "#86efac" : "#15803d" }]}>Remedy</Text>
-        <Text style={[st.insightBody, { color: isDark ? "#f8fafc" : "#334155" }]}>{person.remedy}</Text>
+        <Text style={[st.insightLabel, { color: isDark ? "#86efac" : "#15803d" }]}>Simple remedy</Text>
+        <Text style={[st.insightBody, { color: isDark ? "#f8fafc" : "#334155" }]}>{plain.remedy}</Text>
       </View>
-    </View>
-  );
-}
-
-function FactRow({
-  label,
-  value,
-  isDark,
-  multiline,
-}: {
-  label: string;
-  value: string;
-  isDark: boolean;
-  multiline?: boolean;
-}) {
-  return (
-    <View style={st.factRow}>
-      <Text style={[st.factLabel, { color: isDark ? "rgba(255,255,255,0.45)" : "#64748b" }]}>{label}</Text>
-      <Text
-        style={[st.factValue, { color: isDark ? "rgba(241,245,249,0.9)" : "#1e293b" }]}
-        numberOfLines={multiline ? undefined : 2}
-      >
-        {value}
-      </Text>
     </View>
   );
 }
@@ -225,10 +225,10 @@ export function KundliMilanBasicResult({ data, isDark, onOpenPro, onRecalculate 
       </LinearGradient>
 
       <SectionHeader title="PARTNER A" isDark={isDark} />
-      <PartnerCard person={data.p1} isDark={isDark} />
+      <PartnerCard person={data.p1} isDark={isDark} onOpenPro={onOpenPro} />
 
       <SectionHeader title="PARTNER B" isDark={isDark} />
-      <PartnerCard person={data.p2} isDark={isDark} />
+      <PartnerCard person={data.p2} isDark={isDark} onOpenPro={onOpenPro} />
 
       <View
         style={[
@@ -281,13 +281,16 @@ const st = StyleSheet.create({
   bandPill: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, alignItems: "center" },
   bandPillTxt: { fontSize: 11, fontFamily: "Nunito_800ExtraBold" },
   bandScore: { fontSize: 9, fontFamily: "Nunito_600SemiBold", marginTop: 2 },
-  blockTitle: { fontSize: 10, fontFamily: "Nunito_800ExtraBold", letterSpacing: 0.8, marginTop: 6 },
-  factRow: { gap: 2 },
-  factLabel: { fontSize: 9, fontFamily: "Nunito_700Bold", letterSpacing: 0.5, textTransform: "uppercase" },
-  factValue: { fontSize: 11.5, fontFamily: "Nunito_500Medium", lineHeight: 17 },
-  flagWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
-  flagChip: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
-  flagTxt: { fontSize: 9, fontFamily: "Nunito_700Bold" },
+  headline: { fontSize: 12, fontFamily: "Nunito_500Medium", lineHeight: 18, marginTop: 2 },
+  blockTitle: { fontSize: 10, fontFamily: "Nunito_800ExtraBold", letterSpacing: 0.8, marginTop: 8 },
+  bulletList: { gap: 6, marginTop: 2 },
+  bulletRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  bulletIcon: { marginTop: 3 },
+  bulletTxt: { flex: 1, fontSize: 11.5, fontFamily: "Nunito_500Medium", lineHeight: 17 },
+  plainLine: { fontSize: 11.5, fontFamily: "Nunito_500Medium", lineHeight: 17, marginTop: 2 },
+  lockBox: { borderRadius: 12, borderWidth: 1, padding: 10, gap: 4, marginTop: 4 },
+  lockTxt: { fontSize: 11, fontFamily: "Nunito_700Bold", lineHeight: 16 },
+  lockSub: { fontSize: 9, fontFamily: "Nunito_600SemiBold" },
   insightBox: { borderRadius: 12, padding: 10, gap: 4, marginTop: 4 },
   insightLabel: { fontSize: 9, fontFamily: "Nunito_800ExtraBold", letterSpacing: 0.6 },
   insightBody: { fontSize: 11, fontFamily: "Nunito_500Medium", lineHeight: 16 },

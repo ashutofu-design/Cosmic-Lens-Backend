@@ -301,3 +301,42 @@ def test_marriage_score_floors():
     assert out["couple"]["structural_score"] >= _MARRIAGE_COUPLE_FLOOR
     assert out["p1"]["readiness_band"] == "Strained"
     assert out["couple"]["structural_band"] == "High Effort"
+
+
+def test_plain_copy_shape_and_deterministic():
+    from vedic.compat.marriage_copy_picker import count_templates
+
+    assert count_templates() >= 100
+
+    k1 = _sample_kundli("Rahul", "Leo")
+    k2 = _sample_kundli("Priya", "Cancer", moon_h=5)
+    out1 = compute_marriage_basics(
+        k1, k2,
+        p1_name="Rahul", p2_name="Priya",
+        p1_gender="Male", p2_gender="Female",
+    )
+    out2 = compute_marriage_basics(
+        k1, k2,
+        p1_name="Rahul", p2_name="Priya",
+        p1_gender="Male", p2_gender="Female",
+    )
+    pc1 = out1["p1"]["plain_copy"]
+    pc2 = out2["p1"]["plain_copy"]
+    assert pc1 == pc2
+    assert pc1["headline"]
+    assert len(pc1["positives"]) >= 1
+    assert len(pc1["watchouts"]) >= 1
+    assert pc1["friction"]
+    assert pc1["remedy"]
+    assert "copy_tags" in pc1
+
+    k3 = _sample_kundli("Amit", "Aries", moon_h=2)
+    out3 = compute_marriage_basics(
+        k3, k2,
+        p1_name="Amit", p2_name="Priya",
+        p1_gender="Male", p2_gender="Female",
+    )
+    assert out3["p1"]["plain_copy"]["headline"]
+    # Different chart should usually differ (not guaranteed for all fields, but headline pool is large)
+    assert out1["p1"]["plain_copy"] != out3["p1"]["plain_copy"] or out1["p1"]["readiness_score"] != out3["p1"]["readiness_score"]
+

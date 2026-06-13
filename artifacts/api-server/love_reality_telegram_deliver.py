@@ -11,9 +11,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 import requests
-from flask import jsonify, request
-
-from love_reality_founder_pdf import render_founder_love_reality_pdf
 
 log = logging.getLogger("lr_telegram")
 
@@ -301,6 +298,8 @@ def fulfill_order_with_founder_text(order_prefix: str, body_text: str) -> dict[s
                 order_id=order_id,
             )
         else:
+            from love_reality_founder_pdf import render_founder_love_reality_pdf
+
             pdf_bytes = render_founder_love_reality_pdf(
                 p1_name=p1_name,
                 p2_name=p2_name,
@@ -398,6 +397,7 @@ def _founder_chat_id() -> str:
 def _send_telegram_reply(chat_id: str | int, text: str) -> bool:
     token = _telegram_token()
     if not token:
+        log.warning("[lr_telegram] reply skipped — no TELEGRAM_BOT_TOKEN")
         return False
     try:
         resp = requests.post(
@@ -405,6 +405,13 @@ def _send_telegram_reply(chat_id: str | int, text: str) -> bool:
             json={"chat_id": chat_id, "text": text[:4000], "disable_web_page_preview": True},
             timeout=_TIMEOUT,
         )
+        if not resp.ok:
+            log.warning(
+                "[lr_telegram] sendMessage failed chat=%s http=%s body=%s",
+                chat_id,
+                resp.status_code,
+                (resp.text or "")[:200],
+            )
         return resp.ok
     except Exception as exc:
         log.warning("[lr_telegram] reply failed: %s", exc)
@@ -512,21 +519,32 @@ def handle_founder_telegram_chat(text: str, chat_id: str) -> str:
 
 
 def _process_update_async(update: dict[str, Any]) -> None:
+    chat_id = ""
     try:
         msg = update.get("message") or update.get("edited_message") or {}
         chat = msg.get("chat") or {}
         chat_id = str(chat.get("id") or "")
         founder = _founder_chat_id()
         if founder and chat_id != founder:
+            log.warning("[lr_telegram] ignored chat_id=%s founder=%s", chat_id, founder)
             return
         text = str(msg.get("text") or "").strip()
         if not text:
             return
+        log.info("[lr_telegram] inbound chat=%s chars=%d", chat_id, len(text))
+        prefix, body, parse_err = _parse_myreport_start(text)
+        if prefix and body and len(body) >= 80 and not parse_err:
+            _send_telegram_reply(chat_id, f"⏳ Processing order #{prefix[:8]}...")
         reply = handle_founder_telegram_chat(text, chat_id)
         if chat_id:
             _send_telegram_reply(chat_id, reply)
     except Exception as exc:
         log.exception("[lr_telegram] update failed: %s", exc)
+        if chat_id:
+            _send_telegram_reply(
+                chat_id,
+                "❌ Server error — VPS: pm2 logs cosmic-telegram --lines 30",
+            )
 
 
 def _polling_enabled() -> bool:
@@ -627,15 +645,14 @@ def _poll_loop() -> None:
                 continue
             updates = resp.json().get("result") or []
             for upd in updates:
+                upd_id = int(upd.get("update_id") or 0)
                 try:
-                    upd_id = int(upd.get("update_id") or 0)
-                    if upd_id >= offset:
-                        offset = upd_id + 1
                     _process_update_async(upd)
                 except Exception as exc:
                     log.exception("[lr_telegram] poll update: %s", exc)
-            if updates:
-                _save_poll_offset(offset)
+                if upd_id >= offset:
+                    offset = upd_id + 1
+                    _save_poll_offset(offset)
         except Exception as exc:
             log.warning("[lr_telegram] poll error: %s", exc)
 
@@ -665,6 +682,8 @@ def start_telegram_polling_if_enabled() -> None:
 
 
 def register_telegram_deliver_routes(flask_app) -> None:
+    from flask import jsonify, request
+
     if "telegram_love_reality_webhook" not in flask_app.view_functions:
         secret = (os.environ.get("TELEGRAM_WEBHOOK_SECRET") or "cosmic-lens-lr").strip()
 

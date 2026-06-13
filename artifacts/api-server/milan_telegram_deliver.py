@@ -339,7 +339,9 @@ def register_milan_telegram_routes(flask_app) -> None:
         body = str(data.get("body") or data.get("text") or "").strip()
         if not prefix or not body:
             return jsonify({"error": "expected_order_id_and_body"}), 400
-        result = fulfill_milan_order_with_founder_text(prefix, body)
+        from love_reality_telegram_deliver import fulfill_order_with_founder_text
+
+        result = fulfill_order_with_founder_text(prefix, body)
         if not result.get("ok"):
             return jsonify(result), 400
         return jsonify(result), 200

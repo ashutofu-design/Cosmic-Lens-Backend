@@ -13,6 +13,8 @@ PORT="${PORT:-8080}"
 # without tripping the 402 quota gate. Production deploys override
 # via env if needed.
 export ANON_DAILY_LIMIT="${ANON_DAILY_LIMIT:-2000}"
+# Only standalone cosmic-telegram PM2 process may poll (else Telegram HTTP 409).
+export TELEGRAM_POLL_FROM_API="${TELEGRAM_POLL_FROM_API:-0}"
 
 # Auto-load Firebase Admin credentials when not already in the environment.
 # Priority: FIREBASE_SERVICE_ACCOUNT_JSON → FIREBASE_CREDENTIALS_PATH →

@@ -21,5 +21,19 @@ module.exports = {
       restart_delay: 3000,
       exp_backoff_restart_delay: 1000,
     },
+    {
+      name: "cosmic-telegram",
+      cwd: __dirname,
+      script: "./run_lr_telegram_poller.py",
+      interpreter: "python3",
+      env: {
+        TELEGRAM_USE_POLLING: "1",
+        TELEGRAM_POLL_FROM_API: "0",
+      },
+      max_restarts: 20,
+      min_uptime: "5s",
+      restart_delay: 5000,
+      exp_backoff_restart_delay: 2000,
+    },
   ],
 };

@@ -201,11 +201,6 @@ def register_human_order_routes(flask_app) -> None:
         if not isinstance(data.get("p1"), dict) or not isinstance(data.get("p2"), dict):
             return jsonify({"error": "expected_p1_p2"}), 400
 
-        method = str(data.get("contact_method") or "").strip().lower()
-        contact, err = _normalize_contact(method, str(data.get("contact_value") or ""))
-        if err:
-            return jsonify({"error": err}), 400
-
         lang = str(data.get("lang") or "en").strip().lower() or "en"
         urgent = bool(data.get("urgent"))
 
@@ -216,6 +211,16 @@ def register_human_order_routes(flask_app) -> None:
                 user_id = int(uid_hdr)
             except Exception:
                 user_id = 0
+
+        method = str(data.get("contact_method") or "my_reports").strip().lower()
+        raw_contact = str(data.get("contact_value") or "").strip()
+        if raw_contact:
+            contact, err = _normalize_contact(method, raw_contact)
+            if err:
+                return jsonify({"error": err}), 400
+        else:
+            method = "my_reports"
+            contact = str(user_id) if user_id else "in_app"
 
         try:
             from vedic.love_reality.compute_bundle import compute_love_reality_bundle
@@ -252,6 +257,16 @@ def register_human_order_routes(flask_app) -> None:
             "eta_hours": eta_hours,
             "message": (
                 "Order received. Our astrologer will prepare your verified PDF "
-                f"and send it on {method}."
+                "and save it in My Reports."
             ),
         }), 200
+
+    try:
+        from love_reality_telegram_deliver import register_telegram_deliver_routes
+
+        register_telegram_deliver_routes(flask_app)
+    except Exception as _tg_exc:
+        try:
+            print(f"[love_reality_human_orders] telegram deliver routes failed: {_tg_exc}", flush=True)
+        except Exception:
+            pass

@@ -13,9 +13,9 @@ export function healthTridoshaCopy(lang: UILang) {
     sectionTitle: p(L, "Tridosha Balance", "Tridosha Balance", "त्रिदोष संतुलन"),
     sectionSub: p(
       L,
-      "Vata · Pitta · Kapha from your birth chart",
-      "Chart se Vata · Pitta · Kapha",
-      "जन्म कुंडली से वात · पित्त · कफ",
+      "D1 prakriti · D9 immunity · KP 6th CSL",
+      "D1 prakriti · D9 immunity · KP 6th CSL",
+      "D1 प्रकृति · D9 रोग प्रतिरोध · KP 6वें भाव CSL",
     ),
     labels: {
       vata: p(L, "Vata (Baat)", "Vata (Baat)", "वात (बात)"),
@@ -28,6 +28,7 @@ export function healthTridoshaCopy(lang: UILang) {
       Balanced: p(L, "Balanced", "Balanced", "संतुलित"),
       Afflicted: p(L, "Afflicted", "Afflicted", "प्रभावित"),
       "Highly Critical": p(L, "Elevated", "Elevated", "अधिक"),
+      Elevated: p(L, "Elevated", "Elevated", "अधिक"),
     } as Record<string, string>,
     careTitle: p(L, "Daily care tip", "Daily care tip", "दैनिक देखभाल"),
   };

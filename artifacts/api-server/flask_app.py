@@ -5334,7 +5334,7 @@ def health_analysis():
     try:
         from vedic.life_specifics import build_health_basic_insights, compute_health_specifics
 
-        deep = compute_health_specifics(planets, asc_idx, cd)
+        deep = compute_health_specifics(planets, asc_idx, cd, kundli)
     except Exception:
         deep = {}
 

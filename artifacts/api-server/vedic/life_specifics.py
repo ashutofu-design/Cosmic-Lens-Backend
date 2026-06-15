@@ -44,182 +44,17 @@ PLANET_DOSHA = {
     "Moon":"kapha","Venus":"kapha","Jupiter":"kapha","Rahu":"vata","Ketu":"vata",
 }
 
-_BENEFICS_TRIDOSHA = frozenset({"Jupiter", "Venus", "Mercury", "Moon"})
-_MALEFICS_TRIDOSHA = frozenset({"Saturn", "Mars", "Rahu", "Ketu", "Sun"})
-_TRIDOSHA_PLANETS = ("Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Rahu", "Ketu")
 _DUSTHANA_HOUSES = frozenset({6, 8, 12})
 
 
-def _is_combust_planet(p: dict, sun: Optional[dict]) -> bool:
-    if p.get("combust") or p.get("isCombust"):
-        return True
-    if not sun:
-        return False
-    pl, sl = p.get("longitude"), sun.get("longitude")
-    if pl is None or sl is None:
-        return False
-    try:
-        diff = abs(float(pl) - float(sl)) % 360.0
-        return diff < 8.0 or diff > 352.0
-    except (TypeError, ValueError):
-        return False
+def compute_tridosha_balance(
+    planets: List[dict],
+    asc_idx: int,
+    kundli: Optional[dict] = None,
+) -> Dict[str, Any]:
+    from vedic.health_tridosha_engine import compute_tridosha_balance as _compute
 
-
-def _planet_is_retro(p: dict) -> bool:
-    return bool(p.get("retrograde") or p.get("isRetrograde") or p.get("vakri"))
-
-
-def _dusthana_lords(asc_idx: int) -> set[str]:
-    out: set[str] = set()
-    for h in _DUSTHANA_HOUSES:
-        out.add(SIGN_LORD[SIGNS[(asc_idx + h - 1) % 12]])
-    return out
-
-
-def _normalize_tridosha_pct(raw: Dict[str, float]) -> Dict[str, int]:
-    total = sum(raw.values()) or 1.0
-    pct = {k: int(round(v * 100.0 / total)) for k, v in raw.items()}
-    drift = 100 - sum(pct.values())
-    if drift:
-        dom = max(pct, key=pct.get)
-        pct[dom] = max(0, pct[dom] + drift)
-    return pct
-
-
-def _dosha_state_label(pct: int) -> str:
-    if pct < 36:
-        return "Balanced"
-    if pct < 48:
-        return "Afflicted"
-    return "Highly Critical"
-
-
-def _tridosha_care_tip(dosha: str, state: str) -> str:
-    tips = {
-        ("vata", "Balanced"): "Warm meals, steady sleep — keep Vata calm.",
-        ("vata", "Afflicted"): "Warm oily food, oil massage, fixed routine — ease Vata.",
-        ("vata", "Highly Critical"): "Avoid cold/dry food and anxiety spikes — warmth & rest first.",
-        ("pitta", "Balanced"): "Cooling foods, moderate exercise — Pitta stays balanced.",
-        ("pitta", "Afflicted"): "Less spice, anger, midday sun — hydrate and cool Pitta.",
-        ("pitta", "Highly Critical"): "Cooling diet, calm mind — watch acidity and heat.",
-        ("kapha", "Balanced"): "Active mornings, light meals — Kapha stays light.",
-        ("kapha", "Afflicted"): "Less sweets/dairy, brisk walks — avoid heaviness.",
-        ("kapha", "Highly Critical"): "Light warm spices, daily movement — ease congestion.",
-    }
-    return tips.get((dosha, state), "Regular routine supports all three doshas.")
-
-
-def compute_tridosha_balance(planets: List[dict], asc_idx: int) -> Dict[str, Any]:
-    """Vata / Pitta / Kapha % — prakriti (40%) + element matrix (35%) + afflictions (25%)."""
-    sign_1 = SIGNS[asc_idx % 12]
-
-    def find_p(name: str) -> Optional[dict]:
-        return next((p for p in planets if p.get("name") == name), None)
-
-    prakriti = {"vata": 0.0, "pitta": 0.0, "kapha": 0.0}
-    prakriti[SIGN_DOSHA.get(sign_1, "vata")] += 25.0
-    moon = find_p("Moon")
-    if moon and moon.get("sign"):
-        prakriti[SIGN_DOSHA.get(str(moon.get("sign")), "vata")] += 25.0
-    sun = find_p("Sun")
-    if sun and sun.get("sign"):
-        prakriti[SIGN_DOSHA.get(str(sun.get("sign")), "vata")] += 15.0
-    lord_1 = SIGN_LORD[sign_1]
-    prakriti[PLANET_DOSHA.get(lord_1, "vata")] += 15.0
-
-    element = {"vata": 0.0, "pitta": 0.0, "kapha": 0.0}
-    for pname in _TRIDOSHA_PLANETS:
-        p = find_p(pname)
-        if not p:
-            continue
-        sg = str(p.get("sign") or "")
-        pd = PLANET_DOSHA.get(pname, "vata")
-        sd = SIGN_DOSHA.get(sg, pd)
-        element[pd] += 4.0
-        element[sd] += 2.0
-
-    affliction = {"vata": 0.0, "pitta": 0.0, "kapha": 0.0}
-    dusthana_lords = _dusthana_lords(asc_idx)
-
-    def _malefic_w(pname: str) -> float:
-        return 2.0 if pname in dusthana_lords else 1.0
-
-    for h, bias in ((4, "kapha"), (5, "pitta")):
-        for p in planets:
-            if p.get("house") != h:
-                continue
-            nm = p.get("name")
-            if nm not in _MALEFICS_TRIDOSHA:
-                continue
-            affliction[bias] += 6.0 * _malefic_w(str(nm))
-        for p in planets:
-            if p.get("house") != 6:
-                continue
-            nm = p.get("name")
-            if nm not in _MALEFICS_TRIDOSHA:
-                continue
-            d = PLANET_DOSHA.get(str(nm), "vata")
-            affliction[d] += 5.0 * _malefic_w(str(nm))
-
-    sat, rahu, mars, venus = find_p("Saturn"), find_p("Rahu"), find_p("Mars"), find_p("Venus")
-    for p in (sat, rahu):
-        if p and p.get("house") in (1, 6):
-            affliction["vata"] += 10.0 * _malefic_w(str(p.get("name")))
-
-    for p in (sun, mars):
-        if p and p.get("house") in (5, 6):
-            affliction["pitta"] += 8.0 * _malefic_w(str(p.get("name") or ""))
-
-    for p in (moon, venus):
-        if not p:
-            continue
-        kapha_hit = _is_combust_planet(p, sun) or _planet_is_retro(p)
-        if not kapha_hit:
-            for aff in (sat, rahu):
-                if aff and p.get("house") and aff.get("house"):
-                    if abs(int(p.get("house") or 0) - int(aff.get("house") or 0)) <= 1:
-                        kapha_hit = True
-                        break
-        if kapha_hit:
-            affliction["kapha"] += 8.0
-
-    if sum(affliction.values()) <= 0:
-        affliction = {"vata": 1.0, "pitta": 1.0, "kapha": 1.0}
-
-    pt = sum(prakriti.values()) or 1.0
-    et = sum(element.values()) or 1.0
-    at = sum(affliction.values()) or 1.0
-    merged = {
-        k: (prakriti[k] / pt) * 40.0 + (element[k] / et) * 35.0 + (affliction[k] / at) * 25.0
-        for k in ("vata", "pitta", "kapha")
-    }
-    dosha_balance = _normalize_tridosha_pct(merged)
-    dosha_states = {k: _dosha_state_label(dosha_balance[k]) for k in dosha_balance}
-    dominant_key = max(dosha_balance, key=dosha_balance.get)
-    dominant = dominant_key.title()
-
-    care: List[str] = []
-    primary_tip = _tridosha_care_tip(dominant_key, dosha_states[dominant_key])
-    care.append(primary_tip)
-    for dk, pct in sorted(dosha_balance.items(), key=lambda x: -x[1]):
-        if dk == dominant_key:
-            continue
-        if dosha_states[dk] == "Balanced":
-            continue
-        extra = _tridosha_care_tip(dk, dosha_states[dk])
-        if extra not in care:
-            care.append(extra)
-        if len(care) >= 2:
-            break
-
-    return {
-        "dosha_balance": dosha_balance,
-        "dosha_states": dosha_states,
-        "dominant_dosha": dominant,
-        "primary_imbalance": dominant_key,
-        "tridosha_care": care,
-        "engine": "tridosha_v2",
-    }
+    return _compute(planets, asc_idx, kundli)
 
 # Body areas governed by each rashi (head→feet, classical)
 SIGN_ORGAN = {
@@ -529,7 +364,8 @@ def _build_wellness_sensitivities_from_chart(
 
 # ── HEALTH ────────────────────────────────────────────────────────────────
 def compute_health_specifics(planets: List[dict], asc_idx: int,
-                             current_dasha: Optional[dict] = None
+                             current_dasha: Optional[dict] = None,
+                             kundli: Optional[dict] = None,
                              ) -> Dict[str, Any]:
     """Return structured health issues, dosha balance, vulnerable organs."""
     try:
@@ -622,7 +458,7 @@ def compute_health_specifics(planets: List[dict], asc_idx: int,
                 })
 
         # ── Tridosha balance (Vata / Pitta / Kapha %) ─────────────────────
-        tri = compute_tridosha_balance(planets, asc_idx)
+        tri = compute_tridosha_balance(planets, asc_idx, kundli)
         dosha_balance = tri["dosha_balance"]
         dosha_states = tri["dosha_states"]
         dominant = tri["dominant_dosha"]
@@ -650,6 +486,8 @@ def compute_health_specifics(planets: List[dict], asc_idx: int,
             "primary_imbalance":  tri.get("primary_imbalance"),
             "tridosha_care":      tri.get("tridosha_care") or [],
             "tridosha_engine":    tri.get("engine"),
+            "d9_immunity_verdict": tri.get("d9_immunity_verdict") or "",
+            "kp_6th_csl":         tri.get("kp_6th_csl") or {},
             "vulnerable_organs":  vuln_set[:10],
             "wellness_tendencies": _build_wellness_sensitivities_from_chart(
                 planets, asc_idx
@@ -1158,6 +996,9 @@ def build_health_basic_insights(
         "dominant_dosha": dominant,
         "primary_imbalance": deep.get("primary_imbalance") or "",
         "tridosha_care": deep.get("tridosha_care") or [],
+        "tridosha_engine": deep.get("tridosha_engine") or "",
+        "d9_immunity_verdict": deep.get("d9_immunity_verdict") or "",
+        "kp_6th_csl": deep.get("kp_6th_csl") or {},
         "daily_care": daily,
     }
 

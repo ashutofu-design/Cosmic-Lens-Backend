@@ -42,6 +42,8 @@ interface BasicBlock {
   dominant_dosha?: string;
   primary_imbalance?: string;
   tridosha_care?: string[];
+  d9_immunity_verdict?: string;
+  kp_6th_csl?: { csl_planet?: string; verdict?: string };
 }
 interface PlanetStrength { name: string; sign: string; house: number; status: string; retrograde?: boolean; }
 interface HouseInfo { sign: string; lord: string; occupants: string; meaning: string; }
@@ -331,6 +333,14 @@ export default function HealthScreen() {
                     ? ` · ${triCopy.dominant(data.basic.dominant_dosha)}`
                     : ""}
                 </Text>
+                {data.basic.d9_immunity_verdict ? (
+                  <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, marginBottom: 8, fontFamily: F.regular }}>
+                    {data.basic.d9_immunity_verdict}
+                    {data.basic.kp_6th_csl?.csl_planet
+                      ? ` · KP 6th CSL: ${data.basic.kp_6th_csl.csl_planet}`
+                      : ""}
+                  </Text>
+                ) : null}
                 {(["vata", "pitta", "kapha"] as const).map(dk => (
                   <DoshaBar
                     key={dk}

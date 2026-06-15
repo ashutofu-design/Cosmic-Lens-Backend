@@ -24,15 +24,22 @@ BAND_LABEL_HN = {
     "Strained": "Extra care chahiye",
 }
 
+BAND_LABEL_HI = {
+    "Strong": "अच्छी नींव",
+    "Moderate": "मिला-जुला संकेत",
+    "Strained": "अतिरिक्त ध्यान चाहिए",
+}
+
 
 def normalize_marriage_lang(lang: str | None) -> str:
-    """Map UI / API lang codes to marriage copy pool: en | hn."""
+    """Map UI / API lang codes to marriage copy pool: en | hn | hi."""
     c = (lang or "hn").strip().lower()
     if c in ("en", "english"):
         return "en"
-    if c in ("hn", "hinglish", "hi", "hindi"):
+    if c in ("hi", "hindi"):
+        return "hi"
+    if c in ("hn", "hinglish"):
         return "hn"
-    # Global UI langs without a dedicated pool → English (not Hinglish mix).
     return "en"
 
 _POSITIVE_PRIORITY = (
@@ -81,6 +88,10 @@ def _load_templates(lang: str | None = None) -> dict[str, list[str]]:
             from vedic.compat.marriage_copy_templates_en_data import TEMPLATES_EN
 
             _TEMPLATES_BY_LANG[key] = TEMPLATES_EN
+        elif key == "hi":
+            from vedic.compat.marriage_copy_templates_hi_data import TEMPLATES_HI
+
+            _TEMPLATES_BY_LANG[key] = TEMPLATES_HI
         else:
             path = Path(__file__).with_name(_template_filename(lang))
             with open(path, encoding="utf-8") as fh:
@@ -89,7 +100,12 @@ def _load_templates(lang: str | None = None) -> dict[str, list[str]]:
 
 
 def _band_labels(lang: str | None) -> dict[str, str]:
-    return BAND_LABEL_EN if normalize_marriage_lang(lang) == "en" else BAND_LABEL_HN
+    key = normalize_marriage_lang(lang)
+    if key == "en":
+        return BAND_LABEL_EN
+    if key == "hi":
+        return BAND_LABEL_HI
+    return BAND_LABEL_HN
 
 
 def partner_copy_seed(kundli: dict, name: str) -> str:

@@ -10,6 +10,9 @@ import {
   type MarriagePartnerBasics,
 } from "@/lib/milanMarriageBasics";
 import { buildPartnerPlainView } from "@/lib/partnerPlainCopy";
+import { MilanGunBreakdown, type MilanGunKootScores } from "@/components/kundliMilan/MilanGunBreakdown";
+import type { UILang } from "@/lib/i18n";
+import { milanResultScreenCopy } from "@/lib/milanResultCopyI18n";
 
 /** Legacy Pro / deep-link route — 36 Gun shape converter */
 export interface MilanKootItem {
@@ -54,6 +57,9 @@ type Props = {
   data: MarriageBasicsPayload;
   isDark: boolean;
   onOpenPro: () => void;
+  gunScores?: MilanGunKootScores | null;
+  gunTotal?: number | null;
+  lang?: UILang;
 };
 
 type CompactPlain = {
@@ -64,6 +70,25 @@ type CompactPlain = {
   proLockTeaser: string;
   remedyTeaser: string;
 };
+
+function TwoLensExplainer({ isDark, text }: { isDark: boolean; text: string }) {
+  return (
+    <View
+      style={[
+        st.lensCard,
+        {
+          backgroundColor: isDark ? "rgba(124,58,237,0.1)" : "rgba(124,58,237,0.05)",
+          borderColor: isDark ? "rgba(167,139,250,0.28)" : "rgba(124,58,237,0.14)",
+        },
+      ]}
+    >
+      <Feather name="info" size={14} color={isDark ? "#c4b5fd" : "#7c3aed"} />
+      <Text style={[st.lensTxt, { color: isDark ? "rgba(241,245,249,0.88)" : "#475569", flex: 1 }]}>
+        {text}
+      </Text>
+    </View>
+  );
+}
 
 function SectionHeader({ title, isDark }: { title: string; isDark: boolean }) {
   return (
@@ -257,7 +282,8 @@ function resolveCoupleCopy(data: MarriageBasicsPayload): CouplePlainCopy {
   };
 }
 
-export function KundliMilanBasicResult({ data, isDark, onOpenPro }: Props) {
+export function KundliMilanBasicResult({ data, isDark, onOpenPro, gunScores, gunTotal, lang = "en" }: Props) {
+  const copy = milanResultScreenCopy(lang);
   const fade = useRef(new Animated.Value(0)).current;
   const coupleCol = bandColor(data.couple.structural_band);
   const coupleCopy = resolveCoupleCopy(data);
@@ -274,7 +300,13 @@ export function KundliMilanBasicResult({ data, isDark, onOpenPro }: Props) {
         colors={isDark ? ["#1a0533", "#0f172a"] : ["#f5f3ff", "#ede9fe"]}
         style={[st.heroCard, { borderColor: isDark ? `${coupleCol}50` : `${coupleCol}35` }]}
       >
-        <Text style={[st.heroEyebrow, { color: isDark ? "#c4b5fd" : "#6366f1" }]}>COUPLE MARRIAGE STRUCTURE</Text>
+        <Text style={[st.heroEyebrow, { color: isDark ? "#c4b5fd" : "#6366f1" }]}>{copy.basicMode}</Text>
+        <Text style={[st.heroEyebrow, { color: isDark ? "#a78bfa" : "#6366f1", marginTop: 4 }]}>
+          {copy.primaryBadge} · {copy.structureTitle.toUpperCase()}
+        </Text>
+        <Text style={[st.heroSub, { color: isDark ? "rgba(255,255,255,0.55)" : "#64748b" }]}>
+          {copy.structureSubtitle}
+        </Text>
         <Text style={[st.heroScore, { color: coupleCol }]}>{data.couple.structural_score}</Text>
         <Text style={[st.heroDenom, { color: isDark ? "rgba(255,255,255,0.5)" : "#64748b" }]}>/ 100</Text>
         <View style={[st.heroBand, { backgroundColor: `${coupleCol}22`, borderColor: `${coupleCol}44` }]}>
@@ -285,11 +317,26 @@ export function KundliMilanBasicResult({ data, isDark, onOpenPro }: Props) {
         </Text>
       </LinearGradient>
 
-      <SectionHeader title="PARTNER A" isDark={isDark} />
+      {gunScores ? (
+        <TwoLensExplainer isDark={isDark} text={copy.twoLensExplainer} />
+      ) : null}
+
+      {gunScores ? (
+        <MilanGunBreakdown
+          scores={gunScores}
+          total={gunTotal ?? null}
+          isDark={isDark}
+          textColor={isDark ? "#f8fafc" : "#0f172a"}
+          mutedColor={isDark ? "rgba(255,255,255,0.55)" : "#64748b"}
+          copy={copy}
+        />
+      ) : null}
+
+      <SectionHeader title={copy.partnerA} isDark={isDark} />
       <PartnerCard person={data.p1} isDark={isDark} onOpenPro={onOpenPro} />
       <ProMiniStrip text={p1Strip} isDark={isDark} onOpenPro={onOpenPro} />
 
-      <SectionHeader title="PARTNER B" isDark={isDark} />
+      <SectionHeader title={copy.partnerB} isDark={isDark} />
       <PartnerCard person={data.p2} isDark={isDark} onOpenPro={onOpenPro} />
 
       <CoupleGapCard copy={coupleCopy} isDark={isDark} onOpenPro={onOpenPro} />
@@ -301,7 +348,10 @@ const st = StyleSheet.create({
   wrap: { gap: 12, marginTop: 4 },
   heroCard: { borderRadius: 22, borderWidth: 1.5, padding: 20, alignItems: "center", gap: 6 },
   heroEyebrow: { fontSize: 9, fontFamily: "Nunito_800ExtraBold", letterSpacing: 1.4 },
+  heroSub: { fontSize: 11, fontFamily: "Nunito_500Medium", textAlign: "center", lineHeight: 16, marginTop: 2, paddingHorizontal: 8 },
   heroScore: { fontSize: 44, fontFamily: "Nunito_800ExtraBold", lineHeight: 48 },
+  lensCard: { flexDirection: "row", alignItems: "flex-start", gap: 10, borderWidth: 1, borderRadius: 14, padding: 12 },
+  lensTxt: { fontSize: 11, fontFamily: "Nunito_500Medium", lineHeight: 17 },
   heroDenom: { fontSize: 12, fontFamily: "Nunito_600SemiBold", marginTop: -8 },
   heroBand: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 5, marginTop: 4 },
   heroBandTxt: { fontSize: 14, fontFamily: "Nunito_800ExtraBold" },

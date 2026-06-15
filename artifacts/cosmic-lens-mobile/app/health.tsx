@@ -32,6 +32,13 @@ const F = {
   extra:   "Nunito_800ExtraBold",
 } as const;
 
+const DOSHA_ORDER: DoshaKey[] = ["vata", "pitta", "kapha"];
+
+function doshasByPct(balance?: Partial<Record<DoshaKey, number>>): DoshaKey[] {
+  if (!balance) return DOSHA_ORDER;
+  return [...DOSHA_ORDER].sort((a, b) => (balance[b] ?? 0) - (balance[a] ?? 0));
+}
+
 interface BasicBlock {
   score: number;
   risk: string;
@@ -239,6 +246,7 @@ export default function HealthScreen() {
     pitta: "#ef4444",
     kapha: "#22c55e",
   };
+  const doshaOrder = doshasByPct(doshaBal ?? undefined);
 
   return (
     <CosmicBg>
@@ -363,7 +371,7 @@ export default function HealthScreen() {
                     Clinical trigger: {data.basic.dominant_clinical_trigger}
                   </Text>
                 ) : null}
-                {(["vata", "pitta", "kapha"] as const).map(dk => (
+                {doshaOrder.map(dk => (
                   <DoshaBar
                     key={dk}
                     label={triCopy.labels[dk]}
@@ -548,7 +556,7 @@ export default function HealthScreen() {
                 {/* Dosha balance */}
                 {(data.pro as any).dosha_balance && Object.keys((data.pro as any).dosha_balance).length > 0 && (
                   <SectionCard icon="droplet" title={`Dosha Balance — ${(data.pro as any).dominant_dosha || "Mixed"} dominant`} accent="#a78bfa">
-                    {(["vata", "pitta", "kapha"] as const).map(dk => {
+                    {doshasByPct((data.pro as any).dosha_balance).map(dk => {
                       const v = (data.pro as any).dosha_balance[dk] || 0;
                       const col = dk === "vata" ? "#60a5fa" : dk === "pitta" ? "#ef4444" : "#22c55e";
                       return (

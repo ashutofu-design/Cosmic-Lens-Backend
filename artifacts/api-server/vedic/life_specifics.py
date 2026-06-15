@@ -2560,11 +2560,11 @@ def compute_finance_specifics(
         )
         wealth_finance = _patch_wealth_finance_dhan_details(wealth_finance, planets, asc_idx)
 
-        from vedic.raj_yoga_engine_v1 import scan_raj_yogas
-        raj_yogas = [
-            {"name": y["name"], "detail": y["detail"]}
-            for y in scan_raj_yogas(planets, asc_idx)
-        ]
+        ym = (wealth_finance.get("yog_metrics") or {})
+        raj_yogas = list(ym.get("raj_yogas") or [])
+        if not raj_yogas:
+            from vedic.raj_yoga_engine_v1 import scan_raj_yogas
+            raj_yogas = _serialize_yoga_metrics_api(scan_raj_yogas(planets, asc_idx))
 
         return {
             "wealth_karma_score": wealth_karma_score,
@@ -2793,12 +2793,18 @@ def build_finance_basic_insights(
     dhana_yogas = list(deep.get("dhana_yogas") or [])
     raj_yogas = list(deep.get("raj_yogas") or [])
     ym = dict(wealth_finance.get("yog_metrics") or {})
-    if not ym.get("dhan_yogas") and dhana_yogas:
+    if ym.get("dhan_yogas"):
+        dhana_yogas = list(ym["dhan_yogas"])
+    elif dhana_yogas:
         ym["dhan_yogas"] = _serialize_yoga_metrics_api(dhana_yogas)
+    if ym.get("raj_yogas"):
+        raj_yogas = list(ym["raj_yogas"])
+    elif raj_yogas:
+        ym["raj_yogas"] = _serialize_yoga_metrics_api(raj_yogas)
+    if ym.get("dhan_yogas"):
         ym["dhan_count"] = len(ym["dhan_yogas"])
         ym["dhan_yoga_names"] = [str(x.get("name") or "") for x in ym["dhan_yogas"]]
-    if not ym.get("raj_yogas") and raj_yogas:
-        ym["raj_yogas"] = _serialize_yoga_metrics_api(raj_yogas)
+    if ym.get("raj_yogas"):
         ym["raj_count"] = len(ym["raj_yogas"])
         ym["raj_yoga_names"] = [str(x.get("name") or "") for x in ym["raj_yogas"]]
     if ym:

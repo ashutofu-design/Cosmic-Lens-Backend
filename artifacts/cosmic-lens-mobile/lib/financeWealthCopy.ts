@@ -59,6 +59,13 @@ export function financeWealthCopy(lang: UILang) {
     } as Record<string, string>,
     housePair: (a: number, b: number) =>
       p(L, `Houses ${a} & ${b} lords`, `${a} aur ${b} ghar ke lord`, `${a} और ${b} भाव के स्वामी`),
+    housesLine: (houses: number[]) =>
+      p(
+        L,
+        `Houses ${houses.join(", ")}`,
+        `Ghar ${houses.join(", ")}`,
+        `भाव ${houses.join(", ")}`,
+      ),
     matrixTitle: p(L, "Wealth Chart Layers", "Wealth chart layers", "धन चार्ट परतें"),
     d1Label: p(L, "Visible wealth (D1)", "Dikhne wala dhana (D1)", "दृश्य धन (D1)"),
     d9Label: p(L, "Long-term stability (D9)", "Lambi stability (D9)", "दीर्घकालिक स्थिरता (D9)"),

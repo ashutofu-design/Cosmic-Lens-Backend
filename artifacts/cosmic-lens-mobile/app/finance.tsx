@@ -63,9 +63,9 @@ function resolveYogas(
   const fromBasic = (basicFallback ?? []).filter((x) => x?.name).map((x) => ({
     name: x.name,
     detail: x.detail ?? "",
-    link: "",
-    houses: [] as number[],
-    planets: [] as string[],
+    link: x.link ?? "",
+    houses: x.houses ?? [],
+    planets: x.planets ?? [],
   }));
   if (fromBasic.length > 0) return fromBasic;
 
@@ -94,14 +94,97 @@ function resolveYogas(
   return [];
 }
 
+type WealthCopy = ReturnType<typeof financeWealthCopy>;
+
+function yogaHouseHint(houses: number[] | undefined, wealthCopy: WealthCopy): string | null {
+  if (!houses?.length) return null;
+  if (houses.length === 2) return wealthCopy.housePair(houses[0], houses[1]);
+  return wealthCopy.housesLine(houses);
+}
+
+function YogaDetailModal({
+  visible,
+  onClose,
+  title,
+  subtitle,
+  items,
+  emptyText,
+  closeLabel,
+  wealthCopy,
+  accent,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  subtitle: string;
+  items: YogaItem[];
+  emptyText: string;
+  closeLabel: string;
+  wealthCopy: WealthCopy;
+  accent: { name: string; pillBorder: string; pillBg: string; pillText: string };
+}) {
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={s.modalBackdrop} onPress={onClose}>
+        <Pressable style={s.modalSheet} onPress={(e) => e.stopPropagation()}>
+          <View style={s.modalHandle} />
+          <Text style={s.modalTitle}>{title}</Text>
+          <Text style={s.modalSub}>{subtitle}</Text>
+          <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+            {items.length > 0 ? (
+              items.map((item, i) => {
+                const linkKey = item.link ?? "";
+                const linkLabel = wealthCopy.linkType[linkKey] ?? linkKey;
+                const houseHint = yogaHouseHint(item.houses, wealthCopy);
+                return (
+                  <View key={`${item.name}-${i}`} style={s.dhanDetailRow}>
+                    <Text style={[s.dhanDetailName, accent.name ? { color: accent.name } : null]}>
+                      {item.name}
+                    </Text>
+                    {linkLabel ? (
+                      <View style={[s.dhanLinkPill, {
+                        borderColor: accent.pillBorder,
+                        backgroundColor: accent.pillBg,
+                      }]}>
+                        <Text style={[s.dhanLinkPillText, { color: accent.pillText }]}>
+                          {linkLabel}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {houseHint ? (
+                      <Text style={s.dhanDetailMeta}>{houseHint}</Text>
+                    ) : null}
+                    {item.planets && item.planets.length > 0 ? (
+                      <Text style={s.dhanDetailMeta}>{item.planets.join(" • ")}</Text>
+                    ) : null}
+                    <Text style={s.dhanDetailBody}>{item.detail || "—"}</Text>
+                  </View>
+                );
+              })
+            ) : (
+              <Text style={s.dhanDetailBody}>{emptyText}</Text>
+            )}
+          </ScrollView>
+          <Pressable
+            onPress={onClose}
+            style={({ pressed }) => [s.modalCloseBtn, { opacity: pressed ? 0.85 : 1 }]}
+          >
+            <Text style={s.modalCloseText}>{closeLabel}</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 interface BasicBlock {
   score: number;
   trend: string;
   summary: string;
   hook: string;
   money_habits?: string[];
-  dhana_yogas?: Array<{ name: string; detail?: string }>;
-  raj_yogas?: Array<{ name: string; detail?: string }>;
+  dhana_yogas?: YogaItem[];
+  raj_yogas?: YogaItem[];
   wealth_finance?: {
     engine?: string;
     disclaimer?: string;
@@ -423,113 +506,39 @@ export default function FinanceScreen() {
               </SectionCard>
             )}
 
-            <Modal
+            <YogaDetailModal
               visible={dhanDetailOpen}
-              animationType="slide"
-              transparent
-              onRequestClose={() => setDhanDetailOpen(false)}
-            >
-              <Pressable style={s.modalBackdrop} onPress={() => setDhanDetailOpen(false)}>
-                <Pressable style={s.modalSheet} onPress={(e) => e.stopPropagation()}>
-                  <View style={s.modalHandle} />
-                  <Text style={s.modalTitle}>{wealthCopy.dhanDetailTitle}</Text>
-                  <Text style={s.modalSub}>{wealthCopy.dhanDetailSub}</Text>
-                  <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-                    {dhanYogas.length > 0 ? (
-                      dhanYogas.map((item, i) => {
-                        const linkKey = item.link ?? "";
-                        const linkLabel = wealthCopy.linkType[linkKey] ?? linkKey;
-                        const houseHint =
-                          item.houses && item.houses.length === 2
-                            ? wealthCopy.housePair(item.houses[0], item.houses[1])
-                            : null;
-                        return (
-                          <View key={`${item.name}-${i}`} style={s.dhanDetailRow}>
-                            <Text style={s.dhanDetailName}>{item.name}</Text>
-                            {linkLabel ? (
-                              <View style={s.dhanLinkPill}>
-                                <Text style={s.dhanLinkPillText}>{linkLabel}</Text>
-                              </View>
-                            ) : null}
-                            {houseHint ? (
-                              <Text style={s.dhanDetailMeta}>{houseHint}</Text>
-                            ) : null}
-                            {item.planets && item.planets.length > 0 ? (
-                              <Text style={s.dhanDetailMeta}>
-                                {item.planets.join(" • ")}
-                              </Text>
-                            ) : null}
-                            <Text style={s.dhanDetailBody}>{item.detail}</Text>
-                          </View>
-                        );
-                      })
-                    ) : (
-                      <Text style={s.dhanDetailBody}>{wealthCopy.dhanEmpty}</Text>
-                    )}
-                  </ScrollView>
-                  <Pressable
-                    onPress={() => setDhanDetailOpen(false)}
-                    style={({ pressed }) => [s.modalCloseBtn, { opacity: pressed ? 0.85 : 1 }]}
-                  >
-                    <Text style={s.modalCloseText}>{wealthCopy.close}</Text>
-                  </Pressable>
-                </Pressable>
-              </Pressable>
-            </Modal>
+              onClose={() => setDhanDetailOpen(false)}
+              title={wealthCopy.dhanDetailTitle}
+              subtitle={wealthCopy.dhanDetailSub}
+              items={dhanYogas}
+              emptyText={wealthCopy.dhanEmpty}
+              closeLabel={wealthCopy.close}
+              wealthCopy={wealthCopy}
+              accent={{
+                name: "",
+                pillBorder: "rgba(251,191,36,0.45)",
+                pillBg: "rgba(251,191,36,0.12)",
+                pillText: "#fbbf24",
+              }}
+            />
 
-            <Modal
+            <YogaDetailModal
               visible={rajDetailOpen}
-              animationType="slide"
-              transparent
-              onRequestClose={() => setRajDetailOpen(false)}
-            >
-              <Pressable style={s.modalBackdrop} onPress={() => setRajDetailOpen(false)}>
-                <Pressable style={s.modalSheet} onPress={(e) => e.stopPropagation()}>
-                  <View style={s.modalHandle} />
-                  <Text style={s.modalTitle}>{wealthCopy.rajDetailTitle}</Text>
-                  <Text style={s.modalSub}>{wealthCopy.rajDetailSub}</Text>
-                  <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-                    {rajYogas.length > 0 ? (
-                      rajYogas.map((item, i) => {
-                        const linkKey = item.link ?? "";
-                        const linkLabel = wealthCopy.linkType[linkKey] ?? linkKey;
-                        const houseHint =
-                          item.houses && item.houses.length === 2
-                            ? wealthCopy.housePair(item.houses[0], item.houses[1])
-                            : null;
-                        return (
-                          <View key={`${item.name}-${i}`} style={s.dhanDetailRow}>
-                            <Text style={[s.dhanDetailName, { color: "#e9d5ff" }]}>{item.name}</Text>
-                            {linkLabel ? (
-                              <View style={[s.dhanLinkPill, { borderColor: "rgba(167,139,250,0.5)", backgroundColor: "rgba(167,139,250,0.15)" }]}>
-                                <Text style={[s.dhanLinkPillText, { color: "#c4b5fd" }]}>{linkLabel}</Text>
-                              </View>
-                            ) : null}
-                            {houseHint ? (
-                              <Text style={s.dhanDetailMeta}>{houseHint}</Text>
-                            ) : null}
-                            {item.planets && item.planets.length > 0 ? (
-                              <Text style={s.dhanDetailMeta}>
-                                {item.planets.join(" • ")}
-                              </Text>
-                            ) : null}
-                            <Text style={s.dhanDetailBody}>{item.detail}</Text>
-                          </View>
-                        );
-                      })
-                    ) : (
-                      <Text style={s.dhanDetailBody}>{wealthCopy.rajEmpty}</Text>
-                    )}
-                  </ScrollView>
-                  <Pressable
-                    onPress={() => setRajDetailOpen(false)}
-                    style={({ pressed }) => [s.modalCloseBtn, { opacity: pressed ? 0.85 : 1 }]}
-                  >
-                    <Text style={s.modalCloseText}>{wealthCopy.close}</Text>
-                  </Pressable>
-                </Pressable>
-              </Pressable>
-            </Modal>
+              onClose={() => setRajDetailOpen(false)}
+              title={wealthCopy.rajDetailTitle}
+              subtitle={wealthCopy.rajDetailSub}
+              items={rajYogas}
+              emptyText={wealthCopy.rajEmpty}
+              closeLabel={wealthCopy.close}
+              wealthCopy={wealthCopy}
+              accent={{
+                name: "#e9d5ff",
+                pillBorder: "rgba(167,139,250,0.5)",
+                pillBg: "rgba(167,139,250,0.15)",
+                pillText: "#c4b5fd",
+              }}
+            />
 
             {/* CHART MATRIX */}
             {matrix && (

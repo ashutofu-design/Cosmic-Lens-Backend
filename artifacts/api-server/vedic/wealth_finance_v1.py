@@ -1,0 +1,483 @@
+"""
+wealth_finance_v1 — Life Map Finance diagnostic pipeline.
+
+D1 yog blueprint → D9 verify → D2 hora style → KP 2/11 tier lock
+→ dasha yoga activation → 12CSL leakage + transit liquidity hints.
+"""
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+SIGNS = [
+    "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+    "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
+]
+SIGN_LORD = {
+    "Aries": "Mars", "Taurus": "Venus", "Gemini": "Mercury", "Cancer": "Moon",
+    "Leo": "Sun", "Virgo": "Mercury", "Libra": "Venus", "Scorpio": "Mars",
+    "Sagittarius": "Jupiter", "Capricorn": "Saturn", "Aquarius": "Saturn", "Pisces": "Jupiter",
+}
+EXALT = {
+    "Sun": "Aries", "Moon": "Taurus", "Mars": "Capricorn", "Mercury": "Virgo",
+    "Jupiter": "Cancer", "Venus": "Pisces", "Saturn": "Libra",
+}
+OWN = {
+    "Sun": ["Leo"], "Moon": ["Cancer"], "Mars": ["Aries", "Scorpio"],
+    "Mercury": ["Gemini", "Virgo"], "Jupiter": ["Sagittarius", "Pisces"],
+    "Venus": ["Taurus", "Libra"], "Saturn": ["Capricorn", "Aquarius"],
+}
+_KENDRA = frozenset({1, 4, 7, 10})
+_TRIKONA = frozenset({1, 5, 9})
+_BENEFICS = frozenset({"Jupiter", "Venus", "Mercury", "Moon"})
+_GAIN_KP = frozenset({2, 6, 11})
+_JOB_KP = frozenset({6, 7, 10})
+
+_2L_CHANNELS: Dict[int, str] = {
+    1: "self-driven wealth and personal brand",
+    2: "family savings and self-made accumulation",
+    3: "communication, media and skill-based income",
+    4: "property, comfort assets and home-based work",
+    5: "creativity, speculation and advisory roles",
+    6: "service, salary and competitive earnings",
+    7: "business partnerships and client-facing roles",
+    8: "inheritance, sudden shifts and other people's capital",
+    9: "fortune, consultation and foreign or digital scaling",
+    10: "corporate career, rank and administrative authority",
+    11: "network gains, elder support and multiple streams",
+    12: "foreign, digital or behind-the-scenes income",
+}
+
+_CSL10_CHANNELS: Dict[str, str] = {
+    "Venus": "luxury, fashion, arts and entertainment",
+    "Mars": "tech, engineering, real estate and enterprise",
+    "Mercury": "trading, finance, coding and communication",
+    "Jupiter": "education, law, coaching and advisory",
+    "Sun": "government, leadership and authority roles",
+    "Saturn": "long-build industry, manufacturing and discipline",
+    "Moon": "public-facing care, hospitality and fluid income",
+    "Rahu": "foreign, digital and unconventional scaling",
+    "Ketu": "research, niche expertise and spiritual commerce",
+}
+
+
+def _find_p(planets: List[dict], name: str) -> Optional[dict]:
+    return next((p for p in planets if p.get("name") == name), None)
+
+
+def _house_lord(asc_idx: int, house: int) -> str:
+    return SIGN_LORD[SIGNS[(asc_idx + house - 1) % 12]]
+
+
+def _planet_house(planets: List[dict], name: str) -> Optional[int]:
+    p = _find_p(planets, name)
+    if not p:
+        return None
+    h = p.get("house")
+    return int(h) if isinstance(h, int) else None
+
+
+def _lords_connected(planets: List[dict], asc_idx: int, lord_a: str, lord_b: str) -> bool:
+    ha = _planet_house(planets, lord_a)
+    hb = _planet_house(planets, lord_b)
+    if ha and hb and ha == hb:
+        return True
+    if ha and hb and abs(ha - hb) in (4, 8):
+        return True
+    return _has_parivartana(planets, asc_idx, lord_a, lord_b)
+
+
+def _has_parivartana(planets: List[dict], asc_idx: int, lord_a: str, lord_b: str) -> bool:
+    pa, pb = _find_p(planets, lord_a), _find_p(planets, lord_b)
+    if not pa or not pb:
+        return False
+    sign_a = SIGNS[(asc_idx + int(pa.get("house") or 1) - 1) % 12] if pa.get("house") else ""
+    sign_b = SIGNS[(asc_idx + int(pb.get("house") or 1) - 1) % 12] if pb.get("house") else ""
+    # True exchange: A sits in B's sign lordship house and vice versa
+    for h in range(1, 13):
+        if SIGN_LORD[SIGNS[(asc_idx + h - 1) % 12]] == lord_b:
+            if int(pa.get("house") or 0) == h and SIGN_LORD.get(str(pb.get("sign") or "")) == lord_a:
+                return True
+    return (
+        SIGN_LORD.get(str(pa.get("sign") or "")) == lord_b
+        and SIGN_LORD.get(str(pb.get("sign") or "")) == lord_a
+    )
+
+
+def _scan_dhan_yogas(
+    planets: List[dict],
+    asc_idx: int,
+    existing: Optional[List[Dict[str, str]]] = None,
+) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    lord_2 = _house_lord(asc_idx, 2)
+    lord_11 = _house_lord(asc_idx, 11)
+    lord_9 = _house_lord(asc_idx, 9)
+    lord_5 = _house_lord(asc_idx, 5)
+
+    for y in existing or []:
+        out.append({
+            "name": y.get("name", ""),
+            "detail": y.get("detail", ""),
+            "kind": "dhan",
+            "planets": [lord_2, lord_11, lord_9, lord_5],
+        })
+
+    if _lords_connected(planets, asc_idx, lord_2, lord_11):
+        if not any(x["name"] == "Dhana Yoga" for x in out):
+            out.append({
+                "name": "Dhana Yoga",
+                "detail": "2nd and 11th lords linked — savings and gains reinforce each other.",
+                "kind": "dhan",
+                "planets": [lord_2, lord_11],
+            })
+
+    jup = _find_p(planets, "Jupiter")
+    if jup and int(jup.get("house") or 0) in _KENDRA | _TRIKONA:
+        sg = str(jup.get("sign") or "")
+        if sg in OWN.get("Jupiter", []) or sg == EXALT.get("Jupiter"):
+            if not any("Kubera" in x["name"] for x in out):
+                out.append({
+                    "name": "Kubera Yoga",
+                    "detail": "Strong Jupiter in wealth-supportive houses.",
+                    "kind": "dhan",
+                    "planets": ["Jupiter"],
+                })
+
+    moon, mars = _find_p(planets, "Moon"), _find_p(planets, "Mars")
+    if moon and mars and moon.get("house") == mars.get("house"):
+        out.append({
+            "name": "Chandra-Mangal Yoga",
+            "detail": "Moon and Mars together — enterprise and self-earned wealth.",
+            "kind": "dhan",
+            "planets": ["Moon", "Mars"],
+        })
+
+    sun, merc = _find_p(planets, "Sun"), _find_p(planets, "Mercury")
+    if sun and merc and sun.get("house") == merc.get("house"):
+        if int(sun.get("house") or 0) in _KENDRA | _TRIKONA:
+            out.append({
+                "name": "Budhaditya Yoga",
+                "detail": "Sun and Mercury united in a strong house — sharp wealth intelligence.",
+                "kind": "dhan",
+                "planets": ["Sun", "Mercury"],
+            })
+
+    return out[:8]
+
+
+def _scan_raj_yogas(planets: List[dict], asc_idx: int) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    k_lords = {_house_lord(asc_idx, h) for h in _KENDRA}
+    t_lords = {_house_lord(asc_idx, h) for h in _TRIKONA}
+    seen: Set[str] = set()
+    for kl in k_lords:
+        for tl in t_lords:
+            if kl == tl:
+                continue
+            key = tuple(sorted((kl, tl)))
+            if key in seen:
+                continue
+            if _lords_connected(planets, asc_idx, kl, tl):
+                seen.add(key)
+                out.append({
+                    "name": "Raj Yoga link",
+                    "detail": f"{kl} and {tl} lords connected — status supports wealth rise.",
+                    "kind": "raj",
+                    "planets": [kl, tl],
+                })
+    benefic_kendra = 0
+    for p in planets:
+        if p.get("name") in _BENEFICS and int(p.get("house") or 0) in _KENDRA | _TRIKONA:
+            benefic_kendra += 1
+    if benefic_kendra >= 2:
+        out.append({
+            "name": "Benefic strength",
+            "detail": f"{benefic_kendra} benefics in kendra/trikona — supportive wealth backdrop.",
+            "kind": "raj",
+            "planets": list(_BENEFICS),
+        })
+    return out[:6]
+
+
+def _yoga_activation_pct(
+    yogas: List[Dict[str, Any]],
+    current_dasha: Optional[dict],
+) -> Tuple[int, List[str]]:
+    if not yogas:
+        return 0, []
+    cd = current_dasha or {}
+    md = str(cd.get("maha") or "")
+    ad = str(cd.get("antar") or "")
+    pd = str(cd.get("pratyantar") or cd.get("pratyantarDasha") or "")
+    weights = [(md, 0.30), (ad, 0.50), (pd, 0.20)]
+    active: List[str] = []
+    active_score = 0.0
+    for y in yogas:
+        parts = set(str(x) for x in (y.get("planets") or []))
+        hit = 0.0
+        for planet, w in weights:
+            if planet and planet in parts:
+                hit += w
+        if hit >= 0.25:
+            active.append(str(y.get("name") or ""))
+            active_score += min(1.0, hit)
+    pct = int(round(min(100.0, (active_score / max(1, len(yogas))) * 100)))
+    return pct, [a for a in active if a]
+
+
+def _varga_chart(kundli: Optional[dict], key: str) -> Optional[dict]:
+    if not kundli:
+        return None
+    dv = kundli.get("divisionalCharts") or {}
+    ch = dv.get(key) or dv.get(key.lower())
+    if isinstance(ch, dict) and ch.get("planets"):
+        return ch
+    return None
+
+
+def _d2_chandra_pct(kundli: Optional[dict], asc_idx: int) -> Tuple[int, str]:
+    d2 = _varga_chart(kundli, "D2")
+    if not d2:
+        return 50, "mixed"
+    planets = d2.get("planets") or []
+
+    def hora(name: str) -> str:
+        p = _find_p(planets, name)
+        if not p:
+            return "other"
+        sg = str(p.get("sign") or "")
+        si = SIGNS.index(sg) if sg in SIGNS else -1
+        if si == 3:
+            return "moon"
+        if si == 4:
+            return "sun"
+        if si < 0:
+            return "other"
+        return "moon" if si % 2 == 1 else "sun"
+
+    moon_n = sum(1 for p in planets if hora(str(p.get("name") or "")) == "moon")
+    sun_n = sum(1 for p in planets if hora(str(p.get("name") or "")) == "sun")
+    total = max(1, moon_n + sun_n)
+    pct = int(round(100 * moon_n / total))
+    if pct >= 58:
+        tag = "chandra_dominant"
+    elif pct <= 42:
+        tag = "surya_dominant"
+    else:
+        tag = "mixed"
+    return pct, tag
+
+
+def _chart_plane_verdicts(
+    planets: List[dict],
+    asc_idx: int,
+    kundli: Optional[dict],
+) -> Dict[str, Any]:
+    jup = _find_p(planets, "Jupiter")
+    ven = _find_p(planets, "Venus")
+    d1_ok = bool(
+        jup and int(jup.get("house") or 0) in (2, 5, 9, 11)
+        or ven and int(ven.get("house") or 0) in (2, 11)
+        or _planet_house(planets, _house_lord(asc_idx, 2)) in (2, 11, 5, 9)
+    )
+    d9 = _varga_chart(kundli, "D9")
+    d9_ok = False
+    if d9:
+        d9p = d9.get("planets") or []
+        j9 = _find_p(d9p, "Jupiter")
+        l11 = _house_lord(asc_idx, 11)
+        p11 = _find_p(d9p, l11)
+        d9_ok = bool(
+            j9 and str(j9.get("sign") or "") in OWN.get("Jupiter", []) + [EXALT["Jupiter"]]
+            or p11 and int(p11.get("house") or 0) in (2, 11, 9)
+        )
+    chandra_pct, d2_tag = _d2_chandra_pct(kundli, asc_idx)
+    return {
+        "d1_verdict": "strong" if d1_ok else "moderate",
+        "d9_verdict": "stable" if d9_ok else "building",
+        "d2_tag": d2_tag,
+        "d2_chandra_pct": chandra_pct,
+    }
+
+
+def _kp_tier_lock(
+    kp: Optional[Dict[str, Any]],
+    d2_chandra_pct: int,
+    fallback: str,
+) -> str:
+    if not kp:
+        return fallback
+    h2, h11 = kp.get("h2") or {}, kp.get("h11") or {}
+    g2 = set(h2.get("gain_hits") or [])
+    g11 = set(h11.get("gain_hits") or [])
+    combined = g2 | g11
+    loss = bool(h2.get("loss_hits") or h11.get("loss_hits"))
+
+    if (
+        h2.get("verdict") == "GREEN"
+        and h11.get("verdict") == "GREEN"
+        and len(combined & _GAIN_KP) >= 2
+        and bool(combined & {5, 9})
+        and d2_chandra_pct >= 50
+        and not loss
+    ):
+        return "millionaire"
+
+    if (
+        not loss
+        and h2.get("verdict") != "RED"
+        and h11.get("verdict") != "RED"
+        and len(g2) >= 1
+        and len(g11) >= 1
+        and len(combined & _GAIN_KP) >= 2
+    ):
+        return "rich"
+
+    if loss and not (g11 & _GAIN_KP):
+        return "middle_class"
+
+    job_only = combined and combined <= _JOB_KP and not (combined & {2, 11})
+    if job_only:
+        return "middle_class"
+
+    if loss:
+        return "middle_class"
+
+    return fallback if fallback else "middle_class"
+
+
+def _wealth_source(
+    planets: List[dict],
+    asc_idx: int,
+    kundli: Optional[dict],
+) -> Dict[str, str]:
+    lord_2 = _house_lord(asc_idx, 2)
+    h2l = _planet_house(planets, lord_2) or 0
+    channel_a = _2L_CHANNELS.get(h2l, "mixed income channels")
+
+    channel_b = "diverse professional paths"
+    try:
+        from finance_static.kp_finance_csl import evaluate_kp_cusp_by_house
+        h10 = evaluate_kp_cusp_by_house(kundli or {}, 10, "10th")
+        if h10:
+            csl = str(h10.get("csl_planet") or "")
+            channel_b = _CSL10_CHANNELS.get(csl, channel_b)
+    except Exception:
+        pass
+
+    label = f"{channel_b.title()} via {channel_a}"
+    return {
+        "channel": channel_b,
+        "path": channel_a,
+        "label": label,
+    }
+
+
+def _leakage_alerts(h12: Optional[Dict[str, Any]]) -> List[str]:
+    if not h12:
+        return []
+    flags: List[str] = []
+    csl = str(h12.get("csl_planet") or "")
+    loss = set(h12.get("loss_hits") or [])
+    sig = set((h12.get("chain") or {}).get("signified") or [])
+    if csl in ("Saturn", "Mars") or loss & {8, 12} or sig & {8, 12}:
+        flags.append("property_legal_loss_risk")
+    if csl in ("Rahu", "Mercury") or 5 in sig or 8 in sig:
+        flags.append("speculation_trading_fraud_risk")
+    if h12.get("verdict") == "RED":
+        flags.append("expense_drain_active")
+    return flags
+
+
+def _liquidity_index(
+    planets: List[dict],
+    asc_idx: int,
+    transit_notes: Optional[List[str]] = None,
+) -> str:
+    notes = " ".join(transit_notes or []).lower()
+    if any(k in notes for k in ("jupiter currently", "wealth-building", "opportunity phase")):
+        return "high"
+    if any(k in notes for k in ("saturn in", "discipline on expenses", "restricted")):
+        return "restricted"
+    moon = _find_p(planets, "Moon")
+    if moon:
+        mh = int(moon.get("house") or 0)
+        if mh in (2, 5, 9, 11):
+            return "high"
+    return "restricted" if "expense" in notes else "moderate"
+
+
+_TIER_LABELS = {
+    "middle_class": "Average",
+    "rich": "Rich",
+    "ultra_rich": "Ultra Rich",
+    "millionaire": "Millionaire Potential",
+}
+
+
+def compute_wealth_finance_diagnostic(
+    planets: List[dict],
+    asc_idx: int,
+    current_dasha: Optional[dict] = None,
+    kundli: Optional[dict] = None,
+    *,
+    dhana_yogas: Optional[List[Dict[str, str]]] = None,
+    wealth_karma_score: int = 50,
+    fallback_category: str = "middle_class",
+    transit_notes: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Full finance diagnostic payload for Life Map Finance screen."""
+    dhan = _scan_dhan_yogas(planets, asc_idx, dhana_yogas)
+    raj = _scan_raj_yogas(planets, asc_idx)
+    all_yogas = dhan + raj
+    activation_pct, active_yogas = _yoga_activation_pct(all_yogas, current_dasha)
+    matrix = _chart_plane_verdicts(planets, asc_idx, kundli)
+    chandra_pct = int(matrix["d2_chandra_pct"])
+
+    kp: Optional[Dict[str, Any]] = None
+    h12: Optional[Dict[str, Any]] = None
+    try:
+        from finance_static.kp_finance_csl import compute_kp_finance_csl, evaluate_kp_cusp_by_house
+        kp = compute_kp_finance_csl(kundli or {})
+        h12 = evaluate_kp_cusp_by_house(kundli or {}, 12, "12th")
+    except Exception:
+        pass
+
+    tier = _kp_tier_lock(kp, chandra_pct, fallback_category)
+    if not kp:
+        c = int(wealth_karma_score)
+        if c >= 80:
+            tier = "millionaire"
+        elif c >= 65:
+            tier = "ultra_rich"
+        elif c >= 50:
+            tier = "rich"
+        else:
+            tier = "middle_class"
+
+    source = _wealth_source(planets, asc_idx, kundli)
+    leakage = _leakage_alerts(h12)
+    liquidity = _liquidity_index(planets, asc_idx, transit_notes)
+
+    return {
+        "engine": "wealth_finance_v1",
+        "disclaimer": "Chart-based wellness guidance only — not investment or tax advice.",
+        "yog_metrics": {
+            "dhan_count": len(dhan),
+            "raj_count": len(raj),
+            "total_count": len(all_yogas),
+            "activation_pct": activation_pct,
+            "active_yogas": active_yogas[:4],
+        },
+        "chart_matrix": matrix,
+        "wealth_tier": tier,
+        "wealth_tier_label": _TIER_LABELS.get(tier, tier.replace("_", " ").title()),
+        "wealth_source": source,
+        "kp_layer": {
+            "h2_verdict": (kp or {}).get("h2", {}).get("verdict"),
+            "h11_verdict": (kp or {}).get("h11", {}).get("verdict"),
+            "h12_verdict": (h12 or {}).get("verdict"),
+        },
+        "leakage_alerts": leakage,
+        "current_liquidity_index": liquidity,
+    }

@@ -2557,6 +2557,17 @@ def compute_finance_specifics(
         peak = {"current_md": md, "rating": DASHA_WEALTH.get(md, "Neutral"),
                 "ends": cd.get("endDate", "")}
 
+        from vedic.wealth_finance_v1 import compute_wealth_finance_diagnostic
+        wealth_finance = compute_wealth_finance_diagnostic(
+            planets,
+            asc_idx,
+            current_dasha,
+            kundli,
+            dhana_yogas=yogas,
+            wealth_karma_score=wealth_karma_score,
+            fallback_category=wealth_category,
+        )
+
         return {
             "wealth_karma_score": wealth_karma_score,
             "wealth_score":       wealth_karma_score,
@@ -2571,6 +2582,7 @@ def compute_finance_specifics(
             "yogas_count":        yogas_count,
             "money_habits":       money_habits,
             "peak_wealth_period": peak,
+            "wealth_finance":     wealth_finance,
         }
     except Exception as exc:
         return {"error": str(exc)}
@@ -2769,9 +2781,24 @@ def build_finance_basic_insights(
         if len(transits) >= 2:
             break
 
+    wealth_finance = dict(deep.get("wealth_finance") or {})
+    if wealth_finance and transit_notes:
+        try:
+            from vedic.wealth_finance_v1 import _liquidity_index
+            wealth_finance["current_liquidity_index"] = _liquidity_index(
+                [], 0, transit_notes=transit_notes,
+            )
+        except Exception:
+            pass
+
     return {
         "score": max(0, min(100, operational)),
         "trend": trend_n,
+        "summary": summary,
+        "hook": (
+            "Full gain windows, house-level wealth map, and remedy blueprint "
+            "unlock with Pro."
+        ),
         "phase_key": phase_key,
         "finance_focus_key": finance_focus_key,
         "wealth_category": wealth_category,
@@ -2780,4 +2807,5 @@ def build_finance_basic_insights(
         "wealth_styles": list(deep.get("wealth_styles") or []),
         "money_habits": money_habits,
         "transit_lines": transits,
+        "wealth_finance": wealth_finance,
     }

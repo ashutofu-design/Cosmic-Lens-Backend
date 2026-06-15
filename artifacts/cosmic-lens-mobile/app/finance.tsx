@@ -23,6 +23,13 @@ import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 import { usePlan } from "@/lib/subscription";
+import {
+  financeWealthCopy,
+  type LeakageKey,
+  type LiquidityKey,
+  type WealthTierKey,
+} from "@/lib/financeWealthCopy";
+import { coerceUILang } from "@/lib/i18n";
 
 const F = {
   regular: "Nunito_400Regular",
@@ -31,7 +38,35 @@ const F = {
   extra:   "Nunito_800ExtraBold",
 } as const;
 
-interface BasicBlock { score: number; trend: string; summary: string; hook: string; }
+interface BasicBlock {
+  score: number;
+  trend: string;
+  summary: string;
+  hook: string;
+  money_habits?: string[];
+  wealth_finance?: {
+    engine?: string;
+    disclaimer?: string;
+    yog_metrics?: {
+      dhan_count?: number;
+      raj_count?: number;
+      total_count?: number;
+      activation_pct?: number;
+      active_yogas?: string[];
+    };
+    chart_matrix?: {
+      d1_verdict?: string;
+      d9_verdict?: string;
+      d2_tag?: string;
+      d2_chandra_pct?: number;
+    };
+    wealth_tier?: WealthTierKey;
+    wealth_tier_label?: string;
+    wealth_source?: { channel?: string; path?: string; label?: string };
+    leakage_alerts?: string[];
+    current_liquidity_index?: LiquidityKey;
+  };
+}
 interface PlanetStrength { name: string; sign: string; house: number; status: string; retrograde?: boolean; }
 interface HouseInfo { sign: string; lord: string; occupants: string; meaning: string; }
 interface ProBlock {
@@ -137,6 +172,7 @@ export default function FinanceScreen() {
   const insets = useSafeAreaInsets();
   const { user, kundli } = useUser();
   const t = useT();
+  const wealthCopy = financeWealthCopy(coerceUILang(t.lang));
   const { isPro, isTrial } = usePlan();
   const isProUser = isPro || isTrial;
 
@@ -174,6 +210,11 @@ export default function FinanceScreen() {
   }, [user?.id, user?.api_key, kundli]);
 
   const accent = "#3b82f6";
+  const wf = data?.basic?.wealth_finance;
+  const yog = wf?.yog_metrics;
+  const matrix = wf?.chart_matrix;
+  const tierKey = (wf?.wealth_tier ?? "middle_class") as WealthTierKey;
+  const liquidity = (wf?.current_liquidity_index ?? "moderate") as LiquidityKey;
 
   return (
     <CosmicBg>
@@ -262,10 +303,112 @@ export default function FinanceScreen() {
               </View>
             </View>
 
-            {/* SUMMARY */}
-            <SectionCard icon="message-circle" title={t.cr_quickReading} accent={accent}>
-              <Text style={s.summary}>{data.basic.summary}</Text>
-            </SectionCard>
+            {/* WEALTH YOGAS */}
+            {wf && yog && (
+              <SectionCard icon="star" title={wealthCopy.yogTitle} accent="#fbbf24">
+                <Text style={[s.summary, { fontSize: 12, marginBottom: 12 }]}>{wealthCopy.yogSub}</Text>
+                <View style={{ flexDirection: "row", gap: 10, marginBottom: 12 }}>
+                  <View style={s.yogCard}>
+                    <Text style={s.yogCardLabel}>{wealthCopy.dhanYogCard}</Text>
+                    <Text style={s.yogCardNum}>{yog.dhan_count ?? 0}</Text>
+                    <Text style={s.yogCardSub}>{wealthCopy.inChart}</Text>
+                  </View>
+                  <View style={[s.yogCard, { borderColor: "rgba(167,139,250,0.4)", backgroundColor: "rgba(167,139,250,0.1)" }]}>
+                    <Text style={[s.yogCardLabel, { color: "#c4b5fd" }]}>{wealthCopy.rajYogCard}</Text>
+                    <Text style={[s.yogCardNum, { color: "#c4b5fd" }]}>{yog.raj_count ?? 0}</Text>
+                    <Text style={s.yogCardSub}>{wealthCopy.inChart}</Text>
+                  </View>
+                </View>
+                <View style={[s.chipGold, { alignSelf: "flex-start", borderColor: "rgba(34,197,94,0.45)", marginBottom: 10 }]}>
+                  <Text style={[s.chipGoldText, { color: "#4ade80" }]}>
+                    {wealthCopy.activation(yog.activation_pct ?? 0)}
+                  </Text>
+                </View>
+                {(yog.active_yogas?.length ?? 0) > 0 ? (
+                  yog.active_yogas!.map((name, i) => (
+                    <Text key={`${name}-${i}`} style={s.miniLine}>• {name}</Text>
+                  ))
+                ) : (
+                  <Text style={s.miniLine}>{wealthCopy.noActiveYog}</Text>
+                )}
+              </SectionCard>
+            )}
+
+            {/* CHART MATRIX */}
+            {matrix && (
+              <SectionCard icon="layers" title={wealthCopy.matrixTitle} accent={accent}>
+                <View style={{ gap: 8 }}>
+                  <View style={s.matrixRow}>
+                    <Text style={s.matrixLabel}>{wealthCopy.d1Label}</Text>
+                    <Text style={s.matrixVal}>
+                      {matrix.d1_verdict === "strong" ? wealthCopy.d1Strong : wealthCopy.d1Moderate}
+                    </Text>
+                  </View>
+                  <View style={s.matrixRow}>
+                    <Text style={s.matrixLabel}>{wealthCopy.d9Label}</Text>
+                    <Text style={s.matrixVal}>
+                      {matrix.d9_verdict === "stable" ? wealthCopy.d9Stable : wealthCopy.d9Building}
+                    </Text>
+                  </View>
+                  <View style={s.matrixRow}>
+                    <Text style={s.matrixLabel}>{wealthCopy.d2Label}</Text>
+                    <Text style={s.matrixVal}>
+                      {matrix.d2_tag === "chandra_dominant"
+                        ? wealthCopy.d2Chandra
+                        : matrix.d2_tag === "surya_dominant"
+                          ? wealthCopy.d2Surya
+                          : wealthCopy.d2Mixed}
+                    </Text>
+                  </View>
+                </View>
+              </SectionCard>
+            )}
+
+            {/* WEALTH TIER + SOURCE */}
+            {wf && (
+              <SectionCard icon="award" title={wealthCopy.tierTitle} accent="#fbbf24">
+                <View style={[s.tierPill, { borderColor: "rgba(251,191,36,0.5)", backgroundColor: "rgba(251,191,36,0.12)" }]}>
+                  <Text style={s.tierPillText}>
+                    {wealthCopy.tierLabels[tierKey] ?? wf.wealth_tier_label}
+                  </Text>
+                </View>
+                {wf.wealth_source?.label ? (
+                  <>
+                    <Text style={[s.cardSubTitle, { marginTop: 12 }]}>{wealthCopy.sourceTitle}</Text>
+                    <Text style={s.summary}>{wf.wealth_source.label}</Text>
+                  </>
+                ) : null}
+              </SectionCard>
+            )}
+
+            {/* LEAKAGE + LIQUIDITY */}
+            {wf && (
+              <SectionCard icon="alert-triangle" title={wealthCopy.leakageTitle} accent="#f59e0b">
+                {(wf.leakage_alerts?.length ?? 0) > 0 ? (
+                  wf.leakage_alerts!.map((flag, i) => (
+                    <Text key={`${flag}-${i}`} style={s.miniLine}>
+                      • {wealthCopy.leakage[flag as LeakageKey] ?? flag}
+                    </Text>
+                  ))
+                ) : (
+                  <Text style={s.miniLine}>{wealthCopy.liquidity.moderate}</Text>
+                )}
+                <Text style={[s.cardSubTitle, { marginTop: 10 }]}>{wealthCopy.liquidityTitle}</Text>
+                <Text style={[s.summary, { fontSize: 13 }]}>
+                  {wealthCopy.liquidity[liquidity]}
+                </Text>
+                <Text style={[s.disclaimer, { marginTop: 8 }]}>{wf.disclaimer ?? wealthCopy.disclaimer}</Text>
+              </SectionCard>
+            )}
+
+            {/* MONEY HABITS */}
+            {(data.basic.money_habits?.length ?? 0) > 0 && (
+              <SectionCard icon="check-circle" title={wealthCopy.habitsTitle} accent="#22c55e">
+                {data.basic.money_habits!.slice(0, 4).map((line, i) => (
+                  <Bullet key={i} color="#22c55e">{line}</Bullet>
+                ))}
+              </SectionCard>
+            )}
 
             {/* HOOK */}
             {!isProUser && (
@@ -562,4 +705,80 @@ const s = StyleSheet.create({
     borderRadius: 10, borderWidth: 1,
   },
   statusText: { fontSize: 10, fontFamily: F.bold, letterSpacing: 0.3 },
+
+  chipGold: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.4)",
+    backgroundColor: "rgba(251,191,36,0.1)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  chipGoldText: { color: "#fbbf24", fontSize: 11, fontFamily: F.semi },
+  yogCard: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.4)",
+    backgroundColor: "rgba(251,191,36,0.1)",
+    padding: 14,
+    alignItems: "center",
+    minHeight: 100,
+  },
+  yogCardLabel: {
+    color: "#fbbf24",
+    fontSize: 11,
+    fontFamily: F.semi,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 6,
+  },
+  yogCardNum: {
+    color: "#fbbf24",
+    fontSize: 36,
+    fontFamily: F.extra,
+    lineHeight: 40,
+  },
+  yogCardSub: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 10,
+    fontFamily: F.regular,
+    marginTop: 4,
+    textAlign: "center",
+  },
+  miniLine: {
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: F.regular,
+  },
+  matrixRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  matrixLabel: { color: "rgba(255,255,255,0.65)", fontSize: 12, fontFamily: F.semi, flex: 1 },
+  matrixVal: { color: "#fff", fontSize: 12, fontFamily: F.bold, textAlign: "right", flex: 1 },
+  tierPill: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  tierPillText: { color: "#fbbf24", fontSize: 13, fontFamily: F.bold },
+  cardSubTitle: {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 10,
+    fontFamily: F.extra,
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+  },
+  disclaimer: {
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 10,
+    lineHeight: 15,
+    fontFamily: F.regular,
+  },
 });

@@ -181,3 +181,29 @@ def compute_kp_finance_csl(kundli: dict) -> Optional[Dict[str, Any]]:
         "risk_nudge": risk_nudge,        # added to risk_leak raw count
         "engine_version": "kp_finance_csl_v1.1_sb_node_dispositor",
     }
+
+
+def evaluate_kp_cusp_by_house(
+    kundli: dict,
+    house_num: int,
+    label: str,
+) -> Optional[Dict[str, Any]]:
+    """Evaluate one KP cusp CSL (e.g. 10th income, 12th expenses)."""
+    if not isinstance(kundli, dict):
+        return None
+    kp = kundli.get("kp") or {}
+    cusps = kp.get("cusps") if isinstance(kp, dict) else None
+    if not isinstance(cusps, list):
+        return None
+    cusp = next(
+        (c for c in cusps if isinstance(c, dict) and c.get("house") == house_num),
+        None,
+    )
+    if not cusp:
+        return None
+    planets = kundli.get("planets") or []
+    asc_sign = kundli.get("ascendant", "")
+    asc_si = _SIGN_IDX.get(asc_sign)
+    if asc_si is None or not planets:
+        return None
+    return _evaluate_cusp(cusp, planets, asc_si, label)

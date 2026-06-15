@@ -11,6 +11,7 @@ import {
   I18nManager,
   Platform,
   Pressable,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -54,6 +55,13 @@ interface BasicBlock {
       activation_pct?: number;
       active_yogas?: string[];
       dhan_yoga_names?: string[];
+      dhan_yogas?: Array<{
+        name: string;
+        detail: string;
+        link?: string;
+        houses?: number[];
+        planets?: string[];
+      }>;
     };
     chart_matrix?: {
       d1_verdict?: string;
@@ -180,6 +188,7 @@ export default function FinanceScreen() {
   const [data, setData] = useState<FinanceResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [dhanDetailOpen, setDhanDetailOpen] = useState(false);
 
   const fade = useRef(new Animated.Value(0)).current;
 
@@ -216,6 +225,7 @@ export default function FinanceScreen() {
   const matrix = wf?.chart_matrix;
   const tierKey = (wf?.wealth_tier ?? "middle_class") as WealthTierKey;
   const liquidity = (wf?.current_liquidity_index ?? "moderate") as LiquidityKey;
+  const dhanYogas = yog?.dhan_yogas ?? [];
 
   return (
     <CosmicBg>
@@ -308,25 +318,30 @@ export default function FinanceScreen() {
             {wf && yog && (
               <SectionCard icon="star" title={wealthCopy.yogTitle} accent="#fbbf24">
                 <Text style={[s.summary, { fontSize: 12, marginBottom: 12 }]}>{wealthCopy.yogSub}</Text>
-                <View style={{ flexDirection: "row", gap: 10, marginBottom: 12 }}>
-                  <View style={s.yogCard}>
-                    <Text style={s.yogCardLabel}>{wealthCopy.dhanYogCard}</Text>
-                    <Text style={s.yogCardNum}>{yog.dhan_count ?? 0}</Text>
-                    <Text style={s.yogCardSub}>{wealthCopy.inChart}</Text>
-                  </View>
+                <View style={{ flexDirection: "row", gap: 10, marginBottom: 8 }}>
+                  <Pressable
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setDhanDetailOpen(true);
+                    }}
+                    style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.88 : 1 }]}
+                  >
+                    <View style={s.yogCard}>
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                        <Text style={s.yogCardLabel}>{wealthCopy.dhanYogCard}</Text>
+                        <Feather name="chevron-right" size={14} color="#fbbf24" />
+                      </View>
+                      <Text style={s.yogCardNum}>{yog.dhan_count ?? 0}</Text>
+                      <Text style={s.yogCardSub}>{wealthCopy.inChart}</Text>
+                    </View>
+                  </Pressable>
                   <View style={[s.yogCard, { borderColor: "rgba(167,139,250,0.4)", backgroundColor: "rgba(167,139,250,0.1)" }]}>
                     <Text style={[s.yogCardLabel, { color: "#c4b5fd" }]}>{wealthCopy.rajYogCard}</Text>
                     <Text style={[s.yogCardNum, { color: "#c4b5fd" }]}>{yog.raj_count ?? 0}</Text>
                     <Text style={s.yogCardSub}>{wealthCopy.inChart}</Text>
                   </View>
                 </View>
-                {(yog.dhan_yoga_names?.length ?? 0) > 0 ? (
-                  <View style={{ marginBottom: 10, gap: 4 }}>
-                    {yog.dhan_yoga_names!.map((name, i) => (
-                      <Text key={`${name}-${i}`} style={s.miniLine}>• {name}</Text>
-                    ))}
-                  </View>
-                ) : null}
+                <Text style={[s.tapHint, { marginBottom: 12 }]}>{wealthCopy.tapDhanHint}</Text>
                 <View style={[s.chipGold, { alignSelf: "flex-start", borderColor: "rgba(34,197,94,0.45)", marginBottom: 10 }]}>
                   <Text style={[s.chipGoldText, { color: "#4ade80" }]}>
                     {wealthCopy.activation(yog.activation_pct ?? 0)}
@@ -341,6 +356,60 @@ export default function FinanceScreen() {
                 )}
               </SectionCard>
             )}
+
+            <Modal
+              visible={dhanDetailOpen}
+              animationType="slide"
+              transparent
+              onRequestClose={() => setDhanDetailOpen(false)}
+            >
+              <Pressable style={s.modalBackdrop} onPress={() => setDhanDetailOpen(false)}>
+                <Pressable style={s.modalSheet} onPress={(e) => e.stopPropagation()}>
+                  <View style={s.modalHandle} />
+                  <Text style={s.modalTitle}>{wealthCopy.dhanDetailTitle}</Text>
+                  <Text style={s.modalSub}>{wealthCopy.dhanDetailSub}</Text>
+                  <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+                    {dhanYogas.length > 0 ? (
+                      dhanYogas.map((item, i) => {
+                        const linkKey = item.link ?? "";
+                        const linkLabel = wealthCopy.linkType[linkKey] ?? linkKey;
+                        const houseHint =
+                          item.houses && item.houses.length === 2
+                            ? wealthCopy.housePair(item.houses[0], item.houses[1])
+                            : null;
+                        return (
+                          <View key={`${item.name}-${i}`} style={s.dhanDetailRow}>
+                            <Text style={s.dhanDetailName}>{item.name}</Text>
+                            {linkLabel ? (
+                              <View style={s.dhanLinkPill}>
+                                <Text style={s.dhanLinkPillText}>{linkLabel}</Text>
+                              </View>
+                            ) : null}
+                            {houseHint ? (
+                              <Text style={s.dhanDetailMeta}>{houseHint}</Text>
+                            ) : null}
+                            {item.planets && item.planets.length > 0 ? (
+                              <Text style={s.dhanDetailMeta}>
+                                {item.planets.join(" • ")}
+                              </Text>
+                            ) : null}
+                            <Text style={s.dhanDetailBody}>{item.detail}</Text>
+                          </View>
+                        );
+                      })
+                    ) : (
+                      <Text style={s.dhanDetailBody}>{wealthCopy.dhanEmpty}</Text>
+                    )}
+                  </ScrollView>
+                  <Pressable
+                    onPress={() => setDhanDetailOpen(false)}
+                    style={({ pressed }) => [s.modalCloseBtn, { opacity: pressed ? 0.85 : 1 }]}
+                  >
+                    <Text style={s.modalCloseText}>{wealthCopy.close}</Text>
+                  </Pressable>
+                </Pressable>
+              </Pressable>
+            </Modal>
 
             {/* CHART MATRIX */}
             {matrix && (
@@ -753,6 +822,101 @@ const s = StyleSheet.create({
     fontFamily: F.regular,
     marginTop: 4,
     textAlign: "center",
+  },
+  tapHint: {
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 11,
+    fontFamily: F.regular,
+    textAlign: "center",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "flex-end",
+  },
+  modalSheet: {
+    backgroundColor: "#0f172a",
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.25)",
+    padding: 20,
+    paddingBottom: 28,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignSelf: "center",
+    marginBottom: 14,
+  },
+  modalTitle: {
+    color: "#fbbf24",
+    fontSize: 17,
+    fontFamily: F.bold,
+    marginBottom: 6,
+  },
+  modalSub: {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: F.regular,
+    marginBottom: 14,
+  },
+  dhanDetailRow: {
+    borderLeftWidth: 3,
+    borderLeftColor: "#fbbf24",
+    backgroundColor: "rgba(251,191,36,0.08)",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+  },
+  dhanDetailName: {
+    color: "#fff",
+    fontSize: 14,
+    fontFamily: F.bold,
+    marginBottom: 6,
+  },
+  dhanLinkPill: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(251,191,36,0.15)",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 6,
+  },
+  dhanLinkPillText: {
+    color: "#fbbf24",
+    fontSize: 10,
+    fontFamily: F.semi,
+    textTransform: "uppercase",
+  },
+  dhanDetailMeta: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 11,
+    fontFamily: F.semi,
+    marginBottom: 4,
+  },
+  dhanDetailBody: {
+    color: "rgba(255,255,255,0.82)",
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: F.regular,
+  },
+  modalCloseBtn: {
+    marginTop: 14,
+    backgroundColor: "rgba(251,191,36,0.15)",
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.35)",
+  },
+  modalCloseText: {
+    color: "#fbbf24",
+    fontSize: 14,
+    fontFamily: F.bold,
   },
   miniLine: {
     color: "rgba(255,255,255,0.78)",

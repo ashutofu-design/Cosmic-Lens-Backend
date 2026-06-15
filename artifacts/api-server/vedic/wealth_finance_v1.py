@@ -416,6 +416,16 @@ def compute_wealth_finance_diagnostic(
             "activation_pct": activation_pct,
             "active_yogas": active_yogas[:4],
             "dhan_yoga_names": [str(y.get("name") or "") for y in dhan],
+            "dhan_yogas": [
+                {
+                    "name": str(y.get("name") or ""),
+                    "detail": str(y.get("detail") or ""),
+                    "link": str(y.get("link") or ""),
+                    "houses": list(y.get("houses") or []),
+                    "planets": list(y.get("planets") or []),
+                }
+                for y in dhan
+            ],
         },
         "chart_matrix": matrix,
         "wealth_tier": tier,

@@ -488,6 +488,12 @@ def compute_health_specifics(planets: List[dict], asc_idx: int,
             "tridosha_engine":    tri.get("engine"),
             "d9_immunity_verdict": tri.get("d9_immunity_verdict") or "",
             "kp_6th_csl":         tri.get("kp_6th_csl") or {},
+            "kp_6th_csl_validation": tri.get("kp_6th_csl_validation") or tri.get("kp_6th_csl") or {},
+            "dominant_clinical_trigger": tri.get("dominant_clinical_trigger") or "",
+            "structural_reason":  tri.get("structural_reason") or "",
+            "dietary_remedies":   tri.get("dietary_remedies") or [],
+            "clinical_disease_promise": bool(tri.get("clinical_disease_promise")),
+            "diagnostics":        tri.get("diagnostics") or {},
             "vulnerable_organs":  vuln_set[:10],
             "wellness_tendencies": _build_wellness_sensitivities_from_chart(
                 planets, asc_idx
@@ -999,6 +1005,11 @@ def build_health_basic_insights(
         "tridosha_engine": deep.get("tridosha_engine") or "",
         "d9_immunity_verdict": deep.get("d9_immunity_verdict") or "",
         "kp_6th_csl": deep.get("kp_6th_csl") or {},
+        "kp_6th_csl_validation": deep.get("kp_6th_csl_validation") or deep.get("kp_6th_csl") or {},
+        "dominant_clinical_trigger": deep.get("dominant_clinical_trigger") or "",
+        "structural_reason": deep.get("structural_reason") or "",
+        "dietary_remedies": deep.get("dietary_remedies") or [],
+        "clinical_disease_promise": bool(deep.get("clinical_disease_promise")),
         "daily_care": daily,
     }
 

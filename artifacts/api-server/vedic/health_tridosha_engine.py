@@ -1,19 +1,32 @@
 """
 health_tridosha_v1 — Vata / Pitta / Kapha from D1 + D9 + KP 6th CSL.
 
-Layers (spec-aligned, no medical diagnosis output):
-  1. D1 — prakriti, tattva element matrix, 4H/5H/6H occupants + aspects
-  2. D9 — dignity adjusts affliction weights (exalted/own −40%, debilitated +50%)
-  3. KP — 6th cusp sub-lord signification + planet dosha promise
+Weighted aggregation (display gauges):
+  Final = D1 * 0.40 + D9 * 0.30 + 6th_CSL * 0.30
+
+KP Step A — complete 6th CSL house script; dusthana 6/8/12 gating.
+KP Step B — CSL planet humor override when connected to 6/8/12.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+try:
+    from stock_engine.kp_5th_csl import _csl_signification_chain
+except ImportError:
+    _csl_signification_chain = None  # type: ignore
+
+try:
+    from event_timing._shared.kp_significator_scan import _kp_sig_for_planet, _to_int_house_list
+except ImportError:
+    _kp_sig_for_planet = None  # type: ignore
+    _to_int_house_list = None  # type: ignore
 
 SIGNS = [
     "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
     "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
 ]
+_SIGN_IDX = {s: i for i, s in enumerate(SIGNS)}
 SIGN_LORD = {
     "Aries": "Mars", "Taurus": "Venus", "Gemini": "Mercury", "Cancer": "Moon",
     "Leo": "Sun", "Virgo": "Mercury", "Libra": "Venus", "Scorpio": "Mars",
@@ -49,6 +62,31 @@ _MALEFICS = frozenset({"Saturn", "Mars", "Rahu", "Ketu", "Sun"})
 _PLANETS_9 = ("Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Rahu", "Ketu")
 _DUSTHANA = frozenset({6, 8, 12})
 _HOUSE_DOSHA_BIAS = {4: "kapha", 5: "pitta"}
+_W_D1, _W_D9, _W_CSL = 0.40, 0.30, 0.30
+
+_CLINICAL_LABELS = {
+    "kapha": "Kapha (Cough / Allergy)",
+    "vata": "Vata (Baat / Gas / Nerve Pain)",
+    "pitta": "Pitta (Acidity / Blood / Inflammation)",
+}
+
+_DIETARY_REMEDIES = {
+    "kapha": [
+        "Light warm meals; kam sweets, dairy, fried food",
+        "Morning walk / brisk movement daily",
+        "Ginger, black pepper, tulsi — congestion ko light rakho",
+    ],
+    "vata": [
+        "Warm oily food; sesame/olive oil in diet",
+        "Fixed sleep time; cold/dry food avoid",
+        "Jeera-ajwain water; gentle abhyanga (oil massage)",
+    ],
+    "pitta": [
+        "Cooling foods — coconut water, cucumber, sweet fruits",
+        "Spice, anger, midday sun kam karo",
+        "Amalaki, coriander, fennel — heat aur acidity balance",
+    ],
+}
 
 
 def _find_p(planets: List[dict], name: str) -> Optional[dict]:
@@ -74,11 +112,8 @@ def _aspects_house(aspector: str, ap_house: int, target_house: int) -> bool:
     if diff == 7:
         return True
     extras = {
-        "Mars": {4, 8},
-        "Jupiter": {5, 9},
-        "Saturn": {3, 10},
-        "Rahu": {3, 10},
-        "Ketu": {3, 10},
+        "Mars": {4, 8}, "Jupiter": {5, 9}, "Saturn": {3, 10},
+        "Rahu": {3, 10}, "Ketu": {3, 10},
     }
     return diff in extras.get(aspector, set())
 
@@ -112,6 +147,16 @@ def _varga_chart(kundli: Optional[dict], key: str) -> Optional[dict]:
     return None
 
 
+def _varga_asc_idx(chart: dict, fallback: int) -> int:
+    asc = chart.get("ascendantSignIndex")
+    if isinstance(asc, int):
+        return int(asc) % 12
+    asc_s = chart.get("ascendant") or ""
+    if isinstance(asc_s, str) and asc_s in SIGNS:
+        return SIGNS.index(asc_s)
+    return fallback % 12
+
+
 def _d9_dignity_tier(d9: dict, pname: str) -> str:
     p = _find_p(d9.get("planets") or [], pname)
     if not p:
@@ -133,18 +178,20 @@ def _kp_cusp(kp: dict, house: int) -> Optional[dict]:
     return None
 
 
-def _kp_signified_houses(kp: dict, planet: str) -> List[int]:
+def _kp_flat_signified(kp: dict, planet: str) -> List[int]:
     sig = (kp or {}).get("significations") or {}
     raw = sig.get(planet) or sig.get(planet.lower()) or []
-    out: List[int] = []
-    for v in raw:
-        try:
-            h = int(v)
-            if 1 <= h <= 12:
-                out.append(h)
-        except (TypeError, ValueError):
-            continue
-    return out
+    if isinstance(raw, list):
+        out: List[int] = []
+        for v in raw:
+            try:
+                h = int(v)
+                if 1 <= h <= 12:
+                    out.append(h)
+            except (TypeError, ValueError):
+                continue
+        return sorted(set(out))
+    return []
 
 
 def _norm_planet(p: Any) -> Optional[str]:
@@ -163,6 +210,11 @@ def _normalize_pct(raw: Dict[str, float]) -> Dict[str, int]:
     return pct
 
 
+def _share_scores(scores: Dict[str, float]) -> Dict[str, float]:
+    total = sum(scores.values()) or 1.0
+    return {k: (scores[k] / total) * 100.0 for k in scores}
+
+
 def _dosha_state(pct: int) -> str:
     if pct < 36:
         return "Balanced"
@@ -171,38 +223,101 @@ def _dosha_state(pct: int) -> str:
     return "Elevated"
 
 
-def _care_tip(dosha: str, state: str) -> str:
-    tips = {
-        ("vata", "Balanced"): "Warm meals, steady sleep — Vata balanced rakho.",
-        ("vata", "Afflicted"): "Warm oily food, oil massage, fixed routine — Vata ko shaant rakho.",
-        ("vata", "Elevated"): "Cold/dry food aur irregular routine kam karo — warmth aur rest.",
-        ("pitta", "Balanced"): "Cooling foods, moderate exercise — Pitta balanced.",
-        ("pitta", "Afflicted"): "Spice, anger, dhoop kam — hydrate aur cool rakho.",
-        ("pitta", "Elevated"): "Cooling diet, calm mind — heat aur acidity pe dhyan.",
-        ("kapha", "Balanced"): "Active mornings, light meals — Kapha light rakho.",
-        ("kapha", "Afflicted"): "Sweets/dairy kam, brisk walk — heaviness avoid karo.",
-        ("kapha", "Elevated"): "Light warm spices, daily movement — sluggishness kam karo.",
-    }
-    return tips.get((dosha, state), "Regular routine teeno dosha ko support karti hai.")
-
-
-def _csl_dosha_boost(csl: str) -> Dict[str, float]:
-    """KP 6th CSL planet → dominant humor when disease promise active."""
-    if csl in ("Moon", "Venus", "Jupiter"):
-        return {"kapha": 28.0, "vata": 0.0, "pitta": 0.0}
-    if csl in ("Saturn", "Rahu", "Ketu"):
-        return {"vata": 28.0, "pitta": 0.0, "kapha": 0.0}
+def _clinical_humor(csl: str) -> Optional[str]:
+    if csl in ("Venus", "Moon", "Jupiter"):
+        return "kapha"
+    if csl in ("Saturn", "Rahu", "Mercury"):
+        return "vata"
     if csl in ("Sun", "Mars"):
-        return {"pitta": 28.0, "vata": 0.0, "kapha": 0.0}
-    if csl == "Mercury":
-        return {"vata": 14.0, "pitta": 10.0, "kapha": 0.0}
-    return {"vata": 8.0, "pitta": 8.0, "kapha": 8.0}
+        return "pitta"
+    if csl == "Ketu":
+        return "vata"
+    return None
+
+
+def _extract_6th_csl_script(kundli: Optional[dict], asc_idx: int) -> Dict[str, Any]:
+    """Complete KP 6th CSL house signification chain."""
+    out: Dict[str, Any] = {
+        "csl_planet": None,
+        "house_script": [],
+        "chain": {},
+        "dusthana_hits": [],
+        "connects_to_dusthana": False,
+        "clinical_disease_promise": False,
+        "verdict": "UNKNOWN",
+        "immunity_message": "",
+    }
+    if not kundli:
+        return out
+
+    kp = kundli.get("kp") or {}
+    cusp = _kp_cusp(kp, 6)
+    if not cusp:
+        return out
+
+    csl_raw = cusp.get("sb") or cusp.get("subLord") or cusp.get("sub_lord") or cusp.get("sl")
+    csl = _norm_planet(csl_raw)
+    out["csl_planet"] = csl
+    if not csl:
+        return out
+
+    script: Set[int] = set()
+    chain: Dict[str, Any] = {}
+
+    if _kp_sig_for_planet and _to_int_house_list:
+        sig = _kp_sig_for_planet(kp, csl)
+        if sig:
+            for key in ("pl", "sl", "sb_houses", "ss_houses"):
+                script.update(_to_int_house_list(sig.get(key)))
+            chain = {
+                "nl_lord": sig.get("nl_lord"),
+                "sb_lord": sig.get("sb_lord"),
+                "ss_lord": sig.get("ss_lord"),
+                "houses_pl": _to_int_house_list(sig.get("pl")),
+                "houses_nl": _to_int_house_list(sig.get("sl")),
+                "houses_sb": _to_int_house_list(sig.get("sb_houses")),
+                "houses_ss": _to_int_house_list(sig.get("ss_houses")),
+            }
+
+    if not script and _csl_signification_chain:
+        planets = kundli.get("planets") or []
+        asc_si = _SIGN_IDX.get(str(kundli.get("ascendant") or ""), asc_idx)
+        if planets:
+            chain = _csl_signification_chain(csl, planets, asc_si)
+            script.update(chain.get("signified") or [])
+
+    if not script:
+        script.update(_kp_flat_signified(kp, csl))
+
+    house_script = sorted(script)
+    out["house_script"] = house_script
+    out["chain"] = chain
+
+    dusthana_hits = sorted(h for h in house_script if h in _DUSTHANA)
+    out["dusthana_hits"] = dusthana_hits
+    out["connects_to_dusthana"] = bool(dusthana_hits)
+
+    hset = set(house_script)
+    out["clinical_disease_promise"] = (6 in hset and 8 in hset) or (8 in hset and 12 in hset)
+
+    if not out["connects_to_dusthana"]:
+        out["verdict"] = "HIGH_IMMUNITY"
+        out["immunity_message"] = (
+            "High Immunity / Sub-clinical Tendencies only."
+        )
+    elif out["clinical_disease_promise"]:
+        out["verdict"] = "DISEASE_PROMISE_ACTIVE"
+        out["immunity_message"] = ""
+    else:
+        out["verdict"] = "DUSTHANA_LINK_WEAK"
+        out["immunity_message"] = ""
+
+    return out
 
 
 def _d1_layer(
     planets: List[dict], asc_idx: int
 ) -> Tuple[Dict[str, float], List[Tuple[str, str, float]]]:
-    """Return dosha scores + per-planet affliction ledger for D9 adjustment."""
     scores = {"vata": 0.0, "pitta": 0.0, "kapha": 0.0}
     ledger: List[Tuple[str, str, float]] = []
     sign_1 = SIGNS[asc_idx % 12]
@@ -214,17 +329,14 @@ def _d1_layer(
         if planet and w > 0:
             ledger.append((planet, dosha, w))
 
-    # Prakriti anchors
     _add(SIGN_DOSHA.get(sign_1, "vata"), 25.0)
     moon = _find_p(planets, "Moon")
     if moon and moon.get("sign"):
         _add(SIGN_DOSHA.get(str(moon.get("sign")), "vata"), 25.0, "Moon")
     if sun and sun.get("sign"):
         _add(SIGN_DOSHA.get(str(sun.get("sign")), "vata"), 15.0, "Sun")
-    lord_1 = SIGN_LORD[sign_1]
-    _add(PLANET_DOSHA.get(lord_1, "vata"), 15.0, lord_1)
+    _add(PLANET_DOSHA.get(SIGN_LORD[sign_1], "vata"), 15.0, SIGN_LORD[sign_1])
 
-    # Tattva element matrix (all planets)
     for p in planets or []:
         nm = str(p.get("name") or "")
         if nm not in _PLANETS_9:
@@ -240,7 +352,6 @@ def _d1_layer(
             _add(SIGN_DOSHA.get(sg, "kapha"), 2.0, nm)
         _add(PLANET_DOSHA.get(nm, "vata"), 2.0, nm)
 
-    # 4H / 5H / 6H occupants + aspects
     for h in (4, 5, 6):
         bias = _HOUSE_DOSHA_BIAS.get(h)
         for p in planets or []:
@@ -251,9 +362,7 @@ def _d1_layer(
                 continue
             target = bias or PLANET_DOSHA.get(nm, "vata")
             if nm in _MALEFICS:
-                w = 7.0
-                if nm in dusthana_lords:
-                    w *= 2.0
+                w = 7.0 * (2.0 if nm in dusthana_lords else 1.0)
                 _add(target, w, nm)
             elif nm in _BENEFICS:
                 _add(target, 3.0, nm)
@@ -264,27 +373,20 @@ def _d1_layer(
                 continue
             target = bias or PLANET_DOSHA.get(pname, "vata")
             if pname in _MALEFICS:
-                w = 5.0
-                if pname in dusthana_lords:
-                    w *= 2.0
+                w = 5.0 * (2.0 if pname in dusthana_lords else 1.0)
                 _add(target, w, pname)
             elif pname in _BENEFICS:
                 _add(target, 2.0, pname)
 
-    # Core sub-routines (constitutional stress, not disease labels)
     sat, rahu = _find_p(planets, "Saturn"), _find_p(planets, "Rahu")
-    mars = _find_p(planets, "Mars")
-    venus = _find_p(planets, "Venus")
-
+    mars, venus = _find_p(planets, "Mars"), _find_p(planets, "Venus")
     for p in (sat, rahu):
         if p and p.get("house") in (1, 6):
             w = 10.0 * (2.0 if str(p.get("name")) in dusthana_lords else 1.0)
             _add("vata", w, str(p.get("name")))
-
     for p in (sun, mars):
         if p and p.get("house") in (5, 6):
             _add("pitta", 8.0, str(p.get("name") or ""))
-
     for p in (moon, venus):
         if not p:
             continue
@@ -301,79 +403,112 @@ def _d1_layer(
     return scores, ledger
 
 
-def _apply_d9(
-    d1_scores: Dict[str, float],
-    ledger: List[Tuple[str, str, float]],
+def _d9_layer(
+    planets: List[dict],
+    asc_idx: int,
     kundli: Optional[dict],
+    ledger: List[Tuple[str, str, float]],
 ) -> Tuple[Dict[str, float], str]:
-    """Adjust D1 affliction ledger via D9 dignity; return scores + immunity verdict."""
+    """Independent D9 dosha scores + immunity verdict."""
     d9 = _varga_chart(kundli, "D9")
-    if not d9 or not ledger:
-        return dict(d1_scores), "D9 unavailable — D1 prakriti only"
+    if not d9:
+        d1, _ = _d1_layer(planets, asc_idx)
+        return dict(d1), "D9 unavailable — D1 prakriti used for D9 layer"
 
-    adjusted = dict(d1_scores)
+    d9_planets = d9.get("planets") or []
+    d9_asc = _varga_asc_idx(d9, asc_idx)
+    scores = {"vata": 0.0, "pitta": 0.0, "kapha": 0.0}
+
+    sign_9 = SIGNS[d9_asc % 12]
+    scores[SIGN_DOSHA.get(sign_9, "vata")] += 30.0
+    moon9 = _find_p(d9_planets, "Moon")
+    if moon9 and moon9.get("sign"):
+        scores[SIGN_DOSHA.get(str(moon9.get("sign")), "vata")] += 25.0
+    sun9 = _find_p(d9_planets, "Sun")
+    if sun9 and sun9.get("sign"):
+        scores[SIGN_DOSHA.get(str(sun9.get("sign")), "vata")] += 20.0
+    lord_9 = SIGN_LORD[sign_9]
+    scores[PLANET_DOSHA.get(lord_9, "vata")] += 15.0
+
+    for p in d9_planets:
+        nm = str(p.get("name") or "")
+        if nm not in _PLANETS_9:
+            continue
+        sg = str(p.get("sign") or "")
+        scores[SIGN_DOSHA.get(sg, PLANET_DOSHA.get(nm, "vata"))] += 2.0
+        scores[PLANET_DOSHA.get(nm, "vata")] += 2.0
+
     strong_n, weak_n = 0, 0
     for planet, dosha, w in ledger:
         tier = _d9_dignity_tier(d9, planet)
         if tier == "strong":
-            delta = w * 0.4
-            adjusted[dosha] = max(0.0, adjusted[dosha] - delta)
+            scores[dosha] = max(0.0, scores[dosha] - w * 0.4)
             strong_n += 1
         elif tier == "weak":
-            delta = w * 0.5
-            adjusted[dosha] += delta
+            scores[dosha] += w * 0.5
             weak_n += 1
 
     if weak_n > strong_n:
-        verdict = "Chronic tendency — D9 mein kamzor graha zyada"
+        verdict = "Chronic Risk — D9 debilitated graha dominate"
     elif strong_n > weak_n:
-        verdict = "High recovery — D9 mein strong graha zyada"
+        verdict = "High Recovery Capabilities — D9 strong graha dominate"
     else:
         verdict = "Mixed D9 immunity"
-    return adjusted, verdict
+
+    return scores, verdict
 
 
-def _kp6_layer(
-    kundli: Optional[dict],
-) -> Tuple[Dict[str, float], Dict[str, Any]]:
-    """KP 6th CSL — immunity vs active dosha promise."""
-    meta: Dict[str, Any] = {
-        "csl_planet": None,
-        "signified_houses": [],
-        "verdict": "UNKNOWN",
-    }
-    neutral = {"vata": 22.0, "pitta": 22.0, "kapha": 22.0}
-    kp = (kundli or {}).get("kp") or {}
-    if not kp:
-        return neutral, meta
+def _csl_significance_scores(csl_meta: Dict[str, Any]) -> Tuple[Dict[str, float], Optional[str]]:
+    """6th CSL humor significance for 30% weight layer."""
+    base = {"vata": 33.0, "pitta": 33.0, "kapha": 34.0}
+    csl = csl_meta.get("csl_planet") or ""
+    humor = _clinical_humor(csl) if csl else None
 
-    cusp = _kp_cusp(kp, 6)
-    if not cusp:
-        return neutral, meta
+    if not csl_meta.get("connects_to_dusthana"):
+        return base, None
 
-    csl_raw = cusp.get("sl") or cusp.get("subLord") or cusp.get("sub_lord")
-    csl = _norm_planet(csl_raw)
-    meta["csl_planet"] = csl
-    if not csl:
-        return neutral, meta
+    if not humor:
+        return base, None
 
-    sig = _kp_signified_houses(kp, csl) or _kp_signified_houses(kp, csl_raw or "")
-    meta["signified_houses"] = sig
+    active = {"vata": 12.0, "pitta": 12.0, "kapha": 12.0}
+    boost = 64.0 if csl_meta.get("clinical_disease_promise") else 52.0
+    active[humor] = boost
+    return active, humor
 
-    has_dusthana = any(h in _DUSTHANA for h in sig)
-    has_immunity = any(h in (1, 5, 11) for h in sig)
 
-    if has_immunity and not has_dusthana:
-        meta["verdict"] = "IMMUNITY_HIGH"
-        return {"vata": 20.0, "pitta": 20.0, "kapha": 20.0}, meta
+def _structural_reason(
+    csl_meta: Dict[str, Any],
+    d9_verdict: str,
+    clinical_trigger: Optional[str],
+    dosha_balance: Dict[str, int],
+) -> str:
+    parts: List[str] = []
+    csl = csl_meta.get("csl_planet") or "?"
+    script = csl_meta.get("house_script") or []
 
-    if has_dusthana:
-        meta["verdict"] = "DOSHA_PROMISE_ACTIVE"
-        return _csl_dosha_boost(csl), meta
+    if csl_meta.get("verdict") == "HIGH_IMMUNITY":
+        parts.append(
+            f"KP 6th CSL {csl} chain {script} does not connect to houses 6/8/12 — "
+            "major triggers dormant; High Immunity / Sub-clinical Tendencies only."
+        )
+    elif clinical_trigger:
+        combo = ""
+        if csl_meta.get("clinical_disease_promise"):
+            combo = " (6-8 or 8-12 clinical promise)"
+        parts.append(
+            f"KP 6th CSL {csl} chain {script} connects to dusthana "
+            f"{csl_meta.get('dusthana_hits')}{combo} — "
+            f"{_CLINICAL_LABELS.get(clinical_trigger, clinical_trigger)} clinically activated."
+        )
+    else:
+        parts.append(
+            f"D1 prakriti dominant {max(dosha_balance, key=dosha_balance.get).title()} "
+            f"({dosha_balance[max(dosha_balance, key=dosha_balance.get)]}%) with KP script {script}."
+        )
 
-    meta["verdict"] = "NEUTRAL"
-    boost = _csl_dosha_boost(csl)
-    return {k: 18.0 + boost[k] * 0.35 for k in boost}, meta
+    if d9_verdict:
+        parts.append(d9_verdict)
+    return " ".join(parts)
 
 
 def compute_tridosha_balance(
@@ -381,43 +516,80 @@ def compute_tridosha_balance(
     asc_idx: int,
     kundli: Optional[dict] = None,
 ) -> Dict[str, Any]:
-    """D1 (45%) + D9-adjusted (30%) + KP 6th CSL (25%) → vata/pitta/kapha %."""
-    d1_scores, ledger = _d1_layer(planets, asc_idx)
-    d9_scores, d9_verdict = _apply_d9(d1_scores, ledger, kundli)
-    kp_scores, kp_meta = _kp6_layer(kundli)
+    """D1 (40%) + D9 (30%) + 6th CSL (30%) → final vata/pitta/kapha %."""
+    d1_raw, ledger = _d1_layer(planets, asc_idx)
+    d9_raw, d9_verdict = _d9_layer(planets, asc_idx, kundli, ledger)
+    csl_meta = _extract_6th_csl_script(kundli, asc_idx)
+    csl_raw, clinical_trigger = _csl_significance_scores(csl_meta)
 
-    d1_t = sum(d1_scores.values()) or 1.0
-    d9_t = sum(d9_scores.values()) or 1.0
-    kp_t = sum(kp_scores.values()) or 1.0
+    d1_share = _share_scores(d1_raw)
+    d9_share = _share_scores(d9_raw)
+    csl_share = _share_scores(csl_raw)
 
     merged = {
-        k: (d1_scores[k] / d1_t) * 45.0
-        + (d9_scores[k] / d9_t) * 30.0
-        + (kp_scores[k] / kp_t) * 25.0
+        k: d1_share[k] * _W_D1 + d9_share[k] * _W_D9 + csl_share[k] * _W_CSL
         for k in ("vata", "pitta", "kapha")
     }
     dosha_balance = _normalize_pct(merged)
     dosha_states = {k: _dosha_state(dosha_balance[k]) for k in dosha_balance}
-    dominant_key = max(dosha_balance, key=dosha_balance.get)
 
-    care: List[str] = []
-    care.append(_care_tip(dominant_key, dosha_states[dominant_key]))
-    for dk, pct in sorted(dosha_balance.items(), key=lambda x: -x[1]):
-        if dk == dominant_key or dosha_states[dk] == "Balanced":
-            continue
-        tip = _care_tip(dk, dosha_states[dk])
-        if tip not in care:
-            care.append(tip)
-        if len(care) >= 2:
-            break
+    d1_dominant = max(d1_share, key=d1_share.get)
+    score_dominant = max(dosha_balance, key=dosha_balance.get)
+
+    if csl_meta.get("connects_to_dusthana") and clinical_trigger:
+        dominant_clinical = clinical_trigger
+        primary_imbalance = clinical_trigger
+        dominant_label = _CLINICAL_LABELS.get(clinical_trigger, clinical_trigger.title())
+    else:
+        dominant_clinical = score_dominant
+        primary_imbalance = score_dominant
+        dominant_label = score_dominant.title()
+
+    dietary = list(_DIETARY_REMEDIES.get(dominant_clinical, []))
+    structural = _structural_reason(csl_meta, d9_verdict, clinical_trigger, dosha_balance)
+
+    kp_validation = {
+        "csl_planet": csl_meta.get("csl_planet"),
+        "house_script": csl_meta.get("house_script") or [],
+        "signified_houses": csl_meta.get("house_script") or [],
+        "dusthana_hits": csl_meta.get("dusthana_hits") or [],
+        "clinical_disease_promise": bool(csl_meta.get("clinical_disease_promise")),
+        "connects_to_dusthana": bool(csl_meta.get("connects_to_dusthana")),
+        "verdict": (
+            "DISEASE_PROMISE_ACTIVE"
+            if csl_meta.get("clinical_disease_promise")
+            else csl_meta.get("verdict", "UNKNOWN")
+        ),
+        "immunity_message": csl_meta.get("immunity_message") or "",
+        "chain": csl_meta.get("chain") or {},
+    }
 
     return {
+        "engine": "health_tridosha_v1",
         "dosha_balance": dosha_balance,
         "dosha_states": dosha_states,
-        "dominant_dosha": dominant_key.title(),
-        "primary_imbalance": dominant_key,
-        "tridosha_care": care,
-        "engine": "health_tridosha_v1",
+        "diagnostics": {
+            "vata_score_state": dosha_states["vata"],
+            "pitta_score_state": dosha_states["pitta"],
+            "kapha_score_state": dosha_states["kapha"],
+        },
+        "dominant_dosha": dominant_label,
+        "dominant_clinical_trigger": _CLINICAL_LABELS.get(
+            dominant_clinical, dominant_clinical.title()
+        ),
+        "primary_imbalance": primary_imbalance,
+        "d1_dominant": d1_dominant,
+        "structural_reason": structural,
+        "dietary_remedies": dietary,
+        "tridosha_care": dietary[:2],
         "d9_immunity_verdict": d9_verdict,
-        "kp_6th_csl": kp_meta,
+        "kp_6th_csl": kp_validation,
+        "kp_6th_csl_validation": kp_validation,
+        "layer_breakdown": {
+            "d1_pct": {k: round(d1_share[k], 1) for k in d1_share},
+            "d9_pct": {k: round(d9_share[k], 1) for k in d9_share},
+            "csl_pct": {k: round(csl_share[k], 1) for k in csl_share},
+            "weights": {"d1": _W_D1, "d9": _W_D9, "csl": _W_CSL},
+        },
+        "clinical_disease_promise": bool(csl_meta.get("clinical_disease_promise")),
     }

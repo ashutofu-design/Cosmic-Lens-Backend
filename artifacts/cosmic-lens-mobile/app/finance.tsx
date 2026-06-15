@@ -57,6 +57,22 @@ type YogaItem = {
   planets?: string[];
 };
 
+type LeakChannelAlert = {
+  channel: string;
+  fact: string;
+  severity?: number;
+  message_en: string;
+  message_hn?: string;
+  message_hi?: string;
+};
+
+function leakChannelMessage(alert: LeakChannelAlert, lang: string): string {
+  const L = coerceUILang(lang);
+  if (L === "hi" && alert.message_hi) return alert.message_hi;
+  if (L === "hn" && alert.message_hn) return alert.message_hn;
+  return alert.message_en;
+}
+
 function resolveYogas(
   yog: BasicBlock["wealth_finance"] extends { yog_metrics?: infer Y } ? Y : undefined,
   key: "dhan" | "raj",
@@ -224,6 +240,7 @@ interface BasicBlock {
     wealth_tier_label?: string;
     wealth_source?: { channel?: string; path?: string; label?: string };
     leakage_alerts?: string[];
+    leakage_channels?: LeakChannelAlert[];
     current_liquidity_index?: LiquidityKey;
   };
 }
@@ -534,7 +551,6 @@ export default function FinanceScreen() {
     if (currentDashaWealth) return wealthTierFromScore(currentDashaWealth.score);
     return birthTierKey;
   }, [currentDashaWealth, birthTierKey]);
-  const liquidity = (wf?.current_liquidity_index ?? "moderate") as LiquidityKey;
   const dhanYogas = resolveYogas(yog, "dhan", data?.basic?.dhana_yogas);
   const rajYogas = resolveYogas(yog, "raj", data?.basic?.raj_yogas);
   const headerTopPad = insets.top + 8;
@@ -733,10 +749,16 @@ export default function FinanceScreen() {
               </SectionCard>
             )}
 
-            {/* LEAKAGE + LIQUIDITY */}
+            {/* LEAKAGE */}
             {wf && (
               <SectionCard icon="alert-triangle" title={wealthCopy.leakageTitle} accent="#f59e0b">
-                {(wf.leakage_alerts?.length ?? 0) > 0 ? (
+                {(wf.leakage_channels?.length ?? 0) > 0 ? (
+                  wf.leakage_channels!.map((alert, i) => (
+                    <Text key={`${alert.channel}-${i}`} style={s.miniLine}>
+                      • {leakChannelMessage(alert, t.lang)}
+                    </Text>
+                  ))
+                ) : (wf.leakage_alerts?.length ?? 0) > 0 ? (
                   wf.leakage_alerts!.map((flag, i) => (
                     <Text key={`${flag}-${i}`} style={s.miniLine}>
                       • {wealthCopy.leakage[flag as LeakageKey] ?? flag}
@@ -745,10 +767,6 @@ export default function FinanceScreen() {
                 ) : (
                   <Text style={s.miniLine}>{wealthCopy.leakageEmpty}</Text>
                 )}
-                <Text style={[s.cardSubTitle, { marginTop: 10 }]}>{wealthCopy.liquidityTitle}</Text>
-                <Text style={[s.summary, { fontSize: 13 }]}>
-                  {wealthCopy.liquidity[liquidity]}
-                </Text>
                 <Text style={[s.disclaimer, { marginTop: 8 }]}>{wf.disclaimer ?? wealthCopy.disclaimer}</Text>
               </SectionCard>
             )}

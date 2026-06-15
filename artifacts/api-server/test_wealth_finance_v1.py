@@ -32,6 +32,8 @@ class TestWealthFinanceV1(unittest.TestCase):
         self.assertIn("wealth_tier", out)
         self.assertIn("wealth_source", out)
         self.assertIn("disclaimer", out)
+        self.assertIn("leakage_channels", out)
+        self.assertIsInstance(out["leakage_channels"], list)
 
     def test_yog_counts_non_negative(self):
         out = compute_wealth_finance_diagnostic(_planets(), 0)

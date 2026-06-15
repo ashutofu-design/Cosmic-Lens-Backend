@@ -434,7 +434,12 @@ def compute_wealth_finance_diagnostic(
     source = _wealth_source(planets, asc_idx, kundli)
     h2_block = (kp or {}).get("h2") if kp else None
     h11_block = (kp or {}).get("h11") if kp else None
-    leakage = _leakage_alerts(planets, asc_idx, h2_block, h11_block, h12)
+    from vedic.leak_channels_v1 import scan_wealth_leak_channels
+
+    leakage_channels = scan_wealth_leak_channels(
+        planets, asc_idx, h2_block, h11_block, h12,
+    )
+    leakage = [str(row.get("channel") or "") for row in leakage_channels if row.get("channel")]
     liquidity = _liquidity_index(planets, asc_idx, transit_notes)
 
     return {
@@ -461,5 +466,6 @@ def compute_wealth_finance_diagnostic(
             "h12_verdict": (h12 or {}).get("verdict"),
         },
         "leakage_alerts": leakage,
+        "leakage_channels": leakage_channels,
         "current_liquidity_index": liquidity,
     }

@@ -344,6 +344,32 @@ def test_plain_copy_shape_and_deterministic():
     assert out1["p1"]["plain_copy"] != out3["p1"]["plain_copy"] or out1["p1"]["readiness_score"] != out3["p1"]["readiness_score"]
 
 
+def test_plain_copy_respects_english_lang():
+    k1 = _sample_kundli("Rahul", "Leo")
+    k2 = _sample_kundli("Priya", "Cancer", moon_h=5)
+    out_en = compute_marriage_basics(
+        k1,
+        k2,
+        p1_name="Rahul",
+        p2_name="Priya",
+        lang="en",
+    )
+    out_hn = compute_marriage_basics(
+        k1,
+        k2,
+        p1_name="Rahul",
+        p2_name="Priya",
+        lang="hn",
+    )
+    hl_en = out_en["p1"]["plain_copy"]["headline"]
+    hl_hn = out_hn["p1"]["plain_copy"]["headline"]
+    assert hl_en
+    assert hl_hn
+    assert hl_en != hl_hn
+    assert " shaadi " not in f" {hl_en.lower()} "
+    assert " mein " not in f" {hl_en.lower()} "
+
+
 def test_couple_locked_highlights_no_gun_milan():
     k1 = _sample_kundli("Rahul", "Leo")
     k2 = _sample_kundli("Priya", "Cancer", moon_h=5)

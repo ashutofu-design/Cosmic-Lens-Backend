@@ -1453,7 +1453,13 @@ def _pick_remedy(k: KundliReader, gender: Gender, pressures: list[str]) -> str:
     return f"{weekday} light for 7th lord {h7l}; joint ritual with partner weekly."
 
 
-def _analyze_partner(kundli: dict, *, name: str, gender: Gender) -> dict[str, Any]:
+def _analyze_partner(
+    kundli: dict,
+    *,
+    name: str,
+    gender: Gender,
+    lang: str | None = None,
+) -> dict[str, Any]:
     k = KundliReader({**kundli, "name": name})
     manglik = _manglik_profile(kundli)
     asc = k.asc_index()
@@ -1680,7 +1686,7 @@ def _analyze_partner(kundli: dict, *, name: str, gender: Gender) -> dict[str, An
         "pressures": safe_pressures,
     }
     payload["plain_copy"] = build_partner_plain_copy(
-        payload, partner_copy_seed(kundli, name)
+        payload, partner_copy_seed(kundli, name), lang=lang
     )
     return payload
 
@@ -1710,12 +1716,13 @@ def compute_marriage_basics(
     p2_name: str = "Partner B",
     p1_gender: str | None = None,
     p2_gender: str | None = None,
+    lang: str | None = None,
 ) -> dict[str, Any]:
     """Full deterministic Basic marriage payload for a couple."""
     g1 = normalize_gender(p1_gender)
     g2 = normalize_gender(p2_gender)
-    person1 = _analyze_partner(kundli_p1, name=p1_name, gender=g1)
-    person2 = _analyze_partner(kundli_p2, name=p2_name, gender=g2)
+    person1 = _analyze_partner(kundli_p1, name=p1_name, gender=g1, lang=lang)
+    person2 = _analyze_partner(kundli_p2, name=p2_name, gender=g2, lang=lang)
 
     d9_full = compute_d9_marriage(kundli_p1, kundli_p2)
     d9_sync = d9_full.get("sync") or {}
@@ -1796,7 +1803,7 @@ def compute_marriage_basics(
     }
     c_seed = couple_copy_seed(kundli_p1, kundli_p2, p1_name, p2_name)
     couple_block["plain_copy"] = build_couple_plain_copy(
-        couple_block, person1, person2, c_seed
+        couple_block, person1, person2, c_seed, lang=lang
     )
 
     return {

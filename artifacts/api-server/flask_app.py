@@ -12424,6 +12424,7 @@ def kundli_milan():
                 "Kundli chart unavailable for one or both partners"
             )
         else:
+            _mb_lang = (data.get("lang") or data.get("language") or "en").strip().lower()
             _mb_out = compute_marriage_basics(
                 _k1,
                 _k2,
@@ -12431,6 +12432,7 @@ def kundli_milan():
                 p2_name=pp2["name"],
                 p1_gender=_mb_p1.get("gender"),
                 p2_gender=_mb_p2.get("gender"),
+                lang=_mb_lang,
             )
             _json.dumps(_mb_out)
             response_payload["marriage_basics"] = _mb_out

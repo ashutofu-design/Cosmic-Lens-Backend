@@ -70,7 +70,7 @@ def build_marriage_engine_snapshot(marriage_basics: dict[str, Any]) -> dict[str,
     }
 
 
-def _compute_marriage_basics_from_birth(p1: dict, p2: dict) -> dict[str, Any]:
+def _compute_marriage_basics_from_birth(p1: dict, p2: dict, *, lang: str | None = None) -> dict[str, Any]:
     from cache_helpers import get_or_compute_kundli
     from vedic.compat.marriage_basics import compute_marriage_basics
 
@@ -92,6 +92,7 @@ def _compute_marriage_basics_from_birth(p1: dict, p2: dict) -> dict[str, Any]:
         p2_name=str(bp2.get("name") or "Partner B"),
         p1_gender=bp1.get("gender"),
         p2_gender=bp2.get("gender"),
+        lang=lang,
     )
 
 
@@ -201,7 +202,9 @@ def register_milan_human_order_routes(flask_app) -> None:
         if not isinstance(data.get("p1"), dict) or not isinstance(data.get("p2"), dict):
             return jsonify({"error": "expected_p1_p2"}), 400
         try:
-            mb = _compute_marriage_basics_from_birth(data["p1"], data["p2"])
+            mb = _compute_marriage_basics_from_birth(
+                data["p1"], data["p2"], lang=data.get("lang")
+            )
             snap = build_marriage_engine_snapshot(mb)
             return jsonify({"ok": True, "snapshot": snap}), 200
         except Exception as exc:
@@ -237,7 +240,7 @@ def register_milan_human_order_routes(flask_app) -> None:
             contact = str(user_id) if user_id else "in_app"
 
         try:
-            mb = _compute_marriage_basics_from_birth(data["p1"], data["p2"])
+            mb = _compute_marriage_basics_from_birth(data["p1"], data["p2"], lang=lang)
             snap = build_marriage_engine_snapshot(mb)
         except Exception as exc:
             return jsonify({"error": "engine_snapshot_failed", "detail": str(exc)}), 500

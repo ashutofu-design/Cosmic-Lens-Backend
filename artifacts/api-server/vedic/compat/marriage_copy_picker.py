@@ -10,13 +10,30 @@ import json
 from pathlib import Path
 from typing import Any
 
-_TEMPLATES: dict[str, list[str]] | None = None
+_TEMPLATES_BY_LANG: dict[str, dict[str, list[str]]] = {}
 
-BAND_LABEL = {
+BAND_LABEL_EN = {
     "Strong": "Good foundation",
     "Moderate": "Mixed signals",
     "Strained": "Needs extra care",
 }
+
+BAND_LABEL_HN = {
+    "Strong": "Achha base",
+    "Moderate": "Mixed signals",
+    "Strained": "Extra care chahiye",
+}
+
+
+def normalize_marriage_lang(lang: str | None) -> str:
+    """Map UI / API lang codes to marriage copy pool: en | hn."""
+    c = (lang or "hn").strip().lower()
+    if c in ("en", "english"):
+        return "en"
+    if c in ("hn", "hinglish", "hi", "hindi"):
+        return "hn"
+    # Global UI langs without a dedicated pool → English (not Hinglish mix).
+    return "en"
 
 _POSITIVE_PRIORITY = (
     "h7_benefic_only",
@@ -53,13 +70,26 @@ class _SafeFormat(dict[str, str]):
         return "{" + key + "}"
 
 
-def _load_templates() -> dict[str, list[str]]:
-    global _TEMPLATES
-    if _TEMPLATES is None:
-        path = Path(__file__).with_name("marriage_copy_templates.json")
-        with open(path, encoding="utf-8") as fh:
-            _TEMPLATES = json.load(fh)
-    return _TEMPLATES
+def _template_filename(lang: str | None) -> str:
+    return "marriage_copy_templates.json"
+
+
+def _load_templates(lang: str | None = None) -> dict[str, list[str]]:
+    key = normalize_marriage_lang(lang)
+    if key not in _TEMPLATES_BY_LANG:
+        if key == "en":
+            from vedic.compat.marriage_copy_templates_en_data import TEMPLATES_EN
+
+            _TEMPLATES_BY_LANG[key] = TEMPLATES_EN
+        else:
+            path = Path(__file__).with_name(_template_filename(lang))
+            with open(path, encoding="utf-8") as fh:
+                _TEMPLATES_BY_LANG[key] = json.load(fh)
+    return _TEMPLATES_BY_LANG[key]
+
+
+def _band_labels(lang: str | None) -> dict[str, str]:
+    return BAND_LABEL_EN if normalize_marriage_lang(lang) == "en" else BAND_LABEL_HN
 
 
 def partner_copy_seed(kundli: dict, name: str) -> str:
@@ -77,8 +107,14 @@ def partner_copy_seed(kundli: dict, name: str) -> str:
     return "|".join(parts)
 
 
-def _pick(category: str, seed: str, slots: dict[str, str]) -> str:
-    templates = _load_templates()
+def _pick(
+    category: str,
+    seed: str,
+    slots: dict[str, str],
+    *,
+    lang: str | None = None,
+) -> str:
+    templates = _load_templates(lang)
     variants = templates.get(category)
     if not variants:
         variants = templates.get("positive_generic") or ["Chart note."]
@@ -275,13 +311,14 @@ def _collect_from_tags(
     *,
     suffix: str,
     limit: int,
+    lang: str | None = None,
 ) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
     for cat in priority:
         if cat not in tag_set:
             continue
-        line = _pick(cat, f"{seed}:{suffix}:{cat}", slots).strip()
+        line = _pick(cat, f"{seed}:{suffix}:{cat}", slots, lang=lang).strip()
         if not line or line in seen:
             continue
         seen.add(line)
@@ -291,46 +328,52 @@ def _collect_from_tags(
     return out
 
 
-def build_partner_plain_copy(partner: dict[str, Any], seed: str) -> dict[str, Any]:
+def build_partner_plain_copy(
+    partner: dict[str, Any],
+    seed: str,
+    *,
+    lang: str | None = None,
+) -> dict[str, Any]:
     """Build human-voice plain_copy block for one partner (Basic = compact Pro funnel)."""
     tags = extract_copy_tags(partner)
     tag_set = set(tags)
     slots = extract_copy_slots(partner)
     band = str(partner.get("readiness_band") or "Moderate")
+    labels = _band_labels(lang)
 
     critical = partner.get("critical_alerts") or {}
     alert_count = int(critical.get("count") or 0)
     slots["alert_count"] = str(alert_count)
     slots["hidden_count"] = str(max(alert_count, 2))
 
-    headline = _pick(f"band_{band.lower()}", f"{seed}:headline", slots)
+    headline = _pick(f"band_{band.lower()}", f"{seed}:headline", slots, lang=lang)
 
     positives = _collect_from_tags(
-        tag_set, _POSITIVE_PRIORITY, seed, slots, suffix="pos", limit=1
+        tag_set, _POSITIVE_PRIORITY, seed, slots, suffix="pos", limit=1, lang=lang
     )
     if not positives:
-        positives = [_pick("positive_generic", f"{seed}:pos:fallback", slots)]
+        positives = [_pick("positive_generic", f"{seed}:pos:fallback", slots, lang=lang)]
 
     watchouts = _collect_from_tags(
-        tag_set, _WATCHOUT_PRIORITY, seed, slots, suffix="watch", limit=1
+        tag_set, _WATCHOUT_PRIORITY, seed, slots, suffix="watch", limit=1, lang=lang
     )
     if not watchouts:
-        watchouts = [_pick("watchout_generic", f"{seed}:watch:fallback", slots)]
+        watchouts = [_pick("watchout_generic", f"{seed}:watch:fallback", slots, lang=lang)]
 
     if critical.get("locked") and critical.get("teaser"):
         pro_lock_teaser = f"{critical['teaser']} — full detail in Pro."
     else:
-        pro_lock_teaser = _pick("pro_lock_teaser", f"{seed}:lock", slots)
+        pro_lock_teaser = _pick("pro_lock_teaser", f"{seed}:lock", slots, lang=lang)
 
-    remedy_teaser = _pick("remedy_teaser", f"{seed}:remedy_teaser", slots)
-    pro_strip = _pick("pro_strip_partner", f"{seed}:strip", slots)
+    remedy_teaser = _pick("remedy_teaser", f"{seed}:remedy_teaser", slots, lang=lang)
+    pro_strip = _pick("pro_strip_partner", f"{seed}:strip", slots, lang=lang)
 
     # Full friction/remedy kept for Pro PDF — not shown on Basic card.
-    friction = _pick(_friction_category(partner), f"{seed}:friction", slots)
-    remedy = _pick(_remedy_category(partner), f"{seed}:remedy", slots)
+    friction = _pick(_friction_category(partner), f"{seed}:friction", slots, lang=lang)
+    remedy = _pick(_remedy_category(partner), f"{seed}:remedy", slots, lang=lang)
 
     return {
-        "band_label": BAND_LABEL.get(band, band),
+        "band_label": labels.get(band, band),
         "headline": headline,
         "positives": positives,
         "watchouts": watchouts,
@@ -416,6 +459,8 @@ def build_couple_plain_copy(
     p1: dict[str, Any],
     p2: dict[str, Any],
     seed: str,
+    *,
+    lang: str | None = None,
 ) -> dict[str, Any]:
     """Couple-level Pro gap copy — shown after both partner cards."""
     band = str(couple.get("structural_band") or "Workable")
@@ -428,18 +473,18 @@ def build_couple_plain_copy(
         "alert_count": str(alert_count),
     }
     gap_cat = _COUPLE_GAP_MAP.get(band, "couple_gap_workable")
-    gap_teaser = _pick(gap_cat, f"{seed}:gap", slots)
+    gap_teaser = _pick(gap_cat, f"{seed}:gap", slots, lang=lang)
     if alert_count > 0:
-        gap_teaser = _pick("couple_gap_alerts", f"{seed}:gap:alerts", slots)
+        gap_teaser = _pick("couple_gap_alerts", f"{seed}:gap:alerts", slots, lang=lang)
 
     return {
         "gap_teaser": gap_teaser,
-        "pro_cta_line": _pick("couple_pro_cta", f"{seed}:cta", slots),
+        "pro_cta_line": _pick("couple_pro_cta", f"{seed}:cta", slots, lang=lang),
         "alert_count": alert_count,
         "locked_highlights": _build_couple_locked_highlights(couple, p1, p2),
     }
 
 
-def count_templates() -> int:
+def count_templates(lang: str | None = None) -> int:
     """Total template strings in pool (for diagnostics)."""
-    return sum(len(v) for v in _load_templates().values())
+    return sum(len(v) for v in _load_templates(lang).values())

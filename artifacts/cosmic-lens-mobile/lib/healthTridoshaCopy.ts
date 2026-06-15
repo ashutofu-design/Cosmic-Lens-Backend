@@ -6,6 +6,14 @@ function p(lang: UILang, en: string, hn: string, hi: string): string {
 }
 
 export type DoshaKey = "vata" | "pitta" | "kapha";
+export type OrganZoneId =
+  | "digestion"
+  | "respiratory"
+  | "joints_nerves"
+  | "heart_circulation"
+  | "mind_sleep"
+  | "metabolism";
+export type OrganZoneStatus = "high" | "moderate" | "stable";
 
 export function healthTridoshaCopy(lang: UILang) {
   const L = coerceUILang(lang);
@@ -26,6 +34,26 @@ export function healthTridoshaCopy(lang: UILang) {
     } as Record<string, string>,
     careTitle: p(L, "Daily care tip", "Daily care tip", "दैनिक देखभाल"),
     forYouTitle: p(L, "For you", "Aapke liye", "आपके लिए"),
+    organHeatmapTitle: p(L, "Body Zone Map", "Body zone map", "शरीर क्षेत्र मानचित्र"),
+    organHeatmapSub: p(
+      L,
+      "Six zones from your chart — higher sensitivity means extra seasonal care.",
+      "Chart ke 6 zones — zyada sensitivity par extra care rakho.",
+      "कुंडली के 6 क्षेत्र — अधिक संवेदनशीलता पर अतिरिक्त देखभाल।",
+    ),
+    zoneLabels: {
+      digestion: p(L, "Stomach & Digestion", "Pet aur digestion", "पेट और पाचन"),
+      respiratory: p(L, "Lungs & Throat", "Saans aur gala", "फेफड़े और गला"),
+      joints_nerves: p(L, "Joints & Nerves", "Joints aur nerves", "जोड़ और नसें"),
+      heart_circulation: p(L, "Heart & Circulation", "Dil aur blood flow", "हृदय और रक्त प्रवाह"),
+      mind_sleep: p(L, "Mind & Sleep", "Mann aur neend", "मन और नींद"),
+      metabolism: p(L, "Metabolism & Liver", "Metabolism aur liver", "चयापचय और लीवर"),
+    } as Record<OrganZoneId, string>,
+    statusLabels: {
+      high: p(L, "High sensitivity", "Zyada sensitivity", "अधिक संवेदनशील"),
+      moderate: p(L, "Moderate", "Medium", "मध्यम"),
+      stable: p(L, "Stable", "Stable", "स्थिर"),
+    } as Record<OrganZoneStatus, string>,
     riskyOrgansTitle: p(L, "Sensitive Body Areas", "Sensitive body zones", "संवेदनशील अंग"),
     riskyOrgansSub: p(
       L,

@@ -463,6 +463,11 @@ def compute_health_specifics(planets: List[dict], asc_idx: int,
         dosha_states = tri["dosha_states"]
         dominant = tri["dominant_dosha"]
 
+        from vedic.health_organ_matrix_v1 import compute_organ_vulnerability_matrix
+        organ_vulnerability_matrix = compute_organ_vulnerability_matrix(
+            planets, asc_idx, issues, dosha_balance, kundli,
+        )
+
         # ── Vulnerable organs list (deduped) ──────────────────────────────
         vuln_set: List[str] = []
         for issue in issues:
@@ -495,6 +500,7 @@ def compute_health_specifics(planets: List[dict], asc_idx: int,
             "clinical_disease_promise": bool(tri.get("clinical_disease_promise")),
             "diagnostics":        tri.get("diagnostics") or {},
             "vulnerable_organs":  vuln_set[:10],
+            "organ_vulnerability_matrix": organ_vulnerability_matrix,
             "wellness_tendencies": _build_wellness_sensitivities_from_chart(
                 planets, asc_idx
             ),
@@ -1046,6 +1052,7 @@ def build_health_basic_insights(
         "watch_areas": watch_areas,
         "sensitive_areas": sensitive_areas,
         "risky_organs": risky_organs,
+        "organ_vulnerability_matrix": deep.get("organ_vulnerability_matrix") or [],
         "wellness_tendencies": wellness_tendencies,
         "dosha_balance": deep.get("dosha_balance") or {},
         "dosha_states": deep.get("dosha_states") or {},

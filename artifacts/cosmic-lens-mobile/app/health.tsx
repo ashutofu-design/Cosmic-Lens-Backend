@@ -23,7 +23,7 @@ import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 import { usePlan } from "@/lib/subscription";
-import { healthTridoshaCopy, type DoshaKey } from "@/lib/healthTridoshaCopy";
+import { healthTridoshaCopy, type DoshaKey, type OrganZoneId, type OrganZoneStatus } from "@/lib/healthTridoshaCopy";
 
 const F = {
   regular: "Nunito_400Regular",
@@ -62,6 +62,12 @@ interface BasicBlock {
   dietary_remedies?: string[];
   clinical_disease_promise?: boolean;
   risky_organs?: string[];
+  organ_vulnerability_matrix?: Array<{
+    id: OrganZoneId;
+    status: OrganZoneStatus;
+    score: number;
+    engine?: string;
+  }>;
   sensitive_areas?: string[];
 }
 interface PlanetStrength { name: string; sign: string; house: number; status: string; retrograde?: boolean; }
@@ -251,9 +257,20 @@ export default function HealthScreen() {
   const doshaOrder = doshasByPct(doshaBal ?? undefined);
   const topDosha = doshaOrder[0];
   const topRemedy = topDosha ? triCopy.dominantRemedy[topDosha] : "";
+  const organMatrix = data?.basic?.organ_vulnerability_matrix ?? [];
   const riskyOrgans = (data?.basic?.risky_organs?.length
     ? data.basic.risky_organs
     : data?.basic?.sensitive_areas) ?? [];
+
+  const zoneStatusStyle = (status: OrganZoneStatus) => {
+    if (status === "high") {
+      return { bg: "rgba(239,68,68,0.12)", border: "rgba(239,68,68,0.4)", text: "#f87171", icon: "alert-triangle" as const };
+    }
+    if (status === "moderate") {
+      return { bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.35)", text: "#fbbf24", icon: "alert-circle" as const };
+    }
+    return { bg: "rgba(34,197,94,0.1)", border: "rgba(34,197,94,0.3)", text: "#4ade80", icon: "check-circle" as const };
+  };
 
   return (
     <CosmicBg>
@@ -382,12 +399,43 @@ export default function HealthScreen() {
               </SectionCard>
             )}
 
-            {/* RISKY ORGANS — all users */}
-            <SectionCard icon="heart" title={triCopy.riskyOrgansTitle} accent="#f59e0b">
-              <Text style={[s.summary, { marginBottom: 10, fontSize: 12 }]}>
-                {triCopy.riskyOrgansSub}
+            {/* ORGAN HEATMAP — 6 zone cards */}
+            <SectionCard icon="activity" title={triCopy.organHeatmapTitle} accent="#f59e0b">
+              <Text style={[s.summary, { marginBottom: 12, fontSize: 12 }]}>
+                {triCopy.organHeatmapSub}
               </Text>
-              {riskyOrgans.length > 0 ? (
+              {organMatrix.length > 0 ? (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                  {organMatrix.map((zone) => {
+                    const st = zoneStatusStyle(zone.status);
+                    const label = triCopy.zoneLabels[zone.id] ?? zone.id;
+                    return (
+                      <View
+                        key={zone.id}
+                        style={{
+                          width: "47%",
+                          backgroundColor: st.bg,
+                          borderColor: st.border,
+                          borderWidth: 1,
+                          borderRadius: 12,
+                          padding: 12,
+                          minHeight: 88,
+                        }}
+                      >
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                          <Feather name={st.icon} size={13} color={st.text} />
+                          <Text style={{ color: st.text, fontSize: 10, fontFamily: F.semi, textTransform: "uppercase" }}>
+                            {triCopy.statusLabels[zone.status]}
+                          </Text>
+                        </View>
+                        <Text style={{ color: "#fff", fontSize: 12, fontFamily: F.semi, lineHeight: 17 }}>
+                          {label}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : riskyOrgans.length > 0 ? (
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {riskyOrgans.map((organ, i) => (
                     <View

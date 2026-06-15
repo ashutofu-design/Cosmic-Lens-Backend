@@ -2636,13 +2636,24 @@ def _mb_dasha_planet_multiplier(planets: List[dict], asc_idx: int, kundli: Optio
     return max(0.80, min(1.25, mult))
 
 
+def _mb_combine_dasha_wealth_multiplier(md_mult: float, ad_mult: Optional[float] = None) -> float:
+    """MD anchor + AD modifier; +0.03 synergy when both lords >= 1.08."""
+    if ad_mult is None:
+        combined = md_mult
+    else:
+        combined = md_mult * (0.60 + 0.40 * ad_mult)
+        if md_mult >= 1.08 and ad_mult >= 1.08:
+            combined += 0.03
+    return max(0.80, min(1.25, combined))
+
+
 def _mb_operational_score(base_score: int, planets: List[dict], asc_idx: int, kundli: Optional[dict], current_dasha: Optional[dict]) -> int:
     cd = current_dasha or {}
     md = str(cd.get("maha") or "")
     ad = str(cd.get("antar") or "")
     md_mult = _mb_dasha_planet_multiplier(planets, asc_idx, kundli, md)
-    ad_mult = _mb_dasha_planet_multiplier(planets, asc_idx, kundli, ad)
-    multiplier = max(0.80, min(1.25, md_mult * 0.60 + ad_mult * 0.40))
+    ad_mult = _mb_dasha_planet_multiplier(planets, asc_idx, kundli, ad) if ad else None
+    multiplier = _mb_combine_dasha_wealth_multiplier(md_mult, ad_mult)
     return max(8, min(96, int(round(base_score * multiplier))))
 
 

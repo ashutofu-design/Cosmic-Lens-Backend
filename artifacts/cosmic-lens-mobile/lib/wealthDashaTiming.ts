@@ -120,6 +120,13 @@ export function dashaWealthPlanetMultiplier(kundli: KundliData, planet: string):
   return Math.max(0.8, Math.min(1.25, mult));
 }
 
+/** MD anchor + AD modifier; +0.03 synergy when both lords ≥ 1.08. Mirrors server _mb_combine_dasha_wealth_multiplier. */
+function combineDashaWealthMultipliers(mdMult: number, adMult?: number): number {
+  let combined = adMult == null ? mdMult : mdMult * (0.6 + 0.4 * adMult);
+  if (adMult != null && mdMult >= 1.08 && adMult >= 1.08) combined += 0.03;
+  return Math.max(0.8, Math.min(1.25, combined));
+}
+
 export function operationalWealthScore(
   baseScore: number,
   kundli: KundliData,
@@ -127,11 +134,8 @@ export function operationalWealthScore(
   adPlanet?: string,
 ): number {
   const mdMult = dashaWealthPlanetMultiplier(kundli, mdPlanet);
-  if (!adPlanet) {
-    return Math.max(8, Math.min(96, Math.round(baseScore * mdMult)));
-  }
-  const adMult = dashaWealthPlanetMultiplier(kundli, adPlanet);
-  const combined = Math.max(0.8, Math.min(1.25, mdMult * 0.6 + adMult * 0.4));
+  const adMult = adPlanet ? dashaWealthPlanetMultiplier(kundli, adPlanet) : undefined;
+  const combined = combineDashaWealthMultipliers(mdMult, adMult);
   return Math.max(8, Math.min(96, Math.round(baseScore * combined)));
 }
 
@@ -152,39 +156,121 @@ export function formatDashaRange(startDate: string, endDate: string): string {
   return `${formatDashaDate(startDate)} – ${formatDashaDate(endDate)}`;
 }
 
+function parseDashaDate(raw: string): Date | null {
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function horizonDate(now: Date, years: number): Date {
+  const d = new Date(now);
+  d.setFullYear(d.getFullYear() + years);
+  return d;
+}
+
+/** Period touches [now, horizon] window. */
+function overlapsWindow(startDate: string, endDate: string, now: Date, horizon: Date): boolean {
+  const start = parseDashaDate(startDate);
+  const end = parseDashaDate(endDate);
+  if (!start || !end) return false;
+  return end >= now && start <= horizon;
+}
+
+function findCurrentMahadashaIndex(dashas: DashaData[], now: Date, currentMd: string): number {
+  for (let i = 0; i < dashas.length; i++) {
+    if (isRangeActive(dashas[i].startDate, dashas[i].endDate, now)) return i;
+  }
+  if (currentMd) {
+    const idx = dashas.findIndex(md => md.planet === currentMd && overlapsWindow(
+      md.startDate, md.endDate, now, horizonDate(now, 100),
+    ));
+    if (idx >= 0) return idx;
+  }
+  for (let i = 0; i < dashas.length; i++) {
+    const end = parseDashaDate(dashas[i].endDate);
+    if (end && end >= now) return i;
+  }
+  return 0;
+}
+
+function filterForwardAntardashas(
+  md: DashaData,
+  now: Date,
+  horizon: Date,
+  currentMd: string,
+  currentAd: string,
+): DashaData[] {
+  const ads = md.subDashas ?? [];
+  const isCurrentMd = isRangeActive(md.startDate, md.endDate, now)
+    || (currentMd && md.planet === currentMd);
+
+  let startIdx = 0;
+  if (isCurrentMd) {
+    for (let j = 0; j < ads.length; j++) {
+      if (isRangeActive(ads[j].startDate, ads[j].endDate, now)) {
+        startIdx = j;
+        break;
+      }
+      if (currentMd === md.planet && currentAd && ads[j].planet === currentAd) {
+        startIdx = j;
+        break;
+      }
+      const adEnd = parseDashaDate(ads[j].endDate);
+      if (adEnd && adEnd >= now) {
+        startIdx = j;
+        break;
+      }
+    }
+  }
+
+  return ads
+    .slice(startIdx)
+    .filter(ad => overlapsWindow(ad.startDate, ad.endDate, now, horizon));
+}
+
 export function buildWealthDashaTimeline(
   kundli: KundliData | null | undefined,
   baseScore: number,
+  horizonYears = 100,
 ): WealthDashaTimeline | null {
   if (!kundli?.dashas?.length || baseScore <= 0) return null;
 
   const wealthSet = wealthLinkedPlanets(kundli);
   const currentMd = kundli.currentDasha?.maha ?? "";
   const currentAd = kundli.currentDasha?.antar ?? "";
+  const now = new Date();
+  const horizon = horizonDate(now, horizonYears);
+  const allMd = kundli.dashas;
+  const startIdx = findCurrentMahadashaIndex(allMd, now, currentMd);
 
-  const cycle = kundli.dashas.slice(0, 9);
-  const mahadashas: WealthMahadashaRow[] = cycle.map((md: DashaData) => {
-    const mdScore = operationalWealthScore(baseScore, kundli, md.planet);
-    const antardashas: WealthAntardashaRow[] = (md.subDashas ?? []).map((ad: DashaData) => ({
+  const mahadashas: WealthMahadashaRow[] = [];
+
+  for (let i = startIdx; i < allMd.length; i++) {
+    const md = allMd[i];
+    const mdStart = parseDashaDate(md.startDate);
+    if (mdStart && mdStart > horizon) break;
+    if (!overlapsWindow(md.startDate, md.endDate, now, horizon)) continue;
+
+    const forwardAds = filterForwardAntardashas(md, now, horizon, currentMd, currentAd);
+    const antardashas: WealthAntardashaRow[] = forwardAds.map((ad: DashaData) => ({
       planet: ad.planet,
       startDate: ad.startDate,
       endDate: ad.endDate,
       score: operationalWealthScore(baseScore, kundli, md.planet, ad.planet),
-      isCurrent: isRangeActive(ad.startDate, ad.endDate)
+      isCurrent: isRangeActive(ad.startDate, ad.endDate, now)
         || (md.planet === currentMd && ad.planet === currentAd),
       isWealthLinked: wealthSet.has(ad.planet),
     }));
 
-    return {
+    mahadashas.push({
       planet: md.planet,
       startDate: md.startDate,
       endDate: md.endDate,
-      score: mdScore,
-      isCurrent: isRangeActive(md.startDate, md.endDate) || md.planet === currentMd,
+      score: operationalWealthScore(baseScore, kundli, md.planet),
+      isCurrent: isRangeActive(md.startDate, md.endDate, now) || md.planet === currentMd,
       isWealthLinked: wealthSet.has(md.planet),
       antardashas,
-    };
-  });
+    });
+  }
 
   let bestMd: WealthDashaTimeline["bestMd"] = null;
   let bestAd: WealthDashaTimeline["bestAd"] = null;

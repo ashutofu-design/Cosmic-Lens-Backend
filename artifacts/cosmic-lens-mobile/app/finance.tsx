@@ -311,7 +311,7 @@ function SectionCard({
         pointerEvents="none"
       />
       <View style={[s.cardHead, compact && s.cardHeadCompact]}>
-        <View style={{ flexDirection: "row", alignItems: "center", flex: 1, gap: 10 }}>
+        <View style={s.cardHeadLeft}>
           <View style={[
             s.cardIcon,
             compact && s.cardIconCompact,
@@ -319,7 +319,7 @@ function SectionCard({
           ]}>
             <Feather name={icon} size={compact ? 12 : 14} color={accent} />
           </View>
-          <Text style={[s.cardTitle, compact && s.cardTitleCompact, { flex: 1 }]}>{title}</Text>
+          <Text style={[s.cardTitle, compact && s.cardTitleCompact]}>{title}</Text>
         </View>
         {headerRight}
       </View>
@@ -332,6 +332,24 @@ function wealthScoreColor(score: number): string {
   if (score >= 72) return "#22c55e";
   if (score >= 60) return "#fbbf24";
   return "rgba(255,255,255,0.55)";
+}
+
+function DashaScoreBadge({
+  score,
+  wealthCopy,
+}: {
+  score: number;
+  wealthCopy: ReturnType<typeof financeWealthCopy>;
+}) {
+  const tierKey = wealthTierFromScore(score);
+  return (
+    <View style={s.dashaScoreCol}>
+      <Text style={[s.dashaScoreText, { color: wealthScoreColor(score) }]}>{score}</Text>
+      <Text style={s.dashaTierText} numberOfLines={1}>
+        {wealthCopy.tierLabels[tierKey]}
+      </Text>
+    </View>
+  );
 }
 
 function WealthDashaTimingModal({
@@ -361,12 +379,12 @@ function WealthDashaTimingModal({
               </Text>
               {timeline.bestMd ? (
                 <Text style={s.dashaMetaLine}>
-                  {wealthCopy.dashaBestMd}: {timeline.bestMd.planet} ({timeline.bestMd.score})
+                  {wealthCopy.dashaBestMd}: {timeline.bestMd.planet} ({timeline.bestMd.score} · {wealthCopy.tierLabels[wealthTierFromScore(timeline.bestMd.score)]})
                 </Text>
               ) : null}
               {timeline.bestAd ? (
                 <Text style={[s.dashaMetaLine, { marginBottom: 12 }]}>
-                  {wealthCopy.dashaBestAd}: {timeline.bestAd.mdPlanet}/{timeline.bestAd.planet} ({timeline.bestAd.score})
+                  {wealthCopy.dashaBestAd}: {timeline.bestAd.mdPlanet}/{timeline.bestAd.planet} ({timeline.bestAd.score} · {wealthCopy.tierLabels[wealthTierFromScore(timeline.bestAd.score)]})
                 </Text>
               ) : null}
               <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false}>
@@ -384,9 +402,7 @@ function WealthDashaTimingModal({
                         </View>
                         <Text style={s.dashaDateText}>{formatDashaRange(md.startDate, md.endDate)}</Text>
                       </View>
-                      <Text style={[s.dashaScoreText, { color: wealthScoreColor(md.score) }]}>
-                        {md.score}
-                      </Text>
+                      <DashaScoreBadge score={md.score} wealthCopy={wealthCopy} />
                     </View>
                     {md.antardashas.map(ad => (
                       <View
@@ -404,9 +420,7 @@ function WealthDashaTimingModal({
                           </View>
                           <Text style={s.dashaDateText}>{formatDashaRange(ad.startDate, ad.endDate)}</Text>
                         </View>
-                        <Text style={[s.dashaScoreText, { color: wealthScoreColor(ad.score) }]}>
-                          {ad.score}
-                        </Text>
+                        <DashaScoreBadge score={ad.score} wealthCopy={wealthCopy} />
                       </View>
                     ))}
                   </View>
@@ -661,23 +675,7 @@ export default function FinanceScreen() {
 
             {/* WEALTH TIER + SOURCE */}
             {wf && (
-              <SectionCard
-                icon="award"
-                title={wealthCopy.tierTitle}
-                accent="#fbbf24"
-                headerRight={(
-                  <Pressable
-                    onPress={() => {
-                      setDashaTimingOpen(true);
-                      void Haptics.selectionAsync().catch(() => undefined);
-                    }}
-                    style={({ pressed }) => [s.tierViewBtn, { opacity: pressed ? 0.8 : 1 }]}
-                  >
-                    <Text style={s.tierViewBtnText}>{wealthCopy.dashaTimingView}</Text>
-                    <Feather name="chevron-right" size={14} color="#fbbf24" />
-                  </Pressable>
-                )}
-              >
+              <SectionCard icon="award" title={wealthCopy.tierTitle} accent="#fbbf24">
                 <View style={s.tierRow}>
                   {WEALTH_TIER_ORDER.map(key => {
                     const selected = key === tierKey;
@@ -707,6 +705,18 @@ export default function FinanceScreen() {
                     Wealth Builder score {Math.round(wealthBuilderScore * 4) / 4} → {wealthCopy.tierLabels[tierKey]}
                   </Text>
                 ) : null}
+                <Pressable
+                  onPress={() => {
+                    setDashaTimingOpen(true);
+                    void Haptics.selectionAsync().catch(() => undefined);
+                  }}
+                  style={({ pressed }) => [s.dashaTimingLinkRow, { opacity: pressed ? 0.85 : 1 }]}
+                >
+                  <Feather name="clock" size={14} color="#fbbf24" />
+                  <Text style={s.dashaTimingLinkText}>{wealthCopy.dashaTimingTitle}</Text>
+                  <Text style={s.tierViewBtnText}>{wealthCopy.dashaTimingView}</Text>
+                  <Feather name="chevron-right" size={16} color="#fbbf24" />
+                </Pressable>
               </SectionCard>
             )}
 
@@ -1004,7 +1014,19 @@ const s = StyleSheet.create({
     gap: 8,
     borderRadius: 14,
   },
-  cardHead: { flexDirection: "row", alignItems: "center", gap: 9 },
+  cardHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  cardHeadLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    flexShrink: 1,
+    flex: 1,
+  },
   cardHeadCompact: { gap: 7 },
   cardIcon: {
     width: 28, height: 28, borderRadius: 9, borderWidth: 1,
@@ -1285,6 +1307,24 @@ const s = StyleSheet.create({
     fontSize: 11,
     fontFamily: F.bold,
   },
+  dashaTimingLinkRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.4)",
+    backgroundColor: "rgba(251,191,36,0.1)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  dashaTimingLinkText: {
+    color: "#fff",
+    fontSize: 12,
+    fontFamily: F.semi,
+    flex: 1,
+  },
   dashaMetaLine: {
     color: "rgba(255,255,255,0.65)",
     fontSize: 12,
@@ -1328,11 +1368,23 @@ const s = StyleSheet.create({
     fontSize: 10,
     fontFamily: F.regular,
   },
+  dashaScoreCol: {
+    alignItems: "flex-end",
+    minWidth: 72,
+    gap: 2,
+  },
   dashaScoreText: {
     fontSize: 15,
     fontFamily: F.bold,
-    minWidth: 28,
     textAlign: "right",
+  },
+  dashaTierText: {
+    fontSize: 9,
+    fontFamily: F.bold,
+    color: "rgba(251,191,36,0.9)",
+    textAlign: "right",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
   },
   dashaWealthChip: {
     color: "#fbbf24",

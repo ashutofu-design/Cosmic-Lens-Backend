@@ -98,9 +98,9 @@ export function financeWealthCopy(lang: UILang) {
     dashaTimingTitle: p(L, "Wealth Dasha Timing", "Wealth dasha timing", "धन दशा समय"),
     dashaTimingSub: p(
       L,
-      "Mahadasha & Antardasha scores from your Wealth Builder base. Higher = better money flow in that period.",
-      "Wealth Builder base se MD/AD score — zyada = us period me paisa flow better.",
-      "वेल्थ बिल्डर आधार से MD/AD स्कोर — अधिक = उस अवधि में बेहतर धन प्रवाह।",
+      "From your current Mahadasha forward (next 100 years). Higher score = better wealth flow in that MD/AD.",
+      "Current MD se aage 100 saal — zyada score = us MD/AD me paisa flow better.",
+      "वर्तमान MD से आगे 100 वर्ष — अधिक स्कोर = उस MD/AD में बेहतर धन प्रवाह।",
     ),
     dashaBaseLabel: p(L, "Birth wealth base", "Birth wealth base", "जन्म धन आधार"),
     dashaBestMd: p(L, "Best Mahadasha", "Best MD", "सर्वोत्तम महादशा"),

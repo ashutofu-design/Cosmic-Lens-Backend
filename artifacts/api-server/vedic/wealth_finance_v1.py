@@ -330,9 +330,9 @@ def _liquidity_index(
 
 
 _TIER_LABELS = {
-    "middle_class": "Average",
+    "middle_class": "Stable",
     "rich": "Rich",
-    "ultra_rich": "Very Rich",
+    "ultra_rich": "Ultra Rich",
     "millionaire": "Millionaire Potential",
 }
 

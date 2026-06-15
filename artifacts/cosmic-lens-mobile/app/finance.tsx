@@ -700,6 +700,7 @@ export default function FinanceScreen() {
                     );
                   })}
                 </View>
+                <Text style={s.tierSubtitle}>{wealthCopy.tierSubtitle}</Text>
                 {wealthBuilderScore != null ? (
                   <Text style={[s.miniLine, { marginTop: 10 }]}>
                     Wealth Builder score {Math.round(wealthBuilderScore * 4) / 4} → {wealthCopy.tierLabels[tierKey]}
@@ -1265,6 +1266,13 @@ const s = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
+  },
+  tierSubtitle: {
+    color: "rgba(255,255,255,0.52)",
+    fontSize: 11,
+    lineHeight: 16,
+    fontFamily: F.regular,
+    marginTop: 10,
   },
   tierTag: {
     borderRadius: 999,

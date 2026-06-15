@@ -142,11 +142,17 @@ export function financeWealthCopy(lang: UILang) {
       ),
     } as Record<LeakageKey, string>,
     tierLabels: {
-      middle_class: p(L, "Average", "Average", "औसत"),
+      middle_class: p(L, "Stable", "Stable", "स्थिर"),
       rich: p(L, "Rich", "Rich", "धनी"),
-      ultra_rich: p(L, "Very Rich", "Bahut rich", "बहुत धनी"),
+      ultra_rich: p(L, "Ultra Rich", "Ultra Rich", "अल्ट्रा धनी"),
       millionaire: p(L, "Millionaire Potential", "Crorepati potential", "करोड़पति संभावना"),
     } as Record<WealthTierKey, string>,
+    tierSubtitle: p(
+      L,
+      "Based on your Wealth Builder chart score — guidance only, not a guarantee.",
+      "Wealth Builder kundli score par — sirf guidance, guarantee nahi.",
+      "वेल्थ बिल्डर कुंडली स्कोर पर — केवल मार्गदर्शन, गारंटी नहीं।",
+    ),
     disclaimer: p(
       L,
       "Chart guidance only — not investment, tax or legal advice.",

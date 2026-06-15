@@ -53,6 +53,7 @@ interface BasicBlock {
       total_count?: number;
       activation_pct?: number;
       active_yogas?: string[];
+      dhan_yoga_names?: string[];
     };
     chart_matrix?: {
       d1_verdict?: string;
@@ -319,6 +320,13 @@ export default function FinanceScreen() {
                     <Text style={s.yogCardSub}>{wealthCopy.inChart}</Text>
                   </View>
                 </View>
+                {(yog.dhan_yoga_names?.length ?? 0) > 0 ? (
+                  <View style={{ marginBottom: 10, gap: 4 }}>
+                    {yog.dhan_yoga_names!.map((name, i) => (
+                      <Text key={`${name}-${i}`} style={s.miniLine}>• {name}</Text>
+                    ))}
+                  </View>
+                ) : null}
                 <View style={[s.chipGold, { alignSelf: "flex-start", borderColor: "rgba(34,197,94,0.45)", marginBottom: 10 }]}>
                   <Text style={[s.chipGoldText, { color: "#4ade80" }]}>
                     {wealthCopy.activation(yog.activation_pct ?? 0)}

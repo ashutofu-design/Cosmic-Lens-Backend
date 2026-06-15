@@ -148,59 +148,13 @@ PLANET_PROFESSIONS = {
                 "Detective / Investigation"],
 }
 
-# Dhana yoga rules (simplified — most common combos)
-def _has_dhana_yoga(planets: List[dict], lord_2: str, lord_5: str,
-                    lord_9: str, lord_11: str) -> List[Dict[str, str]]:
-    """Detect classical wealth yogas (Lakshmi, Dhana, Kubera-like)."""
-    yogas: List[Dict[str, str]] = []
-
-    def _planet_in_house(name: str) -> Optional[int]:
-        for p in planets:
-            if p.get("name") == name:
-                return p.get("house")
-        return None
-
-    h2  = _planet_in_house(lord_2)
-    h5  = _planet_in_house(lord_5)
-    h9  = _planet_in_house(lord_9)
-    h11 = _planet_in_house(lord_11)
-
-    # Dhana Yoga — 2nd lord and 11th lord conjunct or in trine
-    if h2 and h11 and (h2 == h11 or abs(h2 - h11) in (4, 8)):
-        yogas.append({
-            "name": "Dhana Yoga",
-            "detail": f"2nd & 11th lords ({lord_2} + {lord_11}) connected — strong wealth-flow combination."
-        })
-
-    # Lakshmi Yoga — 9th lord strong + Venus strong
-    ven = next((p for p in planets if p.get("name") == "Venus"), None)
-    if ven and h9 in (1, 4, 5, 7, 9, 10, 11):
-        if (ven.get("sign") in OWN.get("Venus", []) or
-                ven.get("sign") == EXALT["Venus"]):
-            yogas.append({
-                "name": "Lakshmi Yoga",
-                "detail": f"9th lord {lord_9} well-placed + Venus dignified — luxury and wealth blessings."
-            })
-
-    # Kubera-like — Jupiter + 2nd lord in own/exalted in kendra/trikona
-    jup = next((p for p in planets if p.get("name") == "Jupiter"), None)
-    if jup and jup.get("house") in (1, 4, 5, 7, 9, 10):
-        if jup.get("sign") in OWN.get("Jupiter", []) or jup.get("sign") == EXALT["Jupiter"]:
-            yogas.append({
-                "name": "Kubera Yoga (Jupiter wealth blessing)",
-                "detail": "Jupiter dignified in kendra/trikona — divine wealth protection and growth."
-            })
-
-    # Chandra-Mangal Yoga — Moon and Mars in conjunction
-    moon = next((p for p in planets if p.get("name") == "Moon"), None)
-    mars = next((p for p in planets if p.get("name") == "Mars"), None)
-    if moon and mars and moon.get("house") == mars.get("house"):
-        yogas.append({
-            "name": "Chandra-Mangal Yoga",
-            "detail": "Moon-Mars conjunction — natural ability to convert ideas into money; entrepreneurial."
-        })
-
-    return yogas
+# Dhana yoga — approved list only (see dhan_yoga_engine_v1)
+def _has_dhana_yoga_for_chart(planets: List[dict], asc_idx: int) -> List[Dict[str, str]]:
+    from vedic.dhan_yoga_engine_v1 import scan_dhan_yogas
+    return [
+        {"name": y["name"], "detail": y["detail"]}
+        for y in scan_dhan_yogas(planets, asc_idx)
+    ]
 
 
 # ── HEALTH chart helpers ───────────────────────────────────────────────────
@@ -2468,7 +2422,7 @@ def _money_builder_wealth_score(planets: List[dict], asc_idx: int, kundli: Optio
     yoga = _mb_clamp(
         50
         + _wealth_exchange_bonus(planets, asc_idx)
-        + min(len(_has_dhana_yoga(planets, lord_2, lord_5, lord_9, lord_11)), 4) * 3
+        + min(len(_has_dhana_yoga_for_chart(planets, asc_idx)), 4) * 3
     )
     if d2 >= 65 and d10 >= 65:
         base = _mb_weighted([(d1, .20), (d2, .35), (d10, .30), (wealth_planets, .10), (yoga, .05)])
@@ -2527,17 +2481,7 @@ def compute_finance_specifics(
 
         # ── Dhana yogas are still returned for display/styles, but no longer add
         # extra points here because Money Builder already includes a 5% yoga layer.
-        yogas = _has_dhana_yoga(planets, lord_2, lord_5, lord_9, lord_11)
-        if _has_lord_exchange(planets, asc_idx, 9, 11):
-            yogas.append({
-                "name": "Bhagya-Labha Parivartana",
-                "detail": "9th & 11th lords exchange — fortune and gains reinforce each other (destiny-income loop).",
-            })
-        elif _has_lord_exchange(planets, asc_idx, 2, 11):
-            yogas.append({
-                "name": "Dhana-Labha Parivartana",
-                "detail": "2nd & 11th lords exchange — savings and income streams strongly linked.",
-            })
+        yogas = _has_dhana_yoga_for_chart(planets, asc_idx)
         yogas_count = len(yogas)
         wealth_category = _classify_wealth_category(wealth_karma_score)
         wealth_styles = _derive_wealth_styles(

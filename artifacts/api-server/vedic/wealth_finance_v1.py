@@ -108,61 +108,8 @@ def _scan_dhan_yogas(
     asc_idx: int,
     existing: Optional[List[Dict[str, str]]] = None,
 ) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
-    lord_2 = _house_lord(asc_idx, 2)
-    lord_11 = _house_lord(asc_idx, 11)
-    lord_9 = _house_lord(asc_idx, 9)
-    lord_5 = _house_lord(asc_idx, 5)
-
-    for y in existing or []:
-        out.append({
-            "name": y.get("name", ""),
-            "detail": y.get("detail", ""),
-            "kind": "dhan",
-            "planets": [lord_2, lord_11, lord_9, lord_5],
-        })
-
-    if _lords_connected(planets, asc_idx, lord_2, lord_11):
-        if not any(x["name"] == "Dhana Yoga" for x in out):
-            out.append({
-                "name": "Dhana Yoga",
-                "detail": "2nd and 11th lords linked — savings and gains reinforce each other.",
-                "kind": "dhan",
-                "planets": [lord_2, lord_11],
-            })
-
-    jup = _find_p(planets, "Jupiter")
-    if jup and int(jup.get("house") or 0) in _KENDRA | _TRIKONA:
-        sg = str(jup.get("sign") or "")
-        if sg in OWN.get("Jupiter", []) or sg == EXALT.get("Jupiter"):
-            if not any("Kubera" in x["name"] for x in out):
-                out.append({
-                    "name": "Kubera Yoga",
-                    "detail": "Strong Jupiter in wealth-supportive houses.",
-                    "kind": "dhan",
-                    "planets": ["Jupiter"],
-                })
-
-    moon, mars = _find_p(planets, "Moon"), _find_p(planets, "Mars")
-    if moon and mars and moon.get("house") == mars.get("house"):
-        out.append({
-            "name": "Chandra-Mangal Yoga",
-            "detail": "Moon and Mars together — enterprise and self-earned wealth.",
-            "kind": "dhan",
-            "planets": ["Moon", "Mars"],
-        })
-
-    sun, merc = _find_p(planets, "Sun"), _find_p(planets, "Mercury")
-    if sun and merc and sun.get("house") == merc.get("house"):
-        if int(sun.get("house") or 0) in _KENDRA | _TRIKONA:
-            out.append({
-                "name": "Budhaditya Yoga",
-                "detail": "Sun and Mercury united in a strong house — sharp wealth intelligence.",
-                "kind": "dhan",
-                "planets": ["Sun", "Mercury"],
-            })
-
-    return out[:8]
+    from vedic.dhan_yoga_engine_v1 import scan_dhan_yogas
+    return scan_dhan_yogas(planets, asc_idx)[:8]
 
 
 def _scan_raj_yogas(planets: List[dict], asc_idx: int) -> List[Dict[str, Any]]:
@@ -468,6 +415,7 @@ def compute_wealth_finance_diagnostic(
             "total_count": len(all_yogas),
             "activation_pct": activation_pct,
             "active_yogas": active_yogas[:4],
+            "dhan_yoga_names": [str(y.get("name") or "") for y in dhan],
         },
         "chart_matrix": matrix,
         "wealth_tier": tier,

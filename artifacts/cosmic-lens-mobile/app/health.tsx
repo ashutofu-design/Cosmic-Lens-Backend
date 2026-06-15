@@ -23,6 +23,7 @@ import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 import { usePlan } from "@/lib/subscription";
+import { healthTridoshaCopy, type DoshaKey } from "@/lib/healthTridoshaCopy";
 
 const F = {
   regular: "Nunito_400Regular",
@@ -31,7 +32,17 @@ const F = {
   extra:   "Nunito_800ExtraBold",
 } as const;
 
-interface BasicBlock { score: number; risk: string; summary: string; hook: string; }
+interface BasicBlock {
+  score: number;
+  risk: string;
+  summary?: string;
+  hook?: string;
+  dosha_balance?: Record<"vata" | "pitta" | "kapha", number>;
+  dosha_states?: Record<"vata" | "pitta" | "kapha", string>;
+  dominant_dosha?: string;
+  primary_imbalance?: string;
+  tridosha_care?: string[];
+}
 interface PlanetStrength { name: string; sign: string; house: number; status: string; retrograde?: boolean; }
 interface HouseInfo { sign: string; lord: string; occupants: string; meaning: string; }
 interface ProBlock {
@@ -132,6 +143,35 @@ function Bullet({ children, color }: { children: React.ReactNode; color: string 
   );
 }
 
+function DoshaBar({
+  label,
+  pct,
+  state,
+  color,
+  stateLabel,
+}: {
+  label: string;
+  pct: number;
+  state: string;
+  color: string;
+  stateLabel: string;
+}) {
+  return (
+    <View style={{ marginBottom: 12 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 5 }}>
+        <Text style={{ color: "#e2e8f0", fontSize: 13, fontFamily: F.semi }}>{label}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Text style={{ color: color, fontSize: 13, fontFamily: F.bold }}>{pct}%</Text>
+          <Text style={{ color: "rgba(255,255,255,0.45)", fontSize: 10, fontFamily: F.semi }}>{stateLabel}</Text>
+        </View>
+      </View>
+      <View style={{ height: 9, backgroundColor: "#1e293b", borderRadius: 5, overflow: "hidden" }}>
+        <View style={{ width: `${Math.min(100, pct)}%`, height: "100%", backgroundColor: color, borderRadius: 5 }} />
+      </View>
+    </View>
+  );
+}
+
 export default function HealthScreen() {
   const insets = useSafeAreaInsets();
   const { user, kundli } = useUser();
@@ -173,6 +213,20 @@ export default function HealthScreen() {
   }, [user?.id, user?.api_key, kundli]);
 
   const accent = "#14b8a6";
+  const triCopy = healthTridoshaCopy(t.lang);
+  const doshaBal = data?.basic?.dosha_balance;
+  const doshaStates = data?.basic?.dosha_states;
+  const hasTridosha =
+    doshaBal &&
+    typeof doshaBal.vata === "number" &&
+    typeof doshaBal.pitta === "number" &&
+    typeof doshaBal.kapha === "number";
+
+  const doshaColors: Record<DoshaKey, string> = {
+    vata: "#60a5fa",
+    pitta: "#ef4444",
+    kapha: "#22c55e",
+  };
 
   return (
     <CosmicBg>
@@ -262,9 +316,53 @@ export default function HealthScreen() {
             </View>
 
             {/* SUMMARY */}
-            <SectionCard icon="message-circle" title={t.cr_quickReading} accent={accent}>
-              <Text style={s.summary}>{data.basic.summary}</Text>
-            </SectionCard>
+            {data.basic.summary ? (
+              <SectionCard icon="message-circle" title={t.cr_quickReading} accent={accent}>
+                <Text style={s.summary}>{data.basic.summary}</Text>
+              </SectionCard>
+            ) : null}
+
+            {/* TRIDOSHA — all users */}
+            {hasTridosha && (
+              <SectionCard icon="droplet" title={triCopy.sectionTitle} accent="#a78bfa">
+                <Text style={[s.summary, { marginBottom: 10, fontSize: 12 }]}>
+                  {triCopy.sectionSub}
+                  {data.basic.dominant_dosha
+                    ? ` · ${triCopy.dominant(data.basic.dominant_dosha)}`
+                    : ""}
+                </Text>
+                {(["vata", "pitta", "kapha"] as const).map(dk => (
+                  <DoshaBar
+                    key={dk}
+                    label={triCopy.labels[dk]}
+                    pct={doshaBal![dk]}
+                    state={doshaStates?.[dk] || "Balanced"}
+                    stateLabel={triCopy.states[doshaStates?.[dk] || "Balanced"] || doshaStates?.[dk] || ""}
+                    color={doshaColors[dk]}
+                  />
+                ))}
+                {(data.basic.tridosha_care ?? []).slice(0, 1).map((tip, i) => (
+                  <View
+                    key={i}
+                    style={{
+                      marginTop: 6,
+                      padding: 10,
+                      borderRadius: 10,
+                      backgroundColor: "rgba(167,139,250,0.08)",
+                      borderWidth: 1,
+                      borderColor: "rgba(167,139,250,0.2)",
+                    }}
+                  >
+                    <Text style={{ color: "#c4b5fd", fontSize: 10, fontFamily: F.bold, marginBottom: 4 }}>
+                      {triCopy.careTitle}
+                    </Text>
+                    <Text style={{ color: "rgba(255,255,255,0.82)", fontSize: 12, lineHeight: 18, fontFamily: F.regular }}>
+                      {tip}
+                    </Text>
+                  </View>
+                ))}
+              </SectionCard>
+            )}
 
             {/* HOOK (non-pro) */}
             {!isProUser && (

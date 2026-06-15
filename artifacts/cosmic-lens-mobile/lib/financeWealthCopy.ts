@@ -32,6 +32,7 @@ export function financeWealthCopy(lang: UILang) {
     rajYogCard: p(L, "Raj Yog", "Raj Yog", "राज योग"),
     inChart: p(L, "in your chart", "chart me", "आपकी कुंडली में"),
     tapDhanHint: p(L, "Tap Dhan Yog card for details", "Dhan Yog card tap karo — detail", "धन योग कार्ड दबाएँ — विवरण"),
+    tapYogHint: p(L, "Tap Dhan or Raj Yog cards for details", "Dhan / Raj Yog card tap karo — detail", "धन या राज योग कार्ड दबाएँ — विवरण"),
     dhanDetailTitle: p(L, "How your Dhan Yogas formed", "Dhan yog kaise bane", "धन योग कैसे बने"),
     dhanDetailSub: p(
       L,
@@ -40,12 +41,21 @@ export function financeWealthCopy(lang: UILang) {
       "हर पंक्ति में योग और कुंडली लिंक।",
     ),
     dhanEmpty: p(L, "No dhan yoga combination found in this chart.", "Is chart me dhan yog combo nahi.", "इस कुंडली में धन योग संयोग नहीं।"),
+    rajDetailTitle: p(L, "How your Raj Yogas formed", "Raj yog kaise bane", "राज योग कैसे बने"),
+    rajDetailSub: p(
+      L,
+      "Kendra-trikona links, placements, and special status yogas in your chart.",
+      "Kendra-trikona link, placement aur status yog.",
+      "केंद्र-त्रिकोण लिंक, स्थिति और विशेष राज योग।",
+    ),
+    rajEmpty: p(L, "No raj yoga combination found in this chart.", "Is chart me raj yog combo nahi.", "इस कुंडली में राज योग संयोग नहीं।"),
     close: p(L, "Close", "Band karo", "बंद करें"),
     linkType: {
       conjunction: p(L, "Same house", "Ek hi ghar me", "एक ही भाव में"),
       mutual_aspect: p(L, "Mutual aspect", "Mutual aspect", "परस्पर दृष्टि"),
       parivartana: p(L, "Lord exchange", "Lord parivartana", "स्वामी परिवर्तन"),
       karaka: p(L, "Strong karaka", "Strong karaka", "बलवान कारक"),
+      placement: p(L, "House placement", "Ghar me baitha", "भाव में स्थित"),
     } as Record<string, string>,
     housePair: (a: number, b: number) =>
       p(L, `Houses ${a} & ${b} lords`, `${a} aur ${b} ghar ke lord`, `${a} और ${b} भाव के स्वामी`),

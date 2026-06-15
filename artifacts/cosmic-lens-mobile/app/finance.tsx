@@ -39,7 +39,7 @@ const F = {
   extra:   "Nunito_800ExtraBold",
 } as const;
 
-type DhanYogaItem = {
+type YogaItem = {
   name: string;
   detail: string;
   link?: string;
@@ -47,14 +47,20 @@ type DhanYogaItem = {
   planets?: string[];
 };
 
-function resolveDhanYogas(
+function resolveYogas(
   yog: BasicBlock["wealth_finance"] extends { yog_metrics?: infer Y } ? Y : undefined,
-  basicDhana?: Array<{ name: string; detail?: string }>,
-): DhanYogaItem[] {
-  const fromMetrics = yog?.dhan_yogas?.filter((x) => x?.name) ?? [];
+  key: "dhan" | "raj",
+  basicFallback?: Array<{ name: string; detail?: string }>,
+): YogaItem[] {
+  const listKey = key === "dhan" ? "dhan_yogas" : "raj_yogas";
+  const namesKey = key === "dhan" ? "dhan_yoga_names" : "raj_yoga_names";
+  const countKey = key === "dhan" ? "dhan_count" : "raj_count";
+  const label = key === "dhan" ? "Dhan Yog" : "Raj Yog";
+
+  const fromMetrics = (yog?.[listKey] as YogaItem[] | undefined)?.filter((x) => x?.name) ?? [];
   if (fromMetrics.length > 0) return fromMetrics;
 
-  const fromBasic = (basicDhana ?? []).filter((x) => x?.name).map((x) => ({
+  const fromBasic = (basicFallback ?? []).filter((x) => x?.name).map((x) => ({
     name: x.name,
     detail: x.detail ?? "",
     link: "",
@@ -63,7 +69,7 @@ function resolveDhanYogas(
   }));
   if (fromBasic.length > 0) return fromBasic;
 
-  const names = yog?.dhan_yoga_names?.filter(Boolean) ?? [];
+  const names = yog?.[namesKey]?.filter(Boolean) ?? [];
   if (names.length > 0) {
     return names.map((name) => ({
       name,
@@ -74,10 +80,10 @@ function resolveDhanYogas(
     }));
   }
 
-  const count = yog?.dhan_count ?? 0;
+  const count = yog?.[countKey] ?? 0;
   if (count > 0) {
     return Array.from({ length: count }, (_, i) => ({
-      name: `Dhan Yog ${i + 1}`,
+      name: `${label} ${i + 1}`,
       detail: "",
       link: "",
       houses: [] as number[],
@@ -95,6 +101,7 @@ interface BasicBlock {
   hook: string;
   money_habits?: string[];
   dhana_yogas?: Array<{ name: string; detail?: string }>;
+  raj_yogas?: Array<{ name: string; detail?: string }>;
   wealth_finance?: {
     engine?: string;
     disclaimer?: string;
@@ -105,7 +112,9 @@ interface BasicBlock {
       activation_pct?: number;
       active_yogas?: string[];
       dhan_yoga_names?: string[];
-      dhan_yogas?: DhanYogaItem[];
+      dhan_yogas?: YogaItem[];
+      raj_yoga_names?: string[];
+      raj_yogas?: YogaItem[];
     };
     chart_matrix?: {
       d1_verdict?: string;
@@ -233,6 +242,7 @@ export default function FinanceScreen() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [dhanDetailOpen, setDhanDetailOpen] = useState(false);
+  const [rajDetailOpen, setRajDetailOpen] = useState(false);
 
   const fade = useRef(new Animated.Value(0)).current;
 
@@ -269,7 +279,8 @@ export default function FinanceScreen() {
   const matrix = wf?.chart_matrix;
   const tierKey = (wf?.wealth_tier ?? "middle_class") as WealthTierKey;
   const liquidity = (wf?.current_liquidity_index ?? "moderate") as LiquidityKey;
-  const dhanYogas = resolveDhanYogas(yog, data?.basic?.dhana_yogas);
+  const dhanYogas = resolveYogas(yog, "dhan", data?.basic?.dhana_yogas);
+  const rajYogas = resolveYogas(yog, "raj", data?.basic?.raj_yogas);
 
   return (
     <CosmicBg>
@@ -379,13 +390,24 @@ export default function FinanceScreen() {
                       <Text style={s.yogCardSub}>{wealthCopy.inChart}</Text>
                     </View>
                   </Pressable>
-                  <View style={[s.yogCard, { borderColor: "rgba(167,139,250,0.4)", backgroundColor: "rgba(167,139,250,0.1)" }]}>
-                    <Text style={[s.yogCardLabel, { color: "#c4b5fd" }]}>{wealthCopy.rajYogCard}</Text>
-                    <Text style={[s.yogCardNum, { color: "#c4b5fd" }]}>{yog.raj_count ?? 0}</Text>
-                    <Text style={s.yogCardSub}>{wealthCopy.inChart}</Text>
-                  </View>
+                  <Pressable
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setRajDetailOpen(true);
+                    }}
+                    style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.88 : 1 }]}
+                  >
+                    <View style={[s.yogCard, { borderColor: "rgba(167,139,250,0.4)", backgroundColor: "rgba(167,139,250,0.1)" }]}>
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                        <Text style={[s.yogCardLabel, { color: "#c4b5fd" }]}>{wealthCopy.rajYogCard}</Text>
+                        <Feather name="chevron-right" size={14} color="#c4b5fd" />
+                      </View>
+                      <Text style={[s.yogCardNum, { color: "#c4b5fd" }]}>{yog.raj_count ?? 0}</Text>
+                      <Text style={s.yogCardSub}>{wealthCopy.inChart}</Text>
+                    </View>
+                  </Pressable>
                 </View>
-                <Text style={[s.tapHint, { marginBottom: 12 }]}>{wealthCopy.tapDhanHint}</Text>
+                <Text style={[s.tapHint, { marginBottom: 12 }]}>{wealthCopy.tapYogHint}</Text>
                 <View style={[s.chipGold, { alignSelf: "flex-start", borderColor: "rgba(34,197,94,0.45)", marginBottom: 10 }]}>
                   <Text style={[s.chipGoldText, { color: "#4ade80" }]}>
                     {wealthCopy.activation(yog.activation_pct ?? 0)}
@@ -447,6 +469,60 @@ export default function FinanceScreen() {
                   </ScrollView>
                   <Pressable
                     onPress={() => setDhanDetailOpen(false)}
+                    style={({ pressed }) => [s.modalCloseBtn, { opacity: pressed ? 0.85 : 1 }]}
+                  >
+                    <Text style={s.modalCloseText}>{wealthCopy.close}</Text>
+                  </Pressable>
+                </Pressable>
+              </Pressable>
+            </Modal>
+
+            <Modal
+              visible={rajDetailOpen}
+              animationType="slide"
+              transparent
+              onRequestClose={() => setRajDetailOpen(false)}
+            >
+              <Pressable style={s.modalBackdrop} onPress={() => setRajDetailOpen(false)}>
+                <Pressable style={s.modalSheet} onPress={(e) => e.stopPropagation()}>
+                  <View style={s.modalHandle} />
+                  <Text style={s.modalTitle}>{wealthCopy.rajDetailTitle}</Text>
+                  <Text style={s.modalSub}>{wealthCopy.rajDetailSub}</Text>
+                  <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+                    {rajYogas.length > 0 ? (
+                      rajYogas.map((item, i) => {
+                        const linkKey = item.link ?? "";
+                        const linkLabel = wealthCopy.linkType[linkKey] ?? linkKey;
+                        const houseHint =
+                          item.houses && item.houses.length === 2
+                            ? wealthCopy.housePair(item.houses[0], item.houses[1])
+                            : null;
+                        return (
+                          <View key={`${item.name}-${i}`} style={s.dhanDetailRow}>
+                            <Text style={[s.dhanDetailName, { color: "#e9d5ff" }]}>{item.name}</Text>
+                            {linkLabel ? (
+                              <View style={[s.dhanLinkPill, { borderColor: "rgba(167,139,250,0.5)", backgroundColor: "rgba(167,139,250,0.15)" }]}>
+                                <Text style={[s.dhanLinkPillText, { color: "#c4b5fd" }]}>{linkLabel}</Text>
+                              </View>
+                            ) : null}
+                            {houseHint ? (
+                              <Text style={s.dhanDetailMeta}>{houseHint}</Text>
+                            ) : null}
+                            {item.planets && item.planets.length > 0 ? (
+                              <Text style={s.dhanDetailMeta}>
+                                {item.planets.join(" • ")}
+                              </Text>
+                            ) : null}
+                            <Text style={s.dhanDetailBody}>{item.detail}</Text>
+                          </View>
+                        );
+                      })
+                    ) : (
+                      <Text style={s.dhanDetailBody}>{wealthCopy.rajEmpty}</Text>
+                    )}
+                  </ScrollView>
+                  <Pressable
+                    onPress={() => setRajDetailOpen(false)}
                     style={({ pressed }) => [s.modalCloseBtn, { opacity: pressed ? 0.85 : 1 }]}
                   >
                     <Text style={s.modalCloseText}>{wealthCopy.close}</Text>

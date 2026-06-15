@@ -157,7 +157,7 @@ def _has_dhana_yoga_for_chart(planets: List[dict], asc_idx: int) -> List[Dict[st
     ]
 
 
-def _serialize_dhan_yogas_api(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _serialize_yoga_metrics_api(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return [
         {
             "name": str(y.get("name") or ""),
@@ -170,22 +170,38 @@ def _serialize_dhan_yogas_api(items: List[Dict[str, Any]]) -> List[Dict[str, Any
     ]
 
 
+def _serialize_dhan_yogas_api(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return _serialize_yoga_metrics_api(items)
+
+
+def _patch_wealth_finance_yoga_details(
+    wealth_finance: Dict[str, Any],
+    planets: List[dict],
+    asc_idx: int,
+) -> Dict[str, Any]:
+    """Always attach full dhan_yogas[] and raj_yogas[] for Finance tap-detail UI."""
+    from vedic.dhan_yoga_engine_v1 import scan_dhan_yogas
+    from vedic.raj_yoga_engine_v1 import scan_raj_yogas
+    wf = dict(wealth_finance or {})
+    ym = dict(wf.get("yog_metrics") or {})
+    dhan = scan_dhan_yogas(planets, asc_idx)
+    raj = scan_raj_yogas(planets, asc_idx)
+    ym["dhan_yogas"] = _serialize_yoga_metrics_api(dhan)
+    ym["dhan_count"] = len(ym["dhan_yogas"])
+    ym["dhan_yoga_names"] = [x["name"] for x in ym["dhan_yogas"] if x.get("name")]
+    ym["raj_yogas"] = _serialize_yoga_metrics_api(raj)
+    ym["raj_count"] = len(ym["raj_yogas"])
+    ym["raj_yoga_names"] = [x["name"] for x in ym["raj_yogas"] if x.get("name")]
+    wf["yog_metrics"] = ym
+    return wf
+
+
 def _patch_wealth_finance_dhan_details(
     wealth_finance: Dict[str, Any],
     planets: List[dict],
     asc_idx: int,
 ) -> Dict[str, Any]:
-    """Always attach full dhan_yogas[] for Finance tap-detail UI."""
-    from vedic.dhan_yoga_engine_v1 import scan_dhan_yogas
-    wf = dict(wealth_finance or {})
-    ym = dict(wf.get("yog_metrics") or {})
-    scanned = scan_dhan_yogas(planets, asc_idx)
-    serialized = _serialize_dhan_yogas_api(scanned)
-    ym["dhan_yogas"] = serialized
-    ym["dhan_count"] = len(serialized)
-    ym["dhan_yoga_names"] = [x["name"] for x in serialized if x.get("name")]
-    wf["yog_metrics"] = ym
-    return wf
+    return _patch_wealth_finance_yoga_details(wealth_finance, planets, asc_idx)
 
 
 # ── HEALTH chart helpers ───────────────────────────────────────────────────
@@ -2544,6 +2560,12 @@ def compute_finance_specifics(
         )
         wealth_finance = _patch_wealth_finance_dhan_details(wealth_finance, planets, asc_idx)
 
+        from vedic.raj_yoga_engine_v1 import scan_raj_yogas
+        raj_yogas = [
+            {"name": y["name"], "detail": y["detail"]}
+            for y in scan_raj_yogas(planets, asc_idx)
+        ]
+
         return {
             "wealth_karma_score": wealth_karma_score,
             "wealth_score":       wealth_karma_score,
@@ -2555,6 +2577,7 @@ def compute_finance_specifics(
                 or (kundli or {}).get("divisionalCharts", {}).get("D10", {}).get("planets")
             ),
             "dhana_yogas":        yogas,
+            "raj_yogas":          raj_yogas,
             "yogas_count":        yogas_count,
             "money_habits":       money_habits,
             "peak_wealth_period": peak,
@@ -2768,11 +2791,17 @@ def build_finance_basic_insights(
             pass
 
     dhana_yogas = list(deep.get("dhana_yogas") or [])
+    raj_yogas = list(deep.get("raj_yogas") or [])
     ym = dict(wealth_finance.get("yog_metrics") or {})
     if not ym.get("dhan_yogas") and dhana_yogas:
-        ym["dhan_yogas"] = _serialize_dhan_yogas_api(dhana_yogas)
+        ym["dhan_yogas"] = _serialize_yoga_metrics_api(dhana_yogas)
         ym["dhan_count"] = len(ym["dhan_yogas"])
         ym["dhan_yoga_names"] = [str(x.get("name") or "") for x in ym["dhan_yogas"]]
+    if not ym.get("raj_yogas") and raj_yogas:
+        ym["raj_yogas"] = _serialize_yoga_metrics_api(raj_yogas)
+        ym["raj_count"] = len(ym["raj_yogas"])
+        ym["raj_yoga_names"] = [str(x.get("name") or "") for x in ym["raj_yogas"]]
+    if ym:
         wealth_finance["yog_metrics"] = ym
 
     return {
@@ -2793,4 +2822,5 @@ def build_finance_basic_insights(
         "transit_lines": transits,
         "wealth_finance": wealth_finance,
         "dhana_yogas": dhana_yogas,
+        "raj_yogas": raj_yogas,
     }

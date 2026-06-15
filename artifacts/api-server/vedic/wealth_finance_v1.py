@@ -76,31 +76,22 @@ def _planet_house(planets: List[dict], name: str) -> Optional[int]:
     return int(h) if isinstance(h, int) else None
 
 
-def _lords_connected(planets: List[dict], asc_idx: int, lord_a: str, lord_b: str) -> bool:
-    ha = _planet_house(planets, lord_a)
-    hb = _planet_house(planets, lord_b)
-    if ha and hb and ha == hb:
-        return True
-    if ha and hb and abs(ha - hb) in (4, 8):
-        return True
-    return _has_parivartana(planets, asc_idx, lord_a, lord_b)
+def _scan_raj_yogas(planets: List[dict], asc_idx: int) -> List[Dict[str, Any]]:
+    from vedic.raj_yoga_engine_v1 import scan_raj_yogas
+    return scan_raj_yogas(planets, asc_idx)[:12]
 
 
-def _has_parivartana(planets: List[dict], asc_idx: int, lord_a: str, lord_b: str) -> bool:
-    pa, pb = _find_p(planets, lord_a), _find_p(planets, lord_b)
-    if not pa or not pb:
-        return False
-    sign_a = SIGNS[(asc_idx + int(pa.get("house") or 1) - 1) % 12] if pa.get("house") else ""
-    sign_b = SIGNS[(asc_idx + int(pb.get("house") or 1) - 1) % 12] if pb.get("house") else ""
-    # True exchange: A sits in B's sign lordship house and vice versa
-    for h in range(1, 13):
-        if SIGN_LORD[SIGNS[(asc_idx + h - 1) % 12]] == lord_b:
-            if int(pa.get("house") or 0) == h and SIGN_LORD.get(str(pb.get("sign") or "")) == lord_a:
-                return True
-    return (
-        SIGN_LORD.get(str(pa.get("sign") or "")) == lord_b
-        and SIGN_LORD.get(str(pb.get("sign") or "")) == lord_a
-    )
+def _serialize_yogas_api(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [
+        {
+            "name": str(y.get("name") or ""),
+            "detail": str(y.get("detail") or ""),
+            "link": str(y.get("link") or ""),
+            "houses": list(y.get("houses") or []),
+            "planets": list(y.get("planets") or []),
+        }
+        for y in (items or [])
+    ]
 
 
 def _scan_dhan_yogas(
@@ -110,40 +101,6 @@ def _scan_dhan_yogas(
 ) -> List[Dict[str, Any]]:
     from vedic.dhan_yoga_engine_v1 import scan_dhan_yogas
     return scan_dhan_yogas(planets, asc_idx)[:8]
-
-
-def _scan_raj_yogas(planets: List[dict], asc_idx: int) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
-    k_lords = {_house_lord(asc_idx, h) for h in _KENDRA}
-    t_lords = {_house_lord(asc_idx, h) for h in _TRIKONA}
-    seen: Set[str] = set()
-    for kl in k_lords:
-        for tl in t_lords:
-            if kl == tl:
-                continue
-            key = tuple(sorted((kl, tl)))
-            if key in seen:
-                continue
-            if _lords_connected(planets, asc_idx, kl, tl):
-                seen.add(key)
-                out.append({
-                    "name": "Raj Yoga link",
-                    "detail": f"{kl} and {tl} lords connected — status supports wealth rise.",
-                    "kind": "raj",
-                    "planets": [kl, tl],
-                })
-    benefic_kendra = 0
-    for p in planets:
-        if p.get("name") in _BENEFICS and int(p.get("house") or 0) in _KENDRA | _TRIKONA:
-            benefic_kendra += 1
-    if benefic_kendra >= 2:
-        out.append({
-            "name": "Benefic strength",
-            "detail": f"{benefic_kendra} benefics in kendra/trikona — supportive wealth backdrop.",
-            "kind": "raj",
-            "planets": list(_BENEFICS),
-        })
-    return out[:6]
 
 
 def _yoga_activation_pct(
@@ -416,16 +373,9 @@ def compute_wealth_finance_diagnostic(
             "activation_pct": activation_pct,
             "active_yogas": active_yogas[:4],
             "dhan_yoga_names": [str(y.get("name") or "") for y in dhan],
-            "dhan_yogas": [
-                {
-                    "name": str(y.get("name") or ""),
-                    "detail": str(y.get("detail") or ""),
-                    "link": str(y.get("link") or ""),
-                    "houses": list(y.get("houses") or []),
-                    "planets": list(y.get("planets") or []),
-                }
-                for y in dhan
-            ],
+            "dhan_yogas": _serialize_yogas_api(dhan),
+            "raj_yoga_names": [str(y.get("name") or "") for y in raj],
+            "raj_yogas": _serialize_yogas_api(raj),
         },
         "chart_matrix": matrix,
         "wealth_tier": tier,

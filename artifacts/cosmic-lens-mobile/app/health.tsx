@@ -61,6 +61,8 @@ interface BasicBlock {
   structural_reason?: string;
   dietary_remedies?: string[];
   clinical_disease_promise?: boolean;
+  risky_organs?: string[];
+  sensitive_areas?: string[];
 }
 interface PlanetStrength { name: string; sign: string; house: number; status: string; retrograde?: boolean; }
 interface HouseInfo { sign: string; lord: string; occupants: string; meaning: string; }
@@ -247,6 +249,11 @@ export default function HealthScreen() {
     kapha: "#22c55e",
   };
   const doshaOrder = doshasByPct(doshaBal ?? undefined);
+  const topDosha = doshaOrder[0];
+  const topRemedy = topDosha ? triCopy.dominantRemedy[topDosha] : "";
+  const riskyOrgans = (data?.basic?.risky_organs?.length
+    ? data.basic.risky_organs
+    : data?.basic?.sensitive_areas) ?? [];
 
   return (
     <CosmicBg>
@@ -335,40 +342,12 @@ export default function HealthScreen() {
               </View>
             </View>
 
-            {/* SUMMARY */}
-            {data.basic.summary ? (
-              <SectionCard icon="message-circle" title={t.cr_quickReading} accent={accent}>
-                <Text style={s.summary}>{data.basic.summary}</Text>
-              </SectionCard>
-            ) : null}
-
             {/* TRIDOSHA — all users */}
             {hasTridosha && (
               <SectionCard icon="droplet" title={triCopy.sectionTitle} accent="#a78bfa">
-                <Text style={[s.summary, { marginBottom: 10, fontSize: 12 }]}>
-                  {triCopy.sectionSub}
-                  {data.basic.dominant_dosha
-                    ? ` · ${triCopy.dominant(data.basic.dominant_dosha)}`
-                    : ""}
-                </Text>
-                {data.basic.structural_reason ? (
-                  <Text style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, marginBottom: 8, lineHeight: 17, fontFamily: F.regular }}>
-                    {data.basic.structural_reason}
-                  </Text>
-                ) : data.basic.d9_immunity_verdict ? (
-                  <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, marginBottom: 8, fontFamily: F.regular }}>
-                    {data.basic.d9_immunity_verdict}
-                    {data.basic.kp_6th_csl?.csl_planet
-                      ? ` · KP 6th CSL: ${data.basic.kp_6th_csl.csl_planet}`
-                      : ""}
-                    {data.basic.kp_6th_csl?.immunity_message
-                      ? ` · ${data.basic.kp_6th_csl.immunity_message}`
-                      : ""}
-                  </Text>
-                ) : null}
-                {data.basic.dominant_clinical_trigger ? (
-                  <Text style={{ color: "#c4b5fd", fontSize: 11, marginBottom: 8, fontFamily: F.semi }}>
-                    Clinical trigger: {data.basic.dominant_clinical_trigger}
+                {data.basic.dominant_dosha ? (
+                  <Text style={[s.summary, { marginBottom: 10, fontSize: 12 }]}>
+                    {triCopy.dominant(data.basic.dominant_dosha)}
                   </Text>
                 ) : null}
                 {doshaOrder.map(dk => (
@@ -381,9 +360,8 @@ export default function HealthScreen() {
                     color={doshaColors[dk]}
                   />
                 ))}
-                {(data.basic.dietary_remedies ?? data.basic.tridosha_care ?? []).slice(0, 2).map((tip, i) => (
+                {topRemedy ? (
                   <View
-                    key={i}
                     style={{
                       marginTop: 6,
                       padding: 10,
@@ -394,15 +372,47 @@ export default function HealthScreen() {
                     }}
                   >
                     <Text style={{ color: "#c4b5fd", fontSize: 10, fontFamily: F.bold, marginBottom: 4 }}>
-                      {triCopy.careTitle}
+                      {triCopy.forYouTitle}
                     </Text>
                     <Text style={{ color: "rgba(255,255,255,0.82)", fontSize: 12, lineHeight: 18, fontFamily: F.regular }}>
-                      {tip}
+                      {topRemedy}
                     </Text>
                   </View>
-                ))}
+                ) : null}
               </SectionCard>
             )}
+
+            {/* RISKY ORGANS — all users */}
+            <SectionCard icon="heart" title={triCopy.riskyOrgansTitle} accent="#f59e0b">
+              <Text style={[s.summary, { marginBottom: 10, fontSize: 12 }]}>
+                {triCopy.riskyOrgansSub}
+              </Text>
+              {riskyOrgans.length > 0 ? (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {riskyOrgans.map((organ, i) => (
+                    <View
+                      key={`${organ}-${i}`}
+                      style={{
+                        backgroundColor: "rgba(245,158,11,0.12)",
+                        borderColor: "rgba(245,158,11,0.35)",
+                        borderWidth: 1,
+                        borderRadius: 999,
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                      }}
+                    >
+                      <Text style={{ color: "#fbbf24", fontSize: 12, fontFamily: F.semi }}>
+                        {organ}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={{ color: "rgba(255,255,255,0.65)", fontSize: 12, lineHeight: 18, fontFamily: F.regular }}>
+                  {triCopy.riskyOrgansEmpty}
+                </Text>
+              )}
+            </SectionCard>
 
             {/* HOOK (non-pro) */}
             {!isProUser && (

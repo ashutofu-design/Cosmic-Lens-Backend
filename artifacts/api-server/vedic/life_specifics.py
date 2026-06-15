@@ -699,6 +699,52 @@ def _plain_organ_label(fragment: str) -> str:
     return fragment.strip().title() if fragment.islower() else fragment.strip()
 
 
+_RISK_RANK = {"High": 3, "Medium": 2, "Low": 1}
+
+
+def _build_risky_organs(
+    issues: Optional[List[Dict[str, Any]]],
+    raw_organs: Optional[List[str]] = None,
+) -> List[str]:
+    """Up to 4 body zones — High-risk chart hits first, plain language."""
+    out: List[str] = []
+    seen: set = set()
+
+    ranked = sorted(
+        issues or [],
+        key=lambda it: -_RISK_RANK.get(str(it.get("risk") or "Low"), 0),
+    )
+    for it in ranked:
+        blob = str(it.get("organs") or "")
+        for part in blob.replace(";", ",").split(","):
+            label = _plain_organ_label(part.strip())
+            if not label:
+                continue
+            key = label.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(label)
+            if len(out) >= 4:
+                return out
+
+    for item in raw_organs or []:
+        if not item:
+            continue
+        for part in str(item).replace(";", ",").split(","):
+            label = _plain_organ_label(part.strip())
+            if not label:
+                continue
+            key = label.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(label)
+            if len(out) >= 4:
+                return out
+    return out
+
+
 def _sanitize_sensitive_areas(
     raw: Optional[List[str]],
     issues: Optional[List[Dict[str, Any]]] = None,
@@ -984,6 +1030,9 @@ def build_health_basic_insights(
         deep.get("vulnerable_organs"),
         issues,
     )
+    risky_organs = _build_risky_organs(issues, deep.get("vulnerable_organs"))
+    if not risky_organs:
+        risky_organs = list(sensitive_areas)
     wellness_tendencies = list(deep.get("wellness_tendencies") or [])
     if not wellness_tendencies:
         wellness_tendencies = _extract_wellness_tendencies(issues, nature)
@@ -996,6 +1045,7 @@ def build_health_basic_insights(
         "health_focus_key": focus_key,
         "watch_areas": watch_areas,
         "sensitive_areas": sensitive_areas,
+        "risky_organs": risky_organs,
         "wellness_tendencies": wellness_tendencies,
         "dosha_balance": deep.get("dosha_balance") or {},
         "dosha_states": deep.get("dosha_states") or {},

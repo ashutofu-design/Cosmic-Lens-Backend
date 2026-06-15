@@ -11,12 +11,6 @@ export function healthTridoshaCopy(lang: UILang) {
   const L = coerceUILang(lang);
   return {
     sectionTitle: p(L, "Tridosha Balance", "Tridosha Balance", "त्रिदोष संतुलन"),
-    sectionSub: p(
-      L,
-      "D1 prakriti · D9 immunity · KP 6th CSL",
-      "D1 prakriti · D9 immunity · KP 6th CSL",
-      "D1 प्रकृति · D9 रोग प्रतिरोध · KP 6वें भाव CSL",
-    ),
     labels: {
       vata: p(L, "Vata (Baat)", "Vata (Baat)", "वात (बात)"),
       pitta: p(L, "Pitta", "Pitta", "पित्त"),
@@ -31,5 +25,39 @@ export function healthTridoshaCopy(lang: UILang) {
       Elevated: p(L, "Elevated", "Elevated", "अधिक"),
     } as Record<string, string>,
     careTitle: p(L, "Daily care tip", "Daily care tip", "दैनिक देखभाल"),
+    forYouTitle: p(L, "For you", "Aapke liye", "आपके लिए"),
+    riskyOrgansTitle: p(L, "Sensitive Body Areas", "Sensitive body zones", "संवेदनशील अंग"),
+    riskyOrgansSub: p(
+      L,
+      "Areas that may need extra care from your chart",
+      "Chart se zyada dhyan dene wale zones",
+      "कुंडली से अधिक देखभाल वाले अंग",
+    ),
+    riskyOrgansEmpty: p(
+      L,
+      "No major sensitive zone flagged — routine seasonal care is enough.",
+      "Koi bada sensitive zone nahi — regular care kaafi hai.",
+      "कोई बड़ा संवेदनशील अंग नहीं — नियमित देखभाल पर्याप्त।",
+    ),
+    dominantRemedy: {
+      vata: p(
+        L,
+        "Warm, oily meals and steady sleep — ease cold, dry food and late nights.",
+        "Garam, tel wala khana aur fixed sleep rakho — thanda-sukha khana aur late nights kam karo.",
+        "गर्म, तैलीय भोजन और नियमित नींद रखें — ठंडा-सूखा भोजन और देर रात कम करें।",
+      ),
+      pitta: p(
+        L,
+        "Cool, light meals — less spice, anger, and sun; stay well hydrated.",
+        "Thanda, halka khana — masala, gussa aur dhoop kam; paani zyada piyo.",
+        "ठंडा, हल्का भोजन — मसाला, क्रोध और धूप कम; पानी अधिक पिएं।",
+      ),
+      kapha: p(
+        L,
+        "Morning walk and light warm meals — cut sweets, dairy, and heavy fried food.",
+        "Subah walk + halka garam khana — mithai, dairy aur bhari fried cheez kam.",
+        "सुबह टहलें + हल्का गर्म भोजन — मिठाई, दूध और तला हुआ कम करें।",
+      ),
+    } as Record<DoshaKey, string>,
   };
 }

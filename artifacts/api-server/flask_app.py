@@ -5125,140 +5125,20 @@ def health_analysis():
     lord_6th = SIGN_LORD[sign_of_6th]
     lord_8th = SIGN_LORD[sign_of_8th]
 
-    # ── Health score (start strong, deduct for vulnerabilities) ──────────
-    score = 65
-    notes = []
-    benefics = {"Jupiter", "Venus", "Mercury", "Moon"}
+    # ── Health score — health_engine_v1 vitality (D1 40% + D9 30% + KP 20% + Dasha 10%)
+    from vedic.health_vitality_score_v1 import compute_health_vitality_score
 
-    # Lagna lord placement & dignity → vitality
-    l1 = find_planet(lord_1st)
-    if l1:
-        h = l1.get("house", 0)
-        sg = l1.get("sign", "")
-        if h in (1, 4, 5, 7, 9, 10, 11):
-            score += 6
-            notes.append(
-                f"Lagna lord {lord_1st} well-placed in {h}th — strong vitality"
-            )
-        elif h in (6, 8, 12):
-            score -= 8
-            notes.append(
-                f"Lagna lord {lord_1st} in {h}th (dusthana) — vitality challenges"
-            )
-        if lord_1st in EXALT and sg == EXALT[lord_1st]:
-            score += 5
-            notes.append(f"{lord_1st} exalted — robust constitution")
-        elif lord_1st in DEBIL and sg == DEBIL[lord_1st]:
-            score -= 6
-            notes.append(f"{lord_1st} debilitated — extra self-care needed")
+    vitality = compute_health_vitality_score(kundli)
+    score = int(vitality.get("score") or 50)
+    risk = vitality.get("risk") or "Moderate"
+    summary = vitality.get("summary") or ""
 
-    # Planets in 1st house
-    p1 = [p for p in planets if p.get("house") == 1]
-    for p in p1:
-        nm = p.get("name")
-        if nm in benefics:
-            score += 4
-        elif nm in ("Saturn", "Mars", "Rahu", "Ketu"):
-            score -= 5
-            notes.append(f"{nm} in Lagna — affects natural body strength")
-
-    # 6th house — disease (more planets here = more health activity, often issues)
-    p6 = [p for p in planets if p.get("house") == 6]
-    for p in p6:
-        nm = p.get("name")
-        if nm == "Saturn":
-            score -= 5
-            notes.append("Saturn in 6th — chronic, slow-recovery tendency")
-        elif nm == "Mars":
-            score -= 3
-            notes.append("Mars in 6th — inflammation & accident-prone phases")
-        elif nm == "Rahu":
-            score -= 4
-            notes.append("Rahu in 6th — sudden, hard-to-diagnose issues")
-        elif nm == "Sun":
-            score -= 2
-        elif nm in benefics:
-            score += 2  # benefics in 6th can give recovery strength
-
-    # 8th house — chronic / longevity
-    p8 = [p for p in planets if p.get("house") == 8]
-    for p in p8:
-        nm = p.get("name")
-        if nm in ("Saturn", "Mars", "Rahu", "Ketu"):
-            score -= 4
-            notes.append(f"{nm} in 8th — chronic patterns possible")
-        elif nm == "Sun":
-            score -= 2
-
-    # 12th house — hidden/sleep/hospital
-    p12 = [p for p in planets if p.get("house") == 12]
-    for p in p12:
-        nm = p.get("name")
-        if nm in ("Saturn", "Rahu", "Ketu"):
-            score -= 3
-            notes.append(f"{nm} in 12th — sleep or hidden issues to monitor")
-
-    # Moon — mental health
-    moon = find_planet("Moon")
-    moon_house = moon.get("house") if moon else 0
-    if moon:
-        msg = moon.get("sign", "")
-        if msg == EXALT["Moon"]:
-            score += 4
-            notes.append("Moon exalted — strong emotional balance")
-        elif msg == DEBIL["Moon"]:
-            score -= 5
-            notes.append("Moon debilitated — mood swings & stress sensitivity")
-        if moon_house in (6, 8, 12):
-            score -= 4
-            notes.append(f"Moon in {moon_house}th — mental fatigue prone")
-        # Moon-Saturn close house = depression risk
-        sat = find_planet("Saturn")
-        if sat and abs((sat.get("house", 0) or 0) - (moon_house or 0)) <= 1:
-            score -= 3
-            notes.append("Moon-Saturn proximity — emotional heaviness, needs grounding")
-
-    # Sun — vitality
-    sun = find_planet("Sun")
-    if sun:
-        ssg = sun.get("sign", "")
-        if ssg == EXALT["Sun"]:
-            score += 3
-        elif ssg == DEBIL["Sun"]:
-            score -= 3
-            notes.append("Sun debilitated — low immunity periods possible")
-
-    # ── Current dasha lord influence ─────────────────────────────────────
     cd = kundli.get("currentDasha") or {}
     md_lord = cd.get("maha", "")
     ad_lord = cd.get("antar", "")
-    DASHA_HEALTH = {
-        "Jupiter": +5,
-        "Venus": +3,
-        "Mercury": +2,
-        "Moon": +1,
-        "Sun": 0,
-        "Mars": -3,
-        "Saturn": -4,
-        "Rahu": -5,
-        "Ketu": -4,
-    }
-    if md_lord in DASHA_HEALTH:
-        score += DASHA_HEALTH[md_lord]
-    if ad_lord in DASHA_HEALTH:
-        score += DASHA_HEALTH[ad_lord] // 2
-
-    # Clamp
-    score = max(25, min(95, score))
-    if score >= 70:
-        risk = "Low"
-        summary = "Aapki health energy strong dikh rahi hai. Routine maintain karein, sab achha rahega."
-    elif score >= 50:
-        risk = "Moderate"
-        summary = "Health mixed phase mein hai. Sleep, food aur stress management pe dhyan dein — chhoti aadat badi rakshak hoti hai."
-    else:
-        risk = "High"
-        summary = "Body abhi extra care maang rahi hai. Kuch areas mein dhyan dene se bade issue tale ja sakte hain. Doctor consult zaroori lagey to lein."
+    l1 = find_planet(lord_1st)
+    moon = find_planet("Moon")
+    moon_house = moon.get("house") if moon else 0
 
     # ── Wellness payload (all users — Basic dashboard) ───────────────────
     risk_periods = []
@@ -5349,6 +5229,8 @@ def health_analysis():
         risk_periods=risk_periods,
         current_dasha=cd,
     )
+    basic["vitality_engine"] = vitality.get("engine", "health_vitality_v1")
+    basic["vitality_layers"] = vitality.get("layer_scores") or {}
     return jsonify({"basic": basic})
 
 

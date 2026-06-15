@@ -39,12 +39,62 @@ const F = {
   extra:   "Nunito_800ExtraBold",
 } as const;
 
+type DhanYogaItem = {
+  name: string;
+  detail: string;
+  link?: string;
+  houses?: number[];
+  planets?: string[];
+};
+
+function resolveDhanYogas(
+  yog: BasicBlock["wealth_finance"] extends { yog_metrics?: infer Y } ? Y : undefined,
+  basicDhana?: Array<{ name: string; detail?: string }>,
+): DhanYogaItem[] {
+  const fromMetrics = yog?.dhan_yogas?.filter((x) => x?.name) ?? [];
+  if (fromMetrics.length > 0) return fromMetrics;
+
+  const fromBasic = (basicDhana ?? []).filter((x) => x?.name).map((x) => ({
+    name: x.name,
+    detail: x.detail ?? "",
+    link: "",
+    houses: [] as number[],
+    planets: [] as string[],
+  }));
+  if (fromBasic.length > 0) return fromBasic;
+
+  const names = yog?.dhan_yoga_names?.filter(Boolean) ?? [];
+  if (names.length > 0) {
+    return names.map((name) => ({
+      name,
+      detail: "",
+      link: "",
+      houses: [] as number[],
+      planets: [] as string[],
+    }));
+  }
+
+  const count = yog?.dhan_count ?? 0;
+  if (count > 0) {
+    return Array.from({ length: count }, (_, i) => ({
+      name: `Dhan Yog ${i + 1}`,
+      detail: "",
+      link: "",
+      houses: [] as number[],
+      planets: [] as string[],
+    }));
+  }
+
+  return [];
+}
+
 interface BasicBlock {
   score: number;
   trend: string;
   summary: string;
   hook: string;
   money_habits?: string[];
+  dhana_yogas?: Array<{ name: string; detail?: string }>;
   wealth_finance?: {
     engine?: string;
     disclaimer?: string;
@@ -55,13 +105,7 @@ interface BasicBlock {
       activation_pct?: number;
       active_yogas?: string[];
       dhan_yoga_names?: string[];
-      dhan_yogas?: Array<{
-        name: string;
-        detail: string;
-        link?: string;
-        houses?: number[];
-        planets?: string[];
-      }>;
+      dhan_yogas?: DhanYogaItem[];
     };
     chart_matrix?: {
       d1_verdict?: string;
@@ -225,7 +269,7 @@ export default function FinanceScreen() {
   const matrix = wf?.chart_matrix;
   const tierKey = (wf?.wealth_tier ?? "middle_class") as WealthTierKey;
   const liquidity = (wf?.current_liquidity_index ?? "moderate") as LiquidityKey;
-  const dhanYogas = yog?.dhan_yogas ?? [];
+  const dhanYogas = resolveDhanYogas(yog, data?.basic?.dhana_yogas);
 
   return (
     <CosmicBg>

@@ -157,6 +157,37 @@ def _has_dhana_yoga_for_chart(planets: List[dict], asc_idx: int) -> List[Dict[st
     ]
 
 
+def _serialize_dhan_yogas_api(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [
+        {
+            "name": str(y.get("name") or ""),
+            "detail": str(y.get("detail") or ""),
+            "link": str(y.get("link") or ""),
+            "houses": list(y.get("houses") or []),
+            "planets": list(y.get("planets") or []),
+        }
+        for y in (items or [])
+    ]
+
+
+def _patch_wealth_finance_dhan_details(
+    wealth_finance: Dict[str, Any],
+    planets: List[dict],
+    asc_idx: int,
+) -> Dict[str, Any]:
+    """Always attach full dhan_yogas[] for Finance tap-detail UI."""
+    from vedic.dhan_yoga_engine_v1 import scan_dhan_yogas
+    wf = dict(wealth_finance or {})
+    ym = dict(wf.get("yog_metrics") or {})
+    scanned = scan_dhan_yogas(planets, asc_idx)
+    serialized = _serialize_dhan_yogas_api(scanned)
+    ym["dhan_yogas"] = serialized
+    ym["dhan_count"] = len(serialized)
+    ym["dhan_yoga_names"] = [x["name"] for x in serialized if x.get("name")]
+    wf["yog_metrics"] = ym
+    return wf
+
+
 # ── HEALTH chart helpers ───────────────────────────────────────────────────
 def _sign_idx(sign: str) -> int:
     try:
@@ -2511,6 +2542,7 @@ def compute_finance_specifics(
             wealth_karma_score=wealth_karma_score,
             fallback_category=wealth_category,
         )
+        wealth_finance = _patch_wealth_finance_dhan_details(wealth_finance, planets, asc_idx)
 
         return {
             "wealth_karma_score": wealth_karma_score,
@@ -2735,6 +2767,14 @@ def build_finance_basic_insights(
         except Exception:
             pass
 
+    dhana_yogas = list(deep.get("dhana_yogas") or [])
+    ym = dict(wealth_finance.get("yog_metrics") or {})
+    if not ym.get("dhan_yogas") and dhana_yogas:
+        ym["dhan_yogas"] = _serialize_dhan_yogas_api(dhana_yogas)
+        ym["dhan_count"] = len(ym["dhan_yogas"])
+        ym["dhan_yoga_names"] = [str(x.get("name") or "") for x in ym["dhan_yogas"]]
+        wealth_finance["yog_metrics"] = ym
+
     return {
         "score": max(0, min(100, operational)),
         "trend": trend_n,
@@ -2752,4 +2792,5 @@ def build_finance_basic_insights(
         "money_habits": money_habits,
         "transit_lines": transits,
         "wealth_finance": wealth_finance,
+        "dhana_yogas": dhana_yogas,
     }

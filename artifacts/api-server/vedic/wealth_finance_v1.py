@@ -295,20 +295,83 @@ def _wealth_source(
     }
 
 
-def _leakage_alerts(h12: Optional[Dict[str, Any]]) -> List[str]:
-    if not h12:
-        return []
-    flags: List[str] = []
-    csl = str(h12.get("csl_planet") or "")
-    loss = set(h12.get("loss_hits") or [])
-    sig = set((h12.get("chain") or {}).get("signified") or [])
-    if csl in ("Saturn", "Mars") or loss & {8, 12} or sig & {8, 12}:
-        flags.append("property_legal_loss_risk")
-    if csl in ("Rahu", "Mercury") or 5 in sig or 8 in sig:
-        flags.append("speculation_trading_fraud_risk")
-    if h12.get("verdict") == "RED":
-        flags.append("expense_drain_active")
+_LEAKAGE_ORDER = (
+    "expense_drain_active",
+    "property_legal_loss_risk",
+    "speculation_trading_fraud_risk",
+)
+_DUSTHANA = frozenset({6, 8, 12})
+_12H_DRAIN_PLANETS = frozenset({"Saturn", "Rahu", "Ketu", "Mars"})
+
+
+def _d1_leakage_flags(planets: List[dict], asc_idx: int) -> Set[str]:
+    """Classical D1 wealth leak signals (works without KP cusps)."""
+    flags: Set[str] = set()
+    for house in (2, 11):
+        lord = _house_lord(asc_idx, house)
+        lord_h = _planet_house(planets, lord)
+        if lord_h in _DUSTHANA:
+            flags.add("expense_drain_active")
+    if _planet_house(planets, "Ketu") == 2:
+        flags.add("expense_drain_active")
+    if _planet_house(planets, "Rahu") == 8:
+        flags.add("property_legal_loss_risk")
+    for name in _12H_DRAIN_PLANETS:
+        if _planet_house(planets, name) == 12:
+            flags.add("expense_drain_active")
+            break
     return flags
+
+
+def _kp_leakage_flags(
+    h2: Optional[Dict[str, Any]],
+    h11: Optional[Dict[str, Any]],
+    h12: Optional[Dict[str, Any]],
+) -> Set[str]:
+    """KP 2nd / 11th / 12th CSL leak signals — deduped per contamination bucket."""
+    flags: Set[str] = set()
+
+    for block in (h2, h11):
+        if not block:
+            continue
+        if block.get("loss_hits") or block.get("verdict") == "RED":
+            flags.add("expense_drain_active")
+
+    if not h12:
+        return flags
+
+    csl = str(h12.get("csl_planet") or "")
+    sig = set((h12.get("chain") or {}).get("signified") or [])
+    loss = set(h12.get("loss_hits") or [])
+    red = h12.get("verdict") == "RED"
+    kp_vyaya = red or bool(loss)
+
+    if kp_vyaya:
+        flags.add("expense_drain_active")
+
+    if csl in ("Saturn", "Mars"):
+        flags.add("property_legal_loss_risk")
+
+    if csl == "Rahu" and (sig & {5, 8}):
+        flags.add("speculation_trading_fraud_risk")
+
+    # One 8/12 contamination on 12th CSL → expense only (not property from same signal).
+    if kp_vyaya and csl not in ("Saturn", "Mars"):
+        flags.discard("property_legal_loss_risk")
+
+    return flags
+
+
+def _leakage_alerts(
+    planets: List[dict],
+    asc_idx: int,
+    h2: Optional[Dict[str, Any]] = None,
+    h11: Optional[Dict[str, Any]] = None,
+    h12: Optional[Dict[str, Any]] = None,
+) -> List[str]:
+    """D1 + KP hybrid leakage flags in stable display order."""
+    combined = _d1_leakage_flags(planets, asc_idx) | _kp_leakage_flags(h2, h11, h12)
+    return [key for key in _LEAKAGE_ORDER if key in combined]
 
 
 def _liquidity_index(
@@ -369,7 +432,9 @@ def compute_wealth_finance_diagnostic(
     tier = wealth_tier_from_score(int(wealth_karma_score))
 
     source = _wealth_source(planets, asc_idx, kundli)
-    leakage = _leakage_alerts(h12)
+    h2_block = (kp or {}).get("h2") if kp else None
+    h11_block = (kp or {}).get("h11") if kp else None
+    leakage = _leakage_alerts(planets, asc_idx, h2_block, h11_block, h12)
     liquidity = _liquidity_index(planets, asc_idx, transit_notes)
 
     return {

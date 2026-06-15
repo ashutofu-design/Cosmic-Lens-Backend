@@ -36,6 +36,7 @@ import {
 import { buildPersonalSnapshot } from "@/lib/personalizationSnapshot";
 import {
   buildWealthDashaTimeline,
+  currentOperationalWealthScore,
   formatDashaRange,
   type WealthDashaTimeline,
 } from "@/lib/wealthDashaTiming";
@@ -365,29 +366,36 @@ function WealthDashaTimingModal({
 }) {
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={s.modalBackdrop} onPress={onClose}>
-        <Pressable style={s.modalSheet} onPress={(e) => e.stopPropagation()}>
+      <View style={s.modalBackdrop}>
+        <Pressable style={s.modalBackdropDismiss} onPress={onClose} accessibilityRole="button" />
+        <View style={[s.modalSheet, s.dashaTimingSheet]}>
           <View style={s.modalHandle} />
           <Text style={s.modalTitle}>{wealthCopy.dashaTimingTitle}</Text>
           <Text style={s.modalSub}>{wealthCopy.dashaTimingSub}</Text>
-          {!timeline ? (
-            <Text style={s.dhanDetailBody}>{wealthCopy.dashaNoData}</Text>
-          ) : (
-            <>
-              <Text style={s.dashaMetaLine}>
-                {wealthCopy.dashaBaseLabel}: {Math.round(timeline.baseScore * 4) / 4}
-              </Text>
-              {timeline.bestMd ? (
+          <ScrollView
+            style={s.dashaTimingScroll}
+            contentContainerStyle={s.dashaTimingScrollContent}
+            showsVerticalScrollIndicator
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+          >
+            {!timeline ? (
+              <Text style={s.dhanDetailBody}>{wealthCopy.dashaNoData}</Text>
+            ) : (
+              <>
                 <Text style={s.dashaMetaLine}>
-                  {wealthCopy.dashaBestMd}: {timeline.bestMd.planet} ({timeline.bestMd.score} · {wealthCopy.tierLabels[wealthTierFromScore(timeline.bestMd.score)]})
+                  {wealthCopy.dashaBaseLabel}: {Math.round(timeline.baseScore * 4) / 4}
                 </Text>
-              ) : null}
-              {timeline.bestAd ? (
-                <Text style={[s.dashaMetaLine, { marginBottom: 12 }]}>
-                  {wealthCopy.dashaBestAd}: {timeline.bestAd.mdPlanet}/{timeline.bestAd.planet} ({timeline.bestAd.score} · {wealthCopy.tierLabels[wealthTierFromScore(timeline.bestAd.score)]})
-                </Text>
-              ) : null}
-              <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false}>
+                {timeline.bestMd ? (
+                  <Text style={s.dashaMetaLine}>
+                    {wealthCopy.dashaBestMd}: {timeline.bestMd.planet} ({timeline.bestMd.score} · {wealthCopy.tierLabels[wealthTierFromScore(timeline.bestMd.score)]})
+                  </Text>
+                ) : null}
+                {timeline.bestAd ? (
+                  <Text style={[s.dashaMetaLine, { marginBottom: 12 }]}>
+                    {wealthCopy.dashaBestAd}: {timeline.bestAd.mdPlanet}/{timeline.bestAd.planet} ({timeline.bestAd.score} · {wealthCopy.tierLabels[wealthTierFromScore(timeline.bestAd.score)]})
+                  </Text>
+                ) : null}
                 {timeline.mahadashas.map(md => (
                   <View key={`${md.planet}-${md.startDate}`} style={s.dashaMdBlock}>
                     <View style={[s.dashaRow, md.isCurrent && s.dashaRowCurrent]}>
@@ -425,17 +433,11 @@ function WealthDashaTimingModal({
                     ))}
                   </View>
                 ))}
-              </ScrollView>
-            </>
-          )}
-          <Pressable
-            onPress={onClose}
-            style={({ pressed }) => [s.modalCloseBtn, { opacity: pressed ? 0.85 : 1 }]}
-          >
-            <Text style={s.modalCloseText}>Close</Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
+              </>
+            )}
+          </ScrollView>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -500,23 +502,43 @@ export default function FinanceScreen() {
   const accent = "#3b82f6";
   const wf = data?.basic?.wealth_finance;
   const yog = wf?.yog_metrics;
-  const matrix = wf?.chart_matrix;
   const wealthBuilderScore = useMemo(() => {
     const snap = buildPersonalSnapshot(kundli);
     const wb = snap.categoryScores.find(item => item.type === "Wealth Builder Kundli");
     return wb?.score ?? null;
   }, [kundli]);
-  const tierKey = useMemo((): WealthTierKey => {
-    if (wealthBuilderScore != null) return wealthTierFromScore(wealthBuilderScore);
-    return wealthTierFromScore(data?.basic?.wealth_karma_score ?? data?.basic?.wealth_score ?? 50);
-  }, [wealthBuilderScore, data?.basic?.wealth_karma_score, data?.basic?.wealth_score]);
+  const wealthBaseScore = wealthBuilderScore ?? data?.basic?.wealth_karma_score ?? data?.basic?.wealth_score ?? 50;
+  const birthTierKey = useMemo((): WealthTierKey => {
+    return wealthTierFromScore(wealthBaseScore);
+  }, [wealthBaseScore]);
   const wealthDashaTimeline = useMemo(
-    () => buildWealthDashaTimeline(kundli, wealthBuilderScore ?? 50),
-    [kundli, wealthBuilderScore],
+    () => buildWealthDashaTimeline(kundli, wealthBaseScore),
+    [kundli, wealthBaseScore],
   );
+  const currentDashaWealth = useMemo(() => {
+    const direct = currentOperationalWealthScore(kundli, wealthBaseScore);
+    if (direct) return direct;
+    if (!wealthDashaTimeline) return null;
+    for (const md of wealthDashaTimeline.mahadashas) {
+      const ad = md.antardashas.find(row => row.isCurrent);
+      if (ad) {
+        return { mdPlanet: md.planet, adPlanet: ad.planet, score: ad.score };
+      }
+      if (md.isCurrent) {
+        return { mdPlanet: md.planet, adPlanet: "", score: md.score };
+      }
+    }
+    return null;
+  }, [kundli, wealthBaseScore, wealthDashaTimeline]);
+  const tierKey = useMemo((): WealthTierKey => {
+    if (currentDashaWealth) return wealthTierFromScore(currentDashaWealth.score);
+    return birthTierKey;
+  }, [currentDashaWealth, birthTierKey]);
   const liquidity = (wf?.current_liquidity_index ?? "moderate") as LiquidityKey;
   const dhanYogas = resolveYogas(yog, "dhan", data?.basic?.dhana_yogas);
   const rajYogas = resolveYogas(yog, "raj", data?.basic?.raj_yogas);
+  const headerTopPad = insets.top + 8;
+  const scrollTopPad = headerTopPad + 52;
 
   return (
     <CosmicBg>
@@ -527,23 +549,30 @@ export default function FinanceScreen() {
         pointerEvents="none"
       />
 
-      <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <Pressable
-          onPress={() => { Haptics.selectionAsync(); router.back(); }}
-          style={s.backBtn}
-          hitSlop={10}
-        >
-          <View style={s.backCircle}>
-            <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color="#fff" />
-          </View>
-        </Pressable>
-        <Text style={s.topTitle}>{t.fn_pageTitle}</Text>
-        <View style={{ width: 40 }} />
+      <View style={[s.topBar, { paddingTop: headerTopPad }]}>
+        {Platform.OS === "ios" ? (
+          <BlurView intensity={48} tint="dark" style={StyleSheet.absoluteFill} />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, s.topBarBg]} />
+        )}
+        <View style={s.topBarRow}>
+          <Pressable
+            onPress={() => { Haptics.selectionAsync(); router.back(); }}
+            style={s.backBtn}
+            hitSlop={10}
+          >
+            <View style={s.backCircle}>
+              <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color="#fff" />
+            </View>
+          </Pressable>
+          <Text style={s.topTitle}>{t.fn_pageTitle}</Text>
+          <View style={{ width: 40 }} />
+        </View>
       </View>
 
       <ScrollView
         contentContainerStyle={{
-          paddingTop: insets.top + 60,
+          paddingTop: scrollTopPad,
           paddingBottom: insets.bottom + 80,
           paddingHorizontal: 18,
           gap: 16,
@@ -643,36 +672,6 @@ export default function FinanceScreen() {
               </SectionCard>
             )}
 
-            {/* CHART MATRIX */}
-            {matrix && (
-              <SectionCard icon="layers" title={wealthCopy.matrixTitle} accent={accent}>
-                <View style={{ gap: 8 }}>
-                  <View style={s.matrixRow}>
-                    <Text style={s.matrixLabel}>{wealthCopy.d1Label}</Text>
-                    <Text style={s.matrixVal}>
-                      {matrix.d1_verdict === "strong" ? wealthCopy.d1Strong : wealthCopy.d1Moderate}
-                    </Text>
-                  </View>
-                  <View style={s.matrixRow}>
-                    <Text style={s.matrixLabel}>{wealthCopy.d9Label}</Text>
-                    <Text style={s.matrixVal}>
-                      {matrix.d9_verdict === "stable" ? wealthCopy.d9Stable : wealthCopy.d9Building}
-                    </Text>
-                  </View>
-                  <View style={s.matrixRow}>
-                    <Text style={s.matrixLabel}>{wealthCopy.d2Label}</Text>
-                    <Text style={s.matrixVal}>
-                      {matrix.d2_tag === "chandra_dominant"
-                        ? wealthCopy.d2Chandra
-                        : matrix.d2_tag === "surya_dominant"
-                          ? wealthCopy.d2Surya
-                          : wealthCopy.d2Mixed}
-                    </Text>
-                  </View>
-                </View>
-              </SectionCard>
-            )}
-
             {/* WEALTH TIER + SOURCE */}
             {wf && (
               <SectionCard icon="award" title={wealthCopy.tierTitle} accent="#fbbf24">
@@ -701,9 +700,22 @@ export default function FinanceScreen() {
                   })}
                 </View>
                 <Text style={s.tierSubtitle}>{wealthCopy.tierSubtitle}</Text>
-                {wealthBuilderScore != null ? (
+                {currentDashaWealth ? (
                   <Text style={[s.miniLine, { marginTop: 10 }]}>
-                    Wealth Builder score {Math.round(wealthBuilderScore * 4) / 4} → {wealthCopy.tierLabels[tierKey]}
+                    {wealthCopy.tierCurrentDashaLine(
+                      currentDashaWealth.mdPlanet,
+                      currentDashaWealth.adPlanet,
+                      currentDashaWealth.score,
+                      wealthCopy.tierLabels[tierKey],
+                    )}
+                  </Text>
+                ) : null}
+                {wealthBuilderScore != null ? (
+                  <Text style={[s.miniLine, { marginTop: currentDashaWealth ? 6 : 10 }]}>
+                    {wealthCopy.tierBirthLine(
+                      Math.round(wealthBuilderScore * 4) / 4,
+                      wealthCopy.tierLabels[birthTierKey],
+                    )}
                   </Text>
                 ) : null}
                 <Pressable
@@ -731,7 +743,7 @@ export default function FinanceScreen() {
                     </Text>
                   ))
                 ) : (
-                  <Text style={s.miniLine}>{wealthCopy.liquidity.moderate}</Text>
+                  <Text style={s.miniLine}>{wealthCopy.leakageEmpty}</Text>
                 )}
                 <Text style={[s.cardSubTitle, { marginTop: 10 }]}>{wealthCopy.liquidityTitle}</Text>
                 <Text style={[s.summary, { fontSize: 13 }]}>
@@ -974,8 +986,20 @@ export default function FinanceScreen() {
 const s = StyleSheet.create({
   topBar: {
     position: "absolute", top: 0, left: 0, right: 0,
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 14, zIndex: 10, height: 60,
+    zIndex: 20,
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+  },
+  topBarBg: {
+    backgroundColor: "rgba(10,18,30,0.94)",
+  },
+  topBarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   backBtn: { padding: 4 },
   backCircle: {
@@ -1164,6 +1188,9 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.65)",
     justifyContent: "flex-end",
   },
+  modalBackdropDismiss: {
+    ...StyleSheet.absoluteFillObject,
+  },
   modalSheet: {
     backgroundColor: "#0f172a",
     borderTopLeftRadius: 22,
@@ -1172,6 +1199,16 @@ const s = StyleSheet.create({
     borderColor: "rgba(251,191,36,0.25)",
     padding: 20,
     paddingBottom: 28,
+  },
+  dashaTimingSheet: {
+    maxHeight: "85%",
+  },
+  dashaTimingScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  dashaTimingScrollContent: {
+    paddingBottom: 8,
   },
   modalHandle: {
     width: 40,
@@ -1254,14 +1291,6 @@ const s = StyleSheet.create({
     lineHeight: 18,
     fontFamily: F.regular,
   },
-  matrixRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 4,
-  },
-  matrixLabel: { color: "rgba(255,255,255,0.65)", fontSize: 12, fontFamily: F.semi, flex: 1 },
-  matrixVal: { color: "#fff", fontSize: 12, fontFamily: F.bold, textAlign: "right", flex: 1 },
   tierRow: {
     flexDirection: "row",
     flexWrap: "wrap",

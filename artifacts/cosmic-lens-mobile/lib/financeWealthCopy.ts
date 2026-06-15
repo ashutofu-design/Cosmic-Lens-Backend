@@ -115,6 +115,12 @@ export function financeWealthCopy(lang: UILang) {
       "दशा डेटा उपलब्ध नहीं — पहले जन्म कुंडली पूरी करें।",
     ),
     leakageTitle: p(L, "Wealth Leak Alerts", "Paisa leak alerts", "धन रिसाव अलर्ट"),
+    leakageEmpty: p(
+      L,
+      "No major leak signal in chart.",
+      "Chart me major leak signal nahi.",
+      "चार्ट में कोई बड़ा रिसाव संकेत नहीं।",
+    ),
     liquidityTitle: p(L, "Cash Flow Mood", "Cash flow mood", "नकद प्रवाह"),
     liquidity: {
       high: p(L, "Supportive liquidity phase", "Cash flow supportive", "अनुकूल नकदी चरण"),
@@ -149,10 +155,24 @@ export function financeWealthCopy(lang: UILang) {
     } as Record<WealthTierKey, string>,
     tierSubtitle: p(
       L,
-      "Based on your Wealth Builder chart score — guidance only, not a guarantee.",
-      "Wealth Builder kundli score par — sirf guidance, guarantee nahi.",
-      "वेल्थ बिल्डर कुंडली स्कोर पर — केवल मार्गदर्शन, गारंटी नहीं।",
+      "Highlighted tier = your current MD/AD wealth window. Birth chart score shown below.",
+      "Jo tier highlight hai = abhi ki MD/AD wealth window. Neeche janam chart score.",
+      "हाइलाइट स्तर = वर्तमान MD/AD धन खिड़की। नीचे जन्म कुंडली स्कोर।",
     ),
+    tierCurrentDashaLine: (md: string, ad: string, score: number, label: string) =>
+      p(
+        L,
+        `Current dasha ${md}${ad ? ` / ${ad}` : ""} · ${score} → ${label}`,
+        `Abhi ${md}${ad ? ` / ${ad}` : ""} · ${score} → ${label}`,
+        `अभी ${md}${ad ? ` / ${ad}` : ""} · ${score} → ${label}`,
+      ),
+    tierBirthLine: (score: number, label: string) =>
+      p(
+        L,
+        `Birth Wealth Builder · ${score} → ${label}`,
+        `Janam Wealth Builder · ${score} → ${label}`,
+        `जन्म वेल्थ बिल्डर · ${score} → ${label}`,
+      ),
     disclaimer: p(
       L,
       "Chart guidance only — not investment, tax or legal advice.",

@@ -139,6 +139,22 @@ export function operationalWealthScore(
   return Math.max(8, Math.min(96, Math.round(baseScore * combined)));
 }
 
+/** Current MD/AD operational wealth score — same logic as active row in dasha timing modal. */
+export function currentOperationalWealthScore(
+  kundli: KundliData | null | undefined,
+  baseScore: number,
+): { mdPlanet: string; adPlanet: string; score: number } | null {
+  if (!kundli || baseScore <= 0) return null;
+  const mdPlanet = kundli.currentDasha?.maha ?? "";
+  if (!mdPlanet) return null;
+  const adPlanet = kundli.currentDasha?.antar ?? "";
+  return {
+    mdPlanet,
+    adPlanet,
+    score: operationalWealthScore(baseScore, kundli, mdPlanet, adPlanet || undefined),
+  };
+}
+
 function isRangeActive(startDate: string, endDate: string, now = new Date()): boolean {
   const start = new Date(startDate);
   const end = new Date(endDate);

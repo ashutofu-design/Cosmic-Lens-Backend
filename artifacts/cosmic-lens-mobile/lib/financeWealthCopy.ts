@@ -6,6 +6,22 @@ function p(lang: UILang, en: string, hn: string, hi: string): string {
 }
 
 export type WealthTierKey = "middle_class" | "rich" | "ultra_rich" | "millionaire";
+
+export const WEALTH_TIER_ORDER: readonly WealthTierKey[] = [
+  "middle_class",
+  "rich",
+  "ultra_rich",
+  "millionaire",
+];
+
+/** Wealth Builder score → tier (must match server wealth_tier_from_score). */
+export function wealthTierFromScore(score: number): WealthTierKey {
+  const c = Math.round(score);
+  if (c >= 85) return "millionaire";
+  if (c >= 72) return "ultra_rich";
+  if (c >= 60) return "rich";
+  return "middle_class";
+}
 export type LiquidityKey = "high" | "moderate" | "restricted";
 export type LeakageKey =
   | "property_legal_loss_risk"
@@ -18,9 +34,9 @@ export function financeWealthCopy(lang: UILang) {
     yogTitle: p(L, "Wealth Yogas", "Wealth yogas", "धन योग"),
     yogSub: p(
       L,
-      "Prosperity combinations in your chart and how active they are now.",
-      "Chart ke dhana yog aur ab kitne active hain.",
-      "कुंडली के धन योग और अभी कितने सक्रिय हैं।",
+      "Prosperity and status combinations in your birth chart.",
+      "Chart ke dhana aur raj yog — detail ke liye card tap karo.",
+      "जन्म कुंडली के धन और राज योग — विवरण के लिए कार्ड दबाएँ।",
     ),
     activation: (pct: number) =>
       p(L, `${pct}% active now`, `${pct}% abhi active`, `अभी ${pct}% सक्रिय`),
@@ -78,7 +94,26 @@ export function financeWealthCopy(lang: UILang) {
     d2Surya: p(L, "Effort & authority build", "Mehnat se build", "परिश्रम से निर्माण"),
     d2Mixed: p(L, "Balanced mix", "Mixed style", "मिश्रित शैली"),
     tierTitle: p(L, "Wealth Tier", "Wealth tier", "धन स्तर"),
-    sourceTitle: p(L, "Money Will Come From", "Paisa kahan se aayega", "धन कहाँ से आएगा"),
+    dashaTimingView: p(L, "View", "Dekho", "देखें"),
+    dashaTimingTitle: p(L, "Wealth Dasha Timing", "Wealth dasha timing", "धन दशा समय"),
+    dashaTimingSub: p(
+      L,
+      "Mahadasha & Antardasha scores from your Wealth Builder base. Higher = better money flow in that period.",
+      "Wealth Builder base se MD/AD score — zyada = us period me paisa flow better.",
+      "वेल्थ बिल्डर आधार से MD/AD स्कोर — अधिक = उस अवधि में बेहतर धन प्रवाह।",
+    ),
+    dashaBaseLabel: p(L, "Birth wealth base", "Birth wealth base", "जन्म धन आधार"),
+    dashaBestMd: p(L, "Best Mahadasha", "Best MD", "सर्वोत्तम महादशा"),
+    dashaBestAd: p(L, "Best Antardasha", "Best AD", "सर्वोत्तम अंतर्दशा"),
+    dashaWealthTag: p(L, "Wealth-linked", "Wealth-linked", "धन से जुड़ा"),
+    dashaMdLabel: p(L, "MD", "MD", "MD"),
+    dashaAdLabel: p(L, "AD", "AD", "AD"),
+    dashaNoData: p(
+      L,
+      "Dasha timeline not available — complete birth chart first.",
+      "Dasha data nahi — pehle birth chart poora karein.",
+      "दशा डेटा उपलब्ध नहीं — पहले जन्म कुंडली पूरी करें।",
+    ),
     leakageTitle: p(L, "Wealth Leak Alerts", "Paisa leak alerts", "धन रिसाव अलर्ट"),
     liquidityTitle: p(L, "Cash Flow Mood", "Cash flow mood", "नकद प्रवाह"),
     liquidity: {
@@ -109,7 +144,7 @@ export function financeWealthCopy(lang: UILang) {
     tierLabels: {
       middle_class: p(L, "Average", "Average", "औसत"),
       rich: p(L, "Rich", "Rich", "धनी"),
-      ultra_rich: p(L, "Ultra Rich", "Ultra rich", "अति धनी"),
+      ultra_rich: p(L, "Very Rich", "Bahut rich", "बहुत धनी"),
       millionaire: p(L, "Millionaire Potential", "Crorepati potential", "करोड़पति संभावना"),
     } as Record<WealthTierKey, string>,
     disclaimer: p(

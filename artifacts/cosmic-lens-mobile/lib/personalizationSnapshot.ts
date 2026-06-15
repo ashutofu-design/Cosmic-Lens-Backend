@@ -719,27 +719,6 @@ function cleanCategoryResult(args: {
   return { score, details, checked: args.checked, rules: args.rules };
 }
 
-function wealthYogaSupport(kundli: KundliData): number {
-  const wealthHouses = [2, 5, 9, 10, 11];
-  const lords = [...new Set(wealthHouses.map(h => houseLord(kundli, h)))];
-  let score = 0;
-  for (let i = 0; i < lords.length; i++) {
-    const a = getPlanet(kundli, lords[i]);
-    const aSign = planetSign(a);
-    if (!a || aSign == null) continue;
-    for (let j = i + 1; j < lords.length; j++) {
-      const b = getPlanet(kundli, lords[j]);
-      const bSign = planetSign(b);
-      if (!b || bSign == null) continue;
-      if (a.house === b.house) score += 3.5;
-      if (hasAspect(a, bSign)) score += 2.5;
-      if (hasAspect(b, aSign)) score += 2.5;
-      if (wealthHouses.includes(a.house) && wealthHouses.includes(b.house)) score += 1.5;
-    }
-  }
-  return Math.max(0, Math.min(18, score));
-}
-
 function aspectNamesToPlanet(kundli: KundliData, targetPlanet: string) {
   const target = getPlanet(kundli, targetPlanet);
   const targetSign = planetSign(target);
@@ -754,17 +733,274 @@ function aspectNamesToPlanet(kundli: KundliData, targetPlanet: string) {
   return { benefic, malefic };
 }
 
-function hasMercuryModernContext(kundli: KundliData): boolean {
-  const rahu = getPlanet(kundli, "Rahu");
-  if (rahu && [3, 6, 10, 11].includes(rahu.house)) return true;
-  if (!hasVarga(kundli, "D10")) return false;
-  const d10 = getVarga(kundli, "D10");
-  const d10Rahu = getPlanet(d10, "Rahu");
-  const d10Mercury = getPlanet(d10, "Mercury");
-  return !!(
-    (d10Rahu && [10, 11].includes(d10Rahu.house)) ||
-    (d10Mercury && [3, 6, 10, 11, 12].includes(d10Mercury.house))
-  );
+const KENDRA_HOUSES = [1, 4, 7, 10] as const;
+const TRIKONA_HOUSES = [1, 5, 9] as const;
+const STRONG_HOUSES = new Set([1, 4, 5, 7, 9, 10]);
+const DUSTHANA_HOUSES = new Set([6, 8, 12]);
+const YOGAKARAKA_BY_ASC: Record<number, string> = {
+  1: "Saturn", 3: "Mars", 4: "Mars", 6: "Saturn", 9: "Venus", 10: "Venus",
+};
+
+const DHAN_LORD_PAIR_SPECS: ReadonlyArray<readonly [number, number, string]> = [
+  [1, 2, "Lagna-Dhana"],
+  [2, 5, "Dhana-Lakshmi"],
+  [2, 9, "Dhana-Bhagya"],
+  [2, 11, "Dhana"],
+  [5, 9, "Lakshmi-Bhagya"],
+  [5, 11, "Lakshmi-Labha"],
+  [9, 11, "Bhagya-Labha"],
+];
+
+const RAJ_KENDRA_TRIKONA_SPECS: ReadonlyArray<readonly [number, number, string]> = [
+  [10, 9, "Dharma-Karmadhipati"],
+  [1, 9, "Lagna-Bhagya Raj"],
+  [1, 5, "Lagna-Lakshmi Raj"],
+  [4, 9, "Kendra-Bhagya Raj"],
+  [4, 5, "Kendra-Lakshmi Raj"],
+  [7, 9, "Saptam-Bhagya Raj"],
+  [7, 5, "Saptam-Lakshmi Raj"],
+  [10, 5, "Karma-Lakshmi Raj"],
+  [10, 1, "Karma-Lagna Raj"],
+  [4, 1, "Kendra-Lagna Raj"],
+  [7, 1, "Saptam-Lagna Raj"],
+];
+
+const WEALTH_LORD_HOUSES = [2, 5, 9, 11] as const;
+const WEALTH_LORD_PAIR_HOUSES: ReadonlyArray<readonly [number, number]> = [
+  [2, 5], [2, 9], [2, 11], [5, 9], [5, 11], [9, 11],
+];
+
+function planetHouseNum(chart: KundliData, name: string): number | null {
+  const p = getPlanet(chart, name);
+  return p?.house ?? null;
+}
+
+function lordsMutualAspectOnChart(chart: KundliData, lordA: string, lordB: string): boolean {
+  const pa = getPlanet(chart, lordA);
+  const pb = getPlanet(chart, lordB);
+  const sa = planetSign(pa);
+  const sb = planetSign(pb);
+  if (!pa || !pb || sa == null || sb == null) return false;
+  return hasAspect(pa, sb) && hasAspect(pb, sa);
+}
+
+function wealthLordPairLinkOnChart(
+  chart: KundliData,
+  d1: KundliData,
+  houseA: number,
+  houseB: number,
+): "parivartana" | "conjunction" | "mutual_aspect" | null {
+  const lordA = houseLord(d1, houseA);
+  const lordB = houseLord(d1, houseB);
+  if (lordA === lordB) return null;
+  const ha = planetHouseNum(chart, lordA);
+  const hb = planetHouseNum(chart, lordB);
+  if (ha === houseB && hb === houseA) return "parivartana";
+  if (ha != null && ha === hb) return "conjunction";
+  if (lordsMutualAspectOnChart(chart, lordA, lordB)) return "mutual_aspect";
+  return null;
+}
+
+function lordPairLinkType(kundli: KundliData, houseA: number, houseB: number): "parivartana" | "conjunction" | "mutual_aspect" | null {
+  return wealthLordPairLinkOnChart(kundli, kundli, houseA, houseB);
+}
+
+function d9WealthLordPairBonus(houseA: number, houseB: number, link: "parivartana" | "conjunction" | "mutual_aspect"): number {
+  const key = `${Math.min(houseA, houseB)}-${Math.max(houseA, houseB)}`;
+  if (link === "parivartana") return key === "2-11" || key === "9-11" ? 4 : 3;
+  if (link === "conjunction") return key === "2-11" ? 3.5 : 2.5;
+  return 2;
+}
+
+function vargottamaWealthPlanets(d1: KundliData, d9: KundliData): string[] {
+  const hits: string[] = [];
+  for (const name of ["Jupiter", "Venus", "Moon", "Mercury"] as const) {
+    const p1 = getPlanet(d1, name);
+    const p9 = getPlanet(d9, name);
+    const s1 = planetSign(p1);
+    const s9 = planetSign(p9);
+    if (s1 != null && s1 === s9) hits.push(name);
+  }
+  return hits;
+}
+
+function dhanLordPairBonus(houseA: number, houseB: number, link: "parivartana" | "conjunction" | "mutual_aspect"): number {
+  const key = `${Math.min(houseA, houseB)}-${Math.max(houseA, houseB)}`;
+  if (link === "parivartana") return key === "2-11" || key === "9-11" ? 12 : 10;
+  if (link === "conjunction") return key === "2-11" ? 10 : 8;
+  return 6;
+}
+
+function rajLordPairBonus(houseA: number, houseB: number, link: "parivartana" | "conjunction" | "mutual_aspect"): number {
+  const set = new Set([houseA, houseB]);
+  const dharmaKarma = set.has(9) && set.has(10);
+  if (link === "parivartana") return dharmaKarma ? 10 : 8;
+  if (link === "conjunction") return dharmaKarma ? 8 : 6;
+  return dharmaKarma ? 6 : 5;
+}
+
+function scanVipreetRajYogas(kundli: KundliData): string[] {
+  const dustLords = new Set([6, 8, 12].map(h => houseLord(kundli, h)));
+  const byHouse = new Map<number, string[]>();
+  for (const lord of dustLords) {
+    const h = planetHouseNum(kundli, lord);
+    if (h == null || !DUSTHANA_HOUSES.has(h)) continue;
+    const list = byHouse.get(h) ?? [];
+    list.push(lord);
+    byHouse.set(h, list);
+  }
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const [h, lords] of byHouse) {
+    if (lords.length < 2) continue;
+    const key = [...lords].sort().join(",");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(`Vipreet Raj Yoga: dusthana lords ${lords.join(", ")} in ${h}H (+6)`);
+  }
+  return out;
+}
+
+function scanYogakarakaRaj(kundli: KundliData): string | null {
+  const asc = signOf(kundli.ascendantDeg ?? 0);
+  const yk = YOGAKARAKA_BY_ASC[asc];
+  if (!yk) return null;
+  const p = getPlanet(kundli, yk);
+  if (!p?.house || !STRONG_HOUSES.has(p.house)) return null;
+  const dig = dignity(yk, planetSign(p));
+  if (dig.label !== "exalted" && dig.label !== "own sign") return null;
+  return `Yogakaraka ${yk} dignified in ${p.house}H (+8)`;
+}
+
+function scanGajaKesari(kundli: KundliData): string | null {
+  const moon = getPlanet(kundli, "Moon");
+  const jup = getPlanet(kundli, "Jupiter");
+  if (!moon?.house || !jup?.house) return null;
+  const kendraFromMoon = new Set([0, 3, 6, 9].map(o => ((moon.house + o - 1) % 12) + 1));
+  if (!kendraFromMoon.has(jup.house)) return null;
+  return `Gaja Kesari Yoga: Jupiter kendra from Moon (+5)`;
+}
+
+function d1WealthYogaLinksResult(kundli: KundliData) {
+  let yogaRaw = 50;
+  const yogaFactors: string[] = [];
+  const linkedPairs = new Set<string>();
+
+  for (const [houseA, houseB, label] of DHAN_LORD_PAIR_SPECS) {
+    const link = lordPairLinkType(kundli, houseA, houseB);
+    if (!link) continue;
+    const pairKey = `${Math.min(houseA, houseB)}-${Math.max(houseA, houseB)}`;
+    if (linkedPairs.has(pairKey)) continue;
+    linkedPairs.add(pairKey);
+    const bonus = dhanLordPairBonus(houseA, houseB, link);
+    yogaRaw += bonus;
+    yogaFactors.push(`${label} (${link}): +${bonus}`);
+  }
+
+  const jup = getPlanet(kundli, "Jupiter");
+  if (jup?.house && STRONG_HOUSES.has(jup.house)) {
+    const jDig = dignity("Jupiter", planetSign(jup));
+    if (jDig.label === "exalted" || jDig.label === "own sign") {
+      yogaRaw += 6;
+      yogaFactors.push("Kubera Yoga: Jupiter dignified in strong house (+6)");
+    }
+  }
+
+  const sun = getPlanet(kundli, "Sun");
+  const merc = getPlanet(kundli, "Mercury");
+  if (sun && merc && sun.house === merc.house && sun.house && STRONG_HOUSES.has(sun.house)) {
+    yogaRaw += 5;
+    yogaFactors.push(`Budhaditya Yoga: Sun-Mercury in ${sun.house}H (+5)`);
+  }
+
+  for (const [kH, tH, label] of RAJ_KENDRA_TRIKONA_SPECS) {
+    const link = lordPairLinkType(kundli, kH, tH);
+    if (!link) continue;
+    const pairKey = `raj-${Math.min(kH, tH)}-${Math.max(kH, tH)}`;
+    if (linkedPairs.has(pairKey)) continue;
+    linkedPairs.add(pairKey);
+    const bonus = rajLordPairBonus(kH, tH, link);
+    yogaRaw += bonus;
+    yogaFactors.push(`${label} (${link}): +${bonus}`);
+  }
+
+  for (const line of scanVipreetRajYogas(kundli)) {
+    yogaRaw += 6;
+    yogaFactors.push(line);
+  }
+
+  const yogakaraka = scanYogakarakaRaj(kundli);
+  if (yogakaraka) {
+    yogaRaw += 8;
+    yogaFactors.push(yogakaraka);
+  }
+
+  const gaja = scanGajaKesari(kundli);
+  if (gaja) {
+    yogaRaw += 5;
+    yogaFactors.push(gaja);
+  }
+
+  for (const tH of TRIKONA_HOUSES) {
+    const lord = houseLord(kundli, tH);
+    if (planetHouseNum(kundli, lord) === 10) {
+      yogaRaw += 5;
+      yogaFactors.push(`Trikona lord ${lord} (${tH}H) in 10H (+5)`);
+    }
+  }
+
+  for (const kH of KENDRA_HOUSES) {
+    const lord = houseLord(kundli, kH);
+    const h = planetHouseNum(kundli, lord);
+    if (h != null && [1, 5, 9].includes(h)) {
+      yogaRaw += 4;
+      yogaFactors.push(`Kendra lord ${lord} (${kH}H) in trikona ${h}H (+4)`);
+    }
+  }
+
+  const lord2 = houseLord(kundli, 2);
+  const lord11 = houseLord(kundli, 11);
+  const p2 = getPlanet(kundli, lord2);
+  const p11 = getPlanet(kundli, lord11);
+  const p2Sign = planetSign(p2);
+  const p11Sign = planetSign(p11);
+
+  for (const row of [
+    { lord: houseLord(kundli, 5), label: "5H lord", pair2: "2-5", pair11: "5-11" },
+    { lord: houseLord(kundli, 9), label: "9H lord", pair2: "2-9", pair11: "9-11" },
+  ]) {
+    const p = getPlanet(kundli, row.lord);
+    if (!p?.house) continue;
+    if ([2, 11].includes(p.house)) {
+      yogaRaw += 7;
+      yogaFactors.push(`${row.label} ${row.lord} in ${p.house}H: +7`);
+    }
+    if (p2Sign != null && hasAspect(p, p2Sign) && !linkedPairs.has(row.pair2)) {
+      yogaRaw += 3;
+      yogaFactors.push(`${row.label} ${row.lord} aspects 2H lord: +3`);
+    }
+    if (p11Sign != null && hasAspect(p, p11Sign) && !linkedPairs.has(row.pair11)) {
+      yogaRaw += 3;
+      yogaFactors.push(`${row.label} ${row.lord} aspects 11H lord: +3`);
+    }
+  }
+
+  if (!linkedPairs.has("2-11")) {
+    if (p2 && p11Sign != null && hasAspect(p2, p11Sign)) {
+      yogaRaw += 4;
+      yogaFactors.push(`2H lord ${lord2} one-way aspect 11H lord: +4`);
+    }
+    if (p11 && p2Sign != null && hasAspect(p11, p2Sign)) {
+      yogaRaw += 4;
+      yogaFactors.push(`11H lord ${lord11} one-way aspect 2H lord: +4`);
+    }
+  }
+
+  if (!yogaFactors.length) yogaFactors.push("No strong dhan/raj wealth yoga found");
+  return {
+    score: Math.max(8, Math.min(96, yogaRaw)),
+    factors: yogaFactors,
+  };
 }
 
 function d1WealthPromiseResult(kundli: KundliData, specs: CleanHouseSpec[]) {
@@ -778,13 +1014,10 @@ function d1WealthPromiseResult(kundli: KundliData, specs: CleanHouseSpec[]) {
     if (p) {
       notes.push(`${row.lord} placement: ${p.house}H`);
       if ([6, 8, 12].includes(p.house)) {
-        const basePenalty = row.house === 2 || row.house === 11 ? 12 : 7;
-        const penalty = row.lord === "Mercury" && p.house === 12 && hasMercuryModernContext(kundli)
-          ? Math.round(basePenalty * 0.4)
-          : basePenalty;
+        const penalty = row.house === 2 || row.house === 11 ? 12 : 7;
         score -= penalty;
         punished.add(`${row.lord}:dusthana`);
-        notes.push(`${row.lord} in dusthana: ${penalty < basePenalty ? "modern/foreign-tech context reduces leakage" : "wealth leakage/debt pressure"} -${penalty}`);
+        notes.push(`${row.lord} in dusthana: wealth leakage/debt pressure -${penalty}`);
       }
       if (isCombust(kundli, p)) {
         score = Math.round(score * 0.5);
@@ -809,51 +1042,9 @@ function d1WealthPromiseResult(kundli: KundliData, specs: CleanHouseSpec[]) {
   });
 
   const coreScore = weighted(coreRows.map((row, idx) => [row.score, specs[idx].weight]));
-  const lord2 = houseLord(kundli, 2);
-  const lord11 = houseLord(kundli, 11);
-  const lord5 = houseLord(kundli, 5);
-  const lord9 = houseLord(kundli, 9);
-  const p2 = getPlanet(kundli, lord2);
-  const p11 = getPlanet(kundli, lord11);
-  const p5 = getPlanet(kundli, lord5);
-  const p9 = getPlanet(kundli, lord9);
-  const p2Sign = planetSign(p2);
-  const p11Sign = planetSign(p11);
-  let yogaRaw = 50;
-  const yogaFactors: string[] = [];
-  if (p2 && p11 && p2.house === p11.house) {
-    yogaRaw += 12;
-    yogaFactors.push(`2H lord ${lord2} conjunct 11H lord ${lord11}: direct wealth link`);
-  }
-  if (p2 && p11Sign != null && hasAspect(p2, p11Sign)) {
-    yogaRaw += 8;
-    yogaFactors.push(`2H lord ${lord2} aspects 11H lord ${lord11}`);
-  }
-  if (p11 && p2Sign != null && hasAspect(p11, p2Sign)) {
-    yogaRaw += 8;
-    yogaFactors.push(`11H lord ${lord11} aspects 2H lord ${lord2}`);
-  }
-  for (const row of [
-    { lord: lord5, planet: p5, label: "5H lord" },
-    { lord: lord9, planet: p9, label: "9H lord" },
-  ]) {
-    const rowSign = planetSign(row.planet);
-    if (!row.planet || rowSign == null) continue;
-    if ([2, 11].includes(row.planet.house)) {
-      yogaRaw += 7;
-      yogaFactors.push(`${row.label} ${row.lord} placed in ${row.planet.house}H`);
-    }
-    if (p2Sign != null && hasAspect(row.planet, p2Sign)) {
-      yogaRaw += 5;
-      yogaFactors.push(`${row.label} ${row.lord} aspects 2H lord`);
-    }
-    if (p11Sign != null && hasAspect(row.planet, p11Sign)) {
-      yogaRaw += 5;
-      yogaFactors.push(`${row.label} ${row.lord} aspects 11H lord`);
-    }
-  }
-  const yogaScore = Math.max(8, Math.min(96, yogaRaw));
-  if (!yogaFactors.length) yogaFactors.push("No strong 2H/11H/5H/9H lord link found");
+  const wealthYogas = d1WealthYogaLinksResult(kundli);
+  const yogaScore = wealthYogas.score;
+  const yogaFactors = wealthYogas.factors;
 
   let occupantRaw = 50;
   const occupantFactors: string[] = [];
@@ -869,14 +1060,14 @@ function d1WealthPromiseResult(kundli: KundliData, specs: CleanHouseSpec[]) {
         if (BENEFICS.has(p.name)) add += 7;
         if (MALEFICS.has(p.name)) add -= p.name === "Sun" ? 4 : 8;
       } else if ([10, 11].includes(house)) {
-        if (MALEFICS.has(p.name)) add += 7;
         if (BENEFICS.has(p.name)) add += 4;
+        if (MALEFICS.has(p.name)) add -= 2;
       } else if (house === 9) {
         if (BENEFICS.has(p.name)) add += 5;
         if (MALEFICS.has(p.name)) add -= 2;
       }
       occupantRaw += add;
-      occupantFactors.push(`${p.name} in ${house}H: ${add >= 0 ? "+" : ""}${add} (${house === 2 && MALEFICS.has(p.name) ? "savings pressure" : [10, 11].includes(house) && MALEFICS.has(p.name) ? "upachaya ambition" : "occupant effect"})`);
+      occupantFactors.push(`${p.name} in ${house}H: ${add >= 0 ? "+" : ""}${add}`);
     }
   }
   const occupantScore = Math.max(8, Math.min(96, occupantRaw));
@@ -959,7 +1150,7 @@ function d1WealthPromiseResult(kundli: KundliData, specs: CleanHouseSpec[]) {
     factors: [
       `Loop 1 - Core house lords: ${coreScore}%`,
       ...coreRows.flatMap(row => row.notes),
-      `Loop 2 - Dhan yoga links: ${yogaScore}%`,
+      `Loop 2 - Dhan & raj wealth yogas: ${yogaScore}%`,
       ...yogaFactors,
       `Loop 3 - Occupants with upachaya rule: ${occupantScore}%`,
       ...occupantFactors,
@@ -1117,6 +1308,19 @@ function d10DignityPoints(chart: KundliData, planet: string) {
   return { points, label: dig.label, house: p?.house };
 }
 
+function d10LordPlacementPoints(house?: number | null): number {
+  if (house == null) return 0;
+  if ([1, 2, 4, 5, 9, 10, 11].includes(house)) return 3;
+  if ([6, 8, 12].includes(house)) return -2;
+  return 0;
+}
+
+function d10ChartLordPairBonus(link: "parivartana" | "conjunction" | "mutual_aspect"): number {
+  if (link === "parivartana") return 6;
+  if (link === "conjunction") return 5;
+  return 4;
+}
+
 function d10IncomeEngineResult(kundli: KundliData) {
   if (!hasVarga(kundli, "D10")) {
     return {
@@ -1138,27 +1342,47 @@ function d10IncomeEngineResult(kundli: KundliData) {
   const lord10Dig = d10DignityPoints(d10, lord10);
   const lord11Dig = d10DignityPoints(d10, lord11);
   points += lord10Dig.points + lord11Dig.points;
-  factors.push(`D10 10H lord ${lord10}: ${lord10Dig.label}, ${lord10Dig.points >= 0 ? "+" : ""}${lord10Dig.points}, placed ${lord10Dig.house ?? "missing"}H`);
-  factors.push(`D10 11H lord ${lord11}: ${lord11Dig.label}, ${lord11Dig.points >= 0 ? "+" : ""}${lord11Dig.points}, placed ${lord11Dig.house ?? "missing"}H`);
+  const place10 = d10LordPlacementPoints(lord10Dig.house);
+  const place11 = d10LordPlacementPoints(lord11Dig.house);
+  points += place10 + place11;
+  factors.push(`D10 10H lord ${lord10}: ${lord10Dig.label}, ${lord10Dig.points >= 0 ? "+" : ""}${lord10Dig.points}, placed ${lord10Dig.house ?? "missing"}H, placement ${place10 >= 0 ? "+" : ""}${place10}`);
+  factors.push(`D10 11H lord ${lord11}: ${lord11Dig.label}, ${lord11Dig.points >= 0 ? "+" : ""}${lord11Dig.points}, placed ${lord11Dig.house ?? "missing"}H, placement ${place11 >= 0 ? "+" : ""}${place11}`);
 
-  const connected = !!(p10 && p11 && (
-    p10.house === p11.house ||
-    (p11Sign != null && hasAspect(p10, p11Sign)) ||
-    (p10Sign != null && hasAspect(p11, p10Sign))
-  ));
-  if (connected) {
-    points += 5;
-    factors.push(`10L ${lord10} and 11L ${lord11} connected by conjunction/aspect: +5`);
+  const link910D10 = wealthLordPairLinkOnChart(d10, d10, 9, 10);
+  if (link910D10) {
+    const bonus = d10ChartLordPairBonus(link910D10);
+    points += bonus;
+    factors.push(`D10 9L-10L Dharma-Karmadhipati (${link910D10}): +${bonus}`);
+    const link910D1 = wealthLordPairLinkOnChart(kundli, kundli, 9, 10);
+    if (link910D1) {
+      points += 3;
+      factors.push(`D1+D10 sustain 9-10 (D1 ${link910D1} + D10 ${link910D10}): +3`);
+    }
   } else {
-    factors.push(`10L ${lord10} and 11L ${lord11} connection: not found`);
+    factors.push("D10 9L-10L Dharma-Karmadhipati: not found");
   }
 
-  const exchangeLike = p10?.house === 11 || p11?.house === 10;
-  if (exchangeLike) {
-    points += 5;
-    factors.push(`10L/11L placed in each other's income nodes: +5`);
+  const link1011D10 = wealthLordPairLinkOnChart(d10, d10, 10, 11);
+  if (link1011D10) {
+    const bonus = d10ChartLordPairBonus(link1011D10);
+    points += bonus;
+    factors.push(`D10 10L-11L income link (${link1011D10}): +${bonus}`);
+    const link1011D1 = wealthLordPairLinkOnChart(kundli, kundli, 10, 11);
+    if (link1011D1) {
+      points += 3;
+      factors.push(`D1+D10 sustain 10-11 (D1 ${link1011D1} + D10 ${link1011D10}): +3`);
+    }
   } else {
-    factors.push("10L in 11H / 11L in 10H: not found");
+    const oneWay = !!(p10 && p11 && (
+      (p11Sign != null && hasAspect(p10, p11Sign)) ||
+      (p10Sign != null && hasAspect(p11, p10Sign))
+    ));
+    if (oneWay) {
+      points += 3;
+      factors.push(`D10 10L-11L one-way aspect only: +3`);
+    } else {
+      factors.push(`10L ${lord10} and 11L ${lord11} connection: not found`);
+    }
   }
 
   if (p11?.house === 2) {
@@ -1199,10 +1423,9 @@ function d10IncomeEngineResult(kundli: KundliData) {
     }
     for (const p of occ) {
       let add = 0;
-      if (["Saturn", "Mars", "Rahu", "Sun"].includes(p.name)) add = 2;
-      else if (["Jupiter", "Venus"].includes(p.name)) add = 1;
+      if (["Jupiter", "Venus"].includes(p.name)) add = 1;
       upachayaPoints += add;
-      factors.push(`${p.name} in D10 ${house}H: ${add >= 0 ? "+" : ""}${add} (${add === 2 ? "upachaya ambition boost" : add === 1 ? "smooth support" : "neutral"})`);
+      if (add) factors.push(`${p.name} in D10 ${house}H: +${add}`);
     }
   }
   upachayaPoints = Math.min(8, upachayaPoints);
@@ -1210,17 +1433,15 @@ function d10IncomeEngineResult(kundli: KundliData) {
   factors.push(`Upachaya occupant boost total: +${upachayaPoints}`);
 
   let bridgePoints = 0;
-  for (const house of [10, 11]) {
+  for (const house of [2, 9, 10, 11]) {
     const d1Lord = houseLord(kundli, house);
     const p = getPlanet(d10, d1Lord);
-    let add = 0;
-    if (p && [1, 4, 5, 7, 9, 10].includes(p.house)) add = 3;
-    else if (p && [6, 8, 12].includes(p.house)) add = -2;
+    const add = d10LordPlacementPoints(p?.house);
     bridgePoints += add;
     factors.push(`D1 ${house}H lord ${d1Lord} in D10: ${p?.house ?? "missing"}H, bridge ${add >= 0 ? "+" : ""}${add}`);
   }
   points += bridgePoints;
-  factors.push(`D1-to-D10 bridge total: ${bridgePoints >= 0 ? "+" : ""}${bridgePoints}`);
+  factors.push(`D1 wealth/career lords in D10 total: ${bridgePoints >= 0 ? "+" : ""}${bridgePoints}`);
 
   const score = Math.max(8, Math.min(96, Math.round(50 + points * 1.5)));
   return {
@@ -1242,21 +1463,58 @@ function d9WealthValidationResult(kundli: KundliData) {
     };
   }
   const d9 = getVarga(kundli, "D9");
-  const houses = [2, 5, 9, 11];
   let modifier = 0;
   const factors: string[] = [];
-  for (const house of houses) {
+
+  for (const house of WEALTH_LORD_HOUSES) {
     const lord = houseLord(kundli, house);
     const p = getPlanet(d9, lord);
     const sign = planetSign(p);
     const dig = dignity(lord, sign);
     let add = 0;
-    if (dig.label === "exalted" || dig.label === "own sign") add = 1.5;
-    else if (dig.label === "debilitated") add = -1.5;
+    if (dig.label === "exalted") add += 2;
+    else if (dig.label === "own sign") add += 1.5;
+    else if (dig.label === "debilitated") add -= 2;
+
+    const placed = p?.house ?? null;
+    if (placed != null) {
+      if ([2, 5, 9, 11].includes(placed)) add += 2;
+      else if ([1, 4, 7, 10].includes(placed)) add += 1;
+      else if ([6, 8, 12].includes(placed)) add -= 2;
+    }
+
     modifier += add;
-    factors.push(`D1 ${house}H lord ${lord} in D9: ${dig.label}, placed ${p?.house ?? "missing"}H, modifier ${add >= 0 ? "+" : ""}${add}`);
+    factors.push(
+      `D1 ${house}H lord ${lord} in D9: ${dig.label}, ${placed ?? "missing"}H, ${add >= 0 ? "+" : ""}${Math.round(add * 10) / 10}`,
+    );
   }
-  modifier = Math.max(-5, Math.min(5, modifier));
+
+  const linkedD9 = new Set<string>();
+  for (const [houseA, houseB] of WEALTH_LORD_PAIR_HOUSES) {
+    const link = wealthLordPairLinkOnChart(d9, kundli, houseA, houseB);
+    if (!link) continue;
+    const pairKey = `${Math.min(houseA, houseB)}-${Math.max(houseA, houseB)}`;
+    if (linkedD9.has(pairKey)) continue;
+    linkedD9.add(pairKey);
+    const bonus = d9WealthLordPairBonus(houseA, houseB, link);
+    modifier += bonus;
+    factors.push(`D9 wealth link ${pairKey} (${link}): +${bonus}`);
+
+    const d1Link = lordPairLinkType(kundli, houseA, houseB);
+    if (d1Link) {
+      modifier += 3;
+      factors.push(`D1+D9 sustain ${pairKey} (D1 ${d1Link} + D9 ${link}): +3`);
+    }
+  }
+
+  const vargottama = vargottamaWealthPlanets(kundli, d9);
+  if (vargottama.length) {
+    const vBonus = Math.min(4.5, vargottama.length * 1.5);
+    modifier += vBonus;
+    factors.push(`Vargottama wealth karakas (${vargottama.join(", ")}): +${vBonus}`);
+  }
+
+  modifier = Math.max(-8, Math.min(12, Math.round(modifier * 10) / 10));
   return {
     modifier,
     score: Math.max(8, Math.min(96, Math.round(50 + modifier * 8))),
@@ -1302,39 +1560,17 @@ function wealthBuilderResult(kundli: KundliData, wealthBase: number) {
     { house: 9, weight: 0.15, karakas: ["Jupiter", "Sun"] },
   ];
   const d1Wealth = d1WealthPromiseResult(kundli, d1Specs);
-  const wealthPlanetRows = ["Jupiter", "Venus", "Mercury", "Saturn"].map(name => {
-    const strength = planetStrength(kundli, name);
-    return { name, score: normPlanetScore(strength.score), strength };
-  });
-  const wealthPlanetScore = weighted([
-    [wealthPlanetRows[0].score, 0.30],
-    [wealthPlanetRows[1].score, 0.24],
-    [wealthPlanetRows[2].score, 0.24],
-    [wealthPlanetRows[3].score, 0.22],
-  ]);
-  const dhanYogaScore = Math.max(8, Math.min(96, Math.round(50 + wealthYogaSupport(kundli))));
   const d2Hora = d2HoraCapacityResult(kundli, wealthBase);
   const d10Income = d10IncomeEngineResult(kundli);
   const d9Validation = d9WealthValidationResult(kundli);
   const wealthAshtak = wealthAshtakavargaModifier(kundli);
   const globalLeakage = globalWealthLeakagePenalty(kundli);
-  const highPotentialOverride = d2Hora.score >= 65 && d10Income.score >= 65;
 
-  let score = highPotentialOverride
-    ? weightedPrecise([
-      [d1Wealth.score, 0.20],
-      [d2Hora.score, 0.35],
-      [d10Income.score, 0.30],
-      [wealthPlanetScore, 0.10],
-      [dhanYogaScore, 0.05],
-    ])
-    : weightedPrecise([
-      [d1Wealth.score, 0.40],
-      [d2Hora.score, 0.25],
-      [d10Income.score, 0.20],
-      [wealthPlanetScore, 0.10],
-      [dhanYogaScore, 0.05],
-    ]);
+  let score = weightedPrecise([
+    [d1Wealth.score, 0.50],
+    [d2Hora.score, 0.25],
+    [d10Income.score, 0.25],
+  ]);
   score += d9Validation.modifier;
   score += wealthAshtak.modifier;
   score += globalLeakage.penalty;
@@ -1344,8 +1580,8 @@ function wealthBuilderResult(kundli: KundliData, wealthBase: number) {
       key: "money-d1",
       label: "D1 wealth promise",
       score: d1Wealth.score,
-      weightPct: 40,
-      detail: "D1 runs the 6-loop wealth blueprint: lords, yogas, occupants, aspects, karakas and edge filters.",
+      weightPct: 50,
+      detail: "D1: 2H/11H/10H/9H lords, full dhan yogas, raj wealth yogas (VIPREET, kendra-trikona, Yogakaraka, Gaja Kesari), occupants, aspects, karakas.",
       factors: d1Wealth.factors,
     },
     {
@@ -1353,32 +1589,16 @@ function wealthBuilderResult(kundli: KundliData, wealthBase: number) {
       label: "D2 capacity",
       score: d2Hora.score,
       weightPct: 25,
-      detail: "D2 runs the 5-loop Hora blueprint: Sun/Moon dominance, Lagna, vault, Jupiter/Venus and D1 wealth-lord status.",
+      detail: "D2 Hora: Sun/Moon dominance, Lagna, vault, Jupiter/Venus and D1 wealth-lord status.",
       factors: d2Hora.factors,
     },
     {
       key: "money-d10",
       label: "D10 income engine",
       score: d10Income.score,
-      weightPct: 20,
-      detail: "D10 checks only career-to-income wealth generation: 10L/11L nodes, companions, upachaya occupants and D1 bridge.",
+      weightPct: 25,
+      detail: "D10: 10L/11L dignity & placement, 9L-10L Dharma-Karmadhipati, 10L-11L links, D1+D10 sustain, companions, D1 2/9/10/11 bridge.",
       factors: d10Income.factors,
-    },
-    {
-      key: "money-planets",
-      label: "Wealth planets",
-      score: wealthPlanetScore,
-      weightPct: 10,
-      detail: "Jupiter, Venus, Mercury and Saturn are checked for dignity and placement.",
-      factors: wealthPlanetRows.map(row => `${row.name}: ${row.score}%, ${row.strength.label}`),
-    },
-    {
-      key: "money-yoga",
-      label: "Dhan-yoga links",
-      score: dhanYogaScore,
-      weightPct: 5,
-      detail: "Cross-links among 2H/5H/9H/10H/11H lords — counted once here (not inside D1 loop 2).",
-      factors: [`Dhan-yoga support: +${Math.round(wealthYogaSupport(kundli))}`],
     },
   ];
   details.push({
@@ -1386,7 +1606,7 @@ function wealthBuilderResult(kundli: KundliData, wealthBase: number) {
     label: "D9 validation",
     score: d9Validation.score,
     weightPct: 0,
-    detail: "D9 is only a reality check: D1 2L/5L/9L/11L sustain wealth in Navamsha or not.",
+    detail: "D9: D1 2L/5L/9L/11L dignity & placement, wealth-lord links in D9, D1+D9 double sustain, vargottama.",
     factors: d9Validation.factors,
   });
   details.push({
@@ -1394,7 +1614,7 @@ function wealthBuilderResult(kundli: KundliData, wealthBase: number) {
     label: "Ashtakavarga validator",
     score: Math.max(8, Math.min(96, Math.round(50 + wealthAshtak.modifier * 10))),
     weightPct: 0,
-    detail: "2H and 11H bindu support acts as a small validator.",
+    detail: "2H and 11H bindu support — small validator only.",
     factors: [
       ...wealthAshtak.factors,
       `Applied modifier: ${wealthAshtak.modifier >= 0 ? "+" : ""}${Math.round(wealthAshtak.modifier * 10) / 10}`,
@@ -1405,31 +1625,26 @@ function wealthBuilderResult(kundli: KundliData, wealthBase: number) {
     label: "Residual leakage signals",
     score: globalLeakage.score,
     weightPct: 0,
-    detail: "Only Ketu 2H and Rahu 8H volatility — dusthana/combust penalties stay inside D1.",
+    detail: "Only Ketu 2H and Rahu 8H — dusthana/debility/combust stay inside D1.",
     factors: globalLeakage.factors,
   });
   return {
     score: baseScore,
     details,
     checked: [
-      "D1 2H/11H/10H/9H",
-      "D2 Sun/Moon Hora dominance, Lagna, vault, Jupiter/Venus and D1 wealth lords",
-      "D10 10L/11L relation, companion backup, upachaya occupants and D1 bridge",
-      "Jupiter/Venus/Mercury/Saturn",
-      "Dhan-yoga links (5% weight only)",
-      "D9 validation, threshold Ashtakavarga, residual Ketu/Rahu leakage",
+      "D1 2H/11H/10H/9H lords, all dhan yogas + raj wealth yogas, occupants, aspects, karakas",
+      "D2 Hora dominance, Lagna, vault, Jupiter/Venus",
+      "D10 9-10/10-11 links, lord placement, D1 2/9/10/11 bridge, D1+D10 sustain",
+      "D9 2L/5L/9L/11L dignity, placement, lord links, D1+D9 sustain, vargottama",
     ],
     rules: [
-      "Old backend Finance Wealth Category is not used; this Money Builder score now feeds LifeMap Finance category.",
-      "D1, D2 and D10 carry the main score.",
-      "D10 uses only the income engine checks: 10L/11L dignity, connection/exchange/vault, companion support, upachaya occupants and D1-to-D10 bridge.",
-      "If D10 is missing, neutral 50% is used — no career-dimension fallback.",
-      "D2 uses only the 5 Hora checks; if D2 is missing, fallback uses D1 2H plus Jupiter and Venus strength.",
-      "Ashtakavarga uses SAV thresholds: >32 support, 26-31 neutral, <24 friction.",
-      "D9 validates D1 2L/5L/9L/11L only; each exalted/own lord gives +1.5 and each debilitated lord gives -1.5, capped at +/-5.",
-      "Dhan-yoga cross-links count once at 5% weight; D1 loop 2 keeps separate 2H/11H/5H/9H lord links.",
-      "Synthesis priority reduces D1 drag when both D2 vault and D10 income engine are high-potential.",
-      "Penalty stacking: dusthana/debility/combustion stay in D1; global layer only adds Ketu 2H / Rahu 8H volatility.",
+      "Score = 50% D1 + 25% D2 + 25% D10, then small D9/Ashtak/leakage modifiers.",
+      "No duplicate wealth-planet layer (Jupiter/Venus already inside D1 karakas).",
+      "D1 loop 2 = Finance dhan yogas + raj yogas (parivartana/conjunction/mutual aspect, Kubera, Budhaditya, VIPREET, placements).",
+      "No modern/foreign-tech dusthana discount for Mercury 12H.",
+      "No D1 weight drop when D2 and D10 are high.",
+      "D10 upachaya: only Jupiter/Venus in 10H/11H get a small +1.",
+      "10H/11H occupants: benefic +4, malefic -2 (no malefic ambition boost).",
     ],
   };
 }

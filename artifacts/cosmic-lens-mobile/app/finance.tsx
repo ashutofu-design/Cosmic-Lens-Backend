@@ -3,7 +3,7 @@ import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -15,6 +15,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import Svg, { Circle, Defs, LinearGradient as SvgGrad, Stop } from "react-native-svg";
@@ -26,10 +27,18 @@ import { API_BASE, apiFetch } from "@/lib/apiConfig";
 import { usePlan } from "@/lib/subscription";
 import {
   financeWealthCopy,
+  WEALTH_TIER_ORDER,
+  wealthTierFromScore,
   type LeakageKey,
   type LiquidityKey,
   type WealthTierKey,
 } from "@/lib/financeWealthCopy";
+import { buildPersonalSnapshot } from "@/lib/personalizationSnapshot";
+import {
+  buildWealthDashaTimeline,
+  formatDashaRange,
+  type WealthDashaTimeline,
+} from "@/lib/wealthDashaTiming";
 import { coerceUILang } from "@/lib/i18n";
 
 const F = {
@@ -99,7 +108,10 @@ type WealthCopy = ReturnType<typeof financeWealthCopy>;
 function yogaHouseHint(houses: number[] | undefined, wealthCopy: WealthCopy): string | null {
   if (!houses?.length) return null;
   if (houses.length === 2) return wealthCopy.housePair(houses[0], houses[1]);
-  return wealthCopy.housesLine(houses);
+  if (typeof wealthCopy.housesLine === "function") {
+    return wealthCopy.housesLine(houses);
+  }
+  return `Houses ${houses.join(", ")}`;
 }
 
 function YogaDetailModal({
@@ -181,6 +193,8 @@ interface BasicBlock {
   score: number;
   trend: string;
   summary: string;
+  wealth_karma_score?: number;
+  wealth_score?: number;
   hook: string;
   money_habits?: string[];
   dhana_yogas?: YogaItem[];
@@ -279,28 +293,136 @@ function ScoreRing({ score, color }: { score: number; color: string }) {
 }
 
 function SectionCard({
-  icon, title, children, accent,
+  icon, title, children, accent, compact, headerRight,
 }: {
   icon: React.ComponentProps<typeof Feather>["name"];
   title: string;
   children: React.ReactNode;
   accent: string;
+  compact?: boolean;
+  headerRight?: React.ReactNode;
 }) {
   return (
-    <View style={[s.card, { borderColor: `${accent}33` }]}>
+    <View style={[s.card, compact && s.cardCompact, { borderColor: `${accent}33` }]}>
       <LinearGradient
         colors={["rgba(255,255,255,0.04)", "rgba(255,255,255,0.01)"]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
+        pointerEvents="none"
       />
-      <View style={s.cardHead}>
-        <View style={[s.cardIcon, { backgroundColor: `${accent}1F`, borderColor: `${accent}55` }]}>
-          <Feather name={icon} size={14} color={accent} />
+      <View style={[s.cardHead, compact && s.cardHeadCompact]}>
+        <View style={{ flexDirection: "row", alignItems: "center", flex: 1, gap: 10 }}>
+          <View style={[
+            s.cardIcon,
+            compact && s.cardIconCompact,
+            { backgroundColor: `${accent}1F`, borderColor: `${accent}55` },
+          ]}>
+            <Feather name={icon} size={compact ? 12 : 14} color={accent} />
+          </View>
+          <Text style={[s.cardTitle, compact && s.cardTitleCompact, { flex: 1 }]}>{title}</Text>
         </View>
-        <Text style={s.cardTitle}>{title}</Text>
+        {headerRight}
       </View>
-      <View style={{ gap: 8 }}>{children}</View>
+      <View style={{ gap: compact ? 6 : 8 }}>{children}</View>
     </View>
+  );
+}
+
+function wealthScoreColor(score: number): string {
+  if (score >= 72) return "#22c55e";
+  if (score >= 60) return "#fbbf24";
+  return "rgba(255,255,255,0.55)";
+}
+
+function WealthDashaTimingModal({
+  visible,
+  onClose,
+  timeline,
+  wealthCopy,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  timeline: WealthDashaTimeline | null;
+  wealthCopy: ReturnType<typeof financeWealthCopy>;
+}) {
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={s.modalBackdrop} onPress={onClose}>
+        <Pressable style={s.modalSheet} onPress={(e) => e.stopPropagation()}>
+          <View style={s.modalHandle} />
+          <Text style={s.modalTitle}>{wealthCopy.dashaTimingTitle}</Text>
+          <Text style={s.modalSub}>{wealthCopy.dashaTimingSub}</Text>
+          {!timeline ? (
+            <Text style={s.dhanDetailBody}>{wealthCopy.dashaNoData}</Text>
+          ) : (
+            <>
+              <Text style={s.dashaMetaLine}>
+                {wealthCopy.dashaBaseLabel}: {Math.round(timeline.baseScore * 4) / 4}
+              </Text>
+              {timeline.bestMd ? (
+                <Text style={s.dashaMetaLine}>
+                  {wealthCopy.dashaBestMd}: {timeline.bestMd.planet} ({timeline.bestMd.score})
+                </Text>
+              ) : null}
+              {timeline.bestAd ? (
+                <Text style={[s.dashaMetaLine, { marginBottom: 12 }]}>
+                  {wealthCopy.dashaBestAd}: {timeline.bestAd.mdPlanet}/{timeline.bestAd.planet} ({timeline.bestAd.score})
+                </Text>
+              ) : null}
+              <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false}>
+                {timeline.mahadashas.map(md => (
+                  <View key={`${md.planet}-${md.startDate}`} style={s.dashaMdBlock}>
+                    <View style={[s.dashaRow, md.isCurrent && s.dashaRowCurrent]}>
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <Text style={s.dashaMdText}>
+                            {wealthCopy.dashaMdLabel} {md.planet}
+                          </Text>
+                          {md.isWealthLinked ? (
+                            <Text style={s.dashaWealthChip}>{wealthCopy.dashaWealthTag}</Text>
+                          ) : null}
+                        </View>
+                        <Text style={s.dashaDateText}>{formatDashaRange(md.startDate, md.endDate)}</Text>
+                      </View>
+                      <Text style={[s.dashaScoreText, { color: wealthScoreColor(md.score) }]}>
+                        {md.score}
+                      </Text>
+                    </View>
+                    {md.antardashas.map(ad => (
+                      <View
+                        key={`${md.planet}-${ad.planet}-${ad.startDate}`}
+                        style={[s.dashaRow, s.dashaAdRow, ad.isCurrent && s.dashaRowCurrent]}
+                      >
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                            <Text style={s.dashaAdText}>
+                              {wealthCopy.dashaAdLabel} {ad.planet}
+                            </Text>
+                            {ad.isWealthLinked ? (
+                              <Text style={s.dashaWealthChip}>{wealthCopy.dashaWealthTag}</Text>
+                            ) : null}
+                          </View>
+                          <Text style={s.dashaDateText}>{formatDashaRange(ad.startDate, ad.endDate)}</Text>
+                        </View>
+                        <Text style={[s.dashaScoreText, { color: wealthScoreColor(ad.score) }]}>
+                          {ad.score}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ))}
+              </ScrollView>
+            </>
+          )}
+          <Pressable
+            onPress={onClose}
+            style={({ pressed }) => [s.modalCloseBtn, { opacity: pressed ? 0.85 : 1 }]}
+          >
+            <Text style={s.modalCloseText}>Close</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -324,8 +446,13 @@ export default function FinanceScreen() {
   const [data, setData] = useState<FinanceResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [dhanDetailOpen, setDhanDetailOpen] = useState(false);
-  const [rajDetailOpen, setRajDetailOpen] = useState(false);
+  const [yogaDetailOpen, setYogaDetailOpen] = useState<"dhan" | "raj" | null>(null);
+  const [dashaTimingOpen, setDashaTimingOpen] = useState(false);
+
+  const openYogaDetail = (kind: "dhan" | "raj") => {
+    setYogaDetailOpen(kind);
+    void Haptics.selectionAsync().catch(() => undefined);
+  };
 
   const fade = useRef(new Animated.Value(0)).current;
 
@@ -360,7 +487,19 @@ export default function FinanceScreen() {
   const wf = data?.basic?.wealth_finance;
   const yog = wf?.yog_metrics;
   const matrix = wf?.chart_matrix;
-  const tierKey = (wf?.wealth_tier ?? "middle_class") as WealthTierKey;
+  const wealthBuilderScore = useMemo(() => {
+    const snap = buildPersonalSnapshot(kundli);
+    const wb = snap.categoryScores.find(item => item.type === "Wealth Builder Kundli");
+    return wb?.score ?? null;
+  }, [kundli]);
+  const tierKey = useMemo((): WealthTierKey => {
+    if (wealthBuilderScore != null) return wealthTierFromScore(wealthBuilderScore);
+    return wealthTierFromScore(data?.basic?.wealth_karma_score ?? data?.basic?.wealth_score ?? 50);
+  }, [wealthBuilderScore, data?.basic?.wealth_karma_score, data?.basic?.wealth_score]);
+  const wealthDashaTimeline = useMemo(
+    () => buildWealthDashaTimeline(kundli, wealthBuilderScore ?? 50),
+    [kundli, wealthBuilderScore],
+  );
   const liquidity = (wf?.current_liquidity_index ?? "moderate") as LiquidityKey;
   const dhanYogas = resolveYogas(yog, "dhan", data?.basic?.dhana_yogas);
   const rajYogas = resolveYogas(yog, "raj", data?.basic?.raj_yogas);
@@ -454,91 +593,41 @@ export default function FinanceScreen() {
 
             {/* WEALTH YOGAS */}
             {wf && yog && (
-              <SectionCard icon="star" title={wealthCopy.yogTitle} accent="#fbbf24">
-                <Text style={[s.summary, { fontSize: 12, marginBottom: 12 }]}>{wealthCopy.yogSub}</Text>
-                <View style={{ flexDirection: "row", gap: 10, marginBottom: 8 }}>
-                  <Pressable
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      setDhanDetailOpen(true);
-                    }}
-                    style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.88 : 1 }]}
+              <SectionCard icon="star" title={wealthCopy.yogTitle} accent="#fbbf24" compact>
+                <View style={s.yogRow}>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => openYogaDetail("dhan")}
+                    style={s.yogPress}
+                    accessibilityRole="button"
+                    accessibilityLabel={wealthCopy.dhanYogCard}
                   >
-                    <View style={s.yogCard}>
-                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-                        <Text style={s.yogCardLabel}>{wealthCopy.dhanYogCard}</Text>
-                        <Feather name="chevron-right" size={14} color="#fbbf24" />
+                    <View style={s.yogCompact}>
+                      <Text style={s.yogCompactLabel}>{wealthCopy.dhanYogCard}</Text>
+                      <View style={s.yogCompactRight}>
+                        <Text style={s.yogCompactNum}>{yog.dhan_count ?? 0}</Text>
+                        <Feather name="chevron-right" size={12} color="#fbbf24" />
                       </View>
-                      <Text style={s.yogCardNum}>{yog.dhan_count ?? 0}</Text>
-                      <Text style={s.yogCardSub}>{wealthCopy.inChart}</Text>
                     </View>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      setRajDetailOpen(true);
-                    }}
-                    style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.88 : 1 }]}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => openYogaDetail("raj")}
+                    style={s.yogPress}
+                    accessibilityRole="button"
+                    accessibilityLabel={wealthCopy.rajYogCard}
                   >
-                    <View style={[s.yogCard, { borderColor: "rgba(167,139,250,0.4)", backgroundColor: "rgba(167,139,250,0.1)" }]}>
-                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-                        <Text style={[s.yogCardLabel, { color: "#c4b5fd" }]}>{wealthCopy.rajYogCard}</Text>
-                        <Feather name="chevron-right" size={14} color="#c4b5fd" />
+                    <View style={[s.yogCompact, s.yogCompactRaj]}>
+                      <Text style={[s.yogCompactLabel, s.yogCompactLabelRaj]}>{wealthCopy.rajYogCard}</Text>
+                      <View style={s.yogCompactRight}>
+                        <Text style={[s.yogCompactNum, s.yogCompactNumRaj]}>{yog.raj_count ?? 0}</Text>
+                        <Feather name="chevron-right" size={12} color="#c4b5fd" />
                       </View>
-                      <Text style={[s.yogCardNum, { color: "#c4b5fd" }]}>{yog.raj_count ?? 0}</Text>
-                      <Text style={s.yogCardSub}>{wealthCopy.inChart}</Text>
                     </View>
-                  </Pressable>
+                  </TouchableOpacity>
                 </View>
-                <Text style={[s.tapHint, { marginBottom: 12 }]}>{wealthCopy.tapYogHint}</Text>
-                <View style={[s.chipGold, { alignSelf: "flex-start", borderColor: "rgba(34,197,94,0.45)", marginBottom: 10 }]}>
-                  <Text style={[s.chipGoldText, { color: "#4ade80" }]}>
-                    {wealthCopy.activation(yog.activation_pct ?? 0)}
-                  </Text>
-                </View>
-                {(yog.active_yogas?.length ?? 0) > 0 ? (
-                  yog.active_yogas!.map((name, i) => (
-                    <Text key={`${name}-${i}`} style={s.miniLine}>• {name}</Text>
-                  ))
-                ) : (
-                  <Text style={s.miniLine}>{wealthCopy.noActiveYog}</Text>
-                )}
               </SectionCard>
             )}
-
-            <YogaDetailModal
-              visible={dhanDetailOpen}
-              onClose={() => setDhanDetailOpen(false)}
-              title={wealthCopy.dhanDetailTitle}
-              subtitle={wealthCopy.dhanDetailSub}
-              items={dhanYogas}
-              emptyText={wealthCopy.dhanEmpty}
-              closeLabel={wealthCopy.close}
-              wealthCopy={wealthCopy}
-              accent={{
-                name: "",
-                pillBorder: "rgba(251,191,36,0.45)",
-                pillBg: "rgba(251,191,36,0.12)",
-                pillText: "#fbbf24",
-              }}
-            />
-
-            <YogaDetailModal
-              visible={rajDetailOpen}
-              onClose={() => setRajDetailOpen(false)}
-              title={wealthCopy.rajDetailTitle}
-              subtitle={wealthCopy.rajDetailSub}
-              items={rajYogas}
-              emptyText={wealthCopy.rajEmpty}
-              closeLabel={wealthCopy.close}
-              wealthCopy={wealthCopy}
-              accent={{
-                name: "#e9d5ff",
-                pillBorder: "rgba(167,139,250,0.5)",
-                pillBg: "rgba(167,139,250,0.15)",
-                pillText: "#c4b5fd",
-              }}
-            />
 
             {/* CHART MATRIX */}
             {matrix && (
@@ -572,17 +661,51 @@ export default function FinanceScreen() {
 
             {/* WEALTH TIER + SOURCE */}
             {wf && (
-              <SectionCard icon="award" title={wealthCopy.tierTitle} accent="#fbbf24">
-                <View style={[s.tierPill, { borderColor: "rgba(251,191,36,0.5)", backgroundColor: "rgba(251,191,36,0.12)" }]}>
-                  <Text style={s.tierPillText}>
-                    {wealthCopy.tierLabels[tierKey] ?? wf.wealth_tier_label}
-                  </Text>
+              <SectionCard
+                icon="award"
+                title={wealthCopy.tierTitle}
+                accent="#fbbf24"
+                headerRight={(
+                  <Pressable
+                    onPress={() => {
+                      setDashaTimingOpen(true);
+                      void Haptics.selectionAsync().catch(() => undefined);
+                    }}
+                    style={({ pressed }) => [s.tierViewBtn, { opacity: pressed ? 0.8 : 1 }]}
+                  >
+                    <Text style={s.tierViewBtnText}>{wealthCopy.dashaTimingView}</Text>
+                    <Feather name="chevron-right" size={14} color="#fbbf24" />
+                  </Pressable>
+                )}
+              >
+                <View style={s.tierRow}>
+                  {WEALTH_TIER_ORDER.map(key => {
+                    const selected = key === tierKey;
+                    return (
+                      <View
+                        key={key}
+                        style={[
+                          s.tierTag,
+                          selected ? s.tierTagSelected : s.tierTagFaded,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            s.tierTagText,
+                            selected ? s.tierTagTextSelected : s.tierTagTextFaded,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {wealthCopy.tierLabels[key]}
+                        </Text>
+                      </View>
+                    );
+                  })}
                 </View>
-                {wf.wealth_source?.label ? (
-                  <>
-                    <Text style={[s.cardSubTitle, { marginTop: 12 }]}>{wealthCopy.sourceTitle}</Text>
-                    <Text style={s.summary}>{wf.wealth_source.label}</Text>
-                  </>
+                {wealthBuilderScore != null ? (
+                  <Text style={[s.miniLine, { marginTop: 10 }]}>
+                    Wealth Builder score {Math.round(wealthBuilderScore * 4) / 4} → {wealthCopy.tierLabels[tierKey]}
+                  </Text>
                 ) : null}
               </SectionCard>
             )}
@@ -801,6 +924,38 @@ export default function FinanceScreen() {
           </Animated.View>
         )}
       </ScrollView>
+
+      <YogaDetailModal
+        visible={yogaDetailOpen !== null}
+        onClose={() => setYogaDetailOpen(null)}
+        title={yogaDetailOpen === "raj" ? wealthCopy.rajDetailTitle : wealthCopy.dhanDetailTitle}
+        subtitle={yogaDetailOpen === "raj" ? wealthCopy.rajDetailSub : wealthCopy.dhanDetailSub}
+        items={yogaDetailOpen === "raj" ? rajYogas : dhanYogas}
+        emptyText={yogaDetailOpen === "raj" ? wealthCopy.rajEmpty : wealthCopy.dhanEmpty}
+        closeLabel={wealthCopy.close}
+        wealthCopy={wealthCopy}
+        accent={
+          yogaDetailOpen === "raj"
+            ? {
+                name: "#e9d5ff",
+                pillBorder: "rgba(167,139,250,0.5)",
+                pillBg: "rgba(167,139,250,0.15)",
+                pillText: "#c4b5fd",
+              }
+            : {
+                name: "",
+                pillBorder: "rgba(251,191,36,0.45)",
+                pillBg: "rgba(251,191,36,0.12)",
+                pillText: "#fbbf24",
+              }
+        }
+      />
+      <WealthDashaTimingModal
+        visible={dashaTimingOpen}
+        onClose={() => setDashaTimingOpen(false)}
+        timeline={wealthDashaTimeline}
+        wealthCopy={wealthCopy}
+      />
     </CosmicBg>
   );
 }
@@ -844,12 +999,22 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(10,15,25,0.78)",
     padding: 16, gap: 12, overflow: "hidden",
   },
+  cardCompact: {
+    padding: 11,
+    gap: 8,
+    borderRadius: 14,
+  },
   cardHead: { flexDirection: "row", alignItems: "center", gap: 9 },
+  cardHeadCompact: { gap: 7 },
   cardIcon: {
     width: 28, height: 28, borderRadius: 9, borderWidth: 1,
     alignItems: "center", justifyContent: "center",
   },
+  cardIconCompact: {
+    width: 22, height: 22, borderRadius: 7,
+  },
   cardTitle: { fontSize: 13, fontFamily: F.bold, letterSpacing: 0.2, color: "#fff" },
+  cardTitleCompact: { fontSize: 12 },
 
   summary: {
     fontSize: 13.5, fontFamily: F.semi,
@@ -921,42 +1086,55 @@ const s = StyleSheet.create({
     paddingVertical: 6,
   },
   chipGoldText: { color: "#fbbf24", fontSize: 11, fontFamily: F.semi },
-  yogCard: {
-    flex: 1,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.4)",
-    backgroundColor: "rgba(251,191,36,0.1)",
-    padding: 14,
-    alignItems: "center",
-    minHeight: 100,
+  yogRow: {
+    flexDirection: "row",
+    gap: 8,
+    zIndex: 2,
   },
-  yogCardLabel: {
+  yogPress: {
+    flex: 1,
+    minWidth: 0,
+  },
+  yogCompact: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.35)",
+    backgroundColor: "rgba(251,191,36,0.08)",
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    width: "100%",
+  },
+  yogCompactRaj: {
+    borderColor: "rgba(167,139,250,0.35)",
+    backgroundColor: "rgba(167,139,250,0.08)",
+  },
+  yogCompactLabel: {
     color: "#fbbf24",
     fontSize: 11,
     fontFamily: F.semi,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    marginBottom: 6,
+    letterSpacing: 0.3,
+    flexShrink: 1,
   },
-  yogCardNum: {
+  yogCompactLabelRaj: {
+    color: "#c4b5fd",
+  },
+  yogCompactRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginLeft: 6,
+  },
+  yogCompactNum: {
     color: "#fbbf24",
-    fontSize: 36,
+    fontSize: 20,
     fontFamily: F.extra,
-    lineHeight: 40,
+    lineHeight: 22,
   },
-  yogCardSub: {
-    color: "rgba(255,255,255,0.5)",
-    fontSize: 10,
-    fontFamily: F.regular,
-    marginTop: 4,
-    textAlign: "center",
-  },
-  tapHint: {
-    color: "rgba(255,255,255,0.45)",
-    fontSize: 11,
-    fontFamily: F.regular,
-    textAlign: "center",
+  yogCompactNumRaj: {
+    color: "#c4b5fd",
   },
   modalBackdrop: {
     flex: 1,
@@ -1061,6 +1239,108 @@ const s = StyleSheet.create({
   },
   matrixLabel: { color: "rgba(255,255,255,0.65)", fontSize: 12, fontFamily: F.semi, flex: 1 },
   matrixVal: { color: "#fff", fontSize: 12, fontFamily: F.bold, textAlign: "right", flex: 1 },
+  tierRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  tierTag: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  tierTagSelected: {
+    borderColor: "rgba(251,191,36,0.85)",
+    backgroundColor: "rgba(251,191,36,0.22)",
+  },
+  tierTagFaded: {
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    opacity: 0.45,
+  },
+  tierTagText: {
+    fontSize: 11,
+    fontFamily: F.bold,
+  },
+  tierTagTextSelected: {
+    color: "#fbbf24",
+  },
+  tierTagTextFaded: {
+    color: "rgba(255,255,255,0.55)",
+  },
+  tierViewBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.45)",
+    backgroundColor: "rgba(251,191,36,0.1)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  tierViewBtnText: {
+    color: "#fbbf24",
+    fontSize: 11,
+    fontFamily: F.bold,
+  },
+  dashaMetaLine: {
+    color: "rgba(255,255,255,0.65)",
+    fontSize: 12,
+    fontFamily: F.semi,
+    marginBottom: 4,
+  },
+  dashaMdBlock: {
+    marginBottom: 12,
+    gap: 4,
+  },
+  dashaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.03)",
+  },
+  dashaRowCurrent: {
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.45)",
+    backgroundColor: "rgba(251,191,36,0.08)",
+  },
+  dashaAdRow: {
+    marginLeft: 14,
+    paddingVertical: 6,
+  },
+  dashaMdText: {
+    color: "#fff",
+    fontSize: 13,
+    fontFamily: F.bold,
+  },
+  dashaAdText: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 12,
+    fontFamily: F.semi,
+  },
+  dashaDateText: {
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 10,
+    fontFamily: F.regular,
+  },
+  dashaScoreText: {
+    fontSize: 15,
+    fontFamily: F.bold,
+    minWidth: 28,
+    textAlign: "right",
+  },
+  dashaWealthChip: {
+    color: "#fbbf24",
+    fontSize: 9,
+    fontFamily: F.bold,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
   tierPill: {
     alignSelf: "flex-start",
     borderRadius: 999,

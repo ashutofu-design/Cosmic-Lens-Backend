@@ -1,7 +1,7 @@
 """Tests for wealth_finance_v1 diagnostic engine."""
 import unittest
 
-from vedic.wealth_finance_v1 import compute_wealth_finance_diagnostic
+from vedic.wealth_finance_v1 import compute_wealth_finance_diagnostic, wealth_tier_from_score
 
 
 def _planets():
@@ -47,6 +47,10 @@ class TestWealthFinanceV1(unittest.TestCase):
     def test_wealth_source_has_label(self):
         out = compute_wealth_finance_diagnostic(_planets(), 0)
         self.assertTrue(out["wealth_source"].get("label"))
+
+    def test_score_56_is_average_not_rich(self):
+        self.assertEqual(wealth_tier_from_score(56), "middle_class")
+        self.assertEqual(wealth_tier_from_score(60), "rich")
 
 
 if __name__ == "__main__":

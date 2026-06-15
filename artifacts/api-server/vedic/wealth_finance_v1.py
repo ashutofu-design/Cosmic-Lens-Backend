@@ -204,38 +204,38 @@ def _chart_plane_verdicts(
     }
 
 
-def _kp_tier_lock(
+_TIER_RANK = {
+    "middle_class": 0,
+    "rich": 1,
+    "ultra_rich": 2,
+    "millionaire": 3,
+}
+
+
+def wealth_tier_from_score(score: int) -> str:
+    """Score → tier. Yog count does not affect this — only Money Builder score."""
+    c = int(score)
+    if c >= 85:
+        return "millionaire"
+    if c >= 72:
+        return "ultra_rich"
+    if c >= 60:
+        return "rich"
+    return "middle_class"
+
+
+def _kp_tier_downgrade(
     kp: Optional[Dict[str, Any]],
-    d2_chandra_pct: int,
-    fallback: str,
+    score_tier: str,
 ) -> str:
+    """KP may lower wealth tier (leakage / job-only); never upgrade above score band."""
     if not kp:
-        return fallback
+        return score_tier
     h2, h11 = kp.get("h2") or {}, kp.get("h11") or {}
     g2 = set(h2.get("gain_hits") or [])
     g11 = set(h11.get("gain_hits") or [])
     combined = g2 | g11
     loss = bool(h2.get("loss_hits") or h11.get("loss_hits"))
-
-    if (
-        h2.get("verdict") == "GREEN"
-        and h11.get("verdict") == "GREEN"
-        and len(combined & _GAIN_KP) >= 2
-        and bool(combined & {5, 9})
-        and d2_chandra_pct >= 50
-        and not loss
-    ):
-        return "millionaire"
-
-    if (
-        not loss
-        and h2.get("verdict") != "RED"
-        and h11.get("verdict") != "RED"
-        and len(g2) >= 1
-        and len(g11) >= 1
-        and len(combined & _GAIN_KP) >= 2
-    ):
-        return "rich"
 
     if loss and not (g11 & _GAIN_KP):
         return "middle_class"
@@ -247,7 +247,25 @@ def _kp_tier_lock(
     if loss:
         return "middle_class"
 
-    return fallback if fallback else "middle_class"
+    if h2.get("verdict") == "RED" or h11.get("verdict") == "RED":
+        if score_tier in ("ultra_rich", "millionaire"):
+            return "rich"
+        if score_tier == "rich":
+            return "middle_class"
+
+    return score_tier
+
+
+def _kp_tier_lock(
+    kp: Optional[Dict[str, Any]],
+    d2_chandra_pct: int,
+    fallback: str,
+    wealth_score: int = 50,
+) -> str:
+    """Legacy name — score drives tier; KP can only downgrade."""
+    _ = (d2_chandra_pct, fallback)
+    score_tier = wealth_tier_from_score(wealth_score)
+    return _kp_tier_downgrade(kp, score_tier)
 
 
 def _wealth_source(
@@ -314,7 +332,7 @@ def _liquidity_index(
 _TIER_LABELS = {
     "middle_class": "Average",
     "rich": "Rich",
-    "ultra_rich": "Ultra Rich",
+    "ultra_rich": "Very Rich",
     "millionaire": "Millionaire Potential",
 }
 
@@ -347,17 +365,8 @@ def compute_wealth_finance_diagnostic(
     except Exception:
         pass
 
-    tier = _kp_tier_lock(kp, chandra_pct, fallback_category)
-    if not kp:
-        c = int(wealth_karma_score)
-        if c >= 80:
-            tier = "millionaire"
-        elif c >= 65:
-            tier = "ultra_rich"
-        elif c >= 50:
-            tier = "rich"
-        else:
-            tier = "middle_class"
+    # Wealth tier = Money Builder score only (KP shown in kp_layer, does not change tier).
+    tier = wealth_tier_from_score(int(wealth_karma_score))
 
     source = _wealth_source(planets, asc_idx, kundli)
     leakage = _leakage_alerts(h12)

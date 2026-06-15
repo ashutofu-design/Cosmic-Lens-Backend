@@ -2131,6 +2131,98 @@ def _mb_sarva_bindu(kundli: Optional[dict], asc_idx: int, house: int) -> Optiona
     return None
 
 
+def _mb_dhan_yoga_bonus(yoga: dict) -> int:
+    link = str(yoga.get("link") or "")
+    houses = tuple(sorted(int(h) for h in (yoga.get("houses") or []) if isinstance(h, int)))
+    if link == "parivartana":
+        return 12 if houses in ((2, 11), (9, 11)) else 10
+    if link == "conjunction":
+        return 10 if houses == (2, 11) else 8
+    if link == "mutual_aspect":
+        return 6
+    if link == "karaka":
+        return 6
+    return 5
+
+
+def _mb_raj_yoga_bonus(yoga: dict) -> int:
+    link = str(yoga.get("link") or "")
+    name = str(yoga.get("name") or "")
+    houses = {int(h) for h in (yoga.get("houses") or []) if isinstance(h, int)}
+    dharma_karma = 9 in houses and 10 in houses
+    if link == "parivartana":
+        return 10 if dharma_karma else 8
+    if link == "conjunction":
+        return 8 if dharma_karma else 6
+    if link == "mutual_aspect":
+        return 6 if dharma_karma else 5
+    if name == "Yogakaraka Yoga":
+        return 8
+    if name == "Gaja Kesari Yoga":
+        return 5
+    if name == "Trikona Lord in 10th":
+        return 5
+    if name == "Kendra Lord in Trikona":
+        return 4
+    if name == "Vipreet Raj Yoga":
+        return 6
+    return 5
+
+
+def _mb_d1_wealth_yoga_score(planets: List[dict], asc_idx: int) -> int:
+    from vedic.dhan_yoga_engine_v1 import scan_dhan_yogas
+    from vedic.raj_yoga_engine_v1 import scan_raj_yogas
+
+    raw = 50.0
+    linked: set = set()
+
+    for y in scan_dhan_yogas(planets, asc_idx):
+        houses = tuple(sorted(int(h) for h in (y.get("houses") or []) if isinstance(h, int)))
+        if len(houses) == 2:
+            key = f"dhan-{houses[0]}-{houses[1]}"
+            if key in linked:
+                continue
+            linked.add(key)
+        raw += _mb_dhan_yoga_bonus(y)
+
+    for y in scan_raj_yogas(planets, asc_idx):
+        houses = tuple(sorted(int(h) for h in (y.get("houses") or []) if isinstance(h, int)))
+        if len(houses) == 2:
+            key = f"raj-{houses[0]}-{houses[1]}"
+            if key in linked:
+                continue
+            linked.add(key)
+        raw += _mb_raj_yoga_bonus(y)
+
+    lord_2 = _mb_house_lord(asc_idx, 2)
+    lord_11 = _mb_house_lord(asc_idx, 11)
+    p2, p11 = _mb_planet(planets, lord_2), _mb_planet(planets, lord_11)
+    p2s, p11s = _mb_sign_idx(p2), _mb_sign_idx(p11)
+
+    for house in (5, 9):
+        lord = _mb_house_lord(asc_idx, house)
+        p = _mb_planet(planets, lord)
+        if not p:
+            continue
+        ph = int(p.get("house") or 0)
+        if ph in (2, 11):
+            raw += 7
+        pair2 = tuple(sorted((2, house)))
+        pair11 = tuple(sorted((house, 11)))
+        if _mb_has_aspect(p, p2s) and f"dhan-{pair2[0]}-{pair2[1]}" not in linked:
+            raw += 3
+        if _mb_has_aspect(p, p11s) and f"dhan-{pair11[0]}-{pair11[1]}" not in linked:
+            raw += 3
+
+    if "dhan-2-11" not in linked:
+        if _mb_has_aspect(p2, p11s):
+            raw += 4
+        if _mb_has_aspect(p11, p2s):
+            raw += 4
+
+    return _mb_clamp(int(round(raw)))
+
+
 def _mb_d1_wealth_score(planets: List[dict], asc_idx: int) -> int:
     lords = [_mb_house_lord(asc_idx, h) for h in (2, 11, 10, 9)]
     core = []
@@ -2142,28 +2234,7 @@ def _mb_d1_wealth_score(planets: List[dict], asc_idx: int) -> int:
         core.append(_mb_clamp(score))
     core_score = _mb_weighted([(core[0], .30), (core[1], .30), (core[2], .25), (core[3], .15)])
 
-    lord_2, lord_11, lord_10, lord_9 = lords
-    p2, p11 = _mb_planet(planets, lord_2), _mb_planet(planets, lord_11)
-    p2s, p11s = _mb_sign_idx(p2), _mb_sign_idx(p11)
-    yoga = 50 + _wealth_exchange_bonus(planets, asc_idx)
-    if p2 and p11 and p2.get("house") == p11.get("house"):
-        yoga += 12
-    if _mb_has_aspect(p2, p11s):
-        yoga += 8
-    if _mb_has_aspect(p11, p2s):
-        yoga += 8
-    for house in (5, 9):
-        lord = _mb_house_lord(asc_idx, house)
-        p = _mb_planet(planets, lord)
-        if not p:
-            continue
-        if int(p.get("house") or 0) in (2, 11):
-            yoga += 7
-        if _mb_has_aspect(p, p2s):
-            yoga += 5
-        if _mb_has_aspect(p, p11s):
-            yoga += 5
-    yoga_score = _mb_clamp(yoga)
+    yoga_score = _mb_d1_wealth_yoga_score(planets, asc_idx)
 
     benefics = {"Jupiter", "Venus", "Mercury", "Moon"}
     malefics = {"Saturn", "Mars", "Rahu", "Ketu", "Sun"}
@@ -2277,63 +2348,177 @@ def _mb_d2_score(planets: List[dict], asc_idx: int, kundli: Optional[dict], weal
     return _mb_weighted([(_mb_clamp(dominance), .30), (_mb_clamp(lagna), .18), (_mb_clamp(vault), .22), (karaka, .16), (_mb_clamp(cross), .14)])
 
 
+def _mb_d10_placement_points(house: int) -> int:
+    if house in (1, 2, 4, 5, 9, 10, 11):
+        return 3
+    if house in (6, 8, 12):
+        return -2
+    return 0
+
+
+def _mb_d10_pair_bonus(link: str) -> int:
+    if link == "parivartana":
+        return 6
+    if link == "conjunction":
+        return 5
+    return 4
+
+
 def _mb_d10_score(planets: List[dict], asc_idx: int, kundli: Optional[dict], fallback: int) -> int:
     d10 = _mb_get_varga(kundli, "D10")
     if not d10:
         return _mb_clamp(fallback)
-    pl = d10.get("planets") or []
-    a = _mb_varga_asc(d10, asc_idx)
-    lord10, lord11 = _mb_house_lord(a, 10), _mb_house_lord(a, 11)
-    p10, p11 = _mb_planet(pl, lord10), _mb_planet(pl, lord11)
+    from vedic.career_inclination_engine import ensure_planet_houses
+
+    d10_asc = _mb_varga_asc(d10, asc_idx)
+    d10_pl = ensure_planet_houses(list(d10.get("planets") or []), d10_asc)
+    d1_pl = ensure_planet_houses(list(planets or []), asc_idx)
+    lord10, lord11 = _mb_house_lord(d10_asc, 10), _mb_house_lord(d10_asc, 11)
+    p10, p11 = _mb_planet(d10_pl, lord10), _mb_planet(d10_pl, lord11)
+
     def dig_pts(lord: str, p: Optional[dict]) -> int:
         d = _mb_dignity(lord, p)
         return 5 if d in ("exalted", "own sign") else 3 if d == "friendly sign" else -2 if d == "enemy sign" else -3 if d == "debilitated" else 0
+
     points = dig_pts(lord10, p10) + dig_pts(lord11, p11)
-    p10s, p11s = _mb_sign_idx(p10), _mb_sign_idx(p11)
-    if p10 and p11 and (p10.get("house") == p11.get("house") or _mb_has_aspect(p10, p11s) or _mb_has_aspect(p11, p10s)):
-        points += 5
-    if p10 and int(p10.get("house") or 0) == 11:
-        points += 5
-    if p11 and int(p11.get("house") or 0) == 10:
-        points += 5
+    points += _mb_d10_placement_points(int(p10.get("house") or 0) if p10 else 0)
+    points += _mb_d10_placement_points(int(p11.get("house") or 0) if p11 else 0)
+
+    link910 = _mb_wealth_lord_pair_link(d10_pl, d10_asc, 9, 10)
+    if link910:
+        points += _mb_d10_pair_bonus(link910)
+        if _mb_wealth_lord_pair_link(d1_pl, asc_idx, 9, 10):
+            points += 3
+
+    link1011 = _mb_wealth_lord_pair_link(d10_pl, d10_asc, 10, 11)
+    if link1011:
+        points += _mb_d10_pair_bonus(link1011)
+        if _mb_wealth_lord_pair_link(d1_pl, asc_idx, 10, 11):
+            points += 3
+    else:
+        p10s, p11s = _mb_sign_idx(p10), _mb_sign_idx(p11)
+        if p10 and p11 and (_mb_has_aspect(p10, p11s) or _mb_has_aspect(p11, p10s)):
+            points += 3
+
     if p11 and int(p11.get("house") or 0) == 2:
         points += 4
+
     companion = 0
     for lord, p in ((lord10, p10), (lord11, p11)):
         if not p:
             continue
-        for c in pl:
+        for c in d10_pl:
             if c.get("name") != lord and c.get("house") == p.get("house"):
                 if _mb_dignity(str(c.get("name")), c) in ("exalted", "own sign"):
                     companion += 3
     points += min(6, companion)
+
     upachaya = 0
-    for p in pl:
-        if int(p.get("house") or 0) in (10, 11):
-            nm = p.get("name")
-            upachaya += 2 if nm in {"Saturn", "Mars", "Rahu", "Sun"} else 1 if nm in {"Jupiter", "Venus"} else 0
+    for p in d10_pl:
+        if int(p.get("house") or 0) in (10, 11) and p.get("name") in {"Jupiter", "Venus"}:
+            upachaya += 1
     points += min(8, upachaya)
+
     bridge = 0
-    for h in (10, 11):
+    for h in (2, 9, 10, 11):
         lord = _mb_house_lord(asc_idx, h)
-        p = _mb_planet(pl, lord)
-        ph = int(p.get("house") or 0) if p else 0
-        bridge += 3 if ph in (1, 4, 5, 7, 9, 10) else -2 if ph in (6, 8, 12) else 0
+        p = _mb_planet(d10_pl, lord)
+        bridge += _mb_d10_placement_points(int(p.get("house") or 0) if p else 0)
     points += bridge
     return _mb_clamp(50 + points * 1.5)
+
+
+def _mb_mutual_aspect(planets: List[dict], lord_a: str, lord_b: str) -> bool:
+    pa, pb = _mb_planet(planets, lord_a), _mb_planet(planets, lord_b)
+    sa, sb = _mb_sign_idx(pa), _mb_sign_idx(pb)
+    if not pa or not pb or sa is None or sb is None:
+        return False
+    return _mb_has_aspect(pa, sb) and _mb_has_aspect(pb, sa)
+
+
+def _mb_wealth_lord_pair_link(
+    chart_planets: List[dict],
+    d1_asc_idx: int,
+    house_a: int,
+    house_b: int,
+) -> Optional[str]:
+    lord_a = _mb_house_lord(d1_asc_idx, house_a)
+    lord_b = _mb_house_lord(d1_asc_idx, house_b)
+    if lord_a == lord_b:
+        return None
+    pa, pb = _mb_planet(chart_planets, lord_a), _mb_planet(chart_planets, lord_b)
+    ha = int(pa.get("house") or 0) if pa else 0
+    hb = int(pb.get("house") or 0) if pb else 0
+    if ha == house_b and hb == house_a:
+        return "parivartana"
+    if ha and ha == hb:
+        return "conjunction"
+    if _mb_mutual_aspect(chart_planets, lord_a, lord_b):
+        return "mutual_aspect"
+    return None
+
+
+def _mb_d9_wealth_pair_bonus(house_a: int, house_b: int, link: str) -> float:
+    key = tuple(sorted((house_a, house_b)))
+    if link == "parivartana":
+        return 4.0 if key in ((2, 11), (9, 11)) else 3.0
+    if link == "conjunction":
+        return 3.5 if key == (2, 11) else 2.5
+    return 2.0
 
 
 def _mb_d9_modifier(planets: List[dict], asc_idx: int, kundli: Optional[dict]) -> float:
     d9 = _mb_get_varga(kundli, "D9")
     if not d9:
         return 0.0
-    pl = d9.get("planets") or []
+    from vedic.career_inclination_engine import ensure_planet_houses
+
+    d9_asc = _mb_varga_asc(d9, asc_idx)
+    d9_pl = ensure_planet_houses(list(d9.get("planets") or []), d9_asc)
+    d1_pl = ensure_planet_houses(list(planets or []), asc_idx)
     mod = 0.0
-    for h in (2, 5, 9, 11):
+    wealth_houses = (2, 5, 9, 11)
+    wealth_pairs = ((2, 5), (2, 9), (2, 11), (5, 9), (5, 11), (9, 11))
+
+    for h in wealth_houses:
         lord = _mb_house_lord(asc_idx, h)
-        d = _mb_dignity(lord, _mb_planet(pl, lord))
-        mod += 1.5 if d in ("exalted", "own sign") else -1.5 if d == "debilitated" else 0
-    return max(-5.0, min(5.0, mod))
+        p = _mb_planet(d9_pl, lord)
+        d = _mb_dignity(lord, p)
+        if d == "exalted":
+            mod += 2.0
+        elif d == "own sign":
+            mod += 1.5
+        elif d == "debilitated":
+            mod -= 2.0
+        ph = int(p.get("house") or 0) if p else 0
+        if ph in (2, 5, 9, 11):
+            mod += 2.0
+        elif ph in (1, 4, 7, 10):
+            mod += 1.0
+        elif ph in (6, 8, 12):
+            mod -= 2.0
+
+    linked: set = set()
+    for ha, hb in wealth_pairs:
+        link = _mb_wealth_lord_pair_link(d9_pl, asc_idx, ha, hb)
+        if not link:
+            continue
+        key = tuple(sorted((ha, hb)))
+        if key in linked:
+            continue
+        linked.add(key)
+        mod += _mb_d9_wealth_pair_bonus(ha, hb, link)
+        if _mb_wealth_lord_pair_link(d1_pl, asc_idx, ha, hb):
+            mod += 3.0
+
+    vargottama = 0.0
+    for name in ("Jupiter", "Venus", "Moon", "Mercury"):
+        p1, p9 = _mb_planet(d1_pl, name), _mb_planet(d9_pl, name)
+        if p1 and p9 and (p1.get("sign") or "") == (p9.get("sign") or ""):
+            vargottama += 1.5
+    mod += min(4.5, vargottama)
+
+    return max(-8.0, min(12.0, round(mod, 1)))
 
 
 def _mb_ashtak_modifier(kundli: Optional[dict], asc_idx: int) -> int:
@@ -2344,6 +2529,16 @@ def _mb_ashtak_modifier(kundli: Optional[dict], asc_idx: int) -> int:
             continue
         total += 3 if b > 32 else -3 if b < 24 else 0
     return max(-3, min(3, total))
+
+
+def _mb_wealth_builder_residual_leakage(planets: List[dict]) -> int:
+    """Ketu 2H / Rahu 8H only — matches Personalization Wealth Builder leakage."""
+    penalty = 0
+    if any(p.get("name") == "Ketu" and int(p.get("house") or 0) == 2 for p in planets or []):
+        penalty -= 1
+    if any(p.get("name") == "Rahu" and int(p.get("house") or 0) == 8 for p in planets or []):
+        penalty -= 1
+    return penalty
 
 
 def _mb_global_leakage(planets: List[dict], asc_idx: int) -> int:
@@ -2452,39 +2647,17 @@ def _mb_operational_score(base_score: int, planets: List[dict], asc_idx: int, ku
 
 
 def _money_builder_wealth_score(planets: List[dict], asc_idx: int, kundli: Optional[dict], fallback_career_score: int = 50) -> int:
+    """Same architecture as Personalization Wealth Builder Kundli (50/25/25 + D9/SAV/leakage)."""
     d1 = _mb_d1_wealth_score(planets, asc_idx)
     wealth_base = _mb_clamp(d1)
     d2 = _mb_d2_score(planets, asc_idx, kundli, wealth_base)
     d10 = _mb_d10_score(planets, asc_idx, kundli, fallback_career_score)
-    wealth_planets = _mb_weighted([
-        (_mb_norm_planet_score(planets, asc_idx, "Jupiter"), .30),
-        (_mb_norm_planet_score(planets, asc_idx, "Venus"), .24),
-        (_mb_norm_planet_score(planets, asc_idx, "Mercury"), .24),
-        (_mb_norm_planet_score(planets, asc_idx, "Saturn"), .22),
-    ])
-    lord_2 = _mb_house_lord(asc_idx, 2)
-    lord_5 = _mb_house_lord(asc_idx, 5)
-    lord_9 = _mb_house_lord(asc_idx, 9)
-    lord_11 = _mb_house_lord(asc_idx, 11)
-    yoga = _mb_clamp(
-        50
-        + _wealth_exchange_bonus(planets, asc_idx)
-        + min(len(_has_dhana_yoga_for_chart(planets, asc_idx)), 4) * 3
-    )
-    if d2 >= 65 and d10 >= 65:
-        base = _mb_weighted([(d1, .20), (d2, .35), (d10, .30), (wealth_planets, .10), (yoga, .05)])
-    else:
-        base = _mb_weighted([(d1, .40), (d2, .25), (d10, .20), (wealth_planets, .10), (yoga, .05)])
-    modern = _mb_modern_modifier(planets, asc_idx, kundli)
-    score = (
-        base
-        + _mb_d9_modifier(planets, asc_idx, kundli)
-        + _mb_ashtak_modifier(kundli, asc_idx)
-        + modern
-        + _mb_trajectory_modifier(d1, d2, d10, modern)
-        + _mb_global_leakage(planets, asc_idx)
-    )
-    return max(22, min(92, int(round(score))))
+    score = d1 * 0.50 + d2 * 0.25 + d10 * 0.25
+    score += _mb_d9_modifier(planets, asc_idx, kundli)
+    score += float(_mb_ashtak_modifier(kundli, asc_idx))
+    score += float(_mb_wealth_builder_residual_leakage(planets))
+    score = max(8.0, min(96.0, round(score * 4) / 4))
+    return int(round(score))
 
 
 def compute_finance_specifics(
@@ -2596,15 +2769,9 @@ _CALM_FINANCE_HABITS = [
 
 
 def _classify_wealth_category(composite: int) -> str:
-    """middle_class → rich → ultra_rich → millionaire (birth chart only, static)."""
-    c = int(composite)
-    if c >= 80:
-        return "millionaire"
-    if c >= 65:
-        return "ultra_rich"
-    if c >= 50:
-        return "rich"
-    return "middle_class"
+    """middle_class → rich → ultra_rich → millionaire (birth chart score only)."""
+    from vedic.wealth_finance_v1 import wealth_tier_from_score
+    return wealth_tier_from_score(composite)
 
 
 def _pick_finance_focus_key(

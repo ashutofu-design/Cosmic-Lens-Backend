@@ -8,6 +8,7 @@ import * as Sharing from "expo-sharing";
 import React, { useEffect, useMemo, useState } from "react";
 import { API_BASE } from "@/lib/apiConfig";
 import {
+  Modal,
   Platform, Pressable, ScrollView, StyleSheet,
   Text, TextInput, View,
 } from "react-native";
@@ -16,6 +17,8 @@ import { useC } from "@/context/ThemeContext";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { getPYTheme } from "@/lib/i18nContent";
+import { LIFE_MASTERY_CHECKOUT_CONFIG, LIFE_MASTERY_UI_PRICING } from "@/lib/numerologyProOffer";
+import { consumeNumerologyPaidReady, gateNumerologyReportAfterLangPick } from "@/lib/numerologyReportCheckoutFlow";
 
 // ── Calculation helpers ───────────────────────────────────────────────────────
 const PYTH: Record<string, number> = {
@@ -354,47 +357,21 @@ function NumCard({
         ))}
       </View>
 
-      {/* Description always visible */}
-      <Text style={[nc.desc, { color: C.textMuted }]}>{t.vlang === "hi" ? (info.descHi || info.desc) : t.vlang === "hn" ? (info.descHn || info.desc) : info.desc}</Text>
-
-      {/* Expanded detail */}
-      {expanded && (
-        <View style={{ gap:10, marginTop:4 }}>
-          <View style={[nc.detailBlock, { borderColor: C.border }]}>
-            <Text style={[nc.detailLabel, { color: C.textDim }]}>{t.numCareer}</Text>
-            <Text style={[nc.detailVal, { color: C.textMid }]}>{t.vlang === "hi" ? (info.careerHi || info.career) : t.vlang === "hn" ? (info.careerHn || info.career) : info.career}</Text>
-          </View>
-          <View style={[nc.detailBlock, { borderColor: C.border }]}>
-            <Text style={[nc.detailLabel, { color: C.textDim }]}>{t.numLove}</Text>
-            <Text style={[nc.detailVal, { color: C.textMid }]}>{t.vlang === "hi" ? (info.loveHi || info.love) : t.vlang === "hn" ? (info.loveHn || info.love) : info.love}</Text>
-          </View>
-          <View style={[nc.detailBlock, { borderColor: C.border }]}>
-            <Text style={[nc.detailLabel, { color: C.textDim }]}>{t.numStrength}</Text>
-            <Text style={[nc.detailVal, { color: "#22c55e" }]}>{t.vlang === "hi" ? (info.strengthHi || info.strength) : t.vlang === "hn" ? (info.strengthHn || info.strength) : info.strength}</Text>
-          </View>
-          <View style={[nc.detailBlock, { borderColor: C.border }]}>
-            <Text style={[nc.detailLabel, { color: C.textDim }]}>{t.numWeakness}</Text>
-            <Text style={[nc.detailVal, { color: "#f87171" }]}>{t.vlang === "hi" ? (info.weaknessHi || info.weakness) : t.vlang === "hn" ? (info.weaknessHn || info.weakness) : info.weakness}</Text>
-          </View>
-          <View style={[nc.detailBlock, { borderColor: C.border, backgroundColor:`${info.color}06` }]}>
-            <Text style={[nc.detailLabel, { color: info.color }]}>{t.numRemedy}</Text>
-            <Text style={[nc.detailVal, { color: C.textMid }]}>{t.vlang === "hi" ? (info.remedyHi || info.remedy) : t.vlang === "hn" ? (info.remedyHn || info.remedy) : info.remedy}</Text>
-          </View>
-          <View style={nc.luckyRow}>
-            <View style={[nc.luckyPill, { backgroundColor:`${info.color}12` }]}>
-              <Text style={[nc.luckyLabel, { color: C.textDim }]}>{t.numLuckyNumbers}</Text>
-              <Text style={[nc.luckyVal, { color: info.color }]}>{info.luckyNums}</Text>
-            </View>
-            <View style={[nc.luckyPill, { backgroundColor:`${info.luckyColorHex}12` }]}>
-              <View style={[nc.colorDot, { backgroundColor: info.luckyColorHex }]} />
-              <View>
-                <Text style={[nc.luckyLabel, { color: C.textDim }]}>{t.numLuckyColor}</Text>
-                <Text style={[nc.luckyVal, { color: info.color }]}>{info.luckyColor}</Text>
-              </View>
-            </View>
-          </View>
+      {/* Compact (basic) — only strengths/weakness shown */}
+      <View style={nc.quickRow}>
+        <View style={[nc.quickPill, { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.25)" }]}>
+          <Text style={[nc.quickLabel, { color: C.textDim }]}>{t.numStrength}</Text>
+          <Text style={[nc.quickVal, { color: "#22c55e" }]}>
+            {t.vlang === "hi" ? (info.strengthHi || info.strength) : t.vlang === "hn" ? (info.strengthHn || info.strength) : info.strength}
+          </Text>
         </View>
-      )}
+        <View style={[nc.quickPill, { backgroundColor: "rgba(248,113,113,0.08)", borderColor: "rgba(248,113,113,0.22)" }]}>
+          <Text style={[nc.quickLabel, { color: C.textDim }]}>{t.numWeakness}</Text>
+          <Text style={[nc.quickVal, { color: "#f87171" }]}>
+            {t.vlang === "hi" ? (info.weaknessHi || info.weakness) : t.vlang === "hn" ? (info.weaknessHn || info.weakness) : info.weakness}
+          </Text>
+        </View>
+      </View>
     </Pressable>
   );
 }
@@ -410,15 +387,10 @@ const nc = StyleSheet.create({
   chip:       { flexDirection:"row", paddingHorizontal:8, paddingVertical:4, borderRadius:8, borderWidth:1 },
   chipTxt:    { fontSize:10, fontWeight:"700" },
   chipHindi:  { fontSize:10 },
-  desc:       { fontSize:12, lineHeight:19 },
-  detailBlock:{ borderTopWidth:1, paddingTop:8, gap:2 },
-  detailLabel:{ fontSize:9, fontWeight:"800", letterSpacing:1.2 },
-  detailVal:  { fontSize:12, lineHeight:19 },
-  luckyRow:   { flexDirection:"row", gap:10 },
-  luckyPill:  { flex:1, flexDirection:"row", alignItems:"center", gap:8, padding:10, borderRadius:12 },
-  colorDot:   { width:14, height:14, borderRadius:7 },
-  luckyLabel: { fontSize:9, fontWeight:"700", letterSpacing:0.8 },
-  luckyVal:   { fontSize:12, fontWeight:"700", marginTop:1 },
+  quickRow:   { flexDirection:"row", gap:10 },
+  quickPill:  { flex:1, borderRadius:12, borderWidth:1, padding:12, gap:4 },
+  quickLabel: { fontSize:9, fontWeight:"800", letterSpacing:1.2 },
+  quickVal:   { fontSize:12, lineHeight:18, fontWeight:"700" },
 });
 
 // ── Personal year mini card ───────────────────────────────────────────────────
@@ -529,11 +501,16 @@ const ps = StyleSheet.create({
 function ProReportPanel({ profile }: { profile: ProfileEntry }) {
   const C = useC();
   const t = useT();
+  const { user } = useUser();
   const bd = profile.birthData;
 
-  // Single product: Life Mastery Report (Part 2) only — Standard removed.
-  const lang: "english" | "hindi" | "hinglish" = "english";
   const [opening, setOpening] = useState(false);
+  const [langOpen, setLangOpen] = useState(false);
+  const [pdfLang, setPdfLang] = useState<"en" | "hn" | "hi">(
+    (t.lang || "en").toLowerCase() === "hi"
+      ? "hi"
+      : ((t.lang || "en").toLowerCase() === "hn" ? "hn" : "en"),
+  );
 
   // Pro+ Tools inputs
   const [mobile, setMobile]   = useState("");
@@ -617,7 +594,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
     }
   };
 
-  const openTools = async () => {
+  const openTools = async (langCode: "en" | "hn" | "hi") => {
     setErr(null);
     if (!bd) {
       setErr("Pehle Profile screen me Name aur Date of Birth bhar dijiye, phir wapas aaiye.");
@@ -629,7 +606,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
     }
     const params = new URLSearchParams({
       name: bd.name, dob: dobStr,
-      lang,
+      lang: langCode,
       ...(tobStr  ? { tob: tobStr } : {}),
       ...(mobile  ? { mobile }  : {}),
       ...(vehicle ? { vehicle } : {}),
@@ -645,6 +622,59 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
       `${API_BASE}/api/numerology/pdf_pro?${params.toString()}`,
       `Numerology_Tools_${safeName}.pdf`,
     );
+  };
+
+  useEffect(() => {
+    if (consumeNumerologyPaidReady()) {
+      void openTools(pdfLang);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const startUnlock = () => {
+    setErr(null);
+    if (!bd) {
+      setErr("Pehle Profile screen me Name aur Date of Birth bhar dijiye, phir wapas aaiye.");
+      return;
+    }
+    if (!mobile && !vehicle && !house) {
+      setErr("Kam se kam ek number to dijiye — Mobile, Vehicle ya House.");
+      return;
+    }
+    setLangOpen(true);
+  };
+
+  const confirmUnlock = async () => {
+    setLangOpen(false);
+    const entitlementParams: Record<string, unknown> = {
+      name: bd?.name,
+      dob: dobStr,
+      tob: tobStr || "12:00",
+      ...(mobile  ? { mobile }  : {}),
+      ...(vehicle ? { vehicle } : {}),
+      ...(house   ? { house }   : {}),
+      ...(typeof bd?.lat === "number" ? { lat: bd.lat } : {}),
+      ...(typeof bd?.lon === "number" ? { lon: bd.lon } : {}),
+      ...(typeof bd?.tz  === "number" ? { tz:  bd.tz } : {}),
+      ...(bd?.place ? { place: bd.place } : {}),
+    };
+
+    if (LIFE_MASTERY_CHECKOUT_CONFIG.bypassCheckoutForTesting) {
+      await openTools(pdfLang);
+      return;
+    }
+
+    await gateNumerologyReportAfterLangPick({
+      user,
+      params: entitlementParams,
+      lang: pdfLang,
+      label: "Life Mastery Report",
+      amountInr: LIFE_MASTERY_UI_PRICING.offerInr,
+      bypassCheckout: false,
+      onEntitled: () => {
+        void openTools(pdfLang);
+      },
+    });
   };
 
   const toolSections = [
@@ -670,21 +700,29 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
           <View style={[pp.hero, { backgroundColor: C.bgCard, borderColor: "rgba(124,58,237,0.4)" }]}>
             <View style={pp.heroRow}>
               <View style={[pp.heroIcon, { backgroundColor: "rgba(124,58,237,0.15)" }]}>
-                <Text style={{ fontSize: 28 }}>🛠️</Text>
+                <Text style={{ fontSize: 28 }}>🔒</Text>
               </View>
               <View style={{ flex: 1 }}>
                 <View style={pp.tagRow}>
                   <View style={[pp.tag, { backgroundColor: "#7c3aed" }]}>
-                    <Text style={pp.tagTxt}>PRO+ TOOLS</Text>
+                    <Text style={pp.tagTxt}>NUMEROLOGY PRO</Text>
                   </View>
                   <View style={[pp.tag, { backgroundColor: "rgba(245,158,11,0.18)" }]}>
-                    <Text style={[pp.tagTxt, { color: "#f59e0b" }]}>{t.nm_premium}</Text>
+                    <Text style={[pp.tagTxt, { color: "#f59e0b" }]}>{LIFE_MASTERY_UI_PRICING.discountLabel}</Text>
                   </View>
                 </View>
                 <Text style={[pp.heroTitle, { color: C.text }]}>{t.nm_lifeMastery}</Text>
                 <Text style={[pp.heroSub, { color: C.textMuted }]}>
-                  26-page deep report — Mobile, Vehicle, House + Career, Love, Money blueprint
+                  Deep PDF report — Career, Love, Money + lucky number tools.
                 </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 }}>
+                  <Text style={{ color: C.textMuted, textDecorationLine: "line-through", fontWeight: "800" }}>
+                    ₹{LIFE_MASTERY_UI_PRICING.originalInr}
+                  </Text>
+                  <Text style={{ color: "#f59e0b", fontWeight: "900", fontSize: 18 }}>
+                    ₹{LIFE_MASTERY_UI_PRICING.offerInr}
+                  </Text>
+                </View>
               </View>
             </View>
           </View>
@@ -759,14 +797,104 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
             </View>
           ))}
 
-          <Pressable onPress={openTools} disabled={opening}
+          <Text style={[pp.sectionLabel, { color: C.textDim }]}>LOCKED PREVIEW</Text>
+          <LockedCard title="Career direction + earning pattern" emoji="💼" color="#7c3aed" />
+          <LockedCard title="Money blocks + lucky activation dates" emoji="💰" color="#f59e0b" />
+          <LockedCard title="Love & relationship blueprint" emoji="💕" color="#ec4899" />
+          <LockedCard title="Mobile / Vehicle / House number dosha" emoji="🔢" color="#22c55e" />
+
+          <Pressable onPress={startUnlock} disabled={opening}
             style={[pp.cta, { backgroundColor: "#7c3aed", shadowColor: "#7c3aed" },
                     opening && { opacity: 0.6 }]}>
             <View style={pp.ctaInner}>
-              <Feather name={opening ? "loader" : "download"} size={18} color="#fff" />
-              <Text style={pp.ctaTxt}>{opening ? t.nm_opening : t.nm_generateBtn}</Text>
+              <Feather name={opening ? "loader" : "lock"} size={18} color="#fff" />
+              <Text style={pp.ctaTxt}>{opening ? t.nm_opening : "Unlock & Download PDF"}</Text>
             </View>
           </Pressable>
+
+          <Modal transparent visible={langOpen} animationType="fade" onRequestClose={() => setLangOpen(false)}>
+            <View style={{
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.55)",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 18,
+            }}>
+              <View style={{
+                width: "100%",
+                maxWidth: 420,
+                backgroundColor: C.bgCard,
+                borderColor: C.border,
+                borderWidth: 1,
+                borderRadius: 16,
+                padding: 14,
+                gap: 10,
+              }}>
+                <Text style={{ color: C.text, fontWeight: "900", fontSize: 16 }}>
+                  Choose PDF Language
+                </Text>
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  {([
+                    { id: "en", label: "English" },
+                    { id: "hn", label: "Hinglish" },
+                    { id: "hi", label: "Hindi" },
+                  ] as const).map(opt => {
+                    const active = pdfLang === opt.id;
+                    return (
+                      <Pressable
+                        key={opt.id}
+                        onPress={() => { setPdfLang(opt.id); Haptics.selectionAsync(); }}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 10,
+                          borderRadius: 12,
+                          borderWidth: 1.5,
+                          borderColor: active ? "#7c3aed" : C.border,
+                          backgroundColor: active ? "rgba(124,58,237,0.12)" : C.bgCard2,
+                          alignItems: "center",
+                        }}
+                      >
+                        <Text style={{ color: active ? "#7c3aed" : C.textMuted, fontWeight: "800", fontSize: 12 }}>
+                          {opt.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <View style={{ flexDirection: "row", gap: 10, marginTop: 6 }}>
+                  <Pressable
+                    onPress={() => setLangOpen(false)}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 11,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: C.border,
+                      backgroundColor: C.bgCard2,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text style={{ color: C.textMid, fontWeight: "800" }}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => { void confirmUnlock(); }}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 11,
+                      borderRadius: 12,
+                      backgroundColor: "#7c3aed",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontWeight: "900" }}>Continue</Text>
+                  </Pressable>
+                </View>
+                <Text style={{ color: C.textMuted, fontSize: 11, lineHeight: 16 }}>
+                  Payment ke baad isi screen pe wapas aake download ho jayega.
+                </Text>
+              </View>
+            </View>
+          </Modal>
         </>
       )}
 
@@ -835,8 +963,8 @@ export default function NumerologyScreen() {
   const profile = profiles.find(p => p.id === selectedId) ?? profiles[0] ?? null;
   const bd      = profile?.birthData ?? null;
 
-  // Expanded cards
-  const [expLP,   setExpLP]   = useState(true);
+  // Expanded cards (compact basic: keep collapsed by default)
+  const [expLP,   setExpLP]   = useState(false);
   const [expDest, setExpDest] = useState(false);
   const [expSoul, setExpSoul] = useState(false);
 
@@ -996,63 +1124,6 @@ export default function NumerologyScreen() {
               num={nums.soul} expanded={expSoul}
               onToggle={() => { setExpSoul(v => !v); Haptics.selectionAsync(); }}
             />
-
-            {/* Personal Year / Month */}
-            <PersonalYearCard py={nums.py} pm={nums.pm} />
-
-            {/* Divider + Advanced teaser */}
-            <View style={[s.divider, { borderColor: C.border }]}>
-              <View style={[s.divLine, { backgroundColor: C.border }]} />
-              <View style={[s.divBadge, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                <Feather name="lock" size={10} color={C.isDark ? "#f59e0b" : "#92400E"} />
-                <Text style={[s.divTxt, { color: C.isDark ? "#f59e0b" : "#92400E" }]}>{t.numPremiumDivider}</Text>
-              </View>
-              <View style={[s.divLine, { backgroundColor: C.border }]} />
-            </View>
-
-            {/* Teaser blurb */}
-            <View style={[s.teaserCard, { backgroundColor: C.bgCard, borderColor:"rgba(245,158,11,0.25)" }]}>
-              <Text style={{ fontSize:32 }}>🔐</Text>
-              <View style={{ flex:1, gap:4 }}>
-                <Text style={[s.teaserTitle, { color: C.text }]}>{t.numUnlockTitle}</Text>
-                <Text style={[s.teaserBody, { color: C.textMuted }]}>
-                  {t.numUnlockBody}
-                </Text>
-              </View>
-            </View>
-
-            {/* Locked cards preview */}
-            <Text style={[s.sectionLabel, { color: C.textDim }]}>{t.numAdvancedSection}</Text>
-
-            <LockedCard title={t.numLockPersonality} emoji="🎭" color="#8b5cf6" />
-            <LockedCard title={t.numLockMaturity} emoji="🌱" color="#10b981" />
-            <LockedCard title={t.numLockCareerFin} emoji="💼" color="#f59e0b" />
-            <LockedCard title={t.numLockLoveCompat} emoji="❤️" color="#f43f5e" />
-            <LockedCard title={t.numLockNameCorr} emoji="✍️" color="#06b6d4" />
-            <LockedCard title={t.numLockChallenges} emoji="🙏" color="#f97316" />
-
-            {/* CTA */}
-            <Pressable
-              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/subscription" as any); }}
-              style={s.ctaBtn}
-            >
-              <View style={s.ctaInner}>
-                <Text style={{ fontSize:22 }}>⭐</Text>
-                <View style={{ flex:1 }}>
-                  <Text style={s.ctaTitle}>{t.numCtaTitle}</Text>
-                  <Text style={s.ctaSub}>{t.numCtaSub}</Text>
-                </View>
-                <Feather name="arrow-right" size={18} color="#fff" />
-              </View>
-            </Pressable>
-
-            {/* Info footer */}
-            <View style={[s.footer, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Feather name="info" size={12} color={C.textMuted} />
-              <Text style={[s.footerTxt, { color: C.textMuted }]}>
-                {t.numFooterNote}
-              </Text>
-            </View>
           </>
         )}
       </ScrollView>

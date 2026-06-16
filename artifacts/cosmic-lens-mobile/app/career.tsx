@@ -47,7 +47,6 @@ interface BasicBlock {
   strengths?: string[];
   weakness?: string;
   main_risk?: string;
-  why?: string[];
   job_score?: number;
   business_score?: number;
 }
@@ -160,11 +159,9 @@ function PathMeter({
       <View style={s.pathInlineRow}>
         <Text style={s.pathInlineLeft} numberOfLines={1}>
           <Text style={{ color: "#60a5fa", fontFamily: F.bold }}>{labels.job}</Text>
-          <Text style={s.pathInlinePct}> {job}%</Text>
         </Text>
         <Text style={s.pathInlineRight} numberOfLines={1}>
           <Text style={{ color: accent, fontFamily: F.bold }}>{labels.business}</Text>
-          <Text style={s.pathInlinePct}> {biz}%</Text>
         </Text>
       </View>
 
@@ -173,15 +170,10 @@ function PathMeter({
         <View style={[s.pathFillBizRest, { backgroundColor: accent }]} />
       </View>
 
-      {(typeof jobScore === "number" && typeof businessScore === "number") ? (
-        <View style={{ marginTop: 6, gap: 2 }}>
-          <Text style={s.pathScoreLine}>
-            {labels.job} match: {Math.max(0, Math.min(100, jobScore))}/100
-          </Text>
-          <Text style={s.pathScoreLine}>
-            {labels.business} match: {Math.max(0, Math.min(100, businessScore))}/100
-          </Text>
-        </View>
+      {typeof jobScore === "number" ? (
+        <Text style={s.pathScoreLine}>
+          {labels.job} - {Math.max(0, Math.min(100, jobScore))}/100
+        </Text>
       ) : null}
 
       {mode ? (
@@ -437,15 +429,6 @@ export default function CareerScreen() {
                   mode: t.cr_pathMode,
                 }}
               />
-            )}
-
-            {/* ─── WHY (simple reasons) ─── */}
-            {Array.isArray(data.basic.why) && data.basic.why.length > 0 && (
-              <SectionCard icon="info" title={t.cr_why} accent="#94a3b8">
-                {data.basic.why.slice(0, 3).map((line, i) => (
-                  <Bullet key={i} color="#94a3b8">{line}</Bullet>
-                ))}
-              </SectionCard>
             )}
 
             {/* ─── BEST SUITABLE CAREER OPTIONS ─── */}
@@ -815,11 +798,6 @@ const s = StyleSheet.create({
     fontSize: 12.5,
     fontFamily: F.semi,
     color: "rgba(255,255,255,0.85)",
-  },
-  pathInlinePct: {
-    fontSize: 13.5,
-    fontFamily: F.extra,
-    color: "#fff",
   },
   pathLabel: {
     color: "rgba(255,255,255,0.65)", fontSize: 12, fontFamily: F.semi,

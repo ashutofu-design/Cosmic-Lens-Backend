@@ -82,6 +82,7 @@ class TestCareerInclinationEngine(unittest.TestCase):
   def test_empty_planets_safe(self):
     r = compute_career_inclination([], 0, {})
     self.assertEqual(r["job_pct"] + r["business_pct"], 100)
+    self.assertNotEqual((r["job_pct"], r["business_pct"]), (50, 50))
 
   def test_dhanu_lagna_moon_gemini_not_forced_fifty_fifty(self):
     """Dhanu lagna + Moon in Gemini (7th) — should not flatten to 50/50."""

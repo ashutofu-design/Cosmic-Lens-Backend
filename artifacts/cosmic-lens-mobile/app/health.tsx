@@ -258,6 +258,11 @@ export default function HealthScreen() {
   const topDosha = doshaOrder[0];
   const topRemedy = topDosha ? triCopy.dominantRemedy[topDosha] : "";
   const organMatrix = data?.basic?.organ_vulnerability_matrix ?? [];
+  const topCareZones = organMatrix
+    .filter((z) => z.status === "high" || z.status === "moderate")
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+  const stableZoneCount = organMatrix.filter((z) => z.status === "stable").length;
   const riskyOrgans = (data?.basic?.risky_organs?.length
     ? data.basic.risky_organs
     : data?.basic?.sensitive_areas) ?? [];
@@ -272,6 +277,8 @@ export default function HealthScreen() {
     return { bg: "rgba(34,197,94,0.1)", border: "rgba(34,197,94,0.3)", text: "#4ade80", icon: "check-circle" as const };
   };
 
+  const headerTopPad = insets.top + 8;
+
   return (
     <CosmicBg>
       <LinearGradient
@@ -281,29 +288,38 @@ export default function HealthScreen() {
         pointerEvents="none"
       />
 
-      <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <Pressable
-          onPress={() => { Haptics.selectionAsync(); router.back(); }}
-          style={s.backBtn}
-          hitSlop={10}
-        >
-          <View style={s.backCircle}>
-            <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color="#fff" />
+      <View style={s.screen}>
+        <View style={[s.topBar, { paddingTop: headerTopPad }]}>
+          {Platform.OS === "ios" ? (
+            <BlurView intensity={48} tint="dark" style={StyleSheet.absoluteFill} />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, s.topBarBg]} />
+          )}
+          <View style={s.topBarRow}>
+            <Pressable
+              onPress={() => { Haptics.selectionAsync(); router.back(); }}
+              style={s.backBtn}
+              hitSlop={10}
+            >
+              <View style={s.backCircle}>
+                <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color="#fff" />
+              </View>
+            </Pressable>
+            <Text style={s.topTitle}>{t.hl_pageTitle}</Text>
+            <View style={{ width: 40 }} />
           </View>
-        </Pressable>
-        <Text style={s.topTitle}>{t.hl_pageTitle}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+        </View>
 
-      <ScrollView
-        contentContainerStyle={{
-          paddingTop: insets.top + 60,
-          paddingBottom: insets.bottom + 80,
-          paddingHorizontal: 18,
-          gap: 16,
-        }}
-        showsVerticalScrollIndicator={false}
-      >
+        <ScrollView
+          style={s.scroll}
+          contentContainerStyle={{
+            paddingTop: 12,
+            paddingBottom: insets.bottom + 80,
+            paddingHorizontal: 18,
+            gap: 16,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
         {loading && (
           <View style={{ paddingVertical: 60, alignItems: "center", gap: 12 }}>
             <ActivityIndicator size="large" color={accent} />
@@ -399,42 +415,51 @@ export default function HealthScreen() {
               </SectionCard>
             )}
 
-            {/* ORGAN HEATMAP — 6 zone cards */}
+            {/* PRIORITY BODY ZONES — top 3 needing care */}
             <SectionCard icon="activity" title={triCopy.organHeatmapTitle} accent="#f59e0b">
               <Text style={[s.summary, { marginBottom: 12, fontSize: 12 }]}>
                 {triCopy.organHeatmapSub}
               </Text>
-              {organMatrix.length > 0 ? (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                  {organMatrix.map((zone) => {
-                    const st = zoneStatusStyle(zone.status);
-                    const label = triCopy.zoneLabels[zone.id] ?? zone.id;
-                    return (
-                      <View
-                        key={zone.id}
-                        style={{
-                          width: "47%",
-                          backgroundColor: st.bg,
-                          borderColor: st.border,
-                          borderWidth: 1,
-                          borderRadius: 12,
-                          padding: 12,
-                          minHeight: 88,
-                        }}
-                      >
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                          <Feather name={st.icon} size={13} color={st.text} />
-                          <Text style={{ color: st.text, fontSize: 10, fontFamily: F.semi, textTransform: "uppercase" }}>
-                            {triCopy.statusLabels[zone.status]}
+              {topCareZones.length > 0 ? (
+                <>
+                  <View style={{ gap: 10 }}>
+                    {topCareZones.map((zone) => {
+                      const st = zoneStatusStyle(zone.status);
+                      const label = triCopy.zoneLabels[zone.id] ?? zone.id;
+                      return (
+                        <View
+                          key={zone.id}
+                          style={{
+                            backgroundColor: st.bg,
+                            borderColor: st.border,
+                            borderWidth: 1,
+                            borderRadius: 12,
+                            padding: 14,
+                          }}
+                        >
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                            <Feather name={st.icon} size={13} color={st.text} />
+                            <Text style={{ color: st.text, fontSize: 10, fontFamily: F.semi, textTransform: "uppercase" }}>
+                              {triCopy.statusLabels[zone.status]}
+                            </Text>
+                          </View>
+                          <Text style={{ color: "#fff", fontSize: 13, fontFamily: F.semi, lineHeight: 18 }}>
+                            {label}
                           </Text>
                         </View>
-                        <Text style={{ color: "#fff", fontSize: 12, fontFamily: F.semi, lineHeight: 17 }}>
-                          {label}
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </View>
+                      );
+                    })}
+                  </View>
+                  {stableZoneCount > 0 ? (
+                    <Text style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, lineHeight: 16, fontFamily: F.regular, marginTop: 12 }}>
+                      {triCopy.stableZonesNote(stableZoneCount)}
+                    </Text>
+                  ) : null}
+                </>
+              ) : organMatrix.length > 0 ? (
+                <Text style={{ color: "rgba(255,255,255,0.65)", fontSize: 12, lineHeight: 18, fontFamily: F.regular }}>
+                  {triCopy.riskyOrgansEmpty}
+                </Text>
               ) : riskyOrgans.length > 0 ? (
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {riskyOrgans.map((organ, i) => (
@@ -658,16 +683,34 @@ export default function HealthScreen() {
             )}
           </Animated.View>
         )}
-      </ScrollView>
+        </ScrollView>
+      </View>
     </CosmicBg>
   );
 }
 
 const s = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
   topBar: {
-    position: "absolute", top: 0, left: 0, right: 0,
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 14, zIndex: 10, height: 60,
+    zIndex: 20,
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 0.6,
+    borderBottomColor: "rgba(255,255,255,0.06)",
+    overflow: "hidden",
+  },
+  topBarBg: {
+    backgroundColor: "rgba(10,22,22,0.94)",
+  },
+  topBarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   backBtn: { padding: 4 },
   backCircle: {

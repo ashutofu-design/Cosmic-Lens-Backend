@@ -867,6 +867,18 @@ def _blend_d10_pct(
     return job_pct
 
 
+def _enforce_min_gap(job_pct: int, *, min_gap: int = 20) -> int:
+    """
+    UX rule: never show exact 50-50. If the read is near-balanced, push to at least
+    60-40 (or 40-60) toward the side it already leans.
+    """
+    gap = abs(job_pct - 50)
+    if gap >= min_gap // 2:
+        return int(_clamp(job_pct, 12, 88))
+    target = 50 + (min_gap // 2 if job_pct >= 50 else -(min_gap // 2))
+    return int(_clamp(target, 12, 88))
+
+
 def _apply_d10_nudge(
     job_pct: int,
     align_state: str,
@@ -1138,6 +1150,7 @@ def compute_career_inclination(
         business_pct = 100 - job_pct
 
         job_pct = _blend_d10_pct(job_pct, align_state, d10_job, d10_biz, convergence)
+        job_pct = _enforce_min_gap(job_pct, min_gap=20)
         business_pct = 100 - job_pct
 
         gap = abs(job_pct - 50)

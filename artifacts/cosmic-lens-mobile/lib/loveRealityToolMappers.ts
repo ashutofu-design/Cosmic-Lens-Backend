@@ -1,5 +1,10 @@
 /** Maps Love Reality API payloads → minimal single-screen UI model */
 
+import {
+  coerceLoveBasicLang,
+  pickLoveBasicCopy,
+  type LoveBasicLang,
+} from "@/lib/loveRealityBasicLang";
 import { parseChartProof, type ChartProof } from "@/lib/loveRealityChartProof";
 
 export type LoveRealityToolKey =
@@ -24,6 +29,25 @@ export type LoyaltyCompareData = {
   estimated?: boolean;
 };
 
+export type LoveDimensionBar = {
+  key: string;
+  label: string;
+  score: number;
+};
+
+export type LoveCompatDetail = {
+  emotionalSummary?: string;
+  riskLevel?: string;
+  factors?: Record<string, string>;
+  dimensions: LoveDimensionBar[];
+  reasons: string[];
+};
+
+export type FutureOutcomeDetail = {
+  verdictLine: string;
+  reasonLine?: string;
+};
+
 export interface LoveRealityBasicDisplay {
   visual: LoveVisualKind;
   percent?: number;
@@ -32,20 +56,56 @@ export interface LoveRealityBasicDisplay {
   statusLabel?: string;
   statusAccent?: string;
   hookLine: string;
+  warningLine?: string;
   chartProof?: ChartProof | null;
   loyaltyCompare?: LoyaltyCompareData;
+  loveDetail?: LoveCompatDetail;
+  futureDetail?: FutureOutcomeDetail;
 }
 
 function withProof(json: Record<string, unknown>, base: LoveRealityBasicDisplay): LoveRealityBasicDisplay {
-  const chartProof = parseChartProof(json);
-  const hookLine = chartProof?.cosmicHook?.trim() || base.hookLine;
-  return { ...base, chartProof, hookLine };
+  return { ...base, chartProof: parseChartProof(json) };
 }
 
-function firstReason(reasons?: string[]): string {
-  const r = reasons?.find(x => typeof x === "string" && x.trim());
-  if (!r) return "";
-  const t = r.trim();
+/** Raw API reasons — hide planet/house jargon from Basic UI. */
+export function isTechnicalChartLine(text: string): boolean {
+  const t = text.trim();
+  if (!t) return true;
+  if (/\b(moon|venus|mars|saturn|rahu|ketu|jupiter|mercury|sun|nodes?)\b/i.test(t)) return true;
+  if (/\b7th[- ]?lord\b/i.test(t)) return true;
+  if (/\b(7th|5th|12th|1st|2nd|3rd|4th|6th|8th|9th|10th|11th)\s*(lord|house|axis)\b/i.test(t)) return true;
+  if (/\bon 7th\b/i.test(t)) return true;
+  if (/\b(dusthana|debil|neech|navamsa|d9|d1|afflict|synastry|transit|dasha|yoga)\b/i.test(t)) return true;
+  if (/\b(venus|moon)\s*\/\s*(moon|venus)\b/i.test(t)) return true;
+  if (/\bthird[- ]?person\b/i.test(t)) return true;
+  if (/\b(ketu|rahu|mars|saturn)\s+on\b/i.test(t)) return true;
+  if (/\bboth charts?\b/i.test(t)) return true;
+  if (/\bsignatures?\b/i.test(t) && /\b(breakup|chart|bond|separation|break)\b/i.test(t)) return true;
+  if (/'s\s+\w+/i.test(t) && /\b(moon|venus|mars|saturn|rahu|ketu|chart)\b/i.test(t)) return true;
+  if (/\bunder\s+(saturn|rahu|ketu|mars|nodes?)\b/i.test(t)) return true;
+  if (/saturn[\u2013-]moon/i.test(t)) return true;
+  return false;
+}
+
+export function humanizeDisplayText(text: string): string {
+  if (!text?.trim()) return "";
+  return text
+    .replace(/_/g, " ")
+    .replace(/[-–—]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function sanitizeBasicHookLine(line?: string): string | undefined {
+  if (!line?.trim()) return undefined;
+  const clean = userFacingLine(line);
+  return clean ? humanizeDisplayText(clean) : undefined;
+}
+
+function userFacingLine(text: unknown): string {
+  if (typeof text !== "string") return "";
+  const t = text.trim();
+  if (!t || isTechnicalChartLine(t)) return "";
   return t.length > 160 ? `${t.slice(0, 157)}…` : t;
 }
 
@@ -64,38 +124,69 @@ function fallbackHook(tool: LoveRealityToolKey): string {
   }
 }
 
+const LOVE_DIMENSION_DEFS: { key: string; label: string }[] = [
+  { key: "emotional", label: "Emotional Bond" },
+  { key: "attraction", label: "Attraction" },
+  { key: "communication", label: "Communication" },
+  { key: "karmic", label: "Karmic Link" },
+  { key: "stability", label: "Stability" },
+];
+
+function parseLoveCompatDetail(json: Record<string, unknown>): LoveCompatDetail | undefined {
+  const bd = json.breakdown as Record<string, unknown> | undefined;
+  if (!bd) return undefined;
+
+  const dimensions: LoveDimensionBar[] = [];
+  for (const def of LOVE_DIMENSION_DEFS) {
+    const v = Number(bd[def.key]);
+    if (Number.isFinite(v)) {
+      dimensions.push({
+        key: def.key,
+        label: def.label,
+        score: Math.round(Math.max(0, Math.min(100, v))),
+      });
+    }
+  }
+  if (!dimensions.length) return undefined;
+
+  const factorsRaw = json.factors as Record<string, unknown> | undefined;
+  const factors: Record<string, string> = {};
+  if (factorsRaw) {
+    for (const [k, v] of Object.entries(factorsRaw)) {
+      if (typeof v === "string" && v.trim()) factors[k] = v.trim();
+    }
+  }
+
+  return {
+    riskLevel: typeof json.risk_level === "string" ? json.risk_level : undefined,
+    factors: Object.keys(factors).length ? factors : undefined,
+    dimensions,
+    reasons: [],
+  };
+}
+
+export function buildLoveCompatDetailFromJson(json: Record<string, unknown>): LoveCompatDetail | undefined {
+  return parseLoveCompatDetail(json);
+}
+
 export function mapLoveCompatibility(json: Record<string, unknown>): LoveRealityBasicDisplay {
   const score = Number(json.score) || 0;
-  const reasons = json.reasons as string[] | undefined;
-  const hook =
-    firstReason(reasons) ||
-    (score >= 75
-      ? "Strong cosmic tuning — yet one blind spot can still create emotional distance."
-      : score >= 50
-        ? "Real connection is present — a temporary planetary shadow is testing patience."
-        : "Attraction exists — but misaligned rhythms are amplifying misunderstandings.");
   return withProof(json, {
     visual: "circular",
     percent: Math.round(Math.max(0, Math.min(100, score))),
-    hookLine: hook,
+    hookLine: "",
+    loveDetail: parseLoveCompatDetail(json),
   });
 }
 
 export function mapBreakupChances(json: Record<string, unknown>): LoveRealityBasicDisplay {
   const score = Number(json.breakup_score) || 0;
-  const risk = String(json.risk_level || "medium");
-  const hook =
-    firstReason(json.reasons as string[]) ||
-    (risk.includes("high")
-      ? "Breakup pressure is elevated — one trigger window needs careful awareness."
-      : risk.includes("low")
-        ? "Bond resilience is strong — still, one transit can stir old friction."
-        : "Mixed stress signals — small choices in the next phase carry outsized weight.");
+  const risk = humanizeDisplayText(String(json.risk_level || "medium"));
   return withProof(json, {
     visual: "risk-gauge",
     riskScore: Math.round(Math.max(0, Math.min(100, score))),
     riskLevel: risk,
-    hookLine: hook,
+    hookLine: "",
   });
 }
 
@@ -272,38 +363,43 @@ export function loyaltyCompareVerdict(
   compare: LoyaltyCompareData,
   youName: string,
   partnerName: string,
+  lang: LoveBasicLang = "en",
 ): string {
-  const you = youName.trim() || "Aap";
-  const partner = partnerName.trim() || "Partner";
-  const yLv = loyaltyLevelShort(compare.youLevel);
-  const pLv = loyaltyLevelShort(compare.partnerLevel);
+  const you = youName.trim() || pickLoveBasicCopy(lang, "You", "Aap", "आप");
+  const partner = partnerName.trim() || pickLoveBasicCopy(lang, "Partner", "Partner", "साथी");
 
   if (compare.higherSide === "you") {
-    return `${you} ki loyalty zyada hai (${compare.youScore}/100, ${yLv}) — ${partner} thodi kam stable (${compare.partnerScore}/100, ${pLv}).`;
+    return pickLoveBasicCopy(
+      lang,
+      `${you} shows stronger loyalty than ${partner}.`,
+      `${you} zyada loyal hai, ${partner} utna nahi.`,
+      `${you} की वफ़ादारी ${partner} से ज़्यादा है।`,
+    );
   }
   if (compare.higherSide === "partner") {
-    return `${partner} ki loyalty zyada hai (${compare.partnerScore}/100, ${pLv}) — ${you} ke chart mein zyada risk signs (${compare.youScore}/100, ${yLv}).`;
+    return pickLoveBasicCopy(
+      lang,
+      `${partner} shows stronger loyalty than ${you}.`,
+      `${partner} zyada loyal hai, ${you} utna nahi.`,
+      `${partner} की वफ़ादारी ${you} से ज़्यादा है।`,
+    );
   }
-  return `${you} aur ${partner} dono ki loyalty same level par hai (${compare.youScore}/100) — behavior aur timing decide karenge.`;
+  return pickLoveBasicCopy(
+    lang,
+    `${you} and ${partner} show equal loyalty.`,
+    `${you} aur ${partner} dono ki loyalty barabar hai.`,
+    `${you} और ${partner} की वफ़ादारी बराबर है।`,
+  );
 }
 
 export function mapLoyaltyCheck(json: Record<string, unknown>): LoveRealityBasicDisplay {
   const { label, accent } = loyaltyStatusLabel(json);
   const compare = parseLoyaltyCompare(json);
-  const tie = json.loyalty_tie_breaker as Record<string, unknown> | null | undefined;
-  const dutyBound = Boolean(json.is_duty_bound_loyal);
-  const hook =
-    firstReason(json.reasons as string[]) ||
-    (dutyBound
-      ? "Saturn–Moon duty-bound pattern — dukh sahen karte hain, dhoka ka pattern kam."
-      : null) ||
-    (tie?.applied && typeof tie.note === "string" ? tie.note : null) ||
-    "Dono charts mein loyalty alag-alag layer par dikhti hai — neeche compare dekho.";
   return withProof(json, {
     visual: "status-card",
     statusLabel: label,
     statusAccent: accent,
-    hookLine: hook,
+    hookLine: "",
     loyaltyCompare: compare,
   });
 }
@@ -320,7 +416,7 @@ export function mapWillReturn(json: Record<string, unknown>): LoveRealityBasicDi
   const chance = String(json.return_chance || "possible");
   const { label, accent } = returnStatusLabel(chance);
   const hook =
-    firstReason(json.reasons as string[]) ||
+    userFacingLine(json.emotional_summary) ||
     `Charts hint at ${chance} reconnection energy — exact timing stays locked in your full report.`;
   return { visual: "status-card", statusLabel: label, statusAccent: accent, hookLine: hook };
 }
@@ -328,35 +424,159 @@ export function mapWillReturn(json: Record<string, unknown>): LoveRealityBasicDi
 function futureStatusLabel(json: Record<string, unknown>): { label: string; accent: string } {
   const outcome = String(json.outcome || "").toLowerCase();
   const phase = String(json.current_phase || "");
-  const score = Number(json.future_score) || 50;
-  if (outcome.includes("positive") || outcome.includes("strong") || score >= 70) {
+  const score = Number(json.future_score ?? json.score) || 50;
+  if (outcome.includes("thriving") || outcome.includes("growing") || score >= 70) {
     return { label: "Bright Trajectory", accent: "#22c55e" };
   }
-  if (outcome.includes("challeng") || score < 40) {
-    return { label: "Karmic Test", accent: "#ef4444" };
+  if (outcome.includes("fading") || score < 28) {
+    return { label: "Closure Energy", accent: "#ef4444" };
+  }
+  if (outcome.includes("strained") || (score >= 28 && score < 42)) {
+    return { label: "Strained Phase", accent: "#f97316" };
+  }
+  if (outcome.includes("mixed") || score >= 42) {
+    return { label: "Mixed Future", accent: "#fbbf24" };
   }
   if (phase) {
-    const short = phase.length > 28 ? `${phase.slice(0, 25)}…` : phase;
-    return { label: short, accent: "#c084fc" };
+    const short = humanizeDisplayText(phase);
+    const clipped = short.length > 28 ? `${short.slice(0, 25)}…` : short;
+    return { label: clipped, accent: "#c084fc" };
   }
   return { label: "Evolving Bond", accent: "#a855f7" };
 }
 
-export function mapFutureOutcome(json: Record<string, unknown>): LoveRealityBasicDisplay {
+function pickFutureReason(json: Record<string, unknown>): string {
+  const warning = userFacingLine(json.timeline_validation_warning);
+  const raw = (json.reasons as string[] | undefined) ?? [];
+  for (const r of raw) {
+    const line = userFacingLine(r);
+    if (line && line !== warning) return line.length > 120 ? `${line.slice(0, 117)}…` : line;
+  }
+  return warning.length > 120 ? `${warning.slice(0, 117)}…` : warning;
+}
+
+function buildFutureUserLines(
+  json: Record<string, unknown>,
+  score: number,
+  lang: LoveBasicLang,
+): FutureOutcomeDetail {
+  const reasonFromApi = pickFutureReason(json);
+
+  if (score >= 58) {
+    return polishFutureLines({
+      verdictLine: pickLoveBasicCopy(
+        lang,
+        "Yes — the charts point to a strong long-term future for this bond.",
+        "Haan, charts is rishte ka long term future strong dikhate hain.",
+        "हाँ — कुंडली इस रिश्ते का दीर्घकालिक भविष्य मज़बूत दिखाती है।",
+      ),
+    });
+  }
+  if (score >= 42) {
+    return polishFutureLines({
+      verdictLine: pickLoveBasicCopy(
+        lang,
+        "The future is mixed — the bond can hold, but the current phase is unstable.",
+        "Future mixed hai, rishta tik sakta hai, par abhi phase unstable hai.",
+        "भविष्य मिश्रित है — रिश्ता टिक सकता है, पर अभी चरण अस्थिर है।",
+      ),
+      reasonLine:
+        reasonFromApi ||
+        pickLoveBasicCopy(
+          lang,
+          "Timing and dasha will decide whether the bond deepens or drifts.",
+          "Timing aur dasha ab decide karenge ki bond deepen hoga ya drift karega.",
+          "समय और दशा तय करेंगे कि बंधन गहरा होगा या दूर होगा।",
+        ),
+    });
+  }
+  if (score >= 28) {
+    return polishFutureLines({
+      verdictLine: pickLoveBasicCopy(
+        lang,
+        "The long-term outlook looks weak right now — stability is not assured.",
+        "Abhi long term future weak dikhta hai, stability assured nahi.",
+        "अभी दीर्घकालिक भविष्य कमज़ोर दिखता है — स्थिरता तय नहीं।",
+      ),
+      reasonLine:
+        reasonFromApi ||
+        pickLoveBasicCopy(
+          lang,
+          "Emotional fatigue is building — exhaustion is outpacing growth.",
+          "Emotional fatigue build ho rahi hai, grow karne ki jagah exhaustion zyada active hai.",
+          "भावनात्मक थकान बढ़ रही है — विकास की जगह थकावट ज़्यादा सक्रिय है।",
+        ),
+    });
+  }
+  return polishFutureLines({
+    verdictLine: pickLoveBasicCopy(
+      lang,
+      "No — the charts lean toward closure or distance in this bond.",
+      "Nahi, charts is rishte mein closure ya distance ki taraf lean karte hain.",
+      "नहीं — कुंडली इस रिश्ते में अलगाव या दूरी की ओर झुकती है।",
+    ),
+    reasonLine:
+      reasonFromApi ||
+      pickLoveBasicCopy(
+        lang,
+        "Without long-term stability, emotional exhaustion is the dominant pattern.",
+        "Long term stability ke bina emotional exhaustion zyada active hai.",
+        "दीर्घकालिक स्थिरता के बिना भावनात्मक थकान ज़्यादा सक्रिय है।",
+      ),
+  });
+}
+
+function polishFutureLines(lines: FutureOutcomeDetail): FutureOutcomeDetail {
+  return {
+    verdictLine: humanizeDisplayText(lines.verdictLine),
+    reasonLine: lines.reasonLine ? humanizeDisplayText(lines.reasonLine) : undefined,
+  };
+}
+
+function buildFutureUserDetail(
+  json: Record<string, unknown>,
+  lang: LoveBasicLang,
+): FutureOutcomeDetail | undefined {
+  const score = Number(json.future_score ?? json.score);
+  if (!Number.isFinite(score)) return undefined;
+  const rounded = Math.round(Math.max(0, Math.min(100, score)));
+  return buildFutureUserLines(json, rounded, lang);
+}
+
+export function mapFutureOutcome(
+  json: Record<string, unknown>,
+  lang: LoveBasicLang = "en",
+): LoveRealityBasicDisplay {
+  const score = Number(json.future_score ?? json.score) || 0;
+  const rounded = Math.round(Math.max(0, Math.min(100, score)));
+  const detail = buildFutureUserDetail(json, lang) ?? buildFutureUserLines(json, rounded, lang);
   const { label, accent } = futureStatusLabel(json);
-  const hook =
-    firstReason(json.reasons as string[]) ||
-    fallbackHook("future-outcome");
-  return withProof(json, { visual: "status-card", statusLabel: label, statusAccent: accent, hookLine: hook });
+  return withProof(json, {
+    visual: "circular",
+    percent: rounded,
+    statusLabel: label,
+    statusAccent: accent,
+    hookLine: detail.verdictLine,
+    warningLine: detail.reasonLine,
+    futureDetail: detail,
+  });
 }
 
 export function mapLoveRealityResult(
   tool: LoveRealityToolKey,
   json: Record<string, unknown>,
+  lang?: string | null,
 ): LoveRealityBasicDisplay {
+  const lane = coerceLoveBasicLang(lang);
   switch (tool) {
-    case "love-compat":
-      return mapLoveCompatibility(json);
+    case "love-compat": {
+      const mapped = mapLoveCompatibility(json);
+      if (!mapped.loveDetail) {
+        const detail = buildLoveCompatDetailFromJson(json);
+        if (detail) return { ...mapped, loveDetail: detail };
+      }
+      return mapped;
+    }
     case "breakup":
       return mapBreakupChances(json);
     case "loyalty": {
@@ -370,7 +590,7 @@ export function mapLoveRealityResult(
     case "will-return":
       return mapWillReturn(json);
     case "future-outcome":
-      return mapFutureOutcome(json);
+      return mapFutureOutcome(json, lane);
     default:
       return { visual: "status-card", statusLabel: "Reading Ready", statusAccent: "#a855f7", hookLine: fallbackHook("love-compat") };
   }

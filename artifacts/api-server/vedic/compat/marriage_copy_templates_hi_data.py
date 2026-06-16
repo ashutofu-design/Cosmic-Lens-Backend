@@ -109,11 +109,24 @@ _CORE_HI: dict[str, list[str]] = {
 }
 
 _FALLBACK_HI = _CORE_HI["positive_generic"]
+_FALLBACK_WATCH_HI = _CORE_HI["watchout_generic"]
+_FALLBACK_FRICTION_HI = _CORE_HI["friction_generic"]
+_FALLBACK_REMEDY_HI = _CORE_HI["remedy_generic"]
 
 TEMPLATES_HI: dict[str, list[str]] = {
   **{k: list(v) for k, v in TEMPLATES_EN.items()},
   **_CORE_HI,
 }
 for _k, _v in list(TEMPLATES_HI.items()):
-  if _k not in _CORE_HI and _v == TEMPLATES_EN.get(_k):
+  if _k in _CORE_HI:
+    continue
+  if _v != TEMPLATES_EN.get(_k):
+    continue
+  if _k.startswith("watchout") or _k.startswith("lord_weak") or _k.startswith("h7_malefic") or _k.startswith("kp_weak") or _k.startswith("upapada_strained") or _k.startswith("d9_weak"):
+    TEMPLATES_HI[_k] = list(_FALLBACK_WATCH_HI)
+  elif _k.startswith("friction"):
+    TEMPLATES_HI[_k] = list(_FALLBACK_FRICTION_HI)
+  elif _k.startswith("remedy"):
+    TEMPLATES_HI[_k] = list(_FALLBACK_REMEDY_HI)
+  else:
     TEMPLATES_HI[_k] = list(_FALLBACK_HI)

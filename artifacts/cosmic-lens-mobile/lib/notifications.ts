@@ -208,3 +208,41 @@ export function attachTapHandler(navigate: (path: string) => void) {
     return null;
   }
 }
+
+/** Foreground/background push received — e.g. trigger report sync. */
+export function attachPushReceivedHandler(
+  handler: (data: Record<string, unknown>) => void,
+) {
+  if (!loadModules()) return null;
+  try {
+    return _Notifications.addNotificationReceivedListener((notification: any) => {
+      const data = (notification.request?.content?.data || {}) as Record<string, unknown>;
+      handler(data);
+    });
+  } catch (e: any) {
+    console.warn("[push] attachPushReceivedHandler failed:", e?.message || e);
+    return null;
+  }
+}
+
+/** In-app / system banner when auto-sync finds a new report (no server push needed). */
+export async function presentReportReadyNotification(count: number): Promise<void> {
+  if (!loadModules() || count <= 0) return;
+  try {
+    const body =
+      count === 1
+        ? "Aapki report My Reports mein save ho gayi — abhi dekhein."
+        : `${count} reports My Reports mein save ho gayi.`;
+    await _Notifications.scheduleNotificationAsync({
+      content: {
+        title: "📄 Report ready",
+        body,
+        data: { screen: "/my-reports", kind: "report_ready" },
+        sound: "default",
+      },
+      trigger: null,
+    });
+  } catch (e: any) {
+    console.warn("[push] presentReportReadyNotification failed:", e?.message || e);
+  }
+}

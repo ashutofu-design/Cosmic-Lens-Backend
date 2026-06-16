@@ -19,6 +19,7 @@ import {
 import Svg, { Circle, Defs, LinearGradient as SvgGrad, Stop } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
@@ -31,6 +32,30 @@ const F = {
   bold:    "Nunito_700Bold",
   extra:   "Nunito_800ExtraBold",
 } as const;
+
+const CAREER_ACCENT = "#f59e0b";
+
+function PremiumOrb({ color }: { color: string }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.14] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.22, 0.5] });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[ui.orb, { backgroundColor: color, transform: [{ scale }], opacity }]}
+    />
+  );
+}
 
 interface BasicBlock {
   score: number;
@@ -80,13 +105,6 @@ function trendColor(trend: string): string {
   return "#f59e0b";
 }
 
-function confidenceColor(conf: string | undefined): string {
-  if (conf === "High") return "#22c55e";
-  if (conf === "Medium-High") return "#84cc16";
-  if (conf === "Medium") return "#f59e0b";
-  return "rgba(255,255,255,0.45)";
-}
-
 function rankCareerOptions(
   opts: { label: string; strength: number }[],
   jobPct: number,
@@ -110,81 +128,6 @@ function rankCareerOptions(
     .map(o => ({ ...o, _boost: scoreBoost(o.label) } as any))
     .sort((a, b) => (b.strength + b._boost) - (a.strength + a._boost))
     .map(({ _boost, ...rest }) => rest);
-}
-
-function PathMeter({
-  jobPct,
-  businessPct,
-  confidence,
-  mode,
-  verdict,
-  labels,
-  accent,
-}: {
-  jobPct: number;
-  businessPct: number;
-  jobScore?: number;
-  businessScore?: number;
-  confidence?: string;
-  mode?: string;
-  verdict?: string;
-  labels: { title: string; job: string; business: string; confidence: string; mode: string };
-  accent: string;
-}) {
-  const job = Math.max(0, Math.min(100, jobPct));
-  const biz = Math.max(0, Math.min(100, businessPct || 100 - job));
-  const animated = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    animated.setValue(0);
-    Animated.timing(animated, {
-      toValue: 1, duration: 900, easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
-  }, [job, biz]);
-
-  const jobWidth = animated.interpolate({ inputRange: [0, 1], outputRange: ["0%", `${job}%`] });
-
-  return (
-    <View style={[s.pathCard, { borderColor: `${accent}44` }]}>
-      <LinearGradient
-        colors={["rgba(245,158,11,0.12)", "transparent"]}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={s.pathHead}>
-        <Text style={[s.pathTitle, { color: accent }]}>{labels.title}</Text>
-      </View>
-
-      <View style={s.pathInlineRow}>
-        <Text style={s.pathInlineLeft} numberOfLines={1}>
-          <Text style={{ color: "#60a5fa", fontFamily: F.bold }}>{labels.job}</Text>
-        </Text>
-        <Text style={s.pathInlineRight} numberOfLines={1}>
-          <Text style={{ color: accent, fontFamily: F.bold }}>{labels.business}</Text>
-        </Text>
-      </View>
-
-      <View style={s.pathTrack}>
-        <Animated.View style={[s.pathFillJob, { width: jobWidth }]} />
-        <View style={[s.pathFillBizRest, { backgroundColor: accent }]} />
-      </View>
-
-      {typeof jobScore === "number" ? (
-        <Text style={s.pathScoreLine}>
-          {labels.job} - {Math.max(0, Math.min(100, jobScore))}/100
-        </Text>
-      ) : null}
-
-      {mode ? (
-        <Text style={s.pathMode}>
-          {labels.mode}: <Text style={{ color: "#fff", fontFamily: F.bold }}>{mode}</Text>
-        </Text>
-      ) : null}
-
-      {null}
-    </View>
-  );
 }
 
 function ScoreRing({ score, color }: { score: number; color: string }) {
@@ -229,19 +172,21 @@ function ScoreRing({ score, color }: { score: number; color: string }) {
 }
 
 function SectionCard({
-  icon, title, children, accent,
+  icon, title, children, accent, delay,
 }: {
   icon: React.ComponentProps<typeof Feather>["name"];
   title: string;
   children: React.ReactNode;
   accent: string;
+  delay?: number;
 }) {
-  return (
-    <View style={[s.card, { borderColor: `${accent}33` }]}>
+  const body = (
+    <View style={[s.card, { borderColor: `${accent}40` }]}>
       <LinearGradient
-        colors={["rgba(255,255,255,0.04)", "rgba(255,255,255,0.01)"]}
+        colors={[`${accent}14`, "rgba(255,255,255,0.03)", "transparent"]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
+        pointerEvents="none"
       />
       <View style={s.cardHead}>
         <View style={[s.cardIcon, { backgroundColor: `${accent}1F`, borderColor: `${accent}55` }]}>
@@ -252,6 +197,10 @@ function SectionCard({
       <View style={{ gap: 8 }}>{children}</View>
     </View>
   );
+  if (typeof delay === "number") {
+    return <FadeInView delay={delay}>{body}</FadeInView>;
+  }
+  return body;
 }
 
 function Bullet({ children, color }: { children: React.ReactNode; color: string }) {
@@ -274,8 +223,6 @@ export default function CareerScreen() {
   const [data, setData] = useState<CareerResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-
-  const fade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!user?.id || !user?.api_key) {
@@ -302,13 +249,12 @@ export default function CareerScreen() {
       .then(d => {
         setData(d);
         setErr(null);
-        Animated.timing(fade, { toValue: 1, duration: 600, useNativeDriver: true }).start();
       })
       .catch(e => setErr(e?.message || "Career analysis load nahi ho saka."))
       .finally(() => setLoading(false));
   }, [user?.id, user?.api_key, kundli]);
 
-  const accent = "#f59e0b";
+  const accent = CAREER_ACCENT;
   const headerTopPad = insets.top + 8;
 
   return (
@@ -319,9 +265,10 @@ export default function CareerScreen() {
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
+      <PremiumOrb color={accent} />
 
       <View style={s.screen}>
-        <View style={[s.topBar, { paddingTop: headerTopPad }]}>
+        <View style={[s.topBar, { paddingTop: headerTopPad, borderBottomColor: `${accent}22` }]}>
           {Platform.OS === "ios" ? (
             <BlurView intensity={48} tint="dark" style={StyleSheet.absoluteFill} />
           ) : (
@@ -337,7 +284,10 @@ export default function CareerScreen() {
                 <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color="#fff" />
               </View>
             </Pressable>
-            <Text style={s.topTitle}>{t.cr_pageTitle}</Text>
+            <View style={{ flex: 1, alignItems: "center" }}>
+              <Text style={ui.headerBadge}>{t.cr_scoreLabel}</Text>
+              <Text style={s.topTitle}>{t.cr_pageTitle}</Text>
+            </View>
             <View style={{ width: 40 }} />
           </View>
         </View>
@@ -353,15 +303,23 @@ export default function CareerScreen() {
           showsVerticalScrollIndicator={false}
         >
         {loading && (
-          <View style={{ paddingVertical: 60, alignItems: "center", gap: 12 }}>
+          <FadeInView delay={0}>
+          <View style={[s.card, { borderColor: `${accent}44`, paddingVertical: 52, alignItems: "center", gap: 14 }]}>
+            <LinearGradient
+              colors={[`${accent}18`, "transparent"]}
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
             <ActivityIndicator size="large" color={accent} />
-            <Text style={{ color: "rgba(255,255,255,0.6)", fontFamily: F.semi }}>
+            <Text style={{ color: "rgba(255,255,255,0.72)", fontFamily: F.semi, fontSize: 13 }}>
               {t.cr_loading}
             </Text>
           </View>
+          </FadeInView>
         )}
 
         {!loading && err && (
+          <FadeInView delay={0}>
           <View style={[s.card, { borderColor: "#ef444455", padding: 22, alignItems: "center", gap: 10 }]}>
             <Feather name="alert-circle" size={28} color="#ef4444" />
             <Text style={[s.cardTitle, { color: "#fff", textAlign: "center" }]}>
@@ -380,12 +338,13 @@ export default function CareerScreen() {
               </Pressable>
             )}
           </View>
+          </FadeInView>
         )}
 
         {!loading && data && (
-          <Animated.View style={{ opacity: fade, gap: 16 }}>
-            {/* ─── HERO: Score + Trend ─── */}
-            <View style={[s.hero, { borderColor: `${accent}3A` }]}>
+          <View style={{ gap: 16 }}>
+            <FadeInView delay={staggerDelay(0)}>
+            <View style={[s.hero, { borderColor: `${accent}50` }]}>
               <LinearGradient
                 colors={["rgba(245,158,11,0.18)", "rgba(245,158,11,0.04)", "transparent"]}
                 start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}
@@ -396,6 +355,16 @@ export default function CareerScreen() {
                 <View style={{ marginTop: 12 }}>
                   <ScoreRing score={data.basic.score} color={trendColor(data.basic.trend)} />
                 </View>
+                {typeof data.basic.job_pct === "number" ? (
+                  <View style={s.pathPctRow}>
+                    <Text style={s.pathPctLeft}>
+                      {t.cr_jobLabel} {data.basic.job_pct}%
+                    </Text>
+                    <Text style={s.pathPctRight}>
+                      {t.cr_businessLabel} {data.basic.business_pct ?? (100 - data.basic.job_pct)}%
+                    </Text>
+                  </View>
+                ) : null}
                 <View style={[s.trendPill, {
                   backgroundColor: `${trendColor(data.basic.trend)}22`,
                   borderColor: `${trendColor(data.basic.trend)}66`,
@@ -409,31 +378,10 @@ export default function CareerScreen() {
                 </View>
               </View>
             </View>
+            </FadeInView>
 
-            {/* ─── JOB vs BUSINESS (chart-based path) ─── */}
-            {typeof data.basic.job_pct === "number" && (
-              <PathMeter
-                jobPct={data.basic.job_pct}
-                businessPct={data.basic.business_pct ?? 100 - data.basic.job_pct}
-                jobScore={data.basic.job_score}
-                businessScore={data.basic.business_score}
-                confidence={data.basic.confidence}
-                mode={data.basic.career_mode}
-                verdict={data.basic.path_verdict}
-                accent={accent}
-                labels={{
-                  title: t.cr_pathTitle,
-                  job: t.cr_jobLabel,
-                  business: t.cr_businessLabel,
-                  confidence: t.cr_pathConfidence,
-                  mode: t.cr_pathMode,
-                }}
-              />
-            )}
-
-            {/* ─── BEST SUITABLE CAREER OPTIONS ─── */}
             {Array.isArray(data.basic.income_paths) && data.basic.income_paths.length > 0 && (
-              <SectionCard icon="award" title={t.cr_bestOptions} accent={accent}>
+              <SectionCard icon="award" title={t.cr_bestOptions} accent={accent} delay={staggerDelay(1)}>
                 {rankCareerOptions(
                   data.basic.income_paths,
                   data.basic.job_pct ?? 50,
@@ -446,27 +394,26 @@ export default function CareerScreen() {
               </SectionCard>
             )}
 
-            {/* ─── Strengths / Weakness / Risk ─── */}
             {(Array.isArray(data.basic.strengths) && data.basic.strengths.length > 0) && (
-              <SectionCard icon="zap" title={t.cr_topStrengths} accent="#22c55e">
+              <SectionCard icon="zap" title={t.cr_topStrengths} accent="#22c55e" delay={staggerDelay(2)}>
                 {data.basic.strengths.slice(0, 2).map((sTxt, i) => (
                   <Bullet key={i} color="#22c55e">{sTxt}</Bullet>
                 ))}
               </SectionCard>
             )}
             {!!data.basic.weakness && (
-              <SectionCard icon="trending-down" title={t.cr_weakness} accent="#f59e0b">
+              <SectionCard icon="trending-down" title={t.cr_weakness} accent="#f59e0b" delay={staggerDelay(3)}>
                 <Bullet color="#f59e0b">{data.basic.weakness}</Bullet>
               </SectionCard>
             )}
             {!!data.basic.main_risk && (
-              <SectionCard icon="alert-triangle" title={t.cr_risk} accent="#ef4444">
+              <SectionCard icon="alert-triangle" title={t.cr_risk} accent="#ef4444" delay={staggerDelay(4)}>
                 <Bullet color="#ef4444">{data.basic.main_risk}</Bullet>
               </SectionCard>
             )}
 
-            {/* ─── PRO HOOK (visible to non-Pro users) ─── */}
             {!isProUser && (
+              <FadeInView delay={staggerDelay(5)}>
               <View style={[s.hookCard, { borderColor: `${accent}55` }]}>
                 <LinearGradient
                   colors={["rgba(245,158,11,0.18)", "rgba(245,158,11,0.05)"]}
@@ -524,13 +471,12 @@ export default function CareerScreen() {
                   </LinearGradient>
                 </Pressable>
               </View>
+              </FadeInView>
             )}
 
-            {/* ─── PRO SECTIONS ─── */}
             {isProUser && data.pro && (
               <>
-                {/* Houses */}
-                <SectionCard icon="home" title={t.cr_houses} accent={accent}>
+                <SectionCard icon="home" title={t.cr_houses} accent={accent} delay={staggerDelay(6)}>
                   {[data.pro.houses.h10, data.pro.houses.h6, data.pro.houses.h11].map(h => (
                     <View key={h.house} style={s.kvRow}>
                       <View style={s.kvLeft}>
@@ -545,8 +491,7 @@ export default function CareerScreen() {
                   ))}
                 </SectionCard>
 
-                {/* Planet strengths */}
-                <SectionCard icon="star" title={t.cr_planets} accent={accent}>
+                <SectionCard icon="star" title={t.cr_planets} accent={accent} delay={staggerDelay(7)}>
                   {data.pro.planets.map(p => {
                     const sc = p.status === "exalted" ? "#22c55e"
                       : p.status === "debilitated" ? "#ef4444"
@@ -565,8 +510,7 @@ export default function CareerScreen() {
                   })}
                 </SectionCard>
 
-                {/* Dasha */}
-                <SectionCard icon="clock" title={t.cr_dasha} accent={accent}>
+                <SectionCard icon="clock" title={t.cr_dasha} accent={accent} delay={staggerDelay(8)}>
                   <View style={s.dashaRow}>
                     <View style={s.dashaCol}>
                       <Text style={s.dashaLabel}>{t.cr_mahadasha}</Text>
@@ -586,33 +530,29 @@ export default function CareerScreen() {
                   </Text>
                 </SectionCard>
 
-                {/* Transit */}
-                <SectionCard icon="globe" title={t.cr_transit} accent={accent}>
+                <SectionCard icon="globe" title={t.cr_transit} accent={accent} delay={staggerDelay(9)}>
                   {data.pro.transit.map((t, i) => (
                     <Bullet key={i} color={accent}>{t}</Bullet>
                   ))}
                 </SectionCard>
 
-                {/* Growth & Promotion */}
-                <SectionCard icon="trending-up" title={t.cr_growth} accent="#22c55e">
+                <SectionCard icon="trending-up" title={t.cr_growth} accent="#22c55e" delay={staggerDelay(10)}>
                   {data.pro.growth.map((t, i) => (<Bullet key={i} color="#22c55e">{t}</Bullet>))}
                   {data.pro.promotion.map((t, i) => (<Bullet key={`p${i}`} color="#22c55e">{t}</Bullet>))}
                 </SectionCard>
 
-                {/* Job change */}
-                <SectionCard icon="shuffle" title={t.cr_jobChange} accent="#3b82f6">
+                <SectionCard icon="shuffle" title={t.cr_jobChange} accent="#3b82f6" delay={staggerDelay(11)}>
                   {data.pro.job_change.map((t, i) => (<Bullet key={i} color="#3b82f6">{t}</Bullet>))}
                 </SectionCard>
 
-                {/* Struggles & Risks */}
-                <SectionCard icon="alert-triangle" title={t.cr_struggle} accent="#ef4444">
+                <SectionCard icon="alert-triangle" title={t.cr_struggle} accent="#ef4444" delay={staggerDelay(12)}>
                   {data.pro.struggles.map((t, i) => (<Bullet key={i} color="#ef4444">{t}</Bullet>))}
                   {data.pro.risks.map((t, i) => (<Bullet key={`r${i}`} color="#ef4444">{t}</Bullet>))}
                 </SectionCard>
 
                 {/* DEEP — 10th lord analysis */}
                 {(data.pro as any).tenth_lord?.planet && (
-                  <SectionCard icon="award" title="10th Lord Deep Analysis (Karya Bhava)" accent="#22d3ee">
+                  <SectionCard icon="award" title="10th Lord Deep Analysis (Karya Bhava)" accent="#22d3ee" delay={staggerDelay(13)}>
                     <View style={{ backgroundColor: "#0b1220", padding: 12, borderRadius: 10 }}>
                       <Text style={{ color: "#e2e8f0", fontSize: 14, marginBottom: 6 }}>
                         10th sign: <Text style={{ color: "#22d3ee", fontWeight: "700" }}>{(data.pro as any).tenth_lord.sign_10}</Text>{" "}
@@ -642,7 +582,7 @@ export default function CareerScreen() {
 
                 {/* Atmakaraka */}
                 {(data.pro as any).atmakaraka?.planet && (
-                  <SectionCard icon="star" title={`Atmakaraka — ${(data.pro as any).atmakaraka.planet} (Soul Planet)`} accent="#fbbf24">
+                  <SectionCard icon="star" title={`Atmakaraka — ${(data.pro as any).atmakaraka.planet} (Soul Planet)`} accent="#fbbf24" delay={staggerDelay(14)}>
                     <Text style={{ color: "#cbd5e1", fontSize: 13, lineHeight: 19 }}>
                       {(data.pro as any).atmakaraka.meaning}
                     </Text>
@@ -651,7 +591,7 @@ export default function CareerScreen() {
 
                 {/* Suitable career fields */}
                 {Array.isArray((data.pro as any).suitable_fields) && (data.pro as any).suitable_fields.length > 0 && (
-                  <SectionCard icon="briefcase" title="Suitable Career Fields (chart-driven)" accent="#22c55e">
+                  <SectionCard icon="briefcase" title="Suitable Career Fields (chart-driven)" accent="#22c55e" delay={staggerDelay(15)}>
                     {(data.pro as any).suitable_fields.map((f: any, i: number) => (
                       <View key={i} style={{ marginBottom: 12 }}>
                         <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
@@ -669,7 +609,7 @@ export default function CareerScreen() {
 
                 {/* Business vs Job */}
                 {!!(data.pro as any).business_vs_job && (
-                  <SectionCard icon="trending-up" title="Business vs Job — Chart Verdict" accent="#a78bfa">
+                  <SectionCard icon="trending-up" title="Business vs Job — Chart Verdict" accent="#a78bfa" delay={staggerDelay(16)}>
                     <Text style={{ color: "#e2e8f0", fontSize: 14, lineHeight: 20 }}>
                       {(data.pro as any).business_vs_job}
                     </Text>
@@ -678,13 +618,13 @@ export default function CareerScreen() {
 
                 {/* Reasoning */}
                 {data.pro.reasons.length > 0 && (
-                  <SectionCard icon="info" title={t.cr_reasoning} accent="#94a3b8">
+                  <SectionCard icon="info" title={t.cr_reasoning} accent="#94a3b8" delay={staggerDelay(17)}>
                     {data.pro.reasons.map((t, i) => (<Bullet key={i} color="#94a3b8">{t}</Bullet>))}
                   </SectionCard>
                 )}
               </>
             )}
-          </Animated.View>
+          </View>
         )}
         </ScrollView>
       </View>
@@ -734,6 +674,26 @@ const s = StyleSheet.create({
     color: "rgba(245,158,11,0.9)",
     fontSize: 10, letterSpacing: 2.4,
     fontFamily: F.extra, marginTop: 10,
+  },
+  pathPctRow: {
+    marginTop: 12,
+    width: "100%",
+    paddingHorizontal: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  pathPctLeft: {
+    fontSize: 14,
+    fontFamily: F.extra,
+    color: "rgba(255,255,255,0.92)",
+    letterSpacing: 0.2,
+  },
+  pathPctRight: {
+    fontSize: 14,
+    fontFamily: F.extra,
+    color: "rgba(255,255,255,0.92)",
+    letterSpacing: 0.2,
   },
   trendPill: {
     flexDirection: "row", alignItems: "center", gap: 6,
@@ -920,5 +880,24 @@ const s = StyleSheet.create({
   },
   dashaVal: {
     color: "#fff", fontSize: 13, fontFamily: F.extra,
+  },
+});
+
+const ui = StyleSheet.create({
+  orb: {
+    position: "absolute",
+    top: -50,
+    right: -30,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+  },
+  headerBadge: {
+    fontSize: 10,
+    fontFamily: F.extra,
+    letterSpacing: 2.2,
+    color: CAREER_ACCENT,
+    textTransform: "uppercase",
+    marginBottom: 2,
   },
 });

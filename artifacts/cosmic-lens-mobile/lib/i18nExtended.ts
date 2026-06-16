@@ -201,7 +201,7 @@ const TE: Record<UILang, ExtTranslations> = {
     auspiciousTimes: "Auspicious Times", rahukaal: "Rahu Kaal",
     moonSignLabel: "Moon Sign", paksha: "Paksha", festivals: "Festivals",
 
-    kundliMilanTitle: "Kundli Milan", kundliMilanSub: "Ashtakoot Compatibility",
+    kundliMilanTitle: "Kundli Milan", kundliMilanSub: "Marriage Structure · Synastry · Pro PDF",
     groomLabel: "Groom", brideLabel: "Bride",
     checkCompatibility: "Check Compatibility",
     gunaScore: "Guna Score", outOf36: "out of 36",
@@ -289,7 +289,7 @@ const TE: Record<UILang, ExtTranslations> = {
     auspiciousTimes: "Shubh Muhurat", rahukaal: "Rahu Kaal",
     moonSignLabel: "Chandra Rashi", paksha: "Paksha", festivals: "Tyohaar",
 
-    kundliMilanTitle: "Kundli Milan", kundliMilanSub: "Ashtakoot Compatibility",
+    kundliMilanTitle: "Kundli Milan", kundliMilanSub: "Marriage Structure · Synastry · Pro PDF",
     groomLabel: "Dulha", brideLabel: "Dulhan",
     checkCompatibility: "Compatibility check karein",
     gunaScore: "Guna Score", outOf36: "36 me se",
@@ -377,7 +377,7 @@ const TE: Record<UILang, ExtTranslations> = {
     auspiciousTimes: "शुभ मुहूर्त", rahukaal: "राहु काल",
     moonSignLabel: "चंद्र राशि", paksha: "पक्ष", festivals: "त्योहार",
 
-    kundliMilanTitle: "कुंडली मिलान", kundliMilanSub: "अष्टकूट गुण मिलान",
+    kundliMilanTitle: "कुंडली मिलान", kundliMilanSub: "विवाह संरचना · सिनास्ट्री · Pro PDF",
     groomLabel: "वर", brideLabel: "वधू",
     checkCompatibility: "मिलान करें",
     gunaScore: "गुण अंक", outOf36: "36 में से",

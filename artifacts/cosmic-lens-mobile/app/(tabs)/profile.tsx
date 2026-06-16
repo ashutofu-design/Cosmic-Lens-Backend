@@ -335,6 +335,7 @@ export default function ProfileScreen() {
   const primaryProfile = profiles.find(p => p.id === primaryProfileId) ?? profiles[0];
   const initials = (primaryProfile?.name ?? "U")
     .split(" ").map(w=>w[0]??"").join("").slice(0,2).toUpperCase();
+  const cosmoId = (user?.cosmo_user_id || "").trim();
 
   function handleLogout() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -369,7 +370,14 @@ export default function ProfileScreen() {
           </LinearGradient>
 
           <View style={{ alignItems:"center", gap:4 }}>
-            <Text style={[s.headerName,{ color: C.text }]}>{primaryProfile?.name ?? "User"}</Text>
+            <View style={s.nameIdRow}>
+              <Text style={[s.headerName,{ color: C.text }]}>{primaryProfile?.name ?? "User"}</Text>
+              {cosmoId ? (
+                <View style={[s.userIdBadge, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
+                  <Text style={[s.userIdText, { color: C.isDark ? "#f59e0b" : "#7C3AED" }]}>{cosmoId}</Text>
+                </View>
+              ) : null}
+            </View>
             <Text style={{ color: C.textMuted, fontSize: 11, fontFamily: F.medium }}>
               {profiles.length} profile{profiles.length!==1?"s":""} · {primaryProfile?.birthData.place ?? ""}
             </Text>
@@ -500,7 +508,22 @@ const s = StyleSheet.create({
     shadowColor:"#f59e0b", shadowOpacity:0.5, shadowRadius:12, shadowOffset:{width:0,height:0},
   },
   headerInitials: { color:"#fff", fontSize:22, fontFamily:F.bold },
+  nameIdRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    flexWrap: "wrap",
+    paddingHorizontal: 8,
+  },
   headerName: { color:"#dde8f4", fontSize:18, fontFamily:F.bold, letterSpacing:-0.4 },
+  userIdBadge: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+  },
+  userIdText: { fontSize: 11, fontFamily: F.bold, letterSpacing: 0.6 },
   headerSub: { color:"#1e3a5f", fontSize:11, fontFamily:F.medium },
 
   planBadge: {

@@ -117,6 +117,10 @@ export default function AstroVastuBasicScreen() {
       setErrInfo({ error: "auth_required", message: t.vt_alertLoginRequiredBody });
       return;
     }
+    if (!room?.trim()) {
+      setErrInfo({ error: "validation", message: t.vt_sectionPickKamra || "Pick a room first." });
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setLoading(true);
     setErrInfo(null);
@@ -193,7 +197,10 @@ export default function AstroVastuBasicScreen() {
             return (
               <Pressable
                 key={r.key}
-                onPress={() => { Haptics.selectionAsync(); setRoom(r.key); }}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setRoom((prev) => (prev === r.key ? "" : r.key));
+                }}
                 style={[
                   styles.gridChip,
                   {

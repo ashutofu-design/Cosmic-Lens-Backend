@@ -497,12 +497,14 @@ SKU_CATALOG = {
     "1room_99":      {"price": 99,  "grants": "credits", "credits": 1, "label": "1 Room Scan"},
     "bundle_249":    {"price": 249, "grants": "credits", "credits": 3, "label": "3 Room Scans"},
     "bundle_399":    {"price": 399, "grants": "credits", "credits": 5, "label": "5 Room Scans"},
+    # Upload photo → founder manual Vastu report (no instant scan credit)
+    "room_expert_199": {"price": 199, "grants": "manual_room", "label": "1 Room · Expert Vastu Review"},
     # Business Vastu (separate screen) — unchanged for now
     "shop_999":        {"price": 999,  "grants": "unlock",  "label": "Shop Vastu Lifetime"},
     "office_1499":     {"price": 1499, "grants": "unlock",  "label": "Office Vastu Lifetime"},
     "factory_2999":    {"price": 2999, "grants": "unlock",  "label": "Factory Vastu Lifetime"},
     # Complete floor plan (one scan per purchase, per plan type)
-    "home_floor_799":    {"price": 799,  "grants": "floor_scan", "plan_kind": "home",    "label": "Home · Full Floor Plan"},
+    "home_floor_799":    {"price": 999,  "grants": "floor_scan", "plan_kind": "home",    "label": "Home · Full Home Plan"},
     "shop_floor_1499":   {"price": 1499, "grants": "floor_scan", "plan_kind": "shop",    "label": "Shop · Full Floor Plan"},
     "office_floor_2499": {"price": 2499, "grants": "floor_scan", "plan_kind": "office",  "label": "Office · Full Floor Plan"},
     "factory_floor_4999":{"price": 4999, "grants": "floor_scan", "plan_kind": "factory", "label": "Factory · Full Floor Plan"},
@@ -933,7 +935,10 @@ def grant_purchase_idempotent(purchase) -> dict:
             db.session.rollback()
             return {"granted": True, "sku": purchase.sku, "via": spec["grants"],
                     "note": "floor_scan_side_effect_failed"}
-    else:  # "unlock"
+    elif spec["grants"] == "manual_room":
+        # Paid upload — founder prepares report; no wallet credit.
+        pass
+    elif spec["grants"] == "unlock":
         try:
             with db.session.begin_nested():
                 db.session.add(AstroVastuPropertyUnlock(

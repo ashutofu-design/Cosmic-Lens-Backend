@@ -46,6 +46,16 @@ export function buildMoreDrawerCategories(t: ReturnType<typeof useT>): MoreMenuC
           accent: "#06b6d4",
           badge: "Live",
         },
+        {
+          id: "gemstones",
+          icon: "hexagon",
+          emoji: "💎",
+          title: t.ku_gemstones,
+          subtitle: t.ku_gemstonesSub,
+          route: "/gemstones",
+          accent: "#c084fc",
+          badge: "Navratna",
+        },
       ],
     },
     {

@@ -276,3 +276,109 @@ def notify_founder_milan_order(record: dict[str, Any]) -> None:
             pass
 
     threading.Thread(target=_run, daemon=True).start()
+
+
+def format_astrovastu_room_order_alert(record: dict[str, Any]) -> str:
+    oid = str(record.get("order_id") or "")[:8]
+    room = str(record.get("room_type") or "—")
+    direction = str(record.get("direction") or "—")
+    amount = record.get("amount_inr")
+    cosmo = str(record.get("cosmo_user_id") or record.get("user_id") or "—")
+    lines = [
+        "🏠 New AstroVastu room upload (paid)",
+        "",
+        f"• Order: {oid}",
+        f"• User: {cosmo}",
+        f"• Room: {room}",
+        f"• Direction: {direction}",
+        f"• Amount: ₹{amount}" if amount else "• Amount: —",
+        "",
+        "Admin panel → AstroVastu room orders → review photo & upload report.",
+    ]
+    return "\n".join(lines)
+
+
+def notify_founder_astrovastu_room_order(record: dict[str, Any]) -> None:
+    if not record:
+        return
+    has_telegram = bool(
+        (os.environ.get("TELEGRAM_BOT_TOKEN") or "").strip()
+        and (os.environ.get("TELEGRAM_FOUNDER_CHAT_ID") or "").strip()
+    )
+    has_sms = bool(
+        (os.environ.get("MSG91_AUTH_KEY") or "").strip()
+        and (os.environ.get("FOUNDER_ALERT_PHONE") or "").strip()
+    )
+    if not has_telegram and not has_sms:
+        return
+
+    def _run() -> None:
+        text = format_astrovastu_room_order_alert(record)
+        sent = _send_telegram(text)
+        if not sent:
+            _send_msg91_sms(text)
+        try:
+            print(f"[order_alert] astrovastu room notify telegram={sent} order={record.get('order_id')}", flush=True)
+        except Exception:
+            pass
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def format_business_vastu_order_alert(record: dict[str, Any]) -> str:
+    oid = str(record.get("order_id") or "")[:8]
+    btype = str(record.get("business_type") or "—")
+    prop = str(record.get("property_name") or "—")
+    photos = record.get("room_photos") if isinstance(record.get("room_photos"), list) else []
+    has_pdf = bool(
+        isinstance(record.get("floor_plan_upload"), dict)
+        and (
+            record["floor_plan_upload"].get("data_url")
+            or record["floor_plan_upload"].get("base64")
+        )
+    )
+    cosmo = str(record.get("cosmo_user_id") or record.get("user_id") or "—")
+    lines = [
+        "🏪 New Business Vastu upload",
+        "",
+        f"• Order: {oid}",
+        f"• User: {cosmo}",
+        f"• Type: {btype}",
+        f"• Premise: {prop}",
+        f"• Room photos: {len(photos)}",
+        f"• Full shop PDF: {'yes' if has_pdf else 'no'}",
+        "",
+        "Admin panel → Business Vastu orders → review photos & upload report.",
+    ]
+    return "\n".join(lines)
+
+
+def notify_founder_business_vastu_order(record: dict[str, Any]) -> None:
+    if not record:
+        return
+    has_telegram = bool(
+        (os.environ.get("TELEGRAM_BOT_TOKEN") or "").strip()
+        and (os.environ.get("TELEGRAM_FOUNDER_CHAT_ID") or "").strip()
+    )
+    has_sms = bool(
+        (os.environ.get("MSG91_AUTH_KEY") or "").strip()
+        and (os.environ.get("FOUNDER_ALERT_PHONE") or "").strip()
+    )
+    if not has_telegram and not has_sms:
+        return
+
+    def _run() -> None:
+        text = format_business_vastu_order_alert(record)
+        sent = _send_telegram(text)
+        if not sent:
+            _send_msg91_sms(text)
+        try:
+            print(
+                f"[order_alert] business vastu notify telegram={sent} "
+                f"order={record.get('order_id')}",
+                flush=True,
+            )
+        except Exception:
+            pass
+
+    threading.Thread(target=_run, daemon=True).start()

@@ -12,14 +12,18 @@
  * No AI/LLM branding — surfaces "Photo Engine" only.
  */
 import { Feather } from "@expo/vector-icons";
+import * as DocumentPicker from "expo-document-picker";
 import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { LinearGradient } from "expo-linear-gradient";
-import { router, Stack } from "expo-router";
-import React, { useCallback, useState } from "react";
+import { router, Stack, useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
+  ActivityIndicator,
+  Animated,
+  Easing,
   I18nManager,
   Pressable,
   ScrollView,
@@ -29,16 +33,34 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
+
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 import { openReportPdfWithLanguageChoice } from "@/lib/pdfLanguagePicker";
 import { GalleryScanResult, GalleryScanUpload } from "@/components/GalleryScanUpload";
-import { RoomPhoto, RoomPhotoCapture } from "@/components/RoomPhotoCapture";
 import { ScanBasisBadge, VisionRoomFindings } from "@/components/ScanBasisBadge";
 import { SmartScanCamera, SmartScanResult } from "@/components/SmartScanCamera";
-import { SmartScanUpload, SmartScanUploadValue } from "@/components/SmartScanUpload";
+import { SmartScanUploadValue, NorthAt } from "@/components/SmartScanUpload";
+import { submitAstrovastuRoomHumanOrder } from "@/lib/astrovastuHumanOrder";
+import { purchaseFloorPlanSku } from "@/lib/astrovastuFloorPlanPurchase";
+import { FLOOR_PLAN_CATALOG } from "@/lib/astrovastuFloorPlanPricing";
+import { startAstrovastuRoomUploadCheckout } from "@/lib/astrovastuRoomUploadCheckout";
+import {
+  ROOM_EXPERT_UPLOAD_PRICE_INR,
+} from "@/lib/astrovastuRoomUploadPricing";
+import {
+  consumeAstrovastuRoomPaidReady,
+  getPendingAstrovastuRoomUpload,
+} from "@/lib/pendingAstrovastuRoomUpload";
+import {
+  clearPendingAstrovastuFloorPlan,
+  consumeAstrovastuFloorPaidReady,
+  getPendingAstrovastuFloorPlan,
+  setPendingAstrovastuFloorPlan,
+} from "@/lib/pendingAstrovastuFloorPlan";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Rooms a user can pick before opening the live camera (PRO residential).
@@ -76,6 +98,74 @@ const VERDICT_COLOR: Record<string, { bg: string; fg: string; border: string }> 
 const GRADE_COLOR: Record<string, string> = {
   A: "#10B981", B: "#3B82F6", C: "#F59E0B", D: "#EF4444",
 };
+
+const MAX_HOME_PLAN_BYTES = 10 * 1024 * 1024;
+const HOME_PDF_PRICE = FLOOR_PLAN_CATALOG.home_floor_799.price;
+const HOME_ACCENT = "#a78bfa";
+const BIZ_TAB_ACCENT = "#06b6d4";
+
+function PremiumOrb({ color }: { color: string }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.28, 0.55] });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[ui.orb, { backgroundColor: color, transform: [{ scale }], opacity }]}
+    />
+  );
+}
+
+function SectionShell({
+  icon,
+  title,
+  subtitle,
+  accent,
+  children,
+  delay = 0,
+  resetKey,
+}: {
+  icon: keyof typeof Feather.glyphMap;
+  title: string;
+  subtitle?: string;
+  accent: string;
+  children: React.ReactNode;
+  delay?: number;
+  resetKey?: string;
+}) {
+  const C = useC();
+  return (
+    <FadeInView delay={delay} resetKey={resetKey} style={[ui.sectionShell, { borderColor: `${accent}33` }]}>
+      <LinearGradient
+        colors={[`${accent}14`, "transparent"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <View style={ui.sectionHead}>
+        <View style={[ui.sectionIconWrap, { backgroundColor: `${accent}22`, borderColor: `${accent}55` }]}>
+          <Feather name={icon} size={15} color={accent} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[ui.sectionHeadTitle, { color: C.text }]}>{title}</Text>
+          {subtitle ? <Text style={[ui.sectionHeadSub, { color: C.textMid }]}>{subtitle}</Text> : null}
+        </View>
+      </View>
+      {children}
+    </FadeInView>
+  );
+}
 
 type Remedy = { action: string; english: string; hindi: string; priority: number; classical_ref: string };
 type RoomReport = {
@@ -124,9 +214,64 @@ export default function AstroVastuProScreen() {
   const [result,  setResult]  = useState<ProResponse | null>(null);
   const [error,   setError]   = useState<ErrorPayload | null>(null);
   const [wholePlan, setWholePlan] = useState<SmartScanUploadValue | null>(null);
-  const [wholeRoomPhotos, setWholeRoomPhotos] = useState<RoomPhoto[]>([]);
-  const [mode, setMode] = useState<"camera" | "single" | "whole">("camera");
+  const [mode, setMode] = useState<"camera" | "business">("camera");
   const [cameraRoom, setCameraRoom] = useState<string | null>(null);
+  const [uploadSubmitting, setUploadSubmitting] = useState(false);
+  const [planPicking, setPlanPicking] = useState(false);
+
+  const paySubmitLabel = String(t.avp_uploadPaySubmit || "Pay ₹{amount}")
+    .replace("{amount}", String(ROOM_EXPERT_UPLOAD_PRICE_INR));
+  const homePdfLabel = `${t.avp_btnUploadHomePdf || "Upload Full Home PDF"} (₹${HOME_PDF_PRICE})`;
+  const perRoomLabel = t.avp_uploadPricePerRoom || "per room";
+  const cameraLabel = `${t.avp_btnSmartScan} (₹${ROOM_EXPERT_UPLOAD_PRICE_INR}/${perRoomLabel})`;
+  const uploadRoomLabel = `${t.avp_btnUploadPhoto} (₹${ROOM_EXPERT_UPLOAD_PRICE_INR}/${perRoomLabel})`;
+  const accent = mode === "camera" ? HOME_ACCENT : BIZ_TAB_ACCENT;
+  const payPulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (loading || !wholePlan) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(payPulse, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(payPulse, { toValue: 0, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [loading, wholePlan, payPulse]);
+  const payGlow = payPulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.85] });
+
+  useFocusEffect(
+    useCallback(() => {
+      // 1) Paid room upload → submit to founder queue
+      if (consumeAstrovastuRoomPaidReady()) {
+        const pending = getPendingAstrovastuRoomUpload();
+        if (pending?.purchase_id && user?.id && user?.api_key) {
+          setUploadSubmitting(true);
+          void submitAstrovastuRoomHumanOrder({
+            user: { id: user.id, api_key: user.api_key },
+            purchaseId: pending.purchase_id,
+          }).finally(() => setUploadSubmitting(false));
+        }
+      }
+
+      // 2) Paid full home plan → auto-run scan on return
+      if (consumeAstrovastuFloorPaidReady()) {
+        const pending = getPendingAstrovastuFloorPlan();
+        const fp = pending?.floor_plan_upload;
+        if (fp && user?.id && user?.api_key) {
+          clearPendingAstrovastuFloorPlan();
+          void runScan({
+            floor_plan_upload: {
+              type: fp.type,
+              ...(fp.data_url ? { data_url: fp.data_url } : {}),
+              ...(fp.base64 ? { base64: fp.base64 } : {}),
+              north_at: fp.north_at || "top",
+            },
+          });
+        }
+      }
+    }, [runScan, user?.api_key, user?.id]),
+  );
 
   // ── Shared submit helper ──────────────────────────────────────────────
   const runScan = useCallback(async (payload: Record<string, unknown>) => {
@@ -176,224 +321,416 @@ export default function AstroVastuProScreen() {
     });
   }, [runScan, cameraRoom]);
 
-  // ── Gallery / PDF upload: file + user-tagged room/direction (ground truth) ─
-  const onGallerySubmit = useCallback((g: GalleryScanResult) => {
-    runScan({
-      floor_plan: [{ room_type: g.room_type, direction: g.direction }],
-      floor_plan_upload: { type: g.kind, data_url: g.data_url },
-    });
-  }, [runScan]);
-
-  // ── Whole floor plan: PDF/JPG of the entire floor — vision auto-detects all rooms ─
-  const onWholePlanSubmit = useCallback(() => {
-    if (!wholePlan) return;
-    runScan({
-      floor_plan_upload: {
-        type:     wholePlan.type,
-        ...(wholePlan.data_url ? { data_url: wholePlan.data_url } : {}),
-        ...(wholePlan.base64   ? { base64:   wholePlan.base64   } : {}),
-        north_at: wholePlan.north_at || "top",
+  // ── Gallery upload: pay → founder manual review ──
+  const onUploadPaySubmit = useCallback((g: GalleryScanResult) => {
+    if (!user?.id || !user?.api_key) {
+      setError({ error: "auth_required", message: t.avp_errAuthRequired });
+      return;
+    }
+    void startAstrovastuRoomUploadCheckout({
+      user: { id: user.id, api_key: user.api_key },
+      payload: {
+        room_type: g.room_type,
+        direction: g.direction,
+        data_url: g.data_url,
+        base64: g.base64,
       },
-      ...(wholeRoomPhotos.length > 0
-        ? { room_photos: wholeRoomPhotos.map(p => ({
-              room_type:      p.room_type,
-              image_data_url: p.image_data_url,
-              ...(typeof p.heading_deg === "number" ? { heading_deg: p.heading_deg } : {}),
-            })) }
-        : {}),
     });
-  }, [runScan, wholePlan, wholeRoomPhotos]);
+  }, [t.avp_errAuthRequired, user]);
+
+  // ── Full home plan: pay ₹999 → return here → auto-run scan ───────────────
+  const onWholePlanPay = useCallback(() => {
+    if (!wholePlan) return;
+    if (!user?.id || !user?.api_key) {
+      setError({ error: "auth_required", message: t.avp_errAuthRequired });
+      return;
+    }
+    setPendingAstrovastuFloorPlan({ floor_plan_upload: wholePlan });
+    void purchaseFloorPlanSku({
+      user: { id: user.id, api_key: user.api_key },
+      planKind: "home",
+      propertyName: "",
+      returnTo: "astrovastu-pro",
+    });
+  }, [t.avp_errAuthRequired, user, wholePlan]);
+
+  const onPickHomePlanPdf = useCallback(async () => {
+    if (loading || planPicking) return;
+    Haptics.selectionAsync();
+    setPlanPicking(true);
+    try {
+      const r = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf"],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (r.canceled || !r.assets?.[0]) return;
+      const f = r.assets[0];
+      if (typeof f.size === "number" && f.size > MAX_HOME_PLAN_BYTES) {
+        Alert.alert("File too large", "Floor plan PDF must be under 10 MB.");
+        return;
+      }
+      const FileSystem = await import("expo-file-system/legacy");
+      const b64 = await FileSystem.readAsStringAsync(f.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      setWholePlan({
+        type: "pdf",
+        base64: b64,
+        filename: f.name || "home_floor_plan.pdf",
+        size_bytes: f.size,
+        north_at: "top",
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert("Upload failed", msg || "Could not read the PDF.");
+    } finally {
+      setPlanPicking(false);
+    }
+  }, [loading, planPicking]);
 
   // ─────────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top }}>
       <Stack.Screen options={{ headerShown: false }} />
+
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <LinearGradient colors={[`${accent}16`, C.bg, C.bg]} style={StyleSheet.absoluteFill} />
+        <PremiumOrb color={accent} />
+      </View>
+
       <LinearGradient
-        colors={[C.bg, C.bgCard]}
+        colors={[`${accent}28`, `${accent}08`, "transparent"]}
         style={[styles.header, { paddingTop: 4 }]}
       >
-        <Pressable onPress={() => router.back()} hitSlop={10} style={{ padding: 6 }}>
-          <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={22} color={C.text} />
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={10}
+          style={({ pressed }) => [ui.glassBtn, { opacity: pressed ? 0.75 : 1 }]}
+        >
+          <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color={C.text} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: C.text }]}>{t.avp_headerTitle}</Text>
-        <View style={{ width: 28 }} />
+        <View style={{ flex: 1, alignItems: "center" }}>
+          <Text style={[ui.headerBadge, { color: accent }]}>
+            {mode === "camera" ? "HOME VASTU" : "BUSINESS VASTU"}
+          </Text>
+          <Text style={[styles.headerTitle, { color: C.text }]}>{t.avp_headerTitle}</Text>
+        </View>
+        <View style={{ width: 40 }} />
       </LinearGradient>
 
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        {/* ── Hero ─────────────────────────────────────────────────── */}
-        <View style={[styles.hero, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <View style={[styles.heroIcon, { backgroundColor: C.accentBg }]}>
-            <Feather name="zap" size={26} color={C.accent} />
+        <FadeInView delay={0}>
+          <View style={[ui.heroCard, { borderColor: `${accent}44`, backgroundColor: `${accent}10` }]}>
+            <View style={[ui.heroIconRing, { backgroundColor: `${accent}22`, borderColor: `${accent}55` }]}>
+              <Feather name="home" size={22} color={accent} />
+            </View>
+            <Text style={[styles.heroTitle, { color: C.text }]}>{t.avp_heroTitle}</Text>
+            <Text style={[styles.heroBody, { color: C.textMid }]}>{t.avp_heroBody}</Text>
           </View>
-          <Text style={[styles.heroTitle, { color: C.text }]}>{t.avp_heroTitle}</Text>
-          <Text style={[styles.heroBody, { color: C.textMid }]}>
-            {t.avp_heroBody}
-          </Text>
-        </View>
+        </FadeInView>
 
-        {/* ── 3-tile sub-menu picker ───────────────────────────────── */}
-        <View style={styles.modeRow}>
-          {([
-            { key: "camera", icon: "camera",    title: t.avp_modeCameraTitle,  sub: t.avp_modeCameraSub  },
-            { key: "single", icon: "image",     title: t.avp_modeSingleTitle,  sub: t.avp_modeSingleSub  },
-            { key: "whole",  icon: "layout",    title: t.avp_modeWholeTitle,   sub: t.avp_modeWholeSub   },
-          ] as const).map((m) => {
-            const sel = mode === m.key;
-            return (
-              <Pressable
-                key={m.key}
-                onPress={() => setMode(m.key)}
-                style={({ pressed }) => [
-                  styles.modeTile,
-                  {
-                    borderColor:     sel ? C.accent  : C.border,
-                    backgroundColor: sel ? C.accentBg : C.bgCard,
-                    opacity:         pressed ? 0.85 : 1,
-                  },
-                ]}
-              >
-                <Feather name={m.icon} size={20} color={sel ? C.accent : C.textMid} />
-                <Text style={[styles.modeTitle, { color: sel ? C.accent : C.text }]}>
-                  {m.title}
-                </Text>
-                <Text style={[styles.modeSub, { color: sel ? C.accent : C.textMid }]}>
-                  {m.sub}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <FadeInView delay={staggerDelay(1)}>
+          <View style={styles.modeRow}>
+            {([
+              { key: "camera" as const, icon: "camera" as const, title: t.avp_modeCameraTitle, sub: t.avp_modeCameraSub, tabAccent: HOME_ACCENT },
+              { key: "business" as const, icon: "briefcase" as const, title: t.vt_titleBusinessVastu, sub: `${t.bv_biz_shop} · ${t.bv_biz_office}`, tabAccent: BIZ_TAB_ACCENT },
+            ]).map((m) => {
+              const sel = mode === m.key;
+              const tabAccent = m.tabAccent;
+              return (
+                <Pressable
+                  key={m.key}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setMode(m.key);
+                  }}
+                  style={({ pressed }) => [
+                    ui.modeCardOuter,
+                    {
+                      borderColor: sel ? tabAccent : C.border,
+                      transform: [{ scale: pressed ? 0.97 : 1 }],
+                    },
+                  ]}
+                >
+                  {sel ? (
+                    <LinearGradient
+                      colors={[`${tabAccent}33`, `${tabAccent}08`]}
+                      style={StyleSheet.absoluteFill}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    />
+                  ) : null}
+                  <View style={[ui.modeIconRing, { borderColor: sel ? tabAccent : C.border, backgroundColor: sel ? `${tabAccent}22` : C.bgCard }]}>
+                    <Feather name={m.icon} size={20} color={sel ? tabAccent : C.textMid} />
+                  </View>
+                  <Text style={[styles.modeTitle, { color: sel ? tabAccent : C.text }]}>{m.title}</Text>
+                  <Text style={[styles.modeSub, { color: sel ? tabAccent : C.textMid }]}>{m.sub}</Text>
+                  {sel ? <View style={[ui.bizSelDot, { backgroundColor: tabAccent }]} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </FadeInView>
 
-        {/* ── Selected mode body ───────────────────────────────────── */}
         {mode === "camera" && (
           <>
-            <View style={[styles.modeIntro, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={[styles.modeIntroTitle, { color: C.text }]}>
-                {t.avp_introCameraTitle}
-              </Text>
-              <Text style={[styles.modeIntroBody, { color: C.textMid }]}>
-                {t.avp_introCameraBody}
-              </Text>
-            </View>
+            <FadeInView delay={staggerDelay(2)} resetKey="camera">
+              <View style={[ui.priceRibbon, { borderColor: `${HOME_ACCENT}44`, backgroundColor: `${HOME_ACCENT}12` }]}>
+                <Feather name="zap" size={14} color={HOME_ACCENT} />
+                <Text style={[ui.priceRibbonText, { color: C.text }]}>
+                  {`₹${ROOM_EXPERT_UPLOAD_PRICE_INR}/${perRoomLabel} · Full Home PDF ₹${HOME_PDF_PRICE}`}
+                </Text>
+              </View>
+            </FadeInView>
 
-            {/* Room picker — required before camera opens */}
-            <Text style={[styles.pickerLabel, { color: C.text }]}>
-              {t.avp_pickerLabel}
-            </Text>
-            <View style={styles.roomGrid}>
-              {CAMERA_ROOMS.map((r) => {
-                const sel = cameraRoom === r.key;
-                return (
-                  <Pressable
-                    key={r.key}
-                    onPress={() => setCameraRoom(r.key)}
-                    disabled={loading}
-                    style={({ pressed }) => [
-                      styles.roomChip,
-                      {
-                        borderColor:     sel ? C.accent  : C.border,
-                        backgroundColor: sel ? C.accentBg : C.bgCard,
-                        opacity:         loading ? 0.5 : pressed ? 0.7 : 1,
-                      },
-                    ]}
-                  >
-                    <Feather name={r.icon} size={14} color={sel ? C.accent : C.textMid} />
-                    <Text style={{
-                      color: sel ? C.accent : C.text,
-                      fontSize: 12, fontWeight: "600",
-                    }}>
-                      {avpRoom(r.key)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            {!cameraRoom && (
-              <Text style={[styles.pickerHint, { color: C.textMid }]}>
-                {t.avp_pickerHint}
-              </Text>
-            )}
-
-            <View style={{ opacity: cameraRoom ? 1 : 0.45, marginTop: 10 }} pointerEvents={cameraRoom ? "auto" : "none"}>
-              <SmartScanCamera
-                onCapture={onCapture}
-                loading={loading}
-                disabled={!cameraRoom}
-                hint={cameraRoom
-                  ? `${t.avp_camHintPrefix} ${avpRoom(cameraRoom)}`
-                  : t.avp_camHintNoRoom}
-              />
-            </View>
-          </>
-        )}
-
-        {mode === "single" && (
-          <>
-            <View style={[styles.modeIntro, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={[styles.modeIntroTitle, { color: C.text }]}>
-                {t.avp_introSingleTitle}
-              </Text>
-              <Text style={[styles.modeIntroBody, { color: C.textMid }]}>
-                {t.avp_introSingleBody}
-              </Text>
-            </View>
-            <GalleryScanUpload
-              onSubmit={onGallerySubmit}
-              loading={loading}
-            />
-          </>
-        )}
-
-        {mode === "whole" && (
-          <>
-            <View style={[styles.modeIntro, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={[styles.modeIntroTitle, { color: C.text }]}>
-                {t.avp_introWholeTitle}
-              </Text>
-              <Text style={[styles.modeIntroBody, { color: C.textMid }]}>
-                {t.avp_introWholeBody}
-              </Text>
-            </View>
-            <SmartScanUpload
-              value={wholePlan}
-              onChange={setWholePlan}
-              disabled={loading}
-            />
-
-            {/* Optional: room photos with magnetometer for sensor-confirmed accuracy */}
-            <RoomPhotoCapture
-              rooms={CAMERA_ROOMS.map(r => ({ key: r.key, label: avpRoom(r.key) }))}
-              photos={wholeRoomPhotos}
-              onChange={setWholeRoomPhotos}
-              disabled={loading}
-              maxPhotos={6}
-            />
-
-            <Pressable
-              onPress={onWholePlanSubmit}
-              disabled={loading || !wholePlan}
-              style={({ pressed }) => [
-                styles.runScanBtn,
-                {
-                  backgroundColor: (loading || !wholePlan) ? C.border : C.accent,
-                  opacity: pressed ? 0.85 : 1,
-                },
-              ]}
+            <SectionShell
+              icon="map-pin"
+              title={t.avp_pickerLabel}
+              subtitle={cameraRoom
+                ? `${t.avp_camHintPrefix} ${avpRoom(cameraRoom)}`
+                : t.avp_pickerHint}
+              accent={HOME_ACCENT}
+              delay={staggerDelay(3)}
+              resetKey={`room-${cameraRoom || "none"}`}
             >
-              <Feather name="zap" size={16} color={(loading || !wholePlan) ? C.textMid : "#0B0F19"} />
-              <Text style={[styles.runScanText, { color: (loading || !wholePlan) ? C.textMid : "#0B0F19" }]}>
-                {loading ? t.avp_btnAnalysing : t.avp_btnRunWhole}
-              </Text>
-            </Pressable>
+              <View style={[ui.scopeBadgeRow, { backgroundColor: `${HOME_ACCENT}14`, borderColor: `${HOME_ACCENT}44` }]}>
+                <Feather name="compass" size={13} color={HOME_ACCENT} />
+                <Text style={[ui.scopeBadgeText, { color: HOME_ACCENT }]}>
+                  {String(t.avp_badgeSingleRoom || "Single room")}
+                </Text>
+                <Text style={{ color: C.textMid, fontSize: 10, flex: 1 }} numberOfLines={2}>
+                  {t.avp_introCameraBody}
+                </Text>
+              </View>
+
+              <View style={styles.roomGrid}>
+                {CAMERA_ROOMS.map((r) => {
+                  const sel = cameraRoom === r.key;
+                  return (
+                    <Pressable
+                      key={r.key}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setCameraRoom((prev) => (prev === r.key ? null : r.key));
+                      }}
+                      disabled={loading}
+                      style={({ pressed }) => [
+                        ui.roomChip,
+                        {
+                          borderColor: sel ? HOME_ACCENT : C.border,
+                          backgroundColor: sel ? `${HOME_ACCENT}18` : C.bgCard,
+                          borderWidth: sel ? 2 : 1,
+                          opacity: loading ? 0.5 : pressed ? 0.9 : 1,
+                          transform: [{ scale: pressed ? 0.98 : 1 }],
+                        },
+                      ]}
+                    >
+                      <Feather name={r.icon} size={13} color={sel ? HOME_ACCENT : C.textMid} />
+                      <Text style={{ flex: 1, color: sel ? HOME_ACCENT : C.text, fontSize: 11, fontWeight: sel ? "800" : "600" }}>
+                        {avpRoom(r.key)}
+                      </Text>
+                      {sel ? <Feather name="check-circle" size={12} color={HOME_ACCENT} /> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </SectionShell>
+
+            <SectionShell
+              icon="upload-cloud"
+              title={t.avp_introCameraTitle}
+              subtitle={cameraRoom ? avpRoom(cameraRoom) : t.avp_camHintNoRoom}
+              accent={HOME_ACCENT}
+              delay={staggerDelay(4)}
+            >
+              <View style={[ui.uploadActionCard, { borderColor: `${HOME_ACCENT}33`, backgroundColor: `${HOME_ACCENT}08` }]}>
+                <View style={styles.scanActionRow}>
+              <View style={styles.scanActionCol}>
+                <SmartScanCamera
+                  compact
+                  onCapture={onCapture}
+                  loading={loading}
+                  disabled={!cameraRoom}
+                  disabledTitle={t.avp_camHintNoRoom}
+                  disabledMessage={t.avp_pickerHint}
+                  label={cameraLabel}
+                />
+              </View>
+              <View style={styles.scanActionCol}>
+                <GalleryScanUpload
+                  compact
+                  photoOnly
+                  paidManual
+                  priceInr={ROOM_EXPERT_UPLOAD_PRICE_INR}
+                  pricePerRoomLabel={t.avp_uploadPricePerRoom}
+                  payLabel={paySubmitLabel}
+                  onPaySubmit={onUploadPaySubmit}
+                  loading={loading || uploadSubmitting}
+                  disabled={!cameraRoom}
+                  preselectedRoom={cameraRoom}
+                  disabledTitle={t.avp_camHintNoRoom}
+                  disabledMessage={t.avp_pickerHint}
+                  label={uploadRoomLabel}
+                  roomLabel={avpRoom}
+                />
+              </View>
+              <View style={styles.scanActionCol}>
+                <Pressable
+                  onPress={() => { void onPickHomePlanPdf(); }}
+                  disabled={loading || planPicking}
+                  style={({ pressed }) => [
+                    styles.compactPlanBtn,
+                    {
+                      borderColor: wholePlan ? HOME_ACCENT : C.border,
+                      backgroundColor: wholePlan ? `${HOME_ACCENT}18` : C.bgCard,
+                      opacity: loading ? 0.55 : pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  {planPicking ? (
+                    <ActivityIndicator color={HOME_ACCENT} />
+                  ) : (
+                    <>
+                      <Feather name="file-text" size={22} color={HOME_ACCENT} />
+                      <Text style={[styles.compactPlanBtnText, { color: C.text }]}>
+                        {homePdfLabel}
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+              </View>
+              </View>
+            </SectionShell>
+
+            {wholePlan ? (
+              <FadeInView delay={staggerDelay(5)}>
+                <View style={[ui.pdfPlanCard, { borderColor: HOME_ACCENT, backgroundColor: `${HOME_ACCENT}14` }]}>
+                  <View style={[ui.pdfIconWrap, { backgroundColor: `${HOME_ACCENT}22` }]}>
+                    <Feather name="file-text" size={22} color={HOME_ACCENT} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.planChipText, { color: C.text }]} numberOfLines={1}>
+                      {wholePlan.filename || "home_floor_plan.pdf"}
+                    </Text>
+                    <Text style={{ color: C.textMid, fontSize: 10, marginTop: 2 }}>
+                      {t.bv_planNorthHint || "Where is North on this plan?"}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setWholePlan(null);
+                    }}
+                    hitSlop={8}
+                    disabled={loading}
+                    style={{ padding: 4 }}
+                  >
+                    <Feather name="x" size={16} color={C.textMid} />
+                  </Pressable>
+                </View>
+                <View style={styles.northRow}>
+                  {(["top", "right", "bottom", "left"] as const).map((opt) => {
+                    const sel = (wholePlan.north_at || "top") === opt;
+                    return (
+                      <Pressable
+                        key={opt}
+                        disabled={loading}
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          setWholePlan({ ...wholePlan, north_at: opt as NorthAt });
+                        }}
+                        style={({ pressed }) => [
+                          styles.northBtn,
+                          {
+                            borderColor: sel ? HOME_ACCENT : C.border,
+                            backgroundColor: sel ? `${HOME_ACCENT}18` : C.bgCard,
+                            opacity: loading ? 0.5 : pressed ? 0.85 : 1,
+                          },
+                        ]}
+                      >
+                        <Text style={{ color: sel ? HOME_ACCENT : C.text, fontWeight: "700", fontSize: 11 }}>
+                          {opt[0].toUpperCase() + opt.slice(1)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Animated.View style={[ui.submitGlow, { opacity: payGlow, backgroundColor: "#22c55e" }]} />
+                <Pressable
+                  onPress={onWholePlanPay}
+                  disabled={loading || !wholePlan}
+                  style={({ pressed }) => [ui.submitOuter, { opacity: (loading || !wholePlan) ? 0.55 : pressed ? 0.9 : 1 }]}
+                >
+                  <LinearGradient
+                    colors={(loading || !wholePlan) ? [C.border, C.border] : ["#22c55e", "#16a34a"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={ui.submitGradient}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#0B0F19" />
+                    ) : (
+                      <View style={ui.submitInner}>
+                        <Feather name="credit-card" size={16} color="#0B0F19" />
+                        <Text style={[styles.runScanText, { color: "#0B0F19" }]}>
+                          {loading ? t.avp_btnAnalysing : `Pay ₹${HOME_PDF_PRICE}`}
+                        </Text>
+                      </View>
+                    )}
+                  </LinearGradient>
+                </Pressable>
+              </FadeInView>
+            ) : null}
           </>
         )}
 
-        {/* ── Error / paywall card ─────────────────────────────────── */}
+        {mode === "business" && (
+          <SectionShell
+            icon="briefcase"
+            title={t.vt_titleBusinessVastu}
+            subtitle={`${t.bv_biz_shop} · ${t.bv_biz_office} · ${t.bv_biz_factory || "Factory"}`}
+            accent={BIZ_TAB_ACCENT}
+            delay={staggerDelay(2)}
+            resetKey="business"
+          >
+            <Text style={{ color: C.textMid, fontSize: 12, lineHeight: 17, marginBottom: 12 }}>
+              {t.bv_cardBody}
+            </Text>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                router.push("/business-vastu" as any);
+              }}
+              style={({ pressed }) => [ui.submitOuter, { opacity: pressed ? 0.9 : 1 }]}
+            >
+              <LinearGradient
+                colors={[BIZ_TAB_ACCENT, `${BIZ_TAB_ACCENT}BB`]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={ui.submitGradient}
+              >
+                <View style={ui.submitInner}>
+                  <Feather name="briefcase" size={16} color="#0B0F19" />
+                  <Text style={[styles.runScanText, { color: "#0B0F19", flex: 1 }]}>
+                    {t.vt_ctaOpenBusinessVastu}
+                  </Text>
+                  <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={16} color="#0B0F19" />
+                </View>
+              </LinearGradient>
+            </Pressable>
+          </SectionShell>
+        )}
+
         {error && (
-          <View style={[styles.errCard, {
+          <FadeInView delay={staggerDelay(5)}>
+          <View style={[ui.errCard, {
             backgroundColor: C.bgCard, borderColor: VERDICT_COLOR.Avoid.border,
           }]}>
             <Feather name="alert-triangle" size={18} color={VERDICT_COLOR.Avoid.fg} style={{ marginTop: 2 }} />
@@ -423,6 +760,7 @@ export default function AstroVastuProScreen() {
               )}
             </View>
           </View>
+          </FadeInView>
         )}
 
         {/* ── Result: PDF version ────────────────────────────────────── */}
@@ -442,8 +780,9 @@ export default function AstroVastuProScreen() {
             });
           };
           return (
+            <FadeInView delay={staggerDelay(6)}>
             <View style={{ marginTop: 18 }}>
-              <View style={[styles.scoreCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <View style={[ui.scoreCardPremium, { backgroundColor: C.bgCard, borderColor: `${HOME_ACCENT}44` }]}>
                 <Text style={[styles.sectionLabel, { color: C.textMid }]}>{t.avp_overallScore}</Text>
                 <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: 4 }}>
                   <Text style={[styles.scoreNum, { color: GRADE_COLOR[grade] || C.text }]}>{score}</Text>
@@ -488,6 +827,7 @@ export default function AstroVastuProScreen() {
                 {t.avp_footerBrand}
               </Text>
             </View>
+            </FadeInView>
           );
         })()}
 
@@ -503,8 +843,9 @@ export default function AstroVastuProScreen() {
           const mdAlert  = result.mahadasha_alert || null;
           const quota    = result.quota || { used: 0, limit: 0, plan: "" };
           return (
+          <FadeInView delay={staggerDelay(6)}>
           <View style={{ marginTop: 18 }}>
-            <View style={[styles.scoreCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+            <View style={[ui.scoreCardPremium, { backgroundColor: C.bgCard, borderColor: `${HOME_ACCENT}44` }]}>
               <Text style={[styles.sectionLabel, { color: C.textMid }]}>{t.avp_overallScore}</Text>
               <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: 4 }}>
                 <Text style={[styles.scoreNum, { color: GRADE_COLOR[grade] || C.text }]}>{score}</Text>
@@ -623,42 +964,9 @@ export default function AstroVastuProScreen() {
                 : `${t.avp_quotaPrefix} ${quota.used}/${quota.limit} ${t.avp_quotaThisMonth}`}
             </Text>
           </View>
+          </FadeInView>
           );
         })()}
-
-        {/* Business Vastu + reports (replaces old pricing chooser page) */}
-        {!loading && !result && (
-          <View style={{ gap: 10, marginTop: 8 }}>
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push("/business-vastu" as any);
-              }}
-              style={[styles.altLink, { backgroundColor: C.bgCard, borderColor: "#06b6d455" }]}
-            >
-              <Text style={{ fontSize: 22 }}>🏢</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.altLinkTitle, { color: C.text }]}>{t.vt_titleBusinessVastu}</Text>
-                <Text style={[styles.altLinkSub, { color: C.textMid }]}>{t.vt_subKundliPersonalized}</Text>
-              </View>
-              <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={18} color="#06b6d4" />
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push("/my-reports" as any);
-              }}
-              style={[styles.altLink, { backgroundColor: C.bgCard, borderColor: C.border }]}
-            >
-              <Feather name="folder" size={18} color="#f6c453" />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.altLinkTitle, { color: C.text }]}>{t.vt_titleMyReports}</Text>
-                <Text style={[styles.altLinkSub, { color: C.textMid }]}>{t.vt_reportsSub}</Text>
-              </View>
-              <Feather name={I18nManager.isRTL ? "chevron-left" : "chevron-right"} size={18} color={C.textMuted} />
-            </Pressable>
-          </View>
-        )}
 
         {/* ── Branding footer (NEVER reveal AI/LLM) ──────────────────── */}
         <Text style={[styles.brandingFooter, { color: C.textMid }]}>
@@ -684,8 +992,8 @@ const styles = StyleSheet.create({
                  marginBottom: 16, alignItems: "center" },
   heroIcon:    { width: 56, height: 56, borderRadius: 28,
                  alignItems: "center", justifyContent: "center", marginBottom: 10 },
-  heroTitle:   { fontSize: 22, fontWeight: "800", marginBottom: 6 },
-  heroBody:    { fontSize: 13, lineHeight: 19, textAlign: "center" },
+  heroTitle:   { fontSize: 18, fontWeight: "800", marginBottom: 6, textAlign: "center" },
+  heroBody:    { fontSize: 12, lineHeight: 17, textAlign: "center" },
 
   card:        { borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 14 },
   cardTitle:   { fontSize: 15, fontWeight: "700" },
@@ -729,6 +1037,8 @@ const styles = StyleSheet.create({
   modeIntro:      { borderRadius: 12, borderWidth: 1, padding: 12, marginBottom: 12 },
   modeIntroTitle: { fontSize: 14, fontWeight: "700", marginBottom: 4 },
   modeIntroBody:  { fontSize: 12, lineHeight: 17 },
+  scopeBadge:     { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1 },
+  scopeBadgeText: { fontSize: 10, fontWeight: "900", letterSpacing: 0.3 },
 
   pickerLabel: { fontSize: 13, fontWeight: "700", marginBottom: 8 },
   pickerHint:  { fontSize: 11, marginTop: 6, fontStyle: "italic" },
@@ -737,6 +1047,40 @@ const styles = StyleSheet.create({
                  paddingVertical: 9, paddingHorizontal: 12,
                  borderRadius: 9, borderWidth: 1 },
 
+  scanActionRow: { flexDirection: "row", gap: 10, marginTop: 0, alignItems: "stretch" },
+  scanActionCol: { flex: 1 },
+  compactPlanBtn: {
+    flex: 1,
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 18,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    borderWidth: 2,
+    minHeight: 96,
+  },
+  compactPlanBtnText: { fontSize: 12, fontWeight: "800", textAlign: "center", lineHeight: 16 },
+  planChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  planChipText: { flex: 1, fontSize: 12, fontWeight: "600" },
+  northRow: { flexDirection: "row", gap: 6 },
+  northBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+
   runScanBtn:  { flexDirection: "row", alignItems: "center", justifyContent: "center",
                  gap: 8, paddingVertical: 13, borderRadius: 10, marginTop: 10 },
   runScanText: { fontSize: 14, fontWeight: "800" },
@@ -744,4 +1088,198 @@ const styles = StyleSheet.create({
   altLink:     { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
   altLinkTitle:{ fontSize: 14, fontWeight: "800" },
   altLinkSub:  { fontSize: 11, marginTop: 2 },
+});
+
+const ui = StyleSheet.create({
+  orb: {
+    position: "absolute",
+    top: -60,
+    right: -40,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+  },
+  glassBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
+  headerBadge: {
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 2.2,
+    marginBottom: 2,
+  },
+  heroCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 18,
+    marginBottom: 14,
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  heroIconRing: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+  priceRibbon: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 14,
+  },
+  priceRibbonText: { fontSize: 12, fontWeight: "700" },
+  modeCardOuter: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    overflow: "hidden",
+    minHeight: 108,
+    gap: 6,
+  },
+  modeIconRing: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bizSelDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginTop: 2,
+  },
+  sectionShell: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 14,
+    overflow: "hidden",
+  },
+  sectionHead: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 12,
+  },
+  sectionIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sectionHeadTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+  },
+  sectionHeadSub: {
+    fontSize: 11,
+    marginTop: 3,
+    lineHeight: 15,
+  },
+  scopeBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  scopeBadgeText: {
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.3,
+  },
+  roomChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    width: "48.5%",
+    paddingVertical: 9,
+    paddingHorizontal: 9,
+    borderRadius: 12,
+  },
+  uploadActionCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 10,
+  },
+  pdfPlanCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 10,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  pdfIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  submitGlow: {
+    position: "absolute",
+    left: 20,
+    right: 20,
+    top: 8,
+    height: 44,
+    borderRadius: 22,
+  },
+  submitOuter: {
+    marginTop: 6,
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  submitGradient: {
+    paddingVertical: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  submitInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 8,
+  },
+  errCard: {
+    flexDirection: "row",
+    gap: 10,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 14,
+  },
+  scoreCardPremium: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 16,
+    overflow: "hidden",
+  },
 });

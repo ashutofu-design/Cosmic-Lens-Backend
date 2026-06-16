@@ -27,7 +27,6 @@ import {
   gateCoupleReportAfterLangPick,
 } from "@/lib/coupleReportCheckoutFlow";
 import { getPendingCoupleCheckout } from "@/lib/pendingCoupleCheckout";
-import { indianWhatsAppHint, normalizeIndianWhatsApp } from "@/lib/indianPhone";
 import { submitLoveRealityHumanOrder } from "@/lib/loveRealityHumanOrder";
 import {
   LOVE_REALITY_CHECKOUT_CONFIG,
@@ -37,11 +36,12 @@ import {
 } from "@/lib/loveRealityProOffer";
 import { packLovePerson } from "@/lib/loveRealityProPdfDownload";
 import { coerceProPdfLang, proPdfLangDisplayName } from "@/lib/proPdfLang";
+import { loveRealityProScreenCopy } from "@/lib/loveRealityProCopyI18n";
 
 export default function LoveRealityProScreen() {
   const C = useC();
   const t = useT();
-  const { user, profiles, primaryProfileId } = useUser();
+  const { user, profiles, primaryProfileId, language } = useUser();
   const params = useLocalSearchParams<{ partnerId?: string }>();
   const partnerId = typeof params.partnerId === "string" ? params.partnerId : null;
   const insets = useSafeAreaInsets();
@@ -59,9 +59,9 @@ export default function LoveRealityProScreen() {
 
   const [priorityDelivery, setPriorityDelivery] = useState(false);
   const [langPickerVisible, setLangPickerVisible] = useState(false);
-  const [selectedPdfLang, setSelectedPdfLang] = useState(coerceProPdfLang(t.lang));
-  const [contactMethod, setContactMethod] = useState<"whatsapp" | "email">("whatsapp");
-  const [contactValue, setContactValue] = useState("");
+  const [selectedPdfLang, setSelectedPdfLang] = useState(coerceProPdfLang(language || t.lang));
+  const displayLang = coerceProPdfLang(selectedPdfLang);
+  const proCopy = loveRealityProScreenCopy(displayLang);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [submittingOrder, setSubmittingOrder] = useState(false);
 
@@ -70,13 +70,9 @@ export default function LoveRealityProScreen() {
       if (consumeCouplePaidReady()) {
         const pending = getPendingCoupleCheckout();
         if (pending?.lang) setSelectedPdfLang(coerceProPdfLang(pending.lang));
-        if (pending?.contactMethod) setContactMethod(pending.contactMethod);
-        if (pending?.contactValue) setContactValue(pending.contactValue);
         if (pending?.urgent != null) setPriorityDelivery(pending.urgent);
         void placeVerifiedPdfOrder({
           langOverride: pending?.lang,
-          contactMethodOverride: pending?.contactMethod,
-          contactValueOverride: pending?.contactValue,
           urgentOverride: pending?.urgent,
         });
       }
@@ -107,31 +103,12 @@ export default function LoveRealityProScreen() {
 
   async function placeVerifiedPdfOrder(opts?: {
     langOverride?: string;
-    contactMethodOverride?: "whatsapp" | "email";
-    contactValueOverride?: string;
     urgentOverride?: boolean;
   }) {
     if (!primaryProfile?.birthData || !partnerProfile?.birthData || !user?.id) return;
 
     const lang = coerceProPdfLang(opts?.langOverride ?? selectedPdfLang);
-    const method = opts?.contactMethodOverride ?? contactMethod;
-    const rawContact = opts?.contactValueOverride ?? contactValue;
-    const value =
-      method === "whatsapp"
-        ? normalizeIndianWhatsApp(rawContact) ?? rawContact.trim()
-        : rawContact.trim();
     const urgent = opts?.urgentOverride ?? priorityDelivery;
-
-    if (!value) {
-      Alert.alert("Contact required", "Add WhatsApp number or email for PDF delivery.");
-      setLangPickerVisible(true);
-      return;
-    }
-    if (method === "whatsapp" && !normalizeIndianWhatsApp(rawContact)) {
-      Alert.alert("Invalid WhatsApp number", indianWhatsAppHint());
-      setLangPickerVisible(true);
-      return;
-    }
 
     setSubmittingOrder(true);
     try {
@@ -141,19 +118,17 @@ export default function LoveRealityProScreen() {
         p1,
         p2,
         lang,
-        contactMethod: method,
-        contactValue: value,
         urgent,
         userId: user.id,
+        cosmoUserId: user.cosmo_user_id,
         apiKey: user.api_key,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       const langLabel = proPdfLangDisplayName(lang);
+      const etaLabel = result.eta_hours <= 24 ? "12 hours" : "24–48 hours";
       Alert.alert(
-        "Order placed!",
-        `Your verified Love Reality PDF (${langLabel}) will be prepared by our astrologer and sent on ${
-          method === "whatsapp" ? "WhatsApp" : "email"
-        } within ${result.eta_hours <= 24 ? "12 hours" : "24–48 hours"}.`,
+        proCopy.orderPlacedTitle,
+        proCopy.orderPlacedBody(langLabel, etaLabel),
         [{ text: "OK" }],
       );
     } catch (e: unknown) {
@@ -186,21 +161,12 @@ export default function LoveRealityProScreen() {
   }
 
   async function onLangPickerContinue() {
-    const trimmed = contactValue.trim();
-    if (!trimmed) {
-      Alert.alert("Contact required", "Add WhatsApp number or email for PDF delivery.");
-      return;
-    }
-    if (contactMethod === "whatsapp" && !normalizeIndianWhatsApp(trimmed)) {
-      Alert.alert("Invalid WhatsApp number", indianWhatsAppHint());
-      return;
-    }
     if (!primaryProfile?.birthData || !partnerProfile?.birthData) return;
 
     if (!user?.id) {
       Alert.alert(
         "Login required",
-        "Please sign in to order your verified Love Reality PDF.",
+        proCopy.loginRequired,
         [{ text: "OK" }],
       );
       return;
@@ -229,11 +195,6 @@ export default function LoveRealityProScreen() {
         label: "Love Reality Pro",
         amountInr: loveRealityOrderTotalInr(priorityDelivery),
         bypassCheckout: false,
-        contactMethod,
-        contactValue:
-          contactMethod === "whatsapp"
-            ? normalizeIndianWhatsApp(trimmed) ?? trimmed
-            : trimmed,
         urgent: priorityDelivery,
         onEntitled: () => {
           void placeVerifiedPdfOrder();
@@ -262,10 +223,10 @@ export default function LoveRealityProScreen() {
           </Pressable>
           <View style={{ flex: 1, alignItems: "center", paddingHorizontal: 4 }}>
             <Text style={[s.headerTitle, { color: titleColor }]} numberOfLines={1}>
-              Love Reality Pro
+              {proCopy.title}
             </Text>
             <Text style={[s.headerSub, { color: subColor }]} numberOfLines={1}>
-              Founder-verified relationship report
+              {proCopy.subtitle}
             </Text>
           </View>
           <View style={{ width: 40 }} />
@@ -285,8 +246,8 @@ export default function LoveRealityProScreen() {
                 <Feather name="users" size={14} color="#f472b6" />
                 <Text style={[s.partnerHintText, { color: isDark ? "#fbcfe8" : "#9d174d" }]}>
                   {!partnerProfile
-                    ? "Select partner on Relationship screen"
-                    : "Complete both kundlis to unlock Pro"}
+                    ? proCopy.partnerMissing
+                    : proCopy.kundliMissing}
                 </Text>
                 <Feather name="chevron-right" size={14} color="#f472b6" />
               </Pressable>
@@ -297,6 +258,7 @@ export default function LoveRealityProScreen() {
               partnerName={partnerProfile?.name}
               priorityDelivery={priorityDelivery}
               onPriorityDeliveryChange={setPriorityDelivery}
+              lang={displayLang}
             />
           </ScrollView>
 
@@ -307,6 +269,7 @@ export default function LoveRealityProScreen() {
             regularInr={LOVE_REALITY_PRO_UI_PRICING.regularInr}
             totalInr={loveRealityOrderTotalInr(priorityDelivery)}
             onUnlock={startProUnlock}
+            lang={displayLang}
           />
         </View>
       </View>
@@ -318,10 +281,6 @@ export default function LoveRealityProScreen() {
         onClose={() => setLangPickerVisible(false)}
         onContinue={onLangPickerContinue}
         delivery={{
-          contactMethod,
-          onContactMethodChange: setContactMethod,
-          contactValue,
-          onContactValueChange: setContactValue,
           priorityDelivery,
           onPriorityDeliveryChange: setPriorityDelivery,
         }}

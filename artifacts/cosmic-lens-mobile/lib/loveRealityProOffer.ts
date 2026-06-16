@@ -13,11 +13,15 @@ export const LOVE_REALITY_PRO_UI_PRICING = {
 
 export const LOVE_REALITY_URGENT_SURCHARGE_INR = 300 as const;
 
-export function loveRealityOrderTotalInr(urgent: boolean): number {
+export function loveRealityOrderTotalInr(priorityDelivery: boolean): number {
   return (
     LOVE_REALITY_PRO_UI_PRICING.todayInr +
-    (urgent ? LOVE_REALITY_URGENT_SURCHARGE_INR : 0)
+    (priorityDelivery ? LOVE_REALITY_URGENT_SURCHARGE_INR : 0)
   );
+}
+
+export function loveRealityFirstTimeSavingsInr(): number {
+  return LOVE_REALITY_PRO_UI_PRICING.regularInr - LOVE_REALITY_PRO_UI_PRICING.todayInr;
 }
 
 export const LOVE_REALITY_CHECKOUT_CONFIG = {
@@ -28,4 +32,12 @@ export const LOVE_REALITY_CHECKOUT_CONFIG = {
 /** Opens language picker; payment runs after language selection (see coupleReportCheckoutFlow). */
 export function runLoveRealityProUnlockCta(opts: { continueProExperience: () => void }): void {
   opts.continueProExperience();
+}
+
+/** Dedicated Pro purchase screen (separate from Basic Love Reality). */
+export function loveRealityProRouteParams(partnerId?: string | null) {
+  return {
+    pathname: "/love-reality-pro" as const,
+    params: { partnerId: partnerId ?? "" },
+  };
 }

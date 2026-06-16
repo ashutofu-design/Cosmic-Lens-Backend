@@ -23,6 +23,7 @@ import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
+import { MILAN_HIGHLIGHT_ITEMS } from "@/lib/milanKootDisplay";
 
 interface MainOption {
   key: string;
@@ -53,7 +54,7 @@ function buildOptions(t: any): MainOption[] {
       highlighted: true,
       badge: `🔥 ${t.rl_mostUsed}`,
       desc: t.rl_loveDesc,
-      items: ["Love Compatibility", "Breakup Chances", "Loyalty Check", "Will X Return", "Future Outcome"],
+      items: ["Love Compatibility", "Breakup Chances", "Loyalty Check", "Future Outcome"],
     },
     {
       key: "marriage",
@@ -66,8 +67,8 @@ function buildOptions(t: any): MainOption[] {
       highlighted: true,
       badge: `💍 ${t.rl_deepBadge}`,
       desc: t.rl_marriageSub,
-      items: ["Soul Sync", "Attraction Match", "Destiny Link", "Intimacy Score"],
-      depthLine: "36 Gun Milan + deep compatibility insights",
+      items: [...MILAN_HIGHLIGHT_ITEMS],
+      depthLine: "D1 + D9 marriage structure · synastry · dasha",
     },
   ];
 }

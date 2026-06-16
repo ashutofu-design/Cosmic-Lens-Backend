@@ -409,7 +409,7 @@ export function SmartScanRoomUpload({
                     key={opt.key}
                     onPress={() => {
                       Haptics.selectionAsync().catch(() => {});
-                      setRoomType(opt.key);
+                      setRoomType((prev) => (prev === opt.key ? "" : opt.key));
                     }}
                     style={[
                       s.roomChip,

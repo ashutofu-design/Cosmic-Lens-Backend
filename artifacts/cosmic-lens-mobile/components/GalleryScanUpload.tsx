@@ -20,6 +20,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -39,9 +40,24 @@ export type GalleryScanResult = {
 };
 
 type Props = {
-  onSubmit:  (result: GalleryScanResult) => void;
+  onSubmit?: (result: GalleryScanResult) => void;
   loading?:  boolean;
   disabled?: boolean;
+  /** Side-by-side with Smart Scan — single photo button only */
+  compact?: boolean;
+  photoOnly?: boolean;
+  preselectedRoom?: string | null;
+  disabledTitle?: string;
+  disabledMessage?: string;
+  label?: string;
+  roomLabel?: (key: string) => string;
+  /** Pay first → founder manual report (no instant Run Smart Scan) */
+  paidManual?: boolean;
+  priceInr?: number;
+  pricePerRoomLabel?: string;
+  payLabel?: string;
+  onPaySubmit?: (result: GalleryScanResult) => void;
+  submitLabel?: string;
 };
 
 const ROOM_OPTIONS: {
@@ -73,7 +89,24 @@ type PickedFile =
   | { kind: "image"; data_url: string; base64: string; name?: string }
   | { kind: "pdf";   data_url: string; base64: string; name?: string };
 
-export function GalleryScanUpload({ onSubmit, loading, disabled }: Props) {
+export function GalleryScanUpload({
+  onSubmit,
+  loading,
+  disabled,
+  compact,
+  photoOnly,
+  preselectedRoom,
+  disabledTitle,
+  disabledMessage,
+  label,
+  roomLabel,
+  paidManual,
+  priceInr = 199,
+  pricePerRoomLabel,
+  payLabel,
+  onPaySubmit,
+  submitLabel,
+}: Props) {
   const C = useC();
   const [open, setOpen] = useState(false);
   const [picking, setPicking] = useState<"image" | "pdf" | null>(null);
@@ -81,17 +114,42 @@ export function GalleryScanUpload({ onSubmit, loading, disabled }: Props) {
   const [roomType, setRoomType] = useState<string>("");
   const [direction, setDirection] = useState<string>("");
 
+  const roomName = (key: string) => {
+    if (roomLabel) return roomLabel(key);
+    const opt = ROOM_OPTIONS.find((o) => o.key === key);
+    return opt?.en || key;
+  };
+
+  const guardRoom = useCallback(() => {
+    if (preselectedRoom) return true;
+    // Smart Scan tab — room is pre-selected above.
+    if (!compact || !photoOnly) return true;
+    Alert.alert(
+      disabledTitle || "Select a room first",
+      disabledMessage || "Please pick which room this photo is for, then tap Upload Photo again.",
+    );
+    return false;
+  }, [compact, disabledMessage, disabledTitle, photoOnly, preselectedRoom]);
+
+  const hasGalleryPermission = (perm: { granted?: boolean; status?: string }) =>
+    perm.granted === true || perm.status === "granted";
+
   // ── Pick image from gallery ─────────────────────────────────────────
   const pickImage = useCallback(async () => {
-    if (disabled || loading || picking) return;
-    Haptics.selectionAsync();
+    if (loading || picking) return;
+    if (!guardRoom()) return;
+    try { Haptics.selectionAsync(); } catch { /* noop */ }
     setPicking("image");
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
+      if (!hasGalleryPermission(perm)) {
         Alert.alert(
           "Gallery permission needed",
-          "Please allow photo access so you can pick a floor plan from your gallery.",
+          "Please allow photo access so you can pick a room photo from your gallery.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Open Settings", onPress: () => { void Linking.openSettings(); } },
+          ],
         );
         return;
       }
@@ -109,15 +167,16 @@ export function GalleryScanUpload({ onSubmit, loading, disabled }: Props) {
         data_url: `data:${a.mimeType || "image/jpeg"};base64,${a.base64}`,
         name:     a.fileName || undefined,
       });
-      setRoomType("");
+      setRoomType(preselectedRoom || "");
       setDirection("");
       setOpen(true);
-    } catch (e: any) {
-      Alert.alert("Couldn't open gallery", String(e?.message || e));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert("Couldn't open gallery", msg || "Please try again.");
     } finally {
       setPicking(null);
     }
-  }, [disabled, loading, picking]);
+  }, [guardRoom, loading, picking, preselectedRoom]);
 
   // ── Pick PDF from device ────────────────────────────────────────────
   const pickPdf = useCallback(async () => {
@@ -173,37 +232,231 @@ export function GalleryScanUpload({ onSubmit, loading, disabled }: Props) {
   }, [loading]);
 
   const submit = useCallback(() => {
-    if (!file || !roomType || !direction || loading) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onSubmit({
+    const room = preselectedRoom || roomType;
+    if (!file || !room || !direction || loading) return;
+    const result: GalleryScanResult = {
       kind:      file.kind,
       data_url:  file.data_url,
       base64:    file.base64,
-      room_type: roomType,
+      room_type: room,
       direction,
-    });
+    };
+    if (paidManual) {
+      if (!onPaySubmit) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setOpen(false);
+      setFile(null);
+      setRoomType("");
+      setDirection("");
+      onPaySubmit(result);
+      return;
+    }
+    if (!onSubmit) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onSubmit(result);
     setOpen(false);
     setFile(null);
     setRoomType("");
     setDirection("");
-  }, [direction, file, loading, onSubmit, roomType]);
+  }, [direction, file, loading, onPaySubmit, onSubmit, paidManual, preselectedRoom, roomType]);
 
-  const canSubmit = !!file && !!roomType && !!direction && !loading;
+  const canSubmit = !!file && !!(preselectedRoom || roomType) && !!direction && !loading;
   const busy      = !!picking || !!loading;
+
+  const tagModal = (
+    <Modal
+      visible={open}
+      animationType="slide"
+      onRequestClose={close}
+      statusBarTranslucent
+    >
+      <View style={[s.modalWrap, { backgroundColor: C.bg }]}>
+        <View style={[s.modalHeader, { borderColor: C.border }]}>
+          <Pressable onPress={close} hitSlop={10} style={{ padding: 6 }}>
+            <Feather name="x" size={22} color={C.text} />
+          </Pressable>
+          <Text style={[s.modalTitle, { color: C.text }]}>
+            {preselectedRoom
+              ? `Tag direction · ${roomName(preselectedRoom)}`
+              : `Tag this ${file?.kind === "pdf" ? "PDF" : "photo"}`}
+          </Text>
+          <View style={{ width: 28 }} />
+        </View>
+
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+          {file?.kind === "image" ? (
+            <Image
+              source={{ uri: file.data_url }}
+              style={s.preview}
+              resizeMode="cover"
+            />
+          ) : file?.kind === "pdf" ? (
+            <View style={[s.pdfBadge, { backgroundColor: C.bgCard, borderColor: C.border }]}>
+              <Feather name="file-text" size={36} color={C.accent} />
+              <Text style={{ color: C.text, fontWeight: "700", marginTop: 8, textAlign: "center" }}>
+                {file.name || "floor-plan.pdf"}
+              </Text>
+              <Text style={{ color: C.textMid, fontSize: 11, marginTop: 4, textAlign: "center" }}>
+                We will read page 1 of this PDF as your floor plan.
+              </Text>
+            </View>
+          ) : null}
+
+          {!preselectedRoom ? (
+            <>
+              <Text style={[s.sectionLabel, { color: C.textMid, marginTop: 18 }]}>
+                ROOM TYPE
+              </Text>
+              <View style={s.chipGrid}>
+                {ROOM_OPTIONS.map((opt) => {
+                  const sel = opt.key === roomType;
+                  return (
+                    <Pressable
+                      key={opt.key}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setRoomType((prev) => (prev === opt.key ? "" : opt.key));
+                      }}
+                      style={[s.roomChip, {
+                        borderColor: sel ? C.accent : C.border,
+                        backgroundColor: sel ? C.accentBg : C.bgCard,
+                      }]}
+                    >
+                      <Feather name={opt.icon} size={14} color={sel ? C.accent : C.textMid} />
+                      <Text style={{
+                        color: sel ? C.accent : C.text,
+                        fontSize: 12, fontWeight: "700",
+                      }}>{opt.en}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
+          ) : (
+            <View style={[s.roomLocked, { backgroundColor: C.accentBg, borderColor: C.accent }]}>
+              <Feather name="home" size={14} color={C.accent} />
+              <Text style={{ color: C.accent, fontWeight: "800", fontSize: 13 }}>
+                {roomName(preselectedRoom)}
+              </Text>
+            </View>
+          )}
+
+          <Text style={[s.sectionLabel, { color: C.textMid, marginTop: 18 }]}>
+            DIRECTION (DISHA)
+          </Text>
+          <View style={s.dirGrid}>
+            {DIRECTION_OPTIONS.map((d) => {
+              const sel = d.key === direction;
+              return (
+                <Pressable
+                  key={d.key}
+                  onPress={() => { Haptics.selectionAsync(); setDirection(d.key); }}
+                  style={[s.dirChip, {
+                    borderColor: sel ? C.accent : C.border,
+                    backgroundColor: sel ? C.accentBg : C.bgCard,
+                  }]}
+                >
+                  <Text style={{
+                    color: sel ? C.accent : C.text, fontWeight: "800", fontSize: 16,
+                  }}>{d.short}</Text>
+                  <Text style={{
+                    color: sel ? C.accent : C.textMid, fontSize: 10, marginTop: 2,
+                  }}>{d.hi}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {paidManual ? (
+            <View style={[s.priceBox, { backgroundColor: C.accentBg, borderColor: C.accent }]}>
+              <Text style={[s.priceLine, { color: C.accent }]}>
+                ₹{priceInr}{" "}
+                <Text style={{ fontWeight: "600", fontSize: 13 }}>
+                  {pricePerRoomLabel || "per room"}
+                </Text>
+              </Text>
+            </View>
+          ) : null}
+
+          <Pressable
+            onPress={submit}
+            disabled={!canSubmit}
+            style={({ pressed }) => [
+              s.submitBtn,
+              {
+                backgroundColor: C.accent,
+                opacity: !canSubmit ? 0.4 : pressed ? 0.85 : 1,
+                marginTop: paidManual ? 14 : 22,
+              },
+            ]}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={s.submitText}>
+                {paidManual
+                  ? (payLabel || `Pay ₹${priceInr}`)
+                  : (submitLabel || "Run Smart Scan")}
+              </Text>
+            )}
+          </Pressable>
+
+          {!paidManual ? (
+            <Text style={[s.fineprint, { color: C.textMid }]}>
+              {preselectedRoom
+                ? "You picked the direction — Photo Engine will use it with your uploaded photo."
+                : `You picked the direction yourself, so Photo Engine will use it as ground truth instead of inferring from the ${file?.kind === "pdf" ? "PDF" : "photo"}.`}
+            </Text>
+          ) : null}
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+
+  if (compact && photoOnly) {
+    return (
+      <>
+        <Pressable
+          onPress={() => { void pickImage(); }}
+          disabled={busy}
+          style={({ pressed }) => [
+            s.compactBtn,
+            {
+              borderColor: C.accent,
+              backgroundColor: C.bgCard,
+              opacity: loading ? 0.55 : pressed ? 0.85 : !preselectedRoom ? 0.7 : 1,
+            },
+          ]}
+        >
+          {picking === "image" || loading ? (
+            <ActivityIndicator color={C.accent} />
+          ) : (
+            <>
+              <Feather name="image" size={22} color={C.accent} />
+              <Text style={[s.compactBtnText, { color: C.text }]}>
+                {label || "Upload Photo"}
+              </Text>
+            </>
+          )}
+        </Pressable>
+        {tagModal}
+      </>
+    );
+  }
 
   return (
     <>
       {/* Two side-by-side buttons: Image | PDF */}
       <View style={s.btnRow}>
         <Pressable
-          onPress={pickImage}
-          disabled={disabled || busy}
+          onPress={() => { void pickImage(); }}
+          disabled={busy}
           style={({ pressed }) => [
             s.uploadBtn,
             {
               borderColor: C.border,
               backgroundColor: C.bgCard,
-              opacity: (disabled || loading) ? 0.5 : pressed ? 0.85 : 1,
+              opacity: loading ? 0.5 : pressed ? 0.85 : 1,
               flex: 1,
             },
           ]}
@@ -256,117 +509,7 @@ export function GalleryScanUpload({ onSubmit, loading, disabled }: Props) {
         Not at home? Pick a photo or PDF and tag the room + direction manually.
       </Text>
 
-      <Modal
-        visible={open}
-        animationType="slide"
-        onRequestClose={close}
-        statusBarTranslucent
-      >
-        <View style={[s.modalWrap, { backgroundColor: C.bg }]}>
-          <View style={[s.modalHeader, { borderColor: C.border }]}>
-            <Pressable onPress={close} hitSlop={10} style={{ padding: 6 }}>
-              <Feather name="x" size={22} color={C.text} />
-            </Pressable>
-            <Text style={[s.modalTitle, { color: C.text }]}>Tag this {file?.kind === "pdf" ? "PDF" : "photo"}</Text>
-            <View style={{ width: 28 }} />
-          </View>
-
-          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-            {file?.kind === "image" ? (
-              <Image
-                source={{ uri: file.data_url }}
-                style={s.preview}
-                resizeMode="cover"
-              />
-            ) : file?.kind === "pdf" ? (
-              <View style={[s.pdfBadge, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-                <Feather name="file-text" size={36} color={C.accent} />
-                <Text style={{ color: C.text, fontWeight: "700", marginTop: 8, textAlign: "center" }}>
-                  {file.name || "floor-plan.pdf"}
-                </Text>
-                <Text style={{ color: C.textMid, fontSize: 11, marginTop: 4, textAlign: "center" }}>
-                  We will read page 1 of this PDF as your floor plan.
-                </Text>
-              </View>
-            ) : null}
-
-            <Text style={[s.sectionLabel, { color: C.textMid, marginTop: 18 }]}>
-              ROOM TYPE
-            </Text>
-            <View style={s.chipGrid}>
-              {ROOM_OPTIONS.map((opt) => {
-                const sel = opt.key === roomType;
-                return (
-                  <Pressable
-                    key={opt.key}
-                    onPress={() => { Haptics.selectionAsync(); setRoomType(opt.key); }}
-                    style={[s.roomChip, {
-                      borderColor: sel ? C.accent : C.border,
-                      backgroundColor: sel ? C.accentBg : C.bgCard,
-                    }]}
-                  >
-                    <Feather name={opt.icon} size={14} color={sel ? C.accent : C.textMid} />
-                    <Text style={{
-                      color: sel ? C.accent : C.text,
-                      fontSize: 12, fontWeight: "700",
-                    }}>{opt.en}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <Text style={[s.sectionLabel, { color: C.textMid, marginTop: 18 }]}>
-              DIRECTION (DISHA)
-            </Text>
-            <View style={s.dirGrid}>
-              {DIRECTION_OPTIONS.map((d) => {
-                const sel = d.key === direction;
-                return (
-                  <Pressable
-                    key={d.key}
-                    onPress={() => { Haptics.selectionAsync(); setDirection(d.key); }}
-                    style={[s.dirChip, {
-                      borderColor: sel ? C.accent : C.border,
-                      backgroundColor: sel ? C.accentBg : C.bgCard,
-                    }]}
-                  >
-                    <Text style={{
-                      color: sel ? C.accent : C.text, fontWeight: "800", fontSize: 16,
-                    }}>{d.short}</Text>
-                    <Text style={{
-                      color: sel ? C.accent : C.textMid, fontSize: 10, marginTop: 2,
-                    }}>{d.hi}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <Pressable
-              onPress={submit}
-              disabled={!canSubmit}
-              style={({ pressed }) => [
-                s.submitBtn,
-                {
-                  backgroundColor: C.accent,
-                  opacity: !canSubmit ? 0.4 : pressed ? 0.85 : 1,
-                  marginTop: 22,
-                },
-              ]}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={s.submitText}>Run Smart Scan</Text>
-              )}
-            </Pressable>
-
-            <Text style={[s.fineprint, { color: C.textMid }]}>
-              You picked the direction yourself, so Photo Engine will use it as
-              ground truth instead of inferring from the {file?.kind === "pdf" ? "PDF" : "photo"}.
-            </Text>
-          </ScrollView>
-        </View>
-      </Modal>
+      {tagModal}
     </>
   );
 }
@@ -384,6 +527,31 @@ const s = StyleSheet.create({
   uploadTitle: { fontSize: 13, fontWeight: "700" },
   uploadSub:   { fontSize: 10, marginTop: 3, textAlign: "center" },
   hintLine:    { fontSize: 11, marginTop: 8, textAlign: "center", lineHeight: 15 },
+
+  compactBtn: {
+    flex: 1,
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 18,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    borderWidth: 2,
+    minHeight: 96,
+  },
+  compactBtnText: { fontSize: 13, fontWeight: "800", textAlign: "center" },
+
+  roomLocked: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
 
   modalWrap:    { flex: 1 },
   modalHeader:  {
@@ -421,4 +589,6 @@ const s = StyleSheet.create({
   },
   submitText:   { color: "#fff", fontSize: 16, fontWeight: "700" },
   fineprint:    { fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 12 },
+  priceBox:     { marginTop: 18, padding: 14, borderRadius: 12, borderWidth: 1 },
+  priceLine:    { fontSize: 22, fontWeight: "900" },
 });

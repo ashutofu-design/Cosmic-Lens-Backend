@@ -20,9 +20,9 @@ export function healthTridoshaCopy(lang: UILang) {
   return {
     sectionTitle: p(L, "Tridosha Balance", "Tridosha Balance", "त्रिदोष संतुलन"),
     labels: {
-      vata: p(L, "Vata (Baat)", "Vata (Baat)", "वात (बात)"),
+      vata: p(L, "Vata", "Vata", "वात"),
       pitta: p(L, "Pitta", "Pitta", "पित्त"),
-      kapha: p(L, "Kapha (Cough)", "Kapha (Cough)", "कफ (कफ)"),
+      kapha: p(L, "Kapha", "Kapha", "कफ"),
     } as Record<DoshaKey, string>,
     dominant: (name: string) =>
       p(L, `${name} dominant`, `${name} dominant`, `${name} प्रमुख`),
@@ -34,12 +34,12 @@ export function healthTridoshaCopy(lang: UILang) {
     } as Record<string, string>,
     careTitle: p(L, "Daily care tip", "Daily care tip", "दैनिक देखभाल"),
     forYouTitle: p(L, "For you", "Aapke liye", "आपके लिए"),
-    organHeatmapTitle: p(L, "Body Zone Map", "Body zone map", "शरीर क्षेत्र मानचित्र"),
+    organHeatmapTitle: p(L, "Priority Body Zones", "Priority body zones", "प्राथमिकता वाले क्षेत्र"),
     organHeatmapSub: p(
       L,
-      "Six zones from your chart — higher sensitivity means extra seasonal care.",
-      "Chart ke 6 zones — zyada sensitivity par extra care rakho.",
-      "कुंडली के 6 क्षेत्र — अधिक संवेदनशीलता पर अतिरिक्त देखभाल।",
+      "Top 3 zones from your chart that need the most seasonal care.",
+      "Chart ke top 3 zones jin par sabse zyada dhyan dena chahiye.",
+      "कुंडली के वे 3 क्षेत्र जिन पर सबसे अधिक देखभाल चाहिए।",
     ),
     zoneLabels: {
       digestion: p(L, "Stomach & Digestion", "Pet aur digestion", "पेट और पाचन"),
@@ -54,6 +54,20 @@ export function healthTridoshaCopy(lang: UILang) {
       moderate: p(L, "Moderate", "Medium", "मध्यम"),
       stable: p(L, "Stable", "Stable", "स्थिर"),
     } as Record<OrganZoneStatus, string>,
+    stableZonesNote: (count: number) =>
+      count === 1
+        ? p(
+            L,
+            "1 other zone is stable — routine care is enough.",
+            "1 aur zone stable hai — regular care kaafi hai.",
+            "1 और क्षेत्र स्थिर है — नियमित देखभाल पर्याप्त।",
+          )
+        : p(
+            L,
+            `${count} other zones are stable — routine care is enough.`,
+            `${count} aur zones stable hain — regular care kaafi hai.`,
+            `${count} और क्षेत्र स्थिर हैं — नियमित देखभाल पर्याप्त।`,
+          ),
     riskyOrgansTitle: p(L, "Sensitive Body Areas", "Sensitive body zones", "संवेदनशील अंग"),
     riskyOrgansSub: p(
       L,

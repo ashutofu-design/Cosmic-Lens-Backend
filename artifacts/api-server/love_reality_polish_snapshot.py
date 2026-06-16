@@ -28,12 +28,15 @@ def _ensure_dir() -> None:
 
 
 def snapshot_params(user_id: int, lang: str, p1: dict, p2: dict) -> dict[str, Any]:
+    from love_reality_api import LOVE_REALITY_HI_CACHE_VER
     from vedic.love_reality.love_section_polish import _ASSEMBLY_VER
 
     cp = rc.couple_cache_params(lang, p1, p2)
     cp["user_id"] = int(user_id or 0)
     cp["kind"] = "love_reality_pro_polish"
     cp["polish_assembly"] = _ASSEMBLY_VER
+    if (lang or "").strip().lower() == "hi":
+        cp["hi_cache_ver"] = LOVE_REALITY_HI_CACHE_VER
     return cp
 
 
@@ -77,6 +80,32 @@ def invalidate(params: dict[str, Any]) -> None:
             os.remove(p)
     except Exception as exc:
         log.warning("[love_polish_snapshot] invalidate failed %s: %s", sid[:12], exc)
+
+
+def purge_all_hi_snapshots() -> int:
+    """Delete polish snapshots that look like Hindi LLM output (Devanagari-heavy)."""
+    import re
+
+    removed = 0
+    deva = re.compile(r"[\u0900-\u097F]")
+    try:
+        _ensure_dir()
+        for name in os.listdir(_BASE):
+            if not name.endswith(".json"):
+                continue
+            path = os.path.join(_BASE, name)
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    raw = fh.read(12000)
+                if len(deva.findall(raw)) < 24:
+                    continue
+                os.remove(path)
+                removed += 1
+            except Exception:
+                continue
+    except Exception as exc:
+        log.warning("[love_polish_snapshot] purge_all_hi_snapshots failed: %s", exc)
+    return removed
 
 
 def save(params: dict[str, Any], pro_premium: dict[str, Any]) -> None:

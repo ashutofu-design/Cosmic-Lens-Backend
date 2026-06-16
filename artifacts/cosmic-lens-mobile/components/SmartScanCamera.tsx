@@ -1,24 +1,18 @@
 /**
- * SmartScanCamera — single-tap live camera Smart Scan.
- *
- * Flow:
- *   1. User taps the big "Smart Scan" button.
- *   2. Camera permission is requested if needed; live camera modal opens.
- *   3. A live compass strip overlays the bottom of the camera.
- *   4. User taps the shutter; we capture base64 jpeg + magnetometer heading
- *      at the same instant and hand the result back via `onCapture`.
- *
- * Branding: surfaces "Photo Engine" — never mentions AI/LLM/GPT.
+ * SmartScanCamera — in-app camera preview with live compass below the view.
+ * Falls back to the system camera if the preview cannot start.
  */
 import { Feather } from "@expo/vector-icons";
-import { CameraType, CameraView, useCameraPermissions } from "expo-camera";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { Magnetometer } from "expo-sensors";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -26,6 +20,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useC } from "@/context/ThemeContext";
 
@@ -39,11 +34,14 @@ type Props = {
   onCapture: (result: SmartScanResult) => void;
   loading?:  boolean;
   disabled?: boolean;
+  disabledTitle?: string;
+  disabledMessage?: string;
   label?:    string;
   hint?:     string;
+  compact?:  boolean;
 };
 
-const HEADING_TO_DIR = (h: number): { code: string; label: string } => {
+function headingToDir(h: number): { code: string; label: string } {
   const a = ((h % 360) + 360) % 360;
   const buckets = [
     { code: "N",  label: "North",      lo: 337.5, hi: 22.5  },
@@ -63,29 +61,27 @@ const HEADING_TO_DIR = (h: number): { code: string; label: string } => {
     }
   }
   return { code: "N", label: "North" };
-};
+}
 
-export function SmartScanCamera({
-  onCapture, loading, disabled, label, hint,
-}: Props) {
-  const C = useC();
-  const cameraRef = useRef<CameraView | null>(null);
-  const [perm, requestPerm] = useCameraPermissions();
-  const [open,    setOpen]    = useState(false);
-  const [busy,    setBusy]    = useState(false);
+function useLiveHeading(enabled: boolean) {
+  const headingRef = useRef<number | null>(null);
   const [heading, setHeading] = useState<number | null>(null);
-  const [facing,  setFacing]  = useState<CameraType>("back");
+  const [hasFix, setHasFix] = useState(false);
 
   useEffect(() => {
-    if (Platform.OS === "web") return;
+    if (!enabled || Platform.OS === "web") {
+      setHeading(null);
+      setHasFix(false);
+      headingRef.current = null;
+      return;
+    }
+
     let locSub: Location.LocationSubscription | null = null;
     let magSub: { remove: () => void } | null = null;
     let cancelled = false;
-
-    // Smoothing across the 0°/360° wrap-around. iOS already delivers a
-    // de-jittered heading via Core Location, so use a soft alpha there.
     let smoothed: number | null = null;
-    const ALPHA = Platform.OS === "ios" ? 0.5 : 0.25;
+    const ALPHA = Platform.OS === "ios" ? 0.5 : 0.28;
+
     const apply = (raw: number) => {
       let r = ((raw % 360) + 360) % 360;
       if (smoothed == null) {
@@ -96,36 +92,27 @@ export function SmartScanCamera({
         if (diff < -180) diff += 360;
         smoothed = (smoothed + ALPHA * diff + 360) % 360;
       }
+      headingRef.current = smoothed;
       setHeading(smoothed);
+      setHasFix(true);
     };
 
     (async () => {
-      // Preferred: Core Location / Android FusedLocation heading. This is
-      // what the iOS Compass app uses — properly calibrated, with magnetic
-      // declination corrected via GPS, so the value matches the system
-      // compass instead of raw magnetometer math.
       try {
         const perm = await Location.requestForegroundPermissionsAsync();
         if (!cancelled && perm.granted) {
           locSub = await Location.watchHeadingAsync((h) => {
-            // trueHeading uses GPS-corrected declination (matches iOS
-            // Compass). Falls back to magHeading if GPS lock not yet
-            // acquired (trueHeading reports -1 in that case).
             const t = typeof h.trueHeading === "number" ? h.trueHeading : -1;
             const m = typeof h.magHeading  === "number" ? h.magHeading  : -1;
             const pick = t >= 0 ? t : m;
             if (pick >= 0) apply(pick);
           });
-          return; // success — don't fall back to raw magnetometer
+          return;
         }
-      } catch {
-        // Permission denied or sensor unavailable — fall through.
-      }
+      } catch { /* fall through */ }
 
-      // Fallback: raw magnetometer (no declination correction; will drift
-      // from the system compass by up to ~10° depending on location).
       try {
-        Magnetometer.setUpdateInterval(180);
+        Magnetometer.setUpdateInterval(120);
         magSub = Magnetometer.addListener(({ x, y }) => {
           let raw = Math.atan2(-x, y) * (180 / Math.PI);
           if (raw < 0) raw += 360;
@@ -139,41 +126,179 @@ export function SmartScanCamera({
       try { locSub?.remove(); } catch { /* noop */ }
       try { magSub?.remove(); } catch { /* noop */ }
     };
+  }, [enabled]);
+
+  return { heading, headingRef, hasFix };
+}
+
+function CompassPanel({
+  heading,
+  hasFix,
+  dark,
+}: {
+  heading: number | null;
+  hasFix: boolean;
+  dark?: boolean;
+}) {
+  const C = useC();
+  const dir = heading != null ? headingToDir(heading) : null;
+  const fg = dark ? "#fff" : C.text;
+  const muted = dark ? "#9ca3af" : C.textMuted;
+  const accent = dark ? "#fbbf24" : C.accent;
+
+  return (
+    <View style={[
+      s.compassPanel,
+      dark
+        ? { backgroundColor: "#111827", borderColor: "#374151" }
+        : { backgroundColor: C.bgCard, borderColor: C.border },
+    ]}>
+      <Feather name="compass" size={22} color={dir ? accent : muted} />
+      <View style={{ flex: 1 }}>
+        {dir ? (
+          <Text style={[s.compassDeg, { color: fg }]}>
+            {heading?.toFixed(0)}°{"  ·  "}
+            Facing{" "}
+            <Text style={{ color: accent, fontWeight: "900" }}>
+              {dir.label}
+            </Text>{" "}
+            ({dir.code})
+          </Text>
+        ) : (
+          <Text style={[s.compassDeg, { color: muted }]}>
+            {Platform.OS === "web"
+              ? "Compass not available on web — use your phone."
+              : hasFix
+                ? "Reading compass…"
+                : "Calibrating compass… move phone in a figure-8"}
+          </Text>
+        )}
+        <Text style={[s.compassSub, { color: muted }]}>
+          Stand inside the room and point the phone at the wall you want analysed.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+export function SmartScanCompass({ disabled }: { disabled?: boolean }) {
+  const { heading, hasFix } = useLiveHeading(!disabled);
+  if (disabled) return null;
+  return <CompassPanel heading={heading} hasFix={hasFix} />;
+}
+
+export function SmartScanCamera({
+  onCapture,
+  loading,
+  disabled,
+  disabledTitle,
+  disabledMessage,
+  label,
+  hint,
+  compact,
+}: Props) {
+  const C = useC();
+  const insets = useSafeAreaInsets();
+  const cameraRef = useRef<CameraView>(null);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [open, setOpen] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [facing, setFacing] = useState<"back" | "front">("back");
+  const [busy, setBusy] = useState(false);
+  const { heading, headingRef, hasFix } = useLiveHeading(open && !disabled);
+
+  const finishCapture = useCallback((base64: string) => {
+    const headingAtCapture = headingRef.current ?? heading;
+    const result: SmartScanResult = {
+      base64,
+      data_url: `data:image/jpeg;base64,${base64}`,
+      ...(typeof headingAtCapture === "number"
+        ? { heading_deg: Math.round(headingAtCapture * 10) / 10 }
+        : {}),
+    };
+    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch { /* noop */ }
+    onCapture(result);
+  }, [heading, headingRef, onCapture]);
+
+  const captureWithSystemCamera = useCallback(async () => {
+    setBusy(true);
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          "Camera permission needed",
+          "Please allow camera access in Settings to use Smart Scan.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Open Settings", onPress: () => { void Linking.openSettings(); } },
+          ],
+        );
+        return;
+      }
+      const res = await ImagePicker.launchCameraAsync({
+        quality: 0.7,
+        base64: true,
+        allowsEditing: false,
+      });
+      if (res.canceled || !res.assets?.[0]?.base64) return;
+      finishCapture(res.assets[0].base64);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert("Camera error", msg || "Could not open camera. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }, [finishCapture]);
+
+  const closeModal = useCallback(() => {
+    setOpen(false);
+    setCameraReady(false);
   }, []);
 
-  const dir = useMemo(
-    () => (heading != null ? HEADING_TO_DIR(heading) : null),
-    [heading],
-  );
-
   const openCamera = useCallback(async () => {
-    if (disabled || busy || loading) return;
-    Haptics.selectionAsync();
-    if (Platform.OS === "web") {
+    if (loading || busy) return;
+
+    if (disabled) {
       Alert.alert(
-        "Camera not available on web",
-        "Please open Cosmic Lens on your phone via Expo Go to use the live Smart Scan camera.",
+        disabledTitle || "Select a room first",
+        disabledMessage || "Please pick which room you are scanning, then tap Smart Scan again.",
       );
       return;
     }
-    if (!perm?.granted) {
-      const r = await requestPerm();
-      if (!r.granted) {
+
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch { /* noop */ }
+
+    if (Platform.OS === "web") {
+      void captureWithSystemCamera();
+      return;
+    }
+
+    if (!permission?.granted) {
+      const res = await requestPermission();
+      if (!res.granted) {
         Alert.alert(
           "Camera permission needed",
-          "Please allow camera access in settings to use Smart Scan.",
+          "Please allow camera access in Settings to use Smart Scan.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Open Settings", onPress: () => { void Linking.openSettings(); } },
+          ],
         );
         return;
       }
     }
+
+    setCameraReady(false);
     setOpen(true);
-  }, [busy, disabled, loading, perm, requestPerm]);
+  }, [
+    busy, captureWithSystemCamera, disabled, disabledMessage, disabledTitle,
+    loading, permission?.granted, requestPermission,
+  ]);
 
   const onShutter = useCallback(async () => {
-    if (busy || !cameraRef.current) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (busy || !cameraReady || !cameraRef.current) return;
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch { /* noop */ }
     setBusy(true);
-    const headingAtCapture = heading;
     try {
       const photo = await cameraRef.current.takePictureAsync({
         base64: true,
@@ -185,127 +310,114 @@ export function SmartScanCamera({
         Alert.alert("Capture failed", "Photo could not be saved. Please try again.");
         return;
       }
-      const result: SmartScanResult = {
-        base64:   photo.base64,
-        data_url: `data:image/jpeg;base64,${photo.base64}`,
-        ...(typeof headingAtCapture === "number"
-          ? { heading_deg: Math.round(headingAtCapture * 10) / 10 }
-          : {}),
-      };
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setOpen(false);
-      onCapture(result);
-    } catch (e: any) {
-      Alert.alert("Capture failed", String(e?.message || e));
+      closeModal();
+      finishCapture(photo.base64);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert("Capture failed", msg || "Please try again.");
     } finally {
       setBusy(false);
     }
-  }, [busy, heading, onCapture]);
+  }, [busy, cameraReady, closeModal, finishCapture]);
+
+  const onPreviewError = useCallback((message?: string) => {
+    closeModal();
+    Alert.alert(
+      "Camera preview unavailable",
+      message || "We will open your phone's built-in camera instead. Compass direction is still recorded.",
+      [{ text: "OK", onPress: () => { void captureWithSystemCamera(); } }],
+    );
+  }, [captureWithSystemCamera, closeModal]);
 
   const flipCamera = useCallback(() => {
-    Haptics.selectionAsync();
+    try { Haptics.selectionAsync(); } catch { /* noop */ }
     setFacing((f) => (f === "back" ? "front" : "back"));
+    setCameraReady(false);
   }, []);
+
+  const btnOpacity = useMemo(
+    () => (loading || busy ? 0.7 : disabled ? 0.55 : 1),
+    [busy, disabled, loading],
+  );
 
   return (
     <>
       <Pressable
-        onPress={openCamera}
-        disabled={disabled || loading || busy}
+        onPress={() => { void openCamera(); }}
+        disabled={loading || busy}
         style={({ pressed }) => [
           s.bigBtn,
+          compact && s.bigBtnCompact,
           {
             backgroundColor: C.accent,
-            opacity: (disabled || loading) ? 0.6 : pressed ? 0.85 : 1,
+            opacity: btnOpacity * (pressed ? 0.85 : 1),
           },
         ]}
       >
-        {loading ? (
+        {loading || busy ? (
           <ActivityIndicator color="#fff" />
         ) : (
           <>
-            <Feather name="camera" size={26} color="#fff" />
-            <Text style={s.bigBtnText}>{label || "Smart Scan — Open Camera"}</Text>
+            <Feather name="camera" size={compact ? 22 : 26} color="#fff" />
+            <Text style={[s.bigBtnText, compact && s.bigBtnTextCompact]}>
+              {label || "Smart Scan — Open Camera"}
+            </Text>
           </>
         )}
       </Pressable>
-      {hint ? (
+
+      {hint && !compact ? (
         <Text style={[s.hint, { color: C.textMid }]}>{hint}</Text>
       ) : null}
 
       <Modal
         visible={open}
         animationType="slide"
-        onRequestClose={() => !busy && setOpen(false)}
+        presentationStyle="fullScreen"
+        onRequestClose={closeModal}
         statusBarTranslucent
       >
-        <View style={s.camWrap}>
-          {/* Top: live camera preview */}
-          <View style={s.camTop}>
-            {open ? (
-              <CameraView
-                ref={cameraRef}
-                style={s.camView}
-                facing={facing}
-              />
-            ) : null}
-
-            <View style={s.topBar} pointerEvents="box-none">
-              <View style={s.topBadge}>
-                <Feather name="zap" size={13} color="#fff" />
-                <Text style={s.topBadgeText}>Smart Scan</Text>
+        <View style={s.modalRoot}>
+          <View style={[s.previewWrap, { paddingTop: insets.top }]}>
+            <CameraView
+              ref={cameraRef}
+              style={s.preview}
+              facing={facing}
+              mode="picture"
+              active={open}
+              onCameraReady={() => setCameraReady(true)}
+              onMountError={({ message }) => onPreviewError(message)}
+            />
+            {!cameraReady && (
+              <View style={s.previewLoading}>
+                <ActivityIndicator color="#fff" size="large" />
+                <Text style={s.previewLoadingText}>Starting camera…</Text>
               </View>
-              <Pressable
-                onPress={() => !busy && setOpen(false)}
-                hitSlop={12}
-                style={s.closeBtn}
-              >
-                <Feather name="x" size={22} color="#fff" />
-              </Pressable>
-            </View>
-
-            {/* Center crosshair to help user aim */}
-            <View pointerEvents="none" style={s.crosshair}>
-              <View style={s.crosshairBox} />
-            </View>
+            )}
+            <Pressable onPress={closeModal} hitSlop={12} style={[s.closeBtn, { top: insets.top + 10 }]}>
+              <Feather name="x" size={22} color="#fff" />
+            </Pressable>
           </View>
 
-          {/* Bottom: compass + shutter (separate section, no overlap) */}
           <View style={s.bottomPanel}>
-            <View style={s.camCompass}>
-              <Feather name="compass" size={18} color={dir ? "#fbbf24" : "#9ca3af"} />
-              {dir ? (
-                <Text style={s.camCompassText}>
-                  {heading?.toFixed(0)}°  ·  Facing{" "}
-                  <Text style={{ color: "#fbbf24", fontWeight: "900" }}>{dir.label}</Text> ({dir.code})
-                </Text>
-              ) : (
-                <Text style={[s.camCompassText, { color: "#9ca3af" }]}>
-                  Reading compass…
-                </Text>
-              )}
-            </View>
+            <CompassPanel heading={heading} hasFix={hasFix} dark />
 
             <Text style={s.camHint}>
-              Aim at your floor plan or the room, then tap the shutter.
+              Compass locks direction at shutter — keep the phone steady when you capture.
             </Text>
 
             <View style={s.shutterRow}>
-              <View style={{ width: 56 }} />
+              <View style={{ width: 46 }} />
               <Pressable
-                onPress={onShutter}
-                disabled={busy}
+                onPress={() => { void onShutter(); }}
+                disabled={busy || !cameraReady}
                 accessibilityLabel="Capture photo"
                 style={({ pressed }) => [
                   s.shutterOuter,
-                  { opacity: busy ? 0.5 : pressed ? 0.7 : 1 },
+                  { opacity: busy || !cameraReady ? 0.45 : pressed ? 0.75 : 1 },
                 ]}
               >
-                {busy ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <View style={s.shutterInner} />
-                )}
+                <View style={s.shutterInner} />
               </Pressable>
               <Pressable
                 onPress={flipCamera}
@@ -313,12 +425,20 @@ export function SmartScanCamera({
                 hitSlop={10}
                 style={({ pressed }) => [
                   s.flipBtn,
-                  { opacity: busy ? 0.5 : pressed ? 0.7 : 1 },
+                  { opacity: busy ? 0.45 : pressed ? 0.75 : 1 },
                 ]}
               >
                 <Feather name="refresh-cw" size={20} color="#fff" />
               </Pressable>
             </View>
+
+            <Pressable
+              onPress={() => { closeModal(); void captureWithSystemCamera(); }}
+              disabled={busy}
+              style={{ paddingVertical: 10, alignItems: "center" }}
+            >
+              <Text style={s.fallbackText}>Use system camera instead</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -328,51 +448,105 @@ export function SmartScanCamera({
 
 const s = StyleSheet.create({
   bigBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 12, paddingVertical: 22, borderRadius: 16,
-    shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 6 },
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    paddingVertical: 22,
+    borderRadius: 16,
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
     elevation: 5,
   },
   bigBtnText: { color: "#fff", fontSize: 17, fontWeight: "800", letterSpacing: 0.3 },
+  bigBtnCompact: {
+    flex: 1,
+    flexDirection: "column",
+    paddingVertical: 18,
+    paddingHorizontal: 10,
+    minHeight: 96,
+  },
+  bigBtnTextCompact: { fontSize: 13, textAlign: "center", letterSpacing: 0.1 },
   hint:       { fontSize: 12, lineHeight: 17, textAlign: "center", marginTop: 10 },
 
-  camWrap:        { flex: 1, backgroundColor: "#000", flexDirection: "column" },
-  camTop:         { flex: 1, position: "relative", backgroundColor: "#000",
-                    overflow: "hidden" },
-  camView:        { flex: 1, width: "100%", backgroundColor: "#000" },
-  topBar:         { position: "absolute", top: 0, left: 0, right: 0,
-                    paddingTop: 50, paddingHorizontal: 16, paddingBottom: 10,
-                    flexDirection: "row", justifyContent: "space-between",
-                    alignItems: "center", zIndex: 10 },
-  topBadge:       { flexDirection: "row", alignItems: "center", gap: 6,
-                    paddingHorizontal: 12, paddingVertical: 7,
-                    backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 18 },
-  topBadgeText:   { color: "#fff", fontSize: 13, fontWeight: "700" },
-  closeBtn:       { width: 38, height: 38, borderRadius: 19,
-                    backgroundColor: "rgba(0,0,0,0.55)",
-                    alignItems: "center", justifyContent: "center" },
-  crosshair:      { position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-                    alignItems: "center", justifyContent: "center" },
-  crosshairBox:   { width: 110, height: 110, borderWidth: 1.5,
-                    borderColor: "rgba(255,255,255,0.7)", borderRadius: 8 },
-  bottomPanel:    { backgroundColor: "#0b1220",
-                    paddingHorizontal: 20, paddingTop: 18, paddingBottom: 32 },
-  camCompass:     { flexDirection: "row", alignItems: "center", gap: 12,
-                    paddingHorizontal: 16, paddingVertical: 14,
-                    backgroundColor: "#111827", borderRadius: 12,
-                    borderWidth: 1, borderColor: "#374151" },
-  camCompassText: { color: "#fff", fontSize: 14, fontWeight: "700" },
-  camHint:        { color: "#9ca3af", fontSize: 12, textAlign: "center",
-                    marginTop: 12, marginBottom: 4 },
-  shutterRow:     { flexDirection: "row", alignItems: "center",
-                    justifyContent: "space-between", paddingTop: 6 },
-  shutterOuter:   { width: 84, height: 84, borderRadius: 42,
-                    borderWidth: 4, borderColor: "#fff",
-                    alignItems: "center", justifyContent: "center",
-                    backgroundColor: "rgba(255,255,255,0.12)" },
-  shutterInner:   { width: 64, height: 64, borderRadius: 32,
-                    backgroundColor: "#fff" },
-  flipBtn:        { width: 46, height: 46, borderRadius: 23,
-                    backgroundColor: "rgba(255,255,255,0.18)",
-                    alignItems: "center", justifyContent: "center" },
+  compassPanel: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 4,
+  },
+  compassDeg: { fontSize: 15, fontWeight: "700", lineHeight: 21 },
+  compassSub: { fontSize: 11, lineHeight: 16, marginTop: 4 },
+
+  modalRoot:    { flex: 1, backgroundColor: "#000" },
+  previewWrap:  { flex: 1, backgroundColor: "#000", position: "relative" },
+  preview:      { flex: 1, width: "100%" },
+  previewLoading: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.45)",
+    gap: 10,
+  },
+  previewLoadingText: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  closeBtn: {
+    position: "absolute",
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  bottomPanel: {
+    backgroundColor: "#0b1220",
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 24,
+    gap: 10,
+  },
+  camHint: {
+    color: "#9ca3af",
+    fontSize: 11,
+    textAlign: "center",
+    lineHeight: 16,
+  },
+  shutterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 4,
+  },
+  shutterOuter: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    borderWidth: 4,
+    borderColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  shutterInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#fff",
+  },
+  flipBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fallbackText: { color: "#94a3b8", fontSize: 12, fontWeight: "600" },
 });

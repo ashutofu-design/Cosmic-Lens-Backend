@@ -28,6 +28,7 @@ import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 import { KundliMilanBasicLanding } from "@/components/kundliMilan/KundliMilanBasicLanding";
+import { kootsToGunScores, type MilanGunKootScores } from "@/components/kundliMilan/MilanGunBreakdown";
 import { KundliMilanBasicResult } from "@/components/kundliMilan/KundliMilanBasicResult";
 import { KundliMilanProResult } from "@/components/kundliMilan/KundliMilanProResult";
 import type { MarriageBasicsPayload } from "@/lib/milanMarriageBasics";
@@ -1466,6 +1467,8 @@ export default function KundliMilanScreen(){
   const [p2Profile,setP2Profile]=useState<any|null>(null);
   const [result,setResult]=useState<Result|null>(null);
   const [marriageBasics,setMarriageBasics]=useState<MarriageBasicsPayload|null>(null);
+  const [serverGunScores,setServerGunScores]=useState<MilanGunKootScores|null>(null);
+  const [serverGunTotal,setServerGunTotal]=useState<number|null>(null);
   const [pdfLoading,setPdfLoading]=useState(false);
   const [calcLoading,setCalcLoading]=useState(false);
   const [confirmVisible,setConfirmVisible]=useState(false);
@@ -1637,6 +1640,13 @@ export default function KundliMilanScreen(){
   const person1=autoP1??p1;
   const canCalculate=!!person1&&!!p2;
   const isPro=plan==="pro";
+  const fmtMoon=(ms:string)=>EN2R[ms]??ms;
+  const person1Astro=person1?.moonSign&&person1.nakshatra
+    ?{moonSign:fmtMoon(person1.moonSign),nakshatra:person1.nakshatra}
+    :null;
+  const partnerAstro=p2?.moonSign&&p2.nakshatra
+    ?{moonSign:fmtMoon(p2.moonSign),nakshatra:p2.nakshatra}
+    :null;
 
   const handleHeaderBack=useCallback(()=>{
     if(confirmVisible){ setConfirmVisible(false); return; }
@@ -1646,11 +1656,15 @@ export default function KundliMilanScreen(){
     if(result){
       setResult(null);
       setMarriageBasics(null);
+      setServerGunScores(null);
+      setServerGunTotal(null);
       Haptics.selectionAsync();
       return;
     }
     if(marriageBasics){
       setMarriageBasics(null);
+      setServerGunScores(null);
+      setServerGunTotal(null);
       Haptics.selectionAsync();
       return;
     }
@@ -1673,6 +1687,8 @@ export default function KundliMilanScreen(){
     setAddingFor(null);
     setResult(null);
     setMarriageBasics(null);
+    setServerGunScores(null);
+    setServerGunTotal(null);
   }
   async function handleCalculate(){
     if(!person1||!p2)return;
@@ -1706,6 +1722,8 @@ export default function KundliMilanScreen(){
 
     setCalcLoading(true);
     MilanResultStore.clear();
+    setServerGunScores(null);
+    setServerGunTotal(null);
 
     try{
       const ctrl=new AbortController();
@@ -1730,6 +1748,11 @@ export default function KundliMilanScreen(){
 
       const json=await resp.json();
       MilanResultStore.set(json);
+      const gunFromServer=kootsToGunScores(json.koots);
+      if(gunFromServer&&typeof json.total==="number"){
+        setServerGunScores(gunFromServer);
+        setServerGunTotal(json.total);
+      }
       if(plan==="basic"){
         if(json.marriage_basics){
           setMarriageBasics(json.marriage_basics as MarriageBasicsPayload);
@@ -2040,9 +2063,20 @@ export default function KundliMilanScreen(){
             </Pressable>
             <View style={{flex:1}}>
               <Text style={{color:C.isDark?"#f3e8ff":C.text,fontSize:18,fontFamily:"Nunito_700Bold"}}>{t.kundliMilanTitle}</Text>
-              <Text style={{color:C.isDark?"#c4b5fd":"#6366f1",fontSize:10,fontFamily:"Nunito_500Medium"}}>
-                {isPro?t.kundliMilanSub:"Marriage Structure · D1/D9 Engine"}
-              </Text>
+              {isPro ? (
+                <Text style={{color:C.isDark?"#c4b5fd":"#6366f1",fontSize:10,fontFamily:"Nunito_500Medium"}}>
+                  {t.kundliMilanSub}
+                </Text>
+              ) : (
+                <>
+                  <Text style={{color:C.isDark?"#ddd6fe":"#4f46e5",fontSize:11,fontFamily:"Nunito_800ExtraBold",marginTop:2}}>
+                    You are in Basic mode
+                  </Text>
+                  <Text style={{color:C.isDark?"#c4b5fd":"#6366f1",fontSize:9,fontFamily:"Nunito_500Medium",marginTop:1}}>
+                    Marriage Structure · D1/D9 Engine
+                  </Text>
+                </>
+              )}
             </View>
           </View>
 
@@ -2085,9 +2119,12 @@ export default function KundliMilanScreen(){
               matchingWithLabel={t.km2_matchingWith}
               person1Name={p1Profile?.name||person1?.name||t.km_aap}
               partnerName={p2?.name}
+              person1Astro={person1Astro}
+              partnerAstro={partnerAstro}
               hasPartner={!!p2}
               canCalculate={canCalculate}
               calcLoading={calcLoading}
+              lang={t.lang}
               onSelectPartner={()=>router.push("/relationship" as any)}
               onEditPartner={()=>router.back()}
               onCalculate={handleCalculate}
@@ -2099,8 +2136,13 @@ export default function KundliMilanScreen(){
             <KundliMilanBasicResult
               data={marriageBasics}
               isDark={C.isDark}
+              gunScores={serverGunScores}
+              gunTotal={serverGunTotal}
+              lang={t.lang}
               onOpenPro={() => {
                 setMarriageBasics(null);
+                setServerGunScores(null);
+                setServerGunTotal(null);
                 openProScreen();
               }}
             />

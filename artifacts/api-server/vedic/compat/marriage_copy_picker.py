@@ -30,6 +30,75 @@ BAND_LABEL_HI = {
     "Strained": "अतिरिक्त ध्यान चाहिए",
 }
 
+COUPLE_BAND_LABEL_EN = {
+    "Promising": "Promising",
+    "Workable": "Workable",
+    "High Effort": "High Effort",
+}
+
+COUPLE_BAND_LABEL_HN = {
+    "Promising": "Promising",
+    "Workable": "Workable",
+    "High Effort": "High Effort",
+}
+
+COUPLE_BAND_LABEL_HI = {
+    "Promising": "आशाजनक",
+    "Workable": "काम चलने योग्य",
+    "High Effort": "उच्च प्रयास",
+}
+
+_COUPLE_VERDICT = {
+    "en": {
+        "Promising": (
+            "Both marriage axes show supportive structure — if these two marry, "
+            "long-term direction can grow well with steady effort."
+        ),
+        "Workable": (
+            "Marriage is workable but not effortless — strengths exist on both sides; "
+            "friction points need conscious handling after wedding."
+        ),
+        "High Effort": (
+            "High effort match — marriage is possible but demands patience, remedies, "
+            "and realistic expectations on both charts."
+        ),
+    },
+    "hn": {
+        "Promising": (
+            "Dono marriage axes supportive structure dikhate hain — shaadi ke baad "
+            "steady effort se long-term direction achhi ho sakti hai."
+        ),
+        "Workable": (
+            "Shaadi workable hai par effortless nahi — dono taraf strengths hain; "
+            "friction points ko shaadi ke baad consciously handle karna hoga."
+        ),
+        "High Effort": (
+            "High effort match — shaadi possible hai par patience, upay aur realistic "
+            "expectations dono charts par chahiye."
+        ),
+    },
+    "hi": {
+        "Promising": (
+            "दोनों विवाह अक्ष सहायक संरचना दिखाते हैं — यदि ये दो विवाह करें, "
+            "तो निरंतर प्रयास से दीर्घकालिक दिशा अच्छी बढ़ सकती है।"
+        ),
+        "Workable": (
+            "विवाह संभव है पर सहज नहीं — दोनों ओर शक्तियाँ हैं; "
+            "घर्षण बिंदुओं को विवाह के बाद सचेत रूप से संभालना होगा।"
+        ),
+        "High Effort": (
+            "उच्च प्रयास मिलान — विवाह संभव है पर धैर्य, उपाय और दोनों चार्ट पर "
+            "यथार्थवादी अपेक्षाएँ ज़रूरी हैं।"
+        ),
+    },
+}
+
+_PRO_DETAIL_SUFFIX = {
+    "en": "full detail in Pro.",
+    "hn": "poora detail Pro mein.",
+    "hi": "पूर्ण विवरण प्रो में।",
+}
+
 
 def normalize_marriage_lang(lang: str | None) -> str:
     """Map UI / API lang codes to marriage copy pool: en | hn | hi."""
@@ -106,6 +175,27 @@ def _band_labels(lang: str | None) -> dict[str, str]:
     if key == "hi":
         return BAND_LABEL_HI
     return BAND_LABEL_HN
+
+
+def couple_band_label(band: str, lang: str | None = None) -> str:
+    key = normalize_marriage_lang(lang)
+    maps = {
+        "en": COUPLE_BAND_LABEL_EN,
+        "hi": COUPLE_BAND_LABEL_HI,
+        "hn": COUPLE_BAND_LABEL_HN,
+    }
+    return maps.get(key, COUPLE_BAND_LABEL_EN).get(band, band)
+
+
+def couple_verdict_text(band: str, lang: str | None = None) -> str:
+    key = normalize_marriage_lang(lang)
+    pool = _COUPLE_VERDICT.get(key) or _COUPLE_VERDICT["en"]
+    return pool.get(band, pool.get("Workable", ""))
+
+
+def pro_detail_suffix(lang: str | None = None) -> str:
+    key = normalize_marriage_lang(lang)
+    return _PRO_DETAIL_SUFFIX.get(key, _PRO_DETAIL_SUFFIX["en"])
 
 
 def partner_copy_seed(kundli: dict, name: str) -> str:
@@ -377,7 +467,7 @@ def build_partner_plain_copy(
         watchouts = [_pick("watchout_generic", f"{seed}:watch:fallback", slots, lang=lang)]
 
     if critical.get("locked") and critical.get("teaser"):
-        pro_lock_teaser = f"{critical['teaser']} — full detail in Pro."
+        pro_lock_teaser = f"{critical['teaser']} — {pro_detail_suffix(lang)}"
     else:
         pro_lock_teaser = _pick("pro_lock_teaser", f"{seed}:lock", slots, lang=lang)
 
@@ -427,35 +517,72 @@ def _build_couple_locked_highlights(
     couple: dict[str, Any],
     p1: dict[str, Any],
     p2: dict[str, Any],
+    *,
+    lang: str | None = None,
 ) -> list[str]:
     """Pro PDF hooks — marriage structure engine only (no Gun Milan)."""
+    key = normalize_marriage_lang(lang)
+    if key == "hi":
+        _t = {
+            "alerts": lambda n: f"दोनों चार्ट में {n} छिपे अलर्ट",
+            "synastry": "क्रॉस-चार्ट सप्तम स्वामी सिनैस्ट्री — आप एक-दूसरे को कैसे प्रभावित करते हैं",
+            "manglik": "दोनों चार्ट के लिए मांगलिक संतुलन और निवारण",
+            "graha_maitri": "चंद्र मन मेल (ग्रह मैत्री) — रोज़ का सामंजस्य",
+            "kp": "KP कपल विवाह वादा — प्रतिबद्धता की गहराई",
+            "d9": "नवांश कपल सिंक — साथ में दीर्घकालिक विवाहित जीवन का स्वर",
+            "dasha": "विवाह दशा विंडो — सर्वोत्तम और जोखिम भरा समय (दोनों साथी)",
+            "pdf": "पूर्ण उपाय श्रृंखला + डाउनलोड योग्य PDF",
+        }
+    elif key == "hn":
+        _t = {
+            "alerts": lambda n: f"Dono charts mein {n} hidden alert(s)",
+            "synastry": "Cross-chart 7th lord synastry — aap ek doosre ko kaise affect karte hain",
+            "manglik": "Dono charts ke liye Manglik balance aur cancellation",
+            "graha_maitri": "Moon mood match (Graha Maitri) — daily harmony read",
+            "kp": "KP couple marriage promise — commitment depth",
+            "d9": "D9 couple sync — long-term married life tone together",
+            "dasha": "Marriage dasha windows — best aur risky timing (dono partners)",
+            "pdf": "Poori remedy chain + downloadable PDF",
+        }
+    else:
+        _t = {
+            "alerts": lambda n: f"{n} hidden alert(s) across both charts",
+            "synastry": "Cross-chart 7th lord synastry — how you affect each other",
+            "manglik": "Manglik balance & cancellation for both charts",
+            "graha_maitri": "Moon mood match (Graha Maitri) — daily harmony read",
+            "kp": "KP couple marriage promise — commitment depth",
+            "d9": "D9 couple sync — long-term married life tone together",
+            "dasha": "Marriage dasha windows — best & risky timing (both partners)",
+            "pdf": "Full remedy chain + downloadable PDF",
+        }
+
     items: list[str] = []
     alert_count = int(couple.get("critical_alerts_total") or 0)
     if alert_count > 0:
-        items.append(f"{alert_count} hidden alert(s) across both charts")
+        items.append(_t["alerts"](alert_count))
 
     syn = couple.get("synastry") or {}
     if syn.get("available"):
-        items.append("Cross-chart 7th lord synastry — how you affect each other")
+        items.append(_t["synastry"])
 
     manglik = couple.get("manglik") or {}
     if manglik.get("p1_has_dosh") or manglik.get("p2_has_dosh"):
-        items.append("Manglik balance & cancellation for both charts")
+        items.append(_t["manglik"])
 
     gm = couple.get("graha_maitri") or {}
     if gm.get("available") and str(gm.get("relation") or "") not in ("", "neutral"):
-        items.append("Moon mood match (Graha Maitri) — daily harmony read")
+        items.append(_t["graha_maitri"])
 
     kp = couple.get("kp_couple") or {}
     if kp.get("available"):
-        items.append("KP couple marriage promise — commitment depth")
+        items.append(_t["kp"])
 
     d9 = couple.get("d9_sync") or {}
     if d9.get("available"):
-        items.append("D9 couple sync — long-term married life tone together")
+        items.append(_t["d9"])
 
-    items.append("Marriage dasha windows — best & risky timing (both partners)")
-    items.append("Full remedy chain + downloadable PDF")
+    items.append(_t["dasha"])
+    items.append(_t["pdf"])
 
     # Dedupe while preserving order; cap at 4 for Basic end card.
     seen: set[str] = set()
@@ -497,7 +624,7 @@ def build_couple_plain_copy(
         "gap_teaser": gap_teaser,
         "pro_cta_line": _pick("couple_pro_cta", f"{seed}:cta", slots, lang=lang),
         "alert_count": alert_count,
-        "locked_highlights": _build_couple_locked_highlights(couple, p1, p2),
+        "locked_highlights": _build_couple_locked_highlights(couple, p1, p2, lang=lang),
     }
 
 

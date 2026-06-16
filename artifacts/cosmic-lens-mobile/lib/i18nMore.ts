@@ -289,6 +289,8 @@ export interface MoreT {
   numTapHint:         string;
   numLifePathLbl:     string;
   numLifePathHi:      string;
+  numBirthDayLbl:     string;
+  numBirthDayHi:      string;
   numDestinyLbl:      string;
   numDestinyHi:       string;
   numSoulUrgeLbl:     string;
@@ -315,6 +317,13 @@ export interface MoreT {
   numCtaTitle:        string;
   numCtaSub:          string;
   numFooterNote:      string;
+  numCoreSummary:     string;
+  numBasicLockedHint: string;
+  numBasicCompareTitle: string;
+  numBasicCompareBasicLine: string;
+  numBasicCompareProLine: string;
+  numProTeaseBtn:     string;
+  numProfileFor:      string; // "{name}"
 
   // ── profile-edit.tsx ──────────────────────────────────────
   pe_primary:         string;
@@ -691,7 +700,6 @@ export interface MoreT {
   cr_topStrengths:    string;
   cr_weakness:        string;
   cr_risk:            string;
-  cr_why:             string;
 
   // ── health (hl_*) ──
   hl_pageTitle:       string;
@@ -1008,6 +1016,43 @@ export interface MoreT {
   ku_birthChartSnap: string;
   ku_planetPosition: string;
   ku_planetPositionSub: string;
+  ku_gemstones: string;
+  ku_gemstonesSub: string;
+  ku_gemstonesBadge: string;
+  ku_gemstonesHero: string;
+  ku_gemstonesAll: string;
+  gs_buyTitle: string;
+  gs_youSave: string;
+  gs_offerSelf: string;
+  gs_offerReferral: string;
+  gs_selfBuy: string;
+  gs_referralBuy: string;
+  gs_flatOff: string;
+  gs_referrerGets: string;
+  gs_referralPlaceholder: string;
+  gs_selfReferralErr: string;
+  gs_referralHint: string;
+  gs_yourReferral: string;
+  gs_referralEarn: string;
+  gs_afterDelivery: string;
+  gs_payNow: string;
+  gs_disclaimer: string;
+  gs_shopTitle: string;
+  gs_buyCta: string;
+  gs_selectRatti: string;
+  gs_ratti: string;
+  gs_shopFrom: string;
+  gs_shopSizes: string;
+  gs_certified: string;
+  gs_benefitTag: string;
+  gs_whatsappPhotos: string;
+  gs_whatsappCta: string;
+  gs_productSpecs: string;
+  gs_howToWear: string;
+  gs_careTitle: string;
+  gs_whyWear: string;
+  gs_deliveryNote: string;
+  gs_authenticPromise: string;
   ku_dailyAlertsLink: string;
   ku_dailyAlertsLinkSub: string;
   ku_house: string;
@@ -1309,6 +1354,11 @@ export interface MoreT {
   fr_honestFoot: string;
   fr_ctaText: string;
   fr_ctaSub: string;
+  fr_wipBadge: string;
+  fr_wipTitle: string;
+  fr_wipBody: string;
+  fr_wipHint: string;
+  mdFaceReadingSubSoon: string;
   fu_introEyebrow: string;
   fu_introTitle: string;
   fu_introSub: string;
@@ -1602,9 +1652,13 @@ export interface MoreT {
   bv_room_entrance: string;
   bv_room_owner_seat: string;
   bv_room_cash_counter: string;
+  bv_room_billing_counter: string;
   bv_room_vault: string;
   bv_room_stock_storage: string;
   bv_room_display: string;
+  bv_room_pooja: string;
+  bv_room_back_office: string;
+  bv_room_staff_room: string;
   bv_room_toilet: string;
   bv_room_owner_cabin: string;
   bv_room_reception: string;
@@ -1620,6 +1674,16 @@ export interface MoreT {
   bv_room_labour_quarter: string;
   bv_errAuthRequired: string;
   bv_errValidationRooms: string;
+  bv_btnUploadShopPdf: string;
+  bv_btnUploadOfficePdf: string;
+  bv_btnUploadOfficePhoto: string;
+  bv_btnUploadFactoryPdf: string;
+  bv_btnUploadFactoryPhoto: string;
+  bv_planNorthHint: string;
+  bv_secUploadedPhotos: string;
+  bv_btnSubmitReview: string;
+  bv_submitSuccessTitle: string;
+  bv_submitSuccessBody: string;
   bv_errValidationName: string;
   bv_errUnlockTitle: string;
   bv_errProfileTitle: string;
@@ -1663,6 +1727,14 @@ export interface MoreT {
   avp_pickerHint: string;
   avp_camHintPrefix: string;
   avp_camHintNoRoom: string;
+  avp_btnSmartScan: string;
+  avp_btnUploadPhoto: string;
+  avp_btnUploadHomePdf: string;
+  avp_badgeSingleRoom: string;
+  avp_badgeWholeHome: string;
+  avp_uploadPricePerRoom: string;
+  avp_uploadPaySubmit: string;
+  avp_uploadSubmitted: string;
   avp_introSingleTitle: string;
   avp_introSingleBody: string;
   avp_introWholeTitle: string;
@@ -2077,10 +2149,12 @@ const EN: MoreT = {
   numNoProfileBody:   "Please create a Kundli profile first. Numerology reads directly from your birth details.",
   numSetupProfile:    "Set Up Profile →",
   numAutoSynced:      "Auto-synced",
-  numFreeSection:     "🆓 FREE NUMEROLOGY",
+  numFreeSection:     "BASIC NUMEROLOGY",
   numTapHint:         "Tap any card to expand full details",
   numLifePathLbl:     "LIFE PATH NUMBER",
   numLifePathHi:      "Life Path",
+  numBirthDayLbl:     "BIRTH DAY NUMBER",
+  numBirthDayHi:      "Birth Day",
   numDestinyLbl:      "DESTINY / EXPRESSION NUMBER",
   numDestinyHi:       "Destiny",
   numSoulUrgeLbl:     "SOUL URGE NUMBER",
@@ -2107,6 +2181,13 @@ const EN: MoreT = {
   numCtaTitle:        "Unlock Full Numerology Report",
   numCtaSub:          "Get Personality, Maturity, Love, Career & Remedies",
   numFooterNote:      "Calculations use the Pythagorean Numerology system. Life Path, Destiny, and Soul Urge numbers are derived from your Kundli profile data — no re-entry needed.",
+  numCoreSummary:     "YOUR 4 CORE NUMBERS",
+  numBasicLockedHint: "Career blueprint, phone numerology & lucky colours are in your Pro PDF report.",
+  numBasicCompareTitle: "BASIC VS PRO",
+  numBasicCompareBasicLine: "4 core numbers · traits · strength & weakness",
+  numBasicCompareProLine: "Full PDF · career blueprint · phone & lucky numbers · remedies",
+  numProTeaseBtn:     "Get Numerology Pro Report",
+  numProfileFor:      "Numbers for {name}",
 
   // profile-edit.tsx
   pe_primary:         "PRIMARY",
@@ -2437,12 +2518,12 @@ const EN: MoreT = {
 
   nm_proTools:        "PRO+ TOOLS",
   nm_premium:         "PREMIUM",
-  nm_lifeMastery:     "Life Mastery Report",
+  nm_lifeMastery:     "Numerology Pro Report",
   nm_yourNumbers:     "YOUR NUMBERS",
   nm_yourNumbersHint: "(at least one)",
   nm_whatsInside:     "WHAT'S INSIDE",
   nm_opening:         "Opening…",
-  nm_generateBtn:     "Generate Life Mastery Report",
+  nm_generateBtn:     "Generate Numerology Pro Report",
 
   cr_pageTitle:       "Career Analysis",
   cr_loading:         "Reading your chart…",
@@ -2478,7 +2559,6 @@ const EN: MoreT = {
   cr_topStrengths:    "Top strengths",
   cr_weakness:        "Weakness",
   cr_risk:            "Risk",
-  cr_why:             "Why",
 
   hl_pageTitle:       "Health Analysis",
   hl_loginRequired:   "Please log in to view your health analysis.",
@@ -2820,6 +2900,43 @@ const EN: MoreT = {
   ku_birthChartSnap: "BIRTH CHART SNAPSHOT",
   ku_planetPosition: "Planet Position",
   ku_planetPositionSub: "Live planetary degrees and rashi",
+  ku_gemstones: "Gemstones",
+  ku_gemstonesSub: "Navratna gems for each graha — finger, metal & benefits",
+  ku_gemstonesBadge: "NAVRATNA GEMS",
+  ku_gemstonesHero: "Vedic Gemstone Guide",
+  ku_gemstonesAll: "All Navratna Gems",
+  gs_buyTitle: "Buy Gemstone",
+  gs_youSave: "You save",
+  gs_offerSelf: "Direct purchase",
+  gs_offerReferral: "Referral offer",
+  gs_selfBuy: "Buy yourself",
+  gs_referralBuy: "Have a referral code?",
+  gs_flatOff: "flat off",
+  gs_referrerGets: "Referrer gets",
+  gs_referralPlaceholder: "Enter code e.g. CL123",
+  gs_selfReferralErr: "You cannot use your own referral code.",
+  gs_referralHint: "Referrer reward is paid to bank after delivery + 7 days. Self-buy and referral discounts cannot be combined.",
+  gs_yourReferral: "Your referral code",
+  gs_referralEarn: "Earn",
+  gs_afterDelivery: "in bank after friend's order is delivered.",
+  gs_payNow: "Pay",
+  gs_disclaimer: "Natural gemstones — consult a Jyotishi before wearing. Referral payout after verified delivery.",
+  gs_shopTitle: "Certified Gems",
+  gs_buyCta: "Buy Now",
+  gs_selectRatti: "Ratti",
+  gs_ratti: "Ratti",
+  gs_shopFrom: "from",
+  gs_shopSizes: "5 – 10 Ratti · Certified Ceylon",
+  gs_certified: "Lab Certified",
+  gs_benefitTag: "Attracts Wealth & Guru Blessings",
+  gs_whatsappPhotos: "Get real photos & videos on WhatsApp before you pay",
+  gs_whatsappCta: "Request on WhatsApp",
+  gs_productSpecs: "Product specifications",
+  gs_howToWear: "How to wear",
+  gs_careTitle: "Gemstone care",
+  gs_whyWear: "Why Ceylon Pukhraj?",
+  gs_deliveryNote: "Prepaid orders ship on priority · insured delivery in 7–10 days",
+  gs_authenticPromise: "Natural Ceylon origin · certificate with every order · unheated & untreated",
   ku_dailyAlertsLink: "Daily Alerts",
   ku_dailyAlertsLinkSub: "4-day planetary guidance",
   ku_house: "House",
@@ -3088,6 +3205,11 @@ const EN: MoreT = {
   fr_honestFoot: "Zero fake or hardcoded readings — everything comes from your actual photo.",
   fr_ctaText: "Start My Face Reading",
   fr_ctaSub: "Upload 3 selfies → 30-60 seconds and a 40-page PDF report on your device.",
+  fr_wipBadge: "Coming Soon",
+  fr_wipTitle: "Face Reading Pro is being built",
+  fr_wipBody: "We're finalizing the Vedic + Science face-reading report and your 40-page PDF. Upload and payment stay paused until launch.",
+  fr_wipHint: "Check Life Map again after the next app update.",
+  mdFaceReadingSubSoon: "Coming soon · Vedic + Science fusion",
   fu_introEyebrow: "STEP 1 OF 2",
   fu_introTitle: "Upload 3 selfies",
   fu_introSub: "Front + left + right profile. Use good lighting, remove glasses, push hair back from forehead.",
@@ -3381,9 +3503,13 @@ const EN: MoreT = {
   bv_room_entrance: "Entrance",
   bv_room_owner_seat: "Owner Seat",
   bv_room_cash_counter: "Cash Counter",
+  bv_room_billing_counter: "Billing Counter",
   bv_room_vault: "Vault",
   bv_room_stock_storage: "Stock Storage",
   bv_room_display: "Display Area",
+  bv_room_pooja: "Mandir / Pooja",
+  bv_room_back_office: "Back Office",
+  bv_room_staff_room: "Staff Room",
   bv_room_toilet: "Toilet",
   bv_room_owner_cabin: "Owner Cabin",
   bv_room_reception: "Reception",
@@ -3398,7 +3524,17 @@ const EN: MoreT = {
   bv_room_boiler: "Boiler",
   bv_room_labour_quarter: "Labour Quarter",
   bv_errAuthRequired: "Please log in to run a Business Vastu scan.",
-  bv_errValidationRooms: "Add at least one room with a direction, or upload a floor plan.",
+  bv_errValidationRooms: "Add at least 2 room photos, or upload your full shop floor plan PDF.",
+  bv_btnUploadShopPdf: "Upload Full Shop PDF",
+  bv_btnUploadOfficePdf: "Upload Full Office PDF",
+  bv_btnUploadOfficePhoto: "Upload Office Room Photo",
+  bv_btnUploadFactoryPdf: "Upload Full Factory PDF",
+  bv_btnUploadFactoryPhoto: "Upload Factory Photo",
+  bv_planNorthHint: "Where is North on this plan?",
+  bv_secUploadedPhotos: "Uploaded Photos",
+  bv_btnSubmitReview: "Pay Now",
+  bv_submitSuccessTitle: "Payment received",
+  bv_submitSuccessBody: "Our Vastu expert will review your photos and prepare your report within 24–48 hours.",
   bv_errValidationName: "Naam your premise (e.g. 'Andheri Shop') — needed to match your unlock.",
   bv_errUnlockTitle: "Unlock Required",
   bv_errProfileTitle: "Complete your profile",
@@ -3427,26 +3563,34 @@ const EN: MoreT = {
   bv_secRoomByRoom: "Room-by-room",
   bv_lblZone: "Zone:",
   bv_secClassicalRefs: "CLASSICAL REFERENCES",
-  avp_headerTitle: "AstroVastu PRO",
-  avp_heroTitle: "Smart Scan",
-  avp_heroBody: "Choose how you want to scan. Each method runs a personalised Vastu × Kundli analysis.",
-  avp_modeCameraTitle: "Smart Scan",
-  avp_modeCameraSub: "Open camera",
+  avp_headerTitle: "Home Vastu Premium",
+  avp_heroTitle: "Home Vastu Premium",
+  avp_heroBody: "Choose what you want to scan — a single room photo, or your full home floor plan. Get personalised Vastu × Kundli guidance with clear next steps.",
+  avp_modeCameraTitle: "Home Vastu",
+  avp_modeCameraSub: "Single room (camera)",
   avp_modeSingleTitle: "Individual Room",
   avp_modeSingleSub: "Photo / PDF",
-  avp_modeWholeTitle: "Full Plan",
-  avp_modeWholeSub: "Architect PDF",
-  avp_introCameraTitle: "Smart Scan — Live Camera",
-  avp_introCameraBody: "Step 1 — Tell us which room you're going to photograph. Step 2 — Tap the camera and stand inside that room. The built-in compass will lock the direction at shutter time.",
+  avp_modeWholeTitle: "Full Home Plan",
+  avp_modeWholeSub: "Whole home (PDF/JPG)",
+  avp_introCameraTitle: "Home Vastu — Live Camera",
+  avp_introCameraBody: "This is for one room only. Pick the room name, open the camera, stand inside that room, and capture the photo — the compass locks direction at shutter time.",
   avp_pickerLabel: "Which room is this photo of?",
   avp_pickerHint: "Pick a room above to enable the camera.",
   avp_camHintPrefix: "Camera + compass · Photographing",
   avp_camHintNoRoom: "Pick a room first",
+  avp_btnSmartScan: "Open Camera",
+  avp_btnUploadPhoto: "Upload Room Photo",
+  avp_btnUploadHomePdf: "Upload Full Home PDF",
+  avp_badgeSingleRoom: "Single room",
+  avp_badgeWholeHome: "Whole home",
+  avp_uploadPricePerRoom: "per room",
+  avp_uploadPaySubmit: "Pay ₹{amount}",
+  avp_uploadSubmitted: "Done! Check My Reports soon.",
   avp_introSingleTitle: "Individual Room — Photo or PDF",
   avp_introSingleBody: "Not at home? Pick a photo or PDF from your gallery and tag the room + direction manually. Best when you want to check one specific room.",
-  avp_introWholeTitle: "Full Plan — Smart Scan Photo Engine",
-  avp_introWholeBody: "Got the entire floor plan from your architect (PDF or image — bedroom, kitchen, bathroom, all of it)? Upload here. Photo Engine will detect every room and give you one consolidated direction-wise report, personalised to your kundli.",
-  avp_btnRunWhole: "Run Whole-Floor Vastu Scan",
+  avp_introWholeTitle: "Full Home Plan — Photo Engine",
+  avp_introWholeBody: "Upload your complete home floor plan (architect PDF/JPG). Photo Engine will detect rooms and generate a consolidated direction-wise report, personalised to your kundli.",
+  avp_btnRunWhole: "Run Full Home Scan",
   avp_btnAnalysing: "Analysing…",
   avp_room_bedroom: "Bedroom",
   avp_room_kitchen: "Kitchen",
@@ -3859,10 +4003,12 @@ const HN: Partial<MoreT> = {
   numNoProfileBody:   "Pehle Kundli profile banayein. Numerology aapki birth details se direct calculate hoti hai.",
   numSetupProfile:    "Profile Banayein →",
   numAutoSynced:      "Auto-synced",
-  numFreeSection:     "🆓 FREE NUMEROLOGY",
+  numFreeSection:     "BASIC NUMEROLOGY",
   numTapHint:         "Poori details ke liye kisi bhi card par tap karein",
   numLifePathLbl:     "LIFE PATH NUMBER",
   numLifePathHi:      "Jeevan Path Sankhya",
+  numBirthDayLbl:     "BIRTH DAY NUMBER",
+  numBirthDayHi:      "Janm Din Sankhya",
   numDestinyLbl:      "DESTINY / EXPRESSION NUMBER",
   numDestinyHi:       "Bhagya Sankhya",
   numSoulUrgeLbl:     "SOUL URGE NUMBER",
@@ -3889,6 +4035,13 @@ const HN: Partial<MoreT> = {
   numCtaTitle:        "Poori Numerology Report Unlock Karein",
   numCtaSub:          "Personality, Maturity, Love, Career aur Upay paayein",
   numFooterNote:      "Calculations Pythagorean Numerology system pe based hain. Life Path, Destiny aur Soul Urge numbers aapki Kundli profile se aate hain — re-entry ki zaroorat nahi.",
+  numCoreSummary:     "AAPKE 4 CORE NUMBERS",
+  numBasicLockedHint: "Career blueprint, phone numerology aur lucky colours — Pro PDF report mein.",
+  numBasicCompareTitle: "BASIC VS PRO",
+  numBasicCompareBasicLine: "4 core numbers · traits · strength & weakness",
+  numBasicCompareProLine: "Full PDF · career blueprint · phone & lucky numbers · remedies",
+  numProTeaseBtn:     "Numerology Pro Report Lein",
+  numProfileFor:      "{name} ke numbers",
 
   km_addYourKundli:   "Apni Kundli Add karein",
   km_addPartnerKundli:"Saathi ki Kundli Add karein",
@@ -4113,12 +4266,12 @@ const HN: Partial<MoreT> = {
 
   nm_proTools:        "PRO+ TOOLS",
   nm_premium:         "PREMIUM",
-  nm_lifeMastery:     "Life Mastery Report",
+  nm_lifeMastery:     "Numerology Pro Report",
   nm_yourNumbers:     "AAPKE NUMBERS",
   nm_yourNumbersHint: "(kam se kam ek)",
   nm_whatsInside:     "ANDAR KYA HAI",
   nm_opening:         "Khol raha…",
-  nm_generateBtn:     "Life Mastery Report Generate Karein",
+  nm_generateBtn:     "Numerology Pro Report Generate Karein",
 
   cr_pageTitle:       "Career Analysis",
   cr_loading:         "Aapki kundli read ho rahi…",
@@ -4154,7 +4307,6 @@ const HN: Partial<MoreT> = {
   cr_topStrengths:    "Top strengths",
   cr_weakness:        "Weakness",
   cr_risk:            "Risk",
-  cr_why:             "Why",
 
   hl_pageTitle:       "Health Analysis",
   hl_loginRequired:   "Health analysis dekhne ke liye login karein.",
@@ -4641,6 +4793,11 @@ const HN: Partial<MoreT> = {
   fr_honestFoot: "Zero fake ya hardcoded readings — sab kuch aapki actual photo se nikalta hai.",
   fr_ctaText: "Mera Face Reading Shuru Karein",
   fr_ctaSub: "3 selfies upload karein → 30-60 seconds mein 40-page PDF report aapke device pe.",
+  fr_wipBadge: "Jald aa raha hai",
+  fr_wipTitle: "Face Reading Pro abhi tayyar ho raha hai",
+  fr_wipBody: "Hum Vedic + Science face-reading report aur 40-page PDF final kar rahe hain. Launch tak upload aur payment band hai.",
+  fr_wipHint: "Agle app update ke baad Life Map se dobara check karein.",
+  mdFaceReadingSubSoon: "Jald aa raha hai · Vedic + Science fusion",
   fu_introEyebrow: "STEP 1 OF 2",
   fu_introTitle: "3 selfies upload karein",
   fu_introSub: "Front + left + right profile. Achi roshni mein lein, chashma utar dein, baal forehead se hata lein.",
@@ -4934,9 +5091,13 @@ const HN: Partial<MoreT> = {
   bv_room_entrance: "Pravesh",
   bv_room_owner_seat: "Swami Sthaan",
   bv_room_cash_counter: "Golak",
+  bv_room_billing_counter: "Billing Counter",
   bv_room_vault: "Tijori",
   bv_room_stock_storage: "Bhandaar",
   bv_room_display: "Pradarshan",
+  bv_room_pooja: "Mandir / Pooja",
+  bv_room_back_office: "Peeche Office",
+  bv_room_staff_room: "Staff Room",
   bv_room_toilet: "Shauchalaya",
   bv_room_owner_cabin: "Swami Cabin",
   bv_room_reception: "Swagat",
@@ -4951,7 +5112,17 @@ const HN: Partial<MoreT> = {
   bv_room_boiler: "Boiler",
   bv_room_labour_quarter: "Shramik",
   bv_errAuthRequired: "Business Vastu scan chalaane ke liye kripaya login karein.",
-  bv_errValidationRooms: "Kam se kam ek room disha ke saath joden, ya floor plan upload karein.",
+  bv_errValidationRooms: "Kam se kam 2 room photos joden, ya apna full shop floor plan PDF upload karein.",
+  bv_btnUploadShopPdf: "Full Shop PDF Upload",
+  bv_btnUploadOfficePdf: "Full Office PDF Upload",
+  bv_btnUploadOfficePhoto: "Office Room Photo Upload",
+  bv_btnUploadFactoryPdf: "Full Factory PDF Upload",
+  bv_btnUploadFactoryPhoto: "Factory Photo Upload",
+  bv_planNorthHint: "Is plan par North kahan hai?",
+  bv_secUploadedPhotos: "Upload ki gayi Photos",
+  bv_btnSubmitReview: "Pay Now",
+  bv_submitSuccessTitle: "Admin ko bhej diya",
+  bv_submitSuccessBody: "Hamare Vastu expert aapki photos review karke 24–48 ghante me report taiyar karenge.",
   bv_errValidationName: "Apne sthal ka naam dein (jaise 'Andheri Shop') — unlock match karne ke liye zaroori hai.",
   bv_errUnlockTitle: "Unlock Zaroori",
   bv_errProfileTitle: "Apni profile poori karein",
@@ -4980,26 +5151,34 @@ const HN: Partial<MoreT> = {
   bv_secRoomByRoom: "Kamra-dar-Kamra",
   bv_lblZone: "Kshetra:",
   bv_secClassicalRefs: "CLASSICAL REFERENCES",
-  avp_headerTitle: "AstroVastu PRO",
-  avp_heroTitle: "Smart Scan",
-  avp_heroBody: "Scan ka tareeka chunein. Har method ek personalised Vastu × Kundli analysis chalata hai.",
-  avp_modeCameraTitle: "Smart Scan",
-  avp_modeCameraSub: "Camera kholein",
+  avp_headerTitle: "Home Vastu Premium",
+  avp_heroTitle: "Home Vastu Premium",
+  avp_heroBody: "Kya scan karna hai chunein — ek room ki photo, ya poora ghar ka floor plan. Aapki Kundli ke hisaab se personalised Vastu guidance aur clear next steps milenge.",
+  avp_modeCameraTitle: "Home Vastu",
+  avp_modeCameraSub: "Ek room (camera)",
   avp_modeSingleTitle: "Ek Room",
   avp_modeSingleSub: "Photo / PDF",
-  avp_modeWholeTitle: "Poora Plan",
-  avp_modeWholeSub: "Architect PDF",
-  avp_introCameraTitle: "Smart Scan — Live Camera",
-  avp_introCameraBody: "Step 1 — Batayein kis room ki photo lenge. Step 2 — Camera tap karein aur us room ke andar khade hon. Shutter time par built-in compass disha lock kar dega.",
+  avp_modeWholeTitle: "Full Home Plan",
+  avp_modeWholeSub: "Poora ghar (PDF/JPG)",
+  avp_introCameraTitle: "Home Vastu — Live Camera",
+  avp_introCameraBody: "Ye sirf ek room ke liye hai. Room name chunein, camera kholein, us room ke andar khade hon aur photo lein — shutter time par compass direction lock kar deta hai.",
   avp_pickerLabel: "Ye photo kis room ki hai?",
   avp_pickerHint: "Camera enable karne ke liye upar room chunein.",
   avp_camHintPrefix: "Camera + compass · Photo le rahe",
   avp_camHintNoRoom: "Pehle room chunein",
+  avp_btnSmartScan: "Camera Kholein",
+  avp_btnUploadPhoto: "Room Photo Upload",
+  avp_btnUploadHomePdf: "Full Home PDF Upload",
+  avp_badgeSingleRoom: "Ek room",
+  avp_badgeWholeHome: "Poora ghar",
+  avp_uploadPricePerRoom: "per room",
+  avp_uploadPaySubmit: "₹{amount} Pay karein",
+  avp_uploadSubmitted: "Ho gaya! My Reports check karein.",
   avp_introSingleTitle: "Ek Room — Photo ya PDF",
   avp_introSingleBody: "Ghar par nahi ho? Gallery se photo ya PDF chunein aur room + direction manually tag karein. Tab best jab aap kisi ek room ko check karna chahte ho.",
-  avp_introWholeTitle: "Poora Plan — Smart Scan Photo Engine",
-  avp_introWholeBody: "Architect se poora floor plan mila (PDF ya image — bedroom, kitchen, bathroom sab)? Yahan upload karein. Photo Engine har room detect karega aur aapki kundli ke hisaab se ek consolidated disha-wise report dega.",
-  avp_btnRunWhole: "Poori Manzil Vastu Scan Chalayein",
+  avp_introWholeTitle: "Full Home Plan — Photo Engine",
+  avp_introWholeBody: "Poore ghar ka floor plan (architect PDF/JPG) upload karein. Photo Engine rooms detect karke ek consolidated direction-wise report banata hai, aapki kundli ke hisaab se.",
+  avp_btnRunWhole: "Full Home Scan Chalayein",
   avp_btnAnalysing: "Analyse ho raha hai…",
   avp_room_bedroom: "Bedroom",
   avp_room_kitchen: "Kitchen",
@@ -5392,10 +5571,12 @@ const HI: Partial<MoreT> = {
   numNoProfileBody:   "कृपया पहले कुंडली प्रोफ़ाइल बनाएं। अंकज्योतिष आपकी जन्म जानकारी से सीधे गणना करता है।",
   numSetupProfile:    "प्रोफ़ाइल बनाएं →",
   numAutoSynced:      "ऑटो-सिंक",
-  numFreeSection:     "🆓 निःशुल्क अंकज्योतिष",
+  numFreeSection:     "🆓 बेसिक अंकज्योतिष",
   numTapHint:         "पूरी जानकारी के लिए किसी भी कार्ड पर टैप करें",
   numLifePathLbl:     "जीवन पथ संख्या",
   numLifePathHi:      "जीवन पथ",
+  numBirthDayLbl:     "जन्म दिन संख्या",
+  numBirthDayHi:      "जन्म दिन",
   numDestinyLbl:      "भाग्य संख्या",
   numDestinyHi:       "भाग्य",
   numSoulUrgeLbl:     "आत्मा की इच्छा",
@@ -5422,6 +5603,13 @@ const HI: Partial<MoreT> = {
   numCtaTitle:        "पूरी अंकज्योतिष रिपोर्ट अनलॉक करें",
   numCtaSub:          "व्यक्तित्व, परिपक्वता, प्रेम, करियर और उपाय पाएं",
   numFooterNote:      "गणनाएं पाइथागोरस अंकज्योतिष प्रणाली पर आधारित हैं। जीवन पथ, भाग्य और आत्मा की इच्छा संख्याएं आपकी कुंडली प्रोफ़ाइल से ली जाती हैं — दोबारा दर्ज करने की आवश्यकता नहीं।",
+  numCoreSummary:     "आपकी 4 मुख्य संख्याएं",
+  numBasicLockedHint: "करियर ब्लूप्रिंट, फ़ोन न्यूमरोलॉजी और लकी कलर — प्रो PDF रिपोर्ट में।",
+  numBasicCompareTitle: "बेसिक बनाम प्रो",
+  numBasicCompareBasicLine: "4 मुख्य संख्याएं · लक्षण · ताकत और कमज़ोरी",
+  numBasicCompareProLine: "पूरी PDF · करियर ब्लूप्रिंट · फ़ोन और लकी नंबर · उपाय",
+  numProTeaseBtn:     "न्यूमरोलॉजी प्रो रिपोर्ट लें",
+  numProfileFor:      "{name} की संख्याएं",
 
   // profile-edit.tsx
   pe_primary:         "मुख्य",
@@ -5693,12 +5881,12 @@ const HI: Partial<MoreT> = {
 
   nm_proTools:        "प्रो+ टूल्स",
   nm_premium:         "प्रीमियम",
-  nm_lifeMastery:     "जीवन महारत रिपोर्ट",
+  nm_lifeMastery:     "न्यूमरोलॉजी प्रो रिपोर्ट",
   nm_yourNumbers:     "आपके अंक",
   nm_yourNumbersHint: "(कम से कम एक)",
   nm_whatsInside:     "अंदर क्या है",
   nm_opening:         "खुल रहा…",
-  nm_generateBtn:     "जीवन महारत रिपोर्ट बनाएँ",
+  nm_generateBtn:     "न्यूमरोलॉजी प्रो रिपोर्ट बनाएँ",
 
   cr_pageTitle:       "करियर विश्लेषण",
   cr_loading:         "आपकी कुंडली पढ़ी जा रही है…",
@@ -5734,7 +5922,6 @@ const HI: Partial<MoreT> = {
   cr_topStrengths:    "टॉप ताकत",
   cr_weakness:        "कमज़ोरी",
   cr_risk:            "जोखिम",
-  cr_why:             "क्यों",
 
   hl_pageTitle:       "स्वास्थ्य विश्लेषण",
   hl_loginRequired:   "स्वास्थ्य विश्लेषण देखने के लिए लॉगिन करें।",
@@ -6224,6 +6411,11 @@ const HI: Partial<MoreT> = {
   fr_honestFoot: "कोई नकली या हार्डकोड रीडिंग नहीं — सब कुछ आपकी वास्तविक फ़ोटो से निकलता है।",
   fr_ctaText: "मेरा फेस रीडिंग शुरू करें",
   fr_ctaSub: "3 सेल्फ़ी अपलोड करें → 30-60 सेकंड में आपके डिवाइस पर 40-पृष्ठीय PDF रिपोर्ट।",
+  fr_wipBadge: "जल्द आ रहा है",
+  fr_wipTitle: "फेस रीडिंग Pro अभी तैयार हो रहा है",
+  fr_wipBody: "हम वैदिक + विज्ञान फेस रीडिंग रिपोर्ट और 40-पृष्ठीय PDF को अंतिम रूप दे रहे हैं। लॉन्च तक अपलोड और भुगतान रोक दिया गया है।",
+  fr_wipHint: "अगले ऐप अपडेट के बाद Life Map से फिर देखें।",
+  mdFaceReadingSubSoon: "जल्द आ रहा है · वैदिक + विज्ञान फ्यूजन",
   fu_introEyebrow: "चरण 1 / 2",
   fu_introTitle: "3 सेल्फ़ी अपलोड करें",
   fu_introSub: "सामने + बायाँ + दायाँ प्रोफ़ाइल। अच्छी रोशनी में लें, चश्मा उतार दें, बाल माथे से हटा लें।",
@@ -6517,9 +6709,13 @@ const HI: Partial<MoreT> = {
   bv_room_entrance: "प्रवेश",
   bv_room_owner_seat: "स्वामी स्थान",
   bv_room_cash_counter: "गोलक",
+  bv_room_billing_counter: "बिलिंग काउंटर",
   bv_room_vault: "तिजोरी",
   bv_room_stock_storage: "भंडार",
   bv_room_display: "प्रदर्शन क्षेत्र",
+  bv_room_pooja: "मंदिर / पूजा",
+  bv_room_back_office: "पीछे का कार्यालय",
+  bv_room_staff_room: "स्टाफ रूम",
   bv_room_toilet: "शौचालय",
   bv_room_owner_cabin: "स्वामी केबिन",
   bv_room_reception: "स्वागत",
@@ -6534,7 +6730,17 @@ const HI: Partial<MoreT> = {
   bv_room_boiler: "बॉयलर",
   bv_room_labour_quarter: "श्रमिक क्वार्टर",
   bv_errAuthRequired: "Business Vastu स्कैन चलाने के लिए कृपया लॉगिन करें।",
-  bv_errValidationRooms: "कम से कम एक रूम दिशा सहित जोड़ें, या एक फ़्लोर प्लान अपलोड करें।",
+  bv_errValidationRooms: "कम से कम 2 रूम फोटो जोड़ें, या अपना पूरा शॉप फ़्लोर प्लान PDF अपलोड करें।",
+  bv_btnUploadShopPdf: "पूरा शॉप PDF अपलोड",
+  bv_btnUploadOfficePdf: "पूरा ऑफिस PDF अपलोड",
+  bv_btnUploadOfficePhoto: "ऑफिस रूम फ़ोटो अपलोड",
+  bv_btnUploadFactoryPdf: "पूरा फैक्टरी PDF अपलोड",
+  bv_btnUploadFactoryPhoto: "फैक्टरी फ़ोटो अपलोड",
+  bv_planNorthHint: "इस प्लान पर उत्तर (North) कहाँ है?",
+  bv_secUploadedPhotos: "अपलोड की गई फ़ोटो",
+  bv_btnSubmitReview: "Pay Now",
+  bv_submitSuccessTitle: "एडमिन को भेज दिया",
+  bv_submitSuccessBody: "हमारे वास्तु विशेषज्ञ आपकी फ़ोटो देखकर 24–48 घंटे में रिपोर्ट तैयार करेंगे।",
   bv_errValidationName: "अपने स्थल का नाम दें (जैसे 'अंधेरी दुकान') — अनलॉक मिलाने के लिए आवश्यक।",
   bv_errUnlockTitle: "अनलॉक आवश्यक",
   bv_errProfileTitle: "अपनी प्रोफ़ाइल पूरी करें",
@@ -6563,26 +6769,34 @@ const HI: Partial<MoreT> = {
   bv_secRoomByRoom: "कमरा-दर-कमरा",
   bv_lblZone: "क्षेत्र:",
   bv_secClassicalRefs: "शास्त्रीय संदर्भ",
-  avp_headerTitle: "AstroVastu PRO",
-  avp_heroTitle: "स्मार्ट स्कैन",
-  avp_heroBody: "स्कैन का तरीका चुनें। हर विधि एक व्यक्तिगत वास्तु × कुंडली विश्लेषण चलाती है।",
-  avp_modeCameraTitle: "स्मार्ट स्कैन",
-  avp_modeCameraSub: "कैमरा खोलें",
+  avp_headerTitle: "Home Vastu Premium",
+  avp_heroTitle: "Home Vastu Premium",
+  avp_heroBody: "क्या स्कैन करना है चुनें — एक रूम की फ़ोटो, या पूरे घर का फ़्लोर प्लान। कुंडली के अनुसार व्यक्तिगत वास्तु मार्गदर्शन और स्पष्ट next steps मिलेंगे।",
+  avp_modeCameraTitle: "होम वास्तु",
+  avp_modeCameraSub: "एक रूम (कैमरा)",
   avp_modeSingleTitle: "एक रूम",
   avp_modeSingleSub: "फ़ोटो / PDF",
-  avp_modeWholeTitle: "पूरा प्लान",
-  avp_modeWholeSub: "आर्किटेक्ट PDF",
-  avp_introCameraTitle: "स्मार्ट स्कैन — लाइव कैमरा",
-  avp_introCameraBody: "चरण 1 — बताएँ कि आप किस रूम की फ़ोटो लेंगे। चरण 2 — कैमरा टैप करें और उस रूम के अंदर खड़े हों। शटर के समय बिल्ट-इन कम्पास दिशा लॉक कर देगा।",
+  avp_modeWholeTitle: "Full Home Plan",
+  avp_modeWholeSub: "पूरा घर (PDF/JPG)",
+  avp_introCameraTitle: "होम वास्तु — लाइव कैमरा",
+  avp_introCameraBody: "यह सिर्फ़ एक रूम के लिए है। रूम चुनें, कैमरा खोलें, उसी रूम के अंदर खड़े होकर फ़ोटो लें — शटर के समय कम्पास दिशा लॉक कर देता है।",
   avp_pickerLabel: "यह फ़ोटो किस रूम की है?",
   avp_pickerHint: "कैमरा सक्षम करने के लिए ऊपर रूम चुनें।",
   avp_camHintPrefix: "कैमरा + कम्पास · फ़ोटो ले रहे",
   avp_camHintNoRoom: "पहले रूम चुनें",
+  avp_btnSmartScan: "कैमरा खोलें",
+  avp_btnUploadPhoto: "रूम फ़ोटो अपलोड",
+  avp_btnUploadHomePdf: "Full Home PDF अपलोड",
+  avp_badgeSingleRoom: "एक रूम",
+  avp_badgeWholeHome: "पूरा घर",
+  avp_uploadPricePerRoom: "प्रति रूम",
+  avp_uploadPaySubmit: "₹{amount} भुगतान करें",
+  avp_uploadSubmitted: "हो गया! My Reports देखें।",
   avp_introSingleTitle: "एक रूम — फ़ोटो या PDF",
   avp_introSingleBody: "घर पर नहीं हैं? गैलरी से फ़ोटो या PDF चुनें और रूम + दिशा मैन्युअल रूप से टैग करें। तब सर्वोत्तम जब आप किसी एक विशिष्ट रूम की जाँच करना चाहते हैं।",
-  avp_introWholeTitle: "पूरा प्लान — स्मार्ट स्कैन Photo Engine",
-  avp_introWholeBody: "अपने आर्किटेक्ट से पूरा फ़्लोर प्लान मिला (PDF या छवि — बेडरूम, रसोई, स्नानघर सब)? यहाँ अपलोड करें। Photo Engine हर रूम पहचानेगा और आपकी कुंडली के अनुसार एक संकलित दिशा-वार रिपोर्ट देगा।",
-  avp_btnRunWhole: "पूरी मंज़िल वास्तु स्कैन चलाएँ",
+  avp_introWholeTitle: "Full Home Plan — Photo Engine",
+  avp_introWholeBody: "पूरे घर का फ़्लोर प्लान (architect PDF/JPG) अपलोड करें। Photo Engine rooms detect करके कुंडली के अनुसार एक संकलित दिशा-वार रिपोर्ट बनाता है।",
+  avp_btnRunWhole: "Full Home Scan चलाएँ",
   avp_btnAnalysing: "विश्लेषण हो रहा है…",
   avp_room_bedroom: "शयन कक्ष",
   avp_room_kitchen: "रसोई",

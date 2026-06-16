@@ -28,6 +28,22 @@ export type LeakageKey =
   | "speculation_trading_fraud_risk"
   | "expense_drain_active";
 
+export type LeakChannelKey =
+  | "subscriptions_small_spend"
+  | "emi_debt"
+  | "medical_hospital"
+  | "property_legal"
+  | "sudden_loss_tax"
+  | "speculation_trading"
+  | "partnership_client_loss"
+  | "family_shared_money"
+  | "foreign_online_spend"
+  | "impulsive_fines"
+  | "savings_dont_stick"
+  | "income_not_retained"
+  | "kp_savings_leak"
+  | "kp_income_leak";
+
 export function financeWealthCopy(lang: UILang) {
   const L = coerceUILang(lang);
   return {
@@ -147,6 +163,92 @@ export function financeWealthCopy(lang: UILang) {
         "खर्च अधिक — सब्सक्रिप्शन और रिसाव देखें।",
       ),
     } as Record<LeakageKey, string>,
+    leakChannels: {
+      subscriptions_small_spend: p(
+        L,
+        "Small recurring spends — track subscriptions and micro-payments monthly.",
+        "Chhote repeat kharcha — subscriptions aur micro-payment monthly track karo.",
+        "छोटे बार-बार खर्च — सब्सक्रिप्शन और छोटे भुगतान मासिक देखें।",
+      ),
+      emi_debt: p(
+        L,
+        "EMI / debt pressure — cap loans and service bills before new commitments.",
+        "EMI / karz pressure — naye kharcha se pehle loan aur bills limit karo.",
+        "ईएमआई / कर्ज दबाव — नई जिम्मेदारी से पहले ऋण और बिल सीमित करें।",
+      ),
+      medical_hospital: p(
+        L,
+        "Medical / hospital spend — keep a health buffer; don't skip insurance review.",
+        "Medical / hospital kharcha — health buffer rakho; insurance review mat chhodo.",
+        "चिकित्सा / अस्पताल खर्च — स्वास्थ्य फंड रखें; बीमा समीक्षा करें।",
+      ),
+      property_legal: p(
+        L,
+        "Property / legal / rent — double-check papers before big asset moves.",
+        "Property / legal / rent — bade asset move se pehle papers dhyaan se dekho.",
+        "संपत्ति / कानूनी / किराया — बड़े फैसले से पहले कागज़ जाँचें।",
+      ),
+      sudden_loss_tax: p(
+        L,
+        "Sudden loss / tax / inheritance — avoid rushed joint-money decisions.",
+        "Achanak loss / tax / virasat — jaldi joint-money faisla mat lo.",
+        "अचानक नुकसान / कर / विरासत — जल्दबाज़ी संयुक्त धन निर्णय न लें।",
+      ),
+      speculation_trading: p(
+        L,
+        "Speculation / trading / crypto — no impulsive bets; use a strict loss limit.",
+        "Trading / crypto / satta — jaldi bet mat; strict loss limit rakho.",
+        "सट्टा / ट्रेडिंग / क्रिप्टो — आवेग में दांव न लें; सीमा तय करें।",
+      ),
+      partnership_client_loss: p(
+        L,
+        "Partnership / client leakage — put client and partner payouts in writing.",
+        "Partnership / client leak — partner aur client payment likhit rakho.",
+        "साझेदारी / ग्राहक रिसाव — भुगतान लिखित करार में रखें।",
+      ),
+      family_shared_money: p(
+        L,
+        "Family / shared money — separate personal savings from family pool.",
+        "Family / shared paisa — apni bachat family pool se alag rakho.",
+        "परिवार / साझा धन — निजी बचत परिवार के पैसे से अलग रखें।",
+      ),
+      foreign_online_spend: p(
+        L,
+        "Foreign / online / hidden spend — watch cross-border and app-store charges.",
+        "Foreign / online / chhupa kharcha — cross-border aur app charges dekho.",
+        "विदेश / ऑनलाइन / छिपा खर्च — विदेशी और ऐप शुल्क पर नज़र रखें।",
+      ),
+      impulsive_fines: p(
+        L,
+        "Impulsive / fines / accidents — pause before big purchases; avoid rash driving.",
+        "Impulsive / fine / accident — badi shopping se pehle ruko; rash driving avoid.",
+        "आवेग / जुर्माना / दुर्घटना — बड़ी खरीद से पहले रुकें; लापरवाही न करें।",
+      ),
+      savings_dont_stick: p(
+        L,
+        "Savings don't stick — auto-transfer to a separate account on payday.",
+        "Bachat tikti nahi — salary aate hi alag account me auto-transfer.",
+        "बचत नहीं टिकती — वेतन आते ही अलग खाते में स्वतः स्थानांतरण करें।",
+      ),
+      income_not_retained: p(
+        L,
+        "Income comes but doesn't stay — track inflow vs outflow every month.",
+        "Income aata hai, bachta nahi — har mahine inflow vs outflow track karo.",
+        "आय आती है, टिकती नहीं — हर महीने आमदनी बनाम खर्च देखें।",
+      ),
+      kp_savings_leak: p(
+        L,
+        "Savings may drain — guard accumulated wealth and review recurring commitments.",
+        "Bachat slip ho sakti hai — jama paisa bachao aur repeat commitments review karo.",
+        "बचत रिस सकती है — संचित धन सुरक्षित रखें और बार-बार की प्रतिबद्धता देखें।",
+      ),
+      kp_income_leak: p(
+        L,
+        "Income may slip — tighten payouts and review where gains go each month.",
+        "Kamai slip ho sakti hai — payouts tight karo aur har mahine dekho paisa kahan ja raha hai.",
+        "आय फिसल सकती है — खर्च कम करें और हर महीने देखें लाभ कहाँ जा रहा है।",
+      ),
+    } as Record<LeakChannelKey, string>,
     tierLabels: {
       middle_class: p(L, "Stable", "Stable", "स्थिर"),
       rich: p(L, "Rich", "Rich", "धनी"),

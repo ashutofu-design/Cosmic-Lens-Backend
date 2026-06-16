@@ -12,7 +12,7 @@ import {
 import { buildPartnerPlainView } from "@/lib/partnerPlainCopy";
 import { MilanGunBreakdown, type MilanGunKootScores } from "@/components/kundliMilan/MilanGunBreakdown";
 import type { UILang } from "@/lib/i18n";
-import { milanResultScreenCopy } from "@/lib/milanResultCopyI18n";
+import { milanResultScreenCopy, type CoupleBandKey, type MilanResultScreenCopy } from "@/lib/milanResultCopyI18n";
 
 /** Legacy Pro / deep-link route — 36 Gun shape converter */
 export interface MilanKootItem {
@@ -99,32 +99,32 @@ function SectionHeader({ title, isDark }: { title: string; isDark: boolean }) {
   );
 }
 
-function resolveCompactPlain(person: MarriagePartnerBasics): CompactPlain {
+function resolveCompactPlain(person: MarriagePartnerBasics, copy: MilanResultScreenCopy): CompactPlain {
   const pc = person.plain_copy;
   if (pc?.headline && pc.positives?.length) {
     const alertTeaser =
       person.critical_alerts?.locked && person.critical_alerts.teaser
-        ? `${person.critical_alerts.teaser} — full detail in Pro.`
+        ? `${person.critical_alerts.teaser} — ${copy.proDetailSuffix}`
         : null;
     return {
       bandLabel: pc.band_label,
       headline: pc.headline,
-      positive: pc.positives[0] ?? "Chart shows some supportive marriage signals.",
-      watchout: pc.watchouts[0] ?? "Stay conscious before big decisions.",
-      proLockTeaser: pc.pro_lock_teaser ?? alertTeaser ?? "Deeper marriage timing + hidden alerts — unlock in Pro.",
-      remedyTeaser: pc.remedy_teaser ?? "Full personalized remedy chain — Pro report mein.",
+      positive: pc.positives[0] ?? copy.fallbackPositive,
+      watchout: pc.watchouts[0] ?? copy.fallbackWatchout,
+      proLockTeaser: pc.pro_lock_teaser ?? alertTeaser ?? copy.fallbackProLock,
+      remedyTeaser: pc.remedy_teaser ?? copy.fallbackRemedy,
     };
   }
   const fb = buildPartnerPlainView(person);
   return {
     bandLabel: fb.bandLabel,
     headline: fb.headline,
-    positive: fb.positives[0] ?? "Some supportive signals present.",
-    watchout: fb.watchouts[0] ?? "Some areas need care.",
+    positive: fb.positives[0] ?? copy.fallbackPositive,
+    watchout: fb.watchouts[0] ?? copy.fallbackWatchout,
     proLockTeaser: person.critical_alerts?.teaser
-      ? `${person.critical_alerts.teaser} — Pro unlock.`
-      : "Marriage dasha windows + hidden alerts — Pro mein.",
-    remedyTeaser: "Full remedy plan locked in Pro report.",
+      ? `${person.critical_alerts.teaser} — ${copy.proDetailSuffix}`
+      : copy.fallbackProLock,
+    remedyTeaser: copy.fallbackRemedy,
   };
 }
 
@@ -147,10 +147,21 @@ function ProMiniStrip({ text, isDark, onOpenPro }: { text: string; isDark: boole
   );
 }
 
-function PartnerCard({ person, isDark, onOpenPro }: { person: MarriagePartnerBasics; isDark: boolean; onOpenPro: () => void }) {
+function PartnerCard({
+  person,
+  isDark,
+  onOpenPro,
+  copy,
+}: {
+  person: MarriagePartnerBasics;
+  isDark: boolean;
+  onOpenPro: () => void;
+  copy: MilanResultScreenCopy;
+}) {
   const col = bandColor(person.readiness_band);
-  const plain = resolveCompactPlain(person);
-  const genderLabel = person.gender === "male" ? "Male" : person.gender === "female" ? "Female" : "Chart";
+  const plain = resolveCompactPlain(person, copy);
+  const genderLabel =
+    person.gender === "male" ? copy.genderMale : person.gender === "female" ? copy.genderFemale : copy.genderChart;
 
   return (
     <View
@@ -192,7 +203,7 @@ function PartnerCard({ person, isDark, onOpenPro }: { person: MarriagePartnerBas
       >
         <Feather name="lock" size={14} color={isDark ? "#fca5a5" : "#b91c1c"} />
         <Text style={[st.lockTxt, { color: isDark ? "#fecaca" : "#991b1b" }]}>{plain.proLockTeaser}</Text>
-        <Text style={[st.lockSub, { color: isDark ? "rgba(255,255,255,0.5)" : "#64748b" }]}>Unlock in Pro →</Text>
+        <Text style={[st.lockSub, { color: isDark ? "rgba(255,255,255,0.5)" : "#64748b" }]}>{copy.unlockInPro}</Text>
       </Pressable>
 
       <Pressable onPress={onOpenPro} style={[st.remedyLock, { backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)" }]}>
@@ -205,7 +216,17 @@ function PartnerCard({ person, isDark, onOpenPro }: { person: MarriagePartnerBas
   );
 }
 
-function CoupleGapCard({ copy, isDark, onOpenPro }: { copy: CouplePlainCopy; isDark: boolean; onOpenPro: () => void }) {
+function CoupleGapCard({
+  copy,
+  coupleCopy,
+  isDark,
+  onOpenPro,
+}: {
+  copy: MilanResultScreenCopy;
+  coupleCopy: CouplePlainCopy;
+  isDark: boolean;
+  onOpenPro: () => void;
+}) {
   return (
     <View
       style={[
@@ -216,9 +237,9 @@ function CoupleGapCard({ copy, isDark, onOpenPro }: { copy: CouplePlainCopy; isD
         },
       ]}
     >
-      <Text style={[st.gapEyebrow, { color: isDark ? "#fde68a" : "#b45309" }]}>TOGETHER — WHAT BASIC HIDES</Text>
-      <Text style={[st.gapBody, { color: isDark ? "rgba(241,245,249,0.9)" : "#334155" }]}>{copy.gap_teaser}</Text>
-      {(copy.locked_highlights ?? []).map(item => (
+      <Text style={[st.gapEyebrow, { color: isDark ? "#fde68a" : "#b45309" }]}>{copy.coupleGapEyebrow}</Text>
+      <Text style={[st.gapBody, { color: isDark ? "rgba(241,245,249,0.9)" : "#334155" }]}>{coupleCopy.gap_teaser}</Text>
+      {(coupleCopy.locked_highlights ?? []).map(item => (
         <View key={item} style={st.gapRow}>
           <Feather name="lock" size={10} color={isDark ? "#fcd34d" : "#d97706"} />
           <Text style={[st.gapItem, { color: isDark ? "rgba(255,255,255,0.55)" : "#64748b" }]}>{item}</Text>
@@ -226,7 +247,7 @@ function CoupleGapCard({ copy, isDark, onOpenPro }: { copy: CouplePlainCopy; isD
       ))}
       <Pressable onPress={onOpenPro} style={({ pressed }) => ({ opacity: pressed ? 0.88 : 1 })}>
         <LinearGradient colors={["#6366F1", "#8B5CF6", "#db2777"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={st.gapBtn}>
-          <Text style={st.gapBtnTxt}>{copy.pro_cta_line}</Text>
+          <Text style={st.gapBtnTxt}>{coupleCopy.pro_cta_line}</Text>
           <Feather name="arrow-right" size={14} color="#fff" />
         </LinearGradient>
       </Pressable>
@@ -234,20 +255,20 @@ function CoupleGapCard({ copy, isDark, onOpenPro }: { copy: CouplePlainCopy; isD
   );
 }
 
-function defaultCoupleGap(data: MarriageBasicsPayload): CouplePlainCopy {
+function defaultCoupleGap(data: MarriageBasicsPayload, copy: MilanResultScreenCopy): CouplePlainCopy {
   const alerts = data.couple.critical_alerts_total ?? 0;
   const highlights: string[] = [];
-  if (alerts > 0) highlights.push(`${alerts} hidden alert(s) across both charts`);
-  if (data.couple.synastry?.available) highlights.push("Cross-chart 7th lord synastry — how you affect each other");
+  if (alerts > 0) highlights.push(copy.lockedHighlights.alerts(alerts));
+  if (data.couple.synastry?.available) highlights.push(copy.lockedHighlights.synastry);
   if (data.couple.manglik?.p1_has_dosh || data.couple.manglik?.p2_has_dosh) {
-    highlights.push("Manglik balance & cancellation for both charts");
+    highlights.push(copy.lockedHighlights.manglik);
   }
-  highlights.push("Marriage dasha windows — best & risky timing (both partners)");
-  highlights.push("Full remedy chain + downloadable PDF");
+  highlights.push(copy.lockedHighlights.dasha);
+  highlights.push(copy.lockedHighlights.pdf);
 
   return {
-    gap_teaser: `Together ${data.couple.structural_score}/100 — full cross-chart marriage read sirf Pro mein.`,
-    pro_cta_line: "Unlock Full Match Report — synastry · dasha · remedies · PDF",
+    gap_teaser: copy.defaultGapTeaser(data.couple.structural_score),
+    pro_cta_line: copy.defaultGapCta,
     locked_highlights: highlights.slice(0, 4),
   };
 }
@@ -255,8 +276,8 @@ function defaultCoupleGap(data: MarriageBasicsPayload): CouplePlainCopy {
 const GUN_COPY_RE = /36\s*gun|ashtakoot|guna\s*milan|full\s*score\s*breakdown/i;
 
 /** Strip legacy Gun Milan lines from API copy (old server builds). */
-function resolveCoupleCopy(data: MarriageBasicsPayload): CouplePlainCopy {
-  const fallback = defaultCoupleGap(data);
+function resolveCoupleCopy(data: MarriageBasicsPayload, copy: MilanResultScreenCopy): CouplePlainCopy {
+  const fallback = defaultCoupleGap(data, copy);
   const api = data.couple.plain_copy;
   if (!api) return fallback;
 
@@ -282,12 +303,28 @@ function resolveCoupleCopy(data: MarriageBasicsPayload): CouplePlainCopy {
   };
 }
 
+function localizeCoupleBand(band: string, copy: MilanResultScreenCopy): string {
+  return copy.coupleBands[band as CoupleBandKey] ?? band;
+}
+
+function localizeFutureVerdict(band: string, apiVerdict: string, copy: MilanResultScreenCopy): string {
+  const localized = copy.coupleVerdict[band as CoupleBandKey];
+  if (!localized) return apiVerdict;
+  // Prefer API text when server already localized (Devanagari for hi).
+  if (/[\u0900-\u097F]/.test(apiVerdict)) return apiVerdict;
+  return localized;
+}
+
 export function KundliMilanBasicResult({ data, isDark, onOpenPro, gunScores, gunTotal, lang = "en" }: Props) {
   const copy = milanResultScreenCopy(lang);
   const fade = useRef(new Animated.Value(0)).current;
   const coupleCol = bandColor(data.couple.structural_band);
-  const coupleCopy = resolveCoupleCopy(data);
-  const p1Strip = data.p1.plain_copy?.pro_strip ?? `Pro for ${data.p1.name}: full marriage consultation + PDF`;
+  const coupleCopy = resolveCoupleCopy(data, copy);
+  const coupleBandLabel =
+    (data.couple as { structural_band_label?: string }).structural_band_label ??
+    localizeCoupleBand(data.couple.structural_band, copy);
+  const futureVerdict = localizeFutureVerdict(data.couple.structural_band, data.couple.future_verdict, copy);
+  const p1Strip = data.p1.plain_copy?.pro_strip ?? copy.fallbackProStrip(data.p1.name);
 
   useEffect(() => {
     Animated.timing(fade, { toValue: 1, duration: 450, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
@@ -310,10 +347,10 @@ export function KundliMilanBasicResult({ data, isDark, onOpenPro, gunScores, gun
         <Text style={[st.heroScore, { color: coupleCol }]}>{data.couple.structural_score}</Text>
         <Text style={[st.heroDenom, { color: isDark ? "rgba(255,255,255,0.5)" : "#64748b" }]}>/ 100</Text>
         <View style={[st.heroBand, { backgroundColor: `${coupleCol}22`, borderColor: `${coupleCol}44` }]}>
-          <Text style={[st.heroBandTxt, { color: coupleCol }]}>{data.couple.structural_band}</Text>
+          <Text style={[st.heroBandTxt, { color: coupleCol }]}>{coupleBandLabel}</Text>
         </View>
         <Text style={[st.heroVerdict, { color: isDark ? "rgba(241,245,249,0.9)" : "#334155" }]}>
-          {data.couple.future_verdict}
+          {futureVerdict}
         </Text>
       </LinearGradient>
 
@@ -333,13 +370,13 @@ export function KundliMilanBasicResult({ data, isDark, onOpenPro, gunScores, gun
       ) : null}
 
       <SectionHeader title={copy.partnerA} isDark={isDark} />
-      <PartnerCard person={data.p1} isDark={isDark} onOpenPro={onOpenPro} />
+      <PartnerCard person={data.p1} isDark={isDark} onOpenPro={onOpenPro} copy={copy} />
       <ProMiniStrip text={p1Strip} isDark={isDark} onOpenPro={onOpenPro} />
 
       <SectionHeader title={copy.partnerB} isDark={isDark} />
-      <PartnerCard person={data.p2} isDark={isDark} onOpenPro={onOpenPro} />
+      <PartnerCard person={data.p2} isDark={isDark} onOpenPro={onOpenPro} copy={copy} />
 
-      <CoupleGapCard copy={coupleCopy} isDark={isDark} onOpenPro={onOpenPro} />
+      <CoupleGapCard copy={copy} coupleCopy={coupleCopy} isDark={isDark} onOpenPro={onOpenPro} />
     </Animated.View>
   );
 }

@@ -17,8 +17,10 @@ import Svg, { Circle, Defs, LinearGradient as SvgGrad, Stop } from "react-native
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CosmicBg } from "@/components/CosmicBg";
+import { FaceReadingProBuilding } from "@/components/faceReading/FaceReadingProBuilding";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
+import { FACE_READING_PRO_LIVE } from "@/lib/faceReadingProConfig";
 
 const ACCENT = "#ec4899";
 const ACCENT_2 = "#7B1F1F";
@@ -133,6 +135,21 @@ export default function FaceReadingScreen() {
   const insets = useSafeAreaInsets();
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
+
+  if (!FACE_READING_PRO_LIVE) {
+    return (
+      <CosmicBg>
+        <View style={[s.header, { paddingTop: topPad + 4 }]}>
+          <Pressable onPress={() => router.back()} style={s.backBtn} hitSlop={12}>
+            <Feather name="chevron-left" size={26} color={C.text} />
+          </Pressable>
+          <Text style={[s.headerTitle, { color: C.text }]}>{t.fr_headerTitle}</Text>
+          <View style={{ width: 26 }} />
+        </View>
+        <FaceReadingProBuilding />
+      </CosmicBg>
+    );
+  }
 
   return (
     <CosmicBg>

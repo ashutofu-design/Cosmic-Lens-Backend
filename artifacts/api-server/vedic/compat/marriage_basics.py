@@ -19,7 +19,9 @@ from karakas import compute_karakas
 from vedic.compat.marriage_copy_picker import (
     build_couple_plain_copy,
     build_partner_plain_copy,
+    couple_band_label,
     couple_copy_seed,
+    couple_verdict_text,
     partner_copy_seed,
 )
 from jaimini import compute_arudha_padas, compute_upapada
@@ -85,6 +87,15 @@ _SENSITIVE_NOTE_WORDS = (
 _SENSITIVE_FLAG_WORDS = ("loyalty", "third-person", "secrecy", "parallel")
 _VIMS_ORDER = ["Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu", "Jupiter", "Saturn", "Mercury"]
 _VIMS_YEARS = {"Ketu": 7, "Venus": 20, "Sun": 6, "Moon": 10, "Mars": 7, "Rahu": 18, "Jupiter": 16, "Saturn": 19, "Mercury": 17}
+_ALERT_LABELS_HI = {
+    "loyalty_axis": "निष्ठा पर तनाव — जुनून/आवेग प्रतिबद्धता पर हावी हो सकता है",
+    "secrecy_axis": "गोपनीयता अक्ष — छिपे संबंध या समानांतर ध्यान का जोखिम",
+    "passion_override": "शुक्र-मंगल सटीक योग — आवेग निष्ठा पर भारी",
+    "hidden_emotion": "चंद्र अष्टम में — छिपी भावनाएँ विश्वास की परख करती हैं",
+    "parallel_pull": "द्वादश स्वामी पंचम में — गुप्त समानांतर आकर्षण रेखा",
+    "karmic_obsession": "सातवें पर राहु-केतु — साझेदारी पर जुनूनी/कर्मिक खिंचाव",
+}
+
 _ALERT_LABELS = {
     "loyalty_axis": "Loyalty stress — passion/impulse may override commitment",
     "secrecy_axis": "Secrecy axis — hidden ties or parallel attention risk",
@@ -92,6 +103,33 @@ _ALERT_LABELS = {
     "hidden_emotion": "Moon in 8th — hidden emotional layers test trust",
     "parallel_pull": "12th lord in 5th — secret parallel attraction line",
     "karmic_obsession": "Nodes on 7th — obsessive/karmic pull on partnership",
+}
+
+
+def _alert_labels(lang: str | None = None) -> dict[str, str]:
+    from vedic.compat.marriage_copy_picker import normalize_marriage_lang
+
+    if normalize_marriage_lang(lang) == "hi":
+        return _ALERT_LABELS_HI
+    return _ALERT_LABELS
+
+
+_CRITICAL_ALERT_TEASER = {
+    "en": {
+        "one": "⚠️ {count} Critical Hidden Karmic Alert detected in your chart axis.",
+        "many": "⚠️ {count} Critical Hidden Karmic Alerts detected in your chart axis.",
+        "none": "No critical hidden karmic alerts flagged.",
+    },
+    "hn": {
+        "one": "⚠️ Aapke chart axis mein {count} Critical Hidden Karmic Alert mila.",
+        "many": "⚠️ Aapke chart axis mein {count} Critical Hidden Karmic Alerts mile.",
+        "none": "Koi critical hidden karmic alert nahi mila.",
+    },
+    "hi": {
+        "one": "⚠️ आपके चार्ट अक्ष में {count} गंभीर छिपा कर्मिक अलर्ट मिला।",
+        "many": "⚠️ आपके चार्ट अक्ष में {count} गंभीर छिपे कर्मिक अलर्ट मिले।",
+        "none": "कोई गंभीर छिपा कर्मिक अलर्ट नहीं मिला।",
+    },
 }
 
 
@@ -356,8 +394,9 @@ def _is_sensitive_note(note: str) -> bool:
     return any(w in low for w in _SENSITIVE_NOTE_WORDS)
 
 
-def _critical_alerts_detail(sig: PersonSignals) -> list[dict[str, str]]:
+def _critical_alerts_detail(sig: PersonSignals, lang: str | None = None) -> list[dict[str, str]]:
     items: list[dict[str, str]] = []
+    labels = _alert_labels(lang)
     checks = (
         ("loyalty_axis", sig.loyalty_risk_high),
         ("secrecy_axis", sig.third_person_risk),
@@ -368,11 +407,11 @@ def _critical_alerts_detail(sig: PersonSignals) -> list[dict[str, str]]:
     )
     for key, active in checks:
         if active:
-            items.append({"id": key, "label": _ALERT_LABELS[key]})
+            items.append({"id": key, "label": labels[key]})
     return items
 
 
-def _critical_alerts_block(sig: PersonSignals) -> dict[str, Any]:
+def _critical_alerts_block(sig: PersonSignals, lang: str | None = None) -> dict[str, Any]:
     categories: list[str] = []
     if sig.loyalty_risk_high:
         categories.append("loyalty_axis")
@@ -387,15 +426,19 @@ def _critical_alerts_block(sig: PersonSignals) -> dict[str, Any]:
     if sig.rahu_on_7th_axis:
         categories.append("karmic_obsession")
     count = len(categories)
-    detail = _critical_alerts_detail(sig)
+    detail = _critical_alerts_detail(sig, lang=lang)
+    from vedic.compat.marriage_copy_picker import normalize_marriage_lang
+
+    teaser_pool = _CRITICAL_ALERT_TEASER.get(normalize_marriage_lang(lang), _CRITICAL_ALERT_TEASER["en"])
+    if count:
+        key = "one" if count == 1 else "many"
+        teaser = teaser_pool[key].format(count=count)
+    else:
+        teaser = teaser_pool["none"]
     return {
         "count": count,
         "locked": count > 0,
-        "teaser": (
-            f"⚠️ {count} Critical Hidden Karmic Alert{'s' if count != 1 else ''} detected in your chart axis."
-            if count
-            else "No critical hidden karmic alerts flagged."
-        ),
+        "teaser": teaser,
         "unlock_in": "pro" if count else None,
         "detail": detail,
     }
@@ -1579,7 +1622,7 @@ def _analyze_partner(
         score = _MARRIAGE_READINESS_FLOOR
 
     friction, remedy, strengths, pressures = _friction_and_remedy(k, gender, sig, kp, ul, manglik)
-    critical = _critical_alerts_block(sig)
+    critical = _critical_alerts_block(sig, lang=lang)
     friction = _sanitize_friction(friction, critical)
     dasha_tl = _partner_dasha_timeline(kundli, name)
 
@@ -1691,21 +1734,8 @@ def _analyze_partner(
     return payload
 
 
-def _couple_verdict(band: CoupleBand, p1: dict, p2: dict) -> str:
-    if band == "Promising":
-        return (
-            "Both marriage axes show supportive structure — if these two marry, "
-            "long-term direction can grow well with steady effort."
-        )
-    if band == "Workable":
-        return (
-            "Marriage is workable but not effortless — strengths exist on both sides; "
-            "friction points need conscious handling after wedding."
-        )
-    return (
-        "High effort match — marriage is possible but demands patience, remedies, "
-        "and realistic expectations on both charts."
-    )
+def _couple_verdict(band: CoupleBand, p1: dict, p2: dict, lang: str | None = None) -> str:
+    return couple_verdict_text(band, lang)
 
 
 def compute_marriage_basics(
@@ -1752,7 +1782,8 @@ def compute_marriage_basics(
     couple_block: dict[str, Any] = {
         "structural_score": structural,
         "structural_band": couple_band,
-        "future_verdict": _couple_verdict(couple_band, person1, person2),
+        "structural_band_label": couple_band_label(couple_band, lang),
+        "future_verdict": _couple_verdict(couple_band, person1, person2, lang=lang),
         "d9_sync_note": _d9_sync_summary(d9_sync, d9_1, d9_2),
         "d9_sync": {
             "available": bool(d9_sync.get("available")),

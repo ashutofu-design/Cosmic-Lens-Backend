@@ -260,7 +260,7 @@ def _deliver_pending(chat_id: str, *, force: bool) -> str:
     result = fulfill_order_with_founder_text(prefix, body)
     _pending_clear(chat_id)
     if not result.get("ok"):
-        return _format_error(str(result.get("error") or "failed"))
+        return _format_result_error(result)
     return _format_success(result)
 
 
@@ -288,15 +288,31 @@ def fulfill_order_with_founder_text(order_prefix: str, body_text: str) -> dict[s
 
     try:
         if is_milan:
-            from milan_founder_pdf import render_founder_milan_pdf
+            try:
+                from milan_founder_pdf import render_founder_milan_pdf
 
-            pdf_bytes = render_founder_milan_pdf(
-                p1_name=p1_name,
-                p2_name=p2_name,
-                lang=lang,
-                body_text=body_text,
-                order_id=order_id,
-            )
+                pdf_bytes = render_founder_milan_pdf(
+                    p1_name=p1_name,
+                    p2_name=p2_name,
+                    lang=lang,
+                    body_text=body_text,
+                    order_id=order_id,
+                )
+            except Exception as milan_exc:
+                log.warning(
+                    "[lr_telegram] milan founder pdf failed order=%s — love fallback: %s",
+                    order_id[:8],
+                    milan_exc,
+                )
+                from love_reality_founder_pdf import render_founder_love_reality_pdf
+
+                pdf_bytes = render_founder_love_reality_pdf(
+                    p1_name=p1_name,
+                    p2_name=p2_name,
+                    lang=lang,
+                    body_text=body_text,
+                    order_id=order_id,
+                )
         else:
             from love_reality_founder_pdf import render_founder_love_reality_pdf
 
@@ -431,7 +447,7 @@ def _format_success(result: dict[str, Any]) -> str:
     )
 
 
-def _format_error(code: str) -> str:
+def _format_error(code: str, detail: str = "") -> str:
     msgs = {
         "not_myreport_command": (
             "Use:\n"
@@ -453,7 +469,19 @@ def _format_error(code: str) -> str:
         "pdf_render_failed": "PDF conversion failed. Try again or shorten text.",
         "report_save_failed": "Could not save PDF to My Reports.",
     }
-    return f"❌ {msgs.get(code, code)}"
+    msg = msgs.get(code, code)
+    if detail and code == "pdf_render_failed":
+        short = (detail or "").strip()[:180]
+        if short:
+            msg = f"{msg}\n\nDebug: {short}"
+    return f"❌ {msg}"
+
+
+def _format_result_error(result: dict[str, Any]) -> str:
+    return _format_error(
+        str(result.get("error") or "failed"),
+        str(result.get("detail") or ""),
+    )
 
 
 def handle_founder_telegram_text(text: str, chat_id: str = "") -> str:
@@ -464,7 +492,7 @@ def handle_founder_telegram_text(text: str, chat_id: str = "") -> str:
     assert prefix and body
     result = fulfill_order_with_founder_text(prefix, body)
     if not result.get("ok"):
-        return _format_error(str(result.get("error") or "failed"))
+        return _format_result_error(result)
     return _format_success(result)
 
 
@@ -492,7 +520,7 @@ def handle_founder_telegram_chat(text: str, chat_id: str) -> str:
             result = fulfill_order_with_founder_text(prefix, body)
             _pending_clear(chat_id)
             if not result.get("ok"):
-                return _format_error(str(result.get("error") or "failed"))
+                return _format_result_error(result)
             return _format_success(result)
         _pending_append(chat_id, prefix, body or "")
         total = len(_pending_body(chat_id))

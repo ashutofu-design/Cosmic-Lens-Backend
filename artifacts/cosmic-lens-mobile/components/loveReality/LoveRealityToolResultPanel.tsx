@@ -3,8 +3,92 @@ import * as Haptics from "expo-haptics";
 import React from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { LoveRealityResultHero, LoyaltyCompareCard } from "@/components/loveReality/LoveRealityBasicScreen";
-import type { LoveRealityBasicDisplay, LoveRealityToolKey, LoyaltyCompareData } from "@/lib/loveRealityToolMappers";
+import { LoveRealityResultHero, LoyaltyCompareCard, LoveCompatibilityDetailCard, FutureOutcomeDetailCard } from "@/components/loveReality/LoveRealityBasicScreen";
+import {
+  sanitizeBasicHookLine,
+  type LoveRealityBasicDisplay,
+  type LoveRealityToolKey,
+  type LoyaltyCompareData,
+} from "@/lib/loveRealityToolMappers";
+import { coerceLoveBasicLang, pickLoveBasicCopy, type LoveBasicLang } from "@/lib/loveRealityBasicLang";
+
+export function LoveRealityToolSectionContent({
+  toolKey,
+  userName,
+  partnerName,
+  display,
+  loyaltyCompare,
+  isDark,
+  accentGradient,
+  lang = "en",
+}: {
+  toolKey?: LoveRealityToolKey;
+  userName: string;
+  partnerName: string;
+  display: LoveRealityBasicDisplay;
+  loyaltyCompare?: LoyaltyCompareData;
+  isDark: boolean;
+  accentGradient: [string, string];
+  lang?: LoveBasicLang;
+}) {
+  const lane = coerceLoveBasicLang(lang);
+  const compare = loyaltyCompare ?? display.loyaltyCompare;
+  const isLoyaltyTool = toolKey === "loyalty";
+  const isLoveTool = toolKey === "love-compat";
+  const isBreakupTool = toolKey === "breakup";
+  const isFutureTool = toolKey === "future-outcome";
+  const hookLine = sanitizeBasicHookLine(display.hookLine);
+  const warningLine = sanitizeBasicHookLine(display.warningLine);
+
+  return (
+    <View style={p.sectionBody}>
+      {!isLoyaltyTool ? (
+        <LoveRealityResultHero
+          display={display}
+          isDark={isDark}
+          accentGradient={accentGradient}
+          compact
+          hideLoyaltyCompare
+        />
+      ) : null}
+      {isLoveTool && display.loveDetail ? (
+        <LoveCompatibilityDetailCard detail={display.loveDetail} isDark={isDark} compact />
+      ) : null}
+      {isFutureTool && display.futureDetail ? (
+        <FutureOutcomeDetailCard detail={display.futureDetail} isDark={isDark} compact />
+      ) : null}
+      {isLoyaltyTool && compare ? (
+        <LoyaltyCompareCard
+          compare={compare}
+          youName={userName}
+          partnerName={partnerName}
+          isDark={isDark}
+          compact
+          lang={lane}
+        />
+      ) : isLoyaltyTool && !compare ? (
+        <Text style={[p.hook, { color: isDark ? "rgba(203,213,225,0.72)" : "#64748B" }]}>
+          {pickLoveBasicCopy(
+            lane,
+            "Could not load comparison — tap refresh above. If it persists, a server update may be needed.",
+            "Dono ka compare load nahi hua — upar refresh dabao. Agar phir bhi na aaye to server update chahiye.",
+            "तुलना लोड नहीं हुई — ऊपर रिफ्रेश दबाएँ। फिर भी न आए तो सर्वर अपडेट चाहिए।",
+          )}
+        </Text>
+      ) : null}
+      {!isFutureTool && !isLoyaltyTool && !isLoveTool && !isBreakupTool && hookLine ? (
+        <Text style={[p.hook, { color: isDark ? "rgba(203,213,225,0.72)" : "#64748B" }]}>
+          {hookLine}
+        </Text>
+      ) : null}
+      {!isFutureTool && !isLoyaltyTool && !isLoveTool && !isBreakupTool && warningLine ? (
+        <Text style={[p.warning, { color: isDark ? "#fca5a5" : "#dc2626" }]}>
+          {warningLine}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
 
 export function LoveRealityToolResultPanel({
   toolKey,
@@ -37,8 +121,6 @@ export function LoveRealityToolResultPanel({
   refreshing?: boolean;
 }) {
   const textHi = isDark ? "#fff" : "#0F172A";
-  const compare = loyaltyCompare ?? display.loyaltyCompare;
-  const isLoyaltyTool = toolKey === "loyalty";
 
   return (
     <View style={p.root}>
@@ -85,40 +167,21 @@ export function LoveRealityToolResultPanel({
 
       <ScrollView
         style={p.bodyScroll}
-        contentContainerStyle={[p.body, { paddingBottom: bottomPad + 12 }]}
+        contentContainerStyle={{ paddingBottom: bottomPad + 12 }}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        <LoveRealityResultHero
-          display={display}
-          isDark={isDark}
-          accentGradient={accentGradient}
-          compact
-          hideLoyaltyCompare
-        />
-        {isLoyaltyTool && compare ? (
-          <LoyaltyCompareCard
-            compare={compare}
-            youName={userName}
+        <View style={p.body}>
+          <LoveRealityToolSectionContent
+            toolKey={toolKey}
+            userName={userName}
             partnerName={partnerName}
+            display={display}
+            loyaltyCompare={loyaltyCompare}
             isDark={isDark}
-            compact
+            accentGradient={accentGradient}
           />
-        ) : isLoyaltyTool && !compare ? (
-          <Text style={[p.hook, { color: isDark ? "rgba(203,213,225,0.72)" : "#64748B" }]}>
-            Dono ka compare load nahi hua — neeche &quot;Refresh loyalty reading&quot; dabao. Agar phir bhi na aaye to server update chahiye.
-          </Text>
-        ) : null}
-        {display.hookLine ? (
-          <Text
-            style={[
-              p.hook,
-              { color: isDark ? "rgba(203,213,225,0.72)" : "#64748B" },
-            ]}
-          >
-            {display.hookLine}
-          </Text>
-        ) : null}
+        </View>
       </ScrollView>
     </View>
   );
@@ -147,12 +210,26 @@ const p = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: 16,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
+  },
+  sectionBody: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "flex-start",
   },
   hook: {
     marginTop: 12,
     fontSize: 12,
     fontFamily: "Nunito_600SemiBold",
+    lineHeight: 17,
+    textAlign: "center",
+    maxWidth: 300,
+    paddingHorizontal: 8,
+  },
+  warning: {
+    marginTop: 10,
+    fontSize: 12,
+    fontFamily: "Nunito_700Bold",
     lineHeight: 17,
     textAlign: "center",
     maxWidth: 300,

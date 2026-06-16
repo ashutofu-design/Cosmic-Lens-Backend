@@ -10,7 +10,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LOVE_REALITY_PDF_LAYOUT_VER } from "@/lib/loveRealityPdfLayout";
 import { packLovePerson } from "@/lib/loveRealityPack";
 import type { LoveProReportResponse } from "@/lib/loveRealityProReport";
-import { enHnReportCacheReady, needsLoveReportLlmRefresh } from "@/lib/loveRealityReportLang";
+import {
+  enHnReportCacheReady,
+  englishLlmNarrativeReady,
+  needsLoveReportLlmRefresh,
+} from "@/lib/loveRealityReportLang";
 import {
   currentLoveReportRevision,
   detectLoveReportChange,
@@ -304,6 +308,7 @@ export function deviceCacheNeedsServerRefresh(
   if (lang === "en" || lang === "hn") {
     const asm = (payload?.polish_assembly || "").trim();
     if (asm && asm !== LOVE_REALITY_POLISH_ASSEMBLY_VER) return true;
+    if (lang === "en" && payload && !englishLlmNarrativeReady(payload)) return true;
     if (enHnReportCacheReady(payload, lang)) return false;
     if (meta?.contentLang && coerceProPdfLang(meta.contentLang) !== lang) return true;
     return needsLoveReportLlmRefresh(payload, lang, meta?.contentLang);

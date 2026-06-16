@@ -3244,6 +3244,48 @@ def admin_love_reality_orders_route():
     return jsonify(list_human_orders(page=page, per_page=per_page, status=status))
 
 
+@app.route("/api/admin/astrovastu-room-orders", methods=["GET"])
+def admin_astrovastu_room_orders_route():
+    """Paid room photo uploads awaiting founder Vastu report."""
+    err = require_admin()
+    if err:
+        return err
+    from astrovastu_human_orders import list_human_orders
+
+    page = request.args.get("page", type=int) or 1
+    per_page = request.args.get("per_page", type=int) or 50
+    status = (request.args.get("status") or "").strip() or None
+    return jsonify(list_human_orders(page=page, per_page=per_page, status=status))
+
+
+@app.route("/api/admin/business-vastu-orders", methods=["GET"])
+def admin_business_vastu_orders_route():
+    """Business Vastu photo/PDF uploads awaiting founder report."""
+    err = require_admin()
+    if err:
+        return err
+    from business_vastu_human_orders import list_business_vastu_orders
+
+    page = request.args.get("page", type=int) or 1
+    per_page = request.args.get("per_page", type=int) or 50
+    status = (request.args.get("status") or "").strip() or None
+    return jsonify(list_business_vastu_orders(page=page, per_page=per_page, status=status))
+
+
+@app.route("/api/admin/business-vastu-orders/<order_id>", methods=["GET"])
+def admin_business_vastu_order_detail_route(order_id: str):
+    """Full Business Vastu submission with photos for admin review."""
+    err = require_admin()
+    if err:
+        return err
+    from business_vastu_human_orders import get_business_vastu_order
+
+    rec = get_business_vastu_order((order_id or "").strip())
+    if not rec:
+        return jsonify({"error": "not_found"}), 404
+    return jsonify(rec)
+
+
 @app.route("/api/admin/login-activity", methods=["GET"])
 def admin_login_activity():
     """List authentication attempts for admin panel."""
@@ -4881,22 +4923,6 @@ def career_analysis():
     user, err = get_authed_user(int(user_id))
     if err:
         return err
-
-    import career_billing as _career_bill
-
-    access = _career_bill.check_access(user.id)
-    if access.get("payment_required") and not access.get("entitled"):
-        return (
-            jsonify(
-                {
-                    "error": "payment_required",
-                    "message": "Pay ₹1 to unlock Career Analysis.",
-                    "amount_inr": access.get("amount_inr", 1),
-                    "label": access.get("label"),
-                }
-            ),
-            402,
-        )
 
     planets = kundli.get("planets") or []
     if not planets:
@@ -12092,6 +12118,26 @@ except Exception as _mho_exc:
     except Exception:
         pass
 
+try:
+    from astrovastu_human_orders import register_astrovastu_human_order_routes
+
+    register_astrovastu_human_order_routes(app)
+except Exception as _avho_exc:
+    try:
+        print(f"[astrovastu_human_orders] route register failed: {_avho_exc}", flush=True)
+    except Exception:
+        pass
+
+try:
+    from business_vastu_human_orders import register_business_vastu_human_order_routes
+
+    register_business_vastu_human_order_routes(app)
+except Exception as _bvho_exc:
+    try:
+        print(f"[business_vastu_human_orders] route register failed: {_bvho_exc}", flush=True)
+    except Exception:
+        pass
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ── /api/kundli-milan/pdf — Phase 2.5.11.21 (PDF download) ────────────────────
@@ -12760,6 +12806,15 @@ def payment_webhook():
             app.logger.info("[RZ-FR] webhook granted face_reading_report order=%s", order_id)
         else:
             app.logger.warning("[RZ-FR] webhook: no purchase for order=%s", order_id)
+        return jsonify({"status": "ok"}), 200
+
+    if tags.get("kind") == "gemstone" or (order_id and order_id.startswith("GM")):
+        import gemstone_billing as _gmb
+
+        if _gmb.grant_from_webhook(order_id, tags):
+            app.logger.info("[RZ-GM] webhook granted gemstone order=%s", order_id)
+        else:
+            app.logger.warning("[RZ-GM] webhook: no gemstone order for order=%s", order_id)
         return jsonify({"status": "ok"}), 200
 
     uid = tags.get("user_id", "")
@@ -16766,6 +16821,16 @@ try:
 except Exception as _fr_reg_exc:
     try:
         print(f"[face_reading_report_api] route register failed: {_fr_reg_exc}", flush=True)
+    except Exception:
+        pass
+
+try:
+    from gemstone_api import register_gemstone_routes
+
+    register_gemstone_routes(app)
+except Exception as _gm_reg_exc:
+    try:
+        print(f"[gemstone_api] route register failed: {_gm_reg_exc}", flush=True)
     except Exception:
         pass
 

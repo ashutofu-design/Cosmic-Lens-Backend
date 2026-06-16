@@ -110,7 +110,10 @@ export function TagRoomModal({
               return (
                 <Pressable
                   key={opt.key}
-                  onPress={() => { Haptics.selectionAsync(); setRoomType(opt.key); }}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setRoomType((prev) => (prev === opt.key ? "" : opt.key));
+                  }}
                   style={[s.roomChip, {
                     borderColor: sel ? C.accent : C.border,
                     backgroundColor: sel ? C.accentBg : C.bgCard,

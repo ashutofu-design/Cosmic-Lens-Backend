@@ -316,6 +316,56 @@ function textLooksEnglishProse(text: string): boolean {
 
 
 
+function wordCountBrief(text: string): number {
+
+  return (String(text || "").match(/\S+/g) || []).length;
+
+}
+
+
+
+/** English Pro report — need LLM deep_analysis / verdict, not engine scores only. */
+
+export function englishLlmNarrativeReady(
+
+  report: LoveReportLangPayload | null | undefined,
+
+): boolean {
+
+  if (!report) return false;
+
+  let deepOk = 0;
+
+  for (const row of report.pro_premium?.deep_analysis || []) {
+
+    if (!row || typeof row !== "object") continue;
+
+    const expl = String(row.explanation || "").trim();
+
+    if (wordCountBrief(expl) >= 40 && textLooksEnglishProse(expl)) deepOk += 1;
+
+  }
+
+  if (deepOk >= 2) return true;
+
+  const verdict = String(
+
+    report.page1?.verdict
+
+    || report.pro_premium?.verdict
+
+    || report.page1?.insights_narrative
+
+    || "",
+
+  ).trim();
+
+  return wordCountBrief(verdict) >= 35 && textLooksEnglishProse(verdict);
+
+}
+
+
+
 export function reportSummaryMatchesLang(
 
   report: LoveReportLangPayload,

@@ -24,8 +24,8 @@ export type FloorPlanSkuSpec = {
 
 export const FLOOR_PLAN_CATALOG: Record<FloorPlanSku, FloorPlanSkuSpec> = {
   home_floor_799: {
-    price: 799,
-    label: "Home · Full Floor Plan",
+    price: 999,
+    label: "Home · Full Home Plan",
     plan_kind: "home",
   },
   shop_floor_1499: {

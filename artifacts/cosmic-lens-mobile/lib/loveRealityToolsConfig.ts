@@ -39,15 +39,6 @@ export const LOVE_REALITY_TOOLS: LoveRealityToolDef[] = [
     apiPath: "/api/loyalty-check",
   },
   {
-    key: "will-return",
-    shortLabel: "Return",
-    title: "Will X Return?",
-    emoji: "🪃",
-    iconColor: "#fbbf24",
-    gradient: ["#f59e0b", "#fbbf24"],
-    apiPath: "/api/will-return",
-  },
-  {
     key: "future-outcome",
     shortLabel: "Future",
     title: "Future Outcome",

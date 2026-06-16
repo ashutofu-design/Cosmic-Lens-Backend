@@ -44,8 +44,17 @@ def register_career_routes(app) -> None:
         if request.method == "OPTIONS":
             return "", 204
         if not pg.configured():
-            body, code = pg.not_configured_error()
-            return jsonify(body), code
+            user, err = _resolve_user()
+            if err:
+                return err
+            access = billing.check_access(user.id)
+            return jsonify(
+                {
+                    **access,
+                    "already_entitled": True,
+                    "payment_required": False,
+                }
+            )
 
         user, err = _resolve_user()
         if err:

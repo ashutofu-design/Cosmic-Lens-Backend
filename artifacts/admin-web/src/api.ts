@@ -445,3 +445,56 @@ export async function fetchLoveRealityOrders(opts?: {
   const qs = q.toString();
   return adminFetch(`/api/admin/love-reality-orders${qs ? `?${qs}` : ""}`);
 }
+
+export interface BusinessVastuOrderItem {
+  order_id: string;
+  created_at: string | null;
+  status: string;
+  user_id: number;
+  cosmo_user_id?: string;
+  business_type: string;
+  property_name: string;
+  photo_count: number;
+  has_pdf: boolean;
+  pdf_filename?: string | null;
+}
+
+export interface BusinessVastuOrdersResponse {
+  orders: BusinessVastuOrderItem[];
+  total: number;
+  page: number;
+  pages: number;
+}
+
+export interface BusinessVastuOrderDetail {
+  order_id: string;
+  created_at: string | null;
+  status: string;
+  user_id: number;
+  cosmo_user_id?: string;
+  business_type: string;
+  property_name: string;
+  room_photos?: { room_type: string; image_data_url: string; heading_deg?: number }[];
+  floor_plan_upload?: {
+    type?: string;
+    filename?: string;
+    north_at?: string;
+    data_url?: string;
+    base64?: string;
+  };
+}
+
+export async function fetchBusinessVastuOrders(opts?: {
+  page?: number;
+  status?: string;
+}): Promise<BusinessVastuOrdersResponse> {
+  const q = new URLSearchParams();
+  if (opts?.page) q.set("page", String(opts.page));
+  if (opts?.status) q.set("status", opts.status);
+  const qs = q.toString();
+  return adminFetch(`/api/admin/business-vastu-orders${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchBusinessVastuOrderDetail(orderId: string) {
+  return adminFetch<BusinessVastuOrderDetail>(`/api/admin/business-vastu-orders/${orderId}`);
+}

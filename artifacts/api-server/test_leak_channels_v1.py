@@ -24,7 +24,8 @@ class TestLeakChannelsV1(unittest.TestCase):
         out = scan_wealth_leak_channels(planets, 0)
         channels = [row["channel"] for row in out]
         self.assertIn("sudden_loss_tax", channels)
-        self.assertIn("Rahu in 8th house", out[0]["message_en"])
+        self.assertNotIn("Rahu", out[0]["message_en"])
+        self.assertIn("joint-money", out[0]["message_en"].lower())
 
     def test_ketu_2h_savings_channel(self):
         planets = [p if p["name"] != "Ketu" else {**p, "house": 2} for p in _planets()]

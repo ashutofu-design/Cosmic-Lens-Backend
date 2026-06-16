@@ -24,6 +24,10 @@ import {
   fetchUsers,
   fetchLoveRealityOrders,
   type LoveRealityOrderItem,
+  fetchBusinessVastuOrders,
+  fetchBusinessVastuOrderDetail,
+  type BusinessVastuOrderItem,
+  type BusinessVastuOrderDetail,
   formatDate,
   formatInr,
   profileBirthFields,
@@ -31,7 +35,7 @@ import {
   setUserPro,
 } from "./api";
 
-type Tab = "dashboard" | "transactions" | "users" | "logins" | "pdfcosts" | "lrorders";
+type Tab = "dashboard" | "transactions" | "users" | "logins" | "pdfcosts" | "lrorders" | "bvorders";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("dashboard");
@@ -89,6 +93,15 @@ export default function App() {
   const [lrOrders, setLrOrders] = useState<LoveRealityOrderItem[]>([]);
   const [lrOrdersError, setLrOrdersError] = useState<string | null>(null);
 
+  const [bvOrdersPage, setBvOrdersPage] = useState(1);
+  const [bvOrdersPages, setBvOrdersPages] = useState(1);
+  const [bvOrdersTotal, setBvOrdersTotal] = useState(0);
+  const [bvOrders, setBvOrders] = useState<BusinessVastuOrderItem[]>([]);
+  const [bvOrdersError, setBvOrdersError] = useState<string | null>(null);
+  const [bvDetailId, setBvDetailId] = useState<string | null>(null);
+  const [bvDetail, setBvDetail] = useState<BusinessVastuOrderDetail | null>(null);
+  const [bvDetailLoading, setBvDetailLoading] = useState(false);
+
   const loadDashboard = useCallback(async () => {
     const [d, s] = await Promise.all([fetchDashboard(), fetchStats()]);
     setDash(d);
@@ -141,6 +154,14 @@ export default function App() {
     setLrOrdersTotal(data.total);
   }, [lrOrdersPage]);
 
+  const loadBusinessVastuOrders = useCallback(async () => {
+    setBvOrdersError(null);
+    const data = await fetchBusinessVastuOrders({ page: bvOrdersPage });
+    setBvOrders(data.orders);
+    setBvOrdersPages(data.pages);
+    setBvOrdersTotal(data.total);
+  }, [bvOrdersPage]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -151,15 +172,17 @@ export default function App() {
       else if (tab === "logins") await loadLogins();
       else if (tab === "pdfcosts") await loadPdfGenerations();
       else if (tab === "lrorders") await loadLoveRealityOrders();
+      else if (tab === "bvorders") await loadBusinessVastuOrders();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load";
       if (tab === "pdfcosts") setPdfGenError(msg);
       else if (tab === "lrorders") setLrOrdersError(msg);
+      else if (tab === "bvorders") setBvOrdersError(msg);
       else setError(msg);
     } finally {
       setLoading(false);
     }
-  }, [tab, loadDashboard, loadTransactions, loadUsers, loadLogins, loadPdfGenerations, loadLoveRealityOrders]);
+  }, [tab, loadDashboard, loadTransactions, loadUsers, loadLogins, loadPdfGenerations, loadLoveRealityOrders, loadBusinessVastuOrders]);
 
   useEffect(() => {
     load();
@@ -360,6 +383,25 @@ export default function App() {
       alert(e instanceof Error ? e.message : "Delete failed");
     } finally {
       setDeletingLoginKey(null);
+    }
+  }
+
+  async function onShowBvDetail(orderId: string) {
+    if (bvDetailId === orderId) {
+      setBvDetailId(null);
+      setBvDetail(null);
+      return;
+    }
+    setBvDetailId(orderId);
+    setBvDetail(null);
+    setBvDetailLoading(true);
+    try {
+      setBvDetail(await fetchBusinessVastuOrderDetail(orderId));
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to load order");
+      setBvDetailId(null);
+    } finally {
+      setBvDetailLoading(false);
     }
   }
 
@@ -689,6 +731,7 @@ export default function App() {
             ["users", "Users"],
             ["logins", "Gmail logins"],
             ["lrorders", "Love Reality Orders"],
+            ["bvorders", "Business Vastu"],
             ["pdfcosts", "PDF AI costs"],
           ] as const
         ).map(([id, label]) => (
@@ -975,7 +1018,9 @@ export default function App() {
                       </td>
                       <td>{row.lang}</td>
                       <td>
-                        {row.contact_method}: {row.contact_value}
+                        {row.contact_method === "my_reports"
+                          ? "My Reports"
+                          : `${row.contact_method}: ${row.contact_value}`}
                       </td>
                       <td>{row.urgent ? "⚡ 12h" : "24–48h"}</td>
                       <td>
@@ -1006,6 +1051,140 @@ export default function App() {
                 type="button"
                 disabled={lrOrdersPage >= lrOrdersPages || loading}
                 onClick={() => setLrOrdersPage((p) => p + 1)}
+              >
+                Next
+              </button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {tab === "bvorders" ? (
+        <section className="section">
+          <h2>Business Vastu orders ({bvOrdersTotal})</h2>
+          <p className="detail-muted">
+            Shop/office photos and floor-plan PDFs awaiting founder Vastu review.
+          </p>
+          {bvOrdersError ? <div className="error">{bvOrdersError}</div> : null}
+          <div className="card" style={{ padding: 0, overflow: "auto" }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Premise</th>
+                  <th>Type</th>
+                  <th>Photos</th>
+                  <th>PDF</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {bvOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={7}>No orders yet.</td>
+                  </tr>
+                ) : (
+                  bvOrders.map((row) => (
+                    <Fragment key={row.order_id}>
+                      <tr>
+                        <td>{formatDate(row.created_at)}</td>
+                        <td>
+                          {row.property_name || "—"}
+                          {row.user_id ? (
+                            <div className="detail-muted">
+                              user #{row.user_id}
+                              {row.cosmo_user_id ? ` · ${row.cosmo_user_id}` : ""}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td>{row.business_type}</td>
+                        <td>{row.photo_count}</td>
+                        <td>{row.has_pdf ? row.pdf_filename || "yes" : "—"}</td>
+                        <td>
+                          <span className={row.status === "pending" ? "badge warn" : "badge ok"}>
+                            {row.status}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className={bvDetailId === row.order_id ? "primary" : ""}
+                            onClick={() => onShowBvDetail(row.order_id)}
+                          >
+                            {bvDetailId === row.order_id ? "Hide" : "View"}
+                          </button>
+                        </td>
+                      </tr>
+                      {bvDetailId === row.order_id ? (
+                        <tr className="detail-row">
+                          <td colSpan={7}>
+                            {bvDetailLoading ? (
+                              <p className="detail-muted">Loading photos…</p>
+                            ) : bvDetail ? (
+                              <div className="user-detail-panel">
+                                <p className="detail-summary">
+                                  <strong>{bvDetail.property_name}</strong> · {bvDetail.business_type}
+                                </p>
+                                {(bvDetail.room_photos ?? []).length > 0 ? (
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                                    {(bvDetail.room_photos ?? []).map((p, i) => (
+                                      <div key={`${p.room_type}-${i}`} style={{ width: 140 }}>
+                                        <img
+                                          src={p.image_data_url}
+                                          alt={p.room_type}
+                                          style={{
+                                            width: "100%",
+                                            aspectRatio: "1",
+                                            objectFit: "cover",
+                                            borderRadius: 8,
+                                            border: "1px solid var(--border)",
+                                          }}
+                                        />
+                                        <p className="detail-muted" style={{ marginTop: 4, fontSize: 12 }}>
+                                          {p.room_type.replace(/_/g, " ")}
+                                        </p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="detail-muted">No room photos.</p>
+                                )}
+                                {bvDetail.floor_plan_upload ? (
+                                  <p className="detail-muted" style={{ marginTop: 10 }}>
+                                    PDF: {bvDetail.floor_plan_upload.filename || "floor plan"} · North:{" "}
+                                    {bvDetail.floor_plan_upload.north_at || "top"}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <p className="detail-error">Could not load order.</p>
+                            )}
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          {bvOrdersPages > 1 ? (
+            <div className="pager">
+              <button
+                type="button"
+                disabled={bvOrdersPage <= 1 || loading}
+                onClick={() => setBvOrdersPage((p) => Math.max(1, p - 1))}
+              >
+                Prev
+              </button>
+              <span>
+                Page {bvOrdersPage} / {bvOrdersPages}
+              </span>
+              <button
+                type="button"
+                disabled={bvOrdersPage >= bvOrdersPages || loading}
+                onClick={() => setBvOrdersPage((p) => p + 1)}
               >
                 Next
               </button>

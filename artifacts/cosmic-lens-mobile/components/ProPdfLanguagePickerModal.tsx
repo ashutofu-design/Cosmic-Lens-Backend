@@ -7,10 +7,8 @@ import {
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useC } from "@/context/ThemeContext";
@@ -19,16 +17,10 @@ import { LOVE_REALITY_URGENT_SURCHARGE_INR } from "@/lib/loveRealityProOffer";
 import {
   coerceProPdfLang,
   PRO_PDF_LANG_OPTIONS,
-  proPdfLangOptionExplain,
   proPdfLangPickerUi,
-  type ProPdfLangCode,
 } from "@/lib/proPdfLang";
 
 export type ProPdfDeliveryDetails = {
-  contactMethod: "whatsapp" | "email";
-  onContactMethodChange: (method: "whatsapp" | "email") => void;
-  contactValue: string;
-  onContactValueChange: (value: string) => void;
   priorityDelivery: boolean;
   onPriorityDeliveryChange: (value: boolean) => void;
 };
@@ -82,8 +74,6 @@ export function ProPdfLanguagePickerModal({
                 s.card,
                 {
                   backgroundColor: C.isDark ? "#0F0A1F" : "#FFFFFF",
-                  paddingHorizontal: 18,
-                  paddingVertical: 22,
                 },
               ]}
             >
@@ -94,18 +84,18 @@ export function ProPdfLanguagePickerModal({
                   end={{ x: 1, y: 1 }}
                   style={s.iconCircle}
                 >
-                  <Feather name="globe" size={22} color="#fff" />
+                  <Feather name="globe" size={18} color="#fff" />
                 </LinearGradient>
-                <Text style={[s.title, { color: C.text }]}>{titleText}</Text>
-                <Text style={[s.sub, { color: C.textDim }]}>{subtitleText}</Text>
+                <View style={s.headerText}>
+                  <Text style={[s.title, { color: C.text }]}>{titleText}</Text>
+                  <Text style={[s.sub, { color: C.textDim }]} numberOfLines={1}>
+                    {subtitleText}
+                  </Text>
+                </View>
               </View>
 
-              <ScrollView
-                style={{ maxHeight: delivery ? 420 : 340, marginTop: 14, marginBottom: 14 }}
-                contentContainerStyle={{ paddingVertical: 4 }}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-              >
+              <Text style={[s.sectionLbl, { color: C.textDim }]}>Language</Text>
+              <View style={s.langRow}>
                 {PRO_PDF_LANG_OPTIONS.map(L => {
                   const sel = selectedLang === L.code;
                   return (
@@ -115,164 +105,92 @@ export function ProPdfLanguagePickerModal({
                         Haptics.selectionAsync();
                         onSelectLang(L.code);
                       }}
-                      style={({ pressed }) => ({
-                        flexDirection: "row",
-                        alignItems: "center",
-                        paddingVertical: 12,
-                        paddingHorizontal: 14,
-                        marginBottom: 8,
-                        borderRadius: 12,
-                        borderWidth: sel ? 1.5 : 1,
-                        borderColor: sel ? "#8B5CF6" : C.isDark ? "rgba(255,255,255,0.10)" : "#E5E7EB",
-                        backgroundColor: sel
-                          ? C.isDark
-                            ? "rgba(139,92,246,0.18)"
-                            : "rgba(139,92,246,0.08)"
-                          : C.isDark
-                            ? "rgba(255,255,255,0.03)"
-                            : "#F9FAFB",
-                        opacity: pressed ? 0.85 : 1,
-                      })}
+                      style={({ pressed }) => [
+                        s.langChip,
+                        {
+                          borderColor: sel ? "#8B5CF6" : C.isDark ? "rgba(255,255,255,0.12)" : "#E5E7EB",
+                          backgroundColor: sel
+                            ? C.isDark
+                              ? "rgba(139,92,246,0.2)"
+                              : "rgba(139,92,246,0.1)"
+                            : C.isDark
+                              ? "rgba(255,255,255,0.03)"
+                              : "#F9FAFB",
+                          opacity: pressed ? 0.85 : 1,
+                        },
+                      ]}
                     >
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={{
-                            color: C.text,
-                            fontSize: 16,
-                            fontFamily: "Nunito_700Bold",
-                          }}
-                          numberOfLines={1}
-                        >
-                          {L.native}
-                        </Text>
-                        <Text
-                          style={{
-                            color: C.textDim,
-                            fontSize: 11,
-                            fontFamily: "Nunito_400Regular",
-                            marginTop: 2,
-                          }}
-                          numberOfLines={2}
-                        >
-                          {proPdfLangOptionExplain(L.code as ProPdfLangCode, uiLang)}
-                        </Text>
-                      </View>
-                      {sel ? (
-                        <View
-                          style={{
-                            width: 22,
-                            height: 22,
-                            borderRadius: 11,
-                            backgroundColor: "#8B5CF6",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <Feather name="check" size={13} color="#fff" />
-                        </View>
-                      ) : (
-                        <View
-                          style={{
-                            width: 22,
-                            height: 22,
-                            borderRadius: 11,
-                            borderWidth: 1.5,
-                            borderColor: C.isDark ? "rgba(255,255,255,0.18)" : "#D1D5DB",
-                          }}
-                        />
-                      )}
+                      <Text
+                        style={[
+                          s.langChipTxt,
+                          { color: sel ? (C.isDark ? "#e9d5ff" : "#6d28d9") : C.text },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {L.native}
+                      </Text>
+                      {sel ? <Feather name="check" size={11} color="#8B5CF6" /> : null}
                     </Pressable>
                   );
                 })}
+              </View>
 
-                {delivery ? (
-                  <View
+              {delivery ? (
+                <View
+                  style={[
+                    s.deliveryCard,
+                    {
+                      borderColor: C.isDark ? "rgba(255,255,255,0.1)" : "#E5E7EB",
+                      backgroundColor: C.isDark ? "rgba(255,255,255,0.03)" : "#F9FAFB",
+                    },
+                  ]}
+                >
+                  <View style={s.deliveryTop}>
+                    <Text style={[s.deliveryHead, { color: C.text }]}>{ui.deliveryHead}</Text>
+                    <Text style={[s.deliveryLine, { color: C.textDim }]} numberOfLines={1}>
+                      {ui.deliveryLine}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => {
+                      delivery.onPriorityDeliveryChange(!delivery.priorityDelivery);
+                      Haptics.selectionAsync();
+                    }}
                     style={[
-                      s.deliveryCard,
+                      s.urgentRow,
                       {
-                        borderColor: C.isDark ? "rgba(255,255,255,0.12)" : "#E5E7EB",
-                        backgroundColor: C.isDark ? "rgba(255,255,255,0.03)" : "#F9FAFB",
+                        borderColor: delivery.priorityDelivery ? "#f59e0b" : C.border,
+                        backgroundColor: delivery.priorityDelivery
+                          ? C.isDark
+                            ? "rgba(245,158,11,0.1)"
+                            : "rgba(245,158,11,0.06)"
+                          : "transparent",
                       },
                     ]}
                   >
-                    <Text style={[s.deliveryHead, { color: C.text }]}>{ui.deliveryHead}</Text>
-                    <View style={s.methodRow}>
-                      {(["whatsapp", "email"] as const).map(m => (
-                        <Pressable
-                          key={m}
-                          onPress={() => {
-                            delivery.onContactMethodChange(m);
-                            Haptics.selectionAsync();
-                          }}
-                          style={[
-                            s.methodBtn,
-                            {
-                              borderColor: delivery.contactMethod === m ? "#ec4899" : C.border,
-                              backgroundColor:
-                                delivery.contactMethod === m ? "rgba(236,72,153,0.12)" : "transparent",
-                            },
-                          ]}
-                        >
-                          <Feather
-                            name={m === "whatsapp" ? "message-circle" : "mail"}
-                            size={14}
-                            color="#ec4899"
-                          />
-                          <Text style={[s.methodTxt, { color: C.text }]}>
-                            {m === "whatsapp" ? ui.whatsapp : ui.email}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                    <TextInput
-                      value={delivery.contactValue}
-                      onChangeText={delivery.onContactValueChange}
-                      placeholder={
-                        delivery.contactMethod === "whatsapp"
-                          ? ui.whatsappPlaceholder
-                          : ui.emailPlaceholder
-                      }
-                      placeholderTextColor={C.textMuted}
-                      keyboardType={delivery.contactMethod === "whatsapp" ? "phone-pad" : "email-address"}
-                      autoCapitalize="none"
+                    <Text style={[s.urgentTitle, { color: C.text }]} numberOfLines={1}>
+                      {priorityOption.emoji} {priorityOption.title} · {priorityOption.eta} · +₹
+                      {LOVE_REALITY_URGENT_SURCHARGE_INR}
+                    </Text>
+                    <View
                       style={[
-                        s.input,
-                        { color: C.text, borderColor: C.border, backgroundColor: C.bg },
-                      ]}
-                    />
-                    <Pressable
-                      onPress={() => {
-                        delivery.onPriorityDeliveryChange(!delivery.priorityDelivery);
-                        Haptics.selectionAsync();
-                      }}
-                      style={[
-                        s.urgentRow,
-                        { borderColor: delivery.priorityDelivery ? "#f59e0b" : C.border },
+                        s.check,
+                        {
+                          borderColor: delivery.priorityDelivery ? "#f59e0b" : C.border,
+                          backgroundColor: delivery.priorityDelivery ? "#f59e0b" : "transparent",
+                        },
                       ]}
                     >
-                      <View style={{ flex: 1 }}>
-                        <Text style={[s.urgentTitle, { color: C.text }]}>
-                          {priorityOption.emoji} {priorityOption.title}
-                        </Text>
-                        <Text style={[s.urgentSub, { color: C.textDim }]}>
-                          {priorityOption.eta} · +₹{LOVE_REALITY_URGENT_SURCHARGE_INR}
-                        </Text>
-                      </View>
-                      <View
-                        style={[
-                          s.check,
-                          {
-                            borderColor: delivery.priorityDelivery ? "#f59e0b" : C.border,
-                            backgroundColor: delivery.priorityDelivery ? "#f59e0b" : "transparent",
-                          },
-                        ]}
-                      >
-                        {delivery.priorityDelivery ? <Feather name="check" size={14} color="#fff" /> : null}
-                      </View>
-                    </Pressable>
-                  </View>
-                ) : null}
-              </ScrollView>
+                      {delivery.priorityDelivery ? (
+                        <Feather name="check" size={11} color="#fff" />
+                      ) : null}
+                    </View>
+                  </Pressable>
+                  <Text style={[s.priorityRefund, { color: C.textMuted }]} numberOfLines={2}>
+                    {ui.priorityRefund}
+                  </Text>
+                </View>
+              ) : null}
 
               <View style={s.actions}>
                 <Pressable
@@ -289,7 +207,7 @@ export function ProPdfLanguagePickerModal({
                     },
                   ]}
                 >
-                  <Feather name="x" size={14} color={C.text} />
+                  <Feather name="x" size={13} color={C.text} />
                   <Text style={[s.changeTxt, { color: C.text }]}>{ui.cancel}</Text>
                 </Pressable>
                 <Pressable
@@ -305,7 +223,7 @@ export function ProPdfLanguagePickerModal({
                     end={{ x: 1, y: 0 }}
                     style={s.continueGrad}
                   >
-                    <Feather name="arrow-right" size={15} color="#fff" />
+                    <Feather name="arrow-right" size={14} color="#fff" />
                     <Text style={s.continueTxt}>{ui.continue}</Text>
                   </LinearGradient>
                 </Pressable>
@@ -320,106 +238,93 @@ export function ProPdfLanguagePickerModal({
 
 const s = StyleSheet.create({
   backdrop: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20 },
-  cardWrap: { width: "100%", maxWidth: 420 },
-  borderGradient: { borderRadius: 26, padding: 1.5 },
-  card: { borderRadius: 24, padding: 22 },
-  header: { alignItems: "center", marginBottom: 20 },
+  cardWrap: { width: "100%", maxWidth: 400 },
+  borderGradient: { borderRadius: 22, padding: 1.5 },
+  card: { borderRadius: 20, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 14 },
+  header: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
   iconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
-    shadowColor: "#8B5CF6",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 8,
   },
-  title: { fontSize: 20, fontFamily: "Nunito_700Bold", letterSpacing: -0.4, marginBottom: 6 },
-  sub: {
-    fontSize: 12,
-    fontFamily: "Nunito_400Regular",
-    textAlign: "center",
-    lineHeight: 17,
-    paddingHorizontal: 8,
+  headerText: { flex: 1, gap: 1 },
+  title: { fontSize: 16, fontFamily: "Nunito_700Bold", letterSpacing: -0.3 },
+  sub: { fontSize: 11, fontFamily: "Nunito_400Regular" },
+  sectionLbl: {
+    fontSize: 10,
+    fontFamily: "Nunito_700Bold",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    marginBottom: 6,
   },
-  deliveryCard: {
-    marginTop: 4,
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 14,
-    gap: 10,
-  },
-  deliveryHead: { fontSize: 14, fontFamily: "Nunito_700Bold" },
-  methodRow: { flexDirection: "row", gap: 10 },
-  methodBtn: {
+  langRow: { flexDirection: "row", gap: 6 },
+  langChip: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 12,
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 10,
     borderWidth: 1,
   },
-  methodTxt: { fontSize: 13, fontFamily: "Nunito_600SemiBold" },
-  input: {
-    borderWidth: 1,
+  langChipTxt: { fontSize: 12, fontFamily: "Nunito_700Bold" },
+  deliveryCard: {
+    marginTop: 10,
     borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === "ios" ? 12 : 10,
-    fontFamily: "Nunito_500Medium",
-    fontSize: 15,
+    borderWidth: 1,
+    padding: 10,
+    gap: 8,
   },
+  deliveryTop: { gap: 2 },
+  deliveryHead: { fontSize: 12, fontFamily: "Nunito_700Bold" },
+  deliveryLine: { fontSize: 10.5, fontFamily: "Nunito_400Regular" },
   urgentRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
   },
-  urgentTitle: { fontSize: 13, fontFamily: "Nunito_700Bold" },
-  urgentSub: { fontSize: 11, fontFamily: "Nunito_400Regular", marginTop: 2 },
+  urgentTitle: { flex: 1, fontSize: 11, fontFamily: "Nunito_600SemiBold" },
+  priorityRefund: { fontSize: 10, fontFamily: "Nunito_500Medium", lineHeight: 14 },
   check: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 5,
     borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
   },
-  actions: { flexDirection: "row", gap: 10 },
+  actions: { flexDirection: "row", gap: 8, marginTop: 12 },
   changeBtn: {
-    flex: 0.8,
+    flex: 0.75,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 7,
-    height: 48,
-    borderRadius: 14,
+    gap: 5,
+    height: 42,
+    borderRadius: 12,
     borderWidth: 1,
   },
-  changeTxt: { fontSize: 14, fontFamily: "Nunito_700Bold" },
+  changeTxt: { fontSize: 13, fontFamily: "Nunito_700Bold" },
   continueBtn: {
-    flex: 1.2,
-    height: 48,
-    borderRadius: 14,
+    flex: 1.25,
+    height: 42,
+    borderRadius: 12,
     overflow: "hidden",
-    shadowColor: "#8B5CF6",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 6,
   },
   continueGrad: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: 6,
   },
-  continueTxt: { color: "#fff", fontSize: 14, fontFamily: "Nunito_700Bold", letterSpacing: 0.2 },
+  continueTxt: { color: "#fff", fontSize: 13, fontFamily: "Nunito_700Bold" },
 });

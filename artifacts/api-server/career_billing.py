@@ -10,23 +10,29 @@ def price_inr() -> int:
 
 
 def payment_bypass() -> bool:
-    return (os.environ.get("CAREER_PAYMENT_BYPASS") or "").strip().lower() in (
+    if (os.environ.get("CAREER_PAYMENT_BYPASS") or "").strip().lower() in (
         "1",
         "true",
         "yes",
         "on",
-    )
+    ):
+        return True
+    try:
+        import payment_gateway as pg
+
+        if not pg.configured():
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def payment_required() -> bool:
+    """Paywall only when explicitly enabled (CAREER_PAYMENT_REQUIRED=1) and not bypassed."""
     if payment_bypass():
         return False
-    return (os.environ.get("CAREER_PAYMENT_REQUIRED") or "1").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    flag = (os.environ.get("CAREER_PAYMENT_REQUIRED") or "0").strip().lower()
+    return flag in ("1", "true", "yes", "on")
 
 
 def check_access(user_id: int) -> dict:
@@ -35,28 +41,29 @@ def check_access(user_id: int) -> dict:
     user = User.query.get(int(user_id))
     if not user:
         return {
-            "entitled": False,
-            "payment_required": True,
+            "entitled": not payment_required(),
+            "payment_required": payment_required(),
             "amount_inr": price_inr(),
             "label": "Career Analysis Unlock",
             "career_unlocked": False,
-            "payment_bypass": False,
+            "payment_bypass": payment_bypass(),
         }
 
-    # Only real ₹1 payment unlocks career — not "payment_required=off" alone.
     unlocked = bool(getattr(user, "career_unlocked", False))
-    if payment_bypass():
+    bypass = payment_bypass()
+    paywall = payment_required() and not unlocked
+    if bypass or not payment_required():
         return {
             "entitled": True,
             "payment_required": False,
             "amount_inr": price_inr(),
             "label": "Career Analysis Unlock",
             "career_unlocked": unlocked,
-            "payment_bypass": True,
+            "payment_bypass": bypass,
         }
     return {
         "entitled": unlocked,
-        "payment_required": payment_required() and not unlocked,
+        "payment_required": paywall,
         "amount_inr": price_inr(),
         "label": "Career Analysis Unlock",
         "career_unlocked": unlocked,

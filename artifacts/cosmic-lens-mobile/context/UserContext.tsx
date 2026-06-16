@@ -6,6 +6,10 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import type { BirthData, KundliData } from "@/types";
 import { coerceUILang, type UILang } from "@/lib/i18n";
 import { API_BASE } from "@/lib/apiConfig";
+import { clearAllLocalReports } from "@/lib/localReports";
+import { attachPushReceivedHandler, setupPushForUser } from "@/lib/notifications";
+import { startReportAutoSync, stopReportAutoSync } from "@/lib/reportAutoSync";
+import { clearServerSyncCache, syncServerReportsForUser } from "@/lib/serverMyReports";
 
 // ── ProfileEntry ────────────────────────────────────────────────────────────
 export interface ProfileEntry {
@@ -306,7 +310,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const removals: Promise<void>[] = [
       AsyncStorage.removeItem(KEYS.user),
       AsyncStorage.removeItem(KEYS.legacyUser),
+      clearAllLocalReports(),
+      clearServerSyncCache(),
     ];
+    stopReportAutoSync();
     if (keepLastUserId && prevId != null) {
       removals.push(AsyncStorage.setItem(KEYS.lastUserId, String(prevId)));
     }
@@ -643,6 +650,34 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       }
     };
   }, [pullProfilesFromCloud]);
+
+  // Push token + auto-sync founder-delivered reports (no manual Fetch needed).
+  useEffect(() => {
+    if (!user?.id || !user?.api_key) {
+      stopReportAutoSync();
+      return;
+    }
+    void setupPushForUser(user.id, user.api_key);
+    startReportAutoSync(user.id, user.api_key);
+    const pushSub = attachPushReceivedHandler((data) => {
+      const screen = typeof data.screen === "string" ? data.screen : "";
+      const kind = typeof data.kind === "string" ? data.kind : "";
+      if (screen !== "/my-reports" && kind !== "love_reality_pro" && kind !== "report_ready") {
+        return;
+      }
+      const u = userRef.current;
+      if (!u?.id || !u.api_key) return;
+      void syncServerReportsForUser({ userId: u.id, apiKey: u.api_key });
+    });
+    return () => {
+      stopReportAutoSync();
+      try {
+        pushSub?.remove?.();
+      } catch {
+        /* push unsupported */
+      }
+    };
+  }, [user?.id, user?.api_key]);
 
   return (
     <UserContext.Provider value={{

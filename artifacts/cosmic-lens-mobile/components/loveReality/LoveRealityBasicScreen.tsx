@@ -24,6 +24,11 @@ import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 import {
+  coerceLoveBasicLang,
+  pickLoveBasicCopy,
+  type LoveBasicLang,
+} from "@/lib/loveRealityBasicLang";
+import {
   humanizeDisplayText,
   loyaltyCompareVerdict,
   mapLoveRealityResult,
@@ -373,16 +378,19 @@ export function LoyaltyCompareCard({
   partnerName,
   isDark,
   compact = false,
+  lang = "en",
 }: {
   compare: LoyaltyCompareData;
   youName: string;
   partnerName: string;
   isDark: boolean;
   compact?: boolean;
+  lang?: LoveBasicLang;
 }) {
-  const you = youName.trim() || "Aap";
-  const partner = partnerName.trim() || "Partner";
-  const verdict = loyaltyCompareVerdict(compare, you, partner);
+  const lane = coerceLoveBasicLang(lang);
+  const you = youName.trim() || pickLoveBasicCopy(lane, "You", "Aap", "आप");
+  const partner = partnerName.trim() || pickLoveBasicCopy(lane, "Partner", "Partner", "साथी");
+  const verdict = loyaltyCompareVerdict(compare, you, partner, lane);
   const textHi = isDark ? "#fff" : "#0F172A";
   const textLo = isDark ? "rgba(203,213,225,0.65)" : "#64748B";
   const cardBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.03)";
@@ -392,7 +400,7 @@ export function LoyaltyCompareCard({
     {
       key: "you" as const,
       label: you,
-      sub: "Aap",
+      sub: pickLoveBasicCopy(lane, "You", "Aap", "आप"),
       score: compare.youScore,
       level: compare.youLevel,
       isHigher: compare.higherSide === "you",
@@ -400,7 +408,7 @@ export function LoyaltyCompareCard({
     {
       key: "partner" as const,
       label: partner,
-      sub: "Partner",
+      sub: pickLoveBasicCopy(lane, "Partner", "Partner", "साथी"),
       score: compare.partnerScore,
       level: compare.partnerLevel,
       isHigher: compare.higherSide === "partner",
@@ -430,11 +438,15 @@ export function LoyaltyCompareCard({
                 </View>
                 {row.isHigher && compare.higherSide !== "tie" ? (
                   <View style={[loyaltyCmpStyles.badge, { backgroundColor: color + "22", borderColor: color + "55" }]}>
-                    <Text style={[loyaltyCmpStyles.badgeTxt, { color }]}>Zyada</Text>
+                    <Text style={[loyaltyCmpStyles.badgeTxt, { color }]}>
+                      {pickLoveBasicCopy(lane, "Higher", "Zyada", "ज़्यादा")}
+                    </Text>
                   </View>
                 ) : compare.higherSide === "tie" ? (
                   <View style={[loyaltyCmpStyles.badge, { backgroundColor: border, borderColor: border }]}>
-                    <Text style={[loyaltyCmpStyles.badgeTxt, { color: textLo }]}>Barabar</Text>
+                    <Text style={[loyaltyCmpStyles.badgeTxt, { color: textLo }]}>
+                      {pickLoveBasicCopy(lane, "Equal", "Barabar", "बराबर")}
+                    </Text>
                   </View>
                 ) : (
                   <View style={{ width: 52 }} />
@@ -670,6 +682,7 @@ export function LoveRealityResultHero({
   youName,
   partnerName,
   hideLoyaltyCompare = false,
+  lang = "en",
 }: {
   display: LoveRealityBasicDisplay;
   isDark: boolean;
@@ -678,7 +691,9 @@ export function LoveRealityResultHero({
   youName?: string;
   partnerName?: string;
   hideLoyaltyCompare?: boolean;
+  lang?: LoveBasicLang;
 }) {
+  const lane = coerceLoveBasicLang(lang);
   if (display.visual === "circular" && display.percent != null) {
     return (
       <View style={{ width: "100%", alignItems: "center" }}>
@@ -712,10 +727,11 @@ export function LoveRealityResultHero({
       {display.loyaltyCompare && !hideLoyaltyCompare ? (
         <LoyaltyCompareCard
           compare={display.loyaltyCompare}
-          youName={youName ?? "Aap"}
-          partnerName={partnerName ?? "Partner"}
+          youName={youName ?? pickLoveBasicCopy(lane, "You", "Aap", "आप")}
+          partnerName={partnerName ?? pickLoveBasicCopy(lane, "Partner", "Partner", "साथी")}
           isDark={isDark}
           compact={compact}
+          lang={lane}
         />
       ) : null}
     </View>
@@ -791,7 +807,7 @@ export function LoveRealityBasicScreen({ config }: { config: LoveRealityToolConf
   const topPad = Platform.OS === "android" ? Math.max(insets.top, 24) : insets.top;
   const { LockOverlay } = useFeatureGate(config.featureGate);
 
-  const { profiles, primaryProfileId } = useUser();
+  const { profiles, primaryProfileId, language } = useUser();
   const params = useLocalSearchParams<{ partnerId?: string }>();
   const partnerId = typeof params.partnerId === "string" ? params.partnerId : null;
 
@@ -838,7 +854,7 @@ export function LoveRealityBasicScreen({ config }: { config: LoveRealityToolConf
       clearTimeout(timer);
       const json = await resp.json();
       if (!resp.ok || json.error) throw new Error(json.error || "Analysis failed");
-      setDisplay(mapLoveRealityResult(config.toolKey, json as Record<string, unknown>));
+      setDisplay(mapLoveRealityResult(config.toolKey, json as Record<string, unknown>, language));
       // chart_proof attached by backend engines
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: unknown) {
@@ -852,8 +868,8 @@ export function LoveRealityBasicScreen({ config }: { config: LoveRealityToolConf
   function openProPdf() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push({
-      pathname: "/love-reality",
-      params: { partnerId: partnerId ?? "", openPro: "1" },
+      pathname: "/love-reality-pro",
+      params: { partnerId: partnerId ?? "" },
     } as never);
   }
 

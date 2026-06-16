@@ -119,3 +119,37 @@ def backfill_missing_cosmo_user_ids() -> int:
     if count:
         db.session.commit()
     return count
+
+
+def cosmo_display_id_for_user_id(user_id: int) -> str:
+    """Public COSMO id (e.g. COSMO101) for founder-facing messages."""
+    if not user_id or not users_have_cosmo_column():
+        return ""
+
+    def _lookup() -> str:
+        try:
+            from models import User
+
+            user = User.query.get(int(user_id))
+            if not user:
+                return ""
+            cid = ensure_user_cosmo_id(user)
+            return (cid or "").strip().upper()
+        except Exception:
+            return ""
+
+    try:
+        from flask import has_app_context
+
+        if has_app_context():
+            return _lookup()
+    except Exception:
+        pass
+
+    try:
+        from flask_app import app
+
+        with app.app_context():
+            return _lookup()
+    except Exception:
+        return ""

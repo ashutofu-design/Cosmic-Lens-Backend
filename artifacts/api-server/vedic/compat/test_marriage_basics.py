@@ -361,13 +361,27 @@ def test_plain_copy_respects_english_lang():
         p2_name="Priya",
         lang="hn",
     )
+    out_hi = compute_marriage_basics(
+        k1,
+        k2,
+        p1_name="Rahul",
+        p2_name="Priya",
+        lang="hi",
+    )
     hl_en = out_en["p1"]["plain_copy"]["headline"]
     hl_hn = out_hn["p1"]["plain_copy"]["headline"]
+    hl_hi = out_hi["p1"]["plain_copy"]["headline"]
     assert hl_en
     assert hl_hn
+    assert hl_hi
     assert hl_en != hl_hn
+    assert hl_hi != hl_en
     assert " shaadi " not in f" {hl_en.lower()} "
-    assert " mein " not in f" {hl_en.lower()} "
+    assert " मिलान " in hl_hi or " कुंडली " in hl_hi or " शादी " in hl_hi
+    fv_hi = out_hi["couple"]["future_verdict"]
+    assert " विवाह " in fv_hi or " प्रयास " in fv_hi
+    highlights_hi = " ".join(out_hi["couple"]["plain_copy"]["locked_highlights"])
+    assert " दोनों " in highlights_hi or " विवाह " in highlights_hi or " उपाय " in highlights_hi
 
 
 def test_couple_locked_highlights_no_gun_milan():

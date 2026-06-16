@@ -354,6 +354,30 @@ class CoupleReportPurchase(db.Model):
     )
 
 
+class GemstoneOrder(db.Model):
+    """One-time gemstone purchase with optional referral discount."""
+    __tablename__ = "gemstone_orders"
+
+    id                     = db.Column(db.Integer, primary_key=True)
+    user_id                = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"),
+                                       nullable=False, index=True)
+    sku                    = db.Column(db.String(60), nullable=False, index=True)
+    mrp_inr                = db.Column(db.Integer, nullable=False, default=0)
+    discount_inr           = db.Column(db.Integer, nullable=False, default=0)
+    amount_inr             = db.Column(db.Integer, nullable=False, default=0)
+    discount_type          = db.Column(db.String(12), nullable=False, default="self")  # self | referral
+    referral_code_used     = db.Column(db.String(32), nullable=True)
+    referrer_user_id       = db.Column(db.Integer, nullable=True, index=True)
+    referrer_reward_inr    = db.Column(db.Integer, nullable=False, default=0)
+    referrer_payout_status = db.Column(db.String(16), nullable=False, default="none")  # none|pending|paid|cancelled
+    order_id               = db.Column(db.String(200), nullable=True, unique=True)
+    status                 = db.Column(db.String(20), nullable=False, default="created")  # created|paid|failed
+    delivery_status        = db.Column(db.String(20), nullable=False, default="pending")  # pending|shipped|delivered
+    created_at             = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    paid_at                = db.Column(db.DateTime, nullable=True)
+    delivered_at           = db.Column(db.DateTime, nullable=True)
+
+
 class BusinessVastuLog(db.Model):
     """Phase-4 — one row per Business Vastu deep-scan (analytics + audit)."""
     __tablename__ = "business_vastu_logs"

@@ -21,6 +21,7 @@ import {
 import Svg, { Circle, Defs, LinearGradient as SvgGrad, Stop } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
@@ -31,6 +32,7 @@ import {
   wealthTierFromScore,
   type LeakageKey,
   type LiquidityKey,
+  type LeakChannelKey,
   type WealthTierKey,
 } from "@/lib/financeWealthCopy";
 import { buildPersonalSnapshot } from "@/lib/personalizationSnapshot";
@@ -49,6 +51,30 @@ const F = {
   extra:   "Nunito_800ExtraBold",
 } as const;
 
+const FINANCE_ACCENT = "#3b82f6";
+
+function PremiumOrb({ color }: { color: string }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.14] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.22, 0.5] });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[ui.orb, { backgroundColor: color, transform: [{ scale }], opacity }]}
+    />
+  );
+}
+
 type YogaItem = {
   name: string;
   detail: string;
@@ -59,17 +85,19 @@ type YogaItem = {
 
 type LeakChannelAlert = {
   channel: string;
-  fact: string;
+  fact?: string;
   severity?: number;
   message_en: string;
   message_hn?: string;
   message_hi?: string;
 };
 
-function leakChannelMessage(alert: LeakChannelAlert, lang: string): string {
-  const L = coerceUILang(lang);
-  if (L === "hi" && alert.message_hi) return alert.message_hi;
-  if (L === "hn" && alert.message_hn) return alert.message_hn;
+function leakChannelMessage(
+  alert: LeakChannelAlert,
+  wealthCopy: ReturnType<typeof financeWealthCopy>,
+): string {
+  const fromChannel = wealthCopy.leakChannels[alert.channel as LeakChannelKey];
+  if (fromChannel) return fromChannel;
   return alert.message_en;
 }
 
@@ -311,7 +339,7 @@ function ScoreRing({ score, color }: { score: number; color: string }) {
 }
 
 function SectionCard({
-  icon, title, children, accent, compact, headerRight,
+  icon, title, children, accent, compact, headerRight, delay,
 }: {
   icon: React.ComponentProps<typeof Feather>["name"];
   title: string;
@@ -319,11 +347,12 @@ function SectionCard({
   accent: string;
   compact?: boolean;
   headerRight?: React.ReactNode;
+  delay?: number;
 }) {
-  return (
-    <View style={[s.card, compact && s.cardCompact, { borderColor: `${accent}33` }]}>
+  const body = (
+    <View style={[s.card, compact && s.cardCompact, { borderColor: `${accent}40` }]}>
       <LinearGradient
-        colors={["rgba(255,255,255,0.04)", "rgba(255,255,255,0.01)"]}
+        colors={[`${accent}14`, "rgba(255,255,255,0.03)", "transparent"]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
@@ -344,6 +373,10 @@ function SectionCard({
       <View style={{ gap: compact ? 6 : 8 }}>{children}</View>
     </View>
   );
+  if (typeof delay === "number") {
+    return <FadeInView delay={delay}>{body}</FadeInView>;
+  }
+  return body;
 }
 
 function wealthScoreColor(score: number): string {
@@ -487,8 +520,6 @@ export default function FinanceScreen() {
     void Haptics.selectionAsync().catch(() => undefined);
   };
 
-  const fade = useRef(new Animated.Value(0)).current;
-
   useEffect(() => {
     if (!user?.id || !user?.api_key) {
       setErr(t.fn_pageTitle + " — login required"); setLoading(false); return;
@@ -510,13 +541,12 @@ export default function FinanceScreen() {
       })
       .then(d => {
         setData(d); setErr(null);
-        Animated.timing(fade, { toValue: 1, duration: 600, useNativeDriver: true }).start();
       })
       .catch(e => setErr(e?.message || "Finance analysis load nahi ho saka."))
       .finally(() => setLoading(false));
   }, [user?.id, user?.api_key, kundli]);
 
-  const accent = "#3b82f6";
+  const accent = FINANCE_ACCENT;
   const wf = data?.basic?.wealth_finance;
   const yog = wf?.yog_metrics;
   const wealthBuilderScore = useMemo(() => {
@@ -564,8 +594,9 @@ export default function FinanceScreen() {
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
+      <PremiumOrb color={accent} />
 
-      <View style={[s.topBar, { paddingTop: headerTopPad }]}>
+      <View style={[s.topBar, { paddingTop: headerTopPad, borderBottomColor: `${accent}22` }]}>
         {Platform.OS === "ios" ? (
           <BlurView intensity={48} tint="dark" style={StyleSheet.absoluteFill} />
         ) : (
@@ -581,7 +612,10 @@ export default function FinanceScreen() {
               <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color="#fff" />
             </View>
           </Pressable>
-          <Text style={s.topTitle}>{t.fn_pageTitle}</Text>
+          <View style={{ flex: 1, alignItems: "center" }}>
+            <Text style={ui.headerBadge}>{t.fn_scoreLabel}</Text>
+            <Text style={s.topTitle}>{t.fn_pageTitle}</Text>
+          </View>
           <View style={{ width: 40 }} />
         </View>
       </View>
@@ -596,15 +630,23 @@ export default function FinanceScreen() {
         showsVerticalScrollIndicator={false}
       >
         {loading && (
-          <View style={{ paddingVertical: 60, alignItems: "center", gap: 12 }}>
+          <FadeInView delay={0}>
+          <View style={[s.card, { borderColor: `${accent}44`, paddingVertical: 52, alignItems: "center", gap: 14 }]}>
+            <LinearGradient
+              colors={[`${accent}18`, "transparent"]}
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
             <ActivityIndicator size="large" color={accent} />
-            <Text style={{ color: "rgba(255,255,255,0.6)", fontFamily: F.semi }}>
+            <Text style={{ color: "rgba(255,255,255,0.72)", fontFamily: F.semi, fontSize: 13 }}>
               Reading your chart…
             </Text>
           </View>
+          </FadeInView>
         )}
 
         {!loading && err && (
+          <FadeInView delay={0}>
           <View style={[s.card, { borderColor: "#ef444455", padding: 22, alignItems: "center", gap: 10 }]}>
             <Feather name="alert-circle" size={28} color="#ef4444" />
             <Text style={[s.cardTitle, { textAlign: "center" }]}>{err}</Text>
@@ -621,12 +663,13 @@ export default function FinanceScreen() {
               </Pressable>
             )}
           </View>
+          </FadeInView>
         )}
 
         {!loading && data && (
-          <Animated.View style={{ opacity: fade, gap: 16 }}>
-            {/* HERO */}
-            <View style={[s.hero, { borderColor: `${accent}3A` }]}>
+          <View style={{ gap: 16 }}>
+            <FadeInView delay={staggerDelay(0)}>
+            <View style={[s.hero, { borderColor: `${accent}50` }]}>
               <LinearGradient
                 colors={["rgba(59,130,246,0.18)", "rgba(59,130,246,0.04)", "transparent"]}
                 start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}
@@ -635,24 +678,24 @@ export default function FinanceScreen() {
               <View style={{ alignItems: "center", paddingTop: 8, paddingBottom: 16 }}>
                 <Text style={s.heroLabel}>{t.fn_scoreLabel}</Text>
                 <View style={{ marginTop: 12 }}>
-                  <ScoreRing score={data.basic.score} color={trendColor(data.basic.trend)} />
+                  <ScoreRing score={data.basic.score} color={wealthScoreColor(data.basic.score)} />
                 </View>
                 <View style={[s.trendPill, {
-                  backgroundColor: `${trendColor(data.basic.trend)}22`,
-                  borderColor: `${trendColor(data.basic.trend)}66`,
+                  backgroundColor: `${wealthScoreColor(data.basic.score)}22`,
+                  borderColor: `${wealthScoreColor(data.basic.score)}66`,
                   marginTop: 14,
                 }]}>
-                  <View style={[s.trendDot, { backgroundColor: trendColor(data.basic.trend) }]} />
-                  <Text style={[s.trendText, { color: trendColor(data.basic.trend) }]}>
+                  <View style={[s.trendDot, { backgroundColor: wealthScoreColor(data.basic.score) }]} />
+                  <Text style={[s.trendText, { color: wealthScoreColor(data.basic.score) }]}>
                     {trendPhrase(data.basic.trend, t)}  •  {data.basic.trend}
                   </Text>
                 </View>
               </View>
             </View>
+            </FadeInView>
 
-            {/* WEALTH YOGAS */}
             {wf && yog && (
-              <SectionCard icon="star" title={wealthCopy.yogTitle} accent="#fbbf24" compact>
+              <SectionCard icon="star" title={wealthCopy.yogTitle} accent="#fbbf24" compact delay={staggerDelay(1)}>
                 <View style={s.yogRow}>
                   <TouchableOpacity
                     activeOpacity={0.85}
@@ -690,7 +733,7 @@ export default function FinanceScreen() {
 
             {/* WEALTH TIER + SOURCE */}
             {wf && (
-              <SectionCard icon="award" title={wealthCopy.tierTitle} accent="#fbbf24">
+              <SectionCard icon="award" title={wealthCopy.tierTitle} accent="#fbbf24" delay={staggerDelay(2)}>
                 <View style={s.tierRow}>
                   {WEALTH_TIER_ORDER.map(key => {
                     const selected = key === tierKey;
@@ -751,11 +794,11 @@ export default function FinanceScreen() {
 
             {/* LEAKAGE */}
             {wf && (
-              <SectionCard icon="alert-triangle" title={wealthCopy.leakageTitle} accent="#f59e0b">
+              <SectionCard icon="alert-triangle" title={wealthCopy.leakageTitle} accent="#f59e0b" delay={staggerDelay(3)}>
                 {(wf.leakage_channels?.length ?? 0) > 0 ? (
                   wf.leakage_channels!.map((alert, i) => (
                     <Text key={`${alert.channel}-${i}`} style={s.miniLine}>
-                      • {leakChannelMessage(alert, t.lang)}
+                      • {leakChannelMessage(alert, wealthCopy)}
                     </Text>
                   ))
                 ) : (wf.leakage_alerts?.length ?? 0) > 0 ? (
@@ -767,14 +810,13 @@ export default function FinanceScreen() {
                 ) : (
                   <Text style={s.miniLine}>{wealthCopy.leakageEmpty}</Text>
                 )}
-                <Text style={[s.disclaimer, { marginTop: 8 }]}>{wf.disclaimer ?? wealthCopy.disclaimer}</Text>
               </SectionCard>
             )}
 
             {/* MONEY HABITS */}
             {(data.basic.money_habits?.length ?? 0) > 0 && (
-              <SectionCard icon="check-circle" title={wealthCopy.habitsTitle} accent="#22c55e">
-                {data.basic.money_habits!.slice(0, 4).map((line, i) => (
+              <SectionCard icon="check-circle" title={wealthCopy.habitsTitle} accent="#22c55e" delay={staggerDelay(4)}>
+                {data.basic.money_habits!.slice(0, 3).map((line, i) => (
                   <Bullet key={i} color="#22c55e">{line}</Bullet>
                 ))}
               </SectionCard>
@@ -782,6 +824,7 @@ export default function FinanceScreen() {
 
             {/* HOOK */}
             {!isProUser && (
+              <FadeInView delay={staggerDelay(5)}>
               <View style={[s.hookCard, { borderColor: `${accent}55` }]}>
                 <LinearGradient
                   colors={["rgba(59,130,246,0.18)", "rgba(59,130,246,0.05)"]}
@@ -830,12 +873,12 @@ export default function FinanceScreen() {
                   </LinearGradient>
                 </Pressable>
               </View>
+              </FadeInView>
             )}
 
-            {/* PRO sections */}
             {isProUser && data.pro && (
               <>
-                <SectionCard icon="home" title={t.fn_houses} accent={accent}>
+                <SectionCard icon="home" title={t.fn_houses} accent={accent} delay={staggerDelay(6)}>
                   {([
                     { num: 2,  info: data.pro.houses.h2  },
                     { num: 11, info: data.pro.houses.h11 },
@@ -856,7 +899,7 @@ export default function FinanceScreen() {
                   ))}
                 </SectionCard>
 
-                <SectionCard icon="star" title={t.fn_planets} accent={accent}>
+                <SectionCard icon="star" title={t.fn_planets} accent={accent} delay={staggerDelay(7)}>
                   {data.pro.planets.map(p => {
                     const sc = p.status === "exalted" ? "#22c55e"
                       : p.status === "debilitated" ? "#ef4444"
@@ -875,27 +918,27 @@ export default function FinanceScreen() {
                   })}
                 </SectionCard>
 
-                <SectionCard icon="globe" title={t.cr_transit} accent={accent}>
+                <SectionCard icon="globe" title={t.cr_transit} accent={accent} delay={staggerDelay(8)}>
                   {data.pro.transit.map((t, i) => (<Bullet key={i} color={accent}>{t}</Bullet>))}
                 </SectionCard>
 
-                <SectionCard icon="trending-up" title={t.fn_inflow} accent="#22c55e">
+                <SectionCard icon="trending-up" title={t.fn_inflow} accent="#22c55e" delay={staggerDelay(9)}>
                   {data.pro.inflow.map((t, i) => (<Bullet key={i} color="#22c55e">{t}</Bullet>))}
                 </SectionCard>
 
-                <SectionCard icon="trending-down" title={t.fn_expense} accent="#f59e0b">
+                <SectionCard icon="trending-down" title={t.fn_expense} accent="#f59e0b" delay={staggerDelay(10)}>
                   {data.pro.expenses.map((t, i) => (<Bullet key={i} color="#f59e0b">{t}</Bullet>))}
                 </SectionCard>
 
-                <SectionCard icon="bar-chart-2" title={t.fn_invest} accent="#a78bfa">
+                <SectionCard icon="bar-chart-2" title={t.fn_invest} accent="#a78bfa" delay={staggerDelay(11)}>
                   {data.pro.invest.map((t, i) => (<Bullet key={i} color="#a78bfa">{t}</Bullet>))}
                 </SectionCard>
 
-                <SectionCard icon="zap" title={t.fn_sudden} accent="#fbbf24">
+                <SectionCard icon="zap" title={t.fn_sudden} accent="#fbbf24" delay={staggerDelay(12)}>
                   {data.pro.sudden.map((t, i) => (<Bullet key={i} color="#fbbf24">{t}</Bullet>))}
                 </SectionCard>
 
-                <SectionCard icon="shield" title={t.fn_stability} accent="#22c55e">
+                <SectionCard icon="shield" title={t.fn_stability} accent="#22c55e" delay={staggerDelay(13)}>
                   <Text style={[s.summary, { color: "rgba(255,255,255,0.9)" }]}>
                     {data.pro.stability}
                   </Text>
@@ -903,7 +946,7 @@ export default function FinanceScreen() {
 
                 {/* DEEP — Wealth tier */}
                 {!!(data.pro as any).wealth_tier && (
-                  <SectionCard icon="award" title={`Wealth Tier — ${(data.pro as any).wealth_tier}`} accent="#fbbf24">
+                  <SectionCard icon="award" title={`Wealth Tier — ${(data.pro as any).wealth_tier}`} accent="#fbbf24" delay={staggerDelay(14)}>
                     {typeof (data.pro as any).wealth_score === "number" && (
                       <View style={{ marginBottom: 10 }}>
                         <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
@@ -923,7 +966,7 @@ export default function FinanceScreen() {
 
                 {/* Income sources */}
                 {Array.isArray((data.pro as any).income_sources) && (data.pro as any).income_sources.length > 0 && (
-                  <SectionCard icon="dollar-sign" title={t.fn_income} accent="#22c55e">
+                  <SectionCard icon="dollar-sign" title={t.fn_income} accent="#22c55e" delay={staggerDelay(15)}>
                     {(data.pro as any).income_sources.map((s: any, i: number) => (
                       <View key={i} style={{ marginBottom: 12 }}>
                         <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
@@ -941,7 +984,7 @@ export default function FinanceScreen() {
 
                 {/* Dhana yogas */}
                 {Array.isArray((data.pro as any).dhana_yogas) && (data.pro as any).dhana_yogas.length > 0 && (
-                  <SectionCard icon="star" title={`Dhana Yogas Detected (${(data.pro as any).yogas_count})`} accent="#a78bfa">
+                  <SectionCard icon="star" title={`Dhana Yogas Detected (${(data.pro as any).yogas_count})`} accent="#a78bfa" delay={staggerDelay(16)}>
                     {(data.pro as any).dhana_yogas.map((y: any, i: number) => (
                       <View key={i} style={{ backgroundColor: "#1e1b4b", padding: 10, borderRadius: 8, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: "#a78bfa" }}>
                         <Text style={{ color: "#c4b5fd", fontSize: 13, fontWeight: "700", marginBottom: 4 }}>{y.name}</Text>
@@ -951,18 +994,18 @@ export default function FinanceScreen() {
                   </SectionCard>
                 )}
 
-                <SectionCard icon="sun" title="Remedies (Practical & Astrological)" accent="#f59e0b">
+                <SectionCard icon="sun" title="Remedies (Practical & Astrological)" accent="#f59e0b" delay={staggerDelay(17)}>
                   {data.pro.remedies.map((t, i) => (<Bullet key={i} color="#f59e0b">{t}</Bullet>))}
                 </SectionCard>
 
                 {data.pro.reasons.length > 0 && (
-                  <SectionCard icon="info" title={t.cr_reasoning} accent="#94a3b8">
+                  <SectionCard icon="info" title={t.cr_reasoning} accent="#94a3b8" delay={staggerDelay(18)}>
                     {data.pro.reasons.map((t, i) => (<Bullet key={i} color="#94a3b8">{t}</Bullet>))}
                   </SectionCard>
                 )}
               </>
             )}
-          </Animated.View>
+          </View>
         )}
       </ScrollView>
 
@@ -1468,5 +1511,24 @@ const s = StyleSheet.create({
     fontSize: 10,
     lineHeight: 15,
     fontFamily: F.regular,
+  },
+});
+
+const ui = StyleSheet.create({
+  orb: {
+    position: "absolute",
+    top: -50,
+    right: -30,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+  },
+  headerBadge: {
+    fontSize: 10,
+    fontFamily: F.extra,
+    letterSpacing: 2.2,
+    color: FINANCE_ACCENT,
+    textTransform: "uppercase",
+    marginBottom: 2,
   },
 });

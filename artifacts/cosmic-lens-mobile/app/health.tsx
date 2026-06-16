@@ -19,6 +19,7 @@ import {
 import Svg, { Circle, Defs, LinearGradient as SvgGrad, Stop } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
@@ -31,6 +32,30 @@ const F = {
   bold:    "Nunito_700Bold",
   extra:   "Nunito_800ExtraBold",
 } as const;
+
+const HEALTH_ACCENT = "#14b8a6";
+
+function PremiumOrb({ color }: { color: string }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.14] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.22, 0.5] });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[ui.orb, { backgroundColor: color, transform: [{ scale }], opacity }]}
+    />
+  );
+}
 
 const DOSHA_ORDER: DoshaKey[] = ["vata", "pitta", "kapha"];
 
@@ -136,19 +161,21 @@ function ScoreRing({ score, color }: { score: number; color: string }) {
 }
 
 function SectionCard({
-  icon, title, children, accent,
+  icon, title, children, accent, delay,
 }: {
   icon: React.ComponentProps<typeof Feather>["name"];
   title: string;
   children: React.ReactNode;
   accent: string;
+  delay?: number;
 }) {
-  return (
-    <View style={[s.card, { borderColor: `${accent}33` }]}>
+  const body = (
+    <View style={[s.card, { borderColor: `${accent}40` }]}>
       <LinearGradient
-        colors={["rgba(255,255,255,0.04)", "rgba(255,255,255,0.01)"]}
+        colors={[`${accent}14`, "rgba(255,255,255,0.03)", "transparent"]}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
+        pointerEvents="none"
       />
       <View style={s.cardHead}>
         <View style={[s.cardIcon, { backgroundColor: `${accent}1F`, borderColor: `${accent}55` }]}>
@@ -159,6 +186,10 @@ function SectionCard({
       <View style={{ gap: 8 }}>{children}</View>
     </View>
   );
+  if (typeof delay === "number") {
+    return <FadeInView delay={delay}>{body}</FadeInView>;
+  }
+  return body;
 }
 
 function Bullet({ children, color }: { children: React.ReactNode; color: string }) {
@@ -210,8 +241,6 @@ export default function HealthScreen() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  const fade = useRef(new Animated.Value(0)).current;
-
   useEffect(() => {
     if (!user?.id || !user?.api_key) {
       setErr(t.hl_loginRequired); setLoading(false); return;
@@ -233,13 +262,12 @@ export default function HealthScreen() {
       })
       .then(d => {
         setData(d); setErr(null);
-        Animated.timing(fade, { toValue: 1, duration: 600, useNativeDriver: true }).start();
       })
       .catch(e => setErr(e?.message || "Health analysis load nahi ho saka."))
       .finally(() => setLoading(false));
   }, [user?.id, user?.api_key, kundli]);
 
-  const accent = "#14b8a6";
+  const accent = HEALTH_ACCENT;
   const triCopy = healthTridoshaCopy(t.lang);
   const doshaBal = data?.basic?.dosha_balance;
   const doshaStates = data?.basic?.dosha_states;
@@ -263,6 +291,9 @@ export default function HealthScreen() {
     .sort((a, b) => b.score - a.score)
     .slice(0, 3);
   const stableZoneCount = organMatrix.filter((z) => z.status === "stable").length;
+  const highZoneCount = organMatrix.filter((z) => z.status === "high").length;
+  const moderateZoneCount = organMatrix.filter((z) => z.status === "moderate").length;
+  const totalZoneCount = organMatrix.length;
   const riskyOrgans = (data?.basic?.risky_organs?.length
     ? data.basic.risky_organs
     : data?.basic?.sensitive_areas) ?? [];
@@ -287,9 +318,10 @@ export default function HealthScreen() {
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
+      <PremiumOrb color={accent} />
 
       <View style={s.screen}>
-        <View style={[s.topBar, { paddingTop: headerTopPad }]}>
+        <View style={[s.topBar, { paddingTop: headerTopPad, borderBottomColor: `${accent}22` }]}>
           {Platform.OS === "ios" ? (
             <BlurView intensity={48} tint="dark" style={StyleSheet.absoluteFill} />
           ) : (
@@ -305,7 +337,10 @@ export default function HealthScreen() {
                 <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color="#fff" />
               </View>
             </Pressable>
-            <Text style={s.topTitle}>{t.hl_pageTitle}</Text>
+            <View style={{ flex: 1, alignItems: "center" }}>
+              <Text style={ui.headerBadge}>{t.hl_scoreLabel}</Text>
+              <Text style={s.topTitle}>{t.hl_pageTitle}</Text>
+            </View>
             <View style={{ width: 40 }} />
           </View>
         </View>
@@ -321,15 +356,23 @@ export default function HealthScreen() {
           showsVerticalScrollIndicator={false}
         >
         {loading && (
-          <View style={{ paddingVertical: 60, alignItems: "center", gap: 12 }}>
+          <FadeInView delay={0}>
+          <View style={[s.card, { borderColor: `${accent}44`, paddingVertical: 52, alignItems: "center", gap: 14 }]}>
+            <LinearGradient
+              colors={[`${accent}18`, "transparent"]}
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
             <ActivityIndicator size="large" color={accent} />
-            <Text style={{ color: "rgba(255,255,255,0.6)", fontFamily: F.semi }}>
+            <Text style={{ color: "rgba(255,255,255,0.72)", fontFamily: F.semi, fontSize: 13 }}>
               Reading your chart…
             </Text>
           </View>
+          </FadeInView>
         )}
 
         {!loading && err && (
+          <FadeInView delay={0}>
           <View style={[s.card, { borderColor: "#ef444455", padding: 22, alignItems: "center", gap: 10 }]}>
             <Feather name="alert-circle" size={28} color="#ef4444" />
             <Text style={[s.cardTitle, { textAlign: "center" }]}>{err}</Text>
@@ -346,12 +389,13 @@ export default function HealthScreen() {
               </Pressable>
             )}
           </View>
+          </FadeInView>
         )}
 
         {!loading && data && (
-          <Animated.View style={{ opacity: fade, gap: 16 }}>
-            {/* HERO */}
-            <View style={[s.hero, { borderColor: `${accent}3A` }]}>
+          <View style={{ gap: 16 }}>
+            <FadeInView delay={staggerDelay(0)}>
+            <View style={[s.hero, { borderColor: `${accent}50` }]}>
               <LinearGradient
                 colors={["rgba(20,184,166,0.18)", "rgba(20,184,166,0.04)", "transparent"]}
                 start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}
@@ -374,10 +418,10 @@ export default function HealthScreen() {
                 </View>
               </View>
             </View>
+            </FadeInView>
 
-            {/* TRIDOSHA — all users */}
             {hasTridosha && (
-              <SectionCard icon="droplet" title={triCopy.sectionTitle} accent="#a78bfa">
+              <SectionCard icon="droplet" title={triCopy.sectionTitle} accent="#a78bfa" delay={staggerDelay(1)}>
                 {data.basic.dominant_dosha ? (
                   <Text style={[s.summary, { marginBottom: 10, fontSize: 12 }]}>
                     {triCopy.dominant(data.basic.dominant_dosha)}
@@ -415,11 +459,15 @@ export default function HealthScreen() {
               </SectionCard>
             )}
 
-            {/* PRIORITY BODY ZONES — top 3 needing care */}
-            <SectionCard icon="activity" title={triCopy.organHeatmapTitle} accent="#f59e0b">
+            <SectionCard icon="activity" title={triCopy.organHeatmapTitle} accent="#f59e0b" delay={staggerDelay(2)}>
               <Text style={[s.summary, { marginBottom: 12, fontSize: 12 }]}>
                 {triCopy.organHeatmapSub}
               </Text>
+              {totalZoneCount > 0 ? (
+                <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 11.5, lineHeight: 16, fontFamily: F.semi, marginBottom: 10 }}>
+                  Total zones: {totalZoneCount}  •  High: {highZoneCount}  •  Moderate: {moderateZoneCount}  •  Stable: {stableZoneCount}
+                </Text>
+              ) : null}
               {topCareZones.length > 0 ? (
                 <>
                   <View style={{ gap: 10 }}>
@@ -487,8 +535,8 @@ export default function HealthScreen() {
               )}
             </SectionCard>
 
-            {/* HOOK (non-pro) */}
             {!isProUser && (
+              <FadeInView delay={staggerDelay(3)}>
               <View style={[s.hookCard, { borderColor: `${accent}55` }]}>
                 <LinearGradient
                   colors={["rgba(20,184,166,0.18)", "rgba(20,184,166,0.05)"]}
@@ -537,13 +585,12 @@ export default function HealthScreen() {
                   </LinearGradient>
                 </Pressable>
               </View>
+              </FadeInView>
             )}
 
-            {/* PRO sections */}
             {isProUser && data.pro && (
               <>
-                {/* Houses */}
-                <SectionCard icon="home" title={t.hl_houses} accent={accent}>
+                <SectionCard icon="home" title={t.hl_houses} accent={accent} delay={staggerDelay(4)}>
                   {([
                     { num: 1,  info: data.pro.houses.h1  },
                     { num: 6,  info: data.pro.houses.h6  },
@@ -564,8 +611,7 @@ export default function HealthScreen() {
                   ))}
                 </SectionCard>
 
-                {/* Planets */}
-                <SectionCard icon="star" title={t.hl_planets} accent={accent}>
+                <SectionCard icon="star" title={t.hl_planets} accent={accent} delay={staggerDelay(5)}>
                   {data.pro.planets.map(p => {
                     const sc = p.status === "exalted" ? "#22c55e"
                       : p.status === "debilitated" ? "#ef4444"
@@ -584,25 +630,25 @@ export default function HealthScreen() {
                   })}
                 </SectionCard>
 
-                <SectionCard icon="globe" title={t.cr_transit} accent={accent}>
+                <SectionCard icon="globe" title={t.cr_transit} accent={accent} delay={staggerDelay(6)}>
                   {data.pro.transit.map((t, i) => (<Bullet key={i} color={accent}>{t}</Bullet>))}
                 </SectionCard>
 
-                <SectionCard icon="alert-triangle" title={t.hl_riskPeriods} accent="#f59e0b">
+                <SectionCard icon="alert-triangle" title={t.hl_riskPeriods} accent="#f59e0b" delay={staggerDelay(7)}>
                   {data.pro.risk_periods.map((t, i) => (<Bullet key={i} color="#f59e0b">{t}</Bullet>))}
                 </SectionCard>
 
-                <SectionCard icon="activity" title={t.hl_nature} accent="#a78bfa">
+                <SectionCard icon="activity" title={t.hl_nature} accent="#a78bfa" delay={staggerDelay(8)}>
                   {data.pro.nature.map((t, i) => (<Bullet key={i} color="#a78bfa">{t}</Bullet>))}
                 </SectionCard>
 
-                <SectionCard icon="heart" title={t.hl_recovery} accent="#22c55e">
+                <SectionCard icon="heart" title={t.hl_recovery} accent="#22c55e" delay={staggerDelay(9)}>
                   <Text style={[s.summary, { color: "rgba(255,255,255,0.9)" }]}>
                     {data.pro.recovery}
                   </Text>
                 </SectionCard>
 
-                <SectionCard icon="shield" title={t.hl_prevent} accent="#22c55e">
+                <SectionCard icon="shield" title={t.hl_prevent} accent="#22c55e" delay={staggerDelay(10)}>
                   {data.pro.prevent.map((t, i) => (<Bullet key={i} color="#22c55e">{t}</Bullet>))}
                 </SectionCard>
 
@@ -612,6 +658,7 @@ export default function HealthScreen() {
                     icon="alert-triangle"
                     title={`Health Issues Detected (${(data.pro as any).issues_total || (data.pro as any).issues.length})`}
                     accent="#ef4444"
+                    delay={staggerDelay(11)}
                   >
                     <Text style={{ color: "#94a3b8", fontSize: 12, marginBottom: 10 }}>
                       Severity: High {((data.pro as any).issues_by_severity?.High) || 0} · Medium {((data.pro as any).issues_by_severity?.Medium) || 0} · Low {((data.pro as any).issues_by_severity?.Low) || 0}
@@ -638,7 +685,7 @@ export default function HealthScreen() {
 
                 {/* Dosha balance */}
                 {(data.pro as any).dosha_balance && Object.keys((data.pro as any).dosha_balance).length > 0 && (
-                  <SectionCard icon="droplet" title={`Dosha Balance — ${(data.pro as any).dominant_dosha || "Mixed"} dominant`} accent="#a78bfa">
+                  <SectionCard icon="droplet" title={`Dosha Balance — ${(data.pro as any).dominant_dosha || "Mixed"} dominant`} accent="#a78bfa" delay={staggerDelay(12)}>
                     {doshasByPct((data.pro as any).dosha_balance).map(dk => {
                       const v = (data.pro as any).dosha_balance[dk] || 0;
                       const col = dk === "vata" ? "#60a5fa" : dk === "pitta" ? "#ef4444" : "#22c55e";
@@ -659,7 +706,7 @@ export default function HealthScreen() {
 
                 {/* Vulnerable organs */}
                 {Array.isArray((data.pro as any).vulnerable_organs) && (data.pro as any).vulnerable_organs.length > 0 && (
-                  <SectionCard icon="heart" title={t.hl_organs} accent="#f59e0b">
+                  <SectionCard icon="heart" title={t.hl_organs} accent="#f59e0b" delay={staggerDelay(13)}>
                     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
                       {(data.pro as any).vulnerable_organs.map((o: string, i: number) => (
                         <View key={i} style={{ backgroundColor: "#451a1a", borderColor: "#f59e0b", borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
@@ -670,18 +717,18 @@ export default function HealthScreen() {
                   </SectionCard>
                 )}
 
-                <SectionCard icon="sun" title={t.hl_remedies} accent="#f59e0b">
+                <SectionCard icon="sun" title={t.hl_remedies} accent="#f59e0b" delay={staggerDelay(14)}>
                   {data.pro.remedies.map((t, i) => (<Bullet key={i} color="#f59e0b">{t}</Bullet>))}
                 </SectionCard>
 
                 {data.pro.reasons.length > 0 && (
-                  <SectionCard icon="info" title={t.cr_reasoning} accent="#94a3b8">
+                  <SectionCard icon="info" title={t.cr_reasoning} accent="#94a3b8" delay={staggerDelay(15)}>
                     {data.pro.reasons.map((t, i) => (<Bullet key={i} color="#94a3b8">{t}</Bullet>))}
                   </SectionCard>
                 )}
               </>
             )}
-          </Animated.View>
+          </View>
         )}
         </ScrollView>
       </View>
@@ -812,4 +859,23 @@ const s = StyleSheet.create({
     borderRadius: 10, borderWidth: 1,
   },
   statusText: { fontSize: 10, fontFamily: F.bold, letterSpacing: 0.3 },
+});
+
+const ui = StyleSheet.create({
+  orb: {
+    position: "absolute",
+    top: -50,
+    right: -30,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+  },
+  headerBadge: {
+    fontSize: 10,
+    fontFamily: F.extra,
+    letterSpacing: 2.2,
+    color: HEALTH_ACCENT,
+    textTransform: "uppercase",
+    marginBottom: 2,
+  },
 });

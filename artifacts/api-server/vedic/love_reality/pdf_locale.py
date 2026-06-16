@@ -39,6 +39,28 @@ def cover_title(lang: str | None) -> str:
     return "Love Reality Check Pro"
 
 
+def founder_report_title(lang: str | None) -> str:
+    return _tx3(lang, "Love Reality Pro", "Love Reality Pro", "लव रियलिटी प्रो")
+
+
+def founder_report_subtitle(lang: str | None) -> str:
+    return _tx3(
+        lang,
+        "Founder-verified relationship report",
+        "Founder ne verify kiya rishta report",
+        "संस्थापक-सत्यापित रिश्ता रिपोर्ट",
+    )
+
+
+def founder_report_meta(lang: str | None) -> str:
+    return _tx3(
+        lang,
+        "Cosmic Lens · Founder-verified report",
+        "Cosmic Lens · Founder verified report",
+        "कॉस्मिक लेंस · संस्थापक-सत्यापित रिपोर्ट",
+    )
+
+
 def cover_subtitle(lang: str | None) -> str:
     return _tx3(
         lang,

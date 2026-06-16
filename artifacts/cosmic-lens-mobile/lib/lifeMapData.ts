@@ -1,6 +1,7 @@
 import type { Feather } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 import type { useT } from "@/hooks/useT";
+import { FACE_READING_PRO_LIVE } from "@/lib/faceReadingProConfig";
 
 export interface LifeMapCategory {
   key: string;
@@ -45,8 +46,6 @@ export const LIFE_MAP_CATEGORIES: LifeMapCategory[] = [
     badgeIcon: "🚀",
     subtitle: "Career growth & breakthrough insights",
     route: "/career",
-    priceInr: 1,
-    paywall: true,
   },
   {
     key: "health",
@@ -110,10 +109,10 @@ export function buildExploreCategories(t: ReturnType<typeof useT>): LifeMapCateg
       gradient: ["#ec4899", "#8b5cf6"],
       glowOuter: ["rgba(236,72,153,0.22)", "rgba(139,92,246,0.1)"],
       glowColor: "#ec4899",
-      badge: "PRO",
-      badgeIcon: "🔮",
+      badge: FACE_READING_PRO_LIVE ? "PRO" : "SOON",
+      badgeIcon: FACE_READING_PRO_LIVE ? "🔮" : "🛠️",
       title: t.mdFaceReadingTitle,
-      subtitle: t.mdFaceReadingSub,
+      subtitle: FACE_READING_PRO_LIVE ? t.mdFaceReadingSub : t.mdFaceReadingSubSoon,
       route: "/face-reading",
     },
   ];

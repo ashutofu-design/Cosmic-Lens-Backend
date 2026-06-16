@@ -186,9 +186,7 @@ export function MilanGunBreakdown({ scores, total, isDark, textColor, mutedColor
             ))}
         </View>
       ) : (
-        <Text style={[st.lockHint, { color: mutedColor }]}>
-          Select both kundlis — scores preview here before you tap Check
-        </Text>
+        <Text style={[st.lockHint, { color: mutedColor }]}>{copy.gunLockHint}</Text>
       )}
 
       <View style={{ gap: 10, marginTop: 4 }}>

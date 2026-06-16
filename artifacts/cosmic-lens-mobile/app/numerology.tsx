@@ -1,24 +1,43 @@
 import { Feather } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import * as FileSystem from "expo-file-system/legacy";
 import { saveLocalReport } from "@/lib/localReports";
 import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
 import { router } from "expo-router";
 import * as Sharing from "expo-sharing";
-import React, { useEffect, useMemo, useState } from "react";
+import { LinearGradient } from "expo-linear-gradient";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "@/lib/apiConfig";
 import {
+  Animated,
+  Easing,
   Modal,
   Platform, Pressable, ScrollView, StyleSheet,
   Text, TextInput, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useUser, type ProfileEntry } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { getPYTheme } from "@/lib/i18nContent";
-import { LIFE_MASTERY_CHECKOUT_CONFIG, LIFE_MASTERY_UI_PRICING } from "@/lib/numerologyProOffer";
+import {
+  LIFE_MASTERY_CHECKOUT_CONFIG,
+  LIFE_MASTERY_UI_PRICING,
+  lifeMasteryOrderTotalInr,
+  LIFE_MASTERY_PRIORITY_SURCHARGE_INR,
+} from "@/lib/numerologyProOffer";
 import { consumeNumerologyPaidReady, gateNumerologyReportAfterLangPick } from "@/lib/numerologyReportCheckoutFlow";
+import { FOUNDER_PROFILE } from "@/lib/founderProfile";
+
+const F = {
+  regular: "Nunito_400Regular",
+  medium:  "Nunito_500Medium",
+  semi:    "Nunito_600SemiBold",
+  bold:    "Nunito_700Bold",
+  extra:   "Nunito_800ExtraBold",
+} as const;
 
 // ── Calculation helpers ───────────────────────────────────────────────────────
 const PYTH: Record<string, number> = {
@@ -48,6 +67,9 @@ function letterSum(name: string, vowelsOnly?: boolean, consonantsOnly?: boolean)
 
 function calcLifePath(day: number, month: number, year: number) {
   return reduce(reduce(digitSum(day)) + reduce(digitSum(month)) + reduce(digitSum(year)));
+}
+function calcBirthDay(day: number) {
+  return reduce(digitSum(day));
 }
 function calcDestiny(name: string) { return reduce(letterSum(name)); }
 function calcSoulUrge(name: string) { return reduce(letterSum(name, true)); }
@@ -301,6 +323,37 @@ function getInfo(n: number): NumInfo {
   return NUM[n] ?? NUM[9];
 }
 
+function pickCareer(info: NumInfo, vlang: string): string {
+  if (vlang === "hi") return info.careerHi || info.career;
+  if (vlang === "hn") return info.careerHn || info.career;
+  return info.career;
+}
+
+const BASIC_ACCENT = "#8b5cf6";
+const PRO_ACCENT = "#f59e0b";
+
+function PremiumOrb({ color }: { color: string }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.28, 0.55] });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[ui.orb, { backgroundColor: color, transform: [{ scale }], opacity }]}
+    />
+  );
+}
+
 // ── Number badge component ─────────────────────────────────────────────────────
 function NumberBadge({ num, color, size = 68 }: { num: number; color: string; size?: number }) {
   return (
@@ -312,22 +365,35 @@ function NumberBadge({ num, color, size = 68 }: { num: number; color: string; si
 }
 const nb = StyleSheet.create({
   wrap: { alignItems:"center", justifyContent:"center", flexShrink:0 },
-  num:  { fontWeight:"900" },
+  num:  { fontFamily: F.extra },
 });
 
 // ── Free numerology card ───────────────────────────────────────────────────────
 function NumCard({
-  label, labelHindi, num, expanded, onToggle,
-}: { label: string; labelHindi: string; num: number; expanded: boolean; onToggle: () => void }) {
+  label, labelHindi, num, expanded, onToggle, delay = 0,
+}: { label: string; labelHindi: string; num: number; expanded: boolean; onToggle: () => void; delay?: number }) {
   const C    = useC();
   const t    = useT();
   const info = getInfo(num);
 
   return (
+    <FadeInView delay={delay}>
     <Pressable
       onPress={onToggle}
-      style={[nc.card, { backgroundColor: C.bgCard, borderColor: `${info.color}35` }]}
+      style={({ pressed }) => [
+        nc.card,
+        {
+          backgroundColor: C.bgCard,
+          borderColor: `${info.color}45`,
+          transform: [{ scale: pressed ? 0.99 : 1 }],
+        },
+      ]}
     >
+      <LinearGradient
+        colors={[`${info.color}12`, "transparent"]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
       {/* Top row */}
       <View style={nc.topRow}>
         <NumberBadge num={num} color={info.color} />
@@ -345,53 +411,84 @@ function NumCard({
         <Feather name={expanded ? "chevron-up" : "chevron-down"} size={16} color={C.textMuted} />
       </View>
 
-      {/* Traits */}
-      <View style={nc.traits}>
-        {info.traits.map((tr, i) => (
-          <View key={tr} style={[nc.chip, { backgroundColor:`${info.color}12`, borderColor:`${info.color}28` }]}>
-            <Text style={[nc.chipTxt, { color:info.color }]}>{t.vlang === "hi" ? (info.traitsHindi[i] || tr) : tr}</Text>
-            {t.vlang !== "hi" && t.vlang !== "en" && info.traitsHindi[i] && (
-              <Text style={[nc.chipHindi, { color:info.color }]}> · {info.traitsHindi[i]}</Text>
-            )}
+      {/* Traits + details — expanded only */}
+      {expanded && (
+        <>
+          <View style={nc.traits}>
+            {info.traits.map((tr, i) => (
+              <View key={tr} style={[nc.chip, { backgroundColor:`${info.color}12`, borderColor:`${info.color}28` }]}>
+                <Text style={[nc.chipTxt, { color:info.color }]}>{t.vlang === "hi" ? (info.traitsHindi[i] || tr) : tr}</Text>
+                {t.vlang !== "hi" && t.vlang !== "en" && info.traitsHindi[i] && (
+                  <Text style={[nc.chipHindi, { color:info.color }]}> · {info.traitsHindi[i]}</Text>
+                )}
+              </View>
+            ))}
           </View>
-        ))}
-      </View>
 
-      {/* Compact (basic) — only strengths/weakness shown */}
-      <View style={nc.quickRow}>
-        <View style={[nc.quickPill, { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.25)" }]}>
-          <Text style={[nc.quickLabel, { color: C.textDim }]}>{t.numStrength}</Text>
-          <Text style={[nc.quickVal, { color: "#22c55e" }]}>
-            {t.vlang === "hi" ? (info.strengthHi || info.strength) : t.vlang === "hn" ? (info.strengthHn || info.strength) : info.strength}
-          </Text>
-        </View>
-        <View style={[nc.quickPill, { backgroundColor: "rgba(248,113,113,0.08)", borderColor: "rgba(248,113,113,0.22)" }]}>
-          <Text style={[nc.quickLabel, { color: C.textDim }]}>{t.numWeakness}</Text>
-          <Text style={[nc.quickVal, { color: "#f87171" }]}>
-            {t.vlang === "hi" ? (info.weaknessHi || info.weakness) : t.vlang === "hn" ? (info.weaknessHn || info.weakness) : info.weakness}
-          </Text>
-        </View>
-      </View>
+          <View style={nc.quickRow}>
+            <View style={[nc.quickPill, { backgroundColor: "rgba(34,197,94,0.10)", borderColor: "rgba(34,197,94,0.25)" }]}>
+              <Text style={[nc.quickLabel, { color: C.textDim }]}>{t.numStrength}</Text>
+              <Text style={[nc.quickVal, { color: "#22c55e" }]}>
+                {t.vlang === "hi" ? (info.strengthHi || info.strength) : t.vlang === "hn" ? (info.strengthHn || info.strength) : info.strength}
+              </Text>
+            </View>
+            <View style={[nc.quickPill, { backgroundColor: "rgba(248,113,113,0.08)", borderColor: "rgba(248,113,113,0.22)" }]}>
+              <Text style={[nc.quickLabel, { color: C.textDim }]}>{t.numWeakness}</Text>
+              <Text style={[nc.quickVal, { color: "#f87171" }]}>
+                {t.vlang === "hi" ? (info.weaknessHi || info.weakness) : t.vlang === "hn" ? (info.weaknessHn || info.weakness) : info.weakness}
+              </Text>
+            </View>
+          </View>
+
+          <LockedCareerRow career={pickCareer(info, t.vlang)} accent={info.color} />
+        </>
+      )}
     </Pressable>
+    </FadeInView>
   );
 }
 const nc = StyleSheet.create({
-  card:       { borderRadius:16, borderWidth:1.5, padding:16, gap:10 },
+  card:       { borderRadius:18, borderWidth:1.5, padding:16, gap:10, overflow:"hidden" },
   topRow:     { flexDirection:"row", alignItems:"flex-start", gap:12 },
-  tag:        { fontSize:9, fontWeight:"800", letterSpacing:1.8, marginBottom:1 },
-  tagHindi:   { fontSize:9, marginBottom:3 },
-  titleTxt:   { fontSize:15, fontWeight:"800", marginBottom:2 },
+  tag:        { fontSize:9, fontFamily:F.bold, letterSpacing:0.8, textTransform:"uppercase", marginBottom:1 },
+  tagHindi:   { fontSize:9, fontFamily:F.medium, marginBottom:3 },
+  titleTxt:   { fontSize:14, fontFamily:F.extra, letterSpacing:-0.2, marginBottom:2 },
   planetRow:  { flexDirection:"row", alignItems:"center", gap:4 },
-  planetTxt:  { fontSize:11 },
+  planetTxt:  { fontSize:11, fontFamily:F.medium },
   traits:     { flexDirection:"row", flexWrap:"wrap", gap:6 },
   chip:       { flexDirection:"row", paddingHorizontal:8, paddingVertical:4, borderRadius:8, borderWidth:1 },
-  chipTxt:    { fontSize:10, fontWeight:"700" },
-  chipHindi:  { fontSize:10 },
+  chipTxt:    { fontSize:10.5, fontFamily:F.bold },
+  chipHindi:  { fontSize:10, fontFamily:F.medium },
   quickRow:   { flexDirection:"row", gap:10 },
   quickPill:  { flex:1, borderRadius:12, borderWidth:1, padding:12, gap:4 },
-  quickLabel: { fontSize:9, fontWeight:"800", letterSpacing:1.2 },
-  quickVal:   { fontSize:12, lineHeight:18, fontWeight:"700" },
+  quickLabel: { fontSize:9, fontFamily:F.extra, letterSpacing:1.1, textTransform:"uppercase" },
+  quickVal:   { fontSize:12, lineHeight:18, fontFamily:F.semi },
+  lockWrap:   { marginTop:2, borderRadius:12, borderWidth:1, overflow:"hidden", minHeight:52 },
+  lockLabel:  { fontSize:9, fontFamily:F.extra, letterSpacing:1, textTransform:"uppercase", marginBottom:6 },
+  lockText:   { fontSize:12, lineHeight:18, fontFamily:F.medium },
+  lockOverlay:{ ...StyleSheet.absoluteFillObject, alignItems:"center", justifyContent:"center" },
 });
+
+function LockedCareerRow({ career, accent }: { career: string; accent: string }) {
+  const C = useC();
+  const t = useT();
+  return (
+    <View style={[nc.lockWrap, { borderColor: `${accent}30`, backgroundColor: C.isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)" }]}>
+      <View style={{ padding:12 }}>
+        <Text style={[nc.lockLabel, { color: C.textDim }]}>{t.numCareer}</Text>
+        <Text style={[nc.lockText, { color: C.textMuted }]} numberOfLines={2}>{career}</Text>
+      </View>
+      {Platform.OS !== "web" ? (
+        <BlurView intensity={28} tint={C.isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: C.isDark ? "rgba(15,23,42,0.55)" : "rgba(248,250,252,0.72)" }]} />
+      )}
+      <View style={nc.lockOverlay}>
+        <Feather name="lock" size={16} color={accent} />
+      </View>
+    </View>
+  );
+}
 
 // ── Personal year mini card ───────────────────────────────────────────────────
 function PersonalYearCard({ py, pm }: { py: number; pm: number }) {
@@ -403,7 +500,9 @@ function PersonalYearCard({ py, pm }: { py: number; pm: number }) {
   const month = new Date().toLocaleString("default", { month:"long" });
 
   return (
-    <View style={[pyc.card, { backgroundColor: C.bgCard, borderColor: `${info.color}30` }]}>
+    <FadeInView delay={staggerDelay(4)}>
+    <View style={[pyc.card, { backgroundColor: C.bgCard, borderColor: `${info.color}40`, overflow: "hidden" }]}>
+      <LinearGradient colors={[`${info.color}10`, "transparent"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
       <Text style={[pyc.title, { color: C.textDim }]}>{t.numPersonalYM}</Text>
       <View style={pyc.row}>
         <View style={[pyc.box, { borderColor:`${info.color}30`, backgroundColor:`${info.color}08` }]}>
@@ -418,54 +517,106 @@ function PersonalYearCard({ py, pm }: { py: number; pm: number }) {
         </View>
       </View>
     </View>
+    </FadeInView>
   );
 }
 const pyc = StyleSheet.create({
-  card:   { borderRadius:16, borderWidth:1, padding:16, gap:10 },
-  title:  { fontSize:9, fontWeight:"800", letterSpacing:1.8 },
+  card:   { borderRadius:18, borderWidth:1, padding:16, gap:10 },
+  title:  { fontSize:9, fontFamily:F.extra, letterSpacing:1.1, textTransform:"uppercase" },
   row:    { flexDirection:"row", gap:10 },
   box:    { flex:1, borderRadius:12, borderWidth:1, padding:12, gap:4, alignItems:"center" },
-  bigNum: { fontSize:36, fontWeight:"900" },
-  label:  { fontSize:10, fontWeight:"700" },
-  theme:  { fontSize:11, lineHeight:16, textAlign:"center" },
+  bigNum: { fontSize:36, fontFamily:F.extra },
+  label:  { fontSize:10, fontFamily:F.bold },
+  theme:  { fontSize:11, lineHeight:16, textAlign:"center", fontFamily:F.medium },
 });
 
-// ── Locked premium card ───────────────────────────────────────────────────────
-function LockedCard({ title, emoji, color }: { title: string; emoji: string; color: string }) {
+function CoreNumbersSummary({ items }: { items: { num: number; label: string }[] }) {
   const C = useC();
+  const t = useT();
   return (
-    <View style={[lk.card, { backgroundColor: C.bgCard, borderColor: `${color}22` }]}>
-      <View style={lk.row}>
-        <View style={[lk.icon, { backgroundColor:`${color}15` }]}>
-          <Text style={{ fontSize:18 }}>{emoji}</Text>
+    <View style={[cs.card, { backgroundColor: C.bgCard, borderColor: `${BASIC_ACCENT}35`, overflow: "hidden" }]}>
+      <LinearGradient colors={[`${BASIC_ACCENT}10`, "transparent"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <Text style={[cs.title, { color: C.textDim }]}>{t.numCoreSummary}</Text>
+      <View style={cs.row}>
+        {items.map(item => {
+          const info = getInfo(item.num);
+          return (
+            <View key={item.label} style={[cs.item, { borderColor: `${info.color}35`, backgroundColor: `${info.color}08` }]}>
+              <Text style={[cs.num, { color: info.color }]}>{item.num}</Text>
+              <Text style={[cs.lbl, { color: C.textMuted }]} numberOfLines={2}>{item.label}</Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+const cs = StyleSheet.create({
+  card:  { borderRadius:18, borderWidth:1, padding:14, gap:10 },
+  title: { fontSize:9, fontFamily:F.extra, letterSpacing:1.1, textTransform:"uppercase" },
+  row:   { flexDirection:"row", gap:8 },
+  item:  { flex:1, borderRadius:12, borderWidth:1, paddingVertical:10, paddingHorizontal:6, alignItems:"center", gap:4 },
+  num:   { fontSize:22, fontFamily:F.extra },
+  lbl:   { fontSize:8.5, fontFamily:F.bold, textAlign:"center", letterSpacing:0.2, textTransform:"uppercase" },
+});
+
+function BasicProCompare() {
+  const C = useC();
+  const t = useT();
+  return (
+    <View style={[bc.card, { backgroundColor: C.bgCard, borderColor: `${BASIC_ACCENT}30`, overflow: "hidden" }]}>
+      <LinearGradient colors={[`${PRO_ACCENT}08`, "transparent"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <Text style={[bc.title, { color: C.textDim }]}>{t.numBasicCompareTitle}</Text>
+      <View style={bc.row}>
+        <View style={[bc.col, { borderColor: C.border, backgroundColor: C.bgCard2 }]}>
+          <Text style={[bc.colHead, { color: C.text }]}>{t.km_basic}</Text>
+          <Text style={[bc.line, { color: C.textMuted }]}>{t.numBasicCompareBasicLine}</Text>
         </View>
-        <View style={{ flex:1, gap:6 }}>
-          <Text style={[lk.title, { color: C.text }]}>{title}</Text>
-          <View style={lk.blurRow}>
-            {["●●●●●●","●●●●●●●●","●●●●●"].map((b,i) => (
-              <View key={i} style={[lk.blurChip, { backgroundColor:`${color}18` }]}>
-                <Text style={{ color:`${color}40`, fontSize:9 }}>{b}</Text>
-              </View>
-            ))}
-          </View>
-          <Text style={[lk.preview, { color: C.textDim }]}>••••••••••••••••••••••••••••••••••</Text>
-        </View>
-        <View style={[lk.lockIcon, { backgroundColor:`${color}12` }]}>
-          <Feather name="lock" size={14} color={color} />
+        <View style={[bc.col, { borderColor: "rgba(245,158,11,0.35)", backgroundColor: "rgba(245,158,11,0.08)" }]}>
+          <Text style={[bc.colHead, { color: "#f59e0b" }]}>{t.vu_tabPro}</Text>
+          <Text style={[bc.line, { color: C.textMuted }]}>{t.numBasicCompareProLine}</Text>
         </View>
       </View>
     </View>
   );
 }
-const lk = StyleSheet.create({
-  card:     { borderRadius:14, borderWidth:1, padding:12, opacity:0.75 },
-  row:      { flexDirection:"row", alignItems:"flex-start", gap:10 },
-  icon:     { width:40, height:40, borderRadius:12, alignItems:"center", justifyContent:"center", flexShrink:0 },
-  title:    { fontSize:13, fontWeight:"700" },
-  blurRow:  { flexDirection:"row", gap:6 },
-  blurChip: { paddingHorizontal:8, paddingVertical:3, borderRadius:8 },
-  preview:  { fontSize:10, letterSpacing:1 },
-  lockIcon: { width:30, height:30, borderRadius:15, alignItems:"center", justifyContent:"center", flexShrink:0 },
+const bc = StyleSheet.create({
+  card:    { borderRadius:18, borderWidth:1, padding:14, gap:10 },
+  title:   { fontSize:9, fontFamily:F.extra, letterSpacing:1.1, textTransform:"uppercase" },
+  row:     { flexDirection:"row", gap:8 },
+  col:     { flex:1, borderRadius:12, borderWidth:1, padding:12, gap:6 },
+  colHead: { fontSize:13, fontFamily:F.extra },
+  line:    { fontSize:11, lineHeight:16, fontFamily:F.medium },
+});
+
+function BasicProTease({ onOpenPro }: { onOpenPro: () => void }) {
+  const C = useC();
+  const t = useT();
+  const price = LIFE_MASTERY_UI_PRICING.offerInr;
+  return (
+    <View style={{ gap:10 }}>
+      <Text style={[bp.hint, { color: C.isDark ? "rgba(203,213,225,0.55)" : "rgba(100,116,139,0.75)" }]}>
+        {t.numBasicLockedHint}
+      </Text>
+      <Pressable
+        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onOpenPro(); }}
+        style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}
+      >
+        <LinearGradient colors={["#d97706", "#f59e0b", "#fbbf24"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={bp.tease}>
+          <Feather name="file-text" size={16} color="#fff" />
+          <Text style={bp.teaseTxt}>{t.numProTeaseBtn} — ₹{price}</Text>
+          <Feather name="chevron-right" size={16} color="#fff" />
+        </LinearGradient>
+      </Pressable>
+      <Text style={[bp.foot, { color: C.textDim }]}>{t.numFooterNote}</Text>
+    </View>
+  );
+}
+const bp = StyleSheet.create({
+  hint:    { fontSize:11.5, fontFamily:F.medium, lineHeight:17, textAlign:"center", paddingHorizontal:8 },
+  tease:   { flexDirection:"row", alignItems:"center", justifyContent:"center", gap:8, paddingVertical:15, paddingHorizontal:14, borderRadius:16 },
+  teaseTxt:{ flex:1, flexShrink:1, color:"#fff", fontSize:12.5, fontFamily:F.bold, textAlign:"center", lineHeight:17 },
+  foot:    { fontSize:11, lineHeight:17, fontFamily:F.medium, textAlign:"center", paddingHorizontal:4 },
 });
 
 // ── Profile selector ──────────────────────────────────────────────────────────
@@ -505,7 +656,9 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
   const bd = profile.birthData;
 
   const [opening, setOpening] = useState(false);
+  const [founderExpanded, setFounderExpanded] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
+  const [priorityDelivery, setPriorityDelivery] = useState(false);
   const [pdfLang, setPdfLang] = useState<"en" | "hn" | "hi">(
     (t.lang || "en").toLowerCase() === "hi"
       ? "hi"
@@ -513,9 +666,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
   );
 
   // Pro+ Tools inputs
-  const [mobile, setMobile]   = useState("");
-  const [vehicle, setVehicle] = useState("");
-  const [house, setHouse]     = useState("");
+  const [mobile, setMobile] = useState("");
   const [err, setErr]         = useState<string | null>(null);
 
   const dobStr = bd
@@ -600,17 +751,15 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
       setErr("Pehle Profile screen me Name aur Date of Birth bhar dijiye, phir wapas aaiye.");
       return;
     }
-    if (!mobile && !vehicle && !house) {
-      setErr("Kam se kam ek number to dijiye — Mobile, Vehicle ya House.");
+    if (!mobile.trim()) {
+      setErr("Apna mobile number dijiye — PDF generate karne ke liye zaroori hai.");
       return;
     }
     const params = new URLSearchParams({
       name: bd.name, dob: dobStr,
       lang: langCode,
       ...(tobStr  ? { tob: tobStr } : {}),
-      ...(mobile  ? { mobile }  : {}),
-      ...(vehicle ? { vehicle } : {}),
-      ...(house   ? { house }   : {}),
+      mobile: mobile.trim(),
       // ── Birth-place context for Tier 4 (doshas) + Tier 5 (compatibility) ──
       ...(typeof bd.lat === "number" ? { lat: String(bd.lat) } : {}),
       ...(typeof bd.lon === "number" ? { lon: String(bd.lon) } : {}),
@@ -637,8 +786,8 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
       setErr("Pehle Profile screen me Name aur Date of Birth bhar dijiye, phir wapas aaiye.");
       return;
     }
-    if (!mobile && !vehicle && !house) {
-      setErr("Kam se kam ek number to dijiye — Mobile, Vehicle ya House.");
+    if (!mobile.trim()) {
+      setErr("Apna mobile number dijiye — PDF generate karne ke liye zaroori hai.");
       return;
     }
     setLangOpen(true);
@@ -650,9 +799,7 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
       name: bd?.name,
       dob: dobStr,
       tob: tobStr || "12:00",
-      ...(mobile  ? { mobile }  : {}),
-      ...(vehicle ? { vehicle } : {}),
-      ...(house   ? { house }   : {}),
+      mobile: mobile.trim(),
       ...(typeof bd?.lat === "number" ? { lat: bd.lat } : {}),
       ...(typeof bd?.lon === "number" ? { lon: bd.lon } : {}),
       ...(typeof bd?.tz  === "number" ? { tz:  bd.tz } : {}),
@@ -668,8 +815,8 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
       user,
       params: entitlementParams,
       lang: pdfLang,
-      label: "Life Mastery Report",
-      amountInr: LIFE_MASTERY_UI_PRICING.offerInr,
+      label: "Numerology Pro Report",
+      amountInr: lifeMasteryOrderTotalInr(priorityDelivery),
       bypassCheckout: false,
       onEntitled: () => {
         void openTools(pdfLang);
@@ -681,64 +828,138 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
     { icon: "⭐", title: t.nm_wi1Title,  sub: t.nm_wi1Sub },
     { icon: "🌟", title: t.nm_wi2Title,  sub: t.nm_wi2Sub },
     { icon: "💼", title: t.nm_wi3Title,  sub: t.nm_wi3Sub },
-    { icon: "💕", title: t.nm_wi4Title,  sub: t.nm_wi4Sub },
-    { icon: "🩺", title: t.nm_wi5Title,  sub: t.nm_wi5Sub },
-    { icon: "⚠️", title: t.nm_wi6Title,  sub: t.nm_wi6Sub },
-    { icon: "📱", title: t.nm_wi7Title,  sub: t.nm_wi7Sub },
-    { icon: "🚗", title: t.nm_wi8Title,  sub: t.nm_wi8Sub },
-    { icon: "🏠", title: t.nm_wi9Title,  sub: t.nm_wi9Sub },
-    { icon: "🤝", title: t.nm_wi10Title, sub: t.nm_wi10Sub },
     { icon: "🔤", title: t.nm_wi11Title, sub: t.nm_wi11Sub },
-    { icon: "✍️", title: t.nm_wi12Title, sub: t.nm_wi12Sub },
+    { icon: "🍀", title: "Lucky Numbers & Colour", sub: "Personal lucky digits, colours and best days to act." },
+    { icon: "📱", title: "Phone Number Numerology", sub: "Mobile digit vibration — support, blocks and simple fixes." },
   ];
+
+  const answer3 = [
+    "What is my core number pattern (Life Path / Destiny / Soul) and what it means?",
+    "Which numbers amplify money/career outcomes and which create blocks?",
+    "Which mobile number vibration is supportive for me right now?",
+  ];
+
+  const cardBg = C.isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.92)";
+  const border = C.isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)";
+  const titleColor = C.isDark ? "#f8fafc" : "#0f172a";
+  const bodyColor = C.isDark ? "rgba(226,232,240,0.72)" : "#64748b";
 
   return (
     <View style={{ gap: 12 }}>
-      {/* ── LIFE MASTERY REPORT (single product) ─────────────────── */}
-      {true && (
-        <>
-          <View style={[pp.hero, { backgroundColor: C.bgCard, borderColor: "rgba(124,58,237,0.4)" }]}>
-            <View style={pp.heroRow}>
-              <View style={[pp.heroIcon, { backgroundColor: "rgba(124,58,237,0.15)" }]}>
-                <Text style={{ fontSize: 28 }}>🔒</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={pp.tagRow}>
-                  <View style={[pp.tag, { backgroundColor: "#7c3aed" }]}>
-                    <Text style={pp.tagTxt}>NUMEROLOGY PRO</Text>
-                  </View>
-                  <View style={[pp.tag, { backgroundColor: "rgba(245,158,11,0.18)" }]}>
-                    <Text style={[pp.tagTxt, { color: "#f59e0b" }]}>{LIFE_MASTERY_UI_PRICING.discountLabel}</Text>
-                  </View>
-                </View>
-                <Text style={[pp.heroTitle, { color: C.text }]}>{t.nm_lifeMastery}</Text>
-                <Text style={[pp.heroSub, { color: C.textMuted }]}>
-                  Deep PDF report — Career, Love, Money + lucky number tools.
-                </Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 }}>
-                  <Text style={{ color: C.textMuted, textDecorationLine: "line-through", fontWeight: "800" }}>
-                    ₹{LIFE_MASTERY_UI_PRICING.originalInr}
-                  </Text>
-                  <Text style={{ color: "#f59e0b", fontWeight: "900", fontSize: 18 }}>
-                    ₹{LIFE_MASTERY_UI_PRICING.offerInr}
-                  </Text>
-                </View>
-              </View>
-            </View>
+      <FadeInView delay={0} resetKey="pro-hero">
+      <View style={[np.heroCard, { borderColor: C.isDark ? "rgba(124,58,237,0.5)" : "rgba(124,58,237,0.35)" }]}>
+        <LinearGradient
+          colors={C.isDark ? ["rgba(124,58,237,0.22)", "rgba(99,102,241,0.14)"] : ["rgba(124,58,237,0.1)", "rgba(99,102,241,0.06)"]}
+          style={StyleSheet.absoluteFill}
+        />
+        <Text style={np.heroEmoji}>🔢</Text>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={[np.heroTitle, { color: titleColor }]}>Numerology Pro Report</Text>
+          <Text style={[np.heroLine, { color: bodyColor }]} numberOfLines={2}>
+            #1 reason people order — clear money & career direction from your numbers.
+          </Text>
+        </View>
+      </View>
+      </FadeInView>
+
+      <FadeInView delay={staggerDelay(1)}>
+      <View style={[np.card, { backgroundColor: cardBg, borderColor: border }]}>
+        <Pressable
+          onPress={() => { setFounderExpanded(v => !v); Haptics.selectionAsync(); }}
+          style={np.founderHead}
+        >
+          {FOUNDER_PROFILE.photoUri ? (
+            <View style={[np.founderPhoto, { backgroundColor: "rgba(124,58,237,0.18)" }]} />
+          ) : (
+            <LinearGradient colors={["#6366f1", "#7c3aed"]} style={np.founderPhoto}>
+              <Text style={np.founderInitials}>{FOUNDER_PROFILE.initials}</Text>
+            </LinearGradient>
+          )}
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[np.founderName, { color: titleColor }]}>{FOUNDER_PROFILE.displayName}</Text>
+            <Text style={[np.founderRole, { color: bodyColor }]} numberOfLines={founderExpanded ? 3 : 1}>
+              {founderExpanded ? FOUNDER_PROFILE.roleLine : "Personally prepared & reviewed"}
+            </Text>
           </View>
-
-          {/* Profile shown (read-only) */}
-          <View style={[pp.row, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-            <Feather name="user" size={18} color={C.accent} />
-            <View style={{ flex: 1 }}>
-              <Text style={[pp.rowTitle, { color: C.text }]}>{bd?.name || "—"}</Text>
-              <Text style={[pp.rowSub, { color: C.textMuted }]}>DOB: {dobStr}</Text>
+          <Feather name={founderExpanded ? "chevron-up" : "chevron-down"} size={18} color={C.isDark ? "#a78bfa" : "#7c3aed"} />
+        </Pressable>
+        <View style={np.founderChipRow}>
+          {["Founder-reviewed", "Saved in My Reports", "Secure payment"].map(b => (
+            <View key={b} style={[np.founderBulletChip, { borderColor: border }]}>
+              <Feather name="check" size={10} color="#22c55e" />
+              <Text style={[np.founderBulletTxt, { color: titleColor }]} numberOfLines={1}>{b}</Text>
             </View>
+          ))}
+        </View>
+      </View>
+      </FadeInView>
+
+      <FadeInView delay={staggerDelay(2)}>
+      <View style={[np.card, { backgroundColor: cardBg, borderColor: border }]}>
+        <Text style={[np.sectionTitle, { color: titleColor }]}>Your Report Answers These 3 Questions</Text>
+        <View style={np.coreQChipRow}>
+          {answer3.map((q, i) => (
+            <View key={q} style={[np.coreQChip, { borderColor: border }]}>
+              <Text style={[np.coreQChipNum, { color: C.isDark ? "#a78bfa" : "#7c3aed" }]}>{i + 1}</Text>
+              <Text style={[np.coreQChipTxt, { color: titleColor }]} numberOfLines={1}>{q}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+      </FadeInView>
+
+      <FadeInView delay={staggerDelay(3)}>
+      <View style={[np.card, { backgroundColor: cardBg, borderColor: border }]}>
+        <Text style={[np.sectionTitle, { color: titleColor }]}>What's Inside Your Report</Text>
+        <Text style={[np.reportSummary, { color: bodyColor }]}>{toolSections.length} things</Text>
+        <View style={np.reportChipRow}>
+          {toolSections.map(sec => (
+            <View key={sec.title} style={[np.reportChip, { borderColor: border }]}>
+              <Text style={np.reportChipEmoji}>{sec.icon}</Text>
+              <Text style={[np.reportChipTxt, { color: titleColor }]}>{sec.title}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+      </FadeInView>
+
+      <FadeInView delay={staggerDelay(4)}>
+      <View style={[np.card, { backgroundColor: cardBg, borderColor: border }]}>
+        <Text style={[np.sectionTitle, { color: titleColor }]}>Standard Delivery</Text>
+        <Text style={[np.deliveryStandardLine, { color: bodyColor }]} numberOfLines={1}>
+          📁 My Reports · within 24 hours · ₹{LIFE_MASTERY_UI_PRICING.offerInr}
+        </Text>
+        <Pressable
+          onPress={() => { setPriorityDelivery(!priorityDelivery); Haptics.selectionAsync(); }}
+          style={[
+            np.deliveryPriorityRow,
+            {
+              borderColor: priorityDelivery ? (C.isDark ? "#f59e0b" : "#d97706") : border,
+              backgroundColor: priorityDelivery ? (C.isDark ? "rgba(245,158,11,0.08)" : "rgba(245,158,11,0.06)") : "transparent",
+            },
+          ]}
+        >
+          <View style={[np.priorityCheck, { borderColor: priorityDelivery ? "#f59e0b" : border, backgroundColor: priorityDelivery ? "#f59e0b" : "transparent" }]}>
+            {priorityDelivery ? <Feather name="check" size={10} color="#fff" /> : null}
           </View>
+          <Text style={[np.deliveryPriorityTxt, { color: titleColor }]} numberOfLines={1}>
+            ⚡ Priority +₹{LIFE_MASTERY_PRIORITY_SURCHARGE_INR} · within 12 hours
+          </Text>
+        </Pressable>
+        <View style={[np.priceDivider, { backgroundColor: border }]} />
+        <Text style={[np.priceInline, { color: titleColor }]}>
+          <Text style={[np.priceStrikeTiny, { color: bodyColor }]}>₹{LIFE_MASTERY_UI_PRICING.originalInr}</Text>
+          <Text style={np.priceArrow}> → </Text>
+          <Text style={np.priceTotalTiny}>₹{lifeMasteryOrderTotalInr(priorityDelivery)}</Text>
+        </Text>
+      </View>
+      </FadeInView>
 
-          {/* Inputs */}
-          <Text style={[pp.sectionLabel, { color: C.textDim }]}>YOUR NUMBERS (kam se kam ek)</Text>
-
+      <FadeInView delay={staggerDelay(5)}>
+      <View style={[np.card, { backgroundColor: cardBg, borderColor: border }]}>
+        <Text style={[np.sectionTitle, { color: titleColor }]}>Your numbers</Text>
+        <Text style={[np.reportSummary, { color: bodyColor }]}>Mobile number required for your PDF report.</Text>
+        <View style={{ gap: 10, marginTop: 10 }}>
           <View style={pp.inputBlock}>
             <Text style={[pp.inputLabel, { color: C.textDim }]}>📱 Mobile Number</Text>
             <TextInput
@@ -751,66 +972,34 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
               style={[pp.input, { backgroundColor: C.bgCard, borderColor: C.border, color: C.text }]}
             />
           </View>
-
-          <View style={pp.inputBlock}>
-            <Text style={[pp.inputLabel, { color: C.textDim }]}>🚗 Vehicle Number (optional)</Text>
-            <TextInput
-              value={vehicle}
-              onChangeText={(v) => setVehicle(v.toUpperCase())}
-              placeholder="DL01AB1234"
-              placeholderTextColor={C.textMuted}
-              autoCapitalize="characters"
-              maxLength={15}
-              style={[pp.input, { backgroundColor: C.bgCard, borderColor: C.border, color: C.text }]}
-            />
+        </View>
+        {err ? (
+          <View style={[pp.errBox, { marginTop: 12 }]}>
+            <Feather name="alert-circle" size={14} color="#dc2626" />
+            <Text style={pp.errTxt}>{err}</Text>
           </View>
+        ) : null}
+      </View>
+      </FadeInView>
 
-          <View style={pp.inputBlock}>
-            <Text style={[pp.inputLabel, { color: C.textDim }]}>🏠 House / Flat Number (optional)</Text>
-            <TextInput
-              value={house}
-              onChangeText={(v) => setHouse(v.toUpperCase())}
-              placeholder="B-204"
-              placeholderTextColor={C.textMuted}
-              autoCapitalize="characters"
-              maxLength={15}
-              style={[pp.input, { backgroundColor: C.bgCard, borderColor: C.border, color: C.text }]}
-            />
-          </View>
+      <Text style={[np.trustBar, { color: bodyColor }]}>🔒 Secure Payment • Founder Reviewed • Delivered in My Reports</Text>
 
-          {err && (
-            <View style={[pp.errBox]}>
-              <Feather name="alert-circle" size={14} color="#dc2626" />
-              <Text style={pp.errTxt}>{err}</Text>
-            </View>
-          )}
-
-          <Text style={[pp.sectionLabel, { color: C.textDim }]}>WHAT'S INSIDE</Text>
-          {toolSections.map((sec, i) => (
-            <View key={i} style={[pp.row, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <Text style={{ fontSize: 22 }}>{sec.icon}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={[pp.rowTitle, { color: C.text }]}>{sec.title}</Text>
-                <Text style={[pp.rowSub, { color: C.textMuted }]}>{sec.sub}</Text>
-              </View>
-              <Feather name="check" size={16} color="#22c55e" />
-            </View>
-          ))}
-
-          <Text style={[pp.sectionLabel, { color: C.textDim }]}>LOCKED PREVIEW</Text>
-          <LockedCard title="Career direction + earning pattern" emoji="💼" color="#7c3aed" />
-          <LockedCard title="Money blocks + lucky activation dates" emoji="💰" color="#f59e0b" />
-          <LockedCard title="Love & relationship blueprint" emoji="💕" color="#ec4899" />
-          <LockedCard title="Mobile / Vehicle / House number dosha" emoji="🔢" color="#22c55e" />
-
-          <Pressable onPress={startUnlock} disabled={opening}
-            style={[pp.cta, { backgroundColor: "#7c3aed", shadowColor: "#7c3aed" },
-                    opening && { opacity: 0.6 }]}>
-            <View style={pp.ctaInner}>
-              <Feather name={opening ? "loader" : "lock"} size={18} color="#fff" />
-              <Text style={pp.ctaTxt}>{opening ? t.nm_opening : "Unlock & Download PDF"}</Text>
-            </View>
-          </Pressable>
+      <Pressable
+        onPress={startUnlock}
+        disabled={opening}
+        style={({ pressed }) => [{
+          borderRadius: 14,
+          backgroundColor: "#7c3aed",
+          paddingVertical: 14,
+          paddingHorizontal: 16,
+          alignItems: "center",
+          opacity: pressed || opening ? 0.85 : 1,
+        }]}
+      >
+        <Text style={{ color: "#fff", fontSize: 14, fontFamily: "Nunito_800ExtraBold", textAlign: "center" }}>
+          {opening ? "Opening…" : "Get My Report"}
+        </Text>
+      </Pressable>
 
           <Modal transparent visible={langOpen} animationType="fade" onRequestClose={() => setLangOpen(false)}>
             <View style={{
@@ -895,17 +1084,6 @@ function ProReportPanel({ profile }: { profile: ProfileEntry }) {
               </View>
             </View>
           </Modal>
-        </>
-      )}
-
-      {/* Foot note */}
-      <View style={[pp.note, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-        <Feather name="info" size={12} color={C.textMuted} />
-        <Text style={[pp.noteTxt, { color: C.textMuted }]}>
-          Report opens in your browser. PDF can be saved or shared from there.
-          All numbers are 100% deterministic — same inputs always give same result.
-        </Text>
-      </View>
     </View>
   );
 }
@@ -926,9 +1104,11 @@ const pp = StyleSheet.create({
                  borderRadius: 16, overflow: "hidden", backgroundColor: "#f59e0b",
                  shadowColor: "#f59e0b", shadowOffset: { width: 0, height: 6 },
                  shadowOpacity: 0.4, shadowRadius: 12, elevation: 10,
+                 alignItems: "center",
                },
-  ctaInner:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, padding: 16 },
+  ctaInner:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingTop: 16, paddingHorizontal: 16, paddingBottom: 4 },
   ctaTxt:      { color: "#fff", fontSize: 15, fontWeight: "900" },
+  ctaPrice:    { color: "rgba(255,255,255,0.92)", fontSize: 13, fontWeight: "800", paddingBottom: 14 },
   note:        { borderRadius: 12, borderWidth: 1, padding: 12, flexDirection: "row", alignItems: "flex-start", gap: 8 },
   noteTxt:     { fontSize: 11, lineHeight: 16, flex: 1 },
   subTabBar:   { flexDirection: "row", padding: 4, borderRadius: 14, borderWidth: 1, gap: 4 },
@@ -945,6 +1125,60 @@ const pp = StyleSheet.create({
                  backgroundColor: "rgba(220,38,38,0.1)", borderRadius: 10,
                  padding: 10, borderWidth: 1, borderColor: "rgba(220,38,38,0.3)" },
   errTxt:      { fontSize: 12, color: "#dc2626", fontWeight: "700", flex: 1 },
+  founderAvatarWrap: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, alignItems: "center", justifyContent: "center", overflow: "hidden", marginTop: 2 },
+  founderAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  founderAvatarTxt: { color: "#fff", fontSize: 12, fontWeight: "900" },
+  expandBtn: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: "center", justifyContent: "center", marginTop: 2 },
+  chip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: 1, maxWidth: "90%" },
+  chipTxt: { fontSize: 10, fontWeight: "800", flexShrink: 1 },
+  answerRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 9, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1 },
+  answerNum: { width: 18, textAlign: "center", fontWeight: "900" },
+  answerTxt: { flex: 1, fontSize: 12, fontWeight: "800" },
+  priorityRow: { width: "100%", flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, paddingVertical: 9, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1 },
+  priorityCheck: { width: 16, height: 16, borderRadius: 4, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  priorityTxt: { flex: 1, fontSize: 12, fontWeight: "800" },
+  priceDivider: { width: "100%", height: 1, marginTop: 12, marginBottom: 8 },
+  priceInline: { fontSize: 12, lineHeight: 17 },
+  priceStrikeTiny: { fontSize: 12, fontWeight: "700", textDecorationLine: "line-through" },
+  priceArrow: { fontSize: 12, fontWeight: "600", color: "rgba(148,163,184,0.9)" },
+  priceTotalTiny: { fontSize: 14, fontWeight: "900" },
+});
+
+// Numerology Pro purchase styles (copied from MarriageCompatProPurchase layout)
+const np = StyleSheet.create({
+  card: { borderRadius: 18, borderWidth: 1, padding: 16 },
+  founderHead: { flexDirection: "row", alignItems: "center", gap: 10 },
+  founderPhoto: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  founderInitials: { color: "#fff", fontSize: 13, fontFamily: "Nunito_800ExtraBold" },
+  founderName: { fontSize: 13.5, fontFamily: "Nunito_800ExtraBold" },
+  founderRole: { fontSize: 11, fontFamily: "Nunito_500Medium", lineHeight: 15 },
+  founderChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
+  founderBulletChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, borderWidth: 1, maxWidth: "48%", flexGrow: 1 },
+  founderBulletTxt: { fontSize: 10, fontFamily: "Nunito_700Bold", flexShrink: 1 },
+  heroCard: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, overflow: "hidden" },
+  heroEmoji: { fontSize: 22 },
+  heroTitle: { fontSize: 14.5, fontFamily: "Nunito_800ExtraBold", lineHeight: 19 },
+  heroLine: { fontSize: 11.5, fontFamily: "Nunito_500Medium", lineHeight: 16 },
+  sectionTitle: { fontSize: 15, fontFamily: "Nunito_800ExtraBold", letterSpacing: -0.2 },
+  coreQChipRow: { gap: 6, marginTop: 10 },
+  coreQChip: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 9, borderWidth: 1 },
+  coreQChipNum: { fontSize: 11, fontFamily: "Nunito_800ExtraBold", width: 14 },
+  coreQChipTxt: { flex: 1, fontSize: 12, fontFamily: "Nunito_700Bold" },
+  reportSummary: { fontSize: 11, fontFamily: "Nunito_500Medium", marginTop: 2 },
+  reportChipRow: { gap: 6, marginTop: 10 },
+  reportChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, width: "100%" },
+  reportChipEmoji: { fontSize: 12 },
+  reportChipTxt: { flex: 1, fontSize: 11, fontFamily: "Nunito_700Bold", lineHeight: 15 },
+  deliveryStandardLine: { fontSize: 11.5, fontFamily: "Nunito_500Medium", marginTop: 6 },
+  deliveryPriorityRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 6, paddingVertical: 7, paddingHorizontal: 9, borderRadius: 9, borderWidth: 1 },
+  deliveryPriorityTxt: { flex: 1, fontSize: 11, fontFamily: "Nunito_700Bold" },
+  priorityCheck: { width: 16, height: 16, borderRadius: 4, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  priceDivider: { height: 1, marginTop: 10, marginBottom: 8 },
+  priceInline: { fontSize: 12, lineHeight: 17 },
+  priceStrikeTiny: { fontSize: 12, fontFamily: "Nunito_600SemiBold", textDecorationLine: "line-through" },
+  priceArrow: { fontSize: 12, fontFamily: "Nunito_500Medium", color: "rgba(148,163,184,0.9)" },
+  priceTotalTiny: { fontSize: 14, fontFamily: "Nunito_800ExtraBold" },
+  trustBar: { fontSize: 11, fontFamily: "Nunito_600SemiBold", textAlign: "center", lineHeight: 16, paddingHorizontal: 4 },
 });
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
@@ -965,6 +1199,7 @@ export default function NumerologyScreen() {
 
   // Expanded cards (compact basic: keep collapsed by default)
   const [expLP,   setExpLP]   = useState(false);
+  const [expBD,   setExpBD]   = useState(false);
   const [expDest, setExpDest] = useState(false);
   const [expSoul, setExpSoul] = useState(false);
 
@@ -975,13 +1210,14 @@ export default function NumerologyScreen() {
   const nums = useMemo(() => {
     if (!bd) return null;
     const lp   = calcLifePath(bd.day, bd.month, bd.year);
+    const bdNum = calcBirthDay(bd.day);
     const dest = calcDestiny(bd.name);
     const soul = calcSoulUrge(bd.name);
     const pers = calcPersonality(bd.name);
     const mat  = calcMaturity(lp, dest);
     const py   = calcPersonalYear(bd.day, bd.month);
     const pm   = calcPersonalMonth(bd.day, bd.month);
-    return { lp, dest, soul, pers, mat, py, pm };
+    return { lp, bdNum, dest, soul, pers, mat, py, pm };
   }, [bd]);
 
   // Format DOB for display
@@ -994,136 +1230,159 @@ export default function NumerologyScreen() {
     ? `${bd.day} ${MONTHS[bd.month - 1]} ${bd.year}`
     : null;
 
+  const accent = tab === "free" ? BASIC_ACCENT : PRO_ACCENT;
+
   return (
     <View style={[s.root, { backgroundColor: C.bg }]}>
-      {/* Header */}
-      <View style={[s.header, { paddingTop: topPad + 8, borderBottomColor: C.border }]}>
-        <Pressable onPress={() => router.back()} style={s.back}>
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <LinearGradient colors={[`${accent}14`, C.bg, C.bg]} style={StyleSheet.absoluteFill} />
+        <PremiumOrb color={accent} />
+      </View>
+
+      <LinearGradient
+        colors={[`${accent}24`, `${accent}08`, "transparent"]}
+        style={[s.header, { paddingTop: topPad + 8, borderBottomColor: `${accent}22` }]}
+      >
+        <Pressable onPress={() => router.back()} style={({ pressed }) => [ui.glassBtn, { opacity: pressed ? 0.75 : 1 }]}>
           <Feather name="arrow-left" size={20} color={C.textMuted} />
         </Pressable>
-        <View style={{ flex:1 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={[ui.headerBadge, { color: accent }]}>
+            {tab === "free" ? "NUMEROLOGY BASIC" : "NUMEROLOGY PRO"}
+          </Text>
           <Text style={[s.title, { color: C.text }]}>{t.numerologyTitle}</Text>
           <Text style={[s.sub, { color: C.textMuted }]}>{t.numSubtitle}</Text>
         </View>
-        <View style={[s.badge, { backgroundColor: `${C.accent}15` }]}>
-          <Text style={[s.badgeTxt, { color: C.accent }]}>{t.numFreeBadge}</Text>
-        </View>
-      </View>
+        <View style={{ width: 40 }} />
+      </LinearGradient>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[s.content, { paddingBottom: botPad + 40 }]}
       >
-        {/* Profile selector */}
-        {profiles.length > 1 && (
-          <View style={{ gap:6 }}>
-            <Text style={[s.sectionLabel, { color: C.textDim }]}>{t.numSelectProfile}</Text>
-            <ProfileSelector
-              profiles={profiles} activeId={selectedId}
-              onSelect={(id) => setSelectedId(id)}
-            />
-          </View>
-        )}
-
-        {/* No profile state */}
         {!bd && (
-          <View style={[s.emptyCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-            <Text style={{ fontSize:40 }}>🔢</Text>
+          <FadeInView delay={0}>
+          <View style={[ui.emptyPremium, { backgroundColor: C.bgCard, borderColor: `${BASIC_ACCENT}35` }]}>
+            <View style={[ui.heroIconRing, { backgroundColor: `${BASIC_ACCENT}22`, borderColor: `${BASIC_ACCENT}55` }]}>
+              <Text style={{ fontSize: 28 }}>🔢</Text>
+            </View>
             <Text style={[s.emptyTitle, { color: C.text }]}>{t.numNoProfileTitle}</Text>
             <Text style={[s.emptyBody, { color: C.textMuted }]}>
               {t.numNoProfileBody}
             </Text>
             <Pressable
               onPress={() => router.push("/profile-edit" as any)}
-              style={[s.emptyBtn, { backgroundColor: C.accent }]}
+              style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, width: "100%" })}
             >
-              <Text style={s.emptyBtnTxt}>{t.numSetupProfile}</Text>
+              <LinearGradient colors={[BASIC_ACCENT, `${BASIC_ACCENT}BB`]} style={ui.emptyBtnGrad}>
+                <Text style={s.emptyBtnTxt}>{t.numSetupProfile}</Text>
+              </LinearGradient>
             </Pressable>
           </View>
+          </FadeInView>
         )}
 
-        {/* Profile info card */}
         {bd && (
-          <View style={[s.profileCard, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-            <View style={s.profileRow}>
-              <View style={[s.avatar, { backgroundColor:`${C.accent}15`, borderColor:`${C.accent}30` }]}>
-                <Text style={{ fontSize:20 }}>👤</Text>
-              </View>
-              <View style={{ flex:1 }}>
-                <Text style={[s.profileName, { color: C.text }]}>{bd.name}</Text>
-                <Text style={[s.profileDob, { color: C.textMuted }]}>🎂 {dobFull}</Text>
-                {bd.place && <Text style={[s.profilePlace, { color: C.textDim }]}>📍 {bd.place}</Text>}
-              </View>
-              <View style={[s.syncBadge, { backgroundColor:`${C.accent}10` }]}>
-                <Feather name="check-circle" size={11} color={C.accent} />
-                <Text style={[s.syncTxt, { color: C.accent }]}>{t.numAutoSynced}</Text>
-              </View>
-            </View>
+          <FadeInView delay={staggerDelay(1)} resetKey={tab}>
+          <View style={[ui.tabBarPremium, { backgroundColor: C.bgCard2, borderColor: `${accent}33` }]}>
+            {([
+              { key: "free" as const, icon: "hash" as const, label: t.km_basic, tabAccent: BASIC_ACCENT },
+              { key: "pro" as const, icon: "file-text" as const, label: t.vu_tabPro, tabAccent: PRO_ACCENT },
+            ]).map((m) => {
+              const sel = tab === m.key;
+              return (
+                <Pressable
+                  key={m.key}
+                  onPress={() => { setTab(m.key); Haptics.selectionAsync(); }}
+                  style={({ pressed }) => [
+                    ui.tabBtnPremium,
+                    {
+                      borderColor: sel ? m.tabAccent : "transparent",
+                      transform: [{ scale: pressed ? 0.98 : 1 }],
+                    },
+                  ]}
+                >
+                  {sel ? (
+                    <LinearGradient
+                      colors={[m.tabAccent, `${m.tabAccent}CC`]}
+                      style={StyleSheet.absoluteFill}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                    />
+                  ) : null}
+                  <Feather name={m.icon} size={13} color={sel ? "#fff" : C.textMuted} />
+                  <Text style={[s.tabTxt, { color: sel ? "#fff" : C.textMuted }]}>{m.label}</Text>
+                </Pressable>
+              );
+            })}
           </View>
+          </FadeInView>
         )}
 
-        {/* Pattern A — Segmented tab toggle (Free | PRO Report) */}
-        {bd && (
-          <View style={[s.tabBar, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
-            <Pressable
-              onPress={() => { setTab("free"); Haptics.selectionAsync(); }}
-              style={[
-                s.tabBtn,
-                tab === "free" && { backgroundColor: C.accent },
-              ]}
-            >
-              <Feather name="hash" size={13} color={tab === "free" ? "#fff" : C.textMuted} />
-              <Text style={[
-                s.tabTxt,
-                { color: tab === "free" ? "#fff" : C.textMuted },
-              ]}>
-                Free Numerology
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => { setTab("pro"); Haptics.selectionAsync(); }}
-              style={[
-                s.tabBtn,
-                tab === "pro" && { backgroundColor: "#f59e0b" },
-              ]}
-            >
-              <Feather name="file-text" size={13} color={tab === "pro" ? "#fff" : C.textMuted} />
-              <Text style={[
-                s.tabTxt,
-                { color: tab === "pro" ? "#fff" : C.textMuted },
-              ]}>
-                PRO Report
-              </Text>
-            </Pressable>
-          </View>
-        )}
-
-        {/* PRO Report tab */}
         {bd && tab === "pro" && (
           <ProReportPanel profile={profile!} />
         )}
 
-        {/* Free section */}
         {nums && tab === "free" && (
           <>
-            <Text style={[s.sectionLabel, { color: C.textDim }]}>{t.numFreeSection}</Text>
-            <Text style={[s.sectionSub, { color: C.textMuted }]}>{t.numTapHint}</Text>
+            <FadeInView delay={staggerDelay(2)} resetKey="basic">
+              <View style={[ui.priceRibbon, { borderColor: `${BASIC_ACCENT}44`, backgroundColor: `${BASIC_ACCENT}12`, marginBottom: 4 }]}>
+                <Feather name="hash" size={14} color={BASIC_ACCENT} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[ui.priceRibbonText, { color: C.text }]}>{t.numFreeSection}</Text>
+                  {profile?.name ? (
+                    <Text style={{ color: C.textMuted, fontSize: 10, marginTop: 2 }}>
+                      {t.numProfileFor.replace("{name}", profile.name)}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            </FadeInView>
+
+            <FadeInView delay={staggerDelay(3)}>
+            <CoreNumbersSummary
+              items={[
+                { num: nums.lp,     label: t.numLifePathHi },
+                { num: nums.bdNum,  label: t.numBirthDayHi },
+                { num: nums.dest,   label: t.numDestinyHi },
+                { num: nums.soul,   label: t.numSoulUrgeHi },
+              ]}
+            />
+            </FadeInView>
+
+            <PersonalYearCard py={nums.py} pm={nums.pm} />
 
             <NumCard
               label={t.numLifePathLbl} labelHindi={t.numLifePathHi}
               num={nums.lp} expanded={expLP}
               onToggle={() => { setExpLP(v => !v); Haptics.selectionAsync(); }}
+              delay={staggerDelay(3)}
+            />
+            <NumCard
+              label={t.numBirthDayLbl} labelHindi={t.numBirthDayHi}
+              num={nums.bdNum} expanded={expBD}
+              onToggle={() => { setExpBD(v => !v); Haptics.selectionAsync(); }}
+              delay={staggerDelay(4)}
             />
             <NumCard
               label={t.numDestinyLbl} labelHindi={t.numDestinyHi}
               num={nums.dest} expanded={expDest}
               onToggle={() => { setExpDest(v => !v); Haptics.selectionAsync(); }}
+              delay={staggerDelay(5)}
             />
             <NumCard
               label={t.numSoulUrgeLbl} labelHindi={t.numSoulUrgeHi}
               num={nums.soul} expanded={expSoul}
               onToggle={() => { setExpSoul(v => !v); Haptics.selectionAsync(); }}
+              delay={staggerDelay(6)}
             />
+
+            <FadeInView delay={staggerDelay(7)}>
+              <BasicProCompare />
+            </FadeInView>
+            <FadeInView delay={staggerDelay(8)}>
+              <BasicProTease onOpenPro={() => { setTab("pro"); Haptics.selectionAsync(); }} />
+            </FadeInView>
           </>
         )}
       </ScrollView>
@@ -1135,19 +1394,18 @@ const s = StyleSheet.create({
   root:        { flex:1 },
   header:      { flexDirection:"row", alignItems:"center", gap:12, paddingHorizontal:16, paddingBottom:14, borderBottomWidth:1 },
   back:        { width:36, height:36, alignItems:"center", justifyContent:"center" },
-  title:       { fontSize:17, fontWeight:"800" },
-  sub:         { fontSize:10, marginTop:1 },
-  badge:       { paddingHorizontal:8, paddingVertical:3, borderRadius:8 },
-  badgeTxt:    { fontSize:9, fontWeight:"800", letterSpacing:1 },
+  title:       { fontSize:17, fontFamily:F.bold, letterSpacing:-0.2 },
+  sub:         { fontSize:11, fontFamily:F.medium, marginTop:1, letterSpacing:0.1 },
   content:     { paddingHorizontal:16, gap:12, paddingTop:14 },
-  sectionLabel:{ fontSize:9, fontWeight:"800", letterSpacing:2, marginBottom:-4 },
-  sectionSub:  { fontSize:11, marginTop:-8 },
+  sectionLabel:{ fontSize:9, fontFamily:F.extra, letterSpacing:1.1, textTransform:"uppercase", marginBottom:-4 },
+  sectionSub:  { fontSize:11, fontFamily:F.medium, marginTop:-8 },
+  profileCtx:  { fontSize:12, fontFamily:F.medium, marginTop:-6, marginBottom:2 },
 
   emptyCard:   { borderRadius:18, borderWidth:1, padding:24, alignItems:"center", gap:14 },
-  emptyTitle:  { fontSize:16, fontWeight:"800", textAlign:"center" },
-  emptyBody:   { fontSize:13, lineHeight:20, textAlign:"center" },
+  emptyTitle:  { fontSize:16, fontFamily:F.extra, textAlign:"center" },
+  emptyBody:   { fontSize:13, fontFamily:F.medium, lineHeight:20, textAlign:"center" },
   emptyBtn:    { paddingHorizontal:24, paddingVertical:12, borderRadius:14 },
-  emptyBtnTxt: { color:"#fff", fontSize:14, fontWeight:"800" },
+  emptyBtnTxt: { color:"#fff", fontSize:14, fontFamily:F.extra },
 
   profileCard: { borderRadius:14, borderWidth:1, padding:14 },
   profileRow:  { flexDirection:"row", alignItems:"center", gap:12 },
@@ -1183,5 +1441,85 @@ const s = StyleSheet.create({
   tabBar:    { flexDirection:"row", padding:4, borderRadius:14, borderWidth:1, gap:4 },
   tabBtn:    { flex:1, flexDirection:"row", alignItems:"center", justifyContent:"center",
                gap:6, paddingVertical:10, borderRadius:10 },
-  tabTxt:    { fontSize:12, fontWeight:"800", letterSpacing:0.3 },
+  tabTxt:    { fontSize:12, fontFamily:F.extra, letterSpacing:0.3 },
+});
+
+const ui = StyleSheet.create({
+  orb: {
+    position: "absolute",
+    top: -50,
+    right: -30,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+  },
+  glassBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
+  headerBadge: {
+    fontSize: 10,
+    fontFamily: F.extra,
+    letterSpacing: 2,
+    marginBottom: 2,
+  },
+  heroIconRing: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+  emptyPremium: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 24,
+    alignItems: "center",
+    gap: 12,
+    overflow: "hidden",
+  },
+  emptyBtnGrad: {
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+    width: "100%",
+  },
+  tabBarPremium: {
+    flexDirection: "row",
+    padding: 5,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 6,
+    marginBottom: 4,
+  },
+  tabBtnPremium: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    overflow: "hidden",
+  },
+  priceRibbon: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  priceRibbonText: { fontSize: 12, fontFamily: F.bold },
 });

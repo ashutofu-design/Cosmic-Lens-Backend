@@ -1,5 +1,4 @@
 import { API_BASE } from "@/lib/apiConfig";
-import { humanizeContactError, normalizeIndianWhatsApp } from "@/lib/indianPhone";
 import type { ProPdfLangCode } from "@/lib/proPdfLang";
 
 export type EngineSnapshot = {
@@ -50,17 +49,11 @@ export async function submitLoveRealityHumanOrder(opts: {
   p1: Record<string, unknown>;
   p2: Record<string, unknown>;
   lang: ProPdfLangCode;
-  contactMethod: "whatsapp" | "email";
-  contactValue: string;
   urgent: boolean;
   userId: number;
+  cosmoUserId?: string | null;
   apiKey?: string | null;
 }): Promise<HumanOrderResult> {
-  const contactValue =
-    opts.contactMethod === "whatsapp"
-      ? normalizeIndianWhatsApp(opts.contactValue) ?? opts.contactValue.trim()
-      : opts.contactValue.trim();
-
   const resp = await fetch(`${API_BASE}/api/love-reality/human-order`, {
     method: "POST",
     headers: authHeaders(opts.userId, opts.apiKey),
@@ -68,15 +61,14 @@ export async function submitLoveRealityHumanOrder(opts: {
       p1: opts.p1,
       p2: opts.p2,
       lang: opts.lang,
-      contact_method: opts.contactMethod,
-      contact_value: contactValue,
       urgent: opts.urgent,
+      ...(opts.cosmoUserId ? { cosmo_user_id: opts.cosmoUserId } : {}),
     }),
   });
   const json = await resp.json().catch(() => ({}));
   if (!resp.ok) {
     const detail = typeof json.detail === "string" ? json.detail : json.error;
-    throw new Error(humanizeContactError(String(detail || "Could not place order")));
+    throw new Error(String(detail || "Could not place order"));
   }
   return {
     order_id: String(json.order_id),

@@ -14,6 +14,7 @@ export async function purchaseFloorPlanSku(opts: {
   planKind: PlanKind;
   propertyName?: string;
   catalog?: Record<string, { price?: number; label?: string }> | null;
+  returnTo?: string;
 }): Promise<void> {
   const sku: FloorPlanSku = PLAN_KIND_TO_FLOOR_SKU[opts.planKind];
   const spec = priceForPlanKind(opts.planKind, opts.catalog);
@@ -55,6 +56,7 @@ export async function purchaseFloorPlanSku(opts: {
         amount: String(order.amount || spec.price),
         label: spec.label,
         propertyName: opts.propertyName || "",
+        returnTo: opts.returnTo || "",
       },
     });
   } catch (e: unknown) {

@@ -13,6 +13,12 @@ export const LOVE_REALITY_HI_DEVICE_CACHE_VER = "hi_purge_v11_section4_force_llm
 /** Must match artifacts/api-server/love_reality_api.py LOVE_REALITY_HI_CACHE_VER */
 export const LOVE_REALITY_HI_SERVER_CACHE_VER = "hi_purge_v19_section4_force_llm";
 
+/** Must match vedic/love_reality/love_section_polish.py _ASSEMBLY_VER */
+export const LOVE_REALITY_POLISH_ASSEMBLY_VER = "lr_sections_v20_human_narrative";
+
+/** One-time wipe of English device report cache when narrative engine ships. */
+export const LOVE_REALITY_EN_DEVICE_CACHE_VER = "en_purge_v2_lang_lane_llm";
+
 export type LoveReportChangeKind =
   /** Cached payload matches current app + PDF layout. */
   | "none"

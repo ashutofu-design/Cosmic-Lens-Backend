@@ -14,15 +14,19 @@
  * Branding: "Powered by Advanced Cosmic Intelligence" — never reveal AI/LLM.
  */
 import { Feather } from "@expo/vector-icons";
+import * as DocumentPicker from "expo-document-picker";
 import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, Stack } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -32,15 +36,20 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
+
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 import { openReportPdfWithLanguageChoice } from "@/lib/pdfLanguagePicker";
-import { AstroVastuWallet } from "@/components/AstroVastuWallet";
-import { RoomPhoto, RoomPhotoCapture } from "@/components/RoomPhotoCapture";
+import { GalleryScanResult, GalleryScanUpload } from "@/components/GalleryScanUpload";
 import { ScanBasisBadge, VisionRoomFindings } from "@/components/ScanBasisBadge";
-import { SmartScanUpload, SmartScanUploadValue } from "@/components/SmartScanUpload";
+import {
+  SmartScanCamera,
+  SmartScanResult,
+} from "@/components/SmartScanCamera";
+import { NorthAt, SmartScanUploadValue } from "@/components/SmartScanUpload";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Static option lists per business type (mirrors backend BUSINESS_CRITICAL)
@@ -58,9 +67,13 @@ const ROOM_BY_BIZ: Record<BizType, { key: string; en: string; hi: string; icon: 
     { key: "entrance",       en: "Entrance",       hi: "Pravesh",       icon: "log-in",       critical: true },
     { key: "owner_seat",     en: "Owner Seat",     hi: "Swami Sthaan",  icon: "user",         critical: true },
     { key: "cash_counter",   en: "Cash Counter",   hi: "Golak",         icon: "dollar-sign",  critical: true },
+    { key: "billing_counter",en: "Billing Counter",hi: "Billing",       icon: "credit-card" },
     { key: "vault",          en: "Vault",          hi: "Tijori",        icon: "lock",         critical: true },
     { key: "stock_storage",  en: "Stock Storage",  hi: "Bhandaar",      icon: "package" },
     { key: "display",        en: "Display Area",   hi: "Pradarshan",    icon: "grid" },
+    { key: "pooja",          en: "Mandir / Pooja", hi: "Pooja",         icon: "sun" },
+    { key: "back_office",    en: "Back Office",    hi: "Peeche Office", icon: "briefcase" },
+    { key: "staff_room",     en: "Staff Room",     hi: "Staff Room",    icon: "users" },
     { key: "toilet",         en: "Toilet",         hi: "Shauchalaya",   icon: "alert-circle" },
   ],
   office: [
@@ -89,17 +102,6 @@ const ROOM_BY_BIZ: Record<BizType, { key: string; en: string; hi: string; icon: 
   ],
 };
 
-const DIRECTION_OPTIONS: { key: string; short: string; en: string; hi: string }[] = [
-  { key: "N",  short: "N",  en: "North",      hi: "Uttar"    },
-  { key: "NE", short: "NE", en: "North-East", hi: "Ishan"    },
-  { key: "E",  short: "E",  en: "East",       hi: "Poorv"    },
-  { key: "SE", short: "SE", en: "South-East", hi: "Agneya"   },
-  { key: "S",  short: "S",  en: "South",      hi: "Dakshin"  },
-  { key: "SW", short: "SW", en: "South-West", hi: "Nairutya" },
-  { key: "W",  short: "W",  en: "West",       hi: "Paschim"  },
-  { key: "NW", short: "NW", en: "North-West", hi: "Vayavya"  },
-];
-
 const VERDICT_COLOR: Record<string, { bg: string; fg: string; border: string }> = {
   Ideal:                { bg: "rgba(16,185,129,0.18)", fg: "#10B981", border: "rgba(16,185,129,0.45)" },
   Acceptable:           { bg: "rgba(59,130,246,0.18)", fg: "#3B82F6", border: "rgba(59,130,246,0.45)" },
@@ -110,8 +112,102 @@ const GRADE_COLOR: Record<string, string> = {
   A: "#10B981", B: "#3B82F6", C: "#F59E0B", D: "#EF4444",
 };
 
-// ─────────────────────────────────────────────────────────────────────────
-type FloorRoom = { room_type: string; direction: string };
+const BIZ_ACCENT: Record<BizType, string> = {
+  shop: "#f59e0b",
+  office: "#06b6d4",
+  factory: "#8b5cf6",
+};
+
+function PremiumOrb({ color }: { color: string }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.28, 0.55] });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[ui.orb, { backgroundColor: color, transform: [{ scale }], opacity }]}
+    />
+  );
+}
+
+function SectionShell({
+  icon,
+  title,
+  subtitle,
+  accent,
+  children,
+  delay = 0,
+}: {
+  icon: keyof typeof Feather.glyphMap;
+  title: string;
+  subtitle?: string;
+  accent: string;
+  children: React.ReactNode;
+  delay?: number;
+}) {
+  const C = useC();
+  return (
+    <FadeInView delay={delay} style={[ui.sectionShell, { borderColor: `${accent}33` }]}>
+      <LinearGradient
+        colors={[`${accent}14`, "transparent"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <View style={ui.sectionHead}>
+        <View style={[ui.sectionIconWrap, { backgroundColor: `${accent}22`, borderColor: `${accent}55` }]}>
+          <Feather name={icon} size={15} color={accent} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[ui.sectionHeadTitle, { color: C.text }]}>{title}</Text>
+          {subtitle ? <Text style={[ui.sectionHeadSub, { color: C.textMid }]}>{subtitle}</Text> : null}
+        </View>
+      </View>
+      {children}
+    </FadeInView>
+  );
+}
+
+const DIR_TO_HEADING: Record<string, number> = {
+  N: 0, NE: 45, E: 90, SE: 135, S: 180, SW: 225, W: 270, NW: 315,
+};
+
+function dirToHeadingDeg(dir: string): number | undefined {
+  const d = (dir || "").trim().toUpperCase();
+  return DIR_TO_HEADING[d];
+}
+
+const MAX_ROOM_PHOTOS = 6;
+const MAX_PLAN_BYTES = 10 * 1024 * 1024;
+const SHOP_ROOM_PHOTO_PRICE = 399;
+const OFFICE_ROOM_PHOTO_PRICE = 499;
+const FACTORY_ROOM_PHOTO_PRICE = 999;
+const SHOP_PDF_PRICE = 2999;
+const OFFICE_PDF_PRICE = 6999;
+const FACTORY_PDF_PRICE = 14999;
+
+const DEFAULT_PLAN_FILENAME: Record<BizType, string> = {
+  shop: "shop_floor_plan.pdf",
+  office: "office_floor_plan.pdf",
+  factory: "factory_floor_plan.pdf",
+};
+
+type RoomPhoto = {
+  room_type: string;
+  image_data_url: string;
+  heading_deg?: number;
+};
 
 type RoomReport = {
   room_type: string; direction: string; verdict: string; severity: string;
@@ -164,48 +260,102 @@ export default function BusinessVastuScreen() {
   const t = useT() as any;
   const bvBiz  = (k: string) => t[`bv_biz_${k}`]   ?? k;
   const bvRoom = (k: string) => t[`bv_room_${k}`]  ?? k.replace(/_/g, " ");
-  const bvDir  = (k: string) => t[`bv_dir_${k}`]   ?? k;
 
   const [bizType,   setBizType]   = useState<BizType>("shop");
-  const [rooms,     setRooms]     = useState<FloorRoom[]>([
-    { room_type: "entrance", direction: "" },
-    { room_type: "owner_seat", direction: "" },
-  ]);
-  const [editIdx,   setEditIdx]   = useState<number | null>(null);
   const [propertyName, setPropertyName] = useState("");
   const [loading,   setLoading]   = useState(false);
   const [result,    setResult]    = useState<BizResponse | null>(null);
   const [error,     setError]     = useState<ErrorPayload | null>(null);
-  const [walletKey, setWalletKey] = useState(0);
-  const [scanUpload, setScanUpload] = useState<SmartScanUploadValue | null>(null);
   const [roomPhotos, setRoomPhotos] = useState<RoomPhoto[]>([]);
+  const [photoRoom, setPhotoRoom] = useState<string | null>(null);
+  const [planUpload, setPlanUpload] = useState<SmartScanUploadValue | null>(null);
+  const [planPicking, setPlanPicking] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   const roomOpts = ROOM_BY_BIZ[bizType];
+  const photosFull = roomPhotos.length >= MAX_ROOM_PHOTOS;
 
   const onChangeBizType = useCallback((b: BizType) => {
     Haptics.selectionAsync();
     setBizType(b);
-    // Reset rooms with the first two critical rooms of the new business type
-    const crits = ROOM_BY_BIZ[b].filter(r => r.critical).slice(0, 2);
-    setRooms(crits.map(r => ({ room_type: r.key, direction: "" })));
-    // Clear any room photos — they were tied to the previous business type's room set
+    setPhotoRoom(null);
     setRoomPhotos([]);
+    setPlanUpload(null);
     setResult(null); setError(null);
+    setSubmitted(false);
   }, []);
 
-  const addRoom = useCallback(() => {
-    if (rooms.length >= 15) return;
+  const onPickPlanPdf = useCallback(async () => {
+    if (loading || planPicking) return;
     Haptics.selectionAsync();
-    setRooms((rs) => [...rs, { room_type: roomOpts[0].key, direction: "" }]);
-  }, [rooms.length, roomOpts]);
+    setPlanPicking(true);
+    try {
+      const r = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf"],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (r.canceled || !r.assets?.[0]) return;
+      const f = r.assets[0];
+      if (typeof f.size === "number" && f.size > MAX_PLAN_BYTES) {
+        Alert.alert("File too large", "Floor plan PDF must be under 10 MB.");
+        return;
+      }
+      const FileSystem = await import("expo-file-system/legacy");
+      const b64 = await FileSystem.readAsStringAsync(f.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      setPlanUpload({
+        type: "pdf",
+        base64: b64,
+        filename: f.name || DEFAULT_PLAN_FILENAME[bizType],
+        size_bytes: f.size,
+        north_at: "top",
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert("Upload failed", msg || "Could not read the PDF.");
+    } finally {
+      setPlanPicking(false);
+    }
+  }, [loading, planPicking, bizType]);
 
-  const removeRoom = useCallback((idx: number) => {
-    Haptics.selectionAsync();
-    setRooms((rs) => rs.filter((_, i) => i !== idx));
+  const appendRoomPhoto = useCallback((photo: RoomPhoto) => {
+    setSubmitted(false);
+    setRoomPhotos((prev) => {
+      if (prev.length >= MAX_ROOM_PHOTOS) return prev;
+      return [...prev, photo];
+    });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, []);
 
-  const updateRoom = useCallback((idx: number, patch: Partial<FloorRoom>) => {
-    setRooms((rs) => rs.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  const onPhotoCapture = useCallback((capture: SmartScanResult) => {
+    if (!photoRoom) return;
+    appendRoomPhoto({
+      room_type: photoRoom,
+      image_data_url: capture.data_url,
+      ...(typeof capture.heading_deg === "number"
+        ? { heading_deg: capture.heading_deg }
+        : {}),
+    });
+  }, [appendRoomPhoto, photoRoom]);
+
+  const onGalleryPhotoSubmit = useCallback((g: GalleryScanResult) => {
+    const room = photoRoom || g.room_type;
+    if (!room) return;
+    const heading = dirToHeadingDeg(g.direction);
+    appendRoomPhoto({
+      room_type: room,
+      image_data_url: g.data_url,
+      ...(typeof heading === "number" ? { heading_deg: heading } : {}),
+    });
+  }, [appendRoomPhoto, photoRoom]);
+
+  const removeRoomPhoto = useCallback((index: number) => {
+    Haptics.selectionAsync();
+    setRoomPhotos((prev) => prev.filter((_, i) => i !== index));
+    setSubmitted(false);
   }, []);
 
   const onSubmit = useCallback(async () => {
@@ -214,8 +364,7 @@ export default function BusinessVastuScreen() {
       setError({ error: "auth_required", message: t.bv_errAuthRequired });
       return;
     }
-    const valid = rooms.filter(r => r.room_type && r.direction);
-    if (valid.length === 0 && !scanUpload) {
+    if (roomPhotos.length < 2 && !planUpload) {
       setError({ error: "validation", message: t.bv_errValidationRooms });
       return;
     }
@@ -225,24 +374,28 @@ export default function BusinessVastuScreen() {
       return;
     }
 
-    setError(null); setResult(null); setLoading(true);
+    setError(null); setResult(null); setSubmitted(false); setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const resp = await fetch(`${API_BASE}/api/business-vastu`, {
+      const resp = await fetch(`${API_BASE}/api/business-vastu/submit-order`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", "X-API-Key": user.api_key },
         body:    JSON.stringify({
           user_id:       user.id,
           business_type: bizType,
-          floor_plan:    valid,
           property_name: propertyName.trim(),
-          ...(scanUpload ? { floor_plan_upload: {
-              type:     scanUpload.type,
-              ...(scanUpload.data_url ? { data_url: scanUpload.data_url } : {}),
-              ...(scanUpload.base64   ? { base64:   scanUpload.base64   } : {}),
-              ...(scanUpload.north_at ? { north_at: scanUpload.north_at } : {}),
-            } } : {}),
+          ...(planUpload
+            ? {
+                floor_plan_upload: {
+                  type: planUpload.type,
+                  ...(planUpload.data_url ? { data_url: planUpload.data_url } : {}),
+                  ...(planUpload.base64   ? { base64:   planUpload.base64   } : {}),
+                  ...(planUpload.filename ? { filename: planUpload.filename } : {}),
+                  north_at: planUpload.north_at || "top",
+                },
+              }
+            : {}),
           ...(roomPhotos.length > 0
             ? { room_photos: roomPhotos.map(p => ({
                   room_type:      p.room_type,
@@ -257,218 +410,422 @@ export default function BusinessVastuScreen() {
         setError({ ...(body as ErrorPayload), error: body.error || `HTTP ${resp.status}` });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       } else {
-        setResult(body as BizResponse);
-        setWalletKey(k => k + 1);
+        setSubmitted(true);
+        setRoomPhotos([]);
+        setPlanUpload(null);
+        setPhotoRoom(null);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert(
+          t.bv_submitSuccessTitle || "Submitted",
+          body?.message || t.bv_submitSuccessBody || "Our Vastu expert will review and prepare your report within 24–48 hours.",
+        );
       }
     } catch (e: any) {
       setError({ error: "network", message: String(e?.message || e) });
     } finally {
       setLoading(false);
     }
-  }, [loading, rooms, user, bizType, propertyName, scanUpload, roomPhotos]);
+  }, [loading, user, bizType, propertyName, planUpload, roomPhotos, t.bv_errAuthRequired, t.bv_errValidationName, t.bv_errValidationRooms, t.bv_submitSuccessTitle, t.bv_submitSuccessBody]);
+
+  const hasUploads = roomPhotos.length > 0 || !!planUpload;
 
   const bizMeta = BIZ_OPTIONS.find(b => b.key === bizType)!;
+  const planPdfLabel =
+    bizType === "shop"
+      ? `${t.bv_btnUploadShopPdf || "Upload Full Shop PDF"} (₹${SHOP_PDF_PRICE})`
+      : bizType === "office"
+        ? `${t.bv_btnUploadOfficePdf || "Upload Full Office PDF"} (₹${OFFICE_PDF_PRICE})`
+        : bizType === "factory"
+          ? `${t.bv_btnUploadFactoryPdf || "Upload Full Factory PDF"} (₹${FACTORY_PDF_PRICE})`
+          : "";
+  const roomPhotoPrice =
+    bizType === "office" ? OFFICE_ROOM_PHOTO_PRICE
+    : bizType === "factory" ? FACTORY_ROOM_PHOTO_PRICE
+    : SHOP_ROOM_PHOTO_PRICE;
+  const galleryPhotoBase =
+    bizType === "factory"
+      ? (t.bv_btnUploadFactoryPhoto || "Upload Factory Photo")
+      : bizType === "office"
+        ? (t.bv_btnUploadOfficePhoto || "Upload Office Room Photo")
+        : (t.avp_btnUploadPhoto || "Upload Room Photo");
+  const galleryPhotoLabel = `${galleryPhotoBase} (₹${roomPhotoPrice}/${t.avp_uploadPricePerRoom || "per room"})`;
+  const accent = BIZ_ACCENT[bizType];
+  const planPdfPrice =
+    bizType === "office" ? OFFICE_PDF_PRICE
+    : bizType === "factory" ? FACTORY_PDF_PRICE
+    : SHOP_PDF_PRICE;
+  const submitPulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (loading || submitted) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(submitPulse, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(submitPulse, { toValue: 0, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [loading, submitted, submitPulse]);
+  const submitGlow = submitPulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.85] });
 
   // ─────────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top }}>
       <Stack.Screen options={{ headerShown: false }} />
-      <LinearGradient colors={[C.bg, C.bgCard]} style={[styles.header, { paddingTop: 4 }]}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={{ padding: 6 }}>
-          <Feather name="arrow-left" size={22} color={C.text} />
+
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <LinearGradient
+          colors={[`${accent}16`, C.bg, C.bg]}
+          style={StyleSheet.absoluteFill}
+        />
+        <PremiumOrb color={accent} />
+      </View>
+
+      <LinearGradient
+        colors={[`${accent}28`, `${accent}08`, "transparent"]}
+        style={[styles.header, { paddingTop: 4 }]}
+      >
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={10}
+          style={({ pressed }) => [ui.glassBtn, { opacity: pressed ? 0.75 : 1 }]}
+        >
+          <Feather name="arrow-left" size={20} color={C.text} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: C.text }]}>{t.bv_headerTitle}</Text>
-        <View style={{ width: 28 }} />
+        <View style={{ flex: 1, alignItems: "center" }}>
+          <Text style={[ui.headerBadge, { color: accent }]}>BUSINESS VASTU</Text>
+          <Text style={[styles.headerTitle, { color: C.text }]}>{t.bv_headerTitle}</Text>
+        </View>
+        <View style={{ width: 40 }} />
       </LinearGradient>
 
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        {/* ── Intro card ──────────────────────────────────────────────── */}
-        <View style={[styles.card, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            <Feather name="briefcase" size={18} color={C.accent} />
-            <Text style={[styles.cardTitle, { color: C.text }]}>{t.bv_cardTitle}</Text>
+        <FadeInView delay={0}>
+          <View style={[ui.priceRibbon, { borderColor: `${accent}44`, backgroundColor: `${accent}12` }]}>
+            <Feather name="zap" size={14} color={accent} />
+            <Text style={[ui.priceRibbonText, { color: C.text }]}>
+              {`₹${roomPhotoPrice}/${t.avp_uploadPricePerRoom || "room"} · PDF ₹${planPdfPrice}`}
+            </Text>
           </View>
-          <Text style={[styles.bodyText, { color: C.textMid }]}>
-            {t.bv_cardBody}
-          </Text>
-          <Text style={[styles.bodyTextSmall, { color: C.textMid, marginTop: 6 }]}>
-            {t.bv_cardBodySmall}
-          </Text>
-        </View>
+        </FadeInView>
 
-        {/* ── Business type selector ─────────────────────────────────── */}
-        <Text style={[styles.sectionTitle, { color: C.text, marginTop: 4 }]}>
-          {t.bv_secBizType}
-        </Text>
-        <View style={styles.bizRow}>
-          {BIZ_OPTIONS.map((b) => {
-            const sel = b.key === bizType;
+        <SectionShell
+          icon="layers"
+          title={t.bv_secBizType}
+          subtitle={bvBiz(bizType)}
+          accent={accent}
+          delay={staggerDelay(1)}
+        >
+          <View style={styles.bizRow}>
+            {BIZ_OPTIONS.map((b) => {
+              const sel = b.key === bizType;
+              const bAccent = BIZ_ACCENT[b.key];
+              return (
+                <Pressable
+                  key={b.key}
+                  onPress={() => onChangeBizType(b.key)}
+                  style={({ pressed }) => [
+                    ui.bizCardOuter,
+                    {
+                      borderColor: sel ? bAccent : C.border,
+                      transform: [{ scale: pressed ? 0.97 : 1 }],
+                    },
+                  ]}
+                >
+                  {sel ? (
+                    <LinearGradient
+                      colors={[`${bAccent}33`, `${bAccent}08`]}
+                      style={StyleSheet.absoluteFill}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                    />
+                  ) : null}
+                  <View style={[ui.bizIconRing, { borderColor: sel ? bAccent : C.border, backgroundColor: sel ? `${bAccent}22` : C.bgCard }]}>
+                    <Feather name={b.icon} size={20} color={sel ? bAccent : C.textMid} />
+                  </View>
+                  <Text style={{ color: sel ? bAccent : C.text, fontWeight: "800", marginTop: 8, fontSize: 13 }}>
+                    {bvBiz(b.key)}
+                  </Text>
+                  {sel ? (
+                    <View style={[ui.bizSelDot, { backgroundColor: bAccent }]} />
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </SectionShell>
+
+        <SectionShell
+          icon="home"
+          title={t.bv_secPremiseName}
+          subtitle={t.bv_premiseHint}
+          accent={accent}
+          delay={staggerDelay(2)}
+        >
+          <View style={[ui.inputWrap, { borderColor: `${accent}44`, backgroundColor: C.bgCard }]}>
+            <Feather name="edit-3" size={16} color={accent} style={{ marginRight: 10 }} />
+            <TextInput
+              value={propertyName}
+              onChangeText={setPropertyName}
+              placeholder={t.bv_phPremiseName}
+              placeholderTextColor={C.textMid}
+              style={[ui.input, { color: C.text }]}
+            />
+          </View>
+        </SectionShell>
+
+        <SectionShell
+          icon="camera"
+          title={t.avp_pickerLabel || "Which room is this photo for?"}
+          subtitle={photoRoom
+            ? `${t.avp_camHintPrefix || "Photographing"} ${bvRoom(photoRoom)} · ${roomPhotos.length}/${MAX_ROOM_PHOTOS}`
+            : (t.avp_pickerHint || "Pick a room below before taking or uploading a photo.")}
+          accent={accent}
+          delay={staggerDelay(3)}
+        >
+        <View style={styles.roomGrid}>
+          {roomOpts.map((r) => {
+            const sel = photoRoom === r.key;
             return (
               <Pressable
-                key={b.key}
-                onPress={() => onChangeBizType(b.key)}
-                style={[styles.bizCard, {
-                  borderColor: sel ? C.accent : C.border,
-                  backgroundColor: sel ? C.accentBg : C.bgCard,
-                }]}
+                key={r.key}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setPhotoRoom((prev) => (prev === r.key ? null : r.key));
+                }}
+                disabled={loading}
+                style={({ pressed }) => [
+                  ui.roomChip,
+                  {
+                    borderColor: sel ? accent : C.border,
+                    backgroundColor: sel ? `${accent}18` : C.bgCard,
+                    borderWidth: sel ? 2 : 1,
+                    opacity: loading ? 0.5 : pressed ? 0.9 : 1,
+                    transform: [{ scale: pressed ? 0.98 : 1 }],
+                  },
+                ]}
               >
-                <Feather name={b.icon} size={22} color={sel ? C.accent : C.textMid} />
-                <Text style={{ color: sel ? C.accent : C.text, fontWeight: "800", marginTop: 4 }}>
-                  {bvBiz(b.key)}
+                <Feather name={r.icon} size={13} color={sel ? accent : C.textMid} />
+                <Text
+                  style={[styles.roomChipLabel, { color: sel ? accent : C.text, fontWeight: sel ? "800" : "600" }]}
+                  numberOfLines={1}
+                >
+                  {bvRoom(r.key)}
                 </Text>
-                <Text style={{ color: sel ? C.accent : C.textMid, fontSize: 11, marginTop: 2, fontWeight: "700" }}>
-                  ₹{b.price}
-                </Text>
+                {sel ? (
+                  <Feather name="check-circle" size={12} color={accent} />
+                ) : r.critical ? (
+                  <Text style={styles.roomChipStar}>★</Text>
+                ) : null}
               </Pressable>
             );
           })}
         </View>
 
-        {/* ── Premise name ───────────────────────────────────────────── */}
-        <Text style={[styles.sectionTitle, { color: C.text, marginTop: 14 }]}>
-          {t.bv_secPremiseName}
-        </Text>
-        <TextInput
-          value={propertyName}
-          onChangeText={setPropertyName}
-          placeholder={t.bv_phPremiseName}
-          placeholderTextColor={C.textMid}
-          style={[styles.input, { color: C.text, borderColor: C.border, backgroundColor: C.bgCard }]}
-        />
-        <Text style={{ color: C.textMid, fontSize: 11, marginTop: 4 }}>
-          {t.bv_premiseHint}
-        </Text>
-
-        {/* ── Wallet (Phase 2 unlocks) ───────────────────────────────── */}
-        <AstroVastuWallet
-          variant="pro"
-          propertyName={propertyName}
-          onPropertyNameChange={setPropertyName}
-          refreshKey={walletKey}
-        />
-
-        {/* ── Smart Scan upload — full premise PDF/image (vision auto-detects) ── */}
-        <View style={{ marginTop: 14 }}>
-          <SmartScanUpload value={scanUpload} onChange={setScanUpload} disabled={loading} />
+        <View style={[ui.uploadActionCard, { borderColor: `${accent}33`, backgroundColor: `${accent}08` }]}>
+        <View style={styles.scanActionRow}>
+          <View style={styles.scanActionCol}>
+            <SmartScanCamera
+              compact
+              onCapture={onPhotoCapture}
+              loading={loading}
+              disabled={!photoRoom || photosFull}
+              disabledTitle={t.avp_camHintNoRoom || "Pick a room first"}
+              disabledMessage={t.avp_pickerHint || "Select which area this photo is for."}
+              label={`${t.avp_btnSmartScan || "Open Camera"} (₹${roomPhotoPrice}/${t.avp_uploadPricePerRoom || "per room"})`}
+            />
+          </View>
+          <View style={styles.scanActionCol}>
+            <GalleryScanUpload
+              compact
+              photoOnly
+              onSubmit={onGalleryPhotoSubmit}
+              loading={loading}
+              disabled={!photoRoom || photosFull}
+              preselectedRoom={photoRoom}
+              disabledTitle={t.avp_camHintNoRoom || "Pick a room first"}
+              disabledMessage={t.avp_pickerHint || "Select which area this photo is for."}
+              label={galleryPhotoLabel}
+              roomLabel={bvRoom}
+              submitLabel={t.bv_addRoomPhoto || "Add Photo"}
+            />
+          </View>
+          {(bizType === "shop" || bizType === "office" || bizType === "factory") ? (
+            <View style={styles.scanActionCol}>
+              <Pressable
+                onPress={() => { void onPickPlanPdf(); }}
+                disabled={loading || planPicking}
+                style={({ pressed }) => [
+                  styles.compactPlanBtn,
+                  {
+                    borderColor: planUpload ? accent : C.border,
+                    backgroundColor: planUpload ? `${accent}18` : C.bgCard,
+                    opacity: loading ? 0.55 : pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                {planPicking ? (
+                  <ActivityIndicator color={accent} />
+                ) : (
+                  <>
+                    <Feather name="file-text" size={22} color={accent} />
+                    <Text style={[styles.compactPlanBtnText, { color: C.text }]}>
+                      {planPdfLabel}
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
         </View>
 
-        {/* ── Optional: room photos with magnetometer (sensor-confirmed accuracy) ── */}
-        <RoomPhotoCapture
-          rooms={
-            // Use the user's listed rooms (whichever have a room_type filled in) —
-            // de-duped so each room appears once with its business-type label.
-            Array.from(
-              new Map(
-                rooms
-                  .filter(r => r.room_type)
-                  .map(r => {
-                    return [r.room_type, { key: r.room_type, label: bvRoom(r.room_type) }];
-                  })
-              ).values()
-            )
-          }
-          photos={roomPhotos}
-          onChange={setRoomPhotos}
-          disabled={loading}
-          maxPhotos={6}
-        />
-
-        {/* ── Floor-plan editor ──────────────────────────────────────── */}
-        <Text style={[styles.sectionTitle, { color: C.text, marginTop: 4 }]}>
-          {scanUpload ? t.bv_refineRooms : `${t.bv_premiseLayout} (${rooms.length}/15)`}
-        </Text>
-        {scanUpload ? (
-          <Text style={{ color: C.textMid, fontSize: 11, marginBottom: 6 }}>
-            {t.bv_engineWillDetect}
-          </Text>
-        ) : null}
-
-        {rooms.map((r, idx) => {
-          const ro = roomOpts.find(x => x.key === r.room_type) ?? roomOpts[0];
-          const di = DIRECTION_OPTIONS.find(x => x.key === r.direction);
-          const isEditing = editIdx === idx;
-          return (
-            <View key={idx} style={[styles.roomRow, { backgroundColor: C.bgCard, borderColor: C.border }]}>
-              <View style={{ flex: 1 }}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={{ gap: 6, paddingVertical: 2 }}>
-                  {roomOpts.map((opt) => {
-                    const sel = opt.key === r.room_type;
+        {hasUploads ? (
+          <View style={{ marginTop: 14 }}>
+            <View style={ui.uploadsHeader}>
+              <Feather name="image" size={14} color={accent} />
+              <Text style={[styles.sectionTitle, { color: C.text, marginBottom: 0, marginTop: 0 }]}>
+                {t.bv_secUploadedPhotos || "Uploaded Photos"}
+              </Text>
+            </View>
+            {roomPhotos.length > 0 ? (
+              <View style={styles.photoPreviewGrid}>
+                {roomPhotos.map((p, i) => (
+                  <View
+                    key={`${p.room_type}-${i}`}
+                    style={[ui.photoPreviewCard, { borderColor: `${accent}44`, backgroundColor: C.bgCard }]}
+                  >
+                    <Image source={{ uri: p.image_data_url }} style={styles.photoPreviewImg} resizeMode="cover" />
+                    <View style={styles.photoPreviewMeta}>
+                      <Text style={[styles.photoPreviewLabel, { color: C.text }]} numberOfLines={1}>
+                        {bvRoom(p.room_type)}
+                      </Text>
+                      <Pressable
+                        onPress={() => removeRoomPhoto(i)}
+                        hitSlop={8}
+                        disabled={loading}
+                        style={{ padding: 2 }}
+                      >
+                        <Feather name="x" size={14} color={C.textMid} />
+                      </Pressable>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            {planUpload ? (
+              <View style={[ui.pdfPreviewCard, { borderColor: accent, backgroundColor: `${accent}14` }]}>
+                <View style={[ui.pdfIconWrap, { backgroundColor: `${accent}22` }]}>
+                  <Feather name="file-text" size={22} color={accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.pdfPreviewTitle, { color: C.text }]} numberOfLines={1}>
+                    {planUpload.filename || DEFAULT_PLAN_FILENAME[bizType]}
+                  </Text>
+                  <Text style={[styles.pickerHintCompact, { color: C.textMid }]}>
+                    {t.bv_planNorthHint || "Where is North on this plan?"}{" "}
+                    · {(planUpload.north_at || "top").toUpperCase()}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setPlanUpload(null);
+                    setSubmitted(false);
+                  }}
+                  hitSlop={8}
+                  disabled={loading}
+                  style={{ padding: 4 }}
+                >
+                  <Feather name="x" size={16} color={C.textMid} />
+                </Pressable>
+              </View>
+            ) : null}
+            {(bizType === "shop" || bizType === "office" || bizType === "factory") && planUpload ? (
+              <View style={{ marginTop: 8 }}>
+                <View style={styles.northRow}>
+                  {(["top", "right", "bottom", "left"] as const).map((opt) => {
+                    const sel = (planUpload.north_at || "top") === opt;
                     return (
-                      <Pressable key={opt.key}
-                                 onPress={() => { Haptics.selectionAsync(); updateRoom(idx, { room_type: opt.key }); }}
-                                 style={[styles.roomChip, {
-                                   borderColor: sel ? C.accent : (opt.critical ? VERDICT_COLOR.Avoid.border : C.border),
-                                   backgroundColor: sel ? C.accentBg : "transparent",
-                                 }]}>
-                        <Feather name={opt.icon} size={12} color={sel ? C.accent : (opt.critical ? VERDICT_COLOR.Avoid.fg : C.textMid)} />
-                        <Text style={{ color: sel ? C.accent : (opt.critical ? VERDICT_COLOR.Avoid.fg : C.textMid),
-                                       fontSize: 11, fontWeight: "600" }}>
-                          {bvRoom(opt.key)}{opt.critical ? " ★" : ""}
+                      <Pressable
+                        key={opt}
+                        disabled={loading}
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          setPlanUpload({ ...planUpload, north_at: opt as NorthAt });
+                        }}
+                        style={({ pressed }) => [
+                          styles.northBtn,
+                          {
+                            borderColor: sel ? accent : C.border,
+                            backgroundColor: sel ? `${accent}18` : C.bgCard,
+                            opacity: loading ? 0.5 : pressed ? 0.85 : 1,
+                          },
+                        ]}
+                      >
+                        <Text style={{ color: sel ? accent : C.text, fontWeight: "700", fontSize: 11 }}>
+                          {opt[0].toUpperCase() + opt.slice(1)}
                         </Text>
                       </Pressable>
                     );
                   })}
-                </ScrollView>
-
-                <Pressable
-                  onPress={() => { Haptics.selectionAsync(); setEditIdx(isEditing ? null : idx); }}
-                  style={[styles.dirSummary, { borderColor: C.border }]}
-                >
-                  <Text style={{ color: C.textMid, fontSize: 12 }}>{t.bv_lblDirection}</Text>
-                  <Text style={{ color: di ? C.text : C.textMid, fontSize: 13, fontWeight: "700" }}>
-                    {di ? `${di.short} · ${bvDir(di.key)}` : t.bv_selectDirection}
-                  </Text>
-                  <Feather name={isEditing ? "chevron-up" : "chevron-down"} size={14} color={C.textMid} />
-                </Pressable>
-
-                {isEditing && (
-                  <View style={styles.dirGrid}>
-                    {DIRECTION_OPTIONS.map((d) => {
-                      const sel = d.key === r.direction;
-                      return (
-                        <Pressable key={d.key}
-                                   onPress={() => { Haptics.selectionAsync(); updateRoom(idx, { direction: d.key }); setEditIdx(null); }}
-                                   style={[styles.dirChip, {
-                                     borderColor: sel ? C.accent : C.border,
-                                     backgroundColor: sel ? C.accentBg : "transparent",
-                                   }]}>
-                          <Text style={{ color: sel ? C.accent : C.text, fontWeight: "800" }}>{d.short}</Text>
-                          <Text style={{ color: sel ? C.accent : C.textMid, fontSize: 10 }}>{bvDir(d.key)}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                )}
+                </View>
               </View>
+            ) : null}
+          </View>
+        ) : null}
+        </SectionShell>
 
-              <Pressable onPress={() => removeRoom(idx)} hitSlop={8} style={{ paddingHorizontal: 6 }}>
-                <Feather name="x-circle" size={20} color={C.textMid} />
-              </Pressable>
+        <FadeInView delay={staggerDelay(4)}>
+          <Animated.View style={[ui.submitGlow, { opacity: submitGlow, backgroundColor: accent }]} />
+          <Pressable
+            onPress={onSubmit}
+            disabled={loading || submitted}
+            style={({ pressed }) => [
+              ui.submitOuter,
+              { opacity: loading || submitted ? 0.65 : pressed ? 0.9 : 1 },
+            ]}
+          >
+            <LinearGradient
+              colors={submitted ? [C.border, C.border] : [accent, `${accent}BB`]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={ui.submitGradient}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <View style={ui.submitInner}>
+                  <Feather name="credit-card" size={18} color="#fff" />
+                  <Text style={styles.submitText}>{t.bv_btnSubmitReview || "Pay Now"}</Text>
+                </View>
+              )}
+            </LinearGradient>
+          </Pressable>
+        </FadeInView>
+
+        {submitted ? (
+          <FadeInView delay={staggerDelay(5)}>
+          <View style={[ui.successCard, { backgroundColor: `${accent}14`, borderColor: accent }]}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <Feather name="check-circle" size={18} color={accent} />
+              <Text style={[styles.cardTitle, { color: C.text }]}>{t.bv_submitSuccessTitle || "Submitted"}</Text>
             </View>
-          );
-        })}
-
-        <Pressable onPress={addRoom} disabled={rooms.length >= 15}
-                   style={[styles.addBtn, { borderColor: C.border, opacity: rooms.length >= 15 ? 0.5 : 1 }]}>
-          <Feather name="plus" size={16} color={C.accent} />
-          <Text style={{ color: C.accent, fontWeight: "700" }}>{t.bv_addRoom}</Text>
-        </Pressable>
-
-        {/* ── Submit ─────────────────────────────────────────────────── */}
-        <Pressable onPress={onSubmit} disabled={loading}
-                   style={[styles.submitBtn, { backgroundColor: C.accent, opacity: loading ? 0.7 : 1 }]}>
-          {loading ? <ActivityIndicator color="#fff" />
-                   : <Text style={styles.submitText}>{t.bv_runScanPrefix} {bvBiz(bizType)} {t.bv_runScanSuffix}</Text>}
-        </Pressable>
+            <Text style={{ color: C.text, fontSize: 13 }}>
+              {t.bv_submitSuccessBody || "Our Vastu expert will review your photos and prepare your report within 24–48 hours."}
+            </Text>
+          </View>
+          </FadeInView>
+        ) : null}
 
         {/* ── Error / 402 paywall card ───────────────────────────────── */}
         {error && (
-          <View style={[styles.errCard, {
+          <FadeInView delay={staggerDelay(5)}>
+          <View style={[ui.errCard, {
             backgroundColor: C.bgCard, borderColor: VERDICT_COLOR.Avoid.border,
           }]}>
             <Feather name="alert-triangle" size={18} color={VERDICT_COLOR.Avoid.fg} style={{ marginTop: 2 }} />
@@ -484,7 +841,7 @@ export default function BusinessVastuScreen() {
               </Text>
               {error.error === "profile_incomplete" && (
                 <Pressable onPress={() => router.push("/profile-edit")}
-                           style={[styles.upgradeBtn, { backgroundColor: C.accent, marginTop: 10 }]}>
+                           style={[styles.upgradeBtn, { backgroundColor: accent, marginTop: 10 }]}>
                   <Text style={styles.upgradeText}>{t.bv_btnCompleteProfile}</Text>
                 </Pressable>
               )}
@@ -495,6 +852,7 @@ export default function BusinessVastuScreen() {
               )}
             </View>
           </View>
+          </FadeInView>
         )}
 
         {/* ── PDF-only result for paid Business tiers ─────────────────── */}
@@ -776,19 +1134,87 @@ const styles = StyleSheet.create({
   headerTitle:   { fontSize: 17, fontWeight: "800" },
   card:          { borderRadius: 14, padding: 14, borderWidth: 1, marginBottom: 12 },
   cardTitle:     { fontSize: 14, fontWeight: "700" },
-  bodyText:      { fontSize: 13 },
-  bodyTextSmall: { fontSize: 12 },
   sectionTitle:  { fontSize: 13, fontWeight: "800", marginBottom: 8, marginTop: 4, letterSpacing: 0.4 },
   sectionLabel:  { fontSize: 10, fontWeight: "800", letterSpacing: 1 },
   bizRow:        { flexDirection: "row", gap: 8 },
   bizCard:       { flex: 1, borderWidth: 1, borderRadius: 12, paddingVertical: 12, alignItems: "center" },
   input:         { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, marginTop: 4 },
-  roomRow:       { flexDirection: "row", alignItems: "flex-start", gap: 6, padding: 10, borderRadius: 12, borderWidth: 1, marginBottom: 8 },
-  roomChip:      { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 1 },
-  dirSummary:    { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 6, paddingHorizontal: 8, borderRadius: 8, borderWidth: 1, marginTop: 6 },
-  dirGrid:       { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
-  dirChip:       { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, alignItems: "center", minWidth: 56 },
-  addBtn:        { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderStyle: "dashed", marginTop: 4 },
+  pickerLabel:   { fontSize: 12, fontWeight: "800", marginBottom: 4 },
+  pickerHint:    { fontSize: 11, marginTop: 6, fontStyle: "italic" },
+  pickerHintCompact: { fontSize: 10, marginBottom: 6 },
+  roomGrid:      { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  roomChip:      {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    width: "48.5%",
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  roomChipLabel: { flex: 1, fontSize: 11, lineHeight: 14 },
+  roomChipStar:  { fontSize: 10, color: "#F59E0B", fontWeight: "800" },
+  scanActionRow: { flexDirection: "row", gap: 10, marginTop: 0, alignItems: "stretch" },
+  scanActionCol: { flex: 1 },
+  compactPlanBtn: {
+    flex: 1,
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 18,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    borderWidth: 2,
+    minHeight: 96,
+  },
+  compactPlanBtnText: { fontSize: 12, fontWeight: "800", textAlign: "center", lineHeight: 16 },
+  planChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  planChipText: { flex: 1, fontSize: 12, fontWeight: "600" },
+  northRow: { flexDirection: "row", gap: 6 },
+  northBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  photoPreviewGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  photoPreviewCard: {
+    width: "31%",
+    borderRadius: 10,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  photoPreviewImg: { width: "100%", aspectRatio: 1 },
+  photoPreviewMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 6,
+    paddingVertical: 5,
+    gap: 4,
+  },
+  photoPreviewLabel: { flex: 1, fontSize: 10, fontWeight: "700" },
+  pdfPreviewCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  pdfPreviewTitle: { fontSize: 12, fontWeight: "700" },
   submitBtn:     { paddingVertical: 14, borderRadius: 12, alignItems: "center", marginTop: 14 },
   submitText:    { color: "#fff", fontWeight: "800", fontSize: 15 },
   errCard:       { flexDirection: "row", gap: 10, padding: 12, borderRadius: 12, borderWidth: 1, marginTop: 14 },
@@ -803,4 +1229,190 @@ const styles = StyleSheet.create({
   mdAlert:       { padding: 12, borderRadius: 12, borderWidth: 1, marginTop: 10 },
   priorityRow:   { padding: 10, borderRadius: 10, borderWidth: 1, marginTop: 6 },
   roomReport:    { padding: 10, borderRadius: 10, borderWidth: 1, marginTop: 6 },
+});
+
+const ui = StyleSheet.create({
+  orb: {
+    position: "absolute",
+    top: -60,
+    right: -40,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+  },
+  glassBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
+  headerBadge: {
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 2.2,
+    marginBottom: 2,
+  },
+  priceRibbon: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 14,
+  },
+  priceRibbonText: { fontSize: 12, fontWeight: "700" },
+  sectionShell: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 14,
+    overflow: "hidden",
+  },
+  sectionHead: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 12,
+  },
+  sectionIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sectionHeadTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+  },
+  sectionHeadSub: {
+    fontSize: 11,
+    marginTop: 3,
+    lineHeight: 15,
+  },
+  bizCardOuter: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: "center",
+    overflow: "hidden",
+    minHeight: 108,
+  },
+  bizIconRing: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bizSelDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginTop: 6,
+  },
+  inputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+  },
+  input: {
+    flex: 1,
+    fontSize: 14,
+    paddingVertical: 10,
+    fontWeight: "600",
+  },
+  roomChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    width: "48.5%",
+    paddingVertical: 9,
+    paddingHorizontal: 9,
+    borderRadius: 12,
+  },
+  uploadActionCard: {
+    marginTop: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 10,
+  },
+  uploadsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  photoPreviewCard: {
+    width: "31%",
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  pdfPreviewCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  pdfIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  submitGlow: {
+    position: "absolute",
+    left: 20,
+    right: 20,
+    top: 8,
+    height: 44,
+    borderRadius: 22,
+  },
+  submitOuter: {
+    marginTop: 6,
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  submitGradient: {
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  submitInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  successCard: {
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    marginTop: 12,
+  },
+  errCard: {
+    flexDirection: "row",
+    gap: 10,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 14,
+  },
 });

@@ -57,6 +57,10 @@ Thumbs.db
 # Replit chat attachments (screenshots / images uploaded in chat)
 attached_assets/
 
+# Local protected-file snapshots (see scripts/snapshot-protected.ps1)
+backups/snapshots/*
+!backups/snapshots/README.md
+
 # Secrets — never commit (use .env.example as template)
 .env
 .env.*

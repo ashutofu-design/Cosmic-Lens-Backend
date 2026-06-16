@@ -38,10 +38,10 @@ class TestDhanYogaLordPairs(unittest.TestCase):
         self.assertNotIn("Chandra-Mangal Yoga", names)
 
     def test_mutual_aspect_only_not_single(self):
-        """7th aspect one-way should not count without return aspect."""
+        """One-way aspect should not count — Mars h1 Aries vs Venus h2 Taurus."""
         planets = [
             {"name": "Mars", "sign": "Aries", "house": 1},
-            {"name": "Venus", "sign": "Libra", "house": 7},
+            {"name": "Venus", "sign": "Taurus", "house": 2},
             {"name": "Sun", "sign": "Leo", "house": 5},
             {"name": "Jupiter", "sign": "Cancer", "house": 4},
             {"name": "Mercury", "sign": "Virgo", "house": 6},

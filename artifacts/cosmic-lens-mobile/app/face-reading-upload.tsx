@@ -4,7 +4,7 @@ import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import * as Sharing from "expo-sharing";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -24,6 +24,7 @@ import { CosmicBg } from "@/components/CosmicBg";
 import { useC } from "@/context/ThemeContext";
 import { useT, type T } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
+import { FACE_READING_PRO_LIVE } from "@/lib/faceReadingProConfig";
 
 type Slot = "front" | "left" | "right";
 type Phase = "idle" | "uploading" | "analyzing" | "rendering" | "done" | "error";
@@ -60,6 +61,16 @@ export default function FaceReadingUploadScreen() {
   const [progress, setProgress] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string>("");
   const [pdfUri, setPdfUri]     = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!FACE_READING_PRO_LIVE) {
+      router.replace("/face-reading");
+    }
+  }, []);
+
+  if (!FACE_READING_PRO_LIVE) {
+    return null;
+  }
 
   async function pick(slot: Slot, source: "camera" | "library") {
     try {

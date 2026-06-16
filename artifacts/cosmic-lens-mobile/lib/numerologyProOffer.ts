@@ -3,9 +3,15 @@
  */
 export const LIFE_MASTERY_UI_PRICING = {
   originalInr: 599,
-  offerInr: 249,
-  discountLabel: "58% OFF",
+  offerInr: 499,
+  discountLabel: "SPECIAL",
 } as const;
+
+export const LIFE_MASTERY_PRIORITY_SURCHARGE_INR = 300 as const;
+
+export function lifeMasteryOrderTotalInr(priorityDelivery: boolean): number {
+  return LIFE_MASTERY_UI_PRICING.offerInr + (priorityDelivery ? LIFE_MASTERY_PRIORITY_SURCHARGE_INR : 0);
+}
 
 export const LIFE_MASTERY_CHECKOUT_CONFIG = {
   /** Dev only — skips Cashfree; entitlement + PDF run immediately */

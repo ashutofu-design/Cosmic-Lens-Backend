@@ -41,6 +41,7 @@ import { connectLoveRealityPageToPdf } from "@/lib/loveRealityProPdfDownload";
 import { coerceProPdfLang, type ProPdfLangCode } from "@/lib/proPdfLang";
 import {
   enHnReportCacheReady,
+  englishLlmNarrativeReady,
   reportContentMatchesLang,
   reportHasDisplayableContent,
   hindiReportPageLoadReady,
@@ -511,11 +512,11 @@ export default function LoveRealityProReportScreen() {
 
       const snapshotNeedsRegen =
         data.polish_source === "polish_snapshot"
-        && lang !== "en"
         && (
           lang === "hi"
             ? !hindiReportPageLoadReady(data, lang).ok
             : !reportContentMatchesLang(data, lang)
+            || (lang === "en" && !englishLlmNarrativeReady(data))
         );
       if (snapshotNeedsRegen) {
         setLoadStep(5);
@@ -524,7 +525,16 @@ export default function LoveRealityProReportScreen() {
         serverCacheHit = fresh.serverCacheHit;
       }
 
-      if (!forceUpdate && lang === "hn" && reportNeedsHindiRetry(data, lang)) {
+      if (
+        !forceUpdate
+        && lang === "en"
+        && (!reportContentMatchesLang(data, lang) || !englishLlmNarrativeReady(data))
+      ) {
+        setLoadStep(5);
+        const fresh = await fetchReport("full");
+        data = fresh.data;
+        serverCacheHit = fresh.serverCacheHit;
+      } else if (!forceUpdate && lang === "hn" && reportNeedsHindiRetry(data, lang)) {
         setLoadStep(5);
         const retry = await fetchReport("relocalize");
         data = retry.data;

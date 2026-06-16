@@ -140,6 +140,15 @@ def list_human_orders(*, page: int = 1, per_page: int = 50, status: str | None =
         snap = rec.get("engine_snapshot") if isinstance(rec.get("engine_snapshot"), dict) else {}
         p1 = rec.get("p1") if isinstance(rec.get("p1"), dict) else {}
         p2 = rec.get("p2") if isinstance(rec.get("p2"), dict) else {}
+        cosmo_id = (str(rec.get("cosmo_user_id") or "").strip().upper())
+        uid = int(rec.get("user_id") or 0)
+        if not cosmo_id and uid:
+            try:
+                from cosmo_user_id import cosmo_display_id_for_user_id
+
+                cosmo_id = cosmo_display_id_for_user_id(uid)
+            except Exception:
+                cosmo_id = ""
         rows.append(
             {
                 "order_id": rec.get("order_id") or fn.replace(".json", ""),
@@ -149,7 +158,8 @@ def list_human_orders(*, page: int = 1, per_page: int = 50, status: str | None =
                 "urgent": bool(rec.get("urgent")),
                 "contact_method": rec.get("contact_method"),
                 "contact_value": rec.get("contact_value"),
-                "user_id": rec.get("user_id") or 0,
+                "user_id": uid,
+                "cosmo_user_id": cosmo_id,
                 "p1_name": snap.get("p1_name") or p1.get("name") or "—",
                 "p2_name": snap.get("p2_name") or p2.get("name") or "—",
             }
@@ -234,10 +244,23 @@ def register_human_order_routes(flask_app) -> None:
 
         order_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
+        cosmo_user_id = (
+            str(data.get("cosmo_user_id") or request.headers.get("X-Cosmo-User-Id") or "")
+            .strip()
+            .upper()
+        )
+        if not cosmo_user_id and user_id:
+            try:
+                from cosmo_user_id import cosmo_display_id_for_user_id
+
+                cosmo_user_id = cosmo_display_id_for_user_id(user_id)
+            except Exception:
+                cosmo_user_id = ""
         record = {
             "order_id": order_id,
             "created_at": now,
             "user_id": user_id,
+            "cosmo_user_id": cosmo_user_id,
             "lang": lang,
             "urgent": urgent,
             "contact_method": method,

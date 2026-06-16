@@ -1399,33 +1399,9 @@ def build_career_basic_insights(
     career_mode = str(incl.get("career_mode") or "Hybrid Career")
     reasoning_summary = incl.get("reasoning_summary") or []
 
-    # 3 simple "why" lines (no planet/house jargon for UI trust)
-    why: List[str] = []
     exec_score = int(incl.get("execution_score") or 0)
     comm_score = int(incl.get("commercial_score") or 0)
-    indep = int(incl.get("independence_score") or incl.get("independence") or 0)
-    struct = int(incl.get("structure_score") or incl.get("structure") or 0)
-    gap = abs(job_pct - business_pct)
-    if gap <= 6:
-        why.append("Your chart shows a balanced mix of job and business tendencies.")
-    elif job_pct > business_pct:
-        why.append("You perform best with structure, routines, and long-term stability.")
-    else:
-        why.append("You perform best with autonomy, client-facing work, and self-driven growth.")
-
-    if comm_score >= 12:
-        why.append("Strong professional skill/craft indicators: consulting, advisory, or specialist roles suit you.")
-    elif exec_score >= 28:
-        why.append("Good execution drive: you can build momentum with consistent weekly targets.")
-    else:
-        why.append("Progress improves most when you fix consistency and execution habits.")
-
-    if indep >= struct + 8:
-        why.append("Independence is a strong trait — avoid overly restrictive environments.")
-    elif struct >= indep + 8:
-        why.append("Structure is a strong trait — stable roles and clear systems fit you.")
-    else:
-        why.append("You can adapt — role-fit matters more than the label.")
+    free_score = int(incl.get("freelance_score") or 0)
 
     income_paths = [
         {"label": m["label"], "strength": m["score"]}
@@ -1513,7 +1489,6 @@ def build_career_basic_insights(
         "confidence": confidence,
         "career_mode": career_mode,
         "reasoning_summary": reasoning_summary[:5],
-        "why": why[:3],
         "dominant_path": incl.get("dominant") or deep.get("path_dominant"),
         "secondary_path": incl.get("secondary_path"),
         "commercial_score": incl.get("commercial_score"),

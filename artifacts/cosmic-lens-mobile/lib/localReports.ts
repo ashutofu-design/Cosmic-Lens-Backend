@@ -27,6 +27,7 @@ export type LocalReportKind =
   | "astrovastu_pro"
   | "business_vastu"
   | "face_reading"
+  | "love_reality"
   | "other";
 
 export interface LocalReport {
@@ -386,4 +387,26 @@ export async function shareLocalReport(report: LocalReport): Promise<void> {
 export async function openLocalReport(report: LocalReport): Promise<void> {
   if (IS_WEB) { _webDownload(report); return; }
   await shareLocalReport(report);
+}
+
+/** Clear device My Reports on logout — PDFs are per-account, not per-device shared. */
+export async function clearAllLocalReports(): Promise<void> {
+  try {
+    const rows = await readAll();
+    if (!IS_WEB && REPORTS_DIR) {
+      for (const row of rows) {
+        const uri = row.localUri || "";
+        if (uri.startsWith("file://")) {
+          try {
+            await FileSystem.deleteAsync(uri, { idempotent: true });
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    }
+    await AsyncStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
 }

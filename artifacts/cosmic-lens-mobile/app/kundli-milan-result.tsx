@@ -5,6 +5,7 @@ import React from "react";
 import { Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KundliMilanBasicResult } from "@/components/kundliMilan/KundliMilanBasicResult";
+import { kootsToGunScores } from "@/components/kundliMilan/MilanGunBreakdown";
 import { useC } from "@/context/ThemeContext";
 import { useT } from "@/hooks/useT";
 import type { MarriageBasicsPayload } from "@/lib/milanMarriageBasics";
@@ -25,6 +26,8 @@ export default function KundliMilanResultScreen() {
   const params = useLocalSearchParams<{ p1Name?: string; p2Name?: string }>();
   const backendData = MilanResultStore.get();
   const marriageBasics = backendData?.marriage_basics as MarriageBasicsPayload | undefined;
+  const gunScores = kootsToGunScores(backendData?.koots);
+  const gunTotal = typeof backendData?.total === "number" ? backendData.total : null;
 
   if (!marriageBasics?.couple) {
     return (
@@ -78,11 +81,13 @@ export default function KundliMilanResultScreen() {
         <KundliMilanBasicResult
           data={marriageBasics}
           isDark={isDark}
+          gunScores={gunScores}
+          gunTotal={gunTotal}
+          lang={t.lang}
           onOpenPro={() => {
             MilanResultStore.requestProOnReturn();
             router.replace("/kundli-milan?openPro=1" as never);
           }}
-          onRecalculate={() => router.replace("/kundli-milan" as never)}
         />
       </ScrollView>
       {LockOverlay}

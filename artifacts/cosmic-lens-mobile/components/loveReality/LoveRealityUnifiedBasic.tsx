@@ -13,7 +13,11 @@ import {
 } from "react-native";
 
 import { LoveRealityToolSectionContent } from "@/components/loveReality/LoveRealityToolResultPanel";
+import { useUser } from "@/context/UserContext";
 import { apiFetch, apiFetchBases } from "@/lib/apiConfig";
+import { coerceLoveBasicLang, pickLoveBasicCopy } from "@/lib/loveRealityBasicLang";
+import { loveRealityProScreenCopy } from "@/lib/loveRealityProCopyI18n";
+import { LOVE_REALITY_PRO_CTA_LABEL } from "@/lib/loveRealityProCopy";
 import {
   buildLoyaltyCompareFromJson,
   buildLoveCompatDetailFromJson,
@@ -24,11 +28,8 @@ import {
   type LoyaltyCompareData,
 } from "@/lib/loveRealityToolMappers";
 import { LOVE_REALITY_TOOLS, type LoveRealityToolDef } from "@/lib/loveRealityToolsConfig";
+import { coerceProPdfLang } from "@/lib/proPdfLang";
 import type { BirthData } from "@/types";
-import {
-  LOVE_REALITY_BASIC_LOCKED_HINT,
-  LOVE_REALITY_PRO_CTA_LABEL,
-} from "@/lib/loveRealityProCopy";
 
 function packPerson(bd: BirthData) {
   return {
@@ -91,6 +92,10 @@ export function LoveRealityUnifiedBasic({
   initialToolKey?: string;
   onOpenPro: () => void;
 }) {
+  const { language } = useUser();
+  const contentLang = coerceLoveBasicLang(language);
+  const proUiLang = coerceProPdfLang(language);
+  const proScreenCopy = loveRealityProScreenCopy(proUiLang);
   const canAnalyze = !!primaryProfile?.birthData && !!partnerProfile?.birthData;
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ResultsMap>({});
@@ -106,7 +111,7 @@ export function LoveRealityUnifiedBasic({
     useCallback(() => {
       if (!canAnalyze) return;
       void fetchAllTools();
-    }, [canAnalyze, primaryProfile?.birthData, partnerProfile?.birthData]),
+    }, [canAnalyze, primaryProfile?.birthData, partnerProfile?.birthData, contentLang]),
   );
 
   async function fetchAllTools() {
@@ -117,6 +122,7 @@ export function LoveRealityUnifiedBasic({
     const body = JSON.stringify({
       p1: packPerson(primaryProfile.birthData),
       p2: packPerson(partnerProfile.birthData),
+      lang: contentLang,
     });
 
     const isRetryable = (msg: string) =>
@@ -144,7 +150,7 @@ export function LoveRealityUnifiedBasic({
                 }
                 throw new Error(json.error || tool.title);
               }
-              return [tool.key, mapLoveRealityResult(tool.key, json as Record<string, unknown>), json] as const;
+              return [tool.key, mapLoveRealityResult(tool.key, json as Record<string, unknown>, contentLang), json] as const;
             } catch (e) {
               clearTimeout(timer);
               throw e;
@@ -231,12 +237,13 @@ export function LoveRealityUnifiedBasic({
                   <ToolSectionHeader tool={tool} isDark={isDark} />
                   <LoveRealityToolSectionContent
                     toolKey={tool.key}
-                    userName={primaryProfile.name || "You"}
-                    partnerName={partnerProfile.name || "Partner"}
+                    userName={primaryProfile.name || pickLoveBasicCopy(contentLang, "You", "Aap", "आप")}
+                    partnerName={partnerProfile.name || pickLoveBasicCopy(contentLang, "Partner", "Partner", "साथी")}
                     display={display}
                     loyaltyCompare={loyaltyCompare}
                     isDark={isDark}
                     accentGradient={tool.gradient}
+                    lang={contentLang}
                   />
                   {index < LOVE_REALITY_TOOLS.length - 1 ? (
                     <View style={[u.sectionDivider, { backgroundColor: border }]} />
@@ -248,7 +255,7 @@ export function LoveRealityUnifiedBasic({
 
         {hasResults ? (
           <Text style={[u.lockedHint, { color: isDark ? "rgba(203,213,225,0.42)" : "rgba(100,116,139,0.55)" }]}>
-            {LOVE_REALITY_BASIC_LOCKED_HINT}
+            {proScreenCopy.basicLockedHint}
           </Text>
         ) : null}
 

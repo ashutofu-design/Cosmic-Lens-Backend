@@ -19,6 +19,15 @@ import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { API_BASE } from "@/lib/apiConfig";
 import { finalizeCoupleReportPayment } from "@/lib/coupleReportCheckoutFlow";
+import { buildRazorpayCheckoutHtml, openRazorpayCheckoutWeb } from "@/lib/razorpayCheckout";
+import {
+  getPendingAstrovastuRoomUpload,
+  markPendingAstrovastuRoomPaidReady,
+} from "@/lib/pendingAstrovastuRoomUpload";
+import {
+  getPendingAstrovastuFloorPlan,
+  markPendingAstrovastuFloorPaidReady,
+} from "@/lib/pendingAstrovastuFloorPlan";
 import { PRICES } from "@/lib/subscription";
 
 const F = {
@@ -76,17 +85,24 @@ export default function PaymentWebviewScreen() {
     // ── AstroVastu one-time purchase params ──
     kind?: string; sku?: string; purchaseId?: string;
     amount?: string; label?: string; propertyName?: string;
+    returnTo?: string;
+    // ── Razorpay one-time (couple report, gemstone) ──
+    razorpayKeyId?: string; amountPaise?: string;
+    customerName?: string; customerEmail?: string; customerPhone?: string;
   }>();
 
   const plan  = params.plan  ?? "pro";
   const cycle = params.cycle ?? "monthly";
   const isAstroVastu  = (params.kind === "astrovastu") || plan === "astrovastu";
   const isCoupleReport = params.kind === "couple_report" || plan === "couple_report";
+  const isGemstone = params.kind === "gemstone" || plan === "gemstone";
   const avPurchaseId  = params.purchaseId ? Number(params.purchaseId) : 0;
-  const avLabel       = params.label || (isCoupleReport ? "Love Reality Pro" : "AstroVastu Unlock");
+  const avLabel       = params.label || (isGemstone ? "Gemstone" : isCoupleReport ? "Love Reality Pro" : "AstroVastu Unlock");
   const avPropName    = params.propertyName || "";
   const avAmount      = params.amount ? Number(params.amount) : 0;
-  const price = (isAstroVastu || isCoupleReport)
+  const isRoomUploadPay = params.sku === "room_expert_199";
+  const isFloorPlanPay = isAstroVastu && String(params.sku || "").includes("_floor_");
+  const price = (isAstroVastu || isCoupleReport || isGemstone)
     ? avAmount
     : (PLAN_PRICES[`${plan}_${cycle}`] ?? 0);
 
@@ -99,6 +115,10 @@ export default function PaymentWebviewScreen() {
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const handledRef = useRef(false);
+  const rzKeyId = params.razorpayKeyId || process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || "";
+  const rzAmountPaise = params.amountPaise
+    ? Number(params.amountPaise)
+    : Math.round(price * 100);
 
   useEffect(() => {
     Animated.parallel([
@@ -106,9 +126,10 @@ export default function PaymentWebviewScreen() {
       Animated.spring(scaleAnim, { toValue: 1, friction: 7,   useNativeDriver: true }),
     ]).start();
 
-    if (params.orderId && params.paymentLink) {
+    if (params.orderId && (params.paymentLink || params.sessionId)) {
       setOrderId(params.orderId);
-      setPaymentLink(params.paymentLink);
+      if (params.sessionId) setSessionId(params.sessionId);
+      setPaymentLink(params.paymentLink || "");
       setPhase("paying");
     } else {
       _createOrder();
@@ -190,8 +211,66 @@ export default function PaymentWebviewScreen() {
     }
   }
 
+  function _razorpayOpts() {
+    return {
+      keyId: rzKeyId,
+      orderId: sessionId,
+      amountPaise: rzAmountPaise,
+      title: "Cosmic Lens",
+      description: avLabel,
+      customerName: params.customerName || "",
+      customerEmail: params.customerEmail || "",
+      customerPhone: params.customerPhone || "",
+      themeColor: ac,
+    };
+  }
+
+  async function _openRazorpayCheckout() {
+    if (!sessionId || !rzKeyId) {
+      setErrMsg("Payment session invalid. Please go back and try again.");
+      setPhase("failed");
+      return;
+    }
+    try {
+      await openRazorpayCheckoutWeb(
+        _razorpayOpts(),
+        () => {
+          handledRef.current = true;
+          setPhase("verifying");
+          _verifyPayment(orderId);
+        },
+        () => {
+          if (!handledRef.current) setPhase("cancelled");
+        },
+      );
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Razorpay checkout failed";
+      setErrMsg(msg);
+      setPhase("failed");
+    }
+  }
+
+  function _onRazorpayMessage(event: { nativeEvent: { data: string } }) {
+    if (handledRef.current) return;
+    try {
+      const msg = JSON.parse(event.nativeEvent.data) as {
+        status?: string; error?: string;
+      };
+      if (msg.status === "success") {
+        handledRef.current = true;
+        setPhase("verifying");
+        _verifyPayment(orderId);
+      } else if (msg.status === "dismissed") {
+        setPhase("cancelled");
+      } else if (msg.status === "failed") {
+        setErrMsg(msg.error || "Payment failed");
+        setPhase("failed");
+      }
+    } catch { /* ignore malformed messages */ }
+  }
+
   async function _createOrder() {
-    if (isCoupleReport || isAstroVastu) {
+    if (isCoupleReport || isAstroVastu || isGemstone) {
       if (params.orderId && params.sessionId) {
         setOrderId(params.orderId);
         setSessionId(params.sessionId);
@@ -290,29 +369,66 @@ export default function PaymentWebviewScreen() {
   }
 
   async function _verifyPayment(oid: string) {
-    if (!oid && !isAstroVastu) { setPhase("cancelled"); return; }
+    if (!oid && !isAstroVastu && !isGemstone && !isCoupleReport) {
+      setPhase("cancelled");
+      return;
+    }
     // Small grace so backend webhook can settle
     await new Promise(r => setTimeout(r, 1200));
 
-    // ── AstroVastu one-time: poll our purchase-status endpoint ───────────
-    if (isAstroVastu) {
+    // ── Couple report: poll purchase-status ──────────────────────────
+    if (isCoupleReport) {
       if (!avPurchaseId) { setPhase("cancelled"); return; }
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (user?.api_key) headers["X-API-Key"] = user.api_key;
-      // Poll up to 6 times w/ 2s gap (~12s headroom for webhook delivery).
-      // On miss → "pending_verify" (NOT "cancelled") so user can re-check
-      // the SAME purchase without creating a new order — no double charge.
+      if (user?.id) headers["X-User-Id"] = String(user.id);
       for (let attempt = 0; attempt < 6; attempt++) {
         try {
           const ctrl  = new AbortController();
           const timer = setTimeout(() => ctrl.abort(), 10000);
           const resp  = await fetch(
-            `${API_BASE}/api/astrovastu/purchase-status/${avPurchaseId}`,
+            `${API_BASE}/api/couple-report/purchase-status/${avPurchaseId}`,
             { signal: ctrl.signal, headers },
           );
           clearTimeout(timer);
           const data = await resp.json();
-          if (data?.status === "paid" && data?.granted) {
+          if (data?.status === "paid" && data?.entitled) {
+            finalizeCoupleReportPayment();
+            await refreshUser().catch(() => {});
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setPhase("success");
+            return;
+          }
+        } catch { /* retry */ }
+        await new Promise(r => setTimeout(r, 2000));
+      }
+      setPhase("pending_verify");
+      return;
+    }
+
+    // ── One-time purchases: poll purchase-status endpoint ───────────
+    if (isAstroVastu || isGemstone) {
+      if (!avPurchaseId) { setPhase("cancelled"); return; }
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (user?.api_key) headers["X-API-Key"] = user.api_key;
+      if (user?.id) headers["X-User-Id"] = String(user.id);
+      const statusUrl = isGemstone
+        ? `${API_BASE}/api/gemstone/purchase-status/${avPurchaseId}`
+        : `${API_BASE}/api/astrovastu/purchase-status/${avPurchaseId}`;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        try {
+          const ctrl  = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 10000);
+          const resp  = await fetch(statusUrl, { signal: ctrl.signal, headers });
+          clearTimeout(timer);
+          const data = await resp.json();
+          if (data?.status === "paid" && (data?.granted || data?.paid)) {
+            if (isRoomUploadPay && getPendingAstrovastuRoomUpload() && avPurchaseId) {
+              markPendingAstrovastuRoomPaidReady(avPurchaseId);
+            }
+            if (isFloorPlanPay && getPendingAstrovastuFloorPlan() && avPurchaseId) {
+              markPendingAstrovastuFloorPaidReady(avPurchaseId);
+            }
             await refreshUser().catch(() => {});
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             setPhase("success");
@@ -381,8 +497,12 @@ export default function PaymentWebviewScreen() {
     pending_verify: "⌛",
   };
 
-  const successCopy = isCoupleReport
+  const successCopy = isGemstone
+    ? `💎 ${avLabel} order confirmed — we will contact you for delivery.`
+    : isCoupleReport
     ? `💞 ${avLabel} unlocked — return to generate your PDF.`
+    : isRoomUploadPay
+      ? `🏠 Payment successful.`
     : isAstroVastu
       ? `${PLAN_ICONS.astrovastu} ${avLabel}${avPropName ? ` for "${avPropName}"` : ""} unlocked!`
       : `${PLAN_ICONS[plan]} ${PLAN_LABELS[plan]} ${CYCLE_LABELS[cycle]} plan is now active!`;
@@ -391,15 +511,19 @@ export default function PaymentWebviewScreen() {
     creating:       "Creating Your Order…",
     paying:         "Complete Your Payment",
     verifying:      "Verifying Payment…",
-    success:        isCoupleReport ? "Payment Successful!" : isAstroVastu ? "Unlocked!" : "Plan Activated!",
+    success:        isGemstone ? "Order Confirmed!" : isCoupleReport ? "Payment Successful!" : isAstroVastu ? "Unlocked!" : "Plan Activated!",
     failed:         "Payment Failed",
     cancelled:      "Payment Cancelled",
     pending_verify: "Verification Pending",
   };
 
+  const payGateway = isRazorpay ? "Razorpay" : "Cashfree";
+
   const phaseSubtitle: Record<Phase, string> = {
-    creating:       "Securely connecting to Cashfree…",
-    paying:         "Pay securely below — page is hosted by Cashfree.",
+    creating:       isRazorpay ? "Connecting to Razorpay…" : "Securely connecting to Cashfree…",
+    paying:         isRazorpay
+      ? "Pay securely with Razorpay (UPI / Card / Net Banking)."
+      : "Pay securely below — page is hosted by Cashfree.",
     verifying:      "Checking your payment status…",
     success:        successCopy,
     failed:         errMsg || "Something went wrong. Please try again.",
@@ -418,7 +542,7 @@ export default function PaymentWebviewScreen() {
         <Text style={[s.headerTitle, { color: C.text }]}>{t.paymentTitle}</Text>
         <View style={[s.cfBadge, { borderColor: isDark ? "rgba(245,158,11,0.3)" : "rgba(245,158,11,0.4)" }]}>
           <Text style={{ fontSize: 9, color: isDark ? "#f59e0b" : "#d97706", fontFamily: F.bold, letterSpacing: 0.5 }}>
-            🔒 Cashfree
+            🔒 {payGateway}
           </Text>
         </View>
       </View>
@@ -433,10 +557,10 @@ export default function PaymentWebviewScreen() {
             <Text style={{ fontSize: 28 }}>{PLAN_ICONS[plan] ?? "⭐"}</Text>
             <View style={{ flex: 1 }}>
               <Text style={[s.planName, { color: isDark ? "#f59e0b" : "#d97706" }]}>
-                {isCoupleReport ? avLabel : `${PLAN_LABELS[plan]} ${CYCLE_LABELS[cycle]}`}
+                {isGemstone || isCoupleReport ? avLabel : `${PLAN_LABELS[plan]} ${CYCLE_LABELS[cycle]}`}
               </Text>
               <Text style={[s.planSub, { color: C.textMuted }]}>
-                {isCoupleReport ? "One-time couple report" : "Cosmic Lens Premium"}
+                {isGemstone ? "Certified gemstone · one-time" : isCoupleReport ? "One-time couple report" : "Cosmic Lens Premium"}
               </Text>
             </View>
             <Text style={[s.price, { color: isDark ? "#f59e0b" : "#d97706" }]}>
@@ -450,7 +574,7 @@ export default function PaymentWebviewScreen() {
           </View>
           <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 4 }}>
             <Text style={[s.detailLabel, { color: C.textMuted }]}>Payment Gateway</Text>
-            <Text style={[s.detailVal, { color: C.textMid }]}>Cashfree</Text>
+            <Text style={[s.detailVal, { color: C.textMid }]}>{payGateway}</Text>
           </View>
         </View>
 
@@ -464,8 +588,32 @@ export default function PaymentWebviewScreen() {
             <ActivityIndicator size="large" color={ac} style={{ marginTop: 20 }} />
           )}
 
+          {/* Web: Razorpay one-time checkout */}
+          {phase === "paying" && Platform.OS === "web" && isRazorpay && !!sessionId && !!rzKeyId && (
+            <View style={{ gap: 10, marginTop: 20, width: "100%" }}>
+              <Pressable
+                onPress={() => { Haptics.selectionAsync(); _openRazorpayCheckout(); }}
+                style={({ pressed }) => [s.primaryBtn, { backgroundColor: ac, opacity: pressed ? 0.85 : 1 }]}
+              >
+                <Text style={s.primaryBtnText}>💳 Pay with Razorpay</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { Haptics.selectionAsync(); setPhase("verifying"); _verifyPayment(orderId); }}
+                style={({ pressed }) => [s.secondaryBtn, { borderColor: C.border, opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Text style={[s.secondaryBtnText, { color: C.textMid }]}>✓ I've Paid — Verify Now</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.back()}
+                style={({ pressed }) => [s.secondaryBtn, { borderColor: C.border, opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Text style={[s.secondaryBtnText, { color: C.textMid }]}>Cancel</Text>
+              </Pressable>
+            </View>
+          )}
+
           {/* Web: choose a payment method — each opens Cashfree pre-selected */}
-          {phase === "paying" && Platform.OS === "web" && !!sessionId && (
+          {phase === "paying" && Platform.OS === "web" && !isRazorpay && !!sessionId && (
             <View style={{ gap: 10, marginTop: 20, width: "100%" }}>
               <Text style={[s.statusSub, { color: C.textMid, marginBottom: 4, fontFamily: F.bold }]}>
                 Choose Payment Method
@@ -518,7 +666,9 @@ export default function PaymentWebviewScreen() {
             <Pressable
               onPress={() => {
                 Haptics.selectionAsync();
-                if (isCoupleReport) {
+                if (isGemstone && params.returnTo) {
+                  router.replace(params.returnTo as any);
+                } else if (isCoupleReport || isRoomUploadPay || params.returnTo === "astrovastu-pro") {
                   router.back();
                 } else {
                   router.replace("/");
@@ -527,7 +677,13 @@ export default function PaymentWebviewScreen() {
               style={({ pressed }) => [s.primaryBtn, { backgroundColor: ac, opacity: pressed ? 0.85 : 1 }]}
             >
               <Text style={s.primaryBtnText}>
-                {isCoupleReport ? "Continue to PDF →" : "Go to Home ✨"}
+                {isGemstone
+                  ? "Back to Gemstones →"
+                  : isCoupleReport
+                  ? "Continue to PDF →"
+                  : isRoomUploadPay
+                    ? "Continue →"
+                    : "Go to Home ✨"}
               </Text>
             </Pressable>
           )}
@@ -572,7 +728,10 @@ export default function PaymentWebviewScreen() {
         </View>
 
         <View style={s.trustRow}>
-          {["🔒 256-bit SSL", "🏦 Cashfree Secured", "🔄 Auto-renewal"].map(b => (
+          {(isRazorpay
+            ? ["🔒 256-bit SSL", "🏦 Razorpay Secured", "💎 One-time payment"]
+            : ["🔒 256-bit SSL", "🏦 Cashfree Secured", "🔄 Auto-renewal"]
+          ).map(b => (
             <View key={b} style={[s.trustBadge, { backgroundColor: C.bgCard2, borderColor: C.border }]}>
               <Text style={[s.trustText, { color: C.textMuted }]}>{b}</Text>
             </View>
@@ -580,14 +739,56 @@ export default function PaymentWebviewScreen() {
         </View>
 
         <Text style={[s.footer, { color: C.textMuted }]}>
-          Payment is processed securely by Cashfree.{"\n"}
+          Payment is processed securely by {payGateway}.{"\n"}
           Do not share OTP or card details with anyone.
         </Text>
       </Animated.View>
 
+      {/* Razorpay checkout (mobile — hosted in WebView) */}
+      <Modal
+        visible={Platform.OS !== "web" && phase === "paying" && isRazorpay && !!sessionId && !!rzKeyId}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={handleClosePayment}
+      >
+        <View style={[s.modalRoot, { backgroundColor: C.bg }]}>
+          <View style={[s.modalHeader, { paddingTop: topPad + 6, borderBottomColor: C.border, backgroundColor: C.bg }]}>
+            <Pressable onPress={handleClosePayment} hitSlop={10} style={s.modalCloseBtn}>
+              <Text style={{ color: C.text, fontSize: 22, lineHeight: 22 }}>✕</Text>
+            </Pressable>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.modalTitle, { color: C.text }]}>Secure Payment</Text>
+              <Text style={[s.modalSub, { color: C.textMuted }]}>
+                Powered by Razorpay • ₹{price.toLocaleString("en-IN")}
+              </Text>
+            </View>
+            <View style={[s.lockBadge, { borderColor: ac }]}>
+              <Text style={{ color: ac, fontSize: 10, fontFamily: F.bold }}>🔒 SSL</Text>
+            </View>
+          </View>
+          <WebView
+            source={{ html: buildRazorpayCheckoutHtml(_razorpayOpts()) }}
+            onMessage={_onRazorpayMessage}
+            startInLoadingState
+            renderLoading={() => (
+              <View style={s.wvLoader}>
+                <ActivityIndicator size="large" color={ac} />
+                <Text style={{ marginTop: 10, color: C.textMuted, fontFamily: F.semibold }}>
+                  Opening Razorpay…
+                </Text>
+              </View>
+            )}
+            javaScriptEnabled
+            domStorageEnabled
+            originWhitelist={["*"]}
+            style={{ flex: 1, backgroundColor: "#0c0818" }}
+          />
+        </View>
+      </Modal>
+
       {/* In-app payment WebView (mobile only — web uses new tab) */}
       <Modal
-        visible={Platform.OS !== "web" && phase === "paying" && !!paymentLink}
+        visible={Platform.OS !== "web" && phase === "paying" && !!paymentLink && !isRazorpay}
         animationType="slide"
         presentationStyle="fullScreen"
         onRequestClose={handleClosePayment}

@@ -17,7 +17,7 @@
 artifacts/api-server
 artifacts/admin-web
 artifacts/mockup-sandbox
-scripts
+/scripts
 
 # Shared workspace libs at repo root only (do NOT exclude artifacts/cosmic-lens-mobile/lib)
 /lib

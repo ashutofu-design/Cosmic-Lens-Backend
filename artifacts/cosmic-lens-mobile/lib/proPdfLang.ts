@@ -47,12 +47,11 @@ export function proPdfLangPickerUi(uiLang: ProPdfLangCode) {
   if (uiLang === "hi") {
     return {
       title: "रिपोर्ट की भाषा चुनें",
-      subtitle: "Founder-verified PDF किस भाषा में चाहिए — नीचे से चुनें।",
-      deliveryHead: "डिलीवरी विवरण",
-      whatsapp: "WhatsApp",
-      email: "ईमेल",
-      whatsappPlaceholder: "10 अंकों का मोबाइल नंबर",
-      emailPlaceholder: "your@email.com",
+      subtitle: "English, Hinglish या Hindi",
+      deliveryHead: "डिलीवरी",
+      deliveryLine: "My Reports में सेव · More से खोलें",
+      priorityRefund:
+        "12 घंटे में रिपोर्ट नहीं मिली? ₹300 प्राथमिकता शुल्क वापस।",
       cancel: "रद्द करें",
       continue: "ऑर्डर करें",
     };
@@ -60,24 +59,20 @@ export function proPdfLangPickerUi(uiLang: ProPdfLangCode) {
   if (uiLang === "hn") {
     return {
       title: "Report Language Chunein",
-      subtitle: "Poori Love Reality Pro report — English, Hinglish ya Hindi mein.",
-      deliveryHead: "Delivery details",
-      whatsapp: "WhatsApp",
-      email: "Email",
-      whatsappPlaceholder: "10-digit mobile number",
-      emailPlaceholder: "your@email.com",
+      subtitle: "English, Hinglish ya Hindi",
+      deliveryHead: "Delivery",
+      deliveryLine: "My Reports mein save · More se kholo",
+      priorityRefund: "12 ghante mein report nahi mili? ₹300 wapas refund.",
       cancel: "Cancel",
       continue: "Order karo",
     };
   }
   return {
     title: "Report Language",
-    subtitle: "Founder-verified PDF — pick English, Hinglish, or Hindi.",
-    deliveryHead: "Delivery details",
-    whatsapp: "WhatsApp",
-    email: "Email",
-    whatsappPlaceholder: "10-digit mobile number",
-    emailPlaceholder: "your@email.com",
+    subtitle: "English, Hinglish, or Hindi",
+    deliveryHead: "Delivery",
+    deliveryLine: "Saved in My Reports · open from More menu",
+    priorityRefund: "Not in My Reports within 12 hours? ₹300 priority fee refunded.",
     cancel: "Cancel",
     continue: "Place order",
   };

@@ -23,14 +23,14 @@ export const LOVE_REALITY_FOUNDER_TRUST = {
     "Founder-reviewed",
     "Personalized PDF",
     "Remedies included",
-    "WhatsApp or Email delivery",
+    "Saved in My Reports",
   ],
 } as const;
 
 export const LOVE_REALITY_PRO_HERO = {
   emoji: "🔄",
   title: "Return or Move On?",
-  line: "The #1 reason people order this report. Should you wait, reconcile, or move on?",
+  line: "#1 reason people order — wait, reconcile, or move on?",
 } as const;
 
 export const LOVE_REALITY_CORE_QUESTIONS_TITLE = "Your Report Answers These 3 Questions" as const;
@@ -102,6 +102,10 @@ export const LOVE_REALITY_DELIVERY_OPTIONS = [
   },
 ] as const;
 
+/** Shown under Priority toggle — 12h SLA refund for the +₹300 surcharge only. */
+export const LOVE_REALITY_PRIORITY_REFUND_GUARANTEE =
+  "Not in My Reports within 12 hours? ₹300 priority fee refunded." as const;
+
 /** A/B Version A — swap with LOVE_REALITY_PRO_CTA_TITLE to test */
 export const LOVE_REALITY_PRO_CTA_TITLE_ALT_A = "Unlock My Founder-Verified Report" as const;
 
@@ -113,7 +117,7 @@ export function loveRealitySavingsMessage(savingsInr: number): string {
 }
 
 export const LOVE_REALITY_PRO_TRUST_BAR =
-  "🔒 Secure Payment • Founder Reviewed • Delivered in 24–48 Hours" as const;
+  "🔒 Secure Payment • Founder Reviewed • Delivered in My Reports" as const;
 
 export const LOVE_REALITY_PRO_CTA_MICROCOPY =
   "Prepared manually after reviewing both charts. No generic AI-generated report is delivered." as const;

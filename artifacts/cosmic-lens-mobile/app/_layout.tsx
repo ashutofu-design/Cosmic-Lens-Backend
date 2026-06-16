@@ -48,6 +48,8 @@ function RootLayoutNav() {
       <Stack.Screen name="forecast"         options={{ headerShown: false }} />
       <Stack.Screen name="dasha-risk"       options={{ headerShown: false }} />
       <Stack.Screen name="planet-position"   options={{ headerShown: false }} />
+      <Stack.Screen name="gemstones"         options={{ headerShown: false }} />
+      <Stack.Screen name="gemstone-buy"      options={{ headerShown: false }} />
       <Stack.Screen name="divisional-charts" options={{ headerShown: false }} />
       <Stack.Screen name="varga-chart"         options={{ headerShown: false }} />
       <Stack.Screen name="profile-edit"     options={{ headerShown: false }} />

@@ -283,6 +283,7 @@ export default function CareerScreen() {
   }, [user?.id, user?.api_key, kundli]);
 
   const accent = "#f59e0b";
+  const headerTopPad = insets.top + 8;
 
   return (
     <CosmicBg>
@@ -293,29 +294,38 @@ export default function CareerScreen() {
         pointerEvents="none"
       />
 
-      <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <Pressable
-          onPress={() => { Haptics.selectionAsync(); router.back(); }}
-          style={s.backBtn}
-          hitSlop={10}
-        >
-          <View style={s.backCircle}>
-            <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color="#fff" />
+      <View style={s.screen}>
+        <View style={[s.topBar, { paddingTop: headerTopPad }]}>
+          {Platform.OS === "ios" ? (
+            <BlurView intensity={48} tint="dark" style={StyleSheet.absoluteFill} />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, s.topBarBg]} />
+          )}
+          <View style={s.topBarRow}>
+            <Pressable
+              onPress={() => { Haptics.selectionAsync(); router.back(); }}
+              style={s.backBtn}
+              hitSlop={10}
+            >
+              <View style={s.backCircle}>
+                <Feather name={I18nManager.isRTL ? "arrow-right" : "arrow-left"} size={20} color="#fff" />
+              </View>
+            </Pressable>
+            <Text style={s.topTitle}>{t.cr_pageTitle}</Text>
+            <View style={{ width: 40 }} />
           </View>
-        </Pressable>
-        <Text style={s.topTitle}>{t.cr_pageTitle}</Text>
-        <View style={{ width: 40 }} />
-      </View>
+        </View>
 
-      <ScrollView
-        contentContainerStyle={{
-          paddingTop: insets.top + 60,
-          paddingBottom: insets.bottom + 80,
-          paddingHorizontal: 18,
-          gap: 16,
-        }}
-        showsVerticalScrollIndicator={false}
-      >
+        <ScrollView
+          style={s.scroll}
+          contentContainerStyle={{
+            paddingTop: 12,
+            paddingBottom: insets.bottom + 80,
+            paddingHorizontal: 18,
+            gap: 16,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
         {loading && (
           <View style={{ paddingVertical: 60, alignItems: "center", gap: 12 }}>
             <ActivityIndicator size="large" color={accent} />
@@ -621,16 +631,34 @@ export default function CareerScreen() {
             )}
           </Animated.View>
         )}
-      </ScrollView>
+        </ScrollView>
+      </View>
     </CosmicBg>
   );
 }
 
 const s = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
   topBar: {
-    position: "absolute", top: 0, left: 0, right: 0,
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 14, zIndex: 10, height: 60,
+    zIndex: 20,
+    paddingHorizontal: 14,
+    paddingBottom: 8,
+    borderBottomWidth: 0.6,
+    borderBottomColor: "rgba(255,255,255,0.06)",
+    overflow: "hidden",
+  },
+  topBarBg: {
+    backgroundColor: "rgba(20,14,30,0.94)",
+  },
+  topBarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   backBtn: { padding: 4 },
   backCircle: {

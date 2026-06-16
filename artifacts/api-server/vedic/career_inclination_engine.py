@@ -867,6 +867,36 @@ def _blend_d10_pct(
     return job_pct
 
 
+def _enforce_path_lean(
+    job_pct: int,
+    eff_job: float,
+    eff_biz: float,
+    convergence: float,
+    *,
+    min_gap: int = 20,
+) -> int:
+    """
+    Never emit 50-50. Flat reads widen to at least 60-40 toward the stronger axis.
+    """
+    gap = abs(job_pct - 50)
+    if gap >= min_gap // 2:
+        return int(_clamp(job_pct, 12, 88))
+
+    if eff_job > eff_biz + 0.5:
+        lean_job = True
+    elif eff_biz > eff_job + 0.5:
+        lean_job = False
+    elif job_pct > 50:
+        lean_job = True
+    elif job_pct < 50:
+        lean_job = False
+    else:
+        lean_job = convergence >= 0.5
+
+    target = 50 + (min_gap // 2 if lean_job else -(min_gap // 2))
+    return int(_clamp(target, 12, 88))
+
+
 def _apply_d10_nudge(
     job_pct: int,
     align_state: str,
@@ -1138,6 +1168,7 @@ def compute_career_inclination(
         business_pct = 100 - job_pct
 
         job_pct = _blend_d10_pct(job_pct, align_state, d10_job, d10_biz, convergence)
+        job_pct = _enforce_path_lean(job_pct, eff_job, eff_biz, convergence)
         business_pct = 100 - job_pct
 
         gap = abs(job_pct - 50)
@@ -1148,9 +1179,6 @@ def compute_career_inclination(
             d9_present=bool(chart.d9_planets),
             karakas_present=bool(karakas.get("AmK")),
         )
-        if gap <= 1 and confidence_label == "Low":
-            job_pct = 50
-            business_pct = 50
         traits = _psychology_traits(chart)
         subtypes = _classify_subtypes(chart)
         struct_raw = ledger.structure
@@ -1202,8 +1230,8 @@ def compute_career_inclination(
         }
     except Exception as exc:
         return {
-            "job_pct": 50,
-            "business_pct": 50,
+            "job_pct": 55,
+            "business_pct": 45,
             "confidence": "Low",
             "confidence_score": 0,
             "dominant": "balanced",

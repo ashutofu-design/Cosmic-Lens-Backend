@@ -48,6 +48,8 @@ interface BasicBlock {
   weakness?: string;
   main_risk?: string;
   why?: string[];
+  job_score?: number;
+  business_score?: number;
 }
 interface PlanetStrength {
   name: string; sign: string; house: number;
@@ -122,6 +124,8 @@ function PathMeter({
 }: {
   jobPct: number;
   businessPct: number;
+  jobScore?: number;
+  businessScore?: number;
   confidence?: string;
   mode?: string;
   verdict?: string;
@@ -168,6 +172,12 @@ function PathMeter({
         <Animated.View style={[s.pathFillJob, { width: jobWidth }]} />
         <View style={[s.pathFillBizRest, { backgroundColor: accent }]} />
       </View>
+
+      {(typeof jobScore === "number" && typeof businessScore === "number") ? (
+        <Text style={s.pathScoreLine}>
+          {labels.job}: {jobScore}  •  {labels.business}: {businessScore}
+        </Text>
+      ) : null}
 
       {mode ? (
         <Text style={s.pathMode}>
@@ -408,6 +418,8 @@ export default function CareerScreen() {
               <PathMeter
                 jobPct={data.basic.job_pct}
                 businessPct={data.basic.business_pct ?? 100 - data.basic.job_pct}
+                jobScore={data.basic.job_score}
+                businessScore={data.basic.business_score}
                 confidence={data.basic.confidence}
                 mode={data.basic.career_mode}
                 verdict={data.basic.path_verdict}
@@ -825,6 +837,12 @@ const s = StyleSheet.create({
   pathMode: {
     marginTop: 6, fontSize: 11, fontFamily: F.semi,
     color: "rgba(255,255,255,0.55)",
+  },
+  pathScoreLine: {
+    marginTop: 6,
+    fontSize: 11.5,
+    fontFamily: F.semi,
+    color: "rgba(255,255,255,0.6)",
   },
   pathVerdict: {
     marginTop: 4, fontSize: 12.5, fontFamily: F.regular,

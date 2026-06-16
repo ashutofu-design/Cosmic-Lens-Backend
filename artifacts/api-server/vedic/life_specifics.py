@@ -1519,6 +1519,8 @@ def build_career_basic_insights(
         "commercial_score": incl.get("commercial_score"),
         "execution_score": incl.get("execution_score"),
         "freelance_score": incl.get("freelance_score"),
+        "job_score": int(incl.get("job_score") or 0),
+        "business_score": int(incl.get("business_score") or 0),
         "current_phase": current_phase,
         "strengths": strengths[:2],
         "weakness": weakness,

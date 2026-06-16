@@ -1146,8 +1146,10 @@ def compute_career_inclination(
         )
 
         total = max(eff_job + eff_biz, 1.0)
-        job_pct = int(round(eff_job * 100 / total))
-        business_pct = 100 - job_pct
+        raw_job_pct = int(round(eff_job * 100 / total))
+        raw_business_pct = 100 - raw_job_pct
+        job_pct = raw_job_pct
+        business_pct = raw_business_pct
 
         job_pct = _blend_d10_pct(job_pct, align_state, d10_job, d10_biz, convergence)
         job_pct = _enforce_min_gap(job_pct, min_gap=20)
@@ -1183,6 +1185,8 @@ def compute_career_inclination(
         return {
             "job_pct": job_pct,
             "business_pct": business_pct,
+            "job_score": raw_job_pct,
+            "business_score": raw_business_pct,
             "confidence": confidence_label,
             "confidence_score": confidence_score,
             "dominant": dominant if dominant != "hybrid" else "balanced",

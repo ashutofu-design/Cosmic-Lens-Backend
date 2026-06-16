@@ -174,9 +174,14 @@ function PathMeter({
       </View>
 
       {(typeof jobScore === "number" && typeof businessScore === "number") ? (
-        <Text style={s.pathScoreLine}>
-          {labels.job}: {jobScore}  •  {labels.business}: {businessScore}
-        </Text>
+        <View style={{ marginTop: 6, gap: 2 }}>
+          <Text style={s.pathScoreLine}>
+            {labels.job} match: {Math.max(0, Math.min(100, jobScore))}/100
+          </Text>
+          <Text style={s.pathScoreLine}>
+            {labels.business} match: {Math.max(0, Math.min(100, businessScore))}/100
+          </Text>
+        </View>
       ) : null}
 
       {mode ? (

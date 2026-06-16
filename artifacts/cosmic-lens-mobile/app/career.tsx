@@ -37,6 +37,12 @@ interface BasicBlock {
   trend: "Good" | "Average" | "Risk" | string;
   summary: string;
   hook: string;
+  job_pct?: number;
+  business_pct?: number;
+  path_verdict?: string;
+  confidence?: string;
+  career_mode?: string;
+  reasoning_summary?: string[];
 }
 interface PlanetStrength {
   name: string; sign: string; house: number;
@@ -66,6 +72,93 @@ function trendColor(trend: string): string {
   if (trend === "Good")  return "#22c55e";
   if (trend === "Risk")  return "#ef4444";
   return "#f59e0b";
+}
+
+function confidenceColor(conf: string | undefined): string {
+  if (conf === "High") return "#22c55e";
+  if (conf === "Medium-High") return "#84cc16";
+  if (conf === "Medium") return "#f59e0b";
+  return "rgba(255,255,255,0.45)";
+}
+
+function PathMeter({
+  jobPct,
+  businessPct,
+  confidence,
+  mode,
+  verdict,
+  labels,
+  accent,
+}: {
+  jobPct: number;
+  businessPct: number;
+  confidence?: string;
+  mode?: string;
+  verdict?: string;
+  labels: { title: string; job: string; business: string; confidence: string; mode: string };
+  accent: string;
+}) {
+  const job = Math.max(0, Math.min(100, jobPct));
+  const biz = Math.max(0, Math.min(100, businessPct || 100 - job));
+  const dominant = job >= biz ? "job" : "business";
+  const animated = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    animated.setValue(0);
+    Animated.timing(animated, {
+      toValue: 1, duration: 900, easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [job, biz]);
+
+  const jobWidth = animated.interpolate({ inputRange: [0, 1], outputRange: ["0%", `${job}%`] });
+  const bizWidth = animated.interpolate({ inputRange: [0, 1], outputRange: ["0%", `${biz}%`] });
+
+  return (
+    <View style={[s.pathCard, { borderColor: `${accent}44` }]}>
+      <LinearGradient
+        colors={["rgba(245,158,11,0.12)", "transparent"]}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={s.pathHead}>
+        <Text style={[s.pathTitle, { color: accent }]}>{labels.title}</Text>
+        {confidence ? (
+          <View style={[s.confPill, { borderColor: `${confidenceColor(confidence)}66` }]}>
+            <Text style={[s.confText, { color: confidenceColor(confidence) }]}>
+              {labels.confidence}: {confidence}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={s.pathRow}>
+        <Text style={[s.pathLabel, dominant === "job" && s.pathLabelStrong]}>{labels.job}</Text>
+        <Text style={[s.pathPct, { color: "#60a5fa" }]}>{job}%</Text>
+      </View>
+      <View style={s.pathTrack}>
+        <Animated.View style={[s.pathFillJob, { width: jobWidth }]} />
+      </View>
+
+      <View style={[s.pathRow, { marginTop: 10 }]}>
+        <Text style={[s.pathLabel, dominant === "business" && s.pathLabelStrong]}>{labels.business}</Text>
+        <Text style={[s.pathPct, { color: accent }]}>{biz}%</Text>
+      </View>
+      <View style={s.pathTrack}>
+        <Animated.View style={[s.pathFillBiz, { width: bizWidth, backgroundColor: accent }]} />
+      </View>
+
+      {mode ? (
+        <Text style={s.pathMode}>
+          {labels.mode}: <Text style={{ color: "#fff", fontFamily: F.bold }}>{mode}</Text>
+        </Text>
+      ) : null}
+
+      {verdict ? (
+        <Text style={s.pathVerdict}>{verdict}</Text>
+      ) : null}
+    </View>
+  );
 }
 
 function ScoreRing({ score, color }: { score: number; color: string }) {
@@ -280,6 +373,25 @@ export default function CareerScreen() {
                 </View>
               </View>
             </View>
+
+            {/* ─── JOB vs BUSINESS (chart-based path) ─── */}
+            {typeof data.basic.job_pct === "number" && (
+              <PathMeter
+                jobPct={data.basic.job_pct}
+                businessPct={data.basic.business_pct ?? 100 - data.basic.job_pct}
+                confidence={data.basic.confidence}
+                mode={data.basic.career_mode}
+                verdict={data.basic.path_verdict}
+                accent={accent}
+                labels={{
+                  title: t.cr_pathTitle,
+                  job: t.cr_jobLabel,
+                  business: t.cr_businessLabel,
+                  confidence: t.cr_pathConfidence,
+                  mode: t.cr_pathMode,
+                }}
+              />
+            )}
 
             {/* ─── SUMMARY ─── */}
             <SectionCard icon="message-circle" title={t.cr_quickReading} accent={accent}>
@@ -564,6 +676,54 @@ const s = StyleSheet.create({
   summary: {
     fontSize: 13.5, fontFamily: F.semi,
     lineHeight: 21, letterSpacing: 0.1,
+  },
+
+  pathCard: {
+    borderRadius: 18, borderWidth: 1,
+    backgroundColor: "rgba(15,10,25,0.78)",
+    padding: 16, gap: 8,
+    overflow: "hidden",
+  },
+  pathHead: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    gap: 8, marginBottom: 4,
+  },
+  pathTitle: {
+    fontSize: 12, fontFamily: F.extra, letterSpacing: 1.5,
+  },
+  confPill: {
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 8, borderWidth: 1,
+    backgroundColor: "rgba(0,0,0,0.25)",
+  },
+  confText: { fontSize: 9.5, fontFamily: F.bold, letterSpacing: 0.3 },
+  pathRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+  },
+  pathLabel: {
+    color: "rgba(255,255,255,0.65)", fontSize: 12, fontFamily: F.semi,
+  },
+  pathLabelStrong: { color: "#fff", fontFamily: F.bold },
+  pathPct: { fontSize: 15, fontFamily: F.extra },
+  pathTrack: {
+    height: 8, borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+  },
+  pathFillJob: {
+    height: "100%", borderRadius: 4,
+    backgroundColor: "#60a5fa",
+  },
+  pathFillBiz: {
+    height: "100%", borderRadius: 4,
+  },
+  pathMode: {
+    marginTop: 6, fontSize: 11, fontFamily: F.semi,
+    color: "rgba(255,255,255,0.55)",
+  },
+  pathVerdict: {
+    marginTop: 4, fontSize: 12.5, fontFamily: F.regular,
+    color: "rgba(255,255,255,0.82)", lineHeight: 19,
   },
 
   bullet: {

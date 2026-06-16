@@ -682,6 +682,11 @@ export interface MoreT {
   cr_jobChange:       string;
   cr_struggle:        string;
   cr_reasoning:       string;
+  cr_pathTitle:       string;
+  cr_jobLabel:        string;
+  cr_businessLabel:   string;
+  cr_pathConfidence:  string;
+  cr_pathMode:        string;
 
   // ── health (hl_*) ──
   hl_pageTitle:       string;
@@ -2459,6 +2464,11 @@ const EN: MoreT = {
   cr_jobChange:       "Job Change Timing",
   cr_struggle:        "Struggle Phases & Hidden Risks",
   cr_reasoning:       "Why This Reading",
+  cr_pathTitle:       "Job vs Business",
+  cr_jobLabel:        "Job / Employment",
+  cr_businessLabel:   "Business / Self-employed",
+  cr_pathConfidence:  "Chart confidence",
+  cr_pathMode:        "Career mode",
 
   hl_pageTitle:       "Health Analysis",
   hl_loginRequired:   "Please log in to view your health analysis.",
@@ -4125,6 +4135,11 @@ const HN: Partial<MoreT> = {
   cr_jobChange:       "Job Change Timing",
   cr_struggle:        "Sangharsh aur Chhupe Risks",
   cr_reasoning:       "Yeh Reading Kyun",
+  cr_pathTitle:       "Job vs Business",
+  cr_jobLabel:        "Naukri / Job",
+  cr_businessLabel:   "Business / Apna Kaam",
+  cr_pathConfidence:  "Chart confidence",
+  cr_pathMode:        "Career mode",
 
   hl_pageTitle:       "Health Analysis",
   hl_loginRequired:   "Health analysis dekhne ke liye login karein.",
@@ -5695,6 +5710,11 @@ const HI: Partial<MoreT> = {
   cr_jobChange:       "नौकरी बदलने का समय",
   cr_struggle:        "संघर्ष और छिपे जोखिम",
   cr_reasoning:       "यह पठन क्यों",
+  cr_pathTitle:       "नौकरी बनाम व्यवसाय",
+  cr_jobLabel:        "नौकरी / रोज़गार",
+  cr_businessLabel:   "व्यवसाय / स्वरोज़गार",
+  cr_pathConfidence:  "कुंडली विश्वास",
+  cr_pathMode:        "करियर प्रकार",
 
   hl_pageTitle:       "स्वास्थ्य विश्लेषण",
   hl_loginRequired:   "स्वास्थ्य विश्लेषण देखने के लिए लॉगिन करें।",

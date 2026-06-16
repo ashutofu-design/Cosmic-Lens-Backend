@@ -1,8 +1,8 @@
 """
-Deterministic lifelong career inclination engine (D1 + D10).
+Deterministic lifelong career inclination engine (D1 + D9 + D10 + Jaimini).
 
 Static tendency only — no dasha/transit timing.
-D1 = nature (75–80%); D10 = execution validation (confidence + small nudge).
+D1 = nature (~70%); D9 + karakas validate soul-career; D10 = execution blend.
 """
 from __future__ import annotations
 
@@ -160,9 +160,14 @@ class CareerChart:
         self.asc_idx = asc_idx
         self.kundli = kundli or {}
         self._by_name = {p["name"]: p for p in self.planets if p.get("name")}
-        d10 = (self.kundli.get("divisionalCharts") or {}).get("D10") or {}
+        div = self.kundli.get("divisionalCharts") or {}
+        d10 = div.get("D10") or {}
         self.d10_planets: List[dict] = d10.get("planets") or []
         self._d10_by_name = {p["name"]: p for p in self.d10_planets if p.get("name")}
+        d9 = div.get("D9") or {}
+        self.d9_planets: List[dict] = d9.get("planets") or []
+        self._d9_by_name = {p["name"]: p for p in self.d9_planets if p.get("name")}
+        self.d9_asc_idx = resolve_asc_idx({"ascendant": d9.get("ascendant"), **d9}) if d9 else asc_idx
 
     def p(self, name: str, d10: bool = False) -> Optional[dict]:
         return (self._d10_by_name if d10 else self._by_name).get(name)
@@ -473,8 +478,206 @@ def _apply_placement_layer(chart: CareerChart, ledger: ScoreLedger) -> None:
         ledger.add(Signal("job", 5, "6th-lord service yoga", lord_6))
 
 
+def _apply_karaka_layer(chart: CareerChart, ledger: ScoreLedger) -> Dict[str, Optional[str]]:
+    """Jaimini AK + AmK — soul-level career signature (classical mandatory)."""
+    try:
+        from karakas import compute_karakas
+    except ImportError:
+        return {"AK": None, "AmK": None}
+
+    karakas = compute_karakas(chart.planets)
+    if not karakas:
+        return {"AK": None, "AmK": None}
+
+    amk = karakas.get("AmK")
+    ak = karakas.get("AK")
+
+    if amk:
+        m = chart.dignity_score(amk)
+        amk_pl = chart.p(amk)
+        amk_h = int(amk_pl.get("house") or 0) if amk_pl else 0
+
+        if amk in JOB_PLANETS:
+            ledger.add(Signal("job", 18 * m, f"Amatyakaraka {amk} — soul service/authority path", amk))
+            ledger.add(Signal("structure", 9 * m, f"AmK {amk} — institutional career karma", amk))
+        elif amk in BIZ_PLANETS:
+            ledger.add(Signal("business", 18 * m, f"Amatyakaraka {amk} — soul commercial enterprise", amk))
+            ledger.add(Signal("independence", 8 * m, f"AmK {amk} — self-directed livelihood", amk))
+        elif amk == "Moon":
+            ledger.add(Signal("commercial", 13 * m, "Amatyakaraka Moon — public-facing profession", "Moon"))
+            ledger.add(Signal("business", 7 * m, "AmK Moon — client-interface income", "Moon"))
+
+        if amk_h == 10:
+            boost = 15 * m
+            axis = "job" if amk in JOB_PLANETS else "business"
+            ledger.add(Signal(axis, boost, f"AmK {amk} in 10th — karma-career alignment", amk))
+        elif amk_h == 6:
+            ledger.add(Signal("job", 11 * m, f"AmK {amk} in 6th — service karma career", amk))
+        elif amk_h == 7:
+            ledger.add(Signal("business", 12 * m, f"AmK {amk} in 7th — trade/partnership career", amk))
+        elif amk_h in (2, 11):
+            ledger.add(Signal("business", 10 * m, f"AmK {amk} in {amk_h}th — wealth-creation career", amk))
+        elif amk_h in (8, 12):
+            ledger.instability += 4
+
+    if ak:
+        ak_pl = chart.p(ak)
+        ak_h = int(ak_pl.get("house") or 0) if ak_pl else 0
+        m = chart.dignity_score(ak)
+        if ak_h == 10:
+            axis = "job" if ak in JOB_PLANETS else "business"
+            ledger.add(Signal(axis, 9 * m, f"Atmakaraka {ak} in 10th — soul-purpose through career", ak))
+        elif ak_h == 6:
+            ledger.add(Signal("job", 7 * m, f"Atmakaraka {ak} in 6th — service is soul-work", ak))
+        elif ak_h in (2, 11):
+            ledger.add(Signal("business", 7 * m, f"Atmakaraka {ak} in {ak_h}th — wealth is soul-aligned", ak))
+
+    return {"AK": ak, "AmK": amk}
+
+
+def _apply_artha_layer(chart: CareerChart, ledger: ScoreLedger) -> None:
+    """2nd / 6th / 11th artha axis — wealth, service, gains."""
+    lord_10 = chart.lord(10)
+    l10 = chart.p(lord_10)
+    l10_h = int(l10.get("house") or 0) if l10 else 0
+
+    for house, primary in ((2, "business"), (6, "job"), (11, "business")):
+        lord = chart.lord(house)
+        pl = chart.p(lord)
+        if not pl:
+            continue
+        m = chart.dignity_score(lord)
+        h = int(pl.get("house") or 0)
+
+        if house == 6 and h == 10:
+            ledger.add(Signal("job", 13 * m, "6L in 10th — service-to-career yoga", lord))
+        elif house == 2 and h in (7, 10, 11):
+            ledger.add(Signal("business", 11 * m, f"2L in {h}th — wealth through commerce", lord))
+        elif house == 11 and h in (7, 10):
+            ledger.add(Signal("business", 10 * m, f"11L in {h}th — gains from trade/career", lord))
+        elif house == 6 and h in (6, 8):
+            ledger.add(Signal("job", 9 * m, f"6L in {h}th — employment/service axis", lord))
+
+        for nm in chart.occupants(house):
+            mod = chart.dignity_score(nm)
+            if house == 6 and nm in JOB_PLANETS:
+                ledger.add(Signal("job", 8 * mod, f"{nm} in 6th (artha) — service income", nm))
+            if house == 11 and nm in BIZ_PLANETS:
+                ledger.add(Signal("business", 9 * mod, f"{nm} in 11th — enterprise gains", nm))
+            if house == 2 and nm in ("Mercury", "Venus", "Jupiter"):
+                ledger.add(Signal("commercial", 7 * mod, f"{nm} in 2nd — wealth via profession", nm))
+
+    if l10_h == 6 and chart.lord(6) == lord_10:
+        ledger.add(Signal("job", 8, "10L and 6L linked — strong service career", lord_10))
+
+
+def _apply_parivartana_layer(chart: CareerChart, ledger: ScoreLedger) -> None:
+    """Mutual sign exchange between 10L and other artha/kendra lords."""
+    lord_10 = chart.lord(10)
+    l10 = chart.p(lord_10)
+    if not l10:
+        return
+    l10_sign = str(l10.get("sign") or "")
+    if l10_sign not in SIGNS:
+        return
+
+    exchanges = (
+        (6, "job", 16, "10th–6th parivartana — service career yoga"),
+        (7, "business", 16, "10th–7th parivartana — trade/partnership career"),
+        (11, "business", 13, "10th–11th parivartana — gains through enterprise"),
+        (2, "business", 12, "10th–2nd parivartana — wealth-career link"),
+        (1, "business", 11, "10th–1st parivartana — self-employed career"),
+    )
+    for other_h, axis, weight, msg in exchanges:
+        other_lord = chart.lord(other_h)
+        other_pl = chart.p(other_lord)
+        if not other_pl:
+            continue
+        other_sign = str(other_pl.get("sign") or "")
+        if SIGN_LORD.get(l10_sign) == other_lord and SIGN_LORD.get(other_sign) == lord_10:
+            m = chart.dignity_score(lord_10) * chart.dignity_score(other_lord)
+            ledger.add(Signal(axis, weight * m, msg, lord_10))
+
+
+def _apply_d9_layer(chart: CareerChart, ledger: ScoreLedger, karakas: Dict[str, Optional[str]]) -> None:
+    """D9 Navamsa validation — 10L + AmK soul-career promise."""
+    if not chart.d9_planets:
+        return
+
+    d9_asc = chart.d9_asc_idx
+    d9_normed = ensure_planet_houses(list(chart.d9_planets), d9_asc)
+    d9_by_name = {p["name"]: p for p in d9_normed if p.get("name")}
+
+    for nm in d9_normed:
+        if int(nm.get("house") or 0) != 10:
+            continue
+        name = nm.get("name")
+        if not name:
+            continue
+        mod = chart.dignity_score(name, d10=False)
+        sign = str(nm.get("sign") or "")
+        if name in JOB_PLANETS:
+            ledger.add(Signal("job", 8 * mod, f"D9: {name} in 10th — soul validates service career", name))
+        elif name in BIZ_PLANETS:
+            ledger.add(Signal("business", 8 * mod, f"D9: {name} in 10th — soul validates enterprise", name))
+        if sign == EXALT.get(name):
+            ledger.add(Signal("execution", 6 * mod, f"D9: {name} exalted — career promise locked", name))
+
+    lord_10 = chart.lord(10)
+    d9_l10 = d9_by_name.get(lord_10)
+    if d9_l10:
+        d9_sign = str(d9_l10.get("sign") or "")
+        m = chart.dignity_score(lord_10)
+        if d9_sign in OWN.get(lord_10, []) or d9_sign == EXALT.get(lord_10):
+            d1_sign = str((chart.p(lord_10) or {}).get("sign") or "")
+            if d1_sign == d9_sign:
+                ledger.add(Signal("execution", 10 * m, f"D9: 10L {lord_10} vargottama — career locked", lord_10))
+            if lord_10 in JOB_PLANETS:
+                ledger.add(Signal("job", 7 * m, f"D9: 10L {lord_10} strong — service path validated", lord_10))
+            elif lord_10 in BIZ_PLANETS:
+                ledger.add(Signal("business", 7 * m, f"D9: 10L {lord_10} strong — commerce validated", lord_10))
+
+    amk = karakas.get("AmK")
+    if amk:
+        d9_amk = d9_by_name.get(amk)
+        if d9_amk:
+            d9_sign = str(d9_amk.get("sign") or "")
+            m = chart.dignity_score(amk)
+            d9_h = int(d9_amk.get("house") or 0)
+            if not d9_h and d9_sign in SIGNS:
+                d9_h = (SIGNS.index(d9_sign) - d9_asc) % 12 + 1
+            if d9_sign in OWN.get(amk, []) or d9_sign == EXALT.get(amk):
+                axis = "job" if amk in JOB_PLANETS else "business"
+                ledger.add(Signal(axis, 9 * m, f"D9: AmK {amk} dignified — soul-career validated", amk))
+            if d9_h == 10:
+                axis = "job" if amk in JOB_PLANETS else "business"
+                ledger.add(Signal(axis, 8 * m, f"D9: AmK {amk} in 10th — navamsa career alignment", amk))
+
+
+def _ledger_convergence(ledger: ScoreLedger) -> float:
+    """0.5 = balanced; >0.5 = job-heavy raw ledger."""
+    raw_j = max(ledger.job, 0.0)
+    raw_b = max(ledger.business, 0.0)
+    total = raw_j + raw_b
+    if total < 8:
+        return 0.5
+    return raw_j / total
+
+
+def _apply_convergence_multiplier(eff_job: float, eff_biz: float, ledger: ScoreLedger) -> Tuple[float, float]:
+    """Amplify lean when many independent layers agree."""
+    conv = _ledger_convergence(ledger)
+    if conv >= 0.62:
+        boost = min(0.14, (conv - 0.55) * 0.35)
+        eff_job *= 1.0 + boost
+    elif conv <= 0.38:
+        boost = min(0.14, (0.45 - conv) * 0.35)
+        eff_biz *= 1.0 + boost
+    return eff_job, eff_biz
+
+
 def _apply_d10_readout(chart: CareerChart) -> Tuple[float, float, float, float]:
-    """D10 lean for alignment only — does not heavily rewrite D1 nature."""
+    """D10 lean — stronger readout when dashamsha available."""
     d10_job = d10_biz = d10_comm = 0.0
     if not chart.d10_planets:
         return 0.0, 0.0, 0.0, 0.0
@@ -482,22 +685,43 @@ def _apply_d10_readout(chart: CareerChart) -> Tuple[float, float, float, float]:
     for nm in chart.occupants(10, d10=True):
         mod = chart.dignity_score(nm, d10=True)
         if nm in JOB_PLANETS:
-            d10_job += 7 * mod
+            d10_job += 9 * mod
         if nm in BIZ_PLANETS and nm != "Mercury":
-            d10_biz += 7 * mod
+            d10_biz += 9 * mod
         if nm in ("Mercury", "Jupiter", "Venus"):
-            d10_comm += 6 * mod
+            d10_comm += 7 * mod
 
     for pl in chart.d10_planets:
         if pl.get("name") == chart.lord(10):
             h = int(pl.get("house") or 0)
             mod = chart.dignity_score(chart.lord(10), d10=True)
             if h in (6, 10):
-                d10_job += 6 * mod
-                d10_comm += 4 * mod
+                d10_job += 8 * mod
+                d10_comm += 5 * mod
             elif h in (7, 11):
+                d10_biz += 8 * mod
+            elif h in (1, 2):
                 d10_biz += 6 * mod
             break
+
+    amk_pl = None
+    try:
+        from karakas import compute_karakas
+        amk = (compute_karakas(chart.planets) or {}).get("AmK")
+        if amk:
+            amk_pl = chart._d10_by_name.get(amk)
+    except ImportError:
+        amk_pl = None
+    if amk_pl:
+        amk = amk_pl.get("name")
+        h = int(amk_pl.get("house") or 0)
+        mod = chart.dignity_score(amk, d10=True) if amk else 1.0
+        if h == 10:
+            if amk in JOB_PLANETS:
+                d10_job += 7 * mod
+            else:
+                d10_biz += 7 * mod
+
     return d10_job, d10_biz, d10_comm, d10_job + d10_biz + d10_comm
 
 
@@ -613,7 +837,34 @@ def _compute_directional_scores(ledger: ScoreLedger) -> Tuple[float, float, floa
     effective_job = d_job + d_comm * 0.54 + d_free * 0.38 + ledger.structure * 0.06 * mult
     effective_biz = d_biz + d_comm * 0.26 + d_free * 0.22 + ledger.independence * 0.08 * mult
 
+    effective_job, effective_biz = _apply_convergence_multiplier(effective_job, effective_biz, ledger)
+
     return effective_job, effective_biz, d_comm, d_free, exec_score
+
+
+def _blend_d10_pct(
+    job_pct: int,
+    align_state: str,
+    d10_job: float,
+    d10_biz: float,
+    convergence: float,
+) -> int:
+    """Blend D1 lean with D10 when dashamsha supports the read."""
+    total = d10_job + d10_biz
+    if total < 8:
+        return job_pct
+    d10_pct = int(round(d10_job * 100 / total))
+    if align_state == "aligned":
+        w_d10 = 0.24 if convergence >= 0.58 or convergence <= 0.42 else 0.18
+        blended = int(round((1.0 - w_d10) * job_pct + w_d10 * d10_pct))
+        return int(_clamp(blended, 12, 88))
+    if align_state == "mixed":
+        blended = int(round(0.9 * job_pct + 0.1 * d10_pct))
+        return int(_clamp(blended, 15, 85))
+    if align_state == "contradictory":
+        nudge = 2 if job_pct > 50 else -2
+        return int(_clamp(job_pct - nudge, 15, 85))
+    return job_pct
 
 
 def _apply_d10_nudge(
@@ -640,25 +891,36 @@ def _confidence(
     stability_penalty: float,
     d10_total: float,
     align_state: str,
+    convergence: float = 0.5,
+    d9_present: bool = False,
+    karakas_present: bool = False,
 ) -> Tuple[str, int]:
-    clarity = gap_pct * 2.2
+    clarity = gap_pct * 2.4
     if alignment == "aligned":
-        clarity += 18
+        clarity += 20
     elif alignment == "contradictory":
-        clarity -= 22
+        clarity -= 24
     elif alignment == "mixed":
-        clarity -= 6
-    clarity -= affliction * 0.28
-    clarity -= stability_penalty * 0.45
-    if d10_total > 5:
+        clarity -= 8
+    clarity -= affliction * 0.3
+    clarity -= stability_penalty * 0.5
+    if d10_total > 8:
+        clarity += 10
+    if d9_present:
+        clarity += 8
+    if karakas_present:
+        clarity += 10
+    if convergence >= 0.62 or convergence <= 0.38:
+        clarity += 14
+    elif convergence >= 0.56 or convergence <= 0.44:
         clarity += 6
     clarity = int(_clamp(clarity, 0, 100))
 
-    if clarity >= 72:
+    if clarity >= 78:
         return "High", clarity
-    if clarity >= 52:
+    if clarity >= 58:
         return "Medium-High", clarity
-    if clarity >= 32:
+    if clarity >= 36:
         return "Medium", clarity
     return "Low", clarity
 
@@ -852,13 +1114,18 @@ def compute_career_inclination(
         ledger = ScoreLedger()
 
         _apply_placement_layer(chart, ledger)
+        karakas = _apply_karaka_layer(chart, ledger)
+        _apply_artha_layer(chart, ledger)
+        _apply_parivartana_layer(chart, ledger)
         _apply_commercial_profession_layer(chart, ledger)
         _apply_execution_layer(chart, ledger)
         _apply_freelance_layer(chart, ledger)
         _apply_aspect_layer(chart, ledger)
         _apply_affliction_layer(chart, ledger)
+        _apply_d9_layer(chart, ledger, karakas)
 
         d10_job, d10_biz, d10_comm, d10_total = _apply_d10_readout(chart)
+        convergence = _ledger_convergence(ledger)
 
         eff_job, eff_biz, comm_raw, free_raw, exec_score = _compute_directional_scores(ledger)
         align_state = _d1_d10_alignment(
@@ -870,18 +1137,20 @@ def compute_career_inclination(
         job_pct = int(round(eff_job * 100 / total))
         business_pct = 100 - job_pct
 
-        job_pct = _apply_d10_nudge(job_pct, align_state, d10_job, d10_biz)
+        job_pct = _blend_d10_pct(job_pct, align_state, d10_job, d10_biz, convergence)
         business_pct = 100 - job_pct
 
         gap = abs(job_pct - 50)
-        if gap <= 2:
-            job_pct = 50
-            business_pct = 50
-
         confidence_label, confidence_score = _confidence(
             float(gap), align_state, ledger.affliction,
             ledger.stability_penalty, d10_total, align_state,
+            convergence=convergence,
+            d9_present=bool(chart.d9_planets),
+            karakas_present=bool(karakas.get("AmK")),
         )
+        if gap <= 1 and confidence_label == "Low":
+            job_pct = 50
+            business_pct = 50
         traits = _psychology_traits(chart)
         subtypes = _classify_subtypes(chart)
         struct_raw = ledger.structure
@@ -920,6 +1189,9 @@ def compute_career_inclination(
             "d1_d10_alignment": align_state,
             "affliction_load": round(ledger.affliction, 1),
             "stability_penalty": round(ledger.stability_penalty, 1),
+            "ledger_convergence": round(convergence, 3),
+            "atmakaraka": karakas.get("AK"),
+            "amatyakaraka": karakas.get("AmK"),
             "job_subtypes": subtypes.get("job_subtypes", []),
             "business_subtypes": subtypes.get("business_subtypes", []),
             "commercial_subtypes": subtypes.get("commercial_subtypes", []),

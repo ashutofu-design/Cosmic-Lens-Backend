@@ -6,23 +6,45 @@ import { Alert } from "react-native";
 
 import {
   CAREER_UNLOCK_PRICE_INR,
+  checkCareerAccess,
   createCareerUnlockOrder,
 } from "@/lib/careerBilling";
 
 type AuthUser = { id: number; api_key?: string | null };
 
-/** Life Map → Career: create Razorpay order → payment-webview (no skip). */
+/** Set false when Razorpay career unlock is live in production. */
+export const CAREER_CHECKOUT_CONFIG = {
+  bypassCheckoutForTesting: true,
+} as const;
+
+/** Life Map → Career: check access or open career directly (no Razorpay gate in dev). */
 export async function gateCareerLifeMapAccess(opts: {
   user: AuthUser | null | undefined;
 }): Promise<void> {
   if (!opts.user?.id || !opts.user.api_key) {
     Alert.alert(
       "Login required",
-      "Please sign in to unlock Career Analysis.",
+      "Please sign in to view Career Analysis.",
       [{ text: "OK" }],
     );
     return;
   }
+
+  if (CAREER_CHECKOUT_CONFIG.bypassCheckoutForTesting) {
+    router.push("/career" as const);
+    return;
+  }
+
+  try {
+    const access = await checkCareerAccess(opts.user);
+    if (access.entitled || access.payment_bypass || !access.payment_required) {
+      router.push("/career" as const);
+      return;
+    }
+  } catch {
+    // fall through to payment attempt
+  }
+
   await startCareerPayment(opts.user);
 }
 
@@ -77,6 +99,10 @@ export async function startCareerPayment(
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Network error";
+    if (msg.includes("razorpay_not_configured")) {
+      router.replace("/career" as const);
+      return;
+    }
     Alert.alert("Could not start payment", msg, [{ text: "OK" }]);
   }
 }

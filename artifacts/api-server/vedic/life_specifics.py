@@ -2771,18 +2771,69 @@ def compute_finance_specifics(
         return {"error": str(exc)}
 
 
-_CALM_FINANCE_HABITS = [
-    "Track monthly expenses — know where money goes",
-    "Save at least 10% before spending on wants",
-    "Avoid rushed big purchases this month",
-    "Review subscriptions and small leaks",
-]
-
-
 def _classify_wealth_category(composite: int) -> str:
     """middle_class → rich → ultra_rich → millionaire (birth chart score only)."""
     from vedic.wealth_finance_v1 import wealth_tier_from_score
     return wealth_tier_from_score(composite)
+
+
+def _derive_static_money_habits(
+    planets: List[dict],
+    asc_idx: int,
+    wealth_category: str,
+    pattern_signals: Dict[str, bool],
+) -> List[str]:
+    """2–3 human-sounding money habits from chart-matched templates (D1 only)."""
+    from vedic.money_habits_v1 import derive_money_habits
+    return derive_money_habits(planets, asc_idx, wealth_category, pattern_signals)
+
+
+def _finance_transit_nudge(transit_notes: Optional[List[str]]) -> int:
+    """Small ±5 nudge from live transit themes — applied to operational score only."""
+    blob = " ".join(str(n) for n in (transit_notes or [])).lower()
+    nudge = 0
+    if "wealth-building" in blob or "opportunity" in blob:
+        nudge += 3
+    if "sudden income" in blob or "unconventional gain" in blob:
+        nudge += 2
+    if "solid long-term" in blob:
+        nudge += 2
+    if "discipline on expenses" in blob or "extra discipline" in blob:
+        nudge -= 3
+    if "comfort spending" in blob or "luxury inflow" in blob:
+        nudge -= 2
+    return max(-5, min(5, nudge))
+
+
+def _derive_finance_trend(unified_score: int, birth_score: int) -> str:
+    """Gain/Stable/Loss from birth wealth vs current operational window."""
+    delta = unified_score - birth_score
+    if delta >= 4:
+        return "Gain"
+    if delta <= -4:
+        return "Loss"
+    if unified_score >= 68:
+        return "Gain"
+    if unified_score < 50:
+        return "Loss"
+    return "Stable"
+
+
+def _finance_trend_summary(trend: str) -> str:
+    if trend == "Gain":
+        return (
+            "Finance mein achhi energy hai. Income grow karne ke yog hain. "
+            "Sahi opportunity ka faayda uthayein."
+        )
+    if trend == "Loss":
+        return (
+            "Abhi expenses ya delay phase chal sakta hai. Naya investment soch-samajh ke karein, "
+            "savings ko priority dein."
+        )
+    return (
+        "Money flow steady hai. Bade risks abhi avoid karein, slow & disciplined approach se "
+        "wealth build hogi."
+    )
 
 
 def _pick_finance_focus_key(
@@ -2804,98 +2855,6 @@ def _pick_finance_focus_key(
     if trend == "Stable":
         return "steady"
     return "steady"
-
-
-def _derive_static_money_habits(
-    planets: List[dict],
-    asc_idx: int,
-    wealth_category: str,
-    pattern_signals: Dict[str, bool],
-) -> List[str]:
-    """Fixed money habits from birth-chart weaknesses only — no dasha, no transit, no trend."""
-    out: List[str] = []
-    sign_2 = SIGNS[(asc_idx + 1) % 12]
-    sign_11 = SIGNS[(asc_idx + 10) % 12]
-    lord_2 = SIGN_LORD[sign_2]
-    lord_11 = SIGN_LORD[sign_11]
-
-    def find_p(name: str) -> Optional[dict]:
-        return next((p for p in planets if p.get("name") == name), None)
-
-    l2 = find_p(lord_2)
-    if l2:
-        h2 = int(l2.get("house") or 0)
-        sg2 = str(l2.get("sign") or "")
-        if h2 in (6, 8, 12):
-            out.append(
-                "Savings can leak — 2nd lord in a drain house; track expenses and plug small outflows"
-            )
-        if lord_2 in DEBIL and sg2 == DEBIL[lord_2]:
-            out.append(
-                "Wealth needs patience — avoid get-rich-quick moves; steady income beats shortcuts"
-            )
-
-    l11 = find_p(lord_11)
-    if l11:
-        h11 = int(l11.get("house") or 0)
-        sg11 = str(l11.get("sign") or "")
-        if h11 in (6, 8, 12):
-            out.append(
-                "Gains may face blocks — don’t depend on one income stream; build a backup plan"
-            )
-        if lord_11 in DEBIL and sg11 == DEBIL[lord_11]:
-            out.append(
-                "Income rhythm can fluctuate — automate savings on good months"
-            )
-
-    for p in planets:
-        h = int(p.get("house") or 0)
-        nm = p.get("name") or ""
-        if h == 2 and nm == "Ketu":
-            out.append("Money can slip away quietly — review bank statements weekly for 30 days")
-        elif h == 2 and nm == "Saturn":
-            out.append("Wealth builds slowly — use fixed monthly SIP; avoid comparing with others")
-        elif h == 2 and nm in ("Rahu", "Mars"):
-            out.append("Impulsive spending risk — wait 48 hours before any large purchase")
-        elif h == 12 and nm in ("Saturn", "Rahu", "Ketu"):
-            out.append("Hidden expenses may hurt — cut unused subscriptions and idle memberships")
-        elif h == 8 and nm in ("Mars", "Rahu", "Saturn", "Ketu"):
-            out.append(
-                "Sudden money swings possible — keep 6 months expenses in a separate emergency fund"
-            )
-        elif h == 6 and nm in ("Saturn", "Rahu", "Mars"):
-            out.append("Work stress can trigger spending — set a simple monthly fun-money cap")
-
-    rahu = find_p("Rahu")
-    if rahu and int(rahu.get("house") or 0) in (5, 8):
-        out.append(
-            "Speculation tempts this chart — cap risky bets; never invest money you cannot afford to lose"
-        )
-
-    if pattern_signals.get("rahu_8") or pattern_signals.get("rahu_11"):
-        if not any("Speculation" in x for x in out):
-            out.append(
-                "Unconventional income needs discipline — save part of every windfall immediately"
-            )
-
-    if wealth_category == "middle_class":
-        out.append("Lifestyle creep is the main trap — raise savings % before upgrading spends")
-
-    seen: set = set()
-    unique: List[str] = []
-    for line in out:
-        if line not in seen:
-            seen.add(line)
-            unique.append(line)
-        if len(unique) >= 4:
-            break
-
-    if len(unique) < 2:
-        unique.extend([
-            "Track monthly expenses — know where money goes",
-            "Save at least 10% before spending on wants",
-        ])
-    return unique[:4]
 
 
 def _soften_finance_transit(line: str) -> str:
@@ -2924,16 +2883,19 @@ def _soften_finance_transit(line: str) -> str:
 
 
 def build_finance_basic_insights(
-    score: int,
-    trend: str,
-    summary: str,
     deep: Dict[str, Any],
     *,
     transit_notes: Optional[List[str]] = None,
     current_dasha: Optional[dict] = None,
 ) -> Dict[str, Any]:
-    """Calm finance dashboard — minimal fields, no Pro upsell or raw chart jargon."""
-    trend_n = (trend or "Stable").strip()
+    """Calm finance dashboard — score and trend from one Money Builder engine."""
+    karma = int(deep.get("wealth_karma_score") or deep.get("wealth_score") or 50)
+    operational = int(deep.get("wealth_operational_score") or karma)
+    nudge = _finance_transit_nudge(transit_notes)
+    unified_score = max(8, min(96, operational + nudge))
+    trend_n = _derive_finance_trend(unified_score, karma)
+    summary = _finance_trend_summary(trend_n)
+
     if trend_n == "Gain":
         phase_key = "growth"
     elif trend_n == "Loss":
@@ -2941,11 +2903,8 @@ def build_finance_basic_insights(
     else:
         phase_key = "steady"
 
-    # Wealth category: birth chart only (lords, houses, yogas) — no dasha, no transit.
-    karma = int(deep.get("wealth_karma_score") or deep.get("wealth_score") or 50)
     wealth_category = str(deep.get("wealth_category") or _classify_wealth_category(karma))
     composite = karma
-    operational = int(deep.get("wealth_operational_score") or score or karma)
 
     finance_focus_key = _pick_finance_focus_key(trend_n, deep, transit_notes)
     money_habits = list(deep.get("money_habits") or [])
@@ -2989,7 +2948,7 @@ def build_finance_basic_insights(
         wealth_finance["yog_metrics"] = ym
 
     return {
-        "score": max(0, min(100, operational)),
+        "score": max(0, min(100, unified_score)),
         "trend": trend_n,
         "summary": summary,
         "hook": (

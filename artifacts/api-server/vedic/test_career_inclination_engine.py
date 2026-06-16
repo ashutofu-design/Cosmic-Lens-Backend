@@ -11,14 +11,19 @@ def _planet(name: str, house: int, sign: str, **extra) -> dict:
 
 
 class TestCareerInclinationEngine(unittest.TestCase):
-  def _run(self, planets: list, asc: str = "Capricorn", d10: list | None = None) -> dict:
+  def _run(self, planets: list, asc: str = "Capricorn", d10: list | None = None, d9: list | None = None) -> dict:
     asc_idx = [
       "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
       "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
     ].index(asc)
     kundli = {"ascendant": asc, "planets": planets}
+    div: dict = {}
     if d10 is not None:
-      kundli["divisionalCharts"] = {"D10": {"planets": d10}}
+      div["D10"] = {"planets": d10, "ascendant": asc}
+    if d9 is not None:
+      div["D9"] = {"planets": d9, "ascendant": asc}
+    if div:
+      kundli["divisionalCharts"] = div
     return compute_career_inclination(planets, asc_idx, kundli)
 
   def test_deterministic_same_input(self):
@@ -137,6 +142,65 @@ class TestCareerInclinationEngine(unittest.TestCase):
       "Commercial Professional", "Advisory / Consulting",
       "Structured Professional", "Hybrid Career", "Authority-Oriented",
     ))
+
+  def test_amatyakaraka_saturn_boosts_job(self):
+    """AmK Saturn with karaka degrees → employment lean strengthens."""
+    planets = [
+      _planet("Sun", 10, "Libra", degree_in_sign=28),
+      _planet("Moon", 4, "Aries", degree_in_sign=22),
+      _planet("Mars", 3, "Pisces", degree_in_sign=18),
+      _planet("Mercury", 3, "Pisces", degree_in_sign=15),
+      _planet("Jupiter", 11, "Scorpio", degree_in_sign=12),
+      _planet("Venus", 2, "Aquarius", degree_in_sign=8),
+      _planet("Saturn", 6, "Gemini", degree_in_sign=25),
+      _planet("Rahu", 10, "Libra"),
+      _planet("Ketu", 4, "Aries"),
+    ]
+    r = self._run(planets)
+    self.assertEqual(r.get("amatyakaraka"), "Saturn")
+    self.assertGreaterEqual(r["job_pct"], 55)
+
+  def test_amatyakaraka_mercury_boosts_business(self):
+    planets = [
+      _planet("Sun", 5, "Leo", degree_in_sign=29),
+      _planet("Mercury", 7, "Gemini", degree_in_sign=27),
+      _planet("Jupiter", 9, "Sagittarius", degree_in_sign=12),
+      _planet("Moon", 4, "Cancer", degree_in_sign=8),
+      _planet("Mars", 8, "Aries", degree_in_sign=6),
+      _planet("Venus", 2, "Taurus", degree_in_sign=5),
+      _planet("Saturn", 3, "Capricorn", degree_in_sign=3),
+      _planet("Rahu", 7, "Gemini"),
+      _planet("Ketu", 1, "Sagittarius"),
+    ]
+    r = self._run(planets, "Sagittarius")
+    self.assertEqual(r.get("amatyakaraka"), "Mercury")
+    self.assertGreaterEqual(r["business_pct"], 52)
+
+  def test_d9_and_d10_raise_confidence_when_aligned(self):
+    asc = "Capricorn"
+    planets = [
+      _planet("Sun", 10, "Libra"),
+      _planet("Saturn", 6, "Gemini"),
+      _planet("Saturn", 10, "Libra"),
+      _planet("Mercury", 3, "Pisces"),
+      _planet("Moon", 4, "Aries"),
+      _planet("Mars", 8, "Leo"),
+      _planet("Jupiter", 11, "Scorpio"),
+      _planet("Venus", 2, "Aquarius"),
+      _planet("Rahu", 5, "Cancer"),
+      _planet("Ketu", 11, "Scorpio"),
+    ]
+    d10 = [
+      _planet("Sun", 10, "Libra"),
+      _planet("Saturn", 10, "Libra"),
+    ]
+    d9 = [
+      _planet("Sun", 10, "Libra"),
+      _planet("Saturn", 6, "Gemini"),
+    ]
+    r = self._run(planets, asc, d10=d10, d9=d9)
+    self.assertIn(r["confidence"], ("Medium", "Medium-High", "High"))
+    self.assertGreaterEqual(r["job_pct"], 50)
 
 
 if __name__ == "__main__":

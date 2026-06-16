@@ -43,6 +43,11 @@ interface BasicBlock {
   confidence?: string;
   career_mode?: string;
   reasoning_summary?: string[];
+  income_paths?: { label: string; strength: number }[];
+  strengths?: string[];
+  weakness?: string;
+  main_risk?: string;
+  why?: string[];
 }
 interface PlanetStrength {
   name: string; sign: string; house: number;
@@ -81,6 +86,31 @@ function confidenceColor(conf: string | undefined): string {
   return "rgba(255,255,255,0.45)";
 }
 
+function rankCareerOptions(
+  opts: { label: string; strength: number }[],
+  jobPct: number,
+  businessPct: number,
+): { label: string; strength: number }[] {
+  const biz = businessPct > jobPct;
+  const scoreBoost = (label: string) => {
+    const s = (label || "").toLowerCase();
+    if (biz) {
+      if (s.includes("business") || s.includes("trade") || s.includes("trading") || s.includes("marketing")) return 14;
+      if (s.includes("import") || s.includes("export") || s.includes("sales")) return 10;
+      if (s.includes("media") || s.includes("communication")) return 6;
+    } else {
+      if (s.includes("government") || s.includes("administration") || s.includes("public")) return 14;
+      if (s.includes("service sector") || s.includes("research") || s.includes("education")) return 10;
+      if (s.includes("engineering") || s.includes("manufacturing") || s.includes("corporate")) return 6;
+    }
+    return 0;
+  };
+  return [...(opts || [])]
+    .map(o => ({ ...o, _boost: scoreBoost(o.label) } as any))
+    .sort((a, b) => (b.strength + b._boost) - (a.strength + a._boost))
+    .map(({ _boost, ...rest }) => rest);
+}
+
 function PathMeter({
   jobPct,
   businessPct,
@@ -100,7 +130,6 @@ function PathMeter({
 }) {
   const job = Math.max(0, Math.min(100, jobPct));
   const biz = Math.max(0, Math.min(100, businessPct || 100 - job));
-  const dominant = job >= biz ? "job" : "business";
   const animated = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -112,7 +141,6 @@ function PathMeter({
   }, [job, biz]);
 
   const jobWidth = animated.interpolate({ inputRange: [0, 1], outputRange: ["0%", `${job}%`] });
-  const bizWidth = animated.interpolate({ inputRange: [0, 1], outputRange: ["0%", `${biz}%`] });
 
   return (
     <View style={[s.pathCard, { borderColor: `${accent}44` }]}>
@@ -123,29 +151,22 @@ function PathMeter({
       />
       <View style={s.pathHead}>
         <Text style={[s.pathTitle, { color: accent }]}>{labels.title}</Text>
-        {confidence ? (
-          <View style={[s.confPill, { borderColor: `${confidenceColor(confidence)}66` }]}>
-            <Text style={[s.confText, { color: confidenceColor(confidence) }]}>
-              {labels.confidence}: {confidence}
-            </Text>
-          </View>
-        ) : null}
       </View>
 
-      <View style={s.pathRow}>
-        <Text style={[s.pathLabel, dominant === "job" && s.pathLabelStrong]}>{labels.job}</Text>
-        <Text style={[s.pathPct, { color: "#60a5fa" }]}>{job}%</Text>
+      <View style={s.pathInlineRow}>
+        <Text style={s.pathInlineLeft} numberOfLines={1}>
+          <Text style={{ color: "#60a5fa", fontFamily: F.bold }}>{labels.job}</Text>
+          <Text style={s.pathInlinePct}> {job}%</Text>
+        </Text>
+        <Text style={s.pathInlineRight} numberOfLines={1}>
+          <Text style={{ color: accent, fontFamily: F.bold }}>{labels.business}</Text>
+          <Text style={s.pathInlinePct}> {biz}%</Text>
+        </Text>
       </View>
+
       <View style={s.pathTrack}>
         <Animated.View style={[s.pathFillJob, { width: jobWidth }]} />
-      </View>
-
-      <View style={[s.pathRow, { marginTop: 10 }]}>
-        <Text style={[s.pathLabel, dominant === "business" && s.pathLabelStrong]}>{labels.business}</Text>
-        <Text style={[s.pathPct, { color: accent }]}>{biz}%</Text>
-      </View>
-      <View style={s.pathTrack}>
-        <Animated.View style={[s.pathFillBiz, { width: bizWidth, backgroundColor: accent }]} />
+        <View style={[s.pathFillBizRest, { backgroundColor: accent }]} />
       </View>
 
       {mode ? (
@@ -154,9 +175,7 @@ function PathMeter({
         </Text>
       ) : null}
 
-      {verdict ? (
-        <Text style={s.pathVerdict}>{verdict}</Text>
-      ) : null}
+      {null}
     </View>
   );
 }
@@ -403,12 +422,48 @@ export default function CareerScreen() {
               />
             )}
 
-            {/* ─── SUMMARY ─── */}
-            <SectionCard icon="message-circle" title={t.cr_quickReading} accent={accent}>
-              <Text style={[s.summary, { color: "rgba(255,255,255,0.92)" }]}>
-                {data.basic.summary}
-              </Text>
-            </SectionCard>
+            {/* ─── WHY (simple reasons) ─── */}
+            {Array.isArray(data.basic.why) && data.basic.why.length > 0 && (
+              <SectionCard icon="info" title={t.cr_why} accent="#94a3b8">
+                {data.basic.why.slice(0, 3).map((line, i) => (
+                  <Bullet key={i} color="#94a3b8">{line}</Bullet>
+                ))}
+              </SectionCard>
+            )}
+
+            {/* ─── BEST SUITABLE CAREER OPTIONS ─── */}
+            {Array.isArray(data.basic.income_paths) && data.basic.income_paths.length > 0 && (
+              <SectionCard icon="award" title={t.cr_bestOptions} accent={accent}>
+                {rankCareerOptions(
+                  data.basic.income_paths,
+                  data.basic.job_pct ?? 50,
+                  data.basic.business_pct ?? 50,
+                ).slice(0, 4).map((p, i) => (
+                  <Bullet key={i} color={accent}>
+                    {p.label}
+                  </Bullet>
+                ))}
+              </SectionCard>
+            )}
+
+            {/* ─── Strengths / Weakness / Risk ─── */}
+            {(Array.isArray(data.basic.strengths) && data.basic.strengths.length > 0) && (
+              <SectionCard icon="zap" title={t.cr_topStrengths} accent="#22c55e">
+                {data.basic.strengths.slice(0, 2).map((sTxt, i) => (
+                  <Bullet key={i} color="#22c55e">{sTxt}</Bullet>
+                ))}
+              </SectionCard>
+            )}
+            {!!data.basic.weakness && (
+              <SectionCard icon="trending-down" title={t.cr_weakness} accent="#f59e0b">
+                <Bullet color="#f59e0b">{data.basic.weakness}</Bullet>
+              </SectionCard>
+            )}
+            {!!data.basic.main_risk && (
+              <SectionCard icon="alert-triangle" title={t.cr_risk} accent="#ef4444">
+                <Bullet color="#ef4444">{data.basic.main_risk}</Bullet>
+              </SectionCard>
+            )}
 
             {/* ─── PRO HOOK (visible to non-Pro users) ─── */}
             {!isProUser && (
@@ -725,8 +780,29 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.25)",
   },
   confText: { fontSize: 9.5, fontFamily: F.bold, letterSpacing: 0.3 },
-  pathRow: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+  pathInlineRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+  },
+  pathInlineLeft: {
+    flex: 1,
+    textAlign: "left",
+    fontSize: 12.5,
+    fontFamily: F.semi,
+    color: "rgba(255,255,255,0.85)",
+  },
+  pathInlineRight: {
+    flex: 1,
+    textAlign: "right",
+    fontSize: 12.5,
+    fontFamily: F.semi,
+    color: "rgba(255,255,255,0.85)",
+  },
+  pathInlinePct: {
+    fontSize: 13.5,
+    fontFamily: F.extra,
+    color: "#fff",
   },
   pathLabel: {
     color: "rgba(255,255,255,0.65)", fontSize: 12, fontFamily: F.semi,
@@ -734,6 +810,7 @@ const s = StyleSheet.create({
   pathLabelStrong: { color: "#fff", fontFamily: F.bold },
   pathPct: { fontSize: 15, fontFamily: F.extra },
   pathTrack: {
+    flexDirection: "row",
     height: 8, borderRadius: 4,
     backgroundColor: "rgba(255,255,255,0.08)",
     overflow: "hidden",
@@ -742,8 +819,8 @@ const s = StyleSheet.create({
     height: "100%", borderRadius: 4,
     backgroundColor: "#60a5fa",
   },
-  pathFillBiz: {
-    height: "100%", borderRadius: 4,
+  pathFillBizRest: {
+    flex: 1,
   },
   pathMode: {
     marginTop: 6, fontSize: 11, fontFamily: F.semi,

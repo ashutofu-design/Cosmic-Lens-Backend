@@ -1399,6 +1399,34 @@ def build_career_basic_insights(
     career_mode = str(incl.get("career_mode") or "Hybrid Career")
     reasoning_summary = incl.get("reasoning_summary") or []
 
+    # 3 simple "why" lines (no planet/house jargon for UI trust)
+    why: List[str] = []
+    exec_score = int(incl.get("execution_score") or 0)
+    comm_score = int(incl.get("commercial_score") or 0)
+    indep = int(incl.get("independence_score") or incl.get("independence") or 0)
+    struct = int(incl.get("structure_score") or incl.get("structure") or 0)
+    gap = abs(job_pct - business_pct)
+    if gap <= 6:
+        why.append("Your chart shows a balanced mix of job and business tendencies.")
+    elif job_pct > business_pct:
+        why.append("You perform best with structure, routines, and long-term stability.")
+    else:
+        why.append("You perform best with autonomy, client-facing work, and self-driven growth.")
+
+    if comm_score >= 12:
+        why.append("Strong professional skill/craft indicators: consulting, advisory, or specialist roles suit you.")
+    elif exec_score >= 28:
+        why.append("Good execution drive: you can build momentum with consistent weekly targets.")
+    else:
+        why.append("Progress improves most when you fix consistency and execution habits.")
+
+    if indep >= struct + 8:
+        why.append("Independence is a strong trait — avoid overly restrictive environments.")
+    elif struct >= indep + 8:
+        why.append("Structure is a strong trait — stable roles and clear systems fit you.")
+    else:
+        why.append("You can adapt — role-fit matters more than the label.")
+
     income_paths = [
         {"label": m["label"], "strength": m["score"]}
         for m in top_matches[:4]
@@ -1442,6 +1470,20 @@ def build_career_basic_insights(
     else:
         main_risk = "Spreading focus too thin during growth windows can slow results."
 
+    # One actionable weakness line (so user knows what to work on).
+    weakness = ""
+    exec_score = int(incl.get("execution_score") or 0)
+    comm_score = int(incl.get("commercial_score") or 0)
+    free_score = int(incl.get("freelance_score") or 0)
+    if exec_score and exec_score < 22:
+        weakness = "Execution consistency is the weak link — routines and weekly targets will help most."
+    elif trend == "Average":
+        weakness = "Indecision/overthinking can slow progress — commit to one track for 8–12 weeks."
+    elif comm_score and comm_score < 10 and free_score and free_score < 8:
+        weakness = "Income path clarity is low — build one strong skill-stack and a clear portfolio."
+    else:
+        weakness = "Focus leakage is the weak point — choose fewer goals and deepen them."
+
     ends = str(peak.get("ends") or cd.get("endDate") or "")
     year_hint = ""
     for token in ends.replace(",", " ").split():
@@ -1471,6 +1513,7 @@ def build_career_basic_insights(
         "confidence": confidence,
         "career_mode": career_mode,
         "reasoning_summary": reasoning_summary[:5],
+        "why": why[:3],
         "dominant_path": incl.get("dominant") or deep.get("path_dominant"),
         "secondary_path": incl.get("secondary_path"),
         "commercial_score": incl.get("commercial_score"),
@@ -1478,6 +1521,7 @@ def build_career_basic_insights(
         "freelance_score": incl.get("freelance_score"),
         "current_phase": current_phase,
         "strengths": strengths[:2],
+        "weakness": weakness,
         "main_risk": main_risk,
         "timing_insight": timing_insight,
     }

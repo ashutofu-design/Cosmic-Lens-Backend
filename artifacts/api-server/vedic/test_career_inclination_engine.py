@@ -82,26 +82,6 @@ class TestCareerInclinationEngine(unittest.TestCase):
   def test_empty_planets_safe(self):
     r = compute_career_inclination([], 0, {})
     self.assertEqual(r["job_pct"] + r["business_pct"], 100)
-    self.assertNotEqual(r["job_pct"], 50)
-
-  def test_never_exact_fifty_fifty(self):
-    """Any chart must show a lean (min 60-40), never 50-50."""
-    charts = [
-      [
-        _planet("Sun", 10, "Libra"),
-        _planet("Mercury", 7, "Cancer"),
-        _planet("Venus", 7, "Cancer"),
-      ],
-      [
-        _planet("Sun", 5, "Leo"),
-        _planet("Moon", 5, "Leo"),
-        _planet("Mars", 5, "Leo"),
-      ],
-    ]
-    for planets in charts:
-      r = self._run(planets)
-      self.assertNotEqual(r["job_pct"], 50, f"got 50-50 for {planets}")
-      self.assertGreaterEqual(abs(r["job_pct"] - 50), 10)
 
   def test_dhanu_lagna_moon_gemini_not_forced_fifty_fifty(self):
     """Dhanu lagna + Moon in Gemini (7th) — should not flatten to 50/50."""

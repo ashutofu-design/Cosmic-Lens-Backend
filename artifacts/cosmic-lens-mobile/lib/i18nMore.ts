@@ -687,6 +687,11 @@ export interface MoreT {
   cr_businessLabel:   string;
   cr_pathConfidence:  string;
   cr_pathMode:        string;
+  cr_bestOptions:     string;
+  cr_topStrengths:    string;
+  cr_weakness:        string;
+  cr_risk:            string;
+  cr_why:             string;
 
   // ── health (hl_*) ──
   hl_pageTitle:       string;
@@ -2465,10 +2470,15 @@ const EN: MoreT = {
   cr_struggle:        "Struggle Phases & Hidden Risks",
   cr_reasoning:       "Why This Reading",
   cr_pathTitle:       "Job vs Business",
-  cr_jobLabel:        "Job / Employment",
-  cr_businessLabel:   "Business / Self-employed",
+  cr_jobLabel:        "Job",
+  cr_businessLabel:   "Business",
   cr_pathConfidence:  "Chart confidence",
   cr_pathMode:        "Career mode",
+  cr_bestOptions:     "Best suitable career options",
+  cr_topStrengths:    "Top strengths",
+  cr_weakness:        "Weakness",
+  cr_risk:            "Risk",
+  cr_why:             "Why",
 
   hl_pageTitle:       "Health Analysis",
   hl_loginRequired:   "Please log in to view your health analysis.",
@@ -4136,10 +4146,15 @@ const HN: Partial<MoreT> = {
   cr_struggle:        "Sangharsh aur Chhupe Risks",
   cr_reasoning:       "Yeh Reading Kyun",
   cr_pathTitle:       "Job vs Business",
-  cr_jobLabel:        "Naukri / Job",
-  cr_businessLabel:   "Business / Apna Kaam",
+  cr_jobLabel:        "Job",
+  cr_businessLabel:   "Business",
   cr_pathConfidence:  "Chart confidence",
   cr_pathMode:        "Career mode",
+  cr_bestOptions:     "Best suitable career options",
+  cr_topStrengths:    "Top strengths",
+  cr_weakness:        "Weakness",
+  cr_risk:            "Risk",
+  cr_why:             "Why",
 
   hl_pageTitle:       "Health Analysis",
   hl_loginRequired:   "Health analysis dekhne ke liye login karein.",
@@ -5711,10 +5726,15 @@ const HI: Partial<MoreT> = {
   cr_struggle:        "संघर्ष और छिपे जोखिम",
   cr_reasoning:       "यह पठन क्यों",
   cr_pathTitle:       "नौकरी बनाम व्यवसाय",
-  cr_jobLabel:        "नौकरी / रोज़गार",
-  cr_businessLabel:   "व्यवसाय / स्वरोज़गार",
+  cr_jobLabel:        "नौकरी",
+  cr_businessLabel:   "व्यवसाय",
   cr_pathConfidence:  "कुंडली विश्वास",
   cr_pathMode:        "करियर प्रकार",
+  cr_bestOptions:     "सबसे उपयुक्त करियर विकल्प",
+  cr_topStrengths:    "टॉप ताकत",
+  cr_weakness:        "कमज़ोरी",
+  cr_risk:            "जोखिम",
+  cr_why:             "क्यों",
 
   hl_pageTitle:       "स्वास्थ्य विश्लेषण",
   hl_loginRequired:   "स्वास्थ्य विश्लेषण देखने के लिए लॉगिन करें।",

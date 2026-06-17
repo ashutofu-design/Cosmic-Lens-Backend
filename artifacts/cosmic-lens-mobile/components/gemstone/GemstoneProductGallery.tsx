@@ -29,9 +29,35 @@ const F = {
 type Props = {
   trustLabel?: string;
   reviewHint?: string;
+  product?: "pukhraj" | "emerald";
+  accent?: string;
 };
 
-export function GemstoneProductGallery({ trustLabel, reviewHint }: Props) {
+function EmeraldPlaceholder({ trustLabel, accent }: { trustLabel?: string; accent: string }) {
+  return (
+    <View style={[s.wrap, { height: HERO_H }]}>
+      <LinearGradient
+        colors={["#064e3b", "#047857", "#0f172a"]}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={s.placeholderInner}>
+        <Text style={{ fontSize: 56 }}>💚</Text>
+        <Text style={[s.placeholderTitle, { color: accent }]}>Zambian Emerald</Text>
+        <Text style={s.placeholderSub}>5 Ratti · Certified Natural</Text>
+      </View>
+      <View style={[s.certSeal, { borderColor: `${accent}66` }]} pointerEvents="none">
+        <Feather name="award" size={14} color={accent} />
+        <Text style={[s.certText, { color: accent }]}>{trustLabel ?? "CERTIFIED"}</Text>
+      </View>
+    </View>
+  );
+}
+
+export function GemstoneProductGallery({ trustLabel, reviewHint, product = "pukhraj", accent = ACCENT }: Props) {
+  if (product === "emerald") {
+    return <EmeraldPlaceholder trustLabel={trustLabel} accent={accent} />;
+  }
+
   const scrollRef = useRef<ScrollView>(null);
   const [active, setActive] = useState(0);
   const items = PUKHRAJ_GALLERY;
@@ -104,6 +130,9 @@ function Thumb({ item, on, onPress }: { item: GemstoneGalleryItem; on: boolean; 
 
 const s = StyleSheet.create({
   wrap: { marginBottom: 4 },
+  placeholderInner: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
+  placeholderTitle: { fontSize: 20, fontFamily: F.extra },
+  placeholderSub: { color: "rgba(255,255,255,0.65)", fontSize: 12, fontFamily: F.semi },
   heroImg: { width: "100%", height: "100%", backgroundColor: "#1a1528" },
   certSeal: {
     position: "absolute", top: 12, right: 14, flexDirection: "row", alignItems: "center", gap: 5,

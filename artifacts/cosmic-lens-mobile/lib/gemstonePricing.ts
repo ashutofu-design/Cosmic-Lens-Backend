@@ -138,6 +138,30 @@ export const CEYLON_PUKHRAJ_RATTI: GemstoneRattiPricing[] = [
 
 
 
+export const ZAMBIAN_EMERALD_RATTI: GemstoneRattiPricing[] = [
+
+  {
+
+    ratti: 5,
+
+    sku: "zambian_emerald_5ratti",
+
+    mrpInr: 65_000,
+
+    selfDiscountInr: 2_500,
+
+    referralBuyerDiscountInr: 1_500,
+
+    referrerRewardInr: 3_000,
+
+    inStock: true,
+
+  },
+
+];
+
+
+
 export const CEYLON_PUKHRAJ_PRODUCT = {
 
   catalogId: "yellowsapphire" as GemstoneCatalogKey,
@@ -147,6 +171,92 @@ export const CEYLON_PUKHRAJ_PRODUCT = {
   subtitle: "Natural Ceylon · 5–10 Ratti · Certified",
 
 };
+
+
+
+export const ZAMBIAN_EMERALD_PRODUCT = {
+
+  catalogId: "emerald" as GemstoneCatalogKey,
+
+  label: "Zambian Emerald",
+
+  subtitle: "Natural Zambia · 5 Ratti · Certified",
+
+};
+
+
+
+export type GemstoneProductId = "pukhraj" | "emerald";
+
+
+
+export type GemstoneProductLine = {
+
+  id: GemstoneProductId;
+
+  catalogId: GemstoneCatalogKey;
+
+  label: string;
+
+  subtitle: string;
+
+  accent: string;
+
+  rattiRows: GemstoneRattiPricing[];
+
+};
+
+
+
+export const GEMSTONE_PRODUCT_LINES: GemstoneProductLine[] = [
+
+  {
+
+    id: "pukhraj",
+
+    catalogId: CEYLON_PUKHRAJ_PRODUCT.catalogId,
+
+    label: CEYLON_PUKHRAJ_PRODUCT.label,
+
+    subtitle: CEYLON_PUKHRAJ_PRODUCT.subtitle,
+
+    accent: "#fbbf24",
+
+    rattiRows: CEYLON_PUKHRAJ_RATTI,
+
+  },
+
+  {
+
+    id: "emerald",
+
+    catalogId: ZAMBIAN_EMERALD_PRODUCT.catalogId,
+
+    label: ZAMBIAN_EMERALD_PRODUCT.label,
+
+    subtitle: ZAMBIAN_EMERALD_PRODUCT.subtitle,
+
+    accent: "#34d399",
+
+    rattiRows: ZAMBIAN_EMERALD_RATTI,
+
+  },
+
+];
+
+
+
+export const ALL_GEMSTONE_RATTI: GemstoneRattiPricing[] = GEMSTONE_PRODUCT_LINES.flatMap(p => p.rattiRows);
+
+
+
+function shopSubtitle(line: GemstoneProductLine, ratti: number): string {
+
+  const origin = line.id === "emerald" ? "Natural Zambia" : "Natural Ceylon";
+
+  return `${origin} · ${ratti} Ratti · Certified`;
+
+}
 
 
 
@@ -176,35 +286,55 @@ export type GemstoneShopSku = {
 
 
 
-export const GEMSTONE_SHOP: GemstoneShopSku[] = CEYLON_PUKHRAJ_RATTI.map(row => ({
+export const GEMSTONE_SHOP: GemstoneShopSku[] = GEMSTONE_PRODUCT_LINES.flatMap(line =>
 
-  sku: row.sku,
+  line.rattiRows.map(row => ({
 
-  catalogId: CEYLON_PUKHRAJ_PRODUCT.catalogId,
+    sku: row.sku,
 
-  label: CEYLON_PUKHRAJ_PRODUCT.label,
+    catalogId: line.catalogId,
 
-  subtitle: `Natural Ceylon · ${row.ratti} Ratti · Certified`,
+    label: line.label,
 
-  mrpInr: row.mrpInr,
+    subtitle: shopSubtitle(line, row.ratti),
 
-  inStock: row.inStock,
+    mrpInr: row.mrpInr,
 
-  ratti: row.ratti,
+    inStock: row.inStock,
 
-  selfDiscountInr: row.selfDiscountInr,
+    ratti: row.ratti,
 
-  referralBuyerDiscountInr: row.referralBuyerDiscountInr,
+    selfDiscountInr: row.selfDiscountInr,
 
-  referrerRewardInr: row.referrerRewardInr,
+    referralBuyerDiscountInr: row.referralBuyerDiscountInr,
 
-}));
+    referrerRewardInr: row.referrerRewardInr,
+
+  })),
+
+);
+
+
+
+export function getProductLineById(id: GemstoneProductId): GemstoneProductLine | undefined {
+
+  return GEMSTONE_PRODUCT_LINES.find(p => p.id === id);
+
+}
+
+
+
+export function getProductLineForSku(sku: string): GemstoneProductLine | undefined {
+
+  return GEMSTONE_PRODUCT_LINES.find(p => p.rattiRows.some(r => r.sku === sku));
+
+}
 
 
 
 export function getGemstoneSkuPricing(sku: string): GemstoneRattiPricing | undefined {
 
-  return CEYLON_PUKHRAJ_RATTI.find(r => r.sku === sku);
+  return ALL_GEMSTONE_RATTI.find(r => r.sku === sku);
 
 }
 
@@ -241,6 +371,30 @@ export function referralPriceFor(row: GemstoneRattiPricing): number {
 export function lowestSelfPriceInr(): number {
 
   return Math.min(...CEYLON_PUKHRAJ_RATTI.filter(r => r.inStock).map(selfPriceFor));
+
+}
+
+
+
+export function lowestSelfPriceForProduct(id: GemstoneProductId): number {
+
+  const rows = getProductLineById(id)?.rattiRows.filter(r => r.inStock) ?? [];
+
+  if (!rows.length) return 0;
+
+  return Math.min(...rows.map(selfPriceFor));
+
+}
+
+
+
+export function getDefaultSkuForProduct(id: GemstoneProductId): string {
+
+  if (id === "pukhraj") return getDefaultGemstoneSku();
+
+  const line = getProductLineById(id);
+
+  return line?.rattiRows.find(r => r.inStock)?.sku ?? "zambian_emerald_5ratti";
 
 }
 

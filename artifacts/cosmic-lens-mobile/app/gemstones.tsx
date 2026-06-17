@@ -28,9 +28,9 @@ import {
   type GemstoneCatalogEntry,
 } from "@/lib/gemstoneCatalog";
 import {
-  CEYLON_PUKHRAJ_PRODUCT,
   formatInr,
-  lowestSelfPriceInr,
+  GEMSTONE_PRODUCT_LINES,
+  lowestSelfPriceForProduct,
 } from "@/lib/gemstonePricing";
 import { DAY, GEMSTONE, PLANET, pick } from "@/lib/i18nVedic";
 
@@ -237,43 +237,53 @@ export default function GemstonesScreen() {
 
         <FadeInView delay={staggerDelay(1)}>
           <Text style={s.sectionLabel}>{t.gs_shopTitle}</Text>
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              router.push({
-                pathname: "/gemstone-buy",
-                params: {
-                  ...(params.ref ? { ref: String(params.ref) } : {}),
-                },
-              } as any);
-            }}
-            style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}
-          >
-            <View style={[s.shopCard, { borderColor: `${ACCENT}55` }]}>
-              <LinearGradient
-                colors={["rgba(251,191,36,0.16)", "transparent"]}
-                style={StyleSheet.absoluteFill}
-                pointerEvents="none"
-              />
-              <View style={s.shopRow}>
-                <View style={{ flex: 1, gap: 4 }}>
-                  <Text style={s.shopTitle}>{CEYLON_PUKHRAJ_PRODUCT.label}</Text>
-                  <Text style={s.shopSub}>{t.gs_shopSizes}</Text>
-                  <View style={s.shopPriceRow}>
-                    <Text style={s.shopMrp}>{t.gs_shopFrom}</Text>
-                    <Text style={s.shopPrice}>{formatInr(lowestSelfPriceInr())}</Text>
+          {GEMSTONE_PRODUCT_LINES.map((line, idx) => (
+            <Pressable
+              key={line.id}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                router.push({
+                  pathname: "/gemstone-buy",
+                  params: {
+                    product: line.id,
+                    ...(params.ref ? { ref: String(params.ref) } : {}),
+                  },
+                } as any);
+              }}
+              style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1, marginBottom: idx < GEMSTONE_PRODUCT_LINES.length - 1 ? 10 : 0 })}
+            >
+              <View style={[s.shopCard, { borderColor: `${line.accent}55` }]}>
+                <LinearGradient
+                  colors={[`${line.accent}28`, "transparent"]}
+                  style={StyleSheet.absoluteFill}
+                  pointerEvents="none"
+                />
+                <View style={s.shopRow}>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={s.shopTitle}>{line.label}</Text>
+                    <Text style={s.shopSub}>
+                      {line.id === "emerald" ? "5 Ratti · Certified Zambia" : t.gs_shopSizes}
+                    </Text>
+                    <View style={s.shopPriceRow}>
+                      <Text style={s.shopMrp}>{t.gs_shopFrom}</Text>
+                      <Text style={[s.shopPrice, { color: line.accent }]}>
+                        {formatInr(lowestSelfPriceForProduct(line.id))}
+                      </Text>
+                    </View>
+                    <Text style={s.shopOffer}>
+                      {line.id === "emerald"
+                        ? `5 ${t.gs_ratti} · ${t.gs_selfBuy} & ${t.gs_referralBuy}`
+                        : `5–10 ${t.gs_ratti} · ${t.gs_selfBuy} & ${t.gs_referralBuy}`}
+                    </Text>
                   </View>
-                  <Text style={s.shopOffer}>
-                    5–10 {t.gs_ratti} · {t.gs_selfBuy} & {t.gs_referralBuy}
-                  </Text>
-                </View>
-                <View style={s.shopCta}>
-                  <Text style={s.shopCtaText}>{t.gs_buyCta}</Text>
-                  <Feather name="chevron-right" size={14} color="#fff" />
+                  <View style={[s.shopCta, { borderColor: `${line.accent}66`, backgroundColor: `${line.accent}2e` }]}>
+                    <Text style={s.shopCtaText}>{t.gs_buyCta}</Text>
+                    <Feather name="chevron-right" size={14} color="#fff" />
+                  </View>
                 </View>
               </View>
-            </View>
-          </Pressable>
+            </Pressable>
+          ))}
         </FadeInView>
 
         {recommended ? (

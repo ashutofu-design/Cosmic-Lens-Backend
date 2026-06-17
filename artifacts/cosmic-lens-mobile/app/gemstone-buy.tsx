@@ -25,7 +25,6 @@ import { GemstoneProductGallery } from "@/components/gemstone/GemstoneProductGal
 import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
-import { openFounderWhatsApp } from "@/lib/founderWhatsApp";
 import {
   fetchGemstoneQuote,
   fetchMyReferralCode,
@@ -35,7 +34,11 @@ import {
 import { startGemstoneCheckout } from "@/lib/gemstoneCheckoutFlow";
 import { GEMSTONE_CATALOG } from "@/lib/gemstoneCatalog";
 import {
-  gemstoneWhatsAppMessage,
+  EMERALD_BENEFITS,
+  EMERALD_CARE_TIPS,
+  EMERALD_SPECS,
+  EMERALD_TRUST_BADGES,
+  EMERALD_WEAR_STEPS,
   PUKHRAJ_BENEFITS,
   PUKHRAJ_CARE_TIPS,
   PUKHRAJ_SPECS,
@@ -43,16 +46,17 @@ import {
   PUKHRAJ_WEAR_STEPS,
 } from "@/lib/gemstoneProductContent";
 import {
-  CEYLON_PUKHRAJ_PRODUCT,
-  CEYLON_PUKHRAJ_RATTI,
   formatInr,
-  getDefaultGemstoneSku,
+  getDefaultSkuForProduct,
   getGemstoneSkuPricing,
+  getProductLineById,
+  getProductLineForSku,
   isSelfReferral,
   normalizeReferralCode,
   referralCodeForUserId,
   referralPriceFor,
   selfPriceFor,
+  type GemstoneProductId,
 } from "@/lib/gemstonePricing";
 import { GEMSTONE, pick } from "@/lib/i18nVedic";
 
@@ -63,26 +67,26 @@ const F = {
   extra: "Nunito_800ExtraBold",
 } as const;
 
-const ACCENT = "#fbbf24";
-
 function Collapsible({
   title,
   icon,
   open,
   onToggle,
   children,
+  accentColor = "#fbbf24",
 }: {
   title: string;
   icon: keyof typeof Feather.glyphMap;
   open: boolean;
   onToggle: () => void;
   children: React.ReactNode;
+  accentColor?: string;
 }) {
   return (
     <View style={s.card}>
       <Pressable onPress={onToggle} style={s.collapseHead}>
         <View style={s.collapseTitleRow}>
-          <Feather name={icon} size={15} color={ACCENT} />
+          <Feather name={icon} size={15} color={accentColor} />
           <Text style={s.collapseTitle}>{title}</Text>
         </View>
         <Feather name={open ? "chevron-up" : "chevron-down"} size={18} color="rgba(255,255,255,0.45)" />
@@ -97,15 +101,27 @@ export default function GemstoneBuyScreen() {
   const t = useT();
   const { user } = useUser();
   const vlang = t.vlang;
-  const params = useLocalSearchParams<{ sku?: string; ref?: string; ratti?: string }>();
+  const params = useLocalSearchParams<{ sku?: string; ref?: string; ratti?: string; product?: string }>();
+  const productId: GemstoneProductId = params.product === "emerald" ? "emerald" : "pukhraj";
+  const productLine = getProductLineById(productId)!;
+  const accent = productLine.accent;
+  const rattiRows = productLine.rattiRows;
+  const trustBadges = productId === "emerald" ? EMERALD_TRUST_BADGES : PUKHRAJ_TRUST_BADGES;
+  const specs = productId === "emerald" ? EMERALD_SPECS : PUKHRAJ_SPECS;
+  const benefits = productId === "emerald" ? EMERALD_BENEFITS : PUKHRAJ_BENEFITS;
+  const wearSteps = productId === "emerald" ? EMERALD_WEAR_STEPS : PUKHRAJ_WEAR_STEPS;
+  const careTips = productId === "emerald" ? EMERALD_CARE_TIPS : PUKHRAJ_CARE_TIPS;
+  const benefitTag = productId === "emerald" ? "Speech, Business & Budh Blessings" : t.gs_benefitTag;
+
   const initialSku = (params.sku as string)
     || (params.ratti
-      ? CEYLON_PUKHRAJ_RATTI.find(r => String(r.ratti) === String(params.ratti))?.sku
+      ? rattiRows.find(r => String(r.ratti) === String(params.ratti))?.sku
       : undefined)
-    || getDefaultGemstoneSku();
+    || getDefaultSkuForProduct(productId);
   const [selectedSku, setSelectedSku] = useState(initialSku);
-  const pricing = getGemstoneSkuPricing(selectedSku) ?? CEYLON_PUKHRAJ_RATTI[0];
-  const catalog = GEMSTONE_CATALOG.find(g => g.id === CEYLON_PUKHRAJ_PRODUCT.catalogId);
+  const pricing = getGemstoneSkuPricing(selectedSku) ?? rattiRows[0];
+  const activeLine = getProductLineForSku(selectedSku) ?? productLine;
+  const catalog = GEMSTONE_CATALOG.find(g => g.id === activeLine.catalogId);
 
   const [referralInput, setReferralInput] = useState((params.ref as string) || "");
   const [useReferral, setUseReferral] = useState(!!params.ref);
@@ -120,7 +136,7 @@ export default function GemstoneBuyScreen() {
   const [openCare, setOpenCare] = useState(false);
 
   const headerTopPad = insets.top + 8;
-  const gemName = catalog ? pick(vlang, GEMSTONE[catalog.gemstoneKey]) : CEYLON_PUKHRAJ_PRODUCT.label;
+  const gemName = catalog ? pick(vlang, GEMSTONE[catalog.gemstoneKey]) : activeLine.label;
 
   const loadQuote = useCallback(async () => {
     if (!user?.id || !user.api_key) {
@@ -185,7 +201,7 @@ export default function GemstoneBuyScreen() {
         user,
         sku: selectedSku,
         referralCode: useReferral ? normalizeReferralCode(referralInput) : undefined,
-        label: `${CEYLON_PUKHRAJ_PRODUCT.label} — ${pricing.ratti} ${t.gs_ratti}`,
+        label: `${activeLine.label} — ${pricing.ratti} ${t.gs_ratti}`,
       });
     } finally {
       setPaying(false);
@@ -195,7 +211,7 @@ export default function GemstoneBuyScreen() {
   async function shareReferral() {
     const code = referralInfo?.referral_code || (user?.id ? referralCodeForUserId(user.id) : "");
     const msg = referralInfo?.share_message
-      || `Use code ${code} on Cosmic Lens Ceylon Pukhraj — referral discount for you, reward for me after delivery.`;
+      || `Use code ${code} on Cosmic Lens gemstones — referral discount for you, reward for me after delivery.`;
     try {
       await Share.share({ message: msg });
     } catch {
@@ -206,7 +222,7 @@ export default function GemstoneBuyScreen() {
 
   return (
     <CosmicBg>
-      <View style={[s.topBar, { paddingTop: headerTopPad, borderBottomColor: `${ACCENT}22` }]}>
+      <View style={[s.topBar, { paddingTop: headerTopPad, borderBottomColor: `${accent}22` }]}>
         {Platform.OS === "ios" ? (
           <BlurView intensity={48} tint="dark" style={StyleSheet.absoluteFill} />
         ) : (
@@ -229,25 +245,30 @@ export default function GemstoneBuyScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <FadeInView delay={staggerDelay(0)}>
-          <GemstoneProductGallery trustLabel={t.gs_certified} reviewHint="Verified buyers" />
+          <GemstoneProductGallery
+            product={productId}
+            accent={accent}
+            trustLabel={t.gs_certified}
+            reviewHint={productId === "pukhraj" ? "Verified buyers" : undefined}
+          />
         </FadeInView>
 
         <View style={s.content}>
           <FadeInView delay={staggerDelay(1)}>
             <View style={s.titleBlock}>
               <Text style={s.productTitle}>{gemName}</Text>
-              <Text style={s.productSub}>{CEYLON_PUKHRAJ_PRODUCT.label}</Text>
-              <View style={s.benefitPill}>
-                <Text style={s.benefitPillText}>{t.gs_benefitTag}</Text>
+              <Text style={s.productSub}>{activeLine.label}</Text>
+              <View style={[s.benefitPill, { backgroundColor: `${accent}1f`, borderColor: `${accent}59` }]}>
+                <Text style={[s.benefitPillText, { color: accent }]}>{benefitTag}</Text>
               </View>
             </View>
           </FadeInView>
 
           <FadeInView delay={staggerDelay(2)}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.trustRow}>
-              {PUKHRAJ_TRUST_BADGES.map(b => (
+              {trustBadges.map(b => (
                 <View key={b.label} style={s.trustChip}>
-                  <Feather name={b.icon} size={12} color={ACCENT} />
+                  <Feather name={b.icon} size={12} color={accent} />
                   <Text style={s.trustChipText}>{b.label}</Text>
                 </View>
               ))}
@@ -256,12 +277,12 @@ export default function GemstoneBuyScreen() {
           </FadeInView>
 
           <FadeInView delay={staggerDelay(3)}>
-            <View style={[s.priceCard, { borderColor: `${ACCENT}44` }]}>
-              <LinearGradient colors={[`${ACCENT}18`, "transparent"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+            <View style={[s.priceCard, { borderColor: `${accent}44` }]}>
+              <LinearGradient colors={[`${accent}18`, "transparent"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
               <View style={s.priceTop}>
                 <View>
                   <Text style={s.mrpStrike}>{formatInr(displayQuote.mrp_inr)}</Text>
-                  <Text style={s.payPrice}>{formatInr(displayQuote.amount_inr)}</Text>
+                  <Text style={[s.payPrice, { color: accent }]}>{formatInr(displayQuote.amount_inr)}</Text>
                 </View>
                 <View style={s.offBadge}>
                   <Text style={s.offBadgeText}>{savePct}% OFF</Text>
@@ -277,7 +298,7 @@ export default function GemstoneBuyScreen() {
             <View style={[s.card, s.rattiCard]}>
               <Text style={s.rattiLabel}>{t.gs_selectRatti}</Text>
               <View style={s.rattiRow}>
-                {CEYLON_PUKHRAJ_RATTI.map(row => {
+                {rattiRows.map(row => {
                   const on = row.sku === selectedSku;
                   return (
                     <Pressable
@@ -290,13 +311,13 @@ export default function GemstoneBuyScreen() {
                         setQuote(null);
                       }}
                       style={({ pressed }) => [
-                        s.rattiChip, on && s.rattiChipOn, !row.inStock && s.rattiChipOff,
+                        s.rattiChip, on && [s.rattiChipOn, { borderColor: `${accent}88`, backgroundColor: `${accent}24` }], !row.inStock && s.rattiChipOff,
                         pressed && { opacity: 0.85 },
                       ]}
                     >
-                      <Text style={[s.rattiChipText, on && s.rattiChipTextOn]}>
+                      <Text style={[s.rattiChipText, on && { color: accent }]}>
                         {row.ratti}
-                        <Text style={[s.rattiChipSuffix, on && s.rattiChipSuffixOn]}>R</Text>
+                        <Text style={[s.rattiChipSuffix, on && { color: `${accent}b3` }]}>R</Text>
                       </Text>
                     </Pressable>
                   );
@@ -305,32 +326,14 @@ export default function GemstoneBuyScreen() {
             </View>
           </FadeInView>
 
-          <FadeInView delay={staggerDelay(5)}>
-            <Pressable
-              onPress={() => void openFounderWhatsApp(gemstoneWhatsAppMessage(pricing.ratti))}
-              style={({ pressed }) => [s.waCard, pressed && { opacity: 0.9 }]}
-            >
-              <View style={s.waIcon}>
-                <Feather name="video" size={18} color="#22c55e" />
-              </View>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={s.waTitle}>{t.gs_whatsappPhotos}</Text>
-                <Text style={s.waSub}>See the exact stone before payment</Text>
-              </View>
-              <View style={s.waBtn}>
-                <Text style={s.waBtnText}>{t.gs_whatsappCta}</Text>
-              </View>
-            </Pressable>
-          </FadeInView>
-
           <FadeInView delay={staggerDelay(6)}>
             <View style={s.card}>
               <Text style={s.cardLabel}>{t.gs_offerSelf}</Text>
               <Pressable
                 onPress={() => { setUseReferral(false); Haptics.selectionAsync(); }}
-                style={[s.optionRow, !useReferral && s.optionRowOn]}
+                style={[s.optionRow, !useReferral && [s.optionRowOn, { borderColor: `${accent}55`, backgroundColor: `${accent}0f` }]]}
               >
-                <Feather name={!useReferral ? "check-circle" : "circle"} size={18} color={!useReferral ? ACCENT : "#64748b"} />
+                <Feather name={!useReferral ? "check-circle" : "circle"} size={18} color={!useReferral ? accent : "#64748b"} />
                 <View style={{ flex: 1 }}>
                   <Text style={s.optionTitle}>{t.gs_selfBuy}</Text>
                   <Text style={s.optionSub}>{formatInr(pricing.selfDiscountInr)} {t.gs_flatOff}</Text>
@@ -398,7 +401,7 @@ export default function GemstoneBuyScreen() {
                   </Pressable>
                 </View>
                 <Text style={s.hintText}>
-                  {t.gs_referralEarn} up to {formatInr(Math.max(...CEYLON_PUKHRAJ_RATTI.map(r => r.referrerRewardInr)))}{" "}
+                  {t.gs_referralEarn} up to {formatInr(Math.max(...rattiRows.map(r => r.referrerRewardInr)))}{" "}
                   {t.gs_afterDelivery}
                 </Text>
               </View>
@@ -411,8 +414,9 @@ export default function GemstoneBuyScreen() {
               icon="settings"
               open={openSpecs}
               onToggle={() => setOpenSpecs(v => !v)}
+              accentColor={accent}
             >
-              {PUKHRAJ_SPECS.map(row => (
+              {specs.map(row => (
                 <View key={row.label} style={s.specRow}>
                   <Text style={s.specLabel}>{row.label}</Text>
                   <Text style={s.specVal}>{row.value}</Text>
@@ -427,10 +431,11 @@ export default function GemstoneBuyScreen() {
               icon="star"
               open={openWhy}
               onToggle={() => setOpenWhy(v => !v)}
+              accentColor={accent}
             >
-              {PUKHRAJ_BENEFITS.map(b => (
+              {benefits.map(b => (
                 <View key={b} style={s.bulletRow}>
-                  <Feather name="check" size={13} color={ACCENT} />
+                  <Feather name="check" size={13} color={accent} />
                   <Text style={s.bulletText}>{b}</Text>
                 </View>
               ))}
@@ -443,12 +448,13 @@ export default function GemstoneBuyScreen() {
               icon="help-circle"
               open={openWear}
               onToggle={() => setOpenWear(v => !v)}
+              accentColor={accent}
             >
               <View style={s.grid2}>
-                {PUKHRAJ_WEAR_STEPS.map(step => (
+                {wearSteps.map(step => (
                   <View key={step.title} style={s.gridCard}>
-                    <View style={s.gridIcon}>
-                      <Feather name={step.icon} size={16} color={ACCENT} />
+                    <View style={[s.gridIcon, { backgroundColor: `${accent}1a` }]}>
+                      <Feather name={step.icon} size={16} color={accent} />
                     </View>
                     <Text style={s.gridText}>{step.title}</Text>
                   </View>
@@ -463,12 +469,13 @@ export default function GemstoneBuyScreen() {
               icon="heart"
               open={openCare}
               onToggle={() => setOpenCare(v => !v)}
+              accentColor={accent}
             >
               <View style={s.grid2}>
-                {PUKHRAJ_CARE_TIPS.map(tip => (
+                {careTips.map(tip => (
                   <View key={tip.text} style={s.gridCard}>
-                    <View style={s.gridIcon}>
-                      <Feather name={tip.icon} size={16} color={ACCENT} />
+                    <View style={[s.gridIcon, { backgroundColor: `${accent}1a` }]}>
+                      <Feather name={tip.icon} size={16} color={accent} />
                     </View>
                     <Text style={s.gridText}>{tip.text}</Text>
                   </View>
@@ -478,8 +485,8 @@ export default function GemstoneBuyScreen() {
           </FadeInView>
 
           <FadeInView delay={staggerDelay(13)}>
-            <View style={s.deliveryCard}>
-              <Feather name="package" size={16} color={ACCENT} />
+            <View style={[s.deliveryCard, { backgroundColor: `${accent}0f`, borderColor: `${accent}33` }]}>
+              <Feather name="package" size={16} color={accent} />
               <Text style={s.deliveryText}>{t.gs_deliveryNote}</Text>
             </View>
             <Text style={s.disclaimer}>{t.gs_disclaimer}</Text>
@@ -497,7 +504,7 @@ export default function GemstoneBuyScreen() {
           onPress={() => void handleBuy()}
           style={({ pressed }) => [s.footerBtnWrap, { opacity: pressed ? 0.88 : 1, flex: 1 }]}
         >
-          <LinearGradient colors={["#d97706", "#fbbf24"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.buyBtn}>
+          <LinearGradient colors={[productId === "emerald" ? "#059669" : "#d97706", accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.buyBtn}>
             {paying || loadingQuote ? (
               <ActivityIndicator color="#fff" />
             ) : (
@@ -535,7 +542,7 @@ const s = StyleSheet.create({
     alignSelf: "flex-start", marginTop: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
     backgroundColor: "rgba(251,191,36,0.12)", borderWidth: 1, borderColor: "rgba(251,191,36,0.35)",
   },
-  benefitPillText: { color: ACCENT, fontSize: 10.5, fontFamily: F.bold },
+  benefitPillText: { fontSize: 10.5, fontFamily: F.bold },
   trustRow: { gap: 8, paddingVertical: 4 },
   trustChip: {
     flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 7,
@@ -551,7 +558,7 @@ const s = StyleSheet.create({
   mrpStrike: {
     color: "rgba(255,255,255,0.4)", fontSize: 13, fontFamily: F.semi, textDecorationLine: "line-through",
   },
-  payPrice: { color: ACCENT, fontSize: 30, fontFamily: F.extra, letterSpacing: -0.5 },
+  payPrice: { fontSize: 30, fontFamily: F.extra, letterSpacing: -0.5 },
   offBadge: {
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
     backgroundColor: "rgba(34,197,94,0.15)", borderWidth: 1, borderColor: "rgba(34,197,94,0.35)",
@@ -569,26 +576,12 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", alignItems: "center",
     backgroundColor: "rgba(255,255,255,0.03)",
   },
-  rattiChipOn: { borderColor: `${ACCENT}88`, backgroundColor: "rgba(251,191,36,0.14)" },
+  rattiChipOn: { borderColor: "rgba(251,191,36,0.53)", backgroundColor: "rgba(251,191,36,0.14)" },
   rattiChipOff: { opacity: 0.35 },
   rattiChipText: { color: "rgba(255,255,255,0.65)", fontSize: 13, fontFamily: F.bold },
-  rattiChipTextOn: { color: ACCENT },
+  rattiChipTextOn: { color: "#fbbf24" },
   rattiChipSuffix: { fontSize: 9, fontFamily: F.semi, color: "rgba(255,255,255,0.35)" },
   rattiChipSuffixOn: { color: "rgba(251,191,36,0.7)" },
-  waCard: {
-    flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 14,
-    backgroundColor: "rgba(34,197,94,0.08)", borderWidth: 1, borderColor: "rgba(34,197,94,0.28)",
-  },
-  waIcon: {
-    width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center",
-    backgroundColor: "rgba(34,197,94,0.12)",
-  },
-  waTitle: { color: "#fff", fontSize: 12, fontFamily: F.bold },
-  waSub: { color: "rgba(255,255,255,0.5)", fontSize: 10, fontFamily: F.regular },
-  waBtn: {
-    paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, backgroundColor: "#16a34a",
-  },
-  waBtnText: { color: "#fff", fontSize: 10, fontFamily: F.bold },
   card: {
     borderRadius: 16, borderWidth: 1, borderColor: "rgba(251,191,36,0.15)",
     backgroundColor: "rgba(10,12,22,0.78)", padding: 14, gap: 10,
@@ -601,7 +594,7 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 10,
     padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
   },
-  optionRowOn: { borderColor: `${ACCENT}55`, backgroundColor: "rgba(251,191,36,0.06)" },
+  optionRowOn: { borderColor: "rgba(251,191,36,0.33)", backgroundColor: "rgba(251,191,36,0.06)" },
   optionRowOnPurple: { borderColor: "#a78bfa55", backgroundColor: "rgba(167,139,250,0.06)" },
   optionTitle: { color: "#fff", fontSize: 13, fontFamily: F.bold },
   optionSub: { color: "rgba(255,255,255,0.55)", fontSize: 11, fontFamily: F.semi, marginTop: 2 },

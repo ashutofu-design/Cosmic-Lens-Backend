@@ -4649,79 +4649,95 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     if _is_mr_static:
         static_dasha_hint = False
     dcr_love_meta = None
-    if is_timing:
-        chart_text = _raw_compact_chart(
-            kundli, include_dasha=True, static_dasha_hint=False,
-        )
-        try:
-            from reply_cosmo.engine_locked_to_llm.locked_facts import (
-                build_locked_facts as _build_lf_rp,
-            )
-
-            _lf_rp = _build_lf_rp(kundli, birth) or ""
-            if _lf_rp:
-                _topic_rp = ""
-                try:
-                    _tr = _detect_topic(question)
-                    _topic_rp = (_tr or {}).get("topic_id") or ""
-                except Exception:
-                    pass
-                _lf_slim = _slim_locked_facts_for_narrative(_lf_rp, topic=_topic_rp)
-                if _lf_slim:
-                    chart_text = chart_text + "\n\n=== TIMING ENGINE (LOCKED) ===\n" + _lf_slim
-        except Exception as _lfe:
-            print(f"[raw_passthrough] timing locked_facts skipped: {_lfe}", flush=True)
-    elif _is_mr_static:
-        try:
-            from ask_marriage_relationship_slice import (  # type: ignore
-                build_marriage_relationship_slice,
-            )
-            chart_text, dcr_love_meta = build_marriage_relationship_slice(
-                kundli if isinstance(kundli, dict) else {}, question,
-            )
-            print(
-                f"[raw_passthrough] MR_SLICE "
-                f"flags={len((dcr_love_meta or {}).get('flags') or [])} "
-                f"chart_chars={len(chart_text)}",
-                flush=True,
-            )
-        except Exception as _mr_slice_exc:
-            print(f"[raw_passthrough] MR_SLICE skipped: {_mr_slice_exc}", flush=True)
+    _chart_slice_type = "full_compact"
+    try:
+        if is_timing:
             chart_text = _raw_compact_chart(
-                kundli, include_dasha=False, static_dasha_hint=False,
+                kundli, include_dasha=True, static_dasha_hint=False,
             )
-            dcr_love_meta = None
-    else:
-        # Narrative: D1 + D9; inject current dasha when phase-relevant.
-        chart_text = _raw_compact_chart(
-            kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
-        )
-    if not is_timing and not _is_mr_static:
-        try:
-            from dcr_love import build_dcr_love_context  # type: ignore
+            try:
+                from reply_cosmo.engine_locked_to_llm.locked_facts import (
+                    build_locked_facts as _build_lf_rp,
+                )
 
-            _dcr_love_block, dcr_love_meta = build_dcr_love_context(
-                kundli if isinstance(kundli, dict) else {}, question,
-            )
-            if _dcr_love_block:
-                chart_text = chart_text + "\n\n" + _dcr_love_block
+                _lf_rp = _build_lf_rp(kundli, birth) or ""
+                if _lf_rp:
+                    _topic_rp = ""
+                    try:
+                        _tr = _detect_topic(question)
+                        _topic_rp = (_tr or {}).get("topic_id") or ""
+                    except Exception:
+                        pass
+                    _lf_slim = _slim_locked_facts_for_narrative(_lf_rp, topic=_topic_rp)
+                    if _lf_slim:
+                        chart_text = chart_text + "\n\n=== TIMING ENGINE (LOCKED) ===\n" + _lf_slim
+            except Exception as _lfe:
+                print(f"[raw_passthrough] timing locked_facts skipped: {_lfe}", flush=True)
+        elif _is_mr_static:
+            try:
+                from ask_marriage_relationship_slice import (  # type: ignore
+                    build_marriage_relationship_slice,
+                )
+                chart_text, dcr_love_meta = build_marriage_relationship_slice(
+                    kundli if isinstance(kundli, dict) else {}, question,
+                )
                 print(
-                    f"[raw_passthrough] DCR_LOVE slice "
-                    f"buckets={dcr_love_meta.get('buckets')} "
+                    f"[raw_passthrough] MR_SLICE "
+                    f"flags={len((dcr_love_meta or {}).get('flags') or [])} "
                     f"chart_chars={len(chart_text)}",
                     flush=True,
                 )
-        except Exception as _dcr_love_exc:
-            print(f"[raw_passthrough] DCR_LOVE skipped: {_dcr_love_exc}", flush=True)
+            except Exception as _mr_slice_exc:
+                print(f"[raw_passthrough] MR_SLICE skipped: {_mr_slice_exc}", flush=True)
+                chart_text = _raw_compact_chart(
+                    kundli, include_dasha=False, static_dasha_hint=False,
+                )
+                dcr_love_meta = None
+                _is_mr_static = False
+        else:
+            chart_text = _raw_compact_chart(
+                kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
+            )
+        if not is_timing and not _is_mr_static:
+            try:
+                from dcr_love import build_dcr_love_context  # type: ignore
 
-    if _is_mr_static:
-        _chart_slice_type = "marriage_relationship"
-    elif is_timing:
-        _chart_slice_type = "timing_full_chart"
-    elif dcr_love_meta:
-        _chart_slice_type = "full_compact+dcr_love"
-    else:
-        _chart_slice_type = "full_compact"
+                _dcr_love_block, dcr_love_meta = build_dcr_love_context(
+                    kundli if isinstance(kundli, dict) else {}, question,
+                )
+                if _dcr_love_block:
+                    chart_text = chart_text + "\n\n" + _dcr_love_block
+                    print(
+                        f"[raw_passthrough] DCR_LOVE slice "
+                        f"buckets={dcr_love_meta.get('buckets')} "
+                        f"chart_chars={len(chart_text)}",
+                        flush=True,
+                    )
+            except Exception as _dcr_love_exc:
+                print(f"[raw_passthrough] DCR_LOVE skipped: {_dcr_love_exc}", flush=True)
+
+        if _is_mr_static:
+            _chart_slice_type = "marriage_relationship"
+        elif is_timing:
+            _chart_slice_type = "timing_full_chart"
+        elif dcr_love_meta:
+            _chart_slice_type = "full_compact+dcr_love"
+        else:
+            _chart_slice_type = "full_compact"
+    except Exception as _chart_build_exc:
+        print(
+            f"[raw_passthrough] chart build failed, compact fallback: "
+            f"{str(_chart_build_exc)[:240]}",
+            flush=True,
+        )
+        chart_text = _raw_compact_chart(
+            kundli,
+            include_dasha=bool(is_timing),
+            static_dasha_hint=False,
+        )
+        dcr_love_meta = None
+        _is_mr_static = False
+        _chart_slice_type = "full_compact_fallback"
 
     # ── Specific-partner synastry (Phase 2.5.11.6) ─────────────────────
     # When the Q references an EXISTING partner ("mere bf se", "wife
@@ -4961,18 +4977,33 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     eff_lang = _resolve_response_lang(question, lang, None)
     user_payload = _strict_lang_block(eff_lang) + question
 
-    system_prompt = _build_universal_ask_system_prompt(
-        chart_text=chart_text,
-        qtype=qtype,
-        topic_hint=_topic_hint,
-        wants_explain=wants_explain,
-        is_timing=is_timing,
-        is_decision=is_decision,
-        is_finance=is_finance,
-        reply_lang=eff_lang,
-        extra_rules=extra_rules,
-        dcr_love_rule=dcr_love_rule,
-    )
+    try:
+        system_prompt = _build_universal_ask_system_prompt(
+            chart_text=chart_text,
+            qtype=qtype,
+            topic_hint=_topic_hint,
+            wants_explain=wants_explain,
+            is_timing=is_timing,
+            is_decision=is_decision,
+            is_finance=is_finance,
+            reply_lang=eff_lang,
+            extra_rules=extra_rules,
+            dcr_love_rule=dcr_love_rule,
+        )
+    except Exception as _sp_exc:
+        print(f"[raw_passthrough] system_prompt build failed: {_sp_exc}", flush=True)
+        system_prompt = _build_universal_ask_system_prompt(
+            chart_text=chart_text or "(no chart data available)",
+            qtype=qtype or "STATIC",
+            topic_hint="",
+            wants_explain=False,
+            is_timing=bool(is_timing),
+            is_decision=False,
+            is_finance=False,
+            reply_lang=eff_lang,
+            extra_rules="",
+            dcr_love_rule="",
+        )
 
     model = os.environ.get("RAW_PASSTHROUGH_MODEL",
                             os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"))
@@ -5022,7 +5053,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             (_understanding or {}).get("topic") if isinstance(_understanding, dict) else None,
             skip=True,
         )
-        if dcr_love_meta:
+        if dcr_love_meta and dcr_love_meta.get("buckets"):
             text = _polish_dcr_love_answer(
                 text,
                 hide_technical=not wants_explain,

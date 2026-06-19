@@ -63,6 +63,42 @@ from question_history import (
     token_fields_from_result,
 )
 
+
+def _finalize_ask_out_after_llm(out, user, quota_on_success=None):
+    """Quota finalize — tolerates older subscription_helper on VPS."""
+    try:
+        from subscription_helper import finalize_ask_out_after_llm as _fn
+
+        return _fn(out, user, quota_on_success=quota_on_success)
+    except ImportError:
+        if not isinstance(out, dict):
+            return out
+        if out.get("source") == "raw_passthrough_error":
+            if user:
+                try:
+                    from subscription_helper import can_ask_question, refund_question
+
+                    refund_question(user)
+                    chk = can_ask_question(user)
+                    out["quota"] = {"used": chk["used"], "limit": chk["limit"]}
+                except Exception:
+                    pass
+            out["llm_failed"] = True
+        elif quota_on_success is not None:
+            out["quota"] = quota_on_success
+        return out
+
+
+def _build_admin_ask_questions(**kwargs):
+    try:
+        from admin_dashboard import build_ask_questions as _fn
+
+        return _fn(**kwargs)
+    except ImportError:
+        from question_history import list_admin_ask_questions
+
+        return list_admin_ask_questions(**kwargs)
+
 app = Flask(__name__)
 import logging as _logging
 import time as _time
@@ -3244,14 +3280,13 @@ def admin_ask_questions_route():
     err = require_admin()
     if err:
         return err
-    from admin_dashboard import build_ask_questions
 
     page = request.args.get("page", type=int) or 1
     per_page = request.args.get("per_page", type=int) or 50
     user_id = request.args.get("user_id", type=int)
     email = (request.args.get("email") or "").strip() or None
     return jsonify(
-        build_ask_questions(
+        _build_admin_ask_questions(
             page=page,
             per_page=per_page,
             user_id=user_id,
@@ -7785,11 +7820,7 @@ def ask_route():
         _rp_ask = None
     if _rp_enabled() and _rp_ask is not None:
         try:
-            from subscription_helper import (
-                consume_question,
-                effective_plan,
-                finalize_ask_out_after_llm,
-            )
+            from subscription_helper import consume_question, effective_plan
         except Exception as _sub_imp:
             import traceback
 
@@ -7930,7 +7961,7 @@ def ask_route():
                 "engine_tag": "ans-cosmo",
                 "follow_ups": [],
             }
-        out = finalize_ask_out_after_llm(out, rp_user, quota_on_success=rp_quota)
+        out = _finalize_ask_out_after_llm(out, rp_user, quota_on_success=rp_quota)
         out["plan"] = rp_plan
         llm_ctx_json = extract_admin_llm_context_for_save(out)
         # Phase 2.5.11.19 — Ask Q&A persistence (sync raw passthrough exit).
@@ -8809,11 +8840,7 @@ def ask_stream_route():
         _rp_ask_s = None
     if _rp_enabled_s() and _rp_ask_s is not None:
         try:
-            from subscription_helper import (
-                consume_question,
-                effective_plan,
-                finalize_ask_out_after_llm,
-            )
+            from subscription_helper import consume_question, effective_plan
         except Exception as _sub_imp_s:
             import traceback
 
@@ -8958,7 +8985,7 @@ def ask_stream_route():
                 "engine_tag": "ans-cosmo",
                 "follow_ups": [],
             }
-        out_s = finalize_ask_out_after_llm(out_s, rp_user_s, quota_on_success=rp_quota_s)
+        out_s = _finalize_ask_out_after_llm(out_s, rp_user_s, quota_on_success=rp_quota_s)
         out_s["plan"] = rp_plan_s
         llm_ctx_json_s = extract_admin_llm_context_for_save(out_s)
         # Phase 2.5.11.19 — Ask Q&A persistence (stream raw passthrough exit).

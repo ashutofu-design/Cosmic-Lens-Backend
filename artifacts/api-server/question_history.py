@@ -204,6 +204,38 @@ def save_user_question(
         db.session.commit()
         return row_id
     except Exception as exc:
+        err = str(exc).lower()
+        if ctx_json and ("llm_context_json" in err or "no such column" in err):
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            try:
+                row = UserQuestion(
+                    id                = row_id,
+                    user_id           = user_id,
+                    question_text     = qtext,
+                    topic             = topic_norm,
+                    primary_kundli_id = primary_kundli_id,
+                    verdict_summary   = verdict_norm,
+                    answer_text       = atext,
+                    answer_source     = asrc,
+                    llm_model         = model,
+                    prompt_tokens     = pt,
+                    completion_tokens = ct,
+                    total_tokens      = tt,
+                    cached_tokens     = cached,
+                    cost_usd          = usd,
+                    cost_inr          = inr,
+                    engine_tag        = etag,
+                    created_at        = created_at or datetime.utcnow(),
+                )
+                db.session.add(row)
+                db.session.commit()
+                print("[question_history] saved without llm_context_json (column missing)", flush=True)
+                return row_id
+            except Exception as exc2:
+                exc = exc2
         # Never surface — this is a non-critical telemetry path.
         try:
             db.session.rollback()

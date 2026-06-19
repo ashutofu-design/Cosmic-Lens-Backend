@@ -379,6 +379,47 @@ def consume_question(user) -> dict:
     return {"allowed": True, "used": user.daily_questions_used, "limit": limit}
 
 
+def refund_question(user) -> None:
+    """Best-effort: return one daily Ask slot after a failed LLM response."""
+    if not user or ask_quota_bypass():
+        return
+    try:
+        reset_daily_quota_if_needed(user)
+        if (user.daily_questions_used or 0) <= 0:
+            return
+        from models import User
+
+        db.session.execute(
+            update(User)
+            .where(User.id == user.id)
+            .where(User.daily_questions_used > 0)
+            .values(daily_questions_used=User.daily_questions_used - 1)
+        )
+        db.session.commit()
+        db.session.refresh(user)
+    except Exception as exc:
+        print(f"[subscription] refund_question failed (non-fatal): {exc}", flush=True)
+
+
+def finalize_ask_out_after_llm(
+    out: dict,
+    user,
+    quota_on_success: dict | None = None,
+) -> dict:
+    """Refund daily slot + refresh quota when the LLM call failed."""
+    if not isinstance(out, dict):
+        return out
+    if out.get("source") == "raw_passthrough_error":
+        if user:
+            refund_question(user)
+            chk = can_ask_question(user)
+            out["quota"] = {"used": chk["used"], "limit": chk["limit"]}
+        out["llm_failed"] = True
+    elif quota_on_success is not None:
+        out["quota"] = quota_on_success
+    return out
+
+
 def can_generate_kundli(user) -> dict:
     if not user:
         return {"allowed": False, "used": 0, "limit": 0, "reason": "Login required"}

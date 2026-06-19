@@ -261,7 +261,13 @@ def _marriage_yogas_from_intel(intel: dict) -> list[str]:
     return keep[:6]
 
 
+def _deep_precalc_enabled() -> bool:
+    return (os.environ.get("ASK_MR_SLICE_DEEP") or "").strip() == "1"
+
+
 def _step0_snapshot(kundli: dict) -> dict[str, Any]:
+    if not _deep_precalc_enabled():
+        return {}
     out: dict[str, Any] = {}
     try:
         lagna_si = _lagna_sign_idx(kundli)
@@ -285,6 +291,8 @@ def _step0_snapshot(kundli: dict) -> dict[str, Any]:
 
 
 def _intel_snapshot(kundli: dict) -> dict[str, Any]:
+    if not _deep_precalc_enabled():
+        return {}
     try:
         from chart_intelligence import analyze_chart
 
@@ -301,8 +309,12 @@ def _build_precalc_flags(
     d9_asc: str,
 ) -> list[str]:
     flags: list[str] = []
-    intel = _intel_snapshot(kundli)
-    step0 = _step0_snapshot(kundli)
+    try:
+        intel = _intel_snapshot(kundli)
+        step0 = _step0_snapshot(kundli)
+    except Exception:
+        intel = {}
+        step0 = {}
 
     manglik = _compute_manglik(d1_planets)
     md = intel.get("mangal_dosh")
@@ -398,7 +410,11 @@ def build_marriage_relationship_slice(
         if line:
             d9_planet_lines.append(line)
 
-    precalc = _build_precalc_flags(kundli, asc, d1_planets, d9_planets, str(d9_asc))
+    precalc: list[str] = []
+    try:
+        precalc = _build_precalc_flags(kundli, asc, d1_planets, d9_planets, str(d9_asc))
+    except Exception:
+        precalc = ["precalc_error: lightweight flags only"]
 
     block = [
         "=== MARRIAGE / RELATIONSHIP SLICE (narrative — NOT timing) ===",

@@ -675,3 +675,21 @@ def build_pdf_generations(
     from pdf_generation_log import list_generations
 
     return list_generations(page=page, per_page=per_page, kind=kind or None)
+
+
+def build_ask_questions(
+    *,
+    page: int = 1,
+    per_page: int = 50,
+    user_id: int | None = None,
+    email: str | None = None,
+) -> dict[str, Any]:
+    """Ask Q&A + OpenAI token + INR ledger for admin panel."""
+    from question_history import list_admin_ask_questions
+
+    return list_admin_ask_questions(
+        page=page,
+        per_page=per_page,
+        user_id=user_id,
+        email=email,
+    )

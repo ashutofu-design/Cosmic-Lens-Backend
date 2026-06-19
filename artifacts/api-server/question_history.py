@@ -106,6 +106,15 @@ def save_user_question(
     verdict_summary: str = "answered",
     answer_text: Optional[str] = None,
     answer_source: Optional[str] = None,
+    llm_model: Optional[str] = None,
+    prompt_tokens: Optional[int] = None,
+    completion_tokens: Optional[int] = None,
+    total_tokens: Optional[int] = None,
+    cached_tokens: Optional[int] = None,
+    cost_usd: Optional[float] = None,
+    cost_inr: Optional[float] = None,
+    engine_tag: Optional[str] = None,
+    llm_context_json: Optional[str] = None,
     created_at: Optional[datetime] = None,
 ) -> Optional[str]:
     """Persist one question row. Returns the new row id, or None on failure.
@@ -141,6 +150,34 @@ def save_user_question(
     if answer_source:
         asrc = str(answer_source).strip().lower()[:40] or None
 
+    def _pos_int(v: Any) -> Optional[int]:
+        try:
+            n = int(v)
+            return n if n >= 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    def _pos_float(v: Any) -> Optional[float]:
+        try:
+            f = float(v)
+            return f if f >= 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    pt = _pos_int(prompt_tokens)
+    ct = _pos_int(completion_tokens)
+    tt = _pos_int(total_tokens)
+    if tt is None and pt is not None and ct is not None:
+        tt = pt + ct
+    cached = _pos_int(cached_tokens)
+    usd = _pos_float(cost_usd)
+    inr = _pos_float(cost_inr)
+    model = (str(llm_model).strip()[:80] if llm_model else None) or None
+    etag = (str(engine_tag).strip()[:40] if engine_tag else None) or None
+    ctx_json: Optional[str] = None
+    if llm_context_json:
+        ctx_json = str(llm_context_json).strip() or None
+
     row_id = str(uuid.uuid4())
     try:
         row = UserQuestion(
@@ -152,6 +189,15 @@ def save_user_question(
             verdict_summary   = verdict_norm,
             answer_text       = atext,
             answer_source     = asrc,
+            llm_model         = model,
+            prompt_tokens     = pt,
+            completion_tokens = ct,
+            total_tokens      = tt,
+            cached_tokens     = cached,
+            cost_usd          = usd,
+            cost_inr          = inr,
+            engine_tag        = etag,
+            llm_context_json  = ctx_json,
             created_at        = created_at or datetime.utcnow(),
         )
         db.session.add(row)
@@ -213,3 +259,91 @@ def search_questions(user_id: int, q: str, limit: int = 20) -> list[dict]:
         .all()
     )
     return [r.to_dict() for r in rows]
+
+
+def list_admin_ask_questions(
+    *,
+    page: int = 1,
+    per_page: int = 50,
+    user_id: Optional[int] = None,
+    email: Optional[str] = None,
+) -> dict:
+    """Paginated Ask Q&A for admin panel — question, answer, tokens, cost."""
+    from models import User
+
+    page = max(1, int(page or 1))
+    per_page = max(1, min(int(per_page or 50), 100))
+    q = UserQuestion.query.join(User, UserQuestion.user_id == User.id)
+    if user_id:
+        q = q.filter(UserQuestion.user_id == int(user_id))
+    em = (email or "").strip().lower()
+    if em:
+        q = q.filter(db.func.lower(User.email).like(f"%{em}%"))
+
+    total = q.count()
+    pages = max(1, (total + per_page - 1) // per_page)
+    if page > pages:
+        page = pages
+
+    rows = (
+        q.order_by(UserQuestion.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .with_entities(UserQuestion, User.email, User.name)
+        .all()
+    )
+
+    items = []
+    for uq, user_email, user_name in rows:
+        d = uq.to_dict()
+        d["user_id"] = uq.user_id
+        d["user_email"] = user_email or ""
+        d["user_name"] = user_name or ""
+        try:
+            from ask_llm_context_debug import parse_llm_context_from_db
+
+            d["llm_context"] = parse_llm_context_from_db(uq.llm_context_json)
+        except Exception:
+            d["llm_context"] = None
+        items.append(d)
+
+    return {
+        "items": items,
+        "page": page,
+        "pages": pages,
+        "per_page": per_page,
+        "total": total,
+    }
+
+
+def extract_admin_llm_context_for_save(result: Any) -> str | None:
+    """Pop admin_llm_context from an Ask result and serialize for DB."""
+    if not isinstance(result, dict):
+        return None
+    try:
+        from ask_llm_context_debug import serialize_llm_context_for_db
+
+        ctx = result.pop("admin_llm_context", None)
+        return serialize_llm_context_for_db(ctx)
+    except Exception:
+        return None
+
+
+def token_fields_from_result(result: Any) -> dict[str, Any]:
+    """Pull token/cost columns from an Ask API result dict."""
+    try:
+        from ask_token_telemetry import extract_usage_from_result
+
+        u = extract_usage_from_result(result if isinstance(result, dict) else None)
+    except Exception:
+        u = {}
+    return {
+        "llm_model": u.get("llm_model"),
+        "prompt_tokens": u.get("prompt_tokens"),
+        "completion_tokens": u.get("completion_tokens"),
+        "total_tokens": u.get("total_tokens"),
+        "cached_tokens": u.get("cached_tokens"),
+        "cost_usd": u.get("cost_usd"),
+        "cost_inr": u.get("cost_inr"),
+        "engine_tag": (result or {}).get("engine_tag") if isinstance(result, dict) else None,
+    }

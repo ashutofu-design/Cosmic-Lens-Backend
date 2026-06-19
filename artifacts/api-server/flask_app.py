@@ -55,10 +55,12 @@ from openai_helper import ai_ask, ai_ask_stream, ai_ask_v2
 from openai_helper import is_available as openai_available
 from openai_helper import vastu_scan
 from question_history import (
+    extract_admin_llm_context_for_save,
     extract_verdict_summary,
     get_recent_questions,
     save_user_question,
     search_questions,
+    token_fields_from_result,
 )
 
 app = Flask(__name__)
@@ -2626,12 +2628,18 @@ def _log_question_history(user, question_text: str, result):
         topic_logged = result.get("topic") or "general"
         verdict_logged = extract_verdict_summary(result, topic_logged)
         kundli_id = user.kundli.id if getattr(user, "kundli", None) else None
+        tok = token_fields_from_result(result)
+        llm_ctx_json = extract_admin_llm_context_for_save(result)
         save_user_question(
             user_id=user.id,
             question_text=question_text or "",
             topic=topic_logged,
             primary_kundli_id=kundli_id,
             verdict_summary=verdict_logged,
+            answer_text=(result.get("text") or ""),
+            answer_source=result.get("source"),
+            llm_context_json=llm_ctx_json,
+            **tok,
         )
     except Exception as exc:
         print(f"[ask] question_history save failed (non-fatal): {exc}")
@@ -3228,6 +3236,28 @@ def admin_pdf_generations_route():
     page = request.args.get("page", type=int) or 1
     kind = (request.args.get("kind") or "").strip() or None
     return jsonify(build_pdf_generations(page=page, kind=kind))
+
+
+@app.route("/api/admin/ask-questions", methods=["GET"])
+def admin_ask_questions_route():
+    """Ask Q&A ledger — question, answer, tokens, INR cost per user question."""
+    err = require_admin()
+    if err:
+        return err
+    from admin_dashboard import build_ask_questions
+
+    page = request.args.get("page", type=int) or 1
+    per_page = request.args.get("per_page", type=int) or 50
+    user_id = request.args.get("user_id", type=int)
+    email = (request.args.get("email") or "").strip() or None
+    return jsonify(
+        build_ask_questions(
+            page=page,
+            per_page=per_page,
+            user_id=user_id,
+            email=email,
+        )
+    )
 
 
 @app.route("/api/admin/love-reality-orders", methods=["GET"])
@@ -7691,6 +7721,29 @@ def ask_route():
     except Exception:
         pass
 
+    # Greetings / help — before language & scope gates (hi/hello are not "personal" astro Qs).
+    _shortcut_early = None
+    try:
+        from shortcuts import resolve_ask_shortcut as _resolve_ask_shortcut
+
+        _shortcut_early = _resolve_ask_shortcut(question, lang=lang)
+    except Exception as _sc_exc:
+        print(f"[ask] shortcut import error (non-fatal): {_sc_exc}", flush=True)
+    if not _shortcut_early:
+        try:
+            from ask_scope_gate import greeting_shortcut_response as _greet_sc
+
+            _shortcut_early = _greet_sc(question, lang=lang)
+        except Exception as _greet_exc:
+            print(f"[ask] greeting shortcut error (non-fatal): {_greet_exc}", flush=True)
+    if _shortcut_early:
+        print(
+            f"[ask] shortcut hit topic={_shortcut_early.get('topic')} "
+            f"q={question[:40]!r}",
+            flush=True,
+        )
+        return jsonify(_shortcut_early)
+
     try:
         from ask_language_gate import assess_ask_language, language_refusal_payload
 
@@ -7711,7 +7764,7 @@ def ask_route():
         if not _scope_v.allowed:
             print(f"[ask] scope_gate blocked reason={_scope_v.reason}", flush=True)
             _log_brand_guard_question(question, data)
-            return jsonify(scope_refusal_payload(_scope_v.reason))
+            return jsonify(scope_refusal_payload(_scope_v.reason, question=question, lang=lang))
     except Exception as _sg_exc:
         print(f"[ask] scope_gate error (non-fatal): {_sg_exc}", flush=True)
 
@@ -7731,7 +7784,32 @@ def ask_route():
         _rp_enabled = lambda: False  # noqa: E731
         _rp_ask = None
     if _rp_enabled() and _rp_ask is not None:
-        from subscription_helper import consume_question, effective_plan
+        try:
+            from subscription_helper import (
+                consume_question,
+                effective_plan,
+                finalize_ask_out_after_llm,
+            )
+        except Exception as _sub_imp:
+            import traceback
+
+            print(f"[ask] subscription_helper import failed: {_sub_imp}", flush=True)
+            traceback.print_exc()
+            return (
+                jsonify(
+                    {
+                        "text": (
+                            "Server update incomplete (subscription_helper). "
+                            "Deploy subscription_helper.py and restart."
+                        ),
+                        "topic": "general",
+                        "confidence": 0.0,
+                        "source": "subscription_helper_import_error",
+                        "follow_ups": [],
+                    }
+                ),
+                503,
+            )
 
         rp_user = None
         rp_quota = {"used": 0, "limit": 0}
@@ -7823,29 +7901,55 @@ def ask_route():
                     503,
                 )
         # ── Single LLM call ──
-        out = _rp_ask(
-            question,
-            kundli,
-            lang,
-            birth=birth,
-            user_id=(rp_user.id if rp_user else None),
-        )
-        out["quota"] = rp_quota
+        try:
+            out = _rp_ask(
+                question,
+                kundli,
+                lang,
+                birth=birth,
+                user_id=(rp_user.id if rp_user else None),
+                ask_route=data.get("ask_route"),
+            )
+        except Exception as _rp_exc:
+            print(f"[ask:RP] raw_passthrough_ask failed: {_rp_exc}", flush=True)
+            import traceback
+
+            traceback.print_exc()
+            if rp_user:
+                from subscription_helper import can_ask_question, refund_question
+
+                refund_question(rp_user)
+                _chk = can_ask_question(rp_user)
+                rp_quota = {"used": _chk["used"], "limit": _chk["limit"]}
+            out = {
+                "text": "Abhi jawab generate nahi ho pa raha. Thodi der baad try karein.",
+                "topic": "general",
+                "question_type": "STATIC",
+                "confidence": 0.0,
+                "source": "raw_passthrough_error",
+                "engine_tag": "ans-cosmo",
+                "follow_ups": [],
+            }
+        out = finalize_ask_out_after_llm(out, rp_user, quota_on_success=rp_quota)
         out["plan"] = rp_plan
+        llm_ctx_json = extract_admin_llm_context_for_save(out)
         # Phase 2.5.11.19 — Ask Q&A persistence (sync raw passthrough exit).
         # Authenticated users only (UserQuestion.user_id is NOT NULL).
         # Fire-and-forget — save_user_question() swallows all errors so a
         # logging failure can never break the user's Ask flow.
-        if rp_user is not None:
+        if rp_user is not None and out.get("source") != "raw_passthrough_error":
             try:
+                tok = token_fields_from_result(out)
                 save_user_question(
                     user_id=rp_user.id,
                     question_text=question,
                     topic=(out.get("topic") or "general"),
                     primary_kundli_id=(rp_user.kundli.id if rp_user.kundli else None),
-                    verdict_summary=(out.get("source") or "answered"),
+                    verdict_summary=extract_verdict_summary(out, out.get("topic") or "general"),
                     answer_text=(out.get("text") or ""),
                     answer_source=out.get("source"),
+                    llm_context_json=llm_ctx_json,
+                    **tok,
                 )
             except Exception as _qh_exc:
                 print(
@@ -7880,7 +7984,22 @@ def ask_route():
     # daily-question slot for a question we will not answer. Mirrored inside
     # ai_ask() too, but called here as well so the rule-engine fallback path
     # (when OpenAI is unavailable) also enforces the same policy.
-    from openai_helper import astro_scope_refusal as _ask_scope_refusal
+    try:
+        from openai_helper import astro_scope_refusal as _ask_scope_refusal
+    except Exception as _scope_imp_exc:
+        print(f"[ask] openai_helper import failed: {_scope_imp_exc}", flush=True)
+        return (
+            jsonify(
+                {
+                    "text": "Cosmo abhi update ho raha hai. Thodi der baad dubara try karein.",
+                    "topic": "general",
+                    "confidence": 0.0,
+                    "source": "openai_helper_import_error",
+                    "follow_ups": [],
+                }
+            ),
+            503,
+        )
 
     _scope_hit = _ask_scope_refusal(question, lang, None)
     if _scope_hit:
@@ -7897,25 +8016,6 @@ def ask_route():
                 "plan": "free",
             }
         )
-
-    # ── Phase 6.2 — Shortcut layer (greetings, intro, help) ──────────────────
-    # Bypass classifier + LLM for obvious queries that have a fixed canned
-    # reply. Fires AFTER brand-guard (so off-topic still wins) but BEFORE
-    # auth/quota (greetings shouldn't consume a daily question slot, and
-    # anonymous users should still get a friendly hello). Returns None
-    # for any real question → normal pipeline continues unchanged.
-    try:
-        from shortcuts import try_shortcut as _try_shortcut
-
-        _shortcut = _try_shortcut(question, lang=lang)
-    except Exception as _exc:
-        # Shortcut module bug must never block the ask flow.
-        print(f"[ask] shortcut layer error (non-fatal): {_exc}")
-        _shortcut = None
-    if _shortcut:
-        _shortcut["quota"] = {"used": 0, "limit": 0}
-        _shortcut["plan"] = "free"
-        return jsonify(_shortcut)
 
     # ── H3-SAFETY (2026-05-06) — CRISIS hard-guard MUST fire BEFORE
     # Layer-3 clarifier. Self-harm / suicide phrasing was previously
@@ -8455,21 +8555,7 @@ def ask_route():
     # logging failure cannot break the user's Ask flow. Only authenticated
     # users (have a user row) get logged — anonymous demo asks do not.
     if user and isinstance(result, dict):
-        try:
-            topic_logged = result.get("topic") or "general"
-            verdict_logged = extract_verdict_summary(result, topic_logged)
-            kundli_id = user.kundli.id if getattr(user, "kundli", None) else None
-            save_user_question(
-                user_id=user.id,
-                question_text=question,
-                topic=topic_logged,
-                primary_kundli_id=kundli_id,
-                verdict_summary=verdict_logged,
-            )
-        except Exception as exc:
-            # Defensive — save_user_question() already swallows; this is a
-            # second belt-and-braces guard for the kundli FK lookup.
-            print(f"[ask] question_history save failed (non-fatal): {exc}")
+        _log_question_history(user, question, result)
 
     # P1.2.10 B1 - Multi-intent acknowledge (route-level chokepoint).
     # Catches ALL engine paths (ai_passthrough / health_static / stock_engine
@@ -8527,6 +8613,8 @@ def stt_route():
     if not audio_file.filename:
         return jsonify({"error": "audio file empty"}), 400
 
+    lang_hint = (request.form.get("lang") or request.args.get("lang") or "").strip().lower()
+
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return jsonify({"error": "STT engine not configured"}), 503
@@ -8544,13 +8632,20 @@ def stt_route():
 
         client = OpenAI(api_key=api_key)
         with open(tmp.name, "rb") as f:
-            # language hint = hi (Hindi) — Whisper auto-detects Hinglish from this
-            transcription = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=f,
-                language="hi",
-                response_format="text",
-            )
+            whisper_kwargs: dict = {
+                "model": "whisper-1",
+                "file": f,
+                "response_format": "text",
+                "prompt": (
+                    "Hindi, English, Hinglish. User asks astrology questions. "
+                    "Greetings: hi, hello, namaste."
+                ),
+            }
+            if lang_hint in ("hi", "hindi", "hinglish"):
+                whisper_kwargs["language"] = "hi"
+            elif lang_hint in ("en", "english"):
+                whisper_kwargs["language"] = "en"
+            transcription = client.audio.transcriptions.create(**whisper_kwargs)
         text = (
             transcription
             if isinstance(transcription, str)
@@ -8643,6 +8738,29 @@ def ask_stream_route():
     except Exception:
         pass
 
+    # Greetings / help — before language & scope gates (hi/hello are not "personal" astro Qs).
+    _shortcut_early_s = None
+    try:
+        from shortcuts import resolve_ask_shortcut as _resolve_ask_shortcut_s
+
+        _shortcut_early_s = _resolve_ask_shortcut_s(question, lang=lang)
+    except Exception as _sc_exc_s:
+        print(f"[ask/stream] shortcut import error (non-fatal): {_sc_exc_s}", flush=True)
+    if not _shortcut_early_s:
+        try:
+            from ask_scope_gate import greeting_shortcut_response as _greet_sc_s
+
+            _shortcut_early_s = _greet_sc_s(question, lang=lang)
+        except Exception as _greet_exc_s:
+            print(f"[ask/stream] greeting shortcut error (non-fatal): {_greet_exc_s}", flush=True)
+    if _shortcut_early_s:
+        print(
+            f"[ask/stream] shortcut hit topic={_shortcut_early_s.get('topic')} "
+            f"q={question[:40]!r}",
+            flush=True,
+        )
+        return jsonify(_shortcut_early_s)
+
     try:
         from ask_language_gate import assess_ask_language, language_refusal_payload
 
@@ -8670,7 +8788,7 @@ def ask_stream_route():
                 flush=True,
             )
             _log_brand_guard_question(question, data)
-            return jsonify(scope_refusal_payload(_scope_v_s.reason))
+            return jsonify(scope_refusal_payload(_scope_v_s.reason, question=question, lang=lang))
     except Exception as _sg_exc_s:
         print(f"[ask/stream] scope_gate error (non-fatal): {_sg_exc_s}", flush=True)
 
@@ -8690,7 +8808,35 @@ def ask_stream_route():
         _rp_enabled_s = lambda: False  # noqa: E731
         _rp_ask_s = None
     if _rp_enabled_s() and _rp_ask_s is not None:
-        from subscription_helper import consume_question, effective_plan
+        try:
+            from subscription_helper import (
+                consume_question,
+                effective_plan,
+                finalize_ask_out_after_llm,
+            )
+        except Exception as _sub_imp_s:
+            import traceback
+
+            print(
+                f"[ask/stream:RP] subscription_helper import failed: {_sub_imp_s}",
+                flush=True,
+            )
+            traceback.print_exc()
+            return (
+                jsonify(
+                    {
+                        "text": (
+                            "Server update incomplete (subscription_helper). "
+                            "Deploy subscription_helper.py and restart."
+                        ),
+                        "topic": "general",
+                        "confidence": 0.0,
+                        "source": "subscription_helper_import_error",
+                        "follow_ups": [],
+                    }
+                ),
+                503,
+            )
 
         rp_user_s = None
         rp_quota_s = {"used": 0, "limit": 0}
@@ -8783,19 +8929,43 @@ def ask_stream_route():
                     ),
                     503,
                 )
-        out_s = _rp_ask_s(
-            question,
-            kundli,
-            lang,
-            birth=birth,
-            user_id=(rp_user_s.id if rp_user_s else None),
-        )
-        out_s["quota"] = rp_quota_s
+        try:
+            out_s = _rp_ask_s(
+                question,
+                kundli,
+                lang,
+                birth=birth,
+                user_id=(rp_user_s.id if rp_user_s else None),
+                ask_route=data.get("ask_route"),
+            )
+        except Exception as _rp_exc_s:
+            print(f"[ask/stream:RP] raw_passthrough_ask failed: {_rp_exc_s}", flush=True)
+            import traceback
+
+            traceback.print_exc()
+            if rp_user_s:
+                from subscription_helper import can_ask_question, refund_question
+
+                refund_question(rp_user_s)
+                _chk_s = can_ask_question(rp_user_s)
+                rp_quota_s = {"used": _chk_s["used"], "limit": _chk_s["limit"]}
+            out_s = {
+                "text": "Abhi jawab generate nahi ho pa raha. Thodi der baad try karein.",
+                "topic": "general",
+                "question_type": "STATIC",
+                "confidence": 0.0,
+                "source": "raw_passthrough_error",
+                "engine_tag": "ans-cosmo",
+                "follow_ups": [],
+            }
+        out_s = finalize_ask_out_after_llm(out_s, rp_user_s, quota_on_success=rp_quota_s)
         out_s["plan"] = rp_plan_s
+        llm_ctx_json_s = extract_admin_llm_context_for_save(out_s)
         # Phase 2.5.11.19 — Ask Q&A persistence (stream raw passthrough exit).
         # Same fire-and-forget contract as the sync path above.
-        if rp_user_s is not None:
+        if rp_user_s is not None and out_s.get("source") != "raw_passthrough_error":
             try:
+                tok = token_fields_from_result(out_s)
                 save_user_question(
                     user_id=rp_user_s.id,
                     question_text=question,
@@ -8803,9 +8973,13 @@ def ask_stream_route():
                     primary_kundli_id=(
                         rp_user_s.kundli.id if rp_user_s.kundli else None
                     ),
-                    verdict_summary=(out_s.get("source") or "answered"),
+                    verdict_summary=extract_verdict_summary(
+                        out_s, out_s.get("topic") or "general"
+                    ),
                     answer_text=(out_s.get("text") or ""),
                     answer_source=out_s.get("source"),
+                    llm_context_json=llm_ctx_json_s,
+                    **tok,
                 )
             except Exception as _qh_exc_s:
                 print(
@@ -8837,7 +9011,22 @@ def ask_stream_route():
     # for a question we will not answer. ai_ask_stream() also enforces this
     # internally; the route-level call additionally protects the rule-engine
     # fallback path used when OpenAI is unavailable.
-    from openai_helper import astro_scope_refusal as _ask_scope_refusal
+    try:
+        from openai_helper import astro_scope_refusal as _ask_scope_refusal
+    except Exception as _scope_imp_exc:
+        print(f"[ask/stream] openai_helper import failed: {_scope_imp_exc}", flush=True)
+        return (
+            jsonify(
+                {
+                    "text": "Cosmo abhi update ho raha hai. Thodi der baad dubara try karein.",
+                    "topic": "general",
+                    "confidence": 0.0,
+                    "source": "openai_helper_import_error",
+                    "follow_ups": [],
+                }
+            ),
+            503,
+        )
 
     _scope_hit = _ask_scope_refusal(question, lang, None)
     if _scope_hit:
@@ -8854,25 +9043,6 @@ def ask_stream_route():
                 "plan": "free",
             }
         )
-
-    # ── Phase 6.2 — Shortcut layer (greetings, intro, help) ──────────────────
-    # Bypass classifier + LLM for obvious queries that have a fixed canned
-    # reply. Fires AFTER brand-guard (so off-topic still wins) but BEFORE
-    # auth/quota (greetings shouldn't consume a daily question slot, and
-    # anonymous users should still get a friendly hello). Returns None
-    # for any real question → normal pipeline continues unchanged.
-    try:
-        from shortcuts import try_shortcut as _try_shortcut
-
-        _shortcut = _try_shortcut(question, lang=lang)
-    except Exception as _exc:
-        # Shortcut module bug must never block the ask flow.
-        print(f"[ask/stream] shortcut layer error (non-fatal): {_exc}")
-        _shortcut = None
-    if _shortcut:
-        _shortcut["quota"] = {"used": 0, "limit": 0}
-        _shortcut["plan"] = "free"
-        return jsonify(_shortcut)
 
     # ── Auth + quota — identical contract to /api/ask ────────────────────────
     user = None
@@ -9380,6 +9550,7 @@ def ask_stream_route():
                     if log_user_id:
                         try:
                             verdict_logged = extract_verdict_summary(evt, final_topic)
+                            tok = token_fields_from_result(evt)
                             with _app_for_save.app_context():
                                 save_user_question(
                                     user_id=log_user_id,
@@ -9387,6 +9558,9 @@ def ask_stream_route():
                                     topic=final_topic,
                                     primary_kundli_id=log_kundli_id,
                                     verdict_summary=verdict_logged,
+                                    answer_text=(evt.get("text") or ""),
+                                    answer_source=evt.get("source"),
+                                    **tok,
                                 )
                             print(
                                 f"[ask/stream] phase60i_history_save_ok: "

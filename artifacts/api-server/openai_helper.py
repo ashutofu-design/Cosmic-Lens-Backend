@@ -4516,6 +4516,19 @@ def _raw_kp_block(kundli: Any) -> str:
         return ""
 
 
+def _attach_admin_llm_context(result: dict, **kwargs) -> dict:
+    """Attach admin-only LLM debug payload (stripped before mobile response)."""
+    if not isinstance(result, dict):
+        return result
+    try:
+        from ask_llm_context_debug import build_admin_llm_context
+
+        result["admin_llm_context"] = build_admin_llm_context(**kwargs)
+    except Exception as _ctx_exc:
+        print(f"[raw_passthrough] admin_llm_context skipped: {_ctx_exc}", flush=True)
+    return result
+
+
 def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         birth: Any = None, user_id: Any = None,
                         reply_idx: int = 0,
@@ -4701,6 +4714,15 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         except Exception as _dcr_love_exc:
             print(f"[raw_passthrough] DCR_LOVE skipped: {_dcr_love_exc}", flush=True)
 
+    if _is_mr_static:
+        _chart_slice_type = "marriage_relationship"
+    elif is_timing:
+        _chart_slice_type = "timing_full_chart"
+    elif dcr_love_meta:
+        _chart_slice_type = "full_compact+dcr_love"
+    else:
+        _chart_slice_type = "full_compact"
+
     # ── Specific-partner synastry (Phase 2.5.11.6) ─────────────────────
     # When the Q references an EXISTING partner ("mere bf se", "wife
     # loyal"), look up the user's saved partner profile.
@@ -4837,7 +4859,33 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
         except Exception:
             pass
-        return _out_rp
+        _pt_checks = {
+            "slice_type": "timing_marriage_engine",
+            "resolved_route": _resolved_route,
+            "wants_explain": wants_explain,
+            "is_marriage_engine": True,
+            "is_kp": is_kp,
+            "is_mr_static": _is_mr_static,
+            "static_dasha_hint": static_dasha_hint,
+            "dasha_included": True,
+        }
+        _pt_blocks = {"chart_context": chart_text}
+        if kp_block:
+            _pt_blocks["kp"] = kp_block.strip()
+        if marriage_block:
+            _pt_blocks["marriage_engine"] = marriage_block
+        return _attach_admin_llm_context(
+            _out_rp,
+            question=question or "",
+            question_type=qtype,
+            is_timing=True,
+            checks=_pt_checks,
+            chart_text=chart_text,
+            blocks=_pt_blocks,
+            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+            llm_called=False,
+            skip_reason="marriage_timing_deterministic",
+        )
 
     # ── Optional prompt add-ons (timing engines, KP, partner, depth modes) ──
     sensitive_depth_rule = (
@@ -5033,7 +5081,45 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _out["understanding"] = slim_understanding_payload(_understanding)
         except Exception:
             pass
-        return _out
+        _pt_checks = {
+            "slice_type": _chart_slice_type,
+            "resolved_route": _resolved_route,
+            "wants_explain": wants_explain,
+            "is_decision": is_decision,
+            "is_finance": is_finance,
+            "is_sensitive": is_sensitive,
+            "is_long_story": is_long_story,
+            "is_marriage_domain": is_marriage_domain,
+            "is_specific_partner": is_specific_partner,
+            "is_kp": is_kp,
+            "is_marriage_engine": is_marriage_engine,
+            "is_mr_static": _is_mr_static,
+            "static_dasha_hint": static_dasha_hint,
+            "dasha_included": bool(is_timing or static_dasha_hint),
+            "partner_name": partner_name or None,
+            "partner_relation": partner_relation or None,
+        }
+        _pt_blocks = {"chart_context": chart_text}
+        if kp_block:
+            _pt_blocks["kp"] = kp_block.strip()
+        if marriage_block:
+            _pt_blocks["marriage_engine"] = marriage_block
+        return _attach_admin_llm_context(
+            _out,
+            question=question or "",
+            question_type=qtype,
+            is_timing=is_timing,
+            checks=_pt_checks,
+            chart_text=chart_text,
+            system_prompt=system_prompt,
+            extra_rules=extra_rules,
+            user_payload=user_payload,
+            model=model,
+            max_tokens=_max_tok,
+            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+            blocks=_pt_blocks,
+            llm_called=True,
+        )
     except Exception as exc:
         try:
             print(f"[raw_passthrough] OpenAI call failed: {exc}", flush=True)

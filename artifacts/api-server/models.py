@@ -506,6 +506,17 @@ class UserQuestion(db.Model):
     # Source of the answer: timing/static/brand_guard/shortcut/etc. — mirrors
     # the `source` field on the JSON response so analytics can group by path.
     answer_source     = db.Column(db.String(40), nullable=True, index=True)
+    # Ask OpenAI telemetry (admin panel — token + cost per Q)
+    llm_model         = db.Column(db.String(80), nullable=True)
+    prompt_tokens     = db.Column(db.Integer, nullable=True)
+    completion_tokens = db.Column(db.Integer, nullable=True)
+    total_tokens      = db.Column(db.Integer, nullable=True)
+    cached_tokens     = db.Column(db.Integer, nullable=True)
+    cost_usd          = db.Column(db.Float, nullable=True)
+    cost_inr          = db.Column(db.Float, nullable=True)
+    engine_tag        = db.Column(db.String(40), nullable=True)
+    # Admin-only JSON — exact chart slice / checks sent to the Ask LLM.
+    llm_context_json  = db.Column(db.Text, nullable=True)
     created_at        = db.Column(db.DateTime, default=datetime.utcnow,
                                   nullable=False, index=True)
 
@@ -523,6 +534,15 @@ class UserQuestion(db.Model):
             "verdict_summary":   self.verdict_summary,
             "answer_text":       self.answer_text,
             "answer_source":     self.answer_source,
+            "llm_model":         self.llm_model,
+            "prompt_tokens":     self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "total_tokens":      self.total_tokens,
+            "cached_tokens":     self.cached_tokens,
+            "cost_usd":          self.cost_usd,
+            "cost_inr":          self.cost_inr,
+            "engine_tag":        self.engine_tag,
+            "llm_context_json":  self.llm_context_json,
             "created_at":        self.created_at.isoformat() if self.created_at else None,
         }
 

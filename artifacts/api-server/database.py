@@ -251,6 +251,24 @@ def run_schema_migrations() -> None:
 
                     pass
 
+                for _uq_sql in (
+                    "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS answer_text TEXT",
+                    "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS answer_source VARCHAR(40)",
+                    "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS llm_model VARCHAR(80)",
+                    "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS prompt_tokens INTEGER",
+                    "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS completion_tokens INTEGER",
+                    "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS total_tokens INTEGER",
+                    "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS cached_tokens INTEGER",
+                    "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS cost_usd DOUBLE PRECISION",
+                    "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS cost_inr DOUBLE PRECISION",
+                    "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS engine_tag VARCHAR(40)",
+                    "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS llm_context_json TEXT",
+                ):
+                    try:
+                        conn.execute(text(_uq_sql))
+                    except Exception:
+                        pass
+
                 if os.environ.get("COSMIC_WIPE_USERS") == "1":
 
                     try:
@@ -404,6 +422,21 @@ def run_schema_migrations() -> None:
                     "ALTER TABLE users ADD COLUMN cosmo_user_id VARCHAR(16)",
 
                 )
+
+                for _tbl, _col, _sql in (
+                    ("user_questions", "answer_text", "ALTER TABLE user_questions ADD COLUMN answer_text TEXT"),
+                    ("user_questions", "answer_source", "ALTER TABLE user_questions ADD COLUMN answer_source VARCHAR(40)"),
+                    ("user_questions", "llm_model", "ALTER TABLE user_questions ADD COLUMN llm_model VARCHAR(80)"),
+                    ("user_questions", "prompt_tokens", "ALTER TABLE user_questions ADD COLUMN prompt_tokens INTEGER"),
+                    ("user_questions", "completion_tokens", "ALTER TABLE user_questions ADD COLUMN completion_tokens INTEGER"),
+                    ("user_questions", "total_tokens", "ALTER TABLE user_questions ADD COLUMN total_tokens INTEGER"),
+                    ("user_questions", "cached_tokens", "ALTER TABLE user_questions ADD COLUMN cached_tokens INTEGER"),
+                    ("user_questions", "cost_usd", "ALTER TABLE user_questions ADD COLUMN cost_usd REAL"),
+                    ("user_questions", "cost_inr", "ALTER TABLE user_questions ADD COLUMN cost_inr REAL"),
+                    ("user_questions", "engine_tag", "ALTER TABLE user_questions ADD COLUMN engine_tag VARCHAR(40)"),
+                    ("user_questions", "llm_context_json", "ALTER TABLE user_questions ADD COLUMN llm_context_json TEXT"),
+                ):
+                    _sqlite_add_column(conn, _tbl, _col, _sql)
 
             conn.commit()
 

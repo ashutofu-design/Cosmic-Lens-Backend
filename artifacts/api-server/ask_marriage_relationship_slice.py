@@ -146,6 +146,63 @@ def _partner_focus_slim(label: str, asc: str, planets: list[dict]) -> str:
     )
 
 
+def _partner_nature_only(profile: dict[str, Any], question: str = "") -> bool:
+    """True when Q is only partner/spouse nature — minimal D1 facts."""
+    if profile.get("include_spouse_profession"):
+        return False
+    q = (question or "").lower()
+    if re.search(r"manglik|mangal\s*dosh|mangalik|kaal\s*sarp|kalsarp", q):
+        return False
+    buckets = set(profile.get("buckets") or [])
+    return buckets <= {"partner_nature"}
+
+
+def _build_partner_nature_minimal_block(
+    asc: str,
+    d1_planets: list[dict],
+    question: str,
+    buckets: list[str],
+) -> tuple[str, dict]:
+    """D1 only: 7H rashi, 7H occupants, 7L placement, Venus karak."""
+    sign7, lord7 = _house_sign_lord(str(asc), 7)
+    occupants = _planets_in_house(d1_planets, 7)
+    p7l = _planet(d1_planets, lord7) if lord7 else None
+    ven = _planet(d1_planets, "Venus")
+
+    lines = [
+        "=== PARTNER NATURE SLICE (D1 — NOT timing) ===",
+        f"TOPIC: partner_nature | buckets: {buckets}",
+        "Instruction: Plain Hinglish answer. Tendency only — ho sakta hai / lagta hai.",
+        "Use ONLY these 4 checks. Do NOT invent other placements.",
+        f"1) 7th house rashi: {sign7 or 'unknown'}",
+        f"2) 7th house planets: {occupants or []}",
+    ]
+    if lord7 and p7l:
+        lines.append(
+            f"3) 7th lord {lord7}: rashi={_canon_sign(p7l.get('sign')) or '?'}, "
+            f"house=H{p7l.get('house', '?')}"
+        )
+    else:
+        lines.append(f"3) 7th lord: {lord7 or 'unknown'}")
+    if ven:
+        lines.append(
+            f"4) Karak Venus: rashi={_canon_sign(ven.get('sign')) or '?'}"
+            + (f", house=H{ven.get('house')}" if ven.get("house") is not None else "")
+        )
+    else:
+        lines.append("4) Karak Venus: not available")
+
+    meta = {
+        "slice": "partner_nature_minimal",
+        "topic": "partner_nature",
+        "buckets": buckets,
+        "checks": ["7H_rashi", "7H_planets", "7L_rashi_house", "Venus_rashi"],
+        "flags": [],
+        "question": (question or "")[:200],
+    }
+    return "\n".join(lines), meta
+
+
 def _select_slice_profile(question: str) -> dict[str, Any]:
     """Question-aware houses/planets — partner nature stays lean."""
     buckets = [b for b in classify_buckets(question) if b != "core_love_base"]
@@ -460,8 +517,13 @@ def build_marriage_relationship_slice(
 
     asc = str(kundli.get("ascendant") or kundli.get("lagna") or "")
     d1_planets = kundli.get("planets") or []
-    d9_asc, d9_planets = _d9_data(kundli)
     profile = _select_slice_profile(question)
+    if _partner_nature_only(profile, question):
+        return _build_partner_nature_minimal_block(
+            asc, d1_planets, question, profile["buckets"],
+        )
+
+    d9_asc, d9_planets = _d9_data(kundli)
     houses = profile["houses"]
     base_planets = set(profile["planets"])
 
@@ -495,6 +557,7 @@ def build_marriage_relationship_slice(
         "=== MARRIAGE / RELATIONSHIP SLICE (narrative — NOT timing) ===",
         f"TOPIC: marriage_and_relationship | buckets: {profile['buckets']}",
         "Instruction: Answer in plain Hinglish. Use only facts below.",
+        "Tone: tendency only — ho sakta hai / lagta hai / shayad. Never pakka hoga or yahi hoga.",
         "Do NOT cite dasha dates/windows. Do NOT invent missing placements.",
         f"D1 ascendant: {asc or 'unknown'}",
         _partner_focus_slim("D1", asc, d1_planets),

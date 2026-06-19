@@ -56,21 +56,35 @@ class MarriageRelationshipSliceTests(unittest.TestCase):
             is_marriage_relationship_static_question("career kab badhega?")
         )
 
-    def test_partner_nature_slice_is_lean(self):
+    def test_partner_nature_minimal_four_checks_only(self):
         block, meta = build_marriage_relationship_slice(
             SAMPLE_KUNDLI,
             "mera partner ka nature kya hai",
         )
-        self.assertIn("partner_nature", meta["buckets"])
-        self.assertIn("D1 partner focus:", block)
-        self.assertIn("7H=Gemini", block)
-        self.assertIn("5H=", block)
-        self.assertNotIn("spouse profession focus:", block)
-        self.assertNotIn("10H=", block)
-        self.assertNotIn("nak:", block)
-        self.assertNotIn("marriage_tilt:", block)
-        self.assertIn("7th_house_afflicted:", block)
-        self.assertIn("d9_marriage:", block)
+        self.assertEqual(meta["slice"], "partner_nature_minimal")
+        self.assertEqual(
+            meta["checks"],
+            ["7H_rashi", "7H_planets", "7L_rashi_house", "Venus_rashi"],
+        )
+        self.assertIn("7th house rashi:", block)
+        self.assertIn("7th house planets:", block)
+        self.assertIn("7th lord", block)
+        self.assertIn("Karak Venus:", block)
+        self.assertNotIn("D9", block)
+        self.assertNotIn("PRE-CALCULATED", block)
+        self.assertIn("7th house rashi: Gemini", block)
+        self.assertIn("7th house planets: ['Moon']", block)
+        self.assertIn("7th lord Mercury", block)
+        self.assertIn("Karak Venus: rashi=Leo", block)
+
+    def test_love_marriage_uses_expanded_slice(self):
+        block, meta = build_marriage_relationship_slice(
+            SAMPLE_KUNDLI,
+            "love marriage hogi ya arranged?",
+        )
+        self.assertEqual(meta["slice"], "marriage_relationship")
+        self.assertIn("D9", block)
+        self.assertIn("PRE-CALCULATED FLAGS:", block)
 
     def test_slice_has_d1_d9_and_precalc_no_dasha(self):
         block, meta = build_marriage_relationship_slice(

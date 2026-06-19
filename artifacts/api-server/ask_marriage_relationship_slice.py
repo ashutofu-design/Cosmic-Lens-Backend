@@ -6,26 +6,25 @@ LLM. No dasha, no Upapada Lagna, no timing windows.
 
 from __future__ import annotations
 
+import os
 import re
 from typing import Any
 
 from dcr_love import (
+    BUCKETS,
     CORE_PLANETS,
     _aspects,
     _canon_sign,
     _d9_data,
     _house_lines,
     _house_sign_lord,
-    _partner_focus_line,
     _planet,
-    _spouse_profession_focus_line,
+    classify_buckets,
 )
 
-# Union of all dcr_love bucket houses — covers partner nature, love vs
-# arranged, breakup, family approval, spouse profession, intimacy, etc.
-MR_HOUSES = {1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12}
-
-MR_PLANETS = set(CORE_PLANETS) | {"Sun"}
+# Fallback when no specific bucket matches — lean partner-nature slice.
+_DEFAULT_HOUSES = {5, 7}
+_DEFAULT_PLANETS = {"Moon", "Venus", "Mercury", "Mars", "Jupiter", "Saturn"}
 
 _TIMING_RX = re.compile(
     r"\b(kab|kabhi|when|kis\s+saal|kis\s+date|timing|muhurat|muhurt|"
@@ -132,6 +131,75 @@ def _slim_planet_line(p: dict | None) -> str:
     if p.get("retrograde"):
         parts.append("retro")
     return " ".join(parts)
+
+
+def _partner_focus_slim(label: str, asc: str, planets: list[dict]) -> str:
+    sign, lord = _house_sign_lord(str(asc), 7)
+    lord_line = _slim_planet_line(_planet(planets, lord)) if lord else ""
+    occupants = _planets_in_house(planets, 7)
+    if not sign or not lord:
+        return f"{label} partner focus: not available"
+    return (
+        f"{label} partner focus: 7H={sign}, 7L={lord}"
+        + (f" ({lord_line})" if lord_line else "")
+        + f", 7H occupants={occupants or []}"
+    )
+
+
+def _select_slice_profile(question: str) -> dict[str, Any]:
+    """Question-aware houses/planets — partner nature stays lean."""
+    buckets = [b for b in classify_buckets(question) if b != "core_love_base"]
+    houses = set(_DEFAULT_HOUSES)
+    planets = set(_DEFAULT_PLANETS)
+    include_spouse_profession = False
+
+    for b in buckets:
+        cfg = BUCKETS.get(b) or {}
+        houses |= set(cfg.get("houses") or set())
+        planets |= set(cfg.get("planets") or set())
+        if b == "spouse_profession":
+            include_spouse_profession = True
+
+    if "manglik" in (question or "").lower() or re.search(
+        r"mangal\s*dosh|mangalik", question or "", re.I
+    ):
+        planets.add("Mars")
+
+    return {
+        "buckets": buckets or ["partner_nature"],
+        "houses": houses,
+        "planets": planets,
+        "include_spouse_profession": include_spouse_profession,
+    }
+
+
+def _filter_flags(flags: list[str], profile: dict[str, Any], question: str) -> list[str]:
+    """Drop flags irrelevant to the asked sub-topic."""
+    buckets = set(profile.get("buckets") or [])
+    q = (question or "").lower()
+    out: list[str] = []
+    for f in flags:
+        key = f.split(":", 1)[0].strip().lower()
+        if key in ("marriage_tilt", "combined_pace", "delay_vs_late", "chart_marriage_pace"):
+            if "love_marriage_vs_arranged" in buckets or re.search(
+                r"love\s*marriage|arrange", q
+            ):
+                out.append(f)
+            continue
+        if key == "8th_or_12th_stress_for_relationship":
+            if buckets & {"breakup_separation", "obsession_overattachment", "secret_relationship"}:
+                out.append(f)
+            continue
+        if key in ("manglik", "mangal_dosh"):
+            if "manglik" in q or "mangal" in q or "manglik" in buckets:
+                out.append(f)
+            continue
+        if key.startswith("risk:") or key == "relevant_yogas":
+            if os.environ.get("ASK_MR_SLICE_DEEP") == "1":
+                out.append(f)
+            continue
+        out.append(f)
+    return out
 
 
 def _love_arranged_tilt(d1_planets: list[dict], asc: str) -> str:
@@ -393,10 +461,13 @@ def build_marriage_relationship_slice(
     asc = str(kundli.get("ascendant") or kundli.get("lagna") or "")
     d1_planets = kundli.get("planets") or []
     d9_asc, d9_planets = _d9_data(kundli)
+    profile = _select_slice_profile(question)
+    houses = profile["houses"]
+    base_planets = set(profile["planets"])
 
-    house_lines, lord_names = _house_lines(asc, d1_planets, MR_HOUSES)
-    d9_house_lines, d9_lord_names = _house_lines(str(d9_asc), d9_planets, MR_HOUSES)
-    planets = set(MR_PLANETS) | lord_names | d9_lord_names
+    house_lines, lord_names = _house_lines(asc, d1_planets, houses)
+    d9_house_lines, d9_lord_names = _house_lines(str(d9_asc), d9_planets, houses)
+    planets = base_planets | lord_names | d9_lord_names
 
     d1_planet_lines = []
     for name in sorted(planets):
@@ -412,33 +483,42 @@ def build_marriage_relationship_slice(
 
     precalc: list[str] = []
     try:
-        precalc = _build_precalc_flags(kundli, asc, d1_planets, d9_planets, str(d9_asc))
+        precalc = _filter_flags(
+            _build_precalc_flags(kundli, asc, d1_planets, d9_planets, str(d9_asc)),
+            profile,
+            question,
+        )
     except Exception:
         precalc = ["precalc_error: lightweight flags only"]
 
     block = [
         "=== MARRIAGE / RELATIONSHIP SLICE (narrative — NOT timing) ===",
-        "TOPIC: marriage_and_relationship",
+        f"TOPIC: marriage_and_relationship | buckets: {profile['buckets']}",
         "Instruction: Answer in plain Hinglish. Use only facts below.",
         "Do NOT cite dasha dates/windows. Do NOT invent missing placements.",
         f"D1 ascendant: {asc or 'unknown'}",
-        _partner_focus_line("D1", asc, d1_planets),
-        _spouse_profession_focus_line("D1", asc, d1_planets),
+        _partner_focus_slim("D1", asc, d1_planets),
         "D1 houses: " + " | ".join(house_lines),
         "D1 key planets: " + " | ".join(d1_planet_lines),
         f"D9 ascendant: {d9_asc or 'unknown'}",
-        _partner_focus_line("D9", str(d9_asc), d9_planets),
-        _spouse_profession_focus_line("D9", str(d9_asc), d9_planets),
+        _partner_focus_slim("D9", str(d9_asc), d9_planets),
         "D9 houses: " + (" | ".join(d9_house_lines) if d9_house_lines else "not available"),
         "D9 key planets: " + (" | ".join(d9_planet_lines) if d9_planet_lines else "not available"),
-        "PRE-CALCULATED FLAGS:",
     ]
+    if profile.get("include_spouse_profession"):
+        from dcr_love import _spouse_profession_focus_line
+
+        block.insert(6, _spouse_profession_focus_line("D1", asc, d1_planets))
+        block.append(_spouse_profession_focus_line("D9", str(d9_asc), d9_planets))
+
+    block.append("PRE-CALCULATED FLAGS:")
     block.extend(f"  • {f}" for f in precalc)
 
     meta = {
         "slice": "marriage_relationship",
         "topic": "marriage_and_relationship",
-        "houses": sorted(MR_HOUSES),
+        "buckets": profile["buckets"],
+        "houses": sorted(houses),
         "planets": sorted(planets),
         "flags": precalc,
         "question": (question or "")[:200],

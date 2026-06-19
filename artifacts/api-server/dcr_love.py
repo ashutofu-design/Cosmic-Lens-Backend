@@ -97,7 +97,7 @@ BUCKETS: dict[str, dict[str, Any]] = {
     "partner_nature": {
         "rx": (
             r"partner|spouse|husband|wife|pati|patni|jeevan\s*sathi|jeevansathi|"
-            r"boyfriend|girlfriend|bf|gf|nature|kaisa|kaisi"
+            r"boyfriend|girlfriend|bf|gf|nature|kaisa|kaisi|kaise|kya\s+ho"
         ),
         "houses": {5, 7},
         "planets": {"Venus", "Mars", "Moon", "Mercury", "Jupiter", "Saturn", "Rahu"},

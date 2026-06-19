@@ -348,6 +348,10 @@ ul.product-list li:last-child {
   color: #93c5fd;
 }
 
+.llm-context-panel.llm-context-missing > summary {
+  color: #fcd34d;
+}
+
 .llm-context-body {
   margin-top: 10px;
   display: flex;

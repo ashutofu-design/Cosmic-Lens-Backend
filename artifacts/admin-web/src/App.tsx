@@ -1409,7 +1409,7 @@ export default function App() {
                           {row.topic ? ` — ${row.topic}` : ""}
                           {row.engine_tag ? ` — ${row.engine_tag}` : ""}
                         </div>
-                        <AskLlmContextPanel ctx={row.llm_context} />
+                        <AskLlmContextPanel row={row} />
                       </td>
                       <td>
                         {row.total_tokens != null ? (

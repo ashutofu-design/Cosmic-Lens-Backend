@@ -331,12 +331,21 @@ def list_admin_ask_questions(
         d["user_id"] = uq.user_id
         d["user_email"] = user_email or ""
         d["user_name"] = user_name or ""
-        try:
-            from ask_llm_context_debug import parse_llm_context_from_db
+        d["llm_context"] = None
+        raw_ctx = uq.llm_context_json
+        if raw_ctx:
+            try:
+                from ask_llm_context_debug import parse_llm_context_from_db
 
-            d["llm_context"] = parse_llm_context_from_db(uq.llm_context_json)
-        except Exception:
-            d["llm_context"] = None
+                d["llm_context"] = parse_llm_context_from_db(raw_ctx)
+            except Exception:
+                try:
+                    import json
+
+                    parsed = json.loads(raw_ctx)
+                    d["llm_context"] = parsed if isinstance(parsed, dict) else None
+                except Exception:
+                    d["llm_context"] = {"raw": str(raw_ctx)[:8000]}
         items.append(d)
 
     return {
@@ -352,13 +361,27 @@ def extract_admin_llm_context_for_save(result: Any) -> str | None:
     """Pop admin_llm_context from an Ask result and serialize for DB."""
     if not isinstance(result, dict):
         return None
+    ctx = result.pop("admin_llm_context", None)
+    if not ctx:
+        return None
     try:
         from ask_llm_context_debug import serialize_llm_context_for_db
 
-        ctx = result.pop("admin_llm_context", None)
-        return serialize_llm_context_for_db(ctx)
-    except Exception:
-        return None
+        out = serialize_llm_context_for_db(ctx)
+    except Exception as exc:
+        try:
+            import json
+
+            out = json.dumps(ctx, ensure_ascii=False, default=str)
+            if len(out) > 80_000:
+                out = out[:79_999] + "…"
+            print(f"[question_history] llm_context fallback serialize: {exc}", flush=True)
+        except Exception as exc2:
+            print(f"[question_history] llm_context serialize failed: {exc2}", flush=True)
+            return None
+    if out:
+        print(f"[question_history] llm_context_json ready chars={len(out)}", flush=True)
+    return out
 
 
 def token_fields_from_result(result: Any) -> dict[str, Any]:

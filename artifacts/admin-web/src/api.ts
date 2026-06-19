@@ -144,6 +144,7 @@ export interface AskLlmContext {
   model?: string | null;
   max_tokens?: number | null;
   sizes?: Record<string, number>;
+  raw?: string;
 }
 
 export interface AskQuestionItem {

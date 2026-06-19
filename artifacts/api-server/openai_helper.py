@@ -3461,15 +3461,19 @@ _RAW_LENGTH_DECISION = """
 ════════════════════════════════════════════════════════════════════
 ⚖️ DECISION MODE — A vs B (job vs business, start vs wait, X ya Y)
 ════════════════════════════════════════════════════════════════════
-**45–65 words**, 3–4 COMPLETE sentences — kabhi mid-sentence mat rukna.
+**45–70 words**, 4 COMPLETE sentences — kabhi mid-sentence mat rukna.
 
-  • Sentence 1 = CLEAR verdict: job / business / mixed — seedha bolo kaunsa zyada suit.
-  • Sentence 2 = ek simple reason plain Hinglish mein (NO house/sign/lord dump).
-  • Sentence 3 = practical note (abhi ka phase, caution, ya green light).
-  • Last sentence MUST end with . or ? — incomplete fragment forbidden.
+MANDATORY STRUCTURE (user ki language mein — English report NAHI):
+  1) **Seedha jawab:** job / business / pehle job phir business / mixed — pehli line par clear pick.
+  2) Ek simple reason — plain words, NO "placed in", "signals", "lord", "house", "favorable".
+  3) Practical note — abhi ka phase / caution / green light.
+  4) **Conclusion:** ek line — user ab kya kare (e.g. "filhaal job pe focus karo").
 
-BANNED opener: "10th house lord Mercury 12th house me..." — user ko plain advice chahiye.
-Use chart internally; reply = wise dost, not technical report.
+GOOD (Hinglish):
+"Seedha jawab: abhi job zyada suit karega. Apna business abhi risk zyada hai kyunki income unstable phase me hai. 1-2 saal naukri se base strong karo. Conclusion: filhaal job continue karo, business baad me try karna."
+
+BAD (English chart dump — NEVER):
+"Jupiter as Lagna lord placed in 5th house... signals strong potential..."
 """
 
 _RAW_LENGTH_ULTRA_BRIEF = """
@@ -3523,6 +3527,7 @@ def _build_universal_ask_system_prompt(
     wants_explain: bool,
     is_timing: bool,
     is_decision: bool = False,
+    reply_lang: str = "hn",
     extra_rules: str = "",
     dcr_love_rule: str = "",
 ) -> str:
@@ -3535,6 +3540,15 @@ def _build_universal_ask_system_prompt(
         length_block = _RAW_LENGTH_DECISION
     else:
         length_block = _RAW_LENGTH_ULTRA_BRIEF
+    _rl = (reply_lang or "hn").strip().lower()
+    if _rl not in _RAW_LANG_INSTR:
+        _rl = "hn"
+    lang_block = (
+        f"════════════════ LANGUAGE (MANDATORY — entire reply) ════════════════\n"
+        f"{_RAW_LANG_INSTR[_rl]}\n"
+        f"NEVER reply in a different language than specified above.\n"
+        f"═══════════════════════════════════════════════════════════════════"
+    )
     if is_timing:
         mode_block = """
 TIMING MODE (user asked kab/when):
@@ -3544,8 +3558,9 @@ TIMING MODE (user asked kab/when):
     elif is_decision:
         mode_block = """
 DECISION MODE (user chose between two paths — job vs business, start vs wait, etc.):
-- Lead with a clear verdict on WHICH path suits them better (or mixed).
-- Use current dasha line in chart block if present — cite phase naturally in plain words.
+- MUST use labels "Seedha jawab:" and "Conclusion:" in the reply (in user's language).
+- Lead with WHICH option wins; end with what user should DO now.
+- Use current dasha line in chart block if present — cite phase in plain words only.
 - Do NOT dump house lords/signs in the reply; translate chart read into simple advice."""
     else:
         mode_block = """
@@ -3555,6 +3570,8 @@ NARRATIVE MODE (pattern / quality / yes-no — NOT timing):
 - Answer tendency, strength, quality, or yes/no from chart facts."""
 
     return f"""You are Cosmo — an experienced Vedic astrologer. Answer ONLY from the chart facts below; never invent placements, lords, houses, signs, nakshatras, D9 facts, or timing.
+
+{lang_block}
 
 UNDERSTAND THE QUESTION
 - Identify what the user wants: fact, yes/no, quality, strength, luck, career, marriage, health, money, psychology, placement, etc.
@@ -3576,7 +3593,6 @@ EXTRA DATA (only when appended below)
 
 REPLY STYLE
 {length_block}
-- Match the user's language/script (Hinglish Roman / Devanagari Hindi / English).
 - Human wise-friend tone. Answer ONLY what was asked — no extra topics.
 - Plain language in the reply; hide house numbers and dasha names unless the user used them first.
 - NO [Checked:...], NO 👉 Final, NO bullet lists, NO "Based on your chart".
@@ -3709,6 +3725,40 @@ def _enforce_one_line_answer(
     elif line and line[-1] not in ".?!।":
         line = line.rstrip(",—-") + "."
     return line.strip()
+
+
+_DECISION_STRUCTURE_RX = _re_explain_gate.compile(
+    r"(?ix)(seedha\s*jawab|verdict|nateeja|net\s*:|conclusion\s*:)"
+)
+_ENGLISH_REPORT_RX = _re_explain_gate.compile(
+    r"(?ix)\b("
+    r"placed\s+in|signals|suggests|favorable|potential\s+for|"
+    r"lord|house|retrograde|weakens|challenges"
+    r")\b"
+)
+
+
+def _polish_decision_reply(text: str, lang: str) -> str:
+    """Ensure decision answers have verdict labels; flag English report style."""
+    t = (text or "").strip()
+    if not t:
+        return t
+    if lang in ("hi", "hn") and _ENGLISH_REPORT_RX.search(t):
+        if not _DECISION_STRUCTURE_RX.search(t):
+            # Model ignored format — prepend minimal structure so user gets a hook
+            if lang == "hi":
+                t = "सीधा जवाब: " + t
+            else:
+                t = "Seedha jawab: " + t
+    if _DECISION_STRUCTURE_RX.search(t) and "conclusion" not in t.lower():
+        parts = [p.strip() for p in _re_explain_gate.split(r"(?<=[.!?।])\s+", t) if p.strip()]
+        if len(parts) >= 2:
+            tail = parts[-1]
+            if not _DECISION_STRUCTURE_RX.search(tail):
+                label = "निष्कर्ष:" if lang == "hi" else "Conclusion:"
+                parts[-1] = f"{label} {tail}"
+                t = " ".join(parts)
+    return t.strip()
 
 
 # ── STATIC-mode dasha gate (Phase 2.5.11.2) ────────────────────────────
@@ -4692,6 +4742,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             "Plain Hinglish result only; hide technical terms in reply.\n"
         )
 
+    eff_lang = _resolve_response_lang(question, lang, None)
+    user_payload = _strict_lang_block(eff_lang) + question
+
     system_prompt = _build_universal_ask_system_prompt(
         chart_text=chart_text,
         qtype=qtype,
@@ -4699,6 +4752,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         wants_explain=wants_explain,
         is_timing=is_timing,
         is_decision=is_decision,
+        reply_lang=eff_lang,
         extra_rules=extra_rules,
         dcr_love_rule=dcr_love_rule,
     )
@@ -4717,7 +4771,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": question},
+                {"role": "user",   "content": user_payload},
             ],
             max_tokens=_max_tok,
         )
@@ -4725,6 +4779,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         text = _enforce_one_line_answer(
             text, wants_explain, is_timing=is_timing, is_decision=is_decision,
         )
+        if is_decision:
+            text = _polish_decision_reply(text, eff_lang)
         if not text:
             text = "Maaf kijiye, abhi response generate nahi ho paya. Phir try karein."
         # Skip robotic [Checked: ...] trace — user wants human replies only.
@@ -4761,7 +4817,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                          if prompt_tok else 0.0)
         try:
             print(f"[raw_passthrough] qtype={qtype} explain={wants_explain} "
-                  f"decision={is_decision} "
+                  f"decision={is_decision} lang={eff_lang} "
                   f"kp={is_kp} marriage={is_marriage_engine} model={model} "
                   f"max_tokens={_max_tok} "
                   f"q={question[:60]!r} chart_chars={len(chart_text)} "
@@ -5384,6 +5440,7 @@ _HINGLISH_TOKENS = {
     "maa", "pita", "papa", "mummy", "bhai", "behan", "didi", "ghar", "gharwale",
     "abhi", "kabhi", "phir", "fir", "pehle", "baad", "se", "tak", "ya", "aur",
     "kr", "krna", "hojayegi", "hojayega", "lagta", "lagti", "lagte",
+    "chahiye", "chahie", "shuru", "apna", "apni", "apne", "sahi", "khud", "naya", "nayi",
 }
 
 

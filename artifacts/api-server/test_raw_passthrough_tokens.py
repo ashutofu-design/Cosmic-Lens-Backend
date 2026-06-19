@@ -1,7 +1,9 @@
 """Raw passthrough must not truncate timing/decision answers mid-sentence."""
 from openai_helper import (
+    _detect_question_lang,
     _enforce_one_line_answer,
     _is_decision_ask,
+    _polish_decision_reply,
     _raw_passthrough_max_tokens,
 )
 
@@ -10,8 +12,31 @@ _JOB_VS_BUSINESS = (
 )
 
 
+def test_job_vs_business_detects_hinglish():
+    assert _detect_question_lang(_JOB_VS_BUSINESS, "en") == "hn"
+
+
 def test_decision_question_detected():
     assert _is_decision_ask(_JOB_VS_BUSINESS)
+
+
+def test_decision_en_report_gets_seedha_prefix():
+    raw = (
+        "Jupiter as Lagna lord placed in 5th house signals strong potential for business. "
+        "Mercury in 12th weakens career efforts."
+    )
+    out = _polish_decision_reply(raw, "hn")
+    assert out.lower().startswith("seedha jawab:")
+
+
+def test_decision_hinglish_with_conclusion_preserved():
+    raw = (
+        "Seedha jawab: abhi job zyada suit karega. Business me risk zyada hai. "
+        "Conclusion: filhaal naukri pe focus karo."
+    )
+    out = _polish_decision_reply(raw, "hn")
+    assert "Seedha jawab:" in out
+    assert "Conclusion:" in out
 
 
 def test_decision_token_budget():

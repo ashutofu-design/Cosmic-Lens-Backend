@@ -3532,14 +3532,6 @@ def _build_universal_ask_system_prompt(
     dcr_love_rule: str = "",
 ) -> str:
     """Universal Cosmo prompt — full D1+D9 chart block + short human reply rules."""
-    if wants_explain:
-        length_block = _RAW_LENGTH_EXPLAIN
-    elif is_timing:
-        length_block = _RAW_LENGTH_TIMING
-    elif is_decision:
-        length_block = _RAW_LENGTH_DECISION
-    else:
-        length_block = _RAW_LENGTH_ULTRA_BRIEF
     _rl = (reply_lang or "hn").strip().lower()
     if _rl not in _RAW_LANG_INSTR:
         _rl = "hn"
@@ -3549,19 +3541,46 @@ def _build_universal_ask_system_prompt(
         f"NEVER reply in a different language than specified above.\n"
         f"═══════════════════════════════════════════════════════════════════"
     )
+
+    # Decision Qs get a SEPARATE prompt — the generic "READ 10H/10L" block
+    # causes house-lord dumps despite "plain language" rules (conflicting instructions).
+    if is_decision:
+        return f"""You are Cosmo — an experienced Vedic astrologer.
+
+{lang_block}
+
+DECISION QUESTION — user must choose between TWO paths (job vs business, start vs wait, etc.).
+
+WORK INTERNALLY (never quote in reply):
+- Read CHART FACTS below: career = 10th/6th, business = 7th/11th/5th, current dasha if shown.
+- Pick which path suits better from evidence.
+
+USER-FACING REPLY RULES (STRICT):
+- {_RAW_LENGTH_DECISION.strip()}
+- NEVER write: house numbers, "lord", planet names (Mercury/Jupiter/Saturn…), retrograde,
+  signs, "chart mein", "10th/12th/5th", nakshatra, dasha names.
+- Translate chart read into plain life advice only (stable income, risk abhi, experience pehle).
+
+MANDATORY LABELS (exact):
+  Seedha jawab: [job / business / pehle job phir business / mixed]
+  (1–2 short plain sentences — reason)
+  Conclusion: [what user should DO now — one clear line]
+
+CHART FACTS (internal reference only):
+{chart_text}{extra_rules}"""
+
+    if wants_explain:
+        length_block = _RAW_LENGTH_EXPLAIN
+    elif is_timing:
+        length_block = _RAW_LENGTH_TIMING
+    else:
+        length_block = _RAW_LENGTH_ULTRA_BRIEF
     if is_timing:
         mode_block = """
 TIMING MODE (user asked kab/when):
 - Give a concrete window from dasha data in the chart block (month/year or dasha period).
 - Match topic significators with active Mahadasha / Antardasha lords shown below.
 - Do NOT invent dates or dasha periods absent from the chart block."""
-    elif is_decision:
-        mode_block = """
-DECISION MODE (user chose between two paths — job vs business, start vs wait, etc.):
-- MUST use labels "Seedha jawab:" and "Conclusion:" in the reply (in user's language).
-- Lead with WHICH option wins; end with what user should DO now.
-- Use current dasha line in chart block if present — cite phase in plain words only.
-- Do NOT dump house lords/signs in the reply; translate chart read into simple advice."""
     else:
         mode_block = """
 NARRATIVE MODE (pattern / quality / yes-no — NOT timing):
@@ -3659,7 +3678,7 @@ def _raw_passthrough_max_tokens(
     if is_timing:
         return 140
     if is_decision:
-        return 130
+        return 180
     if is_sensitive:
         return 120
     if dcr_love_meta:
@@ -3736,20 +3755,76 @@ _ENGLISH_REPORT_RX = _re_explain_gate.compile(
     r"lord|house|retrograde|weakens|challenges"
     r")\b"
 )
+_CHART_JARGON_VISIBLE_RX = _re_explain_gate.compile(
+    r"(?ix)\b("
+    r"chart\s*mein|kundli\s*mein|"
+    r"\d{1,2}(?:st|nd|rd|th)?\s*(?:house|ghar|bhav|bhaav)|"
+    r"(?:house|ghar|bhav|bhaav)\s*(?:ka|ki|ke|mein|me|mai)|"
+    r"(?:\d{1,2})(?:th|nd|rd|st)\s*(?:house|ghar)|"
+    r"lord|swami|lagna\s*lord|"
+    r"mercury|jupiter|saturn|venus|mars|rahu|ketu|shani|guru|budh|shukra|"
+    r"retrograde|vakri|debilitated|neech|"
+    r"nakshatra|dasha|mahadasha|antardasha"
+    r")\b"
+)
+
+
+def _decision_needs_plain_rewrite(text: str) -> bool:
+    t = (text or "").strip()
+    if not t:
+        return True
+    if not _DECISION_STRUCTURE_RX.search(t):
+        return True
+    if _CHART_JARGON_VISIBLE_RX.search(t):
+        return True
+    if t[-1] not in ".?!।":
+        return True
+    return False
+
+
+def _raw_rewrite_decision_plain(
+    client: object,
+    model: str,
+    question: str,
+    eff_lang: str,
+    draft: str,
+) -> str:
+    """One cheap rewrite when the model dumps chart jargon instead of plain advice."""
+    rewrite_user = (
+        f"{_strict_lang_block(eff_lang)}"
+        f"ORIGINAL QUESTION:\n{question}\n\n"
+        f"DRAFT (too technical — rewrite completely):\n{draft}\n\n"
+        "Rewrite for a lay user. Use EXACTLY this structure:\n"
+        "Seedha jawab: [job / business / pehle job phir business / mixed]\n"
+        "[1-2 short plain sentences — reason, NO houses/planets/lords]\n"
+        "Conclusion: [one clear action line]\n"
+        "FORBIDDEN in reply: house, lord, Mercury, Jupiter, Saturn, retrograde, chart mein, 10th, 12th."
+    )
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You rewrite astro answers into plain friendly advice. "
+                        "Never mention houses, lords, or planet names."
+                    ),
+                },
+                {"role": "user", "content": rewrite_user},
+            ],
+            max_tokens=160,
+        )
+        return (resp.choices[0].message.content or "").strip()
+    except Exception:
+        return draft
 
 
 def _polish_decision_reply(text: str, lang: str) -> str:
-    """Ensure decision answers have verdict labels; flag English report style."""
+    """Ensure decision answers have Conclusion label when missing."""
     t = (text or "").strip()
     if not t:
         return t
-    if lang in ("hi", "hn") and _ENGLISH_REPORT_RX.search(t):
-        if not _DECISION_STRUCTURE_RX.search(t):
-            # Model ignored format — prepend minimal structure so user gets a hook
-            if lang == "hi":
-                t = "सीधा जवाब: " + t
-            else:
-                t = "Seedha jawab: " + t
     if _DECISION_STRUCTURE_RX.search(t) and "conclusion" not in t.lower():
         parts = [p.strip() for p in _re_explain_gate.split(r"(?<=[.!?।])\s+", t) if p.strip()]
         if len(parts) >= 2:
@@ -4780,6 +4855,19 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             text, wants_explain, is_timing=is_timing, is_decision=is_decision,
         )
         if is_decision:
+            if _decision_needs_plain_rewrite(text):
+                try:
+                    _rewritten = _raw_rewrite_decision_plain(
+                        client, model, question, eff_lang, text,
+                    )
+                    if _rewritten:
+                        text = _enforce_one_line_answer(
+                            _rewritten, wants_explain,
+                            is_timing=False, is_decision=True,
+                        )
+                        print("[raw_passthrough] decision plain rewrite applied", flush=True)
+                except Exception as _dre:
+                    print(f"[raw_passthrough] decision rewrite skipped: {_dre}", flush=True)
             text = _polish_decision_reply(text, eff_lang)
         if not text:
             text = "Maaf kijiye, abhi response generate nahi ho paya. Phir try karein."

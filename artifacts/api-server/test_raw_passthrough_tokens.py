@@ -1,5 +1,6 @@
 """Raw passthrough must not truncate timing/decision answers mid-sentence."""
 from openai_helper import (
+    _decision_needs_plain_rewrite,
     _detect_question_lang,
     _enforce_one_line_answer,
     _is_decision_ask,
@@ -20,13 +21,13 @@ def test_decision_question_detected():
     assert _is_decision_ask(_JOB_VS_BUSINESS)
 
 
-def test_decision_en_report_gets_seedha_prefix():
+def test_decision_jargon_dump_needs_rewrite():
     raw = (
-        "Jupiter as Lagna lord placed in 5th house signals strong potential for business. "
-        "Mercury in 12th weakens career efforts."
+        "Aapke chart mein 10th house ka lord Mercury 12th house mein hai, jo thoda isolation "
+        "ya expenses bhi dikhata hai career mein. 5th house mein Jupiter aur Saturn dono "
+        "retrograde hain, jo naya creative ya business start karne"
     )
-    out = _polish_decision_reply(raw, "hn")
-    assert out.lower().startswith("seedha jawab:")
+    assert _decision_needs_plain_rewrite(raw)
 
 
 def test_decision_hinglish_with_conclusion_preserved():
@@ -37,6 +38,7 @@ def test_decision_hinglish_with_conclusion_preserved():
     out = _polish_decision_reply(raw, "hn")
     assert "Seedha jawab:" in out
     assert "Conclusion:" in out
+    assert not _decision_needs_plain_rewrite(out)
 
 
 def test_decision_token_budget():
@@ -47,7 +49,7 @@ def test_decision_token_budget():
         dcr_love_meta=None,
         is_sensitive=False,
     )
-    assert n >= 120
+    assert n >= 160
 
 
 def test_timing_token_budget_above_old_cap():
@@ -58,7 +60,7 @@ def test_timing_token_budget_above_old_cap():
         dcr_love_meta=None,
         is_sensitive=False,
     )
-    assert n >= 120
+    assert n >= 140
 
 
 def test_default_token_budget_above_55():

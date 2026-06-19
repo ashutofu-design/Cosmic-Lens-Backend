@@ -42,6 +42,7 @@ _WORD_FIXES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bnau+kri+\b", re.I), "naukri"),
     (re.compile(r"\bnok+ri+\b", re.I), "naukri"),
     (re.compile(r"\bcarr+eer+\b", re.I), "career"),
+    (re.compile(r"\bcarrer+\b", re.I), "career"),
     (re.compile(r"\bpa+i+sa+\b", re.I), "paisa"),
     (re.compile(r"\bpais+e+\b", re.I), "paise"),
     (re.compile(r"\bbus+iness+\b", re.I), "business"),
@@ -109,7 +110,36 @@ _PERSONAL_RX = re.compile(
 )
 
 _QUESTION_SHAPE_RX = re.compile(
-    r"(?ix)\b(kya|kaun|kab|kaise|kaisa|when|what|how|why|should|will|hoga|hogi|milega|batao)\b",
+    r"(?ix)\b("
+    r"kya|kaun|kaunsa|kaunsi|kab|kaise|kaisa|kaisi|kahan|kyun|kyu|"
+    r"when|what|how|why|should|will|where|which|kis|kitna|kitni|"
+    r"hoga|hogi|milega|milegi|aayega|aayegi|rahega|rahegi|"
+    r"hai|he|chal\s*rah|effect|result|prabhav|asar|"
+    r"possible|likely|batao|samjhao|theek|sahi|achha|accha|delay"
+    r")\b",
+)
+
+_IMPLICIT_ASK_TOPIC_RX = re.compile(
+    r"(?ix)\b("
+    r"lagna|ascendant|rashi|nakshatra|kundli|chart|horoscope|"
+    r"dasha|mahadasha|antardasha|gochar|yog|yoga|dosh|dosha|manglik|muhurat|"
+    r"sade\s*sati|kaal\s*sarp|"
+    r"shaadi|shadi|marriage|vivah|love|pyaar|partner|bf|gf|husband|wife|pati|"
+    r"career|naukri|job|business|paisa|money|wealth|finance|"
+    r"health|sehat|child|bachcha|pregnancy|"
+    r"property|ghar|flat|vastu|visa|abroad|videsh|travel|"
+    r"luck|bhagya|future|timing|"
+    r"sun|moon|mars|mangal|mercury|budh|jupiter|guru|venus|shukra|saturn|shani|rahu|ketu|"
+    r"house|bhav|bhaav|lord|swami|"
+    r"navamsa|navamsha|d9|d7|d10|d12|divisional"
+    r")\b",
+)
+
+_TIMING_ONLY_RX = re.compile(
+    r"(?ix)"
+    r"\b(shaadi|shadi|marriage|naukri|career|paisa|health|bachcha|visa|abroad)\b"
+    r".{0,15}\b(kab|when)\b|"
+    r"\b(kab|when)\b.{0,15}\b(shaadi|shadi|marriage|naukri|career|paisa|health|bachcha|visa|abroad)\b"
 )
 
 
@@ -160,3 +190,20 @@ def looks_like_personal_life_question(question: str) -> bool:
     if _QUESTION_SHAPE_RX.search(q) and len(q.split()) <= 14:
         return True
     return False
+
+
+def looks_like_implicit_ask(question: str) -> bool:
+    """True for Ask-screen questions that omit mera/meri but are clearly chart/life asks."""
+    q = prepare_ask_question(question)
+    if not q or len(q.split()) > 30:
+        return False
+    if not _IMPLICIT_ASK_TOPIC_RX.search(q):
+        return False
+    if _QUESTION_SHAPE_RX.search(q):
+        return True
+    return bool(_TIMING_ONLY_RX.search(q))
+
+
+def has_question_intent(question: str) -> bool:
+    q = prepare_ask_question(question)
+    return bool(_QUESTION_SHAPE_RX.search(q)) if q else False

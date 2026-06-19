@@ -66,18 +66,15 @@ _TIMING_LIFE_RX = re.compile(
     r"\b(hoga|hogi|milega|milegi)\b.{0,20}\b(kab|when)\b"
 )
 
-# Short follow-up style asks often omit "mera/meri", e.g.
-# "2nd marriage period kab he". These are still personal life-event asks.
-_PERSONAL_LIFE_EVENT_RX = re.compile(
+# Chart placement without mera/meri: "D9 me moon kahan", "8th house me Rahu"
+_CHART_PLACEMENT_RX = re.compile(
     r"(?ix)"
     r"\b("
-    r"(?:2nd|second|dusri|doosri|दूसरी)?\s*"
-    r"(?:shaadi|shadi|marriage|vivah|विवाह|शादी)|"
-    r"career|naukri|job|business|paisa|money|wealth|finance|"
-    r"health|sehat|bachcha|child|pregnancy|property|ghar|visa|abroad|videsh"
-    r")\b"
-    r".{0,40}\b("
-    r"kab|when|period|time|timing|kis\s+saal|kitne\s+saal|hoga|hogi|milega|milegi"
+    r"(?:d\d+|navamsa|navamsha|d9|d7|d10|d12)\b.{0,30}\b("
+    r"lagna|moon|sun|venus|mars|saturn|rahu|ketu|jupiter|mercury|"
+    r"shani|shukra|mangal|surya|chandra|budh|guru"
+    r")\b|"
+    r"\b(?:1st|2nd|3rd|[4-9]th|1[0-2]th|\d{1,2})\s*(?:house|bhav|bhaav)\b"
     r")\b"
 )
 
@@ -92,11 +89,9 @@ _PERSONAL_HOUSE_PLACEMENT_RX = re.compile(
     r")"
 )
 
-# Short follow-ups after an astrology answer often omit "mera/meri":
-# "kaise love marriage hai samjhao", "delay kyun hai", "career me kaise".
+# Follow-ups after an astrology answer often omit "mera/meri".
 _ASTRO_FOLLOWUP_RX = re.compile(
     r"(?ix)"
-    r"(?=.{1,90}$)"
     r"(?=.*\b("
     r"shaadi|shadi|marriage|vivah|love\s*marriage|arrange(?:d)?|"
     r"relationship|partner|spouse|career|naukri|job|business|paisa|money|"
@@ -111,6 +106,67 @@ _ASTRO_FOLLOWUP_RX = re.compile(
 )
 
 
+# Short greetings — must pass scope gate AND get canned reply (not LLM).
+_GREETING_RX = re.compile(
+    r"(?ix)^("
+    r"hi+|hello+|hey+|hlo+|helo+|hallo+|hii+|hy+"
+    r"|namaste|namaskar|pranam|ram\s*ram|jai\s*shree\s*ram"
+    r"|good\s*(morning|evening|afternoon|night)"
+    r"|नमस्ते|नमस्कार|प्रणाम|हैलो|हेलो|हाइ|हाय|हैल्लो"
+    r"|kaise\s*ho|kaise\s*hai|kya\s*haal"
+    r")(\s+("
+    r"hi+|hello+|hey+|namaste|namaskar|नमस्ते|हैलो|हेलो"
+    r"))?\s*[!?.।,]*$"
+)
+
+
+def _is_short_greeting(q: str) -> bool:
+    if _GREETING_RX.match(q):
+        return True
+    words = re.findall(r"[\w\u0900-\u097F]+", q, flags=re.IGNORECASE)
+    if not words or len(words) > 6:
+        return False
+    greet = {
+        "hi", "hii", "hello", "hey", "helo", "namaste", "namaskar", "pranam",
+        "नमस्ते", "नमस्कार", "हैलो", "हेलो", "हाइ", "हाय", "kaise", "ho", "hai",
+    }
+    lowered = [w.lower() for w in words]
+    return all(w in greet for w in lowered)
+
+
+def greeting_shortcut_response(question: str, lang: str = "en") -> Optional[dict]:
+    """Canned welcome for hi/hello — no shortcuts.py import required."""
+    from ask_question_normalize import prepare_ask_question
+
+    q = prepare_ask_question((question or "").strip())
+    if not q or not _is_short_greeting(q):
+        return None
+    hi = (lang or "en").lower().startswith("hi")
+    text = (
+        "Namaste! Main Cosmo hoon — aapki kundli ke hisaab se career, shaadi, "
+        "health, paisa aur timing par seedha jawab deta hoon. "
+        "Aaj aap kya janna chahte ho?"
+        if hi
+        else
+        "Hello! I'm Cosmo — I read your birth chart and answer career, marriage, "
+        "health, money, and timing questions in plain language. "
+        "What would you like to know today?"
+    )
+    return {
+        "text": text,
+        "topic": "greeting",
+        "source": "shortcut:greeting",
+        "confidence": 1.0,
+        "follow_ups": [
+            "Meri rashi kya hai?",
+            "Career kaisi rahegi?",
+            "Shadi kab hogi?",
+        ],
+        "quota": {"used": 0, "limit": 0},
+        "plan": "free",
+    }
+
+
 def _gate_enabled() -> bool:
     return (os.environ.get("ASK_SCOPE_GATE") or "on").strip().lower() != "off"
 
@@ -122,11 +178,19 @@ class AskScopeVerdict:
 
 
 def assess_ask_scope(question: str) -> AskScopeVerdict:
-    from ask_question_normalize import looks_like_personal_life_question, prepare_ask_question
+    from ask_question_normalize import (
+        has_question_intent,
+        looks_like_implicit_ask,
+        looks_like_personal_life_question,
+        prepare_ask_question,
+    )
 
     q = prepare_ask_question((question or "").strip())
     if not q:
         return AskScopeVerdict(allowed=False, reason="not_personal")
+
+    if _is_short_greeting(q):
+        return AskScopeVerdict(allowed=True, reason="ok")
 
     if not _gate_enabled():
         return AskScopeVerdict(allowed=True, reason="ok")
@@ -134,14 +198,27 @@ def assess_ask_scope(question: str) -> AskScopeVerdict:
     if _GK_BLOCK_RX.search(q):
         return AskScopeVerdict(allowed=False, reason="general_knowledge")
 
-    if _PERSONAL_LIFE_EVENT_RX.search(q):
+    # Primary path: read topic + intent — mera/meri NOT required in Ask context.
+    if looks_like_implicit_ask(q):
         return AskScopeVerdict(allowed=True, reason="ok")
 
-    if _PERSONAL_HOUSE_PLACEMENT_RX.search(q):
+    if _PERSONAL_HOUSE_PLACEMENT_RX.search(q) or _CHART_PLACEMENT_RX.search(q):
         return AskScopeVerdict(allowed=True, reason="ok")
 
     if _ASTRO_FOLLOWUP_RX.search(q):
         return AskScopeVerdict(allowed=True, reason="ok")
+
+    try:
+        from domain_splitter import extract_domains, has_astro_anchor, is_jyotish_anchored_strict
+
+        if extract_domains(q):
+            return AskScopeVerdict(allowed=True, reason="ok")
+        if has_astro_anchor(q) and has_question_intent(q):
+            return AskScopeVerdict(allowed=True, reason="ok")
+        if is_jyotish_anchored_strict(q):
+            return AskScopeVerdict(allowed=True, reason="ok")
+    except Exception:
+        pass
 
     try:
         from openai_helper import _is_brand_unsafe
@@ -164,15 +241,6 @@ def assess_ask_scope(question: str) -> AskScopeVerdict:
             return AskScopeVerdict(allowed=True, reason="ok")
         if _TIMING_LIFE_RX.search(q):
             return AskScopeVerdict(allowed=True, reason="ok")
-        try:
-            from domain_splitter import extract_domains, has_astro_anchor, is_jyotish_anchored_strict
-
-            if extract_domains(q):
-                return AskScopeVerdict(allowed=True, reason="ok")
-            if has_astro_anchor(q) or is_jyotish_anchored_strict(q):
-                return AskScopeVerdict(allowed=True, reason="ok")
-        except Exception:
-            return AskScopeVerdict(allowed=True, reason="ok")
 
     if looks_like_personal_life_question(q):
         return AskScopeVerdict(allowed=True, reason="ok")
@@ -180,7 +248,16 @@ def assess_ask_scope(question: str) -> AskScopeVerdict:
     return AskScopeVerdict(allowed=False, reason="not_personal")
 
 
-def scope_refusal_payload(reason: Optional[ScopeReason] = None) -> dict:
+def scope_refusal_payload(
+    reason: Optional[ScopeReason] = None,
+    question: str = "",
+    lang: str = "en",
+) -> dict:
+    # Last-line safety: hi/hello must never get the GK refusal wall.
+    if question:
+        greet = greeting_shortcut_response(question, lang=lang)
+        if greet:
+            return greet
     return {
         "text": SCOPE_REFUSAL_TEXT,
         "topic": "off_topic",

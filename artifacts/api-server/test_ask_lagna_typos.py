@@ -36,3 +36,13 @@ def test_normalize_shadi():
 def test_looks_like_personal_life():
     assert looks_like_personal_life_question("mera paisa kab milega")
     assert looks_like_personal_life_question("mujhe shaadi kab hogi")
+
+
+def test_scope_allows_current_dasha_without_mera():
+    v = assess_ask_scope("Abhi kaun sa dasha chal raha hai aur kya effect hai?")
+    assert v.allowed, v.reason
+
+
+def test_scope_allows_mahadasha_question():
+    v = assess_ask_scope("Mahadasha kab khatam hogi?")
+    assert v.allowed, v.reason

@@ -3476,6 +3476,27 @@ BAD (English chart dump — NEVER):
 "Jupiter as Lagna lord placed in 5th house... signals strong potential..."
 """
 
+_RAW_LENGTH_FINANCE = """
+════════════════════════════════════════════════════════════════════
+💰 FINANCE MODE — paisa, bachat, kharch, income, loan
+════════════════════════════════════════════════════════════════════
+**45–70 words**, 3–4 COMPLETE sentences — user ko SAMJHAO kyon ho raha hai.
+
+MANDATORY FLOW:
+  1) **Seedha jawab:** Haan/Nahi — user ki exact problem (paisa tikta nahi / kharch zyada / income kam).
+  2) **Kyon (short):** 2nd-11th-12th house READING in plain words + **current dasha** (chart se).
+     - OK: "paisa wale ghar thode weak hain", "abhi Jupiter-Rahu dasha me kharch zyada rehta hai"
+     - NOT OK: "lord Mercury 12th Scorpio", "retrograde Saturn", planet laundry list
+  3) **Isliye:** connect chart → real life (paisa haath me nahi rukta / savings weak).
+  4) **Conclusion:** ek practical line (saving discipline / risky spend kam / patience).
+
+GOOD:
+"Haan — paisa tikne me dikkat hai. Paisa wale ghar thode weak hain aur abhi Jupiter-Rahu dasha me kharch zyada rehta hai, isliye savings kam hoti hai. Conclusion: risky kharch kam karke thodi fixed saving rakho."
+
+BAD:
+"Jupiter aur Saturn retrograde hain aur paisa wala ghar weak..." (planets without clear isliye link)
+"""
+
 _RAW_LENGTH_ULTRA_BRIEF = """
 ════════════════════════════════════════════════════════════════════
 🎯 DEFAULT — SHORT + HUMAN (Cosmo voice)
@@ -3519,6 +3540,23 @@ def _is_decision_ask(question: str) -> bool:
     return bool(_DECISION_ASK_RE.search(question))
 
 
+_FINANCE_ASK_RE = _re_explain_gate.compile(
+    r"(?ix)\b("
+    r"paisa|paise|money|wealth|dhan|dhana|kharcha|kharch|bachat|saving|"
+    r"income|kamai|salary|tankhwah|loan|karz|emi|udhar|debt|"
+    r"tikta|tikti|tikte|rukta|rukti|ruke|"
+    r"garib|amir|finance|financial|mutual|sip|nifty|share"
+    r")\b"
+)
+
+
+def _is_finance_ask(question: str) -> bool:
+    """Paisa/bachat/kharch — explain with houses + dasha in plain Hinglish."""
+    if not isinstance(question, str) or not question.strip():
+        return False
+    return bool(_FINANCE_ASK_RE.search(question))
+
+
 def _build_universal_ask_system_prompt(
     *,
     chart_text: str,
@@ -3527,6 +3565,7 @@ def _build_universal_ask_system_prompt(
     wants_explain: bool,
     is_timing: bool,
     is_decision: bool = False,
+    is_finance: bool = False,
     reply_lang: str = "hn",
     extra_rules: str = "",
     dcr_love_rule: str = "",
@@ -3565,6 +3604,23 @@ MANDATORY LABELS (exact):
   Seedha jawab: [job / business / pehle job phir business / mixed]
   (1–2 short plain sentences — reason)
   Conclusion: [what user should DO now — one clear line]
+
+CHART FACTS (internal reference only):
+{chart_text}{extra_rules}"""
+
+    if is_finance:
+        return f"""You are Cosmo — an experienced Vedic astrologer.
+
+{lang_block}
+
+FINANCE / PAISA QUESTION — user wants to know WHY money behaves this way (save, spend, income, debt).
+
+WORK INTERNALLY (never quote raw placements):
+- Read CHART FACTS: 2nd house (savings/flow), 11th (gains), 12th (expenses/loss), 8th (debt).
+- Read CURRENT DASHA line if shown — link phase to spending/saving pattern.
+
+USER REPLY — explain cause → effect in plain language:
+- {_RAW_LENGTH_FINANCE.strip()}
 
 CHART FACTS (internal reference only):
 {chart_text}{extra_rules}"""
@@ -3666,6 +3722,7 @@ def _raw_passthrough_max_tokens(
     wants_explain: bool,
     is_timing: bool,
     is_decision: bool,
+    is_finance: bool,
     dcr_love_meta: object,
     is_sensitive: bool,
 ) -> int:
@@ -3679,6 +3736,8 @@ def _raw_passthrough_max_tokens(
         return 140
     if is_decision:
         return 180
+    if is_finance:
+        return 160
     if is_sensitive:
         return 120
     if dcr_love_meta:
@@ -3691,6 +3750,7 @@ def _enforce_one_line_answer(
     wants_explain: bool,
     is_timing: bool = False,
     is_decision: bool = False,
+    is_finance: bool = False,
 ) -> str:
     """Post-trim: short, human, no robot traces."""
     if not text:
@@ -3700,7 +3760,7 @@ def _enforce_one_line_answer(
     raw = _CHECKED_LINE_RX.sub("", raw)
     if "👉" in raw:
         raw = raw.split("👉")[0].strip()
-    rich = is_timing or is_decision
+    rich = is_timing or is_decision or is_finance
     for sep in ("\n\n", "\n"):
         parts = [p.strip() for p in raw.split(sep) if p.strip()]
         if parts:
@@ -3727,7 +3787,7 @@ def _enforce_one_line_answer(
     # Strip banned AI phrases
     line = _AI_PHRASE_RX.sub("", line).strip()
     line = " ".join(line.split())
-    word_cap = 80 if is_timing else (75 if is_decision else (70 if wants_explain else 50))
+    word_cap = 80 if is_timing else (75 if (is_decision or is_finance) else (70 if wants_explain else 50))
     words = line.split()
     if len(words) > word_cap:
         trimmed = " ".join(words[:word_cap])
@@ -4530,8 +4590,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     is_timing = (_resolved_route == "timing")
     wants_explain = _user_wants_explanation(question)
     is_decision = (not is_timing) and _is_decision_ask(question)
+    is_finance = (not is_timing) and (not is_decision) and _is_finance_ask(question)
     static_dasha_hint = (not is_timing) and (
-        _static_needs_current_dasha(question) or is_decision
+        _static_needs_current_dasha(question) or is_decision or is_finance
     )
     is_sensitive = (not is_timing) and _is_sensitive_static_q(question)
     is_long_story = (not is_timing) and (not is_sensitive) and _is_long_story_q(question)
@@ -4550,6 +4611,15 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         and (not is_long_story)
         and _is_marriage_domain_q(question)
     )
+    _is_mr_static = False
+    if not is_timing:
+        try:
+            from ask_marriage_relationship_slice import (  # type: ignore
+                is_marriage_relationship_static_question,
+            )
+            _is_mr_static = is_marriage_relationship_static_question(question)
+        except Exception:
+            _is_mr_static = False
     # Sensitive Qs ALSO need current dasha so the LLM has a real reason
     # to cite in layer-2 (astrological reason). Auto-promote.
     if is_sensitive:
@@ -4559,9 +4629,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     if is_long_story:
         static_dasha_hint = True
     # Marriage-domain Qs need current dasha so partner/delay/timing
-    # framing references the active phase naturally.
-    if is_marriage_domain:
+    # framing references the active phase naturally — except the dedicated
+    # marriage/relationship non-timing slice (no dasha by design).
+    if is_marriage_domain and not _is_mr_static:
         static_dasha_hint = True
+    if _is_mr_static:
+        static_dasha_hint = False
+    dcr_love_meta = None
     if is_timing:
         chart_text = _raw_compact_chart(
             kundli, include_dasha=True, static_dasha_hint=False,
@@ -4584,13 +4658,32 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     chart_text = chart_text + "\n\n=== TIMING ENGINE (LOCKED) ===\n" + _lf_slim
         except Exception as _lfe:
             print(f"[raw_passthrough] timing locked_facts skipped: {_lfe}", flush=True)
+    elif _is_mr_static:
+        try:
+            from ask_marriage_relationship_slice import (  # type: ignore
+                build_marriage_relationship_slice,
+            )
+            chart_text, dcr_love_meta = build_marriage_relationship_slice(
+                kundli if isinstance(kundli, dict) else {}, question,
+            )
+            print(
+                f"[raw_passthrough] MR_SLICE "
+                f"flags={len((dcr_love_meta or {}).get('flags') or [])} "
+                f"chart_chars={len(chart_text)}",
+                flush=True,
+            )
+        except Exception as _mr_slice_exc:
+            print(f"[raw_passthrough] MR_SLICE skipped: {_mr_slice_exc}", flush=True)
+            chart_text = _raw_compact_chart(
+                kundli, include_dasha=False, static_dasha_hint=False,
+            )
+            dcr_love_meta = None
     else:
         # Narrative: D1 + D9; inject current dasha when phase-relevant.
         chart_text = _raw_compact_chart(
             kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
         )
-    dcr_love_meta = None
-    if not is_timing:
+    if not is_timing and not _is_mr_static:
         try:
             from dcr_love import build_dcr_love_context  # type: ignore
 
@@ -4827,6 +4920,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         wants_explain=wants_explain,
         is_timing=is_timing,
         is_decision=is_decision,
+        is_finance=is_finance,
         reply_lang=eff_lang,
         extra_rules=extra_rules,
         dcr_love_rule=dcr_love_rule,
@@ -4838,6 +4932,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         wants_explain=wants_explain,
         is_timing=is_timing,
         is_decision=is_decision,
+        is_finance=is_finance,
         dcr_love_meta=dcr_love_meta,
         is_sensitive=is_sensitive,
     )
@@ -4852,7 +4947,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         )
         text = (resp.choices[0].message.content or "").strip()
         text = _enforce_one_line_answer(
-            text, wants_explain, is_timing=is_timing, is_decision=is_decision,
+            text, wants_explain,
+            is_timing=is_timing, is_decision=is_decision, is_finance=is_finance,
         )
         if is_decision:
             if _decision_needs_plain_rewrite(text):
@@ -4905,7 +5001,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                          if prompt_tok else 0.0)
         try:
             print(f"[raw_passthrough] qtype={qtype} explain={wants_explain} "
-                  f"decision={is_decision} lang={eff_lang} "
+                  f"decision={is_decision} finance={is_finance} lang={eff_lang} "
                   f"kp={is_kp} marriage={is_marriage_engine} model={model} "
                   f"max_tokens={_max_tok} "
                   f"q={question[:60]!r} chart_chars={len(chart_text)} "

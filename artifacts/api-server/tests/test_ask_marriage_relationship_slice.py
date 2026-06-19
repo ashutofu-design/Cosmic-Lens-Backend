@@ -60,22 +60,39 @@ class MarriageRelationshipSliceTests(unittest.TestCase):
         block, meta = build_marriage_relationship_slice(
             SAMPLE_KUNDLI,
             "mera partner ka nature kya hai",
+            birth={"gender": "male"},
         )
         self.assertEqual(meta["slice"], "partner_nature_minimal")
+        self.assertEqual(meta["chart_gender"], "male")
+        self.assertEqual(meta["karak_planet"], "Venus")
         self.assertEqual(
             meta["checks"],
-            ["7H_rashi", "7H_planets", "7L_rashi_house", "Venus_rashi"],
+            ["7H_rashi", "7L_rashi_house", "7H_planets", "Venus_karak_rashi"],
         )
-        self.assertIn("7th house rashi:", block)
-        self.assertIn("7th house planets:", block)
-        self.assertIn("7th lord", block)
-        self.assertIn("Karak Venus:", block)
+        self.assertIn("EXECUTION PRIORITY", block)
+        self.assertIn("STEP 1", block)
+        self.assertIn("STEP 2", block)
+        self.assertIn("STEP 3", block)
+        self.assertIn("OUTPUT FORMAT", block)
+        self.assertIn("7th house rashi: Gemini", block)
+        self.assertIn("Occupants: ['Moon']", block)
+        self.assertIn("7th lord Mercury", block)
+        self.assertIn("karak Venus", block)
+        self.assertIn("Venus: rashi=Leo", block)
         self.assertNotIn("D9", block)
         self.assertNotIn("PRE-CALCULATED", block)
-        self.assertIn("7th house rashi: Gemini", block)
-        self.assertIn("7th house planets: ['Moon']", block)
-        self.assertIn("7th lord Mercury", block)
-        self.assertIn("Karak Venus: rashi=Leo", block)
+
+    def test_partner_nature_female_uses_jupiter_karak(self):
+        block, meta = build_marriage_relationship_slice(
+            SAMPLE_KUNDLI,
+            "mera pati ka nature kaisa hoga",
+            birth={"gender": "female"},
+        )
+        self.assertEqual(meta["chart_gender"], "female")
+        self.assertEqual(meta["karak_planet"], "Jupiter")
+        self.assertIn("karak Jupiter", block)
+        self.assertIn("Jupiter: rashi=Pisces", block)
+        self.assertNotIn("karak Venus", block)
 
     def test_love_marriage_uses_expanded_slice(self):
         block, meta = build_marriage_relationship_slice(

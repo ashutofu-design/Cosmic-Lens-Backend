@@ -146,6 +146,26 @@ def _partner_focus_slim(label: str, asc: str, planets: list[dict]) -> str:
     )
 
 
+def _resolve_chart_gender(birth: Any = None, kundli: dict | None = None) -> str:
+    """male | female | unknown — from birth payload or kundli metadata."""
+    for src in (birth, kundli):
+        if not isinstance(src, dict):
+            continue
+        g = str(src.get("gender") or src.get("sex") or "").strip().lower()
+        if g in ("male", "m", "man", "boy", "ladka"):
+            return "male"
+        if g in ("female", "f", "woman", "girl", "ladki"):
+            return "female"
+    return "unknown"
+
+
+def _partner_karak_for_chart(gender: str) -> tuple[str, str]:
+    """Male chart → Venus (wife); female chart → Jupiter (husband)."""
+    if gender == "female":
+        return "Jupiter", "husband (female chart karak)"
+    return "Venus", "wife/partner (male chart karak)"
+
+
 def _partner_nature_only(profile: dict[str, Any], question: str = "") -> bool:
     """True when Q is only partner/spouse nature — minimal D1 facts."""
     if profile.get("include_spouse_profession"):
@@ -162,41 +182,72 @@ def _build_partner_nature_minimal_block(
     d1_planets: list[dict],
     question: str,
     buckets: list[str],
+    birth: Any = None,
+    kundli: dict | None = None,
 ) -> tuple[str, dict]:
-    """D1 only: 7H rashi, 7H occupants, 7L placement, Venus karak."""
+    """D1 only: 7H rashi, 7H occupants, 7L placement, gender-aware karak."""
     sign7, lord7 = _house_sign_lord(str(asc), 7)
     occupants = _planets_in_house(d1_planets, 7)
     p7l = _planet(d1_planets, lord7) if lord7 else None
-    ven = _planet(d1_planets, "Venus")
+    gender = _resolve_chart_gender(birth, kundli)
+    karak_name, karak_role = _partner_karak_for_chart(gender)
+    karak_p = _planet(d1_planets, karak_name)
 
     lines = [
         "=== PARTNER NATURE SLICE (D1 — NOT timing) ===",
         f"TOPIC: partner_nature | buckets: {buckets}",
-        "Instruction: Plain Hinglish answer. Tendency only — ho sakta hai / lagta hai.",
-        "Use ONLY these 4 checks. Do NOT invent other placements.",
-        f"1) 7th house rashi: {sign7 or 'unknown'}",
-        f"2) 7th house planets: {occupants or []}",
+        "",
+        "=== EXECUTION PRIORITY (mandatory — analyze in this exact order) ===",
+        "STEP 1 — 7th house rashi + 7th lord placement (baseline mindset/background):",
+        f"  • 7th house rashi: {sign7 or 'unknown'}",
     ]
     if lord7 and p7l:
         lines.append(
-            f"3) 7th lord {lord7}: rashi={_canon_sign(p7l.get('sign')) or '?'}, "
+            f"  • 7th lord {lord7}: rashi={_canon_sign(p7l.get('sign')) or '?'}, "
             f"house=H{p7l.get('house', '?')}"
         )
     else:
-        lines.append(f"3) 7th lord: {lord7 or 'unknown'}")
-    if ven:
+        lines.append(f"  • 7th lord: {lord7 or 'unknown'}")
+    lines.extend([
+        "STEP 2 — Planets in 7th house (blend with Step 1; if none, rely on Step 1 lord only):",
+        f"  • Occupants: {occupants if occupants else 'none'}",
+        "STEP 3 — Partner karak by chart gender (look, lifestyle, grace — blend with Steps 1–2):",
+        f"  • Chart gender: {gender} → karak {karak_name} ({karak_role})",
+    ])
+    if karak_p:
         lines.append(
-            f"4) Karak Venus: rashi={_canon_sign(ven.get('sign')) or '?'}"
-            + (f", house=H{ven.get('house')}" if ven.get("house") is not None else "")
+            f"  • {karak_name}: rashi={_canon_sign(karak_p.get('sign')) or '?'}"
+            + (f", house=H{karak_p.get('house')}" if karak_p.get("house") is not None else "")
         )
     else:
-        lines.append("4) Karak Venus: not available")
+        lines.append(f"  • {karak_name}: not available")
+    lines.extend([
+        "",
+        "=== OUTPUT FORMAT (mandatory) ===",
+        "Write exactly 3 short Hinglish paragraphs (~90–120 words total):",
+        "Para 1: Blend Step 1 + Step 2 — partner's social/emotional nature (7H rashi + occupants).",
+        "Para 2: Step 1 depth — 7th lord's rashi/house → mindset, communication, intensity.",
+        f"Para 3: Step 3 — {karak_name} karak → look, presence, lifestyle preferences.",
+        "Blend traits across paragraphs — do NOT keep steps isolated.",
+        "Example flow: 'Aapke chart ke mutabik, aapke partner kafi intelligent, expressive...'",
+        "Tone: insightful, positive, warm. USE ho sakta hai / lagta hai / shayad ONLY.",
+        "NEVER pakka hoga / yahi hoga / milega hi. No bullet lists.",
+        "No raw house numbers (H7) or planet/sign names in user-facing text.",
+        "Use ONLY the chart facts above. Do NOT invent other placements.",
+    ])
 
     meta = {
         "slice": "partner_nature_minimal",
         "topic": "partner_nature",
         "buckets": buckets,
-        "checks": ["7H_rashi", "7H_planets", "7L_rashi_house", "Venus_rashi"],
+        "checks": [
+            "7H_rashi",
+            "7L_rashi_house",
+            "7H_planets",
+            f"{karak_name}_karak_rashi",
+        ],
+        "chart_gender": gender,
+        "karak_planet": karak_name,
         "flags": [],
         "question": (question or "")[:200],
     }
@@ -510,6 +561,7 @@ def _build_precalc_flags(
 def build_marriage_relationship_slice(
     kundli: dict,
     question: str = "",
+    birth: Any = None,
 ) -> tuple[str, dict]:
     """Build compact marriage/relationship slice (no dasha)."""
     if not isinstance(kundli, dict) or not kundli.get("planets"):
@@ -521,6 +573,7 @@ def build_marriage_relationship_slice(
     if _partner_nature_only(profile, question):
         return _build_partner_nature_minimal_block(
             asc, d1_planets, question, profile["buckets"],
+            birth=birth, kundli=kundli,
         )
 
     d9_asc, d9_planets = _d9_data(kundli)

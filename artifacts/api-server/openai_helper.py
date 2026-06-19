@@ -3740,9 +3740,44 @@ def _raw_passthrough_max_tokens(
         return 160
     if is_sensitive:
         return 120
+    if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "partner_nature_minimal":
+        return 180
     if dcr_love_meta:
         return 100
     return 90
+
+
+def _enforce_partner_nature_paragraphs(text: str) -> str:
+    """Keep 3 short Hinglish paragraphs; trim without flattening."""
+    if not text:
+        return ""
+    raw = (text or "").strip()
+    raw = _CHECKED_LINE_RX.sub("", raw)
+    if "👉" in raw:
+        raw = raw.split("👉")[0].strip()
+    raw = _AI_PHRASE_RX.sub("", raw).strip()
+    parts = [p.strip() for p in re.split(r"\n\s*\n", raw) if p.strip()]
+    if len(parts) <= 1:
+        parts = [p.strip() for p in raw.split("\n") if p.strip()]
+    if not parts:
+        return ""
+    parts = parts[:3]
+    joined = "\n\n".join(parts)
+    words = joined.split()
+    if len(words) > 130:
+        trimmed: list[str] = []
+        count = 0
+        for para in parts:
+            pw = para.split()
+            if count + len(pw) > 130:
+                remain = 130 - count
+                if remain > 8:
+                    trimmed.append(" ".join(pw[:remain]))
+                break
+            trimmed.append(para)
+            count += len(pw)
+        joined = "\n\n".join(trimmed)
+    return joined.strip()
 
 
 def _enforce_one_line_answer(
@@ -3751,8 +3786,11 @@ def _enforce_one_line_answer(
     is_timing: bool = False,
     is_decision: bool = False,
     is_finance: bool = False,
+    is_partner_nature: bool = False,
 ) -> str:
     """Post-trim: short, human, no robot traces."""
+    if is_partner_nature:
+        return _enforce_partner_nature_paragraphs(text)
     if not text:
         return ""
     raw = (text or "").strip()
@@ -4680,6 +4718,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 chart_text, dcr_love_meta = build_marriage_relationship_slice(
                     kundli if isinstance(kundli, dict) else {}, question,
+                    birth=birth,
                 )
                 print(
                     f"[raw_passthrough] MR_SLICE "
@@ -4925,6 +4964,39 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         "NO essay, NO 👉 Final, NO [Checked].\n"
     ) if is_marriage_domain else ""
 
+    _is_pn_minimal = (
+        isinstance(dcr_love_meta, dict)
+        and dcr_love_meta.get("slice") == "partner_nature_minimal"
+    )
+    mr_static_rule = ""
+    if _is_mr_static:
+        if _is_pn_minimal:
+            mr_static_rule = (
+                "\n\n=== PARTNER NATURE — 3-step answer (mandatory) ===\n"
+                "Follow EXECUTION PRIORITY in chart slice: Step 1 (7H rashi + 7L) → "
+                "Step 2 (7H occupants) → Step 3 (gender karak: Venus male / Jupiter female).\n"
+                "Output: exactly 3 short Hinglish paragraphs (~90–120 words). "
+                "Blend traits across paras — NOT isolated sections.\n"
+                "Para 1: emotional/social nature (Step 1+2). "
+                "Para 2: mindset/communication (7L depth). "
+                "Para 3: look/lifestyle (karak).\n"
+                "USE: ho sakta hai, lagta hai, shayad, mumkin hai. "
+                "NEVER: pakka, yahi hoga, hoga hi, milega hi.\n"
+                "No planet/house/sign names in user text. Warm, positive, insightful.\n"
+            )
+        else:
+            mr_static_rule = (
+                "\n\n=== MARRIAGE/RELATIONSHIP SLICE — answer tone (mandatory) ===\n"
+                "Short Hinglish, max 50-60 words. Chart = pattern/tendency, NOT fixed fate.\n"
+                "USE: ho sakta hai, lagta hai, tendency dikhti hai, shayad, mumkin hai, "
+                "chances hain, kam-zyaada.\n"
+                "NEVER: pakka, yahi hoga, hoga hi, 100%, confirm, definitely, "
+                "milega hi, waisa hi hoga.\n"
+                "Negative → 'mushkil ho sakta hai' NOT 'nahi hoga'. "
+                "Positive → 'ho sakta hai' NOT 'hoga'.\n"
+                "No house/planet jargon. One warm insight + soft pattern — human friend tone.\n"
+            )
+
     if is_specific_partner and partner_kundli is not None:
         _safe_name = _sanitize_partner_label(partner_name, "your partner")
         _safe_rel = _sanitize_partner_label(partner_relation, "Partner", max_len=20)
@@ -4957,7 +5029,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     extra_rules = (
         f"{kp_reading_rule}{marriage_reading_rule}"
         f"{sensitive_depth_rule}{long_story_rule}"
-        f"{marriage_psychology_rule}{partner_compat_rule}"
+        f"{marriage_psychology_rule}{partner_compat_rule}{mr_static_rule}"
     )
 
     _topic_hint = ""
@@ -5028,6 +5100,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         text = _enforce_one_line_answer(
             text, wants_explain,
             is_timing=is_timing, is_decision=is_decision, is_finance=is_finance,
+            is_partner_nature=_is_pn_minimal,
         )
         if is_decision:
             if _decision_needs_plain_rewrite(text):

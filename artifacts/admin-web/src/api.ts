@@ -24,6 +24,11 @@ async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
         "pdf-generations API not found on server — deploy latest flask_app.py + pdf_generation_log.py, then restart API",
       );
     }
+    if (res.status === 404 && path.includes("ask-questions")) {
+      throw new Error(
+        "ask-questions API not found on server — deploy latest flask_app.py + question_history.py, then restart API",
+      );
+    }
     throw new Error(err);
   }
   return data as T;
@@ -119,6 +124,49 @@ export interface PdfGenerationItem {
   final_status: string;
   notes: string;
   phases: string[];
+}
+
+export interface AskLlmContext {
+  version?: number;
+  route?: string;
+  question?: string;
+  question_type?: string;
+  is_timing?: boolean;
+  llm_called?: boolean;
+  skip_reason?: string | null;
+  checks?: Record<string, unknown>;
+  slice_meta?: Record<string, unknown>;
+  blocks?: Record<string, unknown>;
+  chart_text?: string;
+  extra_rules?: string;
+  system_prompt?: string;
+  user_payload?: string;
+  model?: string | null;
+  max_tokens?: number | null;
+  sizes?: Record<string, number>;
+}
+
+export interface AskQuestionItem {
+  id: string;
+  user_id: number;
+  user_email: string;
+  user_name: string;
+  question_text: string;
+  answer_text: string | null;
+  answer_source: string | null;
+  topic: string;
+  verdict_summary: string;
+  llm_model: string | null;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  total_tokens: number | null;
+  cached_tokens: number | null;
+  cost_usd: number | null;
+  cost_inr: number | null;
+  engine_tag: string | null;
+  llm_context_json?: string | null;
+  llm_context?: AskLlmContext | null;
+  created_at: string | null;
 }
 
 export interface LoginActivityItem {
@@ -289,6 +337,27 @@ export function fetchPdfGenerations(opts?: { page?: number; kind?: string }) {
     pages: number;
     per_page: number;
   }>(`/api/admin/pdf-generations?${q}`);
+}
+
+export function fetchAskQuestions(opts?: {
+  page?: number;
+  per_page?: number;
+  email?: string;
+  user_id?: number;
+}) {
+  const q = new URLSearchParams({
+    page: String(opts?.page ?? 1),
+    per_page: String(opts?.per_page ?? 50),
+  });
+  if (opts?.email?.trim()) q.set("email", opts.email.trim());
+  if (opts?.user_id) q.set("user_id", String(opts.user_id));
+  return adminFetch<{
+    items: AskQuestionItem[];
+    total: number;
+    page: number;
+    pages: number;
+    per_page: number;
+  }>(`/api/admin/ask-questions?${q}`);
 }
 
 export function fetchUsers(page: number, search: string, plan: string) {

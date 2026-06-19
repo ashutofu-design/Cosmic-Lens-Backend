@@ -332,3 +332,59 @@ ul.product-list li:last-child {
 .detail-table th {
   font-size: 0.7rem;
 }
+
+.llm-context-panel {
+  margin-top: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.llm-context-panel > summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #93c5fd;
+}
+
+.llm-context-body {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.llm-context-body details > summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.llm-context-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  font-size: 0.8rem;
+}
+
+.llm-check-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.llm-context-pre {
+  margin: 8px 0 0;
+  padding: 10px;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  background: rgba(2, 6, 23, 0.65);
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+}

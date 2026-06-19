@@ -1,3 +1,4 @@
+import { AskLlmContextPanel } from "./AskLlmContextPanel";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import {
   type AdminStats,
@@ -17,6 +18,8 @@ import {
   fetchLoginActivity,
   fetchPdfGenerations,
   type PdfGenerationItem,
+  fetchAskQuestions,
+  type AskQuestionItem,
   fetchStats,
   type GmailProfilesResponse,
   fetchTransactions,
@@ -35,7 +38,7 @@ import {
   setUserPro,
 } from "./api";
 
-type Tab = "dashboard" | "transactions" | "users" | "logins" | "pdfcosts" | "lrorders" | "bvorders";
+type Tab = "dashboard" | "transactions" | "users" | "logins" | "pdfcosts" | "askqa" | "lrorders" | "bvorders";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("dashboard");
@@ -86,6 +89,13 @@ export default function App() {
   const [pdfGenerations, setPdfGenerations] = useState<PdfGenerationItem[]>([]);
   const [pdfGenKind, setPdfGenKind] = useState("");
   const [pdfGenError, setPdfGenError] = useState<string | null>(null);
+
+  const [askQaPage, setAskQaPage] = useState(1);
+  const [askQaPages, setAskQaPages] = useState(1);
+  const [askQaTotal, setAskQaTotal] = useState(0);
+  const [askQuestions, setAskQuestions] = useState<AskQuestionItem[]>([]);
+  const [askQaEmail, setAskQaEmail] = useState("");
+  const [askQaError, setAskQaError] = useState<string | null>(null);
 
   const [lrOrdersPage, setLrOrdersPage] = useState(1);
   const [lrOrdersPages, setLrOrdersPages] = useState(1);
@@ -146,6 +156,17 @@ export default function App() {
     setPdfGenTotal(data.total);
   }, [pdfGenPage, pdfGenKind]);
 
+  const loadAskQuestions = useCallback(async () => {
+    setAskQaError(null);
+    const data = await fetchAskQuestions({
+      page: askQaPage,
+      email: askQaEmail || undefined,
+    });
+    setAskQuestions(data.items);
+    setAskQaPages(data.pages);
+    setAskQaTotal(data.total);
+  }, [askQaPage, askQaEmail]);
+
   const loadLoveRealityOrders = useCallback(async () => {
     setLrOrdersError(null);
     const data = await fetchLoveRealityOrders({ page: lrOrdersPage });
@@ -171,18 +192,20 @@ export default function App() {
       else if (tab === "users") await loadUsers();
       else if (tab === "logins") await loadLogins();
       else if (tab === "pdfcosts") await loadPdfGenerations();
+      else if (tab === "askqa") await loadAskQuestions();
       else if (tab === "lrorders") await loadLoveRealityOrders();
       else if (tab === "bvorders") await loadBusinessVastuOrders();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to load";
       if (tab === "pdfcosts") setPdfGenError(msg);
+      else if (tab === "askqa") setAskQaError(msg);
       else if (tab === "lrorders") setLrOrdersError(msg);
       else if (tab === "bvorders") setBvOrdersError(msg);
       else setError(msg);
     } finally {
       setLoading(false);
     }
-  }, [tab, loadDashboard, loadTransactions, loadUsers, loadLogins, loadPdfGenerations, loadLoveRealityOrders, loadBusinessVastuOrders]);
+  }, [tab, loadDashboard, loadTransactions, loadUsers, loadLogins, loadPdfGenerations, loadAskQuestions, loadLoveRealityOrders, loadBusinessVastuOrders]);
 
   useEffect(() => {
     load();
@@ -733,6 +756,7 @@ export default function App() {
             ["lrorders", "Love Reality Orders"],
             ["bvorders", "Business Vastu"],
             ["pdfcosts", "PDF AI costs"],
+            ["askqa", "Ask Q&A"],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -1311,6 +1335,131 @@ export default function App() {
                 type="button"
                 disabled={pdfGenPage >= pdfGenPages || loading}
                 onClick={() => setPdfGenPage((p) => p + 1)}
+              >
+                Next
+              </button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {tab === "askqa" ? (
+        <section className="section card">
+          <h2>Ask Q&A</h2>
+          <p className="detail-muted">
+            User questions with full answers, OpenAI tokens, INR cost, and exact LLM chart context per Ask.
+          </p>
+          {askQaError ? <div className="error">{askQaError}</div> : null}
+          <div className="toolbar">
+            <input
+              type="search"
+              placeholder="Filter by user email…"
+              value={askQaEmail}
+              onChange={(e) => {
+                setAskQaEmail(e.target.value);
+                setAskQaPage(1);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setAskQaError(null);
+                loadAskQuestions().catch((e) =>
+                  setAskQaError(e instanceof Error ? e.message : "Failed to load"),
+                );
+              }}
+              disabled={loading}
+            >
+              Refresh
+            </button>
+            <span className="detail-muted">{askQaTotal} questions</span>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Question · answer · user</th>
+                  <th>Tokens · cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {askQuestions.length === 0 ? (
+                  <tr>
+                    <td colSpan={2}>No Ask questions logged yet.</td>
+                  </tr>
+                ) : (
+                  askQuestions.map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        <strong>Q:</strong> {row.question_text}
+                        {row.answer_text ? (
+                          <>
+                            <br />
+                            <span className="detail-muted">
+                              <strong>A:</strong> {row.answer_text}
+                            </span>
+                          </>
+                        ) : (
+                          <div className="detail-muted">No answer saved</div>
+                        )}
+                        <div className="detail-muted">
+                          {row.user_name || row.user_email || `user #${row.user_id}`}
+                          {" — "}
+                          {formatDate(row.created_at)}
+                          {row.topic ? ` — ${row.topic}` : ""}
+                          {row.engine_tag ? ` — ${row.engine_tag}` : ""}
+                        </div>
+                        <AskLlmContextPanel ctx={row.llm_context} />
+                      </td>
+                      <td>
+                        {row.total_tokens != null ? (
+                          <>
+                            {(row.prompt_tokens ?? 0).toLocaleString("en-IN")} in
+                            <br />
+                            {(row.completion_tokens ?? 0).toLocaleString("en-IN")} out
+                            {row.cached_tokens ? (
+                              <>
+                                <br />
+                                <span className="detail-muted">
+                                  {row.cached_tokens.toLocaleString("en-IN")} cached
+                                </span>
+                              </>
+                            ) : null}
+                            <br />
+                            <strong>{formatInr(row.cost_inr ?? 0)}</strong>
+                            {row.llm_model ? (
+                              <>
+                                <br />
+                                <span className="detail-muted">{row.llm_model}</span>
+                              </>
+                            ) : null}
+                          </>
+                        ) : (
+                          <span className="detail-muted">No LLM call</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          {askQaPages > 1 ? (
+            <div className="pager">
+              <button
+                type="button"
+                disabled={askQaPage <= 1 || loading}
+                onClick={() => setAskQaPage((p) => Math.max(1, p - 1))}
+              >
+                Prev
+              </button>
+              <span>
+                Page {askQaPage} / {askQaPages}
+              </span>
+              <button
+                type="button"
+                disabled={askQaPage >= askQaPages || loading}
+                onClick={() => setAskQaPage((p) => p + 1)}
               >
                 Next
               </button>

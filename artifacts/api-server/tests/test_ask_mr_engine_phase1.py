@@ -5,6 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ask_mr import run_mr_static_engine
+from ask_mr.classifier import classify_mr_archetype
 from ask_mr.narrator import render_template
 
 
@@ -136,6 +137,22 @@ class MrEngineTests(unittest.TestCase):
         res = run_mr_static_engine(SAMPLE_KUNDLI, "meri patni ka profession kya hoga?", wants_explain=False)
         self.assertEqual(res.archetype, "spouse_profession")
         self.assertTrue(len(res.evidence) >= 2)
+
+    def test_partner_family_background_routes_partner_nature(self):
+        q = "Partner ki family background kaisi ho sakti hai?"
+        self.assertEqual(classify_mr_archetype(q), "partner_nature")
+
+    def test_emotional_compatibility_routes_general_mr(self):
+        q = "Marriage ke baad emotional compatibility kaisi rahegi?"
+        self.assertEqual(classify_mr_archetype(q), "general_mr")
+
+    def test_partner_career_support_routes_general_mr(self):
+        q = "Marriage partner meri career aur life goals ko support karega ya nahi?"
+        self.assertEqual(classify_mr_archetype(q), "general_mr")
+
+    def test_family_approval_still_routes_elders(self):
+        q = "ghar wale maanenge kya?"
+        self.assertEqual(classify_mr_archetype(q), "family_approval")
 
 
 if __name__ == "__main__":

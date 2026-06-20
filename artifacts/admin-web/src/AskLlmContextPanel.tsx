@@ -36,15 +36,25 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
   }
 
   const checks = (ctx.checks || {}) as Record<string, unknown>;
-  const flags = (ctx.slice_meta as { flags?: string[] } | undefined)?.flags;
+  const sliceMeta = (ctx.slice_meta || {}) as Record<string, unknown>;
+  const flags = (sliceMeta.flags as string[] | undefined) || undefined;
+  const evidence = (sliceMeta.evidence as string[] | undefined) || undefined;
+  const summary = (sliceMeta.summary as string[] | undefined) || undefined;
+  const verdict = sliceMeta.verdict ? String(sliceMeta.verdict) : "";
+  const archetype = sliceMeta.archetype ? String(sliceMeta.archetype) : "";
+  const skipLlm = sliceMeta.skip_llm === true || checks.skip_llm === true;
   const chartChars = ctx.sizes?.chart_chars ?? ctx.chart_text?.length ?? 0;
   const rawOnly = typeof (ctx as { raw?: string }).raw === "string";
+  const sliceLabel = rawOnly
+    ? "raw JSON"
+    : String(checks.slice_type || checks.archetype || archetype || "unknown");
 
   return (
     <details className="llm-context-panel" open>
       <summary>
-        LLM context — slice: {rawOnly ? "raw JSON" : String(checks.slice_type || "unknown")}
+        LLM context — {sliceLabel}
         {ctx.llm_called === false ? " (LLM skipped)" : ""}
+        {archetype ? ` · ${archetype}` : ""}
       </summary>
       <div className="llm-context-body">
         {rawOnly ? (
@@ -65,7 +75,7 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
               <span>
                 <strong>Model</strong>
                 <br />
-                {ctx.model || "—"}
+                {ctx.model || (skipLlm ? "template" : "—")}
               </span>
               <span>
                 <strong>Max tokens</strong>
@@ -73,6 +83,12 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
                 {ctx.max_tokens ?? "—"}
               </span>
             </div>
+
+            {verdict ? (
+              <p className="detail-muted">
+                <strong>Engine verdict:</strong> {verdict}
+              </p>
+            ) : null}
 
             {ctx.skip_reason ? (
               <p className="detail-muted">
@@ -93,8 +109,30 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
               </details>
             ) : null}
 
-            {flags && flags.length > 0 ? (
+            {summary && summary.length > 0 ? (
               <details open>
+                <summary>Engine summary ({summary.length})</summary>
+                <ul className="llm-check-list">
+                  {summary.map((s) => (
+                    <li key={s}>{s}</li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+
+            {evidence && evidence.length > 0 ? (
+              <details open>
+                <summary>Engine evidence ({evidence.length})</summary>
+                <ul className="llm-check-list">
+                  {evidence.map((e) => (
+                    <li key={e}>{e}</li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+
+            {flags && flags.length > 0 ? (
+              <details>
                 <summary>Pre-calculated flags ({flags.length})</summary>
                 <ul className="llm-check-list">
                   {flags.map((f) => (

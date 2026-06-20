@@ -3524,6 +3524,37 @@ YES/NO: "Haan — …" ya "Nahi — …" seedhe.
 Chart unclear: "Abhi mixed signal hai — ek clear trend nahi dikh raha."
 """
 
+_RAW_LENGTH_PARTNER_NATURE = """
+════════════════════════════════════════════════════════════════════
+PARTNER NATURE — 3 plain paragraphs (NO boxes / NO steps in reply)
+════════════════════════════════════════════════════════════════════
+User ko sirf flowing Hinglish prose chahiye — koi box, card, heading, ya step label nahi.
+
+HARD RULES:
+  • **3 chhoti paragraphs** (~90–120 words total), blank line se alag.
+  • Pehla para: emotional/social nature (7H sign + occupants blend).
+  • Doosra para: mindset/communication (7th lord depth).
+  • Teesra para: look/lifestyle (gender karak Venus/Jupiter).
+  • **BANNED in user text:** "Step 1/2/3", "Para 1/2/3", headings, bullets,
+    numbered lists, markdown blockquotes (>), **bold section titles**, boxes/cards.
+  • Traits blend karo — sections alag mat rakho.
+  • USE: ho sakta hai, lagta hai, shayad. NEVER: pakka hoga, yahi hoga, milega hi.
+  • NO planet/house/sign names in user-facing text.
+
+EXAMPLE (exact style — plain prose only):
+"Aapke chart ke mutabik, aapke partner kafi intelligent, expressive aur baat-cheet
+karne wale ho sakte hain. Gemini rashi aur Moon ki wajah se wo aapse emotionally
+gehre jud sakte hain, halanki unka mood thoda badalta reh sakta hai.
+
+Unka dimaag kafi gehri soch wala aur analytical ho sakta hai. 7th lord ki placement
+se wo har baat ke peeche ka logic ya sach nikalne mein mahir ho sakte hain aur
+thode mysterious bhi lag sakte hain.
+
+Partner ke karak ki placement se unka look aur presence kafi royal, attractive
+aur graceful ho sakta hai. Unka self-respect high ho sakta hai aur unhe ek standard
+aur acchi lifestyle jeena pasand ho sakta hai."
+"""
+
 _RAW_LENGTH_EXPLAIN = """
 ════════════════════════════════════════════════════════════════════
 📖 DETAIL MODE — user ne samjhao/detail manga
@@ -3569,6 +3600,7 @@ def _build_universal_ask_system_prompt(
     reply_lang: str = "hn",
     extra_rules: str = "",
     dcr_love_rule: str = "",
+    is_partner_nature: bool = False,
 ) -> str:
     """Universal Cosmo prompt — full D1+D9 chart block + short human reply rules."""
     _rl = (reply_lang or "hn").strip().lower()
@@ -3625,7 +3657,9 @@ USER REPLY — explain cause → effect in plain language:
 CHART FACTS (internal reference only):
 {chart_text}{extra_rules}"""
 
-    if wants_explain:
+    if is_partner_nature:
+        length_block = _RAW_LENGTH_PARTNER_NATURE
+    elif wants_explain:
         length_block = _RAW_LENGTH_EXPLAIN
     elif is_timing:
         length_block = _RAW_LENGTH_TIMING
@@ -3740,7 +3774,13 @@ def _raw_passthrough_max_tokens(
         return 160
     if is_sensitive:
         return 120
-    if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "partner_nature_minimal":
+    if isinstance(dcr_love_meta, dict) and (
+        dcr_love_meta.get("slice") == "partner_nature_minimal"
+        or (
+            dcr_love_meta.get("slice") == "mr_engine_v1"
+            and dcr_love_meta.get("archetype") == "partner_nature"
+        )
+    ):
         return 180
     if dcr_love_meta:
         return 100
@@ -3748,7 +3788,7 @@ def _raw_passthrough_max_tokens(
 
 
 def _enforce_partner_nature_paragraphs(text: str) -> str:
-    """Keep 3 short Hinglish paragraphs; trim without flattening."""
+    """Keep 3 short Hinglish paragraphs; strip boxes/steps/labels."""
     if not text:
         return ""
     raw = (text or "").strip()
@@ -3756,6 +3796,29 @@ def _enforce_partner_nature_paragraphs(text: str) -> str:
     if "👉" in raw:
         raw = raw.split("👉")[0].strip()
     raw = _AI_PHRASE_RX.sub("", raw).strip()
+    # Drop markdown boxes / step labels the model sometimes leaks
+    cleaned_lines: list[str] = []
+    _step_rx = re.compile(
+        r"^(?:#{1,3}\s*)?(?:\*{0,2})?"
+        r"(?:step\s*[123]|para(?:graph)?\s*[123]|part\s*[123])"
+        r"(?:\*{0,2})?\s*[:\-—]\s*",
+        re.I,
+    )
+    for line in raw.splitlines():
+        ln = line.strip()
+        if not ln:
+            cleaned_lines.append("")
+            continue
+        if ln.startswith(">"):
+            ln = ln.lstrip(">").strip()
+        if re.match(r"^[-*•]\s+", ln):
+            ln = re.sub(r"^[-*•]\s+", "", ln)
+        if re.match(r"^\d+[.)]\s+", ln):
+            ln = re.sub(r"^\d+[.)]\s+", "", ln)
+        ln = _step_rx.sub("", ln).strip()
+        if ln:
+            cleaned_lines.append(ln)
+    raw = "\n".join(cleaned_lines).strip()
     parts = [p.strip() for p in re.split(r"\n\s*\n", raw) if p.strip()]
     if len(parts) <= 1:
         parts = [p.strip() for p in raw.split("\n") if p.strip()]
@@ -4687,6 +4750,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     if _is_mr_static:
         static_dasha_hint = False
     dcr_love_meta = None
+    _mr_engine_result = None
     _chart_slice_type = "full_compact"
     try:
         if is_timing:
@@ -4712,27 +4776,84 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             except Exception as _lfe:
                 print(f"[raw_passthrough] timing locked_facts skipped: {_lfe}", flush=True)
         elif _is_mr_static:
-            try:
-                from ask_marriage_relationship_slice import (  # type: ignore
-                    build_marriage_relationship_slice,
-                )
-                chart_text, dcr_love_meta = build_marriage_relationship_slice(
-                    kundli if isinstance(kundli, dict) else {}, question,
-                    birth=birth,
-                )
-                print(
-                    f"[raw_passthrough] MR_SLICE "
-                    f"flags={len((dcr_love_meta or {}).get('flags') or [])} "
-                    f"chart_chars={len(chart_text)}",
-                    flush=True,
-                )
-            except Exception as _mr_slice_exc:
-                print(f"[raw_passthrough] MR_SLICE skipped: {_mr_slice_exc}", flush=True)
-                chart_text = _raw_compact_chart(
-                    kundli, include_dasha=False, static_dasha_hint=False,
-                )
-                dcr_love_meta = None
-                _is_mr_static = False
+            _use_legacy_mr = (os.environ.get("ASK_MR_ENGINE") or "1").strip() == "0"
+            if _use_legacy_mr:
+                try:
+                    from ask_marriage_relationship_slice import (  # type: ignore
+                        build_marriage_relationship_slice,
+                    )
+                    chart_text, dcr_love_meta = build_marriage_relationship_slice(
+                        kundli if isinstance(kundli, dict) else {}, question,
+                        birth=birth,
+                    )
+                    print(
+                        "[raw_passthrough] MR_LEGACY_SLICE "
+                        f"chart_chars={len(chart_text)}",
+                        flush=True,
+                    )
+                except Exception as _leg_exc:
+                    print(f"[raw_passthrough] MR_LEGACY_SLICE failed: {_leg_exc}", flush=True)
+                    chart_text = _raw_compact_chart(
+                        kundli, include_dasha=False, static_dasha_hint=False,
+                    )
+                    dcr_love_meta = None
+                    _is_mr_static = False
+            else:
+                try:
+                    from ask_mr import run_mr_static_engine  # type: ignore
+
+                    _mr_engine_result = run_mr_static_engine(
+                        kundli if isinstance(kundli, dict) else {},
+                        question or "",
+                        birth=birth,
+                        wants_explain=wants_explain,
+                    )
+                    chart_text = _mr_engine_result.to_chart_text(question=question or "")
+                    dcr_love_meta = {
+                        "slice": "mr_engine_v1",
+                        "topic": "marriage_and_relationship",
+                        "archetype": _mr_engine_result.archetype,
+                        "verdict": _mr_engine_result.verdict,
+                        "summary": list(_mr_engine_result.summary or []),
+                        "evidence": list(_mr_engine_result.evidence or []),
+                        "ignore": list(_mr_engine_result.ignore or []),
+                        "checks": dict(_mr_engine_result.checks or {}),
+                        "skip_llm": bool(_mr_engine_result.skip_llm),
+                    }
+                    print(
+                        f"[raw_passthrough] MR_ENGINE "
+                        f"archetype={_mr_engine_result.archetype} "
+                        f"skip_llm={_mr_engine_result.skip_llm} "
+                        f"evidence={len(_mr_engine_result.evidence or [])} "
+                        f"chart_chars={len(chart_text)}",
+                        flush=True,
+                    )
+                except Exception as _mr_slice_exc:
+                    print(
+                        f"[raw_passthrough] MR_ENGINE failed, legacy fallback: "
+                        f"{_mr_slice_exc}",
+                        flush=True,
+                    )
+                    try:
+                        from ask_marriage_relationship_slice import (  # type: ignore
+                            build_marriage_relationship_slice,
+                        )
+                        chart_text, dcr_love_meta = build_marriage_relationship_slice(
+                            kundli if isinstance(kundli, dict) else {}, question,
+                            birth=birth,
+                        )
+                        print(
+                            "[raw_passthrough] MR_LEGACY_FALLBACK "
+                            f"chart_chars={len(chart_text)}",
+                            flush=True,
+                        )
+                    except Exception as _fb_exc:
+                        print(f"[raw_passthrough] MR_LEGACY_FALLBACK failed: {_fb_exc}", flush=True)
+                        chart_text = _raw_compact_chart(
+                            kundli, include_dasha=False, static_dasha_hint=False,
+                        )
+                        dcr_love_meta = None
+                        _is_mr_static = False
         else:
             chart_text = _raw_compact_chart(
                 kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
@@ -4756,7 +4877,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 print(f"[raw_passthrough] DCR_LOVE skipped: {_dcr_love_exc}", flush=True)
 
         if _is_mr_static:
-            _chart_slice_type = "marriage_relationship"
+            _chart_slice_type = (
+                "mr_engine_v1"
+                if isinstance(dcr_love_meta, dict)
+                and dcr_love_meta.get("slice") == "mr_engine_v1"
+                else "marriage_relationship"
+            )
         elif is_timing:
             _chart_slice_type = "timing_full_chart"
         elif dcr_love_meta:
@@ -4942,7 +5068,55 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             skip_reason="marriage_timing_deterministic",
         )
 
+    # ── MR engine template-only (skip LLM for simple yes/no e.g. manglik) ──
+    if (
+        _is_mr_static
+        and _mr_engine_result is not None
+        and getattr(_mr_engine_result, "skip_llm", False)
+        and (_mr_engine_result.template_text or "").strip()
+    ):
+        _tpl_text = (_mr_engine_result.template_text or "").strip()
+        _out_tpl = {
+            "text": _tpl_text,
+            "topic": "marriage",
+            "question_type": qtype,
+            "confidence": 1.0,
+            "source": "mr_engine_template",
+            "engine_tag": "ans-engine",
+            "follow_ups": [],
+        }
+        _pt_checks_tpl = {
+            "slice_type": "mr_engine_v1",
+            "resolved_route": _resolved_route,
+            "is_mr_static": True,
+            "archetype": _mr_engine_result.archetype,
+            "skip_llm": True,
+            "dasha_included": False,
+        }
+        return _attach_admin_llm_context(
+            _out_tpl,
+            question=question or "",
+            question_type=qtype,
+            is_timing=False,
+            checks=_pt_checks_tpl,
+            chart_text=chart_text,
+            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+            llm_called=False,
+            skip_reason="mr_engine_template",
+        )
+
     # ── Optional prompt add-ons (timing engines, KP, partner, depth modes) ──
+    _is_pn_minimal = (
+        isinstance(dcr_love_meta, dict)
+        and (
+            dcr_love_meta.get("slice") == "partner_nature_minimal"
+            or (
+                dcr_love_meta.get("slice") == "mr_engine_v1"
+                and dcr_love_meta.get("archetype") == "partner_nature"
+            )
+        )
+    )
+
     sensitive_depth_rule = (
         "\n\n=== SENSITIVE Q — short + warm ===\n"
         "Max 40-45 words, 3 chhoti sentences: soft verdict → ek plain reason "
@@ -4962,27 +5136,19 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         "Sirf user ke sawaal ka jawab — max 40-45 words. Pehle direct insight, "
         "phir 1 plain reason (max 1 planet). Warm dost tone, stereotypes nahi. "
         "NO essay, NO 👉 Final, NO [Checked].\n"
-    ) if is_marriage_domain else ""
+    ) if (is_marriage_domain and not _is_pn_minimal) else ""
 
-    _is_pn_minimal = (
-        isinstance(dcr_love_meta, dict)
-        and dcr_love_meta.get("slice") == "partner_nature_minimal"
-    )
     mr_static_rule = ""
     if _is_mr_static:
         if _is_pn_minimal:
             mr_static_rule = (
-                "\n\n=== PARTNER NATURE — 3-step answer (mandatory) ===\n"
-                "Follow EXECUTION PRIORITY in chart slice: Step 1 (7H rashi + 7L) → "
-                "Step 2 (7H occupants) → Step 3 (gender karak: Venus male / Jupiter female).\n"
-                "Output: exactly 3 short Hinglish paragraphs (~90–120 words). "
-                "Blend traits across paras — NOT isolated sections.\n"
-                "Para 1: emotional/social nature (Step 1+2). "
-                "Para 2: mindset/communication (7L depth). "
-                "Para 3: look/lifestyle (karak).\n"
-                "USE: ho sakta hai, lagta hai, shayad, mumkin hai. "
-                "NEVER: pakka, yahi hoga, hoga hi, milega hi.\n"
-                "No planet/house/sign names in user text. Warm, positive, insightful.\n"
+                "\n\n=== PARTNER NATURE — plain prose only (mandatory) ===\n"
+                "Internally follow EXECUTION PRIORITY in chart slice (7H+7L → occupants → karak).\n"
+                "User-facing reply: 3 flowing Hinglish paragraphs (~90–120 words). "
+                "NO Step 1/2/3 labels, NO Para headings, NO bullets, NO boxes/cards/blockquotes.\n"
+                "Blend traits naturally across paragraphs — like a wise friend talking.\n"
+                "USE: ho sakta hai, lagta hai, shayad. NEVER: pakka, yahi hoga, milega hi.\n"
+                "No planet/house/sign names in user text.\n"
             )
         else:
             mr_static_rule = (
@@ -5040,7 +5206,11 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         _topic_hint = ""
 
     dcr_love_rule = ""
-    if dcr_love_meta:
+    if (
+        dcr_love_meta
+        and not _is_pn_minimal
+        and dcr_love_meta.get("slice") != "mr_engine_v1"
+    ):
         dcr_love_rule = (
             "\nDCR LOVE SLICE: partner/love Q — D1 first, D9 confirms. "
             "Plain Hinglish result only; hide technical terms in reply.\n"
@@ -5061,6 +5231,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             reply_lang=eff_lang,
             extra_rules=extra_rules,
             dcr_love_rule=dcr_love_rule,
+            is_partner_nature=_is_pn_minimal,
         )
     except Exception as _sp_exc:
         print(f"[raw_passthrough] system_prompt build failed: {_sp_exc}", flush=True)
@@ -5075,6 +5246,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             reply_lang=eff_lang,
             extra_rules="",
             dcr_love_rule="",
+            is_partner_nature=_is_pn_minimal,
         )
 
     model = os.environ.get("RAW_PASSTHROUGH_MODEL",

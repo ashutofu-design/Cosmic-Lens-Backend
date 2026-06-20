@@ -15,14 +15,12 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Share,
   StatusBar,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import * as Clipboard from "expo-clipboard";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CosmicBg } from "@/components/CosmicBg";
@@ -30,7 +28,6 @@ import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { AcharyaTypingDots } from "@/components/AcharyaTypingDots";
 import { CardsCarousel, type CardData } from "@/components/CardsCarousel";
 import { MarkdownReply } from "@/components/MarkdownReply";
-import { MessageActionsSheet } from "@/components/MessageActionsSheet";
 import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
@@ -315,24 +312,7 @@ export default function AskScreen() {
     plan: string;
     message: string;
   }>(null);
-  // Long-press action sheet target message
-  const [actionsFor, setActionsFor] = useState<Message | null>(null);
   const listRef = useRef<FlatList>(null);
-
-  // Find the user question that produced a given assistant message. Used by
-  // Regenerate so we re-ask the question paired to the LONG-PRESSED bubble,
-  // not just the latest one in the thread (architect bug #2 fix).
-  const findPrecedingUserQuestion = useCallback(
-    (assistantId: string): string => {
-      const idx = messages.findIndex((m) => m.id === assistantId);
-      if (idx <= 0) return "";
-      for (let i = idx - 1; i >= 0; i--) {
-        if (messages[i].role === "user") return messages[i].text;
-      }
-      return "";
-    },
-    [messages],
-  );
 
   const scrollToEnd = useCallback(() => {
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
@@ -846,21 +826,6 @@ export default function AskScreen() {
   const [voiceMsgId, setVoiceMsgId] = useState<string | null>(null);
   // States: idle | loading | playing
   const [voiceState, setVoiceState] = useState<"idle" | "loading" | "playing">("idle");
-  // Phase 2 — Copy button feedback. Holds the message id whose Copy
-  // button was tapped recently; flips icon to "check" + label to
-  // "Copied" for ~1.4s before reverting. Null when no message is in
-  // the post-copy confirmation window. Timeout id is kept in a ref so
-  // unmount can cancel the pending setState (architect lifecycle fix).
-  const [copiedFor, setCopiedFor] = useState<string | null>(null);
-  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    return () => {
-      if (copiedTimerRef.current) {
-        clearTimeout(copiedTimerRef.current);
-        copiedTimerRef.current = null;
-      }
-    };
-  }, []);
 
   // Configure audio mode once (play even in silent mode on iOS)
   useEffect(() => {
@@ -940,9 +905,6 @@ export default function AskScreen() {
   const renderMsg = ({ item }: { item: Message }) => {
     const isUser = item.role === "user";
     const isLatestAssistant = !isUser && item.id === latestAssistantId;
-    const voiceActive = voiceMsgId === item.id;
-    const voiceLoading = voiceActive && voiceState === "loading";
-    const voicePlaying = voiceActive && voiceState === "playing";
     return (
       <View>
         <View style={[s.bubble, isUser ? s.bubbleUser : s.bubbleAssistant]}>
@@ -951,13 +913,7 @@ export default function AskScreen() {
               <Text style={{ fontSize: 12 }}>🔭</Text>
             </View>
           )}
-          <Pressable
-            onLongPress={() => {
-              if (isUser || item.loading) return;
-              try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
-              setActionsFor(item);
-            }}
-            delayLongPress={350}
+          <View
             style={[s.bubbleInner, isUser
               ? [s.bubbleInnerUser, { backgroundColor: C.isDark ? "#1E1B4B" : "#EDE9FE", borderColor: `${C.accent}30` }]
               : [s.bubbleInnerAssistant, { backgroundColor: C.bgCard, borderColor: C.border }]]}
@@ -974,124 +930,7 @@ export default function AskScreen() {
             ) : (
               <MarkdownReply text={item.text} />
             )}
-
-            {/* Action row — assistant messages only, after streaming done.
-                Phase 2 polish: Sun lo (voice) + Copy + Share, ChatGPT-style. */}
-            {!isUser && !item.loading && !item.streaming && (item.text || "").trim().length > 0 && (
-              <View style={s.assistantActionsRow}>
-                <Pressable
-                  onPress={() => handleVoicePlay(item)}
-                  hitSlop={8}
-                  style={({ pressed }) => [
-                    s.voiceBtn,
-                    { borderColor: `${C.accent}40`, backgroundColor: voicePlaying ? `${C.accent}20` : "transparent" },
-                    pressed && { opacity: 0.6 },
-                  ]}
-                >
-                  <Feather
-                    name={voicePlaying ? "pause" : voiceLoading ? "loader" : "volume-2"}
-                    size={12}
-                    color={C.accent}
-                  />
-                  <Text style={[s.voiceBtnText, { color: C.accent }]}>
-                    {voiceLoading ? "Ban raha…" : voicePlaying ? "Ruko" : "Sun lo"}
-                  </Text>
-                </Pressable>
-
-                {/* Copy — copies the markdown reply to clipboard. */}
-                <Pressable
-                  onPress={async () => {
-                    try {
-                      await Clipboard.setStringAsync(item.text || "");
-                      try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
-                      setCopiedFor(item.id);
-                      // Cancel any pending revert from a prior tap before
-                      // scheduling a fresh one — prevents the "Copied" badge
-                      // from disappearing too early if the user taps two
-                      // assistant replies in quick succession.
-                      if (copiedTimerRef.current) {
-                        clearTimeout(copiedTimerRef.current);
-                      }
-                      copiedTimerRef.current = setTimeout(() => {
-                        setCopiedFor((cur) => (cur === item.id ? null : cur));
-                        copiedTimerRef.current = null;
-                      }, 1400);
-                    } catch {}
-                  }}
-                  hitSlop={8}
-                  style={({ pressed }) => [
-                    s.actionPlainBtn,
-                    pressed && { opacity: 0.55 },
-                  ]}
-                >
-                  <Feather
-                    name={copiedFor === item.id ? "check" : "copy"}
-                    size={12}
-                    color={copiedFor === item.id ? C.accent : C.textMuted}
-                  />
-                  <Text style={[s.actionPlainBtnText, { color: copiedFor === item.id ? C.accent : C.textMuted }]}>
-                    {copiedFor === item.id ? "Copied" : "Copy"}
-                  </Text>
-                </Pressable>
-
-                {/* Share — RN native share sheet. */}
-                <Pressable
-                  onPress={async () => {
-                    try { Haptics.selectionAsync(); } catch {}
-                    try {
-                      await Share.share({
-                        message: (item.text || "").trim(),
-                      });
-                    } catch {}
-                  }}
-                  hitSlop={8}
-                  style={({ pressed }) => [
-                    s.actionPlainBtn,
-                    pressed && { opacity: 0.55 },
-                  ]}
-                >
-                  <Feather name="share-2" size={12} color={C.textMuted} />
-                  <Text style={[s.actionPlainBtnText, { color: C.textMuted }]}>
-                    Share
-                  </Text>
-                </Pressable>
-
-                {/* Phase 2.8.27 — engine provenance badge.
-                    `ans-engine` = deterministic engine LOCKED FACTS were
-                    injected into the system prompt (e.g. marriage engine).
-                    `ans-cosmo`  = pure LLM (Cosmo) answer, no engine block.
-                    Absent → no badge (legacy / pre-tag responses). */}
-                {item.engineTag && (
-                  <View
-                    style={[
-                      s.engineTagChip,
-                      {
-                        borderColor: item.engineTag === "ans-engine"
-                          ? `${C.accent}55`
-                          : `${C.textMuted}40`,
-                        backgroundColor: item.engineTag === "ans-engine"
-                          ? `${C.accent}15`
-                          : "transparent",
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        s.engineTagText,
-                        {
-                          color: item.engineTag === "ans-engine"
-                            ? C.accent
-                            : C.textMuted,
-                        },
-                      ]}
-                    >
-                      {item.engineTag}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
-          </Pressable>
+          </View>
         </View>
 
         {/* Phase 7.5 — Clarifier UX: refinement chips shown when the
@@ -1511,19 +1350,6 @@ export default function AskScreen() {
       </View>
       </>)}
 
-      {/* ── Long-press actions sheet (Copy / Share / Regenerate) ─────────── */}
-      <MessageActionsSheet
-        visible={!!actionsFor}
-        text={actionsFor?.text || ""}
-        canRegenerate={!loading && !!actionsFor && !!findPrecedingUserQuestion(actionsFor.id)}
-        onClose={() => setActionsFor(null)}
-        onRegenerate={() => {
-          if (!actionsFor) return;
-          const q = findPrecedingUserQuestion(actionsFor.id);
-          if (q) send(q, { regenerate: true, targetAssistantId: actionsFor.id });
-        }}
-      />
-
       {/* ── Daily quota exhausted modal ──────────────────────────────────── */}
       <Modal
         visible={!!quotaModal}
@@ -1836,39 +1662,6 @@ const s = StyleSheet.create({
     borderWidth: 1,
   },
   clarifierChipText: { fontSize: 12, fontWeight: "600" },
-
-  // Phase 2 — Action row under assistant message: Sun lo + Copy + Share
-  assistantActionsRow: {
-    flexDirection: "row", alignItems: "center", flexWrap: "wrap",
-    gap: 8, marginTop: 10,
-  },
-  // Voice play button (Sun lo) — primary accent-bordered chip
-  voiceBtn: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 14, borderWidth: 1,
-  },
-  voiceBtnText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
-  // Phase 2 — secondary action button (Copy / Share). Borderless, muted
-  // foreground to keep the voice button as the primary affordance.
-  actionPlainBtn: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 8, paddingVertical: 5,
-    borderRadius: 12,
-  },
-  actionPlainBtnText: { fontSize: 11, fontWeight: "600", letterSpacing: 0.3 },
-
-  // Phase 2.8.27 — engine provenance badge (ans-engine / ans-cosmo).
-  // Sits inline next to Share in the same flex row as Sun lo / Copy /
-  // Share. Distinct visual: bordered chip, smaller font, lowercase.
-  engineTagChip: {
-    paddingHorizontal: 7, paddingVertical: 3,
-    borderRadius: 10, borderWidth: 1,
-  },
-  engineTagText: {
-    fontSize: 10, fontWeight: "700",
-    letterSpacing: 0.4, textTransform: "lowercase",
-  },
 
   starters: {
     paddingHorizontal: 16, paddingBottom: 10, gap: 8,

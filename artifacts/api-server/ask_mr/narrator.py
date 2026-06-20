@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from .types import EngineResult
 
-_NARRATOR_LANG = {
+_MR_CONFIDENT_TONE = """
+TONE — confident chart reading (engine already decided; do NOT sound doubtful):
+• State traits directly: "partner chatty hote hain", "emotional side gehra rehta hai", "mindset private rehta hai".
+• Use: hai / hote hain / rehta hai / rehti hai / hota hai / dikhta hai (pattern voice).
+• BANNED hedging: shayad, ho sakta hai, ho sakti hai, lagta hai, mumkin hai, maybe, perhaps, might.
+• NEVER: pakka hoga, 100%, guarantee, fixed fate, milega hi, yahi hoga.
+""".strip()
     "hn": "Reply in natural Hinglish (Roman script). No Devanagari. No planet/house jargon.",
     "hi": "Reply in Hindi (Devanagari). No planet/house jargon.",
     "en": "Reply in simple English. No jargon.",
@@ -44,19 +50,21 @@ def build_mr_engine_narrator_system_prompt(
             "PARAGRAPH 2 (~30–40 words): ONLY 7th lord + planets-in-7th evidence → emotional tone + private/thoughtful mindset.\n"
             "PARAGRAPH 3 (~30–40 words): ONLY partner-karak evidence → warm presence / attraction in relationship.\n\n"
             "Do NOT write one long essay. Do NOT add 'unique vibes' or facts outside EVIDENCE.\n"
-            "USE: ho sakta hai, lagta hai, shayad. NEVER: pakka, 100%, definitely."
+            f"{_MR_CONFIDENT_TONE}"
         )
     elif wants_explain:
         length_block = (
             f"Write 3–5 short sentences (~{min(wb + 35, 130)} words).\n"
             "Explain the engine verdict using 3–5 evidence lines below — "
-            "each in plain life language (no jargon)."
+            "each in plain life language (no jargon).\n"
+            f"{_MR_CONFIDENT_TONE}"
         )
     else:
         length_block = (
             f"Write 2–3 short sentences (~{wb} words max).\n"
-            "Line 1 = engine verdict in plain words.\n"
-            "Line 2–3 = 1–2 reasons from evidence only (+ optional soft practical note)."
+            "Line 1 = engine verdict stated clearly (not hedged).\n"
+            "Line 2–3 = 1–2 reasons from evidence only.\n"
+            f"{_MR_CONFIDENT_TONE}"
         )
 
     topic_hint = archetype.replace("_", " ") if archetype else "marriage/relationship"
@@ -65,9 +73,10 @@ def build_mr_engine_narrator_system_prompt(
 
 {_NARRATOR_LANG[rl]}
 
-RULES: ENGINE FACTS below are final. Narrate VERDICT + EVIDENCE only in plain language.
+RULES: ENGINE FACTS below are final. Narrate VERDICT + EVIDENCE in plain language with confidence.
 Do NOT add planets/houses/D9/dasha or new reasons. Do NOT contradict VERDICT.
-Use ho sakta hai / lagta hai / shayad — never pakka or 100%. No bullets or [Checked].
+Do NOT hedge with shayad/ho sakta hai/lagta hai — state the pattern the engine found.
+No bullets or [Checked].
 
 Topic: {topic_hint}
 {length_block}
@@ -87,12 +96,12 @@ def build_manglik_template(result: EngineResult) -> str:
     is_yes = bool((result.checks or {}).get("is_manglik"))
     if is_yes:
         return (
-            "Haan — aapke chart mein manglik pattern dikhta hai. "
-            "Iska matlab gussa ya impulse ko sambhalna zaroori ho sakta hai, "
+            "Haan — chart mein manglik pattern hai. "
+            "Gussa ya impulse ko sambhalna zaroori rehta hai, "
             "lekin yeh seedha barbaadi nahi hoti. "
-            "Patience aur clear baat se rishta smooth ho sakta hai."
+            "Patience aur clear baat se rishta smooth rehta hai."
         )
     return (
         "Nahi — classic manglik position active nahi dikhti. "
-        "Phir bhi overall rishta chart ke baaki signals se decide hota hai."
+        "Overall rishta baaki chart signals se decide hota hai."
     )

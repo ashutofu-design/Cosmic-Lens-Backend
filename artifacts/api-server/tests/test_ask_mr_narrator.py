@@ -87,6 +87,7 @@ class MrNarratorTests(unittest.TestCase):
         )
         self.assertIn("exactly 3 paragraphs", prompt)
         self.assertIn("PARAGRAPH 1", prompt)
+        self.assertIn("BANNED hedging", prompt)
 
 
 if __name__ == "__main__":

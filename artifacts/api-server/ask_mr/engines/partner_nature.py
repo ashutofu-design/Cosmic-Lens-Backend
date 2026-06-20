@@ -24,6 +24,7 @@ def partner_nature_narrator_payload(result: EngineResult) -> str:
         "ARCHETYPE: partner_nature",
         f"VERDICT: {result.verdict}",
         "OUTPUT: exactly 3 paragraphs separated by a blank line (90–120 words total).",
+        "TONE: confident — state traits as chart pattern (hai/hote hain/rehta hai). NO shayad/ho sakta hai/lagta hai.",
         "PARA 1 — social vibe: use ONLY the 7th house sign evidence line.",
         "PARA 2 — emotions + mindset: use ONLY 7th lord + planets-in-7th evidence lines.",
         "PARA 3 — presence in love: use ONLY the partner-karak evidence line.",
@@ -90,7 +91,7 @@ def run_partner_nature(
         ),
         summary=[
             "User asked partner/spouse nature (non-timing).",
-            "Keep it warm and positive; avoid fatalistic wording.",
+            "State traits confidently from evidence — not hedged/shayad tone.",
             f"7H occupants for tone: {occ_label}.",
         ],
         evidence=evidence[:6],

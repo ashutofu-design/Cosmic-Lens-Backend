@@ -5208,20 +5208,18 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 "User-facing reply: 3 flowing Hinglish paragraphs (~90–120 words). "
                 "NO Step 1/2/3 labels, NO Para headings, NO bullets, NO boxes/cards/blockquotes.\n"
                 "Blend traits naturally across paragraphs — like a wise friend talking.\n"
-                "USE: ho sakta hai, lagta hai, shayad. NEVER: pakka, yahi hoga, milega hi.\n"
+                "State traits confidently (hai/hote hain/rehta hai). "
+                "NO shayad/ho sakta hai/lagta hai. NEVER: pakka hoga, 100%, guarantee.\n"
                 "No planet/house/sign names in user text.\n"
             )
         else:
             mr_static_rule = (
                 "\n\n=== MARRIAGE/RELATIONSHIP SLICE — answer tone (mandatory) ===\n"
-                "Short Hinglish, max 50-60 words. Chart = pattern/tendency, NOT fixed fate.\n"
-                "USE: ho sakta hai, lagta hai, tendency dikhti hai, shayad, mumkin hai, "
-                "chances hain, kam-zyaada.\n"
-                "NEVER: pakka, yahi hoga, hoga hi, 100%, confirm, definitely, "
-                "milega hi, waisa hi hoga.\n"
-                "Negative → 'mushkil ho sakta hai' NOT 'nahi hoga'. "
-                "Positive → 'ho sakta hai' NOT 'hoga'.\n"
-                "No house/planet jargon. One warm insight + soft pattern — human friend tone.\n"
+                "Short Hinglish, max 50-60 words. Chart = pattern reading — state it clearly.\n"
+                "USE direct pattern voice: hai, hote hain, rehta hai, dikhta hai.\n"
+                "BANNED: shayad, ho sakta hai, lagta hai, mumkin hai, maybe.\n"
+                "NEVER: pakka hoga, 100%, guarantee, milega hi, fixed fate.\n"
+                "No house/planet jargon. One clear insight + reason — confident friend tone.\n"
             )
 
     if is_specific_partner and partner_kundli is not None:

@@ -46,20 +46,21 @@ def run_general_mr(kundli: dict, question: str, *, wants_explain: bool = False) 
         evidence = ["No dominant marriage-quality driver; overall pattern looks mixed/normal."]
 
     summary = [
-        "Answer marriage happiness/quality without guaranteeing fate.",
-        "If mixed: suggest communication, respect, and realistic expectations.",
+        "Answer marriage happiness/quality with confident pattern voice.",
+        "NO shayad/ho sakta hai/lagta hai — state what the chart shows.",
+        "If mixed: communication and respect matter — say it directly.",
     ]
     if sig.separation_yoga:
         summary.append("Separation theme exists — emphasize repair time, not doom.")
     if quality_score >= 72:
-        summary.append("Tone can be warm and encouraging.")
+        summary.append("Tone warm and encouraging.")
 
     return EngineResult(
         archetype="general_mr",
         verdict=verdict,
         confidence="medium" if quality_score >= 35 else "low",
         word_budget=85 if wants_explain else 55,
-        answer_plan="2–3 short sentences: quality outlook → 1–2 reasons → soft practical line.",
+        answer_plan="2–3 short sentences: quality outlook → 1–2 reasons → one practical line.",
         summary=summary[:4],
         evidence=evidence[:6],
         ignore=["timing dates/windows", "exact job title for spouse"],

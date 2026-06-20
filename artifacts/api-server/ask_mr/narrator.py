@@ -2,19 +2,68 @@
 
 from __future__ import annotations
 
+import re
+
 from .types import EngineResult
 
 _MR_CONFIDENT_TONE = """
 TONE — confident chart reading (engine already decided; do NOT sound doubtful):
-• State traits directly: "partner chatty hote hain", "emotional side gehra rehta hai", "mindset private rehta hai".
-• Use: hai / hote hain / rehta hai / rehti hai / hota hai / dikhta hai (pattern voice).
-• BANNED hedging: shayad, ho sakta hai, ho sakti hai, lagta hai, mumkin hai, maybe, perhaps, might.
+• State patterns directly: hai / hote hain / rehta hai / rehti hai / hota hai / hoti hai / dikhta hai.
+• Example: "partner chatty hote hain", "rishta intense rehta hai", "love side zyada hai".
+• BANNED hedging: shayad, ho sakta hai, ho sakti hai, ho sakte hain, lagta hai, lagti hai,
+  lagte hain, lag sakta hai, mumkin hai, maybe, perhaps, might, possibly, could be.
 • NEVER: pakka hoga, 100%, guarantee, fixed fate, milega hi, yahi hoga.
 """.strip()
+
+_NARRATOR_LANG = {
     "hn": "Reply in natural Hinglish (Roman script). No Devanagari. No planet/house jargon.",
     "hi": "Reply in Hindi (Devanagari). No planet/house jargon.",
     "en": "Reply in simple English. No jargon.",
 }
+
+_MR_HEDGE_RX: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\bshayad\b", re.I), ""),
+    (re.compile(r"\bperhaps\b", re.I), ""),
+    (re.compile(r"\bmaybe\b", re.I), ""),
+    (re.compile(r"\bmight\b", re.I), ""),
+    (re.compile(r"\bpossibly\b", re.I), ""),
+    (re.compile(r"\bcould be\b", re.I), "hai"),
+    (re.compile(r"\bmumkin hai\b", re.I), ""),
+    (re.compile(r"\bho sakte hain\b", re.I), "hain"),
+    (re.compile(r"\bho sakti hai\b", re.I), "hai"),
+    (re.compile(r"\bho sakta hai\b", re.I), "hai"),
+    (re.compile(r"\blag sakte hain\b", re.I), "hain"),
+    (re.compile(r"\blag sakti hai\b", re.I), "hai"),
+    (re.compile(r"\blag sakta hai\b", re.I), "hai"),
+    (re.compile(r"\blagte hain\b", re.I), "hain"),
+    (re.compile(r"\blagti hai\b", re.I), "hai"),
+    (re.compile(r"\blagta hai\b", re.I), "hai"),
+    (re.compile(r"\bfeel hoti hai\b", re.I), "hoti hai"),
+    (re.compile(r"\bfeel hota hai\b", re.I), "hota hai"),
+    (re.compile(r"\bfeel hote hain\b", re.I), "hote hain"),
+    (re.compile(r"\bunique lagta hai\b", re.I), "unique hai"),
+    (re.compile(r"\bdepend karega\b", re.I), "mix rehta hai"),
+    (re.compile(r"\bdepend karti hai\b", re.I), "mix rehti hai"),
+    (re.compile(r"\s+,", re.I), ","),
+]
+
+
+def polish_mr_confident_tone(text: str) -> str:
+    """Strip doubt-hedging from MR narrator output (all archetypes)."""
+    if not text or not str(text).strip():
+        return ""
+    blocks = str(text).split("\n\n")
+    out_blocks: list[str] = []
+    for block in blocks:
+        line = block.strip()
+        if not line:
+            continue
+        for rx, repl in _MR_HEDGE_RX:
+            line = rx.sub(repl, line)
+        line = re.sub(r"\s{2,}", " ", line).strip()
+        line = re.sub(r"\s+([,.;])", r"\1", line)
+        out_blocks.append(line)
+    return "\n\n".join(out_blocks).strip()
 
 
 def build_mr_narrator_user_lang_block(code: str) -> str:
@@ -89,7 +138,8 @@ def render_template(result: EngineResult) -> str | None:
     """Return user-facing text when skip_llm is set; else None."""
     if not result.skip_llm or not (result.template_text or "").strip():
         return None
-    return result.template_text.strip()
+    text = result.template_text.strip()
+    return polish_mr_confident_tone(text)
 
 
 def build_manglik_template(result: EngineResult) -> str:

@@ -68,7 +68,7 @@ def run_love_vs_arranged(kundli: dict, question: str, *, wants_explain: bool = F
 
     summary = [
         f"Classical scores — love: {love_score}, arrange: {arrange_score}.",
-        "Present as tendency, not guarantee.",
+        "State the tilt clearly — confident pattern voice, not shayad/ho sakta hai.",
     ]
     if wants_explain:
         summary.append("User wants explanation — cite 3–5 evidence lines in plain Hinglish.")
@@ -79,9 +79,9 @@ def run_love_vs_arranged(kundli: dict, question: str, *, wants_explain: bool = F
         confidence=_confidence_label(verdict_public, numeric_conf),
         word_budget=120 if wants_explain else 55,
         answer_plan=(
-            "State headline tilt → 2–4 classical reasons → soft practical note."
+            "State headline tilt clearly → 2–4 classical reasons → one practical line."
             if wants_explain
-            else "One clear tilt line → 1–2 reasons → soft practical note."
+            else "One clear tilt line → 1–2 reasons → one practical line."
         ),
         summary=summary,
         evidence=evidence[:10],

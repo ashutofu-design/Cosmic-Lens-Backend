@@ -5378,6 +5378,10 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             is_timing=is_timing, is_decision=is_decision, is_finance=is_finance,
             is_partner_nature=_is_pn_minimal,
         )
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "mr_engine_v1":
+            from ask_mr.narrator import polish_mr_confident_tone
+
+            text = polish_mr_confident_tone(text)
         if is_decision:
             if _decision_needs_plain_rewrite(text):
                 try:

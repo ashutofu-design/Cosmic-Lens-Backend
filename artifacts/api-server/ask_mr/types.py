@@ -24,6 +24,7 @@ class EngineResult:
         """Compact facts block for LLM narrator (minimal tokens)."""
         lines = [
             f"ARCHETYPE: {self.archetype}",
+            "TONE: confident pattern voice (hai/hote hain/rehta hai). NO shayad/ho sakta hai/lagta hai.",
             f"VERDICT: {self.verdict}",
             f"CONFIDENCE: {self.confidence}",
         ]

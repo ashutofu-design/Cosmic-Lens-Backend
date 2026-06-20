@@ -69,6 +69,21 @@ def run_mr_static_engine(
 
         return run_spouse_profession(kundli, question, wants_explain=wants_explain)
 
+    if archetype == "spouse_wealth":
+        from .engines.spouse_wealth import run_spouse_wealth
+
+        return run_spouse_wealth(kundli, question, wants_explain=wants_explain)
+
+    if archetype == "second_marriage":
+        from .engines.second_marriage import run_second_marriage
+
+        return run_second_marriage(kundli, question, wants_explain=wants_explain)
+
+    if archetype == "long_distance":
+        from .engines.long_distance import run_long_distance
+
+        return run_long_distance(kundli, question, wants_explain=wants_explain)
+
     if archetype == "one_sided_love":
         from .engines.one_sided_love import run_one_sided_love
 

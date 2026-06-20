@@ -88,6 +88,8 @@ def run_loyalty_trust(kundli: dict, question: str, *, wants_explain: bool = Fals
     ]
     if level in ("mixed", "unstable", "risky"):
         summary.append("Name the friction (distance/fights/hidden stress) then one practical trust habit.")
+    if support:
+        summary.append("Include one Trust support line (duty/loyalty strength) so answer is balanced.")
 
     return EngineResult(
         archetype="loyalty_trust",

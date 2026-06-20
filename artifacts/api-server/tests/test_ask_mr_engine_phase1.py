@@ -154,6 +154,29 @@ class MrEngineTests(unittest.TestCase):
         q = "ghar wale maanenge kya?"
         self.assertEqual(classify_mr_archetype(q), "family_approval")
 
+    def test_second_marriage_engine(self):
+        q = "Kya meri dusri shaadi hogi?"
+        self.assertEqual(classify_mr_archetype(q), "second_marriage")
+        res = run_mr_static_engine(SAMPLE_KUNDLI, q)
+        self.assertEqual(res.archetype, "second_marriage")
+        self.assertTrue(len(res.evidence) >= 1)
+
+    def test_long_distance_engine(self):
+        q = "Long distance relationship chalega kya?"
+        self.assertEqual(classify_mr_archetype(q), "long_distance")
+        res = run_mr_static_engine(SAMPLE_KUNDLI, q)
+        self.assertEqual(res.archetype, "long_distance")
+
+    def test_spouse_wealth_engine(self):
+        q = "Partner rich hoga ya financially comfortable?"
+        self.assertEqual(classify_mr_archetype(q), "spouse_wealth")
+        res = run_mr_static_engine(SAMPLE_KUNDLI, q)
+        self.assertEqual(res.archetype, "spouse_wealth")
+        self.assertTrue(len(res.evidence) >= 2)
+
+    def test_ex_return_routes_patchup(self):
+        self.assertEqual(classify_mr_archetype("Ex wapas aayega kya?"), "patchup")
+
 
 if __name__ == "__main__":
     unittest.main()

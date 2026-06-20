@@ -1,0 +1,68 @@
+from __future__ import annotations
+
+from vedic.love_reality.scoring_core import KundliReader
+
+from ..types import EngineResult
+
+
+def run_family_approval(kundli: dict, question: str, *, wants_explain: bool = False) -> EngineResult:
+    k = dict(kundli or {})
+    k.setdefault("name", "You")
+    r = KundliReader(k)
+
+    rahu_h = (r.planet("Rahu") or {}).get("house")
+    sat_h = (r.planet("Saturn") or {}).get("house")
+    jup_h = (r.planet("Jupiter") or {}).get("house")
+    sun_h = (r.planet("Sun") or {}).get("house")
+
+    friction = 0
+    support = 0
+    evidence: list[str] = []
+
+    if rahu_h in (5, 7, 9, 11):
+        friction += 2
+        evidence.append("Rahu on relationship/dharma axis → family may find it unconventional at first.")
+    if sat_h in (2, 7, 9) or sun_h in (2, 9):
+        friction += 1
+        evidence.append("Authority/tradition indicators active → approval may need patience and proof.")
+    if jup_h in (2, 9, 11):
+        support += 2
+        evidence.append("Jupiter connected to family/dharma support → elders can soften with time.")
+
+    if support > friction:
+        verdict = "Family approval: chances improve with steady approach"
+        conf = "medium"
+    elif friction > support:
+        verdict = "Family approval: initial resistance likely; patience + process needed"
+        conf = "medium"
+    else:
+        verdict = "Family approval: mixed signals; approach matters more than fate"
+        conf = "low"
+
+    if not evidence:
+        evidence = ["No strong family-approval driver visible; treat as mixed/normal."]
+
+    return EngineResult(
+        archetype="family_approval",
+        verdict=verdict,
+        confidence=conf,
+        word_budget=85 if wants_explain else 55,
+        answer_plan="2–3 short sentences: approval outlook → 1–2 reasons → practical approach.",
+        summary=[
+            "Avoid absolutes; suggest respectful communication and gradual trust-building.",
+        ],
+        evidence=evidence[:6],
+        ignore=[
+            "timing dates/windows",
+            "breakup risk (unless asked)",
+            "manglik (unless asked)",
+        ],
+        checks={
+            "slice_type": "mr_engine_v1",
+            "archetype": "family_approval",
+            "rahu_house": rahu_h,
+            "saturn_house": sat_h,
+            "jupiter_house": jup_h,
+        },
+    )
+

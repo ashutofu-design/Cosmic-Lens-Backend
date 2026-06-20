@@ -3774,6 +3774,12 @@ def _raw_passthrough_max_tokens(
         return 160
     if is_sensitive:
         return 120
+    if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "mr_engine_v1":
+        if wants_explain:
+            return 140
+        if dcr_love_meta.get("archetype") == "partner_nature":
+            return 180
+        return 75
     if isinstance(dcr_love_meta, dict) and (
         dcr_love_meta.get("slice") == "partner_nature_minimal"
         or (
@@ -4819,6 +4825,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         "ignore": list(_mr_engine_result.ignore or []),
                         "checks": dict(_mr_engine_result.checks or {}),
                         "skip_llm": bool(_mr_engine_result.skip_llm),
+                        "word_budget": int(_mr_engine_result.word_budget or 55),
+                        "narrator_mode": "engine_facts_only",
                     }
                     print(
                         f"[raw_passthrough] MR_ENGINE "
@@ -5219,35 +5227,75 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     eff_lang = _resolve_response_lang(question, lang, None)
     user_payload = _strict_lang_block(eff_lang) + question
 
+    _mr_engine_narrator = (
+        isinstance(dcr_love_meta, dict)
+        and dcr_love_meta.get("slice") == "mr_engine_v1"
+        and (os.environ.get("ASK_MR_NARRATOR") or "1").strip() != "0"
+    )
+    _archetype_mr = (
+        str(dcr_love_meta.get("archetype") or "") if isinstance(dcr_love_meta, dict) else ""
+    )
+    _is_pn_narrator = _archetype_mr == "partner_nature"
+
     try:
-        system_prompt = _build_universal_ask_system_prompt(
-            chart_text=chart_text,
-            qtype=qtype,
-            topic_hint=_topic_hint,
-            wants_explain=wants_explain,
-            is_timing=is_timing,
-            is_decision=is_decision,
-            is_finance=is_finance,
-            reply_lang=eff_lang,
-            extra_rules=extra_rules,
-            dcr_love_rule=dcr_love_rule,
-            is_partner_nature=_is_pn_minimal,
-        )
+        if _mr_engine_narrator:
+            from ask_mr.narrator import build_mr_engine_narrator_system_prompt
+
+            _wb_mr = int((dcr_love_meta or {}).get("word_budget") or 55)
+            system_prompt = build_mr_engine_narrator_system_prompt(
+                chart_text=chart_text,
+                reply_lang=eff_lang,
+                wants_explain=wants_explain,
+                archetype=_archetype_mr,
+                word_budget=_wb_mr,
+                is_partner_nature=_is_pn_narrator,
+            )
+            print(
+                f"[raw_passthrough] MR_NARRATOR archetype={_archetype_mr} "
+                f"prompt_chars={len(system_prompt)} explain={wants_explain}",
+                flush=True,
+            )
+        else:
+            system_prompt = _build_universal_ask_system_prompt(
+                chart_text=chart_text,
+                qtype=qtype,
+                topic_hint=_topic_hint,
+                wants_explain=wants_explain,
+                is_timing=is_timing,
+                is_decision=is_decision,
+                is_finance=is_finance,
+                reply_lang=eff_lang,
+                extra_rules=extra_rules,
+                dcr_love_rule=dcr_love_rule,
+                is_partner_nature=_is_pn_minimal,
+            )
     except Exception as _sp_exc:
         print(f"[raw_passthrough] system_prompt build failed: {_sp_exc}", flush=True)
-        system_prompt = _build_universal_ask_system_prompt(
-            chart_text=chart_text or "(no chart data available)",
-            qtype=qtype or "STATIC",
-            topic_hint="",
-            wants_explain=False,
-            is_timing=bool(is_timing),
-            is_decision=False,
-            is_finance=False,
-            reply_lang=eff_lang,
-            extra_rules="",
-            dcr_love_rule="",
-            is_partner_nature=_is_pn_minimal,
-        )
+        if _mr_engine_narrator:
+            from ask_mr.narrator import build_mr_engine_narrator_system_prompt
+
+            system_prompt = build_mr_engine_narrator_system_prompt(
+                chart_text=chart_text or "(no engine facts)",
+                reply_lang=eff_lang,
+                wants_explain=wants_explain,
+                archetype=_archetype_mr,
+                word_budget=55,
+                is_partner_nature=_is_pn_narrator,
+            )
+        else:
+            system_prompt = _build_universal_ask_system_prompt(
+                chart_text=chart_text or "(no chart data available)",
+                qtype=qtype or "STATIC",
+                topic_hint="",
+                wants_explain=False,
+                is_timing=bool(is_timing),
+                is_decision=False,
+                is_finance=False,
+                reply_lang=eff_lang,
+                extra_rules="",
+                dcr_love_rule="",
+                is_partner_nature=_is_pn_minimal,
+            )
 
     model = os.environ.get("RAW_PASSTHROUGH_MODEL",
                             os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"))
@@ -5388,6 +5436,11 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _pt_checks["archetype"] = dcr_love_meta.get("archetype")
         if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "mr_engine_v1":
             _pt_checks["mr_engine"] = "v1"
+            _pt_checks["narrator_mode"] = dcr_love_meta.get("narrator_mode") or (
+                "engine_facts_only"
+                if (os.environ.get("ASK_MR_NARRATOR") or "1").strip() != "0"
+                else "universal"
+            )
         elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice"):
             _pt_checks["mr_engine"] = "legacy_slice"
         _pt_blocks = {"chart_context": chart_text}

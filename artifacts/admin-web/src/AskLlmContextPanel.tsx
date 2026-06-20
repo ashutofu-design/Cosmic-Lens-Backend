@@ -127,6 +127,7 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
       ? String(sliceMeta.archetype)
       : "";
   const skipLlm = ctx.llm_called === false || sliceMeta.skip_llm === true || checks.skip_llm === true;
+  const narratorMode = checks.narrator_mode ? String(checks.narrator_mode) : "";
   const chartChars = ctx.sizes?.chart_chars ?? ctx.chart_text?.length ?? 0;
   const rawOnly = typeof (ctx as { raw?: string }).raw === "string";
   const sliceLabel = rawOnly
@@ -151,6 +152,12 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
                 <>
                   {" · "}
                   <code>source={row.answer_source}</code>
+                </>
+              ) : null}
+              {narratorMode ? (
+                <>
+                  {" · "}
+                  <code>narrator={narratorMode}</code>
                 </>
               ) : null}
               {ctx.llm_called === false ? (

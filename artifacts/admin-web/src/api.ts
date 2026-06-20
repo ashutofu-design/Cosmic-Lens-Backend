@@ -133,6 +133,19 @@ export interface AskLlmContext {
   question_type?: string;
   is_timing?: boolean;
   llm_called?: boolean;
+  answer_path?: string;
+  answer_path_label?: string;
+  engine_facts?: {
+    archetype?: string;
+    verdict?: string;
+    summary?: string[];
+    evidence?: string[];
+    ignore?: string[];
+    love_score?: number;
+    arrange_score?: number;
+    verdict_public?: string;
+    confidence_ratio?: number;
+  };
   skip_reason?: string | null;
   checks?: Record<string, unknown>;
   slice_meta?: Record<string, unknown>;

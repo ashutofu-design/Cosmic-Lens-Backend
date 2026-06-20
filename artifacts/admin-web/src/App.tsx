@@ -1,4 +1,4 @@
-import { AskLlmContextPanel } from "./AskLlmContextPanel";
+import { AskLlmContextPanel, AnswerPathBadge, parseAskLlmContext } from "./AskLlmContextPanel";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import {
   type AdminStats,
@@ -1407,7 +1407,19 @@ export default function App() {
                           {" — "}
                           {formatDate(row.created_at)}
                           {row.topic ? ` — ${row.topic}` : ""}
-                          {row.engine_tag ? ` — ${row.engine_tag}` : ""}
+                          {" — "}
+                          <AnswerPathBadge
+                            ctx={parseAskLlmContext(row)}
+                            row={row}
+                          />
+                          {row.answer_source ? (
+                            <>
+                              {" · "}
+                              <code>{row.answer_source}</code>
+                            </>
+                          ) : row.engine_tag ? (
+                            <> — {row.engine_tag}</>
+                          ) : null}
                         </div>
                         <AskLlmContextPanel row={row} />
                       </td>

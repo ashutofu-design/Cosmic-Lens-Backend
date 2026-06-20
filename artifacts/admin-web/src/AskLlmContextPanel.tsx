@@ -20,6 +20,74 @@ export function parseAskLlmContext(row: AskQuestionItem): AskLlmContext | null {
   }
 }
 
+export type AnswerPathCode = "engine_then_llm" | "engine_only" | "direct_llm" | "unknown";
+
+export function resolveAnswerPath(
+  ctx: AskLlmContext | null,
+  row?: Pick<AskQuestionItem, "answer_source" | "engine_tag" | "total_tokens">,
+): { code: AnswerPathCode; label: string } {
+  if (ctx?.answer_path && ctx?.answer_path_label) {
+    return {
+      code: ctx.answer_path as AnswerPathCode,
+      label: String(ctx.answer_path_label),
+    };
+  }
+
+  const src = (row?.answer_source || "").toLowerCase();
+  if (src === "mr_engine_template" || src.includes("deterministic")) {
+    return { code: "engine_only", label: "Engine only (no LLM)" };
+  }
+  if (src === "mr_engine_then_llm" || row?.engine_tag === "ans-engine") {
+    return { code: "engine_then_llm", label: "Engine → LLM" };
+  }
+  if (ctx?.llm_called === false) {
+    return { code: "engine_only", label: "Engine only (no LLM)" };
+  }
+  if (row?.total_tokens != null && row.total_tokens > 0) {
+    const hasFacts = Boolean(
+      ctx?.engine_facts?.verdict ||
+        (ctx?.engine_facts?.evidence && ctx.engine_facts.evidence.length > 0) ||
+        ctx?.slice_meta?.verdict ||
+        (ctx?.slice_meta?.evidence && ctx.slice_meta.evidence.length > 0),
+    );
+    if (hasFacts) {
+      return { code: "engine_then_llm", label: "Engine → LLM" };
+    }
+    return { code: "direct_llm", label: "Direct LLM (no engine facts)" };
+  }
+  return { code: "unknown", label: "Unknown path" };
+}
+
+function engineFactsFromContext(ctx: AskLlmContext) {
+  const ef = ctx.engine_facts;
+  if (ef && (ef.verdict || (ef.evidence && ef.evidence.length > 0))) {
+    return ef;
+  }
+  const sm = ctx.slice_meta || {};
+  return {
+    archetype: sm.archetype,
+    verdict: sm.verdict,
+    summary: (sm.summary as string[] | undefined) || [],
+    evidence: (sm.evidence as string[] | undefined) || [],
+    ignore: (sm.ignore as string[] | undefined) || [],
+    love_score: undefined,
+    arrange_score: undefined,
+    verdict_public: undefined,
+    confidence_ratio: undefined,
+  };
+}
+
+export function AnswerPathBadge({
+  ctx,
+  row,
+}: {
+  ctx: AskLlmContext | null;
+  row: Pick<AskQuestionItem, "answer_source" | "engine_tag" | "total_tokens">;
+}) {
+  const { code, label } = resolveAnswerPath(ctx, row);
+  return <span className={`answer-path-badge answer-path-${code}`}>{label}</span>;
+}
+
 export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
   const ctx = parseAskLlmContext(row);
 
@@ -38,11 +106,27 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
   const checks = (ctx.checks || {}) as Record<string, unknown>;
   const sliceMeta = (ctx.slice_meta || {}) as Record<string, unknown>;
   const flags = (sliceMeta.flags as string[] | undefined) || undefined;
-  const evidence = (sliceMeta.evidence as string[] | undefined) || undefined;
-  const summary = (sliceMeta.summary as string[] | undefined) || undefined;
-  const verdict = sliceMeta.verdict ? String(sliceMeta.verdict) : "";
-  const archetype = sliceMeta.archetype ? String(sliceMeta.archetype) : "";
-  const skipLlm = sliceMeta.skip_llm === true || checks.skip_llm === true;
+  const answerPath = resolveAnswerPath(ctx, row);
+  const engineFacts = engineFactsFromContext(ctx);
+  const evidence =
+    (engineFacts.evidence && engineFacts.evidence.length > 0
+      ? engineFacts.evidence
+      : (sliceMeta.evidence as string[] | undefined)) || undefined;
+  const summary =
+    (engineFacts.summary && engineFacts.summary.length > 0
+      ? engineFacts.summary
+      : (sliceMeta.summary as string[] | undefined)) || undefined;
+  const verdict = engineFacts.verdict
+    ? String(engineFacts.verdict)
+    : sliceMeta.verdict
+      ? String(sliceMeta.verdict)
+      : "";
+  const archetype = engineFacts.archetype
+    ? String(engineFacts.archetype)
+    : sliceMeta.archetype
+      ? String(sliceMeta.archetype)
+      : "";
+  const skipLlm = ctx.llm_called === false || sliceMeta.skip_llm === true || checks.skip_llm === true;
   const chartChars = ctx.sizes?.chart_chars ?? ctx.chart_text?.length ?? 0;
   const rawOnly = typeof (ctx as { raw?: string }).raw === "string";
   const sliceLabel = rawOnly
@@ -53,7 +137,7 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
     <details className="llm-context-panel" open>
       <summary>
         LLM context — {sliceLabel}
-        {ctx.llm_called === false ? " (LLM skipped)" : ""}
+        {skipLlm ? " (LLM skipped)" : ""}
         {archetype ? ` · ${archetype}` : ""}
       </summary>
       <div className="llm-context-body">
@@ -61,6 +145,83 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
           <pre className="llm-context-pre">{(ctx as { raw: string }).raw}</pre>
         ) : (
           <>
+            <div className={`answer-path-banner answer-path-${answerPath.code}`}>
+              <strong>Answer path:</strong> {answerPath.label}
+              {row.answer_source ? (
+                <>
+                  {" · "}
+                  <code>source={row.answer_source}</code>
+                </>
+              ) : null}
+              {ctx.llm_called === false ? (
+                <span className="answer-path-note"> — final text from engine template</span>
+              ) : ctx.model ? (
+                <span className="answer-path-note">
+                  {" "}
+                  — user-facing text written by <code>{ctx.model}</code>
+                </span>
+              ) : null}
+            </div>
+
+            <details open className="engine-facts-panel">
+              <summary>Facts sent to LLM (engine output)</summary>
+              {!verdict && (!evidence || evidence.length === 0) ? (
+                <p className="detail-muted">
+                  No structured engine facts — LLM got chart slice / prompt only (direct LLM
+                  path).
+                </p>
+              ) : (
+                <div className="engine-facts-box">
+                  {archetype ? (
+                    <p>
+                      <strong>Archetype:</strong> {archetype}
+                    </p>
+                  ) : null}
+                  {verdict ? (
+                    <p>
+                      <strong>Verdict:</strong> {verdict}
+                    </p>
+                  ) : null}
+                  {engineFacts.love_score != null || engineFacts.arrange_score != null ? (
+                    <p>
+                      <strong>Scores:</strong> love={fmtCheckValue(engineFacts.love_score)}, arrange=
+                      {fmtCheckValue(engineFacts.arrange_score)}
+                      {engineFacts.confidence_ratio != null ? (
+                        <>
+                          {" "}
+                          · ratio={fmtCheckValue(engineFacts.confidence_ratio)}
+                        </>
+                      ) : null}
+                    </p>
+                  ) : null}
+                  {summary && summary.length > 0 ? (
+                    <>
+                      <p>
+                        <strong>Summary for narrator:</strong>
+                      </p>
+                      <ul className="llm-check-list">
+                        {summary.map((s) => (
+                          <li key={s}>{s}</li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                  {evidence && evidence.length > 0 ? (
+                    <>
+                      <p>
+                        <strong>Evidence ({evidence.length}):</strong>
+                      </p>
+                      <ul className="llm-check-list">
+                        {evidence.map((e) => (
+                          <li key={e}>{e}</li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                </div>
+              )}
+            </details>
+
             <div className="llm-context-grid">
               <span>
                 <strong>Route</strong>
@@ -84,12 +245,6 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
               </span>
             </div>
 
-            {verdict ? (
-              <p className="detail-muted">
-                <strong>Engine verdict:</strong> {verdict}
-              </p>
-            ) : null}
-
             {ctx.skip_reason ? (
               <p className="detail-muted">
                 <strong>Skip reason:</strong> {ctx.skip_reason}
@@ -97,35 +252,13 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
             ) : null}
 
             {Object.keys(checks).length > 0 ? (
-              <details open>
+              <details>
                 <summary>Checks / routing flags</summary>
                 <ul className="llm-check-list">
                   {Object.entries(checks).map(([k, v]) => (
                     <li key={k}>
                       <code>{k}</code>: {fmtCheckValue(v)}
                     </li>
-                  ))}
-                </ul>
-              </details>
-            ) : null}
-
-            {summary && summary.length > 0 ? (
-              <details open>
-                <summary>Engine summary ({summary.length})</summary>
-                <ul className="llm-check-list">
-                  {summary.map((s) => (
-                    <li key={s}>{s}</li>
-                  ))}
-                </ul>
-              </details>
-            ) : null}
-
-            {evidence && evidence.length > 0 ? (
-              <details open>
-                <summary>Engine evidence ({evidence.length})</summary>
-                <ul className="llm-check-list">
-                  {evidence.map((e) => (
-                    <li key={e}>{e}</li>
                   ))}
                 </ul>
               </details>
@@ -143,9 +276,9 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
             ) : null}
 
             {ctx.chart_text ? (
-              <details open>
+              <details>
                 <summary>
-                  Chart context sent to LLM ({chartChars.toLocaleString("en-IN")} chars)
+                  Full chart context block ({chartChars.toLocaleString("en-IN")} chars)
                 </summary>
                 <pre className="llm-context-pre">{ctx.chart_text}</pre>
               </details>

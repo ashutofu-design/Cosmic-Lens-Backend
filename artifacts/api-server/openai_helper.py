@@ -5334,13 +5334,22 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                   f"completion={completion_tok}", flush=True)
         except Exception:
             pass
-        _engine_tag = "ans-engine" if is_timing else "ans-cosmo"
+        _mr_engine_ran = (
+            isinstance(dcr_love_meta, dict)
+            and dcr_love_meta.get("slice") == "mr_engine_v1"
+        )
+        _engine_tag = "ans-engine" if (is_timing or _mr_engine_ran) else "ans-cosmo"
+        _answer_source = (
+            "mr_engine_then_llm"
+            if _mr_engine_ran
+            else f"raw_passthrough_{qtype.lower()}"
+        )
         _out = {
             "text":       text,
             "topic":      qtype.lower(),
             "question_type": qtype,
             "confidence": 1.0,
-            "source":     f"raw_passthrough_{qtype.lower()}",
+            "source":     _answer_source,
             "engine_tag": _engine_tag,
             "follow_ups": [],
         }
@@ -5375,6 +5384,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             "partner_name": partner_name or None,
             "partner_relation": partner_relation or None,
         }
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("archetype"):
+            _pt_checks["archetype"] = dcr_love_meta.get("archetype")
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "mr_engine_v1":
+            _pt_checks["mr_engine"] = "v1"
+        elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice"):
+            _pt_checks["mr_engine"] = "legacy_slice"
         _pt_blocks = {"chart_context": chart_text}
         if kp_block:
             _pt_blocks["kp"] = kp_block.strip()

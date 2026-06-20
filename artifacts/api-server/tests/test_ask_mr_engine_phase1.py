@@ -105,6 +105,20 @@ class MrEngineTests(unittest.TestCase):
     def test_loyalty_trust_engine_runs(self):
         res = run_mr_static_engine(SAMPLE_KUNDLI, "kya wo loyal hai ya dhokha karega?", wants_explain=False)
         self.assertEqual(res.archetype, "loyalty_trust")
+        self.assertTrue(len(res.evidence) >= 1)
+        self.assertIn("trust_level", (res.checks or {}))
+
+    def test_loyalty_commitment_question_routes(self):
+        res = run_mr_static_engine(
+            SAMPLE_KUNDLI,
+            "Marriage me loyalty aur commitment level kaise rahega",
+            wants_explain=False,
+        )
+        self.assertEqual(res.archetype, "loyalty_trust")
+        level = (res.checks or {}).get("trust_level")
+        self.assertIn(level, ("mixed", "unstable", "moderate", "risky"))
+        if (res.checks or {}).get("negative_signal_count", 0) >= 1:
+            self.assertTrue(any("Trust challenge:" in e for e in res.evidence))
 
     def test_patchup_engine_runs(self):
         res = run_mr_static_engine(SAMPLE_KUNDLI, "patchup ho sakta hai?", wants_explain=False)

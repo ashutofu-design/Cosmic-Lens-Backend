@@ -1,64 +1,102 @@
 from __future__ import annotations
 
-from ._person_signals import build_person_signals
+from ._person_signals import build_person_signals, pick_notes
 from ..types import EngineResult
 
+# Trust/commitment evidence — same relationship signal notes as general_mr/breakup (planet+meaning).
+_LOYALTY_NEGATIVE_KEYS = [
+    "Saturn on 7th",
+    "Mars on 7th",
+    "7th lord in dusthana",
+    "7th lord debilitated",
+    "Moon under Saturn/Rahu",
+    "Moon in 8th",
+    "nodes on 7th",
+    "Ketu influence on 7th",
+    "Venus-Mars conjunction",
+    "12th lord in 7th",
+    "12th lord in 5th",
+    "hidden ties",
+    "parallel attention",
+    "Navamsa Moon debilitated",
+    "Venus in dusthana",
+    "Mercury debilitated",
+    "obsession, pull, loyalty blur",
+]
 
-def _trust_level(sig) -> str:
-    # Deterministic buckets; not "fate", just risk posture.
+_LOYALTY_SUPPORT_KEYS = [
+    "5th lord strong",
+    "Saturn-Moon link",
+    "Saturn as 7th lord in 7th",
+]
+
+
+def _pick_loyalty_evidence(sig) -> tuple[list[str], list[str]]:
+    negative = pick_notes(sig, _LOYALTY_NEGATIVE_KEYS, limit=6)
+    support = pick_notes(sig, _LOYALTY_SUPPORT_KEYS, limit=2)
+    return negative, support
+
+
+def _trust_level(sig, negative: list[str]) -> str:
+    """Deterministic loyalty/commitment posture from chart signals + evidence."""
     if sig.third_person_risk or sig.venus_mars_conjunct_tight or sig.moon_in_8th:
         return "risky"
     if sig.loyalty_risk_high or sig.venus_mars_conjunct or sig.rahu_on_7th_axis:
         return "unstable"
+
+    w = int(sig.affliction_weight or 0)
+    n = len(negative)
+
+    if n >= 3 or w >= 38:
+        return "unstable"
+    if n >= 2 or w >= 22 or (sig.saturn_on_7th and sig.mars_on_7th):
+        return "mixed"
+    if n >= 1 or w >= 14 or sig.saturn_on_7th or sig.mars_on_7th or sig.moon_afflicted:
+        return "mixed"
     return "moderate"
+
+
+def _trust_verdict(level: str) -> str:
+    return {
+        "moderate": "Trust/loyalty: mostly stable — clear talk keeps commitment strong",
+        "mixed": "Trust/loyalty: mixed — commitment rehta hai par distance or friction trust test karta hai",
+        "unstable": "Trust/loyalty: sensitive — clarity and boundaries keep bond safe",
+        "risky": "Trust/loyalty: high-risk pattern — secrecy and impulse loyalty ko weak karte hain",
+    }[level]
 
 
 def run_loyalty_trust(kundli: dict, question: str, *, wants_explain: bool = False) -> EngineResult:
     sig = build_person_signals(kundli)
-    level = _trust_level(sig)
-
-    verdict = {
-        "moderate": "Trust/loyalty: mostly stable (but communicate clearly)",
-        "unstable": "Trust/loyalty: mixed — clarity + boundaries needed",
-        "risky": "Trust/loyalty: sensitive — assumptions se bachna hoga",
-    }[level]
+    negative, support = _pick_loyalty_evidence(sig)
+    level = _trust_level(sig, negative)
+    verdict = _trust_verdict(level)
 
     evidence: list[str] = []
-    # Pull engine-notes that already contain planet+meaning.
-    for key in (
-        "Venus-Mars conjunction",
-        "12th lord in 7th",
-        "12th lord in 5th",
-        "nodes on 7th",
-        "Moon in 8th",
-        "Navamsa Moon debilitated",
-        "Venus in dusthana",
-        "hidden ties",
-        "parallel attention",
-        "obsession, pull, loyalty blur",
-    ):
-        for n in sig.notes or []:
-            if len(evidence) >= 6:
-                break
-            if key.lower() in n.lower() and n not in evidence:
-                evidence.append(n.replace("You's ", "").replace("You: ", ""))
+    for line in negative[:5]:
+        evidence.append(f"Trust challenge: {line}")
+    for line in support[:2]:
+        if len(evidence) >= 6:
+            break
+        evidence.append(f"Trust support: {line}")
 
     if not evidence:
-        evidence = ["No strong trust-risk driver triggered; signals look normal/mixed."]
+        evidence = ["No strong trust driver triggered; loyalty/commitment pattern looks normal."]
 
     summary = [
         "Answer loyalty/commitment level directly — confident pattern voice.",
         "NO shayad/ho sakta hai/lagta hai. Avoid accusations; focus on trust + boundaries.",
     ]
+    if level in ("mixed", "unstable", "risky"):
+        summary.append("Name the friction (distance/fights/hidden stress) then one practical trust habit.")
 
     return EngineResult(
         archetype="loyalty_trust",
         verdict=verdict,
-        confidence="medium",
-        word_budget=85 if wants_explain else 55,
-        answer_plan="2–3 short sentences: direct trust posture → 1–2 reasons → practical next step.",
+        confidence="high" if level == "moderate" and len(negative) == 0 else "medium",
+        word_budget=85 if wants_explain else 60,
+        answer_plan="2–3 short sentences: loyalty level → 1–2 chart reasons → one practical trust line.",
         summary=summary,
-        evidence=evidence,
+        evidence=evidence[:6],
         ignore=[
             "timing dates/windows",
             "spouse profession",
@@ -68,11 +106,10 @@ def run_loyalty_trust(kundli: dict, question: str, *, wants_explain: bool = Fals
         checks={
             "slice_type": "mr_engine_v1",
             "archetype": "loyalty_trust",
+            "trust_level": level,
             "loyalty_risk_high": bool(sig.loyalty_risk_high),
             "third_person_risk": bool(sig.third_person_risk),
-            "venus_mars_tight": bool(sig.venus_mars_conjunct_tight),
-            "moon_in_8th": bool(sig.moon_in_8th),
-            "rahu_on_7th_axis": bool(sig.rahu_on_7th_axis),
+            "affliction_weight": int(sig.affliction_weight or 0),
+            "negative_signal_count": len(negative),
         },
     )
-

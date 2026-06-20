@@ -82,8 +82,10 @@ def classify_mr_archetype(question: str) -> str:
     if re.search(r"\b(manglik|mangalik|mangal\s*dosh)\b", q):
         return "manglik"
 
-    # Love vs arranged
-    if re.search(r"\b(love\s*marriage|arrange|arranged|prem\s*vivah)\b", q):
+    # Love vs arranged (direct comparison or "love marriage … ya arrange" Hinglish)
+    has_love = bool(re.search(r"\b(love|pyaar|pyar|prem|romance)\b", q))
+    has_arr = bool(re.search(r"\barrang", q))
+    if (has_love and has_arr) or re.search(r"\b(love\s*marriage|prem\s*vivah)\b", q):
         return "love_vs_arranged"
 
     # Breakup / separation

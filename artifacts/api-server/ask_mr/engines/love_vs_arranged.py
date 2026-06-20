@@ -1,85 +1,104 @@
 from __future__ import annotations
 
-from vedic.love_reality.scoring_core import KundliReader
-
 from ..types import EngineResult
 
+_VERDICT_LABELS = {
+    "clear_love": "Clear love-marriage yog (classical rules)",
+    "leaning_love": "Love-marriage side stronger (leaning)",
+    "clear_arrange": "Clear arrange-marriage yog (classical rules)",
+    "leaning_arrange": "Arranged-marriage side stronger (leaning)",
+    "inconclusive": "Mixed / neutral (both possible)",
+}
 
-def _tilt(reader: KundliReader) -> tuple[str, list[str]]:
-    """Return (tilt, evidence_lines)."""
-    e: list[str] = []
 
-    rahu_h = (reader.planet("Rahu") or {}).get("house")
-    jup_h = (reader.planet("Jupiter") or {}).get("house")
-    sat_h = (reader.planet("Saturn") or {}).get("house")
-
-    love = 0
-    arranged = 0
-
-    if rahu_h in (5, 7, 11):
-        love += 2
-        e.append("Rahu on love/partnership axis → unconventional pull / self-choice tendency.")
-
-    if jup_h in (2, 7, 9) or sat_h in (2, 7, 9):
-        arranged += 2
-        e.append("Jupiter/Saturn tied to family/dharma axis → tradition/structure favors arranged path.")
-
-    # 5L ↔ 7L bridge (simple): if 5L aspects 7L or vice-versa by drishti to the planet.
-    lord5 = reader.house_lord(5)
-    lord7 = reader.house_lord(7)
-    asp_7l = set(reader.aspects_planet(lord7))
-    asp_5l = set(reader.aspects_planet(lord5))
-    if lord5 in asp_7l or lord7 in asp_5l:
-        love += 1
-        e.append("5th lord–7th lord linkage → love-to-marriage conversion support.")
-
-    # Venus-Mars share house → strong attraction (can trigger love tilt)
-    if reader.share_house("Venus", "Mars"):
-        love += 1
-        e.append("Venus–Mars linkage → strong attraction/passion, self-driven bonding.")
-
-    if love > arranged:
-        return "love_marriage_tilt", e
-    if arranged > love:
-        return "arranged_marriage_tilt", e
-    return "mixed_neutral", e
+def _confidence_label(verdict_public: str, numeric: float) -> str:
+    if verdict_public in ("clear_love", "clear_arrange"):
+        return "high"
+    if verdict_public in ("leaning_love", "leaning_arrange"):
+        return "medium"
+    if numeric >= 0.75:
+        return "medium"
+    return "low"
 
 
 def run_love_vs_arranged(kundli: dict, question: str, *, wants_explain: bool = False) -> EngineResult:
-    k = dict(kundli or {})
-    k.setdefault("name", "You")
-    r = KundliReader(k)
+    """Classical love-vs-arrange tilt via Phase 5.5 rules (D1 + D9)."""
+    # Lazy import — reuses production-tested rules; avoids circular import at load time.
+    from openai_helper import _phase55_compute_love_vs_arrange
 
-    tilt, ev = _tilt(r)
-    verdict = {
-        "love_marriage_tilt": "Tilt: love-marriage side stronger",
-        "arranged_marriage_tilt": "Tilt: arranged-marriage side stronger",
-        "mixed_neutral": "Tilt: mixed / neutral (both possible)",
-    }.get(tilt, f"Tilt: {tilt}")
+    computed = _phase55_compute_love_vs_arrange(kundli)
+    if not computed:
+        return EngineResult(
+            archetype="love_vs_arranged",
+            verdict="Tilt: inconclusive (chart data incomplete)",
+            confidence="low",
+            word_budget=55,
+            answer_plan="Say chart data is insufficient; do not invent placements.",
+            summary=["Do not guess love vs arrange without D1 planets."],
+            evidence=["Required D1 planet data missing for classical love/arrange rules."],
+            ignore=[
+                "timing dates/windows",
+                "spouse profession",
+                "manglik detail (unless asked)",
+            ],
+            checks={"slice_type": "mr_engine_v1", "archetype": "love_vs_arranged", "error": "no_data"},
+        )
 
-    # Keep evidence compact and deterministic.
-    evidence = ev[:6] if ev else ["No strong tilt driver triggered; outcome depends on choices + family context."]
+    verdict_public = str(computed.get("verdict_public") or "inconclusive")
+    headline = (
+        computed.get("verdict_text_public")
+        or computed.get("verdict_text_hi")
+        or _VERDICT_LABELS.get(verdict_public, verdict_public)
+    )
+
+    evidence: list[str] = []
+    for reason in computed.get("reasons_love") or []:
+        evidence.append(f"Love indicator: {reason}")
+    for reason in computed.get("reasons_arrange") or []:
+        evidence.append(f"Arrange indicator: {reason}")
+
+    if not evidence:
+        evidence.append(
+            "No strong classical driver triggered; outcome depends on choices + family context."
+        )
+
+    love_score = int(computed.get("love_score") or 0)
+    arrange_score = int(computed.get("arrange_score") or 0)
+    numeric_conf = float(computed.get("confidence") or 0.55)
+
+    summary = [
+        f"Classical scores — love: {love_score}, arrange: {arrange_score}.",
+        "Present as tendency, not guarantee.",
+    ]
+    if wants_explain:
+        summary.append("User wants explanation — cite 3–5 evidence lines in plain Hinglish.")
 
     return EngineResult(
         archetype="love_vs_arranged",
-        verdict=verdict,
-        confidence="medium" if tilt == "mixed_neutral" else "high",
-        word_budget=85 if wants_explain else 55,
-        answer_plan="One clear tilt → 1–2 reasons → soft practical note (communication/family).",
-        summary=[
-            "Do not guarantee outcome; present as tendency.",
-        ],
-        evidence=evidence,
+        verdict=headline,
+        confidence=_confidence_label(verdict_public, numeric_conf),
+        word_budget=120 if wants_explain else 55,
+        answer_plan=(
+            "State headline tilt → 2–4 classical reasons → soft practical note."
+            if wants_explain
+            else "One clear tilt line → 1–2 reasons → soft practical note."
+        ),
+        summary=summary,
+        evidence=evidence[:10],
         ignore=[
             "timing dates/windows",
             "spouse profession",
-            "manglik (unless asked)",
+            "manglik detail (unless asked)",
             "breakup risk (unless asked)",
         ],
         checks={
             "slice_type": "mr_engine_v1",
             "archetype": "love_vs_arranged",
-            "tilt": tilt,
+            "verdict_public": verdict_public,
+            "verdict_internal": computed.get("verdict"),
+            "love_score": love_score,
+            "arrange_score": arrange_score,
+            "confidence_ratio": computed.get("confidence_ratio"),
+            "confidence_numeric": numeric_conf,
         },
     )
-

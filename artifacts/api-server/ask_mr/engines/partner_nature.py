@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from vedic.love_reality.scoring_core import KundliReader, SIGNS
 
+from ._person_signals import build_person_signals
 from ..types import EngineResult
 
 
@@ -20,16 +22,44 @@ def _gender_from_birth(birth: Any) -> str:
 
 def partner_nature_narrator_payload(result: EngineResult) -> str:
     """Structured facts + mandatory 3-paragraph map for the LLM narrator."""
+    evidence = result.evidence or []
+    has_bg = any("Different background theme" in e for e in evidence)
+    synth_keys = (
+        "partnership style",
+        "emotional style",
+        "nature blend",
+        "feeling depth",
+        "care style",
+        "respect pattern",
+    )
+    has_synth = any(any(k in e.lower() for k in synth_keys) for e in evidence)
+
     lines = [
         "ARCHETYPE: partner_nature",
         f"VERDICT: {result.verdict}",
         "OUTPUT: exactly 3 paragraphs separated by a blank line (90–120 words total).",
         "TONE: confident — state traits as chart pattern (hai/hote hain/rehta hai). NO shayad/ho sakta hai/lagta hai.",
-        "PARA 1 — social vibe: use ONLY the 7th house sign evidence line.",
-        "PARA 2 — emotions + mindset: use ONLY 7th lord + planets-in-7th evidence lines.",
-        "PARA 3 — presence in love: use ONLY the partner-karak evidence line.",
     ]
-    for item in result.evidence or []:
+    if has_bg:
+        lines.append(
+            "PARA 1 — social vibe + family background: use 7th house sign AND Different background theme evidence."
+        )
+    else:
+        lines.append("PARA 1 — social vibe: use ONLY the 7th house sign evidence line.")
+    lines.append(
+        "PARA 2 — emotions + mindset: use ONLY 7th lord + planets-in-7th evidence lines"
+        + (" + any synthesized either/or line." if has_synth else ".")
+    )
+    lines.append(
+        "PARA 3 — presence in love: use ONLY the partner-karak evidence line"
+        + (" + respect/care synthesis if present." if has_synth else ".")
+    )
+    if has_synth:
+        lines.append("HINT: Answer the either/or in the question directly using synthesized evidence line(s).")
+    for item in result.summary or []:
+        if item.startswith("Answer"):
+            lines.append(f"HINT: {item}")
+    for item in evidence:
         lines.append(f"EVIDENCE: {item}")
     return "\n".join(lines)
 
@@ -80,6 +110,107 @@ def run_partner_nature(
     else:
         evidence.append(f"Partner-karak by chart gender: {gender} → {karak} (placement not available).")
 
+    q = (question or "").lower()
+    sig = build_person_signals(k)
+    summary_extra: str | None = None
+
+    if re.search(r"\b(express|reserved|emotion|feeling|khul|band)\b", q):
+        expressive = bool(occ7 and "Moon" in occ7) or sign7 in ("Gemini", "Libra", "Leo", "Sagittarius", "Aries")
+        reserved = bool(sig.saturn_on_7th) or sign7 in ("Capricorn", "Scorpio", "Virgo")
+        if expressive and reserved:
+            evidence.append(
+                "Emotional style: partner caring/expressive side dikhta hai, par poori openness trust ke baad — "
+                "pehle thoda guarded, baad mein khul kar expressive."
+            )
+            summary_extra = (
+                "Answer expressive vs reserved directly: mostly expressive after trust, not fully closed."
+            )
+        elif expressive:
+            evidence.append(
+                "Emotional style: partner generally expressive — feelings behaviour mein dikhte hain, baat-cheet se closeness banati hai."
+            )
+            summary_extra = "Answer: partner expressive side zyada — reserved kam."
+        elif reserved:
+            evidence.append(
+                "Emotional style: partner reserved-first — warmth slow but steady; push se nahi, trust se khulta hai."
+            )
+            summary_extra = "Answer: partner reserved side zyada — openly expressive kam."
+
+    if re.search(r"\b(culture|foreign|videsh|city|background|alag\s*shahr)\b", q):
+        rahu = r.planet("Rahu") or {}
+        evidence.append(
+            f"Different background theme: Rahu in house {rahu.get('house')} sign {rahu.get('sign')} — "
+            "partner from another city/culture/background fits chart pattern."
+        )
+        summary_extra = (
+            "Answer family/background directly — include Different background theme (Rahu) in Para 1."
+        )
+
+    if re.search(r"\b(dominant|cooperative|co-operative|controlling|bossy)\b", q):
+        cooperative = sign7 in ("Gemini", "Libra", "Taurus") or bool(occ7 and "Moon" in occ7)
+        assertive = (p7l and p7l.get("sign") == "Aries") or lord7 == "Mars"
+        if cooperative and assertive:
+            evidence.append(
+                "Partnership style: cooperative-communicative default — shares decisions; "
+                "Mercury Aries streak assertive in ideas, not controlling dominant."
+            )
+            summary_extra = (
+                "Answer dominant vs cooperative: cooperative zyada, assertive kabhi — bossy controlling nahi."
+            )
+        elif cooperative:
+            evidence.append(
+                "Partnership style: cooperative — Gemini/Moon tone prefers talk, compromise and shared choices."
+            )
+            summary_extra = "Answer: partner cooperative — dominant controlling pattern kam."
+        else:
+            evidence.append("Partnership style: can take lead in decisions — direct tone when goals matter.")
+            summary_extra = "Answer: partner dominant/assertive side zyada — cooperative bhi situational."
+
+    if re.search(r"\b(love\s*language|care\s*dikhane|affection\s*style)\b", q):
+        evidence.append(
+            "Care style: Moon 7th = emotional presence and acts of care; "
+            "Mercury = words, humour and thoughtful talk; Venus Leo = warm gestures and quality time."
+        )
+        summary_extra = "Answer love language directly from Moon/Mercury/Venus care-style line."
+
+    if re.search(r"\b(spiritual|practical|ambitious|artistic)\b", q):
+        evidence.append(
+            "Nature blend: Mercury 5th Aries + Venus Leo = artistic/ambitious creative drive; "
+            "Gemini 7th = practical communication; Venus 9th = spiritual touch via values/dharma."
+        )
+        summary_extra = (
+            "Answer all four nature options: lean artistic+ambitious, practical talk, spiritual via values."
+        )
+
+    if re.search(r"\b(gehra|gehri|halki|halka|deep|superficial)\b", q) and re.search(
+        r"\b(feelings?|pyaar|emotion)\b", q
+    ):
+        if occ7 and "Moon" in occ7:
+            evidence.append(
+                "Feeling depth: Moon in 7th — feelings partner ke saath gehre rehte hain, halki surface bond nahi."
+            )
+            summary_extra = "Answer gehra vs halki: feelings gehre (Moon 7th), halki nahi."
+        else:
+            evidence.append(
+                "Feeling depth: feelings grow with trust — moderate start, depth builds over time."
+            )
+            summary_extra = "Answer gehra vs halki: depth trust ke saath badhti hai."
+
+    if re.search(r"\b(respect|izzat|samman)\b", q):
+        evidence.append(
+            "Respect pattern: Gemini 7th + Moon = respect through talk and emotional regard; "
+            "Venus Leo = mutual dignity and warmth."
+        )
+        summary_extra = "Answer partner respect directly — yes, via communication and mutual dignity."
+
+    summary = [
+        "User asked partner/spouse nature (non-timing).",
+        "State traits confidently from evidence — not hedged/shayad tone.",
+        f"7H occupants for tone: {occ_label}.",
+    ]
+    if summary_extra:
+        summary.append(summary_extra)
+
     return EngineResult(
         archetype="partner_nature",
         verdict=verdict,
@@ -89,11 +220,7 @@ def run_partner_nature(
             "Para1: 7H sign social vibe → Para2: 7L + occupants emotional/mindset → "
             "Para3: karak presence (~90–120 words, blank line between paras)."
         ),
-        summary=[
-            "User asked partner/spouse nature (non-timing).",
-            "State traits confidently from evidence — not hedged/shayad tone.",
-            f"7H occupants for tone: {occ_label}.",
-        ],
+        summary=summary,
         evidence=evidence[:6],
         ignore=[
             "timing dates/windows",

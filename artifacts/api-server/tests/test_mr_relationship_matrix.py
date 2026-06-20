@@ -38,7 +38,7 @@ SAMPLE_KUNDLI = {
 # id, question, expected_archetype
 MATRIX = [
     (1, "Mera life partner ka nature aur personality kaisa hoga?", "partner_nature"),
-    (2, "Partner emotionally expressive hoga ya reserved?", "emotional_attachment"),
+    (2, "Partner emotionally expressive hoga ya reserved?", "partner_nature"),
     (3, "Marriage mein loyalty aur commitment level kaisa rahega?", "loyalty_trust"),
     (4, "Love marriage ke yog zyada hain ya arranged marriage ke?", "love_vs_arranged"),
     (5, "Partner ka profession ya work field kis type ka ho sakta hai?", "spouse_profession"),
@@ -71,7 +71,7 @@ MATRIX = [
     (32, "Physical attraction strong rahega kya?", "chemistry"),
     (33, "Romance aur spark marriage mein rahega?", "chemistry"),
     (34, "Mera emotional attachment style kaisa hai relationship mein?", "emotional_attachment"),
-    (35, "Partner ke saath feelings gehra rahenge ya halki rahengi?", "emotional_attachment"),
+    (35, "Partner ke saath feelings gehra rahenge ya halki rahengi?", "partner_nature"),
     (36, "Ghar wale meri shaadi ke liye maanenge kya?", "family_approval"),
     (37, "Intercaste marriage mein family approval milega?", "family_approval"),
     (38, "Parents meri pasand ko accept karenge?", "family_approval"),
@@ -83,7 +83,7 @@ MATRIX = [
     (44, "Kya main possessive ya jealous nature ka hoon?", "obsession"),
     (45, "Private life aur conjugal compatibility kaisi rahegi?", "bed_intimacy"),
     (46, "Relationship mein self worth weak kyun lagti hai?", "self_worth"),
-    (47, "Partner mujhe respect dega ya nahi?", "self_worth"),
+    (47, "Partner mujhe respect dega ya nahi?", "partner_nature"),
     (48, "Kya meri dusri shaadi hogi?", "second_marriage"),
     (49, "Second marriage ka yog hai kya?", "second_marriage"),
     (50, "Long distance relationship chalega kya?", "long_distance"),

@@ -59,6 +59,50 @@ class MrEngineTests(unittest.TestCase):
         self.assertTrue(res.verdict)
         self.assertTrue(len(res.evidence) >= 1)
 
+    def test_general_mr_strengths_question_leads_with_positives(self):
+        q = "Marriage ke baad relationship ki strengths kya hongi?"
+        res = run_mr_static_engine(SAMPLE_KUNDLI, q, wants_explain=False)
+        self.assertEqual(res.archetype, "general_mr")
+        self.assertEqual(res.checks.get("question_intent"), "strengths")
+        self.assertIn("strength", res.verdict.lower())
+        joined = " ".join(res.evidence).lower()
+        self.assertTrue(
+            "moon in 7th" in joined or "jupiter in house" in joined or "venus in house" in joined
+        )
+        self.assertFalse(res.verdict.lower().startswith("marriage/relationship quality: strained"))
+
+    def test_general_mr_emotional_compatibility_is_balanced(self):
+        q = "Marriage ke baad emotional compatibility kaisi rahegi?"
+        res = run_mr_static_engine(SAMPLE_KUNDLI, q, wants_explain=False)
+        self.assertEqual(res.archetype, "general_mr")
+        self.assertEqual(res.checks.get("question_intent"), "emotional_compatibility")
+        self.assertIn("emotional compatibility", res.verdict.lower())
+        joined = " ".join(res.evidence).lower()
+        self.assertIn("moon in 7th", joined)
+        self.assertIn("emotional friction", joined)
+
+    def test_partner_nature_dominant_cooperative_synthesis(self):
+        q = "Partner dominant hoga ya cooperative?"
+        res = run_mr_static_engine(SAMPLE_KUNDLI, q, wants_explain=False)
+        self.assertEqual(res.archetype, "partner_nature")
+        joined = " ".join(res.evidence).lower()
+        self.assertIn("partnership style", joined)
+
+    def test_partner_nature_background_narrator_hint(self):
+        q = "Partner ki family background kaisi ho sakti hai?"
+        res = run_mr_static_engine(SAMPLE_KUNDLI, q, wants_explain=False)
+        from ask_mr.engines.partner_nature import partner_nature_narrator_payload
+
+        payload = partner_nature_narrator_payload(res)
+        self.assertIn("family background", payload.lower())
+        self.assertIn("different background theme", payload.lower())
+
+    def test_general_mr_partner_support_intent(self):
+        q = "Marriage partner meri career aur life goals ko support karega ya nahi?"
+        res = run_mr_static_engine(SAMPLE_KUNDLI, q, wants_explain=False)
+        self.assertEqual(res.checks.get("question_intent"), "partner_support")
+        self.assertIn("support", res.verdict.lower())
+
     def test_one_sided_love(self):
         res = run_mr_static_engine(SAMPLE_KUNDLI, "kya yeh ek tarfa pyar hai?", wants_explain=False)
         self.assertEqual(res.archetype, "one_sided_love")
@@ -70,6 +114,16 @@ class MrEngineTests(unittest.TestCase):
     def test_obsession(self):
         res = run_mr_static_engine(SAMPLE_KUNDLI, "kya main possessive hun?", wants_explain=False)
         self.assertEqual(res.archetype, "obsession")
+
+    def test_partner_expressive_routes_partner_nature(self):
+        q = "Partner emotionally expressive hoga ya reserved?"
+        self.assertEqual(classify_mr_archetype(q), "partner_nature")
+
+    def test_partner_respect_routes_partner_nature(self):
+        self.assertEqual(
+            classify_mr_archetype("Partner mujhe respect dega ya nahi?"),
+            "partner_nature",
+        )
 
     def test_emotional_attachment(self):
         res = run_mr_static_engine(SAMPLE_KUNDLI, "mera emotional attachment kaisa hai?", wants_explain=False)
@@ -146,7 +200,18 @@ class MrEngineTests(unittest.TestCase):
         q = "Marriage ke baad emotional compatibility kaisi rahegi?"
         self.assertEqual(classify_mr_archetype(q), "general_mr")
 
-    def test_partner_career_support_routes_general_mr(self):
+    def test_classifier_audit_regressions(self):
+        cases = [
+            ("Relationship tootne ka risk hai kya?", "breakup_risk"),
+            ("Door rehkar rishta strong reh sakta hai?", "long_distance"),
+            (
+                "Khud pasand se shaadi hogi ya ghar wale choose karenge?",
+                "love_vs_arranged",
+            ),
+        ]
+        for q, expected in cases:
+            with self.subTest(q=q[:48]):
+                self.assertEqual(classify_mr_archetype(q), expected)
         q = "Marriage partner meri career aur life goals ko support karega ya nahi?"
         self.assertEqual(classify_mr_archetype(q), "general_mr")
 

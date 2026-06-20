@@ -55,16 +55,28 @@ def classify_mr_archetype(question: str) -> str:
     ):
         return "bed_intimacy"
 
-    # Self-worth / boundaries
+    # Self-worth / boundaries (user's confidence — not "partner respect dega")
     if re.search(
-        r"\b(self\s*worth|boundar|respect|insecure|insecurity|value\s*myself)\b", q
+        r"\b(self\s*worth|boundar|insecure|insecurity|value\s*myself)\b", q
     ):
         return "self_worth"
 
-    # Long-distance / door rehkar rishta
+    # Partner respect / izzat (partner behaviour — not self-worth engine)
+    if re.search(r"\b(partner|spouse|husband|wife|pati|patni|jeevan\s*sathi)\b", q) and re.search(
+        r"\b(respect|izzat|samman)\b", q
+    ):
+        return "partner_nature"
+
+    # Partner emotional style (expressive/reserved — not user attachment depth)
+    if re.search(r"\b(partner|spouse|husband|wife|pati|patni|jeevan\s*sathi)\b", q) and re.search(
+        r"\b(express|reserved|emotionally|emotion|feelings?|khul|band|bolt[ae]?)\b", q
+    ) and not re.search(r"\b(compatible|compatibility|loyal|trust|commit|attach)\b", q):
+        return "partner_nature"
+
+    # Long-distance / door rehkar rishta (before breakup — avoid bare "door" as separation)
     if re.search(
-        r"\b(long\s*distance|ldr|door\s*reh|dur\s*reh|alag\s*shahr|"
-        r"different\s*city|dur\s*se\s*rishta)\b",
+        r"(?:\b(long\s*distance|ldr|alag\s*shahr|different\s*city|dur\s*se\s*rishta)\b|"
+        r"door\s*reh\w*|dur\s*reh\w*)",
         q,
     ) and re.search(
         r"\b(relation|relationship|partner|marriage|pyaar|pyar|love|rishta|shaadi)\b", q
@@ -130,6 +142,27 @@ def classify_mr_archetype(question: str) -> str:
     ):
         return "partner_nature"
 
+    # Love vs arranged / khud pasand vs ghar wale (before family approval)
+    has_love = bool(re.search(r"\b(love|pyaar|pyar|prem|romance)\b", q))
+    has_arr = bool(re.search(r"\barrang", q))
+    has_marriage_word = bool(
+        re.search(r"\b(marriage|shaadi|shadi|shaddi|vivah|biyah|byah|rishta)\b", q)
+    )
+    if (has_love and has_arr) or re.search(r"\b(love\s*marriage|prem\s*vivah)\b", q):
+        return "love_vs_arranged"
+    if has_arr and (has_marriage_word or has_love):
+        return "love_vs_arranged"
+    if has_arr and re.search(r"\b(khud|apni|choice|pasand|pyar\w*)\b", q):
+        return "love_vs_arranged"
+    if re.search(r"\b(khud|apni)\s*pasand\b", q) and re.search(
+        r"\b(ghar\s*wal\w*|parents?|family)\b", q
+    ):
+        return "love_vs_arranged"
+    if re.search(r"\b(ghar\s*wal\w*|parents?)\s*choose\b", q) and re.search(
+        r"\b(pasand|khud|apni|shaadi|shadi|marriage|vivah)\b", q
+    ):
+        return "love_vs_arranged"
+
     # Family approval (user's elders / intercaste — not spouse family profile)
     if re.search(
         r"\b(parents?|ghar\s*wal\w*|gharwal\w*|approval|intercaste|inter\s*caste|"
@@ -147,27 +180,16 @@ def classify_mr_archetype(question: str) -> str:
     if re.search(r"\b(manglik|mangalik|mangal\s*dosh)\b", q):
         return "manglik"
 
-    # Love vs arranged (direct comparison, marriage+arrange, Hinglish typos)
-    has_love = bool(re.search(r"\b(love|pyaar|pyar|prem|romance)\b", q))
-    has_arr = bool(re.search(r"\barrang", q))
-    has_marriage_word = bool(
-        re.search(r"\b(marriage|shaadi|shadi|shaddi|vivah|biyah|byah|rishta)\b", q)
-    )
-    if (has_love and has_arr) or re.search(r"\b(love\s*marriage|prem\s*vivah)\b", q):
-        return "love_vs_arranged"
-    if has_arr and (has_marriage_word or has_love):
-        return "love_vs_arranged"
-    if has_arr and re.search(r"\b(khud|apni|choice|pasand|pyar\w*)\b", q):
-        return "love_vs_arranged"
-
     # Second marriage / remarriage (before breakup — divorce word may appear)
     if re.search(
         r"\b(second|dusri|doosri|2nd|twice|dubara|punah|remarri|do\s*bar)\b", q
     ) and re.search(r"\b(marriage|shaadi|shadi|vivah|vivahit|partner|husband|wife|rishta)\b", q):
         return "second_marriage"
 
-    # Breakup / separation
-    if re.search(r"\b(breakup|break\s*up|separation|divorce|talaq|door|dur|toot|tut)\b", q):
+    # Breakup / separation (toot/tootna; not bare "door" — LDR uses door rehkar)
+    if re.search(
+        r"\b(breakup|break\s*up|separation|divorce|talaq|toot\w*|tut\w*|rishta\s*toot)\b", q
+    ):
         return "breakup_risk"
 
     # Partner nature (after more specific buckets)

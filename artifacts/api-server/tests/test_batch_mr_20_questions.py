@@ -39,7 +39,7 @@ SAMPLE_KUNDLI = {
 # strict=False → only assert engine runs + has evidence (routing debatable)
 BATCH = [
     ("Mera life partner ka nature aur personality kaisa hoga?", "partner_nature", True),
-    ("Partner emotionally expressive hoga ya reserved?", "emotional_attachment", True),
+    ("Partner emotionally expressive hoga ya reserved?", "partner_nature", True),
     ("Marriage mein loyalty aur commitment level kaisa rahega?", "loyalty_trust", True),
     ("Love marriage ke yog zyada hain ya arranged marriage ke?", "love_vs_arranged", True),
     ("Partner ka profession ya work field kis type ka ho sakta hai?", "spouse_profession", True),

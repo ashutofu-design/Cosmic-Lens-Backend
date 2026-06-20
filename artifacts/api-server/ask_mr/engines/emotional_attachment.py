@@ -43,7 +43,7 @@ def run_emotional_attachment(kundli: dict, question: str, *, wants_explain: bool
         confidence="medium",
         word_budget=85 if wants_explain else 55,
         answer_plan="2–3 sentences: attachment style → reason → warm practical note.",
-        summary=["Focus on feelings and bonding, not timing or spouse job."],
+        summary=["Focus on user's attachment style (not partner job/timing)."],
         evidence=evidence,
         ignore=["timing dates/windows", "breakup certainty"],
         checks={

@@ -5,10 +5,20 @@ from __future__ import annotations
 from .types import EngineResult
 
 _NARRATOR_LANG = {
-    "hn": "Reply entirely in natural Hinglish (Hindi + simple English mix).",
-    "hi": "Reply entirely in Hindi (Devanagari).",
-    "en": "Reply entirely in simple English.",
+    "hn": "Reply in natural Hinglish (Roman script). No Devanagari. No planet/house jargon.",
+    "hi": "Reply in Hindi (Devanagari). No planet/house jargon.",
+    "en": "Reply in simple English. No jargon.",
 }
+
+
+def build_mr_narrator_user_lang_block(code: str) -> str:
+    """Minimal language lock for MR narrator (~80 chars vs ~350)."""
+    c = (code or "hn").strip().lower()
+    if c == "hi":
+        return "Lang: Hindi (Devanagari).\n\n"
+    if c == "en":
+        return "Lang: English.\n\n"
+    return "Lang: Hinglish (Roman).\n\n"
 
 
 def build_mr_engine_narrator_system_prompt(
@@ -28,9 +38,13 @@ def build_mr_engine_narrator_system_prompt(
 
     if is_partner_nature or archetype == "partner_nature":
         length_block = (
-            "Write 3 flowing Hinglish paragraphs (~90–120 words total).\n"
-            "Blend partner traits naturally — wise friend tone.\n"
-            "NO step labels, NO bullets, NO boxes."
+            "MANDATORY: exactly 3 paragraphs separated by ONE blank line (\\n\\n).\n"
+            "Total 90–120 words. Wise friend Hinglish. No planet/house/sign/lord/karak words.\n\n"
+            "PARAGRAPH 1 (~30–40 words): ONLY 7th house sign evidence → social/chatty/curious vibe.\n"
+            "PARAGRAPH 2 (~30–40 words): ONLY 7th lord + planets-in-7th evidence → emotional tone + private/thoughtful mindset.\n"
+            "PARAGRAPH 3 (~30–40 words): ONLY partner-karak evidence → warm presence / attraction in relationship.\n\n"
+            "Do NOT write one long essay. Do NOT add 'unique vibes' or facts outside EVIDENCE.\n"
+            "USE: ho sakta hai, lagta hai, shayad. NEVER: pakka, 100%, definitely."
         )
     elif wants_explain:
         length_block = (
@@ -47,24 +61,18 @@ def build_mr_engine_narrator_system_prompt(
 
     topic_hint = archetype.replace("_", " ") if archetype else "marriage/relationship"
 
-    return f"""You are Cosmo — a warm, wise friend. You are NOT an astrologer calculating charts.
+    return f"""You are Cosmo — warm wise friend. NOT calculating charts.
 
 {_NARRATOR_LANG[rl]}
 
-STRICT RULES (breaking any rule is wrong):
-1. The ENGINE FACTS block below is the COMPLETE computed answer — already final.
-2. Do NOT calculate, infer, or add planets, houses, signs, D9, dasha, or new reasons.
-3. Do NOT contradict the engine VERDICT or invent facts missing from EVIDENCE.
-4. Translate engine evidence into plain human language only.
-5. Soft language: ho sakta hai, lagta hai, shayad, tendency — never pakka / 100% / definitely.
-6. Hide technical terms in user text (no house numbers, no planet names, no D9).
-7. NO bullets, NO 👉 Final, NO [Checked], NO "Based on your chart", NO essay.
+RULES: ENGINE FACTS below are final. Narrate VERDICT + EVIDENCE only in plain language.
+Do NOT add planets/houses/D9/dasha or new reasons. Do NOT contradict VERDICT.
+Use ho sakta hai / lagta hai / shayad — never pakka or 100%. No bullets or [Checked].
 
-Topic focus: {topic_hint}
-
+Topic: {topic_hint}
 {length_block}
 
-ENGINE FACTS (use ONLY this block — nothing else exists):
+ENGINE FACTS:
 {chart_text}"""
 
 

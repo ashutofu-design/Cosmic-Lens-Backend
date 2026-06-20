@@ -18,6 +18,21 @@ def _gender_from_birth(birth: Any) -> str:
     return "unknown"
 
 
+def partner_nature_narrator_payload(result: EngineResult) -> str:
+    """Structured facts + mandatory 3-paragraph map for the LLM narrator."""
+    lines = [
+        "ARCHETYPE: partner_nature",
+        f"VERDICT: {result.verdict}",
+        "OUTPUT: exactly 3 paragraphs separated by a blank line (90–120 words total).",
+        "PARA 1 — social vibe: use ONLY the 7th house sign evidence line.",
+        "PARA 2 — emotions + mindset: use ONLY 7th lord + planets-in-7th evidence lines.",
+        "PARA 3 — presence in love: use ONLY the partner-karak evidence line.",
+    ]
+    for item in result.evidence or []:
+        lines.append(f"EVIDENCE: {item}")
+    return "\n".join(lines)
+
+
 def run_partner_nature(
     kundli: dict,
     question: str,
@@ -40,7 +55,11 @@ def run_partner_nature(
     karak = "Venus" if gender != "female" else "Jupiter"
     pk = r.planet(karak)
 
-    verdict = "Partner nature: mostly steady vs intense depends on 7th axis signals"
+    occ_label = ", ".join(occ7) if occ7 else "none"
+    verdict = (
+        "Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), "
+        "mindset in relationship (7L), and overall presence (karak)."
+    )
 
     evidence: list[str] = []
     evidence.append(f"7th house sign baseline: {sign7 or 'unknown'} (partner vibe / social style).")
@@ -65,10 +84,14 @@ def run_partner_nature(
         verdict=verdict,
         confidence="medium",
         word_budget=120,
-        answer_plan="3 short paragraphs (~90–120 words): vibe → mindset → presence (soft language).",
+        answer_plan=(
+            "Para1: 7H sign social vibe → Para2: 7L + occupants emotional/mindset → "
+            "Para3: karak presence (~90–120 words, blank line between paras)."
+        ),
         summary=[
             "User asked partner/spouse nature (non-timing).",
             "Keep it warm and positive; avoid fatalistic wording.",
+            f"7H occupants for tone: {occ_label}.",
         ],
         evidence=evidence[:6],
         ignore=[
@@ -83,6 +106,6 @@ def run_partner_nature(
             "archetype": "partner_nature",
             "gender": gender,
             "karak": karak,
+            "sign7": sign7,
         },
     )
-

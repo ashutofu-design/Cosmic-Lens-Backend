@@ -20,33 +20,37 @@ class EngineResult:
     template_text: str = ""
     checks: dict[str, Any] = field(default_factory=dict)
 
+    def to_narrator_payload(self) -> str:
+        """Compact facts block for LLM narrator (minimal tokens)."""
+        lines = [
+            f"ARCHETYPE: {self.archetype}",
+            f"VERDICT: {self.verdict}",
+            f"CONFIDENCE: {self.confidence}",
+        ]
+        checks = self.checks or {}
+        if checks.get("love_score") is not None:
+            lines.append(
+                f"SCORES: love={checks.get('love_score')} arrange={checks.get('arrange_score')}"
+            )
+        if self.evidence:
+            lines.append("EVIDENCE (use 2–4 only, plain language):")
+            lines.extend(f"- {e}" for e in self.evidence[:6])
+        return "\n".join(lines)
+
     def to_chart_text(self, *, question: str) -> str:
+        """Full admin/debug block (includes question + narrator rules)."""
         lines: list[str] = []
         lines.append("=== MR STATIC ENGINE (non-timing) — facts for narrator only ===")
-        lines.append(f"ARCHETYPE: {self.archetype}")
         lines.append(f"QUESTION: {question.strip()[:220]}")
-        lines.append(f"VERDICT: {self.verdict}")
-        lines.append(f"CONFIDENCE: {self.confidence}")
+        lines.append(self.to_narrator_payload())
         lines.append(f"WORD_BUDGET: {int(self.word_budget)}")
         if self.answer_plan:
             lines.append(f"ANSWER_PLAN: {self.answer_plan}")
         if self.summary:
-            lines.append("")
-            lines.append("SUMMARY (use 1–2 points only):")
-            lines.extend(f"- {s}" for s in self.summary[:6])
-        if self.evidence:
-            lines.append("")
-            lines.append("EVIDENCE (use 2–4 lines only; do not invent new reasons):")
-            lines.extend(f"- {e}" for e in self.evidence[:10])
+            lines.append("SUMMARY:")
+            lines.extend(f"- {s}" for s in self.summary[:4])
         if self.ignore:
-            lines.append("")
-            lines.append("IGNORE (unless user asked explicitly):")
-            lines.extend(f"- {x}" for x in self.ignore[:12])
-        lines.append("")
-        lines.append("NARRATOR RULES (STRICT):")
-        lines.append("- You are NOT calculating chart placements. Use only the facts above.")
-        lines.append("- Reply in plain Hinglish. No house numbers, no planet names, no D9 words.")
-        lines.append("- Use soft language: ho sakta hai / lagta hai / shayad. Never 100% claims.")
-        lines.append("- Keep it human: no bullets/labels in final user reply.")
+            lines.append("IGNORE:")
+            lines.extend(f"- {x}" for x in self.ignore[:8])
         return "\n".join(lines)
 

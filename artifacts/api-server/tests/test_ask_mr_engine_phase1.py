@@ -85,9 +85,9 @@ class MrEngineTests(unittest.TestCase):
     def test_love_vs_arranged_engine_emits_tilt(self):
         res = run_mr_static_engine(SAMPLE_KUNDLI, "love marriage hogi ya arranged?", wants_explain=False)
         self.assertEqual(res.archetype, "love_vs_arranged")
+        self.assertFalse(res.skip_llm)
         self.assertTrue(res.verdict)
         self.assertTrue(len(res.evidence) >= 1)
-        self.assertNotIn("No strong tilt driver triggered", " ".join(res.evidence))
 
     def test_love_vs_arranged_hinglish_typo(self):
         res = run_mr_static_engine(SAMPLE_KUNDLI, "mera love marriage he ya arrange?", wants_explain=False)

@@ -3778,7 +3778,7 @@ def _raw_passthrough_max_tokens(
         if wants_explain:
             return 140
         if dcr_love_meta.get("archetype") == "partner_nature":
-            return 180
+            return 220
         return 75
     if isinstance(dcr_love_meta, dict) and (
         dcr_love_meta.get("slice") == "partner_nature_minimal"
@@ -3794,15 +3794,43 @@ def _raw_passthrough_max_tokens(
 
 
 def _enforce_partner_nature_paragraphs(text: str) -> str:
-    """Keep 3 short Hinglish paragraphs; strip boxes/steps/labels."""
+    """Keep exactly 3 short Hinglish paragraphs; strip boxes/steps/labels."""
     if not text:
         return ""
+
+    def _split_sentences(block: str) -> list[str]:
+        block = " ".join(block.split())
+        if not block:
+            return []
+        out: list[str] = []
+        for sep in (". ", "? ", "! ", "। "):
+            if sep not in block:
+                continue
+            chunks = block.split(sep)
+            for i, ch in enumerate(chunks):
+                s = ch.strip()
+                if not s:
+                    continue
+                suffix = sep.strip() if i < len(chunks) - 1 else ""
+                if suffix and not s.endswith((".", "?", "!", "।")):
+                    s = f"{s}{suffix}"
+                out.append(s)
+            return out
+        return [block]
+
+    def _ensure_period(s: str) -> str:
+        s = (s or "").strip()
+        if not s:
+            return s
+        if s[-1] not in ".?!।":
+            s = s.rstrip(",—-") + "."
+        return s
+
     raw = (text or "").strip()
     raw = _CHECKED_LINE_RX.sub("", raw)
     if "👉" in raw:
         raw = raw.split("👉")[0].strip()
     raw = _AI_PHRASE_RX.sub("", raw).strip()
-    # Drop markdown boxes / step labels the model sometimes leaks
     cleaned_lines: list[str] = []
     _step_rx = re.compile(
         r"^(?:#{1,3}\s*)?(?:\*{0,2})?"
@@ -3828,25 +3856,45 @@ def _enforce_partner_nature_paragraphs(text: str) -> str:
     parts = [p.strip() for p in re.split(r"\n\s*\n", raw) if p.strip()]
     if len(parts) <= 1:
         parts = [p.strip() for p in raw.split("\n") if p.strip()]
+    if len(parts) == 1:
+        sents = _split_sentences(parts[0])
+        if len(sents) >= 3:
+            third = max(1, len(sents) // 3)
+            parts = [
+                " ".join(sents[:third]),
+                " ".join(sents[third : third * 2]),
+                " ".join(sents[third * 2 :]),
+            ]
+        elif len(sents) == 2:
+            parts = [sents[0], sents[1]]
     if not parts:
         return ""
+    parts = [_ensure_period(p) for p in parts[:3] if p.strip()]
+    while len(parts) < 3:
+        parts.append("")
     parts = parts[:3]
-    joined = "\n\n".join(parts)
-    words = joined.split()
-    if len(words) > 130:
-        trimmed: list[str] = []
-        count = 0
-        for para in parts:
-            pw = para.split()
-            if count + len(pw) > 130:
-                remain = 130 - count
-                if remain > 8:
-                    trimmed.append(" ".join(pw[:remain]))
-                break
+
+    word_cap = 120
+    trimmed: list[str] = []
+    count = 0
+    for para in parts:
+        if not para:
+            trimmed.append("")
+            continue
+        pw = para.split()
+        if count + len(pw) <= word_cap:
             trimmed.append(para)
             count += len(pw)
-        joined = "\n\n".join(trimmed)
-    return joined.strip()
+            continue
+        remain = word_cap - count
+        if remain >= 10:
+            chunk = " ".join(pw[:remain])
+            chunk = _ensure_period(chunk)
+            trimmed.append(chunk)
+        break
+    while len(trimmed) < 3:
+        trimmed.append("")
+    return "\n\n".join(p for p in trimmed[:3] if p).strip()
 
 
 def _enforce_one_line_answer(
@@ -4814,7 +4862,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         birth=birth,
                         wants_explain=wants_explain,
                     )
-                    chart_text = _mr_engine_result.to_chart_text(question=question or "")
+                    if _mr_engine_result.archetype == "partner_nature":
+                        from ask_mr.engines.partner_nature import partner_nature_narrator_payload
+
+                        chart_text = partner_nature_narrator_payload(_mr_engine_result)
+                    else:
+                        chart_text = _mr_engine_result.to_narrator_payload()
                     dcr_love_meta = {
                         "slice": "mr_engine_v1",
                         "topic": "marriage_and_relationship",
@@ -5225,13 +5278,18 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         )
 
     eff_lang = _resolve_response_lang(question, lang, None)
-    user_payload = _strict_lang_block(eff_lang) + question
 
     _mr_engine_narrator = (
         isinstance(dcr_love_meta, dict)
         and dcr_love_meta.get("slice") == "mr_engine_v1"
         and (os.environ.get("ASK_MR_NARRATOR") or "1").strip() != "0"
     )
+    if _mr_engine_narrator:
+        from ask_mr.narrator import build_mr_narrator_user_lang_block
+
+        user_payload = build_mr_narrator_user_lang_block(eff_lang) + question
+    else:
+        user_payload = _strict_lang_block(eff_lang) + question
     _archetype_mr = (
         str(dcr_love_meta.get("archetype") or "") if isinstance(dcr_love_meta, dict) else ""
     )

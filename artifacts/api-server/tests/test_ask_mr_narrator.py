@@ -37,16 +37,23 @@ SAMPLE_KUNDLI = {
 
 class MrNarratorTests(unittest.TestCase):
     def test_narrator_prompt_forbids_calculation(self):
-        eng = run_mr_static_engine(SAMPLE_KUNDLI, "love marriage ya arrange?", wants_explain=False)
+        eng = run_mr_static_engine(SAMPLE_KUNDLI, "love marriage kyun?", wants_explain=True)
+        payload = eng.to_narrator_payload()
         prompt = build_mr_engine_narrator_system_prompt(
-            chart_text=eng.to_chart_text(question="love marriage ya arrange?"),
+            chart_text=payload,
             archetype=eng.archetype,
             word_budget=eng.word_budget,
+            wants_explain=True,
         )
-        self.assertIn("Do NOT calculate", prompt)
+        self.assertIn("NOT calculating", prompt)
         self.assertIn("ENGINE FACTS", prompt)
         self.assertNotIn("Full D1 is below", prompt)
-        self.assertLess(len(prompt), 3500)
+        self.assertLess(len(prompt), 2200)
+        self.assertLess(len(payload), 900)
+
+    def test_love_vs_arranged_uses_llm_not_template(self):
+        eng = run_mr_static_engine(SAMPLE_KUNDLI, "love marriage ya arrange?", wants_explain=False)
+        self.assertFalse(eng.skip_llm)
 
     def test_classifier_marriage_arrange_typo(self):
         self.assertEqual(
@@ -57,6 +64,29 @@ class MrNarratorTests(unittest.TestCase):
             classify_mr_archetype("mera marriage hogi ya arranged?"),
             "love_vs_arranged",
         )
+
+    def test_partner_nature_payload_maps_three_paragraphs(self):
+        from ask_mr.engines.partner_nature import partner_nature_narrator_payload, run_partner_nature
+
+        eng = run_partner_nature(SAMPLE_KUNDLI, "mera partner ka nature?", birth=None)
+        payload = partner_nature_narrator_payload(eng)
+        self.assertIn("PARA 1", payload)
+        self.assertIn("PARA 2", payload)
+        self.assertIn("PARA 3", payload)
+        self.assertIn("7th house sign baseline", payload)
+
+    def test_partner_nature_prompt_requires_three_paragraphs(self):
+        from ask_mr.engines.partner_nature import partner_nature_narrator_payload, run_partner_nature
+
+        eng = run_partner_nature(SAMPLE_KUNDLI, "partner nature?", birth=None)
+        prompt = build_mr_engine_narrator_system_prompt(
+            chart_text=partner_nature_narrator_payload(eng),
+            archetype="partner_nature",
+            is_partner_nature=True,
+            word_budget=120,
+        )
+        self.assertIn("exactly 3 paragraphs", prompt)
+        self.assertIn("PARAGRAPH 1", prompt)
 
 
 if __name__ == "__main__":

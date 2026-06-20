@@ -1,4 +1,5 @@
 import { AskLlmContextPanel, AnswerPathBadge, parseAskLlmContext } from "./AskLlmContextPanel";
+import { CopyTextButton } from "./CopyTextButton";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import {
   type AdminStats,
@@ -1391,7 +1392,14 @@ export default function App() {
                   askQuestions.map((row) => (
                     <tr key={row.id}>
                       <td>
-                        <strong>Q:</strong> {row.question_text}
+                        <div className="ask-q-line">
+                          <strong>Q:</strong> {row.question_text}
+                          <CopyTextButton
+                            text={row.question_text}
+                            label="Copy Q"
+                            copiedLabel="Copied"
+                          />
+                        </div>
                         {row.answer_text ? (
                           <>
                             <br />

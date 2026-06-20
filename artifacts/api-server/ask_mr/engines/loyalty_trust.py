@@ -47,8 +47,8 @@ def run_loyalty_trust(kundli: dict, question: str, *, wants_explain: bool = Fals
         evidence = ["No strong trust-risk driver triggered; signals look normal/mixed."]
 
     summary = [
-        "Answer must avoid accusations; focus on communication + boundaries.",
-        "If risk is sensitive: suggest verification through behavior, not fear.",
+        "Answer loyalty/commitment level directly — confident pattern voice.",
+        "NO shayad/ho sakta hai/lagta hai. Avoid accusations; focus on trust + boundaries.",
     ]
 
     return EngineResult(

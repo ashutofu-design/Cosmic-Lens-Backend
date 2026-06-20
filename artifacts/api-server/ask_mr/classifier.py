@@ -49,15 +49,17 @@ def classify_mr_archetype(question: str) -> str:
     ):
         return "self_worth"
 
-    # Emotional attachment / feelings
+    # Emotional attachment / feelings (not loyalty/commitment)
     if re.search(
         r"\b(emotional|attachment|attach|feelings?|dil\s*lag|lagav|pyaar\s*gehra)\b", q
-    ):
+    ) and not re.search(r"\b(loyal\w*|commitment|commit|trust|vishwas)\b", q):
         return "emotional_attachment"
 
-    # Loyalty / cheating / trust
+    # Loyalty / commitment / cheating / trust (before emotional attachment)
     if re.search(
-        r"\b(cheat|cheating|dhokha|dhoka|betray|loyal|faithful|trust|third\s+person)\b", q
+        r"\b(cheat|cheating|dhokha|dhoka|betray|loyal\w*|faithful|trust|vishwas|"
+        r"commitment|commit|nibha\w*|wafad\w*|vafad\w*|third\s+person)\b",
+        q,
     ):
         return "loyalty_trust"
 

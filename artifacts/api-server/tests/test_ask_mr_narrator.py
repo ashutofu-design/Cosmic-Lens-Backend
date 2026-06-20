@@ -55,7 +55,11 @@ class MrNarratorTests(unittest.TestCase):
         eng = run_mr_static_engine(SAMPLE_KUNDLI, "love marriage ya arrange?", wants_explain=False)
         self.assertFalse(eng.skip_llm)
 
-    def test_classifier_marriage_arrange_typo(self):
+    def test_loyalty_commitment_routes_to_loyalty_trust(self):
+        self.assertEqual(
+            classify_mr_archetype("Marriage me loyalty aur commitment level kaise rahega"),
+            "loyalty_trust",
+        )
         self.assertEqual(
             classify_mr_archetype("meraove marriage he ya arrange"),
             "love_vs_arranged",

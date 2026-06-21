@@ -17,6 +17,14 @@ HEALTH_ARCHETYPES = frozenset({
     "parent_health",
     "addiction_support",
     "reproductive_support",
+    "digestive_health",
+    "cardio_health",
+    "nervous_health",
+    "musculoskeletal_health",
+    "skin_health",
+    "endocrine_health",
+    "respiratory_health",
+    "immune_health",
     "refuse_diagnosis",
     "refuse_death",
     "refuse_cure_guarantee",
@@ -166,6 +174,15 @@ def detect_health_archetype(question: str) -> str | None:
         return "addiction_support"
     if _ACCIDENT_RX.search(q):
         return "accident_risk"
+    # Body-system subdomains (pet/heart/breath etc.) before generic mental/chronic
+    try:
+        from .engines.system_health import detect_system_archetype
+
+        sys_arch = detect_system_archetype(q)
+        if sys_arch:
+            return sys_arch
+    except Exception:
+        pass
     if _MENTAL_RX.search(q):
         return "mental_stress"
     if _CHRONIC_RX.search(q):

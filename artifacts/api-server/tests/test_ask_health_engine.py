@@ -45,7 +45,8 @@ _FOUNDATION_10 = [
 class TestAskHealthEngine(unittest.TestCase):
     def test_scope_vitality_chronic_mental_surgery(self):
         cases = [
-            ("meri immunity strong hai?", "overall_vitality"),
+            ("meri vitality strong hai?", "overall_vitality"),
+            ("meri immunity strong hai?", "immune_health"),
             ("purani bimari ki tendency?", "chronic_tendency"),
             ("depression aur neend ki problem?", "mental_stress"),
             ("operation ka risk hai?", "surgery_risk_tone"),
@@ -104,6 +105,37 @@ class TestAskHealthEngine(unittest.TestCase):
                 self.assertGreaterEqual(len(res.evidence), 2)
                 payload = res.to_narrator_payload()
                 self.assertIn("VERDICT:", payload)
+
+    def test_hard_guards_cancer_death(self):
+        cancer_cases = [
+            ("kya mujhe cancer hai chart me?", "refuse_diagnosis"),
+            ("Do I have cancer in my kundli?", "refuse_diagnosis"),
+            ("mera cancer hoga kya?", "refuse_diagnosis"),
+        ]
+        for q, expected in cancer_cases:
+            with self.subTest(q=q):
+                self.assertEqual(classify_health_archetype(q), expected)
+        death_cases = [
+            ("kab marunga main?", "refuse_death"),
+            ("death kab hogi meri?", "refuse_death"),
+            ("when will I die?", "refuse_death"),
+            ("kitni umar hai meri?", "refuse_death"),
+        ]
+        for q, expected in death_cases:
+            with self.subTest(q=q):
+                self.assertEqual(classify_health_archetype(q), expected)
+
+    def test_body_system_subdomains(self):
+        cases = [
+            ("pet dard aur acidity?", "digestive_health"),
+            ("heart weak hai chart me?", "cardio_health"),
+            ("saans phool jati hai?", "respiratory_health"),
+            ("immunity weak hai?", "immune_health"),
+            ("knee pain chronic?", "musculoskeletal_health"),
+        ]
+        for q, expected in cases:
+            with self.subTest(q=q):
+                self.assertEqual(classify_health_archetype(q), expected)
 
     def test_hard_guard_skips_llm(self):
         res = run_health_static_engine(

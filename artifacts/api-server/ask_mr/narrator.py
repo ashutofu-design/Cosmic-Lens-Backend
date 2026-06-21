@@ -205,12 +205,15 @@ def build_mr_engine_narrator_system_prompt(
         "overall_vitality", "chronic_tendency", "mental_stress", "surgery_risk_tone",
         "preventive_risk", "recovery_capacity", "accident_risk", "parent_health",
         "addiction_support", "reproductive_support", "general_health",
+        "digestive_health", "cardio_health", "nervous_health", "musculoskeletal_health",
+        "skin_health", "endocrine_health", "respiratory_health", "immune_health",
     ):
         length_block = (
             f"Write 2–3 short sentences (~{min(wb + 15, 95)} words max).\n"
             "Read USER ACTUALLY ASKED — answer THAT exact health question per VERDICT.\n"
             "Sentence 1 = direct health answer (vitality/chronic/stress/surgery tone/recovery).\n"
             "Sentence 2–3 = WHY from ENGINE EVIDENCE in plain words — NO disease names.\n"
+            "NEVER name diseases (cancer, diabetes, etc.) or predict death/lifespan.\n"
             "NEVER predict death, illness date, recovery date, or cure guarantee.\n"
             "NEVER give surgery muhurat/date — surgeon decides.\n"
             "Mental/addiction/parent Qs → soft supportive tone + doctor/counselling line.\n"

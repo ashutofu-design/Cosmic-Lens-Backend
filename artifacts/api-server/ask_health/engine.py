@@ -16,6 +16,18 @@ _HARD_GUARD_ARCHETYPES = frozenset({
 })
 
 
+_SYSTEM_ARCHETYPES = frozenset({
+    "digestive_health",
+    "cardio_health",
+    "nervous_health",
+    "musculoskeletal_health",
+    "skin_health",
+    "endocrine_health",
+    "respiratory_health",
+    "immune_health",
+})
+
+
 def run_health_static_engine(
     kundli: dict,
     question: str,
@@ -61,6 +73,9 @@ def run_health_static_engine(
     if archetype == "reproductive_support":
         from .engines.reproductive_support import run_reproductive_support
         return run_reproductive_support(kundli, question, wants_explain=wants_explain)
+    if archetype in _SYSTEM_ARCHETYPES:
+        from .engines.system_health import run_system_health
+        return run_system_health(kundli, question, archetype=archetype, wants_explain=wants_explain)
 
     from .engines.general_health import run_general_health
     return run_general_health(kundli, question, wants_explain=wants_explain)

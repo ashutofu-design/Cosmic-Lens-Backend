@@ -124,6 +124,14 @@ HEALTH_ARCHETYPES = {
     "parent_health",
     "addiction_support",
     "reproductive_support",
+    "digestive_health",
+    "cardio_health",
+    "nervous_health",
+    "musculoskeletal_health",
+    "skin_health",
+    "endocrine_health",
+    "respiratory_health",
+    "immune_health",
     "refuse_diagnosis",
     "refuse_death",
     "refuse_cure_guarantee",
@@ -233,8 +241,12 @@ the partner will SUPPORT the native's career / life goals / decisions
    - parent_health: mother/father/parent health
    - addiction_support: addiction/nasha/sharab/smoking
    - reproductive_support: fertility/pregnancy/santaan
-   - refuse_diagnosis / refuse_death / refuse_cure_guarantee / refuse_timing_decline / \
-refuse_timing_recovery / refuse_surgery_muhurat / crisis_redirect: hard-guard Qs
+   - digestive_health / cardio_health / nervous_health / musculoskeletal_health / \
+skin_health / endocrine_health / respiratory_health / immune_health: body-system subdomains
+   - refuse_diagnosis: cancer/diabetes/disease name from chart — NEVER diagnose
+   - refuse_death: death/mrityu/kab marunga/lifespan — NEVER predict death timing
+   - refuse_cure_guarantee / refuse_timing_decline / refuse_timing_recovery / \
+refuse_surgery_muhurat / crisis_redirect: other hard-guard Qs
    - general_health: other health questions
 9. "interpretation": ONE short plain sentence describing what the user really \
 wants to know, phrased as "User wants to know ...". Write it in simple \

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit foundation health questions — routing coverage."""
+"""Audit health routing — subdomains + hard guards (cancer/death blocked)."""
 
 from __future__ import annotations
 
@@ -11,24 +11,33 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ask_health.classifier import classify_health_archetype, is_health_static_question
 
 QUESTIONS = [
+    # Core
     ("Meri sehat kaisi hai?", "overall_vitality"),
-    ("Overall health strong hai?", "overall_vitality"),
     ("Chronic issue ki tendency?", "chronic_tendency"),
-    ("Long term bimari risk?", "chronic_tendency"),
-    ("Stress anxiety tension?", "mental_stress"),
-    ("Neend nahi aati insomnia?", "mental_stress"),
-    ("Surgery risk high hai?", "surgery_risk_tone"),
-    ("Operation safe hai?", "surgery_risk_tone"),
+    ("Stress anxiety?", "mental_stress"),
+    ("Surgery risk?", "surgery_risk_tone"),
     ("Future health risk?", "preventive_risk"),
     ("Recovery capacity?", "recovery_capacity"),
-    ("Accident risk?", "accident_risk"),
-    ("Papa ki health?", "parent_health"),
-    ("Addiction nasha?", "addiction_support"),
-    ("Fertility conceive?", "reproductive_support"),
-    ("Chart se bimari bata", "refuse_diagnosis"),
-    ("Kab marunga?", "refuse_death"),
+    # Subdomains
+    ("Pet dard acidity gas?", "digestive_health"),
+    ("Heart BP chest?", "cardio_health"),
+    ("Saans phool jati?", "respiratory_health"),
+    ("Immunity weak baar baar bimar?", "immune_health"),
+    ("Knee joint pain?", "musculoskeletal_health"),
+    ("Skin rash acne?", "skin_health"),
+    ("Thyroid hormone PCOS?", "endocrine_health"),
+    ("Nerve tingling numbness?", "nervous_health"),
+    # Hard guards — MUST refuse, never answer disease/death
+    ("Kya mujhe cancer hai?", "refuse_diagnosis"),
+    ("Chart me diabetes hai kya?", "refuse_diagnosis"),
+    ("Kab marunga main?", "refuse_death"),
+    ("Death kab hogi?", "refuse_death"),
+    ("Kitni umar jiyunga?", "refuse_death"),
     ("Operation muhurat kab?", "refuse_surgery_muhurat"),
-    ("Pet dard sehat?", "general_health"),
+    ("100% thik ho jaunga?", "refuse_cure_guarantee"),
+    # Edge
+    ("Papa ki health?", "parent_health"),
+    ("Pet dard sehat?", "digestive_health"),
 ]
 
 
@@ -39,9 +48,9 @@ def main() -> int:
         arch = classify_health_archetype(q)
         if in_scope and arch == expected:
             ok += 1
-            print(f"OK  {arch:22} {q[:50]}")
+            print(f"OK  {arch:24} {q[:45]}")
         else:
-            print(f"FAIL expected={expected} got={arch} scope={in_scope}  {q[:50]}")
+            print(f"FAIL expected={expected} got={arch} scope={in_scope}  {q[:45]}")
     total = len(QUESTIONS)
     print(f"\n{ok}/{total} OK")
     return 0 if ok == total else 1

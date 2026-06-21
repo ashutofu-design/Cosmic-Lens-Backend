@@ -235,11 +235,17 @@ _CRISIS_RX = _re.compile(
 )
 
 _DEATH_RX = _re.compile(
-    r"(kab\s+marunga|kab\s+marungi|kab\s+(meri|mera)\s+(maut|death|mrityu)|"
-    r"meri\s+death\s+(kab|kaise)|life\s+span|kitne\s+saal\s+jiyu(?:nga|ngi)?|"
-    r"umar\s+kitni|longevity|when\s+will\s+i\s+die|"
+    r"(kab\s+marunga|kab\s+marungi|kab\s+mar(?:enge|ogi|ogi)|"
+    r"death\s+kab|maut\s+kab|mrityu\s+kab|"
+    r"kab\s+(meri|mera)\s+(maut|death|mrityu)|"
+    r"meri\s+death\s+(kab|kaise|hogi)|"
+    r"life\s+span|life\s+expectancy|lifespan|"
+    r"kitne\s+saal\s+jiyu(?:nga|ngi)?|kitni\s+umar|umar\s+kitni|"
+    r"longevity|when\s+will\s+i\s+die|when\s+do\s+i\s+die|"
     r"kab\s+tak\s+(zinda|alive|jiunga|jiyungi)|"
-    r"mrityu\s+(kab|samay|tarikh))",
+    r"mrityu\s+(kab|samay|tarikh|hogi)|"
+    r"mar\s+ja(?:unga|ungi|oge)\s+kab|"
+    r"मृत्यु|कब\s+मरूँ|कब\s+मरूंग|कब\s+मरungi)",
     _re.IGNORECASE,
 )
 
@@ -252,6 +258,24 @@ _DIAGNOSIS_DEMAND_RX = _re.compile(
     r"chart\s+se\s+bata.{0,30}(bimari|disease|illness)|"
     r"chart\s+(me|mein)\s+(bimari|disease|illness)\s+(bata|name|kya))",
     _re.IGNORECASE,
+)
+
+# Specific disease-name prediction/diagnosis — NEVER answer (cancer, diabetes, etc.)
+_DISEASE_NAME_DEMAND_RX = _re.compile(
+    r"(?ix)"
+    r"(?:\b(?:mujhe|mere|meri|do\s+i\s+have|am\s+i\s+having|will\s+i\s+get)\b.{0,40}\b("
+    r"cancer|kanser|tumor|tumour|tumour|carcinoma|"
+    r"diabetes|madhumeh|sugar\s+disease|"
+    r"hiv|aids|tuberculosis|\btb\b|"
+    r"parkinson|epilepsy|schizophrenia|"
+    r"leukemia|leukaemia|lymphoma|"
+    r"कैंसर|मधुमेह|ट्यूमर"
+    r")\b)|"
+    r"(?:\b("
+    r"cancer|kanser|tumor|tumour|diabetes|hiv|aids|"
+    r"कैंसर|मधुमेह|ट्यूमर"
+    r")\b.{0,40}\b(?:hai|hoga|ho\s+sakta|ho\s+sakti|lagta|chart|kundli|mujhe|mera|meri)\b)|"
+    r"(?:\bchart\b.{0,30}\b(?:cancer|kanser|tumor|tumour|diabetes|hiv|aids|कैंसर)\b)"
 )
 
 _TIMING_DECLINE_RX = _re.compile(
@@ -301,6 +325,8 @@ def detect_hard_guard(question: str) -> Optional[str]:
         return "CRISIS_REDIRECT"
     if _DEATH_RX.search(question):
         return "REFUSE_DEATH"
+    if _DISEASE_NAME_DEMAND_RX.search(question):
+        return "REFUSE_DIAGNOSIS"
     if _DIAGNOSIS_DEMAND_RX.search(question):
         return "REFUSE_DIAGNOSIS"
     # RECOVERY first (positive-direction cues like "kab thik", "kab jayegi")

@@ -156,6 +156,16 @@ def build_mr_engine_narrator_system_prompt(
             "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
             f"{_MR_CONFIDENT_TONE}"
         )
+    elif archetype == "govt_job":
+        length_block = (
+            f"Write 2–3 short sentences (~{min(wb + 20, 95)} words max).\n"
+            "Read USER ACTUALLY ASKED — government/sarkari job, IAS/IPS/police/railway/bank PO suitability.\n"
+            "Sentence 1 = direct haan/nahi for govt/sarkari job per VERDICT.\n"
+            "Sentence 2–3 = WHY from Sun-Saturn service, discipline, job-mode evidence in plain words.\n"
+            "Do NOT give job vs business % split. Do NOT promise selection date or guaranteed rank.\n"
+            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
+            f"{_MR_CONFIDENT_TONE}"
+        )
     elif archetype == "vocational_trade":
         length_block = (
             f"Write 2–3 short sentences (~{min(wb + 15, 85)} words max).\n"

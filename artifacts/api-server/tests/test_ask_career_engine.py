@@ -37,10 +37,27 @@ class CareerEngineTests(unittest.TestCase):
     def test_sector_fit_government(self):
         q = "Government job suit karegi?"
         self.assertTrue(is_career_static_question(q))
-        self.assertEqual(classify_career_archetype(q), "sector_fit")
+        self.assertEqual(classify_career_archetype(q), "govt_job")
         res = run_career_static_engine(SAMPLE_KUNDLI, q)
-        self.assertEqual(res.archetype, "sector_fit")
-        self.assertTrue(len(res.evidence) >= 3)
+        self.assertEqual(res.archetype, "govt_job")
+        joined = " ".join(res.evidence).lower()
+        self.assertIn("discipline", joined)
+        self.assertTrue(len(res.evidence) >= 4)
+        self.assertIn("focus", res.checks)
+
+    def test_govt_exam_still_milestones(self):
+        q = "UPSC exam clear ho jayega kya?"
+        self.assertEqual(classify_career_archetype(q), "career_milestones")
+        res = run_career_static_engine(SAMPLE_KUNDLI, q)
+        self.assertEqual(res.checks.get("focus"), "govt_exam")
+
+    def test_sarkari_naukri_routes_govt_job(self):
+        q = "Kya mujhe sarkari naukri suit karegi?"
+        self.assertEqual(classify_career_archetype(q), "govt_job")
+        res = run_career_static_engine(SAMPLE_KUNDLI, q)
+        self.assertEqual(res.archetype, "govt_job")
+        self.assertGreaterEqual(len(res.evidence), 4)
+        self.assertIn("govt_score", res.checks)
 
     def test_career_traits_leadership(self):
         q = "Mere andar leadership quality kitni hai?"

@@ -68,6 +68,23 @@ GOVT_EXAM_RX = _rx(
     r"government\s*exam|competitive\s*exam|civil\s*service|pcs|"
     r"state\s*psc|defence\s*exam|nda|cds"
 )
+
+GOVT_EXAM_INTENT_RX = re.compile(
+    r"(?ix)\b("
+    r"exam|clear|pass|crack|selection|result|prelims|mains|paper|rank|"
+    r"topper|qualified|qualify|shortlist|attempt"
+    r")\b"
+)
+
+GOVT_JOB_RX = _rx(
+    r"govt\s*job|government\s*job|sarkari\s*naukri|sarkari\s*job|"
+    r"sarkari\s*me\s*(jaau|jau|javu|ban|service)|govt\s*me\s*naukri|"
+    r"public\s*sector\s*job|government\s*service|civil\s*service\s*(job|line|career)|"
+    r"ias\s*(ban|banna|job|line|career|suit)|ips\s*(ban|job|line|career|suit)|"
+    r"police\s*(job|service|line)|railway\s*job|railway\s*service|"
+    r"bank\s*po|bank\s*job|ssc\s*job|defence\s*job|army\s*job|"
+    r"sarkari\s*field|govt\s*field|government\s*field|sarkari\s*line|govt\s*line"
+)
 SIDE_HUSTLE_RX = _rx(
     r"side\s*hustle|part\s*time|extra\s*income|side\s*income|"
     r"dusra\s*kaam|second\s*job|parallel\s*income"
@@ -134,6 +151,32 @@ def detect_sector(question: str) -> SectorEntry | None:
         if entry.pattern.search(q):
             return entry
     return None
+
+
+def is_govt_exam_milestone_question(question: str, interpretation: str = "") -> bool:
+    q = (question or "").strip()
+    interp = (interpretation or "").strip()
+    if not GOVT_EXAM_RX.search(q):
+        return False
+    if GOVT_EXAM_INTENT_RX.search(q):
+        return True
+    return bool(re.search(r"(?ix)(govt exam|government exam|competitive exam)", interp))
+
+
+def is_govt_job_question(question: str, interpretation: str = "") -> bool:
+    q = (question or "").strip()
+    interp = (interpretation or "").strip()
+    if is_govt_exam_milestone_question(q, interp):
+        return False
+    if GOVT_JOB_RX.search(q):
+        return True
+    if re.search(r"(?ix)\b(government|govt|sarkari|public\s*sector)\b", q):
+        if re.search(r"(?ix)\b(job|naukri|service|suit|better|career|ban|line|field|banna)\b", q):
+            return True
+    entry = detect_sector(q)
+    if entry and entry.key in ("government", "defence") and not is_govt_exam_milestone_question(q, interp):
+        return True
+    return bool(re.search(r"(?ix)(government job|sarkari naukri|govt job)", interp))
 
 
 def sector_answer_words() -> re.Pattern[str]:

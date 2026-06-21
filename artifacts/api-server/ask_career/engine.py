@@ -67,6 +67,9 @@ def run_career_static_engine(
     if archetype == "vocational_trade":
         from .engines.vocational_trade import run_vocational_trade
         return run_vocational_trade(kundli, question, wants_explain=wants_explain)
+    if archetype == "govt_job":
+        from .engines.govt_job import run_govt_job
+        return run_govt_job(kundli, question, wants_explain=wants_explain)
 
     from .engines.general_career import run_general_career
     return run_general_career(kundli, question, wants_explain=wants_explain)

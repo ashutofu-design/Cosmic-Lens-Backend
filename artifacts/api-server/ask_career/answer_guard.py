@@ -6,6 +6,7 @@ from typing import Any
 
 from .routing import (
     is_creativity_career_question,
+    is_govt_job_question,
     is_job_vs_business_question,
     is_milestone_question,
     is_specific_sector_suitability_question,
@@ -63,7 +64,16 @@ def verify_career_answer(
     sector_suit_q = is_specific_sector_suitability_question(q, user_intent)
     creativity_q = is_creativity_career_question(q, user_intent)
     vocational_q = is_vocational_question(q, user_intent)
+    govt_job_q = is_govt_job_question(q, user_intent)
     milestone_q = is_milestone_question(q, user_intent)
+
+    if govt_job_q and not which_biz_q and _JOB_BIZ_SPLIT_ANSWER_RX.search(text):
+        if not re.search(r"(?ix)\b(govt|government|sarkari|public\s*sector|ias|ips|police|railway)\b", text):
+            issues.append("govt_job_but_job_split_answer")
+
+    if archetype == "govt_job" and govt_job_q:
+        if not re.search(r"(?ix)\b(govt|government|sarkari|public\s*sector|naukri|ias|ips|police)\b", text):
+            issues.append("govt_job_no_direct_answer")
 
     if which_biz_q:
         if archetype == "job_vs_business":
@@ -73,7 +83,7 @@ def verify_career_answer(
         if not _WHICH_BIZ_ANSWER_RX.search(text):
             issues.append("no_business_type_named")
 
-    if sector_suit_q and not which_biz_q and not creativity_q and not vocational_q and not milestone_q:
+    if sector_suit_q and not which_biz_q and not creativity_q and not vocational_q and not milestone_q and not govt_job_q:
         if _JOB_BIZ_SPLIT_ANSWER_RX.search(text):
             issues.append("sector_suit_but_job_split_answer")
 
@@ -139,6 +149,7 @@ def _repair_instructions(
     creativity_q: bool,
     vocational_q: bool = False,
     milestone_q: bool = False,
+    govt_job_q: bool = False,
 ) -> str:
     if milestone_q or archetype == "career_milestones":
         return (
@@ -171,6 +182,14 @@ def _repair_instructions(
             "(e.g. commerce, partnership/public dealing, trading, consulting) per VERDICT + EVIDENCE.\n"
             "- Sentence 2: WHY from chart evidence in plain life language.\n"
             "- Do NOT give job vs business % split — user asked WHICH business, not job OR business.\n"
+            "- NO labels: Seedha jawab, Conclusion, Verdict."
+        )
+    if govt_job_q or archetype == "govt_job":
+        return (
+            "Rewrite in 2-3 short sentences.\n"
+            "- Sentence 1: direct haan/nahi for government/sarkari job suitability per VERDICT.\n"
+            "- Sentence 2: WHY from discipline, Sun-Saturn service, job-mode evidence.\n"
+            "- Do NOT give job vs business % split. Do NOT promise selection date.\n"
             "- NO labels: Seedha jawab, Conclusion, Verdict."
         )
     if sector_suit_q or archetype == "sector_fit":
@@ -214,6 +233,7 @@ def repair_career_answer(
     creativity_q = is_creativity_career_question(question, intent)
     vocational_q = is_vocational_question(question, intent)
     milestone_q = is_milestone_question(question, intent)
+    govt_job_q = is_govt_job_question(question, intent)
     lang_note = (
         "Reply in Hindi (Devanagari)."
         if (reply_lang or "").lower() == "hi"
@@ -229,6 +249,7 @@ def repair_career_answer(
         creativity_q=creativity_q,
         vocational_q=vocational_q,
         milestone_q=milestone_q,
+        govt_job_q=govt_job_q,
     )
 
     user_msg = f"""USER QUESTION (answer THIS exactly):

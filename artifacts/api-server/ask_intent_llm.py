@@ -71,6 +71,7 @@ CAREER_ARCHETYPES = {
     "retirement_legacy",
     "career_milestones",
     "vocational_trade",
+    "govt_job",
     "general_career",
 }
 
@@ -138,7 +139,8 @@ the partner will SUPPORT the native's career / life goals / decisions
    - workplace_relations: boss, colleagues, job satisfaction
    - fame_recognition: fame, reputation, recognition in career
    - creativity_innovation: YouTuber, actor, singer, photographer, gamer, content creator, creative/innovation career
-   - career_milestones: promotion, interview, job change, govt/competitive exam, side hustle/part-time income
+   - career_milestones: promotion, interview, job change, govt/competitive EXAM clear/pass, side hustle/part-time income
+   - govt_job: government/sarkari job suitability, IAS/IPS/police/railway/bank PO/public sector naukri (NOT exam timing)
    - vocational_trade: electrician, plumber, mechanic, carpenter, driver, ITI/skilled trade
    - career_obstacles: delays, setbacks, obstacles in career
    - education_career: study, degree, education for career

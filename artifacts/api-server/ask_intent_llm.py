@@ -62,8 +62,12 @@ Read the user's question (Hindi/Hinglish/English) and return STRICT JSON only.
 Decide:
 1. "domain": the life area the question is really about. One of:
    marriage, love, career, finance, health, general.
-   IMPORTANT: judge the REAL subject, not just keywords. e.g. "will my \
-partner support my career" is about CAREER support, not marriage quality.
+   CRITICAL RULE: if the question is ABOUT THE PARTNER / SPOUSE / lover \
+(their support, nature, behaviour, loyalty, feelings, family) — even if it \
+also mentions career or money — the domain is "marriage" or "love" (the \
+PARTNER is the subject). e.g. "will my partner support my career" → domain \
+love (partner is the subject), NOT career. Use "career" / "finance" ONLY when \
+the question is about the NATIVE's own job / money, with no partner focus.
 2. "is_timing": true if the user asks WHEN something happens (kab, timing, \
 date, muhurat, age). false otherwise.
 3. "is_decision": true if it is a should-I / yes-or-no decision question.
@@ -78,10 +82,10 @@ best-fitting archetype id; otherwise null. Allowed ids and meaning:
    - obsession: obsession, jealousy, possessiveness
    - bed_intimacy: physical/sexual intimacy
    - self_worth: user's own confidence/boundaries
-   - partner_nature: partner's nature/personality/behaviour/age, incl. \
-whether partner supports the native's goals/career
+   - partner_nature: partner's nature/personality/behaviour/age/family
    - long_distance: long-distance relationship
-   - general_mr: overall marriage quality/happiness/compatibility
+   - general_mr: overall marriage quality/happiness/compatibility, OR whether \
+the partner will SUPPORT the native's career / life goals / decisions
    - loyalty_trust: loyalty, trust, cheating, commitment
    - emotional_attachment: emotional bonding / feelings depth
    - patchup: reconciliation, ex returning

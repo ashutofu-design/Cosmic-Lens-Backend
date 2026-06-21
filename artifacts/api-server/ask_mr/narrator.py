@@ -124,6 +124,18 @@ def build_mr_engine_narrator_system_prompt(
             "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
             f"{_MR_CONFIDENT_TONE}"
         )
+    elif archetype == "sector_fit":
+        length_block = (
+            f"Write 2–3 short sentences (~{min(wb + 20, 95)} words max).\n"
+            "Read USER ACTUALLY ASKED — if they asked WHICH business / best business type / "
+            "konsa business, name 1-2 concrete business FIELDS from EVIDENCE "
+            "(e.g. commerce, partnership/public dealing, trading, consulting, sales/marketing).\n"
+            "Sentence 1 = direct best-business-type answer per VERDICT.\n"
+            "Sentence 2–3 = WHY from ENGINE EVIDENCE in plain words.\n"
+            "Do NOT answer job vs business % split unless USER ACTUALLY ASKED job OR business.\n"
+            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
+            f"{_MR_CONFIDENT_TONE}"
+        )
     elif open_chart_qa:
         _ow = min(wb + 30, 130) if wants_explain else max(wb, 60)
         length_block = (

@@ -99,6 +99,37 @@ class CareerEngineTests(unittest.TestCase):
         self.assertIn("VERDICT", payload)
 
 
+    def test_which_business_routes_sector_fit(self):
+        q = "Agar business me jaau konsa business best hai"
+        self.assertEqual(classify_career_archetype(q), "sector_fit")
+        res = run_career_static_engine(SAMPLE_KUNDLI, q)
+        self.assertEqual(res.archetype, "sector_fit")
+        self.assertIn("business", " ".join(res.summary).lower())
+
+    def test_resolve_overrides_llm_job_vs_biz(self):
+        from ask_career.routing import resolve_career_archetype
+
+        arch, reason = resolve_career_archetype(
+            "Agar business me jaau konsa business best hai",
+            llm_archetype="job_vs_business",
+            interpretation="User wants to know which business is best for them to start.",
+        )
+        self.assertEqual(arch, "sector_fit")
+        self.assertTrue(reason)
+
+    def test_job_vs_business_still_routes(self):
+        q = "Mere liye job better hai ya business?"
+        self.assertEqual(classify_career_archetype(q), "job_vs_business")
+        from ask_career.routing import resolve_career_archetype
+
+        arch, _ = resolve_career_archetype(
+            q,
+            llm_archetype="sector_fit",
+            interpretation="User wants to know if job or business suits them.",
+        )
+        self.assertEqual(arch, "job_vs_business")
+
+
 class TestCareerAnswerGuard(unittest.TestCase):
     _JOB_META = {
         "archetype": "job_vs_business",
@@ -130,6 +161,27 @@ class TestCareerAnswerGuard(unittest.TestCase):
             self._JOB_META,
         )
         self.assertTrue(ok)
+
+    def test_verify_rejects_job_split_for_which_business(self):
+        from ask_career.answer_guard import verify_career_answer
+
+        meta = {
+            "archetype": "job_vs_business",
+            "verdict": "Employment path stronger — job ~60% vs business ~40%",
+            "checks": {"job_pct": 60, "business_pct": 40},
+            "user_intent": "User wants to know which business is best for them to start.",
+        }
+        ans = (
+            "Tere liye business ka scope lagbhag 40% hai, par abhi employment ya job "
+            "zyada suit karti hai, kareeb 60%."
+        )
+        ok, issues = verify_career_answer(
+            "Agar business me jaau konsa business best hai",
+            ans,
+            meta,
+        )
+        self.assertFalse(ok)
+        self.assertIn("wrong_engine_job_vs_biz_for_which_business", issues)
 
 
 if __name__ == "__main__":

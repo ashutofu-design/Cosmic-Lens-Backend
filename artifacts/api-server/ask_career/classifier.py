@@ -56,11 +56,27 @@ def classify_career_archetype(question: str) -> str:
     if not q:
         return "general_career"
 
+    # Which business type/field — NOT job vs business comparison.
+    if re.search(
+        r"(?ix)\b("
+        r"konsa\s+business|kaun\s*sa\s+business|kaunsi\s+business|konsi\s+business|"
+        r"which\s+business|what\s+business|best\s+business|business\s+best|"
+        r"business\s+type|business\s+line|business\s+field|business\s+choose|"
+        r"business\s+me\s+(jau|jaau|javu|jao|jaana)|agar\s+business|"
+        r"business\s+start\s+kar\w*\s+konsa|sapna\s+business|ideal\s+business|"
+        r"suitable\s+business|business\s+suit|business\s+option"
+        r")\b",
+        q,
+    ):
+        return "sector_fit"
+
     if re.search(
         r"(?ix)\b(job\s*vs\s*business|job\s+better|naukri\s+ya\s+business|"
         r"employee\s+type|entrepreneur\s+type|naukri\s+ya\s*dhandha|"
-        r"job\s+ya\s+business)\b",
+        r"job\s+ya\s+business|business\s+ya\s+job|naukri\s+better|job\s+better)\b",
         q,
+    ) or re.search(r"(?ix)\b(job|naukri).{0,25}\b(business|dhandha)\b", q) or re.search(
+        r"(?ix)\b(business|dhandha).{0,25}\b(job|naukri)\b", q
     ) or (
         re.search(r"(?ix)\bbusiness\s+better\b", q)
         and not re.search(r"(?ix)\b(solo|partnership|family|online|trading)\s+business\b", q)

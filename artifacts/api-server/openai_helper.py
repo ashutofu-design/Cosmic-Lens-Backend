@@ -4999,12 +4999,30 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         elif _is_career_static:
             try:
                 from ask_career import run_career_static_engine  # type: ignore
+                from ask_career.routing import resolve_career_archetype  # type: ignore
+
+                _career_interp = ""
+                if isinstance(_llm_intent, dict):
+                    _career_interp = str(_llm_intent.get("interpretation") or "").strip()
+
+                _resolved_career_arch, _career_arch_reason = resolve_career_archetype(
+                    question or "",
+                    llm_archetype=_career_archetype_override,
+                    interpretation=_career_interp,
+                )
+                if _career_arch_reason:
+                    print(
+                        f"[raw_passthrough] CAREER_ARCHETYPE_ROUTE "
+                        f"llm={_career_archetype_override} -> {_resolved_career_arch} "
+                        f"reason={_career_arch_reason}",
+                        flush=True,
+                    )
 
                 _career_engine_result = run_career_static_engine(
                     kundli if isinstance(kundli, dict) else {},
                     question or "",
                     wants_explain=wants_explain,
-                    archetype=_career_archetype_override,
+                    archetype=_resolved_career_arch,
                 )
                 chart_text = _career_engine_result.to_narrator_payload()
                 dcr_love_meta = {

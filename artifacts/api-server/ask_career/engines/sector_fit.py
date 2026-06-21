@@ -23,7 +23,15 @@ _SECTOR_MAP: list[tuple[str, re.Pattern[str], str, str]] = [
     ("media", re.compile(r"(?ix)\b(media|journalism|content\s*creation|influencer)\b"), "comm", "Media/content"),
     ("ngo", re.compile(r"(?ix)\b(ngo|social\s*work|non[\s-]?profit)\b"), "job", "Social/NGO service"),
     ("politics", re.compile(r"(?ix)\b(politics|political|neta|election)\b"), "job", "Politics/public influence"),
-    ("industry", re.compile(r"(?ix)\b(industry|field|line|profession|kaunsi)\b"), "comm", "Best industry"),
+    (
+        "industry",
+        re.compile(
+            r"(?ix)\b(industry|field|line|profession|kaunsi|konsa\s+business|"
+            r"best\s+business|which\s+business|business\s+best|business\s+type)\b"
+        ),
+        "comm",
+        "Best industry/business type",
+    ),
 ]
 
 
@@ -89,7 +97,13 @@ def run_sector_fit(kundli: dict, question: str, *, wants_explain: bool = False) 
         confidence="medium",
         word_budget=95 if wants_explain else 70,
         answer_plan="Direct sector suitability → 2 chart reasons → one skill note.",
-        summary=[f"QUESTION FOCUS: {key} sector/industry fit.", "No exact job title guarantee."],
+        summary=[
+            f"QUESTION FOCUS: {key} sector/industry fit.",
+            "If user asked WHICH business: name 1-2 concrete business types from evidence "
+            "(commerce, partnership/public dealing, trading, consulting, etc.).",
+            "Do NOT answer job vs business % split unless user asked job OR business.",
+            "No exact job title guarantee.",
+        ],
         evidence=evidence[:8],
         ignore=["timing", "marriage", "spouse profession"],
         checks={"slice_type": "career_engine_v1", "archetype": "sector_fit", "sector": key},

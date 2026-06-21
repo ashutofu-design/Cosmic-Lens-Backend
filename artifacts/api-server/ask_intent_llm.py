@@ -125,11 +125,11 @@ the partner will SUPPORT the native's career / life goals / decisions
    - second_marriage: second/again marriage
    - breakup_risk: breakup, separation, divorce risk
 6. "career_archetype": ONLY when domain is career, pick best id; otherwise null:
-   - job_vs_business: job vs business / employee vs entrepreneur
-   - sector_fit: industry/field (govt, IT, medical, law, teaching, sales, etc.)
+   - job_vs_business: ONLY employment vs self-employment (job OR business, naukri ya dhandha)
+   - sector_fit: industry/field OR which business is best / konsa business / business type / line
    - career_traits: leadership, pressure, risk, discipline, team, independence
    - strengths_skills: strengths, weaknesses, skills to develop
-   - entrepreneurship: startup, partnership business, online, family business
+   - entrepreneurship: startup, partnership business, online, family business, trading business
    - work_environment: remote, corporate, MNC, public/private sector
    - income_wealth: salary, passive income, high income, freelancing, commission
    - foreign_career: abroad job, foreign company, settle abroad for work

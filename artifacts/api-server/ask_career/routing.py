@@ -8,6 +8,7 @@ import re
 
 
 
+from .foundation_personality import classify_foundation_personality
 from .job_registry import JOB_ENGINE_ARCHETYPES, detect_job_archetype, is_dedicated_job_question
 from .sector_registry import (
     CREATIVITY_RX,
@@ -356,6 +357,18 @@ def resolve_career_archetype(
             return "govt_job", f"govt_job_over_{llm}"
 
         return "govt_job", None if rule == "govt_job" else "govt_job_over_rule"
+
+
+
+    found = classify_foundation_personality(question)
+
+    if found:
+
+        if llm and llm != found:
+
+            return found, f"foundation_over_{llm}"
+
+        return found, None if rule == found else "foundation_over_rule"
 
 
 

@@ -7,6 +7,7 @@ from ._career_base import inclination_evidence, load_inclination, trait_line
 
 _ENV_RX = [
     (re.compile(r"(?ix)\b(remote\s*work|work\s*from\s*home|wfh)\b"), "remote"),
+    (re.compile(r"(?ix)\b(travel[\s-]?based\s*career|travel\s*heavy|frequent\s*travel)\b"), "travel"),
     (re.compile(r"(?ix)\b(multinational|mnc|global\s*company)\b"), "mnc"),
     (re.compile(r"(?ix)\b(corporate\s*world|corporate\s*job|big\s*company)\b"), "corporate"),
     (re.compile(r"(?ix)\b(public\s*sector|government|sarkari)\b"), "public"),
@@ -39,9 +40,18 @@ def run_work_environment(kundli: dict, question: str, *, wants_explain: bool = F
         "corporate": f"Corporate fit: job ~{job}% + structure {struct}/100 — hierarchy and process-oriented workplaces suit.",
         "public": "Public sector: Sun-Saturn service subtype + job tilt supports government/public roles.",
         "private": "Private sector: commercial/professional subtype supports company employment with growth track.",
-        "travel": "Travel-heavy career: Rahu movement + Mercury field roles (sales/consulting/operations) support frequent travel.",
+        "travel": "Travel-heavy career: Rahu movement + Mercury field roles support travel-based work.",
+        "office": "Office-based work: structure score + Saturn routine supports fixed workplace roles.",
+        "field": "Field/on-site work: Mars execution + movement appetite supports outdoor/field roles.",
+        "backend": "Backend/support work: Mercury analytical focus suits research/detail roles behind the scenes.",
     }
-    if env == "self_employed":
+    if env == "office" or re.search(r"(?ix)\boffice\s+work\b", question or ""):
+        evidence.append(msgs.get("office", msgs["corporate"]))
+    elif env == "field" or re.search(r"(?ix)\bfield\s+work\b", question or ""):
+        evidence.append(msgs["field"])
+    elif env == "backend" or re.search(r"(?ix)\bbackend\s+work\b", question or ""):
+        evidence.append(msgs["backend"])
+    elif env == "self_employed":
         evidence.append(trait_line(inc, "independence", high="self-employment suits", low="employed structure better first"))
     elif env == "employee":
         evidence.append(trait_line(inc, "discipline", high="employee track suits — steady role in organisation", low="may chafe in fixed roles — seek flexible org"))

@@ -35,6 +35,7 @@ from .sector_registry import (
 )
 
 from .job_registry import detect_job_archetype
+from .foundation_personality import classify_foundation_personality, is_foundation_scope
 
 
 
@@ -84,6 +85,10 @@ def is_career_static_question(question: str) -> bool:
 
         return False
 
+    if is_foundation_scope(q):
+
+        return True
+
     if _CAREER_CORE.search(q):
 
         return True
@@ -119,6 +124,14 @@ def classify_career_archetype(question: str) -> str:
     if WHICH_BUSINESS_RX.search(q):
 
         return "sector_fit"
+
+
+
+    found = classify_foundation_personality(q)
+
+    if found:
+
+        return found
 
 
 

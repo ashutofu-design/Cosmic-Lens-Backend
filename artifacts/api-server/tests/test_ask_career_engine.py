@@ -205,6 +205,24 @@ class CareerEngineTests(unittest.TestCase):
     def test_actor_routes_creativity(self):
         self.assertEqual(classify_career_archetype("Actor ban sakta hun?"), "creativity_innovation")
 
+    def test_section1_foundation_personality_routing(self):
+        cases = [
+            ("Main naturally kis type ke work ke liye bana hoon?", True, "general_career"),
+            ("Main follower zyada hoon ya leader?", True, "career_traits"),
+            ("Main practical hoon ya creative?", True, "general_career"),
+            ("Main pressure me kaisa perform karta hoon?", True, "career_traits"),
+            ("Main authority handle kar sakta hoon?", True, "career_traits"),
+            ("Main remote work me better hoon?", True, "work_environment"),
+            ("Main travel-based career me better hoon?", True, "work_environment"),
+            ("Mujhe kis skill ko avoid karna chahiye?", True, "strengths_skills"),
+        ]
+        for q, in_scope, arch in cases:
+            with self.subTest(q=q):
+                self.assertEqual(is_career_static_question(q), in_scope)
+                self.assertEqual(classify_career_archetype(q), arch)
+                res = run_career_static_engine(SAMPLE_KUNDLI, q)
+                self.assertGreaterEqual(len(res.evidence), 4)
+
 
 class TestCareerAnswerGuard(unittest.TestCase):
     _JOB_META = {

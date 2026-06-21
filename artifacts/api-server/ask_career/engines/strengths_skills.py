@@ -6,14 +6,15 @@ from ask_career.types import EngineResult
 from ._career_base import inclination_evidence, load_inclination, trait_line
 
 _SKILL_RX = [
-    (re.compile(r"(?ix)\b(strength|strong\s*side|biggest\s*strength)\b"), "strength"),
-    (re.compile(r"(?ix)\b(weakness|weak\s*side|biggest\s*weakness|kamzor)\b"), "weakness"),
+    (re.compile(r"(?ix)\b(strength|strong\s*side|biggest\s*strength|sabse\s+badi\s+strength)\b"), "strength"),
+    (re.compile(r"(?ix)\b(weakness|weak\s*side|biggest\s*weakness|sabse\s+badi\s+weakness|kamzor)\b"), "weakness"),
+    (re.compile(r"(?ix)\b(skill\s+ko\s+avoid|avoid\s+karna)\b"), "avoid"),
+    (re.compile(r"(?ix)\b(skill\s+par\s+focus|focus\s+karna\s+chahiye|valuable\s+skill)\b"), "develop"),
+    (re.compile(r"(?ix)\b(hidden\s+talents?|natural\s+talents?)\b"), "natural"),
     (re.compile(r"(?ix)\b(develop|improve|seekhni|seekhna|skill\s*develop)\b"), "develop"),
-    (re.compile(r"(?ix)\b(natural(ly)?\s*strong|naturally\s*strong)\b"), "natural"),
-    (re.compile(r"(?ix)\b(communication)\b"), "communication"),
-    (re.compile(r"(?ix)\b(technical)\b"), "technical"),
+    (re.compile(r"(?ix)\b(communication|public\s*speaking|problem\s+solving|decision\s+making)\b"), "communication"),
+    (re.compile(r"(?ix)\b(technical\s+role|technical)\b"), "technical"),
     (re.compile(r"(?ix)\b(management)\b"), "management"),
-    (re.compile(r"(?ix)\b(public\s*speaking)\b"), "communication"),
     (re.compile(r"(?ix)\b(sales\s*skill)\b"), "communication"),
     (re.compile(r"(?ix)\b(foreign\s*language|language\s*seekh)\b"), "communication"),
 ]
@@ -44,6 +45,14 @@ def run_strengths_skills(kundli: dict, question: str, *, wants_explain: bool = F
         evidence.append(f"Growth edge: {low[0].replace('_', ' ')} ({low[1]}/100) — build skill/habit here.")
         evidence.append("Weakness is workable — chart shows where deliberate practice helps most.")
         verdict = f"Career growth edge: {low[0].replace('_', ' ')} — improve with focused effort"
+    elif focus == "avoid":
+        evidence.append(
+            f"Skill to de-prioritise: {low[0].replace('_', ' ')} ({low[1]}/100) — not your natural strong zone."
+        )
+        evidence.append(
+            f"Better to build on {top[0].replace('_', ' ')} ({top[1]}/100) where chart support is stronger."
+        )
+        verdict = f"Skill avoid zone: {low[0].replace('_', ' ')} — lean away from over-investing here"
     else:
         skill = focus if focus in psych else "communication"
         if focus == "develop":

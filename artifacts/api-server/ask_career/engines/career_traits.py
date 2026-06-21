@@ -6,16 +6,18 @@ from ask_career.types import EngineResult
 from ._career_base import inclination_evidence, load_inclination, trait_line
 
 _TRAIT_RX: list[tuple[str, re.Pattern[str], str]] = [
-    ("leadership", re.compile(r"(?ix)\b(leadership|leader|lead\s*role|authority)\b"), "leadership"),
+    ("leadership", re.compile(r"(?ix)\b(leadership|leader|lead\s*role|follower)\b"), "leadership"),
     ("team", re.compile(r"(?ix)\b(team\s*handle|team\s*player|team\s*work)\b"), "communication"),
     ("independent", re.compile(r"(?ix)\b(independent\s*work|solo|alone|self[\s-]?reliant)\b"), "independence"),
-    ("pressure", re.compile(r"(?ix)\b(pressure|stress|deadline|high[\s-]?pressure)\b"), "persistence"),
-    ("risk", re.compile(r"(?ix)\b(risk[\s-]?tak|risks?|gamble)\b"), "risk_appetite"),
+    ("pressure", re.compile(r"(?ix)\b(pressure|stress|deadline|high[\s-]?pressure|perform\s+karta)\b"), "persistence"),
+    ("risk", re.compile(r"(?ix)\b(risk[\s-]?tak|risk[\s-]?averse|risks?|gamble)\b"), "risk_appetite"),
     ("discipline", re.compile(r"(?ix)\b(disciplin|self[\s-]?control|consistent)\b"), "discipline"),
-    ("strategic", re.compile(r"(?ix)\b(strategic|strategy|planner|planning)\b"), "adaptability"),
-    ("public", re.compile(r"(?ix)\b(public\s*dealing|client\s*face|people\s*skill)\b"), "communication"),
-    ("network", re.compile(r"(?ix)\b(network|connections|contacts)\b"), "communication"),
+    ("strategic", re.compile(r"(?ix)\b(strategic|strategy|planner|planning|long[\s-]?term\s+planning)\b"), "adaptability"),
+    ("public", re.compile(r"(?ix)\b(public\s*dealing|client[\s-]?face|client[\s-]?facing|people\s*skill)\b"), "communication"),
+    ("network", re.compile(r"(?ix)\b(network|networking|connections|contacts)\b"), "communication"),
     ("negotiation", re.compile(r"(?ix)\b(negotiat|deal\s*close|bargain)\b"), "communication"),
+    ("authority", re.compile(r"(?ix)\b(authority\s+handle|authority\s+ko\s+accept|authority)\b"), "authority_tolerance"),
+    ("responsibility", re.compile(r"(?ix)\b(responsibility)\b"), "discipline"),
     ("entrepreneur", re.compile(r"(?ix)\b(entrepreneur|founder|startup\s*founder)\b"), "independence"),
     ("employee", re.compile(r"(?ix)\b(employee\s*type|job\s*person)\b"), "discipline"),
 ]

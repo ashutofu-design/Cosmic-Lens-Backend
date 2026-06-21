@@ -113,6 +113,27 @@ FINANCE_ARCHETYPES = {
     "general_finance",
 }
 
+HEALTH_ARCHETYPES = {
+    "overall_vitality",
+    "chronic_tendency",
+    "mental_stress",
+    "surgery_risk_tone",
+    "preventive_risk",
+    "recovery_capacity",
+    "accident_risk",
+    "parent_health",
+    "addiction_support",
+    "reproductive_support",
+    "refuse_diagnosis",
+    "refuse_death",
+    "refuse_cure_guarantee",
+    "refuse_timing_decline",
+    "refuse_timing_recovery",
+    "refuse_surgery_muhurat",
+    "crisis_redirect",
+    "general_health",
+}
+
 DOMAINS = {"marriage", "love", "career", "finance", "health", "general"}
 
 # Low-confidence cutoff — below this the caller treats the result as
@@ -201,15 +222,30 @@ the partner will SUPPORT the native's career / life goals / decisions
    - wealth_potential: amir/rich/crorepati potential
    - dhana_yoga: dhana/dhan yog audit
    - general_finance: other money questions
-8. "interpretation": ONE short plain sentence describing what the user really \
+8. "health_archetype": ONLY when domain is health, pick best id; otherwise null:
+   - overall_vitality: sehat/vitality/immunity/stamina/energy kaisi
+   - chronic_tendency: chronic/long-term/purani bimari tendency
+   - mental_stress: stress/anxiety/depression/sleep/neend/tension
+   - surgery_risk_tone: surgery/operation risk tone (NOT muhurat/date)
+   - preventive_risk: future health risk/tendency/prevention
+   - recovery_capacity: recovery/healing capacity (NOT recovery date)
+   - accident_risk: accident/injury/chot risk tone
+   - parent_health: mother/father/parent health
+   - addiction_support: addiction/nasha/sharab/smoking
+   - reproductive_support: fertility/pregnancy/santaan
+   - refuse_diagnosis / refuse_death / refuse_cure_guarantee / refuse_timing_decline / \
+refuse_timing_recovery / refuse_surgery_muhurat / crisis_redirect: hard-guard Qs
+   - general_health: other health questions
+9. "interpretation": ONE short plain sentence describing what the user really \
 wants to know, phrased as "User wants to know ...". Write it in simple \
 English. e.g. "User wants to know if their partner will support their career."
-8. "confidence": 0.0-1.0 how sure you are.
+10. "confidence": 0.0-1.0 how sure you are.
 
 Return ONLY this JSON object:
 {{"domain": "...", "is_timing": false, "is_decision": false, \
 "wants_explain": false, "mr_archetype": null, "career_archetype": null, \
-"finance_archetype": null, "interpretation": "User wants to know ...", "confidence": 0.0}}
+"finance_archetype": null, "health_archetype": null, \
+"interpretation": "User wants to know ...", "confidence": 0.0}}
 
 Question: {question}"""
 
@@ -223,6 +259,7 @@ def _error(reason: str, source: str = "llm_error") -> dict:
         "mr_archetype": None,
         "career_archetype": None,
         "finance_archetype": None,
+        "health_archetype": None,
         "interpretation": "",
         "confidence": 0.0,
         "source": source,
@@ -329,6 +366,7 @@ def classify_ask_intent(
         if career_arch is None:
             career_arch = "general_career"
         finance_arch = None
+        health_arch = None
     elif domain == "finance":
         finance_arch = data.get("finance_archetype")
         if isinstance(finance_arch, str):
@@ -338,9 +376,21 @@ def classify_ask_intent(
         if finance_arch is None:
             finance_arch = "general_finance"
         career_arch = None
+        health_arch = None
+    elif domain == "health":
+        health_arch = data.get("health_archetype")
+        if isinstance(health_arch, str):
+            health_arch = health_arch.strip().lower()
+        if health_arch not in HEALTH_ARCHETYPES:
+            health_arch = None
+        if health_arch is None:
+            health_arch = "general_health"
+        career_arch = None
+        finance_arch = None
     else:
         career_arch = None
         finance_arch = None
+        health_arch = None
 
     interpretation = str(data.get("interpretation") or "").strip()[:300]
 
@@ -352,6 +402,7 @@ def classify_ask_intent(
         "mr_archetype": archetype,
         "career_archetype": career_arch,
         "finance_archetype": finance_arch,
+        "health_archetype": health_arch,
         "interpretation": interpretation,
         "confidence": conf,
         "source": "llm_low_conf" if conf < _LOW_CONF else "llm",

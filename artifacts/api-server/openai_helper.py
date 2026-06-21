@@ -751,6 +751,11 @@ def _passthrough_health_focus(question, topic_id):
       - any sub-step raises (logged, never propagates)
     """
     try:
+        if (os.environ.get("ASK_HEALTH_ENGINE") or "1").strip() != "0":
+            from ask_health.classifier import is_health_static_question  # type: ignore
+
+            if is_health_static_question(question or ""):
+                return ""
         if not _health_focus_enabled():
             return ""
         if not _is_health_topic(topic_id, question):
@@ -4863,6 +4868,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _mr_archetype_override = None
     _career_archetype_override = None
     _finance_archetype_override = None
+    _health_archetype_override = None
     if (os.environ.get("ASK_LLM_INTENT") or "0").strip() == "1":
         try:
             from ask_intent_llm import classify_ask_intent  # type: ignore
@@ -4874,6 +4880,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _mr_archetype_override = _res.get("mr_archetype")
                 _career_archetype_override = _res.get("career_archetype")
                 _finance_archetype_override = _res.get("finance_archetype")
+                _health_archetype_override = _res.get("health_archetype")
             print(
                 f"[raw_passthrough] LLM_INTENT source={(_res or {}).get('source')} "
                 f"domain={(_res or {}).get('domain')} "
@@ -4933,7 +4940,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _is_mr_static = False
     _is_career_static = False
     _is_finance_static = False
+    _is_health_static = False
     _finance_engine_on = (os.environ.get("ASK_FINANCE_ENGINE") or "1").strip() != "0"
+    _health_engine_on = (os.environ.get("ASK_HEALTH_ENGINE") or "1").strip() != "0"
     if not is_timing:
         if _llm_intent is not None:
             _dom = _llm_intent.get("domain")
@@ -4966,6 +4975,19 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     _is_finance_static = _fin_regex
             except Exception:
                 _is_finance_static = False
+        if _health_engine_on and not _is_mr_static and not _is_career_static and not _is_finance_static:
+            try:
+                from ask_health.classifier import is_health_static_question  # type: ignore
+
+                _hlth_regex = is_health_static_question(question)
+                if _llm_intent is not None:
+                    _is_health_static = _hlth_regex or (
+                        _llm_intent.get("domain") == "health"
+                    )
+                else:
+                    _is_health_static = _hlth_regex
+            except Exception:
+                _is_health_static = False
         if _is_career_static and _is_finance_static:
             try:
                 from ask_finance.routing import finance_overrides_career  # type: ignore
@@ -5004,8 +5026,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         static_dasha_hint = False
         is_decision = False
         is_finance = False
+    if _is_health_static:
+        static_dasha_hint = False
+        is_decision = False
+        is_finance = False
     dcr_love_meta = None
     _mr_engine_result = None
+    _health_engine_result = None
     _chart_slice_type = "full_compact"
     try:
         if is_timing:
@@ -5142,6 +5169,63 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_finance_static = False
+        elif _is_health_static:
+            try:
+                from ask_health import run_health_static_engine  # type: ignore
+                from ask_health.routing import resolve_health_archetype  # type: ignore
+
+                _health_interp = ""
+                if isinstance(_llm_intent, dict):
+                    _health_interp = str(_llm_intent.get("interpretation") or "").strip()
+
+                _resolved_health_arch, _health_arch_reason = resolve_health_archetype(
+                    question or "",
+                    llm_archetype=_health_archetype_override,
+                    interpretation=_health_interp,
+                )
+                if _health_arch_reason:
+                    print(
+                        f"[raw_passthrough] HEALTH_ARCHETYPE_ROUTE "
+                        f"llm={_health_archetype_override} -> {_resolved_health_arch} "
+                        f"reason={_health_arch_reason}",
+                        flush=True,
+                    )
+
+                _health_engine_result = run_health_static_engine(
+                    kundli if isinstance(kundli, dict) else {},
+                    question or "",
+                    wants_explain=wants_explain,
+                    archetype=_resolved_health_arch,
+                )
+                chart_text = _health_engine_result.to_narrator_payload()
+                dcr_love_meta = {
+                    "slice": "health_engine_v1",
+                    "topic": "health",
+                    "archetype": _health_engine_result.archetype,
+                    "verdict": _health_engine_result.verdict,
+                    "summary": list(_health_engine_result.summary or []),
+                    "evidence": list(_health_engine_result.evidence or []),
+                    "ignore": list(_health_engine_result.ignore or []),
+                    "checks": dict(_health_engine_result.checks or {}),
+                    "skip_llm": bool(_health_engine_result.skip_llm),
+                    "word_budget": int(_health_engine_result.word_budget or 75),
+                    "narrator_mode": "engine_facts_only",
+                }
+                print(
+                    f"[raw_passthrough] HEALTH_ENGINE "
+                    f"archetype={_health_engine_result.archetype} "
+                    f"skip_llm={_health_engine_result.skip_llm} "
+                    f"evidence={len(_health_engine_result.evidence or [])} "
+                    f"chart_chars={len(chart_text)}",
+                    flush=True,
+                )
+            except Exception as _hl_exc:
+                print(f"[raw_passthrough] HEALTH_ENGINE failed: {_hl_exc}", flush=True)
+                chart_text = _raw_compact_chart(
+                    kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
+                )
+                dcr_love_meta = None
+                _is_health_static = False
         elif _is_mr_static:
             _use_legacy_mr = (os.environ.get("ASK_MR_ENGINE") or "1").strip() == "0"
             if _use_legacy_mr:
@@ -5463,6 +5547,45 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             llm_intent=_llm_intent,
         )
 
+    # ── Health engine template-only (hard guards / crisis — skip LLM) ──
+    if (
+        _is_health_static
+        and _health_engine_result is not None
+        and getattr(_health_engine_result, "skip_llm", False)
+        and (_health_engine_result.template_text or "").strip()
+    ):
+        _htpl_text = (_health_engine_result.template_text or "").strip()
+        _out_htpl = {
+            "text": _htpl_text,
+            "topic": "health",
+            "question_type": qtype,
+            "confidence": 1.0,
+            "source": "health_engine_template",
+            "engine_tag": "ans-engine",
+            "follow_ups": [],
+        }
+        _pt_checks_htpl = {
+            "slice_type": "health_engine_v1",
+            "resolved_route": _resolved_route,
+            "is_health_static": True,
+            "archetype": _health_engine_result.archetype,
+            "skip_llm": True,
+            "dasha_included": False,
+        }
+        return _attach_admin_llm_context(
+            _out_htpl,
+            question=question or "",
+            question_type=qtype,
+            is_timing=False,
+            checks=_pt_checks_htpl,
+            chart_text=chart_text,
+            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+            llm_called=False,
+            skip_reason="health_engine_template",
+            intent_source=_intent_source,
+            llm_intent=_llm_intent,
+        )
+
     # ── MR engine template-only (skip LLM for simple yes/no e.g. manglik) ──
     if (
         _is_mr_static
@@ -5604,7 +5727,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     if (
         dcr_love_meta
         and not _is_pn_minimal
-        and dcr_love_meta.get("slice") not in ("mr_engine_v1", "career_engine_v1", "finance_engine_v1")
+        and dcr_love_meta.get("slice") not in ("mr_engine_v1", "career_engine_v1", "finance_engine_v1", "health_engine_v1")
     ):
         dcr_love_rule = (
             "\nDCR LOVE SLICE: partner/love Q — D1 first, D9 confirms. "
@@ -5615,11 +5738,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
     _mr_engine_narrator = (
         isinstance(dcr_love_meta, dict)
-        and dcr_love_meta.get("slice") in ("mr_engine_v1", "career_engine_v1", "finance_engine_v1")
+        and dcr_love_meta.get("slice") in ("mr_engine_v1", "career_engine_v1", "finance_engine_v1", "health_engine_v1")
         and (
             os.environ.get("ASK_MR_NARRATOR")
             or os.environ.get("ASK_CAREER_NARRATOR")
             or os.environ.get("ASK_FINANCE_NARRATOR")
+            or os.environ.get("ASK_HEALTH_NARRATOR")
             or "1"
         ).strip() != "0"
     )
@@ -5757,6 +5881,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             "mr_engine_v1",
             "career_engine_v1",
             "finance_engine_v1",
+            "health_engine_v1",
         ):
             from ask_mr.narrator import polish_mr_confident_tone
 
@@ -5830,6 +5955,30 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     )
             except Exception as _fag:
                 print(f"[raw_passthrough] FINANCE_ANSWER_GUARD skipped: {_fag}", flush=True)
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "health_engine_v1":
+            try:
+                from ask_health.answer_guard import guard_health_answer
+
+                text, _hguard = guard_health_answer(
+                    question or "",
+                    text,
+                    dcr_love_meta,
+                )
+                text = _strip_decision_template_labels(text)
+                if _hguard.get("repaired"):
+                    print(
+                        f"[raw_passthrough] HEALTH_ANSWER_GUARD repaired "
+                        f"issues={_hguard.get('issues')}",
+                        flush=True,
+                    )
+                elif not _hguard.get("ok"):
+                    print(
+                        f"[raw_passthrough] HEALTH_ANSWER_GUARD warn "
+                        f"issues={_hguard.get('issues')}",
+                        flush=True,
+                    )
+            except Exception as _hag:
+                print(f"[raw_passthrough] HEALTH_ANSWER_GUARD skipped: {_hag}", flush=True)
         if not text:
             text = "Maaf kijiye, abhi response generate nahi ho paya. Phir try karein."
         # Skip robotic [Checked: ...] trace — user wants human replies only.

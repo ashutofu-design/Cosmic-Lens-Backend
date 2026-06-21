@@ -201,6 +201,22 @@ def build_mr_engine_narrator_system_prompt(
             "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
             f"{_MR_CONFIDENT_TONE}"
         )
+    elif archetype in (
+        "overall_vitality", "chronic_tendency", "mental_stress", "surgery_risk_tone",
+        "preventive_risk", "recovery_capacity", "accident_risk", "parent_health",
+        "addiction_support", "reproductive_support", "general_health",
+    ):
+        length_block = (
+            f"Write 2–3 short sentences (~{min(wb + 15, 95)} words max).\n"
+            "Read USER ACTUALLY ASKED — answer THAT exact health question per VERDICT.\n"
+            "Sentence 1 = direct health answer (vitality/chronic/stress/surgery tone/recovery).\n"
+            "Sentence 2–3 = WHY from ENGINE EVIDENCE in plain words — NO disease names.\n"
+            "NEVER predict death, illness date, recovery date, or cure guarantee.\n"
+            "NEVER give surgery muhurat/date — surgeon decides.\n"
+            "Mental/addiction/parent Qs → soft supportive tone + doctor/counselling line.\n"
+            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
+            f"{_MR_CONFIDENT_TONE}"
+        )
     elif open_chart_qa:
         _ow = min(wb + 30, 130) if wants_explain else max(wb, 60)
         length_block = (
@@ -234,6 +250,13 @@ def build_mr_engine_narrator_system_prompt(
         )
 
     topic_hint = (
+        "health"
+        if archetype in (
+            "overall_vitality", "chronic_tendency", "mental_stress", "surgery_risk_tone",
+            "preventive_risk", "recovery_capacity", "accident_risk", "parent_health",
+            "addiction_support", "reproductive_support", "general_health",
+        )
+        else (
         "finance"
         if archetype in (
             "income_source", "savings_capacity", "save_vs_spend", "expense_pattern",
@@ -246,6 +269,7 @@ def build_mr_engine_narrator_system_prompt(
             if archetype and archetype not in ("partner_nature", "general_mr")
             and not archetype.startswith("breakup")
             else (archetype.replace("_", " ") if archetype else "marriage/relationship")
+        )
         )
     )
 

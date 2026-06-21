@@ -4862,6 +4862,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _intent_source = "regex"
     _mr_archetype_override = None
     _career_archetype_override = None
+    _finance_archetype_override = None
     if (os.environ.get("ASK_LLM_INTENT") or "0").strip() == "1":
         try:
             from ask_intent_llm import classify_ask_intent  # type: ignore
@@ -4872,6 +4873,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _intent_source = "llm"
                 _mr_archetype_override = _res.get("mr_archetype")
                 _career_archetype_override = _res.get("career_archetype")
+                _finance_archetype_override = _res.get("finance_archetype")
             print(
                 f"[raw_passthrough] LLM_INTENT source={(_res or {}).get('source')} "
                 f"domain={(_res or {}).get('domain')} "
@@ -4930,11 +4932,15 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     )
     _is_mr_static = False
     _is_career_static = False
+    _is_finance_static = False
+    _finance_engine_on = (os.environ.get("ASK_FINANCE_ENGINE") or "1").strip() != "0"
     if not is_timing:
         if _llm_intent is not None:
             _dom = _llm_intent.get("domain")
             _is_mr_static = _dom in {"marriage", "love"}
             _is_career_static = _dom == "career"
+            if _finance_engine_on:
+                _is_finance_static = _dom == "finance" and not _is_mr_static and not _is_career_static
         else:
             try:
                 from ask_marriage_relationship_slice import (  # type: ignore
@@ -4949,6 +4955,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _is_career_static = is_career_static_question(question) and not _is_mr_static
             except Exception:
                 _is_career_static = False
+            if _finance_engine_on and not _is_mr_static and not _is_career_static:
+                try:
+                    from ask_finance.classifier import is_finance_static_question  # type: ignore
+
+                    _is_finance_static = is_finance_static_question(question)
+                except Exception:
+                    _is_finance_static = False
     # Sensitive Qs ALSO need current dasha so the LLM has a real reason
     # to cite in layer-2 (astrological reason). Auto-promote.
     if is_sensitive:
@@ -4967,6 +4980,10 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         is_decision = False
         is_finance = False
     if _is_career_static:
+        static_dasha_hint = False
+        is_decision = False
+        is_finance = False
+    if _is_finance_static:
         static_dasha_hint = False
         is_decision = False
         is_finance = False
@@ -5052,6 +5069,62 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_career_static = False
+        elif _is_finance_static:
+            try:
+                from ask_finance import run_finance_static_engine  # type: ignore
+                from ask_finance.routing import resolve_finance_archetype  # type: ignore
+
+                _finance_interp = ""
+                if isinstance(_llm_intent, dict):
+                    _finance_interp = str(_llm_intent.get("interpretation") or "").strip()
+
+                _resolved_finance_arch, _finance_arch_reason = resolve_finance_archetype(
+                    question or "",
+                    llm_archetype=_finance_archetype_override,
+                    interpretation=_finance_interp,
+                )
+                if _finance_arch_reason:
+                    print(
+                        f"[raw_passthrough] FINANCE_ARCHETYPE_ROUTE "
+                        f"llm={_finance_archetype_override} -> {_resolved_finance_arch} "
+                        f"reason={_finance_arch_reason}",
+                        flush=True,
+                    )
+
+                _finance_engine_result = run_finance_static_engine(
+                    kundli if isinstance(kundli, dict) else {},
+                    question or "",
+                    wants_explain=wants_explain,
+                    archetype=_resolved_finance_arch,
+                )
+                chart_text = _finance_engine_result.to_narrator_payload()
+                dcr_love_meta = {
+                    "slice": "finance_engine_v1",
+                    "topic": "finance",
+                    "archetype": _finance_engine_result.archetype,
+                    "verdict": _finance_engine_result.verdict,
+                    "summary": list(_finance_engine_result.summary or []),
+                    "evidence": list(_finance_engine_result.evidence or []),
+                    "ignore": list(_finance_engine_result.ignore or []),
+                    "checks": dict(_finance_engine_result.checks or {}),
+                    "skip_llm": bool(_finance_engine_result.skip_llm),
+                    "word_budget": int(_finance_engine_result.word_budget or 70),
+                    "narrator_mode": "engine_facts_only",
+                }
+                print(
+                    f"[raw_passthrough] FINANCE_ENGINE "
+                    f"archetype={_finance_engine_result.archetype} "
+                    f"evidence={len(_finance_engine_result.evidence or [])} "
+                    f"chart_chars={len(chart_text)}",
+                    flush=True,
+                )
+            except Exception as _fn_exc:
+                print(f"[raw_passthrough] FINANCE_ENGINE failed: {_fn_exc}", flush=True)
+                chart_text = _raw_compact_chart(
+                    kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
+                )
+                dcr_love_meta = None
+                _is_finance_static = False
         elif _is_mr_static:
             _use_legacy_mr = (os.environ.get("ASK_MR_ENGINE") or "1").strip() == "0"
             if _use_legacy_mr:
@@ -5170,6 +5243,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             )
         elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "career_engine_v1":
             _chart_slice_type = "career_engine_v1"
+        elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "finance_engine_v1":
+            _chart_slice_type = "finance_engine_v1"
         elif is_timing:
             _chart_slice_type = "timing_full_chart"
         elif dcr_love_meta:
@@ -5200,6 +5275,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") in (
         "mr_engine_v1",
         "career_engine_v1",
+        "finance_engine_v1",
     ):
         is_decision = False
         is_finance = False
@@ -5511,7 +5587,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     if (
         dcr_love_meta
         and not _is_pn_minimal
-        and dcr_love_meta.get("slice") not in ("mr_engine_v1", "career_engine_v1")
+        and dcr_love_meta.get("slice") not in ("mr_engine_v1", "career_engine_v1", "finance_engine_v1")
     ):
         dcr_love_rule = (
             "\nDCR LOVE SLICE: partner/love Q — D1 first, D9 confirms. "
@@ -5522,8 +5598,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
     _mr_engine_narrator = (
         isinstance(dcr_love_meta, dict)
-        and dcr_love_meta.get("slice") in ("mr_engine_v1", "career_engine_v1")
-        and (os.environ.get("ASK_MR_NARRATOR") or os.environ.get("ASK_CAREER_NARRATOR") or "1").strip() != "0"
+        and dcr_love_meta.get("slice") in ("mr_engine_v1", "career_engine_v1", "finance_engine_v1")
+        and (
+            os.environ.get("ASK_MR_NARRATOR")
+            or os.environ.get("ASK_CAREER_NARRATOR")
+            or os.environ.get("ASK_FINANCE_NARRATOR")
+            or "1"
+        ).strip() != "0"
     )
     if _mr_engine_narrator:
         from ask_mr.narrator import build_mr_narrator_user_lang_block
@@ -5577,6 +5658,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "career_engine_v1":
                 print(
                     f"[raw_passthrough] CAREER_NARRATOR mode=engine_facts_only "
+                    f"decision={is_decision}",
+                    flush=True,
+                )
+            if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "finance_engine_v1":
+                print(
+                    f"[raw_passthrough] FINANCE_NARRATOR mode=engine_facts_only "
                     f"decision={is_decision}",
                     flush=True,
                 )
@@ -5652,6 +5739,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") in (
             "mr_engine_v1",
             "career_engine_v1",
+            "finance_engine_v1",
         ):
             from ask_mr.narrator import polish_mr_confident_tone
 
@@ -5701,6 +5789,30 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     )
             except Exception as _cag:
                 print(f"[raw_passthrough] CAREER_ANSWER_GUARD skipped: {_cag}", flush=True)
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "finance_engine_v1":
+            try:
+                from ask_finance.answer_guard import guard_finance_answer
+
+                text, _fguard = guard_finance_answer(
+                    question or "",
+                    text,
+                    dcr_love_meta,
+                )
+                text = _strip_decision_template_labels(text)
+                if _fguard.get("repaired"):
+                    print(
+                        f"[raw_passthrough] FINANCE_ANSWER_GUARD repaired "
+                        f"issues={_fguard.get('issues')}",
+                        flush=True,
+                    )
+                elif not _fguard.get("ok"):
+                    print(
+                        f"[raw_passthrough] FINANCE_ANSWER_GUARD warn "
+                        f"issues={_fguard.get('issues')}",
+                        flush=True,
+                    )
+            except Exception as _fag:
+                print(f"[raw_passthrough] FINANCE_ANSWER_GUARD skipped: {_fag}", flush=True)
         if not text:
             text = "Maaf kijiye, abhi response generate nahi ho paya. Phir try karein."
         # Skip robotic [Checked: ...] trace — user wants human replies only.
@@ -5753,13 +5865,16 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         )
         _mr_engine_ran = _engine_slice == "mr_engine_v1"
         _career_engine_ran = _engine_slice == "career_engine_v1"
+        _finance_engine_ran = _engine_slice == "finance_engine_v1"
         _engine_tag = (
             "ans-engine"
-            if (is_timing or _mr_engine_ran or _career_engine_ran)
+            if (is_timing or _mr_engine_ran or _career_engine_ran or _finance_engine_ran)
             else "ans-cosmo"
         )
         if _career_engine_ran:
             _answer_source = "career_engine_then_llm"
+        elif _finance_engine_ran:
+            _answer_source = "finance_engine_then_llm"
         elif _mr_engine_ran:
             _answer_source = "mr_engine_then_llm"
         else:
@@ -5818,6 +5933,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _pt_checks["narrator_mode"] = dcr_love_meta.get("narrator_mode") or (
                 "engine_facts_only"
                 if (os.environ.get("ASK_CAREER_NARRATOR") or "1").strip() != "0"
+                else "universal"
+            )
+        elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "finance_engine_v1":
+            _pt_checks["finance_engine"] = "v1"
+            _pt_checks["narrator_mode"] = dcr_love_meta.get("narrator_mode") or (
+                "engine_facts_only"
+                if (os.environ.get("ASK_FINANCE_NARRATOR") or "1").strip() != "0"
                 else "universal"
             )
         elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice"):

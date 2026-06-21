@@ -95,6 +95,20 @@ CAREER_ARCHETYPES = {
     "general_career",
 }
 
+FINANCE_ARCHETYPES = {
+    "income_source",
+    "savings_capacity",
+    "expense_pattern",
+    "debt_loan",
+    "property_money",
+    "sudden_gain_loss",
+    "business_profit",
+    "loss_reasons",
+    "wealth_potential",
+    "dhana_yoga",
+    "general_finance",
+}
+
 DOMAINS = {"marriage", "love", "career", "finance", "health", "general"}
 
 # Low-confidence cutoff — below this the caller treats the result as
@@ -167,7 +181,19 @@ the partner will SUPPORT the native's career / life goals / decisions
    - education_career: study, degree, education for career
    - retirement_legacy: late career, legacy, retirement tone
    - general_career: other career questions
-7. "interpretation": ONE short plain sentence describing what the user really \
+7. "finance_archetype": ONLY when domain is finance, pick best id; otherwise null:
+   - income_source: salary, earning, income stability, source of money
+   - savings_capacity: saving, bachat, paisa tikta/rukta, kitni bachat
+   - expense_pattern: kharcha, spending, leak, paisa nahi tikta
+   - debt_loan: loan, karz, EMI, udhar, debt free
+   - property_money: ghar/flat/property purchase money, home loan readiness
+   - sudden_gain_loss: lottery/inheritance/windfall OR sudden loss
+   - business_profit: business profit, partnership money safety
+   - loss_reasons: paisa kyun nahi, money problems, garib kyun
+   - wealth_potential: amir/rich/crorepati potential
+   - dhana_yoga: dhana/dhan yog audit
+   - general_finance: other money questions
+8. "interpretation": ONE short plain sentence describing what the user really \
 wants to know, phrased as "User wants to know ...". Write it in simple \
 English. e.g. "User wants to know if their partner will support their career."
 8. "confidence": 0.0-1.0 how sure you are.
@@ -175,7 +201,7 @@ English. e.g. "User wants to know if their partner will support their career."
 Return ONLY this JSON object:
 {{"domain": "...", "is_timing": false, "is_decision": false, \
 "wants_explain": false, "mr_archetype": null, "career_archetype": null, \
-"interpretation": "User wants to know ...", "confidence": 0.0}}
+"finance_archetype": null, "interpretation": "User wants to know ...", "confidence": 0.0}}
 
 Question: {question}"""
 
@@ -188,6 +214,7 @@ def _error(reason: str, source: str = "llm_error") -> dict:
         "wants_explain": False,
         "mr_archetype": None,
         "career_archetype": None,
+        "finance_archetype": None,
         "interpretation": "",
         "confidence": 0.0,
         "source": source,
@@ -293,8 +320,19 @@ def classify_ask_intent(
             career_arch = None
         if career_arch is None:
             career_arch = "general_career"
+        finance_arch = None
+    elif domain == "finance":
+        finance_arch = data.get("finance_archetype")
+        if isinstance(finance_arch, str):
+            finance_arch = finance_arch.strip().lower()
+        if finance_arch not in FINANCE_ARCHETYPES:
+            finance_arch = None
+        if finance_arch is None:
+            finance_arch = "general_finance"
+        career_arch = None
     else:
         career_arch = None
+        finance_arch = None
 
     interpretation = str(data.get("interpretation") or "").strip()[:300]
 
@@ -305,6 +343,7 @@ def classify_ask_intent(
         "wants_explain": bool(data.get("wants_explain")),
         "mr_archetype": archetype,
         "career_archetype": career_arch,
+        "finance_archetype": finance_arch,
         "interpretation": interpretation,
         "confidence": conf,
         "source": "llm_low_conf" if conf < _LOW_CONF else "llm",

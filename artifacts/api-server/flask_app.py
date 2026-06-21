@@ -8384,12 +8384,14 @@ def ask_route():
     # env read failure.
     try:
         _fm_bypass = os.environ.get("FINANCE_STATIC_BYPASS", "0") == "1"
+        if (os.environ.get("ASK_FINANCE_ENGINE") or "1").strip() != "0":
+            _fm_bypass = True
     except Exception:
         _fm_bypass = False
     if _fm_bypass:
         print(
-            f"[ask] H2.7.8 FINANCE_STATIC_BYPASS=1 → skip finance_static, "
-            f"flow to Path B+ passthrough (full kundli pack to LLM)",
+            f"[ask] FINANCE_STATIC bypass → ask_finance engine in Path B+ passthrough "
+            f"(FINANCE_STATIC_BYPASS or ASK_FINANCE_ENGINE=1)",
             flush=True,
         )
     try:
@@ -9240,13 +9242,14 @@ def ask_stream_route():
     # openai_helper L17124 (stream) which injects full kundli pack to LLM.
     try:
         _fm_bypass = os.environ.get("FINANCE_STATIC_BYPASS", "0") == "1"
+        if (os.environ.get("ASK_FINANCE_ENGINE") or "1").strip() != "0":
+            _fm_bypass = True
     except Exception:
         _fm_bypass = False
     if _fm_bypass:
         print(
-            f"[ask/stream] H2.7.8 FINANCE_STATIC_BYPASS=1 → skip "
-            f"finance_static, flow to Path B+ passthrough "
-            f"(full kundli pack to LLM)",
+            f"[ask/stream] FINANCE_STATIC bypass → ask_finance engine in Path B+ "
+            f"(FINANCE_STATIC_BYPASS or ASK_FINANCE_ENGINE=1)",
             flush=True,
         )
     try:

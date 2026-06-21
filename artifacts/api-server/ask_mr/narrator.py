@@ -186,6 +186,20 @@ def build_mr_engine_narrator_system_prompt(
             "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
             f"{_MR_CONFIDENT_TONE}"
         )
+    elif archetype in (
+        "income_source", "savings_capacity", "expense_pattern", "debt_loan",
+        "property_money", "sudden_gain_loss", "business_profit", "loss_reasons",
+        "wealth_potential", "dhana_yoga", "general_finance",
+    ):
+        length_block = (
+            f"Write 2–3 short sentences (~{min(wb + 15, 90)} words max).\n"
+            "Read USER ACTUALLY ASKED — answer THAT exact money/finance question per VERDICT.\n"
+            "Sentence 1 = direct answer (income/saving/debt/property/sudden gain/loss/amir).\n"
+            "Sentence 2–3 = WHY from ENGINE EVIDENCE in plain words — no house/planet jargon.\n"
+            "Do NOT push lottery/satta/stock tips. Do NOT invent amounts or dates.\n"
+            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
+            f"{_MR_CONFIDENT_TONE}"
+        )
     elif open_chart_qa:
         _ow = min(wb + 30, 130) if wants_explain else max(wb, 60)
         length_block = (
@@ -219,10 +233,18 @@ def build_mr_engine_narrator_system_prompt(
         )
 
     topic_hint = (
-        "career"
-        if archetype and archetype not in ("partner_nature", "general_mr")
-        and not archetype.startswith("breakup")
-        else (archetype.replace("_", " ") if archetype else "marriage/relationship")
+        "finance"
+        if archetype in (
+            "income_source", "savings_capacity", "expense_pattern", "debt_loan",
+            "property_money", "sudden_gain_loss", "business_profit", "loss_reasons",
+            "wealth_potential", "dhana_yoga", "general_finance",
+        )
+        else (
+            "career"
+            if archetype and archetype not in ("partner_nature", "general_mr")
+            and not archetype.startswith("breakup")
+            else (archetype.replace("_", " ") if archetype else "marriage/relationship")
+        )
     )
 
     intent_block = ""

@@ -1,0 +1,157 @@
+"""Finance topic registry — scope keywords + archetype detection."""
+
+from __future__ import annotations
+
+import re
+
+# Reuse stock-safe finance scope from finance_static.
+from finance_static.finance_routing import is_finance_question
+
+FINANCE_ARCHETYPES = frozenset({
+    "income_source",
+    "savings_capacity",
+    "expense_pattern",
+    "debt_loan",
+    "property_money",
+    "sudden_gain_loss",
+    "business_profit",
+    "loss_reasons",
+    "wealth_potential",
+    "dhana_yoga",
+    "general_finance",
+})
+
+_TIMING_RX = re.compile(
+    r"(?ix)\b("
+    r"kab|kab\s+tak|when|when\s+will|kis\s+(saal|year|mahine|month)|"
+    r"\d{4}\s+me|dasha|antardasha|mahadasha|transit|gochar|muhurat|timing|"
+    r"date\s+fix|exact\s+date"
+    r")\b"
+)
+
+_INCOME_RX = re.compile(
+    r"(?ix)\b("
+    r"income|kamai|kama\s*sakta|salary|tankhwah|earning|earn\s*money|"
+    r"paisa\s*kahan\s*se|income\s*source|multiple\s*income|passive\s*income|"
+    r"freelanc|commission|side\s*income|extra\s*income|monthly\s*income|"
+    r"fixed\s*income|business\s*se\s*income|job\s*se\s*income"
+    r")\b"
+)
+
+_SAVINGS_RX = re.compile(
+    r"(?ix)\b("
+    r"saving|savings|bachat|bach\s*pata|save\s*kar|kitni\s*bachat|"
+    r"paisa\s*bach|money\s*save|saving\s*capacity|retain|tik\s*pata|"
+    r"paisa\s*tikta|paisa\s*rukta|accumulate|jama\s*kar"
+    r")\b"
+)
+
+_EXPENSE_RX = re.compile(
+    r"(?ix)\b("
+    r"kharcha|kharch|expense|spend|spending|leak|drain|"
+    r"paisa\s*nahi\s*tik\w*|tikta\s*nahi|ud\s*jata|kharab\s*kharch|"
+    r"paisa\s*kyun\s*nahi\s*tik\w*|kyun\s*nahi\s*tik\w*|"
+    r"impulsive\s*spend|overspend|wasteful|paisa\s*gaya"
+    r")\b"
+)
+
+_DEBT_RX = re.compile(
+    r"(?ix)\b("
+    r"loan|karz|emi|udhar|debt|borrow|lender|credit\s*card|"
+    r"loan\s*lena|loan\s*le\s*sakta|karz\s*chuk|debt\s*free|"
+    r"interest|repay|installment|mortgage"
+    r")\b"
+)
+
+_PROPERTY_RX = re.compile(
+    r"(?ix)\b("
+    r"property|real\s*estate|flat|plot|ghar\s*khareed\w*|house\s*buy|"
+    r"home\s*loan|property\s*purchase|land\s*buy|apartment|"
+    r"construction\s*money|own\s*house|ghar\s*ban\w*|property\s*money"
+    r")\b"
+)
+
+_SUDDEN_RX = re.compile(
+    r"(?ix)\b("
+    r"sudden|achanak|windfall|lottery|inheritance|virasat|"
+    r"unexpected\s*(gain|loss|money|wealth)|satta|jackpot|"
+    r"bonus\s*windfall|legal\s*settlement|sudden\s*loss|"
+    r"big\s*loss|paisa\s*achanak|wealth\s*shock"
+    r")\b"
+)
+
+_BUSINESS_PROFIT_RX = re.compile(
+    r"(?ix)\b("
+    r"business\s*profit|partnership\s*(money|profit|safe)|"
+    r"dhandha\s*profit|vyapaar\s*profit|profit\s*aayega|"
+    r"business\s*se\s*paisa|partnership\s*business|"
+    r"joint\s*venture|business\s*income"
+    r")\b"
+)
+
+_LOSS_RX = re.compile(
+    r"(?ix)\b("
+    r"loss|nuksan|kharab\s*ho\s*gaya|paisa\s*kyun\s*nahi|"
+    r"why\s*no\s*money|money\s*problem|financial\s*problem|"
+    r"paisa\s*problem|garib\s*kyun|wealth\s*block|paisa\s*nahi\s*"
+    r")\b"
+)
+
+_WEALTH_RX = re.compile(
+    r"(?ix)\b("
+    r"amir|rich|wealthy|crorepati|millionaire|wealth\s*potential|"
+    r"dhan\s*ban|paisa\s*ban|money\s*grow|financial\s*success|"
+    r"prosper|affluent|dhani|maldar"
+    r")\b"
+)
+
+_DHANA_YOGA_RX = re.compile(
+    r"(?ix)\b("
+    r"dhana\s*yog\w*|dhan\s*yog\w*|lakshmi\s*yog\w*|kubera|wealth\s*yog|"
+    r"rich\s*yog|dhan\s*yoga|money\s*yog"
+    r")\b"
+)
+
+_SPOUSE_MONEY_RX = re.compile(
+    r"(?ix)\b("
+    r"(spouse|partner|wife|husband|pati|patni)\b.{0,30}\b("
+    r"paisa|money|wealth|income|salary|finance|bachat|rich|garib"
+    r")\b"
+    r")\b"
+)
+
+
+def is_finance_static_question(question: str) -> bool:
+    q = (question or "").strip()
+    if not q or _TIMING_RX.search(q):
+        return False
+    if _SPOUSE_MONEY_RX.search(q):
+        return False
+    return bool(is_finance_question(q))
+
+
+def detect_finance_archetype(question: str) -> str | None:
+    q = (question or "").strip().lower()
+    if not q:
+        return None
+    if _SUDDEN_RX.search(q):
+        return "sudden_gain_loss"
+    if _PROPERTY_RX.search(q):
+        return "property_money"
+    if _DEBT_RX.search(q):
+        return "debt_loan"
+    if _SAVINGS_RX.search(q):
+        return "savings_capacity"
+    if _EXPENSE_RX.search(q):
+        return "expense_pattern"
+    if _INCOME_RX.search(q):
+        return "income_source"
+    if _BUSINESS_PROFIT_RX.search(q):
+        return "business_profit"
+    if _LOSS_RX.search(q):
+        return "loss_reasons"
+    if _WEALTH_RX.search(q):
+        return "wealth_potential"
+    if _DHANA_YOGA_RX.search(q):
+        return "dhana_yoga"
+    return None

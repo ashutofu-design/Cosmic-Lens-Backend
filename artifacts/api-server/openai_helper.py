@@ -4804,11 +4804,19 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             }
 
     try:
-        from chart_fact_answer import try_deterministic_chart_fact
+        from chart_fact_answer import (
+            try_deterministic_chart_fact,
+            is_chart_lookup_question,
+            chart_lookup_refusal_payload,
+        )
 
         _det = try_deterministic_chart_fact(question, kundli, lang)
         if _det:
             return _det
+        # Chart placement lookups must NEVER reach the LLM — engine or refusal only.
+        if is_chart_lookup_question(question):
+            print("[raw_passthrough] chart_fact lookup blocked LLM (no deterministic match)", flush=True)
+            return chart_lookup_refusal_payload(question, lang)
     except Exception as _cfe:
         print(f"[raw_passthrough] chart_fact deterministic skipped: {_cfe}", flush=True)
 
@@ -9796,6 +9804,16 @@ _CHART_FACT_PATTERNS = [
         r"\bhow\s+did\s+you\s+(?:know|find|figure)\b",
         r"\bproof\s+kya\s+hai\b",
         r"\bsource\s+(?:kya|kaha)\b",
+        # ── House / planet placement lookups (engine-only, no LLM) ─────────
+        r"\b\d{1,2}(?:st|nd|rd|th)?\s*(?:house|ghar|bhav[a]?)\s+me\b",
+        r"\b\d{1,2}(?:st|nd|rd|th)?\s+me\b.{0,20}\b(kon|kaun|kya|planet|grah)\b",
+        r"\b\d{1,2}(?:st|nd|rd|th)?\s+(?:house|ghar|bhav[a]?)\s+(?:k[ae]\s+)?(?:lord|swami|malik)\b",
+        r"\b(?:sun|surya|moon|chandra|mars|mangal|mercury|budh|jupiter|guru|venus|shukra|saturn|shani|rahu|ketu)\b"
+        r".{0,25}\b(?:kis\s+(?:house|ghar|bhav|rashi)|kahan|kahaan|placement)\b",
+        r"\b(?:kis\s+(?:house|ghar|bhav)|kahan|kahaan)\b.{0,25}\b(?:sun|surya|moon|chandra|mars|mangal|"
+        r"mercury|budh|jupiter|guru|venus|shukra|saturn|shani|rahu|ketu)\b",
+        r"\b(?:sub[\s-]?lord|sublord|cusp)\b",
+        r"\b(?:d\d{1,2}|navamsa|navamsha|dwadasamsa)\b.{0,30}\b(?:house|ghar|bhav|me|kon|kaun|kahan)\b",
     )
 ]
 _CHART_FACT_DEV_PATTERNS = [
@@ -9813,9 +9831,8 @@ def _is_chart_fact_question(question: str) -> bool:
     q = (question or "").strip()
     if not q:
         return False
-    # Allow up to 14 words — meta follow-ups like "tumko kaise pata mera
-    # mars 1st house me he" run 10-12 words and are still simple lookups.
-    if len(q.split()) > 14:
+    # Allow up to 18 words — chart lookups like "d12 ke 8th house me kon hai".
+    if len(q.split()) > 18:
         return False
     for rx in _CHART_FACT_PATTERNS:
         if rx.search(q):

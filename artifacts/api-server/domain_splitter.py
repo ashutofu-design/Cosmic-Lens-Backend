@@ -81,6 +81,8 @@ _DOMAIN_KEYWORDS: Dict[str, List[str]] = {
         "boss", "salary", "promotion", "interview", "company",
         "employment", "business job", "transfer order",
         "job change", "career change", "naukri change",
+        "youtuber", "youtube", "vlogger", "influencer", "content creator",
+        "food business", "restaurant", "hotel business",
     ],
     # finance / money / wealth (Gap-2 widened: bare "business/dukaan" added back
     # since they consistently denote finance-domain in this app's user base).

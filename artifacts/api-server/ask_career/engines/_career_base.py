@@ -64,9 +64,9 @@ def career_snapshot(kundli: dict, inc: dict | None = None) -> list[str]:
     return lines[:12]
 
 
-def inclination_evidence(inc: dict, *, limit: int = 6) -> list[str]:
+def inclination_evidence(inc: dict, *, limit: int = 6, include_job_split: bool = True) -> list[str]:
     out: list[str] = []
-    if inc.get("job_pct") is not None:
+    if include_job_split and inc.get("job_pct") is not None:
         out.append(
             f"Job vs business split: employment ~{inc.get('job_pct')}% / "
             f"business ~{inc.get('business_pct')}% ({inc.get('confidence', 'medium')} confidence)."

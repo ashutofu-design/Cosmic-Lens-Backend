@@ -221,6 +221,14 @@ def assess_ask_scope(question: str) -> AskScopeVerdict:
     if not _gate_enabled():
         return AskScopeVerdict(allowed=True, reason="ok")
 
+    try:
+        from ask_career.classifier import is_career_static_question
+
+        if is_career_static_question(q):
+            return AskScopeVerdict(allowed=True, reason="ok")
+    except Exception:
+        pass
+
     if _GK_BLOCK_RX.search(q):
         return AskScopeVerdict(allowed=False, reason="general_knowledge")
 

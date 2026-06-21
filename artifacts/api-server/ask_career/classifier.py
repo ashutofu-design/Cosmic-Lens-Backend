@@ -23,7 +23,9 @@ _CAREER_CORE = re.compile(
     r"strategic|weakness|strength|suitable|suit\s+kare|suit\s+kar|"
     r"private\s*sector|public\s*sector|team|independent|communication|"
     r"public\s*dealing|public\s*speaking|"
-    r"investment\w*|commission|higher\s*stud|colleague"
+    r"investment\w*|commission|higher\s*stud|colleague|"
+    r"youtuber|youtube|vlogger|influencer|streamer|tiktok|"
+    r"food|restaurant|catering|hotel|bakery|cafe|dhaba"
     r")\b"
 )
 
@@ -69,6 +71,28 @@ def classify_career_archetype(question: str) -> str:
         q,
     ):
         return "sector_fit"
+
+    if re.search(
+        r"(?ix)\b("
+        r"food|restaurant|catering|hotel|bakery|cafe|dhaba|cloud\s*kitchen"
+        r")\s*(business|biz|line|field)?\b",
+        q,
+    ) or re.search(
+        r"(?ix)\b("
+        r"food\s+business|restaurant\s+business|hotel\s+business|bakery\s+business"
+        r")\b",
+        q,
+    ):
+        return "sector_fit"
+
+    if re.search(
+        r"(?ix)\b("
+        r"youtuber|youtube|vlogger|influencer|content\s*creat\w*|"
+        r"tiktok|instagram\s*reels?|streamer|podcast\w*"
+        r")\b",
+        q,
+    ):
+        return "creativity_innovation"
 
     if re.search(
         r"(?ix)\b(job\s*vs\s*business|job\s+better|naukri\s+ya\s+business|"
@@ -173,7 +197,7 @@ def classify_career_archetype(question: str) -> str:
     if re.search(r"(?ix)\b(fame|recognition|reputation|naam\s*chalega|popular)\b", q):
         return "fame_recognition"
 
-    if re.search(r"(?ix)\b(content\s*creation|innovation|innovative)\b", q):
+    if re.search(r"(?ix)\b(content\s*creation|innovation|innovative|creative\s*field)\b", q):
         return "creativity_innovation"
 
     if _CAREER_CORE.search(q):

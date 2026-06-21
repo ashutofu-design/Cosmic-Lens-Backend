@@ -49,6 +49,40 @@ _WHICH_BIZ_INTERP_RX = re.compile(
     r"|what business to start"
 )
 
+_CREATIVITY_CAREER_RX = re.compile(
+    r"(?ix)\b("
+    r"youtuber|youtube|vlogger|influencer|content\s*creat\w*|"
+    r"tiktok|instagram\s*reels?|streamer|podcast\w*"
+    r")\b"
+)
+
+_SPECIFIC_SECTOR_SUIT_RX = re.compile(
+    r"(?ix)\b("
+    r"food|restaurant|catering|hotel|bakery|cafe|dhaba|cloud\s*kitchen|"
+    r"it\b|software|medical|law|finance\s*sector|teaching|sales|marketing|"
+    r"real\s*estate|consulting|government|govt|sarkari|media|ngo|politics"
+    r")\s*(business|biz|line|field|sector|job)?\b|"
+    r"food\s+business|restaurant\s+business|hotel\s+business"
+)
+
+
+def is_creativity_career_question(question: str, interpretation: str = "") -> bool:
+    q = (question or "").strip()
+    interp = (interpretation or "").strip()
+    if _CREATIVITY_CAREER_RX.search(q):
+        return True
+    return bool(re.search(r"(?ix)\b(youtuber|youtube|content\s*creat)", interp))
+
+
+def is_specific_sector_suitability_question(question: str, interpretation: str = "") -> bool:
+    q = (question or "").strip()
+    interp = (interpretation or "").strip()
+    if is_job_vs_business_question(q) or is_which_business_question(q, interp):
+        return False
+    if is_creativity_career_question(q, interp):
+        return True
+    return bool(_SPECIFIC_SECTOR_SUIT_RX.search(q))
+
 
 def is_job_vs_business_question(question: str) -> bool:
     q = (question or "").strip().lower()
@@ -111,6 +145,13 @@ def resolve_career_archetype(
         if rule != target and rule in ("general_career", "job_vs_business"):
             return target, "which_business_over_rule"
         return target, None
+
+    if is_creativity_career_question(question, interpretation):
+        if llm and llm != "creativity_innovation":
+            return "creativity_innovation", f"creativity_over_{llm}"
+        if rule != "creativity_innovation":
+            return "creativity_innovation", "creativity_over_rule"
+        return "creativity_innovation", None
 
     if is_job_vs_business_question(question):
         return "job_vs_business", (

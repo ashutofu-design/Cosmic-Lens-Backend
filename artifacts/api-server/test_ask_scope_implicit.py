@@ -19,6 +19,8 @@ from ask_scope_gate import assess_ask_scope
         "Naukri kab lagegi?",
         "Love marriage hogi ya arranged?",
         "Business start karun ya risk hai?",
+        "Acha youtuber ban sakta hun me?",
+        "Food business acha he kya?",
     ],
 )
 def test_implicit_asks_allowed_without_mera(question):

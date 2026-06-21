@@ -129,6 +129,31 @@ class CareerEngineTests(unittest.TestCase):
         )
         self.assertEqual(arch, "job_vs_business")
 
+    def test_youtuber_routes_creativity(self):
+        q = "Acha youtuber ban sakta hun me?"
+        self.assertTrue(is_career_static_question(q))
+        self.assertEqual(classify_career_archetype(q), "creativity_innovation")
+        from ask_career.routing import resolve_career_archetype
+
+        arch, _ = resolve_career_archetype(
+            q,
+            llm_archetype="general_career",
+            interpretation="User wants to know if they can become a YouTuber.",
+        )
+        self.assertEqual(arch, "creativity_innovation")
+        res = run_career_static_engine(SAMPLE_KUNDLI, q)
+        self.assertEqual(res.archetype, "creativity_innovation")
+        self.assertIn("youtube", res.verdict.lower())
+
+    def test_food_business_routes_sector_fit(self):
+        q = "Food business acha he kya?"
+        self.assertEqual(classify_career_archetype(q), "sector_fit")
+        res = run_career_static_engine(SAMPLE_KUNDLI, q)
+        self.assertEqual(res.archetype, "sector_fit")
+        self.assertEqual(res.checks.get("sector"), "food")
+        joined = " ".join(res.evidence).lower()
+        self.assertNotIn("job vs business split", joined)
+
 
 class TestCareerAnswerGuard(unittest.TestCase):
     _JOB_META = {
@@ -182,6 +207,23 @@ class TestCareerAnswerGuard(unittest.TestCase):
         )
         self.assertFalse(ok)
         self.assertIn("wrong_engine_job_vs_biz_for_which_business", issues)
+
+    def test_verify_rejects_job_split_for_food_business(self):
+        from ask_career.answer_guard import verify_career_answer
+
+        meta = {
+            "archetype": "sector_fit",
+            "verdict": "Food/hospitality business: suitable pattern visible",
+            "checks": {"sector": "food"},
+            "user_intent": "User wants to know if food business is good for them.",
+        }
+        ans = (
+            "Business ka scope 40% hai par employment zyada suit karti hai 60%. "
+            "Structured professional field mein zyada achha kama sakte ho."
+        )
+        ok, issues = verify_career_answer("Food business acha he kya?", ans, meta)
+        self.assertFalse(ok)
+        self.assertIn("sector_suit_but_job_split_answer", issues)
 
 
 if __name__ == "__main__":

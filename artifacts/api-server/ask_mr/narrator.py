@@ -127,12 +127,22 @@ def build_mr_engine_narrator_system_prompt(
     elif archetype == "sector_fit":
         length_block = (
             f"Write 2–3 short sentences (~{min(wb + 20, 95)} words max).\n"
-            "Read USER ACTUALLY ASKED — if they asked WHICH business / best business type / "
-            "konsa business, name 1-2 concrete business FIELDS from EVIDENCE "
-            "(e.g. commerce, partnership/public dealing, trading, consulting, sales/marketing).\n"
-            "Sentence 1 = direct best-business-type answer per VERDICT.\n"
+            "Read USER ACTUALLY ASKED — if they asked food/IT/govt/best business type, "
+            "answer THAT sector directly (haan/nahi or best type).\n"
+            "Sentence 1 = direct sector answer per VERDICT.\n"
             "Sentence 2–3 = WHY from ENGINE EVIDENCE in plain words.\n"
             "Do NOT answer job vs business % split unless USER ACTUALLY ASKED job OR business.\n"
+            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
+            f"{_MR_CONFIDENT_TONE}"
+        )
+    elif archetype == "creativity_innovation":
+        length_block = (
+            f"Write 2–3 short sentences (~{min(wb + 15, 90)} words max).\n"
+            "Read USER ACTUALLY ASKED — if they asked YouTuber/content creator/influencer, "
+            "answer ban sakta hun / suit karega directly (haan/nahi per VERDICT).\n"
+            "Sentence 1 = clear yes/no or strong/weak fit for THAT creative path.\n"
+            "Sentence 2–3 = WHY from ENGINE EVIDENCE (communication, audience, creative axis).\n"
+            "Do NOT give job vs business % split.\n"
             "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
             f"{_MR_CONFIDENT_TONE}"
         )

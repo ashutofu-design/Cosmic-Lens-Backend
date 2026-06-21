@@ -96,6 +96,8 @@ _LIFE_ASTRO_TOPIC_RX = re.compile(
     r"property|ghar|flat|vastu|"
     r"visa|abroad|videsh|travel|"
     r"luck|bhagya|future|timing|"
+    r"youtuber|youtube|vlogger|influencer|content\s*creator|streamer|tiktok|"
+    r"food|restaurant|hotel|bakery|cafe|"
     r"sun|moon|mars|mangal|mercury|budh|jupiter|guru|venus|shukra|saturn|shani|rahu|ketu"
     r")\b",
 )
@@ -115,7 +117,8 @@ _QUESTION_SHAPE_RX = re.compile(
     r"when|what|how|why|should|will|where|which|kis|kitna|kitni|"
     r"hoga|hogi|milega|milegi|aayega|aayegi|rahega|rahegi|"
     r"hai|he|chal\s*rah|effect|result|prabhav|asar|"
-    r"possible|likely|batao|samjhao|theek|sahi|achha|accha|delay"
+    r"possible|likely|batao|samjhao|theek|sahi|achha|accha|delay|"
+    r"ban\s+sakta|ban\s+sakti|ban\s+paunga|ban\s+paungi|banna"
     r")\b",
 )
 
@@ -129,6 +132,8 @@ _IMPLICIT_ASK_TOPIC_RX = re.compile(
     r"health|sehat|child|bachcha|pregnancy|"
     r"property|ghar|flat|vastu|visa|abroad|videsh|travel|"
     r"luck|bhagya|future|timing|"
+    r"youtuber|youtube|vlogger|influencer|content\s*creator|streamer|tiktok|"
+    r"food|restaurant|hotel|bakery|cafe|"
     r"sun|moon|mars|mangal|mercury|budh|jupiter|guru|venus|shukra|saturn|shani|rahu|ketu|"
     r"house|bhav|bhaav|lord|swami|"
     r"navamsa|navamsha|d9|d7|d10|d12|divisional"

@@ -135,7 +135,7 @@ the partner will SUPPORT the native's career / life goals / decisions
    - foreign_career: abroad job, foreign company, settle abroad for work
    - workplace_relations: boss, colleagues, job satisfaction
    - fame_recognition: fame, reputation, recognition in career
-   - creativity_innovation: creative field, innovation, content creation
+   - creativity_innovation: YouTuber, content creator, influencer, creative/innovation career
    - career_obstacles: delays, setbacks, obstacles in career
    - education_career: study, degree, education for career
    - retirement_legacy: late career, legacy, retirement tone

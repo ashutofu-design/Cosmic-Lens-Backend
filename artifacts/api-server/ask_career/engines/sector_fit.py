@@ -20,7 +20,8 @@ _SECTOR_MAP: list[tuple[str, re.Pattern[str], str, str]] = [
     ("research", re.compile(r"(?ix)\b(research|analyst|scientist|r\s*&\s*d)\b"), "comm", "Research/analysis"),
     ("real_estate", re.compile(r"(?ix)\b(real\s*estate|property\s*business|builder)\b"), "biz", "Real estate/commerce"),
     ("consulting", re.compile(r"(?ix)\b(consulting|consultant|advisory)\b"), "comm", "Consulting/advisory"),
-    ("media", re.compile(r"(?ix)\b(media|journalism|content\s*creation|influencer)\b"), "comm", "Media/content"),
+    ("food", re.compile(r"(?ix)\b(food|restaurant|catering|hotel|bakery|cafe|dhaba|cloud\s*kitchen)\b"), "biz", "Food/hospitality business"),
+    ("media", re.compile(r"(?ix)\b(media|journalism|content\s*creation|influencer|youtuber|youtube|vlogger)\b"), "comm", "Media/content"),
     ("ngo", re.compile(r"(?ix)\b(ngo|social\s*work|non[\s-]?profit)\b"), "job", "Social/NGO service"),
     ("politics", re.compile(r"(?ix)\b(politics|political|neta|election)\b"), "job", "Politics/public influence"),
     (
@@ -51,7 +52,9 @@ def run_sector_fit(kundli: dict, question: str, *, wants_explain: bool = False) 
         house_axis(r, 10, "Profession execution (10th house)"),
         house_axis(r, 6, "Work style/service (6th house)"),
     ]
-    evidence.extend(inclination_evidence(inc, limit=4))
+    evidence.extend(
+        inclination_evidence(inc, limit=4, include_job_split=key in ("general", "industry"))
+    )
 
     tags = subtype_hits(inc, kind)
     if tags:
@@ -77,6 +80,19 @@ def run_sector_fit(kundli: dict, question: str, *, wants_explain: bool = False) 
     elif key in ("sales", "media", "creative"):
         evidence.append(f"{label} fit: Venus-Mercury commercial subtype supports people-facing creative/commerce fields.")
         fit = comm >= 30
+    elif key == "food":
+        moon = r.planet("Moon") or {}
+        ven = r.planet("Venus") or {}
+        evidence.append(
+            "Food/hospitality fit: Venus-Moon + service/commercial subtype supports "
+            "food, cafe, catering, restaurant lines."
+        )
+        if ven.get("house") in (2, 4, 7, 10, 11) or moon.get("house") in (2, 4, 6, 7, 10):
+            evidence.append(
+                f"Hospitality signal: Venus house {ven.get('house')}, Moon house {moon.get('house')} — "
+                "public taste/service orientation for food business."
+            )
+        fit = comm >= 28 or biz >= 35 or ven.get("house") in (2, 4, 7, 10, 11)
     elif key in ("real_estate", "politics"):
         evidence.append(f"{label} fit: Mars-Saturn/Rahu execution supports high-stakes independent fields.")
         fit = biz >= 45
@@ -98,10 +114,9 @@ def run_sector_fit(kundli: dict, question: str, *, wants_explain: bool = False) 
         word_budget=95 if wants_explain else 70,
         answer_plan="Direct sector suitability → 2 chart reasons → one skill note.",
         summary=[
-            f"QUESTION FOCUS: {key} sector/industry fit.",
-            "If user asked WHICH business: name 1-2 concrete business types from evidence "
-            "(commerce, partnership/public dealing, trading, consulting, etc.).",
-            "Do NOT answer job vs business % split unless user asked job OR business.",
+            f"QUESTION FOCUS: {label} suitability — answer haan/nahi for THIS sector only.",
+            "If user asked food/IT/govt etc.: stay on that sector — do NOT pivot to job vs business % split.",
+            "If user asked WHICH business: name 1-2 concrete business types from evidence.",
             "No exact job title guarantee.",
         ],
         evidence=evidence[:8],

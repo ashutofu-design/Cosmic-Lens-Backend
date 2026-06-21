@@ -1,0 +1,485 @@
+{
+  "summary": {
+    "ok": 17,
+    "warn": 3,
+    "fail": 0
+  },
+  "results": [
+    {
+      "id": 1,
+      "question": "Mera life partner ka nature aur personality kaisa hoga?",
+      "ideal_archetype": "partner_nature",
+      "archetype": "partner_nature",
+      "status": "OK",
+      "verdict": "Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).",
+      "evidence_count": 4,
+      "evidence": [
+        "7th house sign baseline: Gemini (partner vibe / social style).",
+        "7th lord placement: Mercury in house 5 sign Aries (mindset + how partnership behaves).",
+        "Planets in 7th house: ['Moon'] (direct behavior tone).",
+        "Partner-karak by chart gender: unknown \u2192 Venus in house 9 sign Leo (presence/attraction style)."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "partner_nature",
+        "gender": "unknown",
+        "karak": "Venus",
+        "sign7": "Gemini"
+      },
+      "skip_llm": false,
+      "word_budget": 120
+    },
+    {
+      "id": 2,
+      "question": "Partner emotionally expressive hoga ya reserved?",
+      "ideal_archetype": "emotional_attachment",
+      "archetype": "partner_nature",
+      "status": "WARN",
+      "verdict": "Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).",
+      "evidence_count": 4,
+      "evidence": [
+        "7th house sign baseline: Gemini (partner vibe / social style).",
+        "7th lord placement: Mercury in house 5 sign Aries (mindset + how partnership behaves).",
+        "Planets in 7th house: ['Moon'] (direct behavior tone).",
+        "Partner-karak by chart gender: unknown \u2192 Venus in house 9 sign Leo (presence/attraction style)."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "partner_nature",
+        "gender": "unknown",
+        "karak": "Venus",
+        "sign7": "Gemini"
+      },
+      "skip_llm": false,
+      "word_budget": 120
+    },
+    {
+      "id": 3,
+      "question": "Marriage mein loyalty aur commitment level kaisa rahega?",
+      "ideal_archetype": "loyalty_trust",
+      "archetype": "loyalty_trust",
+      "status": "OK",
+      "verdict": "Trust/loyalty: sensitive \u2014 clarity and boundaries keep bond safe",
+      "evidence_count": 4,
+      "evidence": [
+        "Trust challenge: Saturn on 7th axis \u2014 distance, delay, emotional cooling.",
+        "Trust challenge: Moon under Saturn/Rahu \u2014 feelings held in, then erupt or detach.",
+        "Trust challenge: nodes on 7th \u2014 karmic obsession, unclear loyalty lines.",
+        "Trust support: Saturn-Moon link (Punahoo) \u2014 duty-bound loyalty; may suffer in silence without cheating pattern."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "loyalty_trust",
+        "trust_level": "unstable",
+        "loyalty_risk_high": false,
+        "third_person_risk": false,
+        "affliction_weight": 54,
+        "negative_signal_count": 3
+      },
+      "skip_llm": false,
+      "word_budget": 60
+    },
+    {
+      "id": 4,
+      "question": "Love marriage ke yog zyada hain ya arranged marriage ke?",
+      "ideal_archetype": "love_vs_arranged",
+      "archetype": "love_vs_arranged",
+      "status": "OK",
+      "verdict": "Aapki kundli mein dono taraf strong indication nahi hai \u2014 situation aur paristithi par depend karega.",
+      "evidence_count": 2,
+      "evidence": [
+        "Love indicator: 5th lord is Mars (natural love-nature ruler)",
+        "Arrange indicator: Manglik dosha (Mars in 8H) \u2014 delays / typically arrange"
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "love_vs_arranged",
+        "verdict_public": "inconclusive",
+        "verdict_internal": "mixed",
+        "love_score": 1,
+        "arrange_score": 2,
+        "confidence_ratio": 0.333,
+        "confidence_numeric": 0.55
+      },
+      "skip_llm": false,
+      "word_budget": 55
+    },
+    {
+      "id": 5,
+      "question": "Partner ka profession ya work field kis type ka ho sakta hai?",
+      "ideal_archetype": "spouse_profession",
+      "archetype": "spouse_profession",
+      "status": "OK",
+      "verdict": "Spouse profession: pattern read from spouse-profession axis (not a fixed job title)",
+      "evidence_count": 4,
+      "evidence": [
+        "profession axis (10th from spouse): house 4 sign Pisces; lord Jupiter placed in house 4 sign Pisces; occupants=['Jupiter'].",
+        "income style (2nd from spouse): house 8 sign Cancer; lord Moon placed in house 7 sign Gemini; occupants=['Mars'].",
+        "service/workload (6th from spouse): house 12 sign Scorpio; lord Mars placed in house 8 sign Cancer; occupants=none.",
+        "gains/network (11th from spouse): house 5 sign Aries; lord Mars placed in house 8 sign Cancer; occupants=['Mercury']."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "spouse_profession"
+      },
+      "skip_llm": false,
+      "word_budget": 65
+    },
+    {
+      "id": 6,
+      "question": "Partner ki family background kaisi ho sakti hai?",
+      "ideal_archetype": "family_approval",
+      "archetype": "family_approval",
+      "status": "OK",
+      "verdict": "Family approval: initial resistance likely; patience + process needed",
+      "evidence_count": 1,
+      "evidence": [
+        "Authority/tradition indicators active \u2192 approval may need patience and proof."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "family_approval",
+        "rahu_house": 3,
+        "saturn_house": 10,
+        "jupiter_house": 4
+      },
+      "skip_llm": false,
+      "word_budget": 55
+    },
+    {
+      "id": 7,
+      "question": "Physical appearance aur overall personality kaisi ho sakti hai?",
+      "ideal_archetype": "partner_nature",
+      "archetype": "partner_nature",
+      "status": "OK",
+      "verdict": "Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).",
+      "evidence_count": 4,
+      "evidence": [
+        "7th house sign baseline: Gemini (partner vibe / social style).",
+        "7th lord placement: Mercury in house 5 sign Aries (mindset + how partnership behaves).",
+        "Planets in 7th house: ['Moon'] (direct behavior tone).",
+        "Partner-karak by chart gender: unknown \u2192 Venus in house 9 sign Leo (presence/attraction style)."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "partner_nature",
+        "gender": "unknown",
+        "karak": "Venus",
+        "sign7": "Gemini"
+      },
+      "skip_llm": false,
+      "word_budget": 120
+    },
+    {
+      "id": 8,
+      "question": "Marriage ke baad relationship ki strengths kya hongi?",
+      "ideal_archetype": "general_mr",
+      "archetype": "general_mr",
+      "status": "OK",
+      "verdict": "Marriage/relationship quality: strained patterns visible \u2014 repair habits needed",
+      "evidence_count": 3,
+      "evidence": [
+        "Saturn on 7th axis \u2014 distance, delay, emotional cooling.",
+        "Moon under Saturn/Rahu \u2014 feelings held in, then erupt or detach.",
+        "nodes on 7th \u2014 karmic obsession, unclear loyalty lines."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "general_mr",
+        "quality_score": 35,
+        "affliction_weight": 54,
+        "separation_yoga": true,
+        "reconnection_yoga": false
+      },
+      "skip_llm": false,
+      "word_budget": 55
+    },
+    {
+      "id": 9,
+      "question": "Relationship mein major challenges ya conflicts kis wajah se aa sakte hain?",
+      "ideal_archetype": "general_mr",
+      "archetype": "general_mr",
+      "status": "OK",
+      "verdict": "Marriage/relationship quality: strained patterns visible \u2014 repair habits needed",
+      "evidence_count": 3,
+      "evidence": [
+        "Saturn on 7th axis \u2014 distance, delay, emotional cooling.",
+        "Moon under Saturn/Rahu \u2014 feelings held in, then erupt or detach.",
+        "nodes on 7th \u2014 karmic obsession, unclear loyalty lines."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "general_mr",
+        "quality_score": 35,
+        "affliction_weight": 54,
+        "separation_yoga": true,
+        "reconnection_yoga": false
+      },
+      "skip_llm": false,
+      "word_budget": 55
+    },
+    {
+      "id": 10,
+      "question": "Partner spiritual, practical, ambitious ya artistic nature ka hoga?",
+      "ideal_archetype": "partner_nature",
+      "archetype": "partner_nature",
+      "status": "OK",
+      "verdict": "Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).",
+      "evidence_count": 4,
+      "evidence": [
+        "7th house sign baseline: Gemini (partner vibe / social style).",
+        "7th lord placement: Mercury in house 5 sign Aries (mindset + how partnership behaves).",
+        "Planets in 7th house: ['Moon'] (direct behavior tone).",
+        "Partner-karak by chart gender: unknown \u2192 Venus in house 9 sign Leo (presence/attraction style)."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "partner_nature",
+        "gender": "unknown",
+        "karak": "Venus",
+        "sign7": "Gemini"
+      },
+      "skip_llm": false,
+      "word_budget": 120
+    },
+    {
+      "id": 11,
+      "question": "Marriage ke baad emotional compatibility kaisi rahegi?",
+      "ideal_archetype": "general_mr",
+      "archetype": "emotional_attachment",
+      "status": "WARN",
+      "verdict": "Emotional attachment: sensitive \u2014 mood swings can affect closeness",
+      "evidence_count": 2,
+      "evidence": [
+        "Moon under Saturn/Rahu \u2014 feelings held in, then erupt or detach.",
+        "Saturn-Moon link (Punahoo) \u2014 duty-bound loyalty; may suffer in silence without cheating pattern."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "emotional_attachment",
+        "moon_afflicted": true,
+        "moon_debil": false
+      },
+      "skip_llm": false,
+      "word_budget": 55
+    },
+    {
+      "id": 12,
+      "question": "Partner dominant hoga ya cooperative?",
+      "ideal_archetype": "partner_nature",
+      "archetype": "partner_nature",
+      "status": "OK",
+      "verdict": "Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).",
+      "evidence_count": 4,
+      "evidence": [
+        "7th house sign baseline: Gemini (partner vibe / social style).",
+        "7th lord placement: Mercury in house 5 sign Aries (mindset + how partnership behaves).",
+        "Planets in 7th house: ['Moon'] (direct behavior tone).",
+        "Partner-karak by chart gender: unknown \u2192 Venus in house 9 sign Leo (presence/attraction style)."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "partner_nature",
+        "gender": "unknown",
+        "karak": "Venus",
+        "sign7": "Gemini"
+      },
+      "skip_llm": false,
+      "word_budget": 120
+    },
+    {
+      "id": 13,
+      "question": "Partner ke love language (care dikhane ka tareeka) kya ho sakta hai?",
+      "ideal_archetype": "partner_nature",
+      "archetype": "partner_nature",
+      "status": "OK",
+      "verdict": "Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).",
+      "evidence_count": 4,
+      "evidence": [
+        "7th house sign baseline: Gemini (partner vibe / social style).",
+        "7th lord placement: Mercury in house 5 sign Aries (mindset + how partnership behaves).",
+        "Planets in 7th house: ['Moon'] (direct behavior tone).",
+        "Partner-karak by chart gender: unknown \u2192 Venus in house 9 sign Leo (presence/attraction style)."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "partner_nature",
+        "gender": "unknown",
+        "karak": "Venus",
+        "sign7": "Gemini"
+      },
+      "skip_llm": false,
+      "word_budget": 120
+    },
+    {
+      "id": 14,
+      "question": "Relationship mein trust aur communication ka level kaisa rahega?",
+      "ideal_archetype": "loyalty_trust",
+      "archetype": "loyalty_trust",
+      "status": "OK",
+      "verdict": "Trust/loyalty: sensitive \u2014 clarity and boundaries keep bond safe",
+      "evidence_count": 4,
+      "evidence": [
+        "Trust challenge: Saturn on 7th axis \u2014 distance, delay, emotional cooling.",
+        "Trust challenge: Moon under Saturn/Rahu \u2014 feelings held in, then erupt or detach.",
+        "Trust challenge: nodes on 7th \u2014 karmic obsession, unclear loyalty lines.",
+        "Trust support: Saturn-Moon link (Punahoo) \u2014 duty-bound loyalty; may suffer in silence without cheating pattern."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "loyalty_trust",
+        "trust_level": "unstable",
+        "loyalty_risk_high": false,
+        "third_person_risk": false,
+        "affliction_weight": 54,
+        "negative_signal_count": 3
+      },
+      "skip_llm": false,
+      "word_budget": 60
+    },
+    {
+      "id": 15,
+      "question": "Partner ke andar kaunsi qualities mujhe sabse zyada attract karengi?",
+      "ideal_archetype": "partner_nature",
+      "archetype": "partner_nature",
+      "status": "OK",
+      "verdict": "Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).",
+      "evidence_count": 4,
+      "evidence": [
+        "7th house sign baseline: Gemini (partner vibe / social style).",
+        "7th lord placement: Mercury in house 5 sign Aries (mindset + how partnership behaves).",
+        "Planets in 7th house: ['Moon'] (direct behavior tone).",
+        "Partner-karak by chart gender: unknown \u2192 Venus in house 9 sign Leo (presence/attraction style)."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "partner_nature",
+        "gender": "unknown",
+        "karak": "Venus",
+        "sign7": "Gemini"
+      },
+      "skip_llm": false,
+      "word_budget": 120
+    },
+    {
+      "id": 16,
+      "question": "Marriage se meri life mein kya positive changes aa sakte hain?",
+      "ideal_archetype": "general_mr",
+      "archetype": "general_mr",
+      "status": "OK",
+      "verdict": "Marriage/relationship quality: strained patterns visible \u2014 repair habits needed",
+      "evidence_count": 3,
+      "evidence": [
+        "Saturn on 7th axis \u2014 distance, delay, emotional cooling.",
+        "Moon under Saturn/Rahu \u2014 feelings held in, then erupt or detach.",
+        "nodes on 7th \u2014 karmic obsession, unclear loyalty lines."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "general_mr",
+        "quality_score": 35,
+        "affliction_weight": 54,
+        "separation_yoga": true,
+        "reconnection_yoga": false
+      },
+      "skip_llm": false,
+      "word_budget": 55
+    },
+    {
+      "id": 17,
+      "question": "Kya partner different culture, city ya background se ho sakta hai?",
+      "ideal_archetype": "partner_nature",
+      "archetype": "partner_nature",
+      "status": "OK",
+      "verdict": "Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).",
+      "evidence_count": 4,
+      "evidence": [
+        "7th house sign baseline: Gemini (partner vibe / social style).",
+        "7th lord placement: Mercury in house 5 sign Aries (mindset + how partnership behaves).",
+        "Planets in 7th house: ['Moon'] (direct behavior tone).",
+        "Partner-karak by chart gender: unknown \u2192 Venus in house 9 sign Leo (presence/attraction style)."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "partner_nature",
+        "gender": "unknown",
+        "karak": "Venus",
+        "sign7": "Gemini"
+      },
+      "skip_llm": false,
+      "word_budget": 120
+    },
+    {
+      "id": 18,
+      "question": "Relationship mein kis cheez par mujhe sabse zyada kaam karna chahiye?",
+      "ideal_archetype": "general_mr",
+      "archetype": "general_mr",
+      "status": "OK",
+      "verdict": "Marriage/relationship quality: strained patterns visible \u2014 repair habits needed",
+      "evidence_count": 3,
+      "evidence": [
+        "Saturn on 7th axis \u2014 distance, delay, emotional cooling.",
+        "Moon under Saturn/Rahu \u2014 feelings held in, then erupt or detach.",
+        "nodes on 7th \u2014 karmic obsession, unclear loyalty lines."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "general_mr",
+        "quality_score": 35,
+        "affliction_weight": 54,
+        "separation_yoga": true,
+        "reconnection_yoga": false
+      },
+      "skip_llm": false,
+      "word_budget": 55
+    },
+    {
+      "id": 19,
+      "question": "Ideal spouse ki qualities meri kundli ke hisab se kya hain?",
+      "ideal_archetype": "partner_nature",
+      "archetype": "partner_nature",
+      "status": "OK",
+      "verdict": "Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).",
+      "evidence_count": 4,
+      "evidence": [
+        "7th house sign baseline: Gemini (partner vibe / social style).",
+        "7th lord placement: Mercury in house 5 sign Aries (mindset + how partnership behaves).",
+        "Planets in 7th house: ['Moon'] (direct behavior tone).",
+        "Partner-karak by chart gender: unknown \u2192 Venus in house 9 sign Leo (presence/attraction style)."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "partner_nature",
+        "gender": "unknown",
+        "karak": "Venus",
+        "sign7": "Gemini"
+      },
+      "skip_llm": false,
+      "word_budget": 120
+    },
+    {
+      "id": 20,
+      "question": "Marriage partner meri career aur life goals ko support karega ya nahi?",
+      "ideal_archetype": "general_mr",
+      "archetype": "partner_nature",
+      "status": "WARN",
+      "verdict": "Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).",
+      "evidence_count": 4,
+      "evidence": [
+        "7th house sign baseline: Gemini (partner vibe / social style).",
+        "7th lord placement: Mercury in house 5 sign Aries (mindset + how partnership behaves).",
+        "Planets in 7th house: ['Moon'] (direct behavior tone).",
+        "Partner-karak by chart gender: unknown \u2192 Venus in house 9 sign Leo (presence/attraction style)."
+      ],
+      "checks": {
+        "slice_type": "mr_engine_v1",
+        "archetype": "partner_nature",
+        "gender": "unknown",
+        "karak": "Venus",
+        "sign7": "Gemini"
+      },
+      "skip_llm": false,
+      "word_budget": 120
+    }
+  ]
+}

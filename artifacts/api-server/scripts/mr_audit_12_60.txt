@@ -1,0 +1,224 @@
+MR Audit IDs 1-60
+Total: 60 | OK: 60 | Issues: 0
+
+--- OK IDs ---
+1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60
+
+==============================================================================
+DETAILED BLOCKS (issues + samples)
+==============================================================================
+
+==============================================================================
+QUESTION #12  [OK]
+==============================================================================
+Q: Partner dominant hoga ya cooperative?
+Expected engine : partner_nature
+Routed engine   : partner_nature
+Engine ran      : partner_nature
+Skip LLM        : False
+Verdict         : Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).
+Confidence      : medium
+Word budget     : 120
+
+--- Evidence (LLM ko yeh facts jate hain) ---
+  1. 7th house sign baseline: Gemini (partner vibe / social style).
+  2. 7th lord placement: Mercury in house 5 sign Aries (mindset + how partnership behaves).
+  3. Planets in 7th house: ['Moon'] (direct behavior tone).
+  4. Partner-karak by chart gender: unknown → Venus in house 9 sign Leo (presence/attraction style).
+  5. Partnership style: cooperative-communicative default — shares decisions; Mercury Aries streak assertive in ideas, not controlling dominant.
+
+--- Summary for narrator ---
+  • User asked partner/spouse nature (non-timing).
+  • State traits confidently from evidence — not hedged/shayad tone.
+  • 7H occupants for tone: Moon.
+  • Answer dominant vs cooperative: cooperative zyada, assertive kabhi — bossy controlling nahi.
+
+--- Narrator payload (production shape) ---
+ARCHETYPE: partner_nature
+VERDICT: Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).
+OUTPUT: exactly 3 paragraphs separated by a blank line (90–120 words total).
+TONE: confident — state traits as chart pattern (hai/hote hain/rehta hai). NO shayad/ho sakta hai/lagta hai.
+PARA 1 — social vibe: use ONLY the 7th house sign evidence line.
+PARA 2 — emotions + mindset: use ONLY 7th lord + planets-in-7th evidence lines + any synthesized either/or line.
+PARA 3 — presence in love: use ONLY the partner-karak evidence line + respect/care synthesis if present.
+HINT: Answer the either/or in the question directly using synthesized evidence line(s).
+HINT: Answer dominant vs cooperative: cooperative zyada, assertive kabhi — bossy controlling nahi.
+EVIDENCE: 7th house sign baseline: Gemini (partner vibe / social style).
+EVIDENCE: 7th lord placement: Mercury in house 5 sign Aries (mindset + how partnership behaves).
+EVIDENCE: Planets in 7th house: ['Moon'] (direct behavior tone).
+EVIDENCE: Partner-karak by chart gender: unknown → Venus in house 9 sign Leo (presence/attraction style).
+EVIDENCE: Partnership style: cooperative-communicative default — shares decisions; Mercury Aries streak assertive in ideas, not controlling dominant.
+
+CHECK: App mein yeh question pucho → admin mein archetype + verdict match karo.
+       User answer verdict ke direction mein human-friendly hona chahiye.
+
+==============================================================================
+QUESTION #16  [OK]
+==============================================================================
+Q: Marriage se meri life mein kya positive changes aa sakte hain?
+Expected engine : general_mr
+Routed engine   : general_mr
+Engine ran      : general_mr
+Skip LLM        : False
+Verdict         : Marriage strengths: emotional depth, warmth and partnership growth — steady communication unlocks them
+Confidence      : medium
+Word budget     : 55
+
+--- Evidence (LLM ko yeh facts jate hain) ---
+  1. Moon in 7th — emotional bonding is central to marriage; caring depth is a core strength.
+  2. Jupiter in house 4 — home grace, faith and long-term stability favour marriage.
+  3. Venus in house 9 — warmth, respect and partnership charm strengthen the bond.
+  4. Mercury-linked partnership pattern — communication, humour and mental rapport are marriage strengths.
+  5. Growth edge: Saturn on 7th axis — distance, delay, emotional cooling.
+
+--- Summary for narrator ---
+  • Answer strengths directly — lead with 2–3 positive patterns; one short growth edge max.
+  • NO shayad/ho sakta hai/lagta hai — state what the chart shows.
+  • If mixed: communication and respect matter — say it directly.
+  • Tone warm and encouraging.
+
+--- Narrator payload (production shape) ---
+ARCHETYPE: general_mr
+TONE: confident pattern voice (hai/hote hain/rehta hai). NO shayad/ho sakta hai/lagta hai.
+VERDICT: Marriage strengths: emotional depth, warmth and partnership growth — steady communication unlocks them
+CONFIDENCE: medium
+EVIDENCE (use 2–4 only, plain language):
+- Moon in 7th — emotional bonding is central to marriage; caring depth is a core strength.
+- Jupiter in house 4 — home grace, faith and long-term stability favour marriage.
+- Venus in house 9 — warmth, respect and partnership charm strengthen the bond.
+- Mercury-linked partnership pattern — communication, humour and mental rapport are marriage strengths.
+- Growth edge: Saturn on 7th axis — distance, delay, emotional cooling.
+
+CHECK: App mein yeh question pucho → admin mein archetype + verdict match karo.
+       User answer verdict ke direction mein human-friendly hona chahiye.
+
+==============================================================================
+QUESTION #17  [OK]
+==============================================================================
+Q: Kya partner different culture, city ya background se ho sakta hai?
+Expected engine : partner_nature
+Routed engine   : partner_nature
+Engine ran      : partner_nature
+Skip LLM        : False
+Verdict         : Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).
+Confidence      : medium
+Word budget     : 120
+
+--- Evidence (LLM ko yeh facts jate hain) ---
+  1. 7th house sign baseline: Gemini (partner vibe / social style).
+  2. 7th lord placement: Mercury in house 5 sign Aries (mindset + how partnership behaves).
+  3. Planets in 7th house: ['Moon'] (direct behavior tone).
+  4. Partner-karak by chart gender: unknown → Venus in house 9 sign Leo (presence/attraction style).
+  5. Different background theme: Rahu in house 3 sign Aquarius — partner from another city/culture/background fits chart pattern.
+
+--- Summary for narrator ---
+  • User asked partner/spouse nature (non-timing).
+  • State traits confidently from evidence — not hedged/shayad tone.
+  • 7H occupants for tone: Moon.
+  • Answer family/background directly — include Different background theme (Rahu) in Para 1.
+
+--- Narrator payload (production shape) ---
+ARCHETYPE: partner_nature
+VERDICT: Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).
+OUTPUT: exactly 3 paragraphs separated by a blank line (90–120 words total).
+TONE: confident — state traits as chart pattern (hai/hote hain/rehta hai). NO shayad/ho sakta hai/lagta hai.
+PARA 1 — social vibe + family background: use 7th house sign AND Different background theme evidence.
+PARA 2 — emotions + mindset: use ONLY 7th lord + planets-in-7th evidence lines.
+PARA 3 — presence in love: use ONLY the partner-karak evidence line.
+HINT: Answer family/background directly — include Different background theme (Rahu) in Para 1.
+EVIDENCE: 7th house sign baseline: Gemini (partner vibe / social style).
+EVIDENCE: 7th lord placement: Mercury in house 5 sign Aries (mindset + how partnership behaves).
+EVIDENCE: Planets in 7th house: ['Moon'] (direct behavior tone).
+EVIDENCE: Partner-karak by chart gender: unknown → Venus in house 9 sign Leo (presence/attraction style).
+EVIDENCE: Different background theme: Rahu in house 3 sign Aquarius — partner from another city/culture/background fits chart pattern.
+
+CHECK: App mein yeh question pucho → admin mein archetype + verdict match karo.
+       User answer verdict ke direction mein human-friendly hona chahiye.
+
+==============================================================================
+QUESTION #35  [OK]
+==============================================================================
+Q: Partner ke saath feelings gehra rahenge ya halki rahengi?
+Expected engine : partner_nature
+Routed engine   : partner_nature
+Engine ran      : partner_nature
+Skip LLM        : False
+Verdict         : Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).
+Confidence      : medium
+Word budget     : 120
+
+--- Evidence (LLM ko yeh facts jate hain) ---
+  1. 7th house sign baseline: Gemini (partner vibe / social style).
+  2. 7th lord placement: Mercury in house 5 sign Aries (mindset + how partnership behaves).
+  3. Planets in 7th house: ['Moon'] (direct behavior tone).
+  4. Partner-karak by chart gender: unknown → Venus in house 9 sign Leo (presence/attraction style).
+  5. Feeling depth: Moon in 7th — feelings partner ke saath gehre rehte hain, halki surface bond nahi.
+
+--- Summary for narrator ---
+  • User asked partner/spouse nature (non-timing).
+  • State traits confidently from evidence — not hedged/shayad tone.
+  • 7H occupants for tone: Moon.
+  • Answer gehra vs halki: feelings gehre (Moon 7th), halki nahi.
+
+--- Narrator payload (production shape) ---
+ARCHETYPE: partner_nature
+VERDICT: Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).
+OUTPUT: exactly 3 paragraphs separated by a blank line (90–120 words total).
+TONE: confident — state traits as chart pattern (hai/hote hain/rehta hai). NO shayad/ho sakta hai/lagta hai.
+PARA 1 — social vibe: use ONLY the 7th house sign evidence line.
+PARA 2 — emotions + mindset: use ONLY 7th lord + planets-in-7th evidence lines + any synthesized either/or line.
+PARA 3 — presence in love: use ONLY the partner-karak evidence line + respect/care synthesis if present.
+HINT: Answer the either/or in the question directly using synthesized evidence line(s).
+HINT: Answer gehra vs halki: feelings gehre (Moon 7th), halki nahi.
+EVIDENCE: 7th house sign baseline: Gemini (partner vibe / social style).
+EVIDENCE: 7th lord placement: Mercury in house 5 sign Aries (mindset + how partnership behaves).
+EVIDENCE: Planets in 7th house: ['Moon'] (direct behavior tone).
+EVIDENCE: Partner-karak by chart gender: unknown → Venus in house 9 sign Leo (presence/attraction style).
+EVIDENCE: Feeling depth: Moon in 7th — feelings partner ke saath gehre rehte hain, halki surface bond nahi.
+
+CHECK: App mein yeh question pucho → admin mein archetype + verdict match karo.
+       User answer verdict ke direction mein human-friendly hona chahiye.
+
+==============================================================================
+QUESTION #47  [OK]
+==============================================================================
+Q: Partner mujhe respect dega ya nahi?
+Expected engine : partner_nature
+Routed engine   : partner_nature
+Engine ran      : partner_nature
+Skip LLM        : False
+Verdict         : Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).
+Confidence      : medium
+Word budget     : 120
+
+--- Evidence (LLM ko yeh facts jate hain) ---
+  1. 7th house sign baseline: Gemini (partner vibe / social style).
+  2. 7th lord placement: Mercury in house 5 sign Aries (mindset + how partnership behaves).
+  3. Planets in 7th house: ['Moon'] (direct behavior tone).
+  4. Partner-karak by chart gender: unknown → Venus in house 9 sign Leo (presence/attraction style).
+  5. Respect pattern: Gemini 7th + Moon = respect through talk and emotional regard; Venus Leo = mutual dignity and warmth.
+
+--- Summary for narrator ---
+  • User asked partner/spouse nature (non-timing).
+  • State traits confidently from evidence — not hedged/shayad tone.
+  • 7H occupants for tone: Moon.
+  • Answer partner respect directly — yes, via communication and mutual dignity.
+
+--- Narrator payload (production shape) ---
+ARCHETYPE: partner_nature
+VERDICT: Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).
+OUTPUT: exactly 3 paragraphs separated by a blank line (90–120 words total).
+TONE: confident — state traits as chart pattern (hai/hote hain/rehta hai). NO shayad/ho sakta hai/lagta hai.
+PARA 1 — social vibe: use ONLY the 7th house sign evidence line.
+PARA 2 — emotions + mindset: use ONLY 7th lord + planets-in-7th evidence lines + any synthesized either/or line.
+PARA 3 — presence in love: use ONLY the partner-karak evidence line + respect/care synthesis if present.
+HINT: Answer the either/or in the question directly using synthesized evidence line(s).
+HINT: Answer partner respect directly — yes, via communication and mutual dignity.
+EVIDENCE: 7th house sign baseline: Gemini (partner vibe / social style).
+EVIDENCE: 7th lord placement: Mercury in house 5 sign Aries (mindset + how partnership behaves).
+EVIDENCE: Planets in 7th house: ['Moon'] (direct behavior tone).
+EVIDENCE: Partner-karak by chart gender: unknown → Venus in house 9 sign Leo (presence/attraction style).
+EVIDENCE: Respect pattern: Gemini 7th + Moon = respect through talk and emotional regard; Venus Leo = mutual dignity and warmth.
+
+CHECK: App mein yeh question pucho → admin mein archetype + verdict match karo.
+       User answer verdict ke direction mein human-friendly hona chahiye.

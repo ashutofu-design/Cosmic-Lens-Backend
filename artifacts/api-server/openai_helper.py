@@ -5017,6 +5017,16 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         _is_mr_static = False
         _chart_slice_type = "full_compact_fallback"
 
+    # ── MR engine owns the answer: neutralise decision/finance formatting ──
+    # When the MR static engine produced the facts, the MR narrator alone
+    # shapes the reply (engine_facts_only). The generic decision/finance
+    # post-processing (adds "Seedha jawab:" / "Conclusion:" labels and bumps
+    # max_tokens) must NOT run on top of it — it made engine answers read like
+    # a decision template instead of a natural narrated answer.
+    if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "mr_engine_v1":
+        is_decision = False
+        is_finance = False
+
     # ── Specific-partner synastry (Phase 2.5.11.6) ─────────────────────
     # When the Q references an EXISTING partner ("mere bf se", "wife
     # loyal"), look up the user's saved partner profile.

@@ -12,7 +12,6 @@ import {
   BackHandler,
   FlatList,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -23,6 +22,12 @@ import {
   TextInput,
   View,
 } from "react-native";
+// Edge-to-edge aware KeyboardAvoidingView. RN's built-in one relies on the
+// old Android `adjustResize` window shrink, which SDK 54 edge-to-edge
+// disables — so the input would hide behind the keyboard. This drop-in
+// (backed by the root <KeyboardProvider/>) tracks the keyboard frame
+// natively and pushes the input flush above it on both platforms.
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Reanimated, {
@@ -319,7 +324,14 @@ export default function AskScreen() {
   // Resting bottom padding: keyboard-open → tiny gap; chat (tab bar hidden)
   // → just the safe-area inset; landing → clear the tab bar.
   const tabBarHidden = mode === "chat";
-  const inputRowBottomPad = kbVisible ? 10 : tabBarHidden ? botPad + 10 : botPad + TAB_BAR_HEIGHT;
+  // Resting bottom padding (keyboard CLOSED). When open, the KeyboardAvoiding
+  // View lifts the whole row above the keyboard so we only need a tiny gap.
+  //   keyboard open → 10px flush gap above the keyboard.
+  //   chat (tab bar hidden) → just the safe-area inset.
+  //   landing → clear the tab bar.
+  const inputRowBottomPad = kbVisible
+    ? 10
+    : tabBarHidden ? botPad + 10 : botPad + TAB_BAR_HEIGHT;
 
   // ── Request ownership ────────────────────────────────────────────────────
   // Each send() bumps requestIdRef. Stream callbacks gate every state mutation
@@ -1082,9 +1094,11 @@ export default function AskScreen() {
           )}
           {isUser ? (
             <LinearGradient
-              colors={[C.accent, `${C.accent}CC`]}
+              // Fixed premium violet — NOT the zodiac accent (which can resolve
+              // to dark red for some signs and made the question bubble look off).
+              colors={["#6D5DF6", "#8B5CF6"]}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={[s.bubbleInner, s.bubbleInnerUser, s.bubbleGlow, { shadowColor: C.accent, borderColor: `${C.accent}55` }]}
+              style={[s.bubbleInner, s.bubbleInnerUser, s.bubbleGlow, { shadowColor: "#6D5DF6", borderColor: "rgba(139,92,246,0.45)" }]}
             >
               <Text style={[s.bubbleText, s.bubbleTextUser]}>{item.text}</Text>
             </LinearGradient>
@@ -1253,15 +1267,13 @@ export default function AskScreen() {
     <View style={[s.root, { backgroundColor: C.isDark ? "#000000" : C.bg }]}>
     <KeyboardAvoidingView
       style={s.root}
-      // iOS: `padding` adds bottom padding equal to (kb_height - offset).
-      //   verticalOffset = TAB_BAR_HEIGHT + botPad so the input lands
-      //   FLUSH above the keyboard (instead of above the tab bar, which
-      //   was the original "half screen" symptom).
-      // Android: rely on the default `windowSoftInputMode=adjustResize`
-      //   for input pushup; use behavior=undefined to avoid double-
-      //   adjustment that compresses the FlatList area.
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? (tabBarHidden ? botPad : botPad + TAB_BAR_HEIGHT) : 0}
+      // `padding` lifts the input row flush above the keyboard. The
+      // keyboard-controller version handles Android edge-to-edge correctly
+      // (no persistent nav-bar gap when closed, no half-hidden input).
+      // verticalOffset accounts for the (visible) tab bar on the landing
+      // screen so the row doesn't jump; in chat the tab bar is hidden.
+      behavior="padding"
+      keyboardVerticalOffset={tabBarHidden ? 0 : TAB_BAR_HEIGHT}
     >
       {/* Header */}
       <FadeInView delay={0}>

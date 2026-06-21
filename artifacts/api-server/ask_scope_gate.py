@@ -74,7 +74,11 @@ _CHART_PLACEMENT_RX = re.compile(
     r"lagna|moon|sun|venus|mars|saturn|rahu|ketu|jupiter|mercury|"
     r"shani|shukra|mangal|surya|chandra|budh|guru"
     r")\b|"
-    r"\b(?:1st|2nd|3rd|[4-9]th|1[0-2]th|\d{1,2})\s*(?:house|bhav|bhaav)\b"
+    r"\b(?:1st|2nd|3rd|[4-9]th|1[0-2]th|\d{1,2})\s*(?:house|bhav|bhaav)\b|"
+    r"\b(?:\d{1,2}(?:st|nd|rd|th)?\s+)?(?:csl|cusp|sub[\s-]?lord|sublord)\b|"
+    r"\b(?:mesh|mithun|kark|singh|kanya|tula|vrishchik|dhanu|makar|kumbh|meen|"
+    r"aries|taurus|gemini|cancer|leo|virgo|libra|scorpio|sagittarius|"
+    r"capricorn|aquarius|pisces)\s*(?:rashi)?\b.{0,20}\b(?:ghar|house|bhav)\b"
     r")\b"
 )
 

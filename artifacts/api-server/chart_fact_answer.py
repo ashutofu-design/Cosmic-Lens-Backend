@@ -43,6 +43,7 @@ _CHART_LOOKUP_INTENTS = frozenset({
     "planet_nakshatra_lookup",
     "kp_cusp_lookup",
     "divisional_lookup",
+    "sign_house_lookup",
 })
 
 _HOUSE_NUM_RX = re.compile(
@@ -68,9 +69,29 @@ _PLANET_NAK_RX = re.compile(
     r"mercury|budh|jupiter|guru|venus|shukra|saturn|shani|sani|rahu|ketu)\b",
     re.I,
 )
+_CSL_HOUSE_RX = re.compile(r"\b(\d{1,2})(?:st|nd|rd|th)?\s+csl\b", re.I)
 _KP_CUSP_RX = re.compile(
-    r"\b(?:kp|sub[\s-]?lord|sublord|cusp)\b"
-    r"|\b(\d{1,2})(?:st|nd|rd|th)?\s+cusp\b",
+    r"\b(?:kp|sub[\s-]?lord|sublord|cusp|csl|cuspal\s*sub[\s-]?lord)\b"
+    r"|\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:csl|cusp|sub[\s-]?lord)\b",
+    re.I,
+)
+_SIGN_ALIASES: dict[str, str] = {
+    "mesh": "aries", "aries": "aries",
+    "vrishabh": "taurus", "vrishabha": "taurus", "taurus": "taurus",
+    "mithun": "gemini", "gemini": "gemini",
+    "kark": "cancer", "karka": "cancer", "cancer": "cancer",
+    "singh": "leo", "simha": "leo", "leo": "leo",
+    "kanya": "virgo", "virgo": "virgo",
+    "tula": "libra", "libra": "libra",
+    "vrishchik": "scorpio", "vrishchika": "scorpio", "scorpio": "scorpio",
+    "dhanu": "sagittarius", "sagittarius": "sagittarius",
+    "makar": "capricorn", "capricorn": "capricorn",
+    "kumbh": "aquarius", "aquarius": "aquarius",
+    "meen": "pisces", "meena": "pisces", "pisces": "pisces",
+}
+_SIGN_IN_HOUSE_RX = re.compile(
+    r"\b(kis\s+(?:ghar|house|bhav)|kahan|kahaan|kaun\s+sa\s+ghar|which\s+house|"
+    r"ghar\s+me|house\s+me)\b",
     re.I,
 )
 _DIV_CHART_RX = re.compile(
@@ -84,7 +105,7 @@ _CHART_LOOKUP_RX = re.compile(
     r"which\s+(?:house|sign|placement)|placement|placed|sthit|"
     r"house|ghar|bhav[a]?|lord|swami|malik|adhipati|"
     r"lagna|ascendant|nakshatra|dasha|"
-    r"sub[\s-]?lord|sublord|cusp|navamsa|navamsha|"
+    r"sub[\s-]?lord|sublord|cusp|csl|navamsa|navamsha|"
     r"d\d{1,2}|kon\s+he|kaun\s+he|kya\s+hai"
     r")\b",
     re.I,
@@ -141,7 +162,26 @@ def _sign_label(sign: str | None, lang: str) -> str:
     return key
 
 
+def _parse_named_sign(q: str) -> str | None:
+    ql = (q or "").lower()
+    for alias, canon in _SIGN_ALIASES.items():
+        if re.search(r"\b" + re.escape(alias) + r"\b", ql):
+            return canon
+    return None
+
+
+def _detect_sign_house_lookup(q: str) -> bool:
+    return bool(_parse_named_sign(q) and _SIGN_IN_HOUSE_RX.search(q or ""))
+
+
 def _parse_house_num(q: str) -> int | None:
+    m_csl = _CSL_HOUSE_RX.search(q or "")
+    if m_csl and m_csl.group(1):
+        try:
+            h = int(m_csl.group(1))
+            return h if 1 <= h <= 12 else None
+        except (TypeError, ValueError):
+            pass
     m = _HOUSE_NUM_RX.search(q or "")
     if m and m.group(1):
         try:
@@ -177,12 +217,14 @@ def _detect_divisional(q: str) -> str | None:
 
 
 def _detect_local_lookup_tag(q: str) -> str | None:
+    if _KP_CUSP_RX.search(q):
+        return "kp_cusp_lookup"
+    if _detect_sign_house_lookup(q):
+        return "sign_house_lookup"
     if _HOUSE_LORD_RX.search(q):
         return "house_lord_lookup"
     if _PLANET_NAK_RX.search(q):
         return "planet_nakshatra_lookup"
-    if _KP_CUSP_RX.search(q):
-        return "kp_cusp_lookup"
     if _detect_divisional(q):
         return "divisional_lookup"
     return None
@@ -396,7 +438,41 @@ def _answer_planet_nakshatra(kundli: dict, planet: str, lang: str) -> str | None
     return text
 
 
-def _answer_kp_cusp(kundli: dict, house: int, lang: str) -> str | None:
+def _answer_sign_in_house(kundli: dict, sign_canon: str, lang: str) -> str | None:
+    facts = _truth(kundli)
+    house_sign = facts.get("house_sign") or {}
+    matches = [h for h, s in house_sign.items() if str(s).lower() == sign_canon.lower()]
+    if not matches:
+        return None
+    h = int(matches[0])
+    sign_disp = _sign_label(sign_canon.title(), lang)
+    if lang == "en":
+        return f"{sign_disp} sign is in your {h}{_ordinal(h)} house."
+    return f"{sign_disp} rashi aapke {h}th house mein hai."
+
+
+def _ensure_kp_on_kundli(kundli: dict) -> dict | None:
+    """Return kp dict from kundli, computing lazily from birth fields if missing."""
+    kp = kundli.get("kp") if isinstance(kundli, dict) else None
+    if isinstance(kp, dict) and isinstance(kp.get("cusps"), list):
+        return kp
+    birth_keys = ("day", "month", "year", "hour", "minute", "ampm", "lat", "lon", "tz")
+    if not all(kundli.get(k) is not None for k in birth_keys):
+        return None
+    try:
+        from kp_engine import calculate_kp
+
+        kp = calculate_kp({k: kundli.get(k) for k in birth_keys})
+        if isinstance(kp, dict):
+            kundli["kp"] = kp
+            return kp
+    except Exception:
+        return None
+    return None
+
+
+def _answer_kp_cusp(kundli: dict, house: int, lang: str, *, use_csl: bool = False) -> str | None:
+    _ensure_kp_on_kundli(kundli)
     kp = kundli.get("kp") if isinstance(kundli, dict) else None
     if not isinstance(kp, dict):
         return None
@@ -412,14 +488,16 @@ def _answer_kp_cusp(kundli: dict, house: int, lang: str) -> str | None:
         return None
     sb_disp = _planet_display(str(sb))
     sign_l = _sign_label(str(sign), lang) if sign else ""
+    label = "CSL (cusp sub-lord)" if use_csl else "cusp sub-lord"
 
     if lang == "en":
-        text = f"{house}{_ordinal(house)} cusp sub-lord is {sb_disp}."
+        text = f"{house}{_ordinal(house)} {label} is {sb_disp}."
         if sign_l:
             text += f" Cusp sign: {sign_l}."
         return text
 
-    text = f"{house}th cusp ka sub-lord {sb_disp} hai."
+    label_hn = "CSL (cusp sub-lord)" if use_csl else "cusp ka sub-lord"
+    text = f"{house}th cusp ka {label_hn} {sb_disp} hai."
     if sign_l:
         text += f" Cusp ki rashi {sign_l} hai."
     return text
@@ -525,10 +603,17 @@ def try_deterministic_chart_fact(
     question: str,
     kundli: Any,
     lang: str = "hn",
+    birth: Any = None,
 ) -> dict | None:
     """Return a full ask-response dict for chart lookups, or None if not a lookup."""
     if not isinstance(kundli, dict) or not kundli.get("planets"):
         return None
+
+    # Merge birth fields for lazy KP compute when client sends birthData separately.
+    if isinstance(birth, dict):
+        for k in ("day", "month", "year", "hour", "minute", "ampm", "lat", "lon", "tz"):
+            if kundli.get(k) is None and birth.get(k) is not None:
+                kundli[k] = birth.get(k)
 
     q = normalize_ask_typos(question or "")
     lang_use = lang if lang in ("hi", "hn", "en") else "hn"
@@ -553,15 +638,31 @@ def try_deterministic_chart_fact(
     house = _parse_house_num(q)
     varga = _detect_divisional(q)
     wants_interpret = is_chart_interpretation_question(q)
+    use_csl = bool(re.search(r"\bcsl\b", q, re.I))
 
-    # ── Handlers ──────────────────────────────────────────────────────────
+    # ── Handlers (priority order) ─────────────────────────────────────────
+    # Sign-in-house BEFORE moon_sign ("Mesh rashi kis ghar me" ≠ janma rashi).
+    if _detect_sign_house_lookup(q):
+        sign = _parse_named_sign(q)
+        if sign:
+            text = _answer_sign_in_house(kundli, sign, lang_use)
+            if text:
+                return _payload(text, "sign_house_lookup")
+
+    # KP CSL / cusp sub-lord — engine only, no LLM interpretation.
+    if it == "kp_cusp_lookup" or _KP_CUSP_RX.search(q):
+        h = house or 1
+        text = _answer_kp_cusp(kundli, h, lang_use, use_csl=use_csl)
+        if text:
+            return _payload(text, "kp_cusp_lookup")
+
     if it == "lagna_lookup":
         sign = _sign_label(_lagna_sign(kundli), lang_use)
         if sign:
             text = f"Your ascendant (Lagna) is {sign}." if lang_use == "en" else f"Aapka lagna {sign} hai."
             return _payload(text, it)
 
-    if it == "moon_sign_lookup":
+    if it == "moon_sign_lookup" and not _detect_sign_house_lookup(q):
         sign = _sign_label(_moon_sign(kundli), lang_use)
         if sign:
             text = (
@@ -604,12 +705,6 @@ def try_deterministic_chart_fact(
 
     if it in ("planet_nakshatra_lookup",) and planets:
         text = _answer_planet_nakshatra(kundli, planets[0], lang_use)
-        if text:
-            return _payload(text, it)
-
-    if it in ("kp_cusp_lookup",):
-        h = house or 7
-        text = _answer_kp_cusp(kundli, h, lang_use)
         if text:
             return _payload(text, it)
 

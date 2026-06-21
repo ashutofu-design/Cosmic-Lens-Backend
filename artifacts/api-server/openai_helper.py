@@ -4810,7 +4810,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             chart_lookup_refusal_payload,
         )
 
-        _det = try_deterministic_chart_fact(question, kundli, lang)
+        _det = try_deterministic_chart_fact(question, kundli, lang, birth=birth)
         if _det:
             return _det
         # Chart placement lookups must NEVER reach the LLM — engine or refusal only.
@@ -9814,6 +9814,11 @@ _CHART_FACT_PATTERNS = [
         r"mercury|budh|jupiter|guru|venus|shukra|saturn|shani|rahu|ketu)\b",
         r"\b(?:sub[\s-]?lord|sublord|cusp)\b",
         r"\b(?:d\d{1,2}|navamsa|navamsha|dwadasamsa)\b.{0,30}\b(?:house|ghar|bhav|me|kon|kaun|kahan)\b",
+        r"\b\d{1,2}(?:st|nd|rd|th)?\s+csl\b",
+        r"\b(?:mera|meri|mere)\s+\d{1,2}(?:st|nd|rd|th)?\s+csl\b",
+        r"\b(?:mesh|mithun|kark|singh|kanya|tula|vrishchik|dhanu|makar|kumbh|meen|"
+        r"aries|taurus|gemini|cancer|leo|virgo|libra|scorpio|sagittarius|"
+        r"capricorn|aquarius|pisces)\s*(?:rashi)?\b.{0,15}\b(?:kis\s+ghar|kis\s+house)\b",
     )
 ]
 _CHART_FACT_DEV_PATTERNS = [
@@ -10026,11 +10031,32 @@ def _classify_ask_intent(question: str, lang: str = "hn") -> dict:
         reasons.append("nakshatra keyword")
         return {"intent": "nakshatra_lookup", "subjects": ["Nakshatra"], "scope": "nakshatra",
                 "confidence": 0.95, "reasons": reasons, "word_count": wc}
+    # 2a. Named sign → which house ("Mesh rashi kis ghar me") — NOT janma rashi.
+    _SIGN_IN_HOUSE_CLASS_RX = re.compile(
+        r"\b(mesh|aries|vrishabh|taurus|mithun|gemini|kark|cancer|singh|leo|"
+        r"kanya|virgo|tula|libra|vrishchik|scorpio|dhanu|sagittarius|makar|"
+        r"capricorn|kumbh|aquarius|meen|pisces)\b"
+        r".{0,25}\b(kis\s+(?:ghar|house|bhav)|kahan|kaun\s+sa\s+ghar|which\s+house)\b",
+        re.I,
+    )
+    if _SIGN_IN_HOUSE_CLASS_RX.search(q):
+        reasons.append("named sign + which-house query (not janma rashi)")
+        return {"intent": "sign_house_lookup", "subjects": houses or ["sign"], "scope": "house",
+                "confidence": 0.93, "reasons": reasons, "word_count": wc}
+    # 2b. KP CSL / cusp sub-lord lookup.
+    if re.search(
+        r"\b(csl|sub[\s-]?lord|sublord|cusp)\b|\b\d{1,2}(?:st|nd|rd|th)?\s+csl\b",
+        q,
+        re.I,
+    ):
+        reasons.append("KP CSL/cusp sub-lord lookup")
+        return {"intent": "kp_cusp_lookup", "subjects": houses or ["cusp"], "scope": "kp",
+                "confidence": 0.95, "reasons": reasons, "word_count": wc}
     if has_sun_sign and not has_strength:
         reasons.append("sun-sign keyword (explicit Sun token + sign keyword)")
         return {"intent": "sun_sign_lookup", "subjects": ["Sun"], "scope": "sun_sign",
                 "confidence": 0.92, "reasons": reasons, "word_count": wc}
-    if has_moon_sign and not has_strength:
+    if has_moon_sign and not has_strength and not _SIGN_IN_HOUSE_CLASS_RX.search(q):
         reasons.append("moon-sign keyword (rashi/raashi defaults to janma-rashi=Moon)")
         return {"intent": "moon_sign_lookup", "subjects": ["Moon"], "scope": "moon_sign",
                 "confidence": 0.92, "reasons": reasons, "word_count": wc}

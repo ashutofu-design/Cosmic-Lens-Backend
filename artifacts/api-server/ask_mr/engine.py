@@ -17,12 +17,18 @@ def run_mr_static_engine(
     *,
     birth: Any = None,
     wants_explain: bool = False,
+    archetype: str | None = None,
 ) -> EngineResult:
-    """MR static engine entrypoint. Set ASK_MR_ENGINE=0 to force legacy slice upstream."""
+    """MR static engine entrypoint. Set ASK_MR_ENGINE=0 to force legacy slice upstream.
+
+    When `archetype` is provided (e.g. from the LLM-first intent classifier)
+    it is used directly instead of the regex `classify_mr_archetype`, letting
+    the caller route nuanced questions the regex would mislabel.
+    """
     if _legacy_slice_enabled():
         raise RuntimeError("ASK_MR_ENGINE=0 — caller should use legacy marriage slice")
 
-    archetype = classify_mr_archetype(question)
+    archetype = (archetype or "").strip().lower() or classify_mr_archetype(question)
 
     if archetype == "breakup_risk":
         from .engines.breakup_risk import run_breakup_risk

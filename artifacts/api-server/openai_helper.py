@@ -4752,13 +4752,59 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     except Exception as _rre:
         print(f"[raw_passthrough] ask_route resolve failed: {_rre}", flush=True)
 
-    # ── Classify: STATIC vs TIMING — regex route only (no classifier LLM) ─
+    # ── LLM-first intent (optional, ASK_LLM_INTENT=1) ─────────────────
+    # When enabled, one cheap JSON LLM call understands the question and
+    # drives domain/timing/decision/MR-archetype routing. We only trust a
+    # confident ("llm") result; on error/low-confidence we fall straight
+    # back to the regex routing below (zero behaviour change).
+    _llm_intent = None
+    _intent_source = "regex"
+    _mr_archetype_override = None
+    if (os.environ.get("ASK_LLM_INTENT") or "0").strip() == "1":
+        try:
+            from ask_intent_llm import classify_ask_intent  # type: ignore
+
+            _res = classify_ask_intent(question, client=client)
+            if (_res or {}).get("source") == "llm":
+                _llm_intent = _res
+                _intent_source = "llm"
+                _mr_archetype_override = _res.get("mr_archetype")
+            print(
+                f"[raw_passthrough] LLM_INTENT source={(_res or {}).get('source')} "
+                f"domain={(_res or {}).get('domain')} "
+                f"archetype={(_res or {}).get('mr_archetype')} "
+                f"timing={(_res or {}).get('is_timing')} "
+                f"conf={(_res or {}).get('confidence')}",
+                flush=True,
+            )
+        except Exception as _lie:
+            print(f"[raw_passthrough] LLM intent skipped: {_lie}", flush=True)
+
+    # ── Classify: STATIC vs TIMING — LLM (if confident) else regex route ─
+    # NOTE: `_understanding` stays None to preserve the legacy "understanding"
+    # payload shape; the LLM-first intent is surfaced separately via the
+    # admin `llm_intent` field (different schema).
     _understanding = None
-    qtype = "TIMING" if _resolved_route == "timing" else "STATIC"
-    is_timing = (_resolved_route == "timing")
-    wants_explain = _user_wants_explanation(question)
-    is_decision = (not is_timing) and _is_decision_ask(question)
-    is_finance = (not is_timing) and (not is_decision) and _is_finance_ask(question)
+    if _llm_intent is not None:
+        is_timing = bool(_llm_intent.get("is_timing"))
+    else:
+        is_timing = (_resolved_route == "timing")
+    qtype = "TIMING" if is_timing else "STATIC"
+    wants_explain = (
+        bool(_llm_intent.get("wants_explain"))
+        if _llm_intent is not None
+        else _user_wants_explanation(question)
+    )
+    is_decision = (not is_timing) and (
+        bool(_llm_intent.get("is_decision"))
+        if _llm_intent is not None
+        else _is_decision_ask(question)
+    )
+    is_finance = (not is_timing) and (not is_decision) and (
+        (_llm_intent.get("domain") == "finance")
+        if _llm_intent is not None
+        else _is_finance_ask(question)
+    )
     static_dasha_hint = (not is_timing) and (
         _static_needs_current_dasha(question) or is_decision or is_finance
     )
@@ -4781,13 +4827,18 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     )
     _is_mr_static = False
     if not is_timing:
-        try:
-            from ask_marriage_relationship_slice import (  # type: ignore
-                is_marriage_relationship_static_question,
-            )
-            _is_mr_static = is_marriage_relationship_static_question(question)
-        except Exception:
-            _is_mr_static = False
+        if _llm_intent is not None:
+            # LLM-first: relationship domains route to the MR engine; the
+            # chosen archetype (set above) is injected at dispatch time.
+            _is_mr_static = _llm_intent.get("domain") in {"marriage", "love"}
+        else:
+            try:
+                from ask_marriage_relationship_slice import (  # type: ignore
+                    is_marriage_relationship_static_question,
+                )
+                _is_mr_static = is_marriage_relationship_static_question(question)
+            except Exception:
+                _is_mr_static = False
     # Sensitive Qs ALSO need current dasha so the LLM has a real reason
     # to cite in layer-2 (astrological reason). Auto-promote.
     if is_sensitive:
@@ -4861,6 +4912,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         question or "",
                         birth=birth,
                         wants_explain=wants_explain,
+                        archetype=_mr_archetype_override,
                     )
                     if _mr_engine_result.archetype == "partner_nature":
                         from ask_mr.engines.partner_nature import partner_nature_narrator_payload
@@ -5127,6 +5179,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
             llm_called=False,
             skip_reason="marriage_timing_deterministic",
+            intent_source=_intent_source,
+            llm_intent=_llm_intent,
         )
 
     # ── MR engine template-only (skip LLM for simple yes/no e.g. manglik) ──
@@ -5164,6 +5218,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
             llm_called=False,
             skip_reason="mr_engine_template",
+            intent_source=_intent_source,
+            llm_intent=_llm_intent,
         )
 
     # ── Optional prompt add-ons (timing engines, KP, partner, depth modes) ──
@@ -5523,6 +5579,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
             blocks=_pt_blocks,
             llm_called=True,
+            intent_source=_intent_source,
+            llm_intent=_llm_intent,
         )
     except Exception as exc:
         try:

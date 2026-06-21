@@ -105,6 +105,8 @@ def build_admin_llm_context(
     blocks: dict[str, Any] | None = None,
     llm_called: bool = True,
     skip_reason: str = "",
+    intent_source: str = "regex",
+    llm_intent: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Structured snapshot for admin panel (never shown to end users)."""
     _checks = checks or {}
@@ -122,6 +124,8 @@ def build_admin_llm_context(
         "question": (question or "")[:500],
         "question_type": question_type,
         "is_timing": bool(is_timing),
+        "intent_source": intent_source or "regex",
+        "llm_intent": llm_intent or None,
         "llm_called": bool(llm_called),
         "answer_path": answer_path,
         "answer_path_label": answer_path_label,

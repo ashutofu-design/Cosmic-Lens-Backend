@@ -132,6 +132,16 @@ export interface AskLlmContext {
   question?: string;
   question_type?: string;
   is_timing?: boolean;
+  intent_source?: string;
+  llm_intent?: {
+    domain?: string;
+    is_timing?: boolean;
+    is_decision?: boolean;
+    wants_explain?: boolean;
+    mr_archetype?: string | null;
+    confidence?: number;
+    source?: string;
+  } | null;
   llm_called?: boolean;
   answer_path?: string;
   answer_path_label?: string;

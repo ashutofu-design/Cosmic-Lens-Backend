@@ -170,6 +170,23 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
               ) : null}
             </div>
 
+            <div className="answer-path-banner">
+              <strong>Intent:</strong>{" "}
+              <code>{ctx.intent_source === "llm" ? "LLM" : "regex"}</code>
+              {ctx.intent_source === "llm" && ctx.llm_intent ? (
+                <>
+                  {" · "}
+                  <code>
+                    {ctx.llm_intent.domain}
+                    {ctx.llm_intent.mr_archetype ? ` → ${ctx.llm_intent.mr_archetype}` : ""}
+                    {ctx.llm_intent.confidence != null
+                      ? ` (${ctx.llm_intent.confidence})`
+                      : ""}
+                  </code>
+                </>
+              ) : null}
+            </div>
+
             <details open className="engine-facts-panel">
               <summary>Facts sent to LLM (engine output)</summary>
               {!verdict && (!evidence || evidence.length === 0) ? (

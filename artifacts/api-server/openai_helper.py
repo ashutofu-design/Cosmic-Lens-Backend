@@ -4939,8 +4939,6 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _dom = _llm_intent.get("domain")
             _is_mr_static = _dom in {"marriage", "love"}
             _is_career_static = _dom == "career"
-            if _finance_engine_on:
-                _is_finance_static = _dom == "finance" and not _is_mr_static and not _is_career_static
         else:
             try:
                 from ask_marriage_relationship_slice import (  # type: ignore
@@ -4955,13 +4953,32 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _is_career_static = is_career_static_question(question) and not _is_mr_static
             except Exception:
                 _is_career_static = False
-            if _finance_engine_on and not _is_mr_static and not _is_career_static:
-                try:
-                    from ask_finance.classifier import is_finance_static_question  # type: ignore
+        if _finance_engine_on and not _is_mr_static:
+            try:
+                from ask_finance.classifier import is_finance_static_question  # type: ignore
 
-                    _is_finance_static = is_finance_static_question(question)
-                except Exception:
-                    _is_finance_static = False
+                _fin_regex = is_finance_static_question(question)
+                if _llm_intent is not None:
+                    _is_finance_static = _fin_regex or (
+                        _llm_intent.get("domain") == "finance"
+                    )
+                else:
+                    _is_finance_static = _fin_regex
+            except Exception:
+                _is_finance_static = False
+        if _is_career_static and _is_finance_static:
+            try:
+                from ask_finance.routing import finance_overrides_career  # type: ignore
+
+                if finance_overrides_career(question or ""):
+                    _is_career_static = False
+                    print(
+                        "[raw_passthrough] FINANCE_OVERRIDES_CAREER "
+                        f"q={(question or '')[:60]!r}",
+                        flush=True,
+                    )
+            except Exception as _fo_exc:
+                print(f"[raw_passthrough] FINANCE_OVERRIDES_CAREER skipped: {_fo_exc}", flush=True)
     # Sensitive Qs ALSO need current dasha so the LLM has a real reason
     # to cite in layer-2 (astrological reason). Auto-promote.
     if is_sensitive:

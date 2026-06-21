@@ -41,10 +41,19 @@ _CAREER_MONEY_MINDSET_RX = re.compile(
     r")\b"
 )
 
+_JOB_VS_BIZ_FINANCE_EXCL_RX = re.compile(
+    r"(?ix)\b("
+    r"salary\s+karu\s+ya|job\s+karu\s+ya|naukri\s+ya\s+business|"
+    r"salary\s+\w+\s+ya\s+business|job\s+\w+\s+ya\s+business|"
+    r"job\s*vs\s*business|business\s*vs\s*job"
+    r")\b"
+)
+
 _SAVE_VS_SPEND_RX = re.compile(
     r"(?ix)\b("
     r"bachane\s+wala\s+.*\b(ya|or)\b.*\b(kharch|spend)|"
     r"kharch\s+.*\b(ya|or)\b.*\b(bach|save)|"
+    r"bachat\s+.*\b(ya|or)\b.*\b(kharch|spend)|"
     r"save\s+.*\b(ya|or)\b.*\b(spend|spend)|"
     r"saver\s+.*\b(ya|or)\b.*\bspender|spender\s+.*\b(ya|or)\b.*\b(saver|bach)"
     r")\b"
@@ -52,9 +61,9 @@ _SAVE_VS_SPEND_RX = re.compile(
 
 _SPENDING_PERSONALITY_RX = re.compile(
     r"(?ix)\b("
-    r"emotional\s+spend\w*|impulsive\s+spend\w*|mood\s+spend\w*|"
+    r"emotional\s+spend\w*|impulsive\s+spend\w*|impulsive\s+shop\w*|mood\s+spend\w*|"
     r"luxury[\s-]?oriented|luxury\s+lover|luxury\s+spend\w*|"
-    r"brand\s+oriented|show[\s-]?off\s+spend\w*|shopping\s+addict|"
+    r"brand\s+oriented|brand\s+pe\s+.{0,15}kharch|show[\s-]?off\s+spend\w*|shopping\s+addict|"
     r"comfort\s+spend\w*|status\s+spend\w*|shauk\s+se\s+kharch"
     r")\b"
 )
@@ -63,9 +72,10 @@ _INVESTMENT_RISK_RX = re.compile(
     r"(?ix)\b("
     r"risk[\s-]?taking\s+investor|investor\s+.*\b(ya|or)\b.*\b(conservative|safe)|"
     r"conservative\s+.*\b(ya|or)\b.*\b(investor|risk)|"
-    r"aggressive\s+investor|safe\s+investor|high[\s-]?risk\s+invest|"
+    r"aggressive\s+invest\w*|safe\s+investor|high[\s-]?risk\s+invest|"
     r"risk\s+l(?:ena|ene)\s+wala\s+investor|conservative\s+investor|"
-    r"investment\s+risk|invest\s+.*\b(ya|or)\b.*\b(conservative|safe)"
+    r"investment\s+risk|investment\s+me\s+risk|invest\s+.*\b(ya|or)\b.*\b(conservative|safe)|"
+    r"invest\s+me\s+risk|investment\s+me\s+risk"
     r")\b"
 )
 
@@ -73,7 +83,8 @@ _DISCIPLINE_RX = re.compile(
     r"(?ix)\b("
     r"financial\s+discipline|money\s+discipline|paisa\s+discipline|"
     r"financially\s+disciplined|discipline\s+me\s+kaisa|"
-    r"budget\s+discipline|saving\s+discipline"
+    r"budget\s+discipline|saving\s+discipline|budget\s+ban\w*|"
+    r"paisa\s+discipline\s+weak|discipline\s+strong"
     r")\b"
 )
 
@@ -82,7 +93,7 @@ _INCOME_RX = re.compile(
     r"income|kamai|kama\s*sakta|kamaane|kama\s*ne\s*ka|salary|tankhwah|"
     r"earning|earn\s*money|paisa\s*kahan\s*se|income\s*source|"
     r"natural\s+tareek|natural\s+way|natural\s+style|"
-    r"multiple\s*income|passive\s*income|freelanc|commission|"
+    r"multiple\s*income|passive\s*income|freelanc\w*|commission|"
     r"side\s*income|extra\s*income|monthly\s*income|fixed\s*income|"
     r"business\s*se\s*income|job\s*se\s*income|paisa\s*kama"
     r")\b"
@@ -101,6 +112,7 @@ _EXPENSE_RX = re.compile(
     r"kharcha|kharch|expense|spend|spending|leak|drain|"
     r"paisa\s*nahi\s*tik\w*|tikta\s*nahi|ud\s*jata|kharab\s*kharch|"
     r"paisa\s*kyun\s*nahi\s*tik\w*|kyun\s*nahi\s*tik\w*|"
+    r"haath\s+me\s+nahi\s+rukt\w*|jeb\s+khali|"
     r"impulsive\s*spend|overspend|wasteful|paisa\s*gaya"
     r")\b"
 )
@@ -135,7 +147,8 @@ _BUSINESS_PROFIT_RX = re.compile(
     r"business\s*profit|partnership\s*(money|profit|safe)|"
     r"dhandha\s*profit|vyapaar\s*profit|profit\s*aayega|"
     r"business\s*se\s*paisa|partnership\s*business|"
-    r"joint\s*venture|business\s*income"
+    r"joint\s*venture|business\s*income|"
+    r"apna\s+kaam\s+chalega|startup\s+se\s+paisa|startup\s+profit"
     r")\b"
 )
 
@@ -156,10 +169,12 @@ _WEALTH_RX = re.compile(
     r")\b"
 )
 
+_WEALTH_NOT_YOG_RX = re.compile(r"(?ix)\b(yog\w*|yoga)\b")
+
 _DHANA_YOGA_RX = re.compile(
     r"(?ix)\b("
     r"dhana\s*yog\w*|dhan\s*yog\w*|lakshmi\s*yog\w*|kubera|wealth\s*yog|"
-    r"rich\s*yog|dhan\s*yoga|money\s*yog"
+    r"rich\s*yog|dhan\s*yoga|money\s*yog|chart\s+me\s+rich\s+yog"
     r")\b"
 )
 
@@ -179,6 +194,8 @@ def is_finance_static_question(question: str) -> bool:
     if _SPOUSE_MONEY_RX.search(q):
         return False
     if _CAREER_MONEY_MINDSET_RX.search(q):
+        return False
+    if _JOB_VS_BIZ_FINANCE_EXCL_RX.search(q):
         return False
     if detect_finance_archetype(q):
         return True
@@ -201,10 +218,10 @@ def detect_finance_archetype(question: str) -> str | None:
         return "financial_discipline"
     if _SUDDEN_RX.search(q):
         return "sudden_gain_loss"
-    if _PROPERTY_RX.search(q):
-        return "property_money"
     if _DEBT_RX.search(q):
         return "debt_loan"
+    if _PROPERTY_RX.search(q):
+        return "property_money"
     if _SAVINGS_RX.search(q):
         return "savings_capacity"
     if _EXPENSE_RX.search(q):
@@ -215,8 +232,8 @@ def detect_finance_archetype(question: str) -> str | None:
         return "business_profit"
     if _LOSS_RX.search(q):
         return "loss_reasons"
-    if _WEALTH_RX.search(q):
-        return "wealth_potential"
     if _DHANA_YOGA_RX.search(q):
         return "dhana_yoga"
+    if _WEALTH_RX.search(q) and not (_WEALTH_NOT_YOG_RX.search(q) and _DHANA_YOGA_RX.search(q)):
+        return "wealth_potential"
     return None

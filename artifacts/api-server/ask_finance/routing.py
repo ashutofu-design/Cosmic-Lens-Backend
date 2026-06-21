@@ -15,9 +15,30 @@ __all__ = [
     "FINANCE_ARCHETYPES",
     "classify_finance_archetype",
     "detect_finance_archetype",
+    "finance_overrides_career",
     "is_finance_static_question",
     "resolve_finance_archetype",
 ]
+
+_CAREER_WINS_RX = re.compile(
+    r"(?ix)\b("
+    r"job\s*vs\s*business|naukri\s+ya\s+business|salary\s+karu\s+ya|"
+    r"job\s+\w+\s+ya\s+business|salary\s+\w+\s+ya\s+business|"
+    r"govt\s*job|sarkari|promotion|interview|job\s*change|"
+    r"employee\s+mindset|entrepreneur\s+mindset|"
+    r"which\s+(job|field|line)|kaunsi\s+(field|line|naukri)|"
+    r"doctor|engineer|pilot|teacher|lawyer|software\s*developer|it\s*job|"
+    r"youtuber|actor|singer|electrician|plumber"
+    r")\b"
+)
+
+
+def finance_overrides_career(question: str) -> bool:
+    """Money subdomain Qs beat generic career keyword overlap (paisa/income in career core)."""
+    q = (question or "").strip()
+    if not q or _CAREER_WINS_RX.search(q):
+        return False
+    return bool(detect_finance_archetype(q))
 
 _STOCK_RX = re.compile(
     r"(?ix)\b("

@@ -81,6 +81,21 @@ def is_career_static_question(question: str) -> bool:
 
         return False
 
+    if re.search(
+        r"(?ix)\b(stock|stocks|share[\s-]*market|nifty|sensex|intraday|"
+        r"trading|trader|mutual\s*fund|sip|nse|bse|crypto|portfolio)\b",
+        q,
+    ):
+        return False
+
+    try:
+        from ask_finance.routing import finance_overrides_career  # type: ignore
+
+        if finance_overrides_career(q):
+            return False
+    except Exception:
+        pass
+
     if _SPOUSE_CAREER_RX.search(q):
 
         return False
@@ -184,7 +199,7 @@ def classify_career_archetype(question: str) -> str:
 
         r"employee\s+type|entrepreneur\s+type|employee\s+mindset|entrepreneur\s+mindset|"
 
-        r"naukri\s+ya\s*dhandha|"
+        r"salary\s+karu\s+ya|job\s+karu\s+ya|naukri\s+ya\s*dhandha|"
 
         r"job\s+ya\s+business|business\s+ya\s+job|naukri\s+better|job\s+better)\b",
 

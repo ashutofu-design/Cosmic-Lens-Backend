@@ -7940,6 +7940,7 @@ def ask_route():
                 birth=birth,
                 user_id=(rp_user.id if rp_user else None),
                 ask_route=data.get("ask_route"),
+                history=data.get("history"),
             )
         except Exception as _rp_exc:
             print(f"[ask:RP] raw_passthrough_ask failed: {_rp_exc}", flush=True)
@@ -8964,6 +8965,7 @@ def ask_stream_route():
                 birth=birth,
                 user_id=(rp_user_s.id if rp_user_s else None),
                 ask_route=data.get("ask_route"),
+                history=data.get("history"),
             )
         except Exception as _rp_exc_s:
             print(f"[ask/stream:RP] raw_passthrough_ask failed: {_rp_exc_s}", flush=True)

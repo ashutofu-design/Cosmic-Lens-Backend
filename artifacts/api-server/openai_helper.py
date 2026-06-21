@@ -3723,6 +3723,56 @@ def _user_wants_explanation(question: str) -> bool:
     return bool(_EXPLAIN_REQUEST_RE.search(question))
 
 
+# ── Transparency follow-up ("how did you decide this? kya check kiya?") ──
+# These reference the PREVIOUS answer, so they carry no astro topic of their
+# own. We re-run the previous question with explain=ON to list the full
+# evidence behind the earlier reading.
+_TRANSPARENCY_FOLLOWUP_RE = _re_explain_gate.compile(
+    r"(?ix)\b("
+    r"kaise\s+(bataya|bata|pata|kaha|bola|nikala|nikali|samjha|jana|"
+    r"jaana|decide|check|maloom|malum)|"
+    r"kya\s+(check|dekha|dekhe|aadhar|aadhaar|basis)|check\s+kiya|"
+    r"kis\s+(basis|aadhar|aadhaar|cheez|hisaab)\s*(pe|par|se)?|"
+    r"pata\s+(chala|chale|kaise)|kaise\s+pata|"
+    r"kyun?\s+(bola|kaha|bataya|lagta)|"
+    r"proof|saboot|sabut|evidence|"
+    r"how\s+(did|do)\s+you\s+(know|say|check|tell|find|figure|"
+    r"determine|decide|conclude)|"
+    r"what\s+did\s+you\s+(check|see|look)|"
+    r"on\s+what\s+basis|why\s+do\s+you\s+say|prove\s+it"
+    r")\b"
+)
+
+
+def _is_transparency_followup(question: str) -> bool:
+    """True when the user asks HOW the previous reading was decided."""
+    if not isinstance(question, str) or not question.strip():
+        return False
+    return bool(_TRANSPARENCY_FOLLOWUP_RE.search(question))
+
+
+def _extract_prev_ask_question(history: Any, current_question: str) -> str:
+    """Most recent prior USER question in chat history that is a real astro
+    ask (not itself a transparency/explain follow-up). Used to re-run and
+    explain the previous reading. Returns "" when nothing usable found."""
+    if not isinstance(history, (list, tuple)) or not history:
+        return ""
+    cur = (current_question or "").strip().lower()
+    for item in reversed(history):
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("role") or "").strip().lower()
+        if role not in ("user", "human"):
+            continue
+        text = str(item.get("text") or item.get("content") or "").strip()
+        if not text or text.lower() == cur:
+            continue
+        if _is_transparency_followup(text):
+            continue
+        return text
+    return ""
+
+
 _AI_PHRASE_RX = _re_explain_gate.compile(
     r"(?ix)"
     r"(based on your chart|according to (?:your )?chart|according to astrology|"
@@ -4691,7 +4741,8 @@ def _attach_admin_llm_context(result: dict, **kwargs) -> dict:
 def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         birth: Any = None, user_id: Any = None,
                         reply_idx: int = 0,
-                        ask_route: str | None = None) -> dict:
+                        ask_route: str | None = None,
+                        history: Any = None) -> dict:
     """Pure raw passthrough: D1 + D9 + dasha + question → LLM → answer.
 
     No classifiers, no static engines, no post-injectors, no disclaimers.
@@ -4724,6 +4775,33 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             return scope_refusal_payload(_sv.reason, question=question, lang=lang)
     except Exception:
         pass
+
+    # ── Transparency follow-up ("kaise bataya? kya check kiya?") ──────────
+    # Re-run the PREVIOUS question with explain=ON so the user gets the full
+    # evidence behind the earlier reading, instead of answering the meta-Q.
+    _force_explain = False
+    if _is_transparency_followup(question):
+        _prev_q = _extract_prev_ask_question(history, question)
+        if _prev_q:
+            print(
+                f"[raw_passthrough] transparency follow-up → re-explain prev Q",
+                flush=True,
+            )
+            question = _prev_q
+            _force_explain = True
+        else:
+            return {
+                "text": (
+                    "Pichhle reading ke kis hisse ke baare me janna hai? "
+                    "Thoda batao — main wahi pattern detail me samjha deta hoon."
+                ),
+                "topic": "general",
+                "question_type": "STATIC",
+                "confidence": 1.0,
+                "source": "raw_passthrough:transparency_no_context",
+                "engine_tag": "ans-cosmo",
+                "follow_ups": [],
+            }
 
     try:
         from chart_fact_answer import try_deterministic_chart_fact
@@ -4794,7 +4872,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     else:
         is_timing = (_resolved_route == "timing")
     qtype = "TIMING" if is_timing else "STATIC"
-    wants_explain = (
+    wants_explain = _force_explain or (
         bool(_llm_intent.get("wants_explain"))
         if _llm_intent is not None
         else _user_wants_explanation(question)

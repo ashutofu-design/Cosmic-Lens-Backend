@@ -89,6 +89,28 @@ _PERSONAL_HOUSE_PLACEMENT_RX = re.compile(
     r")"
 )
 
+# Transparency / "how did you decide this" follow-ups to a prior reading.
+# These reference the assistant's previous answer, so they have no astro
+# topic word of their own — but they ARE in scope (explain my reading).
+# GK ("astrology kaise kaam karta hai") is blocked earlier by _GK_BLOCK_RX.
+_TRANSPARENCY_FOLLOWUP_RX = re.compile(
+    r"(?ix)\b("
+    r"kaise\s+(bataya|bata|pata|kaha|bola|nikala|nikali|samjha|jana|"
+    r"jaana|decide|check|maloom|malum)|"
+    r"kya\s+(check|dekha|dekhe|aadhar|aadhaar|basis)|check\s+kiya|"
+    r"kis\s+(basis|aadhar|aadhaar|cheez|hisaab)\s*(pe|par|se)?|"
+    r"pata\s+(chala|chale|kaise)|kaise\s+pata|"
+    r"kyun?\s+(bola|kaha|bataya|lagta)|"
+    r"proof|saboot|sabut|evidence|"
+    r"how\s+(did|do)\s+you\s+(know|say|check|tell|find|figure|"
+    r"determine|decide|conclude)|"
+    r"what\s+did\s+you\s+(check|see|look)|"
+    r"on\s+what\s+basis|why\s+do\s+you\s+say|prove\s+it|"
+    r"samjha(?:o|do|iye)"
+    r")\b"
+)
+
+
 # Follow-ups after an astrology answer often omit "mera/meri".
 _ASTRO_FOLLOWUP_RX = re.compile(
     r"(?ix)"
@@ -197,6 +219,12 @@ def assess_ask_scope(question: str) -> AskScopeVerdict:
 
     if _GK_BLOCK_RX.search(q):
         return AskScopeVerdict(allowed=False, reason="general_knowledge")
+
+    # "How did you decide this? / kya check kiya?" — transparency follow-up to
+    # the previous reading. In scope; the answer layer re-explains the prior
+    # question's evidence using conversation history.
+    if _TRANSPARENCY_FOLLOWUP_RX.search(q):
+        return AskScopeVerdict(allowed=True, reason="ok")
 
     # Primary path: read topic + intent — mera/meri NOT required in Ask context.
     if looks_like_implicit_ask(q):

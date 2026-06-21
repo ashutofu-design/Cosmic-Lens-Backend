@@ -88,6 +88,7 @@ def build_mr_engine_narrator_system_prompt(
     archetype: str = "",
     word_budget: int = 55,
     is_partner_nature: bool = False,
+    user_intent: str = "",
 ) -> str:
     """Minimal system prompt: engine already computed the answer — LLM narrates only."""
     rl = (reply_lang or "hn").strip().lower()
@@ -127,11 +128,20 @@ def build_mr_engine_narrator_system_prompt(
 
     topic_hint = archetype.replace("_", " ") if archetype else "marriage/relationship"
 
+    intent_block = ""
+    if (user_intent or "").strip():
+        intent_block = (
+            "\nUSER ACTUALLY ASKED (answer THIS exact thing first, nothing off-track): "
+            f"{user_intent.strip()}\n"
+        )
+
     return f"""You are Cosmo — warm wise friend. NOT calculating charts.
 
 {_NARRATOR_LANG[rl]}
-
+{intent_block}
 RULES: ENGINE FACTS below are final. Narrate VERDICT + EVIDENCE in plain language with confidence.
+Match the answer to EXACTLY what the user asked — if they asked a specific thing
+(percentage, yes/no, who, when-ish tilt), answer THAT directly first, then reason.
 Do NOT add planets/houses/D9/dasha or new reasons. Do NOT contradict VERDICT.
 Do NOT hedge with shayad/ho sakta hai/lagta hai — state the pattern the engine found.
 If the user asks for a percentage / number / "kitna" / ratio, LEAD with the

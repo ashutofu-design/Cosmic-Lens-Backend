@@ -5441,6 +5441,15 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     )
     _is_pn_narrator = _archetype_mr == "partner_nature"
 
+    # What the LLM understood the question to be — feed it to the narrator so
+    # the answer stays tightly on the user's actual ask (strict alignment).
+    _user_intent_hint = ""
+    try:
+        if isinstance(_llm_intent, dict):
+            _user_intent_hint = str(_llm_intent.get("interpretation") or "").strip()
+    except Exception:
+        _user_intent_hint = ""
+
     try:
         if _mr_engine_narrator:
             from ask_mr.narrator import build_mr_engine_narrator_system_prompt
@@ -5453,6 +5462,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 archetype=_archetype_mr,
                 word_budget=_wb_mr,
                 is_partner_nature=_is_pn_narrator,
+                user_intent=_user_intent_hint,
             )
             print(
                 f"[raw_passthrough] MR_NARRATOR archetype={_archetype_mr} "
@@ -5485,6 +5495,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 archetype=_archetype_mr,
                 word_budget=55,
                 is_partner_nature=_is_pn_narrator,
+                user_intent=_user_intent_hint,
             )
         else:
             system_prompt = _build_universal_ask_system_prompt(

@@ -8,6 +8,144 @@ from vedic.love_reality.scoring_core import KundliReader, SIGNS
 from ._person_signals import build_person_signals
 from ..types import EngineResult
 
+# Spouse's in-laws / family members (8H = 2nd from 7th) — NOT partner personality (7H).
+# Excludes "family background / khandaan" (partner upbringing → 7H + Rahu branch).
+_SPOUSE_FAMILY_RX = re.compile(
+    r"(?ix)"
+    r"(?:"
+    r"(?:wife|husband|spouse|partner|pati|patni|biwi)\b"
+    r".{0,45}\b(?:"
+    r"family\s*wal\w*|ghar\s*wal\w*|ghar\s*ke\s*log|in[\s-]?laws?|"
+    r"saas|sasur|sasural|sasuraal|rishtedaar|"
+    r"(?:parivaar|parivar|pariwar|family|relatives)\s*(?:kaise|kya|kaisa|kaisi)\b"
+    r")|"
+    r"(?:saas|sasur|sasural|in[\s-]?laws?)\b"
+    r"|"
+    r"(?:family\s*wal\w*|ghar\s*wal\w*)\b"
+    r".{0,30}\b(?:wife|husband|spouse|partner|pati|patni|biwi)\b"
+    r")"
+)
+_USER_FAMILY_APPROVAL_RX = re.compile(
+    r"(?ix)\b(?:mer[ei]|mere|my|parents?|ma\s*baap|papa|mummy|ghar\s*wal\w*)\b"
+    r".{0,35}\b(?:manenge|manzoor|accept|swikar|approval|manna|allow)\b"
+)
+
+
+def _is_spouse_family_question(q: str) -> bool:
+    if _USER_FAMILY_APPROVAL_RX.search(q or ""):
+        return False
+    return bool(_SPOUSE_FAMILY_RX.search(q or ""))
+
+
+def _build_spouse_family_result(
+    r: KundliReader,
+    sig,
+    *,
+    wants_explain: bool,
+    gender: str,
+) -> EngineResult:
+    """In-laws / spouse's family — 8th house axis only (not 7H partner personality)."""
+    asc_i = r.asc_index()
+    sign8 = SIGNS[(asc_i + 7) % 12] if isinstance(asc_i, int) else None
+    lord8 = r.house_lord(8)
+    p8l = r.planet(lord8) if lord8 else None
+    occ8 = r.occupants(8)
+    occ_label = ", ".join(occ8) if occ8 else "none"
+
+    evidence: list[str] = [
+        f"Spouse-family axis (8th house / 2nd from 7th): sign {sign8 or 'unknown'} — "
+        "in-laws / sasural family tone and environment.",
+        f"Planets in 8th house: {occ_label} — direct in-law / spouse-family influence.",
+    ]
+    if lord8 and p8l:
+        evidence.append(
+            f"8th lord {lord8} in house {p8l.get('house')} sign {p8l.get('sign')} — "
+            "how the bond with spouse's family flows."
+        )
+
+    # Synthesized in-law tone from 8H occupants (plain language for narrator).
+    if "Jupiter" in occ8:
+        evidence.append(
+            "In-law family tone: Jupiter in 8th — generally supportive, fair and "
+            "tradition-respecting elders; wisdom in family matters."
+        )
+    if "Saturn" in occ8:
+        evidence.append(
+            "In-law family tone: Saturn in 8th — serious, duty-bound family; "
+            "formality and patience needed; distance until trust builds."
+        )
+    if "Mars" in occ8:
+        evidence.append(
+            "In-law family tone: Mars in 8th — strong personalities in spouse's family; "
+            "direct talk and boundaries help; occasional friction possible."
+        )
+    if "Moon" in occ8:
+        evidence.append(
+            "In-law family tone: Moon in 8th — emotionally involved family; "
+            "feelings and home rituals matter a lot in sasural."
+        )
+    if "Rahu" in occ8:
+        evidence.append(
+            "In-law family tone: Rahu in 8th — different background or unconventional "
+            "family setup; expectations may differ from your upbringing."
+        )
+    if "Venus" in occ8:
+        evidence.append(
+            "In-law family tone: Venus in 8th — warm, hospitality-oriented family; "
+            "respect and pleasant conduct open doors."
+        )
+    if not any(
+        p in occ8 for p in ("Jupiter", "Saturn", "Mars", "Moon", "Rahu", "Venus")
+    ):
+        evidence.append(
+            f"In-law family baseline: {sign8 or 'unknown'} 8th-house sign sets the "
+            "general social tone of spouse's family — read from that pattern."
+        )
+
+    if p8l and p8l.get("house") in (6, 8, 12):
+        evidence.append(
+            "8th lord in dusthana — extra effort needed with in-laws; "
+            "clear boundaries and steady respect reduce friction."
+        )
+
+    verdict = (
+        "Spouse's family / in-laws: read from 8th house (2nd from 7th) — "
+        "family tone, environment and bond pattern."
+    )
+    summary = [
+        "QUESTION FOCUS: spouse's family / in-laws — NOT partner's own personality.",
+        "Use ONLY 8th-house / spouse-family evidence — do NOT use 7th-house partner traits as in-laws.",
+        f"8H occupants for in-law tone: {occ_label}.",
+        "Answer how spouse's family members are — confident pattern voice, no shayad.",
+    ]
+
+    return EngineResult(
+        archetype="partner_nature",
+        verdict=verdict,
+        confidence="medium",
+        word_budget=130 if wants_explain else 120,
+        answer_plan=(
+            "Para1: 8H sign + in-law family social tone → "
+            "Para2: 8L + 8H occupants emotional/dynamic → "
+            "Para3: one practical line for living with in-laws."
+        ),
+        summary=summary,
+        evidence=evidence[:8],
+        ignore=[
+            "7th house partner personality (wrong axis for this question)",
+            "timing dates/windows",
+            "love-vs-arranged",
+        ],
+        checks={
+            "slice_type": "mr_engine_v1",
+            "archetype": "partner_nature",
+            "question_focus": "spouse_family",
+            "gender": gender,
+            "sign8": sign8,
+            "occ8": occ_label,
+        },
+    )
+
 
 def _gender_from_birth(birth: Any) -> str:
     if not isinstance(birth, dict):
@@ -24,6 +162,7 @@ def partner_nature_narrator_payload(result: EngineResult) -> str:
     """Structured facts + mandatory 3-paragraph map for the LLM narrator."""
     evidence = result.evidence or []
     has_bg = any("Different background theme" in e for e in evidence)
+    is_inlaw = (result.checks or {}).get("question_focus") == "spouse_family"
     synth_keys = (
         "partnership style",
         "emotional style",
@@ -40,7 +179,17 @@ def partner_nature_narrator_payload(result: EngineResult) -> str:
         "OUTPUT: exactly 3 paragraphs separated by a blank line (90–120 words total).",
         "TONE: confident — state traits as chart pattern (hai/hote hain/rehta hai). NO shayad/ho sakta hai/lagta hai.",
     ]
-    if has_bg:
+    if is_inlaw:
+        lines.append(
+            "QUESTION FOCUS: spouse's family / in-laws ONLY — do NOT describe partner's "
+            "7th-house personality as if it were the in-laws."
+        )
+        lines.append("PARA 1 — in-law family social tone: use 8th house sign + in-law family tone evidence.")
+        lines.append(
+            "PARA 2 — bond dynamic: use 8th lord + planets-in-8th evidence only."
+        )
+        lines.append("PARA 3 — one practical line about living with spouse's family.")
+    elif has_bg:
         lines.append(
             "PARA 1 — social vibe + family background: use 7th house sign AND Different background theme evidence."
         )
@@ -86,6 +235,13 @@ def run_partner_nature(
     karak = "Venus" if gender != "female" else "Jupiter"
     pk = r.planet(karak)
 
+    q = (question or "").lower()
+    sig = build_person_signals(k)
+
+    # In-laws / spouse's family — 8H axis ONLY (before any 7H partner-personality lines).
+    if _is_spouse_family_question(q):
+        return _build_spouse_family_result(r, sig, wants_explain=wants_explain, gender=gender)
+
     occ_label = ", ".join(occ7) if occ7 else "none"
     verdict = (
         "Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), "
@@ -110,8 +266,6 @@ def run_partner_nature(
     else:
         evidence.append(f"Partner-karak by chart gender: {gender} → {karak} (placement not available).")
 
-    q = (question or "").lower()
-    sig = build_person_signals(k)
     summary_extra: str | None = None
 
     if re.search(r"\b(express|reserved|emotion|feeling|khul|band)\b", q):
@@ -194,7 +348,8 @@ def run_partner_nature(
             )
         elif cooperative:
             evidence.append(
-                "Partnership style: cooperative — Gemini/Moon tone prefers talk, compromise and shared choices."
+                f"Partnership style: cooperative — {sign7 or '7th sign'} / Moon tone prefers talk, "
+                "compromise and shared choices."
             )
             summary_extra = "Answer: partner cooperative — dominant controlling pattern kam."
         else:
@@ -202,19 +357,56 @@ def run_partner_nature(
             summary_extra = "Answer: partner dominant/assertive side zyada — cooperative bhi situational."
 
     if re.search(r"\b(love\s*language|care\s*dikhane|affection\s*style)\b", q):
-        evidence.append(
-            "Care style: Moon 7th = emotional presence and acts of care; "
-            "Mercury = words, humour and thoughtful talk; Venus Leo = warm gestures and quality time."
-        )
-        summary_extra = "Answer love language directly from Moon/Mercury/Venus care-style line."
+        care_parts: list[str] = []
+        if occ7 and "Moon" in occ7:
+            care_parts.append("Moon in 7th — emotional presence and acts of care")
+        moon = r.planet("Moon") or {}
+        if moon.get("house") and not (occ7 and "Moon" in occ7):
+            care_parts.append(
+                f"Moon in house {moon.get('house')} sign {moon.get('sign')} — emotional care style"
+            )
+        merc = r.planet("Mercury") or {}
+        if merc.get("house"):
+            care_parts.append(
+                f"Mercury in house {merc.get('house')} sign {merc.get('sign')} — "
+                "words, humour and thoughtful talk"
+            )
+        ven = r.planet("Venus") or {}
+        if ven.get("house"):
+            care_parts.append(
+                f"Venus in house {ven.get('house')} sign {ven.get('sign')} — "
+                "warm gestures and quality time"
+            )
+        if care_parts:
+            evidence.append("Care style: " + "; ".join(care_parts) + ".")
+        summary_extra = "Answer love language directly from Care style evidence line(s)."
 
     if re.search(r"\b(spiritual|practical|ambitious|artistic)\b", q):
-        evidence.append(
-            "Nature blend: Mercury 5th Aries + Venus Leo = artistic/ambitious creative drive; "
-            "Gemini 7th = practical communication; Venus 9th = spiritual touch via values/dharma."
-        )
+        blend: list[str] = []
+        merc = r.planet("Mercury") or {}
+        ven = r.planet("Venus") or {}
+        jup = r.planet("Jupiter") or {}
+        if merc.get("house"):
+            blend.append(
+                f"Mercury in house {merc.get('house')} sign {merc.get('sign')} — "
+                "practical communication and ideas"
+            )
+        if ven.get("house"):
+            blend.append(
+                f"Venus in house {ven.get('house')} sign {ven.get('sign')} — "
+                "artistic warmth and creative drive"
+            )
+        if jup.get("house") in (1, 5, 9, 12):
+            blend.append(
+                f"Jupiter in house {jup.get('house')} sign {jup.get('sign')} — "
+                "spiritual/dharma values touch"
+            )
+        if sign7:
+            blend.append(f"7th house sign {sign7} — social/practical partnership tone")
+        if blend:
+            evidence.append("Nature blend: " + "; ".join(blend) + ".")
         summary_extra = (
-            "Answer all four nature options: lean artistic+ambitious, practical talk, spiritual via values."
+            "Answer nature options from chart placements in Nature blend evidence — not generic labels."
         )
 
     if re.search(r"\b(gehra|gehri|halki|halka|deep|superficial)\b", q) and re.search(
@@ -232,11 +424,16 @@ def run_partner_nature(
             summary_extra = "Answer gehra vs halki: depth trust ke saath badhti hai."
 
     if re.search(r"\b(respect|izzat|samman)\b", q):
-        evidence.append(
-            "Respect pattern: Gemini 7th + Moon = respect through talk and emotional regard; "
-            "Venus Leo = mutual dignity and warmth."
-        )
-        summary_extra = "Answer partner respect directly — yes, via communication and mutual dignity."
+        respect_parts = [f"7th house sign {sign7 or 'unknown'} sets partnership respect tone"]
+        if occ7 and "Moon" in occ7:
+            respect_parts.append("Moon in 7th — respect through talk and emotional regard")
+        ven = r.planet("Venus") or {}
+        if ven.get("house"):
+            respect_parts.append(
+                f"Venus in house {ven.get('house')} sign {ven.get('sign')} — mutual dignity and warmth"
+            )
+        evidence.append("Respect pattern: " + "; ".join(respect_parts) + ".")
+        summary_extra = "Answer partner respect directly from Respect pattern evidence."
 
     summary = [
         "User asked partner/spouse nature (non-timing).",
@@ -267,6 +464,7 @@ def run_partner_nature(
         checks={
             "slice_type": "mr_engine_v1",
             "archetype": "partner_nature",
+            "question_focus": "partner_personality",
             "gender": gender,
             "karak": karak,
             "sign7": sign7,

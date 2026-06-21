@@ -239,8 +239,38 @@ class MrEngineTests(unittest.TestCase):
         self.assertEqual(res.archetype, "spouse_wealth")
         self.assertTrue(len(res.evidence) >= 2)
 
-    def test_ex_return_routes_patchup(self):
-        self.assertEqual(classify_mr_archetype("Ex wapas aayega kya?"), "patchup")
+    def test_spouse_family_wale_uses_8th_house_evidence(self):
+        q = "wife ke family wale kaise honge"
+        self.assertEqual(classify_mr_archetype(q), "partner_nature")
+        res = run_mr_static_engine(SAMPLE_KUNDLI, q, wants_explain=False)
+        self.assertEqual(res.checks.get("question_focus"), "spouse_family")
+        joined = " ".join(res.evidence).lower()
+        self.assertIn("8th house", joined)
+        self.assertIn("in-law", joined)
+        self.assertNotIn("7th house sign baseline", joined)
+
+    def test_spouse_family_not_user_parents_approval(self):
+        q = "ghar wale maanenge kya?"
+        self.assertEqual(classify_mr_archetype(q), "family_approval")
+        res = run_mr_static_engine(SAMPLE_KUNDLI, q, wants_explain=False)
+        self.assertEqual(res.archetype, "family_approval")
+
+    def test_partner_family_background_stays_partner_upbringing(self):
+        q = "Partner ki family background kaisi ho sakti hai?"
+        res = run_mr_static_engine(SAMPLE_KUNDLI, q, wants_explain=False)
+        self.assertEqual(res.archetype, "partner_nature")
+        self.assertNotEqual(res.checks.get("question_focus"), "spouse_family")
+        joined = " ".join(res.evidence).lower()
+        self.assertIn("7th house sign baseline", joined)
+        self.assertIn("different background theme", joined)
+
+    def test_partner_anger_uses_7th_house_temper(self):
+        q = "Partner gussa wala hoga kya?"
+        res = run_mr_static_engine(SAMPLE_KUNDLI, q, wants_explain=False)
+        self.assertEqual(res.archetype, "partner_nature")
+        joined = " ".join(res.evidence).lower()
+        self.assertIn("temper signal", joined)
+        self.assertIn("7th", joined)
 
 
 if __name__ == "__main__":

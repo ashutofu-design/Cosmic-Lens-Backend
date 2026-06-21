@@ -82,7 +82,8 @@ best-fitting archetype id; otherwise null. Allowed ids and meaning:
    - obsession: obsession, jealousy, possessiveness
    - bed_intimacy: physical/sexual intimacy
    - self_worth: user's own confidence/boundaries
-   - partner_nature: partner's nature/personality/behaviour/age/family
+   - partner_nature: partner's nature/personality/behaviour/age/respect/temper; \
+OR spouse's in-laws / family-wale (8th house axis — NOT user's parents approval)
    - long_distance: long-distance relationship
    - general_mr: overall marriage quality/happiness/compatibility, OR whether \
 the partner will SUPPORT the native's career / life goals / decisions

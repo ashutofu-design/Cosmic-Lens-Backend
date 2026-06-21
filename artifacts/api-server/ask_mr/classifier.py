@@ -21,6 +21,30 @@ def classify_mr_archetype(question: str) -> str:
     ) and re.search(r"\b(spouse|partner|husband|wife|pati|patni|jeevan\s*sathi)\b", q):
         return "spouse_wealth"
 
+    # Spouse's in-laws / family-wale (8H axis) — NOT partner upbringing (family background)
+    if not re.search(
+        r"\b(?:mer[ei]|mere|my|parents?|ma\s*baap|papa|mummy)\b.{0,30}\b"
+        r"(?:manenge|manzoor|accept|swikar|approval|manna|allow)\b",
+        q,
+    ) and (
+        re.search(
+            r"\b(?:wife|husband|spouse|partner|pati|patni|biwi)\b"
+            r".{0,40}\b(?:"
+            r"family\s*wal\w*|ghar\s*wal\w*|ghar\s*ke\s*log|in[\s-]?laws?|"
+            r"saas|sasur|sasural|sasuraal|rishtedaar|"
+            r"(?:parivaar|parivar|pariwar|family|relatives)\s*(?:kaise|kya|kaisa|kaisi)\b"
+            r")\b",
+            q,
+        )
+        or re.search(
+            r"\b(?:family\s*wal\w*|ghar\s*wal\w*)\b"
+            r".{0,30}\b(?:wife|husband|spouse|partner|pati|patni|biwi)\b",
+            q,
+        )
+        or re.search(r"\b(?:saas|sasur|sasural|in[\s-]?laws?)\b", q)
+    ):
+        return "partner_nature"
+
     # Multiple / parallel love pattern
     if re.search(
         r"\b(multiple\s*(love|relationship)|parallel\s*(love|relation)|do\s*rishte)\b", q
@@ -131,16 +155,6 @@ def classify_mr_archetype(question: str) -> str:
     # Chemistry / attraction (non-bed)
     if re.search(r"\b(chemistry|attraction|spark|passion|romance|romantic)\b", q):
         return "chemistry"
-
-    # Spouse/partner family background (describe in-laws — not elders approving match)
-    if re.search(
-        r"\b(spouse|partner|husband|wife|pati|patni|jeevan\s*sathi)\b", q
-    ) and re.search(
-        r"\b(family\s*background|parivaar|parivar|khandaan|pariwar|"
-        r"family\s*type|family\s*status|ghar\s*ki\s*background)\b",
-        q,
-    ):
-        return "partner_nature"
 
     # Love vs arranged / khud pasand vs ghar wale (before family approval)
     has_love = bool(re.search(r"\b(love|pyaar|pyar|prem|romance)\b", q))

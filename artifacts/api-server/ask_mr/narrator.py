@@ -134,6 +134,9 @@ def build_mr_engine_narrator_system_prompt(
 RULES: ENGINE FACTS below are final. Narrate VERDICT + EVIDENCE in plain language with confidence.
 Do NOT add planets/houses/D9/dasha or new reasons. Do NOT contradict VERDICT.
 Do NOT hedge with shayad/ho sakta hai/lagta hai — state the pattern the engine found.
+If the user asks for a percentage / number / "kitna" / ratio, LEAD with the
+approx % split shown in ENGINE FACTS (e.g. "Love ~56%, arrange ~44%"), then one
+short reason. Use ONLY the numbers given — do NOT invent your own figure.
 No bullets or [Checked].
 
 Topic: {topic_hint}

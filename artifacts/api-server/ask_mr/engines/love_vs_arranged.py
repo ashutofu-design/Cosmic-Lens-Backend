@@ -66,8 +66,18 @@ def run_love_vs_arranged(kundli: dict, question: str, *, wants_explain: bool = F
     arrange_score = int(computed.get("arrange_score") or 0)
     numeric_conf = float(computed.get("confidence") or 0.55)
 
+    # Approx percentage split from classical scores — so the narrator can give
+    # a concrete number when the user asks "percentage kitna".
+    _total_score = love_score + arrange_score
+    if _total_score > 0:
+        love_pct = round(love_score * 100 / _total_score)
+        arrange_pct = 100 - love_pct
+    else:
+        love_pct = arrange_pct = 50
+
     summary = [
-        f"Classical scores — love: {love_score}, arrange: {arrange_score}.",
+        f"Approx split — love ~{love_pct}%, arrange ~{arrange_pct}% "
+        f"(from classical scores love {love_score} : arrange {arrange_score}).",
         "State the tilt clearly — confident pattern voice, not shayad/ho sakta hai.",
     ]
     if wants_explain:
@@ -98,6 +108,8 @@ def run_love_vs_arranged(kundli: dict, question: str, *, wants_explain: bool = F
             "verdict_internal": computed.get("verdict"),
             "love_score": love_score,
             "arrange_score": arrange_score,
+            "love_pct": love_pct,
+            "arrange_pct": arrange_pct,
             "confidence_ratio": computed.get("confidence_ratio"),
             "confidence_numeric": numeric_conf,
         },

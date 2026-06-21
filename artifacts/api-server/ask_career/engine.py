@@ -4,6 +4,7 @@ import os
 from typing import Any
 
 from .classifier import classify_career_archetype
+from .job_registry import JOB_ENGINE_ARCHETYPES
 from .types import EngineResult
 
 
@@ -70,6 +71,9 @@ def run_career_static_engine(
     if archetype == "govt_job":
         from .engines.govt_job import run_govt_job
         return run_govt_job(kundli, question, wants_explain=wants_explain)
+    if archetype in JOB_ENGINE_ARCHETYPES:
+        from .engines.job_sector import run_job_sector
+        return run_job_sector(kundli, question, archetype=archetype, wants_explain=wants_explain)
 
     from .engines.general_career import run_general_career
     return run_general_career(kundli, question, wants_explain=wants_explain)

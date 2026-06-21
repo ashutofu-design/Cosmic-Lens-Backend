@@ -72,6 +72,26 @@ CAREER_ARCHETYPES = {
     "career_milestones",
     "vocational_trade",
     "govt_job",
+    "govt_job",
+    "it_job",
+    "medical_job",
+    "banking_job",
+    "teaching_job",
+    "law_job",
+    "defence_job",
+    "engineering_job",
+    "ca_job",
+    "aviation_job",
+    "sales_job",
+    "research_job",
+    "consulting_job",
+    "pharma_job",
+    "architecture_job",
+    "sports_job",
+    "media_job",
+    "ngo_job",
+    "management_job",
+    "private_job",
     "general_career",
 }
 
@@ -141,6 +161,7 @@ the partner will SUPPORT the native's career / life goals / decisions
    - creativity_innovation: YouTuber, actor, singer, photographer, gamer, content creator, creative/innovation career
    - career_milestones: promotion, interview, job change, govt/competitive EXAM clear/pass, side hustle/part-time income
    - govt_job: government/sarkari job suitability, IAS/IPS/police/railway/bank PO/public sector naukri (NOT exam timing)
+   - it_job / medical_job / banking_job / teaching_job / law_job / defence_job / engineering_job / ca_job / aviation_job / sales_job / research_job / consulting_job / pharma_job / architecture_job / sports_job / media_job / ngo_job / management_job / private_job: named profession/job-line suitability (doctor, software, pilot, CA, etc.)
    - vocational_trade: electrician, plumber, mechanic, carpenter, driver, ITI/skilled trade
    - career_obstacles: delays, setbacks, obstacles in career
    - education_career: study, degree, education for career

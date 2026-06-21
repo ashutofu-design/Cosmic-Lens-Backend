@@ -8,30 +8,19 @@ import re
 
 
 
+from .job_registry import JOB_ENGINE_ARCHETYPES, detect_job_archetype, is_dedicated_job_question
 from .sector_registry import (
-
     CREATIVITY_RX,
-
     GOVT_EXAM_RX,
-
     INTERVIEW_RX,
-
     JOB_CHANGE_RX,
-
     PROMOTION_RX,
-
     SIDE_HUSTLE_RX,
-
     VOCATIONAL_RX,
-
     WHICH_BUSINESS_RX,
-
     detect_sector,
-
     is_govt_exam_milestone_question,
-
     is_govt_job_question,
-
 )
 
 
@@ -71,6 +60,8 @@ CAREER_ARCHETYPES = frozenset({
     "vocational_trade",
 
     "govt_job",
+
+    *JOB_ENGINE_ARCHETYPES,
 
     "general_career",
 
@@ -252,6 +243,10 @@ def is_specific_sector_suitability_question(question: str, interpretation: str =
 
         return True
 
+    if is_dedicated_job_question(q, interp):
+
+        return True
+
     return detect_sector(q) is not None
 
 
@@ -361,6 +356,18 @@ def resolve_career_archetype(
             return "govt_job", f"govt_job_over_{llm}"
 
         return "govt_job", None if rule == "govt_job" else "govt_job_over_rule"
+
+
+
+    job_arch = detect_job_archetype(question)
+
+    if job_arch:
+
+        if llm and llm != job_arch:
+
+            return job_arch, f"{job_arch}_over_{llm}"
+
+        return job_arch, None if rule == job_arch else f"{job_arch}_over_rule"
 
 
 

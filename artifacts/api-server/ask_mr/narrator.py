@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from .types import EngineResult
+from ask_career.job_registry import JOB_ENGINE_ARCHETYPES
 
 _MR_CONFIDENT_TONE = """
 TONE — confident chart reading (engine already decided; do NOT sound doubtful):
@@ -156,13 +157,13 @@ def build_mr_engine_narrator_system_prompt(
             "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
             f"{_MR_CONFIDENT_TONE}"
         )
-    elif archetype == "govt_job":
+    elif archetype == "govt_job" or archetype in JOB_ENGINE_ARCHETYPES:
         length_block = (
             f"Write 2–3 short sentences (~{min(wb + 20, 95)} words max).\n"
-            "Read USER ACTUALLY ASKED — government/sarkari job, IAS/IPS/police/railway/bank PO suitability.\n"
-            "Sentence 1 = direct haan/nahi for govt/sarkari job per VERDICT.\n"
-            "Sentence 2–3 = WHY from Sun-Saturn service, discipline, job-mode evidence in plain words.\n"
-            "Do NOT give job vs business % split. Do NOT promise selection date or guaranteed rank.\n"
+            "Read USER ACTUALLY ASKED — named job/profession line (govt/IT/doctor/pilot/CA/bank/etc.).\n"
+            "Sentence 1 = direct haan/nahi for THAT job line per VERDICT.\n"
+            "Sentence 2–3 = WHY from profession-specific evidence in plain words.\n"
+            "Do NOT give job vs business % split. Do NOT promise selection date or guaranteed post.\n"
             "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
             f"{_MR_CONFIDENT_TONE}"
         )

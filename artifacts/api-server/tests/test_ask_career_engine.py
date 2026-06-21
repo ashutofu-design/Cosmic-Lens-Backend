@@ -110,10 +110,11 @@ class CareerEngineTests(unittest.TestCase):
         self.assertTrue(res.checks.get("open_chart_qa"))
 
     def test_engine_result_has_narrator_payload(self):
-        res = run_career_static_engine(SAMPLE_KUNDLI, "IT industry suit karegi?")
+        res = run_career_static_engine(SAMPLE_KUNDLI, "IT job suit karegi?")
         payload = res.to_narrator_payload()
         self.assertIn("EVIDENCE", payload)
         self.assertIn("VERDICT", payload)
+        self.assertEqual(res.archetype, "it_job")
 
 
     def test_which_business_routes_sector_fit(self):
@@ -171,9 +172,23 @@ class CareerEngineTests(unittest.TestCase):
         joined = " ".join(res.evidence).lower()
         self.assertNotIn("job vs business split", joined)
 
-    def test_pilot_and_ca_route_sector_fit(self):
-        self.assertEqual(classify_career_archetype("Pilot ban sakta hun?"), "sector_fit")
-        self.assertEqual(classify_career_archetype("CA line achi hai kya?"), "sector_fit")
+    def test_pilot_and_ca_route_dedicated_jobs(self):
+        self.assertEqual(classify_career_archetype("Pilot ban sakta hun?"), "aviation_job")
+        self.assertEqual(classify_career_archetype("CA line achi hai kya?"), "ca_job")
+        pilot = run_career_static_engine(SAMPLE_KUNDLI, "Pilot ban sakta hun?")
+        self.assertEqual(pilot.archetype, "aviation_job")
+        self.assertGreaterEqual(len(pilot.evidence), 4)
+
+    def test_medical_and_private_job_engines(self):
+        self.assertEqual(classify_career_archetype("Doctor ban sakta hun?"), "medical_job")
+        self.assertEqual(
+            classify_career_archetype("Private company job suit karegi?"),
+            "private_job",
+        )
+        med = run_career_static_engine(SAMPLE_KUNDLI, "Doctor ban sakta hun?")
+        self.assertIn("job_score", med.checks)
+        joined = " ".join(med.evidence).lower()
+        self.assertIn("jupiter", joined)
 
     def test_promotion_routes_milestones(self):
         q = "Promotion milegi kya?"

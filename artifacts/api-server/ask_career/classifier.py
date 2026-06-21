@@ -34,6 +34,8 @@ from .sector_registry import (
 
 )
 
+from .job_registry import detect_job_archetype
+
 
 
 _TIMING_RX = re.compile(
@@ -183,6 +185,14 @@ def classify_career_archetype(question: str) -> str:
     if is_govt_job_question(q):
 
         return "govt_job"
+
+
+
+    job_arch = detect_job_archetype(q)
+
+    if job_arch:
+
+        return job_arch
 
 
 

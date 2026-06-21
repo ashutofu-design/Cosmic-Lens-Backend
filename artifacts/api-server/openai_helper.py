@@ -4850,6 +4850,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _llm_intent = None
     _intent_source = "regex"
     _mr_archetype_override = None
+    _career_archetype_override = None
     if (os.environ.get("ASK_LLM_INTENT") or "0").strip() == "1":
         try:
             from ask_intent_llm import classify_ask_intent  # type: ignore
@@ -4859,6 +4860,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _llm_intent = _res
                 _intent_source = "llm"
                 _mr_archetype_override = _res.get("mr_archetype")
+                _career_archetype_override = _res.get("career_archetype")
             print(
                 f"[raw_passthrough] LLM_INTENT source={(_res or {}).get('source')} "
                 f"domain={(_res or {}).get('domain')} "
@@ -4916,11 +4918,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         and _is_marriage_domain_q(question)
     )
     _is_mr_static = False
+    _is_career_static = False
     if not is_timing:
         if _llm_intent is not None:
-            # LLM-first: relationship domains route to the MR engine; the
-            # chosen archetype (set above) is injected at dispatch time.
-            _is_mr_static = _llm_intent.get("domain") in {"marriage", "love"}
+            _dom = _llm_intent.get("domain")
+            _is_mr_static = _dom in {"marriage", "love"}
+            _is_career_static = _dom == "career"
         else:
             try:
                 from ask_marriage_relationship_slice import (  # type: ignore
@@ -4929,6 +4932,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _is_mr_static = is_marriage_relationship_static_question(question)
             except Exception:
                 _is_mr_static = False
+            try:
+                from ask_career.classifier import is_career_static_question  # type: ignore
+
+                _is_career_static = is_career_static_question(question) and not _is_mr_static
+            except Exception:
+                _is_career_static = False
     # Sensitive Qs ALSO need current dasha so the LLM has a real reason
     # to cite in layer-2 (astrological reason). Auto-promote.
     if is_sensitive:
@@ -4943,6 +4952,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     if is_marriage_domain and not _is_mr_static:
         static_dasha_hint = True
     if _is_mr_static:
+        static_dasha_hint = False
+    if _is_career_static:
         static_dasha_hint = False
     dcr_love_meta = None
     _mr_engine_result = None
@@ -4970,6 +4981,44 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         chart_text = chart_text + "\n\n=== TIMING ENGINE (LOCKED) ===\n" + _lf_slim
             except Exception as _lfe:
                 print(f"[raw_passthrough] timing locked_facts skipped: {_lfe}", flush=True)
+        elif _is_career_static:
+            try:
+                from ask_career import run_career_static_engine  # type: ignore
+
+                _career_engine_result = run_career_static_engine(
+                    kundli if isinstance(kundli, dict) else {},
+                    question or "",
+                    wants_explain=wants_explain,
+                    archetype=_career_archetype_override,
+                )
+                chart_text = _career_engine_result.to_narrator_payload()
+                dcr_love_meta = {
+                    "slice": "career_engine_v1",
+                    "topic": "career",
+                    "archetype": _career_engine_result.archetype,
+                    "verdict": _career_engine_result.verdict,
+                    "summary": list(_career_engine_result.summary or []),
+                    "evidence": list(_career_engine_result.evidence or []),
+                    "ignore": list(_career_engine_result.ignore or []),
+                    "checks": dict(_career_engine_result.checks or {}),
+                    "skip_llm": bool(_career_engine_result.skip_llm),
+                    "word_budget": int(_career_engine_result.word_budget or 55),
+                    "narrator_mode": "engine_facts_only",
+                }
+                print(
+                    f"[raw_passthrough] CAREER_ENGINE "
+                    f"archetype={_career_engine_result.archetype} "
+                    f"evidence={len(_career_engine_result.evidence or [])} "
+                    f"chart_chars={len(chart_text)}",
+                    flush=True,
+                )
+            except Exception as _cr_exc:
+                print(f"[raw_passthrough] CAREER_ENGINE failed: {_cr_exc}", flush=True)
+                chart_text = _raw_compact_chart(
+                    kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
+                )
+                dcr_love_meta = None
+                _is_career_static = False
         elif _is_mr_static:
             _use_legacy_mr = (os.environ.get("ASK_MR_ENGINE") or "1").strip() == "0"
             if _use_legacy_mr:
@@ -5061,7 +5110,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             chart_text = _raw_compact_chart(
                 kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
             )
-        if not is_timing and not _is_mr_static:
+        if not is_timing and not _is_mr_static and not _is_career_static:
             try:
                 from dcr_love import build_dcr_love_context  # type: ignore
 
@@ -5435,8 +5484,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
     _mr_engine_narrator = (
         isinstance(dcr_love_meta, dict)
-        and dcr_love_meta.get("slice") == "mr_engine_v1"
-        and (os.environ.get("ASK_MR_NARRATOR") or "1").strip() != "0"
+        and dcr_love_meta.get("slice") in ("mr_engine_v1", "career_engine_v1")
+        and (os.environ.get("ASK_MR_NARRATOR") or os.environ.get("ASK_CAREER_NARRATOR") or "1").strip() != "0"
     )
     if _mr_engine_narrator:
         from ask_mr.narrator import build_mr_narrator_user_lang_block

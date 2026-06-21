@@ -54,6 +54,24 @@ MR_ARCHETYPES = {
     "breakup_risk",
 }
 
+CAREER_ARCHETYPES = {
+    "job_vs_business",
+    "sector_fit",
+    "career_traits",
+    "strengths_skills",
+    "entrepreneurship",
+    "work_environment",
+    "income_wealth",
+    "foreign_career",
+    "workplace_relations",
+    "fame_recognition",
+    "creativity_innovation",
+    "career_obstacles",
+    "education_career",
+    "retirement_legacy",
+    "general_career",
+}
+
 DOMAINS = {"marriage", "love", "career", "finance", "health", "general"}
 
 # Low-confidence cutoff — below this the caller treats the result as
@@ -106,14 +124,30 @@ the partner will SUPPORT the native's career / life goals / decisions
    - manglik: manglik / mangal dosh
    - second_marriage: second/again marriage
    - breakup_risk: breakup, separation, divorce risk
-6. "interpretation": ONE short plain sentence describing what the user really \
+6. "career_archetype": ONLY when domain is career, pick best id; otherwise null:
+   - job_vs_business: job vs business / employee vs entrepreneur
+   - sector_fit: industry/field (govt, IT, medical, law, teaching, sales, etc.)
+   - career_traits: leadership, pressure, risk, discipline, team, independence
+   - strengths_skills: strengths, weaknesses, skills to develop
+   - entrepreneurship: startup, partnership business, online, family business
+   - work_environment: remote, corporate, MNC, public/private sector
+   - income_wealth: salary, passive income, high income, freelancing, commission
+   - foreign_career: abroad job, foreign company, settle abroad for work
+   - workplace_relations: boss, colleagues, job satisfaction
+   - fame_recognition: fame, reputation, recognition in career
+   - creativity_innovation: creative field, innovation, content creation
+   - career_obstacles: delays, setbacks, obstacles in career
+   - education_career: study, degree, education for career
+   - retirement_legacy: late career, legacy, retirement tone
+   - general_career: other career questions
+7. "interpretation": ONE short plain sentence describing what the user really \
 wants to know, phrased as "User wants to know ...". Write it in simple \
 English. e.g. "User wants to know if their partner will support their career."
-7. "confidence": 0.0-1.0 how sure you are.
+8. "confidence": 0.0-1.0 how sure you are.
 
 Return ONLY this JSON object:
 {{"domain": "...", "is_timing": false, "is_decision": false, \
-"wants_explain": false, "mr_archetype": null, \
+"wants_explain": false, "mr_archetype": null, "career_archetype": null, \
 "interpretation": "User wants to know ...", "confidence": 0.0}}
 
 Question: {question}"""
@@ -126,6 +160,7 @@ def _error(reason: str, source: str = "llm_error") -> dict:
         "is_decision": False,
         "wants_explain": False,
         "mr_archetype": None,
+        "career_archetype": None,
         "interpretation": "",
         "confidence": 0.0,
         "source": source,
@@ -223,6 +258,17 @@ def classify_ask_intent(
         conf = 0.0
     conf = max(0.0, min(1.0, conf))
 
+    if domain == "career":
+        career_arch = data.get("career_archetype")
+        if isinstance(career_arch, str):
+            career_arch = career_arch.strip().lower()
+        if career_arch not in CAREER_ARCHETYPES:
+            career_arch = None
+        if career_arch is None:
+            career_arch = "general_career"
+    else:
+        career_arch = None
+
     interpretation = str(data.get("interpretation") or "").strip()[:300]
 
     return {
@@ -231,6 +277,7 @@ def classify_ask_intent(
         "is_decision": bool(data.get("is_decision")),
         "wants_explain": bool(data.get("wants_explain")),
         "mr_archetype": archetype,
+        "career_archetype": career_arch,
         "interpretation": interpretation,
         "confidence": conf,
         "source": "llm_low_conf" if conf < _LOW_CONF else "llm",

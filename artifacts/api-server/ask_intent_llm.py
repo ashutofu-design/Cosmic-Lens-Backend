@@ -91,11 +91,15 @@ whether partner supports the native's goals/career
    - manglik: manglik / mangal dosh
    - second_marriage: second/again marriage
    - breakup_risk: breakup, separation, divorce risk
-6. "confidence": 0.0-1.0 how sure you are.
+6. "interpretation": ONE short plain sentence describing what the user really \
+wants to know, phrased as "User wants to know ...". Write it in simple \
+English. e.g. "User wants to know if their partner will support their career."
+7. "confidence": 0.0-1.0 how sure you are.
 
 Return ONLY this JSON object:
 {{"domain": "...", "is_timing": false, "is_decision": false, \
-"wants_explain": false, "mr_archetype": null, "confidence": 0.0}}
+"wants_explain": false, "mr_archetype": null, \
+"interpretation": "User wants to know ...", "confidence": 0.0}}
 
 Question: {question}"""
 
@@ -107,6 +111,7 @@ def _error(reason: str, source: str = "llm_error") -> dict:
         "is_decision": False,
         "wants_explain": False,
         "mr_archetype": None,
+        "interpretation": "",
         "confidence": 0.0,
         "source": source,
         "error": reason[:200],
@@ -203,12 +208,15 @@ def classify_ask_intent(
         conf = 0.0
     conf = max(0.0, min(1.0, conf))
 
+    interpretation = str(data.get("interpretation") or "").strip()[:300]
+
     return {
         "domain": domain,
         "is_timing": bool(data.get("is_timing")),
         "is_decision": bool(data.get("is_decision")),
         "wants_explain": bool(data.get("wants_explain")),
         "mr_archetype": archetype,
+        "interpretation": interpretation,
         "confidence": conf,
         "source": "llm_low_conf" if conf < _LOW_CONF else "llm",
         "latency_ms": latency_ms,

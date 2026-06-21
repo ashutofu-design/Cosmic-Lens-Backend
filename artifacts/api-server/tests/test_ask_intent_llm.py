@@ -88,6 +88,7 @@ class ClassifyAskIntentTests(unittest.TestCase):
             "is_decision": False,
             "wants_explain": False,
             "mr_archetype": "partner_nature",
+            "interpretation": "User wants to know if their partner will support their career.",
             "confidence": 0.86,
         }
         res = classify_ask_intent(
@@ -98,6 +99,7 @@ class ClassifyAskIntentTests(unittest.TestCase):
         self.assertEqual(res["domain"], "love")
         self.assertEqual(res["mr_archetype"], "partner_nature")
         self.assertFalse(res["is_timing"])
+        self.assertIn("support", res["interpretation"].lower())
 
     def test_timing_question(self):
         payload = {

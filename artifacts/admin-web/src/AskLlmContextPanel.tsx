@@ -170,22 +170,45 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
               ) : null}
             </div>
 
-            <div className="answer-path-banner">
-              <strong>Intent:</strong>{" "}
-              <code>{ctx.intent_source === "llm" ? "LLM" : "regex"}</code>
-              {ctx.intent_source === "llm" && ctx.llm_intent ? (
-                <>
-                  {" · "}
+            {ctx.intent_source === "llm" && ctx.llm_intent ? (
+              <div className="llm-understanding-box">
+                <p>
+                  <strong>What the LLM understood:</strong>{" "}
+                  {ctx.llm_intent.interpretation
+                    ? ctx.llm_intent.interpretation
+                    : "—"}
+                </p>
+                <p>
+                  <strong>Engine selected:</strong>{" "}
                   <code>
-                    {ctx.llm_intent.domain}
-                    {ctx.llm_intent.mr_archetype ? ` → ${ctx.llm_intent.mr_archetype}` : ""}
-                    {ctx.llm_intent.confidence != null
-                      ? ` (${ctx.llm_intent.confidence})`
-                      : ""}
+                    {ctx.llm_intent.mr_archetype
+                      ? `${ctx.llm_intent.mr_archetype} (MR engine)`
+                      : ctx.llm_intent.is_timing
+                        ? "timing engine"
+                        : `${ctx.llm_intent.domain || "general"} (chart → LLM)`}
                   </code>
-                </>
-              ) : null}
-            </div>
+                  {ctx.llm_intent.confidence != null ? (
+                    <span className="answer-path-note">
+                      {" "}
+                      — domain={ctx.llm_intent.domain}, confidence=
+                      {ctx.llm_intent.confidence}
+                    </span>
+                  ) : null}
+                </p>
+                <p className="detail-muted">
+                  Flow: LLM reads question → picks engine → engine produces facts → LLM
+                  writes the human answer.
+                </p>
+              </div>
+            ) : (
+              <div className="answer-path-banner">
+                <strong>Intent:</strong> <code>regex</code>
+                <span className="answer-path-note">
+                  {" "}
+                  — set ASK_LLM_INTENT=1 to route via LLM
+                </span>
+              </div>
+            )}
 
             <details open className="engine-facts-panel">
               <summary>Facts sent to LLM (engine output)</summary>

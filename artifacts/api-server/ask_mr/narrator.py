@@ -113,11 +113,14 @@ def build_mr_engine_narrator_system_prompt(
         )
     elif archetype == "job_vs_business":
         length_block = (
-            f"Write 2 short sentences (~{wb} words max).\n"
-            "Sentence 1 = pick JOB or BUSINESS per VERDICT (include ~% split if given).\n"
-            "If VERDICT says Employment path stronger → say job is better NOW — "
+            f"Write 2–3 short sentences (~{min(wb + 15, 90)} words max).\n"
+            "Read USER ACTUALLY ASKED — answer job vs business (or business vs job) directly.\n"
+            "Sentence 1 = clear pick JOB or BUSINESS per VERDICT (include ~% split if given).\n"
+            "If VERDICT says Employment path stronger → job/naukri suits abhi — "
             "do NOT say 'pehle job phir business' unless VERDICT says Hybrid.\n"
-            "Sentence 2 = ONE reason from EVIDENCE in plain life language.\n"
+            "Sentence 2–3 = WHY from ENGINE EVIDENCE in plain words "
+            "(career mode, structure, independence, discipline — pick 1–2 reasons).\n"
+            "End feeling: user ko samajh aaye poori kundli reading se yeh path kyun better hai.\n"
             "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
             f"{_MR_CONFIDENT_TONE}"
         )

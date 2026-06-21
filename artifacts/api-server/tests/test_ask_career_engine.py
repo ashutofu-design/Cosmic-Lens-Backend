@@ -99,5 +99,38 @@ class CareerEngineTests(unittest.TestCase):
         self.assertIn("VERDICT", payload)
 
 
+class TestCareerAnswerGuard(unittest.TestCase):
+    _JOB_META = {
+        "archetype": "job_vs_business",
+        "verdict": "Employment path stronger — job ~60% vs business ~40%",
+        "checks": {"job_pct": 60, "business_pct": 40},
+    }
+
+    def test_verify_blocks_labels_and_wrong_pick(self):
+        from ask_career.answer_guard import verify_career_answer
+
+        ok, issues = verify_career_answer(
+            "job ya business kya better hai?",
+            "Seedha jawab: pehle job phir business. Conclusion: dono.",
+            self._JOB_META,
+        )
+        self.assertFalse(ok)
+        self.assertIn("template_labels", issues)
+
+    def test_verify_accepts_job_answer(self):
+        from ask_career.answer_guard import verify_career_answer
+
+        ans = (
+            "Aapki kundli mein job path zyada strong hai — structure aur discipline se "
+            "employment suit karta hai. Isliye job mein hi raho; business abhi secondary hai."
+        )
+        ok, _ = verify_career_answer(
+            "job ya business kya better hai?",
+            ans,
+            self._JOB_META,
+        )
+        self.assertTrue(ok)
+
+
 if __name__ == "__main__":
     unittest.main()

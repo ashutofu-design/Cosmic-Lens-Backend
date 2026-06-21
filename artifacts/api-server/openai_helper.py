@@ -5655,6 +5655,34 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     print(f"[raw_passthrough] decision rewrite skipped: {_dre}", flush=True)
             text = _polish_decision_reply(text, eff_lang)
         text = _strip_decision_template_labels(text)
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "career_engine_v1":
+            try:
+                from ask_career.answer_guard import guard_career_answer
+
+                text, _guard = guard_career_answer(
+                    client,
+                    model,
+                    question=question or "",
+                    answer=text,
+                    meta=dcr_love_meta,
+                    user_intent=_user_intent_hint,
+                    reply_lang=eff_lang,
+                )
+                text = _strip_decision_template_labels(text)
+                if _guard.get("repaired"):
+                    print(
+                        f"[raw_passthrough] CAREER_ANSWER_GUARD repaired "
+                        f"issues={_guard.get('issues')} ok={_guard.get('ok_after_repair')}",
+                        flush=True,
+                    )
+                elif not _guard.get("ok"):
+                    print(
+                        f"[raw_passthrough] CAREER_ANSWER_GUARD warn "
+                        f"issues={_guard.get('issues')}",
+                        flush=True,
+                    )
+            except Exception as _cag:
+                print(f"[raw_passthrough] CAREER_ANSWER_GUARD skipped: {_cag}", flush=True)
         if not text:
             text = "Maaf kijiye, abhi response generate nahi ho paya. Phir try karein."
         # Skip robotic [Checked: ...] trace — user wants human replies only.

@@ -39,10 +39,17 @@ def run_job_vs_business(kundli: dict, question: str, *, wants_explain: bool = Fa
         answer_plan="Direct job vs business answer → 2 inclination reasons → one practical note.",
         summary=[
             "Answer job OR business directly with approximate split from engine.",
+            "If verdict says Employment path stronger → say JOB is better (~split), NOT 'pehle job phir business'.",
+            "Only say hybrid / both viable when verdict says Hybrid career.",
             "Use ONLY inclination evidence — not marriage or finance-only axes.",
         ],
         evidence=evidence[:8],
-        ignore=["timing dates/windows", "exact salary", "marriage partner career"],
+        ignore=[
+            "timing dates/windows",
+            "exact salary",
+            "marriage partner career",
+            "pehle job phir business unless hybrid verdict",
+        ],
         checks={
             "slice_type": "career_engine_v1",
             "archetype": "job_vs_business",

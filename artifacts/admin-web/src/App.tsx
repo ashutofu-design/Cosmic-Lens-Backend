@@ -1392,11 +1392,13 @@ export default function App() {
                   askQuestions.map((row) => (
                     <tr key={row.id}>
                       <td>
-                        <div className="ask-q-line">
-                          <strong>Q:</strong> {row.question_text}
+                        <div className="ask-q-block">
+                          <div className="ask-q-text">
+                            <strong>Q:</strong> {row.question_text}
+                          </div>
                           <CopyTextButton
                             text={row.question_text}
-                            label="Copy Q"
+                            label="Copy question"
                             copiedLabel="Copied"
                           />
                         </div>

@@ -4089,6 +4089,22 @@ def _raw_rewrite_decision_plain(
         return draft
 
 
+def _strip_decision_template_labels(text: str) -> str:
+    """Remove decision-mode section labels from user-facing engine answers."""
+    t = (text or "").strip()
+    if not t:
+        return t
+    for label in (
+        r"Seedha jawab\s*:",
+        r"seedha jawab\s*:",
+        r"Conclusion\s*:",
+        r"निष्कर्ष\s*:",
+    ):
+        t = _re_explain_gate.sub(label, "", t, flags=_re_explain_gate.IGNORECASE)
+    t = _re_explain_gate.sub(r"\s{2,}", " ", t).strip()
+    return t
+
+
 def _polish_decision_reply(text: str, lang: str) -> str:
     """Ensure decision answers have Conclusion label when missing."""
     t = (text or "").strip()
@@ -5135,6 +5151,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 and dcr_love_meta.get("slice") == "mr_engine_v1"
                 else "marriage_relationship"
             )
+        elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "career_engine_v1":
+            _chart_slice_type = "career_engine_v1"
         elif is_timing:
             _chart_slice_type = "timing_full_chart"
         elif dcr_love_meta:
@@ -5156,13 +5174,16 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         _is_mr_static = False
         _chart_slice_type = "full_compact_fallback"
 
-    # ── MR engine owns the answer: neutralise decision/finance formatting ──
-    # When the MR static engine produced the facts, the MR narrator alone
+    # ── MR / Career engine owns the answer: neutralise decision/finance formatting ──
+    # When the static engine produced the facts, the engine narrator alone
     # shapes the reply (engine_facts_only). The generic decision/finance
     # post-processing (adds "Seedha jawab:" / "Conclusion:" labels and bumps
     # max_tokens) must NOT run on top of it — it made engine answers read like
     # a decision template instead of a natural narrated answer.
-    if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "mr_engine_v1":
+    if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") in (
+        "mr_engine_v1",
+        "career_engine_v1",
+    ):
         is_decision = False
         is_finance = False
 
@@ -5473,7 +5494,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     if (
         dcr_love_meta
         and not _is_pn_minimal
-        and dcr_love_meta.get("slice") != "mr_engine_v1"
+        and dcr_love_meta.get("slice") not in ("mr_engine_v1", "career_engine_v1")
     ):
         dcr_love_rule = (
             "\nDCR LOVE SLICE: partner/love Q — D1 first, D9 confirms. "
@@ -5605,10 +5626,14 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             is_timing=is_timing, is_decision=is_decision, is_finance=is_finance,
             is_partner_nature=_is_pn_minimal,
         )
-        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "mr_engine_v1":
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") in (
+            "mr_engine_v1",
+            "career_engine_v1",
+        ):
             from ask_mr.narrator import polish_mr_confident_tone
 
             text = polish_mr_confident_tone(text)
+            text = _strip_decision_template_labels(text)
         if is_decision:
             if _decision_needs_plain_rewrite(text):
                 try:
@@ -5669,16 +5694,24 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                   f"completion={completion_tok}", flush=True)
         except Exception:
             pass
-        _mr_engine_ran = (
-            isinstance(dcr_love_meta, dict)
-            and dcr_love_meta.get("slice") == "mr_engine_v1"
+        _engine_slice = (
+            dcr_love_meta.get("slice")
+            if isinstance(dcr_love_meta, dict)
+            else None
         )
-        _engine_tag = "ans-engine" if (is_timing or _mr_engine_ran) else "ans-cosmo"
-        _answer_source = (
-            "mr_engine_then_llm"
-            if _mr_engine_ran
-            else f"raw_passthrough_{qtype.lower()}"
+        _mr_engine_ran = _engine_slice == "mr_engine_v1"
+        _career_engine_ran = _engine_slice == "career_engine_v1"
+        _engine_tag = (
+            "ans-engine"
+            if (is_timing or _mr_engine_ran or _career_engine_ran)
+            else "ans-cosmo"
         )
+        if _career_engine_ran:
+            _answer_source = "career_engine_then_llm"
+        elif _mr_engine_ran:
+            _answer_source = "mr_engine_then_llm"
+        else:
+            _answer_source = f"raw_passthrough_{qtype.lower()}"
         _out = {
             "text":       text,
             "topic":      qtype.lower(),
@@ -5726,6 +5759,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _pt_checks["narrator_mode"] = dcr_love_meta.get("narrator_mode") or (
                 "engine_facts_only"
                 if (os.environ.get("ASK_MR_NARRATOR") or "1").strip() != "0"
+                else "universal"
+            )
+        elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "career_engine_v1":
+            _pt_checks["career_engine"] = "v1"
+            _pt_checks["narrator_mode"] = dcr_love_meta.get("narrator_mode") or (
+                "engine_facts_only"
+                if (os.environ.get("ASK_CAREER_NARRATOR") or "1").strip() != "0"
                 else "universal"
             )
         elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice"):

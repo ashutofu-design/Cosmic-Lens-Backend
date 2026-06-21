@@ -111,6 +111,16 @@ def build_mr_engine_narrator_system_prompt(
             "Do NOT write one long essay. Do NOT add 'unique vibes' or facts outside EVIDENCE.\n"
             f"{_MR_CONFIDENT_TONE}"
         )
+    elif archetype == "job_vs_business":
+        length_block = (
+            f"Write 2 short sentences (~{wb} words max).\n"
+            "Sentence 1 = pick JOB or BUSINESS per VERDICT (include ~% split if given).\n"
+            "If VERDICT says Employment path stronger → say job is better NOW — "
+            "do NOT say 'pehle job phir business' unless VERDICT says Hybrid.\n"
+            "Sentence 2 = ONE reason from EVIDENCE in plain life language.\n"
+            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
+            f"{_MR_CONFIDENT_TONE}"
+        )
     elif open_chart_qa:
         _ow = min(wb + 30, 130) if wants_explain else max(wb, 60)
         length_block = (
@@ -139,10 +149,16 @@ def build_mr_engine_narrator_system_prompt(
             "confirmations are strongest, then single planet-lord placements, "
             "then general notes. Give the user ONE clear 'why' — do NOT list "
             "multiple reasons or stack evidence.\n"
+            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
             f"{_MR_CONFIDENT_TONE}"
         )
 
-    topic_hint = archetype.replace("_", " ") if archetype else "marriage/relationship"
+    topic_hint = (
+        "career"
+        if archetype and archetype not in ("partner_nature", "general_mr")
+        and not archetype.startswith("breakup")
+        else (archetype.replace("_", " ") if archetype else "marriage/relationship")
+    )
 
     intent_block = ""
     if (user_intent or "").strip():
@@ -159,6 +175,7 @@ RULES: ENGINE FACTS below are final. Narrate VERDICT + EVIDENCE in plain languag
 Match the answer to EXACTLY what the user asked — if they asked a specific thing
 (percentage, yes/no, who, when-ish tilt), answer THAT directly first, then reason.
 Do NOT add planets/houses/D9/dasha or new reasons. Do NOT contradict VERDICT.
+Do NOT use section labels like Seedha jawab / Conclusion — write natural sentences only.
 Do NOT hedge with shayad/ho sakta hai/lagta hai — state the pattern the engine found.
 If the user asks for a percentage / number / "kitna" / ratio, LEAD with the
 approx % split shown in ENGINE FACTS (e.g. "Love ~56%, arrange ~44%"), then one

@@ -4969,8 +4969,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         static_dasha_hint = True
     if _is_mr_static:
         static_dasha_hint = False
+        is_decision = False
+        is_finance = False
     if _is_career_static:
         static_dasha_hint = False
+        is_decision = False
+        is_finance = False
     dcr_love_meta = None
     _mr_engine_result = None
     _chart_slice_type = "full_compact"
@@ -5557,6 +5561,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 f"prompt_chars={len(system_prompt)} explain={wants_explain}",
                 flush=True,
             )
+            if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "career_engine_v1":
+                print(
+                    f"[raw_passthrough] CAREER_NARRATOR mode=engine_facts_only "
+                    f"decision={is_decision}",
+                    flush=True,
+                )
         else:
             system_prompt = _build_universal_ask_system_prompt(
                 chart_text=chart_text,

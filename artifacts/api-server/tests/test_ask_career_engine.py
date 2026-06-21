@@ -154,6 +154,25 @@ class CareerEngineTests(unittest.TestCase):
         joined = " ".join(res.evidence).lower()
         self.assertNotIn("job vs business split", joined)
 
+    def test_pilot_and_ca_route_sector_fit(self):
+        self.assertEqual(classify_career_archetype("Pilot ban sakta hun?"), "sector_fit")
+        self.assertEqual(classify_career_archetype("CA line achi hai kya?"), "sector_fit")
+
+    def test_promotion_routes_milestones(self):
+        q = "Promotion milegi kya?"
+        self.assertEqual(classify_career_archetype(q), "career_milestones")
+        res = run_career_static_engine(SAMPLE_KUNDLI, q)
+        self.assertEqual(res.checks.get("focus"), "promotion")
+
+    def test_electrician_routes_vocational(self):
+        q = "Electrician ka kaam suit karega?"
+        self.assertEqual(classify_career_archetype(q), "vocational_trade")
+        res = run_career_static_engine(SAMPLE_KUNDLI, q)
+        self.assertEqual(res.archetype, "vocational_trade")
+
+    def test_actor_routes_creativity(self):
+        self.assertEqual(classify_career_archetype("Actor ban sakta hun?"), "creativity_innovation")
+
 
 class TestCareerAnswerGuard(unittest.TestCase):
     _JOB_META = {

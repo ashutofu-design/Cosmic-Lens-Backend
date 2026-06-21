@@ -85,6 +85,13 @@ _VERB_FIXES: list[tuple[re.Pattern[str], str]] = [
 ]
 
 # Personal + life/astro — allow scope gate when anchors are typo'd
+try:
+    from ask_career.sector_registry import CAREER_SCOPE_EXTRA as _CAREER_SCOPE_EXTRA
+except Exception:
+    _CAREER_SCOPE_EXTRA = (
+        r"youtuber|youtube|food|restaurant|pilot|actor|electrician|promotion|interview"
+    )
+
 _LIFE_ASTRO_TOPIC_RX = re.compile(
     r"(?ix)\b("
     r"lagna|ascendant|rashi|nakshatra|kundli|chart|horoscope|dasha|gochar|"
@@ -96,8 +103,7 @@ _LIFE_ASTRO_TOPIC_RX = re.compile(
     r"property|ghar|flat|vastu|"
     r"visa|abroad|videsh|travel|"
     r"luck|bhagya|future|timing|"
-    r"youtuber|youtube|vlogger|influencer|content\s*creator|streamer|tiktok|"
-    r"food|restaurant|hotel|bakery|cafe|"
+    rf"{_CAREER_SCOPE_EXTRA}|"
     r"sun|moon|mars|mangal|mercury|budh|jupiter|guru|venus|shukra|saturn|shani|rahu|ketu"
     r")\b",
 )
@@ -132,8 +138,7 @@ _IMPLICIT_ASK_TOPIC_RX = re.compile(
     r"health|sehat|child|bachcha|pregnancy|"
     r"property|ghar|flat|vastu|visa|abroad|videsh|travel|"
     r"luck|bhagya|future|timing|"
-    r"youtuber|youtube|vlogger|influencer|content\s*creator|streamer|tiktok|"
-    r"food|restaurant|hotel|bakery|cafe|"
+    rf"{_CAREER_SCOPE_EXTRA}|"
     r"sun|moon|mars|mangal|mercury|budh|jupiter|guru|venus|shukra|saturn|shani|rahu|ketu|"
     r"house|bhav|bhaav|lord|swami|"
     r"navamsa|navamsha|d9|d7|d10|d12|divisional"

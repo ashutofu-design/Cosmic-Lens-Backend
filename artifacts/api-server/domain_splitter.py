@@ -78,11 +78,17 @@ _DOMAIN_KEYWORDS: Dict[str, List[str]] = {
     # career / job / work — must be employment-specific (not bare "kaam")
     "career": [
         "job", "naukri", "naukari", "career", "kaam-kaaj",
-        "boss", "salary", "promotion", "interview", "company",
-        "employment", "business job", "transfer order",
+        "boss", "salary", "promotion", "interview",
+        "company", "employment", "business job", "transfer order",
         "job change", "career change", "naukri change",
         "youtuber", "youtube", "vlogger", "influencer", "content creator",
-        "food business", "restaurant", "hotel business",
+        "actor", "actress", "singer", "photographer", "gamer",
+        "food business", "restaurant", "hotel business", "salon", "franchise",
+        "pilot", "aviation", "army", "defence", "defense", "police", "ips", "ias",
+        "upsc", "ssc", "govt exam", "bank exam", "electrician", "plumber", "mechanic",
+        "ca", "chartered accountant", "architect", "fashion", "sports", "cricketer",
+        "e-commerce", "amazon", "flipkart", "transport", "logistics", "jewellery",
+        "garment", "pharmacy", "coaching center", "digital marketing", "side hustle",
     ],
     # finance / money / wealth (Gap-2 widened: bare "business/dukaan" added back
     # since they consistently denote finance-domain in this app's user base).

@@ -138,11 +138,40 @@ def build_mr_engine_narrator_system_prompt(
     elif archetype == "creativity_innovation":
         length_block = (
             f"Write 2–3 short sentences (~{min(wb + 15, 90)} words max).\n"
-            "Read USER ACTUALLY ASKED — if they asked YouTuber/content creator/influencer, "
+            "Read USER ACTUALLY ASKED — if they asked YouTuber/actor/singer/photographer/gamer, "
             "answer ban sakta hun / suit karega directly (haan/nahi per VERDICT).\n"
             "Sentence 1 = clear yes/no or strong/weak fit for THAT creative path.\n"
             "Sentence 2–3 = WHY from ENGINE EVIDENCE (communication, audience, creative axis).\n"
             "Do NOT give job vs business % split.\n"
+            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
+            f"{_MR_CONFIDENT_TONE}"
+        )
+    elif archetype == "career_milestones":
+        length_block = (
+            f"Write 2–3 short sentences (~{min(wb + 15, 90)} words max).\n"
+            "Read USER ACTUALLY ASKED — promotion / interview / job change / govt exam / side hustle.\n"
+            "Sentence 1 = direct answer to THAT milestone per VERDICT.\n"
+            "Sentence 2–3 = WHY from ENGINE EVIDENCE in plain words.\n"
+            "Do NOT give job vs business % split unless user asked job OR business.\n"
+            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
+            f"{_MR_CONFIDENT_TONE}"
+        )
+    elif archetype == "vocational_trade":
+        length_block = (
+            f"Write 2–3 short sentences (~{min(wb + 15, 85)} words max).\n"
+            "Read USER ACTUALLY ASKED — electrician/plumber/mechanic/skilled trade suitability.\n"
+            "Sentence 1 = direct haan/nahi for THAT trade per VERDICT.\n"
+            "Sentence 2–3 = WHY from craft/service evidence in plain words.\n"
+            "Do NOT give job vs business % split.\n"
+            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
+            f"{_MR_CONFIDENT_TONE}"
+        )
+    elif archetype in ("entrepreneurship", "income_wealth", "foreign_career", "workplace_relations", "fame_recognition", "education_career", "career_obstacles", "retirement_legacy", "work_environment", "career_traits", "strengths_skills"):
+        length_block = (
+            f"Write 2–3 short sentences (~{min(wb + 15, 90)} words max).\n"
+            "Read USER ACTUALLY ASKED — answer THAT exact career question directly per VERDICT.\n"
+            "Do NOT pivot to job vs business % split unless user asked job OR business.\n"
+            "Sentence 1 = clear direct answer. Sentence 2–3 = strongest reason from EVIDENCE.\n"
             "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
             f"{_MR_CONFIDENT_TONE}"
         )

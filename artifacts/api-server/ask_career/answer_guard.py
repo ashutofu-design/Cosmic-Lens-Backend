@@ -7,7 +7,9 @@ from typing import Any
 from .routing import (
     is_creativity_career_question,
     is_job_vs_business_question,
+    is_milestone_question,
     is_specific_sector_suitability_question,
+    is_vocational_question,
     is_which_business_question,
 )
 
@@ -30,10 +32,6 @@ _WHICH_BIZ_ANSWER_RX = re.compile(
 _JOB_BIZ_SPLIT_ANSWER_RX = re.compile(
     r"(?ix)(\d+\s*%|~\s*\d+|employment\s+path|job\s+path|naukri\s+zyada|"
     r"job\s+zyada|business\s+scope|employment\s+ya\s+job|structured\s+professional)"
-)
-_SECTOR_WORD_RX = re.compile(
-    r"(?ix)\b(food|restaurant|hotel|it|software|medical|law|finance|teaching|"
-    r"sales|marketing|real\s*estate|consulting|government|govt|media|hospitality|cafe|catering)\b"
 )
 _CREATIVITY_ANSWER_RX = re.compile(
     r"(?ix)\b(youtube|youtuber|content|creator|influencer|vlogger|creative|media|ban\s+sakta|suit)\b"
@@ -64,6 +62,8 @@ def verify_career_answer(
     which_biz_q = is_which_business_question(q, user_intent)
     sector_suit_q = is_specific_sector_suitability_question(q, user_intent)
     creativity_q = is_creativity_career_question(q, user_intent)
+    vocational_q = is_vocational_question(q, user_intent)
+    milestone_q = is_milestone_question(q, user_intent)
 
     if which_biz_q:
         if archetype == "job_vs_business":
@@ -73,13 +73,19 @@ def verify_career_answer(
         if not _WHICH_BIZ_ANSWER_RX.search(text):
             issues.append("no_business_type_named")
 
-    if sector_suit_q and not which_biz_q and not creativity_q:
+    if sector_suit_q and not which_biz_q and not creativity_q and not vocational_q and not milestone_q:
         if _JOB_BIZ_SPLIT_ANSWER_RX.search(text):
-            sector_hit = _SECTOR_WORD_RX.search(q)
-            if sector_hit and not re.search(re.escape(sector_hit.group(0)), text, re.I):
-                issues.append("sector_suit_but_job_split_answer")
-            elif not sector_hit and not _WHICH_BIZ_ANSWER_RX.search(text):
-                issues.append("sector_suit_but_job_split_answer")
+            issues.append("sector_suit_but_job_split_answer")
+
+    if archetype == "career_milestones" and milestone_q:
+        if _JOB_BIZ_SPLIT_ANSWER_RX.search(text):
+            issues.append("milestone_but_job_split_answer")
+
+    if archetype == "vocational_trade" and vocational_q:
+        if _JOB_BIZ_SPLIT_ANSWER_RX.search(text) and not re.search(
+            r"(?ix)\b(electrician|plumber|mechanic|trade|vocational|skill)\b", text
+        ):
+            issues.append("vocational_but_job_split_answer")
 
     if archetype == "sector_fit" and which_biz_q and not _WHICH_BIZ_ANSWER_RX.search(text):
         issues.append("sector_fit_no_type_named")
@@ -131,7 +137,25 @@ def _repair_instructions(
     which_biz_q: bool,
     sector_suit_q: bool,
     creativity_q: bool,
+    vocational_q: bool = False,
+    milestone_q: bool = False,
 ) -> str:
+    if milestone_q or archetype == "career_milestones":
+        return (
+            "Rewrite in 2-3 short sentences.\n"
+            "- Sentence 1: direct answer to promotion/interview/job-change/exam/side-hustle question per VERDICT.\n"
+            "- Sentence 2: WHY from chart evidence in plain life language.\n"
+            "- Do NOT give job vs business % split.\n"
+            "- NO labels: Seedha jawab, Conclusion, Verdict."
+        )
+    if vocational_q or archetype == "vocational_trade":
+        return (
+            "Rewrite in 2-3 short sentences.\n"
+            "- Sentence 1: direct haan/nahi for the skilled trade asked (electrician, plumber, etc.) per VERDICT.\n"
+            "- Sentence 2: WHY from Mars/Saturn/Mercury craft evidence.\n"
+            "- Do NOT give job vs business % split.\n"
+            "- NO labels: Seedha jawab, Conclusion, Verdict."
+        )
     if creativity_q or archetype == "creativity_innovation":
         return (
             "Rewrite in 2-3 short sentences.\n"
@@ -188,6 +212,8 @@ def repair_career_answer(
     which_biz_q = is_which_business_question(question, intent)
     sector_suit_q = is_specific_sector_suitability_question(question, intent)
     creativity_q = is_creativity_career_question(question, intent)
+    vocational_q = is_vocational_question(question, intent)
+    milestone_q = is_milestone_question(question, intent)
     lang_note = (
         "Reply in Hindi (Devanagari)."
         if (reply_lang or "").lower() == "hi"
@@ -201,6 +227,8 @@ def repair_career_answer(
         which_biz_q=which_biz_q,
         sector_suit_q=sector_suit_q,
         creativity_q=creativity_q,
+        vocational_q=vocational_q,
+        milestone_q=milestone_q,
     )
 
     user_msg = f"""USER QUESTION (answer THIS exactly):

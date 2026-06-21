@@ -61,6 +61,12 @@ def run_career_static_engine(
     if archetype == "retirement_legacy":
         from .engines.retirement_legacy import run_retirement_legacy
         return run_retirement_legacy(kundli, question, wants_explain=wants_explain)
+    if archetype == "career_milestones":
+        from .engines.career_milestones import run_career_milestones
+        return run_career_milestones(kundli, question, wants_explain=wants_explain)
+    if archetype == "vocational_trade":
+        from .engines.vocational_trade import run_vocational_trade
+        return run_vocational_trade(kundli, question, wants_explain=wants_explain)
 
     from .engines.general_career import run_general_career
     return run_general_career(kundli, question, wants_explain=wants_explain)

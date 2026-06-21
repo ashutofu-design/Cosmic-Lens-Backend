@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import MoreDrawer, { type MoreDrawerHandle } from "@/components/MoreDrawer";
 import { useC } from "@/context/ThemeContext";
+import { useTabBar } from "@/context/TabBarContext";
 import { useUser } from "@/context/UserContext";
 import { getT } from "@/lib/i18n";
 
@@ -119,6 +120,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
   const insets = useSafeAreaInsets();
   const C = useC();
   const { language } = useUser();
+  const { hidden } = useTabBar();
   const [showMore, setStateShowMore] = useState(false);
   const moreDrawerRef = useRef<MoreDrawerHandle>(null);
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -134,6 +136,9 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
   const barBg = C.isDark ? "rgba(8,16,32,0.95)" : C.navBg;
   const blurTint = C.isDark ? "dark" : "light";
   const useBlur = Platform.OS === "ios";
+
+  // Full-screen mode (e.g. Ask chat) — hide the bar entirely.
+  if (hidden) return null;
 
   return (
     <>

@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import {
   useAudioPlayer, useAudioPlayerStatus, useAudioRecorder,
@@ -8,6 +9,7 @@ import {
 } from "expo-audio";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  BackHandler,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -23,7 +25,17 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { CosmicBg } from "@/components/CosmicBg";
+import Reanimated, {
+  Easing as REasing,
+  FadeInLeft,
+  FadeInRight,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 import { FadeInView, staggerDelay } from "@/components/motion/FadeInView";
 import { AcharyaTypingDots } from "@/components/AcharyaTypingDots";
 import { CardsCarousel, type CardData } from "@/components/CardsCarousel";
@@ -32,7 +44,8 @@ import { useC } from "@/context/ThemeContext";
 import { useUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
 import { getT } from "@/lib/i18n";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
+import { useTabBar } from "@/context/TabBarContext";
 
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
 
@@ -91,7 +104,7 @@ const DEMO_MESSAGES: Message[] = [
 ];
 
 const STARTERS = [
-  "Marriage kab hoga?",
+  "Mera love marriage hai ya arrange?",
   "Career growth kab milegi?",
   "Health kaisi rahegi?",
   "Paisa kab aayega?",
@@ -140,6 +153,105 @@ function prettyAgo(iso: string): string {
   return new Date(t).toLocaleDateString();
 }
 
+// ── Premium motion primitives ─────────────────────────────────────────────
+// A small set of self-contained reanimated helpers used only by this screen.
+// They are deliberately local (not in components/) so the Ask redesign owns
+// its own polish without touching shared widgets.
+
+/**
+ * GlowDot — a solid status dot wrapped in an expanding, fading "radar" ring
+ * that pulses forever. Used for the header status / live indicators so they
+ * read as a living, premium "online" signal instead of a static dot.
+ */
+function GlowDot({ color, size = 8 }: { color: string; size?: number }) {
+  const progress = useSharedValue(0);
+  useEffect(() => {
+    progress.value = withRepeat(
+      withTiming(1, { duration: 1800, easing: REasing.out(REasing.ease) }),
+      -1,
+      false,
+    );
+  }, [progress]);
+  const ringStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(progress.value, [0, 1], [1, 2.8]) }],
+    opacity: interpolate(progress.value, [0, 0.15, 1], [0, 0.45, 0]),
+  }));
+  return (
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+      <Reanimated.View
+        pointerEvents="none"
+        style={[
+          { position: "absolute", width: size, height: size, borderRadius: size / 2, backgroundColor: color },
+          ringStyle,
+        ]}
+      />
+      <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }} />
+    </View>
+  );
+}
+
+/**
+ * CardShimmer — a soft diagonal light bar that sweeps across a premium
+ * gradient card every few seconds, giving a glossy, "alive" highlight.
+ * Parent must have overflow:"hidden" (the mode cards do).
+ */
+function CardShimmer() {
+  const x = useSharedValue(0);
+  useEffect(() => {
+    x.value = withRepeat(
+      withDelay(700, withTiming(1, { duration: 1500, easing: REasing.inOut(REasing.ease) })),
+      -1,
+      false,
+    );
+  }, [x]);
+  const style = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: interpolate(x.value, [0, 1], [-160, 420]) },
+      { rotate: "20deg" },
+    ],
+    opacity: interpolate(x.value, [0, 0.25, 0.5, 0.75, 1], [0, 0.5, 0.7, 0.5, 0]),
+  }));
+  return (
+    <Reanimated.View
+      pointerEvents="none"
+      style={[
+        { position: "absolute", top: -60, bottom: -60, width: 46, backgroundColor: "rgba(255,255,255,0.28)" },
+        style,
+      ]}
+    />
+  );
+}
+
+/**
+ * PressScale — wraps tappable content in a spring-like scale + dim on press
+ * for tactile, premium button feedback (replaces the flat opacity press).
+ */
+function PressScale({
+  children,
+  onPress,
+  style,
+  accessibilityLabel,
+}: {
+  children: React.ReactNode;
+  onPress: () => void;
+  style?: any;
+  accessibilityLabel?: string;
+}) {
+  const scale = useSharedValue(1);
+  const aStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPressIn={() => { scale.value = withTiming(0.96, { duration: 90 }); }}
+      onPressOut={() => { scale.value = withTiming(1, { duration: 160, easing: REasing.out(REasing.ease) }); }}
+      onPress={onPress}
+    >
+      <Reanimated.View style={[aStyle, style]}>{children}</Reanimated.View>
+    </Pressable>
+  );
+}
+
 export default function AskScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
@@ -170,12 +282,44 @@ export default function AskScreen() {
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
-  // Resting bottom padding clears the tab bar; keyboard-open shrinks
-  // it to a small visual gap so the input sits flush above the kb.
-  const inputRowBottomPad = kbVisible ? 10 : botPad + TAB_BAR_HEIGHT;
-
   // Mode picker: null = show 2-option landing, "chat" = open Cosmic Intelligence chat
   const [mode, setMode] = useState<"chat" | null>(null);
+
+  // ── Full-screen chat: hide the bottom tab bar (Home / Lifemap / Future …)
+  // while in chat mode so "Ask Anything" opens edge-to-edge like a dedicated
+  // chat app. Restored automatically on blur or when returning to the
+  // landing picker (the in-header back chevron sets mode → null).
+  const { setHidden } = useTabBar();
+  useFocusEffect(
+    useCallback(() => {
+      setHidden(mode === "chat");
+      return () => setHidden(false);
+    }, [mode, setHidden]),
+  );
+
+  // ── Back handling: while in chat mode, the hardware/gesture back should
+  // return to the Ask landing ("How can I help you?" — Ask Anything +
+  // Prashna Kundli), NOT pop the whole tab stack back to Home. We intercept
+  // the Android hardware back press here; the in-header chevron already
+  // does the same via setMode(null).
+  useFocusEffect(
+    useCallback(() => {
+      const onBack = () => {
+        if (mode === "chat") {
+          setMode(null);
+          return true; // consumed — stay on the Ask tab, show landing
+        }
+        return false; // landing: let default tab back behaviour run
+      };
+      const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+      return () => sub.remove();
+    }, [mode]),
+  );
+
+  // Resting bottom padding: keyboard-open → tiny gap; chat (tab bar hidden)
+  // → just the safe-area inset; landing → clear the tab bar.
+  const tabBarHidden = mode === "chat";
+  const inputRowBottomPad = kbVisible ? 10 : tabBarHidden ? botPad + 10 : botPad + TAB_BAR_HEIGHT;
 
   // ── Request ownership ────────────────────────────────────────────────────
   // Each send() bumps requestIdRef. Stream callbacks gate every state mutation
@@ -192,7 +336,7 @@ export default function AskScreen() {
           {
             id: "init",
             role: "assistant",
-            text: `Cosmic Intelligence ready. Aapka chart load ho chuka hai — career, marriage, health, money, timing — koi bhi prashna sharp aur evidence-based mil jayega.`,
+            text: `Hey, I'm Cosmo ✨ What would you like to know today?`,
           },
         ]
   );
@@ -275,6 +419,22 @@ export default function AskScreen() {
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [copiedUserMsgId, setCopiedUserMsgId] = useState<string | null>(null);
+  const copiedUserMsgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const copyUserQuestion = useCallback((msgId: string, text: string) => {
+    const value = (text || "").trim();
+    if (!value) return;
+    void (async () => {
+      try {
+        await Clipboard.setStringAsync(value);
+        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+      } catch {}
+      setCopiedUserMsgId(msgId);
+      if (copiedUserMsgTimerRef.current) clearTimeout(copiedUserMsgTimerRef.current);
+      copiedUserMsgTimerRef.current = setTimeout(() => setCopiedUserMsgId(null), 1500);
+    })();
+  }, []);
 
   // ── Recent Questions (history) — read-only surface populated by /api/ask
   // and /api/ask/stream's server-side logger. Pure storage layer; clicking
@@ -304,8 +464,9 @@ export default function AskScreen() {
     }
   }, [user?.id, user?.api_key]);
 
-  // Fetch on landing mount + whenever the user returns to the landing.
-  useEffect(() => { if (mode === null) fetchHistory(); }, [mode, fetchHistory]);
+  // Fetch on landing mount AND on chat-open so the in-chat Recent
+  // Questions strip (fresh-thread only) is always up to date.
+  useEffect(() => { fetchHistory(); }, [mode, fetchHistory]);
   const [quotaModal, setQuotaModal] = useState<null | {
     used: number;
     limit: number;
@@ -906,32 +1067,85 @@ export default function AskScreen() {
     const isUser = item.role === "user";
     const isLatestAssistant = !isUser && item.id === latestAssistantId;
     return (
-      <View>
+      <Reanimated.View
+        entering={(isUser ? FadeInRight : FadeInLeft).duration(380).easing(REasing.out(REasing.cubic))}
+      >
         <View style={[s.bubble, isUser ? s.bubbleUser : s.bubbleAssistant]}>
           {!isUser && (
-            <View style={[s.avatar, { backgroundColor: C.accentBg, borderColor: `${C.accent}30` }]}>
-              <Text style={{ fontSize: 12 }}>🔭</Text>
-            </View>
+            <LinearGradient
+              colors={[C.accent, `${C.accent}88`]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={[s.avatar, s.avatarGlow, { shadowColor: C.accent, borderColor: `${C.accent}55` }]}
+            >
+              <Feather name="cpu" size={13} color="#fff" />
+            </LinearGradient>
           )}
-          <View
-            style={[s.bubbleInner, isUser
-              ? [s.bubbleInnerUser, { backgroundColor: C.isDark ? "#1E1B4B" : "#EDE9FE", borderColor: `${C.accent}30` }]
-              : [s.bubbleInnerAssistant, { backgroundColor: C.bgCard, borderColor: C.border }]]}
-          >
-            {item.loading ? (
-              <AcharyaTypingDots caption="Cosmic Intelligence calculating…" />
-            ) : isUser ? (
-              <Text style={[s.bubbleText, s.bubbleTextUser, { color: C.text }]}>{item.text}</Text>
-            ) : item.cards && item.cards.length > 0 ? (
-              <CardsCarousel
-                cards={item.cards}
-                trimmedCount={item.trimmedCount ?? 0}
-              />
-            ) : (
-              <MarkdownReply text={item.text} />
-            )}
-          </View>
+          {isUser ? (
+            <LinearGradient
+              colors={[C.accent, `${C.accent}CC`]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={[s.bubbleInner, s.bubbleInnerUser, s.bubbleGlow, { shadowColor: C.accent, borderColor: `${C.accent}55` }]}
+            >
+              <Text style={[s.bubbleText, s.bubbleTextUser]}>{item.text}</Text>
+            </LinearGradient>
+          ) : (
+            <LinearGradient
+              colors={[C.bgCard2, C.bgCard]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={[
+                s.bubbleInner, s.bubbleInnerAssistant, s.bubbleGlowSoft,
+                { borderColor: `${C.accent}33`, shadowColor: C.accent },
+              ]}
+            >
+              {item.loading ? (
+                <AcharyaTypingDots caption="Cosmic Intelligence calculating…" />
+              ) : item.cards && item.cards.length > 0 ? (
+                <CardsCarousel
+                  cards={item.cards}
+                  trimmedCount={item.trimmedCount ?? 0}
+                />
+              ) : (
+                <MarkdownReply text={item.text} />
+              )}
+            </LinearGradient>
+          )}
         </View>
+
+        {isUser && !item.loading && !!item.text?.trim() && (
+          <View style={s.userMsgActions}>
+            <Pressable
+              onPress={() => copyUserQuestion(item.id, item.text)}
+              style={({ pressed }) => [
+                s.userMsgActionBtn,
+                { borderColor: `${C.accent}40`, backgroundColor: C.bgCard },
+                pressed && { opacity: 0.7 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Copy question"
+            >
+              <Feather name="copy" size={12} color={C.accent} />
+              <Text style={[s.userMsgActionText, { color: C.accent }]}>
+                {copiedUserMsgId === item.id ? "Copied" : "Copy question"}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                try { Haptics.selectionAsync(); } catch {}
+                setInput(item.text.trim());
+              }}
+              style={({ pressed }) => [
+                s.userMsgActionBtn,
+                { borderColor: C.border, backgroundColor: C.bgCard },
+                pressed && { opacity: 0.7 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Use question again"
+            >
+              <Feather name="edit-3" size={12} color={C.textMid} />
+              <Text style={[s.userMsgActionText, { color: C.textMid }]}>Ask again</Text>
+            </Pressable>
+          </View>
+        )}
 
         {/* Phase 7.5 — Clarifier UX: refinement chips shown when the
             classifier confidence was low. Server attaches `clarification`
@@ -1031,12 +1245,12 @@ export default function AskScreen() {
             ))}
           </ScrollView>
         )}
-      </View>
+      </Reanimated.View>
     );
   };
 
   return (
-    <CosmicBg>
+    <View style={[s.root, { backgroundColor: C.isDark ? "#000000" : C.bg }]}>
     <KeyboardAvoidingView
       style={s.root}
       // iOS: `padding` adds bottom padding equal to (kb_height - offset).
@@ -1047,7 +1261,7 @@ export default function AskScreen() {
       //   for input pushup; use behavior=undefined to avoid double-
       //   adjustment that compresses the FlatList area.
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? botPad + TAB_BAR_HEIGHT : 0}
+      keyboardVerticalOffset={Platform.OS === "ios" ? (tabBarHidden ? botPad : botPad + TAB_BAR_HEIGHT) : 0}
     >
       {/* Header */}
       <FadeInView delay={0}>
@@ -1061,36 +1275,22 @@ export default function AskScreen() {
             <Feather name="chevron-left" size={20} color={C.text} />
           </Pressable>
         )}
-        <View style={s.headerDot} />
         <View style={s.headerTitleRow}>
+          <View
+            pointerEvents="none"
+            style={[s.headerTitleGlow, { backgroundColor: `${C.accent}26`, shadowColor: C.accent }]}
+          />
           <Feather name="cpu" size={15} color={C.accent} style={{ marginRight: 6 }} />
-          <Text style={[s.headerTitle, { color: C.text }]}>Cosmic Intelligence</Text>
-          <View style={[s.headerLiveDot, { backgroundColor: "#10b981" }]} />
+          <Text style={[s.headerTitle, { color: C.text, textShadowColor: `${C.accent}88` }]}>
+            Cosmic Intelligence
+          </Text>
+          <View style={{ marginLeft: 8 }}>
+            <GlowDot color="#10b981" size={7} />
+          </View>
         </View>
         <Text style={[s.headerSub, { color: C.textMuted }]}>Multi System Pattern Engine V2.0</Text>
         </View>
       </FadeInView>
-
-      {/* ── Mode switcher pill (only in chat mode) ───────────────────────── */}
-      {mode === "chat" && (
-        <View style={[s.modeSwitch, { backgroundColor: (C as any).bgCard2 ?? C.bgCard, borderColor: C.border }]}>
-          <View style={[s.modeSwitchSeg, { backgroundColor: C.accentBg, borderColor: `${C.accent}80` }]}>
-            <Feather name="message-circle" size={13} color={C.accent} />
-            <Text style={[s.modeSwitchText, { color: C.accent }]}>Ask Anything</Text>
-          </View>
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              if (showDemo) { router.push("/onboarding"); return; }
-              router.push("/prashna-kundli");
-            }}
-            style={({ pressed }) => [s.modeSwitchSeg, pressed && { opacity: 0.7 }]}
-          >
-            <Feather name="hash" size={13} color={C.textMuted} />
-            <Text style={[s.modeSwitchText, { color: C.textMuted }]}>Prashna Kundli</Text>
-          </Pressable>
-        </View>
-      )}
 
       {/* Demo banner */}
       {showDemo && (
@@ -1127,20 +1327,24 @@ export default function AskScreen() {
 
           {/* Card 1: Ask Anything (Chat) */}
           <FadeInView delay={staggerDelay(1, 70, 80)}>
-            <Pressable
+            <PressScale
+            accessibilityLabel="Ask Anything"
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               if (showDemo) { router.push("/onboarding"); return; }
               setMode("chat");
             }}
-            style={({ pressed }) => [s.modeCard, pressed && { opacity: 0.85 }]}
+            style={[s.modeCard, { shadowColor: "#3b82f6" }]}
           >
             <LinearGradient
               colors={["#1e40af", "#3b82f6", "#06b6d4"]}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
               style={s.modeGrad}
             >
-              <Text style={s.modeEmoji}>💬</Text>
+              <CardShimmer />
+              <View style={s.modeIconWrap}>
+                <Text style={s.modeEmoji}>💬</Text>
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.modeTitle}>Ask Anything</Text>
                 <Text style={s.modeBody}>
@@ -1153,25 +1357,29 @@ export default function AskScreen() {
               </View>
               <Feather name="chevron-right" size={20} color="#fff" />
             </LinearGradient>
-            </Pressable>
+            </PressScale>
           </FadeInView>
 
           {/* Card 2: Prashna Kundli (KP 1-249) */}
           <FadeInView delay={staggerDelay(2, 70, 80)}>
-            <Pressable
+            <PressScale
+            accessibilityLabel="Prashna Kundli"
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               if (showDemo) { router.push("/onboarding"); return; }
               router.push("/prashna-kundli");
             }}
-            style={({ pressed }) => [s.modeCard, pressed && { opacity: 0.85 }]}
+            style={[s.modeCard, { shadowColor: "#0891b2" }]}
           >
             <LinearGradient
               colors={["#0e7490", "#0891b2", "#14b8a6"]}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
               style={s.modeGrad}
             >
-              <Text style={s.modeEmoji}>🔢</Text>
+              <CardShimmer />
+              <View style={s.modeIconWrap}>
+                <Text style={s.modeEmoji}>🔢</Text>
+              </View>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Text style={s.modeTitle}>Prashna Kundli</Text>
@@ -1189,56 +1397,11 @@ export default function AskScreen() {
               </View>
               <Feather name="chevron-right" size={20} color="#fff" />
             </LinearGradient>
-            </Pressable>
+            </PressScale>
           </FadeInView>
 
-          {/* ─── Recent Questions ──────────────────────────────────────
-              Read-only history strip. Logged server-side after every
-              Ask flow (storage layer only — no full kundli, no full
-              LLM text persisted). Tap an item to refill the input
-              for re-asking. */}
-          {!showDemo && history.length > 0 ? (
-            <FadeInView delay={staggerDelay(3, 70, 100)}>
-              <View style={s.historyWrap}>
-              <View style={s.historyHeader}>
-                <Feather name="clock" size={13} color={C.textMid} />
-                <Text style={[s.historyTitle, { color: C.textMid }]}>Recent Questions</Text>
-              </View>
-              {history.slice(0, 5).map(h => (
-                <Pressable
-                  key={h.id}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setMode("chat");
-                    setInput(h.question_text);
-                  }}
-                  style={({ pressed }) => [
-                    s.historyItem,
-                    { backgroundColor: C.bgCard, borderColor: C.border },
-                    pressed && { opacity: 0.7 },
-                  ]}
-                >
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <Text style={[s.historyQ, { color: C.text }]} numberOfLines={2}>
-                      {h.question_text}
-                    </Text>
-                    <View style={s.historyMeta}>
-                      <View style={[s.historyTag, { backgroundColor: `${C.accent}22`, borderColor: `${C.accent}55` }]}>
-                        <Text style={[s.historyTagText, { color: C.accent }]} numberOfLines={1}>
-                          {prettyVerdict(h.verdict_summary)}
-                        </Text>
-                      </View>
-                      <Text style={[s.historyTime, { color: C.textMuted }]}>
-                        {prettyAgo(h.created_at)}
-                      </Text>
-                    </View>
-                  </View>
-                  <Feather name="chevron-right" size={16} color={C.textMuted} />
-                </Pressable>
-              ))}
-              </View>
-            </FadeInView>
-          ) : null}
+          {/* Recent Questions MOVED into the chat view (fresh-thread only).
+              Landing picker now stays focused on the two mode cards. */}
 
           {/* Optional: small Divya Prashna link (legacy, less prominent) */}
           <FadeInView delay={staggerDelay(4, 70, 120)}>
@@ -1276,11 +1439,27 @@ export default function AskScreen() {
           is typing). */}
       {messages.length <= 1 && !showDemo && !kbVisible && (
         <View style={s.starters}>
-          {STARTERS.map(q => (
-            <Pressable key={q} style={[s.starter, { backgroundColor: C.bgCard, borderColor: `${C.accent}30` }]} onPress={() => send(q)}>
-              <Text style={[s.starterText, { color: C.accent }]}>{q}</Text>
-            </Pressable>
-          ))}
+          {STARTERS.map(q => {
+            // Starter-chip accent — intentionally NOT the theme/zodiac accent
+            // (that can be red). A premium gold (dark) / indigo (light) tone
+            // that pops on the black chat without looking like an error.
+            const chipColor = C.isDark ? "#E8B86D" : "#6D5DF6";
+            return (
+              <Pressable
+                key={q}
+                style={({ pressed }) => [
+                  s.starter,
+                  { backgroundColor: C.isDark ? "#16161C" : C.bgCard, borderColor: `${chipColor}33` },
+                  pressed && { opacity: 0.8, transform: [{ scale: 0.99 }], borderColor: `${chipColor}80` },
+                ]}
+                onPress={() => { try { Haptics.selectionAsync(); } catch {} send(q); }}
+              >
+                <Feather name="message-circle" size={14} color={chipColor} />
+                <Text style={[s.starterText, { color: chipColor }]} numberOfLines={1}>{q}</Text>
+                <Feather name="arrow-up-right" size={15} color={`${chipColor}99`} />
+              </Pressable>
+            );
+          })}
         </View>
       )}
 
@@ -1304,9 +1483,16 @@ export default function AskScreen() {
           • keyboard hidden → clear the tab bar (botPad + TAB_BAR_HEIGHT)
           • keyboard visible → small flush gap (10px), KAV pushes the
             row above the keyboard top automatically. */}
-      <View style={[s.inputRow, { paddingBottom: inputRowBottomPad, backgroundColor: C.bg, borderTopColor: C.border }]}>
+      <View style={[s.inputRow, { paddingBottom: inputRowBottomPad, backgroundColor: C.isDark ? "#000000" : C.bg, borderTopColor: C.isDark ? "rgba(255,255,255,0.06)" : C.border }]}>
         <TextInput
-          style={[s.input, { backgroundColor: C.bgCard, borderColor: C.border, color: C.text }]}
+          style={[
+            s.input,
+            {
+              backgroundColor: C.isDark ? "#1C1C22" : C.bgCard2,
+              borderColor: C.isDark ? "rgba(255,255,255,0.10)" : C.border,
+              color: C.text,
+            },
+          ]}
           value={input}
           onChangeText={setInput}
           placeholder={isRecording ? "Bol rahe ho…" : t.askPlaceholder}
@@ -1316,27 +1502,14 @@ export default function AskScreen() {
           onSubmitEditing={() => send(input)}
           returnKeyType="send"
         />
-        {/* Mic button — tap to record, tap again to stop & transcribe */}
-        <Pressable
-          onPress={() => {
-            if (showDemo) { router.push("/onboarding"); return; }
-            if (isTranscribing || loading) return;
-            if (isRecording) stopRecordingAndTranscribe();
-            else startRecording();
-          }}
-          style={({ pressed }) => [s.sendBtn, { marginRight: 8 }, pressed && { opacity: 0.7 }]}
-        >
-          <View style={[s.sendGrad, { backgroundColor: isRecording ? "#E53935" : C.bgCard, borderWidth: 1, borderColor: isRecording ? "#E53935" : C.border }]}>
-            <Feather
-              name={isRecording ? "square" : "mic"}
-              size={16}
-              color={isRecording ? "#fff" : C.text}
-            />
-          </View>
-        </Pressable>
         <Pressable
           onPress={() => (showDemo ? router.push("/onboarding") : send(input))}
-          style={({ pressed }) => [s.sendBtn, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [
+            s.sendBtn,
+            { shadowColor: C.btnGradEnd },
+            s.sendBtnGlow,
+            pressed && { opacity: 0.9, transform: [{ scale: 0.92 }] },
+          ]}
           disabled={isRecording || isTranscribing}
         >
           <LinearGradient
@@ -1410,7 +1583,7 @@ export default function AskScreen() {
         </Pressable>
       </Modal>
     </KeyboardAvoidingView>
-    </CosmicBg>
+    </View>
   );
 }
 
@@ -1464,9 +1637,23 @@ const s = StyleSheet.create({
     width: 8, height: 8, borderRadius: 4, backgroundColor: "#22c55e",
     marginBottom: 4,
   },
-  headerTitle: { color: "#dde8f4", fontSize: 16, fontWeight: "700", letterSpacing: -0.2 },
+  headerTitle: {
+    color: "#dde8f4", fontSize: 16, fontWeight: "700", letterSpacing: -0.2,
+    textShadowColor: "rgba(139,92,246,0.5)",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
+  },
   headerSub:   { color: "#3d5a7a", fontSize: 11 },
-  headerTitleRow: { flexDirection: "row", alignItems: "center" },
+  headerTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
+  headerTitleGlow: {
+    position: "absolute",
+    alignSelf: "center",
+    width: 180, height: 28, borderRadius: 16,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 22,
+    elevation: 0,
+  },
   headerLiveDot:  { width: 7, height: 7, borderRadius: 4, marginLeft: 8 },
   heroBadgeRow:   { flexDirection: "row", marginTop: 4 },
   heroBadge:      { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1 },
@@ -1494,6 +1681,13 @@ const s = StyleSheet.create({
     borderColor: "transparent",
   },
   modeSwitchActive: {},
+  modeSwitchSegActive: {
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.45,
+    shadowRadius: 9,
+    elevation: 5,
+  },
+  modeSwitchLiveDot: { marginLeft: 2 },
   modeSwitchText: {
     fontSize: 12,
     fontWeight: "700",
@@ -1539,12 +1733,25 @@ const s = StyleSheet.create({
   pickerWrap: { paddingHorizontal: 16, paddingTop: 28, gap: 14 },
   pickerHi:   { fontSize: 22, fontWeight: "800", letterSpacing: -0.4 },
   pickerSub:  { fontSize: 13, marginBottom: 14 },
-  modeCard:   { borderRadius: 18, overflow: "hidden" },
+  modeCard: {
+    borderRadius: 18, overflow: "hidden",
+    shadowColor: "#3b82f6",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.45,
+    shadowRadius: 18,
+    elevation: 10,
+  },
   modeGrad: {
     paddingHorizontal: 18, paddingVertical: 18,
     flexDirection: "row", alignItems: "center", gap: 14,
   },
-  modeEmoji: { fontSize: 36 },
+  modeIconWrap: {
+    width: 54, height: 54, borderRadius: 16,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.22)",
+  },
+  modeEmoji: { fontSize: 30 },
   modeTitle: { color: "#fff", fontSize: 18, fontWeight: "800", letterSpacing: -0.3 },
   modeBody:  { color: "#ffffffd0", fontSize: 12.5, lineHeight: 17, marginTop: 4 },
   modeMeta:  { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8 },
@@ -1575,25 +1782,65 @@ const s = StyleSheet.create({
   bubbleAssistant: { justifyContent: "flex-start" },
 
   avatar: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: "rgba(245,158,11,0.12)", borderWidth: 1, borderColor: "rgba(245,158,11,0.2)",
+    width: 30, height: 30, borderRadius: 15,
+    borderWidth: 1,
     alignItems: "center", justifyContent: "center",
     alignSelf: "flex-end",
   },
+  avatarGlow: {
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 6,
+  },
 
   bubbleInner: {
-    maxWidth: "80%", borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10,
+    maxWidth: "80%", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 11,
   },
   bubbleInnerUser: {
-    backgroundColor: "#0c3257", borderBottomRightRadius: 4,
+    borderBottomRightRadius: 5, borderWidth: 1,
   },
   bubbleInnerAssistant: {
-    backgroundColor: "#040e1f", borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
-    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderBottomLeftRadius: 5,
   },
-  bubbleText:       { fontSize: 13, lineHeight: 20 },
-  bubbleTextUser:   { color: "#dde8f4" },
+  // Strong glow for the gradient user bubble.
+  bubbleGlow: {
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 7,
+  },
+  // Soft, subtle lift for the assistant bubble.
+  bubbleGlowSoft: {
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  bubbleText:       { fontSize: 14, lineHeight: 21 },
+  bubbleTextUser:   { color: "#FFFFFF", fontWeight: "600" },
   bubbleTextAssist: { color: "#94a3b8" },
+
+  userMsgActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: -4,
+    marginBottom: 8,
+    paddingHorizontal: 2,
+  },
+  userMsgActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  userMsgActionText: { fontSize: 11, fontWeight: "600" },
 
   followUpsRow: {
     flexDirection: "row",
@@ -1665,13 +1912,14 @@ const s = StyleSheet.create({
 
   starters: {
     paddingHorizontal: 16, paddingBottom: 10, gap: 8,
-    flexDirection: "row", flexWrap: "wrap",
   },
   starter: {
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
-    backgroundColor: "#040e1f", borderWidth: 1, borderColor: "rgba(245,158,11,0.15)",
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingHorizontal: 14, paddingVertical: 13, borderRadius: 14,
+    borderWidth: 1,
+    // backgroundColor + borderColor injected at render-time from theme.
   },
-  starterText: { color: "#f59e0b", fontSize: 12 },
+  starterText: { fontSize: 13.5, fontWeight: "600", flex: 1 },
 
   // ── Phase 6.1.1 — Kundli selector pill row (above input) ───────────────
   kundliRow: {
@@ -1708,6 +1956,23 @@ const s = StyleSheet.create({
   historyTagText: { fontSize: 11, fontWeight: "700" },
   historyTime:    { fontSize: 11 },
 
+  // ── In-chat Recent Questions strip (fresh thread only) ─────────────────
+  chatHistoryWrap:   { paddingTop: 6, paddingBottom: 4 },
+  chatHistoryHeader: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 16, marginBottom: 8,
+  },
+  chatHistoryRow:    { flexDirection: "row", gap: 8, paddingHorizontal: 16 },
+  chatHistoryChip: {
+    maxWidth: 230, gap: 3,
+    paddingHorizontal: 12, paddingVertical: 9,
+    borderRadius: 14, borderWidth: 1,
+  },
+  chatHistoryQ:    { fontSize: 13, fontWeight: "600" },
+  chatHistoryMeta: { flexDirection: "row", alignItems: "center", gap: 2 },
+  chatHistoryTag:  { fontSize: 10.5, fontWeight: "700", maxWidth: 150 },
+  chatHistoryTime: { fontSize: 10.5 },
+
   inputRow: {
     flexDirection: "row", alignItems: "flex-end", gap: 10,
     paddingHorizontal: 14, paddingTop: 12,
@@ -1715,11 +1980,30 @@ const s = StyleSheet.create({
     // borderTopColor + backgroundColor injected at render-time from theme.
   },
   input: {
-    flex: 1, borderRadius: 22, borderWidth: 1,
-    paddingHorizontal: 16, paddingVertical: 12,
-    fontSize: 14, lineHeight: 20, maxHeight: 120, minHeight: 44,
+    flex: 1, borderRadius: 24, borderWidth: 1,
+    paddingHorizontal: 18, paddingVertical: 13,
+    fontSize: 15, lineHeight: 21, maxHeight: 120, minHeight: 50,
+    // Subtle lift so the bar reads as a premium floating composer.
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
     // backgroundColor + borderColor + color injected at render-time from theme.
   },
-  sendBtn:  { borderRadius: 22, overflow: "hidden" },
-  sendGrad: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  sendBtn:  { borderRadius: 22 },
+  sendBtnGlow: {
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.55,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  micBtnRecGlow: {
+    shadowColor: "#E53935",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  sendGrad: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", overflow: "hidden" },
 });

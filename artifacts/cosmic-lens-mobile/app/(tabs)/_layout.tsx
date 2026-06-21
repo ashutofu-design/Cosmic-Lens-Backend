@@ -7,13 +7,22 @@ import React from "react";
 import { Platform, StyleSheet, View } from "react-native";
 
 import CustomTabBar from "@/components/CustomTabBar";
+import { TabBarProvider, useTabBar } from "@/context/TabBarContext";
 import { useT } from "@/hooks/useT";
 
 // ── iOS 26 Native Tab Layout (Liquid Glass) ──────────────────────────────────
 function NativeTabLayout() {
   const t = useT();
+  const { hidden } = useTabBar();
+  // `hidden` on <NativeTabs> is the Expo-recommended way to make a screen
+  // full-screen (e.g. Ask chat). It is available in SDK 55+; on the current
+  // SDK 54 it's a harmless no-op (cast keeps types happy and forward-ready —
+  // it will start hiding the native liquid-glass bar after an SDK 55 upgrade,
+  // with no further code changes). The Ask screen drives the flag via the
+  // shared TabBarContext, same as the Android/JS custom tab bar.
+  const nativeTabsProps = { hidden } as Record<string, unknown>;
   return (
-    <NativeTabs>
+    <NativeTabs {...nativeTabsProps}>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: "house", selected: "house.fill" }} />
         <Label>{t.tabHome}</Label>
@@ -58,8 +67,9 @@ function ClassicTabLayout() {
 }
 
 export default function TabLayout() {
-  if (isLiquidGlassAvailable()) {
-    return <NativeTabLayout />;
-  }
-  return <ClassicTabLayout />;
+  return (
+    <TabBarProvider>
+      {isLiquidGlassAvailable() ? <NativeTabLayout /> : <ClassicTabLayout />}
+    </TabBarProvider>
+  );
 }

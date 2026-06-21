@@ -3911,6 +3911,10 @@ def _enforce_one_line_answer(
     if not text:
         return ""
     raw = (text or "").strip()
+    # No big dashes in user-facing answers (user pref) — em/en dash → comma.
+    raw = re.sub(r"\s*[\u2014\u2013]\s*", ", ", raw)
+    raw = re.sub(r",\s*,", ",", raw)
+    raw = re.sub(r",\s*([.?!।])", r"\1", raw)
     # Drop robotic trace / final lines
     raw = _CHECKED_LINE_RX.sub("", raw)
     if "👉" in raw:

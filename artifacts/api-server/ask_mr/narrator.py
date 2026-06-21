@@ -60,8 +60,12 @@ def polish_mr_confident_tone(text: str) -> str:
             continue
         for rx, repl in _MR_HEDGE_RX:
             line = rx.sub(repl, line)
+        # No big dashes — em/en dash becomes a comma (user pref).
+        line = re.sub(r"\s*[\u2014\u2013]\s*", ", ", line)
+        line = re.sub(r",\s*,", ",", line)
         line = re.sub(r"\s{2,}", " ", line).strip()
         line = re.sub(r"\s+([,.;])", r"\1", line)
+        line = re.sub(r",\s*([.?!])", r"\1", line)
         out_blocks.append(line)
     return "\n\n".join(out_blocks).strip()
 
@@ -110,9 +114,14 @@ def build_mr_engine_narrator_system_prompt(
         )
     else:
         length_block = (
-            f"Write 2–3 short sentences (~{wb} words max).\n"
-            "Line 1 = engine verdict stated clearly (not hedged).\n"
-            "Line 2–3 = 1–2 reasons from evidence only.\n"
+            f"Write 2 short sentences (~{wb} words max).\n"
+            "Sentence 1 = engine verdict stated clearly (not hedged).\n"
+            "Sentence 2 = the SINGLE strongest reason. Pick ONLY the most "
+            "decisive EVIDENCE line and explain that one in plain life language. "
+            "Strength ranking: deep-chart / D9 / Navamsha / conjunction "
+            "confirmations are strongest, then single planet-lord placements, "
+            "then general notes. Give the user ONE clear 'why' — do NOT list "
+            "multiple reasons or stack evidence.\n"
             f"{_MR_CONFIDENT_TONE}"
         )
 

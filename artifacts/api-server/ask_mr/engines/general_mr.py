@@ -2,10 +2,96 @@ from __future__ import annotations
 
 import re
 
-from vedic.love_reality.scoring_core import KundliReader, risk_band_high_is_good
+from vedic.love_reality.scoring_core import KundliReader, SIGNS, risk_band_high_is_good
 
 from ._person_signals import build_person_signals, pick_notes
 from ..types import EngineResult
+
+
+def _dignity_word(r: KundliReader, planet: str, sign: str | None) -> str:
+    """Plain strength label for a planet in its sign (best-effort)."""
+    if not sign:
+        return ""
+    try:
+        d = r.dignity(planet, r.sidx(sign))
+    except Exception:
+        return ""
+    if d is None:
+        return ""
+    if d >= 1:
+        return "strong"
+    if d < 0:
+        return "weak"
+    return "neutral"
+
+
+def _build_d1_relationship_snapshot(kundli: dict, sig) -> list[str]:
+    """Full D1 relationship picture for OPEN questions that have no dedicated
+    engine — the LLM narrator reads these factors and answers the user's exact
+    question itself (chart-grounded, not a fixed verdict)."""
+    k = dict(kundli or {})
+    k.setdefault("name", "You")
+    r = KundliReader(k)
+
+    asc = k.get("ascendant") or k.get("lagna") or "Aries"
+    asc_i = r.sidx(str(asc))
+    sign7 = SIGNS[(asc_i + 6) % 12] if isinstance(asc_i, int) else None
+    lord7 = r.house_lord(7)
+    p7l = r.planet(lord7) if lord7 else None
+    occ7 = r.occupants(7)
+
+    lines: list[str] = [
+        f"7th house (marriage/partner) sign: {sign7 or 'unknown'}.",
+    ]
+    if lord7 and p7l:
+        dw = _dignity_word(r, lord7, p7l.get("sign"))
+        lines.append(
+            f"7th lord {lord7} in house {p7l.get('house')} sign {p7l.get('sign')}"
+            + (f" ({dw})" if dw else "")
+            + " — how the partnership behaves."
+        )
+    lines.append(
+        f"Planets in 7th house: {', '.join(occ7) if occ7 else 'none'} (direct relationship tone)."
+    )
+    for planet, role in (
+        ("Venus", "love/affection/spouse karak"),
+        ("Mars", "passion/drive/temper"),
+        ("Moon", "emotions/mind"),
+        ("Jupiter", "wisdom/blessing"),
+        ("Saturn", "duty/distance/patience"),
+        ("Mercury", "communication"),
+    ):
+        p = r.planet(planet) or {}
+        if p.get("house"):
+            dw = _dignity_word(r, planet, p.get("sign"))
+            lines.append(
+                f"{planet} ({role}): house {p.get('house')} sign {p.get('sign')}"
+                + (f" ({dw})" if dw else "")
+                + "."
+            )
+
+    l5 = r.house_lord(5)
+    p5 = r.planet(l5) if l5 else None
+    if l5 and p5:
+        lines.append(f"5th lord (romance/love) {l5} in house {p5.get('house')}.")
+
+    flags: list[str] = []
+    if getattr(sig, "saturn_on_7th", False):
+        flags.append("Saturn touches 7th (delay/coolness/duty)")
+    if getattr(sig, "mars_on_7th", False):
+        flags.append("Mars touches 7th (heat/assertive/temper)")
+    if getattr(sig, "rahu_on_7th_axis", False):
+        flags.append("Rahu on 7th axis (unconventional/sudden shifts)")
+    if getattr(sig, "separation_yoga", False):
+        flags.append("separation theme (needs repair effort)")
+    if getattr(sig, "reconnection_yoga", False):
+        flags.append("reconnection capacity present")
+    if getattr(sig, "loyalty_risk_high", False):
+        flags.append("loyalty needs attention")
+    if flags:
+        lines.append("Key patterns: " + "; ".join(flags) + ".")
+
+    return lines[:12]
 
 _STRENGTH_Q = re.compile(
     r"\b(strengths?|strong\s*side|positive\s*changes?|sukh|khushi|achhi\s*rahegi)\b",
@@ -172,6 +258,7 @@ def run_general_mr(kundli: dict, question: str, *, wants_explain: bool = False) 
     w = int(sig.affliction_weight or 0)
     quality_score = max(0, min(100, 100 - int(round(w * 1.2))))
     verdict = _quality_verdict(quality_score, sig)
+    open_chart_qa = False
 
     if intent == "strengths":
         evidence = pick_notes(sig, _POSITIVE_NOTE_KEYS, limit=3)
@@ -218,22 +305,33 @@ def run_general_mr(kundli: dict, question: str, *, wants_explain: bool = False) 
         evidence.append("Repair habit: weekly clear talk + boundaries — effort shifts outcome.")
         verdict = "Growth focus: communication, emotional expression and trust boundaries — priority areas"
     else:
-        evidence = pick_notes(
-            sig,
-            _POSITIVE_NOTE_KEYS + _AFFLICTION_NOTE_KEYS,
-            limit=6,
-        )
-        if sig.reconnection_yoga and "5th lord strong" not in str(evidence).lower():
-            evidence.insert(0, "5th lord strong — emotional reconnection capacity present.")
+        # OPEN relationship question with no dedicated engine / sub-handler.
+        # Hand the LLM the full D1 relationship picture so it answers the
+        # user's EXACT question from the chart itself (chart-grounded QA).
+        open_chart_qa = True
+        evidence = _build_d1_relationship_snapshot(kundli, sig)
         if not evidence:
-            evidence = ["No dominant marriage-quality driver; overall pattern looks mixed/normal."]
+            evidence = ["D1 relationship data incomplete — answer cautiously from available factors."]
+        verdict = (
+            "Open relationship question — no fixed verdict; answer from the D1 "
+            "relationship factors most relevant to what the user asked."
+        )
 
     summary = [
         "Answer marriage happiness/quality with confident pattern voice.",
         "NO shayad/ho sakta hai/lagta hai — state what the chart shows.",
         "If mixed: communication and respect matter — say it directly.",
     ]
-    if intent == "strengths":
+    if open_chart_qa:
+        summary = [
+            "OPEN question — no dedicated engine. Read the D1 RELATIONSHIP CHART facts and "
+            "answer the user's EXACT question directly.",
+            "Use ONLY the chart factors relevant to what was asked; ignore the rest. "
+            "Give a clear stance + 1–2 plain reasons.",
+            "Confident pattern voice — no shayad/ho sakta hai. Plain language, no house/planet "
+            "jargon in the reply.",
+        ]
+    elif intent == "strengths":
         summary[0] = "Answer strengths directly — lead with 2–3 positive patterns; one short growth edge max."
     elif intent == "challenges":
         summary[0] = "Answer challenges/conflicts directly — name friction causes; one repair habit at end."
@@ -248,24 +346,36 @@ def run_general_mr(kundli: dict, question: str, *, wants_explain: bool = False) 
         )
     elif intent == "growth_focus":
         summary[0] = "Answer what to work on directly — name 2 friction areas + one weekly repair habit."
-    if sig.separation_yoga and intent not in ("strengths", "emotional_compatibility", "partner_support"):
+    if (
+        not open_chart_qa
+        and sig.separation_yoga
+        and intent not in ("strengths", "emotional_compatibility", "partner_support")
+    ):
         summary.append("Separation theme exists — emphasize repair time, not doom.")
-    if quality_score >= 72 or intent in ("strengths", "emotional_compatibility", "partner_support"):
+    if not open_chart_qa and (
+        quality_score >= 72
+        or intent in ("strengths", "emotional_compatibility", "partner_support")
+    ):
         summary.append("Tone warm and encouraging.")
 
     return EngineResult(
         archetype="general_mr",
         verdict=verdict,
         confidence="medium" if quality_score >= 35 else "low",
-        word_budget=85 if wants_explain else 55,
-        answer_plan="2–3 short sentences: quality outlook → 1–2 reasons → one practical line.",
+        word_budget=(70 if open_chart_qa else 85) if wants_explain else (65 if open_chart_qa else 55),
+        answer_plan=(
+            "Answer the exact question from the relevant D1 factors → 1–2 plain reasons."
+            if open_chart_qa
+            else "2–3 short sentences: quality outlook → 1–2 reasons → one practical line."
+        ),
         summary=summary[:4],
-        evidence=evidence[:6],
+        evidence=evidence[:12] if open_chart_qa else evidence[:6],
         ignore=["timing dates/windows", "exact job title for spouse"],
         checks={
             "slice_type": "mr_engine_v1",
             "archetype": "general_mr",
             "question_intent": intent,
+            "open_chart_qa": open_chart_qa,
             "quality_score": quality_score,
             "affliction_weight": w,
             "separation_yoga": bool(sig.separation_yoga),

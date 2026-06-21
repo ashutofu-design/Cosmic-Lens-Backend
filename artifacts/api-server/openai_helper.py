@@ -5450,6 +5450,15 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     except Exception:
         _user_intent_hint = ""
 
+    # Open relationship question with no dedicated engine — narrator reads the
+    # full D1 chart facts and answers the exact question itself.
+    _open_chart_qa = False
+    try:
+        if isinstance(dcr_love_meta, dict):
+            _open_chart_qa = bool((dcr_love_meta.get("checks") or {}).get("open_chart_qa"))
+    except Exception:
+        _open_chart_qa = False
+
     try:
         if _mr_engine_narrator:
             from ask_mr.narrator import build_mr_engine_narrator_system_prompt
@@ -5463,6 +5472,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 word_budget=_wb_mr,
                 is_partner_nature=_is_pn_narrator,
                 user_intent=_user_intent_hint,
+                open_chart_qa=_open_chart_qa,
             )
             print(
                 f"[raw_passthrough] MR_NARRATOR archetype={_archetype_mr} "
@@ -5496,6 +5506,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 word_budget=55,
                 is_partner_nature=_is_pn_narrator,
                 user_intent=_user_intent_hint,
+                open_chart_qa=_open_chart_qa,
             )
         else:
             system_prompt = _build_universal_ask_system_prompt(

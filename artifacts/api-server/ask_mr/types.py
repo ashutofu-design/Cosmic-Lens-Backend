@@ -33,9 +33,22 @@ class EngineResult:
             lines.append(
                 f"SCORES: love={checks.get('love_score')} arrange={checks.get('arrange_score')}"
             )
+        if checks.get("love_pct") is not None:
+            lines.append(
+                f"PERCENT: love~{checks.get('love_pct')}% arrange~{checks.get('arrange_pct')}%"
+            )
         if self.evidence:
-            lines.append("EVIDENCE (use 2–4 only, plain language):")
-            lines.extend(f"- {e}" for e in self.evidence[:6])
+            if checks.get("open_chart_qa"):
+                # Open question, no fixed engine — give the LLM the full D1 picture
+                # and let it pick the factors relevant to the exact question.
+                lines.append(
+                    "D1 RELATIONSHIP CHART (use ONLY the factors relevant to the question; "
+                    "ignore the rest, plain language):"
+                )
+                lines.extend(f"- {e}" for e in self.evidence[:12])
+            else:
+                lines.append("EVIDENCE (use 2–4 only, plain language):")
+                lines.extend(f"- {e}" for e in self.evidence[:6])
         return "\n".join(lines)
 
     def to_chart_text(self, *, question: str) -> str:

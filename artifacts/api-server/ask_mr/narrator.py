@@ -89,6 +89,7 @@ def build_mr_engine_narrator_system_prompt(
     word_budget: int = 55,
     is_partner_nature: bool = False,
     user_intent: str = "",
+    open_chart_qa: bool = False,
 ) -> str:
     """Minimal system prompt: engine already computed the answer — LLM narrates only."""
     rl = (reply_lang or "hn").strip().lower()
@@ -108,6 +109,17 @@ def build_mr_engine_narrator_system_prompt(
             "PARAGRAPH 2 (~30–40 words): ONLY 7th lord + planets-in-7th evidence → emotional tone + private/thoughtful mindset.\n"
             "PARAGRAPH 3 (~30–40 words): ONLY partner-karak evidence → warm presence / attraction in relationship.\n\n"
             "Do NOT write one long essay. Do NOT add 'unique vibes' or facts outside EVIDENCE.\n"
+            f"{_MR_CONFIDENT_TONE}"
+        )
+    elif open_chart_qa:
+        _ow = min(wb + 30, 130) if wants_explain else max(wb, 60)
+        length_block = (
+            f"Write 2–3 short sentences (~{_ow} words).\n"
+            "This is an OPEN question with NO fixed engine verdict. Read the D1 RELATIONSHIP "
+            "CHART facts below, pick ONLY the factors relevant to the user's exact question "
+            "(see USER ACTUALLY ASKED), and answer THAT question directly: clear stance first, "
+            "then 1–2 plain reasons from those factors. Do NOT list every factor and do NOT give "
+            "a generic marriage summary — stay on the exact thing asked.\n"
             f"{_MR_CONFIDENT_TONE}"
         )
     elif wants_explain:

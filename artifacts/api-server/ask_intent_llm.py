@@ -30,6 +30,11 @@ from typing import Any, Optional
 MR_ARCHETYPES = {
     "spouse_profession",
     "spouse_wealth",
+    "spouse_appearance",
+    "children_parenting",
+    "karmic_marriage",
+    "lifestyle_marriage",
+    "dating_courtship",
     "secret_relationship",
     "one_sided_love",
     "obsession",
@@ -75,8 +80,13 @@ date, muhurat, age). false otherwise.
 (samjhao, explain, reason, kyun) rather than a short verdict.
 5. "mr_archetype": ONLY when domain is marriage or love, pick the single \
 best-fitting archetype id; otherwise null. Allowed ids and meaning:
-   - spouse_profession: partner's job/career field
-   - spouse_wealth: partner's wealth / financial status
+   - spouse_profession: partner's job/career field (doctor/IT/gov/business etc.)
+   - spouse_wealth: partner's wealth / financial status / saving habits
+   - spouse_appearance: partner's physical look (height, face, eyes, complexion, voice, aura)
+   - children_parenting: spouse parenting style, bond with children, family values
+   - karmic_marriage: soulmate, past life, karmic debt, spiritual growth via marriage
+   - lifestyle_marriage: luxury/travel/social/home/abroad settlement after marriage
+   - dating_courtship: true love, dating, flirting, red/green flags, friend-to-lover
    - secret_relationship: secret/hidden/parallel affair
    - one_sided_love: one-sided love, crush, proposal
    - obsession: obsession, jealousy, possessiveness

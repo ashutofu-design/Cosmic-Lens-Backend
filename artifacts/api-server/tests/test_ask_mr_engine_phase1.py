@@ -272,6 +272,36 @@ class MrEngineTests(unittest.TestCase):
         self.assertIn("temper signal", joined)
         self.assertIn("7th", joined)
 
+    def test_spouse_appearance_height_engine(self):
+        q = "partner ki height kaisi hogi?"
+        self.assertEqual(classify_mr_archetype(q), "spouse_appearance")
+        res = run_mr_static_engine(SAMPLE_KUNDLI, q, wants_explain=False)
+        joined = " ".join(res.evidence).lower()
+        self.assertIn("height", joined)
+        self.assertIn("7th", joined)
+
+    def test_children_parenting_engine(self):
+        q = "spouse ka parenting style kaisa hoga?"
+        self.assertEqual(classify_mr_archetype(q), "children_parenting")
+        res = run_mr_static_engine(SAMPLE_KUNDLI, q, wants_explain=False)
+        self.assertIn("parenting", res.verdict.lower())
+
+    def test_karmic_soulmate_engine(self):
+        q = "kya yeh soulmate hai?"
+        self.assertEqual(classify_mr_archetype(q), "karmic_marriage")
+        res = run_mr_static_engine(SAMPLE_KUNDLI, q, wants_explain=False)
+        joined = " ".join(res.evidence).lower()
+        self.assertIn("rahu", joined)
+
+    def test_dating_red_flags_engine(self):
+        q = "relationship me red flags kya hain?"
+        self.assertEqual(classify_mr_archetype(q), "dating_courtship")
+        res = run_mr_static_engine(SAMPLE_KUNDLI, q, wants_explain=False)
+        self.assertTrue(any("red flag" in e.lower() for e in res.evidence))
+
+    def test_ex_return_routes_patchup(self):
+        self.assertEqual(classify_mr_archetype("Ex wapas aayega kya?"), "patchup")
+
 
 if __name__ == "__main__":
     unittest.main()

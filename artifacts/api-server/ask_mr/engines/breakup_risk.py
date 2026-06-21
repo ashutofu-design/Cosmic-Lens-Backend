@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from typing import Any
 
 from vedic.love_reality.scoring_core import KundliReader, risk_band_high_is_bad
@@ -78,8 +80,15 @@ def run_breakup_risk(kundli: dict, question: str, *, wants_explain: bool = False
         verdict += " (repair capacity present)"
 
     evidence = _pick_evidence(sig)
+    if re.search(r"(?ix)\b(toxic|manipulat|unhealthy)\b", question or ""):
+        if sig.rahu_on_7th_axis or sig.third_person_risk:
+            evidence.insert(0, "Toxic pattern: Rahu/hidden-stress on partnership axis — emotional drain if boundaries weak.")
+        if sig.mars_on_7th and sig.saturn_on_7th:
+            evidence.insert(0, "Toxic pattern: Mars+Saturn on 7th — heated conflicts + cold distance cycle; repair needs both calm.")
     if not evidence:
         evidence = ["No strong separation driver triggered; signals look mixed/normal."]
+    if re.search(r"(?ix)\b(toot\w*|tut\w*|breakup|separation|divorce)\b", question or ""):
+        evidence.insert(0, f"Breakup/separation signal: {verdict} — chart friction on partnership axis.")
 
     summary: list[str] = []
     summary.append("Answer should be cautious and practical (repair advice), not fatalistic.")

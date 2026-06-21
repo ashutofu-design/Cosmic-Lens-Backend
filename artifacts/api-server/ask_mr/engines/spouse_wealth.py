@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from vedic.love_reality.scoring_core import KundliReader, SIGNS
 
 from ..types import EngineResult
@@ -45,6 +47,40 @@ def run_spouse_wealth(kundli: dict, question: str, *, wants_explain: bool = Fals
             f"occupants={occ or 'none'}."
         )
 
+    q = (question or "").lower()
+    focus = "general"
+    if re.search(r"(?ix)\b(middle\s*class|middleclass)\b", q):
+        focus = "middle_class"
+        evidence.append(
+            "Middle-class comfort: 2nd/8th spouse-wealth axes balanced — stable modest lifestyle, not extreme luxury."
+        )
+    elif re.search(r"(?ix)\b(wealthy\s*family|amir\s*ghar|rich\s*family)\b", q):
+        focus = "wealthy_family"
+        lord8 = r.house_lord(8)
+        p8 = r.planet(lord8) or {}
+        evidence.append(
+            f"Wealthy-family marker: 8th lord {lord8} in house {p8.get('house')} — spouse from resource-comfort background."
+        )
+    elif re.search(r"(?ix)\b(self[\s-]?made|khud\s*banaya|apni\s*mehnat)\b", q):
+        focus = "self_made"
+        mars = r.planet("Mars") or {}
+        evidence.append(
+            f"Self-made marker: Mars in house {mars.get('house')} + 2nd-from-spouse axis — "
+            "partner earns through own effort, not only inheritance."
+        )
+    elif re.search(r"(?ix)\b(saving|bachat|kanjoos|frugal)\b", q):
+        focus = "saving"
+        sat = r.planet("Saturn") or {}
+        evidence.append(
+            f"Saving habit: Saturn in house {sat.get('house')} — cautious spending, savings-oriented money style."
+        )
+    elif re.search(r"(?ix)\b(spending|kharch|lavish|shopping)\b", q):
+        focus = "spending"
+        ven_h = ven.get("house")
+        evidence.append(
+            f"Spending habit: Venus in house {ven_h} — comfort spending on lifestyle, gifts and pleasures."
+        )
+
     verdict = "Spouse wealth / financial comfort: pattern from spouse-wealth houses (not exact income figure)"
 
     return EngineResult(
@@ -58,10 +94,11 @@ def run_spouse_wealth(kundli: dict, question: str, *, wants_explain: bool = Fals
             "Do NOT quote exact salary or net worth.",
             "NO shayad/ho sakta hai/lagta hai.",
         ],
-        evidence=evidence[:6],
+        evidence=evidence[:8],
         ignore=["timing dates/windows", "exact income number", "job title"],
         checks={
             "slice_type": "mr_engine_v1",
             "archetype": "spouse_wealth",
+            "question_focus": focus,
         },
     )

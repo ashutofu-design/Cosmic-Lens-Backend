@@ -113,6 +113,13 @@ _GROWTH_Q = re.compile(
     r"\b(kaam\s+karna\s+chahiye|work\s+on|improve|sudhar|focus\s+area)\b",
     re.I,
 )
+_COMMUNICATION_Q = re.compile(
+    r"\b(communication|baat\s*cheet|samajh\s*payeg[aei]|understanding)\b", re.I
+)
+_STABILITY_Q = re.compile(r"\b(stable|stability|tik\s*pa|long\s*lasting)\b", re.I)
+_TEAMWORK_Q = re.compile(r"\b(teamwork|saath\s*mil\s*kar|partnership\s*goal)\b", re.I)
+_CONFLICT_Q = re.compile(r"\b(conflict\s*style|ego\s*clash|ladai|jhagda)\b", re.I)
+_MATURITY_Q = re.compile(r"\b(emotional\s*maturity|mature|immature)\b", re.I)
 _POSITIVE_NOTE_KEYS = [
     "5th lord strong",
     "Saturn as 7th lord in 7th",
@@ -133,14 +140,61 @@ _AFFLICTION_NOTE_KEYS = [
 ]
 
 
+def _synthesize_communication(kundli: dict, sig) -> list[str]:
+    k = dict(kundli or {})
+    k.setdefault("name", "You")
+    r = KundliReader(k)
+    lines: list[str] = []
+    merc = r.planet("Mercury") or {}
+    if merc.get("house") in (3, 7, 11):
+        lines.append(
+            f"Mercury in house {merc.get('house')} sign {merc.get('sign')} — clear talk and mental understanding in marriage."
+        )
+    occ7 = r.occupants(7)
+    if "Mercury" in occ7:
+        lines.append("Mercury in 7th — partner communicates openly; misunderstandings resolve through dialogue.")
+    if "Moon" in occ7:
+        lines.append("Moon in 7th — emotional understanding grows when feelings are spoken honestly.")
+    for key in ("Saturn on 7th", "Mars on 7th", "Moon under Saturn/Rahu"):
+        picked = pick_notes(sig, [key], limit=1)
+        if picked:
+            lines.append(f"Communication friction: {picked[0]} — patience needed in hard talks.")
+        if len(lines) >= 5:
+            break
+    return lines[:5]
+
+
+def _synthesize_stability(kundli: dict, sig) -> list[str]:
+    lines = pick_notes(sig, ["Saturn as 7th lord in 7th", "Jupiter in house", "5th lord strong"], limit=3)
+    k = dict(kundli or {})
+    k.setdefault("name", "You")
+    r = KundliReader(k)
+    jup = r.planet("Jupiter") or {}
+    if jup.get("house") in (1, 4, 7, 9, 11):
+        lines.append(
+            f"Stability marker: Jupiter in house {jup.get('house')} — long-term faith and steady bond growth."
+        )
+    if sig.saturn_on_7th:
+        lines.append("Saturn on 7th — slow-build stable marriage; loyalty through duty and patience.")
+    if not lines:
+        lines.append("Marriage stability: moderate — daily respect and routine keep bond steady.")
+    return lines[:5]
+
+
 def _question_intent(question: str) -> str:
     q = question or ""
     if _STRENGTH_Q.search(q) and not _CHALLENGE_Q.search(q):
         return "strengths"
-    if _CHALLENGE_Q.search(q) and not _STRENGTH_Q.search(q):
+    if _CONFLICT_Q.search(q) or (_CHALLENGE_Q.search(q) and not _STRENGTH_Q.search(q)):
         return "challenges"
-    if _EMOTIONAL_COMPAT_Q.search(q):
+    if _COMMUNICATION_Q.search(q):
+        return "communication"
+    if _EMOTIONAL_COMPAT_Q.search(q) or _MATURITY_Q.search(q):
         return "emotional_compatibility"
+    if _STABILITY_Q.search(q):
+        return "stability"
+    if _TEAMWORK_Q.search(q):
+        return "teamwork"
     if _SUPPORT_Q.search(q) and re.search(
         r"\b(partner|spouse|husband|wife|pati|patni|marriage|career|goals?)\b", q, re.I
     ):
@@ -280,6 +334,19 @@ def run_general_mr(kundli: dict, question: str, *, wants_explain: bool = False) 
         evidence = pick_notes(sig, _AFFLICTION_NOTE_KEYS, limit=6)
         if not evidence:
             evidence = ["No dominant friction driver; routine communication still matters."]
+        verdict = "Marriage challenges: friction patterns visible — repair through talk and boundaries"
+    elif intent == "communication":
+        evidence = _synthesize_communication(kundli, sig)
+        verdict = "Marriage communication: understanding possible — clear honest talk is the key habit"
+    elif intent == "stability":
+        evidence = _synthesize_stability(kundli, sig)
+        verdict = "Marriage stability: steady long-term bond possible — patience and respect anchor it"
+    elif intent == "teamwork":
+        evidence = _synthesize_partner_support(kundli, sig)
+        evidence.append(
+            "Teamwork pattern: shared goals work when roles are discussed openly — partnership as a team."
+        )
+        verdict = "Marriage teamwork: partner can work as a team — shared planning and support matter"
     elif intent == "emotional_compatibility":
         evidence = _synthesize_emotional_compatibility(kundli, sig)
         if sig.reconnection_yoga and not any("5th lord strong" in e for e in evidence):
@@ -335,6 +402,12 @@ def run_general_mr(kundli: dict, question: str, *, wants_explain: bool = False) 
         summary[0] = "Answer strengths directly — lead with 2–3 positive patterns; one short growth edge max."
     elif intent == "challenges":
         summary[0] = "Answer challenges/conflicts directly — name friction causes; one repair habit at end."
+    elif intent == "communication":
+        summary[0] = "Answer communication/understanding directly — talk strengths first, one friction caveat."
+    elif intent == "stability":
+        summary[0] = "Answer stability directly — long-term bond markers first, one patience note if Saturn."
+    elif intent == "teamwork":
+        summary[0] = "Answer teamwork directly — shared support lines + one practical couple habit."
     elif intent == "emotional_compatibility":
         summary[0] = (
             "Answer emotional compatibility directly — bond depth first, "

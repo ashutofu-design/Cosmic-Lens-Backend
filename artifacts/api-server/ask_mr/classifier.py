@@ -1,217 +1,623 @@
 from __future__ import annotations
 
+
+
 import re
 
 
-def classify_mr_archetype(question: str) -> str:
-    """Return MR non-timing archetype id for routing."""
-    q = (question or "").strip().lower()
-    if not q:
-        return "general_mr"
 
-    # Spouse profession (partner's job field — not native career support)
-    if re.search(r"\b(profession|job|work|business|naukri|kaam|field|line)\b", q) and re.search(
-        r"\b(spouse|partner|husband|wife|pati|patni|jeevan\s*sathi)\b", q
-    ):
-        return "spouse_profession"
+_SPOUSE = r"\b(spouse|partner|husband|wife|pati|patni|biwi|jeevan\s*sathi)\b"
 
-    # Spouse wealth / financial comfort (not native money topic)
-    if re.search(
-        r"\b(wealth|rich|affluent|dhan|paisa|money|prosper|samriddh|amir|comfortable)\b", q
-    ) and re.search(r"\b(spouse|partner|husband|wife|pati|patni|jeevan\s*sathi)\b", q):
-        return "spouse_wealth"
+_NATIVE = r"\b(meri|mera|mere|my|mujhe|main|i\s*am)\b"
 
-    # Spouse's in-laws / family-wale (8H axis) — NOT partner upbringing (family background)
-    if not re.search(
-        r"\b(?:mer[ei]|mere|my|parents?|ma\s*baap|papa|mummy)\b.{0,30}\b"
-        r"(?:manenge|manzoor|accept|swikar|approval|manna|allow)\b",
-        q,
-    ) and (
-        re.search(
-            r"\b(?:wife|husband|spouse|partner|pati|patni|biwi)\b"
-            r".{0,40}\b(?:"
-            r"family\s*wal\w*|ghar\s*wal\w*|ghar\s*ke\s*log|in[\s-]?laws?|"
-            r"saas|sasur|sasural|sasuraal|rishtedaar|"
-            r"(?:parivaar|parivar|pariwar|family|relatives)\s*(?:kaise|kya|kaisa|kaisi)\b"
-            r")\b",
-            q,
-        )
-        or re.search(
-            r"\b(?:family\s*wal\w*|ghar\s*wal\w*)\b"
-            r".{0,30}\b(?:wife|husband|spouse|partner|pati|patni|biwi)\b",
-            q,
-        )
-        or re.search(r"\b(?:saas|sasur|sasural|in[\s-]?laws?)\b", q)
-    ):
-        return "partner_nature"
 
-    # Multiple / parallel love pattern
-    if re.search(
-        r"\b(multiple\s*(love|relationship)|parallel\s*(love|relation)|do\s*rishte)\b", q
-    ):
-        return "secret_relationship"
 
-    # Secret / hidden relationship
-    if re.search(
-        r"\b(secret|hidden|chhup|chhupa|affair|chakkar|private\s*rishta|gupt)\b", q
-    ):
-        return "secret_relationship"
 
-    # One-sided / crush / proposal
-    if re.search(
-        r"\b(one\s*sided|ek\s*tarfa|ektarafa|crush|proposal|propose|"
-        r"meri\s+taraf\s+se|us\s+ko\s+pasand)\b",
-        q,
-    ):
-        return "one_sided_love"
 
-    # Obsession / jealousy / possessive
-    if re.search(
-        r"\b(obsess|obsession|jealous|possessive|control|over\s*attach)\b", q
-    ):
-        return "obsession"
+def _has_spouse(q: str) -> bool:
 
-    # Bed / intimacy (before generic chemistry)
-    if re.search(
-        r"\b(bed|conjugal|sexual|sex\b|suhag\s*raat|private\s*life|"
-        r"physical\s*compat)\b",
-        q,
-    ):
-        return "bed_intimacy"
+    return bool(re.search(_SPOUSE, q))
 
-    # Self-worth / boundaries (user's confidence — not "partner respect dega")
-    if re.search(
-        r"\b(self\s*worth|boundar|insecure|insecurity|value\s*myself)\b", q
-    ):
-        return "self_worth"
 
-    # Partner respect / izzat (partner behaviour — not self-worth engine)
-    if re.search(r"\b(partner|spouse|husband|wife|pati|patni|jeevan\s*sathi)\b", q) and re.search(
-        r"\b(respect|izzat|samman)\b", q
-    ):
-        return "partner_nature"
 
-    # Partner emotional style (expressive/reserved — not user attachment depth)
-    if re.search(r"\b(partner|spouse|husband|wife|pati|patni|jeevan\s*sathi)\b", q) and re.search(
-        r"\b(express|reserved|emotionally|emotion|feelings?|khul|band|bolt[ae]?)\b", q
-    ) and not re.search(r"\b(compatible|compatibility|loyal|trust|commit|attach)\b", q):
-        return "partner_nature"
 
-    # Long-distance / door rehkar rishta (before breakup — avoid bare "door" as separation)
-    if re.search(
-        r"(?:\b(long\s*distance|ldr|alag\s*shahr|different\s*city|dur\s*se\s*rishta)\b|"
-        r"door\s*reh\w*|dur\s*reh\w*)",
-        q,
-    ) and re.search(
-        r"\b(relation|relationship|partner|marriage|pyaar|pyar|love|rishta|shaadi)\b", q
-    ):
-        return "long_distance"
 
-    # Marriage quality / compatibility / strengths / growth (before emotional-only)
-    if re.search(
-        r"\b(shaadi\s*achhi|happy|khush|sukh|marriage\s*quality|compatible|"
-        r"compatibility|match\s*making|rishta\s*achha|vivah\s*sukh|"
-        r"strengths?|positive\s*changes?|major\s*challenges?|conflicts?|"
-        r"kaam\s+karna\s+chahiye|gun\s*milan|36\s*gun)\b",
-        q,
-    ):
-        return "general_mr"
+def _user_attachment(q: str) -> bool:
 
-    # Partner supports native career / life goals (not spouse profession axis)
-    if re.search(
-        r"\b(spouse|partner|husband|wife|pati|patni|jeevan\s*sathi|marriage\s*partner)\b",
-        q,
-    ) and re.search(
-        r"\b(support|saath\s*deg[ei]|saath\s*dega)\b",
-        q,
-    ) and re.search(r"\b(career|goals?|sapne|dreams?|ambition|life\s*goals?|meri|mujhe|mere)\b", q):
-        return "general_mr"
+    """User's own emotional style — not partner's."""
 
-    # Loyalty / commitment / cheating / trust (before emotional attachment)
-    if re.search(
-        r"\b(cheat|cheating|dhokha|dhoka|betray|loyal\w*|faithful|trust|vishwas|"
-        r"commitment|commit|nibha\w*|wafad\w*|vafad\w*|third\s+person)\b",
-        q,
-    ):
-        return "loyalty_trust"
+    return bool(re.search(_NATIVE, q)) and re.search(
 
-    # Emotional attachment / feelings (expressive vs reserved — not compatibility)
-    if re.search(
-        r"\b(emotional|attachment|attach|feelings?|dil\s*lag|lagav|pyaar\s*gehra)\b", q
-    ) and not re.search(r"\b(compatible|compatibility)\b", q) and not re.search(
-        r"\b(loyal\w*|commitment|commit|trust|vishwas)\b", q
-    ):
-        return "emotional_attachment"
+        r"\b(attachment|attach|emotional\s*needs?|mera\s*attachment)\b", q
 
-    # Patchup / reconciliation / ex return
-    if re.search(
-        r"\b(patch\s*up|patchup|reconcile|reconciliation|wapas|return|laut|maan\s+jayega)\b", q
-    ) or (
-        re.search(r"\b(ex\b|purana\s*partner|former\s*partner|past\s*love)\b", q)
-        and re.search(r"\b(wapas|return|laut|aayega|aayegi|patch)\b", q)
-    ):
-        return "patchup"
-
-    # Chemistry / attraction (non-bed)
-    if re.search(r"\b(chemistry|attraction|spark|passion|romance|romantic)\b", q):
-        return "chemistry"
-
-    # Love vs arranged / khud pasand vs ghar wale (before family approval)
-    has_love = bool(re.search(r"\b(love|pyaar|pyar|prem|romance)\b", q))
-    has_arr = bool(re.search(r"\barrang", q))
-    has_marriage_word = bool(
-        re.search(r"\b(marriage|shaadi|shadi|shaddi|vivah|biyah|byah|rishta)\b", q)
     )
-    if (has_love and has_arr) or re.search(r"\b(love\s*marriage|prem\s*vivah)\b", q):
-        return "love_vs_arranged"
-    if has_arr and (has_marriage_word or has_love):
-        return "love_vs_arranged"
-    if has_arr and re.search(r"\b(khud|apni|choice|pasand|pyar\w*)\b", q):
-        return "love_vs_arranged"
-    if re.search(r"\b(khud|apni)\s*pasand\b", q) and re.search(
-        r"\b(ghar\s*wal\w*|parents?|family)\b", q
-    ):
-        return "love_vs_arranged"
-    if re.search(r"\b(ghar\s*wal\w*|parents?)\s*choose\b", q) and re.search(
-        r"\b(pasand|khud|apni|shaadi|shadi|marriage|vivah)\b", q
-    ):
-        return "love_vs_arranged"
 
-    # Family approval (user's elders / intercaste — not spouse family profile)
-    if re.search(
-        r"\b(parents?|ghar\s*wal\w*|gharwal\w*|approval|intercaste|inter\s*caste|"
-        r"religion|maanenge|manenge)\b",
-        q,
-    ) or (
-        re.search(r"\bfamily\b", q)
-        and not re.search(
-            r"\b(spouse|partner|husband|wife|pati|patni|jeevan\s*sathi)\b", q
-        )
-    ):
-        return "family_approval"
 
-    # Manglik
+
+
+
+def classify_mr_archetype(question: str) -> str:
+
+    """Return MR non-timing archetype id for routing (priority order matters)."""
+
+    q = (question or "").strip().lower()
+
+    if not q:
+
+        return "general_mr"
+
+
+
+    # --- Love language / affection style (native or partner) ---
+    if re.search(r"\b(love\s*language|care\s*dikhane|affection\s*style)\b", q):
+        return "partner_nature"
+
+    # --- Manglik ---
+
     if re.search(r"\b(manglik|mangalik|mangal\s*dosh)\b", q):
+
         return "manglik"
 
-    # Second marriage / remarriage (before breakup — divorce word may appear)
-    if re.search(
-        r"\b(second|dusri|doosri|2nd|twice|dubara|punah|remarri|do\s*bar)\b", q
-    ) and re.search(r"\b(marriage|shaadi|shadi|vivah|vivahit|partner|husband|wife|rishta)\b", q):
-        return "second_marriage"
 
-    # Breakup / separation (toot/tootna; not bare "door" — LDR uses door rehkar)
-    if re.search(
-        r"\b(breakup|break\s*up|separation|divorce|talaq|toot\w*|tut\w*|rishta\s*toot)\b", q
-    ):
-        return "breakup_risk"
 
-    # Partner nature (after more specific buckets)
-    if re.search(
-        r"\b(partner|spouse|husband|wife|pati|patni|jeevan\s*sathi|"
-        r"nature|kaisa|kaisi|kaise\s+honge|age\s*gap|umar)\b",
+    # --- Spouse physical appearance (before partner_nature) ---
+
+    if _has_spouse(q) and re.search(
+
+        r"(?ix)\b("
+
+        r"height|lamba[iy]?|complexion|rang|face|chehra|eyes?|aankh\w*|hair|baal|"
+
+        r"body\s*type|figure|dress|dressing|voice|awaaz|aura|attract\w*|beautiful|"
+
+        r"handsome|good\s*looking|physical\s*appear|shakl|surat|look\b"
+
+        r")\b",
+
         q,
+
     ):
+
+        return "spouse_appearance"
+
+
+
+    # --- Spouse profession (expanded: doctor, IT, gov, business without word 'profession') ---
+
+    if _has_spouse(q) and re.search(
+
+        r"(?ix)\b("
+
+        r"profession|job|work|business|naukri|kaam|field|line|career|"
+
+        r"doctor|medical|engineer|it\b|software|government|govt|private|"
+
+        r"teacher|education|finance|bank|creative|artist|leadership|manager"
+
+        r")\b",
+
+        q,
+
+    ) and not re.search(r"\b(support|saath\s*deg)\b", q):
+
+        return "spouse_profession"
+
+
+
+    # --- Spouse wealth (expanded) ---
+
+    if _has_spouse(q) and re.search(
+
+        r"(?ix)\b("
+
+        r"wealth|rich|affluent|dhan|paisa|money|prosper|samriddh|amir|comfortable|"
+
+        r"middle\s*class|self\s*made|self-made|saving|spending|wealthy\s*family|"
+
+        r"financial|finance|income|salary|paisa\s*wal"
+
+        r")\b",
+
+        q,
+
+    ):
+
+        return "spouse_wealth"
+
+
+
+    # --- Children / parenting / family values ---
+
+    if re.search(
+
+        r"(?ix)\b("
+
+        r"parenting|parent\s*style|bachon|bacchon|children|kids?|"
+
+        r"family\s*values?|sanskaar|bachch"
+
+        r")\b",
+
+        q,
+
+    ) and (
+
+        _has_spouse(q)
+
+        or re.search(r"\b(marriage|shaadi|after\s*marriage|partner)\b", q)
+
+        or re.search(r"\b(parenting|bachon|children|family\s*values)\b", q)
+
+    ):
+
+        return "children_parenting"
+
+
+
+    # --- Karmic / soulmate / past life ---
+
+    if re.search(
+
+        r"(?ix)\b("
+
+        r"soul\s*mate|soulmate|twin\s*flame|karmic|karma\s*debt|past\s*life|"
+
+        r"pichle\s*janam|purva\s*janm|spiritual\s*growth.*marriage|"
+
+        r"marriage.*spiritual\s*growth|aadhyatmik.*shaadi"
+
+        r")\b",
+
+        q,
+
+    ):
+
+        return "karmic_marriage"
+
+
+
+    # --- Lifestyle after marriage ---
+
+    if re.search(
+
+        r"(?ix)\b("
+
+        r"luxury|luxurious|travel|ghumna|social\s*life|home\s*environment|"
+
+        r"ghar\s*ka\s*mahaul|abroad\s*settle|settle\s*abroad|foreign\s*settle|"
+
+        r"lifestyle\s*after\s*marriage|shaadi\s*ke\s*baad.*(travel|luxury|ghar)"
+
+        r")\b",
+
+        q,
+
+    ):
+
+        return "lifestyle_marriage"
+
+
+
+    if re.search(r"(?ix)\b(red\s*flags?|green\s*flags?)\b", q):
+        return "dating_courtship"
+
+    # --- Dating / courtship / true love / flags ---
+
+    if re.search(
+
+        r"(?ix)\b("
+
+        r"true\s*love|sachcha\s*pyaar|friend\s*to\s*lover|dost\s*se\s*pyaar|friend\s*se\s*lover|"
+
+        r"dost\s*se\s*love|lover\s*ban|online\s*relation|dating|flirt\w*|first\s*impression|"
+
+        r"red\s*flags?|green\s*flags?|attraction\s*pattern|dating\s*success|courtship|date\s*pe|"
+
+        r"flirting\s*style"
+
+        r")\b",
+
+        q,
+
+    ) or (
+
+        re.search(r"\b(pyaar|pyar|love|rishta)\b", q)
+
+        and re.search(r"\b(milega|milegi|hoga|hogi|sachcha|true)\b", q)
+
+        and not re.search(r"\barrang", q)
+
+        and not _has_spouse(q)
+
+    ):
+
+        return "dating_courtship"
+
+
+
+    # --- In-laws / spouse family-wale (8H) ---
+
+    if not re.search(
+
+        r"\b(?:mer[ei]|mere|my|parents?|ma\s*baap|papa|mummy)\b.{0,30}\b"
+
+        r"(?:manenge|manzoor|accept|swikar|approval|manna|allow)\b",
+
+        q,
+
+    ) and (
+
+        re.search(
+
+            r"\b(?:wife|husband|spouse|partner|pati|patni|biwi)\b"
+
+            r".{0,40}\b(?:"
+
+            r"family\s*wal\w*|ghar\s*wal\w*|ghar\s*ke\s*log|in[\s-]?laws?|"
+
+            r"saas|sasur|sasural|sasuraal|rishtedaar|"
+
+            r"(?:parivaar|parivar|pariwar|family|relatives)\s*(?:kaise|kya|kaisa|kaisi)\b"
+
+            r")\b",
+
+            q,
+
+        )
+
+        or re.search(
+
+            r"\b(?:family\s*wal\w*|ghar\s*wal\w*)\b"
+
+            r".{0,30}\b(?:wife|husband|spouse|partner|pati|patni|biwi)\b",
+
+            q,
+
+        )
+
+        or re.search(r"\b(?:saas|sasur|sasural|mother[\s-]?in[\s-]?law|father[\s-]?in[\s-]?law)\b", q)
+
+        or re.search(r"\b(?:joint\s*family|nuclear\s*family|sasural\s*interference)\b", q)
+
+    ):
+
         return "partner_nature"
 
+
+
+    # --- Multiple / secret / affair ---
+
+    if re.search(
+
+        r"(?ix)\b("
+
+        r"multiple\s*(?:love|relationships?|relations?|rishte)|parallel\s*(?:love|relations?|rishte)|"
+
+        r"do\s*rishte|secret|hidden|chhup|chhupa|affair|chakkar|private\s*rishta|gupt"
+
+        r")\b",
+
+        q,
+
+    ):
+
+        return "secret_relationship"
+
+
+
+    # --- One-sided / crush ---
+
+    if re.search(
+
+        r"\b(one\s*sided|ek\s*tarfa|ektarafa|crush|proposal|propose|"
+
+        r"meri\s+taraf\s+se|us\s+ko\s+pasand)\b",
+
+        q,
+
+    ):
+
+        return "one_sided_love"
+
+
+
+    # --- Obsession / jealousy ---
+
+    if re.search(r"\b(obsess|obsession|jealous|possessive|control|over\s*attach)\b", q):
+
+        return "obsession"
+
+
+
+    # --- Bed / intimacy ---
+
+    if re.search(
+
+        r"\b(bed|conjugal|sexual|sex\b|suhag\s*raat|private\s*life|physical\s*compat)\b", q
+
+    ):
+
+        return "bed_intimacy"
+
+
+
+    # --- Self-worth ---
+
+    if re.search(r"\b(self\s*worth|boundar|insecure|insecurity|value\s*myself)\b", q):
+
+        return "self_worth"
+
+
+
+    # --- Long-distance + online relationship ---
+
+    if re.search(
+
+        r"(?ix)\b("
+
+        r"long\s*distance|ldr|alag\s*shahr|different\s*city|dur\s*se\s*rishta|"
+
+        r"online\s*relationship|online\s*rishta|virtual\s*love|internet\s*love"
+
+        r")\b",
+
+        q,
+
+    ) or (
+
+        re.search(r"(?:door\s*reh\w*|dur\s*reh\w*)", q)
+
+        and re.search(r"\b(relation|relationship|partner|marriage|pyaar|pyar|love|rishta|shaadi)\b", q)
+
+    ):
+
+        return "long_distance"
+
+
+
+    # --- Breakup / toxic / divorce / separation ---
+
+    if re.search(
+
+        r"(?ix)\b("
+
+        r"breakup|break\s*up|separation|divorce|talaq|toot\w*|tut\w*|rishta\s*toot|"
+
+        r"toxic|manipulat|ego\s*clash"
+
+        r")\b",
+
+        q,
+
+    ):
+
+        return "breakup_risk"
+
+
+
+    # --- Second marriage ---
+
+    if re.search(
+
+        r"\b(second|dusri|doosri|2nd|twice|dubara|punah|remarri|do\s*bar)\b", q
+
+    ) and re.search(r"\b(marriage|shaadi|shadi|vivah|vivahit|partner|husband|wife|rishta)\b", q):
+
+        return "second_marriage"
+
+
+
+    # --- Loyalty / trust / commitment ---
+
+    if re.search(
+
+        r"\b(cheat|cheating|dhokha|dhoka|betray|loyal\w*|faithful|trust|vishwas|"
+
+        r"commitment|commit|nibha\w*|wafad\w*|vafad\w*|third\s+person)\b",
+
+        q,
+
+    ):
+
+        return "loyalty_trust"
+
+
+
+    # --- Love vs arranged ---
+
+    has_love = bool(re.search(r"\b(love|pyaar|pyar|prem|romance)\b", q))
+
+    has_arr = bool(re.search(r"\barrang", q))
+
+    has_marriage_word = bool(re.search(r"\b(marriage|shaadi|shadi|vivah|biyah|byah|rishta)\b", q))
+
+    if (has_love and has_arr) or re.search(r"\b(love\s*marriage|prem\s*vivah)\b", q):
+
+        return "love_vs_arranged"
+
+    if has_arr and (has_marriage_word or has_love):
+
+        return "love_vs_arranged"
+
+    if has_arr and re.search(r"\b(khud|apni|choice|pasand|pyar\w*)\b", q):
+
+        return "love_vs_arranged"
+
+    if re.search(r"\b(khud|apni)\s*pasand\b", q) and re.search(r"\b(ghar\s*wal\w*|parents?|family)\b", q):
+
+        return "love_vs_arranged"
+
+    if re.search(r"\b(ghar\s*wal\w*|parents?)\s*choose\b", q) and re.search(
+
+        r"\b(pasand|khud|apni|shaadi|shadi|marriage|vivah)\b", q
+
+    ):
+
+        return "love_vs_arranged"
+
+    if re.search(r"\blove[\s-]?cum[\s-]?arrang", q):
+
+        return "love_vs_arranged"
+
+
+
+    # --- Family approval / inter-caste / court marriage ---
+
+    if re.search(
+
+        r"(?ix)\b("
+
+        r"parents?|ghar\s*wal\w*|gharwal\w*|approval|inter[\s-]?caste|intercaste|"
+
+        r"inter[\s-]?religion|interreligion|maanenge|manenge|court\s*marriage|"
+
+        r"family\s*involve|ghar\s*walon\s*ka\s*role"
+
+        r")\b",
+
+        q,
+
+    ) or (
+
+        re.search(r"\bfamily\b", q)
+
+        and not _has_spouse(q)
+
+        and not re.search(r"\b(values?|sanskaar|parenting)\b", q)
+
+    ):
+
+        return "family_approval"
+
+
+
+    # --- Marriage quality / compatibility / emotional compat / communication ---
+
+    if re.search(
+
+        r"(?ix)\b("
+
+        r"shaadi\s*achhi|happy|khush|sukh|marriage\s*quality|compatible|compatibility|"
+
+        r"match\s*making|rishta\s*achha|vivah\s*sukh|strengths?|positive\s*changes?|"
+
+        r"major\s*challenges?|conflicts?|kaam\s+karna\s+chahiye|gun\s*milan|36\s*gun|"
+
+        r"emotional\s*compat|samajh\s*payega|samajh\s*payegi|communication|teamwork|"
+
+        r"stable|stability|growth|mutual\s*support|conflict\s*style|emotional\s*maturity|"
+
+        r"understanding|shaadi\s*ke\s*baad.*(khush|sukh|achh)"
+
+        r")\b",
+
+        q,
+
+    ):
+
+        return "general_mr"
+
+
+
+    # --- Partner supports native career ---
+
+    if _has_spouse(q) and re.search(r"\b(support|saath\s*deg[ei]|saath\s*dega)\b", q) and re.search(
+
+        r"\b(career|goals?|sapne|dreams?|ambition|life\s*goals?|meri|mujhe|mere)\b", q
+
+    ):
+
+        return "general_mr"
+
+
+
+    # --- Partner personality (before chemistry / emotional_attachment) ---
+
+    if _has_spouse(q) and re.search(
+
+        r"(?ix)\b("
+
+        r"nature|kaisa|kaisi|kaise\s+honge|express|reserved|emotion|feeling|"
+
+        r"gussa|anger|temper|dominant|cooperative|romantic|caring|humor|humour|"
+
+        r"honest|introvert|extrovert|spiritual|practical|ambitious|respect|izzat|"
+
+        r"love\s*language|affection\s*style|background|culture|foreign|videsh|"
+
+        r"family\s*background|khandaan|manipulat"
+
+        r")\b",
+
+        q,
+
+    ):
+
+        return "partner_nature"
+
+
+
+    # --- Chemistry (non-partner or general) ---
+
+    if re.search(r"\b(chemistry|attraction|spark|passion|romance|romantic)\b", q):
+
+        return "chemistry"
+
+
+
+    # --- User emotional attachment only ---
+
+    if re.search(r"\b(emotional|attachment|attach|feelings?|dil\s*lag|lagav|pyaar\s*gehra)\b", q) and not re.search(
+
+        r"\b(compatible|compatibility)\b", q
+
+    ) and not re.search(r"\b(loyal\w*|commitment|commit|trust|vishwas)\b", q) and (
+
+        _user_attachment(q) or not _has_spouse(q)
+
+    ):
+
+        return "emotional_attachment"
+
+
+
+    # --- Patchup ---
+
+    if re.search(
+
+        r"\b(patch\s*up|patchup|reconcile|reconciliation|wapas|return|laut|maan\s+jayega)\b", q
+
+    ) or (
+
+        re.search(r"\b(ex\b|purana\s*partner|former\s*partner|past\s*love)\b", q)
+
+        and re.search(r"\b(wapas|return|laut|aayega|aayegi|patch)\b", q)
+
+    ):
+
+        return "patchup"
+
+
+
+    # --- Foreign spouse (without lifestyle settle) ---
+
+    if re.search(r"\b(foreign\s*spouse|videshi\s*partner|alag\s*culture)\b", q):
+
+        return "partner_nature"
+
+
+
+    # --- Partner nature catch-all ---
+
+    if re.search(
+
+        r"\b(partner|spouse|husband|wife|pati|patni|jeevan\s*sathi|age\s*gap|umar)\b", q
+
+    ):
+
+        return "partner_nature"
+
+
+
     return "general_mr"
+

@@ -80,6 +80,31 @@ def run_mr_static_engine(
 
         return run_spouse_wealth(kundli, question, wants_explain=wants_explain)
 
+    if archetype == "spouse_appearance":
+        from .engines.spouse_appearance import run_spouse_appearance
+
+        return run_spouse_appearance(kundli, question, wants_explain=wants_explain)
+
+    if archetype == "children_parenting":
+        from .engines.children_parenting import run_children_parenting
+
+        return run_children_parenting(kundli, question, wants_explain=wants_explain)
+
+    if archetype == "karmic_marriage":
+        from .engines.karmic_marriage import run_karmic_marriage
+
+        return run_karmic_marriage(kundli, question, wants_explain=wants_explain)
+
+    if archetype == "lifestyle_marriage":
+        from .engines.lifestyle_marriage import run_lifestyle_marriage
+
+        return run_lifestyle_marriage(kundli, question, wants_explain=wants_explain)
+
+    if archetype == "dating_courtship":
+        from .engines.dating_courtship import run_dating_courtship
+
+        return run_dating_courtship(kundli, question, wants_explain=wants_explain)
+
     if archetype == "second_marriage":
         from .engines.second_marriage import run_second_marriage
 

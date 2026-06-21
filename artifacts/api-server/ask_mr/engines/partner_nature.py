@@ -41,10 +41,12 @@ def _build_spouse_family_result(
     r: KundliReader,
     sig,
     *,
+    question: str,
     wants_explain: bool,
     gender: str,
 ) -> EngineResult:
     """In-laws / spouse's family — 8th house axis only (not 7H partner personality)."""
+    q = (question or "").lower()
     asc_i = r.asc_index()
     sign8 = SIGNS[(asc_i + 7) % 12] if isinstance(asc_i, int) else None
     lord8 = r.house_lord(8)
@@ -102,6 +104,73 @@ def _build_spouse_family_result(
             "general social tone of spouse's family — read from that pattern."
         )
 
+    if re.search(r"\b(?:saas|sasur|mother[\s-]?in[\s-]?law)\b", q or ""):
+        if re.search(r"\b(?:saas|mother[\s-]?in[\s-]?law)\b", q):
+            if "Moon" in occ8:
+                evidence.append(
+                    "Mother-in-law (saas) tone: Moon in 8th — emotionally involved, caring but sensitive sasural elder."
+                )
+            if "Mars" in occ8:
+                evidence.append(
+                    "Mother-in-law (saas) tone: Mars in 8th — strong-willed saas; direct talk and respect open doors."
+                )
+            if "Saturn" in occ8:
+                evidence.append(
+                    "Mother-in-law (saas) tone: Saturn in 8th — traditional disciplined saas; patience builds trust."
+                )
+            if not any("Mother-in-law" in e for e in evidence):
+                evidence.append(
+                    f"Mother-in-law (saas) baseline: 8th house sign {sign8 or 'unknown'} sets sasural elder tone."
+                )
+        if re.search(r"\b(?:sasur|father[\s-]?in[\s-]?law)\b", q):
+            sun = r.planet("Sun") or {}
+            if "Sun" in occ8 or sun.get("house") == 8:
+                evidence.append(
+                    "Father-in-law (sasur) tone: Sun linked to 8th — dignified authority figure in spouse's family."
+                )
+            if "Saturn" in occ8:
+                evidence.append(
+                    "Father-in-law (sasur) tone: Saturn in 8th — serious principled sasur; formal respect matters."
+                )
+            if not any("Father-in-law" in e for e in evidence):
+                evidence.append(
+                    f"Father-in-law (sasur) baseline: 8th lord {lord8 or '?'} tone shapes sasur behaviour."
+                )
+
+    if re.search(r"\b(?:joint\s*family|nuclear\s*family)\b", q or ""):
+        sign4 = SIGNS[(asc_i + 3) % 12] if isinstance(asc_i, int) else None
+        occ4 = r.occupants(4)
+        if re.search(r"\bnuclear\b", q):
+            evidence.append(
+                f"Nuclear-family tendency: 4th house (home) sign {sign4 or 'unknown'} with occupants "
+                f"{occ4 or 'none'} — smaller independent household after marriage fits chart."
+            )
+        else:
+            evidence.append(
+                f"Joint-family tendency: 8th house (spouse family) sign {sign8 or 'unknown'} + "
+                f"4th home sign {sign4 or 'unknown'} — shared family setup / sasural ghar influence strong."
+            )
+
+    if re.search(r"\b(?:interference|tut\s*na|dabang|control)\b", q or ""):
+        if "Rahu" in occ8 or (r.planet("Rahu") or {}).get("house") == 8:
+            evidence.append(
+                "In-law interference: Rahu in 8th — unexpected meddling or strong opinions from spouse's family."
+            )
+        if "Mars" in occ8 or "Saturn" in occ8:
+            evidence.append(
+                "In-law interference: Mars/Saturn in 8th — family boundaries tested; clear respectful limits needed."
+            )
+        if not any("interference" in e for e in evidence):
+            evidence.append(
+                "In-law interference level: read from 8th house occupants — benefics ease, malefics need boundaries."
+            )
+
+    if re.search(r"\b(?:siblings?|devr|jeth|nanad|brother[\s-]?in[\s-]?law|sister[\s-]?in[\s-]?law)\b", q):
+        evidence.append(
+            f"Spouse's siblings / extended in-laws: 8th house occupants {occ_label} — "
+            "extended family member tone in sasural."
+        )
+
     if p8l and p8l.get("house") in (6, 8, 12):
         evidence.append(
             "8th lord in dusthana — extra effort needed with in-laws; "
@@ -130,7 +199,7 @@ def _build_spouse_family_result(
             "Para3: one practical line for living with in-laws."
         ),
         summary=summary,
-        evidence=evidence[:8],
+        evidence=evidence[:10],
         ignore=[
             "7th house partner personality (wrong axis for this question)",
             "timing dates/windows",
@@ -145,6 +214,10 @@ def _build_spouse_family_result(
             "occ8": occ_label,
         },
     )
+
+
+def _has_spouse_word(q: str) -> bool:
+    return bool(re.search(r"\b(partner|spouse|husband|wife|pati|patni|biwi)\b", q or ""))
 
 
 def _gender_from_birth(birth: Any) -> str:
@@ -240,7 +313,9 @@ def run_partner_nature(
 
     # In-laws / spouse's family — 8H axis ONLY (before any 7H partner-personality lines).
     if _is_spouse_family_question(q):
-        return _build_spouse_family_result(r, sig, wants_explain=wants_explain, gender=gender)
+        return _build_spouse_family_result(
+            r, sig, question=question, wants_explain=wants_explain, gender=gender
+        )
 
     occ_label = ", ".join(occ7) if occ7 else "none"
     verdict = (
@@ -341,7 +416,7 @@ def run_partner_nature(
         if cooperative and assertive:
             evidence.append(
                 "Partnership style: cooperative-communicative default — shares decisions; "
-                "Mercury Aries streak assertive in ideas, not controlling dominant."
+                f"assertive streak from {lord7 or '7th lord'} placement, not controlling dominant."
             )
             summary_extra = (
                 "Answer dominant vs cooperative: cooperative zyada, assertive kabhi — bossy controlling nahi."
@@ -435,6 +510,111 @@ def run_partner_nature(
         evidence.append("Respect pattern: " + "; ".join(respect_parts) + ".")
         summary_extra = "Answer partner respect directly from Respect pattern evidence."
 
+    if re.search(r"\b(introvert|extrovert|antar\s*mukhi|bahar\s*mukhi)\b", q):
+        extro = sign7 in ("Gemini", "Leo", "Libra", "Sagittarius", "Aries") or bool(
+            occ7 and ("Moon" in occ7 or "Mercury" in occ7)
+        )
+        intro = sign7 in ("Cancer", "Scorpio", "Capricorn", "Virgo", "Pisces") or bool(sig.saturn_on_7th)
+        if extro and not intro:
+            evidence.append(
+                "Social energy: extrovert-leaning partner — open talkative social vibe from 7th sign/occupants."
+            )
+            summary_extra = "Answer introvert vs extrovert: extrovert side zyada."
+        elif intro and not extro:
+            evidence.append(
+                "Social energy: introvert-leaning partner — private thoughtful vibe; opens up with trust."
+            )
+            summary_extra = "Answer introvert vs extrovert: introvert side zyada."
+        else:
+            evidence.append(
+                "Social energy: ambivert mix — social in familiar circles, reserved in new settings."
+            )
+            summary_extra = "Answer introvert vs extrovert: mix — situational."
+
+    if re.search(r"\b(romantic|romance)\b", q) and _has_spouse_word(q):
+        ven = r.planet("Venus") or {}
+        if "Venus" in occ7 or ven.get("house") in (5, 7):
+            evidence.append(
+                "Romantic nature: Venus on love/partnership axis — partner gestures, dates and warmth naturally romantic."
+            )
+        else:
+            evidence.append(
+                f"Romantic nature: Venus in house {ven.get('house')} — romance style through practical steady affection."
+            )
+        summary_extra = "Answer romantic directly from Romantic nature evidence."
+
+    if re.search(r"\b(caring|care\s*karega|care\s*karegi)\b", q):
+        if occ7 and "Moon" in occ7:
+            evidence.append("Caring nature: Moon in 7th — partner emotionally attentive and nurturing in daily life.")
+        elif (r.planet("Moon") or {}).get("house") in (4, 5, 7):
+            evidence.append("Caring nature: Moon on emotional houses — partner shows care through presence and support.")
+        else:
+            evidence.append("Caring nature: care builds steadily — partner shows concern through actions over time.")
+        summary_extra = "Answer caring directly from Caring nature evidence."
+
+    if re.search(r"\b(humor|humour|funny|mazaak)\b", q):
+        merc = r.planet("Mercury") or {}
+        jup = r.planet("Jupiter") or {}
+        if merc.get("house") in (3, 5, 7) or "Mercury" in occ7:
+            evidence.append(
+                f"Humour style: Mercury in house {merc.get('house')} sign {merc.get('sign')} — witty talk, teasing humour."
+            )
+        if jup.get("house") in (5, 7, 9):
+            evidence.append(
+                f"Humour style: Jupiter in house {jup.get('house')} — warm optimistic humour, lightens mood."
+            )
+        summary_extra = "Answer humorous directly from Humour style evidence."
+
+    if re.search(r"\b(honest|imandaar|sach\s*bol)\b", q):
+        jup = r.planet("Jupiter") or {}
+        if jup.get("house") in (1, 7, 9) or "Jupiter" in occ7:
+            evidence.append(
+                f"Honesty pattern: Jupiter in house {jup.get('house')} — fair principled talk, values truth in relationship."
+            )
+        elif lord7 == "Mercury" or (p7l and p7l.get("sign") in ("Sagittarius", "Aries")):
+            evidence.append("Honesty pattern: direct Mercury/Jupiter tone — partner speaks straight, dislikes long pretence.")
+        else:
+            evidence.append("Honesty pattern: honesty grows with trust — partner may guard feelings early then opens up.")
+        summary_extra = "Answer honest directly from Honesty pattern evidence."
+
+    if re.search(r"\b(practical|emotional)\b", q) and _has_spouse_word(q):
+        merc = r.planet("Mercury") or {}
+        moon = r.planet("Moon") or {}
+        practical = (merc.get("house") in (2, 3, 6, 10) or sign7 in ("Virgo", "Capricorn", "Gemini"))
+        emotional = bool(occ7 and "Moon" in occ7) or moon.get("house") in (4, 5, 7)
+        if practical and emotional:
+            evidence.append(
+                "Practical vs emotional: partner mixes practical planning with emotional care — head + heart both active."
+            )
+            summary_extra = "Answer practical vs emotional: dono mix, thoda practical thoda emotional."
+        elif practical:
+            evidence.append(
+                f"Practical vs emotional: Mercury/sign {sign7 or '?'} tone — partner practical grounded, shows love through actions."
+            )
+            summary_extra = "Answer: partner practical side zyada."
+        else:
+            evidence.append(
+                "Practical vs emotional: Moon-led partnership tone — partner emotional, feelings drive closeness."
+            )
+            summary_extra = "Answer: partner emotional side zyada."
+
+    if re.search(r"\b(manipulat|dhokhebaaz|mind\s*game)\b", q):
+        rahu = r.planet("Rahu") or {}
+        if sig.rahu_on_7th_axis or rahu.get("house") in (7, 8) or "Rahu" in occ7:
+            evidence.append(
+                f"Manipulation risk: Rahu on partnership axis (house {rahu.get('house')}) — "
+                "mind-games or mixed signals possible; clarity and boundaries protect you."
+            )
+        elif (r.planet("Mercury") or {}).get("house") in (6, 8, 12):
+            evidence.append(
+                "Manipulation risk: Mercury in dusthana tone — indirect talk at times; ask directly when confused."
+            )
+        else:
+            evidence.append(
+                "Manipulation risk: no strong manipulation driver — partner generally straightforward; trust but verify."
+            )
+        summary_extra = "Answer manipulation directly from Manipulation risk evidence."
+
     summary = [
         "User asked partner/spouse nature (non-timing).",
         "State traits confidently from evidence — not hedged/shayad tone.",
@@ -453,7 +633,7 @@ def run_partner_nature(
             "Para3: karak presence (~90–120 words, blank line between paras)."
         ),
         summary=summary,
-        evidence=evidence[:6],
+        evidence=evidence[:10],
         ignore=[
             "timing dates/windows",
             "love-vs-arranged",

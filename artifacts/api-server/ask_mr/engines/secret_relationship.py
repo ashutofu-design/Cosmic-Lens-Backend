@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from ._person_signals import build_person_signals, pick_notes
 from ..types import EngineResult
 
@@ -12,6 +14,7 @@ def run_secret_relationship(kundli: dict, question: str, *, wants_explain: bool 
         or sig.twelfth_lord_in_fifth
         or sig.fifth_lord_in_twelfth
         or sig.rahu_on_7th_axis
+        or re.search(r"(?ix)\b(multiple|parallel|do\s*rishte)\b", question or "")
     )
     verdict = (
         "Secret/hidden relationship theme: active — transparency reduces stress"
@@ -29,11 +32,19 @@ def run_secret_relationship(kundli: dict, question: str, *, wants_explain: bool 
             "secret parallel",
             "nodes on 7th",
             "Venus in dusthana",
+            "5th lord",
         ],
         limit=6,
     )
+    if re.search(r"(?ix)\b(multiple|parallel|do\s*rishte)\b", question or ""):
+        evidence.insert(
+            0,
+            "Multiple/parallel relationship pattern: 12th-5th hidden-link or parallel attention signals on romance axis.",
+        )
     if not evidence:
         evidence = ["No strong secrecy driver triggered; treat as mixed/normal."]
+    if re.search(r"(?ix)\b(affair|chakkar|secret)\b", question or ""):
+        evidence.insert(0, "Secret affair pattern: hidden-link signals on 12th-5th / parallel attention romance axis.")
 
     return EngineResult(
         archetype="secret_relationship",

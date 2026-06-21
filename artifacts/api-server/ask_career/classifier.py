@@ -89,6 +89,12 @@ def is_career_static_question(question: str) -> bool:
 
         return True
 
+    if re.search(
+        r"(?ix)\b(employee\s+mindset|entrepreneur\s+mindset)\b",
+        q,
+    ):
+        return True
+
     if _CAREER_CORE.search(q):
 
         return True
@@ -170,10 +176,15 @@ def classify_career_archetype(question: str) -> str:
 
 
     if re.search(
+        r"(?ix)\b(employee\s+mindset|entrepreneur\s+mindset)\b",
+        q,
+    ) or re.search(
 
         r"(?ix)\b(job\s*vs\s*business|job\s+better|naukri\s+ya\s+business|"
 
-        r"employee\s+type|entrepreneur\s+type|naukri\s+ya\s*dhandha|"
+        r"employee\s+type|entrepreneur\s+type|employee\s+mindset|entrepreneur\s+mindset|"
+
+        r"naukri\s+ya\s*dhandha|"
 
         r"job\s+ya\s+business|business\s+ya\s+job|naukri\s+better|job\s+better)\b",
 

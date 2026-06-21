@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import re
 
-# Reuse stock-safe finance scope from finance_static.
 from finance_static.finance_routing import is_finance_question
 
 FINANCE_ARCHETYPES = frozenset({
     "income_source",
     "savings_capacity",
+    "save_vs_spend",
     "expense_pattern",
+    "spending_personality",
+    "financial_discipline",
+    "investment_risk",
     "debt_loan",
     "property_money",
     "sudden_gain_loss",
@@ -29,20 +32,67 @@ _TIMING_RX = re.compile(
     r")\b"
 )
 
+# Employee vs entrepreneur mindset → career (job_vs_business), not finance
+_CAREER_MONEY_MINDSET_RX = re.compile(
+    r"(?ix)\b("
+    r"employee\s+mindset|entrepreneur\s+mindset|"
+    r"employee\s+.*\b(ya|or)\b.*\b(entrepreneur|business)\b|"
+    r"entrepreneur\s+.*\b(ya|or)\b.*\b(employee|job|naukri)\b"
+    r")\b"
+)
+
+_SAVE_VS_SPEND_RX = re.compile(
+    r"(?ix)\b("
+    r"bachane\s+wala\s+.*\b(ya|or)\b.*\b(kharch|spend)|"
+    r"kharch\s+.*\b(ya|or)\b.*\b(bach|save)|"
+    r"save\s+.*\b(ya|or)\b.*\b(spend|spend)|"
+    r"saver\s+.*\b(ya|or)\b.*\bspender|spender\s+.*\b(ya|or)\b.*\b(saver|bach)"
+    r")\b"
+)
+
+_SPENDING_PERSONALITY_RX = re.compile(
+    r"(?ix)\b("
+    r"emotional\s+spend\w*|impulsive\s+spend\w*|mood\s+spend\w*|"
+    r"luxury[\s-]?oriented|luxury\s+lover|luxury\s+spend\w*|"
+    r"brand\s+oriented|show[\s-]?off\s+spend\w*|shopping\s+addict|"
+    r"comfort\s+spend\w*|status\s+spend\w*|shauk\s+se\s+kharch"
+    r")\b"
+)
+
+_INVESTMENT_RISK_RX = re.compile(
+    r"(?ix)\b("
+    r"risk[\s-]?taking\s+investor|investor\s+.*\b(ya|or)\b.*\b(conservative|safe)|"
+    r"conservative\s+.*\b(ya|or)\b.*\b(investor|risk)|"
+    r"aggressive\s+investor|safe\s+investor|high[\s-]?risk\s+invest|"
+    r"risk\s+l(?:ena|ene)\s+wala\s+investor|conservative\s+investor|"
+    r"investment\s+risk|invest\s+.*\b(ya|or)\b.*\b(conservative|safe)"
+    r")\b"
+)
+
+_DISCIPLINE_RX = re.compile(
+    r"(?ix)\b("
+    r"financial\s+discipline|money\s+discipline|paisa\s+discipline|"
+    r"financially\s+disciplined|discipline\s+me\s+kaisa|"
+    r"budget\s+discipline|saving\s+discipline"
+    r")\b"
+)
+
 _INCOME_RX = re.compile(
     r"(?ix)\b("
-    r"income|kamai|kama\s*sakta|salary|tankhwah|earning|earn\s*money|"
-    r"paisa\s*kahan\s*se|income\s*source|multiple\s*income|passive\s*income|"
-    r"freelanc|commission|side\s*income|extra\s*income|monthly\s*income|"
-    r"fixed\s*income|business\s*se\s*income|job\s*se\s*income"
+    r"income|kamai|kama\s*sakta|kamaane|kama\s*ne\s*ka|salary|tankhwah|"
+    r"earning|earn\s*money|paisa\s*kahan\s*se|income\s*source|"
+    r"natural\s+tareek|natural\s+way|natural\s+style|"
+    r"multiple\s*income|passive\s*income|freelanc|commission|"
+    r"side\s*income|extra\s*income|monthly\s*income|fixed\s*income|"
+    r"business\s*se\s*income|job\s*se\s*income|paisa\s*kama"
     r")\b"
 )
 
 _SAVINGS_RX = re.compile(
     r"(?ix)\b("
     r"saving|savings|bachat|bach\s*pata|save\s*kar|kitni\s*bachat|"
-    r"paisa\s*bach|money\s*save|saving\s*capacity|retain|tik\s*pata|"
-    r"paisa\s*tikta|paisa\s*rukta|accumulate|jama\s*kar"
+    r"paisa\s*bach\w*|money\s*save|saving\s*capacity|retain|tik\s*pata|"
+    r"paisa\s*tik\w*|paisa\s*rukt\w*|accumulate|jama\s*kar"
     r")\b"
 )
 
@@ -99,9 +149,10 @@ _LOSS_RX = re.compile(
 
 _WEALTH_RX = re.compile(
     r"(?ix)\b("
-    r"amir|rich|wealthy|crorepati|millionaire|wealth\s*potential|"
-    r"dhan\s*ban|paisa\s*ban|money\s*grow|financial\s*success|"
-    r"prosper|affluent|dhani|maldar"
+    r"amir|ameer|rich|wealthy|crorepati|millionaire|wealth\s*potential|"
+    r"wealth\s*creat|create\s*wealth|dhan\s*ban|paisa\s*ban|money\s*grow|"
+    r"financial\s*success|prosper|affluent|dhani|maldar|"
+    r"banne\s*ki\s*potential|wealth\s*capable|kitna\s*capable"
     r")\b"
 )
 
@@ -127,6 +178,10 @@ def is_finance_static_question(question: str) -> bool:
         return False
     if _SPOUSE_MONEY_RX.search(q):
         return False
+    if _CAREER_MONEY_MINDSET_RX.search(q):
+        return False
+    if detect_finance_archetype(q):
+        return True
     return bool(is_finance_question(q))
 
 
@@ -134,6 +189,16 @@ def detect_finance_archetype(question: str) -> str | None:
     q = (question or "").strip().lower()
     if not q:
         return None
+    if _CAREER_MONEY_MINDSET_RX.search(q):
+        return None
+    if _SAVE_VS_SPEND_RX.search(q):
+        return "save_vs_spend"
+    if _SPENDING_PERSONALITY_RX.search(q):
+        return "spending_personality"
+    if _INVESTMENT_RISK_RX.search(q):
+        return "investment_risk"
+    if _DISCIPLINE_RX.search(q):
+        return "financial_discipline"
     if _SUDDEN_RX.search(q):
         return "sudden_gain_loss"
     if _PROPERTY_RX.search(q):

@@ -24,9 +24,21 @@ def run_finance_static_engine(
     if archetype == "savings_capacity":
         from .engines.savings_capacity import run_savings_capacity
         return run_savings_capacity(kundli, question, wants_explain=wants_explain)
+    if archetype == "save_vs_spend":
+        from .engines.save_vs_spend import run_save_vs_spend
+        return run_save_vs_spend(kundli, question, wants_explain=wants_explain)
     if archetype == "expense_pattern":
         from .engines.expense_pattern import run_expense_pattern
         return run_expense_pattern(kundli, question, wants_explain=wants_explain)
+    if archetype == "spending_personality":
+        from .engines.spending_personality import run_spending_personality
+        return run_spending_personality(kundli, question, wants_explain=wants_explain)
+    if archetype == "financial_discipline":
+        from .engines.financial_discipline import run_financial_discipline
+        return run_financial_discipline(kundli, question, wants_explain=wants_explain)
+    if archetype == "investment_risk":
+        from .engines.investment_risk import run_investment_risk
+        return run_investment_risk(kundli, question, wants_explain=wants_explain)
     if archetype == "debt_loan":
         from .engines.debt_loan import run_debt_loan
         return run_debt_loan(kundli, question, wants_explain=wants_explain)

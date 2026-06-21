@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from ..types import EngineResult
 from ._finance_base import (
     affliction_lines,
@@ -30,6 +32,10 @@ def run_income_source(kundli: dict, question: str, *, wants_explain: bool = Fals
     ]
     evidence.extend(income_affinity_lines(facts))
     evidence.extend(affliction_lines(facts, limit=2))
+
+    q_lower = (question or "").lower()
+    if re.search(r"(?ix)\b(natural\s+tareek|natural\s+way|natural\s+style)\b", q_lower):
+        evidence.insert(0, "Answer focus: natural earning style — pick strongest income affinity below")
 
     biz = sub_flag(facts, "business_friendly")
     if biz:

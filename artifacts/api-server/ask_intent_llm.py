@@ -98,7 +98,11 @@ CAREER_ARCHETYPES = {
 FINANCE_ARCHETYPES = {
     "income_source",
     "savings_capacity",
+    "save_vs_spend",
     "expense_pattern",
+    "spending_personality",
+    "financial_discipline",
+    "investment_risk",
     "debt_loan",
     "property_money",
     "sudden_gain_loss",
@@ -184,7 +188,11 @@ the partner will SUPPORT the native's career / life goals / decisions
 7. "finance_archetype": ONLY when domain is finance, pick best id; otherwise null:
    - income_source: salary, earning, income stability, source of money
    - savings_capacity: saving, bachat, paisa tikta/rukta, kitni bachat
+   - save_vs_spend: saver vs spender, bachane wala ya kharch wala
    - expense_pattern: kharcha, spending, leak, paisa nahi tikta
+   - spending_personality: emotional spending, luxury-oriented, impulsive spend
+   - financial_discipline: financial discipline, money habits, budget discipline
+   - investment_risk: risk investor vs conservative, aggressive vs safe investing
    - debt_loan: loan, karz, EMI, udhar, debt free
    - property_money: ghar/flat/property purchase money, home loan readiness
    - sudden_gain_loss: lottery/inheritance/windfall OR sudden loss

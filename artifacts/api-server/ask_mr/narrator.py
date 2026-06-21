@@ -187,9 +187,10 @@ def build_mr_engine_narrator_system_prompt(
             f"{_MR_CONFIDENT_TONE}"
         )
     elif archetype in (
-        "income_source", "savings_capacity", "expense_pattern", "debt_loan",
-        "property_money", "sudden_gain_loss", "business_profit", "loss_reasons",
-        "wealth_potential", "dhana_yoga", "general_finance",
+        "income_source", "savings_capacity", "save_vs_spend", "expense_pattern",
+        "spending_personality", "financial_discipline", "investment_risk",
+        "debt_loan", "property_money", "sudden_gain_loss", "business_profit",
+        "loss_reasons", "wealth_potential", "dhana_yoga", "general_finance",
     ):
         length_block = (
             f"Write 2–3 short sentences (~{min(wb + 15, 90)} words max).\n"
@@ -235,9 +236,10 @@ def build_mr_engine_narrator_system_prompt(
     topic_hint = (
         "finance"
         if archetype in (
-            "income_source", "savings_capacity", "expense_pattern", "debt_loan",
-            "property_money", "sudden_gain_loss", "business_profit", "loss_reasons",
-            "wealth_potential", "dhana_yoga", "general_finance",
+            "income_source", "savings_capacity", "save_vs_spend", "expense_pattern",
+            "spending_personality", "financial_discipline", "investment_risk",
+            "debt_loan", "property_money", "sudden_gain_loss", "business_profit",
+            "loss_reasons", "wealth_potential", "dhana_yoga", "general_finance",
         )
         else (
             "career"

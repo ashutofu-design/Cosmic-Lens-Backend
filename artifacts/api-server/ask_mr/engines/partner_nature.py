@@ -136,6 +136,41 @@ def run_partner_nature(
             )
             summary_extra = "Answer: partner reserved side zyada — openly expressive kam."
 
+    if re.search(
+        r"\b(gussa|gusse|gussewala|gusaa|gusail|anger|angry|temper|"
+        r"short[-\s]?temper|irritab|aggress|chidchid|naraz|krodh|"
+        r"garam\s*dimag|garam[-\s]?mizaj|hot[-\s]?head|tez\s*mizaj)\b",
+        q,
+    ):
+        mars = r.planet("Mars") or {}
+        mars_fiery = mars.get("sign") in ("Aries", "Scorpio", "Capricorn")
+        angry = (
+            bool(sig.mars_on_7th)
+            or lord7 == "Mars"
+            or bool(occ7 and "Mars" in occ7)
+            or bool(occ7 and "Sun" in occ7)
+        )
+        if angry:
+            evidence.append(
+                "Temper signal: Mars/aggression ka assar 7th house (rishta) pe hai — partner thoda "
+                "garam-dimaag/jaldi react karne wala side rakhta hai"
+                + (", aur Mars ki fiery sign isse thoda aur tez karti hai" if mars_fiery else "")
+                + ", par baat-cheet se jaldi shaant bhi ho jaata hai."
+            )
+            summary_extra = (
+                "Answer gussa directly: HAAN — Mars assar se partner ka temper/short-temper side "
+                "hai, lekin manage ho jaata hai. Yeh baat clearly bolo (bich ya end mein)."
+            )
+        else:
+            evidence.append(
+                "Temper signal: 7th house (rishta) pe Mars/aggression ka strong assar nahi — partner "
+                "generally calm, patient aur thanda-dimaag nature ka hai."
+            )
+            summary_extra = (
+                "Answer gussa directly: NAHI — koi strong anger pattern nahi, partner zyadatar shaant "
+                "rehta hai. Yeh baat clearly bolo (bich ya end mein)."
+            )
+
     if re.search(r"\b(culture|foreign|videsh|city|background|alag\s*shahr)\b", q):
         rahu = r.planet("Rahu") or {}
         evidence.append(

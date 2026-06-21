@@ -100,7 +100,11 @@ def build_mr_engine_narrator_system_prompt(
         length_block = (
             "MANDATORY: exactly 3 paragraphs separated by ONE blank line (\\n\\n).\n"
             "Total 90–120 words. Wise friend Hinglish. No planet/house/sign/lord/karak words.\n\n"
-            "PARAGRAPH 1 (~30–40 words): ONLY 7th house sign evidence → social/chatty/curious vibe.\n"
+            "IF the user asked about a SPECIFIC trait (gussa/temper, loyalty, expressive, "
+            "dominant, respect, etc.) — look for a matching EVIDENCE line (e.g. 'Temper signal') "
+            "or an 'Answer ... directly' HINT — then START paragraph 1 with ONE clear sentence "
+            "that directly answers that exact question (clear haan/nahi), and continue.\n\n"
+            "PARAGRAPH 1 (~30–40 words): direct trait answer (if asked) + 7th house sign social/chatty/curious vibe.\n"
             "PARAGRAPH 2 (~30–40 words): ONLY 7th lord + planets-in-7th evidence → emotional tone + private/thoughtful mindset.\n"
             "PARAGRAPH 3 (~30–40 words): ONLY partner-karak evidence → warm presence / attraction in relationship.\n\n"
             "Do NOT write one long essay. Do NOT add 'unique vibes' or facts outside EVIDENCE.\n"

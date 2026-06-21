@@ -3461,19 +3461,21 @@ _RAW_LENGTH_DECISION = """
 ════════════════════════════════════════════════════════════════════
 ⚖️ DECISION MODE — A vs B (job vs business, start vs wait, X ya Y)
 ════════════════════════════════════════════════════════════════════
-**45–70 words**, 4 COMPLETE sentences — kabhi mid-sentence mat rukna.
+**45–70 words**, 3–4 COMPLETE sentences — kabhi mid-sentence mat rukna.
 
-MANDATORY STRUCTURE (user ki language mein — English report NAHI):
-  1) **Seedha jawab:** job / business / pehle job phir business / mixed — pehli line par clear pick.
-  2) Ek simple reason — plain words, NO "placed in", "signals", "lord", "house", "favorable".
-  3) Practical note — abhi ka phase / caution / green light.
-  4) **Conclusion:** ek line — user ab kya kare (e.g. "filhaal job pe focus karo").
+FLOW (natural prose — NO section labels):
+  • Sentence 1 = clear pick (job / business / mixed / wait / start) — direct answer.
+  • Sentence 2 = one plain reason (stable income, risk, experience, timing) — NO jargon.
+  • Sentence 3 = optional practical note — what fits NOW from chart read.
+  • Last sentence MUST end with . or ? — incomplete fragment forbidden.
+
+BANNED in reply: "Seedha jawab:", "Conclusion:", "निष्कर्ष:", "Verdict:", bullets, headings.
 
 GOOD (Hinglish):
-"Seedha jawab: abhi job zyada suit karega. Apna business abhi risk zyada hai kyunki income unstable phase me hai. 1-2 saal naukri se base strong karo. Conclusion: filhaal job continue karo, business baad me try karna."
+"Abhi job zyada suit karega. Tujhe structured environment aur stable income pattern chahiye jo employment se milta hai. Business abhi thoda risky lag sakta hai bina strong base ke."
 
-BAD (English chart dump — NEVER):
-"Jupiter as Lagna lord placed in 5th house... signals strong potential..."
+BAD (template labels — NEVER):
+"Seedha jawab: ... Conclusion: ..."
 """
 
 _RAW_LENGTH_FINANCE = """
@@ -3483,15 +3485,17 @@ _RAW_LENGTH_FINANCE = """
 **45–70 words**, 3–4 COMPLETE sentences — user ko SAMJHAO kyon ho raha hai.
 
 MANDATORY FLOW:
-  1) **Seedha jawab:** Haan/Nahi — user ki exact problem (paisa tikta nahi / kharch zyada / income kam).
+  1) Direct Haan/Nahi or clear problem statement (paisa tikta nahi / kharch zyada / income kam).
   2) **Kyon (short):** 2nd-11th-12th house READING in plain words + **current dasha** (chart se).
      - OK: "paisa wale ghar thode weak hain", "abhi Jupiter-Rahu dasha me kharch zyada rehta hai"
      - NOT OK: "lord Mercury 12th Scorpio", "retrograde Saturn", planet laundry list
   3) **Isliye:** connect chart → real life (paisa haath me nahi rukta / savings weak).
-  4) **Conclusion:** ek practical line (saving discipline / risky spend kam / patience).
+  4) One practical closing line (saving discipline / risky spend kam / patience).
+
+BANNED labels: "Seedha jawab:", "Conclusion:", "निष्कर्ष:" — natural sentences only.
 
 GOOD:
-"Haan — paisa tikne me dikkat hai. Paisa wale ghar thode weak hain aur abhi Jupiter-Rahu dasha me kharch zyada rehta hai, isliye savings kam hoti hai. Conclusion: risky kharch kam karke thodi fixed saving rakho."
+"Haan — paisa tikne me dikkat hai. Paisa wale ghar thode weak hain aur abhi kharch zyada rehta hai, isliye savings kam hoti hai. Thodi fixed saving aur risky kharch kam karna faaydemand rahega."
 
 BAD:
 "Jupiter aur Saturn retrograde hain aur paisa wala ghar weak..." (planets without clear isliye link)
@@ -3508,6 +3512,7 @@ HARD CAPS:
   • Pehla sentence = direct answer (haan/nahi / trait / window / fact).
   • Doosra = sirf ek simple reason (plain Hinglish, koi jargon nahi).
   • Teesra optional — sirf agar zaroori ho, ek soft line.
+  • BANNED labels anywhere: "Seedha jawab:", "Conclusion:", "निष्कर्ष:", "Verdict:".
 
 TONE — bilkul insaan jaisa:
   • Wise dost / experienced guru — warm, confident, natural.
@@ -3631,11 +3636,7 @@ USER-FACING REPLY RULES (STRICT):
 - NEVER write: house numbers, "lord", planet names (Mercury/Jupiter/Saturn…), retrograde,
   signs, "chart mein", "10th/12th/5th", nakshatra, dasha names.
 - Translate chart read into plain life advice only (stable income, risk abhi, experience pehle).
-
-MANDATORY LABELS (exact):
-  Seedha jawab: [job / business / pehle job phir business / mixed]
-  (1–2 short plain sentences — reason)
-  Conclusion: [what user should DO now — one clear line]
+- NEVER use section labels: Seedha jawab, Conclusion, निष्कर्ष, Verdict — write flowing sentences.
 
 CHART FACTS (internal reference only):
 {chart_text}{extra_rules}"""
@@ -3944,7 +3945,9 @@ def _enforce_partner_nature_paragraphs(text: str) -> str:
         break
     while len(trimmed) < 3:
         trimmed.append("")
-    return "\n\n".join(p for p in trimmed[:3] if p).strip()
+    return _strip_decision_template_labels(
+        "\n\n".join(p for p in trimmed[:3] if p).strip()
+    )
 
 
 def _enforce_one_line_answer(
@@ -4012,7 +4015,7 @@ def _enforce_one_line_answer(
             line = trimmed.rstrip(",—-") + "."
     elif line and line[-1] not in ".?!।":
         line = line.rstrip(",—-") + "."
-    return line.strip()
+    return _strip_decision_template_labels(line.strip())
 
 
 _DECISION_STRUCTURE_RX = _re_explain_gate.compile(
@@ -4063,11 +4066,8 @@ def _raw_rewrite_decision_plain(
         f"{_strict_lang_block(eff_lang)}"
         f"ORIGINAL QUESTION:\n{question}\n\n"
         f"DRAFT (too technical — rewrite completely):\n{draft}\n\n"
-        "Rewrite for a lay user. Use EXACTLY this structure:\n"
-        "Seedha jawab: [job / business / pehle job phir business / mixed]\n"
-        "[1-2 short plain sentences — reason, NO houses/planets/lords]\n"
-        "Conclusion: [one clear action line]\n"
-        "FORBIDDEN in reply: house, lord, Mercury, Jupiter, Saturn, retrograde, chart mein, 10th, 12th."
+        "Rewrite for a lay user. Use 3–4 short plain sentences, NO section labels.\n"
+        "FORBIDDEN in reply: Seedha jawab, Conclusion, निष्कर्ष, house, lord, Mercury, Jupiter, Saturn, retrograde, chart mein, 10th, 12th."
     )
     try:
         resp = client.chat.completions.create(
@@ -4090,35 +4090,30 @@ def _raw_rewrite_decision_plain(
 
 
 def _strip_decision_template_labels(text: str) -> str:
-    """Remove decision-mode section labels from user-facing engine answers."""
+    """Remove banned section labels from ANY user-facing answer (permanent ban)."""
     t = (text or "").strip()
     if not t:
         return t
-    for label in (
-        r"Seedha jawab\s*:",
-        r"seedha jawab\s*:",
+    for pattern in (
+        r"Seedha\s*jawab\s*:",
+        r"seedha\s*jawab\s*:",
         r"Conclusion\s*:",
+        r"conclusion\s*:",
         r"निष्कर्ष\s*:",
+        r"Verdict\s*:",
+        r"verdict\s*:",
+        r"Nateeja\s*:",
+        r"Net\s*:",
     ):
-        t = _re_explain_gate.sub(label, "", t, flags=_re_explain_gate.IGNORECASE)
+        t = _re_explain_gate.sub(pattern, "", t, flags=_re_explain_gate.IGNORECASE)
     t = _re_explain_gate.sub(r"\s{2,}", " ", t).strip()
+    t = _re_explain_gate.sub(r"^[\s,;:.\-]+", "", t).strip()
     return t
 
 
 def _polish_decision_reply(text: str, lang: str) -> str:
-    """Ensure decision answers have Conclusion label when missing."""
-    t = (text or "").strip()
-    if not t:
-        return t
-    if _DECISION_STRUCTURE_RX.search(t) and "conclusion" not in t.lower():
-        parts = [p.strip() for p in _re_explain_gate.split(r"(?<=[.!?।])\s+", t) if p.strip()]
-        if len(parts) >= 2:
-            tail = parts[-1]
-            if not _DECISION_STRUCTURE_RX.search(tail):
-                label = "निष्कर्ष:" if lang == "hi" else "Conclusion:"
-                parts[-1] = f"{label} {tail}"
-                t = " ".join(parts)
-    return t.strip()
+    """Strip banned template labels — never add Conclusion/Seedha jawab."""
+    return _strip_decision_template_labels(text)
 
 
 # ── STATIC-mode dasha gate (Phase 2.5.11.2) ────────────────────────────
@@ -5659,6 +5654,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 except Exception as _dre:
                     print(f"[raw_passthrough] decision rewrite skipped: {_dre}", flush=True)
             text = _polish_decision_reply(text, eff_lang)
+        text = _strip_decision_template_labels(text)
         if not text:
             text = "Maaf kijiye, abhi response generate nahi ho paya. Phir try karein."
         # Skip robotic [Checked: ...] trace — user wants human replies only.

@@ -30,15 +30,15 @@ def test_decision_jargon_dump_needs_rewrite():
     assert _decision_needs_plain_rewrite(raw)
 
 
-def test_decision_hinglish_with_conclusion_preserved():
+def test_decision_hinglish_labels_stripped():
     raw = (
         "Seedha jawab: abhi job zyada suit karega. Business me risk zyada hai. "
         "Conclusion: filhaal naukri pe focus karo."
     )
     out = _polish_decision_reply(raw, "hn")
-    assert "Seedha jawab:" in out
-    assert "Conclusion:" in out
-    assert not _decision_needs_plain_rewrite(out)
+    assert "Seedha jawab:" not in out
+    assert "Conclusion:" not in out
+    assert "job zyada suit" in out.lower()
 
 
 def test_decision_token_budget():

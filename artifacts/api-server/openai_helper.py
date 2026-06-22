@@ -926,6 +926,66 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
         return ""
 
 
+def _passthrough_career_block(question, kundli, intel, birth, llm_intent=None):
+    """Career timing — inject assess_career() verdict for passthrough paths."""
+    try:
+        if not isinstance(question, str) or not question.strip():
+            return ""
+        if not isinstance(kundli, dict) or not kundli.get("planets"):
+            return ""
+        try:
+            from ask_career.timing_registry import (  # type: ignore
+                classify_career_timing_bucket,
+                is_career_timing_question,
+            )
+            if not is_career_timing_question(question, llm_intent):
+                return ""
+            pre_bucket = None
+            if isinstance(llm_intent, dict):
+                pre_bucket = (
+                    llm_intent.get("career_timing_bucket")
+                    or llm_intent.get("career_archetype")
+                )
+            pre_bucket = classify_career_timing_bucket(question, pre_bucket)
+        except Exception:
+            if not _is_career_question(question):
+                return ""
+            pre_bucket = None
+
+        kp_dict = None
+        try:
+            kp_dict = _kp_calc()(birth) if isinstance(birth, dict) else {}
+        except Exception:
+            kp_dict = {}
+
+        assess_career, fmt_career, _ = _career_timing()
+        verdict = assess_career(
+            kundli,
+            intel or {},
+            kp_dict or {},
+            birth,
+            question,
+            pre_classified_bucket=pre_bucket,
+        )
+        if not isinstance(verdict, dict) or not verdict:
+            return ""
+        block = fmt_career(verdict, question)
+        try:
+            print(
+                f"[passthrough_career_block] bucket={verdict.get('bucket')!r} "
+                f"tense={verdict.get('tense')!r} verdict={verdict.get('verdict')!r} "
+                f"score={verdict.get('score')} conf={verdict.get('confidence')} "
+                f"age={((verdict.get('age_context') or {}).get('user_age'))}",
+                flush=True,
+            )
+        except Exception:
+            pass
+        return block or ""
+    except Exception as _exc:  # noqa: BLE001
+        print(f"[passthrough_career_block] err: {str(_exc)[:200]}")
+        return ""
+
+
 # ════════════════════════════════════════════════════════════════════
 # Phase 2.8.29 — Marriage answer validator (post-injector, NARRATIVE mode).
 # Pure deterministic checks on LLM output. NO extra LLM calls.
@@ -2547,29 +2607,32 @@ def _is_love_question(text: str) -> bool:
     return bool(_LOVE_QUESTION_RX.search(text))
 
 
-def _career_timing(): return (lambda *a, **k: None, lambda *a, **k: "", lambda *a, **k: "")  # Phase 2.8.37 stub
+def _career_timing():
+    """Lazy-load deterministic career & profession timing engine."""
+    from event_timing.career import (  # type: ignore
+        assess_career,
+        format_verdict_for_prompt as _fmt_career,
+        classify_career_question,
+    )
+    return assess_career, _fmt_career, classify_career_question
 
 
 # Career-question gate. Triggers career_timing when question is genuinely
 # about job / career / promotion / business / transfer / govt-exam — but
 # NOT when stock-market or marriage routing already wins. Order in the
 # orchestrator below: marriage > stock > love > career > general.
-_CAREER_QUESTION_RX = type("_NoMatch", (), {"search": staticmethod(lambda *a, **k: None)})()  # Phase 2.8.37 stub
+try:
+    from ask_career.timing_registry import (  # type: ignore
+        CAREER_QUESTION_RX as _CAREER_QUESTION_RX,
+        _STOCK_OVERRIDE_RX as _CAREER_STOCK_OVERRIDE_RX,
+        is_career_question as _is_career_question,
+    )
+except Exception:
+    _CAREER_QUESTION_RX = type("_NoMatch", (), {"search": staticmethod(lambda *a, **k: None)})()
+    _CAREER_STOCK_OVERRIDE_RX = type("_NoMatch", (), {"search": staticmethod(lambda *a, **k: None)})()
 
-# Stock-market vocabulary that should NOT trigger career_timing even if
-# career keywords (business / venture) are also present — e.g.
-# "share business kaisa rahega" must go to stock_engine.
-#
-# Bare "equity/share/shares" is INTENTIONALLY excluded because it collides
-# with legitimate career queries like "startup partnership equity split"
-# or "share business start karu". We require an unambiguous trading-context
-# anchor (nifty/sensex/share[- ]market/trading/demat/broker/etc.) OR an
-# explicit instrument that has no career meaning (intraday/fno/options/
-# crypto/sip). Pure "equity"/"share" without these anchors stays in career.
-_CAREER_STOCK_OVERRIDE_RX = type("_NoMatch", (), {"search": staticmethod(lambda *a, **k: None)})()  # Phase 2.8.37 stub
-
-
-def _is_career_question(*a, **k): return False  # Phase 2.8.37 stub
+    def _is_career_question(*a, **k):  # type: ignore[misc]
+        return False
 
 
 
@@ -4869,6 +4932,11 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _career_archetype_override = None
     _finance_archetype_override = None
     _health_archetype_override = None
+    _education_archetype_override = None
+    _children_archetype_override = None
+    _property_archetype_override = None
+    _travel_archetype_override = None
+    _litigation_archetype_override = None
     if (os.environ.get("ASK_LLM_INTENT") or "0").strip() == "1":
         try:
             from ask_intent_llm import classify_ask_intent  # type: ignore
@@ -4881,6 +4949,11 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _career_archetype_override = _res.get("career_archetype")
                 _finance_archetype_override = _res.get("finance_archetype")
                 _health_archetype_override = _res.get("health_archetype")
+                _education_archetype_override = _res.get("education_archetype")
+                _children_archetype_override = _res.get("children_archetype")
+                _property_archetype_override = _res.get("property_archetype")
+                _travel_archetype_override = _res.get("travel_archetype")
+                _litigation_archetype_override = _res.get("litigation_archetype")
             print(
                 f"[raw_passthrough] LLM_INTENT source={(_res or {}).get('source')} "
                 f"domain={(_res or {}).get('domain')} "
@@ -4901,6 +4974,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         is_timing = bool(_llm_intent.get("is_timing"))
     else:
         is_timing = (_resolved_route == "timing")
+    try:
+        from ask_career.timing_registry import is_career_timing_question  # type: ignore
+
+        if is_career_timing_question(question or "", _llm_intent):
+            is_timing = True
+    except Exception:
+        pass
     qtype = "TIMING" if is_timing else "STATIC"
     wants_explain = _force_explain or (
         bool(_llm_intent.get("wants_explain"))
@@ -4941,13 +5021,28 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _is_career_static = False
     _is_finance_static = False
     _is_health_static = False
+    _is_education_static = False
+    _is_children_static = False
+    _is_property_static = False
+    _is_travel_static = False
+    _is_litigation_static = False
     _finance_engine_on = (os.environ.get("ASK_FINANCE_ENGINE") or "1").strip() != "0"
     _health_engine_on = (os.environ.get("ASK_HEALTH_ENGINE") or "1").strip() != "0"
+    _education_engine_on = (os.environ.get("ASK_EDUCATION_ENGINE") or "1").strip() != "0"
+    _children_engine_on = (os.environ.get("ASK_CHILDREN_ENGINE") or "1").strip() != "0"
+    _property_engine_on = (os.environ.get("ASK_PROPERTY_ENGINE") or "1").strip() != "0"
+    _travel_engine_on = (os.environ.get("ASK_TRAVEL_ENGINE") or "1").strip() != "0"
+    _litigation_engine_on = (os.environ.get("ASK_LITIGATION_ENGINE") or "1").strip() != "0"
     if not is_timing:
         if _llm_intent is not None:
             _dom = _llm_intent.get("domain")
             _is_mr_static = _dom in {"marriage", "love"}
             _is_career_static = _dom == "career"
+            _is_education_static = _dom == "education"
+            _is_children_static = _dom == "children"
+            _is_property_static = _dom == "property"
+            _is_travel_static = _dom == "travel"
+            _is_litigation_static = _dom == "litigation"
         else:
             try:
                 from ask_marriage_relationship_slice import (  # type: ignore
@@ -4962,7 +5057,85 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _is_career_static = is_career_static_question(question) and not _is_mr_static
             except Exception:
                 _is_career_static = False
-        if _finance_engine_on and not _is_mr_static:
+            try:
+                from ask_education.classifier import is_education_static_question  # type: ignore
+
+                _edu_regex = is_education_static_question(question)
+                if _llm_intent is not None:
+                    _is_education_static = _edu_regex or (
+                        _llm_intent.get("domain") == "education"
+                    )
+                else:
+                    _is_education_static = _edu_regex
+            except Exception:
+                _is_education_static = False
+            try:
+                from ask_children.classifier import is_children_static_question  # type: ignore
+
+                _child_regex = is_children_static_question(question)
+                if _llm_intent is not None:
+                    _is_children_static = _child_regex or (
+                        _llm_intent.get("domain") == "children"
+                    )
+                else:
+                    _is_children_static = _child_regex
+            except Exception:
+                _is_children_static = False
+            try:
+                from ask_property.classifier import is_property_static_question  # type: ignore
+
+                _prop_regex = is_property_static_question(question)
+                if _llm_intent is not None:
+                    _is_property_static = _prop_regex or (
+                        _llm_intent.get("domain") == "property"
+                    )
+                else:
+                    _is_property_static = _prop_regex
+            except Exception:
+                _is_property_static = False
+            try:
+                from ask_travel.classifier import is_travel_static_question  # type: ignore
+
+                _trv_regex = is_travel_static_question(question)
+                if _llm_intent is not None:
+                    _is_travel_static = _trv_regex or (
+                        _llm_intent.get("domain") == "travel"
+                    )
+                else:
+                    _is_travel_static = _trv_regex
+            except Exception:
+                _is_travel_static = False
+            try:
+                from ask_litigation.classifier import is_litigation_static_question  # type: ignore
+
+                _lit_regex = is_litigation_static_question(question)
+                if _llm_intent is not None:
+                    _is_litigation_static = _lit_regex or (
+                        _llm_intent.get("domain") == "litigation"
+                    )
+                else:
+                    _is_litigation_static = _lit_regex
+            except Exception:
+                _is_litigation_static = False
+            if _is_education_static:
+                _is_career_static = False
+            if _is_children_static:
+                _is_health_static = False
+                _is_mr_static = False
+            if _is_property_static:
+                _is_finance_static = False
+            if _is_travel_static:
+                _is_career_static = False
+            if _is_litigation_static:
+                _is_career_static = False
+        try:
+            from ask_career.timing_registry import is_career_timing_question  # type: ignore
+
+            if is_career_timing_question(question or "", _llm_intent):
+                _is_career_static = False
+        except Exception:
+            pass
+        if _finance_engine_on and not _is_mr_static and not _is_property_static:
             try:
                 from ask_finance.classifier import is_finance_static_question  # type: ignore
 
@@ -4975,7 +5148,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     _is_finance_static = _fin_regex
             except Exception:
                 _is_finance_static = False
-        if _health_engine_on and not _is_mr_static and not _is_career_static and not _is_finance_static:
+        if _health_engine_on and not _is_mr_static and not _is_career_static and not _is_finance_static and not _is_education_static and not _is_children_static and not _is_property_static and not _is_travel_static and not _is_litigation_static:
             try:
                 from ask_health.classifier import is_health_static_question  # type: ignore
 
@@ -5001,6 +5174,106 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     )
             except Exception as _fo_exc:
                 print(f"[raw_passthrough] FINANCE_OVERRIDES_CAREER skipped: {_fo_exc}", flush=True)
+        if _education_engine_on and not _is_mr_static:
+            try:
+                from ask_education.education_registry import is_education_static_question  # type: ignore
+
+                if is_education_static_question(question or ""):
+                    _is_education_static = True
+                    _is_career_static = False
+            except Exception:
+                pass
+        if _children_engine_on and not _is_mr_static:
+            try:
+                from ask_children.children_registry import is_children_static_question  # type: ignore
+
+                if is_children_static_question(question or ""):
+                    _is_children_static = True
+                    _is_health_static = False
+                    _is_mr_static = False
+            except Exception:
+                pass
+        if _property_engine_on and not _is_mr_static:
+            try:
+                from ask_property.property_registry import is_property_static_question  # type: ignore
+
+                if is_property_static_question(question or ""):
+                    _is_property_static = True
+                    _is_finance_static = False
+            except Exception:
+                pass
+        if _travel_engine_on and not _is_mr_static and not _is_education_static:
+            try:
+                from ask_travel.travel_registry import is_travel_static_question  # type: ignore
+
+                if is_travel_static_question(question or ""):
+                    _is_travel_static = True
+                    _is_career_static = False
+            except Exception:
+                pass
+        if _litigation_engine_on and not _is_mr_static:
+            try:
+                from ask_litigation.litigation_registry import is_litigation_static_question  # type: ignore
+
+                if is_litigation_static_question(question or ""):
+                    _is_litigation_static = True
+                    _is_career_static = False
+            except Exception:
+                pass
+        if _is_finance_static and _is_property_static:
+            try:
+                from ask_property.routing import property_overrides_finance  # type: ignore
+
+                if property_overrides_finance(question or ""):
+                    _is_finance_static = False
+            except Exception:
+                pass
+        if _is_career_static and _is_travel_static:
+            try:
+                from ask_travel.routing import travel_overrides_career  # type: ignore
+
+                if travel_overrides_career(question or ""):
+                    _is_career_static = False
+            except Exception:
+                pass
+        if _is_career_static and _is_litigation_static:
+            try:
+                from ask_litigation.litigation_registry import is_career_police_job_question  # type: ignore
+
+                if is_career_police_job_question(question or ""):
+                    _is_litigation_static = False
+            except Exception:
+                pass
+        if _is_litigation_static:
+            try:
+                from ask_litigation.litigation_registry import (  # type: ignore
+                    is_career_police_job_question,
+                    is_death_penalty_crisis_question,
+                    is_mr_divorce_court_question,
+                    is_property_court_question,
+                )
+
+                if is_property_court_question(question or ""):
+                    _is_litigation_static = False
+                    _is_property_static = True
+                elif is_mr_divorce_court_question(question or ""):
+                    _is_litigation_static = False
+                    _is_mr_static = True
+                elif is_career_police_job_question(question or ""):
+                    _is_litigation_static = False
+                    _is_career_static = True
+                elif is_death_penalty_crisis_question(question or ""):
+                    _is_litigation_static = False
+            except Exception:
+                pass
+        if _is_litigation_static and _is_property_static:
+            try:
+                from ask_litigation.litigation_registry import is_property_court_question  # type: ignore
+
+                if is_property_court_question(question or ""):
+                    _is_litigation_static = False
+            except Exception:
+                pass
     # Sensitive Qs ALSO need current dasha so the LLM has a real reason
     # to cite in layer-2 (astrological reason). Auto-promote.
     if is_sensitive:
@@ -5022,6 +5295,26 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         static_dasha_hint = False
         is_decision = False
         is_finance = False
+    if _is_education_static:
+        static_dasha_hint = False
+        is_decision = False
+        is_finance = False
+    if _is_children_static:
+        static_dasha_hint = False
+        is_decision = False
+        is_finance = False
+    if _is_property_static:
+        static_dasha_hint = False
+        is_decision = False
+        is_finance = False
+    if _is_travel_static:
+        static_dasha_hint = False
+        is_decision = False
+        is_finance = False
+    if _is_litigation_static:
+        static_dasha_hint = False
+        is_decision = False
+        is_finance = False
     if _is_finance_static:
         static_dasha_hint = False
         is_decision = False
@@ -5033,6 +5326,11 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     dcr_love_meta = None
     _mr_engine_result = None
     _health_engine_result = None
+    _education_engine_result = None
+    _children_engine_result = None
+    _property_engine_result = None
+    _travel_engine_result = None
+    _litigation_engine_result = None
     _chart_slice_type = "full_compact"
     try:
         if is_timing:
@@ -5057,6 +5355,295 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         chart_text = chart_text + "\n\n=== TIMING ENGINE (LOCKED) ===\n" + _lf_slim
             except Exception as _lfe:
                 print(f"[raw_passthrough] timing locked_facts skipped: {_lfe}", flush=True)
+        elif _is_education_static:
+            try:
+                from ask_education import run_education_static_engine  # type: ignore
+                from ask_education.routing import resolve_education_archetype  # type: ignore
+
+                _edu_interp = ""
+                if isinstance(_llm_intent, dict):
+                    _edu_interp = str(_llm_intent.get("interpretation") or "").strip()
+
+                _resolved_edu_arch, _edu_arch_reason = resolve_education_archetype(
+                    question or "",
+                    llm_archetype=_education_archetype_override,
+                    interpretation=_edu_interp,
+                )
+                if _edu_arch_reason:
+                    print(
+                        f"[raw_passthrough] EDUCATION_ARCHETYPE_ROUTE "
+                        f"llm={_education_archetype_override} -> {_resolved_edu_arch} "
+                        f"reason={_edu_arch_reason}",
+                        flush=True,
+                    )
+
+                _education_engine_result = run_education_static_engine(
+                    kundli if isinstance(kundli, dict) else {},
+                    question or "",
+                    wants_explain=wants_explain,
+                    archetype=_resolved_edu_arch,
+                )
+                chart_text = _education_engine_result.to_narrator_payload()
+                dcr_love_meta = {
+                    "slice": "education_engine_v1",
+                    "topic": "education",
+                    "archetype": _education_engine_result.archetype,
+                    "verdict": _education_engine_result.verdict,
+                    "summary": list(_education_engine_result.summary or []),
+                    "evidence": list(_education_engine_result.evidence or []),
+                    "ignore": list(_education_engine_result.ignore or []),
+                    "checks": dict(_education_engine_result.checks or {}),
+                    "skip_llm": bool(_education_engine_result.skip_llm),
+                    "word_budget": int(_education_engine_result.word_budget or 70),
+                    "narrator_mode": "engine_facts_only",
+                }
+                print(
+                    f"[raw_passthrough] EDUCATION_ENGINE "
+                    f"archetype={_education_engine_result.archetype} "
+                    f"evidence={len(_education_engine_result.evidence or [])} "
+                    f"chart_chars={len(chart_text)}",
+                    flush=True,
+                )
+            except Exception as _edu_exc:
+                print(f"[raw_passthrough] EDUCATION_ENGINE failed: {_edu_exc}", flush=True)
+                chart_text = _raw_compact_chart(
+                    kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
+                )
+                dcr_love_meta = None
+                _is_education_static = False
+        elif _is_children_static:
+            try:
+                from ask_children import run_children_static_engine  # type: ignore
+                from ask_children.routing import resolve_children_archetype  # type: ignore
+
+                _child_interp = ""
+                if isinstance(_llm_intent, dict):
+                    _child_interp = str(_llm_intent.get("interpretation") or "").strip()
+
+                _resolved_child_arch, _child_arch_reason = resolve_children_archetype(
+                    question or "",
+                    llm_archetype=_children_archetype_override,
+                    interpretation=_child_interp,
+                )
+                if _child_arch_reason:
+                    print(
+                        f"[raw_passthrough] CHILDREN_ARCHETYPE_ROUTE "
+                        f"llm={_children_archetype_override} -> {_resolved_child_arch} "
+                        f"reason={_child_arch_reason}",
+                        flush=True,
+                    )
+
+                _children_engine_result = run_children_static_engine(
+                    kundli if isinstance(kundli, dict) else {},
+                    question or "",
+                    wants_explain=wants_explain,
+                    archetype=_resolved_child_arch,
+                )
+                chart_text = _children_engine_result.to_narrator_payload()
+                dcr_love_meta = {
+                    "slice": "children_engine_v1",
+                    "topic": "children",
+                    "archetype": _children_engine_result.archetype,
+                    "verdict": _children_engine_result.verdict,
+                    "summary": list(_children_engine_result.summary or []),
+                    "evidence": list(_children_engine_result.evidence or []),
+                    "ignore": list(_children_engine_result.ignore or []),
+                    "checks": dict(_children_engine_result.checks or {}),
+                    "skip_llm": bool(_children_engine_result.skip_llm),
+                    "word_budget": int(_children_engine_result.word_budget or 70),
+                    "narrator_mode": "engine_facts_only",
+                }
+                print(
+                    f"[raw_passthrough] CHILDREN_ENGINE "
+                    f"archetype={_children_engine_result.archetype} "
+                    f"evidence={len(_children_engine_result.evidence or [])} "
+                    f"chart_chars={len(chart_text)}",
+                    flush=True,
+                )
+            except Exception as _child_exc:
+                print(f"[raw_passthrough] CHILDREN_ENGINE failed: {_child_exc}", flush=True)
+                chart_text = _raw_compact_chart(
+                    kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
+                )
+                dcr_love_meta = None
+                _is_children_static = False
+        elif _is_property_static:
+            try:
+                from ask_property import run_property_static_engine  # type: ignore
+                from ask_property.routing import resolve_property_archetype  # type: ignore
+
+                _prop_interp = ""
+                if isinstance(_llm_intent, dict):
+                    _prop_interp = str(_llm_intent.get("interpretation") or "").strip()
+
+                _resolved_prop_arch, _prop_arch_reason = resolve_property_archetype(
+                    question or "",
+                    llm_archetype=_property_archetype_override,
+                    interpretation=_prop_interp,
+                )
+                if _prop_arch_reason:
+                    print(
+                        f"[raw_passthrough] PROPERTY_ARCHETYPE_ROUTE "
+                        f"llm={_property_archetype_override} -> {_resolved_prop_arch} "
+                        f"reason={_prop_arch_reason}",
+                        flush=True,
+                    )
+
+                _property_engine_result = run_property_static_engine(
+                    kundli if isinstance(kundli, dict) else {},
+                    question or "",
+                    wants_explain=wants_explain,
+                    archetype=_resolved_prop_arch,
+                )
+                chart_text = _property_engine_result.to_narrator_payload()
+                dcr_love_meta = {
+                    "slice": "property_engine_v1",
+                    "topic": "property",
+                    "archetype": _property_engine_result.archetype,
+                    "verdict": _property_engine_result.verdict,
+                    "summary": list(_property_engine_result.summary or []),
+                    "evidence": list(_property_engine_result.evidence or []),
+                    "ignore": list(_property_engine_result.ignore or []),
+                    "checks": dict(_property_engine_result.checks or {}),
+                    "skip_llm": bool(_property_engine_result.skip_llm),
+                    "word_budget": int(_property_engine_result.word_budget or 75),
+                    "narrator_mode": "engine_facts_only",
+                }
+                print(
+                    f"[raw_passthrough] PROPERTY_ENGINE "
+                    f"archetype={_property_engine_result.archetype} "
+                    f"evidence={len(_property_engine_result.evidence or [])} "
+                    f"chart_chars={len(chart_text)}",
+                    flush=True,
+                )
+            except Exception as _prop_exc:
+                print(f"[raw_passthrough] PROPERTY_ENGINE failed: {_prop_exc}", flush=True)
+                chart_text = _raw_compact_chart(
+                    kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
+                )
+                dcr_love_meta = None
+                _is_property_static = False
+        elif _is_travel_static:
+            try:
+                from ask_travel import run_travel_static_engine  # type: ignore
+                from ask_travel.routing import resolve_travel_archetype  # type: ignore
+
+                _trv_interp = ""
+                if isinstance(_llm_intent, dict):
+                    _trv_interp = str(_llm_intent.get("interpretation") or "").strip()
+
+                _resolved_trv_arch, _trv_arch_reason = resolve_travel_archetype(
+                    question or "",
+                    llm_archetype=_travel_archetype_override,
+                    interpretation=_trv_interp,
+                )
+                if _trv_arch_reason:
+                    print(
+                        f"[raw_passthrough] TRAVEL_ARCHETYPE_ROUTE "
+                        f"llm={_travel_archetype_override} -> {_resolved_trv_arch} "
+                        f"reason={_trv_arch_reason}",
+                        flush=True,
+                    )
+
+                _travel_engine_result = run_travel_static_engine(
+                    kundli if isinstance(kundli, dict) else {},
+                    question or "",
+                    wants_explain=wants_explain,
+                    archetype=_resolved_trv_arch,
+                )
+                chart_text = _travel_engine_result.to_narrator_payload()
+                dcr_love_meta = {
+                    "slice": "travel_engine_v1",
+                    "topic": "travel",
+                    "archetype": _travel_engine_result.archetype,
+                    "verdict": _travel_engine_result.verdict,
+                    "summary": list(_travel_engine_result.summary or []),
+                    "evidence": list(_travel_engine_result.evidence or []),
+                    "ignore": list(_travel_engine_result.ignore or []),
+                    "checks": dict(_travel_engine_result.checks or {}),
+                    "skip_llm": bool(_travel_engine_result.skip_llm),
+                    "word_budget": int(_travel_engine_result.word_budget or 75),
+                    "narrator_mode": "engine_facts_only",
+                }
+                print(
+                    f"[raw_passthrough] TRAVEL_ENGINE "
+                    f"archetype={_travel_engine_result.archetype} "
+                    f"evidence={len(_travel_engine_result.evidence or [])} "
+                    f"chart_chars={len(chart_text)}",
+                    flush=True,
+                )
+            except Exception as _trv_exc:
+                print(f"[raw_passthrough] TRAVEL_ENGINE failed: {_trv_exc}", flush=True)
+                chart_text = _raw_compact_chart(
+                    kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
+                )
+                dcr_love_meta = None
+                _is_travel_static = False
+        elif _is_litigation_static:
+            try:
+                from ask_litigation import run_litigation_static_engine  # type: ignore
+                from ask_litigation.routing import resolve_litigation_archetype  # type: ignore
+
+                _lit_interp = ""
+                if isinstance(_llm_intent, dict):
+                    _lit_interp = str(_llm_intent.get("interpretation") or "").strip()
+
+                _resolved_lit_arch, _lit_arch_reason = resolve_litigation_archetype(
+                    question or "",
+                    llm_archetype=_litigation_archetype_override,
+                    interpretation=_lit_interp,
+                )
+                if _lit_arch_reason:
+                    print(
+                        f"[raw_passthrough] LITIGATION_ARCHETYPE_ROUTE "
+                        f"llm={_litigation_archetype_override} -> {_resolved_lit_arch} "
+                        f"reason={_lit_arch_reason}",
+                        flush=True,
+                    )
+
+                _litigation_engine_result = run_litigation_static_engine(
+                    kundli if isinstance(kundli, dict) else {},
+                    question or "",
+                    wants_explain=wants_explain,
+                    archetype=_resolved_lit_arch,
+                )
+                chart_text = _litigation_engine_result.to_narrator_payload()
+                _lit_remedy = (_litigation_engine_result.checks or {}).get("remedy_text") or ""
+                if _lit_remedy:
+                    chart_text = (
+                        chart_text
+                        + "\n\n=== LITIGATION REMEDIES (LOCKED — quote verbatim, practical FIRST) ===\n"
+                        + _lit_remedy
+                    )
+                dcr_love_meta = {
+                    "slice": "litigation_engine_v1",
+                    "topic": "litigation",
+                    "archetype": _litigation_engine_result.archetype,
+                    "verdict": _litigation_engine_result.verdict,
+                    "summary": list(_litigation_engine_result.summary or []),
+                    "evidence": list(_litigation_engine_result.evidence or []),
+                    "ignore": list(_litigation_engine_result.ignore or []),
+                    "checks": dict(_litigation_engine_result.checks or {}),
+                    "skip_llm": bool(_litigation_engine_result.skip_llm),
+                    "word_budget": int(
+                        _litigation_engine_result.word_budget or 80
+                    ) + (25 if _lit_remedy else 0),
+                    "narrator_mode": "engine_facts_only",
+                }
+                print(
+                    f"[raw_passthrough] LITIGATION_ENGINE "
+                    f"archetype={_litigation_engine_result.archetype} "
+                    f"evidence={len(_litigation_engine_result.evidence or [])} "
+                    f"chart_chars={len(chart_text)}",
+                    flush=True,
+                )
+            except Exception as _lit_exc:
+                print(f"[raw_passthrough] LITIGATION_ENGINE failed: {_lit_exc}", flush=True)
+                chart_text = _raw_compact_chart(
+                    kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
+                )
+                dcr_love_meta = None
+                _is_litigation_static = False
         elif _is_career_static:
             try:
                 from ask_career import run_career_static_engine  # type: ignore
@@ -5317,7 +5904,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             chart_text = _raw_compact_chart(
                 kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
             )
-        if not is_timing and not _is_mr_static and not _is_career_static:
+        if not is_timing and not _is_mr_static and not _is_career_static and not _is_education_static and not _is_children_static and not _is_property_static:
             try:
                 from dcr_love import build_dcr_love_context  # type: ignore
 
@@ -5344,6 +5931,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             )
         elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "career_engine_v1":
             _chart_slice_type = "career_engine_v1"
+        elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "education_engine_v1":
+            _chart_slice_type = "education_engine_v1"
+        elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "children_engine_v1":
+            _chart_slice_type = "children_engine_v1"
+        elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "property_engine_v1":
+            _chart_slice_type = "property_engine_v1"
         elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "finance_engine_v1":
             _chart_slice_type = "finance_engine_v1"
         elif is_timing:
@@ -5376,6 +5969,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") in (
         "mr_engine_v1",
         "career_engine_v1",
+        "education_engine_v1",
+        "children_engine_v1",
+        "property_engine_v1",
         "finance_engine_v1",
     ):
         is_decision = False
@@ -5482,6 +6078,78 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     chart_text = chart_text + "\n" + marriage_block
         except Exception as _me:
             print(f"[raw_passthrough] marriage enrichment skipped: {_me}")
+
+    career_block = ""
+    is_career_engine = False
+    try:
+        from ask_career.timing_registry import is_career_timing_question  # type: ignore
+
+        _career_timing_q = is_career_timing_question(question or "", _llm_intent)
+    except Exception:
+        _career_timing_q = bool(is_timing and _is_career_question(question or ""))
+    if _career_timing_q and isinstance(kundli, dict) and kundli.get("planets"):
+        try:
+            _intel_for_career = {}
+            try:
+                _analyze_c, _ = _chart_intel()
+                _intel_for_career = _analyze_c(kundli, birth) or {}
+            except Exception as _ice:
+                print(
+                    f"[raw_passthrough] career intel build skipped: "
+                    f"{str(_ice)[:160]}"
+                )
+            career_block = _passthrough_career_block(
+                question, kundli, _intel_for_career, birth, _llm_intent
+            ) or ""
+            if career_block:
+                is_career_engine = True
+                chart_text = chart_text + "\n" + career_block
+        except Exception as _ce:
+            print(f"[raw_passthrough] career enrichment skipped: {_ce}")
+
+    # ── Unified domain timing (travel / partial domains) ─────────────────
+    domain_timing_block = ""
+    _timing_ctx = None
+    if is_timing and isinstance(kundli, dict) and kundli.get("planets"):
+        try:
+            from event_timing.timing_router import (  # type: ignore
+                format_timing_block,
+                resolve_timing_domain,
+                run_timing_engine,
+            )
+
+            _td, _tb, _tt = resolve_timing_domain(question or "", _llm_intent)
+            if _tt and _td not in ("career", "marriage"):
+                _intel_ut = {}
+                try:
+                    _analyze_u, _ = _chart_intel()
+                    _intel_ut = _analyze_u(kundli, birth) or {}
+                except Exception:
+                    _intel_ut = {}
+                _kp_ut = None
+                try:
+                    _kp_ut = _kp_calc()(birth) if isinstance(birth, dict) else {}
+                except Exception:
+                    _kp_ut = {}
+                _timing_ctx = run_timing_engine(
+                    question or "",
+                    kundli,
+                    _intel_ut,
+                    _kp_ut or {},
+                    birth,
+                    _llm_intent,
+                )
+                domain_timing_block = format_timing_block(_timing_ctx) or ""
+                if domain_timing_block:
+                    chart_text = chart_text + "\n" + domain_timing_block
+                    print(
+                        f"[raw_passthrough] domain_timing OK domain={_td} "
+                        f"status={_timing_ctx.engine_status} "
+                        f"verdict={_timing_ctx.verdict!r}",
+                        flush=True,
+                    )
+        except Exception as _ute:
+            print(f"[raw_passthrough] unified timing skipped: {_ute}")
 
     # Marriage timing — skip LLM; window comes from assess_marriage (M17).
     if (marriage_block and is_marriage_engine
@@ -5727,7 +6395,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     if (
         dcr_love_meta
         and not _is_pn_minimal
-        and dcr_love_meta.get("slice") not in ("mr_engine_v1", "career_engine_v1", "finance_engine_v1", "health_engine_v1")
+        and dcr_love_meta.get("slice") not in ("mr_engine_v1", "career_engine_v1", "education_engine_v1", "children_engine_v1", "property_engine_v1", "travel_engine_v1", "litigation_engine_v1", "finance_engine_v1", "health_engine_v1")
     ):
         dcr_love_rule = (
             "\nDCR LOVE SLICE: partner/love Q — D1 first, D9 confirms. "
@@ -5738,10 +6406,15 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
     _mr_engine_narrator = (
         isinstance(dcr_love_meta, dict)
-        and dcr_love_meta.get("slice") in ("mr_engine_v1", "career_engine_v1", "finance_engine_v1", "health_engine_v1")
+        and dcr_love_meta.get("slice") in ("mr_engine_v1", "career_engine_v1", "education_engine_v1", "children_engine_v1", "property_engine_v1", "travel_engine_v1", "litigation_engine_v1", "finance_engine_v1", "health_engine_v1")
         and (
             os.environ.get("ASK_MR_NARRATOR")
             or os.environ.get("ASK_CAREER_NARRATOR")
+            or os.environ.get("ASK_EDUCATION_NARRATOR")
+            or os.environ.get("ASK_CHILDREN_NARRATOR")
+            or os.environ.get("ASK_PROPERTY_NARRATOR")
+            or os.environ.get("ASK_TRAVEL_NARRATOR")
+            or os.environ.get("ASK_LITIGATION_NARRATOR")
             or os.environ.get("ASK_FINANCE_NARRATOR")
             or os.environ.get("ASK_HEALTH_NARRATOR")
             or "1"
@@ -5880,6 +6553,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") in (
             "mr_engine_v1",
             "career_engine_v1",
+            "education_engine_v1",
+            "children_engine_v1",
+            "property_engine_v1",
             "finance_engine_v1",
             "health_engine_v1",
         ):
@@ -5979,6 +6655,126 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     )
             except Exception as _hag:
                 print(f"[raw_passthrough] HEALTH_ANSWER_GUARD skipped: {_hag}", flush=True)
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "education_engine_v1":
+            try:
+                from ask_education.answer_guard import guard_education_answer
+
+                text, _eduguard = guard_education_answer(
+                    question or "",
+                    text,
+                    dcr_love_meta,
+                )
+                text = _strip_decision_template_labels(text)
+                if _eduguard.get("repaired"):
+                    print(
+                        f"[raw_passthrough] EDUCATION_ANSWER_GUARD repaired "
+                        f"issues={_eduguard.get('issues')}",
+                        flush=True,
+                    )
+                elif not _eduguard.get("ok"):
+                    print(
+                        f"[raw_passthrough] EDUCATION_ANSWER_GUARD warn "
+                        f"issues={_eduguard.get('issues')}",
+                        flush=True,
+                    )
+            except Exception as _edag:
+                print(f"[raw_passthrough] EDUCATION_ANSWER_GUARD skipped: {_edag}", flush=True)
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "children_engine_v1":
+            try:
+                from ask_children.answer_guard import guard_children_answer
+
+                text, _childguard = guard_children_answer(
+                    question or "",
+                    text,
+                    dcr_love_meta,
+                )
+                text = _strip_decision_template_labels(text)
+                if _childguard.get("repaired"):
+                    print(
+                        f"[raw_passthrough] CHILDREN_ANSWER_GUARD repaired "
+                        f"issues={_childguard.get('issues')}",
+                        flush=True,
+                    )
+                elif not _childguard.get("ok"):
+                    print(
+                        f"[raw_passthrough] CHILDREN_ANSWER_GUARD warn "
+                        f"issues={_childguard.get('issues')}",
+                        flush=True,
+                    )
+            except Exception as _chag:
+                print(f"[raw_passthrough] CHILDREN_ANSWER_GUARD skipped: {_chag}", flush=True)
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "property_engine_v1":
+            try:
+                from ask_property.answer_guard import guard_property_answer
+
+                text, _propguard = guard_property_answer(
+                    question or "",
+                    text,
+                    dcr_love_meta,
+                )
+                text = _strip_decision_template_labels(text)
+                if _propguard.get("repaired"):
+                    print(
+                        f"[raw_passthrough] PROPERTY_ANSWER_GUARD repaired "
+                        f"issues={_propguard.get('issues')}",
+                        flush=True,
+                    )
+                elif not _propguard.get("ok"):
+                    print(
+                        f"[raw_passthrough] PROPERTY_ANSWER_GUARD warn "
+                        f"issues={_propguard.get('issues')}",
+                        flush=True,
+                    )
+            except Exception as _prag:
+                print(f"[raw_passthrough] PROPERTY_ANSWER_GUARD skipped: {_prag}", flush=True)
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "travel_engine_v1":
+            try:
+                from ask_travel.answer_guard import guard_travel_answer
+
+                text, _trvguard = guard_travel_answer(
+                    question or "",
+                    text,
+                    dcr_love_meta,
+                )
+                text = _strip_decision_template_labels(text)
+                if _trvguard.get("repaired"):
+                    print(
+                        f"[raw_passthrough] TRAVEL_ANSWER_GUARD repaired "
+                        f"issues={_trvguard.get('issues')}",
+                        flush=True,
+                    )
+                elif not _trvguard.get("ok"):
+                    print(
+                        f"[raw_passthrough] TRAVEL_ANSWER_GUARD warn "
+                        f"issues={_trvguard.get('issues')}",
+                        flush=True,
+                    )
+            except Exception as _trvag:
+                print(f"[raw_passthrough] TRAVEL_ANSWER_GUARD skipped: {_trvag}", flush=True)
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "litigation_engine_v1":
+            try:
+                from ask_litigation.answer_guard import guard_litigation_answer
+
+                text, _litguard = guard_litigation_answer(
+                    question or "",
+                    text,
+                    dcr_love_meta,
+                )
+                text = _strip_decision_template_labels(text)
+                if _litguard.get("repaired"):
+                    print(
+                        f"[raw_passthrough] LITIGATION_ANSWER_GUARD repaired "
+                        f"issues={_litguard.get('issues')}",
+                        flush=True,
+                    )
+                elif not _litguard.get("ok"):
+                    print(
+                        f"[raw_passthrough] LITIGATION_ANSWER_GUARD warn "
+                        f"issues={_litguard.get('issues')}",
+                        flush=True,
+                    )
+            except Exception as _litag:
+                print(f"[raw_passthrough] LITIGATION_ANSWER_GUARD skipped: {_litag}", flush=True)
         if not text:
             text = "Maaf kijiye, abhi response generate nahi ho paya. Phir try karein."
         # Skip robotic [Checked: ...] trace — user wants human replies only.
@@ -6031,16 +6827,28 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         )
         _mr_engine_ran = _engine_slice == "mr_engine_v1"
         _career_engine_ran = _engine_slice == "career_engine_v1"
+        _education_engine_ran = _engine_slice == "education_engine_v1"
+        _children_engine_ran = _engine_slice == "children_engine_v1"
+        _property_engine_ran = _engine_slice == "property_engine_v1"
         _finance_engine_ran = _engine_slice == "finance_engine_v1"
+        _health_engine_ran = _engine_slice == "health_engine_v1"
         _engine_tag = (
             "ans-engine"
-            if (is_timing or _mr_engine_ran or _career_engine_ran or _finance_engine_ran)
+            if (is_timing or _mr_engine_ran or _career_engine_ran or _education_engine_ran or _children_engine_ran or _property_engine_ran or _finance_engine_ran or _health_engine_ran)
             else "ans-cosmo"
         )
         if _career_engine_ran:
             _answer_source = "career_engine_then_llm"
+        elif _property_engine_ran:
+            _answer_source = "property_engine_then_llm"
+        elif _children_engine_ran:
+            _answer_source = "children_engine_then_llm"
+        elif _education_engine_ran:
+            _answer_source = "education_engine_then_llm"
         elif _finance_engine_ran:
             _answer_source = "finance_engine_then_llm"
+        elif _health_engine_ran:
+            _answer_source = "health_engine_then_llm"
         elif _mr_engine_ran:
             _answer_source = "mr_engine_then_llm"
         else:
@@ -16819,10 +17627,119 @@ def _phase59_format_dosh_facts_block(v: Any) -> str:
 # detector ↔ executor drift.
 
 
-def _phase59_is_career_question(*a, **k): return False  # Phase 2.8.37 stub
+def _phase59_is_career_question(question: Any) -> bool:
+    """True iff the question is a career / job / promotion query.
+
+    Delegates to `_is_career_question()` — same gate as `assess_career`.
+    """
+    if not isinstance(question, str) or not question.strip():
+        return False
+    return _is_career_question(question)
 
 
-def _phase59_format_career_facts_block(*a, **k): return ""  # Phase 2.8.37 stub
+def _phase59_career_outlook(verdict: str, score: int) -> str:
+    v = (verdict or "").strip().lower()
+    if v == "green_go":
+        return "favourable"
+    if v == "yellow_wait":
+        return "wait_and_prepare"
+    if v == "slow_burn":
+        return "gradual"
+    if v == "red_avoid":
+        return "defer_risk" if score < 25 else "caution"
+    return "mixed"
+
+
+def _phase59_format_career_facts_block(v: Any) -> str:
+    """Render `assess_career()` output as a structured CAREER_FACTS block."""
+    if not isinstance(v, dict) or not v:
+        return ""
+
+    def _safe_int(x: Any, default: int = 0) -> int:
+        try:
+            return int(x)
+        except (TypeError, ValueError):
+            return default
+
+    def _safe_str(x: Any) -> str:
+        if not isinstance(x, str):
+            return ""
+        return _re_p58.sub(r"\s+", " ", x).strip()
+
+    def _safe_iter(x: Any) -> list:
+        return x if isinstance(x, list) else []
+
+    bucket = _safe_str(v.get("bucket")) or "general_career"
+    tense = _safe_str(v.get("tense")) or "general"
+    verdict = _safe_str(v.get("verdict"))
+    score = _safe_int(v.get("score"))
+    conf = _safe_int(v.get("confidence"))
+    outlook = _phase59_career_outlook(verdict, score)
+
+    lines: list[str] = [
+        "CAREER_FACTS:",
+        f"  - outlook: {outlook}",
+        f"  - bucket: {bucket}",
+        f"  - tense: {tense}",
+        f"  - verdict: {verdict or 'unknown'}",
+        f"  - score: {score}",
+        f"  - confidence: {conf}",
+    ]
+
+    age_ctx = v.get("age_context") or {}
+    if isinstance(age_ctx, dict):
+        u_age = age_ctx.get("user_age")
+        band = _safe_str(age_ctx.get("age_band"))
+        if u_age is not None:
+            lines.append(f"  - user_age: {u_age}")
+        if band:
+            lines.append(f"  - age_band: {band}")
+        reframe = _safe_str(v.get("age_reframe") or age_ctx.get("reframe_bucket"))
+        if reframe:
+            lines.append(f"  - age_reframe: {reframe}")
+
+    tw = v.get("timing_window") or {}
+    if isinstance(tw, dict):
+        cur = tw.get("current") or {}
+        if isinstance(cur, dict):
+            lords = cur.get("lords")
+            start = _safe_str(cur.get("start"))[:7]
+            end = _safe_str(cur.get("end"))[:7]
+            if lords or start or end:
+                lord_s = _safe_str(str(lords)) if lords else "(unspecified)"
+                win = f"{lord_s} ({start}..{end})" if (start or end) else lord_s
+                lines.append(f"  - current_window: {win}")
+        nxt = tw.get("next_career") or {}
+        if isinstance(nxt, dict) and (nxt.get("md") or nxt.get("ad")):
+            md = _safe_str(nxt.get("md"))
+            ad = _safe_str(nxt.get("ad"))
+            ns = _safe_str(nxt.get("start"))[:7]
+            ne = _safe_str(nxt.get("end"))[:7]
+            label = f"{md}/{ad}".strip("/")
+            tail = f" ({ns}..{ne})" if (ns or ne) else ""
+            lines.append(f"  - next_career_window: {label}{tail}")
+
+    top_reasons = [_safe_str(r) for r in _safe_iter(v.get("reasons"))[:4]]
+    top_reasons = [r for r in top_reasons if r]
+    if top_reasons:
+        lines.append("  - top_factors:")
+        for r in top_reasons:
+            lines.append(f"    - {r}")
+
+    strat = _safe_str(v.get("strategy"))
+    if strat:
+        if len(strat) > 240:
+            strat = strat[:237].rstrip() + "..."
+        lines.append(f"  - strategy: {strat}")
+
+    bsw = [_safe_str(b) for b in _safe_iter(v.get("brand_safety_warnings"))]
+    bsw = [b for b in bsw if b]
+    if bsw:
+        lines.append("  - brand_safety:")
+        for b in bsw:
+            lines.append(f"    - {b}")
+
+    return "\n".join(lines)
 
 
 

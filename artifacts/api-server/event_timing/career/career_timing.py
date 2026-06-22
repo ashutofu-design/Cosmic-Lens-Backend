@@ -4079,7 +4079,7 @@ def assess_career(kundli: dict,
         for w in (synastry[r].get("why") or []):
             reasons.append(w)
 
-    return {
+    result = {
         "bucket":              bucket,
         "tense":               tense,
         "verdict":             verdict,
@@ -4105,6 +4105,20 @@ def assess_career(kundli: dict,
         "reasons":             reasons,
         "weakest_planet":      weakest,
     }
+
+    try:
+        from ask_career.timing_registry import (  # type: ignore
+            apply_age_context_to_verdict,
+            assess_career_age_context,
+            resolve_user_age,
+        )
+        _u_age = resolve_user_age(question=question, birth=birth, kundli=kundli)
+        _age_ctx = assess_career_age_context(_u_age, question, bucket)
+        result = apply_age_context_to_verdict(result, _age_ctx)
+    except Exception:
+        pass
+
+    return result
 
 
 # ─────────────────────────────────────────────────────────────────────────────

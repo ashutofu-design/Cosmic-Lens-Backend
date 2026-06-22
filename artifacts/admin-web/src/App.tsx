@@ -41,6 +41,52 @@ import {
 
 type Tab = "dashboard" | "transactions" | "users" | "logins" | "pdfcosts" | "askqa" | "lrorders" | "bvorders";
 
+const NAV_ITEMS: { id: Tab; label: string; icon: string }[] = [
+  { id: "dashboard", label: "Dashboard", icon: "◈" },
+  { id: "transactions", label: "Transactions", icon: "₹" },
+  { id: "users", label: "Users", icon: "◎" },
+  { id: "logins", label: "Gmail logins", icon: "✉" },
+  { id: "lrorders", label: "Love Reality", icon: "♡" },
+  { id: "bvorders", label: "Business Vastu", icon: "⌂" },
+  { id: "pdfcosts", label: "PDF AI costs", icon: "◫" },
+  { id: "askqa", label: "Ask Q&A", icon: "?" },
+];
+
+const TAB_META: Record<Tab, { title: string; subtitle: string }> = {
+  dashboard: {
+    title: "Command Center",
+    subtitle: "Revenue, users, and subscription health at a glance.",
+  },
+  transactions: {
+    title: "Transactions",
+    subtitle: "Paid orders, plans, and one-time report purchases.",
+  },
+  users: {
+    title: "Users",
+    subtitle: "Accounts, kundli profiles, and admin actions.",
+  },
+  logins: {
+    title: "Gmail logins",
+    subtitle: "Google / Firebase sign-in history — OTP not shown.",
+  },
+  lrorders: {
+    title: "Love Reality Orders",
+    subtitle: "Founder-verified PDF queue with Telegram alerts when configured.",
+  },
+  bvorders: {
+    title: "Business Vastu",
+    subtitle: "Shop/office photos and floor plans awaiting Vastu review.",
+  },
+  pdfcosts: {
+    title: "PDF AI costs",
+    subtitle: "Exact tokens and INR per PDF generation.",
+  },
+  askqa: {
+    title: "Ask Q&A",
+    subtitle: "User questions with answers, tokens, and LLM chart context.",
+  },
+};
+
 export default function App() {
   const [tab, setTab] = useState<Tab>("dashboard");
   const [dash, setDash] = useState<Dashboard | null>(null);
@@ -620,18 +666,20 @@ export default function App() {
     const profiles = gmailViewData?.profiles ?? [];
 
     return (
-      <div className="app">
-        <header>
-          <button type="button" className="back-btn" onClick={closeGmailProfilesView}>
-            ← Back to Gmail logins
-          </button>
-          <h1>User overview</h1>
-          <p className="detail-muted">
-            {gmailProfileView.email}
-            {gmailProfileView.userId ? ` · user #${gmailProfileView.userId}` : ""}
-            {gmailProfileView.userName ? ` · ${gmailProfileView.userName}` : ""}
-          </p>
-        </header>
+      <div className="admin-shell">
+        <div className="cosmic-bg" aria-hidden />
+        <div className="main-area gmail-standalone">
+          <header className="top-bar">
+            <button type="button" className="back-btn" onClick={closeGmailProfilesView}>
+              ← Back to Gmail logins
+            </button>
+            <h2>User overview</h2>
+            <p className="subtitle">
+              {gmailProfileView.email}
+              {gmailProfileView.userId ? ` · user #${gmailProfileView.userId}` : ""}
+              {gmailProfileView.userName ? ` · ${gmailProfileView.userName}` : ""}
+            </p>
+          </header>
 
         {gmailProfilesLoading ? <p className="detail-muted">Loading…</p> : null}
         {gmailProfilesError ? <div className="error">{gmailProfilesError}</div> : null}
@@ -733,83 +781,100 @@ export default function App() {
             </section>
           </>
         ) : null}
+        </div>
       </div>
     );
   }
 
-  return (
-    <div className="app">
-      <header>
-        <h1>Cosmic Lens Admin</h1>
-        <p>
-          Gmail login only (no OTP). VPS API via <code>VITE_API_PROXY_TARGET</code> +{" "}
-          <code>VITE_ADMIN_SECRET</code>.
-        </p>
-      </header>
+  const meta = TAB_META[tab];
 
-      <nav className="tabs">
-        {(
-          [
-            ["dashboard", "Dashboard"],
-            ["transactions", "Transactions"],
-            ["users", "Users"],
-            ["logins", "Gmail logins"],
-            ["lrorders", "Love Reality Orders"],
-            ["bvorders", "Business Vastu"],
-            ["pdfcosts", "PDF AI costs"],
-            ["askqa", "Ask Q&A"],
-          ] as const
-        ).map(([id, label]) => (
+  return (
+    <div className="admin-shell">
+      <div className="cosmic-bg" aria-hidden />
+      {loading ? <div className="loading-bar" aria-hidden /> : null}
+
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <div className="brand-icon" aria-hidden>
+            ✦
+          </div>
+          <div className="brand-text">
+            <h1>Cosmic Lens</h1>
+            <span>Admin</span>
+          </div>
+        </div>
+
+        {NAV_ITEMS.map((item) => (
           <button
-            key={id}
+            key={item.id}
             type="button"
-            className={tab === id ? "primary" : ""}
-            onClick={() => setTab(id)}
+            className={`nav-item${tab === item.id ? " active" : ""}`}
+            onClick={() => setTab(item.id)}
           >
-            {label}
+            <span className="nav-icon" aria-hidden>
+              {item.icon}
+            </span>
+            <span>{item.label}</span>
           </button>
         ))}
-        <button type="button" className="tab-refresh" onClick={load} disabled={loading}>
-          Refresh
-        </button>
-      </nav>
+
+        <div className="sidebar-footer">
+          <button
+            type="button"
+            className="nav-item nav-refresh"
+            onClick={load}
+            disabled={loading}
+          >
+            <span className="nav-icon" aria-hidden>
+              ↻
+            </span>
+            <span>{loading ? "Refreshing…" : "Refresh"}</span>
+          </button>
+        </div>
+      </aside>
+
+      <div className="main-area">
+        <header className="top-bar">
+          <h2>{meta.title}</h2>
+          <p className="subtitle">{meta.subtitle}</p>
+        </header>
 
       {error && <div className="error">{error}</div>}
 
       {tab === "dashboard" && dash ? (
         <>
           <div className="grid stats">
-            <div className="card">
+            <div className="stat-card">
               <h3>Total users</h3>
               <div className="value">{dash.total_users}</div>
             </div>
             {stats ? (
               <>
-                <div className="card">
+                <div className="stat-card">
                   <h3>Active today</h3>
                   <div className="value">{stats.active_today}</div>
                 </div>
-                <div className="card">
+                <div className="stat-card">
                   <h3>Pro users</h3>
                   <div className="value">{stats.pro_users}</div>
                 </div>
               </>
             ) : null}
-            <div className="card">
+            <div className="stat-card">
               <h3>Today ₹</h3>
-              <div className="value">{formatInr(dash.payments.today_inr)}</div>
+              <div className="value gold">{formatInr(dash.payments.today_inr)}</div>
             </div>
-            <div className="card">
+            <div className="stat-card">
               <h3>Week ₹</h3>
-              <div className="value">{formatInr(dash.payments.week_inr)}</div>
+              <div className="value gold">{formatInr(dash.payments.week_inr)}</div>
             </div>
-            <div className="card">
+            <div className="stat-card">
               <h3>Month ₹</h3>
-              <div className="value">{formatInr(dash.payments.month_inr)}</div>
+              <div className="value gold">{formatInr(dash.payments.month_inr)}</div>
             </div>
-            <div className="card">
+            <div className="stat-card">
               <h3>Lifetime ₹</h3>
-              <div className="value">{formatInr(dash.payments.lifetime_inr)}</div>
+              <div className="value gold">{formatInr(dash.payments.lifetime_inr)}</div>
             </div>
           </div>
           <section className="section card">
@@ -1602,8 +1667,11 @@ export default function App() {
       ) : null}
 
       {loading && !dash && tab === "dashboard" ? (
-        <p style={{ color: "var(--muted)" }}>Loading…</p>
+        <p className="detail-muted loading-shimmer" style={{ width: 120, height: 20 }}>
+          Loading
+        </p>
       ) : null}
+      </div>
     </div>
   );
 }

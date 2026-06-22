@@ -45,9 +45,11 @@ _TIMING_RX = re.compile(
 
     r"kab|kab\s+tak|when|when\s+will|kis\s+(saal|year|mahine|month)|"
 
+    r"kitna\s+time|time\s+lagega|lagne\s+me|"
+
     r"\d{4}\s+me|dasha|antardasha|mahadasha|transit|gochar|muhurat|timing"
 
-    r")\b"
+    r")\b|(?:कब|कितना\s+समय)"
 
 )
 
@@ -81,6 +83,14 @@ def is_career_static_question(question: str) -> bool:
 
         return False
 
+    try:
+        from ask_education.education_registry import is_education_static_question  # type: ignore
+
+        if is_education_static_question(q):
+            return False
+    except Exception:
+        pass
+
     if re.search(
         r"(?ix)\b(stock|stocks|share[\s-]*market|nifty|sensex|intraday|"
         r"trading|trader|mutual\s*fund|sip|nse|bse|crypto|portfolio)\b",
@@ -99,6 +109,10 @@ def is_career_static_question(question: str) -> bool:
     if _SPOUSE_CAREER_RX.search(q):
 
         return False
+
+    if GOVT_EXAM_RX.search(q) and is_govt_exam_milestone_question(q):
+
+        return True
 
     if is_foundation_scope(q):
 
@@ -148,6 +162,12 @@ def classify_career_archetype(question: str) -> str:
 
 
 
+    if GOVT_EXAM_RX.search(q) and is_govt_exam_milestone_question(q):
+
+        return "career_milestones"
+
+
+
     found = classify_foundation_personality(q)
 
     if found:
@@ -177,10 +197,6 @@ def classify_career_archetype(question: str) -> str:
         return "career_milestones"
 
     if JOB_CHANGE_RX.search(q):
-
-        return "career_milestones"
-
-    if GOVT_EXAM_RX.search(q) and is_govt_exam_milestone_question(q):
 
         return "career_milestones"
 
@@ -280,6 +296,12 @@ def classify_career_archetype(question: str) -> str:
         r"(?ix)\b(study|education|exam|degree|college|university|padhai|course\s*choose|"
 
         r"higher\s*stud|studies|career\s*course)\b",
+
+        q,
+
+    ) and re.search(
+
+        r"(?ix)\b(career|naukri|job|business|profession|kaam|office|course\s*for\s*career)\b",
 
         q,
 

@@ -142,7 +142,92 @@ HEALTH_ARCHETYPES = {
     "general_health",
 }
 
-DOMAINS = {"marriage", "love", "career", "finance", "health", "general"}
+EDUCATION_ARCHETYPES = {
+    "exam_success",
+    "competitive_exam",
+    "higher_studies",
+    "study_field",
+    "specialization_path",
+    "admission",
+    "scholarship",
+    "degree_completion",
+    "marks_performance",
+    "study_focus",
+    "learning_ability",
+    "coaching_support",
+    "education_obstacles",
+    "vocational_diploma",
+    "general_education",
+}
+
+CHILDREN_ARCHETYPES = {
+    "child_promise",
+    "fertility_conception",
+    "pregnancy_wellbeing",
+    "child_delay",
+    "child_gender_note",
+    "number_of_children",
+    "child_nature",
+    "parent_child_bond",
+    "child_success",
+    "adoption_path",
+    "child_loss_concern",
+    "progeny_obstacles",
+    "general_children",
+}
+
+PROPERTY_ARCHETYPES = {
+    "property_yog",
+    "property_capacity",
+    "property_risk",
+    "property_type_fit",
+    "property_inherit",
+    "property_dispute",
+    "property_rent",
+    "property_build",
+    "property_sell",
+    "property_buy",
+    "property_loan",
+    "property_land",
+    "general_property",
+}
+
+TRAVEL_ARCHETYPES = {
+    "travel_yog",
+    "foreign_settlement",
+    "visa_theme",
+    "relocation_abroad",
+    "return_india",
+    "travel_obstacles",
+    "short_travel",
+    "pilgrimage_travel",
+    "passport_travel",
+    "immigration",
+    "business_travel",
+    "travel_risk",
+    "travel_country_fit",
+    "general_travel",
+}
+
+LITIGATION_ARCHETYPES = {
+    "litigation_remedy",
+    "litigation_yog",
+    "case_outcome",
+    "court_delay",
+    "bail_theme",
+    "jail_concern",
+    "police_fir",
+    "criminal_case",
+    "civil_litigation",
+    "legal_obstacles",
+    "enemy_case",
+    "acquittal_relief",
+    "lawyer_support",
+    "family_court",
+    "general_litigation",
+}
+
+DOMAINS = {"marriage", "love", "career", "finance", "health", "education", "children", "property", "travel", "litigation", "general"}
 
 # Low-confidence cutoff — below this the caller treats the result as
 # untrustworthy and falls back to regex.
@@ -154,13 +239,41 @@ Read the user's question (Hindi/Hinglish/English) and return STRICT JSON only.
 
 Decide:
 1. "domain": the life area the question is really about. One of:
-   marriage, love, career, finance, health, general.
+   marriage, love, career, finance, health, education, children, property, travel, litigation, general.
    CRITICAL RULE: if the question is ABOUT THE PARTNER / SPOUSE / lover \
 (their support, nature, behaviour, loyalty, feelings, family) — even if it \
 also mentions career or money — the domain is "marriage" or "love" (the \
 PARTNER is the subject). e.g. "will my partner support my career" → domain \
 love (partner is the subject), NOT career. Use "career" / "finance" ONLY when \
-the question is about the NATIVE's own job / money, with no partner focus.
+the question is about the NATIVE's own job / money, with no partner focus. \
+Use "education" when the question is about study, school/college, exams \
+(pass/clear/result — NOT when), admission, stream/course choice, higher \
+studies/masters/PhD/abroad study, or study focus — WITHOUT a job/career angle. \
+Govt/competitive career exams (UPSC/IAS/SSC/bank PO) → domain career, NOT education.
+Career TIMING (kab/when/dasha) for job, naukri, promotion, transfer, job change, \
+resignation, govt job selection, interview/joining, salary hike → domain career + \
+is_timing true. Tricky: user age 60+ asking "job kab lagega" is still career timing \
+(re-employment/consulting frame), NOT general. Police job/naukri → career static govt_job, \
+NOT litigation.
+Use "children" when the question is about the native's own progeny/santan/bachcha — \
+conception/fertility tone, pregnancy support, child promise, delay, gender/count tone \
+(without WHEN), child nature/bond/success, adoption/surrogacy, miscarriage/loss fear, \
+progeny obstacles — WITHOUT spouse parenting style (that stays marriage MR) and WITHOUT \
+pure medical diagnosis/treatment (that stays health). Timing (kab/when) → is_timing true, \
+NOT children static.
+Use "property" when the question is about home/ghar/makaan/flat/plot/zameen/land/real \
+estate — yog/capacity/risk/type fit, buy/sell/inherit/rent/build/dispute, home loan from \
+property lens — WITHOUT pure money-only Q (paisa/bachat/afford for ghar → finance) and \
+WITHOUT timing (kab/when/muhurat/registry date) → is_timing true, NOT property static.
+Use "travel" when the question is about videsh/foreign/abroad/overseas movement — travel yog, \
+settlement/relocation abroad, visa/passport/immigration/PR/green card theme (NOT when), short trip, \
+pilgrimage/teerth, travel obstacles/risk, return to India — WITHOUT study-abroad padhai (education), \
+job/naukri abroad (career foreign_career), or spouse settle after marriage (MR lifestyle). \
+Timing (kab/when/muhurat/dasha) → is_timing true, NOT travel static.
+Use "litigation" when the question is about court case/mukadma/legal/litigation/police/FIR/bail/jail/criminal/civil \
+case outcome tone, delay, enemy case, acquittal, lawyer support, family court case — WITHOUT property \
+ghar/zameen dispute (property), divorce/spouse nature only (MR), police job/naukri career (career), or \
+death penalty/phansi crisis. Timing (kab verdict/bail/hearing) → is_timing true, NOT litigation static.
 2. "is_timing": true if the user asks WHEN something happens (kab, timing, \
 date, muhurat, age). false otherwise.
 3. "is_decision": true if it is a should-I / yes-or-no decision question.
@@ -248,16 +361,91 @@ skin_health / endocrine_health / respiratory_health / immune_health: body-system
    - refuse_cure_guarantee / refuse_timing_decline / refuse_timing_recovery / \
 refuse_surgery_muhurat / crisis_redirect: other hard-guard Qs
    - general_health: other health questions
-9. "interpretation": ONE short plain sentence describing what the user really \
+8. "education_archetype": ONLY when domain is education, pick best id; otherwise null:
+   - exam_success: generic exam pass/clear/selection/result tone (NOT date)
+   - competitive_exam: NEET/JEE/CAT/GATE/CLAT/board/entrance/competitive academic test
+   - higher_studies: masters, PhD, research, study abroad, GRE/IELTS/student visa
+   - study_field: which stream/subject/course/branch to choose (PCM/PCB/commerce/arts)
+   - specialization_path: medical/engineering/law/CA/teaching line as study direction
+   - admission: college/university admission/seat/waitlist/merit list
+   - scholarship: scholarship/stipend/fee waiver/financial aid for study
+   - degree_completion: degree complete/graduate/pass-out/final year clear
+   - marks_performance: marks/percentage/grade/GPA/topper/distinction
+   - study_focus: concentration, mann nahi lagta, motivation, study habits
+   - learning_ability: buddhi, memory, weak in maths/subject, grasping power
+   - coaching_support: coaching/tuition/online course vs self-study
+   - education_obstacles: backlog, gap year, fail year, ATKT, study delay/break
+   - vocational_diploma: ITI, polytechnic, diploma, certificate/skill course
+   - general_education: other study/education questions
+9. "children_archetype": ONLY when domain is children, pick best id; otherwise null:
+   - child_promise: santan yog / will I have children / putra prapti tone (NOT when)
+   - fertility_conception: conceive/IVF/infertility/fertility chart tone (NOT medical diagnosis)
+   - pregnancy_wellbeing: pregnancy/good news/garbh safe tone (NOT due date)
+   - child_delay: delay in santan/late motherhood/fatherhood (NOT when)
+   - child_gender_note: ladka/ladki/beta/beti gender tone — stay uncertain
+   - number_of_children: kitne bachche/twins — qualitative only, no exact count
+   - child_nature: child personality/swabhav/character
+   - parent_child_bond: native's bond with own children (NOT spouse parenting)
+   - child_success: child's future/success/study/life tone
+   - adoption_path: adoption/surrogacy/gode lena/foster
+   - child_loss_concern: miscarriage/loss/garbhpat fear — sensitive tone
+   - progeny_obstacles: nisantan/barren/dosh/obstacle in santan
+   - general_children: other progeny/children questions
+10. "property_archetype": ONLY when domain is property, pick best id; otherwise null:
+   - property_yog: property/home yog, milega kya, own home possible (NOT when)
+   - property_capacity: capacity/readiness to buy/own property (NOT exact price)
+   - property_risk: legal/documentation/dispute risk tone (NOT exact outcome)
+   - property_type_fit: plot vs flat vs luxury vs rental vs ancestral fit
+   - property_inherit: paitrik/ancestral/virasat/family property
+   - property_dispute: property court/dispute/vivad case
+   - property_rent: rental income, rent out property, kiraya
+   - property_build: ghar banwana/construction/build home
+   - property_sell: sell/dispose property
+   - property_buy: buy/purchase/invest in property (NOT when)
+   - property_loan: home loan/EMI/mortgage from property chart lens
+   - property_land: plot/zameen/land/farm land specific
+   - general_property: other property/real-estate questions
+11. "travel_archetype": ONLY when domain is travel, pick best id; otherwise null:
+   - travel_yog: foreign/videsh travel yog, possible hai, will I go abroad (NOT when)
+   - foreign_settlement: settle abroad, basna videsh, permanent abroad life
+   - visa_theme: visa approve/reject/delay/issue (NOT student visa for study → education)
+   - relocation_abroad: shift/move/relocate abroad
+   - return_india: wapas India, return from abroad, no settlement abroad
+   - travel_obstacles: delay/block/ruka in travel/settlement/visa
+   - short_travel: trip/vacation/holiday abroad
+   - pilgrimage_travel: teerth/dharma yatra/hajj/umrah
+   - passport_travel: passport issue/capacity/travel desire
+   - immigration: PR/green card/citizenship/migration file
+   - business_travel: official/business trip abroad (NOT permanent job)
+   - travel_risk: accident/danger abroad travel
+   - travel_country_fit: kaun sa desh/country, USA ya Canada, which country — qualitative direction only
+   - general_travel: other foreign/travel questions
+12. "litigation_archetype": ONLY when domain is litigation, pick best id; otherwise null:
+   - litigation_remedy: upay/remedy/solution/mantra/puja/daan for court case/legal matter (NOT when-only)
+   - litigation_yog: court case yog, mukadma hoga, legal trouble yog (NOT when)
+   - case_outcome: jeet/har/win/loss/favour tone — indicative only, NOT guaranteed
+   - court_delay: case delay, ruka, pending, lamba chalega (NOT when)
+   - bail_theme: bail/zamanat/interim/anticipatory bail theme (NOT when)
+   - jail_concern: jail/prison/custody fear — calm tone only, NOT jail yog prediction
+   - police_fir: FIR/police case/thana/complaint (NOT police job career)
+   - criminal_case: criminal court/charge/498a/IPC/session court
+   - civil_litigation: civil suit/civil court/consumer/labour tribunal
+   - legal_obstacles: legal problems, kanooni pareshani, rukawat
+   - enemy_case: dushman/shatru/enemy litigation
+   - acquittal_relief: acquittal/bera gari/chhutkara/case dismiss/quash
+   - lawyer_support: advocate/vakil/lawyer support theme (NOT legal advice)
+   - family_court: family court/custody/maintenance/498a case (NOT divorce spouse MR)
+   - general_litigation: other court/legal questions
+13. "interpretation": ONE short plain sentence describing what the user really \
 wants to know, phrased as "User wants to know ...". Write it in simple \
 English. e.g. "User wants to know if their partner will support their career."
-10. "confidence": 0.0-1.0 how sure you are.
+11. "confidence": 0.0-1.0 how sure you are.
 
 Return ONLY this JSON object:
 {{"domain": "...", "is_timing": false, "is_decision": false, \
 "wants_explain": false, "mr_archetype": null, "career_archetype": null, \
-"finance_archetype": null, "health_archetype": null, \
-"interpretation": "User wants to know ...", "confidence": 0.0}}
+"finance_archetype": null, "health_archetype": null, "education_archetype": null, \
+"children_archetype": null, "property_archetype": null, "travel_archetype": null, "litigation_archetype": null, "interpretation": "User wants to know ...", "confidence": 0.0}}
 
 Question: {question}"""
 
@@ -272,6 +460,11 @@ def _error(reason: str, source: str = "llm_error") -> dict:
         "career_archetype": None,
         "finance_archetype": None,
         "health_archetype": None,
+        "education_archetype": None,
+        "children_archetype": None,
+        "property_archetype": None,
+        "travel_archetype": None,
+        "litigation_archetype": None,
         "interpretation": "",
         "confidence": 0.0,
         "source": source,
@@ -379,6 +572,11 @@ def classify_ask_intent(
             career_arch = "general_career"
         finance_arch = None
         health_arch = None
+        education_arch = None
+        children_arch = None
+        property_arch = None
+        travel_arch = None
+        litigation_arch = None
     elif domain == "finance":
         finance_arch = data.get("finance_archetype")
         if isinstance(finance_arch, str):
@@ -389,6 +587,11 @@ def classify_ask_intent(
             finance_arch = "general_finance"
         career_arch = None
         health_arch = None
+        education_arch = None
+        children_arch = None
+        property_arch = None
+        travel_arch = None
+        litigation_arch = None
     elif domain == "health":
         health_arch = data.get("health_archetype")
         if isinstance(health_arch, str):
@@ -399,10 +602,94 @@ def classify_ask_intent(
             health_arch = "general_health"
         career_arch = None
         finance_arch = None
+        education_arch = None
+        children_arch = None
+        property_arch = None
+        travel_arch = None
+        litigation_arch = None
+    elif domain == "education":
+        education_arch = data.get("education_archetype")
+        if isinstance(education_arch, str):
+            education_arch = education_arch.strip().lower()
+        if education_arch not in EDUCATION_ARCHETYPES:
+            education_arch = None
+        if education_arch is None:
+            education_arch = "general_education"
+        career_arch = None
+        finance_arch = None
+        health_arch = None
+        children_arch = None
+        property_arch = None
+        travel_arch = None
+        litigation_arch = None
+    elif domain == "children":
+        children_arch = data.get("children_archetype")
+        if isinstance(children_arch, str):
+            children_arch = children_arch.strip().lower()
+        if children_arch not in CHILDREN_ARCHETYPES:
+            children_arch = None
+        if children_arch is None:
+            children_arch = "general_children"
+        career_arch = None
+        finance_arch = None
+        health_arch = None
+        education_arch = None
+        property_arch = None
+        travel_arch = None
+    elif domain == "property":
+        property_arch = data.get("property_archetype")
+        if isinstance(property_arch, str):
+            property_arch = property_arch.strip().lower()
+        if property_arch not in PROPERTY_ARCHETYPES:
+            property_arch = None
+        if property_arch is None:
+            property_arch = "general_property"
+        career_arch = None
+        finance_arch = None
+        health_arch = None
+        education_arch = None
+        children_arch = None
+        travel_arch = None
+        litigation_arch = None
+    elif domain == "travel":
+        travel_arch = data.get("travel_archetype")
+        if isinstance(travel_arch, str):
+            travel_arch = travel_arch.strip().lower()
+        if travel_arch not in TRAVEL_ARCHETYPES:
+            travel_arch = None
+        if travel_arch is None:
+            travel_arch = "general_travel"
+        career_arch = None
+        finance_arch = None
+        health_arch = None
+        education_arch = None
+        children_arch = None
+        property_arch = None
+        litigation_arch = None
+    elif domain == "litigation":
+        litigation_arch = data.get("litigation_archetype")
+        if isinstance(litigation_arch, str):
+            litigation_arch = litigation_arch.strip().lower()
+        if litigation_arch not in LITIGATION_ARCHETYPES:
+            litigation_arch = None
+        if litigation_arch is None:
+            litigation_arch = "general_litigation"
+        career_arch = None
+        finance_arch = None
+        health_arch = None
+        education_arch = None
+        children_arch = None
+        property_arch = None
+        travel_arch = None
     else:
         career_arch = None
         finance_arch = None
         health_arch = None
+        education_arch = None
+        children_arch = None
+        property_arch = None
+        travel_arch = None
+        litigation_arch = None
 
     interpretation = str(data.get("interpretation") or "").strip()[:300]
 
@@ -415,6 +702,11 @@ def classify_ask_intent(
         "career_archetype": career_arch,
         "finance_archetype": finance_arch,
         "health_archetype": health_arch,
+        "education_archetype": education_arch,
+        "children_archetype": children_arch,
+        "property_archetype": property_arch,
+        "travel_archetype": travel_arch,
+        "litigation_archetype": litigation_arch,
         "interpretation": interpretation,
         "confidence": conf,
         "source": "llm_low_conf" if conf < _LOW_CONF else "llm",

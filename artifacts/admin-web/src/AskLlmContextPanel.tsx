@@ -108,6 +108,40 @@ function asRecord(v: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function formatStep7TransitDetail(step: Record<string, unknown>): string {
+  const months = Array.isArray(step.months)
+    ? (step.months as string[]).join(" + ")
+    : "";
+  let detail = typeof step.detail === "string" ? step.detail : "";
+  if (detail && /\d{4}-\d{2}-\d{2}/.test(detail)) {
+    const byMonth = new Map<string, string[]>();
+    for (const chunk of detail.split(/\s+\+\s+/)) {
+      const m = chunk.trim().match(
+        /^(\d{4}-\d{2}-\d{2})\s+(\w+)→(.+?)(?:\s+orb\s+[\d.]+°)?$/,
+      );
+      if (!m) continue;
+      const [, iso, planet, target] = m;
+      const d = new Date(`${iso}T12:00:00Z`);
+      const month = d.toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+      const abbr = planet.toLowerCase().startsWith("j")
+        ? "Jup"
+        : planet.toLowerCase().startsWith("s")
+          ? "Sat"
+          : planet.slice(0, 3);
+      const tgt = /7th house/i.test(target) ? "7th" : /7th lord/i.test(target) ? "7L" : target.trim();
+      const row = byMonth.get(month) || [];
+      row.push(`${abbr}→${tgt}`);
+      byMonth.set(month, row);
+    }
+    if (byMonth.size > 0) {
+      detail = [...byMonth.entries()]
+        .map(([month, hits]) => `${month} ${hits.join(" ")}`)
+        .join(" · ");
+    }
+  }
+  return detail || months;
+}
+
 function stepOneLiner(stepKey: string, step: Record<string, unknown>): string {
   const name = String(step.name || stepKey);
   if (stepKey === "step0") {
@@ -134,7 +168,14 @@ function stepOneLiner(stepKey: string, step: Record<string, unknown>): string {
     return `${name} · merged ${fmtCheckValue(step.merged_count)}${names ? ` · top ${names}` : ""}`;
   }
   if (stepKey === "step4") {
-    return `${name} · ${fmtCheckValue(step.summary)}`;
+    const summary = step.summary;
+    const summaryText =
+      typeof summary === "string"
+        ? summary
+        : summary && typeof summary === "object"
+          ? JSON.stringify(summary)
+          : fmtCheckValue(summary);
+    return `${name} · ${summaryText || "KP validate"}`;
   }
   if (stepKey === "step5") {
     const ranked = Array.isArray(step.ranked_top) ? step.ranked_top : [];
@@ -152,7 +193,8 @@ function stepOneLiner(stepKey: string, step: Record<string, unknown>): string {
     return `${name} · ${wins.length} window(s)${w ? ` · lead ${w}` : ""}`;
   }
   if (stepKey === "step7") {
-    return `${name} · transit ${step.transit_confirmed ? "confirmed" : "not confirmed"}${step.detail ? ` · ${step.detail}` : ""}`;
+    const detail = formatStep7TransitDetail(step);
+    return `${name} · transit ${step.transit_confirmed ? "confirmed" : "not confirmed"}${detail ? ` · ${detail}` : ""}`;
   }
   if (stepKey === "step8") {
     return `${name} · ${fmtCheckValue(step.verdict)} · band ${fmtCheckValue(step.band)}`;
@@ -244,11 +286,25 @@ export function EngineTracePanel({
           ))}
         </ol>
 
-        {trace?.primary_window ? (
+        {trace?.primary_window || trace?.backup_window ? (
           <div className="engine-outcome-box">
-            <p>
-              <strong>Primary window:</strong> {trace.primary_window}
-            </p>
+            {(trace as { used_window?: string }).used_window === "backup" ? (
+              <>
+                <p>
+                  <strong>Backup window (answered):</strong>{" "}
+                  {trace.backup_window || "—"}
+                </p>
+                {trace.primary_window ? (
+                  <p className="detail-muted">
+                    <strong>Primary (rejected):</strong> {trace.primary_window}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p>
+                <strong>Primary window:</strong> {trace.primary_window || "—"}
+              </p>
+            )}
             {trace.backup_window ? (
               <p>
                 <strong>Backup:</strong> {trace.backup_window}
@@ -279,7 +335,20 @@ export function EngineTracePanel({
                         {status}
                       </span>
                     </summary>
-                    <JsonDetail data={step} label="Step JSON" />
+                    <JsonDetail
+                      data={
+                        key === "step7" && step.by_month
+                          ? {
+                              transit_confirmed: step.transit_confirmed,
+                              double_transit: step.double_transit,
+                              months: step.months,
+                              by_month: step.by_month,
+                              detail: step.detail,
+                            }
+                          : step
+                      }
+                      label={key === "step7" ? "Transit by month" : "Step JSON"}
+                    />
                   </details>
                 );
               })}

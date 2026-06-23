@@ -1202,6 +1202,148 @@ def _exact_transit_hit(
     return None
 
 
+_MONTH_ABBR = (
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+)
+
+
+def _iso_to_month_label(iso_date: str) -> str:
+    """2029-06-30 → Jun 2029 (admin-friendly step audit)."""
+    if not iso_date:
+        return ""
+    try:
+        parts = str(iso_date)[:10].split("-")
+        if len(parts) >= 2:
+            y, m = parts[0], int(parts[1])
+            if 1 <= m <= 12:
+                return f"{_MONTH_ABBR[m - 1]} {y}"
+    except (TypeError, ValueError):
+        pass
+    return str(iso_date)[:7]
+
+
+def _month_sort_key(label: str) -> Tuple[int, int]:
+    try:
+        abbr, y = label.split()
+        return int(y), _MONTH_ABBR.index(abbr) + 1
+    except (ValueError, IndexError):
+        return (0, 0)
+
+
+def _short_transit_target(label: str) -> str:
+    low = (label or "").lower()
+    if "7th house" in low:
+        return "7th"
+    if "7th lord" in low or low.startswith("7l"):
+        return "7L"
+    return (label or "").strip()[:16]
+
+
+def _compact_transit_by_month(
+    samples: List[Dict[str, Any]],
+) -> Tuple[str, List[str], List[Dict[str, Any]]]:
+    """Month-only transit summary for step7 admin JSON (no ISO dates / orbs)."""
+    month_rows: List[Dict[str, Any]] = []
+    month_labels: List[str] = []
+    detail_parts: List[str] = []
+    by_month: Dict[str, Dict[str, Any]] = {}
+
+    for sample in samples:
+        month = _iso_to_month_label(str(sample.get("date") or ""))
+        if not month:
+            continue
+        row = by_month.setdefault(month, {"month": month})
+        for h in sample.get("jupiter_hits") or []:
+            t = _short_transit_target(str(h.get("target") or ""))
+            if t:
+                jup = row.setdefault("jupiter", [])
+                if t not in jup:
+                    jup.append(t)
+        for h in sample.get("saturn_hits") or []:
+            t = _short_transit_target(str(h.get("target") or ""))
+            if t:
+                sat = row.setdefault("saturn", [])
+                if t not in sat:
+                    sat.append(t)
+
+    for month in sorted(by_month.keys(), key=lambda m: _month_sort_key(m)):
+        row = by_month[month]
+        if not row.get("jupiter") and not row.get("saturn"):
+            continue
+        month_labels.append(month)
+        month_rows.append(row)
+        bits: List[str] = []
+        if row.get("jupiter"):
+            bits.append("Jup→" + "+".join(row["jupiter"]))
+        if row.get("saturn"):
+            bits.append("Sat→" + "+".join(row["saturn"]))
+        detail_parts.append(f"{month} " + " ".join(bits))
+
+    detail = " · ".join(detail_parts) if detail_parts else "no transit hit"
+    return detail, month_labels, month_rows
+
+
+def _monthify_verbose_transit_detail(verbose: str) -> str:
+    """Legacy ISO+orb detail → month-only (admin step7)."""
+    import re as _re_m
+
+    if not verbose or "no transit" in verbose.lower():
+        return verbose or "no transit hit"
+    if not _re_m.search(r"\d{4}-\d{2}-\d{2}", verbose):
+        return verbose
+
+    by_month: Dict[str, Dict[str, List[str]]] = {}
+    for chunk in _re_m.split(r"\s+\+\s+", verbose):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        m = _re_m.match(
+            r"(\d{4}-\d{2}-\d{2})\s+(\w+)→(.+?)(?:\s+orb\s+[\d.]+°)?$",
+            chunk,
+        )
+        if not m:
+            continue
+        iso, planet, target = m.groups()
+        month = _iso_to_month_label(iso)
+        if not month:
+            continue
+        pl = planet.lower()
+        abbr = "Jup" if pl.startswith("j") else "Sat" if pl.startswith("s") else planet[:3]
+        tgt = _short_transit_target(target)
+        bucket = "jupiter" if abbr == "Jup" else "saturn"
+        row = by_month.setdefault(month, {"jupiter": [], "saturn": []})
+        if tgt not in row[bucket]:
+            row[bucket].append(tgt)
+
+    if not by_month:
+        return verbose
+
+    out: List[str] = []
+    for month in sorted(by_month.keys(), key=lambda lbl: _month_sort_key(lbl)):
+        row = by_month[month]
+        bits: List[str] = []
+        if row.get("jupiter"):
+            bits.append("Jup→" + "+".join(row["jupiter"]))
+        if row.get("saturn"):
+            bits.append("Sat→" + "+".join(row["saturn"]))
+        if bits:
+            out.append(f"{month} " + " ".join(bits))
+    return " · ".join(out) if out else verbose
+
+
+def _transit_month_summary_from_window(w: Dict[str, Any]) -> Tuple[str, List[str], List[Dict[str, Any]]]:
+    """Best month-only transit line for a scored window."""
+    samples = w.get("transit_samples") or []
+    detail, months, by_month = _compact_transit_by_month(samples)
+    if months:
+        return detail, months, by_month
+    raw = str(w.get("dt_detail") or "").strip()
+    if raw:
+        return _monthify_verbose_transit_detail(raw), [], []
+    return detail, months, by_month
+
+
 def _transit_sample_dates(window: Dict[str, Any]) -> List[datetime]:
     custom = window.get("transit_sample_dates")
     if isinstance(custom, list) and custom:
@@ -1426,13 +1568,17 @@ def _step6_double_transit(window: Dict[str, Any],
                 + (f" orb {h['orb']}°" if "orb" in h else "")
             )
     transit_ok = bool(jup_hit or sat_hit)
+    month_detail, month_labels, by_month = _compact_transit_by_month(samples)
     return {
         "jup_hit": jup_hit,
         "sat_hit": sat_hit,
         "dt": jup_hit and sat_hit,
         "transit_confirmed": transit_ok,
         "boost": boost if transit_ok else 0.0,
-        "detail": " + ".join(detail_parts) or "no transit hit",
+        "detail": month_detail,
+        "detail_verbose": " + ".join(detail_parts) or "no transit hit",
+        "months": month_labels,
+        "by_month": by_month,
         "best_check_at": best_check_at,
         "samples": samples,
     }
@@ -1490,7 +1636,8 @@ def _try_bcp_year_transit_support(
         window["transit_samples"] = best.get("samples", [])
         note = (
             f"BCP age {best.get('bcp_age')} year transit support "
-            f"{best.get('bcp_scan_start')}→{best.get('bcp_scan_end')}"
+            f"{_iso_to_month_label(best.get('bcp_scan_start') or '')}"
+            f"–{_iso_to_month_label(best.get('bcp_scan_end') or '')}"
         )
         window["dt_detail"] = (
             (best.get("detail") or "") + " | " + note
@@ -2618,6 +2765,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     # ── Output assembly ────────────────────────────────────────────────
     top_3_serial: List[Dict[str, Any]] = []
     for w in top_3:
+        _t_detail, _t_months, _t_by_month = _transit_month_summary_from_window(w)
         top_3_serial.append({
             "md": w["md"],
             "ad": w["ad"],
@@ -2631,7 +2779,9 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             "sat": bool(w.get("sat")),
             "transit_confirmed": bool(w.get("transit_confirmed")),
             "transit_check_at": w.get("transit_check_at"),
-            "dt_detail": w.get("dt_detail"),
+            "dt_detail": _t_detail,
+            "transit_months": _t_months,
+            "transit_by_month": _t_by_month,
             "transit_samples": w.get("transit_samples") or [],
             "bcp_year_transit_support": bool(w.get("bcp_year_transit_support")),
             "promoted_by_transit_support": bool(w.get("promoted_by_transit_support")),
@@ -2713,6 +2863,9 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         )
 
     primary_audit = top_3_serial[0] if top_3_serial else {}
+    _step7_detail, _step7_months, _step7_by_month = _transit_month_summary_from_window(
+        primary_audit,
+    )
     audit_checks: List[Dict[str, Any]] = []
     audit_issues: List[str] = []
 
@@ -2773,7 +2926,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     audit_checks.append({
         "name": "transit_support",
         "ok": transit_ok,
-        "detail": primary_audit.get("dt_detail") or "no transit detail",
+        "detail": _step7_detail,
         "double_transit": bool(primary_audit.get("dt")),
         "bcp_year_rescue": bool(primary_audit.get("bcp_year_transit_support")),
     })
@@ -2812,8 +2965,9 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         "transit": {
             "confirmed": transit_ok,
             "double": bool(primary_audit.get("dt")),
-            "detail": primary_audit.get("dt_detail"),
-            "samples": primary_audit.get("transit_samples") or [],
+            "detail": _step7_detail,
+            "months": _step7_months,
+            "by_month": _step7_by_month,
         },
         "checks": audit_checks,
         "expected_reply": expected_reply,
@@ -2927,8 +3081,9 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             "status": "DONE" if top_3_serial else "NO_WINDOW",
             "transit_confirmed": final_transit_support,
             "double_transit": final_double_transit,
-            "detail": final_transit.get("detail"),
-            "samples": primary_audit.get("transit_samples") or [],
+            "detail": _step7_detail,
+            "months": _step7_months,
+            "by_month": _step7_by_month,
         },
         "step8": {
             "name": "Obstacles + final gate",

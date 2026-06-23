@@ -29,6 +29,7 @@ def derive_answer_path(
     skip = (skip_reason or "").strip().lower()
 
     slice_type = str(checks.get("slice_type") or "")
+    sl = str(slice_meta.get("slice") or "")
     has_verdict = bool(slice_meta.get("verdict"))
     has_evidence = bool(slice_meta.get("evidence"))
     mr_v1 = (
@@ -42,6 +43,17 @@ def derive_answer_path(
     legacy_slice = slice_type in ("marriage_relationship",) or bool(
         slice_meta.get("slice") and slice_meta.get("slice") != "mr_engine_v1"
     )
+    domain_engine_slice = sl in (
+        "mr_engine_v1",
+        "career_engine_v1",
+        "education_engine_v1",
+        "children_engine_v1",
+        "property_engine_v1",
+        "travel_engine_v1",
+        "litigation_engine_v1",
+        "finance_engine_v1",
+        "health_engine_v1",
+    )
     has_engine_facts = (
         has_verdict
         or has_evidence
@@ -50,6 +62,7 @@ def derive_answer_path(
         or marriage_engine
         or timing_engine
         or legacy_slice
+        or domain_engine_slice
     )
 
     if not llm_called:
@@ -80,6 +93,73 @@ _MARRIAGE_TRACE_STEP_ORDER = (
 )
 
 
+def normalize_engine_trace_transit_months(trace: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Rewrite step7 / timing_audit transit to month-only (fixes legacy DB rows)."""
+    if not isinstance(trace, dict):
+        return trace
+    try:
+        from event_timing.marriage.marriage_engine_v2 import (
+            _compact_transit_by_month,
+            _monthify_verbose_transit_detail,
+            _transit_month_summary_from_window,
+        )
+    except Exception:
+        return trace
+
+    step_audit = trace.get("step_audit")
+    if isinstance(step_audit, dict):
+        s7 = step_audit.get("step7")
+        if isinstance(s7, dict):
+            samples = s7.get("samples") if isinstance(s7.get("samples"), list) else []
+            detail, months, by_month = _compact_transit_by_month(samples)
+            if not months and isinstance(s7.get("detail"), str):
+                detail = _monthify_verbose_transit_detail(s7["detail"])
+            elif months:
+                pass
+            elif isinstance(s7.get("detail"), str):
+                detail = _monthify_verbose_transit_detail(s7["detail"])
+            else:
+                detail = detail or "no transit hit"
+            s7["detail"] = detail
+            if months:
+                s7["months"] = months
+                s7["by_month"] = by_month
+            s7.pop("samples", None)
+
+    timing_audit = trace.get("timing_audit")
+    if isinstance(timing_audit, dict):
+        transit = timing_audit.get("transit")
+        if isinstance(transit, dict):
+            samples = transit.get("samples") if isinstance(transit.get("samples"), list) else []
+            detail, months, by_month = _compact_transit_by_month(samples)
+            if not months and isinstance(transit.get("detail"), str):
+                detail = _monthify_verbose_transit_detail(transit["detail"])
+            elif not months:
+                detail = detail or transit.get("detail") or "no transit hit"
+            transit["detail"] = detail
+            if months:
+                transit["months"] = months
+                transit["by_month"] = by_month
+            transit.pop("samples", None)
+
+        for check in timing_audit.get("checks") or []:
+            if not isinstance(check, dict):
+                continue
+            if check.get("name") == "transit_support" and isinstance(check.get("detail"), str):
+                check["detail"] = _monthify_verbose_transit_detail(check["detail"])
+
+    for win in trace.get("top_3_windows") or []:
+        if isinstance(win, dict):
+            d, m, b = _transit_month_summary_from_window(win)
+            win["dt_detail"] = d
+            if m:
+                win["transit_months"] = m
+                win["transit_by_month"] = b
+            win.pop("transit_samples", None)
+
+    return trace
+
+
 def build_marriage_engine_trace(engine_result: dict[str, Any] | None) -> dict[str, Any] | None:
     """Trimmed marriage M17 audit for admin panel (step-by-step pipeline)."""
     if not isinstance(engine_result, dict) or not engine_result:
@@ -96,7 +176,7 @@ def build_marriage_engine_trace(engine_result: dict[str, Any] | None) -> dict[st
     factors = engine_result.get("factors") or []
     if not isinstance(factors, list):
         factors = []
-    return {
+    return normalize_engine_trace_transit_months({
         "engine": "marriage_timing_m17",
         "primary_window": engine_result.get("primary_window"),
         "backup_window": engine_result.get("backup_window"),
@@ -111,7 +191,7 @@ def build_marriage_engine_trace(engine_result: dict[str, Any] | None) -> dict[st
         "top_3_windows": top_windows[:3],
         "factors": factors[:50],
         "risk_flags": list(engine_result.get("risk_flags") or [])[:20],
-    }
+    })
 
 
 def build_engine_facts_snapshot(
@@ -214,6 +294,14 @@ def parse_llm_context_from_db(raw: str | None) -> dict[str, Any] | None:
         return None
     try:
         data = json.loads(raw)
-        return data if isinstance(data, dict) else None
+        if not isinstance(data, dict):
+            return None
+        blocks = data.get("blocks")
+        if isinstance(blocks, dict):
+            for key in ("engine_trace", "marriage_engine_trace"):
+                tr = blocks.get(key)
+                if isinstance(tr, dict):
+                    blocks[key] = normalize_engine_trace_transit_months(tr)
+        return data
     except Exception:
         return {"raw": str(raw)[:4000]}

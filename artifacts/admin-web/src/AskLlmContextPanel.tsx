@@ -109,37 +109,37 @@ function asRecord(v: unknown): Record<string, unknown> | null {
 }
 
 function formatStep7TransitDetail(step: Record<string, unknown>): string {
-  const months = Array.isArray(step.months)
-    ? (step.months as string[]).join(" + ")
-    : "";
+  const byMonth = Array.isArray(step.by_month) ? step.by_month : [];
+  if (byMonth.length > 0) {
+    return byMonth
+      .map((row) => {
+        const r = asRecord(row);
+        if (!r) return "";
+        const month = String(r.month || "");
+        const guru = String(r.jupiter_rashi || r.jupiter_sign || "");
+        const shani = String(r.saturn_rashi || r.saturn_sign || "");
+        const bits: string[] = [];
+        if (guru) bits.push(`Guru ${guru}`);
+        if (shani) bits.push(`Shani ${shani}`);
+        return bits.length ? `${month}: ${bits.join(", ")}` : month;
+      })
+      .filter(Boolean)
+      .join(" · ");
+  }
+
   let detail = typeof step.detail === "string" ? step.detail : "";
   if (detail && /\d{4}-\d{2}-\d{2}/.test(detail)) {
-    const byMonth = new Map<string, string[]>();
-    for (const chunk of detail.split(/\s+\+\s+/)) {
-      const m = chunk.trim().match(
-        /^(\d{4}-\d{2}-\d{2})\s+(\w+)→(.+?)(?:\s+orb\s+[\d.]+°)?$/,
-      );
-      if (!m) continue;
-      const [, iso, planet, target] = m;
+    const byMonthMap = new Map<string, { guru?: string; shani?: string }>();
+    for (const iso of detail.match(/\d{4}-\d{2}-\d{2}/g) || []) {
       const d = new Date(`${iso}T12:00:00Z`);
       const month = d.toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
-      const abbr = planet.toLowerCase().startsWith("j")
-        ? "Jup"
-        : planet.toLowerCase().startsWith("s")
-          ? "Sat"
-          : planet.slice(0, 3);
-      const tgt = /7th house/i.test(target) ? "7th" : /7th lord/i.test(target) ? "7L" : target.trim();
-      const row = byMonth.get(month) || [];
-      row.push(`${abbr}→${tgt}`);
-      byMonth.set(month, row);
+      if (!byMonthMap.has(month)) byMonthMap.set(month, {});
     }
-    if (byMonth.size > 0) {
-      detail = [...byMonth.entries()]
-        .map(([month, hits]) => `${month} ${hits.join(" ")}`)
-        .join(" · ");
+    if (byMonthMap.size > 0) {
+      detail = [...byMonthMap.keys()].join(" · ");
     }
   }
-  return detail || months;
+  return detail;
 }
 
 function stepOneLiner(stepKey: string, step: Record<string, unknown>): string {
@@ -337,13 +337,13 @@ export function EngineTracePanel({
                     </summary>
                     <JsonDetail
                       data={
-                        key === "step7" && step.by_month
+                        key === "step7" && (step.by_month || step.months)
                           ? {
                               transit_confirmed: step.transit_confirmed,
                               double_transit: step.double_transit,
                               months: step.months,
                               by_month: step.by_month,
-                              detail: step.detail,
+                              detail: formatStep7TransitDetail(step),
                             }
                           : step
                       }

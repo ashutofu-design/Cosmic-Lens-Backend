@@ -90,6 +90,10 @@ except Exception:
 # ════════════════════════════════════════════════════════════════════════
 _SIGNS = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
           "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"]
+_RASHI_HI = [
+    "Mesh", "Vrishabh", "Mithun", "Kark", "Singh", "Kanya",
+    "Tula", "Vrishchik", "Dhanu", "Makar", "Kumbh", "Meen",
+]
 _SIGN_IDX = {s: i for i, s in enumerate(_SIGNS)}
 
 # Sign lord by sign-idx (0..11)
@@ -1231,19 +1235,59 @@ def _month_sort_key(label: str) -> Tuple[int, int]:
         return (0, 0)
 
 
-def _short_transit_target(label: str) -> str:
-    low = (label or "").lower()
-    if "7th house" in low:
-        return "7th"
-    if "7th lord" in low or low.startswith("7l"):
-        return "7L"
-    return (label or "").strip()[:16]
+def _lon_to_rashi_label(lon: Optional[float]) -> str:
+    if lon is None:
+        return ""
+    try:
+        si = int((float(lon) % 360.0) / 30.0) % 12
+        return _RASHI_HI[si]
+    except (TypeError, ValueError, IndexError):
+        return ""
+
+
+def _si_to_rashi_label(si: Optional[int]) -> str:
+    if si is None:
+        return ""
+    try:
+        return _RASHI_HI[int(si) % 12]
+    except (TypeError, ValueError, IndexError):
+        return ""
+
+
+def _rashi_from_transit_sample(sample: Dict[str, Any], planet: str) -> str:
+    """Guru/Shani rashi from sample row (prefer stored rashi, else lon/si)."""
+    rashi_key = f"{planet}_rashi"
+    if sample.get(rashi_key):
+        return str(sample[rashi_key])
+    lon_key = "jupiter_lon" if planet == "jupiter" else "saturn_lon"
+    si_key = "jupiter_si" if planet == "jupiter" else "saturn_si"
+    if sample.get(lon_key) is not None:
+        return _lon_to_rashi_label(float(sample[lon_key]))
+    if sample.get(si_key) is not None:
+        return _si_to_rashi_label(int(sample[si_key]))
+    return ""
+
+
+def _transit_rashis_at_iso(iso_date: str) -> Tuple[Optional[str], Optional[str]]:
+    """Compute Guru + Shani rashi on a calendar date (legacy DB repair)."""
+    if not _HAS_SWE or not iso_date:
+        return None, None
+    try:
+        y, m, d = [int(x) for x in str(iso_date)[:10].split("-")]
+        dt = datetime(y, m, d)
+        jup_lon = _planet_lon_at(swe.JUPITER, dt)
+        sat_lon = _planet_lon_at(swe.SATURN, dt)
+        guru = _lon_to_rashi_label(jup_lon) or None
+        shani = _lon_to_rashi_label(sat_lon) or None
+        return guru, shani
+    except Exception:
+        return None, None
 
 
 def _compact_transit_by_month(
     samples: List[Dict[str, Any]],
 ) -> Tuple[str, List[str], List[Dict[str, Any]]]:
-    """Month-only transit summary for step7 admin JSON (no ISO dates / orbs)."""
+    """Month + Guru/Shani rashi only (admin step7 — no house/orb detail)."""
     month_rows: List[Dict[str, Any]] = []
     month_labels: List[str] = []
     detail_parts: List[str] = []
@@ -1253,68 +1297,58 @@ def _compact_transit_by_month(
         month = _iso_to_month_label(str(sample.get("date") or ""))
         if not month:
             continue
+        guru = _rashi_from_transit_sample(sample, "jupiter")
+        shani = _rashi_from_transit_sample(sample, "saturn")
+        if not guru and not shani:
+            continue
         row = by_month.setdefault(month, {"month": month})
-        for h in sample.get("jupiter_hits") or []:
-            t = _short_transit_target(str(h.get("target") or ""))
-            if t:
-                jup = row.setdefault("jupiter", [])
-                if t not in jup:
-                    jup.append(t)
-        for h in sample.get("saturn_hits") or []:
-            t = _short_transit_target(str(h.get("target") or ""))
-            if t:
-                sat = row.setdefault("saturn", [])
-                if t not in sat:
-                    sat.append(t)
+        if guru:
+            row["jupiter_rashi"] = guru
+        if shani:
+            row["saturn_rashi"] = shani
 
     for month in sorted(by_month.keys(), key=lambda m: _month_sort_key(m)):
         row = by_month[month]
-        if not row.get("jupiter") and not row.get("saturn"):
+        guru = row.get("jupiter_rashi")
+        shani = row.get("saturn_rashi")
+        if not guru and not shani:
             continue
         month_labels.append(month)
-        month_rows.append(row)
+        month_rows.append({
+            "month": month,
+            **({"jupiter_rashi": guru} if guru else {}),
+            **({"saturn_rashi": shani} if shani else {}),
+        })
         bits: List[str] = []
-        if row.get("jupiter"):
-            bits.append("Jup→" + "+".join(row["jupiter"]))
-        if row.get("saturn"):
-            bits.append("Sat→" + "+".join(row["saturn"]))
-        detail_parts.append(f"{month} " + " ".join(bits))
+        if guru:
+            bits.append(f"Guru {guru}")
+        if shani:
+            bits.append(f"Shani {shani}")
+        detail_parts.append(f"{month}: " + ", ".join(bits))
 
     detail = " · ".join(detail_parts) if detail_parts else "no transit hit"
     return detail, month_labels, month_rows
 
 
 def _monthify_verbose_transit_detail(verbose: str) -> str:
-    """Legacy ISO+orb detail → month-only (admin step7)."""
+    """Legacy ISO transit lines → month + Guru/Shani rashi."""
     import re as _re_m
 
     if not verbose or "no transit" in verbose.lower():
         return verbose or "no transit hit"
-    if not _re_m.search(r"\d{4}-\d{2}-\d{2}", verbose):
-        return verbose
 
-    by_month: Dict[str, Dict[str, List[str]]] = {}
-    for chunk in _re_m.split(r"\s+\+\s+", verbose):
-        chunk = chunk.strip()
-        if not chunk:
-            continue
-        m = _re_m.match(
-            r"(\d{4}-\d{2}-\d{2})\s+(\w+)→(.+?)(?:\s+orb\s+[\d.]+°)?$",
-            chunk,
-        )
-        if not m:
-            continue
-        iso, planet, target = m.groups()
+    by_month: Dict[str, Dict[str, str]] = {}
+    for iso in _re_m.findall(r"\d{4}-\d{2}-\d{2}", verbose):
         month = _iso_to_month_label(iso)
-        if not month:
+        if not month or month in by_month:
             continue
-        pl = planet.lower()
-        abbr = "Jup" if pl.startswith("j") else "Sat" if pl.startswith("s") else planet[:3]
-        tgt = _short_transit_target(target)
-        bucket = "jupiter" if abbr == "Jup" else "saturn"
-        row = by_month.setdefault(month, {"jupiter": [], "saturn": []})
-        if tgt not in row[bucket]:
-            row[bucket].append(tgt)
+        guru, shani = _transit_rashis_at_iso(iso)
+        row: Dict[str, str] = {"month": month}
+        if guru:
+            row["jupiter_rashi"] = guru
+        if shani:
+            row["saturn_rashi"] = shani
+        by_month[month] = row
 
     if not by_month:
         return verbose
@@ -1323,12 +1357,14 @@ def _monthify_verbose_transit_detail(verbose: str) -> str:
     for month in sorted(by_month.keys(), key=lambda lbl: _month_sort_key(lbl)):
         row = by_month[month]
         bits: List[str] = []
-        if row.get("jupiter"):
-            bits.append("Jup→" + "+".join(row["jupiter"]))
-        if row.get("saturn"):
-            bits.append("Sat→" + "+".join(row["saturn"]))
+        if row.get("jupiter_rashi"):
+            bits.append(f"Guru {row['jupiter_rashi']}")
+        if row.get("saturn_rashi"):
+            bits.append(f"Shani {row['saturn_rashi']}")
         if bits:
-            out.append(f"{month} " + " ".join(bits))
+            out.append(f"{month}: " + ", ".join(bits))
+        else:
+            out.append(month)
     return " · ".join(out) if out else verbose
 
 
@@ -1476,6 +1512,10 @@ def _step6_double_transit(window: Dict[str, Any],
             "date": sample_dt.isoformat()[:10],
             "jupiter_lon": round(jup_lon, 3) if jup_lon is not None else None,
             "saturn_lon": round(sat_lon, 3) if sat_lon is not None else None,
+            "jupiter_si": jup_si,
+            "saturn_si": sat_si,
+            "jupiter_rashi": _si_to_rashi_label(jup_si) or None,
+            "saturn_rashi": _si_to_rashi_label(sat_si) or None,
             "jupiter_hits": [],
             "saturn_hits": [],
         }

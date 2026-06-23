@@ -1010,6 +1010,160 @@ code {
   font-size: 0.8rem;
 }
 
+.engine-trace-panel {
+  margin-top: 12px;
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  background: rgba(6, 78, 59, 0.18);
+}
+
+.engine-trace-panel > summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #6ee7b7;
+}
+
+.engine-trace-body {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.engine-pipeline-overview {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.engine-pipeline-overview li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 0.82rem;
+}
+
+.engine-pipeline-num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(52, 211, 153, 0.2);
+  color: #6ee7b7;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.engine-pipeline-detail {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+}
+
+.engine-outcome-box {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  font-size: 0.82rem;
+}
+
+.engine-outcome-box p {
+  margin: 0 0 4px;
+}
+
+.engine-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.engine-step-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.engine-step-card > summary {
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  list-style: none;
+}
+
+.engine-step-key {
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  color: #93c5fd;
+  min-width: 3.5rem;
+}
+
+.engine-step-oneline {
+  flex: 1;
+  color: var(--text);
+}
+
+.engine-step-status {
+  font-size: 0.68rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+}
+
+.engine-step-status.status-done {
+  color: var(--ok);
+  background: rgba(74, 222, 128, 0.12);
+}
+
+.engine-step-detail {
+  margin-top: 8px;
+}
+
+.engine-step-detail > summary {
+  font-size: 0.72rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.engine-audit-panel {
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  background: rgba(120, 53, 15, 0.15);
+}
+
+.engine-audit-panel > summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fcd34d;
+}
+
+.engine-audit-body {
+  margin-top: 10px;
+  font-size: 0.8rem;
+}
+
+.engine-audit-checks .audit-ok {
+  color: var(--ok);
+}
+
+.engine-audit-checks .audit-warn {
+  color: var(--warn);
+}
+
 .llm-understanding-box {
   margin-bottom: 10px;
   padding: 12px 14px;

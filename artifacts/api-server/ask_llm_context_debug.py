@@ -66,6 +66,54 @@ def derive_answer_path(
     return "direct_llm", _ANSWER_PATH_LABELS["direct_llm"]
 
 
+_MARRIAGE_TRACE_STEP_ORDER = (
+    "step0",
+    "step0a",
+    "step1",
+    "step2",
+    "step3",
+    "step4",
+    "step5",
+    "step6",
+    "step7",
+    "step8",
+)
+
+
+def build_marriage_engine_trace(engine_result: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Trimmed marriage M17 audit for admin panel (step-by-step pipeline)."""
+    if not isinstance(engine_result, dict) or not engine_result:
+        return None
+    step_audit = engine_result.get("step_audit")
+    if not isinstance(step_audit, dict):
+        step_audit = {}
+    timing_audit = engine_result.get("timing_audit")
+    if not isinstance(timing_audit, dict):
+        timing_audit = {}
+    top_windows = engine_result.get("top_3_windows") or []
+    if not isinstance(top_windows, list):
+        top_windows = []
+    factors = engine_result.get("factors") or []
+    if not isinstance(factors, list):
+        factors = []
+    return {
+        "engine": "marriage_timing_m17",
+        "primary_window": engine_result.get("primary_window"),
+        "backup_window": engine_result.get("backup_window"),
+        "key_trigger": engine_result.get("key_trigger"),
+        "verdict": engine_result.get("verdict"),
+        "band": engine_result.get("band"),
+        "user_age": engine_result.get("user_age"),
+        "too_young_for_marriage": engine_result.get("too_young_for_marriage"),
+        "step_audit": step_audit,
+        "step_order": list(_MARRIAGE_TRACE_STEP_ORDER),
+        "timing_audit": timing_audit,
+        "top_3_windows": top_windows[:3],
+        "factors": factors[:50],
+        "risk_flags": list(engine_result.get("risk_flags") or [])[:20],
+    }
+
+
 def build_engine_facts_snapshot(
     *,
     checks: dict[str, Any] | None = None,

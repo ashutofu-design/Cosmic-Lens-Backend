@@ -60,6 +60,30 @@ class AskLlmContextDebugTests(unittest.TestCase):
         )
         self.assertEqual(code, "direct_llm")
 
+    def test_marriage_engine_trace(self):
+        from ask_llm_context_debug import build_marriage_engine_trace
+
+        trace = build_marriage_engine_trace(
+            {
+                "primary_window": "June – November 2029",
+                "step_audit": {
+                    "step0": {"name": "Early/Late", "status": "DONE", "user_age": 28},
+                    "step8": {"name": "Final gate", "status": "DONE", "verdict": "FAVORABLE"},
+                },
+                "timing_audit": {
+                    "status": "PASS",
+                    "expected_reply": "June – November 2029",
+                    "checks": [{"name": "answer_lock", "ok": True, "detail": "ok"}],
+                },
+                "factors": ["BCP_ANCHOR age 30"],
+            }
+        )
+        self.assertIsNotNone(trace)
+        self.assertEqual(trace["engine"], "marriage_timing_m17")
+        self.assertEqual(trace["primary_window"], "June – November 2029")
+        self.assertIn("step0", trace["step_audit"])
+        self.assertEqual(trace["timing_audit"]["status"], "PASS")
+
 
 if __name__ == "__main__":
     unittest.main()

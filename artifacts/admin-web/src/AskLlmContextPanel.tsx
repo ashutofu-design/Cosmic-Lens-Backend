@@ -77,6 +77,305 @@ function engineFactsFromContext(ctx: AskLlmContext) {
   };
 }
 
+type EngineTrace = {
+  engine?: string;
+  primary_window?: string;
+  backup_window?: string;
+  key_trigger?: string;
+  verdict?: string;
+  band?: string;
+  user_age?: number | string;
+  step_audit?: Record<string, Record<string, unknown>>;
+  step_order?: string[];
+  timing_audit?: {
+    status?: string;
+    issues?: string[];
+    expected_reply?: string;
+    primary_window?: string;
+    checks?: { name?: string; ok?: boolean; detail?: string }[];
+    primary_dasha?: Record<string, unknown>;
+    bcp?: Record<string, unknown>;
+    transit?: Record<string, unknown>;
+  };
+  top_3_windows?: Record<string, unknown>[];
+  factors?: string[];
+  risk_flags?: string[];
+};
+
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return v && typeof v === "object" && !Array.isArray(v)
+    ? (v as Record<string, unknown>)
+    : null;
+}
+
+function stepOneLiner(stepKey: string, step: Record<string, unknown>): string {
+  const name = String(step.name || stepKey);
+  if (stepKey === "step0") {
+    const r = asRecord(step.result);
+    const verdict = r?.verdict ? String(r.verdict) : "";
+    const age = step.user_age != null ? `age ${step.user_age}` : "";
+    return [name, verdict, age].filter(Boolean).join(" · ");
+  }
+  if (stepKey === "step0a") {
+    const focus = Array.isArray(step.focus_ages) ? step.focus_ages.join(", ") : "";
+    return `${name} · primary ref age ${fmtCheckValue(step.primary_reference_age)}${focus ? ` · focus ${focus}` : ""}`;
+  }
+  if (stepKey === "step1" || stepKey === "step2") {
+    const r = asRecord(step.result);
+    return `${name} · 7L ${fmtCheckValue(r?.seventh_lord)} · in 7H ${fmtCheckValue(r?.planets_in_7th_house)}`;
+  }
+  if (stepKey === "step3") {
+    const top = Array.isArray(step.top_merged) ? step.top_merged : [];
+    const names = top
+      .slice(0, 3)
+      .map((t) => (asRecord(t)?.name as string) || "")
+      .filter(Boolean)
+      .join(", ");
+    return `${name} · merged ${fmtCheckValue(step.merged_count)}${names ? ` · top ${names}` : ""}`;
+  }
+  if (stepKey === "step4") {
+    return `${name} · ${fmtCheckValue(step.summary)}`;
+  }
+  if (stepKey === "step5") {
+    const ranked = Array.isArray(step.ranked_top) ? step.ranked_top : [];
+    const names = ranked
+      .slice(0, 3)
+      .map((t) => (asRecord(t)?.name as string) || "")
+      .filter(Boolean)
+      .join(", ");
+    return `${name} · targets ${fmtCheckValue(step.target_lords)}${names ? ` · top ${names}` : ""}`;
+  }
+  if (stepKey === "step6") {
+    const wins = Array.isArray(step.selected_windows) ? step.selected_windows : [];
+    const first = asRecord(wins[0]);
+    const w = first?.window ? String(first.window) : "";
+    return `${name} · ${wins.length} window(s)${w ? ` · lead ${w}` : ""}`;
+  }
+  if (stepKey === "step7") {
+    return `${name} · transit ${step.transit_confirmed ? "confirmed" : "not confirmed"}${step.detail ? ` · ${step.detail}` : ""}`;
+  }
+  if (stepKey === "step8") {
+    return `${name} · ${fmtCheckValue(step.verdict)} · band ${fmtCheckValue(step.band)}`;
+  }
+  return name;
+}
+
+function JsonDetail({ data, label }: { data: unknown; label?: string }) {
+  if (data == null) return null;
+  return (
+    <details className="engine-step-detail">
+      <summary>{label || "Full step data"}</summary>
+      <pre className="llm-context-pre">{JSON.stringify(data, null, 2)}</pre>
+    </details>
+  );
+}
+
+export function EngineTracePanel({
+  ctx,
+  row,
+}: {
+  ctx: AskLlmContext;
+  row: Pick<AskQuestionItem, "answer_text" | "answer_source" | "question_text">;
+}) {
+  const blocks = (ctx.blocks || {}) as Record<string, unknown>;
+  const trace = (blocks.engine_trace || blocks.marriage_engine_trace) as EngineTrace | undefined;
+  const hasTrace = Boolean(trace && (trace.step_audit || trace.timing_audit));
+  const stepOrder =
+    trace?.step_order?.length
+      ? trace.step_order
+      : ["step0", "step0a", "step1", "step2", "step3", "step4", "step5", "step6", "step7", "step8"];
+  const stepAudit = trace?.step_audit || {};
+  const timingAudit = trace?.timing_audit;
+
+  const pipeline = [
+    {
+      n: 1,
+      title: "Question",
+      detail: ctx.question || row.question_text || "—",
+    },
+    {
+      n: 2,
+      title: "Intent routing",
+      detail:
+        ctx.intent_source === "llm" && ctx.llm_intent
+          ? `LLM → ${ctx.llm_intent.mr_archetype || ctx.llm_intent.domain || "general"} (confidence ${ctx.llm_intent.confidence ?? "?"})`
+          : `Regex / rules · route ${ctx.route || "—"} · type ${ctx.question_type || "—"}`,
+    },
+    {
+      n: 3,
+      title: "Engine",
+      detail: String(
+        trace?.engine ||
+          (ctx.checks as Record<string, unknown> | undefined)?.slice_type ||
+          "chart analysis",
+      ),
+    },
+    {
+      n: 4,
+      title: ctx.llm_called === false ? "LLM skipped" : "LLM narrator",
+      detail:
+        ctx.llm_called === false
+          ? ctx.skip_reason || "Deterministic template reply"
+          : `Model ${ctx.model || "—"} · max tokens ${ctx.max_tokens ?? "—"}`,
+    },
+    {
+      n: 5,
+      title: "User answer",
+      detail: row.answer_text || trace?.timing_audit?.expected_reply || "—",
+    },
+  ];
+
+  return (
+    <details className="engine-trace-panel" open={hasTrace}>
+      <summary>
+        Engine pipeline — step by step
+        {hasTrace ? "" : " (limited — re-ask after API deploy for full trace)"}
+      </summary>
+      <div className="engine-trace-body">
+        <ol className="engine-pipeline-overview">
+          {pipeline.map((p) => (
+            <li key={p.n}>
+              <span className="engine-pipeline-num">{p.n}</span>
+              <div>
+                <strong>{p.title}</strong>
+                <p className="detail-muted engine-pipeline-detail">{p.detail}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+
+        {trace?.primary_window ? (
+          <div className="engine-outcome-box">
+            <p>
+              <strong>Primary window:</strong> {trace.primary_window}
+            </p>
+            {trace.backup_window ? (
+              <p>
+                <strong>Backup:</strong> {trace.backup_window}
+              </p>
+            ) : null}
+            {trace.key_trigger ? (
+              <p>
+                <strong>Key trigger:</strong> {trace.key_trigger}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {hasTrace ? (
+          <>
+            <p className="detail-summary">Marriage engine checks (M17)</p>
+            <div className="engine-steps-list">
+              {stepOrder.map((key) => {
+                const step = stepAudit[key];
+                if (!step) return null;
+                const status = String(step.status || "DONE");
+                return (
+                  <details key={key} className="engine-step-card">
+                    <summary>
+                      <span className="engine-step-key">{key}</span>
+                      <span className="engine-step-oneline">{stepOneLiner(key, step)}</span>
+                      <span className={`engine-step-status status-${status.toLowerCase()}`}>
+                        {status}
+                      </span>
+                    </summary>
+                    <JsonDetail data={step} label="Step JSON" />
+                  </details>
+                );
+              })}
+            </div>
+
+            {timingAudit ? (
+              <details open className="engine-audit-panel">
+                <summary>
+                  Final validation · status {timingAudit.status || "—"}
+                  {timingAudit.issues?.length
+                    ? ` · ${timingAudit.issues.length} issue(s)`
+                    : ""}
+                </summary>
+                <div className="engine-audit-body">
+                  {timingAudit.expected_reply ? (
+                    <p>
+                      <strong>Locked reply template:</strong> {timingAudit.expected_reply}
+                    </p>
+                  ) : null}
+                  {timingAudit.primary_dasha ? (
+                    <p className="detail-muted">
+                      <strong>Primary dasha:</strong>{" "}
+                      {fmtCheckValue(timingAudit.primary_dasha.md)}-
+                      {fmtCheckValue(timingAudit.primary_dasha.ad)}-
+                      {fmtCheckValue(timingAudit.primary_dasha.pd)}{" "}
+                      {fmtCheckValue(timingAudit.primary_dasha.start_iso)} →{" "}
+                      {fmtCheckValue(timingAudit.primary_dasha.end_iso)}
+                    </p>
+                  ) : null}
+                  {Array.isArray(timingAudit.checks) && timingAudit.checks.length > 0 ? (
+                    <ul className="llm-check-list engine-audit-checks">
+                      {timingAudit.checks.map((c, i) => (
+                        <li key={`${c.name}-${i}`}>
+                          <span className={c.ok ? "audit-ok" : "audit-warn"}>
+                            {c.ok ? "✓" : "⚠"}
+                          </span>{" "}
+                          <code>{c.name}</code>: {c.detail || (c.ok ? "ok" : "failed")}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {timingAudit.issues && timingAudit.issues.length > 0 ? (
+                    <>
+                      <p>
+                        <strong>Issues:</strong>
+                      </p>
+                      <ul className="llm-check-list">
+                        {timingAudit.issues.map((issue) => (
+                          <li key={issue}>{issue}</li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : null}
+                  <JsonDetail data={timingAudit} label="Full timing audit JSON" />
+                </div>
+              </details>
+            ) : null}
+
+            {trace.factors && trace.factors.length > 0 ? (
+              <details>
+                <summary>Engine factors ({trace.factors.length})</summary>
+                <ul className="llm-check-list">
+                  {trace.factors.map((f) => (
+                    <li key={f}>{f}</li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+
+            {trace.top_3_windows && trace.top_3_windows.length > 0 ? (
+              <details>
+                <summary>Top timing windows ({trace.top_3_windows.length})</summary>
+                <pre className="llm-context-pre">
+                  {JSON.stringify(trace.top_3_windows, null, 2)}
+                </pre>
+              </details>
+            ) : null}
+          </>
+        ) : (
+          <p className="detail-muted">
+            Structured step audit not saved for this row. Deploy latest API, restart server, then
+            ask again. Until then use Checks / chart context below.
+          </p>
+        )}
+
+        {typeof blocks.marriage_engine === "string" && blocks.marriage_engine.trim() ? (
+          <details>
+            <summary>Marriage locked-facts block (prompt text)</summary>
+            <pre className="llm-context-pre">{String(blocks.marriage_engine)}</pre>
+          </details>
+        ) : null}
+      </div>
+    </details>
+  );
+}
+
 export function AnswerPathBadge({
   ctx,
   row,
@@ -135,7 +434,7 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
     : String(checks.slice_type || checks.archetype || archetype || "unknown");
 
   return (
-    <details className="llm-context-panel" open>
+    <details className="llm-context-panel">
       <summary>
         LLM context — {sliceLabel}
         {skipLlm ? " (LLM skipped)" : ""}
@@ -146,6 +445,8 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
           <pre className="llm-context-pre">{(ctx as { raw: string }).raw}</pre>
         ) : (
           <>
+            <EngineTracePanel ctx={ctx} row={row} />
+
             <div className={`answer-path-banner answer-path-${answerPath.code}`}>
               <strong>Answer path:</strong> {answerPath.label}
               {row.answer_source ? (

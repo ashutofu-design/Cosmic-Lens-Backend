@@ -780,7 +780,7 @@ def _passthrough_health_focus(question, topic_id):
 def _passthrough_marriage_block(question, kundli, intel, birth):
     """M17 — Build LOCKED FACTS marriage block for passthrough paths.
 
-    Returns "" (safe no-op) when:
+    Returns (text_block, engine_result_dict|None). text_block is "" when:
       - question is not marriage-topic
       - kundli is missing planets
       - assess_marriage returns nothing usable
@@ -788,11 +788,11 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
     """
     try:
         if not isinstance(question, str) or not question.strip():
-            return ""
+            return "", None
         if not _M17_MARRIAGE_KW_RX.search(question):
-            return ""
+            return "", None
         if not isinstance(kundli, dict) or not kundli.get("planets"):
-            return ""
+            return "", None
 
         from event_timing.marriage.kp_from_chart import resolve_kp
 
@@ -804,7 +804,7 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
             question=question or "",
         )
         if not isinstance(engine_result, dict) or not engine_result:
-            return ""
+            return "", None
         _pw = (engine_result.get("primary_window") or "").strip()
         try:
             _s0 = engine_result.get("step0") or {}
@@ -920,10 +920,10 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
             )
         except Exception:
             pass
-        return _M17_format_marriage_block(engine_result)
+        return _M17_format_marriage_block(engine_result), engine_result
     except Exception as _exc:  # noqa: BLE001
         print(f"[passthrough_marriage_block] err: {str(_exc)[:200]}")
-        return ""
+        return "", None
 
 
 def _passthrough_career_block(question, kundli, intel, birth, llm_intent=None):
@@ -6046,6 +6046,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     # User path: AI understands Q + AI answers from chart. Set
     # RAW_PASSTHROUGH_ENGINES=1 only for legacy marriage-engine inject.
     marriage_block = ""
+    marriage_engine_raw: dict | None = None
     is_marriage_engine = False
     _eng_env = (os.environ.get("RAW_PASSTHROUGH_ENGINES") or "").strip()
     if _eng_env == "":
@@ -6070,9 +6071,10 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         f"[raw_passthrough] intel build skipped: "
                         f"{str(_ie)[:160]}"
                     )
-                marriage_block = _passthrough_marriage_block(
+                marriage_block, marriage_engine_raw = _passthrough_marriage_block(
                     question, kundli, _intel_for_marriage, birth
-                ) or ""
+                )
+                marriage_block = marriage_block or ""
                 if marriage_block:
                     is_marriage_engine = True
                     chart_text = chart_text + "\n" + marriage_block
@@ -6200,6 +6202,15 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _pt_blocks["kp"] = kp_block.strip()
         if marriage_block:
             _pt_blocks["marriage_engine"] = marriage_block
+        if marriage_engine_raw:
+            try:
+                from ask_llm_context_debug import build_marriage_engine_trace
+
+                _trace = build_marriage_engine_trace(marriage_engine_raw)
+                if _trace:
+                    _pt_blocks["engine_trace"] = _trace
+            except Exception as _te:
+                print(f"[raw_passthrough] engine_trace skipped: {_te}", flush=True)
         return _attach_admin_llm_context(
             _out_rp,
             question=question or "",
@@ -7885,7 +7896,7 @@ def _build_messages(
                 # Phase 2.8.27 — inject deterministic marriage LOCKED FACTS
                 # in legacy LLM_FULL_CHART_MODE passthrough too (parity with
                 # newer sync + stream passthroughs). Same helper, same args.
-                _marriage_block_pt = _passthrough_marriage_block(
+                _marriage_block_pt, _ = _passthrough_marriage_block(
                     question, kundli, _intel_obj_pt, birth
                 )
                 # ── KP-ALWAYS-FULL (user request, 2026-05-05): legacy
@@ -18681,7 +18692,7 @@ def ai_ask(question: str, kundli: Any, lang: str = "en", reply_idx: int = 0,
                 # Phase 2.8.27 — inject deterministic marriage LOCKED FACTS
                 # so the 25-rule + 6-trust-layer engine actually reaches the
                 # LLM in passthrough mode (was being completely bypassed).
-                _marriage_block_pt = _passthrough_marriage_block(
+                _marriage_block_pt, _ = _passthrough_marriage_block(
                     question, kundli, _intel_obj_pt, birth
                 )
                 # Phase 2.8.42 — emotion-aware tone hint. Returns "" for
@@ -22370,7 +22381,7 @@ def ai_ask_stream(question: str, kundli: Any, lang: str = "en", reply_idx: int =
             # so the 25-rule + 6-trust-layer engine actually reaches the LLM
             # in passthrough mode (was being completely bypassed → LLM was
             # guessing love/arrange instead of using engine output).
-            _marriage_block_pt_s = _passthrough_marriage_block(
+            _marriage_block_pt_s, _ = _passthrough_marriage_block(
                 question, kundli, _intel_obj_pt_s, birth
             )
 

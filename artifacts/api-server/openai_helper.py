@@ -4898,6 +4898,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     # Re-run the PREVIOUS question with explain=ON so the user gets the full
     # evidence behind the earlier reading, instead of answering the meta-Q.
     _force_explain = False
+    _timing_refine_followup = False
     if _is_transparency_followup(question):
         _prev_q = _extract_prev_ask_question(history, question)
         if _prev_q:
@@ -4920,6 +4921,23 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 "engine_tag": "ans-cosmo",
                 "follow_ups": [],
             }
+
+    # ── Timing refine follow-up ("exact month?", "kis mahine change hoga?") ─
+    try:
+        from ask_timing_followup import resolve_timing_followup_question
+
+        _eff_q, _timing_refine_followup = resolve_timing_followup_question(
+            question, history,
+        )
+        if _timing_refine_followup:
+            print(
+                f"[raw_passthrough] timing refine follow-up → engine Q="
+                f"{_eff_q[:80]!r}",
+                flush=True,
+            )
+            question = _eff_q
+    except Exception as _tf_exc:
+        print(f"[raw_passthrough] timing follow-up skipped: {_tf_exc}", flush=True)
 
     # ── Marriage backup window ("agar June 2029 mein nahi, aage kab?") ─────
     if (
@@ -6564,6 +6582,14 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         f"{sensitive_depth_rule}{long_story_rule}"
         f"{marriage_psychology_rule}{partner_compat_rule}{mr_static_rule}"
         f"{_user_profile_hint}"
+        + (
+            "\nTIMING REFINE FOLLOW-UP: User asked for exact month/window after prior "
+            "timing answer. Lead with engine next AD window (start month–end month) and "
+            "current MD/AD/PD lords. If engine shows no next window, state that clearly "
+            "and give the strategy wait-range only — never invent a calendar date.\n"
+            if _timing_refine_followup
+            else ""
+        )
     )
 
     _topic_hint = ""

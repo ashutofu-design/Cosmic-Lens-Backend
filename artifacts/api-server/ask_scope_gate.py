@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 ScopeReason = Literal[
     "ok",
@@ -116,6 +116,18 @@ _TRANSPARENCY_FOLLOWUP_RX = re.compile(
 
 
 # Follow-ups after an astrology answer often omit "mera/meri".
+# Marriage timing alt-window ("agar June 2029 mein nahi, aage kab?") — no shaadi word.
+_MARRIAGE_ALT_TIMING_RX = re.compile(
+    r"(?ix)"
+    r"\b(agar|if)\b.{0,80}\b(nahi|na|not|miss)\b.{0,50}\b(kab|when|aage|agla)\b|"
+    r"\b(aage|agla|next|dusra|backup)\b.{0,30}\b(kab|when|hoga|hogi|milega|time|window|period|samay)\b|"
+    r"\b(kab|when)\b.{0,25}\b(aage|agla|next|baad|later)\b|"
+    r"\b(uske|iske|is)\s+baad\s+(kab|kya|when)\b|"
+    r"\b(january|february|march|april|may|june|july|august|september|october|november|december|"
+    r"jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)"
+    r".{0,60}\b(nahi|na|not|miss)\b.{0,60}\b(kab|when|aage|agla)\b"
+)
+
 _ASTRO_FOLLOWUP_RX = re.compile(
     r"(?ix)"
     r"(?=.*\b("
@@ -203,7 +215,7 @@ class AskScopeVerdict:
     reason: ScopeReason
 
 
-def assess_ask_scope(question: str) -> AskScopeVerdict:
+def assess_ask_scope(question: str, history: Any = None) -> AskScopeVerdict:
     from ask_question_normalize import (
         has_question_intent,
         looks_like_implicit_ask,
@@ -236,6 +248,24 @@ def assess_ask_scope(question: str) -> AskScopeVerdict:
     # the previous reading. In scope; the answer layer re-explains the prior
     # question's evidence using conversation history.
     if _TRANSPARENCY_FOLLOWUP_RX.search(q):
+        return AskScopeVerdict(allowed=True, reason="ok")
+
+    try:
+        from ask_question_normalize import _QUESTION_SHAPE_RX
+        from ask_timing_followup import (
+            history_has_timing_thread,
+            is_timing_refine_followup,
+        )
+
+        if is_timing_refine_followup(q):
+            return AskScopeVerdict(allowed=True, reason="ok")
+        if history and history_has_timing_thread(history):
+            if _QUESTION_SHAPE_RX.search(q) and len(q.split()) <= 16:
+                return AskScopeVerdict(allowed=True, reason="ok")
+    except Exception:
+        pass
+
+    if _MARRIAGE_ALT_TIMING_RX.search(q):
         return AskScopeVerdict(allowed=True, reason="ok")
 
     # Primary path: read topic + intent — mera/meri NOT required in Ask context.
@@ -311,10 +341,10 @@ def scope_refusal_payload(
     }
 
 
-def astro_scope_refusal(question: str, lang: str = "en", user=None):
+def astro_scope_refusal(question: str, lang: str = "en", user=None, history: Any = None):
     """Compatibility shim for flask_app (returns None if allowed)."""
     _ = lang, user
-    v = assess_ask_scope(question)
+    v = assess_ask_scope(question, history)
     if v.allowed:
         return None
     return (v.reason, SCOPE_REFUSAL_TEXT)

@@ -26,6 +26,8 @@ $files = @(
     "openai_helper.py",
     "ask_llm_context_debug.py",
     "ask_hard_guards.py",
+    "ask_timing_followup.py",
+    "ask_scope_gate.py",
     "health_focus_routing.py",
     "ask_user_signals.py",
     "user_ask_profile.py",

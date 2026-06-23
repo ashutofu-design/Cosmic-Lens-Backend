@@ -2650,6 +2650,9 @@ def _log_question_history(user, question_text: str, result):
     """Shared post-Ask hook — extracts topic + verdict + kundli FK and
     persists ONE row via question_history.save_user_question.
 
+    Also applies question-derived personalization (tone/follow-ups) and
+    records per-question signals into user_ask_profile.
+
     No-ops when:
       • user is None (anonymous demo asks)
       • result is not a dict (defensive)
@@ -2661,12 +2664,31 @@ def _log_question_history(user, question_text: str, result):
     if user is None or not isinstance(result, dict):
         return
     try:
+        lang = (result.get("lang") or "hn")
+        try:
+            from user_ask_profile import get_user_ask_profile, personalize_ask_result
+
+            prof = get_user_ask_profile(user.id)
+            backup = ""
+            blocks = (result.get("admin_llm_context") or {}).get("blocks") or {}
+            if isinstance(blocks, dict):
+                tr = blocks.get("engine_trace") or {}
+                if isinstance(tr, dict):
+                    backup = (tr.get("backup_window") or "").strip()
+            personalized = personalize_ask_result(
+                result, prof, lang=lang, backup_window=backup
+            )
+            result.clear()
+            result.update(personalized)
+        except Exception as _pe:
+            print(f"[ask] user profile personalize skipped: {_pe}", flush=True)
+
         topic_logged = result.get("topic") or "general"
         verdict_logged = extract_verdict_summary(result, topic_logged)
         kundli_id = user.kundli.id if getattr(user, "kundli", None) else None
         tok = token_fields_from_result(result)
         llm_ctx_json = extract_admin_llm_context_for_save(result)
-        save_user_question(
+        qid = save_user_question(
             user_id=user.id,
             question_text=question_text or "",
             topic=topic_logged,
@@ -2677,6 +2699,18 @@ def _log_question_history(user, question_text: str, result):
             llm_context_json=llm_ctx_json,
             **tok,
         )
+        try:
+            from user_ask_profile import record_question_signals_for_user
+
+            record_question_signals_for_user(
+                user_id=user.id,
+                question_text=question_text or "",
+                topic=topic_logged,
+                answer_source=result.get("source"),
+                question_id=qid,
+            )
+        except Exception as _re:
+            print(f"[ask] user_ask_profile record skipped: {_re}", flush=True)
     except Exception as exc:
         print(f"[ask] question_history save failed (non-fatal): {exc}")
 
@@ -3490,6 +3524,20 @@ def admin_user_detail(user_id):
     if not detail:
         return jsonify({"error": "User not found"}), 404
     return jsonify(detail)
+
+
+@app.route("/api/admin/users/<int:user_id>/ask-profile", methods=["GET"])
+def admin_user_ask_profile(user_id: int):
+    """Question-derived user mindset profile (Ask signals only)."""
+    err = require_admin()
+    if err:
+        return err
+    from user_ask_profile import admin_profile_view
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    return jsonify(admin_profile_view(user_id))
 
 
 @app.route("/api/admin/users/<int:user_id>/pro", methods=["POST"])
@@ -7795,7 +7843,7 @@ def ask_route():
     try:
         from ask_scope_gate import assess_ask_scope, scope_refusal_payload
 
-        _scope_v = assess_ask_scope(question)
+        _scope_v = assess_ask_scope(question, history)
         if not _scope_v.allowed:
             print(f"[ask] scope_gate blocked reason={_scope_v.reason}", flush=True)
             _log_brand_guard_question(question, data)
@@ -8033,7 +8081,7 @@ def ask_route():
             503,
         )
 
-    _scope_hit = _ask_scope_refusal(question, lang, None)
+    _scope_hit = _ask_scope_refusal(question, lang, None, history)
     if _scope_hit:
         _scope_kind, msg = _scope_hit
         _log_brand_guard_question(question, data)
@@ -9059,7 +9107,7 @@ def ask_stream_route():
             503,
         )
 
-    _scope_hit = _ask_scope_refusal(question, lang, None)
+    _scope_hit = _ask_scope_refusal(question, lang, None, history)
     if _scope_hit:
         _scope_kind, msg = _scope_hit
         _log_brand_guard_question(question, data)

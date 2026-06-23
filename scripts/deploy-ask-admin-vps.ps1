@@ -1,12 +1,14 @@
 # Deploy Ask Q&A admin API files to VPS and restart PM2.
 # Usage (from repo root):
 #   .\scripts\deploy-ask-admin-vps.ps1
+#
+# One-time (no more passwords): .\scripts\setup-vps-ssh-key.ps1
 # Optional: $env:VPS_HOST = "root@187.127.174.55"
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $api = Join-Path $root "artifacts\api-server"
-$host = if ($env:VPS_HOST) { $env:VPS_HOST } else { "root@187.127.174.55" }
+$vpsHost = if ($env:VPS_HOST) { $env:VPS_HOST } else { "root@187.127.174.55" }
 $remote = "/root/Cosmic-Lens-Backend/artifacts/api-server"
 
 $files = @(
@@ -22,37 +24,70 @@ $files = @(
     "models.py",
     "database.py",
     "openai_helper.py",
-    "ask_llm_context_debug.py"
+    "ask_llm_context_debug.py",
+    "ask_hard_guards.py",
+    "health_focus_routing.py",
+    "ask_user_signals.py",
+    "user_ask_profile.py",
+    "event_timing/timing_router.py"
 )
 
 $folders = @(
-    "ask_mr"
+    "ask_mr",
+    "event_timing/marriage",
+    "event_timing/_shared",
+    "event_timing/career"
 )
 
-Write-Host "Deploying Ask Q&A admin API to $host ..." -ForegroundColor Cyan
 foreach ($f in $files) {
     $local = Join-Path $api $f
     if (-not (Test-Path $local)) {
         throw "Missing local file: $local"
     }
-    Write-Host "  scp $f"
-    scp $local "${host}:${remote}/$f"
 }
-
 foreach ($dir in $folders) {
-    $localDir = Join-Path $api $dir
-    if (-not (Test-Path $localDir)) {
-        throw "Missing local folder: $localDir"
+    if (-not (Test-Path (Join-Path $api $dir))) {
+        throw "Missing local folder: $(Join-Path $api $dir)"
     }
-    Write-Host "  scp -r $dir/"
-    scp -r $localDir "${host}:${remote}/$dir"
 }
 
-Write-Host "Restarting API ..." -ForegroundColor Cyan
-ssh $host @"
+Write-Host "Deploying Ask Q&A admin API to $vpsHost (single upload bundle) ..." -ForegroundColor Cyan
+
+$staging = Join-Path $env:TEMP "cosmic-ask-deploy-$([Guid]::NewGuid().ToString('n').Substring(0, 8))"
+$archive = Join-Path $env:TEMP "cosmic-ask-deploy.tar.gz"
+New-Item -ItemType Directory -Path $staging -Force | Out-Null
+
+try {
+    foreach ($f in $files) {
+        Copy-Item (Join-Path $api $f) -Destination (Join-Path $staging $f) -Force
+    }
+    foreach ($dir in $folders) {
+        $dest = Join-Path $staging $dir
+        if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+        Copy-Item (Join-Path $api $dir) -Destination $dest -Recurse -Force
+    }
+
+    if (Test-Path $archive) { Remove-Item $archive -Force }
+    Push-Location $staging
+    try {
+        & tar -czf $archive *
+        if ($LASTEXITCODE -ne 0) { throw "tar failed (exit $LASTEXITCODE)" }
+    } finally {
+        Pop-Location
+    }
+
+    $sizeKb = [math]::Round((Get-Item $archive).Length / 1KB, 1)
+    Write-Host "  Uploading $sizeKb KB archive (1 connection) ..." -ForegroundColor Cyan
+    scp $archive "${vpsHost}:/tmp/cosmic-ask-deploy.tar.gz"
+
+    Write-Host "  Extract + restart on VPS (1 connection) ..." -ForegroundColor Cyan
+    ssh $vpsHost @"
+set -e
 cd $remote
+tar xzf /tmp/cosmic-ask-deploy.tar.gz
+rm -f /tmp/cosmic-ask-deploy.tar.gz
 echo '--- py_compile (abort restart on syntax error) ---'
-python3 -m py_compile openai_helper.py chart_fact_answer.py flask_app.py subscription_helper.py || { echo 'COMPILE_FAILED — fix syntax before restart'; exit 1; }
+python3 -m py_compile openai_helper.py ask_hard_guards.py ask_llm_context_debug.py health_focus_routing.py chart_fact_answer.py flask_app.py subscription_helper.py ask_user_signals.py user_ask_profile.py event_timing/timing_router.py event_timing/_shared/step_audit.py event_timing/_shared/generic_timing_engine.py || { echo 'COMPILE_FAILED — fix syntax before restart'; exit 1; }
 python3 -c "from subscription_helper import finalize_ask_out_after_llm; print('finalize_ask_out_after_llm OK')" || { echo 'MISSING finalize_ask_out_after_llm — deploy subscription_helper.py'; exit 1; }
 python3 -c "from ask_mr import run_mr_static_engine; print('ask_mr engine OK')" || { echo 'MISSING ask_mr/ — deploy ask_mr folder or git pull'; exit 1; }
 grep -c 'ask-questions' flask_app.py || true
@@ -66,7 +101,11 @@ curl -s -m 25 -X POST http://127.0.0.1:8080/api/ask/stream \
   | head -c 400 || true
 echo ''
 "@
+} finally {
+    if (Test-Path $staging) { Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $archive) { Remove-Item $archive -Force -ErrorAction SilentlyContinue }
+}
 
 Write-Host ""
 Write-Host "Done. Refresh admin panel -> Ask Q&A tab." -ForegroundColor Green
-Write-Host "If still 404, run on VPS: grep ask-questions $remote/flask_app.py"
+Write-Host "Tip: run .\scripts\setup-vps-ssh-key.ps1 once - then deploy never asks password." -ForegroundColor DarkGray

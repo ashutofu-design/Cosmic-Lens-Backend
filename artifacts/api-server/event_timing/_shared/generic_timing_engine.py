@@ -436,7 +436,7 @@ def compute_generic_timing_window(
     if not current and top3:
         current = top3[0]
 
-    return {
+    payload = {
         "verdict": verdict,
         "band": band,
         "bucket": bucket,
@@ -453,3 +453,9 @@ def compute_generic_timing_window(
         "engine_arch": "FILTER→VERIFY→KP→DASHA→TRANSIT→WINDOW",
         "question": question,
     }
+    try:
+        from event_timing._shared.step_audit import attach_timing_pipeline_audit
+
+        return attach_timing_pipeline_audit(payload, cfg.domain)
+    except Exception:
+        return payload

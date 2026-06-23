@@ -4118,7 +4118,280 @@ def assess_career(kundli: dict,
     except Exception:
         pass
 
+    result["step_audit"] = build_career_timing_step_audit(result)
+    result["step_order"] = list(_CAREER_TIMING_STEP_ORDER)
+    result["timing_audit"] = build_career_timing_audit(result)
+
     return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ADMIN STEP AUDIT — universal timing pipeline (dasha-first for TIMING Qs)
+# UNDERSTAND → FILTER → VERIFY → KP → RANK → DASHA → TRANSIT → WINDOW → GUARD
+# ─────────────────────────────────────────────────────────────────────────────
+_CAREER_TIMING_STEP_ORDER = (
+    "step0",
+    "step1",
+    "step2",
+    "step3",
+    "step4",
+    "step5",
+    "step6",
+    "step7",
+    "step8",
+)
+
+
+def _top_layer_rows(layers: dict, limit: int = 5) -> list[dict]:
+    ranked = sorted(
+        [(k, v) for k, v in (layers or {}).items() if isinstance(v, dict)],
+        key=lambda kv: abs(float((kv[1] or {}).get("score") or 0)),
+        reverse=True,
+    )
+    return [
+        {
+            "layer": key,
+            "score": row.get("score"),
+            "why": (row.get("why") or [])[:2],
+        }
+        for key, row in ranked[:limit]
+    ]
+
+
+def build_career_timing_step_audit(result: dict) -> dict:
+    """Step-by-step audit for admin — mirrors marriage M17 order (career axis)."""
+    if not isinstance(result, dict):
+        return {}
+
+    bucket = str(result.get("bucket") or "general_career")
+    tense = str(result.get("tense") or "general")
+    age_ctx = result.get("age_context") if isinstance(result.get("age_context"), dict) else {}
+    L = result.get("layers") if isinstance(result.get("layers"), dict) else {}
+    T = result.get("triggers") if isinstance(result.get("triggers"), dict) else {}
+    tw = result.get("timing_window") if isinstance(result.get("timing_window"), dict) else {}
+    sb = result.get("score_breakdown") if isinstance(result.get("score_breakdown"), dict) else {}
+
+    l1 = L.get("L1_tenth_house") or {}
+    l18 = L.get("L18_d9_overlay") or {}
+    l19 = L.get("L19_d10_overlay") or {}
+    l22 = L.get("L22_kp_csl") or {}
+    t1 = T.get("T1_vimshottari") or {}
+    t2 = T.get("T2_saturn_transit") or {}
+    t3 = T.get("T3_jupiter_yogini") or {}
+
+    cur = tw.get("current") if isinstance(tw.get("current"), dict) else {}
+    nxt = tw.get("next_career") if isinstance(tw.get("next_career"), dict) else {}
+    cur_lords = str(t1.get("current_lords") or cur.get("lords") or "")
+    career_lords = t1.get("career_lords_set") or []
+
+    dasha_why = list(t1.get("why") or [])[:6]
+    transit_why = list(t2.get("why") or [])[:3] + list(t3.get("why") or [])[:3]
+
+    return {
+        "step0": {
+            "name": "User demand + age context",
+            "status": "DONE",
+            "bucket": bucket,
+            "tense": tense,
+            "user_age": age_ctx.get("user_age"),
+            "age_reframe": age_ctx.get("age_reframe"),
+            "detail": (
+                f"{bucket} · {tense} tense"
+                + (f" · age {age_ctx.get('user_age')}" if age_ctx.get("user_age") else "")
+            ),
+        },
+        "step1": {
+            "name": "D1 career significators (10H / 10L / AmK)",
+            "status": "DONE" if l1 else "PARTIAL",
+            "tenth_house_score": l1.get("score"),
+            "top_why": (l1.get("why") or [])[:4],
+            "career_lords_target": career_lords,
+            "detail": " · ".join((l1.get("why") or [])[:3]) or "10H/10L scan",
+        },
+        "step2": {
+            "name": "Divisional verify (D9 + D10)",
+            "status": "DONE",
+            "d9_score": l18.get("score"),
+            "d10_score": l19.get("score"),
+            "detail": (
+                f"D9 {l18.get('score', 0):+d} · D10 {l19.get('score', 0):+d}"
+            ),
+        },
+        "step3": {
+            "name": "KP career CSL",
+            "status": "DONE" if l22 else "SKIPPED",
+            "kp_score": l22.get("score"),
+            "top_why": (l22.get("why") or [])[:3],
+            "detail": " · ".join((l22.get("why") or [])[:2]) or "KP partial",
+        },
+        "step4": {
+            "name": "Natal rank (layer score)",
+            "status": "DONE",
+            "layer_score": sb.get("layer_score"),
+            "top_layers": _top_layer_rows(L, 5),
+            "detail": f"natal layers {sb.get('layer_score', 0):+d}",
+        },
+        "step5": {
+            "name": "Dasha activation (MD/AD/PD) — PRIMARY",
+            "status": "DONE" if cur_lords.strip("/") else "MISSING",
+            "current_lords": cur_lords,
+            "current_start": cur.get("start"),
+            "current_end": cur.get("end"),
+            "dasha_score": t1.get("score"),
+            "why": dasha_why,
+            "career_lords_set": career_lords,
+            "detail": (
+                f"MD/AD/PD {cur_lords}"
+                + (f" · {cur.get('start')}→{cur.get('end')}" if cur.get("start") else "")
+                + (f" · {dasha_why[0]}" if dasha_why else "")
+            ),
+        },
+        "step6": {
+            "name": "Transit triggers (Saturn 10H + Jupiter grace)",
+            "status": "DONE" if transit_why else "NEUTRAL",
+            "saturn_score": t2.get("score"),
+            "jupiter_score": t3.get("score"),
+            "why": transit_why,
+            "saturn_transit": t2.get("saturn_transit") or tw.get("saturn_transit"),
+            "jupiter_active": tw.get("jupiter_active"),
+            "detail": " · ".join(transit_why[:3]) or "no strong transit",
+        },
+        "step7": {
+            "name": "Window merge (next career AD)",
+            "status": "DONE" if nxt.get("ad") else "NONE_FOUND",
+            "next_ad": nxt.get("ad"),
+            "next_md": nxt.get("md"),
+            "next_start": nxt.get("start"),
+            "next_end": nxt.get("end"),
+            "reason": nxt.get("reason"),
+            "detail": (
+                f"next AD {nxt.get('ad') or '—'}"
+                + (f" · {nxt.get('start')}→{nxt.get('end')}" if nxt.get("start") else "")
+                + (f" · {nxt.get('reason')}" if nxt.get("reason") else "")
+            ).strip(),
+        },
+        "step8": {
+            "name": "Verdict + strategy + guard",
+            "status": "DONE",
+            "verdict": result.get("verdict"),
+            "score": result.get("score"),
+            "confidence": result.get("confidence"),
+            "strategy": (result.get("strategy") or "")[:200],
+            "brand_safety_warnings": (result.get("brand_safety_warnings") or [])[:4],
+            "detail": (
+                f"{result.get('verdict')} · score {result.get('score')} · "
+                f"conf {result.get('confidence')}%"
+            ),
+        },
+    }
+
+
+def build_career_timing_audit(result: dict) -> dict:
+    """Timing audit block (marriage-style checks) for career."""
+    if not isinstance(result, dict):
+        return {}
+    sa = build_career_timing_step_audit(result)
+    s5 = sa.get("step5") or {}
+    s6 = sa.get("step6") or {}
+    s7 = sa.get("step7") or {}
+    issues: list[str] = []
+    checks: list[dict] = []
+
+    dasha_ok = bool(s5.get("current_lords"))
+    checks.append({
+        "name": "dasha_trace",
+        "ok": dasha_ok,
+        "detail": str(s5.get("detail") or ""),
+    })
+    if not dasha_ok:
+        issues.append("current MD/AD/PD not resolved from chart")
+
+    t1_score = int((result.get("triggers") or {}).get("T1_vimshottari", {}).get("score") or 0)
+    dasha_active = t1_score >= 3
+    checks.append({
+        "name": "dasha_career_activation",
+        "ok": dasha_active,
+        "detail": f"T1 score {t1_score} · lords {s5.get('current_lords')}",
+    })
+    if not dasha_active:
+        issues.append("current dasha lords weak for career-significator activation")
+
+    transit_ok = bool(s6.get("why"))
+    checks.append({
+        "name": "transit_support",
+        "ok": transit_ok,
+        "detail": str(s6.get("detail") or "neutral"),
+    })
+
+    next_win = bool(s7.get("next_ad"))
+    checks.append({
+        "name": "next_career_window",
+        "ok": next_win,
+        "detail": str(s7.get("detail") or "no upcoming AD on 10L/AmK"),
+    })
+
+    checks.append({
+        "name": "verdict_lock",
+        "ok": bool(result.get("verdict")),
+        "detail": str(result.get("strategy") or "")[:160],
+    })
+
+    return {
+        "status": "PASS" if not issues else "WARN",
+        "issues": issues,
+        "primary_dasha": {
+            "lords": s5.get("current_lords"),
+            "start": s5.get("current_start"),
+            "end": s5.get("current_end"),
+            "dasha_score": s5.get("dasha_score"),
+        },
+        "next_window": {
+            "ad": s7.get("next_ad"),
+            "md": s7.get("next_md"),
+            "start": s7.get("next_start"),
+            "end": s7.get("next_end"),
+        },
+        "transit": {
+            "detail": s6.get("detail"),
+            "saturn": s6.get("saturn_transit"),
+            "jupiter": s6.get("jupiter_active"),
+        },
+        "checks": checks,
+        "expected_reply": (result.get("strategy") or "")[:200],
+    }
+
+
+def build_career_timing_engine_trace(verdict: dict) -> dict:
+    """Admin engine_trace payload for career timing questions."""
+    if not isinstance(verdict, dict):
+        return {}
+    step_audit = verdict.get("step_audit") if isinstance(verdict.get("step_audit"), dict) else {}
+    if not step_audit:
+        step_audit = build_career_timing_step_audit(verdict)
+    timing_audit = verdict.get("timing_audit") if isinstance(verdict.get("timing_audit"), dict) else {}
+    if not timing_audit:
+        timing_audit = build_career_timing_audit(verdict)
+    tw = verdict.get("timing_window") if isinstance(verdict.get("timing_window"), dict) else {}
+    cur = tw.get("current") if isinstance(tw.get("current"), dict) else {}
+    nxt = tw.get("next_career") if isinstance(tw.get("next_career"), dict) else {}
+    return {
+        "engine": "career_timing_v1",
+        "bucket": verdict.get("bucket"),
+        "verdict": verdict.get("verdict"),
+        "score": verdict.get("score"),
+        "confidence": verdict.get("confidence"),
+        "step_audit": step_audit,
+        "step_order": list(verdict.get("step_order") or _CAREER_TIMING_STEP_ORDER),
+        "timing_audit": timing_audit,
+        "dasha_trace": {
+            "current_lords": cur.get("lords") or (step_audit.get("step5") or {}).get("current_lords"),
+            "current_start": cur.get("start"),
+            "current_end": cur.get("end"),
+            "next_career_ad": nxt.get("ad"),
+            "next_career_start": nxt.get("start"),
+            "next_career_end": nxt.get("end"),
+        },
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -4199,9 +4472,32 @@ def format_verdict_for_prompt(v: dict, question: str = "") -> str:
             lines.append(f"   • Synastry: {sb.get('synastry_bonus',0):+d}")
         lines.append("")
 
-    # Top reasons
+    # Top reasons — timing Qs: dasha/transit first, not full natal dump
     reasons = v.get("reasons") or []
-    top_reasons = [r for r in reasons if "⭐" in r or "Vargottama" in r or "MANDATORY" in r][:5]
+    top_reasons: list[str] = []
+    if tense == "future":
+        triggers = v.get("triggers") or {}
+        if isinstance(triggers, dict):
+            for key in (
+                "T1_vimshottari",
+                "T2_saturn_transit",
+                "T3_jupiter_transit",
+                "T4_yogini_crosscheck",
+            ):
+                block = triggers.get(key)
+                if isinstance(block, dict):
+                    for w in block.get("why") or []:
+                        if w and w not in top_reasons:
+                            top_reasons.append(str(w))
+        if not top_reasons:
+            for r in reasons:
+                rs = str(r)
+                if any(tok in rs for tok in ("MD", "AD", "PD", "dasha", "transit", "window")):
+                    top_reasons.append(rs)
+                if len(top_reasons) >= 6:
+                    break
+    if not top_reasons:
+        top_reasons = [r for r in reasons if "⭐" in r or "Vargottama" in r or "MANDATORY" in r][:5]
     if not top_reasons:
         top_reasons = reasons[:5]
     if top_reasons:

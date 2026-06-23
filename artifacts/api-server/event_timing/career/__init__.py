@@ -36,12 +36,16 @@ Usage from openai_helper:
 
 from .career_timing import (
     assess_career,
-    format_verdict_for_prompt,
+    build_career_timing_engine_trace,
+    build_career_timing_step_audit,
     classify_career_question,
+    format_verdict_for_prompt,
 )
 
 __all__ = [
     "assess_career",
+    "build_career_timing_engine_trace",
+    "build_career_timing_step_audit",
     "format_verdict_for_prompt",
     "classify_career_question",
 ]

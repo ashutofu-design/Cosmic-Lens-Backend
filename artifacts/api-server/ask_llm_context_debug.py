@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any
+from typing import Any, Optional
 
 _MAX_DB_CHARS = 80_000
 
@@ -39,13 +39,16 @@ def derive_answer_path(
     )
     mr_static = bool(checks.get("is_mr_static"))
     marriage_engine = bool(checks.get("is_marriage_engine"))
-    timing_engine = slice_type == "timing_marriage_engine"
-    legacy_slice = slice_type in ("marriage_relationship",) or bool(
-        slice_meta.get("slice") and slice_meta.get("slice") != "mr_engine_v1"
+    career_engine = bool(checks.get("is_career_engine"))
+    timing_engine = slice_type in (
+        "timing_marriage_engine",
+        "timing_marriage_engine_alt",
+        "timing_career_engine",
     )
     domain_engine_slice = sl in (
         "mr_engine_v1",
         "career_engine_v1",
+        "career_timing_v1",
         "education_engine_v1",
         "children_engine_v1",
         "property_engine_v1",
@@ -53,16 +56,26 @@ def derive_answer_path(
         "litigation_engine_v1",
         "finance_engine_v1",
         "health_engine_v1",
+        "travel_timing_v1",
+        "finance_timing_v1",
+        "health_timing_v1",
+        "children_timing_v1",
+        "love_timing_v1",
+        "education_timing_v1",
+        "property_timing_v1",
+        "litigation_timing_v1",
     )
+    dcr_love_buckets = sl == "marriage_relationship" and bool(slice_meta.get("buckets"))
     has_engine_facts = (
         has_verdict
         or has_evidence
-        or mr_v1
-        or mr_static
-        or marriage_engine
-        or timing_engine
-        or legacy_slice
         or domain_engine_slice
+        or dcr_love_buckets
+        or mr_v1
+        or (mr_static and (has_verdict or has_evidence or domain_engine_slice))
+        or (marriage_engine and (has_verdict or has_evidence or domain_engine_slice))
+        or (career_engine and (has_verdict or has_evidence or domain_engine_slice))
+        or timing_engine
     )
 
     if not llm_called:
@@ -72,7 +85,14 @@ def derive_answer_path(
             return "engine_only", _ANSWER_PATH_LABELS["engine_only"]
         return "unknown", _ANSWER_PATH_LABELS["unknown"]
 
-    if has_engine_facts and (mr_v1 or mr_static or marriage_engine or timing_engine or legacy_slice):
+    if has_engine_facts and (
+        mr_v1
+        or (mr_static and (has_verdict or has_evidence or domain_engine_slice))
+        or (marriage_engine and (has_verdict or has_evidence or domain_engine_slice))
+        or (career_engine and (has_verdict or has_evidence or domain_engine_slice))
+        or timing_engine
+        or dcr_love_buckets
+    ):
         return "engine_then_llm", _ANSWER_PATH_LABELS["engine_then_llm"]
     if has_verdict or has_evidence:
         return "engine_then_llm", _ANSWER_PATH_LABELS["engine_then_llm"]
@@ -93,29 +113,54 @@ _MARRIAGE_TRACE_STEP_ORDER = (
 )
 
 
+def _transit_ctx_from_trace(trace: dict[str, Any], s7: Optional[dict[str, Any]] = None) -> Optional[dict[str, Any]]:
+    ctx = trace.get("transit_chart_context")
+    if isinstance(ctx, dict) and ctx.get("h7_si") is not None:
+        return ctx
+    try:
+        from event_timing.marriage.marriage_engine_v2 import transit_ctx_from_public_chart
+    except Exception:
+        return None
+    if s7 is None:
+        step_audit = trace.get("step_audit")
+        if isinstance(step_audit, dict):
+            s7 = step_audit.get("step7")
+    if isinstance(s7, dict):
+        rebuilt = transit_ctx_from_public_chart(s7.get("chart_context"))
+        if rebuilt:
+            return rebuilt
+    return None
+
+
 def _finalize_step7_transit(s7: dict[str, Any], trace: dict[str, Any]) -> None:
     try:
-        from event_timing.marriage.marriage_engine_v2 import finalize_transit_display
+        from event_timing.marriage.marriage_engine_v2 import _build_step7_transit_package
     except Exception:
         return
 
-    samples = s7.get("samples") if isinstance(s7.get("samples"), list) else []
-    window = None
+    window: dict[str, Any] = {}
     wins = trace.get("top_3_windows") or []
     if wins and isinstance(wins[0], dict):
-        window = wins[0]
-        if not samples:
-            samples = window.get("transit_samples") or []
+        window = dict(wins[0])
+    window.setdefault("transit_confirmed", s7.get("transit_confirmed"))
+    window.setdefault("jup", s7.get("jupiter_hit", s7.get("jup")))
+    window.setdefault("sat", s7.get("saturn_hit", s7.get("sat")))
+    window.setdefault("dt", s7.get("double_transit", s7.get("dt")))
+    if s7.get("detail") and not window.get("dt_detail"):
+        window["dt_detail"] = s7.get("detail")
 
-    detail, months, by_month = finalize_transit_display(
-        samples=samples,
-        detail=str(s7.get("detail") or ""),
-        months=s7.get("months") if isinstance(s7.get("months"), list) else None,
-        window=window,
+    pkg = _build_step7_transit_package(
+        window, _transit_ctx_from_trace(trace, s7),
     )
-    s7["detail"] = detail
-    s7["months"] = months
-    s7["by_month"] = by_month
+    s7["detail"] = pkg.get("detail")
+    s7["months"] = pkg.get("months")
+    s7["by_month"] = pkg.get("by_month")
+    s7["transit_type"] = pkg.get("transit_type")
+    s7["transit_type_label"] = pkg.get("transit_type_label")
+    s7["chart_context"] = pkg.get("chart_context")
+    s7["jupiter_hit"] = pkg.get("jupiter_hit")
+    s7["saturn_hit"] = pkg.get("saturn_hit")
+    s7["double_transit"] = pkg.get("double_transit")
     s7.pop("samples", None)
 
 
@@ -125,11 +170,13 @@ def normalize_engine_trace_transit_months(trace: dict[str, Any] | None) -> dict[
         return trace
     try:
         from event_timing.marriage.marriage_engine_v2 import (
-            finalize_transit_display,
+            _build_step7_transit_package,
             _monthify_verbose_transit_detail,
         )
     except Exception:
         return trace
+
+    transit_ctx = _transit_ctx_from_trace(trace)
 
     step_audit = trace.get("step_audit")
     if isinstance(step_audit, dict):
@@ -141,39 +188,30 @@ def normalize_engine_trace_transit_months(trace: dict[str, Any] | None) -> dict[
     if isinstance(timing_audit, dict):
         transit = timing_audit.get("transit")
         if isinstance(transit, dict):
-            samples = transit.get("samples") if isinstance(transit.get("samples"), list) else []
-            window = None
-            wins = trace.get("top_3_windows") or []
-            if wins and isinstance(wins[0], dict):
-                window = wins[0]
-            detail, months, by_month = finalize_transit_display(
-                samples=samples,
-                detail=str(transit.get("detail") or ""),
-                months=transit.get("months") if isinstance(transit.get("months"), list) else None,
-                window=window,
-            )
-            transit["detail"] = detail
-            transit["months"] = months
-            transit["by_month"] = by_month
+            window = wins[0] if (wins := trace.get("top_3_windows") or []) and isinstance(wins[0], dict) else {}
+            pkg = _build_step7_transit_package(window, transit_ctx)
+            transit["detail"] = pkg.get("detail")
+            transit["months"] = pkg.get("months")
+            transit["by_month"] = pkg.get("by_month")
+            transit["transit_type"] = pkg.get("transit_type")
+            transit["transit_type_label"] = pkg.get("transit_type_label")
+            transit["chart_context"] = pkg.get("chart_context")
             transit.pop("samples", None)
 
         for check in timing_audit.get("checks") or []:
             if not isinstance(check, dict):
                 continue
             if check.get("name") == "transit_support" and isinstance(check.get("detail"), str):
-                check["detail"] = _monthify_verbose_transit_detail(check["detail"])
+                check["detail"] = _monthify_verbose_transit_detail(
+                    check["detail"], transit_ctx,
+                )
 
     for win in trace.get("top_3_windows") or []:
         if isinstance(win, dict):
-            d, m, b = finalize_transit_display(
-                samples=win.get("transit_samples") or [],
-                detail=str(win.get("dt_detail") or ""),
-                months=win.get("transit_months") if isinstance(win.get("transit_months"), list) else None,
-                window=win,
-            )
-            win["dt_detail"] = d
-            win["transit_months"] = m
-            win["transit_by_month"] = b
+            pkg = _build_step7_transit_package(win, transit_ctx)
+            win["dt_detail"] = pkg.get("detail")
+            win["transit_months"] = pkg.get("months")
+            win["transit_by_month"] = pkg.get("by_month")
             win.pop("transit_samples", None)
 
     return trace
@@ -204,6 +242,7 @@ def build_marriage_engine_trace(engine_result: dict[str, Any] | None) -> dict[st
         "band": engine_result.get("band"),
         "user_age": engine_result.get("user_age"),
         "too_young_for_marriage": engine_result.get("too_young_for_marriage"),
+        "transit_chart_context": engine_result.get("transit_chart_context"),
         "step_audit": step_audit,
         "step_order": list(_MARRIAGE_TRACE_STEP_ORDER),
         "timing_audit": timing_audit,
@@ -222,7 +261,7 @@ def build_engine_facts_snapshot(
     checks = checks or {}
     slice_meta = slice_meta or {}
     nested = slice_meta.get("checks") if isinstance(slice_meta.get("checks"), dict) else {}
-    return {
+    out = {
         "archetype": slice_meta.get("archetype") or checks.get("archetype"),
         "verdict": slice_meta.get("verdict"),
         "summary": list(slice_meta.get("summary") or []),
@@ -233,6 +272,11 @@ def build_engine_facts_snapshot(
         "verdict_public": nested.get("verdict_public"),
         "confidence_ratio": nested.get("confidence_ratio"),
     }
+    if slice_meta.get("dasha_trace"):
+        out["dasha_trace"] = slice_meta.get("dasha_trace")
+    if slice_meta.get("timing_evidence"):
+        out["timing_evidence"] = list(slice_meta.get("timing_evidence") or [])
+    return out
 
 
 def build_admin_llm_context(

@@ -109,41 +109,52 @@ function asRecord(v: unknown): Record<string, unknown> | null {
 }
 
 function formatStep7TransitDetail(step: Record<string, unknown>): string {
+  const typeLabel =
+    typeof step.transit_type_label === "string" ? step.transit_type_label : "";
   const byMonth = Array.isArray(step.by_month) ? step.by_month : [];
+  let body = "";
   if (byMonth.length > 0) {
-    return byMonth
+    body = byMonth
       .map((row) => {
         const r = asRecord(row);
         if (!r) return "";
         const month = String(r.month || "");
-        const guru = String(r.jupiter_rashi || r.jupiter_sign || "");
-        const shani = String(r.saturn_rashi || r.saturn_sign || "");
-        const bits: string[] = [];
-        if (guru) bits.push(`Guru ${guru}`);
-        if (shani) bits.push(`Shani ${shani}`);
-        return bits.length ? `${month}: ${bits.join(", ")}` : month;
+        const lineBits: string[] = [];
+        for (const [planet, label] of [
+          ["jupiter", "Guru"],
+          ["saturn", "Shani"],
+        ] as const) {
+          const rashi = String(r[`${planet}_rashi`] || "");
+          if (!rashi) continue;
+          const active = Boolean(r[`${planet}_active`]);
+          const act = String(r[`${planet}_activation`] || "7H/7L par nahi");
+          lineBits.push(`${label} ${rashi} (${active ? act : "7H/7L par nahi"})`);
+        }
+        return lineBits.length ? `${month}: ${lineBits.join(" · ")}` : month;
       })
       .filter(Boolean)
       .join(" · ");
+  } else {
+    body = typeof step.detail === "string" ? step.detail : "";
   }
-
-  let detail = typeof step.detail === "string" ? step.detail : "";
-  if (detail && /\d{4}-\d{2}-\d{2}/.test(detail)) {
-    const byMonthMap = new Map<string, { guru?: string; shani?: string }>();
-    for (const iso of detail.match(/\d{4}-\d{2}-\d{2}/g) || []) {
-      const d = new Date(`${iso}T12:00:00Z`);
-      const month = d.toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
-      if (!byMonthMap.has(month)) byMonthMap.set(month, {});
-    }
-    if (byMonthMap.size > 0) {
-      detail = [...byMonthMap.keys()].join(" · ");
-    }
+  if (typeLabel) {
+    return body ? `${body} | ${typeLabel}` : typeLabel;
   }
-  return detail;
+  return body;
 }
 
-function stepOneLiner(stepKey: string, step: Record<string, unknown>): string {
+function stepOneLiner(
+  stepKey: string,
+  step: Record<string, unknown>,
+  engine?: string,
+): string {
   const name = String(step.name || stepKey);
+  if (engine === "career_timing_v1" && typeof step.detail === "string" && step.detail) {
+    return `${name} · ${step.detail}`;
+  }
+  if (engine?.endsWith("_timing_v1") && typeof step.detail === "string" && step.detail) {
+    return `${name} · ${step.detail}`;
+  }
   if (stepKey === "step0") {
     const r = asRecord(step.result);
     const verdict = r?.verdict ? String(r.verdict) : "";
@@ -193,8 +204,15 @@ function stepOneLiner(stepKey: string, step: Record<string, unknown>): string {
     return `${name} · ${wins.length} window(s)${w ? ` · lead ${w}` : ""}`;
   }
   if (stepKey === "step7") {
+    const cc = asRecord(step.chart_context);
+    const chartHint = cc
+      ? `Lagna ${cc.lagna || "?"} · 7H ${cc.seventh_house || "?"} · 7L ${cc.seventh_lord || "?"} (${cc.seventh_lord_sign || "?"})`
+      : "";
     const detail = formatStep7TransitDetail(step);
-    return `${name} · transit ${step.transit_confirmed ? "confirmed" : "not confirmed"}${detail ? ` · ${detail}` : ""}`;
+    const parts = [name, `transit ${step.transit_confirmed ? "confirmed" : "not confirmed"}`];
+    if (chartHint) parts.push(chartHint);
+    if (detail) parts.push(detail);
+    return parts.join(" · ");
   }
   if (stepKey === "step8") {
     return `${name} · ${fmtCheckValue(step.verdict)} · band ${fmtCheckValue(step.band)}`;
@@ -220,7 +238,11 @@ export function EngineTracePanel({
   row: Pick<AskQuestionItem, "answer_text" | "answer_source" | "question_text">;
 }) {
   const blocks = (ctx.blocks || {}) as Record<string, unknown>;
-  const trace = (blocks.engine_trace || blocks.marriage_engine_trace) as EngineTrace | undefined;
+  const trace = (
+    blocks.engine_trace ||
+    blocks.marriage_engine_trace ||
+    blocks.career_engine_trace
+  ) as EngineTrace | undefined;
   const hasTrace = Boolean(trace && (trace.step_audit || trace.timing_audit));
   const stepOrder =
     trace?.step_order?.length
@@ -228,6 +250,14 @@ export function EngineTracePanel({
       : ["step0", "step0a", "step1", "step2", "step3", "step4", "step5", "step6", "step7", "step8"];
   const stepAudit = trace?.step_audit || {};
   const timingAudit = trace?.timing_audit;
+  const engineId = String(trace?.engine || "");
+
+  const pipelineChecksTitle =
+    engineId === "career_timing_v1" || engineId.endsWith("_timing_v1")
+      ? `Timing pipeline — ${engineId.replace("_timing_v1", "")} (dasha-first)`
+      : engineId === "marriage_timing_m17"
+        ? "Marriage engine checks (M17)"
+        : "Timing engine checks";
 
   const pipeline = [
     {
@@ -320,7 +350,7 @@ export function EngineTracePanel({
 
         {hasTrace ? (
           <>
-            <p className="detail-summary">Marriage engine checks (M17)</p>
+            <p className="detail-summary">{pipelineChecksTitle}</p>
             <div className="engine-steps-list">
               {stepOrder.map((key) => {
                 const step = stepAudit[key];
@@ -330,17 +360,22 @@ export function EngineTracePanel({
                   <details key={key} className="engine-step-card">
                     <summary>
                       <span className="engine-step-key">{key}</span>
-                      <span className="engine-step-oneline">{stepOneLiner(key, step)}</span>
+                      <span className="engine-step-oneline">{stepOneLiner(key, step, engineId)}</span>
                       <span className={`engine-step-status status-${status.toLowerCase()}`}>
                         {status}
                       </span>
                     </summary>
                     <JsonDetail
                       data={
-                        key === "step7" && (step.by_month || step.months)
+                        key === "step7"
                           ? {
                               transit_confirmed: step.transit_confirmed,
                               double_transit: step.double_transit,
+                              transit_type: step.transit_type,
+                              transit_type_label: step.transit_type_label,
+                              chart_context: step.chart_context,
+                              jupiter_hit: step.jupiter_hit,
+                              saturn_hit: step.saturn_hit,
                               months: step.months,
                               by_month: step.by_month,
                               detail: formatStep7TransitDetail(step),
@@ -494,6 +529,10 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
     : sliceMeta.archetype
       ? String(sliceMeta.archetype)
       : "";
+  const dashaTrace = (
+    (engineFacts as Record<string, unknown>).dasha_trace ||
+    sliceMeta.dasha_trace
+  ) as Record<string, unknown> | undefined;
   const skipLlm = ctx.llm_called === false || sliceMeta.skip_llm === true || checks.skip_llm === true;
   const narratorMode = checks.narrator_mode ? String(checks.narrator_mode) : "";
   const chartChars = ctx.sizes?.chart_chars ?? ctx.chart_text?.length ?? 0;
@@ -599,6 +638,32 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
                       <strong>Verdict:</strong> {verdict}
                     </p>
                   ) : null}
+                  {dashaTrace && (dashaTrace.current_lords || dashaTrace.next_career_ad) ? (
+                    <p>
+                      <strong>Dasha check:</strong> current{" "}
+                      {fmtCheckValue(dashaTrace.current_lords)}
+                      {dashaTrace.current_start || dashaTrace.current_end ? (
+                        <>
+                          {" "}
+                          ({fmtCheckValue(dashaTrace.current_start)} →{" "}
+                          {fmtCheckValue(dashaTrace.current_end)})
+                        </>
+                      ) : null}
+                      {dashaTrace.next_career_ad ? (
+                        <>
+                          {" "}
+                          · next career AD {fmtCheckValue(dashaTrace.next_career_ad)}
+                          {dashaTrace.next_career_start || dashaTrace.next_career_end ? (
+                            <>
+                              {" "}
+                              ({fmtCheckValue(dashaTrace.next_career_start)} →{" "}
+                              {fmtCheckValue(dashaTrace.next_career_end)})
+                            </>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </p>
+                  ) : null}
                   {engineFacts.love_score != null || engineFacts.arrange_score != null ? (
                     <p>
                       <strong>Scores:</strong> love={fmtCheckValue(engineFacts.love_score)}, arrange=
@@ -626,7 +691,7 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
                   {evidence && evidence.length > 0 ? (
                     <>
                       <p>
-                        <strong>Evidence ({evidence.length}):</strong>
+                        <strong>Timing evidence ({evidence.length}):</strong>
                       </p>
                       <ul className="llm-check-list">
                         {evidence.map((e) => (

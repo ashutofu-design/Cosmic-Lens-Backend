@@ -105,15 +105,7 @@ def resolve_timing_domain(
     except Exception:
         pass
 
-    # Career before education/property/litigation (muhurat, interview, police job)
-    try:
-        from ask_career.timing_registry import is_career_timing_question  # type: ignore
-
-        if is_career_timing_question(q, llm_intent):
-            return "career", _career_bucket(q, llm_intent), True
-    except Exception:
-        pass
-
+    # Education/travel/finance before career (career core overlaps exam/videsh/paisa)
     try:
         from ask_education.timing_registry import is_education_timing_question  # type: ignore
 
@@ -127,6 +119,22 @@ def resolve_timing_domain(
 
         if is_travel_timing_question(q, llm_intent):
             return "travel", _travel_bucket(q), True
+    except Exception:
+        pass
+
+    try:
+        from ask_finance.timing_registry import is_finance_timing_question  # type: ignore
+
+        if is_finance_timing_question(q, llm_intent):
+            return "finance", "general_finance", True
+    except Exception:
+        pass
+
+    try:
+        from ask_career.timing_registry import is_career_timing_question  # type: ignore
+
+        if is_career_timing_question(q, llm_intent):
+            return "career", _career_bucket(q, llm_intent), True
     except Exception:
         pass
 
@@ -456,6 +464,19 @@ def run_timing_engine(
         ctx.raw["_prompt_block"] = format_spec_directive_block(
             domain, get_domain_spec("career"), demand.bucket
         )
+
+    if (
+        demand.is_timing
+        and domain != "marriage"
+        and isinstance(ctx.raw, dict)
+        and ctx.raw.get("verdict")
+    ):
+        try:
+            from event_timing._shared.step_audit import attach_timing_pipeline_audit
+
+            ctx.raw = attach_timing_pipeline_audit(ctx.raw, domain)
+        except Exception:
+            pass
 
     return ctx
 

@@ -93,15 +93,40 @@ _MARRIAGE_TRACE_STEP_ORDER = (
 )
 
 
+def _finalize_step7_transit(s7: dict[str, Any], trace: dict[str, Any]) -> None:
+    try:
+        from event_timing.marriage.marriage_engine_v2 import finalize_transit_display
+    except Exception:
+        return
+
+    samples = s7.get("samples") if isinstance(s7.get("samples"), list) else []
+    window = None
+    wins = trace.get("top_3_windows") or []
+    if wins and isinstance(wins[0], dict):
+        window = wins[0]
+        if not samples:
+            samples = window.get("transit_samples") or []
+
+    detail, months, by_month = finalize_transit_display(
+        samples=samples,
+        detail=str(s7.get("detail") or ""),
+        months=s7.get("months") if isinstance(s7.get("months"), list) else None,
+        window=window,
+    )
+    s7["detail"] = detail
+    s7["months"] = months
+    s7["by_month"] = by_month
+    s7.pop("samples", None)
+
+
 def normalize_engine_trace_transit_months(trace: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Rewrite step7 / timing_audit transit to month-only (fixes legacy DB rows)."""
+    """Rewrite step7 / timing_audit transit — month + Guru/Shani rashi."""
     if not isinstance(trace, dict):
         return trace
     try:
         from event_timing.marriage.marriage_engine_v2 import (
-            _compact_transit_by_month,
+            finalize_transit_display,
             _monthify_verbose_transit_detail,
-            _transit_month_summary_from_window,
         )
     except Exception:
         return trace
@@ -110,36 +135,26 @@ def normalize_engine_trace_transit_months(trace: dict[str, Any] | None) -> dict[
     if isinstance(step_audit, dict):
         s7 = step_audit.get("step7")
         if isinstance(s7, dict):
-            samples = s7.get("samples") if isinstance(s7.get("samples"), list) else []
-            detail, months, by_month = _compact_transit_by_month(samples)
-            if not months and isinstance(s7.get("detail"), str):
-                detail = _monthify_verbose_transit_detail(s7["detail"])
-            elif months:
-                pass
-            elif isinstance(s7.get("detail"), str):
-                detail = _monthify_verbose_transit_detail(s7["detail"])
-            else:
-                detail = detail or "no transit hit"
-            s7["detail"] = detail
-            if months:
-                s7["months"] = months
-                s7["by_month"] = by_month
-            s7.pop("samples", None)
+            _finalize_step7_transit(s7, trace)
 
     timing_audit = trace.get("timing_audit")
     if isinstance(timing_audit, dict):
         transit = timing_audit.get("transit")
         if isinstance(transit, dict):
             samples = transit.get("samples") if isinstance(transit.get("samples"), list) else []
-            detail, months, by_month = _compact_transit_by_month(samples)
-            if not months and isinstance(transit.get("detail"), str):
-                detail = _monthify_verbose_transit_detail(transit["detail"])
-            elif not months:
-                detail = detail or transit.get("detail") or "no transit hit"
+            window = None
+            wins = trace.get("top_3_windows") or []
+            if wins and isinstance(wins[0], dict):
+                window = wins[0]
+            detail, months, by_month = finalize_transit_display(
+                samples=samples,
+                detail=str(transit.get("detail") or ""),
+                months=transit.get("months") if isinstance(transit.get("months"), list) else None,
+                window=window,
+            )
             transit["detail"] = detail
-            if months:
-                transit["months"] = months
-                transit["by_month"] = by_month
+            transit["months"] = months
+            transit["by_month"] = by_month
             transit.pop("samples", None)
 
         for check in timing_audit.get("checks") or []:
@@ -150,11 +165,15 @@ def normalize_engine_trace_transit_months(trace: dict[str, Any] | None) -> dict[
 
     for win in trace.get("top_3_windows") or []:
         if isinstance(win, dict):
-            d, m, b = _transit_month_summary_from_window(win)
+            d, m, b = finalize_transit_display(
+                samples=win.get("transit_samples") or [],
+                detail=str(win.get("dt_detail") or ""),
+                months=win.get("transit_months") if isinstance(win.get("transit_months"), list) else None,
+                window=win,
+            )
             win["dt_detail"] = d
-            if m:
-                win["transit_months"] = m
-                win["transit_by_month"] = b
+            win["transit_months"] = m
+            win["transit_by_month"] = b
             win.pop("transit_samples", None)
 
     return trace

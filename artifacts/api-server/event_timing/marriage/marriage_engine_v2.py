@@ -1330,54 +1330,119 @@ def _compact_transit_by_month(
     return detail, month_labels, month_rows
 
 
-def _monthify_verbose_transit_detail(verbose: str) -> str:
-    """Legacy ISO transit lines → month + Guru/Shani rashi."""
-    import re as _re_m
+def _parse_month_labels_from_text(text: str) -> List[str]:
+    import re as _re_ml
 
-    if not verbose or "no transit" in verbose.lower():
-        return verbose or "no transit hit"
+    found = _re_ml.findall(
+        r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}",
+        text or "",
+    )
+    out: List[str] = []
+    for label in found:
+        if label not in out:
+            out.append(label)
+    return out
 
-    by_month: Dict[str, Dict[str, str]] = {}
-    for iso in _re_m.findall(r"\d{4}-\d{2}-\d{2}", verbose):
-        month = _iso_to_month_label(iso)
-        if not month or month in by_month:
-            continue
-        guru, shani = _transit_rashis_at_iso(iso)
-        row: Dict[str, str] = {"month": month}
+
+def _mid_month_iso(month_label: str) -> Optional[str]:
+    try:
+        abbr, y = month_label.split()
+        mi = _MONTH_ABBR.index(abbr) + 1
+        return f"{int(y)}-{mi:02d}-15"
+    except (ValueError, IndexError):
+        return None
+
+
+def _has_rashi_rows(by_month: List[Dict[str, Any]]) -> bool:
+    return any(
+        r.get("jupiter_rashi") or r.get("saturn_rashi")
+        for r in (by_month or [])
+        if isinstance(r, dict)
+    )
+
+
+def _enrich_transit_month_labels(
+    month_labels: List[str],
+) -> Tuple[str, List[str], List[Dict[str, Any]]]:
+    """Guru/Shani rashi for each month label (mid-month ephemeris)."""
+    unique = sorted(set(month_labels), key=lambda m: _month_sort_key(m))
+    by_month: List[Dict[str, Any]] = []
+    parts: List[str] = []
+    for month in unique:
+        iso = _mid_month_iso(month)
+        guru, shani = _transit_rashis_at_iso(iso) if iso else (None, None)
+        row: Dict[str, Any] = {"month": month}
         if guru:
             row["jupiter_rashi"] = guru
         if shani:
             row["saturn_rashi"] = shani
-        by_month[month] = row
-
-    if not by_month:
-        return verbose
-
-    out: List[str] = []
-    for month in sorted(by_month.keys(), key=lambda lbl: _month_sort_key(lbl)):
-        row = by_month[month]
+        by_month.append(row)
         bits: List[str] = []
-        if row.get("jupiter_rashi"):
-            bits.append(f"Guru {row['jupiter_rashi']}")
-        if row.get("saturn_rashi"):
-            bits.append(f"Shani {row['saturn_rashi']}")
-        if bits:
-            out.append(f"{month}: " + ", ".join(bits))
-        else:
-            out.append(month)
-    return " · ".join(out) if out else verbose
+        if guru:
+            bits.append(f"Guru {guru}")
+        if shani:
+            bits.append(f"Shani {shani}")
+        parts.append(f"{month}: " + ", ".join(bits) if bits else month)
+    detail = " · ".join(parts) if parts else "no transit hit"
+    return detail, [r["month"] for r in by_month], by_month
+
+
+def finalize_transit_display(
+    *,
+    samples: Optional[List[Dict[str, Any]]] = None,
+    detail: str = "",
+    months: Optional[List[str]] = None,
+    window: Optional[Dict[str, Any]] = None,
+) -> Tuple[str, List[str], List[Dict[str, Any]]]:
+    """Admin step7 line — always prefer Guru/Shani rashi per month."""
+    samples = samples or []
+    d, m, b = _compact_transit_by_month(samples)
+    if _has_rashi_rows(b):
+        return d, m, b
+    if isinstance(window, dict) and window:
+        w_samples = window.get("transit_samples") or []
+        if w_samples and w_samples is not samples:
+            d, m, b = _compact_transit_by_month(w_samples)
+            if _has_rashi_rows(b):
+                return d, m, b
+        check_at = window.get("transit_check_at") or window.get("start_iso")
+        if check_at:
+            labels = [_iso_to_month_label(str(check_at))]
+            if labels[0]:
+                return _enrich_transit_month_labels(labels)
+    labels = list(months or []) or _parse_month_labels_from_text(detail) or _parse_month_labels_from_text(d)
+    if labels:
+        return _enrich_transit_month_labels(labels)
+    return d, m, b
+
+
+def _monthify_verbose_transit_detail(verbose: str) -> str:
+    """Legacy / month-only text → Guru/Shani rashi per month."""
+    if not verbose or "no transit" in verbose.lower():
+        return verbose or "no transit hit"
+
+    import re as _re_m
+
+    labels: List[str] = []
+    for iso in _re_m.findall(r"\d{4}-\d{2}-\d{2}", verbose):
+        month = _iso_to_month_label(iso)
+        if month and month not in labels:
+            labels.append(month)
+    if not labels:
+        labels = _parse_month_labels_from_text(verbose)
+    if labels:
+        return _enrich_transit_month_labels(labels)[0]
+    return verbose
 
 
 def _transit_month_summary_from_window(w: Dict[str, Any]) -> Tuple[str, List[str], List[Dict[str, Any]]]:
-    """Best month-only transit line for a scored window."""
-    samples = w.get("transit_samples") or []
-    detail, months, by_month = _compact_transit_by_month(samples)
-    if months:
-        return detail, months, by_month
-    raw = str(w.get("dt_detail") or "").strip()
-    if raw:
-        return _monthify_verbose_transit_detail(raw), [], []
-    return detail, months, by_month
+    """Best transit line for a scored window (month + Guru/Shani rashi)."""
+    return finalize_transit_display(
+        samples=w.get("transit_samples") or [],
+        detail=str(w.get("dt_detail") or ""),
+        months=w.get("transit_months") if isinstance(w.get("transit_months"), list) else None,
+        window=w,
+    )
 
 
 def _transit_sample_dates(window: Dict[str, Any]) -> List[datetime]:

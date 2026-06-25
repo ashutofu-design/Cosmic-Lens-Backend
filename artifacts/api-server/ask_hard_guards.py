@@ -43,6 +43,39 @@ _NO_ENGINE_REFUSAL = (
     "court-case se juda specific sawaal puchiye; tab engine facts ke saath jawab milega."
 )
 
+# Spec-only TIMING SPEC blocks are NOT engine output — must not unlock LLM passthrough.
+_TIMING_SPEC_ONLY_RX = re.compile(
+    r"(?ix)^\s*===\s*TIMING\s+SPEC\s*\(",
+)
+_TIMING_ENGINE_LOCKED_RX = re.compile(
+    r"(?ix)TIMING\s+ENGINE\s*\(LOCKED\)",
+)
+
+
+def is_real_timing_engine_block(block: str) -> bool:
+    """True when block is deterministic engine output, not a spec checklist."""
+    text = (block or "").strip()
+    if not text:
+        return False
+    if _TIMING_SPEC_ONLY_RX.search(text):
+        return False
+    if _TIMING_ENGINE_LOCKED_RX.search(text):
+        return True
+    if re.search(r"(?im)^Verdict:\s*.+", text) and "TIMING ENGINE" in text.upper():
+        return True
+    if re.search(r"(?im)^Current window:\s*.+\u2192", text):
+        return True
+    return False
+
+
+_GENERAL_LIFE_TIMING_RX = re.compile(
+    r"(?ix)\b("
+    r"life\s+me\s+struggle|struggle\s+kab|mushkil\s+kab|pareshani\s+kab|"
+    r"life\s+me\s+peace|sab\s+theek\s+kab|set\s+ho\s+jaunga|"
+    r"problem\s+kab\s+khatam|dukh\s+kab|tension\s+kab\s+kam"
+    r")\b",
+)
+
 
 def is_death_lifespan_question(question: str) -> bool:
     """True when the user asks for death timing, lifespan, or mrityu prediction."""
@@ -116,7 +149,7 @@ def passthrough_has_domain_engine_facts(
         return True
     if (career_block or "").strip():
         return True
-    if (domain_timing_block or "").strip():
+    if is_real_timing_engine_block(domain_timing_block):
         return True
 
     sl = str(slice_meta.get("slice") or "")
@@ -137,6 +170,25 @@ def marriage_timing_engine_required(question: str) -> bool:
     return bool(q and _MARRIAGE_TIMING_RX.search(q))
 
 
+def general_timing_engine_required(
+    question: str,
+    llm_intent: dict[str, Any] | None = None,
+) -> bool:
+    """Timing Q with no mapped domain engine (life struggle, vague kab)."""
+    q = (question or "").strip()
+    if not q:
+        return False
+    if _GENERAL_LIFE_TIMING_RX.search(q):
+        return True
+    try:
+        from event_timing.timing_router import resolve_timing_domain
+
+        dom, _bucket, is_timing = resolve_timing_domain(q, llm_intent)
+        return bool(is_timing and dom == "general")
+    except Exception:
+        return False
+
+
 def passthrough_missing_required_engine(
     question: str,
     llm_intent: dict[str, Any] | None = None,
@@ -154,6 +206,10 @@ def passthrough_missing_required_engine(
         return "career_timing"
     if marriage_timing_engine_required(q) and not (marriage_block or "").strip():
         return "marriage_timing"
+    if general_timing_engine_required(q, llm_intent) and not is_real_timing_engine_block(
+        domain_timing_block,
+    ):
+        return "general_timing"
     try:
         from event_timing.timing_router import resolve_timing_domain
 

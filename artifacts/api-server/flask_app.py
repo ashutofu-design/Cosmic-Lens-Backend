@@ -8168,6 +8168,25 @@ def ask_route():
         # Layer-3 path must NEVER block the ask flow on a bug.
         print(f"[ask] layer-3 clarifier check error (non-fatal): {_clarif_exc}")
 
+    # ── Vague life-struggle timing → domain clarifier (deterministic) ─────
+    try:
+        from ask_timing_clarify import (
+            build_timing_domain_clarifier_result,
+            needs_timing_domain_clarifier,
+        )
+
+        if needs_timing_domain_clarifier(question or "", None):
+            _tc = build_timing_domain_clarifier_result(question or "", qtype="TIMING")
+            return jsonify(
+                {
+                    **_tc,
+                    "quota": {"used": 0, "limit": 0},
+                    "plan": "free",
+                }
+            )
+    except Exception as _tc_exc:
+        print(f"[ask] timing domain clarifier error (non-fatal): {_tc_exc}", flush=True)
+
     # ── Daily-quota gate (auth mandatory when user_id supplied) ──────────────
     user = None
     if user_id:

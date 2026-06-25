@@ -460,10 +460,9 @@ def run_timing_engine(
             ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
 
     else:
-        ctx.engine_status = "partial"
-        ctx.raw["_prompt_block"] = format_spec_directive_block(
-            domain, get_domain_spec("career"), demand.bucket
-        )
+        ctx.engine_status = "skipped_no_engine"
+        ctx.verdict = ""
+        ctx.raw["_prompt_block"] = ""
 
     if (
         demand.is_timing

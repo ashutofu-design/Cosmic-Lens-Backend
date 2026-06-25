@@ -11,6 +11,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ensureCloudflared, localCloudflaredPath } from "./ensure-cloudflared.mjs";
+import { applyWindowsMetroConfigEnv } from "./lib/metro-env.mjs";
 
 const PORT = process.env.EXPO_METRO_PORT || "8081";
 const isWin = process.platform === "win32";
@@ -250,6 +251,10 @@ async function main() {
     packagerHost = detectLanIp();
   }
 
+  if (!tunnelActive && !useUsb && packagerHost) {
+    printLanFirewallHint(PORT);
+  }
+
   if (!tunnelActive && !useUsb && !packagerHost) {
     console.error("[dev:phone] No LAN IPv4 found. Try:");
     console.error("  pnpm run dev:phone:tunnel   (needs cloudflared — winget install Cloudflare.cloudflared)");
@@ -260,23 +265,30 @@ async function main() {
   const monorepoRoot = findMonorepoRoot(cwd);
   const cliPath = expoCliCandidates(cwd, monorepoRoot).find((p) => fs.existsSync(p)) ?? null;
 
-  const env = {
-    ...process.env,
-    EXPO_PUBLIC_ENABLE_DEMO_LOGIN: "1",
-    ...(packagerHost ? { REACT_NATIVE_PACKAGER_HOSTNAME: packagerHost } : {}),
-    ...(tunnelPublicUrl
-      ? {
-          EXPO_PACKAGER_PROXY_URL: tunnelPublicUrl,
-          EXPO_MANIFEST_PROXY_URL: tunnelPublicUrl,
-        }
-      : {}),
-    ...(isWin
-      ? {
-          TEMP: process.env.TEMP || "D:\\Temp",
-          TMP: process.env.TMP || "D:\\Temp",
-        }
-      : {}),
-  };
+  const env = applyWindowsMetroConfigEnv(
+    cwd,
+    {
+      ...process.env,
+      EXPO_PUBLIC_ENABLE_DEMO_LOGIN: "1",
+      ...(packagerHost ? { REACT_NATIVE_PACKAGER_HOSTNAME: packagerHost } : {}),
+      ...(tunnelPublicUrl
+        ? {
+            EXPO_PACKAGER_PROXY_URL: tunnelPublicUrl,
+            EXPO_MANIFEST_PROXY_URL: tunnelPublicUrl,
+          }
+        : {}),
+      ...(isWin
+        ? {
+            TEMP: process.env.TEMP || "D:\\Temp",
+            TMP: process.env.TMP || "D:\\Temp",
+          }
+        : {}),
+    },
+  );
+
+  if (env.EXPO_OVERRIDE_METRO_CONFIG) {
+    console.log("[dev:phone] Metro config override:", env.EXPO_OVERRIDE_METRO_CONFIG);
+  }
 
   const manualUrl = useUsb
     ? `http://127.0.0.1:${PORT}`
@@ -301,6 +313,12 @@ async function main() {
   console.log("");
   console.log("WAIT before scanning: let Metro finish until you see 'Bundled' in this window.");
   console.log("First load can take 1–3 minutes — scanning too early causes 'timeout' errors.");
+  console.log("");
+  console.log("QR scan TIMEOUT? (phone cannot reach this PC)");
+  console.log("  A) Best fix — USB (no Wi‑Fi needed):  pnpm run dev:phone:usb");
+  console.log("  B) Allow port", PORT, "in Windows Firewall (see checklist above)");
+  console.log("  C) Phone + PC same Wi‑Fi; turn OFF mobile data + VPN on both");
+  console.log("  D) Router 'AP isolation' blocks LAN — use USB or:  pnpm run dev:phone:tunnel");
   console.log("");
   if (useClear) {
     console.log("Cache: clearing Metro cache (--clear) — first bundle will be slower.");

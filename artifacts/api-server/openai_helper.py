@@ -4894,6 +4894,37 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     except Exception as _death_guard_exc:
         print(f"[raw_passthrough] death guard skipped: {_death_guard_exc}", flush=True)
 
+    # ── Vague life-struggle timing → ask user which domain (no LLM guess) ─
+    try:
+        from ask_timing_clarify import (
+            build_timing_domain_clarifier_result,
+            needs_timing_domain_clarifier,
+        )
+
+        if needs_timing_domain_clarifier(question or "", None):
+            _clar = build_timing_domain_clarifier_result(
+                question or "",
+                qtype="TIMING",
+            )
+            print(
+                f"[raw_passthrough] timing_domain_clarifier q={question[:80]!r}",
+                flush=True,
+            )
+            return _attach_admin_llm_context(
+                _clar,
+                question=question or "",
+                question_type="TIMING",
+                is_timing=True,
+                checks={"timing_domain_clarifier": True},
+                chart_text="",
+                slice_meta={},
+                llm_called=False,
+                skip_reason="timing_domain_clarifier",
+                intent_source="hard_guard",
+            )
+    except Exception as _tc_exc:
+        print(f"[raw_passthrough] timing clarifier skipped: {_tc_exc}", flush=True)
+
     # ── Transparency follow-up ("kaise bataya? kya check kiya?") ──────────
     # Re-run the PREVIOUS question with explain=ON so the user gets the full
     # evidence behind the earlier reading, instead of answering the meta-Q.
@@ -6311,7 +6342,20 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     birth,
                     _llm_intent,
                 )
-                domain_timing_block = format_timing_block(_timing_ctx) or ""
+                _candidate_block = format_timing_block(_timing_ctx) or ""
+                try:
+                    from ask_hard_guards import is_real_timing_engine_block
+
+                    _real_timing = (
+                        _timing_ctx.engine_status == "ready"
+                        and is_real_timing_engine_block(_candidate_block)
+                    )
+                except Exception:
+                    _real_timing = (
+                        _timing_ctx.engine_status == "ready"
+                        and bool(_candidate_block.strip())
+                    )
+                domain_timing_block = _candidate_block if _real_timing else ""
                 if domain_timing_block:
                     chart_text = chart_text + "\n" + domain_timing_block
                     try:

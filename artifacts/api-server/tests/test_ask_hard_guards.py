@@ -162,7 +162,8 @@ class TestEngineOnlyPolicy(unittest.TestCase):
             domain_timing_block=spec_only,
         )
         self.assertIsNotNone(out)
-        self.assertEqual(out["source"], "engine_required")
+        self.assertEqual(out["source"], "timing_domain_clarifier")
+        self.assertEqual(out["topic"], "needs_clarification")
 
     def test_vague_struggle_triggers_clarifier_not_health_route(self):
         from ask_timing_clarify import needs_timing_domain_clarifier

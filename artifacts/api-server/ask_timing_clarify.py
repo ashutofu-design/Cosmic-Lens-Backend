@@ -18,7 +18,8 @@ _VAGUE_LIFE_RX = re.compile(
     r"(?ix)\b("
     r"struggle|mushkil|pareshani|pareshaan|dukh|tension|problem|samasya|"
     r"life\s+me|zindagi\s+me|sab\s+theek|set\s+ho\s+jaunga|peace\s+nahi|"
-    r"theek\s+hoga|badal\s+jaayega|khatam\s+hoga|door\s+hogi|kam\s+hogi"
+    r"theek\s+hoga|badal\s+jaayega|jaayega|jaayegi|khatam\s+hoga|"
+    r"door\s+hogi|kam\s+hogi|mushkilat|pareshani"
     r")\b",
 )
 
@@ -87,15 +88,25 @@ def needs_timing_domain_clarifier(
     if _DOMAIN_ANCHOR_RX.search(q):
         return False
 
-    try:
-        from event_timing.timing_router import resolve_timing_domain
+    # Timing + vague life/struggle wording but no career/marriage/health anchor
+    # → must ask user which area (never guess engine from chart-only LLM).
+    return True
 
-        dom, _bucket, routed_timing = resolve_timing_domain(q, llm_intent)
-        if not routed_timing:
-            return False
-        return dom == "general"
-    except Exception:
-        return True
+
+def maybe_timing_domain_clarifier_result(
+    question: str,
+    *,
+    qtype: str = "TIMING",
+    llm_intent: Optional[dict[str, Any]] = None,
+    is_timing: bool = False,
+) -> Optional[dict[str, Any]]:
+    """Return clarifier payload when needed; else None."""
+    intent = dict(llm_intent) if isinstance(llm_intent, dict) else {}
+    if is_timing:
+        intent["is_timing"] = True
+    if not needs_timing_domain_clarifier(question, intent or None):
+        return None
+    return build_timing_domain_clarifier_result(question, qtype=qtype)
 
 
 def build_timing_domain_clarifier_result(

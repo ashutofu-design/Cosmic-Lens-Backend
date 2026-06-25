@@ -41,11 +41,19 @@ from .career_timing import (
     classify_career_question,
     format_verdict_for_prompt,
 )
+from .govt_job_engine_v1 import (
+    assess_govt_job,
+    assess_govt_job_promise,
+    format_govt_job_block_for_prompt,
+)
 
 __all__ = [
     "assess_career",
+    "assess_govt_job",
+    "assess_govt_job_promise",
     "build_career_timing_engine_trace",
     "build_career_timing_step_audit",
+    "format_govt_job_block_for_prompt",
     "format_verdict_for_prompt",
     "classify_career_question",
 ]

@@ -5162,6 +5162,39 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     except Exception:
         pass
     qtype = "TIMING" if is_timing else "STATIC"
+
+    # ── Vague life-struggle timing → clarifier (after intent/timing known) ─
+    try:
+        from ask_timing_clarify import maybe_timing_domain_clarifier_result
+
+        _clar_tc = maybe_timing_domain_clarifier_result(
+            question or "",
+            qtype=qtype,
+            llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+            is_timing=is_timing,
+        )
+        if _clar_tc is not None:
+            print(
+                f"[raw_passthrough] timing_domain_clarifier (post-intent) "
+                f"q={question[:80]!r}",
+                flush=True,
+            )
+            return _attach_admin_llm_context(
+                _clar_tc,
+                question=question or "",
+                question_type=qtype,
+                is_timing=bool(is_timing),
+                checks={"timing_domain_clarifier": True},
+                chart_text="",
+                slice_meta={},
+                llm_called=False,
+                skip_reason="timing_domain_clarifier",
+                intent_source=_intent_source,
+                llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+            )
+    except Exception as _tc2_exc:
+        print(f"[raw_passthrough] timing clarifier (post-intent) skipped: {_tc2_exc}", flush=True)
+
     wants_explain = _force_explain or (
         bool(_llm_intent.get("wants_explain"))
         if _llm_intent is not None
@@ -6315,6 +6348,15 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _timing_ctx = None
     if is_timing and isinstance(kundli, dict) and kundli.get("planets"):
         try:
+            from ask_timing_clarify import needs_timing_domain_clarifier
+
+            _skip_general_timing_engine = needs_timing_domain_clarifier(
+                question or "",
+                _llm_intent if isinstance(_llm_intent, dict) else None,
+            )
+        except Exception:
+            _skip_general_timing_engine = False
+        try:
             from event_timing.timing_router import (  # type: ignore
                 format_timing_block,
                 resolve_timing_domain,
@@ -6323,65 +6365,71 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
             _td, _tb, _tt = resolve_timing_domain(question or "", _llm_intent)
             if _tt and _td not in ("career", "marriage"):
-                _intel_ut = {}
-                try:
-                    _analyze_u, _ = _chart_intel()
-                    _intel_ut = _analyze_u(kundli, birth) or {}
-                except Exception:
-                    _intel_ut = {}
-                _kp_ut = None
-                try:
-                    _kp_ut = _kp_calc()(birth) if isinstance(birth, dict) else {}
-                except Exception:
-                    _kp_ut = {}
-                _timing_ctx = run_timing_engine(
-                    question or "",
-                    kundli,
-                    _intel_ut,
-                    _kp_ut or {},
-                    birth,
-                    _llm_intent,
-                )
-                _candidate_block = format_timing_block(_timing_ctx) or ""
-                try:
-                    from ask_hard_guards import is_real_timing_engine_block
-
-                    _real_timing = (
-                        _timing_ctx.engine_status == "ready"
-                        and is_real_timing_engine_block(_candidate_block)
-                    )
-                except Exception:
-                    _real_timing = (
-                        _timing_ctx.engine_status == "ready"
-                        and bool(_candidate_block.strip())
-                    )
-                domain_timing_block = _candidate_block if _real_timing else ""
-                if domain_timing_block:
-                    chart_text = chart_text + "\n" + domain_timing_block
-                    try:
-                        from event_timing._shared.step_audit import (
-                            build_domain_timing_engine_trace,
-                            build_domain_timing_slice_meta,
-                        )
-
-                        _raw_ut = _timing_ctx.raw if isinstance(_timing_ctx.raw, dict) else {}
-                        if _raw_ut.get("step_audit") or _raw_ut.get("verdict"):
-                            _domain_timing_trace = build_domain_timing_engine_trace(
-                                _raw_ut, _td,
-                            )
-                            if not (
-                                isinstance(dcr_love_meta, dict)
-                                and dcr_love_meta.get("slice")
-                            ):
-                                dcr_love_meta = build_domain_timing_slice_meta(_raw_ut, _td)
-                    except Exception:
-                        pass
+                if _td == "general" and _skip_general_timing_engine:
                     print(
-                        f"[raw_passthrough] domain_timing OK domain={_td} "
-                        f"status={_timing_ctx.engine_status} "
-                        f"verdict={_timing_ctx.verdict!r}",
+                        "[raw_passthrough] skip general timing engine — domain clarifier",
                         flush=True,
                     )
+                else:
+                    _intel_ut = {}
+                    try:
+                        _analyze_u, _ = _chart_intel()
+                        _intel_ut = _analyze_u(kundli, birth) or {}
+                    except Exception:
+                        _intel_ut = {}
+                    _kp_ut = None
+                    try:
+                        _kp_ut = _kp_calc()(birth) if isinstance(birth, dict) else {}
+                    except Exception:
+                        _kp_ut = {}
+                    _timing_ctx = run_timing_engine(
+                        question or "",
+                        kundli,
+                        _intel_ut,
+                        _kp_ut or {},
+                        birth,
+                        _llm_intent,
+                    )
+                    _candidate_block = format_timing_block(_timing_ctx) or ""
+                    try:
+                        from ask_hard_guards import is_real_timing_engine_block
+
+                        _real_timing = (
+                            _timing_ctx.engine_status == "ready"
+                            and is_real_timing_engine_block(_candidate_block)
+                        )
+                    except Exception:
+                        _real_timing = (
+                            _timing_ctx.engine_status == "ready"
+                            and bool(_candidate_block.strip())
+                        )
+                    domain_timing_block = _candidate_block if _real_timing else ""
+                    if domain_timing_block:
+                        chart_text = chart_text + "\n" + domain_timing_block
+                        try:
+                            from event_timing._shared.step_audit import (
+                                build_domain_timing_engine_trace,
+                                build_domain_timing_slice_meta,
+                            )
+
+                            _raw_ut = _timing_ctx.raw if isinstance(_timing_ctx.raw, dict) else {}
+                            if _raw_ut.get("step_audit") or _raw_ut.get("verdict"):
+                                _domain_timing_trace = build_domain_timing_engine_trace(
+                                    _raw_ut, _td,
+                                )
+                                if not (
+                                    isinstance(dcr_love_meta, dict)
+                                    and dcr_love_meta.get("slice")
+                                ):
+                                    dcr_love_meta = build_domain_timing_slice_meta(_raw_ut, _td)
+                        except Exception:
+                            pass
+                        print(
+                            f"[raw_passthrough] domain_timing OK domain={_td} "
+                            f"status={_timing_ctx.engine_status} "
+                            f"verdict={_timing_ctx.verdict!r}",
+                            flush=True,
+                        )
         except Exception as _ute:
             print(f"[raw_passthrough] unified timing skipped: {_ute}")
 

@@ -614,7 +614,9 @@ _BUCKET_KP_CUSPS: dict[str, list[tuple[int, str, int, str]]] = {
                             (5,  "creative-relief",  2, "+")],
     "job_change":          [(6,  "new-service",      4, "+"),
                             (10, "career-shift",     4, "+"),
-                            (3,  "courage",          2, "+")],
+                            (5,  "change-speculation", 3, "+"),
+                            (3,  "courage",          2, "+"),
+                            (9,  "bhagya-direction", 2, "+")],
     "career_field_choice": [(10, "primary-field",    5, "+"),
                             (5,  "passion",          3, "+"),
                             (3,  "skills",           2, "+")],
@@ -1512,6 +1514,38 @@ def _layer_fifth_house(intel: dict, kundli: dict) -> dict:
         "why": why,
         "fifth_lord": fifth_lord,
         "fifth_lord_dignity": _planet_dignity(intel, fifth_lord) if fifth_lord else None,
+    }
+
+
+# ── L35 — 3H + 3L (courage / initiative / short-move for job change) ─────────
+def _layer_third_house(intel: dict, kundli: dict) -> dict:
+    """Weight: 5. 3H = parakram, self-effort, initiative to switch roles."""
+    score = 0
+    why: list[str] = []
+    planets = kundli.get("planets") or []
+
+    third_lord = _house_lord(intel, 3)
+    if third_lord:
+        dgn = _planet_dignity(intel, third_lord)
+        pts = _dignity_pts(dgn)
+        score += pts
+        tl_h = _planet_house(planets, third_lord)
+        if tl_h in {1, 3, 6, 10, 11}:
+            score += 2
+            why.append(
+                f"3L {third_lord} in upachaya/kendra {tl_h} — switch initiative strong (+2)"
+            )
+        elif tl_h in {8, 12}:
+            score -= 1
+            why.append(f"3L {third_lord} in dusthana {tl_h} — change effort strained (-1)")
+        if dgn:
+            why.append(f"3L {third_lord} is {dgn} ({pts:+d})")
+
+    return {
+        "score": score,
+        "why": why,
+        "third_lord": third_lord,
+        "third_lord_dignity": _planet_dignity(intel, third_lord) if third_lord else None,
     }
 
 
@@ -2547,25 +2581,365 @@ def _layer_wealth_triad(intel: dict, kundli: dict) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── T1 — Vimshottari MD+AD+PD timing ─────────────────────────────────────────
-def _trigger_vimshottari(kundli: dict, intel: dict, karakas_d: dict) -> dict:
-    """Weight: 12. Find the next MD/AD/PD window in which the lords signify
-    CAREER_PROMISE houses {2, 6, 10, 11}. Returns:
-      - current_window: {start, end, lords:(MD,AD,PD), score} — favourable if
-        current MD/AD lords own/significate CAREER_PROMISE
-      - next_career_window: same, for next AD where 10L or AmK or 11L or 2L
-        becomes the AD lord OR aspects/rules CAREER_PROMISE houses
-    """
+# job_change: CHANGE lords = 3L/5L/9L; OUTCOME lords = 6L/10L/11L; PD cascade.
+_CAREER_DASHA_SCORE_MD_CHANGE = 3
+_CAREER_DASHA_SCORE_AD_CHANGE = 5
+_CAREER_DASHA_SCORE_PD_CHANGE = 6
+_CAREER_DASHA_SCORE_AD_OUTCOME = 3
+_CAREER_DASHA_SCORE_PD_OUTCOME = 2
+_CAREER_MIN_CHANGE_AD_PD = 5
+_CAREER_CHANGE_CONFLUENCE_BOOST = 2
+_CAREER_JOB_CHANGE_SCAN_YEARS = 12
+
+_VIMS_ORDER = [
+    "Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu", "Jupiter", "Saturn", "Mercury",
+]
+_VIMS_YEARS = {
+    "Ketu": 7, "Venus": 20, "Sun": 6, "Moon": 10, "Mars": 7,
+    "Rahu": 18, "Jupiter": 16, "Saturn": 19, "Mercury": 17,
+}
+
+
+def _parse_career_iso(s: Any) -> Optional[datetime]:
+    if not s:
+        return None
+    if isinstance(s, datetime):
+        return s
+    try:
+        text = str(s).strip()[:19].replace("Z", "")
+        if "T" in text:
+            return datetime.fromisoformat(text.split("+")[0])
+        return datetime.strptime(text[:10], "%Y-%m-%d")
+    except Exception:
+        return None
+
+
+def _fmt_career_dasha_date(dt: Optional[datetime]) -> Optional[str]:
+    if not dt:
+        return None
+    return dt.strftime("%Y-%m-%d")
+
+
+def _career_dasha_lord_sets(intel: dict, karakas_d: dict, bucket: str) -> dict:
+    """Target lords for dasha scan. job_change splits CHANGE vs OUTCOME axes."""
+    third_lord = _house_lord(intel, 3)
+    fifth_lord = _house_lord(intel, 5)
+    ninth_lord = _house_lord(intel, 9)
+    sixth_lord = _house_lord(intel, 6)
+    tenth_lord = _house_lord(intel, 10)
+    eleventh_lord = _house_lord(intel, 11)
+    second_lord = _house_lord(intel, 2)
+    amk = (karakas_d or {}).get("AmK")
+
+    outcome = {x for x in (sixth_lord, tenth_lord, eleventh_lord) if x}
+    if bucket == "job_change":
+        change = {x for x in (third_lord, fifth_lord, ninth_lord) if x}
+        career = change | outcome | ({second_lord} if second_lord else set()) | (
+            {amk} if amk else set()
+        )
+        return {
+            "change_lords_set": sorted(change),
+            "outcome_lords_set": sorted(outcome),
+            "career_lords_set": sorted(career),
+            "change_set": change,
+            "outcome_set": outcome,
+            "career_set": career,
+            "third_lord": third_lord,
+            "fifth_lord": fifth_lord,
+            "ninth_lord": ninth_lord,
+        }
+
+    career = {x for x in (tenth_lord, second_lord, eleventh_lord, sixth_lord, amk) if x}
+    if bucket == "career_field_choice" and fifth_lord:
+        career.add(fifth_lord)
+    return {
+        "change_lords_set": [],
+        "outcome_lords_set": sorted(outcome),
+        "career_lords_set": sorted(career),
+        "change_set": set(),
+        "outcome_set": outcome,
+        "career_set": career,
+        "third_lord": third_lord,
+        "fifth_lord": fifth_lord,
+        "ninth_lord": ninth_lord,
+    }
+
+
+def _job_change_lord_label(lord: str, lord_sets: dict) -> str:
+    if lord == lord_sets.get("third_lord"):
+        return f"{lord} (3L — courage/initiative)"
+    if lord == lord_sets.get("fifth_lord"):
+        return f"{lord} (5L — change, 12th from 6H)"
+    if lord == lord_sets.get("ninth_lord"):
+        return f"{lord} (9L — bhagya/new direction)"
+    if lord in (lord_sets.get("outcome_set") or set()):
+        return f"{lord} (outcome lord — 6/10/11 axis)"
+    return f"{lord} (career significator)"
+
+
+def _flatten_career_dasha_chain(kundli: dict) -> list[dict]:
+    """MD·AD·PD rows from nested dashas (marriage-style flat scan)."""
+    out: list[dict] = []
+    today = datetime.utcnow()
+    horizon = today + timedelta(days=365 * _CAREER_JOB_CHANGE_SCAN_YEARS)
+
+    dashas = kundli.get("dashas") or []
+    if not isinstance(dashas, list):
+        return out
+
+    for md_row in dashas:
+        if not isinstance(md_row, dict):
+            continue
+        md_lord = md_row.get("planet") or md_row.get("md_lord") or md_row.get("maha")
+        if not md_lord:
+            continue
+        for ad_row in (md_row.get("subDashas") or md_row.get("antar_dashas") or []):
+            if not isinstance(ad_row, dict):
+                continue
+            ad_lord = ad_row.get("planet") or ad_row.get("ad_lord") or ad_row.get("antar")
+            ad_start = _parse_career_iso(ad_row.get("startDate") or ad_row.get("start"))
+            ad_end = _parse_career_iso(ad_row.get("endDate") or ad_row.get("end"))
+            if not (ad_lord and ad_start and ad_end):
+                continue
+            if ad_end < today - timedelta(days=30) or ad_start > horizon:
+                continue
+
+            pd_list = ad_row.get("subDashas") or ad_row.get("pratyantar_dashas") or []
+            if pd_list and isinstance(pd_list, list):
+                for pd_row in pd_list:
+                    if not isinstance(pd_row, dict):
+                        continue
+                    pd_lord = (
+                        pd_row.get("planet") or pd_row.get("pd_lord") or pd_row.get("pratyantar")
+                    )
+                    pd_start = _parse_career_iso(pd_row.get("startDate") or pd_row.get("start"))
+                    pd_end = _parse_career_iso(pd_row.get("endDate") or pd_row.get("end"))
+                    if not (pd_lord and pd_start and pd_end):
+                        continue
+                    if pd_end < today - timedelta(days=30):
+                        continue
+                    out.append({
+                        "md": md_lord,
+                        "ad": ad_lord,
+                        "pd": pd_lord,
+                        "start": pd_start,
+                        "end": pd_end,
+                        "pd_synthesized": False,
+                    })
+            elif ad_lord in _VIMS_ORDER:
+                ad_secs = (ad_end - ad_start).total_seconds()
+                if ad_secs <= 0:
+                    continue
+                total = float(sum(_VIMS_YEARS.values()))
+                start_idx = _VIMS_ORDER.index(ad_lord)
+                cursor = ad_start
+                for k in range(9):
+                    pd_lord = _VIMS_ORDER[(start_idx + k) % 9]
+                    frac = _VIMS_YEARS[pd_lord] / total
+                    pd_end = cursor + timedelta(seconds=ad_secs * frac)
+                    if pd_end >= today - timedelta(days=30):
+                        out.append({
+                            "md": md_lord,
+                            "ad": ad_lord,
+                            "pd": pd_lord,
+                            "start": cursor,
+                            "end": pd_end,
+                            "pd_synthesized": True,
+                        })
+                    cursor = pd_end
+
+    out.sort(key=lambda c: c["start"])
+    return out
+
+
+def _score_job_change_chunk(
+    chunk: dict,
+    change_set: set,
+    outcome_set: set,
+    lord_sets: dict,
+) -> tuple[int, list[str]]:
+    """Score one MD·AD·PD row for job-change activation."""
+    score = 0
+    detail: list[str] = []
+    ad_l = chunk.get("ad")
+    pd_l = chunk.get("pd")
+
+    if ad_l in change_set:
+        score += _CAREER_DASHA_SCORE_AD_CHANGE
+        detail.append(f"AD {_job_change_lord_label(ad_l, lord_sets)}")
+    elif ad_l in outcome_set:
+        score += _CAREER_DASHA_SCORE_AD_OUTCOME
+        detail.append(f"AD {_job_change_lord_label(ad_l, lord_sets)}")
+
+    if pd_l in change_set:
+        score += _CAREER_DASHA_SCORE_PD_CHANGE
+        detail.append(f"PD {_job_change_lord_label(pd_l, lord_sets)}")
+    elif pd_l in outcome_set:
+        score += _CAREER_DASHA_SCORE_PD_OUTCOME
+        detail.append(f"PD {_job_change_lord_label(pd_l, lord_sets)}")
+
+    if ad_l in change_set and pd_l in change_set:
+        score += _CAREER_CHANGE_CONFLUENCE_BOOST
+        detail.append(f"AD+PD change confluence (+{_CAREER_CHANGE_CONFLUENCE_BOOST})")
+
+    change_hits = int(ad_l in change_set) + int(pd_l in change_set)
+    if change_hits and (ad_l in change_set) * _CAREER_DASHA_SCORE_AD_CHANGE + (
+        pd_l in change_set
+    ) * _CAREER_DASHA_SCORE_PD_CHANGE < _CAREER_MIN_CHANGE_AD_PD:
+        return 0, []
+
+    if change_hits == 0:
+        return 0, []
+
+    return score, detail
+
+
+def _find_next_job_change_window(
+    kundli: dict,
+    change_set: set,
+    outcome_set: set,
+    lord_sets: dict,
+    *,
+    current_ad: str,
+    current_pd: str,
+) -> Optional[dict]:
+    """Cascade PD windows until a 3L/5L/9L change lord activates."""
+    today = datetime.utcnow()
+    current_active = (current_ad in change_set) or (current_pd in change_set)
+    chain = _flatten_career_dasha_chain(kundli)
+
+    for chunk in chain:
+        if chunk["end"] < today - timedelta(days=1):
+            continue
+        sc, detail = _score_job_change_chunk(chunk, change_set, outcome_set, lord_sets)
+        if sc < _CAREER_MIN_CHANGE_AD_PD:
+            continue
+        if current_active and chunk["start"] <= today <= chunk["end"]:
+            continue
+        if current_active and chunk["start"] < today:
+            continue
+        return {
+            "md": chunk["md"],
+            "ad": chunk["ad"],
+            "pd": chunk.get("pd"),
+            "start": _fmt_career_dasha_date(chunk["start"]),
+            "end": _fmt_career_dasha_date(chunk["end"]),
+            "reason": " · ".join(detail),
+            "change_score": sc,
+        }
+
+    upcoming = kundli.get("upcomingDashas") or kundli.get("antardashas") or []
+    if isinstance(upcoming, list):
+        for u in upcoming[:40]:
+            if not isinstance(u, dict):
+                continue
+            ad_lord = u.get("antardasha") or u.get("ad") or u.get("lord")
+            if ad_lord not in change_set:
+                continue
+            return {
+                "md": u.get("mahadasha") or u.get("md"),
+                "ad": ad_lord,
+                "pd": None,
+                "start": u.get("start") or u.get("startDate"),
+                "end": u.get("end") or u.get("endDate"),
+                "reason": f"AD {_job_change_lord_label(ad_lord, lord_sets)}",
+                "change_score": _CAREER_DASHA_SCORE_AD_CHANGE,
+            }
+    return None
+
+
+def _trigger_vimshottari_job_change(
+    kundli: dict,
+    intel: dict,
+    *,
+    md: str,
+    ad: str,
+    pd: str,
+    cur_start: Any,
+    cur_end: Any,
+    lord_sets: dict,
+) -> dict:
+    change_set = lord_sets["change_set"]
+    outcome_set = lord_sets["outcome_set"]
+    career_lords = lord_sets["career_set"]
+    planets = kundli.get("planets") or []
     score = 0
     why: list[str] = []
 
+    if md:
+        if md in change_set:
+            score += _CAREER_DASHA_SCORE_MD_CHANGE + 1
+            why.append(f"Current MD = {_job_change_lord_label(md, lord_sets)} (+4)")
+        elif md in outcome_set:
+            score += 2
+            why.append(f"Current MD = {_job_change_lord_label(md, lord_sets)} (+2)")
+        md_h = _planet_house(planets, md)
+        if md_h in CAREER_PROMISE:
+            score += 2
+            why.append(f"MD {md} in career-promise h{md_h} (+2)")
+
+    if ad:
+        if ad in change_set:
+            score += _CAREER_DASHA_SCORE_AD_CHANGE
+            why.append(f"Current AD = {_job_change_lord_label(ad, lord_sets)} — CHANGE window ACTIVE (+5)")
+        elif ad in outcome_set:
+            score += _CAREER_DASHA_SCORE_AD_OUTCOME
+            why.append(f"Current AD = {_job_change_lord_label(ad, lord_sets)} — outcome support (+3)")
+        ad_h = _planet_house(planets, ad)
+        if ad_h in CAREER_DENIAL:
+            score -= 2
+            why.append(f"AD {ad} in denial h{ad_h} (-2)")
+
+    if pd:
+        if pd in change_set:
+            score += _CAREER_DASHA_SCORE_PD_CHANGE
+            why.append(f"Current PD = {_job_change_lord_label(pd, lord_sets)} — fine change trigger (+6)")
+        elif pd in outcome_set:
+            score += _CAREER_DASHA_SCORE_PD_OUTCOME
+            why.append(f"Current PD = {_job_change_lord_label(pd, lord_sets)} — outcome support (+2)")
+
+    current_change_active = (ad in change_set) or (pd in change_set)
+    if current_change_active:
+        why.append("Current MD/AD/PD: change lord (3L/5L/9L) ACTIVE — switch window open now")
+    else:
+        why.append("Current AD/PD: no 3L/5L/9L change lord — scanning next PD windows")
+
+    next_career_window = _find_next_job_change_window(
+        kundli,
+        change_set,
+        outcome_set,
+        lord_sets,
+        current_ad=ad,
+        current_pd=pd,
+    )
+
+    return {
+        "score": score,
+        "why": why,
+        "current_lords": f"{md}/{ad}/{pd}",
+        "current_window": {"start": cur_start, "end": cur_end},
+        "next_career_window": next_career_window,
+        "career_lords_set": sorted(career_lords),
+        "change_lords_set": lord_sets["change_lords_set"],
+        "outcome_lords_set": lord_sets["outcome_lords_set"],
+        "current_change_active": current_change_active,
+    }
+
+
+def _trigger_vimshottari(
+    kundli: dict,
+    intel: dict,
+    karakas_d: dict,
+    bucket: str = "general_career",
+) -> dict:
+    """Weight: 12. Vimshottari timing.
+
+    job_change: CHANGE lords 3L/5L/9L + OUTCOME lords 6L/10L/11L with PD cascade.
+    Other buckets: legacy career-significator scan on 2/6/10/11/AmK (+5L field choice).
+    """
     md, ad, pd = _dasha_lords(kundli)
     cd = kundli.get("currentDasha") or {}
     cp = kundli.get("currentPhase") or {}
-    # Recognise multiple key conventions for AD start/end emitted by
-    # different chart providers (startDate/endDate, start/end,
-    # antardashaStart/antardashaEnd, ad_start/ad_end). currentPhase is
-    # used as a final fallback because it always represents the
-    # currently-active AD window.
     cur_start = (cd.get("startDate") or cd.get("start")
                  or cd.get("antardashaStart") or cd.get("ad_start")
                  or cp.get("start"))
@@ -2573,17 +2947,25 @@ def _trigger_vimshottari(kundli: dict, intel: dict, karakas_d: dict) -> dict:
                or cd.get("antardashaEnd") or cd.get("ad_end")
                or cp.get("end"))
 
-    tenth_lord = _house_lord(intel, 10)
-    second_lord = _house_lord(intel, 2)
-    eleventh_lord = _house_lord(intel, 11)
-    sixth_lord = _house_lord(intel, 6)
-    amk = (karakas_d or {}).get("AmK")
-    career_lords = {tenth_lord, second_lord, eleventh_lord, sixth_lord, amk}
-    career_lords.discard(None)
+    lord_sets = _career_dasha_lord_sets(intel, karakas_d, bucket)
+    if bucket == "job_change":
+        return _trigger_vimshottari_job_change(
+            kundli,
+            intel,
+            md=md,
+            ad=ad,
+            pd=pd,
+            cur_start=cur_start,
+            cur_end=cur_end,
+            lord_sets=lord_sets,
+        )
 
+    score = 0
+    why: list[str] = []
+    career_lords = lord_sets["career_set"]
     planets = kundli.get("planets") or []
+    fifth_lord = lord_sets.get("fifth_lord")
 
-    # ── Score current MD lord
     if md:
         md_h = _planet_house(planets, md)
         md_dgn = _planet_dignity(intel, md)
@@ -2603,7 +2985,6 @@ def _trigger_vimshottari(kundli: dict, intel: dict, karakas_d: dict) -> dict:
             score -= 2
             why.append(f"Current MD lord {md} debilitated — weakens MD effects (-2)")
 
-    # ── Score current AD lord
     if ad:
         ad_h = _planet_house(planets, ad)
         ad_dgn = _planet_dignity(intel, ad)
@@ -2620,37 +3001,40 @@ def _trigger_vimshottari(kundli: dict, intel: dict, karakas_d: dict) -> dict:
             score -= 1
             why.append(f"Current AD lord {ad} debilitated — fragile window (-1)")
 
-    # ── Score current PD lord
     if pd:
         if pd in career_lords:
             score += 2
             why.append(f"Current PD = {pd} (career-significator) — fine-tuned career sub-window (+2)")
 
-    # ── Find next career-AD window from upcoming dasha periods
     upcoming = kundli.get("upcomingDashas") or kundli.get("antardashas") or []
     next_career_window = None
     if isinstance(upcoming, list):
-        for u in upcoming[:30]:  # check next 30 sub-periods
+        for u in upcoming[:30]:
             if not isinstance(u, dict):
                 continue
             ad_lord = u.get("antardasha") or u.get("ad") or u.get("lord")
             if ad_lord in career_lords:
+                reason = f"AD {ad_lord} is career-significator"
+                if ad_lord == fifth_lord and bucket == "career_field_choice":
+                    reason = f"AD {ad_lord} is 5L — field-choice significator"
                 next_career_window = {
-                    "md":   u.get("mahadasha") or md,
-                    "ad":   ad_lord,
+                    "md": u.get("mahadasha") or md,
+                    "ad": ad_lord,
                     "start": u.get("start") or u.get("startDate"),
-                    "end":   u.get("end") or u.get("endDate"),
-                    "reason": f"AD {ad_lord} is career-significator",
+                    "end": u.get("end") or u.get("endDate"),
+                    "reason": reason,
                 }
                 break
 
     return {
         "score": score,
         "why": why,
-        "current_lords":      f"{md}/{ad}/{pd}",
-        "current_window":     {"start": cur_start, "end": cur_end},
+        "current_lords": f"{md}/{ad}/{pd}",
+        "current_window": {"start": cur_start, "end": cur_end},
         "next_career_window": next_career_window,
-        "career_lords_set":   sorted(career_lords),
+        "career_lords_set": sorted(career_lords),
+        "change_lords_set": lord_sets.get("change_lords_set") or [],
+        "outcome_lords_set": lord_sets.get("outcome_lords_set") or [],
     }
 
 
@@ -2900,177 +3284,28 @@ def _modifier_rahu_ketu_axis(kundli: dict) -> dict:
 # CONDITIONALS — fire only when question type matches
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── C1 — Govt-job check ──────────────────────────────────────────────────────
+# ── C1 — Govt-job check (delegates to govt_job_engine_v1) ─────────────────────
 def _conditional_govt_job(intel: dict, kundli: dict, karakas_d: dict, kp: Optional[dict] = None) -> dict:
-    """Fires for q_type == 'govt_job' or strong Sun-driven natal chart.
+    """Sun-Saturn life promise + KP cross-check via govt_job_engine_v1."""
+    try:
+        from event_timing.career.govt_job_engine_v1 import assess_govt_job_promise
 
-    Govt-job classical recipe (any 2 of these → strong govt-promise):
-      1. Sun in own/exalted sign in kendra/trikona
-      2. 10L exalted or in own sign
-      3. Sun-Mars-Jupiter combination (Atmakaraka or 10H involvement)
-      4. AmK = Sun
-      5. 10L = Sun OR 10H Sun-occupied
-      6. Sasha-yoga (Saturn for PSU/govt-service)
-      7. Sun-Saturn combo (conjunct OR mutual 7th aspect) in D1
-      8. Sun-Saturn combo in D9 Navamsha (soul-confirmation, +bonus)
-      9. Saturn in 2nd/5th/9th from Sun (artha+kona-trine) in D1
-      10. Same trine rule applied in D10 Dashamsha (career-chart, +bonus)
-      11. 6L in 10H OR 10L in 6H (classical naukri/service yoga)
-      12. 10L conjunct Sun (career-lord fused with govt-karaka)
-      + KP cusps 10/6/1 CSL signification cross-check.
-    """
-    score = 0
-    why: list[str] = []
-    flags: list[str] = []
-    planets = kundli.get("planets") or []
-
-    sun_dgn = _planet_dignity(intel, "Sun")
-    sun_h = _planet_house(planets, "Sun")
-    if sun_dgn in ("exalted", "own-sign", "moolatrikona") and sun_h in {1, 4, 5, 7, 9, 10}:
-        score += 4
-        flags.append("Sun strong in kendra/trikona")
-        why.append(f"⭐ C1: Sun {sun_dgn} in h{sun_h} (kendra/trikona) — govt-authority signature (+4)")
-
-    tenth_lord = _house_lord(intel, 10)
-    if tenth_lord:
-        tl_dgn = _planet_dignity(intel, tenth_lord)
-        if tl_dgn in ("exalted", "own-sign"):
-            score += 3
-            flags.append("10L strong")
-            why.append(f"C1: 10L {tenth_lord} {tl_dgn} — career promise locked (+3)")
-
-    # Sun-Mars-Jupiter combo (any 2 conjunct or aspecting 10H)
-    sun_h = _planet_house(planets, "Sun")
-    mars_h = _planet_house(planets, "Mars")
-    jup_h = _planet_house(planets, "Jupiter")
-    combo_in_career = sum(1 for h in (sun_h, mars_h, jup_h) if h in {1, 5, 9, 10})
-    if combo_in_career >= 2:
-        score += 3
-        flags.append(f"{combo_in_career}-of Sun/Mars/Jupiter in kendra/trikona")
-        why.append(f"C1: {combo_in_career} of (Sun/Mars/Jupiter) in kendra/trikona — govt-recipe combo (+3)")
-
-    # AmK = Sun
-    amk = (karakas_d or {}).get("AmK")
-    if amk == "Sun":
-        score += 4
-        flags.append("AmK = Sun")
-        why.append("⭐ C1: Amatyakaraka = Sun — soul-career = govt/authority (+4)")
-
-    # 10L = Sun OR Sun in 10H
-    if tenth_lord == "Sun":
-        score += 3
-        flags.append("10L = Sun")
-        why.append("C1: 10L = Sun — career-house lord IS govt karaka (+3)")
-    if sun_h == 10:
-        score += 3
-        flags.append("Sun in 10H")
-        why.append("C1: Sun in 10H — direct govt-career signature (+3)")
-
-    # Saturn for PSU/service-govt
-    sat_dgn = _planet_dignity(intel, "Saturn")
-    sat_h = _planet_house(planets, "Saturn")
-    if sat_dgn in ("own-sign", "exalted") and sat_h in {1, 4, 7, 10}:
-        score += 2
-        flags.append("Sasha-yoga (PSU/admin)")
-        why.append(f"C1: Sasha-yoga (Saturn {sat_dgn} in kendra h{sat_h}) — PSU/service-govt (+2)")
-
-    # ── Phase 2.8.32 ADD-ONLY rules (user-specified govt-job classical combos) ──
-    # Helper: Sun-Saturn combo in any chart (conjunction OR mutual 7th aspect).
-    # Returns (points, why_msg) or (0, None). bonus stacks for divisional-chart confirmation.
-    def _sun_sat_combo(chart_planets: list, chart_label: str, bonus: int = 0):
-        s_h = _planet_house(chart_planets, "Sun")
-        st_h = _planet_house(chart_planets, "Saturn")
-        if not s_h or not st_h:
-            return 0, None
-        if s_h == st_h:
-            pts = 3 + bonus
-            return pts, f"C1: Sun-Saturn conjunct in h{s_h} ({chart_label}) — authority + discipline yoga (+{pts})"
-        if abs(s_h - st_h) == 6:
-            pts = 2 + bonus
-            return pts, f"C1: Sun-Saturn mutual 7th aspect ({chart_label}) — govt-power axis (+{pts})"
-        return 0, None
-
-    # Helper: Saturn in 2nd/5th/9th FROM Sun (kona-trine + artha-axis).
-    def _sat_trine_from_sun(chart_planets: list, chart_label: str, bonus: int = 0):
-        s_h = _planet_house(chart_planets, "Sun")
-        st_h = _planet_house(chart_planets, "Saturn")
-        if not s_h or not st_h:
-            return 0, None
-        from_sun = ((st_h - s_h + 12) % 12) + 1
-        if from_sun in (5, 9):
-            pts = 3 + bonus
-            return pts, f"C1: Saturn in {from_sun}th from Sun ({chart_label}) — kona-trine govt yoga (+{pts})"
-        if from_sun == 2:
-            pts = 2 + bonus
-            return pts, f"C1: Saturn in 2nd from Sun ({chart_label}) — artha-axis govt support (+{pts})"
-        return 0, None
-
-    # Rule 7: Sun-Saturn combo in D1
-    pts, msg = _sun_sat_combo(planets, "D1")
-    if pts:
-        score += pts
-        flags.append("Sun-Saturn combo D1")
-        why.append(msg)
-
-    # Rule 8: Sun-Saturn combo in D9 Navamsha (+1 bonus — soul-chart confirmation)
-    d9_planets = ((kundli.get("divisionalCharts") or {}).get("D9") or {}).get("planets") or []
-    pts, msg = _sun_sat_combo(d9_planets, "D9 Navamsha", bonus=1)
-    if pts:
-        score += pts
-        flags.append("Sun-Saturn combo D9")
-        why.append(msg)
-
-    # Rule 9: Saturn-trine-from-Sun in D1
-    pts, msg = _sat_trine_from_sun(planets, "D1")
-    if pts:
-        score += pts
-        flags.append("Saturn trine-from-Sun D1")
-        why.append(msg)
-
-    # Rule 10: Saturn-trine-from-Sun in D10 Dashamsha (+1 bonus — career-chart)
-    d10_planets = ((kundli.get("divisionalCharts") or {}).get("D10") or {}).get("planets") or []
-    pts, msg = _sat_trine_from_sun(d10_planets, "D10 Dashamsha", bonus=1)
-    if pts:
-        score += pts
-        flags.append("Saturn trine-from-Sun D10")
-        why.append(msg)
-
-    # Rule 11: 6-10 exchange (classical naukri/service yoga)
-    sixth_lord = _house_lord(intel, 6)
-    sixth_lord_h = _planet_house(planets, sixth_lord) if sixth_lord else None
-    tenth_lord_h = _planet_house(planets, tenth_lord) if tenth_lord else None
-    if sixth_lord and sixth_lord_h == 10:
-        score += 3
-        flags.append("6L in 10H (naukri yoga)")
-        why.append(f"C1: 6L {sixth_lord} in 10H — naukri/service yoga (+3)")
-    if tenth_lord and tenth_lord_h == 6:
-        score += 3
-        flags.append("10L in 6H (naukri yoga)")
-        why.append(f"C1: 10L {tenth_lord} in 6H — career via service/employment (+3)")
-
-    # Rule 12: 10L conjunct Sun (career-lord fused with govt-karaka, distinct from Rule 5a)
-    if tenth_lord and tenth_lord != "Sun" and sun_h and tenth_lord_h == sun_h:
-        score += 3
-        flags.append("10L conjunct Sun")
-        why.append(f"C1: 10L {tenth_lord} conjunct Sun in h{sun_h} — career fused with govt-karaka (+3)")
-
-    # KP bucket-tuned cross-check
-    kp_assist = _kp_bucket_assist(kp or {}, "govt_job")
-    if kp_assist["score"] != 0 or kp_assist["why"]:
-        score += kp_assist["score"]
-        why.extend(kp_assist["why"])
-        if kp_assist["score"] > 0:
-            flags.append("KP cusps confirm")
-
-    promise = "high" if score >= 8 else ("moderate" if score >= 4 else "low")
-    return {
-        "fired": True,
-        "score": score,
-        "why": why,
-        "flags": flags,
-        "govt_promise_level": promise,
-        "kp_summary": kp_assist["summary"],
-    }
+        kp_assist = _kp_bucket_assist(kp or {}, "govt_job")
+        return assess_govt_job_promise(
+            kundli,
+            intel,
+            karakas_d=karakas_d,
+            kp_assist=kp_assist,
+        )
+    except Exception as exc:
+        return {
+            "fired": True,
+            "score": 0,
+            "why": [f"govt_job_engine error: {exc}"],
+            "flags": [],
+            "govt_promise_level": "low",
+            "kp_summary": None,
+        }
 
 
 # ── C4 — Promotion-window check ──────────────────────────────────────────────
@@ -3906,6 +4141,7 @@ def assess_career(kundli: dict,
     L["L12_seventh_house"]   = _layer_seventh_house(intel, kundli)
     L["L13_ninth_house"]     = _layer_ninth_house(intel, kundli)
     L["L14_fifth_house"]     = _layer_fifth_house(intel, kundli)
+    L["L35_third_house"]     = _layer_third_house(intel, kundli)
     L["L15_lagna_lord"]      = _layer_lagna_lord(intel, kundli)
     L["L16_amatyakaraka"]    = _layer_amatyakaraka(karakas_d, intel, kundli)
     L["L17_atmakaraka"]      = _layer_atmakaraka_career(karakas_d, intel, kundli)
@@ -3927,7 +4163,7 @@ def assess_career(kundli: dict,
 
     # ── Trigger layers
     T: dict[str, dict] = {}
-    T["T1_vimshottari"]     = _trigger_vimshottari(kundli, intel, karakas_d)
+    T["T1_vimshottari"]     = _trigger_vimshottari(kundli, intel, karakas_d, bucket=bucket)
     T["T2_saturn_transit"]  = _trigger_saturn_transit(saturn_t, intel)
     T["T3_jupiter_yogini"]  = _trigger_jupiter_yogini(jup_t, yogini_d, karakas_d, intel)
 
@@ -4118,6 +4354,30 @@ def assess_career(kundli: dict,
     except Exception:
         pass
 
+    if bucket == "govt_job":
+        try:
+            from event_timing.career.govt_job_engine_v1 import (
+                assess_govt_job,
+                format_govt_job_block_for_prompt,
+            )
+
+            _gj = assess_govt_job(
+                kundli,
+                intel,
+                karakas_d=karakas_d,
+                kp=kp,
+                kp_assist_fn=lambda k: _kp_bucket_assist(k, "govt_job"),
+            )
+            result["govt_job_engine"] = _gj
+            result["govt_job_prompt_block"] = format_govt_job_block_for_prompt(
+                _gj, question,
+            )
+            if isinstance(_gj.get("promise"), dict):
+                conditionals["C1_govt_job"] = _gj["promise"]
+                result["conditionals"] = conditionals
+        except Exception as _gj_exc:
+            result["govt_job_engine_error"] = str(_gj_exc)[:200]
+
     result["step_audit"] = build_career_timing_step_audit(result)
     result["step_order"] = list(_CAREER_TIMING_STEP_ORDER)
     result["timing_audit"] = build_career_timing_audit(result)
@@ -4172,6 +4432,9 @@ def build_career_timing_step_audit(result: dict) -> dict:
     sb = result.get("score_breakdown") if isinstance(result.get("score_breakdown"), dict) else {}
 
     l1 = L.get("L1_tenth_house") or {}
+    l13 = L.get("L13_ninth_house") or {}
+    l14 = L.get("L14_fifth_house") or {}
+    l35 = L.get("L35_third_house") or {}
     l18 = L.get("L18_d9_overlay") or {}
     l19 = L.get("L19_d10_overlay") or {}
     l22 = L.get("L22_kp_csl") or {}
@@ -4201,12 +4464,36 @@ def build_career_timing_step_audit(result: dict) -> dict:
             ),
         },
         "step1": {
-            "name": "D1 career significators (10H / 10L / AmK)",
+            "name": (
+                "D1 change axis (3H/3L + 5H/5L + 9H/9L + 6H/10H)"
+                if bucket == "job_change"
+                else "D1 career significators (10H / 10L / AmK)"
+            ),
             "status": "DONE" if l1 else "PARTIAL",
             "tenth_house_score": l1.get("score"),
+            "third_house_score": l35.get("score") if bucket == "job_change" else None,
+            "third_lord": l35.get("third_lord") if bucket == "job_change" else None,
+            "fifth_house_score": l14.get("score") if bucket == "job_change" else None,
+            "fifth_lord": l14.get("fifth_lord") if bucket == "job_change" else None,
+            "ninth_house_score": l13.get("score") if bucket == "job_change" else None,
+            "ninth_lord": l13.get("ninth_lord") if bucket == "job_change" else None,
             "top_why": (l1.get("why") or [])[:4],
+            "third_why": (l35.get("why") or [])[:2] if bucket == "job_change" else [],
+            "fifth_why": (l14.get("why") or [])[:2] if bucket == "job_change" else [],
+            "ninth_why": (l13.get("why") or [])[:2] if bucket == "job_change" else [],
+            "change_lords_target": t1.get("change_lords_set") if bucket == "job_change" else [],
+            "outcome_lords_target": t1.get("outcome_lords_set") if bucket == "job_change" else [],
             "career_lords_target": career_lords,
-            "detail": " · ".join((l1.get("why") or [])[:3]) or "10H/10L scan",
+            "detail": (
+                " · ".join(
+                    (l35.get("why") or [])[:1]
+                    + (l14.get("why") or [])[:1]
+                    + (l13.get("why") or [])[:1]
+                    + (l1.get("why") or [])[:1]
+                )
+                if bucket == "job_change"
+                else " · ".join((l1.get("why") or [])[:3]) or "10H/10L scan"
+            ),
         },
         "step2": {
             "name": "Divisional verify (D9 + D10)",
@@ -4232,7 +4519,11 @@ def build_career_timing_step_audit(result: dict) -> dict:
             "detail": f"natal layers {sb.get('layer_score', 0):+d}",
         },
         "step5": {
-            "name": "Dasha activation (MD/AD/PD) — PRIMARY",
+            "name": (
+                "Dasha activation (3L/5L/9L change + 6L/10L/11L outcome)"
+                if bucket == "job_change"
+                else "Dasha activation (MD/AD/PD) — PRIMARY"
+            ),
             "status": "DONE" if cur_lords.strip("/") else "MISSING",
             "current_lords": cur_lords,
             "current_start": cur.get("start"),
@@ -4240,6 +4531,9 @@ def build_career_timing_step_audit(result: dict) -> dict:
             "dasha_score": t1.get("score"),
             "why": dasha_why,
             "career_lords_set": career_lords,
+            "change_lords_set": t1.get("change_lords_set") if bucket == "job_change" else [],
+            "outcome_lords_set": t1.get("outcome_lords_set") if bucket == "job_change" else [],
+            "current_change_active": t1.get("current_change_active") if bucket == "job_change" else None,
             "detail": (
                 f"MD/AD/PD {cur_lords}"
                 + (f" · {cur.get('start')}→{cur.get('end')}" if cur.get("start") else "")
@@ -4257,15 +4551,21 @@ def build_career_timing_step_audit(result: dict) -> dict:
             "detail": " · ".join(transit_why[:3]) or "no strong transit",
         },
         "step7": {
-            "name": "Window merge (next career AD)",
+            "name": (
+                "Window merge (next change-lord PD cascade)"
+                if bucket == "job_change"
+                else "Window merge (next career AD)"
+            ),
             "status": "DONE" if nxt.get("ad") else "NONE_FOUND",
             "next_ad": nxt.get("ad"),
+            "next_pd": nxt.get("pd"),
             "next_md": nxt.get("md"),
             "next_start": nxt.get("start"),
             "next_end": nxt.get("end"),
             "reason": nxt.get("reason"),
             "detail": (
-                f"next AD {nxt.get('ad') or '—'}"
+                f"next {'PD' if nxt.get('pd') else 'AD'} "
+                f"{nxt.get('pd') or nxt.get('ad') or '—'}"
                 + (f" · {nxt.get('start')}→{nxt.get('end')}" if nxt.get("start") else "")
                 + (f" · {nxt.get('reason')}" if nxt.get("reason") else "")
             ).strip(),
@@ -4565,9 +4865,14 @@ def format_verdict_for_prompt(v: dict, question: str = "") -> str:
         e_h = _ym_to_human(str(nxt.get("end") or "")[:7])
         nxt_md = nxt.get("md") or ""
         nxt_ad = nxt.get("ad") or ""
+        nxt_pd = nxt.get("pd") or ""
         nxt_dasha_parts = []
-        if nxt_md: nxt_dasha_parts.append(f"{nxt_md} Mahadasha")
-        if nxt_ad: nxt_dasha_parts.append(f"{nxt_ad} Antardasha")
+        if nxt_md:
+            nxt_dasha_parts.append(f"{nxt_md} Mahadasha")
+        if nxt_ad:
+            nxt_dasha_parts.append(f"{nxt_ad} Antardasha")
+        if nxt_pd:
+            nxt_dasha_parts.append(f"{nxt_pd} Pratyantardasha")
         nxt_dasha = " / ".join(nxt_dasha_parts) if nxt_dasha_parts else "(dasha unavailable)"
         lines.append(f"▸ Next Career window: {s_h} → {e_h} — {nxt_dasha}")
         if nxt.get("reason"):
@@ -4581,13 +4886,27 @@ def format_verdict_for_prompt(v: dict, question: str = "") -> str:
         lines.append(f"▸ JUPITER GRACE WINDOW ACTIVE: {jup_act.get('sign')} until {jup_act.get('end')} (hits {jup_act.get('hits')})")
     lines.append("")
 
+    # Govt job dedicated engine block (Sun-Saturn promise + timing)
+    gj_block = v.get("govt_job_prompt_block")
+    if isinstance(gj_block, str) and gj_block.strip():
+        lines.append(gj_block.strip())
+        lines.append("")
+
     # Conditionals — verbose for the bucket
     conds = v.get("conditionals") or {}
     if "C1_govt_job" in conds:
         c = conds["C1_govt_job"]
-        lines.append(f"▸ GOVT-JOB PROMISE: {c.get('govt_promise_level','?').upper()}")
+        lvl = c.get("govt_promise_level", "?")
+        psc = c.get("promise_score")
+        hdr = f"▸ GOVT-JOB PROMISE: {str(lvl).upper()}"
+        if psc is not None:
+            hdr += f" ({psc}/100)"
+        lines.append(hdr)
+        for w in (c.get("why") or [])[:5]:
+            lines.append(f"   • {w}")
         for f in (c.get("flags") or [])[:3]:
-            lines.append(f"   • {f}")
+            if f not in " ".join(c.get("why") or []):
+                lines.append(f"   • flag: {f}")
         lines.append("")
     if "C4_promotion_window" in conds:
         c = conds["C4_promotion_window"]

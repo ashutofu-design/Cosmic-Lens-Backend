@@ -26,6 +26,7 @@ $files = @(
     "openai_helper.py",
     "ask_llm_context_debug.py",
     "ask_hard_guards.py",
+    "ask_timing_clarify.py",
     "ask_timing_followup.py",
     "ask_scope_gate.py",
     "health_focus_routing.py",
@@ -89,7 +90,8 @@ cd $remote
 tar xzf /tmp/cosmic-ask-deploy.tar.gz
 rm -f /tmp/cosmic-ask-deploy.tar.gz
 echo '--- py_compile (abort restart on syntax error) ---'
-python3 -m py_compile openai_helper.py ask_hard_guards.py ask_llm_context_debug.py health_focus_routing.py chart_fact_answer.py flask_app.py subscription_helper.py ask_user_signals.py user_ask_profile.py event_timing/timing_router.py event_timing/_shared/step_audit.py event_timing/_shared/generic_timing_engine.py || { echo 'COMPILE_FAILED — fix syntax before restart'; exit 1; }
+python3 -m py_compile openai_helper.py ask_hard_guards.py ask_timing_clarify.py ask_llm_context_debug.py health_focus_routing.py chart_fact_answer.py flask_app.py subscription_helper.py ask_user_signals.py user_ask_profile.py event_timing/timing_router.py event_timing/_shared/step_audit.py event_timing/_shared/generic_timing_engine.py || { echo 'COMPILE_FAILED — fix syntax before restart'; exit 1; }
+python3 -c "from ask_timing_clarify import needs_timing_domain_clarifier; assert needs_timing_domain_clarifier('Mera life me struggle kab jaayega'); print('ask_timing_clarify OK')" || { echo 'MISSING ask_timing_clarify.py — git pull or redeploy'; exit 1; }
 python3 -c "from subscription_helper import finalize_ask_out_after_llm; print('finalize_ask_out_after_llm OK')" || { echo 'MISSING finalize_ask_out_after_llm — deploy subscription_helper.py'; exit 1; }
 python3 -c "from ask_mr import run_mr_static_engine; print('ask_mr engine OK')" || { echo 'MISSING ask_mr/ — deploy ask_mr folder or git pull'; exit 1; }
 grep -c 'ask-questions' flask_app.py || true

@@ -72,7 +72,8 @@ _GENERAL_LIFE_TIMING_RX = re.compile(
     r"(?ix)\b("
     r"life\s+me\s+struggle|struggle\s+kab|mushkil\s+kab|pareshani\s+kab|"
     r"life\s+me\s+peace|sab\s+theek\s+kab|set\s+ho\s+jaunga|"
-    r"problem\s+kab\s+khatam|dukh\s+kab|tension\s+kab\s+kam"
+    r"problem\s+kab\s+khatam|dukh\s+kab|tension\s+kab\s+kam|"
+    r"jaayega|jaayegi|khatam\s+hoga"
     r")\b",
 )
 
@@ -255,8 +256,29 @@ def enforce_engine_only_or_refuse(
         has_domain_engine=has_domain,
     )
     if missing and missing != "no_domain_engine":
+        if missing == "general_timing":
+            try:
+                from ask_timing_clarify import (
+                    build_timing_domain_clarifier_result,
+                    needs_timing_domain_clarifier,
+                )
+
+                if needs_timing_domain_clarifier(question, llm_intent):
+                    return build_timing_domain_clarifier_result(question, qtype=qtype)
+            except Exception:
+                pass
         return no_engine_refusal_result(question, qtype=qtype)
     if not has_domain:
+        try:
+            from ask_timing_clarify import (
+                build_timing_domain_clarifier_result,
+                needs_timing_domain_clarifier,
+            )
+
+            if needs_timing_domain_clarifier(question, llm_intent):
+                return build_timing_domain_clarifier_result(question, qtype=qtype)
+        except Exception:
+            pass
         return no_engine_refusal_result(question, qtype=qtype)
     return None
 

@@ -133,6 +133,9 @@ export interface AskLlmContext {
   question_type?: string;
   is_timing?: boolean;
   intent_source?: string;
+  question_understood?: "yes" | "no" | null;
+  understanding_line?: string;
+  understanding_detail?: string | null;
   llm_intent?: {
     domain?: string;
     is_timing?: boolean;
@@ -140,6 +143,7 @@ export interface AskLlmContext {
     wants_explain?: boolean;
     mr_archetype?: string | null;
     interpretation?: string;
+    understanding_line?: string;
     confidence?: number;
     source?: string;
   } | null;
@@ -435,6 +439,43 @@ export function deleteGmailAccount(email: string) {
 
 export function fetchUserDetail(userId: number) {
   return adminFetch<UserDetail>(`/api/admin/users/${userId}`);
+}
+
+export interface UserAskProfileData {
+  user_id: number;
+  profile: {
+    question_count?: number;
+    avg_word_count?: number;
+    avg_style?: string;
+    lang_style?: string;
+    tone?: string;
+    dominant_emotion?: string;
+    top_topic?: string;
+    labels?: string[];
+    topic_counts?: Record<string, number>;
+    skeptic_rate?: number;
+    followup_rate?: number;
+    night_ratio?: number;
+    questions_30d?: number;
+    last_asked_at?: string;
+  };
+  labels: string[];
+  recent_signals: {
+    id?: number;
+    question_id?: string | null;
+    created_at?: string | null;
+    word_count?: number;
+    style?: string;
+    emotion?: string;
+    question_types?: string[];
+    topics_detected?: string[];
+    logged_topic?: string;
+  }[];
+  personalization_hint: string;
+}
+
+export function fetchUserAskProfile(userId: number) {
+  return adminFetch<UserAskProfileData>(`/api/admin/users/${userId}/ask-profile`);
 }
 
 export function setUserPro(userId: number, enable: boolean) {

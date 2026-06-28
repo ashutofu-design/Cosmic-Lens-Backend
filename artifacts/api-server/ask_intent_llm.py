@@ -446,13 +446,15 @@ refuse_surgery_muhurat / crisis_redirect: other hard-guard Qs
 user's question (fix typos only). NEVER invent topics (in-laws, partner, career, shaadi) \
 unless those exact ideas/words appear in the user's question. If the question is vague \
 ("mere bare me kuch batao"), interpretation must quote that — do NOT guess in-laws or marriage.
-11. "confidence": 0.0-1.0 how sure you are.
+14. "understanding_line": EXACTLY one word — "Yes" if you understood the question topic, \
+"No" if off-topic / too broken / unclear. Examples: finance Q → "Yes"; gibberish → "No".
+15. "confidence": 0.0-1.0 how sure you are.
 
 Return ONLY this JSON object:
 {{"domain": "...", "is_timing": false, "is_decision": false, \
 "wants_explain": false, "mr_archetype": null, "career_archetype": null, \
 "finance_archetype": null, "health_archetype": null, "education_archetype": null, \
-"children_archetype": null, "property_archetype": null, "travel_archetype": null, "litigation_archetype": null, "interpretation": "User wants to know ...", "confidence": 0.0}}
+"children_archetype": null, "property_archetype": null, "travel_archetype": null, "litigation_archetype": null, "interpretation": "User asked: \\"...\\"", "understanding_line": "Yes", "confidence": 0.0}}
 
 Question: {question}"""
 
@@ -473,6 +475,7 @@ def _error(reason: str, source: str = "llm_error") -> dict:
         "travel_archetype": None,
         "litigation_archetype": None,
         "interpretation": "",
+        "understanding_line": "",
         "confidence": 0.0,
         "source": source,
         "error": reason[:200],
@@ -736,6 +739,7 @@ def classify_ask_intent(
         "travel_archetype": travel_arch,
         "litigation_archetype": litigation_arch,
         "interpretation": interpretation,
+        "understanding_line": str(data.get("understanding_line") or "").strip()[:200],
         "confidence": conf,
         "source": "llm_low_conf" if conf < _LOW_CONF else "llm",
         "latency_ms": latency_ms,

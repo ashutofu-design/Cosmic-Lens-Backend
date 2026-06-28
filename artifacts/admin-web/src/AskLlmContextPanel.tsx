@@ -6,6 +6,29 @@ function fmtCheckValue(v: unknown): string {
   return String(v);
 }
 
+export function resolveQuestionUnderstoodWord(
+  ctx: AskLlmContext | null,
+): "Yes" | "No" | null {
+  if (!ctx) return null;
+  const line = ctx.understanding_line?.trim();
+  if (line === "Yes" || line === "No") return line;
+  const qu = ctx.question_understood?.toLowerCase();
+  if (qu === "yes") return "Yes";
+  if (qu === "no") return "No";
+  const li = ctx.llm_intent;
+  if (
+    li?.domain &&
+    li.domain !== "general" &&
+    (li.confidence ?? 0) >= 0.5
+  ) {
+    return "Yes";
+  }
+  if (ctx.skip_reason?.toLowerCase().includes("engine_required") && li?.domain) {
+    return "Yes";
+  }
+  return null;
+}
+
 export function parseAskLlmContext(row: AskQuestionItem): AskLlmContext | null {
   if (row.llm_context && typeof row.llm_context === "object") {
     return row.llm_context;
@@ -491,12 +514,21 @@ export function AnswerPathBadge({
   return <span className={`answer-path-badge answer-path-${code}`}>{label}</span>;
 }
 
-export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
+export function AskLlmContextPanel({
+  row,
+  panelId,
+  defaultOpen = false,
+}: {
+  row: AskQuestionItem;
+  panelId?: string;
+  defaultOpen?: boolean;
+}) {
   const ctx = parseAskLlmContext(row);
+  const id = panelId || `ask-llm-context-${row.id}`;
 
   if (!ctx) {
     return (
-      <details className="llm-context-panel llm-context-missing">
+      <details id={id} className="llm-context-panel llm-context-missing" open={defaultOpen || undefined}>
         <summary>LLM context — not saved for this question</summary>
         <p className="detail-muted">
           Deploy latest API + admin-web, restart cosmic-api, run DB migration, then ask a
@@ -542,7 +574,7 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
     : String(checks.slice_type || checks.archetype || archetype || "unknown");
 
   return (
-    <details className="llm-context-panel">
+    <details id={id} className="llm-context-panel" open={defaultOpen || undefined}>
       <summary>
         LLM context — {sliceLabel}
         {skipLlm ? " (LLM skipped)" : ""}
@@ -583,10 +615,20 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
             ctx.llm_intent ? (
               <div className="llm-understanding-box">
                 <p>
-                  <strong>Question understood:</strong>{" "}
-                  {ctx.llm_intent.interpretation
-                    ? ctx.llm_intent.interpretation
-                    : "—"}
+                  <strong>LLM understood:</strong>{" "}
+                  <span
+                    className={`ask-understood-word ask-understood-word--${
+                      (resolveQuestionUnderstoodWord(ctx) || "unknown").toLowerCase()
+                    }`}
+                  >
+                    {resolveQuestionUnderstoodWord(ctx) || "—"}
+                  </span>
+                  {ctx.understanding_detail ? (
+                    <span className="answer-path-note">
+                      {" "}
+                      — {ctx.understanding_detail}
+                    </span>
+                  ) : null}
                 </p>
                 <p>
                   <strong>Engine selected:</strong>{" "}

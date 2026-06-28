@@ -309,6 +309,43 @@ def build_admin_llm_context(
         slice_meta=_slice_meta,
     )
     engine_facts = build_engine_facts_snapshot(checks=_checks, slice_meta=_slice_meta)
+    has_engine_facts = bool(
+        engine_facts.get("verdict")
+        or (engine_facts.get("evidence") or [])
+        or (_slice_meta.get("verdict"))
+        or (_slice_meta.get("evidence"))
+    )
+    try:
+        from ask_intent_fidelity import (
+            build_question_understanding_detail,
+            build_question_understanding_line,
+            resolve_question_understood,
+        )
+
+        question_understood = resolve_question_understood(
+            question,
+            llm_intent,
+            skip_reason=skip_reason,
+            intent_source=intent_source,
+            has_engine_facts=has_engine_facts,
+        )
+        understanding_line = build_question_understanding_line(
+            question,
+            llm_intent,
+            skip_reason=skip_reason,
+            intent_source=intent_source,
+            has_engine_facts=has_engine_facts,
+        )
+        understanding_detail = build_question_understanding_detail(
+            question,
+            llm_intent,
+            skip_reason=skip_reason,
+            intent_source=intent_source,
+        )
+    except Exception:
+        question_understood = ""
+        understanding_line = ""
+        understanding_detail = ""
     return {
         "version": 1,
         "route": route,
@@ -316,6 +353,9 @@ def build_admin_llm_context(
         "question_type": question_type,
         "is_timing": bool(is_timing),
         "intent_source": intent_source or "regex",
+        "question_understood": question_understood or None,
+        "understanding_line": understanding_line,
+        "understanding_detail": understanding_detail or None,
         "llm_intent": llm_intent or None,
         "llm_called": bool(llm_called),
         "answer_path": answer_path,

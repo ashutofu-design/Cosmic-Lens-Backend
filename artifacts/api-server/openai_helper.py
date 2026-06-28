@@ -5316,6 +5316,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _is_litigation_static = _dom == "litigation"
             if _dom == "health":
                 _is_health_static = True
+            if _dom == "finance":
+                _is_finance_static = True
         else:
             try:
                 from ask_marriage_relationship_slice import (  # type: ignore

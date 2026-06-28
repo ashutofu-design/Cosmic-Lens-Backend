@@ -216,6 +216,139 @@ def archetype_allowed_for_question(question: str, archetype: str | None) -> bool
     return _archetype_supported(question, archetype)
 
 
+def resolve_question_understood(
+    question: str,
+    llm_intent: dict[str, Any] | None = None,
+    *,
+    skip_reason: str = "",
+    intent_source: str = "",
+    has_engine_facts: bool = False,
+) -> str:
+    """One-word admin answer: did the LLM understand the question? yes | no."""
+    q = (question or "").strip()
+    if not q:
+        return "no"
+
+    li = llm_intent if isinstance(llm_intent, dict) else {}
+    src = str(li.get("source") or intent_source or "").strip().lower()
+    if src == "llm_mismatch":
+        return "no"
+
+    try:
+        conf = float(li.get("confidence") or 0.0)
+    except (TypeError, ValueError):
+        conf = 0.0
+    dom = str(li.get("domain") or "").strip().lower()
+    inferred = infer_primary_domain(q)
+
+    if has_engine_facts:
+        return "yes"
+
+    try:
+        from ask_native_overview import is_native_overview_question
+
+        if is_native_overview_question(q):
+            return "yes"
+    except Exception:
+        pass
+
+    if dom and dom != "general" and conf >= 0.5:
+        return "yes"
+    if inferred and src in ("llm", "llm_repaired", "llm_low_conf", ""):
+        return "yes"
+    if inferred and intent_source in ("llm", "llm_repaired", "regex"):
+        return "yes"
+
+    skip = (skip_reason or "").strip().lower()
+    if "engine_required" in skip:
+        return "yes" if (dom and dom != "general") or inferred else "no"
+
+    if src in ("llm", "llm_repaired") and conf >= 0.65:
+        return "yes"
+    if src == "llm_low_conf" and conf >= 0.45 and (dom != "general" or inferred):
+        return "yes"
+
+    if intent_source == "regex" and (inferred or (dom and dom != "general")):
+        return "yes"
+
+    return "no"
+
+
+def build_question_understanding_detail(
+    question: str,
+    llm_intent: dict[str, Any] | None = None,
+    *,
+    skip_reason: str = "",
+    intent_source: str = "",
+) -> str:
+    """Optional Hinglish detail — how routing worked (admin only)."""
+    q = (question or "").strip()
+    li = llm_intent if isinstance(llm_intent, dict) else {}
+    skip = (skip_reason or "").strip().lower()
+    dom = str(li.get("domain") or "general").strip().lower()
+    try:
+        conf = float(li.get("confidence") or 0.0)
+    except (TypeError, ValueError):
+        conf = 0.0
+    src = str(li.get("source") or intent_source or "").strip().lower()
+    timing = "timing" if li.get("is_timing") else "static"
+    inferred = infer_primary_domain(q)
+
+    if "engine_required" in skip:
+        if dom and dom != "general":
+            return (
+                f"{dom} samjha (confidence {conf:.0%}) lekin engine facts nahi mile."
+            )
+        if inferred:
+            return f"{inferred} samjha lekin engine facts nahi mile."
+        return "Engine match nahi — chart-only answer block."
+
+    if src == "llm_mismatch":
+        return "Galat topic samjha tha — exact words par repair kiya."
+
+    try:
+        from ask_native_overview import is_native_overview_question
+
+        if is_native_overview_question(q):
+            return "General native overview — specific domain nahi."
+    except Exception:
+        pass
+
+    arch = (
+        li.get("finance_archetype")
+        or li.get("mr_archetype")
+        or li.get("health_archetype")
+        or li.get("career_archetype")
+        or ""
+    )
+    if arch:
+        return f"{dom} / {arch} ({timing}), confidence {conf:.0%}."
+    if dom != "general":
+        return f"{dom} domain ({timing}), confidence {conf:.0%}."
+    if inferred:
+        return f"Regex anchor: {inferred} ({timing})."
+    return f"General/vague ({timing}), confidence {conf:.0%}."
+
+
+def build_question_understanding_line(
+    question: str,
+    llm_intent: dict[str, Any] | None = None,
+    *,
+    skip_reason: str = "",
+    intent_source: str = "",
+    has_engine_facts: bool = False,
+) -> str:
+    """One word for admin: Yes or No."""
+    word = resolve_question_understood(
+        question,
+        llm_intent,
+        skip_reason=skip_reason,
+        intent_source=intent_source,
+        has_engine_facts=has_engine_facts,
+    )
+    return "Yes" if word == "yes" else "No"
+
+
 def repair_llm_intent(question: str, result: dict[str, Any] | None) -> dict[str, Any]:
     """Validate LLM routing against question text; fix or reject hallucinations."""
     if not isinstance(result, dict):
@@ -289,6 +422,17 @@ def repair_llm_intent(question: str, result: dict[str, Any] | None) -> dict[str,
     out["mr_archetype"] = mr_arch
     out["interpretation"] = faithful_interpretation(q)
     out["question_echo"] = q
+    if repaired:
+        out.pop("understanding_line", None)
+    out["question_understood"] = resolve_question_understood(
+        q, out, intent_source=str(out.get("source") or "")
+    )
+    out["understanding_line"] = (
+        "Yes" if out["question_understood"] == "yes" else "No"
+    )
+    out["understanding_detail"] = build_question_understanding_detail(
+        q, out, intent_source=str(out.get("source") or "")
+    )
 
     src = str(out.get("source") or "")
     if reject or (src == "llm" and repaired and domain == "general" and not mr_arch):

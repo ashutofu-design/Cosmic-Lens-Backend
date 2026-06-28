@@ -5,7 +5,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ask_intent_fidelity import faithful_interpretation, repair_llm_intent
+from ask_intent_fidelity import (
+    faithful_interpretation,
+    repair_llm_intent,
+    resolve_question_understood,
+)
 
 
 class AskIntentFidelityTests(unittest.TestCase):
@@ -68,6 +72,30 @@ class AskIntentFidelityTests(unittest.TestCase):
         fixed = repair_llm_intent("Mere paas paisa kitna hoga", raw)
         self.assertEqual(fixed["domain"], "finance")
         self.assertEqual(fixed.get("finance_archetype"), "wealth_potential")
+        self.assertEqual(fixed.get("understanding_line"), "Yes")
+
+    def test_finance_engine_required_still_understood_yes(self):
+        li = {
+            "domain": "finance",
+            "finance_archetype": "wealth_potential",
+            "confidence": 0.95,
+            "source": "llm",
+        }
+        self.assertEqual(
+            resolve_question_understood(
+                "mere paas paisa kitna hoga",
+                li,
+                skip_reason="engine_required_no_direct_llm",
+                intent_source="llm",
+            ),
+            "yes",
+        )
+
+    def test_gibberish_not_understood(self):
+        self.assertEqual(
+            resolve_question_understood("asdf qwer zx", {"domain": "general", "confidence": 0.2, "source": "llm"}),
+            "no",
+        )
 
 
 if __name__ == "__main__":

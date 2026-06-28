@@ -136,8 +136,17 @@ function engineFactsFromContext(ctx: AskLlmContext) {
 
 type EngineTrace = {
   engine?: string;
+  pipeline_version?: string;
   primary_window?: string;
   running_dasha_window?: string;
+  running_dasha?: {
+    md?: string;
+    ad?: string;
+    pd?: string;
+    lords?: string;
+    start?: string;
+    end?: string;
+  };
   backup_window?: string;
   key_trigger?: string;
   verdict?: string;
@@ -290,6 +299,67 @@ function stepOneLiner(
   return name;
 }
 
+function isDashaFirstTimingEngine(engineId: string): boolean {
+  return (
+    engineId.endsWith("_timing_v1") &&
+    engineId !== "marriage_timing_m17" &&
+    engineId !== "marriage_timing_v1"
+  );
+}
+
+function isNewDashaStep1(step: Record<string, unknown> | undefined): boolean {
+  if (!step) return false;
+  const name = String(step.name || "");
+  return (
+    name.includes("Active dasha") ||
+    Boolean(step.current_end || step.current_lords || (step.md && step.ad))
+  );
+}
+
+function formatRunningDashaDetail(
+  trace: EngineTrace | undefined,
+  stepAudit: Record<string, Record<string, unknown>>,
+  timingAudit: EngineTrace["timing_audit"],
+): string {
+  const rd = trace?.running_dasha;
+  if (rd?.lords || rd?.end || rd?.md) {
+    const md = rd.md || "?";
+    const ad = rd.ad || "?";
+    const pd = rd.pd || "?";
+    const lords = rd.lords || `${md}/${ad}/${pd}`;
+    const parts = [`MD ${md} · AD ${ad} · PD ${pd}`, `lords ${lords}`];
+    if (rd.start && rd.end) parts.push(`${rd.start} → ${rd.end}`);
+    if (rd.end) parts.push(`kab tak ${rd.end}`);
+    return parts.join(" · ");
+  }
+
+  const s1 = stepAudit.step1;
+  if (isNewDashaStep1(s1)) {
+    const md = fmtCheckValue(s1.md);
+    const ad = fmtCheckValue(s1.ad);
+    const pd = fmtCheckValue(s1.pd);
+    const lords = s1.current_lords ? String(s1.current_lords) : `${md}/${ad}/${pd}`;
+    const parts = [`MD ${md} · AD ${ad} · PD ${pd}`, `lords ${lords}`];
+    if (s1.current_start && s1.current_end) {
+      parts.push(`${s1.current_start} → ${s1.current_end}`);
+    }
+    if (s1.current_end) parts.push(`kab tak ${s1.current_end}`);
+    return parts.join(" · ");
+  }
+
+  if (trace?.running_dasha_window) return trace.running_dasha_window;
+
+  const ta = timingAudit?.running_dasha;
+  if (ta?.lords || ta?.end) {
+    const parts = [`lords ${fmtCheckValue(ta.lords)}`];
+    if (ta.start && ta.end) parts.push(`${fmtCheckValue(ta.start)} → ${fmtCheckValue(ta.end)}`);
+    if (ta.end) parts.push(`kab tak ${fmtCheckValue(ta.end)}`);
+    return parts.join(" · ");
+  }
+
+  return "— (re-ask question after API deploy for running dasha)";
+}
+
 function JsonDetail({ data, label }: { data: unknown; label?: string }) {
   if (data == null) return null;
   return (
@@ -321,22 +391,23 @@ export function EngineTracePanel({
   const stepAudit = trace?.step_audit || {};
   const timingAudit = trace?.timing_audit;
   const engineId = String(trace?.engine || "");
+  const dashaFirst = isDashaFirstTimingEngine(engineId);
 
   const pipelineChecksTitle =
-    engineId === "career_timing_v1" || engineId.endsWith("_timing_v1")
-      ? `Timing pipeline — ${engineId.replace("_timing_v1", "")} (dasha-first)`
-      : engineId === "marriage_timing_m17"
-        ? "Marriage engine checks (M17)"
-        : "Timing engine checks";
+    dashaFirst
+      ? `Engine checks — step 2 onward (${engineId.replace("_timing_v1", "")})`
+      : engineId === "career_timing_v1"
+        ? "Timing pipeline — career (dasha-first)"
+        : engineId === "marriage_timing_m17"
+          ? "Marriage engine checks (M17)"
+          : "Timing engine checks";
 
-  const pipeline = [
+  const requestMeta = [
     {
-      n: 1,
       title: "Question",
       detail: ctx.question || row.question_text || "—",
     },
     {
-      n: 2,
       title: "Intent routing",
       detail:
         ctx.intent_source === "llm" && ctx.llm_intent
@@ -344,7 +415,6 @@ export function EngineTracePanel({
           : `Regex / rules · route ${ctx.route || "—"} · type ${ctx.question_type || "—"}`,
     },
     {
-      n: 3,
       title: "Engine",
       detail: String(
         trace?.engine ||
@@ -353,7 +423,6 @@ export function EngineTracePanel({
       ),
     },
     {
-      n: 4,
       title: ctx.llm_called === false ? "LLM skipped" : "LLM narrator",
       detail:
         ctx.llm_called === false
@@ -361,22 +430,56 @@ export function EngineTracePanel({
           : `Model ${ctx.model || "—"} · max tokens ${ctx.max_tokens ?? "—"}`,
     },
     {
-      n: 5,
       title: "User answer",
       detail: row.answer_text || trace?.timing_audit?.expected_reply || "—",
     },
   ];
 
+  const pipeline = dashaFirst
+    ? [
+        {
+          n: 1,
+          title: "Active dasha — abhi kya chal raha hai",
+          detail: formatRunningDashaDetail(trace, stepAudit, timingAudit),
+          hero: true,
+        },
+        ...stepOrder
+          .filter((key) => key !== "step1")
+          .map((key, idx) => {
+            const step = stepAudit[key];
+            if (!step) return null;
+            return {
+              n: idx + 2,
+              title: String(step.name || key),
+              detail: stepOneLiner(key, step, engineId),
+              hero: false,
+            };
+          })
+          .filter(Boolean) as { n: number; title: string; detail: string; hero: boolean }[],
+      ]
+    : requestMeta.map((item, i) => ({
+        n: i + 1,
+        title: item.title,
+        detail: item.detail,
+        hero: false,
+      }));
+
+  const stepCardsOrder = dashaFirst
+    ? stepOrder.filter((k) => k !== "step1")
+    : stepOrder;
+
   return (
     <details className="engine-trace-panel" open={hasTrace}>
       <summary>
-        Engine pipeline — step by step
+        {dashaFirst
+          ? "Timing pipeline — step 1 = running dasha"
+          : "Engine pipeline — step by step"}
         {hasTrace ? "" : " (limited — re-ask after API deploy for full trace)"}
       </summary>
       <div className="engine-trace-body">
         <ol className="engine-pipeline-overview">
           {pipeline.map((p) => (
-            <li key={p.n}>
+            <li key={p.n} className={p.hero ? "engine-pipeline-hero" : undefined}>
               <span className="engine-pipeline-num">{p.n}</span>
               <div>
                 <strong>{p.title}</strong>
@@ -386,13 +489,30 @@ export function EngineTracePanel({
           ))}
         </ol>
 
+        {dashaFirst ? (
+          <details className="engine-request-meta">
+            <summary>Question, intent &amp; LLM (admin meta)</summary>
+            <ol className="engine-pipeline-overview engine-pipeline-meta">
+              {requestMeta.map((item, i) => (
+                <li key={item.title}>
+                  <span className="engine-pipeline-num meta">{i + 1}</span>
+                  <div>
+                    <strong>{item.title}</strong>
+                    <p className="detail-muted engine-pipeline-detail">{item.detail}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </details>
+        ) : null}
+
         {trace?.running_dasha_window || trace?.primary_window || trace?.backup_window ? (
           <div className="engine-outcome-box">
-            {trace?.running_dasha_window ? (
+            {!dashaFirst && trace?.running_dasha_window ? (
               <p>
                 <strong>Running dasha (abhi):</strong> {trace.running_dasha_window}
               </p>
-            ) : timingAudit?.running_dasha?.end ? (
+            ) : !dashaFirst && timingAudit?.running_dasha?.end ? (
               <p>
                 <strong>Running dasha (abhi):</strong>{" "}
                 {fmtCheckValue(timingAudit.running_dasha.lords)} · kab tak{" "}
@@ -433,14 +553,15 @@ export function EngineTracePanel({
           <>
             <p className="detail-summary">{pipelineChecksTitle}</p>
             <div className="engine-steps-list">
-              {stepOrder.map((key) => {
+              {stepCardsOrder.map((key, idx) => {
                 const step = stepAudit[key];
                 if (!step) return null;
                 const status = String(step.status || "DONE");
+                const stepLabel = dashaFirst ? String(idx + 2) : key;
                 return (
                   <details key={key} className="engine-step-card">
                     <summary>
-                      <span className="engine-step-key">{key}</span>
+                      <span className="engine-step-key">{stepLabel}</span>
                       <span className="engine-step-oneline">{stepOneLiner(key, step, engineId)}</span>
                       <span className={`engine-step-status status-${status.toLowerCase()}`}>
                         {status}

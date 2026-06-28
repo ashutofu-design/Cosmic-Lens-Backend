@@ -1067,6 +1067,36 @@ code {
   font-size: 0.78rem;
 }
 
+.engine-pipeline-hero {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(52, 211, 153, 0.14);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+}
+
+.engine-pipeline-hero .engine-pipeline-num {
+  background: rgba(16, 185, 129, 0.35);
+  color: #a7f3d0;
+  width: 26px;
+  height: 26px;
+  font-size: 0.8rem;
+}
+
+.engine-pipeline-hero .engine-pipeline-detail {
+  font-size: 0.84rem;
+  color: #d1fae5;
+}
+
+.engine-request-meta {
+  margin-top: 4px;
+  font-size: 0.8rem;
+}
+
+.engine-pipeline-meta .engine-pipeline-num.meta {
+  background: rgba(100, 116, 139, 0.25);
+  color: #94a3b8;
+}
+
 .engine-outcome-box {
   padding: 10px 12px;
   border-radius: var(--radius-sm);

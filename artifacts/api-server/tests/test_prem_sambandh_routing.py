@@ -32,6 +32,15 @@ class TestPremSambandhRouting(unittest.TestCase):
     def test_explicit_hn_preference_keeps_hinglish_reply(self):
         self.assertEqual(_resolve_response_lang(_Q, "en", "hn"), "hn")
 
+    def test_english_relationship_typo_routes_love_timing(self):
+        from event_timing.timing_router import resolve_timing_domain
+
+        q = "When will I come to realationship"
+        self.assertTrue(is_love_timing_question(q))
+        dom, bucket, is_timing = resolve_timing_domain(q)
+        self.assertTrue(is_timing)
+        self.assertEqual(dom, "love")
+
     def test_static_yoga_still_chart_lookup(self):
         q = "Kya meri kundli me Raj yoga hai?"
         intent = _classify_ask_intent(q, "hn")

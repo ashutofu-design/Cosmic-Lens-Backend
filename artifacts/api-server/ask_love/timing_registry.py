@@ -4,6 +4,12 @@ from __future__ import annotations
 import re
 from typing import Optional
 
+try:
+    from ask_question_normalize import prepare_ask_question
+except Exception:
+    def prepare_ask_question(q: str) -> str:  # type: ignore
+        return (q or "").strip()
+
 _TIMING_RX = re.compile(
     r"(?ix)\b("
     r"kab|kab\s+tak|when|when\s+will|kis\s+(saal|year|mahine|month)|"
@@ -27,7 +33,10 @@ _LOVE_SCOPE_RX = re.compile(
     r"third\s+party|teesra|loyal\w*|loyalty|dhokha|cheat|"
     r"parents?|ghar\s*wale|raazi|societal|samaaj|"
     r"favorable\s+dasha|naya\s+partner|relationship\s+shuru|"
-    r"dusra\s+chance|purane\s+rishte|dispute"
+    r"dusra\s+chance|purane\s+rishte|dispute|"
+    r"get\s+into|come\s+into|come\s+to|enter\s+into|start\s+a|"
+    r"find\s+love|find\s+a\s+partner|get\s+a\s+boyfriend|get\s+a\s+girlfriend|"
+    r"in\s+a\s+relationship|dating\s+life|love\s+life"
     r")\b"
 )
 
@@ -48,7 +57,7 @@ def is_love_timing_question(
     question: str,
     llm_intent: Optional[dict] = None,
 ) -> bool:
-    q = (question or "").strip()
+    q = prepare_ask_question((question or "").strip())
     if not q:
         return False
     if _MARRIAGE_OVERRIDE_RX.search(q):

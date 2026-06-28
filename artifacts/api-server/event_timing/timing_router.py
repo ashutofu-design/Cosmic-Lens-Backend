@@ -82,7 +82,12 @@ def resolve_timing_domain(
     llm_intent: Optional[dict] = None,
 ) -> tuple[str, str, bool]:
     """Return (domain, bucket, is_timing)."""
-    q = (question or "").strip()
+    try:
+        from ask_question_normalize import prepare_ask_question
+
+        q = prepare_ask_question((question or "").strip())
+    except Exception:
+        q = (question or "").strip()
     if not q:
         return "general", "general", False
 

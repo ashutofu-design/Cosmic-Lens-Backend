@@ -175,6 +175,38 @@ class TestEngineOnlyPolicy(unittest.TestCase):
         self.assertTrue(is_timing)
         self.assertEqual(dom, "general")
 
+    def test_enforce_blocks_health_without_engine_facts(self):
+        from ask_hard_guards import enforce_engine_only_or_refuse
+
+        q = "Mujhse yeh batao kya kya health issue ho raha hai"
+        llm = {"domain": "health", "is_timing": False, "archetype": "general_health"}
+        out = enforce_engine_only_or_refuse(
+            question=q,
+            qtype="STATIC",
+            llm_intent=llm,
+            checks={"is_health_static": True, "slice_type": "full_compact"},
+            slice_meta={},
+        )
+        self.assertIsNotNone(out)
+        self.assertEqual(out["source"], "engine_required")
+
+    def test_enforce_allows_health_engine_slice(self):
+        from ask_hard_guards import enforce_engine_only_or_refuse
+
+        q = "Mujhse yeh batao kya kya health issue ho raha hai"
+        out = enforce_engine_only_or_refuse(
+            question=q,
+            qtype="STATIC",
+            llm_intent={"domain": "health"},
+            checks={"is_health_static": True, "slice_type": "health_engine_v1"},
+            slice_meta={
+                "slice": "health_engine_v1",
+                "verdict": "mixed",
+                "evidence": ["6th house lord Mars in 10th"],
+            },
+        )
+        self.assertIsNone(out)
+
     def test_career_timing_answer_guard_red_verdict(self):
         from ask_career.answer_guard import verify_career_timing_answer
 

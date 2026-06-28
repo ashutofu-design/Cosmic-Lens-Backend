@@ -5472,8 +5472,11 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     )
                 else:
                     _is_health_static = _hlth_regex
-            except Exception:
-                _is_health_static = False
+            except Exception as _hl_cls_exc:
+                print(
+                    f"[raw_passthrough] health static classify skipped: {_hl_cls_exc}",
+                    flush=True,
+                )
         if _is_career_static and _is_finance_static:
             try:
                 from ask_finance.routing import finance_overrides_career  # type: ignore
@@ -6246,7 +6249,6 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
                 )
                 dcr_love_meta = None
-                _is_health_static = False
         elif _is_mr_static:
             _use_legacy_mr = (os.environ.get("ASK_MR_ENGINE") or "1").strip() == "0"
             if _use_legacy_mr:
@@ -6418,6 +6420,78 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         _is_mr_static = False
         _chart_slice_type = "full_compact_fallback"
 
+    # Health static must use health_engine_v1 — recover if chart build missed it.
+    _health_wanted = bool(_is_health_static) or (
+        isinstance(_llm_intent, dict)
+        and str(_llm_intent.get("domain") or "").strip().lower() == "health"
+        and str(qtype or "").upper() != "TIMING"
+    )
+    _health_has_slice = (
+        isinstance(dcr_love_meta, dict)
+        and dcr_love_meta.get("slice") == "health_engine_v1"
+    )
+    if _health_wanted and not _health_has_slice:
+        try:
+            from ask_health import run_health_static_engine  # type: ignore
+            from ask_health.routing import resolve_health_archetype  # type: ignore
+
+            _health_interp_rec = ""
+            if isinstance(_llm_intent, dict):
+                _health_interp_rec = str(_llm_intent.get("interpretation") or "").strip()
+
+            _resolved_health_arch_rec, _health_arch_reason_rec = resolve_health_archetype(
+                question or "",
+                llm_archetype=_health_archetype_override,
+                interpretation=_health_interp_rec,
+            )
+            if _health_arch_reason_rec:
+                print(
+                    f"[raw_passthrough] HEALTH_ARCHETYPE_ROUTE (recovery) "
+                    f"llm={_health_archetype_override} -> {_resolved_health_arch_rec} "
+                    f"reason={_health_arch_reason_rec}",
+                    flush=True,
+                )
+
+            _health_engine_result = run_health_static_engine(
+                kundli if isinstance(kundli, dict) else {},
+                question or "",
+                wants_explain=wants_explain,
+                archetype=_resolved_health_arch_rec,
+            )
+            chart_text = _health_engine_result.to_narrator_payload()
+            dcr_love_meta = {
+                "slice": "health_engine_v1",
+                "topic": "health",
+                "archetype": _health_engine_result.archetype,
+                "verdict": _health_engine_result.verdict,
+                "summary": list(_health_engine_result.summary or []),
+                "evidence": list(_health_engine_result.evidence or []),
+                "ignore": list(_health_engine_result.ignore or []),
+                "checks": dict(_health_engine_result.checks or {}),
+                "skip_llm": bool(_health_engine_result.skip_llm),
+                "word_budget": int(_health_engine_result.word_budget or 75),
+                "narrator_mode": "engine_facts_only",
+            }
+            _chart_slice_type = "health_engine_v1"
+            _is_health_static = True
+            is_timing = False
+            qtype = "STATIC"
+            print(
+                f"[raw_passthrough] HEALTH_ENGINE (recovery) "
+                f"archetype={_health_engine_result.archetype} "
+                f"evidence={len(_health_engine_result.evidence or [])} "
+                f"chart_chars={len(chart_text)}",
+                flush=True,
+            )
+        except Exception as _hl_rec_exc:
+            print(
+                f"[raw_passthrough] HEALTH_ENGINE recovery failed: {_hl_rec_exc}",
+                flush=True,
+            )
+            _is_health_static = True
+            is_timing = False
+            qtype = "STATIC"
+
     # ── MR / Career engine owns the answer: neutralise decision/finance formatting ──
     # When the static engine produced the facts, the engine narrator alone
     # shapes the reply (engine_facts_only). The generic decision/finance
@@ -6431,6 +6505,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         "children_engine_v1",
         "property_engine_v1",
         "finance_engine_v1",
+        "health_engine_v1",
     ):
         is_decision = False
         is_finance = False

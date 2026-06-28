@@ -244,39 +244,8 @@ def enforce_engine_only_or_refuse(
     if direct_llm_allowed():
         return None
 
-    # Never show engine_required wall for basic health outlook (Health kaisi rahegi?).
-    try:
-        from ask_health.timing_registry import health_static_overrides_llm_timing
-
-        if health_static_overrides_llm_timing(question or "", llm_intent):
-            return None
-    except Exception:
-        import re
-
-        if re.search(
-            r"(?ix)\b(health|sehat|swasth|swasthya|tabiyat)\s+(kaisi|kaisa)\s*"
-            r"(rahegi|rahega|hogi|hoga)?",
-            question or "",
-        ) and not re.search(
-            r"(?ix)\b(kab|when|kis\s+(?:saal|year|date|mahine|month)|20\d{2})\b",
-            question or "",
-        ):
-            return None
-
     checks = checks or {}
     slice_meta = slice_meta or {}
-    # Health static was selected but engine facts missing — answer via LLM, not refusal wall.
-    if checks.get("is_health_static"):
-        try:
-            from ask_health.classifier import is_health_static_question
-
-            if is_health_static_question(question or ""):
-                return None
-        except Exception:
-            pass
-        dom = str((llm_intent or {}).get("domain") or "").strip().lower()
-        if dom == "health":
-            return None
 
     has_domain = passthrough_has_domain_engine_facts(
         checks=checks,

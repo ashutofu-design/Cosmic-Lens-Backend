@@ -90,6 +90,15 @@ class TestAskHealthEngine(unittest.TestCase):
         self.assertIn("8th house", joined)
         self.assertIn("12th house", joined)
 
+    def test_kya_kya_health_issue_engine_payload(self):
+        q = "Mujhse yeh batao kya kya health issue ho raha hai"
+        res = run_health_static_engine(_SAMPLE_KUNDLI, q, archetype="general_health")
+        self.assertEqual(res.archetype, "general_health")
+        joined = " | ".join(res.evidence or [])
+        self.assertIn("6th house", joined)
+        payload = res.to_narrator_payload()
+        self.assertIn("VERDICT:", payload)
+
     def test_hard_guards(self):
         self.assertEqual(classify_health_archetype("kab marunga main?"), "refuse_death")
         from ask_health.timing_registry import is_health_timing_question

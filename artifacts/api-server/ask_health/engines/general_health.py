@@ -19,7 +19,8 @@ _ISSUE_NOW_Q = re.compile(
 )
 
 
-def run_general_health(kundli: dict, question: str, *, wants_explain: bool = False) -> EngineResult:    facts = load_facts(kundli)
+def run_general_health(kundli: dict, question: str, *, wants_explain: bool = False) -> EngineResult:
+    facts = load_facts(kundli)
     if facts.get("error"):
         raise ValueError(facts["error"])
 

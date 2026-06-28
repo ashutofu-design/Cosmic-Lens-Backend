@@ -5305,8 +5305,17 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         _llm_dom_early = str(_llm_intent.get("domain") or "").strip().lower()
         if _llm_dom_early == "health":
             _is_health_static = True
+            is_timing = False
         if _llm_dom_early == "finance":
             _is_finance_static = True
+    try:
+        from ask_health.classifier import is_health_static_question  # type: ignore
+
+        if is_health_static_question(question or ""):
+            _is_health_static = True
+            is_timing = False
+    except Exception:
+        pass
     try:
         from ask_health.health_registry import is_present_health_issue_question  # type: ignore
 

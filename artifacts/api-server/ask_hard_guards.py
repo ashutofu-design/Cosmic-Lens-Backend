@@ -265,6 +265,19 @@ def enforce_engine_only_or_refuse(
 
     checks = checks or {}
     slice_meta = slice_meta or {}
+    # Health static was selected but engine facts missing — answer via LLM, not refusal wall.
+    if checks.get("is_health_static"):
+        try:
+            from ask_health.classifier import is_health_static_question
+
+            if is_health_static_question(question or ""):
+                return None
+        except Exception:
+            pass
+        dom = str((llm_intent or {}).get("domain") or "").strip().lower()
+        if dom == "health":
+            return None
+
     has_domain = passthrough_has_domain_engine_facts(
         checks=checks,
         slice_meta=slice_meta,

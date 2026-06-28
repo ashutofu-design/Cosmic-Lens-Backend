@@ -92,6 +92,13 @@ def is_health_timing_question(
     q = (question or "").strip()
     if not q:
         return False
+    try:
+        from ask_health.health_registry import is_present_health_issue_question
+
+        if is_present_health_issue_question(q):
+            return False
+    except Exception:
+        pass
     if _DEATH_LONGEVITY_RX.search(q):
         return False
     if re.search(r"(?ix)kab\s+(beemar|bimar|sick|ill)\s+(honga|hungi|ho\s+ja)", q):
@@ -148,6 +155,13 @@ def health_static_overrides_llm_timing(
     q = (question or "").strip()
     if not q:
         return False
+    try:
+        from ask_health.health_registry import is_present_health_issue_question
+
+        if is_present_health_issue_question(q):
+            return True
+    except Exception:
+        pass
     try:
         from ask_health.classifier import is_health_static_question
     except Exception:

@@ -72,6 +72,17 @@ class TestAskHealthEngine(unittest.TestCase):
         self.assertTrue(is_health_static_question(q))
         self.assertEqual(classify_health_archetype(q), "general_health")
 
+    def test_present_health_issue_not_timing(self):
+        from ask_health.health_registry import is_present_health_issue_question
+        from ask_health.timing_registry import is_health_timing_question
+
+        q = "Mujhse yeh batao kya kya health issue ho raha hai"
+        self.assertTrue(is_present_health_issue_question(q))
+        self.assertFalse(is_health_timing_question(q))
+        from ask_health.timing_registry import health_static_overrides_llm_timing
+
+        self.assertTrue(health_static_overrides_llm_timing(q, {"domain": "health", "is_timing": True}))
+
     def test_general_health_includes_dusthana_lords(self):
         res = run_health_static_engine(_SAMPLE_KUNDLI, "meri health overall kaisi hai")
         joined = " | ".join(res.evidence or [])

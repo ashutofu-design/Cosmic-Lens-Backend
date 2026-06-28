@@ -5301,6 +5301,20 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _vehicle_engine_on = (os.environ.get("ASK_VEHICLE_ENGINE") or "1").strip() != "0"
     _travel_engine_on = (os.environ.get("ASK_TRAVEL_ENGINE") or "1").strip() != "0"
     _litigation_engine_on = (os.environ.get("ASK_LITIGATION_ENGINE") or "1").strip() != "0"
+    if isinstance(_llm_intent, dict):
+        _llm_dom_early = str(_llm_intent.get("domain") or "").strip().lower()
+        if _llm_dom_early == "health":
+            _is_health_static = True
+        if _llm_dom_early == "finance":
+            _is_finance_static = True
+    try:
+        from ask_health.health_registry import is_present_health_issue_question  # type: ignore
+
+        if is_present_health_issue_question(question or ""):
+            _is_health_static = True
+            is_timing = False
+    except Exception:
+        pass
     if not is_timing:
         if _is_native_overview:
             _is_mr_static = False

@@ -187,6 +187,11 @@ _HEALTH_BODY_RX = re.compile(
 )
 
 
+def is_present_health_issue_question(question: str) -> bool:
+    """Present-tense 'what issues am I having' — static health, NOT timing."""
+    return bool(_ISSUE_NOW_RX.search((question or "").strip()))
+
+
 def _has_real_health_intent(q: str) -> bool:
     """True when the user wants a body/health chart read — not incidental 'health'."""
     if re.search(
@@ -251,6 +256,8 @@ def is_health_static_question(question: str) -> bool:
             return False
     except Exception:
         pass
+    if is_present_health_issue_question(q):
+        return True
     try:
         from ask_health.timing_registry import is_health_timing_question  # type: ignore
 

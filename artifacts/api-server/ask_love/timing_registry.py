@@ -16,7 +16,8 @@ _TIMING_RX = re.compile(
 
 _LOVE_SCOPE_RX = re.compile(
     r"(?ix)\b("
-    r"love|pyaar|pyar|crush|relationship|boyfriend|girlfriend|"
+    r"love|pyaar|pyar|prem|premika|premi|prem\s*sambandh|sambandh|"
+    r"crush|relationship|boyfriend|girlfriend|"
     r"patchup|patch\s*up|reconcile|commitment|propose|marry\s+him|marry\s+her|"
     r"one[\s-]?sided|affair|breakup|break\s*up|rishta|"
     r"partner|ex\b|separation|separate|unblock|no[\s-]?contact|"

@@ -235,6 +235,19 @@ def is_chart_lookup_question(question: str) -> bool:
     q = normalize_ask_typos((question or "").strip())
     if not q or len(q.split()) > 18:
         return False
+    # Love / vehicle / career timing must not be mis-routed as chart yoga lookup.
+    for _mod, _fn in (
+        ("ask_love.timing_registry", "is_love_timing_question"),
+        ("ask_vehicle.timing_registry", "is_vehicle_timing_question"),
+        ("ask_career.timing_registry", "is_career_timing_question"),
+    ):
+        try:
+            import importlib
+
+            if getattr(importlib.import_module(_mod), _fn)(q):
+                return False
+        except Exception:
+            pass
     local = _detect_local_lookup_tag(q)
     if local:
         return True

@@ -12152,8 +12152,18 @@ def _classify_ask_intent(question: str, lang: str = "hn") -> dict:
         return {"intent": "dasha_current", "subjects": planets or ["Dasha"], "scope": "dasha",
                 "confidence": 0.92, "reasons": reasons, "word_count": wc}
 
-    # 4. Yoga check
+    # 4. Yoga check — static "Raj yoga hai kya?"; "prem ka yog kab banega" = event timing.
     if has_yoga:
+        if has_timing_when or re.search(
+            r"(?ix)\b("
+            r"banega|banegi|ban\s+sakta|bana|milega|milegi|aayega|aayegi|"
+            r"shuru|trigger|kab\s+tak"
+            r")\b",
+            q,
+        ):
+            reasons.append("yoga + when/timing — event timing (not chart yoga lookup)")
+            return {"intent": "timing_when", "subjects": [], "scope": "timing",
+                    "confidence": 0.88, "reasons": reasons, "word_count": wc}
         reasons.append("yoga keyword")
         return {"intent": "yoga_check", "subjects": planets or ["Yoga"], "scope": "yoga",
                 "confidence": 0.90, "reasons": reasons, "word_count": wc}

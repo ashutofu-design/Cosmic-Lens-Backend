@@ -24,10 +24,15 @@ DOMAIN_ENGINE_IDS: dict[str, str] = {
     "children": "children_timing_v1",
     "love": "love_timing_v1",
     "education": "education_timing_v1",
+    "foreign_education": "foreign_education_timing_v1",
     "property": "property_timing_v1",
     "litigation": "litigation_timing_v1",
     "career": "career_timing_v1",
     "marriage": "marriage_timing_m17",
+    "spiritual": "spiritual_timing_v1",
+    "fame": "fame_timing_v1",
+    "network": "network_timing_v1",
+    "universal": "universal_timing_v1",
 }
 
 _RANKED_KEYS = (

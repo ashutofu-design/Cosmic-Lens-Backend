@@ -46,14 +46,60 @@ from .govt_job_engine_v1 import (
     assess_govt_job_promise,
     format_govt_job_block_for_prompt,
 )
+from .promotion_engine_v1 import (
+    assess_promotion,
+    assess_promotion_promise,
+    format_promotion_block_for_prompt,
+)
+from .resignation_engine_v1 import (
+    assess_resignation,
+    assess_resignation_viability,
+    format_resignation_block_for_prompt,
+)
+from .field_choice_engine_v1 import (
+    assess_field_choice,
+    format_field_choice_block_for_prompt,
+)
+from .general_career_engine_v1 import (
+    assess_general_career,
+    format_general_career_block_for_prompt,
+)
+from .job_change_engine_v1 import (
+    assess_job_change,
+    format_job_change_block_for_prompt,
+)
+from .setback_engine_v1 import (
+    assess_setback,
+    format_setback_block_for_prompt,
+)
+from .transfer_engine_v1 import (
+    assess_transfer,
+    format_transfer_block_for_prompt,
+)
 
 __all__ = [
     "assess_career",
+    "assess_field_choice",
+    "assess_general_career",
     "assess_govt_job",
     "assess_govt_job_promise",
+    "assess_job_change",
+    "assess_promotion",
+    "assess_promotion_promise",
+    "assess_resignation",
+    "assess_resignation_viability",
+    "assess_setback",
+    "assess_transfer",
     "build_career_timing_engine_trace",
     "build_career_timing_step_audit",
+    "format_field_choice_block_for_prompt",
+    "format_general_career_block_for_prompt",
     "format_govt_job_block_for_prompt",
+    "format_job_change_block_for_prompt",
+    "format_promotion_block_for_prompt",
+    "format_resignation_block_for_prompt",
+    "format_setback_block_for_prompt",
+    "format_transfer_block_for_prompt",
     "format_verdict_for_prompt",
     "classify_career_question",
 ]

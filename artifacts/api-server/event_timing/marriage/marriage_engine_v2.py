@@ -1284,52 +1284,6 @@ def _transit_rashis_at_iso(iso_date: str) -> Tuple[Optional[str], Optional[str]]
         return None, None
 
 
-def _compact_transit_by_month(
-    samples: List[Dict[str, Any]],
-) -> Tuple[str, List[str], List[Dict[str, Any]]]:
-    """Month + Guru/Shani rashi only (admin step7 — no house/orb detail)."""
-    month_rows: List[Dict[str, Any]] = []
-    month_labels: List[str] = []
-    detail_parts: List[str] = []
-    by_month: Dict[str, Dict[str, Any]] = {}
-
-    for sample in samples:
-        month = _iso_to_month_label(str(sample.get("date") or ""))
-        if not month:
-            continue
-        guru = _rashi_from_transit_sample(sample, "jupiter")
-        shani = _rashi_from_transit_sample(sample, "saturn")
-        if not guru and not shani:
-            continue
-        row = by_month.setdefault(month, {"month": month})
-        if guru:
-            row["jupiter_rashi"] = guru
-        if shani:
-            row["saturn_rashi"] = shani
-
-    for month in sorted(by_month.keys(), key=lambda m: _month_sort_key(m)):
-        row = by_month[month]
-        guru = row.get("jupiter_rashi")
-        shani = row.get("saturn_rashi")
-        if not guru and not shani:
-            continue
-        month_labels.append(month)
-        month_rows.append({
-            "month": month,
-            **({"jupiter_rashi": guru} if guru else {}),
-            **({"saturn_rashi": shani} if shani else {}),
-        })
-        bits: List[str] = []
-        if guru:
-            bits.append(f"Guru {guru}")
-        if shani:
-            bits.append(f"Shani {shani}")
-        detail_parts.append(f"{month}: " + ", ".join(bits))
-
-    detail = " · ".join(detail_parts) if detail_parts else "no transit hit"
-    return detail, month_labels, month_rows
-
-
 def _parse_month_labels_from_text(text: str) -> List[str]:
     import re as _re_ml
 
@@ -1353,38 +1307,332 @@ def _mid_month_iso(month_label: str) -> Optional[str]:
         return None
 
 
-def _has_rashi_rows(by_month: List[Dict[str, Any]]) -> bool:
-    return any(
-        r.get("jupiter_rashi") or r.get("saturn_rashi")
-        for r in (by_month or [])
-        if isinstance(r, dict)
+def _collect_sign_hits(
+    planet_name: str,
+    p_si: Optional[int],
+    h7_si: int,
+    seventh_lord_si: Optional[int],
+) -> List[Dict[str, Any]]:
+    """Sign-level 7H / 7L transit hits for Guru or Shani."""
+    hits: List[Dict[str, Any]] = []
+    if p_si is None:
+        return hits
+    if p_si == h7_si:
+        hits.append({
+            "target": "7th house",
+            "mode": "sign",
+            "hit_type": "occupies_7th_house",
+        })
+    elif _aspects_target(planet_name, p_si, h7_si):
+        hits.append({
+            "target": "7th house",
+            "mode": "sign",
+            "hit_type": "aspects_7th_house",
+        })
+    if seventh_lord_si is not None:
+        if p_si == seventh_lord_si:
+            hits.append({
+                "target": "7th lord sign",
+                "mode": "sign",
+                "hit_type": "conjunct_7th_lord",
+            })
+        elif _aspects_target(planet_name, p_si, seventh_lord_si):
+            hits.append({
+                "target": "7th lord sign",
+                "mode": "sign",
+                "hit_type": "aspects_7th_lord",
+            })
+    return hits
+
+
+_HIT_ACTIVATION_LABELS = {
+    "occupies_7th_house": "7th ghar me",
+    "aspects_7th_house": "7th ghar drishti",
+    "conjunct_7th_lord": "7th lord sign me",
+    "aspects_7th_lord": "7th lord drishti",
+}
+
+_TRANSIT_TYPE_LABELS = {
+    "double": "Double transit (Guru + Shani dono active)",
+    "single_guru": "Single transit (sirf Guru active)",
+    "single_shani": "Single transit (sirf Shani active)",
+    "split": "Split transit (Guru/Shani alag mahino me — double nahi)",
+    "none": "Koi 7H/7L transit active nahi",
+}
+
+
+def _hit_to_activation_label(hit: Dict[str, Any]) -> str:
+    if hit.get("mode") == "exact_orb":
+        tgt = str(hit.get("target") or "").lower()
+        if "7th house" in tgt or tgt.startswith("7h"):
+            return "7th ghar exact orb"
+        if "7th lord" in tgt or tgt.startswith("7l"):
+            return "7th lord exact orb"
+        return "exact orb"
+    return _HIT_ACTIVATION_LABELS.get(
+        str(hit.get("hit_type") or ""),
+        str(hit.get("target") or "7H/7L link"),
     )
+
+
+def _activation_from_hits(hits: Optional[List[Dict[str, Any]]]) -> Tuple[bool, str]:
+    hits = hits or []
+    if not hits:
+        return False, "7H/7L par nahi"
+    labels: List[str] = []
+    for h in hits:
+        lab = _hit_to_activation_label(h)
+        if lab and lab not in labels:
+            labels.append(lab)
+    return True, ", ".join(labels)
+
+
+def _transit_type_label(jup_hit: bool, sat_hit: bool, dt: bool) -> str:
+    if dt or (jup_hit and sat_hit):
+        return "double"
+    if jup_hit:
+        return "single_guru"
+    if sat_hit:
+        return "single_shani"
+    return "none"
+
+
+def _derive_transit_flags_from_by_month(
+    by_month: List[Dict[str, Any]],
+) -> Tuple[bool, bool, bool, str]:
+    """Transit type from displayed month rows — same month both active = double."""
+    if not by_month:
+        return False, False, False, "none"
+    jup = any(bool(r.get("jupiter_active")) for r in by_month)
+    sat = any(bool(r.get("saturn_active")) for r in by_month)
+    double = any(
+        bool(r.get("jupiter_active")) and bool(r.get("saturn_active"))
+        for r in by_month
+    )
+    if double:
+        ttype = "double"
+    elif jup and sat:
+        ttype = "split"
+    elif jup:
+        ttype = "single_guru"
+    elif sat:
+        ttype = "single_shani"
+    else:
+        ttype = "none"
+    return jup, sat, double, ttype
+
+
+def _build_transit_chart_context(
+    lagna_si: int,
+    h7_si: int,
+    seventh_lord: Optional[str],
+    seventh_lord_si: Optional[int],
+) -> Dict[str, Any]:
+    return {
+        "lagna_rashi": _RASHI_HI[lagna_si % 12],
+        "seventh_house_rashi": _RASHI_HI[h7_si % 12],
+        "seventh_lord": seventh_lord or "",
+        "seventh_lord_rashi": _si_to_rashi_label(seventh_lord_si),
+        "h7_si": h7_si,
+        "seventh_lord_si": seventh_lord_si,
+    }
+
+
+def _public_chart_context(ctx: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not isinstance(ctx, dict):
+        return {}
+    return {
+        "lagna": ctx.get("lagna_rashi"),
+        "seventh_house": ctx.get("seventh_house_rashi"),
+        "seventh_lord": ctx.get("seventh_lord"),
+        "seventh_lord_sign": ctx.get("seventh_lord_rashi"),
+    }
+
+
+def _rashi_label_to_si(label: Optional[str]) -> Optional[int]:
+    if not label:
+        return None
+    try:
+        return _RASHI_HI.index(str(label).strip())
+    except ValueError:
+        return None
+
+
+def transit_ctx_from_public_chart(cc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Rebuild ephemeris transit context from admin chart_context (legacy traces)."""
+    if not isinstance(cc, dict):
+        return None
+    h7_si = _rashi_label_to_si(cc.get("seventh_house"))
+    if h7_si is None:
+        return None
+    lord_si = _rashi_label_to_si(cc.get("seventh_lord_sign"))
+    return {
+        "lagna_rashi": cc.get("lagna"),
+        "seventh_house_rashi": cc.get("seventh_house"),
+        "seventh_lord": cc.get("seventh_lord"),
+        "seventh_lord_rashi": cc.get("seventh_lord_sign"),
+        "h7_si": h7_si,
+        "seventh_lord_si": lord_si,
+    }
+
+
+def _format_planet_month_line(
+    planet_label: str,
+    rashi: str,
+    active: bool,
+    activation: str,
+) -> str:
+    if not rashi:
+        return ""
+    status = activation if active else "7H/7L par nahi"
+    return f"{planet_label} {rashi} ({status})"
+
+
+def _compact_transit_by_month(
+    samples: List[Dict[str, Any]],
+    transit_ctx: Optional[Dict[str, Any]] = None,
+) -> Tuple[str, List[str], List[Dict[str, Any]]]:
+    """Month + Guru/Shani rashi + 7H/7L activation (admin step7)."""
+    by_month: Dict[str, Dict[str, Any]] = {}
+
+    for sample in samples:
+        month = _iso_to_month_label(str(sample.get("date") or ""))
+        if not month:
+            continue
+        row = by_month.setdefault(month, {"month": month})
+        for planet, label in (("jupiter", "Guru"), ("saturn", "Shani")):
+            rashi = _rashi_from_transit_sample(sample, planet)
+            if rashi:
+                row[f"{planet}_rashi"] = rashi
+            hits = sample.get(f"{planet}_hits") or []
+            active, act = _activation_from_hits(hits)
+            if active:
+                row[f"{planet}_active"] = True
+                row[f"{planet}_activation"] = act
+            elif f"{planet}_rashi" in row and f"{planet}_activation" not in row:
+                row[f"{planet}_active"] = False
+                row[f"{planet}_activation"] = "7H/7L par nahi"
+
+    month_rows: List[Dict[str, Any]] = []
+    month_labels: List[str] = []
+    detail_parts: List[str] = []
+
+    for month in sorted(by_month.keys(), key=lambda m: _month_sort_key(m)):
+        row = by_month[month]
+        guru = row.get("jupiter_rashi")
+        shani = row.get("saturn_rashi")
+        if not guru and not shani:
+            continue
+        month_labels.append(month)
+        out_row: Dict[str, Any] = {"month": month}
+        line_bits: List[str] = []
+        for planet, label in (("jupiter", "Guru"), ("saturn", "Shani")):
+            rashi = row.get(f"{planet}_rashi")
+            if not rashi:
+                continue
+            active = bool(row.get(f"{planet}_active"))
+            act = str(row.get(f"{planet}_activation") or ("7H/7L par nahi" if not active else ""))
+            out_row[f"{planet}_rashi"] = rashi
+            out_row[f"{planet}_active"] = active
+            out_row[f"{planet}_activation"] = act
+            seg = _format_planet_month_line(label, rashi, active, act)
+            if seg:
+                line_bits.append(seg)
+        month_rows.append(out_row)
+        detail_parts.append(f"{month}: " + " · ".join(line_bits))
+
+    detail = " · ".join(detail_parts) if detail_parts else "no transit hit"
+    return detail, month_labels, month_rows
+
+
+def _transit_row_at_iso(
+    iso_date: str,
+    transit_ctx: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """One month row with rashi + 7H/7L activation from ephemeris."""
+    month = _iso_to_month_label(iso_date)
+    row: Dict[str, Any] = {"month": month}
+    if not month or not isinstance(transit_ctx, dict):
+        guru, shani = _transit_rashis_at_iso(iso_date)
+        if guru:
+            row["jupiter_rashi"] = guru
+        if shani:
+            row["saturn_rashi"] = shani
+        return row
+
+    h7_si = transit_ctx.get("h7_si")
+    seventh_lord_si = transit_ctx.get("seventh_lord_si")
+    if h7_si is None or not _HAS_SWE:
+        guru, shani = _transit_rashis_at_iso(iso_date)
+        if guru:
+            row["jupiter_rashi"] = guru
+        if shani:
+            row["saturn_rashi"] = shani
+        return row
+
+    try:
+        y, m, d = [int(x) for x in str(iso_date)[:10].split("-")]
+        dt = datetime(y, m, d)
+        jup_lon = _planet_lon_at(swe.JUPITER, dt)
+        sat_lon = _planet_lon_at(swe.SATURN, dt)
+        jup_si = int(jup_lon / 30.0) % 12 if jup_lon is not None else None
+        sat_si = int(sat_lon / 30.0) % 12 if sat_lon is not None else None
+    except Exception:
+        jup_si = sat_si = None
+
+    for planet, p_si, label in (
+        ("jupiter", jup_si, "Guru"),
+        ("saturn", sat_si, "Shani"),
+    ):
+        rashi = _si_to_rashi_label(p_si)
+        if rashi:
+            row[f"{planet}_rashi"] = rashi
+        hits = _collect_sign_hits(
+            "Jupiter" if planet == "jupiter" else "Saturn",
+            p_si,
+            int(h7_si),
+            int(seventh_lord_si) if seventh_lord_si is not None else None,
+        )
+        active, act = _activation_from_hits(hits)
+        row[f"{planet}_active"] = active
+        row[f"{planet}_activation"] = act
+    return row
 
 
 def _enrich_transit_month_labels(
     month_labels: List[str],
+    transit_ctx: Optional[Dict[str, Any]] = None,
 ) -> Tuple[str, List[str], List[Dict[str, Any]]]:
-    """Guru/Shani rashi for each month label (mid-month ephemeris)."""
     unique = sorted(set(month_labels), key=lambda m: _month_sort_key(m))
     by_month: List[Dict[str, Any]] = []
     parts: List[str] = []
     for month in unique:
         iso = _mid_month_iso(month)
-        guru, shani = _transit_rashis_at_iso(iso) if iso else (None, None)
-        row: Dict[str, Any] = {"month": month}
-        if guru:
-            row["jupiter_rashi"] = guru
-        if shani:
-            row["saturn_rashi"] = shani
+        if not iso:
+            continue
+        row = _transit_row_at_iso(iso, transit_ctx)
+        row["month"] = month
         by_month.append(row)
-        bits: List[str] = []
-        if guru:
-            bits.append(f"Guru {guru}")
-        if shani:
-            bits.append(f"Shani {shani}")
-        parts.append(f"{month}: " + ", ".join(bits) if bits else month)
+        line_bits: List[str] = []
+        for planet, label in (("jupiter", "Guru"), ("saturn", "Shani")):
+            rashi = row.get(f"{planet}_rashi")
+            if not rashi:
+                continue
+            active = bool(row.get(f"{planet}_active"))
+            act = str(row.get(f"{planet}_activation") or "7H/7L par nahi")
+            seg = _format_planet_month_line(label, rashi, active, act)
+            if seg:
+                line_bits.append(seg)
+        parts.append(f"{month}: " + " · ".join(line_bits) if line_bits else month)
     detail = " · ".join(parts) if parts else "no transit hit"
     return detail, [r["month"] for r in by_month], by_month
+
+
+def _has_activation_rows(by_month: List[Dict[str, Any]]) -> bool:
+    return bool(by_month) and any(
+        isinstance(r, dict) and (r.get("jupiter_rashi") or r.get("saturn_rashi"))
+        for r in by_month
+    )
 
 
 def finalize_transit_display(
@@ -1393,31 +1641,68 @@ def finalize_transit_display(
     detail: str = "",
     months: Optional[List[str]] = None,
     window: Optional[Dict[str, Any]] = None,
+    transit_ctx: Optional[Dict[str, Any]] = None,
 ) -> Tuple[str, List[str], List[Dict[str, Any]]]:
-    """Admin step7 line — always prefer Guru/Shani rashi per month."""
+    """Admin step7 — rashi + 7H/7L activation per month."""
     samples = samples or []
-    d, m, b = _compact_transit_by_month(samples)
-    if _has_rashi_rows(b):
+    d, m, b = _compact_transit_by_month(samples, transit_ctx)
+    if _has_activation_rows(b) and any(
+        "jupiter_activation" in r or "saturn_activation" in r for r in b
+    ):
         return d, m, b
     if isinstance(window, dict) and window:
         w_samples = window.get("transit_samples") or []
         if w_samples and w_samples is not samples:
-            d, m, b = _compact_transit_by_month(w_samples)
-            if _has_rashi_rows(b):
+            d, m, b = _compact_transit_by_month(w_samples, transit_ctx)
+            if _has_activation_rows(b):
                 return d, m, b
         check_at = window.get("transit_check_at") or window.get("start_iso")
         if check_at:
             labels = [_iso_to_month_label(str(check_at))]
             if labels[0]:
-                return _enrich_transit_month_labels(labels)
+                return _enrich_transit_month_labels(labels, transit_ctx)
     labels = list(months or []) or _parse_month_labels_from_text(detail) or _parse_month_labels_from_text(d)
     if labels:
-        return _enrich_transit_month_labels(labels)
+        return _enrich_transit_month_labels(labels, transit_ctx)
     return d, m, b
 
 
-def _monthify_verbose_transit_detail(verbose: str) -> str:
-    """Legacy / month-only text → Guru/Shani rashi per month."""
+def _build_step7_transit_package(
+    window: Dict[str, Any],
+    transit_ctx: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    detail, months, by_month = finalize_transit_display(
+        samples=window.get("transit_samples") or [],
+        detail=str(window.get("dt_detail") or ""),
+        months=window.get("transit_months") if isinstance(window.get("transit_months"), list) else None,
+        window=window,
+        transit_ctx=transit_ctx,
+    )
+    jup_hit, sat_hit, dt, ttype = _derive_transit_flags_from_by_month(by_month)
+    if ttype == "none" and not _has_activation_rows(by_month):
+        jup_hit = bool(window.get("jup"))
+        sat_hit = bool(window.get("sat"))
+        dt = bool(window.get("dt"))
+        ttype = _transit_type_label(jup_hit, sat_hit, dt)
+    return {
+        "detail": detail,
+        "months": months,
+        "by_month": by_month,
+        "transit_type": ttype,
+        "transit_type_label": _TRANSIT_TYPE_LABELS.get(ttype, ttype),
+        "chart_context": _public_chart_context(transit_ctx),
+        "jupiter_hit": jup_hit,
+        "saturn_hit": sat_hit,
+        "double_transit": dt,
+        "transit_confirmed": bool(window.get("transit_confirmed")),
+    }
+
+
+def _monthify_verbose_transit_detail(
+    verbose: str,
+    transit_ctx: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Legacy / month-only text → rashi + 7H/7L activation per month."""
     if not verbose or "no transit" in verbose.lower():
         return verbose or "no transit hit"
 
@@ -1431,18 +1716,16 @@ def _monthify_verbose_transit_detail(verbose: str) -> str:
     if not labels:
         labels = _parse_month_labels_from_text(verbose)
     if labels:
-        return _enrich_transit_month_labels(labels)[0]
+        return _enrich_transit_month_labels(labels, transit_ctx)[0]
     return verbose
 
 
-def _transit_month_summary_from_window(w: Dict[str, Any]) -> Tuple[str, List[str], List[Dict[str, Any]]]:
-    """Best transit line for a scored window (month + Guru/Shani rashi)."""
-    return finalize_transit_display(
-        samples=w.get("transit_samples") or [],
-        detail=str(w.get("dt_detail") or ""),
-        months=w.get("transit_months") if isinstance(w.get("transit_months"), list) else None,
-        window=w,
-    )
+def _transit_month_summary_from_window(
+    w: Dict[str, Any],
+    transit_ctx: Optional[Dict[str, Any]] = None,
+) -> Tuple[str, List[str], List[Dict[str, Any]]]:
+    pkg = _build_step7_transit_package(w, transit_ctx)
+    return pkg["detail"], pkg["months"], pkg["by_month"]
 
 
 def _transit_sample_dates(window: Dict[str, Any]) -> List[datetime]:
@@ -1586,33 +1869,10 @@ def _step6_double_transit(window: Dict[str, Any],
         }
 
         def _append_sign_hits(planet_name: str, p_si: Optional[int], bucket: str) -> None:
-            if p_si is None:
-                return
-            if p_si == h7_si:
-                sample[bucket].append({
-                    "target": "7th house",
-                    "mode": "sign",
-                    "hit_type": "occupies_7th_house",
-                })
-            elif _aspects_target(planet_name, p_si, h7_si):
-                sample[bucket].append({
-                    "target": "7th house",
-                    "mode": "sign",
-                    "hit_type": "aspects_7th_house",
-                })
-            if seventh_lord_si is not None:
-                if p_si == seventh_lord_si:
-                    sample[bucket].append({
-                        "target": "7th lord sign",
-                        "mode": "sign",
-                        "hit_type": "conjunct_7th_lord",
-                    })
-                elif _aspects_target(planet_name, p_si, seventh_lord_si):
-                    sample[bucket].append({
-                        "target": "7th lord sign",
-                        "mode": "sign",
-                        "hit_type": "aspects_7th_lord",
-                    })
+            for hit in _collect_sign_hits(
+                planet_name, p_si, h7_si, seventh_lord_si,
+            ):
+                sample[bucket].append(hit)
 
         if exact_targets:
             if jup_lon is not None:
@@ -2868,9 +3128,14 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             )
 
     # ── Output assembly ────────────────────────────────────────────────
+    _transit_chart_ctx = _build_transit_chart_context(
+        lagna_si, h7_si, seventh_lord, seventh_lord_si,
+    )
     top_3_serial: List[Dict[str, Any]] = []
     for w in top_3:
-        _t_detail, _t_months, _t_by_month = _transit_month_summary_from_window(w)
+        _t_detail, _t_months, _t_by_month = _transit_month_summary_from_window(
+            w, _transit_chart_ctx,
+        )
         top_3_serial.append({
             "md": w["md"],
             "ad": w["ad"],
@@ -2968,9 +3233,12 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         )
 
     primary_audit = top_3_serial[0] if top_3_serial else {}
-    _step7_detail, _step7_months, _step7_by_month = _transit_month_summary_from_window(
-        primary_audit,
+    _step7_pkg = _build_step7_transit_package(
+        primary_audit, _transit_chart_ctx,
     )
+    _step7_detail = _step7_pkg["detail"]
+    _step7_months = _step7_pkg["months"]
+    _step7_by_month = _step7_pkg["by_month"]
     audit_checks: List[Dict[str, Any]] = []
     audit_issues: List[str] = []
 
@@ -3185,7 +3453,12 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             "name": "Transit verification",
             "status": "DONE" if top_3_serial else "NO_WINDOW",
             "transit_confirmed": final_transit_support,
-            "double_transit": final_double_transit,
+            "double_transit": _step7_pkg.get("double_transit"),
+            "transit_type": _step7_pkg.get("transit_type"),
+            "transit_type_label": _step7_pkg.get("transit_type_label"),
+            "chart_context": _step7_pkg.get("chart_context"),
+            "jupiter_hit": _step7_pkg.get("jupiter_hit"),
+            "saturn_hit": _step7_pkg.get("saturn_hit"),
             "detail": _step7_detail,
             "months": _step7_months,
             "by_month": _step7_by_month,
@@ -3214,6 +3487,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         "key_trigger": key_trigger,
         "timing_audit": timing_audit,
         "step_audit": step_audit,
+        "transit_chart_context": _transit_chart_ctx,
         "confluence_strength": confluence_strength,
         "factors": factors,
         # Significator pipeline (user spec Steps 1–5)

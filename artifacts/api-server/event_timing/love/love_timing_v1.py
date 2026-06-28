@@ -1,74 +1,67 @@
-"""Love timing engine v1 — reconciliation/commitment/meeting windows."""
+"""Love timing v1 — dasha-first (current AD/PD → next scan) + KP via dual-track."""
 from __future__ import annotations
 
-import re
 from typing import Any, Optional
 
-from event_timing._shared.generic_timing_engine import DomainTimingConfig, compute_generic_timing_window
+from event_timing._shared.generic_timing_engine import (
+    DomainTimingConfig,
+    compute_generic_timing_window,
+)
+from event_timing.love.love_timing_engine_v1 import (
+    LOVE_TONE_RULES,
+    classify_love_timing_bucket,
+)
 
 _LOVE_CFG = DomainTimingConfig(
     domain="love",
-    engine_version="love_timing_v1.0",
+    engine_version="love_timing_v2.0",
     concern_houses=[
-        (5, 16.0, "5L (romance/attraction)"),
-        (7, 14.0, "7L (partnership/commitment)"),
-        (11, 12.0, "11L (fulfilment/desire)"),
+        (5, 18.0, "5H romance"),
+        (7, 18.0, "7H partnership"),
+        (11, 12.0, "11H fulfilment in love"),
     ],
     leak_houses=[
-        (8, 8.0, "8L (breakup shock/separation tone)"),
-        (12, 8.0, "12L (hidden/loss in relationship)"),
+        (6, 6.0, "6H conflict"),
+        (8, 8.0, "8H sudden breaks"),
+        (12, 8.0, "12H hidden/loss"),
     ],
     occupant_bumps=[
-        (5, 12.0, "occupies 5H (romance active)"),
-        (7, 10.0, "occupies 7H (partnership axis)"),
+        (5, 10.0, "occupies 5H"),
+        (7, 10.0, "occupies 7H"),
+        (11, 8.0, "occupies 11H"),
     ],
     aspect_target_houses=[
-        (5, 8.0, "aspects 5H (romance trigger)"),
-        (7, 8.0, "aspects 7H (relationship trigger)"),
+        (5, 8.0, "aspects 5H"),
+        (7, 8.0, "aspects 7H"),
+        (11, 6.0, "aspects 11H"),
     ],
     karakas=[
-        ("Venus", 14.0, "love/attraction karaka"),
-        ("Moon", 8.0, "emotion/bond karaka"),
-        ("Mars", 6.0, "passion/pursuit karaka"),
+        ("Venus", 16.0, "Venus love karaka"),
+        ("Moon", 12.0, "Moon emotions"),
+        ("Mars", 10.0, "Mars passion"),
     ],
     kp_cusps=[5, 7, 11],
-    promote_tags=("5L", "7L", "11L", "Venus", "Moon", "occupies 5H", "occupies 7H"),
-    obstruct_tags=("8L", "12L", "12H", "separation"),
-    double_transit_houses=[5, 7],
+    promote_tags=(
+        "5L", "5H", "7L", "7H", "11L", "11H",
+        "Venus", "Moon", "Mars", "romance", "partnership", "fulfilment",
+        "occupies 5H", "occupies 7H", "occupies 11H",
+    ),
+    obstruct_tags=("6L", "8L", "12L", "6H", "8H", "12H", "conflict", "hidden"),
+    double_transit_houses=[5, 7, 11],
     promised_label="LOVE_WINDOW_SUPPORTIVE",
     favourable_label="LOVE_WINDOW_MODERATE",
     caution_label="LOVE_WINDOW_SENSITIVE",
-    defer_label="LOVE_WINDOW_LOW",
-    brand_safety=[
-        "Rejection/betrayal/third-party identity ki certainty mat do.",
-        "Breakup ki absolute prediction band — healing + strategy pair karo.",
-        "One-sided cases mein self-worth preserve karo.",
-        "Love-marriage kab → marriage engine use hota hai.",
+    defer_label="LOVE_WINDOW_DEFERRED",
+    brand_safety=list(LOVE_TONE_RULES) + [
+        "Never guarantee exact date — probability window only.",
+        "No third-party naming; pattern level only.",
     ],
-    llm_directives=["LOVE_TONE_RULES", "NO_REJECTION_CERTAINTY", "NO_THIRD_PARTY_ID"],
+    llm_directives=[
+        "DASHA_FIRST: pehle current AD/PD check — agar 5/7/11 + Venus/Moon weak → abhi shuru nahi.",
+        "NEXT_SCAN: current weak ho to chronology se pehla strong AD/PD window batao.",
+        "KP: current dasha lords + 5/7/11 cusp sub-lords match karein to confidence badhao.",
+    ],
 )
-
-LOVE_TONE_RULES: tuple = (
-    "Never encourage breakup or separation; offer perspective only.",
-    "Do not label a partner with toxic-trait diagnoses.",
-    "Never promise love outcome as certainty; use probability window language.",
-    "No third-party identification — cosmic pattern level only.",
-)
-
-_BUCKET_RX = [
-    ("reconciliation", r"(?ix)\b(patchup|patch\s*up|reconcile|wapas|return)\b"),
-    ("commitment_fear", r"(?ix)\b(commitment|propose|shaadi\s+se\s+darr)\b"),
-    ("one_sided", r"(?ix)\b(one[\s-]?sided|crush|unrequited)\b"),
-    ("timing", r"(?ix)\b(milega|milegi|hoga|hogi|kab)\b"),
-]
-
-
-def classify_love_timing_bucket(question: str) -> str:
-    q = question or ""
-    for name, rx in _BUCKET_RX:
-        if re.search(rx, q):
-            return name
-    return "timing"
 
 
 def compute_love_window(
@@ -80,38 +73,91 @@ def compute_love_window(
     bucket: str | None = None,
 ) -> dict:
     b = bucket or classify_love_timing_bucket(question)
-    result = compute_generic_timing_window(
+    out = compute_generic_timing_window(
         kundli, _LOVE_CFG, intel, kp, birth, question, b,
     )
-    result["love_tone_rules"] = list(LOVE_TONE_RULES)
-    return result
+    out["engine"] = "love_timing_engine_v1"
+    out["love_tone_rules"] = list(LOVE_TONE_RULES)
+    out["transits"] = out.get("double_transit") or {}
+    ts = str(out.get("timing_source") or "")
+    cw = out.get("current_window") if isinstance(out.get("current_window"), dict) else {}
+    if ts == "current_dasha_active" and cw:
+        out["strategy"] = (
+            f"CURRENT love window — abhi chal rahi AD/PD {cw.get('ad')}/{cw.get('pd')} "
+            f"({cw.get('start_iso')}→{cw.get('end_iso')}) 5/7/11 axis active."
+        )
+    elif ts == "next_dasha_scan" and cw:
+        out["strategy"] = (
+            f"Current dasha mein love trigger weak — pehla strong window "
+            f"{cw.get('start_iso')}→{cw.get('end_iso')} AD/PD {cw.get('ad')}/{cw.get('pd')}."
+        )
+    else:
+        out["strategy"] = out.get("strategy") or "Chart scan — probability window only."
+    return out
 
 
 def format_love_timing_for_prompt(v: dict, question: str = "") -> str:
     if not isinstance(v, dict) or not v:
         return ""
     lines = [
-        "════════════════ LOVE TIMING ENGINE (LOCKED) ════════════════",
-        f"Verdict: {v.get('verdict', '?')} | Band: {v.get('band', '?')} | Bucket: {v.get('bucket', '?')}",
+        "=== LOVE TIMING ENGINE v2 (LOCKED) — dasha-first · 5H/7H/11H · Venus/Moon ===",
+        f"Bucket: {v.get('bucket')} · Verdict: {v.get('verdict')} · Band: {v.get('band')}",
+        f"Timing source: {v.get('timing_source') or '—'}",
     ]
+    ranked = v.get("top_planets") or []
+    if ranked:
+        tops = [str(r.get("name")) for r in ranked[:3] if isinstance(r, dict) and r.get("name")]
+        if tops:
+            lines.append(f"▸ D1 significators: {', '.join(tops)}")
     cw = v.get("current_window") or {}
-    if cw:
+    if cw.get("start_iso") and cw.get("end_iso"):
+        active = "ACTIVE NOW" if cw.get("is_active_now") or v.get("timing_source") == "current_dasha_active" else "UPCOMING"
         lines.append(
-            f"Current window: {cw.get('start_iso', '?')} → {cw.get('end_iso', '?')} "
-            f"({cw.get('md', '?')}/{cw.get('ad', '?')})"
+            f"▸ PRIMARY window ({active}): {cw.get('start_iso')} → {cw.get('end_iso')} "
+            f"MD/AD/PD={cw.get('md', '?')}/{cw.get('ad', '?')}/{cw.get('pd', '?')}"
         )
-    for i, w in enumerate(v.get("next_3_windows") or [], 1):
-        if isinstance(w, dict):
+    nxt = v.get("next_child_window")
+    if isinstance(nxt, dict) and nxt.get("start_iso"):
+        lines.append(
+            f"▸ NEXT scan window: {nxt.get('start_iso')} → {nxt.get('end_iso')} "
+            f"AD/PD={nxt.get('ad', '?')}/{nxt.get('pd', '?')}"
+        )
+    sync = v.get("kp_dasha_sync") if isinstance(v.get("kp_dasha_sync"), dict) else {}
+    active_kp = sync.get("active_now") or []
+    if active_kp:
+        lines.append(
+            "▸ KP CSL active in current dasha: "
+            + ", ".join(f"{x.get('house')}H={x.get('csl')}" for x in active_kp[:3])
+        )
+    elif sync.get("upcoming"):
+        up = sync["upcoming"][0]
+        nw = up.get("next_window") or {}
+        if nw.get("start_iso"):
             lines.append(
-                f"  Window {i}: {w.get('start_iso', '?')}→{w.get('end_iso', '?')} "
-                f"{w.get('md', '?')}/{w.get('ad', '?')} score={w.get('score', '?')}"
+                f"▸ KP CSL {up.get('csl')} next active {nw.get('start_iso')}→{nw.get('end_iso')}"
             )
+    dt = v.get("double_transit") or {}
+    if dt.get("active") and dt.get("verdict"):
+        lines.append(f"▸ Double transit: {dt.get('verdict')}")
+    dual = v.get("dual_track") if isinstance(v.get("dual_track"), dict) else {}
+    if dual.get("winner") and dual.get("winner") != "NONE":
+        lines.append(
+            f"▸ Vedic+KP match: {dual.get('winner')} "
+            f"(converged={dual.get('converged')})"
+        )
+    if v.get("strategy"):
+        lines.append(f"▸ DIRECTIVE: {v['strategy']}")
     for f in (v.get("factors") or [])[:5]:
-        lines.append(f"  • {f}")
-    for g in (v.get("brand_safety_warnings") or [])[:5]:
+        if isinstance(f, str) and f.startswith("STEP5"):
+            lines.append(f"  • {f}")
+    for g in (v.get("brand_safety_warnings") or v.get("love_tone_rules") or [])[:3]:
         lines.append(f"  GUARD: {g}")
-    for t in (v.get("love_tone_rules") or [])[:4]:
-        lines.append(f"  TONE: {t}")
-    lines.append("⛔ Probability window — no rejection/betrayal certainty")
-    lines.append("══════════════════════════════════════════════════════════════")
+    lines.append(
+        "RULE: current AD/PD weak → mat bolo 'abhi window chal raha'; "
+        "NEXT scan window cite karo. Kabhi bhi pakka date guarantee nahi."
+    )
     return "\n".join(lines)
+
+
+# Backward compat
+assess_love_timing = compute_love_window

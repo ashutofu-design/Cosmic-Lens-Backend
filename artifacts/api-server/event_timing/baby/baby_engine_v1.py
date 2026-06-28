@@ -17,8 +17,7 @@ kar timing engine").
            - 2L  (family expansion / kutumb)
            - Occupants of 5 / 9 / 11
            - Planets ASPECTING the 5th house (most powerful trigger)
-           - Karakas: Jupiter (PRIMARY putra karaka), Sun, Moon
-             (fertility/water), Venus (procreative seed), Mars (vigor)
+           - Karakas: Jupiter only (PUTRA karaka / Guru)
   STEP 2   D9 dignity verification                  (VERIFY)
   STEP 3   D7 Saptamsha (children chart)            (VERIFY)
            Parashara: D7 governs children & progeny. Each sign divides
@@ -391,13 +390,13 @@ def _step1_d1_filter(kundli: dict, lagna_si: int
       • 11L (gain / fulfillment of desires)         — medium weight
       • Occupants of 5 / 9 / 11                      — direct evidence
       • Planets aspecting 5H                         — most powerful trigger
-      • Karakas: Jupiter (PRIMARY) + Moon + Venus    — natural significators
+      • Karakas: Jupiter only (PUTRA karaka)
 
     Deliberately EXCLUDED (handled elsewhere or low-signal):
       • 7L, 2L                — out of scope for baby; over-engineering
       • 6/8/12 occupant boost — fertility-leak handled in Step 5
                                  (dasha obstruction-bearer classification)
-      • Sun, Mars karaka      — double-counts lordship/occupancy
+      • Moon/Venus/Sun/Mars as karaka — Jupiter is sole putra karaka
       • Functional-malefic    — Step 4 ranking handles dignity already
     """
     planets = kundli.get("planets") or []
@@ -434,14 +433,9 @@ def _step1_d1_filter(kundli: dict, lagna_si: int
             out[pname]["d1"] += 9.0
             out[pname]["links"].append("aspects 5H (child-house activation)")
 
-    # 4) Child karakas — Jupiter PRIMARY, Moon + Venus secondary
-    for karaka, bonus, role in (
-        ("Jupiter", 14.0, "PROGENY-KARAKA (primary — Jupiter)"),
-        ("Moon",     8.0, "fertility/maternal karaka (Moon)"),
-        ("Venus",    7.0, "reproductive-health karaka (Venus)"),
-    ):
-        out[karaka]["d1"] += bonus
-        out[karaka]["links"].append(role)
+    # 4) Putra karaka — Jupiter only (Guru)
+    out["Jupiter"]["d1"] += 14.0
+    out["Jupiter"]["links"].append("PUTRA-KARAKA (Jupiter)")
 
     for pname, info in out.items():
         info["in_filter"] = info["d1"] >= _D1_FILTER_MIN_SCORE
@@ -1007,9 +1001,9 @@ def _step3_5_kp_layer(kp: dict, lagna_si: int) -> Dict[str, Any]:
 # STEP 4 — Weighted ranking
 # ════════════════════════════════════════════════════════════════════════
 def _karaka_score(pname: str, lagna_si: int) -> float:
-    base = {"Jupiter": 10.0, "Moon": 7.0, "Venus": 6.0,
-            "Sun": 5.0, "Mars": 5.0, "Mercury": 4.0,
-            "Saturn": 4.0, "Rahu": 4.0, "Ketu": 3.0}.get(pname, 0.0)
+    if pname != "Jupiter":
+        return 0.0
+    base = 10.0
     if pname in _FUNC_BENEFICS.get(lagna_si, set()):
         base += 2.0
     return min(10.0, base)
@@ -1295,10 +1289,7 @@ def _step5_dasha_activation(chain: List[Dict[str, Any]],
     risk_lords: Set[str] = set()
     _PROMOTER_TAGS = ("5L (PUTRASTHANA", "9L (dharma", "11L (gain",
                        "occupies 5H", "occupies 9H", "occupies 11H",
-                       "PUTRA-KARAKA", "fertility/maternal karaka",
-                       "reproductive-health karaka",
-                       "procreative-vigor karaka",
-                       "lineage-vitality karaka")
+                       "PUTRA-KARAKA")
     _OBSTRUCTOR_TAGS = ("occupies 6H (OBSTRUCTION",
                          "occupies 8H (OBSTRUCTION",
                          "occupies 12H (OBSTRUCTION")

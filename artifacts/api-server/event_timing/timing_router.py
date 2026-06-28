@@ -16,8 +16,17 @@ from event_timing._shared.timing_pipeline import PipelineContext, TimingDemand
 _TIMING_RX = re.compile(
     r"(?ix)\b("
     r"kab|kab\s+tak|kab\s+hoga|kab\s+hogi|kab\s+milega|kab\s+milegi|"
-    r"kab\s+lagega|kab\s+lagegi|when|when\s+will|kis\s+(saal|year|mahine|month)|"
-    r"kitna\s+time|time\s+lagega|muhurat|timing|dasha|transit|gochar"
+    r"kab\s+lagega|kab\s+lagegi|when|when\s+will|kis\s+(?:specific\s+)?(?:date|week|saal|year|mahine|month)|"
+    r"kitna\s+time|time\s+lagega|muhurat|timing|"
+    r"dasha|antardasha|mahadasha|pratyantar|transit|gochar|"
+    r"milega|milegi|hoga|hogi|aayega|aayegi|banega|banegi|"
+    r"pahuchegi|lagenge|talegi|rukhega|rukhegi|"
+    r"pass\s+ho|ho\s+jayega|"
+    r"padega|padegi|paunga|paungi|jaunga|jaungi|jayega|jayegi|jayenge|"
+    r"ban\s+raha|ban\s+rahi|mil\s+jayega|ho\s+jayega|ho\s+jaunga|"
+    r"delay|dikh\s+raha|dikhayega|confirmed\s+period|safest.*period|"
+    r"\bweek\b|\bdate\b|"
+    r"vakri|retrograde|chance\s+milega"
     r")\b|(?:कब|कितना\s+समय)"
 )
 
@@ -26,9 +35,26 @@ _MARRIAGE_RX = re.compile(
 )
 _MARRIAGE_EVENT_RX = re.compile(
     r"(?ix)\b("
-    r"engagement|roka|sagai|"
-    r"rishta\s+pakk|rishta\s+fix|rishta\s+tay|rishta\s+lag|rishta\s+final|"
+    r"engagement|roka|sagai|mangni|mangetar|"
+    r"rishta\s+pakk\w*|rishta\s+fix|rishta\s+tay|rishta\s+lag|rishta\s+final|"
     r"rishta\s+pakk[ae]\s+hona|delay\s+in\s+marriage|7th\s+house\s+marriage"
+    r")\b"
+)
+
+# "Biwi kaisi hogi?" / "travel yog strong hai?" — quality/static, not WHEN.
+_EXPLICIT_TIMING_RX = re.compile(
+    r"(?ix)\b("
+    r"kab|kab\s+tak|kab\s+se|when|when\s+will|kis\s+(?:specific\s+)?(?:date|week|saal|year|mahine|month|turning\s+point)|"
+    r"kis\s+dasha|dasha\s+me|kitna\s+time|time\s+lagega|muhurat|timing|"
+    r"kitne\s+mahine|dasha|antardasha|mahadasha|pratyantar|transit|gochar|"
+    r"trigger\s+hoga|approve\s+hoga|prapt\s+hogi|active\s+honge|shuru\s+honge"
+    r")\b|(?:कब|कितना\s+समय)"
+)
+_STATIC_QUALITY_RX = re.compile(
+    r"(?ix)\b("
+    r"kaisi|kaisa|kesi|kesa|kese|kaise|kya\s+tarah|kis\s+tarah|"
+    r"nature|character|personality|appearance|height|colour|color|"
+    r"strong\s+hai|best\s+rahegi|suit\s+karega|possible\s+hai|yog\s+strong"
     r")\b"
 )
 
@@ -39,6 +65,10 @@ def detect_timing_intent(question: str, llm_intent: Optional[dict] = None) -> bo
         return False
     if isinstance(llm_intent, dict) and llm_intent.get("is_timing"):
         return True
+    if re.search(r"(?ix)\bkya\b", q) and not _EXPLICIT_TIMING_RX.search(q):
+        return False
+    if _STATIC_QUALITY_RX.search(q) and not _EXPLICIT_TIMING_RX.search(q):
+        return False
     return bool(_TIMING_RX.search(q))
 
 
@@ -58,6 +88,73 @@ def resolve_timing_domain(
 
     if _STOCK_TIMING_DEFER_RX.search(q):
         return "general", "general", False
+
+    try:
+        from ask_spiritual.timing_registry import (  # type: ignore
+            classify_spiritual_timing_bucket,
+            is_spiritual_timing_question,
+        )
+
+        if is_spiritual_timing_question(q, llm_intent):
+            return "spiritual", classify_spiritual_timing_bucket(q), True
+    except Exception:
+        pass
+
+    try:
+        from ask_fame.timing_registry import (  # type: ignore
+            classify_fame_timing_bucket,
+            is_fame_timing_question,
+        )
+
+        if is_fame_timing_question(q, llm_intent):
+            return "fame", classify_fame_timing_bucket(q), True
+    except Exception:
+        pass
+
+    try:
+        from ask_network.timing_registry import (  # type: ignore
+            classify_network_timing_bucket,
+            is_network_timing_question,
+        )
+
+        if is_network_timing_question(q, llm_intent):
+            return "network", classify_network_timing_bucket(q), True
+    except Exception:
+        pass
+
+    try:
+        from ask_litigation.timing_registry import (  # type: ignore
+            classify_litigation_timing_bucket,
+            is_litigation_timing_question,
+        )
+
+        if is_litigation_timing_question(q, llm_intent):
+            return "litigation", classify_litigation_timing_bucket(q), True
+    except Exception:
+        pass
+
+    # Foreign edu / visa / PR — includes yoga-only timing (before global is_timing gate)
+    try:
+        from ask_foreign_education.timing_registry import (  # type: ignore
+            classify_foreign_education_bucket,
+            is_foreign_education_timing_question,
+        )
+
+        if is_foreign_education_timing_question(q, llm_intent):
+            return "foreign_education", classify_foreign_education_bucket(q), True
+    except Exception:
+        pass
+
+    try:
+        from ask_health.timing_registry import (  # type: ignore
+            classify_health_timing_bucket,
+            is_health_timing_question,
+        )
+
+        if is_health_timing_question(q, llm_intent):
+            return "health", classify_health_timing_bucket(q), True
+    except Exception:
+        pass
 
     is_timing = detect_timing_intent(q, llm_intent)
     if not is_timing:
@@ -85,8 +182,16 @@ def resolve_timing_domain(
             bucket = "general"
 
     # Priority order (specific domains before career/general foreign overlap)
-    if _MARRIAGE_RX.search(q) or _MARRIAGE_EVENT_RX.search(q):
-        return "marriage", "timing", True
+    _love_commitment_rx = re.compile(
+        r"(?ix)"
+        r"\b(commitment|haan\s+kab|propose|proposal)\b.{0,40}\b(shaadi|marriage)\b|"
+        r"\b(shaadi|marriage)\b.{0,20}\b(haan|commitment|propose)\b",
+    )
+    if (_MARRIAGE_RX.search(q) or _MARRIAGE_EVENT_RX.search(q)) and not _love_commitment_rx.search(q):
+        if not re.search(
+            r"(?ix)\b(pr\b|green\s+card|visa|settlement|foreign|videsh|abroad|overseas)\b", q
+        ):
+            return "marriage", "timing", True
 
     try:
         from ask_love.timing_registry import is_love_timing_question  # type: ignore
@@ -110,15 +215,36 @@ def resolve_timing_domain(
         from ask_education.timing_registry import is_education_timing_question  # type: ignore
 
         if is_education_timing_question(q, llm_intent):
-            return "education", "exam_success", True
+            from event_timing.education.education_timing_v1 import classify_education_timing_bucket
+
+            return "education", classify_education_timing_bucket(q), True
     except Exception:
         pass
 
     try:
         from ask_travel.timing_registry import is_travel_timing_question  # type: ignore
+        from ask_travel.timing_registry import classify_travel_timing_bucket  # type: ignore
 
         if is_travel_timing_question(q, llm_intent):
-            return "travel", _travel_bucket(q), True
+            return "travel", classify_travel_timing_bucket(q), True
+    except Exception:
+        pass
+
+    try:
+        from ask_vehicle.timing_registry import is_vehicle_timing_question  # type: ignore
+
+        if is_vehicle_timing_question(q, llm_intent):
+            from event_timing.vehicle.vehicle_timing_v1 import classify_vehicle_timing_bucket
+            return "vehicle", classify_vehicle_timing_bucket(q), True
+    except Exception:
+        pass
+
+    try:
+        from ask_property.timing_registry import is_property_timing_question  # type: ignore
+
+        if is_property_timing_question(q, llm_intent):
+            from event_timing.property.property_timing_v1 import classify_property_timing_bucket
+            return "property", classify_property_timing_bucket(q), True
     except Exception:
         pass
 
@@ -131,22 +257,6 @@ def resolve_timing_domain(
         pass
 
     try:
-        from ask_career.timing_registry import is_career_timing_question  # type: ignore
-
-        if is_career_timing_question(q, llm_intent):
-            return "career", _career_bucket(q, llm_intent), True
-    except Exception:
-        pass
-
-    try:
-        from ask_property.timing_registry import is_property_timing_question  # type: ignore
-
-        if is_property_timing_question(q, llm_intent):
-            return "property", "registry", True
-    except Exception:
-        pass
-
-    try:
         from ask_litigation.timing_registry import is_litigation_timing_question  # type: ignore
 
         if is_litigation_timing_question(q, llm_intent):
@@ -154,15 +264,21 @@ def resolve_timing_domain(
     except Exception:
         pass
 
-    # LLM domain for finance/health (no dedicated timing registry yet)
-    if isinstance(llm_intent, dict):
-        dom = str(llm_intent.get("domain") or "").strip().lower()
-        if dom in DOMAIN_TIMING_SPECS and dom not in ("general", "career", "marriage"):
-            if bool(llm_intent.get("is_timing")):
-                return dom, bucket if bucket != "general" else dom, True
+    try:
+        from ask_career.timing_registry import is_career_timing_question  # type: ignore
 
-    if domain in DOMAIN_TIMING_SPECS:
-        return domain, bucket, True
+        if is_career_timing_question(q, llm_intent):
+            return "career", _career_bucket(q, llm_intent), True
+    except Exception:
+        pass
+
+    # property/finance/career/litigation reordered above — removed duplicate blocks below
+
+    # Do NOT trust LLM domain alone — registry miss → universal fallback below.
+    if is_timing:
+        from event_timing.universal.topic_atlas import classify_universal_bucket  # type: ignore
+
+        return "universal", classify_universal_bucket(q), True
 
     return domain, bucket, is_timing
 
@@ -190,6 +306,12 @@ def _travel_bucket(q: str) -> str:
 
 
 def _lit_bucket(q: str) -> str:
+    try:
+        from event_timing.litigation.litigation_timing_v1 import classify_litigation_timing_bucket
+
+        return classify_litigation_timing_bucket(q)
+    except Exception:
+        pass
     ql = q.lower()
     if re.search(r"\bbail\b", ql):
         return "bail_theme"
@@ -336,6 +458,56 @@ def run_timing_engine(
             ctx.factors.append(f"property_timing error: {exc}")
             ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
 
+    elif domain == "vehicle":
+        try:
+            from event_timing.vehicle.vehicle_timing_v1 import (  # type: ignore
+                compute_vehicle_window,
+                format_vehicle_timing_for_prompt,
+            )
+
+            raw = compute_vehicle_window(
+                ctx.kundli, ctx.intel, ctx.kp, birth, question,
+                bucket=demand.bucket,
+            )
+            ctx.raw = raw if isinstance(raw, dict) else {}
+            ctx.verdict = str(ctx.raw.get("verdict") or "")
+            ctx.factors = list(ctx.raw.get("factors") or [])[:8]
+            ctx.engine_status = "ready"
+            ctx.raw["_prompt_block"] = format_vehicle_timing_for_prompt(ctx.raw, question)
+            cw = ctx.raw.get("current_window") or {}
+            if cw:
+                ctx.windows.append(cw)
+        except Exception as exc:
+            ctx.engine_status = "error"
+            ctx.factors.append(f"vehicle_timing error: {exc}")
+            ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
+
+    elif domain == "foreign_education":
+        try:
+            from event_timing.foreign_education.foreign_education_timing_v1 import (  # type: ignore
+                compute_foreign_education_window,
+                format_foreign_education_timing_for_prompt,
+            )
+
+            raw = compute_foreign_education_window(
+                ctx.kundli, ctx.intel, ctx.kp, birth, question,
+                bucket=demand.bucket,
+            )
+            ctx.raw = raw if isinstance(raw, dict) else {}
+            ctx.verdict = str(ctx.raw.get("verdict") or "")
+            ctx.factors = list(ctx.raw.get("factors") or [])[:8]
+            ctx.engine_status = "ready"
+            ctx.raw["_prompt_block"] = format_foreign_education_timing_for_prompt(
+                ctx.raw, question,
+            )
+            cw = ctx.raw.get("current_window") or {}
+            if cw:
+                ctx.windows.append(cw)
+        except Exception as exc:
+            ctx.engine_status = "error"
+            ctx.factors.append(f"foreign_education_timing error: {exc}")
+            ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
+
     elif domain == "education":
         try:
             from event_timing.education.education_timing_v1 import (  # type: ignore
@@ -422,7 +594,9 @@ def run_timing_engine(
             cw = ctx.raw.get("current_window") or {}
             if cw:
                 ctx.windows.append(cw)
-        except Exception:
+        except Exception as exc:
+            ctx.engine_status = "error"
+            ctx.factors.append(f"finance_timing error: {exc}")
             ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
 
     elif domain == "health":
@@ -439,7 +613,9 @@ def run_timing_engine(
             cw = ctx.raw.get("current_window") or {}
             if cw:
                 ctx.windows.append(cw)
-        except Exception:
+        except Exception as exc:
+            ctx.engine_status = "error"
+            ctx.factors.append(f"health_timing error: {exc}")
             ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
 
     elif domain == "children":
@@ -456,13 +632,152 @@ def run_timing_engine(
             cw = ctx.raw.get("current_window") or {}
             if cw:
                 ctx.windows.append(cw)
-        except Exception:
+        except Exception as exc:
+            ctx.engine_status = "error"
+            ctx.factors.append(f"children_timing error: {exc}")
             ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
+
+    elif domain == "spiritual":
+        try:
+            from event_timing.spiritual.spiritual_timing_v1 import (  # type: ignore
+                compute_spiritual_window,
+                format_spiritual_timing_for_prompt,
+            )
+
+            raw = compute_spiritual_window(
+                ctx.kundli, ctx.intel, ctx.kp, birth, question,
+                bucket=demand.bucket,
+            )
+            ctx.raw = raw if isinstance(raw, dict) else {}
+            ctx.verdict = str(ctx.raw.get("verdict") or "")
+            ctx.factors = list(ctx.raw.get("factors") or [])[:8]
+            ctx.engine_status = "ready"
+            ctx.raw["_prompt_block"] = format_spiritual_timing_for_prompt(ctx.raw, question)
+            cw = ctx.raw.get("current_window") or {}
+            if cw:
+                ctx.windows.append(cw)
+        except Exception as exc:
+            ctx.engine_status = "error"
+            ctx.factors.append(f"spiritual_timing error: {exc}")
+            ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
+
+    elif domain == "fame":
+        try:
+            from event_timing.fame.fame_timing_v1 import (  # type: ignore
+                compute_fame_window,
+                format_fame_timing_for_prompt,
+            )
+
+            raw = compute_fame_window(
+                ctx.kundli, ctx.intel, ctx.kp, birth, question,
+                bucket=demand.bucket,
+            )
+            ctx.raw = raw if isinstance(raw, dict) else {}
+            ctx.verdict = str(ctx.raw.get("verdict") or "")
+            ctx.factors = list(ctx.raw.get("factors") or [])[:8]
+            ctx.engine_status = "ready"
+            ctx.raw["_prompt_block"] = format_fame_timing_for_prompt(ctx.raw, question)
+            cw = ctx.raw.get("current_window") or {}
+            if cw:
+                ctx.windows.append(cw)
+        except Exception as exc:
+            ctx.engine_status = "error"
+            ctx.factors.append(f"fame_timing error: {exc}")
+            ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
+
+    elif domain == "network":
+        try:
+            from event_timing.network.network_timing_v1 import (  # type: ignore
+                compute_network_window,
+                format_network_timing_for_prompt,
+            )
+
+            raw = compute_network_window(
+                ctx.kundli, ctx.intel, ctx.kp, birth, question,
+                bucket=demand.bucket,
+            )
+            ctx.raw = raw if isinstance(raw, dict) else {}
+            ctx.verdict = str(ctx.raw.get("verdict") or "")
+            ctx.factors = list(ctx.raw.get("factors") or [])[:8]
+            ctx.engine_status = "ready"
+            ctx.raw["_prompt_block"] = format_network_timing_for_prompt(ctx.raw, question)
+            cw = ctx.raw.get("current_window") or {}
+            if cw:
+                ctx.windows.append(cw)
+        except Exception as exc:
+            ctx.engine_status = "error"
+            ctx.factors.append(f"network_timing error: {exc}")
+            ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
+
+    elif domain == "universal":
+        try:
+            from event_timing.universal.universal_timing_v1 import (  # type: ignore
+                compute_universal_window,
+                format_universal_timing_for_prompt,
+            )
+
+            raw = compute_universal_window(
+                ctx.kundli, ctx.intel, ctx.kp, birth, question,
+                bucket=demand.bucket,
+            )
+            ctx.raw = raw if isinstance(raw, dict) else {}
+            ctx.verdict = str(ctx.raw.get("verdict") or "")
+            ctx.factors = list(ctx.raw.get("factors") or [])[:8]
+            ctx.engine_status = "ready"
+            ctx.engine_id = "universal_timing_v1"
+            ctx.raw["_prompt_block"] = format_universal_timing_for_prompt(ctx.raw, question)
+            cw = ctx.raw.get("current_window") or {}
+            if cw:
+                ctx.windows.append(cw)
+        except Exception as exc:
+            ctx.engine_status = "error"
+            ctx.factors.append(f"universal_timing error: {exc}")
+            ctx.raw["_prompt_block"] = format_spec_directive_block(
+                domain, get_domain_spec("universal"), demand.bucket,
+            )
 
     else:
         ctx.engine_status = "skipped_no_engine"
         ctx.verdict = ""
         ctx.raw["_prompt_block"] = ""
+
+    if (
+        demand.is_timing
+        and domain != "marriage"
+        and isinstance(ctx.raw, dict)
+        and ctx.engine_status in ("ready", "partial")
+        and ctx.raw
+    ):
+        try:
+            from event_timing._shared.dual_track_timing import (
+                concern_houses_from_spec,
+                enrich_dual_track_timing,
+                format_dual_track_block,
+                karakas_from_spec,
+            )
+
+            concern = concern_houses_from_spec(spec, ctx.raw)
+            if concern:
+                ctx.raw = enrich_dual_track_timing(
+                    ctx.raw,
+                    ctx.kundli,
+                    ctx.kp,
+                    concern_houses=concern,
+                    karakas=karakas_from_spec(spec, ctx.raw),
+                    domain=domain,
+                )
+                ctx.verdict = str(ctx.raw.get("verdict") or ctx.verdict)
+                ctx.factors = list(ctx.raw.get("factors") or [])[:12]
+                dt_block = format_dual_track_block(ctx.raw)
+                if dt_block:
+                    base = ctx.raw.get("_prompt_block") or ""
+                    if dt_block not in base:
+                        ctx.raw["_prompt_block"] = (base + "\n" + dt_block).strip()
+                cw = ctx.raw.get("current_window") or {}
+                if cw:
+                    ctx.windows = [cw]
+        except Exception as exc:
+            ctx.factors.append(f"dual_track error: {exc}")
 
     if (
         demand.is_timing

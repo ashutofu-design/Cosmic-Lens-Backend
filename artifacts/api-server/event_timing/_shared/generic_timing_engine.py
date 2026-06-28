@@ -356,6 +356,96 @@ def _pick_top(windows: List[Dict[str, Any]], n: int = 3) -> List[Dict[str, Any]]
     return chosen
 
 
+def _norm_lord(name: Any) -> str:
+    return str(name or "").strip().title()
+
+
+def _activation_score(
+    w: Dict[str, Any],
+    promote: Set[str],
+    score_map: Dict[str, float],
+) -> float:
+    """AD/PD-led domain activation; MD is background only."""
+    val = 0.0
+    md = _norm_lord(w.get("md"))
+    if md in promote:
+        val += 1.0
+    elif score_map.get(md, 0) >= 12:
+        val += 0.5
+    for _role, key, wt in (("PD", "pd", 6.0), ("AD", "ad", 5.0)):
+        lord = _norm_lord(w.get(key))
+        if not lord:
+            continue
+        if lord in promote:
+            val += wt
+        elif score_map.get(lord, 0) >= 10:
+            val += wt * 0.55
+        elif score_map.get(lord, 0) >= 6:
+            val += wt * 0.25
+    return val
+
+
+def pick_primary_timing_window(
+    windows: List[Dict[str, Any]],
+    ranked: List[Dict[str, Any]],
+    promote: Set[str],
+    now: datetime,
+    *,
+    min_ad_pd: float = 4.0,
+) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]], str, bool]:
+    """Dasha-first: current AD/PD active → else scan forward chronologically."""
+    if not windows:
+        return None, None, "none", False
+
+    score_map = {
+        str(r["name"]): float(r.get("score") or 0)
+        for r in ranked
+        if r.get("name")
+    }
+
+    running = [w for w in windows if w["start"] <= now <= w["end"]]
+    if running:
+        best_run = max(
+            running,
+            key=lambda w: (_activation_score(w, promote, score_map), w.get("score", 0)),
+        )
+        act = _activation_score(best_run, promote, score_map)
+        if act >= min_ad_pd:
+            future = sorted([w for w in windows if w["start"] > now], key=lambda x: x["start"])
+            nxt = next(
+                (w for w in future if _activation_score(w, promote, score_map) >= min_ad_pd),
+                None,
+            )
+            row = dict(best_run)
+            row["is_active_now"] = True
+            row["activation_score"] = round(act, 2)
+            return row, nxt, "current_dasha_active", True
+
+    future = sorted([w for w in windows if w["end"] > now], key=lambda x: x["start"])
+    for w in future:
+        act = _activation_score(w, promote, score_map)
+        if act >= min_ad_pd:
+            row = dict(w)
+            row["is_active_now"] = w["start"] <= now <= w["end"]
+            row["activation_score"] = round(act, 2)
+            nxt = next(
+                (
+                    x
+                    for x in future
+                    if x["start"] > w["start"]
+                    and _activation_score(x, promote, score_map) >= min_ad_pd
+                ),
+                None,
+            )
+            return row, nxt, "next_dasha_scan", False
+
+    top = _pick_top(windows, 1)
+    fallback = dict(top[0]) if top else None
+    if fallback:
+        fallback["is_active_now"] = fallback["start"] <= now <= fallback["end"]
+    return fallback, None, "fallback_top_score", False
+
+
 def _verdict(score: float, cfg: DomainTimingConfig) -> Tuple[str, str]:
     if score >= cfg.verdict_caution:
         return cfg.defer_label, "WEAK"
@@ -403,8 +493,32 @@ def compute_generic_timing_window(
 
     chain = _flatten_dasha_chain(kundli)
     windows = _step5_windows(chain, ranked, cfg, now)
-    top3 = _pick_top(windows, 3)
-    factors.append(f"STEP5 windows_found={len(windows)} top3={len(top3)}")
+    promote, _obstruct = _classify_lords(ranked, cfg)
+    primary, next_win, timing_source, current_supports = pick_primary_timing_window(
+        windows, ranked, promote, now,
+    )
+    top3: List[Dict[str, Any]] = []
+    if primary:
+        top3.append(primary)
+    if next_win:
+        top3.append(next_win)
+    for w in _pick_top(windows, 3):
+        if all(w.get("start") != x.get("start") for x in top3) and len(top3) < 3:
+            top3.append(w)
+    factors.append(f"STEP5 windows_found={len(windows)} source={timing_source}")
+    if timing_source == "current_dasha_active" and primary:
+        factors.append(
+            f"STEP5 PRIMARY=CURRENT AD/PD active score={primary.get('activation_score')} "
+            f"{primary.get('ad')}/{primary.get('pd')} — cite abhi running period"
+        )
+    elif timing_source == "next_dasha_scan" and primary:
+        factors.append(
+            f"STEP5 PRIMARY=NEXT current AD/PD weak for {cfg.domain} — "
+            f"first love-active {primary.get('start_iso')}→{primary.get('end_iso')} "
+            f"AD/PD={primary.get('ad')}/{primary.get('pd')}"
+        )
+    elif primary:
+        factors.append("STEP5 PRIMARY=fallback highest-score window")
 
     dt_result: Dict[str, Any] = {}
     if check_double_transit and cfg.double_transit_houses:
@@ -423,26 +537,21 @@ def compute_generic_timing_window(
         except Exception as exc:
             factors.append(f"STEP6 double_transit skipped: {exc}")
 
-    top_score = top3[0]["score"] if top3 else 5.0
-    if dt_result.get("active") and top3:
+    top_score = primary.get("score", 0) if primary else (top3[0]["score"] if top3 else 5.0)
+    if dt_result.get("active") and primary:
         top_score *= 0.85
     verdict, band = _verdict(top_score, cfg)
-
-    current = None
-    for w in windows:
-        if w["start"] <= now <= w["end"]:
-            current = w
-            break
-    if not current and top3:
-        current = top3[0]
 
     payload = {
         "verdict": verdict,
         "band": band,
         "bucket": bucket,
         "domain": cfg.domain,
-        "current_window": current,
+        "current_window": primary,
         "next_3_windows": top3,
+        "next_child_window": next_win,
+        "timing_source": timing_source,
+        "current_supports": current_supports,
         "top_planets": ranked[:5],
         "kp_layer": kp_layer,
         "double_transit": dt_result,

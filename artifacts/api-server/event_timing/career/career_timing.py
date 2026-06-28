@@ -4182,20 +4182,11 @@ def assess_career(kundli: dict,
     conditionals: dict[str, dict] = {}
     if bucket == "govt_job" or _planet_dignity(intel, "Sun") in ("exalted", "own-sign", "moolatrikona"):
         conditionals["C1_govt_job"] = _conditional_govt_job(intel, kundli, karakas_d, kp)
-    if bucket == "promotion":
-        conditionals["C4_promotion_window"] = _conditional_promotion_window(
-            T["T1_vimshottari"], intel, jup_t, saturn_t, kp
-        )
     if bucket == "career_setback":
-        conditionals["C5_setback_recovery"] = _conditional_setback_recovery(
-            T["T1_vimshottari"], jup_t, intel, kp
-        )
+        pass  # C5_setback — filled by setback_engine_v1 after assess (see below)
     if bucket == "transfer":
-        conditionals["C7_transfer"] = _conditional_transfer(intel, kundli, saturn_t, kp)
-    if bucket == "resignation":
-        conditionals["C8_resignation"] = _conditional_resignation(
-            T["T1_vimshottari"], intel, kp
-        )
+        pass  # C7_transfer — filled by transfer_engine_v1 after assess (see below)
+    # C8_resignation — filled by resignation_engine_v1 after assess (see below)
     # ── Synastry (only if other-kundli provided)
     synastry: dict[str, dict] = {}
     if boss_kundli:
@@ -4378,6 +4369,218 @@ def assess_career(kundli: dict,
         except Exception as _gj_exc:
             result["govt_job_engine_error"] = str(_gj_exc)[:200]
 
+    if bucket == "promotion":
+        try:
+            from event_timing.career.promotion_engine_v1 import (
+                assess_promotion,
+                format_promotion_block_for_prompt,
+            )
+
+            _u_age_promo = (result.get("age_context") or {}).get("user_age")
+            _promo = assess_promotion(
+                kundli,
+                intel,
+                lagna_si=lagna_idx,
+                karakas_d=karakas_d,
+                kp=kp,
+                kp_assist_fn=lambda k: _kp_bucket_assist(k, "promotion"),
+                user_age=_u_age_promo,
+            )
+            result["promotion_engine"] = _promo
+            result["promotion_prompt_block"] = format_promotion_block_for_prompt(
+                _promo, question,
+            )
+            if isinstance(_promo.get("bcp_parallel"), dict):
+                result["promotion_step1_bcp"] = _promo["bcp_parallel"]
+            if isinstance(_promo.get("promise"), dict):
+                _pl = _promo.get("promotion_promise_level") or "low"
+                _sig = {"high": "STRONG", "moderate": "moderate", "low": "weak"}.get(_pl, "weak")
+                _timing = _promo.get("timing") if isinstance(_promo.get("timing"), dict) else {}
+                if _timing.get("active_now") and _pl == "high":
+                    _sig = "STRONG"
+                conditionals["C4_promotion_window"] = {
+                    **_promo["promise"],
+                    "promotion_signal": _sig,
+                    "engine": "promotion_engine_v1",
+                    "verdict_label": _promo.get("verdict_label"),
+                }
+                result["conditionals"] = conditionals
+        except Exception as _pr_exc:
+            result["promotion_engine_error"] = str(_pr_exc)[:200]
+
+    if bucket == "resignation":
+        try:
+            from event_timing.career.resignation_engine_v1 import (
+                assess_resignation,
+                format_resignation_block_for_prompt,
+            )
+
+            _u_age_res = (result.get("age_context") or {}).get("user_age")
+            _res = assess_resignation(
+                kundli,
+                intel,
+                question=question,
+                lagna_si=lagna_idx,
+                kp=kp,
+                kp_assist_fn=lambda k: _kp_bucket_assist(k, "resignation"),
+                user_age=_u_age_res,
+            )
+            result["resignation_engine"] = _res
+            result["resignation_prompt_block"] = format_resignation_block_for_prompt(
+                _res, question,
+            )
+            if isinstance(_res.get("bcp_parallel"), dict):
+                result["resignation_step1_bcp"] = _res["bcp_parallel"]
+            if isinstance(_res.get("viability"), dict):
+                conditionals["C8_resignation"] = {
+                    **_res["viability"],
+                    "resignation_verdict": _res.get("resignation_viability"),
+                    "engine": "resignation_engine_v1",
+                    "verdict_label": _res.get("verdict_label"),
+                }
+                result["conditionals"] = conditionals
+        except Exception as _rs_exc:
+            result["resignation_engine_error"] = str(_rs_exc)[:200]
+
+    if bucket == "transfer":
+        try:
+            from event_timing.career.transfer_engine_v1 import (
+                assess_transfer,
+                format_transfer_block_for_prompt,
+            )
+
+            _u_age_xfer = (result.get("age_context") or {}).get("user_age")
+            _xfer = assess_transfer(
+                kundli,
+                intel,
+                question=question,
+                lagna_si=lagna_idx,
+                saturn_t=saturn_t,
+                kp=kp,
+                kp_assist_fn=lambda k: _kp_bucket_assist(k, "transfer"),
+                user_age=_u_age_xfer,
+            )
+            result["transfer_engine"] = _xfer
+            result["transfer_prompt_block"] = format_transfer_block_for_prompt(
+                _xfer, question,
+            )
+            if isinstance(_xfer.get("bcp_parallel"), dict):
+                result["transfer_step1_bcp"] = _xfer["bcp_parallel"]
+            if isinstance(_xfer.get("likelihood"), dict):
+                conditionals["C7_transfer"] = {
+                    **_xfer["likelihood"],
+                    "transfer_verdict": _xfer.get("transfer_verdict"),
+                    "engine": "transfer_engine_v1",
+                    "verdict_label": _xfer.get("verdict_label"),
+                }
+                result["conditionals"] = conditionals
+        except Exception as _xf_exc:
+            result["transfer_engine_error"] = str(_xf_exc)[:200]
+
+    if bucket == "job_change":
+        try:
+            from event_timing.career.job_change_engine_v1 import (
+                assess_job_change,
+                format_job_change_block_for_prompt,
+            )
+            _u_age_jc = (result.get("age_context") or {}).get("user_age")
+            _jc = assess_job_change(
+                kundli, intel, question=question, lagna_si=lagna_idx, kp=kp,
+                kp_assist_fn=lambda k: _kp_bucket_assist(k, "job_change"),
+                user_age=_u_age_jc,
+            )
+            result["job_change_engine"] = _jc
+            result["job_change_prompt_block"] = format_job_change_block_for_prompt(_jc, question)
+            if isinstance(_jc.get("bcp_parallel"), dict):
+                result["job_change_step1_bcp"] = _jc["bcp_parallel"]
+        except Exception as _jc_exc:
+            result["job_change_engine_error"] = str(_jc_exc)[:200]
+
+    if bucket == "general_career":
+        try:
+            from event_timing.career.general_career_engine_v1 import (
+                assess_general_career,
+                format_general_career_block_for_prompt,
+            )
+            _u_age_gc = (result.get("age_context") or {}).get("user_age")
+            _gc = assess_general_career(
+                kundli, intel, question=question, lagna_si=lagna_idx,
+                karakas_d=karakas_d, kp=kp,
+                kp_assist_fn=lambda k: _kp_bucket_assist(k, "general_career"),
+                user_age=_u_age_gc,
+            )
+            result["general_career_engine"] = _gc
+            result["general_career_prompt_block"] = format_general_career_block_for_prompt(_gc, question)
+            if isinstance(_gc.get("bcp_parallel"), dict):
+                result["general_career_step1_bcp"] = _gc["bcp_parallel"]
+        except Exception as _gc_exc:
+            result["general_career_engine_error"] = str(_gc_exc)[:200]
+
+    if bucket == "career_setback":
+        try:
+            from event_timing.career.setback_engine_v1 import (
+                assess_setback,
+                format_setback_block_for_prompt,
+            )
+            _u_age_sb = (result.get("age_context") or {}).get("user_age")
+            _sb = assess_setback(
+                kundli, intel, question=question, lagna_si=lagna_idx,
+                t1_d=T.get("T1_vimshottari"), jup_t=jup_t, kp=kp,
+                kp_assist_fn=lambda k: _kp_bucket_assist(k, "career_setback"),
+                user_age=_u_age_sb,
+            )
+            result["setback_engine"] = _sb
+            result["setback_prompt_block"] = format_setback_block_for_prompt(_sb, question)
+            if isinstance(_sb.get("bcp_parallel"), dict):
+                result["setback_step1_bcp"] = _sb["bcp_parallel"]
+            if isinstance(_sb.get("recovery"), dict):
+                conditionals["C5_setback_recovery"] = {
+                    **_sb["recovery"],
+                    "recovery_outlook": _sb.get("recovery_outlook"),
+                    "engine": "setback_engine_v1",
+                    "verdict_label": _sb.get("verdict_label"),
+                }
+                result["conditionals"] = conditionals
+        except Exception as _sb_exc:
+            result["setback_engine_error"] = str(_sb_exc)[:200]
+
+    if bucket == "career_field_choice":
+        try:
+            from event_timing.career.field_choice_engine_v1 import (
+                assess_field_choice,
+                format_field_choice_block_for_prompt,
+            )
+            _u_age_fc = (result.get("age_context") or {}).get("user_age")
+            _fc = assess_field_choice(
+                kundli, intel, question=question, lagna_si=lagna_idx,
+                karakas_d=karakas_d, kp=kp,
+                kp_assist_fn=lambda k: _kp_bucket_assist(k, "career_field_choice"),
+                user_age=_u_age_fc,
+            )
+            result["field_choice_engine"] = _fc
+            result["field_choice_prompt_block"] = format_field_choice_block_for_prompt(_fc, question)
+            if isinstance(_fc.get("bcp_parallel"), dict):
+                result["field_choice_step1_bcp"] = _fc["bcp_parallel"]
+            if isinstance(_fc.get("field_recommendations"), dict):
+                result["field_recommendations"] = _fc["field_recommendations"]
+        except Exception as _fc_exc:
+            result["field_choice_engine_error"] = str(_fc_exc)[:200]
+
+    try:
+        _u_age_bcp = (result.get("age_context") or {}).get("user_age")
+        _dedicated_bcp_buckets = (
+            "promotion", "resignation", "transfer", "job_change",
+            "general_career", "career_setback", "career_field_choice",
+        )
+        if lagna_idx >= 0 and bucket not in _dedicated_bcp_buckets:
+            from event_timing.career.career_step1_bcp import run_career_step1_bcp
+
+            result["career_step1_bcp"] = run_career_step1_bcp(
+                kundli, lagna_idx, user_age=_u_age_bcp,
+            )
+    except Exception as _bcp_exc:
+        result["career_step1_bcp_error"] = str(_bcp_exc)[:200]
+
     result["step_audit"] = build_career_timing_step_audit(result)
     result["step_order"] = list(_CAREER_TIMING_STEP_ORDER)
     result["timing_audit"] = build_career_timing_audit(result)
@@ -4399,6 +4602,7 @@ _CAREER_TIMING_STEP_ORDER = (
     "step6",
     "step7",
     "step8",
+    "step9",
 )
 
 
@@ -4450,6 +4654,75 @@ def build_career_timing_step_audit(result: dict) -> dict:
     dasha_why = list(t1.get("why") or [])[:6]
     transit_why = list(t2.get("why") or [])[:3] + list(t3.get("why") or [])[:3]
 
+    bcp1 = {}
+    if bucket == "promotion" and isinstance(result.get("promotion_step1_bcp"), dict):
+        bcp1 = result["promotion_step1_bcp"]
+    elif bucket == "resignation" and isinstance(result.get("resignation_step1_bcp"), dict):
+        bcp1 = result["resignation_step1_bcp"]
+    elif bucket == "transfer" and isinstance(result.get("transfer_step1_bcp"), dict):
+        bcp1 = result["transfer_step1_bcp"]
+    elif bucket == "job_change" and isinstance(result.get("job_change_step1_bcp"), dict):
+        bcp1 = result["job_change_step1_bcp"]
+    elif bucket == "general_career" and isinstance(result.get("general_career_step1_bcp"), dict):
+        bcp1 = result["general_career_step1_bcp"]
+    elif bucket == "career_setback" and isinstance(result.get("setback_step1_bcp"), dict):
+        bcp1 = result["setback_step1_bcp"]
+    elif bucket == "career_field_choice" and isinstance(result.get("field_choice_step1_bcp"), dict):
+        bcp1 = result["field_choice_step1_bcp"]
+    elif isinstance(result.get("career_step1_bcp"), dict):
+        bcp1 = result["career_step1_bcp"]
+
+    if bucket == "promotion":
+        step1_name = "Classical 1–4 + BCP parallel (11L+10L ages)"
+        step1_done = bool(bcp1.get("all_promotion_ages") or (result.get("promotion_engine") or {}).get("promise"))
+        step1_detail = (
+            (result.get("promotion_engine") or {}).get("timing", {}).get("llm_directive")
+            or bcp1.get("detail")
+            or "10H→Sun/Shani→D10→6H/11H→AD/PD dasha"
+        )
+    elif bucket == "resignation":
+        step1_name = "Classical 1–6 + BCP parallel (12L+6L exit ages)"
+        step1_done = bool(
+            bcp1.get("all_exit_ages")
+            or (result.get("resignation_engine") or {}).get("viability")
+        )
+        step1_detail = (
+            (result.get("resignation_engine") or {}).get("timing", {}).get("llm_directive")
+            or bcp1.get("detail")
+            or "12H→6H→8H→2H/10H/11H→AD/PD dasha"
+        )
+    elif bucket == "transfer":
+        step1_name = "Classical 4-step + BCP parallel (3L+12L move ages)"
+        step1_done = bool(
+            bcp1.get("all_transfer_ages")
+            or (result.get("transfer_engine") or {}).get("likelihood")
+        )
+        step1_detail = (
+            (result.get("transfer_engine") or {}).get("timing", {}).get("llm_directive")
+            or bcp1.get("detail")
+            or "3H→12H→10H→Rahu/Shani→AD/PD dasha"
+        )
+    elif bucket == "job_change":
+        step1_name = "3H/5H/9H change + BCP parallel (5L+10L ages)"
+        step1_done = bool(bcp1.get("all_change_ages") or (result.get("job_change_engine") or {}).get("promise"))
+        step1_detail = (result.get("job_change_engine") or {}).get("timing", {}).get("llm_directive") or "3L/5L/9L→AD/PD"
+    elif bucket == "general_career":
+        step1_name = "10H/6H promise + BCP parallel (10L+6L job ages)"
+        step1_done = bool(bcp1.get("all_job_ages") or (result.get("general_career_engine") or {}).get("promise"))
+        step1_detail = (result.get("general_career_engine") or {}).get("timing", {}).get("llm_directive") or "10L/6L BCP"
+    elif bucket == "career_setback":
+        step1_name = "8H/11H recovery + BCP parallel (8L+11L ages)"
+        step1_done = bool(bcp1.get("all_recovery_ages") or (result.get("setback_engine") or {}).get("recovery"))
+        step1_detail = (result.get("setback_engine") or {}).get("timing", {}).get("llm_directive") or "recovery dasha"
+    elif bucket == "career_field_choice":
+        step1_name = "5H/10H field fit + BCP parallel (5L+10L ages)"
+        step1_done = bool(bcp1.get("all_field_ages") or (result.get("field_choice_engine") or {}).get("promise"))
+        step1_detail = (result.get("field_choice_engine") or {}).get("timing", {}).get("llm_directive") or "5L field dasha"
+    else:
+        step1_name = "BCP job ages (10L + 6L placement & aspects)"
+        step1_done = bool(bcp1.get("all_job_ages"))
+        step1_detail = bcp1.get("detail") or "10L/6L BCP scan"
+
     return {
         "step0": {
             "name": "User demand + age context",
@@ -4464,6 +4737,55 @@ def build_career_timing_step_audit(result: dict) -> dict:
             ),
         },
         "step1": {
+            "name": step1_name,
+            "status": "DONE" if step1_done else "PARTIAL",
+            "tenth_lord": bcp1.get("tenth_lord"),
+            "tenth_lord_house": bcp1.get("tenth_lord_house"),
+            "sixth_lord": bcp1.get("sixth_lord") if bucket not in ("promotion",) else None,
+            "sixth_lord_house": bcp1.get("sixth_lord_house") if bucket not in ("promotion",) else None,
+            "twelfth_lord": bcp1.get("twelfth_lord") if bucket in ("resignation", "transfer") else None,
+            "twelfth_lord_house": bcp1.get("twelfth_lord_house") if bucket in ("resignation", "transfer") else None,
+            "third_lord": bcp1.get("third_lord") if bucket == "transfer" else None,
+            "third_lord_house": bcp1.get("third_lord_house") if bucket == "transfer" else None,
+            "eleventh_lord": bcp1.get("eleventh_lord") if bucket == "promotion" else None,
+            "eleventh_lord_house": bcp1.get("eleventh_lord_house") if bucket == "promotion" else None,
+            "aspect_houses_10l": [
+                e.get("house") for e in (bcp1.get("aspect_houses_10l") or [])
+                if isinstance(e, dict)
+            ],
+            "aspect_houses_6l": [
+                e.get("house") for e in (bcp1.get("aspect_houses_6l") or [])
+                if isinstance(e, dict)
+            ] if bucket not in ("promotion",) else [],
+            "aspect_houses_12l": [
+                e.get("house") for e in (bcp1.get("aspect_houses_12l") or [])
+                if isinstance(e, dict)
+            ] if bucket == "resignation" else [],
+            "aspect_houses_3l": [
+                e.get("house") for e in (bcp1.get("aspect_houses_3l") or [])
+                if isinstance(e, dict)
+            ] if bucket == "transfer" else [],
+            "aspect_houses_11l": [
+                e.get("house") for e in (bcp1.get("aspect_houses_11l") or [])
+                if isinstance(e, dict)
+            ] if bucket == "promotion" else [],
+            "career_areas": (
+                bcp1.get("career_areas") or bcp1.get("promotion_areas")
+                or bcp1.get("exit_areas") or bcp1.get("transfer_areas") or []
+            )[:8],
+            "all_job_ages": (bcp1.get("all_job_ages") or [])[:20] if bucket in ("general_career", "govt_job") else None,
+            "all_change_ages": (bcp1.get("all_change_ages") or [])[:20] if bucket == "job_change" else None,
+            "all_recovery_ages": (bcp1.get("all_recovery_ages") or [])[:20] if bucket == "career_setback" else None,
+            "all_field_ages": (bcp1.get("all_field_ages") or [])[:20] if bucket == "career_field_choice" else None,
+            "all_promotion_ages": (bcp1.get("all_promotion_ages") or [])[:20] if bucket == "promotion" else None,
+            "all_exit_ages": (bcp1.get("all_exit_ages") or [])[:20] if bucket == "resignation" else None,
+            "all_transfer_ages": (bcp1.get("all_transfer_ages") or [])[:20] if bucket == "transfer" else None,
+            "future_priority_ages": (bcp1.get("future_priority_ages") or [])[:8],
+            "next_activation_age": bcp1.get("next_activation_age"),
+            "timing_mode": bcp1.get("timing_mode"),
+            "detail": step1_detail,
+        },
+        "step2": {
             "name": (
                 "D1 change axis (3H/3L + 5H/5L + 9H/9L + 6H/10H)"
                 if bucket == "job_change"
@@ -4495,7 +4817,7 @@ def build_career_timing_step_audit(result: dict) -> dict:
                 else " · ".join((l1.get("why") or [])[:3]) or "10H/10L scan"
             ),
         },
-        "step2": {
+        "step3": {
             "name": "Divisional verify (D9 + D10)",
             "status": "DONE",
             "d9_score": l18.get("score"),
@@ -4504,21 +4826,21 @@ def build_career_timing_step_audit(result: dict) -> dict:
                 f"D9 {l18.get('score', 0):+d} · D10 {l19.get('score', 0):+d}"
             ),
         },
-        "step3": {
+        "step4": {
             "name": "KP career CSL",
             "status": "DONE" if l22 else "SKIPPED",
             "kp_score": l22.get("score"),
             "top_why": (l22.get("why") or [])[:3],
             "detail": " · ".join((l22.get("why") or [])[:2]) or "KP partial",
         },
-        "step4": {
+        "step5": {
             "name": "Natal rank (layer score)",
             "status": "DONE",
             "layer_score": sb.get("layer_score"),
             "top_layers": _top_layer_rows(L, 5),
             "detail": f"natal layers {sb.get('layer_score', 0):+d}",
         },
-        "step5": {
+        "step6": {
             "name": (
                 "Dasha activation (3L/5L/9L change + 6L/10L/11L outcome)"
                 if bucket == "job_change"
@@ -4540,7 +4862,7 @@ def build_career_timing_step_audit(result: dict) -> dict:
                 + (f" · {dasha_why[0]}" if dasha_why else "")
             ),
         },
-        "step6": {
+        "step7": {
             "name": "Transit triggers (Saturn 10H + Jupiter grace)",
             "status": "DONE" if transit_why else "NEUTRAL",
             "saturn_score": t2.get("score"),
@@ -4550,7 +4872,7 @@ def build_career_timing_step_audit(result: dict) -> dict:
             "jupiter_active": tw.get("jupiter_active"),
             "detail": " · ".join(transit_why[:3]) or "no strong transit",
         },
-        "step7": {
+        "step8": {
             "name": (
                 "Window merge (next change-lord PD cascade)"
                 if bucket == "job_change"
@@ -4570,7 +4892,7 @@ def build_career_timing_step_audit(result: dict) -> dict:
                 + (f" · {nxt.get('reason')}" if nxt.get("reason") else "")
             ).strip(),
         },
-        "step8": {
+        "step9": {
             "name": "Verdict + strategy + guard",
             "status": "DONE",
             "verdict": result.get("verdict"),
@@ -4591,17 +4913,17 @@ def build_career_timing_audit(result: dict) -> dict:
     if not isinstance(result, dict):
         return {}
     sa = build_career_timing_step_audit(result)
-    s5 = sa.get("step5") or {}
     s6 = sa.get("step6") or {}
     s7 = sa.get("step7") or {}
+    s8 = sa.get("step8") or {}
     issues: list[str] = []
     checks: list[dict] = []
 
-    dasha_ok = bool(s5.get("current_lords"))
+    dasha_ok = bool(s6.get("current_lords"))
     checks.append({
         "name": "dasha_trace",
         "ok": dasha_ok,
-        "detail": str(s5.get("detail") or ""),
+        "detail": str(s6.get("detail") or ""),
     })
     if not dasha_ok:
         issues.append("current MD/AD/PD not resolved from chart")
@@ -4611,23 +4933,23 @@ def build_career_timing_audit(result: dict) -> dict:
     checks.append({
         "name": "dasha_career_activation",
         "ok": dasha_active,
-        "detail": f"T1 score {t1_score} · lords {s5.get('current_lords')}",
+        "detail": f"T1 score {t1_score} · lords {s6.get('current_lords')}",
     })
     if not dasha_active:
         issues.append("current dasha lords weak for career-significator activation")
 
-    transit_ok = bool(s6.get("why"))
+    transit_ok = bool(s7.get("why"))
     checks.append({
         "name": "transit_support",
         "ok": transit_ok,
-        "detail": str(s6.get("detail") or "neutral"),
+        "detail": str(s7.get("detail") or "neutral"),
     })
 
-    next_win = bool(s7.get("next_ad"))
+    next_win = bool(s8.get("next_ad"))
     checks.append({
         "name": "next_career_window",
         "ok": next_win,
-        "detail": str(s7.get("detail") or "no upcoming AD on 10L/AmK"),
+        "detail": str(s8.get("detail") or "no upcoming AD on 10L/AmK"),
     })
 
     checks.append({
@@ -4640,21 +4962,21 @@ def build_career_timing_audit(result: dict) -> dict:
         "status": "PASS" if not issues else "WARN",
         "issues": issues,
         "primary_dasha": {
-            "lords": s5.get("current_lords"),
-            "start": s5.get("current_start"),
-            "end": s5.get("current_end"),
-            "dasha_score": s5.get("dasha_score"),
+            "lords": s6.get("current_lords"),
+            "start": s6.get("current_start"),
+            "end": s6.get("current_end"),
+            "dasha_score": s6.get("dasha_score"),
         },
         "next_window": {
-            "ad": s7.get("next_ad"),
-            "md": s7.get("next_md"),
-            "start": s7.get("next_start"),
-            "end": s7.get("next_end"),
+            "ad": s8.get("next_ad"),
+            "md": s8.get("next_md"),
+            "start": s8.get("next_start"),
+            "end": s8.get("next_end"),
         },
         "transit": {
-            "detail": s6.get("detail"),
-            "saturn": s6.get("saturn_transit"),
-            "jupiter": s6.get("jupiter_active"),
+            "detail": s7.get("detail"),
+            "saturn": s7.get("saturn_transit"),
+            "jupiter": s7.get("jupiter_active"),
         },
         "checks": checks,
         "expected_reply": (result.get("strategy") or "")[:200],
@@ -4684,7 +5006,7 @@ def build_career_timing_engine_trace(verdict: dict) -> dict:
         "step_order": list(verdict.get("step_order") or _CAREER_TIMING_STEP_ORDER),
         "timing_audit": timing_audit,
         "dasha_trace": {
-            "current_lords": cur.get("lords") or (step_audit.get("step5") or {}).get("current_lords"),
+            "current_lords": cur.get("lords") or (step_audit.get("step6") or {}).get("current_lords"),
             "current_start": cur.get("start"),
             "current_end": cur.get("end"),
             "next_career_ad": nxt.get("ad"),
@@ -4806,6 +5128,132 @@ def format_verdict_for_prompt(v: dict, question: str = "") -> str:
             lines.append(f"   • {r}")
         lines.append("")
 
+    # BCP job ages — STEP 1 (10L+6L job | 11L+10L promotion | 12L+6L resignation)
+    bcp1 = {}
+    _bucket = v.get("bucket")
+    if _bucket == "promotion" and isinstance(v.get("promotion_step1_bcp"), dict):
+        bcp1 = v["promotion_step1_bcp"]
+    elif _bucket == "resignation" and isinstance(v.get("resignation_step1_bcp"), dict):
+        bcp1 = v["resignation_step1_bcp"]
+    elif _bucket == "transfer" and isinstance(v.get("transfer_step1_bcp"), dict):
+        bcp1 = v["transfer_step1_bcp"]
+    elif _bucket == "job_change" and isinstance(v.get("job_change_step1_bcp"), dict):
+        bcp1 = v["job_change_step1_bcp"]
+    elif _bucket == "general_career" and isinstance(v.get("general_career_step1_bcp"), dict):
+        bcp1 = v["general_career_step1_bcp"]
+    elif _bucket == "career_setback" and isinstance(v.get("setback_step1_bcp"), dict):
+        bcp1 = v["setback_step1_bcp"]
+    elif _bucket == "career_field_choice" and isinstance(v.get("field_choice_step1_bcp"), dict):
+        bcp1 = v["field_choice_step1_bcp"]
+    elif isinstance(v.get("career_step1_bcp"), dict):
+        bcp1 = v["career_step1_bcp"]
+    if bcp1 and tense == "future":
+        is_promo = _bucket == "promotion"
+        is_resign = _bucket == "resignation"
+        is_xfer = _bucket == "transfer"
+        is_jc = _bucket == "job_change"
+        is_gc = _bucket == "general_career"
+        is_sb = _bucket == "career_setback"
+        is_fc = _bucket == "career_field_choice"
+        bcp_label = (
+            "PROMOTION" if is_promo else "EXIT/RESIGN" if is_resign
+            else "TRANSFER/MOVE" if is_xfer else "JOB-CHANGE" if is_jc
+            else "JOB" if is_gc else "RECOVERY" if is_sb
+            else "FIELD" if is_fc else "JOB"
+        )
+        lines.append(
+            f"▸ BCP {bcp_label} AGES (STEP 1 — do NOT invent ages):"
+        )
+        if is_promo:
+            lines.append(
+                f"   • 11L {bcp1.get('eleventh_lord')} in {bcp1.get('eleventh_lord_house')}H"
+                f" · 10L {bcp1.get('tenth_lord')} in {bcp1.get('tenth_lord_house')}H"
+            )
+            asp11 = [
+                e.get("house") for e in (bcp1.get("aspect_houses_11l") or [])
+                if isinstance(e, dict) and e.get("house") is not None
+            ]
+            if asp11:
+                lines.append(f"   • 11L aspects houses: {asp11}")
+        elif is_resign:
+            lines.append(
+                f"   • 12L {bcp1.get('twelfth_lord')} in {bcp1.get('twelfth_lord_house')}H"
+                f" · 6L {bcp1.get('sixth_lord')} in {bcp1.get('sixth_lord_house')}H"
+            )
+            asp12 = [
+                e.get("house") for e in (bcp1.get("aspect_houses_12l") or [])
+                if isinstance(e, dict) and e.get("house") is not None
+            ]
+            if asp12:
+                lines.append(f"   • 12L aspects houses: {asp12}")
+            asp6r = [
+                e.get("house") for e in (bcp1.get("aspect_houses_6l") or [])
+                if isinstance(e, dict) and e.get("house") is not None
+            ]
+            if asp6r:
+                lines.append(f"   • 6L aspects houses: {asp6r}")
+        elif is_xfer:
+            lines.append(
+                f"   • 3L {bcp1.get('third_lord')} in {bcp1.get('third_lord_house')}H"
+                f" · 12L {bcp1.get('twelfth_lord')} in {bcp1.get('twelfth_lord_house')}H"
+            )
+            asp3 = [
+                e.get("house") for e in (bcp1.get("aspect_houses_3l") or [])
+                if isinstance(e, dict) and e.get("house") is not None
+            ]
+            if asp3:
+                lines.append(f"   • 3L aspects houses: {asp3}")
+            asp12x = [
+                e.get("house") for e in (bcp1.get("aspect_houses_12l") or [])
+                if isinstance(e, dict) and e.get("house") is not None
+            ]
+            if asp12x:
+                lines.append(f"   • 12L aspects houses: {asp12x}")
+        elif is_jc or is_fc:
+            lines.append(
+                f"   • 5L {bcp1.get('fifth_lord')} in {bcp1.get('fifth_lord_house')}H"
+                f" · 10L {bcp1.get('tenth_lord')} in {bcp1.get('tenth_lord_house')}H"
+            )
+        elif is_sb:
+            lines.append(
+                f"   • 8L {bcp1.get('eighth_lord')} in {bcp1.get('eighth_lord_house')}H"
+                f" · 11L {bcp1.get('eleventh_lord')} in {bcp1.get('eleventh_lord_house')}H"
+            )
+        elif is_gc:
+            lines.append(
+                f"   • 10L {bcp1.get('tenth_lord')} in {bcp1.get('tenth_lord_house')}H"
+                f" · 6L {bcp1.get('sixth_lord')} in {bcp1.get('sixth_lord_house')}H"
+            )
+            asp6 = [
+                e.get("house") for e in (bcp1.get("aspect_houses_6l") or [])
+                if isinstance(e, dict) and e.get("house") is not None
+            ]
+            if asp6:
+                lines.append(f"   • 6L aspects houses: {asp6}")
+        elif bcp1.get("tenth_lord"):
+            lines.append(
+                f"   • 10L {bcp1.get('tenth_lord')} in {bcp1.get('tenth_lord_house')}H"
+                f" · 6L {bcp1.get('sixth_lord')} in {bcp1.get('sixth_lord_house')}H"
+            )
+        age_key = (
+            "all_promotion_ages" if is_promo
+            else "all_exit_ages" if is_resign
+            else "all_transfer_ages" if is_xfer
+            else "all_change_ages" if is_jc
+            else "all_recovery_ages" if is_sb
+            else "all_field_ages" if is_fc
+            else "all_job_ages"
+        )
+        all_ages = bcp1.get(age_key) or []
+        if all_ages:
+            lines.append(f"   • BCP activation ages: {all_ages[:16]}{'…' if len(all_ages) > 16 else ''}")
+        priority = bcp1.get("future_priority_ages") or []
+        if priority:
+            lines.append(f"   • Priority future BCP ages: {priority[:6]}")
+        if bcp1.get("next_activation_age") is not None:
+            lines.append(f"   • Next BCP activation age: {bcp1.get('next_activation_age')}")
+        lines.append("")
+
     # Timing window — emit in validator-friendly form (lowercase "window:"
     # + topic keyword + explicit "X Mahadasha / Y Antardasha" wording so
     # the timing_validator (vedic/validator/timing_validator.py) can match
@@ -4892,6 +5340,32 @@ def format_verdict_for_prompt(v: dict, question: str = "") -> str:
         lines.append(gj_block.strip())
         lines.append("")
 
+    promo_block = v.get("promotion_prompt_block")
+    if isinstance(promo_block, str) and promo_block.strip():
+        lines.append(promo_block.strip())
+        lines.append("")
+
+    resign_block = v.get("resignation_prompt_block")
+    if isinstance(resign_block, str) and resign_block.strip():
+        lines.append(resign_block.strip())
+        lines.append("")
+
+    xfer_block = v.get("transfer_prompt_block")
+    if isinstance(xfer_block, str) and xfer_block.strip():
+        lines.append(xfer_block.strip())
+        lines.append("")
+
+    for _key, _label in (
+        ("job_change_prompt_block", "job_change"),
+        ("general_career_prompt_block", "general_career"),
+        ("setback_prompt_block", "setback"),
+        ("field_choice_prompt_block", "field_choice"),
+    ):
+        _blk = v.get(_key)
+        if isinstance(_blk, str) and _blk.strip():
+            lines.append(_blk.strip())
+            lines.append("")
+
     # Conditionals — verbose for the bucket
     conds = v.get("conditionals") or {}
     if "C1_govt_job" in conds:
@@ -4917,6 +5391,22 @@ def format_verdict_for_prompt(v: dict, question: str = "") -> str:
     if "C5_setback_recovery" in conds:
         c = conds["C5_setback_recovery"]
         lines.append(f"▸ RECOVERY OUTLOOK: {c.get('recovery_outlook','?')}")
+        for w in (c.get("why") or [])[:3]:
+            lines.append(f"   • {w}")
+        lines.append("")
+    if "C8_resignation" in conds:
+        c = conds["C8_resignation"]
+        lines.append(f"▸ RESIGNATION VIABILITY: {c.get('resignation_verdict', c.get('viability', '?'))}")
+        if c.get("verdict_label"):
+            lines.append(f"   • Verdict: {c.get('verdict_label')}")
+        for w in (c.get("why") or [])[:3]:
+            lines.append(f"   • {w}")
+        lines.append("")
+    if "C7_transfer" in conds:
+        c = conds["C7_transfer"]
+        lines.append(f"▸ TRANSFER SIGNAL: {c.get('transfer_verdict', '?')}")
+        if c.get("verdict_label"):
+            lines.append(f"   • Verdict: {c.get('verdict_label')}")
         for w in (c.get("why") or [])[:3]:
             lines.append(f"   • {w}")
         lines.append("")

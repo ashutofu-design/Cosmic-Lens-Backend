@@ -12,6 +12,8 @@ _LIT_CFG = DomainTimingConfig(
     concern_houses=[
         (6, 16.0, "6L (dispute/litigation axis)"),
         (8, 12.0, "8L (crisis/legal shock)"),
+        (10, 8.0, "10L (judge/government/authority)"),
+        (11, 6.0, "11L (gains/desired relief)"),
         (12, 10.0, "12L (loss/expense/confinement tone)"),
     ],
     leak_houses=[
@@ -30,10 +32,10 @@ _LIT_CFG = DomainTimingConfig(
         ("Rahu", 8.0, "complexity/FIR karaka"),
         ("Mercury", 6.0, "arguments/documents karaka"),
     ],
-    kp_cusps=[6, 8, 12],
+    kp_cusps=[6, 8, 10, 11, 12],
     promote_tags=("6L", "Mercury", "relief", "acquittal"),
     obstruct_tags=("8L", "12L", "12H", "Saturn delay", "Rahu"),
-    double_transit_houses=[6, 8],
+    double_transit_houses=[6, 8, 10],
     promised_label="LEGAL_WINDOW_EASING",
     favourable_label="LEGAL_WINDOW_MODERATE",
     caution_label="LEGAL_DELAY",
@@ -47,10 +49,12 @@ _LIT_CFG = DomainTimingConfig(
 )
 
 _BUCKET_RX = [
-    ("bail_theme", r"(?ix)\b(bail|anticipatory|parole)\b"),
-    ("case_outcome", r"(?ix)\b(verdict|faisla|judgment|case\s+end|acquit)\b"),
-    ("court_delay", r"(?ix)\b(delay|late|adjourn|pending)\b"),
-    ("acquittal_relief", r"(?ix)\b(acquit|relief|discharge|chhut)\b"),
+    ("fir_police", r"(?ix)\b(fir|complaint|police|arrest|giraftar|warrant|summons|raid|investigation|inquiry)\b"),
+    ("bail_theme", r"(?ix)\b(bail|anticipatory|zamanat|parole|custody|remand)\b"),
+    ("settlement", r"(?ix)\b(compromise|settlement|samjhauta|mediation|lok\s+adalat|arbitration|withdraw)\b"),
+    ("case_outcome", r"(?ix)\b(verdict|faisla|judgment|judgement|jeet|haar|acquit|dosh[\s-]?mukt|partition\s+decree)\b"),
+    ("court_delay", r"(?ix)\b(delay|late|adjourn|pending|latka|speed|tezi)\b"),
+    ("acquittal_relief", r"(?ix)\b(acquit|relief|discharge|chhut|quash|mukti|closure|terminate)\b"),
 ]
 
 

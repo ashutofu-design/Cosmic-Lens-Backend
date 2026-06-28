@@ -7068,18 +7068,24 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     except Exception:
         _topic_hint = ""
 
+    eff_lang = _resolve_response_lang(question, lang, None)
+
     dcr_love_rule = ""
     if (
         dcr_love_meta
         and not _is_pn_minimal
         and dcr_love_meta.get("slice") not in ("mr_engine_v1", "career_engine_v1", "education_engine_v1", "children_engine_v1", "property_engine_v1", "travel_engine_v1", "litigation_engine_v1", "finance_engine_v1", "health_engine_v1")
     ):
-        dcr_love_rule = (
-            "\nDCR LOVE SLICE: partner/love Q — D1 first, D9 confirms. "
-            "Plain Hinglish result only; hide technical terms in reply.\n"
-        )
-
-    eff_lang = _resolve_response_lang(question, lang, None)
+        if eff_lang == "hi":
+            dcr_love_rule = (
+                "\nDCR LOVE SLICE: partner/love Q — D1 first, D9 confirms. "
+                "Plain Hindi (Devanagari) result only; hide technical terms in reply.\n"
+            )
+        else:
+            dcr_love_rule = (
+                "\nDCR LOVE SLICE: partner/love Q — D1 first, D9 confirms. "
+                "Plain Hinglish result only; hide technical terms in reply.\n"
+            )
 
     _mr_engine_narrator = (
         isinstance(dcr_love_meta, dict)
@@ -8387,11 +8393,19 @@ def _resolve_response_lang(question: str, lang: str,
       1. user.preferred_language    (highest — sticky personal pref)
       2. detected language of the question (per-message smart match)
       3. app default language `lang`        (lowest — fallback)
+
+    Hindi content (Devanagari or Roman) replies in Devanagari (`hi`) unless
+    the user explicitly set preferred_language to `hn` (Roman Hinglish replies).
     """
     pl = (preferred_language or "").strip().lower()
     if pl in {"en", "hi", "hn"}:
-        return pl
-    return _detect_question_lang(question, lang)
+        resolved = pl
+    else:
+        resolved = _detect_question_lang(question, lang)
+    # Roman-Hindi questions → Devanagari replies (Cosmic Ask default for India).
+    if resolved == "hn" and pl != "hn":
+        resolved = "hi"
+    return resolved
 
 
 def _strict_lang_block(code: str) -> str:

@@ -73,9 +73,15 @@ export function questionLangLabel(lang: AskQuestionLang | null): string {
 
 export function questionLangLabelCompact(lang: AskQuestionLang | null): string {
   if (lang === "hi") return "Hindi (देवनागरी)";
-  if (lang === "hn") return "Hindi (Roman)";
+  if (lang === "hn") return "Hindi (Roman lipi)";
   if (lang === "en") return "English";
   return "Other";
+}
+
+export function questionLangAnswerHint(lang: AskQuestionLang | null): string {
+  if (lang === "hi" || lang === "hn") return "जवाब: देवनागरी हिंदी";
+  if (lang === "en") return "Answer: English";
+  return "";
 }
 
 export function questionLangShort(lang: AskQuestionLang | null): string {

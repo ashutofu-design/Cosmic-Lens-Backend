@@ -1,5 +1,6 @@
 import {
   detectQuestionLang,
+  questionLangAnswerHint,
   questionLangLabel,
   questionLangLabelCompact,
   type AskQuestionLang,
@@ -15,14 +16,16 @@ export function QuestionLangBadge({
 }) {
   const lang = detectQuestionLang(questionText);
   const label = compact ? questionLangLabelCompact(lang) : questionLangLabel(lang);
+  const answerHint = questionLangAnswerHint(lang);
 
   return (
     <span
       className={`question-lang-badge question-lang-badge--${lang ?? "blocked"}`}
-      title={questionLangLabel(lang)}
+      title={[questionLangLabel(lang), answerHint].filter(Boolean).join(" · ")}
     >
       {compact ? "Language: " : "सवाल की भाषा: "}
       {label}
+      {compact && answerHint ? ` · ${answerHint}` : null}
     </span>
   );
 }

@@ -5543,6 +5543,36 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     _is_litigation_static = False
             except Exception:
                 pass
+    # Health static outlook beats timing — must run even when LLM sets is_timing=True
+    # and even when the `if not is_timing:` block above was skipped.
+    try:
+        from ask_health.timing_registry import health_static_overrides_llm_timing as _hso_always  # type: ignore
+
+        if _hso_always(question or "", _llm_intent):
+            is_timing = False
+            _is_health_static = True
+            qtype = "STATIC"
+    except Exception as _hso_a:
+        import re as _re_hl
+
+        if _re_hl.search(
+            r"(?ix)\b(health|sehat|swasth|swasthya|tabiyat)\s+(kaisi|kaisa)\s*"
+            r"(rahegi|rahega|hogi|hoga)?",
+            question or "",
+        ) and not _re_hl.search(
+            r"(?ix)\b(kab|when|kis\s+(?:saal|year|date|mahine|month)|20\d{2})\b",
+            question or "",
+        ):
+            is_timing = False
+            _is_health_static = True
+            qtype = "STATIC"
+            print(
+                f"[raw_passthrough] HEALTH outlook regex override (import fallback) "
+                f"q={(question or '')[:60]!r}",
+                flush=True,
+            )
+        else:
+            print(f"[raw_passthrough] health beats timing skipped: {_hso_a}", flush=True)
     # Sensitive Qs ALSO need current dasha so the LLM has a real reason
     # to cite in layer-2 (astrological reason). Auto-promote.
     if is_sensitive:
@@ -5614,7 +5644,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _is_health_static = True
         except Exception as _hso_pre_exc:
             print(f"[raw_passthrough] health pre-chart force skipped: {_hso_pre_exc}", flush=True)
-        if is_timing:
+        if is_timing and not _is_health_static:
             chart_text = _raw_compact_chart(
                 kundli, include_dasha=True, static_dasha_hint=False,
             )
@@ -6134,6 +6164,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     "word_budget": int(_health_engine_result.word_budget or 75),
                     "narrator_mode": "engine_facts_only",
                 }
+                _chart_slice_type = "health_engine_v1"
                 print(
                     f"[raw_passthrough] HEALTH_ENGINE "
                     f"archetype={_health_engine_result.archetype} "
@@ -6964,11 +6995,16 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         from ask_hard_guards import direct_llm_allowed, enforce_engine_only_or_refuse
 
         _eng_checks = {
-            "slice_type": _chart_slice_type,
+            "slice_type": (
+                _chart_slice_type
+                if _chart_slice_type != "full_compact"
+                else (dcr_love_meta or {}).get("slice") or _chart_slice_type
+            ),
             "resolved_route": _resolved_route,
             "is_marriage_engine": bool(is_marriage_engine),
             "is_mr_static": bool(_is_mr_static),
             "is_career_engine": bool(is_career_engine),
+            "is_health_static": bool(_is_health_static),
         }
         _eng_slice = dcr_love_meta if isinstance(dcr_love_meta, dict) else {}
         _refusal = enforce_engine_only_or_refuse(

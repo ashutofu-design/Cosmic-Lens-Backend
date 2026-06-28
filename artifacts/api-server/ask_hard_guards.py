@@ -25,6 +25,10 @@ _ENGINE_SLICES = frozenset({
     "education_timing_v1",
     "property_timing_v1",
     "litigation_timing_v1",
+    "spiritual_timing_v1",
+    "fame_timing_v1",
+    "network_timing_v1",
+    "universal_timing_v1",
 })
 
 _MARRIAGE_TIMING_RX = re.compile(
@@ -48,7 +52,7 @@ _TIMING_SPEC_ONLY_RX = re.compile(
     r"(?ix)^\s*===\s*TIMING\s+SPEC\s*\(",
 )
 _TIMING_ENGINE_LOCKED_RX = re.compile(
-    r"(?ix)TIMING\s+ENGINE\s*\(LOCKED\)",
+    r"(?ix)TIMING\s+(?:ENGINE|FALLBACK)\s*\(LOCKED\)",
 )
 
 
@@ -185,7 +189,7 @@ def general_timing_engine_required(
         from event_timing.timing_router import resolve_timing_domain
 
         dom, _bucket, is_timing = resolve_timing_domain(q, llm_intent)
-        return bool(is_timing and dom == "general")
+        return bool(is_timing and dom in ("general", "universal"))
     except Exception:
         return False
 
@@ -215,9 +219,11 @@ def passthrough_missing_required_engine(
         from event_timing.timing_router import resolve_timing_domain
 
         dom, _bucket, is_timing = resolve_timing_domain(q, llm_intent)
-        if is_timing and dom not in ("general", "career", "marriage"):
+        if is_timing and dom not in ("general", "career", "marriage", "universal"):
             if not (domain_timing_block or "").strip():
                 return f"{dom}_timing"
+        if is_timing and dom == "universal" and not (domain_timing_block or "").strip():
+            return "universal_timing"
     except Exception:
         pass
     return "no_domain_engine"
@@ -237,6 +243,25 @@ def enforce_engine_only_or_refuse(
     """Return refusal payload when LLM must not run chart-only; None = OK to proceed."""
     if direct_llm_allowed():
         return None
+
+    # Never show engine_required wall for basic health outlook (Health kaisi rahegi?).
+    try:
+        from ask_health.timing_registry import health_static_overrides_llm_timing
+
+        if health_static_overrides_llm_timing(question or "", llm_intent):
+            return None
+    except Exception:
+        import re
+
+        if re.search(
+            r"(?ix)\b(health|sehat|swasth|swasthya|tabiyat)\s+(kaisi|kaisa)\s*"
+            r"(rahegi|rahega|hogi|hoga)?",
+            question or "",
+        ) and not re.search(
+            r"(?ix)\b(kab|when|kis\s+(?:saal|year|date|mahine|month)|20\d{2})\b",
+            question or "",
+        ):
+            return None
 
     checks = checks or {}
     slice_meta = slice_meta or {}

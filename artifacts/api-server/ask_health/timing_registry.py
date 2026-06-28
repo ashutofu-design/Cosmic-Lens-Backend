@@ -123,9 +123,6 @@ def is_health_timing_question(
         q,
     ):
         return False
-    if isinstance(llm_intent, dict):
-        if llm_intent.get("domain") == "health" and llm_intent.get("is_timing"):
-            return True
     if not _SCOPE_RX.search(q):
         return False
     if not _TIMING_RX.search(q):
@@ -146,7 +143,7 @@ def health_static_overrides_llm_timing(
     """True → caller must set is_timing=False so health_engine_v1 runs.
 
     LLM intent often marks 'Health kaisi rahegi?' as timing (rahegi/future);
-    regex static health wins over that mistake.
+    regex static health wins — do not trust llm_intent.is_timing alone.
     """
     q = (question or "").strip()
     if not q:
@@ -157,6 +154,11 @@ def health_static_overrides_llm_timing(
         return False
     if not is_health_static_question(q):
         return False
+    if _STATIC_HEALTH_OUTLOOK_RX.search(q) and not re.search(
+        r"(?ix)\b(kab|when|kis\s+(?:saal|year|date|mahine|month)|20\d{2})\b",
+        q,
+    ):
+        return True
     return not is_health_timing_question(q, llm_intent)
 
 

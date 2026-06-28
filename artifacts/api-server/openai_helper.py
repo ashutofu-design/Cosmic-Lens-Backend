@@ -5164,15 +5164,22 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     try:
         from ask_health.timing_registry import health_static_overrides_llm_timing  # type: ignore
 
-        if is_timing and health_static_overrides_llm_timing(question or "", _llm_intent):
+        if health_static_overrides_llm_timing(question or "", _llm_intent):
             print(
-                f"[raw_passthrough] HEALTH_STATIC overrides LLM is_timing "
+                f"[raw_passthrough] HEALTH_STATIC overrides timing "
                 f"q={(question or '')[:60]!r}",
                 flush=True,
             )
             is_timing = False
     except Exception as _hso_exc:
         print(f"[raw_passthrough] health static timing override skipped: {_hso_exc}", flush=True)
+    _force_health_static = False
+    try:
+        from ask_health.timing_registry import health_static_overrides_llm_timing as _hso2  # type: ignore
+
+        _force_health_static = bool(_hso2(question or "", _llm_intent))
+    except Exception:
+        pass
     qtype = "TIMING" if is_timing else "STATIC"
 
     # ── Vague life-struggle timing → clarifier (after intent/timing known) ─
@@ -5271,6 +5278,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _is_vehicle_static = _dom == "vehicle"
             _is_travel_static = _dom == "travel"
             _is_litigation_static = _dom == "litigation"
+            if _dom == "health":
+                _is_health_static = True
         else:
             try:
                 from ask_marriage_relationship_slice import (  # type: ignore
@@ -5368,6 +5377,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _is_career_static = False
             if _is_litigation_static:
                 _is_career_static = False
+        if _force_health_static:
+            _is_health_static = True
+            is_timing = False
         try:
             from ask_career.timing_registry import is_career_timing_question  # type: ignore
 
@@ -5594,6 +5606,14 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _litigation_engine_result = None
     _chart_slice_type = "full_compact"
     try:
+        try:
+            from ask_health.timing_registry import health_static_overrides_llm_timing as _hso_pre  # type: ignore
+
+            if _hso_pre(question or "", _llm_intent):
+                is_timing = False
+                _is_health_static = True
+        except Exception as _hso_pre_exc:
+            print(f"[raw_passthrough] health pre-chart force skipped: {_hso_pre_exc}", flush=True)
         if is_timing:
             chart_text = _raw_compact_chart(
                 kundli, include_dasha=True, static_dasha_hint=False,

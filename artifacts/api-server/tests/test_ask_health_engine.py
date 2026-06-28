@@ -112,6 +112,8 @@ class TestAskHealthEngine(unittest.TestCase):
         self.assertFalse(
             health_static_overrides_llm_timing("2027 me health kaisi hogi?", llm_wrong)
         )
+        # LLM is_timing must not force health timing for outlook Q
+        self.assertFalse(is_health_timing_question("Health kaisi rahegi?", llm_wrong))
 
     def test_resolve_override_llm(self):
         arch, reason = resolve_health_archetype(

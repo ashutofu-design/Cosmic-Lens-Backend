@@ -79,9 +79,19 @@ def compute_vehicle_window(
     bucket: str | None = None,
 ) -> dict:
     b = bucket or classify_vehicle_timing_bucket(question)
-    return compute_generic_timing_window(
+    out = compute_generic_timing_window(
         kundli, _VEHICLE_CFG, intel, kp, birth, question, b,
     )
+    try:
+        from event_timing.vehicle.vehicle_practicality import apply_vehicle_practicality
+
+        out = apply_vehicle_practicality(out, kundli, birth, question)
+    except Exception as exc:
+        if isinstance(out, dict):
+            factors = list(out.get("factors") or [])
+            factors.append(f"vehicle_practicality skipped: {exc}")
+            out["factors"] = factors
+    return out
 
 
 def format_vehicle_timing_for_prompt(v: dict, question: str = "") -> str:
@@ -110,6 +120,14 @@ def format_vehicle_timing_for_prompt(v: dict, question: str = "") -> str:
         lines.append(f"  Double-transit: {dt.get('verdict')} active={dt.get('active')}")
     for g in (v.get("brand_safety_warnings") or [])[:5]:
         lines.append(f"  GUARD: {g}")
-    lines.append("RULE: 4H + Venus/Mars + 11H dasha/transit — probability window only.")
+    prac = v.get("practicality") if isinstance(v.get("practicality"), dict) else {}
+    if prac:
+        lines.append(
+            f"▸ PRACTICAL: age {prac.get('user_age', '?')} · min {prac.get('min_purchase_age', '?')} · "
+            f"afford {prac.get('affordability', '?')} · earliest {prac.get('earliest_practical_iso', '?')}"
+        )
+    if v.get("strategy"):
+        lines.append(f"▸ DIRECTIVE: {v['strategy']}")
+    lines.append("RULE: 4H + Venus/Mars + 11H dasha AND age/income practicality — no pakka 6-month promise to minors.")
     lines.append("══════════════════════════════════════════════════════════════")
     return "\n".join(lines)

@@ -147,6 +147,46 @@ class TestPropertyVehicleTiming(unittest.TestCase):
         self.assertNotEqual(source, "current_dasha_active")
         self.assertFalse(supports)
 
+    def test_teen_car_deferred_for_age_practicality(self):
+        from event_timing.vehicle.vehicle_practicality import apply_vehicle_practicality
+
+        now_year = __import__("datetime").datetime.utcnow().year
+        birth = f"{now_year - 19}-01-15"
+        out = {
+            "bucket": "buy",
+            "verdict": "VEHICLE_WINDOW_MODERATE",
+            "band": "MEDIUM",
+            "timing_source": "current_dasha_active",
+            "current_window": {
+                "start_iso": f"{now_year}-07-01",
+                "end_iso": f"{now_year}-12-31",
+                "md": "Saturn",
+                "ad": "Mercury",
+            },
+            "next_3_windows": [
+                {
+                    "start_iso": f"{now_year + 2}-06-01",
+                    "end_iso": f"{now_year + 2}-12-31",
+                    "md": "Saturn",
+                    "ad": "Venus",
+                    "activation_score": 10.5,
+                },
+            ],
+            "top_planets": [
+                {"name": "Saturn", "score": 14},
+                {"name": "Jupiter", "score": 8},
+            ],
+            "factors": [],
+            "brand_safety_warnings": [],
+        }
+        fixed = apply_vehicle_practicality(out, {}, birth, "Main new car kab lunga")
+        prac = fixed.get("practicality") or {}
+        self.assertEqual(prac.get("user_age"), 19)
+        self.assertTrue(prac.get("too_young_now"))
+        cw = fixed.get("current_window") or {}
+        self.assertNotEqual(cw.get("start_iso"), f"{now_year}-07-01")
+        self.assertIn("practical", str(fixed.get("timing_source") or ""))
+
     def test_property_dispute_guards(self):
         raw = compute_property_window(
             SAMPLE_KUNDLI, {}, {}, None,

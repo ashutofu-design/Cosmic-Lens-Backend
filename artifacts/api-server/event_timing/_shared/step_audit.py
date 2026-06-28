@@ -226,6 +226,15 @@ def build_step_audit_from_timing_result(result: dict, domain: str) -> dict:
 
     rec_lords = _lords_from_window(rec)
     transit_why, transit_detail = _transit_detail(result, factors)
+    prac = result.get("practicality") if isinstance(result.get("practicality"), dict) else {}
+    prac_bit = ""
+    if prac:
+        prac_bit = (
+            f" · practical age={prac.get('user_age')} min={prac.get('min_purchase_age')} "
+            f"afford={prac.get('affordability')}"
+        )
+        if prac.get("too_young_now"):
+            prac_bit += " · too_young=YES"
 
     return {
         "step1": {
@@ -303,6 +312,7 @@ def build_step_audit_from_timing_result(result: dict, domain: str) -> dict:
             "detail": (
                 f"{result.get('verdict') or '—'} · band {result.get('band') or '—'}"
                 + (f" · {transit_detail[:80]}" if transit_detail else "")
+                + prac_bit
             ),
         },
     }

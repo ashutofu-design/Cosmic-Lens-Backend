@@ -52,6 +52,15 @@ def karaka_evidence(facts: dict, name: str, label: str) -> str:
     return f"{label}: {name} in H{k.get('house', '?')}, dignity {k.get('dignity', '?')}"
 
 
+def dusthana_chart_evidence(facts: dict) -> list[str]:
+    """6/8/12 lords — disease/chronic/hospital axis for health issue Qs."""
+    return [
+        lord_evidence(facts, "h6", "6th house (disease)"),
+        lord_evidence(facts, "h8", "8th house (chronic/surgery)"),
+        lord_evidence(facts, "h12", "12th house (loss/hospital)"),
+    ]
+
+
 def affliction_lines(facts: dict, limit: int = 3) -> list[str]:
     aff = facts.get("afflictions") or []
     return [f"Pressure signal: {a}" for a in aff[:limit]]

@@ -6368,6 +6368,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _chart_slice_type = "property_engine_v1"
         elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "finance_engine_v1":
             _chart_slice_type = "finance_engine_v1"
+        elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "health_engine_v1":
+            _chart_slice_type = "health_engine_v1"
+        elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "travel_engine_v1":
+            _chart_slice_type = "travel_engine_v1"
+        elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "litigation_engine_v1":
+            _chart_slice_type = "litigation_engine_v1"
         elif is_timing:
             _chart_slice_type = "timing_full_chart"
         elif dcr_love_meta:

@@ -5,6 +5,7 @@ from ._health_base import (
     affliction_lines,
     dim,
     dim_evidence,
+    dusthana_chart_evidence,
     load_facts,
     vitality_line,
 )
@@ -39,7 +40,8 @@ def run_general_health(kundli: dict, question: str, *, wants_explain: bool = Fal
         dim_evidence(facts, "recovery_capacity", "Recovery capacity"),
         dim_evidence(facts, "surgery_risk_tone", "Surgery caution tone"),
     ]
-    evidence.extend(affliction_lines(facts, limit=2))
+    evidence.extend(dusthana_chart_evidence(facts))
+    evidence.extend(affliction_lines(facts, limit=3))
 
     return EngineResult(
         archetype="general_health",
@@ -48,7 +50,7 @@ def run_general_health(kundli: dict, question: str, *, wants_explain: bool = Fal
         word_budget=100 if wants_explain else 85,
         answer_plan="Open health Q — pick relevant dimensions from evidence.",
         summary=["6-dim snapshot.", "Doctor for symptoms."],
-        evidence=evidence[:10],
+        evidence=evidence[:12],
         ignore=["timing", "disease names", "death", "dates"],
         checks={
             "slice_type": "health_engine_v1",

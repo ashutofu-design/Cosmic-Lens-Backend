@@ -67,6 +67,18 @@ class TestAskHealthEngine(unittest.TestCase):
                 self.assertTrue(is_health_static_question(q), q)
                 self.assertEqual(classify_health_archetype(q), expected, q)
 
+    def test_kya_kya_health_issue_routes_preventive(self):
+        q = "Mujhse yeh batao kya kya health issue ho raha hai"
+        self.assertTrue(is_health_static_question(q))
+        self.assertEqual(classify_health_archetype(q), "preventive_risk")
+
+    def test_general_health_includes_dusthana_lords(self):
+        res = run_health_static_engine(_SAMPLE_KUNDLI, "meri health overall kaisi hai")
+        joined = " | ".join(res.evidence or [])
+        self.assertIn("6th house", joined)
+        self.assertIn("8th house", joined)
+        self.assertIn("12th house", joined)
+
     def test_hard_guards(self):
         self.assertEqual(classify_health_archetype("kab marunga main?"), "refuse_death")
         from ask_health.timing_registry import is_health_timing_question

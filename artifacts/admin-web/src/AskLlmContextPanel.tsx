@@ -755,7 +755,12 @@ export function AskLlmContextPanel({
                   {evidence && evidence.length > 0 ? (
                     <>
                       <p>
-                        <strong>Timing evidence ({evidence.length}):</strong>
+                        <strong>
+                          {ctx.is_timing || ctx.question_type === "TIMING"
+                            ? `Timing evidence (${evidence.length})`
+                            : `Chart / engine evidence (${evidence.length})`}
+                          :
+                        </strong>
                       </p>
                       <ul className="llm-check-list">
                         {evidence.map((e) => (

@@ -56,7 +56,7 @@ class NativeOverviewTests(unittest.TestCase):
         res = classify_ask_intent("Mere bare me kuch batao", client=_Client())
         self.assertEqual(res["domain"], "general")
         self.assertIsNone(res["mr_archetype"])
-        self.assertIn("themselves", res["interpretation"].lower())
+        self.assertIn("Mere bare me kuch batao", res["interpretation"])
 
 
 if __name__ == "__main__":

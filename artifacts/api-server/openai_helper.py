@@ -5122,9 +5122,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             from ask_intent_llm import classify_ask_intent  # type: ignore
 
             _res = classify_ask_intent(question, client=client)
-            if (_res or {}).get("source") == "llm":
+            if (_res or {}).get("source") in ("llm", "llm_repaired"):
                 _llm_intent = _res
-                _intent_source = "llm"
+                _intent_source = str(_res.get("source") or "llm")
                 _mr_archetype_override = _res.get("mr_archetype")
                 _career_archetype_override = _res.get("career_archetype")
                 _finance_archetype_override = _res.get("finance_archetype")
@@ -6923,18 +6923,14 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     )
     _is_pn_narrator = _archetype_mr == "partner_nature"
 
-    # What the LLM understood the question to be — feed it to the narrator so
-    # the answer stays tightly on the user's actual ask (strict alignment).
+    # Narrator must answer the EXACT question the user typed — never a hallucinated paraphrase.
     _user_intent_hint = ""
     try:
-        if _is_native_overview:
-            from ask_native_overview import native_overview_interpretation  # type: ignore
+        from ask_intent_fidelity import faithful_interpretation  # type: ignore
 
-            _user_intent_hint = native_overview_interpretation()
-        elif isinstance(_llm_intent, dict):
-            _user_intent_hint = str(_llm_intent.get("interpretation") or "").strip()
+        _user_intent_hint = faithful_interpretation(question or "")
     except Exception:
-        _user_intent_hint = ""
+        _user_intent_hint = f'User asked: "{(question or "").strip()}"'
 
     # Open relationship question with no dedicated engine — narrator reads the
     # full D1 chart facts and answers the exact question itself.

@@ -28,7 +28,17 @@ def run_mr_static_engine(
     if _legacy_slice_enabled():
         raise RuntimeError("ASK_MR_ENGINE=0 — caller should use legacy marriage slice")
 
-    archetype = (archetype or "").strip().lower() or classify_mr_archetype(question)
+    archetype = (archetype or "").strip().lower()
+    if archetype:
+        try:
+            from ask_intent_fidelity import archetype_allowed_for_question
+
+            if not archetype_allowed_for_question(question, archetype):
+                archetype = classify_mr_archetype(question)
+        except Exception:
+            pass
+    if not archetype:
+        archetype = classify_mr_archetype(question)
 
     if archetype == "breakup_risk":
         from .engines.breakup_risk import run_breakup_risk

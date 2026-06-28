@@ -99,7 +99,7 @@ class ClassifyAskIntentTests(unittest.TestCase):
         self.assertEqual(res["domain"], "love")
         self.assertEqual(res["mr_archetype"], "partner_nature")
         self.assertFalse(res["is_timing"])
-        self.assertIn("support", res["interpretation"].lower())
+        self.assertIn("partner", res["interpretation"].lower())
 
     def test_timing_question(self):
         payload = {

@@ -442,9 +442,10 @@ refuse_surgery_muhurat / crisis_redirect: other hard-guard Qs
    - lawyer_support: advocate/vakil/lawyer support theme (NOT legal advice)
    - family_court: family court/custody/maintenance/498a case (NOT divorce spouse MR)
    - general_litigation: other court/legal questions
-13. "interpretation": ONE short plain sentence describing what the user really \
-wants to know, phrased as "User wants to know ...". Write it in simple \
-English. e.g. "User wants to know if their partner will support their career."
+13. "interpretation": MUST be exactly: User asked: "<user question words>" — copy the \
+user's question (fix typos only). NEVER invent topics (in-laws, partner, career, shaadi) \
+unless those exact ideas/words appear in the user's question. If the question is vague \
+("mere bare me kuch batao"), interpretation must quote that — do NOT guess in-laws or marriage.
 11. "confidence": 0.0-1.0 how sure you are.
 
 Return ONLY this JSON object:
@@ -702,7 +703,6 @@ def classify_ask_intent(
     try:
         from ask_native_overview import (
             is_native_overview_question,
-            native_overview_interpretation,
         )
 
         if is_native_overview_question(q):
@@ -716,13 +716,12 @@ def classify_ask_intent(
             property_arch = None
             travel_arch = None
             litigation_arch = None
-            interpretation = native_overview_interpretation()
             data["is_timing"] = False
             data["is_decision"] = False
     except Exception:
         pass
 
-    return {
+    result = {
         "domain": domain,
         "is_timing": bool(data.get("is_timing")),
         "is_decision": bool(data.get("is_decision")),
@@ -741,3 +740,17 @@ def classify_ask_intent(
         "source": "llm_low_conf" if conf < _LOW_CONF else "llm",
         "latency_ms": latency_ms,
     }
+
+    try:
+        from ask_intent_fidelity import repair_llm_intent
+
+        result = repair_llm_intent(q, result)
+    except Exception:
+        try:
+            from ask_intent_fidelity import faithful_interpretation
+
+            result["interpretation"] = faithful_interpretation(q)
+        except Exception:
+            pass
+
+    return result

@@ -579,10 +579,11 @@ export function AskLlmContextPanel({ row }: { row: AskQuestionItem }) {
               ) : null}
             </div>
 
-            {ctx.intent_source === "llm" && ctx.llm_intent ? (
+            {(ctx.intent_source === "llm" || ctx.intent_source === "llm_repaired") &&
+            ctx.llm_intent ? (
               <div className="llm-understanding-box">
                 <p>
-                  <strong>What the LLM understood:</strong>{" "}
+                  <strong>Question understood:</strong>{" "}
                   {ctx.llm_intent.interpretation
                     ? ctx.llm_intent.interpretation
                     : "—"}

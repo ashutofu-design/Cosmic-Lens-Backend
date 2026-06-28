@@ -18,6 +18,7 @@ $files = @(
     "ask_scope_llm.py",
     "ask_question_normalize.py",
     "ask_native_overview.py",
+    "ask_intent_fidelity.py",
     "chart_fact_answer.py",
     "ask_kundli_resolver.py",
     "admin_dashboard.py",

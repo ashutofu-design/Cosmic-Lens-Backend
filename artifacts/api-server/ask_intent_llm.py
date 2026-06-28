@@ -274,6 +274,10 @@ Use "litigation" when the question is about court case/mukadma/legal/litigation/
 case outcome tone, delay, enemy case, acquittal, lawyer support, family court case — WITHOUT property \
 ghar/zameen dispute (property), divorce/spouse nature only (MR), police job/naukri career (career), or \
 death penalty/phansi crisis. Timing (kab verdict/bail/hearing) → is_timing true, NOT litigation static.
+NATIVE OVERVIEW (CRITICAL): "mere bare/baare me kuch batao", "mujhe batao", "tell me about myself", \
+"main kaisa hun", "meri personality" — when NO specific domain (shaadi/career/health/paisa/planet) is \
+named → domain=general, mr_archetype=null, is_timing=false, interpretation about the USER's own chart \
+overview. Do NOT route these to marriage/love or partner_nature/in-laws.
 2. "is_timing": true if the user asks WHEN something happens (kab, timing, \
 date, muhurat, age). false otherwise.
 3. "is_decision": true if it is a should-I / yes-or-no decision question.
@@ -294,7 +298,9 @@ best-fitting archetype id; otherwise null. Allowed ids and meaning:
    - bed_intimacy: physical/sexual intimacy
    - self_worth: user's own confidence/boundaries
    - partner_nature: partner's nature/personality/behaviour/age/respect/temper; \
-OR spouse's in-laws / family-wale (8th house axis — NOT user's parents approval)
+OR spouse's in-laws / family-wale (8th house axis — NOT user's parents approval). \
+NEVER use for "mere bare/baare me", "tell me about myself", or other generic \
+native-overview asks — those are domain=general with mr_archetype=null.
    - long_distance: long-distance relationship
    - general_mr: overall marriage quality/happiness/compatibility, OR whether \
 the partner will SUPPORT the native's career / life goals / decisions
@@ -692,6 +698,29 @@ def classify_ask_intent(
         litigation_arch = None
 
     interpretation = str(data.get("interpretation") or "").strip()[:300]
+
+    try:
+        from ask_native_overview import (
+            is_native_overview_question,
+            native_overview_interpretation,
+        )
+
+        if is_native_overview_question(q):
+            domain = "general"
+            archetype = None
+            career_arch = None
+            finance_arch = None
+            health_arch = None
+            education_arch = None
+            children_arch = None
+            property_arch = None
+            travel_arch = None
+            litigation_arch = None
+            interpretation = native_overview_interpretation()
+            data["is_timing"] = False
+            data["is_decision"] = False
+    except Exception:
+        pass
 
     return {
         "domain": domain,

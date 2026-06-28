@@ -5145,6 +5145,29 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         except Exception as _lie:
             print(f"[raw_passthrough] LLM intent skipped: {_lie}", flush=True)
 
+    _is_native_overview = False
+    try:
+        from ask_native_overview import is_native_overview_question  # type: ignore
+
+        if is_native_overview_question(question or ""):
+            _is_native_overview = True
+            _mr_archetype_override = None
+            if isinstance(_llm_intent, dict):
+                _llm_intent = {
+                    **_llm_intent,
+                    "domain": "general",
+                    "mr_archetype": None,
+                    "is_timing": False,
+                    "is_decision": False,
+                }
+            print(
+                f"[raw_passthrough] NATIVE_OVERVIEW overrides MR routing "
+                f"q={(question or '')[:60]!r}",
+                flush=True,
+            )
+    except Exception as _nov_exc:
+        print(f"[raw_passthrough] native overview detect skipped: {_nov_exc}", flush=True)
+
     # ── Classify: STATIC vs TIMING — LLM (if confident) else regex route ─
     # NOTE: `_understanding` stays None to preserve the legacy "understanding"
     # payload shape; the LLM-first intent is surfaced separately via the
@@ -5268,7 +5291,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _travel_engine_on = (os.environ.get("ASK_TRAVEL_ENGINE") or "1").strip() != "0"
     _litigation_engine_on = (os.environ.get("ASK_LITIGATION_ENGINE") or "1").strip() != "0"
     if not is_timing:
-        if _llm_intent is not None:
+        if _is_native_overview:
+            _is_mr_static = False
+        elif _llm_intent is not None:
             _dom = _llm_intent.get("domain")
             _is_mr_static = _dom in {"marriage", "love"}
             _is_career_static = _dom == "career"
@@ -5626,6 +5651,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         static_dasha_hint = False
         is_decision = False
         is_finance = False
+    if _is_native_overview:
+        static_dasha_hint = True
+        _is_mr_static = False
+        is_decision = False
+        is_finance = False
+        is_marriage_domain = False
     dcr_love_meta = None
     _mr_engine_result = None
     _health_engine_result = None
@@ -6837,6 +6868,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             else ""
         )
     )
+    if _is_native_overview:
+        try:
+            from ask_native_overview import NATIVE_OVERVIEW_NARRATOR_RULE  # type: ignore
+
+            extra_rules += NATIVE_OVERVIEW_NARRATOR_RULE
+        except Exception:
+            pass
 
     _topic_hint = ""
     try:
@@ -6889,7 +6927,11 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     # the answer stays tightly on the user's actual ask (strict alignment).
     _user_intent_hint = ""
     try:
-        if isinstance(_llm_intent, dict):
+        if _is_native_overview:
+            from ask_native_overview import native_overview_interpretation  # type: ignore
+
+            _user_intent_hint = native_overview_interpretation()
+        elif isinstance(_llm_intent, dict):
             _user_intent_hint = str(_llm_intent.get("interpretation") or "").strip()
     except Exception:
         _user_intent_hint = ""

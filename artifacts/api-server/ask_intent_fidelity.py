@@ -346,8 +346,29 @@ def build_question_understanding_line(
     skip_reason: str = "",
     intent_source: str = "",
     has_engine_facts: bool = False,
+    engine_archetype: str = "",
 ) -> str:
-    """One word for admin: Yes or No."""
+    """One admin line: Yes/No + how routing worked."""
+    return build_llm_understood_one_liner(
+        question,
+        llm_intent,
+        skip_reason=skip_reason,
+        intent_source=intent_source,
+        has_engine_facts=has_engine_facts,
+        engine_archetype=engine_archetype,
+    )
+
+
+def build_llm_understood_one_liner(
+    question: str,
+    llm_intent: dict[str, Any] | None = None,
+    *,
+    skip_reason: str = "",
+    intent_source: str = "",
+    has_engine_facts: bool = False,
+    engine_archetype: str = "",
+) -> str:
+    """Single line for admin: Yes — finance / wealth_potential (static), 90%. …"""
     word = resolve_question_understood(
         question,
         llm_intent,
@@ -355,7 +376,17 @@ def build_question_understanding_line(
         intent_source=intent_source,
         has_engine_facts=has_engine_facts,
     )
-    return "Yes" if word == "yes" else "No"
+    yes_no = "Yes" if word == "yes" else "No"
+    detail = build_question_understanding_detail(
+        question,
+        llm_intent,
+        skip_reason=skip_reason,
+        intent_source=intent_source,
+        engine_archetype=engine_archetype,
+    ).strip().rstrip(".")
+    if detail:
+        return f"{yes_no} — {detail}."
+    return yes_no
 
 
 def repair_llm_intent(question: str, result: dict[str, Any] | None) -> dict[str, Any]:
@@ -436,10 +467,10 @@ def repair_llm_intent(question: str, result: dict[str, Any] | None) -> dict[str,
     out["question_understood"] = resolve_question_understood(
         q, out, intent_source=str(out.get("source") or "")
     )
-    out["understanding_line"] = (
-        "Yes" if out["question_understood"] == "yes" else "No"
-    )
     out["understanding_detail"] = build_question_understanding_detail(
+        q, out, intent_source=str(out.get("source") or "")
+    )
+    out["understanding_line"] = build_llm_understood_one_liner(
         q, out, intent_source=str(out.get("source") or "")
     )
 

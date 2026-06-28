@@ -3,8 +3,8 @@ import { formatDate, formatInr } from "./api";
 import {
   AskLlmContextPanel,
   AnswerPathBadge,
+  LlmUnderstoodOneLine,
   parseAskLlmContext,
-  resolveQuestionUnderstoodWord,
 } from "./AskLlmContextPanel";
 import { CopyTextButton } from "./CopyTextButton";
 
@@ -16,8 +16,6 @@ export function AskQuestionDetailPage({
   onBack: () => void;
 }) {
   const ctx = parseAskLlmContext(row);
-  const understoodWord = resolveQuestionUnderstoodWord(ctx);
-  const understandingDetail = ctx?.understanding_detail?.trim() || "";
 
   return (
     <section className="section card ask-question-detail-page">
@@ -40,20 +38,9 @@ export function AskQuestionDetailPage({
           <CopyTextButton text={row.question_text} label="Copy" copiedLabel="Copied" />
         </div>
         <p className="ask-detail-question">{row.question_text}</p>
-        {understoodWord ? (
+        {ctx ? (
           <p className="ask-detail-understanding">
-            <span className="ask-detail-understanding-label">LLM understood:</span>{" "}
-            <strong
-              className={`ask-understood-word ask-understood-word--${understoodWord.toLowerCase()}`}
-            >
-              {understoodWord}
-            </strong>
-            {understandingDetail ? (
-              <span className="ask-detail-understanding-detail">
-                {" "}
-                — {understandingDetail}
-              </span>
-            ) : null}
+            <LlmUnderstoodOneLine ctx={ctx} />
           </p>
         ) : null}
       </div>

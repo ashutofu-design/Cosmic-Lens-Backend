@@ -29,6 +29,40 @@ export function resolveQuestionUnderstoodWord(
   return null;
 }
 
+export function resolveLlmUnderstoodLine(ctx: AskLlmContext | null): string {
+  if (!ctx) return "";
+  const line = ctx.understanding_line?.trim();
+  if (line && line.includes(" — ")) return line;
+  const word = resolveQuestionUnderstoodWord(ctx);
+  const detail = ctx.understanding_detail?.trim();
+  if (word && detail) return `${word} — ${detail}`;
+  if (line) return line;
+  if (word) return word;
+  return "";
+}
+
+export function LlmUnderstoodOneLine({ ctx }: { ctx: AskLlmContext | null }) {
+  const line = resolveLlmUnderstoodLine(ctx);
+  if (!line) return null;
+  const m = line.match(/^(Yes|No)( — .+)?$/);
+  if (!m) {
+    return (
+      <>
+        <strong>LLM understood:</strong> {line}
+      </>
+    );
+  }
+  return (
+    <>
+      <strong>LLM understood:</strong>{" "}
+      <strong className={`ask-understood-word ask-understood-word--${m[1].toLowerCase()}`}>
+        {m[1]}
+      </strong>
+      {m[2] || null}
+    </>
+  );
+}
+
 export function parseAskLlmContext(row: AskQuestionItem): AskLlmContext | null {
   if (row.llm_context && typeof row.llm_context === "object") {
     return row.llm_context;
@@ -615,20 +649,7 @@ export function AskLlmContextPanel({
             ctx.llm_intent ? (
               <div className="llm-understanding-box">
                 <p>
-                  <strong>LLM understood:</strong>{" "}
-                  <span
-                    className={`ask-understood-word ask-understood-word--${
-                      (resolveQuestionUnderstoodWord(ctx) || "unknown").toLowerCase()
-                    }`}
-                  >
-                    {resolveQuestionUnderstoodWord(ctx) || "—"}
-                  </span>
-                  {ctx.understanding_detail ? (
-                    <span className="answer-path-note">
-                      {" "}
-                      — {ctx.understanding_detail}
-                    </span>
-                  ) : null}
+                  <LlmUnderstoodOneLine ctx={ctx} />
                 </p>
                 <p>
                   <strong>Engine selected:</strong>{" "}

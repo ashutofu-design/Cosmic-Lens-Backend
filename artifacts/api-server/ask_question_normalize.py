@@ -104,6 +104,9 @@ _VERB_FIXES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bmilegii+\b", re.I), "milegi"),
     (re.compile(r"\bhog\s*$", re.I), "hoga"),
     (re.compile(r"\bhogi\s*$", re.I), "hogi"),
+    # Keyboard typos near hoga (hogq, hogw, hogx, …)
+    (re.compile(r"\bhog[qwxzc]\b", re.I), "hoga"),
+    (re.compile(r"\bhog[qwxzc]\s*$", re.I), "hoga"),
     (re.compile(r"\b(batao|bataiye|bataye|btao|btyo|bataoo)\b", re.I), "batao"),
     (re.compile(r"\b(samjhao|smjhao|samjhaoo|explain)\b", re.I), "samjhao"),
 ]

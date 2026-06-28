@@ -72,7 +72,7 @@ class AskIntentFidelityTests(unittest.TestCase):
         fixed = repair_llm_intent("Mere paas paisa kitna hoga", raw)
         self.assertEqual(fixed["domain"], "finance")
         self.assertEqual(fixed.get("finance_archetype"), "wealth_potential")
-        self.assertEqual(fixed.get("understanding_line"), "Yes")
+        self.assertTrue(str(fixed.get("understanding_line") or "").startswith("Yes"))
 
     def test_finance_engine_required_still_understood_yes(self):
         li = {

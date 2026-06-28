@@ -70,3 +70,4 @@ def test_normalize_mera_pass_paisa():
     from ask_question_normalize import prepare_ask_question
 
     assert prepare_ask_question("Mera pass paisa kitna hog") == "mere paas paisa kitna hoga"
+    assert prepare_ask_question("mere paas paisa kitna hogq") == "mere paas paisa kitna hoga"

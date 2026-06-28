@@ -335,6 +335,7 @@ def build_admin_llm_context(
             skip_reason=skip_reason,
             intent_source=intent_source,
             has_engine_facts=has_engine_facts,
+            engine_archetype=str(_slice_meta.get("archetype") or engine_facts.get("archetype") or ""),
         )
         understanding_detail = build_question_understanding_detail(
             question,

@@ -57,6 +57,18 @@ class AskIntentFidelityTests(unittest.TestCase):
         self.assertIn("Career kaisi rahegi", fixed["interpretation"])
         self.assertNotIn("in-law", fixed["interpretation"].lower())
 
+    def test_upgrades_finance_from_paisa_question(self):
+        raw = {
+            "domain": "general",
+            "mr_archetype": None,
+            "interpretation": "User asked something",
+            "confidence": 0.9,
+            "source": "llm",
+        }
+        fixed = repair_llm_intent("Mere paas paisa kitna hoga", raw)
+        self.assertEqual(fixed["domain"], "finance")
+        self.assertEqual(fixed.get("finance_archetype"), "wealth_potential")
+
 
 if __name__ == "__main__":
     unittest.main()

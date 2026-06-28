@@ -49,6 +49,16 @@ _JOB_VS_BIZ_FINANCE_EXCL_RX = re.compile(
     r")\b"
 )
 
+_KITNA_PAISA_RX = re.compile(
+    r"(?ix)\b("
+    r"mere?\s+paas\s+.{0,25}(paisa|paise|money)|"
+    r"paas\s+.{0,20}(kitna|kitne)\s+(paisa|paise)|"
+    r"(paisa|paise|money)\s+kitna|"
+    r"kitna\s+(paisa|paise|money|paiso)\s*(hoga|hogi|hai|rahega|rahegi)?|"
+    r"kitne\s+paise"
+    r")\b"
+)
+
 _SAVE_VS_SPEND_RX = re.compile(
     r"(?ix)\b("
     r"bachane\s+wala\s+.*\b(ya|or)\b.*\b(kharch|spend)|"
@@ -103,7 +113,8 @@ _SAVINGS_RX = re.compile(
     r"(?ix)\b("
     r"saving|savings|bachat|bach\s*pata|save\s*kar|kitni\s*bachat|"
     r"paisa\s*bach\w*|money\s*save|saving\s*capacity|retain|tik\s*pata|"
-    r"paisa\s*tik\w*|paisa\s*rukt\w*|accumulate|jama\s*kar"
+    r"paisa\s*tik\w*|paisa\s*rukt\w*|accumulate|jama\s*kar|"
+    r"\bfd\b|fixed\s+deposit|health\s+ke\s+liye\s+(?:fd|bachat|saving)"
     r")\b"
 )
 
@@ -191,6 +202,13 @@ def is_finance_static_question(question: str) -> bool:
     q = (question or "").strip()
     if not q or _TIMING_RX.search(q):
         return False
+    try:
+        from ask_property.property_registry import is_property_static_question
+
+        if is_property_static_question(q):
+            return False
+    except Exception:
+        pass
     if _SPOUSE_MONEY_RX.search(q):
         return False
     if _CAREER_MONEY_MINDSET_RX.search(q):
@@ -208,6 +226,8 @@ def detect_finance_archetype(question: str) -> str | None:
         return None
     if _CAREER_MONEY_MINDSET_RX.search(q):
         return None
+    if _KITNA_PAISA_RX.search(q):
+        return "wealth_potential"
     if _SAVE_VS_SPEND_RX.search(q):
         return "save_vs_spend"
     if _SPENDING_PERSONALITY_RX.search(q):
@@ -221,6 +241,16 @@ def detect_finance_archetype(question: str) -> str | None:
     if _DEBT_RX.search(q):
         return "debt_loan"
     if _PROPERTY_RX.search(q):
+        try:
+            from ask_property.property_registry import (  # type: ignore
+                is_property_money_only_question,
+                is_property_static_question,
+            )
+
+            if is_property_static_question(q) and not is_property_money_only_question(q):
+                return None
+        except Exception:
+            pass
         return "property_money"
     if _SAVINGS_RX.search(q):
         return "savings_capacity"

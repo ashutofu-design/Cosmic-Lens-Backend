@@ -45,6 +45,32 @@ def test_merge_preserves_original():
     assert "Exact month" in merged
 
 
+def test_finance_after_vague_prior_does_not_merge():
+    history = [
+        {"role": "user", "text": "Mere bare me kuch natao"},
+        {
+            "role": "assistant",
+            "text": "4-6 mahine ruk jaayein — abhi switch risky hai.",
+        },
+    ]
+    eff, is_fu = resolve_timing_followup_question(
+        "Mera pass paisa kitna hog",
+        history,
+    )
+    assert not is_fu
+    assert "user refine" not in eff.lower()
+    assert eff.lower().startswith("mera") or "paisa" in eff.lower()
+
+
+def test_should_skip_merge_vague_prior():
+    from ask_timing_followup import should_skip_timing_merge
+
+    assert should_skip_timing_merge(
+        "Mere bare me kuch batao",
+        "Mera pass paisa kitna hog",
+    )
+
+
 @pytest.mark.parametrize(
     "question",
     [

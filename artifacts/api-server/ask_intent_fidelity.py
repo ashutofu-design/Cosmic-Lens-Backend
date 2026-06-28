@@ -108,9 +108,62 @@ _ARCHETYPE_ANCHOR_RX: dict[str, re.Pattern[str]] = {
 }
 
 
-def faithful_interpretation(question: str) -> str:
+_DOMAIN_PRIORITY = (
+    "litigation",
+    "health",
+    "children",
+    "education",
+    "travel",
+    "property",
+    "finance",
+    "career",
+    "marriage",
+    "love",
+)
+
+
+def infer_primary_domain(question: str) -> str | None:
+    """Best-effort domain from question words (regex only)."""
+    q = (question or "").strip()
+    if not q:
+        return None
+    for dom in _DOMAIN_PRIORITY:
+        rx = _DOMAIN_ANCHOR_RX.get(dom)
+        if rx and rx.search(q):
+            return dom
+    return None
+
+
+def _upgrade_domain_archetypes(question: str, domain: str, out: dict[str, Any]) -> None:
+    q = question or ""
+    if domain == "finance":
+        try:
+            from ask_finance.finance_registry import detect_finance_archetype
+
+            out["finance_archetype"] = detect_finance_archetype(q) or "general_finance"
+        except Exception:
+            out["finance_archetype"] = "general_finance"
+    elif domain == "career":
+        try:
+            from ask_career.classifier import classify_career_archetype
+
+            out["career_archetype"] = classify_career_archetype(q)
+        except Exception:
+            out["career_archetype"] = "general_career"
+    elif domain == "health":
+        out["health_archetype"] = out.get("health_archetype") or "general_health"
+    elif domain in ("marriage", "love"):
+        try:
+            from ask_mr.classifier import classify_mr_archetype
+
+            out["mr_archetype"] = classify_mr_archetype(q)
+        except Exception:
+            out["mr_archetype"] = "general_mr"
+
+
+def faithful_interpretation(question: str, *, user_turn: str | None = None) -> str:
     """Admin + narrator hint: always echo the user's actual question."""
-    q = " ".join((question or "").split()).strip()
+    q = " ".join((user_turn or question or "").split()).strip()
     if not q:
         return "User asked an empty question."
     return f'User asked: "{q}"'
@@ -218,6 +271,14 @@ def repair_llm_intent(question: str, result: dict[str, Any] | None) -> dict[str,
             repaired = True
     except Exception:
         pass
+
+    inferred = infer_primary_domain(q)
+    if inferred and domain == "general":
+        domain = inferred
+        mr_arch = None
+        _clear_domain_archetypes(out)
+        _upgrade_domain_archetypes(q, domain, out)
+        repaired = True
 
     # If marriage domain but no archetype and no clear MR signal → general chart Q
     if domain in ("marriage", "love") and not mr_arch and not _PARTNER_SUBJECT_RX.search(q):

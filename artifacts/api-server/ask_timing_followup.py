@@ -101,6 +101,47 @@ def merge_timing_followup_question(prev_question: str, refine: str) -> str:
     return f"{p} — user refine: {r}"
 
 
+_VAGUE_PRIOR_RX = re.compile(
+    r"(?ix)\b("
+    r"mere?\s+(?:bare|baare)\s+(?:me|main)|"
+    r"mujhe?\s+(?:baare|bare)\s+(?:me|main)|"
+    r"kuch\s+(?:batao|batado|bataiye|bata)|"
+    r"life\s+kaisi|kuch\s+achha|something\s+about\s+me"
+    r")\b"
+)
+
+
+def _domain_anchor_hit(question: str) -> bool:
+    try:
+        from ask_intent_fidelity import infer_primary_domain
+
+        return infer_primary_domain(question) is not None
+    except Exception:
+        return bool(_TIMING_TOPIC_RX.search(question or ""))
+
+
+def should_skip_timing_merge(prev_question: str, current_question: str) -> bool:
+    """Do not glue a new specific ask onto a vague or different-domain prior turn."""
+    cur = prepare_ask_question((current_question or "").strip())
+    prv = prepare_ask_question((prev_question or "").strip())
+    if not cur or not prv:
+        return True
+    if _VAGUE_PRIOR_RX.search(prv):
+        return True
+    try:
+        from ask_intent_fidelity import infer_primary_domain
+
+        cur_dom = infer_primary_domain(cur)
+        prv_dom = infer_primary_domain(prv)
+        if cur_dom and cur_dom != prv_dom:
+            return True
+        if cur_dom and not prv_dom:
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def resolve_timing_followup_question(
     question: str,
     history: Any,
@@ -109,11 +150,12 @@ def resolve_timing_followup_question(
     q = prepare_ask_question((question or "").strip())
     if not q:
         return question, False
-    if not is_timing_refine_followup(q) and not (
-        history_has_timing_thread(history) and len(q.split()) <= 14
-    ):
+    # Only true timing-refine phrases merge with prior turn — never every short reply.
+    if not is_timing_refine_followup(q):
         return question, False
     prev = extract_prev_user_question(history, q)
     if not prev:
+        return question, False
+    if should_skip_timing_merge(prev, q):
         return question, False
     return merge_timing_followup_question(prev, q), True

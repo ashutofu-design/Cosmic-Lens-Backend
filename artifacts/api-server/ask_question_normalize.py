@@ -62,6 +62,8 @@ _WORD_FIXES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bkb\b", re.I), "kab"),
     (re.compile(r"\bhlt\b", re.I), "health"),
     (re.compile(r"\bshdi\b", re.I), "shadi"),
+    (re.compile(r"\bnat+a+o\b", re.I), "batao"),
+    (re.compile(r"\bnat+ao\b", re.I), "batao"),
     (re.compile(r"\bbach+ch+a+\b", re.I), "bachcha"),
     (re.compile(r"\bbach+he+\b", re.I), "bachche"),
     (re.compile(r"\bpy+a+ar+\b", re.I), "pyaar"),
@@ -100,6 +102,8 @@ _VERB_FIXES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bhogii+\b", re.I), "hogi"),
     (re.compile(r"\bmilegaa+\b", re.I), "milega"),
     (re.compile(r"\bmilegii+\b", re.I), "milegi"),
+    (re.compile(r"\bhog\s*$", re.I), "hoga"),
+    (re.compile(r"\bhogi\s*$", re.I), "hogi"),
     (re.compile(r"\b(batao|bataiye|bataye|btao|btyo|bataoo)\b", re.I), "batao"),
     (re.compile(r"\b(samjhao|smjhao|samjhaoo|explain)\b", re.I), "samjhao"),
 ]
@@ -280,6 +284,10 @@ def prepare_ask_question(question: str) -> str:
     q = re.sub(r"\bkaisehe\b", "kaise hai", q, flags=re.I)
     q = re.sub(r"\bkaisihe\b", "kaisi hai", q, flags=re.I)
     q = re.sub(r"\bkaisahe\b", "kaisa hai", q, flags=re.I)
+    q = re.sub(r"\bmera\s+pass\s+paisa\b", "mere paas paisa", q, flags=re.I)
+    q = re.sub(r"\bmeri\s+pass\s+paisa\b", "mere paas paisa", q, flags=re.I)
+    q = re.sub(r"\bpass\s+paisa\b", "paas paisa", q, flags=re.I)
+    q = re.sub(r"\bmera\s+paas\b", "mere paas", q, flags=re.I)
     # Strip stray punctuation glue (health??, career!!!)
     q = re.sub(r"([?\!\.]){2,}", r"\1", q)
     q = q.strip(" ?!.,")

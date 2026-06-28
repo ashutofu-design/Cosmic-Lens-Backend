@@ -64,3 +64,9 @@ def test_fuzzy_repair_health_typo():
 
     assert "health" in prepare_ask_question("helth kaisi rahegi")
     assert prepare_ask_question("hlt kaisi rahegi") == "health kaisi rahegi"
+
+
+def test_normalize_mera_pass_paisa():
+    from ask_question_normalize import prepare_ask_question
+
+    assert prepare_ask_question("Mera pass paisa kitna hog") == "mere paas paisa kitna hoga"

@@ -4954,6 +4954,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             }
 
     # ── Timing refine follow-up ("exact month?", "kis mahine change hoga?") ─
+    _user_turn_question = question or ""
     try:
         from ask_timing_followup import resolve_timing_followup_question
 
@@ -4969,6 +4970,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             question = _eff_q
     except Exception as _tf_exc:
         print(f"[raw_passthrough] timing follow-up skipped: {_tf_exc}", flush=True)
+        _user_turn_question = question or ""
+        _timing_refine_followup = False
 
     # ── Marriage backup window ("agar June 2029 mein nahi, aage kab?") ─────
     if (
@@ -5121,10 +5124,18 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         try:
             from ask_intent_llm import classify_ask_intent  # type: ignore
 
-            _res = classify_ask_intent(question, client=client)
+            _res = classify_ask_intent(_user_turn_question, client=client)
             if (_res or {}).get("source") in ("llm", "llm_repaired"):
                 _llm_intent = _res
                 _intent_source = str(_res.get("source") or "llm")
+                try:
+                    from ask_intent_fidelity import faithful_interpretation
+
+                    _llm_intent["interpretation"] = faithful_interpretation(
+                        question, user_turn=_user_turn_question,
+                    )
+                except Exception:
+                    pass
                 _mr_archetype_override = _res.get("mr_archetype")
                 _career_archetype_override = _res.get("career_archetype")
                 _finance_archetype_override = _res.get("finance_archetype")
@@ -5149,7 +5160,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     try:
         from ask_native_overview import is_native_overview_question  # type: ignore
 
-        if is_native_overview_question(question or ""):
+        if is_native_overview_question(_user_turn_question):
             _is_native_overview = True
             _mr_archetype_override = None
             if isinstance(_llm_intent, dict):
@@ -6928,7 +6939,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     try:
         from ask_intent_fidelity import faithful_interpretation  # type: ignore
 
-        _user_intent_hint = faithful_interpretation(question or "")
+        _user_intent_hint = faithful_interpretation(
+            question or "", user_turn=_user_turn_question,
+        )
     except Exception:
         _user_intent_hint = f'User asked: "{(question or "").strip()}"'
 

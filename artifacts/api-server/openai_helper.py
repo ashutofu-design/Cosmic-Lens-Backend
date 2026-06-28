@@ -6315,15 +6315,33 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             chart_text = _raw_compact_chart(
                 kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
             )
-        if not is_timing and not _is_mr_static and not _is_career_static and not _is_education_static and not _is_children_static and not _is_property_static and not _is_vehicle_static:
+        _domain_engine_meta = (
+            isinstance(dcr_love_meta, dict)
+            and str(dcr_love_meta.get("slice") or "").endswith("_engine_v1")
+        )
+        if (
+            not is_timing
+            and not _domain_engine_meta
+            and not _is_mr_static
+            and not _is_career_static
+            and not _is_education_static
+            and not _is_children_static
+            and not _is_property_static
+            and not _is_vehicle_static
+            and not _is_finance_static
+            and not _is_health_static
+            and not _is_travel_static
+            and not _is_litigation_static
+        ):
             try:
                 from dcr_love import build_dcr_love_context  # type: ignore
 
-                _dcr_love_block, dcr_love_meta = build_dcr_love_context(
+                _dcr_love_block, _dcr_meta = build_dcr_love_context(
                     kundli if isinstance(kundli, dict) else {}, question,
                 )
                 if _dcr_love_block:
                     chart_text = chart_text + "\n\n" + _dcr_love_block
+                    dcr_love_meta = _dcr_meta
                     print(
                         f"[raw_passthrough] DCR_LOVE slice "
                         f"buckets={dcr_love_meta.get('buckets')} "
@@ -7058,6 +7076,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             "is_mr_static": bool(_is_mr_static),
             "is_career_engine": bool(is_career_engine),
             "is_health_static": bool(_is_health_static),
+            "is_finance_static": bool(_is_finance_static),
         }
         _eng_slice = dcr_love_meta if isinstance(dcr_love_meta, dict) else {}
         _refusal = enforce_engine_only_or_refuse(

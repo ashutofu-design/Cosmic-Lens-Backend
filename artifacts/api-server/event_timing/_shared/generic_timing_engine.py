@@ -563,6 +563,12 @@ def compute_generic_timing_window(
         "question": question,
     }
     try:
+        from event_timing._shared.dasha_kp_sync import attach_dasha_kp_sync
+
+        payload = attach_dasha_kp_sync(payload, kundli, kp)
+    except Exception:
+        pass
+    try:
         from event_timing._shared.step_audit import attach_timing_pipeline_audit
 
         return attach_timing_pipeline_audit(payload, cfg.domain)

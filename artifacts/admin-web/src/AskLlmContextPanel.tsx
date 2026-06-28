@@ -137,6 +137,7 @@ function engineFactsFromContext(ctx: AskLlmContext) {
 type EngineTrace = {
   engine?: string;
   primary_window?: string;
+  running_dasha_window?: string;
   backup_window?: string;
   key_trigger?: string;
   verdict?: string;
@@ -151,6 +152,7 @@ type EngineTrace = {
     primary_window?: string;
     checks?: { name?: string; ok?: boolean; detail?: string }[];
     primary_dasha?: Record<string, unknown>;
+    running_dasha?: Record<string, unknown>;
     bcp?: Record<string, unknown>;
     transit?: Record<string, unknown>;
   };
@@ -211,6 +213,17 @@ function stepOneLiner(
   }
   if (engine?.endsWith("_timing_v1") && typeof step.detail === "string" && step.detail) {
     return `${name} · ${step.detail}`;
+  }
+  if (stepKey === "step1" && (step.current_end || step.current_start)) {
+    const lords = step.current_lords ? String(step.current_lords) : "—";
+    const end = step.current_end ? String(step.current_end) : "?";
+    return `${name} · MD/AD/PD ${lords} · kab tak ${end}`;
+  }
+  if (stepKey === "step2") {
+    return `${name} · ${fmtCheckValue(step.detail)} · ${step.status || "—"}`;
+  }
+  if (stepKey === "step4") {
+    return `${name} · ${fmtCheckValue(step.detail)}`;
   }
   if (stepKey === "step0") {
     const r = asRecord(step.result);
@@ -303,8 +316,8 @@ export function EngineTracePanel({
   const hasTrace = Boolean(trace && (trace.step_audit || trace.timing_audit));
   const stepOrder =
     trace?.step_order?.length
-      ? trace.step_order
-      : ["step0", "step0a", "step1", "step2", "step3", "step4", "step5", "step6", "step7", "step8"];
+      ? trace.step_order.filter((k) => !k.startsWith("step0"))
+      : ["step1", "step2", "step3", "step4", "step5", "step6"];
   const stepAudit = trace?.step_audit || {};
   const timingAudit = trace?.timing_audit;
   const engineId = String(trace?.engine || "");
@@ -373,8 +386,19 @@ export function EngineTracePanel({
           ))}
         </ol>
 
-        {trace?.primary_window || trace?.backup_window ? (
+        {trace?.running_dasha_window || trace?.primary_window || trace?.backup_window ? (
           <div className="engine-outcome-box">
+            {trace?.running_dasha_window ? (
+              <p>
+                <strong>Running dasha (abhi):</strong> {trace.running_dasha_window}
+              </p>
+            ) : timingAudit?.running_dasha?.end ? (
+              <p>
+                <strong>Running dasha (abhi):</strong>{" "}
+                {fmtCheckValue(timingAudit.running_dasha.lords)} · kab tak{" "}
+                {fmtCheckValue(timingAudit.running_dasha.end)}
+              </p>
+            ) : null}
             {(trace as { used_window?: string }).used_window === "backup" ? (
               <>
                 <p>

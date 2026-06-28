@@ -147,13 +147,17 @@ _PREVENT_RX = re.compile(
     r"(?ix)(prevent|prevention|avoid|bachna|bachne|bachao|"
     r"future\s+(health\s+)?risk|health\s+risk|"
     r"aage\s+(chal\s+ke|jaake)|aane\s+wale|"
-    r"tendency|tendencies|kya\s+kya\s+(?:health\s+|sehat\s+|tabiyat\s+)?(?:issue|problem|dikkat|bimari)|"
-    r"kya\s+kya\s+(bimari|issues?)|"
-    r"(?:health|sehat|tabiyat)\s+(?:issue|problem|dikkat)|"
-    r"issue\s+ho\s+raha|dikkat\s+ho\s+rahi|problem\s+ho\s+raha|"
+    r"tendency|tendencies|kya\s+kya\s+(bimari|issues?)|"
     r"prone\s+to|issues?\s+am\s+i\s+prone|"
     r"risk\s+(hai|hoga|zone)|khatra|dikkat\s+zone|vulnerable|"
     r"भविष्य\s+में\s+स्वास्थ्य\s+जोखिम)"
+)
+
+_ISSUE_NOW_RX = re.compile(
+    r"(?ix)(kya\s+kya\s+(?:health\s+|sehat\s+|tabiyat\s+)?(?:issue|problem|dikkat|bimari)|"
+    r"(?:health|sehat|tabiyat)\s+(?:issue|problem|dikkat)\s+ho\s+raha|"
+    r"(?:issue|problem|dikkat|bimari)\s+ho\s+rahi?|"
+    r"ho\s+raha\s+hai.*(?:health|issue|dikkat|tabiyat))"
 )
 
 _VITALITY_RX = re.compile(
@@ -312,6 +316,8 @@ def detect_health_archetype(question: str) -> str | None:
         pass
     if _MENTAL_RX.search(q):
         return "mental_stress"
+    if _ISSUE_NOW_RX.search(q):
+        return "general_health"
     if _CHRONIC_RX.search(q):
         return "chronic_tendency"
     if _SURGERY_TONE_RX.search(q):

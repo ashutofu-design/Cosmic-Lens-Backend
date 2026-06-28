@@ -208,11 +208,21 @@ def build_mr_engine_narrator_system_prompt(
         "digestive_health", "cardio_health", "nervous_health", "musculoskeletal_health",
         "skin_health", "endocrine_health", "respiratory_health", "immune_health",
     ):
+        _issue_tone = (
+            "User asked what health issues/troubles they feel — describe body, energy, stress, "
+            "recurring strain in warm friend Hinglish (tu/tera OK if user used tu tone).\n"
+            if archetype == "general_health"
+            else ""
+        )
         length_block = (
-            f"Write 2–3 short sentences (~{min(wb + 15, 95)} words max).\n"
+            f"Write 2–3 short sentences (~{min(wb + 15, 100)} words max).\n"
+            f"{_issue_tone}"
             "Read USER ACTUALLY ASKED — answer THAT exact health question per VERDICT.\n"
             "Sentence 1 = direct health answer (vitality/chronic/stress/surgery tone/recovery).\n"
-            "Sentence 2–3 = WHY from ENGINE EVIDENCE in plain words — NO disease names.\n"
+            "Sentence 2–3 = WHY from ENGINE EVIDENCE in plain life words — NO disease names.\n"
+            "BANNED user-facing jargon: vulnerability zones, preventive measures, vitality score, "
+            "health drains, monitor, structural risk, mixed-to-weak, zones, screening.\n"
+            "Say instead: kamzor lagta hai, stress rehta hai, baar-baar dikkat, doctor se check.\n"
             "NEVER name diseases (cancer, diabetes, etc.) or predict death/lifespan.\n"
             "NEVER predict death, illness date, recovery date, or cure guarantee.\n"
             "NEVER give surgery muhurat/date — surgeon decides.\n"

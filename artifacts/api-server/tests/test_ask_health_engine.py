@@ -67,10 +67,10 @@ class TestAskHealthEngine(unittest.TestCase):
                 self.assertTrue(is_health_static_question(q), q)
                 self.assertEqual(classify_health_archetype(q), expected, q)
 
-    def test_kya_kya_health_issue_routes_preventive(self):
+    def test_kya_kya_health_issue_routes_general(self):
         q = "Mujhse yeh batao kya kya health issue ho raha hai"
         self.assertTrue(is_health_static_question(q))
-        self.assertEqual(classify_health_archetype(q), "preventive_risk")
+        self.assertEqual(classify_health_archetype(q), "general_health")
 
     def test_general_health_includes_dusthana_lords(self):
         res = run_health_static_engine(_SAMPLE_KUNDLI, "meri health overall kaisi hai")

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from ..types import EngineResult
 from ._health_base import (
     affliction_lines,
@@ -10,9 +12,14 @@ from ._health_base import (
     vitality_line,
 )
 
+_ISSUE_NOW_Q = re.compile(
+    r"(?ix)(kya\s+kya\s+(?:health\s+|sehat\s+|tabiyat\s+)?(?:issue|problem|dikkat|bimari)|"
+    r"(?:health|sehat|tabiyat)\s+(?:issue|problem|dikkat)\s+ho\s+raha|"
+    r"(?:issue|problem|dikkat|bimari)\s+ho\s+rahi?)"
+)
 
-def run_general_health(kundli: dict, question: str, *, wants_explain: bool = False) -> EngineResult:
-    facts = load_facts(kundli)
+
+def run_general_health(kundli: dict, question: str, *, wants_explain: bool = False) -> EngineResult:    facts = load_facts(kundli)
     if facts.get("error"):
         raise ValueError(facts["error"])
 
@@ -43,19 +50,34 @@ def run_general_health(kundli: dict, question: str, *, wants_explain: bool = Fal
     evidence.extend(dusthana_chart_evidence(facts))
     evidence.extend(affliction_lines(facts, limit=3))
 
+    issue_now = bool(_ISSUE_NOW_Q.search(question or ""))
+    if issue_now:
+        answer_plan = (
+            "User wants to know what health troubles/patterns they feel NOW — "
+            "warm plain Hinglish: energy, stress, recurring weakness, body strain. "
+            "Use 6/8/12 + vitality/stress/chronic evidence as felt patterns, NOT jargon."
+        )
+        summary = ["Cosmo friend tone.", "No disease names.", "No engine jargon."]
+        word_budget = 105 if wants_explain else 95
+    else:
+        answer_plan = "Open health Q — pick relevant dimensions from evidence."
+        summary = ["6-dim snapshot.", "Doctor for symptoms."]
+        word_budget = 100 if wants_explain else 85
+
     return EngineResult(
         archetype="general_health",
         verdict=verdict,
         confidence=confidence,
-        word_budget=100 if wants_explain else 85,
-        answer_plan="Open health Q — pick relevant dimensions from evidence.",
-        summary=["6-dim snapshot.", "Doctor for symptoms."],
+        word_budget=word_budget,
+        answer_plan=answer_plan,
+        summary=summary,
         evidence=evidence[:12],
         ignore=["timing", "disease names", "death", "dates"],
         checks={
             "slice_type": "health_engine_v1",
             "archetype": "general_health",
             "open_chart_qa": True,
+            "issue_now_q": issue_now,
             "vitality_v": ov_v,
         },
     )

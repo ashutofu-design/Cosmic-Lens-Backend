@@ -341,6 +341,7 @@ def build_admin_llm_context(
             llm_intent,
             skip_reason=skip_reason,
             intent_source=intent_source,
+            engine_archetype=str(_slice_meta.get("archetype") or engine_facts.get("archetype") or ""),
         )
     except Exception:
         question_understood = ""

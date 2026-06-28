@@ -280,6 +280,7 @@ def build_question_understanding_detail(
     *,
     skip_reason: str = "",
     intent_source: str = "",
+    engine_archetype: str = "",
 ) -> str:
     """Optional Hinglish detail — how routing worked (admin only)."""
     q = (question or "").strip()
@@ -293,6 +294,20 @@ def build_question_understanding_detail(
     src = str(li.get("source") or intent_source or "").strip().lower()
     timing = "timing" if li.get("is_timing") else "static"
     inferred = infer_primary_domain(q)
+    engine_arch = str(engine_archetype or "").strip().lower()
+    llm_arch = str(
+        li.get("finance_archetype")
+        or li.get("mr_archetype")
+        or li.get("health_archetype")
+        or li.get("career_archetype")
+        or ""
+    ).strip().lower()
+
+    def _arch_detail(arch: str) -> str:
+        base = f"{dom} / {arch} ({timing}), confidence {conf:.0%}."
+        if engine_arch and llm_arch and engine_arch != llm_arch:
+            return f"{base} Engine={engine_arch}, LLM guess={llm_arch}."
+        return base
 
     if "engine_required" in skip:
         if dom and dom != "general":
@@ -314,15 +329,9 @@ def build_question_understanding_detail(
     except Exception:
         pass
 
-    arch = (
-        li.get("finance_archetype")
-        or li.get("mr_archetype")
-        or li.get("health_archetype")
-        or li.get("career_archetype")
-        or ""
-    )
+    arch = engine_arch or llm_arch
     if arch:
-        return f"{dom} / {arch} ({timing}), confidence {conf:.0%}."
+        return _arch_detail(arch)
     if dom != "general":
         return f"{dom} domain ({timing}), confidence {conf:.0%}."
     if inferred:

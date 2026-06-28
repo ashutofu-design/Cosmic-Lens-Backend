@@ -108,6 +108,7 @@ class TestPropertyVehicleTiming(unittest.TestCase):
         from ask_vehicle.timing_registry import is_vehicle_timing_question
         from ask_health.health_registry import is_health_static_question
         from ask_intent_fidelity import repair_llm_intent
+        from event_timing._shared.generic_timing_engine import pick_primary_timing_window
 
         q = "Main new car kab lunga"
         self.assertTrue(is_vehicle_timing_question(q))
@@ -125,6 +126,26 @@ class TestPropertyVehicleTiming(unittest.TestCase):
         self.assertEqual(repaired.get("domain"), "vehicle")
         self.assertTrue(repaired.get("is_timing"))
         self.assertIsNone(repaired.get("health_archetype"))
+
+        # Score 6.05 must NOT lock current dasha — need >= 9.0
+        promote = {"Venus", "Mars", "4L", "11L"}
+        ranked = [{"name": "Saturn", "score": 14.0}, {"name": "Venus", "score": 12.0}]
+        now = __import__("datetime").datetime(2026, 6, 28)
+        windows = [{
+            "start": __import__("datetime").datetime(2026, 6, 27),
+            "end": __import__("datetime").datetime(2026, 12, 18),
+            "start_iso": "2026-06-27",
+            "end_iso": "2026-12-18",
+            "md": "Saturn",
+            "ad": "Saturn",
+            "pd": "Saturn",
+            "score": 6.05,
+        }]
+        primary, _nxt, source, supports = pick_primary_timing_window(
+            windows, ranked, promote, now, min_ad_pd=9.0,
+        )
+        self.assertNotEqual(source, "current_dasha_active")
+        self.assertFalse(supports)
 
     def test_property_dispute_guards(self):
         raw = compute_property_window(

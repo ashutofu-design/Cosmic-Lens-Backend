@@ -179,6 +179,8 @@ def build_step_audit_from_timing_result(result: dict, domain: str) -> dict:
     timing_source = str(result.get("timing_source") or "")
     current_supports = bool(result.get("current_supports"))
     activation = rec.get("activation_score")
+    min_activation = float(result.get("min_current_activation") or 9.0)
+    running_activation = result.get("current_running_activation_score")
 
     kp_sync = result.get("kp_dasha_sync") if isinstance(result.get("kp_dasha_sync"), dict) else {}
     kp_active = kp_sync.get("active_now") or []
@@ -188,9 +190,20 @@ def build_step_audit_from_timing_result(result: dict, domain: str) -> dict:
     activation_detail = step5_primary[0] if step5_primary else ""
     if not activation_detail:
         if timing_source == "current_dasha_active":
-            activation_detail = f"Current AD/PD active for {domain} · score={activation or '?'}"
+            activation_detail = (
+                f"Current AD/PD active for {domain} · score={activation or '?'} "
+                f"(min {min_activation})"
+            )
         elif timing_source == "next_dasha_scan":
-            activation_detail = f"Current AD/PD weak for {domain} — using next scan window"
+            if running_activation is not None:
+                activation_detail = (
+                    f"Current AD/PD score {running_activation} < min {min_activation} "
+                    f"for {domain} — forward scan window used"
+                )
+            else:
+                activation_detail = (
+                    f"Current AD/PD weak for {domain} (< {min_activation}) — next scan window"
+                )
         else:
             activation_detail = f"Scan source={timing_source or 'unknown'}"
 
@@ -236,6 +249,8 @@ def build_step_audit_from_timing_result(result: dict, domain: str) -> dict:
             "timing_source": timing_source,
             "current_supports": current_supports,
             "activation_score": activation,
+            "running_activation_score": running_activation,
+            "min_activation": min_activation,
             "dasha_targets": dasha_targets,
             "top_planets": top_names[:5],
             "detail": activation_detail,

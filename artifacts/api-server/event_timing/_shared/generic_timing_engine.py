@@ -61,6 +61,8 @@ class DomainTimingConfig:
     defer_label: str = "LOW_PROBABILITY"
     brand_safety: List[str] = field(default_factory=list)
     llm_directives: List[str] = field(default_factory=list)
+    # Current AD/PD must reach this activation score to answer with running dasha.
+    min_current_activation: float = 9.0
 
 
 def _sign_idx(v: Any) -> Optional[int]:
@@ -391,9 +393,9 @@ def pick_primary_timing_window(
     promote: Set[str],
     now: datetime,
     *,
-    min_ad_pd: float = 4.0,
+    min_ad_pd: float = 9.0,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]], str, bool]:
-    """Dasha-first: current AD/PD active → else scan forward chronologically."""
+    """Dasha-first: current AD/PD active (score >= min) → else scan forward."""
     if not windows:
         return None, None, "none", False
 
@@ -494,8 +496,23 @@ def compute_generic_timing_window(
     chain = _flatten_dasha_chain(kundli)
     windows = _step5_windows(chain, ranked, cfg, now)
     promote, _obstruct = _classify_lords(ranked, cfg)
+    score_map = {
+        str(r["name"]): float(r.get("score") or 0)
+        for r in ranked
+        if r.get("name")
+    }
+    running_now = [w for w in windows if w["start"] <= now <= w["end"]]
+    running_activation = None
+    if running_now:
+        best_run = max(
+            running_now,
+            key=lambda w: (_activation_score(w, promote, score_map), w.get("score", 0)),
+        )
+        running_activation = round(_activation_score(best_run, promote, score_map), 2)
+
     primary, next_win, timing_source, current_supports = pick_primary_timing_window(
         windows, ranked, promote, now,
+        min_ad_pd=cfg.min_current_activation,
     )
     top3: List[Dict[str, Any]] = []
     if primary:
@@ -513,9 +530,10 @@ def compute_generic_timing_window(
         )
     elif timing_source == "next_dasha_scan" and primary:
         factors.append(
-            f"STEP5 PRIMARY=NEXT current AD/PD weak for {cfg.domain} — "
-            f"first love-active {primary.get('start_iso')}→{primary.get('end_iso')} "
-            f"AD/PD={primary.get('ad')}/{primary.get('pd')}"
+            f"STEP5 PRIMARY=NEXT current AD/PD below min {cfg.min_current_activation} "
+            f"(running={running_activation}) for {cfg.domain} — "
+            f"first active {primary.get('start_iso')}→{primary.get('end_iso')} "
+            f"AD/PD={primary.get('ad')}/{primary.get('pd')} score={primary.get('activation_score')}"
         )
     elif primary:
         factors.append("STEP5 PRIMARY=fallback highest-score window")
@@ -552,6 +570,8 @@ def compute_generic_timing_window(
         "next_child_window": next_win,
         "timing_source": timing_source,
         "current_supports": current_supports,
+        "current_running_activation_score": running_activation,
+        "min_current_activation": cfg.min_current_activation,
         "top_planets": ranked[:5],
         "kp_layer": kp_layer,
         "double_transit": dt_result,

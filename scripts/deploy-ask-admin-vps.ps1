@@ -37,6 +37,7 @@ $files = @(
 
 $folders = @(
     "ask_mr",
+    "ask_health",
     "event_timing/marriage",
     "event_timing/_shared",
     "event_timing/career"

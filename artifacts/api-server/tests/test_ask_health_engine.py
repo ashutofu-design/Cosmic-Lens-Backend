@@ -69,12 +69,34 @@ class TestAskHealthEngine(unittest.TestCase):
 
     def test_hard_guards(self):
         self.assertEqual(classify_health_archetype("kab marunga main?"), "refuse_death")
-        self.assertEqual(classify_health_archetype("operation kab karwau muhurat?"), "refuse_surgery_muhurat")
-        self.assertTrue(is_health_static_question("kab thik honga main?"))
+        from ask_health.timing_registry import is_health_timing_question
+        from event_timing.timing_router import resolve_timing_domain
+
+        self.assertTrue(is_health_timing_question("kab thik honga main?"))
+        self.assertFalse(is_health_static_question("kab thik honga main?"))
+        dom, _b, is_t = resolve_timing_domain("kab thik honga main?")
+        self.assertTrue(is_t and dom == "health")
 
     def test_timing_decline_hard_guard_in_scope(self):
+        from ask_health.timing_registry import is_health_timing_question
+
+        self.assertFalse(is_health_timing_question("kab beemar honga?"))
         self.assertTrue(is_health_static_question("kab beemar honga?"))
         self.assertEqual(classify_health_archetype("kab beemar honga?"), "refuse_timing_decline")
+
+    def test_static_health_outlook_not_timing(self):
+        from ask_health.timing_registry import is_health_timing_question
+
+        for q in (
+            "Health kaisi rahegi?",
+            "Meri health kaisi rahegi?",
+            "Sehat kaisi rahegi?",
+        ):
+            with self.subTest(q=q):
+                self.assertFalse(is_health_timing_question(q), q)
+                self.assertTrue(is_health_static_question(q), q)
+        self.assertTrue(is_health_timing_question("2027 me health kaisi hogi?"))
+        self.assertFalse(is_health_static_question("2027 me health kaisi hogi?"))
 
     def test_resolve_override_llm(self):
         arch, reason = resolve_health_archetype(

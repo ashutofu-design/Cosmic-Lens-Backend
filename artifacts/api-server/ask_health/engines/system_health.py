@@ -92,29 +92,38 @@ _SYSTEM_SPECS: dict[str, dict] = {
 
 _SYSTEM_DETECT: list[tuple[str, re.Pattern[str]]] = [
     ("digestive_health", re.compile(
-        r"(?ix)\b(digest(?:ion|ive)?|pet\s+dard|stomach|acidity|gas|"
-        r"intestine|aant|appetite|bhook|hazme|hajma|liver|jigar|kidney|gurda)\b")),
+        r"(?ix)(digest(?:ion|ive)?|pet\s+dard|stomach|acidity|gas|"
+        r"intestine|aant|appetite|bhook|hazme|hajma|liver|jigar|kidney|gurda|"
+        r"पेट\s+दर्द|पेट\s+की\s+प्रवृत्ति|पाचन)")),
     ("cardio_health", re.compile(
-        r"(?ix)\b(heart|dil\b|cardiac|cardio|blood\s+pressure|\bbp\b|"
-        r"hypertension|chest\s+(pain|discomfort)|seene\s+me)\b")),
+        r"(?ix)(heart|dil\b|cardiac|cardio|blood\s+pressure|\bbp\b|"
+        r"hypertension|chest\s+(pain|discomfort)|seene\s+me|"
+        r"दिल\s+की\s+सेहत|हृदय)")),
     ("nervous_health", re.compile(
-        r"(?ix)\b(nerve|nerves|nervous|neurolog|jhanjhanahat|tingling|"
-        r"numbness|sunn\s+pad|brain|dimag|cognitive)\b")),
+        r"(?ix)(nerve|nerves|nervous|neurolog|neurological|sensitivity|"
+        r"jhanjhanahat|tingling|"
+        r"numbness|sunn\s+pad|brain|dimag|cognitive|"
+        r"नसों\s+की\s+कमजोरी|तंत्रिका)")),
     ("musculoskeletal_health", re.compile(
-        r"(?ix)\b(joint|jod|jodo|knee|ghutna|back\s*pain|kamar|bone|haddi|"
-        r"spine|reedh|muscle|maans|cramp|akadan|stiffness|orthop)\b")),
+        r"(?ix)(joint|jod|jodo|knee|ghutna|back\s*pain|kamar|bone|haddi|"
+        r"spine|reedh|muscle|maans|cramp|akadan|stiffness|orthop|"
+        r"पीठ\s+दर्द|जोड़|अस्थि)")),
     ("skin_health", re.compile(
-        r"(?ix)\b(skin|chamdi|twacha|rash|acne|pimple|muhase|eczema|daag)\b")),
+        r"(?ix)(skin|chamdi|twacha|rash|acne|pimple|muhase|eczema|daag|"
+        r"त्वचा\s+की\s+समस्या|त्वचा)")),
     ("endocrine_health", re.compile(
-        r"(?ix)\b(thyroid|hormone|hormonal|sugar\s+level|metabolism|"
-        r"weight\s+(gain|loss)|wajan|motapa|pcod|pcos|endocrin)\b")),
+        r"(?ix)(thyroid|hormone|hormonal|sugar\s+level|metabolism|"
+        r"weight\s+(gain|loss)|wajan|motapa|pcod|pcos|endocrin|"
+        r"हार्मोन|थायराइड)")),
     ("respiratory_health", re.compile(
-        r"(?ix)\b(breath|breathing|saans|saans\s+phool|lung|phephra|"
-        r"cough|khansi|cold|sardi|zukam|chest\s+infect|nasal|nose\s+block)\b")),
+        r"(?ix)(breath|breathing|saans|saans\s+phool|lung|phephra|"
+        r"cough|khansi|khaansi|cold|sardi|zukam|bar\s+bar|chest\s+infect|nasal|nose\s+block|"
+        r"सांस\s+की\s+समस्या|खांसी|फेफड़)")),
     ("immune_health", re.compile(
-        r"(?ix)\b(immunity|immune|baar\s*baar\s+(beemar|bimar|sick)|"
-        r"jaldi\s+jaldi\s+(beemar|bimar|sick)|frequently\s+(sick|ill)|"
-        r"rog\s*pratirodh|resistance)\b")),
+        r"(?ix)(immunity|immune|baar\s*baar\s+(beemar|bimar|sick|ill)|"
+        r"jaldi\s+jaldi\s+(beemar|bimar|sick|ill)|"
+        r"frequently\s+(sick|ill)|(?:sick|ill)\s+frequently|get\s+sick\s+frequently|"
+        r"rog\s*pratirodh|प्रतिरक्षा\s+कमजोर)")),
 ]
 
 

@@ -1,4 +1,9 @@
-import { detectQuestionLang, questionLangLabel, type AskQuestionLang } from "./questionLang";
+import {
+  detectQuestionLang,
+  questionLangLabel,
+  questionLangLabelCompact,
+  type AskQuestionLang,
+} from "./questionLang";
 
 export function QuestionLangBadge({
   questionText,
@@ -9,22 +14,14 @@ export function QuestionLangBadge({
   compact?: boolean;
 }) {
   const lang = detectQuestionLang(questionText);
-  const label = compact
-    ? lang === "hi"
-      ? "Hindi · देवनागरी"
-      : lang === "hn"
-        ? "Hinglish · Roman"
-        : lang === "en"
-          ? "English"
-          : "Unsupported"
-    : questionLangLabel(lang);
+  const label = compact ? questionLangLabelCompact(lang) : questionLangLabel(lang);
 
   return (
     <span
       className={`question-lang-badge question-lang-badge--${lang ?? "blocked"}`}
       title={questionLangLabel(lang)}
     >
-      {compact ? "Lang: " : "Question language: "}
+      {compact ? "भाषा: " : "सवाल की भाषा: "}
       {label}
     </span>
   );

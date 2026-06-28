@@ -65,15 +65,22 @@ export function detectQuestionLang(question: string): AskQuestionLang | null {
 }
 
 export function questionLangLabel(lang: AskQuestionLang | null): string {
-  if (lang === "hi") return "Hindi (Devanagari)";
-  if (lang === "hn") return "Hinglish (Roman Hindi)";
+  if (lang === "hi") return "हिंदी (देवनागरी में पूछा गया)";
+  if (lang === "hn") return "हिंदी (रोमन लिपि में पूछा गया)";
   if (lang === "en") return "English";
-  return "Unsupported script";
+  return "असमर्थित भाषा / script";
+}
+
+export function questionLangLabelCompact(lang: AskQuestionLang | null): string {
+  if (lang === "hi") return "हिंदी · देवनागरी";
+  if (lang === "hn") return "हिंदी · रोमन";
+  if (lang === "en") return "English";
+  return "अन्य";
 }
 
 export function questionLangShort(lang: AskQuestionLang | null): string {
-  if (lang === "hi") return "Hindi";
-  if (lang === "hn") return "Hinglish";
+  if (lang === "hi") return "हिंदी";
+  if (lang === "hn") return "हिंदी";
   if (lang === "en") return "English";
-  return "Other";
+  return "—";
 }

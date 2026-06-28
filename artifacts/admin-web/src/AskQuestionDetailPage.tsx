@@ -8,6 +8,7 @@ import {
 } from "./AskLlmContextPanel";
 import { CopyTextButton } from "./CopyTextButton";
 import { QuestionLangBadge } from "./QuestionLangBadge";
+import { detectQuestionLang, questionLangLabel } from "./questionLang";
 
 export function AskQuestionDetailPage({
   row,
@@ -62,6 +63,10 @@ export function AskQuestionDetailPage({
       </div>
 
       <div className="ask-detail-meta">
+        <div>
+          <span className="detail-muted">सवाल की भाषा</span>
+          <div>{questionLangLabel(detectQuestionLang(row.question_text))}</div>
+        </div>
         <div>
           <span className="detail-muted">Path</span>
           <div>

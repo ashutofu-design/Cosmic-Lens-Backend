@@ -1,0 +1,254 @@
+========================================================================
+MR FULL AUDIT — 220 non-timing Qs (EN + Hinglish + Hindi)
+========================================================================
+[  1] OK   | HN | mr      | dating_courtship         | kya mujhe sachcha pyaar milega?
+[  2] OK   | HN | mr      | secret_relationship      | kya multiple relationships honge?
+[  3] OK   | HN | mr      | secret_relationship      | kya secret affair chal raha hai?
+[  4] OK   | HN | mr      | long_distance            | online relationship chalega kya?
+[  5] OK   | HN | mr      | dating_courtship         | friend se lover ban sakta hai kya?
+[  6] OK   | HN | mr      | loyalty_trust            | partner loyal rahega kya?
+[  7] OK   | HN | mr      | loyalty_trust            | commitment issues honge kya?
+[  8] OK   | HN | mr      | emotional_attachment     | meri emotional needs poori hongi?
+[  9] OK   | HN | mr      | emotional_attachment     | mera attachment style kaisa hai?
+[ 10] OK   | EN | mr      | dating_courtship         | first impression kaisa rahega?
+[ 11] OK   | HN | mr      | dating_courtship         | mera flirting style kaisa hai?
+[ 12] OK   | HN | mr      | dating_courtship         | dating success milegi kya?
+[ 13] OK   | HN | mr      | dating_courtship         | mera attraction pattern kya hai?
+[ 14] OK   | HN | mr      | dating_courtship         | relationship me red flags kya hain?
+[ 15] OK   | HN | mr      | dating_courtship         | relationship me green flags kya hain?
+[ 16] OK   | EN | mr      | love_vs_arranged         | love marriage hogi ya arranged?
+[ 17] OK   | HN | mr      | love_vs_arranged         | love cum arrange hoga kya?
+[ 18] OK   | EN | mr      | family_approval          | inter-caste marriage hogi?
+[ 19] OK   | HN | mr      | family_approval          | inter-religion shaadi?
+[ 20] OK   | HN | mr      | family_approval          | court marriage hogi kya?
+[ 21] OK   | EN | mr      | family_approval          | family kitna involve hoga?
+[ 22] OK   | HN | mr      | spouse_appearance        | partner ki height kaisi hogi?
+[ 23] OK   | EN | mr      | spouse_appearance        | spouse ka complexion kaisa hoga?
+[ 24] OK   | EN | mr      | spouse_appearance        | wife ka face shape kaisa hoga?
+[ 25] OK   | HN | mr      | spouse_appearance        | partner ki aankhen kaisi hongi?
+[ 26] OK   | HN | mr      | spouse_appearance        | husband ke baal kaisi honge?
+[ 27] OK   | EN | mr      | spouse_appearance        | spouse ka body type kaisa hoga?
+[ 28] OK   | HN | mr      | spouse_appearance        | partner dressing style kaisi hogi?
+[ 29] OK   | HN | mr      | spouse_appearance        | spouse ki awaaz kaisi hogi?
+[ 30] OK   | EN | mr      | spouse_appearance        | partner ka aura kaisa hoga?
+[ 31] OK   | EN | mr      | spouse_appearance        | spouse kitna attractive hoga?
+[ 32] OK   | EN | mr      | partner_nature           | partner introvert hoga ya extrovert?
+[ 33] OK   | HN | mr      | partner_nature           | partner romantic hoga kya?
+[ 34] OK   | HN | mr      | partner_nature           | partner caring hoga kya?
+[ 35] OK   | EN | mr      | partner_nature           | partner emotionally expressive hoga?
+[ 36] OK   | EN | mr      | partner_nature           | partner practical hoga ya emotional?
+[ 37] OK   | HN | mr      | partner_nature           | partner ambitious hoga kya?
+[ 38] OK   | EN | mr      | loyalty_trust            | partner loyal hoga?
+[ 39] OK   | HN | mr      | partner_nature           | partner spiritual hoga kya?
+[ 40] OK   | EN | mr      | partner_nature           | partner dominant hoga ya cooperative?
+[ 41] OK   | HN | mr      | partner_nature           | partner humorous hoga kya?
+[ 42] OK   | HN | mr      | partner_nature           | partner honest hoga kya?
+[ 43] OK   | HN | mr      | obsession                | partner jealous hoga kya?
+[ 44] OK   | HN | mr      | spouse_profession        | wife ka profession kya hoga?
+[ 45] OK   | EN | mr      | spouse_profession        | husband business karega ya job?
+[ 46] OK   | EN | mr      | spouse_profession        | spouse government job karega?
+[ 47] OK   | EN | mr      | spouse_profession        | partner IT field me hoga?
+[ 48] OK   | HN | mr      | spouse_profession        | spouse doctor ban sakta hai?
+[ 49] OK   | EN | mr      | spouse_wealth            | partner rich hoga?
+[ 50] OK   | EN | mr      | spouse_wealth            | wife middle class family se hogi?
+[ 51] OK   | EN | mr      | spouse_wealth            | spouse wealthy family se hoga?
+[ 52] OK   | EN | mr      | spouse_wealth            | partner self made hoga?
+[ 53] OK   | HN | mr      | spouse_wealth            | spouse saving habits kaisi hongi?
+[ 54] OK   | EN | mr      | partner_nature           | wife ke family wale kaise honge?
+[ 55] OK   | HN | mr      | partner_nature           | saas kaisi hogi?
+[ 56] OK   | EN | mr      | partner_nature           | sasural joint family hoga ya nuclear?
+[ 57] OK   | HN | mr      | partner_nature           | mother in law nature kaisi hogi?
+[ 58] OK   | HN | mr      | partner_nature           | sasural interference hoga kya?
+[ 59] OK   | HN | mr      | general_mr               | marriage ke baad emotional compatibility kaisi r
+[ 60] OK   | EN | mr      | general_mr               | partner samajh payega mujhe?
+[ 61] OK   | HN | mr      | general_mr               | communication strong hogi kya?
+[ 62] OK   | HN | mr      | loyalty_trust            | shaadi ke baad trust strong hoga?
+[ 63] OK   | EN | mr      | partner_nature           | partner respect dega?
+[ 64] OK   | HN | mr      | chemistry                | hamari chemistry kaisi hogi?
+[ 65] OK   | HN | mr      | chemistry                | passion strong hogi kya?
+[ 66] OK   | EN | mr      | chemistry                | romance kaisa rahega?
+[ 67] OK   | HN | mr      | bed_intimacy             | private life kaisi rahegi?
+[ 68] OK   | HN | mr      | partner_nature           | partner ka affection style kya hoga?
+[ 69] OK   | HN | mr      | general_mr               | shaadi ke baad khushi rahegi?
+[ 70] OK   | HN | mr      | general_mr               | marriage stable rahegi kya?
+[ 71] OK   | EN | mr      | general_mr               | partner career support karega?
+[ 72] OK   | EN | mr      | general_mr               | marriage me growth hogi?
+[ 73] OK   | HN | mr      | general_mr               | teamwork strong hoga kya?
+[ 74] OK   | HN | mr      | breakup_risk             | divorce ka chance hai kya?
+[ 75] OK   | HN | mr      | breakup_risk             | rishta toot sakta hai kya?
+[ 76] OK   | HN | mr      | breakup_risk             | ego clash hoga kya?
+[ 77] OK   | EN | mr      | loyalty_trust            | third person interference hogi?
+[ 78] OK   | HN | mr      | breakup_risk             | relationship toxic hoga kya?
+[ 79] OK   | HN | mr      | partner_nature           | partner manipulative hoga kya?
+[ 80] OK   | EN | mr      | children_parenting       | spouse ka parenting style kaisa hoga?
+[ 81] OK   | EN | mr      | children_parenting       | partner bachon ke saath bond kaisa hoga?
+[ 82] OK   | HN | mr      | children_parenting       | family values strong honge kya?
+[ 83] OK   | HN | mr      | partner_nature           | foreign spouse milega kya?
+[ 84] OK   | EN | mr      | partner_nature           | partner alag culture se hoga?
+[ 85] OK   | HN | mr      | lifestyle_marriage       | shaadi ke baad abroad settle honge?
+[ 86] OK   | HN | mr      | karmic_marriage          | kya yeh soulmate hai?
+[ 87] OK   | HN | mr      | karmic_marriage          | karmic debt marriage me hai?
+[ 88] OK   | HN | mr      | karmic_marriage          | past life connection hai kya?
+[ 89] OK   | EN | mr      | karmic_marriage          | marriage se spiritual growth hogi?
+[ 90] OK   | HN | mr      | partner_nature           | mera love language kya hai?
+[ 91] OK   | EN | mr      | general_mr               | conflict style kaisa hoga?
+[ 92] OK   | HN | mr      | general_mr               | emotional maturity kaisi hogi?
+[ 93] OK   | HN | mr      | lifestyle_marriage       | shaadi ke baad luxury lifestyle hogi?
+[ 94] OK   | HN | mr      | lifestyle_marriage       | travel zyada hoga kya?
+[ 95] OK   | EN | mr      | lifestyle_marriage       | social life active hogi?
+[ 96] OK   | EN | mr      | lifestyle_marriage       | ghar ka mahaul kaisa hoga?
+[ 97] OK   | EN | mr      | partner_nature           | What will my partner personality be like?
+[ 98] OK   | EN | mr      | partner_nature           | Mera partner introvert hoga ya extrovert?
+[ 99] OK   | EN | mr      | partner_nature           | Spouse emotionally expressive hoga?
+[100] OK   | HI | mr      | partner_nature           | \u092a\u0924\u093f \u0915\u093e \u0938\u094d\u0935\u092d\u093e\u0935 \u0915\u0948\u0938\u093e \u0939\u094b\u0917\u093e?
+[101] OK   | HI | mr      | partner_nature           | \u092a\u0924\u094d\u0928\u0940 \u0915\u093e \u0935\u094d\u092f\u0915\u094d\u0924\u093f\u0924\u094d\u0935 \u0915\u0948\u0938\u093e \u0939\u094b\u0917\u093e?
+[102] OK   | EN | mr      | partner_nature           | Partner dominant hoga ya cooperative?
+[103] OK   | HN | mr      | manglik                  | Am I manglik in my chart?
+[104] OK   | HN | mr      | manglik                  | Kya main manglik hoon chart me?
+[105] OK   | EN | mr      | manglik                  | Mangal dosh marriage pe effect?
+[106] OK   | HI | mr      | manglik                  | \u0915\u094d\u092f\u093e \u092e\u0948\u0902 \u092e\u093e\u0902\u0917\u0932\u093f\u0915 \u0939\u0942\u0901?
+[107] OK   | HI | mr      | manglik                  | \u092e\u093e\u0902\u0917\u0932\u093f\u0915 \u0926\u094b\u0937 \u0915\u093f\u0924\u0928\u093e \u0939\u0948?
+[108] OK   | EN | mr      | love_vs_arranged         | Love marriage or arranged marriage?
+[109] OK   | HN | mr      | love_vs_arranged         | Love cum arranged hoga kya?
+[110] OK   | HN | mr      | love_vs_arranged         | Ghar walon ki pasand ya meri pasand?
+[111] OK   | HI | mr      | love_vs_arranged         | \u092a\u094d\u0930\u0947\u092e \u0935\u093f\u0935\u093e\u0939 \u0939\u094b\u0917\u093e \u092f\u093e arranged?
+[112] OK   | HI | mr      | love_vs_arranged         | \u0915\u094d\u092f\u093e love marriage hogi?
+[113] OK   | EN | mr      | loyalty_trust            | Will my partner cheat on me?
+[114] OK   | HN | mr      | loyalty_trust            | Partner dhokha dega kya?
+[115] OK   | EN | mr      | loyalty_trust            | Partner wafadar hoga?
+[116] OK   | HI | mr      | loyalty_trust            | \u0915\u094d\u092f\u093e \u092a\u0924\u093f \u0935\u093f\u0936\u094d\u0935\u093e\u0938 \u0915\u0947 \u092f\u094b\u0917\u094d\u092f \u0939\u0948?
+[117] OK   | HI | mr      | loyalty_trust            | \u0935\u093f\u0936\u094d\u0935\u093e\u0938 \u0914\u0930 \u0935\u092b\u093e\u0926\u093e\u0930\u0940 chart me?
+[118] OK   | EN | mr      | chemistry                | Physical chemistry strong hogi?
+[119] OK   | HN | mr      | chemistry                | Hamari attraction kaisi hogi?
+[120] OK   | HN | mr      | chemistry                | Romance aur spark chart me?
+[121] OK   | HI | mr      | chemistry                | \u092a\u094d\u0930\u0947\u092e \u0914\u0930 \u0906\u0915\u0930\u094d\u0937\u0923 \u0915\u0948\u0938\u093e \u0939\u0948?
+[122] OK   | HN | mr      | patchup                  | Ex wapas aa sakta hai kya?
+[123] OK   | HN | mr      | patchup                  | Patch up hoga kya rishta?
+[124] OK   | EN | mr      | patchup                  | Purana partner wapas lautega?
+[125] OK   | HI | mr      | patchup                  | \u092a\u0941\u0930\u093e\u0928\u093e \u0930\u093f\u0936\u094d\u0924\u093e \u0935\u093e\u092a\u0938 \u0906\u090f\u0917\u093e?
+[126] OK   | HN | mr      | family_approval          | Parents shaadi ke liye manenge?
+[127] OK   | EN | mr      | family_approval          | Inter caste marriage family accept?
+[128] OK   | HN | mr      | family_approval          | Ghar walon ka role shaadi me?
+[129] OK   | HI | mr      | family_approval          | \u092e\u093e\u0924\u093e-\u092a\u093f\u0924\u093e \u0936\u093e\u0926\u0940 \u0915\u0947 \u0932\u093f\u090f \u0930\u093e\u091c\u0940?
+[130] OK   | HI | mr      | family_approval          | \u0907\u0902\u091f\u0930\u0915\u093e\u0938\u094d\u091f \u0936\u093e\u0926\u0940 \u092e\u0902\u091c\u0942\u0930?
+[131] OK   | EN | mr      | spouse_profession        | What profession will my spouse have?
+[132] OK   | HN | mr      | spouse_profession        | Husband doctor banega kya?
+[133] OK   | EN | mr      | spouse_profession        | Wife government job karegi?
+[134] OK   | HI | mr      | spouse_profession        | \u092a\u0924\u093f \u0915\u093e \u092a\u0947\u0936\u093e \u0915\u094d\u092f\u093e \u0939\u094b\u0917\u093e?
+[135] OK   | EN | mr      | spouse_wealth            | Will my spouse be rich?
+[136] OK   | HN | mr      | spouse_wealth            | Partner amir hoga kya?
+[137] OK   | EN | mr      | spouse_wealth            | Spouse middle class se hoga?
+[138] OK   | HI | mr      | spouse_wealth            | \u092a\u0924\u094d\u0928\u0940 \u0905\u092e\u0940\u0930 \u092a\u0930\u093f\u0935\u093e\u0930 \u0938\u0947?
+[139] OK   | EN | mr      | spouse_appearance        | How tall will my spouse be?
+[140] OK   | HN | mr      | spouse_appearance        | Partner ki height kaisi hogi?
+[141] OK   | EN | mr      | spouse_appearance        | Spouse attractive hoga?
+[142] OK   | HI | mr      | spouse_appearance        | \u092a\u0924\u093f \u0915\u0940 \u0936\u0915\u094d\u0932 \u0915\u0948\u0938\u0940 \u0939\u094b\u0917\u0940?
+[143] OK   | HI | mr      | spouse_appearance        | \u092a\u0924\u094d\u0928\u0940 \u0915\u0940 \u0906\u0902\u0916\u0947\u0902 \u0915\u0948\u0938\u0940 \u0939\u094b\u0902\u0917\u0940?
+[144] OK   | EN | mr      | children_parenting       | Spouse parenting style kaisa hoga?
+[145] OK   | EN | mr      | children_parenting       | Partner bachon ke saath bond?
+[146] OK   | EN | mr      | children_parenting       | Family values strong honge?
+[147] OK   | HI | mr      | children_parenting       | \u092c\u091a\u094d\u091a\u094b\u0902 \u0915\u0947 \u0938\u093e\u0925 \u0930\u093f\u0936\u094d\u0924\u093e \u0915\u0948\u0938\u093e?
+[148] OK   | EN | mr      | karmic_marriage          | Is this my soulmate?
+[149] OK   | HN | mr      | karmic_marriage          | Karmic debt marriage me hai?
+[150] OK   | EN | mr      | karmic_marriage          | Past life connection partner se?
+[151] OK   | HI | mr      | karmic_marriage          | \u0915\u094d\u092f\u093e \u092f\u0939 soulmate \u0939\u0948?
+[152] OK   | EN | mr      | lifestyle_marriage       | Luxury lifestyle after marriage?
+[153] OK   | HN | mr      | lifestyle_marriage       | Shaadi ke baad travel zyada?
+[154] OK   | HN | mr      | lifestyle_marriage       | Ghar ka mahaul shaadi ke baad?
+[155] OK   | HI | mr      | lifestyle_marriage       | \u0935\u093f\u0926\u0947\u0936 \u092e\u0947\u0902 \u092c\u0938\u0928\u093e \u0936\u093e\u0926\u0940 \u0915\u0947 \u092c\u093e\u0926?
+[156] OK   | EN | mr      | dating_courtship         | Will I find true love?
+[157] OK   | HN | mr      | dating_courtship         | Dost se lover ban sakta hai?
+[158] OK   | HN | mr      | dating_courtship         | Dating success milegi kya?
+[159] OK   | EN | mr      | dating_courtship         | First impression partner pe kaisa?
+[160] OK   | HI | mr      | dating_courtship         | \u0938\u091a\u094d\u091a\u093e \u092a\u094d\u092f\u093e\u0930 \u092e\u093f\u0932\u0947\u0917\u093e?
+[161] OK   | HI | mr      | dating_courtship         | \u0921\u0947\u091f\u093f\u0902\u0917 \u092e\u0947\u0902 \u0938\u092b\u0932\u0924\u093e?
+[162] OK   | HN | mr      | second_marriage          | Second marriage hogi kya?
+[163] OK   | HN | mr      | second_marriage          | Dusri shaadi ka yog?
+[164] OK   | HN | mr      | second_marriage          | Do bar shaadi hogi?
+[165] OK   | HI | mr      | second_marriage          | \u0926\u0942\u0938\u0930\u0940 \u0936\u093e\u0926\u0940 \u0939\u094b\u0917\u0940?
+[166] OK   | EN | mr      | long_distance            | Long distance relationship chalega?
+[167] OK   | EN | mr      | long_distance            | Online relationship successful hoga?
+[168] OK   | EN | mr      | long_distance            | Door reh kar rishta chalega?
+[169] OK   | HI | mr      | long_distance            | \u0932\u0949\u0928\u094d\u0917 \u0921\u093f\u0938\u094d\u091f\u0947\u0902\u0938 \u0930\u093f\u0936\u094d\u0924\u093e?
+[170] OK   | EN | mr      | one_sided_love           | One sided love ka result?
+[171] OK   | HN | mr      | one_sided_love           | Ek tarfa pyaar accept hoga?
+[172] OK   | HN | mr      | one_sided_love           | Crush propose karega kya?
+[173] OK   | HI | mr      | one_sided_love           | \u090f\u0915\u0924\u0930\u092b\u093e \u092a\u094d\u092f\u093e\u0930?
+[174] OK   | HN | mr      | secret_relationship      | Secret affair chart me?
+[175] OK   | HN | mr      | secret_relationship      | Chhupa rishta chal raha hai?
+[176] OK   | EN | mr      | secret_relationship      | Multiple relationships honge?
+[177] OK   | HI | mr      | secret_relationship      | \u0917\u0941\u092a\u094d\u0924 \u0930\u093f\u0936\u094d\u0924\u093e chart me?
+[178] OK   | HN | mr      | obsession                | Partner jealous hoga kya?
+[179] OK   | EN | mr      | obsession                | Obsession relationship me?
+[180] OK   | EN | mr      | obsession                | Partner possessive nature?
+[181] OK   | HI | mr      | obsession                | \u0905\u0924\u093f \u0932\u0917\u093e\u0935 partner me?
+[182] OK   | HN | mr      | emotional_attachment     | Mera attachment style kaisa hai?
+[183] OK   | HN | mr      | emotional_attachment     | Meri emotional needs poori hongi?
+[184] OK   | EN | mr      | emotional_attachment     | Emotional bond strong hoga?
+[185] OK   | HI | mr      | emotional_attachment     | \u092d\u093e\u0935\u0928\u093e\u0924\u094d\u092e\u0915 \u091c\u0941\u0921\u093c\u093e\u0935 \u0915\u0948\u0938\u093e?
+[186] OK   | EN | mr      | bed_intimacy             | Physical compatibility bedroom me?
+[187] OK   | HN | mr      | bed_intimacy             | Private life kaisi rahegi?
+[188] OK   | EN | mr      | bed_intimacy             | Conjugal life strong hoga?
+[189] OK   | HI | mr      | bed_intimacy             | \u0936\u093e\u0930\u0940\u0930\u093f\u0915 \u0905\u0928\u0941\u0915\u0942\u0932\u0924\u093e?
+[190] OK   | EN | mr      | self_worth               | Relationship me self worth weak?
+[191] OK   | EN | mr      | self_worth               | Insecurity relationship me?
+[192] OK   | HN | mr      | self_worth               | Meri boundaries strong hongi?
+[193] OK   | HI | mr      | self_worth               | \u0906\u0924\u094d\u092e\u0935\u093f\u0936\u094d\u0935\u093e\u0938 \u0930\u093f\u0936\u094d\u0924\u0947 \u092e\u0947\u0902?
+[194] OK   | HN | mr      | breakup_risk             | Breakup ka chance hai?
+[195] OK   | HN | mr      | breakup_risk             | Divorce hoga kya?
+[196] OK   | HN | mr      | breakup_risk             | Rishta toot sakta hai?
+[197] OK   | EN | mr      | breakup_risk             | Toxic relationship hoga?
+[198] OK   | HI | mr      | breakup_risk             | \u0924\u0932\u093e\u0915 \u0915\u093e \u092f\u094b\u0917?
+[199] OK   | HI | mr      | breakup_risk             | \u0930\u093f\u0936\u094d\u0924\u093e \u091f\u0942\u091f \u0938\u0915\u0924\u093e \u0939\u0948?
+[200] OK   | HN | mr      | general_mr               | Marriage stable rahegi kya?
+[201] OK   | HN | mr      | general_mr               | Shaadi ke baad khushi rahegi?
+[202] OK   | EN | mr      | general_mr               | Communication strong hogi marriage me?
+[203] OK   | EN | mr      | general_mr               | Partner career support karega?
+[204] OK   | HN | mr      | general_mr               | 36 gun milan kaisa hai?
+[205] OK   | HI | mr      | general_mr               | \u0936\u093e\u0926\u0940 \u0915\u0947 \u092c\u093e\u0926 \u0916\u0941\u0936\u0940?
+[206] OK   | HI | mr      | general_mr               | \u0935\u093f\u0935\u093e\u0939 \u092e\u0947\u0902 \u0938\u0902\u0935\u093e\u0926?
+[207] OK   | HN | off     | timing                   | Kab shaadi hogi meri?
+[208] OK   | EN | off     | timing                   | When will I get married?
+[209] OK   | HN | off     | timing                   | Marriage kab hogi chart se?
+[210] OK   | HN | off     | timing                   | Rishta kab fix hoga?
+[211] OK   | HI | off     | timing                   | \u0936\u093e\u0926\u0940 \u0915\u092c \u0939\u094b\u0917\u0940?
+[212] OK   | HI | off     | timing                   | \u0935\u093f\u0935\u093e\u0939 \u0915\u093e \u0938\u092e\u092f \u0915\u092c?
+[213] OK   | HN | off     | timing                   | 2027 me shaadi hogi?
+[214] OK   | EN | off     | timing                   | Next year marriage hogi?
+[215] OK   | HN | off     | career                   | Meri naukri kaisi hai?
+[216] OK   | EN | off     | career                   | Career growth strong hogi?
+[217] OK   | EN | off     | finance                  | Medical ke liye savings FD?
+[218] OK   | EN | off     | finance                  | FD me paisa lagau?
+[219] OK   | HN | off     | health                   | Meri sehat kaisi hai?
+[220] OK   | HN | off     | health                   | Meri immunity weak hai?
+
+========================================================================
+SUMMARY BY BUCKET
+========================================================================
+  bed_intimacy                 5/5 OK
+  breakup_risk                 10/10 OK
+  chemistry                    7/7 OK
+  children_parenting           7/7 OK
+  dating_courtship             14/14 OK
+  emotional_attachment         6/6 OK
+  family_approval              9/9 OK
+  general_mr                   17/17 OK
+  karmic_marriage              8/8 OK
+  lifestyle_marriage           9/9 OK
+  long_distance                5/5 OK
+  love_vs_arranged             7/7 OK
+  loyalty_trust                10/10 OK
+  manglik                      5/5 OK
+  obsession                    5/5 OK
+  off                          14/14 OK
+  one_sided_love               4/4 OK
+  partner_nature               27/27 OK
+  patchup                      4/4 OK
+  second_marriage              4/4 OK
+  secret_relationship          6/6 OK
+  self_worth                   4/4 OK
+  spouse_appearance            15/15 OK
+  spouse_profession            9/9 OK
+  spouse_wealth                9/9 OK
+
+TOTAL: 220/220 OK, 0 FAIL

@@ -37,6 +37,13 @@ _TIMING_REJECT_RX = re.compile(
     r"(ka|ki|ke)\s+(sahi|good|right|achha|best)\s+"
     r"(samay|time|waqt|muhurat)|"
     r"property\s+(date|year|muhurat|timing|window|period)|"
+    r"property\s+(?:purchase|buy|kharid)\s+timing|"
+    r"purchase\s+timing|timing\s+dasha|dasha\s+timing|"
+    r"(ghar|property|home|house|plot|construction)\s+(ka|ki|ke)\s+"
+    r"(?:shubh\s+)?muhurat|"
+    r"(?:shubh\s+)?muhurat\s+(?:ghar|property|home|plot|construction)?|"
+    r"construction\s+(?:start|shuru)\s+kab|"
+    r"start\s+kab\s+kare|kab\s+kare\b|"
     r"(property|ghar|home|house|plot|zameen|land|flat|makaan|"
     r"real[\s-]?estate)\s+(buy|kharid|lene|kharidne)\s+"
     r"(karne\s+)?(ka|ki|ke)\s+(muhurat|samay|time|waqt)|"
@@ -87,7 +94,11 @@ _PROPERTY_TOPIC_RX = re.compile(
     r"dream[\s-]?(home|house)|"
     r"khud[\s-]?ka[\s-]?(ghar|makaan|home|house)|"
     r"apna[\s-]?(ghar|makaan|home|house)|"
-    r"new[\s-]?(home|house|flat|property)"
+    r"new[\s-]?(home|house|flat|property)|"
+    r"broker|bayaana|token\s+money|debt\s+trap|karz|"
+    r"ready[\s-]?to[\s-]?move|bana[\s-]?banaya|"
+    r"sasural|dowry|vasiyat|pitra\s+dosh|vastu|"
+    r"mamle|parivaar|dhoka|dushman|police|afsar"
     r")\b",
     re.IGNORECASE,
 )
@@ -114,7 +125,9 @@ _AMBIGUOUS_PROPERTY_TOKENS_RX = re.compile(
 _STRONG_PROPERTY_RX = re.compile(
     r"\b(property|ghar|makaan|makan|plot|zameen|zamin|jamin|jameen|"
     r"land|flat|apartment|home|house|houses|real[\s-]?estate|"
-    r"villa|bungalow|kothi|haveli|griha|paitrik)\b",
+    r"villa|bungalow|kothi|haveli|griha|paitrik|pustaini|ancestral|vivaad|vivad|"
+    r"mamle|parivaar|dhoka|dushman|police|afsar"
+    r")\b",
     re.IGNORECASE,
 )
 _NON_PROPERTY_CTX_RX = re.compile(
@@ -150,7 +163,8 @@ def is_timing_property_question(question: str) -> bool:
     if _STRONG_PROPERTY_RX.search(question):
         return True
     if re.search(r"\b(registry|griha[\s-]?pravesh|vastu\s+muhurat|"
-                 r"property|real[\s-]?estate|shift)\b",
+                 r"property|real[\s-]?estate|shift|construction|muhurat|"
+                 r"ghar|home|house|plot|zameen|land|flat|makaan|purchase|buy)\b",
                  question, re.IGNORECASE):
         return True
     return False

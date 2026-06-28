@@ -39,31 +39,25 @@ def _sign_idx(lon: float) -> int:
     return int(lon / 30.0) % 12
 
 
-def jupiter_sign_changes(start: datetime, years_ahead: int = 5) -> list[dict]:
+def _planet_sign_changes(planet_id: int, start: datetime, years_ahead: int = 5) -> list[dict]:
     """
-    Walk forward in 5-day steps; whenever Jupiter's sign-index changes,
-    record the transition. Returns a list of {start, end, sign_idx} where
-    each entry is one continuous occupancy of a sign.
-
-    Jupiter spends ~12-13 months per sign, so a 5-day grid has ample
-    resolution for month-precision marriage timing.
+    Walk forward in 5-day steps; record sign-index transitions for any planet.
     """
     end_dt = start + timedelta(days=int(365.25 * years_ahead))
     cursor = start
-    cur_sign = _sign_idx(_sidereal_lon(swe.JUPITER, cursor))
+    cur_sign = _sign_idx(_sidereal_lon(planet_id, cursor))
     seg_start = cursor
 
     out: list[dict] = []
     step = timedelta(days=5)
     while cursor < end_dt:
         nxt = cursor + step
-        new_sign = _sign_idx(_sidereal_lon(swe.JUPITER, nxt))
+        new_sign = _sign_idx(_sidereal_lon(planet_id, nxt))
         if new_sign != cur_sign:
-            # Binary-search the day-precise transition between cursor and nxt.
             lo, hi = cursor, nxt
             for _ in range(8):
                 mid = lo + (hi - lo) / 2
-                if _sign_idx(_sidereal_lon(swe.JUPITER, mid)) == cur_sign:
+                if _sign_idx(_sidereal_lon(planet_id, mid)) == cur_sign:
                     lo = mid
                 else:
                     hi = mid
@@ -82,6 +76,91 @@ def jupiter_sign_changes(start: datetime, years_ahead: int = 5) -> list[dict]:
         "sign_idx": cur_sign,
     })
     return out
+
+
+def jupiter_sign_changes(start: datetime, years_ahead: int = 5) -> list[dict]:
+    """
+    Walk forward in 5-day steps; whenever Jupiter's sign-index changes,
+    record the transition. Returns a list of {start, end, sign_idx} where
+    each entry is one continuous occupancy of a sign.
+
+    Jupiter spends ~12-13 months per sign, so a 5-day grid has ample
+    resolution for month-precision marriage timing.
+    """
+    return _planet_sign_changes(swe.JUPITER, start, years_ahead)
+
+
+def venus_sign_changes(start: datetime, years_ahead: int = 3) -> list[dict]:
+    """Venus sign transitions — ~3-4 weeks per sign; used for romance month locks."""
+    return _planet_sign_changes(swe.VENUS, start, years_ahead)
+
+
+def _love_trigger_windows(
+    lagna_sign_idx: int,
+    moon_sign_idx: Optional[int],
+    segments: list[dict],
+    *,
+    years_ahead: int = 3,
+) -> dict:
+    """Jupiter/Venus transiting signs that activate 5H/7H/11H from Lagna or Moon."""
+    SIGNS = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+             "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"]
+    target_offsets = {4, 6, 10}  # 5th, 7th, 11th (0-indexed)
+    targets: dict[int, list[str]] = {}
+    for off in target_offsets:
+        s_l = (lagna_sign_idx + off) % 12
+        targets.setdefault(s_l, []).append(f"L{off + 1}")
+        if moon_sign_idx is not None and moon_sign_idx >= 0:
+            s_m = (moon_sign_idx + off) % 12
+            targets.setdefault(s_m, []).append(f"M{off + 1}")
+
+    windows: list[dict] = []
+    for seg in segments:
+        sidx = seg["sign_idx"]
+        if sidx in targets:
+            windows.append({
+                "start": seg["start"],
+                "end":   seg["end"],
+                "sign":  SIGNS[sidx],
+                "hits":  sorted(set(targets[sidx])),
+            })
+    now_str = (datetime.utcnow()).strftime("%Y-%m-%d")
+    active = next((w for w in windows if w["start"] <= now_str <= w["end"]), None)
+    upcoming = [w for w in windows if w["start"] > now_str][:4]
+    return {"active_window": active, "upcoming_windows": upcoming, "all_windows": windows}
+
+
+def love_jupiter_trigger_windows(
+    lagna_sign_idx: int,
+    moon_sign_idx: Optional[int],
+    start: Optional[datetime] = None,
+    years_ahead: int = 3,
+) -> dict:
+    start = start or datetime.utcnow()
+    segs = jupiter_sign_changes(start, years_ahead=years_ahead)
+    return _love_trigger_windows(lagna_sign_idx, moon_sign_idx, segs, years_ahead=years_ahead)
+
+
+def love_venus_trigger_windows(
+    lagna_sign_idx: int,
+    moon_sign_idx: Optional[int],
+    start: Optional[datetime] = None,
+    years_ahead: int = 2,
+) -> dict:
+    start = start or datetime.utcnow()
+    segs = venus_sign_changes(start, years_ahead=years_ahead)
+    return _love_trigger_windows(lagna_sign_idx, moon_sign_idx, segs, years_ahead=years_ahead)
+
+
+def venus_is_retrograde(when: Optional[datetime] = None) -> bool:
+    """Sidereal Venus speed < 0 → retrograde (Vakri Shukra)."""
+    when = when or datetime.utcnow()
+    try:
+        jd = _to_jd(when)
+        pos, _ = swe.calc_ut(jd, swe.VENUS, _FLAGS)
+        return float(pos[3]) < 0
+    except Exception:
+        return False
 
 
 def jupiter_marriage_trigger_windows(lagna_sign_idx: int,

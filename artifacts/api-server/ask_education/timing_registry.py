@@ -24,6 +24,8 @@ def is_education_timing_question(
         return False
     if _GOVT_EXAM_RX.search(q):
         return False  # career timing
+    if re.search(r"(?ix)\b(loan|karz|emi|debt|borrow)\b", q):
+        return False  # finance timing
     if re.search(
         r"(?ix)\b(interview|joining|offer\s+letter|onboarding|promotion|naukri|job)\b", q
     ):

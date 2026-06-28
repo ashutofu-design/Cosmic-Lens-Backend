@@ -74,6 +74,16 @@ def check_conflicts(remedies: List[Dict[str, Any]],
             "items":    [],
         })
 
+    if topic == "litigation" and severity == "high_stress":
+        warnings.append({
+            "kind":     "SEVERITY_GUARD",
+            "severity": "critical",
+            "message":  ("Severity is `high_stress` (criminal/bail/custody). "
+                          "Qualified criminal lawyer FIRST — remedies are "
+                          "support-only. NEVER skip legal counsel for mantras/gems."),
+            "items":    [],
+        })
+
     # ── Multiple gemstones at once for cost-protection ──────────────
     if len([p for p in planets if p]) >= 3:
         warnings.append({

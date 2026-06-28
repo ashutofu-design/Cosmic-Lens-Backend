@@ -175,7 +175,7 @@ class TestStep1Filter(unittest.TestCase):
             "Rahu": 12, "Ketu": 6,
         })
         d1 = _step1_d1_filter(kundli, 0)
-        self.assertTrue(any("PROGENY-KARAKA" in l
+        self.assertTrue(any("PUTRA-KARAKA" in l
                             for l in d1["Jupiter"]["links"]))
 
     def test_cross_chart_filter_jupiter_always_confirmed(self):

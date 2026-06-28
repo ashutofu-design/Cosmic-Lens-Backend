@@ -48,6 +48,59 @@ def classify_mr_archetype(question: str) -> str:
 
 
 
+    # Devanagari routing (scope gate already passed via _HINDI_MR_RX)
+    if re.search(r"[\u0900-\u097F]", q):
+        if re.search(r"मांगलिक|मंगल\s*दोष", q):
+            return "manglik"
+        if re.search(r"प्रेम\s*विवाह|love\s*marriage|arranged", q, re.I):
+            return "love_vs_arranged"
+        if re.search(r"विश्वास|वफादार|धोख", q) and not re.search(r"आत्मविश्वास", q):
+            return "loyalty_trust"
+        if re.search(r"आत्मविश्वास|सीमा|boundary", q, re.I):
+            return "self_worth"
+        if re.search(r"आकर्षण|रोमांस|प्रेम\s*और", q):
+            return "chemistry"
+        if re.search(r"वापस|पुराना\s*रिश्त", q):
+            return "patchup"
+        if re.search(r"माता-पिता|इंटरकास्ट|राजी|मंजूर", q):
+            return "family_approval"
+        if re.search(r"पेशा|पेशे", q):
+            return "spouse_profession"
+        if re.search(r"अमीर|धन|संपन्न", q):
+            return "spouse_wealth"
+        if re.search(r"शक्ल|आंख|रूप|दिख", q):
+            return "spouse_appearance"
+        if re.search(r"बच्च|संस्कार", q):
+            return "children_parenting"
+        if re.search(r"soulmate|soul\s*mate|कर्म", q, re.I):
+            return "karmic_marriage"
+        if re.search(r"विदेश|यात्र|घर\s*का\s*माहौल|लक्जरी", q):
+            return "lifestyle_marriage"
+        if re.search(r"सच्चा\s*प्यार|डेटिंग", q):
+            return "dating_courtship"
+        if re.search(r"दूसरी\s*शादी", q):
+            return "second_marriage"
+        if re.search(r"लॉन्ग\s*डिस्टेंस|दूर", q):
+            return "long_distance"
+        if re.search(r"एकतरफा", q):
+            return "one_sided_love"
+        if re.search(r"गुप्त", q):
+            return "secret_relationship"
+        if re.search(r"अति\s*लगाव|ईर्ष|obsess", q, re.I):
+            return "obsession"
+        if re.search(r"भावनात्मक|जुड़ाव", q):
+            return "emotional_attachment"
+        if re.search(r"शारीरिक\s*अनुकूल", q):
+            return "bed_intimacy"
+        if re.search(r"तलाक|टूट", q):
+            return "breakup_risk"
+        if re.search(r"खुश|संवाद|स्थिर|विवाह", q):
+            return "general_mr"
+        if re.search(r"स्वभाव|व्यक्तित्व", q):
+            return "partner_nature"
+
+
+
     # --- Love language / affection style (native or partner) ---
     if re.search(r"\b(love\s*language|care\s*dikhane|affection\s*style)\b", q):
         return "partner_nature"
@@ -66,7 +119,7 @@ def classify_mr_archetype(question: str) -> str:
 
         r"(?ix)\b("
 
-        r"height|lamba[iy]?|complexion|rang|face|chehra|eyes?|aankh\w*|hair|baal|"
+        r"height|tall\b|lamba[iy]?|complexion|rang|face|chehra|eyes?|aankh\w*|hair|baal|"
 
         r"body\s*type|figure|dress|dressing|voice|awaaz|aura|attract\w*|beautiful|"
 
@@ -128,7 +181,15 @@ def classify_mr_archetype(question: str) -> str:
 
     # --- Children / parenting / family values ---
 
-    if re.search(
+    try:
+        from ask_children.children_registry import (  # type: ignore
+            is_children_static_question,
+            is_mr_spouse_children_question,
+        )
+
+        if is_children_static_question(q) and not is_mr_spouse_children_question(q):
+            pass
+        elif re.search(
 
         r"(?ix)\b("
 
@@ -148,9 +209,33 @@ def classify_mr_archetype(question: str) -> str:
 
         or re.search(r"\b(parenting|bachon|children|family\s*values)\b", q)
 
-    ):
+        ):
 
-        return "children_parenting"
+            return "children_parenting"
+    except Exception:
+        if re.search(
+
+            r"(?ix)\b("
+
+            r"parenting|parent\s*style|bachon|bacchon|children|kids?|"
+
+            r"family\s*values?|sanskaar|bachch"
+
+            r")\b",
+
+            q,
+
+        ) and (
+
+            _has_spouse(q)
+
+            or re.search(r"\b(marriage|shaadi|after\s*marriage|partner)\b", q)
+
+            or re.search(r"\b(parenting|bachon|children|family\s*values)\b", q)
+
+        ):
+
+            return "children_parenting"
 
 
 
@@ -198,8 +283,29 @@ def classify_mr_archetype(question: str) -> str:
 
 
 
-    if re.search(r"(?ix)\b(red\s*flags?|green\s*flags?)\b", q):
+    if re.search(r"\b(red\s*flags?|green\s*flags?)\b", q):
         return "dating_courtship"
+
+    # --- Patchup (before dating / ex-wapas) ---
+    if re.search(
+        r"\b(patch\s*up|patchup|reconcile|reconciliation|wapas|return|laut|maan\s+jayega)\b",
+        q,
+    ) or (
+        re.search(r"\b(ex\b|purana\s*partner|former\s*partner|past\s*love)\b", q)
+        and re.search(r"\b(wapas|return|laut|aayega|aayegi|patch|sakta|sakti)\b", q)
+    ):
+        return "patchup"
+
+    # --- One-sided (before generic dating/pyaar+hoga) ---
+    if re.search(
+        r"\b(one\s*sided|ek\s*tarfa|ektarafa|crush|proposal|propose|"
+        r"meri\s+taraf\s+se|us\s+ko\s+pasand|tarfa\s*pyaar|pyaar\s*tarfa)\b",
+        q,
+    ) or (
+        re.search(r"\baccept\b", q)
+        and re.search(r"\b(tarfa|crush|one\s*sided|ek\s*tarfa|pyaar|pyar)\b", q)
+    ):
+        return "one_sided_love"
 
     # --- Dating / courtship / true love / flags ---
 
@@ -220,15 +326,11 @@ def classify_mr_archetype(question: str) -> str:
         q,
 
     ) or (
-
         re.search(r"\b(pyaar|pyar|love|rishta)\b", q)
-
         and re.search(r"\b(milega|milegi|hoga|hogi|sachcha|true)\b", q)
-
         and not re.search(r"\barrang", q)
-
+        and not re.search(r"\b(patch\s*up|patchup|wapas|ex\b|ek\s*tarfa|tarfa\s*pyaar|one\s*sided)\b", q)
         and not _has_spouse(q)
-
     ):
 
         return "dating_courtship"
@@ -333,7 +435,7 @@ def classify_mr_archetype(question: str) -> str:
 
     if re.search(
 
-        r"\b(bed|conjugal|sexual|sex\b|suhag\s*raat|private\s*life|physical\s*compat)\b", q
+        r"\b(bed|conjugal|sexual|sex\b|suhag\s*raat|private\s*life|physical\s*compat\w*|bedroom)\b", q
 
     ):
 
@@ -343,7 +445,7 @@ def classify_mr_archetype(question: str) -> str:
 
     # --- Self-worth ---
 
-    if re.search(r"\b(self\s*worth|boundar|insecure|insecurity|value\s*myself)\b", q):
+    if re.search(r"\b(self\s*worth|boundar\w*|insecure|insecurity|value\s*myself)\b", q):
 
         return "self_worth"
 
@@ -413,7 +515,7 @@ def classify_mr_archetype(question: str) -> str:
 
         r"\b(cheat|cheating|dhokha|dhoka|betray|loyal\w*|faithful|trust|vishwas|"
 
-        r"commitment|commit|nibha\w*|wafad\w*|vafad\w*|third\s+person)\b",
+        r"commitment|commit|nibha\w*|wafad\w*|vafad\w*|third\s+person|interference)\b",
 
         q,
 
@@ -444,6 +546,10 @@ def classify_mr_archetype(question: str) -> str:
         return "love_vs_arranged"
 
     if re.search(r"\b(khud|apni)\s*pasand\b", q) and re.search(r"\b(ghar\s*wal\w*|parents?|family)\b", q):
+
+        return "love_vs_arranged"
+
+    if re.search(r"\b(ghar\s*walon|ghar\s*wal\w*)\b", q) and re.search(r"\bpasand\b", q):
 
         return "love_vs_arranged"
 
@@ -513,6 +619,8 @@ def classify_mr_archetype(question: str) -> str:
 
         q,
 
+    ) and not re.search(
+        r"\b(bedroom|bed\b|conjugal|private\s*life|physical\s*compat|intimacy|suhag)\b", q
     ):
 
         return "general_mr"

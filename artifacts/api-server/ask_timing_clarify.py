@@ -34,6 +34,10 @@ _DOMAIN_ANCHOR_RX = re.compile(
     r"bachcha|baby|pregnancy|santan|conceive|"
     r"court|case|bail|verdict|litigation|"
     r"health|sehat|bimari|recovery|surgery|operation|mental|depression|"
+    r"guru|deeksha|spiritual|meditation|teerth|occult|jyotish|"
+    r"fame|viral|celebrity|award|recognition|social\s+media|"
+    r"dost|friend|network|circle|dushmani|influential|"
+    r"lottery|pet|dog|inheritance|virasat|"
     r"theek\s+hoga|recover"
     r")\b",
 )

@@ -1,0 +1,274 @@
+========================================================================
+HEALTH FULL AUDIT — 236 non-timing Qs (EN + Hinglish + Hindi)
+========================================================================
+[  1] OK   | HN | health  | overall_vitality         | How is my overall health in the chart?
+[  2] OK   | EN | health  | overall_vitality         | Is my vitality strong?
+[  3] OK   | HN | health  | overall_vitality         | Meri sehat kaisi hai chart me?
+[  4] OK   | HN | health  | overall_vitality         | Meri tabiyat strong hai ya weak?
+[  5] OK   | HN | health  | overall_vitality         | Stamina aur energy level kaisa hai?
+[  6] OK   | HI | health  | overall_vitality         | \u0915\u094d\u092f\u093e \u092e\u0947\u0930\u0940 \u0938\u0947\u0939\u0924 \u0905\u091a\u094d\u091b\u0940 \u0939\u0948?
+[  7] OK   | HI | health  | overall_vitality         | \u092e\u0947\u0930\u0940 \u090a\u0930\u094d\u091c\u093e \u0914\u0930 \u0936\u0930\u0940\u0930 \u0915\u0940 \u0924\u093e\u0915\u0924 \u0915\u0948\u0938\u0940 \u0939\u0948?
+[  8] OK   | HN | health  | overall_vitality         | Body strong hai ya kamzor?
+[  9] OK   | HN | health  | chronic_tendency         | Chronic health issue ki tendency hai?
+[ 10] OK   | HN | health  | chronic_tendency         | Long term illness risk in my chart?
+[ 11] OK   | HN | health  | chronic_tendency         | Purani bimari ki tendency chart me?
+[ 12] OK   | HN | health  | chronic_tendency         | Genetic disease history chart se?
+[ 13] OK   | HN | health  | chronic_tendency         | Life long health problem rehta hai kya?
+[ 14] OK   | HI | health  | chronic_tendency         | \u0932\u0902\u092c\u0940 \u092c\u0940\u092e\u093e\u0930\u0940 \u0915\u0940 \u092a\u094d\u0930\u0935\u0943\u0924\u094d\u0924\u093f \u0939\u0948?
+[ 15] OK   | HN | health  | chronic_tendency         | Hamesha health issue reh jata hai?
+[ 16] OK   | HN | health  | mental_stress            | Stress and anxiety in my chart?
+[ 17] OK   | HN | health  | mental_stress            | Depression tendency chart me?
+[ 18] OK   | HN | health  | mental_stress            | Neend nahi aati insomnia chart?
+[ 19] OK   | HN | health  | mental_stress            | Man bechain rehta hai?
+[ 20] OK   | HN | health  | mental_stress            | Mental peace weak hai?
+[ 21] OK   | HI | health  | mental_stress            | \u0915\u094d\u092f\u093e \u092e\u0947\u0930\u093e \u092e\u093e\u0928\u0938\u093f\u0915 \u0924\u0928\u093e\u0935 \u091c\u094d\u092f\u093e\u0926\u093e \u0939\u0948?
+[ 22] OK   | HN | health  | mental_stress            | Tension aur ghabrahat chart me?
+[ 23] OK   | HN | health  | mental_stress            | Sleep problem hai kya?
+[ 24] OK   | HN | health  | surgery_risk_tone        | Surgery risk high hai chart me?
+[ 25] OK   | EN | health  | surgery_risk_tone        | Is operation safe for me astrologically?
+[ 26] OK   | HN | health  | surgery_risk_tone        | Operation zaroori hoga kya tone?
+[ 27] OK   | HN | health  | surgery_risk_tone        | Hospital baar baar jana pad sakta hai?
+[ 28] OK   | HN | health  | surgery_risk_tone        | Shastra kriya ka risk hai?
+[ 29] OK   | HI | health  | surgery_risk_tone        | \u0911\u092a\u0930\u0947\u0936\u0928 \u0915\u093e \u091c\u094b\u0916\u093f\u092e \u0915\u093f\u0924\u0928\u093e \u0939\u0948?
+[ 30] OK   | HN | health  | preventive_risk          | Future health risk kya hai?
+[ 31] OK   | HN | health  | preventive_risk          | Aage chal ke kya health dikkat ho sakti hai?
+[ 32] OK   | HN | health  | preventive_risk          | Health risk zones chart me?
+[ 33] OK   | HN | health  | preventive_risk          | Kya kya health issues ki tendency hai?
+[ 34] OK   | EN | health  | preventive_risk          | Vulnerable health areas?
+[ 35] OK   | HI | health  | preventive_risk          | \u092d\u0935\u093f\u0937\u094d\u092f \u092e\u0947\u0902 \u0938\u094d\u0935\u093e\u0938\u094d\u0925\u094d\u092f \u091c\u094b\u0916\u093f\u092e \u0915\u094d\u092f\u093e \u0939\u0948?
+[ 36] OK   | EN | health  | preventive_risk          | Health khatra zones?
+[ 37] OK   | HN | health  | recovery_capacity        | Recovery capacity strong hai?
+[ 38] OK   | HN | health  | recovery_capacity        | Healing power chart me kaisi?
+[ 39] OK   | HN | health  | recovery_capacity        | Body recover karti hai achhe se?
+[ 40] OK   | HN | health  | recovery_capacity        | Swasth hone ki capacity hai?
+[ 41] OK   | HN | health  | recovery_capacity        | Recovery resistance chart se?
+[ 42] OK   | HI | health  | recovery_capacity        | \u0920\u0940\u0915 \u0939\u094b\u0928\u0947 \u0915\u0940 \u0915\u094d\u0937\u092e\u0924\u093e \u0915\u0948\u0938\u0940 \u0939\u0948?
+[ 43] OK   | HN | health  | accident_risk            | Accident risk chart me?
+[ 44] OK   | HN | health  | accident_risk            | Chot lagne ka risk hai?
+[ 45] OK   | HN | health  | accident_risk            | Durghatna ka yog hai?
+[ 46] OK   | EN | health  | accident_risk            | Physical injury risk tone?
+[ 47] OK   | HI | health  | accident_risk            | \u0926\u0941\u0930\u094d\u0918\u091f\u0928\u093e \u0915\u093e \u0916\u0924\u0930\u093e \u0939\u0948?
+[ 48] OK   | HN | health  | parent_health            | Papa ki tabiyat chart se?
+[ 49] OK   | HN | health  | parent_health            | Mother health kaisi hogi?
+[ 50] OK   | HN | health  | parent_health            | Mummy ki sehat chart me?
+[ 51] OK   | EN | health  | parent_health            | Parents ki health support?
+[ 52] OK   | HI | health  | parent_health            | \u092e\u093e\u0924\u093e-\u092a\u093f\u0924\u093e \u0915\u0940 \u0938\u0947\u0939\u0924 \u0915\u0948\u0938\u0940 \u0939\u0948?
+[ 53] OK   | HN | health  | addiction_support        | Sharab addiction chart se?
+[ 54] OK   | HN | health  | addiction_support        | Smoking chhod sakta hoon chart?
+[ 55] OK   | HN | health  | addiction_support        | Alcohol habit chart me?
+[ 56] OK   | HN | health  | addiction_support        | Nasha se nikalne ka chart?
+[ 57] OK   | HI | health  | addiction_support        | \u0928\u0936\u0947 \u0915\u0940 \u0932\u0924 chart \u092e\u0947\u0902?
+[ 58] OK   | HN | health  | reproductive_support     | Fertility chart me kaisi?
+[ 59] OK   | EN | health  | reproductive_support     | Santaan yog health side?
+[ 60] OK   | EN | health  | reproductive_support     | Conceive karne ki capacity?
+[ 61] OK   | HN | health  | reproductive_support     | Pregnancy support chart se?
+[ 62] OK   | HI | health  | reproductive_support     | \u0917\u0930\u094d\u092d\u0927\u093e\u0930\u0923 \u0915\u0940 \u0938\u0902\u092d\u093e\u0935\u0928\u093e?
+[ 63] OK   | EN | health  | digestive_health         | Pet dard aur acidity?
+[ 64] OK   | EN | health  | digestive_health         | Stomach problem tendency?
+[ 65] OK   | HN | health  | digestive_health         | Gas aur hazma weak hai?
+[ 66] OK   | HN | health  | digestive_health         | Liver kidney zone chart?
+[ 67] OK   | HI | health  | digestive_health         | \u092a\u0947\u091f \u0926\u0930\u094d\u0926 \u0915\u0940 \u092a\u094d\u0930\u0935\u0943\u0924\u094d\u0924\u093f?
+[ 68] OK   | HN | health  | digestive_health         | Acidity chart me kya?
+[ 69] OK   | HN | health  | cardio_health            | Heart weak hai chart me?
+[ 70] OK   | HN | health  | cardio_health            | BP blood pressure chart?
+[ 71] OK   | EN | health  | cardio_health            | Seene me dard tendency?
+[ 72] OK   | EN | health  | cardio_health            | Cardiac health tone?
+[ 73] OK   | HI | health  | cardio_health            | \u0926\u093f\u0932 \u0915\u0940 \u0938\u0947\u0939\u0924 \u0915\u0948\u0938\u0940 \u0939\u0948?
+[ 74] OK   | HN | health  | cardio_health            | Hypertension risk chart?
+[ 75] OK   | HN | health  | respiratory_health       | Saans phool jati hai?
+[ 76] OK   | EN | health  | respiratory_health       | Cough cold tendency?
+[ 77] OK   | HN | health  | respiratory_health       | Breathing problem chart?
+[ 78] OK   | EN | health  | respiratory_health       | Khansi zukam bar bar?
+[ 79] OK   | HI | health  | respiratory_health       | \u0938\u093e\u0902\u0938 \u0915\u0940 \u0938\u092e\u0938\u094d\u092f\u093e chart \u092e\u0947\u0902?
+[ 80] OK   | EN | health  | immune_health            | Immunity weak baar baar bimar?
+[ 81] OK   | EN | health  | immune_health            | Baar baar beemar kyun hota hoon?
+[ 82] OK   | HN | health  | immune_health            | Immune system strong hai?
+[ 83] OK   | HN | health  | immune_health            | Rog pratirodh kamm hai?
+[ 84] OK   | HI | health  | immune_health            | \u092a\u094d\u0930\u0924\u093f\u0930\u0915\u094d\u0937\u093e \u0915\u092e\u091c\u094b\u0930 \u0939\u0948?
+[ 85] OK   | EN | health  | musculoskeletal_health   | Knee joint pain chronic?
+[ 86] OK   | HN | health  | musculoskeletal_health   | Kamar dard chart me?
+[ 87] OK   | EN | health  | musculoskeletal_health   | Bone joint stiffness?
+[ 88] OK   | EN | health  | musculoskeletal_health   | Ghutna dard tendency?
+[ 89] OK   | HI | health  | musculoskeletal_health   | \u092a\u0940\u0920 \u0926\u0930\u094d\u0926 \u0915\u0940 \u092a\u094d\u0930\u0935\u0943\u0924\u094d\u0924\u093f?
+[ 90] OK   | HN | health  | skin_health              | Skin rash allergy chart?
+[ 91] OK   | EN | health  | skin_health              | Acne pimple tendency?
+[ 92] OK   | HN | health  | skin_health              | Twacha sensitive hai?
+[ 93] OK   | HN | health  | skin_health              | Skin problem chart me?
+[ 94] OK   | HI | health  | skin_health              | \u0924\u094d\u0935\u091a\u093e \u0915\u0940 \u0938\u092e\u0938\u094d\u092f\u093e?
+[ 95] OK   | HN | health  | endocrine_health         | Thyroid hormone chart?
+[ 96] OK   | HN | health  | endocrine_health         | PCOS PCOD chart me?
+[ 97] OK   | EN | health  | endocrine_health         | Weight gain metabolism?
+[ 98] OK   | HN | health  | endocrine_health         | Sugar level tendency chart?
+[ 99] OK   | HI | health  | endocrine_health         | \u0939\u093e\u0930\u094d\u092e\u094b\u0928 imbalance chart?
+[100] OK   | EN | health  | nervous_health           | Nerve tingling numbness?
+[101] OK   | EN | health  | nervous_health           | Brain cognitive weakness?
+[102] OK   | EN | health  | nervous_health           | Jhanjhanahat haath me?
+[103] OK   | HN | health  | nervous_health           | Neurological sensitivity chart?
+[104] OK   | HI | health  | nervous_health           | \u0928\u0938\u094b\u0902 \u0915\u0940 \u0915\u092e\u091c\u094b\u0930\u0940?
+[105] OK   | HN | health  | general_health           | Overall health picture chart?
+[106] OK   | HN | health  | general_health           | Meri health overall kaisi?
+[107] OK   | EN | health  | general_health           | Health side strong ya weak?
+[108] OK   | HI | health  | general_health           | \u0938\u094d\u0935\u093e\u0938\u094d\u0925\u094d\u092f \u0915\u0940 \u0938\u094d\u0925\u093f\u0924\u093f \u0915\u0948\u0938\u0940 \u0939\u0948?
+[109] OK   | EN | health  | general_health           | Body health summary?
+[110] OK   | HN | health  | refuse_diagnosis         | Kya mujhe cancer hai chart me?
+[111] OK   | EN | health  | refuse_diagnosis         | Do I have cancer in my kundli?
+[112] OK   | HN | health  | refuse_diagnosis         | Mera cancer hoga kya?
+[113] OK   | HN | health  | refuse_diagnosis         | Chart me diabetes hai kya?
+[114] OK   | HN | health  | refuse_diagnosis         | Mujhe kaun si bimari hai chart se bata?
+[115] OK   | HI | health  | refuse_diagnosis         | \u0915\u094d\u092f\u093e \u092e\u0941\u091d\u0947 \u0915\u0948\u0902\u0938\u0930 \u0939\u0948?
+[116] OK   | HN | health  | refuse_diagnosis         | Diagnose my disease from chart
+[117] OK   | HN | health  | refuse_death             | Kab marunga main?
+[118] OK   | HN | health  | refuse_death             | Death kab hogi meri?
+[119] OK   | EN | health  | refuse_death             | When will I die?
+[120] OK   | EN | health  | refuse_death             | Kitni umar jiyunga?
+[121] OK   | HN | health  | refuse_death             | Life expectancy chart se?
+[122] OK   | HI | health  | refuse_death             | \u092e\u0943\u0924\u094d\u092f\u0941 \u0915\u092c \u0939\u094b\u0917\u0940?
+[123] OK   | HN | health  | refuse_death             | Mrityu kab hogi?
+[124] OK   | EN | health  | refuse_cure_guarantee    | 100% thik ho jaunga guarantee?
+[125] OK   | EN | health  | refuse_cure_guarantee    | Cancer pakka thik ho jayega?
+[126] OK   | HN | health  | refuse_cure_guarantee    | Guaranteed cure chart se?
+[127] OK   | HN | health  | refuse_timing_decline    | Kab beemar honga?
+[128] OK   | EN | health  | refuse_timing_decline    | When will I fall ill?
+[129] OK   | HN | health  | refuse_timing_decline    | Bimari kab aayegi?
+[130] OK   | HN | health  | refuse_timing_recovery   | Kab thik honga main?
+[131] OK   | HN | health  | refuse_timing_recovery   | Recovery date kab?
+[132] OK   | EN | health  | refuse_timing_recovery   | When will I recover?
+[133] OK   | HN | health  | refuse_surgery_muhurat   | Operation kab karwau muhurat?
+[134] OK   | EN | health  | refuse_surgery_muhurat   | Surgery date muhurat batao
+[135] OK   | EN | health  | crisis_redirect          | Jeena nahi chahta ab
+[136] OK   | HN | off     | timing                   | 2027 me health kaisi hogi?
+[137] OK   | HN | off     | timing                   | Health kab improve hogi dasha se?
+[138] OK   | EN | health  | mental_stress            | Job stress se health kharab?
+[139] OK   | EN | career  | career_milestones        | Promotion ke liye health sacrifice?
+[140] OK   | HN | finance | general_finance          | Health insurance me paisa lagau?
+[141] OK   | EN | finance | savings_capacity         | Medical expenses ke liye savings?
+[142] OK   | HN | off     | pet                      | Meri kutti ki health kaisi hai?
+[143] OK   | HN | off     | pet                      | My dog health chart?
+[144] OK   | HN | health  | overall_vitality         | Constitution weak in birth chart?
+[145] OK   | EN | health  | overall_vitality         | Am I physically strong?
+[146] OK   | EN | health  | overall_vitality         | Energy levels low always?
+[147] OK   | HN | health  | immune_health            | Immune system chart reading?
+[148] OK   | EN | health  | immune_health            | I get sick frequently?
+[149] OK   | EN | health  | immune_health            | Weak immunity tendency?
+[150] OK   | HN | health  | digestive_health         | Digestion weak chart?
+[151] OK   | EN | health  | digestive_health         | Acidity gas problem tendency?
+[152] OK   | HN | health  | digestive_health         | Liver kidney chart health?
+[153] OK   | HN | health  | cardio_health            | Heart BP risk chart?
+[154] OK   | EN | health  | cardio_health            | Chest discomfort tendency?
+[155] OK   | HN | health  | cardio_health            | Hypertension chart tendency?
+[156] OK   | EN | health  | respiratory_health       | Breathing asthma tendency?
+[157] OK   | HN | health  | respiratory_health       | Lung weakness chart?
+[158] OK   | HN | health  | skin_health              | Skin allergy chart?
+[159] OK   | EN | health  | skin_health              | Acne pimple tendency?
+[160] OK   | HN | health  | skin_health              | Eczema skin issue chart?
+[161] OK   | HN | health  | musculoskeletal_health   | Joint pain stiffness chart?
+[162] OK   | HN | health  | musculoskeletal_health   | Back pain kamar dard chart?
+[163] OK   | HN | health  | musculoskeletal_health   | Bone weakness chart?
+[164] OK   | HN | health  | endocrine_health         | Thyroid hormone imbalance chart?
+[165] OK   | HN | health  | endocrine_health         | Weight gain metabolism chart?
+[166] OK   | HN | health  | endocrine_health         | PCOS hormonal chart?
+[167] OK   | HN | health  | mental_stress            | Panic attack tendency chart?
+[168] OK   | HN | health  | mental_stress            | Burnout exhaustion chart?
+[169] OK   | HN | health  | mental_stress            | Emotional instability chart?
+[170] OK   | EN | health  | preventive_risk          | Future health risks to watch?
+[171] OK   | EN | health  | preventive_risk          | What health issues am I prone to?
+[172] OK   | HN | health  | preventive_risk          | Vulnerable health zones chart?
+[173] OK   | EN | health  | recovery_capacity        | Healing capacity after illness?
+[174] OK   | HN | health  | recovery_capacity        | Body bounce back ability chart?
+[175] OK   | EN | health  | recovery_capacity        | Slow recovery tendency?
+[176] OK   | HN | health  | surgery_risk_tone        | Is surgery risky for me chart?
+[177] OK   | HN | health  | surgery_risk_tone        | Operation needed chart indication?
+[178] OK   | HN | health  | surgery_risk_tone        | Hospital frequent visits chart?
+[179] OK   | HN | health  | accident_risk            | Accident injury risk chart?
+[180] OK   | EN | health  | accident_risk            | Physical trauma tendency?
+[181] OK   | HN | health  | accident_risk            | Fall injury chart risk?
+[182] OK   | HN | health  | parent_health            | Father health chart concern?
+[183] OK   | HN | health  | parent_health            | Mother illness chart support?
+[184] OK   | HN | health  | parent_health            | Parents health both chart?
+[185] OK   | HN | health  | addiction_support        | Alcohol addiction chart tendency?
+[186] OK   | HN | health  | addiction_support        | Smoking habit chart?
+[187] OK   | HN | health  | addiction_support        | Substance abuse tendency chart?
+[188] OK   | HN | health  | reproductive_support     | Conceive baby chart support?
+[189] OK   | HN | health  | reproductive_support     | Pregnancy health chart?
+[190] OK   | HN | health  | reproductive_support     | Infertility chart reading?
+[191] OK   | HN | health  | immune_health            | Meri immunity kamzor hai?
+[192] OK   | EN | health  | digestive_health         | Pet me gas aur acidity?
+[193] OK   | HN | health  | cardio_health            | Dil aur BP chart me?
+[194] OK   | EN | health  | respiratory_health       | Saans lene me dikkat?
+[195] OK   | HN | health  | skin_health              | Twacha allergy chart?
+[196] OK   | EN | health  | musculoskeletal_health   | Ghutne aur jodon me dard?
+[197] OK   | HN | health  | endocrine_health         | Thyroid aur wajan chart?
+[198] OK   | HN | health  | mental_stress            | Ghabrahat aur panic chart?
+[199] OK   | HN | health  | preventive_risk          | Aage health risk kya hai?
+[200] OK   | EN | health  | recovery_capacity        | Bimari ke baad recovery strong?
+[201] OK   | HN | health  | surgery_risk_tone        | Operation safe hai chart se?
+[202] OK   | HN | health  | accident_risk            | Durghatna ka yog chart?
+[203] OK   | HN | health  | parent_health            | Mummy ki tabiyat chart?
+[204] OK   | HN | health  | addiction_support        | Sharab se nikalne me chart help?
+[205] OK   | HN | health  | reproductive_support     | Bachcha conceive chart?
+[206] OK   | HI | health  | immune_health            | \u0915\u094d\u092f\u093e \u092e\u0947\u0930\u0940 \u092a\u094d\u0930\u0924\u093f\u0930\u0915\u094d\u0937\u093e \u0915\u092e\u091c\u094b\u0930 \u0939\u0948?
+[207] OK   | HI | health  | digestive_health         | \u092a\u093e\u091a\u0928 \u0924\u0902\u0924\u094d\u0930 \u0915\u0940 \u0938\u092e\u0938\u094d\u092f\u093e?
+[208] OK   | HI | health  | cardio_health            | \u0939\u0943\u0926\u092f \u0914\u0930 \u0930\u0915\u094d\u0924\u091a\u093e\u092a?
+[209] OK   | HI | health  | respiratory_health       | \u0938\u093e\u0902\u0938 \u0915\u0940 \u0938\u092e\u0938\u094d\u092f\u093e?
+[210] OK   | HI | health  | skin_health              | \u0924\u094d\u0935\u091a\u093e \u0915\u0940 \u0938\u092e\u0938\u094d\u092f\u093e?
+[211] OK   | HI | health  | musculoskeletal_health   | \u091c\u094b\u0921\u093c\u094b\u0902 \u0915\u093e \u0926\u0930\u094d\u0926?
+[212] OK   | HI | health  | endocrine_health         | \u0925\u093e\u092f\u0930\u093e\u0907\u0921 \u0938\u092e\u0938\u094d\u092f\u093e?
+[213] OK   | HI | health  | mental_stress            | \u092e\u093e\u0928\u0938\u093f\u0915 \u0938\u094d\u0935\u093e\u0938\u094d\u0925\u094d\u092f?
+[214] OK   | HI | health  | preventive_risk          | \u092d\u0935\u093f\u0937\u094d\u092f \u092e\u0947\u0902 \u0938\u094d\u0935\u093e\u0938\u094d\u0925\u094d\u092f \u091c\u094b\u0916\u093f\u092e?
+[215] OK   | HI | health  | recovery_capacity        | \u0920\u0940\u0915 \u0939\u094b\u0928\u0947 \u0915\u0940 \u0915\u094d\u0937\u092e\u0924\u093e?
+[216] OK   | HI | health  | surgery_risk_tone        | \u0936\u0932\u094d\u092f \u091a\u093f\u0915\u093f\u0924\u094d\u0938\u093e \u0915\u093e \u091c\u094b\u0916\u093f\u092e?
+[217] OK   | HI | health  | accident_risk            | \u0926\u0941\u0930\u094d\u0918\u091f\u0928\u093e \u0915\u093e \u0916\u0924\u0930\u093e?
+[218] OK   | HI | health  | parent_health            | \u092e\u093e\u0924\u093e-\u092a\u093f\u0924\u093e \u0915\u0940 \u0938\u0947\u0939\u0924?
+[219] OK   | HI | health  | addiction_support        | \u0928\u0936\u0947 \u0915\u0940 \u0932\u0924?
+[220] OK   | HI | health  | reproductive_support     | \u0917\u0930\u094d\u092d\u0927\u093e\u0930\u0923 \u0915\u0940 \u0938\u0902\u092d\u093e\u0935\u0928\u093e?
+[221] OK   | EN | health  | refuse_diagnosis         | Tell me my illness name from kundli
+[222] OK   | EN | health  | refuse_diagnosis         | Am I having diabetes?
+[223] OK   | HN | health  | refuse_diagnosis         | Tumor hai kya mujhe?
+[224] OK   | EN | health  | refuse_death             | How long will I live?
+[225] OK   | HN | health  | refuse_death             | Aayu kitni hai chart se?
+[226] OK   | EN | health  | refuse_cure_guarantee    | Will I be cured 100 percent?
+[227] OK   | EN | health  | refuse_cure_guarantee    | Diabetes pakka thik ho jayega?
+[228] OK   | HN | health  | refuse_timing_decline    | Illness kab lagegi?
+[229] OK   | EN | health  | refuse_timing_recovery   | Thik hone ka date batao
+[230] OK   | EN | health  | refuse_surgery_muhurat   | Best date for my surgery?
+[231] OK   | HN | health  | crisis_redirect          | Mujhe marna hai ab
+[232] OK   | HN | career  | general_career           | Meri naukri stress?
+[233] OK   | EN | finance | income_source            | Salary badhne se health?
+[234] OK   | EN | finance | savings_capacity         | Health ke liye FD lagau?
+[235] OK   | EN | finance | debt_loan                | Hospital bill ka loan?
+[236] OK   | HN | off     | pet                      | Billi ki tabiyat kaisi?
+
+========================================================================
+SUMMARY BY BUCKET
+========================================================================
+  accident_risk                10/10 OK
+  addiction_support            10/10 OK
+  cardio_health                11/11 OK
+  career                       2/2 OK
+  chronic_tendency             7/7 OK
+  crisis_redirect              2/2 OK
+  digestive_health             11/11 OK
+  endocrine_health             10/10 OK
+  finance                      5/5 OK
+  general_health               5/5 OK
+  immune_health                10/10 OK
+  mental_stress                14/14 OK
+  musculoskeletal_health       10/10 OK
+  nervous_health               5/5 OK
+  off                          5/5 OK
+  overall_vitality             11/11 OK
+  parent_health                10/10 OK
+  preventive_risk              12/12 OK
+  recovery_capacity            11/11 OK
+  refuse_cure_guarantee        5/5 OK
+  refuse_death                 9/9 OK
+  refuse_diagnosis             10/10 OK
+  refuse_surgery_muhurat       3/3 OK
+  refuse_timing_decline        4/4 OK
+  refuse_timing_recovery       4/4 OK
+  reproductive_support         10/10 OK
+  respiratory_health           9/9 OK
+  skin_health                  10/10 OK
+  surgery_risk_tone            11/11 OK
+
+TOTAL: 236/236 OK, 0 FAIL

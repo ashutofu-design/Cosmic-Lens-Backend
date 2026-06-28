@@ -40,6 +40,7 @@ _CAREER_EVENT_RX = re.compile(
     r"job\s+change|naukri\s+badlo|switch\s+job|"
     r"govt\s+job\s+(?:milega|lagega|hoga)|sarkari\s+naukri\s+(?:milegi|lagegi)|"
     r"upsc\s+clear|ssc\s+clear|exam\s+clear|selection\s+hoga|"
+    r"campus\s+placement|placement\s+ke\s+zariye|"
     r"resign|istifa|notice\s+de|job\s+chod|naukri\s+chod|"
     r"interview\s+(?:clear|pass|hoga)|joining\s+(?:hogi|milegi)|"
     r"layoff|job\s+loss|recovery\s+(?:hogi|hoga)|notice\s+period|demotion|setback|"
@@ -217,7 +218,18 @@ def should_defer_career_timing(question: str) -> bool:
     except Exception:
         pass
     try:
-        from ask_travel.travel_registry import is_travel_timing_question  # type: ignore
+        from ask_education.timing_registry import is_education_timing_question  # type: ignore
+
+        if is_education_timing_question(q) and not re.search(
+            r"(?ix)\b(job|naukri|career|promotion|govt\s+job|interview|joining|"
+            r"offer\s+letter|onboarding)\b",
+            q,
+        ):
+            return True
+    except Exception:
+        pass
+    try:
+        from ask_travel.timing_registry import is_travel_timing_question  # type: ignore
 
         if is_travel_timing_question(q) and not re.search(
             r"(?ix)\b(job|naukri|career|promotion|office|salary|company|transfer|"

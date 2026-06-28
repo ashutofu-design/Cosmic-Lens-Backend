@@ -151,6 +151,139 @@ def verify_career_answer(
     return (len(issues) == 0, issues)
 
 
+_TIMING_Q_RX = re.compile(
+    r"(?ix)\b(kab|kab\s+hoga|kab\s+hogi|when|kis\s+saal|kitna\s+time|timing|window)\b"
+)
+_RED_POSITIVE_SWITCH_RX = re.compile(
+    r"(?ix)\b("
+    r"favourable.*switch|switch.*favourable|good time to switch|abhi switch|switch abhi|"
+    r"actively (?:apply|interview)|change kar le|change kar lo|"
+    r"green signal|go ahead.*change|interview shuru"
+    r")\b"
+)
+_GREEN_DEFER_RX = re.compile(
+    r"(?ix)\b(wait\s+\d|ruk\s+ja|defer|avoid switch|risk hai|stable role)\b"
+)
+_DASHA_WORD_RX = re.compile(r"(?ix)\b(mahadasha|antardasha|dasha|md\b|ad\b)\b")
+
+
+def verify_career_timing_answer(
+    question: str,
+    answer: str,
+    meta: dict[str, Any],
+) -> tuple[bool, list[str]]:
+    """Timing Q: verdict + strategy + dasha must align with engine (no LLM drift)."""
+    issues: list[str] = []
+    text = (answer or "").strip()
+    q = (question or "").strip()
+    if not text or not _TIMING_Q_RX.search(q):
+        return True, []
+
+    verdict = str(meta.get("verdict") or "").lower()
+    strategy = ""
+    if meta.get("summary"):
+        strategy = str((meta.get("summary") or [""])[0])
+    dasha_trace = meta.get("dasha_trace") if isinstance(meta.get("dasha_trace"), dict) else {}
+
+    if verdict == "red_avoid":
+        if _RED_POSITIVE_SWITCH_RX.search(text):
+            issues.append("red_verdict_but_positive_switch")
+        if not _GREEN_DEFER_RX.search(text) and not re.search(
+            r"(?ix)\b(ruk|wait|defer|risk|stable|consolidat|patience)\b", text
+        ):
+            issues.append("red_verdict_missing_wait_signal")
+    elif verdict == "green_go":
+        if re.search(r"(?ix)\b(abhi switch mat|avoid change|ruk ja|wait karo)\b", text):
+            issues.append("green_verdict_but_defer_language")
+
+    if strategy:
+        if "4-6" in strategy and not re.search(r"(?ix)\b(4|5|6|char)\s*(-\s*)?(4|5|6|char)?\s*mah", text):
+            if not re.search(r"(?ix)\b(mahine|months?)\b", text):
+                issues.append("strategy_wait_window_missing")
+
+    lords = str(dasha_trace.get("current_lords") or "")
+    if lords and lords != "—":
+        parts = [p.strip() for p in lords.replace("/", "-").split("-") if p.strip()]
+        md = parts[0] if parts else ""
+        if md and md.lower() not in text.lower():
+            if not _DASHA_WORD_RX.search(text):
+                issues.append("dasha_not_cited_in_answer")
+
+    return (len(issues) == 0, issues)
+
+
+def guard_career_timing_answer(
+    client: Any,
+    model: str,
+    *,
+    question: str,
+    answer: str,
+    meta: dict[str, Any],
+    user_intent: str = "",
+    reply_lang: str = "hn",
+) -> tuple[str, dict[str, Any]]:
+    """Verify timing answer vs engine; one repair if drift detected."""
+    meta_check = {**(meta or {}), "user_intent": user_intent}
+    ok, issues = verify_career_timing_answer(question, answer, meta_check)
+    guard_meta = {"ok": ok, "issues": issues, "repaired": False, "guard": "career_timing_v1"}
+    if ok:
+        return answer, guard_meta
+
+    strategy = str((meta.get("summary") or [""])[0])
+    verdict = str(meta.get("verdict") or "")
+    dasha = meta.get("dasha_trace") or {}
+    timing_ev = meta.get("timing_evidence") or meta.get("evidence") or []
+    ev_lines = "\n".join(f"- {e}" for e in timing_ev[:6])
+    lang_note = (
+        "Reply in Hinglish (Roman)."
+        if (reply_lang or "").lower() in ("hn", "hi-en")
+        else "Reply in simple English."
+    )
+    user_msg = f"""USER QUESTION (timing — when will job change happen):
+{question}
+
+ENGINE VERDICT (do NOT change): {verdict}
+LOCKED STRATEGY (embed meaning, natural words):
+{strategy}
+
+CURRENT DASHA: {dasha.get('current_lords') or '—'}
+NEXT CAREER AD: {dasha.get('next_career_ad') or '—'} ({dasha.get('next_career_start')} → {dasha.get('next_career_end')})
+
+TIMING EVIDENCE:
+{ev_lines}
+
+DRAFT (fix issues {issues}):
+{answer}
+
+{lang_note}
+Rewrite in 2-3 sentences. Must match VERDICT. If red_avoid → say wait/defer, NOT favourable switch.
+Mention current dasha lord if given. No template labels."""
+
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You fix career TIMING answers. Engine verdict is locked. "
+                        "Do not contradict dasha/strategy."
+                    ),
+                },
+                {"role": "user", "content": user_msg},
+            ],
+            max_tokens=220,
+        )
+        fixed = (resp.choices[0].message.content or "").strip()
+        ok2, issues2 = verify_career_timing_answer(question, fixed, meta_check)
+        guard_meta["repaired"] = True
+        guard_meta["ok_after_repair"] = ok2
+        guard_meta["issues_after_repair"] = issues2
+        return (fixed if fixed else answer), guard_meta
+    except Exception:
+        return answer, guard_meta
+
+
 def _repair_instructions(
     *,
     archetype: str,
@@ -314,6 +447,16 @@ def guard_career_answer(
     reply_lang: str = "hn",
 ) -> tuple[str, dict[str, Any]]:
     """Verify draft; repair once if needed. Returns (final_text, guard_meta)."""
+    if (meta or {}).get("slice") == "career_timing_v1":
+        return guard_career_timing_answer(
+            client,
+            model,
+            question=question,
+            answer=answer,
+            meta=meta,
+            user_intent=user_intent,
+            reply_lang=reply_lang,
+        )
     meta_check = {**(meta or {}), "user_intent": user_intent}
     ok, issues = verify_career_answer(question, answer, meta_check)
     guard_meta = {"ok": ok, "issues": issues, "repaired": False}

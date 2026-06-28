@@ -547,6 +547,49 @@ class UserQuestion(db.Model):
         }
 
 
+class QuestionUserSignal(db.Model):
+    """Per-question writing/style signals — questions only, no GPS."""
+
+    __tablename__ = "question_user_signals"
+
+    id            = db.Column(db.Integer, primary_key=True)
+    user_id       = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    question_id   = db.Column(db.String(36), nullable=True, index=True)
+    signals_json  = db.Column(db.Text, nullable=False, default="{}")
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index("ix_q_signals_user_created", "user_id", "created_at"),
+    )
+
+
+class UserAskProfile(db.Model):
+    """Rolling Ask persona — aggregated from question_user_signals only."""
+
+    __tablename__ = "user_ask_profiles"
+
+    user_id         = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    profile_json    = db.Column(db.Text, nullable=False, default="{}")
+    question_count  = db.Column(db.Integer, nullable=False, default=0)
+    updated_at      = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def to_dict(self):
+        return {
+            "user_id": self.user_id,
+            "question_count": self.question_count,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class KundliCache(db.Model):
     """
     Global shared cache of computed natal kundlis (Phase-3 cache layer).

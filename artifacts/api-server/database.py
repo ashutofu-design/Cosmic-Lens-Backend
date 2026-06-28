@@ -269,6 +269,31 @@ def run_schema_migrations() -> None:
                     except Exception:
                         pass
 
+                for _tbl_sql in (
+                    """
+                    CREATE TABLE IF NOT EXISTS question_user_signals (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        question_id VARCHAR(36),
+                        signals_json TEXT NOT NULL DEFAULT '{}',
+                        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+                    )
+                    """,
+                    """
+                    CREATE TABLE IF NOT EXISTS user_ask_profiles (
+                        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                        profile_json TEXT NOT NULL DEFAULT '{}',
+                        question_count INTEGER NOT NULL DEFAULT 0,
+                        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+                    )
+                    """,
+                    "CREATE INDEX IF NOT EXISTS ix_q_signals_user_created ON question_user_signals (user_id, created_at)",
+                ):
+                    try:
+                        conn.execute(text(_tbl_sql))
+                    except Exception:
+                        pass
+
                 if os.environ.get("COSMIC_WIPE_USERS") == "1":
 
                     try:

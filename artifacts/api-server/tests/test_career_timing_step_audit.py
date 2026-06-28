@@ -57,16 +57,16 @@ def _sample_verdict() -> dict:
 
 
 class TestCareerTimingStepAudit(unittest.TestCase):
-    def test_step_audit_has_dasha_primary_step5(self):
+    def test_step_audit_has_dasha_primary_step6(self):
         from event_timing.career.career_timing import build_career_timing_step_audit
 
         audit = build_career_timing_step_audit(_sample_verdict())
-        self.assertIn("step5", audit)
-        s5 = audit["step5"]
-        self.assertIn("Dasha", s5["name"])
-        self.assertEqual(s5["status"], "DONE")
-        self.assertIn("Jupiter/Saturn/Mercury", s5["current_lords"])
-        self.assertTrue(s5.get("why"))
+        self.assertIn("step6", audit)
+        s6 = audit["step6"]
+        self.assertIn("Dasha", s6["name"])
+        self.assertEqual(s6["status"], "DONE")
+        self.assertIn("Jupiter/Saturn/Mercury", s6["current_lords"])
+        self.assertTrue(s6.get("why"))
 
     def test_timing_audit_checks_dasha_first(self):
         from event_timing.career.career_timing import build_career_timing_audit
@@ -83,7 +83,7 @@ class TestCareerTimingStepAudit(unittest.TestCase):
         v = _sample_verdict()
         trace = build_career_timing_engine_trace(v)
         self.assertEqual(trace["engine"], "career_timing_v1")
-        self.assertIn("step5", trace["step_audit"])
+        self.assertIn("step6", trace["step_audit"])
         self.assertIn("timing_audit", trace)
         self.assertIn("dasha_trace", trace)
 
@@ -91,7 +91,7 @@ class TestCareerTimingStepAudit(unittest.TestCase):
         from ask_hard_guards import build_career_timing_slice_meta
 
         v = _sample_verdict()
-        v["step_audit"] = {"step5": {"current_lords": "Jupiter/Saturn/Mercury"}}
+        v["step_audit"] = {"step6": {"current_lords": "Jupiter/Saturn/Mercury"}}
         v["timing_audit"] = {"status": "PASS"}
         meta = build_career_timing_slice_meta(v)
         self.assertEqual(meta["slice"], "career_timing_v1")

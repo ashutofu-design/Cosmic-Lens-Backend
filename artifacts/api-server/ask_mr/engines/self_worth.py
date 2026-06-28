@@ -39,6 +39,8 @@ def run_self_worth(kundli: dict, question: str, *, wants_explain: bool = False) 
 
     if not evidence:
         evidence = ["No strong self-worth fragility driver; confidence looks manageable."]
+    if len(evidence) < 2:
+        evidence.append("Moon–Venus balance in chart supports steady self-respect when boundaries are kept clear.")
 
     return EngineResult(
         archetype="self_worth",

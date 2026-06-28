@@ -32,12 +32,28 @@ _CAREER_WINS_RX = re.compile(
     r")\b"
 )
 
+_FINANCE_TIMING_MONEY_RX = re.compile(
+    r"(?ix)\b("
+    r"paisa|paise|money|dhan|wealth|income|kamai|earning|mutual|sip|bachat|"
+    r"salary|tankhwah|loan|emi|debt|karz|profit|loss|nuksan"
+    r")\b"
+)
+
+_TIMING_HINT_RX = re.compile(
+    r"(?ix)\b("
+    r"kab|when|milega|milegi|aayega|aayegi|lagega|lagegi|hoga|hogi|"
+    r"kis\s+(saal|year|mahine|month)"
+    r")\b"
+)
+
 
 def finance_overrides_career(question: str) -> bool:
     """Money subdomain Qs beat generic career keyword overlap (paisa/income in career core)."""
     q = (question or "").strip()
     if not q or _CAREER_WINS_RX.search(q):
         return False
+    if _FINANCE_TIMING_MONEY_RX.search(q) and _TIMING_HINT_RX.search(q):
+        return True
     return bool(detect_finance_archetype(q))
 
 _STOCK_RX = re.compile(

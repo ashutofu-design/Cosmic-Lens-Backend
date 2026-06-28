@@ -33,17 +33,73 @@ _TIMING_RX = re.compile(
     re.IGNORECASE,
 )
 
+_YEAR_FORECAST_RX = re.compile(
+    r"(?ix)(20\d{2}|\d{4}).{0,30}(shaadi|shadi|marriage|vivah|rishta|wedding)|"
+    r"(shaadi|shadi|marriage|vivah|rishta|wedding).{0,30}(20\d{2}|\d{4})|"
+    r"(next\s+year|agla\s+saal|agle\s+saal).{0,25}(shaadi|shadi|marriage|vivah|rishta)|"
+    r"(shaadi|shadi|marriage|vivah|rishta).{0,25}(next\s+year|agla\s+saal)"
+)
+
+_HINDI_TIMING_RX = re.compile(
+    r"(शादी|विवाह|रिश्त|प्रेम).{0,20}(कब|समय)|"
+    r"(कब|समय).{0,20}(शादी|विवाह|रिश्त|होग|होगी)"
+)
+
 _MR_DOMAIN_RX = re.compile(
-    r"\b(shaadi|shadi|marriage|wedding|biwi|wife|husband|pati|patni|spouse|"
-    r"partner|boyfriend|girlfriend|bf\b|gf\b|crush|relationship|rishta|"
-    r"love|pyar|pyaar|prem|romance|breakup|brek[\s-]?up|divorce|talaq|"
-    r"dating|propose|commit(?:ment)?|engagement|sagai|vivah|vivaah|"
-    r"saas|sasural|mangetar|fianc|arranged?|love\s*marriage|"
-    r"manglik|mangal\s*dosh|intercaste|inter\s*caste|"
-    r"affair|cheat|dhokha|loyal|intimacy|intimate|attachment|attraction|"
-    r"chemistry|patchup|patch\s*up|separation|ek\s*tarfa|one\s*sided|"
-    r"jeevan\s*sathi|jeevansathi|jeevansaathi|kalatra)\b",
+    r"(?ix)\b("
+    r"shaadi|shadi|marriage|wedding|biwi|wife|husband|pati|patni|spouse|"
+    r"partner|boyfriend|girlfriend|\bbf\b|\bgf\b|crush|relationships?|rishta|rishte|"
+    r"love|pyar|pyaar|prem|romance|romantic|passion|lover\b|"
+    r"breakup|brek[\s-]?up|divorce|talaq|separation|"
+    r"dating|propose|proposal|commit(?:ment)?|engagement|sagai|vivah|vivaah|"
+    r"saas|sasur|sasural|in[\s-]?laws?|mother[\s-]?in[\s-]?law|father[\s-]?in[\s-]?law|"
+    r"mangetar|fianc|arranged?|love\s*marriage|"
+    r"manglik|mangal\s*dosh|inter[\s-]?caste|intercaste|"
+    r"affair|cheat|dhokha|loyal|faithful|trust|vishwas|wafad|vafad|"
+    r"intimacy|intimate|attachment|attach|emotional|attraction|chemistry|"
+    r"patchup|patch\s*up|ek\s*tarfa|one\s*sided|"
+    r"jeevan\s*sathi|jeevansathi|jeevansaathi|kalatra|"
+    r"soul\s*mate|soulmate|karmic|past\s*life|"
+    r"flirt\w*|impression|courtship|red\s*flag|green\s*flag|"
+    r"private\s*life|conjugal|bedroom|bed\b|suhag|"
+    r"communication|conflict|teamwork|compatible|compat|gun\s*milan|"
+    r"travel|social\s*life|mahaul|luxury|settle\s*abroad|"
+    r"parenting|family\s*values|sanskaar|bachon|children|"
+    r"family\s+involve|kitna\s+involve|ghar\s*walon\s*ka\s*role|"
+    r"pasand|khud\s*pasand|ghar\s*walon|"
+    r"\bex\b|wapas|patch\s*up|"
+    r"ego\s*clash|third\s*person|interference|"
+    r"self[\s-]?worth|boundar\w*|insecure|insecurity|"
+    r"obsess|jealous|possessive|secret|hidden|chhup|affair|"
+    r"long\s*distance|online\s*relationship|"
+    r"second\s*marriage|dusri\s*shaadi|remarri|"
+    r"height|complexion|attract\w*|appearance|"
+    r"profession|naukri|business|doctor|engineer"
+    r")\b",
     re.IGNORECASE,
+)
+
+_HINDI_MR_RX = re.compile(
+    r"(शादी|विवाह|पति|पत्नी|प्रेम|प्यार|रिश्त|संबंध|"
+    r"मांगलिक|मंगल|ससुर|सास|ससुराल|तलाक|विश्वास|वफादार|"
+    r"प्रेमिक|गर्भ|विवाह|अनुकूल|संवाद|खुश|"
+    r"आकर्षण|रोमांस|गुप्त|एकतरफ|प्यार|"
+    r"सच्चा|डेटिंग|दूसरी|लॉन्ग|गर्भ|"
+    r"स्वभाव|व्यक्तित्व|शक्ल|आंख|पेशा|अमीर|"
+    r"भावनात्मक|शारीरिक|आत्मविश्वास|तलाक|टूट)"
+)
+
+_CAREER_NATIVE_RX = re.compile(
+    r"(?ix)\b(meri|mera|mere|my|main|mujhe)\b.{0,35}\b("
+    r"naukri|job|career|salary|promotion|boss|office|kaam|profession"
+    r")\b"
+)
+
+_MR_CONTEXT_RX = re.compile(
+    r"(?ix)\b("
+    r"shaadi|shadi|marriage|spouse|partner|wife|husband|pati|patni|biwi|"
+    r"pyaar|pyar|love|rishta|relationship|boyfriend|girlfriend|saas|sasur"
+    r")\b"
 )
 
 _MALEFICS = {"Sun", "Mars", "Saturn", "Rahu", "Ketu"}
@@ -64,8 +120,14 @@ def is_marriage_relationship_static_question(question: str) -> bool:
     q = (question or "").strip()
     if not q:
         return False
-    if _TIMING_RX.search(q):
+    if _YEAR_FORECAST_RX.search(q):
         return False
+    if _TIMING_RX.search(q) or _HINDI_TIMING_RX.search(q):
+        return False
+    if _CAREER_NATIVE_RX.search(q) and not _MR_CONTEXT_RX.search(q):
+        return False
+    if _HINDI_MR_RX.search(q):
+        return True
     return bool(_MR_DOMAIN_RX.search(q))
 
 

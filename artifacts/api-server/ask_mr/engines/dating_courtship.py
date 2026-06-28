@@ -23,9 +23,9 @@ def _detect_focus(q: str) -> str:
         return "flirting"
     if re.search(r"(?ix)\b(dating\s*success|date\s*pe|dating)\b", q):
         return "dating_success"
-    if re.search(r"(?ix)\b(red\s*flag|warning\s*sign|khatre\s*ke\s*nishan)\b", q):
+    if re.search(r"(?ix)\b(red\s*flags?|warning\s*sign|khatre\s*ke\s*nishan)\b", q):
         return "red_flags"
-    if re.search(r"(?ix)\b(green\s*flag|positive\s*sign|achhe\s*signal)\b", q):
+    if re.search(r"(?ix)\b(green\s*flags?|positive\s*sign|achhe\s*signal)\b", q):
         return "green_flags"
     if re.search(r"(?ix)\b(attraction\s*pattern|pull|drawn\s*to)\b", q):
         return "attraction_pattern"

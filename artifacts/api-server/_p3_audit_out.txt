@@ -1,0 +1,42 @@
+TOTAL=800 GAPS=192
+GAP_TYPES={'DOMAIN': 192}
+#113 [DOMAIN] 'rishta pakka hona kab hoga?' — want=marriage got=love
+#114 [DOMAIN] 'rishta pakka hona kab hogi?' — want=marriage got=love
+#115 [DOMAIN] 'rishta pakka hona kab milega?' — want=marriage got=love
+#116 [DOMAIN] 'rishta pakka hona kab milegi?' — want=marriage got=love
+#117 [DOMAIN] 'rishta pakka hona kab lagega?' — want=marriage got=love
+#118 [DOMAIN] 'rishta pakka hona kab lagegi?' — want=marriage got=love
+#119 [DOMAIN] 'rishta pakka hona kab aayega?' — want=marriage got=love
+#120 [DOMAIN] 'rishta pakka hona kab aayegi?' — want=marriage got=love
+#121 [DOMAIN] 'rishta pakka hona when will it happen?' — want=marriage got=love
+#122 [DOMAIN] 'rishta pakka hona kis saal hoga?' — want=marriage got=love
+#123 [DOMAIN] 'rishta pakka hona kis saal milega?' — want=marriage got=love
+#124 [DOMAIN] 'rishta pakka hona kitna time lagega?' — want=marriage got=general
+#125 [DOMAIN] 'rishta pakka hona muhurat kab hai?' — want=marriage got=love
+#126 [DOMAIN] 'rishta pakka hona timing kya hai?' — want=marriage got=love
+#127 [DOMAIN] 'rishta pakka hona dasha kab active hogi?' — want=marriage got=love
+#128 [DOMAIN] 'rishta pakka hona gochar kab support karega?' — want=marriage got=love
+#161 [DOMAIN] 'engagement kab hoga?' — want=marriage got=general
+#162 [DOMAIN] 'engagement kab hogi?' — want=marriage got=general
+#163 [DOMAIN] 'engagement kab milega?' — want=marriage got=general
+#164 [DOMAIN] 'engagement kab milegi?' — want=marriage got=general
+#165 [DOMAIN] 'engagement kab lagega?' — want=marriage got=general
+#166 [DOMAIN] 'engagement kab lagegi?' — want=marriage got=general
+#167 [DOMAIN] 'engagement kab aayega?' — want=marriage got=general
+#168 [DOMAIN] 'engagement kab aayegi?' — want=marriage got=general
+#169 [DOMAIN] 'engagement when will it happen?' — want=marriage got=general
+#170 [DOMAIN] 'engagement kis saal hoga?' — want=marriage got=general
+#171 [DOMAIN] 'engagement kis saal milega?' — want=marriage got=general
+#172 [DOMAIN] 'engagement kitna time lagega?' — want=marriage got=general
+#173 [DOMAIN] 'engagement muhurat kab hai?' — want=marriage got=property
+#174 [DOMAIN] 'engagement timing kya hai?' — want=marriage got=general
+#175 [DOMAIN] 'engagement dasha kab active hogi?' — want=marriage got=general
+#176 [DOMAIN] 'engagement gochar kab support karega?' — want=marriage got=general
+#177 [DOMAIN] 'roka kab hoga?' — want=marriage got=general
+#178 [DOMAIN] 'roka kab hogi?' — want=marriage got=general
+#179 [DOMAIN] 'roka kab milega?' — want=marriage got=general
+#180 [DOMAIN] 'roka kab milegi?' — want=marriage got=general
+#181 [DOMAIN] 'roka kab lagega?' — want=marriage got=general
+#182 [DOMAIN] 'roka kab lagegi?' — want=marriage got=general
+#183 [DOMAIN] 'roka kab aayega?' — want=marriage got=general
+#184 [DOMAIN] 'roka kab aayegi?' — want=marriage got=general

@@ -201,6 +201,187 @@ def test_step7_bcp_year_scan_can_rescue_primary(monkeypatch):
     assert notes == []
 
 
+def test_transit_type_derived_from_by_month_not_stale_window_flags(monkeypatch):
+    """Admin label must match per-month activation (Dhanu: Guru off, Shani on)."""
+    by_month = [
+        {
+            "month": "Jun 2029",
+            "jupiter_rashi": "Kanya",
+            "jupiter_active": False,
+            "jupiter_activation": "7H/7L par nahi",
+            "saturn_rashi": "Mesh",
+            "saturn_active": True,
+            "saturn_activation": "7th ghar drishti",
+        },
+    ]
+    monkeypatch.setattr(
+        me,
+        "finalize_transit_display",
+        lambda **kwargs: ("Jun 2029: detail", ["Jun 2029"], by_month),
+    )
+    pkg = me._build_step7_transit_package(
+        {"jup": True, "sat": True, "dt": True, "transit_confirmed": True},
+        None,
+    )
+    assert pkg["transit_type"] == "single_shani"
+    assert pkg["transit_type_label"] == me._TRANSIT_TYPE_LABELS["single_shani"]
+    assert pkg["double_transit"] is False
+    assert pkg["jupiter_hit"] is False
+    assert pkg["saturn_hit"] is True
+
+
+def test_transit_type_double_only_when_same_month_both_active():
+    by_month = [
+        {"month": "Jun 2029", "jupiter_active": True, "saturn_active": False},
+        {"month": "Sep 2029", "jupiter_active": False, "saturn_active": True},
+    ]
+    _, _, dt, ttype = me._derive_transit_flags_from_by_month(by_month)
+    assert ttype == "split"
+    assert dt is False
+
+    by_month_dt = [
+        {"month": "Sep 2029", "jupiter_active": True, "saturn_active": True},
+    ]
+    _, _, dt2, ttype2 = me._derive_transit_flags_from_by_month(by_month_dt)
+    assert ttype2 == "double"
+    assert dt2 is True
+
+
+def test_dhanu_lagna_saturn_mesh_aspects_7th_house():
+    """Dhanu lagna → 7H Mithun; Shani Mesh = 3rd aspect on 7H (valid single transit)."""
+    h7_si = (8 + 6) % 12  # Mithun
+    sat_hits = me._collect_sign_hits("Saturn", 0, h7_si, 2)  # 7L in Mithun
+    assert any(h.get("hit_type") == "aspects_7th_house" for h in sat_hits)
+    jup_hits = me._collect_sign_hits("Jupiter", 5, h7_si, 2)  # Guru Kanya
+    assert jup_hits == []
+
+
+def test_activation_detail_in_compact_sample():
+    samples = [
+        {
+            "date": "2029-06-30",
+            "jupiter_rashi": "Kanya",
+            "saturn_rashi": "Mesh",
+            "jupiter_hits": [],
+            "saturn_hits": [{"hit_type": "aspects_7th_house", "target": "7th house"}],
+        },
+    ]
+    detail, months, rows = me._compact_transit_by_month(samples)
+    assert "7H/7L par nahi" in detail
+    assert "7th ghar drishti" in detail
+    assert rows[0]["saturn_active"] is True
+    assert rows[0]["jupiter_active"] is False
+
+
+def test_enrich_dhanu_with_chart_context(monkeypatch):
+    """Month-only enrich + chart context → per-planet 7H/7L activation."""
+    ctx = {
+        "lagna": "Dhanu",
+        "seventh_house": "Mithun",
+        "seventh_lord": "Mercury",
+        "seventh_lord_sign": "Mithun",
+    }
+    full_ctx = me.transit_ctx_from_public_chart(ctx)
+    assert full_ctx is not None
+
+    class Jun2029Swe:
+        JUPITER = 5
+        SATURN = 6
+
+        @staticmethod
+        def julday(year, month, day, hour):
+            return (year, month, day, hour)
+
+        @staticmethod
+        def calc_ut(jd, planet_id, flags):
+            _ = jd, flags
+            if planet_id == Jun2029Swe.JUPITER:
+                return [165.0], 0  # Kanya
+            if planet_id == Jun2029Swe.SATURN:
+                return [15.0], 0   # Mesh
+            return [0.0], 0
+
+    monkeypatch.setattr(me, "_HAS_SWE", True)
+    monkeypatch.setattr(me, "swe", Jun2029Swe)
+    detail, months, rows = me._enrich_transit_month_labels(["Jun 2029"], full_ctx)
+    assert "Guru Kanya (7H/7L par nahi)" in detail
+    assert "Shani Mesh (7th ghar drishti)" in detail
+    assert rows[0]["jupiter_active"] is False
+    assert rows[0]["saturn_active"] is True
+
+
+def test_enrich_month_only_labels(monkeypatch):
+    monkeypatch.setattr(
+        me,
+        "_transit_rashis_at_iso",
+        lambda iso: ("Singh", "Kark") if "2029-06" in iso else ("Tula", "Makar"),
+    )
+    detail, months, rows = me._enrich_transit_month_labels(["Jun 2029", "Sep 2029"])
+    assert "Guru Singh" in detail and "Shani Kark" in detail
+    assert "Guru Tula" in detail and "Shani Makar" in detail
+    assert months == ["Jun 2029", "Sep 2029"]
+    assert rows[0]["jupiter_rashi"] == "Singh"
+
+
+def test_finalize_from_month_only_detail(monkeypatch):
+    monkeypatch.setattr(
+        me,
+        "_transit_rashis_at_iso",
+        lambda iso: ("Dhanu", "Makar") if iso else (None, None),
+    )
+    detail, months, rows = me.finalize_transit_display(
+        detail="Jun 2029 · Sep 2029",
+        months=["Jun 2029", "Sep 2029"],
+    )
+    assert "Guru Dhanu" in detail
+    assert "Shani Makar" in detail
+    assert len(rows) == 2
+
+
+def test_monthify_verbose_transit_detail(monkeypatch):
+    monkeypatch.setattr(
+        me,
+        "_transit_rashis_at_iso",
+        lambda iso: ("Singh", "Kark") if iso.startswith("2029-06") else ("Tula", "Makar"),
+    )
+    verbose = (
+        "2029-06-30 Sat→7th house orb 1.97° + "
+        "2029-09-07 Jup→7th house + "
+        "2029-09-07 Sat→7th house orb 1.82°"
+    )
+    out = me._monthify_verbose_transit_detail(verbose)
+    assert "Jun 2029" in out and "Sep 2029" in out
+    assert "Guru Singh" in out and "Shani Kark" in out
+    assert "Guru Tula" in out and "Shani Makar" in out
+    assert "7th" not in out and "orb" not in out
+
+
+def test_transit_detail_uses_rashi_labels():
+    samples = [
+        {
+            "date": "2029-06-30",
+            "jupiter_lon": 120.0,
+            "saturn_lon": 90.0,
+            "jupiter_hits": [],
+            "saturn_hits": [{"target": "7th house"}],
+        },
+        {
+            "date": "2029-09-07",
+            "jupiter_lon": 180.0,
+            "saturn_lon": 270.0,
+            "jupiter_hits": [{"target": "7th house"}],
+            "saturn_hits": [{"target": "7th house"}],
+        },
+    ]
+    detail, months, rows = me._compact_transit_by_month(samples)
+
+    assert months == ["Jun 2029", "Sep 2029"]
+    assert "Guru" in detail and "Shani" in detail
+    assert "7th" not in detail
+    assert rows[0]["jupiter_rashi"] == "Singh"
+    assert rows[0]["saturn_rashi"] == "Kark"
+
+
 def test_delayed_anchor_removes_early_focus_ages():
     focus, removed = me._delayed_anchor_focus_ages(
         {27, 30, 31, 33, 34},

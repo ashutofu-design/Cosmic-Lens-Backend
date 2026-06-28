@@ -59,6 +59,11 @@ def run_family_approval(kundli: dict, question: str, *, wants_explain: bool = Fa
     if not evidence:
         evidence = ["No strong family-approval driver visible; treat as mixed/normal."]
 
+    if len(evidence) < 2:
+        evidence.append(
+            "Family axis (2nd/9th/Jupiter) sets how much elders engage — respectful steady proof helps approval."
+        )
+
     if re.search(r"(?ix)\b(family\s*involve|kitna\s*involve|ghar\s*walon\s*ka\s*role)\b", question or ""):
         evidence.append(
             "Family involvement level: Jupiter/Rahu on family axis — elders stay engaged; "

@@ -65,7 +65,7 @@ JOB_CHANGE_RX = _rx(
 )
 GOVT_EXAM_RX = _rx(
     r"upsc|ias|ips|ssc|cgl|railway\s*exam|bank\s*exam|govt\s*exam|"
-    r"government\s*exam|competitive\s*exam|civil\s*service|pcs|"
+    r"government\s*exam|sarkari\s*exam|competitive\s*exam|civil\s*service|pcs|"
     r"state\s*psc|defence\s*exam|nda|cds"
 )
 
@@ -159,6 +159,11 @@ def is_govt_exam_milestone_question(question: str, interpretation: str = "") -> 
     if not GOVT_EXAM_RX.search(q):
         return False
     if GOVT_EXAM_INTENT_RX.search(q):
+        return True
+    if re.search(
+        r"(?ix)\b(ias|ips|upsc|ssc|pcs|nda|cds)\b.{0,35}\b(banne|ban|banna|exam|pass|clear|crack)\b",
+        q,
+    ):
         return True
     return bool(re.search(r"(?ix)(govt exam|government exam|competitive exam)", interp))
 

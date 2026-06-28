@@ -44,6 +44,14 @@ BULK = [
     ("Sarkari naukri kab milegi?", "career", True),
     ("Main 65 saal ka job kab lagega?", "career", True),
     ("Partner support karega career me?", "general", False),
+    ("Deeksha kab milegi?", "spiritual", True),
+    ("Astrology kab seekh paunga?", "spiritual", True),
+    ("Teerthyatra kab hoga?", "spiritual", True),
+    ("Meditation kab shuru hogi?", "spiritual", True),
+    ("Mera content kab viral hoga?", "fame", True),
+    ("Bade log help kab karenge?", "network", True),
+    ("Lottery kab lagegi?", "universal", True),
+    ("Pet dog kab adopt karun?", "universal", True),
 ]
 CASES.extend(BULK)
 

@@ -76,7 +76,8 @@ def test_love_engine_tone_rules():
 
 def test_router_wires_phase2_domains():
     for q, marker in (
-        ("Registry kab hogi?", "PROPERTY TIMING ENGINE"),
+        ("Registry kab hogi?", "PROPERTY TIMING ENGINE v1"),
+        ("Gaadi kab khareedun?", "VEHICLE TIMING ENGINE"),
         ("Admission kab hogi?", "EDUCATION TIMING ENGINE"),
         ("Case verdict kab aayega?", "LITIGATION TIMING ENGINE"),
         ("Patchup kab hoga?", "LOVE TIMING ENGINE"),

@@ -29,6 +29,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from .catalog_litigation import LITIGATION_SYSTEM_PRACTICES, _LITIGATION
+
 
 # ════════════════════════════════════════════════════════════════════════
 # HEALTH — 9 planets × 3 tiers
@@ -1334,11 +1336,12 @@ _BUSINESS: Dict[str, Dict[str, Any]] = {
 
 
 CATALOG: Dict[str, Dict[str, Dict[str, Any]]] = {
-    "health":   _HEALTH,
-    "marriage": _MARRIAGE,
-    "career":   _CAREER,
-    "money":    _MONEY,
-    "business": _BUSINESS,
+    "health":      _HEALTH,
+    "marriage":    _MARRIAGE,
+    "career":      _CAREER,
+    "money":       _MONEY,
+    "business":    _BUSINESS,
+    "litigation":  _LITIGATION,
 }
 
 
@@ -1399,3 +1402,4 @@ SYSTEM_PRACTICES: Dict[str, Dict[str, str]] = {
     "brand":                {"practice": "Logo + 5-page site + consistent visual identity + 1 customer-delight ritual + monthly NPS"},
     "legal_compliance":     {"practice": "GST/TDS/PF/ESI/ROC compliance calendar + CA + lawyer on retainer + clean cap-table"},
 }
+SYSTEM_PRACTICES.update(LITIGATION_SYSTEM_PRACTICES)

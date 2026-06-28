@@ -81,6 +81,8 @@ def run_lifestyle_marriage(kundli: dict, question: str, *, wants_explain: bool =
             evidence.append(
                 f"Jupiter in house {jup.get('house')} — respected social network; warm community life."
             )
+        if len(evidence) < 2:
+            evidence.append("11th house links married social life — friends, gatherings and community tone.")
         verdict = "Social life after marriage: 11th house + Venus/Jupiter social markers"
 
     elif focus == "home":

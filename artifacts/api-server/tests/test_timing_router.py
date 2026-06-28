@@ -27,6 +27,31 @@ def test_travel_settlement_routing():
     assert dom == "travel"
 
 
+def test_travel_visa_pr_routing():
+    for q in ("Videsh kab jaunga?", "Visa kab milega?", "PR kab milega?", "Abroad shift kab hoga?"):
+        dom, _, is_t = resolve_timing_domain(q)
+        assert is_t, q
+        assert dom == "travel", q
+
+
+def test_education_timing_routing():
+    for q in ("Exam result kab aayega?", "Admission kab hogi?"):
+        dom, _, is_t = resolve_timing_domain(q)
+        assert is_t, q
+        assert dom == "education", q
+
+
+def test_finance_timing_routing():
+    dom, _, is_t = resolve_timing_domain("Paisa kab aayega?")
+    assert is_t
+    assert dom == "finance"
+    dom2, _, _ = resolve_timing_domain(
+        "Paisa kab aayega?",
+        {"domain": "finance", "is_timing": True},
+    )
+    assert dom2 == "finance"
+
+
 def test_love_marriage_defer():
     dom, _, is_t = resolve_timing_domain("Love marriage kab hogi?")
     assert is_t
@@ -48,6 +73,14 @@ def test_career_timing():
 
 def test_static_not_timing():
     assert not detect_timing_intent("Kaunsi industry best rahegi?")
+    assert not detect_timing_intent("Biwi kaisi hogi?")
+    assert not detect_timing_intent("Travel yog strong hai?")
+
+
+def test_static_spouse_not_timing_route():
+    dom, _, is_t = resolve_timing_domain("Biwi kaisi hogi?")
+    assert not is_t
+    assert not detect_timing_intent("Biwi kaisi hogi?")
 
 
 def test_demand_build():
@@ -58,5 +91,5 @@ def test_demand_build():
 
 def test_ready_engines_list():
     ready = list_domains_by_status("ready")
-    for dom in ("marriage", "career", "travel", "property", "education", "litigation", "love"):
+    for dom in ("marriage", "career", "travel", "property", "education", "litigation", "love", "spiritual"):
         assert dom in ready, f"{dom} should be ready"

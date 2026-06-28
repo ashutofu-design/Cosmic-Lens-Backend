@@ -32,7 +32,7 @@ from .substitutions import apply_substitutions
 from .stack_builder import build_stack
 
 
-_VALID_TOPICS = ("health", "marriage", "career", "money", "business")
+_VALID_TOPICS = ("health", "marriage", "career", "money", "business", "litigation")
 
 # tier_note keyed by topic+severity. Health has explicit medical-safety
 # tone; marriage/career use action-orientation tone.
@@ -66,6 +66,12 @@ _TIER_NOTES: Dict[str, Dict[str, str]] = {
         "celebratory":     "Strong window — but founder-fitness + clean books matter MORE now, not less.",
         "consult":         "Cofounder/legal/CA advisor 2 sessions = highest ROI; verbal deals = top killer.",
     },
+    "litigation": {
+        "watchful":        "Legal friction possible — documents + calm counsel beat panic.",
+        "active_case":     "Case active — hearing discipline + lawyer strategy are primary levers.",
+        "high_stress":     "Criminal/bail/custody stress — qualified lawyer FIRST; remedies are support only.",
+        "consult":         "Bar-Council verified advocate within 7 days = highest ROI before any gemstone.",
+    },
 }
 
 # Universal disclaimer per topic
@@ -88,6 +94,10 @@ _DISCLAIMERS: Dict[str, str] = {
                   "Cashflow, customer conversations, founder fitness, and clean books remain "
                   "the primary drivers. Verbal-only deals + over-fundraising + vanity-metric "
                   "obsession are the top killers — engine warns; user decides."),
+    "litigation": ("Remedies SUPPORT legal strategy, NEVER replace a qualified lawyer. "
+                   "Practical steps (documents, hearing discipline, counsel) come FIRST. "
+                   "No gemstone/mantra guarantees acquittal, bail, or win. "
+                   "Do NOT delay lawyer consult for remedies. No fear-mongering."),
 }
 
 
@@ -103,6 +113,7 @@ def _normalize_severity(topic: str, severity: Optional[str]) -> str:
         "career":   "watchful",
         "money":    "watchful",
         "business": "watchful",
+        "litigation": "consult",
     }.get(topic, "watchful")
 
 
@@ -233,6 +244,12 @@ def get_remedies(topic: str,
                 "Suggested specialist type: " + " / ".join(suggestions)
                 + ". Ask your primary care doctor for a referral."
             )
+
+    if topic == "litigation" and norm_sev in ("consult", "high_stress", "active_case"):
+        referral_hint = (
+            "Qualified advocate (criminal/civil/family as applicable) is the primary path. "
+            "Verify Bar Council registration; avoid 'guaranteed win' touts."
+        )
 
     return {
         "topic":                  topic,

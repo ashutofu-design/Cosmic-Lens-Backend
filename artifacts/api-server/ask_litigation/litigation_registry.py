@@ -19,6 +19,7 @@ LITIGATION_ARCHETYPES = frozenset({
     "acquittal_relief",
     "lawyer_support",
     "family_court",
+    "settlement",
     "general_litigation",
 })
 
@@ -83,7 +84,8 @@ _STRONG_LITIGATION_RX = re.compile(
     r"acquittal|conviction|section\s+\d+|"
     r"498a|ipc|crpc|nda|ndps|"
     r"court\s+case|legal\s+case|police\s+case|"
-    r"kanooni|vivad|case\s+chalega|case\s+ladega"
+    r"kanooni|vivad|case\s+chalega|case\s+ladega|"
+    r"underground|bicholiya|middleman"
     r")\b"
 )
 
@@ -115,7 +117,9 @@ _OUTCOME_RX = re.compile(
     r"case\s+outcome|outcome\s+of\s+case|"
     r"case\s+(?:result|fate)|"
     r"jeet\s+paunga\s+case|har\s+jayega\s+case|"
-    r"favourable|unfavourable|favorable|unfavorable"
+    r"favourable|unfavourable|favorable|unfavorable|"
+    r"hit\s*\(?\s*favour|mere\s+hit|favour\s+me|favor\s+me|"
+    r"dushman|bhai\s+baazi"
     r")\b"
 )
 
@@ -251,10 +255,23 @@ _FAMILY_COURT_RX = re.compile(
     r")\b"
 )
 
+_SETTLEMENT_RX = re.compile(
+    r"(?ix)\b("
+    r"compromise|settlement|samjhauta|mediation|madhyasthata|"
+    r"lok\s+adalat|arbitration|withdraw|bicholiya|middleman|"
+    r"out[\s-]?of[\s-]?court"
+    r")\b"
+)
+
 
 def is_property_court_question(question: str) -> bool:
     q = (question or "").strip().lower()
     if not q:
+        return False
+    if re.search(
+        r"(?ix)\b(fir|criminal|bail|jail|attach|kurki|seize|mukadma|litigation|complaint)\b",
+        q,
+    ):
         return False
     if not _PROPERTY_COURT_RX.search(q):
         return False
@@ -296,15 +313,10 @@ def is_death_penalty_crisis_question(question: str) -> bool:
     return bool(_DEATH_PENALTY_RX.search(q))
 
 
-def is_litigation_timing_question(question: str) -> bool:
-    q = (question or "").strip().lower()
-    if not q:
-        return False
-    if not _TIMING_RX.search(q):
-        return False
-    return bool(_STRONG_LITIGATION_RX.search(q)) or bool(
-        re.search(r"(?ix)\b(case|court|bail|fir|jail|verdict|hearing)\b", q)
-    )
+def is_litigation_timing_question(question: str, llm_intent: dict | None = None) -> bool:
+    from .timing_registry import is_litigation_timing_question as _is_timing
+
+    return _is_timing(question, llm_intent)
 
 
 def detect_litigation_archetype(question: str) -> str | None:
@@ -344,6 +356,8 @@ def detect_litigation_archetype(question: str) -> str | None:
         return "civil_litigation"
     if _FAMILY_COURT_RX.search(q):
         return "family_court"
+    if _SETTLEMENT_RX.search(q):
+        return "settlement"
     if _DELAY_RX.search(q):
         return "court_delay"
     if _OUTCOME_RX.search(q):

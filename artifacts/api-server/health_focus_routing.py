@@ -229,7 +229,7 @@ def _disclaimer_enabled() -> bool:
 _CRISIS_RX = _re.compile(
     r"(suicide|khud[\s-]?kushi|atm[\s-]?hatya|atmhatya|"
     r"khatam\s+kar\s+(lu|du|dunga|loon)|"
-    r"jeena\s+nahi\s+chahta|marna\s+chahta|"
+    r"jeena\s+nahi\s+chahta|marna\s+chahta|mujhe\s+marna\s+hai|"
     r"end\s+(my\s+)?life|kill\s+(myself|me))",
     _re.IGNORECASE,
 )
@@ -239,13 +239,18 @@ _DEATH_RX = _re.compile(
     r"death\s+kab|maut\s+kab|mrityu\s+kab|"
     r"kab\s+(meri|mera)\s+(maut|death|mrityu)|"
     r"meri\s+death\s+(kab|kaise|hogi)|"
-    r"life\s+span|life\s+expectancy|lifespan|"
-    r"kitne\s+saal\s+jiyu(?:nga|ngi)?|kitni\s+umar|umar\s+kitni|"
+    r"(?:mera|meri|my)\s+death\b|"
+    r"\bdeath\b.{0,24}\b(kab|when|hoga|hogi|honge|milega|pata)\b|"
+    r"\b(maut|mrityu)\b.{0,24}\b(kab|when|hoga|hogi|honge)\b|"
+    r"life\s+span|life\s+expectancy|lifespan|how\s+long\s+will\s+i\s+live|"
+    r"kitne\s+saal\s+jiyu(?:nga|ngi)?|kitni\s+umar|umar\s+kitni|aayu\s+kitni|"
     r"longevity|when\s+will\s+i\s+die|when\s+do\s+i\s+die|"
     r"kab\s+tak\s+(zinda|alive|jiunga|jiyungi)|"
     r"mrityu\s+(kab|samay|tarikh|hogi)|"
     r"mar\s+ja(?:unga|ungi|oge)\s+kab|"
-    r"मृत्यु|कब\s+मरूँ|कब\s+मरूंग|कब\s+मरungi)",
+    r"alpayu|madhyayu|deerghayu|"
+    r"jaan\s+bachegi|"
+    r"मृत्यु|कब\s+मरूँ|कब\s+मरूंग|कब\s+मरungi|आयु|उम्र)",
     _re.IGNORECASE,
 )
 
@@ -253,34 +258,37 @@ _DIAGNOSIS_DEMAND_RX = _re.compile(
     r"(mujhe\s+kya\s+(bimari|disease|illness)\s+(hai|hogi)|"
     r"kaun\s*si\s+(bimari|disease|illness)\s+(hai|hogi|hai\s+mujhe)|"
     r"mujhe\s+kaun\s*si\s+(bimari|disease|illness)|"
-    r"diagnose\s+me|"
-    r"chart\s+se\s+(bimari|disease|illness)\s+(bata|tell|name)|"
+    r"diagnose\s+me|diagnose\s+my\s+disease|diagnos\w*\s+(my\s+)?(disease|illness|condition)|"
+    r"illness\s+name\s+from\s+(chart|kundli)|"
+    r"tell\s+me\s+my\s+illness\s+name|"
+    r"chart\s+se\s+(bimari|disease|illness)\s+(bata|tell|name|diagnos)|"
     r"chart\s+se\s+bata.{0,30}(bimari|disease|illness)|"
-    r"chart\s+(me|mein)\s+(bimari|disease|illness)\s+(bata|name|kya))",
+    r"chart\s+(me|mein)\s+(bimari|disease|illness)\s+(bata|name|kya|diagnos)|"
+    r"from\s+chart.{0,20}(diagnos|disease|illness)|"
+    r"am\s+i\s+having\s+(diabetes|cancer|tumor|tumour|hiv|aids))",
     _re.IGNORECASE,
 )
 
 # Specific disease-name prediction/diagnosis — NEVER answer (cancer, diabetes, etc.)
 _DISEASE_NAME_DEMAND_RX = _re.compile(
     r"(?ix)"
-    r"(?:\b(?:mujhe|mere|meri|do\s+i\s+have|am\s+i\s+having|will\s+i\s+get)\b.{0,40}\b("
-    r"cancer|kanser|tumor|tumour|tumour|carcinoma|"
-    r"diabetes|madhumeh|sugar\s+disease|"
-    r"hiv|aids|tuberculosis|\btb\b|"
-    r"parkinson|epilepsy|schizophrenia|"
-    r"leukemia|leukaemia|lymphoma|"
-    r"कैंसर|मधुमेह|ट्यूमर"
+    r"(?:\b(?:mujhe|mere|meri|do\s+i\s+have|am\s+i\s+having|will\s+i\s+get)\b.{0,40}\b(?:"
+    r"cancer|kanser|tumor|tumour|carcinoma|diabetes|madhumeh|sugar\s+disease|"
+    r"hiv|aids|tuberculosis|\btb\b|parkinson|epilepsy|schizophrenia|"
+    r"leukemia|leukaemia|lymphoma|कैंसर|मधुमेह|ट्यूमर"
     r")\b)|"
-    r"(?:\b("
-    r"cancer|kanser|tumor|tumour|diabetes|hiv|aids|"
-    r"कैंसर|मधुमेह|ट्यूमर"
+    r"(?:\b(?:"
+    r"cancer|kanser|tumor|tumour|diabetes|hiv|aids|कैंसर|मधुमेह|ट्यूमर"
     r")\b.{0,40}\b(?:hai|hoga|ho\s+sakta|ho\s+sakti|lagta|chart|kundli|mujhe|mera|meri)\b)|"
-    r"(?:\bchart\b.{0,30}\b(?:cancer|kanser|tumor|tumour|diabetes|hiv|aids|कैंसर)\b)"
+    r"(?:\bchart\b.{0,30}\b(?:cancer|kanser|tumor|tumour|diabetes|hiv|aids|कैंसर)\b)|"
+    r"(?:क्या\s*)?मुझे.{0,25}(?:कैंसर|मधुमेह|ट्यूमर)"
 )
 
 _TIMING_DECLINE_RX = _re.compile(
     r"(kab\s+(beemar|bimar|sick|ill)\s+(honga|hungi|ho\s+jaunga)|"
+    r"when\s+will\s+i\s+(fall\s+ill|get\s+sick|become\s+ill)|"
     r"bimari\s+(kab|kis\s+saal|kis\s+mahine)|"
+    r"illness\s+kab|"
     r"disease\s+(kab|when)|"
     r"health\s+(kab\s+kharab|when\s+will\s+(deteriorate|fail))|"
     r"mujhe\s+kab\s+(bimari|disease|illness))",
@@ -289,7 +297,9 @@ _TIMING_DECLINE_RX = _re.compile(
 
 _TIMING_RECOVERY_RX = _re.compile(
     r"(kab\s+(thik|theek|swasth|healthy)\s+(honga|hungi|ho\s+jaunga|hounga)|"
+    r"when\s+will\s+i\s+(recover|heal|get\s+better)|"
     r"recovery\s+(date|kab|when)|"
+    r"thik\s+hone\s+ka\s+date|"
     r"cure\s+(kab|when|date)|"
     r"bimari\s+(kab\s+jayegi|kab\s+thik|exit\s+date))",
     _re.IGNORECASE,
@@ -298,15 +308,20 @@ _TIMING_RECOVERY_RX = _re.compile(
 _TIMING_SURGERY_RX = _re.compile(
     r"(operation\s+(kab|date|muhurat|kis\s+din)|"
     r"surgery\s+(kab|date|muhurat|when)|"
+    r"best\s+date\s+for\s+(my\s+)?surgery|"
+    r"surgery\s+date|"
     r"shastra[\s-]?kriya\s+kab|"
     r"muhurat\s+(operation|surgery))",
     _re.IGNORECASE,
 )
 
 _CURE_GUARANTEE_RX = _re.compile(
-    r"(guarantee\s+(thik|cure|swasth|recover)|"
+    r"(guarantee\s+(thik|cure|swasth|recover)|guaranteed\s+cure|guaranteed?\s+cure|"
     r"100\s*(?:%|percent|prcnt|pct)\s+(thik|cure|recover|theek)|"
-    r"(cancer|diabetes|tumour|tumor|hiv|aids)\s+(thik\s+ho|cure|theek))",
+    r"will\s+i\s+be\s+cured\s+100|"
+    r"(cancer|diabetes|tumou?r|hiv|aids)\s+(thik\s+ho|pakka\s+thik|cure|theek)|"
+    r"pakka\s+thik\s+ho\s+jayega|"
+    r"(cancer|diabetes)\s+pakka\s+thik)",
     _re.IGNORECASE,
 )
 
@@ -329,7 +344,16 @@ def detect_hard_guard(question: str) -> Optional[str]:
         return "REFUSE_DIAGNOSIS"
     if _DIAGNOSIS_DEMAND_RX.search(question):
         return "REFUSE_DIAGNOSIS"
-    # RECOVERY first (positive-direction cues like "kab thik", "kab jayegi")
+    # Timing windows → health_engine_v1 (dasha + disclaimer), not static refuse
+    try:
+        from ask_health.timing_registry import is_health_timing_question  # type: ignore
+
+        if is_health_timing_question(question):
+            if _CURE_GUARANTEE_RX.search(question):
+                return "REFUSE_CURE_GUARANTEE"
+            return None
+    except Exception:
+        pass
     if _TIMING_RECOVERY_RX.search(question):
         return "REFUSE_TIMING_RECOVERY"
     if _TIMING_DECLINE_RX.search(question):
@@ -526,11 +550,14 @@ _HEALTH_TOPIC_RX = _re.compile(
     r"vitality|immunity|stamina|energy|"
     r"strength|weak|kamzor|kamzori|"
     r"recovery|recover|cure|thik|theek|"
+    r"doctor|hospital|treatment|medicine|dawai|dava|therapy|"
+    r"surgery|operation|specialist|diagnos|"
     r"chronic|long[\s-]?term|lambi|purani|"
     r"stress|anxiety|depression|mental|"
     r"man|mood|tension|chinta|"
     r"ashaant|udas|udaasi|pareshan|bechain[ai]?|ghabrahat|"
     r"neend|sleep|insomnia|"
+    r"miracle|dua|chamatkar|"
     r"ajeeb|ajib|uneasy|weird|strange|unsettled|"
     r"khali\s*sa|khaali\s*sa|theek\s*nahi\s*lagta|"
     r"sardi|zukam|jukam|khansi|kha?ansi|cold|cough|fever|"
@@ -539,6 +566,7 @@ _HEALTH_TOPIC_RX = _re.compile(
     r"sirdard|headache|migraine|"
     r"thakan|fatigue|tiredness|kamzori|weakness|"
     r"accident|injury|chot|durghatna|"
+    r"neurolog|neurological|nerve|nerves|sensitivity|"
     r"infertility|santaan|santan|fertility|pregnancy|conceive|"
     r"addiction|nasha|sharab|smoking|"
     r"arishta|balarishta|vipreet[\s-]?recovery|"
@@ -549,9 +577,18 @@ _HEALTH_TOPIC_RX = _re.compile(
 
 # Animal/pet absolute-non-health context.
 _ABSOLUTE_NON_HEALTH_RX = _re.compile(
-    r"\b(kutta|kuttiya|billi|dog|cat|janwar|"
+    r"\b(kutta|kuttiya|kutti|kutte|billi|billiy|billiyon|dog|cat|janwar|"
     r"animal|puppy|kitten|paalt(u|oo))\b",
     _re.IGNORECASE,
+)
+
+# Devanagari health vocabulary — enables Hindi questions in scope gate
+_HINDI_HEALTH_RX = _re.compile(
+    r"(सेहत|स्वास्थ्य|स्वस्थ|बीमार|बिमार|तबीय|शरीर|मानस|मानसिक|तनाव|चिंता|"
+    r"पेट|दिल|सांस|त्वचा|प्रतिरक्ष|ऊर्जा|शल्य|ऑपरेशन|मृत्यु|कैंसर|"
+    r"गर्भ|माता|पिता|नश|आयु|उम्र|ट्यूमर|मधुमेह|नस|दुर्घटना|चोट|"
+    r"नींद|अस्थि|जोड़|थायराइड|हार्मोन|खांसी|सर्दी|ठीक|क्षमता|प्रवृत्ति|"
+    r"समस्या|दर्द|ताकत|अच्छी|कमजोरी|हृदय|पाचन|लंबी|जोखिम|संभावना|लत)",
 )
 
 _AMBIGUOUS_HEALTH_TOKENS_RX = _re.compile(
@@ -596,6 +633,9 @@ def is_health_question(question: str) -> bool:
         return False
     # 2. Hard-guard patterns ALWAYS owned by health (so refuse fires)
     if detect_hard_guard(question) is not None:
+        return True
+    # 2b. Devanagari health words
+    if _HINDI_HEALTH_RX.search(question):
         return True
     # 3. Health topic keyword present?
     if not _HEALTH_TOPIC_RX.search(question):

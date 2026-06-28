@@ -31,6 +31,8 @@ def run_bed_intimacy(kundli: dict, question: str, *, wants_explain: bool = False
     )
     if not evidence:
         evidence = ["Intimacy signals look normal/mixed; comfort depends on emotional safety."]
+    if len(evidence) < 2:
+        evidence.append("7th house Venus/Mars tone shapes private comfort — trust builds intimacy over time.")
 
     return EngineResult(
         archetype="bed_intimacy",

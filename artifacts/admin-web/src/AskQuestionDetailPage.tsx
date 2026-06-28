@@ -7,6 +7,7 @@ import {
   parseAskLlmContext,
 } from "./AskLlmContextPanel";
 import { CopyTextButton } from "./CopyTextButton";
+import { QuestionLangBadge } from "./QuestionLangBadge";
 
 export function AskQuestionDetailPage({
   row,
@@ -36,6 +37,9 @@ export function AskQuestionDetailPage({
         <div className="ask-detail-label-row">
           <strong>Question</strong>
           <CopyTextButton text={row.question_text} label="Copy" copiedLabel="Copied" />
+        </div>
+        <div className="ask-detail-question-lang">
+          <QuestionLangBadge questionText={row.question_text} />
         </div>
         <p className="ask-detail-question">{row.question_text}</p>
         {ctx ? (

@@ -26,7 +26,7 @@ class TestCatalogCoverage(unittest.TestCase):
     def test_all_topics_have_9_grahas(self):
         expected = {"Sun", "Moon", "Mars", "Mercury", "Jupiter",
                       "Venus", "Saturn", "Rahu", "Ketu"}
-        for topic in ("health", "marriage", "career", "money", "business"):
+        for topic in ("health", "marriage", "career", "money", "business", "litigation"):
             self.assertEqual(set(CATALOG[topic].keys()), expected,
                               f"{topic} missing planets")
 
@@ -293,6 +293,33 @@ class TestRenderOutput(unittest.TestCase):
         text = render_for_locked_facts(r)
         self.assertIn("KPI", text)
         self.assertIn("₹ cost", text)
+
+
+class TestGetRemediesLitigation(unittest.TestCase):
+    def test_litigation_remedy_three_tiers(self):
+        r = get_remedies(
+            "litigation",
+            [{"name": "Mars", "score": 14}, {"name": "Saturn", "score": 12}, {"name": "Rahu", "score": 11}],
+            ["legal_documents", "advocate_strategy", "conflict_calm"],
+            severity="high_stress",
+        )
+        self.assertTrue(r["available"])
+        self.assertEqual(len(r["planet_remedies"]), 3)
+        text = render_for_locked_facts(r)
+        self.assertIn("LITIGATION REMEDIES", text)
+        self.assertIn("practical", text.lower())
+        self.assertIn("vedic", text.lower())
+        self.assertIn("lawyer", text.lower())
+
+    def test_litigation_severity_guard(self):
+        r = get_remedies(
+            "litigation",
+            [{"name": "Mars", "score": 14}],
+            ["criminal_defence"],
+            severity="high_stress",
+        )
+        kinds = [c["kind"] for c in r["conflicts"]]
+        self.assertIn("SEVERITY_GUARD", kinds)
 
 
 if __name__ == "__main__":

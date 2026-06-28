@@ -1,5 +1,8 @@
+import { AskQuestionDetailPage } from "./AskQuestionDetailPage";
 import { AskLlmContextPanel, AnswerPathBadge, parseAskLlmContext } from "./AskLlmContextPanel";
 import { CopyTextButton } from "./CopyTextButton";
+import { ViewQuestionButton } from "./ViewQuestionButton";
+import { QuestionLangBadge } from "./QuestionLangBadge";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import {
   type AdminStats,
@@ -25,6 +28,8 @@ import {
   type GmailProfilesResponse,
   fetchTransactions,
   fetchUserDetail,
+  fetchUserAskProfile,
+  type UserAskProfileData,
   fetchUsers,
   fetchLoveRealityOrders,
   type LoveRealityOrderItem,
@@ -104,6 +109,7 @@ export default function App() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [detailUserId, setDetailUserId] = useState<number | null>(null);
   const [detail, setDetail] = useState<UserDetail | null>(null);
+  const [askProfile, setAskProfile] = useState<UserAskProfileData | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
@@ -143,6 +149,7 @@ export default function App() {
   const [askQuestions, setAskQuestions] = useState<AskQuestionItem[]>([]);
   const [askQaEmail, setAskQaEmail] = useState("");
   const [askQaError, setAskQaError] = useState<string | null>(null);
+  const [askQaViewRow, setAskQaViewRow] = useState<AskQuestionItem | null>(null);
 
   const [lrOrdersPage, setLrOrdersPage] = useState(1);
   const [lrOrdersPages, setLrOrdersPages] = useState(1);
@@ -262,15 +269,22 @@ export default function App() {
     if (detailUserId === user.id) {
       setDetailUserId(null);
       setDetail(null);
+      setAskProfile(null);
       setDetailError(null);
       return;
     }
     setDetailUserId(user.id);
     setDetail(null);
+    setAskProfile(null);
     setDetailError(null);
     setDetailLoading(true);
     try {
-      setDetail(await fetchUserDetail(user.id));
+      const [d, ap] = await Promise.all([
+        fetchUserDetail(user.id),
+        fetchUserAskProfile(user.id).catch(() => null),
+      ]);
+      setDetail(d);
+      setAskProfile(ap);
     } catch (e) {
       setDetailError(e instanceof Error ? e.message : "Failed to load details");
     } finally {
@@ -560,6 +574,67 @@ export default function App() {
           </div>
         </div>
 
+        {askProfile && (askProfile.profile?.question_count ?? 0) > 0 ? (
+          <>
+            <p className="detail-summary">
+              Ask mindset ({askProfile.profile.question_count} questions analysed)
+            </p>
+            <div className="engine-outcome-box" style={{ marginBottom: 12 }}>
+              <p>
+                <strong>Style:</strong> {askProfile.profile.avg_style || "—"} · avg{" "}
+                {askProfile.profile.avg_word_count ?? "—"} words · emotion:{" "}
+                {askProfile.profile.dominant_emotion || "—"} · top topic:{" "}
+                {askProfile.profile.top_topic || "—"}
+              </p>
+              {(askProfile.labels ?? []).length > 0 ? (
+                <p style={{ marginTop: 8 }}>
+                  {(askProfile.labels ?? []).map((lb) => (
+                    <span key={lb} className="badge" style={{ marginRight: 6 }}>
+                      {lb}
+                    </span>
+                  ))}
+                </p>
+              ) : null}
+              {askProfile.personalization_hint ? (
+                <details style={{ marginTop: 8 }}>
+                  <summary className="detail-muted">Personalization hint sent to Cosmo</summary>
+                  <pre className="llm-context-pre" style={{ fontSize: "0.75rem" }}>
+                    {askProfile.personalization_hint}
+                  </pre>
+                </details>
+              ) : null}
+            </div>
+            {(askProfile.recent_signals ?? []).length > 0 ? (
+              <table className="detail-table detail-table-compact">
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Words</th>
+                    <th>Style</th>
+                    <th>Emotion</th>
+                    <th>Types</th>
+                    <th>Topics</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {askProfile.recent_signals.map((s, i) => (
+                    <tr key={s.id ?? i}>
+                      <td>{formatDate(s.created_at ?? null)}</td>
+                      <td>{s.word_count ?? "—"}</td>
+                      <td>{s.style || "—"}</td>
+                      <td>{s.emotion || "—"}</td>
+                      <td>{(s.question_types ?? []).join(", ") || "—"}</td>
+                      <td>{(s.topics_detected ?? []).join(", ") || s.logged_topic || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
+          </>
+        ) : askProfile ? (
+          <p className="detail-muted">No Ask questions logged yet — mindset builds after user asks.</p>
+        ) : null}
+
         {purchases.length > 0 ? (
           <>
             <p className="detail-summary">Purchases (this user)</p>
@@ -787,6 +862,7 @@ export default function App() {
   }
 
   const meta = TAB_META[tab];
+  const adminSecretOk = Boolean((import.meta.env.VITE_ADMIN_SECRET || "").trim());
 
   return (
     <div className="admin-shell">
@@ -809,7 +885,10 @@ export default function App() {
             key={item.id}
             type="button"
             className={`nav-item${tab === item.id ? " active" : ""}`}
-            onClick={() => setTab(item.id)}
+            onClick={() => {
+              setAskQaViewRow(null);
+              setTab(item.id);
+            }}
           >
             <span className="nav-icon" aria-hidden>
               {item.icon}
@@ -838,6 +917,15 @@ export default function App() {
           <h2>{meta.title}</h2>
           <p className="subtitle">{meta.subtitle}</p>
         </header>
+
+      {!adminSecretOk ? (
+        <div className="error">
+          <strong>API not configured.</strong> Create <code>artifacts/admin-web/.env</code> with{" "}
+          <code>VITE_ADMIN_SECRET</code> (same as VPS <code>ADMIN_SECRET</code>). For{" "}
+          <code>pnpm dev</code> set <code>VITE_API_PROXY_TARGET=http://YOUR_VPS:8080</code>. For
+          static build also set <code>VITE_API_BASE=http://YOUR_VPS:8080</code>, then rebuild.
+        </div>
+      ) : null}
 
       {error && <div className="error">{error}</div>}
 
@@ -1410,6 +1498,12 @@ export default function App() {
       ) : null}
 
       {tab === "askqa" ? (
+        askQaViewRow ? (
+          <AskQuestionDetailPage
+            row={askQaViewRow}
+            onBack={() => setAskQaViewRow(null)}
+          />
+        ) : (
         <section className="section card">
           <h2>Ask Q&A</h2>
           <p className="detail-muted">
@@ -1461,11 +1555,18 @@ export default function App() {
                           <div className="ask-q-text">
                             <strong>Q:</strong> {row.question_text}
                           </div>
-                          <CopyTextButton
-                            text={row.question_text}
-                            label="Copy question"
-                            copiedLabel="Copied"
-                          />
+                          <div className="ask-q-actions">
+                            <QuestionLangBadge questionText={row.question_text} compact />
+                            <CopyTextButton
+                              text={row.question_text}
+                              label="Copy question"
+                              copiedLabel="Copied"
+                            />
+                            <ViewQuestionButton
+                              label="View"
+                              onClick={() => setAskQaViewRow(row)}
+                            />
+                          </div>
                         </div>
                         {row.answer_text ? (
                           <>
@@ -1496,7 +1597,10 @@ export default function App() {
                             <> — {row.engine_tag}</>
                           ) : null}
                         </div>
-                        <AskLlmContextPanel row={row} />
+                        <AskLlmContextPanel
+                          row={row}
+                          panelId={`ask-llm-context-${row.id}`}
+                        />
                       </td>
                       <td>
                         {row.total_tokens != null ? (
@@ -1553,6 +1657,7 @@ export default function App() {
             </div>
           ) : null}
         </section>
+        )
       ) : null}
 
       {tab === "users" ? (

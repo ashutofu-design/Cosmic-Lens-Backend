@@ -154,6 +154,22 @@ def _drekkana_sign(lon: float) -> int:
     else:            return (sign + 8)  % 12   # 9th-from
 
 
+def _chaturthamsa_sign(lon: float) -> int:
+    """
+    BPHS D4 Chaturthamsa rule:
+        Each sign divided into 4 parts of 7.5° each.
+        ODD signs (Aries, Gemini, ...): parts from same, 4th, 7th, 10th from sign.
+        EVEN signs (Taurus, Cancer, ...): parts from 1st, 4th, 7th, 10th from sign
+        (i.e. offset +1 vs odd). Used for PROPERTY / home / fortune refinement.
+    """
+    sign = _sign_idx_from_lon(lon)
+    deg_in_sign = lon - sign * 30.0
+    p_idx = int(deg_in_sign / 7.5)   # 0..3
+    if sign % 2 == 0:   # odd 1-based (Aries idx 0)
+        return (sign + p_idx * 3) % 12
+    return (sign + 1 + p_idx * 3) % 12
+
+
 def _saptamsa_sign(lon: float) -> int:
     """
     BPHS D7 Saptamsa rule:
@@ -191,6 +207,10 @@ def compute_d2(planets, lagna_lon=None):
 
 def compute_d3(planets, lagna_lon=None):
     return _compute_chart(planets, lagna_lon, _drekkana_sign)
+
+
+def compute_d4(planets, lagna_lon=None):
+    return _compute_chart(planets, lagna_lon, _chaturthamsa_sign)
 
 
 def compute_d7(planets, lagna_lon=None):
@@ -246,6 +266,49 @@ def summarize_d3_for_siblings(d3: dict, intel: dict) -> dict[str, Any]:
         if p in d3:
             out[f"{k}_d3_sign"] = d3[p]["sign"]
             out[f"{k}_d3_strength"] = _planet_strength_in_varga(p, d3[p]["sign_idx"])
+    return out
+
+
+def summarize_d4_for_property(d4: dict, intel: dict) -> dict[str, Any]:
+    """
+    4L D4 + Mars/Moon/Venus D4 → property/home refinement, comfort/size tone.
+    """
+    out: dict[str, Any] = {}
+    house_lords = intel.get("house_lords") or []
+    fourth_lord = next((h.get("lord") for h in house_lords if h.get("house") == 4), None)
+    if fourth_lord and fourth_lord in d4:
+        out["4L"] = fourth_lord
+        out["4L_d4_sign"] = d4[fourth_lord]["sign"]
+        out["4L_d4_strength"] = _planet_strength_in_varga(fourth_lord, d4[fourth_lord]["sign_idx"])
+    for key, planet, role in (
+        ("mars", "Mars", "land/plot"),
+        ("moon", "Moon", "home/family"),
+        ("venus", "Venus", "comfort/luxury"),
+        ("jupiter", "Jupiter", "growth/fortune"),
+    ):
+        if planet in d4:
+            out[f"{key}_d4_sign"] = d4[planet]["sign"]
+            out[f"{key}_d4_strength"] = _planet_strength_in_varga(planet, d4[planet]["sign_idx"])
+            out[f"{key}_d4_role"] = role
+    lagna = d4.get("_lagna") if isinstance(d4.get("_lagna"), dict) else {}
+    if lagna.get("sign"):
+        out["d4_lagna_sign"] = lagna["sign"]
+    # Qualitative size/comfort tone from D4 karakas (indicative, not literal sqft)
+    ven_str = out.get("venus_d4_strength", "")
+    mar_str = out.get("mars_d4_strength", "")
+    moon_str = out.get("moon_d4_strength", "")
+    if ven_str in {"exalted", "own", "strong"}:
+        out["property_size_tone"] = "spacious/comfortable/luxury-leaning home tone in D4"
+    elif mar_str in {"exalted", "own", "strong"} and ven_str not in {"exalted", "own"}:
+        out["property_size_tone"] = "land/plot or larger-parcel property tone in D4"
+    elif moon_str in {"exalted", "own", "strong"}:
+        out["property_size_tone"] = "family-home, medium comfortable dwelling tone in D4"
+    else:
+        out["property_size_tone"] = "modest/functional home tone in D4 — planning upgrades over time"
+    out["vargottama"] = [
+        p for p, info in d4.items()
+        if isinstance(info, dict) and info.get("vargottama") and not str(p).startswith("_")
+    ]
     return out
 
 

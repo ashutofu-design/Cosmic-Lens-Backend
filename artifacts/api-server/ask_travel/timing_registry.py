@@ -41,6 +41,12 @@ def is_travel_timing_question(
         r"(?ix)\b(job|naukri|work|career)\b", q
     ):
         return False
+    if re.search(
+        r"(?ix)\b(teerth|tirth|pilgrim|char\s+dham|religious\s+travel|"
+        r"mandir\s+yatra|dharmik\s+yatra|spiritual\s+travel)\b",
+        q,
+    ):
+        return False
     if is_mr_settle_abroad_question(q):
         return False
     if is_career_job_abroad_question(q) and re.search(

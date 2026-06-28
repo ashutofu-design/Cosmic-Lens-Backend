@@ -40,12 +40,12 @@ _SAMPLE_KUNDLI = {
                 {
                     "lord": "Saturn",
                     "start": "2024-01-01",
-                    "end": "2026-12-01",
+                    "end": "2028-12-01",
                     "pratyantar": [
                         {
                             "lord": "Mercury",
                             "start": "2025-06-01",
-                            "end": "2025-12-01",
+                            "end": "2028-06-01",
                         }
                     ],
                 }
@@ -66,8 +66,12 @@ class TestAllDomainsStepAudit(unittest.TestCase):
     def test_generic_engine_attaches_step_audit(self):
         raw = compute_generic_timing_window(_SAMPLE_KUNDLI, _MINI_CFG)
         self.assertIn("step_audit", raw)
-        self.assertIn("step5", raw["step_audit"])
-        self.assertEqual(raw["step_audit"]["step5"]["name"], "Dasha activation (MD/AD/PD) — PRIMARY")
+        self.assertIn("step1", raw["step_audit"])
+        self.assertEqual(
+            raw["step_audit"]["step1"]["name"],
+            "Active dasha — abhi kya chal raha hai",
+        )
+        self.assertTrue(raw["step_audit"]["step1"].get("current_end"))
 
     def test_rich_engine_result_audit(self):
         now = datetime.utcnow()
@@ -80,6 +84,14 @@ class TestAllDomainsStepAudit(unittest.TestCase):
                 "STEP5 dasha_windows_in_horizon=12",
                 "STEP6 double_transit=STRONG",
             ],
+            "dasha_running_now": {
+                "md": "Jupiter",
+                "ad": "Saturn",
+                "pd": "Mercury",
+                "start_iso": now.strftime("%Y-%m-%d"),
+                "end_iso": (now + timedelta(days=400)).strftime("%Y-%m-%d"),
+                "lords": "Jupiter/Saturn/Mercury",
+            },
             "current_window": {
                 "md": "Jupiter",
                 "ad": "Saturn",
@@ -101,10 +113,11 @@ class TestAllDomainsStepAudit(unittest.TestCase):
             "kp_layer": {"score": 10.0},
         }
         out = attach_timing_pipeline_audit(result, "travel")
-        self.assertIn("step5", out["step_audit"])
-        self.assertTrue(out["step_audit"]["step5"]["current_lords"])
+        self.assertIn("step1", out["step_audit"])
+        self.assertTrue(out["step_audit"]["step1"]["current_lords"])
+        self.assertTrue(out["step_audit"]["step1"]["current_end"])
         ta = out["timing_audit"]
-        self.assertEqual(ta["checks"][0]["name"], "dasha_trace")
+        self.assertEqual(ta["checks"][0]["name"], "dasha_running_now")
         self.assertEqual(ta["checks"][1]["name"], "dasha_domain_activation")
 
     def test_all_domain_engine_ids(self):
@@ -120,20 +133,30 @@ class TestAllDomainsStepAudit(unittest.TestCase):
             self.assertIn(key, result["step_audit"])
 
     def test_engine_trace_payload(self):
-        audit = build_step_audit_from_timing_result(
+        trace = build_domain_timing_engine_trace(
             {
                 "verdict": "LOVE_WINDOW_SUPPORTIVE",
                 "bucket": "timing",
-                "current_window": {"md": "Venus", "ad": "Moon", "start_iso": "2025-01-01"},
+                "dasha_running_now": {
+                    "md": "Jupiter",
+                    "ad": "Saturn",
+                    "pd": "Mercury",
+                    "start_iso": "2025-01-01",
+                    "end_iso": "2028-12-01",
+                    "lords": "Jupiter/Saturn/Mercury",
+                },
+                "current_window": {
+                    "md": "Jupiter",
+                    "ad": "Venus",
+                    "start_iso": "2027-01-01",
+                    "end_iso": "2028-01-01",
+                },
             },
-            "love",
-        )
-        trace = build_domain_timing_engine_trace(
-            {"verdict": "LOVE_WINDOW_SUPPORTIVE", "step_audit": audit, "bucket": "timing"},
             "love",
         )
         self.assertEqual(trace["engine"], "love_timing_v1")
         self.assertIn("dasha_trace", trace)
+        self.assertTrue(trace.get("running_dasha_window"))
 
 
 if __name__ == "__main__":

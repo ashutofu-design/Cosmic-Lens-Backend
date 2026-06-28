@@ -88,7 +88,7 @@ def format_vehicle_timing_for_prompt(v: dict, question: str = "") -> str:
     if not isinstance(v, dict) or not v:
         return ""
     lines = [
-        "════════════════ VEHICLE TIMING ENGINE v1 (LOCKED) ════════════════",
+        "════════════════ VEHICLE TIMING ENGINE (LOCKED) v1 ════════════════",
         f"Verdict: {v.get('verdict', '?')} | Band: {v.get('band', '?')} | Bucket: {v.get('bucket', '?')}",
     ]
     cw = v.get("current_window") or {}

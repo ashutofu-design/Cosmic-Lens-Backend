@@ -40,6 +40,12 @@ _DOMAIN_ANCHOR_RX: dict[str, re.Pattern[str]] = {
     "travel": re.compile(
         r"(?ix)\b(visa|abroad|videsh|foreign|settle|immigration|yatra|travel)\b"
     ),
+    "vehicle": re.compile(
+        r"(?ix)\b("
+        r"car|cars|bike|bikes|scooter|scooty|motorcycle|motorbike|"
+        r"vehicle|vehicles|gaadi|gadi|suv|sedan|hatchback|automobile"
+        r")\b"
+    ),
     "litigation": re.compile(
         r"(?ix)\b(court|case|mukadma|fir|bail|jail|lawyer|vakil|litigation|kanooni)\b"
     ),
@@ -110,6 +116,7 @@ _ARCHETYPE_ANCHOR_RX: dict[str, re.Pattern[str]] = {
 
 _DOMAIN_PRIORITY = (
     "litigation",
+    "vehicle",
     "health",
     "children",
     "education",
@@ -441,6 +448,19 @@ def repair_llm_intent(question: str, result: dict[str, Any] | None) -> dict[str,
             mr_arch = None
             out["is_timing"] = False
             out["is_decision"] = False
+            repaired = True
+    except Exception:
+        pass
+
+    try:
+        from ask_vehicle.timing_registry import is_vehicle_timing_question  # type: ignore
+
+        if is_vehicle_timing_question(q, out):
+            out["domain"] = "vehicle"
+            out["is_timing"] = True
+            out["is_decision"] = False
+            _clear_domain_archetypes(out)
+            mr_arch = None
             repaired = True
     except Exception:
         pass

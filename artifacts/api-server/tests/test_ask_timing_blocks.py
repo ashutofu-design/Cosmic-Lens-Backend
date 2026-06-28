@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ask_hard_guards import is_real_timing_engine_block, passthrough_has_domain_engine_facts
 from event_timing.love.love_timing_v1 import compute_love_window, format_love_timing_for_prompt
+from event_timing.vehicle.vehicle_timing_v1 import compute_vehicle_window, format_vehicle_timing_for_prompt
 from event_timing.fame.fame_timing_v1 import compute_fame_window, format_fame_timing_for_prompt
 from event_timing.network.network_timing_v1 import compute_network_window, format_network_timing_for_prompt
 from event_timing.spiritual.spiritual_timing_v1 import compute_spiritual_window, format_spiritual_timing_for_prompt
@@ -65,6 +66,14 @@ def test_locked_blocks_recognized_by_ask_guard(formatter, raw) -> None:
 def test_love_timing_v2_block_passes_ask_guard() -> None:
     raw = compute_love_window(_K, question="Mera love life kab shuru hoga")
     block = format_love_timing_for_prompt(raw, "Mera love life kab shuru hoga")
+    assert block
+    assert is_real_timing_engine_block(block), block[:160]
+    assert passthrough_has_domain_engine_facts(domain_timing_block=block)
+
+
+def test_vehicle_timing_block_passes_ask_guard() -> None:
+    raw = compute_vehicle_window(_K, question="Main new car kab lunga")
+    block = format_vehicle_timing_for_prompt(raw, "Main new car kab lunga")
     assert block
     assert is_real_timing_engine_block(block), block[:160]
     assert passthrough_has_domain_engine_facts(domain_timing_block=block)

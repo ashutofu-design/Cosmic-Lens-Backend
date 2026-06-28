@@ -25,6 +25,7 @@ _ENGINE_SLICES = frozenset({
     "education_timing_v1",
     "property_timing_v1",
     "litigation_timing_v1",
+    "vehicle_timing_v1",
     "spiritual_timing_v1",
     "fame_timing_v1",
     "network_timing_v1",

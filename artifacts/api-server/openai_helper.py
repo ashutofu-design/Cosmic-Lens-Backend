@@ -5203,6 +5203,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     except Exception:
         pass
     try:
+        from ask_vehicle.timing_registry import is_vehicle_timing_question  # type: ignore
+
+        if is_vehicle_timing_question(question or "", _llm_intent):
+            is_timing = True
+    except Exception:
+        pass
+    try:
         from ask_health.timing_registry import health_static_overrides_llm_timing  # type: ignore
 
         if health_static_overrides_llm_timing(question or "", _llm_intent):
@@ -5651,6 +5658,17 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             is_timing = True
             qtype = "TIMING"
             _is_mr_static = False
+    except Exception:
+        pass
+    try:
+        from ask_vehicle.timing_registry import is_vehicle_timing_question  # type: ignore
+
+        if is_vehicle_timing_question(question or "", _llm_intent):
+            is_timing = True
+            qtype = "TIMING"
+            _is_health_static = False
+            _is_vehicle_static = False
+            _force_health_static = False
     except Exception:
         pass
     # Sensitive Qs ALSO need current dasha so the LLM has a real reason
@@ -6437,10 +6455,26 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         _chart_slice_type = "full_compact_fallback"
 
     # Health static must use health_engine_v1 — recover if chart build missed it.
-    _health_wanted = bool(_is_health_static) or (
-        isinstance(_llm_intent, dict)
-        and str(_llm_intent.get("domain") or "").strip().lower() == "health"
-        and str(qtype or "").upper() != "TIMING"
+    _vehicle_timing_q = False
+    try:
+        from ask_vehicle.timing_registry import is_vehicle_timing_question  # type: ignore
+
+        _vehicle_timing_q = is_vehicle_timing_question(
+            question or "",
+            _llm_intent if isinstance(_llm_intent, dict) else None,
+        )
+    except Exception:
+        pass
+    _health_wanted = (
+        not _vehicle_timing_q
+        and (
+            bool(_is_health_static)
+            or (
+                isinstance(_llm_intent, dict)
+                and str(_llm_intent.get("domain") or "").strip().lower() == "health"
+                and str(qtype or "").upper() != "TIMING"
+            )
+        )
     )
     _health_has_slice = (
         isinstance(dcr_love_meta, dict)

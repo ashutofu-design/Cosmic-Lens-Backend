@@ -227,7 +227,7 @@ LITIGATION_ARCHETYPES = {
     "general_litigation",
 }
 
-DOMAINS = {"marriage", "love", "career", "finance", "health", "education", "children", "property", "travel", "litigation", "general"}
+DOMAINS = {"marriage", "love", "career", "finance", "health", "education", "children", "property", "travel", "litigation", "vehicle", "general"}
 
 # Low-confidence cutoff — below this the caller treats the result as
 # untrustworthy and falls back to regex.
@@ -239,7 +239,7 @@ Read the user's question (Hindi/Hinglish/English) and return STRICT JSON only.
 
 Decide:
 1. "domain": the life area the question is really about. One of:
-   marriage, love, career, finance, health, education, children, property, travel, litigation, general.
+   marriage, love, career, finance, health, education, children, property, travel, litigation, vehicle, general.
    CRITICAL RULE: if the question is ABOUT THE PARTNER / SPOUSE / lover \
 (their support, nature, behaviour, loyalty, feelings, family) — even if it \
 also mentions career or money — the domain is "marriage" or "love" (the \
@@ -270,6 +270,9 @@ settlement/relocation abroad, visa/passport/immigration/PR/green card theme (NOT
 pilgrimage/teerth, travel obstacles/risk, return to India — WITHOUT study-abroad padhai (education), \
 job/naukri abroad (career foreign_career), or spouse settle after marriage (MR lifestyle). \
 Timing (kab/when/muhurat/dasha) → is_timing true, NOT travel static.
+Use "vehicle" when the question is about car/bike/gaadi/scooter/vehicle purchase, \
+delivery, or ownership timing (kab/when/lunga/paunga/kharid) — NOT health (do NOT map \
+car pollution to health unless user asks about their illness/symptoms). Timing → is_timing true.
 Use "litigation" when the question is about court case/mukadma/legal/litigation/police/FIR/bail/jail/criminal/civil \
 case outcome tone, delay, enemy case, acquittal, lawyer support, family court case — WITHOUT property \
 ghar/zameen dispute (property), divorce/spouse nature only (MR), police job/naukri career (career), or \
@@ -675,6 +678,15 @@ def classify_ask_intent(
         education_arch = None
         children_arch = None
         property_arch = None
+        litigation_arch = None
+    elif domain == "vehicle":
+        career_arch = None
+        finance_arch = None
+        health_arch = None
+        education_arch = None
+        children_arch = None
+        property_arch = None
+        travel_arch = None
         litigation_arch = None
     elif domain == "litigation":
         litigation_arch = data.get("litigation_archetype")

@@ -227,6 +227,20 @@ def _is_cross_domain_non_health(q: str) -> bool:
         return True
     if fin and _FINANCE_PRIMARY_RX.search(q) and not _has_real_health_intent(q):
         return True
+    try:
+        from ask_vehicle.timing_registry import is_vehicle_timing_question  # type: ignore
+
+        if is_vehicle_timing_question(q):
+            return True
+    except Exception:
+        pass
+    try:
+        from ask_vehicle.vehicle_registry import is_vehicle_static_question  # type: ignore
+
+        if is_vehicle_static_question(q):
+            return True
+    except Exception:
+        pass
     if re.search(
         r"(?ix)(health\s+ke\s+liye|medical\s+expense|hospital\s+bill|health\s+insurance|"
         r"insurance\s+me\s+paisa|fd\b|bachat|saving|loan|debt|salary|promotion|naukri)",

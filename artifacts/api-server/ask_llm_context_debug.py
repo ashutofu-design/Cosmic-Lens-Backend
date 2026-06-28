@@ -64,6 +64,8 @@ def derive_answer_path(
         "education_timing_v1",
         "property_timing_v1",
         "litigation_timing_v1",
+        "vehicle_timing_v1",
+        "vehicle_engine_v1",
     )
     dcr_love_buckets = sl == "marriage_relationship" and bool(slice_meta.get("buckets"))
     has_engine_facts = (

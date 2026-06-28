@@ -5196,6 +5196,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     except Exception:
         pass
     try:
+        from ask_love.timing_registry import is_love_timing_question  # type: ignore
+
+        if is_love_timing_question(question or "", _llm_intent):
+            is_timing = True
+    except Exception:
+        pass
+    try:
         from ask_health.timing_registry import health_static_overrides_llm_timing  # type: ignore
 
         if health_static_overrides_llm_timing(question or "", _llm_intent):
@@ -5637,6 +5644,15 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             )
         else:
             print(f"[raw_passthrough] health beats timing skipped: {_hso_a}", flush=True)
+    try:
+        from ask_love.timing_registry import is_love_timing_question  # type: ignore
+
+        if is_love_timing_question(question or "", _llm_intent):
+            is_timing = True
+            qtype = "TIMING"
+            _is_mr_static = False
+    except Exception:
+        pass
     # Sensitive Qs ALSO need current dasha so the LLM has a real reason
     # to cite in layer-2 (astrological reason). Auto-promote.
     if is_sensitive:

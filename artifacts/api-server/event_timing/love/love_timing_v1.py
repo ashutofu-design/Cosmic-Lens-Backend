@@ -100,7 +100,7 @@ def format_love_timing_for_prompt(v: dict, question: str = "") -> str:
     if not isinstance(v, dict) or not v:
         return ""
     lines = [
-        "=== LOVE TIMING ENGINE v2 (LOCKED) — dasha-first · 5H/7H/11H · Venus/Moon ===",
+        "=== LOVE TIMING ENGINE (LOCKED) v2 — dasha-first · 5H/7H/11H · Venus/Moon ===",
         f"Bucket: {v.get('bucket')} · Verdict: {v.get('verdict')} · Band: {v.get('band')}",
         f"Timing source: {v.get('timing_source') or '—'}",
     ]

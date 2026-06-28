@@ -52,7 +52,10 @@ _TIMING_SPEC_ONLY_RX = re.compile(
     r"(?ix)^\s*===\s*TIMING\s+SPEC\s*\(",
 )
 _TIMING_ENGINE_LOCKED_RX = re.compile(
-    r"(?ix)TIMING\s+(?:ENGINE|FALLBACK)\s*\(LOCKED\)",
+    r"(?ix)"
+    r"\bTIMING\s+(?:ENGINE|FALLBACK)\s*(?:v[\d.]+\s*)?\(LOCKED\)"
+    r"|"
+    r"TIMING\s+ENGINE[^\n]{0,40}\(LOCKED\)",
 )
 
 
@@ -67,7 +70,11 @@ def is_real_timing_engine_block(block: str) -> bool:
         return True
     if re.search(r"(?im)^Verdict:\s*.+", text) and "TIMING ENGINE" in text.upper():
         return True
+    if re.search(r"(?im)Verdict:\s*.+", text) and "TIMING ENGINE" in text.upper():
+        return True
     if re.search(r"(?im)^Current window:\s*.+\u2192", text):
+        return True
+    if re.search(r"(?im)PRIMARY window.*\u2192", text) and "TIMING ENGINE" in text.upper():
         return True
     return False
 

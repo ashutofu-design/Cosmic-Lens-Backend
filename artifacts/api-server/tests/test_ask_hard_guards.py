@@ -144,6 +144,17 @@ class TestEngineOnlyPolicy(unittest.TestCase):
             passthrough_has_domain_engine_facts(domain_timing_block=spec),
         )
 
+    def test_love_timing_v2_locked_header_recognized(self):
+        from ask_hard_guards import is_real_timing_engine_block
+
+        block = (
+            "=== LOVE TIMING ENGINE (LOCKED) v2 — dasha-first ===\n"
+            "Bucket: timing · Verdict: LOVE_WINDOW_MODERATE · Band: moderate\n"
+        )
+        self.assertTrue(is_real_timing_engine_block(block))
+        legacy = "=== LOVE TIMING ENGINE v2 (LOCKED) — dasha-first ===\nVerdict: x"
+        self.assertTrue(is_real_timing_engine_block(legacy))
+
     def test_general_life_struggle_timing_requires_engine(self):
         from ask_hard_guards import (
             enforce_engine_only_or_refuse,

@@ -139,6 +139,27 @@ def is_health_timing_question(
     return True
 
 
+def health_static_overrides_llm_timing(
+    question: str,
+    llm_intent: Optional[dict] = None,
+) -> bool:
+    """True → caller must set is_timing=False so health_engine_v1 runs.
+
+    LLM intent often marks 'Health kaisi rahegi?' as timing (rahegi/future);
+    regex static health wins over that mistake.
+    """
+    q = (question or "").strip()
+    if not q:
+        return False
+    try:
+        from ask_health.classifier import is_health_static_question
+    except Exception:
+        return False
+    if not is_health_static_question(q):
+        return False
+    return not is_health_timing_question(q, llm_intent)
+
+
 def classify_health_timing_bucket(question: str) -> str:
     q = question or ""
     if re.search(

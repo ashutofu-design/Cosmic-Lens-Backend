@@ -98,6 +98,21 @@ class TestAskHealthEngine(unittest.TestCase):
         self.assertTrue(is_health_timing_question("2027 me health kaisi hogi?"))
         self.assertFalse(is_health_static_question("2027 me health kaisi hogi?"))
 
+    def test_health_static_overrides_llm_timing_flag(self):
+        from ask_health.timing_registry import health_static_overrides_llm_timing
+
+        llm_wrong = {
+            "domain": "health",
+            "is_timing": True,
+            "interpretation": "health before marriage",
+        }
+        self.assertTrue(
+            health_static_overrides_llm_timing("Health kaisi rahegi?", llm_wrong)
+        )
+        self.assertFalse(
+            health_static_overrides_llm_timing("2027 me health kaisi hogi?", llm_wrong)
+        )
+
     def test_resolve_override_llm(self):
         arch, reason = resolve_health_archetype(
             "stress aur anxiety?",

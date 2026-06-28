@@ -5161,6 +5161,18 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             is_timing = True
     except Exception:
         pass
+    try:
+        from ask_health.timing_registry import health_static_overrides_llm_timing  # type: ignore
+
+        if is_timing and health_static_overrides_llm_timing(question or "", _llm_intent):
+            print(
+                f"[raw_passthrough] HEALTH_STATIC overrides LLM is_timing "
+                f"q={(question or '')[:60]!r}",
+                flush=True,
+            )
+            is_timing = False
+    except Exception as _hso_exc:
+        print(f"[raw_passthrough] health static timing override skipped: {_hso_exc}", flush=True)
     qtype = "TIMING" if is_timing else "STATIC"
 
     # ── Vague life-struggle timing → clarifier (after intent/timing known) ─
@@ -5237,6 +5249,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _is_education_static = False
     _is_children_static = False
     _is_property_static = False
+    _is_vehicle_static = False
     _is_travel_static = False
     _is_litigation_static = False
     _finance_engine_on = (os.environ.get("ASK_FINANCE_ENGINE") or "1").strip() != "0"
@@ -5244,6 +5257,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _education_engine_on = (os.environ.get("ASK_EDUCATION_ENGINE") or "1").strip() != "0"
     _children_engine_on = (os.environ.get("ASK_CHILDREN_ENGINE") or "1").strip() != "0"
     _property_engine_on = (os.environ.get("ASK_PROPERTY_ENGINE") or "1").strip() != "0"
+    _vehicle_engine_on = (os.environ.get("ASK_VEHICLE_ENGINE") or "1").strip() != "0"
     _travel_engine_on = (os.environ.get("ASK_TRAVEL_ENGINE") or "1").strip() != "0"
     _litigation_engine_on = (os.environ.get("ASK_LITIGATION_ENGINE") or "1").strip() != "0"
     if not is_timing:
@@ -5254,6 +5268,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _is_education_static = _dom == "education"
             _is_children_static = _dom == "children"
             _is_property_static = _dom == "property"
+            _is_vehicle_static = _dom == "vehicle"
             _is_travel_static = _dom == "travel"
             _is_litigation_static = _dom == "litigation"
         else:
@@ -5306,6 +5321,18 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     _is_property_static = _prop_regex
             except Exception:
                 _is_property_static = False
+            try:
+                from ask_vehicle.classifier import is_vehicle_static_question  # type: ignore
+
+                _veh_regex = is_vehicle_static_question(question)
+                if _llm_intent is not None:
+                    _is_vehicle_static = _veh_regex or (
+                        _llm_intent.get("domain") == "vehicle"
+                    )
+                else:
+                    _is_vehicle_static = _veh_regex
+            except Exception:
+                _is_vehicle_static = False
             try:
                 from ask_travel.classifier import is_travel_static_question  # type: ignore
 
@@ -5361,7 +5388,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     _is_finance_static = _fin_regex
             except Exception:
                 _is_finance_static = False
-        if _health_engine_on and not _is_mr_static and not _is_career_static and not _is_finance_static and not _is_education_static and not _is_children_static and not _is_property_static and not _is_travel_static and not _is_litigation_static:
+        if _health_engine_on and not _is_mr_static and not _is_career_static and not _is_finance_static and not _is_education_static and not _is_children_static and not _is_property_static and not _is_vehicle_static and not _is_travel_static and not _is_litigation_static:
             try:
                 from ask_health.classifier import is_health_static_question  # type: ignore
 
@@ -5413,6 +5440,23 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 if is_property_static_question(question or ""):
                     _is_property_static = True
                     _is_finance_static = False
+            except Exception:
+                pass
+        if _vehicle_engine_on and not _is_mr_static:
+            try:
+                from ask_vehicle.vehicle_registry import is_vehicle_static_question  # type: ignore
+
+                if is_vehicle_static_question(question or ""):
+                    _is_vehicle_static = True
+                    _is_finance_static = False
+            except Exception:
+                pass
+        if _is_vehicle_static and _is_property_static:
+            try:
+                from ask_vehicle.routing import vehicle_overrides_property  # type: ignore
+
+                if vehicle_overrides_property(question or ""):
+                    _is_property_static = False
             except Exception:
                 pass
         if _travel_engine_on and not _is_mr_static and not _is_education_static:
@@ -5517,6 +5561,10 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         is_decision = False
         is_finance = False
     if _is_property_static:
+        static_dasha_hint = False
+        is_decision = False
+        is_finance = False
+    if _is_vehicle_static:
         static_dasha_hint = False
         is_decision = False
         is_finance = False
@@ -5736,6 +5784,61 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_property_static = False
+        elif _is_vehicle_static:
+            try:
+                from ask_vehicle import run_vehicle_static_engine  # type: ignore
+                from ask_vehicle.routing import resolve_vehicle_archetype  # type: ignore
+
+                _veh_interp = ""
+                if isinstance(_llm_intent, dict):
+                    _veh_interp = str(_llm_intent.get("interpretation") or "").strip()
+
+                _resolved_veh_arch, _veh_arch_reason = resolve_vehicle_archetype(
+                    question or "",
+                    llm_archetype=None,
+                    interpretation=_veh_interp,
+                )
+                if _veh_arch_reason:
+                    print(
+                        f"[raw_passthrough] VEHICLE_ARCHETYPE_ROUTE "
+                        f"-> {_resolved_veh_arch} reason={_veh_arch_reason}",
+                        flush=True,
+                    )
+
+                _vehicle_engine_result = run_vehicle_static_engine(
+                    kundli if isinstance(kundli, dict) else {},
+                    question or "",
+                    wants_explain=wants_explain,
+                    archetype=_resolved_veh_arch,
+                )
+                chart_text = _vehicle_engine_result.to_narrator_payload()
+                dcr_love_meta = {
+                    "slice": "vehicle_engine_v1",
+                    "topic": "vehicle",
+                    "archetype": _vehicle_engine_result.archetype,
+                    "verdict": _vehicle_engine_result.verdict,
+                    "summary": list(_vehicle_engine_result.summary or []),
+                    "evidence": list(_vehicle_engine_result.evidence or []),
+                    "ignore": list(_vehicle_engine_result.ignore or []),
+                    "checks": dict(_vehicle_engine_result.checks or {}),
+                    "skip_llm": bool(_vehicle_engine_result.skip_llm),
+                    "word_budget": int(_vehicle_engine_result.word_budget or 75),
+                    "narrator_mode": "engine_facts_only",
+                }
+                print(
+                    f"[raw_passthrough] VEHICLE_ENGINE "
+                    f"archetype={_vehicle_engine_result.archetype} "
+                    f"evidence={len(_vehicle_engine_result.evidence or [])} "
+                    f"chart_chars={len(chart_text)}",
+                    flush=True,
+                )
+            except Exception as _veh_exc:
+                print(f"[raw_passthrough] VEHICLE_ENGINE failed: {_veh_exc}", flush=True)
+                chart_text = _raw_compact_chart(
+                    kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
+                )
+                dcr_love_meta = None
+                _is_vehicle_static = False
         elif _is_travel_static:
             try:
                 from ask_travel import run_travel_static_engine  # type: ignore
@@ -6117,7 +6220,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             chart_text = _raw_compact_chart(
                 kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
             )
-        if not is_timing and not _is_mr_static and not _is_career_static and not _is_education_static and not _is_children_static and not _is_property_static:
+        if not is_timing and not _is_mr_static and not _is_career_static and not _is_education_static and not _is_children_static and not _is_property_static and not _is_vehicle_static:
             try:
                 from dcr_love import build_dcr_love_context  # type: ignore
 
@@ -8804,6 +8907,25 @@ def _build_messages(
                       f"npx={love_verdict_obj.get('natal_promise_score')} "
                       f"trig={love_verdict_obj.get('current_trigger_score')} "
                       f"window='{love_window_str}'")
+            if partner_kundli and love_verdict_block:
+                try:
+                    from event_timing.love.milan_engine_v1 import (
+                        assess_milan,
+                        format_milan_for_prompt,
+                        is_milan_question,
+                    )
+                    if is_milan_question(question or ""):
+                        _milan_obj = assess_milan(
+                            kundli, partner_kundli, intel_obj or {}, {},
+                            question=question or "",
+                        )
+                        _milan_block = format_milan_for_prompt(_milan_obj)
+                        if _milan_block:
+                            love_verdict_block = f"{love_verdict_block}\n\n{_milan_block}"
+                            if isinstance(out_meta, dict):
+                                out_meta["milan_verdict_obj"] = _milan_obj
+                except Exception as exc:
+                    print(f"[openai_helper] milan_engine failed: {exc}")
         except Exception as exc:
             print(f"[openai_helper] love_engine failed: {exc}")
 

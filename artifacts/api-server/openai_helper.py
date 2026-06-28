@@ -8386,24 +8386,39 @@ from reply_cosmo import (  # noqa: F401
 )
 
 
+def _normalize_client_lang(lang: str) -> Optional[str]:
+    """Explicit reply language from mobile/API body (english | hinglish | hindi)."""
+    l = (lang or "").strip().lower()
+    if l in ("en", "english", "eng"):
+        return "en"
+    if l in ("hi", "hindi", "hin", "devanagari"):
+        return "hi"
+    if l in ("hn", "hinglish", "hg", "hi-latin"):
+        return "hn"
+    return None
+
+
 def _resolve_response_lang(question: str, lang: str,
                            preferred_language: Optional[str]) -> str:
     """
     Final language decision per the Language Intelligence spec:
       1. user.preferred_language    (highest — sticky personal pref)
-      2. detected language of the question (per-message smart match)
-      3. app default language `lang`        (lowest — fallback)
+      2. explicit client `lang` (Ask language picker: english/hinglish/hindi)
+      3. detected language of the question (per-message smart match)
+      4. app default language `lang`        (lowest — fallback)
 
     Hindi content (Devanagari or Roman) replies in Devanagari (`hi`) unless
-    the user explicitly set preferred_language to `hn` (Roman Hinglish replies).
+    the user explicitly set preferred_language or client lang to `hn`.
     """
     pl = (preferred_language or "").strip().lower()
+    client_lang = _normalize_client_lang(lang)
     if pl in {"en", "hi", "hn"}:
         resolved = pl
+    elif client_lang:
+        resolved = client_lang
     else:
-        resolved = _detect_question_lang(question, lang)
-    # Roman-Hindi questions → Devanagari replies (Cosmic Ask default for India).
-    if resolved == "hn" and pl != "hn":
+        resolved = _detect_question_lang(question, lang or "en")
+    if resolved == "hn" and pl != "hn" and client_lang != "hn":
         resolved = "hi"
     return resolved
 

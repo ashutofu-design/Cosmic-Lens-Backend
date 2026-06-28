@@ -53,6 +53,13 @@ import { router, useFocusEffect } from "expo-router";
 import { useTabBar } from "@/context/TabBarContext";
 
 import { API_BASE, apiFetch } from "@/lib/apiConfig";
+import {
+  ASK_REPLY_LANG_OPTIONS,
+  ASK_REPLY_LANG_STORAGE_KEY,
+  askLangToApi,
+  loadAskReplyLang,
+  type AskReplyLang,
+} from "@/lib/askReplyLang";
 
 interface Message {
   id: string;
@@ -260,7 +267,7 @@ function PressScale({
 export default function AskScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
-  const { kundli, birthData, language, user, primaryProfileId } = useUser();
+  const { kundli, birthData, user, primaryProfileId } = useUser();
   const t = useT();
   const androidSB = StatusBar.currentHeight ?? 24;
   const topPad = Platform.OS === "web" ? 67 : Platform.OS === "android" ? Math.max(insets.top, androidSB) : insets.top;
@@ -289,6 +296,52 @@ export default function AskScreen() {
 
   // Mode picker: null = show 2-option landing, "chat" = open Cosmic Intelligence chat
   const [mode, setMode] = useState<"chat" | null>(null);
+  const [askReplyLang, setAskReplyLang] = useState<AskReplyLang>("hn");
+  const [langPickerVisible, setLangPickerVisible] = useState(false);
+  const [langPickerDraft, setLangPickerDraft] = useState<AskReplyLang>("hn");
+
+  useEffect(() => {
+    AsyncStorage.getItem(ASK_REPLY_LANG_STORAGE_KEY)
+      .then((raw) => {
+        const loaded = loadAskReplyLang(raw);
+        setAskReplyLang(loaded);
+        setLangPickerDraft(loaded);
+      })
+      .catch(() => {});
+  }, []);
+
+  const persistAskReplyLang = useCallback(
+    async (lang: AskReplyLang, syncServer: boolean) => {
+      setAskReplyLang(lang);
+      setLangPickerDraft(lang);
+      await AsyncStorage.setItem(ASK_REPLY_LANG_STORAGE_KEY, lang).catch(() => {});
+      if (syncServer && user?.id && user?.api_key) {
+        try {
+          await apiFetch(`${API_BASE}/api/user/${user.id}/language`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              "X-API-Key": user.api_key,
+              "X-User-Id": String(user.id),
+            },
+            body: JSON.stringify({ preferred_language: lang }),
+          });
+        } catch {
+          /* non-fatal */
+        }
+      }
+    },
+    [user?.id, user?.api_key],
+  );
+
+  const enterAskChat = useCallback(
+    (lang: AskReplyLang) => {
+      void persistAskReplyLang(lang, true);
+      setLangPickerVisible(false);
+      setMode("chat");
+    },
+    [persistAskReplyLang],
+  );
 
   // ── Full-screen chat: hide the bottom tab bar (Home / Lifemap / Future …)
   // while in chat mode so "Ask Anything" opens edge-to-edge like a dedicated
@@ -606,7 +659,7 @@ export default function AskScreen() {
             kundli,
             birthData,
             history,
-            lang: language,
+            lang: askLangToApi(askReplyLang),
             user_id: user?.id,
           }),
           signal: ctrl.signal,
@@ -918,7 +971,7 @@ export default function AskScreen() {
         if (isCurrent()) setLoading(false);
       }
     },
-    [loading, showDemo, kundli, birthData, user?.id, user?.api_key, language, messages, t.askDailyLimitOver],
+    [loading, showDemo, kundli, birthData, user?.id, user?.api_key, askReplyLang, messages, t.askDailyLimitOver],
   );
 
   // Latest assistant message id — only this one shows follow-up chips.
@@ -1301,6 +1354,40 @@ export default function AskScreen() {
           </View>
         </View>
         <Text style={[s.headerSub, { color: C.textMuted }]}>Multi System Pattern Engine V2.0</Text>
+        {mode === "chat" && (
+          <View style={s.askLangRow}>
+            <Feather name="globe" size={12} color={C.textMuted} />
+            <Text style={[s.askLangLabel, { color: C.textMuted }]}>Reply:</Text>
+            {ASK_REPLY_LANG_OPTIONS.map((opt) => {
+              const active = askReplyLang === opt.id;
+              return (
+                <Pressable
+                  key={opt.id}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    void persistAskReplyLang(opt.id, true);
+                  }}
+                  style={[
+                    s.askLangChip,
+                    {
+                      backgroundColor: active ? `${C.accent}22` : C.bgCard2,
+                      borderColor: active ? C.accent : C.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      s.askLangChipText,
+                      { color: active ? C.accent : C.textMid },
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
         </View>
       </FadeInView>
 
@@ -1344,7 +1431,8 @@ export default function AskScreen() {
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               if (showDemo) { router.push("/onboarding"); return; }
-              setMode("chat");
+              setLangPickerDraft(askReplyLang);
+              setLangPickerVisible(true);
             }}
             style={[s.modeCard, { shadowColor: "#3b82f6" }]}
           >
@@ -1594,6 +1682,71 @@ export default function AskScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* ── Ask reply language (before chat opens) ───────────────────────── */}
+      <Modal
+        visible={langPickerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLangPickerVisible(false)}
+      >
+        <Pressable style={qm.backdrop} onPress={() => setLangPickerVisible(false)}>
+          <Pressable
+            style={[qm.card, { backgroundColor: C.bgCard, borderColor: `${C.accent}40` }]}
+            onPress={(e) => e.stopPropagation?.()}
+          >
+            <View style={[qm.iconWrap, { backgroundColor: C.accentBg, borderColor: `${C.accent}40` }]}>
+              <Feather name="globe" size={26} color={C.accent} />
+            </View>
+            <Text style={[qm.title, { color: C.text }]}>Jawab kis language mein?</Text>
+            <Text style={[qm.msg, { color: C.textMuted, marginBottom: 12 }]}>
+              Aap jo bhi select karenge, Cosmic Intelligence usi language mein reply karega.
+            </Text>
+            {ASK_REPLY_LANG_OPTIONS.map((opt) => {
+              const active = langPickerDraft === opt.id;
+              return (
+                <Pressable
+                  key={opt.id}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setLangPickerDraft(opt.id);
+                  }}
+                  style={[
+                    s.langPickRow,
+                    {
+                      backgroundColor: active ? `${C.accent}18` : C.bgCard2,
+                      borderColor: active ? C.accent : C.border,
+                    },
+                  ]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.langPickTitle, { color: C.text }]}>{opt.label}</Text>
+                    <Text style={[s.langPickSub, { color: C.textMuted }]}>{opt.sublabel}</Text>
+                  </View>
+                  {active ? <Feather name="check-circle" size={20} color={C.accent} /> : null}
+                </Pressable>
+              );
+            })}
+            <Pressable
+              onPress={() => enterAskChat(langPickerDraft)}
+              style={({ pressed }) => [{ width: "100%", marginTop: 14, opacity: pressed ? 0.9 : 1 }]}
+            >
+              <LinearGradient
+                colors={[C.btnGradStart, C.btnGradEnd]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={qm.cta}
+              >
+                <Feather name="message-circle" size={15} color="#fff" />
+                <Text style={qm.ctaText}>Start chatting</Text>
+              </LinearGradient>
+            </Pressable>
+            <Pressable onPress={() => setLangPickerVisible(false)} style={qm.dismiss}>
+              <Text style={[qm.dismissText, { color: C.textMuted }]}>Cancel</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
     </View>
   );
@@ -1656,6 +1809,36 @@ const s = StyleSheet.create({
     textShadowRadius: 12,
   },
   headerSub:   { color: "#3d5a7a", fontSize: 11 },
+  askLangRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 8,
+    paddingHorizontal: 12,
+  },
+  askLangLabel: { fontSize: 11, fontWeight: "600" },
+  askLangChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  askLangChipText: { fontSize: 11, fontWeight: "700" },
+  langPickRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    width: "100%",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  langPickTitle: { fontSize: 15, fontWeight: "700" },
+  langPickSub: { fontSize: 12, marginTop: 2 },
   headerTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
   headerTitleGlow: {
     position: "absolute",

@@ -72,10 +72,10 @@ export function questionLangLabel(lang: AskQuestionLang | null): string {
 }
 
 export function questionLangLabelCompact(lang: AskQuestionLang | null): string {
-  if (lang === "hi") return "हिंदी · देवनागरी";
-  if (lang === "hn") return "हिंदी · रोमन";
+  if (lang === "hi") return "Hindi (देवनागरी)";
+  if (lang === "hn") return "Hindi (Roman)";
   if (lang === "en") return "English";
-  return "अन्य";
+  return "Other";
 }
 
 export function questionLangShort(lang: AskQuestionLang | null): string {

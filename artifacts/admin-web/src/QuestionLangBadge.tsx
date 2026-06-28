@@ -21,7 +21,7 @@ export function QuestionLangBadge({
       className={`question-lang-badge question-lang-badge--${lang ?? "blocked"}`}
       title={questionLangLabel(lang)}
     >
-      {compact ? "भाषा: " : "सवाल की भाषा: "}
+      {compact ? "Language: " : "सवाल की भाषा: "}
       {label}
     </span>
   );

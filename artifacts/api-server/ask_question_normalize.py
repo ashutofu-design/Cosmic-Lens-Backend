@@ -6,6 +6,8 @@ so scope gate + engines understand intent — not only lagna-specific fixes.
 """
 from __future__ import annotations
 
+import difflib
+import os
 import re
 import unicodedata
 
@@ -47,6 +49,19 @@ _WORD_FIXES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bpais+e+\b", re.I), "paise"),
     (re.compile(r"\bbus+iness+\b", re.I), "business"),
     (re.compile(r"\bse+h+at+\b", re.I), "sehat"),
+    (re.compile(r"\bhel+th+\b", re.I), "health"),
+    (re.compile(r"\bheath+\b", re.I), "health"),
+    (re.compile(r"\bhealt+h+\b", re.I), "health"),
+    (re.compile(r"\btab+iat+\b", re.I), "tabiyat"),
+    (re.compile(r"\btab+iyat+\b", re.I), "tabiyat"),
+    (re.compile(r"\bswast+h+ya+\b", re.I), "swasthya"),
+    (re.compile(r"\bswast+h+\b", re.I), "swasth"),
+    (re.compile(r"\bqu+est+ion+\b", re.I), "question"),
+    (re.compile(r"\bqust+ion+\b", re.I), "question"),
+    (re.compile(r"\bqustn+\b", re.I), "question"),
+    (re.compile(r"\bkb\b", re.I), "kab"),
+    (re.compile(r"\bhlt\b", re.I), "health"),
+    (re.compile(r"\bshdi\b", re.I), "shadi"),
     (re.compile(r"\bbach+ch+a+\b", re.I), "bachcha"),
     (re.compile(r"\bbach+he+\b", re.I), "bachche"),
     (re.compile(r"\bpy+a+ar+\b", re.I), "pyaar"),
@@ -75,13 +90,18 @@ _WORD_FIXES: list[tuple[re.Pattern[str], str]] = [
 # Hinglish verb / question-word typos
 _VERB_FIXES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\b(kya|kaun|kab|kaise|kaisa|kaisi|kahan|kyun)\s+he\b", re.I), r"\1 hai"),
-    (re.compile(r"\b(kya|kaun|kab)\s+ho\b", re.I), r"\1 hai"),
+    (re.compile(r"\b(kya|kaun|kab|kaisa|kaisi)\s+ho\b", re.I), r"\1 hai"),
+    (re.compile(r"\b(kaisa|kaisi|kaise)\s+he\b", re.I), r"\1 hai"),
     (re.compile(r"\b(he|ho|h|haii|haai)\s*$", re.I), "hai"),
     (re.compile(r"\bhogaa+\b", re.I), "hoga"),
     (re.compile(r"\bhogiii+\b", re.I), "hogi"),
-    (re.compile(r"\b(batao|bataiye|bataye|btao|btyo)\b", re.I), "batao"),
+    (re.compile(r"\brahegaa+\b", re.I), "rahega"),
+    (re.compile(r"\brahegii+\b", re.I), "rahegi"),
+    (re.compile(r"\bhogii+\b", re.I), "hogi"),
     (re.compile(r"\bmilegaa+\b", re.I), "milega"),
     (re.compile(r"\bmilegii+\b", re.I), "milegi"),
+    (re.compile(r"\b(batao|bataiye|bataye|btao|btyo|bataoo)\b", re.I), "batao"),
+    (re.compile(r"\b(samjhao|smjhao|samjhaoo|explain)\b", re.I), "samjhao"),
 ]
 
 # Personal + life/astro — allow scope gate when anchors are typo'd
@@ -98,7 +118,7 @@ _LIFE_ASTRO_TOPIC_RX = re.compile(
     r"yog|dosh|dosha|manglik|muhurat|"
     r"shaadi|shadi|marriage|vivah|love|pyaar|partner|bf|gf|husband|wife|pati|"
     r"career|naukri|job|business|paisa|money|wealth|finance|"
-    r"health|sehat|disease|illness|"
+    r"health|sehat|tabiyat|swasth|swasthya|disease|illness|"
     r"child|bachcha|pregnancy|"
     r"property|ghar|flat|vastu|"
     r"visa|abroad|videsh|travel|"
@@ -135,7 +155,7 @@ _IMPLICIT_ASK_TOPIC_RX = re.compile(
     r"sade\s*sati|kaal\s*sarp|"
     r"shaadi|shadi|marriage|vivah|love|pyaar|partner|bf|gf|husband|wife|pati|"
     r"career|naukri|job|business|paisa|money|wealth|finance|"
-    r"health|sehat|child|bachcha|pregnancy|"
+    r"health|sehat|tabiyat|swasth|swasthya|child|bachcha|pregnancy|"
     r"property|ghar|flat|vastu|visa|abroad|videsh|travel|"
     r"luck|bhagya|future|timing|"
     rf"{_CAREER_SCOPE_EXTRA}|"
@@ -158,6 +178,84 @@ def _collapse_repeated_letters(text: str) -> str:
     return re.sub(r"([a-zA-Z\u0900-\u097F])\1{2,}", r"\1\1", text)
 
 
+# Tokens we never fuzzy-correct (possessives, grammar, question words).
+_FUZZY_SKIP: frozenset[str] = frozenset(
+    {
+        "hai", "hoga", "hogi", "honge", "tha", "thi", "the", "he", "ho",
+        "mera", "meri", "mere", "mujhe", "mujhko", "main", "mein", "my", "mine",
+        "kya", "kab", "kaise", "kaisa", "kaisi", "kahan", "kyun", "kyu", "kis",
+        "kitna", "kitni", "kaun", "kaunsa", "kaunsi", "ko", "ke", "ki", "ka",
+        "se", "me", "par", "pe", "ya", "aur", "bhi", "nahi", "na", "agar",
+        "when", "what", "how", "why", "where", "which", "will", "should",
+        "the", "and", "for", "are", "was", "has", "had", "can", "would",
+    }
+)
+
+
+def _build_fuzzy_vocab() -> tuple[str, ...]:
+    """Roman-script astro/life words for difflib typo repair."""
+    words: set[str] = {
+        "lagna", "ascendant", "rashi", "nakshatra", "kundli", "chart", "horoscope",
+        "dasha", "mahadasha", "antardasha", "gochar", "muhurat", "navamsa",
+        "manglik", "yog", "dosh", "dosha", "remedy", "remedies", "upay",
+        "shaadi", "shadi", "marriage", "vivah", "love", "pyaar", "partner",
+        "career", "naukri", "job", "business", "promotion", "interview",
+        "paisa", "paise", "money", "wealth", "finance", "income", "savings",
+        "health", "sehat", "tabiyat", "swasthya", "illness", "disease",
+        "child", "bachcha", "pregnancy", "property", "ghar", "flat", "vastu",
+        "visa", "abroad", "videsh", "travel", "litigation", "court",
+        "shani", "saturn", "rahu", "ketu", "jupiter", "guru", "venus", "shukra",
+        "mars", "mangal", "mercury", "budh", "moon", "chandra", "sun", "surya",
+        "house", "bhav", "bhaav", "lord", "exalted", "debilitated", "retrograde",
+        "future", "timing", "luck", "bhagya", "sade", "sati", "transit",
+    }
+    try:
+        from domain_splitter import _DOMAIN_KEYWORDS  # type: ignore
+
+        for kws in _DOMAIN_KEYWORDS.values():
+            for phrase in kws:
+                for token in phrase.lower().split():
+                    if len(token) >= 4 and token.isascii():
+                        words.add(token)
+    except Exception:
+        pass
+    return tuple(sorted(words))
+
+
+_FUZZY_VOCAB: tuple[str, ...] | None = None
+
+
+def _fuzzy_vocab() -> tuple[str, ...]:
+    global _FUZZY_VOCAB
+    if _FUZZY_VOCAB is None:
+        _FUZZY_VOCAB = _build_fuzzy_vocab()
+    return _FUZZY_VOCAB
+
+
+def _fuzzy_repair_tokens(text: str) -> str:
+    """Repair heavy typos against astro/life vocabulary (after regex fixes)."""
+    if (os.environ.get("ASK_FUZZY_NORMALIZE") or "on").strip().lower() in (
+        "0", "off", "false", "no",
+    ):
+        return text
+    vocab = _fuzzy_vocab()
+    out: list[str] = []
+    for raw in text.split():
+        low = raw.lower()
+        if len(low) < 4 or low in _FUZZY_SKIP or not low.isascii():
+            out.append(raw)
+            continue
+        if low in vocab:
+            out.append(low)
+            continue
+        match = difflib.get_close_matches(low, vocab, n=1, cutoff=0.82)
+        if match:
+            out.append(match[0])
+        else:
+            out.append(raw)
+    return " ".join(out)
+
+
 def prepare_ask_question(question: str) -> str:
     """
     Normalize user question for gates, classifiers, and LLM.
@@ -176,10 +274,17 @@ def prepare_ask_question(question: str) -> str:
     for rx, repl in _VERB_FIXES:
         q = rx.sub(repl, q)
 
-    # kyahe / kabse glued words
+    # kyahe / kabse glued words + common keyboard typos
     q = re.sub(r"\bkyahe\b", "kya hai", q, flags=re.I)
     q = re.sub(r"\bkabse\b", "kab se", q, flags=re.I)
     q = re.sub(r"\bkaisehe\b", "kaise hai", q, flags=re.I)
+    q = re.sub(r"\bkaisihe\b", "kaisi hai", q, flags=re.I)
+    q = re.sub(r"\bkaisahe\b", "kaisa hai", q, flags=re.I)
+    # Strip stray punctuation glue (health??, career!!!)
+    q = re.sub(r"([?\!\.]){2,}", r"\1", q)
+    q = q.strip(" ?!.,")
+
+    q = _fuzzy_repair_tokens(q)
 
     return " ".join(q.split())
 

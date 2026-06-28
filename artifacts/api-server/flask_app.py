@@ -7848,6 +7848,9 @@ def ask_route():
             print(f"[ask] scope_gate blocked reason={_scope_v.reason}", flush=True)
             _log_brand_guard_question(question, data)
             return jsonify(scope_refusal_payload(_scope_v.reason, question=question, lang=lang))
+        if getattr(_scope_v, "normalized_question", None):
+            question = _scope_v.normalized_question
+            print(f"[ask] scope_llm normalized q={question[:60]!r}", flush=True)
     except Exception as _sg_exc:
         print(f"[ask] scope_gate error (non-fatal): {_sg_exc}", flush=True)
 
@@ -8890,6 +8893,9 @@ def ask_stream_route():
             )
             _log_brand_guard_question(question, data)
             return jsonify(scope_refusal_payload(_scope_v_s.reason, question=question, lang=lang))
+        if getattr(_scope_v_s, "normalized_question", None):
+            question = _scope_v_s.normalized_question
+            print(f"[ask/stream] scope_llm normalized q={question[:60]!r}", flush=True)
     except Exception as _sg_exc_s:
         print(f"[ask/stream] scope_gate error (non-fatal): {_sg_exc_s}", flush=True)
 

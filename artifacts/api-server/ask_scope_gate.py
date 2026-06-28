@@ -213,6 +213,7 @@ def _gate_enabled() -> bool:
 class AskScopeVerdict:
     allowed: bool
     reason: ScopeReason
+    normalized_question: Optional[str] = None
 
 
 def assess_ask_scope(question: str, history: Any = None) -> AskScopeVerdict:
@@ -314,6 +315,37 @@ def assess_ask_scope(question: str, history: Any = None) -> AskScopeVerdict:
 
     if looks_like_personal_life_question(q):
         return AskScopeVerdict(allowed=True, reason="ok")
+
+    # LLM fallback — heavy typos / Hinglish the regex layer missed.
+    try:
+        from ask_scope_llm import classify_ask_scope_llm, scope_llm_enabled
+
+        if scope_llm_enabled():
+            _llm = classify_ask_scope_llm(q)
+            if _llm.get("source") in ("llm", "llm_low_conf"):
+                _conf = float(_llm.get("confidence") or 0.0)
+                if _conf >= 0.62:
+                    _cleaned = (_llm.get("cleaned_question") or "").strip()
+                    _norm = None
+                    if _cleaned:
+                        try:
+                            from ask_question_normalize import prepare_ask_question as _prep
+
+                            _norm = _prep(_cleaned)
+                        except Exception:
+                            _norm = _cleaned
+                    if _llm.get("allowed"):
+                        return AskScopeVerdict(
+                            allowed=True, reason="ok", normalized_question=_norm or None
+                        )
+                    _reason = _llm.get("reason") or "not_personal"
+                    if _reason in ("off_topic", "general_knowledge", "not_personal"):
+                        return AskScopeVerdict(
+                            allowed=False, reason=_reason  # type: ignore[arg-type]
+                        )
+                    return AskScopeVerdict(allowed=False, reason="not_personal")
+    except Exception:
+        pass
 
     return AskScopeVerdict(allowed=False, reason="not_personal")
 

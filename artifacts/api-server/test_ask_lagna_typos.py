@@ -43,6 +43,24 @@ def test_scope_allows_current_dasha_without_mera():
     assert v.allowed, v.reason
 
 
-def test_scope_allows_mahadasha_question():
-    v = assess_ask_scope("Mahadasha kab khatam hogi?")
+def test_normalize_health_typos():
+    assert "health" in prepare_ask_question("helth kaisi rahegii")
+    assert "sehat" in prepare_ask_question("meri sehatt kaisa he")
+    assert prepare_ask_question("tabiat kaisi hai") == "tabiyat kaisi hai"
+
+
+def test_scope_allows_health_typo_implicit():
+    v = assess_ask_scope("helth kaisi rahegi")
     assert v.allowed, v.reason
+
+
+def test_scope_allows_health_kyahe_glued():
+    v = assess_ask_scope("meri health kyahe")
+    assert v.allowed, v.reason
+
+
+def test_fuzzy_repair_health_typo():
+    from ask_question_normalize import prepare_ask_question
+
+    assert "health" in prepare_ask_question("helth kaisi rahegi")
+    assert prepare_ask_question("hlt kaisi rahegi") == "health kaisi rahegi"

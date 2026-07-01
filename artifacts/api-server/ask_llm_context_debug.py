@@ -582,7 +582,11 @@ def refresh_stored_llm_context_understanding(ctx: dict[str, Any]) -> dict[str, A
     return out
 
 
-def parse_llm_context_from_db(raw: str | None) -> dict[str, Any] | None:
+def parse_llm_context_from_db(
+    raw: str | None,
+    *,
+    refresh_understanding: bool = False,
+) -> dict[str, Any] | None:
     if not raw or not str(raw).strip():
         return None
     try:
@@ -595,6 +599,8 @@ def parse_llm_context_from_db(raw: str | None) -> dict[str, Any] | None:
                 tr = blocks.get(key)
                 if isinstance(tr, dict):
                     blocks[key] = normalize_engine_trace_transit_months(tr)
-        return refresh_stored_llm_context_understanding(data)
+        if refresh_understanding:
+            return refresh_stored_llm_context_understanding(data)
+        return data
     except Exception:
         return {"raw": str(raw)[:4000]}

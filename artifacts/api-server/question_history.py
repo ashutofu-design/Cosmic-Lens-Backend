@@ -293,6 +293,77 @@ def search_questions(user_id: int, q: str, limit: int = 20) -> list[dict]:
     return [r.to_dict() for r in rows]
 
 
+def _admin_ask_list_item_dict(
+    uq: UserQuestion,
+    user_email: str | None,
+    user_name: str | None,
+) -> dict:
+    """Lightweight row for admin list — no answer_text / llm_context blobs."""
+    return {
+        "id": uq.id,
+        "user_id": uq.user_id,
+        "user_email": user_email or "",
+        "user_name": user_name or "",
+        "question_text": uq.question_text,
+        "topic": uq.topic,
+        "verdict_summary": uq.verdict_summary,
+        "answer_source": uq.answer_source,
+        "llm_model": uq.llm_model,
+        "prompt_tokens": uq.prompt_tokens,
+        "completion_tokens": uq.completion_tokens,
+        "total_tokens": uq.total_tokens,
+        "cached_tokens": uq.cached_tokens,
+        "cost_usd": uq.cost_usd,
+        "cost_inr": uq.cost_inr,
+        "engine_tag": uq.engine_tag,
+        "created_at": uq.created_at.isoformat() if uq.created_at else None,
+    }
+
+
+def get_admin_ask_question(question_id: str) -> dict | None:
+    """Single Ask row for admin detail — includes answer + refreshed llm_context."""
+    from models import User
+
+    qid = (question_id or "").strip()
+    if not qid:
+        return None
+
+    row = (
+        UserQuestion.query.join(User, UserQuestion.user_id == User.id)
+        .filter(UserQuestion.id == qid)
+        .with_entities(UserQuestion, User.email, User.name)
+        .first()
+    )
+    if not row:
+        return None
+
+    uq, user_email, user_name = row
+    d = uq.to_dict()
+    d["user_id"] = uq.user_id
+    d["user_email"] = user_email or ""
+    d["user_name"] = user_name or ""
+    d["llm_context"] = None
+    raw_ctx = uq.llm_context_json
+    if raw_ctx:
+        try:
+            from ask_llm_context_debug import parse_llm_context_from_db
+
+            d["llm_context"] = parse_llm_context_from_db(
+                raw_ctx,
+                refresh_understanding=True,
+            )
+        except Exception:
+            try:
+                import json
+
+                parsed = json.loads(raw_ctx)
+                d["llm_context"] = parsed if isinstance(parsed, dict) else None
+            except Exception:
+                d["llm_context"] = {"raw": str(raw_ctx)[:8000]}
+    d.pop("llm_context_json", None)
+    return d
+
+
 def list_admin_ask_questions(
     *,
     page: int = 1,
@@ -330,8 +401,19 @@ def list_admin_ask_questions(
         page = pages
 
     try:
+        from sqlalchemy.orm import defer
+
+        list_opts = (
+            defer(UserQuestion.llm_context_json),
+            defer(UserQuestion.answer_text),
+        )
+    except Exception:
+        list_opts = ()
+
+    try:
         rows = (
             q.order_by(UserQuestion.created_at.desc())
+            .options(*list_opts)
             .offset((page - 1) * per_page)
             .limit(per_page)
             .with_entities(UserQuestion, User.email, User.name)
@@ -347,6 +429,7 @@ def list_admin_ask_questions(
                 ensure_user_questions_telemetry_columns()
                 rows = (
                     q.order_by(UserQuestion.created_at.desc())
+                    .options(*list_opts)
                     .offset((page - 1) * per_page)
                     .limit(per_page)
                     .with_entities(UserQuestion, User.email, User.name)
@@ -360,26 +443,7 @@ def list_admin_ask_questions(
 
     items = []
     for uq, user_email, user_name in rows:
-        d = uq.to_dict()
-        d["user_id"] = uq.user_id
-        d["user_email"] = user_email or ""
-        d["user_name"] = user_name or ""
-        d["llm_context"] = None
-        raw_ctx = uq.llm_context_json
-        if raw_ctx:
-            try:
-                from ask_llm_context_debug import parse_llm_context_from_db
-
-                d["llm_context"] = parse_llm_context_from_db(raw_ctx)
-            except Exception:
-                try:
-                    import json
-
-                    parsed = json.loads(raw_ctx)
-                    d["llm_context"] = parsed if isinstance(parsed, dict) else None
-                except Exception:
-                    d["llm_context"] = {"raw": str(raw_ctx)[:8000]}
-        items.append(d)
+        items.append(_admin_ask_list_item_dict(uq, user_email, user_name))
 
     return {
         "items": items,

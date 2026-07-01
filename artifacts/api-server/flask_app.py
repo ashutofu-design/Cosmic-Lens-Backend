@@ -3345,6 +3345,27 @@ def admin_ask_questions_route():
         ), 500
 
 
+@app.route("/api/admin/ask-questions/<question_id>", methods=["GET"])
+def admin_ask_question_detail_route(question_id: str):
+    """Single Ask Q&A row with full answer + LLM context (lazy load from list)."""
+    err = require_admin()
+    if err:
+        return err
+    try:
+        from question_history import get_admin_ask_question
+
+        row = get_admin_ask_question(question_id)
+        if not row:
+            return jsonify({"error": "Not found"}), 404
+        return jsonify(row)
+    except Exception as exc:
+        import traceback
+
+        traceback.print_exc()
+        app.logger.exception("admin ask-question detail failed")
+        return jsonify({"error": str(exc)[:500]}), 500
+
+
 @app.route("/api/admin/love-reality-orders", methods=["GET"])
 def admin_love_reality_orders_route():
     """Founder-prepared Love Reality Pro PDF orders (manual delivery queue)."""

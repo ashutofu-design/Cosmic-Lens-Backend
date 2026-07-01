@@ -693,3 +693,9 @@ def build_ask_questions(
         user_id=user_id,
         email=email,
     )
+
+
+def build_ask_question_detail(question_id: str) -> dict[str, Any] | None:
+    from question_history import get_admin_ask_question
+
+    return get_admin_ask_question(question_id)

@@ -22,6 +22,7 @@ import {
   fetchPdfGenerations,
   type PdfGenerationItem,
   fetchAskQuestions,
+  fetchAskQuestionDetail,
   type AskQuestionItem,
   fetchStats,
   type GmailProfilesResponse,
@@ -149,6 +150,7 @@ export default function App() {
   const [askQaEmail, setAskQaEmail] = useState("");
   const [askQaError, setAskQaError] = useState<string | null>(null);
   const [askQaViewRow, setAskQaViewRow] = useState<AskQuestionItem | null>(null);
+  const [askQaDetailLoading, setAskQaDetailLoading] = useState(false);
 
   const [lrOrdersPage, setLrOrdersPage] = useState(1);
   const [lrOrdersPages, setLrOrdersPages] = useState(1);
@@ -215,6 +217,14 @@ export default function App() {
       page: askQaPage,
       email: askQaEmail || undefined,
     });
+    if (!Array.isArray(data.items)) {
+      setAskQaError(
+        "Invalid API response — rebuild admin with VITE_API_BASE + VITE_ADMIN_SECRET in artifacts/admin-web/.env, then npm run build",
+      );
+      setAskQuestions([]);
+      setAskQaTotal(0);
+      return;
+    }
     setAskQuestions(data.items);
     setAskQaPages(data.pages);
     setAskQaTotal(data.total);
@@ -1497,7 +1507,11 @@ export default function App() {
       ) : null}
 
       {tab === "askqa" ? (
-        askQaViewRow ? (
+        askQaDetailLoading ? (
+          <section className="section card">
+            <p className="detail-muted">Loading question detail…</p>
+          </section>
+        ) : askQaViewRow ? (
           <AskQuestionDetailPage
             row={askQaViewRow}
             onBack={() => setAskQaViewRow(null)}
@@ -1562,7 +1576,18 @@ export default function App() {
                             />
                             <ViewQuestionButton
                               label="View"
-                              onClick={() => setAskQaViewRow(row)}
+                              onClick={() => {
+                                setAskQaError(null);
+                                setAskQaDetailLoading(true);
+                                fetchAskQuestionDetail(row.id)
+                                  .then((detail) => setAskQaViewRow(detail))
+                                  .catch((e) =>
+                                    setAskQaError(
+                                      e instanceof Error ? e.message : "Failed to load detail",
+                                    ),
+                                  )
+                                  .finally(() => setAskQaDetailLoading(false));
+                              }}
                             />
                           </div>
                         </div>

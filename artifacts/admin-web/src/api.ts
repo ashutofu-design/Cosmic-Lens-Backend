@@ -421,6 +421,10 @@ export function fetchAskQuestions(opts?: {
   }>(`/api/admin/ask-questions?${q}`);
 }
 
+export function fetchAskQuestionDetail(id: string) {
+  return adminFetch<AskQuestionItem>(`/api/admin/ask-questions/${encodeURIComponent(id)}`);
+}
+
 export function fetchUsers(page: number, search: string, plan: string) {
   const q = new URLSearchParams({ page: String(page), per_page: "50" });
   if (search.trim()) q.set("search", search.trim());

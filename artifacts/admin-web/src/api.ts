@@ -147,6 +147,10 @@ export interface AskLlmContext {
     is_decision?: boolean;
     wants_explain?: boolean;
     mr_archetype?: string | null;
+    routed_domain?: string;
+    routed_archetype?: string;
+    routed_timing?: boolean;
+    career_archetype?: string | null;
     interpretation?: string;
     question_summary?: string;
     understanding_line?: string;

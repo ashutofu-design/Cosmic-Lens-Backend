@@ -5186,11 +5186,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     except Exception as _rre:
         print(f"[raw_passthrough] ask_route resolve failed: {_rre}", flush=True)
 
-    # ── LLM-first intent (optional, ASK_LLM_INTENT=1) ─────────────────
-    # When enabled, one cheap JSON LLM call understands the question and
-    # drives domain/timing/decision/MR-archetype routing. We only trust a
-    # confident ("llm") result; on error/low-confidence we fall straight
-    # back to the regex routing below (zero behaviour change).
+    # ── Understand meaning → route to specific static/timing engine ─────
     _llm_intent = None
     _llm_intent_record = None
     _intent_source = "regex"
@@ -5205,63 +5201,73 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _litigation_archetype_override = None
     if (os.environ.get("ASK_LLM_INTENT") or "1").strip() == "1":
         try:
-            from ask_intent_llm import classify_ask_intent  # type: ignore
+            from ask_route_from_understanding import classify_and_route_ask
 
-            _res = classify_ask_intent(_user_turn_question, client=client)
-            if (_res or {}).get("source") not in ("llm_error", "llm_unavailable", ""):
-                _llm_intent_record = _res
-            if (_res or {}).get("source") in ("llm", "llm_repaired"):
-                _llm_intent = _res
-                _intent_source = str(_res.get("source") or "llm")
-                try:
-                    from ask_intent_fidelity import faithful_interpretation
-
-                    _llm_intent["interpretation"] = faithful_interpretation(
-                        question, user_turn=_user_turn_question,
-                    )
-                except Exception:
-                    pass
-                _mr_archetype_override = _res.get("mr_archetype")
-                _career_archetype_override = _res.get("career_archetype")
-                _finance_archetype_override = _res.get("finance_archetype")
-                _health_archetype_override = _res.get("health_archetype")
-                _education_archetype_override = _res.get("education_archetype")
-                _children_archetype_override = _res.get("children_archetype")
-                _property_archetype_override = _res.get("property_archetype")
-                _travel_archetype_override = _res.get("travel_archetype")
-                _litigation_archetype_override = _res.get("litigation_archetype")
+            _route = classify_and_route_ask(
+                _user_turn_question or question or "",
+                client=client,
+                understanding=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                question_raw=_question_raw,
+            )
+            _llm_intent = _route.get("llm_intent")
+            _llm_intent_record = _route.get("llm_intent_record")
+            if isinstance(_route.get("llm_intent_admin"), dict):
+                _llm_intent_admin = _route["llm_intent_admin"]
+            _intent_source = str(_route.get("intent_source") or "regex")
+            _mr_archetype_override = _route.get("mr_archetype")
+            _career_archetype_override = _route.get("career_archetype")
+            _finance_archetype_override = _route.get("finance_archetype")
+            _health_archetype_override = _route.get("health_archetype")
+            _education_archetype_override = _route.get("education_archetype")
+            _children_archetype_override = _route.get("children_archetype")
+            _property_archetype_override = _route.get("property_archetype")
+            _travel_archetype_override = _route.get("travel_archetype")
+            _litigation_archetype_override = _route.get("litigation_archetype")
+            if _llm_intent is None and isinstance(_llm_intent_admin, dict):
+                if _llm_intent_admin.get("routed_domain") or _llm_intent_admin.get("routed_archetype"):
+                    _llm_intent = {
+                        "domain": _llm_intent_admin.get("routed_domain") or "general",
+                        "is_timing": bool(_llm_intent_admin.get("routed_timing")),
+                        "mr_archetype": _llm_intent_admin.get("routed_archetype"),
+                        "source": "understanding_route",
+                    }
+                    if not _mr_archetype_override:
+                        _mr_archetype_override = _llm_intent_admin.get("routed_archetype")
+                    _intent_source = "understanding_route"
             print(
-                f"[raw_passthrough] LLM_INTENT source={(_res or {}).get('source')} "
-                f"domain={(_res or {}).get('domain')} "
-                f"archetype={(_res or {}).get('mr_archetype')} "
-                f"timing={(_res or {}).get('is_timing')} "
-                f"conf={(_res or {}).get('confidence')}",
+                f"[raw_passthrough] ROUTE_FROM_UNDERSTANDING "
+                f"domain={(_llm_intent_admin or {}).get('routed_domain')} "
+                f"archetype={(_llm_intent_admin or {}).get('routed_archetype')} "
+                f"timing={(_llm_intent_admin or {}).get('routed_timing')} "
+                f"source={_intent_source}",
                 flush=True,
             )
         except Exception as _lie:
-            print(f"[raw_passthrough] LLM intent skipped: {_lie}", flush=True)
+            print(f"[raw_passthrough] route_from_understanding skipped: {_lie}", flush=True)
+    else:
+        _llm_intent_admin = (
+            _llm_intent_admin
+            if isinstance(_llm_intent_admin, dict)
+            else None
+        )
+        try:
+            from ask_question_understand import ensure_question_understanding
 
-    _llm_intent_admin = (
-        _llm_intent_admin
-        if isinstance(_llm_intent_admin, dict)
-        else (_llm_intent_record if isinstance(_llm_intent_record, dict) else _llm_intent)
-    )
-    try:
-        from ask_question_understand import ensure_question_understanding
+            if (os.environ.get("ASK_QUESTION_UNDERSTAND") or "1").strip() != "0":
+                _llm_intent_admin = ensure_question_understanding(
+                    _user_turn_question or question or "",
+                    _llm_intent_admin,
+                    client=client,
+                    force_llm=True,
+                    question_raw=_question_raw or _user_turn_question or "",
+                )
+        except Exception as _uq_exc:
+            print(f"[raw_passthrough] question_understand skipped: {_uq_exc}", flush=True)
 
-        _understand_on = (os.environ.get("ASK_QUESTION_UNDERSTAND") or "1").strip() != "0"
-        if _understand_on:
-            _llm_intent_admin = ensure_question_understanding(
-                _user_turn_question or question or "",
-                _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
-                client=client,
-                force_llm=not bool(
-                    str((_llm_intent_admin or {}).get("question_summary") or "").strip()
-                ),
-                question_raw=_question_raw or _user_turn_question or "",
-            )
-    except Exception as _uq_exc:
-        print(f"[raw_passthrough] question_understand skipped: {_uq_exc}", flush=True)
+    if not isinstance(_llm_intent_admin, dict):
+        _llm_intent_admin = (
+            _llm_intent_record if isinstance(_llm_intent_record, dict) else _llm_intent
+        )
 
     _is_native_overview = False
     try:

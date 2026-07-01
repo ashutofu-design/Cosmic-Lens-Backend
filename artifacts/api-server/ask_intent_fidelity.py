@@ -11,8 +11,9 @@ _DOMAIN_ANCHOR_RX: dict[str, re.Pattern[str]] = {
         r"manglik|divorce|talak|breakup|patchup)\b"
     ),
     "love": re.compile(
-        r"(?ix)\b(love|pyaar|prem|crush|boyfriend|girlfriend|bf|gf|"
-        r"dating|flirt|one[\s-]?sided)\b"
+        r"(?ix)\b(love|pyaar|pyar|prem|crush|boyfriend|girlfriend|bf|gf|"
+        r"dating|flirt|one[\s-]?sided|true\s*love|sach+a\s*pyaar|sach+a\s*pyar|"
+        r"mohabbat)\b"
     ),
     "career": re.compile(
         r"(?ix)\b(career|naukri|nokri|job|business|promotion|interview|"
@@ -454,6 +455,8 @@ def repair_llm_intent(question: str, result: dict[str, Any] | None) -> dict[str,
 
     q = (question or "").strip()
     out = dict(result)
+    summary = str(out.get("question_summary") or "").strip()
+    combined = f"{q} {summary}".strip() if summary else q
     repaired = False
     reject = False
 
@@ -461,31 +464,38 @@ def repair_llm_intent(question: str, result: dict[str, Any] | None) -> dict[str,
     mr_arch = out.get("mr_archetype")
     interp = str(out.get("interpretation") or "").strip()
 
-    if _interpretation_hallucinates(q, interp):
+    if _interpretation_hallucinates(combined, interp):
         repaired = True
 
+    try:
+        from ask_route_from_understanding import is_native_love_chart_question
+    except Exception:
+        def is_native_love_chart_question(_t: str) -> bool:  # type: ignore[misc]
+            return False
+
     if domain in ("marriage", "love") and not (
-        _DOMAIN_ANCHOR_RX["marriage"].search(q)
-        or _DOMAIN_ANCHOR_RX["love"].search(q)
-        or _PARTNER_SUBJECT_RX.search(q)
+        _DOMAIN_ANCHOR_RX["marriage"].search(combined)
+        or _DOMAIN_ANCHOR_RX["love"].search(combined)
+        or _PARTNER_SUBJECT_RX.search(combined)
+        or is_native_love_chart_question(combined)
     ):
         domain = "general"
         mr_arch = None
         out["is_timing"] = False
         repaired = True
 
-    if not _domain_supported(q, domain):
+    if not _domain_supported(combined, domain):
         domain = "general"
         _clear_domain_archetypes(out)
         mr_arch = None
         repaired = True
 
-    if mr_arch and not _archetype_supported(q, str(mr_arch)):
+    if mr_arch and not _archetype_supported(combined, str(mr_arch)):
         mr_arch = None
         repaired = True
 
     # partner_nature without any partner/in-law anchor → never trust
-    if str(mr_arch or "").lower() == "partner_nature" and not _PARTNER_SUBJECT_RX.search(q):
+    if str(mr_arch or "").lower() == "partner_nature" and not _PARTNER_SUBJECT_RX.search(combined):
         mr_arch = None
         if domain in ("marriage", "love"):
             domain = "general"
@@ -506,7 +516,7 @@ def repair_llm_intent(question: str, result: dict[str, Any] | None) -> dict[str,
     try:
         from ask_vehicle.timing_registry import is_vehicle_timing_question  # type: ignore
 
-        if is_vehicle_timing_question(q, out):
+        if is_vehicle_timing_question(combined, out):
             out["domain"] = "vehicle"
             out["is_timing"] = True
             out["is_decision"] = False
@@ -516,18 +526,31 @@ def repair_llm_intent(question: str, result: dict[str, Any] | None) -> dict[str,
     except Exception:
         pass
 
-    inferred = infer_primary_domain(q)
+    inferred = infer_primary_domain(combined)
     if inferred and domain == "general":
         domain = inferred
         mr_arch = None
         _clear_domain_archetypes(out)
-        _upgrade_domain_archetypes(q, domain, out)
+        _upgrade_domain_archetypes(combined, domain, out)
         repaired = True
 
-    # If marriage domain but no archetype and no clear MR signal → general chart Q
-    if domain in ("marriage", "love") and not mr_arch and not _PARTNER_SUBJECT_RX.search(q):
-        domain = "general"
-        repaired = True
+    # Native love chart (true love yog) — keep love + dating_courtship without partner subject.
+    if domain in ("marriage", "love") and not mr_arch and is_native_love_chart_question(combined):
+        try:
+            from ask_mr.classifier import classify_mr_archetype
+
+            mr_arch = classify_mr_archetype(combined) or "dating_courtship"
+            out["mr_archetype"] = mr_arch
+            repaired = True
+        except Exception:
+            out["mr_archetype"] = "dating_courtship"
+            mr_arch = "dating_courtship"
+            repaired = True
+
+    if domain in ("marriage", "love") and not mr_arch and not _PARTNER_SUBJECT_RX.search(combined):
+        if not is_native_love_chart_question(combined):
+            domain = "general"
+            repaired = True
 
     out["domain"] = domain
     out["mr_archetype"] = mr_arch

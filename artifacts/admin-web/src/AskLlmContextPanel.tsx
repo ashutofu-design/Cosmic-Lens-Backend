@@ -848,18 +848,27 @@ export function AskLlmContextPanel({
               ) : null}
             </div>
 
-            {(ctx.intent_source === "llm" || ctx.intent_source === "llm_repaired") &&
+            {(ctx.intent_source === "llm" || ctx.intent_source === "llm_repaired" || ctx.intent_source === "understanding_route") &&
             ctx.llm_intent ? (
               <div className="llm-understanding-box">
                 <QuestionUnderstandingPanel ctx={ctx} />
                 <p>
                   <strong>Engine selected:</strong>{" "}
                   <code>
-                    {ctx.llm_intent.mr_archetype
-                      ? `${ctx.llm_intent.mr_archetype} (MR engine)`
-                      : ctx.llm_intent.is_timing
-                        ? "timing engine"
-                        : `${ctx.llm_intent.domain || "general"} (chart → LLM)`}
+                    {String(
+                      ctx.llm_intent.routed_archetype ||
+                        ctx.slice_meta?.archetype ||
+                        ctx.engine_facts?.archetype ||
+                        ctx.llm_intent.mr_archetype ||
+                        ctx.llm_intent.career_archetype ||
+                        "",
+                    ) ||
+                      (ctx.llm_intent.is_timing
+                        ? `${ctx.llm_intent.domain || "domain"} timing engine`
+                        : `${ctx.llm_intent.domain || "general"} static engine`)}
+                    {ctx.llm_intent.routed_timing || ctx.llm_intent.is_timing
+                      ? " (timing)"
+                      : " (static)"}
                   </code>
                   {ctx.llm_intent.confidence != null ? (
                     <span className="answer-path-note">

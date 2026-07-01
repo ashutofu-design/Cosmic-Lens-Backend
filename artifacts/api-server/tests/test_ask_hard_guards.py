@@ -115,6 +115,20 @@ class TestEngineOnlyPolicy(unittest.TestCase):
         )
         self.assertIsNone(out)
 
+    def test_enforce_blocks_network_without_engine_facts(self):
+        from ask_hard_guards import enforce_engine_only_or_refuse
+
+        q = "Mera social circle acha he ya bura"
+        out = enforce_engine_only_or_refuse(
+            question=q,
+            qtype="STATIC",
+            llm_intent={"domain": "general", "is_timing": False},
+            checks={"slice_type": "full_compact"},
+            slice_meta={},
+        )
+        self.assertIsNotNone(out)
+        self.assertEqual(out["source"], "engine_required")
+
     def test_enforce_allows_general_vague_fallback(self):
         from ask_hard_guards import enforce_engine_only_or_refuse
 

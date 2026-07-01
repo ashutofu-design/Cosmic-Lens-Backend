@@ -5308,8 +5308,10 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _is_travel_static = False
     _is_litigation_static = False
     _is_luck_static = False
+    _is_network_static = False
     _finance_engine_on = (os.environ.get("ASK_FINANCE_ENGINE") or "1").strip() != "0"
     _luck_engine_on = (os.environ.get("ASK_LUCK_ENGINE") or "1").strip() != "0"
+    _network_engine_on = (os.environ.get("ASK_NETWORK_ENGINE") or "1").strip() != "0"
     _health_engine_on = (os.environ.get("ASK_HEALTH_ENGINE") or "1").strip() != "0"
     _education_engine_on = (os.environ.get("ASK_EDUCATION_ENGINE") or "1").strip() != "0"
     _children_engine_on = (os.environ.get("ASK_CHILDREN_ENGINE") or "1").strip() != "0"
@@ -5355,6 +5357,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _is_litigation_static = _dom == "litigation"
             if _dom == "luck":
                 _is_luck_static = True
+            if _dom in ("network", "friends", "social_circle"):
+                _is_network_static = True
             if _dom == "health":
                 _is_health_static = True
             if _dom == "finance":
@@ -5541,7 +5545,41 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
         elif not _luck_engine_on:
             _is_luck_static = False
-        if _health_engine_on and not _is_mr_static and not _is_career_static and not _is_finance_static and not _is_education_static and not _is_children_static and not _is_property_static and not _is_vehicle_static and not _is_travel_static and not _is_litigation_static and not _is_luck_static:
+        if _network_engine_on:
+            try:
+                from ask_network.classifier import is_network_static_question  # type: ignore
+
+                _net_regex = is_network_static_question(
+                    question or "",
+                    _llm_intent if isinstance(_llm_intent, dict) else None,
+                )
+                if _llm_intent is not None:
+                    _llm_dom_net = str(_llm_intent.get("domain") or "").strip().lower()
+                    _is_network_static = _net_regex or _llm_dom_net in (
+                        "network",
+                        "friends",
+                        "social_circle",
+                    )
+                elif _net_regex:
+                    _is_network_static = True
+                if _is_network_static and _net_regex:
+                    _llm_dom_net = ""
+                    if isinstance(_llm_intent, dict):
+                        _llm_dom_net = str(_llm_intent.get("domain") or "").strip().lower()
+                    if _llm_dom_net not in ("network", "friends", "social_circle", "") and _net_regex:
+                        print(
+                            f"[raw_passthrough] NETWORK_REGEX_OVERRIDE "
+                            f"llm_domain={_llm_dom_net} q={(question or '')[:60]!r}",
+                            flush=True,
+                        )
+            except Exception as _net_cls_exc:
+                print(
+                    f"[raw_passthrough] network static classify skipped: {_net_cls_exc}",
+                    flush=True,
+                )
+        elif not _network_engine_on:
+            _is_network_static = False
+        if _health_engine_on and not _is_mr_static and not _is_career_static and not _is_finance_static and not _is_education_static and not _is_children_static and not _is_property_static and not _is_vehicle_static and not _is_travel_static and not _is_litigation_static and not _is_luck_static and not _is_network_static:
             try:
                 from ask_health.classifier import is_health_static_question  # type: ignore
 
@@ -5783,6 +5821,10 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         is_decision = False
         is_finance = False
     if _is_luck_static:
+        static_dasha_hint = False
+        is_decision = False
+        is_finance = False
+    if _is_network_static:
         static_dasha_hint = False
         is_decision = False
         is_finance = False
@@ -6184,6 +6226,61 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_litigation_static = False
+        elif _is_network_static:
+            try:
+                from ask_network import run_network_static_engine  # type: ignore
+                from ask_network.routing import resolve_network_archetype  # type: ignore
+
+                _net_interp = ""
+                if isinstance(_llm_intent, dict):
+                    _net_interp = str(_llm_intent.get("interpretation") or "").strip()
+
+                _resolved_net_arch, _net_arch_reason = resolve_network_archetype(
+                    question or "",
+                    llm_archetype=None,
+                    interpretation=_net_interp,
+                )
+                if _net_arch_reason:
+                    print(
+                        f"[raw_passthrough] NETWORK_ARCHETYPE_ROUTE "
+                        f"-> {_resolved_net_arch} reason={_net_arch_reason}",
+                        flush=True,
+                    )
+
+                _network_engine_result = run_network_static_engine(
+                    kundli if isinstance(kundli, dict) else {},
+                    question or "",
+                    wants_explain=wants_explain,
+                    archetype=_resolved_net_arch,
+                )
+                chart_text = _network_engine_result.to_narrator_payload()
+                dcr_love_meta = {
+                    "slice": "network_engine_v1",
+                    "topic": "network",
+                    "archetype": _network_engine_result.archetype,
+                    "verdict": _network_engine_result.verdict,
+                    "summary": list(_network_engine_result.summary or []),
+                    "evidence": list(_network_engine_result.evidence or []),
+                    "ignore": list(_network_engine_result.ignore or []),
+                    "checks": dict(_network_engine_result.checks or {}),
+                    "skip_llm": bool(_network_engine_result.skip_llm),
+                    "word_budget": int(_network_engine_result.word_budget or 85),
+                    "narrator_mode": "engine_facts_only",
+                }
+                print(
+                    f"[raw_passthrough] NETWORK_ENGINE "
+                    f"archetype={_network_engine_result.archetype} "
+                    f"evidence={len(_network_engine_result.evidence or [])} "
+                    f"chart_chars={len(chart_text)}",
+                    flush=True,
+                )
+            except Exception as _net_exc:
+                print(f"[raw_passthrough] NETWORK_ENGINE failed: {_net_exc}", flush=True)
+                chart_text = _raw_compact_chart(
+                    kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
+                )
+                dcr_love_meta = None
+                _is_network_static = False
         elif _is_luck_static:
             try:
                 from ask_luck import run_luck_static_engine  # type: ignore
@@ -6517,6 +6614,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             and not _is_travel_static
             and not _is_litigation_static
             and not _is_luck_static
+            and not _is_network_static
         ):
             try:
                 from dcr_love import build_dcr_love_context  # type: ignore
@@ -6561,6 +6659,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _chart_slice_type = "litigation_engine_v1"
         elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "luck_engine_v1":
             _chart_slice_type = "luck_engine_v1"
+        elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "network_engine_v1":
+            _chart_slice_type = "network_engine_v1"
         elif is_timing:
             _chart_slice_type = "timing_full_chart"
         elif dcr_love_meta:
@@ -7366,6 +7466,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             "is_health_static": bool(_is_health_static),
             "is_finance_static": bool(_is_finance_static),
             "is_luck_static": bool(_is_luck_static),
+            "is_network_static": bool(_is_network_static),
             "is_education_static": bool(_is_education_static),
             "is_children_static": bool(_is_children_static),
             "is_property_static": bool(_is_property_static),

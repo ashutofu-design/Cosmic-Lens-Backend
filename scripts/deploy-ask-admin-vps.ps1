@@ -41,6 +41,7 @@ $files = @(
 $folders = @(
     "ask_mr",
     "ask_luck",
+    "ask_network",
     "ask_health",
     "event_timing/marriage",
     "event_timing/_shared",
@@ -100,6 +101,7 @@ python3 -c "from ask_timing_clarify import needs_timing_domain_clarifier; assert
 python3 -c "from subscription_helper import finalize_ask_out_after_llm; print('finalize_ask_out_after_llm OK')" || { echo 'MISSING finalize_ask_out_after_llm — deploy subscription_helper.py'; exit 1; }
 python3 -c "from ask_mr import run_mr_static_engine; print('ask_mr engine OK')" || { echo 'MISSING ask_mr/ — deploy ask_mr folder or git pull'; exit 1; }
 python3 -c "from ask_luck import run_luck_static_engine; print('ask_luck engine OK')" || { echo 'MISSING ask_luck/ — deploy ask_luck folder or git pull'; exit 1; }
+python3 -c "from ask_network import run_network_static_engine; print('ask_network engine OK')" || { echo 'MISSING ask_network/ — deploy ask_network folder or git pull'; exit 1; }
 grep -c 'ask-questions' flask_app.py || true
 pm2 restart cosmic-api --update-env 2>/dev/null || pm2 restart cosmiclens-api --update-env 2>/dev/null || pm2 restart all --update-env
 sleep 3

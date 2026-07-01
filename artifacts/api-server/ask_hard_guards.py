@@ -16,6 +16,7 @@ _ENGINE_SLICES = frozenset({
     "travel_engine_v1",
     "litigation_engine_v1",
     "luck_engine_v1",
+    "network_engine_v1",
     "controlled_fallback_v1",
     "finance_engine_v1",
     "health_engine_v1",
@@ -74,6 +75,9 @@ _MANDATORY_LLM_DOMAINS = frozenset({
     "travel",
     "litigation",
     "vehicle",
+    "network",
+    "friends",
+    "social_circle",
 })
 
 _MANDATORY_CHECK_FLAGS = (
@@ -88,6 +92,7 @@ _MANDATORY_CHECK_FLAGS = (
     "is_travel_static",
     "is_litigation_static",
     "is_vehicle_static",
+    "is_network_static",
 )
 
 _VAGUE_PERSONAL_RX = re.compile(
@@ -383,6 +388,13 @@ def mandatory_static_domain_detected(
         from ask_vehicle.classifier import is_vehicle_static_question  # type: ignore
 
         if is_vehicle_static_question(q):
+            return True
+    except Exception:
+        pass
+    try:
+        from ask_network.classifier import is_network_static_question  # type: ignore
+
+        if is_network_static_question(q):
             return True
     except Exception:
         pass

@@ -3,8 +3,11 @@ import { formatDate, formatInr } from "./api";
 import {
   AskLlmContextPanel,
   AnswerPathBadge,
+  EngineVerificationBadge,
+  EngineVerificationPanel,
   QuestionUnderstandingPanel,
   parseAskLlmContext,
+  resolveEngineVerificationSummary,
 } from "./AskLlmContextPanel";
 import { CopyTextButton } from "./CopyTextButton";
 import { QuestionLangBadge } from "./QuestionLangBadge";
@@ -18,6 +21,7 @@ export function AskQuestionDetailPage({
   onBack: () => void;
 }) {
   const ctx = parseAskLlmContext(row);
+  const engineVerify = resolveEngineVerificationSummary(ctx);
 
   return (
     <section className="section card ask-question-detail-page">
@@ -118,6 +122,20 @@ export function AskQuestionDetailPage({
             <div>{row.verdict_summary}</div>
           </div>
         ) : null}
+        <div>
+          <span className="detail-muted">Engine verification</span>
+          <div>
+            <EngineVerificationBadge summary={engineVerify} />
+          </div>
+        </div>
+      </div>
+
+      <div className="ask-detail-engine-verify">
+        <EngineVerificationPanel
+          ctx={ctx}
+          id={`ask-engine-verify-${row.id}`}
+          defaultOpen
+        />
       </div>
 
       <div className="ask-detail-context">

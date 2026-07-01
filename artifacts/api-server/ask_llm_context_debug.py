@@ -331,6 +331,27 @@ def _engine_route_reason_from_context(
     return None
 
 
+def _build_engine_verification_summary_for_ctx(
+    question: str,
+    *,
+    llm_intent: dict[str, Any] | None,
+    slice_meta: dict[str, Any] | None,
+    checks: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    try:
+        from ask_engine_verification import build_engine_verification_admin_summary
+
+        er = checks.get("engine_route") if isinstance(checks, dict) else None
+        return build_engine_verification_admin_summary(
+            question,
+            llm_intent=llm_intent,
+            slice_meta=slice_meta,
+            engine_route=er if isinstance(er, dict) else None,
+        )
+    except Exception:
+        return None
+
+
 def build_admin_llm_context(
     *,
     question: str,
@@ -467,6 +488,12 @@ def build_admin_llm_context(
             _intent.get("engine_verification_recovered")
             if isinstance(_intent, dict)
             else None
+        ),
+        "engine_verification_summary": _build_engine_verification_summary_for_ctx(
+            question,
+            llm_intent=_intent if isinstance(_intent, dict) else None,
+            slice_meta=_slice_meta,
+            checks=_checks,
         ),
         "understanding_source": _understanding_source,
         "question_type": question_type,

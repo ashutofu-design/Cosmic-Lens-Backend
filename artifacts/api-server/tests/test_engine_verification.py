@@ -66,5 +66,32 @@ class EngineVerificationTests(unittest.TestCase):
         self.assertEqual(ver.action, "reroute_mr")
 
 
+class EngineVerificationAdminSummaryTests(unittest.TestCase):
+    def test_summary_correct_when_verification_ok(self):
+        from ask_engine_verification import build_engine_verification_admin_summary
+
+        s = build_engine_verification_admin_summary(
+            "test",
+            llm_intent={
+                "engine_verification": {"ok": True, "action": "keep", "reason": "selection_ok"},
+                "engine_ran": "mr",
+            },
+            slice_meta={"slice": "mr_engine_v1", "archetype": "partner_nature", "evidence": ["x"]},
+        )
+        self.assertEqual(s["status"], "correct")
+        self.assertEqual(s["label"], "Correct engine")
+
+    def test_summary_wrong_when_recovered(self):
+        from ask_engine_verification import build_engine_verification_admin_summary
+
+        s = build_engine_verification_admin_summary(
+            "partner q",
+            llm_intent={"engine_verification_recovered": "reroute_mr"},
+            slice_meta={"archetype": "partner_nature", "evidence": ["x"]},
+        )
+        self.assertEqual(s["status"], "wrong")
+        self.assertIn("corrected", s["label"].lower())
+
+
 if __name__ == "__main__":
     unittest.main()

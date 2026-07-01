@@ -18,7 +18,10 @@ async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = (data as { error?: string }).error || `HTTP ${res.status}`;
+    const err =
+      (data as { error?: string }).error ||
+      (data as { message?: string }).message ||
+      `HTTP ${res.status}`;
     if (res.status === 404 && path.includes("pdf-generations")) {
       throw new Error(
         "pdf-generations API not found on server — deploy latest flask_app.py + pdf_generation_log.py, then restart API",
@@ -126,6 +129,17 @@ export interface PdfGenerationItem {
   phases: string[];
 }
 
+export type EngineVerificationStatus = "correct" | "wrong" | "doubt" | "unknown";
+
+export interface EngineVerificationSummary {
+  status: EngineVerificationStatus;
+  label: string;
+  reason: string;
+  selected_engine?: string | null;
+  ran_archetype?: string | null;
+  recovered?: boolean;
+}
+
 export interface AskLlmContext {
   version?: number;
   route?: string;
@@ -136,6 +150,7 @@ export interface AskLlmContext {
   typo_corrected?: boolean;
     engine_ran?: string | null;
     engine_route_reason?: string | null;
+    engine_verification_summary?: EngineVerificationSummary | null;
     understanding_source?: string | null;
   question_type?: string;
   is_timing?: boolean;

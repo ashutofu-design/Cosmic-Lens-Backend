@@ -251,3 +251,168 @@ def verify_engine_output(
         reason="output_ok",
         failed_checks=[],
     )
+
+
+_SLICE_TO_ENGINE_KEY: dict[str, str] = {
+    "mr_engine_v1": "mr",
+    "personality_engine_v1": "gap",
+    "siblings_engine_v1": "gap",
+    "parents_engine_v1": "gap",
+    "spiritual_engine_v1": "gap",
+    "fame_engine_v1": "gap",
+    "dreams_engine_v1": "gap",
+    "anger_engine_v1": "gap",
+    "remedy_engine_v1": "gap",
+    "charity_engine_v1": "gap",
+    "settlement_engine_v1": "gap",
+    "vastu_engine_v1": "gap",
+    "pets_engine_v1": "gap",
+    "wellness_engine_v1": "gap",
+    "health_engine_v1": "health",
+    "career_engine_v1": "career",
+    "finance_engine_v1": "finance",
+    "education_engine_v1": "education",
+    "children_engine_v1": "children",
+    "property_engine_v1": "property",
+    "vehicle_engine_v1": "vehicle",
+    "travel_engine_v1": "travel",
+    "litigation_engine_v1": "litigation",
+    "network_engine_v1": "network",
+    "luck_engine_v1": "luck",
+}
+
+
+def _engine_key_from_slice(slice_id: str | None) -> str | None:
+    sl = (slice_id or "").strip()
+    if not sl:
+        return None
+    return _SLICE_TO_ENGINE_KEY.get(sl, sl.replace("_engine_v1", ""))
+
+
+def build_engine_verification_admin_summary(
+    question: str,
+    *,
+    llm_intent: dict[str, Any] | None = None,
+    slice_meta: dict[str, Any] | None = None,
+    engine_route: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Admin one-liner: correct | wrong | doubt | unknown."""
+    intent = llm_intent if isinstance(llm_intent, dict) else {}
+    meta = slice_meta if isinstance(slice_meta, dict) else {}
+    route = engine_route if isinstance(engine_route, dict) else {}
+
+    stored = intent.get("engine_verification")
+    recovered = str(intent.get("engine_verification_recovered") or "").strip()
+    ran_key = str(
+        intent.get("engine_ran")
+        or route.get("engine_key")
+        or ""
+    ).strip() or None
+    ran_arch = str(meta.get("archetype") or "").strip() or None
+    selected_arch = str(
+        intent.get("routed_archetype")
+        or route.get("archetype")
+        or intent.get("mr_archetype")
+        or ""
+    ).strip() or None
+    route_reason = str(
+        intent.get("engine_route_reason") or route.get("reason") or ""
+    ).strip()
+    gap_key = str(intent.get("gap_static_key") or "").strip() or None
+
+    if recovered:
+        return {
+            "status": "wrong",
+            "label": "Wrong engine (corrected)",
+            "reason": f"First pick was wrong — recovered via {recovered}",
+            "selected_engine": ran_key,
+            "ran_archetype": ran_arch,
+            "recovered": True,
+        }
+
+    if isinstance(stored, dict):
+        if stored.get("ok") and stored.get("action") == "keep":
+            return {
+                "status": "correct",
+                "label": "Correct engine",
+                "reason": str(stored.get("reason") or "verification passed"),
+                "selected_engine": ran_key,
+                "ran_archetype": ran_arch,
+                "recovered": False,
+            }
+        if not stored.get("ok"):
+            return {
+                "status": "wrong",
+                "label": "Wrong engine",
+                "reason": str(stored.get("reason") or "verification failed"),
+                "selected_engine": ran_key,
+                "ran_archetype": ran_arch,
+                "recovered": False,
+            }
+
+    # Live verify when snapshot missing (older rows or pre-save)
+    engine_key = ran_key or _engine_key_from_slice(str(meta.get("slice") or ""))
+    if engine_key and meta:
+        live = verify_engine_output(
+            question or "",
+            engine_key=engine_key,
+            archetype=ran_arch,
+            slice_meta=meta,
+            gap_key=gap_key,
+        )
+        if live.ok:
+            status = "correct"
+            label = "Correct engine"
+        else:
+            status = "wrong"
+            label = "Wrong engine"
+        if live.action == "d1_open_chart":
+            status = "doubt"
+            label = "Doubt"
+        return {
+            "status": status,
+            "label": label,
+            "reason": live.reason,
+            "selected_engine": engine_key,
+            "ran_archetype": ran_arch,
+            "recovered": False,
+        }
+
+    if selected_arch and ran_arch and selected_arch != ran_arch:
+        return {
+            "status": "doubt",
+            "label": "Doubt",
+            "reason": f"Selected {selected_arch} but ran {ran_arch}",
+            "selected_engine": ran_key,
+            "ran_archetype": ran_arch,
+            "recovered": False,
+        }
+
+    if route_reason in ("pipeline_order", "single_candidate") and route.get("suppressed"):
+        return {
+            "status": "doubt",
+            "label": "Doubt",
+            "reason": f"Resolver picked via {route_reason} — multiple engines matched",
+            "selected_engine": ran_key,
+            "ran_archetype": ran_arch,
+            "recovered": False,
+        }
+
+    if not meta.get("evidence") and not meta.get("archetype"):
+        return {
+            "status": "doubt",
+            "label": "Doubt",
+            "reason": "No engine evidence in snapshot",
+            "selected_engine": ran_key,
+            "ran_archetype": ran_arch,
+            "recovered": False,
+        }
+
+    return {
+        "status": "unknown",
+        "label": "Unknown",
+        "reason": "No verification snapshot (re-ask after deploy)",
+        "selected_engine": ran_key,
+        "ran_archetype": ran_arch,
+        "recovered": False,
+    }

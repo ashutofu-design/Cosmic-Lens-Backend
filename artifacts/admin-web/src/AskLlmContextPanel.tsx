@@ -1,4 +1,4 @@
-import type { AskLlmContext, AskQuestionItem } from "./api";
+import type { AskLlmContext, AskQuestionItem, EngineVerificationSummary } from "./api";
 
 function fmtCheckValue(v: unknown): string {
   if (v === null || v === undefined || v === "") return "—";
@@ -139,6 +139,97 @@ export function parseAskLlmContext(row: AskQuestionItem): AskLlmContext | null {
 }
 
 export type AnswerPathCode = "engine_then_llm" | "engine_only" | "direct_llm" | "unknown";
+
+export function resolveEngineVerificationSummary(
+  ctx: AskLlmContext | null,
+): EngineVerificationSummary | null {
+  if (!ctx) return null;
+  const direct = ctx.engine_verification_summary;
+  if (direct && typeof direct === "object" && direct.label) {
+    return direct;
+  }
+  return null;
+}
+
+export function EngineVerificationBadge({
+  summary,
+}: {
+  summary: EngineVerificationSummary | null;
+}) {
+  if (!summary) {
+    return <span className="engine-verify-badge engine-verify-unknown">Unknown</span>;
+  }
+  return (
+    <span className={`engine-verify-badge engine-verify-${summary.status}`}>
+      {summary.label}
+    </span>
+  );
+}
+
+export function EngineVerificationPanel({
+  ctx,
+  defaultOpen,
+  id,
+}: {
+  ctx: AskLlmContext | null;
+  defaultOpen?: boolean;
+  id?: string;
+}) {
+  const summary = resolveEngineVerificationSummary(ctx);
+  const sliceMeta = (ctx?.slice_meta || {}) as Record<string, unknown>;
+  const archetype =
+    summary?.ran_archetype ||
+    (ctx?.engine_facts?.archetype as string | undefined) ||
+    (sliceMeta.archetype as string | undefined);
+
+  return (
+    <details
+      id={id}
+      className="engine-verify-panel"
+      open={defaultOpen || undefined}
+    >
+      <summary>
+        Engine verification
+        {summary ? (
+          <>
+            {" — "}
+            <EngineVerificationBadge summary={summary} />
+          </>
+        ) : null}
+      </summary>
+      {!summary ? (
+        <p className="detail-muted">
+          No verification snapshot — deploy latest API and ask a new question.
+        </p>
+      ) : (
+        <div className="engine-verify-body">
+          <p>
+            <strong>Status:</strong>{" "}
+            <EngineVerificationBadge summary={summary} />
+          </p>
+          <p>
+            <strong>Reason:</strong> {summary.reason}
+          </p>
+          {summary.selected_engine ? (
+            <p>
+              <strong>Engine ran:</strong> <code>{summary.selected_engine}</code>
+            </p>
+          ) : null}
+          {archetype ? (
+            <p>
+              <strong>Archetype:</strong> <code>{archetype}</code>
+            </p>
+          ) : null}
+          {summary.recovered ? (
+            <p className="engine-verify-recovered-note">
+              System detected a wrong first pick and rerouted before answering.
+            </p>
+          ) : null}
+        </div>
+      )}
+    </details>
+  );
+}
 
 export function resolveAnswerPath(
   ctx: AskLlmContext | null,
@@ -940,6 +1031,7 @@ export function AskLlmContextPanel({
                     ) : null}
                   </p>
                 ) : null}
+                <EngineVerificationPanel ctx={ctx} />
                 <p className="detail-muted">
                   Flow: LLM reads question → picks engine → engine produces facts → LLM
                   writes the human answer.

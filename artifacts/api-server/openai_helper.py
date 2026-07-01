@@ -4718,6 +4718,38 @@ def _raw_compact_chart(kundli: Any, include_dasha: bool = True,
     return "\n".join(lines)
 
 
+def _rich_chart_text_for_llm_fallback(
+    kundli: Any,
+    birth: Any = None,
+    question: str = "",
+) -> str:
+    """Full D1+D9+dignity chart block when domain engine facts are missing."""
+    if not isinstance(kundli, dict) or not kundli:
+        return "(no chart data available)"
+    try:
+        from kundli_full_context import build_full_chart_context  # type: ignore
+
+        intel_obj = None
+        try:
+            analyze_chart, _ = _chart_intel()
+            intel_obj = analyze_chart(kundli, birth)
+        except Exception:
+            pass
+        block = build_full_chart_context(
+            kundli=kundli,
+            intel=intel_obj,
+            birth=birth if isinstance(birth, dict) else None,
+            question=question or "",
+        )
+        if (block or "").strip():
+            return block.strip()
+    except Exception as _rich_exc:
+        print(f"[raw_passthrough] rich chart fallback skipped: {_rich_exc}", flush=True)
+    return _raw_compact_chart(
+        kundli, include_dasha=False, static_dasha_hint=True,
+    )
+
+
 # ── KP enrichment (opt-in, only on KP-style questions) ─────────────────────
 # Keep raw_passthrough lean: D1+D9+dasha is the default. KP cusps + CSL
 # verdicts are heavy + only useful when the user explicitly asks a KP-style
@@ -5216,9 +5248,19 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     except Exception:
         pass
     try:
-        from ask_love.timing_registry import is_love_timing_question  # type: ignore
+        from ask_love.timing_registry import (  # type: ignore
+            is_love_static_loyalty_question,
+            is_love_timing_question,
+        )
 
-        if is_love_timing_question(question or "", _llm_intent):
+        if is_love_static_loyalty_question(question or ""):
+            is_timing = False
+            print(
+                f"[raw_passthrough] LOVE_STATIC_LOYALTY overrides timing "
+                f"q={(question or '')[:60]!r}",
+                flush=True,
+            )
+        elif is_love_timing_question(question or "", _llm_intent):
             is_timing = True
     except Exception:
         pass
@@ -5815,9 +5857,21 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         else:
             print(f"[raw_passthrough] health beats timing skipped: {_hso_a}", flush=True)
     try:
-        from ask_love.timing_registry import is_love_timing_question  # type: ignore
+        from ask_love.timing_registry import (  # type: ignore
+            is_love_static_loyalty_question,
+            is_love_timing_question,
+        )
 
-        if is_love_timing_question(question or "", _llm_intent):
+        if is_love_static_loyalty_question(question or ""):
+            is_timing = False
+            qtype = "STATIC"
+            _is_mr_static = True
+            print(
+                f"[raw_passthrough] LOVE_STATIC_LOYALTY → MR static "
+                f"q={(question or '')[:60]!r}",
+                flush=True,
+            )
+        elif is_love_timing_question(question or "", _llm_intent):
             is_timing = True
             qtype = "TIMING"
             _is_mr_static = False
@@ -7765,12 +7819,11 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             qtype=qtype,
             checks=_eng_checks,
         ):
-            if not (chart_text or "").strip() or "=== D1" not in (chart_text or "")[:400]:
-                chart_text = _raw_compact_chart(
-                    kundli,
-                    include_dasha=False,
-                    static_dasha_hint=bool(static_dasha_hint),
-                )
+            chart_text = _rich_chart_text_for_llm_fallback(
+                kundli,
+                birth=birth,
+                question=question or "",
+            )
             extra_rules = (extra_rules or "") + DOMAIN_CHART_FALLBACK_RULE
             _eng_checks["controlled_llm_fallback"] = True
             _eng_checks["mandatory_domain_chart_fallback"] = True

@@ -30,7 +30,7 @@ _LOVE_SCOPE_RX = re.compile(
     r"dry\s+spell|single\s+status|soulmate|true\s+love|"
     r"approach|insaan|enter\s+karega|wapas|purana\s+pyaar|"
     r"galatfehmi\w*|misunderstanding\w*|stressful\s+phase|healing|doori|"
-    r"third\s+party|teesra|loyal\w*|loyalty|dhokha|cheat|"
+    r"third\s+party|teesra|loyal\w*|loyalty|dhokha|dhoka|cheat|"
     r"parents?|ghar\s*wale|raazi|societal|samaaj|"
     r"favorable\s+dasha|naya\s+partner|relationship\s+shuru|"
     r"dusra\s+chance|purane\s+rishte|dispute|"
@@ -52,6 +52,48 @@ _MARRIAGE_OVERRIDE_RX = re.compile(
     r"\b(shaadi|vivah|marriage|wedding)\s+(hogi|hoga|milegi|milega)\b",
 )
 
+_STATIC_LOYALTY_RX = re.compile(
+    r"(?ix)\b("
+    r"dhokha|dhoka|betray|cheat|cheating|loyal\w*|faithful|trust|vishwas|"
+    r"wafa|beimaan|dhokebaaz"
+    r")\b"
+)
+
+_EXPLICIT_LOVE_TIMING_RX = re.compile(
+    r"(?ix)\b("
+    r"kab|kab\s+tak|when|kis\s+(?:saal|year|mahine|month)|"
+    r"muhurat|timing|dasha|antardasha|mahadasha|transit|gochar"
+    r")\b"
+)
+
+
+def is_love_static_loyalty_question(question: str) -> bool:
+    """Static betrayal/loyalty/trust Q — MR engine, not love timing ('dhoka milega')."""
+    q = prepare_ask_question((question or "").strip())
+    if not q:
+        return False
+    if not _STATIC_LOYALTY_RX.search(q):
+        return False
+    if _EXPLICIT_LOVE_TIMING_RX.search(q):
+        return False
+    if _LOVE_SCOPE_RX.search(q):
+        return True
+    return bool(
+        re.search(
+            r"(?ix)\b(love|pyaar|pyar|prem|relationship|partner|rishta)\b",
+            q,
+        )
+    )
+
+
+def love_static_overrides_llm_timing(
+    question: str,
+    llm_intent: Optional[dict] = None,
+) -> bool:
+    """True when a loyalty/betrayal Q must run MR static, not love timing."""
+    _ = llm_intent
+    return is_love_static_loyalty_question(question or "")
+
 
 def is_love_timing_question(
     question: str,
@@ -59,6 +101,8 @@ def is_love_timing_question(
 ) -> bool:
     q = prepare_ask_question((question or "").strip())
     if not q:
+        return False
+    if is_love_static_loyalty_question(q):
         return False
     if _MARRIAGE_OVERRIDE_RX.search(q):
         return False  # marriage engine

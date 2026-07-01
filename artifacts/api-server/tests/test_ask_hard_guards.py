@@ -294,13 +294,13 @@ class TestEngineOnlyPolicy(unittest.TestCase):
     def test_enforce_blocks_love_without_question_summary(self):
         from ask_hard_guards import enforce_engine_only_or_refuse
 
-        q = "Kya mujhse love life me dhoka milega ya dhoka nehi milega"
-        llm = {"domain": "love", "is_timing": False}
+        q = "Meri career kaisi rahegi"
+        llm = {"domain": "career", "is_timing": False}
         out = enforce_engine_only_or_refuse(
             question=q,
             qtype="STATIC",
             llm_intent=llm,
-            checks={"is_mr_static": False, "slice_type": "full_compact"},
+            checks={"is_career_engine": True, "slice_type": "full_compact"},
             slice_meta={},
         )
         self.assertIsNotNone(out)

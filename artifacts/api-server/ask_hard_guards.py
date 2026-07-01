@@ -80,8 +80,9 @@ CONTROLLED_LLM_FALLBACK_RULE = (
 # When a mandatory domain (love/career/health…) was understood but the engine
 # produced no structured facts, allow a tight D1+D9 chart read — not a hard refuse.
 DOMAIN_CHART_FALLBACK_RULE = (
-    "\n\n=== DOMAIN CHART FALLBACK (engine facts missing; D1+D9 chart only) ===\n"
-    "Structured engine facts are absent — answer ONLY from the D1+D9 chart below.\n"
+    "\n\n=== DOMAIN CHART FALLBACK (engine facts missing; full D1+D9 chart) ===\n"
+    "Structured engine facts are absent — answer ONLY from the full chart block below "
+    "(planet sign, house, degree, dignity exalted/debilitated/own, D9 positions).\n"
     "- Stay EXACTLY on the user's question; give a clear yes / no / mixed leaning.\n"
     "- Cite 2–4 relevant chart factors only (houses, lords, Venus/Moon/Jupiter etc.).\n"
     "- NO invented dates, names, or guaranteed betrayal/loyalty/career outcomes.\n"
@@ -446,12 +447,31 @@ def mandatory_domain_chart_fallback_eligible(
     if not _controlled_fallback_enabled():
         return False
     if str(qtype or "").upper() == "TIMING":
-        return False
-    if (llm_intent or {}).get("is_timing"):
-        return False
+        try:
+            from ask_love.timing_registry import is_love_static_loyalty_question  # type: ignore
+
+            if not is_love_static_loyalty_question(question or ""):
+                try:
+                    from ask_marriage_relationship_slice import (  # type: ignore
+                        is_marriage_relationship_static_question,
+                    )
+
+                    if not is_marriage_relationship_static_question(question or ""):
+                        return False
+                except Exception:
+                    return False
+        except Exception:
+            return False
     summary = str((llm_intent or {}).get("question_summary") or "").strip()
-    if not summary:
-        return False
+    understood = str((llm_intent or {}).get("question_understood") or "").strip().lower()
+    if not summary and understood != "yes":
+        try:
+            from ask_love.timing_registry import is_love_static_loyalty_question  # type: ignore
+
+            if not is_love_static_loyalty_question(question or ""):
+                return False
+        except Exception:
+            return False
     if not mandatory_static_domain_detected(question, llm_intent, checks):
         return False
     return True

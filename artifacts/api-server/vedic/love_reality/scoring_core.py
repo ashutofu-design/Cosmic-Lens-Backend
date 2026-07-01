@@ -198,6 +198,13 @@ class KundliReader:
     def house_lord(self, house: int) -> str:
         return SIGN_LORDS[(self.asc_index() + house - 1) % 12]
 
+    def houses_ruled_by(self, planet: str) -> list[int]:
+        """Whole-sign houses ruled by planet from lagna."""
+        name = (planet or "").strip()
+        if not name:
+            return []
+        return [h for h in range(1, 13) if self.house_lord(h) == name]
+
     def lord_in_house(self, planet: str) -> int | None:
         pl = self.planet(planet)
         return pl.get("house") if pl else None

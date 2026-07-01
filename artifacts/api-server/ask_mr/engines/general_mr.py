@@ -4,6 +4,7 @@ import re
 
 from vedic.love_reality.scoring_core import KundliReader, SIGNS, risk_band_high_is_good
 
+from ._lordship import lordship_clause
 from ._person_signals import build_person_signals, pick_notes
 from ..types import EngineResult
 
@@ -223,23 +224,32 @@ def _synthesize_emotional_compatibility(kundli: dict, sig) -> list[str]:
     occ7 = r.occupants(7)
     if "Moon" in occ7:
         lines.append(
-            "Moon in 7th — emotional tie to partner runs deep; closeness and mood-sync matter."
+            "Moon in 7th — emotional tie to partner runs deep; closeness and mood-sync matter"
+            f"{lordship_clause(r, 'Moon')}."
         )
     if "Venus" in occ7:
-        lines.append("Venus in 7th — affection and emotional harmony in partnership house.")
+        lines.append(
+            "Venus in 7th — affection and emotional harmony in partnership house"
+            f"{lordship_clause(r, 'Venus')}."
+        )
     if "Jupiter" in occ7:
-        lines.append("Jupiter in 7th — emotional maturity and fairness support compatibility.")
+        lines.append(
+            "Jupiter in 7th — emotional maturity and fairness support compatibility"
+            f"{lordship_clause(r, 'Jupiter')}."
+        )
 
     ven = r.planet("Venus") or {}
     if ven.get("house") in (1, 4, 7, 9, 11):
         lines.append(
-            f"Venus in house {ven.get('house')} — warmth and emotional generosity help the bond."
+            f"Venus in house {ven.get('house')} — warmth and emotional generosity help the bond"
+            f"{lordship_clause(r, 'Venus')}."
         )
 
     moon = r.planet("Moon") or {}
     if moon.get("house") in (1, 4, 5, 7) and "Moon in 7th" not in " ".join(lines):
         lines.append(
-            f"Moon in house {moon.get('house')} — feelings are central; emotional language needs space."
+            f"Moon in house {moon.get('house')} — feelings are central; emotional language needs space"
+            f"{lordship_clause(r, 'Moon')}."
         )
 
     for key in ("Moon under Saturn/Rahu", "Saturn on 7th", "nodes on 7th", "Moon debilitated"):
@@ -247,7 +257,13 @@ def _synthesize_emotional_compatibility(kundli: dict, sig) -> list[str]:
         if picked:
             line = picked[0]
             if not any(line in existing for existing in lines):
-                lines.append(f"Emotional friction: {line}")
+                # Add lordship for planets named in friction notes
+                extra = ""
+                for pname in ("Moon", "Saturn", "Rahu", "Ketu"):
+                    if pname in line:
+                        extra = lordship_clause(r, pname)
+                        break
+                lines.append(f"Emotional friction: {line}{extra}")
         if len(lines) >= 5:
             break
 

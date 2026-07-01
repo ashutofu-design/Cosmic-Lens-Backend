@@ -6,6 +6,7 @@ from typing import Any
 from vedic.love_reality.scoring_core import KundliReader, SIGNS
 
 from ._person_signals import build_person_signals
+from ._lordship import lordship_clause
 from ..types import EngineResult
 
 # Spouse's in-laws / family members (8H = 2nd from 7th) — NOT partner personality (7H).
@@ -361,16 +362,25 @@ def run_partner_nature(
     evidence.append(f"7th house sign baseline: {sign7 or 'unknown'} (partner vibe / social style).")
     if lord7 and p7l:
         evidence.append(
-            f"7th lord placement: {lord7} in house {p7l.get('house')} sign {p7l.get('sign')} "
+            f"7th lord placement: {lord7} in house {p7l.get('house')} sign {p7l.get('sign')}"
+            f"{lordship_clause(r, lord7, context_house=7)} "
             f"(mindset + how partnership behaves)."
         )
     else:
         evidence.append(f"7th lord: {lord7 or 'unknown'} (placement not available).")
-    evidence.append(f"Planets in 7th house: {occ7 or 'none'} (direct behavior tone).")
+    if occ7:
+        occ_bits = [
+            f"{name}{lordship_clause(r, name)}" for name in occ7
+        ]
+        evidence.append(
+            f"Planets in 7th house: {occ_bits} (direct behavior tone)."
+        )
+    else:
+        evidence.append("Planets in 7th house: none (direct behavior tone).")
     if pk:
         evidence.append(
-            f"Partner-karak by chart gender: {gender} → {karak} in house {pk.get('house')} sign {pk.get('sign')} "
-            f"(presence/attraction style)."
+            f"Partner-karak by chart gender: {gender} → {karak} in house {pk.get('house')} "
+            f"sign {pk.get('sign')}{lordship_clause(r, karak)} (presence/attraction style)."
         )
     else:
         evidence.append(f"Partner-karak by chart gender: {gender} → {karak} (placement not available).")

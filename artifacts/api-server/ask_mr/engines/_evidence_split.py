@@ -28,7 +28,9 @@ _POSITIVE_RX = re.compile(
     r"exalted|own[\s-]?sign|deep\s+heartfelt|growth[\s-]?oriented|charming|sincere|"
     r"not\s+heavily\s+afflicted|honest\s+growth|positive\s+dating|strong\s+green|"
     r"playful\s+bold|magnetic|blessing|trust\s+and\s+blessing|affectionate\s+sincere|"
-    r"generally\s+expressive|emotional\s+closeness|communicative\s+7th"
+    r"generally\s+expressive|emotional\s+closeness|communicative\s+7th|"
+    r"emotional\s+tie\s+to\s+partner|warmth\s+and\s+emotional\s+generosity|"
+    r"emotional\s+maturity\s+and\s+fairness"
     r")\b"
 )
 
@@ -46,6 +48,8 @@ def classify_evidence_line(line: str) -> str:
         return "neutral"
     low = t.lower()
     if low.startswith("love challenge:") or low.startswith("red flag"):
+        return "negative"
+    if low.startswith("emotional friction:"):
         return "negative"
     if _PARTNERSHIP_AFFLICTION_RX.search(t):
         return "negative"

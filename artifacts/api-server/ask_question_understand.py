@@ -91,6 +91,57 @@ def _summary_is_weak(summary: str, question: str) -> bool:
     return False
 
 
+def _finalize_question_understanding(
+    out: dict[str, Any],
+    question: str,
+    *,
+    client: Any = None,
+) -> None:
+    """Never leave echoed question text as the admin understanding."""
+    from ask_intent_fidelity import (
+        build_question_explanation_fallback,
+        infer_question_scope,
+        strip_scope_bracket,
+    )
+
+    q = (question or "").strip()
+    body = strip_scope_bracket(str(out.get("question_summary") or "")).strip()
+    weak = _summary_is_weak(body, q) or _echoes_question(body, q)
+    needs_lines = "\n" not in body and len(q) > 35
+
+    if weak or needs_lines:
+        extra = llm_understand_question(q, client=client)
+        extra_body = strip_scope_bracket(str(extra.get("question_summary") or "")).strip()
+        if extra_body and not _echoes_question(extra_body, q) and not _summary_is_weak(extra_body, q):
+            _apply_understanding_fields(
+                out,
+                q,
+                summary=extra_body,
+                scope=str(extra.get("question_scope") or "").strip(),
+            )
+            out["understanding_source"] = extra.get("source") or "understand_llm"
+            body = extra_body
+
+    body = strip_scope_bracket(str(out.get("question_summary") or "")).strip()
+    if _summary_is_weak(body, q) or _echoes_question(body, q) or ("\n" not in body and len(q) > 35):
+        fallback = build_question_explanation_fallback(q, out)
+        _apply_understanding_fields(
+            out,
+            q,
+            summary=fallback,
+            scope=str(out.get("question_scope") or "") or infer_question_scope(q, out),
+        )
+        src = str(out.get("understanding_source") or "")
+        out["understanding_source"] = "explain_repair" if src == "understand_llm" else "regex_explain"
+
+    body = strip_scope_bracket(str(out.get("question_summary") or "")).strip()
+    out["question_understood"] = (
+        "yes"
+        if body and not _echoes_question(body, q) and len(body) >= 24
+        else "no"
+    )
+
+
 def _apply_understanding_fields(
     out: dict[str, Any],
     question: str,
@@ -237,9 +288,10 @@ def ensure_question_understanding(
     elif not str(out.get("understanding_source") or "").strip():
         out["understanding_source"] = "regex_paraphrase"
 
+    _finalize_question_understanding(out, q, client=client)
+
     out["interpretation"] = out.get("interpretation") or f'User asked: "{q}"'
     out["question_echo"] = q
-    out["question_understood"] = "yes" if q and str(out.get("question_summary") or "").strip() else "no"
     out["understanding_detail"] = build_question_understanding_detail(q, out)
     out["understanding_line"] = build_llm_understood_one_liner(q, out)
     return out

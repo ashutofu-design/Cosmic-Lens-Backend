@@ -39,6 +39,19 @@ class TestQuestionUnderstand(unittest.TestCase):
         self.assertNotIn("Mujhe kis tarah ka partner suit karega", summary)
         self.assertEqual(out.get("question_understood"), "yes")
 
+    def test_ensure_repairs_echoed_intent_summary(self):
+        q = "Mujhe kis tarah ka partner suit karega meri mental thinking ke hisab se"
+        out = ensure_question_understanding(
+            q,
+            {"domain": "general", "question_summary": q, "question_scope": "partner"},
+            force_llm=False,
+        )
+        summary = str(out.get("question_summary") or "")
+        self.assertNotEqual(summary.strip(), q.strip())
+        self.assertIn("partner", summary.lower())
+        self.assertIn("\n", summary)
+        self.assertEqual(out.get("question_scope"), "partner")
+
     def test_echo_detected_as_weak(self):
         from ask_question_understand import _echoes_question, _summary_is_weak
 

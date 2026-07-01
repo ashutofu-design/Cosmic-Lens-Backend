@@ -101,6 +101,29 @@ def suggest_mr_archetype_for_question(question: str) -> str | None:
     return None
 
 
+def apply_partner_relationship_static_flags(
+    question: str,
+    *,
+    is_mr_static: bool,
+    is_health_static: bool,
+    llm_intent: dict[str, Any] | None = None,
+) -> tuple[bool, bool]:
+    """Partner-fit questions → MR on, health off."""
+    try:
+        from ask_intent_fidelity import is_partner_relationship_question
+
+        if is_partner_relationship_question(question or ""):
+            if isinstance(llm_intent, dict):
+                llm_intent["health_archetype"] = None
+                if str(llm_intent.get("domain") or "general").strip().lower() in ("", "general", "health"):
+                    llm_intent["domain"] = "love"
+                    llm_intent["mr_archetype"] = llm_intent.get("mr_archetype") or "partner_nature"
+            return True, False
+    except Exception:
+        pass
+    return is_mr_static, is_health_static
+
+
 def apply_pre_route_guards(
     flags: dict[str, bool],
     question: str,

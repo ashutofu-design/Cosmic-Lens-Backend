@@ -545,6 +545,43 @@ def serialize_llm_context_for_db(ctx: Any) -> str | None:
     return raw
 
 
+def refresh_stored_llm_context_understanding(ctx: dict[str, Any]) -> dict[str, Any]:
+    """Re-run understanding repair when admin loads a saved row (no DB write)."""
+    if not isinstance(ctx, dict):
+        return ctx
+    q = str(
+        ctx.get("question_normalized")
+        or ctx.get("question")
+        or ""
+    ).strip()
+    intent = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+    if not q and isinstance(intent, dict):
+        q = str(intent.get("question_normalized") or intent.get("question_echo") or "").strip()
+    if not q:
+        return ctx
+    raw = str(ctx.get("question_raw") or intent.get("question_raw") or q).strip()
+    try:
+        from ask_question_understand import ensure_question_understanding
+
+        refreshed = ensure_question_understanding(q, dict(intent), force_llm=False, question_raw=raw)
+    except Exception:
+        return ctx
+    out = dict(ctx)
+    out["llm_intent"] = refreshed
+    for key in (
+        "question_meaning",
+        "question_scope",
+        "understanding_line",
+        "understanding_detail",
+        "understanding_source",
+        "question_understood",
+        "question_summary",
+    ):
+        if refreshed.get(key) is not None:
+            out[key] = refreshed.get(key)
+    return out
+
+
 def parse_llm_context_from_db(raw: str | None) -> dict[str, Any] | None:
     if not raw or not str(raw).strip():
         return None
@@ -558,6 +595,6 @@ def parse_llm_context_from_db(raw: str | None) -> dict[str, Any] | None:
                 tr = blocks.get(key)
                 if isinstance(tr, dict):
                     blocks[key] = normalize_engine_trace_transit_months(tr)
-        return data
+        return refresh_stored_llm_context_understanding(data)
     except Exception:
         return {"raw": str(raw)[:4000]}

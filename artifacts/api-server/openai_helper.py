@@ -5547,11 +5547,29 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _vehicle_engine_on = (os.environ.get("ASK_VEHICLE_ENGINE") or "1").strip() != "0"
     _travel_engine_on = (os.environ.get("ASK_TRAVEL_ENGINE") or "1").strip() != "0"
     _litigation_engine_on = (os.environ.get("ASK_LITIGATION_ENGINE") or "1").strip() != "0"
+    try:
+        from ask_engine_verification import apply_partner_relationship_static_flags
+
+        _is_mr_static, _is_health_static = apply_partner_relationship_static_flags(
+            question or "",
+            is_mr_static=_is_mr_static,
+            is_health_static=_is_health_static,
+            llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+        )
+    except Exception:
+        pass
     if isinstance(_llm_intent, dict):
         _llm_dom_early = str(_llm_intent.get("domain") or "").strip().lower()
         if _llm_dom_early == "health":
-            _is_health_static = True
-            is_timing = False
+            try:
+                from ask_intent_fidelity import is_partner_relationship_question
+
+                if not is_partner_relationship_question(question or ""):
+                    _is_health_static = True
+                    is_timing = False
+            except Exception:
+                _is_health_static = True
+                is_timing = False
         if _llm_dom_early == "finance":
             _is_finance_static = True
     try:
@@ -5588,7 +5606,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             if _dom in ("network", "friends", "social_circle"):
                 _is_network_static = True
             if _dom == "health":
-                _is_health_static = True
+                try:
+                    from ask_intent_fidelity import is_partner_relationship_question
+
+                    if not is_partner_relationship_question(question or ""):
+                        _is_health_static = True
+                except Exception:
+                    _is_health_static = True
             if _dom == "finance":
                 _is_finance_static = True
             try:
@@ -5744,6 +5768,17 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     pass
             elif not _luck_engine_on:
                 _is_luck_static = False
+        try:
+            from ask_engine_verification import apply_partner_relationship_static_flags
+
+            _is_mr_static, _is_health_static = apply_partner_relationship_static_flags(
+                question or "",
+                is_mr_static=_is_mr_static,
+                is_health_static=_is_health_static,
+                llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+            )
+        except Exception:
+            pass
         if _force_health_static:
             _is_health_static = True
             is_timing = False
@@ -6163,6 +6198,17 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         is_decision = False
         is_finance = False
         is_marriage_domain = False
+    try:
+        from ask_engine_verification import apply_partner_relationship_static_flags
+
+        _is_mr_static, _is_health_static = apply_partner_relationship_static_flags(
+            question or "",
+            is_mr_static=_is_mr_static,
+            is_health_static=_is_health_static,
+            llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+        )
+    except Exception:
+        pass
     _engine_route = None
     if not is_timing and not _is_native_overview:
         try:
@@ -6170,38 +6216,49 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 merge_route_into_admin_intent,
                 resolve_static_engine_route,
             )
+            from ask_engine_verification import apply_pre_route_guards
 
+            _route_flags = {
+                "education": _is_education_static,
+                "children": _is_children_static,
+                "property": _is_property_static,
+                "vehicle": _is_vehicle_static,
+                "travel": _is_travel_static,
+                "litigation": _is_litigation_static,
+                "gap": _is_gap_static,
+                "network": _is_network_static,
+                "luck": _is_luck_static,
+                "career": _is_career_static,
+                "finance": _is_finance_static,
+                "health": _is_health_static,
+                "mr": _is_mr_static,
+            }
+            _route_flags, _guard_notes_pre = apply_pre_route_guards(
+                _route_flags,
+                question or "",
+                gap_key=_gap_static_key or None,
+                llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+            )
             _resolver_flags, _engine_route = resolve_static_engine_route(
                 question or "",
-                flags={
-                    "education": _is_education_static,
-                    "children": _is_children_static,
-                    "property": _is_property_static,
-                    "vehicle": _is_vehicle_static,
-                    "travel": _is_travel_static,
-                    "litigation": _is_litigation_static,
-                    "gap": _is_gap_static,
-                    "network": _is_network_static,
-                    "luck": _is_luck_static,
-                    "career": _is_career_static,
-                    "finance": _is_finance_static,
-                    "health": _is_health_static,
-                    "mr": _is_mr_static,
-                },
+                flags=_route_flags,
                 llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
                 llm_intent_admin=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
                 is_timing=bool(is_timing),
             )
+            if _guard_notes_pre:
+                print(
+                    f"[raw_passthrough] ENGINE_GUARDS_PRE notes={_guard_notes_pre}",
+                    flush=True,
+                )
             try:
-                from ask_engine_verification import apply_pre_route_guards
-
                 _guard_flags, _guard_notes = apply_pre_route_guards(
                     _resolver_flags,
                     question or "",
                     gap_key=_gap_static_key or None,
                     llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
                 )
-                if _guard_notes:
+                if _guard_flags != _resolver_flags or _guard_notes:
                     _resolver_flags, _engine_route = resolve_static_engine_route(
                         question or "",
                         flags=_guard_flags,
@@ -6209,10 +6266,11 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         llm_intent_admin=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
                         is_timing=bool(is_timing),
                     )
-                    print(
-                        f"[raw_passthrough] ENGINE_GUARDS notes={_guard_notes}",
-                        flush=True,
-                    )
+                    if _guard_notes:
+                        print(
+                            f"[raw_passthrough] ENGINE_GUARDS notes={_guard_notes}",
+                            flush=True,
+                        )
             except Exception as _guard_exc:
                 print(f"[raw_passthrough] ENGINE_GUARDS skipped: {_guard_exc}", flush=True)
             _is_education_static = _resolver_flags["education"]

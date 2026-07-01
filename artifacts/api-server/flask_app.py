@@ -3319,14 +3319,30 @@ def admin_ask_questions_route():
     per_page = request.args.get("per_page", type=int) or 50
     user_id = request.args.get("user_id", type=int)
     email = (request.args.get("email") or "").strip() or None
-    return jsonify(
-        _build_admin_ask_questions(
-            page=page,
-            per_page=per_page,
-            user_id=user_id,
-            email=email,
+    try:
+        return jsonify(
+            _build_admin_ask_questions(
+                page=page,
+                per_page=per_page,
+                user_id=user_id,
+                email=email,
+            )
         )
-    )
+    except Exception as exc:
+        import traceback
+
+        traceback.print_exc()
+        app.logger.exception("admin ask-questions failed")
+        return jsonify(
+            {
+                "error": str(exc)[:500],
+                "items": [],
+                "page": max(1, int(page or 1)),
+                "pages": 1,
+                "per_page": per_page,
+                "total": 0,
+            }
+        ), 500
 
 
 @app.route("/api/admin/love-reality-orders", methods=["GET"])

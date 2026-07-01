@@ -1,5 +1,4 @@
 import { AskQuestionDetailPage } from "./AskQuestionDetailPage";
-import { AskLlmContextPanel, AnswerPathBadge, parseAskLlmContext, QuestionUnderstandingPanel } from "./AskLlmContextPanel";
 import { CopyTextButton } from "./CopyTextButton";
 import { ViewQuestionButton } from "./ViewQuestionButton";
 import { QuestionLangBadge } from "./QuestionLangBadge";
@@ -1538,14 +1537,13 @@ export default function App() {
             <table>
               <thead>
                 <tr>
-                  <th>Question · answer · user</th>
-                  <th>Tokens · cost</th>
+                  <th>Question</th>
                 </tr>
               </thead>
               <tbody>
                 {askQuestions.length === 0 ? (
                   <tr>
-                    <td colSpan={2}>No Ask questions logged yet.</td>
+                    <td colSpan={1}>No Ask questions logged yet.</td>
                   </tr>
                 ) : (
                   askQuestions.map((row) => (
@@ -1555,14 +1553,6 @@ export default function App() {
                           <div className="ask-q-text">
                             <strong>Q:</strong> {row.question_text}
                           </div>
-                          {(() => {
-                            const rowCtx = parseAskLlmContext(row);
-                            return rowCtx ? (
-                              <div className="ask-q-meaning">
-                                <QuestionUnderstandingPanel ctx={rowCtx} />
-                              </div>
-                            ) : null;
-                          })()}
                           <div className="ask-q-actions">
                             <QuestionLangBadge questionText={row.question_text} compact />
                             <CopyTextButton
@@ -1576,66 +1566,6 @@ export default function App() {
                             />
                           </div>
                         </div>
-                        {row.answer_text ? (
-                          <>
-                            <br />
-                            <span className="detail-muted">
-                              <strong>A:</strong> {row.answer_text}
-                            </span>
-                          </>
-                        ) : (
-                          <div className="detail-muted">No answer saved</div>
-                        )}
-                        <div className="detail-muted">
-                          {row.user_name || row.user_email || `user #${row.user_id}`}
-                          {" — "}
-                          {formatDate(row.created_at)}
-                          {row.topic ? ` — ${row.topic}` : ""}
-                          {" — "}
-                          <AnswerPathBadge
-                            ctx={parseAskLlmContext(row)}
-                            row={row}
-                          />
-                          {row.answer_source ? (
-                            <>
-                              {" · "}
-                              <code>{row.answer_source}</code>
-                            </>
-                          ) : row.engine_tag ? (
-                            <> — {row.engine_tag}</>
-                          ) : null}
-                        </div>
-                        <AskLlmContextPanel
-                          row={row}
-                          panelId={`ask-llm-context-${row.id}`}
-                        />
-                      </td>
-                      <td>
-                        {row.total_tokens != null ? (
-                          <>
-                            {(row.prompt_tokens ?? 0).toLocaleString("en-IN")} in
-                            <br />
-                            {(row.completion_tokens ?? 0).toLocaleString("en-IN")} out
-                            {row.cached_tokens ? (
-                              <>
-                                <br />
-                                <span className="detail-muted">
-                                  {row.cached_tokens.toLocaleString("en-IN")} cached
-                                </span>
-                              </>
-                            ) : null}
-                            <br />
-                            <strong>{formatInr(row.cost_inr ?? 0)}</strong>
-                            {row.llm_model ? (
-                              <>
-                                <br />
-                                <span className="detail-muted">{row.llm_model}</span>
-                              </>
-                            ) : null}
-                          </>
-                        ) : (
-                          <span className="detail-muted">No LLM call</span>
-                        )}
                       </td>
                     </tr>
                   ))

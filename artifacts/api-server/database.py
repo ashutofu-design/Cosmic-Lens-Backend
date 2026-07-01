@@ -493,6 +493,56 @@ def ensure_user_auth_columns() -> None:
             print(f"[DB] ensure_user_auth_columns: {e}", flush=True)
 
 
+def ensure_user_questions_telemetry_columns() -> None:
+    """Best-effort user_questions token/cost/llm_context columns (admin Ask Q&A)."""
+    url = get_database_url()
+    if "postgresql" in url:
+        statements = [
+            "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS answer_text TEXT",
+            "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS answer_source VARCHAR(40)",
+            "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS llm_model VARCHAR(80)",
+            "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS prompt_tokens INTEGER",
+            "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS completion_tokens INTEGER",
+            "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS total_tokens INTEGER",
+            "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS cached_tokens INTEGER",
+            "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS cost_usd DOUBLE PRECISION",
+            "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS cost_inr DOUBLE PRECISION",
+            "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS engine_tag VARCHAR(40)",
+            "ALTER TABLE user_questions ADD COLUMN IF NOT EXISTS llm_context_json TEXT",
+        ]
+    else:
+        statements = []
+
+    for sql in statements:
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text(sql))
+                conn.commit()
+        except Exception as e:
+            print(f"[DB] ensure_user_questions_telemetry_columns: {e}", flush=True)
+
+    if "postgresql" not in url:
+        try:
+            with db.engine.connect() as conn:
+                for _tbl, _col, _sql in (
+                    ("user_questions", "answer_text", "ALTER TABLE user_questions ADD COLUMN answer_text TEXT"),
+                    ("user_questions", "answer_source", "ALTER TABLE user_questions ADD COLUMN answer_source VARCHAR(40)"),
+                    ("user_questions", "llm_model", "ALTER TABLE user_questions ADD COLUMN llm_model VARCHAR(80)"),
+                    ("user_questions", "prompt_tokens", "ALTER TABLE user_questions ADD COLUMN prompt_tokens INTEGER"),
+                    ("user_questions", "completion_tokens", "ALTER TABLE user_questions ADD COLUMN completion_tokens INTEGER"),
+                    ("user_questions", "total_tokens", "ALTER TABLE user_questions ADD COLUMN total_tokens INTEGER"),
+                    ("user_questions", "cached_tokens", "ALTER TABLE user_questions ADD COLUMN cached_tokens INTEGER"),
+                    ("user_questions", "cost_usd", "ALTER TABLE user_questions ADD COLUMN cost_usd REAL"),
+                    ("user_questions", "cost_inr", "ALTER TABLE user_questions ADD COLUMN cost_inr REAL"),
+                    ("user_questions", "engine_tag", "ALTER TABLE user_questions ADD COLUMN engine_tag VARCHAR(40)"),
+                    ("user_questions", "llm_context_json", "ALTER TABLE user_questions ADD COLUMN llm_context_json TEXT"),
+                ):
+                    _sqlite_add_column(conn, _tbl, _col, _sql)
+                conn.commit()
+        except Exception as e:
+            print(f"[DB] ensure_user_questions_telemetry_columns sqlite: {e}", flush=True)
+
+
 def init_db(app):
 
     url = get_database_url()

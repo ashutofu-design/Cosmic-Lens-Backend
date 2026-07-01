@@ -10,6 +10,7 @@ from ask_intent_fidelity import (
     _PARTNER_SUBJECT_RX,
     archetype_allowed_for_question,
     is_dyadic_couple_question,
+    is_partner_relationship_question,
 )
 
 # Gap / personality engines — native self only.
@@ -76,6 +77,13 @@ def suggest_mr_archetype_for_question(question: str) -> str | None:
     q = (question or "").strip()
     if not q:
         return None
+    if is_partner_relationship_question(q):
+        try:
+            from ask_mr.classifier import classify_mr_archetype
+
+            return classify_mr_archetype(q) or "partner_nature"
+        except Exception:
+            return "partner_nature"
     if is_dyadic_couple_question(q) and re.search(
         r"(?ix)\b(chemistry|attraction|spark|passion|romance|romantic|intense)\b",
         q,
@@ -115,6 +123,17 @@ def apply_pre_route_guards(
         out["mr"] = True
         out["gap"] = False
         notes.append("mr:partner_personality")
+
+    if is_partner_relationship_question(question):
+        if out.get("health"):
+            out["health"] = False
+            notes.append("health:suppressed_partner_relationship")
+        for wrong in ("career", "finance", "education", "children", "property", "vehicle", "travel", "litigation"):
+            if out.get(wrong):
+                out[wrong] = False
+                notes.append(f"{wrong}:suppressed_partner_relationship")
+        out["mr"] = True
+        notes.append("mr:forced_partner_relationship")
 
     if _NATIVE_SELF_FOCUS_RX.search(question or "") and not _PARTNER_SUBJECT_RX.search(question or ""):
         if out.get("mr") and not out.get("gap"):
@@ -183,6 +202,16 @@ def verify_static_engine_selection(
             action="reroute_mr",
             reason="chemistry_native_on_dyad_question",
             mr_archetype=suggest_mr_archetype_for_question(q) or "general_mr",
+            failed_checks=failed,
+        )
+
+    if engine_key in ("health", "career", "finance", "education", "children", "property", "vehicle", "travel", "litigation", "gap") and is_partner_relationship_question(q):
+        failed.append(f"{engine_key}_on_partner_question")
+        return EngineVerificationResult(
+            ok=False,
+            action="reroute_mr",
+            reason="partner_question_wrong_domain_engine",
+            mr_archetype=suggest_mr_archetype_for_question(q) or "partner_nature",
             failed_checks=failed,
         )
 

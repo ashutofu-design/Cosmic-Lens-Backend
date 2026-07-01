@@ -6965,7 +6965,6 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     wants_explain=wants_explain,
                     archetype=_resolved_health_arch,
                 )
-                chart_text = _health_engine_result.to_narrator_payload()
                 dcr_love_meta = {
                     "slice": "health_engine_v1",
                     "topic": "health",
@@ -6979,15 +6978,77 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     "word_budget": int(_health_engine_result.word_budget or 75),
                     "narrator_mode": "engine_facts_only",
                 }
-                _chart_slice_type = "health_engine_v1"
-                print(
-                    f"[raw_passthrough] HEALTH_ENGINE "
-                    f"archetype={_health_engine_result.archetype} "
-                    f"skip_llm={_health_engine_result.skip_llm} "
-                    f"evidence={len(_health_engine_result.evidence or [])} "
-                    f"chart_chars={len(chart_text)}",
-                    flush=True,
-                )
+                try:
+                    from ask_engine_verification import verify_engine_output
+
+                    _hlth_ver = verify_engine_output(
+                        question or "",
+                        engine_key="health",
+                        archetype=_health_engine_result.archetype,
+                        slice_meta=dcr_love_meta,
+                    )
+                    if not _hlth_ver.ok and _hlth_ver.action == "reroute_mr":
+                        from ask_mr import run_mr_static_engine  # type: ignore
+                        from ask_mr.engine import mr_engine_slice_meta
+
+                        _recover_arch = _hlth_ver.mr_archetype or "partner_nature"
+                        _mr_rec = run_mr_static_engine(
+                            kundli if isinstance(kundli, dict) else {},
+                            question or "",
+                            birth=birth,
+                            wants_explain=wants_explain,
+                            archetype=_recover_arch,
+                        )
+                        if _mr_rec.archetype == "partner_nature":
+                            from ask_mr.engines.partner_nature import (
+                                partner_nature_narrator_payload,
+                            )
+
+                            chart_text = partner_nature_narrator_payload(_mr_rec)
+                        else:
+                            chart_text = _mr_rec.to_narrator_payload()
+                        dcr_love_meta = mr_engine_slice_meta(_mr_rec)
+                        _is_health_static = False
+                        _is_mr_static = True
+                        if isinstance(_llm_intent_admin, dict):
+                            _llm_intent_admin["engine_verification"] = _hlth_ver.to_dict()
+                            _llm_intent_admin["engine_verification_recovered"] = "reroute_mr"
+                        print(
+                            f"[raw_passthrough] HEALTH_VERIFY recovered→MR "
+                            f"archetype={_mr_rec.archetype} reason={_hlth_ver.reason}",
+                            flush=True,
+                        )
+                    elif not _hlth_ver.ok:
+                        if isinstance(_llm_intent_admin, dict):
+                            _llm_intent_admin["engine_verification"] = _hlth_ver.to_dict()
+                    elif isinstance(_llm_intent_admin, dict):
+                        _llm_intent_admin["engine_verification"] = _hlth_ver.to_dict()
+                except Exception as _hlth_ver_exc:
+                    print(
+                        f"[raw_passthrough] HEALTH_VERIFY skipped: {_hlth_ver_exc}",
+                        flush=True,
+                    )
+                if _is_health_static:
+                    chart_text = _health_engine_result.to_narrator_payload()
+                    _chart_slice_type = "health_engine_v1"
+                    print(
+                        f"[raw_passthrough] HEALTH_ENGINE "
+                        f"archetype={_health_engine_result.archetype} "
+                        f"skip_llm={_health_engine_result.skip_llm} "
+                        f"evidence={len(_health_engine_result.evidence or [])} "
+                        f"chart_chars={len(chart_text)}",
+                        flush=True,
+                    )
+                else:
+                    _chart_slice_type = str(
+                        (dcr_love_meta or {}).get("slice") or "mr_engine_v1"
+                    )
+                    print(
+                        f"[raw_passthrough] HEALTH_VERIFY→MR "
+                        f"archetype={(dcr_love_meta or {}).get('archetype')} "
+                        f"chart_chars={len(chart_text)}",
+                        flush=True,
+                    )
             except Exception as _hl_exc:
                 print(f"[raw_passthrough] HEALTH_ENGINE failed: {_hl_exc}", flush=True)
                 chart_text = _raw_compact_chart(

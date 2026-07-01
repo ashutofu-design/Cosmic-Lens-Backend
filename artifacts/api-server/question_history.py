@@ -303,6 +303,13 @@ def list_admin_ask_questions(
     """Paginated Ask Q&A for admin panel — question, answer, tokens, cost."""
     from models import User
 
+    try:
+        from database import ensure_user_questions_telemetry_columns
+
+        ensure_user_questions_telemetry_columns()
+    except Exception as _col_exc:
+        print(f"[question_history] telemetry columns ensure skipped: {_col_exc}", flush=True)
+
     page = max(1, int(page or 1))
     per_page = max(1, min(int(per_page or 50), 100))
     q = UserQuestion.query.join(User, UserQuestion.user_id == User.id)
@@ -312,18 +319,44 @@ def list_admin_ask_questions(
     if em:
         q = q.filter(db.func.lower(User.email).like(f"%{em}%"))
 
-    total = q.count()
+    try:
+        total = q.count()
+    except Exception as exc:
+        print(f"[question_history] ask-questions count failed: {exc}", flush=True)
+        raise
+
     pages = max(1, (total + per_page - 1) // per_page)
     if page > pages:
         page = pages
 
-    rows = (
-        q.order_by(UserQuestion.created_at.desc())
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-        .with_entities(UserQuestion, User.email, User.name)
-        .all()
-    )
+    try:
+        rows = (
+            q.order_by(UserQuestion.created_at.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+            .with_entities(UserQuestion, User.email, User.name)
+            .all()
+        )
+    except Exception as exc:
+        err = str(exc).lower()
+        print(f"[question_history] ask-questions query failed: {exc}", flush=True)
+        if "no such column" in err or "undefined column" in err:
+            try:
+                from database import ensure_user_questions_telemetry_columns
+
+                ensure_user_questions_telemetry_columns()
+                rows = (
+                    q.order_by(UserQuestion.created_at.desc())
+                    .offset((page - 1) * per_page)
+                    .limit(per_page)
+                    .with_entities(UserQuestion, User.email, User.name)
+                    .all()
+                )
+            except Exception as exc2:
+                print(f"[question_history] ask-questions retry failed: {exc2}", flush=True)
+                raise exc2 from exc
+        else:
+            raise
 
     items = []
     for uq, user_email, user_name in rows:

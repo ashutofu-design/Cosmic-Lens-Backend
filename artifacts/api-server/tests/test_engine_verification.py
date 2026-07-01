@@ -135,6 +135,44 @@ class EngineVerificationAdminSummaryTests(unittest.TestCase):
         self.assertEqual(classify_mr_archetype(q), "general_mr")
         self.assertEqual(classify_mr_archetype("hamari chemistry kaisi hogi?"), "chemistry")
 
+    def test_partner_mental_thinking_not_health(self):
+        from ask_engine_verification import (
+            build_engine_verification_admin_summary,
+            verify_static_engine_selection,
+        )
+        from ask_health.health_registry import is_health_static_question
+        from ask_intent_fidelity import infer_question_scope, resolve_question_understood
+
+        q = "Mujhe kis tarah ka partner suit karega meri mental thinking ke hisab se"
+        self.assertFalse(is_health_static_question(q))
+        self.assertEqual(infer_question_scope(q, {"domain": "general"}), "partner")
+        ver = verify_static_engine_selection(q, engine_key="health", archetype="general_health")
+        self.assertFalse(ver.ok)
+        self.assertEqual(ver.mr_archetype, "partner_nature")
+
+        s = build_engine_verification_admin_summary(
+            q,
+            llm_intent={"engine_ran": "health"},
+            slice_meta={
+                "slice": "health_engine_v1",
+                "archetype": "general_health",
+                "evidence": [],
+                "evidence_positive": [],
+                "evidence_negative": [],
+                "evidence_neutral": [],
+            },
+        )
+        self.assertEqual(s["status"], "wrong")
+
+        self.assertEqual(
+            resolve_question_understood(
+                q,
+                {"question_summary": q, "domain": "general", "confidence": 0.95},
+                engine_archetype="general_health",
+            ),
+            "no",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

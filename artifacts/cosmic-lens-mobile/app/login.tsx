@@ -23,7 +23,12 @@ import { FadeInView } from "@/components/motion/FadeInView";
 import { useC } from "@/context/ThemeContext";
 import { useUser, type AuthUser } from "@/context/UserContext";
 import { useT } from "@/hooks/useT";
-import { demoLogin, isDemoLoginEnabled, verifyFirebaseIdToken } from "@/lib/authBackend";
+import {
+  demoLogin,
+  isAuthNetworkError,
+  isDemoLoginEnabled,
+  verifyFirebaseIdToken,
+} from "@/lib/authBackend";
 import { signInWithGoogle } from "@/lib/firebaseAuth";
 import { isFirebaseConfigured } from "@/lib/firebaseConfig";
 
@@ -130,10 +135,18 @@ export default function LoginScreen() {
       const u = await demoLogin();
       await setUser(u);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      router.replace("/(tabs)");
+      router.replace("/");
     } catch (e: unknown) {
       const msg = String((e as Error)?.message || e || "");
-      setError(msg || (isHindi ? "Demo login fail." : "Demo login failed."));
+      if (isAuthNetworkError(e) || /connection nahi|demo login failed|Server tak/i.test(msg)) {
+        setError(
+          isHindi
+            ? "VPS API bahar se reachable nahi hai (port 8080 blocked ya DNS missing). Hostinger Firewall mein TCP 8080 allow karein, ya api.cosmiclens.app ka A-record + nginx setup karein."
+            : "VPS API is not reachable from your network (port 8080 blocked or DNS missing). Allow TCP 8080 in Hostinger Firewall, or set up api.cosmiclens.app DNS + nginx.",
+        );
+      } else {
+        setError(msg || (isHindi ? "Demo login fail." : "Demo login failed."));
+      }
     } finally {
       setDemoLoading(false);
     }

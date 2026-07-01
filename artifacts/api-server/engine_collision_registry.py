@@ -53,6 +53,13 @@ def should_suppress_health_for_question(question: str, *, llm_domain: str) -> bo
     q = (question or "").strip()
     if not q:
         return False
+    try:
+        from ask_intent_fidelity import is_partner_relationship_question
+
+        if is_partner_relationship_question(q):
+            return True
+    except Exception:
+        pass
     if llm_domain in ("love", "marriage"):
         return True
     try:

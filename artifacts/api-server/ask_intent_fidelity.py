@@ -79,6 +79,34 @@ def is_dyadic_couple_question(question: str) -> bool:
     return bool(_DYAD_COUPLE_RX.search((question or "").strip()))
 
 
+_PARTNER_FIT_RX = re.compile(
+    r"(?ix)\b("
+    r"kis\s+tarah\s+ka\s+partner|kaisa\s+partner|kaisi\s+partner|"
+    r"partner\s+suit|suit\s+kareg|suitable\s+partner|"
+    r"partner\s+match|match\s+kareg|mera\s+partner\s+kaisa"
+    r")\b"
+)
+
+
+def is_partner_relationship_question(question: str) -> bool:
+    """Partner/spouse/couple subject — must not route to health/career/etc."""
+    q = (question or "").strip()
+    if not q:
+        return False
+    if is_dyadic_couple_question(q):
+        return True
+    if _PARTNER_SUBJECT_RX.search(q):
+        return True
+    if _PARTNER_FIT_RX.search(q):
+        return True
+    if re.search(r"(?ix)\b(partner|spouse|rishta|shaadi|vivah)\b", q) and re.search(
+        r"(?ix)\b(suit|match|compatible|thinking|soch|mental|nature|swabhav|kaisa|kaisi|tarah)\b",
+        q,
+    ):
+        return True
+    return False
+
+
 def is_native_solo_chemistry_question(question: str) -> bool:
     """Native-chart chemistry read — not 'between us two'."""
     q = (question or "").strip()
@@ -287,6 +315,8 @@ def infer_question_scope(question: str, llm_intent: dict[str, Any] | None = None
         return summary_scope
 
     q = (question or "").strip()
+    if is_partner_relationship_question(q):
+        return "partner"
     if is_dyadic_couple_question(q):
         return "couple"
     if _PARTNER_SUBJECT_RX.search(q):
@@ -423,6 +453,13 @@ def archetype_allowed_for_question(question: str, archetype: str | None) -> bool
     q = question or ""
     if arch == "chemistry" and is_dyadic_couple_question(q):
         return False
+    if arch.startswith("general_health") or arch in (
+        "mental_stress",
+        "overall_vitality",
+        "chronic_tendency",
+    ):
+        if is_partner_relationship_question(q):
+            return False
     try:
         from ask_route_from_understanding import is_native_love_chart_question
 

@@ -1,4 +1,4 @@
-import { API_BASE, apiFetch } from "@/lib/apiConfig";
+import { API_BASE, apiFetch, probeApiHealth } from "@/lib/apiConfig";
 
 const TIMEOUT_MS = 5000;
 
@@ -14,14 +14,8 @@ async function timedFetch(url: string, init?: RequestInit): Promise<Response> {
 
 /** True when the Cosmic Lens API server responds on /api/healthz. */
 export async function checkBackendConnected(): Promise<boolean> {
-  try {
-    const res = await timedFetch(`${API_BASE}/api/healthz`);
-    if (!res.ok) return false;
-    const data = await res.json().catch(() => null);
-    return data?.status === "ok";
-  } catch {
-    return false;
-  }
+  const { ok } = await probeApiHealth();
+  return ok;
 }
 
 /**

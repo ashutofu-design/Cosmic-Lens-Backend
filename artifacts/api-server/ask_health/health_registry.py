@@ -289,6 +289,13 @@ def is_health_static_question(question: str) -> bool:
     q = (question or "").strip()
     if not q:
         return False
+    try:
+        from ask_intent_fidelity import is_partner_relationship_question
+
+        if is_partner_relationship_question(q):
+            return False
+    except Exception:
+        pass
     if is_love_emotional_dil_question(q):
         return False
     try:
@@ -333,6 +340,13 @@ def detect_health_archetype(question: str) -> str | None:
     q = (question or "").strip()
     if not q:
         return None
+    try:
+        from ask_intent_fidelity import is_partner_relationship_question
+
+        if is_partner_relationship_question(q):
+            return None
+    except Exception:
+        pass
     if is_love_emotional_dil_question(q):
         return None
 

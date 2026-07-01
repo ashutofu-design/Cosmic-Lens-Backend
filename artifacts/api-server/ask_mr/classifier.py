@@ -635,6 +635,13 @@ def classify_mr_archetype(question: str) -> str:
 
 
 
+    # --- Partner fit / mental match (before chemistry; blocks health stealing "mental") ---
+    if re.search(r"\b(partner|spouse|pati|patni|husband|wife)\b", q) and re.search(
+        r"(?ix)\b(suit|match|compatible|thinking|soch|mental|nature|swabhav|kaisa|kaisi|kaise|tarah)\b",
+        q,
+    ):
+        return "partner_nature"
+
     # --- Partner personality (before chemistry / emotional_attachment) ---
 
     if _has_spouse(q) and re.search(

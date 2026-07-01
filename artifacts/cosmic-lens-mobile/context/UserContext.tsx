@@ -5,7 +5,7 @@ import { AppState, type AppStateStatus } from "react-native";
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { BirthData, KundliData } from "@/types";
 import { coerceUILang, type UILang } from "@/lib/i18n";
-import { API_BASE } from "@/lib/apiConfig";
+import { API_BASE, apiFetchWithTimeout } from "@/lib/apiConfig";
 import { clearAllLocalReports } from "@/lib/localReports";
 import { attachPushReceivedHandler, setupPushForUser } from "@/lib/notifications";
 import { startReportAutoSync, stopReportAutoSync } from "@/lib/reportAutoSync";
@@ -359,9 +359,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const pullProfilesFromCloud = useCallback(async (u: AuthUser) => {
     if (!u?.id || !u?.api_key) return;
     try {
-      const r = await fetch(`${API_BASE}/api/user/${u.id}/profiles`, {
+      const r = await apiFetchWithTimeout(`${API_BASE}/api/user/${u.id}/profiles`, {
         headers: { "X-API-Key": u.api_key },
-      });
+      }, 8000);
       if (r.status === 404 || r.status === 401) {
         await invalidateDeletedAccount();
         return;
@@ -519,7 +519,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       userRef.current = u;
       AsyncStorage.setItem(KEYS.user, JSON.stringify(u)).catch(() => {});
       AsyncStorage.setItem(KEYS.lastUserId, String(u.id)).catch(() => {});
-      await pullProfilesFromCloud(u);
+      void pullProfilesFromCloud(u);
     } else {
       _setUser(null);
       userRef.current = null;

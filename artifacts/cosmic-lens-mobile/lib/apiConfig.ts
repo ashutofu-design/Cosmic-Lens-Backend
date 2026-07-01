@@ -11,14 +11,18 @@ import { Platform } from "react-native";
 //   4. DEV VPS fallback (never localhost unless EXPO_PUBLIC_USE_LOCAL_API=1)
 //
 // Set in artifacts/cosmic-lens-mobile/.env:
-//   EXPO_PUBLIC_API_URL=http://187.127.174.55:8080
+//   EXPO_PUBLIC_API_URL=http://187.127.174.55
+// (nginx :80 → gunicorn :8080 — :8080 is often blocked from mobile networks)
 // After changing .env: stop Metro (Ctrl+C) and run `npx expo start` again.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PRODUCTION_API_URL = "https://api.cosmiclens.app";
 
-/** Hostinger VPS — default for dev so laptop/phone always hit live API. */
-const DEFAULT_DEV_VPS_API = "http://187.127.174.55:8080";
+/** VPS public IP — nginx on :80 (preferred; mobile networks often block :8080). */
+const VPS_PUBLIC_IP = "187.127.174.55";
+const VPS_API_NGINX = `http://${VPS_PUBLIC_IP}`;
+/** Direct gunicorn — works on VPS localhost; often blocked from phone/laptop. */
+const DEFAULT_DEV_VPS_API = `http://${VPS_PUBLIC_IP}:8080`;
 
 const DEV_REPLIT_DOMAIN =
   "18370deb-aa55-4d9f-8391-57df5a15cf7a-00-phjaov5qh4np.kirk.replit.dev";
@@ -199,7 +203,7 @@ function installDevFetchInterceptor(): void {
 
 /**
  * Ordered API bases for retries when the primary host is down or blocked.
- * HTTPS domain first as fallback — same VPS, more reliable than raw :8080.
+ * Prefer nginx :80 on VPS IP — same backend, port 8080 often blocked externally.
  */
 export function demoLoginApiBases(): string[] {
   const seen = new Set<string>();
@@ -213,6 +217,7 @@ export function demoLoginApiBases(): string[] {
   };
 
   add(API_BASE);
+  add(VPS_API_NGINX);
   add(PRODUCTION_API_URL);
   const configured = configuredApiUrl();
   if (configured && /^https?:\/\//.test(configured)) {
@@ -258,6 +263,55 @@ export async function apiFetch(url: string, init?: RequestInit): Promise<Respons
   }
 }
 
+const DEFAULT_FETCH_TIMEOUT_MS = 12000;
+
+/** Same as apiFetch but aborts after `ms` — avoids infinite spinner on dead API hosts. */
+export async function apiFetchWithTimeout(
+  url: string,
+  init?: RequestInit,
+  ms = DEFAULT_FETCH_TIMEOUT_MS,
+): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await apiFetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const HEALTH_PROBE_TIMEOUT_MS = 6000;
+
+export type ApiHealthProbe = {
+  ok: boolean;
+  base?: string;
+  data?: unknown;
+  tried: string[];
+};
+
+/** Probe /api/healthz across fallback bases (same order as auth retries). */
+export async function probeApiHealth(
+  bases: string[] = demoLoginApiBases(),
+): Promise<ApiHealthProbe> {
+  const tried: string[] = [];
+  for (const base of bases) {
+    tried.push(base);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), HEALTH_PROBE_TIMEOUT_MS);
+    try {
+      const res = await apiFetch(`${base}/api/healthz`, { signal: ctrl.signal });
+      if (!res.ok) continue;
+      const data = await res.json().catch(() => null);
+      if (data?.status === "ok") return { ok: true, base, data, tried };
+    } catch {
+      // try next base
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return { ok: false, tried };
+}
+
 if (__DEV__) {
   installDevFetchInterceptor();
   console.log("[CosmicLens] API_BASE resolved to:", API_BASE);
@@ -268,18 +322,21 @@ if (__DEV__) {
     );
   }
 
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 8000);
-  apiFetch(`${API_BASE}/api/healthz`, { signal: ctrl.signal })
-    .then((r) => r.json())
-    .then((d) => console.log("[CosmicLens] healthz OK ✓", JSON.stringify(d)))
-    .catch((e) =>
-      console.error(
-        "[CosmicLens] healthz FAILED:",
-        e instanceof Error ? e.message : e,
-        "→",
-        `${API_BASE}/api/healthz`,
-      ),
-    )
-    .finally(() => clearTimeout(timer));
+  void probeApiHealth().then(({ ok, base, data, tried }) => {
+    if (ok) {
+      console.log(
+        `[CosmicLens] healthz OK ✓ via ${base}`,
+        JSON.stringify(data),
+      );
+      return;
+    }
+    console.warn(
+      "[CosmicLens] healthz FAILED — no API responded within",
+      `${HEALTH_PROBE_TIMEOUT_MS}ms per host.`,
+      "\nTried:",
+      tried.join(", "),
+      "\nFix: VPS par nginx :80 → :8080 proxy (scripts/vps-nginx-port80-paste.sh),",
+      `\n.env → EXPO_PUBLIC_API_URL=${VPS_API_NGINX}, Metro restart.`,
+    );
+  });
 }

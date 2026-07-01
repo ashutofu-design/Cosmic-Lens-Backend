@@ -83,12 +83,6 @@ interface Message {
   // nothing renders (defensive — server can ship the field on/off via
   // PHASE75_CLARIFIER_ENABLED env without any client release).
   clarification?: { prompt: string; options: string[] };
-  // Phase 2.8.27 — engine_tag from server tells whether this answer was
-  // produced by a deterministic engine (LOCKED FACTS injected into the
-  // system prompt, "ans-engine") or by a pure LLM call ("ans-cosmo").
-  // Rendered as a tiny badge below the action row so the user/dev can
-  // see provenance at a glance. Absent on legacy / pre-tag responses.
-  engineTag?: "ans-engine" | "ans-cosmo";
   // Phase 2.5.11.6 — partner CTA. When the user asks about an existing
   // partner ("mere bf se shaadi hogi") but no partner profile is saved,
   // server returns this payload so we render an inline "Add partner
@@ -486,6 +480,30 @@ export default function AskScreen() {
   const [loading, setLoading] = useState(false);
   const [copiedUserMsgId, setCopiedUserMsgId] = useState<string | null>(null);
   const copiedUserMsgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [copiedAssistantMsgId, setCopiedAssistantMsgId] = useState<string | null>(null);
+  const copiedAssistantMsgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stripMarkdownForCopy = useCallback((text: string) => {
+    return (text || "")
+      .replace(/[*_`#>~]/g, "")
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/\n{2,}/g, "\n\n")
+      .trim();
+  }, []);
+
+  const copyAssistantAnswer = useCallback((msgId: string, text: string) => {
+    const value = stripMarkdownForCopy(text);
+    if (!value) return;
+    void (async () => {
+      try {
+        await Clipboard.setStringAsync(value);
+        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+      } catch {}
+      setCopiedAssistantMsgId(msgId);
+      if (copiedAssistantMsgTimerRef.current) clearTimeout(copiedAssistantMsgTimerRef.current);
+      copiedAssistantMsgTimerRef.current = setTimeout(() => setCopiedAssistantMsgId(null), 1500);
+    })();
+  }, [stripMarkdownForCopy]);
 
   const copyUserQuestion = useCallback((msgId: string, text: string) => {
     const value = (text || "").trim();
@@ -768,12 +786,6 @@ export default function AskScreen() {
             }
           }
 
-          // Phase 2.8.27 — engine_tag from server. Defensive type-check
-          // before storing so a malformed value can't break the badge UI.
-          const _et: any = (json as any).engine_tag;
-          const oneShotEngineTag: "ans-engine" | "ans-cosmo" | undefined =
-            (_et === "ans-engine" || _et === "ans-cosmo") ? _et : undefined;
-
           // Phase 2.5.11.6 — partner CTA. Server returns this when the Q
           // refers to a specific partner ("mere bf se shaadi hogi") but
           // no partner profile is saved yet. We render an inline button
@@ -805,7 +817,6 @@ export default function AskScreen() {
               trimmedCount: trimmed,
               responseSchema: isV2 ? "v2" : undefined,
               clarification: clar,
-              engineTag: oneShotEngineTag,
               partnerCta,
             })
           );
@@ -842,8 +853,6 @@ export default function AskScreen() {
         // `clarification` field on the `done` event when its classifier
         // confidence was low. Defensive parsing in the evt.done branch.
         let finalClarification: { prompt: string; options: string[] } | undefined;
-        // Phase 2.8.27 — capture engine_tag from `done` event for badge UI.
-        let finalEngineTag: "ans-engine" | "ans-cosmo" | undefined;
         let sawDone         = false;
         let midError: string | null = null;
 
@@ -883,11 +892,6 @@ export default function AskScreen() {
               if (_opts.length > 0) {
                 finalClarification = { prompt: String(_clar.prompt), options: _opts };
               }
-            }
-            // Phase 2.8.27 — capture engine_tag (defensive; absent → undef)
-            const _et: any = (evt as any).engine_tag;
-            if (_et === "ans-engine" || _et === "ans-cosmo") {
-              finalEngineTag = _et;
             }
           }
         };
@@ -942,8 +946,6 @@ export default function AskScreen() {
             ...next[idx],
             // Phase 7.5 — clarifier (undefined when server omits / disabled)
             clarification: finalClarification,
-            // Phase 2.8.27 — engine_tag (undefined when server omits)
-            engineTag: finalEngineTag,
             text:      finalText || accumulated,
             followUps: finalFollowUps,
             streaming: false,
@@ -1177,6 +1179,30 @@ export default function AskScreen() {
             </LinearGradient>
           )}
         </View>
+
+        {!isUser
+          && !item.loading
+          && !item.streaming
+          && item.id !== "thinking"
+          && !!item.text?.trim() && (
+          <View style={s.assistantMsgActions}>
+            <Pressable
+              onPress={() => copyAssistantAnswer(item.id, item.text)}
+              style={({ pressed }) => [
+                s.userMsgActionBtn,
+                { borderColor: `${C.accent}40`, backgroundColor: C.bgCard },
+                pressed && { opacity: 0.7 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Copy answer"
+            >
+              <Feather name="copy" size={12} color={C.accent} />
+              <Text style={[s.userMsgActionText, { color: C.accent }]}>
+                {copiedAssistantMsgId === item.id ? "Copied" : "Copy answer"}
+              </Text>
+            </Pressable>
+          </View>
+        )}
 
         {isUser && !item.loading && !!item.text?.trim() && (
           <View style={s.userMsgActions}>
@@ -2017,6 +2043,16 @@ const s = StyleSheet.create({
   bubbleTextUser:   { color: "#FFFFFF", fontWeight: "600" },
   bubbleTextAssist: { color: "#94a3b8" },
 
+  assistantMsgActions: {
+    flexDirection: "row",
+    justifyContent: "flex-start",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: -4,
+    marginBottom: 8,
+    marginLeft: 38,
+    paddingHorizontal: 2,
+  },
   userMsgActions: {
     flexDirection: "row",
     justifyContent: "flex-end",

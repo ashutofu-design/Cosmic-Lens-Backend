@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { applyWindowsMetroConfigEnv } from "./lib/metro-env.mjs";
 
 const API = process.env.EXPO_PUBLIC_API_URL || "http://127.0.0.1:8080";
 const PORT = process.env.EXPO_METRO_PORT || "18987";
@@ -25,7 +26,7 @@ const LAN_IP = process.env.REACT_NATIVE_PACKAGER_HOSTNAME || detectLanIp();
 // Windows: Metro writes large caches under TEMP/TMP (often on C:).
 // If C: is low on space, force caches to D:\Temp (user can override by setting TEMP/TMP).
 const FALLBACK_TEMP = "D:\\Temp";
-const env = {
+const env = applyWindowsMetroConfigEnv(process.cwd(), {
   ...process.env,
   EXPO_PUBLIC_API_URL: API,
   // Web + localtunnel: must listen on 127.0.0.1 (not LAN IP) or tunnel gets HTTP 408.
@@ -36,7 +37,7 @@ const env = {
         TMP: process.env.TMP || FALLBACK_TEMP,
       }
     : {}),
-};
+});
 
 // Prefer running the Expo CLI JS entry via node (most reliable across shells/Windows).
 // Avoids spawning .cmd / pnpm exec / npx which can fail with EINVAL/UNKNOWN.

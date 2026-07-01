@@ -1,5 +1,5 @@
 import type { AuthUser } from "@/context/UserContext";
-import { API_BASE, apiFetch, demoLoginApiBases } from "./apiConfig";
+import { API_BASE, apiFetchWithTimeout, demoLoginApiBases } from "./apiConfig";
 
 type FirebaseVerifyResponse = AuthUser & {
   ok?: boolean;
@@ -9,6 +9,13 @@ type FirebaseVerifyResponse = AuthUser & {
 
 function authApiBases(): string[] {
   return demoLoginApiBases();
+}
+
+export function isAuthNetworkError(e: unknown): boolean {
+  const msg = String((e as Error)?.message || e || "");
+  return /Network request failed|Failed to fetch|Load failed|fetch|Aborted|AbortError|timeout/i.test(
+    msg,
+  );
 }
 
 function parseVerifyResponse(raw: string): FirebaseVerifyResponse {
@@ -54,7 +61,7 @@ export async function verifyFirebaseIdToken(idToken: string, name?: string): Pro
   for (const base of authApiBases()) {
     lastBase = base;
     try {
-      const res = await apiFetch(`${base}/api/auth/firebase-verify`, {
+      const res = await apiFetchWithTimeout(`${base}/api/auth/firebase-verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body,
@@ -71,9 +78,8 @@ export async function verifyFirebaseIdToken(idToken: string, name?: string): Pro
 
       return mapAuthUser(data, name);
     } catch (e: any) {
-      const msg = String(e?.message || e || "");
-      if (/Network request failed|Failed to fetch|Load failed|fetch/i.test(msg)) {
-        lastNetworkError = msg;
+      if (isAuthNetworkError(e)) {
+        lastNetworkError = String(e?.message || e || "");
         continue;
       }
       throw e;
@@ -89,8 +95,8 @@ export async function verifyFirebaseIdToken(idToken: string, name?: string): Pro
     `Server tak connection nahi ho paya.\n` +
     `API: ${API_BASE}\n` +
     `Tried: ${tried}\n` +
-    `VPS health: http://187.127.174.55:8080/api/healthz\n` +
-    `(Laptop par backend nahi chalana — .env mein VPS URL set karo, Metro restart karo)`,
+    `VPS andar OK ho sakta hai — phone/laptop se test: curl http://187.127.174.55:8080/api/healthz\n` +
+    `Fix: Hostinger hPanel → Firewall → TCP 8080 Allow, ya HTTPS: api.cosmiclens.app + nginx`,
   );
 }
 
@@ -101,7 +107,7 @@ export async function demoLogin(): Promise<AuthUser> {
 
   for (const base of authApiBases()) {
     try {
-      const res = await apiFetch(`${base}/api/auth/demo`, {
+      const res = await apiFetchWithTimeout(`${base}/api/auth/demo`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: "{}",
@@ -121,9 +127,8 @@ export async function demoLogin(): Promise<AuthUser> {
 
       return mapAuthUser(data, "Demo User");
     } catch (e: unknown) {
-      const msg = String((e as Error)?.message || e || "");
-      if (/Network request failed|Failed to fetch|Load failed|fetch/i.test(msg)) {
-        lastNetworkError = msg;
+      if (isAuthNetworkError(e)) {
+        lastNetworkError = String((e as Error)?.message || e || "");
         continue;
       }
       throw e;
@@ -131,7 +136,11 @@ export async function demoLogin(): Promise<AuthUser> {
   }
 
   if (lastHttpError) throw new Error(lastHttpError);
-  throw new Error(lastNetworkError || "Demo login failed — check API server.");
+  throw new Error(
+    lastNetworkError ||
+      "Server tak connection nahi ho paya (port 8080 bahar se blocked?). " +
+      "Hostinger Firewall mein TCP 8080 Allow karein, ya api.cosmiclens.app DNS + nginx setup karein.",
+  );
 }
 
 export function isDemoLoginEnabled(): boolean {

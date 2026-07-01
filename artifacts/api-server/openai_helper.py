@@ -5307,7 +5307,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _is_vehicle_static = False
     _is_travel_static = False
     _is_litigation_static = False
+    _is_luck_static = False
     _finance_engine_on = (os.environ.get("ASK_FINANCE_ENGINE") or "1").strip() != "0"
+    _luck_engine_on = (os.environ.get("ASK_LUCK_ENGINE") or "1").strip() != "0"
     _health_engine_on = (os.environ.get("ASK_HEALTH_ENGINE") or "1").strip() != "0"
     _education_engine_on = (os.environ.get("ASK_EDUCATION_ENGINE") or "1").strip() != "0"
     _children_engine_on = (os.environ.get("ASK_CHILDREN_ENGINE") or "1").strip() != "0"
@@ -5351,6 +5353,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _is_vehicle_static = _dom == "vehicle"
             _is_travel_static = _dom == "travel"
             _is_litigation_static = _dom == "litigation"
+            if _dom == "luck":
+                _is_luck_static = True
             if _dom == "health":
                 _is_health_static = True
             if _dom == "finance":
@@ -5441,6 +5445,18 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     _is_litigation_static = _lit_regex
             except Exception:
                 _is_litigation_static = False
+            try:
+                from ask_luck.classifier import is_luck_static_question  # type: ignore
+
+                _luck_regex = is_luck_static_question(question)
+                if _llm_intent is not None:
+                    _is_luck_static = _luck_regex or (
+                        str(_llm_intent.get("domain") or "").strip().lower() == "luck"
+                    )
+                else:
+                    _is_luck_static = _luck_regex
+            except Exception:
+                _is_luck_static = False
             if _is_education_static:
                 _is_career_static = False
             if _is_children_static:
@@ -5452,7 +5468,21 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _is_career_static = False
             if _is_litigation_static:
                 _is_career_static = False
-        if _force_health_static:
+            if _is_luck_static and _luck_engine_on:
+                try:
+                    from ask_luck.luck_registry import detect_luck_archetype  # type: ignore
+
+                    _luck_arch_pre = detect_luck_archetype(question or "")
+                    if _luck_arch_pre == "career_luck":
+                        _is_career_static = False
+                    elif _luck_arch_pre == "love_luck":
+                        _is_mr_static = False
+                    elif _luck_arch_pre == "money_luck":
+                        _is_finance_static = False
+                except Exception:
+                    pass
+            elif not _luck_engine_on:
+                _is_luck_static = False
             _is_health_static = True
             is_timing = False
         try:
@@ -5713,6 +5743,10 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         is_decision = False
         is_finance = False
     if _is_litigation_static:
+        static_dasha_hint = False
+        is_decision = False
+        is_finance = False
+    if _is_luck_static:
         static_dasha_hint = False
         is_decision = False
         is_finance = False
@@ -6114,6 +6148,61 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_litigation_static = False
+        elif _is_luck_static:
+            try:
+                from ask_luck import run_luck_static_engine  # type: ignore
+                from ask_luck.routing import resolve_luck_archetype  # type: ignore
+
+                _luck_interp = ""
+                if isinstance(_llm_intent, dict):
+                    _luck_interp = str(_llm_intent.get("interpretation") or "").strip()
+
+                _resolved_luck_arch, _luck_arch_reason = resolve_luck_archetype(
+                    question or "",
+                    llm_archetype=None,
+                    interpretation=_luck_interp,
+                )
+                if _luck_arch_reason:
+                    print(
+                        f"[raw_passthrough] LUCK_ARCHETYPE_ROUTE "
+                        f"-> {_resolved_luck_arch} reason={_luck_arch_reason}",
+                        flush=True,
+                    )
+
+                _luck_engine_result = run_luck_static_engine(
+                    kundli if isinstance(kundli, dict) else {},
+                    question or "",
+                    wants_explain=wants_explain,
+                    archetype=_resolved_luck_arch,
+                )
+                chart_text = _luck_engine_result.to_narrator_payload()
+                dcr_love_meta = {
+                    "slice": "luck_engine_v1",
+                    "topic": "luck",
+                    "archetype": _luck_engine_result.archetype,
+                    "verdict": _luck_engine_result.verdict,
+                    "summary": list(_luck_engine_result.summary or []),
+                    "evidence": list(_luck_engine_result.evidence or []),
+                    "ignore": list(_luck_engine_result.ignore or []),
+                    "checks": dict(_luck_engine_result.checks or {}),
+                    "skip_llm": bool(_luck_engine_result.skip_llm),
+                    "word_budget": int(_luck_engine_result.word_budget or 80),
+                    "narrator_mode": "engine_facts_only",
+                }
+                print(
+                    f"[raw_passthrough] LUCK_ENGINE "
+                    f"archetype={_luck_engine_result.archetype} "
+                    f"evidence={len(_luck_engine_result.evidence or [])} "
+                    f"chart_chars={len(chart_text)}",
+                    flush=True,
+                )
+            except Exception as _luck_exc:
+                print(f"[raw_passthrough] LUCK_ENGINE failed: {_luck_exc}", flush=True)
+                chart_text = _raw_compact_chart(
+                    kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
+                )
+                dcr_love_meta = None
+                _is_luck_static = False
         elif _is_career_static:
             try:
                 from ask_career import run_career_static_engine  # type: ignore
@@ -6391,6 +6480,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             and not _is_health_static
             and not _is_travel_static
             and not _is_litigation_static
+            and not _is_luck_static
         ):
             try:
                 from dcr_love import build_dcr_love_context  # type: ignore
@@ -6433,6 +6523,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _chart_slice_type = "travel_engine_v1"
         elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "litigation_engine_v1":
             _chart_slice_type = "litigation_engine_v1"
+        elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "luck_engine_v1":
+            _chart_slice_type = "luck_engine_v1"
         elif is_timing:
             _chart_slice_type = "timing_full_chart"
         elif dcr_love_meta:
@@ -7237,6 +7329,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             "is_career_engine": bool(is_career_engine),
             "is_health_static": bool(_is_health_static),
             "is_finance_static": bool(_is_finance_static),
+            "is_luck_static": bool(_is_luck_static),
         }
         _eng_slice = dcr_love_meta if isinstance(dcr_love_meta, dict) else {}
         _refusal = enforce_engine_only_or_refuse(

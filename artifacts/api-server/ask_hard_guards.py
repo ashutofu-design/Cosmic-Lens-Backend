@@ -15,6 +15,7 @@ _ENGINE_SLICES = frozenset({
     "property_engine_v1",
     "travel_engine_v1",
     "litigation_engine_v1",
+    "luck_engine_v1",
     "finance_engine_v1",
     "health_engine_v1",
     "travel_timing_v1",

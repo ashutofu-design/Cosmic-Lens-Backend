@@ -445,19 +445,22 @@ refuse_surgery_muhurat / crisis_redirect: other hard-guard Qs
    - lawyer_support: advocate/vakil/lawyer support theme (NOT legal advice)
    - family_court: family court/custody/maintenance/498a case (NOT divorce spouse MR)
    - general_litigation: other court/legal questions
-13. "interpretation": MUST be exactly: User asked: "<user question words>" — copy the \
-user's question (fix typos only). NEVER invent topics (in-laws, partner, career, shaadi) \
-unless those exact ideas/words appear in the user's question. If the question is vague \
-("mere bare me kuch batao"), interpretation must quote that — do NOT guess in-laws or marriage.
-14. "understanding_line": EXACTLY one word — "Yes" if you understood the question topic, \
+13. "question_summary": ONE line plain Hinglish — restate what the user wants to know \
+in your own words (12-40 words). For LONG or multi-part questions, still ONE line but \
+cover every sub-part the user asked. Do NOT invent topics not in the question. \
+Do NOT use routing jargon (domain/archetype/engine).
+14. "interpretation": short echo only if needed — prefer question_summary for meaning.
+15. "understanding_line": EXACTLY one word — "Yes" if you understood the question topic, \
 "No" if off-topic / too broken / unclear. Examples: finance Q → "Yes"; gibberish → "No".
-15. "confidence": 0.0-1.0 how sure you are.
+16. "confidence": 0.0-1.0 how sure you are.
 
 Return ONLY this JSON object:
 {{"domain": "...", "is_timing": false, "is_decision": false, \
 "wants_explain": false, "mr_archetype": null, "career_archetype": null, \
 "finance_archetype": null, "health_archetype": null, "education_archetype": null, \
-"children_archetype": null, "property_archetype": null, "travel_archetype": null, "litigation_archetype": null, "interpretation": "User asked: \\"...\\"", "understanding_line": "Yes", "confidence": 0.0}}
+"children_archetype": null, "property_archetype": null, "travel_archetype": null, \
+"litigation_archetype": null, "question_summary": "...", \
+"interpretation": "User asked: \\"...\\"", "understanding_line": "Yes", "confidence": 0.0}}
 
 Question: {question}"""
 
@@ -477,6 +480,7 @@ def _error(reason: str, source: str = "llm_error") -> dict:
         "property_archetype": None,
         "travel_archetype": None,
         "litigation_archetype": None,
+        "question_summary": "",
         "interpretation": "",
         "understanding_line": "",
         "confidence": 0.0,
@@ -531,7 +535,7 @@ def classify_ask_intent(
         # and reject the legacy name with HTTP 400. Try new first, fall back.
         try:
             resp = client.chat.completions.create(
-                max_completion_tokens=200, **_create_kwargs
+                max_completion_tokens=320, **_create_kwargs
             )
         except TypeError:
             resp = client.chat.completions.create(max_tokens=200, **_create_kwargs)
@@ -713,7 +717,8 @@ def classify_ask_intent(
         travel_arch = None
         litigation_arch = None
 
-    interpretation = str(data.get("interpretation") or "").strip()[:300]
+    question_summary = str(data.get("question_summary") or "").strip()[:500]
+    interpretation = str(data.get("interpretation") or "").strip()[:2000]
 
     try:
         from ask_native_overview import (
@@ -750,6 +755,7 @@ def classify_ask_intent(
         "property_archetype": property_arch,
         "travel_archetype": travel_arch,
         "litigation_archetype": litigation_arch,
+        "question_summary": question_summary,
         "interpretation": interpretation,
         "understanding_line": str(data.get("understanding_line") or "").strip()[:200],
         "confidence": conf,

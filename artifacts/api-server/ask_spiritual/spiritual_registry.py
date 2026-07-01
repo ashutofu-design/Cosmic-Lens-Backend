@@ -26,6 +26,13 @@ def is_spiritual_static_question(question: str, llm_intent: dict | None = None) 
     if not q or not is_spiritual_topic(q):
         return False
     try:
+        from ask_finance.finance_registry import is_finance_static_question
+
+        if is_finance_static_question(q):
+            return False
+    except Exception:
+        pass
+    try:
         from ask_spiritual.timing_registry import is_spiritual_timing_question
 
         if is_spiritual_timing_question(q, llm_intent):

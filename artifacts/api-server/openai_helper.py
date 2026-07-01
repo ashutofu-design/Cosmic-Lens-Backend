@@ -5110,6 +5110,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     # confident ("llm") result; on error/low-confidence we fall straight
     # back to the regex routing below (zero behaviour change).
     _llm_intent = None
+    _llm_intent_record = None
     _intent_source = "regex"
     _mr_archetype_override = None
     _career_archetype_override = None
@@ -5120,11 +5121,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _property_archetype_override = None
     _travel_archetype_override = None
     _litigation_archetype_override = None
-    if (os.environ.get("ASK_LLM_INTENT") or "0").strip() == "1":
+    if (os.environ.get("ASK_LLM_INTENT") or "1").strip() == "1":
         try:
             from ask_intent_llm import classify_ask_intent  # type: ignore
 
             _res = classify_ask_intent(_user_turn_question, client=client)
+            if (_res or {}).get("source") not in ("llm_error", "llm_unavailable", ""):
+                _llm_intent_record = _res
             if (_res or {}).get("source") in ("llm", "llm_repaired"):
                 _llm_intent = _res
                 _intent_source = str(_res.get("source") or "llm")
@@ -5155,6 +5158,10 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             )
         except Exception as _lie:
             print(f"[raw_passthrough] LLM intent skipped: {_lie}", flush=True)
+
+    _llm_intent_admin = (
+        _llm_intent_record if isinstance(_llm_intent_record, dict) else _llm_intent
+    )
 
     _is_native_overview = False
     try:
@@ -5264,7 +5271,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 llm_called=False,
                 skip_reason="timing_domain_clarifier",
                 intent_source=_intent_source,
-                llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+                llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
             )
     except Exception as _tc2_exc:
         print(f"[raw_passthrough] timing clarifier (post-intent) skipped: {_tc2_exc}", flush=True)
@@ -7190,7 +7197,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             llm_called=False,
             skip_reason="marriage_timing_deterministic",
             intent_source=_intent_source,
-            llm_intent=_llm_intent,
+            llm_intent=_llm_intent_admin,
         )
 
     # ── Health engine template-only (hard guards / crisis — skip LLM) ──
@@ -7229,7 +7236,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             llm_called=False,
             skip_reason="health_engine_template",
             intent_source=_intent_source,
-            llm_intent=_llm_intent,
+            llm_intent=_llm_intent_admin,
         )
 
     # ── MR engine template-only (skip LLM for simple yes/no e.g. manglik) ──
@@ -7268,7 +7275,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             llm_called=False,
             skip_reason="mr_engine_template",
             intent_source=_intent_source,
-            llm_intent=_llm_intent,
+            llm_intent=_llm_intent_admin,
         )
 
     # ── Optional prompt add-ons (timing engines, KP, partner, depth modes) ──
@@ -7588,7 +7595,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         _refusal = enforce_engine_only_or_refuse(
             question=question or "",
             qtype=qtype,
-            llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+            llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
             checks=_eng_checks,
             slice_meta=_eng_slice,
             marriage_block=marriage_block or "",
@@ -7612,7 +7619,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 llm_called=False,
                 skip_reason="engine_required_no_direct_llm",
                 intent_source=_intent_source,
-                llm_intent=_llm_intent,
+                llm_intent=_llm_intent_admin,
             )
         from ask_hard_guards import (  # type: ignore
             CONTROLLED_LLM_FALLBACK_RULE,
@@ -7670,7 +7677,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 llm_called=False,
                 skip_reason="engine_gate_error",
                 intent_source=_intent_source,
-                llm_intent=_llm_intent,
+                llm_intent=_llm_intent_admin,
             )
         except Exception:
             pass
@@ -8093,7 +8100,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             blocks=_pt_blocks,
             llm_called=True,
             intent_source=_intent_source,
-            llm_intent=_llm_intent,
+            llm_intent=_llm_intent_admin,
         )
     except Exception as exc:
         try:

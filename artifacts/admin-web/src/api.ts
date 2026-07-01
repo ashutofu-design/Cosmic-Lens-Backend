@@ -143,6 +143,7 @@ export interface AskLlmContext {
     wants_explain?: boolean;
     mr_archetype?: string | null;
     interpretation?: string;
+    question_summary?: string;
     understanding_line?: string;
     confidence?: number;
     source?: string;

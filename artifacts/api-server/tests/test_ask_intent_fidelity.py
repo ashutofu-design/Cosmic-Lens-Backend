@@ -6,10 +6,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ask_intent_fidelity import (
+    build_llm_understood_one_liner,
     faithful_interpretation,
     repair_llm_intent,
     resolve_question_understood,
+    summarize_question_one_line,
 )
+from ask_gap_dispatch import detect_gap_static_key
 
 
 class AskIntentFidelityTests(unittest.TestCase):
@@ -73,6 +76,36 @@ class AskIntentFidelityTests(unittest.TestCase):
         self.assertEqual(fixed["domain"], "finance")
         self.assertEqual(fixed.get("finance_archetype"), "wealth_potential")
         self.assertTrue(str(fixed.get("understanding_line") or "").startswith("Yes"))
+
+    def test_understanding_line_includes_question_summary(self):
+        li = {
+            "domain": "finance",
+            "finance_archetype": "loss_reasons",
+            "confidence": 0.9,
+            "source": "llm",
+            "question_summary": "Dhan kamane mein dikkat kyun aati hai",
+        }
+        line = build_llm_understood_one_liner(
+            "mujhse dhan karne me itni dikkat kyun aati he",
+            li,
+            intent_source="llm",
+        )
+        self.assertIn("Dhan kamane", line)
+        self.assertIn("finance", line.lower())
+
+    def test_long_question_regex_summary_not_empty(self):
+        long_q = (
+            "Mere career me promotion nahi mil raha, boss supportive nahi, "
+            "salary bhi kam hai, kya main job change karun ya business shuru karun, "
+            "aur shaadi ke baad bhi paisa bach nahi pata — kya karna chahiye?"
+        )
+        summary = summarize_question_one_line(long_q)
+        self.assertGreater(len(summary), 20)
+        self.assertIn("career", summary.lower())
+
+    def test_dhan_question_not_spiritual_gap(self):
+        q = "mujhse dhan karne me itni dikkat kyun aati he"
+        self.assertNotEqual(detect_gap_static_key(q), "spiritual")
 
     def test_finance_engine_required_still_understood_yes(self):
         li = {

@@ -31,12 +31,21 @@ export function resolveQuestionUnderstoodWord(
 
 export function resolveLlmUnderstoodLine(ctx: AskLlmContext | null): string {
   if (!ctx) return "";
+  const summary = ctx.llm_intent?.question_summary?.trim();
   const line = ctx.understanding_line?.trim();
   if (line && line.includes(" — ")) return line;
+  if (summary && line) {
+    const word = resolveQuestionUnderstoodWord(ctx);
+    if (word) return `${word} — ${summary}`;
+  }
   const word = resolveQuestionUnderstoodWord(ctx);
   const detail = ctx.understanding_detail?.trim();
   if (word && detail) return `${word} — ${detail}`;
   if (line) return line;
+  if (summary) {
+    const w = word || "Yes";
+    return `${w} — ${summary}`;
+  }
   if (word) return word;
   return "";
 }

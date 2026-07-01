@@ -20,7 +20,8 @@ _DOMAIN_ANCHOR_RX: dict[str, re.Pattern[str]] = {
     ),
     "finance": re.compile(
         r"(?ix)\b(paisa|paise|money|wealth|finance|income|saving|loan|"
-        r"debt|invest|profit|loss|amir|crorepati)\b"
+        r"debt|invest|profit|loss|amir|crorepati|dhan|dhana|kamana|kamai|"
+        r"earning|garib|bachat|kharcha|aamdani)\b"
     ),
     "health": re.compile(
         r"(?ix)\b(health|sehat|tabiyat|swasth|illness|disease|bimari|"
@@ -174,6 +175,41 @@ def faithful_interpretation(question: str, *, user_turn: str | None = None) -> s
     if not q:
         return "User asked an empty question."
     return f'User asked: "{q}"'
+
+
+def _clip_one_line(text: str, *, max_len: int = 240) -> str:
+    s = " ".join((text or "").split()).strip()
+    if not s:
+        return ""
+    if len(s) <= max_len:
+        return s
+    cut = s[:max_len].rsplit(" ", 1)[0]
+    return f"{cut}…" if cut else s[:max_len]
+
+
+def summarize_question_one_line(
+    question: str,
+    llm_intent: dict[str, Any] | None = None,
+) -> str:
+    """Plain one-line restatement of what the user asked (admin + narrator)."""
+    li = llm_intent if isinstance(llm_intent, dict) else {}
+    summary = str(li.get("question_summary") or "").strip()
+    if summary:
+        return _clip_one_line(summary)
+
+    interp = str(li.get("interpretation") or "").strip()
+    if interp.lower().startswith("user asked:"):
+        inner = interp.split(":", 1)[-1].strip().strip('"').strip("'")
+        if inner:
+            return _clip_one_line(inner)
+
+    q = " ".join((question or "").split()).strip()
+    if not q:
+        return "Khali sawal"
+    inferred = infer_primary_domain(q)
+    if inferred:
+        return _clip_one_line(f"{inferred}: {q}", max_len=260)
+    return _clip_one_line(q, max_len=260)
 
 
 def _interpretation_hallucinates(question: str, interpretation: str) -> bool:
@@ -375,7 +411,7 @@ def build_llm_understood_one_liner(
     has_engine_facts: bool = False,
     engine_archetype: str = "",
 ) -> str:
-    """Single line for admin: Yes — finance / wealth_potential (static), 90%. …"""
+    """Single admin line: Yes/No + one-line what user asked + routing hint."""
     word = resolve_question_understood(
         question,
         llm_intent,
@@ -384,15 +420,20 @@ def build_llm_understood_one_liner(
         has_engine_facts=has_engine_facts,
     )
     yes_no = "Yes" if word == "yes" else "No"
-    detail = build_question_understanding_detail(
+    summary = summarize_question_one_line(question, llm_intent)
+    route = build_question_understanding_detail(
         question,
         llm_intent,
         skip_reason=skip_reason,
         intent_source=intent_source,
         engine_archetype=engine_archetype,
     ).strip().rstrip(".")
-    if detail:
-        return f"{yes_no} — {detail}."
+    if summary and route:
+        return f"{yes_no} — {summary} · {route}."
+    if summary:
+        return f"{yes_no} — {summary}."
+    if route:
+        return f"{yes_no} — {route}."
     return yes_no
 
 
@@ -482,6 +523,8 @@ def repair_llm_intent(question: str, result: dict[str, Any] | None) -> dict[str,
     out["mr_archetype"] = mr_arch
     out["interpretation"] = faithful_interpretation(q)
     out["question_echo"] = q
+    if not str(out.get("question_summary") or "").strip():
+        out["question_summary"] = summarize_question_one_line(q, out)
     if repaired:
         out.pop("understanding_line", None)
     out["question_understood"] = resolve_question_understood(

@@ -334,6 +334,15 @@ def build_admin_llm_context(
         or (_slice_meta.get("verdict"))
         or (_slice_meta.get("evidence"))
     )
+    _intent = llm_intent if isinstance(llm_intent, dict) else {}
+    if not _intent.get("question_summary"):
+        try:
+            from ask_intent_fidelity import summarize_question_one_line
+
+            _intent = {**_intent, "question_summary": summarize_question_one_line(question, _intent)}
+        except Exception:
+            pass
+    llm_intent = _intent or llm_intent
     try:
         from ask_intent_fidelity import (
             build_question_understanding_detail,
@@ -370,7 +379,7 @@ def build_admin_llm_context(
     return {
         "version": 1,
         "route": route,
-        "question": (question or "")[:500],
+        "question": (question or "")[:2000],
         "question_type": question_type,
         "is_timing": bool(is_timing),
         "intent_source": intent_source or "regex",

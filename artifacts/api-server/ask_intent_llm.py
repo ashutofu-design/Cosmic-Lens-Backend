@@ -778,7 +778,8 @@ def classify_ask_intent(
     try:
         from ask_question_understand import ensure_question_understanding
 
-        result = ensure_question_understanding(q, result, client=client)
+        # Routing module owns mandatory LLM paraphrase (Rule #1).
+        result = ensure_question_understanding(q, result, client=client, force_llm=False)
     except Exception:
         pass
 

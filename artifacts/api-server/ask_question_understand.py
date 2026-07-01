@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from typing import Any, Optional
 
@@ -34,6 +35,11 @@ def _summary_is_weak(summary: str, question: str) -> bool:
         return True
     if s.startswith("user asked:"):
         return True
+    # Regex fallback shape: "love: <verbatim question>"
+    if re.match(r"^(love|marriage|career|finance|health|education|children|property|travel|litigation|vehicle):\s+", s):
+        tail = re.sub(r"^(love|marriage|career|finance|health|education|children|property|travel|litigation|vehicle):\s+", "", s).strip()
+        if tail == q or q.startswith(tail) or tail.startswith(q[: min(len(q), len(tail))]):
+            return True
     if q and (s == q or q.startswith(s) or s.startswith(q[: min(len(q), len(s))])):
         # Near-verbatim echo — prefer LLM paraphrase for long questions
         return len(q) > 80
@@ -125,7 +131,9 @@ def ensure_question_understanding(
     out["typo_corrected"] = bool(raw and q and raw.lower() != q.lower())
 
     summary = str(out.get("question_summary") or "").strip()
-    if force_llm or _summary_is_weak(summary, q):
+    src = str(out.get("understanding_source") or "").strip().lower()
+    need_llm = force_llm or src != "understand_llm" or _summary_is_weak(summary, q)
+    if need_llm:
         llm_q = q
         if out["typo_corrected"]:
             llm_q = f"{q}\n(Original user text with possible typos: {raw})"

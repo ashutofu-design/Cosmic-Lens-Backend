@@ -100,11 +100,14 @@ export function QuestionUnderstandingPanel({ ctx }: { ctx: AskLlmContext | null 
         <p className="question-meaning-row">
           <strong>LLM meaning:</strong> {meaning}
           {understood ? (
-            <span
-              className={`ask-understood-pill ask-understood-pill--${understood.toLowerCase()}`}
-            >
-              {understood}
-            </span>
+            <>
+              {" "}
+              <span
+                className={`ask-understood-pill ask-understood-pill--${understood.toLowerCase()}`}
+              >
+                {understood}
+              </span>
+            </>
           ) : null}
         </p>
       ) : (

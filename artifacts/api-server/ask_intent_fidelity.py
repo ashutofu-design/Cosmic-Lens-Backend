@@ -214,9 +214,18 @@ def summarize_question_one_line(
     q = " ".join((question or "").split()).strip()
     if not q:
         return "Khali sawal"
+    try:
+        from ask_route_from_understanding import is_native_love_chart_question
+
+        if is_native_love_chart_question(q):
+            return _clip_one_line(
+                "User pooch raha hai kya unki kundli me sacha pyaar / true love milne ka yog hai",
+            )
+    except Exception:
+        pass
     inferred = infer_primary_domain(q)
     if inferred:
-        return _clip_one_line(f"{inferred}: {q}", max_len=260)
+        return _clip_one_line(f"User ka {inferred} se related sawal: {q}", max_len=260)
     return _clip_one_line(q, max_len=260)
 
 

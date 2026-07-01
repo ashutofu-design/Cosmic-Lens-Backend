@@ -153,7 +153,7 @@ def classify_and_route_ask(
             q,
             admin,
             client=client,
-            force_llm=not bool(str(admin.get("question_summary") or "").strip()),
+            force_llm=True,
             question_raw=question_raw or q,
         )
     except Exception:

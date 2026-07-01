@@ -30,6 +30,8 @@ $files = @(
     "openai_helper.py",
     "ask_llm_context_debug.py",
     "ask_hard_guards.py",
+    "ask_gap_dispatch.py",
+    "ask_gaps_shared.py",
     "ask_timing_clarify.py",
     "ask_timing_followup.py",
     "health_focus_routing.py",
@@ -42,6 +44,20 @@ $folders = @(
     "ask_mr",
     "ask_luck",
     "ask_network",
+    "ask_siblings",
+    "ask_parents",
+    "ask_enemies",
+    "ask_personality",
+    "ask_dreams",
+    "ask_anger",
+    "ask_remedy",
+    "ask_settlement",
+    "ask_pets",
+    "ask_vastu",
+    "ask_charity",
+    "ask_wellness",
+    "ask_spiritual",
+    "ask_fame",
     "ask_health",
     "event_timing/marriage",
     "event_timing/_shared",
@@ -102,6 +118,7 @@ python3 -c "from subscription_helper import finalize_ask_out_after_llm; print('f
 python3 -c "from ask_mr import run_mr_static_engine; print('ask_mr engine OK')" || { echo 'MISSING ask_mr/ — deploy ask_mr folder or git pull'; exit 1; }
 python3 -c "from ask_luck import run_luck_static_engine; print('ask_luck engine OK')" || { echo 'MISSING ask_luck/ — deploy ask_luck folder or git pull'; exit 1; }
 python3 -c "from ask_network import run_network_static_engine; print('ask_network engine OK')" || { echo 'MISSING ask_network/ — deploy ask_network folder or git pull'; exit 1; }
+python3 -c "from ask_gap_dispatch import run_gap_static_engine; print('ask_gap_dispatch OK')" || { echo 'MISSING ask_gap_dispatch.py — deploy gap engines'; exit 1; }
 grep -c 'ask-questions' flask_app.py || true
 pm2 restart cosmic-api --update-env 2>/dev/null || pm2 restart cosmiclens-api --update-env 2>/dev/null || pm2 restart all --update-env
 sleep 3

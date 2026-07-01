@@ -17,6 +17,20 @@ _ENGINE_SLICES = frozenset({
     "litigation_engine_v1",
     "luck_engine_v1",
     "network_engine_v1",
+    "siblings_engine_v1",
+    "parents_engine_v1",
+    "enemies_engine_v1",
+    "spiritual_engine_v1",
+    "fame_engine_v1",
+    "personality_engine_v1",
+    "dreams_engine_v1",
+    "anger_engine_v1",
+    "remedy_engine_v1",
+    "charity_engine_v1",
+    "settlement_engine_v1",
+    "vastu_engine_v1",
+    "pets_engine_v1",
+    "wellness_engine_v1",
     "controlled_fallback_v1",
     "finance_engine_v1",
     "health_engine_v1",
@@ -395,6 +409,13 @@ def mandatory_static_domain_detected(
         from ask_network.classifier import is_network_static_question  # type: ignore
 
         if is_network_static_question(q):
+            return True
+    except Exception:
+        pass
+    try:
+        from ask_gap_dispatch import is_any_gap_static_question  # type: ignore
+
+        if is_any_gap_static_question(q, llm_intent):
             return True
     except Exception:
         pass

@@ -8382,7 +8382,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 if (os.environ.get("ASK_FINANCE_NARRATOR") or "1").strip() != "0"
                 else "universal"
             )
-        el        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice"):
+        elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice"):
             _pt_checks["mr_engine"] = "legacy_slice"
         if _engine_route is not None:
             _pt_checks["engine_route"] = _engine_route.to_dict()

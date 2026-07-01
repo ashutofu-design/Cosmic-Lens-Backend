@@ -35,6 +35,7 @@ _DOMAIN_ANCHOR_RX = re.compile(
     r"court|case|bail|verdict|litigation|"
     r"health|sehat|bimari|recovery|surgery|operation|mental|depression|"
     r"guru|deeksha|spiritual|meditation|teerth|occult|jyotish|"
+    r"moksha|mukti|liberation|sadhana|dhyan|bhakti|samadhi|"
     r"fame|viral|celebrity|award|recognition|social\s+media|"
     r"dost|friend|network|circle|dushmani|influential|"
     r"lottery|pet|dog|inheritance|virasat|"
@@ -71,6 +72,40 @@ _TIMING_CLARIFIER_OPTIONS: list[tuple[str, str]] = [
 ]
 
 
+def has_mapped_timing_domain(
+    question: str,
+    llm_intent: Optional[dict[str, Any]] = None,
+) -> bool:
+    """True when a named timing registry owns this Q (skip vague-struggle clarifier)."""
+    q = prepare_ask_question((question or "").strip())
+    if not q:
+        return False
+    _checks = (
+        ("ask_spiritual.timing_registry", "is_spiritual_timing_question"),
+        ("ask_fame.timing_registry", "is_fame_timing_question"),
+        ("ask_network.timing_registry", "is_network_timing_question"),
+        ("ask_litigation.timing_registry", "is_litigation_timing_question"),
+        ("ask_career.timing_registry", "is_career_timing_question"),
+        ("ask_love.timing_registry", "is_love_timing_question"),
+        ("ask_vehicle.timing_registry", "is_vehicle_timing_question"),
+        ("ask_health.timing_registry", "is_health_timing_question"),
+        ("ask_property.timing_registry", "is_property_timing_question"),
+        ("ask_travel.timing_registry", "is_travel_timing_question"),
+        ("ask_finance.timing_registry", "is_finance_timing_question"),
+        ("ask_children.timing_registry", "is_children_timing_question"),
+        ("ask_education.timing_registry", "is_education_timing_question"),
+    )
+    for mod_path, fn_name in _checks:
+        try:
+            mod = __import__(mod_path, fromlist=[fn_name])
+            fn = getattr(mod, fn_name)
+            if fn(q, llm_intent):
+                return True
+        except Exception:
+            continue
+    return False
+
+
 def needs_timing_domain_clarifier(
     question: str,
     llm_intent: Optional[dict[str, Any]] = None,
@@ -84,6 +119,9 @@ def needs_timing_domain_clarifier(
     if isinstance(llm_intent, dict) and llm_intent.get("is_timing"):
         is_timing = True
     if not is_timing:
+        return False
+
+    if has_mapped_timing_domain(q, llm_intent):
         return False
 
     if not _VAGUE_LIFE_RX.search(q):

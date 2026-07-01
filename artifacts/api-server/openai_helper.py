@@ -5210,6 +5210,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     except Exception:
         pass
     try:
+        from ask_spiritual.timing_registry import is_spiritual_timing_question  # type: ignore
+
+        if is_spiritual_timing_question(question or "", _llm_intent):
+            is_timing = True
+    except Exception:
+        pass
+    try:
         from ask_health.timing_registry import health_static_overrides_llm_timing  # type: ignore
 
         if health_static_overrides_llm_timing(question or "", _llm_intent):

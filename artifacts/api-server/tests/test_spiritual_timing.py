@@ -89,6 +89,11 @@ CASES = [
         "spiritual",
         "inner_peace",
     ),
+    (
+        "Mera mukti kab hoga",
+        "spiritual",
+        "general_spiritual",
+    ),
 ]
 
 

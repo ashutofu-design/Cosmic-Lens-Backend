@@ -177,7 +177,7 @@ def faithful_interpretation(question: str, *, user_turn: str | None = None) -> s
     return f'User asked: "{q}"'
 
 
-def _clip_one_line(text: str, *, max_len: int = 240) -> str:
+def _clip_one_line(text: str, *, max_len: int = 320) -> str:
     s = " ".join((text or "").split()).strip()
     if not s:
         return ""
@@ -273,6 +273,10 @@ def resolve_question_understood(
         return "no"
 
     li = llm_intent if isinstance(llm_intent, dict) else {}
+    summary = str(li.get("question_summary") or "").strip()
+    if summary and len(summary) >= 10:
+        return "yes"
+
     src = str(li.get("source") or intent_source or "").strip().lower()
     if src == "llm_mismatch":
         return "no"

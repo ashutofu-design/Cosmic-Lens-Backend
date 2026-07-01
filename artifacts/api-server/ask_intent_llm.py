@@ -775,4 +775,24 @@ def classify_ask_intent(
         except Exception:
             pass
 
+    try:
+        from ask_question_understand import ensure_question_understanding
+
+        result = ensure_question_understanding(q, result, client=client)
+    except Exception:
+        pass
+
     return result
+
+
+def finalize_intent_understanding(
+    question: str,
+    result: dict[str, Any] | None,
+    *,
+    client: Any = None,
+) -> dict[str, Any]:
+    """After repair — mandatory one-line understanding for admin + narrator."""
+    from ask_question_understand import ensure_question_understanding
+
+    base = result if isinstance(result, dict) else {}
+    return ensure_question_understanding(question, base, client=client)

@@ -5162,6 +5162,19 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _llm_intent_admin = (
         _llm_intent_record if isinstance(_llm_intent_record, dict) else _llm_intent
     )
+    try:
+        from ask_question_understand import ensure_question_understanding
+
+        _understand_on = (os.environ.get("ASK_QUESTION_UNDERSTAND") or "1").strip() != "0"
+        if _understand_on:
+            _llm_intent_admin = ensure_question_understanding(
+                _user_turn_question or question or "",
+                _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                client=client,
+                force_llm=True,
+            )
+    except Exception as _uq_exc:
+        print(f"[raw_passthrough] question_understand skipped: {_uq_exc}", flush=True)
 
     _is_native_overview = False
     try:
@@ -7460,13 +7473,20 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     # Narrator must answer the EXACT question the user typed — never a hallucinated paraphrase.
     _user_intent_hint = ""
     try:
-        from ask_intent_fidelity import faithful_interpretation  # type: ignore
+        from ask_question_understand import narrator_intent_hint  # type: ignore
 
-        _user_intent_hint = faithful_interpretation(
-            question or "", user_turn=_user_turn_question,
+        _user_intent_hint = narrator_intent_hint(
+            question or "",
+            _llm_intent_admin if isinstance(_llm_intent_admin, dict) else _llm_intent,
         )
     except Exception:
         _user_intent_hint = f'User asked: "{(question or "").strip()}"'
+
+    if _user_intent_hint:
+        extra_rules += (
+            f"\n\n=== USER QUESTION (understood — answer ONLY this) ===\n"
+            f"{_user_intent_hint}\n"
+        )
 
     # Open relationship question with no dedicated engine — narrator reads the
     # full D1 chart facts and answers the exact question itself.

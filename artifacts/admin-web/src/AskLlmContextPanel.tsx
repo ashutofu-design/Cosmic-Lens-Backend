@@ -128,7 +128,7 @@ export function LlmQuestionUnderstandingBrief({ ctx }: { ctx: AskLlmContext | nu
       ) : bracketed ? (
         <p className="ask-detail-llm-meaning">{bracketed}</p>
       ) : null}
-      {routingHint && routingHint !== meaning ? (
+      {routingHint && routingHint !== body && routingHint !== bracketed ? (
         <p className="ask-detail-llm-route detail-muted">{routingHint}</p>
       ) : null}
       <div className="ask-detail-understood-row">

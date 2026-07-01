@@ -5662,6 +5662,16 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         elif _llm_intent is not None:
             _dom = _llm_intent.get("domain")
             _is_mr_static = _dom in {"marriage", "love"}
+            try:
+                from ask_chart_open_qa import should_use_open_chart_qa
+
+                if should_use_open_chart_qa(
+                    question or "",
+                    _llm_intent if isinstance(_llm_intent, dict) else None,
+                ):
+                    _is_mr_static = False
+            except Exception:
+                pass
             _is_career_static = _dom == "career"
             _is_education_static = _dom == "education"
             _is_children_static = _dom == "children"
@@ -6451,6 +6461,30 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _travel_engine_result = None
     _litigation_engine_result = None
     _chart_slice_type = "full_compact"
+    _is_open_chart_qa = False
+    try:
+        from ask_chart_open_qa import should_use_open_chart_qa
+
+        _is_open_chart_qa = should_use_open_chart_qa(
+            question or "",
+            _llm_intent if isinstance(_llm_intent, dict) else None,
+        )
+    except Exception:
+        _is_open_chart_qa = False
+    if _is_open_chart_qa:
+        _is_mr_static = False
+        _is_health_static = False
+        _is_career_static = False
+        _is_finance_static = False
+        _is_education_static = False
+        _is_children_static = False
+        _is_property_static = False
+        _is_vehicle_static = False
+        _is_travel_static = False
+        _is_litigation_static = False
+        _is_gap_static = False
+        _is_luck_static = False
+        _is_network_static = False
     try:
         try:
             from ask_health.timing_registry import health_static_overrides_llm_timing as _hso_pre  # type: ignore
@@ -7188,7 +7222,33 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         archetype=_health_engine_result.archetype,
                         slice_meta=dcr_love_meta,
                     )
-                    if not _hlth_ver.ok and _hlth_ver.action == "reroute_mr":
+                    if not _hlth_ver.ok and _hlth_ver.action == "d1_open_chart":
+                        from ask_chart_open_qa import (
+                            open_chart_qa_slice_meta,
+                            run_open_chart_qa,
+                        )
+
+                        _oca_rec = run_open_chart_qa(
+                            kundli if isinstance(kundli, dict) else {},
+                            question or "",
+                            wants_explain=wants_explain,
+                        )
+                        chart_text = _oca_rec.to_narrator_payload()
+                        dcr_love_meta = open_chart_qa_slice_meta(_oca_rec)
+                        _is_health_static = False
+                        _is_open_chart_qa = True
+                        _chart_slice_type = "open_chart_qa_engine_v1"
+                        if isinstance(_llm_intent_admin, dict):
+                            _llm_intent_admin["engine_verification"] = _hlth_ver.to_dict()
+                            _llm_intent_admin["engine_verification_recovered"] = (
+                                "d1_open_chart"
+                            )
+                        print(
+                            f"[raw_passthrough] HEALTH_VERIFY recovered→OPEN_CHART_QA "
+                            f"reason={_hlth_ver.reason}",
+                            flush=True,
+                        )
+                    elif not _hlth_ver.ok and _hlth_ver.action == "reroute_mr":
                         from ask_mr import run_mr_static_engine  # type: ignore
                         from ask_mr.engine import mr_engine_slice_meta
 
@@ -7256,6 +7316,37 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
                 )
                 dcr_love_meta = None
+        elif _is_open_chart_qa:
+            try:
+                from ask_chart_open_qa import open_chart_qa_slice_meta, run_open_chart_qa
+
+                _oca_result = run_open_chart_qa(
+                    kundli if isinstance(kundli, dict) else {},
+                    question or "",
+                    wants_explain=wants_explain,
+                )
+                chart_text = _oca_result.to_narrator_payload()
+                dcr_love_meta = open_chart_qa_slice_meta(_oca_result)
+                _chart_slice_type = "open_chart_qa_engine_v1"
+                if isinstance(_llm_intent_admin, dict):
+                    _llm_intent_admin["engine_verification"] = {
+                        "ok": True,
+                        "action": "keep",
+                        "reason": "open_chart_qa_native_interpretation",
+                    }
+                print(
+                    f"[raw_passthrough] OPEN_CHART_QA "
+                    f"facts={len(_oca_result.evidence or [])} "
+                    f"chart_chars={len(chart_text)}",
+                    flush=True,
+                )
+            except Exception as _oca_exc:
+                print(f"[raw_passthrough] OPEN_CHART_QA failed: {_oca_exc}", flush=True)
+                chart_text = _raw_compact_chart(
+                    kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
+                )
+                dcr_love_meta = None
+                _is_open_chart_qa = False
         elif _is_mr_static:
             _use_legacy_mr = (os.environ.get("ASK_MR_ENGINE") or "1").strip() == "0"
             if _use_legacy_mr:
@@ -7300,7 +7391,34 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                             archetype=_mr_engine_result.archetype,
                             slice_meta=mr_engine_slice_meta(_mr_engine_result),
                         )
-                        if not _mr_ver.ok and _mr_ver.action == "reroute_mr":
+                        if not _mr_ver.ok and _mr_ver.action == "d1_open_chart":
+                            from ask_chart_open_qa import (
+                                open_chart_qa_slice_meta,
+                                run_open_chart_qa,
+                            )
+
+                            _oca_rec = run_open_chart_qa(
+                                kundli if isinstance(kundli, dict) else {},
+                                question or "",
+                                wants_explain=wants_explain,
+                            )
+                            _mr_engine_result = _oca_rec
+                            chart_text = _oca_rec.to_narrator_payload()
+                            dcr_love_meta = open_chart_qa_slice_meta(_oca_rec)
+                            _is_mr_static = False
+                            _is_open_chart_qa = True
+                            _chart_slice_type = "open_chart_qa_engine_v1"
+                            if isinstance(_llm_intent_admin, dict):
+                                _llm_intent_admin["engine_verification"] = _mr_ver.to_dict()
+                                _llm_intent_admin["engine_verification_recovered"] = (
+                                    "d1_open_chart"
+                                )
+                            print(
+                                f"[raw_passthrough] MR_ENGINE_VERIFY recovered→OPEN_CHART_QA "
+                                f"reason={_mr_ver.reason}",
+                                flush=True,
+                            )
+                        elif not _mr_ver.ok and _mr_ver.action == "reroute_mr":
                             _recover_arch = (
                                 _mr_ver.mr_archetype
                                 or _mr_archetype_override
@@ -7331,21 +7449,29 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                             f"[raw_passthrough] MR_ENGINE_VERIFY skipped: {_mr_ver_exc}",
                             flush=True,
                         )
-                    if _mr_engine_result.archetype == "partner_nature":
-                        from ask_mr.engines.partner_nature import partner_nature_narrator_payload
+                    if not _is_open_chart_qa:
+                        if _mr_engine_result.archetype == "partner_nature":
+                            from ask_mr.engines.partner_nature import (
+                                partner_nature_narrator_payload,
+                            )
 
-                        chart_text = partner_nature_narrator_payload(_mr_engine_result)
-                    else:
-                        chart_text = _mr_engine_result.to_narrator_payload()
-                    dcr_love_meta = mr_engine_slice_meta(_mr_engine_result)
-                    print(
-                        f"[raw_passthrough] MR_ENGINE "
-                        f"archetype={_mr_engine_result.archetype} "
-                        f"skip_llm={_mr_engine_result.skip_llm} "
-                        f"evidence={len(_mr_engine_result.evidence or [])} "
-                        f"chart_chars={len(chart_text)}",
-                        flush=True,
-                    )
+                            chart_text = partner_nature_narrator_payload(_mr_engine_result)
+                        else:
+                            chart_text = _mr_engine_result.to_narrator_payload()
+                        if _mr_engine_result.archetype == "open_chart_qa":
+                            from ask_chart_open_qa import open_chart_qa_slice_meta
+
+                            dcr_love_meta = open_chart_qa_slice_meta(_mr_engine_result)
+                        else:
+                            dcr_love_meta = mr_engine_slice_meta(_mr_engine_result)
+                        print(
+                            f"[raw_passthrough] MR_ENGINE "
+                            f"archetype={_mr_engine_result.archetype} "
+                            f"skip_llm={_mr_engine_result.skip_llm} "
+                            f"evidence={len(_mr_engine_result.evidence or [])} "
+                            f"chart_chars={len(chart_text)}",
+                            flush=True,
+                        )
                 except Exception as _mr_slice_exc:
                     print(
                         f"[raw_passthrough] MR_ENGINE failed, legacy fallback: "
@@ -8145,7 +8271,18 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
     _mr_engine_narrator = (
         isinstance(dcr_love_meta, dict)
-        and dcr_love_meta.get("slice") in ("mr_engine_v1", "career_engine_v1", "education_engine_v1", "children_engine_v1", "property_engine_v1", "travel_engine_v1", "litigation_engine_v1", "finance_engine_v1", "health_engine_v1")
+        and dcr_love_meta.get("slice") in (
+            "mr_engine_v1",
+            "open_chart_qa_engine_v1",
+            "career_engine_v1",
+            "education_engine_v1",
+            "children_engine_v1",
+            "property_engine_v1",
+            "travel_engine_v1",
+            "litigation_engine_v1",
+            "finance_engine_v1",
+            "health_engine_v1",
+        )
         and (
             os.environ.get("ASK_MR_NARRATOR")
             or os.environ.get("ASK_CAREER_NARRATOR")

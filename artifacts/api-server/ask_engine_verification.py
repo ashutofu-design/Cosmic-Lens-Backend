@@ -131,14 +131,24 @@ def apply_love_life_area_static_flags(
     is_health_static: bool,
     llm_intent: dict[str, Any] | None = None,
 ) -> tuple[bool, bool]:
-    """Love/career meaning from placement — MR on, health off (not skin_health)."""
+    """Love/career meaning from placement — open chart QA or MR; never health/skin."""
     try:
         from chart_fact_answer import is_domain_life_area_interpretation_question
-        from ask_mr.classifier import classify_mr_archetype
+        from ask_chart_open_qa import is_native_self_chart_interpretation_question
 
         if is_domain_life_area_interpretation_question(question or ""):
             if isinstance(llm_intent, dict):
                 llm_intent["health_archetype"] = None
+                llm_intent["is_timing"] = False
+                if is_native_self_chart_interpretation_question(question or ""):
+                    llm_intent["open_chart_qa"] = True
+                    llm_intent["mr_archetype"] = "open_chart_qa"
+                    dom = str(llm_intent.get("domain") or "").strip().lower()
+                    if dom in ("", "general", "health"):
+                        llm_intent["domain"] = "love"
+                    return False, False
+                from ask_mr.classifier import classify_mr_archetype
+
                 dom = str(llm_intent.get("domain") or "").strip().lower()
                 if dom in ("", "general", "health"):
                     llm_intent["domain"] = "love"
@@ -147,7 +157,6 @@ def apply_love_life_area_static_flags(
                     or classify_mr_archetype(question or "")
                     or "partner_nature"
                 )
-                llm_intent["is_timing"] = False
             return True, False
     except Exception:
         pass
@@ -193,6 +202,16 @@ def apply_pre_route_guards(
 
         if is_domain_life_area_interpretation_question(question):
             out["health"] = False
+            try:
+                from ask_chart_open_qa import is_native_self_chart_interpretation_question
+
+                if is_native_self_chart_interpretation_question(question):
+                    for k in list(out.keys()):
+                        out[k] = False
+                    notes.append("open_chart_qa:native_self_interpretation")
+                    return out, notes
+            except Exception:
+                pass
             out["mr"] = True
             notes.append("mr:love_life_area_interpretation")
     except Exception:
@@ -304,19 +323,29 @@ def verify_static_engine_selection(
         from chart_fact_answer import is_domain_life_area_interpretation_question
 
         if engine_key == "health" and is_domain_life_area_interpretation_question(q):
-            from ask_mr.classifier import classify_mr_archetype
-
             return EngineVerificationResult(
                 ok=False,
-                action="reroute_mr",
+                action="d1_open_chart",
                 reason="health_on_love_life_interpretation",
-                mr_archetype=classify_mr_archetype(q) or "partner_nature",
                 failed_checks=["health_on_love_style_question"],
             )
     except Exception:
         pass
 
     if engine_key == "mr" and arch and not archetype_allowed_for_question(q, arch):
+        try:
+            from ask_chart_open_qa import should_use_open_chart_qa
+
+            if should_use_open_chart_qa(q):
+                failed.append("mr_archetype_not_allowed")
+                return EngineVerificationResult(
+                    ok=False,
+                    action="d1_open_chart",
+                    reason="mr_archetype_mismatch_open_chart",
+                    failed_checks=failed,
+                )
+        except Exception:
+            pass
         failed.append("mr_archetype_not_allowed")
         return EngineVerificationResult(
             ok=False,

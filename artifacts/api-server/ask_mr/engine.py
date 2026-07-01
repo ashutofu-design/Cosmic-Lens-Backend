@@ -30,6 +30,13 @@ def run_mr_static_engine(
 
     archetype = (archetype or "").strip().lower()
     try:
+        from ask_chart_open_qa import should_use_open_chart_qa
+
+        if should_use_open_chart_qa(question or "", {"mr_archetype": archetype} if archetype else None):
+            archetype = "open_chart_qa"
+    except Exception:
+        pass
+    try:
         from ask_route_from_understanding import is_native_love_chart_question
 
         if is_native_love_chart_question(question or ""):
@@ -41,11 +48,24 @@ def run_mr_static_engine(
             from ask_intent_fidelity import archetype_allowed_for_question
 
             if not archetype_allowed_for_question(question, archetype):
-                archetype = classify_mr_archetype(question)
+                try:
+                    from ask_chart_open_qa import should_use_open_chart_qa
+
+                    if should_use_open_chart_qa(question):
+                        archetype = "open_chart_qa"
+                    else:
+                        archetype = classify_mr_archetype(question)
+                except Exception:
+                    archetype = classify_mr_archetype(question)
         except Exception:
             pass
     if not archetype:
         archetype = classify_mr_archetype(question)
+
+    if archetype == "open_chart_qa":
+        from ask_chart_open_qa import run_open_chart_qa
+
+        return run_open_chart_qa(kundli, question, wants_explain=wants_explain)
 
     if archetype == "breakup_risk":
         from .engines.breakup_risk import run_breakup_risk

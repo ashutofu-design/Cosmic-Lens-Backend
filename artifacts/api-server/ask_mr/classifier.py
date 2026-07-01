@@ -101,11 +101,18 @@ def classify_mr_archetype(question: str) -> str:
 
 
 
-    # --- Love language / affection style (native or partner) ---
-    if re.search(r"\b(love\s*style|love\s*language|affection\s*style)\b", q):
-        return "partner_nature"
+    # --- Love language / affection style (native self → open chart QA) ---
+    try:
+        from ask_chart_open_qa import is_native_self_chart_interpretation_question
 
-    if re.search(r"\b(love\s*language|care\s*dikhane|affection\s*style)\b", q):
+        if re.search(
+            r"\b(love\s*style|love\s*language|affection\s*style)\b", q, re.I
+        ) and is_native_self_chart_interpretation_question(q):
+            return "open_chart_qa"
+    except Exception:
+        pass
+
+    if re.search(r"\b(love\s*style|love\s*language|affection\s*style)\b", q):
         return "partner_nature"
 
     # --- Manglik ---

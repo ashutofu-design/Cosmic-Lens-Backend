@@ -91,9 +91,10 @@ def should_force_mr_for_question(question: str, *, llm_domain: str) -> bool:
         return False
     try:
         from chart_fact_answer import is_domain_life_area_interpretation_question
+        from ask_chart_open_qa import is_native_self_chart_interpretation_question
 
         if is_domain_life_area_interpretation_question(q):
-            return True
+            return not is_native_self_chart_interpretation_question(q)
     except Exception:
         pass
     try:

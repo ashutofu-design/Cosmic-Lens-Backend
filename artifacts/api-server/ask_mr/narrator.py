@@ -270,11 +270,11 @@ def build_mr_engine_narrator_system_prompt(
         _ow = min(wb + 30, 130) if wants_explain else max(wb, 60)
         length_block = (
             f"Write 2–3 short sentences (~{_ow} words).\n"
-            "This is an OPEN question with NO fixed engine verdict. Read the D1 RELATIONSHIP "
-            "CHART facts below, pick ONLY the factors relevant to the user's exact question "
+            "This is an OPEN question with NO fixed engine verdict. Read the CHART FACTS "
+            "below, pick ONLY the factors relevant to the user's exact question "
             "(see USER ACTUALLY ASKED), and answer THAT question directly: clear stance first, "
-            "then 1–2 plain reasons from those factors. Do NOT list every factor and do NOT give "
-            "a generic marriage summary — stay on the exact thing asked.\n"
+            "then 1–2 plain reasons from those factors. Do NOT list every factor and do NOT "
+            "drift to partner traits when the question is about the user themselves.\n"
             f"{_MR_CONFIDENT_TONE}"
         )
     elif wants_explain:

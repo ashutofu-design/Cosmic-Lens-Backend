@@ -33,9 +33,9 @@ class TestChartFactLoveStyle(unittest.TestCase):
         self.assertFalse(is_domain_life_area_interpretation_question(q))
         self.assertTrue(is_chart_lookup_question(q))
 
-    def test_love_style_routes_partner_nature(self):
+    def test_love_style_routes_open_chart_qa(self):
         q = "Meri kundli me venus ki position mere love style ko kaise affect karti hai"
-        self.assertEqual(classify_mr_archetype(q), "partner_nature")
+        self.assertEqual(classify_mr_archetype(q), "open_chart_qa")
 
 
 if __name__ == "__main__":

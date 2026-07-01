@@ -540,11 +540,12 @@ def archetype_allowed_for_question(question: str, archetype: str | None) -> bool
             return False
     try:
         from ask_route_from_understanding import is_native_love_chart_question
+        from ask_chart_open_qa import is_native_self_chart_interpretation_question
 
-        if is_native_love_chart_question(q):
+        if is_native_love_chart_question(q) or is_native_self_chart_interpretation_question(q):
             if arch in ("chemistry", "emotional_attachment", "general_mr", "partner_nature"):
                 return False
-            if arch == "dating_courtship":
+            if arch in ("open_chart_qa", "dating_courtship"):
                 return True
     except Exception:
         pass

@@ -109,7 +109,7 @@ _ARCHETYPE_ANCHOR_RX: dict[str, re.Pattern[str]] = {
         r"(look|face|height|appearance).{0,30}(partner|spouse|wife|husband)"
     ),
     "loyalty_trust": re.compile(
-        r"(?ix)\b(loyal|trust|cheat|dhokha|vishwas|faithful|commitment)\b"
+        r"(?ix)\b(loyal|trust|cheat|dhokha|dhoka|betray|vishwas|faithful|commitment|beimaan)\b"
     ),
     "manglik": re.compile(r"(?ix)\b(manglik|mangal\s*dosh)\b"),
 }
@@ -237,10 +237,16 @@ def _archetype_supported(question: str, archetype: str | None) -> bool:
     if not archetype:
         return True
     arch = str(archetype).strip().lower()
+    q = question or ""
+    if arch == "dating_courtship" and re.search(
+        r"(?ix)\b(dhokha|dhoka|betray|cheat|cheating|loyal|trust|vishwas|faithful|beimaan)\b",
+        q,
+    ):
+        return False
     rx = _ARCHETYPE_ANCHOR_RX.get(arch)
     if rx is None:
         return True
-    return bool(rx.search(question or ""))
+    return bool(rx.search(q))
 
 
 def _clear_domain_archetypes(result: dict[str, Any]) -> None:

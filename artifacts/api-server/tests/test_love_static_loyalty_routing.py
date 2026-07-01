@@ -69,6 +69,11 @@ class TestLoveStaticLoyaltyRouting(unittest.TestCase):
         self.assertFalse(is_property_static_question(_BETRAYAL_Q))
         self.assertIsNone(detect_property_archetype(_BETRAYAL_Q))
 
+    def test_betrayal_routes_loyalty_trust_not_dating(self):
+        from ask_mr.classifier import classify_mr_archetype
+
+        self.assertEqual(classify_mr_archetype(_BETRAYAL_Q), "loyalty_trust")
+
     def test_broker_property_dhoka_still_property(self):
         from ask_property.property_registry import detect_property_archetype
 

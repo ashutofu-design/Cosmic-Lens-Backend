@@ -185,6 +185,23 @@ def run_dating_courtship(kundli: dict, question: str, *, wants_explain: bool = F
         verdict = "Attraction pattern: Venus-Mars + 5th house romance taste"
 
     else:
+        sig_notes = pick_notes(
+            sig,
+            [
+                "Venus debilitated",
+                "Venus in dusthana",
+                "Venus under nodal pull",
+                "Mars on 7th",
+                "Saturn on 7th",
+                "7th lord debilitated",
+                "7th lord in dusthana",
+                "5th lord strong",
+                "Jupiter in house",
+            ],
+            limit=3,
+        )
+        for line in sig_notes:
+            evidence.append(f"Affliction/strength signal: {line}")
         verdict = "Dating/courtship pattern: 5th house romance + Venus/Mars initiative"
 
     return EngineResult(
@@ -197,7 +214,7 @@ def run_dating_courtship(kundli: dict, question: str, *, wants_explain: bool = F
             f"QUESTION FOCUS: {focus}.",
             "Use 5th/7th/Venus/Mars evidence — this is courtship/love-life, not spouse profession.",
         ],
-        evidence=evidence[:10],
+        evidence=evidence[:12],
         ignore=["timing dates/windows", "exact date of meeting", "spouse job title"],
         checks={
             "slice_type": "mr_engine_v1",

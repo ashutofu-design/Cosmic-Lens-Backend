@@ -5,6 +5,8 @@ from typing import Any
 
 from vedic.love_reality.scoring_core import KundliReader, SIGNS
 
+_MALEFICS = frozenset({"Sun", "Mars", "Saturn", "Rahu", "Ketu"})
+
 
 def house_sign(reader: KundliReader, house: int) -> str | None:
     asc_i = reader.asc_index()
@@ -25,9 +27,13 @@ def house_axis_evidence(
     occ = reader.occupants(house)
     lord_h = pl.get("house") if pl else None
     lord_sign = pl.get("sign") if pl else None
+    lord_dig = dignity_word(reader, lord, lord_sign) if lord else "unknown"
+    malefics = [o for o in (occ or []) if o in _MALEFICS]
+    malefic_note = f"; malefics in house={malefics}" if malefics else ""
     return (
         f"{label}: house {house} sign {sign}; lord {lord or 'unknown'} in house "
-        f"{lord_h or '?'} sign {lord_sign or '?'}; occupants={occ or 'none'}."
+        f"{lord_h or '?'} sign {lord_sign or '?'} (dignity {lord_dig}); "
+        f"occupants={occ or 'none'}{malefic_note}."
     )
 
 
@@ -35,9 +41,17 @@ def planet_line(reader: KundliReader, planet: str, *, role: str = "") -> str | N
     p = reader.planet(planet) or {}
     if not p.get("house"):
         return None
+    sign = p.get("sign")
+    dig = dignity_word(reader, planet, sign)
+    retro = ", retrograde" if p.get("retrograde") else ""
     tag = f" ({role})" if role else ""
+    house_mates = [
+        o for o in (reader.occupants(int(p.get("house"))) or [])
+        if o != planet and o in _MALEFICS
+    ]
+    afflict = f"; malefic co-tenant {house_mates}" if house_mates else ""
     return (
-        f"{planet}{tag}: house {p.get('house')} sign {p.get('sign')} — "
+        f"{planet}{tag}: house {p.get('house')} sign {sign}, dignity {dig}{retro}{afflict} — "
         f"direct influence on this topic."
     )
 

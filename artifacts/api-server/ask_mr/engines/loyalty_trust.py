@@ -66,13 +66,29 @@ def _trust_verdict(level: str) -> str:
 
 
 def run_loyalty_trust(kundli: dict, question: str, *, wants_explain: bool = False) -> EngineResult:
+    from vedic.love_reality.scoring_core import KundliReader
+
+    from ._chart_axes import house_axis_evidence, planet_line
+
+    k = dict(kundli or {})
+    k.setdefault("name", "You")
+    r = KundliReader(k)
     sig = build_person_signals(kundli)
     negative, support = _pick_loyalty_evidence(sig)
     level = _trust_level(sig, negative)
     verdict = _trust_verdict(level)
 
-    evidence: list[str] = []
-    for line in negative[:5]:
+    evidence: list[str] = [
+        house_axis_evidence(r, 5, label="Romance/trust axis (5th house)"),
+        house_axis_evidence(r, 7, label="Partnership/loyalty axis (7th house)"),
+    ]
+    ven_line = planet_line(r, "Venus", role="love/trust karak")
+    moon_line = planet_line(r, "Moon", role="emotional trust")
+    if ven_line:
+        evidence.append(ven_line)
+    if moon_line:
+        evidence.append(moon_line)
+    for line in negative[:4]:
         evidence.append(f"Trust challenge: {line}")
     for line in support[:2]:
         if len(evidence) >= 6:
@@ -98,7 +114,7 @@ def run_loyalty_trust(kundli: dict, question: str, *, wants_explain: bool = Fals
         word_budget=85 if wants_explain else 60,
         answer_plan="2–3 short sentences: loyalty level → 1–2 chart reasons → one practical trust line.",
         summary=summary,
-        evidence=evidence[:6],
+        evidence=evidence[:8],
         ignore=[
             "timing dates/windows",
             "spouse profession",

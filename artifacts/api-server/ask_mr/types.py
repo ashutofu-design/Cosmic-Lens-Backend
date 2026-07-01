@@ -80,7 +80,7 @@ class EngineResult:
                 lines.extend(f"- {e}" for e in self.evidence[:12])
             else:
                 lines.append("EVIDENCE (use 2–4 only, plain language):")
-                lines.extend(f"- {e}" for e in self.evidence[:6])
+                lines.extend(f"- {e}" for e in self.evidence[:8])
         return "\n".join(lines)
 
     def to_chart_text(self, *, question: str) -> str:

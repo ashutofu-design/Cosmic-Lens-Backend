@@ -307,6 +307,14 @@ def classify_mr_archetype(question: str) -> str:
     ):
         return "one_sided_love"
 
+    # --- Loyalty / trust / betrayal (before dating — love+milega must not steal dhoka Qs) ---
+    if re.search(
+        r"\b(cheat|cheating|dhokha|dhoka|betray|loyal\w*|faithful|trust|vishwas|"
+        r"commitment|commit|nibha\w*|wafad\w*|vafad\w*|third\s+person|interference|beimaan)\b",
+        q,
+    ):
+        return "loyalty_trust"
+
     # --- Dating / courtship / true love / flags ---
 
     if re.search(
@@ -330,6 +338,10 @@ def classify_mr_archetype(question: str) -> str:
         and re.search(r"\b(milega|milegi|hoga|hogi|sachcha|true)\b", q)
         and not re.search(r"\barrang", q)
         and not re.search(r"\b(patch\s*up|patchup|wapas|ex\b|ek\s*tarfa|tarfa\s*pyaar|one\s*sided)\b", q)
+        and not re.search(
+            r"(?ix)\b(dhokha|dhoka|betray|cheat|cheating|loyal|trust|vishwas|faithful|beimaan)\b",
+            q,
+        )
         and not _has_spouse(q)
     ):
 
@@ -506,22 +518,6 @@ def classify_mr_archetype(question: str) -> str:
     ) and re.search(r"\b(marriage|shaadi|shadi|vivah|vivahit|partner|husband|wife|rishta)\b", q):
 
         return "second_marriage"
-
-
-
-    # --- Loyalty / trust / commitment ---
-
-    if re.search(
-
-        r"\b(cheat|cheating|dhokha|dhoka|betray|loyal\w*|faithful|trust|vishwas|"
-
-        r"commitment|commit|nibha\w*|wafad\w*|vafad\w*|third\s+person|interference)\b",
-
-        q,
-
-    ):
-
-        return "loyalty_trust"
 
 
 

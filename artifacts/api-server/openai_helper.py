@@ -5309,6 +5309,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _is_litigation_static = False
     _is_luck_static = False
     _is_network_static = False
+    _is_gap_static = False
+    _gap_static_key = ""
     _finance_engine_on = (os.environ.get("ASK_FINANCE_ENGINE") or "1").strip() != "0"
     _luck_engine_on = (os.environ.get("ASK_LUCK_ENGINE") or "1").strip() != "0"
     _network_engine_on = (os.environ.get("ASK_NETWORK_ENGINE") or "1").strip() != "0"
@@ -5579,7 +5581,24 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
         elif not _network_engine_on:
             _is_network_static = False
-        if _health_engine_on and not _is_mr_static and not _is_career_static and not _is_finance_static and not _is_education_static and not _is_children_static and not _is_property_static and not _is_vehicle_static and not _is_travel_static and not _is_litigation_static and not _is_luck_static and not _is_network_static:
+        if (os.environ.get("ASK_GAP_ENGINES") or "1").strip() != "0":
+            try:
+                from ask_gap_dispatch import detect_gap_static_key  # type: ignore
+
+                _gap_static_key = detect_gap_static_key(
+                    question or "",
+                    _llm_intent if isinstance(_llm_intent, dict) else None,
+                )
+                if _gap_static_key:
+                    _is_gap_static = True
+                    print(
+                        f"[raw_passthrough] GAP_STATIC_DETECT key={_gap_static_key} "
+                        f"q={(question or '')[:60]!r}",
+                        flush=True,
+                    )
+            except Exception as _gap_det_exc:
+                print(f"[raw_passthrough] gap static detect skipped: {_gap_det_exc}", flush=True)
+        if _health_engine_on and not _is_mr_static and not _is_career_static and not _is_finance_static and not _is_education_static and not _is_children_static and not _is_property_static and not _is_vehicle_static and not _is_travel_static and not _is_litigation_static and not _is_luck_static and not _is_network_static and not _is_gap_static:
             try:
                 from ask_health.classifier import is_health_static_question  # type: ignore
 
@@ -5825,6 +5844,10 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         is_decision = False
         is_finance = False
     if _is_network_static:
+        static_dasha_hint = False
+        is_decision = False
+        is_finance = False
+    if _is_gap_static:
         static_dasha_hint = False
         is_decision = False
         is_finance = False
@@ -6226,6 +6249,45 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_litigation_static = False
+        elif _is_gap_static:
+            try:
+                from ask_gap_dispatch import (  # type: ignore
+                    gap_static_to_meta,
+                    run_gap_static_engine,
+                )
+
+                _gap_out = run_gap_static_engine(
+                    kundli if isinstance(kundli, dict) else {},
+                    question or "",
+                    llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+                    wants_explain=wants_explain,
+                    forced_key=_gap_static_key or None,
+                )
+                if _gap_out:
+                    _gap_result, _gap_slice, _gap_topic, _gap_key = _gap_out
+                    chart_text = _gap_result.to_narrator_payload()
+                    dcr_love_meta = gap_static_to_meta(
+                        _gap_result,
+                        slice_id=_gap_slice,
+                        topic=_gap_topic,
+                    )
+                    _gap_static_key = _gap_key
+                    print(
+                        f"[raw_passthrough] GAP_ENGINE key={_gap_key} "
+                        f"archetype={_gap_result.archetype} "
+                        f"evidence={len(_gap_result.evidence or [])} "
+                        f"chart_chars={len(chart_text)}",
+                        flush=True,
+                    )
+                else:
+                    _is_gap_static = False
+            except Exception as _gap_exc:
+                print(f"[raw_passthrough] GAP_ENGINE failed: {_gap_exc}", flush=True)
+                chart_text = _raw_compact_chart(
+                    kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
+                )
+                dcr_love_meta = None
+                _is_gap_static = False
         elif _is_network_static:
             try:
                 from ask_network import run_network_static_engine  # type: ignore
@@ -6615,6 +6677,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             and not _is_litigation_static
             and not _is_luck_static
             and not _is_network_static
+            and not _is_gap_static
         ):
             try:
                 from dcr_love import build_dcr_love_context  # type: ignore
@@ -6661,6 +6724,25 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _chart_slice_type = "luck_engine_v1"
         elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "network_engine_v1":
             _chart_slice_type = "network_engine_v1"
+        elif isinstance(dcr_love_meta, dict) and str(dcr_love_meta.get("slice") or "").endswith("_engine_v1"):
+            sl = str(dcr_love_meta.get("slice") or "")
+            if sl in (
+                "siblings_engine_v1",
+                "parents_engine_v1",
+                "enemies_engine_v1",
+                "spiritual_engine_v1",
+                "fame_engine_v1",
+                "personality_engine_v1",
+                "dreams_engine_v1",
+                "anger_engine_v1",
+                "remedy_engine_v1",
+                "charity_engine_v1",
+                "settlement_engine_v1",
+                "vastu_engine_v1",
+                "pets_engine_v1",
+                "wellness_engine_v1",
+            ):
+                _chart_slice_type = sl
         elif is_timing:
             _chart_slice_type = "timing_full_chart"
         elif dcr_love_meta:
@@ -7467,6 +7549,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             "is_finance_static": bool(_is_finance_static),
             "is_luck_static": bool(_is_luck_static),
             "is_network_static": bool(_is_network_static),
+            "is_gap_static": bool(_is_gap_static),
+            "gap_static_key": _gap_static_key or None,
             "is_education_static": bool(_is_education_static),
             "is_children_static": bool(_is_children_static),
             "is_property_static": bool(_is_property_static),

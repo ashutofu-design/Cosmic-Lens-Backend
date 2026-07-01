@@ -118,17 +118,9 @@ def gap_static_to_meta(
     slice_id: str,
     topic: str,
 ) -> dict[str, Any]:
-    return {
-        "slice": slice_id,
-        "topic": topic,
-        "archetype": result.archetype,
-        "verdict": result.verdict,
-        "confidence": result.confidence,
-        "summary": list(result.summary or []),
-        "evidence": list(result.evidence or []),
-        "ignore": list(result.ignore or []),
-        "checks": dict(result.checks or {}),
-        "skip_llm": bool(result.skip_llm),
-        "word_budget": int(result.word_budget or 85),
-        "narrator_mode": "engine_facts_only",
-    }
+    from ask_mr.engine import mr_engine_slice_meta
+
+    meta = mr_engine_slice_meta(result)
+    meta["slice"] = slice_id
+    meta["topic"] = topic
+    return meta

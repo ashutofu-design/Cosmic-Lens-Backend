@@ -301,6 +301,36 @@ def build_engine_facts_snapshot(
     return out
 
 
+def _engine_ran_from_context(
+    intent: dict[str, Any] | None,
+    checks: dict[str, Any] | None,
+) -> str | None:
+    if isinstance(intent, dict):
+        ran = str(intent.get("engine_ran") or "").strip()
+        if ran:
+            return ran
+    er = checks.get("engine_route") if isinstance(checks, dict) else None
+    if isinstance(er, dict):
+        key = str(er.get("engine_key") or "").strip()
+        return key or None
+    return None
+
+
+def _engine_route_reason_from_context(
+    intent: dict[str, Any] | None,
+    checks: dict[str, Any] | None,
+) -> str | None:
+    if isinstance(intent, dict):
+        reason = str(intent.get("engine_route_reason") or "").strip()
+        if reason:
+            return reason
+    er = checks.get("engine_route") if isinstance(checks, dict) else None
+    if isinstance(er, dict):
+        reason = str(er.get("reason") or "").strip()
+        return reason or None
+    return None
+
+
 def build_admin_llm_context(
     *,
     question: str,
@@ -346,7 +376,7 @@ def build_admin_llm_context(
         _intent = ensure_question_understanding(
             question_normalized or question or "",
             _intent,
-            force_llm=True,
+            force_llm=False,
             question_raw=question_raw or str(_intent.get("question_raw") or question or ""),
         )
     except Exception:
@@ -420,14 +450,24 @@ def build_admin_llm_context(
         "routed_domain": _intent.get("routed_domain") if isinstance(_intent, dict) else None,
         "routed_archetype": _intent.get("routed_archetype") if isinstance(_intent, dict) else None,
         "routed_timing": (_intent.get("routed_timing") if isinstance(_intent, dict) else None),
-        "engine_ran": (_intent.get("engine_ran") if isinstance(_intent, dict) else None)
-        or (_checks.get("engine_route") or {}).get("engine_key")
-        if isinstance(_checks.get("engine_route"), dict)
-        else None,
-        "engine_route_reason": (_intent.get("engine_route_reason") if isinstance(_intent, dict) else None)
-        or (_checks.get("engine_route") or {}).get("reason")
-        if isinstance(_checks.get("engine_route"), dict)
-        else None,
+        "engine_ran": _engine_ran_from_context(
+            _intent if isinstance(_intent, dict) else None,
+            _checks,
+        ),
+        "engine_route_reason": _engine_route_reason_from_context(
+            _intent if isinstance(_intent, dict) else None,
+            _checks,
+        ),
+        "engine_verification": (
+            _intent.get("engine_verification")
+            if isinstance(_intent, dict) and _intent.get("engine_verification")
+            else None
+        ),
+        "engine_verification_recovered": (
+            _intent.get("engine_verification_recovered")
+            if isinstance(_intent, dict)
+            else None
+        ),
         "understanding_source": _understanding_source,
         "question_type": question_type,
         "is_timing": bool(is_timing),

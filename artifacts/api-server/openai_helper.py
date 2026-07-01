@@ -5845,7 +5845,26 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     _llm_intent if isinstance(_llm_intent, dict) else None,
                 )
                 if _gap_static_key:
-                    _is_gap_static = True
+                    try:
+                        from ask_engine_verification import should_suppress_gap_for_question
+
+                        if should_suppress_gap_for_question(
+                            question or "",
+                            gap_key=_gap_static_key,
+                        ):
+                            print(
+                                f"[raw_passthrough] GAP_SUPPRESSED partner/subject "
+                                f"key={_gap_static_key} → MR",
+                                flush=True,
+                            )
+                            _gap_static_key = ""
+                            _is_gap_static = False
+                            _is_mr_static = True
+                        else:
+                            _is_gap_static = True
+                    except Exception:
+                        _is_gap_static = True
+                if _gap_static_key and _is_gap_static:
                     print(
                         f"[raw_passthrough] GAP_STATIC_DETECT key={_gap_static_key} "
                         f"q={(question or '')[:60]!r}",
@@ -6173,6 +6192,29 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 llm_intent_admin=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
                 is_timing=bool(is_timing),
             )
+            try:
+                from ask_engine_verification import apply_pre_route_guards
+
+                _guard_flags, _guard_notes = apply_pre_route_guards(
+                    _resolver_flags,
+                    question or "",
+                    gap_key=_gap_static_key or None,
+                    llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+                )
+                if _guard_notes:
+                    _resolver_flags, _engine_route = resolve_static_engine_route(
+                        question or "",
+                        flags=_guard_flags,
+                        llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+                        llm_intent_admin=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                        is_timing=bool(is_timing),
+                    )
+                    print(
+                        f"[raw_passthrough] ENGINE_GUARDS notes={_guard_notes}",
+                        flush=True,
+                    )
+            except Exception as _guard_exc:
+                print(f"[raw_passthrough] ENGINE_GUARDS skipped: {_guard_exc}", flush=True)
             _is_education_static = _resolver_flags["education"]
             _is_children_static = _resolver_flags["children"]
             _is_property_static = _resolver_flags["property"]
@@ -6606,6 +6648,57 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         topic=_gap_topic,
                     )
                     _gap_static_key = _gap_key
+                    try:
+                        from ask_engine_verification import verify_engine_output
+
+                        _gap_ver = verify_engine_output(
+                            question or "",
+                            engine_key="gap",
+                            archetype=_gap_result.archetype,
+                            slice_meta=dcr_love_meta,
+                            gap_key=_gap_key,
+                        )
+                        if not _gap_ver.ok and _gap_ver.action == "reroute_mr":
+                            from ask_mr import run_mr_static_engine  # type: ignore
+                            from ask_mr.engine import mr_engine_slice_meta
+
+                            _recover_arch = (
+                                _gap_ver.mr_archetype
+                                or _mr_archetype_override
+                                or "partner_nature"
+                            )
+                            _mr_rec = run_mr_static_engine(
+                                kundli if isinstance(kundli, dict) else {},
+                                question or "",
+                                birth=birth,
+                                wants_explain=wants_explain,
+                                archetype=_recover_arch,
+                            )
+                            if _mr_rec.archetype == "partner_nature":
+                                from ask_mr.engines.partner_nature import (
+                                    partner_nature_narrator_payload,
+                                )
+
+                                chart_text = partner_nature_narrator_payload(_mr_rec)
+                            else:
+                                chart_text = _mr_rec.to_narrator_payload()
+                            dcr_love_meta = mr_engine_slice_meta(_mr_rec)
+                            _is_gap_static = False
+                            _is_mr_static = True
+                            _gap_static_key = ""
+                            if isinstance(_llm_intent_admin, dict):
+                                _llm_intent_admin["engine_verification"] = _gap_ver.to_dict()
+                                _llm_intent_admin["engine_verification_recovered"] = "reroute_mr"
+                            print(
+                                f"[raw_passthrough] ENGINE_VERIFY recovered→MR "
+                                f"archetype={_mr_rec.archetype} reason={_gap_ver.reason}",
+                                flush=True,
+                            )
+                        elif not _gap_ver.ok:
+                            if isinstance(_llm_intent_admin, dict):
+                                _llm_intent_admin["engine_verification"] = _gap_ver.to_dict()
+                    except Exception as _gver_exc:
+                        print(f"[raw_passthrough] ENGINE_VERIFY skipped: {_gver_exc}", flush=True)
                     print(
                         f"[raw_passthrough] GAP_ENGINE key={_gap_key} "
                         f"archetype={_gap_result.archetype} "

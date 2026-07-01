@@ -172,7 +172,6 @@ _VITALITY_RX = re.compile(
     r")\b"
 )
 
-
 _CAREER_PRIMARY_RX = re.compile(
     r"(?ix)(naukri|job|promotion|salary|boss|office|kaam|career|colleague|workplace)"
 )
@@ -185,6 +184,42 @@ _HEALTH_BODY_RX = re.compile(
     r"hospital|doctor|pain|dard|vitality|immune|digest|heart|mental|stress.*health|"
     r"health.*stress|health.*kharab|kharab.*health)"
 )
+
+# "dil se pyaar" = emotional heart — NOT cardio / 4th-house health
+_LOVE_EMOTIONAL_RX = re.compile(
+    r"(?ix)\b(pyaar|pyar|prem|mohabbat|ishq|love|pasand|rishta|partner|crush)\b"
+)
+_LOVE_DIL_IDIOM_RX = re.compile(
+    r"(?ix)\b("
+    r"dil\s+se|dil\s+me|dil\s+ki|dil\s+lag|from\s+(the\s+)?heart|wholehearted|"
+    r"jisse\s+pyaar|pyaar\s+karta|pyaar\s+karti|love\s+her|love\s+him"
+    r")\b"
+)
+_LOVE_RECIPROCITY_RX = re.compile(
+    r"(?ix)\b("
+    r"kya\s+wo\s+bhi|does\s+(she|he|they)\s+love|love\s+me\s+back|"
+    r"utna\s+hi\s+pyaar|jitna\s+main|reciproc|mutual\s+love"
+    r")\b"
+)
+
+
+def is_love_emotional_dil_question(question: str) -> bool:
+    """Romantic 'dil' idiom — must not route to cardio_health."""
+    q = (question or "").strip()
+    if not q:
+        return False
+    if _LOVE_RECIPROCITY_RX.search(q) and _LOVE_EMOTIONAL_RX.search(q):
+        return True
+    if _LOVE_DIL_IDIOM_RX.search(q) and _LOVE_EMOTIONAL_RX.search(q):
+        return True
+    try:
+        from ask_marriage_relationship_slice import is_marriage_relationship_static_question
+
+        if is_marriage_relationship_static_question(q) and _LOVE_DIL_IDIOM_RX.search(q):
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def is_present_health_issue_question(question: str) -> bool:
@@ -254,6 +289,8 @@ def is_health_static_question(question: str) -> bool:
     q = (question or "").strip()
     if not q:
         return False
+    if is_love_emotional_dil_question(q):
+        return False
     try:
         from ask_children.children_registry import is_children_static_question
 
@@ -295,6 +332,8 @@ def is_health_static_question(question: str) -> bool:
 def detect_health_archetype(question: str) -> str | None:
     q = (question or "").strip()
     if not q:
+        return None
+    if is_love_emotional_dil_question(q):
         return None
 
     hard = detect_hard_guard(q)

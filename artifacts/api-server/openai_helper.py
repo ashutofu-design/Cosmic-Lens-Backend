@@ -5508,6 +5508,22 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _adm_dom_mr = str(_llm_intent_admin.get("domain") or "").strip().lower()
                 if _adm_dom_mr in {"marriage", "love"}:
                     _is_mr_static = True
+            if _is_mr_static:
+                _mr_dom = str(
+                    (_llm_intent or {}).get("domain")
+                    or (_llm_intent_admin or {}).get("domain")
+                    or ""
+                ).strip().lower()
+                if _mr_dom in {"marriage", "love"}:
+                    _is_health_static = False
+                else:
+                    try:
+                        from ask_health.health_registry import is_love_emotional_dil_question
+
+                        if is_love_emotional_dil_question(question or ""):
+                            _is_health_static = False
+                    except Exception:
+                        pass
         else:
             try:
                 from ask_marriage_relationship_slice import (  # type: ignore
@@ -6032,6 +6048,61 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         is_decision = False
         is_finance = False
         is_marriage_domain = False
+    _engine_route = None
+    if not is_timing and not _is_native_overview:
+        try:
+            from ask_engine_resolver import (
+                merge_route_into_admin_intent,
+                resolve_static_engine_route,
+            )
+
+            _resolver_flags, _engine_route = resolve_static_engine_route(
+                question or "",
+                flags={
+                    "education": _is_education_static,
+                    "children": _is_children_static,
+                    "property": _is_property_static,
+                    "vehicle": _is_vehicle_static,
+                    "travel": _is_travel_static,
+                    "litigation": _is_litigation_static,
+                    "gap": _is_gap_static,
+                    "network": _is_network_static,
+                    "luck": _is_luck_static,
+                    "career": _is_career_static,
+                    "finance": _is_finance_static,
+                    "health": _is_health_static,
+                    "mr": _is_mr_static,
+                },
+                llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+                llm_intent_admin=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                is_timing=bool(is_timing),
+            )
+            _is_education_static = _resolver_flags["education"]
+            _is_children_static = _resolver_flags["children"]
+            _is_property_static = _resolver_flags["property"]
+            _is_vehicle_static = _resolver_flags["vehicle"]
+            _is_travel_static = _resolver_flags["travel"]
+            _is_litigation_static = _resolver_flags["litigation"]
+            _is_gap_static = _resolver_flags["gap"]
+            _is_network_static = _resolver_flags["network"]
+            _is_luck_static = _resolver_flags["luck"]
+            _is_career_static = _resolver_flags["career"]
+            _is_finance_static = _resolver_flags["finance"]
+            _is_health_static = _resolver_flags["health"]
+            _is_mr_static = _resolver_flags["mr"]
+            if isinstance(_llm_intent_admin, dict) and _engine_route:
+                _llm_intent_admin = merge_route_into_admin_intent(_llm_intent_admin, _engine_route)
+            print(
+                f"[raw_passthrough] ENGINE_RESOLVER "
+                f"winner={_engine_route.engine_key} "
+                f"domain={_engine_route.domain} "
+                f"archetype={_engine_route.archetype} "
+                f"reason={_engine_route.reason} "
+                f"suppressed={len(_engine_route.suppressed)}",
+                flush=True,
+            )
+        except Exception as _eng_res_exc:
+            print(f"[raw_passthrough] ENGINE_RESOLVER skipped: {_eng_res_exc}", flush=True)
     dcr_love_meta = None
     _mr_engine_result = None
     _health_engine_result = None
@@ -8311,8 +8382,10 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 if (os.environ.get("ASK_FINANCE_NARRATOR") or "1").strip() != "0"
                 else "universal"
             )
-        elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice"):
+        el        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice"):
             _pt_checks["mr_engine"] = "legacy_slice"
+        if _engine_route is not None:
+            _pt_checks["engine_route"] = _engine_route.to_dict()
         _pt_blocks = {"chart_context": chart_text}
         if kp_block:
             _pt_blocks["kp"] = kp_block.strip()

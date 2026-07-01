@@ -671,6 +671,17 @@ def classify_mr_archetype(question: str) -> str:
 
 
 
+    # --- Reciprocal love / partner loves me back (before emotional_attachment) ---
+    if re.search(
+        r"(?ix)\b("
+        r"kya\s+wo\s+bhi|does\s+(she|he|they)\s+love|love\s+me\s+back|"
+        r"utna\s+hi\s+pyaar|jitna\s+main|reciproc|mutual\s+love|"
+        r"wo\s+bhi\s+.*\b(pyaar|pyar|prem|love)\b"
+        r")\b",
+        q,
+    ) and re.search(r"(?ix)\b(pyaar|pyar|prem|love|dil)\b", q):
+        return "one_sided_love"
+
     # --- User emotional attachment only ---
 
     if re.search(r"\b(emotional|attachment|attach|feelings?|dil\s*lag|lagav|pyaar\s*gehra)\b", q) and not re.search(

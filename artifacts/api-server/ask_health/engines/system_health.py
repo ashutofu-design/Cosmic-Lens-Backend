@@ -96,9 +96,13 @@ _SYSTEM_DETECT: list[tuple[str, re.Pattern[str]]] = [
         r"intestine|aant|appetite|bhook|hazme|hajma|liver|jigar|kidney|gurda|"
         r"पेट\s+दर्द|पेट\s+की\s+प्रवृत्ति|पाचन)")),
     ("cardio_health", re.compile(
-        r"(?ix)(heart|dil\b|cardiac|cardio|blood\s+pressure|\bbp\b|"
+        r"(?ix)(heart|cardiac|cardio|blood\s+pressure|\bbp\b|"
         r"hypertension|chest\s+(pain|discomfort)|seene\s+me|"
-        r"दिल\s+की\s+सेहत|हृदय)")),
+        r"दिल\s+की\s+सेहत|हृदय|"
+        r"dil\s+ki\s+sehat|dil\s+ka\s+dard|dil\s+me\s+dard|dil\s+ki\s+bimari|"
+        r"dil\s+aur\s+bp|"
+        r"dil.{0,25}\b(sehat|bp|weak|dard|pain|bimari|tabiyat)\b"
+        r")")),
     ("nervous_health", re.compile(
         r"(?ix)(nerve|nerves|nervous|neurolog|neurological|sensitivity|"
         r"jhanjhanahat|tingling|"

@@ -420,6 +420,14 @@ def build_admin_llm_context(
         "routed_domain": _intent.get("routed_domain") if isinstance(_intent, dict) else None,
         "routed_archetype": _intent.get("routed_archetype") if isinstance(_intent, dict) else None,
         "routed_timing": (_intent.get("routed_timing") if isinstance(_intent, dict) else None),
+        "engine_ran": (_intent.get("engine_ran") if isinstance(_intent, dict) else None)
+        or (_checks.get("engine_route") or {}).get("engine_key")
+        if isinstance(_checks.get("engine_route"), dict)
+        else None,
+        "engine_route_reason": (_intent.get("engine_route_reason") if isinstance(_intent, dict) else None)
+        or (_checks.get("engine_route") or {}).get("reason")
+        if isinstance(_checks.get("engine_route"), dict)
+        else None,
         "understanding_source": _understanding_source,
         "question_type": question_type,
         "is_timing": bool(is_timing),

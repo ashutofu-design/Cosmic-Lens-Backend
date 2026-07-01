@@ -134,7 +134,9 @@ export interface AskLlmContext {
   question_normalized?: string | null;
   question_meaning?: string | null;
   typo_corrected?: boolean;
-  understanding_source?: string | null;
+    engine_ran?: string | null;
+    engine_route_reason?: string | null;
+    understanding_source?: string | null;
   question_type?: string;
   is_timing?: boolean;
   intent_source?: string;

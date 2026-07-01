@@ -208,6 +208,14 @@ class TestAskHealthEngine(unittest.TestCase):
             with self.subTest(q=q):
                 self.assertEqual(classify_health_archetype(q), expected)
 
+    def test_love_dil_se_not_cardio_health(self):
+        q = "Main jisse pyaar karta hu, kya wo bhi dil se mujhse utna hi pyaar karti hai"
+        self.assertFalse(is_health_static_question(q))
+        self.assertIsNone(classify_health_archetype(q))
+
+    def test_dil_ki_sehat_still_cardio(self):
+        self.assertEqual(classify_health_archetype("dil ki sehat kaisi hai chart me?"), "cardio_health")
+
     def test_hard_guard_skips_llm(self):
         res = run_health_static_engine(
             _SAMPLE_KUNDLI,

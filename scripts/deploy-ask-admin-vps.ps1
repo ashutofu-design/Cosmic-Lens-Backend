@@ -19,6 +19,8 @@ $files = @(
     "ask_question_normalize.py",
     "ask_question_understand.py",
     "ask_route_from_understanding.py",
+    "ask_engine_resolver.py",
+    "engine_collision_registry.py",
     "ask_universal_chart_llm.py",
     "ask_native_overview.py",
     "ask_intent_fidelity.py",

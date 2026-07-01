@@ -80,6 +80,14 @@ def apply_understanding_routing(
         out["is_timing"] = False
         out["mr_archetype"] = "dating_courtship"
 
+    if re.search(
+        r"(?ix)\b(kya\s+wo\s+bhi|utna\s+hi\s+pyaar|jitna\s+main|love\s+me\s+back)\b",
+        combined,
+    ) and re.search(r"(?ix)\b(pyaar|pyar|prem|love|dil)\b", combined):
+        out["domain"] = "love"
+        out["is_timing"] = False
+        out["mr_archetype"] = "one_sided_love"
+
     if _TIMING_RX.search(combined):
         try:
             from ask_love.timing_registry import is_love_timing_question

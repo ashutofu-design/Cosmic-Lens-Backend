@@ -900,6 +900,26 @@ export function AskLlmContextPanel({
                     </span>
                   ) : null}
                 </p>
+                {ctx.engine_ran || (ctx.llm_intent as { engine_ran?: string })?.engine_ran ? (
+                  <p>
+                    <strong>Engine ran:</strong>{" "}
+                    <code>
+                      {String(
+                        ctx.engine_ran ||
+                          (ctx.llm_intent as { engine_ran?: string }).engine_ran ||
+                          "",
+                      )}
+                    </code>
+                    {ctx.engine_route_reason ||
+                    (ctx.llm_intent as { engine_route_reason?: string })?.engine_route_reason ? (
+                      <span className="answer-path-note">
+                        {" "}
+                        — {String(ctx.engine_route_reason ||
+                          (ctx.llm_intent as { engine_route_reason?: string }).engine_route_reason)}
+                      </span>
+                    ) : null}
+                  </p>
+                ) : null}
                 <p className="detail-muted">
                   Flow: LLM reads question → picks engine → engine produces facts → LLM
                   writes the human answer.

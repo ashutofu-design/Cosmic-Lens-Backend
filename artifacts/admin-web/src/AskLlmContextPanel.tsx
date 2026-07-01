@@ -178,10 +178,24 @@ export function resolveAnswerPath(
 
 function engineFactsFromContext(ctx: AskLlmContext) {
   const ef = ctx.engine_facts;
-  if (ef && (ef.verdict || (ef.evidence && ef.evidence.length > 0))) {
-    return ef;
-  }
   const sm = ctx.slice_meta || {};
+  if (ef && (ef.verdict || (ef.evidence && ef.evidence.length > 0))) {
+    return {
+      ...ef,
+      evidence_positive:
+        ef.evidence_positive && ef.evidence_positive.length > 0
+          ? ef.evidence_positive
+          : (sm.evidence_positive as string[] | undefined) || ef.evidence_positive || [],
+      evidence_negative:
+        ef.evidence_negative && ef.evidence_negative.length > 0
+          ? ef.evidence_negative
+          : (sm.evidence_negative as string[] | undefined) || ef.evidence_negative || [],
+      evidence_neutral:
+        ef.evidence_neutral && ef.evidence_neutral.length > 0
+          ? ef.evidence_neutral
+          : (sm.evidence_neutral as string[] | undefined) || ef.evidence_neutral || [],
+    };
+  }
   return {
     archetype: sm.archetype,
     verdict: sm.verdict,
@@ -793,18 +807,24 @@ export function AskLlmContextPanel({
   const evidencePositive =
     (engineFacts.evidence_positive && engineFacts.evidence_positive.length > 0
       ? engineFacts.evidence_positive
-      : (sliceMeta.evidence_positive as string[] | undefined)) || undefined;
+      : (sliceMeta.evidence_positive as string[] | undefined)) ?? [];
   const evidenceNegative =
     (engineFacts.evidence_negative && engineFacts.evidence_negative.length > 0
       ? engineFacts.evidence_negative
-      : (sliceMeta.evidence_negative as string[] | undefined)) || undefined;
+      : (sliceMeta.evidence_negative as string[] | undefined)) ?? [];
   const evidenceNeutral =
     (engineFacts.evidence_neutral && engineFacts.evidence_neutral.length > 0
       ? engineFacts.evidence_neutral
-      : (sliceMeta.evidence_neutral as string[] | undefined)) || undefined;
+      : (sliceMeta.evidence_neutral as string[] | undefined)) ?? [];
+  const isMrEngineSlice =
+    sliceMeta.slice === "mr_engine_v1" ||
+    checks.slice_type === "mr_engine_v1" ||
+    Boolean(sliceMeta.archetype || engineFacts.archetype);
   const hasSplitEvidence = Boolean(
-    (evidencePositive && evidencePositive.length > 0) ||
-      (evidenceNegative && evidenceNegative.length > 0),
+    isMrEngineSlice ||
+      evidencePositive.length > 0 ||
+      evidenceNegative.length > 0 ||
+      evidenceNeutral.length > 0,
   );
   const summary =
     (engineFacts.summary && engineFacts.summary.length > 0
@@ -1010,42 +1030,42 @@ export function AskLlmContextPanel({
                   ) : null}
                   {hasSplitEvidence ? (
                     <>
-                      {evidencePositive && evidencePositive.length > 0 ? (
-                        <>
-                          <p>
-                            <strong>Positive evidence ({evidencePositive.length}):</strong>
-                          </p>
-                          <ul className="llm-check-list evidence-positive">
-                            {evidencePositive.map((e) => (
-                              <li key={`pos-${e}`}>{e}</li>
-                            ))}
-                          </ul>
-                        </>
-                      ) : null}
-                      {evidenceNegative && evidenceNegative.length > 0 ? (
-                        <>
-                          <p>
-                            <strong>Negative / affliction evidence ({evidenceNegative.length}):</strong>
-                          </p>
-                          <ul className="llm-check-list evidence-negative">
-                            {evidenceNegative.map((e) => (
-                              <li key={`neg-${e}`}>{e}</li>
-                            ))}
-                          </ul>
-                        </>
-                      ) : null}
-                      {evidenceNeutral && evidenceNeutral.length > 0 ? (
-                        <>
-                          <p>
-                            <strong>Neutral chart context ({evidenceNeutral.length}):</strong>
-                          </p>
-                          <ul className="llm-check-list">
-                            {evidenceNeutral.map((e) => (
-                              <li key={`neu-${e}`}>{e}</li>
-                            ))}
-                          </ul>
-                        </>
-                      ) : null}
+                      <p>
+                        <strong>Positive evidence ({evidencePositive.length}):</strong>
+                      </p>
+                      {evidencePositive.length > 0 ? (
+                        <ul className="llm-check-list evidence-positive">
+                          {evidencePositive.map((e) => (
+                            <li key={`pos-${e}`}>{e}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="detail-muted">— none (0)</p>
+                      )}
+                      <p>
+                        <strong>Negative / affliction evidence ({evidenceNegative.length}):</strong>
+                      </p>
+                      {evidenceNegative.length > 0 ? (
+                        <ul className="llm-check-list evidence-negative">
+                          {evidenceNegative.map((e) => (
+                            <li key={`neg-${e}`}>{e}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="detail-muted">— none (0)</p>
+                      )}
+                      <p>
+                        <strong>Neutral chart context ({evidenceNeutral.length}):</strong>
+                      </p>
+                      {evidenceNeutral.length > 0 ? (
+                        <ul className="llm-check-list">
+                          {evidenceNeutral.map((e) => (
+                            <li key={`neu-${e}`}>{e}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="detail-muted">— none (0)</p>
+                      )}
                     </>
                   ) : evidence && evidence.length > 0 ? (
                     <>

@@ -77,7 +77,38 @@ class MrNarratorTests(unittest.TestCase):
         self.assertIn("PARA 1", payload)
         self.assertIn("PARA 2", payload)
         self.assertIn("PARA 3", payload)
-        self.assertIn("7th house sign baseline", payload)
+        self.assertIn("POSITIVE EVIDENCE", payload)
+        self.assertIn("NEGATIVE / AFFLICTION EVIDENCE", payload)
+        self.assertIn("CHART CONTEXT / NEUTRAL", payload)
+
+    def test_partner_nature_attachment_question_has_pos_neg_split(self):
+        from ask_mr.engine import mr_engine_slice_meta
+        from ask_mr.engines.partner_nature import partner_nature_narrator_payload, run_partner_nature
+
+        # Sag asc → Gemini 7H; Mercury lord in 12 Scorpio; Moon in 7; Venus Leo 9
+        kundli = {
+            "ascendant": "Sagittarius",
+            "planets": [
+                {"name": "Moon", "sign": "Gemini", "house": 7},
+                {"name": "Mercury", "sign": "Scorpio", "house": 12},
+                {"name": "Venus", "sign": "Leo", "house": 9},
+                {"name": "Mars", "sign": "Cancer", "house": 8},
+                {"name": "Jupiter", "sign": "Pisces", "house": 4},
+                {"name": "Saturn", "sign": "Virgo", "house": 10},
+                {"name": "Rahu", "sign": "Aquarius", "house": 3},
+                {"name": "Ketu", "sign": "Leo", "house": 9},
+                {"name": "Sun", "sign": "Capricorn", "house": 2},
+            ],
+        }
+        q = "Mera aur mere partner ka emotional attachment kaisa rahega"
+        eng = run_partner_nature(kundli, q, birth=None)
+        meta = mr_engine_slice_meta(eng)
+        self.assertGreater(len(meta["evidence_positive"]), 0)
+        self.assertGreater(len(meta["evidence_negative"]), 0)
+        payload = partner_nature_narrator_payload(eng)
+        self.assertIn("BALANCE:", payload)
+        self.assertIn("Partnership attachment positive", payload)
+        self.assertIn("Partnership attachment affliction", payload)
 
     def test_partner_nature_prompt_requires_three_paragraphs(self):
         from ask_mr.engines.partner_nature import partner_nature_narrator_payload, run_partner_nature

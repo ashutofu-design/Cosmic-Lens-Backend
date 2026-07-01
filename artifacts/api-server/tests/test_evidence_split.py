@@ -51,6 +51,21 @@ class EvidenceSplitTests(unittest.TestCase):
         self.assertEqual(len(neg), 2)
         self.assertEqual(len(pos), 1)
 
+    def test_format_block_always_shows_neutral_count(self):
+        lines = ["5th house sign Cancer; occupants = ['Jupiter']"]
+        block = format_split_evidence_block(lines)
+        text = "\n".join(block)
+        self.assertIn("POSITIVE EVIDENCE (0 points)", text)
+        self.assertIn("NEGATIVE / AFFLICTION EVIDENCE (0 points)", text)
+        self.assertIn("CHART CONTEXT / NEUTRAL (1 points)", text)
+
+    def test_7th_lord_dusthana_is_negative(self):
+        line = (
+            "7th lord placement: Mercury in house 12 sign Scorpio "
+            "(mindset + how partnership behaves)."
+        )
+        self.assertEqual(classify_evidence_line(line), "negative")
+
     def test_format_block_lists_all_points(self):
         lines = [
             "True-love marker: Venus on 5th",

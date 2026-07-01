@@ -281,8 +281,9 @@ def partner_nature_narrator_payload(result: EngineResult) -> str:
     for item in result.summary or []:
         if item.startswith("Answer"):
             lines.append(f"HINT: {item}")
-    for item in evidence:
-        lines.append(f"EVIDENCE: {item}")
+    from ._evidence_split import format_split_evidence_block
+
+    lines.extend(format_split_evidence_block(evidence))
     return "\n".join(lines)
 
 
@@ -342,6 +343,53 @@ def run_partner_nature(
         evidence.append(f"Partner-karak by chart gender: {gender} → {karak} (placement not available).")
 
     summary_extra: str | None = None
+
+    attachment_q = bool(
+        re.search(
+            r"(?ix)\b("
+            r"emotional\s+attachment|attachment\s+kaisa|lagav\s+kaisa|"
+            r"bond\s+kaisa|rishte\s+ka\s+gehra|dono\s+ka\s+attachment"
+            r")\b",
+            q,
+        )
+    )
+    if attachment_q:
+        verdict = (
+            "Partnership emotional attachment: bond depth from 7H Moon + 7L placement + karak — "
+            "weigh supportive vs affliction evidence."
+        )
+        if occ7 and "Moon" in occ7 and not sig.moon_afflicted:
+            evidence.append(
+                "Partnership attachment positive: Moon in 7th — emotional closeness and caring bond tone."
+            )
+        if sign7 in ("Gemini", "Libra", "Leo", "Sagittarius"):
+            evidence.append(
+                f"Partnership attachment positive: communicative 7th sign {sign7} — "
+                "attachment stays alive through talk and sharing."
+            )
+        if pk and pk.get("sign") in ("Leo", "Taurus", "Libra", "Pisces"):
+            evidence.append(
+                f"Partnership attachment positive: {karak} in {pk.get('sign')} "
+                f"(house {pk.get('house')}) — warmth and expressive affection in the relationship."
+            )
+        if p7l and int(p7l.get("house") or 0) in (6, 8, 12):
+            evidence.append(
+                f"Partnership attachment affliction: 7th lord in house {p7l.get('house')} "
+                f"sign {p7l.get('sign')} — hidden distance, tests, or emotional withdrawal phases possible."
+            )
+        if sig.saturn_on_7th or sig.rahu_on_7th_axis:
+            evidence.append(
+                "Partnership attachment affliction: Saturn/Rahu stress on 7th axis — "
+                "bond needs patience; cooling or distance phases possible."
+            )
+        if sig.moon_afflicted or sig.moon_debil:
+            evidence.append(
+                "Partnership attachment affliction: Moon afflicted/debilitated — "
+                "mood swings can affect felt closeness between you."
+            )
+        summary_extra = (
+            "Answer attachment quality first: strong / mixed / cautious — match positive vs affliction balance."
+        )
 
     if re.search(r"\b(express|reserved|emotion|feeling|khul|band)\b", q):
         expressive = bool(occ7 and "Moon" in occ7) or sign7 in ("Gemini", "Libra", "Leo", "Sagittarius", "Aries")
@@ -620,8 +668,23 @@ def run_partner_nature(
         "State traits confidently from evidence — not hedged/shayad tone.",
         f"7H occupants for tone: {occ_label}.",
     ]
+    if attachment_q:
+        summary.insert(
+            0,
+            "User asked emotional attachment between user and partner — "
+            "open with honest strong/mixed/cautious verdict; use POSITIVE + NEGATIVE evidence.",
+        )
     if summary_extra:
         summary.append(summary_extra)
+
+    checks: dict = {
+        "slice_type": "mr_engine_v1",
+        "archetype": "partner_nature",
+        "question_focus": "partnership_attachment" if attachment_q else "partner_personality",
+        "gender": gender,
+        "karak": karak,
+        "sign7": sign7,
+    }
 
     return EngineResult(
         archetype="partner_nature",
@@ -633,7 +696,7 @@ def run_partner_nature(
             "Para3: karak presence (~90–120 words, blank line between paras)."
         ),
         summary=summary,
-        evidence=evidence[:10],
+        evidence=evidence[:12],
         ignore=[
             "timing dates/windows",
             "love-vs-arranged",
@@ -641,12 +704,5 @@ def run_partner_nature(
             "manglik (unless asked)",
             "breakup risk (unless asked)",
         ],
-        checks={
-            "slice_type": "mr_engine_v1",
-            "archetype": "partner_nature",
-            "question_focus": "partner_personality",
-            "gender": gender,
-            "karak": karak,
-            "sign7": sign7,
-        },
+        checks=checks,
     )

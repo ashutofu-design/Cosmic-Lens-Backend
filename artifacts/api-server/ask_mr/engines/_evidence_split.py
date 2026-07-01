@@ -9,16 +9,26 @@ _NEGATIVE_RX = re.compile(
     r"malefic|dusthana|unstable|inconsistent|delay|cooling|distance|withdraw|ghost|"
     r"fight|separation|betray|dhokha|nodal|combust|weak|cool|seriousness|"
     r"tests?\s+before|inconsistent|validation[\s-]?seeking|secrecy|guilt|"
-    r"emotional\s+cooling|impulsive\s+breaks|unclear\s+loyalty|afflicted"
+    r"emotional\s+cooling|impulsive\s+breaks|unclear\s+loyalty|afflicted|"
+    r"reserved-first|guarded|withdrawal|hidden\s+distance|mind-games|manipulation\s+risk"
     r")\b"
 )
+
+# 7th lord / partnership lord in dusthana — attachment distance theme
+_LORD_DUSTHANA_RX = re.compile(
+    r"(?ix)\b(7th\s+lord|lord\s+placement).*\bin\s+house\s+(6|8|12)\b"
+)
+_PARTNERSHIP_AFFLICTION_RX = re.compile(r"(?ix)\bpartnership\s+attachment\s+affliction\b")
+_PARTNERSHIP_POSITIVE_RX = re.compile(r"(?ix)\bpartnership\s+attachment\s+positive\b")
+_MOON_IN_7TH_RX = re.compile(r"(?ix)\bplanets?\s+in\s+7th\s+house:\s*\[.*\bmoon\b")
 
 _POSITIVE_RX = re.compile(
     r"(?ix)\b("
     r"true[\s-]?love\s*marker|dharmic|green\s*flag|reconnection\s+yoga|"
     r"exalted|own[\s-]?sign|deep\s+heartfelt|growth[\s-]?oriented|charming|sincere|"
     r"not\s+heavily\s+afflicted|honest\s+growth|positive\s+dating|strong\s+green|"
-    r"playful\s+bold|magnetic|blessing|trust\s+and\s+blessing|affectionate\s+sincere"
+    r"playful\s+bold|magnetic|blessing|trust\s+and\s+blessing|affectionate\s+sincere|"
+    r"generally\s+expressive|emotional\s+closeness|communicative\s+7th"
     r")\b"
 )
 
@@ -37,6 +47,14 @@ def classify_evidence_line(line: str) -> str:
     low = t.lower()
     if low.startswith("love challenge:") or low.startswith("red flag"):
         return "negative"
+    if _PARTNERSHIP_AFFLICTION_RX.search(t):
+        return "negative"
+    if _PARTNERSHIP_POSITIVE_RX.search(t):
+        return "positive"
+    if _LORD_DUSTHANA_RX.search(t):
+        return "negative"
+    if _MOON_IN_7TH_RX.search(t) and "afflict" not in low:
+        return "positive"
     if _POSITIVE_RX.search(t):
         return "positive"
     if "dignity exalted" in low or "dignity own-sign" in low:
@@ -139,17 +157,19 @@ def format_split_evidence_block(
     if pos:
         out.extend(f"+ {e}" for e in pos)
     else:
-        out.append("+ (none tagged positive — use neutral chart context carefully)")
+        out.append("+ (0 — none tagged positive; use neutral chart context carefully)")
 
     out.append(f"NEGATIVE / AFFLICTION EVIDENCE ({len(neg)} points):")
     if neg:
         out.extend(f"− {e}" for e in neg)
     else:
-        out.append("− (none — do not invent afflictions)")
+        out.append("− (0 — do not invent afflictions)")
 
+    out.append(f"CHART CONTEXT / NEUTRAL ({len(neu)} points):")
     if neu:
-        out.append(f"CHART CONTEXT / NEUTRAL ({len(neu)} points):")
         out.extend(f"• {e}" for e in neu)
+    else:
+        out.append("• (0 — all evidence tagged positive or negative)")
 
     out.append(narrator_balance_instruction(pos, neg, neutral=neu))
     return out

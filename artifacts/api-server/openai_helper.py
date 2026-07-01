@@ -7793,11 +7793,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 llm_intent=_llm_intent_admin,
             )
         from ask_hard_guards import (  # type: ignore
-            CONTROLLED_LLM_FALLBACK_RULE,
-            DOMAIN_CHART_FALLBACK_RULE,
-            controlled_llm_fallback_eligible,
-            mandatory_domain_chart_fallback_eligible,
             passthrough_has_domain_engine_facts,
+            universal_chart_llm_fallback_eligible,
+        )
+        from ask_universal_chart_llm import (  # type: ignore
+            build_universal_chart_llm_rules,
+            infer_chart_topic,
         )
 
         _has_engine_facts = passthrough_has_domain_engine_facts(
@@ -7810,22 +7811,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         _fallback_intent = (
             _llm_intent_admin if isinstance(_llm_intent_admin, dict) else _llm_intent
         )
-        if not _has_engine_facts and controlled_llm_fallback_eligible(
-            question or "",
-            _fallback_intent if isinstance(_fallback_intent, dict) else None,
-            qtype=qtype,
-            checks=_eng_checks,
-        ):
-            extra_rules = (extra_rules or "") + CONTROLLED_LLM_FALLBACK_RULE
-            _eng_checks["controlled_llm_fallback"] = True
-            _eng_checks["narrator_mode"] = "controlled_chart_fallback"
-            _eng_checks["slice_type"] = "controlled_fallback_v1"
-            print(
-                f"[raw_passthrough] CONTROLLED_LLM_FALLBACK "
-                f"q={(question or '')[:60]!r}",
-                flush=True,
-            )
-        elif not _has_engine_facts and mandatory_domain_chart_fallback_eligible(
+        if not _has_engine_facts and universal_chart_llm_fallback_eligible(
             question or "",
             _fallback_intent if isinstance(_fallback_intent, dict) else None,
             qtype=qtype,
@@ -7836,15 +7822,33 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 birth=birth,
                 question=question or "",
             )
-            extra_rules = (extra_rules or "") + DOMAIN_CHART_FALLBACK_RULE
+            extra_rules = (extra_rules or "") + build_universal_chart_llm_rules(
+                question or "",
+                qtype=qtype or "STATIC",
+                llm_intent=_fallback_intent if isinstance(_fallback_intent, dict) else None,
+            )
             _eng_checks["controlled_llm_fallback"] = True
-            _eng_checks["mandatory_domain_chart_fallback"] = True
-            _eng_checks["narrator_mode"] = "mandatory_domain_chart_fallback"
+            _eng_checks["universal_chart_llm"] = True
+            _eng_checks["narrator_mode"] = "universal_chart_llm"
             _eng_checks["slice_type"] = "controlled_fallback_v1"
             print(
-                f"[raw_passthrough] MANDATORY_DOMAIN_CHART_FALLBACK "
+                f"[raw_passthrough] UNIVERSAL_CHART_LLM "
+                f"topic={infer_chart_topic(question or '', _fallback_intent if isinstance(_fallback_intent, dict) else None)} "
                 f"q={(question or '')[:60]!r}",
                 flush=True,
+            )
+            system_prompt = _build_universal_ask_system_prompt(
+                chart_text=chart_text or "(no chart data available)",
+                qtype=qtype or "STATIC",
+                topic_hint=_topic_hint,
+                wants_explain=wants_explain,
+                is_timing=bool(is_timing),
+                is_decision=is_decision,
+                is_finance=is_finance,
+                reply_lang=eff_lang,
+                extra_rules=extra_rules,
+                dcr_love_rule=dcr_love_rule,
+                is_partner_nature=_is_pn_minimal,
             )
     except Exception as _eng_only_exc:
         print(

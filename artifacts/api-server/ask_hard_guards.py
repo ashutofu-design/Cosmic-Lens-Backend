@@ -65,31 +65,7 @@ _NO_ENGINE_REFUSAL = (
     "court-case se juda specific sawaal puchiye; tab engine facts ke saath jawab milega."
 )
 
-# Option C — when no domain engine facts exist, allow a tight chart+LLM path for
-# general / luck / vague personal Qs only (not marriage/career/health/timing).
-CONTROLLED_LLM_FALLBACK_RULE = (
-    "\n\n=== CONTROLLED CHART FALLBACK (no domain engine block) ===\n"
-    "Answer ONLY from the chart slice below — no invented facts.\n"
-    "- Stay on the EXACT user question; do NOT drift to spouse, in-laws, or unrelated topics.\n"
-    "- Use at most 2–3 relevant chart factors (house / planet / current dasha phase).\n"
-    "- NO invented calendar dates, lottery numbers, or guaranteed outcomes.\n"
-    "- For luck/bhagya/general Qs: lean on 9H bhagya, 5H grace, 11H gains, Jupiter, Moon.\n"
-    "- Tone: confident Hinglish, ~80–120 words unless the user asked for more detail.\n"
-)
-
-# When a mandatory domain (love/career/health…) was understood but the engine
-# produced no structured facts, allow a tight D1+D9 chart read — not a hard refuse.
-DOMAIN_CHART_FALLBACK_RULE = (
-    "\n\n=== DOMAIN CHART FALLBACK (engine facts missing; full D1+D9 chart) ===\n"
-    "Structured engine facts are absent — answer ONLY from the full chart block below "
-    "(planet sign, house, degree, dignity exalted/debilitated/own, D9 positions).\n"
-    "- Stay EXACTLY on the user's question; give a clear yes / no / mixed leaning.\n"
-    "- Cite 2–4 relevant chart factors only (houses, lords, Venus/Moon/Jupiter etc.).\n"
-    "- NO invented dates, names, or guaranteed betrayal/loyalty/career outcomes.\n"
-    "- Love/trust/betrayal Qs: weigh 5H romance, 7H partnership, Venus, Moon, "
-    "8H/12H stress — nuanced mixed tone, not fear-mongering.\n"
-    "- Tone: confident Hinglish, ~80–130 words unless the user asked for more detail.\n"
-)
+# Option C + mandatory domain — unified systematic chart read (see ask_universal_chart_llm).
 
 _MANDATORY_LLM_DOMAINS = frozenset({
     "marriage",
@@ -477,6 +453,43 @@ def mandatory_domain_chart_fallback_eligible(
     return True
 
 
+def universal_chart_llm_fallback_eligible(
+    question: str,
+    llm_intent: dict[str, Any] | None = None,
+    *,
+    qtype: str = "STATIC",
+    checks: dict[str, Any] | None = None,
+) -> bool:
+    """Full D1+D9 systematic chart+LLM when no domain engine produced facts."""
+    if controlled_llm_fallback_eligible(question, llm_intent, qtype=qtype, checks=checks):
+        return True
+    if mandatory_domain_chart_fallback_eligible(
+        question, llm_intent, qtype=qtype, checks=checks,
+    ):
+        return True
+    q = (question or "").strip()
+    if not q:
+        return False
+    is_timing = (
+        str(qtype or "").upper() == "TIMING"
+        or bool((llm_intent or {}).get("is_timing"))
+    )
+    if not is_timing:
+        return False
+    try:
+        from ask_timing_clarify import needs_timing_domain_clarifier
+
+        if needs_timing_domain_clarifier(question, llm_intent):
+            return False
+    except Exception:
+        pass
+    summary = str((llm_intent or {}).get("question_summary") or "").strip()
+    understood = str((llm_intent or {}).get("question_understood") or "").strip().lower()
+    if summary or understood == "yes":
+        return True
+    return bool(mandatory_static_domain_detected(question, llm_intent, checks))
+
+
 def controlled_llm_fallback_eligible(
     question: str,
     llm_intent: dict[str, Any] | None = None,
@@ -583,14 +596,7 @@ def enforce_engine_only_or_refuse(
                 return build_timing_domain_clarifier_result(question, qtype=qtype)
         except Exception:
             pass
-        if controlled_llm_fallback_eligible(
-            question,
-            llm_intent,
-            qtype=qtype,
-            checks=checks,
-        ):
-            return None
-        if mandatory_domain_chart_fallback_eligible(
+        if universal_chart_llm_fallback_eligible(
             question,
             llm_intent,
             qtype=qtype,

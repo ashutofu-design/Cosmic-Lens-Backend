@@ -68,7 +68,7 @@ export function resolveQuestionMeaningText(ctx: AskLlmContext | null): string {
     ctx.llm_intent?.interpretation?.trim() ||
     "";
   if (direct) {
-    return direct.replace(/^\[[a-z][a-z0-9_]*\]\s*/i, "").trim() || direct;
+    return direct.replace(/^\[[a-z][a-z0-9_]*\]\s*\n?/i, "").trim() || direct;
   }
 
   const line = ctx.understanding_line?.trim() || "";
@@ -92,23 +92,40 @@ export function resolveQuestionRoutingHint(ctx: AskLlmContext | null): string {
   return "";
 }
 
-function clipUnderstandingText(text: string, maxChars = 360): string {
+function clipUnderstandingText(text: string, maxChars = 1800): string {
   const t = text.trim();
   if (t.length <= maxChars) return t;
-  return `${t.slice(0, maxChars).replace(/\s+\S*$/, "")}…`;
+  const cut = t.slice(0, maxChars);
+  const lastNl = cut.lastIndexOf("\n");
+  if (lastNl > maxChars * 0.5) return `${cut.slice(0, lastNl)}…`;
+  return `${cut.replace(/\s+\S*$/, "")}…`;
+}
+
+function splitScopedExplanation(text: string): { scope: string; body: string } {
+  const raw = text.trim();
+  const m = raw.match(/^\[([a-z][a-z0-9_]*)\]\s*\n?([\s\S]*)$/i);
+  if (m) {
+    return { scope: m[1].toLowerCase(), body: m[2].trim() };
+  }
+  return { scope: "", body: raw };
 }
 
 export function LlmQuestionUnderstandingBrief({ ctx }: { ctx: AskLlmContext | null }) {
   const scope = resolveQuestionScope(ctx);
-  const body = clipUnderstandingText(resolveQuestionMeaningText(ctx));
-  const bracketed =
+  const rawMeaning =
     ctx?.question_meaning?.trim() ||
-    (scope && body ? `[${scope}] ${body}` : body);
+    ctx?.llm_intent?.question_summary?.trim() ||
+    "";
+  const parsed = splitScopedExplanation(
+    rawMeaning || (scope ? `[${scope}]\n${resolveQuestionMeaningText(ctx)}` : resolveQuestionMeaningText(ctx)),
+  );
+  const displayScope = parsed.scope || scope;
+  const body = clipUnderstandingText(parsed.body || resolveQuestionMeaningText(ctx));
   const routingHint = clipUnderstandingText(resolveQuestionRoutingHint(ctx));
   const understood = resolveQuestionUnderstoodWord(ctx);
   const source = (ctx?.understanding_source || ctx?.intent_source || "").trim();
 
-  if (!bracketed && !routingHint && !understood) {
+  if (!body && !routingHint && !understood) {
     return (
       <span className="detail-muted">
         Not saved for this row — deploy latest API and ask again.
@@ -116,19 +133,15 @@ export function LlmQuestionUnderstandingBrief({ ctx }: { ctx: AskLlmContext | nu
     );
   }
 
-  const bracketMatch = bracketed.match(/^(\[[a-z][a-z0-9_]*\])\s*(.*)$/i);
-
   return (
     <div className="ask-detail-llm-understanding">
-      {bracketMatch ? (
-        <p className="ask-detail-llm-meaning">
-          <span className="ask-scope-inline">{bracketMatch[1]}</span>
-          {bracketMatch[2]}
+      {displayScope ? (
+        <p className="ask-detail-llm-scope">
+          <span className="ask-scope-inline">[{displayScope}]</span>
         </p>
-      ) : bracketed ? (
-        <p className="ask-detail-llm-meaning">{bracketed}</p>
       ) : null}
-      {routingHint && routingHint !== body && routingHint !== bracketed ? (
+      {body ? <pre className="ask-detail-llm-meaning">{body}</pre> : null}
+      {routingHint && routingHint !== body ? (
         <p className="ask-detail-llm-route detail-muted">{routingHint}</p>
       ) : null}
       <div className="ask-detail-understood-row">

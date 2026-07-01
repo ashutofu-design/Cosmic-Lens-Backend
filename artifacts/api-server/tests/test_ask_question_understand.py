@@ -30,12 +30,21 @@ class TestQuestionUnderstand(unittest.TestCase):
 
     def test_ensure_fallback_without_client(self):
         out = ensure_question_understanding(
-            "dhan kamane me dikkat kyun",
-            {"domain": "finance"},
+            "Mujhe kis tarah ka partner suit karega meri mental thinking ke hisab se",
+            {"domain": "general"},
             force_llm=False,
         )
-        self.assertTrue(str(out.get("question_summary") or "").strip())
+        summary = str(out.get("question_summary") or "")
+        self.assertTrue(summary.strip())
+        self.assertNotIn("Mujhe kis tarah ka partner suit karega", summary)
         self.assertEqual(out.get("question_understood"), "yes")
+
+    def test_echo_detected_as_weak(self):
+        from ask_question_understand import _echoes_question, _summary_is_weak
+
+        q = "Mujhe kis tarah ka partner suit karega meri mental thinking ke hisab se"
+        self.assertTrue(_echoes_question(q, q))
+        self.assertTrue(_summary_is_weak(q, q))
 
     def test_understood_yes_when_summary_present(self):
         li = {"question_summary": "Dhan kamane mein bar-bar dikkat kyun aati hai", "domain": "finance"}

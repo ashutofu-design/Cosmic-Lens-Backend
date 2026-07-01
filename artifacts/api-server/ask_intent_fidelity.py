@@ -248,6 +248,84 @@ def _clip_one_line(text: str, *, max_len: int = 320) -> str:
     return f"{cut}…" if cut else s[:max_len]
 
 
+def _clip_explanation(text: str, *, max_len: int = 1800, max_lines: int = 10) -> str:
+    raw = (text or "").strip().replace("\\n", "\n")
+    if not raw:
+        return ""
+    lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+    if not lines:
+        lines = [_clip_one_line(raw, max_len=max_len)]
+    lines = lines[:max_lines]
+    out = "\n".join(lines)
+    if len(out) <= max_len:
+        return out
+    trimmed: list[str] = []
+    used = 0
+    for ln in lines:
+        if used + len(ln) + 1 > max_len:
+            break
+        trimmed.append(ln)
+        used += len(ln) + 1
+    return "\n".join(trimmed) if trimmed else _clip_one_line(out, max_len=max_len)
+
+
+def build_question_explanation_fallback(
+    question: str,
+    llm_intent: dict[str, Any] | None = None,
+) -> str:
+    """Regex/template intent explanation — never echo the question verbatim."""
+    q = (question or "").strip()
+    if not q:
+        return "Khali ya incomplete sawal."
+    scope = infer_question_scope(q, llm_intent)
+    lines: list[str] = []
+
+    if scope == "partner" or is_partner_relationship_question(q):
+        lines.append("User partner / life-partner ke baare mein guidance maang raha hai.")
+        if re.search(r"(?ix)\b(suit|match|compatible|thinking|soch|mental|nature|swabhav|tarah)\b", q):
+            lines.append(
+                "Core intent: kaun sa type ka partner unki soch, mental style aur personality ke saath fit baithega."
+            )
+            lines.append("Yeh sehat/body health sawal nahi — rishta / partner traits ka sawal hai.")
+        elif re.search(r"(?ix)\b(loyal|trust|cheat|dhokha|commit)\b", q):
+            lines.append("User partner ki wafadari, trust ya commitment level samajhna chahta hai.")
+        else:
+            lines.append("User partner ke nature, behaviour ya rishta pattern ke baare mein jaanna chahta hai.")
+    elif scope == "couple" or is_dyadic_couple_question(q):
+        lines.append("User do logon ke beech ke rishte / bond ke baare mein pooch raha hai.")
+        if re.search(r"(?ix)\b(chemistry|passion|intense|attraction)\b", q):
+            lines.append("Focus: dono ke beech chemistry, passion ya emotional pull kaisi rahegi.")
+        else:
+            lines.append("Focus: dono ke beech compatibility, closeness ya dynamic kaisi rahegi.")
+    elif scope in ("love", "marriage"):
+        lines.append(f"User {scope} / romantic life se related astrology guidance chahta hai.")
+        if re.search(r"(?ix)\b(kab|when|timing|kitne\s+saal)\b", q):
+            lines.append("Timing / kab hoga type ka sawal lag raha hai.")
+        else:
+            lines.append("Quality / pattern / chances type ka static sawal lag raha hai.")
+    elif scope == "career":
+        lines.append("User career, job, business ya professional growth ke baare mein jaanna chahta hai.")
+    elif scope == "health":
+        lines.append("User apni sehat, body, recovery ya health risk ke baare mein pooch raha hai.")
+    elif scope == "finance":
+        lines.append("User paisa, dhan, savings, loss ya wealth ke baare mein guidance maang raha hai.")
+    elif scope == "self":
+        lines.append("User apne baare mein — apni personality, nature ya life pattern — samajhna chahta hai.")
+    else:
+        dom = infer_primary_domain(q)
+        if dom:
+            lines.append(f"User ka {dom} area se related astrology sawal hai.")
+        else:
+            lines.append("User chart se apni situation ke baare mein general guidance maang raha hai.")
+
+    if re.search(r"(?ix)\b(kab|when|kitne\s+saal|timing|muhurat)\b", q) and "Timing" not in " ".join(lines):
+        lines.append("Sawal mein timing / kab element bhi hai.")
+    if re.search(r"(?ix)\b(ya|or|aur)\b", q):
+        lines.append("User ne do options ya multiple parts compare kiye hain — sab cover karna hoga.")
+
+    return _clip_explanation("\n".join(lines), max_lines=10)
+
+
 _VALID_QUESTION_SCOPES = frozenset({
     "love",
     "marriage",
@@ -340,11 +418,11 @@ def infer_question_scope(question: str, llm_intent: dict[str, Any] | None = None
 
 
 def format_question_understanding(scope: str, summary: str) -> str:
-    body = strip_scope_bracket(summary)
+    body = _clip_explanation(strip_scope_bracket(summary))
     sc = normalize_question_scope(scope)
     if not body:
         return f"[{sc}]"
-    return f"[{sc}] {_clip_one_line(body, max_len=520)}"
+    return f"[{sc}]\n{body}"
 
 
 def summarize_question_one_line(
@@ -357,7 +435,7 @@ def summarize_question_one_line(
     li = llm_intent if isinstance(llm_intent, dict) else {}
     summary = strip_scope_bracket(str(li.get("question_summary") or "").strip())
     if summary:
-        body = _clip_one_line(summary)
+        body = _clip_explanation(summary)
         if with_scope:
             scope = infer_question_scope(question, li)
             return format_question_understanding(scope, body)
@@ -389,11 +467,11 @@ def summarize_question_one_line(
         pass
     inferred = infer_primary_domain(q)
     if inferred:
-        body = _clip_one_line(f"User ka {inferred} se related sawal: {q}", max_len=260)
+        body = build_question_explanation_fallback(q, li).split("\n")[0].strip()
         if with_scope:
             return format_question_understanding(infer_question_scope(q, li), body)
         return body
-    body = _clip_one_line(q, max_len=260)
+    body = build_question_explanation_fallback(q, li).split("\n")[0].strip()
     if with_scope:
         return format_question_understanding(infer_question_scope(q, li), body)
     return body
@@ -494,6 +572,14 @@ def resolve_question_understood(
         or li.get("mr_archetype")
         or ""
     ).strip().lower()
+    try:
+        from ask_question_understand import _echoes_question
+
+        body = strip_scope_bracket(str(li.get("question_summary") or ""))
+        if body and _echoes_question(body, q):
+            return "no"
+    except Exception:
+        pass
     if ran_arch and not archetype_allowed_for_question(q, ran_arch):
         return "no"
 
@@ -657,7 +743,14 @@ def build_llm_understood_one_liner(
         has_engine_facts=has_engine_facts,
     )
     yes_no = "Yes" if word == "yes" else "No"
-    summary = summarize_question_one_line(question, llm_intent)
+    li = llm_intent if isinstance(llm_intent, dict) else {}
+    body = strip_scope_bracket(str(li.get("question_summary") or "")).strip()
+    if not body:
+        body = build_question_explanation_fallback(question, li).split("\n")[0].strip()
+    else:
+        body = body.split("\n")[0].strip()
+    scope = infer_question_scope(question, li)
+    summary = f"[{scope}] {body}" if body else ""
     route = build_question_understanding_detail(
         question,
         llm_intent,

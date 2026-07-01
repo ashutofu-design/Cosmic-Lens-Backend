@@ -1,4 +1,4 @@
-"""Mandatory one-line question understanding — runs for every Ask question."""
+"""Mandatory question understanding — runs for every Ask question."""
 
 from __future__ import annotations
 
@@ -10,63 +10,84 @@ from typing import Any, Optional
 
 _UNDERSTAND_PROMPT = """You read Hindi/Hinglish/English astrology questions WORD BY WORD.
 Return STRICT JSON only:
-{"question_scope": "<one word>",
- "question_summary": "<ONE line plain Hinglish (Roman)>",
- "understood": true}
+{{"question_scope": "<one word>",
+ "question_summary": "<explanation text>",
+ "understood": true}}
 
 question_scope — pick exactly ONE:
 love | marriage | partner | couple | career | health | finance | education | children | property | travel | legal | vehicle | spiritual | self | family | general
 
 Scope rules:
 - couple = hum/ham dono, dono ke beech, between us (bond of TWO people)
-- partner = specific spouse/BF/GF/pati/patni/husband/wife subject
+- partner = specific spouse/BF/GF/pati/patni/husband/wife OR "kis tarah ka partner suit karega"
 - love = romance/pyaar/attachment without naming a partner person
 - marriage = shaadi/vivah/marriage quality or timing
 - self = only about native (mera/meri/main/mujhe — NOT partner)
 - career = job/naukri/business/promotion
-- health = sehat/bimari
+- health = sehat/bimari/doctor/hospital (NOT partner-fit questions)
 - finance = paisa/dhan/wealth/loss
 - general = vague or multi-domain overview only
 
-Rules for question_summary:
-- Read the FULL question carefully — every clause, every "aur/ya", every contrast (X ya Y).
-- If user asks 2–3 things, include ALL in one line (use commas or "aur").
-- 15–70 words, ONE line, paraphrase in your own words (not copy-paste only).
-- Fix spelling silently (shadii→shaadi, helth→health, nokri→naukri).
-- No planet/house/dasha jargon. No answer — only prove you understood.
+Rules for question_summary — THIS IS THE MAIN TASK:
+- Write 2–10 SHORT lines separated by newline (\\n). Plain Hinglish (Roman).
+- EXPLAIN what the user wants to know — their intent, subject, and contrast (X ya Y).
+- Do NOT repeat, quote, or copy-paste the question. Forbidden: starting with the same words as the question.
+- Forbidden: "User ne pucha ki…" / echoing the question back.
+- Good pattern:
+  Line 1: User kya jaanna chahta hai (core intent)
+  Line 2+: kaun sa area (partner/career/self), kis angle se (quality/timing/nature), koi choice/contrast
+- Fix typos silently in your understanding (shadii→shaadi) but do not mention spelling.
+- No planet/house/dasha jargon. No astrology answer — only prove you understood the ASK.
 - understood=false only for gibberish / empty / not a real question.
 
 Question:
 {question}"""
 
-_TIMEOUT_S = 12
+_TIMEOUT_S = 14
+
+
+def _echoes_question(summary: str, question: str) -> bool:
+    """True when summary is mostly a copy of the question — needs real explanation."""
+    s = " ".join((summary or "").split()).strip().lower()
+    q = " ".join((question or "").split()).strip().lower()
+    if not s or not q:
+        return True
+    if s == q:
+        return True
+    if len(q) >= 20 and (q in s or s in q):
+        return True
+    if len(q) >= 12 and (s.startswith(q[: min(len(q), 40)]) or q.startswith(s[: min(len(s), 40)])):
+        return True
+    q_words = [w for w in re.findall(r"[\w']+", q) if len(w) > 2]
+    s_words = set(re.findall(r"[\w']+", s))
+    if len(q_words) >= 4:
+        overlap = sum(1 for w in q_words if w in s_words) / len(q_words)
+        if overlap >= 0.72:
+            return True
+    return False
 
 
 def _summary_is_weak(summary: str, question: str) -> bool:
-    s = " ".join((summary or "").split()).strip().lower()
-    q = " ".join((question or "").split()).strip().lower()
-    if not s or len(s) < 12:
+    s = (summary or "").strip()
+    q = (question or "").strip()
+    if not s or len(s) < 24:
         return True
-    if s.startswith("user asked:"):
+    if _echoes_question(s, q):
         return True
-    # Structured regex paraphrase templates — always prefer dedicated understand LLM
-    if "user pooch raha hai kya unki kundli me sacha pyaar" in s:
+    if s.startswith("User asked:"):
         return True
-    if re.match(r"^user ka \w+ se related sawal:", s):
+    if "user pooch raha hai kya unki kundli me sacha pyaar" in s.lower():
         return True
-    # Regex fallback shape: "love: <verbatim question>"
-    if re.match(r"^(love|marriage|career|finance|health|education|children|property|travel|litigation|vehicle):\s+", s):
-        tail = re.sub(r"^(love|marriage|career|finance|health|education|children|property|travel|litigation|vehicle):\s+", "", s).strip()
-        if tail == q or q.startswith(tail) or tail.startswith(q[: min(len(q), len(tail))]):
-            return True
-    if q and (s == q or q.startswith(s) or s.startswith(q[: min(len(q), len(s))])):
-        # Near-verbatim echo — prefer LLM paraphrase for long questions
-        return len(q) > 80
-    # Long multi-part question but very short summary — re-ask understand LLM
-    if q and len(q) > 55:
-        q_parts = len(re.findall(r"(?ix)\b(aur|ya|or|and)\b", q))
-        if q_parts >= 1 and len(s) < len(q) * 0.45:
-            return True
+    if re.match(r"^user ka \w+ se related sawal:", s.lower()):
+        return True
+    if re.match(
+        r"^(love|marriage|career|finance|health|education|children|property|travel|litigation|vehicle):\s+",
+        s.lower(),
+    ):
+        return True
+    # Single line with no explanation depth
+    if "\n" not in s and len(s) < 50 and len(q) > 30:
+        return True
     return False
 
 
@@ -130,14 +151,14 @@ def llm_understand_question(
             messages=[{"role": "user", "content": _UNDERSTAND_PROMPT.format(question=q)}],
         )
         try:
-            resp = client.chat.completions.create(max_completion_tokens=240, **kwargs)
+            resp = client.chat.completions.create(max_completion_tokens=520, **kwargs)
         except TypeError:
-            resp = client.chat.completions.create(max_tokens=240, **kwargs)
+            resp = client.chat.completions.create(max_tokens=520, **kwargs)
         raw = (resp.choices[0].message.content or "").strip()
         data = json.loads(raw)
-        summary = str(data.get("question_summary") or "").strip()[:600]
+        summary = str(data.get("question_summary") or "").strip().replace("\\n", "\n")[:1800]
         scope = str(data.get("question_scope") or "").strip()
-        understood = bool(data.get("understood", True)) and bool(summary)
+        understood = bool(data.get("understood", True)) and bool(summary) and not _echoes_question(summary, q)
         return {
             "question_summary": summary,
             "question_scope": scope,
@@ -166,9 +187,9 @@ def ensure_question_understanding(
     """Guarantee question_summary + admin understanding lines on every Ask."""
     from ask_intent_fidelity import (
         build_llm_understood_one_liner,
+        build_question_explanation_fallback,
         build_question_understanding_detail,
         infer_question_scope,
-        summarize_question_one_line,
     )
 
     q = (question or "").strip()
@@ -198,14 +219,14 @@ def ensure_question_understanding(
                 out["understand_latency_ms"] = extra["latency_ms"]
 
     if not str(out.get("question_summary") or "").strip():
-        fallback = summarize_question_one_line(q, out, with_scope=False)
+        fallback = build_question_explanation_fallback(q, out)
         _apply_understanding_fields(
             out,
             q,
             summary=fallback,
             scope=infer_question_scope(q, out),
         )
-        out["understanding_source"] = "regex_paraphrase"
+        out["understanding_source"] = "regex_explain"
     elif not str(out.get("question_meaning") or "").strip():
         _apply_understanding_fields(
             out,
@@ -226,13 +247,16 @@ def ensure_question_understanding(
 
 def narrator_intent_hint(question: str, llm_intent: dict[str, Any] | None = None) -> str:
     """Prompt block: LLM must answer this exact understood ask."""
-    from ask_intent_fidelity import summarize_question_one_line
+    from ask_intent_fidelity import format_question_understanding, infer_question_scope, strip_scope_bracket
 
     q = (question or "").strip()
-    summary = summarize_question_one_line(q, llm_intent, with_scope=True)
-    if not summary:
+    li = llm_intent if isinstance(llm_intent, dict) else {}
+    body = strip_scope_bracket(str(li.get("question_summary") or "").strip())
+    if not body:
         return f'User asked: "{q}"'
+    scope = infer_question_scope(q, li)
+    summary = format_question_understanding(scope, body)
     return (
-        f"USER ASKED (answer THIS exact concern — do not drift to other topics): "
+        f"USER ASKED (answer THIS exact concern — do not drift to other topics):\n"
         f"{summary}"
     )

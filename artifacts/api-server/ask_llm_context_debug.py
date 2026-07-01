@@ -469,7 +469,7 @@ def build_admin_llm_context(
         "question_raw": (_raw[:2000] if _raw else None),
         "question_normalized": (_norm[:2000] if _typo_corrected else None),
         "question_meaning": (
-            str(_intent.get("question_meaning") or _meaning or "").strip()[:600] or None
+            str(_intent.get("question_meaning") or _meaning or "").strip()[:2000] or None
         ),
         "question_scope": (
             str(_intent.get("question_scope") or "").strip().lower() or None

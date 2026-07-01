@@ -7387,6 +7387,11 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
     if _is_gap_static and isinstance(dcr_love_meta, dict):
         _gap_conf = str(dcr_love_meta.get("confidence") or "medium").strip().lower()
+        _gap_conf_line = (
+            "positive framing per VERDICT is OK.\n"
+            if _gap_conf == "high"
+            else "no enthusiastic Haan/strong/balance unless VERDICT itself says strong.\n"
+        )
         extra_rules += (
             "\n\n=== ENGINE VERDICT LOCK (gap static — mandatory) ===\n"
             "CHART FACTS contain ARCHETYPE + VERDICT + CONFIDENCE from a deterministic engine.\n"
@@ -7394,12 +7399,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             "verdicts to 'strong', 'acha balance', 'pakka', or 'guaranteed awakening'.\n"
             "• VERDICT with 'mixed' → qualified haan only "
             "(e.g. 'Haan, yog dikhte hain lekin abhi mixed phase — seeking aur grounding dono').\n"
-            f"• CONFIDENCE={_gap_conf} → "
-            + (
-                "positive framing per VERDICT is OK.\n"
-                if _gap_conf == "high"
-                else "no enthusiastic Haan/strong/balance unless VERDICT itself says strong.\n"
-            )
+            f"• CONFIDENCE={_gap_conf} → {_gap_conf_line}"
             "• Yes/no 'kya' questions: 2 short sentences max — verdict + one evidence reason.\n"
             "• This block overrides generic empathy/positivity rules that would oversell.\n"
         )

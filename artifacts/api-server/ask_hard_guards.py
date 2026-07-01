@@ -77,6 +77,19 @@ CONTROLLED_LLM_FALLBACK_RULE = (
     "- Tone: confident Hinglish, ~80–120 words unless the user asked for more detail.\n"
 )
 
+# When a mandatory domain (love/career/health…) was understood but the engine
+# produced no structured facts, allow a tight D1+D9 chart read — not a hard refuse.
+DOMAIN_CHART_FALLBACK_RULE = (
+    "\n\n=== DOMAIN CHART FALLBACK (engine facts missing; D1+D9 chart only) ===\n"
+    "Structured engine facts are absent — answer ONLY from the D1+D9 chart below.\n"
+    "- Stay EXACTLY on the user's question; give a clear yes / no / mixed leaning.\n"
+    "- Cite 2–4 relevant chart factors only (houses, lords, Venus/Moon/Jupiter etc.).\n"
+    "- NO invented dates, names, or guaranteed betrayal/loyalty/career outcomes.\n"
+    "- Love/trust/betrayal Qs: weigh 5H romance, 7H partnership, Venus, Moon, "
+    "8H/12H stress — nuanced mixed tone, not fear-mongering.\n"
+    "- Tone: confident Hinglish, ~80–130 words unless the user asked for more detail.\n"
+)
+
 _MANDATORY_LLM_DOMAINS = frozenset({
     "marriage",
     "love",
@@ -422,6 +435,28 @@ def mandatory_static_domain_detected(
     return False
 
 
+def mandatory_domain_chart_fallback_eligible(
+    question: str,
+    llm_intent: dict[str, Any] | None = None,
+    *,
+    qtype: str = "STATIC",
+    checks: dict[str, Any] | None = None,
+) -> bool:
+    """Understood mandatory-domain Q with no engine facts — allow D1+D9 chart+LLM."""
+    if not _controlled_fallback_enabled():
+        return False
+    if str(qtype or "").upper() == "TIMING":
+        return False
+    if (llm_intent or {}).get("is_timing"):
+        return False
+    summary = str((llm_intent or {}).get("question_summary") or "").strip()
+    if not summary:
+        return False
+    if not mandatory_static_domain_detected(question, llm_intent, checks):
+        return False
+    return True
+
+
 def controlled_llm_fallback_eligible(
     question: str,
     llm_intent: dict[str, Any] | None = None,
@@ -529,6 +564,13 @@ def enforce_engine_only_or_refuse(
         except Exception:
             pass
         if controlled_llm_fallback_eligible(
+            question,
+            llm_intent,
+            qtype=qtype,
+            checks=checks,
+        ):
+            return None
+        if mandatory_domain_chart_fallback_eligible(
             question,
             llm_intent,
             qtype=qtype,

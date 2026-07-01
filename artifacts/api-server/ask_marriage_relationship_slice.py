@@ -55,7 +55,7 @@ _MR_DOMAIN_RX = re.compile(
     r"saas|sasur|sasural|in[\s-]?laws?|mother[\s-]?in[\s-]?law|father[\s-]?in[\s-]?law|"
     r"mangetar|fianc|arranged?|love\s*marriage|"
     r"manglik|mangal\s*dosh|inter[\s-]?caste|intercaste|"
-    r"affair|cheat|dhokha|loyal|faithful|trust|vishwas|wafad|vafad|"
+    r"affair|cheat|dhokha|dhoka|loyal|faithful|trust|vishwas|wafad|vafad|"
     r"intimacy|intimate|attachment|attach|emotional|attraction|chemistry|"
     r"patchup|patch\s*up|ek\s*tarfa|one\s*sided|"
     r"jeevan\s*sathi|jeevansathi|jeevansaathi|kalatra|"

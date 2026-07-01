@@ -263,6 +263,55 @@ class TestEngineOnlyPolicy(unittest.TestCase):
         self.assertIsNotNone(out)
         self.assertEqual(out["source"], "engine_required")
 
+    def test_enforce_allows_love_chart_fallback_when_understood(self):
+        from ask_hard_guards import (
+            enforce_engine_only_or_refuse,
+            mandatory_domain_chart_fallback_eligible,
+        )
+
+        q = "Kya mujhse love life me dhoka milega ya dhoka nehi milega"
+        llm = {
+            "domain": "love",
+            "is_timing": False,
+            "question_summary": "User wants to know if betrayal will happen in love life",
+        }
+        self.assertTrue(
+            mandatory_domain_chart_fallback_eligible(
+                q,
+                llm,
+                checks={"is_mr_static": False, "slice_type": "full_compact"},
+            )
+        )
+        out = enforce_engine_only_or_refuse(
+            question=q,
+            qtype="STATIC",
+            llm_intent=llm,
+            checks={"is_mr_static": False, "slice_type": "full_compact"},
+            slice_meta={},
+        )
+        self.assertIsNone(out)
+
+    def test_enforce_blocks_love_without_question_summary(self):
+        from ask_hard_guards import enforce_engine_only_or_refuse
+
+        q = "Kya mujhse love life me dhoka milega ya dhoka nehi milega"
+        llm = {"domain": "love", "is_timing": False}
+        out = enforce_engine_only_or_refuse(
+            question=q,
+            qtype="STATIC",
+            llm_intent=llm,
+            checks={"is_mr_static": False, "slice_type": "full_compact"},
+            slice_meta={},
+        )
+        self.assertIsNotNone(out)
+        self.assertEqual(out["source"], "engine_required")
+
+    def test_mr_static_detects_dhoka_roman(self):
+        from ask_marriage_relationship_slice import is_marriage_relationship_static_question
+
+        q = "Kya mujhse love life me dhoka milega ya dhoka nehi milega"
+        self.assertTrue(is_marriage_relationship_static_question(q))
+
     def test_enforce_allows_health_engine_slice(self):
         from ask_hard_guards import enforce_engine_only_or_refuse
 

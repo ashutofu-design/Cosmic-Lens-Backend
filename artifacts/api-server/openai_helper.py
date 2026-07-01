@@ -5392,6 +5392,19 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _is_health_static = True
             if _dom == "finance":
                 _is_finance_static = True
+            try:
+                from ask_marriage_relationship_slice import (  # type: ignore
+                    is_marriage_relationship_static_question,
+                )
+
+                if is_marriage_relationship_static_question(question or ""):
+                    _is_mr_static = True
+            except Exception:
+                pass
+            if isinstance(_llm_intent_admin, dict):
+                _adm_dom_mr = str(_llm_intent_admin.get("domain") or "").strip().lower()
+                if _adm_dom_mr in {"marriage", "love"}:
+                    _is_mr_static = True
         else:
             try:
                 from ask_marriage_relationship_slice import (  # type: ignore
@@ -7584,6 +7597,78 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         is_sensitive=is_sensitive,
     )
 
+    # ── Last-chance MR engine when love/relationship Q understood but engine skipped ─
+    try:
+        from ask_hard_guards import passthrough_has_domain_engine_facts as _pre_eng_has_facts_fn
+
+        _pre_eng_slice = dcr_love_meta if isinstance(dcr_love_meta, dict) else {}
+        _pre_eng_has_facts = _pre_eng_has_facts_fn(
+            checks={
+                "is_mr_static": bool(_is_mr_static),
+                "slice_type": _chart_slice_type,
+            },
+            slice_meta=_pre_eng_slice,
+            marriage_block=marriage_block or "",
+            career_block=career_block or "",
+            domain_timing_block=domain_timing_block or "",
+        )
+        _mr_recovery = False
+        if not _pre_eng_has_facts and not is_timing:
+            try:
+                from ask_marriage_relationship_slice import (  # type: ignore
+                    is_marriage_relationship_static_question,
+                )
+
+                _mr_recovery = bool(
+                    _is_mr_static
+                    or is_marriage_relationship_static_question(question or "")
+                    or str(
+                        (_llm_intent_admin or {}).get("domain") or ""
+                    ).strip().lower()
+                    in {"marriage", "love"}
+                )
+            except Exception:
+                _mr_recovery = bool(_is_mr_static)
+        if _mr_recovery and (os.environ.get("ASK_MR_ENGINE") or "1").strip() != "0":
+            from ask_mr import run_mr_static_engine  # type: ignore
+
+            _mr_rec_result = run_mr_static_engine(
+                kundli if isinstance(kundli, dict) else {},
+                question or "",
+                birth=birth,
+                wants_explain=wants_explain,
+                archetype=_mr_archetype_override,
+            )
+            if _mr_rec_result.archetype == "partner_nature":
+                from ask_mr.engines.partner_nature import partner_nature_narrator_payload
+
+                chart_text = partner_nature_narrator_payload(_mr_rec_result)
+            else:
+                chart_text = _mr_rec_result.to_narrator_payload()
+            dcr_love_meta = {
+                "slice": "mr_engine_v1",
+                "topic": "marriage_and_relationship",
+                "archetype": _mr_rec_result.archetype,
+                "verdict": _mr_rec_result.verdict,
+                "summary": list(_mr_rec_result.summary or []),
+                "evidence": list(_mr_rec_result.evidence or []),
+                "ignore": list(_mr_rec_result.ignore or []),
+                "checks": dict(_mr_rec_result.checks or {}),
+                "skip_llm": bool(_mr_rec_result.skip_llm),
+                "word_budget": int(_mr_rec_result.word_budget or 55),
+                "narrator_mode": "engine_facts_only",
+            }
+            _is_mr_static = True
+            _chart_slice_type = "mr_engine_v1"
+            print(
+                f"[raw_passthrough] MR_ENGINE_RECOVERY "
+                f"archetype={_mr_rec_result.archetype} "
+                f"evidence={len(_mr_rec_result.evidence or [])}",
+                flush=True,
+            )
+    except Exception as _mr_rec_exc:
+        print(f"[raw_passthrough] MR_ENGINE_RECOVERY skipped: {_mr_rec_exc}", flush=True)
+
     # ── Engine-only policy: block direct LLM (chart-only, no domain engine) ─
     try:
         from ask_hard_guards import direct_llm_allowed, enforce_engine_only_or_refuse
@@ -7643,7 +7728,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             )
         from ask_hard_guards import (  # type: ignore
             CONTROLLED_LLM_FALLBACK_RULE,
+            DOMAIN_CHART_FALLBACK_RULE,
             controlled_llm_fallback_eligible,
+            mandatory_domain_chart_fallback_eligible,
             passthrough_has_domain_engine_facts,
         )
 
@@ -7654,9 +7741,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             career_block=career_block or "",
             domain_timing_block=domain_timing_block or "",
         )
+        _fallback_intent = (
+            _llm_intent_admin if isinstance(_llm_intent_admin, dict) else _llm_intent
+        )
         if not _has_engine_facts and controlled_llm_fallback_eligible(
             question or "",
-            _llm_intent if isinstance(_llm_intent, dict) else None,
+            _fallback_intent if isinstance(_fallback_intent, dict) else None,
             qtype=qtype,
             checks=_eng_checks,
         ):
@@ -7666,6 +7756,28 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _eng_checks["slice_type"] = "controlled_fallback_v1"
             print(
                 f"[raw_passthrough] CONTROLLED_LLM_FALLBACK "
+                f"q={(question or '')[:60]!r}",
+                flush=True,
+            )
+        elif not _has_engine_facts and mandatory_domain_chart_fallback_eligible(
+            question or "",
+            _fallback_intent if isinstance(_fallback_intent, dict) else None,
+            qtype=qtype,
+            checks=_eng_checks,
+        ):
+            if not (chart_text or "").strip() or "=== D1" not in (chart_text or "")[:400]:
+                chart_text = _raw_compact_chart(
+                    kundli,
+                    include_dasha=False,
+                    static_dasha_hint=bool(static_dasha_hint),
+                )
+            extra_rules = (extra_rules or "") + DOMAIN_CHART_FALLBACK_RULE
+            _eng_checks["controlled_llm_fallback"] = True
+            _eng_checks["mandatory_domain_chart_fallback"] = True
+            _eng_checks["narrator_mode"] = "mandatory_domain_chart_fallback"
+            _eng_checks["slice_type"] = "controlled_fallback_v1"
+            print(
+                f"[raw_passthrough] MANDATORY_DOMAIN_CHART_FALLBACK "
                 f"q={(question or '')[:60]!r}",
                 flush=True,
             )

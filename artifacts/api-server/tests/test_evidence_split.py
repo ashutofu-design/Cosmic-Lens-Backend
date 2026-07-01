@@ -69,6 +69,18 @@ class EvidenceSplitTests(unittest.TestCase):
         inst = narrator_balance_instruction([], ["a", "b", "c"])
         self.assertIn("STRICT", inst)
 
+    def test_house_axis_mixed_occupants_stays_neutral(self):
+        line = (
+            "Romance/dating axis (5th house): house 5 sign Aries; lord Mars in house 1 "
+            "sign Sagittarius (dignity neutral); occupants=['Jupiter', 'Saturn']; "
+            "malefics in house=['Saturn']."
+        )
+        self.assertEqual(classify_evidence_line(line), "neutral")
+
+    def test_house_axis_malefic_only_is_negative(self):
+        line = "5th house: occupants=['Saturn']; malefics in house=['Saturn']."
+        self.assertEqual(classify_evidence_line(line), "negative")
+
     def test_balance_mixed_when_both_sides(self):
         inst = narrator_balance_instruction(["a", "b"], ["x", "y"])
         self.assertIn("MIXED", inst)

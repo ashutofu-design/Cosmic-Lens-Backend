@@ -11,7 +11,7 @@ from ._person_signals import build_person_signals, pick_notes
 
 
 def _detect_focus(q: str) -> str:
-    if re.search(r"(?ix)\b(true\s*love|sachcha\s*pyaar|sachchi\s*mohabbat)\b", q):
+    if re.search(r"(?ix)\b(true\s*love|sach+a\s*pyaar|sachchi\s*mohabbat)\b", q):
         return "true_love"
     if re.search(r"(?ix)\b(friend\s*to\s*lover|dost\s*se\s*pyaar|friend\s*se\s*love)\b", q):
         return "friend_to_lover"
@@ -60,6 +60,10 @@ def run_dating_courtship(kundli: dict, question: str, *, wants_explain: bool = F
         if jup.get("house") in (5, 7, 9):
             evidence.append(
                 f"Jupiter in house {jup.get('house')} — dharmic true love; bond grows with trust and blessing."
+            )
+        if "Jupiter" in occ5:
+            evidence.append(
+                "Benefic Jupiter in 5th house — growth-oriented romance; strong true-love support on romance axis."
             )
         sat = r.planet("Saturn") or {}
         if sat.get("house") == 5:

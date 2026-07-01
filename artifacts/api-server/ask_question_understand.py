@@ -35,6 +35,11 @@ def _summary_is_weak(summary: str, question: str) -> bool:
         return True
     if s.startswith("user asked:"):
         return True
+    # Structured regex paraphrase templates — always prefer dedicated understand LLM
+    if "user pooch raha hai kya unki kundli me sacha pyaar" in s:
+        return True
+    if re.match(r"^user ka \w+ se related sawal:", s):
+        return True
     # Regex fallback shape: "love: <verbatim question>"
     if re.match(r"^(love|marriage|career|finance|health|education|children|property|travel|litigation|vehicle):\s+", s):
         tail = re.sub(r"^(love|marriage|career|finance|health|education|children|property|travel|litigation|vehicle):\s+", "", s).strip()
@@ -146,7 +151,10 @@ def ensure_question_understanding(
 
     if not str(out.get("question_summary") or "").strip():
         out["question_summary"] = summarize_question_one_line(q, out)
-        out.setdefault("understanding_source", "regex_fallback")
+        out["understanding_source"] = "regex_paraphrase"
+    elif not str(out.get("understanding_source") or "").strip():
+        # Never copy intent routing `source` (e.g. regex_fallback) into understanding_source
+        out["understanding_source"] = "regex_paraphrase"
 
     out["interpretation"] = out.get("interpretation") or f'User asked: "{q}"'
     out["question_echo"] = q

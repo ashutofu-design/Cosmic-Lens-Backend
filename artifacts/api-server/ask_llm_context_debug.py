@@ -346,7 +346,7 @@ def build_admin_llm_context(
         _intent = ensure_question_understanding(
             question_normalized or question or "",
             _intent,
-            force_llm=False,
+            force_llm=True,
             question_raw=question_raw or str(_intent.get("question_raw") or question or ""),
         )
     except Exception:

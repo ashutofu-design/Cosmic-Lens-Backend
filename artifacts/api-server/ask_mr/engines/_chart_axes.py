@@ -60,16 +60,25 @@ def dignity_word(reader: KundliReader, planet: str, sign: str | None) -> str:
     if not sign:
         return "neutral"
     try:
-        d = reader.dignity(planet, reader.sidx(sign))
+        si = reader.sidx(sign)
+        d = reader.dignity(planet, si)
+        if d == 2:
+            return "exalted"
+        if d == -2:
+            return "debilitated"
+        if d == -1:
+            return "enemy-sign"
+        if d >= 1:
+            return "own-sign"
+        try:
+            from vedic.compat.d9_marriage import _dignity as _full_dignity, _dignity_word
+
+            fd = _full_dignity(planet, si)
+            return _dignity_word(fd)
+        except Exception:
+            return "neutral"
     except Exception:
         return "neutral"
-    if d is None:
-        return "neutral"
-    if d >= 1:
-        return "strong"
-    if d < 0:
-        return "weak"
-    return "neutral"
 
 
 def d9_reader(kundli: dict) -> KundliReader | None:

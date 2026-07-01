@@ -22,8 +22,11 @@ _POSITIVE_RX = re.compile(
     r")\b"
 )
 
-# House-axis lines with malefics listed → negative tilt
+# House-axis lines with malefics only (no benefic co-tenant) → negative tilt
 _MALEFIC_IN_LINE_RX = re.compile(r"(?ix)malefics?\s+in\s+house\s*=\s*\[.+\]")
+_BENEFIC_OCCUPANT_RX = re.compile(
+    r"(?ix)occupants=\[[^\]]*?\b(Jupiter|Venus|Moon|Mercury)\b"
+)
 
 
 def classify_evidence_line(line: str) -> str:
@@ -34,14 +37,16 @@ def classify_evidence_line(line: str) -> str:
     low = t.lower()
     if low.startswith("love challenge:") or low.startswith("red flag"):
         return "negative"
-    if _NEGATIVE_RX.search(t) or _MALEFIC_IN_LINE_RX.search(t):
-        return "negative"
-    if "dignity debilitated" in low or "dignity enemy" in low:
-        return "negative"
     if _POSITIVE_RX.search(t):
         return "positive"
     if "dignity exalted" in low or "dignity own-sign" in low:
         return "positive"
+    if _MALEFIC_IN_LINE_RX.search(t) and not _BENEFIC_OCCUPANT_RX.search(t):
+        return "negative"
+    if _NEGATIVE_RX.search(t):
+        return "negative"
+    if "dignity debilitated" in low or "dignity enemy" in low:
+        return "negative"
     return "neutral"
 
 

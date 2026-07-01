@@ -158,6 +158,8 @@ def classify_and_route_ask(
         )
     except Exception:
         pass
+    # Keep intent routing source on llm_intent fields, not as understanding provenance
+    admin.pop("source", None)
 
     admin["routed_domain"] = res.get("domain")
     admin["routed_archetype"] = (

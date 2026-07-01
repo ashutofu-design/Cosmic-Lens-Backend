@@ -102,6 +102,9 @@ def classify_mr_archetype(question: str) -> str:
 
 
     # --- Love language / affection style (native or partner) ---
+    if re.search(r"\b(love\s*style|love\s*language|affection\s*style)\b", q):
+        return "partner_nature"
+
     if re.search(r"\b(love\s*language|care\s*dikhane|affection\s*style)\b", q):
         return "partner_nature"
 

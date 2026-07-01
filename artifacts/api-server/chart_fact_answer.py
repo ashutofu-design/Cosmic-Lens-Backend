@@ -111,11 +111,20 @@ _CHART_LOOKUP_RX = re.compile(
     re.I,
 )
 _INTERPRET_RX = re.compile(
-    r"\b(result|matlab|meaning|impact|effect|phala|fal|"
-    r"kya\s+(?:hoga|hogi|hoti|hote)|kaise\s+(?:affect|prabhav)|"
+    r"\b(result|matlab|meaning|impact|effect|affect|phala|fal|"
+    r"kya\s+(?:hoga|hogi|hoti|hote)|kaise\s+(?:affect|prabhav|kar)|"
+    r"style|influence|farak|"
     r"dikkat|problem|issue|accha|bura|lucky|unlucky|"
     r"good|bad|favourable|favorable)\b",
     re.I,
+)
+_DOMAIN_LIFE_INTERPRET_RX = re.compile(
+    r"(?ix)\b("
+    r"love\s*style|love\s*language|affection\s*style|pyaar|pyar|prem|love|romance|"
+    r"relationship|rishta|partner|spouse|emotional|attachment|mohabbat|dating|crush|"
+    r"career|naukri|job|business|wealth|dhan|paisa|money|"
+    r"health|sehat|marriage|shaadi|personality|svabhav|nature|affection"
+    r")\b",
 )
 _DIV_CHART_MAP = {
     "d1": "D1",
@@ -191,6 +200,24 @@ def is_domain_outcome_yoga_question(question: str) -> bool:
             return True
     except Exception:
         pass
+    return False
+
+
+def is_domain_life_area_interpretation_question(question: str) -> bool:
+    """Placement + love/career/etc meaning — MR/love engines + LLM, not chart_fact."""
+    q = normalize_ask_typos((question or "").strip())
+    if not q or not _DOMAIN_LIFE_INTERPRET_RX.search(q):
+        return False
+    if re.search(
+        r"(?ix)\b(love\s*style|love\s*language|affection\s*style|"
+        r"kaise\s+(?:affect|prabhav|kar)|style\s+ko)\b",
+        q,
+    ):
+        return True
+    if is_chart_interpretation_question(q):
+        return True
+    if re.search(r"(?ix)\b(affect|prabhav|impact|influence|farak)\b", q):
+        return True
     return False
 
 
@@ -284,6 +311,8 @@ def is_chart_lookup_question(question: str) -> bool:
     if not q or len(q.split()) > 18:
         return False
     if is_domain_outcome_yoga_question(q):
+        return False
+    if is_domain_life_area_interpretation_question(q):
         return False
     # Love / vehicle / career timing must not be mis-routed as chart yoga lookup.
     for _mod, _fn in (
@@ -682,6 +711,9 @@ def try_deterministic_chart_fact(
 
     q = normalize_ask_typos(question or "")
     lang_use = lang if lang in ("hi", "hn", "en") else "hn"
+
+    if is_domain_life_area_interpretation_question(q):
+        return None
 
     local_tag = _detect_local_lookup_tag(q)
     it = local_tag or ""

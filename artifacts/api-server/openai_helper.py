@@ -5210,6 +5210,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         from chart_fact_answer import (
             try_deterministic_chart_fact,
             is_chart_lookup_question,
+            is_domain_life_area_interpretation_question,
             is_domain_outcome_yoga_question,
             chart_lookup_refusal_payload,
         )
@@ -5217,6 +5218,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         if is_domain_outcome_yoga_question(question):
             print(
                 f"[raw_passthrough] chart_fact skipped — domain outcome yoga "
+                f"q={(question or '')[:72]!r}",
+                flush=True,
+            )
+        elif is_domain_life_area_interpretation_question(question):
+            print(
+                f"[raw_passthrough] chart_fact skipped — domain life interpretation "
                 f"q={(question or '')[:72]!r}",
                 flush=True,
             )

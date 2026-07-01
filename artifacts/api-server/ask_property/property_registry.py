@@ -37,7 +37,7 @@ _STRONG_PROPERTY_RX = re.compile(
     r"property|real\s*estate|ghar|makaan|makan|plot|zameen|zamin|jamin|jameen|"
     r"land|flat|apartment|home|house|villa|bungalow|kothi|haveli|"
     r"griha|paitrik|sampatti|sampada|registry|vastu|"
-    r"mamle|parivaar|dhoka|dushman|compromise|police|afsar"
+    r"mamle|parivaar|dushman|compromise|police|afsar"
     r")\b"
 )
 
@@ -82,7 +82,9 @@ _RISK_RX = re.compile(
     r"legal\s+(?:risk|issue|problem|locha)|documentation|title\s+clear|"
     r"dispute\s+risk|risk\s+in\s+property|nuksan\s+property|"
     r"property\s+safe|ghar\s+safe|"
-    r"fraud|dhoka|broker|over[\s-]?priced|genuine\s+buyer|"
+    r"fraud|broker|over[\s-]?priced|genuine\s+buyer|"
+    r"(?:property|ghar|makaan|plot|zameen|broker|deal|registry).{0,30}dhok|"
+    r"dhok.{0,30}(?:property|ghar|makaan|plot|broker|deal|registry)|"
     r"deal\s+cancel|token\s+money|bayaana|paisa\s+phans|"
     r"registry\s+ke\s+paper|paper\s+me\s+koi"
     r")\b"
@@ -216,6 +218,39 @@ _LAND_RX = re.compile(
 )
 
 
+def _property_blocked_by_love_mr(question: str) -> bool:
+    """Love/relationship loyalty Qs must not hijack property engine (bare dhoka)."""
+    q = (question or "").strip()
+    if not q:
+        return False
+    try:
+        from ask_love.timing_registry import is_love_static_loyalty_question  # type: ignore
+
+        if is_love_static_loyalty_question(q):
+            return True
+    except Exception:
+        pass
+    if not re.search(
+        r"(?ix)\b(love|pyaar|pyar|prem|relationship|partner|boyfriend|girlfriend|"
+        r"crush|rishta|love\s*life)\b",
+        q,
+    ):
+        return False
+    if re.search(
+        r"(?ix)\b(property|ghar|makaan|plot|zameen|zamin|broker|registry|flat|land|deal)\b",
+        q,
+    ):
+        return False
+    try:
+        from ask_marriage_relationship_slice import (  # type: ignore
+            is_marriage_relationship_static_question,
+        )
+
+        return bool(is_marriage_relationship_static_question(q))
+    except Exception:
+        return False
+
+
 def is_property_money_only_question(question: str) -> bool:
     q = (question or "").strip().lower()
     if not q or not _STRONG_PROPERTY_RX.search(q):
@@ -234,6 +269,8 @@ def is_property_money_only_question(question: str) -> bool:
 def is_property_static_question(question: str) -> bool:
     q = (question or "").strip()
     if not q:
+        return False
+    if _property_blocked_by_love_mr(q):
         return False
     try:
         from property_static.property_routing import (
@@ -264,6 +301,8 @@ def is_property_static_question(question: str) -> bool:
 def detect_property_archetype(question: str) -> str | None:
     q = (question or "").strip().lower()
     if not q:
+        return None
+    if _property_blocked_by_love_mr(q):
         return None
     if is_property_money_only_question(q):
         return None

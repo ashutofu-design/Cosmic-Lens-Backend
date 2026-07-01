@@ -60,6 +60,24 @@ class TestLoveStaticLoyaltyRouting(unittest.TestCase):
         )
         self.assertIsNone(out)
 
+    def test_betrayal_not_property_engine(self):
+        from ask_property.property_registry import (
+            detect_property_archetype,
+            is_property_static_question,
+        )
+
+        self.assertFalse(is_property_static_question(_BETRAYAL_Q))
+        self.assertIsNone(detect_property_archetype(_BETRAYAL_Q))
+
+    def test_broker_property_dhoka_still_property(self):
+        from ask_property.property_registry import detect_property_archetype
+
+        q = (
+            "Broker mujhe dhoka toh nahi de raha? "
+            "Property ke rates sahi hain ya over-priced hain?"
+        )
+        self.assertEqual(detect_property_archetype(q), "property_risk")
+
 
 if __name__ == "__main__":
     unittest.main()

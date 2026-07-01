@@ -5866,6 +5866,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             is_timing = False
             qtype = "STATIC"
             _is_mr_static = True
+            _is_property_static = False
             print(
                 f"[raw_passthrough] LOVE_STATIC_LOYALTY → MR static "
                 f"q={(question or '')[:60]!r}",
@@ -5886,6 +5887,17 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _is_health_static = False
             _is_vehicle_static = False
             _force_health_static = False
+    except Exception:
+        pass
+    # MR / love loyalty beats property when LLM mis-routes (e.g. dhoka → property_risk).
+    try:
+        from ask_love.timing_registry import is_love_static_loyalty_question  # type: ignore
+
+        if _is_mr_static or is_love_static_loyalty_question(question or ""):
+            _is_mr_static = True
+            _is_property_static = False
+            is_timing = False
+            qtype = "STATIC"
     except Exception:
         pass
     # Sensitive Qs ALSO need current dasha so the LLM has a real reason

@@ -4,6 +4,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+_RECIPROCITY_DIRECT_ANSWER_ARCHETYPES = frozenset({
+    "one_sided_love",
+    "emotional_attachment",
+})
+
+
 @dataclass
 class EngineResult:
     """Deterministic engine output for MR non-timing questions."""
@@ -50,6 +56,26 @@ class EngineResult:
             "NO shayad/ho sakta hai/lagta hai."
         )
 
+    def _direct_answer_opening_block(self) -> str | None:
+        """Love reciprocity Qs — sentence 1 must answer haan/naa/mixed directly."""
+        checks = self.checks or {}
+        arch = (self.archetype or "").strip().lower()
+        if arch not in _RECIPROCITY_DIRECT_ANSWER_ARCHETYPES and not checks.get(
+            "reciprocity_question"
+        ):
+            return None
+        return (
+            "OPENING_LOCK (reciprocity): Line 1 = direct answer to 'kya wo bhi utna pyaar "
+            "karti/karta hai' — pick ONE: "
+            "'Haan, lekin abhi utna gehra/barabar nahi' OR "
+            "'Nahi / kam — abhi one-sided zyada lagta hai' OR "
+            "'Mixed — pyaar hai lekin barabari mein delay'. "
+            "Must match VERDICT strength (never stronger). "
+            "Line 2 = exactly ONE chart reason from evidence. "
+            "Line 3 = one short practical line (clarity/boundaries). "
+            "Max 3 sentences. NO dasha dates/timing."
+        )
+
     def _finalize_evidence_split(self) -> tuple[list[str], list[str], list[str]]:
         from .engines._evidence_split import split_evidence_polarity
 
@@ -77,6 +103,9 @@ class EngineResult:
                 "Use POSITIVE + NEGATIVE evidence lists below — never ignore afflictions."
             ),
         ]
+        direct = self._direct_answer_opening_block()
+        if direct:
+            lines.append(direct)
         checks = self.checks or {}
         if checks.get("love_score") is not None:
             lines.append(

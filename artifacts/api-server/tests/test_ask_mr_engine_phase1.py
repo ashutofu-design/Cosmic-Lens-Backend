@@ -107,6 +107,15 @@ class MrEngineTests(unittest.TestCase):
         res = run_mr_static_engine(SAMPLE_KUNDLI, "kya yeh ek tarfa pyar hai?", wants_explain=False)
         self.assertEqual(res.archetype, "one_sided_love")
 
+    def test_one_sided_reciprocity_narrator_opening_lock(self):
+        q = "Main jisse pyaar karta hu, kya wo bhi dil se mujhse utna hi pyaar karti hai"
+        res = run_mr_static_engine(SAMPLE_KUNDLI, q, wants_explain=False)
+        self.assertEqual(res.archetype, "one_sided_love")
+        self.assertTrue(res.checks.get("reciprocity_question"))
+        payload = res.to_narrator_payload()
+        self.assertIn("OPENING_LOCK (reciprocity)", payload)
+        self.assertNotIn("dasha", payload.lower())
+
     def test_secret_relationship(self):
         res = run_mr_static_engine(SAMPLE_KUNDLI, "kya chhupa rishta chal raha hai?", wants_explain=False)
         self.assertEqual(res.archetype, "secret_relationship")

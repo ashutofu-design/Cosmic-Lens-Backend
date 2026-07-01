@@ -124,6 +124,36 @@ def apply_partner_relationship_static_flags(
     return is_mr_static, is_health_static
 
 
+def apply_love_life_area_static_flags(
+    question: str,
+    *,
+    is_mr_static: bool,
+    is_health_static: bool,
+    llm_intent: dict[str, Any] | None = None,
+) -> tuple[bool, bool]:
+    """Love/career meaning from placement — MR on, health off (not skin_health)."""
+    try:
+        from chart_fact_answer import is_domain_life_area_interpretation_question
+        from ask_mr.classifier import classify_mr_archetype
+
+        if is_domain_life_area_interpretation_question(question or ""):
+            if isinstance(llm_intent, dict):
+                llm_intent["health_archetype"] = None
+                dom = str(llm_intent.get("domain") or "").strip().lower()
+                if dom in ("", "general", "health"):
+                    llm_intent["domain"] = "love"
+                llm_intent["mr_archetype"] = (
+                    llm_intent.get("mr_archetype")
+                    or classify_mr_archetype(question or "")
+                    or "partner_nature"
+                )
+                llm_intent["is_timing"] = False
+            return True, False
+    except Exception:
+        pass
+    return is_mr_static, is_health_static
+
+
 def apply_pre_route_guards(
     flags: dict[str, bool],
     question: str,
@@ -157,6 +187,16 @@ def apply_pre_route_guards(
                 notes.append(f"{wrong}:suppressed_partner_relationship")
         out["mr"] = True
         notes.append("mr:forced_partner_relationship")
+
+    try:
+        from chart_fact_answer import is_domain_life_area_interpretation_question
+
+        if is_domain_life_area_interpretation_question(question):
+            out["health"] = False
+            out["mr"] = True
+            notes.append("mr:love_life_area_interpretation")
+    except Exception:
+        pass
 
     if _NATIVE_SELF_FOCUS_RX.search(question or "") and not _PARTNER_SUBJECT_RX.search(question or ""):
         if out.get("mr") and not out.get("gap"):
@@ -259,6 +299,22 @@ def verify_static_engine_selection(
             mr_archetype=suggest_mr_archetype_for_question(q) or "partner_nature",
             failed_checks=failed,
         )
+
+    try:
+        from chart_fact_answer import is_domain_life_area_interpretation_question
+
+        if engine_key == "health" and is_domain_life_area_interpretation_question(q):
+            from ask_mr.classifier import classify_mr_archetype
+
+            return EngineVerificationResult(
+                ok=False,
+                action="reroute_mr",
+                reason="health_on_love_life_interpretation",
+                mr_archetype=classify_mr_archetype(q) or "partner_nature",
+                failed_checks=["health_on_love_style_question"],
+            )
+    except Exception:
+        pass
 
     if engine_key == "mr" and arch and not archetype_allowed_for_question(q, arch):
         failed.append("mr_archetype_not_allowed")

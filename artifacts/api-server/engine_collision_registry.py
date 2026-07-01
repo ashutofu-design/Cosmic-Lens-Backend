@@ -54,6 +54,13 @@ def should_suppress_health_for_question(question: str, *, llm_domain: str) -> bo
     if not q:
         return False
     try:
+        from chart_fact_answer import is_domain_life_area_interpretation_question
+
+        if is_domain_life_area_interpretation_question(q):
+            return True
+    except Exception:
+        pass
+    try:
         from ask_intent_fidelity import is_partner_relationship_question
 
         if is_partner_relationship_question(q):
@@ -82,6 +89,13 @@ def should_force_mr_for_question(question: str, *, llm_domain: str) -> bool:
     q = (question or "").strip()
     if not q:
         return False
+    try:
+        from chart_fact_answer import is_domain_life_area_interpretation_question
+
+        if is_domain_life_area_interpretation_question(q):
+            return True
+    except Exception:
+        pass
     try:
         from ask_marriage_relationship_slice import is_marriage_relationship_static_question
 

@@ -290,6 +290,13 @@ def is_health_static_question(question: str) -> bool:
     if not q:
         return False
     try:
+        from chart_fact_answer import is_domain_life_area_interpretation_question
+
+        if is_domain_life_area_interpretation_question(q):
+            return False
+    except Exception:
+        pass
+    try:
         from ask_intent_fidelity import is_partner_relationship_question
 
         if is_partner_relationship_question(q):
@@ -340,6 +347,13 @@ def detect_health_archetype(question: str) -> str | None:
     q = (question or "").strip()
     if not q:
         return None
+    try:
+        from chart_fact_answer import is_domain_life_area_interpretation_question
+
+        if is_domain_life_area_interpretation_question(q):
+            return None
+    except Exception:
+        pass
     try:
         from ask_intent_fidelity import is_partner_relationship_question
 

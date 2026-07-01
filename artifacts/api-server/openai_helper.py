@@ -5603,9 +5603,18 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _travel_engine_on = (os.environ.get("ASK_TRAVEL_ENGINE") or "1").strip() != "0"
     _litigation_engine_on = (os.environ.get("ASK_LITIGATION_ENGINE") or "1").strip() != "0"
     try:
-        from ask_engine_verification import apply_partner_relationship_static_flags
+        from ask_engine_verification import (
+            apply_love_life_area_static_flags,
+            apply_partner_relationship_static_flags,
+        )
 
         _is_mr_static, _is_health_static = apply_partner_relationship_static_flags(
+            question or "",
+            is_mr_static=_is_mr_static,
+            is_health_static=_is_health_static,
+            llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+        )
+        _is_mr_static, _is_health_static = apply_love_life_area_static_flags(
             question or "",
             is_mr_static=_is_mr_static,
             is_health_static=_is_health_static,
@@ -5618,8 +5627,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         if _llm_dom_early == "health":
             try:
                 from ask_intent_fidelity import is_partner_relationship_question
+                from chart_fact_answer import is_domain_life_area_interpretation_question
 
-                if not is_partner_relationship_question(question or ""):
+                if (
+                    not is_partner_relationship_question(question or "")
+                    and not is_domain_life_area_interpretation_question(question or "")
+                ):
                     _is_health_static = True
                     is_timing = False
             except Exception:
@@ -5663,8 +5676,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             if _dom == "health":
                 try:
                     from ask_intent_fidelity import is_partner_relationship_question
+                    from chart_fact_answer import is_domain_life_area_interpretation_question
 
-                    if not is_partner_relationship_question(question or ""):
+                    if (
+                        not is_partner_relationship_question(question or "")
+                        and not is_domain_life_area_interpretation_question(question or "")
+                    ):
                         _is_health_static = True
                 except Exception:
                     _is_health_static = True
@@ -5824,9 +5841,18 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             elif not _luck_engine_on:
                 _is_luck_static = False
         try:
-            from ask_engine_verification import apply_partner_relationship_static_flags
+            from ask_engine_verification import (
+                apply_love_life_area_static_flags,
+                apply_partner_relationship_static_flags,
+            )
 
             _is_mr_static, _is_health_static = apply_partner_relationship_static_flags(
+                question or "",
+                is_mr_static=_is_mr_static,
+                is_health_static=_is_health_static,
+                llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+            )
+            _is_mr_static, _is_health_static = apply_love_life_area_static_flags(
                 question or "",
                 is_mr_static=_is_mr_static,
                 is_health_static=_is_health_static,
@@ -6282,9 +6308,18 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         is_finance = False
         is_marriage_domain = False
     try:
-        from ask_engine_verification import apply_partner_relationship_static_flags
+        from ask_engine_verification import (
+            apply_love_life_area_static_flags,
+            apply_partner_relationship_static_flags,
+        )
 
         _is_mr_static, _is_health_static = apply_partner_relationship_static_flags(
+            question or "",
+            is_mr_static=_is_mr_static,
+            is_health_static=_is_health_static,
+            llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+        )
+        _is_mr_static, _is_health_static = apply_love_life_area_static_flags(
             question or "",
             is_mr_static=_is_mr_static,
             is_health_static=_is_health_static,

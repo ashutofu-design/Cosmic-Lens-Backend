@@ -25,6 +25,13 @@ def resolve_health_archetype(
     interpretation: str = "",
 ) -> tuple[str, str]:
     q = (question or "").strip()
+    try:
+        from chart_fact_answer import is_domain_life_area_interpretation_question
+
+        if is_domain_life_area_interpretation_question(q):
+            return "general_health", "blocked_love_life_interpretation"
+    except Exception:
+        pass
     interp = (interpretation or "").strip().lower()
     combined = f"{q} {interp}".strip()
 

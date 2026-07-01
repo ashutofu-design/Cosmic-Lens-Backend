@@ -70,6 +70,22 @@ def apply_understanding_routing(
     except Exception:
         pass
 
+    try:
+        from ask_mr.timing_registry import (
+            mr_static_overrides_llm_timing,
+            repair_llm_intent_mr_static_timing,
+            resolve_mr_static_archetype,
+        )
+
+        if repair_llm_intent_mr_static_timing(combined, out):
+            pass
+        elif mr_static_overrides_llm_timing(combined, out):
+            out["is_timing"] = False
+            out["domain"] = "love"
+            out["mr_archetype"] = out.get("mr_archetype") or resolve_mr_static_archetype(combined)
+    except Exception:
+        pass
+
     if is_native_love_chart_question(combined):
         out["domain"] = "love"
         out["is_timing"] = False
@@ -88,15 +104,17 @@ def apply_understanding_routing(
         out["is_timing"] = False
         out["mr_archetype"] = "one_sided_love"
 
-    if _TIMING_RX.search(combined):
-        try:
+    try:
+        from ask_mr.timing_registry import mr_static_overrides_llm_timing
+
+        if not mr_static_overrides_llm_timing(combined, out):
             from ask_love.timing_registry import is_love_timing_question
 
             if is_love_timing_question(combined, out):
                 out["domain"] = out.get("domain") or "love"
                 out["is_timing"] = True
-        except Exception:
-            pass
+    except Exception:
+        pass
 
     try:
         from ask_intent_fidelity import infer_primary_domain, _upgrade_domain_archetypes
@@ -112,6 +130,13 @@ def apply_understanding_routing(
             out["mr_archetype"] = classify_mr_archetype(combined)
         elif dom in ("marriage", "love") and is_native_love_chart_question(combined):
             out["mr_archetype"] = "dating_courtship"
+    except Exception:
+        pass
+
+    try:
+        from ask_mr.timing_registry import repair_llm_intent_mr_static_timing
+
+        repair_llm_intent_mr_static_timing(combined, out)
     except Exception:
         pass
 
@@ -147,6 +172,12 @@ def classify_and_route_ask(
         res = {"source": "llm_error", "error": str(exc)[:120], "domain": "general"}
 
     res = apply_understanding_routing(q, understanding, res)
+    try:
+        from ask_mr.timing_registry import repair_llm_intent_mr_static_timing
+
+        repair_llm_intent_mr_static_timing(q, res)
+    except Exception:
+        pass
 
     src = str(res.get("source") or "")
     llm_intent = res if src in ("llm", "llm_repaired", "llm_low_conf") else None

@@ -13,7 +13,7 @@ except Exception:
 _TIMING_RX = re.compile(
     r"(?ix)\b("
     r"kab|kab\s+tak|when|when\s+will|kis\s+(saal|year|mahine|month)|"
-    r"milega|milegi|hoga|hogi|aayega|aayegi|patchup|patch\s*up|"
+    r"milega|milegi|aayega|aayegi|patchup|patch\s*up|"
     r"commitment|propose|dasha|antardasha|mahadasha|transit|gochar|timing|"
     r"shuru|khatam|khatm|trigger|break\s+ho|door\s+hongi|chalega|"
     r"vakri|retrograde"

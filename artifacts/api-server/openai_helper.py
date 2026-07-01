@@ -6109,16 +6109,36 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             is_love_timing_question,
         )
 
-        if is_love_static_loyalty_question(question or ""):
+        _mr_static_override = False
+        try:
+            from ask_mr.timing_registry import mr_static_overrides_llm_timing
+
+            _mr_static_override = mr_static_overrides_llm_timing(
+                question or "", _llm_intent
+            )
+        except Exception as _mro_exc:
+            print(
+                f"[raw_passthrough] MR_STATIC timing override skipped: {_mro_exc}",
+                flush=True,
+            )
+
+        if is_love_static_loyalty_question(question or "") or _mr_static_override:
             is_timing = False
             qtype = "STATIC"
             _is_mr_static = True
             _is_property_static = False
-            print(
-                f"[raw_passthrough] LOVE_STATIC_LOYALTY → MR static "
-                f"q={(question or '')[:60]!r}",
-                flush=True,
-            )
+            if _mr_static_override:
+                print(
+                    f"[raw_passthrough] MR_STATIC → static (late) "
+                    f"q={(question or '')[:60]!r}",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"[raw_passthrough] LOVE_STATIC_LOYALTY → MR static "
+                    f"q={(question or '')[:60]!r}",
+                    flush=True,
+                )
         elif is_love_timing_question(question or "", _llm_intent):
             is_timing = True
             qtype = "TIMING"
@@ -6229,6 +6249,31 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         )
     except Exception:
         pass
+    try:
+        from ask_mr.timing_registry import (
+            mr_static_overrides_llm_timing,
+            resolve_mr_static_archetype,
+        )
+
+        if mr_static_overrides_llm_timing(question or "", _llm_intent):
+            is_timing = False
+            qtype = "STATIC"
+            _is_mr_static = True
+            if isinstance(_llm_intent, dict):
+                _llm_intent["is_timing"] = False
+                _llm_intent["domain"] = "love"
+                _llm_intent["mr_archetype"] = (
+                    _llm_intent.get("mr_archetype")
+                    or resolve_mr_static_archetype(question or "")
+                    or "partner_nature"
+                )
+            print(
+                f"[raw_passthrough] MR_STATIC pre-resolver lock "
+                f"q={(question or '')[:60]!r}",
+                flush=True,
+            )
+    except Exception as _mr_pre_exc:
+        print(f"[raw_passthrough] MR_STATIC pre-resolver skipped: {_mr_pre_exc}", flush=True)
     _engine_route = None
     if not is_timing and not _is_native_overview:
         try:
@@ -7621,6 +7666,15 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     # ── Unified domain timing (travel / partial domains) ─────────────────
     domain_timing_block = ""
     _timing_ctx = None
+    try:
+        from ask_mr.timing_registry import mr_static_overrides_llm_timing
+
+        if mr_static_overrides_llm_timing(question or "", _llm_intent):
+            is_timing = False
+            qtype = "STATIC"
+            _is_mr_static = True
+    except Exception:
+        pass
     if is_timing and isinstance(kundli, dict) and kundli.get("planets"):
         try:
             from ask_timing_clarify import needs_timing_domain_clarifier

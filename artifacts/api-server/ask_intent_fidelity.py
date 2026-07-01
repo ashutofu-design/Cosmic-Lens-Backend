@@ -649,7 +649,16 @@ def build_question_understanding_detail(
     except (TypeError, ValueError):
         conf = 0.0
     src = str(li.get("source") or intent_source or "").strip().lower()
-    timing = "timing" if li.get("is_timing") else "static"
+    try:
+        from ask_mr.timing_registry import mr_static_overrides_llm_timing
+
+        timing = (
+            "static"
+            if mr_static_overrides_llm_timing(q, li) or not li.get("is_timing")
+            else "timing"
+        )
+    except Exception:
+        timing = "timing" if li.get("is_timing") else "static"
     inferred = infer_primary_domain(q)
     engine_arch = str(engine_archetype or "").strip().lower()
     llm_arch = str(

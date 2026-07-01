@@ -3907,9 +3907,14 @@ def _raw_passthrough_max_tokens(
         return 120
     if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "mr_engine_v1":
         if wants_explain:
+            if dcr_love_meta.get("archetype") == "partner_nature":
+                return 200
             return 140
         if dcr_love_meta.get("archetype") == "partner_nature":
-            return 220
+            _pn_checks = dcr_love_meta.get("checks") or {}
+            if _pn_checks.get("question_focus") == "partnership_attachment":
+                return 115
+            return 130
         return 75
     if isinstance(dcr_love_meta, dict) and (
         dcr_love_meta.get("slice") == "partner_nature_minimal"
@@ -3924,7 +3929,71 @@ def _raw_passthrough_max_tokens(
     return 90
 
 
-def _enforce_partner_nature_paragraphs(text: str) -> str:
+def _enforce_partner_nature_paragraphs(
+    text: str,
+    *,
+    question_focus: str = "",
+    wants_explain: bool = False,
+) -> str:
+    """Keep partner-nature answers complete — never cut mid-sentence."""
+    qf = (question_focus or "").strip().lower()
+    if qf == "partnership_attachment":
+        return _enforce_partnership_attachment_answer(
+            text, word_cap=125 if wants_explain else 100
+        )
+
+    return _enforce_partner_nature_three_paragraphs(
+        text, word_cap=130 if wants_explain else 100
+    )
+
+
+def _enforce_partnership_attachment_answer(text: str, *, word_cap: int = 100) -> str:
+    """4 complete sentences max ~100 words — attachment bond questions."""
+    if not text:
+        return ""
+
+    raw = (text or "").strip()
+    raw = _CHECKED_LINE_RX.sub("", raw)
+    if "👉" in raw:
+        raw = raw.split("👉")[0].strip()
+    raw = _AI_PHRASE_RX.sub("", raw).strip()
+    raw = " ".join(raw.split())
+
+    sents: list[str] = []
+    for sep in (". ", "? ", "! ", "। "):
+        if sep not in raw:
+            continue
+        chunks = raw.split(sep)
+        for i, ch in enumerate(chunks):
+            s = ch.strip()
+            if not s:
+                continue
+            if i < len(chunks) - 1 and not s.endswith((".", "?", "!", "।")):
+                s = f"{s}{sep.strip()}"
+            sents.append(s)
+        break
+    if not sents:
+        sents = [raw] if raw else []
+
+    picked: list[str] = []
+    count = 0
+    max_sents = 5 if word_cap > 100 else 4
+    for s in sents[:max_sents]:
+        sw = len(s.split())
+        if count + sw <= word_cap:
+            picked.append(s)
+            count += sw
+        else:
+            break
+    if not picked and sents:
+        picked = [sents[0]]
+    out = " ".join(picked).strip()
+    if out and out[-1] not in ".?!।":
+        out = out.rstrip(",—-") + "."
+    return _strip_decision_template_labels(out)
+
+
+def _enforce_partner_nature_three_paragraphs(text: str, *, word_cap: int = 100) -> str:
     """Keep exactly 3 short Hinglish paragraphs; strip boxes/steps/labels."""
     if not text:
         return ""
@@ -4005,7 +4074,7 @@ def _enforce_partner_nature_paragraphs(text: str) -> str:
         parts.append("")
     parts = parts[:3]
 
-    word_cap = 120
+    word_cap = max(80, int(word_cap))
     trimmed: list[str] = []
     count = 0
     for para in parts:
@@ -4018,10 +4087,32 @@ def _enforce_partner_nature_paragraphs(text: str) -> str:
             count += len(pw)
             continue
         remain = word_cap - count
-        if remain >= 10:
-            chunk = " ".join(pw[:remain])
-            chunk = _ensure_period(chunk)
-            trimmed.append(chunk)
+        if remain >= 12:
+            # Trim only at sentence boundaries inside the paragraph — never mid-phrase.
+            partial_sents: list[str] = []
+            for sep in (". ", "? ", "! ", "। "):
+                if sep in para:
+                    chunks = para.split(sep)
+                    for i, ch in enumerate(chunks):
+                        s = ch.strip()
+                        if not s:
+                            continue
+                        if i < len(chunks) - 1 and not s.endswith((".", "?", "!", "।")):
+                            s = f"{s}{sep.strip()}"
+                        partial_sents.append(s)
+                    break
+            if not partial_sents:
+                partial_sents = [para]
+            chunk_parts: list[str] = []
+            for s in partial_sents:
+                sw = len(s.split())
+                if count + sw <= word_cap:
+                    chunk_parts.append(s)
+                    count += sw
+                else:
+                    break
+            if chunk_parts:
+                trimmed.append(" ".join(chunk_parts))
         break
     while len(trimmed) < 3:
         trimmed.append("")
@@ -4037,10 +4128,15 @@ def _enforce_one_line_answer(
     is_decision: bool = False,
     is_finance: bool = False,
     is_partner_nature: bool = False,
+    question_focus: str = "",
 ) -> str:
     """Post-trim: short, human, no robot traces."""
     if is_partner_nature:
-        return _enforce_partner_nature_paragraphs(text)
+        return _enforce_partner_nature_paragraphs(
+            text,
+            question_focus=question_focus,
+            wants_explain=wants_explain,
+        )
     if not text:
         return ""
     raw = (text or "").strip()
@@ -7669,6 +7765,14 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         str(dcr_love_meta.get("archetype") or "") if isinstance(dcr_love_meta, dict) else ""
     )
     _is_pn_narrator = _archetype_mr == "partner_nature"
+    _mr_question_focus = ""
+    try:
+        if isinstance(dcr_love_meta, dict):
+            _mr_question_focus = str(
+                (dcr_love_meta.get("checks") or {}).get("question_focus") or ""
+            ).strip()
+    except Exception:
+        _mr_question_focus = ""
 
     # Narrator must answer the EXACT question the user typed — never a hallucinated paraphrase.
     _user_intent_hint = ""
@@ -7709,6 +7813,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 archetype=_archetype_mr,
                 word_budget=_wb_mr,
                 is_partner_nature=_is_pn_narrator,
+                question_focus=_mr_question_focus,
                 user_intent=_user_intent_hint,
                 open_chart_qa=_open_chart_qa,
             )
@@ -7755,6 +7860,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 archetype=_archetype_mr,
                 word_budget=55,
                 is_partner_nature=_is_pn_narrator,
+                question_focus=_mr_question_focus,
                 user_intent=_user_intent_hint,
                 open_chart_qa=_open_chart_qa,
             )
@@ -8007,6 +8113,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             text, wants_explain,
             is_timing=is_timing, is_decision=is_decision, is_finance=is_finance,
             is_partner_nature=_is_pn_minimal,
+            question_focus=_mr_question_focus,
         )
         if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") in (
             "mr_engine_v1",

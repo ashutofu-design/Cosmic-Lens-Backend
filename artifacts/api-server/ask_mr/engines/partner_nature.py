@@ -235,7 +235,10 @@ def partner_nature_narrator_payload(result: EngineResult) -> str:
     """Structured facts + mandatory 3-paragraph map for the LLM narrator."""
     evidence = result.evidence or []
     has_bg = any("Different background theme" in e for e in evidence)
-    is_inlaw = (result.checks or {}).get("question_focus") == "spouse_family"
+    checks = result.checks or {}
+    is_inlaw = checks.get("question_focus") == "spouse_family"
+    is_attachment = checks.get("question_focus") == "partnership_attachment"
+    wants_explain = bool(checks.get("wants_explain"))
     synth_keys = (
         "partnership style",
         "emotional style",
@@ -249,9 +252,38 @@ def partner_nature_narrator_payload(result: EngineResult) -> str:
     lines = [
         "ARCHETYPE: partner_nature",
         f"VERDICT: {result.verdict}",
-        "OUTPUT: exactly 3 paragraphs separated by a blank line (90–120 words total).",
         "TONE: confident — state traits as chart pattern (hai/hote hain/rehta hai). NO shayad/ho sakta hai/lagta hai.",
     ]
+    if is_attachment:
+        if wants_explain:
+            lines.append(
+                "OUTPUT: 5–6 complete sentences in ONE block (110–125 words). "
+                "Explain positive + negative evidence with a bit more detail."
+            )
+        else:
+            lines.append(
+                "OUTPUT: exactly 4 complete sentences in ONE block (85–100 words max). "
+                "NOT 3 paragraphs. Every sentence must end properly — never stop mid-phrase."
+            )
+        lines.append(
+            "SENTENCE 1: direct mixed/strong/cautious verdict on emotional attachment between you two."
+        )
+        lines.append("SENTENCE 2: ONE positive bond point from POSITIVE evidence.")
+        lines.append("SENTENCE 3: ONE caveat from NEGATIVE evidence (do not list every affliction).")
+        lines.append("SENTENCE 4: one short practical line (patience, talk, support).")
+        if wants_explain:
+            lines.append(
+                "SENTENCE 5–6 (optional): one more reason + how to handle distance/mood phases."
+            )
+    else:
+        if wants_explain:
+            lines.append(
+                "OUTPUT: exactly 3 paragraphs separated by a blank line (110–130 words total)."
+            )
+        else:
+            lines.append(
+                "OUTPUT: exactly 3 paragraphs separated by a blank line (75–90 words total)."
+            )
     if is_inlaw:
         lines.append(
             "QUESTION FOCUS: spouse's family / in-laws ONLY — do NOT describe partner's "
@@ -266,16 +298,17 @@ def partner_nature_narrator_payload(result: EngineResult) -> str:
         lines.append(
             "PARA 1 — social vibe + family background: use 7th house sign AND Different background theme evidence."
         )
-    else:
+    elif not is_attachment:
         lines.append("PARA 1 — social vibe: use ONLY the 7th house sign evidence line.")
-    lines.append(
-        "PARA 2 — emotions + mindset: use ONLY 7th lord + planets-in-7th evidence lines"
-        + (" + any synthesized either/or line." if has_synth else ".")
-    )
-    lines.append(
-        "PARA 3 — presence in love: use ONLY the partner-karak evidence line"
-        + (" + respect/care synthesis if present." if has_synth else ".")
-    )
+    if not is_attachment:
+        lines.append(
+            "PARA 2 — emotions + mindset: use ONLY 7th lord + planets-in-7th evidence lines"
+            + (" + any synthesized either/or line." if has_synth else ".")
+        )
+        lines.append(
+            "PARA 3 — presence in love: use ONLY the partner-karak evidence line"
+            + (" + respect/care synthesis if present." if has_synth else ".")
+        )
     if has_synth:
         lines.append("HINT: Answer the either/or in the question directly using synthesized evidence line(s).")
     for item in result.summary or []:
@@ -681,16 +714,22 @@ def run_partner_nature(
         "slice_type": "mr_engine_v1",
         "archetype": "partner_nature",
         "question_focus": "partnership_attachment" if attachment_q else "partner_personality",
+        "wants_explain": bool(wants_explain),
         "gender": gender,
         "karak": karak,
         "sign7": sign7,
     }
 
+    if attachment_q:
+        _wb = 125 if wants_explain else 95
+    else:
+        _wb = 135 if wants_explain else 95
+
     return EngineResult(
         archetype="partner_nature",
         verdict=verdict,
         confidence="medium",
-        word_budget=120,
+        word_budget=_wb,
         answer_plan=(
             "Para1: 7H sign social vibe → Para2: 7L + occupants emotional/mindset → "
             "Para3: karak presence (~90–120 words, blank line between paras)."

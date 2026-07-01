@@ -89,6 +89,7 @@ def build_mr_engine_narrator_system_prompt(
     archetype: str = "",
     word_budget: int = 55,
     is_partner_nature: bool = False,
+    question_focus: str = "",
     user_intent: str = "",
     open_chart_qa: bool = False,
 ) -> str:
@@ -97,21 +98,56 @@ def build_mr_engine_narrator_system_prompt(
     if rl not in _NARRATOR_LANG:
         rl = "hn"
     wb = max(25, min(int(word_budget or 55), 180))
+    qf = (question_focus or "").strip().lower()
 
     if is_partner_nature or archetype == "partner_nature":
-        length_block = (
-            "MANDATORY: exactly 3 paragraphs separated by ONE blank line (\\n\\n).\n"
-            "Total 90–120 words. Wise friend Hinglish. No planet/house/sign/lord/karak words.\n\n"
-            "IF the user asked about a SPECIFIC trait (gussa/temper, loyalty, expressive, "
-            "dominant, respect, etc.) — look for a matching EVIDENCE line (e.g. 'Temper signal') "
-            "or an 'Answer ... directly' HINT — then START paragraph 1 with ONE clear sentence "
-            "that directly answers that exact question (clear haan/nahi), and continue.\n\n"
-            "PARAGRAPH 1 (~30–40 words): direct trait answer (if asked) + 7th house sign social/chatty/curious vibe.\n"
-            "PARAGRAPH 2 (~30–40 words): ONLY 7th lord + planets-in-7th evidence → emotional tone + private/thoughtful mindset.\n"
-            "PARAGRAPH 3 (~30–40 words): ONLY partner-karak evidence → warm presence / attraction in relationship.\n\n"
-            "Do NOT write one long essay. Do NOT add 'unique vibes' or facts outside EVIDENCE.\n"
-            f"{_MR_CONFIDENT_TONE}"
-        )
+        if qf == "partnership_attachment":
+            if wants_explain:
+                length_block = (
+                    "MANDATORY: 5–6 complete sentences in ONE block (110–125 words).\n"
+                    "NOT 3 paragraphs. No planet/house/sign/lord/karak words.\n\n"
+                    "Sentence 1: direct mixed/strong/cautious verdict on emotional attachment.\n"
+                    "Sentence 2–3: positive bond points (from POSITIVE evidence).\n"
+                    "Sentence 4: main caveat (from NEGATIVE evidence).\n"
+                    "Sentence 5–6: practical handling + patience/communication.\n"
+                    f"{_MR_CONFIDENT_TONE}"
+                )
+            else:
+                length_block = (
+                    "MANDATORY: exactly 4 complete sentences in ONE block (85–100 words max).\n"
+                    "NOT 3 paragraphs. No planet/house/sign/lord/karak words.\n\n"
+                    "Sentence 1: direct mixed/strong/cautious verdict on emotional attachment.\n"
+                    "Sentence 2: ONE positive bond point (from POSITIVE evidence).\n"
+                    "Sentence 3: ONE caveat only (from NEGATIVE evidence — do not list all).\n"
+                    "Sentence 4: one practical line (patience, baat-cheet, support).\n"
+                    "Every sentence MUST end fully — never cut off mid-phrase.\n"
+                    f"{_MR_CONFIDENT_TONE}"
+                )
+        elif wants_explain:
+            length_block = (
+                "MANDATORY: exactly 3 paragraphs separated by ONE blank line (\\n\\n).\n"
+                "Total 110–130 words. Wise friend Hinglish. No planet/house/sign/lord/karak words.\n\n"
+                "PARAGRAPH 1: direct trait answer + 7th house social vibe.\n"
+                "PARAGRAPH 2: 7th lord + planets-in-7th → emotional tone + mindset.\n"
+                "PARAGRAPH 3: partner-karak → presence / attraction + one practical note.\n"
+                f"{_MR_CONFIDENT_TONE}"
+            )
+        else:
+            length_block = (
+                "MANDATORY: exactly 3 paragraphs separated by ONE blank line (\\n\\n).\n"
+                "Total 75–90 words only — short and complete. No planet/house/sign/lord/karak words.\n\n"
+                "PARAGRAPH 1 (~25 words): direct trait answer + social vibe.\n"
+                "PARAGRAPH 2 (~25 words): emotional tone + mindset (one point each).\n"
+                "PARAGRAPH 3 (~25 words): warm presence in relationship.\n"
+                "Do NOT write one long essay. Do NOT add facts outside EVIDENCE.\n"
+                f"{_MR_CONFIDENT_TONE}"
+            )
+        if qf != "partnership_attachment":
+            _trait_hint = (
+                "IF the user asked a SPECIFIC trait (gussa, expressive, dominant, respect, etc.) — "
+                "START paragraph 1 with ONE clear haan/nahi from matching EVIDENCE or HINT.\n"
+            )
+            length_block = _trait_hint + length_block
     elif archetype == "job_vs_business":
         length_block = (
             f"Write 2–3 short sentences (~{min(wb + 15, 90)} words max).\n"

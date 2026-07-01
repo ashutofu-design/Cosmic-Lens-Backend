@@ -124,6 +124,40 @@ class MrNarratorTests(unittest.TestCase):
         self.assertIn("PARAGRAPH 1", prompt)
         self.assertIn("BANNED hedging", prompt)
 
+    def test_attachment_payload_uses_four_sentences_not_three_paras(self):
+        from ask_mr.engines.partner_nature import partner_nature_narrator_payload, run_partner_nature
+
+        eng = run_partner_nature(
+            SAMPLE_KUNDLI,
+            "Mera aur mere partner ka emotional attachment kaisa rahega",
+            birth=None,
+        )
+        payload = partner_nature_narrator_payload(eng)
+        self.assertIn("exactly 4 complete sentences", payload)
+        self.assertNotIn("PARA 3 — presence in love", payload)
+
+    def test_attachment_narrator_prompt_four_sentences(self):
+        prompt = build_mr_engine_narrator_system_prompt(
+            chart_text="test",
+            archetype="partner_nature",
+            is_partner_nature=True,
+            question_focus="partnership_attachment",
+            word_budget=100,
+        )
+        self.assertIn("exactly 4 complete sentences", prompt)
+
+    def test_attachment_enforce_never_ends_mid_phrase(self):
+        from openai_helper import _enforce_partnership_attachment_answer
+
+        chopped = (
+            "Tum dono ka emotional attachment mixed hai. Partner social aur expressive hai. "
+            "7th lord private tone deta hai. Kabhi distance phases aa sakte hain. "
+            "Venus ki wajah se partner warm aur expressive love deta hai."
+        )
+        out = _enforce_partnership_attachment_answer(chopped)
+        self.assertTrue(out.endswith(".") or out.endswith("।"))
+        self.assertNotRegex(out, r"\baur\.\s*$")
+
 
 if __name__ == "__main__":
     unittest.main()

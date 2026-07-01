@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from ask_gaps_shared import TIMING_RX
+from ask_spiritual.spiritual_scope import is_spiritual_topic
 
 ARCHETYPES = frozenset({"personality_nature", "self_appearance", "general_personality"})
 
@@ -26,6 +27,8 @@ _DOMAIN_RX = re.compile(
 def is_personality_static_question(question: str, llm_intent: dict | None = None) -> bool:
     q = (question or "").strip()
     if not q or TIMING_RX.search(q):
+        return False
+    if is_spiritual_topic(q):
         return False
     if _NATIVE_RX.search(q) and not _SCOPE_RX.search(q):
         return False

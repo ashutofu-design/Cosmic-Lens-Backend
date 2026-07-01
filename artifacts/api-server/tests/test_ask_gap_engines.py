@@ -30,6 +30,8 @@ _GAP_CASES = [
     ("Mere parents se rishta kaisa hai", "parents"),
     ("Mera shatru strong hai kya", "enemies"),
     ("Mera spiritual path kaisa hai", "spiritual"),
+    ("Kya meri intuition power strong hai", "spiritual"),
+    ("Mera past life karma kaisa hai", "spiritual"),
     ("Kya main famous hounga", "fame"),
     ("Mera swabhav kaisa hai", "personality"),
     ("Mere sapne ka matlab kya hai", "dreams"),

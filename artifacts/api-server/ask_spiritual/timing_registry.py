@@ -26,28 +26,7 @@ _TIMING_RX = re.compile(
     r")\b|(?:कब|कितना\s+समय)"
 )
 
-_SCOPE_RX = re.compile(
-    r"(?ix)\b("
-    r"spiritual|spirituality|adhyatm|adhyatmik|dharma|dharam|moksha|mukti|"
-    r"guru|guruji|deeksha|diksha|initiation|awakening|awaken|satguru|"
-    r"sadhana|tapasya|meditation|dhyan|dhyana|samadhi|bhakti|"
-    r"occult|mystic|secret\s+knowledge|paravidi|hidden\s+knowledge|"
-    r"astrology|astro\s*logy|jyotish|tarot|palmistry|numerology|reiki|"
-    r"lal\s+kitab|nadi|prediction|astrologer|intuition|purnanumaan|"
-    r"teerth|tirth|pilgrim|yatra|char\s+dham|religious\s+travel|"
-    r"religious\s+tourism|pavitra\s+sthal|bodh\s+gaya|kumbh|"
-    r"mandir|temple|dharmik|kailash|mansarovar|vaishno|amarnath|kedarnath|"
-    r"jagannath|kashi|rameswaram|shakti\s+peeth|kuldevi|kuldevta|"
-    r"inner\s+peace|manasik\s+shanti|mental\s+restlessness|restlessness|"
-    r"bechaini|overthinking|sukoon|shanti|peace\s+of\s+mind|"
-    r"kundalini|third\s+eye|ajna|chakra|aura|vairagya|sanyas|"
-    r"mantra|siddhi|purva\s+punya|punya|ashram|vipassana|silent\s+retreat|"
-    r"8th\s+house|9th\s+house|12th\s+house|ketu|atmakaraka|amatyakaraka|"
-    r"mantra\s+jap|japa|silence|maun|enlighten|atma-bal|willpower|"
-    r"anxiety|insomnia|nind|trauma|emotional\s+trauma|saade\s+sati|dhaiya|"
-    r"pranayam|sound\s+healing|divine|bhagwan|saint|rishi|siddh"
-    r")\b"
-)
+from ask_spiritual.spiritual_scope import SPIRITUAL_TOPIC_RX as _SCOPE_RX
 
 _RELIGIOUS_FOREIGN_RX = re.compile(
     r"(?ix)\b("

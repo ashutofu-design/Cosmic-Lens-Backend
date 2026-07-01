@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from ask_gaps_shared import TIMING_RX
+from ask_spiritual.spiritual_scope import is_spiritual_topic
 
 ARCHETYPES = frozenset({"gemstone_ratn", "remedy_upay", "mantra_theme", "general_remedy"})
 
@@ -21,6 +22,8 @@ _CHARITY_ONLY_RX = re.compile(r"(?ix)\b(daan|charity|donation)\b")
 def is_remedy_static_question(question: str, llm_intent: dict | None = None) -> bool:
     q = (question or "").strip()
     if not q or not _SCOPE_RX.search(q) or TIMING_RX.search(q):
+        return False
+    if is_spiritual_topic(q):
         return False
     if _CHARITY_ONLY_RX.search(q) and not re.search(
         r"(?ix)\b(remedy|ratn|gem|mantra|puja|upay)\b", q

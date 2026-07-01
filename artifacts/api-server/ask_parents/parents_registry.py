@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from ask_gaps_shared import TIMING_RX
+from ask_spiritual.spiritual_scope import spiritual_overrides_parents_gap
 
 ARCHETYPES = frozenset({"parent_bond", "father_theme", "mother_theme", "general_parents"})
 
@@ -24,6 +25,8 @@ _MOTHER_RX = re.compile(r"(?ix)\b(mata|maa|mummy|mom|mother)\b")
 def is_parents_static_question(question: str, llm_intent: dict | None = None) -> bool:
     q = (question or "").strip()
     if not q or not _SCOPE_RX.search(q) or TIMING_RX.search(q):
+        return False
+    if spiritual_overrides_parents_gap(q):
         return False
     if _HEALTH_RX.search(q):
         return False

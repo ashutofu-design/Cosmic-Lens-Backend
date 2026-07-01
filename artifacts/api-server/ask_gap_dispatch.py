@@ -10,9 +10,9 @@ from ask_mr.types import EngineResult
 _GAP_ORDER: list[tuple[str, str, Callable, Callable, str, str]] = [
     # key, slice, is_fn, run_fn, topic, check_flag
     ("siblings", "siblings_engine_v1", None, None, "siblings", "is_siblings_static"),
+    ("spiritual", "spiritual_engine_v1", None, None, "spiritual", "is_spiritual_static"),
     ("parents", "parents_engine_v1", None, None, "parents", "is_parents_static"),
     ("enemies", "enemies_engine_v1", None, None, "enemies", "is_enemies_static"),
-    ("spiritual", "spiritual_engine_v1", None, None, "spiritual", "is_spiritual_static"),
     ("fame", "fame_engine_v1", None, None, "fame", "is_fame_static"),
     ("personality", "personality_engine_v1", None, None, "personality", "is_personality_static"),
     ("dreams", "dreams_engine_v1", None, None, "dreams", "is_dreams_static"),
@@ -46,9 +46,9 @@ def _lazy_imports() -> list[tuple[str, str, Callable, Callable, str, str]]:
 
     return [
         ("siblings", "siblings_engine_v1", is_siblings_static_question, run_siblings_static_engine, "siblings", "is_siblings_static"),
+        ("spiritual", "spiritual_engine_v1", is_spiritual_static_question, run_spiritual_static_engine, "spiritual", "is_spiritual_static"),
         ("parents", "parents_engine_v1", is_parents_static_question, run_parents_static_engine, "parents", "is_parents_static"),
         ("enemies", "enemies_engine_v1", is_enemies_static_question, run_enemies_static_engine, "enemies", "is_enemies_static"),
-        ("spiritual", "spiritual_engine_v1", is_spiritual_static_question, run_spiritual_static_engine, "spiritual", "is_spiritual_static"),
         ("fame", "fame_engine_v1", is_fame_static_question, run_fame_static_engine, "fame", "is_fame_static"),
         ("personality", "personality_engine_v1", is_personality_static_question, run_personality_static_engine, "personality", "is_personality_static"),
         ("dreams", "dreams_engine_v1", is_dreams_static_question, run_dreams_static_engine, "dreams", "is_dreams_static"),

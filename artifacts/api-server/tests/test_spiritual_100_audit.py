@@ -84,8 +84,16 @@ def test_timing_questions_route_spiritual(category: str, question: str) -> None:
         "occult_learning",
         "pilgrimage",
         "inner_peace",
+        "karma_past_life",
         "general_spiritual",
     )
+
+
+@pytest.mark.parametrize("category,question", STATIC_CASES)
+def test_static_questions_route_spiritual_gap(category: str, question: str) -> None:
+    from ask_gap_dispatch import detect_gap_static_key
+
+    assert detect_gap_static_key(question) == "spiritual", f"gap!=spiritual: {question[:80]}"
 
 
 @pytest.mark.parametrize("category,question", STATIC_CASES)

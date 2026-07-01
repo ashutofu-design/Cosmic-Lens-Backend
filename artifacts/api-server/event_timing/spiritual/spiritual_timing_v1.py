@@ -64,6 +64,13 @@ _SPIRITUAL_CFG = DomainTimingConfig(
 # Order matters — pilgrimage before guru (teerth + guru both present).
 _BUCKET_RX = [
     (
+        "karma_past_life",
+        r"(?ix)\b("
+        r"karma|karmic|past\s+life|pichle\s+janam|purvajan|pitra|pitru|"
+        r"ancestor|reincarnation|purva\s+punya"
+        r")\b",
+    ),
+    (
         "pilgrimage",
         r"(?ix)\b("
         r"teerth|tirth|pilgrim|yatra|char\s+dham|dham\s+yatra|"

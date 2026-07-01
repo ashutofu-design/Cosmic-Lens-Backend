@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from ask_gaps_shared import TIMING_RX
+from ask_spiritual.spiritual_scope import is_spiritual_topic
 
 ARCHETYPES = frozenset({"vastu_home", "vastu_dosh", "general_vastu"})
 
@@ -20,6 +21,8 @@ _BUY_RX = re.compile(r"(?ix)\b(kharid|buy|purchase|flat|plot|ghar)\b")
 def is_vastu_static_question(question: str, llm_intent: dict | None = None) -> bool:
     q = (question or "").strip()
     if not q or not _SCOPE_RX.search(q) or TIMING_RX.search(q):
+        return False
+    if is_spiritual_topic(q):
         return False
     if _BUY_RX.search(q) and not re.search(r"(?ix)\bvastu\b", q):
         return False

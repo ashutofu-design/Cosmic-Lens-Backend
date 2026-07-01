@@ -5,30 +5,25 @@ from __future__ import annotations
 import re
 
 from ask_gaps_shared import TIMING_RX
+from ask_spiritual.spiritual_scope import is_spiritual_topic
 
 ARCHETYPES = frozenset({
     "spiritual_path",
     "guru_yog",
     "deity_faith",
     "meditation_peace",
+    "intuition_occult",
+    "karma_past_life",
+    "moksha_liberation",
     "general_spiritual",
 })
 
-_SCOPE_RX = re.compile(
-    r"(?ix)\b("
-    r"spiritual|spirituality|adhyatm|adhyatmik|dharma|dharam|moksha|mukti|"
-    r"guru|guruji|deeksha|diksha|sadhana|tapasya|meditation|dhyan|bhakti|"
-    r"kuldevi|kuldevta|ishta\s+dev|ishta\s+devta|devi|devta|"
-    r"occult|mystic|jyotish|mantra|inner\s+peace|shanti|vairagya|"
-    r"kundalini|chakra|ketu|12th\s+house|9th\s+house"
-    r")\b"
-)
 _TEERTH_TIMING_RX = re.compile(r"(?ix)\b(teerth|tirth|yatra|pilgrim|kab)\b")
 
 
 def is_spiritual_static_question(question: str, llm_intent: dict | None = None) -> bool:
     q = (question or "").strip()
-    if not q or not _SCOPE_RX.search(q):
+    if not q or not is_spiritual_topic(q):
         return False
     try:
         from ask_spiritual.timing_registry import is_spiritual_timing_question
@@ -49,12 +44,37 @@ def is_spiritual_static_question(question: str, llm_intent: dict | None = None) 
 
 def detect_spiritual_archetype(question: str) -> str:
     q = (question or "").strip()
-    if re.search(r"(?ix)\b(kuldevi|kuldevta|ishta\s+dev|devi|devta)\b", q):
+    if re.search(
+        r"(?ix)\b(karma|karmic|past\s+life|pichle\s+janam|purvajan|pitra|pitru|ancestor|reincarnation)\b",
+        q,
+    ):
+        return "karma_past_life"
+    if re.search(
+        r"(?ix)\b("
+        r"intuition|intuitive|purnanumaan|occult|mystic|tarot|jyotish|astrology|"
+        r"psychic|empath|8th\s+house|secret\s+knowledge|hidden\s+knowledge|"
+        r"palmistry|numerology|reiki|tantra|prediction|astrologer"
+        r")\b",
+        q,
+    ):
+        return "intuition_occult"
+    if re.search(r"(?ix)\b(kuldevi|kuldevta|ishta\s+dev|shiv|shiva|krishna|hanuman|bhakti|darshan|bhagwan)\b", q):
         return "deity_faith"
-    if re.search(r"(?ix)\b(guru|deeksha|diksha)\b", q):
+    if re.search(
+        r"(?ix)\b(guru|guruji|deeksha|diksha|siddhi|atmakaraka|amatyakaraka|satguru|janeu)\b",
+        q,
+    ):
         return "guru_yog"
-    if re.search(r"(?ix)\b(meditation|dhyan|shanti|peace|bechaini)\b", q):
+    if re.search(
+        r"(?ix)\b(meditation|dhyan|dhyana|shanti|peace|bechaini|anxiety|vipassana|pranayam|sukoon|inner\s+peace)\b",
+        q,
+    ):
         return "meditation_peace"
-    if re.search(r"(?ix)\b(path|yog|moksha|adhyatm)\b", q):
+    if re.search(r"(?ix)\b(moksha|mukti|sanyas|vairagya|liberation|moksh)\b", q):
+        return "moksha_liberation"
+    if re.search(
+        r"(?ix)\b(awakening|awaken|jagran|jagruti|spiritual\s+path|life\s+purpose|soul\s+mission|transformation)\b",
+        q,
+    ):
         return "spiritual_path"
     return "general_spiritual"

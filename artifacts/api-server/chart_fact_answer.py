@@ -117,7 +117,6 @@ _INTERPRET_RX = re.compile(
     r"good|bad|favourable|favorable)\b",
     re.I,
 )
-
 _DIV_CHART_MAP = {
     "d1": "D1",
     "d2": "D2",
@@ -144,6 +143,55 @@ _DIV_CHART_MAP = {
     "chaturthamsa": "D4",
     "trimsamsa": "D30",
 }
+
+_CLASSICAL_YOGA_RX = re.compile(
+    r"(?ix)\b("
+    r"raj\s*yog|raja\s*yog|gaj\s*kesari|gaja\s*kesari|"
+    r"kal\s*sarp|kalsarp|mangal\s*dosh|manglik|"
+    r"dhana\s*yog|chandra\s*mangal|budha\s*aditya|"
+    r"neecha\s*bhanga|viparita|panch\s*mahapurush|"
+    r"kaal\s*sarp|pitri\s*dosh|guru\s*chandal"
+    r")\b",
+)
+
+_DOMAIN_OUTCOME_YOGA_RX = re.compile(
+    r"(?ix)\b("
+    r"true\s*love|sach+a\s*pyaar|sach+a\s*pyar|sachchi\s*mohabbat|"
+    r"bachcha\s*pyaar|pyaar\s+milne|pyar\s+milne|prem\s+milne|love\s+milne|"
+    r"pya+a?r\s+.*\byog|pya+a?r\s+.*\blikha|true\s*love\s+.*\byog|"
+    r"prem\s+sambandh|love\s+life|milne\s+ka\s+yog|"
+    r"shaadi|shadi|vivah|marriage|biwi|pati|rishta|"
+    r"bachch|santaan|child|"
+    r"career|naukri|job|promotion|"
+    r"wealth|dhan|paisa|travel|videsh|foreign"
+    r")\b",
+)
+
+
+def is_domain_outcome_yoga_question(question: str) -> bool:
+    """Life-domain yog (love/career/marriage) — engines/LLM, not chart_fact lookup."""
+    q = normalize_ask_typos((question or "").strip())
+    if not q or not re.search(r"\byog", q, re.I):
+        return False
+    if _CLASSICAL_YOGA_RX.search(q):
+        return False
+    if _DOMAIN_OUTCOME_YOGA_RX.search(q):
+        return True
+    try:
+        from ask_marriage_relationship_slice import is_marriage_relationship_static_question
+
+        if is_marriage_relationship_static_question(q):
+            return True
+    except Exception:
+        pass
+    try:
+        from ask_career.classifier import is_career_static_question
+
+        if is_career_static_question(q):
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def _sign_label(sign: str | None, lang: str) -> str:
@@ -235,6 +283,8 @@ def is_chart_lookup_question(question: str) -> bool:
     q = normalize_ask_typos((question or "").strip())
     if not q or len(q.split()) > 18:
         return False
+    if is_domain_outcome_yoga_question(q):
+        return False
     # Love / vehicle / career timing must not be mis-routed as chart yoga lookup.
     for _mod, _fn in (
         ("ask_love.timing_registry", "is_love_timing_question"),
@@ -261,6 +311,8 @@ def is_chart_lookup_question(question: str) -> bool:
         if it in _CHART_LOOKUP_INTENTS:
             return True
         if it in ("planet_strength", "yoga_check", "comparison", "planet_combo"):
+            if it == "yoga_check" and is_domain_outcome_yoga_question(q):
+                return False
             return True
     except Exception:
         pass

@@ -47,6 +47,20 @@ class TestPremSambandhRouting(unittest.TestCase):
         self.assertEqual(intent["intent"], "yoga_check")
         self.assertTrue(is_chart_lookup_question(q))
 
+    def test_true_love_yog_not_chart_lookup(self):
+        from chart_fact_answer import is_domain_outcome_yoga_question
+
+        q = "Kya meri kundli me bachcha pyaar (true love milne ka yog likha hai"
+        self.assertTrue(is_domain_outcome_yoga_question(q))
+        self.assertFalse(is_chart_lookup_question(q))
+
+    def test_sacha_pyaar_true_love_yog_not_chart_lookup(self):
+        from chart_fact_answer import is_domain_outcome_yoga_question
+
+        q = "Kya meri kundli me sacha pyaar true love milne ka yog likha hai"
+        self.assertTrue(is_domain_outcome_yoga_question(q))
+        self.assertFalse(is_chart_lookup_question(q))
+
 
 if __name__ == "__main__":
     unittest.main()

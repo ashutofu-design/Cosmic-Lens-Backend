@@ -5094,24 +5094,65 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         except Exception as _ma_exc:
             print(f"[raw_passthrough] marriage_timing_alt skipped: {_ma_exc}", flush=True)
 
+    client = _get_client()
+    _llm_intent_admin: dict | None = None
+    try:
+        from ask_question_understand import ensure_question_understanding
+
+        if (os.environ.get("ASK_QUESTION_UNDERSTAND") or "1").strip() != "0":
+            _llm_intent_admin = ensure_question_understanding(
+                question or "",
+                None,
+                client=client,
+                force_llm=True,
+                question_raw=_question_raw,
+            )
+    except Exception as _uq_early_exc:
+        print(f"[raw_passthrough] early question_understand skipped: {_uq_early_exc}", flush=True)
+
     try:
         from chart_fact_answer import (
             try_deterministic_chart_fact,
             is_chart_lookup_question,
+            is_domain_outcome_yoga_question,
             chart_lookup_refusal_payload,
         )
 
-        _det = try_deterministic_chart_fact(question, kundli, lang, birth=birth)
-        if _det:
-            return _det
-        # Chart placement lookups must NEVER reach the LLM — engine or refusal only.
-        if is_chart_lookup_question(question):
-            print("[raw_passthrough] chart_fact lookup blocked LLM (no deterministic match)", flush=True)
-            return chart_lookup_refusal_payload(question, lang)
+        if is_domain_outcome_yoga_question(question):
+            print(
+                f"[raw_passthrough] chart_fact skipped — domain outcome yoga "
+                f"q={(question or '')[:72]!r}",
+                flush=True,
+            )
+        else:
+            _det = try_deterministic_chart_fact(question, kundli, lang, birth=birth)
+            if _det:
+                return _attach_admin(
+                    _det,
+                    question=question or "",
+                    question_type="STATIC",
+                    is_timing=False,
+                    llm_called=False,
+                    skip_reason="chart_fact_deterministic",
+                    intent_source="chart_fact",
+                    llm_intent=_llm_intent_admin,
+                )
+            # Chart placement lookups must NEVER reach the LLM — engine or refusal only.
+            if is_chart_lookup_question(question):
+                print("[raw_passthrough] chart_fact lookup blocked LLM (no deterministic match)", flush=True)
+                return _attach_admin(
+                    chart_lookup_refusal_payload(question, lang),
+                    question=question or "",
+                    question_type="STATIC",
+                    is_timing=False,
+                    llm_called=False,
+                    skip_reason="chart_fact_unresolved",
+                    intent_source="chart_fact",
+                    llm_intent=_llm_intent_admin,
+                )
     except Exception as _cfe:
         print(f"[raw_passthrough] chart_fact deterministic skipped: {_cfe}", flush=True)
 
-    client = _get_client()
     if client is None:
         return {
             "text":       "AI service abhi available nahi hai. Thodi der baad try karo.",
@@ -5201,7 +5242,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             print(f"[raw_passthrough] LLM intent skipped: {_lie}", flush=True)
 
     _llm_intent_admin = (
-        _llm_intent_record if isinstance(_llm_intent_record, dict) else _llm_intent
+        _llm_intent_admin
+        if isinstance(_llm_intent_admin, dict)
+        else (_llm_intent_record if isinstance(_llm_intent_record, dict) else _llm_intent)
     )
     try:
         from ask_question_understand import ensure_question_understanding
@@ -5212,7 +5255,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _user_turn_question or question or "",
                 _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
                 client=client,
-                force_llm=True,
+                force_llm=not bool(
+                    str((_llm_intent_admin or {}).get("question_summary") or "").strip()
+                ),
                 question_raw=_question_raw or _user_turn_question or "",
             )
     except Exception as _uq_exc:

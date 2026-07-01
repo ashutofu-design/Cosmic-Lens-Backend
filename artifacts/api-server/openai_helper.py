@@ -6760,6 +6760,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             else:
                 try:
                     from ask_mr import run_mr_static_engine  # type: ignore
+                    from ask_mr.engine import mr_engine_slice_meta
 
                     _mr_engine_result = run_mr_static_engine(
                         kundli if isinstance(kundli, dict) else {},
@@ -6774,19 +6775,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         chart_text = partner_nature_narrator_payload(_mr_engine_result)
                     else:
                         chart_text = _mr_engine_result.to_narrator_payload()
-                    dcr_love_meta = {
-                        "slice": "mr_engine_v1",
-                        "topic": "marriage_and_relationship",
-                        "archetype": _mr_engine_result.archetype,
-                        "verdict": _mr_engine_result.verdict,
-                        "summary": list(_mr_engine_result.summary or []),
-                        "evidence": list(_mr_engine_result.evidence or []),
-                        "ignore": list(_mr_engine_result.ignore or []),
-                        "checks": dict(_mr_engine_result.checks or {}),
-                        "skip_llm": bool(_mr_engine_result.skip_llm),
-                        "word_budget": int(_mr_engine_result.word_budget or 55),
-                        "narrator_mode": "engine_facts_only",
-                    }
+                    dcr_love_meta = mr_engine_slice_meta(_mr_engine_result)
                     print(
                         f"[raw_passthrough] MR_ENGINE "
                         f"archetype={_mr_engine_result.archetype} "
@@ -7758,6 +7747,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _mr_recovery = bool(_is_mr_static)
         if _mr_recovery and (os.environ.get("ASK_MR_ENGINE") or "1").strip() != "0":
             from ask_mr import run_mr_static_engine  # type: ignore
+            from ask_mr.engine import mr_engine_slice_meta
 
             _mr_rec_result = run_mr_static_engine(
                 kundli if isinstance(kundli, dict) else {},
@@ -7772,19 +7762,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 chart_text = partner_nature_narrator_payload(_mr_rec_result)
             else:
                 chart_text = _mr_rec_result.to_narrator_payload()
-            dcr_love_meta = {
-                "slice": "mr_engine_v1",
-                "topic": "marriage_and_relationship",
-                "archetype": _mr_rec_result.archetype,
-                "verdict": _mr_rec_result.verdict,
-                "summary": list(_mr_rec_result.summary or []),
-                "evidence": list(_mr_rec_result.evidence or []),
-                "ignore": list(_mr_rec_result.ignore or []),
-                "checks": dict(_mr_rec_result.checks or {}),
-                "skip_llm": bool(_mr_rec_result.skip_llm),
-                "word_budget": int(_mr_rec_result.word_budget or 55),
-                "narrator_mode": "engine_facts_only",
-            }
+            dcr_love_meta = mr_engine_slice_meta(_mr_rec_result)
             _is_mr_static = True
             _chart_slice_type = "mr_engine_v1"
             print(

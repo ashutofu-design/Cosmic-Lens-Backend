@@ -165,6 +165,9 @@ export interface AskLlmContext {
     verdict?: string;
     summary?: string[];
     evidence?: string[];
+    evidence_positive?: string[];
+    evidence_negative?: string[];
+    evidence_neutral?: string[];
     ignore?: string[];
     love_score?: number;
     arrange_score?: number;

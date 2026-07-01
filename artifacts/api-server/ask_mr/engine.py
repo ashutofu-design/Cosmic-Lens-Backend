@@ -165,3 +165,24 @@ def run_mr_static_engine(
     from .engines.general_mr import run_general_mr
 
     return run_general_mr(kundli, question, wants_explain=wants_explain)
+
+
+def mr_engine_slice_meta(result: EngineResult) -> dict[str, Any]:
+    """Admin/debug slice_meta for MR engine — includes positive/negative evidence split."""
+    pos, neg, neu = result._finalize_evidence_split()
+    return {
+        "slice": "mr_engine_v1",
+        "topic": "marriage_and_relationship",
+        "archetype": result.archetype,
+        "verdict": result.verdict,
+        "summary": list(result.summary or []),
+        "evidence": list(result.evidence or []),
+        "evidence_positive": pos,
+        "evidence_negative": neg,
+        "evidence_neutral": neu,
+        "ignore": list(result.ignore or []),
+        "checks": dict(result.checks or {}),
+        "skip_llm": bool(result.skip_llm),
+        "word_budget": int(result.word_budget or 55),
+        "narrator_mode": "engine_facts_only",
+    }

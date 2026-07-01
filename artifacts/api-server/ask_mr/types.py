@@ -13,6 +13,8 @@ class EngineResult:
     confidence: str = "medium"  # low | medium | high
     summary: list[str] = field(default_factory=list)
     evidence: list[str] = field(default_factory=list)
+    evidence_positive: list[str] = field(default_factory=list)
+    evidence_negative: list[str] = field(default_factory=list)
     ignore: list[str] = field(default_factory=list)
     answer_plan: str = ""
     word_budget: int = 55
@@ -48,6 +50,20 @@ class EngineResult:
             "NO shayad/ho sakta hai/lagta hai."
         )
 
+    def _finalize_evidence_split(self) -> tuple[list[str], list[str], list[str]]:
+        from .engines._evidence_split import split_evidence_polarity
+
+        if self.evidence_positive or self.evidence_negative:
+            pos = list(self.evidence_positive)
+            neg = list(self.evidence_negative)
+            neu = [
+                e
+                for e in (self.evidence or [])
+                if e not in pos and e not in neg
+            ]
+            return pos, neg, neu
+        return split_evidence_polarity(self.evidence)
+
     def to_narrator_payload(self) -> str:
         """Compact facts block for LLM narrator (minimal tokens)."""
         lines = [
@@ -57,7 +73,8 @@ class EngineResult:
             f"CONFIDENCE: {self.confidence}",
             (
                 "NARRATOR_LOCK: Sentence 1 = VERDICT tone (not stronger). "
-                "CONFIDENCE=medium/low → never sound more bullish than VERDICT."
+                "CONFIDENCE=medium/low → never sound more bullish than VERDICT. "
+                "Use POSITIVE + NEGATIVE evidence lists below — never ignore afflictions."
             ),
         ]
         checks = self.checks or {}
@@ -70,17 +87,14 @@ class EngineResult:
                 f"PERCENT: love~{checks.get('love_pct')}% arrange~{checks.get('arrange_pct')}%"
             )
         if self.evidence:
-            if checks.get("open_chart_qa"):
-                # Open question, no fixed engine — give the LLM the full D1 picture
-                # and let it pick the factors relevant to the exact question.
-                lines.append(
-                    "D1 RELATIONSHIP CHART (use ONLY the factors relevant to the question; "
-                    "ignore the rest, plain language):"
+            from .engines._evidence_split import format_split_evidence_block
+
+            lines.extend(
+                format_split_evidence_block(
+                    self.evidence,
+                    open_chart_qa=bool(checks.get("open_chart_qa")),
                 )
-                lines.extend(f"- {e}" for e in self.evidence[:12])
-            else:
-                lines.append("EVIDENCE (use 2–4 only, plain language):")
-                lines.extend(f"- {e}" for e in self.evidence[:8])
+            )
         return "\n".join(lines)
 
     def to_chart_text(self, *, question: str) -> str:

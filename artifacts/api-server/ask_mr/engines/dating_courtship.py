@@ -6,7 +6,7 @@ import re
 from vedic.love_reality.scoring_core import KundliReader
 
 from ..types import EngineResult
-from ._chart_axes import house_axis_evidence, planet_line
+from ._chart_axes import dignity_word, house_axis_evidence, planet_line
 from ._person_signals import build_person_signals, pick_notes
 
 
@@ -61,9 +61,45 @@ def run_dating_courtship(kundli: dict, question: str, *, wants_explain: bool = F
             evidence.append(
                 f"Jupiter in house {jup.get('house')} — dharmic true love; bond grows with trust and blessing."
             )
+        sat = r.planet("Saturn") or {}
+        if sat.get("house") == 5:
+            sat_sign = sat.get("sign")
+            sat_dig = dignity_word(r, "Saturn", str(sat_sign) if sat_sign else None)
+            evidence.append(
+                f"Saturn in 5th ({sat_sign or '?'}, dignity {sat_dig}) — love matures slowly; "
+                "tests, delay, or seriousness before deep bond."
+            )
+            if "Saturn" in (r.aspects_house(7) or []):
+                evidence.append(
+                    "Saturn aspects 7th house — partnership cools or delays; patience needed for lasting love."
+                )
+        challenges = pick_notes(
+            sig,
+            [
+                "Saturn on 7th",
+                "Venus debilitated",
+                "Venus in enemy",
+                "Venus in dusthana",
+                "Venus under nodal",
+                "7th lord debilitated",
+                "7th lord in dusthana",
+                "Moon debilitated",
+                "Moon under Saturn",
+            ],
+            limit=5,
+        )
+        for line in challenges:
+            evidence.append(f"Love challenge: {line}")
+        has_tests = bool(challenges) or sat.get("house") == 5 or sig.venus_afflicted or sig.venus_debil
         if sig.reconnection_yoga:
             evidence.append("Reconnection yoga — true love can deepen again after tests.")
-        verdict = "True love capacity: Venus + Jupiter on 5th/7th romance-partnership axis"
+        if has_tests:
+            verdict = (
+                "True love yog with tests: Jupiter/Venus support romance, but Saturn/afflictions "
+                "add delay, emotional cooling, or inconsistency — mixed, not guaranteed instant."
+            )
+        else:
+            verdict = "True love capacity: Venus + Jupiter on 5th/7th romance-partnership axis"
 
     elif focus == "friend_to_lover":
         evidence.append(house_axis_evidence(r, 11, label="Friendship/social circle axis (11th house)"))
@@ -213,6 +249,9 @@ def run_dating_courtship(kundli: dict, question: str, *, wants_explain: bool = F
         summary=[
             f"QUESTION FOCUS: {focus}.",
             "Use 5th/7th/Venus/Mars evidence — this is courtship/love-life, not spouse profession.",
+            "Narrator MUST give a MIXED honest answer: mention positives (Jupiter/Venus) AND "
+            "challenges (Saturn debilitated in 5th, Venus enemy/debilitated, Saturn on/aspecting 7th) — "
+            "never only optimistic haan.",
         ],
         evidence=evidence[:12],
         ignore=["timing dates/windows", "exact date of meeting", "spouse job title"],

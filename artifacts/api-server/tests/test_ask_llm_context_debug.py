@@ -35,12 +35,16 @@ class AskLlmContextDebugTests(unittest.TestCase):
                 "slice": "mr_engine_v1",
                 "verdict": "Arrange side stronger",
                 "evidence": ["Arrange indicator: Manglik dosha"],
+                "evidence_positive": ["Jupiter in 5th — green flag"],
+                "evidence_negative": ["Saturn on 7th — delay"],
             },
             model="gpt-4.1-mini",
         )
         self.assertEqual(ctx["answer_path"], "engine_then_llm")
         self.assertEqual(ctx["engine_facts"]["verdict"], "Arrange side stronger")
         self.assertEqual(len(ctx["engine_facts"]["evidence"]), 1)
+        self.assertEqual(len(ctx["engine_facts"]["evidence_positive"]), 1)
+        self.assertEqual(len(ctx["engine_facts"]["evidence_negative"]), 1)
 
     def test_answer_path_engine_only(self):
         code, label = derive_answer_path(

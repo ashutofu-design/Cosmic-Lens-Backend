@@ -20,13 +20,45 @@ class EngineResult:
     template_text: str = ""
     checks: dict[str, Any] = field(default_factory=dict)
 
+    def _narrator_tone_block(self) -> str:
+        conf = (self.confidence or "medium").strip().lower()
+        verdict_l = (self.verdict or "").lower()
+        mixed = any(
+            w in verdict_l
+            for w in ("mixed", "kamzor", "patience", "dheere", "early", "abhi ", "needs ")
+        )
+        if conf == "high" and not mixed:
+            return (
+                "TONE: confident pattern voice (hai/hote hain/rehta hai). "
+                "NO shayad/ho sakta hai/lagta hai."
+            )
+        if conf == "low" or mixed:
+            return (
+                "TONE: balanced — mirror VERDICT strength exactly. "
+                "Do NOT upgrade to strong/pakka/guaranteed/acha balance/poori tarah. "
+                "If VERDICT says mixed/patience/early/kamzor → open with qualified haan "
+                "(e.g. 'Haan, yog dikhte hain lekin abhi mixed/gradual phase hai'). "
+                "NO shayad/ho sakta hai/lagta hai."
+            )
+        return (
+            "TONE: measured — VERDICT is the ceiling. "
+            "Do NOT oversell: banned words = strong, acha balance, pakka, guarantee, "
+            "poori tarah, confirmed awakening. "
+            "State VERDICT in plain Hinglish first, then one reason. "
+            "NO shayad/ho sakta hai/lagta hai."
+        )
+
     def to_narrator_payload(self) -> str:
         """Compact facts block for LLM narrator (minimal tokens)."""
         lines = [
             f"ARCHETYPE: {self.archetype}",
-            "TONE: confident pattern voice (hai/hote hain/rehta hai). NO shayad/ho sakta hai/lagta hai.",
+            self._narrator_tone_block(),
             f"VERDICT: {self.verdict}",
             f"CONFIDENCE: {self.confidence}",
+            (
+                "NARRATOR_LOCK: Sentence 1 = VERDICT tone (not stronger). "
+                "CONFIDENCE=medium/low → never sound more bullish than VERDICT."
+            ),
         ]
         checks = self.checks or {}
         if checks.get("love_score") is not None:

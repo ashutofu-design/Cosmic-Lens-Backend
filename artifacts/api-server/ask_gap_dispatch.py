@@ -123,6 +123,7 @@ def gap_static_to_meta(
         "topic": topic,
         "archetype": result.archetype,
         "verdict": result.verdict,
+        "confidence": result.confidence,
         "summary": list(result.summary or []),
         "evidence": list(result.evidence or []),
         "ignore": list(result.ignore or []),

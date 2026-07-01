@@ -36,7 +36,7 @@ SPIRITUAL_TOPIC_RX = re.compile(
     r"religious\s+travel|religious\s+tourism|"
     r"anxiety|trauma|emotional\s+trauma|saade\s+sati|dhaiya|"
     r"negative\s+energy|buri\s+nazar|divine\s+protection|"
-    r"gupta\s+spiritual|kriya\s+yoga|naam\s+jap|japa|"
+    r"gupta\s+spiritual|kriya\s+yoga|naam\s+jap|japa"
     r")\b|(?:आध्यात्म|धर्म|गुरु|मोक्ष|भक्ति|ध्यान|कर्म|अतींद्रिय|मुक्ति)"
 )
 

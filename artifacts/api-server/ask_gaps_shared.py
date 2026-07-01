@@ -73,7 +73,7 @@ def score_label(score: int, high: str, mid: str, low: str) -> tuple[str, str]:
         return high, "high"
     if score >= 55:
         return mid, "medium"
-    return low, "medium"
+    return low, "low"
 
 
 def gap_result(

@@ -130,6 +130,11 @@ export interface AskLlmContext {
   version?: number;
   route?: string;
   question?: string;
+  question_raw?: string | null;
+  question_normalized?: string | null;
+  question_meaning?: string | null;
+  typo_corrected?: boolean;
+  understanding_source?: string | null;
   question_type?: string;
   is_timing?: boolean;
   intent_source?: string;

@@ -1211,6 +1211,64 @@ code {
   margin-bottom: 0;
 }
 
+.question-understanding-panel {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(30, 58, 138, 0.18);
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  font-size: 0.82rem;
+}
+
+.question-understanding-panel p {
+  margin: 0 0 6px;
+}
+
+.question-understanding-panel p:last-child {
+  margin-bottom: 0;
+}
+
+.question-typo-raw {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.question-typo-arrow {
+  color: var(--muted);
+}
+
+.question-typo-norm {
+  color: #93c5fd;
+}
+
+.ask-understood-pill {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.ask-understood-pill--yes {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+}
+
+.ask-understood-pill--no {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.ask-q-meaning {
+  margin: 4px 0 8px;
+}
+
+.ask-detail-understanding {
+  margin-top: 8px;
+}
+
 .ask-q-block {
   display: block;
   margin-bottom: 10px;

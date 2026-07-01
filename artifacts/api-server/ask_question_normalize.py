@@ -66,6 +66,8 @@ _WORD_FIXES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bnat+ao\b", re.I), "batao"),
     (re.compile(r"\bbach+ch+a+\b", re.I), "bachcha"),
     (re.compile(r"\bbach+he+\b", re.I), "bachche"),
+    (re.compile(r"\bsach+ch+a+\b", re.I), "sacha"),
+    (re.compile(r"\bsach+chi+\b", re.I), "sachchi"),
     (re.compile(r"\bpy+a+ar+\b", re.I), "pyaar"),
     (re.compile(r"\bpre+m+\b", re.I), "prem"),
     (re.compile(r"\bhus+b+and+\b", re.I), "husband"),
@@ -215,6 +217,7 @@ def _build_fuzzy_vocab() -> tuple[str, ...]:
         "health", "sehat", "tabiyat", "swasthya", "illness", "disease",
         "child", "bachcha", "pregnancy", "property", "ghar", "flat", "vastu",
         "visa", "abroad", "videsh", "travel", "litigation", "court",
+        "sacha", "sachcha", "sachchi", "mohabbat", "true",
         "shani", "saturn", "rahu", "ketu", "jupiter", "guru", "venus", "shukra",
         "mars", "mangal", "mercury", "budh", "moon", "chandra", "sun", "surya",
         "house", "bhav", "bhaav", "lord", "exalted", "debilitated", "retrograde",
@@ -267,6 +270,21 @@ def _fuzzy_repair_tokens(text: str) -> str:
     return " ".join(out)
 
 
+def _fix_contextual_phrase_typos(text: str) -> str:
+    """Phrase-level fixes where single-word fuzzy would pick the wrong vocab match."""
+    t = text
+    # "bachcha pyaar" beside love/yog/true-love → typo for "sacha pyaar" (not child).
+    if re.search(r"(?ix)\bbachch?a\s+pya+a?r\b", t) and re.search(
+        r"(?ix)\b("
+        r"true\s*love|milne\s+ka\s+yog|yog\s+likha|love|prem|mohabbat|"
+        r"sach|rishta|shaadi|pyaar|pyar"
+        r")\b",
+        t,
+    ):
+        t = re.sub(r"(?ix)\bbachch?a\s+pya+a?r\b", "sacha pyaar", t)
+    return t
+
+
 def prepare_ask_question(question: str) -> str:
     """
     Normalize user question for gates, classifiers, and LLM.
@@ -284,6 +302,8 @@ def prepare_ask_question(question: str) -> str:
 
     for rx, repl in _VERB_FIXES:
         q = rx.sub(repl, q)
+
+    q = _fix_contextual_phrase_typos(q)
 
     # kyahe / kabse glued words + common keyboard typos
     q = re.sub(r"\bkyahe\b", "kya hai", q, flags=re.I)

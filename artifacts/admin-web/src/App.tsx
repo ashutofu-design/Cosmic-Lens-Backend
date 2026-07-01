@@ -1,5 +1,5 @@
 import { AskQuestionDetailPage } from "./AskQuestionDetailPage";
-import { AskLlmContextPanel, AnswerPathBadge, parseAskLlmContext } from "./AskLlmContextPanel";
+import { AskLlmContextPanel, AnswerPathBadge, parseAskLlmContext, QuestionUnderstandingPanel } from "./AskLlmContextPanel";
 import { CopyTextButton } from "./CopyTextButton";
 import { ViewQuestionButton } from "./ViewQuestionButton";
 import { QuestionLangBadge } from "./QuestionLangBadge";
@@ -1555,6 +1555,14 @@ export default function App() {
                           <div className="ask-q-text">
                             <strong>Q:</strong> {row.question_text}
                           </div>
+                          {(() => {
+                            const rowCtx = parseAskLlmContext(row);
+                            return rowCtx ? (
+                              <div className="ask-q-meaning">
+                                <QuestionUnderstandingPanel ctx={rowCtx} />
+                              </div>
+                            ) : null;
+                          })()}
                           <div className="ask-q-actions">
                             <QuestionLangBadge questionText={row.question_text} compact />
                             <CopyTextButton

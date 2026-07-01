@@ -4886,9 +4886,18 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     try:
         from ask_question_normalize import prepare_ask_question
 
+        _question_raw = question or ""
         question = prepare_ask_question(question or "")
+        _question_normalized = question or ""
     except Exception:
+        _question_raw = question or ""
+        _question_normalized = question or ""
         question = question or ""
+
+    def _attach_admin(result: dict, **kwargs) -> dict:
+        kwargs.setdefault("question_raw", _question_raw)
+        kwargs.setdefault("question_normalized", _question_normalized)
+        return _attach_admin_llm_context(result, **kwargs)
 
     try:
         from ask_scope_gate import assess_ask_scope, scope_refusal_payload
@@ -4911,7 +4920,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 "skip_llm": True,
                 "hard_guard": "REFUSE_DEATH",
             }
-            return _attach_admin_llm_context(
+            return _attach_admin(
                 _death_out,
                 question=question or "",
                 question_type="STATIC",
@@ -4942,7 +4951,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 f"[raw_passthrough] timing_domain_clarifier q={question[:80]!r}",
                 flush=True,
             )
-            return _attach_admin_llm_context(
+            return _attach_admin(
                 _clar,
                 question=question or "",
                 question_type="TIMING",
@@ -5071,7 +5080,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 f"q={question[:70]!r}",
                 flush=True,
             )
-            return _attach_admin_llm_context(
+            return _attach_admin(
                 _out_alt,
                 question=question or "",
                 question_type="TIMING",
@@ -5204,6 +5213,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
                 client=client,
                 force_llm=True,
+                question_raw=_question_raw or _user_turn_question or "",
             )
     except Exception as _uq_exc:
         print(f"[raw_passthrough] question_understand skipped: {_uq_exc}", flush=True)
@@ -5315,7 +5325,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 f"q={question[:80]!r}",
                 flush=True,
             )
-            return _attach_admin_llm_context(
+            return _attach_admin(
                 _clar_tc,
                 question=question or "",
                 question_type=qtype,
@@ -7277,7 +7287,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     _pt_blocks["engine_trace"] = _trace
             except Exception as _te:
                 print(f"[raw_passthrough] engine_trace skipped: {_te}", flush=True)
-        return _attach_admin_llm_context(
+        return _attach_admin(
             _out_rp,
             question=question or "",
             question_type=qtype,
@@ -7317,7 +7327,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             "skip_llm": True,
             "dasha_included": False,
         }
-        return _attach_admin_llm_context(
+        return _attach_admin(
             _out_htpl,
             question=question or "",
             question_type=qtype,
@@ -7356,7 +7366,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             "skip_llm": True,
             "dasha_included": False,
         }
-        return _attach_admin_llm_context(
+        return _attach_admin(
             _out_tpl,
             question=question or "",
             question_type=qtype,
@@ -7774,7 +7784,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             domain_timing_block=domain_timing_block or "",
         )
         if _refusal is not None:
-            return _attach_admin_llm_context(
+            return _attach_admin(
                 _refusal,
                 question=question or "",
                 question_type=qtype,
@@ -7859,7 +7869,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             from ask_hard_guards import no_engine_refusal_result
 
             _no_eng = no_engine_refusal_result(question or "", qtype=qtype)
-            return _attach_admin_llm_context(
+            return _attach_admin(
                 _no_eng,
                 question=question or "",
                 question_type=qtype,
@@ -8285,7 +8295,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _pt_blocks["career_engine_trace"] = _career_trace
         if isinstance(_domain_timing_trace, dict) and _domain_timing_trace:
             _pt_blocks["engine_trace"] = _domain_timing_trace
-        return _attach_admin_llm_context(
+        return _attach_admin(
             _out,
             question=question or "",
             question_type=qtype,

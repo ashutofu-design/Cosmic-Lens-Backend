@@ -16,6 +16,8 @@ Rules for question_summary:
 - 12-50 words in ONE line (long multi-part questions: up to 60 words, still one line).
 - Cover EVERY sub-part the user asked — do not drop any concern.
 - Paraphrase in your own words (not copy-paste only).
+- User may have small spelling mistakes in Hindi/Hinglish (Roman). Infer intended meaning from context.
+- In question_summary use the CORRECTED meaning (e.g. "bachcha pyaar" near true love/yog → sacha pyaar; shadii→shaadi; helth→health; nokri→naukri; dhokha→dhoka). Never lecture about spelling.
 - No planet/house/dasha jargon. No answer — only show you understood.
 - understood=false only for gibberish / empty / not a real question.
 
@@ -106,6 +108,7 @@ def ensure_question_understanding(
     *,
     client: Any = None,
     force_llm: bool = False,
+    question_raw: str = "",
 ) -> dict[str, Any]:
     """Guarantee question_summary + admin understanding lines on every Ask."""
     from ask_intent_fidelity import (
@@ -115,11 +118,18 @@ def ensure_question_understanding(
     )
 
     q = (question or "").strip()
+    raw = (question_raw or q).strip()
     out: dict[str, Any] = dict(intent) if isinstance(intent, dict) else {}
+    out["question_raw"] = raw
+    out["question_normalized"] = q
+    out["typo_corrected"] = bool(raw and q and raw.lower() != q.lower())
 
     summary = str(out.get("question_summary") or "").strip()
     if force_llm or _summary_is_weak(summary, q):
-        extra = llm_understand_question(q, client=client)
+        llm_q = q
+        if out["typo_corrected"]:
+            llm_q = f"{q}\n(Original user text with possible typos: {raw})"
+        extra = llm_understand_question(llm_q, client=client)
         if str(extra.get("question_summary") or "").strip():
             out["question_summary"] = str(extra["question_summary"]).strip()
             out["understanding_source"] = extra.get("source") or "understand_llm"
@@ -133,6 +143,7 @@ def ensure_question_understanding(
     out["interpretation"] = out.get("interpretation") or f'User asked: "{q}"'
     out["question_echo"] = q
     out["question_understood"] = "yes" if q and str(out.get("question_summary") or "").strip() else "no"
+    out["question_meaning"] = str(out.get("question_summary") or "").strip()
     out["understanding_detail"] = build_question_understanding_detail(q, out)
     out["understanding_line"] = build_llm_understood_one_liner(q, out)
     return out

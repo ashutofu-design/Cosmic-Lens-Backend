@@ -317,6 +317,8 @@ def build_admin_llm_context(
     skip_reason: str = "",
     intent_source: str = "regex",
     llm_intent: dict[str, Any] | None = None,
+    question_raw: str = "",
+    question_normalized: str = "",
 ) -> dict[str, Any]:
     """Structured snapshot for admin panel (never shown to end users)."""
     _checks = checks or {}
@@ -338,7 +340,12 @@ def build_admin_llm_context(
     try:
         from ask_question_understand import ensure_question_understanding
 
-        _intent = ensure_question_understanding(question or "", _intent, force_llm=False)
+        _intent = ensure_question_understanding(
+            question_normalized or question or "",
+            _intent,
+            force_llm=False,
+            question_raw=question_raw or str(_intent.get("question_raw") or question or ""),
+        )
     except Exception:
         if not _intent.get("question_summary"):
             try:
@@ -348,6 +355,24 @@ def build_admin_llm_context(
             except Exception:
                 pass
     llm_intent = _intent or llm_intent
+    _raw = str(
+        question_raw or (_intent.get("question_raw") if isinstance(_intent, dict) else "") or question or ""
+    ).strip()
+    _norm = str(
+        question_normalized
+        or (_intent.get("question_normalized") if isinstance(_intent, dict) else "")
+        or question
+        or ""
+    ).strip()
+    _meaning = str(
+        (_intent.get("question_meaning") if isinstance(_intent, dict) else "")
+        or (_intent.get("question_summary") if isinstance(_intent, dict) else "")
+        or ""
+    ).strip()
+    _typo_corrected = bool(_raw and _norm and _raw.lower() != _norm.lower())
+    _understanding_source = str(
+        (_intent.get("understanding_source") if isinstance(_intent, dict) else "") or ""
+    ).strip() or None
     try:
         from ask_intent_fidelity import (
             build_question_understanding_detail,
@@ -384,7 +409,12 @@ def build_admin_llm_context(
     return {
         "version": 1,
         "route": route,
-        "question": (question or "")[:2000],
+        "question": (_norm or question or "")[:2000],
+        "question_raw": (_raw[:2000] if _raw else None),
+        "question_normalized": (_norm[:2000] if _typo_corrected else None),
+        "question_meaning": (_meaning[:600] if _meaning else None),
+        "typo_corrected": _typo_corrected,
+        "understanding_source": _understanding_source,
         "question_type": question_type,
         "is_timing": bool(is_timing),
         "intent_source": intent_source or "regex",

@@ -3,7 +3,7 @@ import { formatDate, formatInr } from "./api";
 import {
   AskLlmContextPanel,
   AnswerPathBadge,
-  LlmUnderstoodOneLine,
+  QuestionUnderstandingPanel,
   parseAskLlmContext,
 } from "./AskLlmContextPanel";
 import { CopyTextButton } from "./CopyTextButton";
@@ -43,11 +43,7 @@ export function AskQuestionDetailPage({
           <QuestionLangBadge questionText={row.question_text} />
         </div>
         <p className="ask-detail-question">{row.question_text}</p>
-        {ctx ? (
-          <p className="ask-detail-understanding">
-            <LlmUnderstoodOneLine ctx={ctx} />
-          </p>
-        ) : null}
+        {ctx ? <QuestionUnderstandingPanel ctx={ctx} /> : null}
       </div>
 
       <div className="ask-detail-block">

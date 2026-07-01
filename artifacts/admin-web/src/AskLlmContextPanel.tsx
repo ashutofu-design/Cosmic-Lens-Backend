@@ -31,7 +31,8 @@ export function resolveQuestionUnderstoodWord(
 
 export function resolveLlmUnderstoodLine(ctx: AskLlmContext | null): string {
   if (!ctx) return "";
-  const summary = ctx.llm_intent?.question_summary?.trim();
+  const meaning = ctx.question_meaning?.trim() || ctx.llm_intent?.question_summary?.trim();
+  const summary = meaning;
   const line = ctx.understanding_line?.trim();
   if (line && line.includes(" — ")) return line;
   if (summary && line) {
@@ -69,6 +70,54 @@ export function LlmUnderstoodOneLine({ ctx }: { ctx: AskLlmContext | null }) {
       </strong>
       {m[2] || null}
     </>
+  );
+}
+
+export function QuestionUnderstandingPanel({ ctx }: { ctx: AskLlmContext | null }) {
+  if (!ctx) return null;
+  const raw = (ctx.question_raw || ctx.question || "").trim();
+  const norm = (ctx.question_normalized || "").trim();
+  const meaning = (ctx.question_meaning || ctx.llm_intent?.question_summary || "").trim();
+  const typoFixed = Boolean(
+    ctx.typo_corrected && raw && norm && raw.toLowerCase() !== norm.toLowerCase(),
+  );
+  const source = (ctx.understanding_source || "").trim();
+  const understood = resolveQuestionUnderstoodWord(ctx);
+
+  if (!meaning && !typoFixed && !understood) return null;
+
+  return (
+    <div className="question-understanding-panel">
+      {typoFixed ? (
+        <p className="question-typo-row">
+          <strong>Typos fixed:</strong>{" "}
+          <span className="question-typo-raw">{raw}</span>
+          <span className="question-typo-arrow"> → </span>
+          <span className="question-typo-norm">{norm}</span>
+        </p>
+      ) : null}
+      {meaning ? (
+        <p className="question-meaning-row">
+          <strong>LLM meaning:</strong> {meaning}
+          {understood ? (
+            <span
+              className={`ask-understood-pill ask-understood-pill--${understood.toLowerCase()}`}
+            >
+              {understood}
+            </span>
+          ) : null}
+        </p>
+      ) : (
+        <p>
+          <LlmUnderstoodOneLine ctx={ctx} />
+        </p>
+      )}
+      {source ? (
+        <p className="detail-muted question-understanding-source">
+          Understanding source: <code>{source}</code>
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -802,9 +851,7 @@ export function AskLlmContextPanel({
             {(ctx.intent_source === "llm" || ctx.intent_source === "llm_repaired") &&
             ctx.llm_intent ? (
               <div className="llm-understanding-box">
-                <p>
-                  <LlmUnderstoodOneLine ctx={ctx} />
-                </p>
+                <QuestionUnderstandingPanel ctx={ctx} />
                 <p>
                   <strong>Engine selected:</strong>{" "}
                   <code>
@@ -826,6 +873,10 @@ export function AskLlmContextPanel({
                   Flow: LLM reads question → picks engine → engine produces facts → LLM
                   writes the human answer.
                 </p>
+              </div>
+            ) : ctx.question_meaning || ctx.typo_corrected ? (
+              <div className="llm-understanding-box">
+                <QuestionUnderstandingPanel ctx={ctx} />
               </div>
             ) : (
               <div className="answer-path-banner">

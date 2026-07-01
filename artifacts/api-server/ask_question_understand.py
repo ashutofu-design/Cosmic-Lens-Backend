@@ -8,24 +8,38 @@ import re
 import time
 from typing import Any, Optional
 
-_UNDERSTAND_PROMPT = """You read Hindi/Hinglish/English astrology questions.
+_UNDERSTAND_PROMPT = """You read Hindi/Hinglish/English astrology questions WORD BY WORD.
 Return STRICT JSON only:
-{"question_summary": "<ONE line plain Hinglish (Roman) — what user wants to know>",
+{"question_scope": "<one word>",
+ "question_summary": "<ONE line plain Hinglish (Roman)>",
  "understood": true}
 
+question_scope — pick exactly ONE:
+love | marriage | partner | couple | career | health | finance | education | children | property | travel | legal | vehicle | spiritual | self | family | general
+
+Scope rules:
+- couple = hum/ham dono, dono ke beech, between us (bond of TWO people)
+- partner = specific spouse/BF/GF/pati/patni/husband/wife subject
+- love = romance/pyaar/attachment without naming a partner person
+- marriage = shaadi/vivah/marriage quality or timing
+- self = only about native (mera/meri/main/mujhe — NOT partner)
+- career = job/naukri/business/promotion
+- health = sehat/bimari
+- finance = paisa/dhan/wealth/loss
+- general = vague or multi-domain overview only
+
 Rules for question_summary:
-- 12-50 words in ONE line (long multi-part questions: up to 60 words, still one line).
-- Cover EVERY sub-part the user asked — do not drop any concern.
-- Paraphrase in your own words (not copy-paste only).
-- User may have small spelling mistakes in Hindi/Hinglish (Roman). Infer intended meaning from context.
-- In question_summary use the CORRECTED meaning (e.g. "bachcha pyaar" near true love/yog → sacha pyaar; shadii→shaadi; helth→health; nokri→naukri; dhokha→dhoka). Never lecture about spelling.
-- No planet/house/dasha jargon. No answer — only show you understood.
+- Read the FULL question carefully — every clause, every "aur/ya", every contrast (X ya Y).
+- If user asks 2–3 things, include ALL in one line (use commas or "aur").
+- 15–70 words, ONE line, paraphrase in your own words (not copy-paste only).
+- Fix spelling silently (shadii→shaadi, helth→health, nokri→naukri).
+- No planet/house/dasha jargon. No answer — only prove you understood.
 - understood=false only for gibberish / empty / not a real question.
 
 Question:
 {question}"""
 
-_TIMEOUT_S = 10
+_TIMEOUT_S = 12
 
 
 def _summary_is_weak(summary: str, question: str) -> bool:
@@ -48,7 +62,33 @@ def _summary_is_weak(summary: str, question: str) -> bool:
     if q and (s == q or q.startswith(s) or s.startswith(q[: min(len(q), len(s))])):
         # Near-verbatim echo — prefer LLM paraphrase for long questions
         return len(q) > 80
+    # Long multi-part question but very short summary — re-ask understand LLM
+    if q and len(q) > 55:
+        q_parts = len(re.findall(r"(?ix)\b(aur|ya|or|and)\b", q))
+        if q_parts >= 1 and len(s) < len(q) * 0.45:
+            return True
     return False
+
+
+def _apply_understanding_fields(
+    out: dict[str, Any],
+    question: str,
+    *,
+    summary: str,
+    scope: str = "",
+) -> None:
+    from ask_intent_fidelity import (
+        format_question_understanding,
+        infer_question_scope,
+        normalize_question_scope,
+        strip_scope_bracket,
+    )
+
+    body = strip_scope_bracket(summary)
+    sc = normalize_question_scope(scope) if scope else infer_question_scope(question, out)
+    out["question_scope"] = sc
+    out["question_summary"] = body
+    out["question_meaning"] = format_question_understanding(sc, body)
 
 
 def llm_understand_question(
@@ -90,15 +130,17 @@ def llm_understand_question(
             messages=[{"role": "user", "content": _UNDERSTAND_PROMPT.format(question=q)}],
         )
         try:
-            resp = client.chat.completions.create(max_completion_tokens=180, **kwargs)
+            resp = client.chat.completions.create(max_completion_tokens=240, **kwargs)
         except TypeError:
-            resp = client.chat.completions.create(max_tokens=180, **kwargs)
+            resp = client.chat.completions.create(max_tokens=240, **kwargs)
         raw = (resp.choices[0].message.content or "").strip()
         data = json.loads(raw)
         summary = str(data.get("question_summary") or "").strip()[:600]
+        scope = str(data.get("question_scope") or "").strip()
         understood = bool(data.get("understood", True)) and bool(summary)
         return {
             "question_summary": summary,
+            "question_scope": scope,
             "understood": understood,
             "source": "understand_llm",
             "latency_ms": int((time.time() - t0) * 1000),
@@ -125,6 +167,7 @@ def ensure_question_understanding(
     from ask_intent_fidelity import (
         build_llm_understood_one_liner,
         build_question_understanding_detail,
+        infer_question_scope,
         summarize_question_one_line,
     )
 
@@ -144,22 +187,38 @@ def ensure_question_understanding(
             llm_q = f"{q}\n(Original user text with possible typos: {raw})"
         extra = llm_understand_question(llm_q, client=client)
         if str(extra.get("question_summary") or "").strip():
-            out["question_summary"] = str(extra["question_summary"]).strip()
+            _apply_understanding_fields(
+                out,
+                q,
+                summary=str(extra["question_summary"]).strip(),
+                scope=str(extra.get("question_scope") or "").strip(),
+            )
             out["understanding_source"] = extra.get("source") or "understand_llm"
             if extra.get("latency_ms") is not None:
                 out["understand_latency_ms"] = extra["latency_ms"]
 
     if not str(out.get("question_summary") or "").strip():
-        out["question_summary"] = summarize_question_one_line(q, out)
+        fallback = summarize_question_one_line(q, out, with_scope=False)
+        _apply_understanding_fields(
+            out,
+            q,
+            summary=fallback,
+            scope=infer_question_scope(q, out),
+        )
         out["understanding_source"] = "regex_paraphrase"
+    elif not str(out.get("question_meaning") or "").strip():
+        _apply_understanding_fields(
+            out,
+            q,
+            summary=str(out.get("question_summary") or "").strip(),
+            scope=str(out.get("question_scope") or "").strip(),
+        )
     elif not str(out.get("understanding_source") or "").strip():
-        # Never copy intent routing `source` (e.g. regex_fallback) into understanding_source
         out["understanding_source"] = "regex_paraphrase"
 
     out["interpretation"] = out.get("interpretation") or f'User asked: "{q}"'
     out["question_echo"] = q
     out["question_understood"] = "yes" if q and str(out.get("question_summary") or "").strip() else "no"
-    out["question_meaning"] = str(out.get("question_summary") or "").strip()
     out["understanding_detail"] = build_question_understanding_detail(q, out)
     out["understanding_line"] = build_llm_understood_one_liner(q, out)
     return out
@@ -170,7 +229,7 @@ def narrator_intent_hint(question: str, llm_intent: dict[str, Any] | None = None
     from ask_intent_fidelity import summarize_question_one_line
 
     q = (question or "").strip()
-    summary = summarize_question_one_line(q, llm_intent)
+    summary = summarize_question_one_line(q, llm_intent, with_scope=True)
     if not summary:
         return f'User asked: "{q}"'
     return (

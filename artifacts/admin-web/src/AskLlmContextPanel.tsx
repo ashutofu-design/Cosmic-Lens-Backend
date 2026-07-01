@@ -51,6 +51,102 @@ export function resolveLlmUnderstoodLine(ctx: AskLlmContext | null): string {
   return "";
 }
 
+export function resolveQuestionScope(ctx: AskLlmContext | null): string {
+  if (!ctx) return "";
+  const direct = (ctx.question_scope || ctx.llm_intent?.question_scope || "").trim().toLowerCase();
+  if (direct) return direct;
+  const meaning = ctx.question_meaning?.trim() || ctx.llm_intent?.question_summary?.trim() || "";
+  const m = meaning.match(/^\[([a-z][a-z0-9_]*)\]/i);
+  return m ? m[1].toLowerCase() : "";
+}
+
+export function resolveQuestionMeaningText(ctx: AskLlmContext | null): string {
+  if (!ctx) return "";
+  const direct =
+    ctx.question_meaning?.trim() ||
+    ctx.llm_intent?.question_summary?.trim() ||
+    ctx.llm_intent?.interpretation?.trim() ||
+    "";
+  if (direct) {
+    return direct.replace(/^\[[a-z][a-z0-9_]*\]\s*/i, "").trim() || direct;
+  }
+
+  const line = ctx.understanding_line?.trim() || "";
+  const parsed = line.match(/^(?:Yes|No) — (?:\[[a-z][a-z0-9_]*\]\s*)?(.+)$/i);
+  if (parsed) {
+    const rest = parsed[1];
+    const routeSplit = rest.split(" · ");
+    return routeSplit[0].replace(/\.$/, "").trim();
+  }
+  return ctx.understanding_detail?.trim() || "";
+}
+
+export function resolveQuestionRoutingHint(ctx: AskLlmContext | null): string {
+  if (!ctx) return "";
+  const detail = ctx.understanding_detail?.trim();
+  if (detail) return detail;
+
+  const line = ctx.understanding_line?.trim() || "";
+  const parsed = line.match(/^(?:Yes|No) — .+ · (.+)$/);
+  if (parsed) return parsed[1].replace(/\.$/, "").trim();
+  return "";
+}
+
+function clipUnderstandingText(text: string, maxChars = 360): string {
+  const t = text.trim();
+  if (t.length <= maxChars) return t;
+  return `${t.slice(0, maxChars).replace(/\s+\S*$/, "")}…`;
+}
+
+export function LlmQuestionUnderstandingBrief({ ctx }: { ctx: AskLlmContext | null }) {
+  const scope = resolveQuestionScope(ctx);
+  const body = clipUnderstandingText(resolveQuestionMeaningText(ctx));
+  const bracketed =
+    ctx?.question_meaning?.trim() ||
+    (scope && body ? `[${scope}] ${body}` : body);
+  const routingHint = clipUnderstandingText(resolveQuestionRoutingHint(ctx));
+  const understood = resolveQuestionUnderstoodWord(ctx);
+  const source = (ctx?.understanding_source || ctx?.intent_source || "").trim();
+
+  if (!bracketed && !routingHint && !understood) {
+    return (
+      <span className="detail-muted">
+        Not saved for this row — deploy latest API and ask again.
+      </span>
+    );
+  }
+
+  const bracketMatch = bracketed.match(/^(\[[a-z][a-z0-9_]*\])\s*(.*)$/i);
+
+  return (
+    <div className="ask-detail-llm-understanding">
+      {bracketMatch ? (
+        <p className="ask-detail-llm-meaning">
+          <span className="ask-scope-inline">{bracketMatch[1]}</span>
+          {bracketMatch[2]}
+        </p>
+      ) : bracketed ? (
+        <p className="ask-detail-llm-meaning">{bracketed}</p>
+      ) : null}
+      {routingHint && routingHint !== meaning ? (
+        <p className="ask-detail-llm-route detail-muted">{routingHint}</p>
+      ) : null}
+      <div className="ask-detail-understood-row">
+        {understood ? (
+          <span className={`ask-understood-pill ask-understood-pill--${understood.toLowerCase()}`}>
+            Understood: {understood}
+          </span>
+        ) : null}
+        {source ? (
+          <span className="detail-muted ask-detail-understanding-source">
+            via <code>{source}</code>
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function LlmUnderstoodOneLine({ ctx }: { ctx: AskLlmContext | null }) {
   const line = resolveLlmUnderstoodLine(ctx);
   if (!line) return null;
@@ -160,7 +256,10 @@ export function EngineVerificationBadge({
     return <span className="engine-verify-badge engine-verify-unknown">Unknown</span>;
   }
   return (
-    <span className={`engine-verify-badge engine-verify-${summary.status}`}>
+    <span
+      className={`engine-verify-badge engine-verify-${summary.status}`}
+      title={summary.reason || undefined}
+    >
       {summary.label}
     </span>
   );
@@ -877,7 +976,7 @@ export function AskLlmContextPanel({
   if (!ctx) {
     return (
       <details id={id} className="llm-context-panel llm-context-missing" open={defaultOpen || undefined}>
-        <summary>LLM context — not saved for this question</summary>
+        <summary>Engine evidence — not saved for this question</summary>
         <p className="detail-muted">
           Deploy latest API + admin-web, restart cosmic-api, run DB migration, then ask a
           new question. Rows before deploy will not have this data.
@@ -888,8 +987,6 @@ export function AskLlmContextPanel({
 
   const checks = (ctx.checks || {}) as Record<string, unknown>;
   const sliceMeta = (ctx.slice_meta || {}) as Record<string, unknown>;
-  const flags = (sliceMeta.flags as string[] | undefined) || undefined;
-  const answerPath = resolveAnswerPath(ctx, row);
   const engineFacts = engineFactsFromContext(ctx);
   const evidence =
     (engineFacts.evidence && engineFacts.evidence.length > 0
@@ -935,336 +1032,134 @@ export function AskLlmContextPanel({
     (engineFacts as Record<string, unknown>).dasha_trace ||
     sliceMeta.dasha_trace
   ) as Record<string, unknown> | undefined;
-  const skipLlm = ctx.llm_called === false || sliceMeta.skip_llm === true || checks.skip_llm === true;
-  const narratorMode = checks.narrator_mode ? String(checks.narrator_mode) : "";
-  const chartChars = ctx.sizes?.chart_chars ?? ctx.chart_text?.length ?? 0;
   const rawOnly = typeof (ctx as { raw?: string }).raw === "string";
-  const sliceLabel = rawOnly
-    ? "raw JSON"
-    : String(checks.slice_type || checks.archetype || archetype || "unknown");
 
   return (
     <details id={id} className="llm-context-panel" open={defaultOpen || undefined}>
       <summary>
-        LLM context — {sliceLabel}
-        {skipLlm ? " (LLM skipped)" : ""}
+        Engine evidence
         {archetype ? ` · ${archetype}` : ""}
       </summary>
       <div className="llm-context-body">
         {rawOnly ? (
           <pre className="llm-context-pre">{(ctx as { raw: string }).raw}</pre>
+        ) : !verdict && (!evidence || evidence.length === 0) && !hasSplitEvidence ? (
+          <p className="detail-muted">No structured engine facts for this question.</p>
         ) : (
-          <>
-            <EngineTracePanel ctx={ctx} row={row} />
-
-            <div className={`answer-path-banner answer-path-${answerPath.code}`}>
-              <strong>Answer path:</strong> {answerPath.label}
-              {row.answer_source ? (
-                <>
-                  {" · "}
-                  <code>source={row.answer_source}</code>
-                </>
-              ) : null}
-              {narratorMode ? (
-                <>
-                  {" · "}
-                  <code>narrator={narratorMode}</code>
-                </>
-              ) : null}
-              {ctx.llm_called === false ? (
-                <span className="answer-path-note"> — final text from engine template</span>
-              ) : ctx.model ? (
-                <span className="answer-path-note">
-                  {" "}
-                  — user-facing text written by <code>{ctx.model}</code>
-                </span>
-              ) : null}
-            </div>
-
-            {(ctx.intent_source === "llm" || ctx.intent_source === "llm_repaired" || ctx.intent_source === "understanding_route") &&
-            ctx.llm_intent ? (
-              <div className="llm-understanding-box">
-                <QuestionUnderstandingPanel ctx={ctx} />
-                <p>
-                  <strong>Engine selected:</strong>{" "}
-                  <code>
-                    {String(
-                      ctx.llm_intent.routed_archetype ||
-                        ctx.slice_meta?.archetype ||
-                        ctx.engine_facts?.archetype ||
-                        ctx.llm_intent.mr_archetype ||
-                        ctx.llm_intent.career_archetype ||
-                        "",
-                    ) ||
-                      (ctx.llm_intent.is_timing
-                        ? `${ctx.llm_intent.domain || "domain"} timing engine`
-                        : `${ctx.llm_intent.domain || "general"} static engine`)}
-                    {ctx.llm_intent.routed_timing || ctx.llm_intent.is_timing
-                      ? " (timing)"
-                      : " (static)"}
-                  </code>
-                  {ctx.llm_intent.confidence != null ? (
-                    <span className="answer-path-note">
-                      {" "}
-                      — domain={ctx.llm_intent.domain}, confidence=
-                      {ctx.llm_intent.confidence}
-                    </span>
-                  ) : null}
-                </p>
-                {ctx.engine_ran || (ctx.llm_intent as { engine_ran?: string })?.engine_ran ? (
-                  <p>
-                    <strong>Engine ran:</strong>{" "}
-                    <code>
-                      {String(
-                        ctx.engine_ran ||
-                          (ctx.llm_intent as { engine_ran?: string }).engine_ran ||
-                          "",
-                      )}
-                    </code>
-                    {ctx.engine_route_reason ||
-                    (ctx.llm_intent as { engine_route_reason?: string })?.engine_route_reason ? (
-                      <span className="answer-path-note">
-                        {" "}
-                        — {String(ctx.engine_route_reason ||
-                          (ctx.llm_intent as { engine_route_reason?: string }).engine_route_reason)}
-                      </span>
-                    ) : null}
-                  </p>
-                ) : null}
-                <EngineVerificationPanel ctx={ctx} />
-                <p className="detail-muted">
-                  Flow: LLM reads question → picks engine → engine produces facts → LLM
-                  writes the human answer.
-                </p>
-              </div>
-            ) : ctx.question_meaning || ctx.typo_corrected ? (
-              <div className="llm-understanding-box">
-                <QuestionUnderstandingPanel ctx={ctx} />
-              </div>
-            ) : (
-              <div className="answer-path-banner">
-                <strong>Intent:</strong> <code>regex</code>
-                <span className="answer-path-note">
-                  {" "}
-                  — set ASK_LLM_INTENT=1 to route via LLM
-                </span>
-              </div>
-            )}
-
-            <details open className="engine-facts-panel">
-              <summary>Facts sent to LLM (engine output)</summary>
-              {!verdict && (!evidence || evidence.length === 0) ? (
-                <p className="detail-muted">
-                  No structured engine facts — LLM got chart slice / prompt only (direct LLM
-                  path).
-                </p>
-              ) : (
-                <div className="engine-facts-box">
-                  {archetype ? (
-                    <p>
-                      <strong>Archetype:</strong> {archetype}
-                    </p>
-                  ) : null}
-                  {verdict ? (
-                    <p>
-                      <strong>Verdict:</strong> {verdict}
-                    </p>
-                  ) : null}
-                  {dashaTrace && (dashaTrace.current_lords || dashaTrace.next_career_ad) ? (
-                    <p>
-                      <strong>Dasha check:</strong> current{" "}
-                      {fmtCheckValue(dashaTrace.current_lords)}
-                      {dashaTrace.current_start || dashaTrace.current_end ? (
-                        <>
-                          {" "}
-                          ({fmtCheckValue(dashaTrace.current_start)} →{" "}
-                          {fmtCheckValue(dashaTrace.current_end)})
-                        </>
-                      ) : null}
-                      {dashaTrace.next_career_ad ? (
-                        <>
-                          {" "}
-                          · next career AD {fmtCheckValue(dashaTrace.next_career_ad)}
-                          {dashaTrace.next_career_start || dashaTrace.next_career_end ? (
-                            <>
-                              {" "}
-                              ({fmtCheckValue(dashaTrace.next_career_start)} →{" "}
-                              {fmtCheckValue(dashaTrace.next_career_end)})
-                            </>
-                          ) : null}
-                        </>
-                      ) : null}
-                    </p>
-                  ) : null}
-                  {engineFacts.love_score != null || engineFacts.arrange_score != null ? (
-                    <p>
-                      <strong>Scores:</strong> love={fmtCheckValue(engineFacts.love_score)}, arrange=
-                      {fmtCheckValue(engineFacts.arrange_score)}
-                      {engineFacts.confidence_ratio != null ? (
-                        <>
-                          {" "}
-                          · ratio={fmtCheckValue(engineFacts.confidence_ratio)}
-                        </>
-                      ) : null}
-                    </p>
-                  ) : null}
-                  {summary && summary.length > 0 ? (
-                    <>
-                      <p>
-                        <strong>Summary for narrator:</strong>
-                      </p>
-                      <ul className="llm-check-list">
-                        {summary.map((s) => (
-                          <li key={s}>{s}</li>
-                        ))}
-                      </ul>
-                    </>
-                  ) : null}
-                  {hasSplitEvidence ? (
-                    <>
-                      <p>
-                        <strong>Positive evidence ({evidencePositive.length}):</strong>
-                      </p>
-                      {evidencePositive.length > 0 ? (
-                        <ul className="llm-check-list evidence-positive">
-                          {evidencePositive.map((e) => (
-                            <li key={`pos-${e}`}>{e}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="detail-muted">— none (0)</p>
-                      )}
-                      <p>
-                        <strong>Negative / affliction evidence ({evidenceNegative.length}):</strong>
-                      </p>
-                      {evidenceNegative.length > 0 ? (
-                        <ul className="llm-check-list evidence-negative">
-                          {evidenceNegative.map((e) => (
-                            <li key={`neg-${e}`}>{e}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="detail-muted">— none (0)</p>
-                      )}
-                      <p>
-                        <strong>Neutral chart context ({evidenceNeutral.length}):</strong>
-                      </p>
-                      {evidenceNeutral.length > 0 ? (
-                        <ul className="llm-check-list">
-                          {evidenceNeutral.map((e) => (
-                            <li key={`neu-${e}`}>{e}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="detail-muted">— none (0)</p>
-                      )}
-                    </>
-                  ) : evidence && evidence.length > 0 ? (
-                    <>
-                      <p>
-                        <strong>
-                          {ctx.is_timing || ctx.question_type === "TIMING"
-                            ? `Timing evidence (${evidence.length})`
-                            : `Chart / engine evidence (${evidence.length})`}
-                          :
-                        </strong>
-                      </p>
-                      <ul className="llm-check-list">
-                        {evidence.map((e) => (
-                          <li key={e}>{e}</li>
-                        ))}
-                      </ul>
-                    </>
-                  ) : null}
-                </div>
-              )}
-            </details>
-
-            <div className="llm-context-grid">
-              <span>
-                <strong>Route</strong>
-                <br />
-                {ctx.route || "—"}
-              </span>
-              <span>
-                <strong>Q type</strong>
-                <br />
-                {ctx.question_type || "—"}
-              </span>
-              <span>
-                <strong>Model</strong>
-                <br />
-                {ctx.model || (skipLlm ? "template" : "—")}
-              </span>
-              <span>
-                <strong>Max tokens</strong>
-                <br />
-                {ctx.max_tokens ?? "—"}
-              </span>
-            </div>
-
-            {ctx.skip_reason ? (
-              <p className="detail-muted">
-                <strong>Skip reason:</strong> {ctx.skip_reason}
+          <div className="engine-facts-box">
+            {archetype ? (
+              <p>
+                <strong>Archetype:</strong> {archetype}
               </p>
             ) : null}
-
-            {Object.keys(checks).length > 0 ? (
-              <details>
-                <summary>Checks / routing flags</summary>
+            {verdict ? (
+              <p>
+                <strong>Verdict:</strong> {verdict}
+              </p>
+            ) : null}
+            {dashaTrace && (dashaTrace.current_lords || dashaTrace.next_career_ad) ? (
+              <p>
+                <strong>Dasha check:</strong> current {fmtCheckValue(dashaTrace.current_lords)}
+                {dashaTrace.current_start || dashaTrace.current_end ? (
+                  <>
+                    {" "}
+                    ({fmtCheckValue(dashaTrace.current_start)} →{" "}
+                    {fmtCheckValue(dashaTrace.current_end)})
+                  </>
+                ) : null}
+                {dashaTrace.next_career_ad ? (
+                  <>
+                    {" "}
+                    · next career AD {fmtCheckValue(dashaTrace.next_career_ad)}
+                    {dashaTrace.next_career_start || dashaTrace.next_career_end ? (
+                      <>
+                        {" "}
+                        ({fmtCheckValue(dashaTrace.next_career_start)} →{" "}
+                        {fmtCheckValue(dashaTrace.next_career_end)})
+                      </>
+                    ) : null}
+                  </>
+                ) : null}
+              </p>
+            ) : null}
+            {engineFacts.love_score != null || engineFacts.arrange_score != null ? (
+              <p>
+                <strong>Scores:</strong> love={fmtCheckValue(engineFacts.love_score)}, arrange=
+                {fmtCheckValue(engineFacts.arrange_score)}
+                {engineFacts.confidence_ratio != null ? (
+                  <> · ratio={fmtCheckValue(engineFacts.confidence_ratio)}</>
+                ) : null}
+              </p>
+            ) : null}
+            {summary && summary.length > 0 ? (
+              <>
+                <p>
+                  <strong>Summary for narrator:</strong>
+                </p>
                 <ul className="llm-check-list">
-                  {Object.entries(checks).map(([k, v]) => (
-                    <li key={k}>
-                      <code>{k}</code>: {fmtCheckValue(v)}
-                    </li>
+                  {summary.map((s) => (
+                    <li key={s}>{s}</li>
                   ))}
                 </ul>
-              </details>
+              </>
             ) : null}
-
-            {flags && flags.length > 0 ? (
-              <details>
-                <summary>Pre-calculated flags ({flags.length})</summary>
+            {hasSplitEvidence ? (
+              <>
+                <p>
+                  <strong>Positive evidence ({evidencePositive.length}):</strong>
+                </p>
+                {evidencePositive.length > 0 ? (
+                  <ul className="llm-check-list evidence-positive">
+                    {evidencePositive.map((e) => (
+                      <li key={`pos-${e}`}>{e}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="detail-muted">— none (0)</p>
+                )}
+                <p>
+                  <strong>Negative / affliction evidence ({evidenceNegative.length}):</strong>
+                </p>
+                {evidenceNegative.length > 0 ? (
+                  <ul className="llm-check-list evidence-negative">
+                    {evidenceNegative.map((e) => (
+                      <li key={`neg-${e}`}>{e}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="detail-muted">— none (0)</p>
+                )}
+                <p>
+                  <strong>Neutral chart context ({evidenceNeutral.length}):</strong>
+                </p>
+                {evidenceNeutral.length > 0 ? (
+                  <ul className="llm-check-list">
+                    {evidenceNeutral.map((e) => (
+                      <li key={`neu-${e}`}>{e}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="detail-muted">— none (0)</p>
+                )}
+              </>
+            ) : evidence && evidence.length > 0 ? (
+              <>
+                <p>
+                  <strong>
+                    {ctx.is_timing || ctx.question_type === "TIMING"
+                      ? `Timing evidence (${evidence.length})`
+                      : `Chart / engine evidence (${evidence.length})`}
+                    :
+                  </strong>
+                </p>
                 <ul className="llm-check-list">
-                  {flags.map((f) => (
-                    <li key={f}>{f}</li>
+                  {evidence.map((e) => (
+                    <li key={e}>{e}</li>
                   ))}
                 </ul>
-              </details>
+              </>
             ) : null}
-
-            {ctx.chart_text ? (
-              <details>
-                <summary>
-                  Full chart context block ({chartChars.toLocaleString("en-IN")} chars)
-                </summary>
-                <pre className="llm-context-pre">{ctx.chart_text}</pre>
-              </details>
-            ) : null}
-
-            {ctx.extra_rules ? (
-              <details>
-                <summary>Extra prompt rules ({ctx.sizes?.extra_rules_chars ?? 0} chars)</summary>
-                <pre className="llm-context-pre">{ctx.extra_rules}</pre>
-              </details>
-            ) : null}
-
-            {ctx.system_prompt ? (
-              <details>
-                <summary>
-                  Full system prompt ({ctx.sizes?.system_prompt_chars ?? 0} chars)
-                </summary>
-                <pre className="llm-context-pre">{ctx.system_prompt}</pre>
-              </details>
-            ) : null}
-
-            {ctx.user_payload ? (
-              <details>
-                <summary>User message payload</summary>
-                <pre className="llm-context-pre">{ctx.user_payload}</pre>
-              </details>
-            ) : null}
-          </>
+          </div>
         )}
       </div>
     </details>

@@ -59,6 +59,31 @@ _PARTNER_SUBJECT_RX = re.compile(
     r"sasural|in[\s-]?law|in[\s-]?laws|family\s*wal|ghar\s*wal)\b"
 )
 
+# "Hum dono ke beech …" — chemistry between two people, not native solo attraction.
+_DYAD_COUPLE_RX = re.compile(
+    r"(?ix)\b("
+    r"hum\s+dono\s+ke\s+beech|ham\s+dono\s+ke\s+beech|"
+    r"hum\s+dono\s+mein?|ham\s+dono\s+mein?|"
+    r"tum\s+dono\s+ke\s+beech|aap\s+dono\s+ke\s+beech|"
+    r"dono\s+ke\s+beech|"
+    r"between\s+(?:us|the\s+two\s+of\s+us|both\s+of\s+us)"
+    r")\b"
+)
+
+_CHEMISTRY_TOPIC_RX = re.compile(
+    r"(?ix)\b(chemistry|attraction|spark|passion|romance|romantic)\b"
+)
+
+
+def is_dyadic_couple_question(question: str) -> bool:
+    return bool(_DYAD_COUPLE_RX.search((question or "").strip()))
+
+
+def is_native_solo_chemistry_question(question: str) -> bool:
+    """Native-chart chemistry read — not 'between us two'."""
+    q = (question or "").strip()
+    return bool(_CHEMISTRY_TOPIC_RX.search(q)) and not is_dyadic_couple_question(q)
+
 _INLAW_RX = re.compile(
     r"(?ix)\b(saas|sasur|sasural|sasuraal|in[\s-]?law|in[\s-]?laws|"
     r"mother[\s-]?in[\s-]?law|father[\s-]?in[\s-]?law|devr|jeth|nanad)\b"
@@ -195,21 +220,127 @@ def _clip_one_line(text: str, *, max_len: int = 320) -> str:
     return f"{cut}…" if cut else s[:max_len]
 
 
+_VALID_QUESTION_SCOPES = frozenset({
+    "love",
+    "marriage",
+    "partner",
+    "couple",
+    "career",
+    "health",
+    "finance",
+    "education",
+    "children",
+    "property",
+    "travel",
+    "legal",
+    "vehicle",
+    "spiritual",
+    "self",
+    "family",
+    "general",
+})
+
+_SCOPE_ALIASES = {
+    "relationship": "love",
+    "romance": "love",
+    "job": "career",
+    "jobs": "career",
+    "money": "finance",
+    "wealth": "finance",
+    "litigation": "legal",
+    "court": "legal",
+    "native": "self",
+    "personal": "self",
+    "spouse": "partner",
+}
+
+_SCOPE_BRACKET_RX = re.compile(r"^\[([a-z][a-z0-9_]*)\]\s*", re.IGNORECASE)
+
+
+def normalize_question_scope(scope: str) -> str:
+    s = (scope or "").strip().lower().replace(" ", "_").replace("-", "_")
+    s = _SCOPE_ALIASES.get(s, s)
+    return s if s in _VALID_QUESTION_SCOPES else "general"
+
+
+def strip_scope_bracket(text: str) -> str:
+    return _SCOPE_BRACKET_RX.sub("", (text or "").strip(), count=1).strip()
+
+
+def parse_scoped_summary(text: str) -> tuple[str, str]:
+    """Return (scope, body) from '[love] User wants…' or infer general."""
+    raw = (text or "").strip()
+    m = _SCOPE_BRACKET_RX.match(raw)
+    if m:
+        return normalize_question_scope(m.group(1)), raw[m.end() :].strip()
+    return "general", raw
+
+
+def infer_question_scope(question: str, llm_intent: dict[str, Any] | None = None) -> str:
+    li = llm_intent if isinstance(llm_intent, dict) else {}
+    explicit = str(li.get("question_scope") or "").strip()
+    if explicit:
+        return normalize_question_scope(explicit)
+
+    summary_scope, _ = parse_scoped_summary(str(li.get("question_summary") or ""))
+    if summary_scope != "general":
+        return summary_scope
+
+    q = (question or "").strip()
+    if is_dyadic_couple_question(q):
+        return "couple"
+    if _PARTNER_SUBJECT_RX.search(q):
+        return "partner"
+
+    dom = str(li.get("routed_domain") or li.get("domain") or "").strip().lower()
+    if dom == "litigation":
+        return "legal"
+    if dom and dom != "general":
+        return normalize_question_scope(dom)
+
+    inferred = infer_primary_domain(q)
+    if inferred == "litigation":
+        return "legal"
+    if inferred:
+        return normalize_question_scope(inferred)
+
+    if re.search(r"(?ix)\b(mera|meri|mere|main|mujhe|my)\b", q) and not _PARTNER_SUBJECT_RX.search(q):
+        return "self"
+    return "general"
+
+
+def format_question_understanding(scope: str, summary: str) -> str:
+    body = strip_scope_bracket(summary)
+    sc = normalize_question_scope(scope)
+    if not body:
+        return f"[{sc}]"
+    return f"[{sc}] {_clip_one_line(body, max_len=520)}"
+
+
 def summarize_question_one_line(
     question: str,
     llm_intent: dict[str, Any] | None = None,
+    *,
+    with_scope: bool = True,
 ) -> str:
     """Plain one-line restatement of what the user asked (admin + narrator)."""
     li = llm_intent if isinstance(llm_intent, dict) else {}
-    summary = str(li.get("question_summary") or "").strip()
+    summary = strip_scope_bracket(str(li.get("question_summary") or "").strip())
     if summary:
-        return _clip_one_line(summary)
+        body = _clip_one_line(summary)
+        if with_scope:
+            scope = infer_question_scope(question, li)
+            return format_question_understanding(scope, body)
+        return body
 
     interp = str(li.get("interpretation") or "").strip()
     if interp.lower().startswith("user asked:"):
         inner = interp.split(":", 1)[-1].strip().strip('"').strip("'")
         if inner:
-            return _clip_one_line(inner)
+            body = _clip_one_line(inner)
+            if with_scope:
+                return format_question_understanding(infer_question_scope(question, li), body)
+            return body
 
     q = " ".join((question or "").split()).strip()
     if not q:
@@ -218,15 +349,24 @@ def summarize_question_one_line(
         from ask_route_from_understanding import is_native_love_chart_question
 
         if is_native_love_chart_question(q):
-            return _clip_one_line(
+            body = _clip_one_line(
                 "User pooch raha hai kya unki kundli me sacha pyaar / true love milne ka yog hai",
             )
+            if with_scope:
+                return format_question_understanding("love", body)
+            return body
     except Exception:
         pass
     inferred = infer_primary_domain(q)
     if inferred:
-        return _clip_one_line(f"User ka {inferred} se related sawal: {q}", max_len=260)
-    return _clip_one_line(q, max_len=260)
+        body = _clip_one_line(f"User ka {inferred} se related sawal: {q}", max_len=260)
+        if with_scope:
+            return format_question_understanding(infer_question_scope(q, li), body)
+        return body
+    body = _clip_one_line(q, max_len=260)
+    if with_scope:
+        return format_question_understanding(infer_question_scope(q, li), body)
+    return body
 
 
 def _interpretation_hallucinates(question: str, interpretation: str) -> bool:
@@ -280,10 +420,13 @@ def _clear_domain_archetypes(result: dict[str, Any]) -> None:
 
 def archetype_allowed_for_question(question: str, archetype: str | None) -> bool:
     arch = str(archetype or "").strip().lower()
+    q = question or ""
+    if arch == "chemistry" and is_dyadic_couple_question(q):
+        return False
     try:
         from ask_route_from_understanding import is_native_love_chart_question
 
-        if is_native_love_chart_question(question or ""):
+        if is_native_love_chart_question(q):
             if arch in ("chemistry", "emotional_attachment", "general_mr", "partner_nature"):
                 return False
             if arch == "dating_courtship":
@@ -300,6 +443,7 @@ def resolve_question_understood(
     skip_reason: str = "",
     intent_source: str = "",
     has_engine_facts: bool = False,
+    engine_archetype: str = "",
 ) -> str:
     """One-word admin answer: did the LLM understand the question? yes | no."""
     q = (question or "").strip()
@@ -307,6 +451,15 @@ def resolve_question_understood(
         return "no"
 
     li = llm_intent if isinstance(llm_intent, dict) else {}
+    ran_arch = str(
+        engine_archetype
+        or li.get("routed_archetype")
+        or li.get("mr_archetype")
+        or ""
+    ).strip().lower()
+    if ran_arch and not archetype_allowed_for_question(q, ran_arch):
+        return "no"
+
     summary = str(li.get("question_summary") or "").strip()
     if summary and len(summary) >= 10:
         return "yes"
@@ -390,34 +543,43 @@ def build_question_understanding_detail(
             return f"{base} Engine={engine_arch}, LLM guess={llm_arch}."
         return base
 
+    scope_tag = infer_question_scope(q, li)
+    scope_prefix = f"[{scope_tag}] "
+
+    def _detail(msg: str) -> str:
+        m = (msg or "").strip()
+        if scope_prefix and m and not m.startswith("["):
+            return f"{scope_prefix}{m}"
+        return m
+
     if "engine_required" in skip:
         if dom and dom != "general":
-            return (
+            return _detail(
                 f"{dom} samjha (confidence {conf:.0%}) lekin engine facts nahi mile."
             )
         if inferred:
-            return f"{inferred} samjha lekin engine facts nahi mile."
-        return "Engine match nahi — chart-only answer block."
+            return _detail(f"{inferred} samjha lekin engine facts nahi mile.")
+        return _detail("Engine match nahi — chart-only answer block.")
 
     if src == "llm_mismatch":
-        return "Galat topic samjha tha — exact words par repair kiya."
+        return _detail("Galat topic samjha tha — exact words par repair kiya.")
 
     try:
         from ask_native_overview import is_native_overview_question
 
         if is_native_overview_question(q):
-            return "General native overview — specific domain nahi."
+            return _detail("General native overview — specific domain nahi.")
     except Exception:
         pass
 
     arch = engine_arch or llm_arch
     if arch:
-        return _arch_detail(arch)
+        return _detail(_arch_detail(arch))
     if dom != "general":
-        return f"{dom} domain ({timing}), confidence {conf:.0%}."
+        return _detail(f"{dom} domain ({timing}), confidence {conf:.0%}.")
     if inferred:
-        return f"Regex anchor: {inferred} ({timing})."
-    return f"General/vague ({timing}), confidence {conf:.0%}."
+        return _detail(f"Regex anchor: {inferred} ({timing}).")
+    return _detail(f"General/vague ({timing}), confidence {conf:.0%}.")
 
 
 def build_question_understanding_line(

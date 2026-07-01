@@ -434,12 +434,14 @@ def build_admin_llm_context(
             resolve_question_understood,
         )
 
+        _engine_arch = str(_slice_meta.get("archetype") or engine_facts.get("archetype") or "")
         question_understood = resolve_question_understood(
             question,
             llm_intent,
             skip_reason=skip_reason,
             intent_source=intent_source,
             has_engine_facts=has_engine_facts,
+            engine_archetype=_engine_arch,
         )
         understanding_line = build_question_understanding_line(
             question,
@@ -447,14 +449,14 @@ def build_admin_llm_context(
             skip_reason=skip_reason,
             intent_source=intent_source,
             has_engine_facts=has_engine_facts,
-            engine_archetype=str(_slice_meta.get("archetype") or engine_facts.get("archetype") or ""),
+            engine_archetype=_engine_arch,
         )
         understanding_detail = build_question_understanding_detail(
             question,
             llm_intent,
             skip_reason=skip_reason,
             intent_source=intent_source,
-            engine_archetype=str(_slice_meta.get("archetype") or engine_facts.get("archetype") or ""),
+            engine_archetype=_engine_arch,
         )
     except Exception:
         question_understood = ""
@@ -466,7 +468,12 @@ def build_admin_llm_context(
         "question": (_norm or question or "")[:2000],
         "question_raw": (_raw[:2000] if _raw else None),
         "question_normalized": (_norm[:2000] if _typo_corrected else None),
-        "question_meaning": (_meaning[:600] if _meaning else None),
+        "question_meaning": (
+            str(_intent.get("question_meaning") or _meaning or "").strip()[:600] or None
+        ),
+        "question_scope": (
+            str(_intent.get("question_scope") or "").strip().lower() or None
+        ),
         "typo_corrected": _typo_corrected,
         "routed_domain": _intent.get("routed_domain") if isinstance(_intent, dict) else None,
         "routed_archetype": _intent.get("routed_archetype") if isinstance(_intent, dict) else None,

@@ -9,7 +9,13 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ask_intent_fidelity import build_llm_understood_one_liner, resolve_question_understood
+from ask_intent_fidelity import (
+    build_llm_understood_one_liner,
+    format_question_understanding,
+    infer_question_scope,
+    normalize_question_scope,
+    resolve_question_understood,
+)
 from ask_question_understand import (
     _summary_is_weak,
     ensure_question_understanding,
@@ -62,12 +68,40 @@ class TestQuestionUnderstand(unittest.TestCase):
     def test_force_llm_fills_summary(self, mock_llm):
         mock_llm.return_value = {
             "question_summary": "User puch raha hai dhan kamane mein dikkat kyun hoti hai",
+            "question_scope": "finance",
             "understood": True,
             "source": "understand_llm",
         }
         out = ensure_question_understanding("dhan karne me dikkat", None, force_llm=True)
         self.assertIn("dhan kamane", str(out.get("question_summary") or "").lower())
+        self.assertEqual(out.get("question_scope"), "finance")
+        self.assertTrue(str(out.get("question_meaning") or "").startswith("[finance]"))
         mock_llm.assert_called_once()
+
+    def test_scope_couple_dyad_question(self):
+        q = "Hum dono ke beech chemistry kaisi rahegi, intense aur passionate ya normal"
+        self.assertEqual(infer_question_scope(q, {"domain": "general"}), "couple")
+        scoped = format_question_understanding(
+            "couple",
+            "Dono ke beech chemistry intense hogi ya normal rahegi",
+        )
+        self.assertTrue(scoped.startswith("[couple]"))
+
+    def test_admin_line_includes_scope_bracket(self):
+        li = {
+            "domain": "general",
+            "mr_archetype": "general_mr",
+            "confidence": 0.9,
+            "source": "llm",
+            "question_scope": "couple",
+            "question_summary": "Dono ke beech chemistry intense ya normal rahegi",
+        }
+        line = build_llm_understood_one_liner(
+            "Hum dono ke beech chemistry kaisi rahegi",
+            li,
+            intent_source="llm",
+        )
+        self.assertIn("[couple]", line)
 
 
 if __name__ == "__main__":

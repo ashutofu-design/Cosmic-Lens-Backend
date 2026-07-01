@@ -4,14 +4,12 @@ import {
   AskLlmContextPanel,
   AnswerPathBadge,
   EngineVerificationBadge,
-  EngineVerificationPanel,
-  QuestionUnderstandingPanel,
+  LlmQuestionUnderstandingBrief,
   parseAskLlmContext,
   resolveEngineVerificationSummary,
 } from "./AskLlmContextPanel";
 import { CopyTextButton } from "./CopyTextButton";
 import { QuestionLangBadge } from "./QuestionLangBadge";
-import { detectQuestionLang, questionLangLabel } from "./questionLang";
 
 export function AskQuestionDetailPage({
   row,
@@ -22,6 +20,14 @@ export function AskQuestionDetailPage({
 }) {
   const ctx = parseAskLlmContext(row);
   const engineVerify = resolveEngineVerificationSummary(ctx);
+  const sliceMeta = (ctx?.slice_meta || {}) as Record<string, unknown>;
+  const engineName =
+    engineVerify?.ran_archetype ||
+    (ctx?.engine_facts?.archetype as string | undefined) ||
+    (sliceMeta.archetype as string | undefined) ||
+    engineVerify?.selected_engine ||
+    row.engine_tag ||
+    null;
 
   return (
     <section className="section card ask-question-detail-page">
@@ -29,25 +35,23 @@ export function AskQuestionDetailPage({
         <button type="button" className="ask-detail-back" onClick={onBack}>
           ← Back to Ask Q&A
         </button>
-        <h2>Ask question detail</h2>
+        <div className="ask-detail-title-row">
+          <h2 className="ask-detail-title">
+            Ask question detail
+            <span className="ask-detail-title-sep"> — </span>
+            <span className="ask-detail-title-question">{row.question_text}</span>
+          </h2>
+          <div className="ask-detail-title-actions">
+            <QuestionLangBadge questionText={row.question_text} compact />
+            <CopyTextButton text={row.question_text} label="Copy Q" copiedLabel="Copied" />
+          </div>
+        </div>
         <p className="detail-muted">
           {row.user_name || row.user_email || `user #${row.user_id}`}
           {" · "}
           {formatDate(row.created_at)}
           {row.topic ? ` · ${row.topic}` : ""}
         </p>
-      </div>
-
-      <div className="ask-detail-block">
-        <div className="ask-detail-label-row">
-          <strong>Question</strong>
-          <CopyTextButton text={row.question_text} label="Copy" copiedLabel="Copied" />
-        </div>
-        <div className="ask-detail-question-lang">
-          <QuestionLangBadge questionText={row.question_text} />
-        </div>
-        <p className="ask-detail-question">{row.question_text}</p>
-        {ctx ? <QuestionUnderstandingPanel ctx={ctx} /> : null}
       </div>
 
       <div className="ask-detail-block">
@@ -63,10 +67,6 @@ export function AskQuestionDetailPage({
       </div>
 
       <div className="ask-detail-meta">
-        <div>
-          <span className="detail-muted">सवाल की भाषा</span>
-          <div>{questionLangLabel(detectQuestionLang(row.question_text))}</div>
-        </div>
         <div>
           <span className="detail-muted">Path</span>
           <div>
@@ -116,30 +116,28 @@ export function AskQuestionDetailPage({
             </div>
           </div>
         ) : null}
-        {row.verdict_summary ? (
-          <div className="ask-detail-meta-wide">
-            <span className="detail-muted">Verdict</span>
-            <div>{row.verdict_summary}</div>
-          </div>
-        ) : null}
-        <div>
-          <span className="detail-muted">Engine verification</span>
+        <div className="ask-detail-meta-wide ask-detail-llm-understood">
+          <span className="detail-muted">LLM understood</span>
+          <LlmQuestionUnderstandingBrief ctx={ctx} />
+        </div>
+        <div className="ask-detail-meta-wide ask-detail-verdict-engine">
+          {row.verdict_summary ? (
+            <div>
+              <span className="detail-muted">Verdict</span>
+              <div>{row.verdict_summary}</div>
+            </div>
+          ) : null}
           <div>
-            <EngineVerificationBadge summary={engineVerify} />
+            <span className="detail-muted">Engine</span>
+            <div className="ask-detail-engine-row">
+              {engineName ? <code>{engineName}</code> : <span>—</span>}
+              <EngineVerificationBadge summary={engineVerify} />
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="ask-detail-engine-verify">
-        <EngineVerificationPanel
-          ctx={ctx}
-          id={`ask-engine-verify-${row.id}`}
-          defaultOpen
-        />
-      </div>
-
       <div className="ask-detail-context">
-        <h3>LLM context & engine pipeline</h3>
         <AskLlmContextPanel
           row={row}
           panelId={`ask-llm-context-${row.id}`}

@@ -7029,6 +7029,46 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         wants_explain=wants_explain,
                         archetype=_mr_archetype_override,
                     )
+                    try:
+                        from ask_engine_verification import verify_engine_output
+
+                        _mr_ver = verify_engine_output(
+                            question or "",
+                            engine_key="mr",
+                            archetype=_mr_engine_result.archetype,
+                            slice_meta=mr_engine_slice_meta(_mr_engine_result),
+                        )
+                        if not _mr_ver.ok and _mr_ver.action == "reroute_mr":
+                            _recover_arch = (
+                                _mr_ver.mr_archetype
+                                or _mr_archetype_override
+                                or "general_mr"
+                            )
+                            _mr_engine_result = run_mr_static_engine(
+                                kundli if isinstance(kundli, dict) else {},
+                                question or "",
+                                birth=birth,
+                                wants_explain=wants_explain,
+                                archetype=_recover_arch,
+                            )
+                            if isinstance(_llm_intent_admin, dict):
+                                _llm_intent_admin["engine_verification"] = _mr_ver.to_dict()
+                                _llm_intent_admin["engine_verification_recovered"] = "reroute_mr"
+                            print(
+                                f"[raw_passthrough] MR_ENGINE_VERIFY recovered "
+                                f"archetype={_mr_engine_result.archetype} reason={_mr_ver.reason}",
+                                flush=True,
+                            )
+                        elif not _mr_ver.ok:
+                            if isinstance(_llm_intent_admin, dict):
+                                _llm_intent_admin["engine_verification"] = _mr_ver.to_dict()
+                        elif isinstance(_llm_intent_admin, dict):
+                            _llm_intent_admin["engine_verification"] = _mr_ver.to_dict()
+                    except Exception as _mr_ver_exc:
+                        print(
+                            f"[raw_passthrough] MR_ENGINE_VERIFY skipped: {_mr_ver_exc}",
+                            flush=True,
+                        )
                     if _mr_engine_result.archetype == "partner_nature":
                         from ask_mr.engines.partner_nature import partner_nature_narrator_payload
 

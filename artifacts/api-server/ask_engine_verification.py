@@ -6,7 +6,11 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from ask_intent_fidelity import _PARTNER_SUBJECT_RX, archetype_allowed_for_question
+from ask_intent_fidelity import (
+    _PARTNER_SUBJECT_RX,
+    archetype_allowed_for_question,
+    is_dyadic_couple_question,
+)
 
 # Gap / personality engines — native self only.
 _NATIVE_SELF_ARCHETYPES = frozenset({
@@ -72,6 +76,11 @@ def suggest_mr_archetype_for_question(question: str) -> str | None:
     q = (question or "").strip()
     if not q:
         return None
+    if is_dyadic_couple_question(q) and re.search(
+        r"(?ix)\b(chemistry|attraction|spark|passion|romance|romantic|intense)\b",
+        q,
+    ):
+        return "general_mr"
     if is_partner_personality_question(q):
         return "partner_nature"
     if _PARTNER_SUBJECT_RX.search(q):
@@ -164,6 +173,16 @@ def verify_static_engine_selection(
             action="reroute_mr",
             reason="native_archetype_partner_mismatch",
             mr_archetype=suggest_mr_archetype_for_question(q),
+            failed_checks=failed,
+        )
+
+    if arch == "chemistry" and is_dyadic_couple_question(q):
+        failed.append("chemistry_on_dyad_couple_question")
+        return EngineVerificationResult(
+            ok=False,
+            action="reroute_mr",
+            reason="chemistry_native_on_dyad_question",
+            mr_archetype=suggest_mr_archetype_for_question(q) or "general_mr",
             failed_checks=failed,
         )
 
@@ -331,7 +350,31 @@ def build_engine_verification_admin_summary(
         }
 
     if isinstance(stored, dict):
+        engine_key = ran_key or _engine_key_from_slice(str(meta.get("slice") or ""))
+        live_crosscheck = None
+        if engine_key and meta:
+            live_crosscheck = verify_engine_output(
+                question or "",
+                engine_key=engine_key,
+                archetype=ran_arch,
+                slice_meta=meta,
+                gap_key=gap_key,
+            )
         if stored.get("ok") and stored.get("action") == "keep":
+            if live_crosscheck and not live_crosscheck.ok:
+                status = "wrong"
+                label = "Wrong engine"
+                if live_crosscheck.action == "d1_open_chart":
+                    status = "doubt"
+                    label = "Doubt"
+                return {
+                    "status": status,
+                    "label": label,
+                    "reason": live_crosscheck.reason,
+                    "selected_engine": ran_key,
+                    "ran_archetype": ran_arch,
+                    "recovered": False,
+                }
             return {
                 "status": "correct",
                 "label": "Correct engine",

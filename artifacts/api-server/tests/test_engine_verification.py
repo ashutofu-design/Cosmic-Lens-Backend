@@ -92,6 +92,49 @@ class EngineVerificationAdminSummaryTests(unittest.TestCase):
         self.assertEqual(s["status"], "wrong")
         self.assertIn("corrected", s["label"].lower())
 
+    def test_dyad_chemistry_marked_wrong(self):
+        from ask_engine_verification import (
+            build_engine_verification_admin_summary,
+            verify_static_engine_selection,
+        )
+        from ask_intent_fidelity import resolve_question_understood
+
+        q = "Hum dono ke beech chemistry kaisi rahegi, intense aur passionate ya normal"
+        ver = verify_static_engine_selection(q, engine_key="mr", archetype="chemistry")
+        self.assertFalse(ver.ok)
+        self.assertEqual(ver.mr_archetype, "general_mr")
+
+        s = build_engine_verification_admin_summary(
+            q,
+            llm_intent={
+                "engine_verification": {"ok": True, "action": "keep", "reason": "selection_ok"},
+                "engine_ran": "mr",
+            },
+            slice_meta={
+                "slice": "mr_engine_v1",
+                "archetype": "chemistry",
+                "evidence_neutral": ["Moon under Saturn/Rahu"],
+            },
+        )
+        self.assertEqual(s["status"], "wrong")
+        self.assertEqual(s["label"], "Wrong engine")
+
+        self.assertEqual(
+            resolve_question_understood(
+                q,
+                {"question_summary": q, "domain": "general", "confidence": 0.95},
+                engine_archetype="chemistry",
+            ),
+            "no",
+        )
+
+    def test_classifier_dyad_chemistry_routes_general_mr(self):
+        from ask_mr.classifier import classify_mr_archetype
+
+        q = "Hum dono ke beech chemistry kaisi rahegi, intense aur passionate ya normal"
+        self.assertEqual(classify_mr_archetype(q), "general_mr")
+        self.assertEqual(classify_mr_archetype("hamari chemistry kaisi hogi?"), "chemistry")
+
 
 if __name__ == "__main__":
     unittest.main()

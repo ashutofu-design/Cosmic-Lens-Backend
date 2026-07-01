@@ -147,6 +147,7 @@ export interface AskLlmContext {
   question_raw?: string | null;
   question_normalized?: string | null;
   question_meaning?: string | null;
+  question_scope?: string | null;
   typo_corrected?: boolean;
     engine_ran?: string | null;
     engine_route_reason?: string | null;
@@ -170,6 +171,7 @@ export interface AskLlmContext {
     career_archetype?: string | null;
     interpretation?: string;
     question_summary?: string;
+    question_scope?: string;
     understanding_line?: string;
     confidence?: number;
     source?: string;

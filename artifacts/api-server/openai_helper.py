@@ -5483,6 +5483,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     pass
             elif not _luck_engine_on:
                 _is_luck_static = False
+        if _force_health_static:
             _is_health_static = True
             is_timing = False
         try:
@@ -5505,7 +5506,42 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     _is_finance_static = _fin_regex
             except Exception:
                 _is_finance_static = False
-        if _health_engine_on and not _is_mr_static and not _is_career_static and not _is_finance_static and not _is_education_static and not _is_children_static and not _is_property_static and not _is_vehicle_static and not _is_travel_static and not _is_litigation_static:
+        if _luck_engine_on:
+            try:
+                from ask_luck.classifier import is_luck_static_question  # type: ignore
+                from ask_luck.luck_registry import detect_luck_archetype  # type: ignore
+
+                _luck_regex = is_luck_static_question(question or "")
+                if _llm_intent is not None:
+                    _is_luck_static = _luck_regex or (
+                        str(_llm_intent.get("domain") or "").strip().lower() == "luck"
+                    )
+                elif _luck_regex:
+                    _is_luck_static = True
+                if _is_luck_static:
+                    _luck_arch_route = detect_luck_archetype(question or "")
+                    if _luck_arch_route == "career_luck":
+                        _is_career_static = False
+                    elif _luck_arch_route == "love_luck":
+                        _is_mr_static = False
+                    elif _luck_arch_route == "money_luck":
+                        _is_finance_static = False
+                    if _luck_regex and _llm_intent is not None:
+                        _llm_dom_luck = str(_llm_intent.get("domain") or "").strip().lower()
+                        if _llm_dom_luck not in ("luck", "") and _luck_regex:
+                            print(
+                                f"[raw_passthrough] LUCK_REGEX_OVERRIDE "
+                                f"llm_domain={_llm_dom_luck} q={(question or '')[:60]!r}",
+                                flush=True,
+                            )
+            except Exception as _luck_cls_exc:
+                print(
+                    f"[raw_passthrough] luck static classify skipped: {_luck_cls_exc}",
+                    flush=True,
+                )
+        elif not _luck_engine_on:
+            _is_luck_static = False
+        if _health_engine_on and not _is_mr_static and not _is_career_static and not _is_finance_static and not _is_education_static and not _is_children_static and not _is_property_static and not _is_vehicle_static and not _is_travel_static and not _is_litigation_static and not _is_luck_static:
             try:
                 from ask_health.classifier import is_health_static_question  # type: ignore
 

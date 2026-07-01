@@ -29,9 +29,13 @@ _SAMPLE_KUNDLI = {
 
 class TestAskLuckEngine(unittest.TestCase):
     def test_overall_luck_question(self):
-        q = "mera luck kaise he"
+        q = "Mera luck kaise hai"
         self.assertTrue(is_luck_static_question(q))
         self.assertEqual(classify_luck_archetype(q), "overall_luck")
+
+    def test_mer_luck_typo_still_matches(self):
+        q = "mer luck kaise he"
+        self.assertTrue(is_luck_static_question(q))
 
     def test_timing_excluded(self):
         self.assertFalse(is_luck_static_question("mera luck kab milega"))

@@ -74,6 +74,7 @@ _WORD_FIXES: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\breal+ationship+\b", re.I), "relationship"),
     (re.compile(r"\brelat+ionship+\b", re.I), "relationship"),
     (re.compile(r"\brelat+ionshp+\b", re.I), "relationship"),
+    (re.compile(r"\bmer\s+(luck|bhagya|kismat)\b", re.I), r"mera \1"),
     (re.compile(r"\bluc+k+\b", re.I), "luck"),
     (re.compile(r"\bbhag+y+a+\b", re.I), "bhagya"),
     (re.compile(r"\bfut+ure+\b", re.I), "future"),

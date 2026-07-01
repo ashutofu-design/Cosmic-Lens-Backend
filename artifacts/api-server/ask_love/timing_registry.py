@@ -102,6 +102,13 @@ def is_love_timing_question(
     q = prepare_ask_question((question or "").strip())
     if not q:
         return False
+    try:
+        from ask_mr.timing_registry import is_mr_static_question
+
+        if is_mr_static_question(q):
+            return False
+    except Exception:
+        pass
     if is_love_static_loyalty_question(q):
         return False
     if _MARRIAGE_OVERRIDE_RX.search(q):
@@ -115,7 +122,9 @@ def is_love_timing_question(
     if isinstance(llm_intent, dict):
         dom = str(llm_intent.get("domain") or "")
         if dom == "love" and llm_intent.get("is_timing"):
-            return True
+            if _EXPLICIT_LOVE_TIMING_RX.search(q):
+                return True
+            # LLM is_timing alone is not enough — need explicit when-anchor in text.
     if not _TIMING_RX.search(q):
         return False
     return bool(_LOVE_SCOPE_RX.search(q))

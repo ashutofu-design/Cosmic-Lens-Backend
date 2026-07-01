@@ -5410,13 +5410,33 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             is_love_timing_question,
         )
 
-        if is_love_static_loyalty_question(question or ""):
-            is_timing = False
+        _mr_static_override = False
+        try:
+            from ask_mr.timing_registry import mr_static_overrides_llm_timing
+
+            _mr_static_override = mr_static_overrides_llm_timing(
+                question or "", _llm_intent
+            )
+        except Exception as _mro_exc:
             print(
-                f"[raw_passthrough] LOVE_STATIC_LOYALTY overrides timing "
-                f"q={(question or '')[:60]!r}",
+                f"[raw_passthrough] MR_STATIC timing override skipped: {_mro_exc}",
                 flush=True,
             )
+
+        if is_love_static_loyalty_question(question or "") or _mr_static_override:
+            is_timing = False
+            if _mr_static_override:
+                print(
+                    f"[raw_passthrough] MR_STATIC overrides timing "
+                    f"q={(question or '')[:60]!r}",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"[raw_passthrough] LOVE_STATIC_LOYALTY overrides timing "
+                    f"q={(question or '')[:60]!r}",
+                    flush=True,
+                )
         elif is_love_timing_question(question or "", _llm_intent):
             is_timing = True
     except Exception:

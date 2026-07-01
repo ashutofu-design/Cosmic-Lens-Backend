@@ -123,7 +123,7 @@ def classify_mr_archetype(question: str) -> str:
 
         r"body\s*type|figure|dress|dressing|voice|awaaz|aura|attract\w*|beautiful|"
 
-        r"handsome|good\s*looking|physical\s*appear|shakl|surat|look\b"
+        r"handsome|good\s*looking|physical\s*appear|shakl|surat|look\b|dikh\w*"
 
         r")\b",
 

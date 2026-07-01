@@ -198,6 +198,25 @@ def verify_static_engine_selection(
             failed_checks=["no_engine"],
         )
 
+    ek = str(engine_key or "").strip().lower()
+    if ek in ("timing", "love_timing") or arch == "timing":
+        try:
+            from ask_mr.timing_registry import (
+                mr_static_overrides_llm_timing,
+                resolve_mr_static_archetype,
+            )
+
+            if mr_static_overrides_llm_timing(q, llm_intent):
+                return EngineVerificationResult(
+                    ok=False,
+                    action="reroute_mr",
+                    reason="mr_static_not_timing",
+                    mr_archetype=resolve_mr_static_archetype(q),
+                    failed_checks=["timing_on_mr_static_question"],
+                )
+        except Exception:
+            pass
+
     if engine_key == "gap" and should_suppress_gap_for_question(q, gap_key=gap_key):
         failed.append("gap_on_partner_subject")
         return EngineVerificationResult(

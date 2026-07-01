@@ -158,9 +158,9 @@ _ARCHETYPE_ANCHOR_RX: dict[str, re.Pattern[str]] = {
         r"(rich|wealth|amir).{0,30}(partner|spouse|pati|patni)"
     ),
     "spouse_appearance": re.compile(
-        r"(?ix)\b(partner|spouse|pati|patni|wife|husband).{0,30}"
-        r"(look|face|height|appearance|colour|color|beautiful|handsome)|"
-        r"(look|face|height|appearance).{0,30}(partner|spouse|wife|husband)"
+        r"(?ix)\b(partner|spouse|pati|patni|wife|husband).{0,40}"
+        r"(look|face|height|appearance|colour|color|beautiful|handsome|attract\w*|dikh\w*|good[\s-]?looking)|"
+        r"(look|face|height|appearance|attract\w*|dikh\w*|good[\s-]?looking).{0,40}(partner|spouse|wife|husband)"
     ),
     "loyalty_trust": re.compile(
         r"(?ix)\b(loyal|trust|cheat|dhokha|dhoka|betray|vishwas|faithful|commitment|beimaan)\b"
@@ -870,6 +870,16 @@ def repair_llm_intent(question: str, result: dict[str, Any] | None) -> dict[str,
         if not is_native_love_chart_question(combined):
             domain = "general"
             repaired = True
+
+    try:
+        from ask_mr.timing_registry import repair_llm_intent_mr_static_timing
+
+        if repair_llm_intent_mr_static_timing(q, out):
+            domain = str(out.get("domain") or domain)
+            mr_arch = out.get("mr_archetype")
+            repaired = True
+    except Exception:
+        pass
 
     out["domain"] = domain
     out["mr_archetype"] = mr_arch

@@ -661,11 +661,13 @@ def classify_mr_archetype(question: str) -> str:
 
 
 
-    # --- Chemistry (non-partner or general) ---
-
+    # --- Chemistry (non-partner or general) — not true-love yog questions ---
     if re.search(r"\b(chemistry|attraction|spark|passion|romance|romantic)\b", q):
-
-        return "chemistry"
+        if not re.search(
+            r"(?ix)\b(true\s*love|sach+a\s*pyaar|sach+a\s*pyar|milne\s+ka\s+yog|yog\s+likha)\b",
+            q,
+        ):
+            return "chemistry"
 
 
 

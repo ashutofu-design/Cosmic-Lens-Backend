@@ -26,6 +26,17 @@ def is_native_love_chart_question(text: str) -> bool:
     return bool(_NATIVE_LOVE_CHART_RX.search(text or ""))
 
 
+def is_domain_outcome_yoga_love(text: str) -> bool:
+    try:
+        from chart_fact_answer import is_domain_outcome_yoga_question
+
+        return bool(is_domain_outcome_yoga_question(text or "")) and bool(
+            re.search(r"(?ix)\b(love|pyaar|pyar|prem|true\s*love|sach)\b", text or "")
+        )
+    except Exception:
+        return False
+
+
 def _combined_text(question: str, summary: str) -> str:
     parts = [question or "", summary or ""]
     return " ".join(p for p in parts if p).strip()
@@ -62,7 +73,12 @@ def apply_understanding_routing(
     if is_native_love_chart_question(combined):
         out["domain"] = "love"
         out["is_timing"] = False
-        out["mr_archetype"] = out.get("mr_archetype") or "dating_courtship"
+        # Force true-love engine — never keep LLM guess chemistry/general_mr here.
+        out["mr_archetype"] = "dating_courtship"
+    elif is_domain_outcome_yoga_love(combined):
+        out["domain"] = "love"
+        out["is_timing"] = False
+        out["mr_archetype"] = "dating_courtship"
 
     if _TIMING_RX.search(combined):
         try:
@@ -86,6 +102,8 @@ def apply_understanding_routing(
             from ask_mr.classifier import classify_mr_archetype
 
             out["mr_archetype"] = classify_mr_archetype(combined)
+        elif dom in ("marriage", "love") and is_native_love_chart_question(combined):
+            out["mr_archetype"] = "dating_courtship"
     except Exception:
         pass
 

@@ -29,6 +29,13 @@ def run_mr_static_engine(
         raise RuntimeError("ASK_MR_ENGINE=0 — caller should use legacy marriage slice")
 
     archetype = (archetype or "").strip().lower()
+    try:
+        from ask_route_from_understanding import is_native_love_chart_question
+
+        if is_native_love_chart_question(question or ""):
+            archetype = "dating_courtship"
+    except Exception:
+        pass
     if archetype:
         try:
             from ask_intent_fidelity import archetype_allowed_for_question

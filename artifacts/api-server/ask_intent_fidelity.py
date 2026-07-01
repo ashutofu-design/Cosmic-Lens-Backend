@@ -112,6 +112,13 @@ _ARCHETYPE_ANCHOR_RX: dict[str, re.Pattern[str]] = {
     "loyalty_trust": re.compile(
         r"(?ix)\b(loyal|trust|cheat|dhokha|dhoka|betray|vishwas|faithful|commitment|beimaan)\b"
     ),
+    "chemistry": re.compile(
+        r"(?ix)\b(chemistry|attraction|spark|passion|romance|romantic)\b"
+    ),
+    "dating_courtship": re.compile(
+        r"(?ix)\b(true\s*love|sach+a\s*pyaar|sach+a\s*pyar|milne\s+ka\s+yog|"
+        r"dating|courtship|friend\s*to\s*lover|red\s*flags?|green\s*flags?)\b"
+    ),
     "manglik": re.compile(r"(?ix)\b(manglik|mangal\s*dosh)\b"),
 }
 
@@ -263,6 +270,17 @@ def _clear_domain_archetypes(result: dict[str, Any]) -> None:
 
 
 def archetype_allowed_for_question(question: str, archetype: str | None) -> bool:
+    arch = str(archetype or "").strip().lower()
+    try:
+        from ask_route_from_understanding import is_native_love_chart_question
+
+        if is_native_love_chart_question(question or ""):
+            if arch in ("chemistry", "emotional_attachment", "general_mr", "partner_nature"):
+                return False
+            if arch == "dating_courtship":
+                return True
+    except Exception:
+        pass
     return _archetype_supported(question, archetype)
 
 

@@ -30,6 +30,16 @@ class TestRouteFromUnderstanding(unittest.TestCase):
         self.assertFalse(out.get("is_timing"))
         self.assertEqual(out.get("mr_archetype"), "dating_courtship")
 
+    def test_chemistry_overridden_for_true_love(self):
+        q = "Kya meri kundli me sacha pyaar true love milne ka yog likha hai"
+        understanding = {"question_summary": "true love yog in chart"}
+        out = apply_understanding_routing(
+            q,
+            understanding,
+            {"domain": "love", "mr_archetype": "chemistry", "confidence": 0.95, "source": "llm"},
+        )
+        self.assertEqual(out.get("mr_archetype"), "dating_courtship")
+
     def test_timing_from_summary(self):
         q = "Prem kab milega"
         understanding = {"question_summary": "User asks when they will find love"}

@@ -79,6 +79,54 @@ class TestEngineOnlyPolicy(unittest.TestCase):
             )
         )
 
+    def test_enforce_engine_only_blocks_mandatory_domain_without_facts(self):
+        from ask_hard_guards import enforce_engine_only_or_refuse
+
+        out = enforce_engine_only_or_refuse(
+            question="Career kaisi rahegi?",
+            qtype="STATIC",
+            llm_intent={"domain": "career", "is_timing": False},
+            checks={"is_career_engine": True, "slice_type": "full_compact"},
+            slice_meta={},
+        )
+        self.assertIsNotNone(out)
+        self.assertEqual(out["source"], "engine_required")
+
+    def test_enforce_allows_luck_controlled_fallback(self):
+        from ask_hard_guards import (
+            controlled_llm_fallback_eligible,
+            enforce_engine_only_or_refuse,
+        )
+
+        q = "Mera luck kaise hai"
+        self.assertTrue(
+            controlled_llm_fallback_eligible(
+                q,
+                {"domain": "general", "is_timing": False},
+                checks={"slice_type": "full_compact"},
+            )
+        )
+        out = enforce_engine_only_or_refuse(
+            question=q,
+            qtype="STATIC",
+            llm_intent={"domain": "general", "is_timing": False},
+            checks={"slice_type": "full_compact"},
+            slice_meta={},
+        )
+        self.assertIsNone(out)
+
+    def test_enforce_allows_general_vague_fallback(self):
+        from ask_hard_guards import enforce_engine_only_or_refuse
+
+        out = enforce_engine_only_or_refuse(
+            question="Mere bare me kuch batao",
+            qtype="STATIC",
+            llm_intent={"domain": "general", "is_timing": False},
+            checks={"slice_type": "full_compact"},
+            slice_meta={},
+        )
+        self.assertIsNone(out)
+
     def test_enforce_engine_only_blocks_compact_chart(self):
         from ask_hard_guards import enforce_engine_only_or_refuse
 
@@ -88,8 +136,8 @@ class TestEngineOnlyPolicy(unittest.TestCase):
             checks={"slice_type": "full_compact"},
             slice_meta={},
         )
-        self.assertIsNotNone(out)
-        self.assertEqual(out["source"], "engine_required")
+        # Luck-themed Qs use controlled fallback (Option C), not hard refuse.
+        self.assertIsNone(out)
 
     def test_enforce_engine_only_allows_career_block(self):
         from ask_hard_guards import enforce_engine_only_or_refuse

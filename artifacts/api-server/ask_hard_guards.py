@@ -16,6 +16,7 @@ _ENGINE_SLICES = frozenset({
     "travel_engine_v1",
     "litigation_engine_v1",
     "luck_engine_v1",
+    "controlled_fallback_v1",
     "finance_engine_v1",
     "health_engine_v1",
     "travel_timing_v1",
@@ -47,6 +48,53 @@ _NO_ENGINE_REFUSAL = (
     "sirf raw chart par jawab nahi dete. "
     "Kripya shaadi, career, health, paisa, property, travel, bachche ya "
     "court-case se juda specific sawaal puchiye; tab engine facts ke saath jawab milega."
+)
+
+# Option C — when no domain engine facts exist, allow a tight chart+LLM path for
+# general / luck / vague personal Qs only (not marriage/career/health/timing).
+CONTROLLED_LLM_FALLBACK_RULE = (
+    "\n\n=== CONTROLLED CHART FALLBACK (no domain engine block) ===\n"
+    "Answer ONLY from the chart slice below — no invented facts.\n"
+    "- Stay on the EXACT user question; do NOT drift to spouse, in-laws, or unrelated topics.\n"
+    "- Use at most 2–3 relevant chart factors (house / planet / current dasha phase).\n"
+    "- NO invented calendar dates, lottery numbers, or guaranteed outcomes.\n"
+    "- For luck/bhagya/general Qs: lean on 9H bhagya, 5H grace, 11H gains, Jupiter, Moon.\n"
+    "- Tone: confident Hinglish, ~80–120 words unless the user asked for more detail.\n"
+)
+
+_MANDATORY_LLM_DOMAINS = frozenset({
+    "marriage",
+    "love",
+    "career",
+    "health",
+    "finance",
+    "education",
+    "children",
+    "property",
+    "travel",
+    "litigation",
+    "vehicle",
+})
+
+_MANDATORY_CHECK_FLAGS = (
+    "is_marriage_engine",
+    "is_mr_static",
+    "is_career_engine",
+    "is_health_static",
+    "is_finance_static",
+    "is_education_static",
+    "is_children_static",
+    "is_property_static",
+    "is_travel_static",
+    "is_litigation_static",
+    "is_vehicle_static",
+)
+
+_VAGUE_PERSONAL_RX = re.compile(
+    r"(?ix)\b("
+    r"mer[eie]|meri|mere|mujhe|mujhko|main|mein|my|myself|"
+    r"personality|swabhav|nature|character|kaun\s+hu|who\s+am\s+i"
+    r")\b",
 )
 
 # Spec-only TIMING SPEC blocks are NOT engine output — must not unlock LLM passthrough.
@@ -238,6 +286,158 @@ def passthrough_missing_required_engine(
     return "no_domain_engine"
 
 
+def _controlled_fallback_enabled() -> bool:
+    return (os.environ.get("ASK_CONTROLLED_FALLBACK") or "1").strip().lower() not in (
+        "0",
+        "off",
+        "false",
+        "no",
+    )
+
+
+def mandatory_static_domain_detected(
+    question: str,
+    llm_intent: dict[str, Any] | None = None,
+    checks: dict[str, Any] | None = None,
+) -> bool:
+    """True when a specific domain engine is required — no chart-only fallback."""
+    checks = checks or {}
+    for flag in _MANDATORY_CHECK_FLAGS:
+        if checks.get(flag):
+            return True
+
+    dom = str((llm_intent or {}).get("domain") or "").strip().lower()
+    if dom in _MANDATORY_LLM_DOMAINS:
+        return True
+
+    q = (question or "").strip()
+    if not q:
+        return False
+
+    try:
+        from ask_marriage_relationship_slice import (  # type: ignore
+            is_marriage_relationship_static_question,
+        )
+
+        if is_marriage_relationship_static_question(q):
+            return True
+    except Exception:
+        pass
+    try:
+        from ask_career.classifier import is_career_static_question  # type: ignore
+
+        if is_career_static_question(q):
+            return True
+    except Exception:
+        pass
+    try:
+        from ask_health.classifier import is_health_static_question  # type: ignore
+
+        if is_health_static_question(q):
+            return True
+    except Exception:
+        pass
+    try:
+        from ask_finance.classifier import is_finance_static_question  # type: ignore
+
+        if is_finance_static_question(q):
+            return True
+    except Exception:
+        pass
+    try:
+        from ask_education.classifier import is_education_static_question  # type: ignore
+
+        if is_education_static_question(q):
+            return True
+    except Exception:
+        pass
+    try:
+        from ask_children.classifier import is_children_static_question  # type: ignore
+
+        if is_children_static_question(q):
+            return True
+    except Exception:
+        pass
+    try:
+        from ask_property.classifier import is_property_static_question  # type: ignore
+
+        if is_property_static_question(q):
+            return True
+    except Exception:
+        pass
+    try:
+        from ask_travel.classifier import is_travel_static_question  # type: ignore
+
+        if is_travel_static_question(q):
+            return True
+    except Exception:
+        pass
+    try:
+        from ask_litigation.classifier import is_litigation_static_question  # type: ignore
+
+        if is_litigation_static_question(q):
+            return True
+    except Exception:
+        pass
+    try:
+        from ask_vehicle.classifier import is_vehicle_static_question  # type: ignore
+
+        if is_vehicle_static_question(q):
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def controlled_llm_fallback_eligible(
+    question: str,
+    llm_intent: dict[str, Any] | None = None,
+    *,
+    qtype: str = "STATIC",
+    checks: dict[str, Any] | None = None,
+) -> bool:
+    """Option C: general/luck/vague may use chart+LLM when no engine facts exist."""
+    if not _controlled_fallback_enabled():
+        return False
+
+    if str(qtype or "").upper() == "TIMING":
+        return False
+    if (llm_intent or {}).get("is_timing"):
+        return False
+
+    if mandatory_static_domain_detected(question, llm_intent, checks):
+        return False
+
+    q = (question or "").strip()
+    if not q:
+        return False
+
+    try:
+        from ask_luck.classifier import is_luck_static_question  # type: ignore
+
+        if is_luck_static_question(q):
+            return True
+    except Exception:
+        pass
+
+    try:
+        from ask_native_overview import is_native_overview_question  # type: ignore
+
+        if is_native_overview_question(q):
+            return True
+    except Exception:
+        pass
+
+    dom = str((llm_intent or {}).get("domain") or "").strip().lower()
+    if dom in ("general", "luck", ""):
+        return True
+
+    if _VAGUE_PERSONAL_RX.search(q):
+        return True
+
+    return False
+
+
 def enforce_engine_only_or_refuse(
     *,
     question: str,
@@ -295,6 +495,13 @@ def enforce_engine_only_or_refuse(
                 return build_timing_domain_clarifier_result(question, qtype=qtype)
         except Exception:
             pass
+        if controlled_llm_fallback_eligible(
+            question,
+            llm_intent,
+            qtype=qtype,
+            checks=checks,
+        ):
+            return None
         return no_engine_refusal_result(question, qtype=qtype)
     return None
 

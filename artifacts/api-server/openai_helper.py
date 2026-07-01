@@ -7366,6 +7366,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             "is_health_static": bool(_is_health_static),
             "is_finance_static": bool(_is_finance_static),
             "is_luck_static": bool(_is_luck_static),
+            "is_education_static": bool(_is_education_static),
+            "is_children_static": bool(_is_children_static),
+            "is_property_static": bool(_is_property_static),
+            "is_travel_static": bool(_is_travel_static),
+            "is_litigation_static": bool(_is_litigation_static),
+            "is_vehicle_static": bool(_is_vehicle_static),
         }
         _eng_slice = dcr_love_meta if isinstance(dcr_love_meta, dict) else {}
         _refusal = enforce_engine_only_or_refuse(
@@ -7396,6 +7402,34 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 skip_reason="engine_required_no_direct_llm",
                 intent_source=_intent_source,
                 llm_intent=_llm_intent,
+            )
+        from ask_hard_guards import (  # type: ignore
+            CONTROLLED_LLM_FALLBACK_RULE,
+            controlled_llm_fallback_eligible,
+            passthrough_has_domain_engine_facts,
+        )
+
+        _has_engine_facts = passthrough_has_domain_engine_facts(
+            checks=_eng_checks,
+            slice_meta=_eng_slice,
+            marriage_block=marriage_block or "",
+            career_block=career_block or "",
+            domain_timing_block=domain_timing_block or "",
+        )
+        if not _has_engine_facts and controlled_llm_fallback_eligible(
+            question or "",
+            _llm_intent if isinstance(_llm_intent, dict) else None,
+            qtype=qtype,
+            checks=_eng_checks,
+        ):
+            extra_rules = (extra_rules or "") + CONTROLLED_LLM_FALLBACK_RULE
+            _eng_checks["controlled_llm_fallback"] = True
+            _eng_checks["narrator_mode"] = "controlled_chart_fallback"
+            _eng_checks["slice_type"] = "controlled_fallback_v1"
+            print(
+                f"[raw_passthrough] CONTROLLED_LLM_FALLBACK "
+                f"q={(question or '')[:60]!r}",
+                flush=True,
             )
     except Exception as _eng_only_exc:
         print(

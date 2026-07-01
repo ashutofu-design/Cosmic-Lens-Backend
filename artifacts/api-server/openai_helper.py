@@ -5398,6 +5398,34 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     else:
         is_timing = (_resolved_route == "timing")
     try:
+        from ask_mr.timing_registry import (
+            clear_timing_without_when_anchor,
+            finalize_is_timing_flag,
+            mr_static_overrides_llm_timing,
+            resolve_mr_static_archetype,
+        )
+
+        if isinstance(_llm_intent, dict):
+            clear_timing_without_when_anchor(question or "", _llm_intent)
+        is_timing = finalize_is_timing_flag(question or "", is_timing, _llm_intent)
+        if mr_static_overrides_llm_timing(question or "", _llm_intent):
+            is_timing = False
+            if isinstance(_llm_intent, dict):
+                _llm_intent["is_timing"] = False
+                _llm_intent["domain"] = "love"
+                _llm_intent["mr_archetype"] = (
+                    _llm_intent.get("mr_archetype")
+                    or resolve_mr_static_archetype(question or "")
+                    or "partner_nature"
+                )
+            print(
+                f"[raw_passthrough] MR_STATIC early (no kab/when) "
+                f"q={(question or '')[:60]!r}",
+                flush=True,
+            )
+    except Exception as _when_gate_exc:
+        print(f"[raw_passthrough] WHEN_TIMING_GATE skipped: {_when_gate_exc}", flush=True)
+    try:
         from ask_career.timing_registry import is_career_timing_question  # type: ignore
 
         if is_career_timing_question(question or "", _llm_intent):
@@ -6164,6 +6192,14 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _is_mr_static = True
             _is_property_static = False
             is_timing = False
+            qtype = "STATIC"
+    except Exception:
+        pass
+    try:
+        from ask_mr.timing_registry import finalize_is_timing_flag
+
+        is_timing = finalize_is_timing_flag(question or "", is_timing, _llm_intent)
+        if not is_timing:
             qtype = "STATIC"
     except Exception:
         pass

@@ -102,6 +102,9 @@ def is_love_timing_question(
     q = prepare_ask_question((question or "").strip())
     if not q:
         return False
+    # Hard rule: no kab/when in text → never love timing.
+    if not _EXPLICIT_LOVE_TIMING_RX.search(q):
+        return False
     try:
         from ask_mr.timing_registry import is_mr_static_question
 

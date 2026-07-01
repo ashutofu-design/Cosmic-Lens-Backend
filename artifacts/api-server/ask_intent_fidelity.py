@@ -650,13 +650,17 @@ def build_question_understanding_detail(
         conf = 0.0
     src = str(li.get("source") or intent_source or "").strip().lower()
     try:
-        from ask_mr.timing_registry import mr_static_overrides_llm_timing
-
-        timing = (
-            "static"
-            if mr_static_overrides_llm_timing(q, li) or not li.get("is_timing")
-            else "timing"
+        from ask_mr.timing_registry import (
+            mr_static_overrides_llm_timing,
+            question_requests_timing,
         )
+
+        if question_requests_timing(q, li):
+            timing = "timing" if li.get("is_timing") else "static"
+        elif mr_static_overrides_llm_timing(q, li):
+            timing = "static"
+        else:
+            timing = "static" if not li.get("is_timing") else "timing"
     except Exception:
         timing = "timing" if li.get("is_timing") else "static"
     inferred = infer_primary_domain(q)
@@ -881,11 +885,16 @@ def repair_llm_intent(question: str, result: dict[str, Any] | None) -> dict[str,
             repaired = True
 
     try:
-        from ask_mr.timing_registry import repair_llm_intent_mr_static_timing
+        from ask_mr.timing_registry import (
+            clear_timing_without_when_anchor,
+            repair_llm_intent_mr_static_timing,
+        )
 
         if repair_llm_intent_mr_static_timing(q, out):
             domain = str(out.get("domain") or domain)
             mr_arch = out.get("mr_archetype")
+            repaired = True
+        if clear_timing_without_when_anchor(q, out):
             repaired = True
     except Exception:
         pass

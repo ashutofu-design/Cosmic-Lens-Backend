@@ -281,8 +281,9 @@ NATIVE OVERVIEW (CRITICAL): "mere bare/baare me kuch batao", "mujhe batao", "tel
 "main kaisa hun", "meri personality" — when NO specific domain (shaadi/career/health/paisa/planet) is \
 named → domain=general, mr_archetype=null, is_timing=false, interpretation about the USER's own chart \
 overview. Do NOT route these to marriage/love or partner_nature/in-laws.
-2. "is_timing": true if the user asks WHEN something happens (kab, timing, \
-date, muhurat, age). false otherwise.
+2. "is_timing": true ONLY if the question text contains kab/when/kis saal/muhurat/dasha \
+explicitly (WHEN something happens). false for kaisa hoga / attractive hoga / nature / look / \
+loyalty trait questions even if they contain hoga/hogi without kab.
 3. "is_decision": true if it is a should-I / yes-or-no decision question.
 4. "wants_explain": true if the user wants a detailed "why" explanation \
 (samjhao, explain, reason, kyun) rather than a short verdict.

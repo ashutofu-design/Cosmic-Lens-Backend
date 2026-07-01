@@ -203,16 +203,19 @@ def verify_static_engine_selection(
         try:
             from ask_mr.timing_registry import (
                 mr_static_overrides_llm_timing,
+                question_requests_timing,
                 resolve_mr_static_archetype,
             )
 
-            if mr_static_overrides_llm_timing(q, llm_intent):
+            if not question_requests_timing(q, llm_intent) or mr_static_overrides_llm_timing(
+                q, llm_intent
+            ):
                 return EngineVerificationResult(
                     ok=False,
                     action="reroute_mr",
-                    reason="mr_static_not_timing",
+                    reason="timing_without_kab_when",
                     mr_archetype=resolve_mr_static_archetype(q),
-                    failed_checks=["timing_on_mr_static_question"],
+                    failed_checks=["timing_without_when_anchor"],
                 )
         except Exception:
             pass

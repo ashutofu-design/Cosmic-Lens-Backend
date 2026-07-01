@@ -137,6 +137,9 @@ def apply_understanding_routing(
         from ask_mr.timing_registry import repair_llm_intent_mr_static_timing
 
         repair_llm_intent_mr_static_timing(combined, out)
+        from ask_mr.timing_registry import clear_timing_without_when_anchor
+
+        clear_timing_without_when_anchor(combined, out)
     except Exception:
         pass
 
@@ -173,9 +176,13 @@ def classify_and_route_ask(
 
     res = apply_understanding_routing(q, understanding, res)
     try:
-        from ask_mr.timing_registry import repair_llm_intent_mr_static_timing
+        from ask_mr.timing_registry import (
+            clear_timing_without_when_anchor,
+            repair_llm_intent_mr_static_timing,
+        )
 
         repair_llm_intent_mr_static_timing(q, res)
+        clear_timing_without_when_anchor(q, res)
     except Exception:
         pass
 

@@ -43,6 +43,21 @@ class TestRoutingPolicy(unittest.TestCase):
         q = "D10 mein Sun Makar rashi mein hai (5th house) se kya hota he"
         self.assertTrue(no_engine_llm_fallback_eligible(q, qtype="STATIC"))
 
+    def test_d10_bypasses_static_engines(self):
+        from ask_routing_policy import should_bypass_static_engines_for_direct_llm
+
+        q = "D10 mein Sun Makar rashi mein hai (5th house se kya hota hai"
+        bypass, reason = should_bypass_static_engines_for_direct_llm(q)
+        self.assertTrue(bypass)
+        self.assertIn("divisional", reason)
+
+    def test_career_plain_still_uses_engine(self):
+        from ask_routing_policy import should_bypass_static_engines_for_direct_llm
+
+        q = "Meri career kaisi rahegi"
+        bypass, _ = should_bypass_static_engines_for_direct_llm(q)
+        self.assertFalse(bypass)
+
 
 if __name__ == "__main__":
     unittest.main()

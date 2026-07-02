@@ -68,8 +68,7 @@ _CHILDREN_CORE_RX = re.compile(
     r"matritva|maternity|paternity|"
     r"adoption|adopt|gode\s+lena|"
     r"first\s+child|second\s+child|teesra\s+bachcha|"
-    r"putra\s*prapti|santaan\s*prapti|santan\s*yog|"
-    r"5(?:th|h|H)\s+(?:house|bhav|lord)"
+    r"putra\s*prapti|santaan\s*prapti|santan\s*yog"
     r")\b"
 )
 
@@ -253,9 +252,9 @@ def is_children_static_question(question: str) -> bool:
     if not q or _TIMING_RX.search(q):
         return False
     try:
-        from chart_fact_answer import _detect_divisional, needs_llm_chart_answer
+        from chart_fact_answer import _detect_divisional
 
-        if _detect_divisional(q) or needs_llm_chart_answer(q):
+        if _detect_divisional(q):
             return False
     except Exception:
         pass

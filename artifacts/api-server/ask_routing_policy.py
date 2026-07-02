@@ -151,3 +151,42 @@ def no_engine_llm_fallback_eligible(
 
 def build_cosmic_domain_llm_rules(question: str) -> str:
     return build_no_engine_llm_rules(question)
+
+
+def should_bypass_static_engines_for_direct_llm(
+    question: str,
+    llm_intent: dict[str, Any] | None = None,
+) -> tuple[bool, str]:
+    """Chart/divisional Q with no dedicated engine — skip all static engines → LLM."""
+    q = (question or "").strip()
+    if not q:
+        return False, ""
+    try:
+        from chart_fact_answer import (
+            _detect_divisional,
+            is_pure_chart_fact_lookup,
+            needs_llm_chart_answer,
+        )
+
+        if is_pure_chart_fact_lookup(q):
+            return False, ""
+        if _detect_divisional(q):
+            return True, "divisional_chart_no_static_engine"
+        if needs_llm_chart_answer(q):
+            return True, "chart_interpretive_no_static_engine"
+    except Exception:
+        pass
+    dom = str((llm_intent or {}).get("domain") or "").strip().lower()
+    if dom == "general":
+        try:
+            from chart_fact_answer import needs_llm_chart_answer
+
+            if needs_llm_chart_answer(q):
+                return True, "general_domain_chart_llm"
+        except Exception:
+            pass
+    return False, ""
+
+
+def clear_static_engine_flags(flags: dict[str, bool]) -> dict[str, bool]:
+    return {k: False for k in (flags or {})}

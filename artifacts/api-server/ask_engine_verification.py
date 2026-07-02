@@ -174,6 +174,21 @@ def apply_pre_route_guards(
     out = {k: bool(v) for k, v in (flags or {}).items()}
     notes: list[str] = []
 
+    try:
+        from ask_routing_policy import should_bypass_static_engines_for_direct_llm
+
+        _bypass, _bypass_reason = should_bypass_static_engines_for_direct_llm(
+            question or "",
+            llm_intent if isinstance(llm_intent, dict) else None,
+        )
+        if _bypass:
+            for k in out:
+                out[k] = False
+            notes.append(f"direct_llm:{_bypass_reason}")
+            return out, notes
+    except Exception:
+        pass
+
     if should_suppress_gap_for_question(question, gap_key=gap_key):
         if out.get("gap"):
             out["gap"] = False

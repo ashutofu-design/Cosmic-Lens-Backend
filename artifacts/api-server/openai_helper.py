@@ -6483,6 +6483,34 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         _is_luck_static = False
         _is_network_static = False
     try:
+        from ask_routing_policy import should_bypass_static_engines_for_direct_llm
+
+        _direct_llm_bypass, _direct_llm_reason = should_bypass_static_engines_for_direct_llm(
+            question or "",
+            _llm_intent if isinstance(_llm_intent, dict) else None,
+        )
+        if _direct_llm_bypass:
+            _is_mr_static = False
+            _is_health_static = False
+            _is_career_static = False
+            _is_finance_static = False
+            _is_education_static = False
+            _is_children_static = False
+            _is_property_static = False
+            _is_vehicle_static = False
+            _is_travel_static = False
+            _is_litigation_static = False
+            _is_gap_static = False
+            _is_luck_static = False
+            _is_network_static = False
+            print(
+                f"[raw_passthrough] DIRECT_LLM_BYPASS reason={_direct_llm_reason!r} "
+                f"q={(question or '')[:60]!r}",
+                flush=True,
+            )
+    except Exception as _dlb_exc:
+        print(f"[raw_passthrough] DIRECT_LLM_BYPASS skipped: {_dlb_exc}", flush=True)
+    try:
         try:
             from ask_health.timing_registry import health_static_overrides_llm_timing as _hso_pre  # type: ignore
 

@@ -168,6 +168,27 @@ def resolve_static_engine_route(
     domain = _llm_domain(llm_intent, llm_intent_admin)
     archetype = _llm_archetype(llm_intent, llm_intent_admin)
 
+    try:
+        from ask_routing_policy import should_bypass_static_engines_for_direct_llm
+
+        _bypass, _bypass_reason = should_bypass_static_engines_for_direct_llm(
+            question or "",
+            llm_intent if isinstance(llm_intent, dict) else None,
+        )
+        if _bypass:
+            route = EngineRoute(
+                engine_key=None,
+                domain=domain,
+                archetype=archetype,
+                slice_id=None,
+                reason=_bypass_reason,
+                suppressed=list(_active_engines({k: bool(flags.get(k)) for k in ALL_FLAG_KEYS})),
+                is_timing=False,
+            )
+            return {k: False for k in ALL_FLAG_KEYS}, route
+    except Exception:
+        pass
+
     if is_timing:
         route = EngineRoute(
             engine_key=None,

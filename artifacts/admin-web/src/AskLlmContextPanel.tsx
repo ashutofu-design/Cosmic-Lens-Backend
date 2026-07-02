@@ -382,9 +382,25 @@ export function resolveAnswerPath(
 function engineFactsFromContext(ctx: AskLlmContext) {
   const ef = ctx.engine_facts;
   const sm = ctx.slice_meta || {};
-  if (ef && (ef.verdict || (ef.evidence && ef.evidence.length > 0))) {
+  const smTiming = (sm.timing_evidence as string[] | undefined) || [];
+  const efTiming = (ef as { timing_evidence?: string[] } | undefined)?.timing_evidence || [];
+  const mergedEvidence =
+    (ef?.evidence && ef.evidence.length > 0
+      ? ef.evidence
+      : (sm.evidence as string[] | undefined)) ||
+    (efTiming.length > 0 ? efTiming : smTiming.length > 0 ? smTiming : []);
+  const hasFacts = Boolean(
+    ef?.verdict ||
+      sm.verdict ||
+      mergedEvidence.length > 0 ||
+      (ef?.summary && ef.summary.length > 0) ||
+      ((sm.summary as string[] | undefined)?.length ?? 0) > 0,
+  );
+  if (ef && hasFacts) {
     return {
       ...ef,
+      evidence: mergedEvidence,
+      timing_evidence: efTiming.length > 0 ? efTiming : smTiming,
       evidence_positive:
         ef.evidence_positive && ef.evidence_positive.length > 0
           ? ef.evidence_positive
@@ -403,7 +419,8 @@ function engineFactsFromContext(ctx: AskLlmContext) {
     archetype: sm.archetype,
     verdict: sm.verdict,
     summary: (sm.summary as string[] | undefined) || [],
-    evidence: (sm.evidence as string[] | undefined) || [],
+    evidence: mergedEvidence,
+    timing_evidence: smTiming,
     evidence_positive: (sm.evidence_positive as string[] | undefined) || [],
     evidence_negative: (sm.evidence_negative as string[] | undefined) || [],
     evidence_neutral: (sm.evidence_neutral as string[] | undefined) || [],
@@ -1017,15 +1034,17 @@ export function AskLlmContextPanel({
     (engineFacts.evidence_neutral && engineFacts.evidence_neutral.length > 0
       ? engineFacts.evidence_neutral
       : (sliceMeta.evidence_neutral as string[] | undefined)) ?? [];
+  const sliceName = String(sliceMeta.slice || checks.slice_type || "");
+  const isTimingEngineSlice =
+    sliceName.includes("timing") || Boolean(ctx.is_timing || ctx.question_type === "TIMING");
   const isMrEngineSlice =
-    sliceMeta.slice === "mr_engine_v1" ||
-    checks.slice_type === "mr_engine_v1" ||
-    Boolean(sliceMeta.archetype || engineFacts.archetype);
+    sliceName === "mr_engine_v1" || checks.slice_type === "mr_engine_v1";
   const hasSplitEvidence = Boolean(
-    isMrEngineSlice ||
-      evidencePositive.length > 0 ||
-      evidenceNegative.length > 0 ||
-      evidenceNeutral.length > 0,
+    isMrEngineSlice &&
+      !isTimingEngineSlice &&
+      (evidencePositive.length > 0 ||
+        evidenceNegative.length > 0 ||
+        evidenceNeutral.length > 0),
   );
   const summary =
     (engineFacts.summary && engineFacts.summary.length > 0
@@ -1070,14 +1089,23 @@ export function AskLlmContextPanel({
                 <strong>Verdict:</strong> {verdict}
               </p>
             ) : null}
-            {dashaTrace && (dashaTrace.current_lords || dashaTrace.next_career_ad) ? (
+            {dashaTrace &&
+            (dashaTrace.current_lords ||
+              dashaTrace.running_lords ||
+              dashaTrace.next_career_ad) ? (
               <p>
-                <strong>Dasha check:</strong> current {fmtCheckValue(dashaTrace.current_lords)}
-                {dashaTrace.current_start || dashaTrace.current_end ? (
+                <strong>Dasha check:</strong> current{" "}
+                {fmtCheckValue(dashaTrace.current_lords || dashaTrace.running_lords)}
+                {(dashaTrace.current_start || dashaTrace.current_end ||
+                  dashaTrace.running_start ||
+                  dashaTrace.running_end) ? (
                   <>
                     {" "}
-                    ({fmtCheckValue(dashaTrace.current_start)} →{" "}
-                    {fmtCheckValue(dashaTrace.current_end)})
+                    ({fmtCheckValue(
+                      dashaTrace.current_start || dashaTrace.running_start,
+                    )}{" "}
+                    →{" "}
+                    {fmtCheckValue(dashaTrace.current_end || dashaTrace.running_end)})
                   </>
                 ) : null}
                 {dashaTrace.next_career_ad ? (

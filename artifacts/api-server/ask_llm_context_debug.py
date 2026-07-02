@@ -296,8 +296,12 @@ def build_engine_facts_snapshot(
     }
     if slice_meta.get("dasha_trace"):
         out["dasha_trace"] = slice_meta.get("dasha_trace")
+    if not out["evidence"] and slice_meta.get("timing_evidence"):
+        out["evidence"] = list(slice_meta.get("timing_evidence") or [])
     if slice_meta.get("timing_evidence"):
         out["timing_evidence"] = list(slice_meta.get("timing_evidence") or [])
+    if slice_meta.get("step_audit"):
+        out["step_audit"] = slice_meta.get("step_audit")
     return out
 
 

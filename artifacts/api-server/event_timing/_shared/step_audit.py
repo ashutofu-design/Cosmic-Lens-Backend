@@ -416,7 +416,7 @@ def attach_timing_pipeline_audit(result: dict, domain: str) -> dict:
 def _timing_evidence_from_result(result: dict) -> list[str]:
     out: list[str] = []
     sa = result.get("step_audit") if isinstance(result.get("step_audit"), dict) else {}
-    for key in ("step1", "step2", "step4", "step5"):
+    for key in ("step1", "step2", "step3", "step4", "step5", "step6"):
         block = sa.get(key) or {}
         d = block.get("detail")
         if d and d not in out:
@@ -424,11 +424,13 @@ def _timing_evidence_from_result(result: dict) -> list[str]:
     if len(out) < 4:
         for f in (result.get("factors") or []):
             fs = str(f)
-            if any(tok in fs.upper() for tok in ("STEP5", "RUNNING", "PRIMARY", "DASHA")):
-                if fs not in out:
-                    out.append(fs)
+            if fs and fs not in out:
+                out.append(fs)
             if len(out) >= 8:
                 break
+    verdict = str(result.get("verdict") or "").strip()
+    if verdict and not out:
+        out.append(f"Verdict: {verdict}")
     return out[:8]
 
 

@@ -47,6 +47,7 @@ _ENGINE_SLICES = frozenset({
     "fame_timing_v1",
     "network_timing_v1",
     "universal_timing_v1",
+    "open_chart_qa_engine_v1",
 })
 
 _MARRIAGE_TIMING_RX = re.compile(

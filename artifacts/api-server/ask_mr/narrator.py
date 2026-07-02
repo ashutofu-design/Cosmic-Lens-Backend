@@ -105,8 +105,9 @@ def _archetype_extra_rules(
             )
     elif arch == "open_chart_qa" or open_chart_qa:
         rules.append(
-            "Open chart Q — pick ONLY facts relevant to the user's exact question. "
-            "Native-self focus when they asked about themselves — do NOT drift to partner traits."
+            "Open chart Q — use ONLY LOCKED CHART FACTS in the engine block. "
+            "Stay on TOPIC_LOCK — no invented placements, dates, or unrelated drift. "
+            "Native-self focus when they asked about themselves."
         )
     elif arch in (
         "overall_vitality", "chronic_tendency", "mental_stress", "surgery_risk_tone",

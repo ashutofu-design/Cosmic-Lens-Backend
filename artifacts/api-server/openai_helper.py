@@ -7230,6 +7230,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                             kundli if isinstance(kundli, dict) else {},
                             question or "",
                             wants_explain=wants_explain,
+                            llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
                         )
                         chart_text = _oca_rec.to_narrator_payload()
                         dcr_love_meta = open_chart_qa_slice_meta(_oca_rec)
@@ -7322,6 +7323,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     kundli if isinstance(kundli, dict) else {},
                     question or "",
                     wants_explain=wants_explain,
+                    llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
                 )
                 chart_text = _oca_result.to_narrator_payload()
                 dcr_love_meta = open_chart_qa_slice_meta(_oca_result)
@@ -7399,6 +7401,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                                 kundli if isinstance(kundli, dict) else {},
                                 question or "",
                                 wants_explain=wants_explain,
+                                llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
                             )
                             _mr_engine_result = _oca_rec
                             chart_text = _oca_rec.to_narrator_payload()
@@ -8571,6 +8574,49 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         _fallback_intent = (
             _llm_intent_admin if isinstance(_llm_intent_admin, dict) else _llm_intent
         )
+        if not _has_engine_facts and universal_chart_llm_fallback_eligible(
+            question or "",
+            _fallback_intent if isinstance(_fallback_intent, dict) else None,
+            qtype=qtype,
+            checks=_eng_checks,
+        ):
+            try:
+                from ask_chart_open_qa import (  # type: ignore
+                    build_open_chart_qa_llm_rules,
+                    try_open_chart_qa_for_question,
+                )
+
+                _oca_fb = try_open_chart_qa_for_question(
+                    kundli if isinstance(kundli, dict) else {},
+                    question or "",
+                    llm_intent=_fallback_intent if isinstance(_fallback_intent, dict) else None,
+                    wants_explain=wants_explain,
+                    qtype=qtype or "STATIC",
+                    checks=_eng_checks,
+                )
+                if _oca_fb:
+                    chart_text, dcr_love_meta = _oca_fb
+                    _eng_checks["open_chart_qa"] = True
+                    _eng_checks["narrator_mode"] = "open_chart_qa"
+                    _eng_checks["slice_type"] = "open_chart_qa_engine_v1"
+                    _chart_slice_type = "open_chart_qa_engine_v1"
+                    extra_rules = (extra_rules or "") + build_open_chart_qa_llm_rules(
+                        question or "",
+                        _fallback_intent if isinstance(_fallback_intent, dict) else None,
+                    )
+                    _has_engine_facts = True
+                    print(
+                        f"[raw_passthrough] OPEN_CHART_QA_FALLBACK "
+                        f"topic={(dcr_love_meta or {}).get('topic')} "
+                        f"facts={len((dcr_love_meta or {}).get('evidence') or [])} "
+                        f"q={(question or '')[:60]!r}",
+                        flush=True,
+                    )
+            except Exception as _oca_fb_exc:
+                print(
+                    f"[raw_passthrough] OPEN_CHART_QA_FALLBACK skipped: {_oca_fb_exc}",
+                    flush=True,
+                )
         if not _has_engine_facts and universal_chart_llm_fallback_eligible(
             question or "",
             _fallback_intent if isinstance(_fallback_intent, dict) else None,

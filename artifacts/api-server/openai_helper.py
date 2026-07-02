@@ -3905,17 +3905,15 @@ def _raw_passthrough_max_tokens(
         return 160
     if is_sensitive:
         return 120
-    if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "mr_engine_v1":
-        if wants_explain:
-            if dcr_love_meta.get("archetype") == "partner_nature":
-                return 200
-            return 140
-        if dcr_love_meta.get("archetype") == "partner_nature":
-            _pn_checks = dcr_love_meta.get("checks") or {}
-            if _pn_checks.get("question_focus") == "partnership_attachment":
-                return 115
-            return 130
-        return 75
+    try:
+        from ask_cosmo_narrator import is_cosmo_engine_slice
+
+        if isinstance(dcr_love_meta, dict) and is_cosmo_engine_slice(
+            str(dcr_love_meta.get("slice") or "")
+        ):
+            return 420 if wants_explain else 300
+    except Exception:
+        pass
     if isinstance(dcr_love_meta, dict) and (
         dcr_love_meta.get("slice") == "partner_nature_minimal"
         or (
@@ -7704,12 +7702,17 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     # a decision template instead of a natural narrated answer.
     if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") in (
         "mr_engine_v1",
+        "open_chart_qa_engine_v1",
         "career_engine_v1",
         "education_engine_v1",
         "children_engine_v1",
         "property_engine_v1",
+        "travel_engine_v1",
+        "litigation_engine_v1",
         "finance_engine_v1",
         "health_engine_v1",
+        "network_engine_v1",
+        "luck_engine_v1",
     ):
         is_decision = False
         is_finance = False
@@ -8650,21 +8653,18 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             max_tokens=_max_tok,
         )
         text = (resp.choices[0].message.content or "").strip()
-        text = _enforce_one_line_answer(
-            text, wants_explain,
-            is_timing=is_timing, is_decision=is_decision, is_finance=is_finance,
-            is_partner_nature=_is_pn_minimal,
-            question_focus=_mr_question_focus,
-        )
-        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") in (
-            "mr_engine_v1",
-            "career_engine_v1",
-            "education_engine_v1",
-            "children_engine_v1",
-            "property_engine_v1",
-            "finance_engine_v1",
-            "health_engine_v1",
-        ):
+        if _mr_engine_narrator:
+            from ask_cosmo_narrator import enforce_cosmo_engine_answer
+
+            text = enforce_cosmo_engine_answer(text, wants_explain=wants_explain)
+        else:
+            text = _enforce_one_line_answer(
+                text, wants_explain,
+                is_timing=is_timing, is_decision=is_decision, is_finance=is_finance,
+                is_partner_nature=_is_pn_minimal,
+                question_focus=_mr_question_focus,
+            )
+        if _mr_engine_narrator:
             from ask_mr.narrator import polish_mr_confident_tone
 
             text = polish_mr_confident_tone(text)

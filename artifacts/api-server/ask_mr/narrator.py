@@ -1,9 +1,10 @@
-"""MR engine narrator — thin LLM prompt (facts only, no chart calculation)."""
+"""MR engine narrator — Cosmo Ask voice: expand engine facts into deep Hinglish markdown."""
 
 from __future__ import annotations
 
 import re
 
+from ask_cosmo_narrator import build_cosmo_ask_length_block
 from .types import EngineResult
 from ask_career.job_registry import JOB_ENGINE_ARCHETYPES
 
@@ -81,6 +82,74 @@ def build_mr_narrator_user_lang_block(code: str) -> str:
     return "Lang: Hinglish (Roman).\n\n"
 
 
+def _archetype_extra_rules(
+    *,
+    archetype: str,
+    is_partner_nature: bool,
+    question_focus: str,
+    open_chart_qa: bool,
+) -> str:
+    arch = (archetype or "").strip().lower()
+    qf = (question_focus or "").strip().lower()
+    rules: list[str] = []
+
+    if is_partner_nature or arch == "partner_nature":
+        rules.append(
+            "Partner/spouse nature Q — expand 7H vibe, emotional tone, mindset, presence "
+            "from evidence into warm trait portrait. No planet/house/sign words in reply."
+        )
+        if qf == "partnership_attachment":
+            rules.append(
+                "Focus: emotional attachment depth — bond strengths first, one caveat, "
+                "practical patience/communication in bullets."
+            )
+    elif arch == "open_chart_qa" or open_chart_qa:
+        rules.append(
+            "Open chart Q — pick ONLY facts relevant to the user's exact question. "
+            "Native-self focus when they asked about themselves — do NOT drift to partner traits."
+        )
+    elif arch in (
+        "overall_vitality", "chronic_tendency", "mental_stress", "surgery_risk_tone",
+        "preventive_risk", "recovery_capacity", "accident_risk", "parent_health",
+        "addiction_support", "reproductive_support", "general_health",
+        "digestive_health", "cardio_health", "nervous_health", "musculoskeletal_health",
+        "skin_health", "endocrine_health", "respiratory_health", "immune_health",
+    ):
+        rules.append(
+            "Health Q — warm friend tone. NO disease names, death, illness dates, or cure guarantees. "
+            "Say: kamzor lagta hai, stress rehta hai, doctor/counselling when needed. "
+            "No jargon: vulnerability zones, vitality score, screening."
+        )
+    elif arch in (
+        "income_source", "savings_capacity", "save_vs_spend", "expense_pattern",
+        "spending_personality", "financial_discipline", "investment_risk",
+        "debt_loan", "property_money", "sudden_gain_loss", "business_profit",
+        "loss_reasons", "wealth_potential", "dhana_yoga", "general_finance",
+    ):
+        rules.append(
+            "Finance Q — direct money answer first. No lottery/satta/stock tips. "
+            "Do not invent amounts or dates."
+        )
+    elif arch in JOB_ENGINE_ARCHETYPES or arch.startswith("career") or arch in (
+        "job_vs_business", "sector_fit", "creativity_innovation", "career_milestones",
+        "govt_job", "vocational_trade", "entrepreneurship", "income_wealth",
+        "foreign_career", "workplace_relations", "fame_recognition", "education_career",
+        "career_obstacles", "retirement_legacy", "work_environment", "career_traits",
+        "strengths_skills",
+    ):
+        rules.append(
+            "Career Q — answer the EXACT job/business/milestone asked. "
+            "Lead with clear haan/nahi or path pick per VERDICT, then explain why in daily work terms."
+        )
+    elif arch == "job_vs_business":
+        rules.append(
+            "Job vs business — Big Picture = clear JOB or BUSINESS pick per VERDICT "
+            "(include ~% split if engine gives it). Do NOT say pehle job phir business unless Hybrid."
+        )
+
+    return "\n".join(rules)
+
+
 def build_mr_engine_narrator_system_prompt(
     *,
     chart_text: str,
@@ -93,233 +162,58 @@ def build_mr_engine_narrator_system_prompt(
     user_intent: str = "",
     open_chart_qa: bool = False,
 ) -> str:
-    """Minimal system prompt: engine already computed the answer — LLM narrates only."""
+    """Cosmo Ask narrator — expand engine facts into deep markdown Hinglish."""
     rl = (reply_lang or "hn").strip().lower()
     if rl not in _NARRATOR_LANG:
         rl = "hn"
-    wb = max(25, min(int(word_budget or 55), 180))
-    qf = (question_focus or "").strip().lower()
-
-    if is_partner_nature or archetype == "partner_nature":
-        if qf == "partnership_attachment":
-            if wants_explain:
-                length_block = (
-                    "MANDATORY: 5–6 complete sentences in ONE block (110–125 words).\n"
-                    "NOT 3 paragraphs. No planet/house/sign/lord/karak words.\n\n"
-                    "Sentence 1: direct mixed/strong/cautious verdict on emotional attachment.\n"
-                    "Sentence 2–3: positive bond points (from POSITIVE evidence).\n"
-                    "Sentence 4: main caveat (from NEGATIVE evidence).\n"
-                    "Sentence 5–6: practical handling + patience/communication.\n"
-                    f"{_MR_CONFIDENT_TONE}"
-                )
-            else:
-                length_block = (
-                    "MANDATORY: exactly 4 complete sentences in ONE block (85–100 words max).\n"
-                    "NOT 3 paragraphs. No planet/house/sign/lord/karak words.\n\n"
-                    "Sentence 1: direct mixed/strong/cautious verdict on emotional attachment.\n"
-                    "Sentence 2: ONE positive bond point (from POSITIVE evidence).\n"
-                    "Sentence 3: ONE caveat only (from NEGATIVE evidence — do not list all).\n"
-                    "Sentence 4: one practical line (patience, baat-cheet, support).\n"
-                    "Every sentence MUST end fully — never cut off mid-phrase.\n"
-                    f"{_MR_CONFIDENT_TONE}"
-                )
-        elif wants_explain:
-            length_block = (
-                "MANDATORY: exactly 3 paragraphs separated by ONE blank line (\\n\\n).\n"
-                "Total 110–130 words. Wise friend Hinglish. No planet/house/sign/lord/karak words.\n\n"
-                "PARAGRAPH 1: direct trait answer + 7th house social vibe.\n"
-                "PARAGRAPH 2: 7th lord + planets-in-7th → emotional tone + mindset.\n"
-                "PARAGRAPH 3: partner-karak → presence / attraction + one practical note.\n"
-                f"{_MR_CONFIDENT_TONE}"
-            )
-        else:
-            length_block = (
-                "MANDATORY: exactly 3 paragraphs separated by ONE blank line (\\n\\n).\n"
-                "Total 75–90 words only — short and complete. No planet/house/sign/lord/karak words.\n\n"
-                "PARAGRAPH 1 (~25 words): direct trait answer + social vibe.\n"
-                "PARAGRAPH 2 (~25 words): emotional tone + mindset (one point each).\n"
-                "PARAGRAPH 3 (~25 words): warm presence in relationship.\n"
-                "Do NOT write one long essay. Do NOT add facts outside EVIDENCE.\n"
-                f"{_MR_CONFIDENT_TONE}"
-            )
-        if qf != "partnership_attachment":
-            _trait_hint = (
-                "IF the user asked a SPECIFIC trait (gussa, expressive, dominant, respect, etc.) — "
-                "START paragraph 1 with ONE clear haan/nahi from matching EVIDENCE or HINT.\n"
-            )
-            length_block = _trait_hint + length_block
-    elif archetype == "job_vs_business":
-        length_block = (
-            f"Write 2–3 short sentences (~{min(wb + 15, 90)} words max).\n"
-            "Read USER ACTUALLY ASKED — answer job vs business (or business vs job) directly.\n"
-            "Sentence 1 = clear pick JOB or BUSINESS per VERDICT (include ~% split if given).\n"
-            "If VERDICT says Employment path stronger → job/naukri suits abhi — "
-            "do NOT say 'pehle job phir business' unless VERDICT says Hybrid.\n"
-            "Sentence 2–3 = WHY from ENGINE EVIDENCE in plain words "
-            "(career mode, structure, independence, discipline — pick 1–2 reasons).\n"
-            "End feeling: user ko samajh aaye poori kundli reading se yeh path kyun better hai.\n"
-            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
-            f"{_MR_CONFIDENT_TONE}"
-        )
-    elif archetype == "sector_fit":
-        length_block = (
-            f"Write 2–3 short sentences (~{min(wb + 20, 95)} words max).\n"
-            "Read USER ACTUALLY ASKED — if they asked food/IT/govt/best business type, "
-            "answer THAT sector directly (haan/nahi or best type).\n"
-            "Sentence 1 = direct sector answer per VERDICT.\n"
-            "Sentence 2–3 = WHY from ENGINE EVIDENCE in plain words.\n"
-            "Do NOT answer job vs business % split unless USER ACTUALLY ASKED job OR business.\n"
-            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
-            f"{_MR_CONFIDENT_TONE}"
-        )
-    elif archetype == "creativity_innovation":
-        length_block = (
-            f"Write 2–3 short sentences (~{min(wb + 15, 90)} words max).\n"
-            "Read USER ACTUALLY ASKED — if they asked YouTuber/actor/singer/photographer/gamer, "
-            "answer ban sakta hun / suit karega directly (haan/nahi per VERDICT).\n"
-            "Sentence 1 = clear yes/no or strong/weak fit for THAT creative path.\n"
-            "Sentence 2–3 = WHY from ENGINE EVIDENCE (communication, audience, creative axis).\n"
-            "Do NOT give job vs business % split.\n"
-            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
-            f"{_MR_CONFIDENT_TONE}"
-        )
-    elif archetype == "career_milestones":
-        length_block = (
-            f"Write 2–3 short sentences (~{min(wb + 15, 90)} words max).\n"
-            "Read USER ACTUALLY ASKED — promotion / interview / job change / govt exam / side hustle.\n"
-            "Sentence 1 = direct answer to THAT milestone per VERDICT.\n"
-            "Sentence 2–3 = WHY from ENGINE EVIDENCE in plain words.\n"
-            "Do NOT give job vs business % split unless user asked job OR business.\n"
-            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
-            f"{_MR_CONFIDENT_TONE}"
-        )
-    elif archetype == "govt_job" or archetype in JOB_ENGINE_ARCHETYPES:
-        length_block = (
-            f"Write 2–3 short sentences (~{min(wb + 20, 95)} words max).\n"
-            "Read USER ACTUALLY ASKED — named job/profession line (govt/IT/doctor/pilot/CA/bank/etc.).\n"
-            "Sentence 1 = direct haan/nahi for THAT job line per VERDICT.\n"
-            "Sentence 2–3 = WHY from profession-specific evidence in plain words.\n"
-            "Do NOT give job vs business % split. Do NOT promise selection date or guaranteed post.\n"
-            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
-            f"{_MR_CONFIDENT_TONE}"
-        )
-    elif archetype == "vocational_trade":
-        length_block = (
-            f"Write 2–3 short sentences (~{min(wb + 15, 85)} words max).\n"
-            "Read USER ACTUALLY ASKED — electrician/plumber/mechanic/skilled trade suitability.\n"
-            "Sentence 1 = direct haan/nahi for THAT trade per VERDICT.\n"
-            "Sentence 2–3 = WHY from craft/service evidence in plain words.\n"
-            "Do NOT give job vs business % split.\n"
-            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
-            f"{_MR_CONFIDENT_TONE}"
-        )
-    elif archetype in ("entrepreneurship", "income_wealth", "foreign_career", "workplace_relations", "fame_recognition", "education_career", "career_obstacles", "retirement_legacy", "work_environment", "career_traits", "strengths_skills"):
-        length_block = (
-            f"Write 2–3 short sentences (~{min(wb + 15, 90)} words max).\n"
-            "Read USER ACTUALLY ASKED — answer THAT exact career question directly per VERDICT.\n"
-            "Do NOT pivot to job vs business % split unless user asked job OR business.\n"
-            "Sentence 1 = clear direct answer. Sentence 2–3 = strongest reason from EVIDENCE.\n"
-            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
-            f"{_MR_CONFIDENT_TONE}"
-        )
-    elif archetype in (
-        "income_source", "savings_capacity", "save_vs_spend", "expense_pattern",
-        "spending_personality", "financial_discipline", "investment_risk",
-        "debt_loan", "property_money", "sudden_gain_loss", "business_profit",
-        "loss_reasons", "wealth_potential", "dhana_yoga", "general_finance",
-    ):
-        length_block = (
-            f"Write 2–3 short sentences (~{min(wb + 15, 90)} words max).\n"
-            "Read USER ACTUALLY ASKED — answer THAT exact money/finance question per VERDICT.\n"
-            "Sentence 1 = direct answer (income/saving/debt/property/sudden gain/loss/amir).\n"
-            "Sentence 2–3 = WHY from ENGINE EVIDENCE in plain words — no house/planet jargon.\n"
-            "Do NOT push lottery/satta/stock tips. Do NOT invent amounts or dates.\n"
-            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
-            f"{_MR_CONFIDENT_TONE}"
-        )
-    elif archetype in (
-        "overall_vitality", "chronic_tendency", "mental_stress", "surgery_risk_tone",
-        "preventive_risk", "recovery_capacity", "accident_risk", "parent_health",
-        "addiction_support", "reproductive_support", "general_health",
-        "digestive_health", "cardio_health", "nervous_health", "musculoskeletal_health",
-        "skin_health", "endocrine_health", "respiratory_health", "immune_health",
-    ):
-        _issue_tone = (
-            "User asked what health issues/troubles they feel — describe body, energy, stress, "
-            "recurring strain in warm friend Hinglish (tu/tera OK if user used tu tone).\n"
-            if archetype == "general_health"
-            else ""
-        )
-        length_block = (
-            f"Write 2–3 short sentences (~{min(wb + 15, 100)} words max).\n"
-            f"{_issue_tone}"
-            "Read USER ACTUALLY ASKED — answer THAT exact health question per VERDICT.\n"
-            "Sentence 1 = direct health answer (vitality/chronic/stress/surgery tone/recovery).\n"
-            "Sentence 2–3 = WHY from ENGINE EVIDENCE in plain life words — NO disease names.\n"
-            "BANNED user-facing jargon: vulnerability zones, preventive measures, vitality score, "
-            "health drains, monitor, structural risk, mixed-to-weak, zones, screening.\n"
-            "Say instead: kamzor lagta hai, stress rehta hai, baar-baar dikkat, doctor se check.\n"
-            "NEVER name diseases (cancer, diabetes, etc.) or predict death/lifespan.\n"
-            "NEVER predict death, illness date, recovery date, or cure guarantee.\n"
-            "NEVER give surgery muhurat/date — surgeon decides.\n"
-            "Mental/addiction/parent Qs → soft supportive tone + doctor/counselling line.\n"
-            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
-            f"{_MR_CONFIDENT_TONE}"
-        )
-    elif open_chart_qa:
-        _ow = min(wb + 30, 130) if wants_explain else max(wb, 60)
-        length_block = (
-            f"Write 2–3 short sentences (~{_ow} words).\n"
-            "This is an OPEN question with NO fixed engine verdict. Read the CHART FACTS "
-            "below, pick ONLY the factors relevant to the user's exact question "
-            "(see USER ACTUALLY ASKED), and answer THAT question directly: clear stance first, "
-            "then 1–2 plain reasons from those factors. Do NOT list every factor and do NOT "
-            "drift to partner traits when the question is about the user themselves.\n"
-            f"{_MR_CONFIDENT_TONE}"
-        )
-    elif wants_explain:
-        length_block = (
-            f"Write 3–5 short sentences (~{min(wb + 35, 130)} words).\n"
-            "Explain the engine verdict using 3–5 evidence lines below — "
-            "each in plain life language (no jargon).\n"
-            f"{_MR_CONFIDENT_TONE}"
-        )
-    else:
-        length_block = (
-            f"Write 2 short sentences (~{wb} words max).\n"
-            "Sentence 1 = engine verdict stated clearly (not hedged).\n"
-            "Sentence 2 = the SINGLE strongest reason. Pick ONLY the most "
-            "decisive EVIDENCE line and explain that one in plain life language. "
-            "Strength ranking: deep-chart / D9 / Navamsha / conjunction "
-            "confirmations are strongest, then single planet-lord placements, "
-            "then general notes. Give the user ONE clear 'why' — do NOT list "
-            "multiple reasons or stack evidence.\n"
-            "BANNED labels: 'Seedha jawab:', 'Conclusion:', 'निष्कर्ष:' — natural prose only.\n"
-            f"{_MR_CONFIDENT_TONE}"
-        )
+    arch = (archetype or "").strip().lower()
 
     topic_hint = (
         "health"
-        if archetype in (
+        if arch in (
             "overall_vitality", "chronic_tendency", "mental_stress", "surgery_risk_tone",
             "preventive_risk", "recovery_capacity", "accident_risk", "parent_health",
             "addiction_support", "reproductive_support", "general_health",
+            "digestive_health", "cardio_health", "nervous_health", "musculoskeletal_health",
+            "skin_health", "endocrine_health", "respiratory_health", "immune_health",
         )
         else (
-        "finance"
-        if archetype in (
-            "income_source", "savings_capacity", "save_vs_spend", "expense_pattern",
-            "spending_personality", "financial_discipline", "investment_risk",
-            "debt_loan", "property_money", "sudden_gain_loss", "business_profit",
-            "loss_reasons", "wealth_potential", "dhana_yoga", "general_finance",
+            "finance"
+            if arch in (
+                "income_source", "savings_capacity", "save_vs_spend", "expense_pattern",
+                "spending_personality", "financial_discipline", "investment_risk",
+                "debt_loan", "property_money", "sudden_gain_loss", "business_profit",
+                "loss_reasons", "wealth_potential", "dhana_yoga", "general_finance",
+            )
+            else (
+                "career"
+                if arch and arch not in ("partner_nature", "general_mr", "open_chart_qa")
+                and not arch.startswith("breakup")
+                else (arch.replace("_", " ") if arch else "marriage/relationship")
+            )
         )
-        else (
-            "career"
-            if archetype and archetype not in ("partner_nature", "general_mr")
-            and not archetype.startswith("breakup")
-            else (archetype.replace("_", " ") if archetype else "marriage/relationship")
+    )
+
+    extras = _archetype_extra_rules(
+        archetype=arch,
+        is_partner_nature=is_partner_nature,
+        question_focus=question_focus,
+        open_chart_qa=open_chart_qa,
+    )
+    if (is_partner_nature or arch == "partner_nature") and question_focus != "partnership_attachment":
+        extras = (
+            "IF user asked a SPECIFIC trait (gussa, expressive, dominant, respect) — "
+            "open Big Picture with clear haan/nahi from matching evidence.\n" + extras
         )
+    if arch == "love_vs_arranged" or "arrange" in arch:
+        extras += (
+            "\nIf engine gives love vs arranged % split — LEAD Big Picture with those numbers only."
         )
+
+    length_block = build_cosmo_ask_length_block(
+        wants_explain=wants_explain,
+        topic=topic_hint,
+        extra_rules=extras,
     )
 
     intent_block = ""
@@ -329,22 +223,13 @@ def build_mr_engine_narrator_system_prompt(
             f"{user_intent.strip()}\n"
         )
 
-    return f"""You are Cosmo — warm wise friend. NOT calculating charts.
-
-{_NARRATOR_LANG[rl]}
+    return f"""{_NARRATOR_LANG[rl]}
 {intent_block}
-RULES: ENGINE FACTS below are final. Narrate VERDICT + EVIDENCE in plain language with confidence.
-Match the answer to EXACTLY what the user asked — if they asked a specific thing
-(percentage, yes/no, who, when-ish tilt), answer THAT directly first, then reason.
-Do NOT add planets/houses/D9/dasha or new reasons. Do NOT contradict VERDICT.
-Do NOT use section labels like Seedha jawab / Conclusion — write natural sentences only.
-Do NOT hedge with shayad/ho sakta hai/lagta hai — state the pattern the engine found.
-If the user asks for a percentage / number / "kitna" / ratio, LEAD with the
-approx % split shown in ENGINE FACTS (e.g. "Love ~56%, arrange ~44%"), then one
-short reason. Use ONLY the numbers given — do NOT invent your own figure.
-No bullets or [Checked].
+ENGINE LOCK: Facts below are final — narrate and EXPAND them; never recalculate or contradict VERDICT.
+Do NOT add new planets/houses/dasha reasons beyond ENGINE FACTS.
+If user asked for % / kitna / ratio, lead Big Picture with engine numbers only — do not invent figures.
+BANNED section labels: Seedha jawab, Conclusion, निष्कर्ष — use the Markdown section headers given.
 
-Topic: {topic_hint}
 {length_block}
 
 ENGINE FACTS:

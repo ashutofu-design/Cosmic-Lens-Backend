@@ -182,7 +182,7 @@ def run_open_chart_qa(
             "(not a fixed engine verdict)."
         ),
         confidence="medium",
-        word_budget=75 if wants_explain else 60,
+        word_budget=200 if wants_explain else 180,
         answer_plan=(
             "Read USER QUESTION → pick only matching chart facts → "
             "clear stance + 1–2 plain reasons. No generic marriage/partner summary."

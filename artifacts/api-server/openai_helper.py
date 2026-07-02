@@ -5210,10 +5210,17 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             is_chart_lookup_question,
             is_domain_life_area_interpretation_question,
             is_domain_outcome_yoga_question,
+            needs_llm_chart_answer,
             chart_lookup_refusal_payload,
         )
 
-        if is_domain_outcome_yoga_question(question):
+        if needs_llm_chart_answer(question):
+            print(
+                f"[raw_passthrough] chart_fact skipped — LLM interpretation/combo "
+                f"q={(question or '')[:72]!r}",
+                flush=True,
+            )
+        elif is_domain_outcome_yoga_question(question):
             print(
                 f"[raw_passthrough] chart_fact skipped — domain outcome yoga "
                 f"q={(question or '')[:72]!r}",
@@ -10219,13 +10226,14 @@ def _build_messages(
         pass
     if mode == "astro" and (_route_is_minimal or _is_chart_fact_question(question)):
         try:
-            from chart_fact_answer import try_deterministic_chart_fact
+            from chart_fact_answer import needs_llm_chart_answer, try_deterministic_chart_fact
 
-            _det = try_deterministic_chart_fact(question, kundli, lang)
-            if _det and isinstance(out_meta, dict):
-                out_meta["deterministic_chart_fact"] = True
-            if _det:
-                return _det
+            if not needs_llm_chart_answer(question):
+                _det = try_deterministic_chart_fact(question, kundli, lang)
+                if _det and isinstance(out_meta, dict):
+                    out_meta["deterministic_chart_fact"] = True
+                if _det:
+                    return _det
         except Exception as _cfe:
             print(f"[ai_ask] chart_fact deterministic skipped: {_cfe}", flush=True)
         chart_only = _kundli_summary(kundli, birth)

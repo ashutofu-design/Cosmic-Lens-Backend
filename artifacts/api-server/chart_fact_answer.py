@@ -203,6 +203,53 @@ def is_domain_outcome_yoga_question(question: str) -> bool:
     return False
 
 
+_NEEDS_LLM_RX = re.compile(
+    r"(?ix)\b("
+    r"combination|combo|sath|saath|mil\s*kar|relation|together|versus|vs\.?|"
+    r"compare|comparison|zyada\s+strong|better|worse|"
+    r"matlab|meaning|impact|effect|affect|prabhav|influence|result|phala|fal|"
+    r"kya\s+hoga|kya\s+hoti|kya\s+hot|kaise\s+(?:affect|prabhav|kar|help|hurt)|"
+    r"explain|samjha|samjh|bataye|batao\s+ki|good|bad|accha|bura|favourable|"
+    r"strong|weak|powerful|kamzor"
+    r")\b",
+)
+
+
+def needs_llm_chart_answer(question: str) -> bool:
+    """No dedicated engine → LLM interprets (combo/meaning/effect), not chart_fact stub."""
+    q = normalize_ask_typos((question or "").strip())
+    if not q:
+        return False
+    if is_domain_life_area_interpretation_question(q):
+        return True
+    if is_domain_outcome_yoga_question(q):
+        return True
+    if is_chart_interpretation_question(q):
+        return True
+    if _NEEDS_LLM_RX.search(q):
+        return True
+    varga = _detect_divisional(q)
+    if varga and (_INTERPRET_RX.search(q) or _DOMAIN_LIFE_INTERPRET_RX.search(q)):
+        return True
+    try:
+        from openai_helper import _classify_ask_intent
+
+        it = (_classify_ask_intent(q, "hn").get("intent") or "").strip()
+        if it in ("planet_combo", "comparison", "planet_strength", "yoga_check"):
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def is_pure_chart_fact_lookup(question: str) -> bool:
+    """Atomic placement only — short factual answer, no LLM narration."""
+    q = normalize_ask_typos((question or "").strip())
+    if not q or needs_llm_chart_answer(q):
+        return False
+    return is_chart_lookup_question(q)
+
+
 def is_domain_life_area_interpretation_question(question: str) -> bool:
     """Placement + love/career/etc meaning — MR/love engines + LLM, not chart_fact."""
     q = normalize_ask_typos((question or "").strip())
@@ -310,6 +357,8 @@ def is_chart_lookup_question(question: str) -> bool:
     q = normalize_ask_typos((question or "").strip())
     if not q or len(q.split()) > 18:
         return False
+    if needs_llm_chart_answer(q):
+        return False
     if is_domain_outcome_yoga_question(q):
         return False
     if is_domain_life_area_interpretation_question(q):
@@ -340,9 +389,7 @@ def is_chart_lookup_question(question: str) -> bool:
         if it in _CHART_LOOKUP_INTENTS:
             return True
         if it in ("planet_strength", "yoga_check", "comparison", "planet_combo"):
-            if it == "yoga_check" and is_domain_outcome_yoga_question(q):
-                return False
-            return True
+            return False
     except Exception:
         pass
     if _CHART_LOOKUP_RX.search(q) and _parse_house_num(q) is not None:
@@ -712,6 +759,9 @@ def try_deterministic_chart_fact(
     q = normalize_ask_typos(question or "")
     lang_use = lang if lang in ("hi", "hn", "en") else "hn"
 
+    if needs_llm_chart_answer(q):
+        return None
+
     if is_domain_life_area_interpretation_question(q):
         return None
 
@@ -719,7 +769,7 @@ def try_deterministic_chart_fact(
     it = local_tag or ""
     planets: list[str] = []
 
-    if not is_chart_lookup_question(q):
+    if not is_pure_chart_fact_lookup(q):
         return None
 
     try:
@@ -734,7 +784,6 @@ def try_deterministic_chart_fact(
 
     house = _parse_house_num(q)
     varga = _detect_divisional(q)
-    wants_interpret = is_chart_interpretation_question(q)
     use_csl = bool(re.search(r"\bcsl\b", q, re.I))
 
     # ── Handlers (priority order) ─────────────────────────────────────────
@@ -790,14 +839,6 @@ def try_deterministic_chart_fact(
     if it in ("house_lord_lookup",) and house:
         text = _answer_house_lord(kundli, house, lang_use)
         if text:
-            if wants_interpret:
-                text += (
-                    " Result/impact ke liye specific life-area question puchiye — "
-                    "main sirf chart placement batata hoon."
-                    if lang_use != "en"
-                    else " For result/impact, ask a specific life-area question — "
-                    "I only state chart placements."
-                )
             return _payload(text, it)
 
     if it in ("planet_nakshatra_lookup",) and planets:
@@ -814,35 +855,16 @@ def try_deterministic_chart_fact(
             lang=lang_use,
         )
         if text:
-            if wants_interpret:
-                text += (
-                    " Result/impact ke liye alag specific sawaal puchiye."
-                    if lang_use != "en"
-                    else " Ask a separate specific question for result/impact."
-                )
             return _payload(text, it)
 
     if it in ("house_lookup",) and house:
         text = _answer_house_lookup(kundli, house, lang_use)
         if text:
-            if wants_interpret:
-                text += (
-                    " Result/impact ke liye specific topic puchiye — "
-                    "main sirf placement batata hoon."
-                    if lang_use != "en"
-                    else " For result/impact ask a specific topic — placement only."
-                )
             return _payload(text, it)
 
     if it in ("planet_in_house", "planet_position") and planets:
         text = _answer_planet_position(kundli, planets[0], lang_use)
         if text:
-            if wants_interpret:
-                text += (
-                    " Result/impact ke liye specific sawaal puchiye."
-                    if lang_use != "en"
-                    else " Ask separately for result/impact."
-                )
             return _payload(text, it)
 
     # Fallback: house number in question → occupants

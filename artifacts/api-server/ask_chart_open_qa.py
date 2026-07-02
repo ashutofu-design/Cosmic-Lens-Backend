@@ -1,4 +1,9 @@
-"""Open chart QA — question-relevant D1 facts + LLM narrator (no wrong engine)."""
+"""Open chart QA — question-relevant D1 facts + LLM narrator (no wrong engine).
+
+Policy: dedicated engine → engine facts + LLM narrator.
+No engine + interpretation/combo/meaning → open_chart_qa locked facts + LLM.
+Pure placement lookup only → chart_fact (no LLM).
+"""
 
 from __future__ import annotations
 
@@ -105,6 +110,13 @@ def is_open_chart_interpretation_question(
     q = normalize_ask_typos((question or "").strip())
     if not q:
         return False
+    try:
+        from chart_fact_answer import needs_llm_chart_answer
+
+        if needs_llm_chart_answer(q):
+            return True
+    except Exception:
+        pass
     if TIMING_RX.search(q):
         return False
     if isinstance(llm_intent, dict) and llm_intent.get("is_timing"):
@@ -213,6 +225,51 @@ def _dasha_hint_line(kundli: dict) -> str | None:
     return f"Current dasha (context only): {' · '.join(parts)}."
 
 
+def _divisional_chart_facts(kundli: dict, question: str) -> list[str]:
+    """Locked divisional lines when user names D9/D10/etc."""
+    try:
+        from chart_fact_answer import _detect_divisional
+
+        varga = _detect_divisional(question or "")
+        if not varga:
+            return []
+        div = (kundli.get("divisionalCharts") or {}).get(varga)
+        if not isinstance(div, dict):
+            return [f"{varga}: divisional data not in chart payload."]
+        planets = div.get("planets") or []
+        mentioned = _mentioned_planets(question)
+        lines: list[str] = []
+        asc = div.get("ascendant") or div.get("lagna")
+        if asc:
+            lines.append(f"{varga} lagna: {asc}.")
+        if mentioned:
+            for name in mentioned[:3]:
+                pl = next(
+                    (
+                        p for p in planets
+                        if isinstance(p, dict)
+                        and (p.get("name") or "").lower() == name.lower()
+                    ),
+                    None,
+                )
+                if pl:
+                    lines.append(
+                        f"{varga}: {name} in H{pl.get('house', '?')} sign {pl.get('sign', '?')}."
+                    )
+        elif planets:
+            for pl in planets[:4]:
+                if not isinstance(pl, dict):
+                    continue
+                nm = pl.get("name")
+                if nm:
+                    lines.append(
+                        f"{varga}: {nm} in H{pl.get('house', '?')} sign {pl.get('sign', '?')}."
+                    )
+        return lines[:5]
+    except Exception:
+        return []
+
+
 def build_question_relevant_chart_facts(
     kundli: dict,
     question: str,
@@ -281,6 +338,8 @@ def build_question_relevant_chart_facts(
     dasha_line = _dasha_hint_line(kundli)
     if dasha_line:
         facts.append(dasha_line)
+
+    facts.extend(_divisional_chart_facts(kundli, q))
 
     seen: set[str] = set()
     out: list[str] = []

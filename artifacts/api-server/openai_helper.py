@@ -5212,7 +5212,6 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             is_domain_life_area_interpretation_question,
             is_domain_outcome_yoga_question,
             needs_llm_chart_answer,
-            chart_lookup_refusal_payload,
         )
 
         if needs_llm_chart_answer(question):
@@ -5246,18 +5245,10 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     intent_source="chart_fact",
                     llm_intent=_llm_intent_admin,
                 )
-            # Chart placement lookups must NEVER reach the LLM — engine or refusal only.
             if is_chart_lookup_question(question):
-                print("[raw_passthrough] chart_fact lookup blocked LLM (no deterministic match)", flush=True)
-                return _attach_admin(
-                    chart_lookup_refusal_payload(question, lang),
-                    question=question or "",
-                    question_type="STATIC",
-                    is_timing=False,
-                    llm_called=False,
-                    skip_reason="chart_fact_unresolved",
-                    intent_source="chart_fact",
-                    llm_intent=_llm_intent_admin,
+                print(
+                    "[raw_passthrough] chart_fact unresolved → LLM (no engine refusal)",
+                    flush=True,
                 )
     except Exception as _cfe:
         print(f"[raw_passthrough] chart_fact deterministic skipped: {_cfe}", flush=True)
@@ -8565,7 +8556,6 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             )
         from ask_hard_guards import (  # type: ignore
             passthrough_has_domain_engine_facts,
-            universal_chart_llm_fallback_eligible,
         )
         from ask_universal_chart_llm import (  # type: ignore
             build_universal_chart_llm_rules,
@@ -8582,114 +8572,54 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         _fallback_intent = (
             _llm_intent_admin if isinstance(_llm_intent_admin, dict) else _llm_intent
         )
-        if not _has_engine_facts and universal_chart_llm_fallback_eligible(
-            question or "",
-            _fallback_intent if isinstance(_fallback_intent, dict) else None,
-            qtype=qtype,
-            checks=_eng_checks,
-        ):
-            try:
-                from ask_chart_open_qa import (  # type: ignore
-                    build_open_chart_qa_llm_rules,
-                    try_open_chart_qa_for_question,
-                )
-
-                _oca_fb = try_open_chart_qa_for_question(
-                    kundli if isinstance(kundli, dict) else {},
-                    question or "",
-                    llm_intent=_fallback_intent if isinstance(_fallback_intent, dict) else None,
-                    wants_explain=wants_explain,
-                    qtype=qtype or "STATIC",
-                    checks=_eng_checks,
-                )
-                if _oca_fb:
-                    chart_text, dcr_love_meta = _oca_fb
-                    _eng_checks["open_chart_qa"] = True
-                    _eng_checks["narrator_mode"] = "open_chart_qa"
-                    _eng_checks["slice_type"] = "open_chart_qa_engine_v1"
-                    _chart_slice_type = "open_chart_qa_engine_v1"
-                    extra_rules = (extra_rules or "") + build_open_chart_qa_llm_rules(
-                        question or "",
-                        _fallback_intent if isinstance(_fallback_intent, dict) else None,
-                    )
-                    _has_engine_facts = True
-                    print(
-                        f"[raw_passthrough] OPEN_CHART_QA_FALLBACK "
-                        f"topic={(dcr_love_meta or {}).get('topic')} "
-                        f"facts={len((dcr_love_meta or {}).get('evidence') or [])} "
-                        f"q={(question or '')[:60]!r}",
-                        flush=True,
-                    )
-            except Exception as _oca_fb_exc:
-                print(
-                    f"[raw_passthrough] OPEN_CHART_QA_FALLBACK skipped: {_oca_fb_exc}",
-                    flush=True,
-                )
-        if not _has_engine_facts and universal_chart_llm_fallback_eligible(
-            question or "",
-            _fallback_intent if isinstance(_fallback_intent, dict) else None,
-            qtype=qtype,
-            checks=_eng_checks,
-        ):
-            chart_text = _rich_chart_text_for_llm_fallback(
-                kundli,
-                birth=birth,
-                question=question or "",
+        if not _has_engine_facts:
+            from ask_routing_policy import (  # type: ignore
+                build_no_engine_llm_rules,
+                no_engine_llm_fallback_eligible,
             )
-            extra_rules = (extra_rules or "") + build_universal_chart_llm_rules(
+
+            if no_engine_llm_fallback_eligible(
                 question or "",
-                qtype=qtype or "STATIC",
-                llm_intent=_fallback_intent if isinstance(_fallback_intent, dict) else None,
-            )
-            _eng_checks["controlled_llm_fallback"] = True
-            _eng_checks["universal_chart_llm"] = True
-            _eng_checks["narrator_mode"] = "universal_chart_llm"
-            _eng_checks["slice_type"] = "controlled_fallback_v1"
-            print(
-                f"[raw_passthrough] UNIVERSAL_CHART_LLM "
-                f"topic={infer_chart_topic(question or '', _fallback_intent if isinstance(_fallback_intent, dict) else None)} "
-                f"q={(question or '')[:60]!r}",
-                flush=True,
-            )
-            system_prompt = _build_universal_ask_system_prompt(
-                chart_text=chart_text or "(no chart data available)",
-                qtype=qtype or "STATIC",
-                topic_hint=_topic_hint,
-                wants_explain=wants_explain,
-                is_timing=bool(is_timing),
-                is_decision=is_decision,
-                is_finance=is_finance,
-                reply_lang=eff_lang,
-                extra_rules=extra_rules,
-                dcr_love_rule=dcr_love_rule,
-                is_partner_nature=_is_pn_minimal,
-            )
-        if not _has_engine_facts and not _eng_checks.get("universal_chart_llm"):
-            try:
-                from ask_routing_policy import (
-                    build_cosmic_domain_llm_rules,
-                    is_cosmic_domain_concept_question,
+                _fallback_intent if isinstance(_fallback_intent, dict) else None,
+                qtype=qtype,
+                checks=_eng_checks,
+            ):
+                chart_text = _rich_chart_text_for_llm_fallback(
+                    kundli,
+                    birth=birth,
+                    question=question or "",
                 )
-
-                if is_cosmic_domain_concept_question(
+                extra_rules = (extra_rules or "") + build_universal_chart_llm_rules(
+                    question or "",
+                    qtype=qtype or "STATIC",
+                    llm_intent=_fallback_intent if isinstance(_fallback_intent, dict) else None,
+                )
+                extra_rules += build_no_engine_llm_rules(
                     question or "",
                     _fallback_intent if isinstance(_fallback_intent, dict) else None,
-                ):
-                    extra_rules = (extra_rules or "") + build_cosmic_domain_llm_rules(
-                        question or "",
-                    )
-                    _eng_checks["cosmic_domain_llm"] = True
-                    _eng_checks["narrator_mode"] = "cosmic_domain_llm"
-                    _eng_checks["slice_type"] = "cosmic_domain_llm_v1"
-                    print(
-                        f"[raw_passthrough] COSMIC_DOMAIN_LLM (no engine) "
-                        f"q={(question or '')[:60]!r}",
-                        flush=True,
-                    )
-            except Exception as _cdl_exc:
+                )
+                _eng_checks["controlled_llm_fallback"] = True
+                _eng_checks["llm_no_engine"] = True
+                _eng_checks["narrator_mode"] = "llm_no_engine"
+                _eng_checks["slice_type"] = "llm_no_engine_v1"
                 print(
-                    f"[raw_passthrough] COSMIC_DOMAIN_LLM skipped: {_cdl_exc}",
+                    f"[raw_passthrough] LLM_NO_ENGINE "
+                    f"topic={infer_chart_topic(question or '', _fallback_intent if isinstance(_fallback_intent, dict) else None)} "
+                    f"q={(question or '')[:60]!r}",
                     flush=True,
+                )
+                system_prompt = _build_universal_ask_system_prompt(
+                    chart_text=chart_text or "(no chart data available)",
+                    qtype=qtype or "STATIC",
+                    topic_hint=_topic_hint,
+                    wants_explain=wants_explain,
+                    is_timing=bool(is_timing),
+                    is_decision=is_decision,
+                    is_finance=is_finance,
+                    reply_lang=eff_lang,
+                    extra_rules=extra_rules,
+                    dcr_love_rule=dcr_love_rule,
+                    is_partner_nature=_is_pn_minimal,
                 )
     except Exception as _eng_only_exc:
         print(

@@ -35,6 +35,14 @@ class TestRoutingPolicy(unittest.TestCase):
         self.assertTrue(is_cosmic_domain_concept_question(q))
         self.assertTrue(no_engine_llm_fallback_eligible(q, qtype="STATIC"))
 
+    def test_career_no_engine_llm_ok(self):
+        q = "Meri career kaisi rahegi"
+        self.assertTrue(no_engine_llm_fallback_eligible(q, {"domain": "career"}, qtype="STATIC"))
+
+    def test_d10_interpret_no_engine_llm_ok(self):
+        q = "D10 mein Sun Makar rashi mein hai (5th house) se kya hota he"
+        self.assertTrue(no_engine_llm_fallback_eligible(q, qtype="STATIC"))
+
 
 if __name__ == "__main__":
     unittest.main()

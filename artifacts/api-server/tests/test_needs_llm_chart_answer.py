@@ -27,6 +27,12 @@ _KUNDLI = {
 
 
 class TestNeedsLlmChartAnswer(unittest.TestCase):
+    def test_d10_se_kya_hota_he_needs_llm(self):
+        q = "D10 mein Sun Makar rashi mein hai (5th house). se kya hota he"
+        self.assertTrue(needs_llm_chart_answer(q))
+        self.assertFalse(is_pure_chart_fact_lookup(q))
+        self.assertIsNone(try_deterministic_chart_fact(q, _KUNDLI))
+
     def test_d10_career_effect_needs_llm(self):
         q = "D10 mein Sun mere career par kya effect dalta hai"
         self.assertTrue(needs_llm_chart_answer(q))

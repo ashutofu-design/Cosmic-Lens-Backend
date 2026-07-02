@@ -192,6 +192,16 @@ def death_refusal_result(question: str, *, kundli: Any = None, qtype: str = "STA
     }
 
 
+def no_engine_llm_enabled() -> bool:
+    """Default ON — no domain engine → full LLM answers (chart + question understanding)."""
+    return (os.environ.get("ASK_NO_ENGINE_LLM") or "1").strip().lower() not in (
+        "0",
+        "off",
+        "false",
+        "no",
+    )
+
+
 def direct_llm_allowed() -> bool:
     """Default OFF — set RAW_PASSTHROUGH_DIRECT_LLM=1 to allow legacy chart-only LLM."""
     return (os.environ.get("RAW_PASSTHROUGH_DIRECT_LLM") or "0").strip().lower() in (
@@ -585,6 +595,8 @@ def enforce_engine_only_or_refuse(
                     return build_timing_domain_clarifier_result(question, qtype=qtype)
             except Exception:
                 pass
+        if no_engine_llm_enabled():
+            return None
         return no_engine_refusal_result(question, qtype=qtype)
     if not has_domain:
         try:
@@ -597,6 +609,8 @@ def enforce_engine_only_or_refuse(
                 return build_timing_domain_clarifier_result(question, qtype=qtype)
         except Exception:
             pass
+        if no_engine_llm_enabled():
+            return None
         if universal_chart_llm_fallback_eligible(
             question,
             llm_intent,

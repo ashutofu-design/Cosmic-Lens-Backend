@@ -79,7 +79,7 @@ class TestEngineOnlyPolicy(unittest.TestCase):
             )
         )
 
-    def test_enforce_engine_only_blocks_mandatory_domain_without_facts(self):
+    def test_enforce_allows_llm_when_mandatory_domain_without_facts(self):
         from ask_hard_guards import enforce_engine_only_or_refuse
 
         out = enforce_engine_only_or_refuse(
@@ -89,8 +89,7 @@ class TestEngineOnlyPolicy(unittest.TestCase):
             checks={"is_career_engine": True, "slice_type": "full_compact"},
             slice_meta={},
         )
-        self.assertIsNotNone(out)
-        self.assertEqual(out["source"], "engine_required")
+        self.assertIsNone(out)
 
     def test_enforce_allows_luck_controlled_fallback(self):
         from ask_hard_guards import (
@@ -115,7 +114,7 @@ class TestEngineOnlyPolicy(unittest.TestCase):
         )
         self.assertIsNone(out)
 
-    def test_enforce_blocks_network_without_engine_facts(self):
+    def test_enforce_allows_network_without_engine_facts(self):
         from ask_hard_guards import enforce_engine_only_or_refuse
 
         q = "Mera social circle acha he ya bura"
@@ -126,8 +125,7 @@ class TestEngineOnlyPolicy(unittest.TestCase):
             checks={"slice_type": "full_compact"},
             slice_meta={},
         )
-        self.assertIsNotNone(out)
-        self.assertEqual(out["source"], "engine_required")
+        self.assertIsNone(out)
 
     def test_enforce_allows_general_vague_fallback(self):
         from ask_hard_guards import enforce_engine_only_or_refuse
@@ -248,7 +246,7 @@ class TestEngineOnlyPolicy(unittest.TestCase):
         self.assertTrue(is_timing)
         self.assertEqual(dom, "general")
 
-    def test_enforce_blocks_health_without_engine_facts(self):
+    def test_enforce_allows_health_without_engine_facts(self):
         from ask_hard_guards import enforce_engine_only_or_refuse
 
         q = "Mujhse yeh batao kya kya health issue ho raha hai"
@@ -260,8 +258,7 @@ class TestEngineOnlyPolicy(unittest.TestCase):
             checks={"is_health_static": True, "slice_type": "full_compact"},
             slice_meta={},
         )
-        self.assertIsNotNone(out)
-        self.assertEqual(out["source"], "engine_required")
+        self.assertIsNone(out)
 
     def test_enforce_allows_love_chart_fallback_when_understood(self):
         from ask_hard_guards import (
@@ -291,7 +288,7 @@ class TestEngineOnlyPolicy(unittest.TestCase):
         )
         self.assertIsNone(out)
 
-    def test_enforce_blocks_love_without_question_summary(self):
+    def test_enforce_allows_career_without_question_summary(self):
         from ask_hard_guards import enforce_engine_only_or_refuse
 
         q = "Meri career kaisi rahegi"
@@ -303,8 +300,7 @@ class TestEngineOnlyPolicy(unittest.TestCase):
             checks={"is_career_engine": True, "slice_type": "full_compact"},
             slice_meta={},
         )
-        self.assertIsNotNone(out)
-        self.assertEqual(out["source"], "engine_required")
+        self.assertIsNone(out)
 
     def test_mr_static_detects_dhoka_roman(self):
         from ask_marriage_relationship_slice import is_marriage_relationship_static_question

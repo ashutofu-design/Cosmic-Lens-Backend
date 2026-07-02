@@ -269,6 +269,16 @@ export function EngineVerificationBadge({
   if (!summary) {
     return <span className="engine-verify-badge engine-verify-unknown">Unknown</span>;
   }
+  if (summary.status === "none") {
+    return (
+      <span
+        className="engine-verify-badge engine-verify-none"
+        title={summary.reason || undefined}
+      >
+        {summary.label}
+      </span>
+    );
+  }
   return (
     <span
       className={`engine-verify-badge engine-verify-${summary.status}`}
@@ -313,6 +323,10 @@ export function EngineVerificationPanel({
       {!summary ? (
         <p className="detail-muted">
           No verification snapshot — deploy latest API and ask a new question.
+        </p>
+      ) : summary.status === "none" ? (
+        <p className="detail-muted">
+          Direct LLM only — no domain engine ran for this question.
         </p>
       ) : (
         <div className="engine-verify-body">
@@ -360,6 +374,9 @@ export function resolveAnswerPath(
   }
 
   const src = (row?.answer_source || "").toLowerCase();
+  if (src === "direct_llm_no_engine" || src.includes("direct_llm")) {
+    return { code: "direct_llm", label: "Direct LLM (no engine)" };
+  }
   if (src === "mr_engine_template" || src.includes("deterministic")) {
     return { code: "engine_only", label: "Engine only (no LLM)" };
   }

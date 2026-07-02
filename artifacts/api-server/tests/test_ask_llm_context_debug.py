@@ -101,6 +101,15 @@ class AskLlmContextDebugTests(unittest.TestCase):
         self.assertNotIn("10L Mercury", meta["evidence"][0])
         self.assertEqual(meta["dasha_trace"]["current_lords"], "Jupiter/Saturn/Mercury")
 
+    def test_answer_path_direct_llm_bypass_flag(self):
+        code, label = derive_answer_path(
+            llm_called=True,
+            checks={"direct_llm_bypass": True, "slice_type": "llm_no_engine_v1"},
+            slice_meta={},
+        )
+        self.assertEqual(code, "direct_llm")
+        self.assertIn("Direct LLM", label)
+
     def test_answer_path_direct_llm(self):
         code, _ = derive_answer_path(
             llm_called=True,

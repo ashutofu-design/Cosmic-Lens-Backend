@@ -129,6 +129,18 @@ def resolve_engine_display(
     gap_static_key: str | None = None,
 ) -> EngineDisplay:
     """Resolve admin engine number + line from slice, key, trace, or archetype."""
+    sl_in = (slice_id or "").strip()
+    if sl_in in ("llm_no_engine_v1", "controlled_fallback_v1") or (engine_key or "").strip() == "direct_llm":
+        return EngineDisplay(
+            engine_no=None,
+            slice_id="llm_no_engine_v1",
+            engine_key="direct_llm",
+            kind="special",
+            label="Direct LLM",
+            archetype=None,
+            admin_line="Direct LLM — no engine",
+        )
+
     arch = (archetype or "").strip() or None
     trace_sl = (engine_trace_engine or "").strip() or None
     gap_key = (gap_static_key or "").strip().lower() or None

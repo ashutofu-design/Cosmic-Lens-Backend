@@ -238,4 +238,6 @@ def merge_route_into_admin_intent(
     out["engine_ran"] = route.engine_key
     out["engine_ran_slice"] = route.slice_id
     out["engine_route_reason"] = route.reason
+    if not route.engine_key and route.reason.startswith("divisional"):
+        out["direct_llm_bypass"] = True
     return out

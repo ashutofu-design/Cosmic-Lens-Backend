@@ -5589,6 +5589,19 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _is_network_static = False
     _is_gap_static = False
     _gap_static_key = ""
+    _direct_llm_bypass = False
+    _direct_llm_reason = ""
+    try:
+        from ask_routing_policy import should_bypass_static_engines_for_direct_llm
+
+        _direct_llm_bypass, _direct_llm_reason = should_bypass_static_engines_for_direct_llm(
+            question or "",
+            _llm_intent if isinstance(_llm_intent, dict) else (
+                _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None
+            ),
+        )
+    except Exception:
+        pass
     _finance_engine_on = (os.environ.get("ASK_FINANCE_ENGINE") or "1").strip() != "0"
     _luck_engine_on = (os.environ.get("ASK_LUCK_ENGINE") or "1").strip() != "0"
     _network_engine_on = (os.environ.get("ASK_NETWORK_ENGINE") or "1").strip() != "0"
@@ -5995,7 +6008,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     )
             except Exception as _gap_det_exc:
                 print(f"[raw_passthrough] gap static detect skipped: {_gap_det_exc}", flush=True)
-        if _health_engine_on and not _is_mr_static and not _is_career_static and not _is_finance_static and not _is_education_static and not _is_children_static and not _is_property_static and not _is_vehicle_static and not _is_travel_static and not _is_litigation_static and not _is_luck_static and not _is_network_static and not _is_gap_static:
+        if _health_engine_on and not _direct_llm_bypass and not _is_mr_static and not _is_career_static and not _is_finance_static and not _is_education_static and not _is_children_static and not _is_property_static and not _is_vehicle_static and not _is_travel_static and not _is_litigation_static and not _is_luck_static and not _is_network_static and not _is_gap_static:
             try:
                 from ask_health.classifier import is_health_static_question  # type: ignore
 
@@ -6146,7 +6159,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     try:
         from ask_health.timing_registry import health_static_overrides_llm_timing as _hso_always  # type: ignore
 
-        if _hso_always(question or "", _llm_intent):
+        if not _direct_llm_bypass and _hso_always(question or "", _llm_intent):
             is_timing = False
             _is_health_static = True
             qtype = "STATIC"
@@ -6510,16 +6523,30 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             )
     except Exception as _dlb_exc:
         print(f"[raw_passthrough] DIRECT_LLM_BYPASS skipped: {_dlb_exc}", flush=True)
+    if _direct_llm_bypass:
+        chart_text = _rich_chart_text_for_llm_fallback(
+            kundli,
+            birth=birth,
+            question=question or "",
+        )
+        dcr_love_meta = None
+        _chart_slice_type = "llm_no_engine_v1"
+        print(
+            f"[raw_passthrough] DIRECT_LLM_CHART reason={_direct_llm_reason!r} "
+            f"q={(question or '')[:60]!r}",
+            flush=True,
+        )
     try:
-        try:
-            from ask_health.timing_registry import health_static_overrides_llm_timing as _hso_pre  # type: ignore
+        if not _direct_llm_bypass:
+            try:
+                from ask_health.timing_registry import health_static_overrides_llm_timing as _hso_pre  # type: ignore
 
-            if _hso_pre(question or "", _llm_intent):
-                is_timing = False
-                _is_health_static = True
-        except Exception as _hso_pre_exc:
-            print(f"[raw_passthrough] health pre-chart force skipped: {_hso_pre_exc}", flush=True)
-        if is_timing and not _is_health_static:
+                if _hso_pre(question or "", _llm_intent):
+                    is_timing = False
+                    _is_health_static = True
+            except Exception as _hso_pre_exc:
+                print(f"[raw_passthrough] health pre-chart force skipped: {_hso_pre_exc}", flush=True)
+        if not _direct_llm_bypass and is_timing and not _is_health_static:
             chart_text = _raw_compact_chart(
                 kundli, include_dasha=True, static_dasha_hint=False,
             )
@@ -6541,7 +6568,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         chart_text = chart_text + "\n\n=== TIMING ENGINE (LOCKED) ===\n" + _lf_slim
             except Exception as _lfe:
                 print(f"[raw_passthrough] timing locked_facts skipped: {_lfe}", flush=True)
-        elif _is_education_static:
+        elif not _direct_llm_bypass and _is_education_static:
             try:
                 from ask_education import run_education_static_engine  # type: ignore
                 from ask_education.routing import resolve_education_archetype  # type: ignore
@@ -6597,7 +6624,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_education_static = False
-        elif _is_children_static:
+        elif not _direct_llm_bypass and _is_children_static:
             try:
                 from ask_children import run_children_static_engine  # type: ignore
                 from ask_children.routing import resolve_children_archetype  # type: ignore
@@ -6653,7 +6680,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_children_static = False
-        elif _is_property_static:
+        elif not _direct_llm_bypass and _is_property_static:
             try:
                 from ask_property import run_property_static_engine  # type: ignore
                 from ask_property.routing import resolve_property_archetype  # type: ignore
@@ -6709,7 +6736,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_property_static = False
-        elif _is_vehicle_static:
+        elif not _direct_llm_bypass and _is_vehicle_static:
             try:
                 from ask_vehicle import run_vehicle_static_engine  # type: ignore
                 from ask_vehicle.routing import resolve_vehicle_archetype  # type: ignore
@@ -6764,7 +6791,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_vehicle_static = False
-        elif _is_travel_static:
+        elif not _direct_llm_bypass and _is_travel_static:
             try:
                 from ask_travel import run_travel_static_engine  # type: ignore
                 from ask_travel.routing import resolve_travel_archetype  # type: ignore
@@ -6820,7 +6847,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_travel_static = False
-        elif _is_litigation_static:
+        elif not _direct_llm_bypass and _is_litigation_static:
             try:
                 from ask_litigation import run_litigation_static_engine  # type: ignore
                 from ask_litigation.routing import resolve_litigation_archetype  # type: ignore
@@ -6885,7 +6912,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_litigation_static = False
-        elif _is_gap_static:
+        elif not _direct_llm_bypass and _is_gap_static:
             try:
                 from ask_gap_dispatch import (  # type: ignore
                     gap_static_to_meta,
@@ -6975,7 +7002,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_gap_static = False
-        elif _is_network_static:
+        elif not _direct_llm_bypass and _is_network_static:
             try:
                 from ask_network import run_network_static_engine  # type: ignore
                 from ask_network.routing import resolve_network_archetype  # type: ignore
@@ -7030,7 +7057,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_network_static = False
-        elif _is_luck_static:
+        elif not _direct_llm_bypass and _is_luck_static:
             try:
                 from ask_luck import run_luck_static_engine  # type: ignore
                 from ask_luck.routing import resolve_luck_archetype  # type: ignore
@@ -7085,7 +7112,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_luck_static = False
-        elif _is_career_static:
+        elif not _direct_llm_bypass and _is_career_static:
             try:
                 from ask_career import run_career_static_engine  # type: ignore
                 from ask_career.routing import resolve_career_archetype  # type: ignore
@@ -7141,7 +7168,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_career_static = False
-        elif _is_finance_static:
+        elif not _direct_llm_bypass and _is_finance_static:
             try:
                 from ask_finance import run_finance_static_engine  # type: ignore
                 from ask_finance.routing import resolve_finance_archetype  # type: ignore
@@ -7197,7 +7224,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_finance_static = False
-        elif _is_health_static:
+        elif not _direct_llm_bypass and _is_health_static:
             try:
                 from ask_health import run_health_static_engine  # type: ignore
                 from ask_health.routing import resolve_health_archetype  # type: ignore
@@ -7342,7 +7369,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
                 )
                 dcr_love_meta = None
-        elif _is_open_chart_qa:
+        elif not _direct_llm_bypass and _is_open_chart_qa:
             try:
                 from ask_chart_open_qa import open_chart_qa_slice_meta, run_open_chart_qa
 
@@ -7374,7 +7401,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_open_chart_qa = False
-        elif _is_mr_static:
+        elif not _direct_llm_bypass and _is_mr_static:
             _use_legacy_mr = (os.environ.get("ASK_MR_ENGINE") or "1").strip() == "0"
             if _use_legacy_mr:
                 try:
@@ -7526,7 +7553,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         )
                         dcr_love_meta = None
                         _is_mr_static = False
-        else:
+        elif not _direct_llm_bypass:
             chart_text = _raw_compact_chart(
                 kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
             )
@@ -7535,7 +7562,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             and str(dcr_love_meta.get("slice") or "").endswith("_engine_v1")
         )
         if (
-            not is_timing
+            not _direct_llm_bypass
+            and not is_timing
             and not _domain_engine_meta
             and not _is_mr_static
             and not _is_career_static
@@ -7569,7 +7597,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             except Exception as _dcr_love_exc:
                 print(f"[raw_passthrough] DCR_LOVE skipped: {_dcr_love_exc}", flush=True)
 
-        if _is_mr_static:
+        if _direct_llm_bypass:
+            _chart_slice_type = "llm_no_engine_v1"
+        elif _is_mr_static:
             _chart_slice_type = (
                 "mr_engine_v1"
                 if isinstance(dcr_love_meta, dict)
@@ -8973,34 +9003,38 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             if isinstance(dcr_love_meta, dict)
             else None
         )
-        _mr_engine_ran = _engine_slice == "mr_engine_v1"
-        _career_engine_ran = _engine_slice in ("career_engine_v1", "career_timing_v1")
-        _education_engine_ran = _engine_slice == "education_engine_v1"
-        _children_engine_ran = _engine_slice == "children_engine_v1"
-        _property_engine_ran = _engine_slice == "property_engine_v1"
-        _finance_engine_ran = _engine_slice == "finance_engine_v1"
-        _health_engine_ran = _engine_slice == "health_engine_v1"
-        _engine_tag = (
-            "ans-engine"
-            if (is_timing or _mr_engine_ran or _career_engine_ran or _education_engine_ran or _children_engine_ran or _property_engine_ran or _finance_engine_ran or _health_engine_ran)
-            else "ans-cosmo"
-        )
-        if _career_engine_ran:
-            _answer_source = "career_engine_then_llm"
-        elif _property_engine_ran:
-            _answer_source = "property_engine_then_llm"
-        elif _children_engine_ran:
-            _answer_source = "children_engine_then_llm"
-        elif _education_engine_ran:
-            _answer_source = "education_engine_then_llm"
-        elif _finance_engine_ran:
-            _answer_source = "finance_engine_then_llm"
-        elif _health_engine_ran:
-            _answer_source = "health_engine_then_llm"
-        elif _mr_engine_ran:
-            _answer_source = "mr_engine_then_llm"
+        if _direct_llm_bypass or _eng_checks.get("llm_no_engine"):
+            _answer_source = "direct_llm_no_engine"
+            _engine_tag = "ans-cosmo"
         else:
-            _answer_source = f"raw_passthrough_{qtype.lower()}"
+            _mr_engine_ran = _engine_slice == "mr_engine_v1"
+            _career_engine_ran = _engine_slice in ("career_engine_v1", "career_timing_v1")
+            _education_engine_ran = _engine_slice == "education_engine_v1"
+            _children_engine_ran = _engine_slice == "children_engine_v1"
+            _property_engine_ran = _engine_slice == "property_engine_v1"
+            _finance_engine_ran = _engine_slice == "finance_engine_v1"
+            _health_engine_ran = _engine_slice == "health_engine_v1"
+            _engine_tag = (
+                "ans-engine"
+                if (is_timing or _mr_engine_ran or _career_engine_ran or _education_engine_ran or _children_engine_ran or _property_engine_ran or _finance_engine_ran or _health_engine_ran)
+                else "ans-cosmo"
+            )
+            if _career_engine_ran:
+                _answer_source = "career_engine_then_llm"
+            elif _property_engine_ran:
+                _answer_source = "property_engine_then_llm"
+            elif _children_engine_ran:
+                _answer_source = "children_engine_then_llm"
+            elif _education_engine_ran:
+                _answer_source = "education_engine_then_llm"
+            elif _finance_engine_ran:
+                _answer_source = "finance_engine_then_llm"
+            elif _health_engine_ran:
+                _answer_source = "health_engine_then_llm"
+            elif _mr_engine_ran:
+                _answer_source = "mr_engine_then_llm"
+            else:
+                _answer_source = f"raw_passthrough_{qtype.lower()}"
         _out = {
             "text":       text,
             "topic":      qtype.lower(),
@@ -9026,6 +9060,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         _pt_checks = {
             "slice_type": _chart_slice_type,
             "resolved_route": _resolved_route,
+            "direct_llm_bypass": bool(_direct_llm_bypass),
+            "direct_llm_reason": _direct_llm_reason or None,
             "wants_explain": wants_explain,
             "is_decision": is_decision,
             "is_finance": is_finance,

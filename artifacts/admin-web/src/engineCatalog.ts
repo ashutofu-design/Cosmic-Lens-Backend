@@ -93,6 +93,20 @@ export function resolveEngineDisplayClient(opts: {
   const traceSl = (opts.engineTraceEngine || "").trim() || null;
   const gapKey = (opts.gapStaticKey || "").trim().toLowerCase() || null;
 
+  const slIn = (opts.sliceId || "").trim();
+  if (
+    slIn === "llm_no_engine_v1" ||
+    slIn === "controlled_fallback_v1" ||
+    (opts.engineKey || "").trim() === "direct_llm"
+  ) {
+    return {
+      engineNo: null,
+      sliceId: "llm_no_engine_v1",
+      archetype: null,
+      adminLine: "Direct LLM — no engine",
+    };
+  }
+
   let entry: EngineCatalogEntry | undefined;
   let resolvedSlice: string | null = null;
 

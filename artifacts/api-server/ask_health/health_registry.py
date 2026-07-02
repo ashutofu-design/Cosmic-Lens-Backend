@@ -290,6 +290,13 @@ def is_health_static_question(question: str) -> bool:
     if not q:
         return False
     try:
+        from chart_fact_answer import _detect_divisional
+
+        if _detect_divisional(q):
+            return False
+    except Exception:
+        pass
+    try:
         from chart_fact_answer import is_domain_life_area_interpretation_question
 
         if is_domain_life_area_interpretation_question(q):

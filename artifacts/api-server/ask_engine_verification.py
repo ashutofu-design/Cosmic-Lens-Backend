@@ -514,6 +514,30 @@ def build_engine_verification_admin_summary(
     ).strip()
     gap_key = str(intent.get("gap_static_key") or "").strip() or None
 
+    if (
+        str(meta.get("slice") or intent.get("engine_ran_slice") or "") in (
+            "llm_no_engine_v1",
+            "controlled_fallback_v1",
+        )
+        or route_reason in (
+            "divisional_chart_no_static_engine",
+            "chart_interpretive_no_static_engine",
+            "general_domain_chart_llm",
+        )
+        or (not ran_key and not meta.get("evidence") and route_reason.startswith("divisional"))
+    ):
+        return {
+            "status": "none",
+            "label": "No engine",
+            "reason": "Direct LLM — chart question, no domain engine ran",
+            "selected_engine": None,
+            "ran_archetype": None,
+            "recovered": False,
+            "engine_no": None,
+            "engine_slice": "llm_no_engine_v1",
+            "engine_admin_line": "Direct LLM — no engine",
+        }
+
     def _with_engine_no(payload: dict[str, Any]) -> dict[str, Any]:
         try:
             from ask_engine_catalog import resolve_engine_display

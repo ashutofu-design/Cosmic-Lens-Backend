@@ -29,6 +29,11 @@ def derive_answer_path(
     skip = (skip_reason or "").strip().lower()
 
     slice_type = str(checks.get("slice_type") or "")
+    if checks.get("direct_llm_bypass") or slice_type in (
+        "llm_no_engine_v1",
+        "controlled_fallback_v1",
+    ):
+        return "direct_llm", _ANSWER_PATH_LABELS["direct_llm"]
     sl = str(slice_meta.get("slice") or "")
     has_verdict = bool(slice_meta.get("verdict"))
     has_evidence = bool(slice_meta.get("evidence"))

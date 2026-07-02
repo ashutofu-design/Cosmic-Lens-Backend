@@ -1,4 +1,5 @@
 import type { AskLlmContext, AskQuestionItem, EngineVerificationSummary } from "./api";
+import { resolveEngineDisplayFromContext } from "./engineDisplay";
 
 function fmtCheckValue(v: unknown): string {
   if (v === null || v === undefined || v === "") return "—";
@@ -324,7 +325,11 @@ export function EngineVerificationPanel({
           </p>
           {summary.selected_engine ? (
             <p>
-              <strong>Engine ran:</strong> <code>{summary.selected_engine}</code>
+              <strong>Engine ran:</strong>{" "}
+              <code>
+                {summary.engine_admin_line ||
+                  (summary.engine_no != null ? `Engine #${summary.engine_no}` : summary.selected_engine)}
+              </code>
             </p>
           ) : null}
           {archetype ? (
@@ -714,11 +719,14 @@ export function EngineTracePanel({
     },
     {
       title: "Engine",
-      detail: String(
-        trace?.engine ||
-          (ctx.checks as Record<string, unknown> | undefined)?.slice_type ||
-          "chart analysis",
-      ),
+      detail: (() => {
+        const disp = resolveEngineDisplayFromContext(ctx, row);
+        return disp.adminLine !== "—" ? disp.adminLine : String(
+          trace?.engine ||
+            (ctx.checks as Record<string, unknown> | undefined)?.slice_type ||
+            "chart analysis",
+        );
+      })(),
     },
     {
       title: ctx.llm_called === false ? "LLM skipped" : "LLM narrator",
@@ -1060,6 +1068,7 @@ export function AskLlmContextPanel({
     : sliceMeta.archetype
       ? String(sliceMeta.archetype)
       : "";
+  const engineDisplay = resolveEngineDisplayFromContext(ctx, row);
   const dashaTrace = (
     (engineFacts as Record<string, unknown>).dasha_trace ||
     sliceMeta.dasha_trace
@@ -1070,7 +1079,11 @@ export function AskLlmContextPanel({
     <details id={id} className="llm-context-panel" open={defaultOpen || undefined}>
       <summary>
         Engine evidence
-        {archetype ? ` · ${archetype}` : ""}
+        {engineDisplay.engineNo != null
+          ? ` · Engine #${engineDisplay.engineNo}`
+          : archetype
+            ? ` · ${archetype}`
+            : ""}
       </summary>
       <div className="llm-context-body">
         {rawOnly ? (
@@ -1079,6 +1092,11 @@ export function AskLlmContextPanel({
           <p className="detail-muted">No structured engine facts for this question.</p>
         ) : (
           <div className="engine-facts-box">
+            {engineDisplay.adminLine !== "—" ? (
+              <p>
+                <strong>Engine:</strong> <code>{engineDisplay.adminLine}</code>
+              </p>
+            ) : null}
             {archetype ? (
               <p>
                 <strong>Archetype:</strong> {archetype}

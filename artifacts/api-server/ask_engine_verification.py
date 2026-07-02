@@ -473,6 +473,7 @@ def build_engine_verification_admin_summary(
     llm_intent: dict[str, Any] | None = None,
     slice_meta: dict[str, Any] | None = None,
     engine_route: dict[str, Any] | None = None,
+    is_timing: bool = False,
 ) -> dict[str, Any]:
     """Admin one-liner: correct | wrong | doubt | unknown."""
     intent = llm_intent if isinstance(llm_intent, dict) else {}
@@ -498,15 +499,33 @@ def build_engine_verification_admin_summary(
     ).strip()
     gap_key = str(intent.get("gap_static_key") or "").strip() or None
 
+    def _with_engine_no(payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            from ask_engine_catalog import resolve_engine_display
+
+            disp = resolve_engine_display(
+                slice_id=str(meta.get("slice") or intent.get("engine_ran_slice") or ""),
+                engine_key=ran_key or payload.get("selected_engine"),
+                archetype=ran_arch,
+                is_timing=is_timing or bool(intent.get("routed_timing")),
+                gap_static_key=gap_key,
+            )
+            payload["engine_no"] = disp.engine_no
+            payload["engine_slice"] = disp.slice_id
+            payload["engine_admin_line"] = disp.admin_line
+        except Exception:
+            pass
+        return payload
+
     if recovered:
-        return {
+        return _with_engine_no({
             "status": "wrong",
             "label": "Wrong engine (corrected)",
             "reason": f"First pick was wrong — recovered via {recovered}",
             "selected_engine": ran_key,
             "ran_archetype": ran_arch,
             "recovered": True,
-        }
+        })
 
     if isinstance(stored, dict):
         engine_key = ran_key or _engine_key_from_slice(str(meta.get("slice") or ""))
@@ -526,31 +545,31 @@ def build_engine_verification_admin_summary(
                 if live_crosscheck.action == "d1_open_chart":
                     status = "doubt"
                     label = "Doubt"
-                return {
+                return _with_engine_no({
                     "status": status,
                     "label": label,
                     "reason": live_crosscheck.reason,
                     "selected_engine": ran_key,
                     "ran_archetype": ran_arch,
                     "recovered": False,
-                }
-            return {
+                })
+            return _with_engine_no({
                 "status": "correct",
                 "label": "Correct engine",
                 "reason": str(stored.get("reason") or "verification passed"),
                 "selected_engine": ran_key,
                 "ran_archetype": ran_arch,
                 "recovered": False,
-            }
+            })
         if not stored.get("ok"):
-            return {
+            return _with_engine_no({
                 "status": "wrong",
                 "label": "Wrong engine",
                 "reason": str(stored.get("reason") or "verification failed"),
                 "selected_engine": ran_key,
                 "ran_archetype": ran_arch,
                 "recovered": False,
-            }
+            })
 
     # Live verify when snapshot missing (older rows or pre-save)
     engine_key = ran_key or _engine_key_from_slice(str(meta.get("slice") or ""))
@@ -571,50 +590,50 @@ def build_engine_verification_admin_summary(
         if live.action == "d1_open_chart":
             status = "doubt"
             label = "Doubt"
-        return {
+        return _with_engine_no({
             "status": status,
             "label": label,
             "reason": live.reason,
             "selected_engine": engine_key,
             "ran_archetype": ran_arch,
             "recovered": False,
-        }
+        })
 
     if selected_arch and ran_arch and selected_arch != ran_arch:
-        return {
+        return _with_engine_no({
             "status": "doubt",
             "label": "Doubt",
             "reason": f"Selected {selected_arch} but ran {ran_arch}",
             "selected_engine": ran_key,
             "ran_archetype": ran_arch,
             "recovered": False,
-        }
+        })
 
     if route_reason in ("pipeline_order", "single_candidate") and route.get("suppressed"):
-        return {
+        return _with_engine_no({
             "status": "doubt",
             "label": "Doubt",
             "reason": f"Resolver picked via {route_reason} — multiple engines matched",
             "selected_engine": ran_key,
             "ran_archetype": ran_arch,
             "recovered": False,
-        }
+        })
 
     if not meta.get("evidence") and not meta.get("archetype"):
-        return {
+        return _with_engine_no({
             "status": "doubt",
             "label": "Doubt",
             "reason": "No engine evidence in snapshot",
             "selected_engine": ran_key,
             "ran_archetype": ran_arch,
             "recovered": False,
-        }
+        })
 
-    return {
+    return _with_engine_no({
         "status": "unknown",
         "label": "Unknown",
         "reason": "No verification snapshot (re-ask after deploy)",
         "selected_engine": ran_key,
         "ran_archetype": ran_arch,
         "recovered": False,
-    }
+    })

@@ -9,6 +9,7 @@ import {
   resolveEngineVerificationSummary,
 } from "./AskLlmContextPanel";
 import { CopyTextButton } from "./CopyTextButton";
+import { resolveEngineDisplayFromContext } from "./engineDisplay";
 import { QuestionLangBadge } from "./QuestionLangBadge";
 
 export function AskQuestionDetailPage({
@@ -20,14 +21,7 @@ export function AskQuestionDetailPage({
 }) {
   const ctx = parseAskLlmContext(row);
   const engineVerify = resolveEngineVerificationSummary(ctx);
-  const sliceMeta = (ctx?.slice_meta || {}) as Record<string, unknown>;
-  const engineName =
-    engineVerify?.ran_archetype ||
-    (ctx?.engine_facts?.archetype as string | undefined) ||
-    (sliceMeta.archetype as string | undefined) ||
-    engineVerify?.selected_engine ||
-    row.engine_tag ||
-    null;
+  const engineDisplay = resolveEngineDisplayFromContext(ctx, row, engineVerify);
 
   return (
     <section className="section card ask-question-detail-page">
@@ -130,7 +124,11 @@ export function AskQuestionDetailPage({
           <div>
             <span className="detail-muted">Engine</span>
             <div className="ask-detail-engine-row">
-              {engineName ? <code>{engineName}</code> : <span>—</span>}
+              {engineDisplay.adminLine !== "—" ? (
+                <code className="ask-detail-engine-line">{engineDisplay.adminLine}</code>
+              ) : (
+                <span>—</span>
+              )}
               <EngineVerificationBadge summary={engineVerify} />
             </div>
           </div>

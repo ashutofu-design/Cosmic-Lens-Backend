@@ -137,6 +137,9 @@ export interface EngineVerificationSummary {
   reason: string;
   selected_engine?: string | null;
   ran_archetype?: string | null;
+  engine_no?: number | null;
+  engine_slice?: string | null;
+  engine_admin_line?: string | null;
   recovered?: boolean;
 }
 
@@ -151,6 +154,15 @@ export interface AskLlmContext {
   typo_corrected?: boolean;
     engine_ran?: string | null;
     engine_route_reason?: string | null;
+    engine_display?: {
+      engine_no?: number | null;
+      slice_id?: string | null;
+      engine_key?: string | null;
+      kind?: string | null;
+      label?: string | null;
+      archetype?: string | null;
+      admin_line?: string;
+    } | null;
     engine_verification_summary?: EngineVerificationSummary | null;
     understanding_source?: string | null;
   question_type?: string;

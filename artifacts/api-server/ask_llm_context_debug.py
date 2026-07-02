@@ -341,16 +341,19 @@ def _build_engine_verification_summary_for_ctx(
     llm_intent: dict[str, Any] | None,
     slice_meta: dict[str, Any] | None,
     checks: dict[str, Any] | None,
+    is_timing: bool = False,
 ) -> dict[str, Any] | None:
     try:
         from ask_engine_verification import build_engine_verification_admin_summary
 
         er = checks.get("engine_route") if isinstance(checks, dict) else None
+        intent = llm_intent if isinstance(llm_intent, dict) else {}
         return build_engine_verification_admin_summary(
             question,
             llm_intent=llm_intent,
             slice_meta=slice_meta,
             engine_route=er if isinstance(er, dict) else None,
+            is_timing=is_timing or bool(intent.get("routed_timing")),
         )
     except Exception:
         return None
@@ -466,7 +469,7 @@ def build_admin_llm_context(
         question_understood = ""
         understanding_line = ""
         understanding_detail = ""
-    return {
+    ctx_out = {
         "version": 1,
         "route": route,
         "question": (_norm or question or "")[:2000],
@@ -505,6 +508,7 @@ def build_admin_llm_context(
             llm_intent=_intent if isinstance(_intent, dict) else None,
             slice_meta=_slice_meta,
             checks=_checks,
+            is_timing=bool(is_timing),
         ),
         "understanding_source": _understanding_source,
         "question_type": question_type,
@@ -535,6 +539,13 @@ def build_admin_llm_context(
             "user_payload_chars": len(user_payload or ""),
         },
     }
+    try:
+        from ask_engine_catalog import enrich_admin_context_engine_display
+
+        ctx_out = enrich_admin_context_engine_display(ctx_out, llm_intent=_intent if isinstance(_intent, dict) else None)
+    except Exception:
+        pass
+    return ctx_out
 
 
 def serialize_llm_context_for_db(ctx: Any) -> str | None:
@@ -583,6 +594,12 @@ def refresh_stored_llm_context_understanding(ctx: dict[str, Any]) -> dict[str, A
     ):
         if refreshed.get(key) is not None:
             out[key] = refreshed.get(key)
+    try:
+        from ask_engine_catalog import enrich_admin_context_engine_display
+
+        out = enrich_admin_context_engine_display(out, llm_intent=refreshed)
+    except Exception:
+        pass
     return out
 
 
@@ -605,6 +622,12 @@ def parse_llm_context_from_db(
                     blocks[key] = normalize_engine_trace_transit_months(tr)
         if refresh_understanding:
             return refresh_stored_llm_context_understanding(data)
-        return data
+        try:
+            from ask_engine_catalog import enrich_admin_context_engine_display
+
+            intent = data.get("llm_intent") if isinstance(data.get("llm_intent"), dict) else {}
+            return enrich_admin_context_engine_display(data, llm_intent=intent)
+        except Exception:
+            return data
     except Exception:
         return {"raw": str(raw)[:4000]}

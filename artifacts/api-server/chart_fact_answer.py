@@ -1,9 +1,7 @@
-"""Deterministic chart-fact answers — NO LLM.
+"""Deterministic chart-fact answers — NO LLM for atomic D1 lookups only.
 
-Handles placement lookups: lagna, rashi, nakshatra, dasha, house occupants,
-planet position, house lord, per-planet nakshatra, KP cusp sub-lord, divisional
-chart (D9/D12/…) placements. Chart-fact questions must never fall through to
-the LLM narrator.
+Divisional charts (D9/D10/…) with planet+sign/house statements route to LLM.
+Pure placement ('D10 me Sun kis house me hai') may still answer here.
 """
 from __future__ import annotations
 
@@ -111,12 +109,15 @@ _CHART_LOOKUP_RX = re.compile(
     re.I,
 )
 _INTERPRET_RX = re.compile(
-    r"\b(result|matlab|meaning|impact|effect|affect|phala|fal|"
-    r"kya\s+(?:hoga|hogi|hoti|hote)|kaise\s+(?:affect|prabhav|kar)|"
+    r"(?ix)\b("
+    r"result|matlab|meaning|impact|effect|affect|phala|fal|"
+    r"kya\s+(?:hoga|hogi|hota|hoti|hote|hai|he)|"
+    r"se\s+kya|isse\s+kya|is\s+se\s+kya|"
+    r"kaise\s+(?:affect|prabhav|kar)|"
     r"style|influence|farak|"
     r"dikkat|problem|issue|accha|bura|lucky|unlucky|"
-    r"good|bad|favourable|favorable)\b",
-    re.I,
+    r"good|bad|favourable|favorable"
+    r")\b",
 )
 _DOMAIN_LIFE_INTERPRET_RX = re.compile(
     r"(?ix)\b("
@@ -208,11 +209,32 @@ _NEEDS_LLM_RX = re.compile(
     r"combination|combo|sath|saath|mil\s*kar|relation|together|versus|vs\.?|"
     r"compare|comparison|zyada\s+strong|better|worse|"
     r"matlab|meaning|impact|effect|affect|prabhav|influence|result|phala|fal|"
-    r"kya\s+hoga|kya\s+hoti|kya\s+hot|kaise\s+(?:affect|prabhav|kar|help|hurt)|"
+    r"kya\s+hoga|kya\s+hogi|kya\s+hota|kya\s+hoti|kya\s+hote|kya\s+hai|"
+    r"se\s+kya|isse\s+kya|is\s+se\s+kya|"
+    r"kaise\s+(?:affect|prabhav|kar|help|hurt)|"
     r"explain|samjha|samjh|bataye|batao\s+ki|good|bad|accha|bura|favourable|"
     r"strong|weak|powerful|kamzor"
     r")\b",
 )
+
+
+_PURE_PLACEMENT_LOOKUP_RX = re.compile(
+    r"(?ix)\b("
+    r"kahan|kahaan|kis\s+(?:ghar|house|bhav|rashi|sign)|"
+    r"kon\s+(?:hai|he|sa)|kaun\s+(?:hai|he|sa)|"
+    r"kaun\s+sa\s+(?:ghar|house)|which\s+(?:house|sign)"
+    r")\b",
+)
+
+
+def _is_pure_divisional_placement_lookup(question: str) -> bool:
+    """Only atomic where/who — e.g. 'D10 me Sun kis house me hai'. Statements → LLM."""
+    q = normalize_ask_typos((question or "").strip())
+    if not q or not _detect_divisional(q):
+        return False
+    if _INTERPRET_RX.search(q) or _NEEDS_LLM_RX.search(q):
+        return False
+    return bool(_PURE_PLACEMENT_LOOKUP_RX.search(q))
 
 
 def needs_llm_chart_answer(question: str) -> bool:
@@ -220,6 +242,8 @@ def needs_llm_chart_answer(question: str) -> bool:
     q = normalize_ask_typos((question or "").strip())
     if not q:
         return False
+    if _detect_divisional(q) and not _is_pure_divisional_placement_lookup(q):
+        return True
     if is_domain_life_area_interpretation_question(q):
         return True
     if is_domain_outcome_yoga_question(q):
@@ -229,7 +253,11 @@ def needs_llm_chart_answer(question: str) -> bool:
     if _NEEDS_LLM_RX.search(q):
         return True
     varga = _detect_divisional(q)
-    if varga and (_INTERPRET_RX.search(q) or _DOMAIN_LIFE_INTERPRET_RX.search(q)):
+    if varga and (
+        _INTERPRET_RX.search(q)
+        or _DOMAIN_LIFE_INTERPRET_RX.search(q)
+        or re.search(r"(?ix)(?:se\s+kya|kya\s+hota|matlab|meaning|effect|result)", q)
+    ):
         return True
     try:
         from openai_helper import _classify_ask_intent

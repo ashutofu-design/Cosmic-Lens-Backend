@@ -3905,7 +3905,7 @@ def _raw_passthrough_max_tokens(
     except Exception:
         pass
     if wants_explain:
-        return 160
+        return 480
     if is_timing:
         return 140
     if is_decision:
@@ -8493,6 +8493,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         dcr_love_meta=dcr_love_meta,
         is_sensitive=is_sensitive,
     )
+    if _direct_llm_bypass or _chart_slice_type == "llm_no_engine_v1":
+        _max_tok = 650 if wants_explain else 480
 
     # ── Last-chance MR engine when love/relationship Q understood but engine skipped ─
     try:
@@ -8726,6 +8728,8 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             from ask_cosmo_narrator import enforce_cosmo_engine_answer
 
             text = enforce_cosmo_engine_answer(text, wants_explain=wants_explain)
+        elif _direct_llm_bypass or _eng_checks.get("llm_no_engine"):
+            pass
         else:
             text = _enforce_one_line_answer(
                 text, wants_explain,

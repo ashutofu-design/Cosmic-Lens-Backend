@@ -104,9 +104,21 @@ def build_no_engine_llm_rules(
     )
     scope = str(intent.get("question_scope") or "").strip().lower()
     scope_line = f"\nSCOPE TAG: [{scope}]" if scope else ""
+    div_line = ""
+    try:
+        from chart_fact_answer import _detect_divisional
+
+        varga = _detect_divisional(question or "")
+        if varga:
+            div_line = (
+                f"\nDIVISIONAL LOCK: User asked about {varga} — read {varga} from chart block, "
+                f"NOT D1 only. Explain what it means for their question; full 3-section answer.\n"
+            )
+    except Exception:
+        pass
     return (
         "\n=== NO ENGINE — FULL LLM (understand question + chart) ===\n"
-        f"USER ASKED (lock): {lock[:600]}{scope_line}\n"
+        f"USER ASKED (lock): {lock[:600]}{scope_line}{div_line}\n"
         "No dedicated engine ran for this question — YOU answer fully.\n"
         "Read the question carefully; answer ONLY what was asked (not a generic lecture).\n"
         "Use chart data for facts; never invent placements, signs, houses, or calendar dates.\n"

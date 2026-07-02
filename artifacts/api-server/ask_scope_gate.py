@@ -38,9 +38,6 @@ _GK_BLOCK_RX = re.compile(
     r"\b(astrology|jyotish|horoscope|kundli)\s+(was|is|were)\s+"
     r"(developed|invented|created|discovered|founded|written)\s+by\b|"
     r"\bhistory\s+of\s+(astrology|jyotish|vedic|horoscope)\b|"
-    r"\bwhat\s+is\s+(astrology|jyotish|horoscope|kundli)\b|"
-    r"\b(astrology|jyotish|kundli)\s+(kya\s+hai|matlab|meaning|definition)\b|"
-    r"\bdefine\s+(astrology|jyotish|manglik|nakshatra|dasha)\b|"
     r"\b(wikipedia|encyclopedia|general\s+knowledge)\b"
     r")\b"
 )
@@ -233,6 +230,16 @@ def assess_ask_scope(question: str, history: Any = None) -> AskScopeVerdict:
 
     if not _gate_enabled():
         return AskScopeVerdict(allowed=True, reason="ok")
+
+    # Jyotish / vastu / numerology / tarot — in-app (not random off-topic).
+    try:
+        from ask_routing_policy import is_cosmic_domain_question
+        from ask_question_normalize import has_question_intent
+
+        if is_cosmic_domain_question(q) and has_question_intent(q):
+            return AskScopeVerdict(allowed=True, reason="ok")
+    except Exception:
+        pass
 
     try:
         from ask_career.classifier import is_career_static_question

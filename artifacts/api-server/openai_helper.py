@@ -4996,6 +4996,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     try:
         from ask_scope_gate import assess_ask_scope, scope_refusal_payload
 
+        # Policy: scope → engine → LLM fallback; random off-topic refused here.
         _sv = assess_ask_scope(question)
         if not _sv.allowed:
             return scope_refusal_payload(_sv.reason, question=question, lang=lang)
@@ -8663,6 +8664,33 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 dcr_love_rule=dcr_love_rule,
                 is_partner_nature=_is_pn_minimal,
             )
+        if not _has_engine_facts and not _eng_checks.get("universal_chart_llm"):
+            try:
+                from ask_routing_policy import (
+                    build_cosmic_domain_llm_rules,
+                    is_cosmic_domain_concept_question,
+                )
+
+                if is_cosmic_domain_concept_question(
+                    question or "",
+                    _fallback_intent if isinstance(_fallback_intent, dict) else None,
+                ):
+                    extra_rules = (extra_rules or "") + build_cosmic_domain_llm_rules(
+                        question or "",
+                    )
+                    _eng_checks["cosmic_domain_llm"] = True
+                    _eng_checks["narrator_mode"] = "cosmic_domain_llm"
+                    _eng_checks["slice_type"] = "cosmic_domain_llm_v1"
+                    print(
+                        f"[raw_passthrough] COSMIC_DOMAIN_LLM (no engine) "
+                        f"q={(question or '')[:60]!r}",
+                        flush=True,
+                    )
+            except Exception as _cdl_exc:
+                print(
+                    f"[raw_passthrough] COSMIC_DOMAIN_LLM skipped: {_cdl_exc}",
+                    flush=True,
+                )
     except Exception as _eng_only_exc:
         print(
             f"[raw_passthrough] engine-only gate error → refuse: {_eng_only_exc}",

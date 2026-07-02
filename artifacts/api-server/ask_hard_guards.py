@@ -604,6 +604,18 @@ def enforce_engine_only_or_refuse(
             checks=checks,
         ):
             return None
+        try:
+            from ask_routing_policy import no_engine_llm_fallback_eligible
+
+            if no_engine_llm_fallback_eligible(
+                question,
+                llm_intent,
+                qtype=qtype,
+                checks=checks,
+            ):
+                return None
+        except Exception:
+            pass
         return no_engine_refusal_result(question, qtype=qtype)
     return None
 

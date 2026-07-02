@@ -252,6 +252,13 @@ def is_children_static_question(question: str) -> bool:
     q = (question or "").strip().lower()
     if not q or _TIMING_RX.search(q):
         return False
+    try:
+        from chart_fact_answer import _detect_divisional, needs_llm_chart_answer
+
+        if _detect_divisional(q) or needs_llm_chart_answer(q):
+            return False
+    except Exception:
+        pass
     if is_mr_spouse_children_question(q):
         return False
     if is_health_medical_reproductive(q):

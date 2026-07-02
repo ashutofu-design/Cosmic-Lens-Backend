@@ -89,6 +89,10 @@ class ChildrenEngineTests(unittest.TestCase):
         self.assertFalse(is_children_static_question(q))
         self.assertTrue(is_health_static_question(q))
 
+    def test_d10_divisional_not_children_engine(self):
+        q = "D10 mein Sun Makar rashi mein hai (5th house se kya hota hai"
+        self.assertFalse(is_children_static_question(q))
+
     def test_astrological_fertility_stays_children(self):
         q = "Fertility chart kaisa hai conceive ke liye?"
         self.assertTrue(is_children_static_question(q))

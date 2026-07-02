@@ -3891,10 +3891,19 @@ def _raw_passthrough_max_tokens(
     dcr_love_meta: object,
     is_sensitive: bool,
 ) -> int:
-    """Completion budget — 55 was truncating answers mid-sentence."""
+    """Completion budget — engine narrators need 480+ tokens for 3-section answers."""
     env = (os.environ.get("RAW_PASSTHROUGH_MAX_TOKENS") or "").strip()
     if env:
         return int(env)
+    try:
+        from ask_cosmo_narrator import is_cosmo_engine_slice
+
+        if isinstance(dcr_love_meta, dict) and is_cosmo_engine_slice(
+            str(dcr_love_meta.get("slice") or "")
+        ):
+            return 650 if wants_explain else 480
+    except Exception:
+        pass
     if wants_explain:
         return 160
     if is_timing:
@@ -3905,15 +3914,6 @@ def _raw_passthrough_max_tokens(
         return 160
     if is_sensitive:
         return 120
-    try:
-        from ask_cosmo_narrator import is_cosmo_engine_slice
-
-        if isinstance(dcr_love_meta, dict) and is_cosmo_engine_slice(
-            str(dcr_love_meta.get("slice") or "")
-        ):
-            return 420 if wants_explain else 300
-    except Exception:
-        pass
     if isinstance(dcr_love_meta, dict) and (
         dcr_love_meta.get("slice") == "partner_nature_minimal"
         or (

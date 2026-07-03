@@ -651,29 +651,21 @@ function stepOneLiner(
     return `${name} · D1/D9 7H planets + aspect (see lines below)`;
   }
   if (stepKey === "step4") {
-    const summary = step.summary;
-    const summaryText =
-      typeof summary === "string"
-        ? summary
-        : summary && typeof summary === "object"
-          ? JSON.stringify(summary)
-          : fmtCheckValue(summary);
-    return `${name} · ${summaryText || "KP validate"}`;
+    return `${name} · common planets (see line below)`;
   }
   if (stepKey === "step5") {
-    const ranked = Array.isArray(step.ranked_top) ? step.ranked_top : [];
-    const names = ranked
-      .slice(0, 3)
-      .map((t) => (asRecord(t)?.name as string) || "")
-      .filter(Boolean)
-      .join(", ");
-    return `${name} · targets ${fmtCheckValue(step.target_lords)}${names ? ` · top ${names}` : ""}`;
+    return `${name} · weighted rank (see lines below)`;
   }
   if (stepKey === "step6") {
-    const wins = Array.isArray(step.selected_windows) ? step.selected_windows : [];
-    const first = asRecord(wins[0]);
-    const w = first?.window ? String(first.window) : "";
-    return `${name} · ${wins.length} window(s)${w ? ` · lead ${w}` : ""}`;
+    const matched = Array.isArray(step.selected_windows) ? step.selected_windows.length : 0;
+    const cand = Array.isArray(step.candidate_windows) ? step.candidate_windows.length : 0;
+    const suffix =
+      matched > 0
+        ? `${matched} transit-matched final`
+        : cand > 0
+          ? `${cand} dasha, 0 transit match`
+          : "see lines below";
+    return `${name} · ${suffix}`;
   }
   if (stepKey === "step7") {
     const cc = asRecord(step.chart_context);
@@ -695,10 +687,10 @@ function stepOneLiner(
 function marriageAuditStepTitle(key: string, step?: Record<string, unknown>): string {
   const labels: Record<string, string> = {
     step3: "Step 3 — D1+D9 7H linkage",
-    step4: "Step 4 — KP validate",
-    step5: "Step 5 — Rank significators + dasha targets",
-    step6: "Step 6 — Dasha windows",
-    step7: "Step 7 — Transit verify",
+    step4: "Step 4 — Common planets (D1+D9)",
+    step5: "Step 5 — Rank significators (weighted points)",
+    step6: "Step 6 — Final dasha (Guru/Shani match)",
+    step7: "Step 7 — Guru/Shani transit on 7H/7L",
     step8: "Step 8 — Final gate",
   };
   return labels[key] || String(step?.name || key);
@@ -709,7 +701,12 @@ function fmtPlanetNameList(val: unknown): string {
   return val.map((x) => String(x)).join(", ");
 }
 
-/** Step 3 — one line per D1/D9 7H rule (planets in 7H, aspect on 7H). */
+function fmtLordName(val: unknown): string {
+  if (val == null || val === "") return "nil";
+  return String(val);
+}
+
+/** Step 3 — one line per D1/D9 7H + 7L rule. */
 function formatMarriageStep37HLinkage(
   stepAudit: Record<string, Record<string, unknown>>,
 ): string[] {
@@ -723,8 +720,12 @@ function formatMarriageStep37HLinkage(
   return [
     `D1 7H planets: ${fmtPlanetNameList(d1?.planets_in_7th_house)}`,
     `D1 7H aspect: ${fmtPlanetNameList(d1?.planets_aspecting_7th_house)}`,
+    `D1 7L: ${fmtLordName(d1?.seventh_lord)}`,
+    `D1 with 7L: ${fmtPlanetNameList(d1?.planets_conjunct_or_aspecting_7th_lord)}`,
     `D9 7H planets: ${fmtPlanetNameList(d9?.planets_in_7th_house)}`,
     `D9 7H aspect: ${fmtPlanetNameList(d9?.planets_aspecting_7th_house)}`,
+    `D9 7L: ${fmtLordName(d9?.seventh_lord)}`,
+    `D9 with 7L: ${fmtPlanetNameList(d9?.planets_conjunct_or_aspecting_7th_lord)}`,
   ];
 }
 
@@ -734,6 +735,276 @@ function formatMarriageStep3Planets(
 ): string {
   void step3;
   return formatMarriageStep37HLinkage(stepAudit).join("\n");
+}
+
+function getCommonMarriagePlanets(
+  stepAudit: Record<string, Record<string, unknown>>,
+): string[] {
+  const s4 = stepAudit.step4;
+  if (Array.isArray(s4?.common_planets) && s4.common_planets.length) {
+    return s4.common_planets.map((x) => String(x));
+  }
+  const s3 = stepAudit.step3;
+  if (Array.isArray(s3?.common_planets) && s3.common_planets.length) {
+    return s3.common_planets.map((x) => String(x));
+  }
+  const top = s3?.top_merged;
+  if (Array.isArray(top)) {
+    const fromBoth = top
+      .map((row) => asRecord(row))
+      .filter((r) => r?.both_divisions && r?.name)
+      .map((r) => String(r!.name));
+    if (fromBoth.length) return fromBoth;
+  }
+  const mgp = s3?.marriage_giving_planets;
+  if (Array.isArray(mgp)) {
+    return mgp
+      .map((row) => asRecord(row))
+      .filter((r) => {
+        const d1 = Array.isArray(r?.d1_links) && r!.d1_links!.length > 0;
+        const d9 = Array.isArray(r?.d9_links) && r!.d9_links!.length > 0;
+        return d1 && d9 && r?.name;
+      })
+      .map((r) => String(r!.name));
+  }
+  return [];
+}
+
+function formatMarriageStep4CommonPlanets(
+  stepAudit: Record<string, Record<string, unknown>>,
+): string {
+  const names = getCommonMarriagePlanets(stepAudit);
+  return `Common planets: ${names.length ? names.join(", ") : "nil"}`;
+}
+
+function getRankedMarriageSignificators(
+  stepAudit: Record<string, Record<string, unknown>>,
+): Record<string, unknown>[] {
+  const s5 = stepAudit.step5;
+  if (Array.isArray(s5?.ranked_top) && s5.ranked_top.length) {
+    return s5.ranked_top.map((r) => asRecord(r) || {});
+  }
+  const top = stepAudit.step3?.top_merged;
+  if (Array.isArray(top) && top.length) {
+    return [...top]
+      .map((r) => asRecord(r) || {})
+      .sort(
+        (a, b) =>
+          Number(b.natal_points ?? b.score ?? 0) - Number(a.natal_points ?? a.score ?? 0),
+      );
+  }
+  return [];
+}
+
+function formatMarriageStep5RankedLines(
+  stepAudit: Record<string, Record<string, unknown>>,
+): string[] {
+  const ranked = getRankedMarriageSignificators(stepAudit);
+  if (!ranked.length) {
+    return ["— (not saved)"];
+  }
+  return ranked.map((row, idx) => {
+    const name = String(row.name || "?");
+    const score = row.score ?? row.natal_points ?? "—";
+    const d1 = row.d1_points ?? row.d1 ?? 0;
+    const d9 = row.d9_points ?? row.d9 ?? 0;
+    const both =
+      row.both_bonus != null && Number(row.both_bonus) > 0
+        ? ` +both ${row.both_bonus}`
+        : "";
+    const kp =
+      row.kp_points != null && Number(row.kp_points) > 0
+        ? ` +KP ${row.kp_points}`
+        : "";
+    const links = Array.isArray(row.links)
+      ? row.links.map(String).join(", ")
+      : [
+          ...(Array.isArray(row.d1_links) ? row.d1_links.map(String) : []),
+          ...(Array.isArray(row.d9_links) ? row.d9_links.map(String) : []),
+        ].join(", ");
+    return `${idx + 1}. ${name}: score ${score} (D1=${d1} D9=${d9}${both}${kp}) · ${links || "—"}`;
+  });
+}
+
+function formatMarriageStep5Ranked(
+  stepAudit: Record<string, Record<string, unknown>>,
+): string {
+  return formatMarriageStep5RankedLines(stepAudit).join("\n");
+}
+
+function getMarriageDashaWindows(
+  stepAudit: Record<string, Record<string, unknown>>,
+  trace?: EngineTrace,
+): Record<string, unknown>[] {
+  const s6 = stepAudit.step6;
+  if (Array.isArray(s6?.selected_windows) && s6.selected_windows.length) {
+    return s6.selected_windows
+      .map((w) => asRecord(w))
+      .filter((r): r is Record<string, unknown> => Boolean(r));
+  }
+  if (Array.isArray(trace?.top_3_windows) && trace.top_3_windows.length) {
+    return trace.top_3_windows
+      .map((w) => asRecord(w))
+      .filter((r): r is Record<string, unknown> => Boolean(r));
+  }
+  return [];
+}
+
+function formatMarriageStep6Period(row: Record<string, unknown>): string {
+  const window = row.window ? String(row.window) : "";
+  if (window) return window;
+  const start = row.start_iso ? String(row.start_iso) : "";
+  const end = row.end_iso ? String(row.end_iso) : "";
+  if (start && end) return `${start} → ${end}`;
+  return "—";
+}
+
+function formatMarriageStep6DashaLord(row: Record<string, unknown>): string {
+  const md = row.md ? String(row.md) : "";
+  const ad = row.ad ? String(row.ad) : "";
+  const pd = row.pd ? String(row.pd) : "";
+  if (row.pd_only_activation && pd) {
+    return `PD ${pd}`;
+  }
+  if (ad && pd) {
+    return `AD ${ad} · PD ${pd}`;
+  }
+  if (ad) {
+    return `AD ${ad}`;
+  }
+  if (pd) {
+    return `PD ${pd}`;
+  }
+  if (md) {
+    return `MD ${md}`;
+  }
+  return "—";
+}
+
+function formatMarriageStep6TransitSuffix(row: Record<string, unknown>): string {
+  if (!row.transit_confirmed) return "";
+  const bits: string[] = [];
+  if (row.jup) bits.push("Guru ✓");
+  if (row.sat) bits.push("Shani ✓");
+  if (row.dt) bits.push("double transit");
+  const detail = row.dt_detail ? String(row.dt_detail) : "";
+  const transit = bits.length ? bits.join(" · ") : "transit ✓";
+  return detail ? ` · ${transit} · ${detail}` : ` · ${transit}`;
+}
+
+function formatMarriageStep6DashaLines(
+  stepAudit: Record<string, Record<string, unknown>>,
+  trace?: EngineTrace,
+): string[] {
+  const windows = getMarriageDashaWindows(stepAudit, trace);
+  if (!windows.length) {
+    const s6 = stepAudit.step6;
+    const cands = Array.isArray(s6?.candidate_windows) ? s6.candidate_windows.length : 0;
+    if (cands > 0) {
+      return [
+        `— (top ${cands} dasha mila, par kisi par Guru/Shani 7H/7L transit match nahi)`,
+      ];
+    }
+    return ["— (dasha period save nahi hua — chart me dasha chain chahiye)"];
+  }
+  return windows.slice(0, 3).map((row, idx) => {
+    const lords = formatMarriageStep6DashaLord(row);
+    const period = formatMarriageStep6Period(row);
+    const transit = formatMarriageStep6TransitSuffix(row);
+    return `${idx + 1}. ${lords} → ${period}${transit}`;
+  });
+}
+
+function formatMarriageStep7PerDashaLines(
+  stepAudit: Record<string, Record<string, unknown>>,
+): string[] {
+  const s7 = stepAudit.step7;
+  const perDasha = Array.isArray(s7?.per_dasha_windows) ? s7.per_dasha_windows : [];
+  if (perDasha.length) {
+    return perDasha.map((raw, idx) => {
+      const row = asRecord(raw);
+      if (!row) return "";
+      const lords = formatMarriageStep6DashaLord(row);
+      const period = formatMarriageStep6Period(row);
+      const detail = formatStep7TransitDetail(row);
+      return `${idx + 1}. ${lords} → ${period} · ${detail}`;
+    }).filter(Boolean);
+  }
+  const detail = s7 ? formatStep7TransitDetail(s7) : "";
+  if (detail) return [detail];
+  if (s7?.status === "NO_TRANSIT_MATCH") {
+    return ["— (koi dasha par Guru/Shani 7H/7L transit match nahi)"];
+  }
+  return ["— (transit verify pending)"];
+}
+
+function formatMarriageStep6Dasha(
+  stepAudit: Record<string, Record<string, unknown>>,
+  trace?: EngineTrace,
+): string {
+  return formatMarriageStep6DashaLines(stepAudit, trace).join("\n");
+}
+
+function MarriageStep7TransitLines({
+  stepAudit,
+}: {
+  stepAudit: Record<string, Record<string, unknown>>;
+}) {
+  const lines = formatMarriageStep7PerDashaLines(stepAudit);
+  const cc = asRecord(stepAudit.step7?.chart_context);
+  const chartHint = cc
+    ? `Lagna ${cc.lagna || "?"} · 7H ${cc.seventh_house || "?"} · 7L ${cc.seventh_lord || "?"} (${cc.seventh_lord_sign || "?"})`
+    : "";
+  return (
+    <>
+      {chartHint ? (
+        <p className="detail-muted engine-marriage-step7-chart">{chartHint}</p>
+      ) : null}
+      <ul className="llm-check-list engine-marriage-step7-transit">
+        {lines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+function MarriageStep6DashaLines({
+  stepAudit,
+  trace,
+}: {
+  stepAudit: Record<string, Record<string, unknown>>;
+  trace?: EngineTrace;
+}) {
+  const lines = formatMarriageStep6DashaLines(stepAudit, trace);
+  return (
+    <ul className="llm-check-list engine-marriage-step6-dasha">
+      {lines.map((line) => (
+        <li key={line}>{line}</li>
+      ))}
+    </ul>
+  );
+}
+
+function MarriageStep5RankedLines({
+  stepAudit,
+}: {
+  stepAudit: Record<string, Record<string, unknown>>;
+}) {
+  const lines = formatMarriageStep5RankedLines(stepAudit);
+  const weightNote = String(stepAudit.step5?.weight_note || "").trim();
+  return (
+    <>
+      <ul className="llm-check-list engine-marriage-step5-ranked">
+        {lines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+      {weightNote ? (
+        <p className="detail-muted engine-marriage-step5-weights">{weightNote}</p>
+      ) : null}
+    </>
+  );
 }
 
 function MarriageStep3LinkageLines({
@@ -1499,7 +1770,13 @@ export function EngineTracePanel({
           const detail =
             key === "step3"
               ? formatMarriageStep3Planets(stepAudit, step)
-              : step
+              : key === "step4"
+                ? formatMarriageStep4CommonPlanets(stepAudit)
+                : key === "step5"
+                  ? formatMarriageStep5Ranked(stepAudit)
+                  : key === "step6"
+                    ? formatMarriageStep6Dasha(stepAudit, trace)
+                    : step
                 ? stepOneLiner(key, step, engineId || "marriage_timing_m17")
                 : "— (not saved)";
           return {
@@ -1701,9 +1978,13 @@ export function EngineTracePanel({
                               chart_context: step.chart_context,
                               jupiter_hit: step.jupiter_hit,
                               saturn_hit: step.saturn_hit,
+                              matched_count: step.matched_count,
+                              candidate_count: step.candidate_count,
+                              per_dasha_windows: step.per_dasha_windows,
                               months: step.months,
                               by_month: step.by_month,
                               detail: formatStep7TransitDetail(step),
+                              per_dasha_lines: formatMarriageStep7PerDashaLines(stepAudit),
                             }
                           : key === "step3" && Array.isArray(step.marriage_giving_planets)
                             ? {
@@ -1877,6 +2158,8 @@ export function AskLlmContextPanel({
     sliceMeta,
     engineFacts as Record<string, unknown>,
   );
+  const marriageEngineTrace = ((ctx.blocks || {}) as Record<string, unknown>)
+    .engine_trace as EngineTrace | undefined;
   const marriageStep0Fmt = formatMarriageEarlyLateStep(marriageStepAudit.step0);
   const marriageUserAgeVal = marriageM17
     ? marriageUserAge(marriageStepAudit.step0, evidence)
@@ -1980,6 +2263,25 @@ export function AskLlmContextPanel({
                 <div className="engine-marriage-step0 engine-marriage-step3">
                   <strong>Step 3 — D1+D9 7H linkage:</strong>
                   <MarriageStep3LinkageLines stepAudit={marriageStepAudit} />
+                </div>
+                <p className="engine-marriage-step0 engine-marriage-step4">
+                  <strong>Step 4 — Common planets (D1+D9):</strong>{" "}
+                  {formatMarriageStep4CommonPlanets(marriageStepAudit)}
+                </p>
+                <div className="engine-marriage-step0 engine-marriage-step5">
+                  <strong>Step 5 — Rank significators (weighted points):</strong>
+                  <MarriageStep5RankedLines stepAudit={marriageStepAudit} />
+                </div>
+                <div className="engine-marriage-step0 engine-marriage-step6">
+                  <strong>Step 6 — Final dasha (Guru/Shani match):</strong>
+                  <MarriageStep6DashaLines
+                    stepAudit={marriageStepAudit}
+                    trace={marriageEngineTrace}
+                  />
+                </div>
+                <div className="engine-marriage-step0 engine-marriage-step7">
+                  <strong>Step 7 — Guru/Shani transit on 7H/7L:</strong>
+                  <MarriageStep7TransitLines stepAudit={marriageStepAudit} />
                 </div>
               </>
             ) : null}

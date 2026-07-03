@@ -2551,6 +2551,135 @@ def _target_lords_for_step6(
     return target
 
 
+def _dasha_window_transit_row(
+    w: Dict[str, Any],
+    transit_ctx: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Serialize one dasha window with Guru/Shani 7H/7L transit fields."""
+    start = w.get("start")
+    end = w.get("end")
+    if not isinstance(start, datetime) or not isinstance(end, datetime):
+        start = _parse_iso(w.get("start_iso") or w.get("start"))
+        end = _parse_iso(w.get("end_iso") or w.get("end"))
+    window_label = w.get("window")
+    if not window_label and start and end:
+        window_label = _format_window(start, end)
+    detail, months, by_month = _transit_month_summary_from_window(w, transit_ctx)
+    return {
+        "md": w.get("md"),
+        "ad": w.get("ad"),
+        "pd": w.get("pd"),
+        "score": round(float(w.get("score", 0)), 2),
+        "window": window_label,
+        "start_iso": (
+            start.strftime("%Y-%m-%d") if isinstance(start, datetime) else w.get("start_iso")
+        ),
+        "end_iso": (
+            end.strftime("%Y-%m-%d") if isinstance(end, datetime) else w.get("end_iso")
+        ),
+        "pd_only_activation": bool(w.get("pd_only_activation")),
+        "dasha_score_detail": w.get("dasha_score_detail") or [],
+        "bcp_age_hits": w.get("bcp_age_hits") or [],
+        "jup": bool(w.get("jup")),
+        "sat": bool(w.get("sat")),
+        "dt": bool(w.get("dt")),
+        "transit_confirmed": bool(w.get("transit_confirmed")),
+        "transit_check_at": w.get("transit_check_at"),
+        "dt_detail": detail,
+        "transit_months": months,
+        "transit_by_month": by_month,
+        "transit_samples": w.get("transit_samples") or [],
+    }
+
+
+def apply_step7_transit_to_dasha_windows(
+    windows: List[Dict[str, Any]],
+    kundli: dict,
+    lagna_si: int,
+    *,
+    target_lords: Optional[Set[str]] = None,
+    d9_7l: Optional[str] = None,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any]]:
+    """STEP 7 — Guru/Shani real transit on 7H/7L inside each dasha window.
+
+    Returns (transit_matched, all_candidates, step7_audit).
+    Final shaadi periods = transit_matched only.
+    """
+    planets = kundli.get("planets") or []
+    h7_si = (lagna_si + 6) % 12
+    seventh_lord = _house_lord(lagna_si, 7)
+    seventh_lord_si = _planet_sign_idx(planets, seventh_lord)
+    lord_names = sorted(target_lords or [])
+    top_planet_signs: Set[int] = set()
+    for n in lord_names:
+        s = _planet_sign_idx(planets, n)
+        if s is not None:
+            top_planet_signs.add(s)
+    if d9_7l:
+        d9_si = _planet_sign_idx(planets, d9_7l)
+        if d9_si is not None:
+            top_planet_signs.add(d9_si)
+    transit_targets = _build_transit_targets(
+        kundli, planets, h7_si, seventh_lord, lord_names, d9_7l,
+    )
+    transit_ctx = _build_transit_chart_context(
+        lagna_si, h7_si, seventh_lord, seventh_lord_si,
+    )
+
+    all_serial: List[Dict[str, Any]] = []
+    matched_serial: List[Dict[str, Any]] = []
+
+    for raw in windows:
+        w = dict(raw)
+        start = w.get("start")
+        end = w.get("end")
+        if not isinstance(start, datetime):
+            start = _parse_iso(w.get("start_iso") or w.get("start"))
+        if not isinstance(end, datetime):
+            end = _parse_iso(w.get("end_iso") or w.get("end"))
+        if not (isinstance(start, datetime) and isinstance(end, datetime)):
+            continue
+        w["start"] = start
+        w["end"] = end
+        _attach_transit_to_window(
+            w, h7_si, seventh_lord_si, top_planet_signs, transit_targets,
+        )
+        row = _dasha_window_transit_row(w, transit_ctx)
+        all_serial.append(row)
+        if row.get("transit_confirmed"):
+            matched_serial.append(row)
+
+    per_dasha: List[Dict[str, Any]] = []
+    for row in matched_serial:
+        pkg = _build_step7_transit_package(row, transit_ctx)
+        per_dasha.append({
+            "md": row.get("md"),
+            "ad": row.get("ad"),
+            "pd": row.get("pd"),
+            "window": row.get("window"),
+            "start_iso": row.get("start_iso"),
+            "end_iso": row.get("end_iso"),
+            "transit_confirmed": True,
+            **pkg,
+        })
+
+    primary_pkg = (
+        _build_step7_transit_package(matched_serial[0], transit_ctx)
+        if matched_serial else {}
+    )
+    step7: Dict[str, Any] = {
+        "name": "Transit verification (Guru/Shani → 7H/7L)",
+        "status": "DONE" if matched_serial else "NO_TRANSIT_MATCH",
+        "transit_confirmed": bool(matched_serial),
+        "matched_count": len(matched_serial),
+        "candidate_count": len(all_serial),
+        "per_dasha_windows": per_dasha,
+        "chart_context": _public_chart_context(transit_ctx),
+        **primary_pkg,
+    }
+    return matched_serial, all_serial, step7
+
+
 def build_marriage_step6_audit(
     kundli: dict,
     *,
@@ -2559,17 +2688,25 @@ def build_marriage_step6_audit(
     target_lords: Optional[Set[str]] = None,
     birth: Optional[Any] = None,
     d9_7l: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Lightweight Step 6 — top-3 dasha windows without full KP/timing pipeline."""
+    lagna_si: Optional[int] = None,
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Lightweight Step 6+7 — dasha windows filtered by Guru/Shani 7H/7L transit."""
     raw_n = len((kundli or {}).get("dashas") or (kundli or {}).get("dasha") or [])
     chart = _ensure_dashas_on_kundli(kundli, birth)
     dasha_n = len(chart.get("dashas") or [])
     chain = _flatten_dasha_chain(chart)
-    empty: Dict[str, Any] = {
+    empty_step6: Dict[str, Any] = {
         "name": "Dasha activation + future windows",
         "status": "NO_CHAIN",
         "selected_windows": [],
+        "candidate_windows": [],
         "future_candidates_count": 0,
+    }
+    empty_step7: Dict[str, Any] = {
+        "name": "Transit verification (Guru/Shani → 7H/7L)",
+        "status": "NO_CHAIN",
+        "transit_confirmed": False,
+        "per_dasha_windows": [],
     }
     if not chain:
         print(
@@ -2579,7 +2716,14 @@ def build_marriage_step6_audit(
             f"has_moon={any(isinstance(p, dict) and p.get('name') == 'Moon' for p in (chart.get('planets') or []))}",
             flush=True,
         )
-        return empty
+        return empty_step6, empty_step7
+
+    if lagna_si is None:
+        lagna_si = _resolve_lagna_si_from_kundli(chart)
+    if lagna_si is None:
+        empty_step6["status"] = "NO_LAGNA"
+        empty_step7["status"] = "NO_LAGNA"
+        return empty_step6, empty_step7
 
     audit = step_audit or {}
     step2 = (audit.get("step2") or {}).get("result") or {}
@@ -2593,10 +2737,9 @@ def build_marriage_step6_audit(
             f"[marriage_step6] NO_TARGETS chain={len(chain)} ranked={len(ranked)}",
             flush=True,
         )
-        return {
-            **empty,
-            "status": "NO_TARGETS",
-        }
+        empty_step6["status"] = "NO_TARGETS"
+        empty_step7["status"] = "NO_TARGETS"
+        return empty_step6, empty_step7
 
     lord_profiles = _build_dasha_lord_profiles(ranked)
     now = datetime.utcnow()
@@ -2610,35 +2753,34 @@ def build_marriage_step6_audit(
         lord_profiles=lord_profiles,
     )
     top_3 = _select_top_3(future_candidates)
-    top_3_serial: List[Dict[str, Any]] = []
-    for w in top_3:
-        top_3_serial.append({
-            "md": w["md"],
-            "ad": w["ad"],
-            "pd": w["pd"],
-            "score": round(float(w["score"]), 2),
-            "window": _format_window(w["start"], w["end"]),
-            "start_iso": w["start"].strftime("%Y-%m-%d"),
-            "end_iso": w["end"].strftime("%Y-%m-%d"),
-            "pd_only_activation": bool(w.get("pd_only_activation")),
-            "dasha_score_detail": w.get("dasha_score_detail") or [],
-        })
 
-    status = "DONE" if top_3_serial else "NO_WINDOW"
+    matched, candidates, step7 = apply_step7_transit_to_dasha_windows(
+        top_3, chart, lagna_si, target_lords=lords, d9_7l=d9_7l,
+    )
+
+    if matched:
+        step6_status = "DONE"
+    elif candidates:
+        step6_status = "NO_TRANSIT_MATCH"
+    else:
+        step6_status = "NO_WINDOW"
+
     print(
         "[marriage_step6] "
-        f"status={status} chain={len(chain)} targets={len(lords)} "
-        f"candidates={len(future_candidates)} windows={len(top_3_serial)} "
-        f"lords={sorted(lords)[:6]}",
+        f"status={step6_status} chain={len(chain)} targets={len(lords)} "
+        f"candidates={len(future_candidates)} top3={len(candidates)} "
+        f"transit_matched={len(matched)} lords={sorted(lords)[:6]}",
         flush=True,
     )
-    return {
-        "name": "Dasha activation + future windows",
-        "status": status,
+    step6: Dict[str, Any] = {
+        "name": "Dasha activation + future windows (transit-matched final)",
+        "status": step6_status,
         "current_activation": activation,
         "future_candidates_count": len(future_candidates),
-        "selected_windows": top_3_serial[:3],
+        "candidate_windows": candidates[:3],
+        "selected_windows": matched[:3],
     }
+    return step6, step7
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -3004,11 +3146,12 @@ def _merge_natal_step_audit(
     if not (existing.get("selected_windows") or []):
         try:
             chart = _ensure_dashas_on_kundli(kundli, birth)
-            step6 = build_marriage_step6_audit(
-                chart, step_audit=audit, birth=birth,
+            step6, step7 = build_marriage_step6_audit(
+                chart, step_audit=audit, birth=birth, lagna_si=lagna_si,
             )
             if step6.get("selected_windows"):
                 audit["step6"] = step6
+                audit["step7"] = step7
                 out["step_audit"] = audit
                 out["top_3_windows"] = step6["selected_windows"]
                 if not out.get("primary_window"):
@@ -3017,9 +3160,13 @@ def _merge_natal_step_audit(
                         out["primary_window"] = pw
             else:
                 print(
-                    f"[merge_natal_step_audit] step6 empty status={step6.get('status')}",
+                    f"[merge_natal_step_audit] step6 empty status={step6.get('status')} "
+                    f"candidates={len(step6.get('candidate_windows') or [])}",
                     flush=True,
                 )
+                if step7:
+                    audit["step7"] = step7
+                    out["step_audit"] = audit
         except Exception as exc:
             print(
                 f"[merge_natal_step_audit] step6 failed: "
@@ -3669,13 +3816,26 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             "bcp_age_hits": w.get("bcp_age_hits") or [],
         })
 
+    candidate_serial = top_3_serial[:3]
+    matched_serial = [w for w in candidate_serial if w.get("transit_confirmed")]
+    if matched_serial:
+        factors.append(
+            f"STEP6/7 transit_filter kept {len(matched_serial)}/{len(candidate_serial)} "
+            f"dasha window(s) with Guru/Shani on 7H/7L"
+        )
+    elif candidate_serial:
+        factors.append(
+            "STEP6/7 transit_filter none of top-3 dashas have Guru/Shani on 7H/7L"
+        )
+
+    top_3_serial = matched_serial
     primary_window = top_3_serial[0]["window"] if top_3_serial else None
     backup_window = top_3_serial[1]["window"] if len(top_3_serial) > 1 else None
 
     key_trigger = None
-    if top_3:
-        p = top_3[0]
-        parts = [f"{p['md']} MD", f"{p['ad']} AD", f"{p['pd']} PD"]
+    if top_3_serial:
+        p = top_3_serial[0]
+        parts = [f"{p.get('md')} MD", f"{p.get('ad')} AD", f"{p.get('pd')} PD"]
         if p.get("dt"):
             parts.append("Jupiter+Saturn DT")
         elif p.get("jup"):
@@ -3684,17 +3844,17 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             parts.append("Saturn transit")
         key_trigger = " + ".join(parts)
 
-    top_score = float(top_3[0]["score"]) if top_3 else 0.0
+    top_score = float(top_3_serial[0]["score"]) if top_3_serial else (
+        float(top_3[0]["score"]) if top_3 else 0.0
+    )
     if cur_score >= _DASHA_SCORE_AD:
         top_score = max(top_score, top_score + cur_score * 0.3)
 
-    final_transit_support = bool(
-        top_3 and top_3[0].get("transit_confirmed")
-    )
-    final_double_transit = bool(top_3 and top_3[0].get("dt"))
+    final_transit_support = bool(matched_serial)
+    final_double_transit = bool(matched_serial and matched_serial[0].get("dt"))
 
     has_qualified = (
-        bool(top_3)
+        bool(matched_serial)
         and natal_promise
         and kp_supported
         and timing_appropriate
@@ -3721,11 +3881,11 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         verdict, band = "DELAYED", "WEAK"
         final_gate["notes"].append("too young override → DELAYED/WEAK")
     confluence_strength = _confluence_label(top_score)
-    if top_3 and final_double_transit:
+    if top_3_serial and final_double_transit:
         confluence_strength = "STRONG"
-    elif top_3 and final_transit_support:
+    elif top_3_serial and final_transit_support:
         confluence_strength = "MODERATE"
-    elif top_3:
+    elif top_3_serial:
         confluence_strength = "WEAK"
 
     cascade_narrative = _build_cascade_narrative(future_candidates, top_3,
@@ -3737,6 +3897,19 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         )
 
     primary_audit = top_3_serial[0] if top_3_serial else {}
+    per_dasha_step7: List[Dict[str, Any]] = []
+    for row in matched_serial:
+        pkg = _build_step7_transit_package(row, _transit_chart_ctx)
+        per_dasha_step7.append({
+            "md": row.get("md"),
+            "ad": row.get("ad"),
+            "pd": row.get("pd"),
+            "window": row.get("window"),
+            "start_iso": row.get("start_iso"),
+            "end_iso": row.get("end_iso"),
+            "transit_confirmed": True,
+            **pkg,
+        })
     _step7_pkg = _build_step7_transit_package(
         primary_audit, _transit_chart_ctx,
     )
@@ -3972,10 +4145,14 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             ],
         },
         "step6": {
-            "name": "Dasha activation + future windows",
-            "status": "DONE",
+            "name": "Dasha activation + future windows (transit-matched final)",
+            "status": (
+                "DONE" if matched_serial
+                else ("NO_TRANSIT_MATCH" if candidate_serial else "NO_WINDOW")
+            ),
             "current_activation": activation,
             "future_candidates_count": len(future_candidates),
+            "candidate_windows": candidate_serial,
             "selected_windows": [
                 {
                     "window": w.get("window"),
@@ -3988,13 +4165,23 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                     "pd_only_activation": w.get("pd_only_activation"),
                     "bcp_age_hits": w.get("bcp_age_hits") or [],
                     "dasha_score_detail": w.get("dasha_score_detail") or [],
+                    "jup": w.get("jup"),
+                    "sat": w.get("sat"),
+                    "dt": w.get("dt"),
+                    "transit_confirmed": w.get("transit_confirmed"),
+                    "dt_detail": w.get("dt_detail"),
+                    "transit_months": w.get("transit_months"),
+                    "transit_by_month": w.get("transit_by_month"),
                 }
-                for w in top_3_serial[:3]
+                for w in matched_serial[:3]
             ],
         },
         "step7": {
-            "name": "Transit verification",
-            "status": "DONE" if top_3_serial else "NO_WINDOW",
+            "name": "Transit verification (Guru/Shani → 7H/7L)",
+            "status": (
+                "DONE" if matched_serial
+                else ("NO_TRANSIT_MATCH" if candidate_serial else "NO_WINDOW")
+            ),
             "transit_confirmed": final_transit_support,
             "double_transit": _step7_pkg.get("double_transit"),
             "transit_type": _step7_pkg.get("transit_type"),
@@ -4005,6 +4192,9 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             "detail": _step7_detail,
             "months": _step7_months,
             "by_month": _step7_by_month,
+            "matched_count": len(matched_serial),
+            "candidate_count": len(candidate_serial),
+            "per_dasha_windows": per_dasha_step7,
         },
         "step8": {
             "name": "Obstacles + final gate",

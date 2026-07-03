@@ -601,11 +601,20 @@ def ensure_marriage_step_audit_on_result(
         try:
             from event_timing.marriage.marriage_engine_v2 import build_marriage_step6_audit
 
-            step6 = build_marriage_step6_audit(
+            step6, step7 = build_marriage_step6_audit(
                 chart, step_audit=audit, birth=birth,
             )
             if step6.get("selected_windows"):
                 audit["step6"] = step6
+                audit["step7"] = step7
+            else:
+                print(
+                    f"[ensure_marriage_step_audit] step6 empty status={step6.get('status')} "
+                    f"candidates={len(step6.get('candidate_windows') or [])}",
+                    flush=True,
+                )
+                if step7:
+                    audit["step7"] = step7
         except Exception as exc:
             print(
                 f"[ensure_marriage_step_audit] step6 failed: "
@@ -965,16 +974,20 @@ def _build_marriage_step_audit_from_chart(
         try:
             from event_timing.marriage.marriage_engine_v2 import build_marriage_step6_audit
 
-            step6 = build_marriage_step6_audit(
+            step6, step7 = build_marriage_step6_audit(
                 chart, step_audit=audit, birth=birth,
             )
             if step6.get("selected_windows"):
                 audit["step6"] = {**step6, "recomputed_from_chart": True}
+                audit["step7"] = {**step7, "recomputed_from_chart": True}
             else:
                 print(
-                    f"[marriage_admin_recompute] step6 empty status={step6.get('status')}",
+                    f"[marriage_admin_recompute] step6 empty status={step6.get('status')} "
+                    f"candidates={len(step6.get('candidate_windows') or [])}",
                     flush=True,
                 )
+                if step7:
+                    audit["step7"] = {**step7, "recomputed_from_chart": True}
         except Exception as exc:
             print(
                 f"[marriage_admin_recompute] step6 failed: "
@@ -2051,6 +2064,9 @@ def _slim_marriage_step_audit_for_db(step_audit: dict[str, Any]) -> dict[str, An
                 "jupiter_hit": step.get("jupiter_hit"),
                 "saturn_hit": step.get("saturn_hit"),
                 "months": step.get("months"),
+                "matched_count": step.get("matched_count"),
+                "candidate_count": step.get("candidate_count"),
+                "per_dasha_windows": (step.get("per_dasha_windows") or [])[:3],
                 "detail": str(step.get("detail") or "")[:600],
             }
         elif key in ("step1", "step2"):
@@ -2069,10 +2085,12 @@ def _slim_marriage_step_audit_for_db(step_audit: dict[str, Any]) -> dict[str, An
             }
         elif key == "step6":
             wins = step.get("selected_windows") or []
+            cands = step.get("candidate_windows") or []
             out[key] = {
                 "name": step.get("name"),
                 "status": step.get("status"),
                 "selected_windows": wins[:3] if isinstance(wins, list) else [],
+                "candidate_windows": cands[:3] if isinstance(cands, list) else [],
                 "future_candidates_count": step.get("future_candidates_count"),
                 "current_activation": step.get("current_activation"),
             }

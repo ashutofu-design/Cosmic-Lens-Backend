@@ -960,6 +960,7 @@ def rank_matched_windows_for_late_chart(
     birth_dt: Optional[datetime] = None,
     focus_bcp_ages: Optional[Set[int]] = None,
     merged_bcp_pool: Optional[List[int]] = None,
+    primary_ref_age: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """Late chart — skip near-term windows (2026 at age 26); prefer double transit + late BCP."""
     if not windows:
@@ -1008,11 +1009,14 @@ def rank_matched_windows_for_late_chart(
             score += 80.0
         if focus and hits & focus:
             score += 40.0
+        if age_at is not None and primary_ref_age is not None:
+            score += max(0.0, 35.0 - abs(age_at - int(primary_ref_age)) * 4.0)
         if w.get("transit_confirmed"):
             score += 10.0
         start = _parse_window_start(w)
         if start is not None:
-            score += start.timestamp() / 1e12
+            # Pehla strong late window — 2036 ko 2038 se upar mat rakho
+            score -= start.timestamp() / 1e11
         return score
 
     rows = [w for w in windows if isinstance(w, dict)]

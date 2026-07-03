@@ -184,6 +184,7 @@ def test_rank_matched_windows_skips_2026_for_very_late():
         birth_dt=birth,
         focus_bcp_ages={33, 35},
         merged_bcp_pool=[33, 35, 39],
+        primary_ref_age=33,
     )
     assert ranked[0]["window"] == "October 2036"
     assert all("2026" not in str(w.get("window")) for w in ranked)

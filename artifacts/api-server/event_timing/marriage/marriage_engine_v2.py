@@ -2846,6 +2846,11 @@ def build_marriage_step6_audit(
                 int(a) for a in focus_raw if isinstance(a, (int, float))
             },
             merged_bcp_pool=merged_bcp,
+            primary_ref_age=(
+                int(step0a_block.get("primary_reference_age"))
+                if isinstance(step0a_block.get("primary_reference_age"), (int, float))
+                else None
+            ),
         )
         if matched:
             first = matched[0]
@@ -2899,6 +2904,73 @@ def build_marriage_step6_audit(
 # ════════════════════════════════════════════════════════════════════════
 # STEP 8 — Final prediction (late BCP + Step5 dasha + transit)
 # ════════════════════════════════════════════════════════════════════════
+def _best_transit_month_year(
+    window: Optional[Dict[str, Any]],
+    *,
+    by_month: Optional[List[Dict[str, Any]]] = None,
+    birth_dt: Optional[datetime] = None,
+    bcp_age: Optional[int] = None,
+) -> Dict[str, Optional[Any]]:
+    """Pick clearest month+year label from Step7 by_month (double transit month first)."""
+    rows = by_month or (window or {}).get("transit_by_month") or []
+    best_month: Optional[str] = None
+    for row in rows:
+        if isinstance(row, dict) and row.get("jupiter_active") and row.get("saturn_active"):
+            best_month = str(row.get("month") or "").strip() or None
+            if best_month:
+                break
+    if not best_month:
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if row.get("jupiter_active") or row.get("saturn_active"):
+                best_month = str(row.get("month") or "").strip() or None
+                if best_month:
+                    break
+    if not best_month and window:
+        win_label = str(window.get("window") or "").strip()
+        if win_label:
+            best_month = win_label
+        else:
+            iso = window.get("transit_check_at") or window.get("start_iso")
+            if iso:
+                best_month = _iso_to_month_label(str(iso)) or None
+
+    month_name: Optional[str] = None
+    cal_year: Optional[int] = None
+    if best_month:
+        parts = best_month.split()
+        if len(parts) >= 2 and str(parts[-1]).isdigit() and len(parts) == 2:
+            cal_year = int(parts[-1])
+            month_name = parts[0]
+        elif "–" in best_month or "-" in best_month:
+            month_name = best_month
+            for token in best_month.replace("–", " ").replace("-", " ").split():
+                if token.isdigit() and len(token) == 4:
+                    cal_year = int(token)
+                    break
+        elif parts and str(parts[-1]).isdigit():
+            cal_year = int(parts[-1])
+            month_name = " ".join(parts[:-1]) or None
+        else:
+            month_name = best_month
+
+    if cal_year is None and birth_dt is not None and bcp_age is not None:
+        cal_year = int(birth_dt.year) + int(bcp_age)
+
+    month_year = best_month
+    if not month_year and month_name and cal_year:
+        month_year = f"{month_name} {cal_year}"
+    elif not month_year and cal_year:
+        month_year = str(cal_year)
+
+    return {
+        "marriage_month": month_name,
+        "marriage_year": cal_year,
+        "marriage_month_year": month_year,
+    }
+
+
 def _build_step8_final_prediction(
     *,
     step0_tendency: Dict[str, Any],
@@ -2912,6 +2984,7 @@ def _build_step8_final_prediction(
     primary_window: Optional[str],
     key_trigger: Optional[str],
     birth_dt: Optional[datetime] = None,
+    step7_by_month: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """D1+D9 late → late BCP only; pick age from transit-matched dasha + Step5 ranks."""
     from event_timing.marriage.bcp_marriage_ages import (
@@ -2942,6 +3015,7 @@ def _build_step8_final_prediction(
         birth_dt=birth_dt,
         focus_bcp_ages=focus_bcp_ages,
         merged_bcp_pool=merged_pool,
+        primary_ref_age=primary_ref_age,
     )
 
     if late_locked or d1_pace == "VERY_LATE" or marriage_pace == "VERY_LATE":
@@ -3027,20 +3101,45 @@ def _build_step8_final_prediction(
     best_window = None
     if best_win and isinstance(best_win, dict):
         best_window = best_win.get("window")
-    final_pw = primary_window or best_window
+    month_info = _best_transit_month_year(
+        best_win,
+        by_month=step7_by_month,
+        birth_dt=birth_dt,
+        bcp_age=best_age,
+    )
+    final_pw = month_info.get("marriage_month_year") or primary_window or best_window
     marriage_period = final_pw
-    if not marriage_period and best_age is not None:
+    if not marriage_period and best_age is not None and birth_dt is not None:
+        try:
+            marriage_period = birth_dt.replace(
+                year=birth_dt.year + int(best_age),
+            ).strftime("%B %Y")
+        except (ValueError, OverflowError):
+            marriage_period = f"around age {best_age}"
+    elif not marriage_period and best_age is not None:
         marriage_period = f"around age {best_age}"
+
+    d1_show = d1_ok if d1_ok else [
+        int(a) for a in (d1_bcp_ages or [])
+        if isinstance(a, (int, float)) and (user_age is None or int(a) >= int(user_age))
+    ][:8]
+    d9_show = d9_ok if d9_ok else [
+        int(a) for a in (d9_bcp_ages or [])
+        if isinstance(a, (int, float)) and (user_age is None or int(a) >= int(user_age))
+    ][:8]
 
     return {
         "late_chart_bcp_locked": late_locked,
         "d1_pace": d1_pace,
         "d9_pace": d9_pace,
-        "d1_bcp_ages": d1_ok,
-        "d9_bcp_ages": d9_ok,
+        "d1_bcp_ages": d1_show,
+        "d9_bcp_ages": d9_show,
         "predicted_bcp_age": best_age,
         "primary_window": final_pw,
         "marriage_period": marriage_period,
+        "marriage_month": month_info.get("marriage_month"),
+        "marriage_year": month_info.get("marriage_year"),
+        "marriage_month_year": month_info.get("marriage_month_year"),
         "primary_dasha": {
             "md": md,
             "ad": ad,
@@ -4110,6 +4209,29 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     candidate_serial = top_3_serial[:3]
     matched_serial = [w for w in candidate_serial if w.get("transit_confirmed")]
     if matched_serial:
+        from event_timing.marriage.bcp_marriage_ages import (
+            effective_bcp_pool_for_timing,
+            rank_matched_windows_for_late_chart,
+        )
+        _st0 = step0.get("step0_tendency") or {}
+        _merged_bcp_full = effective_bcp_pool_for_timing(
+            bcp_ctx or {},
+            d1_pace=_st0.get("d1_pace"),
+            d9_pace=_st0.get("d9_pace"),
+            user_age=user_age,
+        )
+        matched_serial = rank_matched_windows_for_late_chart(
+            matched_serial,
+            marriage_pace=str(_combined_pace or ""),
+            d1_pace=_st0.get("d1_pace"),
+            d9_pace=_st0.get("d9_pace"),
+            user_age=user_age,
+            birth_dt=birth_dt,
+            focus_bcp_ages=focus_bcp_ages,
+            merged_bcp_pool=_merged_bcp_full,
+            primary_ref_age=primary_ref_age,
+        )
+    if matched_serial:
         factors.append(
             f"STEP6/7 transit_filter kept {len(matched_serial)}/{len(candidate_serial)} "
             f"dasha window(s) with Guru/Shani on 7H/7L"
@@ -4275,6 +4397,9 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     if not transit_ok:
         audit_issues.append("primary window has no Jupiter/Saturn transit support")
 
+    _step7_by_month = (
+        matched_serial[0].get("transit_by_month") if matched_serial else None
+    )
     step8_prediction = _build_step8_final_prediction(
         step0_tendency=_step0_tendency,
         d1_bcp_ages=list(bcp_ctx.get("d1_future_bcp_ages") or []),
@@ -4287,7 +4412,10 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         primary_window=primary_window,
         key_trigger=key_trigger,
         birth_dt=birth_dt,
+        step7_by_month=_step7_by_month,
     )
+    if step8_prediction.get("marriage_month_year"):
+        primary_window = step8_prediction["marriage_month_year"]
     factors.append(f"STEP8 final={step8_prediction.get('final_prediction')}")
     if step8_prediction.get("late_chart_bcp_locked"):
         factors.append(
@@ -4805,9 +4933,14 @@ def compute_timing_window_fallback(
         birth_dt=birth_dt,
         focus_bcp_ages=focus_set,
         merged_bcp_pool=_merged_bcp,
+        primary_ref_age=_focus_pri if isinstance(_focus_pri, int) else None,
     )
     if matched_s6:
-        primary_window = matched_s6[0].get("window")
+        primary_window = (
+            matched_s6[0].get("window")
+            if not matched_s6[0].get("transit_by_month")
+            else None
+        )
     elif isinstance(_focus_pri, int) and birth_dt is not None:
         try:
             primary_window = birth_dt.replace(
@@ -4831,7 +4964,15 @@ def compute_timing_window_fallback(
         primary_window=primary_window,
         key_trigger=None,
         birth_dt=birth_dt,
+        step7_by_month=(
+            (step_audit.get("step7") or {}).get("by_month")
+            if isinstance(step_audit.get("step7"), dict)
+            else None
+        ),
     )
+    _pw8 = step8_prediction.get("marriage_month_year") or step8_prediction.get("primary_window")
+    if _pw8:
+        primary_window = _pw8
     step_audit["step8"] = {
         "name": "Final — late BCP + dasha + transit",
         "status": "DONE" if step8_prediction.get("transit_confirmed") else "PARTIAL",

@@ -701,6 +701,9 @@ def _ensure_marriage_step8_on_audit(
         birth_dt=birth_dt,
         focus_bcp_ages=focus_set,
         merged_bcp_pool=merged_bcp,
+        primary_ref_age=(
+            int(primary_ref) if isinstance(primary_ref, (int, float)) else None
+        ),
     )
 
     if d1_pace == "VERY_LATE" or (
@@ -737,6 +740,11 @@ def _ensure_marriage_step8_on_audit(
             primary_window=pw,
             key_trigger=er.get("key_trigger"),
             birth_dt=birth_dt,
+            step7_by_month=(
+                (audit.get("step7") or {}).get("by_month")
+                if isinstance(audit.get("step7"), dict)
+                else None
+            ),
         )
         if not pw:
             pd = pred.get("primary_dasha") or {}
@@ -2303,6 +2311,9 @@ def _slim_marriage_step_audit_for_db(step_audit: dict[str, Any]) -> dict[str, An
                 "band": step.get("band"),
                 "primary_window": step.get("primary_window"),
                 "marriage_period": step.get("marriage_period"),
+                "marriage_month": step.get("marriage_month"),
+                "marriage_year": step.get("marriage_year"),
+                "marriage_month_year": step.get("marriage_month_year"),
                 "late_chart_bcp_locked": step.get("late_chart_bcp_locked"),
                 "predicted_bcp_age": step.get("predicted_bcp_age"),
                 "d1_bcp_ages": (step.get("d1_bcp_ages") or [])[:8],

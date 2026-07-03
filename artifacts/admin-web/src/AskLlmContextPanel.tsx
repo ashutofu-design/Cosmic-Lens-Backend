@@ -681,7 +681,9 @@ function stepOneLiner(
   if (stepKey === "step8") {
     const pred = String(step.final_prediction || "").trim();
     const age = step.predicted_bcp_age;
-    const period = String(step.primary_window || step.marriage_period || "").trim();
+    const period = String(
+      step.marriage_month_year || step.primary_window || step.marriage_period || "",
+    ).trim();
     const parts = [
       name,
       `verdict ${fmtCheckValue(step.verdict)}`,
@@ -865,19 +867,29 @@ function buildStep8FromStep6(
     if (lateChart && approxAge != null && approxAge < minFocus) score -= 1000;
     if (w.dt || (w.jup && w.sat)) score += 200;
     if (w.transit_confirmed) score += 10;
-    score += year / 10000;
     return { w, score };
   });
   scored.sort((a, b) => b.score - a.score);
   const best = scored[0]?.w;
   if (!best || (scored[0]?.score ?? 0) < -500) return null;
-  const period = formatMarriageStep6Period(best);
+  const s7 = asRecord(stepAudit.step7);
+  const byMonth = Array.isArray(s7?.by_month) ? s7.by_month : [];
+  let monthYear: string | null = null;
+  for (const row of byMonth) {
+    const r = asRecord(row);
+    if (r?.jupiter_active && r?.saturn_active && r?.month) {
+      monthYear = String(r.month);
+      break;
+    }
+  }
+  const period = monthYear || formatMarriageStep6Period(best);
   const pw = String(trace?.primary_window || period || "").trim() || period;
   const lords = formatMarriageStep6DashaLord(best);
   const hits = Array.isArray(best.bcp_age_hits) ? best.bcp_age_hits : [];
   return {
     primary_window: pw,
     marriage_period: pw,
+    marriage_month_year: monthYear || pw,
     predicted_bcp_age: hits.length ? hits[0] : undefined,
     primary_dasha: {
       md: best.md,
@@ -900,22 +912,38 @@ function formatMarriageStep8Final(
     | Record<string, unknown>
     | undefined;
   if (!s8) return "— (not saved)";
+  const step0a = stepAudit.step0a;
   const lines: string[] = [];
-  const period = String(
-    s8.primary_window || s8.marriage_period || trace?.primary_window || "",
+  const monthYear = String(
+    s8.marriage_month_year
+      || s8.primary_window
+      || s8.marriage_period
+      || trace?.primary_window
+      || "",
   ).trim();
-  if (period) {
-    lines.push(`Marriage kab: ${period}`);
+  if (s8.marriage_year) {
+    lines.push(`Saal: ${s8.marriage_year}`);
+  }
+  if (s8.marriage_month) {
+    lines.push(`Mahina: ${s8.marriage_month}`);
+  }
+  if (monthYear) {
+    lines.push(`Marriage kab: ${monthYear}`);
   }
   if (s8.late_chart_bcp_locked) {
     lines.push("D1+D9 late → sirf late BCP ages");
-    const d1 = Array.isArray(s8.d1_bcp_ages) ? s8.d1_bcp_ages.join(", ") : "—";
-    const d9 = Array.isArray(s8.d9_bcp_ages) ? s8.d9_bcp_ages.join(", ") : "—";
-    lines.push(`D1: ${d1}`);
-    lines.push(`D9: ${d9}`);
+    const d1Raw = Array.isArray(s8.d1_bcp_ages) && s8.d1_bcp_ages.length
+      ? s8.d1_bcp_ages
+      : (Array.isArray(step0a?.d1_bcp_ages) ? step0a!.d1_bcp_ages : []);
+    const d9Raw = Array.isArray(s8.d9_bcp_ages) && s8.d9_bcp_ages.length
+      ? s8.d9_bcp_ages
+      : (Array.isArray(step0a?.d9_bcp_ages) ? step0a!.d9_bcp_ages : []);
+    lines.push(`D1: ${d1Raw.length ? d1Raw.join(", ") : "—"}`);
+    lines.push(`D9: ${d9Raw.length ? d9Raw.join(", ") : "—"}`);
   }
   if (s8.predicted_bcp_age != null) {
-    lines.push(`Predicted BCP age: ${s8.predicted_bcp_age}`);
+    const yr = s8.marriage_year ? ` (saal ~${s8.marriage_year})` : "";
+    lines.push(`Predicted BCP age: ${s8.predicted_bcp_age}${yr}`);
   }
   const dasha = asRecord(s8.primary_dasha);
   if (dasha.md && dasha.ad && dasha.pd) {

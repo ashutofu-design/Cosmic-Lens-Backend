@@ -32,10 +32,11 @@ _PLANET_JOBS: Dict[str, Tuple[str, ...]] = {
         "Real estate / Construction",
     ),
     "Mercury": (
+        "Tech / Software",
         "Finance / Banking",
-        "Education / Teaching",
         "Business / Trading",
         "Media / Communication",
+        "Education / Teaching",
     ),
     "Jupiter": (
         "Finance / Banking",

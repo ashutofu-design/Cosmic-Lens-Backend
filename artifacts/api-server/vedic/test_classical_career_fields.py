@@ -17,13 +17,13 @@ def _sample_planets_sag_asc():
     return ensure_planet_houses(raw, asc), asc
 
 
-def test_mercury_in_10th_shows_finance_education():
+def test_mercury_in_10th_shows_tech_and_finance():
     planets, asc = _sample_planets_sag_asc()
     out = compute_classical_top_careers(planets, asc, None, top_n=4)
     fields = out.get("suitable_fields") or []
     labels = " ".join(f["field"] for f in fields).lower()
+    assert "tech" in labels or "software" in labels
     assert "finance" in labels or "banking" in labels
-    assert "education" in labels or "teaching" in labels
     assert any("10th house" in (f.get("driver") or "").lower() for f in fields)
 
 

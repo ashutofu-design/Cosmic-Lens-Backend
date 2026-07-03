@@ -1194,12 +1194,19 @@ function formatMarriageEarlyLateStep(step0?: Record<string, unknown>): {
     label = "Early marriage chart";
   }
 
+  const d9Mal7h = Array.isArray(r?.d9_malefics_in_7h) ? r.d9_malefics_in_7h.join(", ") : "";
+  const d9Mal7l = Array.isArray(r?.d9_malefics_on_7l) ? r.d9_malefics_on_7l.join(", ") : "";
+  const d9Aff =
+    d9Mal7h || d9Mal7l
+      ? ` · D9 afflict: ${[d9Mal7h ? `7H ${d9Mal7h}` : "", d9Mal7l ? `7L ${d9Mal7l}` : ""].filter(Boolean).join(" · ")}`
+      : "";
+
   const parts = [label];
   if (verdict) parts.push(verdict);
   if (d1 || d9) parts.push(`D1 ${d1 || "—"} · D9 ${d9 || "—"}`);
   return {
     title: "Step 1 — Early / Late marriage",
-    detail: parts.filter(Boolean).join(" · ") + age,
+    detail: parts.filter(Boolean).join(" · ") + d9Aff + age,
   };
 }
 

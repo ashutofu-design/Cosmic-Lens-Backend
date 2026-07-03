@@ -53,7 +53,57 @@ _EARLY_7L_HOUSES = {1, 5, 7, 9}
 _LATE_7L_HOUSES = {6, 8, 12}
 
 
+def _d9_from_saved_chart(kundli: dict) -> tuple[Optional[int], List[dict]]:
+    """Prefer saved Profile D9 (divisionalCharts) over recompute."""
+    divs = kundli.get("divisionalCharts") or kundli.get("divisional_charts") or {}
+    d9_chart = divs.get("D9") if isinstance(divs, dict) else None
+    if not isinstance(d9_chart, dict):
+        return None, []
+    d9_lagna = (
+        d9_chart.get("ascendantSignIndex")
+        or d9_chart.get("ascendantSignIdx")
+        or d9_chart.get("ascendant_sign_idx")
+    )
+    if isinstance(d9_lagna, str) and d9_lagna in _SIGNS:
+        d9_lagna = _SIGNS.index(d9_lagna)
+    if not isinstance(d9_lagna, int):
+        asc = d9_chart.get("ascendant") or d9_chart.get("lagna")
+        if isinstance(asc, str) and asc in _SIGNS:
+            d9_lagna = _SIGNS.index(asc)
+    if not isinstance(d9_lagna, int):
+        return None, []
+    d9_lagna = int(d9_lagna) % 12
+    raw_planets = d9_chart.get("planets") or []
+    if not isinstance(raw_planets, list):
+        return None, []
+    d9_planets: List[dict] = []
+    for p in raw_planets:
+        if not isinstance(p, dict) or not p.get("name"):
+            continue
+        si = p.get("signIndex") or p.get("sign_idx") or p.get("sign_idx")
+        if not isinstance(si, int):
+            s = p.get("sign")
+            if isinstance(s, str) and s in _SIGNS:
+                si = _SIGNS.index(s)
+        if not isinstance(si, int):
+            continue
+        si = int(si) % 12
+        house = p.get("house")
+        if not isinstance(house, int) or not (1 <= house <= 12):
+            house = ((si - d9_lagna) % 12) + 1
+        d9_planets.append({
+            "name": p["name"],
+            "sign_idx": si,
+            "sign": p.get("sign") or _SIGNS[si],
+            "house": house,
+        })
+    return d9_lagna, d9_planets
+
+
 def _load_d9_planets(kundli: dict) -> tuple[Optional[int], List[dict]]:
+    saved_lagna, saved_planets = _d9_from_saved_chart(kundli)
+    if saved_lagna is not None and saved_planets:
+        return saved_lagna, saved_planets
     try:
         from divisional_charts import compute_d9  # type: ignore
     except Exception:
@@ -240,6 +290,43 @@ def light_chart_risk_flags(
     return flags
 
 
+def _occupants_of_house(planets: List[dict], lagna_si: int, house: int) -> List[str]:
+    out: List[str] = []
+    for p in planets or []:
+        if not isinstance(p, dict) or not p.get("name"):
+            continue
+        h = p.get("house")
+        if not isinstance(h, int):
+            si = _planet_sign_idx(planets, str(p.get("name")))
+            if si is not None:
+                h = ((si - lagna_si) % 12) + 1
+        if h == house:
+            out.append(str(p["name"]))
+    return out
+
+
+def _malefics_on_seventh(
+    planets: List[dict],
+    lagna_si: int,
+    seventh_lord: str,
+    seventh_lord_si: Optional[int],
+) -> Dict[str, List[str]]:
+    """Malefics in D1/D9 7H or conjunct/aspecting 7L (marriage delay)."""
+    h7_si = (lagna_si + 6) % 12
+    in_7h: List[str] = []
+    on_7l: List[str] = []
+    for pname in _MALEFICS:
+        p_si = _planet_sign_idx(planets, pname)
+        if p_si is None:
+            continue
+        if p_si == h7_si:
+            in_7h.append(pname)
+        if seventh_lord_si is not None and pname != seventh_lord:
+            if p_si == seventh_lord_si or _aspects_target(pname, p_si, seventh_lord_si):
+                on_7l.append(pname)
+    return {"in_7h": in_7h, "on_7l": on_7l}
+
+
 def chart_marriage_pace_for_division(
     planets: List[dict],
     lagna_si: int,
@@ -344,7 +431,7 @@ def chart_marriage_pace_for_division(
             continue
         if pname in _BENEFICS:
             benefic_support += 1
-        elif pname in _MALEFICS and pname != "Saturn":
+        elif pname in _MALEFICS:
             malefic_pressure += 1
     if benefic_support:
         boost = min(2, benefic_support)
@@ -354,6 +441,23 @@ def chart_marriage_pace_for_division(
         penalty = min(2, malefic_pressure)
         score -= penalty
         signals.append(f"{division}: malefic pressure on 7H/7L (-{penalty})")
+
+    seventh_occupants = _occupants_of_house(planets, lagna_si, 7)
+    mal = _malefics_on_seventh(planets, lagna_si, seventh_lord, seventh_lord_si)
+    if mal["in_7h"]:
+        pen = 3 if division == "D9" else 2
+        score -= pen
+        signals.append(
+            f"{division}: malefics in 7H ({', '.join(mal['in_7h'])}) → delay"
+        )
+    if mal["on_7l"]:
+        pen = min(3 if division == "D9" else 2, len(mal["on_7l"]) + 1)
+        score -= pen
+        signals.append(
+            f"{division}: malefics on 7L ({', '.join(mal['on_7l'])}) → delay"
+        )
+    if seventh_occupants:
+        signals.append(f"{division}: 7H occupants {', '.join(seventh_occupants)}")
 
     if division == "D1":
         if kp_csl_verdict == "DENIES":
@@ -372,6 +476,15 @@ def chart_marriage_pace_for_division(
     else:
         pace = "NORMAL"
 
+    # D9 supreme for marriage — malefic 7H/7L affliction cannot read EARLY.
+    if division == "D9" and (mal["in_7h"] or mal["on_7l"]):
+        if pace == "EARLY":
+            pace = "LATE"
+            signals.append("D9: 7H/7L affliction caps pace at LATE (not EARLY)")
+        elif pace == "NORMAL" and (mal["in_7h"] or len(mal["on_7l"]) >= 2):
+            pace = "LATE"
+            signals.append("D9: strong 7H/7L affliction → LATE")
+
     return {
         "division": division,
         "chart_pace": pace,
@@ -380,6 +493,9 @@ def chart_marriage_pace_for_division(
         "seventh_lord": seventh_lord,
         "seventh_lord_house": h7l_house,
         "seventh_lord_dignity": h7l_dignity,
+        "seventh_house_occupants": seventh_occupants,
+        "malefics_in_7h": mal["in_7h"],
+        "malefics_on_7l": mal["on_7l"],
     }
 
 
@@ -392,9 +508,14 @@ def combine_d1_d9_pace(d1: Dict[str, Any], d9: Optional[Dict[str, Any]]) -> Dict
     signals = (d1.get("chart_pace_signals") or []) + (d9.get("chart_pace_signals") or [])
 
     late_set = {"LATE", "VERY_LATE"}
+    d9_afflicted = bool(
+        (d9.get("malefics_in_7h") or d9.get("malefics_on_7l"))
+    )
     if d1p in late_set and d9p in late_set:
         combined = "VERY_LATE"
     elif d1p in late_set or d9p in late_set:
+        combined = "LATE"
+    elif d1p == "VERY_LATE" and d9_afflicted:
         combined = "LATE"
     elif d1p == "EARLY" and d9p in ("EARLY", "NORMAL"):
         combined = "EARLY"
@@ -411,6 +532,7 @@ def combine_d1_d9_pace(d1: Dict[str, Any], d9: Optional[Dict[str, Any]]) -> Dict
         "d9_pace": d9p,
         "combined_score": score,
         "signals": signals,
+        "d9_afflicted": d9_afflicted,
     }
 
 
@@ -507,6 +629,9 @@ def run_marriage_step0(
         "combined_pace": combined_pace,
         "d1_pace": pace_d1.get("chart_pace"),
         "d9_pace": (pace_d9 or {}).get("chart_pace"),
+        "d9_malefics_in_7h": (pace_d9 or {}).get("malefics_in_7h") or [],
+        "d9_malefics_on_7l": (pace_d9 or {}).get("malefics_on_7l") or [],
+        "d9_afflicted": pace_combined.get("d9_afflicted"),
         "age_band": age_ctx.get("age_band_by_gender"),
         "delay_vs_late": age_ctx.get("delay_vs_late"),
         "life_status": age_ctx.get("life_status"),

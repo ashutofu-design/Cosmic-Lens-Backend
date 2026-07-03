@@ -464,6 +464,60 @@ def test_step0_early_house_not_enough_when_7l_and_venus_weak():
     assert any("Venus debilitated" in s for s in pace["chart_pace_signals"])
 
 
+def test_d9_malefic_in_7h_cannot_read_early():
+    """D9 7H malefic → pace capped at LATE even if 7L in early house."""
+    lagna_si = 0  # Aries; D9 7L = Venus
+    rows = [
+        ("Sun", "Libra", 7),  # malefic in 7H
+        ("Moon", "Cancer", 4),
+        ("Mars", "Capricorn", 10),
+        ("Mercury", "Aquarius", 11),
+        ("Jupiter", "Gemini", 3),
+        ("Venus", "Leo", 5),  # 7L in 5H (early house)
+        ("Saturn", "Virgo", 6),
+        ("Rahu", "Scorpio", 8),
+        ("Ketu", "Taurus", 2),
+    ]
+    ps = []
+    for name, sign, house in rows:
+        ps.append({
+            "name": name,
+            "sign": sign,
+            "sign_idx": SIGNS.index(sign),
+            "house": house,
+        })
+    pace = chart_marriage_pace_for_division(ps, lagna_si, "D9", is_female=False)
+    assert "Sun" in (pace.get("malefics_in_7h") or [])
+    assert pace["chart_pace"] in ("LATE", "VERY_LATE", "NORMAL")
+    assert pace["chart_pace"] != "EARLY"
+
+
+def test_d9_malefic_aspects_7l_counts():
+    """Saturn aspecting D9 7L sign must count toward delay."""
+    lagna_si = 4  # Leo; D9 7L = Saturn (Aquarius)
+    rows = [
+        ("Sun", "Taurus", 10),
+        ("Moon", "Cancer", 12),
+        ("Mars", "Aries", 9),
+        ("Mercury", "Gemini", 11),
+        ("Jupiter", "Sagittarius", 5),
+        ("Venus", "Pisces", 8),
+        ("Saturn", "Leo", 1),  # aspects Aquarius (7L sign) via 7th aspect
+        ("Rahu", "Scorpio", 4),
+        ("Ketu", "Taurus", 10),
+    ]
+    ps = []
+    for name, sign, house in rows:
+        ps.append({
+            "name": name,
+            "sign": sign,
+            "sign_idx": SIGNS.index(sign),
+            "house": house,
+        })
+    pace = chart_marriage_pace_for_division(ps, lagna_si, "D9", is_female=False)
+    assert "Saturn" in (pace.get("malefics_on_7l") or [])
+
+
 def test_step0_late_house_can_be_offset_by_strength_and_benefic_support():
     """7L in a delay house is not automatic delay when it is strong and supported."""
     lagna_si = 0  # Aries; 7L Venus

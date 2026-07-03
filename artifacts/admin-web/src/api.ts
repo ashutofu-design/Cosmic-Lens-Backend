@@ -223,6 +223,8 @@ export interface MarriageBcpStep2Admin {
   title: string;
   detail: string;
   ages: number[];
+  d1_ages?: number[];
+  d9_ages?: number[];
   linkage_lines: string[];
   user_age?: number | null;
   recomputed_from_chart?: boolean;

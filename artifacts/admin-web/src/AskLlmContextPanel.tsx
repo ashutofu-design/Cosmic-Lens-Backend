@@ -754,13 +754,23 @@ function stepAuditFromMarriageContext(
 ): Record<string, Record<string, unknown>> {
   const blocks = (ctx.blocks || {}) as Record<string, unknown>;
   const blockTrace = blocks.engine_trace as { step_audit?: Record<string, Record<string, unknown>> } | undefined;
-  return (
-    trace?.step_audit ||
-    (sliceMeta?.step_audit as Record<string, Record<string, unknown>> | undefined) ||
-    (engineFacts?.step_audit as Record<string, Record<string, unknown>> | undefined) ||
-    blockTrace?.step_audit ||
-    {}
-  );
+  const merged: Record<string, Record<string, unknown>> = {};
+  const sources = [
+    blockTrace?.step_audit,
+    trace?.step_audit,
+    sliceMeta?.step_audit as Record<string, Record<string, unknown>> | undefined,
+    engineFacts?.step_audit as Record<string, Record<string, unknown>> | undefined,
+  ];
+  for (const src of sources) {
+    if (!src || typeof src !== "object") continue;
+    for (const [key, val] of Object.entries(src)) {
+      if (!val || typeof val !== "object") continue;
+      const row = val as Record<string, unknown>;
+      if (Object.keys(row).length === 0) continue;
+      merged[key] = { ...(merged[key] || {}), ...row };
+    }
+  }
+  return merged;
 }
 
 function isDashaFirstTimingEngine(engineId: string): boolean {
@@ -1526,8 +1536,10 @@ export function EngineTracePanel({
 
   const marriageHasFullTrace = marriageM17
     ? Boolean(
-        stepAudit.step3 ||
+        stepAudit.step0 ||
+          stepAudit.step3 ||
           stepAudit.step1 ||
+          marriageStep0?.recomputed_from_chart ||
           (trace?.step_audit && Object.keys(trace.step_audit).length > 0),
       )
     : false;

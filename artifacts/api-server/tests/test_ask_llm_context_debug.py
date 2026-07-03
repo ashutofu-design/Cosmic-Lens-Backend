@@ -403,6 +403,47 @@ class AskLlmContextDebugTests(unittest.TestCase):
         self.assertIn("12H", payload["linkage_lines"][0])
         self.assertIsNotNone(normalize_kundli_chart_payload({"kundli": kundli}))
 
+    def test_recompute_marriage_from_question_text_only(self):
+        from ask_llm_context_debug import recompute_marriage_bcp_from_kundli
+
+        SIGNS = [
+            "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+            "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
+        ]
+        idx = {s: i for i, s in enumerate([
+            "Mesh", "Vrishabh", "Mithun", "Kark", "Simha", "Kanya",
+            "Tula", "Vrishchik", "Dhanu", "Makar", "Kumbh", "Meen",
+        ])}
+        planets = []
+        for name, sign, house in [
+            ("Sun", "Tula", 11),
+            ("Moon", "Mithun", 7),
+            ("Mars", "Dhanu", 1),
+            ("Mercury", "Vrishchik", 12),
+            ("Jupiter", "Mesh", 5),
+            ("Venus", "Simha", 9),
+            ("Saturn", "Mesh", 5),
+            ("Rahu", "Kark", 8),
+            ("Ketu", "Makar", 2),
+        ]:
+            si = idx[sign]
+            planets.append({"name": name, "sign": SIGNS[si], "house": house})
+        kundli = {
+            "ascendant": "Sagittarius",
+            "ascendantDeg": 8 * 30,
+            "planets": planets,
+        }
+        out = recompute_marriage_bcp_from_kundli(
+            {},
+            kundli,
+            {"dob": "1998-01-15"},
+            question_text="Meri shaadi kab hogi?",
+            topic="timing",
+        )
+        sa = out["slice_meta"]["step_audit"]
+        self.assertTrue(sa.get("step0"))
+        self.assertTrue(sa.get("step3"))
+
 
 if __name__ == "__main__":
     unittest.main()

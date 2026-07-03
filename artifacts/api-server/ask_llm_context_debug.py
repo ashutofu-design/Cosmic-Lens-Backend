@@ -536,6 +536,60 @@ def _force_merge_bcp_linkage_into_step0a(
     return out
 
 
+_MARRIAGE_Q_KW = (
+    "shaadi", "shadi", "shādi", "marriage", "vivah", "wedding", "byah",
+    "विवाह", "शादी", "विवाह कब", "marry",
+)
+
+
+def _is_marriage_question_text(q: str) -> bool:
+    ql = (q or "").lower()
+    return any(k in ql for k in _MARRIAGE_Q_KW)
+
+
+def _should_recompute_marriage_admin(
+    ctx: dict[str, Any],
+    *,
+    question_text: str = "",
+    topic: str = "",
+) -> bool:
+    if _is_marriage_timing_admin_ctx(ctx):
+        return True
+    if _is_marriage_question_text(question_text):
+        return True
+    tl = (topic or "").strip().lower()
+    if tl in ("marriage", "timing", "vivah"):
+        return True
+    return False
+
+
+def _bootstrap_marriage_admin_ctx(
+    ctx: dict[str, Any] | None,
+    *,
+    question_text: str = "",
+    topic: str = "",
+) -> dict[str, Any]:
+    """Ensure saved rows have enough metadata for marriage admin recompute."""
+    out = dict(ctx) if isinstance(ctx, dict) else {}
+    if question_text and not out.get("question"):
+        out["question"] = question_text[:2000]
+    if not out.get("is_timing"):
+        if (topic or "").lower() in ("timing", "marriage", "vivah"):
+            out["is_timing"] = True
+        elif _is_marriage_question_text(question_text):
+            out["is_timing"] = True
+    checks = dict(out.get("checks") or {}) if isinstance(out.get("checks"), dict) else {}
+    if not checks.get("slice_type"):
+        checks["slice_type"] = "timing_marriage_engine"
+    checks["is_marriage_engine"] = True
+    out["checks"] = checks
+    sm = dict(out.get("slice_meta") or {}) if isinstance(out.get("slice_meta"), dict) else {}
+    if not sm.get("slice"):
+        sm["slice"] = "marriage_timing_m17"
+    out["slice_meta"] = sm
+    return out
+
+
 def _is_marriage_timing_admin_ctx(ctx: dict[str, Any]) -> bool:
     slice_meta = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
     checks = ctx.get("checks") if isinstance(ctx.get("checks"), dict) else {}
@@ -975,21 +1029,42 @@ def recompute_marriage_bcp_from_kundli(
     ctx: dict[str, Any],
     kundli: dict[str, Any],
     birth: dict[str, Any] | None = None,
+    *,
+    question_text: str = "",
+    topic: str = "",
 ) -> dict[str, Any]:
-    """Admin load: recompute D1/D9 7L houses + BCP ages from saved chart."""
-    if not isinstance(ctx, dict):
-        return ctx
-    chart = normalize_kundli_chart_payload(kundli)
+    """Admin load: recompute Steps 0–3 from saved primary chart."""
+    ctx = _bootstrap_marriage_admin_ctx(
+        ctx if isinstance(ctx, dict) else {},
+        question_text=question_text,
+        topic=topic,
+    )
+    chart = coerce_chart_for_marriage_engine(kundli) or normalize_kundli_chart_payload(kundli)
     if chart is None:
+        print(
+            "[marriage_admin_recompute] skip: chart normalize failed "
+            f"q={(question_text or ctx.get('question') or '')[:50]!r}",
+            flush=True,
+        )
         return ctx
-    if not _is_marriage_timing_admin_ctx(ctx):
+    if not _should_recompute_marriage_admin(
+        ctx, question_text=question_text, topic=topic,
+    ):
         return ctx
     lagna_si = _resolve_lagna_si_for_admin(chart)
     if lagna_si is None:
+        print(
+            "[marriage_admin_recompute] skip: lagna_si missing "
+            f"asc={chart.get('ascendant')!r} ascDeg={chart.get('ascendantDeg')!r} "
+            f"q={(question_text or '')[:50]!r}",
+            flush=True,
+        )
         return ctx
     chart = _normalize_planet_houses(chart, lagna_si)
+    user_age = _user_age_from_admin_ctx(ctx, birth, chart)
     bcp: dict[str, Any] | None = None
-    user_age: int | None = None
+    linkage: dict[str, Any] = {}
+    evidence_lines: list[str] = []
     try:
         from event_timing.marriage.bcp_marriage_ages import (
             bcp_linkage_admin_lines,
@@ -997,7 +1072,6 @@ def recompute_marriage_bcp_from_kundli(
         )
 
         d9_lagna, d9_planets = _resolve_d9_for_bcp(chart)
-        user_age = _user_age_from_admin_ctx(ctx, birth, chart)
         bcp = compute_bcp_marriage_ages(
             chart,
             lagna_si,
@@ -1007,33 +1081,55 @@ def recompute_marriage_bcp_from_kundli(
         )
         if user_age is not None:
             bcp["user_age"] = user_age
-    except Exception:
-        return ctx
+        d9_bcp = bcp.get("d9_bcp") if isinstance(bcp.get("d9_bcp"), dict) else {}
+        fake: dict[str, Any] = {
+            "bcp_marriage_ages": bcp,
+            "user_age": user_age,
+            "d1_seventh_lord": bcp.get("seventh_lord"),
+            "d9_seventh_lord": d9_bcp.get("seventh_lord"),
+            "step_audit": {
+                "step0a": {
+                    "d1_7l_placement_house": bcp.get("seventh_lord_house"),
+                    "d1_7l_aspect_houses": _aspect_house_nums(bcp),
+                    "d9_7l_placement_house": d9_bcp.get("seventh_lord_house"),
+                    "d9_7l_aspect_houses": _aspect_house_nums(d9_bcp),
+                    "bcp_ages_next_years": list(bcp.get("future_priority_ages") or [])[:4],
+                    "user_age": user_age,
+                }
+            },
+        }
+        linkage = _marriage_bcp_linkage_snapshot(fake)
+        evidence_lines = bcp_linkage_admin_lines(bcp) or _bcp_linkage_evidence_lines(linkage)
+    except Exception as exc:
+        print(
+            f"[marriage_admin_recompute] BCP partial fail: {type(exc).__name__}: {str(exc)[:160]}",
+            flush=True,
+        )
 
     extra_audit = _build_marriage_step_audit_from_chart(
         chart, birth, user_age, bcp=bcp,
     )
-    d9_bcp = bcp.get("d9_bcp") if isinstance(bcp.get("d9_bcp"), dict) else {}
-    fake: dict[str, Any] = {
-        "bcp_marriage_ages": bcp,
-        "user_age": user_age,
-        "d1_seventh_lord": bcp.get("seventh_lord"),
-        "d9_seventh_lord": d9_bcp.get("seventh_lord"),
-        "step_audit": {
-            "step0a": extra_audit.get("step0a")
-            or {
-                "d1_7l_placement_house": bcp.get("seventh_lord_house"),
-                "d1_7l_aspect_houses": _aspect_house_nums(bcp),
-                "d9_7l_placement_house": d9_bcp.get("seventh_lord_house"),
-                "d9_7l_aspect_houses": _aspect_house_nums(d9_bcp),
-                "bcp_ages_next_years": list(bcp.get("future_priority_ages") or [])[:4],
-                "user_age": user_age,
-            }
-        },
-    }
-    linkage = _marriage_bcp_linkage_snapshot(fake)
-    evidence_lines = bcp_linkage_admin_lines(bcp) or _bcp_linkage_evidence_lines(linkage)
-    return _apply_bcp_recompute_to_ctx(ctx, linkage, evidence_lines, extra_audit)
+    if not extra_audit:
+        print(
+            "[marriage_admin_recompute] step_audit empty after chart build "
+            f"planets={len(chart.get('planets') or [])}",
+            flush=True,
+        )
+        return ctx
+    out = _apply_bcp_recompute_to_ctx(ctx, linkage, evidence_lines, extra_audit)
+    sa = (
+        (out.get("slice_meta") or {}).get("step_audit")
+        if isinstance(out.get("slice_meta"), dict)
+        else {}
+    )
+    print(
+        "[marriage_admin_recompute] ok "
+        f"step0={bool(sa.get('step0'))} step0a={bool(sa.get('step0a'))} "
+        f"step3={bool(sa.get('step3'))} "
+        f"q={(question_text or '')[:40]!r}",
+        flush=True,
+    )
+    return out
 
 
 def _format_bcp_step2_lines_for_admin(

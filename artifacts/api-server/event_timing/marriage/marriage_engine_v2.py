@@ -2842,6 +2842,8 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                 except (TypeError, ValueError):
                     pass
     if lagna_si is None:
+        lagna_si = _resolve_lagna_si_from_kundli(kundli)
+    if lagna_si is None:
         return {
             "verdict": "UNKNOWN", "band": "WEAK",
             "top_3_windows": [], "risk_flags": ["lagna sign unavailable"],

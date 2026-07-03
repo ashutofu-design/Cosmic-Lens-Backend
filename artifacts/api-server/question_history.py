@@ -321,7 +321,11 @@ def _admin_ask_list_item_dict(
 
 
 def _load_kundli_chart_for_admin_question(uq) -> tuple[dict | None, dict | None]:
-    """Resolve chart JSON + birth hints for admin-only marriage BCP recompute."""
+    """Resolve chart JSON + birth hints for admin marriage trace recompute.
+
+  Primary Profile chart is preferred over legacy kundlis row (user may have
+  updated primary in app while kundlis table is stale).
+    """
     import json
 
     from models import Kundli, Profile, User
@@ -340,9 +344,9 @@ def _load_kundli_chart_for_admin_question(uq) -> tuple[dict | None, dict | None]
 
     def _try_chart(parsed: Any, row_birth: dict | None = None) -> bool:
         nonlocal chart, birth
-        from ask_llm_context_debug import normalize_kundli_chart_payload
+        from ask_llm_context_debug import coerce_chart_for_marriage_engine
 
-        norm = normalize_kundli_chart_payload(parsed)
+        norm = coerce_chart_for_marriage_engine(parsed)
         if norm is not None:
             chart = norm
             if row_birth:
@@ -350,25 +354,22 @@ def _load_kundli_chart_for_admin_question(uq) -> tuple[dict | None, dict | None]
             return True
         return False
 
-    kundli_row = None
-    if getattr(uq, "primary_kundli_id", None):
-        kundli_row = Kundli.query.get(uq.primary_kundli_id)
-    try:
-        user = User.query.get(uq.user_id)
-        if kundli_row is None and user is not None and getattr(user, "kundli", None):
-            kundli_row = user.kundli
-    except Exception:
-        user = None
-    if kundli_row is None:
-        kundli_row = Kundli.query.filter_by(user_id=uq.user_id).first()
-    if kundli_row is not None and kundli_row.chart_data:
+    def _try_profile(prof) -> bool:
+        if prof is None or not prof.chart_data:
+            return False
         try:
-            parsed = json.loads(kundli_row.chart_data)
-            _try_chart(parsed, _birth_from_kundli_row(kundli_row))
+            parsed = json.loads(prof.chart_data)
+            row_birth = None
+            if prof.birth_data:
+                bd = json.loads(prof.birth_data)
+                if isinstance(bd, dict):
+                    row_birth = bd
+            return _try_chart(parsed, row_birth)
         except Exception:
-            pass
+            return False
 
-    if chart is None:
+    # 1) Primary profile — source of truth for "primary user"
+    try:
         prof = (
             Profile.query.filter_by(user_id=uq.user_id, is_primary=True)
             .filter(Profile.deleted_at.is_(None))
@@ -380,15 +381,27 @@ def _load_kundli_chart_for_admin_question(uq) -> tuple[dict | None, dict | None]
                 .order_by(Profile.updated_at.desc())
                 .first()
             )
-        if prof is not None and prof.chart_data:
+        _try_profile(prof)
+    except Exception:
+        pass
+
+    # 2) Question-linked / legacy kundli row
+    if chart is None:
+        kundli_row = None
+        if getattr(uq, "primary_kundli_id", None):
+            kundli_row = Kundli.query.get(uq.primary_kundli_id)
+        try:
+            user = User.query.get(uq.user_id)
+            if kundli_row is None and user is not None and getattr(user, "kundli", None):
+                kundli_row = user.kundli
+        except Exception:
+            user = None
+        if kundli_row is None:
+            kundli_row = Kundli.query.filter_by(user_id=uq.user_id).first()
+        if kundli_row is not None and kundli_row.chart_data:
             try:
-                parsed = json.loads(prof.chart_data)
-                row_birth = None
-                if prof.birth_data:
-                    bd = json.loads(prof.birth_data)
-                    if isinstance(bd, dict):
-                        row_birth = bd
-                _try_chart(parsed, row_birth)
+                parsed = json.loads(kundli_row.chart_data)
+                _try_chart(parsed, _birth_from_kundli_row(kundli_row))
             except Exception:
                 pass
     return chart, birth
@@ -419,8 +432,8 @@ def get_admin_ask_question(question_id: str) -> dict | None:
     d["llm_context"] = None
     d["marriage_bcp_step2"] = None
     raw_ctx = uq.llm_context_json
+    llm_ctx: dict | None = None
     if raw_ctx:
-        llm_ctx: dict | None = None
         try:
             from ask_llm_context_debug import (
                 build_marriage_bcp_step2_admin_payload,
@@ -441,17 +454,44 @@ def get_admin_ask_question(question_id: str) -> dict | None:
                 llm_ctx = parsed if isinstance(parsed, dict) else None
             except Exception:
                 llm_ctx = {"raw": str(raw_ctx)[:8000]}
-        if isinstance(llm_ctx, dict):
-            chart, birth = _load_kundli_chart_for_admin_question(uq)
-            try:
-                if chart:
-                    llm_ctx = recompute_marriage_bcp_from_kundli(llm_ctx, chart, birth)
-                    bcp_payload = build_marriage_bcp_step2_admin_payload(llm_ctx, chart, birth)
-                    if bcp_payload:
-                        d["marriage_bcp_step2"] = bcp_payload
-            except Exception as exc:
-                print(f"[question_history] marriage BCP recompute failed: {exc}", flush=True)
-            d["llm_context"] = llm_ctx
+
+    chart, birth = _load_kundli_chart_for_admin_question(uq)
+    try:
+        from ask_llm_context_debug import (
+            _is_marriage_question_text,
+            build_marriage_bcp_step2_admin_payload,
+            recompute_marriage_bcp_from_kundli,
+        )
+
+        marriage_q = _is_marriage_question_text(uq.question_text or "") or (
+            (uq.topic or "").strip().lower() in ("marriage", "timing", "vivah")
+        )
+        if chart and marriage_q:
+            llm_ctx = recompute_marriage_bcp_from_kundli(
+                llm_ctx if isinstance(llm_ctx, dict) else {},
+                chart,
+                birth,
+                question_text=uq.question_text or "",
+                topic=uq.topic or "",
+            )
+            bcp_payload = build_marriage_bcp_step2_admin_payload(
+                llm_ctx, chart, birth,
+            )
+            if bcp_payload:
+                d["marriage_bcp_step2"] = bcp_payload
+        elif isinstance(llm_ctx, dict) and chart:
+            llm_ctx = recompute_marriage_bcp_from_kundli(
+                llm_ctx, chart, birth,
+                question_text=uq.question_text or "",
+                topic=uq.topic or "",
+            )
+            bcp_payload = build_marriage_bcp_step2_admin_payload(llm_ctx, chart, birth)
+            if bcp_payload:
+                d["marriage_bcp_step2"] = bcp_payload
+    except Exception as exc:
+        print(f"[question_history] marriage trace recompute failed: {exc}", flush=True)
+    if isinstance(llm_ctx, dict):
+        d["llm_context"] = llm_ctx
     d.pop("llm_context_json", None)
     return d
 

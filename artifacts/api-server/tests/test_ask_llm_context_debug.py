@@ -444,6 +444,67 @@ class AskLlmContextDebugTests(unittest.TestCase):
         self.assertTrue(sa.get("step0"))
         self.assertTrue(sa.get("step3"))
 
+    def test_build_marriage_step6_on_gate_fail(self):
+        from datetime import datetime, timedelta
+
+        from event_timing.marriage.marriage_engine_v2 import (
+            build_marriage_step6_audit,
+            compute_timing_window,
+        )
+
+        now = datetime.utcnow()
+        start = now + timedelta(days=90)
+        end = start + timedelta(days=300)
+        pd_start = start + timedelta(days=45)
+        pd_end = pd_start + timedelta(days=90)
+        kundli = {
+            "ascendant": "Leo",
+            "ascendantSignIndex": 4,
+            "planets": [
+                {"name": "Sun", "house": 1, "sign": "Leo", "signIndex": 4},
+                {"name": "Moon", "house": 5, "sign": "Sagittarius", "signIndex": 8},
+                {"name": "Mars", "house": 9, "sign": "Aries", "signIndex": 0},
+                {"name": "Mercury", "house": 2, "sign": "Virgo", "signIndex": 5},
+                {"name": "Jupiter", "house": 11, "sign": "Gemini", "signIndex": 2},
+                {"name": "Venus", "house": 3, "sign": "Libra", "signIndex": 6},
+                {"name": "Saturn", "house": 7, "sign": "Aquarius", "signIndex": 10},
+                {"name": "Rahu", "house": 5, "sign": "Sagittarius", "signIndex": 8},
+                {"name": "Ketu", "house": 11, "sign": "Gemini", "signIndex": 2},
+            ],
+            "dashas": [{
+                "planet": "Jupiter",
+                "startDate": (now - timedelta(days=700)).strftime("%Y-%m-%d"),
+                "endDate": (now + timedelta(days=1200)).strftime("%Y-%m-%d"),
+                "subDashas": [{
+                    "planet": "Venus",
+                    "startDate": start.strftime("%Y-%m-%d"),
+                    "endDate": end.strftime("%Y-%m-%d"),
+                    "subDashas": [{
+                        "planet": "Moon",
+                        "startDate": pd_start.strftime("%Y-%m-%d"),
+                        "endDate": pd_end.strftime("%Y-%m-%d"),
+                    }],
+                }],
+            }],
+        }
+        step_audit = {
+            "step1": {"result": {"seventh_lord": "Saturn"}},
+            "step2": {"result": {"seventh_lord": "Venus"}},
+            "step5": {"ranked_top": [
+                {"name": "Venus", "score": 18, "d1_points": 5, "d9_points": 6, "both_divisions": True},
+                {"name": "Saturn", "score": 14, "d1_points": 5, "d9_points": 0},
+                {"name": "Moon", "score": 10, "d1_points": 4, "d9_points": 0},
+            ]},
+        }
+        s6 = build_marriage_step6_audit(kundli, step_audit=step_audit)
+        self.assertEqual(s6.get("status"), "DONE")
+        self.assertTrue(s6.get("selected_windows"))
+
+        gate = compute_timing_window(kundli, {}, {})
+        sa = gate.get("step_audit") or {}
+        self.assertTrue((sa.get("step6") or {}).get("selected_windows"))
+        self.assertTrue(gate.get("top_3_windows"))
+
 
 if __name__ == "__main__":
     unittest.main()

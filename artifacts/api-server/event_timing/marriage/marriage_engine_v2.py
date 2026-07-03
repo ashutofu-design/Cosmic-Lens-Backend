@@ -797,13 +797,22 @@ def _flatten_dasha_chain(kundli: dict) -> List[Dict[str, Any]]:
         for md in dashas:
             if not isinstance(md, dict):
                 continue
-            md_lord = md.get("planet") or md.get("md_lord") or md.get("maha")
+            md_lord = (
+                md.get("planet") or md.get("lord")
+                or md.get("md_lord") or md.get("maha")
+            )
             if not md_lord:
                 continue
-            for ad in (md.get("subDashas") or md.get("antar_dashas") or []):
+            for ad in (
+                md.get("subDashas") or md.get("antar_dashas")
+                or md.get("antardashas") or []
+            ):
                 if not isinstance(ad, dict):
                     continue
-                ad_lord = ad.get("planet") or ad.get("ad_lord") or ad.get("antar")
+                ad_lord = (
+                    ad.get("planet") or ad.get("lord")
+                    or ad.get("ad_lord") or ad.get("antar")
+                )
                 ad_start = _parse_iso(ad.get("startDate") or ad.get("start"))
                 ad_end = _parse_iso(ad.get("endDate") or ad.get("end"))
                 if not (ad_lord and ad_start and ad_end):
@@ -811,11 +820,16 @@ def _flatten_dasha_chain(kundli: dict) -> List[Dict[str, Any]]:
                 if ad_end < today - timedelta(days=30) or ad_start > horizon:
                     continue
                 # Build PDs inside AD
-                pd_list = ad.get("subDashas") or ad.get("pratyantar_dashas") or []
+                pd_list = (
+                    ad.get("subDashas") or ad.get("pratyantar_dashas")
+                    or ad.get("pratyantardashas") or ad.get("pratyantar") or []
+                )
                 if pd_list and isinstance(pd_list, list):
                     for pd in pd_list:
-                        pd_lord = (pd.get("planet") or pd.get("pd_lord")
-                                   or pd.get("pratyantar"))
+                        pd_lord = (
+                            pd.get("planet") or pd.get("lord")
+                            or pd.get("pd_lord") or pd.get("pratyantar")
+                        )
                         pd_start = _parse_iso(pd.get("startDate") or pd.get("start"))
                         pd_end = _parse_iso(pd.get("endDate") or pd.get("end"))
                         if not (pd_lord and pd_start and pd_end):
@@ -2450,6 +2464,162 @@ def _select_top_3(scored: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return chosen
 
 
+def _ensure_dashas_on_kundli(
+    kundli: dict,
+    birth: Optional[Any] = None,
+) -> dict:
+    """Normalize dashas key; synthesize full chain from Moon+DOB when missing."""
+    out = dict(kundli)
+    raw = out.get("dashas") or out.get("dasha") or []
+    if isinstance(raw, list) and raw:
+        out["dashas"] = raw
+        return out
+
+    try:
+        import swisseph as swe
+        from kundli_engine import calc_vimshottari_dasha
+    except Exception:
+        return out
+
+    moon_lon: Optional[float] = None
+    for p in out.get("planets") or []:
+        if not isinstance(p, dict) or p.get("name") != "Moon":
+            continue
+        for key in ("longitude", "lon", "longitudeDeg", "siderealLon", "degree"):
+            v = p.get(key)
+            if v is None:
+                continue
+            try:
+                moon_lon = float(v) % 360.0
+                break
+            except (TypeError, ValueError):
+                continue
+    if moon_lon is None and out.get("moonLongitude") is not None:
+        try:
+            moon_lon = float(out["moonLongitude"]) % 360.0
+        except (TypeError, ValueError):
+            moon_lon = None
+    if moon_lon is None:
+        return out
+
+    birth_dt = _extract_dob_dt(birth, kundli=out)
+    if birth_dt is None:
+        return out
+
+    try:
+        swe.set_sid_mode(swe.SIDM_LAHIRI)
+        ut_h = (
+            birth_dt.hour + birth_dt.minute / 60.0
+            + birth_dt.second / 3600.0
+        )
+        jd = swe.julday(birth_dt.year, birth_dt.month, birth_dt.day, ut_h)
+        moon_trop_raw, _ = swe.calc_ut(jd, swe.MOON, swe.FLG_SPEED)
+        moon_trop = float(moon_trop_raw[0]) % 360.0
+        ayan = float(swe.get_ayanamsa_ut(jd))
+        dashas = calc_vimshottari_dasha(moon_lon, moon_trop, jd, ayan)
+        if isinstance(dashas, list) and dashas:
+            out["dashas"] = dashas
+    except Exception:
+        pass
+    return out
+
+
+def _target_lords_for_step6(
+    step_audit: Optional[Dict[str, Any]],
+    ranked: Optional[List[Dict[str, Any]]] = None,
+) -> Set[str]:
+    """Marriage significators to scan in dasha cascade (admin + gate-fail path)."""
+    audit = step_audit or {}
+    step1 = (audit.get("step1") or {}).get("result") or {}
+    step2 = (audit.get("step2") or {}).get("result") or {}
+    step4 = audit.get("step4") or {}
+    step5 = audit.get("step5") or {}
+    ranked = ranked or step5.get("ranked_top") or []
+
+    target: Set[str] = set()
+    for lord in (step1.get("seventh_lord"), step2.get("seventh_lord")):
+        if isinstance(lord, str) and lord:
+            target.add(lord)
+    for name in step4.get("common_planets") or []:
+        if isinstance(name, str) and name:
+            target.add(name)
+    for r in ranked[:10]:
+        if isinstance(r, dict):
+            name = r.get("name")
+            if isinstance(name, str) and name:
+                target.add(name)
+    return target
+
+
+def build_marriage_step6_audit(
+    kundli: dict,
+    *,
+    step_audit: Optional[Dict[str, Any]] = None,
+    ranked: Optional[List[Dict[str, Any]]] = None,
+    target_lords: Optional[Set[str]] = None,
+    birth: Optional[Any] = None,
+    d9_7l: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Lightweight Step 6 — top-3 dasha windows without full KP/timing pipeline."""
+    chart = _ensure_dashas_on_kundli(kundli, birth)
+    chain = _flatten_dasha_chain(chart)
+    empty: Dict[str, Any] = {
+        "name": "Dasha activation + future windows",
+        "status": "NO_CHAIN",
+        "selected_windows": [],
+        "future_candidates_count": 0,
+    }
+    if not chain:
+        return empty
+
+    audit = step_audit or {}
+    step2 = (audit.get("step2") or {}).get("result") or {}
+    if not d9_7l:
+        d9_7l = step2.get("seventh_lord")
+    if not ranked:
+        ranked = (audit.get("step5") or {}).get("ranked_top") or []
+    lords = target_lords or _target_lords_for_step6(audit, ranked)
+    if not lords:
+        return {
+            **empty,
+            "status": "NO_TARGETS",
+        }
+
+    lord_profiles = _build_dasha_lord_profiles(ranked)
+    now = datetime.utcnow()
+    activation = _step5_dasha_activation(
+        chain, lords, now, d9_7l=d9_7l, lord_profiles=lord_profiles,
+    )
+    future_candidates = _step5_5_future_cascade(
+        chain, lords, now, activation.get("current"),
+        late_urgent=False,
+        d9_7l=d9_7l,
+        lord_profiles=lord_profiles,
+    )
+    top_3 = _select_top_3(future_candidates)
+    top_3_serial: List[Dict[str, Any]] = []
+    for w in top_3:
+        top_3_serial.append({
+            "md": w["md"],
+            "ad": w["ad"],
+            "pd": w["pd"],
+            "score": round(float(w["score"]), 2),
+            "window": _format_window(w["start"], w["end"]),
+            "start_iso": w["start"].strftime("%Y-%m-%d"),
+            "end_iso": w["end"].strftime("%Y-%m-%d"),
+            "pd_only_activation": bool(w.get("pd_only_activation")),
+            "dasha_score_detail": w.get("dasha_score_detail") or [],
+        })
+
+    return {
+        "name": "Dasha activation + future windows",
+        "status": "DONE" if top_3_serial else "NO_WINDOW",
+        "current_activation": activation,
+        "future_candidates_count": len(future_candidates),
+        "selected_windows": top_3_serial[:3],
+    }
+
+
 # ════════════════════════════════════════════════════════════════════════
 # Verdict + band derivation
 # ════════════════════════════════════════════════════════════════════════
@@ -2785,8 +2955,9 @@ def _merge_natal_step_audit(
     kundli: dict,
     lagna_si: int,
     kp: dict,
+    birth: Optional[Any] = None,
 ) -> Dict[str, Any]:
-    """Attach D1/D9/Step-3 planet list even when timing gates fail."""
+    """Attach D1/D9/Step-3 planet list + Step-6 dasha even when timing gates fail."""
     out: Dict[str, Any] = dict(result)
     try:
         from event_timing.marriage.marriage_spec_pipeline import safe_natal_step_audit
@@ -2802,6 +2973,33 @@ def _merge_natal_step_audit(
             out["step_audit"] = audit
     except Exception:
         pass
+
+    audit = out.get("step_audit")
+    if not isinstance(audit, dict):
+        audit = {}
+    else:
+        audit = dict(audit)
+    existing = audit.get("step6") if isinstance(audit.get("step6"), dict) else {}
+    if not (existing.get("selected_windows") or []):
+        try:
+            chart = _ensure_dashas_on_kundli(kundli, birth)
+            step6 = build_marriage_step6_audit(
+                chart, step_audit=audit, birth=birth,
+            )
+            if step6.get("selected_windows"):
+                audit["step6"] = step6
+                out["step_audit"] = audit
+                out["top_3_windows"] = step6["selected_windows"]
+                if not out.get("primary_window"):
+                    pw = step6["selected_windows"][0].get("window")
+                    if pw:
+                        out["primary_window"] = pw
+        except Exception as exc:
+            print(
+                f"[merge_natal_step_audit] step6 failed: "
+                f"{type(exc).__name__}: {str(exc)[:160]}",
+                flush=True,
+            )
     return out
 
 
@@ -2881,7 +3079,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                     gate_result["primary_window"] = fb.get("primary_window")
         except Exception:
             pass
-        return _merge_natal_step_audit(gate_result, kundli, lagna_si, kp)
+        return _merge_natal_step_audit(gate_result, kundli, lagna_si, kp, birth=birth)
 
     factors: List[str] = []
 
@@ -2983,7 +3181,10 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     )
 
     # ── STEPS 1–5: User-spec significator pipeline (D1/D9/KP/rank) ────
-    from event_timing.marriage.marriage_spec_pipeline import run_user_spec_pipeline
+    from event_timing.marriage.marriage_spec_pipeline import (
+        _common_planets_from_merged,
+        run_user_spec_pipeline,
+    )
 
     spec = run_user_spec_pipeline(kundli, kp, lagna_si)
     ranked = spec.get("ranked_significators") or []
@@ -3685,6 +3886,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             "name": "D1+D9 shadi de sakte planets (7H linkage)",
             "status": "DONE",
             "merged_count": len(spec.get("merged") or {}),
+            "common_planets": _common_planets_from_merged(spec.get("merged") or {}),
             "marriage_giving_planets": spec.get("step3_marriage_giving_planets") or [],
             "planet_names": [
                 p.get("name")
@@ -3698,6 +3900,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                     "d1_points": row.get("d1_points", 0),
                     "d9_points": row.get("d9_points", 0),
                     "both_bonus": row.get("both_bonus", 0),
+                    "both_divisions": row.get("both_divisions", False),
                     "strength_adjust": row.get("strength_adjust", 0),
                     "d1_links": row.get("d1_links") or [],
                     "d9_links": row.get("d9_links") or [],
@@ -3706,8 +3909,9 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             ],
         },
         "step4": {
-            "name": "KP validate",
+            "name": "Common planets (D1+D9)",
             "status": "DONE",
+            "common_planets": _common_planets_from_merged(spec.get("merged") or {}),
             "summary": kp_summary,
             "top_kp": [
                 {
@@ -3729,13 +3933,16 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                 {
                     "name": r.get("name"),
                     "score": r.get("score"),
-                    "d1": r.get("d1_points"),
-                    "d9": r.get("d9_points"),
-                    "kp": r.get("kp_points"),
+                    "d1_points": r.get("d1_points"),
+                    "d9_points": r.get("d9_points"),
+                    "both_bonus": r.get("both_bonus"),
+                    "natal_points": r.get("natal_points"),
+                    "kp_points": r.get("kp_points"),
+                    "kp_weighted_points": r.get("kp_weighted_points"),
                     "kp_verdict": r.get("kp_verdict"),
-                    "links": r.get("links") or [],
+                    "links": (r.get("links") or [])[:8],
                 }
-                for r in ranked[:8]
+                for r in ranked[:12]
             ],
         },
         "step6": {
@@ -3749,7 +3956,10 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                     "md": w.get("md"),
                     "ad": w.get("ad"),
                     "pd": w.get("pd"),
+                    "start_iso": w.get("start_iso"),
+                    "end_iso": w.get("end_iso"),
                     "score": w.get("score"),
+                    "pd_only_activation": w.get("pd_only_activation"),
                     "bcp_age_hits": w.get("bcp_age_hits") or [],
                     "dasha_score_detail": w.get("dasha_score_detail") or [],
                 }
@@ -4013,7 +4223,7 @@ def compute_timing_window_fallback(
         },
     }
     step_audit = _merge_natal_step_audit(
-        {"step_audit": step_audit}, kundli, lagna_si, kp,
+        {"step_audit": step_audit}, kundli, lagna_si, kp, birth=birth,
     )["step_audit"]
 
     verdict = step0_verdict or "UNKNOWN"

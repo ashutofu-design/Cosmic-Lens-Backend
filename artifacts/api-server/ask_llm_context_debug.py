@@ -596,13 +596,31 @@ def ensure_marriage_step_audit_on_result(
                 flush=True,
             )
 
+    existing_s6 = audit.get("step6") if isinstance(audit.get("step6"), dict) else {}
+    if not (existing_s6.get("selected_windows") or []):
+        try:
+            from event_timing.marriage.marriage_engine_v2 import build_marriage_step6_audit
+
+            step6 = build_marriage_step6_audit(
+                chart, step_audit=audit, birth=birth,
+            )
+            if step6.get("selected_windows"):
+                audit["step6"] = step6
+        except Exception as exc:
+            print(
+                f"[ensure_marriage_step_audit] step6 failed: "
+                f"{type(exc).__name__}: {str(exc)[:160]}",
+                flush=True,
+            )
+
     if audit:
         engine_result["step_audit"] = audit
         s1 = ((audit.get("step1") or {}).get("result") or {})
         print(
             "[ensure_marriage_step_audit] ok "
             f"step0={bool(audit.get('step0'))} step0a={bool(audit.get('step0a'))} "
-            f"step3={bool(audit.get('step3'))} d1_7L={s1.get('seventh_lord')!r}",
+            f"step3={bool(audit.get('step3'))} step6={bool((audit.get('step6') or {}).get('selected_windows'))} "
+            f"d1_7L={s1.get('seventh_lord')!r}",
             flush=True,
         )
     return engine_result
@@ -822,6 +840,11 @@ def prepare_kundli_for_marriage_engine(raw: Any) -> dict[str, Any] | None:
     chart = coerce_chart_for_marriage_engine(raw)
     if chart is None:
         return None
+    # Normalize dashas key (dasha → dashas) before any marriage engine read.
+    raw_dashas = chart.get("dashas") or chart.get("dasha") or []
+    if isinstance(raw_dashas, list) and raw_dashas and not chart.get("dashas"):
+        chart = dict(chart)
+        chart["dashas"] = raw_dashas
     lagna_si = _resolve_lagna_si_for_admin(chart)
     if lagna_si is None:
         return chart
@@ -936,6 +959,19 @@ def _build_marriage_step_audit_from_chart(
                 audit[key] = {**block, "recomputed_from_chart": True}
     except Exception:
         pass
+
+    existing_s6 = audit.get("step6") if isinstance(audit.get("step6"), dict) else {}
+    if not (existing_s6.get("selected_windows") or []):
+        try:
+            from event_timing.marriage.marriage_engine_v2 import build_marriage_step6_audit
+
+            step6 = build_marriage_step6_audit(
+                chart, step_audit=audit, birth=birth,
+            )
+            if step6.get("selected_windows"):
+                audit["step6"] = {**step6, "recomputed_from_chart": True}
+        except Exception:
+            pass
 
     if isinstance(bcp, dict) and bcp:
         d9_bcp = bcp.get("d9_bcp") if isinstance(bcp.get("d9_bcp"), dict) else {}
@@ -1209,6 +1245,7 @@ def recompute_marriage_bcp_from_kundli(
         "[marriage_admin_recompute] ok "
         f"step0={bool(sa.get('step0'))} step0a={bool(sa.get('step0a'))} "
         f"step3={bool(sa.get('step3'))} "
+        f"step6={bool((sa.get('step6') or {}).get('selected_windows'))} "
         f"q={(question_text or '')[:40]!r}",
         flush=True,
     )
@@ -1976,9 +2013,16 @@ def _slim_marriage_step_audit_for_db(step_audit: dict[str, Any]) -> dict[str, An
                 "name": step.get("name"),
                 "status": step.get("status"),
                 "merged_count": step.get("merged_count"),
+                "common_planets": step.get("common_planets"),
                 "planet_names": step.get("planet_names"),
                 "marriage_giving_planets": planets[:16] if isinstance(planets, list) else [],
                 "top_merged": (step.get("top_merged") or [])[:10],
+            }
+        elif key == "step4":
+            out[key] = {
+                "name": step.get("name"),
+                "status": step.get("status"),
+                "common_planets": step.get("common_planets") or [],
             }
         elif key == "step7":
             out[key] = {
@@ -2000,12 +2044,20 @@ def _slim_marriage_step_audit_for_db(step_audit: dict[str, Any]) -> dict[str, An
                 "status": step.get("status"),
                 "result": step.get("result") or {},
             }
+        elif key == "step5":
+            ranked = step.get("ranked_top") or []
+            out[key] = {
+                "name": step.get("name"),
+                "status": step.get("status"),
+                "weight_note": step.get("weight_note"),
+                "ranked_top": ranked[:12] if isinstance(ranked, list) else [],
+            }
         elif key == "step6":
             wins = step.get("selected_windows") or []
             out[key] = {
                 "name": step.get("name"),
                 "status": step.get("status"),
-                "selected_windows": wins[:4] if isinstance(wins, list) else [],
+                "selected_windows": wins[:3] if isinstance(wins, list) else [],
                 "future_candidates_count": step.get("future_candidates_count"),
                 "current_activation": step.get("current_activation"),
             }

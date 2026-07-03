@@ -536,6 +536,57 @@ def _force_merge_bcp_linkage_into_step0a(
     return out
 
 
+def _ensure_marriage_step67_on_chart(
+    audit: dict[str, Any],
+    chart: dict[str, Any],
+    birth: dict[str, Any] | None = None,
+    *,
+    lagna_si: int | None = None,
+    force: bool = False,
+) -> None:
+    """Always attach Step 6+7 (dasha + Guru/Shani 7H/7L transit) when chart is valid."""
+    if lagna_si is None:
+        lagna_si = _resolve_lagna_si_for_admin(chart)
+    if lagna_si is None:
+        return
+    existing_s7 = audit.get("step7") if isinstance(audit.get("step7"), dict) else {}
+    if (
+        not force
+        and existing_s7.get("chart_context")
+        and (
+            existing_s7.get("per_dasha_windows")
+            or existing_s7.get("detail")
+            or existing_s7.get("by_month")
+        )
+    ):
+        return
+    try:
+        from event_timing.marriage.marriage_engine_v2 import build_marriage_step6_audit
+
+        prepared = prepare_kundli_for_marriage_engine(chart) or chart
+        step6, step7 = build_marriage_step6_audit(
+            prepared,
+            step_audit=audit,
+            birth=birth,
+            lagna_si=lagna_si,
+        )
+        audit["step6"] = {**(audit.get("step6") or {}), **step6}
+        audit["step7"] = {**(audit.get("step7") or {}), **step7}
+        print(
+            "[ensure_step67] ok "
+            f"step6_status={step6.get('status')} "
+            f"matched={len(step6.get('selected_windows') or [])} "
+            f"candidates={len(step6.get('candidate_windows') or [])} "
+            f"step7_status={step7.get('status')}",
+            flush=True,
+        )
+    except Exception as exc:
+        print(
+            f"[ensure_step67] failed: {type(exc).__name__}: {str(exc)[:160]}",
+            flush=True,
+        )
+
+
 def ensure_marriage_step_audit_on_result(
     engine_result: dict[str, Any],
     kundli: dict[str, Any],
@@ -596,31 +647,9 @@ def ensure_marriage_step_audit_on_result(
                 flush=True,
             )
 
-    existing_s6 = audit.get("step6") if isinstance(audit.get("step6"), dict) else {}
-    if not (existing_s6.get("selected_windows") or []):
-        try:
-            from event_timing.marriage.marriage_engine_v2 import build_marriage_step6_audit
-
-            step6, step7 = build_marriage_step6_audit(
-                chart, step_audit=audit, birth=birth,
-            )
-            if step6.get("selected_windows"):
-                audit["step6"] = step6
-                audit["step7"] = step7
-            else:
-                print(
-                    f"[ensure_marriage_step_audit] step6 empty status={step6.get('status')} "
-                    f"candidates={len(step6.get('candidate_windows') or [])}",
-                    flush=True,
-                )
-                if step7:
-                    audit["step7"] = step7
-        except Exception as exc:
-            print(
-                f"[ensure_marriage_step_audit] step6 failed: "
-                f"{type(exc).__name__}: {str(exc)[:160]}",
-                flush=True,
-            )
+    _ensure_marriage_step67_on_chart(
+        audit, chart, birth, lagna_si=lagna_si, force=False,
+    )
 
     if audit:
         engine_result["step_audit"] = audit
@@ -629,6 +658,7 @@ def ensure_marriage_step_audit_on_result(
             "[ensure_marriage_step_audit] ok "
             f"step0={bool(audit.get('step0'))} step0a={bool(audit.get('step0a'))} "
             f"step3={bool(audit.get('step3'))} step6={bool((audit.get('step6') or {}).get('selected_windows'))} "
+            f"step7={bool(audit.get('step7'))} "
             f"d1_7L={s1.get('seventh_lord')!r}",
             flush=True,
         )
@@ -969,31 +999,12 @@ def _build_marriage_step_audit_from_chart(
     except Exception:
         pass
 
-    existing_s6 = audit.get("step6") if isinstance(audit.get("step6"), dict) else {}
-    if not (existing_s6.get("selected_windows") or []):
-        try:
-            from event_timing.marriage.marriage_engine_v2 import build_marriage_step6_audit
-
-            step6, step7 = build_marriage_step6_audit(
-                chart, step_audit=audit, birth=birth,
-            )
-            if step6.get("selected_windows"):
-                audit["step6"] = {**step6, "recomputed_from_chart": True}
-                audit["step7"] = {**step7, "recomputed_from_chart": True}
-            else:
-                print(
-                    f"[marriage_admin_recompute] step6 empty status={step6.get('status')} "
-                    f"candidates={len(step6.get('candidate_windows') or [])}",
-                    flush=True,
-                )
-                if step7:
-                    audit["step7"] = {**step7, "recomputed_from_chart": True}
-        except Exception as exc:
-            print(
-                f"[marriage_admin_recompute] step6 failed: "
-                f"{type(exc).__name__}: {str(exc)[:160]}",
-                flush=True,
-            )
+    _ensure_marriage_step67_on_chart(
+        audit, chart, birth, lagna_si=lagna_si, force=True,
+    )
+    for key in ("step6", "step7"):
+        if isinstance(audit.get(key), dict):
+            audit[key]["recomputed_from_chart"] = True
 
     if isinstance(bcp, dict) and bcp:
         d9_bcp = bcp.get("d9_bcp") if isinstance(bcp.get("d9_bcp"), dict) else {}
@@ -1274,6 +1285,7 @@ def recompute_marriage_bcp_from_kundli(
         f"step0={bool(sa.get('step0'))} step0a={bool(sa.get('step0a'))} "
         f"step3={bool(sa.get('step3'))} "
         f"step6={bool((sa.get('step6') or {}).get('selected_windows'))} "
+        f"step7={bool(sa.get('step7'))} "
         f"q={(question_text or '')[:40]!r}",
         flush=True,
     )
@@ -2067,6 +2079,7 @@ def _slim_marriage_step_audit_for_db(step_audit: dict[str, Any]) -> dict[str, An
                 "matched_count": step.get("matched_count"),
                 "candidate_count": step.get("candidate_count"),
                 "per_dasha_windows": (step.get("per_dasha_windows") or [])[:3],
+                "by_month": (step.get("by_month") or [])[:12],
                 "detail": str(step.get("detail") or "")[:600],
             }
         elif key in ("step1", "step2"):

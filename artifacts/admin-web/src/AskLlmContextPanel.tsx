@@ -935,7 +935,22 @@ function formatMarriageStep7PerDashaLines(
   if (s7?.status === "NO_TRANSIT_MATCH") {
     return ["— (koi dasha par Guru/Shani 7H/7L transit match nahi)"];
   }
-  return ["— (transit verify pending)"];
+  if (s7?.status === "SWE_UNAVAILABLE") {
+    const cc = asRecord(s7.chart_context);
+    const hint = cc
+      ? `7H ${cc.seventh_house || "?"} · 7L ${cc.seventh_lord || "?"} (${cc.seventh_lord_sign || "?"})`
+      : "";
+    return [
+      `— (pyswisseph missing — VPS par install karein)${hint ? ` · ${hint}` : ""}`,
+    ];
+  }
+  if (s7?.chart_context) {
+    const cc = asRecord(s7.chart_context);
+    return [
+      `Lagna ${cc?.lagna || "?"} · 7H ${cc?.seventh_house || "?"} · 7L ${cc?.seventh_lord || "?"} (${cc?.seventh_lord_sign || "?"}) — transit scan pending`,
+    ];
+  }
+  return ["— (transit verify pending — admin refresh after API deploy)"];
 }
 
 function formatMarriageStep6Dasha(
@@ -1776,7 +1791,12 @@ export function EngineTracePanel({
                   ? formatMarriageStep5Ranked(stepAudit)
                   : key === "step6"
                     ? formatMarriageStep6Dasha(stepAudit, trace)
-                    : step
+                    : key === "step7"
+                      ? (
+                          formatMarriageStep7PerDashaLines(stepAudit).join("\n")
+                          || (step ? stepOneLiner(key, step, engineId || "marriage_timing_m17") : "— (not saved)")
+                        )
+                      : step
                 ? stepOneLiner(key, step, engineId || "marriage_timing_m17")
                 : "— (not saved)";
           return {

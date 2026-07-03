@@ -8896,8 +8896,15 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             )
             _unavail_blocks: dict = {}
             _unavail_slice: dict = {}
+            _chart_diag = _normalize_passthrough_kundli(kundli)
+            _planets_n = len((_chart_diag or {}).get("planets") or [])
+            _failure = (
+                "chart_missing"
+                if not _chart_diag or not _planets_n
+                else "engine_empty"
+            )
+            _mer_diag: dict = {}
             try:
-                _chart_diag = _normalize_passthrough_kundli(kundli)
                 if _chart_diag:
                     from event_timing.marriage.kp_from_chart import resolve_kp
 
@@ -8907,23 +8914,36 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         resolve_kp(_chart_diag, {}, birth),
                         birth,
                         question=question or "",
-                    )
-                    if isinstance(_mer_diag, dict) and _mer_diag:
-                        from ask_llm_context_debug import (
-                            build_marriage_engine_trace,
-                            build_marriage_timing_slice_meta,
-                        )
+                    ) or {}
+                from ask_llm_context_debug import (
+                    build_marriage_engine_trace,
+                    build_marriage_unavailable_admin_meta,
+                )
 
-                        _trace_diag = build_marriage_engine_trace(_mer_diag)
-                        if _trace_diag:
-                            _unavail_blocks["engine_trace"] = _trace_diag
-                        _unavail_slice = build_marriage_timing_slice_meta(_mer_diag)
+                if isinstance(_mer_diag, dict) and _mer_diag:
+                    _trace_diag = build_marriage_engine_trace(_mer_diag)
+                    if _trace_diag:
+                        _unavail_blocks["engine_trace"] = _trace_diag
+                _unavail_slice = build_marriage_unavailable_admin_meta(
+                    partial_engine=_mer_diag if _mer_diag else None,
+                    failure=_failure,
+                    planets_count=_planets_n,
+                )
             except Exception as _diag_exc:
                 print(
                     f"[raw_passthrough] marriage unavailable diag skipped: "
                     f"{str(_diag_exc)[:160]}",
                     flush=True,
                 )
+                try:
+                    from ask_llm_context_debug import build_marriage_unavailable_admin_meta
+
+                    _unavail_slice = build_marriage_unavailable_admin_meta(
+                        failure=_failure,
+                        planets_count=_planets_n,
+                    )
+                except Exception:
+                    pass
             return _attach_admin(
                 marriage_timing_unavailable_result(question or "", qtype=qtype),
                 question=question or "",

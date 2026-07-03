@@ -1274,6 +1274,48 @@ def build_marriage_timing_slice_meta(engine_result: dict[str, Any] | None) -> di
     return meta
 
 
+def build_marriage_unavailable_admin_meta(
+    *,
+    partial_engine: dict[str, Any] | None = None,
+    failure: str = "engine_empty",
+    planets_count: int = 0,
+) -> dict[str, Any]:
+    """Admin slice_meta when M17 block is empty but we still want evidence lines."""
+    if isinstance(partial_engine, dict) and partial_engine:
+        meta = build_marriage_timing_slice_meta(partial_engine)
+    else:
+        meta = {
+            "slice": "marriage_timing_m17",
+            "topic": "marriage",
+            "archetype": "general_mr",
+            "verdict": "",
+            "summary": [],
+            "evidence": [],
+            "timing_evidence": [],
+            "calculation_steps": [],
+            "narrator_mode": "engine_only",
+        }
+    diag: list[str] = []
+    if failure == "chart_missing":
+        diag.append(
+            "Kundli/planets missing — marriage timing engine connect nahi ho paya. "
+            "Profile me birth date, time aur place save karke dubara puchein."
+        )
+    else:
+        diag.append(
+            f"Marriage timing engine ne koi window return nahi ki "
+            f"(planets={planets_count}). Server par latest code + restart check karein."
+        )
+    merged_evidence = diag + list(meta.get("evidence") or [])
+    meta["evidence"] = merged_evidence[:50]
+    meta["timing_evidence"] = merged_evidence[:50]
+    meta["engine_unavailable"] = True
+    meta["failure_reason"] = failure
+    if not meta.get("summary"):
+        meta["summary"] = [diag[0][:200]]
+    return meta
+
+
 def _enrich_engine_facts_from_blocks(
     engine_facts: dict[str, Any],
     blocks: dict[str, Any] | None,
@@ -1281,35 +1323,47 @@ def _enrich_engine_facts_from_blocks(
     """Fill engine_facts from engine_trace when slice_meta was empty (timing passthrough)."""
     if not isinstance(blocks, dict):
         return engine_facts
-    if engine_facts.get("verdict") or (engine_facts.get("evidence") or []):
-        return engine_facts
     trace = blocks.get("engine_trace") or blocks.get("marriage_engine_trace")
     if not isinstance(trace, dict):
         return engine_facts
     out = dict(engine_facts)
     pw = str(trace.get("primary_window") or "").strip()
     verdict = str(trace.get("verdict") or trace.get("band") or "").strip()
-    if verdict:
+    if verdict and not out.get("verdict"):
         out["verdict"] = verdict
-    elif pw:
+    elif pw and not out.get("verdict"):
         out["verdict"] = "answered:timing"
     evidence = list(out.get("evidence") or [])
-    if pw:
+    seen = set(evidence)
+    if pw and f"Primary window: {pw}" not in seen:
         evidence.insert(0, f"Primary window: {pw}")
+        seen.add(f"Primary window: {pw}")
     for f in trace.get("factors") or []:
         fs = str(f).strip()
-        if fs and fs not in evidence:
+        if fs and fs not in seen:
             evidence.append(fs)
-    if not evidence:
-        fake = {"primary_window": pw, "factors": trace.get("factors") or [],
-                "step_audit": trace.get("step_audit"), "timing_audit": trace.get("timing_audit"),
-                "verdict": verdict, "band": trace.get("band")}
-        evidence = _marriage_timing_evidence(fake)
-    out["evidence"] = evidence[:50]
-    out["timing_evidence"] = evidence[:50]
+            seen.add(fs)
+    if len(evidence) < 3:
+        fake = {
+            "primary_window": pw,
+            "factors": trace.get("factors") or [],
+            "step_audit": trace.get("step_audit"),
+            "timing_audit": trace.get("timing_audit"),
+            "verdict": verdict,
+            "band": trace.get("band"),
+            "bcp_marriage_ages": trace.get("bcp_marriage_ages"),
+            "step0a": (trace.get("step_audit") or {}).get("step0a"),
+        }
+        for line in _marriage_timing_evidence(fake):
+            if line not in seen:
+                evidence.append(line)
+                seen.add(line)
+    if evidence:
+        out["evidence"] = evidence[:50]
+        out["timing_evidence"] = evidence[:50]
     if pw and not out.get("summary"):
         out["summary"] = [f"Marriage timing: {pw}"]
-    if trace.get("step_audit"):
+    if trace.get("step_audit") and not out.get("step_audit"):
         out["step_audit"] = trace["step_audit"]
     return out
 
@@ -1595,9 +1649,88 @@ def build_admin_llm_context(
     return ctx_out
 
 
+def _slim_marriage_step_audit_for_db(step_audit: dict[str, Any]) -> dict[str, Any]:
+    """Keep marriage step_audit small enough for DB — never drop step3 planet list."""
+    out: dict[str, Any] = {}
+    for key in _MARRIAGE_TRACE_STEP_ORDER:
+        step = step_audit.get(key)
+        if not isinstance(step, dict):
+            continue
+        if key == "step3":
+            planets = step.get("marriage_giving_planets") or []
+            out[key] = {
+                "name": step.get("name"),
+                "status": step.get("status"),
+                "merged_count": step.get("merged_count"),
+                "planet_names": step.get("planet_names"),
+                "marriage_giving_planets": planets[:16] if isinstance(planets, list) else [],
+                "top_merged": (step.get("top_merged") or [])[:10],
+            }
+        elif key == "step7":
+            out[key] = {
+                "name": step.get("name"),
+                "status": step.get("status"),
+                "transit_confirmed": step.get("transit_confirmed"),
+                "double_transit": step.get("double_transit"),
+                "transit_type": step.get("transit_type"),
+                "transit_type_label": step.get("transit_type_label"),
+                "chart_context": step.get("chart_context"),
+                "jupiter_hit": step.get("jupiter_hit"),
+                "saturn_hit": step.get("saturn_hit"),
+                "months": step.get("months"),
+                "detail": str(step.get("detail") or "")[:600],
+            }
+        elif key in ("step1", "step2"):
+            out[key] = {
+                "name": step.get("name"),
+                "status": step.get("status"),
+                "result": step.get("result") or {},
+            }
+        elif key == "step6":
+            wins = step.get("selected_windows") or []
+            out[key] = {
+                "name": step.get("name"),
+                "status": step.get("status"),
+                "selected_windows": wins[:4] if isinstance(wins, list) else [],
+                "future_candidates_count": step.get("future_candidates_count"),
+                "current_activation": step.get("current_activation"),
+            }
+        else:
+            out[key] = step
+    return out
+
+
+def _apply_slim_step_audit_to_ctx(payload: dict[str, Any]) -> dict[str, Any]:
+    """Slim step_audit in all ctx locations before DB serialize."""
+    out = dict(payload)
+    for container_key in ("slice_meta",):
+        container = out.get(container_key)
+        if isinstance(container, dict) and isinstance(container.get("step_audit"), dict):
+            c = dict(container)
+            c["step_audit"] = _slim_marriage_step_audit_for_db(c["step_audit"])
+            out[container_key] = c
+    ef = out.get("engine_facts")
+    if isinstance(ef, dict) and isinstance(ef.get("step_audit"), dict):
+        ef = dict(ef)
+        ef["step_audit"] = _slim_marriage_step_audit_for_db(ef["step_audit"])
+        out["engine_facts"] = ef
+    blocks = out.get("blocks")
+    if isinstance(blocks, dict):
+        blocks = dict(blocks)
+        for trace_key in ("engine_trace", "marriage_engine_trace"):
+            trace = blocks.get(trace_key)
+            if isinstance(trace, dict) and isinstance(trace.get("step_audit"), dict):
+                t = dict(trace)
+                t["step_audit"] = _slim_marriage_step_audit_for_db(t["step_audit"])
+                blocks[trace_key] = t
+        out["blocks"] = blocks
+    return out
+
+
 def _compact_ctx_for_db(ctx: dict[str, Any]) -> dict[str, Any]:
     """Drop huge prompt blobs so blocks.engine_trace + evidence survive DB save."""
-    out = dict(ctx)
+    out = _apply_slim_step_audit_to_ctx(ctx)
+    out = dict(out)
     sizes = dict(out.get("sizes") or {})
     for key in _DB_STRIP_KEYS:
         val = str(out.get(key) or "")
@@ -1762,17 +1895,22 @@ def serialize_llm_context_for_db(ctx: Any) -> str | None:
     if len(raw) > _MAX_DB_CHARS:
         if isinstance(payload, dict):
             payload = _compact_ctx_for_db(payload)
-            ef = payload.get("engine_facts")
-            if isinstance(ef, dict):
-                ef = dict(ef)
-                ef.pop("step_audit", None)
-                payload["engine_facts"] = ef
-            sm = payload.get("slice_meta")
-            if isinstance(sm, dict):
-                sm = dict(sm)
-                sm.pop("step_audit", None)
-                sm.pop("timing_audit", None)
-                payload["slice_meta"] = sm
+            try:
+                raw = json.dumps(payload, ensure_ascii=False, default=str)
+            except Exception:
+                return None
+        if len(raw) > _MAX_DB_CHARS and isinstance(payload, dict):
+            payload = _apply_slim_step_audit_to_ctx(payload)
+            blocks = payload.get("blocks")
+            if isinstance(blocks, dict):
+                blocks = dict(blocks)
+                trace = blocks.get("engine_trace")
+                if isinstance(trace, dict):
+                    t = dict(trace)
+                    t.pop("factors", None)
+                    t.pop("top_3_windows", None)
+                    blocks["engine_trace"] = t
+                payload["blocks"] = blocks
             try:
                 raw = json.dumps(payload, ensure_ascii=False, default=str)
             except Exception:

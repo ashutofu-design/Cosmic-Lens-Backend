@@ -707,7 +707,56 @@ function stepOneLiner(
   return name;
 }
 
-function isDashaFirstTimingEngine(engineId: string): boolean {
+function marriageAuditStepTitle(key: string, step?: Record<string, unknown>): string {
+  const labels: Record<string, string> = {
+    step3: "Step 3 — D1+D9 shadi de sakte planets (7H linkage)",
+    step4: "Step 4 — KP validate",
+    step5: "Step 5 — Rank significators + dasha targets",
+    step6: "Step 6 — Dasha windows",
+    step7: "Step 7 — Transit verify",
+    step8: "Step 8 — Final gate",
+  };
+  return labels[key] || String(step?.name || key);
+}
+
+function formatMarriageStep3Planets(step?: Record<string, unknown>): string {
+  if (!step) {
+    return "— (not saved — engine ne kundli se connect nahi kiya; birth profile save karke dubara puchein)";
+  }
+  const list = Array.isArray(step.marriage_giving_planets)
+    ? step.marriage_giving_planets
+    : Array.isArray(step.top_merged)
+      ? step.top_merged
+      : [];
+  if (!list.length) {
+    return stepOneLiner("step3", step, "marriage_timing_m17");
+  }
+  return list
+    .map((row) => {
+      const r = asRecord(row);
+      const name = (r?.name as string) || "?";
+      const why = (r?.reasons_summary as string) || (r?.reasons_hi as string[])?.join(" · ") || "";
+      return why ? `${name}: ${why}` : name;
+    })
+    .join(" | ");
+}
+
+function stepAuditFromMarriageContext(
+  ctx: AskLlmContext,
+  trace?: EngineTrace,
+  sliceMeta?: Record<string, unknown>,
+  engineFacts?: Record<string, unknown>,
+): Record<string, Record<string, unknown>> {
+  const blocks = (ctx.blocks || {}) as Record<string, unknown>;
+  const blockTrace = blocks.engine_trace as { step_audit?: Record<string, Record<string, unknown>> } | undefined;
+  return (
+    trace?.step_audit ||
+    (sliceMeta?.step_audit as Record<string, Record<string, unknown>> | undefined) ||
+    (engineFacts?.step_audit as Record<string, Record<string, unknown>> | undefined) ||
+    blockTrace?.step_audit ||
+    {}
+  );
+}
   return (
     engineId.endsWith("_timing_v1") &&
     engineId !== "marriage_timing_m17" &&
@@ -1311,15 +1360,39 @@ export function EngineTracePanel({
       };
     }
   }
-  const hasTrace = Boolean(trace && (trace.step_audit || trace.timing_audit));
   const stepOrder =
     trace?.step_order?.length
       ? trace.step_order.filter((k) => !k.startsWith("step0"))
       : ["step1", "step2", "step3", "step4", "step5", "step6"];
-  const stepAudit = trace?.step_audit || {};
+  const stepAudit = stepAuditFromMarriageContext(ctx, trace, sliceMeta, engineFacts);
+  if (trace && !trace.step_audit && Object.keys(stepAudit).length > 0) {
+    trace = { ...trace, step_audit: stepAudit };
+  }
   const timingAudit = trace?.timing_audit;
   const engineId = String(trace?.engine || "");
   const marriageM17 = isMarriageM17Trace(engineId, ctx);
+  const marriageStepOrder = [
+    "step3",
+    "step4",
+    "step5",
+    "step6",
+    "step7",
+    "step8",
+  ];
+  const marriageStepCardsOrder = [
+    "step1",
+    "step2",
+    "step3",
+    "step4",
+    "step5",
+    "step6",
+    "step7",
+    "step8",
+  ];
+  const hasTrace = Boolean(
+    (trace && (trace.step_audit || trace.timing_audit)) ||
+      (marriageM17 && marriageStepOrder.some((k) => stepAudit[k])),
+  );
   const dashaFirst = isDashaFirstTimingEngine(engineId);
   const marriageStep0 = marriageM17 ? marriageStep0FromContext(ctx, stepAudit) : undefined;
   const marriageStep0Fmt = formatMarriageEarlyLateStep(marriageStep0);
@@ -1338,7 +1411,7 @@ export function EngineTracePanel({
     : null;
 
   const pipelineChecksTitle = marriageM17
-    ? "Marriage timing — Steps 1–2"
+    ? "Marriage timing — Steps 1–8 (early/late → BCP → shadi planets → dasha)"
     : dashaFirst
       ? `Engine checks — step 2 onward (${engineId.replace("_timing_v1", "")})`
       : engineId === "career_timing_v1"
@@ -1397,6 +1470,22 @@ export function EngineTracePanel({
           detail: marriageBcpFmt?.detail || "—",
           hero: false,
         },
+        ...marriageStepOrder.map((key, idx) => {
+          const step = stepAudit[key];
+          const title = marriageAuditStepTitle(key, step);
+          const detail =
+            key === "step3"
+              ? formatMarriageStep3Planets(step)
+              : step
+                ? stepOneLiner(key, step, engineId || "marriage_timing_m17")
+                : "— (not saved)";
+          return {
+            n: idx + 3,
+            title,
+            detail,
+            hero: key === "step3",
+          };
+        }),
       ]
     : dashaFirst
     ? [
@@ -1427,19 +1516,32 @@ export function EngineTracePanel({
         hero: false,
       }));
 
-  const stepCardsOrder = dashaFirst
-    ? stepOrder.filter((k) => k !== "step1")
-    : stepOrder;
+  const marriageHasFullTrace = marriageM17
+    ? Boolean(
+        stepAudit.step3 ||
+          stepAudit.step1 ||
+          (trace?.step_audit && Object.keys(trace.step_audit).length > 0),
+      )
+    : false;
+  const stepCardsOrder = marriageM17
+    ? marriageStepCardsOrder
+    : dashaFirst
+      ? stepOrder.filter((k) => k !== "step1")
+      : stepOrder;
 
   return (
     <details className="engine-trace-panel" open={hasTrace}>
       <summary>
         {marriageM17
-          ? "Marriage timing — Steps 1–2 (early/late + BCP ages)"
+          ? marriageHasFullTrace
+            ? "Marriage timing — full trace (Steps 1–8)"
+            : "Marriage timing — Steps 1–2 (engine trace incomplete)"
           : dashaFirst
             ? "Timing pipeline — step 1 = running dasha"
             : "Engine pipeline — step by step"}
-        {hasTrace ? "" : " (limited — re-ask after API deploy for full trace)"}
+        {hasTrace || marriageHasFullTrace
+          ? ""
+          : " (limited — re-ask after API deploy for full trace)"}
       </summary>
       <div className="engine-trace-body">
         <ol className="engine-pipeline-overview">
@@ -1522,11 +1624,7 @@ export function EngineTracePanel({
           </div>
         ) : null}
 
-        {hasTrace && marriageM17 ? (
-          <p className="detail-summary">{pipelineChecksTitle}</p>
-        ) : null}
-
-        {hasTrace && !marriageM17 ? (
+        {hasTrace ? (
           <>
             <p className="detail-summary">{pipelineChecksTitle}</p>
             <div className="engine-steps-list">
@@ -1534,7 +1632,22 @@ export function EngineTracePanel({
                 const step = stepAudit[key];
                 if (!step) return null;
                 const status = String(step.status || "DONE");
-                const stepLabel = dashaFirst ? String(idx + 2) : key;
+                const stepLabel = marriageM17
+                  ? (
+                      {
+                        step1: "D1",
+                        step2: "D9",
+                        step3: "3",
+                        step4: "4",
+                        step5: "5",
+                        step6: "6",
+                        step7: "7",
+                        step8: "8",
+                      }[key] || key
+                    )
+                  : dashaFirst
+                    ? String(idx + 2)
+                    : key;
                 return (
                   <details key={key} className="engine-step-card">
                     <summary>
@@ -1559,7 +1672,14 @@ export function EngineTracePanel({
                               by_month: step.by_month,
                               detail: formatStep7TransitDetail(step),
                             }
-                          : step
+                          : key === "step3" && Array.isArray(step.marriage_giving_planets)
+                            ? {
+                                merged_count: step.merged_count,
+                                planet_names: step.planet_names,
+                                marriage_giving_planets: step.marriage_giving_planets,
+                                top_merged: step.top_merged,
+                              }
+                            : step
                       }
                       label={key === "step7" ? "Transit by month" : "Step JSON"}
                     />
@@ -1568,7 +1688,7 @@ export function EngineTracePanel({
               })}
             </div>
 
-            {timingAudit ? (
+            {!marriageM17 && timingAudit ? (
               <details open className="engine-audit-panel">
                 <summary>
                   Final validation · status {timingAudit.status || "—"}
@@ -1718,12 +1838,11 @@ export function AskLlmContextPanel({
       : (sliceMeta.evidence_neutral as string[] | undefined)) ?? [];
   const sliceName = String(sliceMeta.slice || checks.slice_type || "");
   const marriageM17 = isMarriageM17Trace(sliceName, ctx);
-  const marriageStepAudit = (
-    (sliceMeta.step_audit as Record<string, Record<string, unknown>> | undefined) ||
-    ((engineFacts as { step_audit?: Record<string, Record<string, unknown>> }).step_audit) ||
-    (((ctx.blocks || {}) as Record<string, unknown>).engine_trace as { step_audit?: Record<string, Record<string, unknown>> } | undefined)
-      ?.step_audit ||
-    {}
+  const marriageStepAudit = stepAuditFromMarriageContext(
+    ctx,
+    (((ctx.blocks || {}) as Record<string, unknown>).engine_trace as EngineTrace | undefined),
+    sliceMeta,
+    engineFacts as Record<string, unknown>,
   );
   const marriageStep0Fmt = formatMarriageEarlyLateStep(marriageStepAudit.step0);
   const marriageUserAgeVal = marriageM17
@@ -1784,8 +1903,14 @@ export function AskLlmContextPanel({
           <pre className="llm-context-pre">{(ctx as { raw: string }).raw}</pre>
         ) : !marriageM17 && !verdict && (!evidence || evidence.length === 0) && !hasSplitEvidence ? (
           <p className="detail-muted">No structured engine facts for this question.</p>
-        ) : marriageM17 && !marriageStepAudit.step0 && !(summary && summary.length) ? (
-          <p className="detail-muted">Step 1 (early / late) not saved — re-ask after deploy.</p>
+        ) : marriageM17 &&
+          !marriageStepAudit.step0 &&
+          !(summary && summary.length) &&
+          !(evidence && evidence.length) ? (
+          <p className="detail-muted">
+            Step 1 (early / late) not saved — marriage question dubara puchein (API restart +
+            birth profile saved honi chahiye).
+          </p>
         ) : (
           <div className="engine-facts-box">
             {engineDisplay.adminLine !== "—" ? (
@@ -1819,6 +1944,10 @@ export function AskLlmContextPanel({
                     ))}
                   </ul>
                 ) : null}
+                <p className="engine-marriage-step0 engine-marriage-step3">
+                  <strong>Step 3 — D1+D9 shadi de sakte planets:</strong>{" "}
+                  {formatMarriageStep3Planets(marriageStepAudit.step3)}
+                </p>
               </>
             ) : null}
             {!marriageM17 && dashaTrace &&
@@ -1876,6 +2005,30 @@ export function AskLlmContextPanel({
                 </ul>
               </>
             ) : null}
+            {marriageM17 && evidence && evidence.length > 0 ? (
+              <>
+                <p>
+                  <strong>Marriage timing evidence ({evidence.length}):</strong>
+                </p>
+                <ul className="llm-check-list">
+                  {evidence.map((e) => (
+                    <li key={e}>{e}</li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+            {marriageM17 && calculationSteps && calculationSteps.length > 0 ? (
+              <>
+                <p>
+                  <strong>Calculation steps ({calculationSteps.length}):</strong>
+                </p>
+                <ul className="llm-check-list">
+                  {calculationSteps.map((e) => (
+                    <li key={`mcalc-${e}`}>{e}</li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
             {!marriageM17 && calculationSteps && calculationSteps.length > 0 ? (
               <>
                 <p>
@@ -1927,7 +2080,7 @@ export function AskLlmContextPanel({
                   <p className="detail-muted">— none (0)</p>
                 )}
               </>
-            ) : !marriageM17 && evidence && evidence.length > 0 ? (
+            ) : marriageM17 && evidence && evidence.length > 0 ? null : !marriageM17 && evidence && evidence.length > 0 ? (
               <>
                 <p>
                   <strong>

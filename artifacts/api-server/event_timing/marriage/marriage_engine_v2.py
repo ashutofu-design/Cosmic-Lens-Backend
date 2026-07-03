@@ -14,7 +14,7 @@ Architecture: USER-SPEC PIPELINE → ACTIVATE → TRIGGER (v3).
   STEP 5   Rank significators (discrete points)
   STEP 6   Dasha — EXACT MD·AD·PD from kundli dasha tree (see marriage_pipeline_rules)
   STEP 7   Transit — Guru+Shani on FINAL dasha window only (verify, not re-pick)
-  STEP 8   Obstacle flags + final gate
+  STEP 8   Obstacle flags + final gate (late BCP lock, Step5 dasha, transit → predict)
 
   Code map: user STEP 6 → _step5_* dasha; user STEP 7 → _attach_transit_to_window + SAV.
   Full rule text: event_timing/marriage/marriage_pipeline_rules.py
@@ -2834,6 +2834,135 @@ def build_marriage_step6_audit(
 
 
 # ════════════════════════════════════════════════════════════════════════
+# STEP 8 — Final prediction (late BCP + Step5 dasha + transit)
+# ════════════════════════════════════════════════════════════════════════
+def _build_step8_final_prediction(
+    *,
+    step0_tendency: Dict[str, Any],
+    d1_bcp_ages: List[int],
+    d9_bcp_ages: List[int],
+    ranked: List[Dict[str, Any]],
+    matched_windows: List[Dict[str, Any]],
+    user_age: Optional[int],
+    primary_ref_age: Optional[int],
+    focus_bcp_ages: Set[int],
+    primary_window: Optional[str],
+    key_trigger: Optional[str],
+) -> Dict[str, Any]:
+    """D1+D9 late → late BCP only; pick age from transit-matched dasha + Step5 ranks."""
+    from event_timing.marriage.bcp_marriage_ages import (
+        both_divisions_late,
+        filter_bcp_ages_from_current,
+    )
+
+    d1_pace = str(step0_tendency.get("d1_pace") or "")
+    d9_pace = str(step0_tendency.get("d9_pace") or "")
+    late_locked = both_divisions_late(d1_pace, d9_pace)
+
+    d1_ok = filter_bcp_ages_from_current(d1_bcp_ages, user_age, both_late=late_locked)
+    d9_ok = filter_bcp_ages_from_current(d9_bcp_ages, user_age, both_late=late_locked)
+    merged_pool = sorted(set(d1_ok) | set(d9_ok))
+
+    ranked_top = [r for r in (ranked or []) if isinstance(r, dict)][:8]
+    ranked_names = {str(r.get("name")) for r in ranked_top if r.get("name")}
+    ranked_rank = {str(r.get("name")): i for i, r in enumerate(ranked_top) if r.get("name")}
+
+    best_win: Optional[Dict[str, Any]] = None
+    best_age: Optional[int] = None
+    best_score = -1.0
+    best_align: List[str] = []
+
+    for win in matched_windows or []:
+        if not isinstance(win, dict):
+            continue
+        lords = [x for x in (win.get("md"), win.get("ad"), win.get("pd")) if x]
+        align = [str(l) for l in lords if str(l) in ranked_names]
+        hits = filter_bcp_ages_from_current(
+            [int(a) for a in (win.get("bcp_age_hits") or []) if isinstance(a, (int, float))],
+            user_age,
+            both_late=late_locked,
+        )
+        if merged_pool:
+            in_pool = [a for a in hits if a in merged_pool]
+            hits = in_pool or hits
+
+        pick_age: Optional[int] = None
+        for pref in sorted(focus_bcp_ages or []):
+            if pref in hits:
+                pick_age = int(pref)
+                break
+        if pick_age is None and primary_ref_age is not None and primary_ref_age in hits:
+            pick_age = int(primary_ref_age)
+        if pick_age is None and hits:
+            pick_age = int(hits[0])
+        elif pick_age is None and merged_pool:
+            pick_age = int(merged_pool[0])
+
+        align_score = sum(8.0 - float(ranked_rank.get(l, 8)) for l in align)
+        pool_score = 3.0 if pick_age is not None and pick_age in merged_pool else 0.0
+        ref_score = (
+            2.0
+            if pick_age is not None and primary_ref_age is not None and pick_age == int(primary_ref_age)
+            else 0.0
+        )
+        dasha_score = float(win.get("score") or 0) * 0.12
+        total = align_score + pool_score + ref_score + dasha_score
+
+        if total > best_score:
+            best_score = total
+            best_win = win
+            best_age = pick_age
+            best_align = align
+
+    if best_age is None and merged_pool:
+        best_age = int(merged_pool[0])
+        if primary_ref_age is not None and primary_ref_age in merged_pool:
+            best_age = int(primary_ref_age)
+
+    transit_ok = bool(matched_windows)
+    md = best_win.get("md") if best_win else None
+    ad = best_win.get("ad") if best_win else None
+    pd = best_win.get("pd") if best_win else None
+
+    parts: List[str] = []
+    if late_locked:
+        parts.append("D1+D9 late → sirf late BCP ages")
+    if best_age is not None:
+        parts.append(f"BCP age {best_age}")
+    if md and ad and pd:
+        parts.append(f"Dasha {md}-{ad}-{pd}")
+    elif key_trigger:
+        parts.append(key_trigger)
+    if best_align:
+        parts.append(f"Step5: {', '.join(best_align)}")
+    if primary_window:
+        parts.append(primary_window)
+    parts.append("transit match" if transit_ok else "transit nahi")
+
+    return {
+        "late_chart_bcp_locked": late_locked,
+        "d1_pace": d1_pace,
+        "d9_pace": d9_pace,
+        "d1_bcp_ages": d1_ok,
+        "d9_bcp_ages": d9_ok,
+        "predicted_bcp_age": best_age,
+        "primary_dasha": {
+            "md": md,
+            "ad": ad,
+            "pd": pd,
+            "start_iso": best_win.get("start_iso") if best_win else None,
+            "end_iso": best_win.get("end_iso") if best_win else None,
+            "window": best_win.get("window") if best_win else None,
+        } if best_win else None,
+        "step5_aligned_lords": best_align,
+        "step5_ranked_top": [str(r.get("name")) for r in ranked_top[:6] if r.get("name")],
+        "transit_confirmed": transit_ok,
+        "final_prediction": " · ".join(parts) if parts else "Koi qualified final window nahi",
+        "prediction_score": round(best_score, 2) if best_score >= 0 else None,
+    }
+
+
+# ════════════════════════════════════════════════════════════════════════
 # Verdict + band derivation
 # ════════════════════════════════════════════════════════════════════════
 def _risk_severity_score(risk_flags: List[str]) -> Tuple[float, List[str]]:
@@ -3382,6 +3511,18 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     bcp_strategy = step0a.get("bcp_timing_strategy") or {}
     dasha_scan = step0a.get("dasha_scan_plan") or {}
     timing_appropriate = bool(marriage_age_ctx.get("timing_appropriate", True))
+    _step0_tendency = step0.get("step0_tendency") or {}
+    from event_timing.marriage.bcp_marriage_ages import effective_bcp_pool_for_timing
+
+    _bcp_effective_ages = effective_bcp_pool_for_timing(
+        bcp_ctx,
+        d1_pace=_step0_tendency.get("d1_pace"),
+        d9_pace=_step0_tendency.get("d9_pace"),
+        user_age=user_age,
+    )
+    bcp_ctx_for_hits = dict(bcp_ctx)
+    if _bcp_effective_ages:
+        bcp_ctx_for_hits["all_marriage_ages"] = _bcp_effective_ages
 
     factors.append(step0.get("reasoning_summary", "")[:220])
     factors.append(step0a.get("reasoning_summary", "")[:220])
@@ -3476,7 +3617,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         lord_profiles=dasha_lord_profiles,
     )
     annotate_candidates_bcp_ages(
-        future_candidates, bcp_ctx, birth_dt, user_age=user_age,
+        future_candidates, bcp_ctx_for_hits, birth_dt, user_age=user_age,
     )
     factors.append(
         "STEP0 dasha_entry: " + "; ".join(dasha_scan.get("entry_notes") or [])[:200]
@@ -4037,10 +4178,41 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     if not transit_ok:
         audit_issues.append("primary window has no Jupiter/Saturn transit support")
 
-    expected_reply = (
-        f"Aapki shaadi {primary_window} ke beech hogi."
-        if primary_window else "Abhi chart se shaadi ka clear period nahi dikh raha."
+    step8_prediction = _build_step8_final_prediction(
+        step0_tendency=_step0_tendency,
+        d1_bcp_ages=list(bcp_ctx.get("d1_future_bcp_ages") or []),
+        d9_bcp_ages=list(bcp_ctx.get("d9_future_bcp_ages") or []),
+        ranked=ranked,
+        matched_windows=matched_serial,
+        user_age=user_age,
+        primary_ref_age=primary_ref_age,
+        focus_bcp_ages=focus_bcp_ages,
+        primary_window=primary_window,
+        key_trigger=key_trigger,
     )
+    factors.append(f"STEP8 final={step8_prediction.get('final_prediction')}")
+    if step8_prediction.get("late_chart_bcp_locked"):
+        factors.append(
+            "STEP8 late_BCP locked "
+            f"D1={step8_prediction.get('d1_bcp_ages')} "
+            f"D9={step8_prediction.get('d9_bcp_ages')}"
+        )
+
+    _pred_age = step8_prediction.get("predicted_bcp_age")
+    if _pred_age and primary_window and transit_ok:
+        expected_reply = (
+            f"Aapki shaadi age {_pred_age} ke around — {primary_window} "
+            f"(dasha + transit match)."
+        )
+    elif primary_window:
+        expected_reply = (
+            f"Aapki shaadi {primary_window} ke beech hogi."
+        )
+    else:
+        expected_reply = (
+            step8_prediction.get("final_prediction")
+            or "Abhi chart se shaadi ka clear period nahi dikh raha."
+        )
     audit_checks.append({
         "name": "answer_lock",
         "ok": bool(primary_window),
@@ -4065,6 +4237,10 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             "anchor_min_age": anchor_min_age,
             "focus_ages": sorted(focus_bcp_ages),
             "primary_bcp_hits": sorted(primary_bcp_hits),
+            "late_locked": step8_prediction.get("late_chart_bcp_locked"),
+            "predicted_bcp_age": step8_prediction.get("predicted_bcp_age"),
+            "d1_bcp_ages": step8_prediction.get("d1_bcp_ages"),
+            "d9_bcp_ages": step8_prediction.get("d9_bcp_ages"),
         },
         "transit": {
             "confirmed": transit_ok,
@@ -4075,6 +4251,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         },
         "checks": audit_checks,
         "expected_reply": expected_reply,
+        "step8_prediction": step8_prediction,
     }
     merged_items = sorted(
         (spec.get("merged") or {}).items(),
@@ -4252,12 +4429,16 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             "per_dasha_windows": per_dasha_step7,
         },
         "step8": {
-            "name": "Obstacles + final gate",
-            "status": "DONE",
+            "name": "Final — late BCP + dasha + transit",
+            "status": (
+                "DONE" if step8_prediction.get("transit_confirmed")
+                else ("PARTIAL" if step8_prediction.get("predicted_bcp_age") else "DONE")
+            ),
             "risk_flags": risk_flags,
             "final_gate": final_gate,
             "verdict": verdict,
             "band": band,
+            **step8_prediction,
         },
     }
 

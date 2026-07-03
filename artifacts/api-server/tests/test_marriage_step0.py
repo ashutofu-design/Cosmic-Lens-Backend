@@ -100,6 +100,52 @@ def test_bcp_compact_admin_lines_from_current_age():
     assert isinstance(bcp.get("d9_future_bcp_ages"), list)
 
 
+def test_bcp_late_chart_locks_ages():
+    from event_timing.marriage.bcp_marriage_ages import (
+        both_divisions_late,
+        filter_bcp_ages_from_current,
+    )
+
+    assert both_divisions_late("LATE", "VERY_LATE")
+    assert not both_divisions_late("LATE", "EARLY")
+    ages = filter_bcp_ages_from_current(
+        [12, 24, 30, 36], user_age=26, both_late=True,
+    )
+    assert ages == [30, 36]
+    assert 24 not in ages
+
+
+def test_step8_final_prediction_late_chart():
+    from event_timing.marriage.marriage_engine_v2 import _build_step8_final_prediction
+
+    pred = _build_step8_final_prediction(
+        step0_tendency={"d1_pace": "LATE", "d9_pace": "LATE"},
+        d1_bcp_ages=[12, 24, 30, 36],
+        d9_bcp_ages=[12, 28, 34],
+        ranked=[{"name": "Venus", "score": 10}, {"name": "Jupiter", "score": 8}],
+        matched_windows=[{
+            "md": "Venus",
+            "ad": "Jupiter",
+            "pd": "Mercury",
+            "score": 12.0,
+            "bcp_age_hits": [30, 31],
+            "start_iso": "2030-01-01",
+            "end_iso": "2030-06-01",
+            "window": "Jan 2030 – Jun 2030",
+            "transit_confirmed": True,
+        }],
+        user_age=26,
+        primary_ref_age=30,
+        focus_bcp_ages={30, 36},
+        primary_window="Jan 2030 – Jun 2030",
+        key_trigger="Venus MD + Jupiter AD",
+    )
+    assert pred["late_chart_bcp_locked"]
+    assert pred["predicted_bcp_age"] == 30
+    assert "Venus" in pred["step5_aligned_lords"]
+    assert pred["transit_confirmed"]
+
+
 def test_bcp_merged_list_has_placement_and_aspects():
     bcp = compute_bcp_marriage_ages(KUNDLI, LAGNA_SI, user_age=26)
     ages = bcp["all_marriage_ages"]

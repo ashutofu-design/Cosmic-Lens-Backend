@@ -39,6 +39,57 @@ _BCP_D1_D9_OVERLAP_BONUS = 4.0
 _BCP_SHARED_LINKAGE_HOUSE_BONUS = 6.0
 _BCP_CLUSTER_NEIGHBOR_BONUS = 1.5
 _BCP_CLUSTER_MAX_BONUS = 3.0
+LATE_PACE_LABELS = frozenset({"LATE", "VERY_LATE", "DELAYED"})
+LATE_BCP_MIN_AGE = 24
+
+
+def both_divisions_late(d1_pace: Optional[str], d9_pace: Optional[str]) -> bool:
+    return (
+        str(d1_pace or "") in LATE_PACE_LABELS
+        and str(d9_pace or "") in LATE_PACE_LABELS
+    )
+
+
+def filter_bcp_ages_from_current(
+    ages: List[int],
+    user_age: Optional[int],
+    *,
+    both_late: bool = False,
+    limit: int = 8,
+) -> List[int]:
+    """From current age onward; D1+D9 late → drop early-cycle BCP (<24)."""
+    pool = sorted({int(a) for a in ages if isinstance(a, (int, float))})
+    if user_age is not None:
+        pool = [a for a in pool if a >= int(user_age)]
+    if both_late:
+        pool = [a for a in pool if a >= LATE_BCP_MIN_AGE]
+    return pool[:limit]
+
+
+def effective_bcp_pool_for_timing(
+    bcp: Dict[str, Any],
+    *,
+    d1_pace: Optional[str],
+    d9_pace: Optional[str],
+    user_age: Optional[int],
+) -> List[int]:
+    """Merged D1+D9 BCP ages used for dasha tagging + Step 8."""
+    late = both_divisions_late(d1_pace, d9_pace)
+    d1 = filter_bcp_ages_from_current(
+        list(bcp.get("d1_future_bcp_ages") or []),
+        user_age,
+        both_late=late,
+    )
+    d9 = filter_bcp_ages_from_current(
+        list(bcp.get("d9_future_bcp_ages") or []),
+        user_age,
+        both_late=late,
+    )
+    merged = sorted(set(d1) | set(d9))
+    if merged:
+        return merged
+    all_ages = list(bcp.get("all_marriage_ages") or [])
+    return filter_bcp_ages_from_current(all_ages, user_age, both_late=late)
 
 
 def _house_lord(lagna_si: int, house: int) -> str:

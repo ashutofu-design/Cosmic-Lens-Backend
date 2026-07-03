@@ -679,7 +679,17 @@ function stepOneLiner(
     return parts.join(" · ");
   }
   if (stepKey === "step8") {
-    return `${name} · ${fmtCheckValue(step.verdict)} · band ${fmtCheckValue(step.band)}`;
+    const pred = String(step.final_prediction || "").trim();
+    const age = step.predicted_bcp_age;
+    const parts = [
+      name,
+      `verdict ${fmtCheckValue(step.verdict)}`,
+      `band ${fmtCheckValue(step.band)}`,
+    ];
+    if (step.late_chart_bcp_locked) parts.push("D1+D9 late BCP");
+    if (age != null) parts.push(`BCP age ${age}`);
+    if (pred) parts.push(pred);
+    return parts.join(" · ");
   }
   return name;
 }
@@ -691,7 +701,7 @@ function marriageAuditStepTitle(key: string, step?: Record<string, unknown>): st
     step5: "Step 5 — Rank significators (weighted points)",
     step6: "Step 6 — Final dasha (Guru/Shani match)",
     step7: "Step 7 — Guru/Shani transit on 7H/7L",
-    step8: "Step 8 — Final gate",
+    step8: "Step 8 — Final (late BCP + dasha + transit)",
   };
   return labels[key] || String(step?.name || key);
 }
@@ -824,6 +834,52 @@ function formatMarriageStep5RankedLines(
         ].join(", ");
     return `${idx + 1}. ${name}: score ${score} (D1=${d1} D9=${d9}${both}${kp}) · ${links || "—"}`;
   });
+}
+
+function formatMarriageStep8Final(stepAudit: Record<string, Record<string, unknown>>): string {
+  const s8 = stepAudit.step8;
+  if (!s8) return "— (not saved)";
+  const lines: string[] = [];
+  if (s8.late_chart_bcp_locked) {
+    lines.push("D1+D9 late → sirf late BCP ages");
+    const d1 = Array.isArray(s8.d1_bcp_ages) ? s8.d1_bcp_ages.join(", ") : "—";
+    const d9 = Array.isArray(s8.d9_bcp_ages) ? s8.d9_bcp_ages.join(", ") : "—";
+    lines.push(`D1: ${d1}`);
+    lines.push(`D9: ${d9}`);
+  }
+  if (s8.predicted_bcp_age != null) {
+    lines.push(`Predicted BCP age: ${s8.predicted_bcp_age}`);
+  }
+  const dasha = asRecord(s8.primary_dasha);
+  if (dasha.md && dasha.ad && dasha.pd) {
+    lines.push(`Dasha: ${dasha.md}-${dasha.ad}-${dasha.pd}`);
+  }
+  if (Array.isArray(s8.step5_aligned_lords) && s8.step5_aligned_lords.length) {
+    lines.push(`Step5 match: ${s8.step5_aligned_lords.join(", ")}`);
+  }
+  if (s8.final_prediction) {
+    lines.push(String(s8.final_prediction));
+  }
+  if (s8.verdict) {
+    lines.push(`Verdict: ${s8.verdict} · ${s8.band || "—"}`);
+  }
+  return lines.length ? lines.join("\n") : "—";
+}
+
+function MarriageStep8FinalLines({
+  stepAudit,
+}: {
+  stepAudit: Record<string, Record<string, unknown>>;
+}) {
+  const text = formatMarriageStep8Final(stepAudit);
+  if (text === "— (not saved)") {
+    return <span className="detail-muted">— (not saved)</span>;
+  }
+  return (
+    <pre className="engine-marriage-step8-final detail-muted" style={{ whiteSpace: "pre-wrap", margin: 0 }}>
+      {text}
+    </pre>
+  );
 }
 
 function formatMarriageStep5Ranked(
@@ -1574,6 +1630,44 @@ function buildBcpLinkageLines(
   ];
 }
 
+function parseBcpDivisionAges(line: string | undefined): number[] {
+  if (!line) return [];
+  const m = line.match(/^(?:D1|D9):\s*(.+)$/);
+  if (!m) return [];
+  return m[1]
+    .split(",")
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => !isNaN(n));
+}
+
+function bcpStep2DisplayLines(
+  userAge: number | null,
+  linkageLines: string[],
+  step0a?: Record<string, unknown>,
+): { header: string; d1Line: string; d9Line: string } {
+  let d1Line = linkageLines.find((l) => l.startsWith("D1:")) || "";
+  let d9Line = linkageLines.find((l) => l.startsWith("D9:")) || "";
+  if (!d1Line && Array.isArray(step0a?.d1_bcp_ages) && step0a.d1_bcp_ages.length) {
+    const nums = (step0a.d1_bcp_ages as unknown[])
+      .map((x) => (typeof x === "number" ? x : parseInt(String(x), 10)))
+      .filter((n) => !isNaN(n))
+      .filter((n) => userAge == null || isNaN(userAge) || n >= userAge);
+    d1Line = `D1: ${nums.length ? nums.join(", ") : "—"}`;
+  }
+  if (!d9Line && Array.isArray(step0a?.d9_bcp_ages) && step0a.d9_bcp_ages.length) {
+    const nums = (step0a.d9_bcp_ages as unknown[])
+      .map((x) => (typeof x === "number" ? x : parseInt(String(x), 10)))
+      .filter((n) => !isNaN(n))
+      .filter((n) => userAge == null || isNaN(userAge) || n >= userAge);
+    d9Line = `D9: ${nums.length ? nums.join(", ") : "—"}`;
+  }
+  if (!d1Line) d1Line = "D1: —";
+  if (!d9Line) d9Line = "D9: —";
+  const header =
+    userAge != null && !isNaN(userAge) ? `age ${userAge} se` : "—";
+  return { header, d1Line, d9Line };
+}
+
 function formatMarriageBcpAgesStep(
   step0a: Record<string, unknown> | undefined,
   userAge: number | null,
@@ -1582,28 +1676,22 @@ function formatMarriageBcpAgesStep(
   title: string;
   detail: string;
   ages: number[];
+  d1Ages: number[];
+  d9Ages: number[];
   linkageLines: string[];
 } {
-  const { ages, priorityAges } = marriageBcpAgesFromStep0a(step0a, userAge, evidence);
+  const { ages: poolAges, priorityAges } = marriageBcpAgesFromStep0a(step0a, userAge, evidence);
   const linkageLines = buildBcpLinkageLines(step0a, userAge);
+  const display = bcpStep2DisplayLines(userAge, linkageLines, step0a);
+  const d1Ages = parseBcpDivisionAges(display.d1Line);
+  const d9Ages = parseBcpDivisionAges(display.d9Line);
+  let ages = [...poolAges];
 
-  if (ages.length === 0) {
-    const fromLines = linkageLines
-      .flatMap((line) => {
-        const m = line.match(/^(?:D1|D9):\s*(.+)$/);
-        if (!m) return [];
-        return m[1]
-          .split(",")
-          .map((s) => parseInt(s.trim(), 10))
-          .filter((n) => !isNaN(n));
-      })
-      .filter((n) => userAge == null || isNaN(userAge) || n >= userAge);
-    if (fromLines.length) {
-      ages = [...new Set(fromLines)].sort((a, b) => a - b).slice(0, 6);
-    }
+  if (ages.length === 0 && (d1Ages.length || d9Ages.length)) {
+    ages = [...new Set([...d1Ages, ...d9Ages])].sort((a, b) => a - b);
   }
 
-  if (ages.length === 0) {
+  if (ages.length === 0 && d1Ages.length === 0 && d9Ages.length === 0) {
     return {
       title: "Step 2 — BCP ages",
       detail:
@@ -1611,25 +1699,24 @@ function formatMarriageBcpAgesStep(
           ? `age ${userAge} se — BCP ages not saved (re-ask after deploy)`
           : "— (not saved)",
       ages: [],
-      linkageLines,
+      d1Ages: [],
+      d9Ages: [],
+      linkageLines: [display.d1Line, display.d9Line],
     };
   }
 
   const mode =
     step0a?.timing_mode != null ? String(step0a.timing_mode).replace(/_/g, " ") : "";
-  const cur = userAge != null && !isNaN(userAge) ? userAge : null;
-  const d1Line = linkageLines.find((l) => l.startsWith("D1:")) || "D1: —";
-  const d9Line = linkageLines.find((l) => l.startsWith("D9:")) || "D9: —";
   const detail =
-    cur != null
-      ? `age ${cur} se${mode ? ` · ${mode}` : ""}`
-      : mode || "—";
+    display.header + (mode ? ` · ${mode}` : "");
 
   return {
     title: "Step 2 — BCP ages",
     detail,
     ages,
-    linkageLines: [d1Line, d9Line],
+    d1Ages,
+    d9Ages,
+    linkageLines: [display.d1Line, display.d9Line],
   };
 }
 
@@ -1651,12 +1738,34 @@ function marriageBcpFmtFromRow(
   evidence?: string[],
 ): ReturnType<typeof formatMarriageBcpAgesStep> {
   const api = row.marriage_bcp_step2;
-  if (api?.linkage_lines?.length) {
-    return {
+  if (api?.linkage_lines?.length || api?.d1_ages || api?.d9_ages) {
+    const mergedStep0a =
+      api?.step0a && Object.keys(api.step0a).length
+        ? { ...(step0a || {}), ...api.step0a }
+        : step0a;
+    const lines =
+      api.linkage_lines?.length
+        ? api.linkage_lines
+        : [
+            `D1: ${(api.d1_ages || []).join(", ") || "—"}`,
+            `D9: ${(api.d9_ages || []).join(", ") || "—"}`,
+          ];
+    const display = bcpStep2DisplayLines(
+      userAge ?? api?.user_age ?? null,
+      lines,
+      mergedStep0a,
+    );
+  const mode =
+    mergedStep0a?.timing_mode != null
+      ? String(mergedStep0a.timing_mode).replace(/_/g, " ")
+      : "";
+  return {
       title: api.title || "Step 2 — BCP ages",
-      detail: api.detail || "—",
-      ages: api.ages || [],
-      linkageLines: api.linkage_lines,
+      detail: display.header + (mode ? ` · ${mode}` : ""),
+      ages: [...parseBcpDivisionAges(display.d1Line), ...parseBcpDivisionAges(display.d9Line)],
+      d1Ages: parseBcpDivisionAges(display.d1Line),
+      d9Ages: parseBcpDivisionAges(display.d9Line),
+      linkageLines: [display.d1Line, display.d9Line],
     };
   }
   const mergedStep0a =
@@ -1804,7 +1913,9 @@ export function EngineTracePanel({
         {
           n: 2,
           title: marriageBcpFmt?.title || "Step 2 — BCP ages",
-          detail: marriageBcpFmt?.detail || "—",
+          detail: marriageBcpFmt
+            ? `${marriageBcpFmt.detail}\n${marriageBcpFmt.linkageLines.join("\n")}`
+            : "—",
           hero: false,
         },
         ...marriageStepOrder.map((key, idx) => {
@@ -1824,7 +1935,9 @@ export function EngineTracePanel({
                           formatMarriageStep7PerDashaLines(stepAudit).join("\n")
                           || (step ? stepOneLiner(key, step, engineId || "marriage_timing_m17") : "— (not saved)")
                         )
-                      : step
+                      : key === "step8"
+                        ? formatMarriageStep8Final(stepAudit)
+                        : step
                 ? stepOneLiner(key, step, engineId || "marriage_timing_m17")
                 : "— (not saved)";
           return {
@@ -1915,11 +2028,13 @@ export function EngineTracePanel({
         </ol>
 
         {marriageM17 && marriageBcpFmt?.linkageLines?.length ? (
-          <ul className="llm-check-list engine-marriage-bcp-linkage">
+          <div className="engine-marriage-bcp-linkage">
             {marriageBcpFmt.linkageLines.map((line) => (
-              <li key={line}>{line}</li>
+              <p key={line} className="engine-marriage-step0 engine-marriage-bcp-div">
+                {line}
+              </p>
             ))}
-          </ul>
+          </div>
         ) : null}
 
         {dashaFirst ? (
@@ -2302,11 +2417,13 @@ export function AskLlmContextPanel({
                   {marriageBcpFmt?.detail || "—"}
                 </p>
                 {marriageBcpFmt?.linkageLines?.length ? (
-                  <ul className="llm-check-list engine-marriage-bcp-linkage">
+                  <div className="engine-marriage-bcp-linkage">
                     {marriageBcpFmt.linkageLines.map((line) => (
-                      <li key={line}>{line}</li>
+                      <p key={line} className="engine-marriage-step0 engine-marriage-bcp-div">
+                        {line}
+                      </p>
                     ))}
-                  </ul>
+                  </div>
                 ) : null}
                 <div className="engine-marriage-step0 engine-marriage-step3">
                   <strong>Step 3 — D1+D9 7H linkage:</strong>
@@ -2330,6 +2447,10 @@ export function AskLlmContextPanel({
                 <div className="engine-marriage-step0 engine-marriage-step7">
                   <strong>Step 7 — Guru/Shani transit on 7H/7L:</strong>
                   <MarriageStep7TransitLines stepAudit={marriageStepAudit} />
+                </div>
+                <div className="engine-marriage-step0 engine-marriage-step8">
+                  <strong>Step 8 — Final (late BCP + dasha + transit):</strong>
+                  <MarriageStep8FinalLines stepAudit={marriageStepAudit} />
                 </div>
               </>
             ) : null}

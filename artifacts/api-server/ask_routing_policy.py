@@ -165,6 +165,59 @@ def build_cosmic_domain_llm_rules(question: str) -> str:
     return build_no_engine_llm_rules(question)
 
 
+def matches_dedicated_static_engine(
+    question: str,
+    llm_intent: dict[str, Any] | None = None,
+) -> bool:
+    """True when a domain static engine should run — do NOT bypass to direct LLM."""
+    q = (question or "").strip()
+    if not q:
+        return False
+    intent = llm_intent if isinstance(llm_intent, dict) else {}
+    dom = str(intent.get("routed_domain") or intent.get("domain") or "").strip().lower()
+    try:
+        from engine_collision_registry import DOMAIN_PRIMARY_ENGINE
+
+        if dom in DOMAIN_PRIMARY_ENGINE:
+            return True
+    except Exception:
+        pass
+    _probe: tuple[str, str, bool] = (
+        ("ask_marriage_relationship_slice", "is_marriage_relationship_static_question", False),
+        ("ask_career.classifier", "is_career_static_question", False),
+        ("ask_children.children_registry", "is_children_static_question", False),
+        ("ask_health.classifier", "is_health_static_question", False),
+        ("ask_finance.finance_registry", "is_finance_static_question", False),
+        ("ask_education.education_registry", "is_education_static_question", False),
+        ("ask_property.property_registry", "is_property_static_question", False),
+        ("ask_vehicle.vehicle_registry", "is_vehicle_static_question", False),
+        ("ask_travel.travel_registry", "is_travel_static_question", False),
+        ("ask_litigation.litigation_registry", "is_litigation_static_question", False),
+        ("ask_luck.luck_registry", "is_luck_static_question", False),
+        ("ask_network.network_registry", "is_network_static_question", False),
+    )
+    for mod_path, fn_name, passes_intent in _probe:
+        try:
+            import importlib
+
+            fn = getattr(importlib.import_module(mod_path), fn_name)
+            if passes_intent:
+                if fn(q, intent):
+                    return True
+            elif fn(q):
+                return True
+        except Exception:
+            continue
+    try:
+        from ask_gap_dispatch import is_any_gap_static_question
+
+        if is_any_gap_static_question(q, llm_intent=intent):
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def should_bypass_static_engines_for_direct_llm(
     question: str,
     llm_intent: dict[str, Any] | None = None,
@@ -172,6 +225,8 @@ def should_bypass_static_engines_for_direct_llm(
     """Chart/divisional Q with no dedicated engine — skip all static engines → LLM."""
     q = (question or "").strip()
     if not q:
+        return False, ""
+    if matches_dedicated_static_engine(q, llm_intent):
         return False, ""
     try:
         from chart_fact_answer import (

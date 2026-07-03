@@ -8,13 +8,67 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 
-def _valid_chart(payload: Any) -> dict | None:
+def _normalize_chart_payload(payload: Any) -> dict | None:
+    """Accept flat or nested chart JSON (kundli/chart/chart_data wrappers)."""
+    try:
+        from ask_llm_context_debug import coerce_chart_for_marriage_engine
+
+        return coerce_chart_for_marriage_engine(payload)
+    except Exception:
+        pass
     if not isinstance(payload, dict):
         return None
     planets = payload.get("planets")
     if isinstance(planets, list) and len(planets) > 0:
         return payload
     return None
+
+
+def _valid_chart(payload: Any) -> dict | None:
+    return _normalize_chart_payload(payload)
+
+
+def _birth_from_kundli_row(row) -> dict:
+    return {
+        "dob": getattr(row, "dob", None),
+        "tob": getattr(row, "tob", None),
+        "time": getattr(row, "tob", None),
+        "lat": getattr(row, "lat", None),
+        "lon": getattr(row, "lon", None),
+        "tz": getattr(row, "tz", None),
+        "place": getattr(row, "pob", None),
+    }
+
+
+def _load_chart_from_profile(user_id: int) -> tuple[dict | None, dict | None]:
+    """Primary Profile chart — same fallback as admin question_history."""
+    try:
+        from models import Profile
+
+        prof = (
+            Profile.query.filter_by(user_id=user_id, is_primary=True)
+            .filter(Profile.deleted_at.is_(None))
+            .first()
+        )
+        if prof is None:
+            prof = (
+                Profile.query.filter_by(user_id=user_id, deleted_at=None)
+                .order_by(Profile.updated_at.desc())
+                .first()
+            )
+        if prof is None or not prof.chart_data:
+            return None, None
+        parsed = json.loads(prof.chart_data)
+        chart = _normalize_chart_payload(parsed)
+        row_birth: dict | None = None
+        if prof.birth_data:
+            bd = json.loads(prof.birth_data)
+            if isinstance(bd, dict):
+                row_birth = bd
+        return chart, row_birth
+    except Exception as exc:
+        log.warning("[ask] profile chart load failed: %s", exc)
+        return None, None
 
 
 def _mirror_to_legacy_kundli(user, chart: dict, birth: dict | None = None) -> None:
@@ -63,6 +117,7 @@ def resolve_kundli_for_user(
     from flask import jsonify
 
     chart = None
+    profile_birth: dict | None = None
     if user is not None:
         kun = getattr(user, "kundli", None)
         if kun and getattr(kun, "chart_data", None):
@@ -70,6 +125,21 @@ def resolve_kundli_for_user(
                 chart = _valid_chart(json.loads(kun.chart_data))
             except Exception as exc:
                 log.warning("[ask] DB kundli parse failed: %s", exc)
+        if chart is None:
+            try:
+                from models import Kundli
+
+                row = Kundli.query.filter_by(user_id=user.id).first()
+                if row is not None and row.chart_data:
+                    chart = _valid_chart(json.loads(row.chart_data))
+                    if chart is not None and not profile_birth:
+                        profile_birth = _birth_from_kundli_row(row)
+            except Exception as exc:
+                log.warning("[ask] kundlis table lookup failed: %s", exc)
+        if chart is None:
+            chart, profile_birth = _load_chart_from_profile(user.id)
+            if chart is not None:
+                log.info("[ask] using Profile chart for user_id=%s", user.id)
 
     if chart is None:
         chart = _valid_chart(client_kundli)
@@ -88,18 +158,30 @@ def resolve_kundli_for_user(
             412,
         )
 
+    merged_birth: dict | None = None
+    if isinstance(birth, dict):
+        merged_birth = dict(birth)
+    if profile_birth:
+        merged_birth = dict(profile_birth)
+        if isinstance(birth, dict):
+            for key, val in birth.items():
+                if val not in (None, ""):
+                    merged_birth[key] = val
+
     try:
         from event_timing.marriage.kp_from_chart import ensure_kp_on_kundli
 
         chart = ensure_kp_on_kundli(
             chart,
-            birth if isinstance(birth, dict) else None,
+            merged_birth,
             user,
         )
     except Exception as exc:
         log.warning("[ask] ensure_kp_on_kundli failed (non-fatal): %s", exc)
 
     if user is not None:
-        _mirror_to_legacy_kundli(user, chart, birth if isinstance(birth, dict) else None)
+        _mirror_to_legacy_kundli(
+            user, chart, merged_birth if isinstance(merged_birth, dict) else None,
+        )
 
     return chart, None

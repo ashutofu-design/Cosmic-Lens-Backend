@@ -1,12 +1,14 @@
 """User-spec marriage significator pipeline (Steps 1–5).
 
 STEP 1 (D1) / STEP 2 (D9) — name-only marriage linkage (user rule):
-  • 7th house occupants
+  • 7th house occupants (+ dispositor / sign-lord of each occupant)
   • planets aspecting 7th house
   • 7th lord name
   • planets conjunct OR aspecting 7th lord
 
-Then merge → KP validate → rank. Imported by marriage_engine_v2 (lazy).
+STEP 3 — merge D1+D9 pools → full list of shadi-de-sakte planets + points.
+
+Then KP validate → rank. Imported by marriage_engine_v2 (lazy).
 """
 
 from __future__ import annotations
@@ -79,6 +81,8 @@ _W_D1_ASPECT_7H = 3
 _W_D9_ASPECT_7H = 4
 _W_D1_WITH_7L = 3
 _W_D9_WITH_7L = 4
+_W_D1_DISPOSITOR_7H = 3
+_W_D9_DISPOSITOR_7H = 4
 _W_KP_2711 = 6
 _W_BOTH_D1_D9 = 6
 _MIN_NATAL_PROMISE = 8  # minimum total on top significator for "promise"
@@ -261,6 +265,7 @@ def marriage_step_names(
             return {
                 "seventh_lord": None,
                 "planets_in_7th_house": [],
+                "lords_of_planets_in_7th_house": [],
                 "planets_aspecting_7th_house": [],
                 "planets_conjunct_or_aspecting_7th_lord": [],
                 "division": division,
@@ -308,9 +313,21 @@ def marriage_step_names(
             elif _aspects_target(pname, p_si, seventh_lord_si):
                 with_7l.append(pname)
 
+    lords_of_7h: List[str] = []
+    seen_lords: Set[str] = set()
+    for occ in in_7h:
+        occ_si = _si(occ)
+        if occ_si is None:
+            continue
+        disp = _SIGN_LORDS.get(occ_si)
+        if disp and disp not in seen_lords:
+            seen_lords.add(disp)
+            lords_of_7h.append(disp)
+
     return {
         "seventh_lord": seventh_lord,
         "planets_in_7th_house": in_7h,
+        "lords_of_planets_in_7th_house": lords_of_7h,
         "planets_aspecting_7th_house": aspect_7h,
         "planets_conjunct_or_aspecting_7th_lord": with_7l,
         "division": division,
@@ -322,12 +339,14 @@ def format_marriage_step_names(step: Dict[str, Any]) -> str:
     div = step.get("division") or "D1"
     sl = step.get("seventh_lord") or "—"
     in7 = ", ".join(step.get("planets_in_7th_house") or []) or "—"
+    disp7 = ", ".join(step.get("lords_of_planets_in_7th_house") or []) or "—"
     asp7 = ", ".join(step.get("planets_aspecting_7th_house") or []) or "—"
     w7l = ", ".join(step.get("planets_conjunct_or_aspecting_7th_lord") or []) or "—"
     return (
         f"{div} STEP — marriage linkage (names only):\n"
         f"  • 7th lord: {sl}\n"
         f"  • In 7th house: {in7}\n"
+        f"  • Lord of graha in 7th house: {disp7}\n"
         f"  • Aspects 7th house: {asp7}\n"
         f"  • With 7th lord (conjunct/aspect): {w7l}"
     )
@@ -410,6 +429,7 @@ def _pool_from_step_names(
     w_in_7h = _W_D1_IN_7H if division == "D1" else _W_D9_IN_7H
     w_aspect_7h = _W_D1_ASPECT_7H if division == "D1" else _W_D9_ASPECT_7H
     w_with_7l = _W_D1_WITH_7L if division == "D1" else _W_D9_WITH_7L
+    w_disp_7h = _W_D1_DISPOSITOR_7H if division == "D1" else _W_D9_DISPOSITOR_7H
     pool: Dict[str, Dict[str, Any]] = {}
 
     def _add(pname: str, points: float, link: str) -> None:
@@ -431,6 +451,9 @@ def _pool_from_step_names(
 
     for p in step.get("planets_in_7th_house") or []:
         _add(p, w_in_7h, f"in {division} 7th house")
+
+    for p in step.get("lords_of_planets_in_7th_house") or []:
+        _add(p, w_disp_7h, f"lord of graha in {division} 7th house")
 
     for p in step.get("planets_aspecting_7th_house") or []:
         _add(p, w_aspect_7h, f"aspects {division} 7th house")
@@ -505,6 +528,55 @@ def _step3_merge(
             "natal_points": round(d1_pts + d9_pts + both_bonus, 2),
         }
     return merged
+
+
+def _hindi_link_label(link: str) -> str:
+    """Short Hindi reason for admin / Step 3 display."""
+    mapping = {
+        "D1 7th lord": "D1 7L — shadi ka swami",
+        "D9 7th lord": "D9 7L — Navamsa shadi swami",
+        "in D1 7th house": "D1 7H me baitha",
+        "in D9 7th house": "D9 7H me baitha",
+        "lord of graha in D1 7th house": "D1 7H graha ka swami",
+        "lord of graha in D9 7th house": "D9 7H graha ka swami",
+        "aspects D1 7th house": "D1 7H par drishti",
+        "aspects D9 7th house": "D9 7H par drishti",
+        "conjunct/aspects D1 7th lord": "D1 7L ke sath / drishti",
+        "conjunct/aspects D9 7th lord": "D9 7L ke sath / drishti",
+    }
+    return mapping.get(link, link)
+
+
+def build_step3_marriage_giving_planets(
+    step1_d1: Dict[str, Any],
+    step2_d9: Dict[str, Any],
+    merged: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """STEP 3 — D1+D9 se shadi de sakne wale planets ki poori list + kaaran."""
+    _ = step1_d1, step2_d9
+    out: List[Dict[str, Any]] = []
+    for pname, row in merged.items():
+        d1_links = list((row or {}).get("d1_links") or [])
+        d9_links = list((row or {}).get("d9_links") or [])
+        all_links = d1_links + d9_links
+        if not all_links:
+            continue
+        hi_reasons = [_hindi_link_label(lk) for lk in all_links]
+        out.append({
+            "name": pname,
+            "can_give_marriage": True,
+            "d1_links": d1_links,
+            "d9_links": d9_links,
+            "reasons_hi": hi_reasons,
+            "reasons_summary": " · ".join(hi_reasons),
+            "d1_points": (row or {}).get("d1_points", 0),
+            "d9_points": (row or {}).get("d9_points", 0),
+            "both_divisions": bool((row or {}).get("both_divisions")),
+            "both_bonus": (row or {}).get("both_bonus", 0),
+            "natal_points": (row or {}).get("natal_points", 0),
+        })
+    out.sort(key=lambda x: (-float(x.get("natal_points", 0)), x.get("name", "")))
+    return out
 
 
 def _weighted_kp_points(
@@ -809,6 +881,9 @@ def run_user_spec_pipeline(
     )
 
     merged = _step3_merge(d1_pool, d9_pool)
+    marriage_giving_planets = build_step3_marriage_giving_planets(
+        step1_d1, step2_d9, merged,
+    )
     kp_details, kp_summary = _step4_kp_validate(kp, merged, d1_7l, d9_7l)
     ranked = _step5_rank(merged, kp_details, d1_7l=d1_7l, d9_7l=d9_7l)
 
@@ -839,6 +914,7 @@ def run_user_spec_pipeline(
         "d1_pool": d1_pool,
         "d9_pool": d9_pool,
         "merged": merged,
+        "step3_marriage_giving_planets": marriage_giving_planets,
         "kp_details": kp_details,
         "kp_summary": kp_summary,
         "ranked_significators": ranked,

@@ -11,6 +11,7 @@ from event_timing.marriage.marriage_spec_pipeline import (
     _pool_from_step_names,
     _step3_merge,
     _step5_rank,
+    build_step3_marriage_giving_planets,
     marriage_step_names,
 )
 
@@ -61,6 +62,12 @@ def test_step1_in_7th_house():
     assert s["planets_in_7th_house"] == ["Moon"]
 
 
+def test_step1_lord_of_graha_in_7th_house():
+    """Moon in 7H (Mithun) → dispositor Mercury."""
+    s = marriage_step_names(planets, LAGNA_SI, "D1")
+    assert s["lords_of_planets_in_7th_house"] == ["Mercury"]
+
+
 def test_step1_aspects_7th_house():
     s = marriage_step_names(planets, LAGNA_SI, "D1")
     assert set(s["planets_aspecting_7th_house"]) == {"Mars", "Saturn"}
@@ -107,6 +114,34 @@ def test_step2_with_7th_lord():
     s = marriage_step_names(planets, LAGNA_SI, "D9", d9_chart=d9, d9_lagna_si=d9_lagna)
     # Mercury (7L) & Mars both in Simha in D9 → Mars conjunct 7L
     assert s["planets_conjunct_or_aspecting_7th_lord"] == ["Mars"]
+
+
+def test_step3_marriage_giving_planets_full_list():
+    d1_step = marriage_step_names(planets, LAGNA_SI, "D1")
+    k = _kundli()
+    d9, d9_lagna, _ = _load_d9(k)
+    d9_step = marriage_step_names(
+        planets, LAGNA_SI, "D9", d9_chart=d9, d9_lagna_si=d9_lagna,
+    )
+    d1_pool = _pool_from_step_names(d1_step, planets=planets, lagna_si=LAGNA_SI)
+    d9_pool = _pool_from_step_names(
+        d9_step,
+        planets=planets,
+        lagna_si=LAGNA_SI,
+        d9_chart=d9,
+        d9_lagna_si=d9_lagna,
+    )
+    merged = _step3_merge(d1_pool, d9_pool)
+    shadi_list = build_step3_marriage_giving_planets(d1_step, d9_step, merged)
+
+    names = {p["name"] for p in shadi_list}
+    assert "Moon" in names
+    assert "Mercury" in names
+    assert "Mars" in names
+    moon = next(p for p in shadi_list if p["name"] == "Moon")
+    assert any("7H me baitha" in r for r in moon["reasons_hi"])
+    merc = next(p for p in shadi_list if p["name"] == "Mercury")
+    assert any("swami" in r for r in merc["reasons_hi"])
 
 
 def test_step3_with_7l_link_now_gets_real_points():

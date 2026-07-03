@@ -6,7 +6,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from event_timing.marriage.bcp_marriage_ages import (
+    _bcp_7l_linkage_houses,
+    _priority_ages_from_shared_houses,
     _score_merged_bcp_ages,
+    _shared_d1_d9_linkage_houses,
     compute_bcp_for_division,
     compute_bcp_marriage_ages,
     resolve_late_marriage_bcp_focus,
@@ -67,6 +70,60 @@ def test_bcp_merged_list_has_placement_and_dual():
     assert "7H BCP" not in rules
     assert "7L placement" in rules
     assert "7L dual-sign house" in rules
+
+
+def test_bcp_shared_d1_d9_linkage_houses_boost_priority():
+    d1 = {
+        "division": "D1",
+        "seventh_lord_house": 12,
+        "aspect_houses": [{"house": 4, "ages": [4, 16, 28, 40]}],
+        "sources": [
+            {"source": "7th_lord_placement", "house": 12, "ages": [12, 24, 36, 48]},
+            {
+                "source": "7th_lord_aspects",
+                "houses": [{"house": 4, "ages": [4, 16, 28, 40]}],
+            },
+        ],
+    }
+    d9 = {
+        "division": "D9",
+        "seventh_lord_house": 5,
+        "aspect_houses": [{"house": 4, "ages": [4, 16, 28, 40]}],
+        "sources": [
+            {"source": "7th_lord_placement", "house": 5, "ages": [5, 17, 29, 41]},
+            {
+                "source": "7th_lord_aspects",
+                "houses": [{"house": 4, "ages": [4, 16, 28, 40]}],
+            },
+        ],
+    }
+    shared = _shared_d1_d9_linkage_houses(d1, d9)
+    assert shared == [4]
+
+    shared_ages = _priority_ages_from_shared_houses(shared, user_age=26)
+    assert shared_ages[0] == 28
+
+    scored = _score_merged_bcp_ages(d1, d9, user_age=26, shared_linkage_houses=shared)
+    by_age = {r["age"]: r for r in scored}
+    assert by_age[28]["shared_linkage_house"]
+    assert by_age[28]["overlap_d1_d9"]
+
+
+def test_bcp_merged_exports_linkage_houses():
+    bcp = compute_bcp_marriage_ages(
+        KUNDLI,
+        LAGNA_SI,
+        user_age=26,
+        d9_lagna_si=LAGNA_SI,
+        d9_planets=planets,
+    )
+    assert isinstance(bcp.get("d1_7l_linkage_houses"), list)
+    assert isinstance(bcp.get("d9_7l_linkage_houses"), list)
+    assert isinstance(bcp.get("shared_7l_linkage_houses"), list)
+    if bcp["shared_7l_linkage_houses"]:
+        pri = bcp["shared_house_priority_ages"]
+        fut = bcp["future_priority_ages"]
+        assert pri[0] == fut[0]
 
 
 def test_bcp_priority_scores_overlap_placement_highest():
@@ -261,6 +318,48 @@ def test_bcp_anchor_guard_demotes_pre_activation_age_26_when_next_bcp_27():
     assert near.get("suppressed_pre_bcp_focus")
     assert not at_bcp.get("suppressed_pre_bcp_focus")
     assert near["score"] < at_bcp["score"]
+
+
+def test_bcp_floor_rejects_oct_2026_before_age_27_birthday():
+    from event_timing.marriage.marriage_engine_v2 import _enforce_bcp_activation_floor
+
+    birth = datetime(2000, 7, 3)
+    early = {
+        "start": datetime(2026, 10, 1),
+        "end": datetime(2026, 11, 30),
+        "score": 30.0,
+        "priority": 0,
+        "md": "Sun",
+        "ad": "Venus",
+        "pd": "Jupiter",
+    }
+    later = {
+        "start": datetime(2027, 8, 1),
+        "end": datetime(2028, 1, 31),
+        "score": 18.0,
+        "priority": 3,
+        "md": "Sun",
+        "ad": "Mars",
+        "pd": "Venus",
+    }
+    pool = [early, later]
+    top, notes = _enforce_bcp_activation_floor(
+        [early],
+        pool,
+        chart_delayed=True,
+        primary_ref_age=24,
+        focus_bcp_ages={27, 29, 31},
+        user_age=26,
+        birth_dt=birth,
+    )
+    assert top[0]["start"] == later["start"]
+    assert any("BCP_FLOOR" in n for n in notes)
+
+
+def test_effective_anchor_uses_focus_when_primary_stale():
+    from event_timing.marriage.marriage_engine_v2 import _effective_bcp_anchor_age
+
+    assert _effective_bcp_anchor_age(24, {27, 29, 31}, 26) == 27
 
 
 def test_age_26_uses_upcoming_bcp_27_not_missed_recent():

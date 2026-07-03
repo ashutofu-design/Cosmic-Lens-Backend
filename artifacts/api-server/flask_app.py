@@ -8041,6 +8041,11 @@ def ask_route():
                 ask_route=data.get("ask_route"),
                 history=data.get("history"),
             )
+            print(
+                f"[ask:RP] done source={out.get('source')!r} "
+                f"q={(question or '')[:50]!r}",
+                flush=True,
+            )
         except Exception as _rp_exc:
             print(f"[ask:RP] raw_passthrough_ask failed: {_rp_exc}", flush=True)
             import traceback
@@ -9089,6 +9094,11 @@ def ask_stream_route():
                 user_id=(rp_user_s.id if rp_user_s else None),
                 ask_route=data.get("ask_route"),
                 history=data.get("history"),
+            )
+            print(
+                f"[ask/stream:RP] done source={out_s.get('source')!r} "
+                f"q={(question or '')[:50]!r}",
+                flush=True,
             )
         except Exception as _rp_exc_s:
             print(f"[ask/stream:RP] raw_passthrough_ask failed: {_rp_exc_s}", flush=True)

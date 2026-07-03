@@ -13,6 +13,8 @@ export function resolveQuestionUnderstoodWord(
   if (!ctx) return null;
   const line = ctx.understanding_line?.trim();
   if (line === "Yes" || line === "No") return line;
+  if (line?.startsWith("Yes ")) return "Yes";
+  if (line?.startsWith("No ")) return "No";
   const qu = ctx.question_understood?.toLowerCase();
   if (qu === "yes") return "Yes";
   if (qu === "no") return "No";
@@ -236,16 +238,55 @@ export function QuestionUnderstandingPanel({ ctx }: { ctx: AskLlmContext | null 
 
 export function parseAskLlmContext(row: AskQuestionItem): AskLlmContext | null {
   if (row.llm_context && typeof row.llm_context === "object") {
-    return row.llm_context;
+    const salvaged = salvageRawLlmContext(row.llm_context as AskLlmContext);
+    if (salvaged) return salvaged;
   }
   const raw = row.llm_context_json;
   if (!raw || !String(raw).trim()) return null;
   try {
     const parsed = JSON.parse(raw) as AskLlmContext;
-    return parsed && typeof parsed === "object" ? parsed : null;
+    if (parsed && typeof parsed === "object") {
+      return salvageRawLlmContext(parsed) ?? parsed;
+    }
+    return null;
   } catch {
-    return { raw: String(raw).slice(0, 8000) };
+    return salvageRawLlmContext({ raw: String(raw).slice(0, 8000) }) ?? {
+      raw: String(raw).slice(0, 8000),
+    };
   }
+}
+
+function salvageRawLlmContext(ctx: AskLlmContext): AskLlmContext | null {
+  if (!ctx || typeof ctx !== "object") return null;
+  const hasMeta = Boolean(
+    ctx.question_meaning ||
+      ctx.engine_verification_summary?.label ||
+      ctx.engine_facts?.evidence?.length ||
+      ctx.understanding_line ||
+      ctx.slice_meta,
+  );
+  if (hasMeta && !ctx.raw) return ctx;
+
+  const raw = String((ctx as { raw?: string }).raw || "").trim();
+  if (!raw.startsWith("{")) return hasMeta ? ctx : null;
+
+  const tryParse = (text: string): AskLlmContext | null => {
+    try {
+      const parsed = JSON.parse(text) as AskLlmContext;
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const direct = tryParse(raw);
+  if (direct) return direct;
+
+  for (const suffix of ['"]}', '"}]}', '"}]}}', "}"]) {
+    const parsed = tryParse(raw + suffix);
+    if (parsed) return parsed;
+  }
+  return hasMeta ? ctx : null;
 }
 
 export type AnswerPathCode = "engine_then_llm" | "engine_only" | "direct_llm" | "unknown";
@@ -257,6 +298,35 @@ export function resolveEngineVerificationSummary(
   const direct = ctx.engine_verification_summary;
   if (direct && typeof direct === "object" && direct.label) {
     return direct;
+  }
+  const display = ctx.engine_display;
+  if (display?.admin_line) {
+    return {
+      status: "correct",
+      label: "Correct engine",
+      reason: "output_ok",
+      engine_no: display.engine_no ?? null,
+      engine_slice: (display.slice_id as string) || null,
+      ran_archetype: (display.archetype as string) || null,
+      engine_admin_line: display.admin_line,
+      recovered: false,
+    };
+  }
+  const slice = String(ctx.slice_meta?.slice || ctx.checks?.slice_type || "");
+  if (slice.includes("marriage_timing") || slice === "timing_marriage_engine") {
+    const disp = resolveEngineDisplayFromContext(ctx);
+    if (disp.adminLine !== "—") {
+      return {
+        status: "correct",
+        label: "Correct engine",
+        reason: "output_ok",
+        engine_no: disp.engineNo,
+        engine_slice: disp.sliceId,
+        ran_archetype: disp.archetype,
+        engine_admin_line: disp.adminLine,
+        recovered: false,
+      };
+    }
   }
   return null;
 }
@@ -423,6 +493,11 @@ function engineFactsFromContext(ctx: AskLlmContext) {
       ...ef,
       evidence: mergedEvidence,
       timing_evidence: efTiming.length > 0 ? efTiming : smTiming,
+      step_audit: (ef as { step_audit?: unknown }).step_audit || sm.step_audit,
+      timing_audit: (ef as { timing_audit?: unknown }).timing_audit || sm.timing_audit,
+      calculation_steps:
+        (ef as { calculation_steps?: string[] }).calculation_steps ||
+        (sm.calculation_steps as string[] | undefined),
       evidence_positive:
         ef.evidence_positive && ef.evidence_positive.length > 0
           ? ef.evidence_positive
@@ -443,6 +518,9 @@ function engineFactsFromContext(ctx: AskLlmContext) {
     summary: (sm.summary as string[] | undefined) || [],
     evidence: mergedEvidence,
     timing_evidence: smTiming,
+    step_audit: sm.step_audit,
+    timing_audit: sm.timing_audit,
+    calculation_steps: sm.calculation_steps as string[] | undefined,
     evidence_positive: (sm.evidence_positive as string[] | undefined) || [],
     evidence_negative: (sm.evidence_negative as string[] | undefined) || [],
     evidence_neutral: (sm.evidence_neutral as string[] | undefined) || [],
@@ -566,16 +644,26 @@ function stepOneLiner(
   }
   if (stepKey === "step1" || stepKey === "step2") {
     const r = asRecord(step.result);
-    return `${name} · 7L ${fmtCheckValue(r?.seventh_lord)} · in 7H ${fmtCheckValue(r?.planets_in_7th_house)}`;
+    const disp = fmtCheckValue(r?.lords_of_planets_in_7th_house);
+    return `${name} · 7L ${fmtCheckValue(r?.seventh_lord)} · in 7H ${fmtCheckValue(r?.planets_in_7th_house)} · 7H swami ${disp}`;
   }
   if (stepKey === "step3") {
-    const top = Array.isArray(step.top_merged) ? step.top_merged : [];
-    const names = top
-      .slice(0, 3)
-      .map((t) => (asRecord(t)?.name as string) || "")
+    const list = Array.isArray(step.marriage_giving_planets)
+      ? step.marriage_giving_planets
+      : Array.isArray(step.top_merged)
+        ? step.top_merged
+        : [];
+    const names = list
+      .map((t) => {
+        const r = asRecord(t);
+        const n = (r?.name as string) || "";
+        const why = (r?.reasons_summary as string) || "";
+        return why ? `${n} (${why})` : n;
+      })
       .filter(Boolean)
-      .join(", ");
-    return `${name} · merged ${fmtCheckValue(step.merged_count)}${names ? ` · top ${names}` : ""}`;
+      .join("; ");
+    const count = step.merged_count ?? list.length;
+    return `${name} · ${count} planet(s)${names ? ` · ${names}` : ""}`;
   }
   if (stepKey === "step4") {
     const summary = step.summary;
@@ -690,19 +778,539 @@ function JsonDetail({ data, label }: { data: unknown; label?: string }) {
   );
 }
 
+function summaryWindowFromMeta(
+  sliceMeta: Record<string, unknown>,
+  engineFacts: ReturnType<typeof engineFactsFromContext>,
+): string | undefined {
+  const summaries = (engineFacts.summary?.length ? engineFacts.summary : sliceMeta.summary) as
+    | string[]
+    | undefined;
+  if (summaries?.length) {
+    const first = String(summaries[0]);
+    if (first.includes("Marriage timing:")) {
+      return first.split("Marriage timing:")[1]?.trim();
+    }
+    return first.trim();
+  }
+  for (const line of engineFacts.evidence || []) {
+    const ls = String(line);
+    if (/^primary window:/i.test(ls)) return ls.split(":").slice(1).join(":").trim();
+    if (/^answer window:/i.test(ls)) return ls.split(":").slice(1).join(":").trim();
+  }
+  return undefined;
+}
+
+function isMarriageM17Trace(engineId: string, ctx: AskLlmContext): boolean {
+  const checks = (ctx.checks || {}) as Record<string, unknown>;
+  const slice = String(ctx.slice_meta?.slice || checks.slice_type || "");
+  return (
+    engineId === "marriage_timing_m17" ||
+    slice === "marriage_timing_m17" ||
+    checks.slice_type === "timing_marriage_engine"
+  );
+}
+
+function formatMarriageEarlyLateStep(step0?: Record<string, unknown>): {
+  title: string;
+  detail: string;
+} {
+  if (!step0) {
+    return {
+      title: "Step 1 — Early / Late marriage",
+      detail: "— (re-ask question after API deploy)",
+    };
+  }
+  const r = asRecord(step0.result);
+  const verdict = String(r?.verdict || "").trim();
+  const combined = String(r?.combined_pace || r?.combined || "").trim();
+  const d1 = String(r?.d1_pace || "").trim();
+  const d9 = String(r?.d9_pace || "").trim();
+  const age = step0.user_age != null ? ` · user age ${step0.user_age}` : "";
+
+  const v = verdict.toUpperCase();
+  const paceBlob = `${combined} ${d1} ${d9}`.toUpperCase();
+  let label = "On-time marriage chart";
+  if (v === "DELAYED" || v === "LATE" || paceBlob.includes("LATE") || paceBlob.includes("VERY_LATE")) {
+    label = "Late marriage chart";
+  } else if (v === "EARLY" || paceBlob.includes("EARLY")) {
+    label = "Early marriage chart";
+  }
+
+  const parts = [label];
+  if (verdict) parts.push(verdict);
+  if (d1 || d9) parts.push(`D1 ${d1 || "—"} · D9 ${d9 || "—"}`);
+  return {
+    title: "Step 1 — Early / Late marriage",
+    detail: parts.filter(Boolean).join(" · ") + age,
+  };
+}
+
+function marriageStep0FromContext(
+  ctx: AskLlmContext,
+  stepAudit: Record<string, Record<string, unknown>>,
+): Record<string, unknown> | undefined {
+  if (stepAudit.step0) return stepAudit.step0;
+  const sm = (ctx.slice_meta || {}) as Record<string, unknown>;
+  const ef = ctx.engine_facts as { step_audit?: Record<string, Record<string, unknown>> } | undefined;
+  return sm.step_audit
+    ? (sm.step_audit as Record<string, Record<string, unknown>>).step0
+    : ef?.step_audit?.step0;
+}
+
+function marriageStep0aFromContext(
+  stepAudit: Record<string, Record<string, unknown>>,
+  sliceMeta?: Record<string, unknown>,
+  evidence?: string[],
+): Record<string, unknown> {
+  const linkage = (sliceMeta?.bcp_linkage || {}) as Record<string, unknown>;
+  const base = { ...(stepAudit.step0a || {}), ...linkage };
+  const parsed = parseBcpLinkageFromEvidence(evidence);
+  const merged = mergeBcpLinkage(base, parsed);
+  if (linkage.bcp_house_display && !merged.bcp_house_display) {
+    merged.bcp_house_display = linkage.bcp_house_display;
+  }
+  return merged;
+}
+
+function mergeBcpLinkage(
+  ...sources: Array<Record<string, unknown> | undefined>
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const src of sources) {
+    if (!src || typeof src !== "object") continue;
+    for (const [key, val] of Object.entries(src)) {
+      if (val == null) continue;
+      if (Array.isArray(val) && val.length === 0 && out[key]) continue;
+      if (out[key] == null || out[key] === "" || (Array.isArray(out[key]) && !(out[key] as unknown[]).length)) {
+        out[key] = val;
+      }
+    }
+  }
+  return out;
+}
+
+function parseBcpLinkageFromEvidence(evidence?: string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (!evidence?.length) return out;
+  for (const line of evidence) {
+    const s = String(line);
+    let m = s.match(/BCP_LINKAGE\s+D1\s+7L=(\w+)\s+placement=(\d+)\s+aspects=([\d,]*)/i);
+    if (m) {
+      out.d1_seventh_lord = m[1];
+      out.d1_7l_placement_house = parseInt(m[2], 10);
+      out.d1_7l_aspect_houses = m[3]
+        ? m[3].split(",").map((x) => parseInt(x.trim(), 10)).filter((n) => !isNaN(n))
+        : [];
+      continue;
+    }
+    m = s.match(/BCP_LINKAGE\s+D9\s+7L=(\w+)\s+placement=(\d+)\s+aspects=([\d,]*)/i);
+    if (m) {
+      out.d9_seventh_lord = m[1];
+      out.d9_7l_placement_house = parseInt(m[2], 10);
+      out.d9_7l_aspect_houses = m[3]
+        ? m[3].split(",").map((x) => parseInt(x.trim(), 10)).filter((n) => !isNaN(n))
+        : [];
+      continue;
+    }
+    m = s.match(/BCP-D1:\s+7L\s+(\w+)@(\d+)H/i);
+    if (m) {
+      if (!out.d1_seventh_lord) out.d1_seventh_lord = m[1];
+      if (!out.d1_7l_placement_house) out.d1_7l_placement_house = parseInt(m[2], 10);
+    }
+    m = s.match(/BCP-D9:\s+7L\s+(\w+)@(\d+)H/i);
+    if (m) {
+      if (!out.d9_seventh_lord) out.d9_seventh_lord = m[1];
+      if (!out.d9_7l_placement_house) out.d9_7l_placement_house = parseInt(m[2], 10);
+    }
+    m = s.match(/D1\s+7L=([A-Za-z]+)/);
+    if (m && !out.d1_seventh_lord) out.d1_seventh_lord = m[1];
+    m = s.match(/D9\s+7L=([A-Za-z]+)/);
+    if (m && !out.d9_seventh_lord) out.d9_seventh_lord = m[1];
+    m = s.match(/BCP_SHARED_HOUSES\s+([\d,]+)/i);
+    if (m) {
+      out.shared_7l_linkage_houses = m[1]
+        .split(",")
+        .map((x) => parseInt(x.trim(), 10))
+        .filter((n) => !isNaN(n));
+    }
+    m = s.match(/BCP_HOUSE\s+(D1|D9)\s+(placement|aspect)=(\d+)\s+ages=([\d,]*)/i);
+    if (m) {
+      const div = m[1].toUpperCase();
+      const kind = m[2].toLowerCase();
+      const house = parseInt(m[3], 10);
+      const ages = m[4]
+        ? m[4].split(",").map((x) => parseInt(x.trim(), 10)).filter((n) => !isNaN(n))
+        : [];
+      const key = div === "D1" ? "d1" : "d9";
+      if (kind === "placement") {
+        out[`${key}_7l_placement_house`] = house;
+      } else {
+        const aspKey = `${key}_7l_aspect_houses`;
+        const cur = (out[aspKey] as number[]) || [];
+        if (!cur.includes(house)) cur.push(house);
+        out[aspKey] = cur.sort((a, b) => a - b);
+      }
+      if (!out.bcp_house_display) out.bcp_house_display = { d1: { items: [] }, d9: { items: [] } };
+      const disp = out.bcp_house_display as { d1?: BcpDivDisplay; d9?: BcpDivDisplay };
+      const bucket = div === "D1" ? disp.d1 : disp.d9;
+      if (bucket) {
+        bucket.items = bucket.items || [];
+        bucket.items.push({ type: kind, house, ages });
+      }
+    }
+  }
+  return out;
+}
+
+function parseUserAgeFromEvidence(evidence?: string[]): number | null {
+  if (!evidence?.length) return null;
+  for (const line of evidence) {
+    const m =
+      line.match(/user_age=(\d+)/i) ||
+      line.match(/User age (\d+)/i) ||
+      line.match(/age=(\d+)/i);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (!isNaN(n)) return n;
+    }
+  }
+  return null;
+}
+
+function parseBcpAgesFromEvidence(evidence?: string[]): number[] {
+  if (!evidence?.length) return [];
+  const ages: number[] = [];
+  for (const line of evidence) {
+    const patterns = [
+      /focus\s*\[([^\]]+)\]/i,
+      /bcp_5y=\[([^\]]+)\]/i,
+      /bcp_focus_ages['"]?\s*[:=]\s*\[([^\]]+)\]/i,
+    ];
+    for (const rx of patterns) {
+      const m = line.match(rx);
+      if (!m) continue;
+      for (const part of m[1].split(",")) {
+        const n = parseInt(part.trim(), 10);
+        if (!isNaN(n)) ages.push(n);
+      }
+    }
+  }
+  return ages;
+}
+
+function formatHouseList(houses: unknown): string {
+  if (!Array.isArray(houses) || houses.length === 0) return "—";
+  return houses.map((h) => `${h}H`).join(", ");
+}
+
+function marriageBcpAgesFromStep0a(
+  step0a: Record<string, unknown> | undefined,
+  userAge: number | null,
+  evidence?: string[],
+): { ages: number[]; priorityAges: Set<number> } {
+  const pool: number[] = [];
+  const priority = new Set<number>();
+  const add = (arr: unknown, asPriority = false) => {
+    if (!Array.isArray(arr)) return;
+    for (const x of arr) {
+      const n = typeof x === "number" ? x : parseInt(String(x), 10);
+      if (!isNaN(n)) {
+        pool.push(n);
+        if (asPriority) priority.add(n);
+      }
+    }
+  };
+  if (step0a) {
+    add(step0a.shared_house_priority_ages, true);
+    add(step0a.bcp_ages_next_years);
+    add(step0a.focus_ages);
+    add(step0a.priority_ages);
+    add(step0a.future_priority_ages);
+    for (const key of ("next_activation_age", "primary_reference_age") as const) {
+      const v = step0a[key];
+      if (v != null) {
+        const n = typeof v === "number" ? v : parseInt(String(v), 10);
+        if (!isNaN(n)) pool.push(n);
+      }
+    }
+  }
+  if (pool.length === 0) {
+    pool.push(...parseBcpAgesFromEvidence(evidence));
+  }
+  const uniq = [...new Set(pool)].sort((a, b) => a - b);
+  if (userAge == null || isNaN(userAge)) {
+    return { ages: uniq.slice(0, 4), priorityAges: priority };
+  }
+
+  const fromCurrent = uniq.filter((a) => a >= userAge);
+  if (fromCurrent.length > 0) {
+    return { ages: fromCurrent.slice(0, 4), priorityAges: priority };
+  }
+
+  if (uniq.includes(userAge)) {
+    const rest = uniq.filter((a) => a > userAge);
+    return { ages: [userAge, ...rest].slice(0, 4), priorityAges: priority };
+  }
+  return { ages: uniq.slice(0, 4), priorityAges: priority };
+}
+
+function formatOneHouse(h: unknown): string {
+  if (h == null || h === "") return "—";
+  const n = typeof h === "number" ? h : parseInt(String(h), 10);
+  return isNaN(n) ? String(h) : `${n}H`;
+}
+
+function bcpAgesForHouse(house: number, userAge: number | null): number[] {
+  const ages: number[] = [];
+  for (let a = house; a <= 96; a += 12) ages.push(a);
+  if (userAge == null || isNaN(userAge)) return ages.slice(0, 4);
+  return ages.filter((a) => a >= userAge).slice(0, 4);
+}
+
+type BcpHouseItem = { type?: string; house?: number; ages?: number[] };
+type BcpDivDisplay = { seventh_lord?: string; items?: BcpHouseItem[] };
+
+function formatDivisionBcpLine(
+  div: BcpDivDisplay | undefined,
+  prefix: string,
+  fallbackLord: string,
+  userAge: number | null,
+  step0a?: Record<string, unknown>,
+): string {
+  const lord = div?.seventh_lord || fallbackLord;
+  const items = div?.items || [];
+  if (items.length > 0) {
+    const parts = items
+      .filter((it) => typeof it.house === "number")
+      .map((it) => {
+        const h = it.house as number;
+        const ages =
+          it.ages && it.ages.length > 0 ? it.ages : bcpAgesForHouse(h, userAge);
+        const ageStr = ages.length ? ages.join(", ") : "—";
+        return it.type === "placement"
+          ? `baitha ${h}H → ages ${ageStr}`
+          : `aspect ${h}H → ages ${ageStr}`;
+      });
+    if (parts.length) return `${prefix} ${lord}: ${parts.join(" · ")}`;
+  }
+
+  const sitKey = prefix === "D1" ? "d1_7l_placement_house" : "d9_7l_placement_house";
+  const aspKey = prefix === "D1" ? "d1_7l_aspect_houses" : "d9_7l_aspect_houses";
+  const sit = step0a?.[sitKey];
+  const asp = step0a?.[aspKey];
+  const chunks: string[] = [];
+  if (sit != null && sit !== "") {
+    const h = Number(sit);
+    if (!isNaN(h)) {
+      const ages = bcpAgesForHouse(h, userAge);
+      chunks.push(`baitha ${h}H → ages ${ages.join(", ") || "—"}`);
+    }
+  }
+  if (Array.isArray(asp) && asp.length) {
+    for (const h of asp) {
+      const hn = Number(h);
+      if (!isNaN(hn)) {
+        const ages = bcpAgesForHouse(hn, userAge);
+        chunks.push(`aspect ${hn}H → ages ${ages.join(", ") || "—"}`);
+      }
+    }
+  }
+  return chunks.length
+    ? `${prefix} ${lord}: ${chunks.join(" · ")}`
+    : `${prefix} ${lord}: —`;
+}
+
+function rebuildBcpHouseDisplayFromStep0a(
+  step0a: Record<string, unknown> | undefined,
+  userAge: number | null,
+): { d1?: BcpDivDisplay; d9?: BcpDivDisplay } {
+  const buildDiv = (
+    lordKey: string,
+    sitKey: string,
+    aspKey: string,
+  ): BcpDivDisplay => {
+    const lord = String(step0a?.[lordKey] || "7L");
+    const items: BcpHouseItem[] = [];
+    const sit = step0a?.[sitKey];
+    if (sit != null && sit !== "") {
+      const h = Number(sit);
+      if (!isNaN(h)) {
+        items.push({ type: "placement", house: h, ages: bcpAgesForHouse(h, userAge) });
+      }
+    }
+    const asp = step0a?.[aspKey];
+    if (Array.isArray(asp)) {
+      for (const x of asp) {
+        const h = Number(x);
+        if (!isNaN(h)) {
+          items.push({ type: "aspect", house: h, ages: bcpAgesForHouse(h, userAge) });
+        }
+      }
+    }
+    return { seventh_lord: lord, items };
+  };
+  return {
+    d1: buildDiv("d1_seventh_lord", "d1_7l_placement_house", "d1_7l_aspect_houses"),
+    d9: buildDiv("d9_seventh_lord", "d9_7l_placement_house", "d9_7l_aspect_houses"),
+  };
+}
+
+function buildBcpLinkageLines(
+  step0a: Record<string, unknown> | undefined,
+  userAge: number | null,
+): string[] {
+  const saved = (step0a?.bcp_house_display || {}) as {
+    d1?: BcpDivDisplay;
+    d9?: BcpDivDisplay;
+    shared_house_items?: { house?: number; ages?: number[] }[];
+  };
+  const rebuilt = rebuildBcpHouseDisplayFromStep0a(step0a, userAge);
+  const hasSavedItems =
+    (saved.d1?.items?.length || 0) > 0 || (saved.d9?.items?.length || 0) > 0;
+  const hasRebuiltItems =
+    (rebuilt.d1?.items?.length || 0) > 0 || (rebuilt.d9?.items?.length || 0) > 0;
+  const display = hasSavedItems
+    ? saved
+    : hasRebuiltItems
+      ? { ...saved, ...rebuilt }
+      : saved;
+  const d1Lord = String(step0a?.d1_seventh_lord || display.d1?.seventh_lord || "7L");
+  const d9Lord = String(step0a?.d9_seventh_lord || display.d9?.seventh_lord || "7L");
+  const lines = [
+    formatDivisionBcpLine(display.d1, "D1", d1Lord, userAge, step0a),
+    formatDivisionBcpLine(display.d9, "D9", d9Lord, userAge, step0a),
+  ];
+  const shared = display.shared_house_items || [];
+  if (shared.length) {
+    const parts = shared
+      .filter((s) => typeof s.house === "number")
+      .map((s) => {
+        const ages =
+          s.ages && s.ages.length
+            ? s.ages
+            : bcpAgesForHouse(s.house as number, userAge);
+        return `${s.house}H → ages ${ages.join(", ") || "—"}`;
+      });
+    if (parts.length) {
+      lines.push(`D1+D9 same ghar (★ priority): ${parts.join(" · ")}`);
+    }
+  } else {
+    const sharedHouses = formatHouseList(step0a?.shared_7l_linkage_houses);
+    if (sharedHouses !== "—") {
+      lines.push(`D1+D9 same ghar → priority: ${sharedHouses}`);
+    }
+  }
+  return lines;
+}
+
+function formatMarriageBcpAgesStep(
+  step0a: Record<string, unknown> | undefined,
+  userAge: number | null,
+  evidence?: string[],
+): {
+  title: string;
+  detail: string;
+  ages: number[];
+  linkageLines: string[];
+} {
+  const { ages, priorityAges } = marriageBcpAgesFromStep0a(step0a, userAge, evidence);
+  const linkageLines = buildBcpLinkageLines(step0a, userAge);
+
+  if (ages.length === 0) {
+    return {
+      title: "Step 2 — BCP ages",
+      detail:
+        userAge != null
+          ? `age ${userAge} se — BCP ages not saved (re-ask after deploy)`
+          : "— (not saved)",
+      ages: [],
+      linkageLines,
+    };
+  }
+
+  const mode =
+    step0a?.timing_mode != null ? String(step0a.timing_mode).replace(/_/g, " ") : "";
+  const ageLabel = ages
+    .map((a) => (priorityAges.has(a) ? `${a}★` : String(a)))
+    .join(", ");
+  const cur = userAge != null && !isNaN(userAge) ? userAge : null;
+  const detail =
+    cur != null
+      ? `age ${cur} se → ${ageLabel}${mode ? ` · ${mode}` : ""}`
+      : ageLabel;
+
+  return {
+    title: "Step 2 — BCP ages",
+    detail,
+    ages,
+    linkageLines,
+  };
+}
+
+function marriageUserAge(
+  step0: Record<string, unknown> | undefined,
+  evidence?: string[],
+): number | null {
+  if (step0?.user_age != null) {
+    const n = Number(step0.user_age);
+    if (!isNaN(n)) return n;
+  }
+  return parseUserAgeFromEvidence(evidence);
+}
+
+function marriageBcpFmtFromRow(
+  row: Pick<AskQuestionItem, "marriage_bcp_step2">,
+  step0a: Record<string, unknown> | undefined,
+  userAge: number | null,
+  evidence?: string[],
+): ReturnType<typeof formatMarriageBcpAgesStep> {
+  const api = row.marriage_bcp_step2;
+  if (api?.linkage_lines?.length) {
+    return {
+      title: api.title || "Step 2 — BCP ages",
+      detail: api.detail || "—",
+      ages: api.ages || [],
+      linkageLines: api.linkage_lines,
+    };
+  }
+  const mergedStep0a =
+    api?.step0a && Object.keys(api.step0a).length
+      ? { ...(step0a || {}), ...api.step0a }
+      : step0a;
+  return formatMarriageBcpAgesStep(mergedStep0a, userAge ?? api?.user_age ?? null, evidence);
+}
+
 export function EngineTracePanel({
   ctx,
   row,
 }: {
   ctx: AskLlmContext;
-  row: Pick<AskQuestionItem, "answer_text" | "answer_source" | "question_text">;
+  row: Pick<AskQuestionItem, "answer_text" | "answer_source" | "question_text" | "marriage_bcp_step2">;
 }) {
   const blocks = (ctx.blocks || {}) as Record<string, unknown>;
-  const trace = (
+  const sliceMeta = (ctx.slice_meta || {}) as Record<string, unknown>;
+  const engineFacts = engineFactsFromContext(ctx);
+  let trace = (
     blocks.engine_trace ||
     blocks.marriage_engine_trace ||
     blocks.career_engine_trace
   ) as EngineTrace | undefined;
+  if (!trace?.step_audit && !trace?.timing_audit) {
+    const stepAudit = (sliceMeta.step_audit || engineFacts.step_audit) as
+      | Record<string, Record<string, unknown>>
+      | undefined;
+    const timingAudit = (sliceMeta.timing_audit || engineFacts.timing_audit) as
+      | EngineTrace["timing_audit"]
+      | undefined;
+    if (stepAudit || timingAudit) {
+      trace = {
+        engine: String(sliceMeta.slice || "marriage_timing_m17"),
+        step_audit: stepAudit,
+        timing_audit: timingAudit,
+        primary_window: summaryWindowFromMeta(sliceMeta, engineFacts),
+      };
+    }
+  }
   const hasTrace = Boolean(trace && (trace.step_audit || trace.timing_audit));
   const stepOrder =
     trace?.step_order?.length
@@ -711,10 +1319,27 @@ export function EngineTracePanel({
   const stepAudit = trace?.step_audit || {};
   const timingAudit = trace?.timing_audit;
   const engineId = String(trace?.engine || "");
+  const marriageM17 = isMarriageM17Trace(engineId, ctx);
   const dashaFirst = isDashaFirstTimingEngine(engineId);
+  const marriageStep0 = marriageM17 ? marriageStep0FromContext(ctx, stepAudit) : undefined;
+  const marriageStep0Fmt = formatMarriageEarlyLateStep(marriageStep0);
+  const marriageEvidence =
+    (engineFacts.evidence as string[] | undefined) ||
+    (sliceMeta.evidence as string[] | undefined) ||
+    [];
+  const marriageUserAgeVal = marriageM17
+    ? marriageUserAge(marriageStep0, marriageEvidence)
+    : null;
+  const marriageStep0a = marriageM17
+    ? marriageStep0aFromContext(stepAudit, sliceMeta, marriageEvidence)
+    : undefined;
+  const marriageBcpFmt = marriageM17
+    ? marriageBcpFmtFromRow(row, marriageStep0a, marriageUserAgeVal, marriageEvidence)
+    : null;
 
-  const pipelineChecksTitle =
-    dashaFirst
+  const pipelineChecksTitle = marriageM17
+    ? "Marriage timing — Steps 1–2"
+    : dashaFirst
       ? `Engine checks — step 2 onward (${engineId.replace("_timing_v1", "")})`
       : engineId === "career_timing_v1"
         ? "Timing pipeline — career (dasha-first)"
@@ -758,7 +1383,22 @@ export function EngineTracePanel({
     },
   ];
 
-  const pipeline = dashaFirst
+  const pipeline = marriageM17
+    ? [
+        {
+          n: 1,
+          title: marriageStep0Fmt.title,
+          detail: marriageStep0Fmt.detail,
+          hero: true,
+        },
+        {
+          n: 2,
+          title: marriageBcpFmt?.title || "Step 2 — BCP ages",
+          detail: marriageBcpFmt?.detail || "—",
+          hero: false,
+        },
+      ]
+    : dashaFirst
     ? [
         {
           n: 1,
@@ -794,9 +1434,11 @@ export function EngineTracePanel({
   return (
     <details className="engine-trace-panel" open={hasTrace}>
       <summary>
-        {dashaFirst
-          ? "Timing pipeline — step 1 = running dasha"
-          : "Engine pipeline — step by step"}
+        {marriageM17
+          ? "Marriage timing — Steps 1–2 (early/late + BCP ages)"
+          : dashaFirst
+            ? "Timing pipeline — step 1 = running dasha"
+            : "Engine pipeline — step by step"}
         {hasTrace ? "" : " (limited — re-ask after API deploy for full trace)"}
       </summary>
       <div className="engine-trace-body">
@@ -811,6 +1453,14 @@ export function EngineTracePanel({
             </li>
           ))}
         </ol>
+
+        {marriageM17 && marriageBcpFmt?.linkageLines?.length ? (
+          <ul className="llm-check-list engine-marriage-bcp-linkage">
+            {marriageBcpFmt.linkageLines.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        ) : null}
 
         {dashaFirst ? (
           <details className="engine-request-meta">
@@ -872,7 +1522,11 @@ export function EngineTracePanel({
           </div>
         ) : null}
 
-        {hasTrace ? (
+        {hasTrace && marriageM17 ? (
+          <p className="detail-summary">{pipelineChecksTitle}</p>
+        ) : null}
+
+        {hasTrace && !marriageM17 ? (
           <>
             <p className="detail-summary">{pipelineChecksTitle}</p>
             <div className="engine-steps-list">
@@ -987,14 +1641,14 @@ export function EngineTracePanel({
               </details>
             ) : null}
           </>
-        ) : (
+        ) : !hasTrace ? (
           <p className="detail-muted">
             Structured step audit not saved for this row. Deploy latest API, restart server, then
             ask again. Until then use Checks / chart context below.
           </p>
-        )}
+        ) : null}
 
-        {typeof blocks.marriage_engine === "string" && blocks.marriage_engine.trim() ? (
+        {typeof blocks.marriage_engine === "string" && blocks.marriage_engine.trim() && !marriageM17 ? (
           <details>
             <summary>Marriage locked-facts block (prompt text)</summary>
             <pre className="llm-context-pre">{String(blocks.marriage_engine)}</pre>
@@ -1047,6 +1701,9 @@ export function AskLlmContextPanel({
     (engineFacts.evidence && engineFacts.evidence.length > 0
       ? engineFacts.evidence
       : (sliceMeta.evidence as string[] | undefined)) || undefined;
+  const calculationSteps =
+    ((engineFacts as Record<string, unknown>).calculation_steps as string[] | undefined) ||
+    (sliceMeta.calculation_steps as string[] | undefined);
   const evidencePositive =
     (engineFacts.evidence_positive && engineFacts.evidence_positive.length > 0
       ? engineFacts.evidence_positive
@@ -1060,6 +1717,26 @@ export function AskLlmContextPanel({
       ? engineFacts.evidence_neutral
       : (sliceMeta.evidence_neutral as string[] | undefined)) ?? [];
   const sliceName = String(sliceMeta.slice || checks.slice_type || "");
+  const marriageM17 = isMarriageM17Trace(sliceName, ctx);
+  const marriageStepAudit = (
+    (sliceMeta.step_audit as Record<string, Record<string, unknown>> | undefined) ||
+    ((engineFacts as { step_audit?: Record<string, Record<string, unknown>> }).step_audit) ||
+    (((ctx.blocks || {}) as Record<string, unknown>).engine_trace as { step_audit?: Record<string, Record<string, unknown>> } | undefined)
+      ?.step_audit ||
+    {}
+  );
+  const marriageStep0Fmt = formatMarriageEarlyLateStep(marriageStepAudit.step0);
+  const marriageUserAgeVal = marriageM17
+    ? marriageUserAge(marriageStepAudit.step0, evidence)
+    : null;
+  const marriageBcpFmt = marriageM17
+    ? marriageBcpFmtFromRow(
+        row,
+        marriageStep0aFromContext(marriageStepAudit, sliceMeta, evidence),
+        marriageUserAgeVal,
+        evidence,
+      )
+    : null;
   const isTimingEngineSlice =
     sliceName.includes("timing") || Boolean(ctx.is_timing || ctx.question_type === "TIMING");
   const isMrEngineSlice =
@@ -1105,8 +1782,10 @@ export function AskLlmContextPanel({
       <div className="llm-context-body">
         {rawOnly ? (
           <pre className="llm-context-pre">{(ctx as { raw: string }).raw}</pre>
-        ) : !verdict && (!evidence || evidence.length === 0) && !hasSplitEvidence ? (
+        ) : !marriageM17 && !verdict && (!evidence || evidence.length === 0) && !hasSplitEvidence ? (
           <p className="detail-muted">No structured engine facts for this question.</p>
+        ) : marriageM17 && !marriageStepAudit.step0 && !(summary && summary.length) ? (
+          <p className="detail-muted">Step 1 (early / late) not saved — re-ask after deploy.</p>
         ) : (
           <div className="engine-facts-box">
             {engineDisplay.adminLine !== "—" ? (
@@ -1114,17 +1793,35 @@ export function AskLlmContextPanel({
                 <strong>Engine:</strong> <code>{engineDisplay.adminLine}</code>
               </p>
             ) : null}
-            {archetype ? (
+            {archetype && !marriageM17 ? (
               <p>
                 <strong>Archetype:</strong> {archetype}
               </p>
             ) : null}
-            {verdict ? (
+            {verdict && !marriageM17 ? (
               <p>
                 <strong>Verdict:</strong> {verdict}
               </p>
             ) : null}
-            {dashaTrace &&
+            {marriageM17 ? (
+              <>
+                <p className="engine-marriage-step0">
+                  <strong>{marriageStep0Fmt.title}:</strong> {marriageStep0Fmt.detail}
+                </p>
+                <p className="engine-marriage-step0">
+                  <strong>{marriageBcpFmt?.title || "Step 2 — BCP ages"}:</strong>{" "}
+                  {marriageBcpFmt?.detail || "—"}
+                </p>
+                {marriageBcpFmt?.linkageLines?.length ? (
+                  <ul className="llm-check-list engine-marriage-bcp-linkage">
+                    {marriageBcpFmt.linkageLines.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </>
+            ) : null}
+            {!marriageM17 && dashaTrace &&
             (dashaTrace.current_lords ||
               dashaTrace.running_lords ||
               dashaTrace.next_career_ad) ? (
@@ -1158,7 +1855,7 @@ export function AskLlmContextPanel({
                 ) : null}
               </p>
             ) : null}
-            {engineFacts.love_score != null || engineFacts.arrange_score != null ? (
+            {!marriageM17 && (engineFacts.love_score != null || engineFacts.arrange_score != null) ? (
               <p>
                 <strong>Scores:</strong> love={fmtCheckValue(engineFacts.love_score)}, arrange=
                 {fmtCheckValue(engineFacts.arrange_score)}
@@ -1170,16 +1867,28 @@ export function AskLlmContextPanel({
             {summary && summary.length > 0 ? (
               <>
                 <p>
-                  <strong>Summary for narrator:</strong>
+                  <strong>{marriageM17 ? "Answer window:" : "Summary for narrator:"}</strong>
                 </p>
                 <ul className="llm-check-list">
-                  {summary.map((s) => (
+                  {(marriageM17 ? summary.slice(0, 1) : summary).map((s) => (
                     <li key={s}>{s}</li>
                   ))}
                 </ul>
               </>
             ) : null}
-            {hasSplitEvidence ? (
+            {!marriageM17 && calculationSteps && calculationSteps.length > 0 ? (
+              <>
+                <p>
+                  <strong>How timing was calculated ({calculationSteps.length}):</strong>
+                </p>
+                <ul className="llm-check-list">
+                  {calculationSteps.map((e) => (
+                    <li key={`calc-${e}`}>{e}</li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+            {!marriageM17 && hasSplitEvidence ? (
               <>
                 <p>
                   <strong>Positive evidence ({evidencePositive.length}):</strong>
@@ -1218,7 +1927,7 @@ export function AskLlmContextPanel({
                   <p className="detail-muted">— none (0)</p>
                 )}
               </>
-            ) : evidence && evidence.length > 0 ? (
+            ) : !marriageM17 && evidence && evidence.length > 0 ? (
               <>
                 <p>
                   <strong>

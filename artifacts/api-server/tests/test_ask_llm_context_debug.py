@@ -13,6 +13,30 @@ from ask_llm_context_debug import (
 
 
 class AskLlmContextDebugTests(unittest.TestCase):
+    def test_bcp_linkage_evidence_parse(self):
+        from ask_llm_context_debug import (
+            _bcp_linkage_evidence_lines,
+            _marriage_bcp_linkage_snapshot,
+            _parse_bcp_linkage_from_evidence,
+        )
+
+        linkage = {
+            "d1_seventh_lord": "Mercury",
+            "d1_7l_placement_house": 12,
+            "d1_7l_aspect_houses": [4, 7],
+            "d9_seventh_lord": "Venus",
+            "d9_7l_placement_house": 5,
+            "d9_7l_aspect_houses": [4],
+            "shared_7l_linkage_houses": [4],
+        }
+        lines = _bcp_linkage_evidence_lines(linkage)
+        assert any("BCP_LINKAGE D1" in x for x in lines)
+        parsed = _parse_bcp_linkage_from_evidence(lines)
+        assert parsed["d1_7l_placement_house"] == 12
+        assert parsed["d1_7l_aspect_houses"] == [4, 7]
+        assert parsed["shared_7l_linkage_houses"] == [4]
+
+
     def test_roundtrip_serialize(self):
         ctx = build_admin_llm_context(
             question="mera partner kaisa hoga",
@@ -24,7 +48,72 @@ class AskLlmContextDebugTests(unittest.TestCase):
         self.assertIsNotNone(raw)
         parsed = parse_llm_context_from_db(raw)
         self.assertEqual(parsed["checks"]["slice_type"], "marriage_relationship")
-        self.assertIn("MARRIAGE SLICE", parsed["chart_text"])
+        self.assertEqual(parsed.get("chart_text"), "")
+        self.assertGreaterEqual((parsed.get("sizes") or {}).get("chart_text_chars", 0), 10)
+
+    def test_compact_serialize_preserves_engine_trace(self):
+        from ask_llm_context_debug import build_marriage_timing_slice_meta
+
+        huge_chart = "X" * 90_000
+        trace = {
+            "engine": "marriage_timing_m17",
+            "primary_window": "March – April 2027",
+            "step_audit": {"step0": {"name": "Early/Late", "status": "DONE"}},
+            "timing_audit": {"status": "PASS"},
+        }
+        ctx = build_admin_llm_context(
+            question="mera shaadi kab hoga",
+            is_timing=True,
+            llm_called=False,
+            checks={"slice_type": "timing_marriage_engine", "is_marriage_engine": True},
+            chart_text=huge_chart,
+            slice_meta=build_marriage_timing_slice_meta(
+                {
+                    "primary_window": "March – April 2027",
+                    "verdict": "PROMISED",
+                    "bucket": "general_mr",
+                    "step_audit": trace["step_audit"],
+                    "timing_audit": trace["timing_audit"],
+                }
+            ),
+            blocks={"engine_trace": trace},
+        )
+        raw = serialize_llm_context_for_db(ctx)
+        self.assertIsNotNone(raw)
+        self.assertLessEqual(len(raw), 80_000)
+        parsed = parse_llm_context_from_db(raw)
+        self.assertIsNotNone(parsed)
+        blocks = parsed.get("blocks") or {}
+        et = blocks.get("engine_trace") or {}
+        self.assertEqual(et.get("primary_window"), "March – April 2027")
+        self.assertIn("step0", et.get("step_audit") or {})
+
+    def test_hydrate_engine_trace_from_slice_meta_on_load(self):
+        import json
+
+        saved = {
+            "question": "mera shaadi kab hoga",
+            "is_timing": True,
+            "question_type": "TIMING",
+            "checks": {"slice_type": "timing_marriage_engine"},
+            "slice_meta": {
+                "slice": "marriage_timing_m17",
+                "verdict": "PROMISED",
+                "summary": ["Marriage timing: March – April 2027"],
+                "step_audit": {"step1": {"name": "BCP scan", "status": "DONE"}},
+                "timing_audit": {"status": "PASS"},
+            },
+            "engine_facts": {
+                "verdict": "PROMISED",
+                "summary": ["Marriage timing: March – April 2027"],
+                "evidence": ["Primary window: March – April 2027"],
+            },
+            "blocks": {},
+        }
+        parsed = parse_llm_context_from_db(json.dumps(saved))
+        trace = (parsed.get("blocks") or {}).get("engine_trace") or {}
+        self.assertEqual(trace.get("primary_window"), "March – April 2027")
+        self.assertIn("step1", trace.get("step_audit") or {})
 
     def test_answer_path_engine_then_llm(self):
         ctx = build_admin_llm_context(
@@ -252,6 +341,62 @@ class AskLlmContextDebugTests(unittest.TestCase):
             self.assertTrue(any(r.get("jupiter_rashi") == "Singh" for r in bm))
         finally:
             me._transit_rashis_at_iso = orig
+
+    def test_recompute_marriage_bcp_from_kundli_fills_houses(self):
+        from ask_llm_context_debug import (
+            build_marriage_bcp_step2_admin_payload,
+            normalize_kundli_chart_payload,
+            recompute_marriage_bcp_from_kundli,
+        )
+
+        SIGNS = [
+            "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+            "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
+        ]
+        idx = {s: i for i, s in enumerate([
+            "Mesh", "Vrishabh", "Mithun", "Kark", "Simha", "Kanya",
+            "Tula", "Vrishchik", "Dhanu", "Makar", "Kumbh", "Meen",
+        ])}
+        planets = []
+        for name, sign, house in [
+            ("Sun", "Tula", 11),
+            ("Moon", "Mithun", 7),
+            ("Mars", "Dhanu", 1),
+            ("Mercury", "Vrishchik", 12),
+            ("Jupiter", "Mesh", 5),
+            ("Venus", "Simha", 9),
+            ("Saturn", "Mesh", 5),
+            ("Rahu", "Kark", 8),
+            ("Ketu", "Makar", 2),
+        ]:
+            si = idx[sign]
+            planets.append({"name": name, "sign": SIGNS[si], "house": house})
+        kundli = {"ascendant": "Sagittarius", "planets": planets}
+
+        ctx = {
+            "is_timing": True,
+            "checks": {"is_marriage_engine": True, "user_age": 26},
+            "slice_meta": {
+                "slice": "marriage_timing_m17",
+                "step_audit": {
+                    "step0a": {
+                        "d1_seventh_lord": "Mercury",
+                        "d9_seventh_lord": "Venus",
+                    }
+                },
+            },
+        }
+        out = recompute_marriage_bcp_from_kundli(ctx, kundli)
+        s0a = out["slice_meta"]["step_audit"]["step0a"]
+        self.assertEqual(s0a["d1_7l_placement_house"], 12)
+        self.assertIsInstance(s0a.get("d1_7l_aspect_houses"), list)
+        disp = s0a.get("bcp_house_display") or {}
+        self.assertTrue((disp.get("d1") or {}).get("items"))
+        payload = build_marriage_bcp_step2_admin_payload(ctx, kundli)
+        self.assertIsNotNone(payload)
+        self.assertTrue(payload["linkage_lines"])
+        self.assertIn("12H", payload["linkage_lines"][0])
+        self.assertIsNotNone(normalize_kundli_chart_payload({"kundli": kundli}))
 
 
 if __name__ == "__main__":

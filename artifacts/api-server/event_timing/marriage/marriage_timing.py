@@ -22,15 +22,50 @@ Public API (preserved):
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Optional
 
 from .marriage_engine_v2 import (
-    compute_timing_window,
+    compute_timing_window as _compute_timing_window_v2,
+    compute_timing_window_fallback,
     # Real helpers re-exported (validator.py uses these):
     _SIGNS,
     _SIGN_LORDS,
     _planet_sign_idx,
 )
+
+log = logging.getLogger(__name__)
+
+
+def compute_timing_window(
+    kundli: dict,
+    intel: dict,
+    kp: dict,
+    birth: Optional[Any] = None,
+) -> dict:
+    """Full v2 pipeline with Step 0/0A fallback when v2 raises or returns empty."""
+    try:
+        result = _compute_timing_window_v2(kundli, intel, kp, birth)
+        if isinstance(result, dict) and result:
+            return result
+    except Exception as exc:
+        log.warning("marriage v2 compute_timing_window failed: %s", exc, exc_info=True)
+        print(
+            f"[marriage_timing] v2 failed: {type(exc).__name__}: {str(exc)[:240]}",
+            flush=True,
+        )
+    try:
+        fb = compute_timing_window_fallback(kundli, intel, kp, birth)
+        if isinstance(fb, dict) and fb:
+            print("[marriage_timing] using Step0/0A fallback", flush=True)
+            return fb
+    except Exception as exc2:
+        log.warning("marriage fallback failed: %s", exc2, exc_info=True)
+        print(
+            f"[marriage_timing] fallback failed: {type(exc2).__name__}: {str(exc2)[:240]}",
+            flush=True,
+        )
+    return {}
 
 # ── Back-compat stubs for removed VIVAH-7 internals ──────────────────
 # validator.py imports these names. They no longer exist as standalone
@@ -117,6 +152,7 @@ def _is_mars_aspect(ap_si: int, target_si: int) -> bool:
 
 __all__ = [
     "compute_timing_window",
+    "compute_timing_window_fallback",
     "_SIGNS", "_SIGN_LORDS", "_planet_sign_idx",
     "_planet_house_local", "_get_d9_chart", "_get_transits_at",
     "_jup_sat_marriage_cluster_check", "_dtt_score_window",

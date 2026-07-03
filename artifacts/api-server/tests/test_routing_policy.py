@@ -51,6 +51,27 @@ class TestRoutingPolicy(unittest.TestCase):
         self.assertTrue(bypass)
         self.assertIn("divisional", reason)
 
+    def test_career_question_uses_engine_not_bypass(self):
+        from ask_routing_policy import should_bypass_static_engines_for_direct_llm
+
+        q = "Meri career kaisi rahegi"
+        bypass, _ = should_bypass_static_engines_for_direct_llm(q)
+        self.assertFalse(bypass)
+
+    def test_d10_career_uses_engine_not_bypass(self):
+        from ask_routing_policy import should_bypass_static_engines_for_direct_llm
+
+        q = "D10 chart mein meri career kaisi rahegi"
+        bypass, _ = should_bypass_static_engines_for_direct_llm(q)
+        self.assertFalse(bypass)
+
+    def test_children_question_uses_engine_not_bypass(self):
+        from ask_routing_policy import should_bypass_static_engines_for_direct_llm
+
+        q = "Kya mujhe santan hogi?"
+        bypass, _ = should_bypass_static_engines_for_direct_llm(q)
+        self.assertFalse(bypass)
+
     def test_career_plain_still_uses_engine(self):
         from ask_routing_policy import should_bypass_static_engines_for_direct_llm
 

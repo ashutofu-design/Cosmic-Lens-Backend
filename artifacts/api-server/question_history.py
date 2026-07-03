@@ -320,6 +320,80 @@ def _admin_ask_list_item_dict(
     }
 
 
+def _load_kundli_chart_for_admin_question(uq) -> tuple[dict | None, dict | None]:
+    """Resolve chart JSON + birth hints for admin-only marriage BCP recompute."""
+    import json
+
+    from models import Kundli, Profile, User
+
+    chart: dict | None = None
+    birth: dict | None = None
+
+    def _birth_from_kundli_row(row) -> dict:
+        return {
+            "dob": getattr(row, "dob", None),
+            "tob": getattr(row, "tob", None),
+            "lat": getattr(row, "lat", None),
+            "lon": getattr(row, "lon", None),
+            "tz": getattr(row, "tz", None),
+        }
+
+    def _try_chart(parsed: Any, row_birth: dict | None = None) -> bool:
+        nonlocal chart, birth
+        from ask_llm_context_debug import normalize_kundli_chart_payload
+
+        norm = normalize_kundli_chart_payload(parsed)
+        if norm is not None:
+            chart = norm
+            if row_birth:
+                birth = row_birth
+            return True
+        return False
+
+    kundli_row = None
+    if getattr(uq, "primary_kundli_id", None):
+        kundli_row = Kundli.query.get(uq.primary_kundli_id)
+    try:
+        user = User.query.get(uq.user_id)
+        if kundli_row is None and user is not None and getattr(user, "kundli", None):
+            kundli_row = user.kundli
+    except Exception:
+        user = None
+    if kundli_row is None:
+        kundli_row = Kundli.query.filter_by(user_id=uq.user_id).first()
+    if kundli_row is not None and kundli_row.chart_data:
+        try:
+            parsed = json.loads(kundli_row.chart_data)
+            _try_chart(parsed, _birth_from_kundli_row(kundli_row))
+        except Exception:
+            pass
+
+    if chart is None:
+        prof = (
+            Profile.query.filter_by(user_id=uq.user_id, is_primary=True)
+            .filter(Profile.deleted_at.is_(None))
+            .first()
+        )
+        if prof is None:
+            prof = (
+                Profile.query.filter_by(user_id=uq.user_id, deleted_at=None)
+                .order_by(Profile.updated_at.desc())
+                .first()
+            )
+        if prof is not None and prof.chart_data:
+            try:
+                parsed = json.loads(prof.chart_data)
+                row_birth = None
+                if prof.birth_data:
+                    bd = json.loads(prof.birth_data)
+                    if isinstance(bd, dict):
+                        row_birth = bd
+                _try_chart(parsed, row_birth)
+            except Exception:
+                pass
+    return chart, birth
+
+
 def get_admin_ask_question(question_id: str) -> dict | None:
     """Single Ask row for admin detail — includes answer + refreshed llm_context."""
     from models import User
@@ -343,23 +417,41 @@ def get_admin_ask_question(question_id: str) -> dict | None:
     d["user_email"] = user_email or ""
     d["user_name"] = user_name or ""
     d["llm_context"] = None
+    d["marriage_bcp_step2"] = None
     raw_ctx = uq.llm_context_json
     if raw_ctx:
+        llm_ctx: dict | None = None
         try:
-            from ask_llm_context_debug import parse_llm_context_from_db
+            from ask_llm_context_debug import (
+                build_marriage_bcp_step2_admin_payload,
+                parse_llm_context_from_db,
+                recompute_marriage_bcp_from_kundli,
+            )
 
-            d["llm_context"] = parse_llm_context_from_db(
+            llm_ctx = parse_llm_context_from_db(
                 raw_ctx,
                 refresh_understanding=True,
             )
-        except Exception:
+        except Exception as exc:
+            print(f"[question_history] llm_context parse failed: {exc}", flush=True)
             try:
                 import json
 
                 parsed = json.loads(raw_ctx)
-                d["llm_context"] = parsed if isinstance(parsed, dict) else None
+                llm_ctx = parsed if isinstance(parsed, dict) else None
             except Exception:
-                d["llm_context"] = {"raw": str(raw_ctx)[:8000]}
+                llm_ctx = {"raw": str(raw_ctx)[:8000]}
+        if isinstance(llm_ctx, dict):
+            chart, birth = _load_kundli_chart_for_admin_question(uq)
+            try:
+                if chart:
+                    llm_ctx = recompute_marriage_bcp_from_kundli(llm_ctx, chart, birth)
+                    bcp_payload = build_marriage_bcp_step2_admin_payload(llm_ctx, chart, birth)
+                    if bcp_payload:
+                        d["marriage_bcp_step2"] = bcp_payload
+            except Exception as exc:
+                print(f"[question_history] marriage BCP recompute failed: {exc}", flush=True)
+            d["llm_context"] = llm_ctx
     d.pop("llm_context_json", None)
     return d
 

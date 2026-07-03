@@ -595,6 +595,13 @@ def enforce_engine_only_or_refuse(
                     return build_timing_domain_clarifier_result(question, qtype=qtype)
             except Exception:
                 pass
+        # Marriage/career timing must never fall back to chart-only LLM hallucination.
+        if missing == "marriage_timing":
+            return marriage_timing_unavailable_result(question, qtype=qtype)
+        if missing == "career_timing" or (
+            isinstance(missing, str) and missing.endswith("_timing") and missing != "general_timing"
+        ):
+            return no_engine_refusal_result(question, qtype=qtype)
         if no_engine_llm_enabled():
             return None
         return no_engine_refusal_result(question, qtype=qtype)
@@ -735,6 +742,21 @@ def _career_dasha_trace(verdict: dict[str, Any]) -> dict[str, Any]:
         "next_career_reason": nxt.get("reason"),
         "saturn_transit": tw.get("saturn_transit"),
         "jupiter_active": tw.get("jupiter_active"),
+    }
+
+
+def marriage_timing_unavailable_result(question: str, *, qtype: str = "TIMING") -> dict:
+    return {
+        "text": (
+            "Shaadi timing engine abhi aapki kundli se connect nahi ho paya. "
+            "Profile me birth details save karke dubara try karein."
+        ),
+        "topic": "timing",
+        "question_type": qtype,
+        "confidence": 1.0,
+        "source": "marriage_timing_engine_unavailable",
+        "engine_tag": "ans-engine",
+        "follow_ups": [],
     }
 
 

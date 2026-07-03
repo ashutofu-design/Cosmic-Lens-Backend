@@ -115,7 +115,16 @@ def run_marriage_step0a(
     all_bcp = bcp.get("all_marriage_ages") or []
     priority_ages = bcp.get("future_priority_ages") or []
     focus_ages = late_focus.get("focus_ages") or []
-    bcp_next_5y = _bcp_ages_in_range(focus_ages or all_bcp, user_age, years_ahead)
+    from event_timing.marriage.bcp_marriage_ages import _bcp_display_ages_from_current
+
+    bcp_next_5y = _bcp_display_ages_from_current(
+        shared_priority=list(bcp.get("shared_house_priority_ages") or []),
+        focus_ages=focus_ages,
+        all_ages=all_bcp,
+        user_age=user_age,
+        years_ahead=years_ahead,
+        limit=4,
+    )
     in_bcp_year = bool(user_age is not None and user_age in all_bcp)
 
     dasha_entry: List[str] = []
@@ -182,6 +191,25 @@ def run_marriage_step0a(
         "bcp_focus_ages": focus_ages,
         "bcp_priority_ages": priority_ages[:8],
         "bcp_age_scores": (bcp.get("bcp_age_scores") or [])[:12],
+        "d1_7l_linkage_houses": bcp.get("d1_7l_linkage_houses") or [],
+        "d9_7l_linkage_houses": bcp.get("d9_7l_linkage_houses") or [],
+        "shared_7l_linkage_houses": bcp.get("shared_7l_linkage_houses") or [],
+        "shared_house_priority_ages": bcp.get("shared_house_priority_ages") or [],
+        "d1_7l_placement_house": bcp.get("seventh_lord_house"),
+        "d1_7l_aspect_houses": [
+            h.get("house")
+            for h in (bcp.get("aspect_houses") or [])
+            if isinstance(h, dict) and isinstance(h.get("house"), int)
+        ],
+        "d9_7l_placement_house": ((bcp.get("d9_bcp") or {}).get("seventh_lord_house")),
+        "d9_7l_aspect_houses": [
+            h.get("house")
+            for h in ((bcp.get("d9_bcp") or {}).get("aspect_houses") or [])
+            if isinstance(h, dict) and isinstance(h.get("house"), int)
+        ],
+        "d1_seventh_lord": bcp.get("seventh_lord"),
+        "d9_seventh_lord": ((bcp.get("d9_bcp") or {}).get("seventh_lord")),
+        "bcp_house_display": bcp.get("bcp_admin_display") or {},
         "late_bcp_focus": late_focus,
         "all_bcp_ages": all_bcp,
         "in_bcp_activation_year": in_bcp_year,

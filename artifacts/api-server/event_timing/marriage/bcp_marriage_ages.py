@@ -46,6 +46,7 @@ _BCP_SOURCE_WEIGHTS = {
     "7th_lord_aspects": 5.0,
 }
 _BCP_D1_D9_OVERLAP_BONUS = 4.0
+_BCP_SHARED_LINKAGE_HOUSE_BONUS = 6.0
 _BCP_CLUSTER_NEIGHBOR_BONUS = 1.5
 _BCP_CLUSTER_MAX_BONUS = 3.0
 
@@ -142,6 +143,96 @@ def _activation_ages_for_house(house: int, max_age: int = _BCP_MAX_AGE) -> List[
         ages.append(a)
         a += 12
     return ages
+
+
+def _bcp_7l_linkage_houses(block: Optional[Dict[str, Any]]) -> Set[int]:
+    """7L placement house + houses aspected by 7L (per division)."""
+    if not isinstance(block, dict):
+        return set()
+    houses: Set[int] = set()
+    ph = block.get("seventh_lord_house")
+    if isinstance(ph, int):
+        houses.add(ph)
+    for ae in block.get("aspect_houses") or []:
+        if not isinstance(ae, dict):
+            continue
+        h = ae.get("house")
+        if isinstance(h, int):
+            houses.add(h)
+    return houses
+
+
+def _shared_d1_d9_linkage_houses(
+    d1: Dict[str, Any],
+    d9: Optional[Dict[str, Any]],
+) -> List[int]:
+    """Houses where D1 and D9 7L sit/aspect overlap — priority BCP linkage."""
+    if not isinstance(d9, dict):
+        return []
+    return sorted(_bcp_7l_linkage_houses(d1) & _bcp_7l_linkage_houses(d9))
+
+
+def _priority_ages_from_shared_houses(
+    shared_houses: List[int],
+    user_age: Optional[int],
+    *,
+    limit: int = 8,
+) -> List[int]:
+    pool: Set[int] = set()
+    for h in shared_houses:
+        pool.update(_activation_ages_for_house(h))
+    ordered = sorted(pool)
+    if user_age is not None:
+        ordered = [a for a in ordered if a >= user_age]
+    return ordered[:limit]
+
+
+def _merge_age_priority_lists(
+    primary: List[int],
+    secondary: List[int],
+    *,
+    limit: int = 12,
+) -> List[int]:
+    seen: Set[int] = set()
+    out: List[int] = []
+    for a in list(primary) + list(secondary):
+        if not isinstance(a, int) or a in seen:
+            continue
+        seen.add(a)
+        out.append(a)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _bcp_display_ages_from_current(
+    *,
+    shared_priority: List[int],
+    focus_ages: List[int],
+    all_ages: List[int],
+    user_age: Optional[int],
+    years_ahead: int = 5,
+    limit: int = 4,
+) -> List[int]:
+    """Admin + Step0A: shared D1/D9 house ages first, then focus, from current age."""
+    hi = (user_age + years_ahead) if user_age is not None else None
+    shared_ok = [
+        a for a in shared_priority
+        if user_age is None or (a >= user_age and (hi is None or a <= hi))
+    ]
+    focus_ok = [
+        a for a in focus_ages
+        if user_age is None or (a >= user_age and (hi is None or a <= hi))
+    ]
+    all_ok = [
+        a for a in all_ages
+        if user_age is None or (a >= user_age and (hi is None or a <= hi))
+    ]
+    return _merge_age_priority_lists(
+        shared_ok,
+        _merge_age_priority_lists(focus_ok, all_ok, limit=limit),
+        limit=limit,
+    )
 
 
 def _active_house_for_age(age: int) -> int:
@@ -260,6 +351,127 @@ def compute_bcp_for_division(
     }
 
 
+def _future_ages_for_house(
+    house: int,
+    user_age: Optional[int] = None,
+    *,
+    limit: int = 4,
+) -> List[int]:
+    ages = _activation_ages_for_house(house)
+    if user_age is not None:
+        ages = [a for a in ages if a >= user_age]
+    return ages[:limit]
+
+
+def build_bcp_admin_linkage_display(
+    bcp: Dict[str, Any] | None,
+    *,
+    user_age: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Admin Step 2: 7L sit/aspect houses each with BCP ages from current age."""
+    if not isinstance(bcp, dict):
+        return {}
+    d9 = bcp.get("d9_bcp") if isinstance(bcp.get("d9_bcp"), dict) else {}
+
+    def _division_rows(block: Dict[str, Any], division: str) -> Dict[str, Any]:
+        lord = block.get("seventh_lord")
+        sit = block.get("seventh_lord_house")
+        items: List[Dict[str, Any]] = []
+        if isinstance(sit, int):
+            ages = _future_ages_for_house(sit, user_age)
+            items.append({
+                "type": "placement",
+                "house": sit,
+                "ages": ages,
+            })
+        for ae in block.get("aspect_houses") or []:
+            if not isinstance(ae, dict):
+                continue
+            h = ae.get("house")
+            if not isinstance(h, int):
+                continue
+            raw = ae.get("ages") if isinstance(ae.get("ages"), list) else None
+            if raw:
+                ages = [int(a) for a in raw if isinstance(a, int)]
+                if user_age is not None:
+                    ages = [a for a in ages if a >= user_age]
+                ages = ages[:4]
+            else:
+                ages = _future_ages_for_house(h, user_age)
+            items.append({
+                "type": "aspect",
+                "house": h,
+                "ages": ages,
+            })
+        return {
+            "division": division,
+            "seventh_lord": lord,
+            "placement_house": sit,
+            "aspect_houses": _aspect_house_nums(block),
+            "items": items,
+        }
+
+    d1_rows = _division_rows(bcp, "D1")
+    d9_rows = _division_rows(d9, "D9") if d9 else {}
+    shared = sorted(set(bcp.get("shared_7l_linkage_houses") or []))
+    shared_age_items = [
+        {"house": h, "ages": _future_ages_for_house(h, user_age)}
+        for h in shared
+    ]
+
+    return {
+        "d1": d1_rows,
+        "d9": d9_rows,
+        "shared_houses": shared,
+        "shared_house_ages": _priority_ages_from_shared_houses(shared, user_age, limit=4),
+        "shared_house_items": shared_age_items,
+    }
+
+
+def bcp_linkage_admin_lines(bcp: Dict[str, Any] | None) -> List[str]:
+    """Compact admin/evidence lines: D1/D9 7L sit + aspect houses + ages."""
+    if not isinstance(bcp, dict):
+        return []
+    user_age = None
+    try:
+        ua = bcp.get("user_age")
+        if ua is not None:
+            user_age = int(ua)
+    except (TypeError, ValueError):
+        pass
+    display = build_bcp_admin_linkage_display(bcp, user_age=user_age)
+    lines: List[str] = []
+    d9 = bcp.get("d9_bcp") if isinstance(bcp.get("d9_bcp"), dict) else {}
+    d1l = bcp.get("seventh_lord")
+    d1p = bcp.get("seventh_lord_house")
+    d1a = _aspect_house_nums(bcp)
+    if d1l and d1p is not None:
+        asp = ",".join(str(x) for x in d1a)
+        lines.append(f"BCP_LINKAGE D1 7L={d1l} placement={d1p} aspects={asp}")
+    d9l = d9.get("seventh_lord")
+    d9p = d9.get("seventh_lord_house")
+    d9a = _aspect_house_nums(d9)
+    if d9l and d9p is not None:
+        asp = ",".join(str(x) for x in d9a)
+        lines.append(f"BCP_LINKAGE D9 7L={d9l} placement={d9p} aspects={asp}")
+    for div_key, div in (("D1", display.get("d1")), ("D9", display.get("d9"))):
+        if not isinstance(div, dict):
+            continue
+        for item in div.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            h = item.get("house")
+            kind = item.get("type") or "house"
+            ages = item.get("ages") or []
+            if isinstance(h, int):
+                asp = ",".join(str(a) for a in ages)
+                lines.append(f"BCP_HOUSE {div_key} {kind}={h} ages={asp}")
+    shared = bcp.get("shared_7l_linkage_houses") or []
+    if shared:
+        lines.append(f"BCP_SHARED_HOUSES {','.join(str(h) for h in shared)}")
+    return lines
+
+
 def compute_bcp_marriage_ages(
     kundli: dict,
     lagna_si: int,
@@ -284,16 +496,33 @@ def compute_bcp_marriage_ages(
         merged_ages.update(d9_block.get("all_marriage_ages") or [])
 
     sorted_merged = sorted(merged_ages)
-    scored_ages = _score_merged_bcp_ages(d1, d9_block, user_age=user_age)
+    shared_houses = _shared_d1_d9_linkage_houses(d1, d9_block)
+    shared_priority_ages = _priority_ages_from_shared_houses(
+        shared_houses, user_age, limit=8,
+    )
+    scored_ages = _score_merged_bcp_ages(
+        d1, d9_block, user_age=user_age, shared_linkage_houses=shared_houses,
+    )
     priority_ages = [r["age"] for r in scored_ages]
     future_priority_ages = [
-        a for a in priority_ages if user_age is None or a >= user_age
+        a for a in _merge_age_priority_lists(shared_priority_ages, priority_ages)
+        if user_age is None or a >= user_age
     ]
     past_m = [a for a in sorted_merged if user_age is not None and a < user_age]
     future_m = [a for a in sorted_merged if user_age is None or a >= user_age]
     next_act = _resolve_next_activation_age(
         sorted_merged, future_priority_ages, user_age,
     )
+
+    _bcp_for_display = {
+        "seventh_lord": d1["seventh_lord"],
+        "seventh_lord_house": d1["seventh_lord_house"],
+        "aspect_houses": d1["aspect_houses"],
+        "d9_bcp": d9_block,
+        "shared_7l_linkage_houses": shared_houses,
+        "shared_house_priority_ages": shared_priority_ages,
+        "user_age": user_age,
+    }
 
     base = {
         "seventh_lord": d1["seventh_lord"],
@@ -306,6 +535,13 @@ def compute_bcp_marriage_ages(
         "sources": d1["sources"],
         "d1_bcp": d1,
         "d9_bcp": d9_block,
+        "d1_7l_linkage_houses": sorted(_bcp_7l_linkage_houses(d1)),
+        "d9_7l_linkage_houses": sorted(_bcp_7l_linkage_houses(d9_block)),
+        "shared_7l_linkage_houses": shared_houses,
+        "shared_house_priority_ages": shared_priority_ages,
+        "bcp_admin_display": build_bcp_admin_linkage_display(
+            _bcp_for_display, user_age=user_age,
+        ),
         "bcp_age_list": format_bcp_age_list(d1, d9_block),
         "all_marriage_ages": sorted_merged,
         "bcp_age_scores": scored_ages,
@@ -373,8 +609,12 @@ def _score_merged_bcp_ages(
     d9: Optional[Dict[str, Any]],
     *,
     user_age: Optional[int] = None,
+    shared_linkage_houses: Optional[List[int]] = None,
 ) -> List[Dict[str, Any]]:
     """Score BCP ages before dasha: source strength + D1/D9 overlap + clusters."""
+    shared_house_set = set(shared_linkage_houses or [])
+    if not shared_house_set and d9:
+        shared_house_set = set(_shared_d1_d9_linkage_houses(d1, d9))
     by_age: Dict[int, Dict[str, Any]] = {}
     for hit in _iter_bcp_source_hits(d1) + _iter_bcp_source_hits(d9):
         age = hit["age"]
@@ -386,6 +626,7 @@ def _score_merged_bcp_ages(
             "rules": set(),
             "houses": set(),
             "overlap_d1_d9": False,
+            "shared_linkage_house": False,
             "cluster_neighbors": [],
         })
         row["score"] += float(hit["weight"])
@@ -400,6 +641,9 @@ def _score_merged_bcp_ages(
         if {"D1", "D9"}.issubset(row["divisions"]):
             row["score"] += _BCP_D1_D9_OVERLAP_BONUS
             row["overlap_d1_d9"] = True
+        if shared_house_set and (row["houses"] & shared_house_set):
+            row["score"] += _BCP_SHARED_LINKAGE_HOUSE_BONUS
+            row["shared_linkage_house"] = True
         neighbors = sorted(a for a in ages if a != age and abs(a - age) <= 1)
         if neighbors:
             cluster_bonus = min(
@@ -421,6 +665,7 @@ def _score_merged_bcp_ages(
             "rules": rules,
             "houses": houses,
             "overlap_d1_d9": bool(row["overlap_d1_d9"]),
+            "shared_linkage_house": bool(row["shared_linkage_house"]),
             "cluster_neighbors": row["cluster_neighbors"],
             "is_future": user_age is None or row["age"] >= user_age,
             "sources": row["sources"],

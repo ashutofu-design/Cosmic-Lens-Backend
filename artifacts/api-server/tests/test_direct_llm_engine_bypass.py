@@ -50,6 +50,11 @@ class TestDirectLlmEngineBypass(unittest.TestCase):
         self.assertFalse(bypass)
         self.assertTrue(is_children_static_question(q))
 
+    def test_career_with_d10_not_bypass(self):
+        q = "D10 me meri naukri aur career growth kaisi hogi"
+        bypass, _ = should_bypass_static_engines_for_direct_llm(q)
+        self.assertFalse(bypass)
+
 
 if __name__ == "__main__":
     unittest.main()

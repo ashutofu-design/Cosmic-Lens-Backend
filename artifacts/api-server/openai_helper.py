@@ -786,6 +786,213 @@ def _passthrough_health_focus(question, topic_id):
         return ""
 
 
+    return True
+
+
+def _normalize_passthrough_kundli(kundli: Any) -> dict | None:
+    try:
+        from ask_llm_context_debug import coerce_chart_for_marriage_engine
+
+        if isinstance(kundli, dict):
+            coerced = coerce_chart_for_marriage_engine(kundli)
+            if coerced is not None:
+                return coerced
+    except Exception:
+        pass
+    if isinstance(kundli, dict):
+        planets = kundli.get("planets")
+        if isinstance(planets, list) and planets:
+            return kundli
+        for key in ("kundli", "chart", "chart_data", "natal", "data"):
+            nested = kundli.get(key)
+            if isinstance(nested, dict):
+                planets = nested.get("planets")
+                if isinstance(planets, (list, dict)) and planets:
+                    return dict(nested)
+    return None
+
+
+def _run_marriage_m17_block(
+    question: str,
+    kundli: Any,
+    birth: Any,
+) -> tuple[str, dict | None]:
+    chart = _normalize_passthrough_kundli(kundli)
+    if not chart:
+        print(
+            "[marriage_timing_m17] run_block_skip no_chart "
+            f"kundli_type={type(kundli).__name__} "
+            f"q={(question or '')[:60]!r}",
+            flush=True,
+        )
+        return "", None
+    intel: dict = {}
+    try:
+        _analyze, _ = _chart_intel()
+        intel = _analyze(chart, birth) or {}
+    except Exception:
+        pass
+    return _passthrough_marriage_block(question, chart, intel, birth)
+
+
+def _marriage_timing_m17_passthrough_response(
+    *,
+    question: str,
+    kundli: Any,
+    birth: Any,
+    lang: str,
+    attach_admin_fn,
+    qtype: str = "TIMING",
+    wants_explain: bool = False,
+    reply_idx: int = 0,
+    chart_text: str = "",
+    resolved_route: str = "",
+    understanding: Any = None,
+    intent_source: str = "marriage_timing_m17",
+    llm_intent: Any = None,
+    kp_block: str = "",
+    skip_reason: str = "marriage_timing_deterministic",
+) -> dict | None:
+    """Run M17 + return admin-wrapped deterministic timing answer, or None."""
+    if wants_explain or not _is_marriage_timing_question(question or ""):
+        return None
+    marriage_block, marriage_engine_raw = _run_marriage_m17_block(
+        question, kundli, birth,
+    )
+    if not marriage_block:
+        _coerced = _normalize_passthrough_kundli(kundli)
+        _ptop = 0
+        if isinstance(kundli, dict) and isinstance(kundli.get("planets"), list):
+            _ptop = len(kundli.get("planets") or [])
+        print(
+            "[marriage_timing_m17] empty_block "
+            f"coerced={bool(_coerced)} "
+            f"coerced_planets={len((_coerced or {}).get('planets') or [])} "
+            f"top_planets={_ptop} "
+            f"kundli_type={type(kundli).__name__} "
+            f"skip_reason={skip_reason} "
+            f"q={(question or '')[:60]!r}",
+            flush=True,
+        )
+        return None
+    aw = _extract_primary_window_from_m17_block(marriage_block)
+    if not aw and isinstance(marriage_engine_raw, dict):
+        aw = (marriage_engine_raw.get("primary_window") or "").strip()
+    text = _compose_marriage_timing_reply(
+        aw, reply_idx, _resolve_response_lang(question, lang, None),
+    )
+    out = {
+        "text": text,
+        "topic": "timing",
+        "question_type": qtype,
+        "confidence": 1.0,
+        "source": "raw_passthrough_timing",
+        "engine_tag": "ans-engine",
+        "follow_ups": [],
+    }
+    try:
+        from question_type import slim_understanding_payload
+
+        if understanding is not None:
+            out["understanding"] = slim_understanding_payload(understanding)
+    except Exception:
+        pass
+    pt_checks = {
+        "slice_type": "timing_marriage_engine",
+        "resolved_route": resolved_route,
+        "wants_explain": wants_explain,
+        "is_marriage_engine": True,
+        "dasha_included": True,
+    }
+    pt_blocks: dict = {"chart_context": chart_text or ""}
+    if kp_block:
+        pt_blocks["kp"] = kp_block.strip()
+    pt_blocks["marriage_engine"] = marriage_block
+    m17_meta: dict = {}
+    if isinstance(marriage_engine_raw, dict):
+        try:
+            from ask_llm_context_debug import (
+                build_marriage_engine_trace,
+                build_marriage_timing_slice_meta,
+            )
+
+            trace = build_marriage_engine_trace(marriage_engine_raw)
+            if trace:
+                pt_blocks["engine_trace"] = trace
+            m17_meta = build_marriage_timing_slice_meta(marriage_engine_raw)
+        except Exception:
+            pass
+    return attach_admin_fn(
+        out,
+        question=question or "",
+        question_type=qtype,
+        is_timing=True,
+        checks=pt_checks,
+        chart_text=chart_text,
+        blocks=pt_blocks,
+        slice_meta=m17_meta,
+        llm_called=False,
+        skip_reason=skip_reason,
+        intent_source=intent_source,
+        llm_intent=llm_intent,
+    )
+
+
+def _marriage_timing_engine_result(
+    kundli: dict,
+    intel: dict,
+    kp_dict: dict,
+    birth: Any,
+    *,
+    question: str = "",
+) -> dict:
+    """Timing-only M17 verdict — prefer compute_timing_window (full v2 pipeline)."""
+    engine_result: dict = {}
+    try:
+        from event_timing.marriage.marriage_timing import compute_timing_window
+
+        engine_result = compute_timing_window(
+            kundli, intel or {}, kp_dict, birth,
+        ) or {}
+    except Exception as exc:
+        print(
+            f"[passthrough_marriage_block] compute_timing_window failed: "
+            f"{type(exc).__name__}: {str(exc)[:200]}",
+            flush=True,
+        )
+    if isinstance(engine_result, dict) and engine_result:
+        return engine_result
+    try:
+        from event_timing.marriage.marriage_engine_v2 import compute_timing_window_fallback
+
+        engine_result = compute_timing_window_fallback(
+            kundli, intel or {}, kp_dict, birth,
+        ) or {}
+        if engine_result:
+            print("[passthrough_marriage_block] Step0/0A fallback used", flush=True)
+    except Exception as exc:
+        print(
+            f"[passthrough_marriage_block] fallback failed: "
+            f"{type(exc).__name__}: {str(exc)[:200]}",
+            flush=True,
+        )
+    if isinstance(engine_result, dict) and engine_result:
+        return engine_result
+    try:
+        from event_timing.marriage import assess_marriage  # type: ignore
+
+        engine_result = assess_marriage(
+            kundli, intel or {}, kp_dict, birth, question=question or "",
+        ) or {}
+    except Exception as exc:
+        print(
+            f"[passthrough_marriage_block] assess_marriage fallback failed: "
+            f"{type(exc).__name__}: {str(exc)[:200]}",
+            flush=True,
+        )
+    return engine_result if isinstance(engine_result, dict) else {}
+
+
 def _passthrough_marriage_block(question, kundli, intel, birth):
     """M17 — Build LOCKED FACTS marriage block for passthrough paths.
 
@@ -800,19 +1007,38 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
             return "", None
         if not _M17_MARRIAGE_KW_RX.search(question):
             return "", None
-        if not isinstance(kundli, dict) or not kundli.get("planets"):
+        chart = _normalize_passthrough_kundli(kundli)
+        if not chart or not chart.get("planets"):
+            _nested = False
+            if isinstance(kundli, dict):
+                for _nk in ("kundli", "chart", "chart_data", "natal"):
+                    if isinstance(kundli.get(_nk), dict):
+                        _nested = True
+                        break
+            print(
+                "[passthrough_marriage_block] skip: chart/planets missing "
+                f"nested_wrapper={_nested} "
+                f"q={(question or '')[:50]!r}",
+                flush=True,
+            )
             return "", None
+        kundli = chart
 
         from event_timing.marriage.kp_from_chart import resolve_kp
 
         kp_dict = resolve_kp(kundli, {}, birth)
 
-        from event_timing.marriage import assess_marriage  # type: ignore
-        engine_result = assess_marriage(
-            kundli, intel or {}, kp_dict, birth,
-            question=question or "",
+        engine_result = _marriage_timing_engine_result(
+            kundli, intel or {}, kp_dict, birth, question=question or "",
         )
         if not isinstance(engine_result, dict) or not engine_result:
+            print(
+                "[passthrough_marriage_block] skip: empty engine_result "
+                f"planets={len(kundli.get('planets') or [])} "
+                f"asc={kundli.get('ascendant')!r} "
+                f"q={(question or '')[:50]!r}",
+                flush=True,
+            )
             return "", None
         _pw = (engine_result.get("primary_window") or "").strip()
         try:
@@ -931,7 +1157,27 @@ def _passthrough_marriage_block(question, kundli, intel, birth):
             pass
         return _M17_format_marriage_block(engine_result), engine_result
     except Exception as _exc:  # noqa: BLE001
-        print(f"[passthrough_marriage_block] err: {str(_exc)[:200]}")
+        print(f"[passthrough_marriage_block] err: {str(_exc)[:200]}", flush=True)
+        try:
+            chart = _normalize_passthrough_kundli(kundli)
+            if chart:
+                from event_timing.marriage.kp_from_chart import resolve_kp
+                from event_timing.marriage.marriage_engine_v2 import (
+                    compute_timing_window_fallback,
+                )
+
+                fb = compute_timing_window_fallback(
+                    chart, intel or {}, resolve_kp(chart, {}, birth), birth,
+                )
+                if isinstance(fb, dict) and fb:
+                    print("[passthrough_marriage_block] exception→fallback ok", flush=True)
+                    return _M17_format_marriage_block(fb), fb
+        except Exception as _fb_exc:
+            print(
+                f"[passthrough_marriage_block] exception→fallback failed: "
+                f"{str(_fb_exc)[:160]}",
+                flush=True,
+            )
         return "", None
 
 
@@ -4993,6 +5239,19 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         kwargs.setdefault("question_normalized", _question_normalized)
         return _attach_admin_llm_context(result, **kwargs)
 
+    if _is_marriage_timing_question(question or ""):
+        _planets_n = (
+            len(kundli.get("planets") or [])
+            if isinstance(kundli, dict) and isinstance(kundli.get("planets"), list)
+            else -1
+        )
+        print(
+            "[marriage_timing_m17] ask_enter "
+            f"kundli_dict={isinstance(kundli, dict)} planets={_planets_n} "
+            f"q={(question or '')[:60]!r}",
+            flush=True,
+        )
+
     try:
         from ask_scope_gate import assess_ask_scope, scope_refusal_payload
 
@@ -5188,6 +5447,38 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             )
         except Exception as _ma_exc:
             print(f"[raw_passthrough] marriage_timing_alt skipped: {_ma_exc}", flush=True)
+
+    # ── Marriage timing M17 (shaadi kab) — engine-only before LLM routing ───
+    if _is_marriage_timing_question(question or ""):
+        if not isinstance(kundli, dict):
+            print(
+                "[marriage_timing_m17] skip_early kundli_not_dict "
+                f"type={type(kundli).__name__} q={(question or '')[:60]!r}",
+                flush=True,
+            )
+        else:
+            _m17_early = _marriage_timing_m17_passthrough_response(
+                question=question or "",
+                kundli=kundli,
+                birth=birth,
+                lang=lang,
+                attach_admin_fn=_attach_admin,
+                reply_idx=reply_idx,
+                skip_reason="marriage_timing_m17_early",
+                intent_source="marriage_timing_m17_early",
+            )
+            if _m17_early is not None:
+                print(
+                    f"[raw_passthrough] marriage_timing_m17_early "
+                    f"q={(question or '')[:60]!r}",
+                    flush=True,
+                )
+                return _m17_early
+            print(
+                "[marriage_timing_m17] early_miss "
+                f"q={(question or '')[:60]!r}",
+                flush=True,
+            )
 
     client = _get_client()
     _llm_intent_admin: dict | None = None
@@ -7852,12 +8143,26 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     if _eng_env == "":
         # Default ON for marriage TIMING Qs (shaadi kab) — user-spec engine v3
         _engines_on = bool(
-            is_timing
-            and isinstance(question, str)
+            isinstance(question, str)
             and _M17_MARRIAGE_KW_RX.search(question)
+            and (
+                _is_marriage_timing_question(question)
+                or (is_timing and _M17_MARRIAGE_KW_RX.search(question))
+            )
         )
     else:
         _engines_on = _eng_env == "1"
+    if (
+        not _engines_on
+        and _is_marriage_timing_question(question or "")
+        and isinstance(question, str)
+    ):
+        print(
+            "[marriage_timing_m17] engines_off "
+            f"RAW_PASSTHROUGH_ENGINES={_eng_env!r} is_timing={is_timing} "
+            f"q={(question or '')[:60]!r}",
+            flush=True,
+        )
     if _engines_on:
         try:
             if (isinstance(question, str)
@@ -7878,6 +8183,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 if marriage_block:
                     is_marriage_engine = True
                     chart_text = chart_text + "\n" + marriage_block
+                elif _is_marriage_timing_question(question or ""):
+                    print(
+                        "[marriage_timing_m17] engines_on but empty_block "
+                        f"q={(question or '')[:60]!r}",
+                        flush=True,
+                    )
         except Exception as _me:
             print(f"[raw_passthrough] marriage enrichment skipped: {_me}")
 
@@ -8029,85 +8340,64 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         except Exception as _ute:
             print(f"[raw_passthrough] unified timing skipped: {_ute}")
 
+    # Last-chance M17 — shaadi kab must not reach LLM without engine block.
+    if (
+        not (marriage_block or "").strip()
+        and _is_marriage_timing_question(question or "")
+        and isinstance(kundli, dict)
+        and kundli.get("planets")
+    ):
+        try:
+            _intel_retry: dict = {}
+            try:
+                _analyze_m, _ = _chart_intel()
+                _intel_retry = _analyze_m(kundli, birth) or {}
+            except Exception:
+                pass
+            _mb_retry, _mer_retry = _passthrough_marriage_block(
+                question, kundli, _intel_retry, birth,
+            )
+            if _mb_retry:
+                marriage_block = _mb_retry
+                marriage_engine_raw = _mer_retry
+                is_marriage_engine = True
+                if marriage_block not in chart_text:
+                    chart_text = chart_text + "\n" + marriage_block
+                print(
+                    f"[raw_passthrough] marriage_M17_retry ok "
+                    f"q={(question or '')[:60]!r}",
+                    flush=True,
+                )
+        except Exception as _m17_retry_exc:
+            print(
+                f"[raw_passthrough] marriage_M17_retry failed: "
+                f"{str(_m17_retry_exc)[:200]}",
+                flush=True,
+            )
+
     # Marriage timing — skip LLM; window comes from assess_marriage (M17).
     if (marriage_block and is_marriage_engine
             and _is_marriage_timing_question(question or "")
             and not wants_explain):
-        _aw_rp = _extract_primary_window_from_m17_block(marriage_block)
-        _eff_lang_rp = _resolve_response_lang(question, lang, None)
-        _text_rp = _compose_marriage_timing_reply(_aw_rp, 0, _eff_lang_rp)
-        try:
-            print(
-                f"[raw_passthrough] marriage_timing_deterministic "
-                f"window={_aw_rp!r} q={question[:60]!r} "
-                f"resp_chars={len(_text_rp)}",
-                flush=True,
-            )
-        except Exception:
-            pass
-        _out_rp = {
-            "text": _text_rp,
-            "topic": "timing",
-            "question_type": qtype,
-            "confidence": 1.0,
-            "source": "raw_passthrough_timing",
-            "engine_tag": "ans-engine",
-            "follow_ups": [],
-        }
-        try:
-            from question_type import slim_understanding_payload
-
-            if _understanding is not None:
-                _out_rp["understanding"] = slim_understanding_payload(
-                    _understanding
-                )
-        except Exception:
-            pass
-        _pt_checks = {
-            "slice_type": "timing_marriage_engine",
-            "resolved_route": _resolved_route,
-            "wants_explain": wants_explain,
-            "is_marriage_engine": True,
-            "is_kp": is_kp,
-            "is_mr_static": _is_mr_static,
-            "static_dasha_hint": static_dasha_hint,
-            "dasha_included": True,
-        }
-        _pt_blocks = {"chart_context": chart_text}
-        if kp_block:
-            _pt_blocks["kp"] = kp_block.strip()
-        if marriage_block:
-            _pt_blocks["marriage_engine"] = marriage_block
-        if marriage_engine_raw:
-            try:
-                from ask_llm_context_debug import (
-                    build_marriage_engine_trace,
-                    build_marriage_timing_slice_meta,
-                )
-
-                _trace = build_marriage_engine_trace(marriage_engine_raw)
-                if _trace:
-                    _pt_blocks["engine_trace"] = _trace
-                _m17_meta = build_marriage_timing_slice_meta(marriage_engine_raw)
-            except Exception as _te:
-                print(f"[raw_passthrough] engine_trace skipped: {_te}", flush=True)
-                _m17_meta = {}
-        else:
-            _m17_meta = {}
-        return _attach_admin(
-            _out_rp,
+        _m17_late = _marriage_timing_m17_passthrough_response(
             question=question or "",
-            question_type=qtype,
-            is_timing=True,
-            checks=_pt_checks,
+            kundli=kundli,
+            birth=birth,
+            lang=lang,
+            attach_admin_fn=_attach_admin,
+            qtype=qtype,
+            wants_explain=wants_explain,
+            reply_idx=reply_idx,
             chart_text=chart_text,
-            blocks=_pt_blocks,
-            slice_meta=_m17_meta if _m17_meta else (dcr_love_meta if isinstance(dcr_love_meta, dict) else {}),
-            llm_called=False,
-            skip_reason="marriage_timing_deterministic",
+            resolved_route=_resolved_route,
+            understanding=_understanding,
             intent_source=_intent_source,
             llm_intent=_llm_intent_admin,
+            kp_block=kp_block,
+            skip_reason="marriage_timing_deterministic",
         )
+        if _m17_late is not None:
+            return _m17_late
 
     # ── Health engine template-only (hard guards / crisis — skip LLM) ──
     if (
@@ -8566,7 +8856,91 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
     # ── Engine-only policy: block direct LLM (chart-only, no domain engine) ─
     try:
-        from ask_hard_guards import direct_llm_allowed, enforce_engine_only_or_refuse
+        from ask_hard_guards import (
+            direct_llm_allowed,
+            enforce_engine_only_or_refuse,
+            marriage_timing_engine_required,
+            marriage_timing_unavailable_result,
+        )
+
+        if (
+            marriage_timing_engine_required(question or "")
+            and not wants_explain
+            and not (marriage_block or "").strip()
+        ):
+            _m17_final = _marriage_timing_m17_passthrough_response(
+                question=question or "",
+                kundli=kundli,
+                birth=birth,
+                lang=lang,
+                attach_admin_fn=_attach_admin,
+                qtype=qtype,
+                wants_explain=wants_explain,
+                reply_idx=reply_idx,
+                chart_text=chart_text,
+                resolved_route=_resolved_route,
+                understanding=_understanding,
+                intent_source=_intent_source,
+                llm_intent=_llm_intent_admin,
+                kp_block=kp_block,
+                skip_reason="marriage_timing_m17_final",
+            )
+            if _m17_final is not None:
+                return _m17_final
+            print(
+                "[marriage_timing_m17] marriage_timing_engine_unavailable "
+                f"marriage_block_len={len(marriage_block or '')} "
+                f"kundli_dict={isinstance(kundli, dict)} "
+                f"q={(question or '')[:60]!r}",
+                flush=True,
+            )
+            _unavail_blocks: dict = {}
+            _unavail_slice: dict = {}
+            try:
+                _chart_diag = _normalize_passthrough_kundli(kundli)
+                if _chart_diag:
+                    from event_timing.marriage.kp_from_chart import resolve_kp
+
+                    _mer_diag = _marriage_timing_engine_result(
+                        _chart_diag,
+                        {},
+                        resolve_kp(_chart_diag, {}, birth),
+                        birth,
+                        question=question or "",
+                    )
+                    if isinstance(_mer_diag, dict) and _mer_diag:
+                        from ask_llm_context_debug import (
+                            build_marriage_engine_trace,
+                            build_marriage_timing_slice_meta,
+                        )
+
+                        _trace_diag = build_marriage_engine_trace(_mer_diag)
+                        if _trace_diag:
+                            _unavail_blocks["engine_trace"] = _trace_diag
+                        _unavail_slice = build_marriage_timing_slice_meta(_mer_diag)
+            except Exception as _diag_exc:
+                print(
+                    f"[raw_passthrough] marriage unavailable diag skipped: "
+                    f"{str(_diag_exc)[:160]}",
+                    flush=True,
+                )
+            return _attach_admin(
+                marriage_timing_unavailable_result(question or "", qtype=qtype),
+                question=question or "",
+                question_type=qtype,
+                is_timing=True,
+                checks={
+                    "slice_type": "timing_marriage_engine",
+                    "is_marriage_engine": bool(_unavail_blocks.get("engine_trace")),
+                },
+                chart_text=chart_text,
+                blocks=_unavail_blocks,
+                slice_meta=_unavail_slice,
+                llm_called=False,
+                skip_reason="marriage_timing_engine_unavailable",
+                intent_source=_intent_source,
+                llm_intent=_llm_intent_admin,
+            )
 
         _eng_checks = {
             "slice_type": (

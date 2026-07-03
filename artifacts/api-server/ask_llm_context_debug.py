@@ -7,6 +7,8 @@ import os
 from typing import Any, Optional
 
 _MAX_DB_CHARS = 80_000
+# Bulky prompt blobs are omitted on DB save (sizes.*_chars retains lengths).
+_DB_STRIP_KEYS = ("chart_text", "system_prompt", "user_payload", "extra_rules")
 
 _ANSWER_PATH_LABELS = {
     "engine_only": "Engine only (no LLM)",
@@ -242,6 +244,847 @@ def normalize_engine_trace_transit_months(trace: dict[str, Any] | None) -> dict[
     return trace
 
 
+def _aspect_house_nums(block: dict[str, Any] | None) -> list[int]:
+    if not isinstance(block, dict):
+        return []
+    out: list[int] = []
+    for row in block.get("aspect_houses") or []:
+        if isinstance(row, dict):
+            h = row.get("house")
+            if isinstance(h, int):
+                out.append(h)
+    return sorted(set(out))
+
+
+def _marriage_bcp_linkage_snapshot(engine_result: dict[str, Any]) -> dict[str, Any]:
+    """D1/D9 7L placement + aspect houses for admin Step 2."""
+    bcp = engine_result.get("bcp_marriage_ages")
+    if not isinstance(bcp, dict):
+        s0a = engine_result.get("step0a")
+        bcp = (s0a.get("bcp_marriage_ages") if isinstance(s0a, dict) else None) or {}
+    if not isinstance(bcp, dict):
+        bcp = {}
+    d9_bcp = bcp.get("d9_bcp") if isinstance(bcp.get("d9_bcp"), dict) else {}
+    dasha_scan: dict[str, Any] = {}
+    s0a = engine_result.get("step0a")
+    if isinstance(s0a, dict) and isinstance(s0a.get("dasha_scan_plan"), dict):
+        dasha_scan = s0a["dasha_scan_plan"]
+    elif isinstance(engine_result.get("dasha_scan_plan"), dict):
+        dasha_scan = engine_result["dasha_scan_plan"]
+    step0a_audit: dict[str, Any] = {}
+    step_audit = engine_result.get("step_audit")
+    if isinstance(step_audit, dict) and isinstance(step_audit.get("step0a"), dict):
+        step0a_audit = step_audit["step0a"]
+
+    d1_asp = _aspect_house_nums(bcp) or list(step0a_audit.get("d1_7l_aspect_houses") or [])
+    d9_asp = _aspect_house_nums(d9_bcp) or list(step0a_audit.get("d9_7l_aspect_houses") or [])
+    d1_sit = bcp.get("seventh_lord_house")
+    if d1_sit is None:
+        d1_sit = step0a_audit.get("d1_7l_placement_house")
+    d9_sit = d9_bcp.get("seventh_lord_house")
+    if d9_sit is None:
+        d9_sit = step0a_audit.get("d9_7l_placement_house")
+
+    shared = sorted(set(bcp.get("shared_7l_linkage_houses") or []))
+    if not shared and d1_asp and d9_asp:
+        shared = sorted(set(d1_asp) & set(d9_asp))
+    if not shared and isinstance(d1_sit, int) and d1_sit == d9_sit:
+        shared = [d1_sit]
+
+    user_age = engine_result.get("user_age")
+    if user_age is None and isinstance(step0a_audit.get("user_age"), (int, float)):
+        user_age = int(step0a_audit["user_age"])
+    house_display = bcp.get("bcp_admin_display")
+    if not isinstance(house_display, dict) or not house_display.get("d1"):
+        try:
+            from event_timing.marriage.bcp_marriage_ages import build_bcp_admin_linkage_display
+
+            house_display = build_bcp_admin_linkage_display(
+                {
+                    "seventh_lord": bcp.get("seventh_lord") or engine_result.get("d1_seventh_lord"),
+                    "seventh_lord_house": d1_sit,
+                    "aspect_houses": [{"house": h} for h in d1_asp],
+                    "d9_bcp": {
+                        "seventh_lord": d9_bcp.get("seventh_lord") or engine_result.get("d9_seventh_lord"),
+                        "seventh_lord_house": d9_sit,
+                        "aspect_houses": [{"house": h} for h in d9_asp],
+                    },
+                    "shared_7l_linkage_houses": shared,
+                    "user_age": user_age,
+                },
+                user_age=int(user_age) if user_age is not None else None,
+            )
+        except Exception:
+            house_display = {}
+
+    return {
+        "d1_seventh_lord": bcp.get("seventh_lord") or engine_result.get("d1_seventh_lord"),
+        "d9_seventh_lord": d9_bcp.get("seventh_lord") or engine_result.get("d9_seventh_lord"),
+        "d1_7l_placement_house": d1_sit,
+        "d1_7l_aspect_houses": d1_asp,
+        "d9_7l_placement_house": d9_sit,
+        "d9_7l_aspect_houses": d9_asp,
+        "d1_7l_linkage_houses": sorted(set(bcp.get("d1_7l_linkage_houses") or [])),
+        "d9_7l_linkage_houses": sorted(set(bcp.get("d9_7l_linkage_houses") or [])),
+        "shared_7l_linkage_houses": shared,
+        "shared_house_priority_ages": list(bcp.get("shared_house_priority_ages") or []),
+        "bcp_house_display": house_display,
+        "bcp_ages_next_years": list(
+            step0a_audit.get("bcp_ages_next_years")
+            or dasha_scan.get("bcp_ages_next_years")
+            or []
+        )[:4],
+        "focus_ages": list(
+            step0a_audit.get("focus_ages") or dasha_scan.get("bcp_focus_ages") or []
+        ),
+        "timing_mode": step0a_audit.get("timing_mode") or dasha_scan.get("timing_mode"),
+    }
+
+
+def _bcp_linkage_evidence_lines(linkage: dict[str, Any]) -> list[str]:
+    try:
+        from event_timing.marriage.bcp_marriage_ages import bcp_linkage_admin_lines
+
+        fake = {
+            "seventh_lord": linkage.get("d1_seventh_lord"),
+            "seventh_lord_house": linkage.get("d1_7l_placement_house"),
+            "aspect_houses": [
+                {"house": h} for h in (linkage.get("d1_7l_aspect_houses") or [])
+            ],
+            "d9_bcp": {
+                "seventh_lord": linkage.get("d9_seventh_lord"),
+                "seventh_lord_house": linkage.get("d9_7l_placement_house"),
+                "aspect_houses": [
+                    {"house": h} for h in (linkage.get("d9_7l_aspect_houses") or [])
+                ],
+            },
+            "shared_7l_linkage_houses": linkage.get("shared_7l_linkage_houses") or [],
+        }
+        lines = bcp_linkage_admin_lines(fake)
+        if lines:
+            return lines
+    except Exception:
+        pass
+    lines: list[str] = []
+    d1l = linkage.get("d1_seventh_lord")
+    d1p = linkage.get("d1_7l_placement_house")
+    d1a = linkage.get("d1_7l_aspect_houses") or []
+    if d1l and d1p is not None:
+        asp = ",".join(str(x) for x in d1a)
+        lines.append(f"BCP_LINKAGE D1 7L={d1l} placement={d1p} aspects={asp}")
+    d9l = linkage.get("d9_seventh_lord")
+    d9p = linkage.get("d9_7l_placement_house")
+    d9a = linkage.get("d9_7l_aspect_houses") or []
+    if d9l and d9p is not None:
+        asp = ",".join(str(x) for x in d9a)
+        lines.append(f"BCP_LINKAGE D9 7L={d9l} placement={d9p} aspects={asp}")
+    shared = linkage.get("shared_7l_linkage_houses") or []
+    if shared:
+        lines.append(f"BCP_SHARED_HOUSES {','.join(str(h) for h in shared)}")
+    return lines
+
+
+def _parse_bcp_linkage_from_evidence(evidence: list[str] | None) -> dict[str, Any]:
+    import re
+
+    out: dict[str, Any] = {}
+    if not evidence:
+        return out
+    for line in evidence:
+        s = str(line)
+        m = re.search(
+            r"BCP_LINKAGE\s+D1\s+7L=(\w+)\s+placement=(\d+)\s+aspects=([\d,]*)",
+            s,
+            re.I,
+        )
+        if m:
+            out["d1_seventh_lord"] = m.group(1)
+            out["d1_7l_placement_house"] = int(m.group(2))
+            out["d1_7l_aspect_houses"] = [
+                int(x) for x in m.group(3).split(",") if x.strip().isdigit()
+            ]
+            continue
+        m = re.search(
+            r"BCP_LINKAGE\s+D9\s+7L=(\w+)\s+placement=(\d+)\s+aspects=([\d,]*)",
+            s,
+            re.I,
+        )
+        if m:
+            out["d9_seventh_lord"] = m.group(1)
+            out["d9_7l_placement_house"] = int(m.group(2))
+            out["d9_7l_aspect_houses"] = [
+                int(x) for x in m.group(3).split(",") if x.strip().isdigit()
+            ]
+            continue
+        m = re.search(r"BCP-D1:\s+7L\s+(\w+)@(\d+)H", s, re.I)
+        if m:
+            out.setdefault("d1_seventh_lord", m.group(1))
+            out.setdefault("d1_7l_placement_house", int(m.group(2)))
+        m = re.search(r"BCP-D9:\s+7L\s+(\w+)@(\d+)H", s, re.I)
+        if m:
+            out.setdefault("d9_seventh_lord", m.group(1))
+            out.setdefault("d9_7l_placement_house", int(m.group(2)))
+        m = re.search(r"D1\s+7L=([A-Za-z]+)", s)
+        if m:
+            out.setdefault("d1_seventh_lord", m.group(1))
+        m = re.search(r"D9\s+7L=([A-Za-z]+)", s)
+        if m:
+            out.setdefault("d9_seventh_lord", m.group(1))
+        m = re.search(r"BCP_SHARED_HOUSES\s+([\d,]+)", s, re.I)
+        if m:
+            out["shared_7l_linkage_houses"] = [
+                int(x) for x in m.group(1).split(",") if x.strip().isdigit()
+            ]
+        m = re.search(
+            r"BCP_HOUSE\s+(D1|D9)\s+(placement|aspect)=(\d+)\s+ages=([\d,]*)",
+            s,
+            re.I,
+        )
+        if m:
+            div = m.group(1).upper()
+            kind = m.group(2).lower()
+            house = int(m.group(3))
+            ages = [int(x) for x in m.group(4).split(",") if x.strip().isdigit()]
+            key = "d1" if div == "D1" else "d9"
+            if kind == "placement":
+                out[f"{key}_7l_placement_house"] = house
+                if key == "d1":
+                    out.setdefault("d1_placement_ages", ages)
+                else:
+                    out.setdefault("d9_placement_ages", ages)
+            else:
+                asp_key = f"{key}_7l_aspect_houses"
+                cur = list(out.get(asp_key) or [])
+                if house not in cur:
+                    cur.append(house)
+                out[asp_key] = sorted(cur)
+    return out
+
+
+def _rebuild_bcp_house_display(linkage: dict[str, Any], user_age: int | None) -> dict[str, Any]:
+    if linkage.get("bcp_house_display") and isinstance(linkage["bcp_house_display"], dict):
+        disp = linkage["bcp_house_display"]
+        if disp.get("d1", {}).get("items"):
+            return disp
+    try:
+        from event_timing.marriage.bcp_marriage_ages import build_bcp_admin_linkage_display
+
+        return build_bcp_admin_linkage_display(
+            {
+                "seventh_lord": linkage.get("d1_seventh_lord"),
+                "seventh_lord_house": linkage.get("d1_7l_placement_house"),
+                "aspect_houses": [
+                    {"house": h} for h in (linkage.get("d1_7l_aspect_houses") or [])
+                ],
+                "d9_bcp": {
+                    "seventh_lord": linkage.get("d9_seventh_lord"),
+                    "seventh_lord_house": linkage.get("d9_7l_placement_house"),
+                    "aspect_houses": [
+                        {"house": h} for h in (linkage.get("d9_7l_aspect_houses") or [])
+                    ],
+                },
+                "shared_7l_linkage_houses": linkage.get("shared_7l_linkage_houses") or [],
+                "user_age": user_age,
+            },
+            user_age=user_age,
+        )
+    except Exception:
+        return {}
+
+
+def _merge_bcp_linkage_into_step0a(
+    step0a: dict[str, Any],
+    linkage: dict[str, Any],
+) -> dict[str, Any]:
+    out = dict(step0a or {})
+    for key, val in linkage.items():
+        if val is None:
+            continue
+        if isinstance(val, list) and not val and out.get(key):
+            continue
+        if out.get(key) in (None, "", [], {}):
+            out[key] = val
+    return out
+
+
+_BCP_LINKAGE_FORCE_KEYS = (
+    "d1_seventh_lord",
+    "d9_seventh_lord",
+    "d1_7l_placement_house",
+    "d1_7l_aspect_houses",
+    "d9_7l_placement_house",
+    "d9_7l_aspect_houses",
+    "d1_7l_linkage_houses",
+    "d9_7l_linkage_houses",
+    "shared_7l_linkage_houses",
+    "shared_house_priority_ages",
+    "bcp_house_display",
+    "bcp_ages_next_years",
+    "focus_ages",
+    "timing_mode",
+)
+
+
+def _force_merge_bcp_linkage_into_step0a(
+    step0a: dict[str, Any],
+    linkage: dict[str, Any],
+) -> dict[str, Any]:
+    out = dict(step0a or {})
+    for key in _BCP_LINKAGE_FORCE_KEYS:
+        if key in linkage and linkage[key] is not None:
+            out[key] = linkage[key]
+    return out
+
+
+def _is_marriage_timing_admin_ctx(ctx: dict[str, Any]) -> bool:
+    slice_meta = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    checks = ctx.get("checks") if isinstance(ctx.get("checks"), dict) else {}
+    sl = str(slice_meta.get("slice") or checks.get("slice_type") or "")
+    if "marriage_timing" in sl or sl == "timing_marriage_engine":
+        return True
+    if checks.get("is_marriage_engine"):
+        return True
+    blocks = ctx.get("blocks") if isinstance(ctx.get("blocks"), dict) else {}
+    trace = blocks.get("engine_trace") or blocks.get("marriage_engine_trace")
+    if isinstance(trace, dict) and str(trace.get("engine") or "") == "marriage_timing_m17":
+        return True
+    intent = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+    topic = str(intent.get("topic") or ctx.get("topic") or "").lower()
+    if topic in ("marriage", "timing") and bool(ctx.get("is_timing") or ctx.get("question_type") == "TIMING"):
+        q = str(ctx.get("question") or intent.get("question_normalized") or "").lower()
+        if any(k in q for k in ("shaadi", "shadi", "shādi", "marriage", "vivah", "wedding")):
+            return True
+    return False
+
+
+_RASHI_NAME_TO_SI = {
+    "aries": 0, "taurus": 1, "gemini": 2, "cancer": 3, "leo": 4, "virgo": 5,
+    "libra": 6, "scorpio": 7, "sagittarius": 8, "capricorn": 9, "aquarius": 10, "pisces": 11,
+    "mesh": 0, "vrishabh": 1, "mithun": 2, "kark": 3, "karka": 3, "simha": 4, "singh": 4,
+    "kanya": 5, "tula": 6, "vrishchik": 7, "vrishchika": 7, "dhanu": 8, "makar": 9,
+    "kumbh": 10, "meen": 11, "mīn": 11,
+}
+
+
+def _sign_si_from_value(val: Any) -> int | None:
+    if isinstance(val, int) and 0 <= val < 12:
+        return val
+    if isinstance(val, str):
+        key = val.strip().lower().replace(" ", "")
+        if key in _RASHI_NAME_TO_SI:
+            return _RASHI_NAME_TO_SI[key]
+        try:
+            from event_timing.marriage.marriage_engine_v2 import _sign_idx
+
+            si = _sign_idx(val)
+            if si is not None:
+                return si
+        except Exception:
+            pass
+    return None
+
+
+_PLANET_NAME_CANON: dict[str, str] = {
+    "sun": "Sun", "surya": "Sun", "सूर्य": "Sun",
+    "moon": "Moon", "chandra": "Moon", "चंद्र": "Moon", "चन्द्र": "Moon",
+    "mars": "Mars", "mangal": "Mars", "मंगल": "Mars",
+    "mercury": "Mercury", "budh": "Mercury", "बुध": "Mercury",
+    "jupiter": "Jupiter", "guru": "Jupiter", "बृहस्पति": "Jupiter",
+    "venus": "Venus", "shukra": "Venus", "शुक्र": "Venus",
+    "saturn": "Saturn", "shani": "Saturn", "शनि": "Saturn",
+    "rahu": "Rahu", "राहु": "Rahu",
+    "ketu": "Ketu", "केतु": "Ketu",
+}
+
+
+def _coerce_planets_for_engine(raw: Any) -> list[dict[str, Any]] | None:
+    """Normalize planets list/dict for marriage M17 (names + int houses)."""
+    items: list[Any] = []
+    if isinstance(raw, list):
+        items = raw
+    elif isinstance(raw, dict):
+        for key, val in raw.items():
+            if isinstance(val, dict):
+                row = dict(val)
+                row.setdefault("name", key)
+                items.append(row)
+    if not items:
+        return None
+    out: list[dict[str, Any]] = []
+    for p in items:
+        if not isinstance(p, dict):
+            continue
+        name = p.get("name") or p.get("planet") or p.get("graha")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        canon = _PLANET_NAME_CANON.get(name.strip().lower(), name.strip())
+        house = p.get("house")
+        if house is not None and not isinstance(house, int):
+            try:
+                house = int(float(house))
+            except (TypeError, ValueError):
+                house = None
+        row = dict(p)
+        row["name"] = canon
+        if house is not None:
+            row["house"] = house
+        out.append(row)
+    return out if len(out) >= 7 else None
+
+
+def normalize_kundli_chart_payload(raw: Any) -> dict[str, Any] | None:
+    """Unwrap + normalize chart JSON for admin BCP recompute."""
+    if not isinstance(raw, dict):
+        return None
+    chart = raw
+    for key in ("kundli", "chart", "chart_data", "natal", "data"):
+        nested = chart.get(key)
+        if isinstance(nested, str):
+            try:
+                import json as _json
+
+                nested = _json.loads(nested)
+            except Exception:
+                nested = None
+        if isinstance(nested, dict):
+            nested_planets = nested.get("planets")
+            if isinstance(nested_planets, (list, dict)) and nested_planets:
+                chart = nested
+                break
+    planets = _coerce_planets_for_engine(chart.get("planets"))
+    if not planets:
+        return None
+    out = dict(chart)
+    out["planets"] = planets
+    return out
+
+
+def coerce_chart_for_marriage_engine(raw: Any) -> dict[str, Any] | None:
+    """Strict chart coerce for M17 ask-time (unwrap + planet normalize)."""
+    if not isinstance(raw, dict):
+        return None
+    norm = normalize_kundli_chart_payload(raw)
+    if norm is not None:
+        return norm
+    for key in ("kundli", "chart", "chart_data", "natal", "data"):
+        nested = raw.get(key)
+        if isinstance(nested, str):
+            try:
+                import json as _json
+
+                nested = _json.loads(nested)
+            except Exception:
+                continue
+        if isinstance(nested, dict):
+            norm = normalize_kundli_chart_payload(nested)
+            if norm is not None:
+                return norm
+    return None
+
+
+def _lagna_si_from_kundli(kundli: dict[str, Any]) -> int | None:
+    for key in (
+        "ascendantSignIndex", "ascendantSignIdx", "ascendant_sign_idx",
+        "lagna_sign_idx", "lagnaSignIdx", "lagnaSignIndex",
+    ):
+        si = _sign_si_from_value(kundli.get(key))
+        if si is not None:
+            return si
+    asc = kundli.get("ascendant") or kundli.get("lagna") or kundli.get("lagnaSign")
+    if isinstance(asc, dict):
+        for key in ("signIndex", "sign_idx", "signIdx", "sign"):
+            si = _sign_si_from_value(asc.get(key))
+            if si is not None:
+                return si
+    else:
+        si = _sign_si_from_value(asc)
+        if si is not None:
+            return si
+    for key in ("lagnaSign", "ascendant_sign", "ascendantSign"):
+        si = _sign_si_from_value(kundli.get(key))
+        if si is not None:
+            return si
+    for key in ("ascendantDeg", "ascendantLon", "ascendantLongitude", "lagnaLon"):
+        v = kundli.get(key)
+        if v is not None:
+            try:
+                return int(float(v) / 30.0) % 12
+            except (TypeError, ValueError):
+                pass
+    return None
+
+
+def _normalize_planet_houses(kundli: dict[str, Any], lagna_si: int) -> dict[str, Any]:
+    out = dict(kundli)
+    planets_out: list[dict[str, Any]] = []
+    for p in kundli.get("planets") or []:
+        if not isinstance(p, dict):
+            continue
+        row = dict(p)
+        house = row.get("house")
+        if not isinstance(house, int) or not (1 <= house <= 12):
+            si = _sign_si_from_value(row.get("sign_idx") or row.get("signIndex"))
+            if si is None:
+                si = _sign_si_from_value(row.get("sign"))
+            if si is not None:
+                row["house"] = ((si - lagna_si) % 12) + 1
+                row.setdefault("sign_idx", si)
+        planets_out.append(row)
+    out["planets"] = planets_out
+    return out
+
+
+def _resolve_d9_for_bcp(kundli: dict[str, Any]) -> tuple[int | None, list[dict[str, Any]]]:
+    divs = kundli.get("divisionalCharts") or kundli.get("divisional_charts") or {}
+    d9_chart = divs.get("D9") if isinstance(divs, dict) else None
+    if isinstance(d9_chart, dict) and isinstance(d9_chart.get("planets"), list):
+        d9_lagna = _sign_si_from_value(
+            d9_chart.get("ascendantSignIndex")
+            or d9_chart.get("ascendantSignIdx")
+            or d9_chart.get("ascendant")
+        )
+        if d9_lagna is not None:
+            d9_planets: list[dict[str, Any]] = []
+            for p in d9_chart.get("planets") or []:
+                if not isinstance(p, dict) or not p.get("name"):
+                    continue
+                row = dict(p)
+                si = _sign_si_from_value(row.get("signIndex") or row.get("sign_idx") or row.get("sign"))
+                if si is not None:
+                    row.setdefault("sign_idx", si)
+                    if not isinstance(row.get("house"), int):
+                        row["house"] = ((si - d9_lagna) % 12) + 1
+                d9_planets.append(row)
+            if d9_planets:
+                return d9_lagna, d9_planets
+    try:
+        from event_timing.marriage.marriage_step0 import _load_d9_planets
+
+        return _load_d9_planets(kundli)
+    except Exception:
+        return None, []
+
+
+def _user_age_from_admin_ctx(
+    ctx: dict[str, Any],
+    birth: dict[str, Any] | None,
+    kundli: dict[str, Any],
+) -> int | None:
+    slice_meta = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    checks = ctx.get("checks") if isinstance(ctx.get("checks"), dict) else {}
+    sm_checks = slice_meta.get("checks") if isinstance(slice_meta.get("checks"), dict) else {}
+    for src in (sm_checks, checks):
+        if isinstance(src, dict) and src.get("user_age") is not None:
+            try:
+                return int(src["user_age"])
+            except (TypeError, ValueError):
+                pass
+    step_audit = slice_meta.get("step_audit") if isinstance(slice_meta.get("step_audit"), dict) else {}
+    for key in ("step0", "step0a"):
+        block = step_audit.get(key) if isinstance(step_audit, dict) else None
+        if isinstance(block, dict) and block.get("user_age") is not None:
+            try:
+                return int(block["user_age"])
+            except (TypeError, ValueError):
+                pass
+    try:
+        from datetime import datetime
+
+        from event_timing.marriage.marriage_engine_v2 import _compute_age_at
+
+        return _compute_age_at(birth or {}, datetime.utcnow(), kundli=kundli)
+    except Exception:
+        return None
+
+
+def _apply_bcp_recompute_to_ctx(
+    ctx: dict[str, Any],
+    linkage: dict[str, Any],
+    evidence_lines: list[str],
+) -> dict[str, Any]:
+    out = dict(ctx)
+    slice_meta = dict(out.get("slice_meta") or {}) if isinstance(out.get("slice_meta"), dict) else {}
+    engine_facts = dict(out.get("engine_facts") or {}) if isinstance(out.get("engine_facts"), dict) else {}
+    blocks = dict(out.get("blocks") or {}) if isinstance(out.get("blocks"), dict) else {}
+
+    step_audit = dict(
+        slice_meta.get("step_audit")
+        or engine_facts.get("step_audit")
+        or (blocks.get("engine_trace") or {}).get("step_audit")
+        or {}
+    )
+    step0a = _force_merge_bcp_linkage_into_step0a(
+        step_audit.get("step0a") if isinstance(step_audit.get("step0a"), dict) else {},
+        linkage,
+    )
+    step_audit["step0a"] = step0a
+    slice_meta["step_audit"] = step_audit
+    slice_meta["bcp_linkage"] = {**dict(slice_meta.get("bcp_linkage") or {}), **linkage}
+    engine_facts["step_audit"] = step_audit
+
+    trace = blocks.get("engine_trace") or blocks.get("marriage_engine_trace")
+    if isinstance(trace, dict):
+        trace = dict(trace)
+        trace["step_audit"] = step_audit
+        blocks["engine_trace"] = trace
+
+    ev = list(engine_facts.get("evidence") or slice_meta.get("evidence") or [])
+    for line in evidence_lines:
+        if line and line not in ev:
+            ev.append(line)
+    if ev:
+        engine_facts["evidence"] = ev
+        slice_meta["evidence"] = ev
+
+    out["slice_meta"] = slice_meta
+    out["engine_facts"] = engine_facts
+    out["blocks"] = blocks
+    return out
+
+
+def recompute_marriage_bcp_from_kundli(
+    ctx: dict[str, Any],
+    kundli: dict[str, Any],
+    birth: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Admin load: recompute D1/D9 7L houses + BCP ages from saved chart."""
+    if not isinstance(ctx, dict):
+        return ctx
+    chart = normalize_kundli_chart_payload(kundli)
+    if chart is None:
+        return ctx
+    if not _is_marriage_timing_admin_ctx(ctx):
+        return ctx
+    lagna_si = _lagna_si_from_kundli(chart)
+    if lagna_si is None:
+        return ctx
+    chart = _normalize_planet_houses(chart, lagna_si)
+    try:
+        from event_timing.marriage.bcp_marriage_ages import (
+            bcp_linkage_admin_lines,
+            compute_bcp_marriage_ages,
+        )
+
+        d9_lagna, d9_planets = _resolve_d9_for_bcp(chart)
+        user_age = _user_age_from_admin_ctx(ctx, birth, chart)
+        bcp = compute_bcp_marriage_ages(
+            chart,
+            lagna_si,
+            user_age=user_age,
+            d9_lagna_si=d9_lagna,
+            d9_planets=d9_planets or None,
+        )
+        if user_age is not None:
+            bcp["user_age"] = user_age
+    except Exception:
+        return ctx
+
+    d9_bcp = bcp.get("d9_bcp") if isinstance(bcp.get("d9_bcp"), dict) else {}
+    fake: dict[str, Any] = {
+        "bcp_marriage_ages": bcp,
+        "user_age": user_age,
+        "d1_seventh_lord": bcp.get("seventh_lord"),
+        "d9_seventh_lord": d9_bcp.get("seventh_lord"),
+        "step_audit": {
+            "step0a": {
+                "d1_7l_placement_house": bcp.get("seventh_lord_house"),
+                "d1_7l_aspect_houses": _aspect_house_nums(bcp),
+                "d9_7l_placement_house": d9_bcp.get("seventh_lord_house"),
+                "d9_7l_aspect_houses": _aspect_house_nums(d9_bcp),
+                "bcp_ages_next_years": list(bcp.get("future_priority_ages") or [])[:4],
+                "user_age": user_age,
+            }
+        },
+    }
+    linkage = _marriage_bcp_linkage_snapshot(fake)
+    evidence_lines = bcp_linkage_admin_lines(bcp) or _bcp_linkage_evidence_lines(linkage)
+    return _apply_bcp_recompute_to_ctx(ctx, linkage, evidence_lines)
+
+
+def _format_bcp_step2_lines_for_admin(
+    step0a: dict[str, Any],
+    user_age: int | None,
+) -> list[str]:
+    """Human-readable D1/D9 7L house + BCP age lines for admin Step 2."""
+    try:
+        from event_timing.marriage.bcp_marriage_ages import _future_ages_for_house
+    except Exception:
+        _future_ages_for_house = None  # type: ignore
+
+    def _ages(house: int) -> list[int]:
+        if _future_ages_for_house is not None:
+            return list(_future_ages_for_house(house, user_age))
+        ages = [house + 12 * i for i in range(8) if house + 12 * i <= 96]
+        if user_age is not None:
+            ages = [a for a in ages if a >= user_age]
+        return ages[:4]
+
+    display = step0a.get("bcp_house_display") if isinstance(step0a.get("bcp_house_display"), dict) else {}
+    lines: list[str] = []
+    for prefix, div_key, lord_key, sit_key, asp_key in (
+        ("D1", "d1", "d1_seventh_lord", "d1_7l_placement_house", "d1_7l_aspect_houses"),
+        ("D9", "d9", "d9_seventh_lord", "d9_7l_placement_house", "d9_7l_aspect_houses"),
+    ):
+        div = display.get(div_key) if isinstance(display.get(div_key), dict) else {}
+        lord = step0a.get(lord_key) or div.get("seventh_lord") or "7L"
+        chunks: list[str] = []
+        items = div.get("items") if isinstance(div.get("items"), list) else []
+        if items:
+            for it in items:
+                if not isinstance(it, dict) or not isinstance(it.get("house"), int):
+                    continue
+                h = int(it["house"])
+                ages = it.get("ages") if isinstance(it.get("ages"), list) and it.get("ages") else _ages(h)
+                age_str = ", ".join(str(a) for a in ages) if ages else "—"
+                if it.get("type") == "placement":
+                    chunks.append(f"baitha {h}H → ages {age_str}")
+                else:
+                    chunks.append(f"aspect {h}H → ages {age_str}")
+        else:
+            sit = step0a.get(sit_key)
+            if sit is not None:
+                try:
+                    h = int(sit)
+                    ages = _ages(h)
+                    chunks.append(f"baitha {h}H → ages {', '.join(str(a) for a in ages) or '—'}")
+                except (TypeError, ValueError):
+                    pass
+            asp = step0a.get(asp_key)
+            if isinstance(asp, list):
+                for h_raw in asp:
+                    try:
+                        h = int(h_raw)
+                        ages = _ages(h)
+                        chunks.append(f"aspect {h}H → ages {', '.join(str(a) for a in ages) or '—'}")
+                    except (TypeError, ValueError):
+                        continue
+        lines.append(f"{prefix} {lord}: " + (" · ".join(chunks) if chunks else "—"))
+    return lines
+
+
+def build_marriage_bcp_step2_admin_payload(
+    ctx: dict[str, Any],
+    kundli: dict[str, Any],
+    birth: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Top-level admin API block — Step 2 BCP houses + ages (chart recompute)."""
+    merged = recompute_marriage_bcp_from_kundli(ctx, kundli, birth)
+    step0a = {}
+    slice_meta = merged.get("slice_meta") if isinstance(merged.get("slice_meta"), dict) else {}
+    step_audit = slice_meta.get("step_audit") if isinstance(slice_meta.get("step_audit"), dict) else {}
+    if isinstance(step_audit.get("step0a"), dict):
+        step0a = step_audit["step0a"]
+    if not step0a.get("d1_7l_placement_house") and not step0a.get("d9_7l_placement_house"):
+        return None
+    chart = normalize_kundli_chart_payload(kundli) or {}
+    user_age = _user_age_from_admin_ctx(merged, birth, chart)
+    linkage_lines = _format_bcp_step2_lines_for_admin(step0a, user_age)
+    ages = list(step0a.get("bcp_ages_next_years") or step0a.get("focus_ages") or [])[:4]
+    if not ages and user_age is not None:
+        try:
+            from event_timing.marriage.bcp_marriage_ages import _future_ages_for_house
+
+            pool: list[int] = []
+            for key in ("d1_7l_placement_house",):
+                h = step0a.get(key)
+                if isinstance(h, int):
+                    pool.extend(_future_ages_for_house(h, user_age))
+            for h in step0a.get("d1_7l_aspect_houses") or []:
+                if isinstance(h, int):
+                    pool.extend(_future_ages_for_house(h, user_age))
+            ages = sorted({int(a) for a in pool if a >= user_age})[:4]
+        except Exception:
+            pass
+    age_label = ", ".join(str(a) for a in ages) if ages else "—"
+    detail = (
+        f"age {user_age} se → {age_label}"
+        if user_age is not None
+        else age_label
+    )
+    return {
+        "title": "Step 2 — BCP ages",
+        "detail": detail,
+        "ages": ages,
+        "linkage_lines": linkage_lines,
+        "user_age": user_age,
+        "step0a": step0a,
+        "recomputed_from_chart": True,
+    }
+
+
+def _enrich_step_audit_bcp_linkage(
+    step_audit: dict[str, Any],
+    engine_result: dict[str, Any],
+) -> dict[str, Any]:
+    linkage = _marriage_bcp_linkage_snapshot(engine_result)
+    out = dict(step_audit or {})
+    s0a = out.get("step0a") if isinstance(out.get("step0a"), dict) else {}
+    out["step0a"] = _merge_bcp_linkage_into_step0a(s0a, linkage)
+    return out
+
+
+def _hydrate_marriage_bcp_linkage(ctx: dict[str, Any]) -> dict[str, Any]:
+    """Fill Step 2 BCP house linkage for admin (incl. older saved rows)."""
+    slice_meta = dict(ctx.get("slice_meta") or {}) if isinstance(ctx.get("slice_meta"), dict) else {}
+    engine_facts = dict(ctx.get("engine_facts") or {}) if isinstance(ctx.get("engine_facts"), dict) else {}
+    evidence = list(engine_facts.get("evidence") or slice_meta.get("evidence") or [])
+    linkage = dict(slice_meta.get("bcp_linkage") or {})
+    parsed = _parse_bcp_linkage_from_evidence(evidence)
+    for key, val in parsed.items():
+        if val is not None and not linkage.get(key):
+            linkage[key] = val
+
+    blocks = dict(ctx.get("blocks") or {}) if isinstance(ctx.get("blocks"), dict) else {}
+    trace = blocks.get("engine_trace") if isinstance(blocks.get("engine_trace"), dict) else {}
+    step_audit = dict(
+        slice_meta.get("step_audit")
+        or engine_facts.get("step_audit")
+        or trace.get("step_audit")
+        or {}
+    )
+    user_age = None
+    checks = ctx.get("checks") if isinstance(ctx.get("checks"), dict) else {}
+    sm_checks = slice_meta.get("checks") if isinstance(slice_meta.get("checks"), dict) else {}
+    for src in (sm_checks, checks):
+        if isinstance(src, dict) and src.get("user_age") is not None:
+            try:
+                user_age = int(src["user_age"])
+                break
+            except (TypeError, ValueError):
+                pass
+    step0 = step_audit.get("step0") if isinstance(step_audit.get("step0"), dict) else {}
+    if user_age is None and step0.get("user_age") is not None:
+        try:
+            user_age = int(step0["user_age"])
+        except (TypeError, ValueError):
+            pass
+
+    house_display = _rebuild_bcp_house_display(linkage, user_age)
+    if house_display:
+        linkage["bcp_house_display"] = house_display
+
+    step0a = _merge_bcp_linkage_into_step0a(
+        step_audit.get("step0a") if isinstance(step_audit.get("step0a"), dict) else {},
+        linkage,
+    )
+    if step0a:
+        step_audit["step0a"] = step0a
+        slice_meta["step_audit"] = step_audit
+        engine_facts["step_audit"] = step_audit
+        if trace:
+            trace = dict(trace)
+            trace["step_audit"] = step_audit
+            blocks["engine_trace"] = trace
+    if linkage:
+        slice_meta["bcp_linkage"] = linkage
+
+    out = dict(ctx)
+    out["slice_meta"] = slice_meta
+    out["engine_facts"] = engine_facts
+    out["blocks"] = blocks
+    return out
+
+
 def build_marriage_engine_trace(engine_result: dict[str, Any] | None) -> dict[str, Any] | None:
     """Trimmed marriage M17 audit for admin panel (step-by-step pipeline)."""
     if not isinstance(engine_result, dict) or not engine_result:
@@ -249,6 +1092,8 @@ def build_marriage_engine_trace(engine_result: dict[str, Any] | None) -> dict[st
     step_audit = engine_result.get("step_audit")
     if not isinstance(step_audit, dict):
         step_audit = {}
+    else:
+        step_audit = _enrich_step_audit_bcp_linkage(step_audit, engine_result)
     timing_audit = engine_result.get("timing_audit")
     if not isinstance(timing_audit, dict):
         timing_audit = {}
@@ -277,12 +1122,72 @@ def build_marriage_engine_trace(engine_result: dict[str, Any] | None) -> dict[st
     })
 
 
+def _marriage_calculation_steps(engine_result: dict[str, Any]) -> list[str]:
+    """High-signal lines for admin: how primary window was chosen."""
+    out: list[str] = []
+    top = (engine_result.get("top_3_windows") or [{}])[0]
+    if isinstance(top, dict) and top.get("md"):
+        out.append(
+            f"Selected dasha: {top.get('md')}-{top.get('ad')}-{top.get('pd')} "
+            f"({top.get('start_iso')} → {top.get('end_iso')}) "
+            f"score={top.get('score')}"
+        )
+    pw = str(engine_result.get("primary_window") or "").strip()
+    if pw:
+        out.append(f"Answer window: {pw}")
+    kt = str(engine_result.get("key_trigger") or "").strip()
+    if kt:
+        out.append(f"Trigger: {kt}")
+    priority_keys = (
+        "BCP_FLOOR", "BCP_ANCHOR", "BCP primary", "STEP0A BCP",
+        "STEP0 verdict", "STEP0 age", "late_urgent", "AGE birth_dt",
+        "STEP7", "STEP5.5", "STEP5 current",
+    )
+    for f in engine_result.get("factors") or []:
+        fs = str(f).strip()
+        if fs and any(k in fs for k in priority_keys) and fs not in out:
+            out.append(fs)
+    s0a = (engine_result.get("step0a") or {}).get("dasha_scan_plan") or {}
+    if isinstance(s0a, dict):
+        mode = s0a.get("timing_mode")
+        pref = s0a.get("primary_reference_age")
+        focus = s0a.get("bcp_focus_ages")
+        if mode or pref:
+            out.append(
+                f"BCP plan: mode={mode} primary_age={pref} "
+                f"focus={focus} late_urgent={s0a.get('late_urgent_scan')}"
+            )
+    return out[:24]
+
+
 def _marriage_timing_evidence(engine_result: dict[str, Any]) -> list[str]:
     """Dasha/BCP/transit lines for admin evidence panel (M17 marriage timing)."""
     out: list[str] = []
     pw = str(engine_result.get("primary_window") or "").strip()
     if pw:
         out.append(f"Primary window: {pw}")
+    linkage = _marriage_bcp_linkage_snapshot(engine_result)
+    linkage_lines: list[str] = []
+    try:
+        from event_timing.marriage.bcp_marriage_ages import bcp_linkage_admin_lines
+
+        bcp_raw = engine_result.get("bcp_marriage_ages")
+        if not isinstance(bcp_raw, dict):
+            s0a = engine_result.get("step0a")
+            bcp_raw = (s0a.get("bcp_marriage_ages") if isinstance(s0a, dict) else None) or {}
+        if isinstance(bcp_raw, dict) and bcp_raw.get("seventh_lord_house") is not None:
+            linkage_lines = bcp_linkage_admin_lines(bcp_raw) or []
+    except Exception:
+        linkage_lines = []
+    if not linkage_lines:
+        linkage_lines = _bcp_linkage_evidence_lines(linkage)
+    for line in linkage_lines:
+        if line and line not in out:
+            out.append(line)
+    calc = _marriage_calculation_steps(engine_result)
+    for line in calc:
+        if line not in out:
+            out.append(line)
     bw = str(engine_result.get("backup_window") or "").strip()
     if bw:
         out.append(f"Backup window: {bw}")
@@ -325,9 +1230,9 @@ def _marriage_timing_evidence(engine_result: dict[str, Any]) -> list[str]:
                 line = f"{key}: " + " · ".join(parts)
                 if line not in out:
                     out.append(line[:240])
-            if len(out) >= 12:
+            if len(out) >= 30:
                 break
-    return out[:12]
+    return out[:40]
 
 
 def build_marriage_timing_slice_meta(engine_result: dict[str, Any] | None) -> dict[str, Any]:
@@ -335,6 +1240,7 @@ def build_marriage_timing_slice_meta(engine_result: dict[str, Any] | None) -> di
     if not isinstance(engine_result, dict) or not engine_result:
         return {}
     evidence = _marriage_timing_evidence(engine_result)
+    calc_steps = _marriage_calculation_steps(engine_result)
     pw = str(engine_result.get("primary_window") or "").strip()
     verdict = str(engine_result.get("verdict") or engine_result.get("band") or "").strip()
     summary: list[str] = []
@@ -348,6 +1254,7 @@ def build_marriage_timing_slice_meta(engine_result: dict[str, Any] | None) -> di
         "summary": summary,
         "evidence": evidence,
         "timing_evidence": evidence,
+        "calculation_steps": calc_steps,
         "checks": {
             "bucket": engine_result.get("bucket"),
             "band": engine_result.get("band"),
@@ -356,7 +1263,12 @@ def build_marriage_timing_slice_meta(engine_result: dict[str, Any] | None) -> di
         "narrator_mode": "engine_only",
     }
     if isinstance(engine_result.get("step_audit"), dict):
-        meta["step_audit"] = engine_result["step_audit"]
+        meta["step_audit"] = _enrich_step_audit_bcp_linkage(
+            engine_result["step_audit"], engine_result,
+        )
+    linkage = _marriage_bcp_linkage_snapshot(engine_result)
+    if linkage.get("d1_7l_placement_house") or linkage.get("d9_7l_placement_house"):
+        meta["bcp_linkage"] = linkage
     if isinstance(engine_result.get("timing_audit"), dict):
         meta["timing_audit"] = engine_result["timing_audit"]
     return meta
@@ -431,6 +1343,8 @@ def build_engine_facts_snapshot(
         out["evidence"] = list(slice_meta.get("timing_evidence") or [])
     if slice_meta.get("timing_evidence"):
         out["timing_evidence"] = list(slice_meta.get("timing_evidence") or [])
+    if slice_meta.get("calculation_steps"):
+        out["calculation_steps"] = list(slice_meta.get("calculation_steps") or [])
     if slice_meta.get("step_audit"):
         out["step_audit"] = slice_meta.get("step_audit")
     return out
@@ -681,15 +1595,190 @@ def build_admin_llm_context(
     return ctx_out
 
 
+def _compact_ctx_for_db(ctx: dict[str, Any]) -> dict[str, Any]:
+    """Drop huge prompt blobs so blocks.engine_trace + evidence survive DB save."""
+    out = dict(ctx)
+    sizes = dict(out.get("sizes") or {})
+    for key in _DB_STRIP_KEYS:
+        val = str(out.get(key) or "")
+        if val:
+            sizes[f"{key}_chars"] = sizes.get(f"{key}_chars") or len(val)
+            out[key] = ""
+    out["sizes"] = sizes
+
+    blocks = out.get("blocks")
+    if isinstance(blocks, dict):
+        blocks = dict(blocks)
+        blocks.pop("chart_context", None)
+        me = blocks.get("marriage_engine")
+        if isinstance(me, str) and len(me) > 1500:
+            blocks["marriage_engine"] = me[:1500] + "…"
+        out["blocks"] = blocks
+
+    ef = out.get("engine_facts")
+    if isinstance(ef, dict):
+        ef = dict(ef)
+        for key in ("evidence", "timing_evidence"):
+            arr = ef.get(key)
+            if isinstance(arr, list) and len(arr) > 40:
+                ef[key] = arr[:40]
+        out["engine_facts"] = ef
+
+    sm = out.get("slice_meta")
+    if isinstance(sm, dict):
+        sm = dict(sm)
+        for key in ("evidence", "timing_evidence"):
+            arr = sm.get(key)
+            if isinstance(arr, list) and len(arr) > 40:
+                sm[key] = arr[:40]
+        out["slice_meta"] = sm
+
+    return out
+
+
+def _salvage_truncated_json(raw: str) -> dict[str, Any] | None:
+    """Best-effort parse when an older row was truncated mid-string."""
+    s = raw.strip()
+    if not s.startswith("{"):
+        return None
+    try:
+        data = json.loads(s)
+        return data if isinstance(data, dict) else None
+    except json.JSONDecodeError:
+        pass
+    for suffix in ('"]}', '"}]}', '"}]}}', '"}]}}}', "}", ""):
+        try:
+            data = json.loads(s + suffix)
+            if isinstance(data, dict):
+                return data
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
+def _synthesize_engine_trace_from_meta(ctx: dict[str, Any]) -> dict[str, Any] | None:
+    """Rebuild admin engine_trace when blocks were lost but slice_meta survived."""
+    slice_meta = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    engine_facts = ctx.get("engine_facts") if isinstance(ctx.get("engine_facts"), dict) else {}
+    checks = ctx.get("checks") if isinstance(ctx.get("checks"), dict) else {}
+    step_audit = slice_meta.get("step_audit") or engine_facts.get("step_audit")
+    timing_audit = slice_meta.get("timing_audit") or engine_facts.get("timing_audit")
+    if not step_audit and not timing_audit:
+        return None
+
+    sl = str(
+        slice_meta.get("slice")
+        or checks.get("slice_type")
+        or "marriage_timing_m17"
+    ).strip()
+    if sl == "timing_marriage_engine":
+        sl = "marriage_timing_m17"
+
+    pw = ""
+    for item in (slice_meta.get("summary") or engine_facts.get("summary") or []):
+        text = str(item)
+        if "Marriage timing:" in text:
+            pw = text.split("Marriage timing:", 1)[-1].strip()
+            break
+        if "–" in text or "-" in text:
+            pw = text.strip()
+            break
+    if not pw:
+        for line in (engine_facts.get("evidence") or slice_meta.get("evidence") or []):
+            ls = str(line)
+            if ls.lower().startswith("primary window:"):
+                pw = ls.split(":", 1)[-1].strip()
+                break
+            if "Answer window:" in ls:
+                pw = ls.split(":", 1)[-1].strip()
+                break
+
+    factors: list[str] = []
+    for line in (engine_facts.get("evidence") or slice_meta.get("evidence") or []):
+        fs = str(line).strip()
+        if fs and fs not in factors:
+            factors.append(fs)
+
+    return normalize_engine_trace_transit_months({
+        "engine": sl,
+        "primary_window": pw or None,
+        "backup_window": None,
+        "verdict": slice_meta.get("verdict") or engine_facts.get("verdict"),
+        "band": (slice_meta.get("checks") or {}).get("band") if isinstance(slice_meta.get("checks"), dict) else None,
+        "step_audit": step_audit if isinstance(step_audit, dict) else {},
+        "step_order": list(_MARRIAGE_TRACE_STEP_ORDER),
+        "timing_audit": timing_audit if isinstance(timing_audit, dict) else {},
+        "factors": factors[:50],
+        "synthesized_from_meta": True,
+    })
+
+
+def _hydrate_admin_context_on_load(ctx: dict[str, Any]) -> dict[str, Any]:
+    """Fill missing engine_trace / verification when loading saved rows."""
+    out = dict(ctx)
+    blocks = dict(out.get("blocks") or {}) if isinstance(out.get("blocks"), dict) else {}
+    trace = blocks.get("engine_trace") or blocks.get("marriage_engine_trace")
+    if not isinstance(trace, dict) or not (trace.get("step_audit") or trace.get("timing_audit")):
+        synth = _synthesize_engine_trace_from_meta(out)
+        if synth:
+            blocks["engine_trace"] = synth
+            out["blocks"] = blocks
+
+    ev = out.get("engine_verification_summary")
+    if not (isinstance(ev, dict) and ev.get("label")):
+        slice_meta = out.get("slice_meta") if isinstance(out.get("slice_meta"), dict) else {}
+        checks = out.get("checks") if isinstance(out.get("checks"), dict) else {}
+        intent = out.get("llm_intent") if isinstance(out.get("llm_intent"), dict) else {}
+        rebuilt = _build_engine_verification_summary_for_ctx(
+            str(out.get("question") or intent.get("question_normalized") or ""),
+            llm_intent=intent,
+            slice_meta=slice_meta,
+            checks=checks,
+            is_timing=bool(out.get("is_timing") or out.get("question_type") == "TIMING"),
+        )
+        if rebuilt:
+            out["engine_verification_summary"] = rebuilt
+
+    try:
+        from ask_engine_catalog import enrich_admin_context_engine_display
+
+        intent = out.get("llm_intent") if isinstance(out.get("llm_intent"), dict) else {}
+        out = enrich_admin_context_engine_display(out, llm_intent=intent)
+    except Exception:
+        pass
+    return _hydrate_marriage_bcp_linkage(out)
+
+
 def serialize_llm_context_for_db(ctx: Any) -> str | None:
     if not ctx:
         return None
+    payload = ctx
+    if isinstance(ctx, dict):
+        payload = _compact_ctx_for_db(ctx)
     try:
-        raw = json.dumps(ctx, ensure_ascii=False, default=str)
+        raw = json.dumps(payload, ensure_ascii=False, default=str)
     except Exception:
         return None
     if len(raw) > _MAX_DB_CHARS:
-        return raw[: _MAX_DB_CHARS - 1] + "…"
+        if isinstance(payload, dict):
+            payload = _compact_ctx_for_db(payload)
+            ef = payload.get("engine_facts")
+            if isinstance(ef, dict):
+                ef = dict(ef)
+                ef.pop("step_audit", None)
+                payload["engine_facts"] = ef
+            sm = payload.get("slice_meta")
+            if isinstance(sm, dict):
+                sm = dict(sm)
+                sm.pop("step_audit", None)
+                sm.pop("timing_audit", None)
+                payload["slice_meta"] = sm
+            try:
+                raw = json.dumps(payload, ensure_ascii=False, default=str)
+            except Exception:
+                return None
+        if len(raw) > _MAX_DB_CHARS:
+            return raw[: _MAX_DB_CHARS - 1] + "…"
     return raw
 
 
@@ -733,7 +1822,7 @@ def refresh_stored_llm_context_understanding(ctx: dict[str, Any]) -> dict[str, A
         out = enrich_admin_context_engine_display(out, llm_intent=refreshed)
     except Exception:
         pass
-    return out
+    return _hydrate_admin_context_on_load(out)
 
 
 def parse_llm_context_from_db(
@@ -744,7 +1833,16 @@ def parse_llm_context_from_db(
     if not raw or not str(raw).strip():
         return None
     try:
-        data = json.loads(raw)
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            data = _salvage_truncated_json(str(raw))
+            if not data:
+                salvaged = _salvage_truncated_json(str(raw)[:79_999])
+                if salvaged:
+                    data = salvaged
+                else:
+                    return {"raw": str(raw)[:8000]}
         if not isinstance(data, dict):
             return None
         blocks = data.get("blocks")
@@ -753,14 +1851,12 @@ def parse_llm_context_from_db(
                 tr = blocks.get(key)
                 if isinstance(tr, dict):
                     blocks[key] = normalize_engine_trace_transit_months(tr)
+        data = _hydrate_admin_context_on_load(data)
         if refresh_understanding:
             return refresh_stored_llm_context_understanding(data)
-        try:
-            from ask_engine_catalog import enrich_admin_context_engine_display
-
-            intent = data.get("llm_intent") if isinstance(data.get("llm_intent"), dict) else {}
-            return enrich_admin_context_engine_display(data, llm_intent=intent)
-        except Exception:
-            return data
+        return data
     except Exception:
-        return {"raw": str(raw)[:4000]}
+        salvaged = _salvage_truncated_json(str(raw))
+        if salvaged:
+            return _hydrate_admin_context_on_load(salvaged)
+        return {"raw": str(raw)[:8000]}

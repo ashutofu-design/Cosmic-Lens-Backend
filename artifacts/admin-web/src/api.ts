@@ -219,6 +219,16 @@ export interface AskLlmContext {
   raw?: string;
 }
 
+export interface MarriageBcpStep2Admin {
+  title: string;
+  detail: string;
+  ages: number[];
+  linkage_lines: string[];
+  user_age?: number | null;
+  recomputed_from_chart?: boolean;
+  step0a?: Record<string, unknown>;
+}
+
 export interface AskQuestionItem {
   id: string;
   user_id: number;
@@ -239,6 +249,7 @@ export interface AskQuestionItem {
   engine_tag: string | null;
   llm_context_json?: string | null;
   llm_context?: AskLlmContext | null;
+  marriage_bcp_step2?: MarriageBcpStep2Admin | null;
   created_at: string | null;
 }
 

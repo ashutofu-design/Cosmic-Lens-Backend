@@ -67,7 +67,7 @@ BUCKETS: dict[str, dict[str, Any]] = {
         "planets": {"Rahu", "Ketu", "Venus", "Mars", "Moon"},
     },
     "breakup_separation": {
-        "rx": r"breakup|break\s*up|separation|door|dur|distance|toot|chhod",
+        "rx": r"breakup|break\s*up|break\s*ho|separation|door|dur|distance|toot|chhod",
         "houses": {6, 7, 8, 12},
         "planets": {"Saturn", "Rahu", "Ketu", "Mars", "Venus", "Moon"},
     },

@@ -97,9 +97,28 @@ _CAREER_NATIVE_RX = re.compile(
 
 _MR_CONTEXT_RX = re.compile(
     r"(?ix)\b("
-    r"shaadi|shadi|marriage|spouse|partner|wife|husband|pati|patni|biwi|"
+    r"shaadi|shadi|marriage|spouse|partner|life\s+partner|wife|husband|pati|patni|biwi|"
     r"pyaar|pyar|love|rishta|relationship|boyfriend|girlfriend|saas|sasur"
     r")\b"
+)
+
+_PARTNER_NATURE_STATIC_RX = re.compile(
+    r"(?ix)("
+    r"\b(partner|spouse|pati|patni|husband|wife|biwi|life\s+partner|"
+    r"jeevan\s*sathi|jeevansathi|boyfriend|girlfriend)\b.{0,45}\b("
+    r"nature|kaisa|kaisi|kaise|personality|swabhav|character|kaisa\s+hoga"
+    r")\b|"
+    r"\b(nature|kaisa|kaisi|kaise)\b.{0,45}\b(partner|spouse|pati|patni|"
+    r"husband|wife|biwi|life\s+partner|jeevan\s*sathi)\b"
+    r")",
+)
+
+_LOVE_ARRANGED_STATIC_RX = re.compile(
+    r"(?ix)("
+    r"love\s*marriage.{0,40}(arrange|arranged)|"
+    r"(arrange|arranged).{0,40}love\s*marriage|"
+    r"prem\s*vivah.{0,30}(arrange|arranged)"
+    r")",
 )
 
 _MALEFICS = {"Sun", "Mars", "Saturn", "Rahu", "Ketu"}
@@ -120,6 +139,10 @@ def is_marriage_relationship_static_question(question: str) -> bool:
     q = (question or "").strip()
     if not q:
         return False
+    if _PARTNER_NATURE_STATIC_RX.search(q):
+        return True
+    if _LOVE_ARRANGED_STATIC_RX.search(q):
+        return True
     if _YEAR_FORECAST_RX.search(q):
         return False
     if _TIMING_RX.search(q) or _HINDI_TIMING_RX.search(q):

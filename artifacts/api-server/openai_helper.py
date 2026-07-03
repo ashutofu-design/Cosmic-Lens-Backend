@@ -226,11 +226,18 @@ def _extract_primary_window_from_m17_block(block: str) -> str:
 
 
 def _is_marriage_timing_question(question: str) -> bool:
-    """True for 'shaadi kab' style Qs — not analysis ('kyun delay')."""
+    """True for 'shaadi kab' style Qs — not static MR (partner nature, love vs arranged)."""
     if not isinstance(question, str) or not question.strip():
         return False
     if not _M17_MARRIAGE_KW_RX.search(question):
         return False
+    try:
+        from ask_marriage_relationship_slice import is_marriage_relationship_static_question
+
+        if is_marriage_relationship_static_question(question):
+            return False
+    except Exception:
+        pass
     q = question.lower()
     if _re_mb_M17.search(
         r"\b(kyun|why|kaise\s+hai|detail|explain|samjha|7th\s*lord|"
@@ -238,7 +245,21 @@ def _is_marriage_timing_question(question: str) -> bool:
         q,
     ):
         return bool(_re_mb_M17.search(r"\b(kab|when|kitne\s+saal|time)\b", q))
-    return True
+    if _re_mb_M17.search(
+        r"\b(kab|when|kitne\s+saal|kis\s+saal|kis\s+date|kis\s+month|"
+        r"kis\s+mahine|timing|muhurat|which\s+year|which\s+month)\b",
+        q,
+    ):
+        return True
+    if _re_mb_M17.search(r"\b(shaadi|shadi|marriage|vivah|wedding)\b", q):
+        return bool(
+            _re_mb_M17.search(
+                r"\b(kab|when|ho\s+jayegi|ho\s+jayega|ho\s+jaegi|ho\s+jaega|"
+                r"tak\s+ho|kis\s+saal)\b",
+                q,
+            )
+        )
+    return False
 
 
 def _marriage_timing_reply_parts(

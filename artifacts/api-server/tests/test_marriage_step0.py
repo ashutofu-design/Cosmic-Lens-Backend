@@ -144,6 +144,41 @@ def test_step8_final_prediction_late_chart():
     assert pred["predicted_bcp_age"] == 30
     assert "Venus" in pred["step5_aligned_lords"]
     assert pred["transit_confirmed"]
+    assert pred.get("primary_window") == "Jan 2030 – Jun 2030"
+    assert pred.get("marriage_period") == "Jan 2030 – Jun 2030"
+
+
+def test_ensure_marriage_step8_builds_from_step6():
+    from ask_llm_context_debug import _ensure_marriage_step8_on_audit
+
+    audit = {
+        "step0": {"result": {"verdict": "DELAYED", "d1_pace": "VERY_LATE", "d9_pace": "LATE"}},
+        "step0a": {
+            "d1_bcp_ages": [33, 39, 45],
+            "d9_bcp_ages": [29, 35, 41],
+            "focus_ages": [33, 35],
+            "primary_reference_age": 33,
+        },
+        "step5": {"ranked_top": [{"name": "Jupiter", "score": 18}]},
+        "step6": {
+            "selected_windows": [{
+                "md": "Sun",
+                "ad": "Sun",
+                "pd": "Sun",
+                "window": "October 2036",
+                "start_iso": "2036-10-01",
+                "end_iso": "2036-10-31",
+                "transit_confirmed": True,
+                "bcp_age_hits": [33],
+                "score": 20.0,
+            }],
+        },
+    }
+    _ensure_marriage_step8_on_audit(audit, user_age=26)
+    s8 = audit.get("step8") or {}
+    assert s8.get("primary_window") == "October 2036"
+    assert s8.get("marriage_period") == "October 2036"
+    assert s8.get("transit_confirmed")
 
 
 def test_bcp_merged_list_has_placement_and_aspects():

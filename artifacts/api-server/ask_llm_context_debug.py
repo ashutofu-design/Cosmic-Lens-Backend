@@ -591,6 +591,162 @@ def _ensure_marriage_step67_on_chart(
         )
 
 
+def _ensure_marriage_step8_on_audit(
+    audit: dict[str, Any],
+    *,
+    primary_window: str | None = None,
+    user_age: int | None = None,
+    engine_result: dict[str, Any] | None = None,
+) -> None:
+    """Build Step 8 final (late BCP + dasha + transit) when missing or incomplete."""
+    if not isinstance(audit, dict):
+        return
+    er = engine_result if isinstance(engine_result, dict) else {}
+    pw = str(primary_window or er.get("primary_window") or "").strip() or None
+
+    age = user_age
+    if age is None and er.get("user_age") is not None:
+        try:
+            age = int(er["user_age"])
+        except (TypeError, ValueError):
+            age = None
+    if age is None:
+        s0 = audit.get("step0")
+        if isinstance(s0, dict) and s0.get("user_age") is not None:
+            try:
+                age = int(s0["user_age"])
+            except (TypeError, ValueError):
+                pass
+
+    existing = audit.get("step8") if isinstance(audit.get("step8"), dict) else {}
+    if (
+        existing.get("primary_window")
+        and existing.get("marriage_period")
+        and (existing.get("final_prediction") or existing.get("primary_dasha"))
+    ):
+        return
+
+    step0 = audit.get("step0") if isinstance(audit.get("step0"), dict) else {}
+    step0_tendency = step0.get("result") if isinstance(step0.get("result"), dict) else {}
+    if not step0_tendency and isinstance(er.get("step0_tendency"), dict):
+        step0_tendency = er["step0_tendency"]
+
+    step0a = audit.get("step0a") if isinstance(audit.get("step0a"), dict) else {}
+    step5 = audit.get("step5") if isinstance(audit.get("step5"), dict) else {}
+    step6 = audit.get("step6") if isinstance(audit.get("step6"), dict) else {}
+
+    ranked = step5.get("ranked_top") or []
+    all_wins = step6.get("selected_windows") or er.get("top_3_windows") or []
+    matched = [
+        w for w in all_wins
+        if isinstance(w, dict) and w.get("transit_confirmed")
+    ]
+    if not matched:
+        matched = [w for w in all_wins if isinstance(w, dict)][:1]
+
+    if not pw and matched:
+        pw = str(matched[0].get("window") or "").strip() or None
+
+    d1_bcp = list(step0a.get("d1_bcp_ages") or [])
+    d9_bcp = list(step0a.get("d9_bcp_ages") or [])
+    if not d1_bcp and not d9_bcp:
+        bcp = er.get("bcp_marriage_ages")
+        if isinstance(bcp, dict):
+            d1_bcp = list(bcp.get("d1_future_bcp_ages") or [])
+            d9_bcp = list(bcp.get("d9_future_bcp_ages") or [])
+
+    focus_raw = step0a.get("focus_ages") or []
+    focus_set = {int(a) for a in focus_raw if isinstance(a, (int, float))}
+    primary_ref = step0a.get("primary_reference_age")
+    if primary_ref is None:
+        dsp = er.get("dasha_scan_plan")
+        if isinstance(dsp, dict):
+            primary_ref = dsp.get("primary_reference_age")
+
+    verdict = (
+        step0_tendency.get("verdict")
+        or existing.get("verdict")
+        or er.get("verdict")
+        or "UNKNOWN"
+    )
+    band = existing.get("band") or er.get("band") or (
+        "MEDIUM" if verdict in ("DELAYED", "LATE") else "WEAK"
+    )
+
+    try:
+        from event_timing.marriage.marriage_engine_v2 import _build_step8_final_prediction
+
+        pred = _build_step8_final_prediction(
+            step0_tendency=step0_tendency,
+            d1_bcp_ages=d1_bcp,
+            d9_bcp_ages=d9_bcp,
+            ranked=ranked if isinstance(ranked, list) else [],
+            matched_windows=matched,
+            user_age=age,
+            primary_ref_age=(
+                int(primary_ref) if isinstance(primary_ref, (int, float)) else None
+            ),
+            focus_bcp_ages=focus_set,
+            primary_window=pw,
+            key_trigger=er.get("key_trigger"),
+        )
+        if not pw:
+            pd = pred.get("primary_dasha") or {}
+            if isinstance(pd, dict):
+                pw = str(pd.get("window") or "").strip() or None
+        marriage_period = (
+            pw
+            or pred.get("marriage_period")
+            or pred.get("final_prediction")
+        )
+        audit["step8"] = {
+            **existing,
+            "name": existing.get("name") or "Final — late BCP + dasha + transit",
+            "status": (
+                "DONE" if pred.get("transit_confirmed")
+                else (
+                    "PARTIAL" if pred.get("predicted_bcp_age")
+                    else str(existing.get("status") or "PARTIAL")
+                )
+            ),
+            "verdict": verdict,
+            "band": band,
+            "primary_window": pw or existing.get("primary_window"),
+            "marriage_period": marriage_period or existing.get("marriage_period"),
+            **pred,
+        }
+    except Exception as exc:
+        if matched:
+            win = matched[0]
+            win_pw = pw or str(win.get("window") or "").strip() or None
+            audit["step8"] = {
+                **existing,
+                "name": "Final — late BCP + dasha + transit",
+                "status": "PARTIAL",
+                "verdict": verdict,
+                "band": band,
+                "primary_window": win_pw,
+                "marriage_period": win_pw,
+                "primary_dasha": {
+                    "md": win.get("md"),
+                    "ad": win.get("ad"),
+                    "pd": win.get("pd"),
+                    "window": win.get("window"),
+                    "start_iso": win.get("start_iso"),
+                    "end_iso": win.get("end_iso"),
+                },
+                "transit_confirmed": bool(win.get("transit_confirmed")),
+                "final_prediction": (
+                    f"Dasha {win.get('md')}-{win.get('ad')}-{win.get('pd')} "
+                    f"→ {win_pw or win.get('window') or '—'}"
+                ),
+            }
+        print(
+            f"[ensure_step8] failed: {type(exc).__name__}: {str(exc)[:120]}",
+            flush=True,
+        )
+
+
 def ensure_marriage_step_audit_on_result(
     engine_result: dict[str, Any],
     kundli: dict[str, Any],
@@ -642,7 +798,7 @@ def ensure_marriage_step_audit_on_result(
                 chart, {}, kp_resolved or {}, birth,
             ) or {}
             fb_sa = fb.get("step_audit") if isinstance(fb.get("step_audit"), dict) else {}
-            for key in ("step0", "step0a"):
+            for key in ("step0", "step0a", "step8"):
                 if isinstance(fb_sa.get(key), dict):
                     audit[key] = {**(audit.get(key) or {}), **fb_sa[key]}
         except Exception as exc:
@@ -653,6 +809,12 @@ def ensure_marriage_step_audit_on_result(
 
     _ensure_marriage_step67_on_chart(
         audit, chart, birth, lagna_si=lagna_si, force=False,
+    )
+    _ensure_marriage_step8_on_audit(
+        audit,
+        primary_window=str(engine_result.get("primary_window") or "").strip() or None,
+        user_age=engine_result.get("user_age"),
+        engine_result=engine_result,
     )
 
     if audit:
@@ -1028,6 +1190,9 @@ def _build_marriage_step_audit_from_chart(
             "user_age": user_age,
             "recomputed_from_chart": True,
         }
+    _ensure_marriage_step8_on_audit(audit, user_age=user_age)
+    if isinstance(audit.get("step8"), dict):
+        audit["step8"]["recomputed_from_chart"] = True
     return audit
 
 
@@ -2080,6 +2245,31 @@ def _slim_marriage_step_audit_for_db(step_audit: dict[str, Any]) -> dict[str, An
                 "candidate_windows": cands[:3] if isinstance(cands, list) else [],
                 "future_candidates_count": step.get("future_candidates_count"),
                 "current_activation": step.get("current_activation"),
+            }
+        elif key == "step8":
+            pd = step.get("primary_dasha") if isinstance(step.get("primary_dasha"), dict) else {}
+            out[key] = {
+                "name": step.get("name"),
+                "status": step.get("status"),
+                "verdict": step.get("verdict"),
+                "band": step.get("band"),
+                "primary_window": step.get("primary_window"),
+                "marriage_period": step.get("marriage_period"),
+                "late_chart_bcp_locked": step.get("late_chart_bcp_locked"),
+                "predicted_bcp_age": step.get("predicted_bcp_age"),
+                "d1_bcp_ages": (step.get("d1_bcp_ages") or [])[:8],
+                "d9_bcp_ages": (step.get("d9_bcp_ages") or [])[:8],
+                "step5_aligned_lords": step.get("step5_aligned_lords") or [],
+                "transit_confirmed": step.get("transit_confirmed"),
+                "final_prediction": str(step.get("final_prediction") or "")[:400],
+                "primary_dasha": {
+                    "md": pd.get("md"),
+                    "ad": pd.get("ad"),
+                    "pd": pd.get("pd"),
+                    "window": pd.get("window"),
+                    "start_iso": pd.get("start_iso"),
+                    "end_iso": pd.get("end_iso"),
+                } if pd else None,
             }
         else:
             out[key] = step

@@ -2939,6 +2939,14 @@ def _build_step8_final_prediction(
         parts.append(primary_window)
     parts.append("transit match" if transit_ok else "transit nahi")
 
+    best_window = None
+    if best_win and isinstance(best_win, dict):
+        best_window = best_win.get("window")
+    final_pw = primary_window or best_window
+    marriage_period = final_pw
+    if not marriage_period and best_age is not None:
+        marriage_period = f"around age {best_age}"
+
     return {
         "late_chart_bcp_locked": late_locked,
         "d1_pace": d1_pace,
@@ -2946,6 +2954,8 @@ def _build_step8_final_prediction(
         "d1_bcp_ages": d1_ok,
         "d9_bcp_ages": d9_ok,
         "predicted_bcp_age": best_age,
+        "primary_window": final_pw,
+        "marriage_period": marriage_period,
         "primary_dasha": {
             "md": md,
             "ad": ad,
@@ -4440,6 +4450,8 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             "final_gate": final_gate,
             "verdict": verdict,
             "band": band,
+            "primary_window": primary_window,
+            "marriage_period": primary_window,
             **step8_prediction,
         },
     }
@@ -4719,6 +4731,8 @@ def compute_timing_window_fallback(
         "risk_flags": ["fallback_step0_only"],
         "verdict": step0_verdict or "UNKNOWN",
         "band": "MEDIUM" if step0_verdict in ("DELAYED", "LATE") else "WEAK",
+        "primary_window": primary_window,
+        "marriage_period": primary_window,
         **step8_prediction,
     }
 

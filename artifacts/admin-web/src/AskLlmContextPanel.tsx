@@ -681,11 +681,13 @@ function stepOneLiner(
   if (stepKey === "step8") {
     const pred = String(step.final_prediction || "").trim();
     const age = step.predicted_bcp_age;
+    const period = String(step.primary_window || step.marriage_period || "").trim();
     const parts = [
       name,
       `verdict ${fmtCheckValue(step.verdict)}`,
       `band ${fmtCheckValue(step.band)}`,
     ];
+    if (period) parts.push(`marriage ${period}`);
     if (step.late_chart_bcp_locked) parts.push("D1+D9 late BCP");
     if (age != null) parts.push(`BCP age ${age}`);
     if (pred) parts.push(pred);
@@ -836,10 +838,50 @@ function formatMarriageStep5RankedLines(
   });
 }
 
-function formatMarriageStep8Final(stepAudit: Record<string, Record<string, unknown>>): string {
-  const s8 = stepAudit.step8;
+function buildStep8FromStep6(
+  stepAudit: Record<string, Record<string, unknown>>,
+  trace?: EngineTrace,
+): Record<string, unknown> | null {
+  const windows = getMarriageDashaWindows(stepAudit, trace);
+  if (!windows.length) return null;
+  const matched = windows.filter((w) => w.transit_confirmed);
+  const best = matched[0] || windows[0];
+  const period = formatMarriageStep6Period(best);
+  const pw = String(trace?.primary_window || period || "").trim() || period;
+  const lords = formatMarriageStep6DashaLord(best);
+  const hits = Array.isArray(best.bcp_age_hits) ? best.bcp_age_hits : [];
+  return {
+    primary_window: pw,
+    marriage_period: pw,
+    predicted_bcp_age: hits.length ? hits[0] : undefined,
+    primary_dasha: {
+      md: best.md,
+      ad: best.ad,
+      pd: best.pd,
+      window: best.window,
+      start_iso: best.start_iso,
+      end_iso: best.end_iso,
+    },
+    transit_confirmed: best.transit_confirmed,
+    final_prediction: `${lords} → ${pw}${formatMarriageStep6TransitSuffix(best)}`,
+  };
+}
+
+function formatMarriageStep8Final(
+  stepAudit: Record<string, Record<string, unknown>>,
+  trace?: EngineTrace,
+): string {
+  const s8 = (stepAudit.step8 || buildStep8FromStep6(stepAudit, trace)) as
+    | Record<string, unknown>
+    | undefined;
   if (!s8) return "— (not saved)";
   const lines: string[] = [];
+  const period = String(
+    s8.primary_window || s8.marriage_period || trace?.primary_window || "",
+  ).trim();
+  if (period) {
+    lines.push(`Marriage kab: ${period}`);
+  }
   if (s8.late_chart_bcp_locked) {
     lines.push("D1+D9 late → sirf late BCP ages");
     const d1 = Array.isArray(s8.d1_bcp_ages) ? s8.d1_bcp_ages.join(", ") : "—";
@@ -854,8 +896,16 @@ function formatMarriageStep8Final(stepAudit: Record<string, Record<string, unkno
   if (dasha.md && dasha.ad && dasha.pd) {
     lines.push(`Dasha: ${dasha.md}-${dasha.ad}-${dasha.pd}`);
   }
+  if (dasha.window) {
+    lines.push(`Dasha window: ${dasha.window}`);
+  } else if (dasha.start_iso && dasha.end_iso) {
+    lines.push(`Dasha period: ${dasha.start_iso} → ${dasha.end_iso}`);
+  }
   if (Array.isArray(s8.step5_aligned_lords) && s8.step5_aligned_lords.length) {
     lines.push(`Step5 match: ${s8.step5_aligned_lords.join(", ")}`);
+  }
+  if (s8.transit_confirmed) {
+    lines.push("Transit: Guru/Shani 7H/7L confirmed");
   }
   if (s8.final_prediction) {
     lines.push(String(s8.final_prediction));
@@ -868,10 +918,12 @@ function formatMarriageStep8Final(stepAudit: Record<string, Record<string, unkno
 
 function MarriageStep8FinalLines({
   stepAudit,
+  trace,
 }: {
   stepAudit: Record<string, Record<string, unknown>>;
+  trace?: EngineTrace;
 }) {
-  const text = formatMarriageStep8Final(stepAudit);
+  const text = formatMarriageStep8Final(stepAudit, trace);
   if (text === "— (not saved)") {
     return <span className="detail-muted">— (not saved)</span>;
   }
@@ -1936,7 +1988,7 @@ export function EngineTracePanel({
                           || (step ? stepOneLiner(key, step, engineId || "marriage_timing_m17") : "— (not saved)")
                         )
                       : key === "step8"
-                        ? formatMarriageStep8Final(stepAudit)
+                        ? formatMarriageStep8Final(stepAudit, trace)
                         : step
                 ? stepOneLiner(key, step, engineId || "marriage_timing_m17")
                 : "— (not saved)";
@@ -2450,7 +2502,7 @@ export function AskLlmContextPanel({
                 </div>
                 <div className="engine-marriage-step0 engine-marriage-step8">
                   <strong>Step 8 — Final (late BCP + dasha + transit):</strong>
-                  <MarriageStep8FinalLines stepAudit={marriageStepAudit} />
+                  <MarriageStep8FinalLines stepAudit={marriageStepAudit} trace={marriageEngineTrace} />
                 </div>
               </>
             ) : null}

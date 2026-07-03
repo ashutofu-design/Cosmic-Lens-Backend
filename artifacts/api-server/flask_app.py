@@ -5054,12 +5054,12 @@ def planet_transits():
 @app.route("/api/career-analysis", methods=["POST", "OPTIONS"])
 def career_analysis():
     """
-    Vedic career analysis (single Basic dashboard — no Pro tier on this screen).
+    Vedic career analysis — Basic dashboard + Pro deep block.
 
     Body: { "user_id": int, "kundli": {...saved kundli object...} }
     Headers: X-API-Key (required)
 
-    Returns: { "basic": { score, trend, job_pct, top_matches, ... } }
+    Returns: { "basic": {...}, "pro": {...}, "level": "basic"|"pro", "pro_locked": bool }
     """
     if request.method == "OPTIONS":
         return jsonify({}), 200
@@ -5165,7 +5165,11 @@ def career_analysis():
         apply_commercial_bonus,
         compute_career_realtime_score,
     )
-    from vedic.life_specifics import build_career_basic_insights, compute_career_specifics
+    from vedic.life_specifics import (
+        build_career_basic_insights,
+        build_career_pro_insights,
+        compute_career_specifics,
+    )
 
     score_result = compute_career_realtime_score(planets, asc_idx, kundli)
     score = score_result["score"]
@@ -5192,7 +5196,14 @@ def career_analysis():
     if comm_note:
         basic_insights["score_note"] = comm_note
 
-    return jsonify({"basic": basic_insights})
+    pro_insights = build_career_pro_insights(planets, asc_idx, deep, score_result, cd)
+
+    return jsonify({
+        "level": "basic",
+        "pro_locked": False,
+        "basic": basic_insights,
+        "pro": pro_insights,
+    })
 
 
 @app.route("/api/health-analysis", methods=["POST", "OPTIONS"])

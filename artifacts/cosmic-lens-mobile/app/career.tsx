@@ -60,8 +60,13 @@ function PremiumOrb({ color }: { color: string }) {
 interface BasicBlock {
   score: number;
   trend: "Good" | "Average" | "Risk" | string;
-  summary: string;
-  hook: string;
+  summary?: string;
+  hook?: string;
+  verdict?: string;
+  score_label?: string;
+  score_context?: string;
+  timing_insight?: string;
+  current_phase?: string;
   job_pct?: number;
   business_pct?: number;
   path_verdict?: string;
@@ -69,6 +74,7 @@ interface BasicBlock {
   career_mode?: string;
   reasoning_summary?: string[];
   income_paths?: { label: string; strength: number }[];
+  top_matches?: { label: string; score: number; driver?: string }[];
   strengths?: string[];
   weakness?: string;
   main_risk?: string;
@@ -113,6 +119,9 @@ function rankCareerOptions(
   const biz = businessPct > jobPct;
   const scoreBoost = (label: string) => {
     const s = (label || "").toLowerCase();
+    if (s.includes("tech") || s.includes("software") || s.includes("it company") || s.includes("developer")) {
+      return 14;
+    }
     if (biz) {
       if (s.includes("business") || s.includes("trade") || s.includes("trading") || s.includes("marketing")) return 14;
       if (s.includes("import") || s.includes("export") || s.includes("sales")) return 10;
@@ -380,6 +389,58 @@ export default function CareerScreen() {
             </View>
             </FadeInView>
 
+            {!!data.basic.score_label && (
+              <SectionCard icon="bar-chart-2" title={data.basic.score_label} accent={accent} delay={staggerDelay(0.5)}>
+                {!!data.basic.summary && (
+                  <Text style={[s.summary, { color: "rgba(255,255,255,0.88)", marginBottom: 8 }]}>
+                    {data.basic.summary}
+                  </Text>
+                )}
+                {!!data.basic.score_context && (
+                  <Text style={{ color: "rgba(255,255,255,0.55)", fontSize: 12, lineHeight: 18 }}>
+                    {data.basic.score_context}
+                  </Text>
+                )}
+                {!!data.basic.current_phase && (
+                  <Text style={{ color: accent, fontSize: 12, marginTop: 8, fontFamily: F.semi }}>
+                    {data.basic.current_phase}
+                  </Text>
+                )}
+                {!!data.basic.timing_insight && (
+                  <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 12, marginTop: 4 }}>
+                    {data.basic.timing_insight}
+                  </Text>
+                )}
+              </SectionCard>
+            )}
+
+            {!!data.basic.path_verdict && (
+              <SectionCard icon="git-branch" title={t.cr_pathTitle} accent="#a78bfa" delay={staggerDelay(0.6)}>
+                <Bullet color="#a78bfa">{data.basic.path_verdict}</Bullet>
+                {(data.basic.career_mode || data.basic.confidence) && (
+                  <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, marginTop: 8 }}>
+                    {data.basic.career_mode ? `${t.cr_pathMode}: ${data.basic.career_mode}` : ""}
+                    {data.basic.career_mode && data.basic.confidence ? " · " : ""}
+                    {data.basic.confidence ? `${t.cr_pathConfidence}: ${data.basic.confidence}` : ""}
+                  </Text>
+                )}
+              </SectionCard>
+            )}
+
+            {!!data.basic.verdict && (
+              <SectionCard icon="compass" title={t.cr_quickReading} accent={accent} delay={staggerDelay(0.7)}>
+                <Bullet color={accent}>{data.basic.verdict}</Bullet>
+              </SectionCard>
+            )}
+
+            {Array.isArray(data.basic.reasoning_summary) && data.basic.reasoning_summary.length > 0 && (
+              <SectionCard icon="info" title={t.cr_reasoning} accent="#94a3b8" delay={staggerDelay(0.8)}>
+                {data.basic.reasoning_summary.slice(0, 4).map((line, i) => (
+                  <Bullet key={i} color="#94a3b8">{line}</Bullet>
+                ))}
+              </SectionCard>
+            )}
+
             {Array.isArray(data.basic.income_paths) && data.basic.income_paths.length > 0 && (
               <SectionCard icon="award" title={t.cr_bestOptions} accent={accent} delay={staggerDelay(1)}>
                 {rankCareerOptions(
@@ -388,7 +449,7 @@ export default function CareerScreen() {
                   data.basic.business_pct ?? 50,
                 ).slice(0, 4).map((p, i) => (
                   <Bullet key={i} color={accent}>
-                    {p.label}
+                    {p.label}{typeof p.strength === "number" ? ` (${p.strength}%)` : ""}
                   </Bullet>
                 ))}
               </SectionCard>
@@ -585,6 +646,14 @@ export default function CareerScreen() {
                   <SectionCard icon="star" title={`Atmakaraka — ${(data.pro as any).atmakaraka.planet} (Soul Planet)`} accent="#fbbf24" delay={staggerDelay(14)}>
                     <Text style={{ color: "#cbd5e1", fontSize: 13, lineHeight: 19 }}>
                       {(data.pro as any).atmakaraka.meaning}
+                    </Text>
+                  </SectionCard>
+                )}
+
+                {(data.pro as any).amatyakaraka?.planet && (
+                  <SectionCard icon="briefcase" title={`Amatyakaraka — ${(data.pro as any).amatyakaraka.planet} (Career Karaka)`} accent="#38bdf8" delay={staggerDelay(14.5)}>
+                    <Text style={{ color: "#cbd5e1", fontSize: 13, lineHeight: 19 }}>
+                      {(data.pro as any).amatyakaraka.meaning}
                     </Text>
                   </SectionCard>
                 )}

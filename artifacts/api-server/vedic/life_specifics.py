@@ -16,7 +16,7 @@ Pure deterministic Vedic logic (BPHS-based). No AI, no DB, no I/O.
 Safe to call repeatedly, never raises (returns empty/default on bad input).
 """
 from __future__ import annotations
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 SIGNS = ["Aries","Taurus","Gemini","Cancer","Leo","Virgo",
          "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"]
@@ -1156,20 +1156,40 @@ def compute_career_specifics(planets: List[dict], asc_idx: int,
                 "verdict":        verdict,
             })
 
-        # ── Atmakaraka (Jaimini) — planet with highest degrees ────────────
+        # ── Atmakaraka (Jaimini 7-karaka) ─────────────────────────────────
         atmak: Optional[Dict[str, str]] = None
-        ranked = sorted(
-            [p for p in planets if p.get("name") in
-             ("Sun","Moon","Mars","Mercury","Jupiter","Venus","Saturn","Rahu")],
-            key=lambda p: float(p.get("degree", p.get("longitude", 0)) or 0) % 30,
-            reverse=True,
-        )
-        if ranked:
-            ak = ranked[0]
-            atmak = {
-                "planet":  ak.get("name"),
-                "meaning": _atmakaraka_meaning(ak.get("name", "")),
-            }
+        amatyakaraka: Optional[Dict[str, str]] = None
+        try:
+            from karakas import compute_karakas
+
+            kk = compute_karakas(planets)
+            ak_name = kk.get("AK") if kk else None
+            amk_name = kk.get("AmK") if kk else None
+            if ak_name:
+                atmak = {
+                    "planet": ak_name,
+                    "meaning": _atmakaraka_meaning(ak_name),
+                }
+            if amk_name:
+                amatyakaraka = {
+                    "planet": amk_name,
+                    "meaning": _atmakaraka_meaning(amk_name),
+                }
+        except Exception:
+            pass
+        if not atmak:
+            ranked = sorted(
+                [p for p in planets if p.get("name") in
+                 ("Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn")],
+                key=lambda p: float(p.get("degree", p.get("longitude", 0)) or 0) % 30,
+                reverse=True,
+            )
+            if ranked:
+                ak = ranked[0]
+                atmak = {
+                    "planet": ak.get("name"),
+                    "meaning": _atmakaraka_meaning(ak.get("name", "")),
+                }
 
         occupants = [p["name"] for p in planets if p.get("house") == 10]
 
@@ -1187,16 +1207,29 @@ def compute_career_specifics(planets: List[dict], asc_idx: int,
         biz_verdict = path["path_verdict"]
         inclination = path.get("inclination") or {}
 
-        # Top careers = classical fields only (not 127 micro-niche catalog)
-        income_paths = [
-            {
-                "label": str(f.get("field") or "").strip(),
-                "strength": int(f.get("score") or 50),
-            }
-            for f in suitable_fields[:4]
-            if str(f.get("field") or "").strip()
-        ]
-        income_sources: List[Dict[str, Any]] = []
+        niche_paths = _compute_chart_income_paths(
+            planets, asc_idx, kundli, job_pct, business_pct,
+        )
+        if niche_paths:
+            income_paths = [
+                {
+                    "label": _compact_career_field(str(x.get("source") or "").strip()),
+                    "strength": int(x.get("strength") or 50),
+                }
+                for x in niche_paths[:4]
+                if str(x.get("source") or "").strip()
+            ]
+            income_sources = niche_paths[:6]
+        else:
+            income_paths = [
+                {
+                    "label": str(f.get("field") or "").strip(),
+                    "strength": int(f.get("score") or 50),
+                }
+                for f in suitable_fields[:4]
+                if str(f.get("field") or "").strip()
+            ]
+            income_sources = []
 
         # ── Peak growth period (current dasha lens) ───────────────────────
         cd = current_dasha or {}
@@ -1217,7 +1250,7 @@ def compute_career_specifics(planets: List[dict], asc_idx: int,
                                    "occupants": ", ".join(occupants) or "Khaali"},
             "tenth_lord":         tenth_lord,
             "atmakaraka":         atmak,
-            "amatyakaraka":       (
+            "amatyakaraka":       amatyakaraka or (
                 {"planet": classical.get("amatyakaraka")}
                 if classical.get("amatyakaraka") else None
             ),
@@ -1305,6 +1338,178 @@ _PHASE_COPY = {
 }
 
 
+def _career_theme_from_label(label: str) -> str:
+    t = (label or "").lower()
+    if "tech" in t or "software" in t or "it " in t:
+        return "analytical"
+    if "business" in t or "trade" in t or "finance" in t:
+        return "business-oriented"
+    if "media" in t or "communication" in t or "marketing" in t:
+        return "communication"
+    if "law" in t or "education" in t or "teaching" in t:
+        return "advisory"
+    if "creative" in t or "arts" in t:
+        return "creative"
+    if "engineer" in t or "technical" in t:
+        return "technical"
+    return (label or "professional").split("/")[0].strip().lower() or "professional"
+
+
+def _career_verdict_from_labels(labels: List[str]) -> str:
+    clean = [x for x in labels if x]
+    if not clean:
+        return "Your chart favors versatile professional growth with the right timing."
+    themes = list(dict.fromkeys(_career_theme_from_label(lb) for lb in clean))[:3]
+    if len(themes) >= 2:
+        return (
+            f"You are naturally suited for {', '.join(themes[:-1])} "
+            f"and {themes[-1]} careers."
+        )
+    if themes:
+        return f"You are naturally suited for {themes[0]} and growth-oriented careers."
+    return "Your chart favors versatile professional growth with the right timing."
+
+
+def _planet_status(sign: str, planet: str) -> str:
+    if not sign or not planet:
+        return "neutral"
+    if sign == EXALT.get(planet):
+        return "exalted"
+    if sign == DEBIL.get(planet):
+        return "debilitated"
+    if sign in OWN.get(planet, []):
+        return "own sign"
+    return "neutral"
+
+
+def _career_house_info(planets: List[dict], asc_idx: int, house_num: int) -> Dict[str, Any]:
+    sign = SIGNS[(asc_idx + house_num - 1) % 12]
+    lord = SIGN_LORD[sign]
+    occ = [str(p.get("name")) for p in planets if int(p.get("house") or 0) == house_num and p.get("name")]
+    return {
+        "house": house_num,
+        "sign": sign,
+        "lord": lord,
+        "occupants": ", ".join(occ) if occ else "—",
+    }
+
+
+def build_career_pro_insights(
+    planets: List[dict],
+    asc_idx: int,
+    deep: Dict[str, Any],
+    score_result: Dict[str, Any],
+    current_dasha: Optional[dict] = None,
+) -> Dict[str, Any]:
+    """Pro-tier career payload — houses, dasha, transits, deep fields."""
+    cd = current_dasha or {}
+    peak = deep.get("peak_growth_period") or {}
+    reasons = list(score_result.get("reasons") or [])[:8]
+    transit = list(score_result.get("transit_notes") or [])[:4]
+
+    career_planets: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    tenth = deep.get("tenth_lord") or {}
+    lord_name = tenth.get("planet")
+    if lord_name:
+        lp = next((p for p in planets if p.get("name") == lord_name), None)
+        if lp:
+            career_planets.append({
+                "name": lord_name,
+                "sign": str(lp.get("sign") or ""),
+                "house": int(lp.get("house") or 0),
+                "status": tenth.get("status") or _planet_status(str(lp.get("sign") or ""), lord_name),
+                "retrograde": bool(lp.get("retrograde")),
+            })
+            seen.add(lord_name)
+
+    occ_str = str((deep.get("tenth_house") or {}).get("occupants") or "")
+    if occ_str.lower() not in ("khaali", "empty", "—", "none (using 10th lord)"):
+        for nm in occ_str.split(","):
+            nm = nm.strip()
+            if not nm or nm in seen:
+                continue
+            p = next((x for x in planets if x.get("name") == nm), None)
+            if p:
+                career_planets.append({
+                    "name": nm,
+                    "sign": str(p.get("sign") or ""),
+                    "house": int(p.get("house") or 0),
+                    "status": _planet_status(str(p.get("sign") or ""), nm),
+                    "retrograde": bool(p.get("retrograde")),
+                })
+                seen.add(nm)
+
+    for src in (deep.get("atmakaraka"), deep.get("amatyakaraka")):
+        if not isinstance(src, dict):
+            continue
+        nm = src.get("planet")
+        if not nm or nm in seen:
+            continue
+        p = next((x for x in planets if x.get("name") == nm), None)
+        if p:
+            career_planets.append({
+                "name": nm,
+                "sign": str(p.get("sign") or ""),
+                "house": int(p.get("house") or 0),
+                "status": _planet_status(str(p.get("sign") or ""), nm),
+                "retrograde": bool(p.get("retrograde")),
+            })
+            seen.add(nm)
+
+    rating = peak.get("rating", "Neutral")
+    dasha_verdict = _PHASE_COPY.get(rating, _PHASE_COPY["Neutral"])
+    growth = [r for r in reasons if any(w in r.lower() for w in ("support", "favorable", "strong", "growth", "+"))]
+    struggles = [r for r in reasons if any(w in r.lower() for w in ("challenging", "obstacle", "slower", "stress", "-"))]
+    if not growth and reasons:
+        growth = reasons[:2]
+    if not struggles and rating in ("Volatile (sudden moves)", "Pause / introspection phase"):
+        struggles = [dasha_verdict]
+
+    md = cd.get("maha") or peak.get("current_md") or ""
+    promotion: List[str] = []
+    job_change: List[str] = []
+    if md in ("Jupiter", "Sun", "Mercury"):
+        promotion.append(f"{md} mahadasha supports visibility, skills, and advancement windows.")
+    if md in ("Rahu", "Mars"):
+        job_change.append(f"{md} period can bring sudden role shifts — plan moves carefully.")
+    if peak.get("next_lord"):
+        job_change.append(f"Next mahadasha lord {peak.get('next_lord')} may open a fresh career chapter.")
+
+    risks = list(struggles)[:3]
+    if not risks:
+        risks = ["Avoid impulsive switches during mixed dasha phases — consolidate first."]
+
+    return {
+        "houses": {
+            "h10": _career_house_info(planets, asc_idx, 10),
+            "h6": _career_house_info(planets, asc_idx, 6),
+            "h11": _career_house_info(planets, asc_idx, 11),
+        },
+        "planets": career_planets[:6],
+        "dasha": {
+            "mahadasha": md or "—",
+            "antardasha": cd.get("antar") or cd.get("antardasha") or "—",
+            "verdict": dasha_verdict,
+            "ends": cd.get("endDate") or peak.get("ends") or "",
+        },
+        "transit": transit or ["Transit data unavailable — score uses live sky when possible."],
+        "growth": growth[:4],
+        "struggles": struggles[:3],
+        "promotion": promotion[:2],
+        "job_change": job_change[:3],
+        "risks": risks[:3],
+        "reasons": reasons,
+        "tenth_lord": tenth,
+        "atmakaraka": deep.get("atmakaraka"),
+        "amatyakaraka": deep.get("amatyakaraka"),
+        "suitable_fields": deep.get("suitable_fields") or [],
+        "business_vs_job": deep.get("path_verdict") or deep.get("business_vs_job") or "",
+        "income_sources": deep.get("income_sources") or [],
+        "classical_summary": deep.get("classical_summary") or "",
+    }
+
+
 def build_career_basic_insights(
     score: int,
     trend: str,
@@ -1343,11 +1548,10 @@ def build_career_basic_insights(
                 "score": max(10, min(98, int(f.get("score") or 50))),
                 "driver": str(f.get("driver") or "").strip(),
             }
-            for f in suitable[:4]
+            for f in suitable[:5]
             if f.get("field")
         ]
-        # Field list is shown in top_matches / income_paths — no duplicate verdict line.
-        verdict = ""
+        verdict = _career_verdict_from_labels([m["label"] for m in top_matches[:3]])
     else:
         top_matches = [
             {"label": _compact_career_field(f.get("field", "")), "score": f.get("score", 0)}
@@ -1355,40 +1559,35 @@ def build_career_basic_insights(
             if f.get("field")
         ]
         if not top_matches:
-            top_matches = [
-                {"label": "General professional growth", "score": 70},
-                {"label": "Skill-based roles", "score": 60},
-                {"label": "People-facing work", "score": 55},
-            ]
-        themes = []
-        for m in top_matches:
-            t = m["label"].lower()
-            if "tech" in t or "software" in t:
-                themes.append("analytical")
-            elif "business" in t or "trade" in t or "finance" in t:
-                themes.append("business-oriented")
-            elif "media" in t or "communication" in t or "marketing" in t:
-                themes.append("communication")
-            elif "law" in t or "education" in t:
-                themes.append("advisory")
-            elif "creative" in t:
-                themes.append("creative")
+            lord = str((deep.get("tenth_lord") or {}).get("planet") or "")
+            fallback_jobs: Tuple[str, ...] = ()
+            if lord:
+                try:
+                    from vedic.classical_career_fields import _PLANET_JOBS
+
+                    fallback_jobs = _PLANET_JOBS.get(lord, ())
+                except Exception:
+                    fallback_jobs = ()
+            if fallback_jobs:
+                top_matches = [
+                    {"label": _compact_career_field(lb), "score": 70 - i * 5}
+                    for i, lb in enumerate(fallback_jobs[:3])
+                ]
             else:
-                themes.append(m["label"].split("/")[0].strip().lower())
-        themes = list(dict.fromkeys(themes))[:3]
-        if len(themes) >= 2:
-            verdict = (
-                f"You are naturally suited for {', '.join(themes[:-1])} "
-                f"and {themes[-1]} careers."
-            )
-        elif themes:
-            verdict = f"You are naturally suited for {themes[0]} and growth-oriented careers."
-        else:
-            verdict = "Your chart favors versatile professional growth with the right timing."
+                top_matches = [
+                    {"label": "General professional growth", "score": 70},
+                    {"label": "Skill-based roles", "score": 60},
+                    {"label": "People-facing work", "score": 55},
+                ]
+        verdict = _career_verdict_from_labels([m["label"] for m in top_matches[:3]])
 
     incl = deep.get("career_inclination") or {}
     job_pct = int(incl.get("job_pct") or deep.get("job_pct", 50))
-    business_pct = 100 - job_pct
+    business_pct = int(
+        incl.get("business_pct")
+        or deep.get("business_pct")
+        or max(0, 100 - job_pct)
+    )
     path_verdict = str(
         incl.get("path_verdict")
         or deep.get("path_verdict")
@@ -1403,10 +1602,18 @@ def build_career_basic_insights(
     comm_score = int(incl.get("commercial_score") or 0)
     free_score = int(incl.get("freelance_score") or 0)
 
-    income_paths = [
-        {"label": m["label"], "strength": m["score"]}
-        for m in top_matches[:4]
-    ]
+    deep_income = deep.get("income_paths") or []
+    if deep_income:
+        income_paths = [
+            {"label": _compact_career_field(str(x.get("label") or "")), "strength": int(x.get("strength") or 50)}
+            for x in deep_income[:4]
+            if str(x.get("label") or "").strip()
+        ]
+    else:
+        income_paths = [
+            {"label": m["label"], "strength": m["score"]}
+            for m in top_matches[:4]
+        ]
 
     rating = peak.get("rating", "Neutral")
     current_phase = _PHASE_COPY.get(rating, _PHASE_COPY["Neutral"])
@@ -1475,12 +1682,21 @@ def build_career_basic_insights(
     else:
         timing_insight = "Next 12–18 months favor consolidation before a stronger push."
 
+    hook = (
+        "Unlock full house map, dasha windows, transit notes, and detailed "
+        "career-field scores with Pro."
+    )
+    if classical_summary:
+        hook = f"{classical_summary[:180]}… Pro unlocks dasha + transit depth."
+
     return {
         "score": score,
         "trend": trend,
         "score_label": score_label,
         "score_context": score_context,
         "verdict": verdict,
+        "summary": str(score_meta.get("summary") or ""),
+        "hook": hook,
         "top_matches": top_matches,
         "income_paths": income_paths,
         "job_pct": job_pct,

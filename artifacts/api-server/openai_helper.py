@@ -8080,13 +8080,20 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _pt_blocks["marriage_engine"] = marriage_block
         if marriage_engine_raw:
             try:
-                from ask_llm_context_debug import build_marriage_engine_trace
+                from ask_llm_context_debug import (
+                    build_marriage_engine_trace,
+                    build_marriage_timing_slice_meta,
+                )
 
                 _trace = build_marriage_engine_trace(marriage_engine_raw)
                 if _trace:
                     _pt_blocks["engine_trace"] = _trace
+                _m17_meta = build_marriage_timing_slice_meta(marriage_engine_raw)
             except Exception as _te:
                 print(f"[raw_passthrough] engine_trace skipped: {_te}", flush=True)
+                _m17_meta = {}
+        else:
+            _m17_meta = {}
         return _attach_admin(
             _out_rp,
             question=question or "",
@@ -8095,7 +8102,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             checks=_pt_checks,
             chart_text=chart_text,
             blocks=_pt_blocks,
-            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+            slice_meta=_m17_meta if _m17_meta else (dcr_love_meta if isinstance(dcr_love_meta, dict) else {}),
             llm_called=False,
             skip_reason="marriage_timing_deterministic",
             intent_source=_intent_source,

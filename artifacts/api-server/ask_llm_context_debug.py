@@ -52,6 +52,7 @@ def derive_answer_path(
     )
     domain_engine_slice = sl in (
         "mr_engine_v1",
+        "marriage_timing_m17",
         "career_engine_v1",
         "career_timing_v1",
         "education_engine_v1",
@@ -276,6 +277,131 @@ def build_marriage_engine_trace(engine_result: dict[str, Any] | None) -> dict[st
     })
 
 
+def _marriage_timing_evidence(engine_result: dict[str, Any]) -> list[str]:
+    """Dasha/BCP/transit lines for admin evidence panel (M17 marriage timing)."""
+    out: list[str] = []
+    pw = str(engine_result.get("primary_window") or "").strip()
+    if pw:
+        out.append(f"Primary window: {pw}")
+    bw = str(engine_result.get("backup_window") or "").strip()
+    if bw:
+        out.append(f"Backup window: {bw}")
+    kt = str(engine_result.get("key_trigger") or "").strip()
+    if kt:
+        out.append(f"Key trigger: {kt}")
+    for f in engine_result.get("factors") or []:
+        fs = str(f).strip()
+        if fs and fs not in out:
+            out.append(fs)
+    timing_audit = engine_result.get("timing_audit")
+    if isinstance(timing_audit, dict):
+        for chk in timing_audit.get("checks") or []:
+            if not isinstance(chk, dict):
+                continue
+            name = str(chk.get("name") or "check")
+            detail = str(chk.get("detail") or chk.get("why") or "").strip()
+            if detail:
+                line = f"{name}: {detail}"
+                if line not in out:
+                    out.append(line)
+        tr = timing_audit.get("transit")
+        if isinstance(tr, dict) and tr.get("detail"):
+            line = f"Transit: {tr['detail']}"
+            if line not in out:
+                out.append(str(line)[:240])
+    step_audit = engine_result.get("step_audit")
+    if isinstance(step_audit, dict):
+        for key in _MARRIAGE_TRACE_STEP_ORDER:
+            step = step_audit.get(key)
+            if not isinstance(step, dict) or step.get("status") == "SKIP":
+                continue
+            parts: list[str] = []
+            if step.get("name"):
+                parts.append(str(step["name"]))
+            for fld in ("detail", "verdict", "band"):
+                if step.get(fld):
+                    parts.append(str(step[fld]))
+            if parts:
+                line = f"{key}: " + " · ".join(parts)
+                if line not in out:
+                    out.append(line[:240])
+            if len(out) >= 12:
+                break
+    return out[:12]
+
+
+def build_marriage_timing_slice_meta(engine_result: dict[str, Any] | None) -> dict[str, Any]:
+    """Admin slice_meta for marriage M17 timing (engine-only passthrough)."""
+    if not isinstance(engine_result, dict) or not engine_result:
+        return {}
+    evidence = _marriage_timing_evidence(engine_result)
+    pw = str(engine_result.get("primary_window") or "").strip()
+    verdict = str(engine_result.get("verdict") or engine_result.get("band") or "").strip()
+    summary: list[str] = []
+    if pw:
+        summary.append(f"Marriage timing: {pw}")
+    meta: dict[str, Any] = {
+        "slice": "marriage_timing_m17",
+        "topic": "marriage",
+        "archetype": engine_result.get("bucket") or "general_mr",
+        "verdict": verdict or ("answered:timing" if pw else ""),
+        "summary": summary,
+        "evidence": evidence,
+        "timing_evidence": evidence,
+        "checks": {
+            "bucket": engine_result.get("bucket"),
+            "band": engine_result.get("band"),
+            "user_age": engine_result.get("user_age"),
+        },
+        "narrator_mode": "engine_only",
+    }
+    if isinstance(engine_result.get("step_audit"), dict):
+        meta["step_audit"] = engine_result["step_audit"]
+    if isinstance(engine_result.get("timing_audit"), dict):
+        meta["timing_audit"] = engine_result["timing_audit"]
+    return meta
+
+
+def _enrich_engine_facts_from_blocks(
+    engine_facts: dict[str, Any],
+    blocks: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Fill engine_facts from engine_trace when slice_meta was empty (timing passthrough)."""
+    if not isinstance(blocks, dict):
+        return engine_facts
+    if engine_facts.get("verdict") or (engine_facts.get("evidence") or []):
+        return engine_facts
+    trace = blocks.get("engine_trace") or blocks.get("marriage_engine_trace")
+    if not isinstance(trace, dict):
+        return engine_facts
+    out = dict(engine_facts)
+    pw = str(trace.get("primary_window") or "").strip()
+    verdict = str(trace.get("verdict") or trace.get("band") or "").strip()
+    if verdict:
+        out["verdict"] = verdict
+    elif pw:
+        out["verdict"] = "answered:timing"
+    evidence = list(out.get("evidence") or [])
+    if pw:
+        evidence.insert(0, f"Primary window: {pw}")
+    for f in trace.get("factors") or []:
+        fs = str(f).strip()
+        if fs and fs not in evidence:
+            evidence.append(fs)
+    if not evidence:
+        fake = {"primary_window": pw, "factors": trace.get("factors") or [],
+                "step_audit": trace.get("step_audit"), "timing_audit": trace.get("timing_audit"),
+                "verdict": verdict, "band": trace.get("band")}
+        evidence = _marriage_timing_evidence(fake)
+    out["evidence"] = evidence[:50]
+    out["timing_evidence"] = evidence[:50]
+    if pw and not out.get("summary"):
+        out["summary"] = [f"Marriage timing: {pw}"]
+    if trace.get("step_audit"):
+        out["step_audit"] = trace["step_audit"]
+    return out
+
+
 def build_engine_facts_snapshot(
     *,
     checks: dict[str, Any] | None = None,
@@ -396,11 +522,13 @@ def build_admin_llm_context(
         slice_meta=_slice_meta,
     )
     engine_facts = build_engine_facts_snapshot(checks=_checks, slice_meta=_slice_meta)
+    engine_facts = _enrich_engine_facts_from_blocks(engine_facts, blocks or {})
     has_engine_facts = bool(
         engine_facts.get("verdict")
         or (engine_facts.get("evidence") or [])
         or (_slice_meta.get("verdict"))
         or (_slice_meta.get("evidence"))
+        or (blocks or {}).get("engine_trace")
     )
     _intent = llm_intent if isinstance(llm_intent, dict) else {}
     try:

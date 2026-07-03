@@ -142,6 +142,45 @@ class AskLlmContextDebugTests(unittest.TestCase):
         self.assertIn("step0", trace["step_audit"])
         self.assertEqual(trace["timing_audit"]["status"], "PASS")
 
+    def test_marriage_timing_slice_meta_for_admin_evidence(self):
+        from ask_llm_context_debug import (
+            build_admin_llm_context,
+            build_marriage_timing_slice_meta,
+        )
+
+        raw = {
+            "primary_window": "October – November 2026",
+            "backup_window": "March – April 2027",
+            "verdict": "FAVORABLE",
+            "band": "green_go",
+            "bucket": "general_mr",
+            "factors": ["BCP_ANCHOR age 29", "7L Venus AD active"],
+            "step_audit": {
+                "step1": {"name": "BCP scan", "status": "DONE", "detail": "age 29 anchor"},
+                "step8": {"name": "Final gate", "status": "DONE", "verdict": "FAVORABLE"},
+            },
+            "timing_audit": {
+                "status": "PASS",
+                "checks": [{"name": "answer_lock", "ok": True, "detail": "window locked"}],
+            },
+        }
+        meta = build_marriage_timing_slice_meta(raw)
+        self.assertEqual(meta["slice"], "marriage_timing_m17")
+        self.assertTrue(meta.get("evidence"))
+        self.assertIn("October", meta["evidence"][0])
+
+        ctx = build_admin_llm_context(
+            question="Shaadi kab hogi?",
+            is_timing=True,
+            llm_called=False,
+            checks={"slice_type": "timing_marriage_engine", "is_marriage_engine": True},
+            slice_meta=meta,
+            blocks={"engine_trace": {"engine": "marriage_timing_m17", **raw}},
+        )
+        facts = ctx.get("engine_facts") or {}
+        self.assertTrue(facts.get("verdict"))
+        self.assertGreaterEqual(len(facts.get("evidence") or []), 1)
+
     def test_normalize_legacy_transit_months_on_read(self):
         import json
 

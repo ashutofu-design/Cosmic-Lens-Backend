@@ -17,6 +17,38 @@ from event_timing.marriage.bcp_marriage_ages import (
 from event_timing.marriage.marriage_step0 import _load_d9_planets
 
 
+def _late_urgent_after_chart_delay_guard(
+    bcp_urgent: bool,
+    *,
+    age_ctx: Dict[str, Any],
+    user_age: Optional[int],
+    bcp: Dict[str, Any],
+    bcp_strategy: Dict[str, Any],
+) -> bool:
+    """Delayed chart + BCP still ahead → skip near-term 12mo urgent scan."""
+    if not (
+        bcp_urgent
+        and age_ctx.get("delay_vs_late") == "chart_delay"
+        and user_age is not None
+    ):
+        return bcp_urgent
+    nxt = bcp.get("next_activation_age")
+    mode = bcp_strategy.get("timing_mode")
+    if (
+        mode == "upcoming_bcp"
+        and nxt is not None
+        and nxt > user_age
+    ):
+        return False
+    if (
+        mode not in ("current_bcp_year", "missed_bcp_recent", "upcoming_bcp")
+        and nxt is not None
+        and (nxt - user_age) > 2
+    ):
+        return False
+    return bcp_urgent
+
+
 def _bcp_ages_in_range(
     all_ages: List[int],
     user_age: Optional[int],
@@ -91,17 +123,13 @@ def run_marriage_step0a(
     if primary_ref is not None:
         bcp_strategy["primary_reference_age"] = primary_ref
 
-    # Chart delay is not the same as age-late. Young delayed charts should
-    # keep their BCP focus instead of forcing a near-term 12-month scan.
-    bcp_urgent = bool(bcp_strategy.get("late_urgent_scan"))
-    if (
-        bcp_urgent
-        and age_ctx.get("delay_vs_late") == "chart_delay"
-        and user_age is not None
-    ):
-        nxt = bcp.get("next_activation_age")
-        if nxt is not None and (nxt - user_age) > 2:
-            bcp_urgent = False
+    bcp_urgent = _late_urgent_after_chart_delay_guard(
+        bool(bcp_strategy.get("late_urgent_scan")),
+        age_ctx=age_ctx,
+        user_age=user_age,
+        bcp=bcp,
+        bcp_strategy=bcp_strategy,
+    )
 
     dasha_scan = {
         "late_urgent_scan": bool(age_ctx.get("late_urgent_scan") or bcp_urgent),

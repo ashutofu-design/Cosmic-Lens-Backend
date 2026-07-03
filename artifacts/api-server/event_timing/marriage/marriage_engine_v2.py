@@ -2212,6 +2212,27 @@ def _gap_ok(cand: Dict[str, Any], chosen: List[Dict[str, Any]]) -> bool:
     return True
 
 
+def _bcp_anchor_guard_active(
+    chart_delayed: bool,
+    primary_ref_age: Optional[int],
+    user_age: Optional[int],
+) -> bool:
+    return bool(
+        chart_delayed
+        and primary_ref_age is not None
+        and user_age is not None
+        and primary_ref_age > user_age
+    )
+
+
+def _bcp_anchor_min_age(primary_ref_age: int, user_age: int) -> int:
+    """Strict anchor at upcoming BCP (e.g. 26→27); grace only when BCP is far."""
+    gap = primary_ref_age - user_age
+    if gap <= _BCP_ANCHOR_MIN_GAP_YEARS:
+        return int(primary_ref_age)
+    return int(primary_ref_age) - _BCP_ANCHOR_GRACE_YEARS
+
+
 def _apply_bcp_anchor_guard(
     candidates: List[Dict[str, Any]],
     *,
@@ -2223,18 +2244,15 @@ def _apply_bcp_anchor_guard(
 ) -> int:
     """Demote windows that end before Step-0 BCP anchor age on delayed charts."""
     if not (
-        chart_delayed
-        and primary_ref_age is not None
-        and user_age is not None
+        _bcp_anchor_guard_active(chart_delayed, primary_ref_age, user_age)
         and birth_dt is not None
-        and (primary_ref_age - user_age) > _BCP_ANCHOR_MIN_GAP_YEARS
     ):
         return 0
     try:
         from event_timing.marriage.bcp_marriage_ages import _age_span_in_chunk
     except Exception:
         return 0
-    anchor_min_age = primary_ref_age - _BCP_ANCHOR_GRACE_YEARS
+    anchor_min_age = _bcp_anchor_min_age(int(primary_ref_age), int(user_age))
     n = 0
     for c in candidates:
         focus_hits = set(c.get("bcp_age_hits") or []) & focus_bcp_ages
@@ -2258,14 +2276,9 @@ def _delayed_anchor_focus_ages(
 ) -> Tuple[Set[int], List[int]]:
     """Delayed charts should not let early BCP hits bypass the primary anchor."""
     focus = {int(a) for a in (focus_bcp_ages or set())}
-    if not (
-        chart_delayed
-        and primary_ref_age is not None
-        and user_age is not None
-        and (primary_ref_age - user_age) > _BCP_ANCHOR_MIN_GAP_YEARS
-    ):
+    if not _bcp_anchor_guard_active(chart_delayed, primary_ref_age, user_age):
         return focus, []
-    anchor_min_age = int(primary_ref_age) - _BCP_ANCHOR_GRACE_YEARS
+    anchor_min_age = _bcp_anchor_min_age(int(primary_ref_age), int(user_age))
     trimmed = {a for a in focus if a >= anchor_min_age}
     trimmed.add(int(primary_ref_age))
     removed = sorted(a for a in focus if a < anchor_min_age)
@@ -2885,7 +2898,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     if _removed_early_focus:
         factors.append(
             f"BCP_ANCHOR removed early focus age(s) {_removed_early_focus} "
-            f"before anchor age {primary_ref_age - _BCP_ANCHOR_GRACE_YEARS}"
+            f"before anchor age {_bcp_anchor_min_age(int(primary_ref_age), int(user_age))}"
         )
     focus_boosted_n = 0
     if chart_delayed and focus_bcp_ages:
@@ -2921,7 +2934,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     if _bcp_anchor_n:
         factors.append(
             f"BCP_ANCHOR demoted {_bcp_anchor_n} near-term window(s) "
-            f"before age {primary_ref_age - _BCP_ANCHOR_GRACE_YEARS} "
+            f"before age {_bcp_anchor_min_age(int(primary_ref_age), int(user_age))} "
             f"(focus BCP {primary_ref_age})"
         )
         future_candidates.sort(
@@ -3023,12 +3036,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
 
     # ── STEP 6 — Pick final dasha window(s) (no transit in ranking) ───
     top_3 = _select_top_3(future_candidates)
-    if (
-        chart_delayed
-        and primary_ref_age is not None
-        and user_age is not None
-        and (primary_ref_age - user_age) > _BCP_ANCHOR_MIN_GAP_YEARS
-    ):
+    if _bcp_anchor_guard_active(chart_delayed, primary_ref_age, user_age):
         _post_bcp = [w for w in top_3 if not w.get("suppressed_pre_bcp_focus")]
         if _post_bcp:
             top_3 = _post_bcp
@@ -3268,14 +3276,12 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         else None
     )
     anchor_min_age = (
-        primary_ref_age - _BCP_ANCHOR_GRACE_YEARS
-        if primary_ref_age is not None else None
+        _bcp_anchor_min_age(int(primary_ref_age), int(user_age))
+        if primary_ref_age is not None and user_age is not None else None
     )
     primary_bcp_hits = set(primary_audit.get("bcp_age_hits") or [])
-    bcp_anchor_required = bool(
-        chart_delayed
-        and anchor_gap is not None
-        and anchor_gap > _BCP_ANCHOR_MIN_GAP_YEARS
+    bcp_anchor_required = _bcp_anchor_guard_active(
+        chart_delayed, primary_ref_age, user_age,
     )
     bcp_anchor_ok = True
     if bcp_anchor_required:

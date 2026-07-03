@@ -15,7 +15,10 @@ from event_timing.marriage.marriage_step0 import (
     chart_marriage_pace_for_division,
     run_marriage_step0,
 )
-from event_timing.marriage.marriage_step0a import run_marriage_step0a
+from event_timing.marriage.marriage_step0a import (
+    _late_urgent_after_chart_delay_guard,
+    run_marriage_step0a,
+)
 
 SIGNS = [
     "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
@@ -224,6 +227,62 @@ def test_bcp_anchor_guard_demotes_near_term_for_delayed_chart():
     assert near.get("suppressed_pre_bcp_focus")
     assert not focus.get("suppressed_pre_bcp_focus")
     assert near["score"] < focus["score"]
+
+
+def test_bcp_anchor_guard_demotes_pre_activation_age_26_when_next_bcp_27():
+    """Delayed chart age 26 + next BCP 27 → Oct-2026 at age 26 must lose."""
+    from event_timing.marriage.marriage_engine_v2 import _apply_bcp_anchor_guard
+
+    birth = datetime(2000, 7, 3)
+    near = {
+        "start": datetime(2026, 10, 1),
+        "end": datetime(2026, 11, 30),
+        "score": 20.0,
+        "priority": 0,
+        "bcp_age_hits": [],
+    }
+    at_bcp = {
+        "start": datetime(2027, 6, 1),
+        "end": datetime(2027, 12, 31),
+        "score": 12.0,
+        "priority": 3,
+        "bcp_age_hits": [27],
+    }
+    cands = [near, at_bcp]
+    n = _apply_bcp_anchor_guard(
+        cands,
+        chart_delayed=True,
+        primary_ref_age=27,
+        user_age=26,
+        focus_bcp_ages={27},
+        birth_dt=birth,
+    )
+    assert n == 1
+    assert near.get("suppressed_pre_bcp_focus")
+    assert not at_bcp.get("suppressed_pre_bcp_focus")
+    assert near["score"] < at_bcp["score"]
+
+
+def test_chart_delay_disables_late_urgent_for_upcoming_bcp_next_year():
+    """upcoming_bcp (26→27) + chart_delay must not keep 12mo late-urgent scan."""
+    urgent = _late_urgent_after_chart_delay_guard(
+        True,
+        age_ctx={"delay_vs_late": "chart_delay"},
+        user_age=26,
+        bcp={"next_activation_age": 27},
+        bcp_strategy={"timing_mode": "upcoming_bcp", "late_urgent_scan": True},
+    )
+    assert urgent is False
+
+    # User ON current BCP year — urgent scan should stay on
+    still_urgent = _late_urgent_after_chart_delay_guard(
+        True,
+        age_ctx={"delay_vs_late": "chart_delay"},
+        user_age=27,
+        bcp={"next_activation_age": 29},
+        bcp_strategy={"timing_mode": "current_bcp_year", "late_urgent_scan": True},
+    )
+    assert still_urgent is True
 
 
 def test_step0_early_house_not_enough_when_7l_and_venus_weak():

@@ -927,6 +927,106 @@ def min_bcp_focus_age_for_chart(
     return floor
 
 
+def _age_at_date(birth_dt: datetime, at: datetime) -> int:
+    age = int(at.year) - int(birth_dt.year)
+    if (at.month, at.day) < (birth_dt.month, birth_dt.day):
+        age -= 1
+    return age
+
+
+def _parse_window_start(w: Dict[str, Any]) -> Optional[datetime]:
+    raw = w.get("start")
+    if isinstance(raw, datetime):
+        return raw
+    iso = w.get("start_iso")
+    if not iso:
+        return None
+    try:
+        return datetime.fromisoformat(str(iso).replace("Z", "")[:19])
+    except ValueError:
+        try:
+            return datetime.fromisoformat(str(iso)[:10])
+        except ValueError:
+            return None
+
+
+def rank_matched_windows_for_late_chart(
+    windows: List[Dict[str, Any]],
+    *,
+    marriage_pace: str = "",
+    d1_pace: Optional[str] = None,
+    d9_pace: Optional[str] = None,
+    user_age: Optional[int] = None,
+    birth_dt: Optional[datetime] = None,
+    focus_bcp_ages: Optional[Set[int]] = None,
+    merged_bcp_pool: Optional[List[int]] = None,
+) -> List[Dict[str, Any]]:
+    """Late chart — skip near-term windows (2026 at age 26); prefer double transit + late BCP."""
+    if not windows:
+        return []
+    _pace = str(marriage_pace or "")
+    _late = (
+        _pace in ("LATE", "VERY_LATE", "DELAYED")
+        or both_divisions_late(d1_pace, d9_pace)
+        or str(d1_pace or "") == "VERY_LATE"
+    )
+    if not _late:
+        return [w for w in windows if isinstance(w, dict)]
+
+    min_focus = min_bcp_focus_age_for_chart(
+        marriage_pace=_pace or "LATE",
+        d1_pace=d1_pace,
+        d9_pace=d9_pace,
+        user_age=user_age,
+    )
+    pool = set(int(a) for a in (merged_bcp_pool or []) if isinstance(a, (int, float)))
+    focus = set(int(a) for a in (focus_bcp_ages or []) if isinstance(a, (int, float)))
+    now = datetime.utcnow()
+
+    def _age_at_start(w: Dict[str, Any]) -> Optional[int]:
+        start = _parse_window_start(w)
+        if start is None:
+            return None
+        if birth_dt is not None:
+            return _age_at_date(birth_dt, start)
+        if user_age is not None:
+            return int(user_age) + (start.year - now.year)
+        return None
+
+    def _score(w: Dict[str, Any]) -> float:
+        age_at = _age_at_start(w)
+        if age_at is not None and age_at < min_focus:
+            return -1e9
+        score = 0.0
+        if w.get("dt") or (w.get("jup") and w.get("sat")):
+            score += 200.0
+        hits = {
+            int(a) for a in (w.get("bcp_age_hits") or [])
+            if isinstance(a, (int, float))
+        }
+        if pool and hits & pool:
+            score += 80.0
+        if focus and hits & focus:
+            score += 40.0
+        if w.get("transit_confirmed"):
+            score += 10.0
+        start = _parse_window_start(w)
+        if start is not None:
+            score += start.timestamp() / 1e12
+        return score
+
+    rows = [w for w in windows if isinstance(w, dict)]
+    kept = [w for w in rows if _score(w) > -1e8]
+    if not kept and birth_dt is not None:
+        min_start = birth_dt.replace(year=birth_dt.year + min_focus)
+        kept = [
+            w for w in rows
+            if (_parse_window_start(w) or datetime.max) >= min_start
+        ]
+    kept.sort(key=_score, reverse=True)
+    return kept or rows
+
+
 def resolve_late_marriage_bcp_focus(
     bcp: Dict[str, Any],
     *,

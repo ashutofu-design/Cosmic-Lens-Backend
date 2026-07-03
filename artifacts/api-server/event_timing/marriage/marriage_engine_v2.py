@@ -2808,6 +2808,69 @@ def build_marriage_step6_audit(
         top_3, chart, lagna_si, target_lords=lords, d9_7l=d9_7l,
     )
 
+    step0_block = audit.get("step0") if isinstance(audit.get("step0"), dict) else {}
+    step0_tendency = step0_block.get("result") if isinstance(step0_block.get("result"), dict) else {}
+    step0a_block = audit.get("step0a") if isinstance(audit.get("step0a"), dict) else {}
+    user_age_val = step0_block.get("user_age")
+    birth_dt_val = _extract_dob_dt(birth, kundli=chart)
+    if birth_dt_val is None and user_age_val is not None:
+        birth_dt_val = _infer_birth_dt_from_age(int(user_age_val), now)
+    if matched and step0_tendency:
+        from event_timing.marriage.bcp_marriage_ages import (
+            effective_bcp_pool_for_timing,
+            rank_matched_windows_for_late_chart,
+        )
+        bcp_stub = {
+            "d1_future_bcp_ages": step0a_block.get("d1_bcp_ages") or [],
+            "d9_future_bcp_ages": step0a_block.get("d9_bcp_ages") or [],
+        }
+        merged_bcp = effective_bcp_pool_for_timing(
+            bcp_stub,
+            d1_pace=step0_tendency.get("d1_pace"),
+            d9_pace=step0_tendency.get("d9_pace"),
+            user_age=int(user_age_val) if user_age_val is not None else None,
+        )
+        focus_raw = step0a_block.get("focus_ages") or []
+        matched = rank_matched_windows_for_late_chart(
+            matched,
+            marriage_pace=str(
+                step0_tendency.get("combined_pace")
+                or step0_tendency.get("marriage_pace")
+                or ""
+            ),
+            d1_pace=step0_tendency.get("d1_pace"),
+            d9_pace=step0_tendency.get("d9_pace"),
+            user_age=int(user_age_val) if user_age_val is not None else None,
+            birth_dt=birth_dt_val,
+            focus_bcp_ages={
+                int(a) for a in focus_raw if isinstance(a, (int, float))
+            },
+            merged_bcp_pool=merged_bcp,
+        )
+        if matched:
+            first = matched[0]
+            for row in step7.get("per_dasha_windows") or []:
+                if not isinstance(row, dict):
+                    continue
+                if (
+                    row.get("md") == first.get("md")
+                    and row.get("ad") == first.get("ad")
+                    and row.get("pd") == first.get("pd")
+                ):
+                    step7 = {
+                        **step7,
+                        "detail": row.get("detail"),
+                        "months": row.get("months"),
+                        "by_month": row.get("by_month"),
+                        "transit_type": row.get("transit_type"),
+                        "transit_type_label": row.get("transit_type_label"),
+                        "jupiter_hit": row.get("jupiter_hit"),
+                        "saturn_hit": row.get("saturn_hit"),
+                        "double_transit": row.get("double_transit"),
+                        "transit_confirmed": row.get("transit_confirmed"),
+                    }
+                    break
+
     if matched:
         step6_status = "DONE"
     elif candidates:
@@ -2848,20 +2911,41 @@ def _build_step8_final_prediction(
     focus_bcp_ages: Set[int],
     primary_window: Optional[str],
     key_trigger: Optional[str],
+    birth_dt: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     """D1+D9 late → late BCP only; pick age from transit-matched dasha + Step5 ranks."""
     from event_timing.marriage.bcp_marriage_ages import (
         both_divisions_late,
         filter_bcp_ages_from_current,
+        rank_matched_windows_for_late_chart,
     )
 
     d1_pace = str(step0_tendency.get("d1_pace") or "")
     d9_pace = str(step0_tendency.get("d9_pace") or "")
     late_locked = both_divisions_late(d1_pace, d9_pace)
+    marriage_pace = str(
+        step0_tendency.get("combined_pace")
+        or step0_tendency.get("marriage_pace")
+        or ("VERY_LATE" if d1_pace == "VERY_LATE" else "")
+    )
 
     d1_ok = filter_bcp_ages_from_current(d1_bcp_ages, user_age, both_late=late_locked)
     d9_ok = filter_bcp_ages_from_current(d9_bcp_ages, user_age, both_late=late_locked)
     merged_pool = sorted(set(d1_ok) | set(d9_ok))
+
+    matched_windows = rank_matched_windows_for_late_chart(
+        list(matched_windows or []),
+        marriage_pace=marriage_pace,
+        d1_pace=d1_pace,
+        d9_pace=d9_pace,
+        user_age=user_age,
+        birth_dt=birth_dt,
+        focus_bcp_ages=focus_bcp_ages,
+        merged_bcp_pool=merged_pool,
+    )
+
+    if late_locked or d1_pace == "VERY_LATE" or marriage_pace == "VERY_LATE":
+        primary_window = None
 
     ranked_top = [r for r in (ranked or []) if isinstance(r, dict)][:8]
     ranked_names = {str(r.get("name")) for r in ranked_top if r.get("name")}
@@ -2906,7 +2990,8 @@ def _build_step8_final_prediction(
             else 0.0
         )
         dasha_score = float(win.get("score") or 0) * 0.12
-        total = align_score + pool_score + ref_score + dasha_score
+        dt_score = 50.0 if win.get("dt") or (win.get("jup") and win.get("sat")) else 0.0
+        total = align_score + pool_score + ref_score + dasha_score + dt_score
 
         if total > best_score:
             best_score = total
@@ -4201,6 +4286,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         focus_bcp_ages=focus_bcp_ages,
         primary_window=primary_window,
         key_trigger=key_trigger,
+        birth_dt=birth_dt,
     )
     factors.append(f"STEP8 final={step8_prediction.get('final_prediction')}")
     if step8_prediction.get("late_chart_bcp_locked"):
@@ -4695,10 +4781,31 @@ def compute_timing_window_fallback(
         or dasha_scan.get("primary_reference_age")
     )
     s6 = step_audit.get("step6") if isinstance(step_audit.get("step6"), dict) else {}
+    focus_set = set(dasha_scan.get("bcp_focus_ages") or [])
     matched_s6 = [
         w for w in (s6.get("selected_windows") or [])
         if isinstance(w, dict) and w.get("transit_confirmed")
     ]
+    from event_timing.marriage.bcp_marriage_ages import (
+        effective_bcp_pool_for_timing,
+        rank_matched_windows_for_late_chart,
+    )
+    _merged_bcp = effective_bcp_pool_for_timing(
+        bcp_ctx or {},
+        d1_pace=_step0_tendency.get("d1_pace"),
+        d9_pace=_step0_tendency.get("d9_pace"),
+        user_age=user_age,
+    )
+    matched_s6 = rank_matched_windows_for_late_chart(
+        matched_s6,
+        marriage_pace=str(_combined_pace or _step0_tendency.get("combined_pace") or ""),
+        d1_pace=_step0_tendency.get("d1_pace"),
+        d9_pace=_step0_tendency.get("d9_pace"),
+        user_age=user_age,
+        birth_dt=birth_dt,
+        focus_bcp_ages=focus_set,
+        merged_bcp_pool=_merged_bcp,
+    )
     if matched_s6:
         primary_window = matched_s6[0].get("window")
     elif isinstance(_focus_pri, int) and birth_dt is not None:
@@ -4712,7 +4819,6 @@ def compute_timing_window_fallback(
         primary_window = f"around age {_focus_pri}"
 
     ranked_fb = (step_audit.get("step5") or {}).get("ranked_top") or []
-    focus_set = set(dasha_scan.get("bcp_focus_ages") or [])
     step8_prediction = _build_step8_final_prediction(
         step0_tendency=_step0_tendency,
         d1_bcp_ages=list((bcp_ctx or {}).get("d1_future_bcp_ages") or []),
@@ -4724,6 +4830,7 @@ def compute_timing_window_fallback(
         focus_bcp_ages=focus_set,
         primary_window=primary_window,
         key_trigger=None,
+        birth_dt=birth_dt,
     )
     step_audit["step8"] = {
         "name": "Final — late BCP + dasha + transit",

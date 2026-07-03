@@ -619,17 +619,21 @@ def _ensure_marriage_step8_on_audit(
                 pass
 
     existing = audit.get("step8") if isinstance(audit.get("step8"), dict) else {}
+    step0 = audit.get("step0") if isinstance(audit.get("step0"), dict) else {}
+    step0_tendency = step0.get("result") if isinstance(step0.get("result"), dict) else {}
+    if not step0_tendency and isinstance(er.get("step0_tendency"), dict):
+        step0_tendency = er["step0_tendency"]
+    d1_pace = str(step0_tendency.get("d1_pace") or "")
+    d9_pace = str(step0_tendency.get("d9_pace") or "")
+
     if (
         existing.get("primary_window")
         and existing.get("marriage_period")
         and (existing.get("final_prediction") or existing.get("primary_dasha"))
     ):
-        return
-
-    step0 = audit.get("step0") if isinstance(audit.get("step0"), dict) else {}
-    step0_tendency = step0.get("result") if isinstance(step0.get("result"), dict) else {}
-    if not step0_tendency and isinstance(er.get("step0_tendency"), dict):
-        step0_tendency = er["step0_tendency"]
+        ex_period = str(existing.get("marriage_period") or "")
+        if not (d1_pace == "VERY_LATE" and "2026" in ex_period):
+            return
 
     step0a = audit.get("step0a") if isinstance(audit.get("step0a"), dict) else {}
     step5 = audit.get("step5") if isinstance(audit.get("step5"), dict) else {}
@@ -643,9 +647,6 @@ def _ensure_marriage_step8_on_audit(
     ]
     if not matched:
         matched = [w for w in all_wins if isinstance(w, dict)][:1]
-
-    if not pw and matched:
-        pw = str(matched[0].get("window") or "").strip() or None
 
     d1_bcp = list(step0a.get("d1_bcp_ages") or [])
     d9_bcp = list(step0a.get("d9_bcp_ages") or [])
@@ -662,6 +663,52 @@ def _ensure_marriage_step8_on_audit(
         dsp = er.get("dasha_scan_plan")
         if isinstance(dsp, dict):
             primary_ref = dsp.get("primary_reference_age")
+
+    birth_dt = None
+    try:
+        from event_timing.marriage.marriage_engine_v2 import _extract_dob_dt
+
+        birth_dt = _extract_dob_dt(er.get("birth"), kundli=er.get("kundli"))
+        if birth_dt is None and age is not None:
+            from event_timing.marriage.marriage_engine_v2 import _infer_birth_dt_from_age
+            from datetime import datetime as _dt
+
+            birth_dt = _infer_birth_dt_from_age(int(age), _dt.utcnow())
+    except Exception:
+        pass
+
+    from event_timing.marriage.bcp_marriage_ages import (
+        effective_bcp_pool_for_timing,
+        rank_matched_windows_for_late_chart,
+    )
+
+    merged_bcp = effective_bcp_pool_for_timing(
+        {"d1_future_bcp_ages": d1_bcp, "d9_future_bcp_ages": d9_bcp},
+        d1_pace=d1_pace,
+        d9_pace=d9_pace,
+        user_age=age,
+    )
+    matched = rank_matched_windows_for_late_chart(
+        matched,
+        marriage_pace=str(
+            step0_tendency.get("combined_pace")
+            or step0_tendency.get("marriage_pace")
+            or ("VERY_LATE" if d1_pace == "VERY_LATE" else "")
+        ),
+        d1_pace=d1_pace,
+        d9_pace=d9_pace,
+        user_age=age,
+        birth_dt=birth_dt,
+        focus_bcp_ages=focus_set,
+        merged_bcp_pool=merged_bcp,
+    )
+
+    if d1_pace == "VERY_LATE" or (
+        d1_pace in ("LATE", "VERY_LATE", "DELAYED") and d9_pace in ("LATE", "VERY_LATE", "DELAYED")
+    ):
+        pw = None
+    elif not pw and matched:
+        pw = str(matched[0].get("window") or "").strip() or None
 
     verdict = (
         step0_tendency.get("verdict")
@@ -689,6 +736,7 @@ def _ensure_marriage_step8_on_audit(
             focus_bcp_ages=focus_set,
             primary_window=pw,
             key_trigger=er.get("key_trigger"),
+            birth_dt=birth_dt,
         )
         if not pw:
             pd = pred.get("primary_dasha") or {}

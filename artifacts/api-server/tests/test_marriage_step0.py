@@ -148,6 +148,47 @@ def test_step8_final_prediction_late_chart():
     assert pred.get("marriage_period") == "Jan 2030 – Jun 2030"
 
 
+def test_rank_matched_windows_skips_2026_for_very_late():
+    from datetime import datetime
+
+    from event_timing.marriage.bcp_marriage_ages import rank_matched_windows_for_late_chart
+
+    birth = datetime(2000, 7, 3)
+    near = {
+        "md": "Sun", "ad": "Venus", "pd": "Jupiter",
+        "window": "October – November 2026",
+        "start_iso": "2026-10-01",
+        "end_iso": "2026-11-30",
+        "transit_confirmed": True,
+        "jup": True,
+        "score": 22.0,
+    }
+    late = {
+        "md": "Sun", "ad": "Sun", "pd": "Sun",
+        "window": "October 2036",
+        "start_iso": "2036-10-01",
+        "end_iso": "2036-10-31",
+        "transit_confirmed": True,
+        "dt": True,
+        "jup": True,
+        "sat": True,
+        "bcp_age_hits": [33],
+        "score": 18.0,
+    }
+    ranked = rank_matched_windows_for_late_chart(
+        [near, late],
+        marriage_pace="VERY_LATE",
+        d1_pace="VERY_LATE",
+        d9_pace="LATE",
+        user_age=26,
+        birth_dt=birth,
+        focus_bcp_ages={33, 35},
+        merged_bcp_pool=[33, 35, 39],
+    )
+    assert ranked[0]["window"] == "October 2036"
+    assert all("2026" not in str(w.get("window")) for w in ranked)
+
+
 def test_ensure_marriage_step8_builds_from_step6():
     from ask_llm_context_debug import _ensure_marriage_step8_on_audit
 

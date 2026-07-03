@@ -844,8 +844,33 @@ function buildStep8FromStep6(
 ): Record<string, unknown> | null {
   const windows = getMarriageDashaWindows(stepAudit, trace);
   if (!windows.length) return null;
-  const matched = windows.filter((w) => w.transit_confirmed);
-  const best = matched[0] || windows[0];
+  const step0 = asRecord(stepAudit.step0?.result);
+  const d1Pace = String(step0?.d1_pace || "");
+  const d9Pace = String(step0?.d9_pace || "");
+  const userAge = stepAudit.step0?.user_age;
+  const lateChart =
+    d1Pace === "VERY_LATE" ||
+    (d1Pace === "LATE" && d9Pace === "LATE") ||
+    d1Pace === "LATE" && d9Pace === "VERY_LATE";
+
+  const scored = windows.map((w) => {
+    const startIso = String(w.start_iso || "");
+    const year = startIso.length >= 4 ? Number(startIso.slice(0, 4)) : 0;
+    const approxAge =
+      typeof userAge === "number" && year
+        ? Number(userAge) + (year - new Date().getFullYear())
+        : null;
+    const minFocus = d1Pace === "VERY_LATE" ? 33 : 29;
+    let score = 0;
+    if (lateChart && approxAge != null && approxAge < minFocus) score -= 1000;
+    if (w.dt || (w.jup && w.sat)) score += 200;
+    if (w.transit_confirmed) score += 10;
+    score += year / 10000;
+    return { w, score };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  const best = scored[0]?.w;
+  if (!best || (scored[0]?.score ?? 0) < -500) return null;
   const period = formatMarriageStep6Period(best);
   const pw = String(trace?.primary_window || period || "").trim() || period;
   const lords = formatMarriageStep6DashaLord(best);

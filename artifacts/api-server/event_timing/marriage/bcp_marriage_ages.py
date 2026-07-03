@@ -291,6 +291,9 @@ def compute_bcp_marriage_ages(
     ]
     past_m = [a for a in sorted_merged if user_age is not None and a < user_age]
     future_m = [a for a in sorted_merged if user_age is None or a >= user_age]
+    next_act = _resolve_next_activation_age(
+        sorted_merged, future_priority_ages, user_age,
+    )
 
     base = {
         "seventh_lord": d1["seventh_lord"],
@@ -311,14 +314,14 @@ def compute_bcp_marriage_ages(
         "primary_priority_age": future_priority_ages[0] if future_priority_ages else None,
         "past_activation_ages": past_m,
         "future_activation_ages": future_m,
-        "next_activation_age": future_m[0] if future_m else None,
+        "next_activation_age": next_act,
         "last_passed_bcp_age": past_m[-1] if past_m else None,
         "years_since_last_bcp": (
             (user_age - past_m[-1]) if (user_age is not None and past_m) else None
         ),
         "years_to_next_bcp": (
-            (future_m[0] - user_age)
-            if (user_age is not None and future_m) else None
+            (next_act - user_age)
+            if (user_age is not None and next_act is not None) else None
         ),
         "current_bcp_house": d1.get("current_bcp_house"),
         "upcoming_year_bcp_ages": sorted(
@@ -581,6 +584,25 @@ def compute_bcp_marriage_ages_d1_only(
     return compute_bcp_marriage_ages(kundli, lagna_si, user_age=user_age)
 
 
+def _resolve_next_activation_age(
+    sorted_merged: List[int],
+    future_priority_ages: List[int],
+    user_age: Optional[int],
+) -> Optional[int]:
+    """Next BCP activation — skip incidental in-list age (e.g. 2H→26 at user 26)."""
+    if user_age is None:
+        return sorted_merged[0] if sorted_merged else None
+    for a in future_priority_ages:
+        if a > user_age:
+            return a
+    future_m = [a for a in sorted_merged if a >= user_age]
+    if not future_m:
+        return None
+    if future_m[0] > user_age:
+        return future_m[0]
+    return future_m[1] if len(future_m) > 1 else future_m[0]
+
+
 def resolve_bcp_timing_strategy(
     bcp: Dict[str, Any],
     user_age: Optional[int],
@@ -616,10 +638,11 @@ def resolve_bcp_timing_strategy(
     years_to_next = bcp.get("years_to_next_bcp")
 
     # User is in the merged BCP list — only "this year" when that age heads
-    # the future queue. Incidental hits (e.g. 2H→26 while 7H→31 is next for
+    # the priority queue. Incidental hits (e.g. 2H→26 while 7H→31 is next for
     # a late chart) must NOT force current_bcp_year / near-term 2026 windows.
+    pri_head = bcp.get("primary_priority_age")
     if user_age in (bcp.get("all_marriage_ages") or []):
-        if next_act is None or user_age >= next_act:
+        if pri_head is not None and user_age == int(pri_head):
             return {
                 "timing_mode": "current_bcp_year",
                 "search_horizon_days": _RECENT_HORIZON_DAYS,

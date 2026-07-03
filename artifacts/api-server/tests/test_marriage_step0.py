@@ -230,7 +230,7 @@ def test_bcp_anchor_guard_demotes_near_term_for_delayed_chart():
 
 
 def test_bcp_anchor_guard_demotes_pre_activation_age_26_when_next_bcp_27():
-    """Delayed chart age 26 + next BCP 27 → Oct-2026 at age 26 must lose."""
+    """Delayed chart age 26 + BCP 27 — Oct-2026 before birthday must lose."""
     from event_timing.marriage.marriage_engine_v2 import _apply_bcp_anchor_guard
 
     birth = datetime(2000, 7, 3)
@@ -242,8 +242,8 @@ def test_bcp_anchor_guard_demotes_pre_activation_age_26_when_next_bcp_27():
         "bcp_age_hits": [],
     }
     at_bcp = {
-        "start": datetime(2027, 6, 1),
-        "end": datetime(2027, 12, 31),
+        "start": datetime(2027, 8, 1),
+        "end": datetime(2028, 2, 28),
         "score": 12.0,
         "priority": 3,
         "bcp_age_hits": [27],
@@ -263,16 +263,36 @@ def test_bcp_anchor_guard_demotes_pre_activation_age_26_when_next_bcp_27():
     assert near["score"] < at_bcp["score"]
 
 
+def test_resolve_next_activation_skips_incidental_in_list_age():
+    from event_timing.marriage.bcp_marriage_ages import _resolve_next_activation_age
+
+    ages = [7, 12, 19, 24, 26, 31, 34, 36]
+    pri = [31, 34, 36, 26, 24]
+    assert _resolve_next_activation_age(ages, pri, 26) == 31
+    assert _resolve_next_activation_age(ages, [27, 29, 31], 26) == 27
+
+
 def test_chart_delay_disables_late_urgent_for_upcoming_bcp_next_year():
-    """upcoming_bcp (26→27) + chart_delay must not keep 12mo late-urgent scan."""
+    """upcoming_bcp (26→27) + delayed chart must not keep 12mo late-urgent scan."""
     urgent = _late_urgent_after_chart_delay_guard(
         True,
         age_ctx={"delay_vs_late": "chart_delay"},
         user_age=26,
         bcp={"next_activation_age": 27},
         bcp_strategy={"timing_mode": "upcoming_bcp", "late_urgent_scan": True},
+        step0_verdict="DELAYED",
     )
     assert urgent is False
+
+    urgent_by_verdict = _late_urgent_after_chart_delay_guard(
+        True,
+        age_ctx={"delay_vs_late": "none"},
+        user_age=26,
+        bcp={"next_activation_age": 27},
+        bcp_strategy={"timing_mode": "upcoming_bcp", "late_urgent_scan": True},
+        step0_verdict="DELAYED",
+    )
+    assert urgent_by_verdict is False
 
     # User ON current BCP year — urgent scan should stay on
     still_urgent = _late_urgent_after_chart_delay_guard(

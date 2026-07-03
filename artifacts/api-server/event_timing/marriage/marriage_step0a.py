@@ -24,12 +24,16 @@ def _late_urgent_after_chart_delay_guard(
     user_age: Optional[int],
     bcp: Dict[str, Any],
     bcp_strategy: Dict[str, Any],
+    step0_verdict: Optional[str] = None,
 ) -> bool:
     """Delayed chart + BCP still ahead → skip near-term 12mo urgent scan."""
     if not (
         bcp_urgent
-        and age_ctx.get("delay_vs_late") == "chart_delay"
         and user_age is not None
+        and (
+            age_ctx.get("delay_vs_late") == "chart_delay"
+            or (step0_verdict or "") in ("DELAYED", "LATE")
+        )
     ):
         return bcp_urgent
     nxt = bcp.get("next_activation_age")
@@ -69,6 +73,7 @@ def run_marriage_step0a(
     user_age: Optional[int] = None,
     birth_dt: Optional[datetime] = None,
     years_ahead: int = 5,
+    step0_verdict: Optional[str] = None,
 ) -> Dict[str, Any]:
     """STEP 0A — BCP list + late-chart focus ages for later dasha ranking."""
     d9_lagna_si, d9_planets = _load_d9_planets(kundli)
@@ -129,6 +134,7 @@ def run_marriage_step0a(
         user_age=user_age,
         bcp=bcp,
         bcp_strategy=bcp_strategy,
+        step0_verdict=step0_verdict,
     )
 
     dasha_scan = {

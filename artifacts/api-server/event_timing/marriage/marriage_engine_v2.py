@@ -2212,6 +2212,23 @@ def _gap_ok(cand: Dict[str, Any], chosen: List[Dict[str, Any]]) -> bool:
     return True
 
 
+def _user_age_on_date(birth_dt: Optional[datetime], when: datetime) -> Optional[int]:
+    if birth_dt is None:
+        return None
+    yrs = when.year - birth_dt.year - (
+        (when.month, when.day) < (birth_dt.month, birth_dt.day)
+    )
+    return max(0, yrs)
+
+
+def _bcp_activation_earliest_dt(
+    birth_dt: Optional[datetime],
+    activation_age: int,
+) -> Optional[datetime]:
+    """Calendar date when user enters BCP activation age (birthday year)."""
+    return _age_start_dt(birth_dt, int(activation_age))
+
+
 def _bcp_anchor_guard_active(
     chart_delayed: bool,
     primary_ref_age: Optional[int],
@@ -2248,18 +2265,21 @@ def _apply_bcp_anchor_guard(
         and birth_dt is not None
     ):
         return 0
-    try:
-        from event_timing.marriage.bcp_marriage_ages import _age_span_in_chunk
-    except Exception:
-        return 0
     anchor_min_age = _bcp_anchor_min_age(int(primary_ref_age), int(user_age))
+    activation_dt = _bcp_activation_earliest_dt(birth_dt, anchor_min_age)
     n = 0
     for c in candidates:
         focus_hits = set(c.get("bcp_age_hits") or []) & focus_bcp_ages
         if focus_hits:
             continue
-        _min_a, max_a = _age_span_in_chunk(birth_dt, c["start"], c["end"])
-        if max_a is not None and max_a < anchor_min_age:
+        too_early = False
+        if activation_dt is not None and c["start"] < activation_dt:
+            too_early = True
+        else:
+            age_at_end = _user_age_on_date(birth_dt, c["end"])
+            if age_at_end is not None and age_at_end < anchor_min_age:
+                too_early = True
+        if too_early:
             c["priority"] = max(c.get("priority", 3), 90)
             c["score"] = float(c.get("score", 0)) - _BCP_PRE_FOCUS_DEMOTE
             c["suppressed_pre_bcp_focus"] = True
@@ -2289,9 +2309,16 @@ def _select_top_3(scored: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Greedy top-3 with min-gap + AD-diversity preference."""
     if not scored:
         return []
-    chosen = [scored[0]]
-    used_ads = {scored[0].get("ad")}
-    for cand in scored[1:]:
+    pool = [
+        c for c in scored
+        if not c.get("suppressed_too_young")
+        and not c.get("suppressed_pre_bcp_focus")
+    ]
+    if not pool:
+        pool = scored
+    chosen = [pool[0]]
+    used_ads = {pool[0].get("ad")}
+    for cand in pool[1:]:
         if len(chosen) >= 3:
             break
         if not _gap_ok(cand, chosen):
@@ -2299,7 +2326,7 @@ def _select_top_3(scored: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         # Prefer different AD when possible (architect diversity rule)
         if cand.get("ad") in used_ads:
             # Look ahead — is there a same-quality different-AD cand?
-            alt = next((c for c in scored
+            alt = next((c for c in pool
                         if c not in chosen
                         and c.get("ad") not in used_ads
                         and _gap_ok(c, chosen)
@@ -2745,6 +2772,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         years_ahead=5,
     )
     marriage_age_ctx = step0.get("marriage_age_context") or {}
+    step0_verdict = (step0.get("step0_tendency") or {}).get("verdict") or ""
     _combined_pace = (
         (step0.get("marriage_pace") or {}).get("combined") or {}
     ).get("combined_pace") or "NORMAL"
@@ -2756,6 +2784,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         user_age=user_age,
         birth_dt=birth_dt,
         years_ahead=5,
+        step0_verdict=step0_verdict,
     )
     bcp_ctx = step0a.get("bcp_marriage_ages") or {}
     bcp_strategy = step0a.get("bcp_timing_strategy") or {}
@@ -2811,6 +2840,11 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     }
     dasha_lord_profiles = _build_dasha_lord_profiles(ranked)
 
+    _chart_pre_delayed = (
+        step0_verdict in ("DELAYED", "LATE")
+        or marriage_age_ctx.get("delay_vs_late") == "chart_delay"
+    )
+
     # ── STEP 5 / 5.5 — dasha (strategy from STEP 0 BCP) ───────────────
     chain = _flatten_dasha_chain(kundli)
     now = datetime.utcnow()
@@ -2822,7 +2856,9 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                     f"lords={activation['active_lords']}")
 
     late_urgent_scan = bool(
-        not too_young and dasha_scan.get("late_urgent_scan")
+        not too_young
+        and dasha_scan.get("late_urgent_scan")
+        and not _chart_pre_delayed
     )
     late_horizon_days = int(
         dasha_scan.get("search_horizon_days")
@@ -2868,23 +2904,29 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             key=lambda x: (x.get("priority", 3), -x.get("score", 0), x["start"])
         )
 
-    step0_verdict = (step0.get("step0_tendency") or {}).get("verdict") or ""
     primary_ref_age = dasha_scan.get("primary_reference_age")
     focus_bcp_ages = set(dasha_scan.get("bcp_focus_ages") or [])
-    # Safety: incidental BCP list hit (e.g. 2H→26) must not anchor over 7H→31.
+    _next_bcp = (bcp_ctx or {}).get("next_activation_age")
+    _pri_bcp = (bcp_ctx or {}).get("primary_priority_age")
+    # Incidental in-list age (e.g. 2H→26) or current_bcp_year must not anchor
+    # over the real upcoming activation (e.g. 7H→27/31) on delayed charts.
     if (
         primary_ref_age is not None
         and user_age is not None
-        and primary_ref_age == user_age
+        and step0_verdict in ("DELAYED", "LATE")
     ):
-        _next_bcp = (bcp_ctx or {}).get("next_activation_age")
-        if _next_bcp is not None and _next_bcp > user_age + 2:
+        _bump: Optional[int] = None
+        if isinstance(_pri_bcp, int) and _pri_bcp > user_age:
+            _bump = _pri_bcp
+        elif isinstance(_next_bcp, int) and _next_bcp > user_age:
+            _bump = _next_bcp
+        if _bump is not None and primary_ref_age <= user_age:
             factors.append(
-                f"BCP primary corrected {user_age}→{_next_bcp} "
-                f"(incidental in-list age skipped)"
+                f"BCP primary corrected {primary_ref_age}→{_bump} "
+                f"(delayed chart; incidental age skipped)"
             )
-            primary_ref_age = _next_bcp
-            focus_bcp_ages.add(_next_bcp)
+            primary_ref_age = _bump
+            focus_bcp_ages.add(_bump)
     chart_delayed = step0_verdict in ("DELAYED", "LATE") or bool(
         marriage_age_ctx.get("delay_vs_late") == "chart_delay"
         and focus_bcp_ages

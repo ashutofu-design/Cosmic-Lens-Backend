@@ -237,7 +237,7 @@ def run_marriage_step0a(
         "dasha_scan_plan": dasha_scan,
         "reasoning_summary": (
             f"STEP0A: BCP ages {all_bcp}; focus {focus_ages}; "
-            f"7L dual houses D1={bcp.get('dual_sign_houses_d1')}"
+            f"conjunct D1={((bcp.get('d1_bcp') or {}).get('conjunct_planets'))}"
         ),
         "llm_directive": " | ".join(
             filter(None, [

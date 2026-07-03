@@ -4,16 +4,15 @@ Rules (user spec):
   • House where 7L sits → marriage ages when that HOUSE number activates:
       e.g. 7L in 12H → ages 12, 24, 36, 48…
   • Houses aspected by 7L → same pattern for each aspected house number.
-  • **Dual-sign 7L** (Mars/Mercury/Jupiter/Venus/Saturn): har owned rashi
-    jis ghar se lagna se aati hai, us ghar ke BCP ages bhi (e.g. Mars → Mesh
-    + Vrishchik dono houses count; Mercury → Mithun + Kanya houses).
+  • Planets **conjunct** 7L (same house) → each conjunct planet's aspect
+    houses also contribute BCP ages (D1 and D9 computed separately).
   • D1 + D9 dono par alag BCP list; merged master list for timing.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
 _SIGN_LORDS = {
     0: "Mars", 1: "Venus", 2: "Mercury", 3: "Moon", 4: "Sun",
@@ -24,15 +23,6 @@ _SIGN_NAMES = [
     "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
     "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
 ]
-# Planet → both owned sign indices (0=Aries … 11=Pisces)
-_PLANET_OWN_SIGNS: Dict[str, Tuple[int, ...]] = {
-    "Mars": (0, 7),
-    "Mercury": (2, 5),
-    "Jupiter": (8, 11),
-    "Venus": (1, 6),
-    "Saturn": (9, 10),
-}
-
 _BCP_MAX_AGE = 96
 _BCP_WINDOW_BOOST = 3.5
 _BCP_NEAR_YEAR_BOOST = 2.0
@@ -42,9 +32,8 @@ _MISSED_BCP_YEARS_THRESHOLD = 2   # 34 guzar, ab 37 → missed-recent mode
 _RECENT_HORIZON_DAYS = 365
 _BCP_SOURCE_WEIGHTS = {
     "7th_lord_placement": 5.0,
-    "7th_lord_dual_sign_houses": 3.0,
     "7th_lord_aspects": 5.0,
-    "7th_lord_dispositor_linkage": 4.0,
+    "7th_lord_conjunct_aspects": 4.0,
 }
 _BCP_D1_D9_OVERLAP_BONUS = 4.0
 _BCP_SHARED_LINKAGE_HOUSE_BONUS = 6.0
@@ -77,36 +66,67 @@ def _planet_sign_idx(planets: List[dict], pname: str) -> Optional[int]:
     return None
 
 
-def _house_from_sign(lagna_si: int, sign_si: int) -> int:
-    """Whole-sign house number for a zodiac sign from lagna."""
-    return (sign_si - lagna_si) % 12 + 1
+_CONJUNCT_GRAHAS = (
+    "Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Rahu", "Ketu",
+)
 
 
-def _dual_lordship_bcp_entries(
+def _planets_conjunct_with(
+    planets: List[dict],
+    *,
+    house: Optional[int],
+    exclude: str,
+) -> List[str]:
+    """Grahas in the same house as `exclude` (whole-sign conjunction)."""
+    if house is None:
+        return []
+    out: List[str] = []
+    for p in planets or []:
+        name = p.get("name")
+        if not name or name == exclude or name not in _CONJUNCT_GRAHAS:
+            continue
+        h = p.get("house")
+        if isinstance(h, int) and h == house:
+            out.append(name)
+    return out
+
+
+def _conjunct_aspect_entries(
     seventh_lord: str,
+    seventh_lord_house: Optional[int],
+    planets: List[dict],
     lagna_si: int,
     *,
-    placement_house: Optional[int] = None,
+    division: str = "D1",
+    skip_houses: Optional[Set[int]] = None,
 ) -> List[Dict[str, Any]]:
-    """BCP ages from each sign the 7L owns (user rule: doosri rashi ka ghar)."""
-    owned = _PLANET_OWN_SIGNS.get(seventh_lord)
-    if not owned:
+    """Conjunct-with-7L planets → their aspect houses → BCP ages."""
+    if seventh_lord_house is None:
         return []
+    skip = set(skip_houses or ())
+    conjuncts = _planets_conjunct_with(
+        planets, house=seventh_lord_house, exclude=seventh_lord,
+    )
     entries: List[Dict[str, Any]] = []
-    for sign_si in owned:
-        h = _house_from_sign(lagna_si, sign_si)
-        if placement_house is not None and h == placement_house:
-            continue  # already covered by placement source
-        ages = _activation_ages_for_house(h)
-        entries.append({
-            "house": h,
-            "sign": _SIGN_NAMES[sign_si],
-            "ages": ages,
-            "label": (
-                f"7L ({seventh_lord}) owned sign {_SIGN_NAMES[sign_si]} "
-                f"→ {h}H BCP"
-            ),
-        })
+    seen: Set[int] = set(skip)
+    for cp in conjuncts:
+        cp_si = _planet_sign_idx(planets, cp)
+        if cp_si is None:
+            continue
+        for h in _houses_aspected_by_planet(cp, cp_si, lagna_si):
+            if h in seen:
+                continue
+            seen.add(h)
+            entries.append({
+                "house": h,
+                "ages": _activation_ages_for_house(h),
+                "conjunct_planet": cp,
+                "label": (
+                    f"{division} — {cp} conjunct 7L ({seventh_lord}) "
+                    f"aspects {h}H"
+                ),
+                "type": "conjunct_aspect",
+            })
     return entries
 
 
@@ -133,54 +153,6 @@ def _aspect_house_nums(block: Optional[Dict[str, Any]]) -> List[int]:
             if isinstance(h, int):
                 out.append(h)
     return sorted(set(out))
-
-
-def _dispositor_linkage_entries(
-    seventh_lord: str,
-    seventh_lord_house: Optional[int],
-    planets: List[dict],
-    lagna_si: int,
-    *,
-    division: str = "D1",
-    skip_houses: Optional[Set[int]] = None,
-) -> List[Dict[str, Any]]:
-    """7L placement sign-lord → that lord's house + aspects → BCP ages."""
-    if seventh_lord_house is None:
-        return []
-    skip = set(skip_houses or ())
-    sign_si = (lagna_si + seventh_lord_house - 1) % 12
-    dispositor = _SIGN_LORDS[sign_si]
-    if dispositor == seventh_lord:
-        return []
-    disp_si = _planet_sign_idx(planets, dispositor)
-    disp_house = _planet_house(planets, dispositor)
-    entries: List[Dict[str, Any]] = []
-    if disp_house is not None and disp_house not in skip:
-        entries.append({
-            "house": disp_house,
-            "ages": _activation_ages_for_house(disp_house),
-            "dispositor": dispositor,
-            "label": (
-                f"{division} — 7L in {seventh_lord_house}H sign-lord "
-                f"{dispositor}@{disp_house}H"
-            ),
-            "type": "dispositor_placement",
-        })
-        skip.add(disp_house)
-    if disp_si is not None:
-        for h in _houses_aspected_by_planet(dispositor, disp_si, lagna_si):
-            if h in skip:
-                continue
-            entries.append({
-                "house": h,
-                "ages": _activation_ages_for_house(h),
-                "dispositor": dispositor,
-                "label": (
-                    f"{division} — 7L sign-lord {dispositor} aspects {h}H"
-                ),
-                "type": "dispositor_aspect",
-            })
-    return entries
 
 
 def _future_ages_from_division_block(
@@ -226,7 +198,7 @@ def _activation_ages_for_house(house: int, max_age: int = _BCP_MAX_AGE) -> List[
 
 
 def _bcp_7l_linkage_houses(block: Optional[Dict[str, Any]]) -> Set[int]:
-    """7L placement + aspects + sign-lord of 7L house (dispositor linkage)."""
+    """7L placement + 7L aspects + conjunct-planet aspect houses."""
     if not isinstance(block, dict):
         return set()
     houses: Set[int] = set()
@@ -239,14 +211,12 @@ def _bcp_7l_linkage_houses(block: Optional[Dict[str, Any]]) -> Set[int]:
         h = ae.get("house")
         if isinstance(h, int):
             houses.add(h)
-    for src in block.get("sources") or []:
-        if not isinstance(src, dict):
+    for ca in block.get("conjunct_aspect_houses") or []:
+        if not isinstance(ca, dict):
             continue
-        if src.get("source") != "7th_lord_dispositor_linkage":
-            continue
-        for row in src.get("houses") or []:
-            if isinstance(row, dict) and isinstance(row.get("house"), int):
-                houses.add(row["house"])
+        h = ca.get("house")
+        if isinstance(h, int):
+            houses.add(h)
     return houses
 
 
@@ -354,20 +324,9 @@ def compute_bcp_for_division(
             "ages": placement_ages,
         })
 
-    dual_entries = _dual_lordship_bcp_entries(
-        seventh_lord, lagna_si, placement_house=seventh_lord_house,
-    )
-    if dual_entries:
-        sources.append({
-            "source": "7th_lord_dual_sign_houses",
-            "houses": dual_entries,
-            "label": f"{division} — 7L ({seventh_lord}) owned signs → houses",
-        })
-
     aspect_entries: List[Dict[str, Any]] = []
     if seventh_lord_si is not None:
-        skip_h = {seventh_lord_house}
-        skip_h.update(e["house"] for e in dual_entries)
+        skip_h = {seventh_lord_house} if seventh_lord_house is not None else set()
         for h in _houses_aspected_by_planet(seventh_lord, seventh_lord_si, lagna_si):
             if h in skip_h:
                 continue
@@ -383,32 +342,35 @@ def compute_bcp_for_division(
                 "houses": aspect_entries,
             })
 
-    skip_for_disp: Set[int] = set()
+    skip_for_conj: Set[int] = set()
     if seventh_lord_house is not None:
-        skip_for_disp.add(seventh_lord_house)
-    skip_for_disp.update(e["house"] for e in dual_entries)
-    skip_for_disp.update(e["house"] for e in aspect_entries)
-    dispositor_entries = _dispositor_linkage_entries(
+        skip_for_conj.add(seventh_lord_house)
+    conjunct_entries = _conjunct_aspect_entries(
         seventh_lord,
         seventh_lord_house,
         planets,
         lagna_si,
         division=division,
-        skip_houses=skip_for_disp,
+        skip_houses=skip_for_conj,
     )
-    if dispositor_entries:
+    conjunct_planets = _planets_conjunct_with(
+        planets, house=seventh_lord_house, exclude=seventh_lord,
+    )
+    if conjunct_entries:
         sources.append({
-            "source": "7th_lord_dispositor_linkage",
-            "houses": dispositor_entries,
+            "source": "7th_lord_conjunct_aspects",
+            "houses": conjunct_entries,
+            "label": (
+                f"{division} — conjunct with 7L ({seventh_lord}): "
+                f"{', '.join(conjunct_planets)}"
+            ),
         })
 
     all_ages: Set[int] = set(placement_ages)
-    for de in dual_entries:
-        all_ages.update(de.get("ages") or [])
     for ae in aspect_entries:
         all_ages.update(ae.get("ages") or [])
-    for de in dispositor_entries:
-        all_ages.update(de.get("ages") or [])
+    for ce in conjunct_entries:
+        all_ages.update(ce.get("ages") or [])
 
     sorted_all = sorted(all_ages)
     past = [a for a in sorted_all if user_age is not None and a < user_age]
@@ -422,20 +384,19 @@ def compute_bcp_for_division(
                 upcoming_year_ages.append(a)
 
     last_passed = past[-1] if past else None
-    dual_houses = [e["house"] for e in dual_entries]
 
     return {
         "division": division,
         "lagna_sign_idx": lagna_si,
         "seventh_lord": seventh_lord,
         "seventh_lord_house": seventh_lord_house,
-        "dual_sign_houses": dual_houses,
+        "conjunct_planets": conjunct_planets,
+        "dual_sign_houses": [],
         "seventh_house_ages": [],
         "placement_ages": placement_ages,
-        "dual_lord_ages": sorted(
-            {a for e in dual_entries for a in (e.get("ages") or [])}
-        ),
+        "dual_lord_ages": [],
         "aspect_houses": aspect_entries,
+        "conjunct_aspect_houses": conjunct_entries,
         "sources": sources,
         "all_marriage_ages": sorted_all,
         "past_activation_ages": past,
@@ -455,7 +416,7 @@ def compute_bcp_for_division(
         "future_bcp_ages": future[:6],
         "reasoning_summary": (
             f"BCP-{division}: 7L {seventh_lord}@{seventh_lord_house}H; "
-            f"dual-sign houses {dual_houses}; "
+            f"conjunct {conjunct_planets or '—'}; "
             f"ages {sorted_all[:10]}{'…' if len(sorted_all) > 10 else ''}"
         ),
     }
@@ -516,7 +477,7 @@ def build_bcp_admin_linkage_display(
         for src in block.get("sources") or []:
             if not isinstance(src, dict):
                 continue
-            if src.get("source") != "7th_lord_dispositor_linkage":
+            if src.get("source") != "7th_lord_conjunct_aspects":
                 continue
             for row in src.get("houses") or []:
                 if not isinstance(row, dict) or not isinstance(row.get("house"), int):
@@ -530,9 +491,8 @@ def build_bcp_admin_linkage_display(
                     ages = ages[:4]
                 else:
                     ages = _future_ages_for_house(h, user_age)
-                kind = row.get("type") or "dispositor"
                 items.append({
-                    "type": kind,
+                    "type": row.get("type") or "conjunct_aspect",
                     "house": h,
                     "ages": ages,
                 })
@@ -872,14 +832,6 @@ def format_bcp_age_list(
                     "detail": src.get("label"),
                     "ages": src.get("ages") or [],
                 })
-            elif kind == "7th_lord_dual_sign_houses":
-                for h in src.get("houses") or []:
-                    rows.append({
-                        "division": div,
-                        "rule": "7L dual-sign house",
-                        "detail": h.get("label"),
-                        "ages": h.get("ages") or [],
-                    })
             elif kind == "7th_lord_aspects":
                 for h in src.get("houses") or []:
                     rows.append({
@@ -888,11 +840,11 @@ def format_bcp_age_list(
                         "detail": h.get("label"),
                         "ages": h.get("ages") or [],
                     })
-            elif kind == "7th_lord_dispositor_linkage":
+            elif kind == "7th_lord_conjunct_aspects":
                 for h in src.get("houses") or []:
                     rows.append({
                         "division": div,
-                        "rule": "7L sign-lord linkage",
+                        "rule": "7L conjunct aspect",
                         "detail": h.get("label"),
                         "ages": h.get("ages") or [],
                     })

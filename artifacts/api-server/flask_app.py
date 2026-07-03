@@ -58,6 +58,7 @@ from question_history import (
     extract_admin_llm_context_for_save,
     extract_verdict_summary,
     get_recent_questions,
+    persist_ask_question_result,
     save_user_question,
     search_questions,
     token_fields_from_result,
@@ -2686,18 +2687,11 @@ def _log_question_history(user, question_text: str, result):
         topic_logged = result.get("topic") or "general"
         verdict_logged = extract_verdict_summary(result, topic_logged)
         kundli_id = user.kundli.id if getattr(user, "kundli", None) else None
-        tok = token_fields_from_result(result)
-        llm_ctx_json = extract_admin_llm_context_for_save(result)
-        qid = save_user_question(
+        qid = persist_ask_question_result(
             user_id=user.id,
             question_text=question_text or "",
-            topic=topic_logged,
+            result=result,
             primary_kundli_id=kundli_id,
-            verdict_summary=verdict_logged,
-            answer_text=(result.get("text") or ""),
-            answer_source=result.get("source"),
-            llm_context_json=llm_ctx_json,
-            **tok,
         )
         try:
             from user_ask_profile import record_question_signals_for_user
@@ -7944,16 +7938,14 @@ def ask_route():
         rp_user = None
         rp_quota = {"used": 0, "limit": 0}
         rp_plan = "free"
-        if user_id:
-            try:
-                _uid = int(str(user_id).strip())
-            except (TypeError, ValueError):
-                _uid = None
-            rp_user = User.query.get(_uid) if _uid is not None else None
-            if not rp_user:
+        _api_key_rp = request.headers.get("X-API-Key", "").strip()
+        if user_id or _api_key_rp:
+            from question_history import resolve_user_for_ask_request
+
+            rp_user = resolve_user_for_ask_request(user_id, _api_key_rp)
+            if user_id and not rp_user:
                 return jsonify({"error": "User not found"}), 404
-            _ak = request.headers.get("X-API-Key", "").strip()
-            if not _ak or rp_user.api_key != _ak:
+            if not rp_user:
                 return jsonify({"error": "Unauthorized"}), 401
             from ask_kundli_resolver import resolve_kundli_for_user
 
@@ -8068,24 +8060,16 @@ def ask_route():
             }
         out = _finalize_ask_out_after_llm(out, rp_user, quota_on_success=rp_quota)
         out["plan"] = rp_plan
-        llm_ctx_json = extract_admin_llm_context_for_save(out)
         # Phase 2.5.11.19 — Ask Q&A persistence (sync raw passthrough exit).
-        # Authenticated users only (UserQuestion.user_id is NOT NULL).
-        # Fire-and-forget — save_user_question() swallows all errors so a
-        # logging failure can never break the user's Ask flow.
         if rp_user is not None and out.get("source") != "raw_passthrough_error":
             try:
-                tok = token_fields_from_result(out)
-                save_user_question(
+                from question_history import persist_ask_question_result
+
+                persist_ask_question_result(
                     user_id=rp_user.id,
                     question_text=question,
-                    topic=(out.get("topic") or "general"),
+                    result=out,
                     primary_kundli_id=(rp_user.kundli.id if rp_user.kundli else None),
-                    verdict_summary=extract_verdict_summary(out, out.get("topic") or "general"),
-                    answer_text=(out.get("text") or ""),
-                    answer_source=out.get("source"),
-                    llm_context_json=llm_ctx_json,
-                    **tok,
                 )
             except Exception as _qh_exc:
                 print(
@@ -8245,19 +8229,14 @@ def ask_route():
 
     # ── Daily-quota gate (auth mandatory when user_id supplied) ──────────────
     user = None
-    if user_id:
-        # user_id may arrive as a JSON string from the mobile client. Coerce
-        # to int safely; treat anything non-numeric as anonymous rather than
-        # crashing the SQLAlchemy primary-key lookup.
-        try:
-            uid_int = int(str(user_id).strip())
-        except (TypeError, ValueError):
-            uid_int = None
-        user = User.query.get(uid_int) if uid_int is not None else None
-        if not user:
+    _api_key_ask = request.headers.get("X-API-Key", "").strip()
+    if user_id or _api_key_ask:
+        from question_history import resolve_user_for_ask_request
+
+        user = resolve_user_for_ask_request(user_id, _api_key_ask)
+        if user_id and not user:
             return jsonify({"error": "User not found"}), 404
-        api_key = request.headers.get("X-API-Key", "").strip()
-        if not api_key or user.api_key != api_key:
+        if not user:
             return jsonify({"error": "Unauthorized"}), 401
 
         # ── Phase 2.10.7 P5 — DB-LOAD ENFORCEMENT (tamper-proof) ─────────
@@ -8997,16 +8976,14 @@ def ask_stream_route():
         rp_user_s = None
         rp_quota_s = {"used": 0, "limit": 0}
         rp_plan_s = "free"
-        if user_id:
-            try:
-                _uid_s = int(str(user_id).strip())
-            except (TypeError, ValueError):
-                _uid_s = None
-            rp_user_s = User.query.get(_uid_s) if _uid_s is not None else None
-            if not rp_user_s:
+        _api_key_s = request.headers.get("X-API-Key", "").strip()
+        if user_id or _api_key_s:
+            from question_history import resolve_user_for_ask_request
+
+            rp_user_s = resolve_user_for_ask_request(user_id, _api_key_s)
+            if user_id and not rp_user_s:
                 return jsonify({"error": "User not found"}), 404
-            _ak_s = request.headers.get("X-API-Key", "").strip()
-            if not _ak_s or rp_user_s.api_key != _ak_s:
+            if not rp_user_s:
                 return jsonify({"error": "Unauthorized"}), 401
             from ask_kundli_resolver import resolve_kundli_for_user
 
@@ -9122,26 +9099,17 @@ def ask_stream_route():
             }
         out_s = _finalize_ask_out_after_llm(out_s, rp_user_s, quota_on_success=rp_quota_s)
         out_s["plan"] = rp_plan_s
-        llm_ctx_json_s = extract_admin_llm_context_for_save(out_s)
-        # Phase 2.5.11.19 — Ask Q&A persistence (stream raw passthrough exit).
-        # Same fire-and-forget contract as the sync path above.
         if rp_user_s is not None and out_s.get("source") != "raw_passthrough_error":
             try:
-                tok = token_fields_from_result(out_s)
-                save_user_question(
+                from question_history import persist_ask_question_result
+
+                persist_ask_question_result(
                     user_id=rp_user_s.id,
                     question_text=question,
-                    topic=(out_s.get("topic") or "general"),
+                    result=out_s,
                     primary_kundli_id=(
                         rp_user_s.kundli.id if rp_user_s.kundli else None
                     ),
-                    verdict_summary=extract_verdict_summary(
-                        out_s, out_s.get("topic") or "general"
-                    ),
-                    answer_text=(out_s.get("text") or ""),
-                    answer_source=out_s.get("source"),
-                    llm_context_json=llm_ctx_json_s,
-                    **tok,
                 )
             except Exception as _qh_exc_s:
                 print(
@@ -9208,16 +9176,14 @@ def ask_stream_route():
 
     # ── Auth + quota — identical contract to /api/ask ────────────────────────
     user = None
-    if user_id:
-        try:
-            uid_int = int(str(user_id).strip())
-        except (TypeError, ValueError):
-            uid_int = None
-        user = User.query.get(uid_int) if uid_int is not None else None
-        if not user:
+    _api_key_stream = request.headers.get("X-API-Key", "").strip()
+    if user_id or _api_key_stream:
+        from question_history import resolve_user_for_ask_request
+
+        user = resolve_user_for_ask_request(user_id, _api_key_stream)
+        if user_id and not user:
             return jsonify({"error": "User not found"}), 404
-        api_key = request.headers.get("X-API-Key", "").strip()
-        if not api_key or user.api_key != api_key:
+        if not user:
             return jsonify({"error": "Unauthorized"}), 401
         quota = consume_question(user)
         if not quota["allowed"]:
@@ -9695,30 +9661,23 @@ def ask_stream_route():
                     _clar_passthrough = evt.get("clarification")
                     if _clar_passthrough is not None:
                         _final_payload["clarification"] = _clar_passthrough
-                    yield "data: " + json.dumps(
-                        _final_payload, ensure_ascii=False
-                    ) + "\n\n"
-
-                    # ── Question history log (storage layer only) ──────
-                    # Save AFTER the engine final event has been
-                    # serialised to the wire so any failure here cannot
-                    # delay the user's reply. helper swallows all errors.
-                    #
-                    # Phase 6.0i — FIX 3 (HISTORY PERSISTENCE): wrap the
-                    # save in `_app_for_save.app_context()` so SQLAlchemy
-                    # `db.session.*` works AFTER Flask has popped the
-                    # request context for the streaming response. Without
-                    # this, every streamed Ask logged "Working outside of
-                    # application context" and silently dropped the row.
+                    # Save BEFORE yield so client disconnect cannot drop the row.
                     if log_user_id:
                         try:
                             from question_history import save_stream_ask_question
 
+                            _save_evt = {
+                                **dict(evt),
+                                "text": _final_payload.get("text"),
+                                "topic": final_topic,
+                                "source": _final_payload.get("source"),
+                                "engine_tag": _final_payload.get("engine_tag"),
+                            }
                             with _app_for_save.app_context():
                                 save_stream_ask_question(
                                     user_id=log_user_id,
                                     question_text=log_question,
-                                    event=dict(evt),
+                                    event=_save_evt,
                                     primary_kundli_id=log_kundli_id,
                                 )
                         except Exception as exc:
@@ -9731,6 +9690,9 @@ def ask_stream_route():
                             "login required for admin Ask Q&A list",
                             flush=True,
                         )
+                    yield "data: " + json.dumps(
+                        _final_payload, ensure_ascii=False
+                    ) + "\n\n"
         except Exception as exc:
             print(f"[ask/stream] mid-stream error: {exc}")
             yield "data: " + json.dumps(

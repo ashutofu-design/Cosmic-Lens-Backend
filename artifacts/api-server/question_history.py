@@ -31,7 +31,29 @@ from typing import Any, Iterable, Optional
 from sqlalchemy import or_
 
 from database import db
-from models import UserQuestion
+from models import User, UserQuestion
+
+
+def resolve_user_for_ask_request(
+    user_id: Any,
+    api_key_header: str | None,
+) -> User | None:
+    """Resolve logged-in user from body user_id + X-API-Key, or API key alone."""
+    api_key = (api_key_header or "").strip()
+    uid: int | None = None
+    if user_id is not None and str(user_id).strip():
+        try:
+            uid = int(str(user_id).strip())
+        except (TypeError, ValueError):
+            uid = None
+    if uid is not None:
+        user = User.query.get(uid)
+        if user and api_key and user.api_key == api_key:
+            return user
+        return None
+    if api_key:
+        return User.query.filter_by(api_key=api_key).first()
+    return None
 
 
 # Hard cap mirrored from UserQuestion.verdict_summary column (String 120).
@@ -691,6 +713,53 @@ def token_fields_from_result(result: Any) -> dict[str, Any]:
     }
 
 
+def persist_ask_question_result(
+    *,
+    user_id: int,
+    question_text: str,
+    result: dict[str, Any],
+    primary_kundli_id: Optional[int] = None,
+) -> Optional[str]:
+    """Unified admin save — always stores question_text; rebuilds admin ctx if missing."""
+    if not user_id or not (question_text or "").strip():
+        return None
+    payload = dict(result) if isinstance(result, dict) else {}
+    if not payload.get("admin_llm_context"):
+        try:
+            from ask_llm_context_debug import build_admin_context_for_ask_save
+
+            payload["admin_llm_context"] = build_admin_context_for_ask_save(
+                question=question_text,
+                result=payload,
+            )
+        except Exception as exc:
+            print(f"[question_history] admin_ctx rebuild skipped: {exc}", flush=True)
+    topic_logged = str(payload.get("topic") or "general")
+    tok = token_fields_from_result(payload)
+    save_payload = dict(payload)
+    llm_ctx_json = extract_admin_llm_context_for_save(save_payload)
+    qid = save_user_question(
+        user_id=user_id,
+        question_text=question_text,
+        topic=topic_logged,
+        primary_kundli_id=primary_kundli_id,
+        verdict_summary=extract_verdict_summary(payload, topic_logged),
+        answer_text=(payload.get("text") or ""),
+        answer_source=payload.get("source"),
+        llm_context_json=llm_ctx_json,
+        **tok,
+    )
+    if qid:
+        print(
+            f"[question_history] persist_ok id={qid} topic={topic_logged} "
+            f"q={question_text[:72]!r}",
+            flush=True,
+        )
+    else:
+        print(f"[question_history] persist_failed q={question_text[:72]!r}", flush=True)
+    return qid
+
+
 def save_stream_ask_question(
     *,
     user_id: int,
@@ -699,48 +768,13 @@ def save_stream_ask_question(
     primary_kundli_id: Optional[int] = None,
 ) -> Optional[str]:
     """Persist streamed Ask final event — always saves question_text for admin list."""
-    if not user_id or not isinstance(user_id, int):
-        return None
-    qtext = (question_text or "").strip()
-    if not qtext:
-        return None
     try:
-        payload = dict(event) if isinstance(event, dict) else {}
-        if not payload.get("admin_llm_context"):
-            try:
-                from ask_llm_context_debug import build_admin_context_for_ask_save
-
-                payload["admin_llm_context"] = build_admin_context_for_ask_save(
-                    question=qtext,
-                    result=payload,
-                )
-            except Exception as exc:
-                print(f"[question_history] stream admin_ctx rebuild skipped: {exc}", flush=True)
-
-        topic_logged = str(payload.get("topic") or "general")
-        tok = token_fields_from_result(payload)
-        save_payload = dict(payload)
-        llm_ctx_json = extract_admin_llm_context_for_save(save_payload)
-        qid = save_user_question(
+        return persist_ask_question_result(
             user_id=user_id,
-            question_text=qtext,
-            topic=topic_logged,
+            question_text=question_text,
+            result=dict(event) if isinstance(event, dict) else {},
             primary_kundli_id=primary_kundli_id,
-            verdict_summary=extract_verdict_summary(payload, topic_logged),
-            answer_text=(payload.get("text") or ""),
-            answer_source=payload.get("source"),
-            llm_context_json=llm_ctx_json,
-            **tok,
         )
-        if qid:
-            print(
-                f"[question_history] stream_save_ok id={qid} "
-                f"topic={topic_logged} q={qtext[:72]!r}",
-                flush=True,
-            )
-        else:
-            print(f"[question_history] stream_save_none q={qtext[:72]!r}", flush=True)
-        return qid
     except Exception as exc:
         print(f"[question_history] stream_save failed: {exc}", flush=True)
         return None

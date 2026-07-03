@@ -735,7 +735,7 @@ function formatMarriageStep3Planets(step?: Record<string, unknown>): string {
   if (!list.length) {
     return stepOneLiner("step3", step, "marriage_timing_m17");
   }
-  return list
+  const text = list
     .map((row) => {
       const r = asRecord(row);
       const name = (r?.name as string) || "?";
@@ -743,6 +743,7 @@ function formatMarriageStep3Planets(step?: Record<string, unknown>): string {
       return why ? `${name}: ${why}` : name;
     })
     .join(" | ");
+  return step.recomputed_from_chart ? `${text} (chart se recompute)` : text;
 }
 
 function stepAuditFromMarriageContext(
@@ -872,7 +873,8 @@ function formatMarriageEarlyLateStep(step0?: Record<string, unknown>): {
   if (!step0) {
     return {
       title: "Step 1 — Early / Late marriage",
-      detail: "— (re-ask question after API deploy)",
+      detail:
+        "— (trace save nahi hua — admin question dubara kholein ya naya marriage timing question puchein. Primary profile chart ho to bhi purane row me blank reh sakta hai jab tak API deploy + restart na ho.)",
     };
   }
   const r = asRecord(step0.result);

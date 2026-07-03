@@ -390,6 +390,11 @@ class AskLlmContextDebugTests(unittest.TestCase):
         s0a = out["slice_meta"]["step_audit"]["step0a"]
         self.assertEqual(s0a["d1_7l_placement_house"], 12)
         self.assertIsInstance(s0a.get("d1_7l_aspect_houses"), list)
+        step_audit = out["slice_meta"]["step_audit"]
+        self.assertIsInstance(step_audit.get("step0"), dict)
+        self.assertTrue((step_audit.get("step0") or {}).get("result"))
+        self.assertIsInstance(step_audit.get("step3"), dict)
+        self.assertTrue(step_audit["step3"].get("planet_names") or step_audit["step3"].get("marriage_giving_planets"))
         disp = s0a.get("bcp_house_display") or {}
         self.assertTrue((disp.get("d1") or {}).get("items"))
         payload = build_marriage_bcp_step2_admin_payload(ctx, kundli)

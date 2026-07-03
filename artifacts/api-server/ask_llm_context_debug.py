@@ -970,8 +970,17 @@ def _build_marriage_step_audit_from_chart(
             )
             if step6.get("selected_windows"):
                 audit["step6"] = {**step6, "recomputed_from_chart": True}
-        except Exception:
-            pass
+            else:
+                print(
+                    f"[marriage_admin_recompute] step6 empty status={step6.get('status')}",
+                    flush=True,
+                )
+        except Exception as exc:
+            print(
+                f"[marriage_admin_recompute] step6 failed: "
+                f"{type(exc).__name__}: {str(exc)[:160]}",
+                flush=True,
+            )
 
     if isinstance(bcp, dict) and bcp:
         d9_bcp = bcp.get("d9_bcp") if isinstance(bcp.get("d9_bcp"), dict) else {}
@@ -1181,6 +1190,12 @@ def recompute_marriage_bcp_from_kundli(
         return ctx
     chart = _normalize_planet_houses(chart, lagna_si)
     user_age = _user_age_from_admin_ctx(ctx, birth, chart)
+    dasha_n = len(chart.get("dashas") or chart.get("dasha") or [])
+    print(
+        f"[marriage_admin_recompute] start planets={len(chart.get('planets') or [])} "
+        f"dashas={dasha_n} user_age={user_age}",
+        flush=True,
+    )
     bcp: dict[str, Any] | None = None
     linkage: dict[str, Any] = {}
     evidence_lines: list[str] = []

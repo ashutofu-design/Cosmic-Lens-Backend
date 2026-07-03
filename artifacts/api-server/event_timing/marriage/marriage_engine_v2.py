@@ -2561,7 +2561,9 @@ def build_marriage_step6_audit(
     d9_7l: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Lightweight Step 6 — top-3 dasha windows without full KP/timing pipeline."""
+    raw_n = len((kundli or {}).get("dashas") or (kundli or {}).get("dasha") or [])
     chart = _ensure_dashas_on_kundli(kundli, birth)
+    dasha_n = len(chart.get("dashas") or [])
     chain = _flatten_dasha_chain(chart)
     empty: Dict[str, Any] = {
         "name": "Dasha activation + future windows",
@@ -2570,6 +2572,13 @@ def build_marriage_step6_audit(
         "future_candidates_count": 0,
     }
     if not chain:
+        print(
+            "[marriage_step6] NO_CHAIN "
+            f"raw_dashas={raw_n} after_ensure={dasha_n} "
+            f"has_currentDasha={bool(chart.get('currentDasha'))} "
+            f"has_moon={any(isinstance(p, dict) and p.get('name') == 'Moon' for p in (chart.get('planets') or []))}",
+            flush=True,
+        )
         return empty
 
     audit = step_audit or {}
@@ -2580,6 +2589,10 @@ def build_marriage_step6_audit(
         ranked = (audit.get("step5") or {}).get("ranked_top") or []
     lords = target_lords or _target_lords_for_step6(audit, ranked)
     if not lords:
+        print(
+            f"[marriage_step6] NO_TARGETS chain={len(chain)} ranked={len(ranked)}",
+            flush=True,
+        )
         return {
             **empty,
             "status": "NO_TARGETS",
@@ -2611,9 +2624,17 @@ def build_marriage_step6_audit(
             "dasha_score_detail": w.get("dasha_score_detail") or [],
         })
 
+    status = "DONE" if top_3_serial else "NO_WINDOW"
+    print(
+        "[marriage_step6] "
+        f"status={status} chain={len(chain)} targets={len(lords)} "
+        f"candidates={len(future_candidates)} windows={len(top_3_serial)} "
+        f"lords={sorted(lords)[:6]}",
+        flush=True,
+    )
     return {
         "name": "Dasha activation + future windows",
-        "status": "DONE" if top_3_serial else "NO_WINDOW",
+        "status": status,
         "current_activation": activation,
         "future_candidates_count": len(future_candidates),
         "selected_windows": top_3_serial[:3],
@@ -2994,6 +3015,11 @@ def _merge_natal_step_audit(
                     pw = step6["selected_windows"][0].get("window")
                     if pw:
                         out["primary_window"] = pw
+            else:
+                print(
+                    f"[merge_natal_step_audit] step6 empty status={step6.get('status')}",
+                    flush=True,
+                )
         except Exception as exc:
             print(
                 f"[merge_natal_step_audit] step6 failed: "

@@ -337,6 +337,8 @@ def _marriage_bcp_linkage_snapshot(engine_result: dict[str, Any]) -> dict[str, A
         "focus_ages": list(
             step0a_audit.get("focus_ages") or dasha_scan.get("bcp_focus_ages") or []
         ),
+        "d1_bcp_ages": list(bcp.get("d1_future_bcp_ages") or step0a_audit.get("d1_bcp_ages") or [])[:6],
+        "d9_bcp_ages": list(bcp.get("d9_future_bcp_ages") or step0a_audit.get("d9_bcp_ages") or [])[:6],
         "timing_mode": step0a_audit.get("timing_mode") or dasha_scan.get("timing_mode"),
     }
 
@@ -518,6 +520,8 @@ _BCP_LINKAGE_FORCE_KEYS = (
     "d9_7l_linkage_houses",
     "shared_7l_linkage_houses",
     "shared_house_priority_ages",
+    "d1_bcp_ages",
+    "d9_bcp_ages",
     "bcp_house_display",
     "bcp_ages_next_years",
     "focus_ages",
@@ -1296,61 +1300,25 @@ def _format_bcp_step2_lines_for_admin(
     step0a: dict[str, Any],
     user_age: int | None,
 ) -> list[str]:
-    """Human-readable D1/D9 7L house + BCP age lines for admin Step 2."""
+    """Compact admin Step 2: D1 ages + D9 ages from current age."""
     try:
-        from event_timing.marriage.bcp_marriage_ages import _future_ages_for_house
+        from event_timing.marriage.bcp_marriage_ages import bcp_compact_admin_lines
     except Exception:
-        _future_ages_for_house = None  # type: ignore
+        bcp_compact_admin_lines = None  # type: ignore
 
-    def _ages(house: int) -> list[int]:
-        if _future_ages_for_house is not None:
-            return list(_future_ages_for_house(house, user_age))
-        ages = [house + 12 * i for i in range(8) if house + 12 * i <= 96]
-        if user_age is not None:
-            ages = [a for a in ages if a >= user_age]
-        return ages[:4]
+    d1 = step0a.get("d1_bcp_ages")
+    d9 = step0a.get("d9_bcp_ages")
+    if isinstance(d1, list) and isinstance(d9, list) and (d1 or d9):
+        d1s = ", ".join(str(int(a)) for a in d1 if isinstance(a, (int, float)))
+        d9s = ", ".join(str(int(a)) for a in d9 if isinstance(a, (int, float)))
+        return [f"D1: {d1s or '—'}", f"D9: {d9s or '—'}"]
 
-    display = step0a.get("bcp_house_display") if isinstance(step0a.get("bcp_house_display"), dict) else {}
-    lines: list[str] = []
-    for prefix, div_key, lord_key, sit_key, asp_key in (
-        ("D1", "d1", "d1_seventh_lord", "d1_7l_placement_house", "d1_7l_aspect_houses"),
-        ("D9", "d9", "d9_seventh_lord", "d9_7l_placement_house", "d9_7l_aspect_houses"),
-    ):
-        div = display.get(div_key) if isinstance(display.get(div_key), dict) else {}
-        lord = step0a.get(lord_key) or div.get("seventh_lord") or "7L"
-        chunks: list[str] = []
-        items = div.get("items") if isinstance(div.get("items"), list) else []
-        if items:
-            for it in items:
-                if not isinstance(it, dict) or not isinstance(it.get("house"), int):
-                    continue
-                h = int(it["house"])
-                ages = it.get("ages") if isinstance(it.get("ages"), list) and it.get("ages") else _ages(h)
-                age_str = ", ".join(str(a) for a in ages) if ages else "—"
-                if it.get("type") == "placement":
-                    chunks.append(f"baitha {h}H → ages {age_str}")
-                else:
-                    chunks.append(f"aspect {h}H → ages {age_str}")
-        else:
-            sit = step0a.get(sit_key)
-            if sit is not None:
-                try:
-                    h = int(sit)
-                    ages = _ages(h)
-                    chunks.append(f"baitha {h}H → ages {', '.join(str(a) for a in ages) or '—'}")
-                except (TypeError, ValueError):
-                    pass
-            asp = step0a.get(asp_key)
-            if isinstance(asp, list):
-                for h_raw in asp:
-                    try:
-                        h = int(h_raw)
-                        ages = _ages(h)
-                        chunks.append(f"aspect {h}H → ages {', '.join(str(a) for a in ages) or '—'}")
-                    except (TypeError, ValueError):
-                        continue
-        lines.append(f"{prefix} {lord}: " + (" · ".join(chunks) if chunks else "—"))
-    return lines
+    if bcp_compact_admin_lines is not None:
+        bcp = step0a.get("bcp_marriage_ages")
+        if isinstance(bcp, dict):
+            return bcp_compact_admin_lines(bcp, user_age=user_age)
+
+    return ["D1: —", "D9: —"]
 
 
 def build_marriage_bcp_step2_admin_payload(
@@ -1370,20 +1338,27 @@ def build_marriage_bcp_step2_admin_payload(
     chart = normalize_kundli_chart_payload(kundli) or {}
     user_age = _user_age_from_admin_ctx(merged, birth, chart)
     linkage_lines = _format_bcp_step2_lines_for_admin(step0a, user_age)
-    ages = list(step0a.get("bcp_ages_next_years") or step0a.get("focus_ages") or [])[:4]
+    d1_ages = list(step0a.get("d1_bcp_ages") or [])[:6]
+    d9_ages = list(step0a.get("d9_bcp_ages") or [])[:6]
+    ages = sorted({int(a) for a in d1_ages + d9_ages if isinstance(a, (int, float))})
+    if user_age is not None:
+        ages = [a for a in ages if a >= user_age]
+    ages = ages[:6]
+    if not ages:
+        ages = list(step0a.get("bcp_ages_next_years") or step0a.get("focus_ages") or [])[:4]
     if not ages and user_age is not None:
         try:
-            from event_timing.marriage.bcp_marriage_ages import _future_ages_for_house
+            from event_timing.marriage.bcp_marriage_ages import _future_ages_from_division_block
 
-            pool: list[int] = []
-            for key in ("d1_7l_placement_house",):
-                h = step0a.get(key)
-                if isinstance(h, int):
-                    pool.extend(_future_ages_for_house(h, user_age))
-            for h in step0a.get("d1_7l_aspect_houses") or []:
-                if isinstance(h, int):
-                    pool.extend(_future_ages_for_house(h, user_age))
-            ages = sorted({int(a) for a in pool if a >= user_age})[:4]
+            bcp_block = step0a.get("bcp_marriage_ages")
+            if isinstance(bcp_block, dict):
+                d1_ages = _future_ages_from_division_block(
+                    bcp_block.get("d1_bcp") or bcp_block, user_age,
+                )
+                d9_ages = _future_ages_from_division_block(
+                    bcp_block.get("d9_bcp") or {}, user_age,
+                )
+                ages = sorted(set(d1_ages + d9_ages))[:6]
         except Exception:
             pass
     age_label = ", ".join(str(a) for a in ages) if ages else "—"

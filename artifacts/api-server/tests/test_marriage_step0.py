@@ -60,6 +60,38 @@ def test_mercury_dual_sign_bcp_houses():
     assert 10 in bcp["all_marriage_ages"]
     assert 22 in bcp["all_marriage_ages"] or 34 in bcp["all_marriage_ages"]
     assert 12 in bcp["placement_ages"]
+    assert bcp["future_bcp_ages"][0] >= 26
+
+
+def test_bcp_dispositor_linkage_mercury_in_12h():
+    """7L in 12H (Vrishchik) → sign-lord Mars house + aspects also count."""
+    bcp = compute_bcp_for_division(planets, LAGNA_SI, division="D1", user_age=26)
+    rules = {s.get("source") for s in bcp.get("sources") or []}
+    assert "7th_lord_dispositor_linkage" in rules
+    assert 1 in bcp["all_marriage_ages"]  # Mars in 1H
+    assert 1 in _bcp_7l_linkage_houses(bcp)
+    future = bcp.get("future_bcp_ages") or []
+    assert future and future[0] >= 26
+
+
+def test_bcp_compact_admin_lines_from_current_age():
+    bcp = compute_bcp_marriage_ages(
+        KUNDLI,
+        LAGNA_SI,
+        user_age=26,
+        d9_lagna_si=LAGNA_SI,
+        d9_planets=planets,
+    )
+    from event_timing.marriage.bcp_marriage_ages import bcp_compact_admin_lines
+
+    lines = bcp_compact_admin_lines(bcp, user_age=26)
+    assert len(lines) == 2
+    assert lines[0].startswith("D1:")
+    assert lines[1].startswith("D9:")
+    d1_nums = [int(x) for x in lines[0].split(":")[1].split(",") if x.strip().isdigit()]
+    assert d1_nums and d1_nums[0] >= 26
+    assert isinstance(bcp.get("d1_future_bcp_ages"), list)
+    assert isinstance(bcp.get("d9_future_bcp_ages"), list)
 
 
 def test_bcp_merged_list_has_placement_and_dual():

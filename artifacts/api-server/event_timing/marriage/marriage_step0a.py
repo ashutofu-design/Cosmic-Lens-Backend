@@ -195,6 +195,8 @@ def run_marriage_step0a(
         "d9_7l_linkage_houses": bcp.get("d9_7l_linkage_houses") or [],
         "shared_7l_linkage_houses": bcp.get("shared_7l_linkage_houses") or [],
         "shared_house_priority_ages": bcp.get("shared_house_priority_ages") or [],
+        "d1_bcp_ages": bcp.get("d1_future_bcp_ages") or [],
+        "d9_bcp_ages": bcp.get("d9_future_bcp_ages") or [],
         "d1_7l_placement_house": bcp.get("seventh_lord_house"),
         "d1_7l_aspect_houses": [
             h.get("house")
@@ -225,6 +227,8 @@ def run_marriage_step0a(
         "bcp_age_scores": bcp.get("bcp_age_scores") or [],
         "bcp_priority_ages": bcp.get("priority_marriage_ages") or [],
         "bcp_future_priority_ages": priority_ages,
+        "d1_bcp_ages": bcp.get("d1_future_bcp_ages") or [],
+        "d9_bcp_ages": bcp.get("d9_future_bcp_ages") or [],
         "bcp_age_list": bcp.get("bcp_age_list") or [],
         "bcp_all_ages_sorted": all_bcp,
         "late_bcp_focus": late_focus,

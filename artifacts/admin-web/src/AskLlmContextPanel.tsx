@@ -1386,6 +1386,8 @@ function marriageBcpAgesFromStep0a(
     }
   };
   if (step0a) {
+    add(step0a.d1_bcp_ages);
+    add(step0a.d9_bcp_ages);
     add(step0a.shared_house_priority_ages, true);
     add(step0a.bcp_ages_next_years);
     add(step0a.focus_ages);
@@ -1524,48 +1526,52 @@ function buildBcpLinkageLines(
   step0a: Record<string, unknown> | undefined,
   userAge: number | null,
 ): string[] {
+  const d1Raw = step0a?.d1_bcp_ages;
+  const d9Raw = step0a?.d9_bcp_ages;
+  if (Array.isArray(d1Raw) || Array.isArray(d9Raw)) {
+    const fmt = (arr: unknown) => {
+      if (!Array.isArray(arr) || arr.length === 0) return "—";
+      const nums = arr
+        .map((x) => (typeof x === "number" ? x : parseInt(String(x), 10)))
+        .filter((n) => !isNaN(n))
+        .filter((n) => userAge == null || isNaN(userAge) || n >= userAge);
+      return nums.length ? nums.join(", ") : "—";
+    };
+    return [`D1: ${fmt(d1Raw)}`, `D9: ${fmt(d9Raw)}`];
+  }
+
   const saved = (step0a?.bcp_house_display || {}) as {
     d1?: BcpDivDisplay;
     d9?: BcpDivDisplay;
-    shared_house_items?: { house?: number; ages?: number[] }[];
   };
-  const rebuilt = rebuildBcpHouseDisplayFromStep0a(step0a, userAge);
-  const hasSavedItems =
-    (saved.d1?.items?.length || 0) > 0 || (saved.d9?.items?.length || 0) > 0;
-  const hasRebuiltItems =
-    (rebuilt.d1?.items?.length || 0) > 0 || (rebuilt.d9?.items?.length || 0) > 0;
-  const display = hasSavedItems
-    ? saved
-    : hasRebuiltItems
-      ? { ...saved, ...rebuilt }
-      : saved;
-  const d1Lord = String(step0a?.d1_seventh_lord || display.d1?.seventh_lord || "7L");
-  const d9Lord = String(step0a?.d9_seventh_lord || display.d9?.seventh_lord || "7L");
-  const lines = [
-    formatDivisionBcpLine(display.d1, "D1", d1Lord, userAge, step0a),
-    formatDivisionBcpLine(display.d9, "D9", d9Lord, userAge, step0a),
-  ];
-  const shared = display.shared_house_items || [];
-  if (shared.length) {
-    const parts = shared
-      .filter((s) => typeof s.house === "number")
-      .map((s) => {
-        const ages =
-          s.ages && s.ages.length
-            ? s.ages
-            : bcpAgesForHouse(s.house as number, userAge);
-        return `${s.house}H → ages ${ages.join(", ") || "—"}`;
-      });
-    if (parts.length) {
-      lines.push(`D1+D9 same ghar (★ priority): ${parts.join(" · ")}`);
+  const collectAges = (div?: BcpDivDisplay): number[] => {
+    const pool: number[] = [];
+    for (const it of div?.items || []) {
+      if (!it.ages?.length || typeof it.house !== "number") continue;
+      const ages =
+        it.ages.length > 0 ? it.ages : bcpAgesForHouse(it.house, userAge);
+      pool.push(...ages);
     }
-  } else {
-    const sharedHouses = formatHouseList(step0a?.shared_7l_linkage_houses);
-    if (sharedHouses !== "—") {
-      lines.push(`D1+D9 same ghar → priority: ${sharedHouses}`);
-    }
+    const uniq = [...new Set(pool)].sort((a, b) => a - b);
+    if (userAge == null || isNaN(userAge)) return uniq.slice(0, 6);
+    return uniq.filter((a) => a >= userAge).slice(0, 6);
+  };
+  const d1Ages = collectAges(saved.d1);
+  const d9Ages = collectAges(saved.d9);
+  if (d1Ages.length || d9Ages.length) {
+    return [
+      `D1: ${d1Ages.length ? d1Ages.join(", ") : "—"}`,
+      `D9: ${d9Ages.length ? d9Ages.join(", ") : "—"}`,
+    ];
   }
-  return lines;
+
+  const rebuilt = rebuildBcpHouseDisplayFromStep0a(step0a, userAge);
+  const d1FromRebuild = collectAges(rebuilt.d1);
+  const d9FromRebuild = collectAges(rebuilt.d9);
+  return [
+    `D1: ${d1FromRebuild.length ? d1FromRebuild.join(", ") : "—"}`,
+    `D9: ${d9FromRebuild.length ? d9FromRebuild.join(", ") : "—"}`,
+  ];
 }
 
 function formatMarriageBcpAgesStep(
@@ -1582,6 +1588,22 @@ function formatMarriageBcpAgesStep(
   const linkageLines = buildBcpLinkageLines(step0a, userAge);
 
   if (ages.length === 0) {
+    const fromLines = linkageLines
+      .flatMap((line) => {
+        const m = line.match(/^(?:D1|D9):\s*(.+)$/);
+        if (!m) return [];
+        return m[1]
+          .split(",")
+          .map((s) => parseInt(s.trim(), 10))
+          .filter((n) => !isNaN(n));
+      })
+      .filter((n) => userAge == null || isNaN(userAge) || n >= userAge);
+    if (fromLines.length) {
+      ages = [...new Set(fromLines)].sort((a, b) => a - b).slice(0, 6);
+    }
+  }
+
+  if (ages.length === 0) {
     return {
       title: "Step 2 — BCP ages",
       detail:
@@ -1595,20 +1617,19 @@ function formatMarriageBcpAgesStep(
 
   const mode =
     step0a?.timing_mode != null ? String(step0a.timing_mode).replace(/_/g, " ") : "";
-  const ageLabel = ages
-    .map((a) => (priorityAges.has(a) ? `${a}★` : String(a)))
-    .join(", ");
   const cur = userAge != null && !isNaN(userAge) ? userAge : null;
+  const d1Line = linkageLines.find((l) => l.startsWith("D1:")) || "D1: —";
+  const d9Line = linkageLines.find((l) => l.startsWith("D9:")) || "D9: —";
   const detail =
     cur != null
-      ? `age ${cur} se → ${ageLabel}${mode ? ` · ${mode}` : ""}`
-      : ageLabel;
+      ? `age ${cur} se${mode ? ` · ${mode}` : ""}`
+      : mode || "—";
 
   return {
     title: "Step 2 — BCP ages",
     detail,
     ages,
-    linkageLines,
+    linkageLines: [d1Line, d9Line],
   };
 }
 

@@ -906,12 +906,35 @@ def format_bcp_age_list(
     return rows
 
 
+def min_bcp_focus_age_for_chart(
+    *,
+    marriage_pace: str,
+    d1_pace: Optional[str] = None,
+    d9_pace: Optional[str] = None,
+    user_age: Optional[int],
+) -> int:
+    """Minimum BCP focus age — VERY_LATE / dual-late charts skip near-term (e.g. 27 at age 26)."""
+    floor = LATE_BCP_MIN_AGE
+    if marriage_pace == "VERY_LATE" or str(d1_pace or "") == "VERY_LATE":
+        floor = max(floor, 33)
+    elif both_divisions_late(d1_pace, d9_pace):
+        floor = max(floor, 29)
+    if user_age is not None:
+        years_skip = 5 if (marriage_pace == "VERY_LATE" or str(d1_pace or "") == "VERY_LATE") else 3
+        if both_divisions_late(d1_pace, d9_pace):
+            years_skip = max(years_skip, 4)
+        floor = max(floor, int(user_age) + years_skip)
+    return floor
+
+
 def resolve_late_marriage_bcp_focus(
     bcp: Dict[str, Any],
     *,
     marriage_pace: str,
     user_age: Optional[int],
     years_ahead: int = 8,
+    d1_pace: Optional[str] = None,
+    d9_pace: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Late marriage → directly grab current BCP year or next late-cycle ages.
 
@@ -923,6 +946,16 @@ def resolve_late_marriage_bcp_focus(
     future = bcp.get("future_activation_ages") or []
     score_map = _bcp_score_lookup(bcp)
     is_late_chart = marriage_pace in ("LATE", "VERY_LATE", "DELAYED")
+    min_focus_age = (
+        min_bcp_focus_age_for_chart(
+            marriage_pace=marriage_pace,
+            d1_pace=d1_pace,
+            d9_pace=d9_pace,
+            user_age=user_age,
+        )
+        if is_late_chart
+        else LATE_BCP_MIN_AGE
+    )
 
     def _priority_sort(ages: List[int]) -> List[int]:
         return sorted(
@@ -938,13 +971,14 @@ def resolve_late_marriage_bcp_focus(
         focus = [
             a for a in future
             if a <= hi
-            and a >= 24
-            and (a > user_age or a >= 31)
-            and (last_p is None or a >= last_p or a >= 31)
+            and a >= min_focus_age
+            and (last_p is None or a >= last_p or a >= min_focus_age)
         ]
         focus = _priority_sort(focus)
         if not focus and future:
-            focus = _priority_sort([a for a in future if a >= 24])[:4] or _priority_sort(future)[:4]
+            focus = _priority_sort(
+                [a for a in future if a >= min_focus_age]
+            )[:4] or _priority_sort(future)[:4]
         primary = focus[0] if focus else bcp.get("next_activation_age")
 
         if (
@@ -1047,6 +1081,10 @@ def _resolve_next_activation_age(
 def resolve_bcp_timing_strategy(
     bcp: Dict[str, Any],
     user_age: Optional[int],
+    *,
+    marriage_pace: Optional[str] = None,
+    d1_pace: Optional[str] = None,
+    d9_pace: Optional[str] = None,
 ) -> Dict[str, Any]:
     """STEP 0 — BCP age first: PRIORITY (boost/sort), never skip non-BCP years.
 
@@ -1077,6 +1115,40 @@ def resolve_bcp_timing_strategy(
     upcoming = bcp.get("upcoming_year_bcp_ages") or []
     years_since = bcp.get("years_since_last_bcp")
     years_to_next = bcp.get("years_to_next_bcp")
+
+    _pace = str(marriage_pace or "")
+    _late_chart = _pace in ("LATE", "VERY_LATE", "DELAYED") or both_divisions_late(d1_pace, d9_pace)
+    if _late_chart and user_age is not None:
+        min_focus = min_bcp_focus_age_for_chart(
+            marriage_pace=_pace or "LATE",
+            d1_pace=d1_pace,
+            d9_pace=d9_pace,
+            user_age=user_age,
+        )
+        future_pri = [
+            int(a) for a in (bcp.get("future_priority_ages") or [])
+            if isinstance(a, (int, float)) and int(a) >= min_focus
+        ]
+        pri = future_pri[0] if future_pri else None
+        if pri is None:
+            for a in sorted(bcp.get("future_activation_ages") or []):
+                if isinstance(a, int) and a >= min_focus:
+                    pri = a
+                    break
+        ytn = (int(pri) - int(user_age)) if pri is not None else 8
+        return {
+            "timing_mode": "late_chart_bcp",
+            "search_horizon_days": max(_RECENT_HORIZON_DAYS, ytn * 366),
+            "late_urgent_scan": False,
+            "prefer_current_dasha": False,
+            "bcp_boost_future_only": True,
+            "primary_reference_age": pri,
+            "pipeline_order": "bcp_age→age→significators→dasha→transit",
+            "llm_directive": (
+                f"Chart late (D1={d1_pace or '—'} D9={d9_pace or '—'}) — "
+                f"BCP focus age {pri}+ only; age {min_focus - 1} ya usse pehle mat bolo."
+            ),
+        }
 
     # User is in the merged BCP list — only "this year" when that age heads
     # the priority queue. Incidental hits (e.g. 2H→26 while 7H→31 is next for

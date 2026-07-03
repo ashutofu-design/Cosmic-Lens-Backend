@@ -860,6 +860,37 @@ def _is_dasha_target_candidate(
     return False
 
 
+def _common_planets_from_merged(merged: Dict[str, Dict[str, Any]]) -> List[str]:
+    """Planets in both D1 and D9 marriage pools (Step 4)."""
+    out = [
+        pname
+        for pname, row in (merged or {}).items()
+        if isinstance(row, dict) and row.get("both_divisions")
+    ]
+    return sorted(out, key=lambda n: (-float((merged.get(n) or {}).get("natal_points", 0)), n))
+
+
+def _ranked_top_for_admin(ranked: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Trim ranked significators for admin Step 5 (weighted points breakdown)."""
+    out: List[Dict[str, Any]] = []
+    for r in ranked[:12]:
+        if not isinstance(r, dict):
+            continue
+        out.append({
+            "name": r.get("name"),
+            "score": r.get("score"),
+            "d1_points": r.get("d1_points"),
+            "d9_points": r.get("d9_points"),
+            "both_bonus": r.get("both_bonus"),
+            "natal_points": r.get("natal_points"),
+            "kp_points": r.get("kp_points"),
+            "kp_weighted_points": r.get("kp_weighted_points"),
+            "kp_verdict": r.get("kp_verdict"),
+            "links": (r.get("links") or [])[:8],
+        })
+    return out
+
+
 def build_natal_step_audit_from_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
     """Admin step_audit entries for D1/D9 names + Step 3 planet list."""
     merged = spec.get("merged") or {}
@@ -869,6 +900,10 @@ def build_natal_step_audit_from_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
         reverse=True,
     )
     planets = spec.get("step3_marriage_giving_planets") or []
+    common_planets = _common_planets_from_merged(merged)
+    d1_7l = (spec.get("step1_d1") or {}).get("seventh_lord")
+    d9_7l = (spec.get("step2_d9") or {}).get("seventh_lord")
+    ranked = _step5_rank(merged, {}, d1_7l=d1_7l, d9_7l=d9_7l)
     return {
         "step1": {
             "name": "D1 marriage significator names",
@@ -884,6 +919,7 @@ def build_natal_step_audit_from_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
             "name": "D1+D9 shadi de sakte planets (7H linkage)",
             "status": "DONE",
             "merged_count": len(merged),
+            "common_planets": common_planets,
             "marriage_giving_planets": planets,
             "planet_names": [
                 p.get("name")
@@ -897,11 +933,27 @@ def build_natal_step_audit_from_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
                     "d1_points": row.get("d1_points", 0),
                     "d9_points": row.get("d9_points", 0),
                     "both_bonus": row.get("both_bonus", 0),
+                    "both_divisions": row.get("both_divisions", False),
                     "d1_links": row.get("d1_links") or [],
                     "d9_links": row.get("d9_links") or [],
                 }
                 for pname, row in merged_items[:12]
             ],
+        },
+        "step4": {
+            "name": "Common planets (D1+D9)",
+            "status": "DONE",
+            "common_planets": common_planets,
+        },
+        "step5": {
+            "name": "Rank significators (weighted shadi points)",
+            "status": "DONE",
+            "ranked_top": _ranked_top_for_admin(ranked),
+            "weight_note": (
+                "D1: 7L=5 in7H=4 aspect7H=3 with7L=3 dispositor7H=3 · "
+                "D9: 7L=6 in7H=5 aspect7H=4 with7L=4 dispositor7H=4 · "
+                "both D1+D9 bonus=+6"
+            ),
         },
     }
 
@@ -911,7 +963,7 @@ def safe_natal_step_audit(
     kp: dict,
     lagna_si: int,
 ) -> Dict[str, Any]:
-    """Steps 1–3 only — runs even when KP/dasha blocks full timing pipeline."""
+    """Steps 1–5 (natal rank) — runs even when KP/dasha blocks full timing pipeline."""
     try:
         planets = kundli.get("planets") or []
         if not isinstance(planets, list) or len(planets) < 7:

@@ -311,6 +311,8 @@ def test_step0_d1_d9_pace_and_late_focus():
         combined_pace=s0["marriage_pace"]["combined"]["combined_pace"],
         age_ctx=s0["marriage_age_context"],
         user_age=26,
+        d1_pace=s0["step0_tendency"]["d1_pace"],
+        d9_pace=s0["step0_tendency"]["d9_pace"],
     )
     assert s0["marriage_pace"]["d1"]["chart_pace"] in ("LATE", "NORMAL", "VERY_LATE")
     assert s0["marriage_pace"]["d1"]["seventh_lord_house"] == 12
@@ -449,6 +451,7 @@ def test_effective_anchor_uses_focus_when_primary_stale():
 
 
 def test_age_26_uses_upcoming_bcp_27_not_missed_recent():
+    """Normal chart (no late pace) — upcoming BCP within ~2 years still wins."""
     from event_timing.marriage.bcp_marriage_ages import resolve_bcp_timing_strategy
 
     bcp = {
@@ -459,10 +462,56 @@ def test_age_26_uses_upcoming_bcp_27_not_missed_recent():
         "years_to_next_bcp": 9,
         "upcoming_year_bcp_ages": [27],
         "primary_priority_age": 35,
+        "future_activation_ages": [27, 29, 31, 35],
+        "future_priority_ages": [27, 29, 31, 35],
     }
     strat = resolve_bcp_timing_strategy(bcp, 26)
     assert strat["timing_mode"] == "upcoming_bcp"
     assert strat["primary_reference_age"] == 27
+
+
+def test_very_late_at_26_skips_near_term_bcp_27():
+    """D1 VERY_LATE + D9 LATE at age 26 — BCP 27 must not anchor answer."""
+    from event_timing.marriage.bcp_marriage_ages import (
+        min_bcp_focus_age_for_chart,
+        resolve_bcp_timing_strategy,
+    )
+
+    assert min_bcp_focus_age_for_chart(
+        marriage_pace="VERY_LATE",
+        d1_pace="VERY_LATE",
+        d9_pace="LATE",
+        user_age=26,
+    ) >= 33
+
+    bcp = {
+        "all_marriage_ages": [3, 9, 15, 21, 27, 29, 33, 35, 39],
+        "past_activation_ages": [3, 9, 15, 21],
+        "future_activation_ages": [27, 29, 33, 35, 39, 41],
+        "future_priority_ages": [27, 29, 33, 35, 39],
+        "next_activation_age": 27,
+        "upcoming_year_bcp_ages": [27],
+    }
+    late = resolve_late_marriage_bcp_focus(
+        bcp,
+        marriage_pace="VERY_LATE",
+        user_age=26,
+        years_ahead=12,
+        d1_pace="VERY_LATE",
+        d9_pace="LATE",
+    )
+    assert 27 not in (late.get("focus_ages") or [])
+    assert late["primary_age"] >= 33
+
+    strat = resolve_bcp_timing_strategy(
+        bcp,
+        26,
+        marriage_pace="VERY_LATE",
+        d1_pace="VERY_LATE",
+        d9_pace="LATE",
+    )
+    assert strat["timing_mode"] == "late_chart_bcp"
+    assert strat["primary_reference_age"] >= 33
 
 
 def test_missed_bcp_not_for_young_user_just_past_incidental_24():

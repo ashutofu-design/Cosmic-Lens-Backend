@@ -84,6 +84,8 @@ def run_marriage_step0a(
     birth_dt: Optional[datetime] = None,
     years_ahead: int = 5,
     step0_verdict: Optional[str] = None,
+    d1_pace: Optional[str] = None,
+    d9_pace: Optional[str] = None,
 ) -> Dict[str, Any]:
     """STEP 0A — BCP list + late-chart focus ages for later dasha ranking."""
     d9_lagna_si, d9_planets = _load_d9_planets(kundli)
@@ -96,20 +98,23 @@ def run_marriage_step0a(
         d9_lagna_si=d9_lagna_si,
         d9_planets=d9_planets if d9_planets else None,
     )
-    bcp_strategy = {
-        k: bcp.get(k)
-        for k in (
-            "timing_mode", "search_horizon_days", "late_urgent_scan",
-            "prefer_current_dasha", "bcp_boost_future_only",
-            "primary_reference_age", "pipeline_order", "llm_directive",
-        )
-    }
+    from event_timing.marriage.bcp_marriage_ages import resolve_bcp_timing_strategy
+
+    bcp_strategy = resolve_bcp_timing_strategy(
+        bcp,
+        user_age,
+        marriage_pace=combined_pace,
+        d1_pace=d1_pace,
+        d9_pace=d9_pace,
+    )
 
     late_focus = resolve_late_marriage_bcp_focus(
         bcp,
         marriage_pace=combined_pace,
         user_age=user_age,
         years_ahead=max(years_ahead, 8),
+        d1_pace=d1_pace,
+        d9_pace=d9_pace,
     )
 
     all_bcp = bcp.get("all_marriage_ages") or []
@@ -146,23 +151,6 @@ def run_marriage_step0a(
     )
     if primary_ref is not None:
         bcp_strategy["primary_reference_age"] = primary_ref
-
-    # Delayed late chart: near focus age (27) must not stay in missed_bcp_recent
-    # (last incidental 24 passed → wrongly boosts next 12mo over BCP 27).
-    _focus_pri = late_focus.get("primary_age")
-    if (
-        (step0_verdict or "") in ("DELAYED", "LATE")
-        and user_age is not None
-        and isinstance(_focus_pri, int)
-        and _focus_pri > user_age
-        and (_focus_pri - user_age) <= 3
-    ):
-        bcp_strategy["timing_mode"] = "upcoming_bcp"
-        bcp_strategy["late_urgent_scan"] = False
-        bcp_strategy["prefer_current_dasha"] = False
-        bcp_strategy["bcp_boost_future_only"] = False
-        bcp_strategy["primary_reference_age"] = _focus_pri
-        primary_ref = _focus_pri
 
     bcp_urgent = _late_urgent_after_chart_delay_guard(
         bool(bcp_strategy.get("late_urgent_scan")),

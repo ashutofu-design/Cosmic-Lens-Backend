@@ -3338,10 +3338,10 @@ def _merge_natal_step_audit(
             out["step_audit"] = audit
             if step6.get("selected_windows"):
                 out["top_3_windows"] = step6["selected_windows"]
-                if not out.get("primary_window"):
-                    pw = step6["selected_windows"][0].get("window")
-                    if pw:
-                        out["primary_window"] = pw
+                pw = step6["selected_windows"][0].get("window")
+                transit_ok = bool(step6["selected_windows"][0].get("transit_confirmed"))
+                if pw and (transit_ok or not out.get("primary_window")):
+                    out["primary_window"] = pw
             else:
                 print(
                     f"[merge_natal_step_audit] step6 empty status={step6.get('status')} "
@@ -3506,6 +3506,8 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         birth_dt=birth_dt,
         years_ahead=5,
         step0_verdict=step0_verdict,
+        d1_pace=(step0.get("step0_tendency") or {}).get("d1_pace"),
+        d9_pace=(step0.get("step0_tendency") or {}).get("d9_pace"),
     )
     bcp_ctx = step0a.get("bcp_marriage_ages") or {}
     bcp_strategy = step0a.get("bcp_timing_strategy") or {}
@@ -4604,6 +4606,8 @@ def compute_timing_window_fallback(
         kundli, lagna_si, combined_pace=_combined_pace,
         age_ctx=marriage_age_ctx, user_age=user_age, birth_dt=birth_dt,
         years_ahead=5, step0_verdict=step0_verdict,
+        d1_pace=(step0.get("step0_tendency") or {}).get("d1_pace"),
+        d9_pace=(step0.get("step0_tendency") or {}).get("d9_pace"),
     )
     bcp_ctx = step0a.get("bcp_marriage_ages") or {}
     bcp_strategy = step0a.get("bcp_timing_strategy") or {}
@@ -4625,15 +4629,6 @@ def compute_timing_window_fallback(
         pass
 
     primary_window: Optional[str] = None
-    nxt = bcp_ctx.get("next_activation_age")
-    if isinstance(nxt, int) and birth_dt is not None:
-        try:
-            tgt = birth_dt.replace(year=birth_dt.year + nxt)
-            primary_window = tgt.strftime("%B %Y")
-        except (ValueError, OverflowError):
-            primary_window = f"age {nxt}"
-    elif isinstance(primary_ref_age, int):
-        primary_window = f"around age {primary_ref_age}"
 
     step_audit = {
         "step0": {
@@ -4680,16 +4675,82 @@ def compute_timing_window_fallback(
         {"step_audit": step_audit}, kundli, lagna_si, kp, birth=birth,
     )["step_audit"]
 
+    _step0_tendency = step0.get("step0_tendency") or {}
+    _late_focus = step0a.get("late_bcp_focus") or {}
+    _focus_pri = (
+        _late_focus.get("primary_age")
+        or primary_ref_age
+        or dasha_scan.get("primary_reference_age")
+    )
+    s6 = step_audit.get("step6") if isinstance(step_audit.get("step6"), dict) else {}
+    matched_s6 = [
+        w for w in (s6.get("selected_windows") or [])
+        if isinstance(w, dict) and w.get("transit_confirmed")
+    ]
+    if matched_s6:
+        primary_window = matched_s6[0].get("window")
+    elif isinstance(_focus_pri, int) and birth_dt is not None:
+        try:
+            primary_window = birth_dt.replace(
+                year=birth_dt.year + int(_focus_pri),
+            ).strftime("%B %Y")
+        except (ValueError, OverflowError):
+            primary_window = f"around age {_focus_pri}"
+    elif isinstance(_focus_pri, int):
+        primary_window = f"around age {_focus_pri}"
+
+    ranked_fb = (step_audit.get("step5") or {}).get("ranked_top") or []
+    focus_set = set(dasha_scan.get("bcp_focus_ages") or [])
+    step8_prediction = _build_step8_final_prediction(
+        step0_tendency=_step0_tendency,
+        d1_bcp_ages=list((bcp_ctx or {}).get("d1_future_bcp_ages") or []),
+        d9_bcp_ages=list((bcp_ctx or {}).get("d9_future_bcp_ages") or []),
+        ranked=ranked_fb,
+        matched_windows=matched_s6,
+        user_age=user_age,
+        primary_ref_age=_focus_pri if isinstance(_focus_pri, int) else None,
+        focus_bcp_ages=focus_set,
+        primary_window=primary_window,
+        key_trigger=None,
+    )
+    step_audit["step8"] = {
+        "name": "Final — late BCP + dasha + transit",
+        "status": "DONE" if step8_prediction.get("transit_confirmed") else "PARTIAL",
+        "risk_flags": ["fallback_step0_only"],
+        "verdict": step0_verdict or "UNKNOWN",
+        "band": "MEDIUM" if step0_verdict in ("DELAYED", "LATE") else "WEAK",
+        **step8_prediction,
+    }
+
+    if step8_prediction.get("transit_confirmed"):
+        pw8 = (step8_prediction.get("primary_dasha") or {}).get("window")
+        if pw8:
+            primary_window = pw8
+
+    factors.append(
+        f"BCP plan: mode={bcp_strategy.get('timing_mode')} "
+        f"primary_age={_focus_pri} "
+        f"focus={sorted(focus_set) if focus_set else focus_bcp_ages} "
+        f"late_urgent={dasha_scan.get('late_urgent_scan')}"
+    )
+    if step8_prediction.get("final_prediction"):
+        factors.append(f"STEP8: {step8_prediction['final_prediction']}")
+
     verdict = step0_verdict or "UNKNOWN"
     band = "MEDIUM" if verdict in ("DELAYED", "LATE") else "WEAK"
+
+    key_trigger = None
+    _pd8 = step8_prediction.get("primary_dasha") or {}
+    if _pd8.get("md") and _pd8.get("ad") and _pd8.get("pd"):
+        key_trigger = f"{_pd8['md']} MD · {_pd8['ad']} AD · {_pd8['pd']} PD"
 
     return {
         "verdict": verdict,
         "band": band,
         "primary_window": primary_window,
         "backup_window": None,
-        "key_trigger": None,
-        "top_3_windows": [],
+        "key_trigger": key_trigger,
+        "top_3_windows": matched_s6 or (s6.get("selected_windows") or []),
         "risk_flags": ["fallback_step0_only"],
         "factors": factors,
         "step_audit": step_audit,

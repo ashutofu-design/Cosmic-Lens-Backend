@@ -1340,37 +1340,36 @@ def build_marriage_bcp_step2_admin_payload(
     linkage_lines = _format_bcp_step2_lines_for_admin(step0a, user_age)
     d1_ages = list(step0a.get("d1_bcp_ages") or [])[:6]
     d9_ages = list(step0a.get("d9_bcp_ages") or [])[:6]
-    ages = sorted({int(a) for a in d1_ages + d9_ages if isinstance(a, (int, float))})
     if user_age is not None:
-        ages = [a for a in ages if a >= user_age]
-    ages = ages[:6]
-    if not ages:
-        ages = list(step0a.get("bcp_ages_next_years") or step0a.get("focus_ages") or [])[:4]
-    if not ages and user_age is not None:
+        d1_ages = [int(a) for a in d1_ages if isinstance(a, (int, float)) and int(a) >= user_age]
+        d9_ages = [int(a) for a in d9_ages if isinstance(a, (int, float)) and int(a) >= user_age]
+    if (not d1_ages or not d9_ages) and user_age is not None:
         try:
             from event_timing.marriage.bcp_marriage_ages import _future_ages_from_division_block
 
             bcp_block = step0a.get("bcp_marriage_ages")
             if isinstance(bcp_block, dict):
-                d1_ages = _future_ages_from_division_block(
-                    bcp_block.get("d1_bcp") or bcp_block, user_age,
-                )
-                d9_ages = _future_ages_from_division_block(
-                    bcp_block.get("d9_bcp") or {}, user_age,
-                )
-                ages = sorted(set(d1_ages + d9_ages))[:6]
+                if not d1_ages:
+                    d1_ages = _future_ages_from_division_block(
+                        bcp_block.get("d1_bcp") or bcp_block, user_age,
+                    )
+                if not d9_ages:
+                    d9_ages = _future_ages_from_division_block(
+                        bcp_block.get("d9_bcp") or {}, user_age,
+                    )
         except Exception:
             pass
-    age_label = ", ".join(str(a) for a in ages) if ages else "—"
-    detail = (
-        f"age {user_age} se → {age_label}"
-        if user_age is not None
-        else age_label
-    )
+    if not linkage_lines or linkage_lines == ["D1: —", "D9: —"]:
+        d1s = ", ".join(str(a) for a in d1_ages) if d1_ages else "—"
+        d9s = ", ".join(str(a) for a in d9_ages) if d9_ages else "—"
+        linkage_lines = [f"D1: {d1s}", f"D9: {d9s}"]
+    detail = f"age {user_age} se" if user_age is not None else "—"
     return {
         "title": "Step 2 — BCP ages",
         "detail": detail,
-        "ages": ages,
+        "d1_ages": d1_ages,
+        "d9_ages": d9_ages,
+        "ages": d1_ages,
         "linkage_lines": linkage_lines,
         "user_age": user_age,
         "step0a": step0a,

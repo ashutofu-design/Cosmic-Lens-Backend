@@ -120,7 +120,15 @@ def _planet_sign_idx(planets: List[dict], pname: str) -> Optional[int]:
                 return si % 12
             s = p.get("sign")
             if isinstance(s, str):
-                return _SIGN_IDX.get(s)
+                si = _SIGN_IDX.get(s)
+                if si is not None:
+                    return si
+                try:
+                    from event_timing.marriage.marriage_engine_v2 import _sign_idx
+
+                    return _sign_idx(s)
+                except Exception:
+                    pass
     return None
 
 
@@ -903,13 +911,42 @@ def safe_natal_step_audit(
     kp: dict,
     lagna_si: int,
 ) -> Dict[str, Any]:
-    """Steps 1–3 only — runs even when full timing pipeline is blocked."""
+    """Steps 1–3 only — runs even when KP/dasha blocks full timing pipeline."""
     try:
-        spec = run_user_spec_pipeline(kundli, kp or {}, lagna_si)
-        if not spec:
+        planets = kundli.get("planets") or []
+        if not isinstance(planets, list) or len(planets) < 7:
             return {}
+        step1_d1 = marriage_step_names(planets, lagna_si, "D1")
+        d9_chart, d9_lagna_si, _d9_7l = _load_d9(kundli)
+        step2_d9 = marriage_step_names(
+            planets, lagna_si, "D9",
+            d9_chart=d9_chart, d9_lagna_si=d9_lagna_si,
+        )
+        d1_pool = _pool_from_step_names(
+            step1_d1, planets=planets, lagna_si=lagna_si,
+        )
+        d9_pool = _pool_from_step_names(
+            step2_d9,
+            planets=planets,
+            lagna_si=lagna_si,
+            d9_chart=d9_chart,
+            d9_lagna_si=d9_lagna_si,
+        )
+        merged = _step3_merge(d1_pool, d9_pool)
+        spec = {
+            "step1_d1": step1_d1,
+            "step2_d9": step2_d9,
+            "merged": merged,
+            "step3_marriage_giving_planets": build_step3_marriage_giving_planets(
+                step1_d1, step2_d9, merged,
+            ),
+        }
         return build_natal_step_audit_from_spec(spec)
-    except Exception:
+    except Exception as exc:
+        print(
+            f"[safe_natal_step_audit] failed: {type(exc).__name__}: {str(exc)[:200]}",
+            flush=True,
+        )
         return {}
 
 

@@ -536,6 +536,78 @@ def _force_merge_bcp_linkage_into_step0a(
     return out
 
 
+def ensure_marriage_step_audit_on_result(
+    engine_result: dict[str, Any],
+    kundli: dict[str, Any],
+    kp: dict[str, Any] | None = None,
+    birth: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Guarantee step_audit Steps 0–3 on every M17 engine return (even KP/dasha gate)."""
+    if not isinstance(engine_result, dict):
+        return engine_result
+    chart = prepare_kundli_for_marriage_engine(kundli) or kundli
+    lagna_si = _resolve_lagna_si_for_admin(chart)
+    if lagna_si is None:
+        print(
+            "[ensure_marriage_step_audit] skip lagna_si "
+            f"asc={chart.get('ascendant')!r} ascDeg={chart.get('ascendantDeg')!r}",
+            flush=True,
+        )
+        return engine_result
+    try:
+        from event_timing.marriage.kp_from_chart import resolve_kp
+
+        kp_resolved = resolve_kp(
+            chart,
+            kp if isinstance(kp, dict) else {},
+            birth,
+        )
+    except Exception:
+        kp_resolved = kp if isinstance(kp, dict) else {}
+
+    audit = dict(engine_result.get("step_audit") or {})
+    try:
+        from event_timing.marriage.marriage_spec_pipeline import safe_natal_step_audit
+
+        natal = safe_natal_step_audit(chart, kp_resolved or {}, lagna_si)
+        for key, block in natal.items():
+            if isinstance(block, dict):
+                audit[key] = {**(audit.get(key) or {}), **block}
+    except Exception as exc:
+        print(
+            f"[ensure_marriage_step_audit] natal failed: {type(exc).__name__}: {str(exc)[:160]}",
+            flush=True,
+        )
+
+    if not audit.get("step0") or not audit.get("step0a"):
+        try:
+            from event_timing.marriage.marriage_engine_v2 import compute_timing_window_fallback
+
+            fb = compute_timing_window_fallback(
+                chart, {}, kp_resolved or {}, birth,
+            ) or {}
+            fb_sa = fb.get("step_audit") if isinstance(fb.get("step_audit"), dict) else {}
+            for key in ("step0", "step0a"):
+                if isinstance(fb_sa.get(key), dict):
+                    audit[key] = {**(audit.get(key) or {}), **fb_sa[key]}
+        except Exception as exc:
+            print(
+                f"[ensure_marriage_step_audit] fallback failed: {type(exc).__name__}: {str(exc)[:160]}",
+                flush=True,
+            )
+
+    if audit:
+        engine_result["step_audit"] = audit
+        s1 = ((audit.get("step1") or {}).get("result") or {})
+        print(
+            "[ensure_marriage_step_audit] ok "
+            f"step0={bool(audit.get('step0'))} step0a={bool(audit.get('step0a'))} "
+            f"step3={bool(audit.get('step3'))} d1_7L={s1.get('seventh_lord')!r}",
+            flush=True,
+        )
+    return engine_result
+
+
 _MARRIAGE_Q_KW = (
     "shaadi", "shadi", "shādi", "marriage", "vivah", "wedding", "byah",
     "विवाह", "शादी", "विवाह कब", "marry",
@@ -743,6 +815,17 @@ def coerce_chart_for_marriage_engine(raw: Any) -> dict[str, Any] | None:
             if norm is not None:
                 return norm
     return None
+
+
+def prepare_kundli_for_marriage_engine(raw: Any) -> dict[str, Any] | None:
+    """Coerce chart + infer planet houses from lagna/sign (ask-time + admin)."""
+    chart = coerce_chart_for_marriage_engine(raw)
+    if chart is None:
+        return None
+    lagna_si = _resolve_lagna_si_for_admin(chart)
+    if lagna_si is None:
+        return chart
+    return _normalize_planet_houses(chart, lagna_si)
 
 
 def _lagna_si_from_kundli(kundli: dict[str, Any]) -> int | None:
@@ -1039,7 +1122,7 @@ def recompute_marriage_bcp_from_kundli(
         question_text=question_text,
         topic=topic,
     )
-    chart = coerce_chart_for_marriage_engine(kundli) or normalize_kundli_chart_payload(kundli)
+    chart = prepare_kundli_for_marriage_engine(kundli) or coerce_chart_for_marriage_engine(kundli) or normalize_kundli_chart_payload(kundli)
     if chart is None:
         print(
             "[marriage_admin_recompute] skip: chart normalize failed "

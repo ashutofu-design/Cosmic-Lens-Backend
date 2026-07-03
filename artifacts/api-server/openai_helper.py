@@ -791,6 +791,14 @@ def _passthrough_health_focus(question, topic_id):
 
 def _normalize_passthrough_kundli(kundli: Any) -> dict | None:
     try:
+        from ask_llm_context_debug import prepare_kundli_for_marriage_engine
+
+        prepared = prepare_kundli_for_marriage_engine(kundli)
+        if prepared is not None:
+            return prepared
+    except Exception:
+        pass
+    try:
         from ask_llm_context_debug import coerce_chart_for_marriage_engine
 
         if isinstance(kundli, dict):
@@ -961,6 +969,18 @@ def _marriage_timing_engine_result(
             flush=True,
         )
     if isinstance(engine_result, dict) and engine_result:
+        try:
+            from ask_llm_context_debug import ensure_marriage_step_audit_on_result
+
+            engine_result = ensure_marriage_step_audit_on_result(
+                engine_result, kundli, kp_dict, birth,
+            )
+        except Exception as exc:
+            print(
+                f"[passthrough_marriage_block] ensure_step_audit failed: "
+                f"{type(exc).__name__}: {str(exc)[:160]}",
+                flush=True,
+            )
         return engine_result
     try:
         from event_timing.marriage.marriage_engine_v2 import compute_timing_window_fallback
@@ -977,6 +997,14 @@ def _marriage_timing_engine_result(
             flush=True,
         )
     if isinstance(engine_result, dict) and engine_result:
+        try:
+            from ask_llm_context_debug import ensure_marriage_step_audit_on_result
+
+            engine_result = ensure_marriage_step_audit_on_result(
+                engine_result, kundli, kp_dict, birth,
+            )
+        except Exception:
+            pass
         return engine_result
     try:
         from event_timing.marriage import assess_marriage  # type: ignore

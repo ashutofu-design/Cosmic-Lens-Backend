@@ -2212,6 +2212,14 @@ def _gap_ok(cand: Dict[str, Any], chosen: List[Dict[str, Any]]) -> bool:
     return True
 
 
+def _infer_birth_dt_from_age(user_age: int, ref: datetime) -> datetime:
+    """Fallback when birth dict has age but no parseable DOB (anchor guard)."""
+    try:
+        return ref.replace(year=ref.year - int(user_age))
+    except ValueError:
+        return ref.replace(year=ref.year - int(user_age), day=28)
+
+
 def _user_age_on_date(birth_dt: Optional[datetime], when: datetime) -> Optional[int]:
     if birth_dt is None:
         return None
@@ -2745,6 +2753,12 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     # v2.4 — practical-age floor + earliest acceptable window
     min_practical_age = _min_practical_age(is_female)
     birth_dt = _extract_dob_dt(birth, kundli=kundli)
+    if birth_dt is None and user_age is not None:
+        birth_dt = _infer_birth_dt_from_age(int(user_age), _now_for_age)
+        factors.append(
+            f"AGE birth_dt inferred from user_age={user_age} "
+            f"(no DOB in birth/kundli — BCP anchor uses estimated birthday)"
+        )
     earliest_practical = _earliest_practical_dt(birth_dt, min_practical_age)
     too_young = (user_age is not None
                  and user_age < min_practical_age)
@@ -2895,6 +2909,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             **bcp_strategy,
             "prefer_current_dasha": dasha_scan.get("prefer_current_dasha"),
             "bcp_boost_future_only": dasha_scan.get("bcp_boost_future_only"),
+            "chart_delayed": _chart_pre_delayed,
         },
         current_dasha=activation.get("current"),
     )
@@ -2908,8 +2923,24 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     focus_bcp_ages = set(dasha_scan.get("bcp_focus_ages") or [])
     _next_bcp = (bcp_ctx or {}).get("next_activation_age")
     _pri_bcp = (bcp_ctx or {}).get("primary_priority_age")
-    # Incidental in-list age (e.g. 2H→26) or current_bcp_year must not anchor
-    # over the real upcoming activation (e.g. 7H→27/31) on delayed charts.
+    _focus_pri = (dasha_scan.get("late_bcp_focus") or {}).get("primary_age")
+    # Delayed chart: late-focus primary (27) beats missed_bcp last_passed (24)
+    # or priority-scored far age (35).
+    if (
+        step0_verdict in ("DELAYED", "LATE")
+        and user_age is not None
+        and isinstance(_focus_pri, int)
+        and _focus_pri > user_age
+        and (_focus_pri - user_age) <= 3
+    ):
+        if primary_ref_age is None or int(primary_ref_age) < _focus_pri:
+            factors.append(
+                f"BCP primary aligned to focus age {_focus_pri} "
+                f"(was {primary_ref_age})"
+            )
+            primary_ref_age = _focus_pri
+            focus_bcp_ages.add(_focus_pri)
+    # Incidental in-list age (e.g. 2H→26) must not anchor over upcoming BCP.
     if (
         primary_ref_age is not None
         and user_age is not None

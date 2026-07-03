@@ -263,6 +263,39 @@ def test_bcp_anchor_guard_demotes_pre_activation_age_26_when_next_bcp_27():
     assert near["score"] < at_bcp["score"]
 
 
+def test_age_26_uses_upcoming_bcp_27_not_missed_recent():
+    from event_timing.marriage.bcp_marriage_ages import resolve_bcp_timing_strategy
+
+    bcp = {
+        "all_marriage_ages": [7, 12, 19, 21, 23, 24, 27, 29, 31, 35],
+        "last_passed_bcp_age": 24,
+        "years_since_last_bcp": 2,
+        "next_activation_age": 35,
+        "years_to_next_bcp": 9,
+        "upcoming_year_bcp_ages": [27],
+        "primary_priority_age": 35,
+    }
+    strat = resolve_bcp_timing_strategy(bcp, 26)
+    assert strat["timing_mode"] == "upcoming_bcp"
+    assert strat["primary_reference_age"] == 27
+
+
+def test_missed_bcp_not_for_young_user_just_past_incidental_24():
+    from event_timing.marriage.bcp_marriage_ages import resolve_bcp_timing_strategy
+
+    bcp = {
+        "all_marriage_ages": [24, 35, 40],
+        "last_passed_bcp_age": 24,
+        "years_since_last_bcp": 2,
+        "next_activation_age": 35,
+        "years_to_next_bcp": 9,
+        "upcoming_year_bcp_ages": [],
+        "primary_priority_age": 35,
+    }
+    strat = resolve_bcp_timing_strategy(bcp, 26)
+    assert strat["timing_mode"] != "missed_bcp_recent"
+
+
 def test_resolve_next_activation_skips_incidental_in_list_age():
     from event_timing.marriage.bcp_marriage_ages import _resolve_next_activation_age
 

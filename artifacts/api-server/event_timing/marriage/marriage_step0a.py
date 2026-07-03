@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from event_timing.marriage.bcp_marriage_ages import (
     _active_house_for_age,
+    _near_bcp_activation_ages,
     compute_bcp_marriage_ages,
     resolve_late_marriage_bcp_focus,
 )
@@ -38,6 +39,15 @@ def _late_urgent_after_chart_delay_guard(
         return bcp_urgent
     nxt = bcp.get("next_activation_age")
     mode = bcp_strategy.get("timing_mode")
+    focus_pri = bcp_strategy.get("primary_reference_age")
+    near_focus = (
+        isinstance(focus_pri, int)
+        and focus_pri > user_age
+        and (focus_pri - user_age) <= 2
+    )
+    near_raw = _near_bcp_activation_ages(bcp, user_age, within_years=2)
+    if near_raw or near_focus:
+        return False
     if (
         mode == "upcoming_bcp"
         and nxt is not None
@@ -45,7 +55,7 @@ def _late_urgent_after_chart_delay_guard(
     ):
         return False
     if (
-        mode not in ("current_bcp_year", "missed_bcp_recent", "upcoming_bcp")
+        mode not in ("current_bcp_year", "upcoming_bcp")
         and nxt is not None
         and (nxt - user_age) > 2
     ):
@@ -127,6 +137,23 @@ def run_marriage_step0a(
     )
     if primary_ref is not None:
         bcp_strategy["primary_reference_age"] = primary_ref
+
+    # Delayed late chart: near focus age (27) must not stay in missed_bcp_recent
+    # (last incidental 24 passed → wrongly boosts next 12mo over BCP 27).
+    _focus_pri = late_focus.get("primary_age")
+    if (
+        (step0_verdict or "") in ("DELAYED", "LATE")
+        and user_age is not None
+        and isinstance(_focus_pri, int)
+        and _focus_pri > user_age
+        and (_focus_pri - user_age) <= 3
+    ):
+        bcp_strategy["timing_mode"] = "upcoming_bcp"
+        bcp_strategy["late_urgent_scan"] = False
+        bcp_strategy["prefer_current_dasha"] = False
+        bcp_strategy["bcp_boost_future_only"] = False
+        bcp_strategy["primary_reference_age"] = _focus_pri
+        primary_ref = _focus_pri
 
     bcp_urgent = _late_urgent_after_chart_delay_guard(
         bool(bcp_strategy.get("late_urgent_scan")),

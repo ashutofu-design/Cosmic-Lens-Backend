@@ -584,6 +584,21 @@ def compute_bcp_marriage_ages_d1_only(
     return compute_bcp_marriage_ages(kundli, lagna_si, user_age=user_age)
 
 
+def _near_bcp_activation_ages(
+    bcp: Dict[str, Any],
+    user_age: Optional[int],
+    within_years: int = 2,
+) -> List[int]:
+    """Raw BCP ages due within `within_years` (not priority-scored far ages)."""
+    if user_age is None:
+        return []
+    hi = user_age + within_years
+    return [
+        int(a) for a in (bcp.get("all_marriage_ages") or [])
+        if isinstance(a, int) and user_age < a <= hi
+    ]
+
+
 def _resolve_next_activation_age(
     sorted_merged: List[int],
     future_priority_ages: List[int],
@@ -657,7 +672,26 @@ def resolve_bcp_timing_strategy(
                 ),
             }
 
-    # Next BCP age soon (within 2 years)
+    # Near raw BCP age (e.g. 27 when user is 26) beats priority-scored far age (35).
+    near_act = _near_bcp_activation_ages(bcp, user_age, within_years=2)
+    if near_act:
+        act = near_act[0]
+        ytn = act - int(user_age)
+        return {
+            "timing_mode": "upcoming_bcp",
+            "search_horizon_days": max(_RECENT_HORIZON_DAYS, ytn * 366),
+            "late_urgent_scan": ytn <= 1,
+            "prefer_current_dasha": False,
+            "bcp_boost_future_only": False,
+            "primary_reference_age": act,
+            "pipeline_order": "bcp_age→age→significators→dasha→transit",
+            "llm_directive": (
+                f"BCP activation age {act} ({ytn} saal mein) — "
+                "dasha windows is age ke around align karo."
+            ),
+        }
+
+    # Next BCP age soon (within 2 years) — priority-scored queue
     if years_to_next is not None and years_to_next <= 2:
         return {
             "timing_mode": "upcoming_bcp",
@@ -673,12 +707,15 @@ def resolve_bcp_timing_strategy(
             ),
         }
 
-    # Missed: e.g. BCP 34, user 37, next 40
+    # Missed: e.g. BCP 34, user 37, next 40 — NOT young user 26 past incidental 24
     if (
         last_passed is not None
         and years_since is not None
-        and years_since >= 1
+        and years_since >= 2
+        and user_age is not None
+        and user_age > int(last_passed) + 2
         and (years_to_next is None or years_to_next > _MISSED_BCP_YEARS_THRESHOLD)
+        and not near_act
     ):
         return {
             "timing_mode": "missed_bcp_recent",
@@ -764,7 +801,7 @@ def bcp_boost_for_window(
     now = now or datetime.utcnow()
 
     # Missed BCP: only boost windows in next 12 months, not far future BCP (40)
-    if mode == "missed_bcp_recent":
+    if mode == "missed_bcp_recent" and not strategy.get("chart_delayed"):
         if start > now + timedelta(days=_RECENT_HORIZON_DAYS):
             return 0.0, ""
         if start <= now + timedelta(days=_RECENT_HORIZON_DAYS):

@@ -2780,6 +2780,31 @@ def _build_cascade_narrative(future: List[Dict[str, Any]],
 # ════════════════════════════════════════════════════════════════════════
 # PUBLIC API — compute_timing_window
 # ════════════════════════════════════════════════════════════════════════
+def _merge_natal_step_audit(
+    result: Dict[str, Any],
+    kundli: dict,
+    lagna_si: int,
+    kp: dict,
+) -> Dict[str, Any]:
+    """Attach D1/D9/Step-3 planet list even when timing gates fail."""
+    out: Dict[str, Any] = dict(result)
+    try:
+        from event_timing.marriage.marriage_spec_pipeline import safe_natal_step_audit
+
+        natal = safe_natal_step_audit(kundli, kp or {}, lagna_si)
+        if natal:
+            audit = out.get("step_audit")
+            if not isinstance(audit, dict):
+                audit = {}
+            else:
+                audit = dict(audit)
+            audit.update(natal)
+            out["step_audit"] = audit
+    except Exception:
+        pass
+    return out
+
+
 def compute_timing_window(kundli: dict, intel: dict, kp: dict,
                           birth: Optional[Any] = None) -> dict:
     """Run the full 8-step Marriage Engine v2 pipeline.
@@ -2835,7 +2860,7 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
     # ── Data sufficiency gate (architect-fix: no fail-open on partial chart) ──
     ok, reasons = _data_sufficiency_check(kundli, kp)
     if not ok:
-        return {
+        gate_result: Dict[str, Any] = {
             "verdict": "UNKNOWN", "band": "WEAK",
             "top_3_windows": [], "risk_flags": reasons,
             "primary_window": None, "backup_window": None,
@@ -2844,6 +2869,17 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
             "engine_version": "v2.0.0",
             "engine_arch": "FILTER→VERIFY→ACTIVATE→TRIGGER",
         }
+        try:
+            fb = compute_timing_window_fallback(kundli, intel, kp, birth)
+            if isinstance(fb, dict):
+                sa = fb.get("step_audit")
+                if isinstance(sa, dict) and sa:
+                    gate_result["step_audit"] = sa
+                if fb.get("primary_window"):
+                    gate_result["primary_window"] = fb.get("primary_window")
+        except Exception:
+            pass
+        return _merge_natal_step_audit(gate_result, kundli, lagna_si, kp)
 
     factors: List[str] = []
 
@@ -3974,6 +4010,9 @@ def compute_timing_window_fallback(
             "entry_notes": dasha_scan.get("entry_notes") or [],
         },
     }
+    step_audit = _merge_natal_step_audit(
+        {"step_audit": step_audit}, kundli, lagna_si, kp,
+    )["step_audit"]
 
     verdict = step0_verdict or "UNKNOWN"
     band = "MEDIUM" if verdict in ("DELAYED", "LATE") else "WEAK"

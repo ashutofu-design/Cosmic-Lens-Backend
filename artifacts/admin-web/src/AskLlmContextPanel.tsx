@@ -721,7 +721,11 @@ function marriageAuditStepTitle(key: string, step?: Record<string, unknown>): st
 
 function formatMarriageStep3Planets(step?: Record<string, unknown>): string {
   if (!step) {
-    return "— (not saved — engine ne kundli se connect nahi kiya; birth profile save karke dubara puchein)";
+    return (
+      "— (trace save nahi hua — NAYA marriage timing question puchein. " +
+      "Chart app me saved ho to bhi purane admin row me yeh blank reh sakta hai; " +
+      "ya server par KP/dasha missing ho sakta hai.)"
+    );
   }
   const list = Array.isArray(step.marriage_giving_planets)
     ? step.marriage_giving_planets
@@ -757,6 +761,8 @@ function stepAuditFromMarriageContext(
     {}
   );
 }
+
+function isDashaFirstTimingEngine(engineId: string): boolean {
   return (
     engineId.endsWith("_timing_v1") &&
     engineId !== "marriage_timing_m17" &&

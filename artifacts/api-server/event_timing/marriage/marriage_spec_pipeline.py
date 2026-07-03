@@ -852,6 +852,67 @@ def _is_dasha_target_candidate(
     return False
 
 
+def build_natal_step_audit_from_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
+    """Admin step_audit entries for D1/D9 names + Step 3 planet list."""
+    merged = spec.get("merged") or {}
+    merged_items = sorted(
+        merged.items(),
+        key=lambda kv: float((kv[1] or {}).get("natal_points", 0)),
+        reverse=True,
+    )
+    planets = spec.get("step3_marriage_giving_planets") or []
+    return {
+        "step1": {
+            "name": "D1 marriage significator names",
+            "status": "DONE",
+            "result": spec.get("step1_d1") or {},
+        },
+        "step2": {
+            "name": "D9 marriage significator names",
+            "status": "DONE",
+            "result": spec.get("step2_d9") or {},
+        },
+        "step3": {
+            "name": "D1+D9 shadi de sakte planets (7H linkage)",
+            "status": "DONE",
+            "merged_count": len(merged),
+            "marriage_giving_planets": planets,
+            "planet_names": [
+                p.get("name")
+                for p in planets
+                if isinstance(p, dict) and p.get("name")
+            ],
+            "top_merged": [
+                {
+                    "name": pname,
+                    "natal_points": row.get("natal_points", 0),
+                    "d1_points": row.get("d1_points", 0),
+                    "d9_points": row.get("d9_points", 0),
+                    "both_bonus": row.get("both_bonus", 0),
+                    "d1_links": row.get("d1_links") or [],
+                    "d9_links": row.get("d9_links") or [],
+                }
+                for pname, row in merged_items[:12]
+            ],
+        },
+    }
+
+
+def safe_natal_step_audit(
+    kundli: dict,
+    kp: dict,
+    lagna_si: int,
+) -> Dict[str, Any]:
+    """Steps 1–3 only — runs even when full timing pipeline is blocked."""
+    try:
+        spec = run_user_spec_pipeline(kundli, kp or {}, lagna_si)
+        if not spec:
+            return {}
+        return build_natal_step_audit_from_spec(spec)
+    except Exception:
+        return {}
+
+
 def run_user_spec_pipeline(
     kundli: dict,
     kp: dict,

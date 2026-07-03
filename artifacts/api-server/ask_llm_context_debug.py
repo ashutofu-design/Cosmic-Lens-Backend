@@ -2044,6 +2044,91 @@ def _build_engine_verification_summary_for_ctx(
         return None
 
 
+def build_admin_context_for_ask_save(
+    *,
+    question: str,
+    result: dict[str, Any] | None = None,
+    lang: str = "hn",
+) -> dict[str, Any]:
+    """Rebuild admin_llm_context for /api/ask/stream saves (no ctx on final evt)."""
+    import re
+
+    payload = dict(result) if isinstance(result, dict) else {}
+    q = (question or "").strip()
+    topic = str(payload.get("topic") or "general")
+    is_timing = False
+    slice_meta: dict[str, Any] = {}
+    checks: dict[str, Any] = {}
+    blocks: dict[str, Any] = {}
+
+    try:
+        from ask_love.timing_registry import (
+            is_love_static_loyalty_question,
+            is_love_timing_question,
+        )
+        from dcr_love import classify_buckets, is_love_static_question
+
+        if is_love_timing_question(q):
+            is_timing = True
+            topic = "love"
+            slice_meta = {"slice": "love_timing_v1", "topic": "love"}
+            checks = {"slice_type": "love_timing_v1"}
+        elif is_love_static_loyalty_question(q):
+            topic = "love"
+            slice_meta = {"slice": "mr_engine_v1", "topic": "love", "archetype": "loyalty"}
+            checks = {"slice_type": "mr_engine_v1", "mr_engine": "v1", "is_mr_static": True}
+        elif is_love_static_question(q):
+            topic = "love"
+            buckets = classify_buckets(q)
+            slice_meta = {
+                "slice": "marriage_relationship",
+                "topic": "love",
+                "buckets": buckets,
+            }
+            checks = {"slice_type": "marriage_relationship"}
+    except Exception:
+        pass
+
+    if not is_timing:
+        try:
+            from openai_helper import _is_marriage_timing_question
+
+            if _is_marriage_timing_question(q):
+                is_timing = True
+                topic = "marriage"
+                slice_meta = {"slice": "marriage_timing_m17", "topic": "marriage"}
+                checks = {
+                    "slice_type": "timing_marriage_engine",
+                    "is_marriage_engine": True,
+                }
+        except Exception:
+            pass
+
+    if not is_timing and not checks:
+        try:
+            from openai_helper import _phase2855_is_timing_question_strict
+
+            is_timing = bool(_phase2855_is_timing_question_strict(q))
+        except Exception:
+            is_timing = bool(re.search(r"(?ix)\b(kab|when|kis\s+saal)\b", q))
+
+    trace = payload.get("engine_trace")
+    if isinstance(trace, dict):
+        blocks["engine_trace"] = trace
+
+    return build_admin_llm_context(
+        question=q,
+        route="ask_stream",
+        question_type="TIMING" if is_timing else "STATIC",
+        is_timing=is_timing,
+        checks=checks,
+        slice_meta={**slice_meta, "topic": slice_meta.get("topic") or topic},
+        blocks=blocks,
+        llm_called=True,
+        intent_source="stream_save_rebuild",
+    )
+
+
 def build_admin_llm_context(
     *,
     question: str,

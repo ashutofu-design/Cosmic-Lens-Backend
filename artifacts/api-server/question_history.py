@@ -23,6 +23,7 @@ user's Ask flow.
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime
 from typing import Any, Iterable, Optional
@@ -407,6 +408,59 @@ def _load_kundli_chart_for_admin_question(uq) -> tuple[dict | None, dict | None]
     return chart, birth
 
 
+def _bootstrap_admin_llm_context_from_row(
+    uq: UserQuestion,
+    llm_ctx: dict | None,
+) -> dict:
+    """Ensure admin detail always has question + basic routing even if JSON was lost."""
+    out = dict(llm_ctx) if isinstance(llm_ctx, dict) else {}
+    qtext = (uq.question_text or "").strip()
+    if qtext and not out.get("question"):
+        out["question"] = qtext[:2000]
+    if uq.topic and not out.get("topic"):
+        out["topic"] = uq.topic
+    if uq.answer_source and not out.get("answer_source"):
+        out["answer_source"] = uq.answer_source
+    if uq.engine_tag and not out.get("engine_tag"):
+        out["engine_tag"] = uq.engine_tag
+    checks = dict(out.get("checks") or {}) if isinstance(out.get("checks"), dict) else {}
+    slice_meta = dict(out.get("slice_meta") or {}) if isinstance(out.get("slice_meta"), dict) else {}
+    if not slice_meta.get("slice") and checks.get("slice_type"):
+        slice_meta["slice"] = checks.get("slice_type")
+    topic_l = (uq.topic or "").strip().lower()
+    if topic_l and not slice_meta.get("topic"):
+        slice_meta["topic"] = topic_l
+    if qtext and not out.get("is_timing"):
+        try:
+            from ask_love.timing_registry import is_love_timing_question
+
+            out["is_timing"] = bool(is_love_timing_question(qtext))
+        except Exception:
+            out["is_timing"] = bool(
+                re.search(r"(?ix)\b(kab|when|kis\s+saal)\b", qtext)
+            )
+    if qtext and not out.get("question_type"):
+        out["question_type"] = "TIMING" if out.get("is_timing") else "STATIC"
+    if qtext and not slice_meta.get("buckets"):
+        try:
+            from dcr_love import classify_buckets, is_love_static_question
+
+            if is_love_static_question(qtext):
+                slice_meta.setdefault("slice", "marriage_relationship")
+                slice_meta["buckets"] = classify_buckets(qtext)
+                checks.setdefault("slice_type", "marriage_relationship")
+        except Exception:
+            pass
+    if checks:
+        out["checks"] = checks
+    if slice_meta:
+        out["slice_meta"] = slice_meta
+    if not out.get("understanding_line") and qtext:
+        out["understanding_line"] = qtext[:240]
+    out.setdefault("version", 1)
+    return out
+
+
 def get_admin_ask_question(question_id: str) -> dict | None:
     """Single Ask row for admin detail — includes answer + refreshed llm_context."""
     from models import User
@@ -490,6 +544,10 @@ def get_admin_ask_question(question_id: str) -> dict | None:
                 d["marriage_bcp_step2"] = bcp_payload
     except Exception as exc:
         print(f"[question_history] marriage trace recompute failed: {exc}", flush=True)
+    if isinstance(llm_ctx, dict):
+        llm_ctx = _bootstrap_admin_llm_context_from_row(uq, llm_ctx)
+    else:
+        llm_ctx = _bootstrap_admin_llm_context_from_row(uq, None)
     if isinstance(llm_ctx, dict):
         d["llm_context"] = llm_ctx
     d.pop("llm_context_json", None)
@@ -631,3 +689,58 @@ def token_fields_from_result(result: Any) -> dict[str, Any]:
         "cost_inr": u.get("cost_inr"),
         "engine_tag": (result or {}).get("engine_tag") if isinstance(result, dict) else None,
     }
+
+
+def save_stream_ask_question(
+    *,
+    user_id: int,
+    question_text: str,
+    event: dict[str, Any],
+    primary_kundli_id: Optional[int] = None,
+) -> Optional[str]:
+    """Persist streamed Ask final event — always saves question_text for admin list."""
+    if not user_id or not isinstance(user_id, int):
+        return None
+    qtext = (question_text or "").strip()
+    if not qtext:
+        return None
+    try:
+        payload = dict(event) if isinstance(event, dict) else {}
+        if not payload.get("admin_llm_context"):
+            try:
+                from ask_llm_context_debug import build_admin_context_for_ask_save
+
+                payload["admin_llm_context"] = build_admin_context_for_ask_save(
+                    question=qtext,
+                    result=payload,
+                )
+            except Exception as exc:
+                print(f"[question_history] stream admin_ctx rebuild skipped: {exc}", flush=True)
+
+        topic_logged = str(payload.get("topic") or "general")
+        tok = token_fields_from_result(payload)
+        save_payload = dict(payload)
+        llm_ctx_json = extract_admin_llm_context_for_save(save_payload)
+        qid = save_user_question(
+            user_id=user_id,
+            question_text=qtext,
+            topic=topic_logged,
+            primary_kundli_id=primary_kundli_id,
+            verdict_summary=extract_verdict_summary(payload, topic_logged),
+            answer_text=(payload.get("text") or ""),
+            answer_source=payload.get("source"),
+            llm_context_json=llm_ctx_json,
+            **tok,
+        )
+        if qid:
+            print(
+                f"[question_history] stream_save_ok id={qid} "
+                f"topic={topic_logged} q={qtext[:72]!r}",
+                flush=True,
+            )
+        else:
+            print(f"[question_history] stream_save_none q={qtext[:72]!r}", flush=True)
+        return qid
+    except Exception as exc:
+        print(f"[question_history] stream_save failed: {exc}", flush=True)
+        return None

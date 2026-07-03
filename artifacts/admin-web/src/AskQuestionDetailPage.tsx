@@ -3,6 +3,7 @@ import { formatDate, formatInr } from "./api";
 import {
   AskLlmContextPanel,
   AnswerPathBadge,
+  bootstrapAskLlmContextFromRow,
   EngineTracePanel,
   EngineVerificationBadge,
   LlmQuestionUnderstandingBrief,
@@ -137,7 +138,7 @@ export function AskQuestionDetailPage({
       </div>
 
       <div className="ask-detail-context">
-        {ctx ? <EngineTracePanel ctx={ctx} row={row} /> : null}
+        <EngineTracePanel ctx={ctx || bootstrapAskLlmContextFromRow(row)} row={row} />
         <AskLlmContextPanel
           row={row}
           panelId={`ask-llm-context-${row.id}`}

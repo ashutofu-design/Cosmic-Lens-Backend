@@ -9712,28 +9712,25 @@ def ask_stream_route():
                     # application context" and silently dropped the row.
                     if log_user_id:
                         try:
-                            verdict_logged = extract_verdict_summary(evt, final_topic)
-                            tok = token_fields_from_result(evt)
+                            from question_history import save_stream_ask_question
+
                             with _app_for_save.app_context():
-                                save_user_question(
+                                save_stream_ask_question(
                                     user_id=log_user_id,
                                     question_text=log_question,
-                                    topic=final_topic,
+                                    event=dict(evt),
                                     primary_kundli_id=log_kundli_id,
-                                    verdict_summary=verdict_logged,
-                                    answer_text=(evt.get("text") or ""),
-                                    answer_source=evt.get("source"),
-                                    **tok,
                                 )
-                            print(
-                                f"[ask/stream] phase60i_history_save_ok: "
-                                f"user_id={log_user_id} topic={final_topic} "
-                                f"verdict={verdict_logged!r}"
-                            )
                         except Exception as exc:
                             print(
                                 f"[ask/stream] question_history save failed (non-fatal): {exc}"
                             )
+                    else:
+                        print(
+                            "[ask/stream] history_save_skipped: guest ask (no user_id) — "
+                            "login required for admin Ask Q&A list",
+                            flush=True,
+                        )
         except Exception as exc:
             print(f"[ask/stream] mid-stream error: {exc}")
             yield "data: " + json.dumps(

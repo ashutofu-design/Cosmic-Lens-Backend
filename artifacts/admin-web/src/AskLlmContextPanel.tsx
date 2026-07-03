@@ -236,23 +236,72 @@ export function QuestionUnderstandingPanel({ ctx }: { ctx: AskLlmContext | null 
   );
 }
 
+export function bootstrapAskLlmContextFromRow(
+  row: Pick<
+    AskQuestionItem,
+    "question_text" | "topic" | "answer_source" | "engine_tag" | "verdict_summary"
+  >,
+): AskLlmContext {
+  const q = (row.question_text || "").trim();
+  const topic = (row.topic || "").trim().toLowerCase();
+  const isTiming = /\b(kab|when|kis\s+saal)\b/i.test(q);
+  const isLove = /\b(love|pyaar|pyar|prem|relationship|partner)\b/i.test(q);
+  return {
+    version: 1,
+    question: q,
+    topic: topic || undefined,
+    is_timing: isTiming,
+    question_type: isTiming ? "TIMING" : "STATIC",
+    understanding_line: q || undefined,
+    slice_meta: isLove
+      ? {
+          slice: isTiming ? "love_timing_v1" : "marriage_relationship",
+          topic: "love",
+        }
+      : topic
+        ? { topic }
+        : undefined,
+    checks: isLove
+      ? { slice_type: isTiming ? "love_timing_v1" : "marriage_relationship" }
+      : undefined,
+  };
+}
+
 export function parseAskLlmContext(row: AskQuestionItem): AskLlmContext | null {
   if (row.llm_context && typeof row.llm_context === "object") {
     const salvaged = salvageRawLlmContext(row.llm_context as AskLlmContext);
-    if (salvaged) return salvaged;
+    if (salvaged) {
+      return {
+        ...bootstrapAskLlmContextFromRow(row),
+        ...salvaged,
+        question: salvaged.question || row.question_text,
+      };
+    }
   }
   const raw = row.llm_context_json;
-  if (!raw || !String(raw).trim()) return null;
+  if (!raw || !String(raw).trim()) {
+    if (row.question_text?.trim()) {
+      return bootstrapAskLlmContextFromRow(row);
+    }
+    return null;
+  }
   try {
     const parsed = JSON.parse(raw) as AskLlmContext;
     if (parsed && typeof parsed === "object") {
-      return salvageRawLlmContext(parsed) ?? parsed;
+      const salvaged = salvageRawLlmContext(parsed) ?? parsed;
+      return {
+        ...bootstrapAskLlmContextFromRow(row),
+        ...salvaged,
+        question: salvaged.question || row.question_text,
+      };
     }
-    return null;
+    return row.question_text?.trim() ? bootstrapAskLlmContextFromRow(row) : null;
   } catch {
-    return salvageRawLlmContext({ raw: String(raw).slice(0, 8000) }) ?? {
-      raw: String(raw).slice(0, 8000),
-    };
+    return salvageRawLlmContext({ raw: String(raw).slice(0, 8000) }) ?? (
+      row.question_text?.trim() ? bootstrapAskLlmContextFromRow(row) : {
+        raw: String(raw).slice(0, 8000),
+      }
+    );
   }
 }
 
@@ -1380,6 +1429,41 @@ function isMarriageM17Trace(engineId: string, ctx: AskLlmContext): boolean {
   );
 }
 
+function isLoveStaticTrace(ctx: AskLlmContext, engineId: string): boolean {
+  if (engineId === "love_timing_v1") return false;
+  const sm = (ctx.slice_meta || {}) as Record<string, unknown>;
+  const checks = (ctx.checks || {}) as Record<string, unknown>;
+  const slice = String(sm.slice || checks.slice_type || "");
+  if (slice === "marriage_relationship" || slice === "mr_engine_v1") return true;
+  if (ctx.is_timing === false && /\b(love|pyaar|pyar|relationship)\b/i.test(String(ctx.question || ""))) {
+    return true;
+  }
+  return Boolean(sm.buckets);
+}
+
+function formatLoveStaticAdminDetail(
+  ctx: AskLlmContext,
+  row: Pick<AskQuestionItem, "question_text" | "answer_text">,
+): string {
+  const sm = (ctx.slice_meta || {}) as Record<string, unknown>;
+  const buckets = Array.isArray(sm.buckets) ? sm.buckets.map(String).join(", ") : "";
+  const evidence = Array.isArray(sm.evidence) ? (sm.evidence as string[]).slice(0, 4) : [];
+  const lines = [
+    `Question: ${ctx.question || row.question_text || "—"}`,
+    `Type: STATIC love (no kab/when — chart slice + LLM narrator)`,
+    buckets ? `DCR buckets: ${buckets}` : "DCR buckets: core_love_base + partner_nature (default)",
+    `Engine path: ${String(sm.slice || (ctx.checks as Record<string, unknown>)?.slice_type || "marriage_relationship")}`,
+  ];
+  if (evidence.length) {
+    lines.push("Evidence:");
+    lines.push(...evidence);
+  }
+  if (row.answer_text) {
+    lines.push(`Answer preview: ${String(row.answer_text).slice(0, 200)}…`);
+  }
+  return lines.join("\n");
+}
+
 function formatMarriageEarlyLateStep(step0?: Record<string, unknown>): {
   title: string;
   detail: string;
@@ -1974,6 +2058,7 @@ export function EngineTracePanel({
   const timingAudit = trace?.timing_audit;
   const engineId = String(trace?.engine || "");
   const marriageM17 = isMarriageM17Trace(engineId, ctx);
+  const loveStatic = isLoveStaticTrace(ctx, engineId);
   const kaalTiming = isKaalTimingEngine(engineId);
   const kaalDomain = String(trace?.domain || engineId.replace("_timing_v1", "").replace("_timing_m17", ""));
   const marriageStepOrder = [
@@ -2017,15 +2102,17 @@ export function EngineTracePanel({
 
   const pipelineChecksTitle = marriageM17
     ? "Marriage timing — Steps 1–8 (early/late → BCP → shadi planets → dasha)"
-    : kaalTiming && hasKaalFinalStep(stepAudit)
-      ? `Vivah Kaal Pipeline — ${kaalDomain || engineId.replace("_timing_v1", "")} (step 8 = saal/mahina)`
-      : dashaFirst
-        ? `Kaal Pipeline — ${engineId.replace("_timing_v1", "")} (dasha-first)`
-        : engineId === "career_timing_v1"
-          ? "Kaal Pipeline — career"
-          : engineId === "marriage_timing_m17"
-            ? "Marriage engine checks (M17)"
-            : "Timing engine checks";
+    : loveStatic
+      ? "Love STATIC — DCR chart slice + LLM (no Kaal timing)"
+      : kaalTiming && hasKaalFinalStep(stepAudit)
+        ? `Vivah Kaal Pipeline — ${kaalDomain || engineId.replace("_timing_v1", "")} (step 8 = saal/mahina)`
+        : dashaFirst
+          ? `Kaal Pipeline — ${engineId.replace("_timing_v1", "")} (dasha-first)`
+          : engineId === "career_timing_v1"
+            ? "Kaal Pipeline — career"
+            : engineId === "marriage_timing_m17"
+              ? "Marriage engine checks (M17)"
+              : "Timing engine checks";
 
   const requestMeta = [
     {
@@ -2108,6 +2195,29 @@ export function EngineTracePanel({
             hero: key === "step3",
           };
         }),
+      ]
+    : loveStatic
+    ? [
+        {
+          n: 1,
+          title: "Question",
+          detail: ctx.question || row.question_text || "—",
+          hero: true,
+        },
+        {
+          n: 2,
+          title: "Love STATIC — routing",
+          detail: formatLoveStaticAdminDetail(ctx, row),
+          hero: false,
+        },
+        ...requestMeta
+          .filter((m) => m.title !== "Question")
+          .map((item, idx) => ({
+            n: idx + 3,
+            title: item.title,
+            detail: item.detail,
+            hero: false,
+          })),
       ]
     : dashaFirst
     ? [
@@ -2196,12 +2306,17 @@ export function EngineTracePanel({
       : stepOrder;
 
   return (
-    <details className="engine-trace-panel" open={hasTrace}>
+    <details
+      className="engine-trace-panel"
+      open={hasTrace || loveStatic || Boolean(row.question_text?.trim())}
+    >
       <summary>
         {marriageM17
           ? marriageHasFullTrace
             ? "Marriage timing — full trace (Steps 1–8)"
             : "Marriage timing — Steps 1–2 (engine trace incomplete)"
+          : loveStatic
+            ? `Love STATIC — ${ctx.question || row.question_text || "question"}`
           : dashaFirst
             ? hasKaalFinalStep(stepAudit)
               ? `Kaal Pipeline — ${kaalDomain || "timing"} (Steps 0–8)`
@@ -2485,12 +2600,19 @@ export function AskLlmContextPanel({
   const id = panelId || `ask-llm-context-${row.id}`;
 
   if (!ctx) {
+    const boot = row.question_text?.trim() ? bootstrapAskLlmContextFromRow(row) : null;
+    if (boot) {
+      return <EngineTracePanel ctx={boot} row={row} />;
+    }
     return (
       <details id={id} className="llm-context-panel llm-context-missing" open={defaultOpen || undefined}>
         <summary>Engine evidence — not saved for this question</summary>
         <p className="detail-muted">
-          Deploy latest API + admin-web, restart cosmic-api, run DB migration, then ask a
-          new question. Rows before deploy will not have this data.
+          <strong>Question:</strong> {row.question_text || "—"}
+        </p>
+        <p className="detail-muted">
+          Deploy latest API + admin-web, restart cosmic-api, then ask a new question from the
+          logged-in app (not verify script). Rows before deploy may lack engine trace JSON.
         </p>
       </details>
     );

@@ -648,22 +648,7 @@ function stepOneLiner(
     return `${name} · 7L ${fmtCheckValue(r?.seventh_lord)} · in 7H ${fmtCheckValue(r?.planets_in_7th_house)} · 7H swami ${disp}`;
   }
   if (stepKey === "step3") {
-    const list = Array.isArray(step.marriage_giving_planets)
-      ? step.marriage_giving_planets
-      : Array.isArray(step.top_merged)
-        ? step.top_merged
-        : [];
-    const names = list
-      .map((t) => {
-        const r = asRecord(t);
-        const n = (r?.name as string) || "";
-        const why = (r?.reasons_summary as string) || "";
-        return why ? `${n} (${why})` : n;
-      })
-      .filter(Boolean)
-      .join("; ");
-    const count = step.merged_count ?? list.length;
-    return `${name} · ${count} planet(s)${names ? ` · ${names}` : ""}`;
+    return `${name} · D1/D9 7H planets + aspect (see lines below)`;
   }
   if (stepKey === "step4") {
     const summary = step.summary;
@@ -709,7 +694,7 @@ function stepOneLiner(
 
 function marriageAuditStepTitle(key: string, step?: Record<string, unknown>): string {
   const labels: Record<string, string> = {
-    step3: "Step 3 — D1+D9 shadi de sakte planets (7H linkage)",
+    step3: "Step 3 — D1+D9 7H linkage",
     step4: "Step 4 — KP validate",
     step5: "Step 5 — Rank significators + dasha targets",
     step6: "Step 6 — Dasha windows",
@@ -719,31 +704,51 @@ function marriageAuditStepTitle(key: string, step?: Record<string, unknown>): st
   return labels[key] || String(step?.name || key);
 }
 
-function formatMarriageStep3Planets(step?: Record<string, unknown>): string {
-  if (!step) {
-    return (
-      "— (trace save nahi hua — NAYA marriage timing question puchein. " +
-      "Chart app me saved ho to bhi purane admin row me yeh blank reh sakta hai; " +
-      "ya server par KP/dasha missing ho sakta hai.)"
-    );
+function fmtPlanetNameList(val: unknown): string {
+  if (!Array.isArray(val) || val.length === 0) return "nil";
+  return val.map((x) => String(x)).join(", ");
+}
+
+/** Step 3 — one line per D1/D9 7H rule (planets in 7H, aspect on 7H). */
+function formatMarriageStep37HLinkage(
+  stepAudit: Record<string, Record<string, unknown>>,
+): string[] {
+  const d1 = asRecord(stepAudit.step1?.result);
+  const d9 = asRecord(stepAudit.step2?.result);
+  if (!d1 && !d9 && !stepAudit.step3) {
+    return [
+      "— (trace save nahi hua — NAYA marriage timing question puchein.)",
+    ];
   }
-  const list = Array.isArray(step.marriage_giving_planets)
-    ? step.marriage_giving_planets
-    : Array.isArray(step.top_merged)
-      ? step.top_merged
-      : [];
-  if (!list.length) {
-    return stepOneLiner("step3", step, "marriage_timing_m17");
-  }
-  const text = list
-    .map((row) => {
-      const r = asRecord(row);
-      const name = (r?.name as string) || "?";
-      const why = (r?.reasons_summary as string) || (r?.reasons_hi as string[])?.join(" · ") || "";
-      return why ? `${name}: ${why}` : name;
-    })
-    .join(" | ");
-  return step.recomputed_from_chart ? `${text} (chart se recompute)` : text;
+  return [
+    `D1 7H planets: ${fmtPlanetNameList(d1?.planets_in_7th_house)}`,
+    `D1 7H aspect: ${fmtPlanetNameList(d1?.planets_aspecting_7th_house)}`,
+    `D9 7H planets: ${fmtPlanetNameList(d9?.planets_in_7th_house)}`,
+    `D9 7H aspect: ${fmtPlanetNameList(d9?.planets_aspecting_7th_house)}`,
+  ];
+}
+
+function formatMarriageStep3Planets(
+  stepAudit: Record<string, Record<string, unknown>>,
+  step3?: Record<string, unknown>,
+): string {
+  void step3;
+  return formatMarriageStep37HLinkage(stepAudit).join("\n");
+}
+
+function MarriageStep3LinkageLines({
+  stepAudit,
+}: {
+  stepAudit: Record<string, Record<string, unknown>>;
+}) {
+  const lines = formatMarriageStep37HLinkage(stepAudit);
+  return (
+    <ul className="llm-check-list engine-marriage-step3-linkage">
+      {lines.map((line) => (
+        <li key={line}>{line}</li>
+      ))}
+    </ul>
+  );
 }
 
 function stepAuditFromMarriageContext(
@@ -1493,7 +1498,7 @@ export function EngineTracePanel({
           const title = marriageAuditStepTitle(key, step);
           const detail =
             key === "step3"
-              ? formatMarriageStep3Planets(step)
+              ? formatMarriageStep3Planets(stepAudit, step)
               : step
                 ? stepOneLiner(key, step, engineId || "marriage_timing_m17")
                 : "— (not saved)";
@@ -1570,7 +1575,15 @@ export function EngineTracePanel({
               <span className="engine-pipeline-num">{p.n}</span>
               <div>
                 <strong>{p.title}</strong>
-                <p className="detail-muted engine-pipeline-detail">{p.detail}</p>
+                {p.detail.includes("\n") ? (
+                  <ul className="llm-check-list engine-marriage-step3-linkage">
+                    {p.detail.split("\n").map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="detail-muted engine-pipeline-detail">{p.detail}</p>
+                )}
               </div>
             </li>
           ))}
@@ -1964,10 +1977,10 @@ export function AskLlmContextPanel({
                     ))}
                   </ul>
                 ) : null}
-                <p className="engine-marriage-step0 engine-marriage-step3">
-                  <strong>Step 3 — D1+D9 shadi de sakte planets:</strong>{" "}
-                  {formatMarriageStep3Planets(marriageStepAudit.step3)}
-                </p>
+                <div className="engine-marriage-step0 engine-marriage-step3">
+                  <strong>Step 3 — D1+D9 7H linkage:</strong>
+                  <MarriageStep3LinkageLines stepAudit={marriageStepAudit} />
+                </div>
               </>
             ) : null}
             {!marriageM17 && dashaTrace &&

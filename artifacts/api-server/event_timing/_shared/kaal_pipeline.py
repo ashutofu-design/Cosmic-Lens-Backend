@@ -1,0 +1,310 @@
+"""Vivah-style Kaal Pipeline shell — step0–step8 for all 16 timing domains.
+
+Marriage M17 already emits a full audit; generic engines use dasha-first step1–6
+and this module adds step0, step0a, step7, step8 (saal/mahina) for admin parity.
+"""
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Optional
+
+from event_timing._shared.step_audit import (
+    LEGACY_TIMING_STEP_ORDER,
+    _lords_from_window,
+    _window_range,
+)
+from event_timing.domain_specs import get_domain_spec
+
+KAAL_PIPELINE_STEP_ORDER: tuple[str, ...] = LEGACY_TIMING_STEP_ORDER
+
+KAAL_PIPELINE_DOMAINS: tuple[str, ...] = (
+    "marriage",
+    "love",
+    "career",
+    "travel",
+    "property",
+    "vehicle",
+    "finance",
+    "health",
+    "children",
+    "education",
+    "foreign_education",
+    "litigation",
+    "spiritual",
+    "fame",
+    "network",
+    "universal",
+)
+
+_MONTH_NAMES = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)
+
+
+def is_kaal_pipeline_domain(domain: str) -> bool:
+    return str(domain or "").strip().lower() in KAAL_PIPELINE_DOMAINS
+
+
+def parse_iso_month_year(iso: str) -> tuple[Optional[str], Optional[int]]:
+    """Return (month_name, year) from YYYY-MM or YYYY-MM-DD."""
+    raw = str(iso or "").strip()
+    if len(raw) < 7:
+        return None, None
+    try:
+        if len(raw) >= 10:
+            dt = datetime.strptime(raw[:10], "%Y-%m-%d")
+        else:
+            dt = datetime.strptime(raw[:7], "%Y-%m")
+        return _MONTH_NAMES[dt.month - 1], dt.year
+    except ValueError:
+        return None, None
+
+
+def human_month_year(iso: str) -> str:
+    month, year = parse_iso_month_year(iso)
+    if month and year:
+        return f"{month} {year}"
+    return str(iso or "").strip()
+
+
+def _event_kab_label(domain: str) -> str:
+    spec = get_domain_spec(domain)
+    label = str(spec.get("label") or domain).split("/")[0].strip()
+    if domain == "marriage":
+        return "Marriage kab"
+    return f"{label} kab"
+
+
+def _pick_primary_window(result: dict, step_audit: dict) -> tuple[str, str, str]:
+    """Return (primary_window, start_iso, end_iso)."""
+    pw = str(result.get("primary_window") or "").strip()
+    cw = result.get("current_window") if isinstance(result.get("current_window"), dict) else {}
+    s4 = step_audit.get("step4") if isinstance(step_audit.get("step4"), dict) else {}
+    s6 = step_audit.get("step6") if isinstance(step_audit.get("step6"), dict) else {}
+    s8 = step_audit.get("step8") if isinstance(step_audit.get("step8"), dict) else {}
+
+    start_iso = (
+        str(s8.get("primary_dasha", {}).get("start_iso") or "")
+        or str(cw.get("start_iso") or cw.get("start") or "")
+        or str(s4.get("current_start") or "")
+        or str(s6.get("next_start") or "")
+    ).strip()
+    end_iso = (
+        str(s8.get("primary_dasha", {}).get("end_iso") or "")
+        or str(cw.get("end_iso") or cw.get("end") or "")
+        or str(s4.get("current_end") or "")
+        or str(s6.get("next_end") or "")
+    ).strip()
+
+    if not pw:
+        pw = _window_range(cw) or _window_range(s4)
+        if not pw and start_iso and end_iso:
+            pw = f"{start_iso}→{end_iso}"
+        elif not pw and start_iso:
+            pw = human_month_year(start_iso) or start_iso
+
+    return pw, start_iso, end_iso
+
+
+def build_kaal_step0(result: dict, domain: str) -> dict[str, Any]:
+    spec = get_domain_spec(domain)
+    prac = result.get("practicality") if isinstance(result.get("practicality"), dict) else {}
+    user_age = result.get("user_age") or prac.get("user_age")
+    bucket = str(result.get("bucket") or "general")
+    return {
+        "name": f"Step 0 — {spec.get('label', domain)} context",
+        "status": "DONE",
+        "user_age": user_age,
+        "bucket": bucket,
+        "domain": domain,
+        "result": {
+            "verdict": result.get("verdict"),
+            "band": result.get("band"),
+            "domain": domain,
+            "bucket": bucket,
+        },
+        "detail": (
+            f"{spec.get('label', domain)} · bucket={bucket}"
+            + (f" · age {user_age}" if user_age is not None else "")
+            + (f" · {result.get('verdict')}" if result.get("verdict") else "")
+        ).strip(),
+    }
+
+
+def build_kaal_step0a(result: dict, domain: str, step_audit: dict) -> dict[str, Any]:
+    spec = get_domain_spec(domain)
+    s2 = step_audit.get("step2") if isinstance(step_audit.get("step2"), dict) else {}
+    targets = s2.get("dasha_targets") or spec.get("dasha_targets") or []
+    prac = result.get("practicality") if isinstance(result.get("practicality"), dict) else {}
+
+    bcp_raw = result.get("bcp_marriage_ages")
+    if not isinstance(bcp_raw, dict):
+        s0a = result.get("step0a")
+        bcp_raw = (s0a.get("bcp_marriage_ages") if isinstance(s0a, dict) else None) or {}
+
+    focus: list[Any] = []
+    if isinstance(bcp_raw, dict):
+        for key in ("d1_bcp_ages", "d9_bcp_ages", "focus_ages", "future_priority_ages"):
+            ages = bcp_raw.get(key)
+            if isinstance(ages, list) and ages:
+                focus.extend(ages[:12])
+    if not focus and prac.get("min_purchase_age") is not None:
+        focus = [prac.get("min_purchase_age")]
+
+    return {
+        "name": f"Step 0a — Focus ages / BCP ({domain})",
+        "status": "DONE" if focus or targets else "PARTIAL",
+        "dasha_targets": list(targets)[:8],
+        "focus_ages": sorted({int(a) for a in focus if a is not None})[:16] if focus else [],
+        "timing_mode": (bcp_raw or {}).get("timing_mode") if isinstance(bcp_raw, dict) else None,
+        "detail": (
+            f"targets {', '.join(str(t) for t in targets[:5]) or '—'}"
+            + (
+                f" · focus ages {', '.join(str(a) for a in sorted({int(a) for a in focus if a is not None})[:8])}"
+                if focus
+                else ""
+            )
+        ).strip(),
+    }
+
+
+def build_kaal_step7(result: dict, domain: str, step_audit: dict) -> dict[str, Any]:
+    existing = step_audit.get("step7")
+    if isinstance(existing, dict) and (
+        existing.get("transit_confirmed") is not None
+        or existing.get("chart_context")
+        or existing.get("by_month")
+    ):
+        return existing
+
+    dt = result.get("double_transit") if isinstance(result.get("double_transit"), dict) else {}
+    s6 = step_audit.get("step6") if isinstance(step_audit.get("step6"), dict) else {}
+    transit_detail = str(s6.get("transit_detail") or s6.get("detail") or "").strip()
+    spec = get_domain_spec(domain)
+    transits = spec.get("transits") or []
+
+    return {
+        "name": f"Step 7 — Transit verify ({domain})",
+        "status": "DONE" if dt or transit_detail else "PARTIAL",
+        "transit_confirmed": bool(dt.get("active")),
+        "double_transit": dt,
+        "transit_rules": transits[:4],
+        "detail": transit_detail or f"double-transit {dt.get('verdict', 'scan')}",
+    }
+
+
+def build_kaal_step8(result: dict, domain: str, step_audit: dict) -> dict[str, Any]:
+    existing = step_audit.get("step8")
+    if isinstance(existing, dict) and (
+        existing.get("marriage_month_year")
+        or existing.get("event_month_year")
+        or existing.get("final_prediction")
+    ):
+        out = dict(existing)
+        if not out.get("event_month_year") and out.get("marriage_month_year"):
+            out["event_month_year"] = out["marriage_month_year"]
+        if not out.get("event_year") and out.get("marriage_year"):
+            out["event_year"] = out["marriage_year"]
+        if not out.get("event_month") and out.get("marriage_month"):
+            out["event_month"] = out["marriage_month"]
+        return out
+
+    pw, start_iso, end_iso = _pick_primary_window(result, step_audit)
+    month, year = parse_iso_month_year(start_iso)
+    month_year = human_month_year(start_iso) if month and year else pw
+
+    cw = result.get("current_window") if isinstance(result.get("current_window"), dict) else {}
+    s4 = step_audit.get("step4") if isinstance(step_audit.get("step4"), dict) else {}
+    primary_dasha = {
+        "md": cw.get("md") or s4.get("md"),
+        "ad": cw.get("ad") or s4.get("ad"),
+        "pd": cw.get("pd") or s4.get("pd"),
+        "lords": _lords_from_window(cw) or s4.get("current_lords"),
+        "start_iso": start_iso or None,
+        "end_iso": end_iso or None,
+        "window": pw or _window_range(cw) or _window_range(s4),
+    }
+
+    dt = result.get("double_transit") if isinstance(result.get("double_transit"), dict) else {}
+    event_label = _event_kab_label(domain)
+
+    return {
+        "name": f"Step 8 — Final Kaal ({domain})",
+        "status": "DONE" if month_year else "PARTIAL",
+        "verdict": result.get("verdict"),
+        "band": result.get("band"),
+        "domain": domain,
+        "primary_window": pw,
+        "marriage_period": pw or month_year,
+        "marriage_month_year": month_year,
+        "marriage_year": year,
+        "marriage_month": month,
+        "event_month_year": month_year,
+        "event_year": year,
+        "event_month": month,
+        "primary_dasha": primary_dasha,
+        "transit_confirmed": bool(dt.get("active")),
+        "final_prediction": (
+            f"{primary_dasha.get('lords') or '—'} → {month_year or pw or '—'}"
+            if primary_dasha.get("lords") or month_year
+            else None
+        ),
+        "detail": f"{event_label}: {month_year or '—'} · {result.get('verdict') or '—'}",
+    }
+
+
+def expand_to_kaal_pipeline(result: dict, domain: str) -> dict:
+    """Ensure step_audit has Kaal Pipeline step0–step8 for admin display."""
+    if not isinstance(result, dict):
+        return result
+    domain = str(domain or result.get("domain") or "").strip().lower()
+    if not domain:
+        return result
+
+    step_audit = result.get("step_audit")
+    if not isinstance(step_audit, dict):
+        step_audit = {}
+    else:
+        step_audit = dict(step_audit)
+
+    # Marriage / career may already ship rich step0–step8(+); only fill gaps.
+    if not step_audit.get("step0"):
+        step_audit["step0"] = build_kaal_step0(result, domain)
+    if domain != "marriage" and not step_audit.get("step0a"):
+        step_audit["step0a"] = build_kaal_step0a(result, domain, step_audit)
+    if not step_audit.get("step7") or not str((step_audit.get("step7") or {}).get("detail") or "").strip():
+        merged7 = build_kaal_step7(result, domain, step_audit)
+        if isinstance(step_audit.get("step7"), dict):
+            merged7 = {**step_audit["step7"], **{k: v for k, v in merged7.items() if v is not None}}
+        step_audit["step7"] = merged7
+
+    s8 = build_kaal_step8(result, domain, step_audit)
+    if isinstance(step_audit.get("step8"), dict):
+        prev = step_audit["step8"]
+        # Career step8 = next window merge — keep it, add kaal final fields alongside.
+        if prev.get("next_ad") or prev.get("next_start"):
+            s8 = {**prev, **{k: v for k, v in s8.items() if k not in prev or prev.get(k) in (None, "", [])}}
+        else:
+            s8 = {**prev, **s8}
+    step_audit["step8"] = s8
+
+    result["step_audit"] = step_audit
+    result["step_order"] = list(KAAL_PIPELINE_STEP_ORDER)
+    result["pipeline_format"] = "kaal_v1"
+    # Promote primary_window for trace/outcome box when missing.
+    if not result.get("primary_window"):
+        pw = s8.get("primary_window") or s8.get("event_month_year") or s8.get("marriage_month_year")
+        if pw:
+            result["primary_window"] = pw
+    return result

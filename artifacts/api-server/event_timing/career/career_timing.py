@@ -4993,15 +4993,33 @@ def build_career_timing_engine_trace(verdict: dict) -> dict:
     timing_audit = verdict.get("timing_audit") if isinstance(verdict.get("timing_audit"), dict) else {}
     if not timing_audit:
         timing_audit = build_career_timing_audit(verdict)
+    try:
+        from event_timing._shared.kaal_pipeline import expand_to_kaal_pipeline
+
+        verdict = expand_to_kaal_pipeline(dict(verdict), "career")
+        step_audit = verdict.get("step_audit") if isinstance(verdict.get("step_audit"), dict) else step_audit
+        timing_audit = verdict.get("timing_audit") if isinstance(verdict.get("timing_audit"), dict) else timing_audit
+    except Exception:
+        pass
     tw = verdict.get("timing_window") if isinstance(verdict.get("timing_window"), dict) else {}
     cur = tw.get("current") if isinstance(tw.get("current"), dict) else {}
     nxt = tw.get("next_career") if isinstance(tw.get("next_career"), dict) else {}
+    s8 = (step_audit.get("step8") or {}) if isinstance(step_audit, dict) else {}
+    primary = (
+        verdict.get("primary_window")
+        or s8.get("event_month_year")
+        or s8.get("marriage_month_year")
+        or s8.get("primary_window")
+    )
     return {
         "engine": "career_timing_v1",
+        "domain": "career",
+        "pipeline_version": "kaal_v1",
         "bucket": verdict.get("bucket"),
         "verdict": verdict.get("verdict"),
         "score": verdict.get("score"),
         "confidence": verdict.get("confidence"),
+        "primary_window": primary,
         "step_audit": step_audit,
         "step_order": list(verdict.get("step_order") or _CAREER_TIMING_STEP_ORDER),
         "timing_audit": timing_audit,

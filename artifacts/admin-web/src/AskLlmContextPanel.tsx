@@ -904,6 +904,42 @@ function buildStep8FromStep6(
   };
 }
 
+function formatKaalStep8Final(
+  stepAudit: Record<string, Record<string, unknown>>,
+  trace?: EngineTrace,
+  domain?: string,
+): string {
+  const s8 = (stepAudit.step8 || buildStep8FromStep6(stepAudit, trace)) as
+    | Record<string, unknown>
+    | undefined;
+  if (!s8) return "— (not saved)";
+  const dom = String(domain || s8.domain || trace?.domain || "").toLowerCase();
+  const eventKab =
+    dom === "marriage"
+      ? "Marriage kab"
+      : dom
+        ? `${dom.charAt(0).toUpperCase()}${dom.slice(1).replace(/_/g, " ")} kab`
+        : "Event kab";
+  const lines: string[] = [];
+  const monthYear = String(
+    s8.event_month_year
+      || s8.marriage_month_year
+      || s8.primary_window
+      || s8.marriage_period
+      || trace?.primary_window
+      || "",
+  ).trim();
+  const year = s8.event_year ?? s8.marriage_year;
+  const month = s8.event_month ?? s8.marriage_month;
+  if (year) lines.push(`Saal: ${year}`);
+  if (month) lines.push(`Mahina: ${month}`);
+  if (monthYear) lines.push(`${eventKab}: ${monthYear}`);
+  if (dom !== "marriage") {
+    return lines.length ? lines.join("\n") : formatMarriageStep8Final(stepAudit, trace);
+  }
+  return formatMarriageStep8Final(stepAudit, trace);
+}
+
 function formatMarriageStep8Final(
   stepAudit: Record<string, Record<string, unknown>>,
   trace?: EngineTrace,
@@ -1230,6 +1266,22 @@ function isDashaFirstTimingEngine(engineId: string): boolean {
     engineId.endsWith("_timing_v1") &&
     engineId !== "marriage_timing_m17" &&
     engineId !== "marriage_timing_v1"
+  );
+}
+
+function isKaalTimingEngine(engineId: string): boolean {
+  return (
+    engineId === "marriage_timing_m17" ||
+    engineId === "career_timing_v1" ||
+    isDashaFirstTimingEngine(engineId)
+  );
+}
+
+function hasKaalFinalStep(stepAudit: Record<string, Record<string, unknown>>): boolean {
+  const s8 = stepAudit.step8;
+  return Boolean(
+    s8 &&
+      (s8.event_month_year || s8.marriage_month_year || s8.primary_window || s8.final_prediction),
   );
 }
 
@@ -1922,6 +1974,8 @@ export function EngineTracePanel({
   const timingAudit = trace?.timing_audit;
   const engineId = String(trace?.engine || "");
   const marriageM17 = isMarriageM17Trace(engineId, ctx);
+  const kaalTiming = isKaalTimingEngine(engineId);
+  const kaalDomain = String(trace?.domain || engineId.replace("_timing_v1", "").replace("_timing_m17", ""));
   const marriageStepOrder = [
     "step3",
     "step4",
@@ -1963,13 +2017,15 @@ export function EngineTracePanel({
 
   const pipelineChecksTitle = marriageM17
     ? "Marriage timing — Steps 1–8 (early/late → BCP → shadi planets → dasha)"
-    : dashaFirst
-      ? `Engine checks — step 2 onward (${engineId.replace("_timing_v1", "")})`
-      : engineId === "career_timing_v1"
-        ? "Timing pipeline — career (dasha-first)"
-        : engineId === "marriage_timing_m17"
-          ? "Marriage engine checks (M17)"
-          : "Timing engine checks";
+    : kaalTiming && hasKaalFinalStep(stepAudit)
+      ? `Vivah Kaal Pipeline — ${kaalDomain || engineId.replace("_timing_v1", "")} (step 8 = saal/mahina)`
+      : dashaFirst
+        ? `Kaal Pipeline — ${engineId.replace("_timing_v1", "")} (dasha-first)`
+        : engineId === "career_timing_v1"
+          ? "Kaal Pipeline — career"
+          : engineId === "marriage_timing_m17"
+            ? "Marriage engine checks (M17)"
+            : "Timing engine checks";
 
   const requestMeta = [
     {
@@ -2055,26 +2111,68 @@ export function EngineTracePanel({
       ]
     : dashaFirst
     ? [
+        ...(stepAudit.step0
+          ? [
+              {
+                n: 1,
+                title: String(stepAudit.step0.name || "Step 0 — Domain context"),
+                detail: stepOneLiner("step0", stepAudit.step0, engineId),
+                hero: true,
+              },
+            ]
+          : []),
+        ...(stepAudit.step0a
+          ? [
+              {
+                n: stepAudit.step0 ? 2 : 1,
+                title: String(stepAudit.step0a.name || "Step 0a — Focus ages"),
+                detail: stepOneLiner("step0a", stepAudit.step0a, engineId),
+                hero: false,
+              },
+            ]
+          : []),
         {
-          n: 1,
+          n: (stepAudit.step0 ? 1 : 0) + (stepAudit.step0a ? 1 : 0) + 1,
           title: "Active dasha — abhi kya chal raha hai",
           detail: formatRunningDashaDetail(trace, stepAudit, timingAudit),
-          hero: true,
+          hero: !stepAudit.step0,
         },
         ...stepOrder
-          .filter((key) => key !== "step1")
+          .filter((key) => key !== "step1" && !["step0", "step0a", "step7", "step8"].includes(key))
           .map((key, idx) => {
             const step = stepAudit[key];
             if (!step) return null;
+            const baseN =
+              (stepAudit.step0 ? 1 : 0) + (stepAudit.step0a ? 1 : 0) + 1;
             return {
-              n: idx + 2,
+              n: baseN + idx + 1,
               title: String(step.name || key),
               detail: stepOneLiner(key, step, engineId),
               hero: false,
             };
           })
           .filter(Boolean) as { n: number; title: string; detail: string; hero: boolean }[],
-      ]
+        ...(stepAudit.step7
+          ? [
+              {
+                n: 99,
+                title: String(stepAudit.step7.name || "Step 7 — Transit verify"),
+                detail: stepOneLiner("step7", stepAudit.step7, engineId),
+                hero: false,
+              },
+            ]
+          : []),
+        ...(hasKaalFinalStep(stepAudit)
+          ? [
+              {
+                n: 100,
+                title: String(stepAudit.step8?.name || "Step 8 — Final Kaal"),
+                detail: formatKaalStep8Final(stepAudit, trace, kaalDomain),
+                hero: false,
+              },
+            ]
+          : []),
+      ].map((item, idx) => ({ ...item, n: idx + 1 }))
     : requestMeta.map((item, i) => ({
         n: i + 1,
         title: item.title,
@@ -2105,7 +2203,9 @@ export function EngineTracePanel({
             ? "Marriage timing — full trace (Steps 1–8)"
             : "Marriage timing — Steps 1–2 (engine trace incomplete)"
           : dashaFirst
-            ? "Timing pipeline — step 1 = running dasha"
+            ? hasKaalFinalStep(stepAudit)
+              ? `Kaal Pipeline — ${kaalDomain || "timing"} (Steps 0–8)`
+              : "Kaal Pipeline — step 1 = running dasha"
             : "Engine pipeline — step by step"}
         {hasTrace || marriageHasFullTrace
           ? ""

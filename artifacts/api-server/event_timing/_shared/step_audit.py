@@ -410,6 +410,12 @@ def attach_timing_pipeline_audit(result: dict, domain: str) -> dict:
     result["step_order"] = list(TIMING_STEP_ORDER)
     result["timing_audit"] = build_timing_audit_from_result(result, step_audit, domain)
     result.setdefault("domain", domain)
+    try:
+        from event_timing._shared.kaal_pipeline import expand_to_kaal_pipeline
+
+        result = expand_to_kaal_pipeline(result, domain)
+    except Exception:
+        pass
     return result
 
 
@@ -482,11 +488,16 @@ def build_domain_timing_engine_trace(result: dict, domain: str) -> dict[str, Any
     primary = _window_range(s4) or _window_range(rec)
     if not primary and next3 and isinstance(next3[0], dict):
         primary = _window_range(next3[0])
+    s8 = (result.get("step_audit") or {}).get("step8") or {}
+    if isinstance(s8, dict):
+        kaal_pw = s8.get("event_month_year") or s8.get("marriage_month_year") or s8.get("primary_window")
+        if kaal_pw:
+            primary = str(kaal_pw)
 
     return {
         "engine": engine_id_for_domain(domain),
         "domain": domain,
-        "pipeline_version": "dasha_first_v2",
+        "pipeline_version": "kaal_v1",
         "verdict": result.get("verdict"),
         "band": result.get("band"),
         "bucket": result.get("bucket"),
@@ -501,7 +512,7 @@ def build_domain_timing_engine_trace(result: dict, domain: str) -> dict[str, Any
         },
         "primary_window": primary,
         "step_audit": result.get("step_audit"),
-        "step_order": list(result.get("step_order") or TIMING_STEP_ORDER),
+        "step_order": list(result.get("step_order") or LEGACY_TIMING_STEP_ORDER),
         "timing_audit": result.get("timing_audit"),
         "dasha_trace": {
             "running_lords": s1.get("current_lords") or _lords_from_window(running),

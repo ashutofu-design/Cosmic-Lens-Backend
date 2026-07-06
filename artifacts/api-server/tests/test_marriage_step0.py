@@ -144,8 +144,11 @@ def test_step8_final_prediction_late_chart():
     assert pred["predicted_bcp_age"] == 30
     assert "Venus" in pred["step5_aligned_lords"]
     assert pred["transit_confirmed"]
-    assert pred.get("primary_window") == "Jan 2030 – Jun 2030"
-    assert pred.get("marriage_period") == "Jan 2030 – Jun 2030"
+    assert pred.get("bcp_primary_window") == "around age 30"
+    assert pred.get("primary_window") == "around age 30"
+    assert pred.get("marriage_month_year") == "around age 30"
+    assert pred.get("next_dasha_window") == "Jan 2030 – Jun 2030"
+    assert pred.get("dasha_transit_month") == "Jan 2030 – Jun 2030"
 
 
 def test_rank_matched_windows_skips_2026_for_very_late():
@@ -191,6 +194,8 @@ def test_rank_matched_windows_skips_2026_for_very_late():
 
 
 def test_ensure_marriage_step8_builds_from_step6():
+    from datetime import datetime
+
     from ask_llm_context_debug import _ensure_marriage_step8_on_audit
 
     audit = {
@@ -216,11 +221,36 @@ def test_ensure_marriage_step8_builds_from_step6():
             }],
         },
     }
-    _ensure_marriage_step8_on_audit(audit, user_age=26)
+    _ensure_marriage_step8_on_audit(
+        audit,
+        user_age=26,
+        engine_result={"birth": {"year": 2000, "month": 3, "day": 15}},
+    )
     s8 = audit.get("step8") or {}
-    assert s8.get("primary_window") == "October 2036"
-    assert s8.get("marriage_period") == "October 2036"
+    assert s8.get("predicted_bcp_age") == 33
+    assert s8.get("primary_window") == "March 2033"
+    assert s8.get("next_dasha_window") == "October 2036"
     assert s8.get("transit_confirmed")
+
+
+def test_bcp_primary_over_dasha_for_user_answer():
+    from datetime import datetime
+
+    from event_timing.marriage.marriage_engine_v2 import apply_marriage_bcp_primary_windows
+
+    birth = datetime(2000, 3, 15)
+    pred = {
+        "predicted_bcp_age": 33,
+        "marriage_month_year": "July 2039",
+        "primary_dasha": {"window": "July – September 2039"},
+    }
+    primary, backup = apply_marriage_bcp_primary_windows(
+        pred,
+        birth_dt=birth,
+        dasha_window="July 2039",
+    )
+    assert primary == "March 2033"
+    assert backup == "July 2039"
 
 
 def test_bcp_merged_list_has_placement_and_aspects():

@@ -99,6 +99,30 @@ class TestCareerTimingStepAudit(unittest.TestCase):
         self.assertIn("timing_audit", meta)
         self.assertTrue(meta.get("dasha_trace"))
 
+    def test_promotion_step_audit_omits_age_bcp_kp(self):
+        from event_timing.career.career_timing import (
+            build_career_timing_engine_trace,
+            build_career_timing_step_audit,
+            career_step_order_for_bucket,
+        )
+
+        v = _sample_verdict()
+        v["bucket"] = "promotion"
+        audit = build_career_timing_step_audit(v)
+        self.assertNotIn("step1", audit)
+        self.assertNotIn("step4", audit)
+        self.assertNotIn("step0a", audit)
+        self.assertEqual(audit["step0"]["name"], "User demand")
+        self.assertNotIn("user_age", audit["step0"])
+        self.assertNotIn("age", audit["step0"].get("detail", ""))
+
+        trace = build_career_timing_engine_trace(v)
+        self.assertEqual(trace.get("engine"), "career_timing_v1")
+        order = list(trace.get("step_order") or [])
+        self.assertNotIn("step1", order)
+        self.assertNotIn("step4", order)
+        self.assertEqual(order, list(career_step_order_for_bucket("promotion")))
+
     def test_hard_guards_trace_delegates_to_career_module(self):
         from ask_hard_guards import build_career_timing_engine_trace
 

@@ -1,0 +1,48 @@
+---
+description: Timing engines must not use KP — Vedic/dasha/transit only
+globs: artifacts/api-server/event_timing/**/*
+alwaysApply: false
+---
+
+# Timing engines — NO KP
+
+**Product decision (noted):** Timing question engines must **not** use Krishnamurti Paddhati (KP) in any form.
+
+## Do not add or keep in timing engines
+
+- KP cusp / CSL / sub-lord scans (`7CSL`, `csl_7`, `kp_cusps`, etc.)
+- `kp` parameters passed into timing compute functions (unless required only to ignore)
+- `L22_kp_csl`, `kp_layer`, `kp_dasha_sync`, `attach_dasha_kp_sync`
+- KP weights in scoring (`_WEIGHT_KP`, KP in `weighted_breakdown`)
+- Admin pipeline steps labeled KP / CSL / significator (e.g. career `step4`, marriage KP validation)
+- `domain_specs.py` `kp_cusps` as active pipeline input (metadata may note "removed" only)
+- Shared helpers used **only** for timing KP: `kp_significator_scan`, KP branches in `generic_timing_engine._step3_kp`
+
+## Allowed
+
+- Classical Vedic: D1/D9/D10, house lords, karakas, BCP ages, vimshottari dasha, Guru/Shani transits
+- Marriage M17 steps 1–8 as currently shown (early/late, BCP, D1+D9 linkage, dasha, transit) — **without** KP validation step
+
+## When touching timing code
+
+1. Remove KP logic; do not replace with another "hidden" KP path.
+2. Redistribute any removed KP score weight to D1/D9/dasha/transit only.
+3. Update `step_audit` / admin labels so no KP row appears.
+4. Do not re-introduce KP via `universal_timing_v1` fallback.
+
+## Scope
+
+All 16 timing domains under `artifacts/api-server/event_timing/` (marriage, love, career, travel, property, vehicle, finance, health, children, education, foreign_education, litigation, spiritual, fame, network, universal).
+
+## Universal Timing Formula (non-marriage)
+
+Marriage keeps `marriage_engine_v2` (BCP-primary answer). **All other domains** use `event_timing/_shared/universal_timing_formula.py` via `timing_router.run_timing_engine`:
+
+- **Step 0** — user age + delay framing when young (e.g. 16 yr + baby kab → answer **delayed**, NOT rejected)
+- **Step 1** — target house/lords (D1 + divisional)
+- **Step 2** — 4-category significators (lord, occupant, aspect, karaka)
+- **Step 3** — dasha MD/AD/PD activation
+- **Step 4** — Guru + Shani double transit lock
+- **Step 5** — final month (Sun/Mars trigger)
+
+No BCP, no KP, no old per-domain KP/BCP pipelines for router dispatch.

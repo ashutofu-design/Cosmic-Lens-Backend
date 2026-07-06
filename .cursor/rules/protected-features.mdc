@@ -1,0 +1,43 @@
+---
+description: Protect Love Reality, Milan, payment & couple-report code from overwrite/delete
+alwaysApply: true
+---
+
+# Protected features — do not overwrite or delete
+
+These paths implement **production user flows** (payments, PDFs, relationship screens). They were lost once by full-file rewrites. Treat them as **immutable unless the user explicitly asks to change them**.
+
+## Protected paths
+
+```
+artifacts/cosmic-lens-mobile/app/love-reality.tsx
+artifacts/cosmic-lens-mobile/app/kundli-milan.tsx
+artifacts/cosmic-lens-mobile/app/relationship.tsx
+artifacts/cosmic-lens-mobile/app/payment-webview.tsx
+artifacts/cosmic-lens-mobile/lib/loveRealityProOffer.ts
+artifacts/cosmic-lens-mobile/lib/loveRealityProPdfDownload.ts
+artifacts/cosmic-lens-mobile/lib/coupleReportCheckoutFlow.ts
+artifacts/cosmic-lens-mobile/lib/coupleReportBilling.ts
+artifacts/cosmic-lens-mobile/lib/pendingCoupleCheckout.ts
+artifacts/api-server/love_reality_api.py
+artifacts/api-server/love_reality_pdf.py
+artifacts/api-server/couple_report_billing.py
+```
+
+Manifest: `protected/MANIFEST.json`
+
+## Required behavior (agents & edits)
+
+1. **No full-file rewrite** of protected paths unless the user message clearly says: rewrite, replace entire file, or delete.
+2. **No deletion** of protected files or removal of Basic|Pro toggle, PDF checkout, or couple-report payment without explicit user request.
+3. **Prefer minimal diffs** — change only lines needed for the task.
+4. **Before any edit > ~80 lines** on a protected file: run `scripts/snapshot-protected.ps1` (or tell the user to run it) and mention the snapshot folder in the reply.
+5. **Do not “simplify”** a protected screen to a shorter version (e.g. list-only Love Reality) to solve unrelated tasks.
+6. **Do not revert** protected UX patterns without user approval:
+   - Love Reality: **Basic | Pro** segmented toggle on one screen (like Kundli Milan), not Pro banner + list only.
+   - Kundli Milan: **Basic | Pro** toggle and Pro PDF flow.
+7. **Git**: do not `git checkout`, `git restore`, or hard reset protected paths unless the user explicitly requests it.
+
+## If the user wants a big change
+
+Ask once: “Protected file — OK to change [path]?” or use a new file/route and link from the old screen instead of replacing in place.

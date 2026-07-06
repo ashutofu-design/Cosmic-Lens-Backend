@@ -1,0 +1,49 @@
+---
+description: Love Reality Pro PDF Section 02 LLM — FROZEN voice contract
+globs:
+  - artifacts/api-server/vedic/love_reality/premium_polish.py
+  - artifacts/api-server/scripts/gen_love_exec_preview_pdf.py
+---
+
+# Love Reality Section 02 LLM — FROZEN (do not over-tweak)
+
+Section 02 = `polish_love_reality_verdict_page_only()` → `verdict` + `practical[2]` only.
+
+**Status: LOCKED for ship.** Further prompt tightening causes rule-following mode / regressions. Target ~85–95% human feel, not zero AI shadow.
+
+## Locked levers (already in code)
+
+- **One golden few-shot** — `_cro_verdict_page_few_shot` (direct conversation, not contrast loop)
+- **Primary reader = p1** (first kundli) — `_verdict_page_primary_reader` (~70% airtime)
+- **Direct voice** — `_verdict_page_direct_voice` (talk TO p1, not balanced case study)
+- **Short bans** — `_VERDICT_PAGE_BANNED_PHRASES` + `_VERDICT_PAGE_ANTI_AI_WORDS` only
+- **Plain facts** — `_verdict_page_facts_summary` (not raw engine labels)
+- **API** — temp `0.78`, presence `0.5`, frequency `0.3` (non-gpt-5); default model `gpt-4o-mini`
+
+## Do NOT (without explicit user request)
+
+- Add 10+ new rules per leaked phrase
+- Re-add regex post-scrub on LLM output
+- Bump word minimums to force filler
+- Chase 100% AI-detector perfection
+- Rename PDF heading / add disclaimer in same PR as prompt edits (product decision, separate)
+
+## If quality regresses
+
+1. Improve the **one** few-shot example only
+2. Enrich `_verdict_page_facts_summary` with more p1 chart facts
+3. Run `pnpm gen:pdf:verdict-llm:force` after prompt change (invalidate cache)
+
+## UI framing (optional — NOT prompt)
+
+Rebranding `Astrologer's Note` → e.g. `Cosmic Lens Synthesis` + one-line engine disclaimer is valid **UX framing**, not a substitute for prose. Change in `pdf_page1_premium.py` only when product approves.
+
+## Local preview
+
+```powershell
+cd artifacts/love-reality-report
+pnpm gen:pdf:verdict-llm:force   # after prompt change
+pnpm gen:pdf                     # reuses preview-verdict-llm.json when present
+```
+
+Pass/fail: **"feels like my relationship"** (p1 reader), not AI smell score.

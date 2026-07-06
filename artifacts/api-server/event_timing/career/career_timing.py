@@ -4605,6 +4605,48 @@ _CAREER_TIMING_STEP_ORDER = (
     "step9",
 )
 
+# Promotion admin pipeline — no age/BCP/KP rows (dasha + D1/D9 + window only).
+_PROMOTION_CAREER_STEP_ORDER = (
+    "step0",
+    "step2",
+    "step3",
+    "step5",
+    "step6",
+    "step7",
+    "step8",
+    "step9",
+)
+
+_PROMOTION_OMIT_ADMIN_STEPS = frozenset({"step1", "step4", "step0a"})
+
+
+def career_step_order_for_bucket(bucket: str) -> tuple[str, ...]:
+    if str(bucket or "").strip().lower() == "promotion":
+        return _PROMOTION_CAREER_STEP_ORDER
+    return _CAREER_TIMING_STEP_ORDER
+
+
+def finalize_promotion_admin_step_audit(
+    audit: dict,
+    *,
+    bucket: str,
+    tense: str,
+) -> dict:
+    """Strip age/BCP/KP from promotion Kaal pipeline display."""
+    if str(bucket or "").strip().lower() != "promotion":
+        return audit
+    out = dict(audit)
+    for key in _PROMOTION_OMIT_ADMIN_STEPS:
+        out.pop(key, None)
+    out["step0"] = {
+        "name": "User demand",
+        "status": "DONE",
+        "bucket": bucket,
+        "tense": tense,
+        "detail": f"{bucket} · {tense} tense",
+    }
+    return out
+
 
 def _top_layer_rows(layers: dict, limit: int = 5) -> list[dict]:
     ranked = sorted(
@@ -4723,7 +4765,7 @@ def build_career_timing_step_audit(result: dict) -> dict:
         step1_done = bool(bcp1.get("all_job_ages"))
         step1_detail = bcp1.get("detail") or "10L/6L BCP scan"
 
-    return {
+    audit = {
         "step0": {
             "name": "User demand + age context",
             "status": "DONE",
@@ -4906,6 +4948,7 @@ def build_career_timing_step_audit(result: dict) -> dict:
             ),
         },
     }
+    return finalize_promotion_admin_step_audit(audit, bucket=bucket, tense=tense)
 
 
 def build_career_timing_audit(result: dict) -> dict:
@@ -5021,7 +5064,10 @@ def build_career_timing_engine_trace(verdict: dict) -> dict:
         "confidence": verdict.get("confidence"),
         "primary_window": primary,
         "step_audit": step_audit,
-        "step_order": list(verdict.get("step_order") or _CAREER_TIMING_STEP_ORDER),
+        "step_order": list(
+            verdict.get("step_order")
+            or career_step_order_for_bucket(str(verdict.get("bucket") or ""))
+        ),
         "timing_audit": timing_audit,
         "dasha_trace": {
             "current_lords": cur.get("lords") or (step_audit.get("step6") or {}).get("current_lords"),

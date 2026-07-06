@@ -2904,6 +2904,67 @@ def build_marriage_step6_audit(
 # ════════════════════════════════════════════════════════════════════════
 # STEP 8 — Final prediction (late BCP + Step5 dasha + transit)
 # ════════════════════════════════════════════════════════════════════════
+def _bcp_age_to_calendar_window(
+    birth_dt: Optional[datetime],
+    bcp_age: Optional[int],
+) -> Optional[str]:
+    """Convert BCP activation age to a calendar month-year for the user reply."""
+    if bcp_age is None:
+        return None
+    if birth_dt is not None:
+        try:
+            return birth_dt.replace(
+                year=birth_dt.year + int(bcp_age),
+            ).strftime("%B %Y")
+        except (ValueError, OverflowError):
+            pass
+    return f"around age {int(bcp_age)}"
+
+
+def apply_marriage_bcp_primary_windows(
+    step8_prediction: Dict[str, Any],
+    *,
+    birth_dt: Optional[datetime] = None,
+    dasha_window: Optional[str] = None,
+    current_backup: Optional[str] = None,
+) -> Tuple[Optional[str], Optional[str]]:
+    """User answer: BCP age window PRIMARY; dasha+transit window BACKUP/next."""
+    pred = step8_prediction if isinstance(step8_prediction, dict) else {}
+    bcp_age = pred.get("predicted_bcp_age")
+    if not isinstance(bcp_age, (int, float)):
+        bcp_age = None
+    else:
+        bcp_age = int(bcp_age)
+
+    bcp_pw = str(pred.get("bcp_primary_window") or "").strip() or None
+    if not bcp_pw and bcp_age is not None:
+        bcp_pw = _bcp_age_to_calendar_window(birth_dt, bcp_age)
+
+    dasha_pw = str(
+        dasha_window
+        or pred.get("next_dasha_window")
+        or pred.get("dasha_transit_month")
+        or pred.get("marriage_month_year")
+        or (pred.get("primary_dasha") or {}).get("window")
+        or ""
+    ).strip() or None
+
+    primary = bcp_pw or dasha_pw
+    backup = str(current_backup or "").strip() or None
+    if dasha_pw and primary and dasha_pw != primary:
+        backup = dasha_pw
+    elif dasha_pw and not primary:
+        primary = dasha_pw
+
+    if isinstance(pred, dict):
+        if bcp_pw:
+            pred["bcp_primary_window"] = bcp_pw
+        if backup:
+            pred["next_dasha_window"] = backup
+
+    return primary, backup
+
+
 def _best_transit_month_year(
     window: Optional[Dict[str, Any]],
     *,
@@ -3107,17 +3168,16 @@ def _build_step8_final_prediction(
         birth_dt=birth_dt,
         bcp_age=best_age,
     )
-    final_pw = month_info.get("marriage_month_year") or primary_window or best_window
+    dasha_pw = (
+        month_info.get("marriage_month_year")
+        or best_window
+        or primary_window
+    )
+    bcp_pw = _bcp_age_to_calendar_window(birth_dt, best_age)
+    final_pw = bcp_pw or dasha_pw
     marriage_period = final_pw
-    if not marriage_period and best_age is not None and birth_dt is not None:
-        try:
-            marriage_period = birth_dt.replace(
-                year=birth_dt.year + int(best_age),
-            ).strftime("%B %Y")
-        except (ValueError, OverflowError):
-            marriage_period = f"around age {best_age}"
-    elif not marriage_period and best_age is not None:
-        marriage_period = f"around age {best_age}"
+    next_dasha_pw = dasha_pw if dasha_pw and dasha_pw != final_pw else None
+    dasha_transit_month = month_info.get("marriage_month_year")
 
     d1_show = d1_ok if d1_ok else [
         int(a) for a in (d1_bcp_ages or [])
@@ -3135,11 +3195,16 @@ def _build_step8_final_prediction(
         "d1_bcp_ages": d1_show,
         "d9_bcp_ages": d9_show,
         "predicted_bcp_age": best_age,
+        "bcp_primary_window": bcp_pw,
+        "next_dasha_window": next_dasha_pw,
         "primary_window": final_pw,
         "marriage_period": marriage_period,
-        "marriage_month": month_info.get("marriage_month"),
-        "marriage_year": month_info.get("marriage_year"),
-        "marriage_month_year": month_info.get("marriage_month_year"),
+        "marriage_month": month_info.get("marriage_month") if not bcp_pw else None,
+        "marriage_year": month_info.get("marriage_year") if not bcp_pw else (
+            int(birth_dt.year) + int(best_age) if birth_dt is not None and best_age is not None else None
+        ),
+        "marriage_month_year": final_pw,
+        "dasha_transit_month": dasha_transit_month,
         "primary_dasha": {
             "md": md,
             "ad": ad,
@@ -4414,9 +4479,17 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         birth_dt=birth_dt,
         step7_by_month=_step7_by_month,
     )
-    if step8_prediction.get("marriage_month_year"):
-        primary_window = step8_prediction["marriage_month_year"]
+    primary_window, backup_window = apply_marriage_bcp_primary_windows(
+        step8_prediction,
+        birth_dt=birth_dt,
+        dasha_window=step8_prediction.get("dasha_transit_month"),
+        current_backup=backup_window,
+    )
     factors.append(f"STEP8 final={step8_prediction.get('final_prediction')}")
+    if step8_prediction.get("next_dasha_window"):
+        factors.append(
+            f"STEP8 next_dasha={step8_prediction.get('next_dasha_window')}"
+        )
     if step8_prediction.get("late_chart_bcp_locked"):
         factors.append(
             "STEP8 late_BCP locked "
@@ -4425,10 +4498,9 @@ def compute_timing_window(kundli: dict, intel: dict, kp: dict,
         )
 
     _pred_age = step8_prediction.get("predicted_bcp_age")
-    if _pred_age and primary_window and transit_ok:
+    if _pred_age and primary_window:
         expected_reply = (
-            f"Aapki shaadi age {_pred_age} ke around — {primary_window} "
-            f"(dasha + transit match)."
+            f"Aapki shaadi age {_pred_age} ke around — {primary_window} ke beech hogi."
         )
     elif primary_window:
         expected_reply = (
@@ -4970,9 +5042,12 @@ def compute_timing_window_fallback(
             else None
         ),
     )
-    _pw8 = step8_prediction.get("marriage_month_year") or step8_prediction.get("primary_window")
-    if _pw8:
-        primary_window = _pw8
+    primary_window, backup_window = apply_marriage_bcp_primary_windows(
+        step8_prediction,
+        birth_dt=birth_dt,
+        dasha_window=step8_prediction.get("dasha_transit_month"),
+        current_backup=None,
+    )
     step_audit["step8"] = {
         "name": "Final — late BCP + dasha + transit",
         "status": "DONE" if step8_prediction.get("transit_confirmed") else "PARTIAL",
@@ -4983,11 +5058,6 @@ def compute_timing_window_fallback(
         "marriage_period": primary_window,
         **step8_prediction,
     }
-
-    if step8_prediction.get("transit_confirmed"):
-        pw8 = (step8_prediction.get("primary_dasha") or {}).get("window")
-        if pw8:
-            primary_window = pw8
 
     factors.append(
         f"BCP plan: mode={bcp_strategy.get('timing_mode')} "
@@ -5010,7 +5080,7 @@ def compute_timing_window_fallback(
         "verdict": verdict,
         "band": band,
         "primary_window": primary_window,
-        "backup_window": None,
+        "backup_window": backup_window,
         "key_trigger": key_trigger,
         "top_3_windows": matched_s6 or (s6.get("selected_windows") or []),
         "risk_flags": ["fallback_step0_only"],

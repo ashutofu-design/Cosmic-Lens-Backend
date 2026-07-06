@@ -272,6 +272,9 @@ def expand_to_kaal_pipeline(result: dict, domain: str) -> dict:
     if not domain:
         return result
 
+    bucket = str(result.get("bucket") or "").strip().lower()
+    skip_bcp_shell = domain == "career" and bucket == "promotion"
+
     step_audit = result.get("step_audit")
     if not isinstance(step_audit, dict):
         step_audit = {}
@@ -281,7 +284,7 @@ def expand_to_kaal_pipeline(result: dict, domain: str) -> dict:
     # Marriage / career may already ship rich step0–step8(+); only fill gaps.
     if not step_audit.get("step0"):
         step_audit["step0"] = build_kaal_step0(result, domain)
-    if domain != "marriage" and not step_audit.get("step0a"):
+    if domain != "marriage" and not step_audit.get("step0a") and not skip_bcp_shell:
         step_audit["step0a"] = build_kaal_step0a(result, domain, step_audit)
     if not step_audit.get("step7") or not str((step_audit.get("step7") or {}).get("detail") or "").strip():
         merged7 = build_kaal_step7(result, domain, step_audit)
@@ -299,8 +302,28 @@ def expand_to_kaal_pipeline(result: dict, domain: str) -> dict:
             s8 = {**prev, **s8}
     step_audit["step8"] = s8
 
+    if skip_bcp_shell:
+        try:
+            from event_timing.career.career_timing import (
+                career_step_order_for_bucket,
+                finalize_promotion_admin_step_audit,
+            )
+
+            step_audit = finalize_promotion_admin_step_audit(
+                step_audit,
+                bucket=bucket,
+                tense=str(result.get("tense") or "general"),
+            )
+            result["step_order"] = list(career_step_order_for_bucket(bucket))
+        except Exception:
+            step_audit.pop("step0a", None)
+            step_audit.pop("step1", None)
+            step_audit.pop("step4", None)
+
     result["step_audit"] = step_audit
-    result["step_order"] = list(KAAL_PIPELINE_STEP_ORDER)
+    result["step_order"] = list(
+        result.get("step_order") or KAAL_PIPELINE_STEP_ORDER
+    )
     result["pipeline_format"] = "kaal_v1"
     # Promote primary_window for trace/outcome box when missing.
     if not result.get("primary_window"):

@@ -399,352 +399,39 @@ def run_timing_engine(
 
     domain = demand.domain
 
-    if domain == "career":
-        try:
-            from event_timing.career import assess_career, format_verdict_for_prompt  # type: ignore
-
-            raw = assess_career(
-                ctx.kundli, ctx.intel, ctx.kp, birth, question,
-                pre_classified_bucket=demand.bucket,
-            )
-            ctx.raw = raw if isinstance(raw, dict) else {}
-            ctx.verdict = str(ctx.raw.get("verdict") or "")
-            ctx.confidence = int(ctx.raw.get("confidence") or 0)
-            ctx.factors = list(ctx.raw.get("reasons") or [])[:8]
-            ctx.engine_status = "ready"
-            ctx.raw["_prompt_block"] = format_verdict_for_prompt(ctx.raw, question)
-        except Exception as exc:
-            ctx.engine_status = "error"
-            ctx.factors.append(f"career_timing error: {exc}")
-
-    elif domain == "travel":
-        try:
-            from event_timing.travel.travel_engine_v1 import compute_travel_window  # type: ignore
-
-            raw = compute_travel_window(ctx.kundli, ctx.intel, ctx.kp, birth)
-            ctx.raw = raw if isinstance(raw, dict) else {}
-            ctx.verdict = str(ctx.raw.get("verdict") or "")
-            ctx.factors = list(ctx.raw.get("factors") or [])[:8]
-            ctx.engine_status = "ready"
-            ctx.raw["_prompt_block"] = format_travel_block(ctx.raw)
-            cw = ctx.raw.get("current_window") or {}
-            if cw:
-                ctx.windows.append(cw)
-        except Exception as exc:
-            ctx.engine_status = "error"
-            ctx.factors.append(f"travel_timing error: {exc}")
-
-    elif domain == "marriage":
+    if domain == "marriage":
         ctx.engine_status = "ready"
         ctx.factors.append("marriage uses dedicated _passthrough_marriage_block path")
         ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
 
-    elif domain == "property":
+    else:
         try:
-            from event_timing.property.property_timing_v1 import (  # type: ignore
-                compute_property_window,
-                format_property_timing_for_prompt,
-            )
-
-            raw = compute_property_window(
-                ctx.kundli, ctx.intel, ctx.kp, birth, question,
-                bucket=demand.bucket,
-            )
-            ctx.raw = raw if isinstance(raw, dict) else {}
-            ctx.verdict = str(ctx.raw.get("verdict") or "")
-            ctx.factors = list(ctx.raw.get("factors") or [])[:8]
-            ctx.engine_status = "ready"
-            ctx.raw["_prompt_block"] = format_property_timing_for_prompt(ctx.raw, question)
-            cw = ctx.raw.get("current_window") or {}
-            if cw:
-                ctx.windows.append(cw)
-        except Exception as exc:
-            ctx.engine_status = "error"
-            ctx.factors.append(f"property_timing error: {exc}")
-            ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
-
-    elif domain == "vehicle":
-        try:
-            from event_timing.vehicle.vehicle_timing_v1 import (  # type: ignore
-                compute_vehicle_window,
-                format_vehicle_timing_for_prompt,
-            )
-
-            raw = compute_vehicle_window(
-                ctx.kundli, ctx.intel, ctx.kp, birth, question,
-                bucket=demand.bucket,
-            )
-            ctx.raw = raw if isinstance(raw, dict) else {}
-            ctx.verdict = str(ctx.raw.get("verdict") or "")
-            ctx.factors = list(ctx.raw.get("factors") or [])[:8]
-            ctx.engine_status = "ready"
-            ctx.raw["_prompt_block"] = format_vehicle_timing_for_prompt(ctx.raw, question)
-            cw = ctx.raw.get("current_window") or {}
-            if cw:
-                ctx.windows.append(cw)
-        except Exception as exc:
-            ctx.engine_status = "error"
-            ctx.factors.append(f"vehicle_timing error: {exc}")
-            ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
-
-    elif domain == "foreign_education":
-        try:
-            from event_timing.foreign_education.foreign_education_timing_v1 import (  # type: ignore
-                compute_foreign_education_window,
-                format_foreign_education_timing_for_prompt,
-            )
-
-            raw = compute_foreign_education_window(
-                ctx.kundli, ctx.intel, ctx.kp, birth, question,
-                bucket=demand.bucket,
-            )
-            ctx.raw = raw if isinstance(raw, dict) else {}
-            ctx.verdict = str(ctx.raw.get("verdict") or "")
-            ctx.factors = list(ctx.raw.get("factors") or [])[:8]
-            ctx.engine_status = "ready"
-            ctx.raw["_prompt_block"] = format_foreign_education_timing_for_prompt(
-                ctx.raw, question,
-            )
-            cw = ctx.raw.get("current_window") or {}
-            if cw:
-                ctx.windows.append(cw)
-        except Exception as exc:
-            ctx.engine_status = "error"
-            ctx.factors.append(f"foreign_education_timing error: {exc}")
-            ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
-
-    elif domain == "education":
-        try:
-            from event_timing.education.education_timing_v1 import (  # type: ignore
-                compute_education_window,
-                format_education_timing_for_prompt,
-            )
-
-            raw = compute_education_window(
-                ctx.kundli, ctx.intel, ctx.kp, birth, question,
-                bucket=demand.bucket,
-            )
-            ctx.raw = raw if isinstance(raw, dict) else {}
-            ctx.verdict = str(ctx.raw.get("verdict") or "")
-            ctx.factors = list(ctx.raw.get("factors") or [])[:8]
-            ctx.engine_status = "ready"
-            ctx.raw["_prompt_block"] = format_education_timing_for_prompt(ctx.raw, question)
-            cw = ctx.raw.get("current_window") or {}
-            if cw:
-                ctx.windows.append(cw)
-        except Exception as exc:
-            ctx.engine_status = "error"
-            ctx.factors.append(f"education_timing error: {exc}")
-            ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
-
-    elif domain == "litigation":
-        try:
-            from event_timing.litigation.litigation_timing_v1 import (  # type: ignore
-                compute_litigation_window,
-                format_litigation_timing_for_prompt,
-            )
-
-            raw = compute_litigation_window(
-                ctx.kundli, ctx.intel, ctx.kp, birth, question,
-                bucket=demand.bucket,
-            )
-            ctx.raw = raw if isinstance(raw, dict) else {}
-            ctx.verdict = str(ctx.raw.get("verdict") or "")
-            ctx.factors = list(ctx.raw.get("factors") or [])[:8]
-            ctx.engine_status = "ready"
-            ctx.raw["_prompt_block"] = format_litigation_timing_for_prompt(ctx.raw, question)
-            cw = ctx.raw.get("current_window") or {}
-            if cw:
-                ctx.windows.append(cw)
-        except Exception as exc:
-            ctx.engine_status = "error"
-            ctx.factors.append(f"litigation_timing error: {exc}")
-            ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
-
-    elif domain == "love":
-        try:
-            from event_timing.love.love_timing_v1 import (  # type: ignore
-                compute_love_window,
-                format_love_timing_for_prompt,
-            )
-
-            raw = compute_love_window(
-                ctx.kundli, ctx.intel, ctx.kp, birth, question,
-                bucket=demand.bucket,
-            )
-            ctx.raw = raw if isinstance(raw, dict) else {}
-            ctx.verdict = str(ctx.raw.get("verdict") or "")
-            ctx.factors = list(ctx.raw.get("factors") or [])[:8]
-            ctx.engine_status = "ready"
-            ctx.raw["_prompt_block"] = format_love_timing_for_prompt(ctx.raw, question)
-            cw = ctx.raw.get("current_window") or {}
-            if cw:
-                ctx.windows.append(cw)
-        except Exception as exc:
-            ctx.engine_status = "error"
-            ctx.factors.append(f"love_timing error: {exc}")
-            ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
-
-    elif domain == "finance":
-        try:
-            from event_timing.finance.finance_engine_v1 import compute_finance_window  # type: ignore
-
-            raw = compute_finance_window(ctx.kundli, ctx.intel, ctx.kp, birth)
-            ctx.raw = raw if isinstance(raw, dict) else {}
-            ctx.verdict = str(ctx.raw.get("verdict") or "")
-            ctx.engine_status = "ready"
-            ctx.raw["_prompt_block"] = format_engine_window_block(
-                ctx.raw, domain.upper(), spec.get("label", domain)
-            )
-            cw = ctx.raw.get("current_window") or {}
-            if cw:
-                ctx.windows.append(cw)
-        except Exception as exc:
-            ctx.engine_status = "error"
-            ctx.factors.append(f"finance_timing error: {exc}")
-            ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
-
-    elif domain == "health":
-        try:
-            from event_timing.health.health_engine_v1 import compute_health_window  # type: ignore
-
-            raw = compute_health_window(ctx.kundli, ctx.intel, ctx.kp, birth)
-            ctx.raw = raw if isinstance(raw, dict) else {}
-            ctx.verdict = str(ctx.raw.get("verdict") or "")
-            ctx.engine_status = "ready"
-            ctx.raw["_prompt_block"] = format_engine_window_block(
-                ctx.raw, domain.upper(), spec.get("label", domain)
-            )
-            cw = ctx.raw.get("current_window") or {}
-            if cw:
-                ctx.windows.append(cw)
-        except Exception as exc:
-            ctx.engine_status = "error"
-            ctx.factors.append(f"health_timing error: {exc}")
-            ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
-
-    elif domain == "children":
-        try:
-            from event_timing.baby.baby_engine_v1 import compute_baby_window  # type: ignore
-
-            raw = compute_baby_window(ctx.kundli, ctx.intel, ctx.kp, birth)
-            ctx.raw = raw if isinstance(raw, dict) else {}
-            ctx.verdict = str(ctx.raw.get("verdict") or "")
-            ctx.engine_status = "ready"
-            ctx.raw["_prompt_block"] = format_engine_window_block(
-                ctx.raw, domain.upper(), spec.get("label", domain)
-            )
-            cw = ctx.raw.get("current_window") or {}
-            if cw:
-                ctx.windows.append(cw)
-        except Exception as exc:
-            ctx.engine_status = "error"
-            ctx.factors.append(f"children_timing error: {exc}")
-            ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
-
-    elif domain == "spiritual":
-        try:
-            from event_timing.spiritual.spiritual_timing_v1 import (  # type: ignore
-                compute_spiritual_window,
-                format_spiritual_timing_for_prompt,
-            )
-
-            raw = compute_spiritual_window(
-                ctx.kundli, ctx.intel, ctx.kp, birth, question,
-                bucket=demand.bucket,
-            )
-            ctx.raw = raw if isinstance(raw, dict) else {}
-            ctx.verdict = str(ctx.raw.get("verdict") or "")
-            ctx.factors = list(ctx.raw.get("factors") or [])[:8]
-            ctx.engine_status = "ready"
-            ctx.raw["_prompt_block"] = format_spiritual_timing_for_prompt(ctx.raw, question)
-            cw = ctx.raw.get("current_window") or {}
-            if cw:
-                ctx.windows.append(cw)
-        except Exception as exc:
-            ctx.engine_status = "error"
-            ctx.factors.append(f"spiritual_timing error: {exc}")
-            ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
-
-    elif domain == "fame":
-        try:
-            from event_timing.fame.fame_timing_v1 import (  # type: ignore
-                compute_fame_window,
-                format_fame_timing_for_prompt,
-            )
-
-            raw = compute_fame_window(
-                ctx.kundli, ctx.intel, ctx.kp, birth, question,
-                bucket=demand.bucket,
-            )
-            ctx.raw = raw if isinstance(raw, dict) else {}
-            ctx.verdict = str(ctx.raw.get("verdict") or "")
-            ctx.factors = list(ctx.raw.get("factors") or [])[:8]
-            ctx.engine_status = "ready"
-            ctx.raw["_prompt_block"] = format_fame_timing_for_prompt(ctx.raw, question)
-            cw = ctx.raw.get("current_window") or {}
-            if cw:
-                ctx.windows.append(cw)
-        except Exception as exc:
-            ctx.engine_status = "error"
-            ctx.factors.append(f"fame_timing error: {exc}")
-            ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
-
-    elif domain == "network":
-        try:
-            from event_timing.network.network_timing_v1 import (  # type: ignore
-                compute_network_window,
-                format_network_timing_for_prompt,
-            )
-
-            raw = compute_network_window(
-                ctx.kundli, ctx.intel, ctx.kp, birth, question,
-                bucket=demand.bucket,
-            )
-            ctx.raw = raw if isinstance(raw, dict) else {}
-            ctx.verdict = str(ctx.raw.get("verdict") or "")
-            ctx.factors = list(ctx.raw.get("factors") or [])[:8]
-            ctx.engine_status = "ready"
-            ctx.raw["_prompt_block"] = format_network_timing_for_prompt(ctx.raw, question)
-            cw = ctx.raw.get("current_window") or {}
-            if cw:
-                ctx.windows.append(cw)
-        except Exception as exc:
-            ctx.engine_status = "error"
-            ctx.factors.append(f"network_timing error: {exc}")
-            ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
-
-    elif domain == "universal":
-        try:
-            from event_timing.universal.universal_timing_v1 import (  # type: ignore
-                compute_universal_window,
+            from event_timing._shared.universal_timing_formula import (  # type: ignore
+                compute_universal_timing,
                 format_universal_timing_for_prompt,
             )
 
-            raw = compute_universal_window(
-                ctx.kundli, ctx.intel, ctx.kp, birth, question,
-                bucket=demand.bucket,
+            raw = compute_universal_timing(
+                ctx.kundli,
+                domain,
+                demand.bucket,
+                birth,
+                question,
+                ctx.intel,
             )
             ctx.raw = raw if isinstance(raw, dict) else {}
             ctx.verdict = str(ctx.raw.get("verdict") or "")
-            ctx.factors = list(ctx.raw.get("factors") or [])[:8]
+            ctx.factors = list(ctx.raw.get("factors") or [])[:12]
             ctx.engine_status = "ready"
-            ctx.engine_id = "universal_timing_v1"
+            ctx.engine_id = str(ctx.raw.get("engine_id") or f"{domain}_utf_v1")
             ctx.raw["_prompt_block"] = format_universal_timing_for_prompt(ctx.raw, question)
             cw = ctx.raw.get("current_window") or {}
             if cw:
                 ctx.windows.append(cw)
         except Exception as exc:
             ctx.engine_status = "error"
-            ctx.factors.append(f"universal_timing error: {exc}")
-            ctx.raw["_prompt_block"] = format_spec_directive_block(
-                domain, get_domain_spec("universal"), demand.bucket,
-            )
-
-    else:
-        ctx.engine_status = "skipped_no_engine"
-        ctx.verdict = ""
-        ctx.raw["_prompt_block"] = ""
+            ctx.factors.append(f"universal_timing_formula error: {exc}")
+            ctx.raw["_prompt_block"] = format_spec_directive_block(domain, spec, demand.bucket)
 
     if (
         demand.is_timing
@@ -752,6 +439,7 @@ def run_timing_engine(
         and isinstance(ctx.raw, dict)
         and ctx.engine_status in ("ready", "partial")
         and ctx.raw
+        and ctx.raw.get("engine_arch") != "UNIVERSAL_TIMING_FORMULA_V1"
     ):
         try:
             from event_timing._shared.dual_track_timing import (
@@ -789,6 +477,7 @@ def run_timing_engine(
         and domain != "marriage"
         and isinstance(ctx.raw, dict)
         and ctx.raw.get("verdict")
+        and ctx.raw.get("engine_arch") != "UNIVERSAL_TIMING_FORMULA_V1"
     ):
         try:
             from event_timing._shared.step_audit import attach_timing_pipeline_audit

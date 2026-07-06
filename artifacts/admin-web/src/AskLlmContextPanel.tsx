@@ -1015,6 +1015,12 @@ function formatMarriageStep8Final(
   if (monthYear) {
     lines.push(`Marriage kab: ${monthYear}`);
   }
+  const nextDasha = String(
+    s8.next_dasha_window || s8.dasha_transit_month || trace?.backup_window || "",
+  ).trim();
+  if (nextDasha && nextDasha !== monthYear) {
+    lines.push(`Agla dasha+transit window: ${nextDasha}`);
+  }
   if (s8.late_chart_bcp_locked) {
     lines.push("D1+D9 late → sirf late BCP ages");
     const d1Raw = Array.isArray(s8.d1_bcp_ages) && s8.d1_bcp_ages.length
@@ -1324,6 +1330,20 @@ function isKaalTimingEngine(engineId: string): boolean {
     engineId === "career_timing_v1" ||
     isDashaFirstTimingEngine(engineId)
   );
+}
+
+function isCareerPromotionPipeline(
+  trace?: EngineTrace,
+  stepAudit?: Record<string, Record<string, unknown>>,
+): boolean {
+  const bucket = String(
+    trace?.bucket || stepAudit?.step0?.bucket || "",
+  ).toLowerCase();
+  return String(trace?.engine || "") === "career_timing_v1" && bucket === "promotion";
+}
+
+function omitCareerPromotionPipelineStep(key: string): boolean {
+  return key === "step0a" || key === "step1" || key === "step4";
 }
 
 function hasKaalFinalStep(stepAudit: Record<string, Record<string, unknown>>): boolean {
@@ -2060,6 +2080,7 @@ export function EngineTracePanel({
   const marriageM17 = isMarriageM17Trace(engineId, ctx);
   const loveStatic = isLoveStaticTrace(ctx, engineId);
   const kaalTiming = isKaalTimingEngine(engineId);
+  const careerPromotion = isCareerPromotionPipeline(trace, stepAudit);
   const kaalDomain = String(trace?.domain || engineId.replace("_timing_v1", "").replace("_timing_m17", ""));
   const marriageStepOrder = [
     "step3",
@@ -2231,7 +2252,7 @@ export function EngineTracePanel({
               },
             ]
           : []),
-        ...(stepAudit.step0a
+        ...(stepAudit.step0a && !careerPromotion
           ? [
               {
                 n: stepAudit.step0 ? 2 : 1,
@@ -2249,6 +2270,7 @@ export function EngineTracePanel({
         },
         ...stepOrder
           .filter((key) => key !== "step1" && !["step0", "step0a", "step7", "step8"].includes(key))
+          .filter((key) => !careerPromotion || !omitCareerPromotionPipelineStep(key))
           .map((key, idx) => {
             const step = stepAudit[key];
             if (!step) return null;
@@ -2302,7 +2324,9 @@ export function EngineTracePanel({
   const stepCardsOrder = marriageM17
     ? marriageStepCardsOrder
     : dashaFirst
-      ? stepOrder.filter((k) => k !== "step1")
+      ? stepOrder
+          .filter((k) => k !== "step1")
+          .filter((k) => !careerPromotion || !omitCareerPromotionPipelineStep(k))
       : stepOrder;
 
   return (

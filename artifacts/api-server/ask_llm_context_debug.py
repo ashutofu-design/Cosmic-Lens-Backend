@@ -750,11 +750,15 @@ def _ensure_marriage_step8_on_audit(
             pd = pred.get("primary_dasha") or {}
             if isinstance(pd, dict):
                 pw = str(pd.get("window") or "").strip() or None
-        marriage_period = (
-            pw
-            or pred.get("marriage_period")
-            or pred.get("final_prediction")
+        from event_timing.marriage.marriage_engine_v2 import apply_marriage_bcp_primary_windows
+
+        pw, backup_pw = apply_marriage_bcp_primary_windows(
+            pred,
+            birth_dt=birth_dt,
+            dasha_window=pred.get("dasha_transit_month") or pw,
+            current_backup=None,
         )
+        marriage_period = pw or pred.get("marriage_period") or pred.get("final_prediction")
         audit["step8"] = {
             **existing,
             "name": existing.get("name") or "Final — late BCP + dasha + transit",
@@ -769,6 +773,7 @@ def _ensure_marriage_step8_on_audit(
             "band": band,
             "primary_window": pw or existing.get("primary_window"),
             "marriage_period": marriage_period or existing.get("marriage_period"),
+            "backup_window": backup_pw,
             **pred,
         }
     except Exception as exc:
@@ -875,6 +880,13 @@ def ensure_marriage_step_audit_on_result(
 
     if audit:
         engine_result["step_audit"] = audit
+        s8 = audit.get("step8") if isinstance(audit.get("step8"), dict) else {}
+        bcp_pw = str(s8.get("bcp_primary_window") or s8.get("primary_window") or "").strip()
+        if bcp_pw:
+            engine_result["primary_window"] = bcp_pw
+        next_pw = str(s8.get("next_dasha_window") or "").strip()
+        if next_pw:
+            engine_result["backup_window"] = next_pw
         s1 = ((audit.get("step1") or {}).get("result") or {})
         print(
             "[ensure_marriage_step_audit] ok "
@@ -2088,6 +2100,28 @@ def build_admin_context_for_ask_save(
             checks = {"slice_type": "marriage_relationship"}
     except Exception:
         pass
+
+    if not checks and not is_timing:
+        try:
+            from ask_fame.fame_registry import detect_fame_archetype, is_fame_static_question
+            from ask_fame.timing_registry import is_fame_timing_question
+
+            if is_fame_timing_question(q):
+                is_timing = True
+                topic = "fame"
+                slice_meta = {"slice": "fame_timing_v1", "topic": "fame"}
+                checks = {"slice_type": "fame_timing_v1"}
+            elif is_fame_static_question(q):
+                topic = "fame"
+                arch = detect_fame_archetype(q)
+                slice_meta = {
+                    "slice": "fame_engine_v1",
+                    "topic": "fame",
+                    "archetype": arch,
+                }
+                checks = {"slice_type": "fame_engine_v1"}
+        except Exception:
+            pass
 
     if not is_timing:
         try:

@@ -39,6 +39,7 @@ $files = @(
     "ask_gaps_shared.py",
     "ask_timing_clarify.py",
     "ask_timing_followup.py",
+    "ask_general_followup.py",
     "health_focus_routing.py",
     "ask_user_signals.py",
     "user_ask_profile.py",
@@ -89,7 +90,12 @@ New-Item -ItemType Directory -Path $staging -Force | Out-Null
 
 try {
     foreach ($f in $files) {
-        Copy-Item (Join-Path $api $f) -Destination (Join-Path $staging $f) -Force
+        $dest = Join-Path $staging $f
+        $destDir = Split-Path $dest -Parent
+        if ($destDir -and -not (Test-Path $destDir)) {
+            New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+        }
+        Copy-Item (Join-Path $api $f) -Destination $dest -Force
     }
     foreach ($dir in $folders) {
         $dest = Join-Path $staging $dir
@@ -117,7 +123,8 @@ cd $remote
 tar xzf /tmp/cosmic-ask-deploy.tar.gz
 rm -f /tmp/cosmic-ask-deploy.tar.gz
 echo '--- py_compile (abort restart on syntax error) ---'
-python3 -m py_compile openai_helper.py ask_hard_guards.py ask_timing_clarify.py ask_llm_context_debug.py health_focus_routing.py chart_fact_answer.py flask_app.py subscription_helper.py ask_user_signals.py user_ask_profile.py event_timing/timing_router.py event_timing/_shared/step_audit.py event_timing/_shared/generic_timing_engine.py || { echo 'COMPILE_FAILED — fix syntax before restart'; exit 1; }
+python3 -m py_compile openai_helper.py ask_hard_guards.py ask_timing_clarify.py ask_general_followup.py ask_llm_context_debug.py health_focus_routing.py chart_fact_answer.py flask_app.py subscription_helper.py ask_user_signals.py user_ask_profile.py event_timing/timing_router.py event_timing/_shared/step_audit.py event_timing/_shared/generic_timing_engine.py || { echo 'COMPILE_FAILED — fix syntax before restart'; exit 1; }
+python3 -c 'from ask_general_followup import is_generic_followup; assert is_generic_followup("Tell me more"); print("ask_general_followup OK")' || { echo 'MISSING ask_general_followup.py — redeploy'; exit 1; }
 python3 -c "from ask_timing_clarify import needs_timing_domain_clarifier; assert needs_timing_domain_clarifier('Mera life me struggle kab jaayega'); print('ask_timing_clarify OK')" || { echo 'MISSING ask_timing_clarify.py — git pull or redeploy'; exit 1; }
 python3 -c "from subscription_helper import finalize_ask_out_after_llm; print('finalize_ask_out_after_llm OK')" || { echo 'MISSING finalize_ask_out_after_llm — deploy subscription_helper.py'; exit 1; }
 python3 -c "from ask_mr import run_mr_static_engine; print('ask_mr engine OK')" || { echo 'MISSING ask_mr/ — deploy ask_mr folder or git pull'; exit 1; }

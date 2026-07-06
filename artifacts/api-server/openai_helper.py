@@ -5374,6 +5374,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     # evidence behind the earlier reading, instead of answering the meta-Q.
     _force_explain = False
     _timing_refine_followup = False
+    _general_followup = False
     if _is_transparency_followup(question):
         _prev_q = _extract_prev_ask_question(history, question)
         if _prev_q:
@@ -5416,6 +5417,25 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         print(f"[raw_passthrough] timing follow-up skipped: {_tf_exc}", flush=True)
         _user_turn_question = question or ""
         _timing_refine_followup = False
+
+    # ── Generic follow-up ("aur detail do", "dobara batao") ────────────────
+    # Merge with the previous user question so the model continues the same
+    # thread instead of treating it as a fresh vague ask.
+    try:
+        from ask_general_followup import resolve_general_followup_question
+
+        _eff_q2, _general_followup = resolve_general_followup_question(
+            question, history,
+        )
+        if _general_followup:
+            print(
+                f"[raw_passthrough] generic follow-up → merged Q={_eff_q2[:80]!r}",
+                flush=True,
+            )
+            question = _eff_q2
+    except Exception as _gf_exc:
+        print(f"[raw_passthrough] generic follow-up skipped: {_gf_exc}", flush=True)
+        _general_followup = False
 
     # ── Marriage backup window ("agar June 2029 mein nahi, aage kab?") ─────
     if (
@@ -5713,7 +5733,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     try:
         from ask_native_overview import is_native_overview_question  # type: ignore
 
-        if is_native_overview_question(_user_turn_question):
+        # If the user is clearly refining a previous question, do NOT reroute
+        # to the generic "about me" overview.
+        if (not _general_followup) and is_native_overview_question(_user_turn_question):
             _is_native_overview = True
             _mr_archetype_override = None
             if isinstance(_llm_intent, dict):
@@ -8622,6 +8644,14 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             "current MD/AD/PD lords. If engine shows no next window, state that clearly "
             "and give the strategy wait-range only — never invent a calendar date.\n"
             if _timing_refine_followup
+            else ""
+        )
+        + (
+            "\nGENERAL REFINE FOLLOW-UP: User is continuing the SAME thread as the "
+            "merged question (Hinglish / English / Hindi). Do NOT restart with a generic "
+            "'about you' overview. Answer ONLY the original topic deeper or clearer. "
+            "Reply in the user's language (match their follow-up wording).\n"
+            if _general_followup
             else ""
         )
     )

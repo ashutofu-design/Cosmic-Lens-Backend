@@ -10,6 +10,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: Number(env.PORT) || 5174,
       host: "127.0.0.1",
+      allowedHosts: true,
       proxy: {
         "/api": {
           target: apiTarget,

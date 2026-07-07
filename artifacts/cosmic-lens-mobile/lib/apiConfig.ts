@@ -100,7 +100,12 @@ function resolveApiBase(): string {
   const hostOnly = process.env.EXPO_PUBLIC_DOMAIN;
 
   if (fullUrl && /\.loca\.lt/i.test(fullUrl) && isWeb()) {
-    // localtunnel interstitial breaks web iframe — fall through
+    // localtunnel interstitial can break some web embeds — but API fetch works with bypass header.
+    const normalized = normalizeApiUrl(fullUrl);
+    if (normalized) return normalized;
+  } else if (fullUrl && /\.trycloudflare\.com/i.test(fullUrl) && isWeb()) {
+    const normalized = normalizeApiUrl(fullUrl);
+    if (normalized) return normalized;
   } else {
     const normalized = normalizeApiUrl(fullUrl);
     if (normalized) return normalized;

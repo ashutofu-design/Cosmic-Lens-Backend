@@ -1,13 +1,17 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { ReportContentsForm } from "./components/ReportContentsForm";
 import { ReportLabPdfPreview } from "./components/ReportLabPdfPreview";
 import { sampleReportData } from "./sampleData";
+
+type ViewMode = "pdf" | "form";
 
 export default function App() {
   const [phoneView, setPhoneView] = useState(true);
   const [showReactApprox, setShowReactApprox] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("form");
 
   return (
-    <div className="min-h-screen py-4">
+    <div className="min-h-screen py-4 cosmic-bg">
       <div className="mx-auto mb-3 max-w-lg px-3">
         <div className="rounded-lg border border-cosmic-300/40 bg-white/90 px-4 py-2.5 shadow-sm">
           <p className="text-sm font-semibold text-cosmic-800">
@@ -21,9 +25,30 @@ export default function App() {
           <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
-              onClick={() => setPhoneView(true)}
+              onClick={() => setViewMode("form")}
               className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                phoneView ? "bg-cosmic-600 text-white" : "bg-slate-100 text-slate-600"
+                viewMode === "form" ? "bg-cosmic-600 text-white" : "bg-slate-100 text-slate-600"
+              }`}
+            >
+              Form view
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("pdf")}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                viewMode === "pdf" ? "bg-cosmic-600 text-white" : "bg-slate-100 text-slate-600"
+              }`}
+            >
+              PDF preview
+            </button>
+            <button
+              type="button"
+              onClick={() => setPhoneView(true)}
+              disabled={viewMode !== "pdf"}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                phoneView && viewMode === "pdf"
+                  ? "bg-cosmic-600 text-white"
+                  : "bg-slate-100 text-slate-600 opacity-60"
               }`}
             >
               Phone width
@@ -31,8 +56,11 @@ export default function App() {
             <button
               type="button"
               onClick={() => setPhoneView(false)}
+              disabled={viewMode !== "pdf"}
               className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                !phoneView ? "bg-cosmic-600 text-white" : "bg-slate-100 text-slate-600"
+                !phoneView && viewMode === "pdf"
+                  ? "bg-cosmic-600 text-white"
+                  : "bg-slate-100 text-slate-600 opacity-60"
               }`}
             >
               Full width
@@ -52,7 +80,7 @@ export default function App() {
         </div>
       </div>
 
-      <ReportLabPdfPreview phoneView={phoneView} />
+      {viewMode === "form" ? <ReportContentsForm /> : <ReportLabPdfPreview phoneView={phoneView} />}
 
       {showReactApprox ? (
         <div className="mx-auto mt-8 max-w-md px-3 text-center text-xs text-slate-400">

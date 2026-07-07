@@ -1,0 +1,10 @@
+{
+  "pages": 18,
+  "report_id": "LR-PREVIEW",
+  "couple": "Aarav & Riya",
+  "section02_source": "builtin_prose",
+  "section03_source": "builtin_prose",
+  "premium_source": null,
+  "description": "Full Love Reality Pro report (ReportLab preview).",
+  "generated_by": "artifacts/api-server/scripts/gen_love_exec_preview_pdf.py"
+}

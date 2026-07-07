@@ -96,6 +96,14 @@ function normalizeApiUrl(raw?: string): string | null {
 }
 
 function resolveApiBase(): string {
+  // Web preview via Cloudflare tunnel: API proxied on same origin (/api → :8080).
+  if (isWeb() && typeof window !== "undefined") {
+    const host = window.location.hostname || "";
+    if (/trycloudflare\.com$/i.test(host)) {
+      return window.location.origin.replace(/\/$/, "");
+    }
+  }
+
   const fullUrl = configuredApiUrl();
   const hostOnly = process.env.EXPO_PUBLIC_DOMAIN;
 

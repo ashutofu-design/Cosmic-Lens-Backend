@@ -1,4 +1,5 @@
 import { AskQuestionDetailPage } from "./AskQuestionDetailPage";
+import { AdminConnectForm } from "./AdminConnectForm";
 import { CopyTextButton } from "./CopyTextButton";
 import { ViewQuestionButton } from "./ViewQuestionButton";
 import { QuestionLangBadge } from "./QuestionLangBadge";
@@ -42,6 +43,8 @@ import {
   profileBirthFields,
   resetKundliQuota,
   setUserPro,
+  isAdminConfigured,
+  clearAdminSession,
 } from "./api";
 
 type Tab = "dashboard" | "transactions" | "users" | "logins" | "pdfcosts" | "askqa" | "lrorders" | "bvorders";
@@ -93,6 +96,7 @@ const TAB_META: Record<Tab, { title: string; subtitle: string }> = {
 };
 
 export default function App() {
+  const [vpsConnected, setVpsConnected] = useState(() => isAdminConfigured());
   const [tab, setTab] = useState<Tab>("dashboard");
   const [dash, setDash] = useState<Dashboard | null>(null);
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -271,8 +275,17 @@ export default function App() {
   }, [tab, loadDashboard, loadTransactions, loadUsers, loadLogins, loadPdfGenerations, loadAskQuestions, loadLoveRealityOrders, loadBusinessVastuOrders]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (vpsConnected) load();
+  }, [load, vpsConnected]);
+
+  if (!vpsConnected) {
+    return (
+      <div className="admin-shell admin-shell-connect">
+        <div className="cosmic-bg" aria-hidden />
+        <AdminConnectForm onConnected={() => setVpsConnected(true)} />
+      </div>
+    );
+  }
 
   async function onShowDetail(user: AdminUser) {
     if (detailUserId === user.id) {
@@ -871,7 +884,6 @@ export default function App() {
   }
 
   const meta = TAB_META[tab];
-  const adminSecretOk = Boolean((import.meta.env.VITE_ADMIN_SECRET || "").trim());
 
   return (
     <div className="admin-shell">
@@ -910,6 +922,19 @@ export default function App() {
           <button
             type="button"
             className="nav-item nav-refresh"
+            onClick={() => {
+              clearAdminSession();
+              setVpsConnected(false);
+            }}
+          >
+            <span className="nav-icon" aria-hidden>
+              ⎋
+            </span>
+            <span>Disconnect VPS</span>
+          </button>
+          <button
+            type="button"
+            className="nav-item nav-refresh"
             onClick={load}
             disabled={loading}
           >
@@ -926,15 +951,6 @@ export default function App() {
           <h2>{meta.title}</h2>
           <p className="subtitle">{meta.subtitle}</p>
         </header>
-
-      {!adminSecretOk ? (
-        <div className="error">
-          <strong>API not configured.</strong> Create <code>artifacts/admin-web/.env</code> with{" "}
-          <code>VITE_ADMIN_SECRET</code> (same as VPS <code>ADMIN_SECRET</code>). For{" "}
-          <code>pnpm dev</code> set <code>VITE_API_PROXY_TARGET=http://YOUR_VPS:8080</code>. For
-          static build also set <code>VITE_API_BASE=http://YOUR_VPS:8080</code>, then rebuild.
-        </div>
-      ) : null}
 
       {error && <div className="error">{error}</div>}
 

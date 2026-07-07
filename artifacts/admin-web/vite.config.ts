@@ -19,5 +19,10 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    preview: {
+      port: Number(env.PORT) || 5174,
+      host: "127.0.0.1",
+      allowedHosts: true,
+    },
   };
 });

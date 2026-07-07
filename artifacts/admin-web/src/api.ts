@@ -1,17 +1,24 @@
-const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/$/, "");
-const ADMIN_TOKEN = (import.meta.env.VITE_ADMIN_SECRET || "").trim();
+import {
+  clearAdminSession,
+  DEFAULT_VPS_API,
+  getAdminApiBase,
+  getAdminToken,
+  isAdminConfigured,
+  saveAdminSession,
+} from "./adminSession";
 
 function adminHeaders(extra?: Record<string, string>): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: "application/json",
     ...extra,
   };
-  if (ADMIN_TOKEN) headers["X-Admin-Token"] = ADMIN_TOKEN;
+  const token = getAdminToken();
+  if (token) headers["X-Admin-Token"] = token;
   return headers;
 }
 
 async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = `${API_BASE}${path}`;
+  const url = `${getAdminApiBase()}${path}`;
   const res = await fetch(url, {
     ...init,
     headers: adminHeaders(init?.headers as Record<string, string> | undefined),
@@ -694,3 +701,22 @@ export async function fetchBusinessVastuOrders(opts?: {
 export function fetchBusinessVastuOrderDetail(orderId: string) {
   return adminFetch<BusinessVastuOrderDetail>(`/api/admin/business-vastu-orders/${orderId}`);
 }
+
+/** Probe VPS admin API before saving session (browser → VPS direct). */
+export async function testAdminConnection(apiBase: string, token: string): Promise<Dashboard> {
+  const base = apiBase.replace(/\/$/, "");
+  const res = await fetch(`${base}/api/admin/dashboard`, {
+    headers: { Accept: "application/json", "X-Admin-Token": token.trim() },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err =
+      (data as { error?: string }).error ||
+      (data as { message?: string }).message ||
+      `HTTP ${res.status}`;
+    throw new Error(err);
+  }
+  return data as Dashboard;
+}
+
+export { isAdminConfigured, saveAdminSession, clearAdminSession, DEFAULT_VPS_API };

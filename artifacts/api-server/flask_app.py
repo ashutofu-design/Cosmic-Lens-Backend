@@ -8043,21 +8043,36 @@ def ask_route():
             import traceback
 
             traceback.print_exc()
-            if rp_user:
-                from subscription_helper import can_ask_question, refund_question
+            out = None
+            try:
+                from ask_mr.static_answer import recover_mr_ask_answer
 
-                refund_question(rp_user)
-                _chk = can_ask_question(rp_user)
-                rp_quota = {"used": _chk["used"], "limit": _chk["limit"]}
-            out = {
-                "text": "Abhi jawab generate nahi ho pa raha. Thodi der baad try karein.",
-                "topic": "general",
-                "question_type": "STATIC",
-                "confidence": 0.0,
-                "source": "raw_passthrough_error",
-                "engine_tag": "ans-cosmo",
-                "follow_ups": [],
-            }
+                out = recover_mr_ask_answer(
+                    question,
+                    kundli,
+                    birth=birth,
+                    lang=lang,
+                )
+                if isinstance(out, dict):
+                    out.pop("llm_called", None)
+            except Exception as _rec_exc:
+                print(f"[ask:RP] MR recovery skipped: {_rec_exc}", flush=True)
+            if not (isinstance(out, dict) and str(out.get("text") or "").strip()):
+                if rp_user:
+                    from subscription_helper import can_ask_question, refund_question
+
+                    refund_question(rp_user)
+                    _chk = can_ask_question(rp_user)
+                    rp_quota = {"used": _chk["used"], "limit": _chk["limit"]}
+                out = {
+                    "text": "Abhi jawab generate nahi ho pa raha. Thodi der baad try karein.",
+                    "topic": "general",
+                    "question_type": "STATIC",
+                    "confidence": 0.0,
+                    "source": "raw_passthrough_error",
+                    "engine_tag": "ans-cosmo",
+                    "follow_ups": [],
+                }
         out = _finalize_ask_out_after_llm(out, rp_user, quota_on_success=rp_quota)
         out["plan"] = rp_plan
         # Phase 2.5.11.19 — Ask Q&A persistence (sync raw passthrough exit).
@@ -9082,21 +9097,36 @@ def ask_stream_route():
             import traceback
 
             traceback.print_exc()
-            if rp_user_s:
-                from subscription_helper import can_ask_question, refund_question
+            out_s = None
+            try:
+                from ask_mr.static_answer import recover_mr_ask_answer
 
-                refund_question(rp_user_s)
-                _chk_s = can_ask_question(rp_user_s)
-                rp_quota_s = {"used": _chk_s["used"], "limit": _chk_s["limit"]}
-            out_s = {
-                "text": "Abhi jawab generate nahi ho pa raha. Thodi der baad try karein.",
-                "topic": "general",
-                "question_type": "STATIC",
-                "confidence": 0.0,
-                "source": "raw_passthrough_error",
-                "engine_tag": "ans-cosmo",
-                "follow_ups": [],
-            }
+                out_s = recover_mr_ask_answer(
+                    question,
+                    kundli,
+                    birth=birth,
+                    lang=lang,
+                )
+                if isinstance(out_s, dict):
+                    out_s.pop("llm_called", None)
+            except Exception as _rec_exc_s:
+                print(f"[ask/stream:RP] MR recovery skipped: {_rec_exc_s}", flush=True)
+            if not (isinstance(out_s, dict) and str(out_s.get("text") or "").strip()):
+                if rp_user_s:
+                    from subscription_helper import can_ask_question, refund_question
+
+                    refund_question(rp_user_s)
+                    _chk_s = can_ask_question(rp_user_s)
+                    rp_quota_s = {"used": _chk_s["used"], "limit": _chk_s["limit"]}
+                out_s = {
+                    "text": "Abhi jawab generate nahi ho pa raha. Thodi der baad try karein.",
+                    "topic": "general",
+                    "question_type": "STATIC",
+                    "confidence": 0.0,
+                    "source": "raw_passthrough_error",
+                    "engine_tag": "ans-cosmo",
+                    "follow_ups": [],
+                }
         out_s = _finalize_ask_out_after_llm(out_s, rp_user_s, quota_on_success=rp_quota_s)
         out_s["plan"] = rp_plan_s
         if rp_user_s is not None and out_s.get("source") != "raw_passthrough_error":
@@ -9697,6 +9727,388 @@ def ask_stream_route():
             print(f"[ask/stream] mid-stream error: {exc}")
             yield "data: " + json.dumps(
                 {"error": str(exc)},
+                ensure_ascii=False,
+            ) + "\n\n"
+
+    from flask import Response
+
+    return Response(
+        sse(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+# ── Batch Ask Test (single parent row) ──────────────────────────────────────
+# Testing helper for Ask tab: run 20–60 questions together, but persist only
+# ONE admin/log row. Child questions are answered sequentially using the
+# same ai_ask pipeline; their texts are combined into the parent answer_text
+# so admin can view everything nested inside one entry.
+
+
+def _batch_primary_kundli_id(user) -> int | None:
+    """Read kundli FK while the SQLAlchemy session is still bound."""
+    if user is None:
+        return None
+    try:
+        uid = int(user.id)
+    except (TypeError, ValueError):
+        return None
+    try:
+        kun = getattr(user, "kundli", None)
+        if kun is not None and getattr(kun, "id", None) is not None:
+            return int(kun.id)
+    except Exception:
+        pass
+    try:
+        from models import Kundli
+
+        row = Kundli.query.filter_by(user_id=uid).first()
+        if row is not None and row.id is not None:
+            return int(row.id)
+    except Exception:
+        pass
+    return None
+
+
+def _parse_batch_ask_request(data: dict):
+    """Shared validation for /api/ask/batch and /api/ask/batch/stream."""
+    raw_questions = data.get("questions") or data.get("batchQuestions")
+    batch_title = (data.get("batch_title") or data.get("title") or "").strip() or "Batch Test"
+    lang = data.get("lang") or "en"
+    kundli = data.get("kundli")
+    birth = data.get("birthData") or data.get("birth")
+    history = data.get("history") or []
+    user_id = data.get("user_id")
+    api_key = (request.headers.get("X-API-Key") or "").strip()
+
+    questions: list[str] = []
+    if isinstance(raw_questions, list):
+        questions = [str(q).strip() for q in raw_questions if str(q).strip()]
+    elif isinstance(raw_questions, str):
+        questions = [x.strip() for x in raw_questions.splitlines() if x.strip()]
+    elif data.get("batchText"):
+        bt = str(data.get("batchText") or "")
+        questions = [x.strip() for x in bt.splitlines() if x.strip()]
+
+    max_q = int(os.environ.get("BATCH_ASK_MAX_QUESTIONS", "60"))
+    if len(questions) > max_q:
+        questions = questions[:max_q]
+
+    if not questions:
+        return None, (jsonify({"error": "questions is required (non-empty)"}), 400)
+
+    user = None
+    quota = None
+    if user_id or api_key:
+        from question_history import resolve_user_for_ask_request
+
+        user = resolve_user_for_ask_request(user_id, api_key)
+        if user_id and not user:
+            return None, (jsonify({"error": "User not found"}), 404)
+        if not user:
+            return None, (jsonify({"error": "Unauthorized"}), 401)
+        from subscription_helper import consume_question, effective_plan
+
+        quota = consume_question(user)
+        if not quota.get("allowed"):
+            return None, (
+                jsonify(
+                    {
+                        "error": "daily_limit_reached",
+                        "message": f"Aaj ka {quota.get('limit',0)} questions ka limit poora ho gaya. Pro upgrade karein for unlimited.",
+                        "quota": {
+                            "used": quota.get("used", 0),
+                            "limit": quota.get("limit", 0),
+                        },
+                        "plan": effective_plan(user),
+                        "upgrade_required": True,
+                    }
+                ),
+                402,
+            )
+    else:
+        return None, (jsonify({"error": "Unauthorized"}), 401)
+
+    from subscription_helper import effective_plan
+    from ask_kundli_resolver import resolve_kundli_for_user
+
+    quota_payload = {
+        "used": (quota or {}).get("used", 0),
+        "limit": (quota or {}).get("limit", 0),
+    }
+    plan_payload = effective_plan(user) if user else "free"
+    preferred_language = user.preferred_language if user else None
+    user_id_int = int(user.id) if user is not None else None
+    primary_kundli_id = _batch_primary_kundli_id(user)
+
+    kundli, k_err = resolve_kundli_for_user(user, kundli, birth)
+    if k_err:
+        return None, k_err
+
+    ctx = {
+        "questions": questions,
+        "batch_title": batch_title,
+        "lang": lang,
+        "kundli": kundli,
+        "birth": birth,
+        "history": history,
+        "user_id": user_id_int,
+        "primary_kundli_id": primary_kundli_id,
+        "quota_payload": quota_payload,
+        "plan_payload": plan_payload,
+        "preferred_language": preferred_language,
+    }
+    return ctx, None
+
+
+def _persist_batch_parent_row(ctx: dict, payload: dict) -> None:
+    from ask_batch_runner import build_batch_admin_context
+    from question_history import persist_ask_question_result
+
+    user_id = ctx.get("user_id")
+    if not user_id:
+        return
+    try:
+        parent_result = {
+            "text": payload.get("text") or "",
+            "topic": "batch",
+            "confidence": 1.0,
+            "source": "batch_ask",
+            "follow_ups": [],
+            "engine_tag": "batch-ask",
+        }
+        admin_ctx = build_batch_admin_context(
+            payload.get("items") or [],
+            payload.get("first_admin_llm_context")
+            if isinstance(payload.get("first_admin_llm_context"), dict)
+            else None,
+        )
+        if isinstance(admin_ctx, dict):
+            parent_result["admin_llm_context"] = admin_ctx
+        persist_ask_question_result(
+            user_id=int(user_id),
+            question_text=payload.get("parent_question_text") or "Batch Test",
+            result=parent_result,
+            primary_kundli_id=ctx.get("primary_kundli_id"),
+        )
+    except Exception as exc:
+        print(f"[ask/batch] persist failed (non-fatal): {exc}", flush=True)
+
+
+@app.route("/api/ask/batch", methods=["POST"])
+def ask_batch_route():
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        ctx, err = _parse_batch_ask_request(data)
+        if err:
+            return err
+
+        from ask_batch_runner import build_batch_parent_payload, iter_batch_answers
+
+        items: list[dict] = []
+        parts: list[str] = []
+        first_admin_llm_context: dict | None = None
+
+        for step in iter_batch_answers(
+            questions=ctx["questions"],
+            kundli=ctx["kundli"],
+            birth=ctx["birth"],
+            lang=ctx["lang"],
+            history=ctx["history"],
+            preferred_language=ctx["preferred_language"],
+            user_id=ctx.get("user_id"),
+        ):
+            items.append(step["item"])
+            parts.append(step["part"])
+            if first_admin_llm_context is None and isinstance(step.get("admin_llm_context"), dict):
+                first_admin_llm_context = step["admin_llm_context"]
+
+        payload = build_batch_parent_payload(
+            batch_title=ctx["batch_title"],
+            questions=ctx["questions"],
+            items=items,
+            parts=parts,
+            first_admin_llm_context=first_admin_llm_context,
+            quota_payload=ctx["quota_payload"],
+            plan_payload=ctx["plan_payload"],
+        )
+        _persist_batch_parent_row(ctx, payload)
+        return jsonify(payload)
+    except Exception as exc:
+        app.logger.exception("[ask/batch] fatal error")
+        return (
+            jsonify(
+                {
+                    "error": "batch_internal_error",
+                    "message": str(exc),
+                }
+            ),
+            500,
+        )
+
+
+@app.route("/api/ask/batch/stream", methods=["POST"])
+def ask_batch_stream_route():
+    """SSE batch — one event per question so long runs do not hit proxy timeouts."""
+    data = request.get_json(force=True, silent=True) or {}
+    ctx, err = _parse_batch_ask_request(data)
+    if err:
+        return err
+
+    from ask_batch_runner import build_batch_parent_payload, iter_batch_answers
+
+    def sse():
+        items: list[dict] = []
+        parts: list[str] = []
+        first_admin_llm_context: dict | None = None
+        total = len(ctx["questions"])
+        try:
+            yield "data: " + json.dumps(
+                {"kind": "started", "total": total},
+                ensure_ascii=False,
+            ) + "\n\n"
+
+            for step in iter_batch_answers(
+                questions=ctx["questions"],
+                kundli=ctx["kundli"],
+                birth=ctx["birth"],
+                lang=ctx["lang"],
+                history=ctx["history"],
+                preferred_language=ctx["preferred_language"],
+                user_id=ctx.get("user_id"),
+            ):
+                items.append(step["item"])
+                parts.append(step["part"])
+                if first_admin_llm_context is None and isinstance(
+                    step.get("admin_llm_context"), dict
+                ):
+                    first_admin_llm_context = step["admin_llm_context"]
+                yield "data: " + json.dumps(
+                    {
+                        "kind": "item",
+                        "index": step["index"],
+                        "total": step["total"],
+                        "item": step["item"],
+                    },
+                    ensure_ascii=False,
+                ) + "\n\n"
+
+            payload = build_batch_parent_payload(
+                batch_title=ctx["batch_title"],
+                questions=ctx["questions"],
+                items=items,
+                parts=parts,
+                first_admin_llm_context=first_admin_llm_context,
+                quota_payload=ctx["quota_payload"],
+                plan_payload=ctx["plan_payload"],
+            )
+            _persist_batch_parent_row(ctx, payload)
+            yield "data: " + json.dumps(
+                {"kind": "done", **payload},
+                ensure_ascii=False,
+            ) + "\n\n"
+        except Exception as exc:
+            app.logger.exception("[ask/batch/stream] fatal error")
+            yield "data: " + json.dumps(
+                {"error": str(exc), "kind": "error"},
+                ensure_ascii=False,
+            ) + "\n\n"
+
+    from flask import Response
+
+    return Response(
+        sse(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+        )
+
+
+# ── Question DNA check (Step 1 — classify only, no answer, no quota) ─────────
+
+
+def _parse_dna_auth(data: dict):
+    """Require logged-in user for DNA lab (prevents anonymous OpenAI burn)."""
+    api_key = (request.headers.get("X-API-Key") or "").strip()
+    user_id = data.get("user_id")
+    if not user_id and not api_key:
+        return None, (jsonify({"error": "Unauthorized"}), 401)
+    from question_history import resolve_user_for_ask_request
+
+    user = resolve_user_for_ask_request(user_id, api_key)
+    if user_id and not user:
+        return None, (jsonify({"error": "User not found"}), 404)
+    if not user:
+        return None, (jsonify({"error": "Unauthorized"}), 401)
+    return user, None
+
+
+@app.route("/api/ask/dna", methods=["POST"])
+def ask_dna_route():
+    """Single-question DNA extraction — JSON only, no astrology answer."""
+    data = request.get_json(force=True, silent=True) or {}
+    _, err = _parse_dna_auth(data)
+    if err:
+        return err
+
+    question = (data.get("question") or "").strip()
+    if not question:
+        return jsonify({"error": "question is required"}), 400
+
+    history = data.get("history") or []
+    from ask_question_dna import extract_question_dna
+
+    dna = extract_question_dna(question, history=history)
+    return jsonify({"question": question, "dna": dna})
+
+
+@app.route("/api/ask/dna/batch/stream", methods=["POST"])
+def ask_dna_batch_stream_route():
+    """SSE DNA batch — one event per question (up to DNA_BATCH_MAX_QUESTIONS)."""
+    data = request.get_json(force=True, silent=True) or {}
+    _, err = _parse_dna_auth(data)
+    if err:
+        return err
+
+    from ask_dna_runner import iter_dna_batch, parse_dna_questions
+
+    raw = data.get("questions") or data.get("batchText") or ""
+    questions = parse_dna_questions(raw)
+    if not questions:
+        return jsonify({"error": "questions is required (non-empty)"}), 400
+
+    history = data.get("history") or []
+
+    def sse():
+        total = len(questions)
+        try:
+            yield "data: " + json.dumps(
+                {"kind": "started", "total": total},
+                ensure_ascii=False,
+            ) + "\n\n"
+
+            for step in iter_dna_batch(questions, history=history):
+                yield "data: " + json.dumps(
+                    {"kind": "item", **step},
+                    ensure_ascii=False,
+                ) + "\n\n"
+
+            yield "data: " + json.dumps(
+                {"kind": "done", "total": total, "processed": total},
+                ensure_ascii=False,
+            ) + "\n\n"
+        except Exception as exc:
+            app.logger.exception("[ask/dna/batch/stream] fatal error")
+            yield "data: " + json.dumps(
+                {"error": str(exc), "kind": "error"},
                 ensure_ascii=False,
             ) + "\n\n"
 

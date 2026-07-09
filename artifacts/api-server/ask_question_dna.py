@@ -6,9 +6,11 @@ pronouns) into structured metadata: domain, bucket, intent, subject, target,
 question_type, timing, tense, emotion, risk, confidence.
 
 Design contract (per product spec):
-  1. Master taxonomy is FIXED — defined below, engines are the source of truth.
-     Bucket ids reuse the existing engine archetype ids (ask_intent_llm) so
-     DNA maps 1:1 onto dispatchable engines. No invented vocabulary.
+  1. Master taxonomy is FIXED in code — engines are the source of truth for
+     non-relationship domains. The love/relationship domain uses a dedicated
+     question-theme taxonomy (`relationship_dna_taxonomy`) separate from MR
+     engine archetype ids. Prompt does NOT enumerate love buckets — few-shots
+     teach the vocabulary; validation enforces the fixed set.
   2. LLM output is STRICT JSON, validated + coerced by `validate_question_dna`.
      Anything outside the taxonomy is normalized to a safe default and the
      confidence is lowered — the LLM can never inject new labels downstream.
@@ -39,7 +41,7 @@ from typing import Any
 # DNA → engine dispatch needs no translation table.
 # ─────────────────────────────────────────────────────────────────────────────
 
-from ask_intent_llm import (  # noqa: E402  (single source of bucket truth)
+from ask_intent_llm import (  # noqa: E402  (engine archetypes for non-love domains)
     MR_ARCHETYPES,
     CAREER_ARCHETYPES,
     FINANCE_ARCHETYPES,
@@ -50,6 +52,15 @@ from ask_intent_llm import (  # noqa: E402  (single source of bucket truth)
     TRAVEL_ARCHETYPES,
     LITIGATION_ARCHETYPES,
 )
+from relationship_dna_taxonomy import (  # noqa: E402
+    LOVE_RELATIONSHIP_BUCKETS,
+    LOVE_BUCKET_UNKNOWN,
+    LOVE_BUCKET_SOFT_DEFAULT,
+    normalize_love_bucket,
+    map_love_bucket_to_mr,
+    derive_bucket_match,
+    audit_log_low_bucket_match,
+)
 
 DNA_DOMAINS: tuple[str, ...] = (
     "marriage", "love", "career", "finance", "health", "education",
@@ -59,7 +70,7 @@ DNA_DOMAINS: tuple[str, ...] = (
 
 DNA_BUCKETS_BY_DOMAIN: dict[str, frozenset[str]] = {
     "marriage":   frozenset(MR_ARCHETYPES),
-    "love":       frozenset(MR_ARCHETYPES),
+    "love":       LOVE_RELATIONSHIP_BUCKETS,
     "career":     frozenset(CAREER_ARCHETYPES),
     "finance":    frozenset(FINANCE_ARCHETYPES),
     "health":     frozenset(HEALTH_ARCHETYPES),
@@ -75,7 +86,7 @@ DNA_BUCKETS_BY_DOMAIN: dict[str, frozenset[str]] = {
 
 DNA_DEFAULT_BUCKET: dict[str, str] = {
     "marriage": "general_mr",
-    "love": "general_mr",
+    "love": LOVE_BUCKET_SOFT_DEFAULT,
     "career": "general_career",
     "finance": "general_finance",
     "health": "general_health",
@@ -233,17 +244,33 @@ QUESTION_DNA_JSON_SCHEMA: dict = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _bucket_lines() -> str:
+    """Non-love domains only — love buckets are NOT listed in the prompt."""
     rows = []
     for d in DNA_DOMAINS:
+        if d == "love":
+            continue
         ids = sorted(DNA_BUCKETS_BY_DOMAIN.get(d, frozenset()))
         rows.append(f"  {d}: {', '.join(ids)}")
     return "\n".join(rows)
 
 
+_LOVE_BUCKET_PROMPT = """LOVE DOMAIN (domain=love) — bucket rules:
+- Use question-theme bucket ids (snake_case), NOT engine jargon
+  (never loyalty_trust, general_mr, secret_relationship, patchup, etc. for love).
+- Pick the SINGLE most specific bucket — do NOT overuse relationship_future.
+  Prefer: compatibility, commitment, communication, spiritual_karmic,
+  relationship_decisions, relationship_promise, trust_loyalty, etc.
+- relationship_future ONLY for vague long-term stability/outlook when no sharper
+  bucket fits (long-term chalega, relationship strong rahega).
+- Valid ids are taught via examples below — do not invent new bucket strings.
+- If truly uncertain → relationship_future + lower confidence.
+- Invented / no-fit bucket → unknown_relationship_intent (audit)."""
+
+
 _FEW_SHOTS = """EXAMPLES (input → output JSON):
 
 Q: "Kya mera boyfriend mujhe cheat karega?"
-{"questions":[{"normalized_question":"Kya mera boyfriend mujhe cheat karega?","domain":"love","bucket":"loyalty_trust","intent":"cheating prediction for current boyfriend","subject":"boyfriend","target":"self_relationship","question_type":"risk","timing":false,"tense":"future","emotion":"fear","risk":"high","is_followup":false,"followup_of":"","confidence":0.97}]}
+{"questions":[{"normalized_question":"Kya mera boyfriend mujhe cheat karega?","domain":"love","bucket":"trust_loyalty","intent":"cheating prediction for current boyfriend","subject":"boyfriend","target":"self_relationship","question_type":"risk","timing":false,"tense":"future","emotion":"fear","risk":"high","is_followup":false,"followup_of":"","confidence":0.97}]}
 
 Q: "Meri shaadi kab hogi?"
 {"questions":[{"normalized_question":"Meri shaadi kab hogi?","domain":"marriage","bucket":"general_mr","intent":"marriage timing for self","subject":"self","target":"self","question_type":"timing","timing":true,"tense":"future","emotion":"curiosity","risk":"low","is_followup":false,"followup_of":"","confidence":0.98}]}
@@ -255,13 +282,40 @@ History: user:"Kya mera partner loyal hai?" — Q: "Uska nature kaisa hai?"
 {"questions":[{"normalized_question":"Mere partner ka nature kaisa hai?","domain":"love","bucket":"partner_nature","intent":"partner personality/nature","subject":"partner","target":"subject_person","question_type":"personality","timing":false,"tense":"present","emotion":"curiosity","risk":"low","is_followup":true,"followup_of":"Kya mera partner loyal hai?","confidence":0.93}]}
 
 Q: "Government job kab milegi? Aur partner loyal hai?"
-{"questions":[{"normalized_question":"Government job kab milegi?","domain":"career","bucket":"govt_job","intent":"government job timing","subject":"self","target":"self","question_type":"timing","timing":true,"tense":"future","emotion":"hope","risk":"low","is_followup":false,"followup_of":"","confidence":0.97},{"normalized_question":"Kya mera partner loyal hai?","domain":"love","bucket":"loyalty_trust","intent":"partner loyalty check","subject":"partner","target":"self_relationship","question_type":"risk","timing":false,"tense":"present","emotion":"anxiety","risk":"high","is_followup":false,"followup_of":"","confidence":0.96}]}
+{"questions":[{"normalized_question":"Government job kab milegi?","domain":"career","bucket":"govt_job","intent":"government job timing","subject":"self","target":"self","question_type":"timing","timing":true,"tense":"future","emotion":"hope","risk":"low","is_followup":false,"followup_of":"","confidence":0.97},{"normalized_question":"Kya mera partner loyal hai?","domain":"love","bucket":"trust_loyalty","intent":"partner loyalty check","subject":"partner","target":"self_relationship","question_type":"risk","timing":false,"tense":"present","emotion":"anxiety","risk":"high","is_followup":false,"followup_of":"","confidence":0.96}]}
 
 Q: "Kya partner ka affair abhi chal raha hai?"
-{"questions":[{"normalized_question":"Kya mere partner ka affair abhi chal raha hai?","domain":"love","bucket":"secret_relationship","intent":"ongoing affair check right now","subject":"partner","target":"self_relationship","question_type":"current_state","timing":false,"tense":"present","emotion":"fear","risk":"high","is_followup":false,"followup_of":"","confidence":0.95}]}
+{"questions":[{"normalized_question":"Kya mere partner ka affair abhi chal raha hai?","domain":"love","bucket":"third_person_infidelity","intent":"ongoing affair check right now","subject":"partner","target":"self_relationship","question_type":"current_state","timing":false,"tense":"present","emotion":"fear","risk":"high","is_followup":false,"followup_of":"","confidence":0.95}]}
 
 Q: "Kya meri relationship ka promise future me strong rahega?"
-{"questions":[{"normalized_question":"Kya meri relationship ka promise future me strong rahega?","domain":"love","bucket":"loyalty_trust","intent":"relationship potential (promise/commitment) in future","subject":"self","target":"self","question_type":"prediction","timing":false,"tense":"future","emotion":"hope","risk":"low","is_followup":false,"followup_of":"","confidence":0.95}]}
+{"questions":[{"normalized_question":"Kya meri relationship ka promise future me strong rahega?","domain":"love","bucket":"relationship_promise","intent":"relationship potential (promise/commitment) in future","subject":"self","target":"self","question_type":"prediction","timing":false,"tense":"future","emotion":"hope","risk":"low","is_followup":false,"followup_of":"","confidence":0.95}]}
+
+Q: "Kya meri life me relationship ka yog hai?"
+{"questions":[{"normalized_question":"Kya meri life me relationship ka yog hai?","domain":"love","bucket":"relationship_promise","intent":"relationship potential in life","subject":"self","target":"self","question_type":"prediction","timing":false,"tense":"future","emotion":"hope","risk":"low","is_followup":false,"followup_of":"","confidence":0.95}]}
+
+Q: "Kya hamara relationship long-term chalega?"
+{"questions":[{"normalized_question":"Kya hamara relationship long-term chalega?","domain":"love","bucket":"relationship_future","intent":"long-term relationship stability/outlook","subject":"couple","target":"self_relationship","question_type":"prediction","timing":false,"tense":"future","emotion":"hope","risk":"low","is_followup":false,"followup_of":"","confidence":0.94}]}
+
+Q: "Kya hum compatible hain? Humara gun milan kaisa hai?"
+{"questions":[{"normalized_question":"Kya hum compatible hain?","domain":"love","bucket":"compatibility","intent":"relationship compatibility / match","subject":"couple","target":"couple","question_type":"compatibility","timing":false,"tense":"present","emotion":"curiosity","risk":"low","is_followup":false,"followup_of":"","confidence":0.96}]}
+
+Q: "Kya mujhe apne ex ko second chance dena chahiye?"
+{"questions":[{"normalized_question":"Kya mujhe apne ex ko second chance dena chahiye?","domain":"love","bucket":"relationship_decisions","intent":"should I give ex a second chance (decision)","subject":"self","target":"self_relationship","question_type":"decision","timing":false,"tense":"present","emotion":"conflicted","risk":"medium","is_followup":false,"followup_of":"","confidence":0.95}]}
+
+Q: "Kya partner sirf time pass kar raha hai?"
+{"questions":[{"normalized_question":"Kya mera partner sirf time pass kar raha hai?","domain":"love","bucket":"commitment","intent":"partner seriousness / genuine commitment check","subject":"partner","target":"self_relationship","question_type":"risk","timing":false,"tense":"present","emotion":"anxiety","risk":"high","is_followup":false,"followup_of":"","confidence":0.94}]}
+
+Q: "Hamari baat kyun nahi hoti? Communication problem hai kya?"
+{"questions":[{"normalized_question":"Kya hamari relationship me communication problem hai?","domain":"love","bucket":"communication","intent":"communication gap / not talking enough","subject":"couple","target":"self_relationship","question_type":"cause","timing":false,"tense":"present","emotion":"anxiety","risk":"medium","is_followup":false,"followup_of":"","confidence":0.93}]}
+
+Q: "Kya mera soulmate milega? Karmic connection hai kya?"
+{"questions":[{"normalized_question":"Kya mera soulmate milega?","domain":"love","bucket":"spiritual_karmic","intent":"soulmate / karmic spiritual connection","subject":"self","target":"self","question_type":"prediction","timing":false,"tense":"future","emotion":"hope","risk":"low","is_followup":false,"followup_of":"","confidence":0.94}]}
+
+Q: "Kya main is relationship me rahun ya chhod dun?"
+{"questions":[{"normalized_question":"Kya main is relationship me rahun ya chhod dun?","domain":"love","bucket":"relationship_decisions","intent":"stay or leave relationship decision","subject":"self","target":"self_relationship","question_type":"decision","timing":false,"tense":"present","emotion":"conflicted","risk":"high","is_followup":false,"followup_of":"","confidence":0.96}]}
+
+Q: "Kya ye relationship mere liye sahi hai?"
+{"questions":[{"normalized_question":"Kya ye relationship mere liye sahi hai?","domain":"love","bucket":"compatibility","intent":"relationship suitability / right fit for me","subject":"self","target":"self_relationship","question_type":"decision","timing":false,"tense":"present","emotion":"conflicted","risk":"medium","is_followup":false,"followup_of":"","confidence":0.94}]}
 
 Q: "Promotion milega?"
 {"questions":[{"normalized_question":"Kya mujhe promotion milega?","domain":"career","bucket":"career_milestones","intent":"promotion prospect (not timing)","subject":"self","target":"self","question_type":"prediction","timing":false,"tense":"future","emotion":"hope","risk":"low","is_followup":false,"followup_of":"","confidence":0.94}]}"""
@@ -289,7 +343,8 @@ RESPONSIBILITIES:
 
 TAXONOMY (use ONLY these values):
 domain: {", ".join(DNA_DOMAINS)}
-bucket (per domain):
+{_LOVE_BUCKET_PROMPT}
+bucket (non-love domains only):
 {_bucket_lines()}
 subject: {", ".join(DNA_SUBJECTS)}
 target: {", ".join(DNA_TARGETS)}
@@ -306,6 +361,19 @@ KEY RULES:
 - Partner/spouse as subject (their nature, loyalty, support) → domain love or
   marriage, even if career/money words appear.
 - "Promotion milega?" → career (NOT finance). "Paisa kab aayega" → finance timing.
+- "relationship ka yog hai / life me pyaar" → domain love, bucket relationship_promise,
+  question_type=prediction, tense=future (NOT unspecified).
+- LOVE bucket disambiguation (critical):
+  • long-term chalega / stable rahega / aage chalega → relationship_future
+    (NOT long_distance — long_distance ONLY for door rehkar / LDR / dur).
+  • ex ko second chance / forgive / wapas aaun → relationship_decisions or
+    reconciliation_ex (NOT second_marriage — that is remarriage after divorce).
+  • time pass / serious nahi / commitment check → commitment (NOT dating_courtship).
+  • compatible / gun milan / sahi hai mere liye → compatibility.
+  • soulmate / karmic / past life bond → spiritual_karmic.
+  • rahun ya chhod dun / karu ya nahi → relationship_decisions.
+  • baat nahi hoti / communication / misunderstanding → communication
+    (NOT emotional_bonding).
 - intent: one short free-text phrase describing EXACTLY what the user wants.
 - confidence: 0.0–1.0 for YOUR classification certainty.
 
@@ -351,9 +419,23 @@ def validate_question_dna_item(raw: Any, original_question: str = "") -> dict:
     coercions += 0 if ok else 1
 
     allowed_buckets = DNA_BUCKETS_BY_DOMAIN.get(domain, frozenset({"general"}))
-    bucket, ok = _coerce_enum(
-        item.get("bucket"), allowed_buckets, DNA_DEFAULT_BUCKET.get(domain, "general"),
-    )
+    raw_bucket = str(item.get("bucket") or "").strip().lower().replace(" ", "_").replace("-", "_")
+    bucket_coerced = False
+    if domain == "love":
+        normalized = normalize_love_bucket(raw_bucket)
+        if normalized:
+            bucket, ok = normalized, True
+        elif not raw_bucket:
+            bucket, ok = LOVE_BUCKET_UNKNOWN, True
+            bucket_coerced = True
+        else:
+            bucket, ok = LOVE_BUCKET_UNKNOWN, False
+            bucket_coerced = True
+    else:
+        bucket, ok = _coerce_enum(
+            item.get("bucket"), allowed_buckets, DNA_DEFAULT_BUCKET.get(domain, "general"),
+        )
+        bucket_coerced = not ok and bool(raw_bucket)
     coercions += 0 if ok else 1
 
     subject, ok = _coerce_enum(item.get("subject"), DNA_SUBJECTS, "unknown")
@@ -380,6 +462,8 @@ def validate_question_dna_item(raw: Any, original_question: str = "") -> dict:
         timing = True
     elif timing and qtype in ("personality", "chart_fact", "explanation"):
         timing = False
+    if qtype in ("prediction", "risk", "compatibility") and tense == "unspecified":
+        tense = "future"
 
     confidence = _coerce_confidence(item.get("confidence"))
     if coercions:
@@ -387,10 +471,23 @@ def validate_question_dna_item(raw: Any, original_question: str = "") -> dict:
 
     nq = str(item.get("normalized_question") or "").strip() or (original_question or "").strip()
 
+    engine_archetype = map_love_bucket_to_mr(bucket) if domain == "love" else None
+    bucket_match_score, bucket_match_confidence = derive_bucket_match(
+        confidence,
+        domain=domain,
+        bucket=bucket,
+        bucket_coerced=bucket_coerced,
+        coercions=coercions,
+    )
+
     return {
         "normalized_question": nq,
         "domain": domain,
         "bucket": bucket,
+        "engine_archetype": engine_archetype,
+        "bucket_coerced": bucket_coerced,
+        "bucket_match_score": bucket_match_score,
+        "bucket_match_confidence": bucket_match_confidence,
         "intent": str(item.get("intent") or "").strip()[:200],
         "subject": subject,
         "target": target,
@@ -424,6 +521,8 @@ def validate_question_dna(raw: Any, original_question: str = "") -> dict:
     if not isinstance(items, list) or not items:
         return _fallback_dna(original_question, "empty_questions")
     out = [validate_question_dna_item(it, original_question=original_question) for it in items[:6]]
+    for it in out:
+        audit_log_low_bucket_match(it.get("normalized_question") or original_question, it)
     return {"questions": out, "source": "llm", "latency_ms": 0}
 
 

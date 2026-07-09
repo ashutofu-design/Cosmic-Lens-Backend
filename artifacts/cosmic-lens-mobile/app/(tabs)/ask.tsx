@@ -258,6 +258,235 @@ function PressScale({
   );
 }
 
+const DNA_DOMAIN_LABEL: Record<string, string> = {
+  love: "Relationship",
+  marriage: "Marriage",
+  career: "Career",
+  finance: "Finance",
+  health: "Health",
+  family: "Family",
+  education: "Education",
+  travel: "Travel",
+  legal: "Legal",
+  spiritual: "Spiritual",
+  general: "General",
+};
+
+const DNA_BUCKET_LABEL: Record<string, string> = {
+  relationship_promise: "Relationship Promise",
+  love_feelings: "Love & Feelings",
+  partner_nature: "Partner Nature",
+  compatibility: "Compatibility",
+  commitment: "Commitment",
+  trust_loyalty: "Trust & Loyalty",
+  communication: "Communication",
+  emotional_bonding: "Emotional Bonding",
+  physical_intimacy: "Physical & Intimacy",
+  third_person_infidelity: "Third Person / Infidelity",
+  dating_courtship: "Dating & Courtship",
+  long_distance: "Long Distance",
+  family_social_acceptance: "Family & Social Acceptance",
+  relationship_challenges: "Relationship Challenges",
+  toxicity_red_flags: "Toxicity & Red Flags",
+  breakup_separation: "Breakup & Separation",
+  reconciliation_ex: "Reconciliation & Ex",
+  marriage_potential: "Marriage Potential",
+  relationship_future: "Relationship Future (Non-Timing)",
+  relationship_decisions: "Relationship Decisions",
+  spiritual_karmic: "Spiritual / Karmic Connection",
+  relationship_remedies: "Relationship Remedies",
+  unknown_relationship_intent: "Unknown (Audit)",
+  general_mr: "Marriage General",
+  govt_job: "Government Job",
+  career_milestones: "Career Milestones",
+};
+
+const DNA_SUBJECT_LABEL: Record<string, string> = {
+  self: "Self",
+  partner: "Partner",
+  spouse: "Spouse",
+  family_member: "Family Member",
+  other_person: "Other Person",
+  subject_person: "Subject Person",
+};
+
+const DNA_TARGET_LABEL: Record<string, string> = {
+  self: "Self",
+  self_relationship: "Self (Relationship)",
+  subject_person: "Subject Person",
+  event: "Event",
+  situation: "Situation",
+};
+
+function dnaDisplayLabel(map: Record<string, string>, key?: string | null): string {
+  if (!key) return "—";
+  return map[key] || key.replace(/_/g, " ");
+}
+
+function dnaYesNo(v?: boolean | null): string {
+  if (v === true) return "Yes";
+  if (v === false) return "No";
+  return "—";
+}
+
+function dnaConfPct(v?: number | null): string {
+  if (typeof v !== "number" || Number.isNaN(v)) return "—";
+  return `${(v * 100).toFixed(0)}%`;
+}
+
+type DnaCopySub = {
+  normalized_question?: string;
+  domain?: string;
+  bucket?: string;
+  engine_archetype?: string | null;
+  intent?: string;
+  subject?: string;
+  target?: string;
+  question_type?: string;
+  timing?: boolean;
+  tense?: string;
+  emotion?: string;
+  risk?: string;
+  is_followup?: boolean;
+  followup_of?: string;
+  confidence?: number;
+  bucket_match_score?: number;
+  bucket_match_confidence?: string;
+  bucket_coerced?: boolean;
+  required_modules?: string[];
+};
+
+type DnaCopyItem = {
+  index?: number;
+  question: string;
+  normalized_question?: string;
+  domain?: string;
+  bucket?: string;
+  engine_archetype?: string | null;
+  intent?: string;
+  subject?: string;
+  target?: string;
+  question_type?: string;
+  timing?: boolean;
+  tense?: string;
+  emotion?: string;
+  risk?: string;
+  is_followup?: boolean;
+  followup_of?: string;
+  confidence?: number;
+  bucket_match_score?: number;
+  bucket_match_confidence?: string;
+  bucket_coerced?: boolean;
+  required_modules?: string[];
+  latency_ms?: number;
+  dna?: { questions?: DnaCopySub[] };
+};
+
+function dnaSubsFromItem(it: DnaCopyItem): DnaCopySub[] {
+  const subs = it.dna?.questions;
+  const multi = Array.isArray(subs) && subs.length > 1;
+  if (multi) return subs!;
+  return [{
+    normalized_question: it.normalized_question || it.question,
+    domain: it.domain,
+    bucket: it.bucket,
+    engine_archetype: it.engine_archetype,
+    intent: it.intent,
+    subject: it.subject,
+    target: it.target,
+    question_type: it.question_type,
+    timing: it.timing,
+    tense: it.tense,
+    emotion: it.emotion,
+    risk: it.risk,
+    is_followup: it.is_followup,
+    followup_of: it.followup_of,
+    confidence: it.confidence,
+    bucket_match_score: it.bucket_match_score,
+    bucket_match_confidence: it.bucket_match_confidence,
+    bucket_coerced: it.bucket_coerced,
+    required_modules: it.required_modules,
+  }];
+}
+
+function formatDnaSubForCopy(sub: DnaCopySub, splitLabel?: string): string {
+  const lines: string[] = [];
+  if (splitLabel) lines.push(splitLabel);
+  const add = (label: string, value: string) => lines.push(`${label}: ${value}`);
+  add("Normalized", sub.normalized_question || "—");
+  add("Domain", `${dnaDisplayLabel(DNA_DOMAIN_LABEL, sub.domain)} (${sub.domain || "—"})`);
+  add("Bucket", `${dnaDisplayLabel(DNA_BUCKET_LABEL, sub.bucket)} (${sub.bucket || "—"})`);
+  add("Intent", sub.intent || "—");
+  add("Subject", `${dnaDisplayLabel(DNA_SUBJECT_LABEL, sub.subject)} (${sub.subject || "—"})`);
+  add("Target", `${dnaDisplayLabel(DNA_TARGET_LABEL, sub.target)} (${sub.target || "—"})`);
+  add("Question Type", sub.question_type ? sub.question_type.replace(/_/g, " ") : "—");
+  add("Timing Required", dnaYesNo(sub.timing));
+  add("Time Context", sub.tense && sub.tense !== "unspecified" ? sub.tense : "—");
+  add("Follow-up", dnaYesNo(sub.is_followup));
+  if (sub.is_followup && sub.followup_of) add("Follow-up Of", sub.followup_of);
+  add("Emotion", sub.emotion ? String(sub.emotion).replace(/_/g, " ") : "—");
+  add("Risk", sub.risk ? String(sub.risk) : "—");
+  add("Engine Archetype", sub.engine_archetype || "—");
+  add(
+    "Modules",
+    Array.isArray(sub.required_modules) && sub.required_modules.length > 0
+      ? sub.required_modules.join(", ")
+      : "—",
+  );
+  add("Confidence", dnaConfPct(sub.confidence));
+  add(
+    "Bucket Match",
+    sub.bucket_match_confidence
+      ? `${String(sub.bucket_match_confidence).toUpperCase()}${
+          typeof sub.bucket_match_score === "number"
+            ? ` (${(sub.bucket_match_score * 100).toFixed(0)}%)`
+            : ""
+        }`
+      : "—",
+  );
+  return lines.join("\n");
+}
+
+function formatAllDnaResultsForCopy(items: DnaCopyItem[]): string {
+  if (!items.length) return "";
+  const blocks = items.map((it, i) => {
+    const subs = dnaSubsFromItem(it);
+    const multi = subs.length > 1;
+    const header = [
+      `=== Q${it.index ?? i + 1}${
+        typeof it.latency_ms === "number" ? ` · ${it.latency_ms}ms` : ""
+      }${multi ? ` · split ×${subs.length}` : ""} ===`,
+      `Question: ${it.question}`,
+    ].join("\n");
+    const body = subs
+      .map((sub, si) =>
+        formatDnaSubForCopy(sub, multi ? `--- Split ${si + 1} of ${subs.length} ---` : undefined),
+      )
+      .join("\n\n");
+    return `${header}\n\n${body}`;
+  });
+  return blocks.join("\n\n" + "─".repeat(48) + "\n\n");
+}
+
+function DnaFieldRow({
+  label,
+  value,
+  textColor,
+  mutedColor,
+}: {
+  label: string;
+  value: string;
+  textColor: string;
+  mutedColor: string;
+}) {
+  return (
+    <View style={{ flexDirection: "row", marginTop: 5, gap: 8 }}>
+      <Text style={{ color: mutedColor, fontSize: 12, width: 132, fontWeight: "600" }}>{label}</Text>
+      <Text style={{ color: textColor, fontSize: 12, flex: 1, lineHeight: 18 }}>{value}</Text>
+    </View>
+  );
+}
+
 export default function AskScreen() {
   const insets = useSafeAreaInsets();
   const C = useC();
@@ -489,15 +718,24 @@ export default function AskScreen() {
   type DnaItem = {
     index?: number;
     question: string;
+    normalized_question?: string;
     domain?: string;
     bucket?: string;
+    engine_archetype?: string | null;
     intent?: string;
     subject?: string;
     target?: string;
     question_type?: string;
     timing?: boolean;
     tense?: string;
+    emotion?: string;
+    risk?: string;
+    is_followup?: boolean;
+    followup_of?: string;
     confidence?: number;
+    bucket_match_score?: number;
+    bucket_match_confidence?: string;
+    bucket_coerced?: boolean;
     required_modules?: string[];
     split_count?: number;
     source?: string;
@@ -508,22 +746,33 @@ export default function AskScreen() {
   const [dnaRunning, setDnaRunning] = useState(false);
   const [dnaProgress, setDnaProgress] = useState<string | null>(null);
   const [dnaItems, setDnaItems] = useState<DnaItem[]>([]);
+  const [dnaCopiedAll, setDnaCopiedAll] = useState(false);
   const dnaScrollRef = useRef<ScrollView>(null);
+  const dnaCopiedAllTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const dnaItemFromPayload = (question: string, dna: any, index = 1): DnaItem => {
     const primary = (dna?.questions || [])[0] || {};
     return {
       index,
       question,
+      normalized_question: primary.normalized_question,
       domain: primary.domain,
       bucket: primary.bucket,
+      engine_archetype: primary.engine_archetype,
       intent: primary.intent,
       subject: primary.subject,
       target: primary.target,
       question_type: primary.question_type,
       timing: primary.timing,
       tense: primary.tense,
+      emotion: primary.emotion,
+      risk: primary.risk,
+      is_followup: primary.is_followup,
+      followup_of: primary.followup_of,
       confidence: primary.confidence,
+      bucket_match_score: primary.bucket_match_score,
+      bucket_match_confidence: primary.bucket_match_confidence,
+      bucket_coerced: primary.bucket_coerced,
       required_modules: primary.required_modules,
       split_count: Array.isArray(dna?.questions) ? dna.questions.length : 1,
       source: dna?.source,
@@ -641,12 +890,18 @@ export default function AskScreen() {
             question: evt.question || "",
             domain: evt.domain,
             bucket: evt.bucket,
+            engine_archetype: evt.engine_archetype ?? (evt.dna?.questions?.[0] as any)?.engine_archetype,
             intent: evt.intent,
             subject: evt.subject,
             target: evt.target,
             question_type: evt.question_type,
             timing: evt.timing,
             tense: evt.tense,
+            emotion: evt.emotion,
+            risk: evt.risk,
+            is_followup: evt.is_followup,
+            followup_of: evt.followup_of,
+            normalized_question: evt.normalized_question,
             confidence: evt.confidence,
             required_modules: evt.required_modules,
             split_count: evt.split_count,
@@ -697,6 +952,21 @@ export default function AskScreen() {
       setDnaRunning(false);
     }
   }, [dnaInput, dnaRunning, showDemo, user?.api_key, user?.id]);
+
+  const copyAllDnaResults = useCallback(() => {
+    if (!dnaItems.length) return;
+    const value = formatAllDnaResultsForCopy(dnaItems);
+    if (!value) return;
+    void (async () => {
+      try {
+        await Clipboard.setStringAsync(value);
+        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch {}
+      } catch {}
+      setDnaCopiedAll(true);
+      if (dnaCopiedAllTimerRef.current) clearTimeout(dnaCopiedAllTimerRef.current);
+      dnaCopiedAllTimerRef.current = setTimeout(() => setDnaCopiedAll(false), 2000);
+    })();
+  }, [dnaItems]);
 
   const runBatchTest = useCallback(async () => {
     if (showDemo) {
@@ -2123,10 +2393,33 @@ export default function AskScreen() {
 
           {dnaItems.length > 0 ? (
             <View style={{ gap: 12 }}>
-              <Text style={{ color: C.textMuted, fontSize: 12, fontWeight: "700" }}>
-                DNA RESULTS ({dnaItems.length})
-                {dnaProgress ? ` · ${dnaProgress}` : ""}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <Text style={{ color: C.textMuted, fontSize: 12, fontWeight: "700", flex: 1 }}>
+                  DNA RESULTS ({dnaItems.length})
+                  {dnaProgress ? ` · ${dnaProgress}` : ""}
+                </Text>
+                <Pressable
+                  onPress={copyAllDnaResults}
+                  disabled={dnaRunning}
+                  style={({ pressed }) => ({
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 10,
+                    backgroundColor: dnaCopiedAll ? "#10b98122" : `${C.accent}18`,
+                    borderWidth: 1,
+                    borderColor: dnaCopiedAll ? "#10b98155" : `${C.accent}44`,
+                    opacity: pressed ? 0.85 : 1,
+                  })}
+                >
+                  <Feather name={dnaCopiedAll ? "check" : "copy"} size={14} color={dnaCopiedAll ? "#10b981" : C.accent} />
+                  <Text style={{ color: dnaCopiedAll ? "#10b981" : C.accent, fontSize: 12, fontWeight: "700" }}>
+                    {dnaCopiedAll ? "Copied!" : "Copy All"}
+                  </Text>
+                </Pressable>
+              </View>
               {dnaItems.map((it, i) => {
                 const subs = it.dna?.questions;
                 const multi = Array.isArray(subs) && subs.length > 1;
@@ -2148,17 +2441,25 @@ export default function AskScreen() {
                     </Text>
                     <Text style={{ color: C.text, fontWeight: "600", marginBottom: 10 }}>{it.question}</Text>
                     {(multi ? subs! : [{
+                      normalized_question: it.normalized_question || it.question,
                       domain: it.domain,
                       bucket: it.bucket,
+                      engine_archetype: it.engine_archetype,
                       intent: it.intent,
                       subject: it.subject,
                       target: it.target,
                       question_type: it.question_type,
                       timing: it.timing,
                       tense: it.tense,
+                      emotion: it.emotion,
+                      risk: it.risk,
+                      is_followup: it.is_followup,
+                      followup_of: it.followup_of,
                       confidence: it.confidence,
+                      bucket_match_score: it.bucket_match_score,
+                      bucket_match_confidence: it.bucket_match_confidence,
+                      bucket_coerced: it.bucket_coerced,
                       required_modules: it.required_modules,
-                      normalized_question: it.question,
                     }]).map((sub: any, si: number) => (
                       <View
                         key={`sub_${si}`}
@@ -2170,58 +2471,106 @@ export default function AskScreen() {
                         }}
                       >
                         {multi ? (
-                          <Text style={{ color: C.textMuted, fontSize: 11, marginBottom: 6 }}>
-                            Split {si + 1}: {sub.normalized_question || ""}
+                          <Text style={{ color: C.textMuted, fontSize: 11, marginBottom: 6, fontWeight: "700" }}>
+                            Split {si + 1} of {subs!.length}
                           </Text>
                         ) : null}
-                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-                          {[
-                            sub.domain,
-                            sub.bucket,
-                            sub.question_type,
-                            sub.timing ? "timing" : "static",
-                            sub.tense,
-                          ].filter(Boolean).map((tag: string) => (
-                            <View
-                              key={tag}
-                              style={{
-                                paddingHorizontal: 8,
-                                paddingVertical: 3,
-                                borderRadius: 8,
-                                backgroundColor: `${C.accent}18`,
-                              }}
-                            >
-                              <Text style={{ color: C.accent, fontSize: 11, fontWeight: "700" }}>{tag}</Text>
-                            </View>
-                          ))}
-                          {typeof sub.confidence === "number" ? (
-                            <View
-                              style={{
-                                paddingHorizontal: 8,
-                                paddingVertical: 3,
-                                borderRadius: 8,
-                                backgroundColor: sub.confidence >= 0.85 ? "#10b98122" : "#f59e0b22",
-                              }}
-                            >
-                              <Text style={{ color: sub.confidence >= 0.85 ? "#10b981" : "#f59e0b", fontSize: 11, fontWeight: "700" }}>
-                                conf {(sub.confidence * 100).toFixed(0)}%
-                              </Text>
-                            </View>
-                          ) : null}
-                        </View>
-                        <Text style={{ color: C.textMid, fontSize: 12, lineHeight: 18 }}>
-                          <Text style={{ fontWeight: "700" }}>intent: </Text>
-                          {sub.intent || "—"}
-                        </Text>
-                        <Text style={{ color: C.textMid, fontSize: 12, lineHeight: 18, marginTop: 4 }}>
-                          <Text style={{ fontWeight: "700" }}>subject → target: </Text>
-                          {(sub.subject || "?") + " → " + (sub.target || "?")}
-                        </Text>
-                        {Array.isArray(sub.required_modules) && sub.required_modules.length > 0 ? (
-                          <Text style={{ color: C.textMuted, fontSize: 11, marginTop: 6 }}>
-                            modules: {sub.required_modules.join(", ")}
-                          </Text>
+                        <DnaFieldRow
+                          label="Normalized"
+                          value={sub.normalized_question || "—"}
+                          textColor={C.text}
+                          mutedColor={C.textMuted}
+                        />
+                        <DnaFieldRow
+                          label="Domain"
+                          value={`${dnaDisplayLabel(DNA_DOMAIN_LABEL, sub.domain)} (${sub.domain || "—"})`}
+                          textColor={C.text}
+                          mutedColor={C.textMuted}
+                        />
+                        <DnaFieldRow
+                          label="Bucket"
+                          value={`${dnaDisplayLabel(DNA_BUCKET_LABEL, sub.bucket)} (${sub.bucket || "—"})`}
+                          textColor={C.text}
+                          mutedColor={C.textMuted}
+                        />
+                        <DnaFieldRow label="Intent" value={sub.intent || "—"} textColor={C.text} mutedColor={C.textMuted} />
+                        <DnaFieldRow
+                          label="Subject"
+                          value={`${dnaDisplayLabel(DNA_SUBJECT_LABEL, sub.subject)} (${sub.subject || "—"})`}
+                          textColor={C.text}
+                          mutedColor={C.textMuted}
+                        />
+                        <DnaFieldRow
+                          label="Target"
+                          value={`${dnaDisplayLabel(DNA_TARGET_LABEL, sub.target)} (${sub.target || "—"})`}
+                          textColor={C.text}
+                          mutedColor={C.textMuted}
+                        />
+                        <DnaFieldRow
+                          label="Question Type"
+                          value={sub.question_type ? sub.question_type.replace(/_/g, " ") : "—"}
+                          textColor={C.text}
+                          mutedColor={C.textMuted}
+                        />
+                        <DnaFieldRow label="Timing Required" value={dnaYesNo(sub.timing)} textColor={C.text} mutedColor={C.textMuted} />
+                        <DnaFieldRow
+                          label="Time Context"
+                          value={sub.tense && sub.tense !== "unspecified" ? sub.tense : "—"}
+                          textColor={C.text}
+                          mutedColor={C.textMuted}
+                        />
+                        <DnaFieldRow label="Follow-up" value={dnaYesNo(sub.is_followup)} textColor={C.text} mutedColor={C.textMuted} />
+                        {sub.is_followup && sub.followup_of ? (
+                          <DnaFieldRow label="Follow-up Of" value={sub.followup_of} textColor={C.text} mutedColor={C.textMuted} />
                         ) : null}
+                        {multi ? (
+                          <DnaFieldRow label="Multiple Questions" value="Yes" textColor={C.text} mutedColor={C.textMuted} />
+                        ) : si === 0 ? (
+                          <DnaFieldRow label="Multiple Questions" value="No" textColor={C.text} mutedColor={C.textMuted} />
+                        ) : null}
+                        <DnaFieldRow
+                          label="Emotion"
+                          value={sub.emotion ? String(sub.emotion).replace(/_/g, " ") : "—"}
+                          textColor={C.text}
+                          mutedColor={C.textMuted}
+                        />
+                        <DnaFieldRow
+                          label="Risk"
+                          value={sub.risk ? String(sub.risk) : "—"}
+                          textColor={C.text}
+                          mutedColor={C.textMuted}
+                        />
+                        <DnaFieldRow
+                          label="Engine Archetype"
+                          value={sub.engine_archetype || "—"}
+                          textColor={C.text}
+                          mutedColor={C.textMuted}
+                        />
+                        <DnaFieldRow
+                          label="Modules"
+                          value={
+                            Array.isArray(sub.required_modules) && sub.required_modules.length > 0
+                              ? sub.required_modules.join(", ")
+                              : "—"
+                          }
+                          textColor={C.text}
+                          mutedColor={C.textMuted}
+                        />
+                        <DnaFieldRow label="Confidence" value={dnaConfPct(sub.confidence)} textColor={C.text} mutedColor={C.textMuted} />
+                        <DnaFieldRow
+                          label="Bucket Match"
+                          value={
+                            sub.bucket_match_confidence
+                              ? `${String(sub.bucket_match_confidence).toUpperCase()}${
+                                  typeof sub.bucket_match_score === "number"
+                                    ? ` (${(sub.bucket_match_score * 100).toFixed(0)}%)`
+                                    : ""
+                                }`
+                              : "—"
+                          }
+                          textColor={C.text}
+                          mutedColor={C.textMuted}
+                        />
                       </View>
                     ))}
                   </View>

@@ -1,0 +1,82 @@
+"""Engine orchestrator — primary + secondary engine execution."""
+from __future__ import annotations
+
+from typing import Any
+
+from .registry import OrchestratorPlan, plan_orchestration
+from .schema import EngineOutputV2
+
+
+def _run_engine(engine_id: str, kundli: dict, question: str, **kwargs: Any) -> EngineOutputV2 | None:
+    eid = engine_id.strip().lower()
+    if eid == "commitment":
+        from .engines.commitment import run_commitment_v2
+
+        return run_commitment_v2(
+            kundli,
+            question,
+            session_id=kwargs.get("session_id", ""),
+            wants_explain=kwargs.get("wants_explain", False),
+            orchestrator_meta=kwargs.get("orchestrator_meta"),
+        )
+    # Other engines: v1 adapter until migrated
+    return None
+
+
+def orchestrate(
+    kundli: dict,
+    question: str,
+    *,
+    dna_bucket: str | None = None,
+    primary_archetype: str | None = None,
+    session_id: str = "",
+    wants_explain: bool = False,
+) -> dict[str, Any]:
+    plan = plan_orchestration(
+        question,
+        dna_bucket=dna_bucket,
+        primary_archetype=primary_archetype,
+    )
+    meta = {"primary": plan.primary, "secondary": plan.secondary, "reason": plan.reason}
+
+    primary_out = _run_engine(
+        plan.primary,
+        kundli,
+        question,
+        session_id=session_id,
+        wants_explain=wants_explain,
+        orchestrator_meta=meta,
+    )
+
+    secondary_out: list[dict[str, Any]] = []
+    for sec in plan.secondary:
+        out = _run_engine(
+            sec,
+            kundli,
+            question,
+            session_id=session_id,
+            wants_explain=wants_explain,
+            orchestrator_meta={**meta, "role": "secondary"},
+        )
+        if out:
+            secondary_out.append(out.to_json_ready())
+
+    if primary_out is None:
+        return {
+            "orchestrator": meta,
+            "primary": None,
+            "secondary": secondary_out,
+            "combined_verdict": "",
+        }
+
+    combined = primary_out.verdict.headline
+    if secondary_out:
+        sec_labels = [s.get("verdict", {}).get("headline", "") for s in secondary_out if s]
+        combined = f"{combined} | Also: {'; '.join(x for x in sec_labels if x)}"
+
+    return {
+        "orchestrator": meta,
+        "primary": primary_out.to_json_ready(),
+        "secondary": secondary_out,
+        "combined_verdict": combined,
+    }

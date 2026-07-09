@@ -62,6 +62,17 @@ def _commitment_verdict(level: str, angle: str) -> str:
 
 
 def run_commitment(kundli: dict, question: str, *, wants_explain: bool = False) -> EngineResult:
+    try:
+        from ask_mr.v2 import v2_enabled_for
+        from ask_mr.v2.adapter import v2_to_engine_result
+        from ask_mr.v2.engines.commitment import run_commitment_v2
+
+        if v2_enabled_for("commitment"):
+            out = run_commitment_v2(kundli, question, wants_explain=wants_explain)
+            return v2_to_engine_result(out)
+    except Exception:
+        pass
+
     from ask_intent_fidelity import infer_partner_commitment_angle
 
     k = dict(kundli or {})

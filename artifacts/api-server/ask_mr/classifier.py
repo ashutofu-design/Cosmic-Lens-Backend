@@ -479,7 +479,7 @@ def classify_mr_archetype(question: str) -> str:
 
         r"(?ix)\b("
 
-        r"long\s*distance|ldr|alag\s*shahr|different\s*city|dur\s*se\s*rishta|"
+        r"long[\s-]*distance|ldr|alag\s*shahr|different\s*city|dur\s*se\s*rishta|"
 
         r"online\s*relationship|online\s*rishta|virtual\s*love|internet\s*love"
 
@@ -603,32 +603,45 @@ def classify_mr_archetype(question: str) -> str:
 
 
 
-    # --- Marriage quality / compatibility / emotional compat / communication ---
+    # --- Compatibility / gun milan / couple match (before marriage-quality general_mr) ---
+
+    try:
+        from ask_intent_fidelity import infer_compatibility_angle
+
+        if infer_compatibility_angle(q) and not re.search(
+            r"\b(bedroom|bed\b|conjugal|private\s*life|physical\s*compat|intimacy|suhag)\b", q
+        ):
+            return "compatibility"
+    except Exception:
+        pass
 
     if re.search(
-
         r"(?ix)\b("
-
-        r"shaadi\s*achhi|happy|khush|sukh|marriage\s*quality|compatible|compatibility|"
-
-        r"match\s*making|rishta\s*achha|vivah\s*sukh|strengths?|positive\s*changes?|"
-
-        r"major\s*challenges?|conflicts?|kaam\s+karna\s+chahiye|gun\s*milan|36\s*gun|"
-
-        r"emotional\s*compat|samajh\s*payega|samajh\s*payegi|communication|teamwork|"
-
-        r"stable|stability|growth|mutual\s*support|conflict\s*style|emotional\s*maturity|"
-
-        r"understanding|shaadi\s*ke\s*baad.*(khush|sukh|achh)"
-
+        r"compatible|compatibility|gun\s*milan|36\s*gun|match\s*making|rishta\s*achha|"
+        r"emotional\s*compat|mentally\s*compat|intellectually\s*compat|"
+        r"thinking\s*match|soch\s*match|values?\s*same|life\s*goals?\s*match|"
+        r"personalities?\s*match|lifestyle\s*compat|dil\s*ka\s*match"
         r")\b",
-
         q,
-
     ) and not re.search(
         r"\b(bedroom|bed\b|conjugal|private\s*life|physical\s*compat|intimacy|suhag)\b", q
     ):
+        return "compatibility"
 
+    # --- Marriage quality / communication / stability (not dedicated compatibility) ---
+
+    if re.search(
+        r"(?ix)\b("
+        r"shaadi\s*achhi|happy|khush|sukh|marriage\s*quality|vivah\s*sukh|strengths?|"
+        r"positive\s*changes?|major\s*challenges?|conflicts?|kaam\s+karna\s+chahiye|"
+        r"samajh\s*payega|samajh\s*payegi|communication|teamwork|stable|stability|growth|"
+        r"mutual\s*support|conflict\s*style|emotional\s*maturity|understanding|"
+        r"shaadi\s*ke\s*baad.*(khush|sukh|achh)"
+        r")\b",
+        q,
+    ) and not re.search(
+        r"\b(bedroom|bed\b|conjugal|private\s*life|physical\s*compat|intimacy|suhag)\b", q
+    ):
         return "general_mr"
 
 

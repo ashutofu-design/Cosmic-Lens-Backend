@@ -66,6 +66,7 @@ _DYAD_COUPLE_RX = re.compile(
     r"hum\s+dono\s+mein?|ham\s+dono\s+mein?|"
     r"tum\s+dono\s+ke\s+beech|aap\s+dono\s+ke\s+beech|"
     r"dono\s+ke\s+beech|"
+    r"hamari|hamara|hamare|humari|humara|humare|"
     r"between\s+(?:us|the\s+two\s+of\s+us|both\s+of\s+us)"
     r")\b"
 )
@@ -77,6 +78,143 @@ _CHEMISTRY_TOPIC_RX = re.compile(
 
 def is_dyadic_couple_question(question: str) -> bool:
     return bool(_DYAD_COUPLE_RX.search((question or "").strip()))
+
+
+_COMPAT_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    (
+        "personalities_match",
+        re.compile(r"(?ix)\b(personality|personalities|swabhav)\b.{0,40}\b(match|milt)"),
+    ),
+    (
+        "thinking_match",
+        re.compile(r"(?ix)\b(thinking|soch)\b.{0,40}\b(match|milt)"),
+    ),
+    (
+        "values_match",
+        re.compile(r"(?ix)\b(values?|sanskaar)\b.{0,40}\b(same|match|milt|align)"),
+    ),
+    (
+        "life_goals_match",
+        re.compile(
+            r"(?ix)\b(life\s*goals?|goals?|sapne|ambition|ambitions)\b.{0,40}\b(match|milt|align)"
+        ),
+    ),
+    (
+        "expectations_match",
+        re.compile(r"(?ix)\b(expectations?|ummeed|expect)\b"),
+    ),
+    (
+        "emotional_compatibility",
+        re.compile(r"(?ix)\b(emotionally|emotional)\b.{0,30}\b(compat|match|milt)"),
+    ),
+    (
+        "mental_compatibility",
+        re.compile(r"(?ix)\b(mentally|mental)\b.{0,30}\b(compat|match|milt)"),
+    ),
+    (
+        "intellectual_compatibility",
+        re.compile(r"(?ix)\b(intellectually|intellectual)\b.{0,30}\b(compat|match|milt)"),
+    ),
+    (
+        "general_compatibility",
+        re.compile(r"(?ix)\b(compat(?:ible|ibility)?|match)\b"),
+    ),
+]
+
+_COMPAT_ANGLE_LABELS: dict[str, str] = {
+    "personalities_match": (
+        "Personality / nature match — daily temperament, traits, vibe dono ka"
+    ),
+    "thinking_match": "Thinking / mindset match — soch, ideas, samajhne ka style",
+    "values_match": "Values / principles — kya dono ki soch aur ethics align hain",
+    "life_goals_match": "Life goals / ambitions — long-term sapne aur direction align hain ya nahi",
+    "expectations_match": "Expectations — dono ki ummeedein aur priorities same hain ya nahi",
+    "emotional_compatibility": (
+        "Emotional compatibility — feelings, mood-sync, dil ka connection"
+    ),
+    "mental_compatibility": (
+        "Mental compatibility — dimaag ka match, processing style, soch ka rhythm"
+    ),
+    "intellectual_compatibility": (
+        "Intellectual compatibility — ideas, learning, debate, depth of conversation"
+    ),
+    "general_compatibility": "General couple compatibility — overall match / bond",
+}
+
+
+def infer_compatibility_angle(question: str) -> str | None:
+    """Exact compatibility sub-angle for couple matrix questions."""
+    q = (question or "").strip()
+    if not q:
+        return None
+    if not (
+        is_dyadic_couple_question(q)
+        or re.search(r"(?ix)\b(compat|match|values?|personalities?|expectations?)\b", q)
+    ):
+        return None
+    for name, rx in _COMPAT_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    return None
+
+
+def compatibility_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _COMPAT_ANGLE_LABELS.get(key, key.replace("_", " "))
+
+
+_PARTNER_COMMITMENT_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("commitment_ready", re.compile(r"(?ix)\b(commitment|commit).{0,35}\b(ready|taiyaar)\b|\bready\b.{0,35}\bcommit")),
+    ("serious_relationship", re.compile(r"(?ix)\bserious\b.{0,25}\b(relationship|rishta)\b")),
+    ("casual_relationship", re.compile(r"(?ix)\bcasual\b.{0,25}\b(relationship|rishta)\b")),
+    ("long_term_intent", re.compile(r"(?ix)\blong[\s-]*term\b")),
+    ("future_together", re.compile(r"(?ix)\b(future|aage|kal).{0,30}\b(saath|sath|with\s+me)\b")),
+    ("life_partner_view", re.compile(r"(?ix)\b(life\s*partner|jeevan\s*sathi)\b")),
+    ("loyalty_intent", re.compile(r"(?ix)\b(loyal|exclusive|faithful|wafad|vafad)\b")),
+    ("time_pass", re.compile(r"(?ix)\b(time\s*pass|waqt\s*pass)\b")),
+    ("genuine_intent", re.compile(r"(?ix)\b(genuine|sachcha|sachhe)\b")),
+    ("effort_and_maintain", re.compile(r"(?ix)\b(effort|maintain|nibha|responsibility|sacrifice|compromise)\b")),
+    ("trust_blockers", re.compile(r"(?ix)\b(trust\s*issues|past\s*relationship|emotionally\s*unavailable|commitment[\s-]*phobic|darta)\b")),
+    ("public_acceptance", re.compile(r"(?ix)\b(public|family|official|introduce|secret)\b")),
+]
+
+_PARTNER_COMMITMENT_LABELS: dict[str, str] = {
+    "commitment_ready": "Partner commitment ke liye ready hai ya nahi",
+    "serious_relationship": "Partner serious long-term relationship chahta hai ya nahi",
+    "casual_relationship": "Partner casual / time-pass relationship me hai ya nahi",
+    "long_term_intent": "Partner long-term relationship chahta hai ya nahi",
+    "future_together": "Partner future user ke saath dekhta hai ya nahi",
+    "life_partner_view": "Partner user ko life partner maanta hai ya nahi",
+    "loyalty_intent": "Partner loyal / exclusive rehna chahta hai ya nahi",
+    "time_pass": "Partner sirf time pass kar raha hai ya nahi",
+    "genuine_intent": "Partner genuinely invested hai ya nahi",
+    "effort_and_maintain": "Partner relationship me effort / responsibility lega ya nahi",
+    "trust_blockers": "Trust / past / emotional unavailability commitment block kar rahi hai ya nahi",
+    "public_acceptance": "Partner relationship ko public / family ke saamne accept karega ya secret rakhega",
+}
+
+
+def infer_partner_commitment_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    if not re.search(r"(?ix)\b(partner|spouse|bf|gf|pati|patni|boyfriend|girlfriend)\b", q):
+        return None
+    if not re.search(
+        r"(?ix)\b(commit|serious|casual|loyal|relationship|nibha|trust|genuine|time\s*pass|"
+        r"exclusive|sacrifice|compromise|responsibility|effort|maintain|future|official|secret)\b",
+        q,
+    ):
+        return None
+    for name, rx in _PARTNER_COMMITMENT_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    return "general_commitment"
+
+
+def partner_commitment_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _PARTNER_COMMITMENT_LABELS.get(key, "Partner commitment / relationship intent")
 
 
 _PARTNER_FIT_RX = re.compile(
@@ -168,9 +306,18 @@ _ARCHETYPE_ANCHOR_RX: dict[str, re.Pattern[str]] = {
     "chemistry": re.compile(
         r"(?ix)\b(chemistry|attraction|spark|passion|romance|romantic)\b"
     ),
+    "compatibility": re.compile(
+        r"(?ix)\b("
+        r"compat(?:ible|ibility)?|gun\s*milan|36\s*gun|match\s*making|"
+        r"thinking\s*match|soch\s*match|values?\s*same|life\s*goals?\s*match|"
+        r"personalities?\s*match|emotional\s*compat|mental\s*compat|intellectual\s*compat"
+        r")\b"
+    ),
     "dating_courtship": re.compile(
         r"(?ix)\b(true\s*love|sach+a\s*pyaar|sach+a\s*pyar|milne\s+ka\s+yog|"
-        r"dating|courtship|friend\s*to\s*lover|red\s*flags?|green\s*flags?)\b"
+        r"love\s+life|love\s+live|dating|courtship|relationship|"
+        r"friend\s*to\s*lover|red\s*flags?|green\s*flags?|"
+        r"kab\s+shuru|shuru\s+hoga)\b"
     ),
     "manglik": re.compile(r"(?ix)\b(manglik|mangal\s*dosh)\b"),
 }
@@ -282,7 +429,13 @@ def build_question_explanation_fallback(
 
     if scope == "partner" or is_partner_relationship_question(q):
         lines.append("User partner / life-partner ke baare mein guidance maang raha hai.")
-        if re.search(r"(?ix)\b(suit|match|compatible|thinking|soch|mental|nature|swabhav|tarah)\b", q):
+        pc_angle = infer_partner_commitment_angle(q)
+        if pc_angle:
+            lines.append(f"Exact focus: {partner_commitment_angle_label(pc_angle)}.")
+            lines.append(
+                "Yeh partner ke intent/commitment ka sawal hai — user ki shaadi timing / dasha mat do."
+            )
+        elif re.search(r"(?ix)\b(suit|match|compatible|thinking|soch|mental|nature|swabhav|tarah)\b", q):
             lines.append(
                 "Core intent: kaun sa type ka partner unki soch, mental style aur personality ke saath fit baithega."
             )
@@ -293,7 +446,13 @@ def build_question_explanation_fallback(
             lines.append("User partner ke nature, behaviour ya rishta pattern ke baare mein jaanna chahta hai.")
     elif scope == "couple" or is_dyadic_couple_question(q):
         lines.append("User do logon ke beech ke rishte / bond ke baare mein pooch raha hai.")
-        if re.search(r"(?ix)\b(chemistry|passion|intense|attraction)\b", q):
+        angle = infer_compatibility_angle(q)
+        if angle:
+            lines.append(f"Exact focus: {compatibility_angle_label(angle)}.")
+            lines.append(
+                "Yeh sirf isi angle ka jawab hai — doosre compatibility types (emotional vs mental vs intellectual) mein mat behko."
+            )
+        elif re.search(r"(?ix)\b(chemistry|passion|intense|attraction)\b", q):
             lines.append("Focus: dono ke beech chemistry, passion ya emotional pull kaisi rahegi.")
         else:
             lines.append("Focus: dono ke beech compatibility, closeness ya dynamic kaisi rahegi.")
@@ -393,10 +552,10 @@ def infer_question_scope(question: str, llm_intent: dict[str, Any] | None = None
         return summary_scope
 
     q = (question or "").strip()
-    if is_partner_relationship_question(q):
-        return "partner"
     if is_dyadic_couple_question(q):
         return "couple"
+    if is_partner_relationship_question(q):
+        return "partner"
     if _PARTNER_SUBJECT_RX.search(q):
         return "partner"
 
@@ -543,7 +702,13 @@ def archetype_allowed_for_question(question: str, archetype: str | None) -> bool
         from ask_chart_open_qa import is_native_self_chart_interpretation_question
 
         if is_native_love_chart_question(q) or is_native_self_chart_interpretation_question(q):
-            if arch in ("chemistry", "emotional_attachment", "general_mr", "partner_nature"):
+            if arch in (
+                "chemistry",
+                "compatibility",
+                "emotional_attachment",
+                "general_mr",
+                "partner_nature",
+            ):
                 return False
             if arch in ("open_chart_qa", "dating_courtship"):
                 return True
@@ -567,24 +732,37 @@ def resolve_question_understood(
         return "no"
 
     li = llm_intent if isinstance(llm_intent, dict) else {}
+    if str(li.get("question_understood") or "").strip().lower() == "yes":
+        return "yes"
+
     ran_arch = str(
         engine_archetype
         or li.get("routed_archetype")
         or li.get("mr_archetype")
         or ""
     ).strip().lower()
+
+    if has_engine_facts:
+        return "yes"
+
     try:
         from ask_question_understand import _echoes_question
 
-        body = strip_scope_bracket(str(li.get("question_summary") or ""))
+        body = strip_scope_bracket(
+            str(li.get("question_summary") or li.get("question_meaning") or "")
+        )
         if body and _echoes_question(body, q):
             return "no"
     except Exception:
         pass
-    if ran_arch and not archetype_allowed_for_question(q, ran_arch):
+    if ran_arch in ("timing", "general_love", "general"):
+        pass
+    elif ran_arch and not archetype_allowed_for_question(q, ran_arch):
         return "no"
 
-    summary = str(li.get("question_summary") or "").strip()
+    summary = str(
+        li.get("question_summary") or li.get("question_meaning") or ""
+    ).strip()
     if summary and len(summary) >= 10:
         return "yes"
 
@@ -596,11 +774,8 @@ def resolve_question_understood(
         conf = float(li.get("confidence") or 0.0)
     except (TypeError, ValueError):
         conf = 0.0
-    dom = str(li.get("domain") or "").strip().lower()
+    dom = str(li.get("domain") or li.get("routed_domain") or "").strip().lower()
     inferred = infer_primary_domain(q)
-
-    if has_engine_facts:
-        return "yes"
 
     try:
         from ask_native_overview import is_native_overview_question
@@ -781,6 +956,113 @@ def build_llm_understood_one_liner(
     return yes_no
 
 
+def reconcile_question_type(
+    question: str,
+    intent: dict[str, Any] | None = None,
+    *,
+    mutate: bool = True,
+) -> dict[str, Any]:
+    """STATIC vs TIMING — deterministic gate; LLM is_timing is never final alone.
+
+    Call after LLM intent and before routing engines / timing clarifier.
+    Returns {is_timing, qtype, intent, reconciled, reasons}.
+    """
+    q = (question or "").strip()
+    out: dict[str, Any] = dict(intent) if isinstance(intent, dict) else {}
+    reasons: list[str] = []
+    reconciled = False
+
+    try:
+        from ask_question_normalize import prepare_ask_question
+
+        qn = prepare_ask_question(q)
+    except Exception:
+        qn = q
+
+    try:
+        from chart_fact_answer import is_domain_outcome_yoga_question
+
+        if is_domain_outcome_yoga_question(qn):
+            if out.get("is_timing"):
+                reconciled = True
+            out["is_timing"] = False
+            reasons.append("domain_outcome_yoga_static")
+    except Exception:
+        pass
+
+    try:
+        from ask_health.timing_registry import health_static_overrides_llm_timing
+
+        if health_static_overrides_llm_timing(qn, out):
+            if out.get("is_timing"):
+                reconciled = True
+            out["is_timing"] = False
+            reasons.append("health_static_override")
+    except Exception:
+        pass
+
+    try:
+        from ask_mr.timing_registry import (
+            clear_timing_without_when_anchor,
+            repair_llm_intent_mr_static_timing,
+        )
+
+        if repair_llm_intent_mr_static_timing(qn, out):
+            reconciled = True
+            reasons.append("mr_static_repair")
+        if clear_timing_without_when_anchor(qn, out):
+            reconciled = True
+            reasons.append("cleared_timing_without_kab")
+    except Exception:
+        pass
+
+    try:
+        from ask_marriage_relationship_slice import is_marriage_relationship_static_question
+        from ask_mr.timing_registry import has_explicit_timing_anchor
+
+        if is_marriage_relationship_static_question(qn) and not has_explicit_timing_anchor(qn):
+            if out.get("is_timing"):
+                reconciled = True
+            out["is_timing"] = False
+            out["domain"] = out.get("domain") or "love"
+            reasons.append("mr_promise_static")
+    except Exception:
+        pass
+
+    try:
+        from ask_mr.timing_registry import finalize_is_timing_flag, question_requests_timing
+
+        wants_timing = question_requests_timing(qn, out)
+        if bool(out.get("is_timing")) != wants_timing:
+            reconciled = True
+            reasons.append("question_requests_timing")
+        out["is_timing"] = wants_timing
+        is_timing = finalize_is_timing_flag(qn, wants_timing, out)
+        if bool(out.get("is_timing")) != is_timing:
+            reconciled = True
+            out["is_timing"] = is_timing
+    except Exception:
+        is_timing = bool(out.get("is_timing"))
+
+    qtype = "TIMING" if is_timing else "STATIC"
+    out["question_type"] = qtype
+    if reconciled:
+        out["timing_reconciled"] = True
+        out["timing_reconcile_reasons"] = reasons
+
+    result = {
+        "is_timing": is_timing,
+        "qtype": qtype,
+        "intent": out if mutate else dict(out),
+        "reconciled": reconciled,
+        "reasons": reasons,
+    }
+    if mutate and isinstance(intent, dict):
+        intent.clear()
+        intent.update(out)
+    return result
+
+
 def repair_llm_intent(question: str, result: dict[str, Any] | None) -> dict[str, Any]:
     """Validate LLM routing against question text; fix or reject hallucinations."""
     if not isinstance(result, dict):
@@ -917,6 +1199,12 @@ def repair_llm_intent(question: str, result: dict[str, Any] | None) -> dict[str,
     out["understanding_line"] = build_llm_understood_one_liner(
         q, out, intent_source=str(out.get("source") or "")
     )
+
+    try:
+        reconcile_question_type(q, out, mutate=True)
+        repaired = repaired or bool(out.get("timing_reconciled"))
+    except Exception:
+        pass
 
     src = str(out.get("source") or "")
     if reject or (src == "llm" and repaired and domain == "general" and not mr_arch):

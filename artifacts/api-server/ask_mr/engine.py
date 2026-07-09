@@ -36,10 +36,18 @@ def run_mr_static_engine(
             archetype = "open_chart_qa"
     except Exception:
         pass
+    if not archetype:
+        archetype = classify_mr_archetype(question)
     try:
         from ask_route_from_understanding import is_native_love_chart_question
 
-        if is_native_love_chart_question(question or ""):
+        # Native love-yog reads: only bump archetypes already in the dating/romance lane.
+        # Promise Qs (general_mr, partner_nature, love-life success) keep classifier choice.
+        if is_native_love_chart_question(question or "") and archetype in (
+            "dating_courtship",
+            "chemistry",
+            "one_sided_love",
+        ):
             archetype = "dating_courtship"
     except Exception:
         pass
@@ -96,6 +104,11 @@ def run_mr_static_engine(
         from .engines.chemistry import run_chemistry
 
         return run_chemistry(kundli, question, wants_explain=wants_explain)
+
+    if archetype == "compatibility":
+        from .engines.compatibility import run_compatibility
+
+        return run_compatibility(kundli, question, wants_explain=wants_explain)
 
     if archetype == "patchup":
         from .engines.patchup import run_patchup

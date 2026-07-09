@@ -39,6 +39,7 @@ class RelationshipTaxonomyTests(unittest.TestCase):
     def test_mr_mapping(self):
         self.assertEqual(map_love_bucket_to_mr("relationship_promise"), "loyalty_trust")
         self.assertEqual(map_love_bucket_to_mr("third_person_infidelity"), "secret_relationship")
+        self.assertEqual(map_love_bucket_to_mr("compatibility"), "compatibility")
         self.assertEqual(map_love_bucket_to_mr("unknown_relationship_intent"), "general_mr")
 
     def test_bucket_match_confidence(self):

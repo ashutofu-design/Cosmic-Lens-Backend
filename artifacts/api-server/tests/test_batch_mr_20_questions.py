@@ -48,7 +48,7 @@ BATCH = [
     ("Marriage ke baad relationship ki strengths kya hongi?", "general_mr", True),
     ("Relationship mein major challenges ya conflicts kis wajah se aa sakte hain?", "general_mr", True),
     ("Partner spiritual, practical, ambitious ya artistic nature ka hoga?", "partner_nature", True),
-    ("Marriage ke baad emotional compatibility kaisi rahegi?", "general_mr", True),
+    ("Marriage ke baad emotional compatibility kaisi rahegi?", "compatibility", True),
     ("Partner dominant hoga ya cooperative?", "partner_nature", True),
     ("Partner ke love language (care dikhane ka tareeka) kya ho sakta hai?", "partner_nature", True),
     ("Relationship mein trust aur communication ka level kaisa rahega?", "loyalty_trust", True),

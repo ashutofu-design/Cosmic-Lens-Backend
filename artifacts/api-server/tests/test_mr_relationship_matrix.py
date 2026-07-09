@@ -47,7 +47,7 @@ MATRIX = [
     (8, "Marriage ke baad relationship ki strengths kya hongi?", "general_mr"),
     (9, "Relationship mein major challenges ya conflicts kis wajah se aa sakte hain?", "general_mr"),
     (10, "Partner spiritual, practical, ambitious ya artistic nature ka hoga?", "partner_nature"),
-    (11, "Marriage ke baad emotional compatibility kaisi rahegi?", "general_mr"),
+    (11, "Marriage ke baad emotional compatibility kaisi rahegi?", "compatibility"),
     (12, "Partner dominant hoga ya cooperative?", "partner_nature"),
     (13, "Partner ke love language (care dikhane ka tareeka) kya ho sakta hai?", "partner_nature"),
     (14, "Relationship mein trust aur communication ka level kaisa rahega?", "loyalty_trust"),

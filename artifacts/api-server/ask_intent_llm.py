@@ -42,6 +42,7 @@ MR_ARCHETYPES = {
     "self_worth",
     "partner_nature",
     "long_distance",
+    "compatibility",
     "general_mr",
     "loyalty_trust",
     "emotional_attachment",
@@ -281,9 +282,12 @@ NATIVE OVERVIEW (CRITICAL): "mere bare/baare me kuch batao", "mujhe batao", "tel
 "main kaisa hun", "meri personality" — when NO specific domain (shaadi/career/health/paisa/planet) is \
 named → domain=general, mr_archetype=null, is_timing=false, interpretation about the USER's own chart \
 overview. Do NOT route these to marriage/love or partner_nature/in-laws.
-2. "is_timing": true ONLY if the question text contains kab/when/kis saal/muhurat/dasha \
-explicitly (WHEN something happens). false for kaisa hoga / attractive hoga / nature / look / \
-loyalty trait questions even if they contain hoga/hogi without kab.
+2. "is_timing": true when the user asks WHEN something happens — including kab/when/kis \
+saal/muhurat/dasha AND also abhi/shubh samay/samay chal raha/chalega/phase/window/period \
+(current or upcoming favourable time). false for kaisa hoga / attractive hoga / nature / look / \
+loyalty trait questions even if they contain hoga/hogi without any WHEN anchor. \
+Love crush approach timing ("abhi approach karun?", "shubh samay chal raha hai?") → \
+domain=love, is_timing=true, mr_archetype=dating_courtship (NOT static one_sided trait read).
 3. "is_decision": true if it is a should-I / yes-or-no decision question.
 4. "wants_explain": true if the user wants a detailed "why" explanation \
 (samjhao, explain, reason, kyun) rather than a short verdict.
@@ -306,7 +310,9 @@ OR spouse's in-laws / family-wale (8th house axis — NOT user's parents approva
 NEVER use for "mere bare/baare me", "tell me about myself", or other generic \
 native-overview asks — those are domain=general with mr_archetype=null.
    - long_distance: long-distance relationship
-   - general_mr: overall marriage quality/happiness/compatibility, OR whether \
+   - compatibility: couple match / gun milan / emotional-mental-intellectual compatibility, \
+values or life-goals fit, "hum compatible hain", thinking/personality match
+   - general_mr: overall marriage quality/happiness (NOT dedicated compat angles), OR whether \
 the partner will SUPPORT the native's career / life goals / decisions
    - loyalty_trust: loyalty, trust, cheating, commitment
    - emotional_attachment: emotional bonding / feelings depth

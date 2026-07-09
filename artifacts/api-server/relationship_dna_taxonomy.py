@@ -132,7 +132,7 @@ LOVE_BUCKET_TO_MR_ARCHETYPE: dict[str, str] = {
     "relationship_promise": "loyalty_trust",
     "love_feelings": "emotional_attachment",
     "partner_nature": "partner_nature",
-    "compatibility": "general_mr",
+    "compatibility": "compatibility",
     "commitment": "loyalty_trust",
     "trust_loyalty": "loyalty_trust",
     "communication": "partner_nature",

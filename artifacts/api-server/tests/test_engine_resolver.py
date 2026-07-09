@@ -99,6 +99,69 @@ class EngineResolverGoldenTests(unittest.TestCase):
         self.assertIsNone(route.engine_key)
         self.assertTrue(final["mr"])
 
+    def test_relationship_batch_beats_health_when_llm_wrong(self):
+        """User relationship Qs must not lose to health_engine when LLM domain=health."""
+        cases = [
+            (
+                "Kya mera partner sach me mujhse pyaar karta hai?",
+                "partner_nature",
+            ),
+            (
+                "Kya mera partner loyal aur faithful hai?",
+                "loyalty_trust",
+            ),
+            (
+                "Kya hum dono compatible hain?",
+                "compatibility",
+            ),
+            (
+                "Relationship me problems kis wajah se aa rahi hain?",
+                "general_mr",
+            ),
+        ]
+        for q, arch in cases:
+            with self.subTest(q=q[:48]):
+                final, route, active = self._resolve(
+                    q,
+                    flags={"health": True, "mr": True},
+                    domain="health",
+                    archetype=arch,
+                )
+                self.assertEqual(active, ["mr"], msg=q)
+                self.assertEqual(route.engine_key, "mr", msg=q)
+                self.assertFalse(final["health"], msg=q)
+
+    def test_relationship_healthy_not_health_engine(self):
+        q = "Kya relationship healthy rahegi ya stressful?"
+        from ask_health.health_registry import is_health_static_question
+
+        self.assertFalse(is_health_static_question(q))
+        final, route, active = self._resolve(
+            q,
+            flags={"health": True, "mr": True},
+            domain="health",
+            archetype="general_mr",
+        )
+        self.assertEqual(active, ["mr"])
+        self.assertEqual(route.engine_key, "mr")
+
+    def test_cross_domain_affect_stays_mr_not_open_chart(self):
+        from ask_chart_open_qa import is_native_self_chart_interpretation_question
+        from ask_mr import run_mr_static_engine
+
+        k = {
+            "ascendant": "Sagittarius",
+            "planets": [{"name": "Moon", "sign": "Gemini", "house": 7}],
+        }
+        for q in (
+            "Financial issues relationship ko affect karenge?",
+            "Career relationship ko affect karega?",
+            "Distance ya foreign settlement relationship ko affect karegi?",
+        ):
+            with self.subTest(q=q[:40]):
+                self.assertFalse(is_native_self_chart_interpretation_question(q))
+                res = run_mr_static_engine(k, q, wants_explain=False)
+                self.assertEqual(res.archetype, "general_mr")
 
 if __name__ == "__main__":
     unittest.main()

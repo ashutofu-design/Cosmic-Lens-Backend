@@ -74,7 +74,7 @@ class MrEngineTests(unittest.TestCase):
     def test_general_mr_emotional_compatibility_is_balanced(self):
         q = "Marriage ke baad emotional compatibility kaisi rahegi?"
         res = run_mr_static_engine(SAMPLE_KUNDLI, q, wants_explain=False)
-        self.assertEqual(res.archetype, "general_mr")
+        self.assertEqual(res.archetype, "compatibility")
         self.assertEqual(res.checks.get("question_intent"), "emotional_compatibility")
         self.assertIn("emotional compatibility", res.verdict.lower())
         joined = " ".join(res.evidence).lower()
@@ -205,9 +205,24 @@ class MrEngineTests(unittest.TestCase):
         q = "Partner ki family background kaisi ho sakti hai?"
         self.assertEqual(classify_mr_archetype(q), "partner_nature")
 
-    def test_emotional_compatibility_routes_general_mr(self):
+    def test_emotional_compatibility_routes_compatibility_engine(self):
         q = "Marriage ke baad emotional compatibility kaisi rahegi?"
-        self.assertEqual(classify_mr_archetype(q), "general_mr")
+        self.assertEqual(classify_mr_archetype(q), "compatibility")
+
+    def test_compatibility_engine_routes_and_runs(self):
+        cases = [
+            ("Kya hum dono compatible hain?", "general_compatibility"),
+            ("Gun milan kaisa rahega?", "gun_milan"),
+            ("Kya hum mentally compatible hain?", "mental_compatibility"),
+        ]
+        for q, intent in cases:
+            with self.subTest(q=q[:40]):
+                self.assertEqual(classify_mr_archetype(q), "compatibility")
+                res = run_mr_static_engine(SAMPLE_KUNDLI, q, wants_explain=False)
+                self.assertEqual(res.archetype, "compatibility")
+                self.assertEqual(res.checks.get("question_intent"), intent)
+                self.assertTrue(res.verdict)
+                self.assertGreaterEqual(len(res.evidence or []), 1)
 
     def test_classifier_audit_regressions(self):
         cases = [

@@ -99,7 +99,11 @@ LOVE_BUCKET_SUB_INTENTS: dict[str, tuple[str, ...]] = {
         "gun_milan", "match", "suitability", "right_fit",
     ),
     "relationship_decisions": (
-        "stay_or_leave", "second_chance_decision", "should_i",
+        "stay_or_leave", "second_chance_decision", "should_i", "overall_suitability",
+    ),
+    "relationship_challenges": (
+        "jealousy", "weakness", "ego", "conflict", "insecurity", "problems",
+        "emotional_gap", "misunderstanding",
     ),
     LOVE_BUCKET_UNKNOWN: ("unclassified", "taxonomy_gap", "needs_review"),
 }

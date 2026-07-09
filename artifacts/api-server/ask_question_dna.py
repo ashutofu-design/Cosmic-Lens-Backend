@@ -259,7 +259,7 @@ _LOVE_BUCKET_PROMPT = """LOVE DOMAIN (domain=love) — bucket rules:
   (never loyalty_trust, general_mr, secret_relationship, patchup, etc. for love).
 - Pick the SINGLE most specific bucket — do NOT overuse relationship_future.
   Prefer: compatibility, commitment, communication, spiritual_karmic,
-  relationship_decisions, relationship_promise, trust_loyalty, etc.
+  relationship_decisions, relationship_challenges, relationship_promise, trust_loyalty, etc.
 - relationship_future ONLY for vague long-term stability/outlook when no sharper
   bucket fits (long-term chalega, relationship strong rahega).
 - Valid ids are taught via examples below — do not invent new bucket strings.
@@ -314,8 +314,20 @@ Q: "Kya mera soulmate milega? Karmic connection hai kya?"
 Q: "Kya main is relationship me rahun ya chhod dun?"
 {"questions":[{"normalized_question":"Kya main is relationship me rahun ya chhod dun?","domain":"love","bucket":"relationship_decisions","intent":"stay or leave relationship decision","subject":"self","target":"self_relationship","question_type":"decision","timing":false,"tense":"present","emotion":"conflicted","risk":"high","is_followup":false,"followup_of":"","confidence":0.96}]}
 
+Q: "Kya jealousy relationship me problem banegi?"
+{"questions":[{"normalized_question":"Kya jealousy relationship me problem banegi?","domain":"love","bucket":"relationship_challenges","intent":"jealousy as relationship problem","subject":"couple","target":"self_relationship","question_type":"risk","timing":false,"tense":"future","emotion":"anxiety","risk":"medium","is_followup":false,"followup_of":"","confidence":0.94}]}
+
+Q: "Hamare relationship ki sabse badi weakness kya hai?"
+{"questions":[{"normalized_question":"Hamare relationship ki sabse badi weakness kya hai?","domain":"love","bucket":"relationship_challenges","intent":"biggest weakness/problem in relationship","subject":"couple","target":"self_relationship","question_type":"cause","timing":false,"tense":"present","emotion":"curiosity","risk":"medium","is_followup":false,"followup_of":"","confidence":0.94}]}
+
+Q: "Kya ye relationship meri growth ke liye achha hai?"
+{"questions":[{"normalized_question":"Kya ye relationship meri growth ke liye achha hai?","domain":"love","bucket":"relationship_future","intent":"relationship impact on personal growth/outlook","subject":"self","target":"self_relationship","question_type":"prediction","timing":false,"tense":"future","emotion":"hope","risk":"low","is_followup":false,"followup_of":"","confidence":0.93}]}
+
+Q: "Overall, kya ye relationship mere liye sahi hai?"
+{"questions":[{"normalized_question":"Overall, kya ye relationship mere liye sahi hai?","domain":"love","bucket":"relationship_decisions","intent":"overall suitability — is this relationship right for me","subject":"self","target":"self_relationship","question_type":"decision","timing":false,"tense":"present","emotion":"conflicted","risk":"medium","is_followup":false,"followup_of":"","confidence":0.94}]}
+
 Q: "Kya ye relationship mere liye sahi hai?"
-{"questions":[{"normalized_question":"Kya ye relationship mere liye sahi hai?","domain":"love","bucket":"compatibility","intent":"relationship suitability / right fit for me","subject":"self","target":"self_relationship","question_type":"decision","timing":false,"tense":"present","emotion":"conflicted","risk":"medium","is_followup":false,"followup_of":"","confidence":0.94}]}
+{"questions":[{"normalized_question":"Kya ye relationship mere liye sahi hai?","domain":"love","bucket":"relationship_decisions","intent":"overall suitability — is this relationship right for me","subject":"self","target":"self_relationship","question_type":"decision","timing":false,"tense":"present","emotion":"conflicted","risk":"medium","is_followup":false,"followup_of":"","confidence":0.94}]}
 
 Q: "Promotion milega?"
 {"questions":[{"normalized_question":"Kya mujhe promotion milega?","domain":"career","bucket":"career_milestones","intent":"promotion prospect (not timing)","subject":"self","target":"self","question_type":"prediction","timing":false,"tense":"future","emotion":"hope","risk":"low","is_followup":false,"followup_of":"","confidence":0.94}]}"""
@@ -369,7 +381,14 @@ KEY RULES:
   • ex ko second chance / forgive / wapas aaun → relationship_decisions or
     reconciliation_ex (NOT second_marriage — that is remarriage after divorce).
   • time pass / serious nahi / commitment check → commitment (NOT dating_courtship).
-  • compatible / gun milan / sahi hai mere liye → compatibility.
+  • compatible / gun milan / match karte hain → compatibility (NOT overall sahi hai).
+  • overall sahi hai / mere liye theek hai / right for me → relationship_decisions
+    (NOT compatibility — user asks suitability, not gun-milan).
+  • jealousy / weakness / problem / conflict / insecurity / ego gap →
+    relationship_challenges (NOT trust_loyalty unless cheating/loyalty explicit).
+  • weakness kya hai / sabse badi kami → relationship_challenges (NOT communication
+    unless user explicitly asks about talking/baat).
+  • growth ke liye achha / impact on life → relationship_future (NOT decision).
   • soulmate / karmic / past life bond → spiritual_karmic.
   • rahun ya chhod dun / karu ya nahi → relationship_decisions.
   • baat nahi hoti / communication / misunderstanding → communication

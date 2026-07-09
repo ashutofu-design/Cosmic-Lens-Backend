@@ -79,8 +79,10 @@ def _compatibility_intent(question: str) -> str:
         return "mental_compatibility"
     if _INTELLECTUAL_COMPAT_Q.search(q):
         return "intellectual_compatibility"
-    if _EMOTIONAL_COMPAT_Q.search(q) or _GENERAL_COMPAT_Q.search(q):
+    if _EMOTIONAL_COMPAT_Q.search(q):
         return "emotional_compatibility"
+    if _GENERAL_COMPAT_Q.search(q):
+        return "general_compatibility"
     if _VALUES_GOALS_Q.search(q):
         return "values_goals_compatibility"
     return "general_compatibility"

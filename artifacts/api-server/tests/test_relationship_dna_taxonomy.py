@@ -5,7 +5,7 @@ import unittest
 
 from relationship_dna_taxonomy import (
     LOVE_RELATIONSHIP_BUCKETS,
-    LOVE_BUCKET_DEFAULT,
+    LOVE_BUCKET_SOFT_DEFAULT,
     LOVE_BUCKET_LABELS,
     normalize_love_bucket,
     map_love_bucket_to_mr,
@@ -24,7 +24,7 @@ class RelationshipTaxonomyTests(unittest.TestCase):
             self.assertIn(b, LOVE_BUCKET_TO_MR_ARCHETYPE, b)
 
     def test_default_is_valid(self):
-        self.assertIn(LOVE_BUCKET_DEFAULT, LOVE_RELATIONSHIP_BUCKETS)
+        self.assertIn(LOVE_BUCKET_SOFT_DEFAULT, LOVE_RELATIONSHIP_BUCKETS)
 
     def test_normalize_aliases(self):
         self.assertEqual(normalize_love_bucket("loyalty_trust"), "trust_loyalty")
@@ -40,6 +40,12 @@ class RelationshipTaxonomyTests(unittest.TestCase):
         self.assertEqual(map_love_bucket_to_mr("relationship_promise"), "loyalty_trust")
         self.assertEqual(map_love_bucket_to_mr("third_person_infidelity"), "secret_relationship")
         self.assertEqual(map_love_bucket_to_mr("compatibility"), "compatibility")
+        self.assertEqual(map_love_bucket_to_mr("commitment"), "commitment")
+        self.assertEqual(map_love_bucket_to_mr("communication"), "communication")
+        self.assertEqual(map_love_bucket_to_mr("relationship_future"), "relationship_future")
+        self.assertEqual(map_love_bucket_to_mr("relationship_decisions"), "relationship_decisions")
+        self.assertEqual(map_love_bucket_to_mr("toxicity_red_flags"), "toxicity")
+        self.assertEqual(map_love_bucket_to_mr("relationship_remedies"), "relationship_remedies")
         self.assertEqual(map_love_bucket_to_mr("unknown_relationship_intent"), "general_mr")
 
     def test_bucket_match_confidence(self):

@@ -43,6 +43,12 @@ MR_ARCHETYPES = {
     "partner_nature",
     "long_distance",
     "compatibility",
+    "commitment",
+    "communication",
+    "relationship_future",
+    "relationship_decisions",
+    "toxicity",
+    "relationship_remedies",
     "general_mr",
     "loyalty_trust",
     "emotional_attachment",
@@ -312,6 +318,13 @@ native-overview asks — those are domain=general with mr_archetype=null.
    - long_distance: long-distance relationship
    - compatibility: couple match / gun milan / emotional-mental-intellectual compatibility, \
 values or life-goals fit, "hum compatible hain", thinking/personality match
+   - commitment: serious vs casual intent, time-pass check, long-term commitment readiness, \
+"shaadi karega/karegi?" (static intent, NOT kab/when)
+   - communication: baat-cheet, misunderstandings, silence, arguments, samajh payega
+   - relationship_future: NON-TIMING future outlook — bond grow/weak, aage kya hoga (no kab/when)
+   - relationship_decisions: stay/leave, continue or not, overall suitability decision
+   - toxicity: toxic dynamic, abuse/manipulation/control/red-flag toxicity (NOT breakup timing)
+   - relationship_remedies: upay/mantra/puja for love/relationship/marriage issues
    - general_mr: overall marriage quality/happiness (NOT dedicated compat angles), OR whether \
 the partner will SUPPORT the native's career / life goals / decisions
    - loyalty_trust: loyalty, trust, cheating, commitment

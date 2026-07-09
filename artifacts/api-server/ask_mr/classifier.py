@@ -121,7 +121,12 @@ def classify_mr_archetype(question: str) -> str:
 
         return "manglik"
 
-
+    # --- Relationship remedies (before generic love routing) ---
+    if re.search(
+        r"(?ix)\b(upay|upaay|remedy|remedies|mantra|totka|puja|parikrama)\b",
+        q,
+    ) and re.search(r"(?ix)\b(love|pyaar|pyar|relationship|rishta|marriage|shaadi|partner)\b", q):
+        return "relationship_remedies"
 
     # --- Spouse physical appearance (before partner_nature) ---
 
@@ -317,10 +322,24 @@ def classify_mr_archetype(question: str) -> str:
     ):
         return "one_sided_love"
 
+    # --- Commitment intent (before loyalty/trust — no betrayal keywords) ---
+    if re.search(
+        r"(?ix)\b("
+        r"commitment|committed|serious\s*relationship|casual\s*relationship|time\s*pass|"
+        r"long[\s-]*term\s*intent|shaadi\s*karega|shaadi\s*karegi|ready\s+for\s+commit|"
+        r"genuine\s*intent|life\s*partner\s*view"
+        r")\b",
+        q,
+    ) and not re.search(
+        r"(?ix)\b(cheat|cheating|dhokha|dhoka|betray|loyal\w*|faithful|trust|vishwas|beimaan)\b",
+        q,
+    ):
+        return "commitment"
+
     # --- Loyalty / trust / betrayal (before dating — love+milega must not steal dhoka Qs) ---
     if re.search(
         r"\b(cheat|cheating|dhokha|dhoka|betray|loyal\w*|faithful|trust|vishwas|"
-        r"commitment|commit|nibha\w*|wafad\w*|vafad\w*|third\s+person|interference|beimaan)\b",
+        r"nibha\w*|wafad\w*|vafad\w*|third\s+person|interference|beimaan)\b",
         q,
     ):
         return "loyalty_trust"
@@ -499,22 +518,24 @@ def classify_mr_archetype(question: str) -> str:
 
 
 
-    # --- Breakup / toxic / divorce / separation ---
-
+    # --- Toxicity / abuse / control (before breakup when not explicit ending) ---
     if re.search(
-
         r"(?ix)\b("
-
-        r"breakup|break\s*up|separation|divorce|talaq|toot\w*|tut\w*|rishta\s*toot|"
-
-        r"toxic|manipulat|ego\s*clash"
-
+        r"toxic|abuse|abusive|manipulat|gaslight|controlling|control\s+issue|"
+        r"red\s*flag|unhealthy|domestic\s*violence|maar\s*peet"
         r")\b",
-
         q,
+    ) and not re.search(r"(?ix)\b(breakup|break\s*up|divorce|talaq|toot|tut)\b", q):
+        return "toxicity"
 
+    # --- Breakup / divorce / separation ---
+    if re.search(
+        r"(?ix)\b("
+        r"breakup|break\s*up|separation|divorce|talaq|toot\w*|tut\w*|rishta\s*toot|"
+        r"ego\s*clash"
+        r")\b",
+        q,
     ):
-
         return "breakup_risk"
 
 
@@ -601,7 +622,15 @@ def classify_mr_archetype(question: str) -> str:
 
         return "family_approval"
 
-
+    # --- Communication (early — before partner_* catch-alls) ---
+    if re.search(
+        r"(?ix)\b("
+        r"communication|baat\s*cheet|samajh\s*payeg\w*|misunderstand|misunderstanding|"
+        r"silent|silence|khamoshi|baat\s*nahi|not\s*talking|argument|jhagda|ladai|sunta\s*nahi"
+        r")\b",
+        q,
+    ):
+        return "communication"
 
     # --- Compatibility / gun milan / couple match (before marriage-quality general_mr) ---
 
@@ -628,13 +657,33 @@ def classify_mr_archetype(question: str) -> str:
     ):
         return "compatibility"
 
-    # --- Marriage quality / communication / stability (not dedicated compatibility) ---
+    # --- Relationship decisions (stay/leave/suitability) ---
+    if re.search(
+        r"(?ix)\b("
+        r"stay\s+or\s+leave|chhod\s+du|continue\s+karu|kya\s+karu|should\s+i\s+(stay|leave|continue)|"
+        r"sahi\s+hai\s+mere\s+liye|mere\s+liye\s+sahi|theek\s+hai\s+ya\s+nahi|rishta\s+continue|"
+        r"badhna\s+chahiye\s+ya|karu\s+ya\s+nahi|leave\s+karu|move\s+on|rehna\s+chahiye"
+        r")\b",
+        q,
+    ):
+        return "relationship_decisions"
+
+    # --- Relationship future outlook (non-timing) ---
+    if re.search(
+        r"(?ix)\b("
+        r"relationship\s+future|relationship\s+ka\s+future|hamare\s+relationship|rishta\s+ka\s+future|"
+        r"future\s+of\s+(our\s+)?relationship|rishta\s+aage|bond\s+grow|aage\s+grow|grow\s+karega|"
+        r"weak\s+hoga|long[\s-]*term\s+outlook|aage\s+kya\s+hoga|aage\s+kaise\s+rahega"
+        r")\b",
+        q,
+    ) and not re.search(r"(?ix)\b(kab|when|timing|milega|milegi|kab\s+tak)\b", q):
+        return "relationship_future"
 
     if re.search(
         r"(?ix)\b("
         r"shaadi\s*achhi|happy|khush|sukh|marriage\s*quality|vivah\s*sukh|strengths?|"
         r"positive\s*changes?|major\s*challenges?|conflicts?|kaam\s+karna\s+chahiye|"
-        r"samajh\s*payega|samajh\s*payegi|communication|teamwork|stable|stability|growth|"
+        r"teamwork|stable|stability|growth|"
         r"mutual\s*support|conflict\s*style|emotional\s*maturity|understanding|"
         r"shaadi\s*ke\s*baad.*(khush|sukh|achh)"
         r")\b",
@@ -691,15 +740,8 @@ def classify_mr_archetype(question: str) -> str:
 
 
 
-    # --- Chemistry (native solo attraction) — not couple "hum dono ke beech" ---
+    # --- Chemistry (native or couple attraction) ---
     if re.search(r"\b(chemistry|attraction|spark|passion|romance|romantic)\b", q):
-        try:
-            from ask_intent_fidelity import is_dyadic_couple_question
-
-            if is_dyadic_couple_question(q):
-                return "general_mr"
-        except Exception:
-            pass
         if not re.search(
             r"(?ix)\b(true\s*love|sach+a\s*pyaar|sach+a\s*pyar|milne\s+ka\s+yog|yog\s+likha)\b",
             q,
@@ -767,7 +809,7 @@ def classify_mr_archetype(question: str) -> str:
 
         r"\b(partner|spouse|husband|wife|pati|patni|jeevan\s*sathi|age\s*gap|umar)\b", q
 
-    ):
+    ) and not re.search(r"(?ix)\b(samajh\s*payeg\w*|communication|baat\s*cheet)\b", q):
 
         return "partner_nature"
 

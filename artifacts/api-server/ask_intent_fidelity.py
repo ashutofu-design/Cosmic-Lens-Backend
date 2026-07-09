@@ -301,7 +301,25 @@ _ARCHETYPE_ANCHOR_RX: dict[str, re.Pattern[str]] = {
         r"(look|face|height|appearance|attract\w*|dikh\w*|good[\s-]?looking).{0,40}(partner|spouse|wife|husband)"
     ),
     "loyalty_trust": re.compile(
-        r"(?ix)\b(loyal|trust|cheat|dhokha|dhoka|betray|vishwas|faithful|commitment|beimaan)\b"
+        r"(?ix)\b(loyal|trust|cheat|dhokha|dhoka|betray|vishwas|faithful|beimaan)\b"
+    ),
+    "commitment": re.compile(
+        r"(?ix)\b(commitment|committed|serious\s*relationship|casual|time\s*pass|long[\s-]*term)\b"
+    ),
+    "communication": re.compile(
+        r"(?ix)\b(communication|baat\s*cheet|misunderstand|silent|silence|argument|jhagda|samajh\s*payeg\w*)\b"
+    ),
+    "relationship_future": re.compile(
+        r"(?ix)\b(relationship\s+ka\s+future|hamare\s+relationship|aage\s+grow|grow\s+karega|bond\s+grow|future\s+kais)\b"
+    ),
+    "relationship_decisions": re.compile(
+        r"(?ix)\b(stay\s+or\s+leave|should\s+i|mere\s+liye\s+sahi|rehna\s+chahiye|chhod\s+du|continue\s+karu)\b"
+    ),
+    "toxicity": re.compile(
+        r"(?ix)\b(toxic|abuse|abusive|manipulat|controlling|red\s*flag|unhealthy)\b"
+    ),
+    "relationship_remedies": re.compile(
+        r"(?ix)\b(upay|remedy|mantra|totka|puja).{0,40}(love|relationship|rishta|marriage)\b"
     ),
     "chemistry": re.compile(
         r"(?ix)\b(chemistry|attraction|spark|passion|romance|romantic)\b"
@@ -705,6 +723,12 @@ def archetype_allowed_for_question(question: str, archetype: str | None) -> bool
             if arch in (
                 "chemistry",
                 "compatibility",
+                "commitment",
+                "communication",
+                "relationship_future",
+                "relationship_decisions",
+                "toxicity",
+                "relationship_remedies",
                 "emotional_attachment",
                 "general_mr",
                 "partner_nature",

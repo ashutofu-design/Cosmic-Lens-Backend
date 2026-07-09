@@ -110,6 +110,36 @@ def run_mr_static_engine(
 
         return run_compatibility(kundli, question, wants_explain=wants_explain)
 
+    if archetype == "commitment":
+        from .engines.commitment import run_commitment
+
+        return run_commitment(kundli, question, wants_explain=wants_explain)
+
+    if archetype == "communication":
+        from .engines.communication import run_communication
+
+        return run_communication(kundli, question, wants_explain=wants_explain)
+
+    if archetype == "relationship_future":
+        from .engines.relationship_future import run_relationship_future
+
+        return run_relationship_future(kundli, question, wants_explain=wants_explain)
+
+    if archetype == "relationship_decisions":
+        from .engines.relationship_decisions import run_relationship_decisions
+
+        return run_relationship_decisions(kundli, question, wants_explain=wants_explain)
+
+    if archetype == "toxicity":
+        from .engines.toxicity import run_toxicity
+
+        return run_toxicity(kundli, question, wants_explain=wants_explain)
+
+    if archetype == "relationship_remedies":
+        from .engines.relationship_remedies import run_relationship_remedies
+
+        return run_relationship_remedies(kundli, question, wants_explain=wants_explain)
+
     if archetype == "patchup":
         from .engines.patchup import run_patchup
 

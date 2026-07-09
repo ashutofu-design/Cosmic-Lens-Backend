@@ -73,7 +73,7 @@ class EngineResult:
             "Must match VERDICT strength (never stronger). "
             "Line 2 = exactly ONE chart reason from evidence. "
             "Line 3 = one short practical line (clarity/boundaries). "
-            "Max 3 sentences. NO dasha dates/timing."
+            "Max 3 sentences. NO timing dates."
         )
 
     def _finalize_evidence_split(self) -> tuple[list[str], list[str], list[str]]:

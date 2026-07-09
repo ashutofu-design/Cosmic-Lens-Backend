@@ -38,9 +38,8 @@ class TaxonomyConsistencyTests(unittest.TestCase):
         self.assertIn("NOT an astrologer", p)
         self.assertIn("govt_job", p)
         self.assertIn("STRICT JSON", p)
-        self.assertIn("long-term chalega", p)
-        self.assertIn("relationship_decisions", p)
-        self.assertIn("communication", p)
+        self.assertIn("ROUTING PRIORITY RULES", p)
+        self.assertIn("relationship_challenges is LAST FALLBACK", p)
         # Love bucket enum is NOT dumped in prompt
         self.assertNotIn("trust_loyalty, love_feelings, partner_nature", p)
         # Few-shots present

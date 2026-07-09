@@ -257,20 +257,87 @@ def _bucket_lines() -> str:
 _LOVE_BUCKET_PROMPT = """LOVE DOMAIN (domain=love) — bucket rules:
 - Use question-theme bucket ids (snake_case), NOT engine jargon
   (never loyalty_trust, general_mr, secret_relationship, patchup, etc. for love).
-- Pick the SINGLE most specific bucket — do NOT overuse relationship_future.
-  Prefer: compatibility, commitment, communication, spiritual_karmic,
-  relationship_decisions, relationship_challenges, relationship_promise, trust_loyalty, etc.
-- relationship_future ONLY for vague long-term stability/outlook when no sharper
-  bucket fits (long-term chalega, relationship strong rahega).
-- Valid ids are taught via examples below — do not invent new bucket strings.
+- Apply ROUTING PRIORITY RULES below BEFORE choosing any bucket.
+- relationship_challenges = LAST FALLBACK only — never for specialist intents.
+- relationship_future ONLY for vague long-term stability/outlook when no sharper bucket fits.
+- Valid ids taught via examples — do not invent new bucket strings.
 - If truly uncertain → relationship_future + lower confidence.
 - Invented / no-fit bucket → unknown_relationship_intent (audit)."""
 
 
+_ROUTING_PRIORITY_RULES = """ROUTING PRIORITY RULES (HIGHEST PRIORITY — override generic classification):
+
+1. MOST SPECIFIC bucket wins. Specific > generic. Never pick relationship_challenges
+   or relationship_future when a specialist bucket clearly fits.
+
+2. relationship_challenges is LAST FALLBACK for love — only when NO specialist bucket
+   fits. NEVER use it for: communication, trust_loyalty, commitment, compatibility,
+   partner_nature, third_person_infidelity, breakup_separation, reconciliation_ex,
+   family_social_acceptance, toxicity_red_flags, jealousy (use toxicity_red_flags),
+   relationship_decisions, spiritual_karmic, long_distance, dating_courtship,
+   physical_intimacy, emotional_bonding, love_feelings, marriage_potential.
+
+3. EX / reconciliation HIGHEST PRIORITY — ex, ex-boyfriend/girlfriend, former partner,
+   patch-up, reconciliation, second chance, come back, wapas aayega → reconciliation_ex
+   (NOT relationship_decisions, NOT relationship_challenges) unless NOT about ex return.
+
+4. THIRD PERSON > trust — another girl/boy, someone else, affair, cheating, flirting,
+   dating someone else, emotional affair, hidden/secret relationship → third_person_infidelity
+   (NOT relationship_challenges; NOT trust_loyalty unless ONLY loyalty/trust with no
+   third-person angle).
+
+5. COMMUNICATION > challenges — silent treatment, stonewalling, not listening,
+   miscommunication, arguments, poor communication, baat nahi hoti → communication.
+
+6. PARTNER NATURE > challenges — emotionally unavailable, narcissistic, immature,
+   manipulative, possessive, controlling personality, anger issues, cold, avoidant →
+   partner_nature.
+
+7. ABUSE / TOXIC — gaslighting, physical/emotional/financial/verbal abuse, blackmail,
+   coercion, control, threats, isolation, love bombing, trauma bond, toxic cycle →
+   toxicity_red_flags (NOT relationship_challenges).
+
+8. BREAKUP priority — breakup hoga, breakup kyun, cause of breakup, divorce risk,
+   alag ho jayenge → breakup_separation (NOT relationship_challenges).
+
+9. VERIFICATION — overthinking?, doubt sahi hai?, misunderstanding?, suspicion true?,
+   reality or imagination? → question_type=verification (bucket = best-fit theme).
+
+10. DECISION — should I stay/leave/forgive/trust/continue/marry (current relationship)?
+    → relationship_decisions. Exception: ex/reconciliation → rule 3 (reconciliation_ex).
+
+11. FAMILY — parents, in-laws, family approval, society, caste, religion, acceptance →
+    family_social_acceptance. domain=love (current relationship) or marriage (shaadi
+    context) — pick one consistently from question context; never general.
+
+12. SUBJECT — boyfriend, girlfriend, wife, husband, fiance, partner, crush, lover, ex,
+    parents, friend, family must map to subject. subject=unknown ONLY if truly unidentifiable.
+
+13. TARGET consistency — relationship health/outlook → self_relationship; partner
+    traits/behavior → subject_person + subject=partner; family approval → family target
+    when asking about family side.
+
+14. TENSE — "is cheating/lying/hiding/ignoring" (abhi) → present; "will cheat/leave/marry"
+    → future; "why happened / why broke up" → past. Never mark clear present state as future.
+
+15. CONFIDENCE — 0.95–0.99 clear intent; 0.85–0.94 minor ambiguity; 0.70–0.84 multiple
+    buckets possible; below 0.70 only if genuinely unclear. Do NOT lower confidence just
+    because question is long.
+
+16. MULTI-INTENT — split independent questions (e.g. "cheating?" + "should I leave?" →
+    two entries, different buckets).
+
+17. FINAL TEST — "Which ONE specialist engine would a human astrologer open first?"
+    That determines the bucket. Never generic when specialist exists."""
+
+
 _FEW_SHOTS = """EXAMPLES (input → output JSON):
 
+Q: "Kya mera boyfriend kisi aur ke saath flirt kar raha hai?"
+{"questions":[{"normalized_question":"Kya mera boyfriend kisi aur ke saath flirt kar raha hai?","domain":"love","bucket":"third_person_infidelity","intent":"partner flirting with someone else","subject":"boyfriend","target":"self_relationship","question_type":"current_state","timing":false,"tense":"present","emotion":"fear","risk":"high","is_followup":false,"followup_of":"","confidence":0.97}]}
+
 Q: "Kya mera boyfriend mujhe cheat karega?"
-{"questions":[{"normalized_question":"Kya mera boyfriend mujhe cheat karega?","domain":"love","bucket":"trust_loyalty","intent":"cheating prediction for current boyfriend","subject":"boyfriend","target":"self_relationship","question_type":"risk","timing":false,"tense":"future","emotion":"fear","risk":"high","is_followup":false,"followup_of":"","confidence":0.97}]}
+{"questions":[{"normalized_question":"Kya mera boyfriend mujhe cheat karega?","domain":"love","bucket":"third_person_infidelity","intent":"cheating prediction for current boyfriend","subject":"boyfriend","target":"self_relationship","question_type":"risk","timing":false,"tense":"future","emotion":"fear","risk":"high","is_followup":false,"followup_of":"","confidence":0.97}]}
 
 Q: "Meri shaadi kab hogi?"
 {"questions":[{"normalized_question":"Meri shaadi kab hogi?","domain":"marriage","bucket":"general_mr","intent":"marriage timing for self","subject":"self","target":"self","question_type":"timing","timing":true,"tense":"future","emotion":"curiosity","risk":"low","is_followup":false,"followup_of":"","confidence":0.98}]}
@@ -300,7 +367,7 @@ Q: "Kya hum compatible hain? Humara gun milan kaisa hai?"
 {"questions":[{"normalized_question":"Kya hum compatible hain?","domain":"love","bucket":"compatibility","intent":"relationship compatibility / match","subject":"couple","target":"couple","question_type":"compatibility","timing":false,"tense":"present","emotion":"curiosity","risk":"low","is_followup":false,"followup_of":"","confidence":0.96}]}
 
 Q: "Kya mujhe apne ex ko second chance dena chahiye?"
-{"questions":[{"normalized_question":"Kya mujhe apne ex ko second chance dena chahiye?","domain":"love","bucket":"relationship_decisions","intent":"should I give ex a second chance (decision)","subject":"self","target":"self_relationship","question_type":"decision","timing":false,"tense":"present","emotion":"conflicted","risk":"medium","is_followup":false,"followup_of":"","confidence":0.95}]}
+{"questions":[{"normalized_question":"Kya mujhe apne ex ko second chance dena chahiye?","domain":"love","bucket":"reconciliation_ex","intent":"should I give ex a second chance / reconciliation","subject":"ex","target":"self_relationship","question_type":"decision","timing":false,"tense":"present","emotion":"conflicted","risk":"medium","is_followup":false,"followup_of":"","confidence":0.95}]}
 
 Q: "Kya partner sirf time pass kar raha hai?"
 {"questions":[{"normalized_question":"Kya mera partner sirf time pass kar raha hai?","domain":"love","bucket":"commitment","intent":"partner seriousness / genuine commitment check","subject":"partner","target":"self_relationship","question_type":"risk","timing":false,"tense":"present","emotion":"anxiety","risk":"high","is_followup":false,"followup_of":"","confidence":0.94}]}
@@ -315,7 +382,7 @@ Q: "Kya main is relationship me rahun ya chhod dun?"
 {"questions":[{"normalized_question":"Kya main is relationship me rahun ya chhod dun?","domain":"love","bucket":"relationship_decisions","intent":"stay or leave relationship decision","subject":"self","target":"self_relationship","question_type":"decision","timing":false,"tense":"present","emotion":"conflicted","risk":"high","is_followup":false,"followup_of":"","confidence":0.96}]}
 
 Q: "Kya jealousy relationship me problem banegi?"
-{"questions":[{"normalized_question":"Kya jealousy relationship me problem banegi?","domain":"love","bucket":"relationship_challenges","intent":"jealousy as relationship problem","subject":"couple","target":"self_relationship","question_type":"risk","timing":false,"tense":"future","emotion":"anxiety","risk":"medium","is_followup":false,"followup_of":"","confidence":0.94}]}
+{"questions":[{"normalized_question":"Kya jealousy relationship me problem banegi?","domain":"love","bucket":"toxicity_red_flags","intent":"jealousy as relationship risk/problem","subject":"couple","target":"self_relationship","question_type":"risk","timing":false,"tense":"future","emotion":"anxiety","risk":"medium","is_followup":false,"followup_of":"","confidence":0.92}]}
 
 Q: "Hamare relationship ki sabse badi weakness kya hai?"
 {"questions":[{"normalized_question":"Hamare relationship ki sabse badi weakness kya hai?","domain":"love","bucket":"relationship_challenges","intent":"biggest weakness/problem in relationship","subject":"couple","target":"self_relationship","question_type":"cause","timing":false,"tense":"present","emotion":"curiosity","risk":"medium","is_followup":false,"followup_of":"","confidence":0.94}]}
@@ -365,6 +432,8 @@ tense: past | present | future | unspecified
 emotion: {", ".join(DNA_EMOTIONS)}
 risk: low | medium | high  (emotional/brand sensitivity of answering this)
 
+{_ROUTING_PRIORITY_RULES}
+
 KEY RULES:
 - timing=true ONLY for a real WHEN anchor (kab/when/kis saal/month/muhurat/date).
   "Kya hoga" prediction without WHEN → timing=false.
@@ -375,24 +444,7 @@ KEY RULES:
 - "Promotion milega?" → career (NOT finance). "Paisa kab aayega" → finance timing.
 - "relationship ka yog hai / life me pyaar" → domain love, bucket relationship_promise,
   question_type=prediction, tense=future (NOT unspecified).
-- LOVE bucket disambiguation (critical):
-  • long-term chalega / stable rahega / aage chalega → relationship_future
-    (NOT long_distance — long_distance ONLY for door rehkar / LDR / dur).
-  • ex ko second chance / forgive / wapas aaun → relationship_decisions or
-    reconciliation_ex (NOT second_marriage — that is remarriage after divorce).
-  • time pass / serious nahi / commitment check → commitment (NOT dating_courtship).
-  • compatible / gun milan / match karte hain → compatibility (NOT overall sahi hai).
-  • overall sahi hai / mere liye theek hai / right for me → relationship_decisions
-    (NOT compatibility — user asks suitability, not gun-milan).
-  • jealousy / weakness / problem / conflict / insecurity / ego gap →
-    relationship_challenges (NOT trust_loyalty unless cheating/loyalty explicit).
-  • weakness kya hai / sabse badi kami → relationship_challenges (NOT communication
-    unless user explicitly asks about talking/baat).
-  • growth ke liye achha / impact on life → relationship_future (NOT decision).
-  • soulmate / karmic / past life bond → spiritual_karmic.
-  • rahun ya chhod dun / karu ya nahi → relationship_decisions.
-  • baat nahi hoti / communication / misunderstanding → communication
-    (NOT emotional_bonding).
+- Apply ROUTING PRIORITY RULES above before any generic bucket choice.
 - intent: one short free-text phrase describing EXACTLY what the user wants.
 - confidence: 0.0–1.0 for YOUR classification certainty.
 

@@ -2000,3 +2000,243 @@ code {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Developer observability debugger ─────────────────────────── */
+.obs-debugger {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.obs-debugger-header h3 {
+  margin: 0 0 4px;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.15rem;
+}
+
+.obs-routing-warning {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  background: rgba(120, 53, 15, 0.35);
+  color: #fde68a;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.obs-section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+}
+
+.obs-section > summary {
+  cursor: pointer;
+  padding: 12px 14px;
+  list-style: none;
+  font-weight: 600;
+  background: rgba(167, 139, 250, 0.08);
+}
+
+.obs-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.obs-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.obs-stars {
+  color: var(--gold);
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.obs-section-body {
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.obs-pipeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.obs-pipeline li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.obs-pipeline-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.obs-pipeline-value {
+  font-size: 0.9rem;
+  line-height: 1.45;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.obs-pipeline-arrow {
+  color: var(--accent);
+  font-size: 0.85rem;
+  margin-top: 2px;
+}
+
+.obs-subblock {
+  margin-bottom: 14px;
+}
+
+.obs-subblock strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.obs-checklist,
+.obs-rules-list,
+.obs-conflict-modules,
+.obs-trace {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.obs-checklist li,
+.obs-rules-list li,
+.obs-conflict-modules li,
+.obs-trace li {
+  padding: 4px 0;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.obs-score-verdict {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.obs-big-value {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--accent-bright);
+}
+
+.obs-evidence-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.obs-evidence-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.obs-weight {
+  flex-shrink: 0;
+  color: var(--gold);
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.obs-scorecard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.obs-scorecard-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.obs-scorecard-value {
+  display: block;
+  margin-top: 4px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--accent-bright);
+}
+
+.obs-json,
+.obs-answer-preview {
+  margin: 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.obs-hallucination-table {
+  width: 100%;
+  font-size: 0.82rem;
+}
+
+.obs-hallucination-table th,
+.obs-hallucination-table td {
+  padding: 8px 10px;
+  vertical-align: top;
+}
+
+.obs-hallucination-table tr.obs-bad td {
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.2);
+}
+
+.obs-hallucination-table tr.obs-ok td {
+  color: #bbf7d0;
+}
+
+@media (max-width: 900px) {
+  .obs-evidence-cols {
+    grid-template-columns: 1fr;
+  }
+
+  .obs-score-verdict {
+    grid-template-columns: 1fr;
+  }
+
+  .obs-scorecard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .obs-hallucination-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}

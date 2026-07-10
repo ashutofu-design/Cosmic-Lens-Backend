@@ -41,6 +41,16 @@ def v2_to_engine_result(output: EngineOutputV2) -> EngineResult:
         "trigger_planets": list(output.timing.trigger_planets or []),
     }
     checks["mode"] = output.mode
+    checks["modules_used"] = list(output.modules_used or [])
+    checks["rules_fired"] = list(output.rules_fired or [])
+    checks["contradiction_detail"] = {
+        "detected": bool(output.contradiction.detected),
+        "pattern": output.contradiction.pattern,
+        "summary": output.contradiction.summary,
+        "module_polarity": dict(output.contradiction.module_polarity or {}),
+    }
+    if output.orchestrator:
+        checks["orchestrator"] = dict(output.orchestrator)
     return EngineResult(
         archetype=output.engine_id,
         verdict=output.verdict.headline,

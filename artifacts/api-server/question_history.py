@@ -203,6 +203,12 @@ def save_user_question(
 
     row_id = str(uuid.uuid4())
     try:
+        from database import ensure_user_questions_telemetry_columns
+
+        ensure_user_questions_telemetry_columns()
+    except Exception:
+        pass
+    try:
         row = UserQuestion(
             id                = row_id,
             user_id           = user_id,
@@ -443,6 +449,9 @@ def _bootstrap_admin_llm_context_from_row(
         out["topic"] = uq.topic
     if uq.answer_source and not out.get("answer_source"):
         out["answer_source"] = uq.answer_source
+    asrc = str(uq.answer_source or "").strip().lower()
+    if asrc.startswith("mr_engine") and not out.get("engine_tag"):
+        out["engine_tag"] = uq.engine_tag
     if uq.engine_tag and not out.get("engine_tag"):
         out["engine_tag"] = uq.engine_tag
     checks = dict(out.get("checks") or {}) if isinstance(out.get("checks"), dict) else {}
@@ -477,6 +486,30 @@ def _bootstrap_admin_llm_context_from_row(
         out["checks"] = checks
     if slice_meta:
         out["slice_meta"] = slice_meta
+    if asrc.startswith("mr_engine"):
+        slice_meta = dict(out.get("slice_meta") or {})
+        if not slice_meta.get("slice"):
+            slice_meta["slice"] = "mr_engine_v1"
+        if not slice_meta.get("topic"):
+            slice_meta["topic"] = "marriage_and_relationship"
+        checks = dict(out.get("checks") or {})
+        checks.setdefault("slice_type", "mr_engine_v1")
+        checks.setdefault("mr_engine", "v1")
+        checks.setdefault("is_mr_static", True)
+        out["checks"] = checks
+        out["slice_meta"] = slice_meta
+        blocks = dict(out.get("blocks") or {})
+        trace = blocks.get("engine_trace") if isinstance(blocks.get("engine_trace"), dict) else {}
+        if not trace.get("engine"):
+            blocks["engine_trace"] = {
+                "engine": "mr_engine_v1",
+                "archetype": slice_meta.get("archetype"),
+                "verdict": slice_meta.get("verdict"),
+                "evidence": list(slice_meta.get("evidence") or [])[:25],
+                "summary": list(slice_meta.get("summary") or [])[:10],
+                "bootstrapped_from_answer_source": True,
+            }
+            out["blocks"] = blocks
     if not out.get("understanding_line") and qtext:
         out["understanding_line"] = qtext[:240]
     out.setdefault("version", 1)
@@ -534,15 +567,20 @@ def get_admin_ask_question(question_id: str) -> dict | None:
     chart, birth = _load_kundli_chart_for_admin_question(uq)
     try:
         from ask_llm_context_debug import (
+            _is_career_timing_admin_ctx,
             _is_marriage_question_text,
+            _is_property_timing_admin_ctx,
             build_marriage_bcp_step2_admin_payload,
             recompute_marriage_bcp_from_kundli,
+            recompute_property_bcp_from_kundli,
         )
+        from ask_property.timing_registry import is_property_timing_question
 
         marriage_q = _is_marriage_question_text(uq.question_text or "") or (
-            (uq.topic or "").strip().lower() in ("marriage", "timing", "vivah")
+            (uq.topic or "").strip().lower() in ("marriage", "vivah")
         )
-        if chart and marriage_q:
+        career_q = isinstance(llm_ctx, dict) and _is_career_timing_admin_ctx(llm_ctx)
+        if chart and marriage_q and not career_q:
             llm_ctx = recompute_marriage_bcp_from_kundli(
                 llm_ctx if isinstance(llm_ctx, dict) else {},
                 chart,
@@ -555,22 +593,60 @@ def get_admin_ask_question(question_id: str) -> dict | None:
             )
             if bcp_payload:
                 d["marriage_bcp_step2"] = bcp_payload
-        elif isinstance(llm_ctx, dict) and chart:
-            llm_ctx = recompute_marriage_bcp_from_kundli(
-                llm_ctx, chart, birth,
+        property_q = (
+            (uq.topic or "").strip().lower() == "property"
+            or is_property_timing_question(uq.question_text or "", None)
+            or (isinstance(llm_ctx, dict) and _is_property_timing_admin_ctx(llm_ctx))
+        )
+        try:
+            from ask_vehicle.vehicle_registry import is_vehicle_static_question
+            from ask_vehicle.timing_registry import is_vehicle_timing_question
+
+            _qt = uq.question_text or ""
+            if is_vehicle_static_question(_qt) or is_vehicle_timing_question(_qt):
+                property_q = False
+        except Exception:
+            pass
+        if chart and property_q and not career_q and not marriage_q:
+            llm_ctx = recompute_property_bcp_from_kundli(
+                llm_ctx if isinstance(llm_ctx, dict) else {},
+                chart,
+                birth,
                 question_text=uq.question_text or "",
                 topic=uq.topic or "",
             )
-            bcp_payload = build_marriage_bcp_step2_admin_payload(llm_ctx, chart, birth)
-            if bcp_payload:
-                d["marriage_bcp_step2"] = bcp_payload
     except Exception as exc:
-        print(f"[question_history] marriage trace recompute failed: {exc}", flush=True)
+        print(f"[question_history] timing trace recompute failed: {exc}", flush=True)
+    try:
+        from ask_llm_context_debug import recompute_mr_engine_admin_context
+
+        if chart:
+            base_ctx = dict(llm_ctx) if isinstance(llm_ctx, dict) else {"question": uq.question_text or ""}
+            if uq.answer_source and not base_ctx.get("answer_source"):
+                base_ctx["answer_source"] = uq.answer_source
+            llm_ctx = recompute_mr_engine_admin_context(
+                base_ctx,
+                chart,
+                birth,
+                question_text=uq.question_text or "",
+            )
+    except Exception as exc:
+        print(f"[question_history] MR admin recompute skipped: {exc}", flush=True)
     if isinstance(llm_ctx, dict):
         llm_ctx = _bootstrap_admin_llm_context_from_row(uq, llm_ctx)
     else:
         llm_ctx = _bootstrap_admin_llm_context_from_row(uq, None)
     if isinstance(llm_ctx, dict):
+        try:
+            from ask_observability_debug import attach_observability_to_context
+
+            llm_ctx = attach_observability_to_context(
+                llm_ctx,
+                question_text=uq.question_text or "",
+                answer_text=uq.answer_text or "",
+            )
+        except Exception as exc:
+            print(f"[question_history] observability attach skipped: {exc}", flush=True)
         d["llm_context"] = llm_ctx
     d.pop("llm_context_json", None)
     return d
@@ -724,16 +800,62 @@ def persist_ask_question_result(
     if not user_id or not (question_text or "").strip():
         return None
     payload = dict(result) if isinstance(result, dict) else {}
-    if not payload.get("admin_llm_context"):
+    chart_for_save: dict | None = None
+    birth_for_save: dict | None = None
+    if primary_kundli_id or user_id:
         try:
-            from ask_llm_context_debug import build_admin_context_for_ask_save
+            class _AskSaveShim:
+                pass
 
-            payload["admin_llm_context"] = build_admin_context_for_ask_save(
+            shim = _AskSaveShim()
+            shim.user_id = user_id
+            shim.primary_kundli_id = primary_kundli_id
+            shim.question_text = question_text
+            chart_for_save, birth_for_save = _load_kundli_chart_for_admin_question(shim)
+        except Exception as exc:
+            print(f"[question_history] chart load for admin save skipped: {exc}", flush=True)
+    try:
+        from ask_llm_context_debug import build_admin_context_for_ask_save
+
+        ctx_existing = payload.get("admin_llm_context")
+        needs_rebuild = not ctx_existing
+        if isinstance(ctx_existing, dict):
+            sm = ctx_existing.get("slice_meta") if isinstance(ctx_existing.get("slice_meta"), dict) else {}
+            blocks = ctx_existing.get("blocks") if isinstance(ctx_existing.get("blocks"), dict) else {}
+            trace = blocks.get("engine_trace") if isinstance(blocks.get("engine_trace"), dict) else {}
+            needs_rebuild = not (sm.get("slice") or trace.get("engine"))
+        if not needs_rebuild:
+            ev = (
+                sm.get("evidence")
+                or trace.get("evidence")
+                or trace.get("factors")
+                or (ctx_existing.get("engine_facts") or {}).get("evidence")
+                or []
+            )
+            needs_rebuild = bool(sm.get("slice") or trace.get("engine")) and not ev
+        if needs_rebuild:
+            rebuilt = build_admin_context_for_ask_save(
                 question=question_text,
                 result=payload,
+                chart=chart_for_save,
+                birth=birth_for_save,
             )
-        except Exception as exc:
-            print(f"[question_history] admin_ctx rebuild skipped: {exc}", flush=True)
+            if isinstance(ctx_existing, dict) and ctx_existing:
+                merged = dict(rebuilt)
+                for key in ("chart_text", "system_prompt", "user_payload", "extra_rules", "blocks"):
+                    if ctx_existing.get(key) and not merged.get(key):
+                        merged[key] = ctx_existing.get(key)
+                if isinstance(ctx_existing.get("blocks"), dict) and isinstance(merged.get("blocks"), dict):
+                    mb = dict(merged["blocks"])
+                    eb = ctx_existing["blocks"]
+                    if isinstance(eb.get("engine_trace"), dict) and not mb.get("engine_trace"):
+                        mb["engine_trace"] = eb["engine_trace"]
+                    merged["blocks"] = mb
+                payload["admin_llm_context"] = merged
+            else:
+                payload["admin_llm_context"] = rebuilt
+    except Exception as exc:
+        print(f"[question_history] admin_ctx rebuild skipped: {exc}", flush=True)
     topic_logged = str(payload.get("topic") or "general")
     tok = token_fields_from_result(payload)
     save_payload = dict(payload)

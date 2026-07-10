@@ -2,14 +2,17 @@ import type { AskQuestionItem } from "./api";
 import { formatDate, formatInr } from "./api";
 import {
   AskLlmContextPanel,
+  AnswerFidelityBadge,
   AnswerPathBadge,
   bootstrapAskLlmContextFromRow,
   EngineTracePanel,
   EngineVerificationBadge,
   LlmQuestionUnderstandingBrief,
   parseAskLlmContext,
+  resolveAnswerFidelitySummary,
   resolveEngineVerificationSummary,
 } from "./AskLlmContextPanel";
+import { AskObservabilityDebugger } from "./AskObservabilityDebugger";
 import { CopyTextButton } from "./CopyTextButton";
 import { resolveEngineDisplayFromContext } from "./engineDisplay";
 import { QuestionLangBadge } from "./QuestionLangBadge";
@@ -23,6 +26,7 @@ export function AskQuestionDetailPage({
 }) {
   const ctx = parseAskLlmContext(row);
   const engineVerify = resolveEngineVerificationSummary(ctx);
+  const answerFidelity = resolveAnswerFidelitySummary(ctx);
   const engineDisplay = resolveEngineDisplayFromContext(ctx, row, engineVerify);
 
   return (
@@ -132,17 +136,20 @@ export function AskQuestionDetailPage({
                 <span>—</span>
               )}
               <EngineVerificationBadge summary={engineVerify} />
+              <AnswerFidelityBadge summary={answerFidelity} />
             </div>
           </div>
         </div>
       </div>
+
+      <AskObservabilityDebugger row={row} />
 
       <div className="ask-detail-context">
         <EngineTracePanel ctx={ctx || bootstrapAskLlmContextFromRow(row)} row={row} />
         <AskLlmContextPanel
           row={row}
           panelId={`ask-llm-context-${row.id}`}
-          defaultOpen
+          defaultOpen={false}
         />
       </div>
     </section>

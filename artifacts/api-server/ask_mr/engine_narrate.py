@@ -167,12 +167,18 @@ def narrate_mr_engine_llm(
 
     arch = str(getattr(engine_result, "archetype", "") or "general_mr").strip().lower()
     if arch == "commitment":
-        from ask_mr.commitment_narrator import commitment_narrator_payload
+        from ask_mr.commitment_narrator import (
+            commitment_narrator_payload,
+            engine_result_to_commitment_json,
+        )
 
         chart_text = commitment_narrator_payload(
             engine_result,
             wants_explain=wants_explain,
         )
+        _checks = dict(engine_result.checks or {})
+        _checks["narrator_input"] = engine_result_to_commitment_json(engine_result)
+        engine_result.checks = _checks
     else:
         chart_text = engine_result.to_narrator_payload()
     eff_lang = _resolve_response_lang(question or "", lang, None)

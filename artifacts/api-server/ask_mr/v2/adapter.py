@@ -16,6 +16,8 @@ def v2_to_engine_result(output: EngineOutputV2) -> EngineResult:
     checks = dict(output.checks or {})
     checks["slice_type"] = "mr_engine_v2"
     checks["engine_version"] = output.engine_version
+    checks["rules_version"] = output.rules_version
+    checks["schema_version"] = output.schema_version
     checks["scorecard"] = dict(output.scorecard)
     checks["contradiction"] = output.contradiction.detected
     checks["contradiction_pattern"] = output.contradiction.pattern
@@ -33,9 +35,12 @@ def v2_to_engine_result(output: EngineOutputV2) -> EngineResult:
             else ""
         ),
     }
-    if output.memory.previously_fired_rules:
-        checks["memory_refire_rules"] = output.memory.previously_fired_rules[:10]
-
+    checks["timing"] = {
+        "applicable": bool(output.timing.applicable),
+        "windows": list(output.timing.windows or []),
+        "trigger_planets": list(output.timing.trigger_planets or []),
+    }
+    checks["mode"] = output.mode
     return EngineResult(
         archetype=output.engine_id,
         verdict=output.verdict.headline,

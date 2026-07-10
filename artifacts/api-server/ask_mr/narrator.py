@@ -131,6 +131,10 @@ def _archetype_extra_rules(
             "Finance Q — direct money answer first. No lottery/satta/stock tips. "
             "Do not invent amounts or dates."
         )
+    elif arch == "commitment":
+        from ask_mr.commitment_narrator import COMMITMENT_NARRATOR_RULES
+
+        rules.append(COMMITMENT_NARRATOR_RULES)
     elif arch in JOB_ENGINE_ARCHETYPES or arch.startswith("career") or arch in (
         "job_vs_business", "sector_fit", "creativity_innovation", "career_milestones",
         "govt_job", "vocational_trade", "entrepreneurship", "income_wealth",
@@ -162,6 +166,7 @@ def build_mr_engine_narrator_system_prompt(
     question_focus: str = "",
     user_intent: str = "",
     open_chart_qa: bool = False,
+    concise: bool = False,
 ) -> str:
     """Cosmo Ask narrator — expand engine facts into deep markdown Hinglish."""
     rl = (reply_lang or "hn").strip().lower()
@@ -170,6 +175,9 @@ def build_mr_engine_narrator_system_prompt(
     arch = (archetype or "").strip().lower()
 
     topic_hint = (
+        "commitment"
+        if arch == "commitment"
+        else (
         "health"
         if arch in (
             "overall_vitality", "chronic_tendency", "mental_stress", "surgery_risk_tone",
@@ -193,6 +201,7 @@ def build_mr_engine_narrator_system_prompt(
                 else (arch.replace("_", " ") if arch else "marriage/relationship")
             )
         )
+        )
     )
 
     extras = _archetype_extra_rules(
@@ -211,11 +220,29 @@ def build_mr_engine_narrator_system_prompt(
             "\nIf engine gives love vs arranged % split — LEAD Big Picture with those numbers only."
         )
 
-    length_block = build_cosmo_ask_length_block(
-        wants_explain=wants_explain,
-        topic=topic_hint,
-        extra_rules=extras,
-    )
+    if arch == "commitment":
+        from ask_mr.commitment_narrator import build_commitment_narrator_length_block
+
+        length_block = build_commitment_narrator_length_block(
+            wants_explain=wants_explain,
+            concise=concise,
+            extra_rules=extras,
+        )
+    else:
+        try:
+            length_block = build_cosmo_ask_length_block(
+                wants_explain=wants_explain,
+                topic=topic_hint,
+                extra_rules=extras,
+                concise=concise,
+            )
+        except TypeError:
+            # VPS may have older ask_cosmo_narrator.py without batch concise kwarg.
+            length_block = build_cosmo_ask_length_block(
+                wants_explain=wants_explain,
+                topic=topic_hint,
+                extra_rules=extras,
+            )
 
     intent_block = ""
     if (user_intent or "").strip():

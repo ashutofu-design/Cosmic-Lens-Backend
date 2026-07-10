@@ -165,7 +165,16 @@ def narrate_mr_engine_llm(
     from ask_question_understand import narrator_intent_hint
     from ask_cosmo_narrator import enforce_cosmo_engine_answer
 
-    chart_text = engine_result.to_narrator_payload()
+    arch = str(getattr(engine_result, "archetype", "") or "general_mr").strip().lower()
+    if arch == "commitment":
+        from ask_mr.commitment_narrator import commitment_narrator_payload
+
+        chart_text = commitment_narrator_payload(
+            engine_result,
+            wants_explain=wants_explain,
+        )
+    else:
+        chart_text = engine_result.to_narrator_payload()
     eff_lang = _resolve_response_lang(question or "", lang, None)
     intent = narrator_intent_hint(
         question or "",
@@ -179,7 +188,7 @@ def narrate_mr_engine_llm(
         chart_text=chart_text,
         reply_lang=eff_lang,
         wants_explain=wants_explain,
-        archetype=str(getattr(engine_result, "archetype", "") or "general_mr"),
+        archetype=arch,
         word_budget=word_budget,
         user_intent=intent,
         concise=concise,

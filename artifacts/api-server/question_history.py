@@ -397,20 +397,15 @@ def _load_kundli_chart_for_admin_question(uq) -> tuple[dict | None, dict | None]
         except Exception:
             return False
 
-    # 1) Primary profile — source of truth for "primary user"
+    # 1) Native profile chart — never a partner slot (same rules as Ask resolver)
     try:
-        prof = (
-            Profile.query.filter_by(user_id=uq.user_id, is_primary=True)
-            .filter(Profile.deleted_at.is_(None))
-            .first()
-        )
-        if prof is None:
-            prof = (
-                Profile.query.filter_by(user_id=uq.user_id, deleted_at=None)
-                .order_by(Profile.updated_at.desc())
-                .first()
-            )
-        _try_profile(prof)
+        from ask_kundli_resolver import load_native_chart_from_profile
+
+        native_chart, native_birth = load_native_chart_from_profile(uq.user_id)
+        if native_chart is not None:
+            chart = native_chart
+            if native_birth:
+                birth = native_birth
     except Exception:
         pass
 

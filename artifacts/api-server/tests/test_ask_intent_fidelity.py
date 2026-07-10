@@ -130,6 +130,54 @@ class AskIntentFidelityTests(unittest.TestCase):
             "no",
         )
 
+    def test_love_live_timing_understood_with_engine(self):
+        q = "mera love live kab shuru hoga"
+        li = {
+            "domain": "love",
+            "mr_archetype": "dating_courtship",
+            "routed_archetype": "dating_courtship",
+            "confidence": 1.0,
+            "source": "llm",
+            "question_summary": (
+                "User apne love life ke shuru hone ka samay jaanna chahta hai.\n"
+                "Focus love life ke starting point par hai."
+            ),
+        }
+        self.assertEqual(
+            resolve_question_understood(
+                q,
+                li,
+                intent_source="llm",
+                has_engine_facts=True,
+                engine_archetype="timing",
+            ),
+            "yes",
+        )
+
+    def test_commitment_timepass_overrides_loyalty_llm(self):
+        q = (
+            "Kya mera partner mujhse genuinely commitment karega "
+            "ya sirf timepass kar raha hai?"
+        )
+        raw = {
+            "domain": "love",
+            "mr_archetype": "loyalty_trust",
+            "is_timing": False,
+            "source": "llm",
+            "question_summary": (
+                "User wants to know if partner is loyal and trustworthy in the relationship."
+            ),
+        }
+        fixed = repair_llm_intent(q, raw)
+        self.assertEqual(fixed.get("mr_archetype"), "commitment")
+        self.assertEqual(fixed.get("routing_override"), "commitment_classifier_raw_question")
+
+    def test_classify_mr_archetype_commitment_timepass(self):
+        from ask_mr.classifier import classify_mr_archetype
+
+        q = "kya mera partner genuinely commitment karega ya sirf timepass kar raha hai"
+        self.assertEqual(classify_mr_archetype(q), "commitment")
+
 
 if __name__ == "__main__":
     unittest.main()

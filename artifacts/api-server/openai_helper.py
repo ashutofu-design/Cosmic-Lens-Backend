@@ -456,12 +456,27 @@ _M17_MARRIAGE_KW_RX = _re_mb_M17.compile(
 )
 
 
-def _M17_format_marriage_block(engine_result: dict) -> str:
+def _M17_format_marriage_block(engine_result: dict, question: str = "") -> str:
     """M17 — timing-only: PRIMARY WINDOW for the one-sentence user reply."""
     if not isinstance(engine_result, dict) or not engine_result:
         return ""
 
-    primary = (engine_result.get("primary_window") or "").strip()
+    try:
+        from event_timing._shared.timing_window_pick import (
+            locked_window_instruction,
+            pick_timing_answer_window,
+            timing_window_index,
+            window_range_label,
+        )
+
+        picked = pick_timing_answer_window(engine_result, question or "")
+        primary = window_range_label(picked) if picked else ""
+    except Exception:
+        picked = None
+        primary = ""
+
+    if not primary:
+        primary = (engine_result.get("primary_window") or "").strip()
     if not primary:
         top3 = engine_result.get("top_3_windows") or []
         if top3 and isinstance(top3[0], dict):
@@ -485,7 +500,12 @@ def _M17_format_marriage_block(engine_result: dict) -> str:
         parts.append("")
 
     if primary:
-        parts.append(f"PRIMARY WINDOW (verbatim in reply): {primary}")
+        try:
+            rank = timing_window_index(question or "") + 1
+        except Exception:
+            rank = 1
+        tag = "PRIMARY" if rank == 1 else f"#{rank} NEXT"
+        parts.append(f"{tag} WINDOW (verbatim in reply): {primary}")
     else:
         parts.append(
             "PRIMARY WINDOW: none — reply ONE sentence: "
@@ -493,8 +513,18 @@ def _M17_format_marriage_block(engine_result: dict) -> str:
         )
 
     backup = (engine_result.get("backup_window") or "").strip()
-    if backup:
+    try:
+        use_next = timing_window_index(question or "") >= 1
+    except Exception:
+        use_next = False
+    if backup and not use_next:
         parts.append(f"BACKUP WINDOW (only if user asks alternate): {backup}")
+    try:
+        lock = locked_window_instruction(engine_result, question or "")
+        if lock:
+            parts.append(lock)
+    except Exception:
+        pass
 
     st0 = engine_result.get("step0_tendency") or {}
     if st0.get("verdict") in ("DELAYED", "LATE"):
@@ -4187,6 +4217,13 @@ def _raw_passthrough_max_tokens(
     is_sensitive: bool,
 ) -> int:
     """Completion budget — engine narrators need 480+ tokens for 3-section answers."""
+    try:
+        from ask_batch_runner import is_batch_concise_mode
+
+        if is_batch_concise_mode():
+            return 120
+    except Exception:
+        pass
     env = (os.environ.get("RAW_PASSTHROUGH_MAX_TOKENS") or "").strip()
     if env:
         return int(env)
@@ -5437,118 +5474,6 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         print(f"[raw_passthrough] generic follow-up skipped: {_gf_exc}", flush=True)
         _general_followup = False
 
-    # ── Marriage backup window ("agar June 2029 mein nahi, aage kab?") ─────
-    if (
-        _detect_marriage_constraint(question, history)
-        or (
-            _last_assistant_topic_was_marriage(history or [])
-            and _re_mb_M17.search(
-                r"(?ix)\b(aage|agla|uske\s+baad|dusra|next|backup|alternate)\b",
-                question or "",
-            )
-        )
-    ) and isinstance(kundli, dict) and kundli.get("planets"):
-        try:
-            from event_timing.marriage import assess_marriage, extract_alt_window_str
-            from event_timing.marriage.kp_from_chart import resolve_kp
-
-            _intel_alt: dict = {}
-            try:
-                _analyze_alt, _ = _chart_intel()
-                _intel_alt = _analyze_alt(kundli, birth) or {}
-            except Exception:
-                pass
-            _kp_alt = resolve_kp(kundli, {}, birth)
-            _eng_alt = assess_marriage(
-                kundli, _intel_alt, _kp_alt, birth, question=question or "",
-            )
-            _alt_w = extract_alt_window_str(_eng_alt) if _eng_alt else ""
-            if not _alt_w and isinstance(_eng_alt, dict):
-                _alt_w = (_eng_alt.get("backup_window") or "").strip()
-            _eff_lang_alt = _resolve_response_lang(question, lang, None)
-            _text_alt = _compose_marriage_timing_alt_reply(_alt_w, _eff_lang_alt)
-            _out_alt = {
-                "text": _text_alt,
-                "topic": "timing",
-                "question_type": "TIMING",
-                "confidence": 1.0,
-                "source": "raw_passthrough_timing_alt",
-                "engine_tag": "ans-engine",
-                "follow_ups": [],
-            }
-            _alt_checks = {
-                "slice_type": "timing_marriage_engine_alt",
-                "is_marriage_engine": True,
-                "marriage_use_alt": True,
-                "primary_window_rejected": True,
-            }
-            _alt_blocks: dict = {}
-            if _alt_w:
-                _alt_blocks["backup_window"] = _alt_w
-            if isinstance(_eng_alt, dict):
-                _mb_alt = _M17_format_marriage_block(_eng_alt)
-                if _mb_alt:
-                    _alt_blocks["marriage_engine"] = _mb_alt
-                try:
-                    from ask_llm_context_debug import build_marriage_engine_trace
-
-                    _trace_alt = build_marriage_engine_trace(_eng_alt)
-                    if _trace_alt:
-                        _trace_alt["used_window"] = "backup"
-                        _alt_blocks["engine_trace"] = _trace_alt
-                except Exception:
-                    pass
-            print(
-                f"[raw_passthrough] marriage_timing_alt window={_alt_w!r} "
-                f"q={question[:70]!r}",
-                flush=True,
-            )
-            return _attach_admin(
-                _out_alt,
-                question=question or "",
-                question_type="TIMING",
-                is_timing=True,
-                checks=_alt_checks,
-                blocks=_alt_blocks,
-                llm_called=False,
-                skip_reason="marriage_timing_alt_window",
-                intent_source="constraint_followup",
-            )
-        except Exception as _ma_exc:
-            print(f"[raw_passthrough] marriage_timing_alt skipped: {_ma_exc}", flush=True)
-
-    # ── Marriage timing M17 (shaadi kab) — engine-only before LLM routing ───
-    if _is_marriage_timing_question(question or ""):
-        if not isinstance(kundli, dict):
-            print(
-                "[marriage_timing_m17] skip_early kundli_not_dict "
-                f"type={type(kundli).__name__} q={(question or '')[:60]!r}",
-                flush=True,
-            )
-        else:
-            _m17_early = _marriage_timing_m17_passthrough_response(
-                question=question or "",
-                kundli=kundli,
-                birth=birth,
-                lang=lang,
-                attach_admin_fn=_attach_admin,
-                reply_idx=reply_idx,
-                skip_reason="marriage_timing_m17_early",
-                intent_source="marriage_timing_m17_early",
-            )
-            if _m17_early is not None:
-                print(
-                    f"[raw_passthrough] marriage_timing_m17_early "
-                    f"q={(question or '')[:60]!r}",
-                    flush=True,
-                )
-                return _m17_early
-            print(
-                "[marriage_timing_m17] early_miss "
-                f"q={(question or '')[:60]!r}",
-                flush=True,
-            )
-
     client = _get_client()
     _llm_intent_admin: dict | None = None
     try:
@@ -5614,6 +5539,32 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         print(f"[raw_passthrough] chart_fact deterministic skipped: {_cfe}", flush=True)
 
     if client is None:
+        try:
+            from ask_mr.static_answer import recover_mr_ask_answer
+
+            _no_client = recover_mr_ask_answer(
+                question or "",
+                kundli,
+                birth=birth,
+                lang=lang,
+                llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+            )
+            if _no_client and str(_no_client.get("text") or "").strip():
+                _no_client.pop("llm_called", None)
+                return _attach_admin(
+                    _no_client,
+                    question=question or "",
+                    question_type="STATIC",
+                    is_timing=False,
+                    checks={"slice_type": "mr_engine_v1", "is_mr_static": True},
+                    chart_text="",
+                    llm_called=bool(_no_client.get("source") == "mr_engine_then_llm"),
+                    skip_reason="mr_engine_no_openai_client",
+                    intent_source="mr_engine_recovery",
+                    llm_intent=_llm_intent_admin,
+                )
+        except Exception as _ncc_exc:
+            print(f"[raw_passthrough] MR no-client recovery skipped: {_ncc_exc}", flush=True)
         return {
             "text":       "AI service abhi available nahi hai. Thodi der baad try karo.",
             "topic":      "general",
@@ -5729,6 +5680,20 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _llm_intent_record if isinstance(_llm_intent_record, dict) else _llm_intent
         )
 
+    # Marriage timing shortcuts run only after LLM understanding confirms domain.
+    _marriage_shortcut = _try_marriage_timing_shortcuts_after_understand(
+        question=question or "",
+        history=history,
+        kundli=kundli,
+        birth=birth,
+        lang=lang,
+        attach_admin_fn=_attach_admin,
+        reply_idx=reply_idx,
+        llm_intent=_llm_intent_admin,
+    )
+    if _marriage_shortcut is not None:
+        return _marriage_shortcut
+
     _is_native_overview = False
     try:
         from ask_native_overview import is_native_overview_question  # type: ignore
@@ -5763,111 +5728,74 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         is_timing = bool(_llm_intent.get("is_timing"))
     else:
         is_timing = (_resolved_route == "timing")
+    # ── Master router: LLM timing authority; regex = guards only ─────────
+    _master_route = None
     try:
-        from ask_mr.timing_registry import (
-            clear_timing_without_when_anchor,
-            finalize_is_timing_flag,
-            mr_static_overrides_llm_timing,
-            resolve_mr_static_archetype,
-        )
+        from ask_master_router import finalize_ask_route
 
-        if isinstance(_llm_intent, dict):
-            clear_timing_without_when_anchor(question or "", _llm_intent)
-        is_timing = finalize_is_timing_flag(question or "", is_timing, _llm_intent)
-        if mr_static_overrides_llm_timing(question or "", _llm_intent):
+        _master_route = finalize_ask_route(
+            question or "",
+            understanding=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+            llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+            llm_intent_admin=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+        )
+        is_timing = bool(_master_route.is_timing)
+        if _master_route.lock_timing and _master_route.is_timing:
+            _is_mr_static = False
+        elif _master_route.mr_static:
+            _is_mr_static = True
             is_timing = False
-            if isinstance(_llm_intent, dict):
-                _llm_intent["is_timing"] = False
-                _llm_intent["domain"] = "love"
-                _llm_intent["mr_archetype"] = (
-                    _llm_intent.get("mr_archetype")
-                    or resolve_mr_static_archetype(question or "")
-                    or "partner_nature"
-                )
-            print(
-                f"[raw_passthrough] MR_STATIC early (no kab/when) "
-                f"q={(question or '')[:60]!r}",
-                flush=True,
-            )
-    except Exception as _when_gate_exc:
-        print(f"[raw_passthrough] WHEN_TIMING_GATE skipped: {_when_gate_exc}", flush=True)
-    try:
-        from ask_career.timing_registry import is_career_timing_question  # type: ignore
-
-        if is_career_timing_question(question or "", _llm_intent):
-            is_timing = True
-    except Exception:
-        pass
-    try:
-        from ask_love.timing_registry import (  # type: ignore
-            is_love_static_loyalty_question,
-            is_love_timing_question,
+        print(
+            f"[raw_passthrough] MASTER_ROUTE path={_master_route.path} "
+            f"domain={_master_route.domain} is_timing={_master_route.is_timing} "
+            f"slice={_master_route.timing_engine_slice or '-'} "
+            f"reason={_master_route.reason} guards={_master_route.guards}",
+            flush=True,
         )
-
-        _mr_static_override = False
+    except Exception as _master_exc:
+        print(f"[raw_passthrough] MASTER_ROUTE skipped: {_master_exc}", flush=True)
         try:
-            from ask_mr.timing_registry import mr_static_overrides_llm_timing
+            from ask_mr.timing_registry import finalize_is_timing_flag
 
-            _mr_static_override = mr_static_overrides_llm_timing(
-                question or "", _llm_intent
-            )
-        except Exception as _mro_exc:
-            print(
-                f"[raw_passthrough] MR_STATIC timing override skipped: {_mro_exc}",
-                flush=True,
-            )
-
-        if is_love_static_loyalty_question(question or "") or _mr_static_override:
-            is_timing = False
-            if _mr_static_override:
-                print(
-                    f"[raw_passthrough] MR_STATIC overrides timing "
-                    f"q={(question or '')[:60]!r}",
-                    flush=True,
-                )
-            else:
-                print(
-                    f"[raw_passthrough] LOVE_STATIC_LOYALTY overrides timing "
-                    f"q={(question or '')[:60]!r}",
-                    flush=True,
-                )
-        elif is_love_timing_question(question or "", _llm_intent):
-            is_timing = True
-    except Exception:
-        pass
-    try:
-        from ask_vehicle.timing_registry import is_vehicle_timing_question  # type: ignore
-
-        if is_vehicle_timing_question(question or "", _llm_intent):
-            is_timing = True
-    except Exception:
-        pass
-    try:
-        from ask_spiritual.timing_registry import is_spiritual_timing_question  # type: ignore
-
-        if is_spiritual_timing_question(question or "", _llm_intent):
-            is_timing = True
-    except Exception:
-        pass
-    try:
-        from ask_health.timing_registry import health_static_overrides_llm_timing  # type: ignore
-
-        if health_static_overrides_llm_timing(question or "", _llm_intent):
-            print(
-                f"[raw_passthrough] HEALTH_STATIC overrides timing "
-                f"q={(question or '')[:60]!r}",
-                flush=True,
-            )
-            is_timing = False
-    except Exception as _hso_exc:
-        print(f"[raw_passthrough] health static timing override skipped: {_hso_exc}", flush=True)
+            is_timing = finalize_is_timing_flag(question or "", is_timing, _llm_intent)
+        except Exception as _when_gate_exc:
+            print(f"[raw_passthrough] WHEN_TIMING_GATE skipped: {_when_gate_exc}", flush=True)
     _force_health_static = False
     try:
         from ask_health.timing_registry import health_static_overrides_llm_timing as _hso2  # type: ignore
 
         _force_health_static = bool(_hso2(question or "", _llm_intent))
+        if _force_health_static and not (_master_route and _master_route.lock_timing):
+            is_timing = False
     except Exception:
         pass
+    try:
+        from ask_intent_fidelity import reconcile_question_type
+
+        _intent_for_rec = (
+            _llm_intent if isinstance(_llm_intent, dict)
+            else _llm_intent_admin if isinstance(_llm_intent_admin, dict)
+            else {}
+        )
+        _rec = reconcile_question_type(
+            question or "",
+            _intent_for_rec,
+            mutate=True,
+        )
+        is_timing = bool(_rec.get("is_timing"))
+        if isinstance(_llm_intent, dict) and _rec.get("intent"):
+            _llm_intent.update(_rec["intent"])
+        if isinstance(_llm_intent_admin, dict) and _rec.get("intent"):
+            _llm_intent_admin.update(_rec["intent"])
+            _llm_intent_admin["routed_timing"] = is_timing
+        if _rec.get("reconciled"):
+            print(
+                f"[raw_passthrough] TIMING_RECONCILE reasons={_rec.get('reasons')} "
+                f"is_timing={is_timing} q={(question or '')[:60]!r}",
+                flush=True,
+            )
+    except Exception as _rec_exc:
+        print(f"[raw_passthrough] TIMING_RECONCILE skipped: {_rec_exc}", flush=True)
     qtype = "TIMING" if is_timing else "STATIC"
 
     # ── Vague life-struggle timing → clarifier (after intent/timing known) ─
@@ -5945,6 +5873,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     _is_children_static = False
     _is_property_static = False
     _is_vehicle_static = False
+    _is_numerology_static = False
     _is_travel_static = False
     _is_litigation_static = False
     _is_luck_static = False
@@ -6161,6 +6090,17 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             except Exception:
                 _is_vehicle_static = False
             try:
+                from ask_numerology import is_numerology_name_question  # type: ignore
+
+                _is_numerology_static = is_numerology_name_question(
+                    question or "",
+                    birth=birth,
+                    kundli=kundli if isinstance(kundli, dict) else None,
+                    llm_intent=_llm_intent if isinstance(_llm_intent, dict) else None,
+                )
+            except Exception:
+                _is_numerology_static = False
+            try:
                 from ask_travel.classifier import is_travel_static_question  # type: ignore
 
                 _trv_regex = is_travel_static_question(question)
@@ -6370,7 +6310,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     )
             except Exception as _gap_det_exc:
                 print(f"[raw_passthrough] gap static detect skipped: {_gap_det_exc}", flush=True)
-        if _health_engine_on and not _direct_llm_bypass and not _is_mr_static and not _is_career_static and not _is_finance_static and not _is_education_static and not _is_children_static and not _is_property_static and not _is_vehicle_static and not _is_travel_static and not _is_litigation_static and not _is_luck_static and not _is_network_static and not _is_gap_static:
+        if _health_engine_on and not _direct_llm_bypass and not _is_mr_static and not _is_career_static and not _is_finance_static and not _is_education_static and not _is_children_static and not _is_property_static and not _is_vehicle_static and not _is_numerology_static and not _is_travel_static and not _is_litigation_static and not _is_luck_static and not _is_network_static and not _is_gap_static:
             try:
                 from ask_health.classifier import is_health_static_question  # type: ignore
 
@@ -6434,6 +6374,22 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 if is_vehicle_static_question(question or ""):
                     _is_vehicle_static = True
                     _is_finance_static = False
+            except Exception:
+                pass
+        _numerology_engine_on = (os.environ.get("ASK_NUMEROLOGY_ENGINE") or "1").strip() != "0"
+        if _numerology_engine_on:
+            try:
+                from ask_numerology import is_numerology_name_question  # type: ignore
+
+                if is_numerology_name_question(
+                    question or "",
+                    birth=birth,
+                    kundli=kundli if isinstance(kundli, dict) else None,
+                    llm_intent=_llm_intent if isinstance(_llm_intent, dict) else (
+                        _llm_intent_admin if isinstance(_llm_intent_admin, dict) else None
+                    ),
+                ):
+                    _is_numerology_static = True
             except Exception:
                 pass
         if _is_vehicle_static and _is_property_static:
@@ -6518,76 +6474,92 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 pass
     # Health static outlook beats timing — must run even when LLM sets is_timing=True
     # and even when the `if not is_timing:` block above was skipped.
-    try:
-        from ask_health.timing_registry import health_static_overrides_llm_timing as _hso_always  # type: ignore
-
-        if not _direct_llm_bypass and _hso_always(question or "", _llm_intent):
-            is_timing = False
-            _is_health_static = True
-            qtype = "STATIC"
-    except Exception as _hso_a:
-        import re as _re_hl
-
-        if _re_hl.search(
-            r"(?ix)\b(health|sehat|swasth|swasthya|tabiyat)\s+(kaisi|kaisa)\s*"
-            r"(rahegi|rahega|hogi|hoga)?",
-            question or "",
-        ) and not _re_hl.search(
-            r"(?ix)\b(kab|when|kis\s+(?:saal|year|date|mahine|month)|20\d{2})\b",
-            question or "",
-        ):
-            is_timing = False
-            _is_health_static = True
-            qtype = "STATIC"
-            print(
-                f"[raw_passthrough] HEALTH outlook regex override (import fallback) "
-                f"q={(question or '')[:60]!r}",
-                flush=True,
-            )
-        else:
-            print(f"[raw_passthrough] health beats timing skipped: {_hso_a}", flush=True)
-    try:
-        from ask_love.timing_registry import (  # type: ignore
-            is_love_static_loyalty_question,
-            is_love_timing_question,
-        )
-
-        _mr_static_override = False
+    if not (_master_route and _master_route.lock_timing):
         try:
-            from ask_mr.timing_registry import mr_static_overrides_llm_timing
+            from ask_health.timing_registry import health_static_overrides_llm_timing as _hso_always  # type: ignore
 
-            _mr_static_override = mr_static_overrides_llm_timing(
-                question or "", _llm_intent
-            )
-        except Exception as _mro_exc:
-            print(
-                f"[raw_passthrough] MR_STATIC timing override skipped: {_mro_exc}",
-                flush=True,
-            )
+            if not _direct_llm_bypass and _hso_always(question or "", _llm_intent):
+                is_timing = False
+                _is_health_static = True
+                qtype = "STATIC"
+        except Exception as _hso_a:
+            import re as _re_hl
 
-        if is_love_static_loyalty_question(question or "") or _mr_static_override:
-            is_timing = False
-            qtype = "STATIC"
-            _is_mr_static = True
-            _is_property_static = False
-            if _mr_static_override:
+            if _re_hl.search(
+                r"(?ix)\b(health|sehat|swasth|swasthya|tabiyat)\s+(kaisi|kaisa)\s*"
+                r"(rahegi|rahega|hogi|hoga)?",
+                question or "",
+            ) and not _re_hl.search(
+                r"(?ix)\b(kab|when|kis\s+(?:saal|year|date|mahine|month)|20\d{2})\b",
+                question or "",
+            ):
+                is_timing = False
+                _is_health_static = True
+                qtype = "STATIC"
                 print(
-                    f"[raw_passthrough] MR_STATIC → static (late) "
+                    f"[raw_passthrough] HEALTH outlook regex override (import fallback) "
                     f"q={(question or '')[:60]!r}",
                     flush=True,
                 )
             else:
+                print(f"[raw_passthrough] health beats timing skipped: {_hso_a}", flush=True)
+    if not (_master_route and _master_route.lock_timing):
+        try:
+            from ask_love.timing_registry import (  # type: ignore
+                is_love_static_loyalty_question,
+                is_love_timing_question,
+            )
+
+            _mr_static_override = False
+            try:
+                from ask_mr.timing_registry import mr_static_overrides_llm_timing
+
+                _mr_static_override = mr_static_overrides_llm_timing(
+                    question or "", _llm_intent
+                )
+            except Exception as _mro_exc:
                 print(
-                    f"[raw_passthrough] LOVE_STATIC_LOYALTY → MR static "
-                    f"q={(question or '')[:60]!r}",
+                    f"[raw_passthrough] MR_STATIC timing override skipped: {_mro_exc}",
                     flush=True,
                 )
-        elif is_love_timing_question(question or "", _llm_intent):
-            is_timing = True
-            qtype = "TIMING"
-            _is_mr_static = False
-    except Exception:
-        pass
+
+            if is_love_static_loyalty_question(question or "") or _mr_static_override:
+                is_timing = False
+                qtype = "STATIC"
+                _is_mr_static = True
+                _is_property_static = False
+                if _mr_static_override:
+                    print(
+                        f"[raw_passthrough] MR_STATIC → static (late) "
+                        f"q={(question or '')[:60]!r}",
+                        flush=True,
+                    )
+                else:
+                    print(
+                        f"[raw_passthrough] LOVE_STATIC_LOYALTY → MR static "
+                        f"q={(question or '')[:60]!r}",
+                        flush=True,
+                    )
+            elif is_love_timing_question(question or "", _llm_intent):
+                is_timing = True
+                qtype = "TIMING"
+                _is_mr_static = False
+            else:
+                try:
+                    from ask_love.timing_registry import llm_says_love_timing
+
+                    _love_llm_intent = (
+                        _llm_intent_admin if isinstance(_llm_intent_admin, dict)
+                        else _llm_intent if isinstance(_llm_intent, dict) else None
+                    )
+                    if llm_says_love_timing(_love_llm_intent):
+                        is_timing = True
+                        qtype = "TIMING"
+                        _is_mr_static = False
+                except Exception:
+                    pass
+        except Exception:
+            pass
     try:
         from ask_vehicle.timing_registry import is_vehicle_timing_question  # type: ignore
 
@@ -6599,17 +6571,40 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _force_health_static = False
     except Exception:
         pass
-    # MR / love loyalty beats property when LLM mis-routes (e.g. dhoka → property_risk).
     try:
-        from ask_love.timing_registry import is_love_static_loyalty_question  # type: ignore
+        from ask_children.timing_registry import (  # type: ignore
+            is_children_timing_question,
+            llm_says_children_timing,
+        )
 
-        if _is_mr_static or is_love_static_loyalty_question(question or ""):
-            _is_mr_static = True
-            _is_property_static = False
-            is_timing = False
-            qtype = "STATIC"
+        _child_route_intent = (
+            _llm_intent_admin if isinstance(_llm_intent_admin, dict)
+            else _llm_intent if isinstance(_llm_intent, dict) else None
+        )
+        if (
+            is_children_timing_question(question or "", _llm_intent)
+            or llm_says_children_timing(_child_route_intent)
+            or llm_says_children_timing(_llm_intent)
+        ):
+            is_timing = True
+            qtype = "TIMING"
+            _is_health_static = False
+            _is_children_static = False
+            _force_health_static = False
     except Exception:
         pass
+    # MR / love loyalty beats property when LLM mis-routes (e.g. dhoka → property_risk).
+    if not (_master_route and _master_route.lock_timing):
+        try:
+            from ask_love.timing_registry import is_love_static_loyalty_question  # type: ignore
+
+            if _is_mr_static or is_love_static_loyalty_question(question or ""):
+                _is_mr_static = True
+                _is_property_static = False
+                is_timing = False
+                qtype = "STATIC"
+        except Exception:
+            pass
     try:
         from ask_mr.timing_registry import finalize_is_timing_flag
 
@@ -6652,6 +6647,10 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         is_decision = False
         is_finance = False
     if _is_vehicle_static:
+        static_dasha_hint = False
+        is_decision = False
+        is_finance = False
+    if _is_numerology_static:
         static_dasha_hint = False
         is_decision = False
         is_finance = False
@@ -6709,31 +6708,32 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         )
     except Exception:
         pass
-    try:
-        from ask_mr.timing_registry import (
-            mr_static_overrides_llm_timing,
-            resolve_mr_static_archetype,
-        )
-
-        if mr_static_overrides_llm_timing(question or "", _llm_intent):
-            is_timing = False
-            qtype = "STATIC"
-            _is_mr_static = True
-            if isinstance(_llm_intent, dict):
-                _llm_intent["is_timing"] = False
-                _llm_intent["domain"] = "love"
-                _llm_intent["mr_archetype"] = (
-                    _llm_intent.get("mr_archetype")
-                    or resolve_mr_static_archetype(question or "")
-                    or "partner_nature"
-                )
-            print(
-                f"[raw_passthrough] MR_STATIC pre-resolver lock "
-                f"q={(question or '')[:60]!r}",
-                flush=True,
+    if not (_master_route and _master_route.lock_timing):
+        try:
+            from ask_mr.timing_registry import (
+                mr_static_overrides_llm_timing,
+                resolve_mr_static_archetype,
             )
-    except Exception as _mr_pre_exc:
-        print(f"[raw_passthrough] MR_STATIC pre-resolver skipped: {_mr_pre_exc}", flush=True)
+
+            if mr_static_overrides_llm_timing(question or "", _llm_intent):
+                is_timing = False
+                qtype = "STATIC"
+                _is_mr_static = True
+                if isinstance(_llm_intent, dict):
+                    _llm_intent["is_timing"] = False
+                    _llm_intent["domain"] = "love"
+                    _llm_intent["mr_archetype"] = (
+                        _llm_intent.get("mr_archetype")
+                        or resolve_mr_static_archetype(question or "")
+                        or "partner_nature"
+                    )
+                print(
+                    f"[raw_passthrough] MR_STATIC pre-resolver lock "
+                    f"q={(question or '')[:60]!r}",
+                    flush=True,
+                )
+        except Exception as _mr_pre_exc:
+            print(f"[raw_passthrough] MR_STATIC pre-resolver skipped: {_mr_pre_exc}", flush=True)
     _engine_route = None
     if not is_timing and not _is_native_overview:
         try:
@@ -6826,6 +6826,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             print(f"[raw_passthrough] ENGINE_RESOLVER skipped: {_eng_res_exc}", flush=True)
     dcr_love_meta = None
     _mr_engine_result = None
+    _eng_checks: dict = {}
     _health_engine_result = None
     _education_engine_result = None
     _children_engine_result = None
@@ -7274,6 +7275,36 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 )
                 dcr_love_meta = None
                 _is_litigation_static = False
+        elif not _direct_llm_bypass and _is_numerology_static:
+            try:
+                from ask_numerology import (  # type: ignore
+                    numerology_engine_slice_meta,
+                    run_numerology_name_engine,
+                )
+
+                _num_result = run_numerology_name_engine(
+                    question or "",
+                    birth=birth,
+                    kundli=kundli if isinstance(kundli, dict) else {},
+                    wants_explain=wants_explain,
+                )
+                chart_text = _num_result.to_narrator_payload()
+                dcr_love_meta = numerology_engine_slice_meta(_num_result)
+                print(
+                    f"[raw_passthrough] NUMEROLOGY_ENGINE "
+                    f"archetype={_num_result.archetype} "
+                    f"harmony={(_num_result.checks or {}).get('harmony_score')} "
+                    f"evidence={len(_num_result.evidence or [])} "
+                    f"chart_chars={len(chart_text)}",
+                    flush=True,
+                )
+            except Exception as _num_exc:
+                print(f"[raw_passthrough] NUMEROLOGY_ENGINE failed: {_num_exc}", flush=True)
+                chart_text = _raw_compact_chart(
+                    kundli, include_dasha=False, static_dasha_hint=static_dasha_hint,
+                )
+                dcr_love_meta = None
+                _is_numerology_static = False
         elif not _direct_llm_bypass and _is_gap_static:
             try:
                 from ask_gap_dispatch import (  # type: ignore
@@ -7873,6 +7904,21 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                             )
 
                             chart_text = partner_nature_narrator_payload(_mr_engine_result)
+                        elif _mr_engine_result.archetype == "commitment":
+                            from ask_mr.commitment_narrator import (
+                                commitment_narrator_payload,
+                                engine_result_to_commitment_json,
+                            )
+
+                            chart_text = commitment_narrator_payload(
+                                _mr_engine_result,
+                                wants_explain=wants_explain,
+                            )
+                            _ni_checks = dict(_mr_engine_result.checks or {})
+                            _ni_checks["narrator_input"] = engine_result_to_commitment_json(
+                                _mr_engine_result
+                            )
+                            _mr_engine_result.checks = _ni_checks
                         else:
                             chart_text = _mr_engine_result.to_narrator_payload()
                         if _mr_engine_result.archetype == "open_chart_qa":
@@ -8265,6 +8311,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
     career_block = ""
     _career_trace = None
+    _career_verdict = None
     _domain_timing_trace = None
     is_career_engine = False
     try:
@@ -8305,7 +8352,9 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                             build_career_timing_slice_meta,
                         )
 
-                        dcr_love_meta = build_career_timing_slice_meta(_career_verdict)
+                        dcr_love_meta = build_career_timing_slice_meta(
+                            _career_verdict, question or "",
+                        )
                         _career_trace = build_career_timing_engine_trace(_career_verdict)
                     except Exception:
                         pass
@@ -8315,6 +8364,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     # ── Unified domain timing (travel / partial domains) ─────────────────
     domain_timing_block = ""
     _timing_ctx = None
+    _domain_timing_engine_id: str | None = None
     try:
         from ask_mr.timing_registry import mr_static_overrides_llm_timing
 
@@ -8341,7 +8391,28 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 run_timing_engine,
             )
 
-            _td, _tb, _tt = resolve_timing_domain(question or "", _llm_intent)
+            _timing_route_intent: dict = (
+                dict(_llm_intent) if isinstance(_llm_intent, dict) else {}
+            )
+            if isinstance(_llm_intent_admin, dict):
+                _timing_route_intent = {**_timing_route_intent, **_llm_intent_admin}
+                if _llm_intent_admin.get("routed_domain"):
+                    _timing_route_intent.setdefault(
+                        "domain", _llm_intent_admin.get("routed_domain")
+                    )
+                if _llm_intent_admin.get("routed_timing"):
+                    _timing_route_intent["is_timing"] = bool(
+                        _timing_route_intent.get("is_timing")
+                        or _llm_intent_admin.get("routed_timing")
+                    )
+                if _llm_intent_admin.get("routed_archetype"):
+                    _timing_route_intent.setdefault(
+                        "mr_archetype", _llm_intent_admin.get("routed_archetype")
+                    )
+
+            _td, _tb, _tt = resolve_timing_domain(
+                question or "", _timing_route_intent or None
+            )
             if _tt and _td not in ("career", "marriage"):
                 if _td == "general" and _skip_general_timing_engine:
                     print(
@@ -8366,7 +8437,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         _intel_ut,
                         _kp_ut or {},
                         birth,
-                        _llm_intent,
+                        _timing_route_intent or None,
                     )
                     _candidate_block = format_timing_block(_timing_ctx) or ""
                     try:
@@ -8382,7 +8453,24 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                             and bool(_candidate_block.strip())
                         )
                     domain_timing_block = _candidate_block if _real_timing else ""
+                    if domain_timing_block and isinstance(_timing_ctx.raw, dict):
+                        try:
+                            from event_timing._shared.timing_window_pick import (
+                                append_locked_window_to_prompt_block,
+                            )
+
+                            domain_timing_block = append_locked_window_to_prompt_block(
+                                domain_timing_block,
+                                _timing_ctx.raw,
+                                question or "",
+                            )
+                        except Exception:
+                            pass
                     if domain_timing_block:
+                        _domain_timing_engine_id = str(
+                            _timing_ctx.engine_id or f"{_td}_timing_v1"
+                        )
+                        _chart_slice_type = _domain_timing_engine_id
                         chart_text = chart_text + "\n" + domain_timing_block
                         try:
                             from event_timing._shared.step_audit import (
@@ -8410,6 +8498,285 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                         )
         except Exception as _ute:
             print(f"[raw_passthrough] unified timing skipped: {_ute}")
+
+    # Last-chance love timing — kab/love live must not hit engine_required refusal.
+    if (
+        not (domain_timing_block or "").strip()
+        and isinstance(kundli, dict)
+        and kundli.get("planets")
+    ):
+        try:
+            from ask_hard_guards import is_real_timing_engine_block
+            from ask_love.timing_registry import is_love_timing_question, llm_says_love_timing
+            from event_timing.timing_router import (
+                format_timing_block,
+                resolve_timing_domain,
+                run_timing_engine,
+            )
+
+            _love_route_intent: dict = (
+                dict(_llm_intent_admin) if isinstance(_llm_intent_admin, dict)
+                else dict(_llm_intent) if isinstance(_llm_intent, dict) else {}
+            )
+            if isinstance(_llm_intent, dict):
+                _love_route_intent = {**dict(_llm_intent), **_love_route_intent}
+            if is_love_timing_question(question or "", _love_route_intent) or llm_says_love_timing(
+                _love_route_intent,
+            ):
+                _intel_love: dict = {}
+                try:
+                    _analyze_l, _ = _chart_intel()
+                    _intel_love = _analyze_l(kundli, birth) or {}
+                except Exception:
+                    pass
+                _kp_love = {}
+                try:
+                    _kp_love = _kp_calc()(birth) if isinstance(birth, dict) else {}
+                except Exception:
+                    pass
+                _td_l, _tb_l, _tt_l = resolve_timing_domain(
+                    question or "", _love_route_intent or None,
+                )
+                if _tt_l and _td_l == "love":
+                    _ctx_love = run_timing_engine(
+                        question or "",
+                        kundli,
+                        _intel_love,
+                        _kp_love or {},
+                        birth,
+                        _love_route_intent or None,
+                    )
+                    _blk_love = format_timing_block(_ctx_love) or ""
+                    if is_real_timing_engine_block(_blk_love):
+                        domain_timing_block = _blk_love
+                        _timing_ctx = _ctx_love
+                        _domain_timing_engine_id = str(
+                            _ctx_love.engine_id or "love_timing_v1"
+                        )
+                        _chart_slice_type = _domain_timing_engine_id
+                        if domain_timing_block not in chart_text:
+                            chart_text = chart_text + "\n" + domain_timing_block
+                        try:
+                            from event_timing._shared.step_audit import (
+                                build_domain_timing_engine_trace,
+                                build_domain_timing_slice_meta,
+                            )
+
+                            _raw_love = (
+                                _ctx_love.raw if isinstance(_ctx_love.raw, dict) else {}
+                            )
+                            if _raw_love.get("step_audit") or _raw_love.get("verdict"):
+                                _domain_timing_trace = build_domain_timing_engine_trace(
+                                    _raw_love, "love",
+                                )
+                                if not (
+                                    isinstance(dcr_love_meta, dict)
+                                    and dcr_love_meta.get("slice")
+                                ):
+                                    dcr_love_meta = build_domain_timing_slice_meta(
+                                        _raw_love, "love",
+                                    )
+                        except Exception:
+                            pass
+                        print(
+                            f"[raw_passthrough] love_timing_retry ok "
+                            f"q={(question or '')[:60]!r}",
+                            flush=True,
+                        )
+        except Exception as _love_retry_exc:
+            print(
+                f"[raw_passthrough] love_timing_retry failed: "
+                f"{str(_love_retry_exc)[:200]}",
+                flush=True,
+            )
+
+    # Last-chance travel timing — visa/videsh kab must not hit engine_required refusal.
+    if (
+        not (domain_timing_block or "").strip()
+        and isinstance(kundli, dict)
+        and kundli.get("planets")
+    ):
+        try:
+            from ask_hard_guards import is_real_timing_engine_block
+            from ask_travel.timing_registry import (
+                is_travel_timing_question,
+                llm_says_travel_timing,
+            )
+            from event_timing.timing_router import (
+                format_timing_block,
+                resolve_timing_domain,
+                run_timing_engine,
+            )
+
+            _travel_route_intent: dict = (
+                dict(_llm_intent_admin) if isinstance(_llm_intent_admin, dict)
+                else dict(_llm_intent) if isinstance(_llm_intent, dict) else {}
+            )
+            if isinstance(_llm_intent, dict):
+                _travel_route_intent = {**dict(_llm_intent), **_travel_route_intent}
+            if is_travel_timing_question(question or "", _travel_route_intent) or llm_says_travel_timing(
+                _travel_route_intent,
+            ):
+                _intel_travel: dict = {}
+                try:
+                    _analyze_t, _ = _chart_intel()
+                    _intel_travel = _analyze_t(kundli, birth) or {}
+                except Exception:
+                    pass
+                _kp_travel = {}
+                try:
+                    _kp_travel = _kp_calc()(birth) if isinstance(birth, dict) else {}
+                except Exception:
+                    pass
+                _td_t, _tb_t, _tt_t = resolve_timing_domain(
+                    question or "", _travel_route_intent or None,
+                )
+                if _tt_t and _td_t == "travel":
+                    _ctx_travel = run_timing_engine(
+                        question or "",
+                        kundli,
+                        _intel_travel,
+                        _kp_travel or {},
+                        birth,
+                        _travel_route_intent or None,
+                    )
+                    _blk_travel = format_timing_block(_ctx_travel) or ""
+                    if is_real_timing_engine_block(_blk_travel):
+                        domain_timing_block = _blk_travel
+                        _timing_ctx = _ctx_travel
+                        _domain_timing_engine_id = str(
+                            _ctx_travel.engine_id or "travel_timing_v1"
+                        )
+                        _chart_slice_type = _domain_timing_engine_id
+                        if domain_timing_block not in chart_text:
+                            chart_text = chart_text + "\n" + domain_timing_block
+                        try:
+                            from event_timing._shared.step_audit import (
+                                build_domain_timing_engine_trace,
+                                build_domain_timing_slice_meta,
+                            )
+
+                            _raw_travel = (
+                                _ctx_travel.raw if isinstance(_ctx_travel.raw, dict) else {}
+                            )
+                            if _raw_travel.get("step_audit") or _raw_travel.get("verdict"):
+                                _domain_timing_trace = build_domain_timing_engine_trace(
+                                    _raw_travel, "travel",
+                                )
+                                if not (
+                                    isinstance(dcr_love_meta, dict)
+                                    and dcr_love_meta.get("slice")
+                                ):
+                                    dcr_love_meta = build_domain_timing_slice_meta(
+                                        _raw_travel, "travel",
+                                    )
+                        except Exception:
+                            pass
+                        print(
+                            f"[raw_passthrough] travel_timing_retry ok "
+                            f"q={(question or '')[:60]!r}",
+                            flush=True,
+                        )
+        except Exception as _travel_retry_exc:
+            print(
+                f"[raw_passthrough] travel_timing_retry failed: "
+                f"{str(_travel_retry_exc)[:200]}",
+                flush=True,
+            )
+
+    # Last-chance property timing — ghar/kharid kab must not hit engine_required refusal.
+    if (
+        not (domain_timing_block or "").strip()
+        and isinstance(kundli, dict)
+        and kundli.get("planets")
+    ):
+        try:
+            from ask_hard_guards import is_real_timing_engine_block
+            from ask_property.timing_registry import (
+                is_property_timing_question,
+                llm_says_property_timing,
+            )
+            from event_timing.timing_router import (
+                format_timing_block,
+                resolve_timing_domain,
+                run_timing_engine,
+            )
+
+            _property_route_intent: dict = (
+                dict(_llm_intent_admin) if isinstance(_llm_intent_admin, dict)
+                else dict(_llm_intent) if isinstance(_llm_intent, dict) else {}
+            )
+            if isinstance(_llm_intent, dict):
+                _property_route_intent = {**dict(_llm_intent), **_property_route_intent}
+            if is_property_timing_question(question or "", _property_route_intent) or llm_says_property_timing(
+                _property_route_intent,
+            ):
+                _intel_property: dict = {}
+                try:
+                    _analyze_p, _ = _chart_intel()
+                    _intel_property = _analyze_p(kundli, birth) or {}
+                except Exception:
+                    pass
+                _kp_property = {}
+                try:
+                    _kp_property = _kp_calc()(birth) if isinstance(birth, dict) else {}
+                except Exception:
+                    pass
+                _td_p, _tb_p, _tt_p = resolve_timing_domain(
+                    question or "", _property_route_intent or None,
+                )
+                if _tt_p and _td_p == "property":
+                    _ctx_property = run_timing_engine(
+                        question or "",
+                        kundli,
+                        _intel_property,
+                        _kp_property or {},
+                        birth,
+                        _property_route_intent or None,
+                    )
+                    _blk_property = format_timing_block(_ctx_property) or ""
+                    if is_real_timing_engine_block(_blk_property):
+                        domain_timing_block = _blk_property
+                        _timing_ctx = _ctx_property
+                        _domain_timing_engine_id = str(
+                            _ctx_property.engine_id or "property_timing_v1"
+                        )
+                        _chart_slice_type = _domain_timing_engine_id
+                        if domain_timing_block not in chart_text:
+                            chart_text = chart_text + "\n" + domain_timing_block
+                        try:
+                            from event_timing._shared.step_audit import (
+                                build_domain_timing_engine_trace,
+                                build_domain_timing_slice_meta,
+                            )
+
+                            _raw_property = (
+                                _ctx_property.raw if isinstance(_ctx_property.raw, dict) else {}
+                            )
+                            if _raw_property.get("step_audit") or _raw_property.get("verdict"):
+                                _domain_timing_trace = build_domain_timing_engine_trace(
+                                    _raw_property, "property",
+                                )
+                                if not (
+                                    isinstance(dcr_love_meta, dict)
+                                    and dcr_love_meta.get("slice")
+                                ):
+                                    dcr_love_meta = build_domain_timing_slice_meta(
+                                        _raw_property, "property",
+                                    )
+                        except Exception:
+                            pass
+                        print(
+                            f"[raw_passthrough] property_timing_retry ok "
+                            f"q={(question or '')[:60]!r}",
+                            flush=True,
+                        )
+        except Exception as _property_retry_exc:
+            print(
+                f"[raw_passthrough] property_timing_retry failed: "
+                f"{str(_property_retry_exc)[:200]}",
+                flush=True,
+            )
 
     # Last-chance M17 — shaadi kab must not reach LLM without engine block.
     if (
@@ -8654,7 +9021,36 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             if _general_followup
             else ""
         )
+        + (
+            "\nCONVERSATION CONTINUITY (mandatory): Prior user/assistant turns are in "
+            "the message history. Short or vague follow-ups (wo/par/agar/us case me/aur?) "
+            "refer to the SAME topic — answer in that context; do NOT restart with a "
+            "generic life overview.\n"
+            if _history_turn_count(history) >= 2
+            else ""
+        )
     )
+    try:
+        from event_timing._shared.timing_window_pick import detect_next_timing_window_question
+
+        if is_timing and detect_next_timing_window_question(question or "", history):
+            extra_rules += (
+                "\n🛡️ NEXT TIMING WINDOW RULE (binding): User asked next/agla/alternate/"
+                "agar-nahi/next-time timing. Narrate ONLY dasha window #2 from the engine "
+                "ranked list — NOT #1 PRIMARY. Follow the line starting with "
+                "'>>> NARRATE THIS WINDOW EXACTLY AS' if present.\n"
+            )
+        from event_timing._shared.timing_window_pick import detect_later_timing_window_question
+
+        if is_timing and detect_later_timing_window_question(question or ""):
+            extra_rules += (
+                "\n🛡️ LATER TIMING WINDOW RULE (binding): User asked what happens AFTER "
+                "a named month/year (e.g. Dec 2026 ke baad) or 'aur koi promotion'. "
+                "Narrate dasha window #3 from the ranked list — NOT #1 or #2. "
+                "Follow '>>> NARRATE THIS WINDOW EXACTLY AS' if present.\n"
+            )
+    except Exception:
+        pass
     if _is_native_overview:
         try:
             from ask_native_overview import NATIVE_OVERVIEW_NARRATOR_RULE  # type: ignore
@@ -8763,6 +9159,13 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             question or "",
             _llm_intent_admin if isinstance(_llm_intent_admin, dict) else _llm_intent,
         )
+        if isinstance(dcr_love_meta, dict):
+            _eng_qi = str((dcr_love_meta.get("checks") or {}).get("question_intent") or "").strip()
+            if _eng_qi and _eng_qi not in ("quality", "open_chart_qa"):
+                _user_intent_hint += (
+                    f"\n\nENGINE LOCKED SUB-INTENT: {_eng_qi.replace('_', ' ')} — "
+                    f"narrator must stay on this exact angle."
+                )
     except Exception:
         _user_intent_hint = f'User asked: "{(question or "").strip()}"'
 
@@ -8783,9 +9186,11 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
     try:
         if _mr_engine_narrator:
+            from ask_batch_runner import is_batch_concise_mode
             from ask_mr.narrator import build_mr_engine_narrator_system_prompt
 
             _wb_mr = int((dcr_love_meta or {}).get("word_budget") or 55)
+            _batch_concise = is_batch_concise_mode()
             system_prompt = build_mr_engine_narrator_system_prompt(
                 chart_text=chart_text,
                 reply_lang=eff_lang,
@@ -8796,6 +9201,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 question_focus=_mr_question_focus,
                 user_intent=_user_intent_hint,
                 open_chart_qa=_open_chart_qa,
+                concise=_batch_concise,
             )
             print(
                 f"[raw_passthrough] MR_NARRATOR archetype={_archetype_mr} "
@@ -8831,6 +9237,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     except Exception as _sp_exc:
         print(f"[raw_passthrough] system_prompt build failed: {_sp_exc}", flush=True)
         if _mr_engine_narrator:
+            from ask_batch_runner import is_batch_concise_mode
             from ask_mr.narrator import build_mr_engine_narrator_system_prompt
 
             system_prompt = build_mr_engine_narrator_system_prompt(
@@ -8843,6 +9250,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 question_focus=_mr_question_focus,
                 user_intent=_user_intent_hint,
                 open_chart_qa=_open_chart_qa,
+                concise=is_batch_concise_mode(),
             )
         else:
             system_prompt = _build_universal_ask_system_prompt(
@@ -8932,6 +9340,63 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             )
     except Exception as _mr_rec_exc:
         print(f"[raw_passthrough] MR_ENGINE_RECOVERY skipped: {_mr_rec_exc}", flush=True)
+
+    # ── Promotion timing — engine window is the answer (no LLM drift) ───────
+    if (
+        not wants_explain
+        and isinstance(_career_verdict, dict)
+        and str(_career_verdict.get("bucket") or "").strip().lower() == "promotion"
+    ):
+        try:
+            from ask_career.timing_reply import try_promotion_timing_deterministic_reply
+
+            _promo_locked = try_promotion_timing_deterministic_reply(
+                _career_verdict,
+                question or "",
+                lang=_resolve_response_lang(question, lang, None),
+                history=history,
+            )
+            if _promo_locked:
+                _promo_out = {
+                    "text": _promo_locked,
+                    "topic": "timing",
+                    "question_type": qtype,
+                    "confidence": 1.0,
+                    "source": "raw_passthrough_promotion_timing",
+                    "engine_tag": "ans-engine",
+                    "follow_ups": [],
+                }
+                _promo_checks = {
+                    "slice_type": "career_timing_v1",
+                    "is_career_engine": True,
+                    "promotion_timing_locked": True,
+                }
+                _promo_blocks: dict = {}
+                if career_block:
+                    _promo_blocks["career_engine"] = career_block
+                if isinstance(_career_trace, dict) and _career_trace:
+                    _promo_blocks["engine_trace"] = _career_trace
+                print(
+                    f"[raw_passthrough] promotion_timing_locked "
+                    f"q={(question or '')[:60]!r}",
+                    flush=True,
+                )
+                return _attach_admin(
+                    _promo_out,
+                    question=question or "",
+                    question_type=qtype,
+                    is_timing=True,
+                    checks=_promo_checks,
+                    blocks=_promo_blocks,
+                    chart_text=chart_text,
+                    slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+                    llm_called=False,
+                    skip_reason="promotion_timing_locked",
+                    intent_source=_intent_source,
+                    llm_intent=_llm_intent_admin,
+                )
+        except Exception as _ptl_exc:
+            print(f"[raw_passthrough] promotion_timing_locked skipped: {_ptl_exc}", flush=True)
 
     # ── Engine-only policy: block direct LLM (chart-only, no domain engine) ─
     try:
@@ -9043,9 +9508,17 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
         _eng_checks = {
             "slice_type": (
-                _chart_slice_type
-                if _chart_slice_type != "full_compact"
-                else (dcr_love_meta or {}).get("slice") or _chart_slice_type
+                _domain_timing_engine_id
+                or (
+                    (dcr_love_meta or {}).get("slice")
+                    if isinstance(dcr_love_meta, dict) and (dcr_love_meta or {}).get("slice")
+                    else None
+                )
+                or (
+                    _chart_slice_type
+                    if _chart_slice_type != "full_compact"
+                    else (dcr_love_meta or {}).get("slice") or _chart_slice_type
+                )
             ),
             "resolved_route": _resolved_route,
             "is_marriage_engine": bool(is_marriage_engine),
@@ -9063,6 +9536,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             "is_travel_static": bool(_is_travel_static),
             "is_litigation_static": bool(_is_litigation_static),
             "is_vehicle_static": bool(_is_vehicle_static),
+            "is_numerology_static": bool(_is_numerology_static),
         }
         _eng_slice = dcr_love_meta if isinstance(dcr_love_meta, dict) else {}
         _refusal = enforce_engine_only_or_refuse(
@@ -9194,20 +9668,156 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         except Exception:
             pass
 
+    _rp_topic = (_topic_hint or "").strip()
+    try:
+        if isinstance(_llm_intent_admin, dict):
+            _rp_topic = str(
+                _llm_intent_admin.get("routed_domain")
+                or _llm_intent_admin.get("topic")
+                or _llm_intent_admin.get("domain")
+                or _rp_topic
+                or ""
+            ).strip()
+        if not _rp_topic and isinstance(_llm_intent, dict):
+            _rp_topic = str(
+                _llm_intent.get("domain") or _llm_intent.get("topic") or ""
+            ).strip()
+    except Exception:
+        pass
+
+    _llm_messages, _hist_stats = _build_raw_passthrough_llm_messages(
+        system_prompt=system_prompt,
+        user_payload=user_payload,
+        history=history,
+        current_topic=_rp_topic or None,
+        current_question=question or "",
+        max_turns=6,
+    )
+    if _hist_stats.get("out", 0) > 0:
+        print(
+            f"[raw_passthrough] CHAT_HISTORY strategy={_hist_stats.get('strategy')} "
+            f"turns={_hist_stats.get('out')} topic={_hist_stats.get('topic', '')!r}",
+            flush=True,
+        )
+
+    _llm_raw_text = ""
     try:
         resp = client.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": user_payload},
-            ],
+            messages=_llm_messages,
             max_tokens=_max_tok,
         )
-        text = (resp.choices[0].message.content or "").strip()
+        _llm_raw_text = (resp.choices[0].message.content or "").strip()
+    except Exception as exc:
+        try:
+            print(f"[raw_passthrough] OpenAI call failed: {exc}", flush=True)
+        except Exception:
+            pass
+        try:
+            from ask_mr.static_answer import recover_mr_ask_answer
+
+            _rec = recover_mr_ask_answer(
+                question or "",
+                kundli,
+                birth=birth,
+                lang=lang,
+                engine_result=_mr_engine_result,
+                llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                wants_explain=wants_explain,
+            )
+            if _rec and str(_rec.get("text") or "").strip():
+                _llm_used = bool(_rec.pop("llm_called", False))
+                return _attach_admin(
+                    _rec,
+                    question=question or "",
+                    question_type=qtype,
+                    is_timing=False,
+                    checks={
+                        "slice_type": "mr_engine_v1",
+                        "is_mr_static": True,
+                        "llm_fallback": "mr_engine_then_llm" if _llm_used else "mr_engine_recovery",
+                    },
+                    chart_text=chart_text,
+                    slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+                    llm_called=_llm_used,
+                    skip_reason="mr_engine_llm_recovery" if _llm_used else "mr_engine_plain_recovery",
+                    intent_source=_intent_source,
+                    llm_intent=_llm_intent_admin,
+                )
+        except Exception as _rec_exc:
+            print(f"[raw_passthrough] MR recovery skipped: {_rec_exc}", flush=True)
+        return {
+            "text":       _friendly_ask_llm_error(exc),
+            "topic":      "general",
+            "question_type": "STATIC",
+            "confidence": 0.0,
+            "source":     "raw_passthrough_error",
+            "engine_tag": "ans-cosmo",
+            "follow_ups": [],
+        }
+
+    if not _llm_raw_text:
+        try:
+            from ask_mr.static_answer import recover_mr_ask_answer
+
+            _rec_empty = recover_mr_ask_answer(
+                question or "",
+                kundli,
+                birth=birth,
+                lang=lang,
+                engine_result=_mr_engine_result,
+                llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                wants_explain=wants_explain,
+            )
+            if _rec_empty and str(_rec_empty.get("text") or "").strip():
+                _llm_used_e = bool(_rec_empty.pop("llm_called", False))
+                return _attach_admin(
+                    _rec_empty,
+                    question=question or "",
+                    question_type=qtype,
+                    is_timing=False,
+                    checks={
+                        "slice_type": "mr_engine_v1",
+                        "is_mr_static": True,
+                        "llm_fallback": "empty_llm_recovery",
+                    },
+                    chart_text=chart_text,
+                    slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+                    llm_called=_llm_used_e,
+                    skip_reason="mr_engine_empty_llm",
+                    intent_source=_intent_source,
+                    llm_intent=_llm_intent_admin,
+                )
+        except Exception:
+            pass
+        return {
+            "text": "Maaf kijiye, abhi response generate nahi ho paya. Phir try karein.",
+            "topic": "general",
+            "question_type": qtype,
+            "confidence": 0.0,
+            "source": "raw_passthrough_empty",
+            "engine_tag": "ans-cosmo",
+            "follow_ups": [],
+        }
+
+    try:
+        text = _llm_raw_text
+        _answer_fidelity: dict = {}
         if _mr_engine_narrator:
             from ask_cosmo_narrator import enforce_cosmo_engine_answer
+            from ask_batch_runner import is_batch_concise_mode
 
-            text = enforce_cosmo_engine_answer(text, wants_explain=wants_explain)
+            try:
+                text = enforce_cosmo_engine_answer(
+                    text,
+                    wants_explain=wants_explain,
+                    concise=is_batch_concise_mode(),
+                )
+            except TypeError:
+                text = enforce_cosmo_engine_answer(
+                    text,
+                    wants_explain=wants_explain,
+                )
         elif _direct_llm_bypass or _eng_checks.get("llm_no_engine"):
             pass
         else:
@@ -9437,6 +10047,30 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                     )
             except Exception as _litag:
                 print(f"[raw_passthrough] LITIGATION_ANSWER_GUARD skipped: {_litag}", flush=True)
+        if text and client and model:
+            try:
+                from ask_answer_fidelity import guard_answer_with_fidelity_loop
+
+                text, _answer_fidelity = guard_answer_with_fidelity_loop(
+                    client,
+                    model,
+                    question=question or "",
+                    answer=text,
+                    llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+                    meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+                    user_intent=_user_intent_hint,
+                    reply_lang=eff_lang,
+                    is_timing=bool(is_timing),
+                )
+                if _answer_fidelity.get("repairs"):
+                    print(
+                        f"[answer_fidelity] attempts={_answer_fidelity.get('attempts')} "
+                        f"ok={_answer_fidelity.get('ok')} "
+                        f"issues={_answer_fidelity.get('issues')}",
+                        flush=True,
+                    )
+            except Exception as _fid_exc:
+                print(f"[raw_passthrough] ANSWER_FIDELITY skipped: {_fid_exc}", flush=True)
         if not text:
             text = "Maaf kijiye, abhi response generate nahi ho paya. Phir try karein."
         # Skip robotic [Checked: ...] trace — user wants human replies only.
@@ -9496,17 +10130,23 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _education_engine_ran = _engine_slice == "education_engine_v1"
             _children_engine_ran = _engine_slice == "children_engine_v1"
             _property_engine_ran = _engine_slice == "property_engine_v1"
+            _vehicle_engine_ran = _engine_slice == "vehicle_engine_v1"
+            _numerology_engine_ran = _engine_slice == "numerology_engine_v1"
             _finance_engine_ran = _engine_slice == "finance_engine_v1"
             _health_engine_ran = _engine_slice == "health_engine_v1"
             _engine_tag = (
                 "ans-engine"
-                if (is_timing or _mr_engine_ran or _career_engine_ran or _education_engine_ran or _children_engine_ran or _property_engine_ran or _finance_engine_ran or _health_engine_ran)
+                if (is_timing or _mr_engine_ran or _career_engine_ran or _education_engine_ran or _children_engine_ran or _property_engine_ran or _vehicle_engine_ran or _numerology_engine_ran or _finance_engine_ran or _health_engine_ran)
                 else "ans-cosmo"
             )
             if _career_engine_ran:
                 _answer_source = "career_engine_then_llm"
             elif _property_engine_ran:
                 _answer_source = "property_engine_then_llm"
+            elif _vehicle_engine_ran:
+                _answer_source = "vehicle_engine_then_llm"
+            elif _numerology_engine_ran:
+                _answer_source = "numerology_engine_then_llm"
             elif _children_engine_ran:
                 _answer_source = "children_engine_then_llm"
             elif _education_engine_ran:
@@ -9571,6 +10211,27 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 if (os.environ.get("ASK_MR_NARRATOR") or "1").strip() != "0"
                 else "universal"
             )
+            _sm_checks = (
+                dcr_love_meta.get("checks")
+                if isinstance(dcr_love_meta.get("checks"), dict)
+                else {}
+            )
+            for _ck in (
+                "rules_fired",
+                "modules_used",
+                "narrator_input",
+                "scorecard",
+                "primary_score",
+                "commitment_level",
+                "level",
+                "contradiction",
+                "contradiction_detail",
+                "explanation",
+                "engine_version",
+                "rules_version",
+            ):
+                if _ck in _sm_checks and _sm_checks[_ck] not in (None, "", [], {}):
+                    _pt_checks[_ck] = _sm_checks[_ck]
         elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "career_engine_v1":
             _pt_checks["career_engine"] = "v1"
             _pt_checks["narrator_mode"] = dcr_love_meta.get("narrator_mode") or (
@@ -9593,6 +10254,44 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _pt_checks["mr_engine"] = "legacy_slice"
         if _engine_route is not None:
             _pt_checks["engine_route"] = _engine_route.to_dict()
+        if _answer_fidelity:
+            _pt_checks["answer_fidelity"] = _answer_fidelity
+        if (domain_timing_block or "").strip() and _domain_timing_engine_id:
+            try:
+                from event_timing._shared.step_audit import ensure_domain_timing_admin_meta
+
+                _raw_timing_admin = (
+                    _timing_ctx.raw
+                    if _timing_ctx is not None and isinstance(_timing_ctx.raw, dict)
+                    else {}
+                )
+                _timing_dom_admin = str(_domain_timing_engine_id).replace("_timing_v1", "")
+                dcr_love_meta, _domain_timing_trace = ensure_domain_timing_admin_meta(
+                    _raw_timing_admin,
+                    domain=_timing_dom_admin,
+                    engine_id=str(_domain_timing_engine_id),
+                    slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else None,
+                    engine_trace=(
+                        _domain_timing_trace
+                        if isinstance(_domain_timing_trace, dict)
+                        else None
+                    ),
+                )
+                if str(_chart_slice_type or "") in (
+                    "",
+                    "timing_full_chart",
+                    "full_compact",
+                    "full_compact+dcr_love",
+                    "full_compact_fallback",
+                ):
+                    _chart_slice_type = str(_domain_timing_engine_id)
+                _pt_checks["slice_type"] = _chart_slice_type
+            except Exception as _timing_admin_exc:
+                print(
+                    f"[raw_passthrough] domain timing admin meta skipped: "
+                    f"{str(_timing_admin_exc)[:200]}",
+                    flush=True,
+                )
         _pt_blocks = {"chart_context": chart_text}
         if kp_block:
             _pt_blocks["kp"] = kp_block.strip()
@@ -9602,8 +10301,24 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             _pt_blocks["career_engine"] = career_block
         if isinstance(_career_trace, dict) and _career_trace:
             _pt_blocks["career_engine_trace"] = _career_trace
+            _pt_blocks["engine_trace"] = _career_trace
         if isinstance(_domain_timing_trace, dict) and _domain_timing_trace:
             _pt_blocks["engine_trace"] = _domain_timing_trace
+        elif isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice") == "mr_engine_v1":
+            _pt_blocks["engine_trace"] = {
+                "engine": "mr_engine_v1",
+                "archetype": dcr_love_meta.get("archetype"),
+                "verdict": dcr_love_meta.get("verdict"),
+                "evidence": list(dcr_love_meta.get("evidence") or [])[:25],
+                "summary": list(dcr_love_meta.get("summary") or [])[:10],
+                "step_audit": dcr_love_meta.get("step_audit") or {},
+                "step_order": (dcr_love_meta.get("step_audit") or {}).get("step_order")
+                or [],
+            }
+        if isinstance(dcr_love_meta, dict) and dcr_love_meta.get("slice"):
+            _out["slice_meta"] = dcr_love_meta
+        if isinstance(_pt_blocks.get("engine_trace"), dict):
+            _out["engine_trace"] = _pt_blocks["engine_trace"]
         return _attach_admin(
             _out,
             question=question or "",
@@ -9622,20 +10337,38 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             intent_source=_intent_source,
             llm_intent=_llm_intent_admin,
         )
-    except Exception as exc:
-        try:
-            print(f"[raw_passthrough] OpenAI call failed: {exc}", flush=True)
-        except Exception:
-            pass
-        return {
-            "text":       _friendly_ask_llm_error(exc),
-            "topic":      "general",
-            "question_type": "STATIC",
-            "confidence": 0.0,
-            "source":     "raw_passthrough_error",
-            "engine_tag": "ans-cosmo",
-            "follow_ups": [],
-        }
+    except Exception as post_exc:
+        print(f"[raw_passthrough] post-LLM processing failed, keeping narrator text: {post_exc}", flush=True)
+        import traceback
+
+        traceback.print_exc()
+        _src = "mr_engine_then_llm" if _mr_engine_narrator else f"raw_passthrough_{(qtype or 'static').lower()}"
+        _tag = "ans-engine" if _mr_engine_narrator else "ans-cosmo"
+        return _attach_admin(
+            {
+                "text": _llm_raw_text,
+                "topic": (qtype or "static").lower(),
+                "question_type": qtype,
+                "confidence": 1.0,
+                "source": _src,
+                "engine_tag": _tag,
+                "follow_ups": [],
+            },
+            question=question or "",
+            question_type=qtype,
+            is_timing=is_timing,
+            checks={
+                "slice_type": _chart_slice_type,
+                "is_mr_static": bool(_is_mr_static),
+                "post_llm_error": str(post_exc)[:200],
+            },
+            chart_text=chart_text,
+            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+            llm_called=True,
+            skip_reason="post_llm_partial",
+            intent_source=_intent_source,
+            llm_intent=_llm_intent_admin,
+        )
 
 
 def _friendly_ask_llm_error(exc: Exception) -> str:
@@ -9661,6 +10394,11 @@ def raw_passthrough_enabled() -> bool:
     """Killswitch helper. Default ON (=1). Set RAW_PASSTHROUGH_MODE=0 to revert
     to the legacy multi-stage classifier+static+focus pipeline."""
     return os.environ.get("RAW_PASSTHROUGH_MODE", "1") == "1"
+
+
+def raw_passthrough_chat_history_enabled() -> bool:
+    """Include prior chat turns in raw_passthrough LLM messages. Default ON."""
+    return os.environ.get("RAW_PASSTHROUGH_CHAT_HISTORY", "1") == "1"
 
 
 # ── Prompt building ───────────────────────────────────────────────────────────
@@ -10147,6 +10885,86 @@ def _clean_history_for_topic(history: list | None,
                       "skipped": len(older) - len(keep_idx),
                       "topic": norm_topic,
                       "classifier_errors": classifier_errors}
+
+
+_COSMO_GREETING_RX = re.compile(
+    r"(?is)^\s*hey,?\s+i'?m\s+cosmo\b.*what would you like",
+)
+
+
+def _history_turn_count(history: Any) -> int:
+    if not isinstance(history, list):
+        return 0
+    n = 0
+    for h in history:
+        if not isinstance(h, dict):
+            continue
+        role = str(h.get("role") or "").strip().lower()
+        text = str(h.get("content") or h.get("text") or "").strip()
+        if role in ("user", "assistant") and text:
+            n += 1
+    return n
+
+
+def _build_raw_passthrough_llm_messages(
+    *,
+    system_prompt: str,
+    user_payload: str,
+    history: Any,
+    current_topic: str | None = None,
+    current_question: str = "",
+    max_turns: int = 6,
+) -> tuple[list[dict], dict]:
+    """Topic-aware prior turns + current user message (ChatGPT-style continuity)."""
+    msgs: list[dict] = [{"role": "system", "content": system_prompt}]
+    stats: dict = {"strategy": "empty", "in": 0, "out": 0, "topic": (current_topic or "")}
+
+    if not raw_passthrough_chat_history_enabled():
+        msgs.append({"role": "user", "content": user_payload})
+        return msgs, {**stats, "strategy": "disabled"}
+
+    hist_clean: list[dict] = []
+    try:
+        hist_clean, stats = _clean_history_for_topic(
+            history, current_topic, max_turns=max_turns,
+        )
+    except Exception as exc:
+        print(f"[raw_passthrough] history clean failed: {exc}", flush=True)
+        for h in (history or [])[-max_turns:]:
+            if not isinstance(h, dict):
+                continue
+            r = h.get("role")
+            t = (h.get("content") or h.get("text") or "").strip()
+            if r in ("user", "assistant") and t:
+                hist_clean.append({"role": r, "content": t})
+        stats = {
+            "strategy": "fallback",
+            "in": len(history or []),
+            "out": len(hist_clean),
+            "topic": (current_topic or ""),
+        }
+
+    hist_clean = [
+        m
+        for m in hist_clean
+        if not (
+            m.get("role") == "assistant"
+            and _COSMO_GREETING_RX.match((m.get("content") or "").strip())
+        )
+    ]
+
+    cur_q = (current_question or "").strip().lower()
+    if hist_clean and cur_q:
+        last = hist_clean[-1]
+        if last.get("role") == "user":
+            last_text = (last.get("content") or "").strip().lower()
+            if last_text == cur_q:
+                hist_clean = hist_clean[:-1]
+
+    msgs.extend(hist_clean)
+    msgs.append({"role": "user", "content": user_payload})
+    stats["out"] = len(hist_clean)
+    return msgs, stats
 
 
 def _summarise_history(history: list) -> tuple[str, dict]:
@@ -13655,10 +14473,192 @@ _MARRIAGE_CONSTRAINT_PATTERNS = [
 ]
 
 
+def _llm_intent_is_marriage_domain(llm_intent: Any, question: str = "") -> bool:
+    """True when LLM routing says marriage/vivah timing (not career etc.)."""
+    if not isinstance(llm_intent, dict):
+        return False
+    domain = str(
+        llm_intent.get("domain") or llm_intent.get("routed_domain") or ""
+    ).strip().lower()
+    if domain in (
+        "career", "health", "finance", "travel", "education", "children",
+        "property", "litigation", "vehicle", "spiritual", "fame", "network",
+        "stock", "foreign",
+    ):
+        return False
+    if domain in ("marriage", "vivah"):
+        return True
+    archetype = str(
+        llm_intent.get("mr_archetype") or llm_intent.get("routed_archetype") or ""
+    ).strip().lower()
+    if any(k in archetype for k in ("marriage", "vivah", "shaadi", "wedding")):
+        return True
+    if domain == "love" and bool(
+        llm_intent.get("is_timing") or llm_intent.get("routed_timing")
+    ):
+        return _is_marriage_timing_question(question or "")
+    return False
+
+
+def _marriage_shortcuts_allowed(llm_intent: Any, question: str) -> bool:
+    """Gate marriage engine shortcuts on LLM domain when understanding is available."""
+    if isinstance(llm_intent, dict) and (
+        llm_intent.get("domain")
+        or llm_intent.get("routed_domain")
+        or llm_intent.get("routed_archetype")
+    ):
+        return _llm_intent_is_marriage_domain(llm_intent, question)
+    return _is_marriage_timing_question(question or "")
+
+
+def _try_marriage_timing_shortcuts_after_understand(
+    *,
+    question: str,
+    history: Any,
+    kundli: Any,
+    birth: Any,
+    lang: str,
+    attach_admin_fn,
+    reply_idx: int,
+    llm_intent: Any,
+) -> dict | None:
+    """Marriage backup window + M17 engine — only after question understanding."""
+    if not _marriage_shortcuts_allowed(llm_intent, question):
+        return None
+    if not isinstance(kundli, dict) or not kundli.get("planets"):
+        return None
+
+    _constraint = (
+        _detect_marriage_constraint(question, history)
+        or (
+            _last_assistant_topic_was_marriage(history or [])
+            and _re_mb_M17.search(
+                r"(?ix)\b(aage|agla|uske\s+baad|dusra|next|backup|alternate)\b",
+                question or "",
+            )
+        )
+    )
+    if _constraint:
+        try:
+            from event_timing.marriage import assess_marriage, extract_alt_window_str
+            from event_timing.marriage.kp_from_chart import resolve_kp
+
+            _intel_alt: dict = {}
+            try:
+                _analyze_alt, _ = _chart_intel()
+                _intel_alt = _analyze_alt(kundli, birth) or {}
+            except Exception:
+                pass
+            _kp_alt = resolve_kp(kundli, {}, birth)
+            _eng_alt = assess_marriage(
+                kundli, _intel_alt, _kp_alt, birth, question=question or "",
+            )
+            _alt_w = extract_alt_window_str(_eng_alt) if _eng_alt else ""
+            if not _alt_w and isinstance(_eng_alt, dict):
+                _alt_w = (_eng_alt.get("backup_window") or "").strip()
+            _eff_lang_alt = _resolve_response_lang(question, lang, None)
+            _text_alt = _compose_marriage_timing_alt_reply(_alt_w, _eff_lang_alt)
+            _out_alt = {
+                "text": _text_alt,
+                "topic": "timing",
+                "question_type": "TIMING",
+                "confidence": 1.0,
+                "source": "raw_passthrough_timing_alt",
+                "engine_tag": "ans-engine",
+                "follow_ups": [],
+            }
+            _alt_checks = {
+                "slice_type": "timing_marriage_engine_alt",
+                "is_marriage_engine": True,
+                "marriage_use_alt": True,
+                "primary_window_rejected": True,
+            }
+            _alt_blocks: dict = {}
+            if _alt_w:
+                _alt_blocks["backup_window"] = _alt_w
+            if isinstance(_eng_alt, dict):
+                _mb_alt = _M17_format_marriage_block(_eng_alt, question or "")
+                if _mb_alt:
+                    _alt_blocks["marriage_engine"] = _mb_alt
+                try:
+                    from ask_llm_context_debug import build_marriage_engine_trace
+
+                    _trace_alt = build_marriage_engine_trace(_eng_alt)
+                    if _trace_alt:
+                        _trace_alt["used_window"] = "backup"
+                        _alt_blocks["engine_trace"] = _trace_alt
+                except Exception:
+                    pass
+            print(
+                f"[raw_passthrough] marriage_timing_alt window={_alt_w!r} "
+                f"q={question[:70]!r}",
+                flush=True,
+            )
+            return attach_admin_fn(
+                _out_alt,
+                question=question or "",
+                question_type="TIMING",
+                is_timing=True,
+                checks=_alt_checks,
+                blocks=_alt_blocks,
+                llm_called=False,
+                skip_reason="marriage_timing_alt_window",
+                intent_source="constraint_followup",
+                llm_intent=llm_intent if isinstance(llm_intent, dict) else None,
+            )
+        except Exception as _ma_exc:
+            print(f"[raw_passthrough] marriage_timing_alt skipped: {_ma_exc}", flush=True)
+
+    if _is_marriage_timing_question(question or ""):
+        _m17_early = _marriage_timing_m17_passthrough_response(
+            question=question or "",
+            kundli=kundli,
+            birth=birth,
+            lang=lang,
+            attach_admin_fn=attach_admin_fn,
+            reply_idx=reply_idx,
+            skip_reason="marriage_timing_m17_after_understand",
+            intent_source="marriage_timing_m17_after_understand",
+            llm_intent=llm_intent if isinstance(llm_intent, dict) else None,
+        )
+        if _m17_early is not None:
+            print(
+                f"[raw_passthrough] marriage_timing_m17_after_understand "
+                f"q={(question or '')[:60]!r}",
+                flush=True,
+            )
+            return _m17_early
+    return None
+
+
+def _is_career_timing_question_text(question: str) -> bool:
+    """True when the user is asking about job/career/promotion timing (not marriage)."""
+    q = (question or "").strip()
+    if not q:
+        return False
+    try:
+        from ask_career.timing_registry import CAREER_QUESTION_RX
+
+        return bool(CAREER_QUESTION_RX.search(q))
+    except Exception:
+        return bool(
+            _re_mb_M17.search(
+                r"(?ix)\b(promotion|career|naukri|naukari|job|salary|transfer|"
+                r"resign|govt|interview|tankhwah|tarakki)\b",
+                q,
+            )
+        )
+
+
 def _detect_marriage_constraint(question: str, history=None) -> bool:
     """User rejected primary window or asks for the next/alternate timing period."""
     q = (question or "").strip()
     if not q:
+        return False
+    # Generic "next … kab" / "agar … nahi … hoga" also match promotion conditionals.
+    if _is_career_timing_question_text(q) and not _re_mb_M17.search(
+        r"(?ix)\b(shaadi|shadi|shādi|vivah|marriage|wedding|byah|dulhan|dulha)\b", q
+    ):
         return False
     for rx in _MARRIAGE_CONSTRAINT_PATTERNS:
         if rx.search(q):

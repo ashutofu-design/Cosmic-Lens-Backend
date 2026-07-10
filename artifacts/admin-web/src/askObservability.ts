@@ -34,9 +34,18 @@ export interface ObservabilityHallucination {
 }
 
 export interface AskObservability {
+  user_question?: ObservabilityPipelineStep[];
   question_dna_pipeline?: ObservabilityPipelineStep[];
+  routing_decision?: {
+    selected_engine?: string;
+    why_selected?: string;
+    rejected_engines?: string[];
+    routing_warning?: string | null;
+  };
   routing_warning?: string | null;
   engine_execution?: {
+    engine_name?: string;
+    engine_version?: string;
     modules?: ObservabilityModule[];
     fired?: ObservabilityRule[];
     ignored?: ObservabilityRule[];
@@ -44,6 +53,7 @@ export interface AskObservability {
     verdict_level?: string | null;
     verdict?: string | null;
   };
+  astrology_checks?: Record<string, string[]>;
   planet_evidence?: {
     positive?: ObservabilityEvidence[];
     negative?: ObservabilityEvidence[];
@@ -55,11 +65,28 @@ export interface AskObservability {
     detected?: boolean;
   };
   scorecard?: Record<string, number>;
+  engine_verdict?: {
+    verdict?: string | null;
+    level?: string | null;
+    confidence?: number | string | null;
+    strongest?: ObservabilityEvidence[];
+    weakest?: ObservabilityEvidence[];
+  };
   narrator_input?: Record<string, unknown> | null;
   narrator_output?: string | null;
   hallucination_checks?: ObservabilityHallucination[];
-  final_trace?: string[];
+  performance?: {
+    model?: string | null;
+    max_tokens?: number | null;
+    chart_chars?: number;
+    system_prompt_chars?: number;
+    llm_called?: boolean;
+    cache_hit?: boolean | null;
+  };
+  final_trace?: ObservabilityPipelineStep[];
+  final_trace_labels?: string[];
   has_v2_rules?: boolean;
+  has_step_audit?: boolean;
 }
 
 function buildFallbackObservability(
@@ -72,10 +99,14 @@ function buildFallbackObservability(
   const smChecks = (sm.checks || {}) as Record<string, unknown>;
   const ef = ctx?.engine_facts || {};
 
-  const pipeline: ObservabilityPipelineStep[] = [
-    { label: "Question", value: row.question_text || ctx?.question || "—" },
-    { label: "Language Detection", value: String(li.language || "—") },
+  const userQuestion: ObservabilityPipelineStep[] = [
+    { label: "Original Question", value: row.question_text || ctx?.question || "—" },
     { label: "Normalized Question", value: ctx?.question_normalized || ctx?.question || "—" },
+    { label: "Language", value: String(li.language || "—") },
+    { label: "Answer Language", value: String(li.reply_lang || li.language || "—") },
+  ];
+
+  const pipeline: ObservabilityPipelineStep[] = [
     { label: "Domain", value: String(li.domain || li.routed_domain || "—") },
     { label: "Bucket", value: String(li.bucket || li.mr_bucket || row.topic || "—") },
     { label: "Intent", value: String(li.intent || li.question_intent || "—") },
@@ -87,7 +118,7 @@ function buildFallbackObservability(
     { label: "Risk", value: String(li.risk || "—") },
     { label: "Primary Engine", value: String(sm.archetype || li.mr_archetype || "—") },
     { label: "Secondary Engine", value: "—" },
-    { label: "Confidence", value: String(li.confidence ?? "—") },
+    { label: "DNA Confidence", value: String(li.confidence ?? "—") },
   ];
 
   const rulesFired = (checks.rules_fired || smChecks.rules_fired || []) as ObservabilityRule[];
@@ -97,8 +128,15 @@ function buildFallbackObservability(
   const neg = (ef.evidence_negative || sm.evidence_negative || []) as string[];
 
   return {
+    user_question: userQuestion,
     question_dna_pipeline: pipeline,
+    routing_decision: {
+      selected_engine: String(sm.archetype || li.mr_archetype || "—"),
+      why_selected: String(ctx?.engine_route_reason || "—"),
+      rejected_engines: [],
+    },
     engine_execution: {
+      engine_name: String(sm.archetype || "—"),
       modules: [
         { module: "D1", loaded: true },
         { module: "D9", loaded: true },
@@ -111,6 +149,7 @@ function buildFallbackObservability(
       verdict: String(sm.verdict || ef.verdict || row.verdict_summary || "—"),
       verdict_level: String(checks.level || checks.commitment_level || "—"),
     },
+    astrology_checks: {},
     planet_evidence: {
       positive: pos.map((label) => ({ label, weight: 10, polarity: "positive" })),
       negative: neg.map((label) => ({ label, weight: -5, polarity: "negative" })),
@@ -124,22 +163,25 @@ function buildFallbackObservability(
     scorecard: Object.fromEntries(
       Object.entries(scorecard).filter(([k]) => k !== "primary").map(([k, v]) => [k, Number(v)]),
     ),
+    engine_verdict: {
+      verdict: String(sm.verdict || "—"),
+      level: String(checks.level || checks.commitment_level || "—"),
+      confidence: (checks.primary_score as number) ?? null,
+    },
     narrator_input: (checks.narrator_input as Record<string, unknown>) || null,
     narrator_output: row.answer_text,
     hallucination_checks: [],
+    performance: {
+      model: row.llm_model,
+      llm_called: ctx?.llm_called !== false,
+    },
     final_trace: [
-      "Question",
-      "DNA",
-      "Engine",
-      "Modules",
-      "Rules Fired",
-      "Evidence",
-      "Score",
-      "Verdict",
-      "Narrator JSON",
-      "LLM Answer",
+      { label: "Question", value: row.question_text || "—" },
+      { label: "Engine", value: String(sm.archetype || "—") },
+      { label: "LLM Answer", value: row.answer_text ? "saved" : "—" },
     ],
     has_v2_rules: rulesFired.length > 0,
+    has_step_audit: Boolean(sm.step_audit),
   };
 }
 

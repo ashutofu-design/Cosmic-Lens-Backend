@@ -246,6 +246,112 @@ def _scorecard(ctx: dict[str, Any]) -> dict[str, int]:
     return out
 
 
+def _user_question_section(ctx: dict[str, Any], question_text: str) -> list[dict[str, str]]:
+    li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+    return [
+        _pipeline_step("Original Question", ctx.get("question_raw") or question_text),
+        _pipeline_step("Normalized Question", ctx.get("question_normalized") or ctx.get("question")),
+        _pipeline_step("Language", li.get("language") or li.get("reply_lang") or "—"),
+        _pipeline_step("Answer Language", li.get("reply_lang") or li.get("language") or "—"),
+    ]
+
+
+def _routing_decision(ctx: dict[str, Any], question_text: str) -> dict[str, Any]:
+    li = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    archetype = str(
+        sm.get("archetype") or ctx.get("routed_archetype") or li.get("mr_archetype") or ""
+    ).strip()
+    selected = archetype or "—"
+    reason_parts: list[str] = []
+    if ctx.get("engine_route_reason"):
+        reason_parts.append(str(ctx.get("engine_route_reason")))
+    if li.get("routing_override"):
+        reason_parts.append(f"Override: {li.get('routing_override')}")
+    if li.get("repair_note"):
+        reason_parts.append(str(li.get("repair_note")))
+    if not reason_parts:
+        reason_parts.append(f"Primary engine {selected} from intent routing.")
+
+    rejected: list[str] = []
+    warning = _routing_warning(question_text, archetype)
+    if warning:
+        rejected.append("loyalty_trust — commitment/timepass signals in raw question")
+    try:
+        from ask_mr.classifier import classify_mr_archetype
+
+        classified = classify_mr_archetype(question_text or "")
+        if classified and classified != archetype:
+            rejected.append(f"{classified} — regex classifier on raw question")
+    except Exception:
+        pass
+
+    return {
+        "selected_engine": selected,
+        "why_selected": " ".join(reason_parts)[:500],
+        "rejected_engines": rejected,
+        "routing_warning": warning,
+    }
+
+
+def _astrology_checks(ctx: dict[str, Any]) -> dict[str, list[str]]:
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    ef = ctx.get("engine_facts") if isinstance(ctx.get("engine_facts"), dict) else {}
+    step_audit = (
+        sm.get("step_audit")
+        or ef.get("step_audit")
+        or (ctx.get("blocks") or {}).get("engine_trace", {}).get("step_audit")
+        or {}
+    )
+    step3 = step_audit.get("step3") if isinstance(step_audit, dict) else {}
+    if not isinstance(step3, dict):
+        step3 = {}
+    return {
+        "d1": list(step3.get("d1") or [])[:10],
+        "d9": list(step3.get("d9") or [])[:10],
+        "dasha": list(step3.get("dasha") or [])[:8],
+        "transit": list(step3.get("transit") or [])[:8],
+        "kp": list(step3.get("kp") or [])[:8],
+        "jaimini": list(step3.get("jaimini") or [])[:6],
+        "ashtakavarga": list(step3.get("bcp") or step3.get("ashtakavarga") or [])[:6],
+    }
+
+
+def _performance_section(ctx: dict[str, Any]) -> dict[str, Any]:
+    sizes = ctx.get("sizes") if isinstance(ctx.get("sizes"), dict) else {}
+    return {
+        "model": ctx.get("model"),
+        "max_tokens": ctx.get("max_tokens"),
+        "chart_chars": sizes.get("chart_chars"),
+        "system_prompt_chars": sizes.get("system_prompt_chars"),
+        "llm_called": ctx.get("llm_called"),
+        "cache_hit": None,
+    }
+
+
+def _structured_final_trace(ctx: dict[str, Any], question_text: str, answer_text: str) -> list[dict[str, str]]:
+    sm = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    ni = _narrator_input(ctx)
+    rules = _rules_sections(ctx)
+    steps = [
+        ("Question", question_text or ctx.get("question") or "—"),
+        ("DNA", str((ctx.get("llm_intent") or {}).get("domain") or "—")),
+        ("Routing", str(sm.get("archetype") or "—")),
+        ("Engine", str(sm.get("slice") or "—")),
+        ("Modules", str(len(_modules_loaded(ctx)))),
+        ("Rules", str(len(rules.get("fired") or []))),
+        ("Evidence", str(
+            len((ctx.get("engine_facts") or {}).get("evidence_positive") or [])
+            + len((ctx.get("engine_facts") or {}).get("evidence_negative") or [])
+        )),
+        ("Score", str(rules.get("final_score") or "—")),
+        ("Verdict", str(rules.get("verdict") or "—")),
+        ("Narrator JSON", "saved" if ni else "—"),
+        ("LLM Answer", "saved" if (answer_text or "").strip() else "—"),
+    ]
+    return [{"label": label, "value": value} for label, value in steps]
+
+
 def _narrator_input(ctx: dict[str, Any]) -> dict[str, Any] | None:
     checks = ctx.get("checks") if isinstance(ctx.get("checks"), dict) else {}
     sm = ctx.get("slice_meta")
@@ -274,7 +380,7 @@ def _hallucination_checks(answer_text: str, ctx: dict[str, Any]) -> list[dict[st
             for word in re.findall(r"[a-zA-Z]{4,}", str(line).lower()):
                 engine_terms.add(word)
     ni = _narrator_input(ctx) or {}
-    for k in ("strongest_factor", "weakest_factor", "warnings"):
+    for k in ("strongest", "weakest", "strongest_factor", "weakest_factor", "reason", "warnings"):
         val = ni.get(k)
         if isinstance(val, list):
             for item in val:
@@ -285,11 +391,12 @@ def _hallucination_checks(answer_text: str, ctx: dict[str, Any]) -> list[dict[st
                 engine_terms.add(word)
 
     axis_aliases = {
-        "communication": ("communication", "baat", "communicat"),
-        "trust": ("trust", "vishwas", "loyal"),
+        "communication": ("communication", "baat", "communicat", "boundaries", "boundary"),
+        "trust": ("trust", "vishwas", "loyal", "trust challenge"),
         "commitment": ("commitment", "commit", "pakka"),
         "chemistry": ("chemistry", "attraction", "spark"),
         "family": ("family", "ghar", "parivar"),
+        "clarity": ("clarity", "emotional investment"),
     }
     rows: list[dict[str, Any]] = []
     for axis, aliases in axis_aliases.items():
@@ -327,6 +434,7 @@ def build_observability_debug(
     trace_labels = [
         "Question",
         "DNA",
+        "Routing",
         "Engine",
         "Modules",
         "Rules Fired",
@@ -337,20 +445,35 @@ def build_observability_debug(
         "LLM Answer",
     ]
     return {
+        "user_question": _user_question_section(ctx, question_text),
         "question_dna_pipeline": _question_dna_pipeline(ctx, question_text),
+        "routing_decision": _routing_decision(ctx, question_text),
         "routing_warning": _routing_warning(question_text, archetype),
         "engine_execution": {
+            "engine_name": archetype,
+            "engine_version": _dig(ctx.get("checks") or {}, sm or {}, key="engine_version"),
             "modules": _modules_loaded(ctx),
             **rules,
         },
+        "astrology_checks": _astrology_checks(ctx),
         "planet_evidence": _planet_evidence(ctx),
         "conflict_resolution": _conflict_resolution(ctx),
         "scorecard": _scorecard(ctx),
+        "engine_verdict": {
+            "verdict": rules.get("verdict"),
+            "level": rules.get("verdict_level"),
+            "confidence": rules.get("final_score"),
+            "strongest": _planet_evidence(ctx).get("positive", [])[:3],
+            "weakest": _planet_evidence(ctx).get("negative", [])[:2],
+        },
         "narrator_input": _narrator_input(ctx),
         "narrator_output": (answer_text or "").strip() or None,
         "hallucination_checks": _hallucination_checks(answer_text, ctx),
-        "final_trace": trace_labels,
+        "performance": _performance_section(ctx),
+        "final_trace": _structured_final_trace(ctx, question_text, answer_text),
+        "final_trace_labels": trace_labels,
         "has_v2_rules": bool(rules.get("fired")),
+        "has_step_audit": bool(_astrology_checks(ctx).get("d1") or rules.get("fired")),
     }
 
 

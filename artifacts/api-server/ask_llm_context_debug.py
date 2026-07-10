@@ -91,6 +91,7 @@ def derive_answer_path(
         "litigation_timing_v1",
         "vehicle_timing_v1",
         "vehicle_engine_v1",
+        "numerology_engine_v1",
     )
     dcr_love_buckets = sl == "marriage_relationship" and bool(slice_meta.get("buckets"))
     has_engine_facts = (
@@ -910,18 +911,54 @@ def _is_marriage_question_text(q: str) -> bool:
     return any(k in ql for k in _MARRIAGE_Q_KW)
 
 
+def _is_property_timing_admin_ctx(ctx: dict[str, Any]) -> bool:
+    slice_meta = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    checks = ctx.get("checks") if isinstance(ctx.get("checks"), dict) else {}
+    sl = str(slice_meta.get("slice") or checks.get("slice_type") or "")
+    if sl == "property_timing_v1":
+        return True
+    blocks = ctx.get("blocks") if isinstance(ctx.get("blocks"), dict) else {}
+    trace = blocks.get("engine_trace")
+    if isinstance(trace, dict) and str(trace.get("engine") or "") == "property_timing_v1":
+        return True
+    intent = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+    domain = str(intent.get("domain") or intent.get("routed_domain") or "").lower()
+    if domain == "property" and bool(intent.get("is_timing") or intent.get("routed_timing")):
+        return True
+    return False
+
+
+def _is_career_timing_admin_ctx(ctx: dict[str, Any]) -> bool:
+    slice_meta = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    checks = ctx.get("checks") if isinstance(ctx.get("checks"), dict) else {}
+    sl = str(slice_meta.get("slice") or checks.get("slice_type") or "")
+    if sl in ("career_timing_v1", "timing_career_engine", "career_engine_v1"):
+        return True
+    if checks.get("is_career_engine"):
+        return True
+    blocks = ctx.get("blocks") if isinstance(ctx.get("blocks"), dict) else {}
+    trace = blocks.get("engine_trace")
+    if isinstance(trace, dict) and str(trace.get("engine") or "") == "career_timing_v1":
+        return True
+    intent = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+    domain = str(intent.get("domain") or intent.get("mr_archetype") or "").lower()
+    return domain == "career"
+
+
 def _should_recompute_marriage_admin(
     ctx: dict[str, Any],
     *,
     question_text: str = "",
     topic: str = "",
 ) -> bool:
+    if _is_career_timing_admin_ctx(ctx):
+        return False
     if _is_marriage_timing_admin_ctx(ctx):
         return True
     if _is_marriage_question_text(question_text):
         return True
     tl = (topic or "").strip().lower()
-    if tl in ("marriage", "timing", "vivah"):
+    if tl in ("marriage", "vivah"):
         return True
     return False
 
@@ -1529,6 +1566,183 @@ def recompute_marriage_bcp_from_kundli(
     return out
 
 
+def _step1_is_property_bcp(step: dict[str, Any] | None) -> bool:
+    if not isinstance(step, dict):
+        return False
+    name = str(step.get("name") or "")
+    return (
+        "BCP" in name
+        or "4L" in name
+        or bool(step.get("fourth_lord") or step.get("d1_bcp_ages"))
+    )
+
+
+def _should_recompute_property_admin(
+    ctx: dict[str, Any],
+    *,
+    question_text: str = "",
+    topic: str = "",
+) -> bool:
+    try:
+        from ask_vehicle.vehicle_registry import is_vehicle_static_question
+        from ask_vehicle.timing_registry import is_vehicle_timing_question
+
+        _q = (question_text or ctx.get("question") or "").strip()
+        if _q and (
+            is_vehicle_static_question(_q)
+            or is_vehicle_timing_question(_q)
+        ):
+            return False
+    except Exception:
+        pass
+    if _is_property_timing_admin_ctx(ctx):
+        return True
+    try:
+        from ask_property.timing_registry import is_property_timing_question
+
+        intent = ctx.get("llm_intent") if isinstance(ctx.get("llm_intent"), dict) else {}
+        if is_property_timing_question(question_text or ctx.get("question") or "", intent):
+            return True
+    except Exception:
+        pass
+    if (topic or "").strip().lower() == "property":
+        return True
+    return False
+
+
+def _apply_property_bcp_recompute_to_ctx(
+    ctx: dict[str, Any],
+    bcp: dict[str, Any],
+    step1_bcp: dict[str, Any],
+    evidence_lines: list[str],
+) -> dict[str, Any]:
+    out = dict(ctx)
+    slice_meta = dict(out.get("slice_meta") or {}) if isinstance(out.get("slice_meta"), dict) else {}
+    engine_facts = dict(out.get("engine_facts") or {}) if isinstance(out.get("engine_facts"), dict) else {}
+    blocks = dict(out.get("blocks") or {}) if isinstance(out.get("blocks"), dict) else {}
+
+    step_audit = dict(
+        slice_meta.get("step_audit")
+        or engine_facts.get("step_audit")
+        or (blocks.get("engine_trace") or {}).get("step_audit")
+        or {}
+    )
+    old_step1 = step_audit.get("step1") if isinstance(step_audit.get("step1"), dict) else {}
+    old_step2 = step_audit.get("step2") if isinstance(step_audit.get("step2"), dict) else {}
+
+    if not _step1_is_property_bcp(old_step1):
+        run_name = str(old_step1.get("name") or "")
+        if "Active dasha" in run_name or old_step1.get("md"):
+            new_step2 = dict(old_step2)
+            new_step2.setdefault("name", "Active dasha — abhi kya chal raha hai")
+            for key in (
+                "md", "ad", "pd", "current_lords", "current_start", "current_end", "detail",
+            ):
+                if old_step1.get(key) and not new_step2.get(key):
+                    new_step2[key] = old_step1[key]
+            if old_step2 and "Current AD/PD" in str(old_step2.get("name") or ""):
+                run_detail = str(old_step1.get("detail") or "").strip()
+                act_detail = str(old_step2.get("detail") or "").strip()
+                parts = [p for p in (run_detail, act_detail) if p]
+                if parts:
+                    new_step2["detail"] = " · ".join(parts)
+                for key in (
+                    "timing_source", "current_supports", "activation_score",
+                    "running_activation_score", "min_activation", "dasha_targets",
+                    "house_lord_scores", "active_lord_tags", "top_planets",
+                ):
+                    if old_step2.get(key) is not None and new_step2.get(key) is None:
+                        new_step2[key] = old_step2[key]
+            step_audit["step2"] = new_step2
+
+    step_audit["step1"] = {**step1_bcp, "recomputed_from_chart": True}
+    slice_meta["step_audit"] = step_audit
+    slice_meta["bcp_property_ages"] = bcp
+    engine_facts["step_audit"] = step_audit
+
+    trace = blocks.get("engine_trace") or blocks.get("marriage_engine_trace")
+    if isinstance(trace, dict):
+        trace = dict(trace)
+        trace["step_audit"] = step_audit
+        if not str(trace.get("engine") or "").strip():
+            trace["engine"] = "property_timing_v1"
+        blocks["engine_trace"] = trace
+
+    ev = list(engine_facts.get("evidence") or slice_meta.get("evidence") or [])
+    for line in evidence_lines:
+        if line and line not in ev:
+            ev.insert(0, line)
+    if ev:
+        engine_facts["evidence"] = ev[:40]
+        slice_meta["evidence"] = ev[:40]
+
+    out["slice_meta"] = slice_meta
+    out["engine_facts"] = engine_facts
+    out["blocks"] = blocks
+    return out
+
+
+def recompute_property_bcp_from_kundli(
+    ctx: dict[str, Any],
+    kundli: dict[str, Any],
+    birth: dict[str, Any] | None = None,
+    *,
+    question_text: str = "",
+    topic: str = "",
+) -> dict[str, Any]:
+    """Admin load: rebuild property Step 1 BCP from saved chart (old rows + missing lagna)."""
+    ctx = dict(ctx) if isinstance(ctx, dict) else {}
+    if not _should_recompute_property_admin(ctx, question_text=question_text, topic=topic):
+        return ctx
+    chart = normalize_kundli_chart_payload(kundli)
+    if chart is None:
+        print(
+            "[property_admin_recompute] skip: chart normalize failed "
+            f"q={(question_text or ctx.get('question') or '')[:50]!r}",
+            flush=True,
+        )
+        return ctx
+    lagna_si = _resolve_lagna_si_for_admin(chart)
+    if lagna_si is None:
+        print(
+            "[property_admin_recompute] skip: lagna_si missing "
+            f"asc={chart.get('ascendant')!r} q={(question_text or '')[:50]!r}",
+            flush=True,
+        )
+        return ctx
+    user_age = _user_age_from_admin_ctx(ctx, birth, chart)
+    try:
+        from event_timing.property.bcp_property_ages import (
+            bcp_property_admin_lines,
+            build_property_step1_bcp,
+            compute_bcp_property_ages,
+        )
+
+        bcp = compute_bcp_property_ages(chart, lagna_si, user_age=user_age)
+        step1_bcp = build_property_step1_bcp(bcp, user_age)
+        evidence_lines = bcp_property_admin_lines(bcp) or []
+    except Exception as exc:
+        print(
+            f"[property_admin_recompute] BCP fail: {type(exc).__name__}: {str(exc)[:160]}",
+            flush=True,
+        )
+        return ctx
+    out = _apply_property_bcp_recompute_to_ctx(ctx, bcp, step1_bcp, evidence_lines)
+    sa = (
+        (out.get("slice_meta") or {}).get("step_audit")
+        if isinstance(out.get("slice_meta"), dict)
+        else {}
+    )
+    s1 = sa.get("step1") if isinstance(sa, dict) else {}
+    print(
+        "[property_admin_recompute] ok "
+        f"4L={s1.get('fourth_lord')!r} house={s1.get('fourth_lord_house')!r} "
+        f"q={(question_text or '')[:40]!r}",
+        flush=True,
+    )
+    return out
+
+
 def _format_bcp_step2_lines_for_admin(
     step0a: dict[str, Any],
     user_age: int | None,
@@ -1623,6 +1837,8 @@ def _enrich_step_audit_bcp_linkage(
 
 def _hydrate_marriage_bcp_linkage(ctx: dict[str, Any]) -> dict[str, Any]:
     """Fill Step 2 BCP house linkage for admin (incl. older saved rows)."""
+    if not _is_marriage_timing_admin_ctx(ctx):
+        return ctx
     slice_meta = dict(ctx.get("slice_meta") or {}) if isinstance(ctx.get("slice_meta"), dict) else {}
     engine_facts = dict(ctx.get("engine_facts") or {}) if isinstance(ctx.get("engine_facts"), dict) else {}
     evidence = list(engine_facts.get("evidence") or slice_meta.get("evidence") or [])
@@ -1936,7 +2152,7 @@ def _enrich_engine_facts_from_blocks(
     if pw and f"Primary window: {pw}" not in seen:
         evidence.insert(0, f"Primary window: {pw}")
         seen.add(f"Primary window: {pw}")
-    for f in trace.get("factors") or []:
+    for f in trace.get("evidence") or trace.get("factors") or []:
         fs = str(f).strip()
         if fs and fs not in seen:
             evidence.append(fs)
@@ -2032,6 +2248,38 @@ def _engine_route_reason_from_context(
     return None
 
 
+def _build_answer_fidelity_summary_for_ctx(
+    checks: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not isinstance(checks, dict):
+        return None
+    af = checks.get("answer_fidelity")
+    if not isinstance(af, dict) or af.get("skipped"):
+        return None
+    ok = bool(af.get("ok"))
+    issues = list(af.get("issues") or [])
+    repairs = list(af.get("repairs") or [])
+    shape = str(af.get("shape") or "")
+    if ok:
+        label = "Answer matched"
+        status = "pass"
+        reason = f"shape={shape}" + (f" · repairs={len(repairs)}" if repairs else "")
+    else:
+        label = "Answer mismatch"
+        status = "fail"
+        reason = ", ".join(str(i) for i in issues[:4]) or "checks failed"
+    return {
+        "status": status,
+        "label": label,
+        "reason": reason[:240],
+        "shape": shape or None,
+        "attempts": af.get("attempts"),
+        "score": af.get("score"),
+        "repairs": len(repairs),
+        "issues": issues[:6],
+    }
+
+
 def _build_engine_verification_summary_for_ctx(
     question: str,
     *,
@@ -2056,11 +2304,101 @@ def _build_engine_verification_summary_for_ctx(
         return None
 
 
+def recompute_mr_engine_admin_context(
+    ctx: dict[str, Any],
+    chart: dict,
+    birth: dict[str, Any] | None = None,
+    *,
+    question_text: str = "",
+) -> dict[str, Any]:
+    """Re-run MR static engine so admin rows regain slice_meta + evidence."""
+    if not isinstance(ctx, dict) or not isinstance(chart, dict) or not chart.get("planets"):
+        return ctx
+    q = (question_text or ctx.get("question") or "").strip()
+    if not q:
+        return ctx
+    sm = dict(ctx.get("slice_meta") or {}) if isinstance(ctx.get("slice_meta"), dict) else {}
+    blocks = dict(ctx.get("blocks") or {}) if isinstance(ctx.get("blocks"), dict) else {}
+    trace = blocks.get("engine_trace") if isinstance(blocks.get("engine_trace"), dict) else {}
+    src = str(ctx.get("answer_source") or "").lower()
+    ev = (
+        sm.get("evidence")
+        or trace.get("evidence")
+        or trace.get("factors")
+        or (ctx.get("engine_facts") or {}).get("evidence")
+        or []
+    )
+    if ev and str(sm.get("slice") or trace.get("engine") or "") == "mr_engine_v1":
+        return ctx
+    should_run = src.startswith("mr_engine") or sm.get("slice") == "mr_engine_v1"
+    if not should_run:
+        try:
+            from ask_marriage_relationship_slice import is_marriage_relationship_static_question
+
+            should_run = bool(is_marriage_relationship_static_question(q))
+        except Exception:
+            try:
+                from dcr_love import is_love_static_question
+
+                should_run = bool(is_love_static_question(q))
+            except Exception:
+                should_run = False
+    if not should_run:
+        return ctx
+    try:
+        from ask_mr import run_mr_static_engine
+        from ask_mr.engine import mr_engine_slice_meta
+
+        arch = sm.get("archetype") or trace.get("archetype")
+        if not arch:
+            from ask_mr.classifier import classify_mr_archetype
+
+            arch = classify_mr_archetype(q)
+        rec = run_mr_static_engine(
+            chart,
+            q,
+            birth=birth,
+            archetype=arch,
+        )
+        meta = mr_engine_slice_meta(rec)
+    except Exception as exc:
+        print(f"[ask_llm_context_debug] MR admin recompute failed: {exc}", flush=True)
+        return ctx
+    out = dict(ctx)
+    merged_sm = {**sm, **meta}
+    out["slice_meta"] = merged_sm
+    blocks = dict(out.get("blocks") or {})
+    blocks["engine_trace"] = {
+        "engine": "mr_engine_v1",
+        "archetype": meta.get("archetype"),
+        "verdict": meta.get("verdict"),
+        "evidence": list(meta.get("evidence") or [])[:25],
+        "summary": list(meta.get("summary") or [])[:10],
+        "recomputed_from_kundli": True,
+    }
+    out["blocks"] = blocks
+    checks = dict(out.get("checks") or {}) if isinstance(out.get("checks"), dict) else {}
+    checks.setdefault("slice_type", "mr_engine_v1")
+    checks.setdefault("mr_engine", "v1")
+    checks.setdefault("is_mr_static", True)
+    if meta.get("archetype"):
+        checks.setdefault("archetype", meta.get("archetype"))
+    out["checks"] = checks
+    try:
+        ef = build_engine_facts_snapshot(checks=checks, slice_meta=merged_sm)
+        out["engine_facts"] = _enrich_engine_facts_from_blocks(ef, blocks)
+    except Exception:
+        pass
+    return out
+
+
 def build_admin_context_for_ask_save(
     *,
     question: str,
     result: dict[str, Any] | None = None,
     lang: str = "hn",
+    chart: dict[str, Any] | None = None,
+    birth: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Rebuild admin_llm_context for /api/ask/stream saves (no ctx on final evt)."""
     import re
@@ -2147,8 +2485,85 @@ def build_admin_context_for_ask_save(
             is_timing = bool(re.search(r"(?ix)\b(kab|when|kis\s+saal)\b", q))
 
     trace = payload.get("engine_trace")
+    if not isinstance(trace, dict):
+        sm_in = payload.get("slice_meta")
+        if isinstance(sm_in, dict) and sm_in.get("slice"):
+            trace = {
+                "engine": str(sm_in.get("slice")),
+                "archetype": sm_in.get("archetype"),
+                "verdict": sm_in.get("verdict"),
+                "evidence": list(sm_in.get("evidence") or [])[:25],
+                "summary": list(sm_in.get("summary") or [])[:10],
+            }
     if isinstance(trace, dict):
         blocks["engine_trace"] = trace
+        if not slice_meta.get("slice") and trace.get("engine"):
+            slice_meta = {
+                **slice_meta,
+                "slice": str(trace.get("engine")),
+                "topic": slice_meta.get("topic") or topic,
+                "archetype": trace.get("archetype"),
+                "verdict": trace.get("verdict"),
+                "summary": list(trace.get("summary") or []),
+                "evidence": list(trace.get("evidence") or trace.get("factors") or []),
+            }
+
+    src = str(payload.get("source") or "").strip().lower()
+    if not slice_meta.get("slice") and src.startswith("mr_engine"):
+        topic = "love"
+        arch = None
+        try:
+            from ask_mr.classifier import classify_mr_archetype
+
+            arch = classify_mr_archetype(q)
+        except Exception:
+            arch = None
+        slice_meta = {
+            "slice": "mr_engine_v1",
+            "topic": topic,
+            "archetype": arch or "general_mr",
+        }
+        checks = {
+            "slice_type": "mr_engine_v1",
+            "mr_engine": "v1",
+            "is_mr_static": True,
+            "archetype": arch,
+        }
+    elif not slice_meta.get("slice") and src.startswith("raw_passthrough_timing"):
+        is_timing = True
+        slice_meta = {"slice": "love_timing_v1", "topic": topic or "love"}
+        checks = {"slice_type": "love_timing_v1"}
+
+    if slice_meta.get("slice") and "engine_trace" not in blocks:
+        blocks["engine_trace"] = {
+            "engine": str(slice_meta.get("slice")),
+            "domain": str(slice_meta.get("topic") or topic),
+            "archetype": slice_meta.get("archetype"),
+            "verdict": slice_meta.get("verdict"),
+            "evidence": list(slice_meta.get("evidence") or [])[:25],
+            "summary": list(slice_meta.get("summary") or [])[:10],
+            "synthesized_on_save": True,
+        }
+
+    draft = {
+        "question": q,
+        "answer_source": src,
+        "slice_meta": slice_meta,
+        "blocks": blocks,
+        "checks": checks,
+        "question_type": "TIMING" if is_timing else "STATIC",
+        "is_timing": is_timing,
+    }
+    if isinstance(chart, dict) and chart.get("planets"):
+        draft = recompute_mr_engine_admin_context(
+            draft,
+            chart,
+            birth,
+            question_text=q,
+        )
+        slice_meta = dict(draft.get("slice_meta") or slice_meta)
+        blocks = dict(draft.get("blocks") or blocks)
+        checks = dict(draft.get("checks") or checks)
 
     return build_admin_llm_context(
         question=q,
@@ -2187,7 +2602,19 @@ def build_admin_llm_context(
 ) -> dict[str, Any]:
     """Structured snapshot for admin panel (never shown to end users)."""
     _checks = checks or {}
-    _slice_meta = slice_meta or {}
+    _slice_meta = dict(slice_meta) if isinstance(slice_meta, dict) else {}
+    _blocks_in = dict(blocks) if isinstance(blocks, dict) else {}
+    _trace_in = _blocks_in.get("engine_trace")
+    if not _slice_meta.get("slice"):
+        st = str(_checks.get("slice_type") or "").strip()
+        if st.endswith("_timing_v1") or st.endswith("_engine_v1") or st in (
+            "timing_marriage_engine",
+            "timing_marriage_engine_alt",
+            "timing_career_engine",
+        ):
+            _slice_meta["slice"] = st
+    if not _slice_meta.get("slice") and isinstance(_trace_in, dict) and _trace_in.get("engine"):
+        _slice_meta["slice"] = str(_trace_in.get("engine"))
     answer_path, answer_path_label = derive_answer_path(
         llm_called=llm_called,
         skip_reason=skip_reason,
@@ -2195,13 +2622,13 @@ def build_admin_llm_context(
         slice_meta=_slice_meta,
     )
     engine_facts = build_engine_facts_snapshot(checks=_checks, slice_meta=_slice_meta)
-    engine_facts = _enrich_engine_facts_from_blocks(engine_facts, blocks or {})
+    engine_facts = _enrich_engine_facts_from_blocks(engine_facts, _blocks_in)
     has_engine_facts = bool(
         engine_facts.get("verdict")
         or (engine_facts.get("evidence") or [])
         or (_slice_meta.get("verdict"))
         or (_slice_meta.get("evidence"))
-        or (blocks or {}).get("engine_trace")
+        or _blocks_in.get("engine_trace")
     )
     _intent = llm_intent if isinstance(llm_intent, dict) else {}
     try:
@@ -2316,6 +2743,7 @@ def build_admin_llm_context(
             checks=_checks,
             is_timing=bool(is_timing),
         ),
+        "answer_fidelity_summary": _build_answer_fidelity_summary_for_ctx(_checks),
         "understanding_source": _understanding_source,
         "question_type": question_type,
         "is_timing": bool(is_timing),
@@ -2331,7 +2759,7 @@ def build_admin_llm_context(
         "skip_reason": (skip_reason or "")[:200] or None,
         "checks": _checks,
         "slice_meta": _slice_meta,
-        "blocks": blocks or {},
+        "blocks": _blocks_in,
         "chart_text": chart_text or "",
         "extra_rules": extra_rules or "",
         "system_prompt": system_prompt or "",
@@ -2349,6 +2777,36 @@ def build_admin_llm_context(
         from ask_engine_catalog import enrich_admin_context_engine_display
 
         ctx_out = enrich_admin_context_engine_display(ctx_out, llm_intent=_intent if isinstance(_intent, dict) else None)
+    except Exception:
+        pass
+    _nested_checks = _slice_meta.get("checks") if isinstance(_slice_meta.get("checks"), dict) else {}
+    if isinstance(_nested_checks, dict):
+        _merged_checks = dict(ctx_out.get("checks") or {})
+        for _k in (
+            "rules_fired",
+            "modules_used",
+            "narrator_input",
+            "scorecard",
+            "primary_score",
+            "commitment_level",
+            "level",
+            "contradiction",
+            "contradiction_detail",
+            "explanation",
+            "engine_version",
+            "rules_version",
+        ):
+            if _k in _nested_checks and _nested_checks[_k] not in (None, "", [], {}):
+                _merged_checks.setdefault(_k, _nested_checks[_k])
+        ctx_out["checks"] = _merged_checks
+    try:
+        from ask_observability_debug import attach_observability_to_context
+
+        ctx_out = attach_observability_to_context(
+            ctx_out,
+            question_text=question or "",
+            answer_text="",
+        )
     except Exception:
         pass
     return ctx_out
@@ -2454,6 +2912,100 @@ def _slim_marriage_step_audit_for_db(step_audit: dict[str, Any]) -> dict[str, An
     return out
 
 
+def _slim_career_step_audit_for_db(step_audit: dict[str, Any]) -> dict[str, Any]:
+    """Keep career timing step_audit compact for DB without marriage-field stripping."""
+    out: dict[str, Any] = {}
+    for key, step in (step_audit or {}).items():
+        if not isinstance(step, dict):
+            continue
+        if key == "step6":
+            out[key] = {
+                "name": step.get("name"),
+                "status": step.get("status"),
+                "current_lords": step.get("current_lords"),
+                "current_start": step.get("current_start"),
+                "current_end": step.get("current_end"),
+                "dasha_score": step.get("dasha_score"),
+                "why": (step.get("why") or [])[:8],
+                "detail": str(step.get("detail") or "")[:500],
+            }
+        elif key == "step7":
+            out[key] = {
+                "name": step.get("name"),
+                "status": step.get("status"),
+                "why": (step.get("why") or [])[:8],
+                "detail": str(step.get("detail") or "")[:600],
+            }
+        elif key == "step2":
+            out[key] = {
+                "name": step.get("name"),
+                "status": step.get("status"),
+                "tenth_house_score": step.get("tenth_house_score"),
+                "top_why": (step.get("top_why") or [])[:6],
+                "detail": str(step.get("detail") or "")[:400],
+            }
+        elif key == "step3":
+            out[key] = {
+                "name": step.get("name"),
+                "status": step.get("status"),
+                "d9_score": step.get("d9_score"),
+                "d10_score": step.get("d10_score"),
+                "detail": str(step.get("detail") or "")[:200],
+            }
+        elif key == "step5":
+            out[key] = {
+                "name": step.get("name"),
+                "status": step.get("status"),
+                "layer_score": step.get("layer_score"),
+                "top_layers": (step.get("top_layers") or [])[:6],
+                "detail": str(step.get("detail") or "")[:200],
+            }
+        elif key == "step8":
+            out[key] = {
+                k: step.get(k)
+                for k in (
+                    "name", "status", "next_ad", "next_pd", "next_md",
+                    "next_start", "next_end", "reason", "detail", "primary_window",
+                    "promotion_timeline", "promotion_windows", "promotion_periods",
+                    "answer_window", "lords", "timing_source", "band",
+                )
+                if step.get(k) is not None
+            }
+        elif key == "step9":
+            out[key] = {
+                "name": step.get("name"),
+                "status": step.get("status"),
+                "verdict": step.get("verdict"),
+                "score": step.get("score"),
+                "confidence": step.get("confidence"),
+                "strategy": str(step.get("strategy") or "")[:300],
+                "detail": str(step.get("detail") or "")[:300],
+            }
+        elif key == "step0":
+            out[key] = {
+                "name": step.get("name"),
+                "status": step.get("status"),
+                "bucket": step.get("bucket"),
+                "tense": step.get("tense"),
+                "detail": str(step.get("detail") or "")[:200],
+            }
+        else:
+            out[key] = {
+                "name": step.get("name"),
+                "status": step.get("status"),
+                "detail": str(step.get("detail") or "")[:400],
+            }
+    return out
+
+
+def _slim_step_audit_for_ctx(ctx: dict[str, Any], step_audit: dict[str, Any]) -> dict[str, Any]:
+    if _is_career_timing_admin_ctx(ctx):
+        return _slim_career_step_audit_for_db(step_audit)
+    if _is_marriage_timing_admin_ctx(ctx):
+        return _slim_marriage_step_audit_for_db(step_audit)
+    return step_audit
+
+
 def _apply_slim_step_audit_to_ctx(payload: dict[str, Any]) -> dict[str, Any]:
     """Slim step_audit in all ctx locations before DB serialize."""
     out = dict(payload)
@@ -2461,21 +3013,21 @@ def _apply_slim_step_audit_to_ctx(payload: dict[str, Any]) -> dict[str, Any]:
         container = out.get(container_key)
         if isinstance(container, dict) and isinstance(container.get("step_audit"), dict):
             c = dict(container)
-            c["step_audit"] = _slim_marriage_step_audit_for_db(c["step_audit"])
+            c["step_audit"] = _slim_step_audit_for_ctx(out, c["step_audit"])
             out[container_key] = c
     ef = out.get("engine_facts")
     if isinstance(ef, dict) and isinstance(ef.get("step_audit"), dict):
         ef = dict(ef)
-        ef["step_audit"] = _slim_marriage_step_audit_for_db(ef["step_audit"])
+        ef["step_audit"] = _slim_step_audit_for_ctx(out, ef["step_audit"])
         out["engine_facts"] = ef
     blocks = out.get("blocks")
     if isinstance(blocks, dict):
         blocks = dict(blocks)
-        for trace_key in ("engine_trace", "marriage_engine_trace"):
+        for trace_key in ("engine_trace", "marriage_engine_trace", "career_engine_trace"):
             trace = blocks.get(trace_key)
             if isinstance(trace, dict) and isinstance(trace.get("step_audit"), dict):
                 t = dict(trace)
-                t["step_audit"] = _slim_marriage_step_audit_for_db(t["step_audit"])
+                t["step_audit"] = _slim_step_audit_for_ctx(out, t["step_audit"])
                 blocks[trace_key] = t
         out["blocks"] = blocks
     return out
@@ -2556,10 +3108,20 @@ def _synthesize_engine_trace_from_meta(ctx: dict[str, Any]) -> dict[str, Any] | 
     sl = str(
         slice_meta.get("slice")
         or checks.get("slice_type")
-        or "marriage_timing_m17"
-    ).strip()
+        or ""
+    ).strip() or "timing_engine_v1"
     if sl == "timing_marriage_engine":
         sl = "marriage_timing_m17"
+
+    step_order = slice_meta.get("step_order") or engine_facts.get("step_order")
+    if not isinstance(step_order, list) or not step_order:
+        dom_guess = sl.replace("_timing_v1", "").replace("_timing_m17", "")
+        if sl in ("marriage_timing_m17", "marriage_timing_v1", "timing_marriage_engine"):
+            step_order = list(_MARRIAGE_TRACE_STEP_ORDER)
+        else:
+            from event_timing._shared.step_audit import kaal_step_order_for_domain
+
+            step_order = list(kaal_step_order_for_domain(dom_guess))
 
     pw = ""
     for item in (slice_meta.get("summary") or engine_facts.get("summary") or []):
@@ -2593,11 +3155,114 @@ def _synthesize_engine_trace_from_meta(ctx: dict[str, Any]) -> dict[str, Any] | 
         "verdict": slice_meta.get("verdict") or engine_facts.get("verdict"),
         "band": (slice_meta.get("checks") or {}).get("band") if isinstance(slice_meta.get("checks"), dict) else None,
         "step_audit": step_audit if isinstance(step_audit, dict) else {},
-        "step_order": list(_MARRIAGE_TRACE_STEP_ORDER),
+        "step_order": list(step_order),
         "timing_audit": timing_audit if isinstance(timing_audit, dict) else {},
         "factors": factors[:50],
         "synthesized_from_meta": True,
     })
+
+
+_CAREER_STRIP_STEP8_KEYS = (
+    "marriage_month_year",
+    "marriage_year",
+    "marriage_month",
+    "marriage_period",
+    "late_chart_bcp_locked",
+    "d1_bcp_ages",
+    "d9_bcp_ages",
+    "predicted_bcp_age",
+    "next_dasha_window",
+    "dasha_transit_month",
+    "step5_aligned_lords",
+)
+
+
+def _filter_non_marriage_timing_evidence(lines: list[Any]) -> list[str]:
+    out: list[str] = []
+    for line in lines or []:
+        s = str(line).strip()
+        if not s:
+            continue
+        if s.startswith("BCP_LINKAGE") or s.startswith("BCP_HOUSE") or s.startswith("BCP_SHARED"):
+            continue
+        if s not in out:
+            out.append(s)
+    return out[:40]
+
+
+def _clean_non_marriage_step_audit(sa: dict[str, Any]) -> dict[str, Any]:
+    audit = dict(sa)
+    audit.pop("step0a", None)
+    s8 = dict(audit.get("step8") or {})
+    for key in _CAREER_STRIP_STEP8_KEYS:
+        s8.pop(key, None)
+    if s8:
+        audit["step8"] = s8
+    return audit
+
+
+def _sanitize_non_marriage_timing_admin_ctx(ctx: dict[str, Any]) -> dict[str, Any]:
+    """Strip vivah BCP / marriage step8 fields from non-marriage timing admin rows."""
+    if _is_marriage_timing_admin_ctx(ctx):
+        return ctx
+    blocks = ctx.get("blocks") if isinstance(ctx.get("blocks"), dict) else {}
+    trace = blocks.get("engine_trace") if isinstance(blocks.get("engine_trace"), dict) else {}
+    engine = str(trace.get("engine") or "")
+    slice_meta = ctx.get("slice_meta") if isinstance(ctx.get("slice_meta"), dict) else {}
+    sl = str(slice_meta.get("slice") or "")
+    is_timing = bool(
+        ctx.get("is_timing")
+        or ctx.get("question_type") == "TIMING"
+        or engine.endswith("_timing_v1")
+        or sl.endswith("_timing_v1")
+        or _is_career_timing_admin_ctx(ctx)
+    )
+    if not is_timing:
+        return ctx
+    out = dict(ctx)
+
+    for bag_key in ("slice_meta", "engine_facts"):
+        bag = out.get(bag_key)
+        if not isinstance(bag, dict):
+            continue
+        bag = dict(bag)
+        for ev_key in ("evidence", "timing_evidence"):
+            ev = bag.get(ev_key)
+            if isinstance(ev, list):
+                bag[ev_key] = _filter_non_marriage_timing_evidence(ev)
+        if isinstance(bag.get("step_audit"), dict):
+            bag["step_audit"] = _clean_non_marriage_step_audit(bag["step_audit"])
+        out[bag_key] = bag
+
+    if isinstance(blocks, dict):
+        blocks = dict(blocks)
+        trace = blocks.get("engine_trace")
+        if isinstance(trace, dict):
+            trace = dict(trace)
+            if isinstance(trace.get("step_audit"), dict):
+                trace["step_audit"] = _clean_non_marriage_step_audit(trace["step_audit"])
+            s8 = (trace.get("step_audit") or {}).get("step8") if isinstance(trace.get("step_audit"), dict) else {}
+            if isinstance(s8, dict):
+                pw = s8.get("event_month_year") or s8.get("primary_window") or s8.get("detail")
+                if pw and not str(trace.get("primary_window") or "").strip():
+                    trace["primary_window"] = str(pw)[:160]
+            if _is_career_timing_admin_ctx(out):
+                dt = trace.get("dasha_trace")
+                if isinstance(dt, dict):
+                    nxt_s, nxt_e = dt.get("next_career_start"), dt.get("next_career_end")
+                    if nxt_s and nxt_e and not str(trace.get("primary_window") or "").strip():
+                        trace["primary_window"] = f"{nxt_s}→{nxt_e}"
+                s8_career = (trace.get("step_audit") or {}).get("step8") if isinstance(trace.get("step_audit"), dict) else {}
+                if isinstance(s8_career, dict) and s8_career.get("promotion_timeline"):
+                    trace["primary_window"] = str(s8_career["promotion_timeline"])[:200]
+            blocks["engine_trace"] = trace
+        out["blocks"] = blocks
+    return out
+
+
+def _sanitize_career_admin_ctx(ctx: dict[str, Any]) -> dict[str, Any]:
+    """Back-compat alias — career + all non-marriage timing."""
+    return _sanitize_non_marriage_timing_admin_ctx(ctx)
 
 
 def _hydrate_admin_context_on_load(ctx: dict[str, Any]) -> dict[str, Any]:
@@ -2605,7 +3270,25 @@ def _hydrate_admin_context_on_load(ctx: dict[str, Any]) -> dict[str, Any]:
     out = dict(ctx)
     blocks = dict(out.get("blocks") or {}) if isinstance(out.get("blocks"), dict) else {}
     trace = blocks.get("engine_trace") or blocks.get("marriage_engine_trace")
-    if not isinstance(trace, dict) or not (trace.get("step_audit") or trace.get("timing_audit")):
+    slice_meta = out.get("slice_meta") if isinstance(out.get("slice_meta"), dict) else {}
+    checks = out.get("checks") if isinstance(out.get("checks"), dict) else {}
+    if not isinstance(trace, dict) or not trace.get("engine"):
+        synth = _synthesize_engine_trace_from_meta(out)
+        if synth:
+            blocks["engine_trace"] = synth
+            out["blocks"] = blocks
+        elif slice_meta.get("slice") or checks.get("slice_type"):
+            blocks["engine_trace"] = {
+                "engine": str(slice_meta.get("slice") or checks.get("slice_type") or ""),
+                "verdict": slice_meta.get("verdict"),
+                "primary_window": None,
+                "factors": list(slice_meta.get("evidence") or [])[:20],
+                "step_audit": slice_meta.get("step_audit") or {},
+                "timing_audit": slice_meta.get("timing_audit") or {},
+                "synthesized_from_slice": True,
+            }
+            out["blocks"] = blocks
+    elif not isinstance(trace, dict) or not (trace.get("step_audit") or trace.get("timing_audit")):
         synth = _synthesize_engine_trace_from_meta(out)
         if synth:
             blocks["engine_trace"] = synth
@@ -2626,6 +3309,13 @@ def _hydrate_admin_context_on_load(ctx: dict[str, Any]) -> dict[str, Any]:
         if rebuilt:
             out["engine_verification_summary"] = rebuilt
 
+    af = out.get("answer_fidelity_summary")
+    if not (isinstance(af, dict) and af.get("label")):
+        checks = out.get("checks") if isinstance(out.get("checks"), dict) else {}
+        rebuilt_af = _build_answer_fidelity_summary_for_ctx(checks)
+        if rebuilt_af:
+            out["answer_fidelity_summary"] = rebuilt_af
+
     try:
         from ask_engine_catalog import enrich_admin_context_engine_display
 
@@ -2633,6 +3323,7 @@ def _hydrate_admin_context_on_load(ctx: dict[str, Any]) -> dict[str, Any]:
         out = enrich_admin_context_engine_display(out, llm_intent=intent)
     except Exception:
         pass
+    out = _sanitize_non_marriage_timing_admin_ctx(out)
     return _hydrate_marriage_bcp_linkage(out)
 
 
@@ -2670,7 +3361,112 @@ def serialize_llm_context_for_db(ctx: Any) -> str | None:
             except Exception:
                 return None
         if len(raw) > _MAX_DB_CHARS:
-            return raw[: _MAX_DB_CHARS - 1] + "…"
+            # Never store invalid/truncated JSON — it breaks admin parsing
+            # and causes NO_ADMIN_ENGINE. Instead, store a minimal valid
+            # payload that still contains slice_meta + engine_trace.
+            def _min_list(v: Any, n: int) -> list[Any]:
+                if isinstance(v, list):
+                    return v[:n]
+                return []
+
+            if not isinstance(payload, dict):
+                return None
+
+            sm = payload.get("slice_meta") if isinstance(payload.get("slice_meta"), dict) else {}
+            checks = payload.get("checks") if isinstance(payload.get("checks"), dict) else {}
+            blocks_in = payload.get("blocks") if isinstance(payload.get("blocks"), dict) else {}
+            trace_in = blocks_in.get("engine_trace") if isinstance(blocks_in.get("engine_trace"), dict) else {}
+
+            sm_min = {}
+            if isinstance(sm, dict) and sm:
+                if sm.get("slice"):
+                    sm_min["slice"] = sm.get("slice")
+                if sm.get("topic"):
+                    sm_min["topic"] = sm.get("topic")
+                if sm.get("archetype"):
+                    sm_min["archetype"] = sm.get("archetype")
+                if sm.get("verdict"):
+                    sm_min["verdict"] = sm.get("verdict")
+                if sm.get("evidence") is not None:
+                    sm_min["evidence"] = _min_list(sm.get("evidence"), 25)
+                if sm.get("summary") is not None:
+                    sm_min["summary"] = _min_list(sm.get("summary"), 10)
+
+            trace_min = {}
+            if isinstance(trace_in, dict) and trace_in:
+                if trace_in.get("engine"):
+                    trace_min["engine"] = trace_in.get("engine")
+                if trace_in.get("archetype"):
+                    trace_min["archetype"] = trace_in.get("archetype")
+                if trace_in.get("verdict"):
+                    trace_min["verdict"] = trace_in.get("verdict")
+                if trace_in.get("evidence") is not None:
+                    trace_min["evidence"] = _min_list(trace_in.get("evidence"), 25)
+                # Some engines store evidence under `factors` (not `evidence`).
+                # Admin audit reads `trace.factors` as fallback.
+                if trace_in.get("factors") is not None:
+                    trace_min["factors"] = _min_list(trace_in.get("factors"), 25)
+                if trace_in.get("summary") is not None:
+                    trace_min["summary"] = _min_list(trace_in.get("summary"), 10)
+
+            checks_min = {}
+            if isinstance(checks, dict) and checks:
+                for k in (
+                    "slice_type",
+                    "mr_engine",
+                    "is_mr_static",
+                    "archetype",
+                    "is_marriage_engine",
+                    "is_timing",
+                ):
+                    if k in checks:
+                        checks_min[k] = checks.get(k)
+
+            # Fallbacks: ensure admin parser can always recover an engine slice.
+            # It expects either trace.engine or slice_meta.slice.
+            if not sm_min.get("slice"):
+                if checks_min.get("mr_engine"):
+                    sm_min["slice"] = checks_min.get("mr_engine")
+                elif checks_min.get("slice_type"):
+                    sm_min["slice"] = checks_min.get("slice_type")
+
+            if not trace_min.get("engine"):
+                if sm_min.get("slice"):
+                    trace_min["engine"] = sm_min.get("slice")
+                elif checks_min.get("mr_engine"):
+                    trace_min["engine"] = checks_min.get("mr_engine")
+                elif checks_min.get("slice_type"):
+                    trace_min["engine"] = checks_min.get("slice_type")
+
+            minimal = {
+                "question_type": payload.get("question_type") or checks_min.get("slice_type") or "",
+                "is_timing": bool(payload.get("is_timing")),
+                "checks": checks_min,
+                "slice_meta": sm_min,
+                "blocks": {"engine_trace": trace_min},
+                "route": payload.get("route"),
+            }
+
+            try:
+                raw_min = json.dumps(minimal, ensure_ascii=False, default=str)
+                # Final safety clamp — still keep valid JSON.
+                if len(raw_min) > _MAX_DB_CHARS:
+                    # Ensure keys exist before assigning.
+                    if not isinstance(minimal.get("slice_meta"), dict):
+                        minimal["slice_meta"] = {}
+                    if not isinstance(minimal.get("blocks"), dict):
+                        minimal["blocks"] = {}
+                    if not isinstance(minimal["blocks"].get("engine_trace"), dict):
+                        minimal["blocks"]["engine_trace"] = {}
+
+                    minimal["slice_meta"]["evidence"] = _min_list(sm_min.get("evidence"), 5)  # type: ignore[index]
+                    minimal["slice_meta"]["summary"] = _min_list(sm_min.get("summary"), 3)    # type: ignore[index]
+                    minimal["blocks"]["engine_trace"]["evidence"] = _min_list(trace_min.get("evidence"), 5)  # type: ignore[index]
+                    minimal["blocks"]["engine_trace"]["summary"] = _min_list(trace_min.get("summary"), 3)    # type: ignore[index]
+                    raw_min = json.dumps(minimal, ensure_ascii=False, default=str)
+                return raw_min
+            except Exception:
+                return None
     return raw
 
 

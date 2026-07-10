@@ -85,8 +85,39 @@ def _extract_timing_window(result: EngineResult, checks: dict[str, Any]) -> str:
     return ""
 
 
+def _compact_evidence_line(raw: str, *, max_len: int = 96) -> str:
+    """Keep engine evidence verbatim — first clause only, no humanize drift."""
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    s = re.split(r"[;]\s*", s)[0].strip()
+    s = re.sub(r"\s{2,}", " ", s)
+    return s[:max_len]
+
+
+def _evidence_from_rules(
+    rules_fired: list[Any],
+    *,
+    polarity: str,
+    limit: int = 3,
+) -> list[str]:
+    out: list[str] = []
+    for rule in rules_fired:
+        if not isinstance(rule, dict):
+            continue
+        if str(rule.get("polarity") or "").strip().lower() != polarity:
+            continue
+        note = str(rule.get("note") or rule.get("evidence") or rule.get("label") or "").strip()
+        line = _compact_evidence_line(note)
+        if line and line not in out:
+            out.append(line)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def engine_result_to_commitment_json(result: EngineResult) -> dict[str, Any]:
-    """Compact narrator JSON — mirrors the commitment engine contract."""
+    """Compact narrator JSON — engine evidence only (no chart / no humanize drift)."""
     checks = result.checks or {}
     explanation = checks.get("explanation") or {}
     if not isinstance(explanation, dict):
@@ -95,7 +126,7 @@ def engine_result_to_commitment_json(result: EngineResult) -> dict[str, Any]:
     level = str(
         checks.get("commitment_level") or checks.get("level") or ""
     ).strip().lower()
-    verdict = _VERDICT_LABELS.get(level, level.title() if level else "Mixed")
+    verdict_label = _VERDICT_LABELS.get(level, level.title() if level else "Mixed")
 
     scorecard = checks.get("scorecard") or {}
     score = int(
@@ -105,43 +136,59 @@ def engine_result_to_commitment_json(result: EngineResult) -> dict[str, Any]:
     )
     conf_label = (result.confidence or "medium").strip().title()
 
-    strongest: list[str] = []
-    sf = str(explanation.get("strongest_factor") or "").strip()
-    if sf:
-        strongest.append(_humanize_factor(sf))
-    for item in explanation.get("why") or []:
-        h = _humanize_factor(str(item))
-        if h and h not in strongest:
-            strongest.append(h)
+    rules_fired = list(checks.get("rules_fired") or [])
+    strongest = _evidence_from_rules(rules_fired, polarity="positive", limit=3)
+    weakest = _evidence_from_rules(rules_fired, polarity="negative", limit=2)
+
+    if not strongest:
+        sf = str(explanation.get("strongest_factor") or "").strip()
+        if sf:
+            strongest.append(_compact_evidence_line(sf))
+        for item in explanation.get("why") or []:
+            line = _compact_evidence_line(str(item))
+            if line and line not in strongest:
+                strongest.append(line)
     if not strongest:
         for item in (result.evidence_positive or [])[:3]:
-            h = _humanize_factor(str(item))
-            if h and h not in strongest:
-                strongest.append(h)
+            line = _compact_evidence_line(str(item))
+            if line and line not in strongest:
+                strongest.append(line)
 
-    weakest: list[str] = []
-    wf = str(explanation.get("weakest_factor") or "").strip()
-    if wf:
-        weakest.append(_humanize_factor(wf))
-    for item in explanation.get("why_not") or []:
-        h = _humanize_factor(str(item))
-        if h and h not in weakest:
-            weakest.append(h)
+    if not weakest:
+        wf = str(explanation.get("weakest_factor") or "").strip()
+        if wf:
+            weakest.append(_compact_evidence_line(wf))
+        for item in explanation.get("why_not") or []:
+            line = _compact_evidence_line(str(item))
+            if line and line not in weakest:
+                weakest.append(line)
     if not weakest:
         for item in (result.evidence_negative or [])[:2]:
-            h = _humanize_factor(str(item))
-            if h and h not in weakest:
-                weakest.append(h)
+            line = _compact_evidence_line(str(item))
+            if line and line not in weakest:
+                weakest.append(line)
+
+    reasons: list[str] = []
+    for item in explanation.get("why") or []:
+        line = _compact_evidence_line(str(item))
+        if line and line not in reasons:
+            reasons.append(line)
+    for item in explanation.get("why_not") or []:
+        line = _compact_evidence_line(str(item))
+        if line and line not in reasons:
+            reasons.append(line)
+    if not reasons:
+        for item in (result.summary or [])[:2]:
+            line = _compact_evidence_line(str(item))
+            if line:
+                reasons.append(line)
 
     warnings: list[str] = []
     if checks.get("contradiction"):
         warnings.append("Mixed signals — patience needed")
-    for item in explanation.get("why_not") or []:
-        w = _humanize_warning(str(item))
-        if w and w not in warnings:
-            warnings.append(w)
-    if not warnings and weakest:
-        warnings.append(_humanize_warning(weakest[0]))
+    for item in weakest[:2]:
+        if item and item not in warnings:
+            warnings.append(item)
 
     timing_window = _extract_timing_window(result, checks)
     timing_block: dict[str, str] | None = None
@@ -149,8 +196,15 @@ def engine_result_to_commitment_json(result: EngineResult) -> dict[str, Any]:
         timing_block = {"window": timing_window}
 
     payload: dict[str, Any] = {
-        "verdict": verdict,
+        "question_type": "commitment",
+        "final_verdict": verdict_label,
+        "commitment_level": verdict_label,
+        "strongest": strongest[:3],
+        "weakest": weakest[:2],
+        "reason": reasons[:4],
         "confidence": score,
+        # backward-compatible keys for admin / tests
+        "verdict": verdict_label,
         "confidence_label": conf_label,
         "strongest_factor": strongest[:3],
         "weakest_factor": weakest[:2],
@@ -197,26 +251,27 @@ def commitment_narrator_payload(
         )
     lines.extend([
         "FLOW (strict order):",
-        "1) Direct answer — haan / nahi / mixed matching verdict + question angle.",
-        "2) Short explanation — why this verdict (one line).",
-        "3) Strongest reasons — 1–2 items from strongest_factor in daily-life words.",
-        "4) Caution — warnings / weakest_factor; clarify delay ≠ rejection.",
+        "1) Direct answer — haan / nahi / mixed matching final_verdict + question angle.",
+        "2) Short explanation — use reason[] lines in daily-life words.",
+        "3) Strongest — explain ONLY strings in strongest[] (no new factors).",
+        "4) Challenges — explain ONLY strings in weakest[] / warnings; delay ≠ rejection.",
         "5) Timing — only if timing.window exists in JSON.",
-        "6) One practical guidance line (clarity talk, patience, boundaries).",
+        "6) One practical line tied to reason[] — no generic communication/boundaries unless in JSON.",
         f"7) Final line: Confidence: {data.get('confidence_label', 'Medium')} ({data.get('confidence', 0)}%).",
-        "BANNED: shayad, ho sakta hai, lagta hai, planet/house/sign/lord jargon, new predictions.",
+        "BANNED: shayad, ho sakta hai, lagta hai, inference beyond JSON fields.",
+        "BANNED unless in JSON: clarity, boundaries, communication, emotional investment, trust challenge.",
     ])
     return "\n".join(lines)
 
 
 COMMITMENT_NARRATOR_RULES = """
 COMMITMENT NARRATOR (JSON-only):
-• You receive ENGINE_JSON — never the chart. Explain ONLY what is in that JSON.
-• Never add astrology beyond strongest_factor / weakest_factor / warnings / timing.
+• You receive ENGINE_JSON — never the chart. Explain ONLY strongest[], weakest[], reason[], warnings[].
+• Never add astrology beyond those JSON strings. No partner-behaviour guesses (e.g. feelings express nahi karta).
 • Never use shayad, ho sakta hai, lagta hai, maybe, perhaps, might.
 • Verdict ceiling: ready → positive; cautious → interested but needs clarity;
   mixed → haan lekin friction; low → hesitant / not ready tone.
-• Translate technical factor names into plain relationship language (no planet/house words).
+• Translate each JSON factor into plain relationship language — keep the same meaning, no new claims.
 • If timing.window missing — skip timing paragraph entirely.
 • End with: Confidence: {label} ({number}%).
 """.strip()

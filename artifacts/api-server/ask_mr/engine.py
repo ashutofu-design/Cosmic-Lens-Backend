@@ -70,6 +70,19 @@ def run_mr_static_engine(
     if not archetype:
         archetype = classify_mr_archetype(question)
 
+    if archetype:
+        try:
+            from ask_mr.v2 import run_engine_v2, v2_enabled_for
+            from ask_mr.v2.adapter import v2_to_engine_result
+            from ask_mr.v2.registry import FROZEN_ENGINE_IDS
+
+            if archetype in FROZEN_ENGINE_IDS and v2_enabled_for(archetype):
+                out = run_engine_v2(archetype, kundli, question, wants_explain=wants_explain)
+                if out is not None:
+                    return v2_to_engine_result(out)
+        except Exception:
+            pass
+
     if archetype == "open_chart_qa":
         from ask_chart_open_qa import run_open_chart_qa
 
@@ -233,7 +246,15 @@ def run_mr_static_engine(
 def mr_engine_slice_meta(result: EngineResult) -> dict[str, Any]:
     """Admin/debug slice_meta for MR engine — includes positive/negative evidence split."""
     pos, neg, neu = result._finalize_evidence_split()
-    return {
+    checks = dict(result.checks or {})
+    step_audit: dict[str, Any] = {}
+    try:
+        from ask_mr.pipeline_audit import build_mr_step_audit_from_result
+
+        step_audit = build_mr_step_audit_from_result(result)
+    except Exception:
+        pass
+    meta: dict[str, Any] = {
         "slice": "mr_engine_v1",
         "topic": "marriage_and_relationship",
         "archetype": result.archetype,
@@ -244,8 +265,11 @@ def mr_engine_slice_meta(result: EngineResult) -> dict[str, Any]:
         "evidence_negative": neg,
         "evidence_neutral": neu,
         "ignore": list(result.ignore or []),
-        "checks": dict(result.checks or {}),
+        "checks": checks,
         "skip_llm": bool(result.skip_llm),
         "word_budget": int(result.word_budget or 55),
         "narrator_mode": "engine_facts_only",
     }
+    if step_audit:
+        meta["step_audit"] = step_audit
+    return meta

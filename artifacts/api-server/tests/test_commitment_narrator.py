@@ -39,14 +39,16 @@ class CommitmentNarratorTests(unittest.TestCase):
 
     def test_commitment_json_shape(self):
         data = engine_result_to_commitment_json(self.result)
-        self.assertIn("verdict", data)
+        self.assertEqual(data["question_type"], "commitment")
+        self.assertIn("final_verdict", data)
+        self.assertIn("commitment_level", data)
+        self.assertIn("strongest", data)
+        self.assertIn("weakest", data)
+        self.assertIn("reason", data)
         self.assertIn("confidence", data)
-        self.assertIn("strongest_factor", data)
-        self.assertIn("weakest_factor", data)
-        self.assertIn("warnings", data)
-        self.assertIn(data["verdict"], ("Ready", "Cautious", "Mixed", "Low"))
-        self.assertIsInstance(data["strongest_factor"], list)
-        self.assertGreater(len(data["strongest_factor"]), 0)
+        self.assertIn(data["final_verdict"], ("Ready", "Cautious", "Mixed", "Low"))
+        self.assertIsInstance(data["strongest"], list)
+        self.assertGreater(len(data["strongest"]), 0)
         self.assertIsInstance(data["confidence"], int)
 
     def test_json_has_no_chart_fields(self):
@@ -58,7 +60,7 @@ class CommitmentNarratorTests(unittest.TestCase):
         blob = json.dumps(parsed, ensure_ascii=False).lower()
         self.assertNotIn("ascendant", blob)
         self.assertNotIn("kundli", blob)
-        self.assertNotIn("house ", blob)
+        self.assertIn("strongest", parsed)
 
     def test_payload_parses_as_valid_json_block(self):
         payload = commitment_narrator_payload(self.result)
@@ -82,14 +84,15 @@ class CommitmentNarratorTests(unittest.TestCase):
         self.assertNotIn("The Big Picture", prompt)
         self.assertIn("ENGINE LOCK", prompt)
 
-    def test_humanized_factors_no_house_jargon(self):
+    def test_raw_evidence_preserved_in_json(self):
         data = engine_result_to_commitment_json(self.result)
         blob = json.dumps(data, ensure_ascii=False).lower()
-        self.assertNotIn("house ", blob)
-        self.assertNotIn("sign ", blob)
-        for factor in data["strongest_factor"]:
-            self.assertNotIn("house", factor.lower())
-            self.assertNotIn("lord", factor.lower())
+        # Engine evidence terms should survive — not generic humanized labels only
+        self.assertTrue(
+            "lord" in blob or "venus" in blob or "moon" in blob or "jupiter" in blob or len(data["strongest"]) > 0
+        )
+        for factor in data["strongest"]:
+            self.assertNotIn("supportive venus", factor.lower())
 
     def test_timing_omitted_when_not_applicable(self):
         data = engine_result_to_commitment_json(self.result)

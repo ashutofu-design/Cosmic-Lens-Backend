@@ -304,7 +304,8 @@ _ARCHETYPE_ANCHOR_RX: dict[str, re.Pattern[str]] = {
         r"(?ix)\b(loyal|trust|cheat|dhokha|dhoka|betray|vishwas|faithful|beimaan)\b"
     ),
     "commitment": re.compile(
-        r"(?ix)\b(commitment|committed|serious\s*relationship|casual|time\s*pass|long[\s-]*term)\b"
+        r"(?ix)\b(commitment|committed|serious\s*relationship|casual|time\s*pass|timepass|"
+        r"genuinely|genuine\s*intent|long[\s-]*term|shaadi\s*karega|shaadi\s*karegi)\b"
     ),
     "communication": re.compile(
         r"(?ix)\b(communication|baat\s*cheet|misunderstand|silent|silence|argument|jhagda|samajh\s*payeg\w*)\b"
@@ -675,11 +676,44 @@ def _domain_supported(question: str, domain: str) -> bool:
     return bool(rx.search(question or ""))
 
 
+def enforce_commitment_archetype_from_question(question: str, out: dict[str, Any]) -> bool:
+    """Raw question wins over LLM summary for commitment vs loyalty_trust misroutes."""
+    q = (question or "").strip()
+    if not q:
+        return False
+    try:
+        from ask_mr.classifier import classify_mr_archetype
+
+        classified = classify_mr_archetype(q)
+    except Exception:
+        return False
+    if classified != "commitment":
+        return False
+    current = str(out.get("mr_archetype") or "").strip().lower()
+    if current == "commitment":
+        return False
+    if current and current not in ("loyalty_trust", "loyalty", "trust"):
+        return False
+    out["mr_archetype"] = "commitment"
+    out["domain"] = out.get("domain") or "love"
+    out["is_timing"] = False
+    out["routing_override"] = "commitment_classifier_raw_question"
+    return True
+
+
 def _archetype_supported(question: str, archetype: str | None) -> bool:
     if not archetype:
         return True
     arch = str(archetype).strip().lower()
     q = question or ""
+    if arch == "loyalty_trust":
+        try:
+            from ask_mr.classifier import classify_mr_archetype
+
+            if classify_mr_archetype(q) == "commitment":
+                return False
+        except Exception:
+            pass
     if arch == "dating_courtship" and re.search(
         r"(?ix)\b(dhokha|dhoka|betray|cheat|cheating|loyal|trust|vishwas|faithful|beimaan)\b",
         q,
@@ -1129,9 +1163,22 @@ def repair_llm_intent(question: str, result: dict[str, Any] | None) -> dict[str,
         mr_arch = None
         repaired = True
 
-    if mr_arch and not _archetype_supported(combined, str(mr_arch)):
+    if mr_arch and not _archetype_supported(q, str(mr_arch)):
         mr_arch = None
         repaired = True
+
+    if domain in ("marriage", "love") and not mr_arch:
+        try:
+            from ask_mr.classifier import classify_mr_archetype
+
+            _cls = classify_mr_archetype(q)
+            if _cls and _cls != "general_mr":
+                mr_arch = _cls
+                if _cls == "commitment":
+                    out["routing_override"] = "commitment_classifier_raw_question"
+                repaired = True
+        except Exception:
+            pass
 
     # partner_nature without any partner/in-law anchor → never trust
     if str(mr_arch or "").lower() == "partner_nature" and not _PARTNER_SUBJECT_RX.search(combined):
@@ -1229,6 +1276,19 @@ def repair_llm_intent(question: str, result: dict[str, Any] | None) -> dict[str,
         repaired = repaired or bool(out.get("timing_reconciled"))
     except Exception:
         pass
+
+    if enforce_commitment_archetype_from_question(q, out):
+        domain = str(out.get("domain") or domain)
+        mr_arch = out.get("mr_archetype")
+        repaired = True
+
+    if (
+        str(out.get("mr_archetype") or "").lower() == "commitment"
+        and str(result.get("mr_archetype") or "").lower() in ("loyalty_trust", "loyalty", "trust")
+        and not out.get("routing_override")
+    ):
+        out["routing_override"] = "commitment_classifier_raw_question"
+        repaired = True
 
     src = str(out.get("source") or "")
     if reject or (src == "llm" and repaired and domain == "general" and not mr_arch):

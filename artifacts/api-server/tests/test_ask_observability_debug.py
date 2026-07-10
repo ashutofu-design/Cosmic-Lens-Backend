@@ -27,6 +27,9 @@ class TestAskObservabilityDebug(unittest.TestCase):
             answer_text="Communication strong hai.",
         )
         self.assertTrue(obs["routing_warning"])
+        self.assertIn("user_question", obs)
+        self.assertIn("routing_decision", obs)
+        self.assertIn("astrology_checks", obs)
         self.assertEqual(len(obs["question_dna_pipeline"]), 15)
         self.assertEqual(obs["engine_execution"]["final_score"], 84)
         self.assertTrue(obs["has_v2_rules"])

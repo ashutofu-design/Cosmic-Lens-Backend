@@ -9,7 +9,8 @@ from typing import Any
 
 _TIMING_RX = re.compile(
     r"(?ix)\b(kab|when|kitne\s+saal|kis\s+saal|kis\s+umar|"
-    r"milega|milegi|hoga|hogi|timing|muhurat|date|month|year)\b"
+    r"milega|milegi|hoga|hogi|timing|muhurat|date|month|year|"
+    r"samay|shubh\s*samay|abhi|chal\s+raha|chalega|phase|window|period)\b"
 )
 
 _NATIVE_LOVE_CHART_RX = re.compile(
@@ -86,6 +87,21 @@ def apply_understanding_routing(
     except Exception:
         pass
 
+    try:
+        from ask_love.timing_registry import is_love_timing_question
+
+        if is_love_timing_question(combined, out):
+            out["domain"] = out.get("domain") or "love"
+            out["is_timing"] = True
+            if str(out.get("mr_archetype") or "").strip().lower() in (
+                "one_sided_love",
+                "general_mr",
+                "partner_nature",
+            ):
+                out["mr_archetype"] = "dating_courtship"
+    except Exception:
+        pass
+
     if is_native_love_chart_question(combined):
         out["domain"] = "love"
         out["is_timing"] = False
@@ -117,6 +133,24 @@ def apply_understanding_routing(
         pass
 
     try:
+        from ask_travel.timing_registry import is_travel_timing_question
+
+        if is_travel_timing_question(combined, out):
+            out["domain"] = out.get("domain") or "travel"
+            out["is_timing"] = True
+    except Exception:
+        pass
+
+    try:
+        from ask_property.timing_registry import is_property_timing_question
+
+        if is_property_timing_question(combined, out):
+            out["domain"] = out.get("domain") or "property"
+            out["is_timing"] = True
+    except Exception:
+        pass
+
+    try:
         from ask_intent_fidelity import infer_primary_domain, _upgrade_domain_archetypes
 
         dom = str(out.get("domain") or "general").strip().lower()
@@ -143,10 +177,24 @@ def apply_understanding_routing(
     except Exception:
         pass
 
+    try:
+        from ask_intent_fidelity import enforce_commitment_archetype_from_question
+
+        enforce_commitment_archetype_from_question(question, out)
+    except Exception:
+        pass
+
     if summary:
         out["question_summary"] = summary
         out["question_meaning"] = summary
     out["routing_from"] = "understanding"
+    try:
+        from ask_intent_fidelity import reconcile_question_type
+
+        _rec = reconcile_question_type(combined, out, mutate=True)
+        out = _rec["intent"]
+    except Exception:
+        pass
     return out
 
 
@@ -215,6 +263,21 @@ def classify_and_route_ask(
         or res.get("health_archetype")
     )
     admin["routed_timing"] = bool(res.get("is_timing"))
+
+    try:
+        from ask_master_router import finalize_ask_route
+
+        _mr = finalize_ask_route(
+            q,
+            understanding=admin,
+            llm_intent=res,
+            llm_intent_admin=admin,
+        )
+        res["is_timing"] = bool(_mr.is_timing)
+        admin["routed_timing"] = bool(_mr.is_timing)
+        admin["master_route"] = _mr.to_dict()
+    except Exception:
+        pass
 
     return {
         "llm_intent": llm_intent,

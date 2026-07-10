@@ -327,7 +327,7 @@ values or life-goals fit, "hum compatible hain", thinking/personality match
    - relationship_remedies: upay/mantra/puja for love/relationship/marriage issues
    - general_mr: overall marriage quality/happiness (NOT dedicated compat angles), OR whether \
 the partner will SUPPORT the native's career / life goals / decisions
-   - loyalty_trust: loyalty, trust, cheating, commitment
+   - loyalty_trust: loyalty, trust, cheating, betrayal (NOT commitment/timepass — use commitment)
    - emotional_attachment: emotional bonding / feelings depth
    - patchup: reconciliation, ex returning
    - chemistry: attraction, romance, spark

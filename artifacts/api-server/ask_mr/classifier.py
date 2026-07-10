@@ -54,6 +54,11 @@ def classify_mr_archetype(question: str) -> str:
             return "manglik"
         if re.search(r"प्रेम\s*विवाह|love\s*marriage|arranged", q, re.I):
             return "love_vs_arranged"
+        if re.search(
+            r"कमिट|टाइम\s*पास|टाइमपास|गेन्युइन|समर्पण|सिर्फ\s*टाइम",
+            q,
+        ) and not re.search(r"विश्वास|वफादार|धोख", q):
+            return "commitment"
         if re.search(r"विश्वास|वफादार|धोख", q) and not re.search(r"आत्मविश्वास", q):
             return "loyalty_trust"
         if re.search(r"आत्मविश्वास|सीमा|boundary", q, re.I):
@@ -325,9 +330,9 @@ def classify_mr_archetype(question: str) -> str:
     # --- Commitment intent (before loyalty/trust — no betrayal keywords) ---
     if re.search(
         r"(?ix)\b("
-        r"commitment|committed|serious\s*relationship|casual\s*relationship|time\s*pass|"
-        r"long[\s-]*term\s*intent|shaadi\s*karega|shaadi\s*karegi|ready\s+for\s+commit|"
-        r"genuine\s*intent|life\s*partner\s*view"
+        r"commitment|committed|serious\s*relationship|casual\s*relationship|time\s*pass|timepass|"
+        r"genuinely|genuine\s*intent|long[\s-]*term\s*intent|shaadi\s*karega|shaadi\s*karegi|"
+        r"ready\s+for\s+commit|life\s*partner\s*view"
         r")\b",
         q,
     ) and not re.search(

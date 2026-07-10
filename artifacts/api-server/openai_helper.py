@@ -5274,6 +5274,16 @@ def _raw_kp_block(kundli: Any) -> str:
         return ""
 
 
+def _is_batch_concise_mode_safe() -> bool:
+    """Batch concise flag — optional module; never crash Ask if ask_batch_runner missing."""
+    try:
+        from ask_batch_runner import is_batch_concise_mode
+
+        return bool(is_batch_concise_mode())
+    except Exception:
+        return False
+
+
 def _attach_admin_llm_context(result: dict, **kwargs) -> dict:
     """Attach admin-only LLM debug payload (stripped before mobile response)."""
     if not isinstance(result, dict):
@@ -9186,11 +9196,10 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
     try:
         if _mr_engine_narrator:
-            from ask_batch_runner import is_batch_concise_mode
             from ask_mr.narrator import build_mr_engine_narrator_system_prompt
 
             _wb_mr = int((dcr_love_meta or {}).get("word_budget") or 55)
-            _batch_concise = is_batch_concise_mode()
+            _batch_concise = _is_batch_concise_mode_safe()
             system_prompt = build_mr_engine_narrator_system_prompt(
                 chart_text=chart_text,
                 reply_lang=eff_lang,
@@ -9237,7 +9246,6 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
     except Exception as _sp_exc:
         print(f"[raw_passthrough] system_prompt build failed: {_sp_exc}", flush=True)
         if _mr_engine_narrator:
-            from ask_batch_runner import is_batch_concise_mode
             from ask_mr.narrator import build_mr_engine_narrator_system_prompt
 
             system_prompt = build_mr_engine_narrator_system_prompt(
@@ -9250,7 +9258,7 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                 question_focus=_mr_question_focus,
                 user_intent=_user_intent_hint,
                 open_chart_qa=_open_chart_qa,
-                concise=is_batch_concise_mode(),
+                concise=_is_batch_concise_mode_safe(),
             )
         else:
             system_prompt = _build_universal_ask_system_prompt(
@@ -9805,13 +9813,12 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
         _answer_fidelity: dict = {}
         if _mr_engine_narrator:
             from ask_cosmo_narrator import enforce_cosmo_engine_answer
-            from ask_batch_runner import is_batch_concise_mode
 
             try:
                 text = enforce_cosmo_engine_answer(
                     text,
                     wants_explain=wants_explain,
-                    concise=is_batch_concise_mode(),
+                    concise=_is_batch_concise_mode_safe(),
                 )
             except TypeError:
                 text = enforce_cosmo_engine_answer(

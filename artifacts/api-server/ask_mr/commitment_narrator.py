@@ -286,7 +286,11 @@ def build_commitment_narrator_length_block(
     """Commitment-specific narrator block — plain paragraphs, not Cosmo section headers."""
     from ask_cosmo_narrator import cosmo_ask_word_target
 
-    lo, hi = cosmo_ask_word_target(wants_explain=wants_explain, concise=concise)
+    try:
+        lo, hi = cosmo_ask_word_target(wants_explain=wants_explain, concise=concise)
+    except TypeError:
+        # Older VPS ask_cosmo_narrator.py without batch concise kwarg.
+        lo, hi = cosmo_ask_word_target(wants_explain=wants_explain)
     rules = f"\n{extra_rules.strip()}\n" if extra_rules.strip() else ""
     if concise:
         structure = """

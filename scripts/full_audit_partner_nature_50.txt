@@ -1,0 +1,653 @@
+FULL AUDIT 50 — http://187.127.174.55:8080
+Demo user id=19
+
+
+========================================================================
+[1/50] Mera partner kaisa insaan hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tera partner ek lively, baat-cheet karne wala insaan hoga, jo naturally social vibes deta hai. Lekin unke emotional aur sochne ka tareeka thoda complex hai, kabhi kabhi woh apni feelings chupane ya doori banaye rakhne wale hain. Unki mohabbat me jo presence hai, woh thodi royal aur proud wali hai, thoda self-respecting aur apne andaaz se pyaar dikhate hain. --- **Kyun aisa hai 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[2/50] Mere partner ki personality kaisi hogi?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapke partner ki social vibe kaafi lively aur baat-cheet pasand karne wali hogi kyunki unka nature Gemini jaisa hai. Unka emotional tone thoda complex hai, kabhi kabhi feeling confuse ya secretive hai, par wo emotionally deeply involved rahte hain. Unka presence kaafi charming hai, ek tarah se warm aur expressive, jo dusron ko attract karta hai. --- **Kyun aisa hai (deep breakd
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[3/50] Mere partner ka nature kaisa hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapke partner ki social style lively aur expressive hogi, matlab communication aur conversations mein wo kaafi mazakiya aur adaptable rahenge. Lekin unka mindset relationship ko leke emotionally thoda complex aur deeply introspective hoga, kabhi-kabhi chhupi feelings ya misunderstandings aasakti hain. Unki overall presence thodi royal aur confident hai, jo logon ko attract kart
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[4/50] Kya mera partner caring hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+Haan, aapka partner caring hoga kyunki wo emotionally attentive aur nurturing hai, jo chhoti chhoti baaton ka dhyan rakhta hai. Wo apni unique style mein pyaar dikhata hai, bas kabhi kabhi communication mein thoda patience chahiye hota hai.
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[5/50] Kya mera partner loyal hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan, tumhara partner generally loyal rehne ki koshish karega, lekin relationship mein clarity aur boundaries honi chahiye warna trust par thoda stress aa sakta hai. --- **Kyun aisa hai (deep breakdown)** Tumhare partner ki loyalty aur trust kaafi partly strong hai kyunki unka pyar dikhane ka tarika heartfelt hai, wo apne jazbaat ko express karne ki koshish karte hain. Unke dil
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[6/50] Kya mera partner honest hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapka partner social style mein baat-cheet aur samajhdari se apni baat rakhta hai, magar kabhi kabhi uska dimaag thoda uljhan mein reh sakta hai, jo honesty ko thoda challenge karta hai. Wohi sachai se sidha bolta hai, jisse samajhna aasan hota hai ki wo jhoot nahi bolega. --- **Kyun aisa hai (deep breakdown)** Aapka partner Gemini jaisa hai, jo social situation mein bohot comm
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[7/50] Kya mera partner trustworthy hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapka partner normally social aur communication mein active hoga, par bharose ke mamle mein thodi testing situation reh sakti hai. Emotional level pe feelings complex hain, aur soch thodi hidden challenges dikhaati hai. Overall, partner ki presence impress karne wali hai, lekin bharose me patience jaruri hai. --- **Kyun aisa hai (deep breakdown)** Partner ka social style mila j
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[8/50] Kya mera partner emotionally mature hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapke partner ki emotional maturity mein thodi complexity hai. Unka social style toh friendly aur baat-cheet wala hai, lekin unka emotional mindset thoda guarded aur introspective hota hai. Samajhdari mein patience ki zarurat rehti hai. --- **Kyun aisa hai (deep breakdown)** Aapka partner naturally logon se baat karne mein comfortable rehta hai, wo social scene mein lively aur 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[9/50] Kya mera partner responsible hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tera partner ekdum social aur expressive insan hai, lekin responsibility mein thodi testing chal rahi hai. Wo emotionally kaafi sensitive hai lekin apne mindset aur dayitva mein kabhi kabhi uljhan hoti hai, jisse wo apne farz bade pyaar se nibhaata hai par challenges ke saath. --- **Kyun aisa hai (deep breakdown)** Tera partner ka social style kaafi lively hai, wo baat-cheet au
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[10/50] Kya mera partner supportive hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapke partner ka social style bahut friendly aur baat-cheet waala hai, lekin unka dimaag kabhi kabhi thoda complicated hai, jis se partnership mein understanding pe thodi mushkil aa sakti hai. Overall, wo apni unique style se aapko attract karenge, par thodi patience rakhni hogi. --- **Kyun aisa hai (deep breakdown)** Aapke partner ka nature Gemini jaisa hai, matlab wo social s
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[11/50] Kya mera partner understanding hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Bhai, tumhare relationship mein understanding hai, par iske liye clear aur honest baat-cheet bahut zaruri hai. Thoda sabr aur patience rakhna padega jab baat thodi tough ho. --- **Kyun aisa hai (deep breakdown)** Tumhare partner ke saath communication thoda tricky hai kyunki kuch energies relationship mein emotional distance ya frustration laa sakti hain. Matlab, kabhi-kabhi ba
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[12/50] Kya mera partner romantic nature ka hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapka partner social aur expressive hai, thoda intellectual aur baatcheet pasand karne wala. Lekin emotions mein wo kabhi kabhi thoda guarded ya privacy maintain karne wala hai. Uska romantic andaaz practical aur steady hai, jisme pyar dheere-dheere badhta hai, flashy gestures se zyada. --- **Kyun aisa hai (deep breakdown)** Partner ka social andaaz Gemini jaisa hai, matlab wo 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[13/50] Kya mera partner practical hoga ya emotional?
+========================================================================
+
+=== ANSWER (first 400) ===
+Tera partner dono practical aur emotional dono ho sakta hai. Wo apni feelings ko samajhta hai aur express bhi karta hai, lekin decisions mein logical soch bhi rakhta hai. Kabhi wo zyada emotional hota hai, toh kabhi practical approach leta hai. Is tarah wo balance bana ke chalna pasand karta hai.
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[14/50] Kya mera partner introvert hoga ya extrovert?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapka partner ek mixed personality rakhta hai, woh Gemini jaise social aur expressive logon ki tarah dikhte hain, jo baat cheet karna pasand karte hain lekin sirf apne close logon ke saath. Matlab, woh bilkul extrovert nahin hai, lekin pure introvert bhi nahi; ek tarah se situational ambivert hai. --- **Kyun aisa hai (deep breakdown)** Gemini ke sign ke hisaab se, partner ki so
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[15/50] Kya mera partner calm nature ka hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapka partner social aur baatcheet mein kaafi lively hoga, lekin unka emotional nature thoda sensitive aur kabhi-kabhi complex hai. Wo bade soch-vichar wale hain, lekin unka behavior hamesha calm nahi rehta; patience aur samajhdari se chalna zaroori hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, partner ka overall social vibe bahut friendly aur expressive hai, matlab 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[16/50] Kya mera partner short-tempered hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Nahi bhai, tumhara partner zyada chhota gussa karne wala nahi hoga, par emotional reactions thode intense hain. Wajah yeh ki wo apni feelings ko kabhi kabhi deep level par mehsoos karta hai, jahan uska dimaag thoda overthink karta hai. --- **Kyun aisa hai (deep breakdown)** Tumhare partner ka social style baat-cheet aur casual masti mein rehta hai, matlab wo logon ke saath frie
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[17/50] Kya mera partner gusse wala hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan, tumhara partner thoda gusse wala nature rakhta hai, matlab kabhi-kabhi jaldi garam ho jaata hai. Lekin yeh jhatka zyada der tak nahi rehta; baat-cheet se woh apne gusse ko control kar leta hai. --- **Kyun aisa hai (deep breakdown)** Tumhare partner ki social style kaafi lively aur expressive hai, jaisa ki Gemini sign dikhata hai. Woh logon ke saath baat-cheet mein kaafi f
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[18/50] Kya mera partner patient hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Bhai, tumhara partner ka patience level medium hi rahega, thoda social aur communicative nature ke sath. Lekin unka mindset aur partnership vibe thoda complex hai, jo kabhi kabhi testing hai sabr ke nazariye se. --- **Kyun aisa hai (deep breakdown)** Tumhara partner ka nature zyada tar Gemini jaisa hai, matlab vo logon se baat-cheet karna pasand karte hain, social hote hain,hle
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[19/50] Kya mera partner kind-hearted hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tera partner social aur baatcheet mein kaafi active hoga, thoda curious type bhi, jo logon se connect karna pasand karta hai. Emotions thode deep hain, par kabhi kabhi uska sochne ka tareeka thoda complex ya guarded hota hai, jo is baat ko thoda affect karta hai ki wo kitna openly dayalu dikhe. --- **Kyun aisa hai (deep breakdown)** Tera partner Gemini jaisa social nature rakht
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[20/50] Kya mera partner generous hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapka partner social aur baatcheet pasand karta hai, par uski generosity thodi guarded hai, kyunki uska dimaag kabhi-kabhi kuch chize chhupane ya insecurities rakhne wala hota hai. Emotional taur par wo sensitive hai, magar apni feelings sabke saamne khul ke nahi dikhata. --- **Kyun aisa hai (deep breakdown)** Aapke partner ki social nature badi expressive hai, aur wo communica
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[21/50] Kya mera partner selfish hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tera partner apne social style mein kaafi baat-cheet ya interaction mein active rahega, matlab thoda expressive aur adaptable hai. Par uska apne emotions aur relationship ka approach thoda complex hai, jo kabhi kabhi usko zyada apne hisaab se chalne wala bana sakta hai. --- **Kyun aisa hai (deep breakdown)** Partner ka social vibe Gemini jaisa hai, matlab woh logon ke saath baa
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[22/50] Kya mera partner dominating hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapke partner ka social andaaz zyada baat-cheet aur communication wala hai, matlab wo zyada openly apni baat rakhte hain. Lekin unka mindset thoda gehra aur complex challenges se juda hai, jisme kabhi kabhi dominance ka rang dikh sakta hai. Unki overall presence me ek royal aur confident vibe hai, jo naturally attract karti hai. --- **Kyun aisa hai (deep breakdown)** Aapke part
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[23/50] Kya mera partner controlling nature ka hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tumhare partner ka nature zyada controlling nahi hai, balki wo zyada social aur baat-cheet mein comfortable hai. Par kuch cheezein hain jo unki soch aur behavior ko thoda cautious aur private rakhte hain, isliye wo kabhi kabhi apne jazbaat ko zyada khula nahi karte. --- **Kyun aisa hai (deep breakdown)** Partner ki social vibe Gemini ki tarah hai, matlab wo zyada open, friendly
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[24/50] Kya mera partner possessive hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan, aapke partner mein possessiveness ka thoda element zaroor hai, jo kabhi kabhi unka behaviour sensitive aur react karne wala bana sakta hai. Yeh unki feelings mein thoda tension aur unpredictability laata hai, isliye unhe thoda space aur samajhna zaroori hai. --- **Kyun aisa hai (deep breakdown)** Aapke partner ka mann kabhi kabhi jaldi badal jata hai jab wo stress mein ho
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[25/50] Kya mera partner jealous nature ka hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Bhai, tumhara partner thoda sensitive aur jealous nature ka hai, lekin ye jealousy ekdum openly nahin aati; wo zyada turn kabhi kabhi apne emotions ko chupake rakhta hai, par phir stress me aake thoda zyada react kar sakta hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, uska mann thoda complex hai, matlab wo apne emotions ko turant samajh nahi pata, aur jab tension ya 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[26/50] Kya mera partner insecure hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapke partner ki emotional duniya mein insecurity zyada nahi hai; unka apne aap par bharosa medium level ka hai. Matlab, wo zyada unstable nahi hote, bas thoda sa dhyaan chahiye ki dono ki izzat bani rahe relationship mein. --- **Kyun aisa hai (deep breakdown)** Partner ki self-worth ya apne value ko lekar koi badi kamzori nahi milti. Matlab unka apne aap par ek manageable bhar
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[27/50] Kya mera partner overprotective hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapke partner ki social vibe bahut expressive aur baat-cheet mein open rehti hai, kyunki unka partner ka nature Gemini jaisa hai. Emotional side thodi sensitive hai, par mindset thoda cautious aur internal struggle wala hai. Overall woh apni love life mein confident aur proud rehte hain, lekin overprotective kehna thoda tricky hai. --- **Kyun aisa hai (deep breakdown)** Gemini 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[28/50] Kya mera partner independent hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tera partner apne social style mein kaafi friendly, baat-cheet karne wala aur samajhdar hoga, lekin uske relationship ke dimaag mein thodi complexity aur emotional intensity rehti hai. Independence ke mamle mein, vo thoda apni feelings aur decisions mein alag tareeke se kaam karta hai, jisme kabhi kabhi apni jagah par rehne ki zarurat mehsoos karta hai. --- **Kyun aisa hai (dee
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[29/50] Kya mera partner ambitious hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan, tumhara partner ambitious hai, par unki soch kabhi kabhi thodi cautious ya phir dusron ke emotions ko samajhne wali hoti hai. Wo aage badhne ke liye apni feelings ko kabhi kabhi chupakar chalenge, matlab unka ambition andar se strong hai, lekin dikhawa bilkul alag hai. --- **Kyun aisa hai (deep breakdown)** Tumhare partner ka social style lively aur expressive hai, wo log
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[30/50] Kya mera partner career-oriented hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapke partner ki professional life mein thodi mixed energy hai, matlab wo career-oriented hain, lekin unka focus sirf career par hi nahi, zindagi ke dusre areas par bhi rehega. --- **Kyun aisa hai (deep breakdown)** Dekho, partner ke career ke area mein koi khas zabardast push ya obstacles nahi dikh rahe, matlab unke paas career ko lekar koi badi dikkat ya aasani ka pattern sup
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[31/50] Kya mera partner financially responsible hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+Haan, tumhara partner financially responsible ho sakta hai, lekin kabhi kabhi wo thoda inconsistent ya distracted ho jata hai paise sambhalne mein. Wo apni feelings aur soch mein thoda cautious hai, isliye patience aur achha communication zaroori hai dono ke liye. Agar milke planning karoge toh financial matters smoothly chal sakte hain.
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[32/50] Kya mera partner family-oriented hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapke partner ka nature thoda mix hai, unka social vibe lively aur baatein karne wala hai, lekin family ke mamle mein thodi complexities aur challenges hain. Wo emotionally thode sensitive hain, par unka dimaag thoda alag jagah focused rehta hai, jo kabhi partnerships mein patience ki zarurat laata hai. --- **Kyun aisa hai (deep breakdown)** Aapke partner ka social style Gemini
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[33/50] Kya mera partner family ko importance dega?
+========================================================================
+
+=== ANSWER (first 400) ===
+Haan, aapka partner family ko importance dega, lekin apne tareeke se aur kabhi kabhi thoda emotionally complex ho sakta hai. Wo relationship mein baat cheet aur samajhdaari ko pasand karta hai, isliye family ke liye uska connection strong rahega. Bas aapko thoda patience aur samajhdaari se uski feelings ko samajhna hoga.
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[34/50] Kya mera partner religious ya spiritual hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapke partner mein thodi spiritual aur dharmik touch zaroor hai, lekin wo zyada openly religious ya strictly spiritual type nahi hote. Unka dimaag practical aur deep hota hai, par wo apni individuality aur creative side pe bhi focus karte hain. --- **Kyun aisa hai (deep breakdown)** Aapke partner ka social andaaz kaafi lively aur baatcheet mein tez hota hai, matlab wo logon se 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[35/50] Kya mera partner open-minded hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tumhara partner ka social style kaafi lively aur curious hai, jo Gemini ki tarah naturally open-minded soch ko dikhata hai. Lekin unki soch aur approach thodi complex aur kabhi kabhi chhupne wali reh sakti hai, jo unke relationship mindset ko thoda cautious aur intense banata hai. Unki presence love mein expressive aur proud hoti hai, lekin thoda dhairya aur samajhdari chahiye.
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[36/50] Kya mera partner conservative hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapka partner zyada conservative nahi hoga; uska nature zyada social aur expressive hai, lekin thoda emotional complexity aur cautiousness bhi dikhega relationship mein. --- **Kyun aisa hai (deep breakdown)** Aapke partner ki social vibe Gemini type ki hai, matlab wo baat-cheet mein fluent aur curious hote hain, naye ideas ko samajhne wale hote hain. Wo log generally open-minde
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[37/50] Kya mera partner social hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan, tumhara partner social hai, kyunki uska nature kaafi expressive aur baat-cheet mein open rehta hai, khas kar tab jab wo logo ke beech ho. Lekin, iske saath-saath wo kabhi-kabhi apne emotions ko thoda private bhi rakhta hai. --- **Kyun aisa hai (deep breakdown)** Tumhare partner ka social style Gemini sign jaisa hai, jiska matlab hai ki wo logon se milna-julna pasand karta
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[38/50] Kya mera partner private nature ka hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapka partner thoda private nature ka hai, par wo bina zyada chhupane ke ek gehri soch aur apne personal space ki kadar karta hai. --- **Kyun aisa hai (deep breakdown)** Aapke partner ki personality mein ek natural blend hai jahan wo apne kaam aur jazbat ko generally chupane se zyada apne andar santulit rakhta hai. Wo zyada open nahi hote, par iska matlab ye nahi ki wo bilkul c
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[39/50] Kya mera partner secretive hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapke partner ka social style kafi expressive aur baatein share karne wala hai kyunki unka vibe Gemini jaisa hai, jo khula aur milansaar hota hai. Lekin unka dimaag aur soch zyada chupane wali hai, thodi guptachari wali quality lekar aati hai, jo relationship mein kuch raaz rakhne ka element la sakta hai. Isliye, haan, wo kuch secretive ya apni feelings aur baatein chhupane wal
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[40/50] Kya mera partner flirt karne wala hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan dost, tera partner definitely flirt karne wala type hai. Uska pyaar aur romance ka andaaz thoda charming, bold aur confident rahega, jo naturally logon ko attract karta hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, uski personality me ek strong mix hai jisme passion aur communication dono achhi tarah se balance hote hain. Matlab, wo flirt karne me direct aur con
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[41/50] Kya mera partner faithful rahega?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapka partner loyal hone ki koshish karega, lekin trust mein clarity aur boundaries bahut zaroori hain, warna misunderstandings aasan hain. Relationship mein emotional distance ya kabhi kabhi sharp words aake rishtay ko test kar sakte hain. --- **Kyun aisa hai (deep breakdown)** Aapke partner ke andar loyalty aur affection ka strong element hai, jaise ki unka pyaar aur trust di
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[42/50] Kya mera partner manipulative hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapka partner ek active aur baat-cheet mein tez nature ka hoga, lekin unka sochne ka tareeka thoda complex aur ghuma-phira hai, isliye kabhi-kabhi unke behavior mein thodi manipulation wali baat samajh aa sakti hai. Emotional level par wo sensitive hain, par mindset thoda hidden motives wala hai. --- **Kyun aisa hai (deep breakdown)** Partner ka social style Gemini jaisa hai, m
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[43/50] Kya mera partner toxic nature ka hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tere partner ka nature thoda challenging hai, jisme toxic traits bhi dikh sakte hain. Unke behavior mein emotional distance aur conflicts zyada dekhe ja sakte hain, jahan misunderstandings aur temper ke issues aate hain. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, unke nature mein conflicts aur emotional doori dono hone ke chances hain. Wo jaldi gussa kar sakte hain ya 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[44/50] Kya mera partner abusive ho sakta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+Haan, tera partner kabhi kabhi emotionally intense aur complex ho sakta hai, jisse misunderstandings ya chhupa gussa aa sakta hai, jo abusive behavior jaisa lag sakta hai. Isliye patience aur clear communication zaruri hai, aur agar zarurat lage toh boundaries set karna bhi important hai.
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[45/50] Kya mera partner egoistic hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tumhara partner jyada egoistic nahi dikhta. Uska social style lively aur baatcheet wala hai, par sochne aur relationship approach thoda complex aur intense hai, jo kabhi egocentric hai. --- **Kyun aisa hai (deep breakdown)** Uska social behaviour bilkul Gemini jaisa hai, matlab baahar se friendly, adaptive aur communication me tez. Aise log generally apne ideas openly share kar
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[46/50] Kya mera partner decision-maker hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tera partner decision-making mein thoda complex hai. Uska social style zyada bolne-wala, ideas share karne-wala rehta hai, par mindset aur decision-making mein emotional aur thoda cautious nature dikhega, jo kabhi-kabhi delays ya uljhan bhi la sakta hai. --- **Kyun aisa hai (deep breakdown)** Partner ka social vibe Gemini jaisa hai, matlab wo logon se baatein karna pasand karta
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[47/50] Kya mera partner compromise karne wala hoga?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapka partner social terms mein kaafi expressive aur baat-cheet khol ke karta hai kyunki unka social andaaz Gemini jaisa hai. Lekin relationship mindset mein thoda complex challenges hain jo kabhi kabhi samjhauta karne mein delay ya confusion la sakte hain. Emotional tone thodi sensitive aur kabhi-kabhi jazbaat se judi uljhan rakhta hai, jo compromise mein rukaavat banta hai. U
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[48/50] Kya mera partner meri respect karega?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan, tumhara partner respect dikhata hai lekin thoda alag tareeke se, zyada emotional aur baaton ke zariye. Wo samajhdar aur baatcheet mein mehnat karta hai, par partner ki soch aur approach thodi complex aur privately guarded hai. --- **Kyun aisa hai (deep breakdown)** Tumhara partner social style kaafi lively aur expressive hai, jaise ek baatcheet-chhedne wala dost jo har wa
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[49/50] Kya mera partner mujhe motivate karega?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tera partner generally social, baatein karne wala aur adaptable hai, lekin uska mindset aur approach thoda complex hai jo kabhi kabhi motivation mein delay ya confusion laa sakta hai. Emotionally vo connected hai par support ke mamle mein thoda struggle hota hai. --- **Kyun aisa hai** Tera partner logon ke saath baatcheet aur samajhne mein tez hai, matlab vo easily approachable
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[50/50] Overall, mere partner ka overall character aur personality kaisi hogi?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tera partner ek social aur milansaar insaan hai, jo baat cheet aur dosti ko bahut importance deta hai. Emotions mein thodi complexity hai, kyunki unka sochne ka tareeqa kabhi kabhi thoda intense aur private hai. Unki mohabbat aur presence mein confidence ke saath ek alag charm bhi rehta hai, jo naturally attract karta hai lekin patience ki zarurat zaroor hogi. --- **Kyun aisa h
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']

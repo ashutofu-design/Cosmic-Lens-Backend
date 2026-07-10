@@ -1,0 +1,53 @@
+API: http://187.127.174.55:8080
+Demo user id=19
+Chart planets=9
+Asking: 'Kya meri life me serious relationship ka yog hai?'
+Stream done � topic=static source=mr_engine_then_llm
+Admin row id=f07fadc5-e441-4023-b095-c4b2578ab008
+
+=== ANSWER ===
+**The Big Picture** Teri life me serious relationship ke chances hain, par kuch challenges bhi hain jo relationship ki quality aur stability par asar daal sakte hain. Commitment ke liye thoda patience aur samajhdaari chahiye hogi. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, ek positive baat yeh hai ki tere paas wisdom aur blessings ka element hai jo love life me thodi maturity laata hai, matlab tu apne partners ke saath samajhdari se deal kar sakta hai. Lekin dikkat yeh hai ki tere relationship wale angle me kuch tough conditions bhi hain. Tera communication style kabhi kabhi complicated hai, jis se misunderstandings ho sakti hain. Saat hi, thoda distance aur delays bhi aate rahenge, matlab relationship me kabhi kabhi thodi doori ya control maintain karne ki zarurat padegi. Kabhi kabhi gusse ya temper se chhoti moti problems ho sakti hain, jinki wajah se relationship me repair karne ki zarurat padti hai. Iska matlab yeh ke tu commitment chahta hai, par uske liye samay aur mehnat dono deni padengi. Emotions thode mixed rahenge, toh lazmi hai ki feelings ko express karne me clearly bane rehna. Passion toh hai, par usse balance karna jaruri hai warna relationship me fights ya disagreements aane aayein ge. --- **Ab kya karein (practical)** * Apne communication style pe dhyan de, especially jab partner ke saath baat karein, khulkar aur patience ke saath. * Relationship me kabhi kisi bhi problem ko ignore na karein; issues aayein toh unhe jaldi solve karne ki koshish karein. * Apne temper ko control karna seekhein, especially jab stress ho ya arguments ho rahe hon. * Apni expectations realistic rakhein aur partner ki feelings ko respect karein. > Serious relationship ke liye discipline aur samay dena zaruri hota hai, bina patience ke relationship ko majbooti nahi milti. Tujhe apne efforts consistent rakhne honge tabhi success milegi.
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | path=engine_then_llm
+admin_engine= | archetype=None
+
+=== CHART EVIDENCE ===
+evidence_ok=False | locked_pick=None
+  WARN: NO_ADMIN_ENGINE � admin row me engine slice missing
+
+=== AUDIT ===
+{
+  "question": "Kya meri life me serious relationship ka yog hai?",
+  "api_base": "http://187.127.174.55:8080",
+  "ask_topic": "static",
+  "ask_source": "mr_engine_then_llm",
+  "engine_tag": "ans-engine",
+  "answer_path": "engine_then_llm",
+  "answer_text": "**The Big Picture** Teri life me serious relationship ke chances hain, par kuch challenges bhi hain jo relationship ki quality aur stability par asar daal sakte hain. Commitment ke liye thoda patience aur samajhdaari chahiye hogi. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, ek positive baat yeh hai ki tere paas wisdom aur blessings ka element hai jo love life me thodi maturity laata hai, matlab tu apne partners ke saath samajhdari se deal kar sakta hai. Lekin dikkat yeh hai ki tere relationship wale angle me kuch tough conditions bhi hain. Tera communication style kabhi kabhi complicated hai, jis se misunderstandings ho sakti hain. Saat hi, thoda distance aur delays bhi aate rahenge, matlab relationship me kabhi kabhi thodi doori ya control maintain karne ki zarurat padegi. Kabhi kabhi gusse ya temper se chhoti moti problems ho sakti hain, jinki wajah se relationship me repair karne ki zarurat padti hai. Iska matlab yeh ke tu commitment chahta hai, par uske liye samay aur mehnat dono deni padengi. Emotions thode mixed rahenge, toh lazmi hai ki feelings ko express karne me clearly bane rehna. Passion toh hai, par usse balance karna jaruri hai warna relationship me fights ya disagreements aane aayein ge. --- **Ab kya karein (practical)** * Apne communication style pe dhyan de, especially jab partner ke saath baat karein, khulkar aur patience ke saath. * Relationship me kabhi kisi bhi problem ko ignore na karein; issues aayein toh unhe jaldi solve karne ki koshish karein. * Apne temper ko control karna seekhein, especially jab stress ho ya arguments ho rahe hon. * Apni expectations realistic rakhein aur partner ki feelings ko respect karein. > Serious relationship ke liye discipline aur samay dena zaruri hota hai, bina patience ke relationship ko majbooti nahi milti. Tujhe apne efforts consistent rakhne honge tabhi success milegi.",
+  "admin_id": "f07fadc5-e441-4023-b095-c4b2578ab008",
+  "admin_engine": "",
+  "admin_archetype": null,
+  "admin_qtype": "",
+  "admin_verdict": null,
+  "verdict_summary": "answered:static",
+  "evidence_audit": {
+    "locked_pick": null,
+    "evidence_sample": [],
+    "checks": [],
+    "warnings": [
+      "NO_ADMIN_ENGINE � admin row me engine slice missing"
+    ],
+    "evidence_ok": false
+  },
+  "ok": [
+    "answer_len=1867",
+    "topic=static",
+    "answer_path=engine_then_llm",
+    "engine_tag=ans-engine"
+  ],
+  "issues": [
+    "NO_ADMIN_ENGINE � admin row me engine slice missing"
+  ],
+  "pass": false
+}

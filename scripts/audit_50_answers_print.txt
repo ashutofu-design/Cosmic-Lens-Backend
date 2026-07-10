@@ -1,0 +1,16 @@
+﻿python : Traceback (most recent call last):
+At C:\Users\HP\AppData\Local\Temp\ps-script-603a5c00-9d82-42d7-b3dc-e51600af0a13.ps1:7 char:30
++ ... Lens-Backend"; python scripts\_print_audit_50_answers.py 2>&1 | Out-F ...
++                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "D:\Cosmic-Lens-Backend\scripts\_print_audit_50_answers.py", line 65, in <module>
+    raise SystemExit(main())
+  File "D:\Cosmic-Lens-Backend\scripts\_print_audit_50_answers.py", line 59, in main
+    OUT_PATH.write_text(text, encoding="utf-8")
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\pathlib.py", line 1152, in write_text
+    with self.open(mode='w', encoding=encoding, errors=errors, newline=newline) as f:
+  File "C:\Users\HP\AppData\Local\Programs\Python\Python310\lib\pathlib.py", line 1117, in open
+    return self._accessor.open(self, mode, buffering, encoding, errors,
+PermissionError: [Errno 13] Permission denied: 'D:\\Cosmic-Lens-Backend\\scripts\\audit_50_answers_print.txt'

@@ -1,0 +1,53 @@
+API: http://187.127.174.55:8080
+Demo user id=19
+Chart planets=9
+Asking: 'Kya meri kundli me relationship ka strong promise hai?'
+Stream done � topic=static source=mr_engine_then_llm
+Admin row id=86fca429-57e1-40fe-babe-1bd277bbbab2
+
+=== ANSWER ===
+**The Big Picture** Teri kundli me relationship ko lekar milti julti situation hai, yani relationship strong hone ka clear pakka promise itna nahi, par challenges se ladke sudharne ka space zarur hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, ek ache point ye hai ki tujhe life me thoda guidance aur awareness wali soch di gayi hai (Jupiter 5th me), jo romance me samajhdari la sakti hai. Lekin relationship ki asli dynamics thodi complex hai. Tera partner sambandh ya relationship jo dikhta hai, waha communication me thoda seambhaal chahiye (Mercury 7th lord 12th me), matlab kabhi kabhi misunderstandings, doori ya dil chhupane ka pattern hota hai. Note kar, ki thodi zimmedari aur patience ki kamee bhi rahegi (Saturn 5th me weak), jisse rishte me kabhi tension aaye, ya thodi delay wali situation bane. Aur Mars ka relationship pe impact garma garam, emotional bharpoor hota hai, kabhi arguments ya gusse ka nature bhi hai. Matlab rishte ko banaye rakhne me kaafi mehnat aur samajhdari ki zarurat hai. Tera partner aur tu dono milke kaam karo tabhi gap door ho payega, kyunki kundli ka overall trend suggest karta hai ki **relationship easy flow me nahi, par ban sakta hai agar dono me teamwork ho.** --- **Ab kya karein (practical)** * Communication pe dhyan de, khulke apni feelings share kar, jo bhi differences hain, chhupaane se badhenge. * Patience aur samajhdari ko apni aadat banao, jaldbazi ya gussa relationship ko kharab kar sakta hai. * Apne rishte me balance lane ke liye thodi emotional maturity aur compromise karna seekho. * Agar feeling karte ho ki tension zyada ho rahi hai, to trusted dost ya counselor ki help lene se achha raasta mil sakta hai. > Yaad rahe, relationship me challenges ka matlab akhirat nahi, balki
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | path=engine_then_llm
+admin_engine= | archetype=None
+
+=== CHART EVIDENCE ===
+evidence_ok=False | locked_pick=None
+  WARN: NO_ADMIN_ENGINE � admin row me engine slice missing
+
+=== AUDIT ===
+{
+  "question": "Kya meri kundli me relationship ka strong promise hai?",
+  "api_base": "http://187.127.174.55:8080",
+  "ask_topic": "static",
+  "ask_source": "mr_engine_then_llm",
+  "engine_tag": "ans-engine",
+  "answer_path": "engine_then_llm",
+  "answer_text": "**The Big Picture** Teri kundli me relationship ko lekar milti julti situation hai, yani relationship strong hone ka clear pakka promise itna nahi, par challenges se ladke sudharne ka space zarur hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, ek ache point ye hai ki tujhe life me thoda guidance aur awareness wali soch di gayi hai (Jupiter 5th me), jo romance me samajhdari la sakti hai. Lekin relationship ki asli dynamics thodi complex hai. Tera partner sambandh ya relationship jo dikhta hai, waha communication me thoda seambhaal chahiye (Mercury 7th lord 12th me), matlab kabhi kabhi misunderstandings, doori ya dil chhupane ka pattern hota hai. Note kar, ki thodi zimmedari aur patience ki kamee bhi rahegi (Saturn 5th me weak), jisse rishte me kabhi tension aaye, ya thodi delay wali situation bane. Aur Mars ka relationship pe impact garma garam, emotional bharpoor hota hai, kabhi arguments ya gusse ka nature bhi hai. Matlab rishte ko banaye rakhne me kaafi mehnat aur samajhdari ki zarurat hai. Tera partner aur tu dono milke kaam karo tabhi gap door ho payega, kyunki kundli ka overall trend suggest karta hai ki **relationship easy flow me nahi, par ban sakta hai agar dono me teamwork ho.** --- **Ab kya karein (practical)** * Communication pe dhyan de, khulke apni feelings share kar, jo bhi differences hain, chhupaane se badhenge. * Patience aur samajhdari ko apni aadat banao, jaldbazi ya gussa relationship ko kharab kar sakta hai. * Apne rishte me balance lane ke liye thodi emotional maturity aur compromise karna seekho. * Agar feeling karte ho ki tension zyada ho rahi hai, to trusted dost ya counselor ki help lene se achha raasta mil sakta hai. > Yaad rahe, relationship me challenges ka matlab akhirat nahi, balki",
+  "admin_id": "86fca429-57e1-40fe-babe-1bd277bbbab2",
+  "admin_engine": "",
+  "admin_archetype": null,
+  "admin_qtype": "",
+  "admin_verdict": null,
+  "verdict_summary": "answered:static",
+  "evidence_audit": {
+    "locked_pick": null,
+    "evidence_sample": [],
+    "checks": [],
+    "warnings": [
+      "NO_ADMIN_ENGINE � admin row me engine slice missing"
+    ],
+    "evidence_ok": false
+  },
+  "ok": [
+    "answer_len=1750",
+    "topic=static",
+    "answer_path=engine_then_llm",
+    "engine_tag=ans-engine"
+  ],
+  "issues": [
+    "NO_ADMIN_ENGINE � admin row me engine slice missing"
+  ],
+  "pass": false
+}

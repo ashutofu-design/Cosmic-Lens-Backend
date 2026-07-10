@@ -1,0 +1,653 @@
+FULL AUDIT 50 — http://187.127.174.55:8080
+Demo user id=19
+
+
+========================================================================
+[1/50] Kya mera partner mujhse sach me pyaar karta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tera partner ka nature social aur communicative hai, jo dikhata hai ki woh apne relationship mein apne jazbaat ko express karta hai. Lekin uska mindset thoda complex hai, jisme kabhi emotional confusion ya distance bhi aa sakta hai. Overall, uska pyaar asli hai, lekin kuch emotional clarity aur patience ki zarurat hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tera pa
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[2/50] Kya meri feelings genuine hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan, lekin abhi utna gehra barabar nahi lagta, kyunki tumhare emotions thode sensitive hain aur kabhi-kabhi mood swings ki wajah se clarity mein thoda uljhan aata hai. --- **Kyun aisa hai (deep breakdown)** Apni feelings ko samajhna tough hai jab dil mein emotions kabhi upar neeche hote hain. Tumhara mann ek taraf loyal aur sachcha hai, par kabhi kabhi jo emotions tum feel kar
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[3/50] Kya hum dono ek dusre se equally pyaar karte hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dono ke beech pyaar ka level thoda uneven hai; challenges hain jo thoda emotional distance aur misunderstandings laate hain. Matlab, barabari ka ehsaas perfect nahi hai, par caring feelings definitely maujood hain. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, partnership mein thodi clarity aur communication tough rehti hai kyunki ek partner ka way of expressing ya samajh
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[4/50] Kya mera partner emotionally attached hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapka partner apne emotional connection mein kaafi thoughtful hai, lekin emotions ko khul ke express karna unke liye thoda complex hota hai. Wo zyada verbal aur social hote hain, par dil se judna thoda subtle aur internal hota hai. --- **Kyun aisa hai (deep breakdown)** Unka social vibe Gemini jaisa hai, matlab wo logon se milna-julna aur baatein karna pasand karte hain. Conver
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[5/50] Kya partner sirf attraction feel karta hai ya love bhi?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapke partner mein attraction ke saath-saath emotional depth bhi hoga, lekin woh apne jazbaat thoda guarded ya private rakhte hain. Matlab, love feel karte hain, par wo zyada openly express nahi karte. --- **Kyun aisa hai (deep breakdown)** Aapke rishtay mein jo attraction ka sabse bada source hai, woh unka natural charm aur beauty hai, jo seedha linked hai unke confident aur e
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[6/50] Kya partner mujhe miss karta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tumhare partner ka social style thoda lively aur baat-cheet pasand karne wala hai, jisme woh logon se jurnay mein comfortable rehta hai. Emotional level pe, uske jazbaat gehre hain par uska sochne ka tareeka partnership mein thoda complex aur kabhi kabhi doori wali feeling la sakta hai. Overall, uska pyaar ka andaaz thoda proud aur expressive type ka hai, jo apne andaaz mein st
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[7/50] Kya partner mujhe dil se chahta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tera partner social taur pe kaafi expressive aur baat-cheet mein active hai, lekin uske dil ke jazbaat thode complex hain. Emotional level par thodi caution chaahiye, kyunki wo apne feelings ko poori tarah openly nahi dikhata. Uska pyar dil se zaroor hai, magar sab kuch turant nahi milta, patience ki zarurat hai. --- **Kyun aisa hai (deep breakdown)** Tera partner Gemini jaise 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[8/50] Kya partner ke emotions real hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Partner ke emotions genuine hain, par unka emotional behavior kabhi kabhi thoda complex aur guarded rehta hai. Wo apne jazbaat dikhane mein thoda hesitant hain, isliye clarity lana zaroori hai. --- **Kyun aisa hai (deep breakdown)** Partner ki social vibe lively hai, wo zyada baat cheet karne wale, curious aur expressive hote hain, matlab unki basic personality kaafi open aur s
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[9/50] Kya partner sirf time pass kar raha hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+Nahi, partner sirf time pass nahi kar raha. Wo social aur emotionally complex hain, kabhi halka-phulka dikhte hain par andar feelings gehri hoti hain. Thoda patience aur samajh ki zarurat hai unke mood aur behavior ko leke. Communication aur trust pe dhyan do, tabhi rishta strong banega.
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[10/50] Kya partner serious feelings rakhta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tera partner social aur baatcheet mein kaafi active hai, matlab wo logon se easily connect karta hai. Lekin emotions thode complex hain, aur uska mindset thoda hidden aur intense chal raha hai relationship mein. Is wajah se wo apni feelings straightforward nahi dikhata, seriousness ko samajhne ke liye patience chahiye. --- **Kyun aisa hai (deep breakdown)** Tera partner ka soci
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[11/50] Kya partner mujhe life partner ke roop me dekhta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Bhai, tumhara partner tumhe definitely life partner ke roop mein dekhta hai, lekin wo thoda emotional depth aur samajh se bharpoor rishta chahta hai. Uska social style lively aur baatcheet mein tez hai, par kuch mann ke complex issues bhi hain jo relationship mein test laate hain. --- **Kyun aisa hai** Partner ka social andaaz Gemini jaisa hai, matlab wo zabardast conversationa
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[12/50] Kya partner emotionally available hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapka partner emotional taur par thoda complex hai, social toh kaafi expressive aur milansaar hai, par emotions aur mindset mein kabhi confusion aur doori reh sakti hai. Waisay emotional availability hai, lekin dheere dheere samajhne wali type hai. --- **Kyun aisa hai (deep breakdown)** Partner ki social vibe bahut friendly aur baat-cheet mein tez hai, wo logon ke saath asaani 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[13/50] Kya partner mujhe priority deta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Bhai, tumhara partner social aur baat-cheet mein kaafi active hai, matlab wo tumhari baaton ko samajhne ki koshish karta hai. Lekin uska dimaag thoda complex hai, thoda alag sochta hai relationship ko leke, jisme kabhi kabhi confusion ya doori aa sakti hai. Wo relationship mein apni alag identity banane mein jyada focus rehta hai, isliye priority mein pure tarah se focus karne 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[14/50] Kya partner mujhe importance deta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapke partner ki social style zyada expressive aur baatcheet pasand karne wali hai, par unka dil emotional taur par thoda complex hai. Wo aapko importance dete hain, lekin unka mindset kabhi kabhi chhupa hua ya uljhan bhara hai. --- **Kyun aisa hai (deep breakdown)** Aapke partner ki social approach zabardast hai, wo baatein karna, ideas share karna, aur naye logon se milna pas
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[15/50] Kya partner mere bina reh sakta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+Haan, aapka partner aapke bina zindagi jee sakta hai, kyunki wo social aur independent nature ka hai. Lekin emotional level par wo thoda affected ho sakta hai aur challenges face kar sakta hai. Overall, wo adjust kar lega par emotional support ki zarurat mehsoos karega.
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[16/50] Kya partner mujhe deeply love karta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Bhai, tumhara partner pyaar mein kaafi social aur baat-cheet wala hai, matlab unka pyaar dikhne mein halka-phulka aur connected rehta hai. Lekin unka mann thoda complex emotions se guzarta hai, isliye unka pyaar kabhi kabhi deeply intense aur thoda guarded bhi hai. Overall, pyaar ke mamle mein wo stylish aur attract karne wale type hain, par thodi patience aur samajh zaruri hai
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[17/50] Kya partner apni feelings chhupa raha hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Bhai, yeh clear nahi hai ki tumhara partner apni asli feelings chhupa raha hai ya nahi. Koi strong sign nahi dikh raha jo poori tarah secrecy ya emotional chhupaav ko suggest kare, par thodi clarity ki zarurat zarur hai. --- **Kyun aisa hai (deep breakdown)** Do cheezein madad karti hain is confusion mein. Sabse pehle, tumhare partner ka behavior normal ya mixed lag raha hai, n
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[18/50] Kya partner mujhe express nahi kar pata?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tumhara partner apni feelings express kar pate hain, lekin ekdum khul ke nahi. Pehle thoda guarded hote hain, trust banne ke baad hi apni emotional baatein openly share karte hain. --- **Kyun aisa hai (deep breakdown)** Unka social style easily milne-julne wala hai, kyunki unka andaaz thoda lively aur conversational rehta hai. Matlab, samajh lo ki wo logon se baat karna pasand 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[19/50] Kya partner emotionally confused hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Partner ka social style bohot lively aur expressive hai, kyunki unka partner ke nature me ek tarah ki chanchalta aur curiosity rehti hai. Lekin unke emotions aur mindset me thodi complexity aur internal struggle hai, jo thodi confusion la sakti hai. Unka emotional clarity thoda challenge mein rehta hai, toh haan, kah sakte hain emotional confusion hai. --- **Kyun aisa hai (deep
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[20/50] Kya partner mujhe sirf friend maanta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tere partner ka social style bilkul lively aur baat-cheet wala hai, matlab dost ki tarah friendly rehna unka natural tareeka hai. Lekin unka asli jazba thoda complex hai, emotions deeply connected hain, par dimaag often alag aur thoda doori bhi rakhta hai. Isliye sirf friend tak simatna mushkil hai; feelings aur connection dono hain, bas clarity thodi slow aayegi. --- **Kyun ai
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[21/50] Kya partner romantic feelings rakhta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan bhai, partner definitely romantic feelings rakhta hai, lekin thoda practical aur steady tareeke se apne pyaar ko dikhata hai. --- **Kyun aisa hai (deep breakdown)** Partner ka social style thoda lively aur communicate karne wala hai, matlab baatein karna, ideas share karna unke liye natural hai. Ye unke relation mein ek khula pan lata hai, jisme vibes friendly aur engaging
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[22/50] Kya partner mujhe sirf physical attraction ki wajah se pasand karta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tere partner ka physical attraction definitely strong factor hai, but sirf usi se woh tujhe pasand nahi karta. Uske emotional aur sochne ke tareeke bhi important hain. --- **Kyun aisa hai (deep breakdown)** Tera partner generally slim aur youthful appearance ka hoga, expressive aankhon ke saath, jo physically kaafi attractive hai. Yeh body language aur look usko naturally pull 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[23/50] Kya hamara emotional connection strong hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan, emotional connection hai, par abhi itna gehra nahi hai; kabhi kabhi mood swings se doori hoti hai. Iska reason yeh hai ki aap dono apni feelings ko zyada openly express nahi kar paate, jiski wajah se emotional bonding thodi delicate rehti hai. --- **Kyun aisa hai (deep breakdown)** Aapke beech ka emotional rishta is tarah ka hai ki dono ek dusre ke prati loyal hain, lekin
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[24/50] Kya hamare beech emotional bonding achhi hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan, emotional attachment hai par abhi gehraai mein thodi sensitivity hai jo mood swings se affect hai. --- **Kyun aisa hai (deep breakdown)** Tum dono ke beech ek tarah ka loyalty aur commitment hota hai, jisme ek dusre ke liye zimmedari ka jazba strong hai. Matlab, tum dono apni feelings ko easy tarike se express nahi karte, kabhi kabhi chup rehna ya apne emotions ko andar h
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[25/50] Kya partner mujhe respect ke saath pyaar karta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan, partner aapko respect ke saath pyaar karta hai, lekin ye respect zyada tar baat-cheet aur emotional samajh se dikhayi deta hai. Rishta samajhne mein thodi complexity toh hai, par jazbaat waqai gahra hain. --- **Kyun aisa hai (deep breakdown)** Aapke partner ka social andaaz baat-cheet mein intelligent aur lively hai, matlab vo aapse open aur expressive tarike se jura reht
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[26/50] Kya partner mujhe emotionally support karega?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Bhai, tera partner emotional support dene mein hai, lekin thoda patience aur samajh zaroori hai jab kabhi distance ya mood off ho jaye. --- **Kyun aisa hai (deep breakdown)** Tera partner emotionally toh connected hai, kyunki tum dono ke beech jo emotional bonding hai, woh bada gehra hai. Matlab jab tum ready ho baat karne ke liye, toh wo sunega, samjhega, aur zarurat par encou
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[27/50] Kya partner meri feelings samajhta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapka partner dikhne mein social aur baat-cheet mein smart hai, par emotions samajhne mein kabhi kabhi thoda complex ya guarded hota hai. Wo aapki feelings ko samajhne ki koshish karta hai, par apni chhupi hui baatein aur emotional depth se kabhi door rahta hai. --- **Kyun aisa hai** Aapka partner natural baat-cheet karne wala insaan hai, Gemini jaise hai jo logon ke saath asaa
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[28/50] Kya partner meri care karta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tera partner social aur baat-cheet mein kaafi active aur curious hai, matlab wo care dikhane mein expressive hota hai. Emotions toh hai, lekin kabhi kabhi uska mindset thoda complex aur emotional depth ke saath guarded bhi hai. Overall, wo apni presence se attract karta hai, lekin dikhave se zyada sincere affection mein thoda patience chahiye. --- **Kyun aisa hai (deep breakdow
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[29/50] Kya partner ko meri value hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapke partner ka social style bohot friendly aur baat-cheet waala hai, lekin unki soch aur feelings thodi complex aur gehri hoti hain. Wo aapko samajhne mein kabhi kabhi thoda confuse hain. Partner ki asli mohabbat ka andaaz thoda royal aur strong hai, lekin izzat aur wajood ko lekar thoda testing phase zaroor chal raha hai. --- **Kyun aisa hai (deep breakdown)** Aapke partner 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[30/50] Kya partner mujhe lose karne se darta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapke partner ka social nature kaafi expressive aur baat-cheet mein tez hai, lekin unke emotional sochne ka tareeka thoda complex aur doori banane wala rehta hai. Iska matlab hai ki wo aapko khona nahi chahte, par kabhi-kabhi apne emotions ko samajhakar chhupa lete hain. Is wajeh se unke dar ka jazba dikhai deta hai, par wo directly usse saamna nahi karte. --- **Kyun aisa hai (
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[31/50] Kya partner mujhe lekar possessive hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapka partner thoda possessive hai, especially emotionally sensitive aur kabhi kabhi jealousy ka effect dikh sakta hai. Wo apni feelings ko zyada express nahi karta, par stress mein kabhi kabhi overreact bhi kar sakta hai. --- **Kyun aisa hai (deep breakdown)** Aapke partner ka dimaag ajeeb tarah se dual nature ka hai, matlab kabhi soch badal jata hai stress mein, jiski wajah s
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[32/50] Kya partner jealous hota hai kyunki woh pyaar karta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Bhai, partner ka jealous hona usually dheere-dheere pyaar ka ek expression hai, lekin yeh kabhi kabhi zyada emotional stress aur insecurity se bhi aata hai. Toh jealous hona isliye nahi ki woh sirf pyaar karta hai, balki unki feelings thodi complex hain, jisme pyaar ke saath emotional tension bhi chhupa hota hai. --- **Kyun aisa hai (deep breakdown)** Tere partner ka mann thoda
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[33/50] Kya partner emotionally mature hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapke partner ki emotional maturity mein thodi complexity hai. Unka communication aur sharing ka style kaafi social aur expressive hai, par unka partnership ke prati mindset thoda challenging hai. --- **Kyun aisa hai (deep breakdown)** Partner ki social vibe Gemini jaise hai, matlab wo conversation mein fluent, curious aur thoda playful hote hain. Aise log easily apne emotions 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[34/50] Kya partner emotionally dependent hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Partner emotionally thoda zyada sensitive hai aur feelings ko lekar deeply connected rehta hai, kyunki unke 7th ghar mein Moon hai. Lekin unka emotional mindset thoda complex aur kabhi kabhi chhupa hua hota hai, jisse kabhi dependence ka ehsaas hai, par vo openly nahi dikhata. --- **Kyun aisa hai (deep breakdown)** Partner ki social style Gemini jaisi hai, matlab vo logon se ba
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[35/50] Kya partner mujhe ignore kar raha hai ya busy hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tere partner ka nature thoda mixed hai, woh social aur baat-cheet mein active rehta hai, par unka dimaag aur feelings kabhi kabhi thodi alag jagah par hote hain. Ignore karne se zyada, woh apne internal challenges ya kaam mein jyada busy hai. --- **Kyun aisa hai (deep breakdown)** Tera partner social admi hai, jo aasan se logon se baat karta hai aur connection bana leta hai. Co
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[36/50] Kya partner ka pyaar waqt ke saath kam ho jayega?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tumhare partner ki social style kaafi energetic aur baatcheet-loving hai, kyunki wo Gemini type hai, matlab wo log milke samay bitana pasand karte hain. Magar unka dil thoda sensitive hai, kyunki unke emotions aur feelings ko Moon handle karta hai, jo pyaar mein gehraai lane wala hai. Par thoda challenge yeh hai ki unka dimaag pyaar mein kabhi kabhi uljhan me aa sakta hai aur k
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[37/50] Kya hamara pyaar one-sided hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Rishtaa dono taraf se kuch had tak hai, lekin usmein kafi challenges aur emotional distance bhi nazar aata hai. Matlab, pyaar hai par dono milke usse samajhna aur sambhalna zaruri hai. --- **Kyun aisa hai (deep breakdown)** Aapke rishtay mein jo positive cheez hai, wo yeh ki aapke dil mein pyaar aur samajh ki koshish hai, ek taraf se ek achha emotional base banane ki chahat hai
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[38/50] Kaun zyada pyaar karta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Iss chart mein pyaar mein thoda complexity hai, strong emotional attachment ke saath kuch challenges bhi rehte hain. Matlab, pyaar dono taraf se hota hai, par communication aur emotional clarity mein dikkat aa sakti hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, 7th house jo partnership dikhata hai, usmein Moon hai, jo emotions aur pyaar ki raw feeling batata hai. Isk
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[39/50] Kaun relationship me zyada emotionally invested hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Is rishtay me dono taraf emotional investment thoda complex hai, lekin partner ki taraf thodi zyada emotional responsibility aur commitment dikhti hai. Lekin dono ke beech distance aur thodi misunderstanding bhi bani reh sakti hai. --- **Kyun aisa hai (deep breakdown)** Partner ke emotions ko samajhne me thoda challenge hai kyunki unka dimaag (communication) kabhi kabhi complex
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[40/50] Kya hum dono emotionally compatible hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan, aap dono ke beech emotional connection kaafi gehra hai, lekin kabhi kabhi mood changes ya doori aane se feelings ko samajhna thoda mushkil hai. Matlab caring to hai, par thoda steady hona zaroori hai. --- **Kyun aisa hai (deep breakdown)** Aap dono ki feelings ek dusre ke liye strong hain, kyunki ek ka dil direct partner se juda hua hai. Matlab aap dono naturally ek dusre
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[41/50] Kya partner mujhe hurt karna chahta hai ya galti se hota hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Partner ka social andaaz zyada baat-cheet karne wala, expressive, thoda restless rehta hai. Jo emotional reactions hote hain, unme jazbaat toh gehre hain par kuch confusion bhi hai kyunki dimaag aur andaaz thoda complex hai. Overall, partner ki aankhain mein pyaar to hai, magar apni feelings ko sahi tarah se samjhana uske liye mushkil hota hai. --- **Kyun aisa hai (deep breakdo
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[42/50] Kya partner mere liye sacrifice karega?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tera partner ek intelligent, expressive type hai jiske social style mein baatein aur communication important hote hain. Wo emotional level pe thoda sensitive hai, lekin uska approach thoda complex hai, is wajah se sacrifice karne mein wo zyada asaani se nahi jata. --- **Kyun aisa hai (deep breakdown)** Tera partner Gemini jaise social environment mein rehta hai, matlab wo logo 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[43/50] Kya partner mere saath emotional future dekh raha hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tumhara partner yeh rishta social aur communication se bhara rehta hai, matlab wo baatein share karna jaanta hai aur open hai. Emotional taur par wo thoda sensitive hai aur kabhi kabhi apne jazbaat ko chupakar rakhta hai. Unka dimaag zyada personal connection ki taraf toh gehra dhyaan nahi deta, lekin wo rishton mein practical soch aur emotional concern dono dikhate hain. Overa
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[44/50] Kya partner mujhe emotionally trust karta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan, partner tum par emotional trust karta hai, lekin yeh trust sensitive hai aur clarity aur boundaries ki zarurat hoti hai takay relation strong rahe. --- **Kyun aisa hai (deep breakdown)** Tumhare partner ke dil me tumhari taraf ek natural attraction aur loyalty zarur hai. Romance aur partnership ke signals milte hain jahan pyaar aur bharosa dono ka combo hai. Unka dil tumh
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[45/50] Kya hamara pyaar temporary hai ya genuine?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dost, tumhara pyaar temporary bhi hai aur genuine bhi, situation thodi mixed hai. Kuch cheezein dikhati hain ki rishta thoda complex hai, jisme kabhi doori aur samjhote ki zarurat padti hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tumhare pyaar mein ek taraf toh wisdom aur spiritual understanding ki chamak hai, jo dikhati hai ki asli feeling ke chances hain. Par doo
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[46/50] Kya partner mujhe dil se accept karta hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tera partner social aur baatcheet mein upbeat aur friendly hai, par unki dil se acceptance thodi complex hai. Wo apne emotions ko intuitive aur sensitive tareeke se dikhate hain, lekin unka mindset partnership mein kabhi kabhi thoda overwhelmed ya confused reh sakta hai. Overall, wo ek bold aur warm presence rakhte hain, jisse samajhna thoda time le sakta hai. --- **Kyun aisa h
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[47/50] Kya partner mujhe kabhi bhool payega?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tumhara partner ekdum social aur baat-cheet pasand karta hai, matlab jo yaadein bandhan banati hain, unme baatein aur connections bahut important hote hain. Lekin unka sochne ka tareeka thoda complex hai, jo kabhi kabhi zyada chup rehne ya doori laane wala hai. Overall, unka dil aur jazba strong hai, lekin dimaag mein kuch uljhan bhi rehti hai jo yaadon ko maintain karne mein t
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[48/50] Kya partner ka pyaar unconditional hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapke partner ka pyaar puri tarah unconditional nahi hai; pyaar mein emotional depth aur samajhdari to hai, lekin kuch challenges aur acceptance ke mamle mein thodi testing rehti hai. --- **Kyun aisa hai (deep breakdown)** Partner ka social andaaz kaafi expressive aur baat-cheet mein khula hua hai, matlab wo apni feelings share karna pasand karta hai. Aap dono ki baatein aur un
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[49/50] Kya hamare relationship me emotional intimacy strong hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan, emotional attachment hai lekin thoda sensitive aur mood swings ke wajah se thoda uneven bhi rehta hai. Matlab dono ke beech pyaar toh hai, par kabhi kabhi feelings hold karke rakhi jaati hain, jo kabhi suddenly bahar aa sakti hain ya thodi doori create kar sakti hai. --- **Kyun aisa hai (deep breakdown)** Aap dono ka emotional bonding ek tarah se loyal aur serious type ka
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[50/50] Overall, kya hamare beech sachcha pyaar hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dost, tum dono ke beech kuch gehra emotional connection zarur hai, par yeh rishta kabhi-kabhi thoda complex aur challenging bhi hai. Sacha pyaar to hai, lekin isme patience aur samajhdaari ki bhi zarurat hai, kyunki kabhi kabhi misunderstandings aur emotional distance aa sakta hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tumhari soch aur samajh ko badhawa dene wala 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']

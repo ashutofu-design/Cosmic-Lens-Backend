@@ -1,0 +1,53 @@
+API: http://187.127.174.55:8080
+Demo user id=19
+Chart planets=9
+Asking: 'Kya meri life me romantic relationship banega?'
+Stream done � topic=static source=mr_engine_then_llm
+Admin row id=5f22982d-24ba-49b1-b938-bc6f54a85492
+
+=== ANSWER ===
+**The Big Picture** Dost, tera pyaar ya romantic connection banne ke chances moderate hain. Matlab koi bahut tez chemistry ki guarantee nahi, par thodi der ke liye emotions thode complex honge. --- **Kyun aisa hai (deep breakdown)** Teri feelings kabhi zyada andar hi reh jaati hain, jo baad mein kabhi kabhi explode kar sakti hain ya fir tu emotionally thoda detached feel kar sakta hai. Iska matlab hai ki tu apne emotions openly share karne mein thoda hesitant rehta hai, jo sometimes attachment banane mein hurdle hota hai. Ye bhi hota hai ki tujhe kisi ke saath banne mein time hai, kyunki tu apne dil ko samajhne aur kisi ko trust karne mein carefully approach karta hai. Yeh slow aur steady approach hai, jisme koi jaldi-jaldi excitement ya instant bonding nahi hoti. Isliye, tera pyaar waala connection zyada instant garlic jaisa nahi, balki mitti mein deebi hui bijli jaisi hoti hai - dhyaan do toh ubhrega, warna thoda chupchaap rehta rahega. --- **Ab kya karein (practical)** * Apne emotions ko express karne ki aadat daal, chahe chhoti-chhoti baatein ho. Friends ke saath khul ke baat karna shuru kar. * Apni feelings ko samajhne ke liye thoda patience rakho; koi jaldi mein decision mat lo. * Self-confidence ya emotional clarity ke liye meditation ya writing apna sakte ho, yeh tere andar ki complexity ko halka karega. * Apne aap ko emotionally vulnerable banane ki koshish kar - thoda risk lene se bonding strong hai. > Emotional depth tera asli strength hai, bus usse chhupane ki bajaye apne connection ko nurture kar. Pyaar aayega, bas thoda waqt aur samajh expect kar.
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | path=engine_then_llm
+admin_engine= | archetype=None
+
+=== CHART EVIDENCE ===
+evidence_ok=False | locked_pick=None
+  WARN: NO_ADMIN_ENGINE � admin row me engine slice missing
+
+=== AUDIT ===
+{
+  "question": "Kya meri life me romantic relationship banega?",
+  "api_base": "http://187.127.174.55:8080",
+  "ask_topic": "static",
+  "ask_source": "mr_engine_then_llm",
+  "engine_tag": "ans-engine",
+  "answer_path": "engine_then_llm",
+  "answer_text": "**The Big Picture** Dost, tera pyaar ya romantic connection banne ke chances moderate hain. Matlab koi bahut tez chemistry ki guarantee nahi, par thodi der ke liye emotions thode complex honge. --- **Kyun aisa hai (deep breakdown)** Teri feelings kabhi zyada andar hi reh jaati hain, jo baad mein kabhi kabhi explode kar sakti hain ya fir tu emotionally thoda detached feel kar sakta hai. Iska matlab hai ki tu apne emotions openly share karne mein thoda hesitant rehta hai, jo sometimes attachment banane mein hurdle hota hai. Ye bhi hota hai ki tujhe kisi ke saath banne mein time hai, kyunki tu apne dil ko samajhne aur kisi ko trust karne mein carefully approach karta hai. Yeh slow aur steady approach hai, jisme koi jaldi-jaldi excitement ya instant bonding nahi hoti. Isliye, tera pyaar waala connection zyada instant garlic jaisa nahi, balki mitti mein deebi hui bijli jaisi hoti hai - dhyaan do toh ubhrega, warna thoda chupchaap rehta rahega. --- **Ab kya karein (practical)** * Apne emotions ko express karne ki aadat daal, chahe chhoti-chhoti baatein ho. Friends ke saath khul ke baat karna shuru kar. * Apni feelings ko samajhne ke liye thoda patience rakho; koi jaldi mein decision mat lo. * Self-confidence ya emotional clarity ke liye meditation ya writing apna sakte ho, yeh tere andar ki complexity ko halka karega. * Apne aap ko emotionally vulnerable banane ki koshish kar - thoda risk lene se bonding strong hai. > Emotional depth tera asli strength hai, bus usse chhupane ki bajaye apne connection ko nurture kar. Pyaar aayega, bas thoda waqt aur samajh expect kar.",
+  "admin_id": "5f22982d-24ba-49b1-b938-bc6f54a85492",
+  "admin_engine": "",
+  "admin_archetype": null,
+  "admin_qtype": "",
+  "admin_verdict": null,
+  "verdict_summary": "answered:static",
+  "evidence_audit": {
+    "locked_pick": null,
+    "evidence_sample": [],
+    "checks": [],
+    "warnings": [
+      "NO_ADMIN_ENGINE � admin row me engine slice missing"
+    ],
+    "evidence_ok": false
+  },
+  "ok": [
+    "answer_len=1587",
+    "topic=static",
+    "answer_path=engine_then_llm",
+    "engine_tag=ans-engine"
+  ],
+  "issues": [
+    "NO_ADMIN_ENGINE � admin row me engine slice missing"
+  ],
+  "pass": false
+}

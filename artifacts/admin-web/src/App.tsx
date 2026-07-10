@@ -94,6 +94,7 @@ const TAB_META: Record<Tab, { title: string; subtitle: string }> = {
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("dashboard");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [dash, setDash] = useState<Dashboard | null>(null);
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -871,14 +872,34 @@ export default function App() {
   }
 
   const meta = TAB_META[tab];
-  const adminSecretOk = Boolean((import.meta.env.VITE_ADMIN_SECRET || "").trim());
+  const proxyTarget = (import.meta.env.VITE_API_PROXY_TARGET || "").trim();
+  const isLocalProxy =
+    import.meta.env.DEV &&
+    (!proxyTarget || /^(https?:\/\/)?(127\.0\.0\.1|localhost)(:\d+)?\/?$/i.test(proxyTarget));
+  const adminSecretOk =
+    Boolean((import.meta.env.VITE_ADMIN_SECRET || "").trim()) || isLocalProxy;
 
   return (
-    <div className="admin-shell">
+    <div className={`admin-shell${mobileNavOpen ? " mobile-nav-open" : ""}`}>
       <div className="cosmic-bg" aria-hidden />
       {loading ? <div className="loading-bar" aria-hidden /> : null}
 
+      <button
+        type="button"
+        className="mobile-nav-backdrop"
+        aria-label="Close menu"
+        onClick={() => setMobileNavOpen(false)}
+      />
+
       <aside className="sidebar">
+        <button
+          type="button"
+          className="sidebar-close"
+          aria-label="Close menu"
+          onClick={() => setMobileNavOpen(false)}
+        >
+          ✕
+        </button>
         <div className="sidebar-brand">
           <div className="brand-icon" aria-hidden>
             ✦
@@ -897,6 +918,7 @@ export default function App() {
             onClick={() => {
               setAskQaViewRow(null);
               setTab(item.id);
+              setMobileNavOpen(false);
             }}
           >
             <span className="nav-icon" aria-hidden>
@@ -922,6 +944,18 @@ export default function App() {
       </aside>
 
       <div className="main-area">
+        <header className="mobile-topbar">
+          <button
+            type="button"
+            className="mobile-menu-btn"
+            aria-label="Open menu"
+            onClick={() => setMobileNavOpen(true)}
+          >
+            ☰
+          </button>
+          <span className="mobile-topbar-title">{meta.title}</span>
+        </header>
+
         <header className="top-bar">
           <h2>{meta.title}</h2>
           <p className="subtitle">{meta.subtitle}</p>
@@ -930,9 +964,11 @@ export default function App() {
       {!adminSecretOk ? (
         <div className="error">
           <strong>API not configured.</strong> Create <code>artifacts/admin-web/.env</code> with{" "}
-          <code>VITE_ADMIN_SECRET</code> (same as VPS <code>ADMIN_SECRET</code>). For{" "}
-          <code>pnpm dev</code> set <code>VITE_API_PROXY_TARGET=http://YOUR_VPS:8080</code>. For
-          static build also set <code>VITE_API_BASE=http://YOUR_VPS:8080</code>, then rebuild.
+          <code>VITE_ADMIN_SECRET</code> (same as VPS <code>ADMIN_SECRET</code>). For local dev run{" "}
+          <code>.\scripts\start-admin-local.ps1</code> (uses{" "}
+          <code>VITE_API_PROXY_TARGET=http://127.0.0.1:8080</code> and{" "}
+          <code>ADMIN_NO_AUTH=1</code> on API). For static build also set{" "}
+          <code>VITE_API_BASE</code>, then rebuild.
         </div>
       ) : null}
 

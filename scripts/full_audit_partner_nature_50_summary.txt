@@ -1,0 +1,10 @@
+API: http://187.127.174.55:8080
+Total: 50/50
+Elapsed: 1244s
+Strict PASS: 0/50
+Content OK (mr_engine_then_llm + answer): 50/50
+NO_ADMIN_ENGINE: 50/50
+No answer: 0
+
+=== FAILURES (content/routing) ===
+(none)

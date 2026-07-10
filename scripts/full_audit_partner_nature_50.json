@@ -1,0 +1,1752 @@
+[
+  {
+    "question": "Mera partner kaisa insaan hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tera partner ek lively, baat-cheet karne wala insaan hoga, jo naturally social vibes deta hai. Lekin unke emotional aur sochne ka tareeka thoda complex hai, kabhi kabhi woh apni feelings chupane ya doori banaye rakhne wale hain. Unki mohabbat me jo presence hai, woh thodi royal aur proud wali hai, thoda self-respecting aur apne andaaz se pyaar dikhate hain. --- **Kyun aisa hai (deep breakdown)** Tera partner Gemini jaise dimaag wale hain, matlab unka social style milne-julne mein kaafi chill aur interactive hota hai. Woh jaldi dost bana lete hain aur unka communication style friendly, clever aur thoda playful hota hai. Is vibe me unke saath baatein karte rehna interesting hai. Unke emotions thode guarded hain, kyunki unka mindset kaafi gehra aur serious hai. Unki soch kabhi kabhi itni private hai ki woh apni asli feelings khud tak rakhte hain. Matlab kabhi kabhi woh distant feel kar sakte hain, especially emotional connection banate waqt. Lekin andar se woh loyalty aur security ke liye jeete hain. Jab baat unki mohabbat aur presence ki aaye, toh woh apne andaaz me confident aur thoda royal type ke hote hain. Matlab unka style unique hai, jo attention khinchta hai aur pyaar karne me bhi unka approach thoda proud hota hai. Wo apne partner ko special feel karana jaante hain, lekin apni izzat bhi zaroori samajhte hain. --- **Ab kya karein (practical)** * Unke saath khuli baat-cheet rakh, unki baate aur feelings samajhne ki koshish kar, bina push kiye. * Patience rakh, kyunki unke emotions thode time leke open hote hain; space dena unke liye zaruri hai. * Unke confident aur proud nature ko respect de, unko judge na karein, apna pyaar dikhate rah.",
+    "admin_id": "2a9f102b-1658-4d91-877d-391920e4ee59",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1689",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 1
+  },
+  {
+    "question": "Mere partner ki personality kaisi hogi?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapke partner ki social vibe kaafi lively aur baat-cheet pasand karne wali hogi kyunki unka nature Gemini jaisa hai. Unka emotional tone thoda complex hai, kabhi kabhi feeling confuse ya secretive hai, par wo emotionally deeply involved rahte hain. Unka presence kaafi charming hai, ek tarah se warm aur expressive, jo dusron ko attract karta hai. --- **Kyun aisa hai (deep breakdown)** Gemini-type partner naturally bahut social aur friendly hote hain, unhe har situation mein baat karna, naye logon se milna accha hai. Wo intelligent aur curious hote hain, formal nahin, zyada casual touch ke saath connect karte hain. Aapko unke saath understanding milti hai, lekin kabhi kabhi wo thoda restless aur fickle hain, yani focus maintain karna unke liye challenge hota hai. Emotional side thodi sensitive aur layered hai, kyunki Moon wahan maujood hai jo feelings ko gehra banata hai. Par partner ka mindset thoda guarded hai, dusron se apni feelings poori tarah share karne mein cautious rehta hai. Kabhi kabhi wo apna dard ya discomfort chupakar rakhte hain, jisse relationship mein thoda tension ya misunderstanding hai. Mercury ka placement unhe emotionally discreet banata hai aur kabhi latchkan de sakta hai, especially jab baat practical ya personal ho. Unka presence ya attraction style kaafi bright aur bold hota hai, jisme ek natural charm aur warmth hoti hai. Wo apni personal style se logon ko impress karte hain aur unme strong individuality rehti hai. Thodi thodi rashness hogi kabhi kabhi, lekin ye hi unki uniqueness ko banata hai. --- **Ab kya karein (practical)** * Partner ke saath open aur patient communication rakho, unse feelings gently nikalne ki koshish karo. * Unke restless nature ko samjho, space do par consistent presence bhi zaroori hai. * Unki individuality ko appreciate karo, unhe judge mat karo agar kabhi emotionally withdrawn",
+    "admin_id": "2113e652-0a19-4cd9-8025-f621a59205ec",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1880",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 2
+  },
+  {
+    "question": "Mere partner ka nature kaisa hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapke partner ki social style lively aur expressive hogi, matlab communication aur conversations mein wo kaafi mazakiya aur adaptable rahenge. Lekin unka mindset relationship ko leke emotionally thoda complex aur deeply introspective hoga, kabhi-kabhi chhupi feelings ya misunderstandings aasakti hain. Unki overall presence thodi royal aur confident hai, jo logon ko attract karti hai par wo apne emotions ko zyada openly share nahi karte. --- **Kyun aisa hai (deep breakdown)** Partner zyada tar social situations mein chanchal aur curious rehenge, matlab wo har tarah ke logon se easily baat-cheet kar lete hain. Gemini jaisa partner generally chalak, bindaas, aur dimaag se fast-moving hota hai, jo kabhi kabhi decisions mein thoda unpredictable hai. Yeh unki sochne-samajhne ki style ko batata hai jo flexible aur adventurous hai. Emotional taur par partner ke andar thodi gehraiyan hain, jo mood swings ya emotional ups and downs bhi la sakti hain. Unka relationship approach kabhi self-sacrifice ya emotional distance bhi dikhata hai, matlab wo apni feelings ko explore karne mein time lete hain, aur kabhi chhupi baatein rakhte hain. Ye thoda patience aur samajhdari mangta hai unke saath rishta nibhaane ke liye. Presence mein wo kaafi proud aur attract karne waale hote hain, matlab log unko ek natural leader ya charming insaan ki tarah dekhte hain. Yeh unki style aur attitude mein dikhega, par inse expectations rakhni hongi ki wo apni feelings zyada openly na dikhayein, jo kabhi confusion la sakti hai. --- **Ab kya karein (practical)** * Partner ko express karne ka moka dein, especially apne emotional thoughts ke liye. * Communication ko open aur honest rakhein, taakki chhupi baatein clear ho sakein. * Unke thode introspective moments ko samajhne ki koshish karein; patience bahut zaruri hai. * Unki natural charm ko appreciate karte",
+    "admin_id": "26b52dbe-2405-42f9-8c5d-61efe8dc3fa3",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1873",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 3
+  },
+  {
+    "question": "Kya mera partner caring hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "Haan, aapka partner caring hoga kyunki wo emotionally attentive aur nurturing hai, jo chhoti chhoti baaton ka dhyan rakhta hai. Wo apni unique style mein pyaar dikhata hai, bas kabhi kabhi communication mein thoda patience chahiye hota hai.",
+    "admin_id": "b23f0d8b-dbfa-4793-b75f-de4d734f7724",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=240",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 4
+  },
+  {
+    "question": "Kya mera partner loyal hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan, tumhara partner generally loyal rehne ki koshish karega, lekin relationship mein clarity aur boundaries honi chahiye warna trust par thoda stress aa sakta hai. --- **Kyun aisa hai (deep breakdown)** Tumhare partner ki loyalty aur trust kaafi partly strong hai kyunki unka pyar dikhane ka tarika heartfelt hai, wo apne jazbaat ko express karne ki koshish karte hain. Unke dil mein sachchi attachment hoti hai, especially jab wo emotionally connected hote hain. Ye unka nature hai ki pyar ko meaningful rakhna chahte hain, aur relationship ko seriously lete hain. Lekin thodi challenges bhi hain. Kabhi kabhi emotional doori ya misunderstandings ho sakti hain, jisse unka rukh thoda distant hai. Aur jab arguments aate hain, to wo impulsively react kar sakte hain, jisse relation mein thodi tannaav ya udaasi aa sakti hai. Isliye ye zaroori hai ki dono apne thoughts aur feelings ko clearly share karen, taaki chhoti chhoti baatein badi na banne payen. Woh log generally apni attachment ke liye kaafi committed hote hain, par kabhi kabhi emotional cooling ya delay ki wajah se doubts bhi create hain. Matlab ki relationship ka foundation strong hai, par usme calm aur patience chahiye hota hai. --- **Ab kya karein (practical)** * Apas mein emotions ko openly aur honestly discuss karna shuru karo. * Arguments ko impulsively na bada hone do, thoda waqt le kar baat cheet karo. * Clear boundaries set karo taaki dono ko comfort feel ho. * Trust build karne ke liye regular positive interactions pe dhyan do, jaise chhote surprises ya time saath bitaana. Zindagi mein pyar ko samjhane aur nibhaane ke liye samay aur patience zaroori hote hain. Tum dono ke beech jitni clarity hogi, loyalty utni hi naturally gehri hogi. Yaad rahe, har rishta test se guzarta hai, par agar dono",
+    "admin_id": "404e6c8a-dbe6-44ad-a2da-74d8d6b1dce2",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1799",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 5
+  },
+  {
+    "question": "Kya mera partner honest hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapka partner social style mein baat-cheet aur samajhdari se apni baat rakhta hai, magar kabhi kabhi uska dimaag thoda uljhan mein reh sakta hai, jo honesty ko thoda challenge karta hai. Wohi sachai se sidha bolta hai, jisse samajhna aasan hota hai ki wo jhoot nahi bolega. --- **Kyun aisa hai (deep breakdown)** Aapka partner Gemini jaisa hai, jo social situation mein bohot communicative aur friendly rehta hai. Matlab, wo usually khule dil se baat karega aur chhupane wale nahi hote. Lekin Mercury, jo uska dimaag aur soch ko control karta hai, wo thoda alag jagah par hai, jahan pe kabhi andekha reh jata hai ya kabhi emotions usko confuse karte hain. Yeh thoda cautious hona sikhata hai usko, jo kabhi kabhi sochne mein time lagata hai, especially jab sachai ko samne lana ho. --- **Ab kya karein (practical)** * Usse khul ke baat karne ki aadat develop karein, taaki wo apne emotions clear tarike se express kare. * Aap bhi uske thoughts ko samajhne mein patience rakhein, kyunki wo kabhi slow hota hai apni baatein batane mein. * Aap dono ke beech honesty ke liye chhote checks rakh sakte hain, jaise sidhi baatein karna ya feelings openly share karna. * Waqt ke saath ye relationship aur bhi majboot hoga agar aap dono communication par dhyaan den. **Yaad rakhein, sachai patience aur samajh se aati hai, jisme aap dono ki mehnat kaafi maayne rakhti hai.**",
+    "admin_id": "4ffa2c2c-8f31-4252-9e6e-62e04c8f5675",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1384",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 6
+  },
+  {
+    "question": "Kya mera partner trustworthy hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapka partner normally social aur communication mein active hoga, par bharose ke mamle mein thodi testing situation reh sakti hai. Emotional level pe feelings complex hain, aur soch thodi hidden challenges dikhaati hai. Overall, partner ki presence impress karne wali hai, lekin bharose me patience jaruri hai. --- **Kyun aisa hai (deep breakdown)** Partner ka social style mila jula aur bole toh expressive hai, woh baatein karne mein comfort feel karta hai. Isliye wo easily apni baat aap tak pahucha sakta hai. Lekin is social sensitivity ke saath thoda overthinking bhi hai, jisse wo kabhi kabhi zyada jyada analyze kar sakta hai relationships ka. Emotional taur pe partner ka nature thoda mix hai: feelings deep hain, par apni soch aur behavior thoda mysterious ya private rehta hai. Mindset bhi aisa hai ki kabhi kabhi wo apne doubts chhupa leta hai, aur problems ko openly express karna mushkil hai. Yeh thoda trust banane ke process ko slow karta hai. Presence mein partner ka style ekdam confident aur charming hai, wo apni energy se logon ko attract karta hai. Par ye bhi dhyaan rahe ki asli bharosa develop karne ke liye sirf attraction hi kaafi nahi, patience se samay dena zaroori hota hai takki wo apne asli thoughts khol paye. --- **Ab kya karein (practical)** * Communication ko hamesha open rakho, jahan dono apni feelings bina dare express kar saken. * Thoda samay do partner ko apne doubts clear karne ke liye, pressure mat daalo. * Partner ki baat dhyan se suno, uski chhupi feelings ko samajhne ki koshish karo. * Apni taraf se bharosa dikhao, jisse wo bhi apna vishwas badha sake. **Yaad rakho, sachha bharosa patiently build hota hai, jaldi expectations mat rakho. Samay ke saath cheezein achhi hongi.**",
+    "admin_id": "00173cf2-21b9-444c-9c3f-b58a60a34eb2",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1746",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 7
+  },
+  {
+    "question": "Kya mera partner emotionally mature hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapke partner ki emotional maturity mein thodi complexity hai. Unka social style toh friendly aur baat-cheet wala hai, lekin unka emotional mindset thoda guarded aur introspective hota hai. Samajhdari mein patience ki zarurat rehti hai. --- **Kyun aisa hai (deep breakdown)** Aapka partner naturally logon se baat karne mein comfortable rehta hai, wo social scene mein lively aur curious type dikhega. Matlab unke saath baat cheet karna aasan hota hai, unka approach open-minded hai, par personal level par thoda complex hota hai jaan-ne mein. Emotional experiences ko handle karte waqt wo kabhi kabhi overthink karte hain ya apni feelings ko chhupate hain. Unka mindset relationships mein thoda challenging rehta hai, kyunki wo apni feelings ko openly express karne mein hesitation rakhte hain. Matlab, wo kabhi kabhi emotional depth se door bhagte hain ya situations ko solve karne mein direct nahi hote. Thodi si emotional struggle rehti hai, jisse patience aur samay chahiye hota hai understanding ke liye. Unka pyaar dikhane ka tareeka thoda proud aur confident hota hai. Wo apni identity ko relationship mein maintain karna pasand karte hain, aur apni opinions ko khulke rakhte hain. Emotional presence mein strong hai, lekin kabhi kabhi apni social image aur respect ko zyada importance denge, isliye emotional vulnerability thodi limited hai. --- **Ab kya karein (practical)** * Unke saath khud bhi patience rakho, unki feelings ko push kiye bina samajhne ki koshish karo. * Conversations mein gentle curiosity rakho taaki wo apne emotions share karne mein comfortable ho jayein. * Kabhi emotional struggles ke waqt negative reaction na do, balki supportive aur empathetic bano. * Unke pride aur independence ko respect karo, but apni emotional zaruratein bhi clearly rakho. **Yaad rakho**, emotional maturity ek journey hai jo time ke saath aur mutual understanding se badhti hai, thoda waqt do, dono",
+    "admin_id": "40dcd9fe-5be1-4b74-97e7-103bb6f09fd7",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1929",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 8
+  },
+  {
+    "question": "Kya mera partner responsible hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tera partner ekdum social aur expressive insan hai, lekin responsibility mein thodi testing chal rahi hai. Wo emotionally kaafi sensitive hai lekin apne mindset aur dayitva mein kabhi kabhi uljhan hoti hai, jisse wo apne farz bade pyaar se nibhaata hai par challenges ke saath. --- **Kyun aisa hai (deep breakdown)** Tera partner ka social style kaafi lively hai, wo baat-cheet aur interaction mein mast rehta hai. Gemini jaisa social attitude leke wo apni relationship ko open-minded aur friendly approach se dekhta hai, which is positive. Lekin uske man ki baat thodi complicated hai. Uska decision-making aur soch kuch jagah emotionally intense hota hai, matlab wo apni feelings ko digest karne mein time leta hai, especially jab baat responsibility aur commitment ki aaye. Is wajah se wo kabhi delays ya doubts dikha sakta hai jab life ke serious decisions lene hote hain. Uski overall vibe thodi royal aur warm bhi hai, kyunki usme ek shining presence hai jo pyaar mein charm aur respect laata hai. Lekin dayitva nibhaate waqt patience aur samajhdari ki zarurat hai, kyunki emotional ups and downs ke beech wo apni responsibility samajhne hai. --- **Ab kya karein (practical)** * Uske saath khulkar baatcheet karna, uske emotions ko samajhna zaroori hai. * Jab responsibility ki baat ho, gently guide karo, avoid pressure dena. * Respect aur pyaar dikhane ke saath uski independence ko bhi space do. * Thoda patience rakho, growth ke phase mein uska behaviour positive direction mein badlega. **Yaad rakh, har rishta ek safar hai jahan zimmedari pyaar ke saath banti hai. Tera samarthan uske liye sabse badi strength hai.**",
+    "admin_id": "ca8aca2d-2ded-4f75-874d-aaeba115824a",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1648",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 9
+  },
+  {
+    "question": "Kya mera partner supportive hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapke partner ka social style bahut friendly aur baat-cheet waala hai, lekin unka dimaag kabhi kabhi thoda complicated hai, jis se partnership mein understanding pe thodi mushkil aa sakti hai. Overall, wo apni unique style se aapko attract karenge, par thodi patience rakhni hogi. --- **Kyun aisa hai (deep breakdown)** Aapke partner ka nature Gemini jaisa hai, matlab wo social situation mein lively, expressive aur baat-cheet mein fluent rehte hain. Matlab, wo logon se milna aur gupshup karna pasand karte hain, jo relationship mein ek achha vibe laata hai. Par unke dimaag mein kuch complexity hai, kyunki unka mindset (jo relationship ke nazariye ko shape karta hai) thoda tough jagah par baitha hai aur kabhi feelings ko express karne mein emotional twists aate hain. Matlab ki kabhi wo emotionally distant ya confusing feel karwa sakte hain, jiska sabr chahiye. Aapka partner apni alag personality style se aapko attract karta hai, wo baat-cheet aur commitment mein ek alag jazba rakhte hain. Lekin, wo zyada expressive ya samajhne waala nahi hote confidence ke sath, toh aapko samajhdaari aur respect deni hogi takey wo apne asli colors dikhayein. --- **Ab kya karein (practical)** * Roz thodi emotional baatein share karne ki aadat daalein, takey misunderstandings kam ho. * Jab bhi partner thoda distant lage, patience se react karein; wo apni taraf se bhi try karenge. * Khud apni expectations ko realistic rakhein, partner ki natural social style ko samajh ke. * Unki uniqueness ko appreciate karein; thoda space den na bhi zaroori hai kabhi kabhi. **Yaad rahe**, Supportive rishta patience aur samajhdaari se banta hai, har relationship mein challenges aate hain, par jo asli connection hota hai, wo samay ke sath aur majboot hota hai",
+    "admin_id": "7ca3d5f6-0e45-497e-a7e6-ed73d5ff17ac",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1767",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 10
+  },
+  {
+    "question": "Kya mera partner understanding hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Bhai, tumhare relationship mein understanding hai, par iske liye clear aur honest baat-cheet bahut zaruri hai. Thoda sabr aur patience rakhna padega jab baat thodi tough ho. --- **Kyun aisa hai (deep breakdown)** Tumhare partner ke saath communication thoda tricky hai kyunki kuch energies relationship mein emotional distance ya frustration laa sakti hain. Matlab, kabhi-kabhi baatein samajhne mein delay ya emotional cooling aa sakti hai, ya kabhi impulsive gut reactions ki wajah se aapas mein thodi sharpness bhi ho jaati hai. Yaani, dono ko patience ke saath baatein karni hongi, jaldbazi mein react nahi karna. Phir bhi, jab emotions honestly share karte ho, toh gehri samajh ban sakti hai. Matlab, agar tum apni feelings khulke express karte ho, toh partner bhi emotionally connect karne ki koshish karega. Lekin feelings ko rok ke rakhne se tension ya misunderstanding badh sakti hai, jo kabhi-kabhi emotional distance badhata hai. --- **Ab kya karein (practical)** * Har roz thodi honest baat-cheet karo, choti choti feelings express karna shuru karo. * Jab tanao ya gussa aaye, us waqt jaldi react karne ki bajay thoda rukke, samjho aur phir baat karo. * Patience rakhna seekho, relationship mein thodi testing phase aayegi, par usse deal karna zaruri hai. * Partner ke emotions ka respect karo, unki baat dhyaan se suno bina interrupt kiye. > **Yaad rakhna**, understanding donon taraf ki mehnat se banti hai. Sabr aur khule dil se baat karoge, toh emotional gap kam hoga aur relationship majboot hoga.",
+    "admin_id": "7a672efd-aaef-46b8-9a03-02d97dee96ca",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1533",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 11
+  },
+  {
+    "question": "Kya mera partner romantic nature ka hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapka partner social aur expressive hai, thoda intellectual aur baatcheet pasand karne wala. Lekin emotions mein wo kabhi kabhi thoda guarded ya privacy maintain karne wala hai. Uska romantic andaaz practical aur steady hai, jisme pyar dheere-dheere badhta hai, flashy gestures se zyada. --- **Kyun aisa hai (deep breakdown)** Partner ka social andaaz Gemini jaisa hai, matlab wo zyada bolne wala, curious aur dosti-jaisi bonding mein comfort feel karta hai. Wo easily dusron se connect karta hai, conversations uska strength hai. Lekin jab baat emotions ki aati hai to wo Moon ki energy ke saath thoda deep aur sensitive hai, par apni feelings ko openly express karna mushkil samajhta hai. Wo apne emotional space ko value deta hai. Iske mindset mein thoda complexity hai: jo uske rishton ka way hai, usme kabhi kabhi confusion ya adjustment ki zarurat padti hai. Wo zyada soche samjhe bina apni feelings ko pura openly share nahi karta, especially jab wo privately struggle karta hai. Par uska jazba aapke liye real hai, bas timing aur circumstance important hote hain. --- **Ab kya karein (practical)** * Partner ke saath open yet patient communication rakhein, emotional space dena seekhein. * Uske pyaar ko jaldi force na karein; dheere-dheere trust build karne ka focus rakhein. * Practical aur steady gestures ki kadar karein, kyunki wo bhi apni taraf se consistent efforts karega. * Kabhi kabhi uski chhupi hui feelings ko samajhne ki koshish karein, voice dene ka moka dein. Yaad rakhein, pyar me depth aur consistency important hai, flashy taur tarike nahi. Aapka partner apne andaaz me romantic hi hai, thoda unique aur controlled style me.",
+    "admin_id": "6a1ac9d2-68a5-4c1c-98ac-a4eb9400c360",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1671",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 12
+  },
+  {
+    "question": "Kya mera partner practical hoga ya emotional?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "Tera partner dono practical aur emotional dono ho sakta hai. Wo apni feelings ko samajhta hai aur express bhi karta hai, lekin decisions mein logical soch bhi rakhta hai. Kabhi wo zyada emotional hota hai, toh kabhi practical approach leta hai. Is tarah wo balance bana ke chalna pasand karta hai.",
+    "admin_id": "1b049457-6be2-49a6-9476-b089020f8087",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=297",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 13
+  },
+  {
+    "question": "Kya mera partner introvert hoga ya extrovert?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapka partner ek mixed personality rakhta hai, woh Gemini jaise social aur expressive logon ki tarah dikhte hain, jo baat cheet karna pasand karte hain lekin sirf apne close logon ke saath. Matlab, woh bilkul extrovert nahin hai, lekin pure introvert bhi nahi; ek tarah se situational ambivert hai. --- **Kyun aisa hai (deep breakdown)** Gemini ke sign ke hisaab se, partner ki social nature kaafi lively hai, unhe baatein karna, naye logon se milna achha hai, lekin mainly unka comfort zone familiar logon tak simit rehta hai. Isliye, woh open circles mein thoda reserved hote hain, apne dil ke kareeb ke logon ke saath khulke interact karte hain. Moon ka unke partnership behavior mein hona iska emotional touch deta hai; woh apne emotional connections mein sensitive aur nurturing hote hain, jo unhe emotionally approachable banata hai. --- **Ab kya karein (practical)** * Partner ko new social situations mein thoda time aur space dena, taaki woh apne aap ko comfort zone mein le aayein. * Apne rishton mein patience rakhna, kyunki unka mindset thoda introspective aur cautious hota hai, jaise woh relationship ko deep aur secure banana chahte hain. * Familiar logon ke saath quality time bitaana unke liye relaxing aur recharge karne wala hota hai. * Unke emotional nuances ko samajhna aur respect karna, kyunki yeh unke connection ko strong banata hai. Yeh sab milke batata hai ki aapka partner ek thoughtful, flexible nature ka insan hai, jise samajhne mein thoda patience chahiye hota hai but jab woh khulta hai, toh kaafi warm aur expressive rehta hai.",
+    "admin_id": "8a9d6be2-f262-4cf6-9991-58c21b1a2924",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1581",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 14
+  },
+  {
+    "question": "Kya mera partner calm nature ka hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapka partner social aur baatcheet mein kaafi lively hoga, lekin unka emotional nature thoda sensitive aur kabhi-kabhi complex hai. Wo bade soch-vichar wale hain, lekin unka behavior hamesha calm nahi rehta; patience aur samajhdari se chalna zaroori hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, partner ka overall social vibe bahut friendly aur expressive hai, matlab wo logon se asaani se jhud jate hain aur unki baat cheet interesting hoti hai. Lekin wo kabhi kabhi apne emotions ko zyada achi tarah samajh nahi pate, jiska matlab hai ki unka andar kaafi gehra dard ya chinta hai. Unka dimag bahut tazgi se kaam karta hai, par unka emotional response kabhi kabhi overthink karne wala ya thoda complicated hota hai, jo calmness mein problem create karta hai. --- **Ab kya karein (practical)** * Partner ke emotions ko gently samjho, unko space do express karne ke liye. * Unke stress moments mein zyada push na karein, patience se kaam lo. * Communication ko open aur honest rakho, misunderstandings ko avoid karne ke liye. * Kabhi kabhi unke liye relaxing activities recommend karo jaise meditation ya nature walks. Har connection mein thodi testing phases aate hain; yeh samay hai ek dusre ki feelings ko samajhne aur relationship ko strong banane ka.",
+    "admin_id": "18b208ba-e169-4ee3-9aed-a438763631b9",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1286",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 15
+  },
+  {
+    "question": "Kya mera partner short-tempered hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Nahi bhai, tumhara partner zyada chhota gussa karne wala nahi hoga, par emotional reactions thode intense hain. Wajah yeh ki wo apni feelings ko kabhi kabhi deep level par mehsoos karta hai, jahan uska dimaag thoda overthink karta hai. --- **Kyun aisa hai (deep breakdown)** Tumhare partner ka social style baat-cheet aur casual masti mein rehta hai, matlab wo logon ke saath friendly, interactive aur thoda curious rehta hai. Ye nature relaxed aur khula hua hai, jo gussa jaldi jaldi dikhane mein kam hota hai. Par emotions ke mamle mein, thoda complicated phase hai. Unka mindset kabhi kabhi chhupi hui baatein ya emotional dilemmas ko lekar tense ho jata hai. Matlab, kabhi wo apne dimaag mein kuch chizo ko lekar overthink karte hain ya bahar seedha express nahi karte. Is wajah se uljhan dikh sakti hai, lekin gussa short-term ya chhota nahi hoga; wo deep aur intense hai. Love aur attraction mein unka andaaz thoda confident, proud, aur warm dikhai deta hai, aur wo apni footing strong rakhte hain. Iska matlab hai ki wo apni boundaries samajhte hain aur unnecessarily jaldi gussa nahi karte, par agar hurt hue to firmly apni baat rakhte hain. --- **Ab kya karein (practical)** * Rabta khula rakho, taaki wo apne emotions ko share kar sake bina dimaag ghumaaye. * Agar wo thoda zyada sochte hain, toh patience rakho, samajh-saath dena faydemand rahega. * Chhoti chhoti baaton ko escalate mat hone do; discussions ko halka-phulka rakho. * Unke confident attitude ko appreciate karo, jisse wo positive vibe maintain karenge. Yaad rakh, emotional complexity ka matlab explosive gussa nahi hota, bas samjho unka nature thoda serious hai feelings ko lekar, par wo definitely short-tempered nahi hain.",
+    "admin_id": "d84aedd6-aa87-47d9-a53a-7dff8845fb8b",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1721",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 16
+  },
+  {
+    "question": "Kya mera partner gusse wala hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan, tumhara partner thoda gusse wala nature rakhta hai, matlab kabhi-kabhi jaldi garam ho jaata hai. Lekin yeh jhatka zyada der tak nahi rehta; baat-cheet se woh apne gusse ko control kar leta hai. --- **Kyun aisa hai (deep breakdown)** Tumhare partner ki social style kaafi lively aur expressive hai, jaisa ki Gemini sign dikhata hai. Woh logon ke saath baat-cheet mein kaafi fluent aur open rehte hain, har haal mein adapt kar lete hain, par kabhi kabhi yeh restless bhi kar sakta hai. Unka emotional tone thoda sensitive aur complex hai, kyunki unke andar moods change hote rehte hain (Moon ka assar). Saath hi, unka dimaag thoda gehra aur sochne wala hai (Mercury ki position), jo kabhi kabhi unhe uljhan ya frustration me bhi daal sakta hai, isliye mood swings se kabhi gussa bhi nikal sakta hai. Woh apne rishton mein kaafi charming aur attract karne waale hote hain, jaise ki Venus unme ek warm aur impressive presence deta hai. Lekin Mars ka influence unke gusse mein jaldi aane ka signal dete hain, matlab chhoti-chhoti baaton par bhi thoda jaldi gussa ho jaate hain, par baat-cheet se jaldi shaant bhi ho jaate hain. --- **Ab kya karein (practical)** * Jab partner gussa ho, toh unki feelings ko samajhne ki koshish karo, kyunki unka gussa zyada der tak nahi rehta. * Unhe apni baat express karne do bina judge kiye, yeh unhe shaant karne mein madad karega. * Achhi communication habits banayein, jisse dono ki misunderstanding kam ho. * Agar partner thoda zyada reactive ho, toh patience rakho aur ek dusre ke perspective ko accept karna seekho. Yaad rakho, gussa ek short phase hai, unke andar ka pyar aur samajh zyada geh",
+    "admin_id": "5087476a-cffc-474c-88ea-9996a726b02d",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1656",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 17
+  },
+  {
+    "question": "Kya mera partner patient hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Bhai, tumhara partner ka patience level medium hi rahega, thoda social aur communicative nature ke sath. Lekin unka mindset aur partnership vibe thoda complex hai, jo kabhi kabhi testing hai sabr ke nazariye se. --- **Kyun aisa hai (deep breakdown)** Tumhara partner ka nature zyada tar Gemini jaisa hai, matlab vo logon se baat-cheet karna pasand karte hain, social hote hain,hlekin kabhi kabhi unka sabr unki energy aur chanchal nature ke wajah se thoda kam ho jata hai. Wo emotionally thoda sensitive hote hain kyunki unki partnership mein moon ka influence hai, jo unhe kabhi kabhi mood swings ya emotional reactions de sakta hai. Phir bhi, unka mindset thoda challenging hai kyunki unka sochne ka tarika (jo partnership ko sambhalta hai) thoda complex aur deep hai, aur kabhi kabhi unhe apni feelings ko share karne mein bhi pareshaani hoti hai. Is environment mein patience test hota hai, especially jab baat misunderstandings ki aati hai. --- **Ab kya karein (practical)** * Communication ko open aur clear rakho, taaki misunderstandings kam ho. * Patience practice karna zaruri hai, dono ko apni feelings express karte waqt thoda dheere chalna hoga. * Emotional ups and downs ko normal samjho, unhe support karne ki koshish karo bina jyada pressure diye. * Kabhi kabhi chhoti breaks lena bhi help karega mindset ko reset karne ke liye. **Yaad rakhna,** patience ek journey hai, patience ka matlab gussa chhupana nahi, balki samajhdari se react karna hota hai. Is rishte mein dono ko milkar seekhna hai.",
+    "admin_id": "05e57759-0725-43ca-84a2-9d80d4a80564",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1530",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 18
+  },
+  {
+    "question": "Kya mera partner kind-hearted hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tera partner social aur baatcheet mein kaafi active hoga, thoda curious type bhi, jo logon se connect karna pasand karta hai. Emotions thode deep hain, par kabhi kabhi uska sochne ka tareeka thoda complex ya guarded hota hai, jo is baat ko thoda affect karta hai ki wo kitna openly dayalu dikhe. --- **Kyun aisa hai (deep breakdown)** Tera partner Gemini jaisa social nature rakhta hai, matlab wo easily logon ke saath baat-cheet mein ghul mil jata hai, funny bhi rahega aur adaptable bhi. Iska matlab hai wo apne kindness ko dikhaane mein natural hai, especially jab baat social situation ki ho. Par Moon jo unke emotions ko dikhaata hai, wo thoda sensitive aur caring hai, jo unko internally gentle banata hai. --- **Ab kya karein (practical)** * Partner ko samajhne ke liye patience rakhna zaruri hai, kyunki uska mindset kabhi difficult ya private hai. * Uske emotions ko express karne ke liye space do, wo apne tareeke se apni dayaluta dikhata hai. * Achi baat-cheet zaruri hai, Gemini nature se communication improve kar sakti hai relation ko. * Thoda waqt do uski personal challenges ko samajhne ke liye, tabhi wo totally khul ke tumhare saamne apni kindness dikhayega. Teri partner ki dayaluta visible hai, bas usko samajhne ke liye thoda confidence aur samay lagega. Sabse bade rishton mein patience sabse bada hero hota hai.",
+    "admin_id": "0c18aebd-f85a-44e1-a189-7e5215bc1c04",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1354",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 19
+  },
+  {
+    "question": "Kya mera partner generous hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapka partner social aur baatcheet pasand karta hai, par uski generosity thodi guarded hai, kyunki uska dimaag kabhi-kabhi kuch chize chhupane ya insecurities rakhne wala hota hai. Emotional taur par wo sensitive hai, magar apni feelings sabke saamne khul ke nahi dikhata. --- **Kyun aisa hai (deep breakdown)** Aapke partner ki social nature badi expressive hai, aur wo communication mein tez hai, matlab wo baatein share karna pasand karta hai aur logos ke saath relax feel karta hai. Is se hai ki generosity unki baat-cheet mein zaroor dikhega, jaise waqt dena, samajhna, aur support karna. Lekin, unka mindset thoda complex hai, woh apni asli feelings ko kisi clear jagah pe rakhne se thoda katraata hai, matlab generosity ka matlab sirf paisa ya cheezein dena nahi balki apne personal resources khul kar dene mein hesitation hai. Emotional taur par wo kaafi sensitive hain (jo moon hai unfazed), lekin apni depth ko sabke saamne dikhane mein cautious hain. --- **Ab kya karein (practical)** * Partner se khul kar baat karein taaki wo apni emotions ko aapke saath share karne mein araam feel karein. * Choti choti appreciative gestures banayein jisse wo feel karein ki unka generous behavior aapko kitna khushi deta hai. * Patience rakhein, unka generous side dheere dheere openly dikhega jab wo safe aur trustful environment me honge. > *Generosity har kisi ka apna andaaz hota hai; aapki understanding se unka asli pyaar aur support dikhayega.*",
+    "admin_id": "92eccc7b-1cb3-45e2-b770-ffe79e66557d",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1470",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 20
+  },
+  {
+    "question": "Kya mera partner selfish hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tera partner apne social style mein kaafi baat-cheet ya interaction mein active rahega, matlab thoda expressive aur adaptable hai. Par uska apne emotions aur relationship ka approach thoda complex hai, jo kabhi kabhi usko zyada apne hisaab se chalne wala bana sakta hai. --- **Kyun aisa hai (deep breakdown)** Partner ka social vibe Gemini jaisa hai, matlab woh logon ke saath baat karna, naye ideas discuss karna pasand karta hai. Ye log thoda changeable hote hain, unme kabhi kabhi apni baat rakhne ki desire zyada hoti hai. Par wo apni alag identity bhi banaye rakhna chahte hain. Is wajah se thoda selfish hai, par asal mein unka tareeka thoda curious aur expressive hota hai. Partner ke emotions aur soch ka halka sa complexity Scorpio wali energy se aata hai. Iska matla hai uski feelings kabhi gehri, intense aur kabhi emotional challenges se guzar sakti hain. Yeh thoda apni dunia mein rehne wala, private aur kabhi selfish jaise lagne wala hai jab wo apni personal needs pe focus karta hai. Uska overall presence jisme attraction aur pyar dikhte hain, Leo wali style mein hai. Matlab usme ek charm, confident aura hai jo log attract karte hain. Isse hai ki woh apni importance mehsoos karna chahte hain aur kabhi kabhi attention bhi chahiye hota hai. Yeh bhi selfishness ki taraf thoda jhukav dikhata hai, par confidence aur apni value samajhne se aata hai. --- **Ab kya karein (practical)** * Partner se khuli baat-cheet rakho, uske true needs samajhne ki koshish karo. * Emotional moments mein patience rakho, kabhi kabhi woh apni feelings samjhana mushkil paata hai. * Uski self-value ko appreciate karo, taaki uska selfishness zyada na badhe. * Relationship mein boundaries define karo, taaki dono ki space safe rahe. **Yaad rahe",
+    "admin_id": "67fb19f0-1240-4df8-b9e4-a808cd5d19d6",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1762",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 21
+  },
+  {
+    "question": "Kya mera partner dominating hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapke partner ka social andaaz zyada baat-cheet aur communication wala hai, matlab wo zyada openly apni baat rakhte hain. Lekin unka mindset thoda gehra aur complex challenges se juda hai, jisme kabhi kabhi dominance ka rang dikh sakta hai. Unki overall presence me ek royal aur confident vibe hai, jo naturally attract karti hai. --- **Kyun aisa hai (deep breakdown)** Aapke partner ka social style Gemini jaisa hai, matlab wo logon se milna-julna pasand karte hain, ideas share karte hain, aur lively discussions me engage hote hain. Ye log zyada aggressive nahi hote, lekin apni baat ko strongly rakhte hain. Emotional taur par, unke dimaag me kuch chhupi tensions ya challenges hote hain, jo unhe kabhi kabhi controlling ya thoda dominating banate hain, especially jab wo apne inner fears ya insecurities ko handle kar rahe hote hain. Wo apne rishton ko lekar deeply serious rehte hain, aur kabhi kabhi apni space aur control ke liye need feel karte hain. Unki mohabbat aur attraction ka andaaz ek dum royal aur strong hai, wo apne partner ko impress karne ke liye naturally charming aur powerful presence rakhte hain. Yeh unki dominance ko thoda balanced aur lifestyle me classy banata hai, na ki sirf overpowering. --- **Ab kya karein (practical)** * Apne partner se khulkar baat karein, unke emotions aur fear ko samajhne ki koshish karein. * Jo moments unhe thoda controlled feel karayein, unhe space dene ki aadat dalein. * Confidence ka positive use karte hui, boundaries define karna dono ke liye zaroori hai. * Relationship me patience rakhein, dominance ek challenge hai, but samajh aur pyar se solve hota hai. **Yaad rahe**, dominance negativity nahi, kabhi kabhi yeh strength ka expression hota hai, bas balance zaroori hai taaki rishta dono ke liye healthy rahe.",
+    "admin_id": "403e8b35-1b3c-4308-badd-42363eab9c55",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1798",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 22
+  },
+  {
+    "question": "Kya mera partner controlling nature ka hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tumhare partner ka nature zyada controlling nahi hai, balki wo zyada social aur baat-cheet mein comfortable hai. Par kuch cheezein hain jo unki soch aur behavior ko thoda cautious aur private rakhte hain, isliye wo kabhi kabhi apne jazbaat ko zyada khula nahi karte. --- **Kyun aisa hai (deep breakdown)** Partner ki social vibe Gemini ki tarah hai, matlab wo zyada open, friendly aur adaptable hain. Wo logon ke saath baat karne mein maza lete hain aur relationship mein bhi compromise karne ki koshish karte hain. Unka emotional tone Moon ki wajah se thoda sensitive hai, matlab wo apne feelings ko samajhte hain aur partners ki needs ko dhyan mein rakhte hain. Lekin, unka mindset thoda cautious hai, Mercury jo complex jagah (12th house) mein hai, wo batata hai ki partner apne inner thoughts ko zyada openly share nahi karta, aur kabhi kabhi privacy chahte hain. Isliye, controlling behavior na ke barabar hai, par kabhi kabhi wo apni space banaye rakhte hain ya apni feelings ko puri tarah share nahi karte. Unki presence relationship mein charming aur attractive hai (jo unka lifestyle aur attitude dikhata hai), par wo zyada dominant ya overbearing nahi hote. Wo zyadatar partner ke saath milke chalna pasand karte hain, ek cooperative nature ke saath. --- **Ab kya karein (practical)** * Partner se khuli aur soft baat-cheet karna, jahan wo apne emotions confidently express kar saken. * Unki privacy aur space ko respect karo, bina unhe pressure diye. * Decision-making mein unko involve karna, taaki dono ka voice equal rahe. * Patience rakho kyunki wo apni feelings thoda dheere-dheere share karte hain. Yaad rakho, pyar aur samajh ke saath har relationship strong hota hai, is journey mein controlling behavior zyada nahi hai, bas thodi sensitivity aur respect chahiye.",
+    "admin_id": "0f58ee0e-f30e-43c6-aa28-66bbb8045d54",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1802",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 23
+  },
+  {
+    "question": "Kya mera partner possessive hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan, aapke partner mein possessiveness ka thoda element zaroor hai, jo kabhi kabhi unka behaviour sensitive aur react karne wala bana sakta hai. Yeh unki feelings mein thoda tension aur unpredictability laata hai, isliye unhe thoda space aur samajhna zaroori hai. --- **Kyun aisa hai (deep breakdown)** Aapke partner ka mann kabhi kabhi jaldi badal jata hai jab wo stress mein hote hain, matlab unke emotions ek pal mein upar-niche hote rehte hain. Is wajah se woh kabhi zyada clingy ya possessive hain, specially jab unhe hai ki unki feelings ko respect nahi mil raha. Wo apne jazbaat ko dil mein daba kar rakhte hain, magar jab woh bhar jata hai to kabhi kabhi ekdum se alag ya door ho jate hain. Yeh pattern unke behaviour mein thoda emotional roller coaster jaisa hai, jisme kabhi vo zyada possessive dikhte hain, aur kabhi apne aap ko thoda alag rakhna prefer karte hain. Isliy, aapko unki feelings ko samajhne ki koshish karni hogi, aur unhe unnecessarily restrict nahi karna chahiye, warna unka react karna aur bhi zyada hai. --- **Ab kya karein (practical)** * Har baat open aur calmly discuss karein, jab partner apni feelings share karein toh dhairya rakhein. * Unhe thoda emotional space dein, unnecessary restrictions se bachkar relationship ko healthy banayein. * Jab partner emotionally stressed ho, tab impatient na ho, unki feelings ko samajhne ki koshish karein. * Same time apni boundaries clear rakhna seekhein, taaki dono ek dusre ke saath comfort feel kar sakein. > Yaad rakhein, **possessiveness agar balance mein na ho to relationship mein tension la sakta hai, lekin samajhdari aur pyar se yeh control kiya ja sakta hai**. Thodi patience aur respect se aap dono ki bonding",
+    "admin_id": "f68a449b-3321-4b2e-85fb-07296caa0f56",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1717",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 24
+  },
+  {
+    "question": "Kya mera partner jealous nature ka hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Bhai, tumhara partner thoda sensitive aur jealous nature ka hai, lekin ye jealousy ekdum openly nahin aati; wo zyada turn kabhi kabhi apne emotions ko chupake rakhta hai, par phir stress me aake thoda zyada react kar sakta hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, uska mann thoda complex hai, matlab wo apne emotions ko turant samajh nahi pata, aur jab tension ya stress badhta hai tab uski feelings flip ho sakti hain. Aise mein wo apne andar jealousy ko chhupa ke rakhta hai, lekin kabhi kabhi wo impatience ya sudden irritation ke form mein bahar aa jati hai. Dusra key point ye hai ki uske dil aur dimaag me emotions ko bahar nikalne mein lockdown jaisa phase chal raha hota hai, wo apne feelings ko rokta hai, reject karta hai ya kabhi emotionally detach bhi ho jata hai. Isliye, jealousy ka expression kabhi kabhi delayed hoga, ya phir wo reflection me badal sakta hai, jaise ki phir wo sochta hai “kya main overreact kiya?” Isi wajah se relationship mein kabhi-kabhi emotional distance ya tension feel hone hai, kyunki uske andar ka ye chhupa hua jealousy kabhi bhi pressure badha sakta hai. --- **Ab kya karein (practical)** * Jab partner zyada chup lage, to gentle aur patient raho, uska emotion ekdum sudden nhn balki dheere dheere samjho. * Open communication ko encourage karo, jahan wo apne emotions bina fear ke share kar sake. * Stress ya tension ke time uske changes ko samjho, aur usse space do jab wo apne aap ko samhale. * Doosri taraf khud bhi apne insecurities share karna shuru karo, taaki dono ko zyada clarity mile. --- Yaad rakh, jealousy hona normal hai, par jab emotional space aur understanding ho toh ye jealousy zyada control mein rehti hai. Thoda patience aur samajh is phase mein madad karega",
+    "admin_id": "ecb56b94-92de-4a32-a03f-2f1170ad0bff",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1760",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 25
+  },
+  {
+    "question": "Kya mera partner insecure hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapke partner ki emotional duniya mein insecurity zyada nahi hai; unka apne aap par bharosa medium level ka hai. Matlab, wo zyada unstable nahi hote, bas thoda sa dhyaan chahiye ki dono ki izzat bani rahe relationship mein. --- **Kyun aisa hai (deep breakdown)** Partner ki self-worth ya apne value ko lekar koi badi kamzori nahi milti. Matlab unka apne aap par ek manageable bharosa hai, jo kabhi kabhi thoda fluctuate kar sakta hai, par generally stable rehta hai. Jaise ki moon aur venus ka balance, jo unki feelings aur pyaar ko ek tarah ka shaant flow deta hai, jab dono apne limits samajh kar respect ki boundary maintain karte hain. Yeh matlab hai ki agar aap dono apas mein izzat aur space rakhen, toh unhe zyada insecurity mehsoos nahi hoti. Emotional ups and downs aapke partner mein kabhi kabhi aa sakte hain, jaise har insan mein hote hain, lekin wo normally apne aap ko wapas confident position mein la sakte hain. --- **Ab kya karein (practical)** * Aapas ki baat-cheet mein hamesha ek dusre ke jazbaat ko samjhen aur respect dein. * Boundary setting pe dhyaan dein taaki dono ko apni space ka ehsaas rahe. * Jab bhi partner thoda doubt dikhaye, supportive rahiye, tension ko badhne mat dijiye. * Gussa ya frustration aane par patience rakhiye, cheezein samjhaane ka mauka dijiyega. Har rishte mein thodi emotional wave toh hoti hi hai, par **jab mutual respect bani rahe, toh insecurity ka dar kam hota hai**. Aapke partner ki emotional stability aise reaction dene wali hai jo zyada fragile nahi hai.",
+    "admin_id": "64bf9e82-9f19-4c4d-aa6e-f94e42758c83",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1536",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 26
+  },
+  {
+    "question": "Kya mera partner overprotective hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapke partner ki social vibe bahut expressive aur baat-cheet mein open rehti hai, kyunki unka partner ka nature Gemini jaisa hai. Emotional side thodi sensitive hai, par mindset thoda cautious aur internal struggle wala hai. Overall woh apni love life mein confident aur proud rehte hain, lekin overprotective kehna thoda tricky hai. --- **Kyun aisa hai (deep breakdown)** Gemini jaisa social nature matlab partner bahut friendly, curious, aur communication mein active rehta hai. Matlab zyada control nahi dikhate bahar, par conversation mein hamesha involved rehte hain. woh apne relationships mein diverse ideas aur khulapan pasand karte hain. Emotions thode complex hain, kyunki moon unke partnership mein hai, yeh dikhata hai ki woh apne rishte ko deeply feel karte hain, kabhi kabhi zyada sensitive bhi hain. Lekin mindset mein cautious side hai, kyunki 7th lord Mercury thodi door kisi aur jagah par hai jo overthinking, kabhi misunderstandings bhi la sakta hai. Yeh unko thoda alag aur reserved banata hai apne emotions ko dikhane mein. Unka overall presence relationship mein strong aur proud hai, matlab woh apni importance samajhte hain aur apni feelings khud confidently leke chalte hain. Isliye, overprotectiveness zyada nahi dikhta, lekin kabhi kabhi emotional insecurity ki wajah se thoda zyada caring aur serious hain. --- **Ab kya karein (practical)** * Partner se khul ke baatein karein, unki feelings samajhne ki koshish karein, taaki unka protective nature unhealthy over-control mein na badle. * Patience rakhein jab woh cautious ya thode distant lagein, insecurity ya confusion ki wajah se hai. * Emotional bonding badhane ke liye aise activities karein jahan dono freely apne emotions express kar saken. * Apni independence ka bhi izhaar karein, taaki woh unnecessary tension na lein aur trust bade. Yaad rakho, overprotectiveness agar hai to woh zyada emotional depth",
+    "admin_id": "156d56fc-8795-464d-90dc-d88f64bb447b",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1911",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 27
+  },
+  {
+    "question": "Kya mera partner independent hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tera partner apne social style mein kaafi friendly, baat-cheet karne wala aur samajhdar hoga, lekin uske relationship ke dimaag mein thodi complexity aur emotional intensity rehti hai. Independence ke mamle mein, vo thoda apni feelings aur decisions mein alag tareeke se kaam karta hai, jisme kabhi kabhi apni jagah par rehne ki zarurat mehsoos karta hai. --- **Kyun aisa hai (deep breakdown)** Tera partner bahar ke logo se milne-julne mein khula hua aur expressive hota hai, jaise ki har situation mein adjust karna janta ho. Uska jazba aur communication style lively aur intelligent rehta hai, jo uski social independence ko dikhaata hai. Lekin uske dimaag mein, relationships ko lekar kabhi kabhi confusion aur emotional struggles dekhne ko milte hain, jisse vo apni privacy aur apni alag jagah banaye rakhne ki koshish karta hai. Iska matlab ye hai ki vo apni feelings ko openly express na kare, par apne tareeke se apni emotional independence bana ke rakhta hai. Kabhi kabhi vo relationship mein struggle bhi kar sakta hai ki apni space aur partner ke space mein balance bana sake. Is complex mindset ki wajah se vo har time apni independence ko protect karne ki koshish mein rehta hai. --- **Ab kya karein (practical)** * Uski baat ko dhyaan se suno aur usse apni feelings share karne ke liye space do. * Relationship mein transparency badhao, par uske personal space ki izzat karo. * Jab vo thoda distance lena chahe, usse force mat karo; patience rakho. * Bond ko deepen karne ke liye emotionally subtle aur understanding bano. **Yaad rakh,** tera partner apni jagah par independent hai, bas usko apni emotions aur decisions ko samajhne aur express karne ke liye thoda waqt chahiye. Yeh independence unki strength hai, jo relationship ko bhi mature banati hai.",
+    "admin_id": "7e79cbce-3e45-4dfe-abe7-3ef50323ac83",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1789",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 28
+  },
+  {
+    "question": "Kya mera partner ambitious hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan, tumhara partner ambitious hai, par unki soch kabhi kabhi thodi cautious ya phir dusron ke emotions ko samajhne wali hoti hai. Wo aage badhne ke liye apni feelings ko kabhi kabhi chupakar chalenge, matlab unka ambition andar se strong hai, lekin dikhawa bilkul alag hai. --- **Kyun aisa hai (deep breakdown)** Tumhare partner ka social style lively aur expressive hai, wo logon ke saath easily baat-cheet karte hain, thoda explorative nature bhi hai. Ye unke relationship approach mein dikhayi deta hai ki wo practical aur intelligent hote hain, conversations mein tezi se samajh lete hain, jo unhe apne lakshya ke liye kaafi madad karta hai. Unme emotional depth bhi strong hai, lekin kabhi kabhi unki communication thodi restrained ya secretive reh sakti hai, jaise wo apne dimaag ko apni ambitions mein lagate hain, lekin khud ko pura kholke nahi dikhate. Isliye unka mindset thoda complex hota hai, jo unhe emotionally strong banata hai par unka rujhan thoda cautious dikh sakta hai. Unka overall presence warmth aur creative energy se paripurna hai, matlab wo logon ke saamne apni ambitions ko confident aur dil se dikhate hain, especially jab wo apne goals ke liye inspire karte hain. Lekin unhe patience aur safalta ke liye thoda samay hai, kyunki wo har step ko soojh-boojh ke uthaate hain. --- **Ab kya karein (practical)** * Partner ke ambitions ko samajhne ke liye unse khuli baatein karo, unke emotions ko space do express karne ka. * Unke ideas aur plans ko support karo, par jaldi mein unpe pressure na dalo, patience honi chahiye. * Unke creative aur practical dono sides ko appreciate karo, wo har perspective se goals ko dekhte hain. * Agar wo kabhi apne jazbaat chupaye, to gently encourage karo ki wo ap",
+    "admin_id": "d9deebb2-18ce-43e1-8e53-dcb7fb438b39",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1747",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 29
+  },
+  {
+    "question": "Kya mera partner career-oriented hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapke partner ki professional life mein thodi mixed energy hai, matlab wo career-oriented hain, lekin unka focus sirf career par hi nahi, zindagi ke dusre areas par bhi rehega. --- **Kyun aisa hai (deep breakdown)** Dekho, partner ke career ke area mein koi khas zabardast push ya obstacles nahi dikh rahe, matlab unke paas career ko lekar koi badi dikkat ya aasani ka pattern support nahi karta. Career ke basic structure mein clarity thodi kam hai isliye wo apni professional life ko equally importance denge, lekin full-time workaholic nahi honge. Unki earning style thodi complex hai, paisa aa sakta hai, lekin wo kisi creative ya unusual tarike se bhi kama sakte hain. Kabhi kabhi unka kaam ya income thoda unstable hai, ya involve karta hai networking aur social connections ko. Workload ka pattern bhi dikhata hai ki partner zyada stress lene wale nahi, wo apni personal space ko importance denge, isliye overwork karna unki aadat nahi. Ek aur cheez ye hai ki partner ki gains ya network mein kuch log important rahenge, jisse career mein madad mil sakti hai, lekin unka career zyada traditional nahin hoga. Matlab, wo apne passion, interests ya versatile skills ke saath career banayenge, na ki sirf ek hi field mein tikkar. --- **Ab kya karein (practical)** * Partner ki priorities ko accept karna aur unhe career ke alawa personal growth ke liye bhi support karna. * Agar career mein consistency chahiye, to unke liye regular schedule aur networking events ko encourage karen. * Kabhi unke ideas aur unconventional ways ko samajhne ki koshish karen; wo alag tarz mein apni pehchaan bana sakte hain. * Unka stress management aur personal space ko respect karna career ke saath balance banaane ke liye zaroori hoga. **Yaad rahe**, partner career ke saath-saath apne life ke aur aspects ko bhi equal respect dena pasand karte hain",
+    "admin_id": "a156570d-67f7-4ad0-8314-499f4127196a",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1857",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 30
+  },
+  {
+    "question": "Kya mera partner financially responsible hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "Haan, tumhara partner financially responsible ho sakta hai, lekin kabhi kabhi wo thoda inconsistent ya distracted ho jata hai paise sambhalne mein. Wo apni feelings aur soch mein thoda cautious hai, isliye patience aur achha communication zaroori hai dono ke liye. Agar milke planning karoge toh financial matters smoothly chal sakte hain.",
+    "admin_id": "b25149a4-ffba-4c3d-8b1a-c247c1e488fd",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=339",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 31
+  },
+  {
+    "question": "Kya mera partner family-oriented hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapke partner ka nature thoda mix hai, unka social vibe lively aur baatein karne wala hai, lekin family ke mamle mein thodi complexities aur challenges hain. Wo emotionally thode sensitive hain, par unka dimaag thoda alag jagah focused rehta hai, jo kabhi partnerships mein patience ki zarurat laata hai. --- **Kyun aisa hai (deep breakdown)** Aapke partner ka social style Gemini jaisa hai, matlab wo easily logon se baat kar lete hain, curious hain, aur communication kaafi important hai unke liye. Wo open, expressive, aur social circle mein zyada involved rahte hain, matlab family se alag nahi, par thoda zyada yaar-dost aur baahar ke connections ziada pasand karte hain. Unke emotional part aur soch Mercury ke influence mein hai, jo ki thoda alag perspective deta hai. Mercury jo Scorpio mein hai, yeh dikhata hai ke unke liye relationship deeply intense hain par kabhi kabhi misunderstandings ya emotional distance aane ke chances hain. Wo apni feelings ko zyada openly share nahi karte, isliye family-oriented hone mein thodi restrictions ya challenges aa sakte hain. Unka overall presence jo Leo jaisa hai, wo confidently apna style dikhate hain, lekin family ya intimate feelings ko priority dena kabhi kabhi unke daily routine ya ambitions ki wajah se thoda mushkil ho jata hai. Matlab, wo dikhte toh charming aur strong hain, par emotionally thoda apni jagah zyada busy rehte hain. --- **Ab kya karein (practical)** * Partner ke saath honest aur khulkar baat cheet karein, taaki emotional distance na bade. * Family time ko special banane ke liye chhote rituals shuru karein, jisse rishte aur mazboot ho. * Unke social aur communication style ko appreciate karein, par boundaries bhi set karein. * Jab kabhi misunderstandings ho, toh patience rakhein, yeh phase hai jo samajhne aur adjust karne ka. **Yaad rahe**, partner thoda unique tareeke",
+    "admin_id": "779e0f5d-a845-4249-b476-de99b3c66851",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1875",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 32
+  },
+  {
+    "question": "Kya mera partner family ko importance dega?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "Haan, aapka partner family ko importance dega, lekin apne tareeke se aur kabhi kabhi thoda emotionally complex ho sakta hai. Wo relationship mein baat cheet aur samajhdaari ko pasand karta hai, isliye family ke liye uska connection strong rahega. Bas aapko thoda patience aur samajhdaari se uski feelings ko samajhna hoga.",
+    "admin_id": "3e17ac27-5141-48d6-a504-6e333c631964",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=322",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 33
+  },
+  {
+    "question": "Kya mera partner religious ya spiritual hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapke partner mein thodi spiritual aur dharmik touch zaroor hai, lekin wo zyada openly religious ya strictly spiritual type nahi hote. Unka dimaag practical aur deep hota hai, par wo apni individuality aur creative side pe bhi focus karte hain. --- **Kyun aisa hai (deep breakdown)** Aapke partner ka social andaaz kaafi lively aur baatcheet mein tez hota hai, matlab wo logon se milna-julna pasand karte hain aur zyada practical style mein baatein karte hain. Emotional level pe thoda complex aur gehra hai, matlab unke andar emotions kaafi subtle aur kabhi-kabhi chupi hui feelings hoti hain jo wo direct share nahi karte. Unka mindset thoda secretive aur introspective bhi rehta hai, especially relationship mein, isliye kabhi kabhi unke dimaag mein intense feelings chalti rehti hain jo wo batate nahi. --- **Ab kya karein (practical)** * Patience rakho jab wo apne emotions easily share na karein, unke liye thoda time aur space dena zaroori hai. * Spiritual baatein ya practices unke saath gently explore karo, zyadatar creative aur artistic tarike se connect karne ki koshish karo. * Unke saath honest aur open communication banaye rakho, taaki wo apne asli emotions express kar saken. * Kabhi kabhi unki uniqueness ko appreciate karo, jisme unki apni ek alag tasveer hai spirituality aur dharm ke prati. > Yaad rakho, har insaan apni journey pe hota hai; thoda samajh aur pyar se rishta gehra hota hai, chahe spiritual preference kitna bhi alag kyun na ho.",
+    "admin_id": "2b73c6ae-6ba3-470a-b827-bda9bd6ef6fd",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1484",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 34
+  },
+  {
+    "question": "Kya mera partner open-minded hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tumhara partner ka social style kaafi lively aur curious hai, jo Gemini ki tarah naturally open-minded soch ko dikhata hai. Lekin unki soch aur approach thodi complex aur kabhi kabhi chhupne wali reh sakti hai, jo unke relationship mindset ko thoda cautious aur intense banata hai. Unki presence love mein expressive aur proud hoti hai, lekin thoda dhairya aur samajhdari chahiye. --- **Kyun aisa hai (deep breakdown)** Partner ka social vibe Gemini jaisa hai, matlab wo logon se easily connect hote hain, naye ideas ko explore karne mein interested rehte hain. Ye nature generally open-mindedness dikhata hai, kyunki Gemini har tarah ki baatein jaanne ki koshish karta hai. Matlab, tumhara partner likely nayi soch ko appreciate karega aur discussion ko enjoy karega. Lekin, unke relationship mindset mein thoda complexity hai. Unka dimaag kuch chhupa hua rah sakta hai, ya kabhi kabhi emotional complexity ke saath deal karta hai, jo unke pyaar ke tarike ko deep aur intense banata hai. Unka focus kabhi kabhi privacy aur emotional depth par hota hai, jisse surface pe wo utne open na lagein. Matlab open-minded hain but apne emotions ko thoda guarded bhi rakhenge. Unki presence relationship mein kaafi expressive aur confident hai, jo ki unke main attraction ka source bhi hai. Wo apne pyaar ko clearly dikhate hain, lekin for long term patience aur understanding jaruri hai, kyunki unka attitude kabhi kabhi thoda testing hai. --- **Ab kya karein (practical)** * Unke ideas aur opinions ko open dil se suno, Gemini jaisa nature hai toh naye topics par baat karna pasand karenge. * Emotional depth ko samajhne ki koshish karo, patience rakho jab wo apne feelings ko thoda guarded rakhen. * Unki independence aur expressive nature ko appreciate karo; unka self-confidence unke liye important hai. * Kabhi kabhi unki privacy ki izzat karo, taaki",
+    "admin_id": "9857cf2e-1b97-4d4d-8b90-b02163adc904",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1867",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 35
+  },
+  {
+    "question": "Kya mera partner conservative hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapka partner zyada conservative nahi hoga; uska nature zyada social aur expressive hai, lekin thoda emotional complexity aur cautiousness bhi dikhega relationship mein. --- **Kyun aisa hai (deep breakdown)** Aapke partner ki social vibe Gemini type ki hai, matlab wo baat-cheet mein fluent aur curious hote hain, naye ideas ko samajhne wale hote hain. Wo log generally open-minded aur zyada traditional bindhan mein nahi phas te. Lekin unke emotions aur mindset mein thodi complexity hai, kyunki unka sochne ka style thoda guarded hai. Wo apni feelings ko openly share karne mein hesitant hain, ya kabhi kabhi apni privacy zyada maintain karna pasand karte hain. Emotional ups and downs ke saath, wo apni relationship ko thoda sensitive aur deep level pe lete hain. Unka overall presence pyar mein kaafi regal aur proud hai, jo dikhaata hai ki unka apna ek strong identity hai, par woh bhi apne tarike se relationship mein dedicated aur supportive hote hain. Matlab, wo showy nahi hote, lekin apne partner ke liye serious commitment rakhte hain. --- **Ab kya karein (practical)** * Partner ki baat ko dhyan se suno aur unki privacy ko respect karo, unko khud khud open hone ka time do. * Relation mein thodi flexibility rakkho, unke cautious approach ko samjho. * Khud bhi positive aur friendly communication se relationship ko maintain karo. * Patience rakho, challenges mein growth hoti hai, pressure mat daalo. Yaad rakhna, thodi complexity aur cautious nature hone ka matlab hai ki wo apni ek alag soch aur respect ke saath relationship ko sambhalte hain, ye aapke liye ek strong foundation ban sakta hai.",
+    "admin_id": "38bf8ad8-37ea-49fc-9590-3dda2647e1a4",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1630",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 36
+  },
+  {
+    "question": "Kya mera partner social hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan, tumhara partner social hai, kyunki uska nature kaafi expressive aur baat-cheet mein open rehta hai, khas kar tab jab wo logo ke beech ho. Lekin, iske saath-saath wo kabhi-kabhi apne emotions ko thoda private bhi rakhta hai. --- **Kyun aisa hai (deep breakdown)** Tumhare partner ka social style Gemini sign jaisa hai, jiska matlab hai ki wo logon se milna-julna pasand karta hai, curious aur baatcheet mein active rehta hai. Lekin uske emotions thode complex hain kyunki uska mann kabhi kabhi deeply introspective hota hai, jo uski feeling ko thoda alag kar deta hai. Wo apne dil ki baatein sabke saath share nahi karta. --- **Ab kya karein (practical)** * Partner ko samajhne ke liye patience rakho, wo apne feelings ko jaldi nahi kholta. * Khuli baatcheet karo, taaki wo apne mann ki baat share kar sake. * Social gatherings mein uske sath involve ho, jisse wo zyada comfortable feel kare. * Uski privacy ka respect karo, jab wo thoda space lena chahe. **Yaad rakho**, wo socially active hai, lekin apne emotions ko manage karna uske liye thoda personal challenge hota hai. Isliye pyar aur samajh se hi rishta mazboot hota hai.",
+    "admin_id": "ba7ed335-d905-430d-80db-e52d8734c171",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1155",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 37
+  },
+  {
+    "question": "Kya mera partner private nature ka hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapka partner thoda private nature ka hai, par wo bina zyada chhupane ke ek gehri soch aur apne personal space ki kadar karta hai. --- **Kyun aisa hai (deep breakdown)** Aapke partner ki personality mein ek natural blend hai jahan wo apne kaam aur jazbat ko generally chupane se zyada apne andar santulit rakhta hai. Wo zyada open nahi hote, par iska matlab ye nahi ki wo bilkul closed hain. Unka dimaag kaafi active rehta hai, aur wo apne social circle mein thode selective hote hain, matlab confuse nahi hote, bas apne trusted logo ko hi apne personal baatein share karte hain. Workload aur network aspects se hai ki wo life mein busy rehte hain, apne responsibilities samajhte hain aur kabhi-kabhi apne aap mein lost bhi ho jate hain. Is wajah se wo apna space maintain karte hain, jisme interruptions kam se kam hone chahiye. Ye nature unko thoda introverted ya private dikha sakta hai, especially jab wo apne emotions ya personal struggles ko openly discuss nahi karte. --- **Ab kya karein (practical)** * Apne partner ko samajhne ke liye patience rakho, unko apne secrets share karne mein waqt hai. * Unka space respect karo, jab wo thoda alag rehna chahein toh force na karo. * Open aur gentle communication ka culture banao taaki wo apna dil khol sake. * Unke busy schedule ko samajh kar unke liye flexible aur supportive banne ki koshish karo. Har insaan ko apna ek personal space chahiye, aur aapka partner bhi isi category mein aata hai. Thoda private hone se rishta aur bhi gehra hai jab aap dono ek doosre ki boundaries ko samajh kar chalenge.",
+    "admin_id": "2e249133-3968-4bb0-b085-dc9d515fb23e",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1576",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 38
+  },
+  {
+    "question": "Kya mera partner secretive hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapke partner ka social style kafi expressive aur baatein share karne wala hai kyunki unka vibe Gemini jaisa hai, jo khula aur milansaar hota hai. Lekin unka dimaag aur soch zyada chupane wali hai, thodi guptachari wali quality lekar aati hai, jo relationship mein kuch raaz rakhne ka element la sakta hai. Isliye, haan, wo kuch secretive ya apni feelings aur baatein chhupane wale hain. --- **Kyun aisa hai (deep breakdown)** Gemini jaisa partner nature generally open aur baat cheet karne wala hota hai, easily dost banta hai aur social hota hai. Lekin yeh saath hi saath jab unka dimaag Scorpio wale nature se judta hai, jo kaafi gehra, tajgi se bhara aur emotional secrecy rakhta hai, tab wo apne asli jazbaat ya intentions sabke saamne rakhna pasand nahi karta. Scorpio ka influence unki soch aur rishton mein thoda complexity, probing nature, aur emotional guard lagata hai, jisse wo apni feelings ko aasan se share nahi karte. --- **Ab kya karein (practical)** * Aapko patience aur samajhdaari se unke emotional guard ko todna padega, jab wo khud aapko apne dil ke raaz batayenge tabhi rishta strong hoga. * Khuli baat-cheet ko badhawa dein, jisse wo apni chhupi baatein aasan se aapke saamne la saken. * Unke nature ko samjho aur unke space ko respect karo, kabhi kabhi wo apni feelings time ke saath reveal karenge. * Apne doubts ko argue karne ke bajaye, pyar aur vishwas ki bhavna se sambodhit karo. Jo thoda secretive nature rakhta hai, wo apna raazrakhne wala hona bhi hota hai, iske andar wo apne partner ki izzat karta hai, bas usse samay aur pyaar chahiye hota hai.",
+    "admin_id": "f9f32368-11e2-4e8f-87d1-cac916717f7e",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1601",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 39
+  },
+  {
+    "question": "Kya mera partner flirt karne wala hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan dost, tera partner definitely flirt karne wala type hai. Uska pyaar aur romance ka andaaz thoda charming, bold aur confident rahega, jo naturally logon ko attract karta hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, uski personality me ek strong mix hai jisme passion aur communication dono achhi tarah se balance hote hain. Matlab, wo flirt karne me direct aur confident hoga, jaise jo dil me hai, wo bol deta hai bina jhijhak ke. Uska dil aur dimaag dono hi romance pe focused hain, dimaag se wo smartly baatein banata hai, aur dil se wo naturally attract karta hai. Woh jo apni baat ko ek funny aur warm tareeke se present karta hai, wo actually flirting style ko bada effective banata hai, matlab boring nahi, entertaining rahega interaction. Partner ke liye flirting ek tarah ka masti bhara expression hai jisme wo apni feelings thoda playful way me dikhata hai. Aur interesting baat, uske relationship me wo serious bhi rahega, flirting sirf timepass nahi, ek genuine tareeka hai apne jazbaat dikhane ka. Iska matlab wo long-term commitment me bhi interested hai, lekin apni baaton me thoda swag zaroor rahega. --- **Ab kya karein (practical)** * Partner ko jyada judge mat karna, unki flirting ko ye samajh ke dekho ki wo apne emotions ko express karne ka healthy style hai. * Jo bhi maza flirting me aaye, usko positive tashreef do, ek dusre ki baat ko samajhne ke liye ye ek achha tool hai. * Agar kabhi bahar ke logon ke prati uska yeh andaaz zyada ho jaye, toh calmly baat kar lena, misunderstandings avoid karne ke liye. * Apne relationship ki boundaries set karna bhi zaruri hai, flirting ka matlab ye nahi ki respect ya faith kam ho. > Flirting ek natural expression hai uska, jo relationship me thodi masti aur nayi energy lata hai. Isko",
+    "admin_id": "b4939201-8106-4075-985f-0bb471a0f0c4",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1787",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 40
+  },
+  {
+    "question": "Kya mera partner faithful rahega?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapka partner loyal hone ki koshish karega, lekin trust mein clarity aur boundaries bahut zaroori hain, warna misunderstandings aasan hain. Relationship mein emotional distance ya kabhi kabhi sharp words aake rishtay ko test kar sakte hain. --- **Kyun aisa hai (deep breakdown)** Aapke partner ke andar loyalty aur affection ka strong element hai, jaise ki unka pyaar aur trust dikhane ka andaaz genuine hai. Unmein apni feelings ko express karne ka jazba bhi hai, jisme wo apne rishtay ko sambhalne ki koshish karte hain. Magar, unki personality mein kuch aise challenges bhi hain jo trust ko thoda sensitive banate hain. Kabhi-kabhi emotional distancing ya delayed response aa sakta hai, jo ki unke nature mein thoda hesitation le aata hai. Matlab, wo apni feelings ko turant share nahi karte, ya emotions ko rok ke rakhte hain, jiski wajah se partner ko hai ki kuch chhupa rahe hain. Aur jab baat jhelne ki ya clarity ki aaye, toh thodi si ladayi ya sharp baatein ho sakti hain, jo misunderstandings badhaati hain. Saath hi, relationship stability mein thoda challenge hai kyunki partner emotionally kabhi kabhi apne aap ko detach kar lete hain jab pressure badhta hai. Lekin iske bawajood, wo apne attachment ko todne se zyada jod ke rakhna pasand karte hain. --- **Ab kya karein (practical)** * Emotions ko open aur time par discuss karein, secretly chupana problem ko badhaata hai. * Boundaries clear karna seekhein, kya chahiye aur kya accept nahi kar sakte, ye samjhein. * Jab conflicts ho, toh ek calm approach rakhein, taaki impulsive words se bacha ja sake. * Partner ko space dena bhi zaroori hai, par usme communication na chhodein. **Yaad rakhein**: Trust ka safar smooth nahi hota, lekin dhairya aur clarity se dono",
+    "admin_id": "2c44b525-231e-4120-b966-3b3a39131c5b",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1750",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 41
+  },
+  {
+    "question": "Kya mera partner manipulative hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapka partner ek active aur baat-cheet mein tez nature ka hoga, lekin unka sochne ka tareeka thoda complex aur ghuma-phira hai, isliye kabhi-kabhi unke behavior mein thodi manipulation wali baat samajh aa sakti hai. Emotional level par wo sensitive hain, par mindset thoda hidden motives wala hai. --- **Kyun aisa hai (deep breakdown)** Partner ka social style Gemini jaisa hai, matlab wo bahut social, curious aur adaptable hain. Wo logon se achha connection banate hain, baat-cheet mein maahir hote hain, aur kabhi kabhi chaalak bhi dikh sakte hain kyunki Gemini ka nature thoda trickster type hota hai. Matlab, unka approach zyada straightforward nahi hota, wo situation ke hisaab se apne aap ko adjust karte hain. Emotions mein ye partner kaafi sensetive hain, kyunki Moon unke relationship mein baitha hai, jo feelings ko deep banata hai. Lekin unka mindset thoda challenging hai, Mercury jo unka main sochne ka andaaz batata hai, wo thoda complex aur gehra hai, jahan wo apni baatein aur intentions ko kabhi chupate hain ya chhupate bhi hain, jisse manipulative nature dikh sakta hai. Matlab relationship mein wo apni feelings ko openly dikhane se door rehte hain, aur apni soch zyada private rakhenge. Partner ki presence ya attraction ka style confident aur thoda dramatic hai, jaisa ki Leo wale hote hain. Wo apni identity strong bana ke rakhte hain aur apne relationship mein apni ek alag pehchaan chahte hain, but kabhi kabhi apna ego bhi dikhate hain jo thoda controlling hai. --- **Ab kya karein (practical)** * Apne partner ke communication style ko samajhne ki koshish karein, unke emotions aur unke dimaag ko explore karna zaruri hai. * Jab bhi aapko unke behavior mein kisi tarah ki chhal ya complexity lage, openly baat karein",
+    "admin_id": "0352cdf9-a40f-4edc-bf9b-091614bbe570",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1764",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 42
+  },
+  {
+    "question": "Kya mera partner toxic nature ka hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tere partner ka nature thoda challenging hai, jisme toxic traits bhi dikh sakte hain. Unke behavior mein emotional distance aur conflicts zyada dekhe ja sakte hain, jahan misunderstandings aur temper ke issues aate hain. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, unke nature mein conflicts aur emotional doori dono hone ke chances hain. Wo jaldi gussa kar sakte hain ya sharp baatein karne ka rujhan rakhte hain, jisse chhoti chhoti baatein bhi bade arguments mein badal sakti hain. Saath hi, emotional connection mein thandi nahin jaati; feeling mein delay aur hold hona pehle dikhai deta hai aur phir kabhi kabhi sudden detach bhi kar dete hain, jo relationship ko unstable bana sakta hai. Doosra, unka behavior zyada warm ya consistent nahi rehta. Jab tense hote hain, to unka attitude rigid aur closed-off hai, jo partner ke saath sahi samvaad ko mushkil banata hai. Long term mein yeh distance aur coldness badh sakti hai, jisse frequent misunderstandings ke chances bante hain. Teejapan, impulsive breaks, aur relationship mein emotional distance ye sab cues dikhate hain ki yeh relationship carefully handle hona chahiye, warna toxic patterns evolve hone ke chances hain. Lekin yaad rahe, har issue ka solution hota hai agar dono parties patience aur samajh se aage badhein. --- **Ab kya karein (practical)** * Jab bhi conflict ho, calmly baat karne ki aadat dalein, taaki sharp words se bachta ja sake. * Emotional expression ko encourage karein, apne feelings ko openly share karne ki koshish karein. * Relationship mein thodi space dena seekhein, taaki dono ko time mile apne emotions manage karne ka. * Agar arguments frequently ho rahe hain, to professional guidance lene se bhi fayda hai. > Toxic patterns growth ke liye challenge hain, dhyan se samjho aur milkar hal nikaalo, tabhi rishta mazboot ho pay",
+    "admin_id": "1e34e0c0-ca41-48a3-a92f-0fcf9e3d05a5",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1847",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 43
+  },
+  {
+    "question": "Kya mera partner abusive ho sakta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "Haan, tera partner kabhi kabhi emotionally intense aur complex ho sakta hai, jisse misunderstandings ya chhupa gussa aa sakta hai, jo abusive behavior jaisa lag sakta hai. Isliye patience aur clear communication zaruri hai, aur agar zarurat lage toh boundaries set karna bhi important hai.",
+    "admin_id": "18bd8908-0438-474b-aa32-3bf10971b50b",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=289",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 44
+  },
+  {
+    "question": "Kya mera partner egoistic hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tumhara partner jyada egoistic nahi dikhta. Uska social style lively aur baatcheet wala hai, par sochne aur relationship approach thoda complex aur intense hai, jo kabhi egocentric hai. --- **Kyun aisa hai (deep breakdown)** Uska social behaviour bilkul Gemini jaisa hai, matlab baahar se friendly, adaptive aur communication me tez. Aise log generally apne ideas openly share karte hain aur har kisi se baat kar sakte hain, jo egoistic nature se thoda alag rehta hai, matlab dusron ki bhi respect karte hain. Par uske mann ka rukh thoda alag hai, kyunki sochne wala angle intense aur mysterious hai. Kabhi kabhi wo apne andar jaldi nahi dikhata, isliye misunderstandings ho sakti hain jahan wo apni feelings jyada chhupa sakta hai ya control karne ki koshish karta hai. Is wajah se egoistic hai, lekin asal me wo apni personal boundaries aur emotional safety protect kar raha hota hai. Uski relationship me jeetne wali style thodi dramatic aur proud hai (leo jaisa), jahan wo apni individuality ko importance deta hai aur relationship ko bhi ek shining moment banana chahta hai. Ego zaroori nahi ki wo dusron ko neecha dikhane ke liye use kare, par apne aap me confidence rakhta hai, jo kabhi dominating bhi hai. --- **Ab kya karein (practical)** * Partner ko apni emotions express karne ka safe space do, taaki wo apni personal thoughts zyada khul kar bol sake. * Communication me clarity rakhna, misunderstandings ko avoid karne ke liye direct baat karo. * Jab kabhi egoistic ya dominant nature show ho, toh patience rakho, samajhne ki koshish karo ki wo apne insecurities ya stress ko chhupa raha hai. * Apne limits set karo aur apne aap ko bhi value do, taaki dono ek healthy balance maintain kar saken. Remember, ego hona normal hai, lekin usko samajh ke handle karna hi growth",
+    "admin_id": "125c2f04-3c78-4abe-9576-6194f2225156",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1803",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 45
+  },
+  {
+    "question": "Kya mera partner decision-maker hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tera partner decision-making mein thoda complex hai. Uska social style zyada bolne-wala, ideas share karne-wala rehta hai, par mindset aur decision-making mein emotional aur thoda cautious nature dikhega, jo kabhi-kabhi delays ya uljhan bhi la sakta hai. --- **Kyun aisa hai (deep breakdown)** Partner ka social vibe Gemini jaisa hai, matlab wo logon se baatein karna pasand karta hai, har perspective samajhne ki koshish karta hai, aur generally ideas aur approach mein open-minded rehta hai. Magar decision-making mein asli tone uski soch aur emotions dekhne ko milte hain. Jo uski mindset wala planet hai, wo thoda complex jagah pe hai jahan gupt baatein ya pressure hai, aur is wajah se kabhi-kabhi wo apne decisions mein straightforward nahi hota, ya emotions se prabhavit ho jata hai. --- **Ab kya karein (practical)** * Partner ko apne decisions ko express karne ke liye comfort aur patience do, jaldbazi se use pressure dena thoda problematic hai. * Uski emotional needs ko samjho, uske emotional feedback ka khyaal rakhna decisions ko smooth banata hai. * Jab bade decisions le rahe ho, toh open discussions karo jahan wo apne doubts aur fears share kar sake. * Kabhi kabhi usko space dena jaruri hai takki wo apne andar ki clarity le aaye. **Yaad rakh, ek strong decision-maker wo hota hai jo samajhdari se sab angles dekhta hai. Tera partner isi tarah sochta hai, bas usse support aur waqt dono chahiye.**",
+    "admin_id": "45e2f69a-edba-47a8-bf01-af2139d5cd14",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1436",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 46
+  },
+  {
+    "question": "Kya mera partner compromise karne wala hoga?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapka partner social terms mein kaafi expressive aur baat-cheet khol ke karta hai kyunki unka social andaaz Gemini jaisa hai. Lekin relationship mindset mein thoda complex challenges hain jo kabhi kabhi samjhauta karne mein delay ya confusion la sakte hain. Emotional tone thodi sensitive aur kabhi-kabhi jazbaat se judi uljhan rakhta hai, jo compromise mein rukaavat banta hai. Unka overall presence dikhata hai ki wo apni individuality aur dikhawa banaye rakhna pasand karte hain, jo relationship mein samjhauta ko thoda tricky bana sakta hai. --- **Kyun aisa hai** Unka social vibe Gemini hone ki wajah se wo logon se bahut milte-julte hain, easily baatein karte hain, aur apne ideas ko share karne mein khulke rehte hain. Iska matlab hai relationship mein ye partner communication ko open rakhenge, jo samjhauta karne mein madadgar hota hai. Lekin unka mindset thoda complicated hai kyunki jo unki soch aur decisions hote hain, wo deep aur kabhi kabhi kisi chhupi tension ke saath jude hote hain, jise samajhna aur handle karna patience maangta hai. Isse kabhi-kabhi conflicts mein samjhauta karna mushkil hai, ya delay hai. Emotions mein wo thode sensitive hain, emotional needs ko lekar kabhi kabhi confusion ya uljhan rahi hai, is wajah se wo sidhe sidhe compromise karne se kum asar dikhate hain. Saath hi, unke behavior mein ek shine aur achanak dikhaawa hota hai jisse wo apni alag pehchan banaye rakhne ki koshish karte hain, jisme samjhauta thoda tough hai, especially jab wo apni space aur respect ke liye khade hote hain. --- **Ab kya karein** * Khulkar baat-cheet karein, open communication se misunderstandings door hongi. * Partner ki emotional needs ko dhyaan se samjhein, patience rak",
+    "admin_id": "7d567ac3-ad82-4e6b-ba26-ce4d4dc63893",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1723",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 47
+  },
+  {
+    "question": "Kya mera partner meri respect karega?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan, tumhara partner respect dikhata hai lekin thoda alag tareeke se, zyada emotional aur baaton ke zariye. Wo samajhdar aur baatcheet mein mehnat karta hai, par partner ki soch aur approach thodi complex aur privately guarded hai. --- **Kyun aisa hai (deep breakdown)** Tumhara partner social style kaafi lively aur expressive hai, jaise ek baatcheet-chhedne wala dost jo har waqt naye topics pe baatein karta rahta ho. Wo open-minded aur curious nature ka hai, jo apne relationship mein bhi ek friendly vibe lata hai. Iska matlab hai ki tum dono ke beech respect ki buniyad natural taur pe ban sakti hai, kyunki communication strong hai. Lekin partner ki soch thodi guarded hai, wo apni feelings ko kabhi kabhi chhupa sakta hai ya private rakhna pasand karta hai. Matlab, har baat ko saral nahi samjho, unka dimaag thoda intense aur secretive hota hai, aur kai baar relationship ke dynamics mein ye confusion ya misunderstanding la sakta hai. Isi wajah se respect dikhane mein kabhi emotional distance ya delayed response rehta hai. Partner ka asli presence garamjoosh aur dignity bhara hai, wo pyar dikhata hai apni adaon mein, asaani se respect dene walon me se hai. Tumhari value ko mehsoos karta hai, aur chahta hai ki ye rishta ek elegant aur warm atmosphere mein rahe. Isliye, respect ke liye communication aur patience dono honi chahiye. --- **Ab kya karein (practical)** * Khuli baat-cheet ko maintain rakho, emotional baatein share karne ka mauka do. * Partner ki privacy ka respect karo, taaki woh khul ke apne jazbaat samjha sake. * Kabhi kabhi unki gupt nature se frustrate mat ho, ye unka apna way hai apne pyaar ko dikhane ka. * Apne aap ko emotionally strong rakho, patience se rishte mein aane wali testing situations ko handle karo. Har rishta",
+    "admin_id": "344349d0-89ba-405c-ab5d-82577b1bdb85",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1783",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 48
+  },
+  {
+    "question": "Kya mera partner mujhe motivate karega?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tera partner generally social, baatein karne wala aur adaptable hai, lekin uska mindset aur approach thoda complex hai jo kabhi kabhi motivation mein delay ya confusion laa sakta hai. Emotionally vo connected hai par support ke mamle mein thoda struggle hota hai. --- **Kyun aisa hai** Tera partner logon ke saath baatcheet aur samajhne mein tez hai, matlab vo easily approachable hai aur tumhare ideas aur feelings ko sunta hai. Par uske dimaag ka jo tareeka hai, vo thoda alag aur gahan sochne wala hai, jo relationship mein kayi baar clarity aur direct support mein gadbad kar sakta hai. Wo motivate karna chahega, par kabhi kabhi apni uljhan ki wajah se usmein der hai. Emotional level par partner genuine hai, jaise ki vo emotionally involved hai par apni personal challenges ki wajah se kabhi kabhi support dene mein pareshani hoti hai. Vo tumhari feelings ko samajhne ki koshish karega, lekin motivation jab chahiye hota hai tab itna straight nahi de paata. Iska matlab hai ki partner tumhe kabhi kabhi cheerleader ki tarah motivate karega, par consistent nahi. Uski overall presence mein thodi royal ya expressive quality hai, matlab uska andaaz thoda strong aur dil le jane wala hota hai jab vo saath hota hai. Ye personality tumhe attract karne wali hai, lekin motivation dene ke maamle mein sabr aur samajh ki zarurat hogi, kyunki challenges ke bina straight encouragement kam mil sakta hai. --- **Ab kya karein** * Partner ke communication style ko samjho, uske thoughts ko gently open karo taaki vo apne emotions aur intents reveal kar sake. * Jab tumhe motivation ki sabse zyada zarurat ho, directly aur clearly apni needs batao. * Uske saath patience rakho, kyunki uska approach thoughtful hai par slow hai. * Kabhi kabhi chhoti chhoti positives ko appreciate karo, jo tumhari relationship ko strong banay",
+    "admin_id": "83096f6d-16c0-49fd-9b41-70f7e17fac7c",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1840",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 49
+  },
+  {
+    "question": "Overall, mere partner ka overall character aur personality kaisi hogi?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tera partner ek social aur milansaar insaan hai, jo baat cheet aur dosti ko bahut importance deta hai. Emotions mein thodi complexity hai, kyunki unka sochne ka tareeqa kabhi kabhi thoda intense aur private hai. Unki mohabbat aur presence mein confidence ke saath ek alag charm bhi rehta hai, jo naturally attract karta hai lekin patience ki zarurat zaroor hogi. --- **Kyun aisa hai (deep breakdown)** Tera partner Gemini jaise expressive aur curious type hain, matlab unki social style approachable, friendly aur hamesha nayi baat seekhne waali hoti hai. Yeh vibe logon ko khud ki taraf khinchti hai, unme baat cheet ka junoon rehta hai, jo relation ko energetic banata hai. Emotions mein thoda mixed experience hoga, kyunki unka mindset kabhi andar se complicated hota hai. Woh soch samajh ke chalte hain, par kabhi kabhi apne jazbaat ko logic se chhupate hain. Unka apna ek private world hota hai jahan wo gahraai se sochte hain. Yeh emotional depth kabhi testing bhi kar sakti hai, toh relationship mein patience aur samajhna zaruri hai. Unka presence ya attitude pyaar mein confident aur thoda royalist type hai, matlab unka apna style aur swag hota hai jo log notice karte hain. Lekin unki apni zindagi mein kai responsibilities bhi hoti hain, jiska impact unke pyaar ke tareeke pe padta hai. Yeh matlab hai ki unki mohabbat waqt leti hai establish hone mein, lekin jab wo full commit karte hain toh sincere rehte hain. --- **Ab kya karein (practical)** * Unke saath khuli aur honest baat cheet banaye rakh, taaki emotional misunderstandings na hon. * Unki privacy aur emotional space ka respect karein, unhe thoda waqt dena zaruri hota hai apne thoughts arrange karne ke liye. * Social interaction aur friendly moments ko importance de, unka nature bhi yahi chahta hai",
+    "admin_id": "22d462c2-4675-4083-98de-1f14eb973b20",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1795",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 50
+  }
+]

@@ -1,0 +1,1526 @@
+[
+  {
+    "question": "Kya hum dono compatible hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "off_topic",
+    "ask_source": "scope_gate:not_personal",
+    "engine_tag": "ans-cosmo",
+    "answer_path": "scope_gate:not_personal",
+    "answer_text": "Cosmic Ask sirf aapke baare me jyotish sawaal leta hai — aapki kundli, shaadi, career, health, paisa, bachche, luck, timing, etc. News, coding, presidents, ya 'astrology kisne banayi' jaisa general GK yahan nahi. Kripya apni life se juda sawaal puchiye.",
+    "admin_id": "ad001b3a-686f-4862-b9d7-8fac3ae76b0c",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "off_topic",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=253"
+    ],
+    "issues": [
+      "BLOCKED — topic=off_topic source=scope_gate:not_personal",
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 1
+  },
+  {
+    "question": "Kya hum ek dusre ke liye sahi partner hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tum dono ki jodi mein communication aur baat-cheet kaafi active rahegi kyunki tumhara partner social aur expressive type hai. Par emotional level par thodi complexity hai, jisme misunderstandings aa sakti hain. Isliye relationship ko samajh aur patience se sambhaalna padega. --- **Kyun aisa hai (deep breakdown)** Tumhara partner deeply social hai, jo baaton se logo ko connect karta hai. Wo har situation mein apne ideas aur thoughts ko share karna pasand karta hai, isliye tum dono milke har cheez par easily discuss kar sakte ho. Lekin emotional taur par wo thoda emotional ups and downs se guzarta hai, kyunki uski feelings kabhi clear nahi hoti. Uska dimaag partnership ko lekar thoda complicated hai. Wo zyada sochta hai feelings ke baare mein, par kabhi kabhi apne jazbaat chupata bhi hai, jisse misunderstandings ho sakti hain. Emotional side mein tumhara partner thoda secretive ya complex hai, jo kabhi tumhe confuse karega. Tumhara partner ek strong presence rakhta hai, jo logon ko attract karta hai, par apne emotions ko openly dikhane mein thoda cautious hai. Iska matlab yeh hai ki wo pampered hona chahta hai aur apni zindagi mein respect aur appreciation ki value samajhta hai. --- **Ab kya karein (practical)** * Rozana khuli baat-cheet ka mahol banao, emotions ko chupane ki jagah share karo. * Ek dusre ke sochne ke tarike ko samajhne ki koshish karo, patience rakkho problems solve karte waqt. * Respect aur appreciation ek dusre ko regularly do, yeh tumhare bond ko mazboot karega. * Emotional transparency ko encourage karo, taaki misunderstandings kam ho sakhein. **Yaad rakhna**, relationship mein challenges aate hain, lekin wo tum dono ke beech samajh aur pyaar ko gehra karte hain. Patience aur honesty se tum dono ek strong couple ban sakte ho.",
+    "admin_id": "67a3b691-cd21-455c-8cb2-f02b6eebbc73",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1794",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 2
+  },
+  {
+    "question": "Kya hamari relationship long-term compatible hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan dost, tum dono ke rishte mein gehra emotional connection hai, par saath hi kabhi-kabhi distance aur mood swings ki wajah se challenges bhi hote hain. Long-term compatibility possible hai agar dono patience aur steady feelings dikhaen. --- **Kyun aisa hai (deep breakdown)** Pehle toh, tumhare rishte mein dono ki feelings kaafi gehri hain. Tum dono naturally ek dusre ke emotions ko samajhte ho, mood pe ek dusre ka asar hota hai, jaise ki emotional synchronicity easy hoti hai. Yeh tumhare rishtay ki ek strong emotional buniyad banati hai jo long-term mein kaafi madadgar hoti hai. Par yeh bhi hota hai ki kabhi kabhi, feelings ko openly express nahi kiya jaata, ya emotionally thoda doori bana leti ho, jo tension create kar sakti hai. Is wajah se kabhi emotional ups and downs bhi aate hain, jaise mood lock ho jata hai ya baatein delayed hoti hain. Yeh chhoti emotional distances rishte ko affect kar sakte hain agar time pe solve na kiya jaye. Iske alawa, kabhi kabhi external ya internal pressures ki wajah se delays ya misunderstandings bhi hain jo thoda emotional cooling create karte hain. Par yeh negative phases rishte ko break nahi karte, bas demand karte hain ki dono taraf samajh aur consistency honi chahiye. --- **Ab kya karein (practical)** * Apas mein apne emotions ko regular share karo, chhoti batein chupane se problems badi hoti hain. * Jab mood mismatch ho, tab bhi patience rakho, aur distance na banne do; consistent communication zaruri hai. * Ek dusre ki feelings ko samajhne aur respect karne ki koshish karo, bina judgment ke. * Kabhi kabhi chhoti surprises ya affection dikhane se emotional warmth bani rahegi. > Yad rakho, har rishte mein kabhi na kabhi difficulties aati hain, par jis rishte mein emotional gehraai aur mehnat ho, usmein long-term possibilities",
+    "admin_id": "be1156d5-61b9-4391-8961-1e158a34654e",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1818",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 3
+  },
+  {
+    "question": "Kya hamari personalities match karti hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dono ke personalities me kuch milte julte pehlu hain, lekin overall compatibility thodi challenging hai. Yahan thoda tension aur distance bhi hai jo relationship ko maintain karne me effort mangta hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, dono ke beech jo communication hota hai, wo thoda complex hai. Aapke conversation me kabhi-kabhi misunderstandings aur emotional distance aa sakte hain, kyunki partner ke attitude me thodi thodi coolness aur patience ki kami hoti hai, aur aap dono ke reactions kabhi intense ho jaate hain. Iska asar relationship me kabhi kabhi arguments ya misunderstandings se ho jata hai. Lekin, dono me pyaar aur affection ka ek acha base hai. Mercury (jo communication aur samjhauta dikhaata hai) thoda hidden aur complex jagah me hai, isliye feelings aur baatein pura openly express nahi hoti hamesha. Mars ki wajah se energy aur passion strong hai, lekin kabhi kabhi wo temper ya rash behavior bhi la sakta hai, jo chhote conflicts ko janam deta hai. Ek positive baat ye hai ki dono me ek dusre ko samajhne ka jazba aur wisdom bhi hai, ye aapko tough moments se ubharne me madad karta hai. But overall, thoda effort chahiye relationship ko smooth banane ke liye. --- **Ab kya karein (practical)** * Dhyan rakhein ki communication me clarity rahe, feelings ko chhupana ya overreact karna relation me rukaavat hai. * Patience aur understanding ko badhayein, especially jab disagreements ho. * Kabhi kabar akele waqt dena dono ke liye zaruri hai, jisse emotional energy control me rahe. * Respect aur pyar dikhana chhoti chhoti baaton me zaroori hai, taaki connection bana rahe. > Relationship me thodi mehnat dene se hi dono apne farak ko samajh ke ek saath aane ka raasta bana sakte hain. Yeh ek safar hai jo daily commitment mangta hai,",
+    "admin_id": "fcdf2299-d606-48e1-a184-40fb0d87d532",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1800",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 4
+  },
+  {
+    "question": "Kya hamari thinking match karti hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dost, tum dono ke sochne ka tareeka thoda alag hai, matlab exact match nahi hai, lekin samajhne aur adjust karne ke mauke hain. Kuch challenges hain jo attention chahte hain, par understanding build hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tumhari relationship mein communication thoda complex hai kyunki soch ka raja (jo aapke jazbaat aur partner ke approach ko control karta hai) ek aise angle se hai jahan feelings thodi chhupi ya intense hoti hain. Matlab, dono apne emotions ko directly express karne mein kabhi hesitate karte hain, is wajah se misunderstandings ho sakti hain. Saath hi, dono ka apna attitude dheere-dheere relationship ko shape karta hai, ek taraf Mars wali energy hai jo passionate aur seedhi baat karti hai, dusri taraf Saturn wali energy hai jo patience aur kabhi kabhi thodi doori (distance) laati hai. Iski wajah se kabhi kabhi tum dono ke beech thoda tension ya delay ho jata hai samajhne mein. Ek achhi baat ye bhi hai ki tum dono ke andar relationship ko aage badhane ka jazba hai (5th house mein Jupiter ki achhi position), matlab tum dono seekhne aur set hone ke liye ready ho, agar thoda effort lagaoge to sochne mein bhi harmonize kar sakte ho. --- **Ab kya karein (practical)** * Regularly khul ke apne feelings aur worries share karo, bina judge kiye. Ye tum dono ke beech ki complexity ko halka karega. * Kabhi kabhi patience rakhna zaroori hai jab misunderstandings ho, try karo jaldi react na karne ka. * Thodi masti aur light conversations se emotional tension door karo, jahan Mars ka passion aur Saturn ka control balance mein aaye. * Dono ko apni soch ek dusre ke nazariye se samajhne ki koshish karni hogi, jisse relationship mein harmony badhegi. Yeh baat yaad rakho ki soch ka 100% perfect match jaruri nahi",
+    "admin_id": "afe6c483-7313-4002-a895-2d7860c62d38",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1790",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 5
+  },
+  {
+    "question": "Kya hamare values same hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "off_topic",
+    "ask_source": "scope_gate:not_personal",
+    "engine_tag": "ans-cosmo",
+    "answer_path": "scope_gate:not_personal",
+    "answer_text": "Cosmic Ask sirf aapke baare me jyotish sawaal leta hai — aapki kundli, shaadi, career, health, paisa, bachche, luck, timing, etc. News, coding, presidents, ya 'astrology kisne banayi' jaisa general GK yahan nahi. Kripya apni life se juda sawaal puchiye.",
+    "admin_id": "bd13276a-bfe6-41ea-8e79-de827302018a",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=253"
+    ],
+    "issues": [
+      "BLOCKED — topic=off_topic source=scope_gate:not_personal",
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 6
+  },
+  {
+    "question": "Kya hamare life goals match karte hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "off_topic",
+    "ask_source": "scope_gate:not_personal",
+    "engine_tag": "ans-cosmo",
+    "answer_path": "scope_gate:not_personal",
+    "answer_text": "Cosmic Ask sirf aapke baare me jyotish sawaal leta hai — aapki kundli, shaadi, career, health, paisa, bachche, luck, timing, etc. News, coding, presidents, ya 'astrology kisne banayi' jaisa general GK yahan nahi. Kripya apni life se juda sawaal puchiye.",
+    "admin_id": "f5cc4a72-c49b-4d85-8c7c-52e7640c8ca4",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "off_topic",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=253"
+    ],
+    "issues": [
+      "BLOCKED — topic=off_topic source=scope_gate:not_personal",
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 7
+  },
+  {
+    "question": "Kya hamari expectations ek jaisi hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Bhai, tum dono ke soch aur ummeedein bilkul ek jaise nahi hain, thodi doori hai. Matlab, dono ke nazariye thode alag hain aur kabhi kabhi misunderstandings ho sakti hain. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tumhare rishtay mein kuch aise patterns hain jo dikhate hain ki tum dono ke beech communication kabhi kabhi tricky hoti hai. Mercury jiska kaam hota hai baat-cheet sambhalna, wo thoda alag jagah par hai, isliye clarity aur open sharing mein rukaavat aa sakti hai. Phir, saath hi ek thoda emotional distance hota hai kyunki Saturn padh raha hai tumhare pyaar mein, jo patience aur thoda cool rehne ki baat karta hai, par kabhi-kabhi ye thandapan ya doori bhi le aata hai. Mars ki energy bhi thodi zyada heat aur temper lekar aati hai, jo arguments ya disagreements ko easily janam de sakti hai. Lekin ek achhi baat ye hai ki tumhari understanding mein ek chhota sa hope bhi hai, wisdom aur naye nazariye ki kiran jaisa kuch hai jo kabhi kabhi tum dono ke beech harmony la sakta hai. Matlab, jab dono jaanbujh ke apni soch samajh mein lana chahte hain, tab rishta sudhar sakta hai. --- **Ab kya karein (practical)** * Apni expectations ko clearly baat-cheet mein rakhna, bina gussa ya blame kiye. * Patience rakhna aur har disagreement ko immediate baat cheet se solve karne ki koshish karna. * Emotional coolness maintain karne ki practice karo, taaki temper na bhide. * Kabhi kabhi apne nazariye ko thoda flexible rakhna, partner ke perspectives ko genuinely samajhne ki koshish karna. > Yaad rakh, rishton mein har kisi ki soch alag hoti hai par samajhne ki koshish aur patience se hi dooriyaan kam hoti hain. Compatibility saanjhe efforts se",
+    "admin_id": "8e7dbbdc-7e90-4c31-8966-7a31d15ec075",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1686",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 8
+  },
+  {
+    "question": "Kya hum emotionally compatible hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "off_topic",
+    "ask_source": "scope_gate:not_personal",
+    "engine_tag": "ans-cosmo",
+    "answer_path": "scope_gate:not_personal",
+    "answer_text": "Cosmic Ask sirf aapke baare me jyotish sawaal leta hai — aapki kundli, shaadi, career, health, paisa, bachche, luck, timing, etc. News, coding, presidents, ya 'astrology kisne banayi' jaisa general GK yahan nahi. Kripya apni life se juda sawaal puchiye.",
+    "admin_id": "234f3b0b-39f1-4360-9405-85856103a58b",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "off_topic",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=253"
+    ],
+    "issues": [
+      "BLOCKED — topic=off_topic source=scope_gate:not_personal",
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 9
+  },
+  {
+    "question": "Kya hum mentally compatible hain?",
+    "pass": false,
+    "issues": [
+      "RUNTIME_ERROR - timed out"
+    ],
+    "answer_text": "",
+    "ask_source": "",
+    "admin_engine": "",
+    "q_index": 10
+  },
+  {
+    "question": "Kya hum intellectually compatible hain?",
+    "pass": false,
+    "issues": [
+      "RUNTIME_ERROR - timed out"
+    ],
+    "answer_text": "",
+    "ask_source": "",
+    "admin_engine": "",
+    "q_index": 11
+  },
+  {
+    "question": "Kya hum spiritually compatible hain?",
+    "pass": false,
+    "issues": [
+      "RUNTIME_ERROR - timed out"
+    ],
+    "answer_text": "",
+    "ask_source": "",
+    "admin_engine": "",
+    "q_index": 12
+  },
+  {
+    "question": "Kya hum physically compatible hain?",
+    "pass": false,
+    "issues": [
+      "RUNTIME_ERROR - timed out"
+    ],
+    "answer_text": "",
+    "ask_source": "",
+    "admin_engine": "",
+    "q_index": 13
+  },
+  {
+    "question": "Kya hamari sexual compatibility achhi hai?",
+    "pass": false,
+    "issues": [
+      "RUNTIME_ERROR - timed out"
+    ],
+    "answer_text": "",
+    "ask_source": "",
+    "admin_engine": "",
+    "q_index": 14
+  },
+  {
+    "question": "Kya hamari communication compatibility achhi hai?",
+    "pass": false,
+    "issues": [
+      "RUNTIME_ERROR - timed out"
+    ],
+    "answer_text": "",
+    "ask_source": "",
+    "admin_engine": "",
+    "q_index": 15
+  },
+  {
+    "question": "Kya hum ek dusre ko achhe se samajhte hain?",
+    "pass": false,
+    "issues": [
+      "RUNTIME_ERROR - timed out"
+    ],
+    "answer_text": "",
+    "ask_source": "",
+    "admin_engine": "",
+    "q_index": 16
+  },
+  {
+    "question": "Kya hum ek dusre ko complete karte hain?",
+    "pass": false,
+    "issues": [
+      "RUNTIME_ERROR - timed out"
+    ],
+    "answer_text": "",
+    "ask_source": "",
+    "admin_engine": "",
+    "q_index": 17
+  },
+  {
+    "question": "Kya hum ek dusre ki weaknesses handle kar sakte hain?",
+    "pass": false,
+    "issues": [
+      "RUNTIME_ERROR - Remote end closed connection without response"
+    ],
+    "answer_text": "",
+    "ask_source": "",
+    "admin_engine": "",
+    "q_index": 18
+  },
+  {
+    "question": "Kya hum ek dusre ki strengths appreciate karte hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dono ke beech emotional bonding aur respect hai, jo ek dusre ki strengths ko samajhne aur appreciate karne ka base banata hai. Lekin kabhi kabhi differences aur thodi doori aa sakti hai jo communication se hi door hoti hai. --- **Kyun aisa hai (deep breakdown)** Aapke rishtay mein emotional depth hai, matlab dono apni feelings ko samajhne ki koshish karte hain. Moon ki position yeh batati hai ki aap dono emotionally connected ho, jo dono ki taqat ko feel karne mein madad karta hai. Matlab, ek dusre ki chhoti chhoti baatein, jaise kind gestures ya emotional support, dono ke liye important hote hain. Venus ki situation yeh batati hai ki rishtay mein warmth aur respect hai, isliye aap dono apni qualities ko nazarandaz nahi karte, balki appreciate karte hain. Communication ka role bhi strong hai, matlab aap dono baatein share karte ho, hasi-mazaak ya deep discussions dono ki taqat ko samajhne mein help karte hain. Lekin Saturn ke thoda influence se thoda emotional distance ya misunderstandings aati hain, jo kabhi kabhi appreciation mein gap la sakti hain. Yeh delay ya thoda emotional cooling temporary challenges hain, jo patience se door hote hain. --- **Ab kya karein (practical)** * Rozana apni feelings aur appreciation express karna, chhoti chhoti baatein bhi count karti hain. * Kabhi jab thoda emotional gap ho, toh open communication rakhna taki misunderstandings na badhein. * Ek dusre ki pasand aur efforts ko verbally ya actions mein dikhana, jisse warmth bani rahe. * Thoda patience rakhna, kyunki kabhi kabhi growth ke phases mein thoda distance normal hai. > Rishtay ki asli taqat tab samajh aati hai jab hum apni imperfections ke bawajood ek dusre ko samjhte aur value karte hain. Yeh ek continuous journey hai, jisme chhoti chhoti appreciation rishte ko gehra karti hai.",
+    "admin_id": "bb6e8cb5-00b3-479f-a9e9-7cf750520c0f",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1819",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 19
+  },
+  {
+    "question": "Kya hamari bonding naturally strong hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dost, tum dono ki bonding mixed vibes deti hai, na poora naturally strong hai, na weak. Kuch cheezein rishta achha chalne mein madad karti hain, par kuch challenges bhi hain jisme effort lagana zaroori hai. --- **Kyun aisa hai (deep breakdown)** Jupiter tumhare rishton mein thodi si samajh aur blessings deta hai, matlab dono ke beech kuch understanding ka element zaroor hai. Par partner ke taraf communication mein thodi complexity hai, jahan baatein kabhi direct nahi hoti ya misunderstandings ho sakti hain. Matlab dono paas emotions ke expression mein thoda dam rakho, warna confusion badh sakti hai. Dusri baat, tumhari personality mein jo energy hai, usse kabhi kabhi relationship mein patience ki kami hoti hai. Thoda temper ya irritation bhi aa sakta hai jo kabhi kabhi misunderstanding badha deta hai. Aur 7th relationship wali jagah pe aise energy ke touch hone se kabhi kabhi rishton mein distance aur delay jaisa hota hai, matlab kabhi rista cool ya thoda slow hai. Moon partner ki taraf hai, jo emotions ko thoda adjust karta hai, magar overall ye relationship thoda effort chahta hai, jise dono ko milke kaam karna padta hai. Natural effortless click se zyada focused mehnat wali bonding hai. --- **Ab kya karein (practical)** * Communication pe dhaan do, khul ke apne emotions clear karo, confusion door karo. * Patience aur samajh bani rakho especially jab temper ya irritation aaye. * Thodi flexibility lekar relationship ki chhoti chhoti problems ko jaldi resolve karo. * Kabhi kabhi thoda space bhi do, jisse emotional distance door ho jaata hai. > Yaad rakho, rishta tabhi majboot hota hai jab dono saath milke usse sambhalte hain, nii ki sirf naturally perfect hone ka wait karein. Effort ek naya balance la sakta hai.",
+    "admin_id": "23cbf71c-218f-4fed-ba68-a0aee366c156",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1761",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 20
+  },
+  {
+    "question": "Kya hamare beech mutual understanding hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dost, tum dono ke beech mutual understanding hona possible hai, lekin iske liye sachai aur patience se baat karna bahut zaroori hai. Emotional baatein kabhi kabhi delay ya thodi garma-garmi ke sath aati hain, toh sabr rakhna zaroori hoga. --- **Kyun aisa hai (deep breakdown)** Tum logon ke beech jo baat-cheet hoti hai, usme kabhi-kabhi gap ya misunderstanding aa sakti hai, kyunki dono taraf se emotional cooling ya thodi doori mehsoos hoti hai. Matlab, feelings tense ya ruk jaati hain, jisse baat-cheet thodi slow ya tough hai. Lekin jab tum dono dil se apne jazbaat ko openly share karoge, tabhi asli samvedansheelta ug sakti hai, kyunki dil se baat karne par hi dono ko ek dusre ki feelings samajhne ka mauka milega. Yahan par impulse se bachkar, thoda patience rakhna zaroori hai, varna baat-cheet me tez alfaaz ya chidh-chidhahat badh sakti hai. Emotionally tum ek dusre ki taraf khiche jaate ho, lekin kabhi kabhi wo jazbaat andar hi andar dab rehte hain, jisse baad me tension banti hai. Isliye chhoti chhoti baaton ko bhi samjhane aur suljhane ka iraada rakhna chahiye. --- **Ab kya karein (practical)** * Apne jazbaat ko chupane se zyada, samay nikalke khulkar baat karo. * Jab baat thodi garam ho, turant reaction dene se bacho; thoda time leke shant ho kar dialogue shuru karo. * Chhoti chhoti baaton ko ignore na karein, ek dusre ko feel karne ka mauka de. * Patience rakho, growth time leta hai, aur sabr se misunderstanding kam hoti hai. > Yaad rakho, behtareen samajh tab aati hai jab baat-cheet",
+    "admin_id": "b31f1b87-2911-4223-b17d-99a7a2951bcc",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1533",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 21
+  },
+  {
+    "question": "Kya hum ek dusre par trust kar sakte hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dost, aap dono ke beech trust hai, lekin thoda sensitive hai. Relationship mein clarity aur boundaries bana ke rakhna bahut zaroori hai tabhi bharosa barqaraar rahega, warna misunderstandings aur emotional thandak aa sakti hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle toh yeh ki aap dono ke beech romance aur dostana rishta strong hai, jo ek achha emotional foundation deta hai. Aapka dil relationship mein involved hai, aur idealism bhi hota hai, jaise koi sapne dekhna. Par haan, kabhi kabhi aap dono mein emotional doori ya misunderstanding bhi hai, specially jab baatein clarity se na ki jayein. Kuch situations mein aap dono ke beech sharp baatein ho sakti hain, jisse bharosa thoda hila hua mehsoos hai. Ek reason yeh bhi hai ki dono ke emotional reactions sometimes controlled nahi hote, jisse tension create hoti hai. Iske bawajood, loyalty aur commitment ka seedha asar dikh raha hai, jo long term mein rishta sambhal ke rakhne mein madad karta hai. Bas ek baat ka dhyan rahe ki kabhi kabhi emotional feelings ko andar hi andar daba diya jata hai, jisse baad mein problems barh sakti hain. --- **Ab kya karein (practical)** * Apas mein khul kar baat karein, frustration ko chupaye nahi. Clarity se misunderstandings door hongi. * Boundaries set karein ki kabhi personal space dono ko mile, jisse emotional space healthy rahe. * Jaldi-jaldi gusse mein aake baat na karein, thoda break le kar baat ko sambhalein. * Ek dusre ko emotionally samajhne ki koshish karein, patience rakhein, trust build karne mein waqt hai. > Bharosa ek aisa phool hai, jo sambhalne par khilta hai; lekin agar use neglect kiya, toh kabhi kabhi thandi hawa chal jaati hai. Ishq aur samvedansheelata ko",
+    "admin_id": "4c42335b-811f-4731-8514-608fc1b7124c",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1715",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 22
+  },
+  {
+    "question": "Kya hum difficult situations me saath denge?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dost, difficult waqt me saath dena thoda challenging rahega, kyunki dono ke beech kabhi kabhi communication ya emotions ko express karne me rukaavat aati hai. Par chhote-chhote efforts se rishta repair aur support bana rehta hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, 7th wale partnership ka jo tarika hai, wo thoda demanding aur emotional depth me tough hai. Communication me clarity kaafi nahi milti, jisme dono ko apne feelings samajhane aur express karne me dikkat hoti hai. Is wajah se jab mushkil halat aati hain, to misunderstandings badh sakti hain. Saturn jo hai, wo distance aur patience pe dhyaan karta hai, lekin wo 5th house me kamzor hai, matlab duty nibhaane me kabhi thakan ya emotional doori bhi aa sakti hai. Mars ka touch 7th house par thoda temper aur heat dalta hai, is wajah se tension jaldi badhne ke chances hain jab stress zyada ho. Positive side me, Jupiter ki presence hai jo dono ke beech thodi clarity aur wisdom lane ki koshish karta hai, aur Moon bhi partnership ko natural emotions se jodta hai. Jo thoda madad karta hai understanding set karne me, lekin yeh sab tabhi possible hai jab dono consciously saath milke kaam karein. --- **Ab kya karein (practical)** * Aapas me regularly apne emotions aur expectations clearly baat karo, jisse confusion na ho. * Difficult samay me patience rakho; jaldi react karne ki bajaye thoda waqt lekar situation samjho. * Ek dusre ki weaknesses ko samajhke supportive baniye, na ki blame karne ki sochiye. * Kabhi-kabhi chhote breaks lena helpful hota hai taaki temper control rahe aur baatein cool dimaag se ho. > Mushkil waqt me saath dena easy process nahi hota, par jab dono intentional efforts karte hain, tabhi rishta apni rakhwali dikhata hai. Yaani saath dena ek seekhne wali",
+    "admin_id": "63226a31-2653-44f0-a785-9bc4971abed1",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1785",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 23
+  },
+  {
+    "question": "Kya hum ek team ki tarah kaam karenge?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dost, tum dono ke beech teamwork possible hai, lekin thodi challenges bhi hain jise samajhkar hi sahi raaste nikal sakte ho. Matlab, ekdam smooth partner jaisa connection nahi, lekin milke kaam karna mushkil bhi nahi. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tum dono ke rishtay mein jo communication ka maamla hai, wo thoda complicated hai. Partner ke taraf se kabhi baatein chupana ya misunderstandings ho sakti hain, kyunki unka communication style thoda hidden ya guarded hai. Iska matlab daily baaton mein thoda dhyan dena padega, taaki chhoti chhoti baatein tension na ban jayein. Dusra, tumhare hisaab se situation thodi demanding hai. Tumhara andar ka drive aur passion kaafi hai, lekin kabhi kabhi duties aur responsibilities ko leke distance ya patience ki bhi zarurat padegi. Matlab, kabhi kabhi teamwork mein interruptions ya delays aa sakte hain, jise handle karna zaruri hai. Aur haan, emotional level par bhi thoda fluctuations milenge. Partner ke emotions kabhi quick-change hain, jis wajah se aapas mein samajh aur coordination pe kaam karna rahega. Ek achhi baat ye hai ki tum dono ke beech love aur positive intentions to hain, jo ek achha base provide karte hain teamwork ke liye. --- **Ab kya karein (practical)** * Rozana choti choti communication par focus karo, feelings openly share karna seekho. * Patience rakho, kisi bhi disagreement ya misunderstanding par jaldi react mat karo. * Team work ko chhoti chhoti goals mein divide karo taaki progress clear dikhe. * Kabhi kabhi thodi personal space bhi dena sikho, taaki dono apne emotions ko samajh sakein. > Remember Bhai, teamwork tabhi banta hai jab dono ek dusre ki khamiyan samajhkar uspar kaam karein. Kabhi kabhi thoda struggle hota hai, lekin support aur understanding se yeh rishte",
+    "admin_id": "c33196ff-0223-472a-b4f0-9221d71b6890",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1796",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 24
+  },
+  {
+    "question": "Kya hum conflict ko achhe se solve kar payenge?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Conflict ko sirf bachche ke hone se solve karna mushkil rahega, kyunki dono ke beech jo challenges hain wo communication aur emotional boundaries wali hai. Bachche support de sakta hai par asli tension tabhi kam hogi jab baat-cheet aur limits pe kaam hoga. --- **Kyun aisa hai (deep breakdown)** Dost, jitna bhi pyar ho, agar dono ke beech baatein tez aur impulsive ho jaayein ya distance badh jaaye, toh bachche hone se solutions nahi aate. Yahan thoda waisa hi scene hai ki jise samjho “thode emotional thande” moments jyada hain, matlab kabhi feelings ko chupaya jaata hai aur phir jab wo vent hoti hain toh zyada intense hoti hain. Aap dono ke rishte mein aise situations ban rahi hain jahan kabhi sharp words ya fights hoti hain, aur yeh water ko thodi aur trouble mein daal deta hai. Bachche to bonding thodi strong karta hai par agar aap dono apne beech ek saaf aur “respectful boundaries” nahi banate, toh yeh tension chhupa hi rahega. Matlab, \"attachment\" to banta hai, lekin “stability” thodi kamjor rahegi. Emotional cooling aur distance ka bhi risk rehta hai, jiska bachche ke relation pe alag tarah se asar padta hai, kabhi comforting feel nahi hone deta. --- **Ab kya karein (practical)** * Bachche ke saath baith kar apne jazbaat khul ke discuss karo, bina blame kare. * Apni boundaries set karna seekho, matlab ek doosre ki feelings ko samajhna aur respect karna. * Conflict aaye toh thoda pause leke chup chap socho, impulsiive reaction na do. * Emotional honesty badhao, apne andar jo tension hai use chup na rakho, warna wo badhta rahega. > Dost, bachche relation ko thoda motivate kar sakta hai lekin asli sulah-tabahi tabhi aayegi jab aap dono ek dusre ki respect aur baat-cheet ko priority",
+    "admin_id": "de99a06f-c97a-42ac-8a35-f93ca13a115a",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1731",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 25
+  },
+  {
+    "question": "Kya hum arguments ke baad relationship sambhal lenge?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Bhai, arguments ke baad relationship sambhalne ki sambhavna hai, par thoda extra mehnat aur patience zaruri hoga. Kabhi-kabhi kuch misunderstandings ya doori aa sakti hai jo balance karni padti hai. --- **Kyun aisa hai (deep breakdown)** Tumhare rishte mein kuch aise elements hain jo thoda tension laate hain, jaise ki tumhare communication style (Mercury) thoda kahin doori leta hai ya misunderstandings badhata hai. Ye baatein aapke beech kabhi confusion ya emotional distance create kar sakti hain. Aur Saturn, jo patience ya responsibility ka symbol hota hai, tumhare romance ke aspects mein thoda weak hai, matlab relationship ko sambhalne ke liye consistent effort aur samay dena padta hai. Lekin positive baat ye hai ki tumhare rishte mein wisdom aur samajdari (Jupiter) bhi maujood hai jo arguments ke baad bhi balance lane mein madad karti hai. Ye dikhaata hai ki agar dono taraf se samajhdaari se baat ho, to relationship ko phir se stable karna. Aur haan, emotional side (Moon) bhi hai tumhare partnership mein, jo emotions aur feelings ko strong banata hai, matlab tum dono ko apni feelings ko express karne ki zarurat hai taaki misunderstandings door ho sakein. --- **Ab kya karein (practical)** * Arguments ke baad thoda waqt dena, energy waste ki jagah soch samajh ke baat karna. * Open aur honest communication practice karna, jo feel karte ho wo clearly share karo. * Patience rakhna, relationship ko sudharne mein waqt hai, ek din mein sab theek nahi hota. * Emotional connection ko priority do, chhoti chhoti baaton pe care dikhana jisse distance kam ho. > Yaad rakho, relationship ek journey hai jisme kabhi thodi uphill difficulty zaruri hoti hai, lekin dono milke agar kaam karenge to sambhal sakti hai. Consistency aur samvedansheel hona zaruri hai.",
+    "admin_id": "d87ac62c-1476-4663-9c97-3757e0e53102",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1793",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 26
+  },
+  {
+    "question": "Kya hamare beech ego clashes rahenge?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Ego clashes hone ke chances hain kyunki dono ke relationship mein kuch tensions aur misunderstandings aa sakti hain, especially jab baat communication aur emotional expression ki ho. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, 7th house aur uske ruler ki situation thodi delicate hai. Mercury jo partnership ka driver hai, wo aise position mein hai jahan misunderstandings ho sakti hain ya dono apni baat clearly nahi samajh pate. Matlab, dono ke beech kabhi kabhi baatein galat interpret ho sakti hain, jisse ego touch hota hai. Saturn aur Mars ka effect bhi alag tarah se relationship mein aata hai. Saturn jo thoda distance aur patience laata hai, wo bharpoor nahi hai yahan, isliye kabhi kabhi dono mein doori ya thandak mehsoos hai. Wahin Mars jo energy aur thoda temper bhi laata hai, wo bhi presence mein hai, jo chhoti chhoti baaton ko bade clashes mein badalne ke chances badhata hai. Par ek positive baat ye hai ki Jupiter, jo wisdom aur understanding ka sign hai, wo zyada strong hai toh agar dono dheere dheere apne ego ko control kar sake aur samajhne ki koshish kare, to situation manageable ban sakti hai. --- **Ab kya karein (practical)** * Apne communication par kaam karo, jab bhi baat ho, apni feelings ko clearly aur respect ke saath express karo. * Patience develop karo, jab galat fehmi ho tab gussa karne ke bajaye samjhauta karne ki koshish karo. * Ego ko control karna seekho, chhoti baaton par “main sahi hu” wali soch chhod do. * Kabhi kabhi space lena bhi zaruri hai, taaki dono apne emotions ko thanda kar sakein aur fir baat karein. **Yaad rakho,** har relationship mein ego clashes aate hain, par agar dono ne milke apne behavior ko sudharnay ki koshish ki, to yeh phase grow karne ka mauka ban jata hai.",
+    "admin_id": "345f9ce5-e8dc-4246-a7ad-34e524d7cd1a",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1763",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 27
+  },
+  {
+    "question": "Kya hamari communication style match karti hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dost, tum dono ke beech communication possible hai, par iska matlab hai ki clear aur honest baat-cheet karni zaroori hogi. Thoda patience aur samajh honi chahiye, kyunki kabhi kabhi baaton mein thodi doori ya tension ban sakti hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tum dono ki baat-cheet me thodi si emotional doori aur delay aasakta hai, jaise jab koi baat samajhne mein time lagta ho. Kuch baar sharp ya impulsive words bhi nikal sakte hain jo fights badha sakte hain. Iska matlab yeh hai ki dono ko apne words par control rakna hoga, aur jaldbazi mein decision nahi lena chahiye. Phir bhi, tum dono ke beech emotional understanding tab aur gehri hoti hai jab feelings ko sachi aur khuli tarah share kiya jaye. Jab tum apne dil ki baat bina kisi rok-tok ke samne laate ho, tab connection strong hota hai. Lekin agar emotions daba ke rakhe jaaye, toh kabhi-kabhi wo silent tension ya alagav bhi bana sakta hai. Isliye patience se har ek hard baat ko suljhane ka attitude rakhna zaroori hai. --- **Ab kya karein (practical)** * Jab bhi koi tough baat ho, ek dusre ko interrupt na karo, poora samay do sunne ke liye. * Har baat ko honestly aur respect ke saath express karo, bina gussa hue. * Agar tension ho, thoda time gap lo, phir firsha baat karo, impulsive reaction se bachna hai. * Apne emotions ko chupane ke bajaye share karo, taaki misunderstanding na ho. > Yaad rakhna, ek successful communication ka raaz hai **dono ki patience aur khulapan**. Thodi si mehnat se tum dono apna rishta aur majboot kar sakte ho.",
+    "admin_id": "55c8a4fc-f95a-45d9-9471-9714b2e71426",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1558",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 28
+  },
+  {
+    "question": "Kya hum emotionally ek dusre ko support karenge?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dono ke beech emotional support ka scope medium hai, matlab thoda ups and downs hai. Kabhi achha samajh milega, kabhi thoda distance ya misunderstandings bhi hongi. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, dono ke rishtay me communication aur emotions thode complex hain. Mercury jo sochne aur bolne ka planet hai, woh thoda door yani struggle wale position mein hai, jisse kabhi kabhi feelings ko openly share karna ya samajhna mushkil hai. Matlab, dono ko apni baat safai se rakhni padegi nahi toh dil ka dard dol sakta hai. Dusra, moon jo mann aur jazbaat ko dikhata hai, partner ke ghar mein hai, isse emotional connection zaroor hai lekin ye bina attention ke thoda surface level hai. Emotional depth ke liye dono ko extra mehnat karni hogi. Ek challenge yeh bhi hai ki kuch planets, jaise Saturn aur Mars, relationship me kabhi kabhi tension ya distance laate hain, matlab emotional support mein delays ya misunderstandings hain. Par Jupiter jo thoda positive light deta hai, yeh batata hai ki agar dono kozaruri wisdom aur patience rakhen to emotional bonding slowly improve hai. --- **Ab kya karein (practical)** * Roz thoda waqt nikal ke apni feelings share karo, bina judge kiye, taaki transparency aaye. * Ek dusre ki feelings ko dhyan se suno, zakhamon ko samajhne ki koshish karo. * Patience rakho, kyunki emotional comfort dheere dheere build hota hai, aaj nahi toh kal. * Agar tension aaye, toh thoda distance le kar issue ko shant dimaag se samjho, takraav badhne na pao. > Yaad rahe, emotional support ek taraf se nahi, dono milke banate hain. Yeh relationship ek learning journey hai jisme sabr aur samajh sabse bada role play karte hain.",
+    "admin_id": "a3de2b42-9a8e-4bb4-9415-dcb759782cbf",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1687",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 29
+  },
+  {
+    "question": "Kya hum financially compatible hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Bhai, tum dono ke beech paisa milan mein emotional connection zarur hai, lekin kabhi kabhi financial decisions mein thodi doori ya delays bhi aa sakti hain. Matlab, samajh toh hogi, par patience se kaam lena padega. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tum dono pae ek emotional bond hai jo financial discussions ko bhi positively affect karta hai. Tumhara dil aur jazba ek dusre se juda hai, is wajah se jab paisa ki baat hoti hai, toh ek basic samajh banti hai. Waisay bhi, tum dono mein ek tarah ki garmahat aur khulaapan hai jo financial matters mein madad karta hai, matlab tum apne paiso ke mamle mein ek dusre se openly baat kar sakte ho. Lekin, thodi challenges bhi hain. Kabhi kabhi tumhara mood ya feelings paiso ko lekar rukawat daal sakte hain, matlab baatein chhupana, fir achanak emotional outburst ya doori. Iske alawa, thoda delay aur rukawat bhi aa sakti hain paisa sambandhi faislo mein, jaise ki ek dusre ki baat ko samajhne mein waqt lagna. Isliye kabhi kabhi financial plans ko immediate na lena better hota hai, patience se cheezen aage badhni chahiye. --- **Ab kya karein (practical)** * Paisa wali baatein khule dil se karo, emotions ko dabane ki bajaye express karo, taaki misunderstandings na hon. * Financial plans banate waqt ek dusre ko space do, jaldbazi mat karo; thoda rukne mein fayda hai. * Regularly apni financial priorities aur expectations ko openly communicate karo, jisse dono ki samajh aur trust barhe. * Agar kabhi financial tension aaye, toh emotional distance banane ki bajaye usse milke solve karne ki koshish karo. > Paisa ek practical maamla hai, par isme dil aur samajh dono chahiye, tum dono ke paas dono hain, bas thoda patience aur sharing se better banega.",
+    "admin_id": "87ae53de-eb71-45c7-9a26-b218d38eb8f3",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1743",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 30
+  },
+  {
+    "question": "Kya money ko lekar hamari soch milti hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Bhai, tum dono ki paisa wali soch thodi alag hai, matlab ekdum same mindset nahi dikh raha. Thoda distance aur misunderstandings ho sakti hain financial thinking mein. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tumhare rishte mein communication thoda complex hai, ek taraf, dost ban ke baat karte ho, par dusri taraf paisa wali baatein kabhi kabhi piche chali jati hain ya khud mein chup jati hain. Yeh isliye kyunki ek partner ki thinking zyada practical aur cautious hai, jabki doosre ki bhi emotions paise par thoda jyada influence kar dete hain. Dusra, rishte mein kabhi tension aa sakti hai paiso ko lekar, jaise ki gussa ya frustration jab spending ya budgeting par raazi na ho pao. Matlab, dono ka approach money ko lekar thoda mismatch kar sakta hai, ek taraf patience aur duty wali problem hai, to doosri taraf thoda assertive aur heated reaction hone ke chances hain. Ek chhota positive nukta hai ki tum dono mein wisdom ka element hai jo kisi tarah se financial decisions mein guidance de sakta hai, par uske liye dono ko compromise karna zaroori hoga. --- **Ab kya karein (practical)** * Paisa aur budgeting ko lekar khas meetings rakhna, khud ko aur apne partner ko samajhne ki koshish karna. * Emotional reactions aur gusse ko control karna, financial baat ko personal mat lena. * Ek dusre ki priorities ko respect karte hue saath me financial planning karni chahiye. * Zarurat pade to kisi trusted advisor se financial advice lena help karega. > Yaad rakho, paisa sirf ek part hai rishte ka, patience aur understanding zyada important hain isme. Dono ko milke financial relationship ko nurture karna hoga tabhi harmony banegi.",
+    "admin_id": "dc745f32-f60d-4408-b4b6-4e7395a94e90",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1670",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 31
+  },
+  {
+    "question": "Kya family values match karti hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan, family values dono taraf se milti julti hain, par thodi testing aur compromises bhi zaroori hain kyunki dono families ke apne alag tarike hain apni sanskriti aur parampara ko nibhane ke. --- **Kyun aisa hai (deep breakdown)** Sabse achhi baat ye hai ki dono ke ghar mein bachchon aur unki upbringing ko bahut importance milta hai. Dono taraf se aapko ek strong desire milega apne bachchon ko sahi sanskar, dharmik aur aacharan ki shiksha dene ki. Iska matlab hai ki parivaar mein pyaar, discipline aur responsibility ko lekar dono taraf ka nazariya kaafi milta hai, jo bonding ke liye bahut zaroori hai. Lekin dikkat ye hai ki jo parampara aur family ke day-to-day values hain, wo dono sides par thodi alag hain. Ek taraf jo tradition aur family ki financial stability ya wealth ko lekar hoti hai, usmein challenges honge, kyunki kuch purani rivaayatein thodi conflicting ho sakti hain. Iske alawa, emotional bonding mein kabhi kabhi thodi doori hai, ya misunderstandings ho sakti hain khas kar ki dono ki soch aur vyaktitva mein antar se. Saath hi, dono parivaar apne-apne tareeke se apne sanskar aur dharmik day-to-day practices ko nibhate hain, jo relationship ko grow karne mein thodi rukawat aur adjustment ki demand karega. --- **Ab kya karein (practical)** * Apne parivaarik rivaayaton aur values ko khul kar discuss karna; jahan difference ho, wahan samjhauta karne ki koshish karna. * Jab bachchon ki baat aaye, toh dono families ke perspectives ko lekar milke ek balanced approach develop karein. * Emotional bonding ko mazboot karne ke liye regular samay parivaar ke saath bitayein, taaki misunderstandings kam ho. * Dono parivar ki riwaayaton ka samman karen, aur ek doosre ke methods ko samajhne ki koshish karein. >",
+    "admin_id": "563a3331-81e5-4701-883e-1fea6ebc8ec8",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1755",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 32
+  },
+  {
+    "question": "Kya lifestyle compatibility achhi hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "off_topic",
+    "ask_source": "scope_gate:not_personal",
+    "engine_tag": "ans-cosmo",
+    "answer_path": "scope_gate:not_personal",
+    "answer_text": "Cosmic Ask sirf aapke baare me jyotish sawaal leta hai — aapki kundli, shaadi, career, health, paisa, bachche, luck, timing, etc. News, coding, presidents, ya 'astrology kisne banayi' jaisa general GK yahan nahi. Kripya apni life se juda sawaal puchiye.",
+    "admin_id": "730235df-a7a0-4a1a-99ce-3dd8942236e9",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "off_topic",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=253"
+    ],
+    "issues": [
+      "BLOCKED — topic=off_topic source=scope_gate:not_personal",
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 33
+  },
+  {
+    "question": "Kya hamari habits ek dusre ke saath fit hoti hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Bhai, tum dono ki aadatein thodi mixed hain, matlab kabhi kabhi toh fit hongi, par challenges bhi hain jo samajh aur patience maangte hain. --- **Kyun aisa hai (deep breakdown)** Tum dono ke beech jo interactions hote hain, unme communication pe thoda dhyaan dena zaroori hai. Mercury jo communication ka symbol hai, wo thoda door aur complex jagah par hai, jiska matlab yeh hai ki baatein kabhi kabhi zyada gehri ya hidden ho jati hain. Matlab samne waale ki aadatein ya feelings ko samajhne mein thodi mushkil aa sakti hai. Is wajah se misunderstandings ho sakti hain, especially jab baat aadaton ke differences ki aaye. Dusri taraf, tumhara passion aur energy (jo Mars dikhata hai) thoda zyada assertive hai, matlab kabhi kabhi jhagde ya garma-garmi bhi hai in choti-choti baaton par. Thoda control aur patience se hi yeh balance maintain hota hai. Positive baat yeh hai ki tum dono me wisdom ya deeper understanding ka touch hai (Jupiter seedha influence nahi, par ek acha factor hai), jo samay ke saath rishton mein clarity aur mutual respect laane ki kapasiti dikhata hai. --- **Ab kya karein (practical)** * Practice karo ki chhoti chhoti baaton ko lekar gussa hone se pehle baith kar shant dil se baat karo. * Apne partner ki habits ko forcefully badalne ki jagah unhe samajhne ki koshish karo. * Kabhi kabhi thoda space dena bhi zaruri hai jab intensity zyada ho, taaki dono apne emotions sudhar sakein. * Chhoti chhoti gestures mein apna pyaar dikhao, jaise ki appreciation ya patience ka hona. > Rishton mein har aadat ko match karna zaroori nahi, par mutual samajh aur respect hi aage chalke sabse bada mel-jol banata hai.",
+    "admin_id": "7db638db-0963-41c2-b8c9-b3958325da2a",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1654",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 34
+  },
+  {
+    "question": "Kya hamari priorities same hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "Haan, tum dono ki priorities aur soch mein kuch alignment hai, par kabhi kabhi differences bhi hote hain jo samajh aur patience se handle karne padenge. Emotional connection strong hai, lekin communication aur expectations mein thoda clash ho sakta hai. Isliye khul ke baat karna aur ek dusre ko samajhna zaroori hai.",
+    "admin_id": "11b7076d-4737-4fc8-bdae-80c41cbd0890",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=317",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 35
+  },
+  {
+    "question": "Kya hum ek dusre ko respect karte hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dost, tum dono ke beech respect ka level mixed hai, matlab kabhi achha understanding hota hai, lekin kabhi communication aur emotional distance ki wajah se challenges bhi aate hain. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, partner ke saath jo baat-cheet hai, woh kabhi kabhi thodi complex rehti hai kyunki dono emotions ko pura khul ke express nahi kar paate. Yeh matlab yeh nahi ki respect nahi hai, par kabhi misunderstandings banti hain jo respect ko temporarily affect karti hain. Dusri baat, tum dono ke beech kabhi kabhi thoda emotional doori ya patience ki kami nazar aati hai, jaise ki dono apni personal space ko zyada importance dete hain. Isse kabhi kabhi hai ki respect consistent nahi hai, ya ek taraf se zyada effort chahiye hota hai. Par ek achhi baat yeh hai ki tummein dono me curiosity aur learning ka jazba hai, ek dusre ko samajhne ka, jo relationship ko mazboot bana sakta hai agar communication clear ho. Yeh ek tara se respect ka positive sign hai, kyunki bina respect ke curiosity nahi banti. --- **Ab kya karein (practical)** * Roz thoda waqt nikal ke dil ki baat khul ke share karo, taaki misunderstandings kam ho. * Apne partner ki feelings ko bina judge kiye samajhne ki koshish karo; ek dusre ko sunna bahut zaroori hai. * Jab kabhi disagreement ho, toh gusse me aake baat na karo, thoda time le kar calmly cheezein explain karo. * Apni personal needs ke saath-saath unki needs ko bhi value dena seekho, taaki respect barqaraar rahe. > Yaad rahe, respect ek din me nahi banta, par agar dono chahein toh dheere-dheere samajh badhakar pyara rishta ban sakta hai.",
+    "admin_id": "4f00dad3-dd4e-4d13-81d5-e0901cda140d",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1620",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 36
+  },
+  {
+    "question": "Kya hum ek dusre ko space de payenge?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dost, is rishtay mein space aur freedom milna possible hai, lekin thoda cautious aur samajhdari se manage karna padega. Kuch aise challenges hain jo kabhi kabhi distance ya misunderstandings la sakte hain, toh balance banaye rakhna hoga. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tum dono ke beech communication aur emotions ka zone thoda complex hai. Partner ke taraf se kabhi kabhi feelings thodi confusing ya hidden rehti hain, jo space aur freedom ki zarurat ko samajhna thoda tricky bana sakti hain. Matlab, ek taraf tum dono ko apni personal space chahiye, par partner se kabhi kabhi emotionally doori ya pause bhi hai. Saturn aur Mars ki position batati hai ki relationship mein kabhi duty aur personal space ke beech clash hai. Yeh dono planets thoda intense energy dete hain, ek taraf discipline aur patience ki zarurat, dusri taraf drive aur kabhi gussa bhi aa sakta hai. So, agar space chahiye toh patience bahut jaruri hoga. Pichehat bhi hai, ya kabhi kabhi aap dono ko relationship ki maintenance mein thoda struggle karna padega. Ek halka silver lining hai Jupiter jo wisdom aur understanding badhata hai, matlab dono ke paas samajhne ki kshamta hai ki kab space dena hai aur kab saath rehna hai, par yeh tabhi smooth hoga jab dono apni feelings openly discuss karenge. --- **Ab kya karein (practical)** * Regularly apne emotions ke baare mein khul kar baat karein, space ki zarurat samjhaane mein ye bahut madad karega. * Pause lene ke liye safe space banayein, chhote breaks ya alag waqt ek dusre ke liye. * Apne impatience ya frustration ko turant express karne se bachein; patience rakhna jaruri hoga. * Relationship ko “maintenance” samjhein, kabhi distance aata hai, toh usse repair karne ka effort dono se hona chahiye. > Remember, freedom milna",
+    "admin_id": "bd2a7a07-5b6d-4ed9-804c-3cffe5f42326",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1796",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 37
+  },
+  {
+    "question": "Kya hum possessiveness ko handle kar payenge?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dono ke beech possessiveness ka mamla sensitive hai, isliye emotional control aur thodi doori dono ko zaroori hai. Agar space aur respect di jaye, toh is tension ko sambhalna. --- **Kyun aisa hai (deep breakdown)** Jab dono ke mann mein chhupi feelings jaldi badalti hain, toh chhoti-chhoti baaton par bhi jealousy ya possessiveness asani se uth sakti hai. Matlab, agar koi ek strain ya stress aata hai, toh dimaag turant react kar deta hai bina samjhe. Doosri baat, feelings ko express karna dono ke liye aasan nahi hota. Kabhi kabhi jo mann mein banta hai, wo bahar nahi nikal pata, jiski wajah se andar hi andar gussa ya confusion jama ho jata hai. Phir kabhi kabhi yeh emotions bahar ekdum dhamaake ke roop mein nikalte hain. Iss sabke beech ek dusre ko samajhna aur emotionally support karna sabse zaroori hai. Jab dono space dete hain, tab doosre se chupaye gaye jazbaat ko bhi samjhne ka mauka milta hai. Thoda thoda karke, dhire-dhire emotional control seekha ja sakta hai. --- **Ab kya karein (practical)** * Roz ek dusre se apni feelings ko bina blame ke share karna shuru karo. * Jab bhi possessiveness ka ehsaas ho, thoda waqt leke khud ko ground karo, deep saans, walk lena, ya sath baahar jaake baat karna. * Ek healthy boundary set karo, matlab respect aur independence ko importance do. * Jab stress zyada ho, tab turant reaction dene se bachna; pehle soch samajh ke baat karo. > Yaad rakho, possessiveness ek phase hai jo patience aur samjhauta se manage hai, ek dusre ki space dena growth ka hissa hai.",
+    "admin_id": "9301e957-78e3-4688-be90-25a0d6e40654",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1540",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 38
+  },
+  {
+    "question": "Kya jealousy relationship ko affect karegi?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "raw_passthrough_static",
+    "engine_tag": "ans-cosmo",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Jealousy relationship mein thodi si complications laa sakti hai, par overall rishta supportiv aur passionate bhi rehta hai. Itni badi problem nahi dikhti, bas thodi samajhdaari chahiye. --- **Kyun aisa hai (deep breakdown)** Aapke rishtay mein dono partners ke emotions aur desires ekdum clear hain, aur dono mein honesty ki bhi achhi capacity hai. Jealousy naturally kabhi-kabhi aati hai, especially jab dono apne partner ko apni life mein bahut mehnat se leke ja rahe hote hain, jaise ki yeh rishta Aries aur Sagittarius jaisi fiery energy se inspired hai. Matlab apko attract hone ke saath-saath, ego clash ya competitiveness bhi hai. Lekin, dono ke beech jo emotional bonding hai (Moon aur Venus ki supportive positioning se pata chalta) wo jealous feelings ko zyada barhne nahi deta. Balanced communication aur respect ki wajah se jaldi misunderstandings door ho jati hain. Jealousy zyada tabhi badi problem banegi jab boundaries clear na ho ya koi apni personal space nahi de raha ho. Aapke relationship mein mercury thodi careful karne wali energy laata hai, matlab baatein thodi secretive ho sakti hain ya misunderstandings ho sakti hain, par agar dono apne har confusion ko openly discuss karenge to jealousy se hone walay confusion khatam hain. --- **Ab kya karein (practical)** * Apne partner ke saath apni feelings open aur honestly share karo; jealousy feelings ko bahar nikalna zaruri hai. * Trust aur personal space ka respect banaye rakho, bina kisi unnecessary controlling behavior ke. * Jab bhi jealous lagay, us moment ko thoda time do, phir calmly baat karo; impulsive reactions se rishta weaken hota hai. * Mutual understanding aur patience rakho, rishte ki growth me ye bohot zaruri hota hai. **Yaad rakhna**, jealousy kabhi-bhi rishtay ka end nahi, par agar manage na kiya jaye to choti si problem badi hai. Thodi",
+    "admin_id": "2e1058bc-fa93-482d-9e15-936c2fb41584",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1856",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-cosmo"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 39
+  },
+  {
+    "question": "Kya hamare differences relationship ko weak karenge?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dost, tum dono ke beech differences hain jo emotional aur behavioral level par thodi doori aur misunderstandings la sakte hain, isliye relationship puri tarah se smooth nahi rahega. Par agar dono mehnat karein, toh rishta compromise karke sambhal sakta hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehli baat, tumhare rishton me ek tarah ka distance aur wait karne wali situation hai, matlab kabhi-kabhi patience ki zarurat padegi. Ye isliye kyunki tum dono ke jazbaat aur dimaag alag tareeke se kaam karte hain, ek taraf emotions thode changeable hain, doosri taraf communication aur apni feelings ko vyakt karna thoda complex hai. Ise samjho jaise do log ek hi kahani ko alag angles se dekh rahe hain. Doosri baat, tumhari love story me jazbaat mein kabhi kabhi khinch-taan rahegi, matlab kabhi gussa ya thoda heat-ups hain. Ye normal hai jab dono ke nature alag hon. Par ye bhi dhyaan rakho ki yeh differences hi tumhari personality ko alag banate hain, aur agar inse samajhdari se deal kiya jaaye, toh rishta ek naye roop me majboot ban sakta hai. Upar se, dono me se ek ya dono ko kabhi kabhi apni zindagi me thodi doori ka ehsaas hoga, jaise emotional ya behavioral alag hone se, par iska matlab nahi ki rishta khatam ho jayega, bas repair aur patience ki zarurat hai. --- **Ab kya karein (practical)** * Roz thoda waqt baith kar apni feelings share karo bina blame kiye. * Dono ko apni expectations clear karni hongi, taaki misunderstandings na ho. * Jab emotions intense ho, thoda doori bana kar socho aur sunny side dekho. * Growth aur learning ko accept karo; kabhi differences ko weakness nahi, par chance samjho rishta better karne ka. > Yaad rahe, differences relationship ki jaan nahi le",
+    "admin_id": "381277f2-d305-4929-a292-0e0bd011743d",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1726",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 40
+  },
+  {
+    "question": "Kya hum compromise kar payenge?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "raw_passthrough_static",
+    "engine_tag": "ans-cosmo",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan Bhai, dono ke beech samjhauta hai, lekin yeh easy nahi hoga. Thoda patience aur samajhdaari chahiye dono taraf se, kyunki situation thodi complex aur challenging hai. --- **Kyun aisa hai (deep breakdown)** Aapke situation mein dono ke beech arguments aur misunderstandings ke chances hain, kyunki dono sides apni baat rakhne mein thoda ziddi hain. Ek taraf toh dono ke paas apni soch aur approach strong hai, lekin thoda friction bhi hoga. Matlab daily life mein chhoti-moti baatein lekar tension aa sakta hai, jahan compromise zaroori hai. Judgement ya delays bhi milke kaam karte hain, matlab agar turant solution na mile toh ghabrane ki zarurat nahi, thoda waqt lagega samjhne mein. Court-case jaisa environment nahi, par legal jaisi clarity aur patience chahiye dono ko. Documentation wagairah ki tarah dono ki baatein sahi se samajhna, respect aur fairness rakho toh mil jul kar chalne ke chances badhte hain. Dost, agar dono ek dusre ki baat genuinely sunenge, thoda apne egos ko thoda side rakhenge, tabhi aage badhna possible hai. --- **Ab kya karein (practical)** * Rozana thoda samay nikal kar shanti se baatein karo, apni feelings bina gusse ke batao. * Ego ko control mein rakho, compromise jab tak na ho tab tak nahi chal payega. * Agar kabhi misunderstanding ho, toh use badhne na do, turant clarify karo. * Formal ya legal problem lag rahi hai toh expert se advice lena sahi rahega, emotions ko thoda side par rakho. > Relationship mein samjhauta ek art hai, joh dono ko patience aur clarity se seekhna padta hai. Dono ko mutual respect aur understanding se chalna hoga, tabhi yeh journey aage badh sakti hai.",
+    "admin_id": "82d349cc-3a50-43d3-9bf7-3c6fa4226e55",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1649",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-cosmo"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 41
+  },
+  {
+    "question": "Kya hum future planning me compatible hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dost, dono ke beech emotional connection gehra hai aur ek dusre ka dhyan rakhne ki achhi capacity hai, lekin mood swings ya emotional doori kabhi-kabhi rishte me thodi tension la sakti hai. Isliye future ki planning me thodi samajhdaari aur patience zaroori hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tum dono ke beech ek khaas emotional bandhan hai jo simple daily baaton se bhi hota hai. Jab dono ek dusre ke jazbat ko samajhte hain aur support karte hain, tab rishte me sukoon aur apnapan barhta hai. Tum dono ke andar warmth aur generosity bhi hai, matlab ek dusre ki help karne ka jazba hai jo aage chal ke plans ko bhi smooth bana sakta hai. Magar thodi problems bhi hain jo dhyaan me rakhni chahiye. Kabhi-kabhi feelings express karne me rukawat aati hai, matlab dono me se koi apne emotions chupata hai ya mood change hone par doori aa jati hai. Isse misunderstanding ya emotional gap ban sakta hai. Aur kabhi kabhi rishte me delays aur thandi reactions bhi dikhte hain, jo tension create kar sakte hain. Iska matlab yeh hai ki dono ko apne jazbat ko steady tareeke se samne lana hoga, especially jab kisi baat se emotional distance feel ho. --- **Ab kya karein (practical)** * Har roz chhoti chhoti batein share karo jisse dono ki understanding badhe. * Jab distance ya tension ho, toh chup rehne ke bajaye gently baat karke pta karo ki asli baat kya hai. * Aapas me patience rakhna seekho, kyunki kabhi-kabhi emotional cooling ya frustration aana natural hai. * Apne bond ko aur mazboot karne ke liye kabhi kabhi chhote surprises ya thoughtful gestures dena mat bhulo. > Yaad rakhna, rishte ki maturity feelings ko samjhne mein hai, na ki unka dikhawa karne mein. Jab dono patiently ek dus",
+    "admin_id": "334168ac-b9a4-40d8-825b-2177f76f971e",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1733",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 42
+  },
+  {
+    "question": "Kya hum marriage ke liye compatible hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dost, tum dono ke beech emotional connection hai aur ek dusre ka khayal rakhne ki capacity bhi achhi hai, par kabhi kabhi feelings ko express karne mein tough moments aate hain jisse thoda doori ya emotional thandak bhi mehsoos hoti hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tum dono ke beech deep emotional bonding hai, yeh aisa hai jaise tum dono ek doosre ke moods ko samajhte ho, aur ek emotional tie banaya hua hai. Matlab seedha yeh ki jab tumhara partner khush ya udaas hota hai, toh tumhara dil bhi ussi rang mein rang jaata hai. Yeh closeness rishtay ko samajhne waali baat hai. Lekin, thoda challenge yeh hai ki kabhi kabhi jazbaat ko andar hi andar dabaa liya jaata hai, jisse frustration hone hai. Toh tension ya doori feel hone par apna mood control karna zaroori hai, varna baat bigad sakti hai. Iska matlab yeh nahi ki tum dono suit nahi karte, par tumhe thoda patience aur khul ke baat karna seekhna padega, especially jab mood down ho. Venus yani pyar aur samajhdari bhi connected hai yeh dikhata hai ki tum dono ka rishta warmth aur generosity se bana hua hai, ek dusre ke liye pyaar baantne ka jazba hai. Par Saturn wali energy jo rishtay mein thodi difficulty laa sakti hai, wo kabhi kabhi emotional distance ya delay create karte hain. Yeh ek test jaisa hai jahan waqt aur samajhdaari se hi relation strong rahega. --- **Ab kya karein (practical)** * Jab mood thoda down lage, directly apne emotions share karo, chupana ya dabana tension badha sakta hai. * Apne partner ki feelings par dhyaan do, unka emotional space samjho, taaki misunderstandings kam hon. * Relationship mein patience zaruri hai, chhoti chhoti emotional difficulties ko samajh ke handle karo. * Mil",
+    "admin_id": "13892cc2-298f-4c87-adc9-e9e26ee00fe9",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1724",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 43
+  },
+  {
+    "question": "Kya hamara relationship healthy rahega?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapka relationship stable hone ke chances hain, lekin isme thodi mehnat aur samajhdari chahiye hogi, kyunki kuch challenges bhi hain jo kabhi kabhi tension la sakte hain. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, dono ke beech communication aur understanding pe dhyan dena zaroori hai, kyunki partner ki soch kabhi kabhi thodi guarded ya complex hai. Ye matlab hai ki baatein khul ke karni padengi, warna chhupi frustration badh sakti hai. Jupiter ki jagah thodi acchi hai, jo aap dono relationship mein wisdom aur growth laane ki capacity rakhta hai. Aap dono mein pyar aur samvedna ki jo roshni hai, wo relationship ko positive banaye rakhti hai. Lekin, kuch moments aise aayenge jab patience ki kafi zarurat hogi, kyunki kabhi kabhi partnership mein doori ya misunderstandings aa sakti hain. Thodi si heat ya gussa bhi kabhi kabhi jag sakta hai, aur ye tabhi avoid hoga jab aap dono apne ego ko thoda control karenge. Emotional side pe partner thoda unpredictable hai, toh unki feelings ko samajhne ki koshish zaroori hogi, warna matters unnecessarily complicated hain. --- **Ab kya karein (practical)** * Regular aur honest baatein karein, har choti baat ko dil se lein aur solve karne ki soch rakhein. * Patience aur tolerance ko apni routine ka hissa banayen, especially jab baatein thodi tough hoon. * Dono ke beech chhoti chhoti bonding activities zaroori hain, jisse emotional connection bana rahe. * Gusse ko control karne ke liye thoda time-out lena seekhein, taaki discussions constructive rahein. > Relationship mein kabhi kabhi challenges aate hain, par dono ki koshish se har tough phase guzra ja sakta hai. Jo bhi ho, apne rishte ko priority dein aur khud ko samj",
+    "admin_id": "91c47c97-516d-431f-bdb7-72550366b4ea",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1709",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 44
+  },
+  {
+    "question": "Kya hamara relationship balanced rahega?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Bhai, tum dono ka rishta thoda mixed nature ka hai, matlab balance aur mel-jol dono jagah me challenges bhi hain aur samajhdari ki zarurat bhi. Samanta aur stability aayegi par effort aur patience se, kyunki kuch emotional aur communication issues kabhi disturbe kar sakte hain. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tumhare rishtay me samajhne ki kshamta aur wisdom ka element hai, jo thoda hope deta hai, jaise ki soch samajh ke faisle lena. Par fir bhi kuch baatein thodi delicate hain. Partner walon ke behaviour me kabhi kabhi doori, misunderstanding ya confusion aa sakte hain, especially jab baat matters ko openly discuss karne ki ho. Mercury ka 12th house me hona thoda unpredictable communication dikhata hai, matlab ki feelings ko clearly samajhna mushkil hai kabhi-kabhi. Doosra, thoda emotional patience kam hai rishtay me, matlab gusse ya temper ke issues bhi aa sakte hain, jo rishte ko thoda distant kar sakte hain. Mars ke touch se gusse ya impulsiveness aa sakti hai, toh careful rehna padega emotions ko control karne me. Aur Saturn ke influence se delays ya emotional thakan bhi aa sakti hai, matlab, sab kuch jaldi nahi hoga, consistency maintain karni padegi. Lekin ek positive baat ye bhi hai ki tum dono ke beech affection aur connection ka basic khaka hai, specially emotional attachment toh hai hi. Ye milke tumhari relationship quality banate hain, jo samay ke saath sambhal sakti hai agar dono sincere efforts karein. --- **Ab kya karein (practical)** * Apne aur partner ke beech khule aur honest communication ko priority do, confusion kam hoga. * Gussa aane par thoda ruk ke baat karo, impulsive reactions se rishtay me doori aa sakti hai. * Patience aur samajdari rakho, kyunki rishtay ko stability dene ke liye time aur mehnat dono chahiye. * Kabhi kab",
+    "admin_id": "b39cb70b-c578-41fb-8777-bc59cba192db",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1818",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 45
+  },
+  {
+    "question": "Kya hum lifetime partners ban sakte hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan, lifetime partner banne ki sambhavna hai, lekin relationship mein kuch emotional tests aur patience se guzarne ki zarurat rahegi. Tumhara partner thoda social aur lively hai, par relationship ka mindset kabhi kabhi complex emotions se bharahua hota hai. --- **Kyun aisa hai (deep breakdown)** Tumhare partner ki social style thodi lively aur baat-cheet mein on-point rahegi, kyunki unka social vibe Gemini jaisa hai, matlab wo khud ko express karte hain aur samajhne mein tez hote hain. Par partner ka emotional tone thoda sensitive hai kyunki wahan Moon hai, jo emotions ko fluid aur kabhi kabhi mood change karta rehta hai. Ye unki feelings ko deeply mehsoos karte hain, par kabhi kabhi isse relationship mein emotional challenges aa sakte hain. Tumhare relationship mindset thoda complex hai because 7th ka malik Mercury ek aise jagah par hai jahan dimaag jyada chod-chad aur privacy mein problem create kar sakti hai. Matlab dincharya mein kabhi misunderstandings ya delays hain, jo patience maangenge. Lekin agar communication khula rahe, toh ye hurdles manageable hote hain. Partner ki presence me ek confident, thoda flamboyant style hai, kyunki unka akarshan ka tareeka Venus jaisa hai jo dikhata hai ki wo apni individuality rakhenge aur mostly apni taraf se relationship mein charm aur warmth lata hain. Ye balance create karte hain emotional ups and downs ke beech. --- **Ab kya karein (practical)** * Roz thoda open communication ko importance do, kyunki misunderstanding zyada hai. * Emotional ups and downs ko ek phase jaano, patience rakho. * Partner ke social energy ko enjoy karo, unki baaton mein involved raho. * Apne emotions ko express karte raho, taaki confusion na bane. Ek baat hamesha yaad rakhna, growth aur understanding hi kisi bhi lifetime relationship ko aage badhata hai. Patience aur respect se tum dono ki bonding strong banegi.",
+    "admin_id": "a6830224-ab48-49d5-8afd-9f1f74125fc0",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1886",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 46
+  },
+  {
+    "question": "Kya hamari compatibility strong hai ya average?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "Tumhari compatibility strong hai kyunki emotional connection gehra hai aur caring dono mein achhi hai. Lekin kabhi kabhi mood swings aur thodi emotional doori aati hai, jo average compatibility jaisi lag sakti hai. Agar tum dono apne emotions ko clearly express karo aur patience rakho, toh rishta aur bhi mazboot ho sakta hai.",
+    "admin_id": "e18daa2c-1c70-4500-bce0-5fcd89a0e385",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=327",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 47
+  },
+  {
+    "question": "Kya hamari compatibility challenges ke baad bhi bani rahegi?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dost, tum dono ke rishte mein challenges hain jo confrontation aur emotional doori laate hain, par agar khule dil se baat cheet aur boundaries banayein, toh rishta ban sakta hai. Loyalty ya lasting bonding thodi mushkil hai, par puri tarah khona bhi zaroori nahi. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tumhare relation mein kuch aise elements hain jo rishte ko thoda stressful banate hain, jaise ki tum dono ke beech kabhi kabhi ladayi-jhagde hain. Ye fights impulsive aur sharp hoti hain, jo ek dusre ko samajhne mein problem la sakta hai. Physical ya mental distance bhi aata rahega, jiski wajah se emotional cooling ya thandi mehsoos hai. Dusra angle yeh hai ki dono ke emotional reactions ko rokna padta hai, warna feelings kabhi kabhi achanak bahar aa jati hain. Matlab, emotionally sab kuch control mein nahi rahta, jisme misunderstanding aur frustration badh sakti hai. Aur haan, rishta zyada stable nahi dikhta, matlab kabhi kabhi laga ki sirf emotional attachment ki wajah se hi bandh hai, par asli stability nahi banti bina mehnat ke. --- **Ab kya karein (practical)** * Rozana khule dil se baat karna shuru karo, jahan chhoti chhoti baatein chupayi na jayein. * Emotional boundary set karna seekho, matlab jab gussa aaye toh thoda space lena zaroori hai, bina galiyaan diye ya uljhan badhaye. * Ek dusre ke differences ko accept karna seekho, jisse unnecessary ladaiyan kam hongi. * Agar zarurat lage toh relationship counseling ya trusted dost se guidance lena madadgar rahega. > Yaad rahe, koi rishta tension-free nahi hota, par agar dono milkar kaam karein toh challenges ko jeetna. Emotional maturity aur patience tumhara sabse bada weapon hoga.",
+    "admin_id": "af808064-92cf-451e-806f-fe929ec29f60",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1694",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 48
+  },
+  {
+    "question": "Kya overall hum ek successful couple ban sakte hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dono ke beech rishta thoda complex hai, toh bilkul seedha nahi kaha ja sakta ki poori tarah successful couple banenge, par koshish aur samajhdaari se relationship ko behtar banaya ja sakta hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, yeh baat samajhni zaroori hai ki partnership mein communication aur samay dena kitna important hai. Aapke charts mein Mercury, jo baat-cheet ka prateek hai, thoda challenging jagah pe hai jahan misunderstandings aur emotional complexities ho sakti hain. Matlab, kabhi kabhi baatein clear nahi hoti, ya feelings ko samajhna mushkil hai. Dusri baat, Saturn ki presence distance ya thodi der ke liye relationship mein thandi chadhav lekar aa sakti hai. Yeh matlab hai ki patience aur apas ki responsibility lena zaroori hai, warna delays ya misunderstandings bade mudde ban sakte hain. Mars jo ki passion dikhata hai, kabhi kabhi thoda temper ya assertiveness bhi lekar aata hai, jisse chhote jagde hain. Lekin iska ek positive angle yeh hai ki aap dono mein jazba aur junoon hain, jo rishta strong kar sakta hai agar sahi direction mile. Upar se, Jupiter ka influence ek positive chhaya laata hai, jo dosti, wisdom aur growth ka signal deta hai. Matlab, agar dono sikhne aur badhne ki ichha rakhen, toh rishta achha grow kar sakta hai. --- **Ab kya karein (practical)** * Har din kuch waqt ek dusre ki baatein dhyan se sunne ko do, bina interrupt kiye. * Patience aur samajhdaari ko apni daily routine mein shamil karo, taaki delays ko aap dono milkar handle kar sakein. * Apni feelings ko gusse ya temper ki jagah calmly express karna seekho, jisse misunderstandings kam ho. * Ek dusre ke passion aur dreams mein support bano, yeh rishta aur gehra karega. > Rishton mein",
+    "admin_id": "7ec5a65b-48d5-43f9-8f6f-f9f1eeb8d2e7",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1735",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 49
+  },
+  {
+    "question": "Overall, hamari compatibility kitni strong hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "Tum dono ke beech emotional connection strong hai, matlab pyaar aur caring dono hain. Lekin kabhi kabhi mood swings ya doori ki wajah se misunderstandings ho sakti hain, jisme patience aur open communication zaroori hai. Agar feelings ko calmly share karoge aur ek dusre ko samjhoge, toh rishta aur majboot hoga. Overall, compatibility achhi hai bas thoda dhyaan aur samajh ki zarurat hai.",
+    "admin_id": "ba57fb0c-8ff5-4a69-a2dd-f8c04b022239",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=389",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 50
+  }
+]

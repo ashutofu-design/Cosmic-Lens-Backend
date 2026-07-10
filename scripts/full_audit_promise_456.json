@@ -1,0 +1,119 @@
+[
+  {
+    "question": "Kya meri life me romantic relationship banega?",
+    "exit_code": 1,
+    "output_file": "D:\\Cosmic-Lens-Backend\\scripts\\full_audit_p4.txt",
+    "audit": {
+      "question": "Kya meri life me romantic relationship banega?",
+      "api_base": "http://187.127.174.55:8080",
+      "ask_topic": "static",
+      "ask_source": "mr_engine_then_llm",
+      "engine_tag": "ans-engine",
+      "answer_path": "engine_then_llm",
+      "answer_text": "**The Big Picture** Dost, tera pyaar ya romantic connection banne ke chances moderate hain. Matlab koi bahut tez chemistry ki guarantee nahi, par thodi der ke liye emotions thode complex honge. --- **Kyun aisa hai (deep breakdown)** Teri feelings kabhi zyada andar hi reh jaati hain, jo baad mein kabhi kabhi explode kar sakti hain ya fir tu emotionally thoda detached feel kar sakta hai. Iska matlab hai ki tu apne emotions openly share karne mein thoda hesitant rehta hai, jo sometimes attachment banane mein hurdle hota hai. Ye bhi hota hai ki tujhe kisi ke saath banne mein time hai, kyunki tu apne dil ko samajhne aur kisi ko trust karne mein carefully approach karta hai. Yeh slow aur steady approach hai, jisme koi jaldi-jaldi excitement ya instant bonding nahi hoti. Isliye, tera pyaar waala connection zyada instant garlic jaisa nahi, balki mitti mein deebi hui bijli jaisi hoti hai - dhyaan do toh ubhrega, warna thoda chupchaap rehta rahega. --- **Ab kya karein (practical)** * Apne emotions ko express karne ki aadat daal, chahe chhoti-chhoti baatein ho. Friends ke saath khul ke baat karna shuru kar. * Apni feelings ko samajhne ke liye thoda patience rakho; koi jaldi mein decision mat lo. * Self-confidence ya emotional clarity ke liye meditation ya writing apna sakte ho, yeh tere andar ki complexity ko halka karega. * Apne aap ko emotionally vulnerable banane ki koshish kar - thoda risk lene se bonding strong hai. > Emotional depth tera asli strength hai, bus usse chhupane ki bajaye apne connection ko nurture kar. Pyaar aayega, bas thoda waqt aur samajh expect kar.",
+      "admin_id": "5f22982d-24ba-49b1-b938-bc6f54a85492",
+      "admin_engine": "",
+      "admin_archetype": null,
+      "admin_qtype": "",
+      "admin_verdict": null,
+      "verdict_summary": "answered:static",
+      "evidence_audit": {
+        "locked_pick": null,
+        "evidence_sample": [],
+        "checks": [],
+        "warnings": [
+          "NO_ADMIN_ENGINE � admin row me engine slice missing"
+        ],
+        "evidence_ok": false
+      },
+      "ok": [
+        "answer_len=1587",
+        "topic=static",
+        "answer_path=engine_then_llm",
+        "engine_tag=ans-engine"
+      ],
+      "issues": [
+        "NO_ADMIN_ENGINE � admin row me engine slice missing"
+      ],
+      "pass": false
+    }
+  },
+  {
+    "question": "Kya meri life me long-term relationship ka yog hai?",
+    "exit_code": 1,
+    "output_file": "D:\\Cosmic-Lens-Backend\\scripts\\full_audit_p5.txt",
+    "audit": {
+      "question": "Kya meri life me long-term relationship ka yog hai?",
+      "api_base": "http://187.127.174.55:8080",
+      "ask_topic": "static",
+      "ask_source": "mr_engine_then_llm",
+      "engine_tag": "ans-engine",
+      "answer_path": "engine_then_llm",
+      "answer_text": "**The Big Picture** Dost, tumhari love life me long-term relationship ka scope hai, lekin kuch challenges hain jo samajh ke chalna zaroori hai. Matlab relationship banega, lekin patience aur understanding se hi stability milegi. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tumhari love life me ek positive cheez yeh hai ki tumhari love wali energy me wisdom hai, jo tumhe relationship ko sudharne aur grow karne me madad karti hai. Lekin, partner ke saath milne-julne me thodi complexity hai, kyunki communication ka angle thoda hidden ya difficult rahta hai. Matlab, baatein openly clear nahi hoti, kabhi misunderstandings ho sakti hain. Saturn jo ki duty aur patience dikhata hai, wo yahan thoda weak padta hai, is wajah se kabhi relationship me delays ya distancing feel hai. Mars ki strong energy thodi tension ya gussa bhi la sakti hai jab dono me kisi baat par takraav ho. Yeh mila ke relationship ko dheere-dheere repair karna padta hai, koi bhi choti problem jaldi badh sakti hai. Mirror me dekhne wali baat yeh hai ki tum emotionally open ho, par partner ke mood ya soch me change aane ka chance bhi zyada hai, isliye samay-samay par relationship ko naye perspective se dekhna hoga. --- **Ab kya karein (practical)** * Apne partner ke saath honest aur regular communication maintain karo, especially jab koi confusion ho. * Thoda patience ka attitude rakho, jaldi gussa ya frustration express mat karo. * Kabhi bhi relationship me dikkat aaye to milke calmly baat karo, karni chahiye mutual understanding pe focus. * Apne passion aur emotional energy ko constructive tarike se channelize karo, jaise hobbies ya creative kaam me. > Pyar me thoda struggle hona common hai, lekin agar tum dono ko relationship lena hai seriously, to yeh struggle tumhe ek mazboot bandhan banane me help karega. Dhairya aur samajhdaari se kaam lo, Bhai!",
+      "admin_id": "8b76d42e-923b-4d74-92eb-7f9dc6973991",
+      "admin_engine": "",
+      "admin_archetype": null,
+      "admin_qtype": "",
+      "admin_verdict": null,
+      "verdict_summary": "answered:static",
+      "evidence_audit": {
+        "locked_pick": null,
+        "evidence_sample": [],
+        "checks": [],
+        "warnings": [
+          "NO_ADMIN_ENGINE � admin row me engine slice missing"
+        ],
+        "evidence_ok": false
+      },
+      "ok": [
+        "answer_len=1849",
+        "topic=static",
+        "answer_path=engine_then_llm",
+        "engine_tag=ans-engine"
+      ],
+      "issues": [
+        "NO_ADMIN_ENGINE � admin row me engine slice missing"
+      ],
+      "pass": false
+    }
+  },
+  {
+    "question": "Kya main committed relationship ke liye bana/bani hoon?",
+    "exit_code": 1,
+    "output_file": "D:\\Cosmic-Lens-Backend\\scripts\\full_audit_p6.txt",
+    "audit": {
+      "question": "Kya main committed relationship ke liye bana/bani hoon?",
+      "api_base": "http://187.127.174.55:8080",
+      "ask_topic": "static",
+      "ask_source": "mr_engine_then_llm",
+      "engine_tag": "ans-engine",
+      "answer_path": "engine_then_llm",
+      "answer_text": "**The Big Picture** Tere committed relationship mein fit hone ka chance hai, par thoda work aur samjhauta zaroori hai. Relationship thoda complex hai, jisme patience aur communication ki zarurat rahegi. --- **Kyun aisa hai (deep breakdown)** Tere chart mein partner wali energy thodi mixed hai. Tere 7th wale area mein communication important hoga, par Mercury jo hai, wo thoda gehra aur kabhi kabhi emotional complexity leke aata hai. Matlab, partner se baatein karne mein kabhi misunderstandings ho sakti hain ya feelings ko express karna thoda challenging hai. Saturn aur Mars dono hi partner wali jagah ko affect karte hain, jisme ek taraf responsibility aur patience chahiye, to dusri taraf temper aur emotional heat bhi aa sakti hai. Yeh combination indicate karta hai ki relationship mein kabhi kabhi tension, ya distance create hai, par jo bhi problem aayegi, use milke solve karna important rahega. Positive point yeh hai ki tere love aur wisdom wali energy (Jupiter) toh hai, jo tujhe relationship ko samajhne aur compromise karne mein madad karegi. Matlab, tera nature deep thinking aur learning ka hai, jo relationship ko long term sustain karne mein madad karega. --- **Ab kya karein (practical)** * Apne emotions ko openly express karne ki aadat daal, taaki misunderstandings kam ho. * Patience aur samjhauta rakho, especially jab tensions aayein. * Partner ke saath constant communication maintain karo, har chhoti baat share karo. * Emotional heat ko control karne ke liye thoda time apne aap ko bhi do, jaldbazi mat karo. > Har relationship mein challenges hote hain, par agar dono milke chalne ki koshish karein, to ye journey strong ban sakti hai. Samjho ki relationship ek kaam hai, jisme dono ko effort lagana padta hai, tabhi wo smooth chal paata hai.",
+      "admin_id": "404f5151-67d1-4cf0-a9eb-ffadfe3e456a",
+      "admin_engine": "",
+      "admin_archetype": null,
+      "admin_qtype": "",
+      "admin_verdict": null,
+      "verdict_summary": "answered:static",
+      "evidence_audit": {
+        "locked_pick": null,
+        "evidence_sample": [],
+        "checks": [],
+        "warnings": [
+          "NO_ADMIN_ENGINE � admin row me engine slice missing"
+        ],
+        "evidence_ok": false
+      },
+      "ok": [
+        "answer_len=1773",
+        "topic=static",
+        "answer_path=engine_then_llm",
+        "engine_tag=ans-engine"
+      ],
+      "issues": [
+        "NO_ADMIN_ENGINE � admin row me engine slice missing"
+      ],
+      "pass": false
+    }
+  }
+]

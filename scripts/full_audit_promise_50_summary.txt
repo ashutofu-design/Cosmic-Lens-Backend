@@ -1,0 +1,12 @@
+API: http://187.127.174.55:8080
+Total: 50/50
+Elapsed: 1256s
+Strict PASS: 0/50
+Content OK (mr_engine_then_llm + answer): 46/50
+NO_ADMIN_ENGINE: 49/50
+No answer: 1
+
+=== FAILURES (content/routing) ===
+Q11: 'Kya meri kundli me lifelong companionship ka yog hai?' | source=health_engine_then_llm | issues=['NO_ADMIN_ENGINE — admin row me engine slice missing']
+Q28: 'Kya meri kundli me relationship ki kami dikh rahi hai?' | source=chart_fact_deterministic:moon_sign_lookup | issues=['NO_ADMIN_ENGINE — admin row me engine slice missing']
+Q38: 'Kya meri kundli me relationship se zyada loneliness dikh rahi hai?' | source=chart_fact_deterministic:moon_sign_lookup | issues=['NO_ADMIN_ENGINE — admin row me engine slice missing']

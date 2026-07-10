@@ -1,0 +1,53 @@
+API: http://187.127.174.55:8080
+Demo user id=19
+Chart planets=9
+Asking: 'Kya meri life me long-term relationship ka yog hai?'
+Stream done � topic=static source=mr_engine_then_llm
+Admin row id=8b76d42e-923b-4d74-92eb-7f9dc6973991
+
+=== ANSWER ===
+**The Big Picture** Dost, tumhari love life me long-term relationship ka scope hai, lekin kuch challenges hain jo samajh ke chalna zaroori hai. Matlab relationship banega, lekin patience aur understanding se hi stability milegi. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tumhari love life me ek positive cheez yeh hai ki tumhari love wali energy me wisdom hai, jo tumhe relationship ko sudharne aur grow karne me madad karti hai. Lekin, partner ke saath milne-julne me thodi complexity hai, kyunki communication ka angle thoda hidden ya difficult rahta hai. Matlab, baatein openly clear nahi hoti, kabhi misunderstandings ho sakti hain. Saturn jo ki duty aur patience dikhata hai, wo yahan thoda weak padta hai, is wajah se kabhi relationship me delays ya distancing feel hai. Mars ki strong energy thodi tension ya gussa bhi la sakti hai jab dono me kisi baat par takraav ho. Yeh mila ke relationship ko dheere-dheere repair karna padta hai, koi bhi choti problem jaldi badh sakti hai. Mirror me dekhne wali baat yeh hai ki tum emotionally open ho, par partner ke mood ya soch me change aane ka chance bhi zyada hai, isliye samay-samay par relationship ko naye perspective se dekhna hoga. --- **Ab kya karein (practical)** * Apne partner ke saath honest aur regular communication maintain karo, especially jab koi confusion ho. * Thoda patience ka attitude rakho, jaldi gussa ya frustration express mat karo. * Kabhi bhi relationship me dikkat aaye to milke calmly baat karo, karni chahiye mutual understanding pe focus. * Apne passion aur emotional energy ko constructive tarike se channelize karo, jaise hobbies ya creative kaam me. > Pyar me thoda struggle hona common hai, lekin agar tum dono ko relationship lena hai seriously, to yeh struggle tumhe ek mazboot bandhan banane me help karega. Dhairya aur samajhdaari se kaam lo, Bhai!
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | path=engine_then_llm
+admin_engine= | archetype=None
+
+=== CHART EVIDENCE ===
+evidence_ok=False | locked_pick=None
+  WARN: NO_ADMIN_ENGINE � admin row me engine slice missing
+
+=== AUDIT ===
+{
+  "question": "Kya meri life me long-term relationship ka yog hai?",
+  "api_base": "http://187.127.174.55:8080",
+  "ask_topic": "static",
+  "ask_source": "mr_engine_then_llm",
+  "engine_tag": "ans-engine",
+  "answer_path": "engine_then_llm",
+  "answer_text": "**The Big Picture** Dost, tumhari love life me long-term relationship ka scope hai, lekin kuch challenges hain jo samajh ke chalna zaroori hai. Matlab relationship banega, lekin patience aur understanding se hi stability milegi. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tumhari love life me ek positive cheez yeh hai ki tumhari love wali energy me wisdom hai, jo tumhe relationship ko sudharne aur grow karne me madad karti hai. Lekin, partner ke saath milne-julne me thodi complexity hai, kyunki communication ka angle thoda hidden ya difficult rahta hai. Matlab, baatein openly clear nahi hoti, kabhi misunderstandings ho sakti hain. Saturn jo ki duty aur patience dikhata hai, wo yahan thoda weak padta hai, is wajah se kabhi relationship me delays ya distancing feel hai. Mars ki strong energy thodi tension ya gussa bhi la sakti hai jab dono me kisi baat par takraav ho. Yeh mila ke relationship ko dheere-dheere repair karna padta hai, koi bhi choti problem jaldi badh sakti hai. Mirror me dekhne wali baat yeh hai ki tum emotionally open ho, par partner ke mood ya soch me change aane ka chance bhi zyada hai, isliye samay-samay par relationship ko naye perspective se dekhna hoga. --- **Ab kya karein (practical)** * Apne partner ke saath honest aur regular communication maintain karo, especially jab koi confusion ho. * Thoda patience ka attitude rakho, jaldi gussa ya frustration express mat karo. * Kabhi bhi relationship me dikkat aaye to milke calmly baat karo, karni chahiye mutual understanding pe focus. * Apne passion aur emotional energy ko constructive tarike se channelize karo, jaise hobbies ya creative kaam me. > Pyar me thoda struggle hona common hai, lekin agar tum dono ko relationship lena hai seriously, to yeh struggle tumhe ek mazboot bandhan banane me help karega. Dhairya aur samajhdaari se kaam lo, Bhai!",
+  "admin_id": "8b76d42e-923b-4d74-92eb-7f9dc6973991",
+  "admin_engine": "",
+  "admin_archetype": null,
+  "admin_qtype": "",
+  "admin_verdict": null,
+  "verdict_summary": "answered:static",
+  "evidence_audit": {
+    "locked_pick": null,
+    "evidence_sample": [],
+    "checks": [],
+    "warnings": [
+      "NO_ADMIN_ENGINE � admin row me engine slice missing"
+    ],
+    "evidence_ok": false
+  },
+  "ok": [
+    "answer_len=1849",
+    "topic=static",
+    "answer_path=engine_then_llm",
+    "engine_tag=ans-engine"
+  ],
+  "issues": [
+    "NO_ADMIN_ENGINE � admin row me engine slice missing"
+  ],
+  "pass": false
+}

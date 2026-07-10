@@ -1,0 +1,152 @@
+[
+  {
+    "question": "Kya meri life me serious relationship ka yog hai?",
+    "archetype": "general_mr",
+    "engine_archetype": "general_mr",
+    "evidence_count": 11,
+    "verdict": "Open relationship question — no fixed verdict; answer from the D1 relationship factors most relevant to what the user asked.",
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya mujhe life me true love milega?",
+    "archetype": "dating_courtship",
+    "engine_archetype": "dating_courtship",
+    "evidence_count": 7,
+    "verdict": "True love yog with tests: Jupiter/Venus support romance, but Saturn/afflictions add delay, emotional cooling, or inconsistency — mixed, not guaranteed instant.",
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya meri kundli me relationship ka strong promise hai?",
+    "archetype": "general_mr",
+    "engine_archetype": "general_mr",
+    "evidence_count": 11,
+    "verdict": "Open relationship question — no fixed verdict; answer from the D1 relationship factors most relevant to what the user asked.",
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya meri life me romantic relationship banega?",
+    "archetype": "chemistry",
+    "engine_archetype": "chemistry",
+    "evidence_count": 2,
+    "verdict": "Chemistry/attraction: mixed",
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya meri life me long-term relationship ka yog hai?",
+    "archetype": "general_mr",
+    "engine_archetype": "general_mr",
+    "evidence_count": 11,
+    "verdict": "Open relationship question — no fixed verdict; answer from the D1 relationship factors most relevant to what the user asked.",
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya main committed relationship ke liye bana/bani hoon?",
+    "archetype": "general_mr",
+    "engine_archetype": "general_mr",
+    "evidence_count": 11,
+    "verdict": "Open relationship question — no fixed verdict; answer from the D1 relationship factors most relevant to what the user asked.",
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya meri life me multiple relationships honge ya ek hi serious relationship?",
+    "archetype": "secret_relationship",
+    "engine_archetype": "secret_relationship",
+    "evidence_count": 3,
+    "verdict": "Secret/hidden relationship theme: active — transparency reduces stress",
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya meri kundli stable relationship support karti hai?",
+    "archetype": "general_mr",
+    "engine_archetype": "general_mr",
+    "evidence_count": 2,
+    "verdict": "Marriage stability: steady long-term bond possible — patience and respect anchor it",
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya meri love life successful rahegi?",
+    "archetype": "general_mr",
+    "engine_archetype": "general_mr",
+    "evidence_count": 11,
+    "verdict": "Open relationship question — no fixed verdict; answer from the D1 relationship factors most relevant to what the user asked.",
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya mujhe genuine life partner milne ka yog hai?",
+    "archetype": "partner_nature",
+    "engine_archetype": "partner_nature",
+    "evidence_count": 4,
+    "verdict": "Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).",
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya meri kundli me healthy relationship ka indication hai?",
+    "archetype": "general_mr",
+    "engine_archetype": "general_mr",
+    "evidence_count": 11,
+    "verdict": "Open relationship question — no fixed verdict; answer from the D1 relationship factors most relevant to what the user asked.",
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya meri kundli me relationship se zyada single rehne ka yog hai?",
+    "archetype": "general_mr",
+    "engine_archetype": "general_mr",
+    "evidence_count": 11,
+    "verdict": "Open relationship question — no fixed verdict; answer from the D1 relationship factors most relevant to what the user asked.",
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya meri life me meaningful emotional connection banega?",
+    "archetype": "emotional_attachment",
+    "engine_archetype": "emotional_attachment",
+    "evidence_count": 2,
+    "verdict": "Emotional attachment: sensitive — mood swings can affect closeness",
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya meri kundli lifelong companionship support karti hai?",
+    "archetype": "general_mr",
+    "engine_archetype": "general_mr",
+    "evidence_count": 11,
+    "verdict": "Open relationship question — no fixed verdict; answer from the D1 relationship factors most relevant to what the user asked.",
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya meri kundli me relationship ka promise weak hai ya strong?",
+    "archetype": "general_mr",
+    "engine_archetype": "general_mr",
+    "evidence_count": 11,
+    "verdict": "Open relationship question — no fixed verdict; answer from the D1 relationship factors most relevant to what the user asked.",
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  }
+]

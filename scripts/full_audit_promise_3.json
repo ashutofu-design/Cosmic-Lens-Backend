@@ -1,0 +1,119 @@
+[
+  {
+    "question": "Kya meri life me serious relationship ka yog hai?",
+    "exit_code": 1,
+    "output_file": "D:\\Cosmic-Lens-Backend\\scripts\\full_audit_p1.txt",
+    "audit": {
+      "question": "Kya meri life me serious relationship ka yog hai?",
+      "api_base": "http://187.127.174.55:8080",
+      "ask_topic": "static",
+      "ask_source": "mr_engine_then_llm",
+      "engine_tag": "ans-engine",
+      "answer_path": "engine_then_llm",
+      "answer_text": "**The Big Picture** Teri life me serious relationship ke chances hain, par kuch challenges bhi hain jo relationship ki quality aur stability par asar daal sakte hain. Commitment ke liye thoda patience aur samajhdaari chahiye hogi. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, ek positive baat yeh hai ki tere paas wisdom aur blessings ka element hai jo love life me thodi maturity laata hai, matlab tu apne partners ke saath samajhdari se deal kar sakta hai. Lekin dikkat yeh hai ki tere relationship wale angle me kuch tough conditions bhi hain. Tera communication style kabhi kabhi complicated hai, jis se misunderstandings ho sakti hain. Saat hi, thoda distance aur delays bhi aate rahenge, matlab relationship me kabhi kabhi thodi doori ya control maintain karne ki zarurat padegi. Kabhi kabhi gusse ya temper se chhoti moti problems ho sakti hain, jinki wajah se relationship me repair karne ki zarurat padti hai. Iska matlab yeh ke tu commitment chahta hai, par uske liye samay aur mehnat dono deni padengi. Emotions thode mixed rahenge, toh lazmi hai ki feelings ko express karne me clearly bane rehna. Passion toh hai, par usse balance karna jaruri hai warna relationship me fights ya disagreements aane aayein ge. --- **Ab kya karein (practical)** * Apne communication style pe dhyan de, especially jab partner ke saath baat karein, khulkar aur patience ke saath. * Relationship me kabhi kisi bhi problem ko ignore na karein; issues aayein toh unhe jaldi solve karne ki koshish karein. * Apne temper ko control karna seekhein, especially jab stress ho ya arguments ho rahe hon. * Apni expectations realistic rakhein aur partner ki feelings ko respect karein. > Serious relationship ke liye discipline aur samay dena zaruri hota hai, bina patience ke relationship ko majbooti nahi milti. Tujhe apne efforts consistent rakhne honge tabhi success milegi.",
+      "admin_id": "f07fadc5-e441-4023-b095-c4b2578ab008",
+      "admin_engine": "",
+      "admin_archetype": null,
+      "admin_qtype": "",
+      "admin_verdict": null,
+      "verdict_summary": "answered:static",
+      "evidence_audit": {
+        "locked_pick": null,
+        "evidence_sample": [],
+        "checks": [],
+        "warnings": [
+          "NO_ADMIN_ENGINE � admin row me engine slice missing"
+        ],
+        "evidence_ok": false
+      },
+      "ok": [
+        "answer_len=1867",
+        "topic=static",
+        "answer_path=engine_then_llm",
+        "engine_tag=ans-engine"
+      ],
+      "issues": [
+        "NO_ADMIN_ENGINE � admin row me engine slice missing"
+      ],
+      "pass": false
+    }
+  },
+  {
+    "question": "Kya mujhe life me true love milega?",
+    "exit_code": 1,
+    "output_file": "D:\\Cosmic-Lens-Backend\\scripts\\full_audit_p2.txt",
+    "audit": {
+      "question": "Kya mujhe life me true love milega?",
+      "api_base": "http://187.127.174.55:8080",
+      "ask_topic": "static",
+      "ask_source": "mr_engine_then_llm",
+      "engine_tag": "ans-engine",
+      "answer_path": "engine_then_llm",
+      "answer_text": "**The Big Picture** Haan dost, tumhari zindagi me saccha pyaar milne ke yog hain, lekin yeh journey thodi chalti-phirti, patience wali hogi. Pyaar pakka hai, par usme kuch tests, delays aur emotional ups-downs bhi honge. --- **Kyun aisa hai (deep breakdown)** Sabse badi baat yeh hai ki tumhare liye pyaar ka rishta dhire-dhire pakadta hai. Tumhari love story me ek bada guide aur protector milta hai jo tumhari feelings ko gehrai aur vishwas deta hai, jo bahut achhi baat hai. Matlab pyaar sirf surface level ka nahi, ek serious aur real connection hoga jo bade time tak tikta hai. Lekin, saath hi thoda rukawat aur emotional thandak bhi aayegi. Kabhi kabhi relationship me doori bani rahegi ya misunderstandings ki wajah se feeling kamzor pad sakti hai. Emotions control me rakhna tumhe seekhna hoga, kyunki kabhi mann me baat chupana pyaar ko thoda challenging bana sakta hai. In sabka matlab yeh nahi ki pyaar nahi hoga, bas uske liye tumhe patience aur samajhdari rakhenge. Pyaar ki energy tumhari personality aur passion se directly judi hai, matlab tum khud bhi active hokar rishto ko strong kar sakte ho. Jo tum deserve karte ho, woh pyaar time ke saath barhta hai, par jaldi mein decisions lene se bachiye. --- **Ab kya karein (practical)** * Pyaar me utar-chadhav ko samajhkar patience rakho, kabhi jaldbazi nahi karni. * Apne emotions ko express karo, chhupana avoid karo, taaki misunderstandings na bane. * Khud ko emotionally strong banao, taaki relation ki testing phases par control banaye raho. * Apne passions aur interests ko nurture karo, kyunki yeh tumhe natural attract karta hai aur pyaar ko grow karta hai. > True love ek journey hai, jisme kabhi rukhawat aayegi par",
+      "admin_id": "495a1921-ae1c-47c6-9a17-6a124d9f9246",
+      "admin_engine": "",
+      "admin_archetype": null,
+      "admin_qtype": "",
+      "admin_verdict": null,
+      "verdict_summary": "answered:static",
+      "evidence_audit": {
+        "locked_pick": null,
+        "evidence_sample": [],
+        "checks": [],
+        "warnings": [
+          "NO_ADMIN_ENGINE � admin row me engine slice missing"
+        ],
+        "evidence_ok": false
+      },
+      "ok": [
+        "answer_len=1689",
+        "topic=static",
+        "answer_path=engine_then_llm",
+        "engine_tag=ans-engine"
+      ],
+      "issues": [
+        "NO_ADMIN_ENGINE � admin row me engine slice missing"
+      ],
+      "pass": false
+    }
+  },
+  {
+    "question": "Kya meri kundli me relationship ka strong promise hai?",
+    "exit_code": 1,
+    "output_file": "D:\\Cosmic-Lens-Backend\\scripts\\full_audit_p3.txt",
+    "audit": {
+      "question": "Kya meri kundli me relationship ka strong promise hai?",
+      "api_base": "http://187.127.174.55:8080",
+      "ask_topic": "static",
+      "ask_source": "mr_engine_then_llm",
+      "engine_tag": "ans-engine",
+      "answer_path": "engine_then_llm",
+      "answer_text": "**The Big Picture** Teri kundli me relationship ko lekar milti julti situation hai, yani relationship strong hone ka clear pakka promise itna nahi, par challenges se ladke sudharne ka space zarur hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, ek ache point ye hai ki tujhe life me thoda guidance aur awareness wali soch di gayi hai (Jupiter 5th me), jo romance me samajhdari la sakti hai. Lekin relationship ki asli dynamics thodi complex hai. Tera partner sambandh ya relationship jo dikhta hai, waha communication me thoda seambhaal chahiye (Mercury 7th lord 12th me), matlab kabhi kabhi misunderstandings, doori ya dil chhupane ka pattern hota hai. Note kar, ki thodi zimmedari aur patience ki kamee bhi rahegi (Saturn 5th me weak), jisse rishte me kabhi tension aaye, ya thodi delay wali situation bane. Aur Mars ka relationship pe impact garma garam, emotional bharpoor hota hai, kabhi arguments ya gusse ka nature bhi hai. Matlab rishte ko banaye rakhne me kaafi mehnat aur samajhdari ki zarurat hai. Tera partner aur tu dono milke kaam karo tabhi gap door ho payega, kyunki kundli ka overall trend suggest karta hai ki **relationship easy flow me nahi, par ban sakta hai agar dono me teamwork ho.** --- **Ab kya karein (practical)** * Communication pe dhyan de, khulke apni feelings share kar, jo bhi differences hain, chhupaane se badhenge. * Patience aur samajhdari ko apni aadat banao, jaldbazi ya gussa relationship ko kharab kar sakta hai. * Apne rishte me balance lane ke liye thodi emotional maturity aur compromise karna seekho. * Agar feeling karte ho ki tension zyada ho rahi hai, to trusted dost ya counselor ki help lene se achha raasta mil sakta hai. > Yaad rahe, relationship me challenges ka matlab akhirat nahi, balki",
+      "admin_id": "86fca429-57e1-40fe-babe-1bd277bbbab2",
+      "admin_engine": "",
+      "admin_archetype": null,
+      "admin_qtype": "",
+      "admin_verdict": null,
+      "verdict_summary": "answered:static",
+      "evidence_audit": {
+        "locked_pick": null,
+        "evidence_sample": [],
+        "checks": [],
+        "warnings": [
+          "NO_ADMIN_ENGINE � admin row me engine slice missing"
+        ],
+        "evidence_ok": false
+      },
+      "ok": [
+        "answer_len=1750",
+        "topic=static",
+        "answer_path=engine_then_llm",
+        "engine_tag=ans-engine"
+      ],
+      "issues": [
+        "NO_ADMIN_ENGINE � admin row me engine slice missing"
+      ],
+      "pass": false
+    }
+  }
+]

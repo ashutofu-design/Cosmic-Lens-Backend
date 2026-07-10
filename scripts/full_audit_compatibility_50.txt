@@ -1,0 +1,644 @@
+FULL COMPATIBILITY AUDIT 50 - http://187.127.174.55:8080
+Demo user id=19
+
+
+========================================================================
+[1/50] Kya hum dono compatible hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+Cosmic Ask sirf aapke baare me jyotish sawaal leta hai — aapki kundli, shaadi, career, health, paisa, bachche, luck, timing, etc. News, coding, presidents, ya 'astrology kisne banayi' jaisa general GK yahan nahi. Kripya apni life se juda sawaal puchiye.
+
+=== PATH ===
+source=scope_gate:not_personal | engine_tag=ans-cosmo | admin_engine='' | pass=False | content_ok=False
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['BLOCKED — topic=off_topic source=scope_gate:not_personal', 'NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[2/50] Kya hum ek dusre ke liye sahi partner hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Tum dono ki jodi mein communication aur baat-cheet kaafi active rahegi kyunki tumhara partner social aur expressive type hai. Par emotional level par thodi complexity hai, jisme misunderstandings aa sakti hain. Isliye relationship ko samajh aur patience se sambhaalna padega. --- **Kyun aisa hai (deep breakdown)** Tumhara partner deeply social hai, jo baaton se logo ko connect k
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[3/50] Kya hamari relationship long-term compatible hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan dost, tum dono ke rishte mein gehra emotional connection hai, par saath hi kabhi-kabhi distance aur mood swings ki wajah se challenges bhi hote hain. Long-term compatibility possible hai agar dono patience aur steady feelings dikhaen. --- **Kyun aisa hai (deep breakdown)** Pehle toh, tumhare rishte mein dono ki feelings kaafi gehri hain. Tum dono naturally ek dusre ke emot
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[4/50] Kya hamari personalities match karti hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dono ke personalities me kuch milte julte pehlu hain, lekin overall compatibility thodi challenging hai. Yahan thoda tension aur distance bhi hai jo relationship ko maintain karne me effort mangta hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, dono ke beech jo communication hota hai, wo thoda complex hai. Aapke conversation me kabhi-kabhi misunderstandings aur emotion
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[5/50] Kya hamari thinking match karti hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dost, tum dono ke sochne ka tareeka thoda alag hai, matlab exact match nahi hai, lekin samajhne aur adjust karne ke mauke hain. Kuch challenges hain jo attention chahte hain, par understanding build hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tumhari relationship mein communication thoda complex hai kyunki soch ka raja (jo aapke jazbaat aur partner ke approach ko c
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[6/50] Kya hamare values same hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+Cosmic Ask sirf aapke baare me jyotish sawaal leta hai — aapki kundli, shaadi, career, health, paisa, bachche, luck, timing, etc. News, coding, presidents, ya 'astrology kisne banayi' jaisa general GK yahan nahi. Kripya apni life se juda sawaal puchiye.
+
+=== PATH ===
+source=scope_gate:not_personal | engine_tag=ans-cosmo | admin_engine='' | pass=False | content_ok=False
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['BLOCKED — topic=off_topic source=scope_gate:not_personal', 'NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[7/50] Kya hamare life goals match karte hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+Cosmic Ask sirf aapke baare me jyotish sawaal leta hai — aapki kundli, shaadi, career, health, paisa, bachche, luck, timing, etc. News, coding, presidents, ya 'astrology kisne banayi' jaisa general GK yahan nahi. Kripya apni life se juda sawaal puchiye.
+
+=== PATH ===
+source=scope_gate:not_personal | engine_tag=ans-cosmo | admin_engine='' | pass=False | content_ok=False
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['BLOCKED — topic=off_topic source=scope_gate:not_personal', 'NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[8/50] Kya hamari expectations ek jaisi hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Bhai, tum dono ke soch aur ummeedein bilkul ek jaise nahi hain, thodi doori hai. Matlab, dono ke nazariye thode alag hain aur kabhi kabhi misunderstandings ho sakti hain. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tumhare rishtay mein kuch aise patterns hain jo dikhate hain ki tum dono ke beech communication kabhi kabhi tricky hoti hai. Mercury jiska kaam hota hai baat
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[9/50] Kya hum emotionally compatible hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+Cosmic Ask sirf aapke baare me jyotish sawaal leta hai — aapki kundli, shaadi, career, health, paisa, bachche, luck, timing, etc. News, coding, presidents, ya 'astrology kisne banayi' jaisa general GK yahan nahi. Kripya apni life se juda sawaal puchiye.
+
+=== PATH ===
+source=scope_gate:not_personal | engine_tag=ans-cosmo | admin_engine='' | pass=False | content_ok=False
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['BLOCKED — topic=off_topic source=scope_gate:not_personal', 'NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[10/50] Kya hum mentally compatible hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+(empty)
+
+=== PATH ===
+source= | engine_tag=None | admin_engine='' | pass=False | content_ok=False
+evidence_ok=None
+issues: ['RUNTIME_ERROR - timed out']
+
+========================================================================
+[11/50] Kya hum intellectually compatible hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+(empty)
+
+=== PATH ===
+source= | engine_tag=None | admin_engine='' | pass=False | content_ok=False
+evidence_ok=None
+issues: ['RUNTIME_ERROR - timed out']
+
+========================================================================
+[12/50] Kya hum spiritually compatible hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+(empty)
+
+=== PATH ===
+source= | engine_tag=None | admin_engine='' | pass=False | content_ok=False
+evidence_ok=None
+issues: ['RUNTIME_ERROR - timed out']
+
+========================================================================
+[13/50] Kya hum physically compatible hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+(empty)
+
+=== PATH ===
+source= | engine_tag=None | admin_engine='' | pass=False | content_ok=False
+evidence_ok=None
+issues: ['RUNTIME_ERROR - timed out']
+
+========================================================================
+[14/50] Kya hamari sexual compatibility achhi hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+(empty)
+
+=== PATH ===
+source= | engine_tag=None | admin_engine='' | pass=False | content_ok=False
+evidence_ok=None
+issues: ['RUNTIME_ERROR - timed out']
+
+========================================================================
+[15/50] Kya hamari communication compatibility achhi hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+(empty)
+
+=== PATH ===
+source= | engine_tag=None | admin_engine='' | pass=False | content_ok=False
+evidence_ok=None
+issues: ['RUNTIME_ERROR - timed out']
+
+========================================================================
+[16/50] Kya hum ek dusre ko achhe se samajhte hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+(empty)
+
+=== PATH ===
+source= | engine_tag=None | admin_engine='' | pass=False | content_ok=False
+evidence_ok=None
+issues: ['RUNTIME_ERROR - timed out']
+
+========================================================================
+[17/50] Kya hum ek dusre ko complete karte hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+(empty)
+
+=== PATH ===
+source= | engine_tag=None | admin_engine='' | pass=False | content_ok=False
+evidence_ok=None
+issues: ['RUNTIME_ERROR - timed out']
+
+========================================================================
+[18/50] Kya hum ek dusre ki weaknesses handle kar sakte hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+(empty)
+
+=== PATH ===
+source= | engine_tag=None | admin_engine='' | pass=False | content_ok=False
+evidence_ok=None
+issues: ['RUNTIME_ERROR - Remote end closed connection without response']
+
+========================================================================
+[19/50] Kya hum ek dusre ki strengths appreciate karte hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dono ke beech emotional bonding aur respect hai, jo ek dusre ki strengths ko samajhne aur appreciate karne ka base banata hai. Lekin kabhi kabhi differences aur thodi doori aa sakti hai jo communication se hi door hoti hai. --- **Kyun aisa hai (deep breakdown)** Aapke rishtay mein emotional depth hai, matlab dono apni feelings ko samajhne ki koshish karte hain. Moon ki position
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[20/50] Kya hamari bonding naturally strong hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dost, tum dono ki bonding mixed vibes deti hai, na poora naturally strong hai, na weak. Kuch cheezein rishta achha chalne mein madad karti hain, par kuch challenges bhi hain jisme effort lagana zaroori hai. --- **Kyun aisa hai (deep breakdown)** Jupiter tumhare rishton mein thodi si samajh aur blessings deta hai, matlab dono ke beech kuch understanding ka element zaroor hai. Pa
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[21/50] Kya hamare beech mutual understanding hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dost, tum dono ke beech mutual understanding hona possible hai, lekin iske liye sachai aur patience se baat karna bahut zaroori hai. Emotional baatein kabhi kabhi delay ya thodi garma-garmi ke sath aati hain, toh sabr rakhna zaroori hoga. --- **Kyun aisa hai (deep breakdown)** Tum logon ke beech jo baat-cheet hoti hai, usme kabhi-kabhi gap ya misunderstanding aa sakti hai, kyun
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[22/50] Kya hum ek dusre par trust kar sakte hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dost, aap dono ke beech trust hai, lekin thoda sensitive hai. Relationship mein clarity aur boundaries bana ke rakhna bahut zaroori hai tabhi bharosa barqaraar rahega, warna misunderstandings aur emotional thandak aa sakti hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle toh yeh ki aap dono ke beech romance aur dostana rishta strong hai, jo ek achha emotional foundation 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[23/50] Kya hum difficult situations me saath denge?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dost, difficult waqt me saath dena thoda challenging rahega, kyunki dono ke beech kabhi kabhi communication ya emotions ko express karne me rukaavat aati hai. Par chhote-chhote efforts se rishta repair aur support bana rehta hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, 7th wale partnership ka jo tarika hai, wo thoda demanding aur emotional depth me tough hai. Commun
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[24/50] Kya hum ek team ki tarah kaam karenge?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dost, tum dono ke beech teamwork possible hai, lekin thodi challenges bhi hain jise samajhkar hi sahi raaste nikal sakte ho. Matlab, ekdam smooth partner jaisa connection nahi, lekin milke kaam karna mushkil bhi nahi. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tum dono ke rishtay mein jo communication ka maamla hai, wo thoda complicated hai. Partner ke taraf se kabhi b
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[25/50] Kya hum conflict ko achhe se solve kar payenge?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Conflict ko sirf bachche ke hone se solve karna mushkil rahega, kyunki dono ke beech jo challenges hain wo communication aur emotional boundaries wali hai. Bachche support de sakta hai par asli tension tabhi kam hogi jab baat-cheet aur limits pe kaam hoga. --- **Kyun aisa hai (deep breakdown)** Dost, jitna bhi pyar ho, agar dono ke beech baatein tez aur impulsive ho jaayein ya 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[26/50] Kya hum arguments ke baad relationship sambhal lenge?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Bhai, arguments ke baad relationship sambhalne ki sambhavna hai, par thoda extra mehnat aur patience zaruri hoga. Kabhi-kabhi kuch misunderstandings ya doori aa sakti hai jo balance karni padti hai. --- **Kyun aisa hai (deep breakdown)** Tumhare rishte mein kuch aise elements hain jo thoda tension laate hain, jaise ki tumhare communication style (Mercury) thoda kahin doori leta
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[27/50] Kya hamare beech ego clashes rahenge?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Ego clashes hone ke chances hain kyunki dono ke relationship mein kuch tensions aur misunderstandings aa sakti hain, especially jab baat communication aur emotional expression ki ho. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, 7th house aur uske ruler ki situation thodi delicate hai. Mercury jo partnership ka driver hai, wo aise position mein hai jahan misunderstandings
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[28/50] Kya hamari communication style match karti hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dost, tum dono ke beech communication possible hai, par iska matlab hai ki clear aur honest baat-cheet karni zaroori hogi. Thoda patience aur samajh honi chahiye, kyunki kabhi kabhi baaton mein thodi doori ya tension ban sakti hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tum dono ki baat-cheet me thodi si emotional doori aur delay aasakta hai, jaise jab koi baat sam
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[29/50] Kya hum emotionally ek dusre ko support karenge?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dono ke beech emotional support ka scope medium hai, matlab thoda ups and downs hai. Kabhi achha samajh milega, kabhi thoda distance ya misunderstandings bhi hongi. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, dono ke rishtay me communication aur emotions thode complex hain. Mercury jo sochne aur bolne ka planet hai, woh thoda door yani struggle wale position mein hai, j
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[30/50] Kya hum financially compatible hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Bhai, tum dono ke beech paisa milan mein emotional connection zarur hai, lekin kabhi kabhi financial decisions mein thodi doori ya delays bhi aa sakti hain. Matlab, samajh toh hogi, par patience se kaam lena padega. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tum dono pae ek emotional bond hai jo financial discussions ko bhi positively affect karta hai. Tumhara dil aur 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[31/50] Kya money ko lekar hamari soch milti hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Bhai, tum dono ki paisa wali soch thodi alag hai, matlab ekdum same mindset nahi dikh raha. Thoda distance aur misunderstandings ho sakti hain financial thinking mein. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tumhare rishte mein communication thoda complex hai, ek taraf, dost ban ke baat karte ho, par dusri taraf paisa wali baatein kabhi kabhi piche chali jati hain y
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[32/50] Kya family values match karti hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan, family values dono taraf se milti julti hain, par thodi testing aur compromises bhi zaroori hain kyunki dono families ke apne alag tarike hain apni sanskriti aur parampara ko nibhane ke. --- **Kyun aisa hai (deep breakdown)** Sabse achhi baat ye hai ki dono ke ghar mein bachchon aur unki upbringing ko bahut importance milta hai. Dono taraf se aapko ek strong desire milega
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[33/50] Kya lifestyle compatibility achhi hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+Cosmic Ask sirf aapke baare me jyotish sawaal leta hai — aapki kundli, shaadi, career, health, paisa, bachche, luck, timing, etc. News, coding, presidents, ya 'astrology kisne banayi' jaisa general GK yahan nahi. Kripya apni life se juda sawaal puchiye.
+
+=== PATH ===
+source=scope_gate:not_personal | engine_tag=ans-cosmo | admin_engine='' | pass=False | content_ok=False
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['BLOCKED — topic=off_topic source=scope_gate:not_personal', 'NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[34/50] Kya hamari habits ek dusre ke saath fit hoti hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Bhai, tum dono ki aadatein thodi mixed hain, matlab kabhi kabhi toh fit hongi, par challenges bhi hain jo samajh aur patience maangte hain. --- **Kyun aisa hai (deep breakdown)** Tum dono ke beech jo interactions hote hain, unme communication pe thoda dhyaan dena zaroori hai. Mercury jo communication ka symbol hai, wo thoda door aur complex jagah par hai, jiska matlab yeh hai k
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[35/50] Kya hamari priorities same hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+Haan, tum dono ki priorities aur soch mein kuch alignment hai, par kabhi kabhi differences bhi hote hain jo samajh aur patience se handle karne padenge. Emotional connection strong hai, lekin communication aur expectations mein thoda clash ho sakta hai. Isliye khul ke baat karna aur ek dusre ko samajhna zaroori hai.
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[36/50] Kya hum ek dusre ko respect karte hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dost, tum dono ke beech respect ka level mixed hai, matlab kabhi achha understanding hota hai, lekin kabhi communication aur emotional distance ki wajah se challenges bhi aate hain. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, partner ke saath jo baat-cheet hai, woh kabhi kabhi thodi complex rehti hai kyunki dono emotions ko pura khul ke express nahi kar paate. Yeh matla
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[37/50] Kya hum ek dusre ko space de payenge?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dost, is rishtay mein space aur freedom milna possible hai, lekin thoda cautious aur samajhdari se manage karna padega. Kuch aise challenges hain jo kabhi kabhi distance ya misunderstandings la sakte hain, toh balance banaye rakhna hoga. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tum dono ke beech communication aur emotions ka zone thoda complex hai. Partner ke taraf s
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[38/50] Kya hum possessiveness ko handle kar payenge?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dono ke beech possessiveness ka mamla sensitive hai, isliye emotional control aur thodi doori dono ko zaroori hai. Agar space aur respect di jaye, toh is tension ko sambhalna. --- **Kyun aisa hai (deep breakdown)** Jab dono ke mann mein chhupi feelings jaldi badalti hain, toh chhoti-chhoti baaton par bhi jealousy ya possessiveness asani se uth sakti hai. Matlab, agar koi ek str
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[39/50] Kya jealousy relationship ko affect karegi?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Jealousy relationship mein thodi si complications laa sakti hai, par overall rishta supportiv aur passionate bhi rehta hai. Itni badi problem nahi dikhti, bas thodi samajhdaari chahiye. --- **Kyun aisa hai (deep breakdown)** Aapke rishtay mein dono partners ke emotions aur desires ekdum clear hain, aur dono mein honesty ki bhi achhi capacity hai. Jealousy naturally kabhi-kabhi 
+
+=== PATH ===
+source=raw_passthrough_static | engine_tag=ans-cosmo | admin_engine='' | pass=False | content_ok=False
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[40/50] Kya hamare differences relationship ko weak karenge?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dost, tum dono ke beech differences hain jo emotional aur behavioral level par thodi doori aur misunderstandings la sakte hain, isliye relationship puri tarah se smooth nahi rahega. Par agar dono mehnat karein, toh rishta compromise karke sambhal sakta hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehli baat, tumhare rishton me ek tarah ka distance aur wait karne wali situa
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[41/50] Kya hum compromise kar payenge?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan Bhai, dono ke beech samjhauta hai, lekin yeh easy nahi hoga. Thoda patience aur samajhdaari chahiye dono taraf se, kyunki situation thodi complex aur challenging hai. --- **Kyun aisa hai (deep breakdown)** Aapke situation mein dono ke beech arguments aur misunderstandings ke chances hain, kyunki dono sides apni baat rakhne mein thoda ziddi hain. Ek taraf toh dono ke paas a
+
+=== PATH ===
+source=raw_passthrough_static | engine_tag=ans-cosmo | admin_engine='' | pass=False | content_ok=False
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[42/50] Kya hum future planning me compatible hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dost, dono ke beech emotional connection gehra hai aur ek dusre ka dhyan rakhne ki achhi capacity hai, lekin mood swings ya emotional doori kabhi-kabhi rishte me thodi tension la sakti hai. Isliye future ki planning me thodi samajhdaari aur patience zaroori hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tum dono ke beech ek khaas emotional bandhan hai jo simple daily 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[43/50] Kya hum marriage ke liye compatible hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dost, tum dono ke beech emotional connection hai aur ek dusre ka khayal rakhne ki capacity bhi achhi hai, par kabhi kabhi feelings ko express karne mein tough moments aate hain jisse thoda doori ya emotional thandak bhi mehsoos hoti hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tum dono ke beech deep emotional bonding hai, yeh aisa hai jaise tum dono ek doosre ke moo
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[44/50] Kya hamara relationship healthy rahega?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Aapka relationship stable hone ke chances hain, lekin isme thodi mehnat aur samajhdari chahiye hogi, kyunki kuch challenges bhi hain jo kabhi kabhi tension la sakte hain. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, dono ke beech communication aur understanding pe dhyan dena zaroori hai, kyunki partner ki soch kabhi kabhi thodi guarded ya complex hai. Ye matlab hai ki ba
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[45/50] Kya hamara relationship balanced rahega?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Bhai, tum dono ka rishta thoda mixed nature ka hai, matlab balance aur mel-jol dono jagah me challenges bhi hain aur samajhdari ki zarurat bhi. Samanta aur stability aayegi par effort aur patience se, kyunki kuch emotional aur communication issues kabhi disturbe kar sakte hain. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tumhare rishtay me samajhne ki kshamta aur wisdom
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[46/50] Kya hum lifetime partners ban sakte hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan, lifetime partner banne ki sambhavna hai, lekin relationship mein kuch emotional tests aur patience se guzarne ki zarurat rahegi. Tumhara partner thoda social aur lively hai, par relationship ka mindset kabhi kabhi complex emotions se bharahua hota hai. --- **Kyun aisa hai (deep breakdown)** Tumhare partner ki social style thodi lively aur baat-cheet mein on-point rahegi, 
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[47/50] Kya hamari compatibility strong hai ya average?
+========================================================================
+
+=== ANSWER (first 400) ===
+Tumhari compatibility strong hai kyunki emotional connection gehra hai aur caring dono mein achhi hai. Lekin kabhi kabhi mood swings aur thodi emotional doori aati hai, jo average compatibility jaisi lag sakti hai. Agar tum dono apne emotions ko clearly express karo aur patience rakho, toh rishta aur bhi mazboot ho sakta hai.
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[48/50] Kya hamari compatibility challenges ke baad bhi bani rahegi?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dost, tum dono ke rishte mein challenges hain jo confrontation aur emotional doori laate hain, par agar khule dil se baat cheet aur boundaries banayein, toh rishta ban sakta hai. Loyalty ya lasting bonding thodi mushkil hai, par puri tarah khona bhi zaroori nahi. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tumhare relation mein kuch aise elements hain jo rishte ko thoda
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[49/50] Kya overall hum ek successful couple ban sakte hain?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Dono ke beech rishta thoda complex hai, toh bilkul seedha nahi kaha ja sakta ki poori tarah successful couple banenge, par koshish aur samajhdaari se relationship ko behtar banaya ja sakta hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, yeh baat samajhni zaroori hai ki partnership mein communication aur samay dena kitna important hai. Aapke charts mein Mercury, jo baat
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[50/50] Overall, hamari compatibility kitni strong hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+Tum dono ke beech emotional connection strong hai, matlab pyaar aur caring dono hain. Lekin kabhi kabhi mood swings ya doori ki wajah se misunderstandings ho sakti hain, jisme patience aur open communication zaroori hai. Agar feelings ko calmly share karoge aur ek dusre ko samjhoge, toh rishta aur majboot hoga. Overall, compatibility achhi hai bas thoda dhyaan aur samajh ki zarurat hai.
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']

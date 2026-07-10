@@ -1,0 +1,53 @@
+API: http://187.127.174.55:8080
+Demo user id=19
+Chart planets=9
+Asking: 'Kya main committed relationship ke liye bana/bani hoon?'
+Stream done � topic=static source=mr_engine_then_llm
+Admin row id=404f5151-67d1-4cf0-a9eb-ffadfe3e456a
+
+=== ANSWER ===
+**The Big Picture** Tere committed relationship mein fit hone ka chance hai, par thoda work aur samjhauta zaroori hai. Relationship thoda complex hai, jisme patience aur communication ki zarurat rahegi. --- **Kyun aisa hai (deep breakdown)** Tere chart mein partner wali energy thodi mixed hai. Tere 7th wale area mein communication important hoga, par Mercury jo hai, wo thoda gehra aur kabhi kabhi emotional complexity leke aata hai. Matlab, partner se baatein karne mein kabhi misunderstandings ho sakti hain ya feelings ko express karna thoda challenging hai. Saturn aur Mars dono hi partner wali jagah ko affect karte hain, jisme ek taraf responsibility aur patience chahiye, to dusri taraf temper aur emotional heat bhi aa sakti hai. Yeh combination indicate karta hai ki relationship mein kabhi kabhi tension, ya distance create hai, par jo bhi problem aayegi, use milke solve karna important rahega. Positive point yeh hai ki tere love aur wisdom wali energy (Jupiter) toh hai, jo tujhe relationship ko samajhne aur compromise karne mein madad karegi. Matlab, tera nature deep thinking aur learning ka hai, jo relationship ko long term sustain karne mein madad karega. --- **Ab kya karein (practical)** * Apne emotions ko openly express karne ki aadat daal, taaki misunderstandings kam ho. * Patience aur samjhauta rakho, especially jab tensions aayein. * Partner ke saath constant communication maintain karo, har chhoti baat share karo. * Emotional heat ko control karne ke liye thoda time apne aap ko bhi do, jaldbazi mat karo. > Har relationship mein challenges hote hain, par agar dono milke chalne ki koshish karein, to ye journey strong ban sakti hai. Samjho ki relationship ek kaam hai, jisme dono ko effort lagana padta hai, tabhi wo smooth chal paata hai.
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | path=engine_then_llm
+admin_engine= | archetype=None
+
+=== CHART EVIDENCE ===
+evidence_ok=False | locked_pick=None
+  WARN: NO_ADMIN_ENGINE � admin row me engine slice missing
+
+=== AUDIT ===
+{
+  "question": "Kya main committed relationship ke liye bana/bani hoon?",
+  "api_base": "http://187.127.174.55:8080",
+  "ask_topic": "static",
+  "ask_source": "mr_engine_then_llm",
+  "engine_tag": "ans-engine",
+  "answer_path": "engine_then_llm",
+  "answer_text": "**The Big Picture** Tere committed relationship mein fit hone ka chance hai, par thoda work aur samjhauta zaroori hai. Relationship thoda complex hai, jisme patience aur communication ki zarurat rahegi. --- **Kyun aisa hai (deep breakdown)** Tere chart mein partner wali energy thodi mixed hai. Tere 7th wale area mein communication important hoga, par Mercury jo hai, wo thoda gehra aur kabhi kabhi emotional complexity leke aata hai. Matlab, partner se baatein karne mein kabhi misunderstandings ho sakti hain ya feelings ko express karna thoda challenging hai. Saturn aur Mars dono hi partner wali jagah ko affect karte hain, jisme ek taraf responsibility aur patience chahiye, to dusri taraf temper aur emotional heat bhi aa sakti hai. Yeh combination indicate karta hai ki relationship mein kabhi kabhi tension, ya distance create hai, par jo bhi problem aayegi, use milke solve karna important rahega. Positive point yeh hai ki tere love aur wisdom wali energy (Jupiter) toh hai, jo tujhe relationship ko samajhne aur compromise karne mein madad karegi. Matlab, tera nature deep thinking aur learning ka hai, jo relationship ko long term sustain karne mein madad karega. --- **Ab kya karein (practical)** * Apne emotions ko openly express karne ki aadat daal, taaki misunderstandings kam ho. * Patience aur samjhauta rakho, especially jab tensions aayein. * Partner ke saath constant communication maintain karo, har chhoti baat share karo. * Emotional heat ko control karne ke liye thoda time apne aap ko bhi do, jaldbazi mat karo. > Har relationship mein challenges hote hain, par agar dono milke chalne ki koshish karein, to ye journey strong ban sakti hai. Samjho ki relationship ek kaam hai, jisme dono ko effort lagana padta hai, tabhi wo smooth chal paata hai.",
+  "admin_id": "404f5151-67d1-4cf0-a9eb-ffadfe3e456a",
+  "admin_engine": "",
+  "admin_archetype": null,
+  "admin_qtype": "",
+  "admin_verdict": null,
+  "verdict_summary": "answered:static",
+  "evidence_audit": {
+    "locked_pick": null,
+    "evidence_sample": [],
+    "checks": [],
+    "warnings": [
+      "NO_ADMIN_ENGINE � admin row me engine slice missing"
+    ],
+    "evidence_ok": false
+  },
+  "ok": [
+    "answer_len=1773",
+    "topic=static",
+    "answer_path=engine_then_llm",
+    "engine_tag=ans-engine"
+  ],
+  "issues": [
+    "NO_ADMIN_ENGINE � admin row me engine slice missing"
+  ],
+  "pass": false
+}

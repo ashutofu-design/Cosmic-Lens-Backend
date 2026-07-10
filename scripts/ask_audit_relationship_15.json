@@ -1,0 +1,406 @@
+[
+  {
+    "question": "Kya ye relationship mere liye sahi hai?",
+    "archetype": "general_mr",
+    "engine_archetype": "general_mr",
+    "is_mr_static": true,
+    "partner_rel": false,
+    "health_static": false,
+    "verdict": "Open relationship question — no fixed verdict; answer from the D1 relationship factors most relevant to what the user asked.",
+    "evidence_sample": [
+      "7th house (marriage/partner) sign: Gemini.",
+      "7th lord Mercury in house 5 sign Aries (neutral) — how the partnership behaves.",
+      "Planets in 7th house: Moon (direct relationship tone)."
+    ],
+    "evidence_count": 11,
+    "ok": [
+      "resolver_general=mr",
+      "resolver_health=mr",
+      "resolver_love=mr",
+      "archetype=general_mr",
+      "health_blocked",
+      "evidence_lines=11",
+      "engine_archetype_match"
+    ],
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya hume breakup kar dena chahiye ya relationship bach sakti hai?",
+    "archetype": "breakup_risk",
+    "engine_archetype": "breakup_risk",
+    "is_mr_static": true,
+    "partner_rel": false,
+    "health_static": false,
+    "verdict": "Breakup/separation risk: high (distance theme stronger than repair)",
+    "evidence_sample": [
+      "Breakup/separation signal: Breakup/separation risk: high (distance theme stronger than repair) — chart friction on partnership axis.",
+      "Saturn on 7th axis — distance, delay, emotional cooling.",
+      "nodes on 7th — karmic obsession, unclear loyalty lines."
+    ],
+    "evidence_count": 5,
+    "ok": [
+      "resolver_general=mr",
+      "resolver_health=mr",
+      "resolver_love=mr",
+      "archetype=breakup_risk",
+      "health_blocked",
+      "evidence_lines=5",
+      "engine_archetype_match"
+    ],
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya partner ka koi affair ya third person hai?",
+    "archetype": "loyalty_trust",
+    "engine_archetype": "loyalty_trust",
+    "is_mr_static": true,
+    "partner_rel": true,
+    "health_static": false,
+    "verdict": "Trust/loyalty: sensitive — clarity and boundaries keep bond safe",
+    "evidence_sample": [
+      "Romance/trust axis (5th house): house 5 sign Aries; lord Mars in house 8 sign Cancer; rules 5H+12H from lagna (dignity debilitated); occupants=['Mercury'].",
+      "Partnership/loyalty axis (7th house): house 7 sign Gemini; lord Mercury in house 5 sign Aries; rules 7H+10H from lagna (dignity own-sign); occupants=['Moon'].",
+      "Venus (love/trust karak): house 9 sign Leo; rules 6H+11H from lagna, dignity own-sign; malefic co-tenant ['Ketu'] — direct influence on this topic."
+    ],
+    "evidence_count": 7,
+    "ok": [
+      "resolver_general=mr",
+      "resolver_health=mr",
+      "resolver_love=mr",
+      "archetype=loyalty_trust",
+      "health_blocked",
+      "evidence_lines=7",
+      "engine_archetype_match"
+    ],
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya partner toxic ya manipulative hai?",
+    "archetype": "breakup_risk",
+    "engine_archetype": "breakup_risk",
+    "is_mr_static": true,
+    "partner_rel": true,
+    "health_static": false,
+    "verdict": "Breakup/separation risk: high (distance theme stronger than repair)",
+    "evidence_sample": [
+      "Toxic pattern: Rahu/hidden-stress on partnership axis — emotional drain if boundaries weak.",
+      "Saturn on 7th axis — distance, delay, emotional cooling.",
+      "nodes on 7th — karmic obsession, unclear loyalty lines."
+    ],
+    "evidence_count": 5,
+    "ok": [
+      "resolver_general=mr",
+      "resolver_health=mr",
+      "resolver_love=mr",
+      "archetype=breakup_risk",
+      "health_blocked",
+      "evidence_lines=5",
+      "engine_archetype_match"
+    ],
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya partner commitment karega?",
+    "archetype": "loyalty_trust",
+    "engine_archetype": "loyalty_trust",
+    "is_mr_static": true,
+    "partner_rel": true,
+    "health_static": false,
+    "verdict": "Trust/loyalty: sensitive — clarity and boundaries keep bond safe",
+    "evidence_sample": [
+      "Romance/trust axis (5th house): house 5 sign Aries; lord Mars in house 8 sign Cancer; rules 5H+12H from lagna (dignity debilitated); occupants=['Mercury'].",
+      "Partnership/loyalty axis (7th house): house 7 sign Gemini; lord Mercury in house 5 sign Aries; rules 7H+10H from lagna (dignity own-sign); occupants=['Moon'].",
+      "Venus (love/trust karak): house 9 sign Leo; rules 6H+11H from lagna, dignity own-sign; malefic co-tenant ['Ketu'] — direct influence on this topic."
+    ],
+    "evidence_count": 7,
+    "ok": [
+      "resolver_general=mr",
+      "resolver_health=mr",
+      "resolver_love=mr",
+      "archetype=loyalty_trust",
+      "health_blocked",
+      "evidence_lines=7",
+      "engine_archetype_match"
+    ],
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya partner ka nature kaisa hai?",
+    "archetype": "partner_nature",
+    "engine_archetype": "partner_nature",
+    "is_mr_static": true,
+    "partner_rel": true,
+    "health_static": false,
+    "verdict": "Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).",
+    "evidence_sample": [
+      "7th house sign baseline: Gemini (partner vibe / social style).",
+      "7th lord placement: Mercury in house 5 sign Aries; rules 7H+10H from lagna (mindset + how partnership behaves).",
+      "Planets in 7th house: ['Moon; rules 8H from lagna'] (direct behavior tone)."
+    ],
+    "evidence_count": 4,
+    "ok": [
+      "resolver_general=mr",
+      "resolver_health=mr",
+      "resolver_love=mr",
+      "archetype=partner_nature",
+      "health_blocked",
+      "evidence_lines=4",
+      "engine_archetype_match"
+    ],
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya partner family-oriented hai?",
+    "archetype": "partner_nature",
+    "engine_archetype": "partner_nature",
+    "is_mr_static": true,
+    "partner_rel": true,
+    "health_static": false,
+    "verdict": "Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).",
+    "evidence_sample": [
+      "7th house sign baseline: Gemini (partner vibe / social style).",
+      "7th lord placement: Mercury in house 5 sign Aries; rules 7H+10H from lagna (mindset + how partnership behaves).",
+      "Planets in 7th house: ['Moon; rules 8H from lagna'] (direct behavior tone)."
+    ],
+    "evidence_count": 4,
+    "ok": [
+      "resolver_general=mr",
+      "resolver_health=mr",
+      "resolver_love=mr",
+      "archetype=partner_nature",
+      "health_blocked",
+      "evidence_lines=4",
+      "engine_archetype_match"
+    ],
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya long-distance relationship successful rahegi?",
+    "archetype": "general_mr",
+    "engine_archetype": "general_mr",
+    "is_mr_static": true,
+    "partner_rel": false,
+    "health_static": false,
+    "verdict": "Open relationship question — no fixed verdict; answer from the D1 relationship factors most relevant to what the user asked.",
+    "evidence_sample": [
+      "7th house (marriage/partner) sign: Gemini.",
+      "7th lord Mercury in house 5 sign Aries (neutral) — how the partnership behaves.",
+      "Planets in 7th house: Moon (direct relationship tone)."
+    ],
+    "evidence_count": 11,
+    "ok": [
+      "resolver_general=mr",
+      "resolver_health=mr",
+      "resolver_love=mr",
+      "archetype=general_mr",
+      "health_blocked",
+      "evidence_lines=11",
+      "engine_archetype_match"
+    ],
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya ex wapas aa sakta hai?",
+    "archetype": "patchup",
+    "engine_archetype": "patchup",
+    "is_mr_static": true,
+    "partner_rel": false,
+    "health_static": false,
+    "verdict": "Patchup/return potential: weak right now",
+    "evidence_sample": [
+      "Saturn on 7th axis — distance, delay, emotional cooling.",
+      "Moon under Saturn/Rahu — feelings held in, then erupt or detach."
+    ],
+    "evidence_count": 2,
+    "ok": [
+      "resolver_general=mr",
+      "resolver_health=mr",
+      "resolver_love=mr",
+      "archetype=patchup",
+      "health_blocked",
+      "evidence_lines=2",
+      "engine_archetype_match"
+    ],
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya hum emotionally compatible hain?",
+    "archetype": "general_mr",
+    "engine_archetype": "general_mr",
+    "is_mr_static": true,
+    "partner_rel": false,
+    "health_static": false,
+    "verdict": "Emotional compatibility: caring depth is present — steady expression needed when moods dip or distance hits",
+    "evidence_sample": [
+      "Moon in 7th — emotional tie to partner runs deep; closeness and mood-sync matter; rules 8H from lagna.",
+      "Venus in house 9 — warmth and emotional generosity help the bond; rules 6H+11H from lagna.",
+      "Emotional friction: Moon under Saturn/Rahu — feelings held in, then erupt or detach.; rules 8H from lagna"
+    ],
+    "evidence_count": 5,
+    "ok": [
+      "resolver_general=mr",
+      "resolver_health=mr",
+      "resolver_love=mr",
+      "archetype=general_mr",
+      "health_blocked",
+      "evidence_lines=5",
+      "engine_archetype_match"
+    ],
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya trust issues khatam honge?",
+    "archetype": "loyalty_trust",
+    "engine_archetype": "loyalty_trust",
+    "is_mr_static": true,
+    "partner_rel": false,
+    "health_static": false,
+    "verdict": "Trust/loyalty: sensitive — clarity and boundaries keep bond safe",
+    "evidence_sample": [
+      "Romance/trust axis (5th house): house 5 sign Aries; lord Mars in house 8 sign Cancer; rules 5H+12H from lagna (dignity debilitated); occupants=['Mercury'].",
+      "Partnership/loyalty axis (7th house): house 7 sign Gemini; lord Mercury in house 5 sign Aries; rules 7H+10H from lagna (dignity own-sign); occupants=['Moon'].",
+      "Venus (love/trust karak): house 9 sign Leo; rules 6H+11H from lagna, dignity own-sign; malefic co-tenant ['Ketu'] — direct influence on this topic."
+    ],
+    "evidence_count": 7,
+    "ok": [
+      "resolver_general=mr",
+      "resolver_health=mr",
+      "resolver_love=mr",
+      "archetype=loyalty_trust",
+      "health_blocked",
+      "evidence_lines=7",
+      "engine_archetype_match"
+    ],
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya relationship me red flags hain?",
+    "archetype": "dating_courtship",
+    "engine_archetype": "dating_courtship",
+    "is_mr_static": true,
+    "partner_rel": false,
+    "health_static": false,
+    "verdict": "Relationship red flags: afflictions on 5th/7th/Venus axis",
+    "evidence_sample": [
+      "Romance/dating axis (5th house): house 5 sign Aries; lord Mars in house 8 sign Cancer; rules 5H+12H from lagna (dignity debilitated); occupants=['Mercury'].",
+      "Partnership outcome axis (7th house): house 7 sign Gemini; lord Mercury in house 5 sign Aries; rules 7H+10H from lagna (dignity own-sign); occupants=['Moon'].",
+      "Venus (love/attraction karak): house 9 sign Leo; rules 6H+11H from lagna, dignity own-sign; malefic co-tenant ['Ketu'] — direct influence on this topic."
+    ],
+    "evidence_count": 7,
+    "ok": [
+      "resolver_general=mr",
+      "resolver_health=mr",
+      "resolver_love=mr",
+      "archetype=dating_courtship",
+      "health_blocked",
+      "evidence_lines=7",
+      "engine_archetype_match"
+    ],
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya partner honest hai?",
+    "archetype": "partner_nature",
+    "engine_archetype": "partner_nature",
+    "is_mr_static": true,
+    "partner_rel": true,
+    "health_static": false,
+    "verdict": "Partner nature: social vibe (7H sign), emotional tone in partnership (7H occupants), mindset in relationship (7L), and overall presence (karak).",
+    "evidence_sample": [
+      "7th house sign baseline: Gemini (partner vibe / social style).",
+      "7th lord placement: Mercury in house 5 sign Aries; rules 7H+10H from lagna (mindset + how partnership behaves).",
+      "Planets in 7th house: ['Moon; rules 8H from lagna'] (direct behavior tone)."
+    ],
+    "evidence_count": 5,
+    "ok": [
+      "resolver_general=mr",
+      "resolver_health=mr",
+      "resolver_love=mr",
+      "archetype=partner_nature",
+      "health_blocked",
+      "evidence_lines=5",
+      "engine_archetype_match"
+    ],
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya hum marriage ke liye compatible hain?",
+    "archetype": "general_mr",
+    "engine_archetype": "general_mr",
+    "is_mr_static": true,
+    "partner_rel": false,
+    "health_static": false,
+    "verdict": "Emotional compatibility: caring depth is present — steady expression needed when moods dip or distance hits",
+    "evidence_sample": [
+      "Moon in 7th — emotional tie to partner runs deep; closeness and mood-sync matter; rules 8H from lagna.",
+      "Venus in house 9 — warmth and emotional generosity help the bond; rules 6H+11H from lagna.",
+      "Emotional friction: Moon under Saturn/Rahu — feelings held in, then erupt or detach.; rules 8H from lagna"
+    ],
+    "evidence_count": 5,
+    "ok": [
+      "resolver_general=mr",
+      "resolver_health=mr",
+      "resolver_love=mr",
+      "archetype=general_mr",
+      "health_blocked",
+      "evidence_lines=5",
+      "engine_archetype_match"
+    ],
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  },
+  {
+    "question": "Kya ye karmic relationship hai ya soulmate connection?",
+    "archetype": "karmic_marriage",
+    "engine_archetype": "karmic_marriage",
+    "is_mr_static": true,
+    "partner_rel": false,
+    "health_static": false,
+    "verdict": "Soulmate pattern: Venus-Jupiter-Moon on 7th/5th with nodal depth if present",
+    "evidence_sample": [
+      "Marriage/karma axis (7th house): house 7 sign Gemini; lord Mercury in house 5 sign Aries; rules 7H+10H from lagna (dignity own-sign); occupants=['Moon'].",
+      "Past merit/romance karma axis (5th house): house 5 sign Aries; lord Mars in house 8 sign Cancer; rules 5H+12H from lagna (dignity debilitated); occupants=['Mercury'].",
+      "Rahu in house 3 sign Aquarius — karmic twist / sudden bond theme."
+    ],
+    "evidence_count": 10,
+    "ok": [
+      "resolver_general=mr",
+      "resolver_health=mr",
+      "resolver_love=mr",
+      "archetype=karmic_marriage",
+      "health_blocked",
+      "evidence_lines=10",
+      "engine_archetype_match"
+    ],
+    "issues": [],
+    "pass": true,
+    "verdict_label": "SAHI"
+  }
+]

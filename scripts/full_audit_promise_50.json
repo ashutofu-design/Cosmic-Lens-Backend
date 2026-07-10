@@ -1,0 +1,72 @@
+[
+  {
+    "question": "Kya meri life me serious relationship ka yog hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Teri life me serious relationship ka scope available hai, lekin kuch challenges aur delays bhi hone wale hain. Emotional connection banane me efforts zaroori honge, aur kabhi-kabhi communication aur distance se dikkat aa sakti hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, pyaar aur emotional bonding ka sign ye hai ki tera dil khula hai aur tu pyaar ko samajhne ki koshish karta hai. Tere chart me pyaar aur romancing ki taraf toh positive energy hai, especially tera dil (5th house) connected hai kuch energetic aur passionate cheezon se. Iska matlab hai tu jazbaat ko feel karta hai aur relationship me bharpoor ruchi rakhta hai. Lekin jo dikkat aa rahi hai, wo ye hai ki tera communication aur partnership main kabhi-kabhi thoda tough phase dekhne ko mil sakta hai. Jo tera partner ho, uske sath samajhne aur milke chalne me kabhi misunderstandings ya distance feel hai. Kabhi kabhi kuch delays bhi rahenge, ya dono ke beech coolness aa sakti hai, jisse relationship mature karne ke liye patience aur extra mehnat chahiye. Mars aur Saturn ki thodi si rough energy se relationship me kabhi mood swings, nafrat, ya emotional heat hai, par agar dono sides samay aur space denge, to ye cheeze manage ki ja sakti hain. --- **Ab kya karein (practical)** * Apni emotional feelings ko samajhne aur express karne ki practice kar, bina ghabraye sab khul ke baat kar. * Jo teri jazbaat ko samajh sake, uske sath honest communication rakh, relationship me clarity bohot zaroori hai. * Patience aur understanding badha jab darr ya doubt aaye, time de kar situation ko calmly handle kar. * Apne aap ko emotionally strong banane ki koshish kar, taaki choti-moti problems se girne ke bajaye seekh sake. > Dear dost, pyaar ke raste par thoda patience aur emotional balance ki zarurat hoti hai. Jab",
+    "admin_id": "615dcb9a-15d6-46bc-aa8e-95051c9f378e",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1815",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 1
+  },
+  {
+    "question": "Kya mujhe true love milega?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan dost, true love milne ke chances hain, lekin thoda patience aur challenges bhi honge; pyaar dhire-dhire aur tests ke saath mature hoga. --- **Kyun aisa hai (deep breakdown)** Teri love life mein ek achhi shuruat hai kyunki tere dil aur emotions se judi cheezein strong hain. Tumhara dil aur passion khud mein ek alag energy rakhta hai jo sachche pyaar ko attract karne mein madad karti hai. Tumhara romance deeply growth-oriented hai, matlab jo rishta banta hai wo time ke saath mazboot hota jayega, trust aur samajh se bhara hoga. Lekin iska matlab ye nahi ki sab kuch jaldi milega ya bina rukawat ke hoga. Kabhi-kabhi situations thodi emotional thandi ho sakti hain ya delays aa sakte hain jo is rishte ko test karte hain. Iska matlab ye hai ki pyaar kuch doori aur samay maange, tabhi wo sachcha aur gehra ban payega. Tumhari feelings kabhi kabhi andar se dabti rah sakti hain aur phir kabhi kabhi unexpected tor pe express hoti hain, jo rishte mein ups and downs la sakta hai. Is journey mein, true love tumhe milega, par wo tabhi hoga jab tum patience rakhoge, thoda emotional maturity dikhaoge, aur har test ko ek seekh samjhoge. --- **Ab kya karein (practical)** * Apne aap ko emotionally open karo, apni feelings ko express karna seekho bina dar ke. * Rishte ko samay do, jaldbazi na karo; patience sabse bada key hai. * Agar kabhi rishte mein rukaawat aaye to usse fear ki tarah na dekho, balki growth opportunity samjho. * Apne passion aur khud pe vishwas banaye rakho, kyunki wo tumhe natural attraction denge. > Yaad rakho, sachcha pyaar ek safar hai jisme kabhi kabhi thandi hawa chalti hai, par jo sath nibhata hai wo",
+    "admin_id": "43039b97-02ed-428e-97b8-4d97431bfcc5",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1656",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 2
+  }
+]

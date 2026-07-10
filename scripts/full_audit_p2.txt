@@ -1,0 +1,53 @@
+API: http://187.127.174.55:8080
+Demo user id=19
+Chart planets=9
+Asking: 'Kya mujhe life me true love milega?'
+Stream done � topic=static source=mr_engine_then_llm
+Admin row id=495a1921-ae1c-47c6-9a17-6a124d9f9246
+
+=== ANSWER ===
+**The Big Picture** Haan dost, tumhari zindagi me saccha pyaar milne ke yog hain, lekin yeh journey thodi chalti-phirti, patience wali hogi. Pyaar pakka hai, par usme kuch tests, delays aur emotional ups-downs bhi honge. --- **Kyun aisa hai (deep breakdown)** Sabse badi baat yeh hai ki tumhare liye pyaar ka rishta dhire-dhire pakadta hai. Tumhari love story me ek bada guide aur protector milta hai jo tumhari feelings ko gehrai aur vishwas deta hai, jo bahut achhi baat hai. Matlab pyaar sirf surface level ka nahi, ek serious aur real connection hoga jo bade time tak tikta hai. Lekin, saath hi thoda rukawat aur emotional thandak bhi aayegi. Kabhi kabhi relationship me doori bani rahegi ya misunderstandings ki wajah se feeling kamzor pad sakti hai. Emotions control me rakhna tumhe seekhna hoga, kyunki kabhi mann me baat chupana pyaar ko thoda challenging bana sakta hai. In sabka matlab yeh nahi ki pyaar nahi hoga, bas uske liye tumhe patience aur samajhdari rakhenge. Pyaar ki energy tumhari personality aur passion se directly judi hai, matlab tum khud bhi active hokar rishto ko strong kar sakte ho. Jo tum deserve karte ho, woh pyaar time ke saath barhta hai, par jaldi mein decisions lene se bachiye. --- **Ab kya karein (practical)** * Pyaar me utar-chadhav ko samajhkar patience rakho, kabhi jaldbazi nahi karni. * Apne emotions ko express karo, chhupana avoid karo, taaki misunderstandings na bane. * Khud ko emotionally strong banao, taaki relation ki testing phases par control banaye raho. * Apne passions aur interests ko nurture karo, kyunki yeh tumhe natural attract karta hai aur pyaar ko grow karta hai. > True love ek journey hai, jisme kabhi rukhawat aayegi par
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | path=engine_then_llm
+admin_engine= | archetype=None
+
+=== CHART EVIDENCE ===
+evidence_ok=False | locked_pick=None
+  WARN: NO_ADMIN_ENGINE � admin row me engine slice missing
+
+=== AUDIT ===
+{
+  "question": "Kya mujhe life me true love milega?",
+  "api_base": "http://187.127.174.55:8080",
+  "ask_topic": "static",
+  "ask_source": "mr_engine_then_llm",
+  "engine_tag": "ans-engine",
+  "answer_path": "engine_then_llm",
+  "answer_text": "**The Big Picture** Haan dost, tumhari zindagi me saccha pyaar milne ke yog hain, lekin yeh journey thodi chalti-phirti, patience wali hogi. Pyaar pakka hai, par usme kuch tests, delays aur emotional ups-downs bhi honge. --- **Kyun aisa hai (deep breakdown)** Sabse badi baat yeh hai ki tumhare liye pyaar ka rishta dhire-dhire pakadta hai. Tumhari love story me ek bada guide aur protector milta hai jo tumhari feelings ko gehrai aur vishwas deta hai, jo bahut achhi baat hai. Matlab pyaar sirf surface level ka nahi, ek serious aur real connection hoga jo bade time tak tikta hai. Lekin, saath hi thoda rukawat aur emotional thandak bhi aayegi. Kabhi kabhi relationship me doori bani rahegi ya misunderstandings ki wajah se feeling kamzor pad sakti hai. Emotions control me rakhna tumhe seekhna hoga, kyunki kabhi mann me baat chupana pyaar ko thoda challenging bana sakta hai. In sabka matlab yeh nahi ki pyaar nahi hoga, bas uske liye tumhe patience aur samajhdari rakhenge. Pyaar ki energy tumhari personality aur passion se directly judi hai, matlab tum khud bhi active hokar rishto ko strong kar sakte ho. Jo tum deserve karte ho, woh pyaar time ke saath barhta hai, par jaldi mein decisions lene se bachiye. --- **Ab kya karein (practical)** * Pyaar me utar-chadhav ko samajhkar patience rakho, kabhi jaldbazi nahi karni. * Apne emotions ko express karo, chhupana avoid karo, taaki misunderstandings na bane. * Khud ko emotionally strong banao, taaki relation ki testing phases par control banaye raho. * Apne passions aur interests ko nurture karo, kyunki yeh tumhe natural attract karta hai aur pyaar ko grow karta hai. > True love ek journey hai, jisme kabhi rukhawat aayegi par",
+  "admin_id": "495a1921-ae1c-47c6-9a17-6a124d9f9246",
+  "admin_engine": "",
+  "admin_archetype": null,
+  "admin_qtype": "",
+  "admin_verdict": null,
+  "verdict_summary": "answered:static",
+  "evidence_audit": {
+    "locked_pick": null,
+    "evidence_sample": [],
+    "checks": [],
+    "warnings": [
+      "NO_ADMIN_ENGINE � admin row me engine slice missing"
+    ],
+    "evidence_ok": false
+  },
+  "ok": [
+    "answer_len=1689",
+    "topic=static",
+    "answer_path=engine_then_llm",
+    "engine_tag=ans-engine"
+  ],
+  "issues": [
+    "NO_ADMIN_ENGINE � admin row me engine slice missing"
+  ],
+  "pass": false
+}

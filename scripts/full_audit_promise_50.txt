@@ -1,0 +1,29 @@
+FULL AUDIT 50 — http://187.127.174.55:8080
+Demo user id=19
+
+
+========================================================================
+[1/50] Kya meri life me serious relationship ka yog hai?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Teri life me serious relationship ka scope available hai, lekin kuch challenges aur delays bhi hone wale hain. Emotional connection banane me efforts zaroori honge, aur kabhi-kabhi communication aur distance se dikkat aa sakti hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, pyaar aur emotional bonding ka sign ye hai ki tera dil khula hai aur tu pyaar ko samajhne ki kos
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']
+
+========================================================================
+[2/50] Kya mujhe true love milega?
+========================================================================
+
+=== ANSWER (first 400) ===
+**The Big Picture** Haan dost, true love milne ke chances hain, lekin thoda patience aur challenges bhi honge; pyaar dhire-dhire aur tests ke saath mature hoga. --- **Kyun aisa hai (deep breakdown)** Teri love life mein ek achhi shuruat hai kyunki tere dil aur emotions se judi cheezein strong hain. Tumhara dil aur passion khud mein ek alag energy rakhta hai jo sachche pyaar ko attract karne mein m
+
+=== PATH ===
+source=mr_engine_then_llm | engine_tag=ans-engine | admin_engine='' | pass=False | content_ok=True
+evidence_ok=False
+  WARN: NO_ADMIN_ENGINE — admin row me engine slice missing
+issues: ['NO_ADMIN_ENGINE — admin row me engine slice missing']

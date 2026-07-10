@@ -1,0 +1,25 @@
+API: http://187.127.174.55:8080
+Total: 50/50
+Elapsed: 2438s
+Strict PASS: 0/50
+Content OK (mr_engine_then_llm + answer): 34/50
+NO_ADMIN_ENGINE: 41/50
+No answer: 9
+
+=== FAILURES (content/routing) ===
+Q1: 'Kya hum dono compatible hain?' | source=scope_gate:not_personal | issues=['BLOCKED — topic=off_topic source=scope_gate:not_personal', 'NO_ADMIN_ENGINE — admin row me engine slice missing']
+Q6: 'Kya hamare values same hain?' | source=scope_gate:not_personal | issues=['BLOCKED — topic=off_topic source=scope_gate:not_personal', 'NO_ADMIN_ENGINE — admin row me engine slice missing']
+Q7: 'Kya hamare life goals match karte hain?' | source=scope_gate:not_personal | issues=['BLOCKED — topic=off_topic source=scope_gate:not_personal', 'NO_ADMIN_ENGINE — admin row me engine slice missing']
+Q9: 'Kya hum emotionally compatible hain?' | source=scope_gate:not_personal | issues=['BLOCKED — topic=off_topic source=scope_gate:not_personal', 'NO_ADMIN_ENGINE — admin row me engine slice missing']
+Q10: 'Kya hum mentally compatible hain?' | source= | issues=['RUNTIME_ERROR - timed out']
+Q11: 'Kya hum intellectually compatible hain?' | source= | issues=['RUNTIME_ERROR - timed out']
+Q12: 'Kya hum spiritually compatible hain?' | source= | issues=['RUNTIME_ERROR - timed out']
+Q13: 'Kya hum physically compatible hain?' | source= | issues=['RUNTIME_ERROR - timed out']
+Q14: 'Kya hamari sexual compatibility achhi hai?' | source= | issues=['RUNTIME_ERROR - timed out']
+Q15: 'Kya hamari communication compatibility achhi hai?' | source= | issues=['RUNTIME_ERROR - timed out']
+Q16: 'Kya hum ek dusre ko achhe se samajhte hain?' | source= | issues=['RUNTIME_ERROR - timed out']
+Q17: 'Kya hum ek dusre ko complete karte hain?' | source= | issues=['RUNTIME_ERROR - timed out']
+Q18: 'Kya hum ek dusre ki weaknesses handle kar sakte hain?' | source= | issues=['RUNTIME_ERROR - Remote end closed connection without response']
+Q33: 'Kya lifestyle compatibility achhi hai?' | source=scope_gate:not_personal | issues=['BLOCKED — topic=off_topic source=scope_gate:not_personal', 'NO_ADMIN_ENGINE — admin row me engine slice missing']
+Q39: 'Kya jealousy relationship ko affect karegi?' | source=raw_passthrough_static | issues=['NO_ADMIN_ENGINE — admin row me engine slice missing']
+Q41: 'Kya hum compromise kar payenge?' | source=raw_passthrough_static | issues=['NO_ADMIN_ENGINE — admin row me engine slice missing']

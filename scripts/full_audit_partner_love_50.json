@@ -1,0 +1,1752 @@
+[
+  {
+    "question": "Kya mera partner mujhse sach me pyaar karta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tera partner ka nature social aur communicative hai, jo dikhata hai ki woh apne relationship mein apne jazbaat ko express karta hai. Lekin uska mindset thoda complex hai, jisme kabhi emotional confusion ya distance bhi aa sakta hai. Overall, uska pyaar asli hai, lekin kuch emotional clarity aur patience ki zarurat hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tera partner Gemini jaisa hai, matlab woh social hai, baatein karta hai, aur relationship mein masti aur baatcheet ko importance deta hai. Aise log apne partner ke saath dosti jaisa rishta banakar aage badhate hain, jahan communication strong hota hai. Ye quality positive sign hai ki woh apne pyaar ko openly share karta hai. Lekin uske dimaag mein thodi si uljhan hai, kyunki jahan uska mindset rehta hai, wahan thoda emotional distance ya hidden feelings bhi hain. Kabhi kabhi woh apne jazbaaton ko pura express nahi kar pata, ya apne fears ko chupata hai. Aur jo uska dil ka tone hai, woh thoda sensitive aur kabhi kabhi mood swings se guzar sakta hai. Isliye samajhne aur patience rakhne ki zarurat hai. Uski overall personality mein ek shining pasión rehati hai, ek dum dil se pyaar karne wali quality. Woh apne rishte ko special samajhta hai, bharosa dilata hai, par apne andar ke kabhi-kabhi chhpe emotions ko dikhane mein thoda hesitant hai. --- **Ab kya karein (practical)** * Open aur honest baatein karo, jahan dono apne feelings share kar sakein. * Patience rakho, kyunki kabhi misunderstandings ya emotional distance hai. * Thoda zyada trust aur emotional security create karo, jisse wo apne dil ki baat khul ke kar sake. * Apne relationship mein fun aur conversations ko banaye rakhna, jo uski social nature ko match kare. Yaad rakh, pyaar grow karne wala process hai; jab",
+    "admin_id": "417568dc-07b1-4a22-8cec-828c6d066127",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1780",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 1
+  },
+  {
+    "question": "Kya meri feelings genuine hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan, lekin abhi utna gehra barabar nahi lagta, kyunki tumhare emotions thode sensitive hain aur kabhi-kabhi mood swings ki wajah se clarity mein thoda uljhan aata hai. --- **Kyun aisa hai (deep breakdown)** Apni feelings ko samajhna tough hai jab dil mein emotions kabhi upar neeche hote hain. Tumhara mann ek taraf loyal aur sachcha hai, par kabhi kabhi jo emotions tum feel karte ho, wo jyada control mein nahi rehte. Iska matlab hai ki tum apne pyaar ko lekar kabhi hold karte ho, toh kabhi thoda detach ho jaate ho, jaise ki lagata hai samne wala kitna sachcha hai ya tum khud apne jazbaat ko fully express kar pa rahe ho ya nahi. Is situation mein, emotional attachment hai par mood swings aur internal conflicts se clarity thodi kamzor ho jaati hai. Yeh is baat ka indication hai ki feelings asli hain, lekin apne aap ko emotional balance banana abhi zaruri hai, tabhi tum apne pyaar ki gehraai aur sachchai ko achhi tarah samajh paoge. --- **Ab kya karein (practical)** * Apne emotions ko samajhne ke liye apne daily mood par nazar rakho; writing ya journaling try karo. * Samne wale se clarity lo, apni feelings openly share karne ki koshish karo bina apne guards uthaye. * Jo bhi emotional ups and downs hain, unko silently na jhelo; trusted dost ya counselor se discuss karo. * Apne emotional boundaries set karna seekho; apni khushi aur comfort ko priority do. > Apne dil ki awaaz ko samajhna step-by-step hota hai, har mood ko design-kiya hua nahi samajhna chahiye. Consistency aayegi toh asli pyaar bhi kar paaoge.",
+    "admin_id": "2677f1c1-028b-4fee-8aea-ff815872c669",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1548",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 2
+  },
+  {
+    "question": "Kya hum dono ek dusre se equally pyaar karte hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dono ke beech pyaar ka level thoda uneven hai; challenges hain jo thoda emotional distance aur misunderstandings laate hain. Matlab, barabari ka ehsaas perfect nahi hai, par caring feelings definitely maujood hain. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, partnership mein thodi clarity aur communication tough rehti hai kyunki ek partner ka way of expressing ya samajhne ka andaaz thoda complex hai. Ye kabhi kabhi emotional disconnect banata hai, jisse dono ko hai ke pyaar mein barabari nahi ho rahi. Dusri baat, relationship mein patience aur distance ka aspect hai, matlab emotional touch kabhi strong nahi rehta; thoda duty jaisa mahsoos hota hai jo asli jazbaat mein barrier create karta hai. Lekin, ek achhi baat ye bhi hai ki dono ke beech pyaar ka ek basic level hai, jo thoda maturity aur wisdom se chal raha hai. Basharte dono effort karein to emotional bonding better hai. Lekin is rishte mein temper aur arguments bhi appear hain, toh dono ko apne behavior par dhyan dena zaroori hai. --- **Ab kya karein (practical)** * Rozana thoda samay sirf ek dusre ko samajhne mein lagao, bina interruptions, bas suno. * Gusse aur misunderstandings ko badhne na do; jaldi calm down hoke issues clear karo. * Joint hobbies ya activities plan karo jo dono ko emotionally connect karne mein madad karein. * Weekend ya free time mein ek relaxed environment banao jahan bina pressure love express ho. > Pyaar ek journey hai jisme kabhi barabari na hone ka ehsaas aa sakta hai, magar agar dono dil se koshish karte hain, toh emotional gap bhar sakta hai. Apne connection ko thoda samay, patience aur understanding dena sabse zaroori hai, bhai.",
+    "admin_id": "fe5a3802-ff0b-4bd0-9678-29b9bce07006",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1671",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 3
+  },
+  {
+    "question": "Kya mera partner emotionally attached hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapka partner apne emotional connection mein kaafi thoughtful hai, lekin emotions ko khul ke express karna unke liye thoda complex hota hai. Wo zyada verbal aur social hote hain, par dil se judna thoda subtle aur internal hota hai. --- **Kyun aisa hai (deep breakdown)** Unka social vibe Gemini jaisa hai, matlab wo logon se milna-julna aur baatein karna pasand karte hain. Conversations unke liye connection ka ek bada part hai, par kabhi-kabhi yeh zyada sochne aur samajhne mein badal jata hai. Emotional expressions thode indirect hain, jiska matlab unka dard ya khushi openly dikhna zaroori nahi. Unke jazbaat thode complex hain kyunki unka dimaag water sign Scorpio mein revolve karta hai jo deep emotional intensity leke aata hai, par yeh emotions waha chupke se rahte hain. Mercury ka placement 12 house mein dikhata hai ki kabhi-kabhi wo apne feelings ko avoid ya distance bana ke rakhna pasand karte hain, jise samajhna thoda mushkil hai. Partner ki overall presence Leo jaisi hai, matlab wo apni life mein proud aur thoda dramatic hain, unka apna ek unique style hota hai jo logon ko attract karta hai, par emotional attachment mein patience aur time hai. --- **Ab kya karein (practical)** * Unse open aur regular baat-cheet karo, unki feelings share karne ki space do. * Unki subtle hints ko samajhne ki koshish karo, kabhi kabhi wo directly nahi bhi bolte. * Thoda sabr rakho, emotional bonding mein wo apne pace pe aage badhenge. * Unke social aur conversational style ko appreciate karo, ye unka apna pyaar vyakt karne ka tareeka hai. **Yaad rakho, jazbaat har kisi ke liye alag tareeke se dikhte hain. Thodi mehnat aur patience se aap dono ka rishta bahut gahra ho sakta",
+    "admin_id": "0a8a3ada-459a-4bba-b651-59d795006599",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1705",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 4
+  },
+  {
+    "question": "Kya partner sirf attraction feel karta hai ya love bhi?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapke partner mein attraction ke saath-saath emotional depth bhi hoga, lekin woh apne jazbaat thoda guarded ya private rakhte hain. Matlab, love feel karte hain, par wo zyada openly express nahi karte. --- **Kyun aisa hai (deep breakdown)** Aapke rishtay mein jo attraction ka sabse bada source hai, woh unka natural charm aur beauty hai, jo seedha linked hai unke confident aur expressive style se. Partner physically bahut appealing honge, unka look slim aur youthful rehta hai, with expressive aankhon ka touch jo attention ko pakad leta hai. Yeh confidence aur charm attraction ko solid base deta hai, jahan partner ko aapki taraf kheechne ki takat hai. Lekin ek cheez jo thodi complex banaati hai, woh yeh hai ki partner apni feelings ko sometimes andar hi andar mehsoos karte hain, zyada openly na dikhakar. Unka nature thoda private hai, emotional expression mein protective. Yeh thoda unconscious hesitation ya fear bhi dikhaata hai ki apna dil pura kholna chahte hain, lekin sambhal ke, apne comfort zone mein rakhna pasand karte hain. Is wajah se attract to hote hain, aur love bhi hai, magar love dikhane ke tareeke mein thoda restraint hai. --- **Ab kya karein (practical)** * Partner ko emotionally space aur time dijiye taaki woh apne jazbaat araam se express kar saken. * Unke gestures ko notice kariye; chhoti chhoti baatein bhi love ki taraf ishaara karti hain. * Apni feelings ko honestly share kijiye, jisse unka bhi trust banega open hone ka. * Kabhi kabhi casual baatein karenge ya fun activities karenge jahan emotional pressure na ho, toh rishte mein aur comfort aayega. > Relationship mein sirf attraction se zyada zaruri hai samajhna ki har kisi ka love express karne ka andaaz alag hota hai, patience aur empathy se aap dono ka rishta gehra hoga.",
+    "admin_id": "5fe22128-75ae-467b-8295-7615009100df",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1792",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 5
+  },
+  {
+    "question": "Kya partner mujhe miss karta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tumhare partner ka social style thoda lively aur baat-cheet pasand karne wala hai, jisme woh logon se jurnay mein comfortable rehta hai. Emotional level pe, uske jazbaat gehre hain par uska sochne ka tareeka partnership mein thoda complex aur kabhi kabhi doori wali feeling la sakta hai. Overall, uska pyaar ka andaaz thoda proud aur expressive type ka hai, jo apne andaaz mein strong dikhayi deta hai. --- **Kyun aisa hai** Tumhara partner logon ke saath baat karne aur naye ideas explore karne mein interested rehta hai, matlab wo miss karne mein apne jazbaat khulkar nahi dikhata, lekin uska mann zaroor tumhari taraf rehta hai. Emotional taur par wo kuch zyada sensitive hai, aur apne feelings ko samajhna thoda challenging hai, jo kabhi-kabhi uski taraf se doori ka ehsaas deta hai. Uska dimaag kabhi kabhi zyada sochta hai aur signals ko samajhne mein uljhan hoti hai, jiski wajah se tumhe hai ki wo tumhe miss nahi kar raha ya emotionally involved nahi hai. Lekin jo jazbaat wo connect karne ke liye dikhata hai, woh deeply personal hote hain. Uska pyaar thoda grand aur expressive hai, jisme usko apni chah ko dikhane ka apna ek andaaz hai, wo direct \"miss karna\" nahi dikhata, par apni unique presence aur pyar se ye zaroor batata hai. --- **Ab kya karein** * Apne partner se khulkar baat karo, apne dil ki baat share karna dono ke liye clarity le aayega. * Jab partner thoda distant lage, to usko space do, kyunki uska dimaag kabhi overthink karta hai. * Use apni chah dikhane ke naye tareeke explore karne do, jaise ki thoughtful messages ya chhoti surprises. * Sabse zaroori, patience rakho",
+    "admin_id": "36552d35-71f5-4df6-959a-876455f4332e",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1622",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 6
+  },
+  {
+    "question": "Kya partner mujhe dil se chahta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tera partner social taur pe kaafi expressive aur baat-cheet mein active hai, lekin uske dil ke jazbaat thode complex hain. Emotional level par thodi caution chaahiye, kyunki wo apne feelings ko poori tarah openly nahi dikhata. Uska pyar dil se zaroor hai, magar sab kuch turant nahi milta, patience ki zarurat hai. --- **Kyun aisa hai (deep breakdown)** Tera partner Gemini jaise milansaar aur friendly type hai, matlab wo bahar se baat-cheet aur socializing mein kaafi comfortable rehta hai. Iska matlab hai ki wo teri company enjoy karta hai, conversations ho ya outings, uska nature lively aur curious hai, jo dil se connected hone ka ek achha sign hai. Par jo dil ke jazbaat hain, wo thode complicated hain. Mindset thoda withdraw hai, kyunki wo apne emotions ko chhupane ya protect karne ki aadat rakhta hai. Isliye, kabhi kabhi wo doori bana sakta hai ya apne feelings ko clearly express nahi karta. Fir bhi, uska core presence ek warm aur attractive vibe deta hai. Jo uski ada hai, wo dikhati hai ki wo teri taraf naturally inclined hai, bas apne tarike se pyar dikhata hai jo thoda alag hai. --- **Ab kya karein (practical)** * Use calm aur open communication promote karo, dil ke jazbaat kholne ke liye sabr se encourage karo. * Uski personal space ko samjho; kabhi-kabhi chup rehna matlab doori nahi, balki apne emotions ko sametne ka tareeka hota hai. * Saath mein quality time bitao jahan sirf tum dono ho, bina distractions ke, taaki emotional bonding strong ho. * Apne emotional expectations ko realistically samjho aur jaldi results ki ummeed na rakho. > Pyar mein patience aur samajh sabse zaroori hai; asli jazbaat hote hain, bas dikhane ka tareeka alag hota hai.",
+    "admin_id": "c227fab0-9a47-4bd9-84d1-db212a88a945",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1700",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 7
+  },
+  {
+    "question": "Kya partner ke emotions real hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Partner ke emotions genuine hain, par unka emotional behavior kabhi kabhi thoda complex aur guarded rehta hai. Wo apne jazbaat dikhane mein thoda hesitant hain, isliye clarity lana zaroori hai. --- **Kyun aisa hai (deep breakdown)** Partner ki social vibe lively hai, wo zyada baat cheet karne wale, curious aur expressive hote hain, matlab unki basic personality kaafi open aur social hai. Lekin unke emotions ka asli nature thoda hidden rehta hai kyunki unke andar ek emotional complexity bhi hai. Jaise ki unke dil ke jazbaat kabhi kabhi deep hote hain aur surface par easily samajh nahi aate. Unka mindset relationship ke mamle mein thoda intense hai, unka approach kabhi kabhi emotional confusion aur privacy ki taraf jhukta hai, jiski wajah se wo apne dard ya feelings khud me rakhte hain. Matlab, feelings genuine hote hain, par unko express karne mein wo thoda doori banaye rakhte hain. Partner ka overall presence kaafi charming aur attract karne wala hai, matlab wo apne andaaz mein natural warmth rakhte hain jo logo ko attract karta hai, lekin unka asli personal emotional side thoda guarded rehta hai. Isliye kabhi emotional authenticity ko lekar doubt hai, par usme kisi tarah ka jhooth nahi hota. --- **Ab kya karein (practical)** * Apne partner se sabr aur samajhdari se baat karein, jab wo apne emotions share karien toh dhyan se sunein. * Unke emotional space ko respect dein, taaki wo apni feelings khul ke express kar sakein. * Kabhi kabhi casual aur relaxed environment me unse baatein karein, jahan stress na ho, taaki unka emotional side naturally samne aaye. * Apne doubts ko openly share karna shuru karein, taaki dono ke beech trust badhe. **Yaad rakho**, emotions kabhi seedhe nahi hote, unhe samajhna patience aur pyaar se hota hai. Genuine feelings",
+    "admin_id": "ebf6fe46-8a3a-413d-9e2f-0cae57da499c",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1797",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 8
+  },
+  {
+    "question": "Kya partner sirf time pass kar raha hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "Nahi, partner sirf time pass nahi kar raha. Wo social aur emotionally complex hain, kabhi halka-phulka dikhte hain par andar feelings gehri hoti hain. Thoda patience aur samajh ki zarurat hai unke mood aur behavior ko leke. Communication aur trust pe dhyan do, tabhi rishta strong banega.",
+    "admin_id": "1e4c7da6-4b7f-41aa-afb5-7c5981b7eaa9",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=288",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 9
+  },
+  {
+    "question": "Kya partner serious feelings rakhta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tera partner social aur baatcheet mein kaafi active hai, matlab wo logon se easily connect karta hai. Lekin emotions thode complex hain, aur uska mindset thoda hidden aur intense chal raha hai relationship mein. Is wajah se wo apni feelings straightforward nahi dikhata, seriousness ko samajhne ke liye patience chahiye. --- **Kyun aisa hai (deep breakdown)** Tera partner ka social andaaz kaafi lively aur talkative hai, matlab wo interaction ko enjoy karta hai aur friendships ko importance deta hai. Lekin uski feelings jyada openly nahi dikhai deti, kyunki uske emotional behavior mein thodi complexity hai, kabhi kabhi wo apne emotions mein uljhav rakhta hai ya chup rehta hai. Wo relationship ko lekar internally serious hai, par apni emotional depth ko samajhna thoda tricky hota hai. Mindset bhi thoda reserved hai, kabhi kabhi woh apni ichchaon aur dimaag ko chhupa ke rakhta hai, jo clarity mein delay kar sakta hai. --- **Ab kya karein (practical)** * Partner se directly baat kar, apni feelings share karne ko encourage kar, silence brokke mat rehne de. * Patience rakh, kyunki wo apni emotions ko express karne mein time lega. * Relationship mein honesty aur trust pe dhyan de, taaki wo emotional barriers tod sake. * Apni understanding aur empathy badha, uske chhupay huye emotions ko respect kar. **Yaad rakh,** seriousness ka matlab turant express karna nahi hota, kabhi kabhi commitment apne aap ko samay dene se hi dikhta hai.",
+    "admin_id": "a6e48dbb-8b6f-43cd-b058-314630b124cc",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1464",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 10
+  },
+  {
+    "question": "Kya partner mujhe life partner ke roop me dekhta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Bhai, tumhara partner tumhe definitely life partner ke roop mein dekhta hai, lekin wo thoda emotional depth aur samajh se bharpoor rishta chahta hai. Uska social style lively aur baatcheet mein tez hai, par kuch mann ke complex issues bhi hain jo relationship mein test laate hain. --- **Kyun aisa hai** Partner ka social andaaz Gemini jaisa hai, matlab wo zabardast conversationalist hai, har hal me baat-cheet chalti rehti hai, naye ideas aur logon se milna usko pasand hai. Yeh dosti jaisa rishta banane mein help karta hai. Lekin uske emotions complex hote hain, kyunki wo kuch baaton ko dil se pakadta hai aur kabhi kabhi apni soch mein uljhan me rehta hai. Kabhi kabhi wo apne andar chhupa leta hai ya relation ke bare me puri spashtata nahi deta. Emotional taur par thodi sensitivity aur samaydhan ki zarurat hoti hai. Uska aakrsan aur pyar dikhane ka tareeqa kaafi strong aur proud hai, wo apne partner ko sabke samne importance deta hai, ek leader jaisa, jo rishta me apni jagah pakki karta hai. --- **Ab kya karein** * Roz baat-cheet me apni feelings share karo, especially jab complex ya emotional baat ho. * Uski individuality ko bhi samjho, kuch cheezein wo apne tak rakhna chahta hai, usse jyaada pressure mat do. * Relationship me patience rakho, kabhi kabhi usko apne emotions sambhalne ka time chahiye. * Uski leadership aur protective feeling ko appreciate karo, usko feel karvao ki wo important hai. Yaad rakho, rishta me thodi samajh aur patience badhne se hi asli pyar aur aagey badhne ka darwaza khulta hai. Tumhara partner life partner baniye ja raha hai, bas thodi nurture karni hai.",
+    "admin_id": "c2365d39-0ac7-42af-bc35-a33b5ced8d59",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1627",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 11
+  },
+  {
+    "question": "Kya partner emotionally available hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapka partner emotional taur par thoda complex hai, social toh kaafi expressive aur milansaar hai, par emotions aur mindset mein kabhi confusion aur doori reh sakti hai. Waisay emotional availability hai, lekin dheere dheere samajhne wali type hai. --- **Kyun aisa hai (deep breakdown)** Partner ki social vibe bahut friendly aur baat-cheet mein tez hai, wo logon ke saath asaani se adjust kar leta hai aur baatein karna acha hai. Matlab, wo emotionally open hone ke liye ready rahta hai, milna-julna uska nature hai. Lekin, jo asli emotional depth aur mindset partnership ke liye hota hai, wo thoda complex hai. Unka sochne ka tarz kabhi kabhi internal struggles aur emotional confusion dikhaata hai, jisme wo apne asli jazbaat ko poori tarah samajhne ya vyakt karne mein miss karte hain. Emotional connect phir bhi hota hai, par baar baar hesitations aur misunderstandings bhi dikhte hain. Partner ki presence aur attraction style mein wo confident aur thoda royal andaaz rakhta hai, par emotional baaton mein patience aur samay chahiye. Kabhi kabar emotional availability dheere develop hoti hai, jisme partner apne emotions ko samajhne aur share karne mein waqt leta hai. --- **Ab kya karein (practical)** * Partner ke saath honest par patiently baatein karein, unke emotions ko jaldbazi me judge na karein. * Unke sentiments ko respect karte hue thoda space den, jisse wo apne dil ki baat khul ke kar sakein. * Emotional moments ko lekar unse baar-baar clarification lene ki aadat daalen, confusion dur karne ke liye. * Apne taraf se zyada trust aur samvedansheel hone ki koshish karein, jisse emotional bridge strong ho. **Yaad rahe, emotional availability ek journey hai, jisme samay aur samajhdaari ki bohot zarurat hoti hai.**",
+    "admin_id": "97de0c70-4da7-4890-9c7a-146b2bcd58e3",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1755",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 12
+  },
+  {
+    "question": "Kya partner mujhe priority deta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Bhai, tumhara partner social aur baat-cheet mein kaafi active hai, matlab wo tumhari baaton ko samajhne ki koshish karta hai. Lekin uska dimaag thoda complex hai, thoda alag sochta hai relationship ko leke, jisme kabhi kabhi confusion ya doori aa sakti hai. Wo relationship mein apni alag identity banane mein jyada focus rehta hai, isliye priority mein pure tarah se focus karne mein thoda slow hai. --- **Kyun aisa hai (deep breakdown)** Tumhara partner logon se baatein karne aur connect karne wala hai, matlab wo social hai aur tumhare saath conversations mein engage hota hai, yeh zaroori cheez hai jo tum relation mein dekhoge. Par uska man kai baar apni internal world mein bhi hai, kuch baatein jo usko samajhna padta hai ya feel karna padta hai. Uske emotions kaafi sensitive hain, par uska dimaag chhupa hua raaz ya emotions ko kabhi kabhi thoda door karke rakhta hai. Matlab, woh deeply connected hona chahta hai par apne doubts ya insecurities ki wajah se baar-baar test lena ya patience rakhna pad sakta hai. Tumhara partner apne andaaz mein pyaar dikhata hai, wo thoda royal ya proud style mein apni feelings express karta hai, jo kabhi kabhi zyada dikhawa hai, par andar se wo tumhare liye serious presence rakhta hai. --- **Ab kya karein (practical)** * khulkar baat karo, apne doubts aur feelings ko share karna unki understanding badhayega. * patience rakh, relationship mein thoda waqt milega full focus dene ka. * focus karo unke social nature par, unke doston ya family ke saath interaction dekh kar samajh sakte ho ki wo kitna invest karte hain tum mein. * unke style ko appreciate karo, jo thoda alag hai par wo apna pyaar dikhane ka tareeka hai. Yaad",
+    "admin_id": "3161dd4e-bb06-4fa8-9542-7f59416ccbcb",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1694",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 13
+  },
+  {
+    "question": "Kya partner mujhe importance deta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapke partner ki social style zyada expressive aur baatcheet pasand karne wali hai, par unka dil emotional taur par thoda complex hai. Wo aapko importance dete hain, lekin unka mindset kabhi kabhi chhupa hua ya uljhan bhara hai. --- **Kyun aisa hai (deep breakdown)** Aapke partner ki social approach zabardast hai, wo baatein karna, ideas share karna, aur naye logon se milna pasand karte hain. Iska matlab hai ki wo rishton mein milansaar aur adapt karne wale hain, jo aapko emotional taur par connected feel karata hai. Lekin unke emotions thode complicated hain. Unka sochne ka tareeka kabhi kabhi ajeeb ya mysterious hota hai, jisse kabhi aapko unka dimaag ya jazba samajhne mein mushkil hoti hai. Ye chhupi hui feelings kabhi rishte mein tension ya delay la sakti hain. Unka pyaar aap tak na sirf shabd se, balki proud aur confident tareeke se aata hai. Wo aapko value dete hain, lekin apna dhyan apni pehchaan par bhi rakhte hain, jisse wo khud ko attract karne wala partner banate hain. --- **Ab kya karein (practical)** * Communication ko open aur regular rakhein, taaki dono ke jazbaat samajh mein aaye. * Unki emotional complexity ko respect karein, pressure na dena unko apne aap ko express karne ke liye waqt dey. * Unki independence aur personal space ko samjhein, yeh unke importance dene ka ek tareeka hai. * Samay ke saath patience rakhein, kabhi kabhi samajhna thoda sa challenge hota hai, par ye rishta gehra aur solid banta jayega. **Yaad rakho, pyar mein kabhi kabhi thodi doori ya samay lena bhi emotional respect ka part hota hai.**",
+    "admin_id": "42d4a8d6-707d-48ef-805b-cba6aa2d3abb",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1575",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 14
+  },
+  {
+    "question": "Kya partner mere bina reh sakta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "Haan, aapka partner aapke bina zindagi jee sakta hai, kyunki wo social aur independent nature ka hai. Lekin emotional level par wo thoda affected ho sakta hai aur challenges face kar sakta hai. Overall, wo adjust kar lega par emotional support ki zarurat mehsoos karega.",
+    "admin_id": "2ce7ecc6-e26f-42bc-ab1b-0dff1c55d6cf",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=270",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 15
+  },
+  {
+    "question": "Kya partner mujhe deeply love karta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Bhai, tumhara partner pyaar mein kaafi social aur baat-cheet wala hai, matlab unka pyaar dikhne mein halka-phulka aur connected rehta hai. Lekin unka mann thoda complex emotions se guzarta hai, isliye unka pyaar kabhi kabhi deeply intense aur thoda guarded bhi hai. Overall, pyaar ke mamle mein wo stylish aur attract karne wale type hain, par thodi patience aur samajh zaruri hai unke liye. --- **Kyun aisa hai (deep breakdown)** Tumhare partner ka social style Gemini jaise dikhata hai ki wo conversational, flexible, aur bade dostana type hain. Matlab wo tumse emotionally connect karne ke saath-saath har waqt ek companionship chahte hain, jisme baatein aur samajhna important hota hai. Ye unka pyaar halka-phulka nahi, balki shared understanding pe based hai. Par partner ke emotions aur soch thodi complex hain, kyunki unka mindset thoda alag disha mein hai, kabhi apne andar ghode halke nahi karte, privacy aur emotional depth ko importance dete hain. Matlab wo apne pyaar ko kabhi openly express karte hain toh kabhi apne emotions chhupake rakhte hain. Is wajah se kabhi kabhi pyaar ko samajhne mein patience chahiye hota hai. Unka partner-wala presence kaafi royal aur dhyan khinchne wala hai, jaise ek natural leader ya charmer. Matlab tumhare partner apni style aur apne andaaz se tumhe attract karte hain, aur unka pyaar bhi kisi tarah se passive nahin balki expressive hota hai jab wo apne dil ko kholte hain. Par overall, thodi testing aur waqt hai emotional gehraai samajhne mein. --- **Ab kya karein (practical)** * Roz thodi baatein share karo, taaki wo apne man ki baat khul ke kah sakein. * Unke emotional space ki respect karo, kabhi kabhi wo apne jazbaat ko time dena chahte hain.",
+    "admin_id": "3e197ff8-c173-4d10-8c6f-76f349a02a06",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1721",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 16
+  },
+  {
+    "question": "Kya partner apni feelings chhupa raha hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Bhai, yeh clear nahi hai ki tumhara partner apni asli feelings chhupa raha hai ya nahi. Koi strong sign nahi dikh raha jo poori tarah secrecy ya emotional chhupaav ko suggest kare, par thodi clarity ki zarurat zarur hai. --- **Kyun aisa hai (deep breakdown)** Do cheezein madad karti hain is confusion mein. Sabse pehle, tumhare partner ka behavior normal ya mixed lag raha hai, na woh zyada chup hai, na zyada khula. Matlab, kabhi kabhi emotions openly dikhte hain, aur kabhi thoda andar chupe bhi hain. Isliye tumhe lagta hoga ki wo apne asli feelings poori tarah express nahi kar rahe. Dusra, tum dono ke beech communication me thodi patience ki zarurat hai. Jab feelings ko samajhne ka process jaldi karte hain, kabhi kabhi misunderstandings badhti hain. Thoda waqt do emotional transparency ke liye, tab cheezein khul ke samajh aayengi. --- **Ab kya karein (practical)** * Regularly baitho, bina judge kiye apne emotions discuss karo. Simple questions pucho jaise \"Aaj tum kaisa mehsoos kar rahe ho?\" * Uske actions pe dhyan do zyada, words pe kam. Kabhi feelings express na bhi kare, uska behaviour tumko kaafi kuch batata hai. * Apna bhi apna emotional side khula rakho; jab tum khud honest rahoge, partner bhi naturally karega. * Agar confusion jyada hai, thoda time aur patience rakho, emotional clarity dheere aati hai. > Yaad rakho, har relationship mein clarity ka process time leta hai, aur emotional honesty gradually build hoti hai. Tumhara honest approach hi rishte ko majboot karega.",
+    "admin_id": "42805674-c939-41e9-9f3f-c49cacc92b02",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1520",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 17
+  },
+  {
+    "question": "Kya partner mujhe express nahi kar pata?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tumhara partner apni feelings express kar pate hain, lekin ekdum khul ke nahi. Pehle thoda guarded hote hain, trust banne ke baad hi apni emotional baatein openly share karte hain. --- **Kyun aisa hai (deep breakdown)** Unka social style easily milne-julne wala hai, kyunki unka andaaz thoda lively aur conversational rehta hai. Matlab, samajh lo ki wo logon se baat karna pasand karte hain, lekin apni feelings ko directly turant kholne mein hesitation hoti hai. Unka mann thoda complex hai, aur dimaag kaafi sensitive hai, woh apni feelings ko bahar lane se pehle samajhna chahte hain ki kya safe hai. Jab tak wo puri tarah se trust nahi karte, tab tak emotional baatein thodi band rakhe rehte hain. Par jab connection strong ho jata hai, tab wo kaafi expressive ho jaate hain aur apni caring nature clearly dikhate hain. Unki mohabbat aur pyaar dikhane ka style thoda royal aur耀nion-mein-se-in-modal hai, matlab unka presence bada impactful hai, lekin wo apni affection ko undemanding aur respectful tareeke se dikhate hain. Yani wo zyada forceful nahi hote, pyaar dhang se nibhaate hain, aur respect kaafi maintain karte hain. --- **Ab kya karein (practical)** * Partner ko patience do, wo apni baatein tabhi kholte hain jab wo puri tarah comfortable feel karte hain. * Chhoti-chhoti baatein share karo, jisse unka trust banta rahe aur wo khulne lagein. * Unka emotional tone samjho, kabhi kabhi woh logically sochte hain, isliye unki feelings ko force na karo. * Respect aur appreciation dikhate raho, jisse unka dil aur open ho. Remember, **har rishta apni speed se grow karta hai**. Tumhara partner emotions mein expressive hai, bas samay aur vishwas chahiye unhein khulne ke",
+    "admin_id": "c325208b-7b2f-421d-802d-df65411acf69",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1702",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 18
+  },
+  {
+    "question": "Kya partner emotionally confused hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Partner ka social style bohot lively aur expressive hai, kyunki unka partner ke nature me ek tarah ki chanchalta aur curiosity rehti hai. Lekin unke emotions aur mindset me thodi complexity aur internal struggle hai, jo thodi confusion la sakti hai. Unka emotional clarity thoda challenge mein rehta hai, toh haan, kah sakte hain emotional confusion hai. --- **Kyun aisa hai (deep breakdown)** Partner ke social approach me Gemini jaisa halka-phulka aur baatcheet-pradhan swag hai, matlab wo log milne-julne wale, baaton ko samajhne aur express karne wale hote hain. But, unka internal mindset, jo partnership mein kaam karta hai, kaafi deep aur thoda complicated hai, Mercury ka placement thodi duri ya anjaani feelings dikhata hai, jisse unka dimaag kabhi kabhi doubt mein ya riddle jaisa chal sakta hai. Ye ek tarah se emotional dhoondh hai, jahan clarity tak pohchna mushkil hota hai. Unka dil (Moon) bhi 7th mein maujood hai, jo unke partner ke liye emotions ko genuine banata hai, par 7th lord ka thoda challenging position emotional confusion ko badha deta hai. Emotional clarity mein delay hai, ya kabhi kabhi partner apne feelings ko samajhne mein struggle karta hai. --- **Ab kya karein (practical)** * Partner ko apne jazbaat ke baare mein open space dein, bina judge kiye, taaki wo apni feelings ko explore kar saken. * Patience rakhein, emotional clarity time ke sath aati hai, jaldi mein nahi. * Khaas taur pe communication ko smooth aur achhi tarah se samjhne ki koshish karein, emotional confusion ko door karne ke liye. * Kabhi kabhi introspection ya journaling encourage karein, taaki wo apne andar ke emotions ko behtar samajh saken. **Yaad rakho, emotional confusion ek signal hota hai growth ka, jo relationship ko aur gehra bana sakta hai agar dono saath milkar handle karein.**",
+    "admin_id": "8edb8017-55dc-4a62-9caf-7dcef8dc88ff",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1820",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 19
+  },
+  {
+    "question": "Kya partner mujhe sirf friend maanta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tere partner ka social style bilkul lively aur baat-cheet wala hai, matlab dost ki tarah friendly rehna unka natural tareeka hai. Lekin unka asli jazba thoda complex hai, emotions deeply connected hain, par dimaag often alag aur thoda doori bhi rakhta hai. Isliye sirf friend tak simatna mushkil hai; feelings aur connection dono hain, bas clarity thodi slow aayegi. --- **Kyun aisa hai (deep breakdown)** Partner ki social vibe hai expressive aur bolne waala, matlab wo naturally friendly aur communicate karte hain, jaise dost ke jaise har baat share kar sakte hain. Lekin unka dimaag partnership ko le kar kabhi kabhi uljhan mein rehta hai, kahi doori bhi banata hai, jisse kabhi hai ki wo zyada emotional involvement mein nahi hain. Yeh baat indicates karta hai ki wo sirf dost nahi, kuch zyada chahte hain, par apni feelings ko dikhane mein hesitant hain. Unke emotions aur dimaag thode mixed signals dete hain kyunki wo andar se deeply sochte hain partnership ke baare mein, lekin apni jagah thodi emotional space bhi chahte hain. Matlab feelings genuine hain, par express karne mein slow hain. Dosti ka level unke liye natural hai, par uske upar bhi kuch emotional connection zaroor hai. Unki overall presence pyar mein passionate aur attract karne wali hai, matlab wo aise insan hain jo apne partner ko apni life mein importance dete hain. Lekin apni feelings ko openly dikhana thoda time le sakta hai. Isliye agar wo sirf friend kahte hain to uske peeche unka sochna aur apni feelings ko samajhne ka process hota hai. --- **Ab kya karein (practical)** * Apne partner ke saath khul kar baat karo, emotional clarity ke liye gently pucho ki wo relationship ko kaise feel karte hain. * Patience rakho, unka jazba time ke saath clear hoga, jaldi decision ya judgment mat do. * Apni feelings ko",
+    "admin_id": "4bd9aa1c-729d-4c90-92fa-f4cd6abb80eb",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1817",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 20
+  },
+  {
+    "question": "Kya partner romantic feelings rakhta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan bhai, partner definitely romantic feelings rakhta hai, lekin thoda practical aur steady tareeke se apne pyaar ko dikhata hai. --- **Kyun aisa hai (deep breakdown)** Partner ka social style thoda lively aur communicate karne wala hai, matlab baatein karna, ideas share karna unke liye natural hai. Ye unke relation mein ek khula pan lata hai, jisme vibes friendly aur engaging rehte hain. Emotional level pe partner thoda complex hai kyunki unka mindset thoda inner struggle mein rehta hai, kabhi apne jazbat ko asaani se express nahi kar paate ya kabhi apne emotions ko chupana padha karta hai. Lekin unka dil gahra hai, aur jo pyaar dikhate hain, wo genuine hota hai. Unka presence relationship mein confident aur charming rehta hai, lekin jahan wo apna pyaar practical aur stable tareeke se dikhaate hain, matlab itna over the top ya impatient nahi hote, balki dheeraj se rishto ko nibhaate hain. --- **Ab kya karein (practical)** * Partner ko apne emotions share karne ka time aur space do, wo naturally open ho jayenge. * Roz thodi positive baatein aur appreciation dikhao, jisse wo secure feel karein. * Jab wo practical gestures dikhayen, uska jazba samajhke unko value do. * Patience rakho, kyunki inka pyaar dheere-dheere gehra hota hai, koi jaldbazi nahi. **Motivational takeaway:** Pyar vo cheez hai jo kabhi jaldi nahi hoti, par agar sahi samay aur samajh ho, toh har practical aur steady gesture dil ko bada pyaar bana deta hai.",
+    "admin_id": "5ec44577-52f1-44dc-a4a8-a087b168ab7b",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1465",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 21
+  },
+  {
+    "question": "Kya partner mujhe sirf physical attraction ki wajah se pasand karta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tere partner ka physical attraction definitely strong factor hai, but sirf usi se woh tujhe pasand nahi karta. Uske emotional aur sochne ke tareeke bhi important hain. --- **Kyun aisa hai (deep breakdown)** Tera partner generally slim aur youthful appearance ka hoga, expressive aankhon ke saath, jo physically kaafi attractive hai. Yeh body language aur look usko naturally pull karta hai, aur yeh attraction ka first layer hota hai. Venus, jo beauty aur charm ki soorat ko control karta hai, apne aap mein acha position mein hai, isliye physical attraction pakka hai. Lekin yeh sirf surface level nahi hai. Tera partner ke emotional aur mental part mein thoda complexity hai, uska sochne ka style aur feelings thodi gehri aur private ho sakti hain. Matlab, woh tujhe sirf dekhkar nahi, balki teri andar ki baaton, teri personality ke nuances ko samajh kar bhi attach hota hai. Kuch pagal pan ya emotional depth bhi us rishe mein rehti hai, jisse woh superficial attraction ke upar bhi jaata hai. --- **Ab kya karein (practical)** * Apne rishe mein openly baatein kar, uske dil ki baatein samajhne ki koshish kar. Emotional bonding pe dhyan de. * Physical attraction ko appreciate kar, but personality aur feelings ko equally importance de. * Apne expressions aur emotions ko clear rakh jitna ho sake, taaki misunderstandings na aayein. * Jab feel ho ke sirf look se hi interest ho raha hai, apni feelings calmly share kar. > Yaad rahe, rishta sirf dikhne se nahi, andar ki understanding se strong banta hai. Samajhna uske jazbaat bhi zaruri hai, tabhi connection deep hoga.",
+    "admin_id": "820684ea-6223-43bb-975f-75e18e42ca3d",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1595",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 22
+  },
+  {
+    "question": "Kya hamara emotional connection strong hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan, emotional connection hai, par abhi itna gehra nahi hai; kabhi kabhi mood swings se doori hoti hai. Iska reason yeh hai ki aap dono apni feelings ko zyada openly express nahi kar paate, jiski wajah se emotional bonding thodi delicate rehti hai. --- **Kyun aisa hai (deep breakdown)** Aapke beech ka emotional rishta is tarah ka hai ki dono ek dusre ke prati loyal hain, lekin apne emotions ko andar hi andar rok ke rakhte hain. Matlab, kabhi kabhi jo kuch aap feel karte ho, wo samne waale tak poori tarah nahi pahunchta. Jaise koi dard ya tension dil me chup jata hai aur phir kabhi kabhi chhota sa issue bada ho jata hai. Yeh ek tarah ka silence se suffering hota hai, jisme zyada baat na karne ki wajah se misunderstandings ban sakti hain. Phir bhi, aap dono ke beech ek sense of duty aur commitment zaroor hai. Matlab aap dono rishtay ko nibhaane ki koshish karte ho, par emotional depth thodi jagah chhoot jati hai kyunki feelings kabhi kabhi distant feel hoti hain. Matlab pyaar hai, par uske expressions ya sharing mein thoda gap hai. --- **Ab kya karein (practical)** * Rozana chhoti baatein share karo, apne emotions ko door na rakho. * Jab bhi mood kharab ho, usko samjho aur ek dusre ko space dene ki jagah baat karke clarity lao. * Apni expectations ko clear karo ki aap emotional level par kya chahte ho. * Loyalty ko appreciate karo, yeh aapke connection ko stable banata hai. Har rishte mein ups and downs hote hain, par jo baat rishtay ko jeevit rakhti hai, wo hai honest communication aur patience. Keep nurturing your bond with small but sincere efforts, bhai.",
+    "admin_id": "67945203-a5ba-4336-9b30-4371f56395e8",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1603",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 23
+  },
+  {
+    "question": "Kya hamare beech emotional bonding achhi hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan, emotional attachment hai par abhi gehraai mein thodi sensitivity hai jo mood swings se affect hai. --- **Kyun aisa hai (deep breakdown)** Tum dono ke beech ek tarah ka loyalty aur commitment hota hai, jisme ek dusre ke liye zimmedari ka jazba strong hai. Matlab, tum dono apni feelings ko easy tarike se express nahi karte, kabhi kabhi chup rehna ya apne emotions ko andar hi andar sametna zyada hota hai. Yeh kabhi kabhi misunderstandings ya emotional distance bhi create kar sakta hai, jab ek ya dono ko hai ki doosra samajh nahi raha ya connect nahi kar raha. Mood swings yahan ek important role play karte hain, agar kisi ek ka mood kharab ho jaye to wo emotional bonding temporarily weak hai. Par iska matlab yeh nahi ki pyaar kam hai, balki dono ko patience rakhna padta hai tabhi connection stable rehta hai. Loyalty aur duty ki feeling ka matlab yeh bhi hai ki koi betrayal ya cheating nahi hoti, bas kabhi silence aur emotional suppression zyada ho jati hai. --- **Ab kya karein (practical)** * Regularly apne emotions ko share karne ki practice karo, chahe chhoti baatein hi kyun na ho. * Jab mood down ho, thoda space do par communication se disconnect na hone do. * Ek dusre ki feelings ko samajhne ki koshish karo, especially jab baatein zyada emotional ho. * Practically trust dikhana, jaise chhoti help ya support moments kaafi important hote hain. *Yaad rakho*, emotional real bonding wo hoti hai jo ups and downs ke beech bhi apne aap ko maintain karti hai, emotional patience se rishta aur gehra hota hai.",
+    "admin_id": "fa9534fd-6e5c-408e-8149-411592aa7533",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1549",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 24
+  },
+  {
+    "question": "Kya partner mujhe respect ke saath pyaar karta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan, partner aapko respect ke saath pyaar karta hai, lekin ye respect zyada tar baat-cheet aur emotional samajh se dikhayi deta hai. Rishta samajhne mein thodi complexity toh hai, par jazbaat waqai gahra hain. --- **Kyun aisa hai (deep breakdown)** Aapke partner ka social andaaz baat-cheet mein intelligent aur lively hai, matlab vo aapse open aur expressive tarike se jura rehta hai. Emotional level par, partner ke dimaag aur jazbaat dono raw insight rakhte hain, magar kabhi kabhi unka approach thoda gupt ya complex hai, jo unki feelings ko thoda mushkil banata hai samajhna. --- **Ab kya karein (practical)** * Apas mein khuli baat-cheet par focus karein, emotions ko samjhane ki koshish karein. * Thoda patience rakhein jab partner apni baat directly na keh paye. * Emotional bonding ko hug ya chhoti gestures se mazboot karein. * Respect aur dignity ko daily chhoti baaton mein appreciate karein. > Emotional respect ki buniyad baaton aur jazbat ki gahrai pe hoti hai; is respect ko samajhna aur nibhana aapke rishton ko gehra kar dega.",
+    "admin_id": "f093799f-920f-49da-b69e-c3ac3351b71b",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1065",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 25
+  },
+  {
+    "question": "Kya partner mujhe emotionally support karega?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Bhai, tera partner emotional support dene mein hai, lekin thoda patience aur samajh zaroori hai jab kabhi distance ya mood off ho jaye. --- **Kyun aisa hai (deep breakdown)** Tera partner emotionally toh connected hai, kyunki tum dono ke beech jo emotional bonding hai, woh bada gehra hai. Matlab jab tum ready ho baat karne ke liye, toh wo sunega, samjhega, aur zarurat par encouragement bhi karega. Tum dono ke beech communication kaafi smooth hai, jisme humor aur mental compatibility bhi shamil hai, jo emotional support ko natural banata hai. Lekin haan, baar-baar kabhi kabhi emotional distance ya mood swings aate hain, jisme thoda emotional cooling ya distance hota hai. Ye partly patience maangta hai, matlab jab partner thoda distant lage, toh apne sentiments ko clear karke share karna zaruri hai. Kabhi-kabhi external pressures aur situations ki wajah se wo thoda emotional hold kar leta hai, toh us time par pyar aur clear baatcheet se situation ko samjho, delay ya friction hai toh ghabrana nahi. Waise, partner ki taraf se warmth aur respect dikhai deta hai, jisse tumhara relationship strong hota hai overall. Par emotional support mein urgency se zyada steady aur long-term approach hoga. --- **Ab kya karein (practical)** * Jab partner distant lage ya mood low ho, toh pyaar se patience rakho aur apne dil ki baat clearly express karo. * Communication ko open aur light-hearted rakho, humor aur dilchaspi se baatcheet ko engage karo. * Career ya life goals pe encouragement ka demand karte waqt realistic expectations ke saath steady support chaho. * Emotional ups and downs ko samajhne ki koshish karo, aur situation ko emotionally heat na hone do. > Emotional support ek journey hai, dost, thoda waqt aur samvedna do, tum dono ka bond aur deep hoga.",
+    "admin_id": "02103d6a-10c5-4072-9af1-1f23d0789c54",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1789",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 26
+  },
+  {
+    "question": "Kya partner meri feelings samajhta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapka partner dikhne mein social aur baat-cheet mein smart hai, par emotions samajhne mein kabhi kabhi thoda complex ya guarded hota hai. Wo aapki feelings ko samajhne ki koshish karta hai, par apni chhupi hui baatein aur emotional depth se kabhi door rahta hai. --- **Kyun aisa hai** Aapka partner natural baat-cheet karne wala insaan hai, Gemini jaise hai jo logon ke saath asaani se jhudta hai, par asli dil ki baat chhupata hai. Uske emotions aise hain jaise chandra ki tarah, kabhi badalte rehte hain, par deep emotional connection chhupa hota hai jo zaroor samajhna padta hai. Par iska mindset thoda complex hai, kyunki wo apne aap ko secure rakhne ke liye feelings ko andar dabake rakhta hai, jisse aapse emotional doori ban sakti hai. --- **Ab kya karein** * Aap apni feelings ko clearly aur softly communicate karte rahe, bina pressure dale. * Uske emotional mood ko samajhne ki koshish karein, patience rakhein jab wo open hota ho ya nahi. * Kabhi kabhi casual baaton se uske dil tak pahunchne ki koshish karein, deep talks forced na banayein. * Apne rishte mein trust aur samvedansheel baatcheet ko badhava dein. **Yaad rahe**, emotions ko samajhna ek process hai; patience se connection strong hota hai, aur thoda sa time chahiye khulne ke liye.",
+    "admin_id": "c443513f-b66f-4474-8a2b-3379455a0d69",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1277",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 27
+  },
+  {
+    "question": "Kya partner meri care karta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tera partner social aur baat-cheet mein kaafi active aur curious hai, matlab wo care dikhane mein expressive hota hai. Emotions toh hai, lekin kabhi kabhi uska mindset thoda complex aur emotional depth ke saath guarded bhi hai. Overall, wo apni presence se attract karta hai, lekin dikhave se zyada sincere affection mein thoda patience chahiye. --- **Kyun aisa hai (deep breakdown)** Tera partner Gemini jaisa social nature rakhta hai, matlab wo khula, dostana aur baaton mein tej hai. Aasaan nahi hai ki wo apni feeling chupaye, isliye care dikhane mein generally koi dikkat nahi hoti. Wo cheeze explore karne wala aur communication mein active rahega, jo ki relation mein ek positive spark leta hai. Lekin uske andar thodi emotional complexity hai. Uska dil full-on sensitive hai (kyunki Moon hai saath mein), par sochna aur samajhna thoda intense hota hai, jaise ki feelings ko chhupane ya samajhne mein time lagta ho. Emotional decisions mein thoda hesitation hai, especially jab baat partnership ki aati hai, kyunki wo apne mann ke ANDAR ke kuch emotions ko easily express nahi karta. Uski jadui presence Leo ke andaaz mein dikhti hai, matlab wo confident, proud aur thoda dramatic hai. Yeh uski attention aur affection dikhane ka style hai. Lekin kabhi kabhi yeh surface level show hai, toh asli care ko samajhne ke liye thoda waqt dena zaroori hai. Care karti to hai, bus directly hamesha dikha ke na mile. --- **Ab kya karein (practical)** * Apne partner se clear aur khulke baat kar, uske emotions samajhne ki koshish kar, especially jab wo thoda guarded lagne lage. * Usko express karne ke liye comfortable mahsoos karva, taaki wo apni deep feelings share kar sake. * Patience rakho, kyunki uska dikhawa aur asli feelings me thoda",
+    "admin_id": "f76c50c1-23c6-4ea9-9b06-33d434973953",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1761",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 28
+  },
+  {
+    "question": "Kya partner ko meri value hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapke partner ka social style bohot friendly aur baat-cheet waala hai, lekin unki soch aur feelings thodi complex aur gehri hoti hain. Wo aapko samajhne mein kabhi kabhi thoda confuse hain. Partner ki asli mohabbat ka andaaz thoda royal aur strong hai, lekin izzat aur wajood ko lekar thoda testing phase zaroor chal raha hai. --- **Kyun aisa hai (deep breakdown)** Aapke partner ki social vibe bohot expressive aur baat-cheet-focused hai, matlab wo apne aapko social taur pe khul ke rakhte hain, naye logon se milna pasand karte hain. Isliye aapke saath unka rishta ek lively, zimmedar aur active friendship-type connection jaisa hai. Lekin unka sochne ka tarz aur jo unki feelings hain, wo thodi complex aur private hain. Kabhi kabhi wo apne jazbaat chhupa ke rakhte hain, jiske karan aap confuse hain ki unki kadar kis level ki hai. --- **Ab kya karein (practical)** * Apne emotions ko khul ke share karo, taki wo aapke feelings ko samajh saken. * Unki personal space ka dhyan rakho, wo apne tareeke se hi apni value express karte hain. * Thoda patience rakho, trust banane mein time hai unke jaise logon ko. * Unke strong aur royal andaaz ko appreciate karo, jo unki mohabbat ka asli roop dikhata hai. **Yaad rakho, har rishta test se guzarta hai, lekin saccha pyaar sab kuch samajhne ki himmat deta hai.**",
+    "admin_id": "62bd409f-550d-43a6-a816-65500f0ee2a2",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1330",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 29
+  },
+  {
+    "question": "Kya partner mujhe lose karne se darta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapke partner ka social nature kaafi expressive aur baat-cheet mein tez hai, lekin unke emotional sochne ka tareeka thoda complex aur doori banane wala rehta hai. Iska matlab hai ki wo aapko khona nahi chahte, par kabhi-kabhi apne emotions ko samajhakar chhupa lete hain. Is wajeh se unke dar ka jazba dikhai deta hai, par wo directly usse saamna nahi karte. --- **Kyun aisa hai (deep breakdown)** Aapke partner ki mulaqat sabke saath karne ki aadat hai, wo logon se baat karna pasand karte hain, samajhne mein tez hote hain. Is social vibe se pata chalta hai ki unhe logon ke beech apni jagah banaani aati hai, par emotional taur par wo thoda sensitive hote hain. Unke andar ek natural darr hai ki wo apni personal feelings ko bayaan karne se jhukenge ya chhupayenge, kyunki unka emotional nature kabhi kabhi utar chadhav se guzarata hai. Unka relationship mindset thoda complicated hai, kyunki wo relationship ko le kar emotional tension bhi mehsoos karte hain. Kuch baatein unhe insecurities mein daalne ki wajah banti hain, jaise ki kahin koi baat chup jaye ya misunderstandings ho jayein. Wo emotionally kabhi khud ko chhupa ke rakhte hain, jisse hai ki wo aapse dur ho jayenge, par asal mein wo aapse judaav chahte hain. --- **Ab kya karein (practical)** * Partner ke saath khul kar baat karne ki koshish karein, emotional baatein dhire-dhire share kijiye. * Unke signs par dhyan dein jab wo thoda dur ho jayein, samajhne ki koshish kijiye, dantna nahi. * Unko space aur samay dein jab unhe emotional handle karne ki zarurat ho. * Aapke consistent pyaar aur samarpan se wo dheere-dheere ap",
+    "admin_id": "f64febfb-4923-4e24-8249-9bfd41678431",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1615",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 30
+  },
+  {
+    "question": "Kya partner mujhe lekar possessive hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapka partner thoda possessive hai, especially emotionally sensitive aur kabhi kabhi jealousy ka effect dikh sakta hai. Wo apni feelings ko zyada express nahi karta, par stress mein kabhi kabhi overreact bhi kar sakta hai. --- **Kyun aisa hai (deep breakdown)** Aapke partner ka dimaag ajeeb tarah se dual nature ka hai, matlab kabhi soch badal jata hai stress mein, jiski wajah se wo zyada possessive aur guarded ho jaata hai. Wo apne emotions ko directly show nahi karta, par andar se ye feelings build hoti rehti hain. Kabhi kabhi to ye feeling itni strong ho jaati hai ki wo chhota motta jealousy ya possessiveness ka angle le aata hai. Iska matlab ye nahi ki wo control freak hai, lekin thoda space dena zaruri hai kyunki wo kabhi kabhi suddenly detached ho ja sakta hai ya fir emotions ka pressure lekar paralllel impact ke saath aapke upar bhi stress la sakta hai. --- **Ab kya karein (practical)** * Apne partner ko open baat karne ka moka dein; feelings chupana unke confusion badha deta hai. * Jab wo stress mein ho, patience se unko samjhaayein, avoid confrontation during emotional ups and downs. * Thoda space dena zaruri hai taaki dono ki individuality barkarar rahe. * Aap bhi apne trust aur positivity ko express karte rahein, taaki unko reassurance mile. Har rishte mein thodi si testing phase hoti hai, par samajhdaari aur patience se possessiveness ke pressures ko handle karna aasaan ho jaata hai. Aap dono ke liye balanced approach zyada faydemand rahegi.",
+    "admin_id": "008b5827-d4ad-4181-98b3-1354f93eaec4",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1496",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 31
+  },
+  {
+    "question": "Kya partner jealous hota hai kyunki woh pyaar karta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Bhai, partner ka jealous hona usually dheere-dheere pyaar ka ek expression hai, lekin yeh kabhi kabhi zyada emotional stress aur insecurity se bhi aata hai. Toh jealous hona isliye nahi ki woh sirf pyaar karta hai, balki unki feelings thodi complex hain, jisme pyaar ke saath emotional tension bhi chhupa hota hai. --- **Kyun aisa hai (deep breakdown)** Tere partner ka mann thoda jaldi emotional flips de sakta hai, matlab kabhi-kabhi wo chill nahi kar pata. Jab stress ya tension hota hai, to feelings upar neeche ho jati hain. Wo apne emotions zyada control nahi kar paata, isliye jealousy aati hai. Ye jealousy pyaar ki nishani toh hoti hai, par kabhi-kabhi ye apni insecurity ko bhi reflect karti hai. Wo apne emotions ko bahar openly express nahi karta, wo andr hi andr struggle karta rehta hai, phir kabhi kabhi jyada react kar deta hai. Matlab ki partner ke jealous hone ke peeche emotions bahut intense hote hain, lekin wo apne aap ko kabu mein nahi rakh pata. Iska matlab ye bhi hai ki unko thodi space aur patience chahiye apne aap ko samajhne ke liye. Aise emotional swings aur jealous behaviour me kabhi wo apne pyaar ko express karne me awkward feel karta hoga, toh willpower ke saath thoda emotional handling ki zarurat hai. --- **Ab kya karein (practical)** * Partner ko zyada space do, jahan wo apne jazbaat aaram se samajh sake. * Open communication adopt karo, bina judge kiye unki feelings ko samjho. * Jab wo jealous ho, toh react mat karo, patiently suno aur calmly situation handle karo. * Apne relationship me trust build karne wala environment create karo, jo unki insecurities ko kam kar sake. **Yaad rahe:** Jealousy sirf pyaar nahi, ek emotional overload bhi hai. Thoda waqt do",
+    "admin_id": "d0190ca1-e7b6-4330-8b45-8cb3054020d6",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1725",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 32
+  },
+  {
+    "question": "Kya partner emotionally mature hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapke partner ki emotional maturity mein thodi complexity hai. Unka communication aur sharing ka style kaafi social aur expressive hai, par unka partnership ke prati mindset thoda challenging hai. --- **Kyun aisa hai (deep breakdown)** Partner ki social vibe Gemini jaise hai, matlab wo conversation mein fluent, curious aur thoda playful hote hain. Aise log easily apne emotions ko express kar dete hain, aur dusron ke viewpoints ko samajhne ki koshish karte hain. Isse unka emotional maturity sense strong hai, kyunki emotional baatein unke liye open hoti hain. Lekin unke mann mein partnership ka approach thoda complex hai kyunki unka dimaag Scorpio ke jaise intense aur chhupi hui feelings leke chal raha hota hai. Matlab kuch emotional issues ya trust karne mein insecurities ho sakti hain. Wo emotions ko andar hi andar feel karte hain, jo kabhi kabhi misunderstandings la sakta hai. Unke partnership waale dimaag mein clarity thodi late aati hai, isliye patience zaruri hoga. Presence mein, wo thoda regal aur confident type hote hain, jaise kisi lead role mein ho. Lekin ye bhi meaning rakhta hai ki wo apne independence aur individual space ko bahut cherish karte hain, jiska impact emotional closeness pe pad sakta hai. --- **Ab kya karein (practical)** * Partner ke saath open aur frequent communication rakho, unke expressions ko samajhne ki koshish karo. * Trust build karne ke liye patience rakho, unki gehri feelings ko gently explore karo. * Privacy aur independence ko respect do, takki relationship balanced rahe. * Emotional clarity ke liye chhoti chhoti emotional baatein share karna encouraged karo. **Yaad rakho**, emotional maturity ek journey hai, donon taraf ki understanding aur patience se hi yeh stronger hoti hai.",
+    "admin_id": "ddf3c84a-dac5-41cd-be62-1e58d99e7ec9",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1763",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 33
+  },
+  {
+    "question": "Kya partner emotionally dependent hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Partner emotionally thoda zyada sensitive hai aur feelings ko lekar deeply connected rehta hai, kyunki unke 7th ghar mein Moon hai. Lekin unka emotional mindset thoda complex aur kabhi kabhi chhupa hua hota hai, jisse kabhi dependence ka ehsaas hai, par vo openly nahi dikhata. --- **Kyun aisa hai (deep breakdown)** Partner ki social style Gemini jaisi hai, matlab vo logon se baat-cheet mein active, smart aur thoda restless hote hain. Ye energy unke approach ko lively banati hai, lekin jazbaat thoda upar-neeche bhi hain. Emotional taur par Moon hone ki wajah se vo apne feelings ko intensely mehsoos karte hain, par kabhi kabhi ye dependency ek chhupi hui tasveer hai. Magar unka mindset thoda guarded hai, kyunki unke partnership soch mein Scorpio wali gahraayi aur 12th ghar wali alag si feeling bhi hoti hai. Matlab wo apne emotions ko kabhi kabhi chhupane ki koshish karte hain aur emotional dependence ko openly discuss nahi karte. Isliye kabhi-kabhi aisa hai ki vo emotionally thoda door bhi rehna chahte hain. --- **Ab kya karein (practical)** * Partner ke emotional signals ko dhyan se samjho, unhe space do apni feelings share karne ke liye. * Jab vo apna trust dikhayein, tab confidence se emotionally connect hone ki koshish karo. * Kabhi bhi unke emotional walls todne ke liye jaldi mat karo, patience rakho. * Communication mein clarity aur empathy badhao, unhe lage ki vo aapke saath bina judge hoye apni feelings express kar sakte hain. Yaad rakho, emotional dependence ka matlab kamzor hona nahi, kabhi-kabhi sirf deeper connection chahiye hota hai. Thoda samajh aur sabr se rishta aur majboot hota hai.",
+    "admin_id": "e62658e9-f3fa-4c8e-8773-37df3493da7c",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1644",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 34
+  },
+  {
+    "question": "Kya partner mujhe ignore kar raha hai ya busy hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tere partner ka nature thoda mixed hai, woh social aur baat-cheet mein active rehta hai, par unka dimaag aur feelings kabhi kabhi thodi alag jagah par hote hain. Ignore karne se zyada, woh apne internal challenges ya kaam mein jyada busy hai. --- **Kyun aisa hai (deep breakdown)** Tera partner social admi hai, jo aasan se logon se baat karta hai aur connection bana leta hai. Conversation unke liye natural hai, toh wo tujhe totally avoid karna nahi chahte, unka behaviour zyada friendly aur khula hota hai. Lekin unka mindset aur dil thoda complicated hai, woh zyada sochte hain, emotional taur par intense feel karte hain, apne andar kuch personal challenges bhi leke chalte hain. Is wajah se kabhi kabhi wo doori feel karane hain, par iska matlab ignore karna ya tumse door hona nahi hai. --- **Ab kya karein (practical)** * Directly apne doubts aur feelings ko calmly share kar, bina confrontation ke. * Unke time aur space ka izzat kar, par apni zarurat bhi express kar. * Thoda patience rakho, kyunki ye phase temporary hai jisme wo emotionally busy hain. * Kabhi kabhi chhoti chhoti baatein karo, jisse dono ka connection strong rahe. > Yaad rahe, jab dil ka matter hota hai, toh misunderstandings hote hain, par samne wale ka nature samajh ke relationship ko grow karna zaruri hai. Tera partner busy zarur hai, ignore nahi kar raha.",
+    "admin_id": "5f4a258c-25a6-4261-9fce-8698161bb821",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1362",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 35
+  },
+  {
+    "question": "Kya partner ka pyaar waqt ke saath kam ho jayega?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tumhare partner ki social style kaafi energetic aur baatcheet-loving hai, kyunki wo Gemini type hai, matlab wo log milke samay bitana pasand karte hain. Magar unka dil thoda sensitive hai, kyunki unke emotions aur feelings ko Moon handle karta hai, jo pyaar mein gehraai lane wala hai. Par thoda challenge yeh hai ki unka dimaag pyaar mein kabhi kabhi uljhan me aa sakta hai aur kabhi doori ban sakti hai. --- **Kyun aisa hai** Partner ka samajhne-wala andaaz interesting hai; wo har baat ko samajhne ki koshish karte hain aur social milna-julna unko acha hai, jaise ki dost ban ke rishte nibhane chahte hain. Lekin Mercury unke dimag ko thoda confuse karta hai kyunki wo apni feelings ko kabhi kabhi chhupa lete hain ya doori bana lete hain, especially jab unhe emotional pressure hota hai. Moon hone ki wajah se unka dil bahut emotional aur sensitive hai, lekin Scorpio sign se unka sochna kabhi kabhi complicated hai, matlab kabhi kabhi misunderstandings ya emotional clashes hain. --- **Ab kya karein** * Rozana communication ko priority do, apne dil ki baat khul ke share karo. * Partner ke emotional mood ko samajhne ki koshish karo, patience rakho jab wo thoda door ho. * Relationship mein chhoti misunderstandings ko badi baat na banane do, thoda space do ek dusre ko. * Kabhi kabhi unki feelings ko confirm karna zaroori hai, bina gusse ke pyaar se baat cheet badhao. **Yaad rakho**, pyaar ka matlab sirf ek feeling nahi, ek journey hai jisme patience aur samajh bohot zaroori hai. Waqt ke saath challenges aate hain, par agar dono mil ke rishte ko nibhayenge to pyaar kam nahi hoga, balki gehra hoga.",
+    "admin_id": "d36725ee-1ccb-47bf-a04c-6c74e4883f1d",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1630",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 36
+  },
+  {
+    "question": "Kya hamara pyaar one-sided hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Rishtaa dono taraf se kuch had tak hai, lekin usmein kafi challenges aur emotional distance bhi nazar aata hai. Matlab, pyaar hai par dono milke usse samajhna aur sambhalna zaruri hai. --- **Kyun aisa hai (deep breakdown)** Aapke rishtay mein jo positive cheez hai, wo yeh ki aapke dil mein pyaar aur samajh ki koshish hai, ek taraf se ek achha emotional base banane ki chahat hai. Lekin, dusri taraf, rishtay ke behavior mein thodi emotional doori, thodi misunderstanding bhi nazar aati hai. Dusre vyakti ki taraf se communication thoda complex hai, aur kabhi kabhi woh apne jazbaat chhupane ki koshish karte hain ya doori maintain karte hain. Saath hi, dono ke beech jo gussa ya tension aata hai, wo bhi rishte ko thoda jhatka deta hai. Is wajah se emotional bonding mazboot hone ki bajaye, kabhi kabhi rishte mein thandi chalen ya rukawat aa jati hai. Yadi dono ek dusre ki feelings ko dhyan se samjhen aur patience rakhen, toh binding better hai. --- **Ab kya karein (practical)** * Apne jazbaat khul ke share karein, confusion ya misunderstanding ko door karne ki koshish karein. * Patience aur samvedansheel banne ki aadat daalein, kyunki rishte mein thodi attention aur samay dena zaruri hai. * Apne partner ko space bhi dein, par regular baatcheet ke zariye connection banaye rakhein. * Emotional ups and downs ko lekar zyada ghabraye nahi, ye phase hai, dhire dhire behtar hota jayega. **Yaad rakhein**, pyaar ek taraf se hona asaan nahi hota; jab dono milkar kaam karte hain tabhi rishte mein khoobsurti aati hai. Thodi mehnat chahiye, par rishte mein dono ki feelings ko samajhna hi sabse bada",
+    "admin_id": "c3c40084-64a4-4f6f-818a-e4a440067147",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1624",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 37
+  },
+  {
+    "question": "Kaun zyada pyaar karta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Iss chart mein pyaar mein thoda complexity hai, strong emotional attachment ke saath kuch challenges bhi rehte hain. Matlab, pyaar dono taraf se hota hai, par communication aur emotional clarity mein dikkat aa sakti hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, 7th house jo partnership dikhata hai, usmein Moon hai, jo emotions aur pyaar ki raw feeling batata hai. Iska matlab hai ki dil se pyaar zaroor hota hai, par Moon Gemini mein hai, toh feelings thodi changeable aur soch samajh kar express ki jati hain. Lekin 7th lord Mercury 12th ghar mein hai, jo thoda doori aur misunderstanding dikhata hai. Communication jo sabse zaroori hoti hai, wo kabhi kabhi misunderstandings ki wajah ban sakta hai. Isliye kabhi kabhi dono log ka dil nahi mil pata ya baatein clear nahi ho pati. Saath mein Saturn bhi 5th ghar me hai, aur wo thoda restriction, patience aur emotional distance laata hai pyaar mein. Mars jo passion aur anger ko control karta hai, 7th house ko affect kar raha hai, jisse kabhi kabhi jhagda ya gusse ka element aa jata hai. Matlab pyaar genuine hai, par express karne mein ya disagree hone mein dikkat hai. Ek positive baat ye hai ki Jupiter 5th house mein hai, jo wisdom aur understanding deta hai pyaar mein, toh dono taraf se seekhne ki koshish hoti hai. --- **Ab kya karein (practical)** * Saaf aur patience wali communication maintain karo, misunderstandings ko jaldi clear karo. * Emotions ko bina gusse express karo, especially jab neutral sochna zaroori ho. * Mutual respect aur space dena seekho, emotional distance ko positive dhang se samjho. * Kabhi emotions ko control karne ke liye thoda relaxation aur meditation helpful rahega. > Pyaar jisne sach mein dil se kiya hota hai, usme thodi mehnat aur samajhdaari donon ko chahiye",
+    "admin_id": "ac51ef8d-0ae9-4532-b234-1a74a643ec36",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1789",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 38
+  },
+  {
+    "question": "Kaun relationship me zyada emotionally invested hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Is rishtay me dono taraf emotional investment thoda complex hai, lekin partner ki taraf thodi zyada emotional responsibility aur commitment dikhti hai. Lekin dono ke beech distance aur thodi misunderstanding bhi bani reh sakti hai. --- **Kyun aisa hai (deep breakdown)** Partner ke emotions ko samajhne me thoda challenge hai kyunki unka dimaag (communication) kabhi kabhi complex aur gehra hota hai, jo relationship me thoda emotional doori la sakta hai. Emotional connection me **partner ka dil kaafi sensitive** (Moon in 7th house) rehta hai, isliye feelings ko samajhna aur express karna unke liye zaruri hota hai. Dusri taraf, aapki taraf se thoda emotional distance aur patience ka aspect hai, jiske wajah se kabhi kabhi relationship me tension aa sakti hai, specially jab expectations clear na ho. Mars aapke personality me zyada passion aur direct action laata hai, lekin iska temper kabhi misunderstandings ko badhata hai. Dono taraf se emotional investment hai, magar partner zyada emotionally sensitive aur invested hai, jabki aap often apne emotions ko handle karte ho thoda rationally ya control karke. --- **Ab kya karein (practical)** * Communication ko clear aur open rakho, feelings ko chupana avoid karo. * Patience aur samajhdari se ek dusre ke emotional space ko respect karo. * Kabhi kabhi apne temper ko thanda karna jaruri hai, jisse arguments avoid ho sakein. * Chhoti chhoti baatein share karte raho, taaki misunderstandings na badhein. **Yaad rahe**, emotional investment ka matlab yeh nahi ki sirf ek hi zyada feel kar raha hai; kabhi kabhi jo dikhai nahi deta, woh hi relationship ka asli strength hota hai. Dono ko apni taraf effort dena hoga tabhi connection strong hoga.",
+    "admin_id": "0bd864ab-bc4a-4970-b9d5-5a9cb544d27c",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1721",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 39
+  },
+  {
+    "question": "Kya hum dono emotionally compatible hain?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan, aap dono ke beech emotional connection kaafi gehra hai, lekin kabhi kabhi mood changes ya doori aane se feelings ko samajhna thoda mushkil hai. Matlab caring to hai, par thoda steady hona zaroori hai. --- **Kyun aisa hai (deep breakdown)** Aap dono ki feelings ek dusre ke liye strong hain, kyunki ek ka dil direct partner se juda hua hai. Matlab aap dono naturally ek dusre ke mood ko samajh sakte ho, aur closeness important hoti hai. Jab dono emotionally khule hote hain, tab warmth aur generosity rishtay ko aur mazboot banati hai. Par kabhi kabhi emotions andar hi andar ruk jaate hain, especially jab koi emotional tension ya pressure aata hai. Aise moments mein feelings surprise kar ke bahar aa jaati hain ya phir ek dusre se thodi doori ban jaati hai. Ye emotional friction misunderstandings aur thodi thodi delays la sakti hain, jaise ki jab dono ka mood ekdum match nahi karta. --- **Ab kya karein (practical)** * Jab mood thoda off ho, tab apne emotions ko share karne ki koshish karo bina gusse ya argumentative hone ke. * Chhoti chhoti baatein, jaise appreciation, pyaar bhare shabd, rozana express karo, taaki emotional bond bana rahe. * Jab doori ya tension aaye, us par calmly baat karo, problems ko avoid na karo. * Apne partner ke emotional signals pe dhyaan do, taaki samajh sake kab unhe space chahiye ya kab unhe support. > Rishte mein emotional compatibility ek process hai, jisme patience aur samajhdaari zaruri hai. Dono ki taraf se steady effort se ye connection aur gehra hota hai.",
+    "admin_id": "85343925-59a6-4aa3-8205-741596ee754d",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1534",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 40
+  },
+  {
+    "question": "Kya partner mujhe hurt karna chahta hai ya galti se hota hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Partner ka social andaaz zyada baat-cheet karne wala, expressive, thoda restless rehta hai. Jo emotional reactions hote hain, unme jazbaat toh gehre hain par kuch confusion bhi hai kyunki dimaag aur andaaz thoda complex hai. Overall, partner ki aankhain mein pyaar to hai, magar apni feelings ko sahi tarah se samjhana uske liye mushkil hota hai. --- **Kyun aisa hai (deep breakdown)** Partner ka social style kaafi lively hai, wo Gemini jaisa hai, matlab usko baatein karna, naye ideas lena pasand hai. Lekin jazbat ke maamle mein, uska man jaise thoda uljhan wala hai, kyunki uske dimaag mein chhupa hua dard ya confusion bhi shamil hota hai (jo Scorpio ke zariye aata hai). Matlab partner ka dukh dena shayd jaan-boojh kar nahi hai, magar apne andar ki pareshani kabhi kabhi tum par affect kar deti hai. Jab partner tumhare saath hota hai, to wo pyaar se full rehta hai, dikhawa ya duri nahi dikhata. Lekin emotions uske liye ek struggle hote hain; wo apni feelings ko pura samajh kar pata nahi kar pata hai. Yeh confusion kabhi galti se tumhe bura feel karwa deta hai. --- **Ab kya karein (practical)** * Partner se calmly baat karke apni feelings share karo, taaki wo samajh sake ki uske alfaaz aur harkatein kaise affect karti hain. * Uski confusion mein usse samay do, uske jazbat ko samajhne ki koshish karo bina blame kiye. * Apne emotions ko control mein rakhne ki aadat daalo, taaki tum khud emotionally strong raho kabhi galti ya misunderstandings ke liye. * Jab partner mood mein ho, uska dil jeetne ke liye chhoti chhoti gestures dikhao jise wo feel kar sake ki tum uske emotions ki parwah karti ho. **Yaad",
+    "admin_id": "a184c29b-a309-4405-8578-e7bba0c513da",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1640",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 41
+  },
+  {
+    "question": "Kya partner mere liye sacrifice karega?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tera partner ek intelligent, expressive type hai jiske social style mein baatein aur communication important hote hain. Wo emotional level pe thoda sensitive hai, lekin uska approach thoda complex hai, is wajah se sacrifice karne mein wo zyada asaani se nahi jata. --- **Kyun aisa hai (deep breakdown)** Tera partner Gemini jaise social environment mein rehta hai, matlab wo logo se baatein share karne wala, open-minded aur thoda restless rehne wala insaan hai. Lekin emotions mein wo thoda deeply uljha hua rehta hai, kyunki uska emotional center moon ki tarah behave karta hai jo unpredictable feelings lane wala hota hai. Isse wo kabhi kabhi emotionally moody bhi hai, jis wajah se self-sacrifice ko leke ego ya comfort zone ka option zyada hoth hai. Woh apne partner ke liye jo attitude dikhata hai, wo thoda complicated hai, kyunki uski mindset me soch-vichaar aur chhupaye hue emotions bhi rehte hain. Uske dil ke rishte thode personal aur secretive hote hain, jo directly sacrifice karne ki quality ko thoda delay karte hain. Jab tak usko trust build nahi hota, sacrifice ka step woh dhyan se lega. Tera partner apni presence mein thoda proud, charming aur dhyaan khinchne wala hai, lekin ye bhi dikhata hai ki apni zindagi ke alag priorities hain. Ye balance banane mein thoda conflict hota hai jab sacrifice ki baat aati hai, kyunki wo apne liye bhi kaafi serious hota hai. --- **Ab kya karein (practical)** * Khuli aur honest baatein kar apne emotions aur expectations ke baare mein. * Uske comfort aur trust level ko samajh ke dheere dheere apni feelings share kar. * Patience se kaam le, sacrifices natural tab honge jab wo emotionally safe feel karega. * Uski individuality aur social needs ko respect kar, ye partner ke liye positive vibe banayega. **Yaad rakh, sacrifice ek taraf se nahi banta, dono ko ground",
+    "admin_id": "ff13a434-4280-4e3b-a48c-295590669ae5",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1845",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 42
+  },
+  {
+    "question": "Kya partner mere saath emotional future dekh raha hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tumhara partner yeh rishta social aur communication se bhara rehta hai, matlab wo baatein share karna jaanta hai aur open hai. Emotional taur par wo thoda sensitive hai aur kabhi kabhi apne jazbaat ko chupakar rakhta hai. Unka dimaag zyada personal connection ki taraf toh gehra dhyaan nahi deta, lekin wo rishton mein practical soch aur emotional concern dono dikhate hain. Overall, wo apni mohabbat mein ek passionate aur dhyan dene wala partner hai. --- **Kyun aisa hai (deep breakdown)** Tumhara partner naturally baatein karne wala aur dosti jaisa sulook wala insaan hai, jo apni feelings express karne mein mahir hai. Yeh unka social style hai, jiski wajah se wo har conversation mein connected feel karte hain. Parantu, unka sochne ka tarz thoda complex hai, wo apni soch ko kabhi kabhi zyada andar tak chupakar rakhta hai, jo matlab rishton mein kabhi kabhi thodi doori mehsoos karne hai. Emotional taur par unke rishton mein tum ek mixture dekhoge, wo first emotions ko samajhne ki koshish karte hain, phir apna dimaag lagaakar practical solution dhundhte hain. Matlab unka pyaar sirf jazbaat tak simit nahi reh jaata, balki wo vyavaharik dhang se tumhari madad bhi karte hain. Lekin unki soch aur jazbaat dono ko milana unke liye kabhi kabhi ek challenge hai. Unka pyaar aur attraction ka style thoda garam aur dil se hai, matlab wo apni feelings ko ek dam se deeply lete hain aur apni mohabbat ko genuine banane ki poori koshish karte hain. Tumhare connection mein ye mix of head and heart ek balance lata hai, jo long term ke liye achha hai. --- **Ab kya karein (practical)** * Rozana apne jazbaat khulkar baat karo, taaki wo apne emotions zyada share karne lag jayein. * Thoda",
+    "admin_id": "64703df4-10b8-4aac-93ac-36fbb19a6ccf",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1709",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 43
+  },
+  {
+    "question": "Kya partner mujhe emotionally trust karta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan, partner tum par emotional trust karta hai, lekin yeh trust sensitive hai aur clarity aur boundaries ki zarurat hoti hai takay relation strong rahe. --- **Kyun aisa hai (deep breakdown)** Tumhare partner ke dil me tumhari taraf ek natural attraction aur loyalty zarur hai. Romance aur partnership ke signals milte hain jahan pyaar aur bharosa dono ka combo hai. Unka dil tumhare saath connected hai, par unhe apni feelings ko samajhne aur express karne me thoda waqt hai, ya kabhi kabhi emotional doori bhi hai. Kabhi kabhi un mein emotional cooling ya thoda distance aata hai, jaise jab kabhi baaton mein tez talwar nikalti hai, ya impulsive reactions hoti hain jo trust ko thoda test karte hain. Unka dimag aur dil dono tumhare liye kaam karte hain, par kabhi kabhi insecurities ya emotional hesitation bhi dikhta hai. Matlab, yeh relationship attachment pe based hai, stability me kabhi-kabhi thoda up-down hote rehte hain. Agar partner apne emotions ko control aur boundaries ke saath maintain kare, toh trust aur gehra hai. Emotional transparency unke liye key hai, warna feelings kabhi band ho ke phir bahar aa sakti hain, jo confusion la sakti hai. --- **Ab kya karein (practical)** * Roz baat-cheet me apne emotions ko clearly express karo, takay unhe samajhne me aasan ho. * Impulsive arguments ya blame game se bacho; patience aur understanding rakho. * Kabhi emotional distance feel ho toh gently unse apni feelings share karne ko kaho, space dene ke saath saath. * Mutual boundaries set karna beneficial hoga, takay dono ko security aur comfort mile. **Yaad rahe, trust ek din ka kaam nahi hota, par thodi mehnat aur samajh se yeh aur mazboot hai.**",
+    "admin_id": "538245df-50e4-484a-8827-be848b327051",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1686",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 44
+  },
+  {
+    "question": "Kya hamara pyaar temporary hai ya genuine?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dost, tumhara pyaar temporary bhi hai aur genuine bhi, situation thodi mixed hai. Kuch cheezein dikhati hain ki rishta thoda complex hai, jisme kabhi doori aur samjhote ki zarurat padti hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tumhare pyaar mein ek taraf toh wisdom aur spiritual understanding ki chamak hai, jo dikhati hai ki asli feeling ke chances hain. Par doosri taraf, rishton mein communication aur emotional closeness ko lekar thodi challenges bhi hain. Jab baat partnerships ki aati hai, toh kabhi-kabhi doori ya misunderstandings aa sakti hain, jo naturally rishta thoda ‘cool’ ya cautious banata hai. Jab ek taraf duty aur patience ki zarurat rahi hai, toh kabhi kabhi emotions mein thodi tension bhi reh jati hai, yeh matlab yeh nahi ki pyaar nahi hai, bas usme working space aur effort hai. Mars jaisa passionate element yeh dikhata hai ki kabhi kabhi feelings tez ho sakti hain, par woh control karna bhi zaruri hai. Overall, tumhara pyaar ek ongoing process hai, jisme genuine feel toh hai, par usko sustain karne ke liye samay aur mehnat chahiye. --- **Ab kya karein (practical)** * Apne emotions ko open rakhna seekho, par patience aur samjhote ka attitude bhi develop karo. * Communication mein clarity lao, taaki misunderstandings kam ho sakein. * Har choti problem ko ignore na karte hue use samajhne ki koshish karo, rishta repair kaam hota hai. * Apne passion ko positive direction me use karo, impulsive behavior se bach kar. Pyaar ek energy hai jo kabhi seedha nahi chalti, usme ups and downs hain, dost. Jab tum us effort ke liye ready rahoge, tabhi pyaar apne asli rang mein niklega. Yaad rakho, asli pyaar wo hai jo samay ke saath grow kare, na ki bas ek pal ka junoon ho",
+    "admin_id": "6fa4c79f-a22f-408d-88aa-679ffd55c2a1",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1734",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 45
+  },
+  {
+    "question": "Kya partner mujhe dil se accept karta hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tera partner social aur baatcheet mein upbeat aur friendly hai, par unki dil se acceptance thodi complex hai. Wo apne emotions ko intuitive aur sensitive tareeke se dikhate hain, lekin unka mindset partnership mein kabhi kabhi thoda overwhelmed ya confused reh sakta hai. Overall, wo ek bold aur warm presence rakhte hain, jisse samajhna thoda time le sakta hai. --- **Kyun aisa hai (deep breakdown)** Tera partner friendly aur lively type hai jo baaton se logo ke dil jeet lene wala hai. Wo apne social interactions mein curious aur expressive rehta hai, matlab raha hai wo tumhare saath baatein karna pasand karta hai, easily connect hota hai. Is se tumhe pata chalta hai ki wo samajhne ki koshish karta hai, bas uske emotions kabhi kabhi surface pe straightforward na bhi ho to andar se genuine rehte hain. Jo emotional side hai, wo thodi sensitive aur intuitive hai, matlab kabhi kabhi wo apne dil ki baatein direct nahi bolte, thoda soch samajh ke dikhate hain. Unka mindset partnership ke mamle mein thoda internal struggle me rehta hai because wo apne doubts ya chhupaye hue feelings ko express nahi kar pate. So acceptance me thoda patience chahiye, kyunki wo apni feelings ko clearly dikhane mein time lete hain. Woh ek confident aur proud style mein apni mohabbat dikhata hai, jo dikhta hai ki wo relationship ko importance deta hai. Wo apni presence se ek dam warm aura bana ke rakhta hai, lekin wo apna space aur personal comfort bhi zaruri samajhta hai. Isliye acceptance ka process slow hota hai, but jo hai, wo sincere hai. --- **Ab kya karein (practical)** * Dheere dheere open communication badhao, jahan dono apne emotions comfortably share kar saken. * Unke emotional signals ko dhyan se samjho, jo clearly bolke na bataye. * Patience rakho, kyunki wo apne dil ki baatein share karne mein thoda time lete hain. * Relationship",
+    "admin_id": "a7dcdcbf-23fa-4099-ba18-b6b764f48296",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1864",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 46
+  },
+  {
+    "question": "Kya partner mujhe kabhi bhool payega?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Tumhara partner ekdum social aur baat-cheet pasand karta hai, matlab jo yaadein bandhan banati hain, unme baatein aur connections bahut important hote hain. Lekin unka sochne ka tareeka thoda complex hai, jo kabhi kabhi zyada chup rehne ya doori laane wala hai. Overall, unka dil aur jazba strong hai, lekin dimaag mein kuch uljhan bhi rehti hai jo yaadon ko maintain karne mein thodi dikkat kar sakti hai. --- **Kyun aisa hai (deep breakdown)** Unka social andaaz halke-phulke baaton wala hai, matlab kisi se dosti karna, ya kisi kisse ko share karna unka style hai. Yeh unke dil ko connect banaye rakhta hai, jisme yaadein fade nahi hoti. Lekin unka sochne ka tareeka jo asli gehraiyon se juda hai, thoda challenging hai. Kabhi wo emotions ko bahar se openly nahi dikhate, aur apne mann ki baatein andar hi andar karte hain. Is wajah se kabhi kabhi emotional connection ko samajhna mushkil ho jata hai. --- **Ab kya karein (practical)** * Partner ke saath khul ke baat karo, apni feelings clearly express karo par zyada dabav mat do. * Unke emotional space ko samjho, patience rakho agar wo thoda door hon. * Chhoti chhoti baatein yaad rakhne ki aadat banao, jaise special moments ka zikr, taaki yaadon ko fresh rakha ja sake. * Jab wo apni baatein share karna shuru kare, dhyaan se suno aur unhe safe feel karvao. Har rishta apni journey se guzarta hai, aur jab tum dono apne rishte mein bharosa aur samajh badhate ho, to bhool hona mushkil hi nahi, namumkin hota hai. Keep faith, dost!",
+    "admin_id": "766fa0d3-53a6-4d27-94d7-716d624132c4",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1509",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 47
+  },
+  {
+    "question": "Kya partner ka pyaar unconditional hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Aapke partner ka pyaar puri tarah unconditional nahi hai; pyaar mein emotional depth aur samajhdari to hai, lekin kuch challenges aur acceptance ke mamle mein thodi testing rehti hai. --- **Kyun aisa hai (deep breakdown)** Partner ka social andaaz kaafi expressive aur baat-cheet mein khula hua hai, matlab wo apni feelings share karna pasand karta hai. Aap dono ki baatein aur understanding mein gadbad nahi hoti, par compromise thoda tough hai. Jo unki emotional soch hai, wo thodi complex aur kabhi-kabhi chhupi emotions lekar aati hai. Kabhi kabhi wo apne jazbaat ko easily samne nahi rakhte, aur galatfehmi badh sakti hai. Aapko patience se unka bharosa jeetna padega, kyunki unki dosti aur pyaar mein testing hoti hai jo relationship ko strong banati hai. Unki overall presence mein ek shining charm hai, jo aapko attract karta hai, lekin unka pyaar genuine hone ke saath-saath thoda demanding bhi hai. Iska matlab hai ki wo unconditional pyaar tabhi denge jab wo khud emotionally secure mahsoos karenge, isme samay hai. --- **Ab kya karein (practical)** * Apne partner ke emotions ko dhyan se samjho, unke mann ki baat jaan-ne ki koshish karo. * Communication mein clarity aur honesty rakho, misunderstandings avoid karne ke liye. * Relationship mein patience rakho, kabhi kabhi challenges aayenge par wo growth ke liye hain. * Unke emotional needs ko respect karo, jab wo apni feelings express karein, samajhne ki koshish karo. > **Pyaar tabhi stick karta hai jab dono ek dusre ke andar ki complexities ko samajh kar izzat dete hain.**",
+    "admin_id": "9074f403-2eeb-4904-b3bb-cf108c6746f4",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1563",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 48
+  },
+  {
+    "question": "Kya hamare relationship me emotional intimacy strong hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Haan, emotional attachment hai lekin thoda sensitive aur mood swings ke wajah se thoda uneven bhi rehta hai. Matlab dono ke beech pyaar toh hai, par kabhi kabhi feelings hold karke rakhi jaati hain, jo kabhi suddenly bahar aa sakti hain ya thodi doori create kar sakti hai. --- **Kyun aisa hai (deep breakdown)** Aap dono ka emotional bonding ek tarah se loyal aur serious type ka hai, matlab dono commitment mein sachche hain. Lekin feel karte waqt kabhi kabhi emotional expressions ko andar hi dabaya jata hai, jisse samajhne mein thoda time hai ki partner kya mehsoos kar raha hai. Udaharan ke taur par, agar kabhi mood off ho jaye to uska asar relationship ki closeness par pad sakta hai. Ye bahut normal hai jab affection dikhane mein thoda restraint ho, especially jab dono duty aur responsibilities ko lekar careful hon. Iss pattern me ek achhi baat ye hai ki dono ek dusre se loyalty ki umeed rakhte hain, matlab feelings genuine hoti hain, lekin emotional fluctuations ko samajhna zaroori hota hai taaki misunderstandings na hon. --- **Ab kya karein (practical)** * Apne partner ke emotions ko gently samajhne ki koshish kijiye, unka mood badalna natural hai par iska matlab doori nahi. * Khud apne emotions ko express karna shuru kijiye, chhoti baatein share karna emotional bonding badaata hai. * Occasional honest baatein karein jisme aap dono apne vigad ya stress ke baare mein khul kar baat kar sakein. * Loyalty aur seriousness ko appreciate karte huye, thoda flexible aur patient rahna zaroori hai. > Emotional intimacy ke liye sabse bada step hai, apne dukh-sukh ko bina dare share karna. Jab aap dono ek safe space bana lenge, tabhi bonding aur gehri hogi.",
+    "admin_id": "38917579-9acb-405a-b9f0-b8e23a52729f",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1694",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 49
+  },
+  {
+    "question": "Overall, kya hamare beech sachcha pyaar hai?",
+    "api_base": "http://187.127.174.55:8080",
+    "ask_topic": "static",
+    "ask_source": "mr_engine_then_llm",
+    "engine_tag": "ans-engine",
+    "answer_path": "engine_then_llm",
+    "answer_text": "**The Big Picture** Dost, tum dono ke beech kuch gehra emotional connection zarur hai, par yeh rishta kabhi-kabhi thoda complex aur challenging bhi hai. Sacha pyaar to hai, lekin isme patience aur samajhdaari ki bhi zarurat hai, kyunki kabhi kabhi misunderstandings aur emotional distance aa sakta hai. --- **Kyun aisa hai (deep breakdown)** Sabse pehle, tumhari soch aur samajh ko badhawa dene wala ek achha influence hai jo tum dono ke rishtay me ek positive touch lata hai. Matlab: dono ke beech me respect aur wisdom hai jo rishtay ko better samajhne me madad karta hai. Lekin, iske sath hi, kuch aise elements hain jo thoda emotional distance ya misunderstandings la sakte hain, jaise tum dono ke communication me kabhi kabhi clarity ki kami, ya guilt/jazbaati struggle jo chupaye jate hain. Saath hi, ek taraf toh tum dono ke emotions me ek tarah ka jazba aur passion dikh raha hai, lekin kabhi-kabhi yehi jazba thoda garam dilpan ya temper ke roop me bhi aa sakta hai, jo chhoti-chhoti batein badi laraiyon tak le ja sakti hain. Yeh thoda emotional tension waala scene ban sakta hai, jahan patience aur samjhauta karna zaruri hota hai. --- **Ab kya karein (practical)** * Roz ek dusre se khulke emotions share karne ki koshish karo, bina judge kiye. * Thoda patience rakho jab baat na samajh aaye ya mood off ho, gusse me na aao. * Apne rishtay me chhoti chhoti khushiyon aur positive baaton ko importance do, taaki emotional bond strong bane. * Kabhi kabhi apni feelings ko express karne ke liye creative tarikay apnao, jaise handwritten chhoti notes ya surprise baatein. > Rishtay ka asli magic tabhi samajh aata hai jab dono apni jagah samajhdar bane",
+    "admin_id": "bfcd4af4-d6ea-46d2-939b-7bbff31e8c22",
+    "admin_engine": "",
+    "admin_archetype": null,
+    "admin_qtype": "",
+    "admin_verdict": null,
+    "verdict_summary": "answered:static",
+    "evidence_audit": {
+      "locked_pick": null,
+      "evidence_sample": [],
+      "checks": [],
+      "warnings": [
+        "NO_ADMIN_ENGINE — admin row me engine slice missing"
+      ],
+      "evidence_ok": false
+    },
+    "ok": [
+      "answer_len=1660",
+      "topic=static",
+      "answer_path=engine_then_llm",
+      "engine_tag=ans-engine"
+    ],
+    "issues": [
+      "NO_ADMIN_ENGINE — admin row me engine slice missing"
+    ],
+    "pass": false,
+    "q_index": 50
+  }
+]

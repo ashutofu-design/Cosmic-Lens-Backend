@@ -228,9 +228,40 @@ _TEMPLATE_STITCH_RX = re.compile(
     r"transparency abhi sensitive zone me hai — repeated|parallel attention trust ko test)"
 )
 
+_BAD_SECRET_LLM_RX = re.compile(
+    r"(?i)(asli wajah|support karne wale|main aapko|kehna chahungi|kehna chahti|"
+    r"shaayad|shayad|motaamtaab|thanda dimaag|humara final verdict|final verdict|"
+    r"matlab chances|matlab aise sanket|bina soche samjhe|poori baatein)"
+)
+
+SECRET_ANSWER_MAX_WORDS = 135
+
 
 def looks_like_secret_template_stitch(text: str) -> bool:
     return bool(_TEMPLATE_STITCH_RX.search(text or ""))
+
+
+def looks_like_bad_secret_llm_output(text: str) -> bool:
+    """Reject verbose counseling / labeled LLM prose for secret answers."""
+    t = (text or "").strip()
+    if not t:
+        return True
+    if looks_like_secret_template_stitch(t):
+        return True
+    if _BAD_SECRET_LLM_RX.search(t):
+        return True
+    if len(t.split()) > SECRET_ANSWER_MAX_WORDS:
+        return True
+    return False
+
+
+def secret_llm_output_acceptable(
+    text: str,
+    narrator_json: dict[str, Any] | None,
+) -> bool:
+    from ask_mr.story_answer import story_llm_output_acceptable
+
+    return story_llm_output_acceptable(text, narrator_json, "secret_relationship")
 
 
 def render_secret_human_answer(data: dict[str, Any], question: str = "", *, lang: str = "hn") -> str:
@@ -303,6 +334,10 @@ def validate_secret_presenter_output(text: str, data: dict[str, Any]) -> tuple[b
         issues.append("contradiction_low_secrecy")
     if _BANNED_NARRATOR_PHRASES.search(t):
         issues.append("banned_phrase")
+    if _BAD_SECRET_LLM_RX.search(t):
+        issues.append("counseling_fluff")
+    if len(t.split()) > SECRET_ANSWER_MAX_WORDS:
+        issues.append("too_long")
     if re.search(r"(?i)\b(d1|d9|relationship\s+axis)\b", t):
         issues.append("chart_jargon_leak")
     return len(issues) == 0, issues

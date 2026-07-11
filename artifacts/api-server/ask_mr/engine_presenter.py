@@ -78,6 +78,8 @@ _PRESENTER_HARD_ISSUES = frozenset({
     "contradiction_high_secrecy",
     "contradiction_low_secrecy",
     "chart_jargon_leak",
+    "counseling_fluff",
+    "too_long",
 })
 
 
@@ -243,29 +245,19 @@ NOT allowed:
 """.strip()
 
 
-def _secret_section_skeleton() -> str:
-    return """
-STRUCTURE (secrecy / third-person interest — natural Hinglish, NO labels):
-P1 — User ke exact sawal ka seedha jawab: direct_answer se shuru karo; tone final_verdict se locked.
-P2 — Kyun: reason_summary + strongest_effects[] ko 1–2 flowing sentences me weave karo.
-P3 — Risk: weakest_effects[] + meaning_note + transparency_outlook — real-life language, no chart jargon.
-P4 — practical_guidance ek caring next step ke taur par.
-Final sentence: confidence_explanation from JSON — copy score + reason exactly.
-
-Write like a trusted friend explaining chart truth — NOT a stitched template.
-No "— lekin", no bullets, no D1/D9/house/planet/lord names. Same facts, warmer flow.
-""".strip()
-
-
-def _generic_section_skeleton(engine: str) -> str:
+def _universal_story_skeleton(engine: str) -> str:
     return f"""
-STRUCTURE (human conversation for {engine} — plain paragraphs, NO robotic labels):
-P1 — Seedha jawab: answer ORIGINAL_QUESTION using direct_answer; tone locked to final_verdict.
-P2 — Kyun: weave reason_summary naturally (no "Asli wajah seedhi hai" label).
-P3 — Support + challenges: strongest_effects / weakest_effects as everyday meaning.
-P4 — Matlab + transparency + practical_guidance as caring advice (no section headers).
-Final line: confidence_explanation from JSON — copy exactly.
-Use PRESENTER_JSON facts only. Sound human, not a form.
+STRUCTURE (story-style answer for {engine} — ALL MR questions use this shape):
+Exactly 4 short paragraphs, 85–130 words total. Read like a small real-life story, not a form.
+
+P1 — Seedha jawab: answer ORIGINAL_QUESTION first using direct_answer + final_verdict tone.
+P2 — Picture: "Jo picture banti hai woh yeh hai..." — weave reason_summary + strongest/weakest effects as everyday meaning.
+P3 — Next step: practical_guidance / meaning_note in one caring sentence (no lecture).
+P4 — confidence_explanation from JSON — copy score + reason exactly.
+
+BANNED: section labels ("Asli wajah", "Mukhya sanket"), counseling essay, "main kehna chahungi",
+"shaayad/shayad", template stitch, planet/house jargon, The Big Picture markdown.
+Write friend-to-friend Roman Hinglish — facts locked, tone natural.
 """.strip()
 
 
@@ -289,9 +281,7 @@ def _presenter_length_block(
         return f"LENGTH: {min(lo, 70)}–{min(hi, 90)} words — one short paragraph, no headers."
     if wants_explain:
         return f"LENGTH: {lo}–{hi} words — explain naturally, 1–2 sentences per idea."
-    if engine == "commitment":
-        return "LENGTH: 90–140 words — natural Hinglish paragraphs, not form fields."
-    return f"LENGTH: {lo}–{max(hi, 130)} words — natural flowing paragraphs."
+    return "LENGTH: 85–130 words — exactly 4 short story-style paragraphs."
 
 
 def build_engine_presenter_system_prompt(
@@ -311,13 +301,7 @@ def build_engine_presenter_system_prompt(
     forbidden = fields.get("forbidden_phrases") or []
     forbidden_line = ", ".join(str(x) for x in forbidden[:12] if x)
 
-    skeleton = (
-        _COMMITMENT_SECTION_SKELETON
-        if eng == "commitment"
-        else _secret_section_skeleton()
-        if eng == "secret_relationship"
-        else _generic_section_skeleton(eng)
-    )
+    skeleton = _universal_story_skeleton(eng)
 
     intent_block = ""
     if (user_intent or "").strip():
@@ -390,6 +374,13 @@ def validate_presenter_output(
     ):
         issues.append("cosmo_markdown_banned")
 
+    from ask_mr.story_answer import STORY_ANSWER_MAX_WORDS, looks_like_bad_story_llm_output
+
+    if looks_like_bad_story_llm_output(t):
+        issues.append("counseling_fluff")
+    elif len(t.split()) > STORY_ANSWER_MAX_WORDS:
+        issues.append("too_long")
+
     eng = (engine or "").strip().lower()
     engine_validators: dict[str, Any] = {}
     if eng == "commitment":
@@ -415,18 +406,20 @@ def validate_presenter_output(
     return len(issues) == 0, issues
 
 
-def present_secret_answer_llm(
+def present_story_answer_llm(
     narrator_json: dict[str, Any],
     *,
+    engine: str,
     question: str,
     lang: str = "hn",
     llm_intent: dict[str, Any] | None = None,
 ) -> str | None:
-    """Thin presenter call for secret — used when full narrate path fails or returns template stitch."""
+    """Thin presenter call — story format for any MR engine."""
     from openai_helper import _get_client
 
+    eng = (engine or "").strip().lower()
     client = _get_client()
-    if not client or not isinstance(narrator_json, dict):
+    if not client or not isinstance(narrator_json, dict) or not eng:
         return None
 
     intent = ""
@@ -434,7 +427,7 @@ def present_secret_answer_llm(
         intent = str(llm_intent.get("user_intent") or llm_intent.get("intent") or "").strip()
 
     system_prompt = build_engine_presenter_system_prompt(
-        engine="secret_relationship",
+        engine=eng,
         narrator_json=narrator_json,
         lang=lang,
         wants_explain=False,
@@ -458,7 +451,7 @@ def present_secret_answer_llm(
         )
         text = (resp.choices[0].message.content or "").strip()
     except Exception as exc:
-        print(f"[engine_presenter] secret direct presenter failed: {exc}", flush=True)
+        print(f"[engine_presenter] story direct presenter failed ({eng}): {exc}", flush=True)
         return None
     if not text:
         return None
@@ -466,7 +459,7 @@ def present_secret_answer_llm(
     from ask_mr.narrator import polish_mr_confident_tone
 
     polished = polish_mr_confident_tone(text)
-    ok, issues = validate_presenter_output(polished, narrator_json, "secret_relationship")
+    ok, issues = validate_presenter_output(polished, narrator_json, eng)
     if ok or presenter_has_only_soft_issues(issues):
         return polished
     hard = [
@@ -475,12 +468,29 @@ def present_secret_answer_llm(
     ]
     if polished and not hard:
         print(
-            f"[engine_presenter] secret direct presenter accepted with issues {issues}",
+            f"[engine_presenter] story direct presenter accepted with issues {issues}",
             flush=True,
         )
         return polished
     print(
-        f"[engine_presenter] secret direct presenter rejected {issues}",
+        f"[engine_presenter] story direct presenter rejected ({eng}) {issues}",
         flush=True,
     )
     return None
+
+
+def present_secret_answer_llm(
+    narrator_json: dict[str, Any],
+    *,
+    question: str,
+    lang: str = "hn",
+    llm_intent: dict[str, Any] | None = None,
+) -> str | None:
+    """Backward-compatible secret presenter wrapper."""
+    return present_story_answer_llm(
+        narrator_json,
+        engine="secret_relationship",
+        question=question,
+        lang=lang,
+        llm_intent=llm_intent,
+    )

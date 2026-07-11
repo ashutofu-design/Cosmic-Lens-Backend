@@ -85,6 +85,22 @@ def format_engine_rich_plain(
 
     q = (question or "").strip()
     arch = str(getattr(result, "archetype", "") or "").strip().lower()
+    from ask_mr.story_answer import (
+        engine_result_to_narrator_json,
+        is_story_engine,
+        render_story_human_answer,
+    )
+
+    if is_story_engine(arch):
+        try:
+            data = engine_result_to_narrator_json(
+                result,
+                question=q,
+                llm_intent=llm_intent,
+            )
+            return render_story_human_answer(data, q, engine=arch, lang=lang)
+        except Exception:
+            pass
     if arch == "loyalty_trust" or infer_loyalty_angle(q):
         try:
             from ask_mr.loyalty_narrator import (
@@ -384,6 +400,22 @@ def format_engine_rich_plain(
     )
 
 
+def _mr_engine_llm_narrator_enabled(arch: str) -> bool:
+    from ask_mr.engine_presenter import engine_llm_enabled
+    return engine_llm_enabled((arch or "").strip().lower())
+
+
+def _render_story_compose_fallback(
+    narrator_json: dict[str, Any],
+    question: str,
+    *,
+    engine: str,
+    lang: str,
+) -> str:
+    from ask_mr.story_answer import render_story_human_answer
+    return render_story_human_answer(narrator_json, question, engine=engine, lang=lang)
+
+
 def narrate_mr_engine_llm(
     question: str,
     engine_result: Any,
@@ -424,22 +456,14 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_COMMITMENT_USE_LLM", "").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-        ) or human_narrator_enabled():
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = commitment_narrator_payload(
                 engine_result,
                 wants_explain=wants_explain,
                 question=question or "",
             )
         else:
-            return render_commitment_template_answer(
-                narrator_json,
-                question or "",
-                lang=eff_lang,
-            )
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "patchup":
         from ask_mr.patchup_narrator import (
             engine_result_to_patchup_json,
@@ -453,22 +477,14 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_PATCHUP_USE_LLM", "").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-        ) or human_narrator_enabled():
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = patchup_narrator_payload(
                 engine_result,
                 wants_explain=wants_explain,
                 question=question or "",
             )
         else:
-            return render_patchup_template_answer(
-                narrator_json,
-                question or "",
-                lang=eff_lang,
-            )
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "loyalty_trust":
         from ask_mr.loyalty_narrator import (
             engine_result_to_loyalty_json,
@@ -482,22 +498,14 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_LOYALTY_USE_LLM", "").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-        ):
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = loyalty_narrator_payload(
                 engine_result,
                 wants_explain=wants_explain,
                 question=question or "",
             )
         else:
-            return render_loyalty_template_answer(
-                narrator_json,
-                question or "",
-                lang=eff_lang,
-            )
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "breakup_risk":
         from ask_mr.breakup_narrator import (
             breakup_narrator_payload,
@@ -511,22 +519,14 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_BREAKUP_USE_LLM", "").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-        ):
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = breakup_narrator_payload(
                 engine_result,
                 wants_explain=wants_explain,
                 question=question or "",
             )
         else:
-            return render_breakup_template_answer(
-                narrator_json,
-                question or "",
-                lang=eff_lang,
-            )
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "compatibility":
         from ask_mr.compatibility_narrator import (
             compatibility_narrator_payload,
@@ -540,22 +540,14 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_COMPATIBILITY_USE_LLM", "").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-        ):
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = compatibility_narrator_payload(
                 engine_result,
                 wants_explain=wants_explain,
                 question=question or "",
             )
         else:
-            return render_compatibility_template_answer(
-                narrator_json,
-                question or "",
-                lang=eff_lang,
-            )
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "secret_relationship":
         from ask_mr.secret_narrator import (
             engine_result_to_secret_json,
@@ -569,14 +561,10 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_SECRET_USE_LLM", "").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-        ) or human_narrator_enabled():
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = secret_narrator_payload(engine_result, wants_explain=wants_explain, question=question or "")
         else:
-            return render_secret_template_answer(narrator_json, question or "", lang=eff_lang)
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "partner_nature":
         from ask_mr.partner_nature_narrator import (
             engine_result_to_partner_nature_json,
@@ -590,12 +578,12 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_PARTNER_NATURE_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = partner_nature_engine_narrator_payload(
                 engine_result, wants_explain=wants_explain, question=question or ""
             )
         else:
-            return render_partner_nature_template_answer(narrator_json, question or "", lang=eff_lang)
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "communication":
         from ask_mr.communication_narrator import (
             communication_engine_narrator_payload,
@@ -609,12 +597,12 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_COMMUNICATION_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = communication_engine_narrator_payload(
                 engine_result, wants_explain=wants_explain, question=question or ""
             )
         else:
-            return render_communication_template_answer(narrator_json, question or "", lang=eff_lang)
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "emotional_attachment":
         from ask_mr.emotional_attachment_narrator import (
             emotional_attachment_engine_narrator_payload,
@@ -628,12 +616,12 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_EMOTIONAL_ATTACHMENT_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = emotional_attachment_engine_narrator_payload(
                 engine_result, wants_explain=wants_explain, question=question or ""
             )
         else:
-            return render_emotional_attachment_template_answer(narrator_json, question or "", lang=eff_lang)
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "family_approval":
         from ask_mr.family_approval_narrator import (
             engine_result_to_family_approval_json,
@@ -647,12 +635,12 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_FAMILY_APPROVAL_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = family_approval_engine_narrator_payload(
                 engine_result, wants_explain=wants_explain, question=question or ""
             )
         else:
-            return render_family_approval_template_answer(narrator_json, question or "", lang=eff_lang)
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "long_distance":
         from ask_mr.long_distance_narrator import (
             engine_result_to_long_distance_json,
@@ -666,12 +654,12 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_LONG_DISTANCE_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = long_distance_engine_narrator_payload(
                 engine_result, wants_explain=wants_explain, question=question or ""
             )
         else:
-            return render_long_distance_template_answer(narrator_json, question or "", lang=eff_lang)
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "toxicity":
         from ask_mr.toxicity_narrator import (
             engine_result_to_toxicity_json,
@@ -685,12 +673,12 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_TOXICITY_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = toxicity_engine_narrator_payload(
                 engine_result, wants_explain=wants_explain, question=question or ""
             )
         else:
-            return render_toxicity_template_answer(narrator_json, question or "", lang=eff_lang)
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "chemistry":
         from ask_mr.chemistry_narrator import (
             engine_result_to_chemistry_json,
@@ -711,7 +699,7 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_CHEMISTRY_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = chemistry_engine_narrator_payload(
                 engine_result,
                 wants_explain=wants_explain,
@@ -719,7 +707,7 @@ def narrate_mr_engine_llm(
                 question_dna=_chem_dna if isinstance(_chem_dna, dict) else None,
             )
         else:
-            return render_chemistry_template_answer(narrator_json, question or "", lang=eff_lang)
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "bed_intimacy":
         from ask_mr.bed_intimacy_narrator import (
             engine_result_to_bed_intimacy_json,
@@ -740,7 +728,7 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_BED_INTIMACY_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = bed_intimacy_engine_narrator_payload(
                 engine_result,
                 wants_explain=wants_explain,
@@ -748,7 +736,7 @@ def narrate_mr_engine_llm(
                 question_dna=_intim_dna if isinstance(_intim_dna, dict) else None,
             )
         else:
-            return render_bed_intimacy_template_answer(narrator_json, question or "", lang=eff_lang)
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "karmic_marriage":
         from ask_mr.karmic_marriage_narrator import (
             engine_result_to_karmic_marriage_json,
@@ -769,7 +757,7 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_KARMIC_MARRIAGE_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = karmic_marriage_engine_narrator_payload(
                 engine_result,
                 wants_explain=wants_explain,
@@ -777,7 +765,7 @@ def narrate_mr_engine_llm(
                 question_dna=_karm_dna if isinstance(_karm_dna, dict) else None,
             )
         else:
-            return render_karmic_marriage_template_answer(narrator_json, question or "", lang=eff_lang)
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "relationship_future":
         from ask_mr.relationship_future_narrator import (
             engine_result_to_relationship_future_json,
@@ -798,7 +786,7 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_RELATIONSHIP_FUTURE_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = relationship_future_engine_narrator_payload(
                 engine_result,
                 wants_explain=wants_explain,
@@ -806,7 +794,7 @@ def narrate_mr_engine_llm(
                 question_dna=_rfut_dna if isinstance(_rfut_dna, dict) else None,
             )
         else:
-            return render_relationship_future_template_answer(narrator_json, question or "", lang=eff_lang)
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "relationship_decisions":
         from ask_mr.relationship_decisions_narrator import (
             engine_result_to_relationship_decisions_json,
@@ -827,7 +815,7 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_RELATIONSHIP_DECISIONS_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = relationship_decisions_engine_narrator_payload(
                 engine_result,
                 wants_explain=wants_explain,
@@ -835,7 +823,7 @@ def narrate_mr_engine_llm(
                 question_dna=_rdec_dna if isinstance(_rdec_dna, dict) else None,
             )
         else:
-            return render_relationship_decisions_template_answer(narrator_json, question or "", lang=eff_lang)
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "relationship_verification":
         from ask_mr.relationship_verification_narrator import (
             engine_result_to_relationship_verification_json,
@@ -856,7 +844,7 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_RELATIONSHIP_VERIFICATION_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = relationship_verification_engine_narrator_payload(
                 engine_result,
                 wants_explain=wants_explain,
@@ -864,7 +852,7 @@ def narrate_mr_engine_llm(
                 question_dna=_rver_dna if isinstance(_rver_dna, dict) else None,
             )
         else:
-            return render_relationship_verification_template_answer(narrator_json, question or "", lang=eff_lang)
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "relationship_remedies":
         from ask_mr.relationship_remedies_narrator import (
             engine_result_to_relationship_remedies_json,
@@ -885,7 +873,7 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_RELATIONSHIP_REMEDIES_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = relationship_remedies_engine_narrator_payload(
                 engine_result,
                 wants_explain=wants_explain,
@@ -893,7 +881,7 @@ def narrate_mr_engine_llm(
                 question_dna=_rem_dna if isinstance(_rem_dna, dict) else None,
             )
         else:
-            return render_relationship_remedies_template_answer(narrator_json, question or "", lang=eff_lang)
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     elif arch == "one_sided_love":
         from ask_mr.one_sided_love_narrator import (
             engine_result_to_one_sided_love_json,
@@ -914,7 +902,7 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_ONE_SIDED_LOVE_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+        if _mr_engine_llm_narrator_enabled(arch):
             chart_text = one_sided_love_engine_narrator_payload(
                 engine_result,
                 wants_explain=wants_explain,
@@ -922,7 +910,7 @@ def narrate_mr_engine_llm(
                 question_dna=_os_dna if isinstance(_os_dna, dict) else None,
             )
         else:
-            return render_one_sided_love_template_answer(narrator_json, question or "", lang=eff_lang)
+            return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
     else:
         chart_text = engine_result.to_narrator_payload()
     intent = narrator_intent_hint(
@@ -1021,11 +1009,7 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.commitment_narrator import render_commitment_template_answer
 
-                    return render_commitment_template_answer(
-                        narrator_json,
-                        question or "",
-                        lang=eff_lang,
-                    )
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
             if arch == "patchup" and narrator_json:
                 if use_presenter:
                     ok, issues = validate_presenter_output(
@@ -1042,11 +1026,7 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.patchup_narrator import render_patchup_template_answer
 
-                    return render_patchup_template_answer(
-                        narrator_json,
-                        question or "",
-                        lang=eff_lang,
-                    )
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
             if arch == "loyalty_trust" and narrator_json:
                 ok, issues = validate_loyalty_narrator_output(polished or "", narrator_json)
                 if not ok:
@@ -1056,11 +1036,7 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.loyalty_narrator import render_loyalty_template_answer
 
-                    return render_loyalty_template_answer(
-                        narrator_json,
-                        question or "",
-                        lang=eff_lang,
-                    )
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
             if arch == "breakup_risk" and narrator_json:
                 ok, issues = validate_breakup_narrator_output(polished or "", narrator_json)
                 if not ok:
@@ -1070,11 +1046,7 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.breakup_narrator import render_breakup_template_answer
 
-                    return render_breakup_template_answer(
-                        narrator_json,
-                        question or "",
-                        lang=eff_lang,
-                    )
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
             if arch == "compatibility" and narrator_json:
                 ok, issues = validate_compatibility_narrator_output(polished or "", narrator_json)
                 if not ok:
@@ -1084,11 +1056,7 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.compatibility_narrator import render_compatibility_template_answer
 
-                    return render_compatibility_template_answer(
-                        narrator_json,
-                        question or "",
-                        lang=eff_lang,
-                    )
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
             if arch == "secret_relationship" and narrator_json:
                 if use_presenter:
                     ok, issues = validate_presenter_output(
@@ -1113,7 +1081,21 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.secret_narrator import render_secret_template_answer
 
-                    return render_secret_template_answer(narrator_json, question or "", lang=eff_lang)
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
+                if use_presenter and polished:
+                    from ask_mr.secret_narrator import (
+                        render_secret_human_answer,
+                        secret_llm_output_acceptable,
+                    )
+
+                    if not secret_llm_output_acceptable(polished, narrator_json):
+                        print(
+                            "[engine_narrate] secret LLM rejected — using human compose",
+                            flush=True,
+                        )
+                        return _render_story_compose_fallback(
+                            narrator_json, question or "", engine=arch, lang=eff_lang
+                        )
             if arch == "partner_nature" and narrator_json:
                 ok, issues = validate_partner_nature_narrator_output(polished or "", narrator_json)
                 if not ok:
@@ -1123,9 +1105,7 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.partner_nature_narrator import render_partner_nature_template_answer
 
-                    return render_partner_nature_template_answer(
-                        narrator_json, question or "", lang=eff_lang
-                    )
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
             if arch == "communication" and narrator_json:
                 ok, issues = validate_communication_narrator_output(polished or "", narrator_json)
                 if not ok:
@@ -1135,9 +1115,7 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.communication_narrator import render_communication_template_answer
 
-                    return render_communication_template_answer(
-                        narrator_json, question or "", lang=eff_lang
-                    )
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
             if arch == "emotional_attachment" and narrator_json:
                 ok, issues = validate_emotional_attachment_narrator_output(polished or "", narrator_json)
                 if not ok:
@@ -1147,9 +1125,7 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.emotional_attachment_narrator import render_emotional_attachment_template_answer
 
-                    return render_emotional_attachment_template_answer(
-                        narrator_json, question or "", lang=eff_lang
-                    )
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
             if arch == "family_approval" and narrator_json:
                 ok, issues = validate_family_approval_narrator_output(polished or "", narrator_json)
                 if not ok:
@@ -1159,9 +1135,7 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.family_approval_narrator import render_family_approval_template_answer
 
-                    return render_family_approval_template_answer(
-                        narrator_json, question or "", lang=eff_lang
-                    )
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
             if arch == "long_distance" and narrator_json:
                 ok, issues = validate_long_distance_narrator_output(polished or "", narrator_json)
                 if not ok:
@@ -1171,9 +1145,7 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.long_distance_narrator import render_long_distance_template_answer
 
-                    return render_long_distance_template_answer(
-                        narrator_json, question or "", lang=eff_lang
-                    )
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
             if arch == "toxicity" and narrator_json:
                 ok, issues = validate_toxicity_narrator_output(polished or "", narrator_json)
                 if not ok:
@@ -1183,9 +1155,7 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.toxicity_narrator import render_toxicity_template_answer
 
-                    return render_toxicity_template_answer(
-                        narrator_json, question or "", lang=eff_lang
-                    )
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
             if arch == "chemistry" and narrator_json:
                 ok, issues = validate_chemistry_narrator_output(polished or "", narrator_json)
                 if not ok:
@@ -1195,9 +1165,7 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.chemistry_narrator import render_chemistry_template_answer
 
-                    return render_chemistry_template_answer(
-                        narrator_json, question or "", lang=eff_lang
-                    )
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
             if arch == "bed_intimacy" and narrator_json:
                 ok, issues = validate_bed_intimacy_narrator_output(polished or "", narrator_json)
                 if not ok:
@@ -1207,9 +1175,7 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.bed_intimacy_narrator import render_bed_intimacy_template_answer
 
-                    return render_bed_intimacy_template_answer(
-                        narrator_json, question or "", lang=eff_lang
-                    )
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
             if arch == "karmic_marriage" and narrator_json:
                 ok, issues = validate_karmic_marriage_narrator_output(polished or "", narrator_json)
                 if not ok:
@@ -1219,9 +1185,7 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.karmic_marriage_narrator import render_karmic_marriage_template_answer
 
-                    return render_karmic_marriage_template_answer(
-                        narrator_json, question or "", lang=eff_lang
-                    )
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
             if arch == "relationship_future" and narrator_json:
                 ok, issues = validate_relationship_future_narrator_output(polished or "", narrator_json)
                 if not ok:
@@ -1231,9 +1195,7 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.relationship_future_narrator import render_relationship_future_template_answer
 
-                    return render_relationship_future_template_answer(
-                        narrator_json, question or "", lang=eff_lang
-                    )
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
             if arch == "relationship_decisions" and narrator_json:
                 ok, issues = validate_relationship_decisions_narrator_output(polished or "", narrator_json)
                 if not ok:
@@ -1243,9 +1205,7 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.relationship_decisions_narrator import render_relationship_decisions_template_answer
 
-                    return render_relationship_decisions_template_answer(
-                        narrator_json, question or "", lang=eff_lang
-                    )
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
             if arch == "relationship_verification" and narrator_json:
                 ok, issues = validate_relationship_verification_narrator_output(polished or "", narrator_json)
                 if not ok:
@@ -1255,9 +1215,7 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.relationship_verification_narrator import render_relationship_verification_template_answer
 
-                    return render_relationship_verification_template_answer(
-                        narrator_json, question or "", lang=eff_lang
-                    )
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
             if arch == "relationship_remedies" and narrator_json:
                 ok, issues = validate_relationship_remedies_narrator_output(polished or "", narrator_json)
                 if not ok:
@@ -1267,9 +1225,7 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.relationship_remedies_narrator import render_relationship_remedies_template_answer
 
-                    return render_relationship_remedies_template_answer(
-                        narrator_json, question or "", lang=eff_lang
-                    )
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
             if arch == "one_sided_love" and narrator_json:
                 ok, issues = validate_one_sided_love_narrator_output(polished or "", narrator_json)
                 if not ok:
@@ -1279,8 +1235,17 @@ def narrate_mr_engine_llm(
                     )
                     from ask_mr.one_sided_love_narrator import render_one_sided_love_template_answer
 
-                    return render_one_sided_love_template_answer(
-                        narrator_json, question or "", lang=eff_lang
+                    return _render_story_compose_fallback(narrator_json, question or "", engine=arch, lang=eff_lang)
+            if use_presenter and narrator_json and polished:
+                from ask_mr.story_answer import story_llm_output_acceptable
+
+                if not story_llm_output_acceptable(polished, narrator_json, arch):
+                    print(
+                        f"[engine_narrate] presenter output rejected for {arch} — story compose",
+                        flush=True,
+                    )
+                    return _render_story_compose_fallback(
+                        narrator_json, question or "", engine=arch, lang=eff_lang
                     )
             return polished or None
         except Exception as exc:

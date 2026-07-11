@@ -3,11 +3,12 @@ from __future__ import annotations
 
 from typing import Any
 
-_HUMAN_PRESENTER_ARCHETYPES = frozenset({
-    "commitment",
-    "patchup",
-    "secret_relationship",
-})
+from ask_mr.story_answer import (
+    engine_result_to_narrator_json,
+    is_story_engine,
+    render_story_human_answer,
+    story_llm_output_acceptable,
+)
 
 
 def try_human_presenter_mr_answer(
@@ -17,13 +18,13 @@ def try_human_presenter_mr_answer(
     lang: str = "hn",
     llm_intent: dict | None = None,
 ) -> dict | None:
-    """Presenter-only LLM answer for commitment / patchup / secret — never Cosmo markdown."""
-    from ask_mr.engine_presenter import human_narrator_enabled
+    """Story-style presenter answer for all frozen MR engines."""
+    from ask_mr.engine_presenter import human_narrator_enabled, present_story_answer_llm
 
     if not human_narrator_enabled() or engine_result is None:
         return None
     arch = str(getattr(engine_result, "archetype", "") or "").strip().lower()
-    if arch not in _HUMAN_PRESENTER_ARCHETYPES:
+    if not is_story_engine(arch):
         return None
     q = (question or "").strip()
     if not q:
@@ -50,39 +51,37 @@ def try_human_presenter_mr_answer(
     checks = dict(getattr(engine_result, "checks", None) or {})
     narrator_json = checks.get("narrator_input") if isinstance(checks.get("narrator_input"), dict) else None
 
-    if arch == "secret_relationship":
-        from ask_mr.secret_narrator import (
-            engine_result_to_secret_json,
-            looks_like_secret_template_stitch,
-            render_secret_human_answer,
-        )
-        from ask_mr.engine_presenter import present_secret_answer_llm
-
+    try:
         if not isinstance(narrator_json, dict):
-            _dna = None
-            if isinstance(llm_intent, dict):
-                _dna = llm_intent.get("question_dna")
-            narrator_json = engine_result_to_secret_json(
+            narrator_json = engine_result_to_narrator_json(
                 engine_result,
                 question=q,
-                question_dna=_dna if isinstance(_dna, dict) else None,
-            )
-
-        need_llm = not narrated or looks_like_secret_template_stitch(str(narrated))
-        if need_llm:
-            direct = present_secret_answer_llm(
-                narrator_json,
-                question=q,
-                lang=lang,
                 llm_intent=llm_intent,
             )
-            if direct:
-                narrated = direct
-                llm_used = True
+    except Exception as exc:
+        print(f"[static_answer] narrator json build failed ({arch}): {exc}", flush=True)
+        return None
 
-        if not narrated or looks_like_secret_template_stitch(str(narrated)):
-            narrated = render_secret_human_answer(narrator_json, q, lang=lang)
-            llm_used = False
+    composed = render_story_human_answer(narrator_json, q, engine=arch, lang=lang)
+    llm_candidate = str(narrated).strip() if narrated else ""
+
+    if not story_llm_output_acceptable(llm_candidate, narrator_json, arch):
+        direct = present_story_answer_llm(
+            narrator_json,
+            engine=arch,
+            question=q,
+            lang=lang,
+            llm_intent=llm_intent,
+        )
+        if direct and story_llm_output_acceptable(direct, narrator_json, arch):
+            llm_candidate = direct
+
+    if story_llm_output_acceptable(llm_candidate, narrator_json, arch):
+        narrated = llm_candidate
+        llm_used = True
+    else:
+        narrated = composed
+        llm_used = False
 
     if not (narrated and str(narrated).strip()):
         return None
@@ -94,7 +93,7 @@ def try_human_presenter_mr_answer(
         except (TypeError, ValueError):
             pass
 
-    source = f"{arch}_engine_presenter" if llm_used else f"{arch}_engine_human_compose"
+    source = f"{arch}_engine_presenter" if llm_used else f"{arch}_engine_story_compose"
     return {
         "text": str(narrated).strip(),
         "topic": "marriage",
@@ -116,34 +115,15 @@ def _locked_template_fallback(
 ) -> str | None:
     arch = str(getattr(engine_result, "archetype", "") or "").strip().lower()
     q = (question or "").strip()
+    if not is_story_engine(arch):
+        return None
     try:
-        if arch == "commitment":
-            from ask_mr.commitment_narrator import (
-                engine_result_to_commitment_json,
-                render_commitment_template_answer,
-            )
-
-            data = engine_result_to_commitment_json(engine_result, question=q)
-            return render_commitment_template_answer(data, q, lang=lang)
-        if arch == "patchup":
-            from ask_mr.patchup_narrator import (
-                engine_result_to_patchup_json,
-                render_patchup_template_answer,
-            )
-
-            data = engine_result_to_patchup_json(engine_result, question=q)
-            return render_patchup_template_answer(data, q, lang=lang)
-        if arch == "secret_relationship":
-            from ask_mr.secret_narrator import (
-                engine_result_to_secret_json,
-                render_secret_template_answer,
-            )
-
-            data = engine_result_to_secret_json(engine_result, question=q)
-            return render_secret_template_answer(data, q, lang=lang)
+        data = engine_result_to_narrator_json(engine_result, question=q)
+        return render_story_human_answer(data, q, engine=arch, lang=lang)
     except Exception as exc:
-        print(f"[static_answer] locked template fallback failed: {exc}", flush=True)
+        print(f"[static_answer] story compose fallback failed: {exc}", flush=True)
     return None
+
 
 def _plain_mr_fallback(
     question: str,
@@ -152,7 +132,22 @@ def _plain_mr_fallback(
     lang: str = "en",
     llm_intent: dict | None = None,
 ) -> str | None:
-    """Rich 3-section plain answer — never raw house/planet dump."""
+    arch = str(getattr(engine_result, "archetype", "") or "").strip().lower()
+    if is_story_engine(arch):
+        try:
+            data = engine_result_to_narrator_json(
+                engine_result,
+                question=question or "",
+                llm_intent=llm_intent,
+            )
+            return render_story_human_answer(
+                data,
+                question or "",
+                engine=arch,
+                lang=lang,
+            )
+        except Exception:
+            pass
     try:
         from ask_mr.engine_narrate import format_engine_rich_plain
 
@@ -182,12 +177,25 @@ def _text_from_engine_result(
     try:
         from ask_mr.narrator import polish_mr_confident_tone, render_template
         from ask_mr.engine_narrate import narrate_mr_engine_llm
+        from ask_mr.engine_presenter import human_narrator_enabled
 
         tpl = render_template(engine_result)
         if tpl:
             return polish_mr_confident_tone(tpl), False
 
         q = (question or "").strip()
+        arch = str(getattr(engine_result, "archetype", "") or "").strip().lower()
+
+        if human_narrator_enabled() and is_story_engine(arch):
+            payload = try_human_presenter_mr_answer(
+                engine_result,
+                question=q,
+                lang=lang,
+                llm_intent=llm_intent,
+            )
+            if payload and str(payload.get("text") or "").strip():
+                return str(payload["text"]).strip(), bool(payload.get("llm_called"))
+
         if try_llm and q:
             narrated = narrate_mr_engine_llm(
                 q,
@@ -199,16 +207,9 @@ def _text_from_engine_result(
             if narrated:
                 return narrated, True
 
-        try:
-            from ask_mr.engine_presenter import human_narrator_enabled
-
-            arch = str(getattr(engine_result, "archetype", "") or "").strip().lower()
-            if human_narrator_enabled() and arch in _HUMAN_PRESENTER_ARCHETYPES:
-                locked = _locked_template_fallback(engine_result, q, lang=lang)
-                if locked:
-                    return locked, False
-        except Exception:
-            pass
+        locked = _locked_template_fallback(engine_result, q, lang=lang)
+        if locked:
+            return locked, False
 
         plain = _plain_mr_fallback(q, engine_result, lang=lang, llm_intent=llm_intent)
         return plain, False

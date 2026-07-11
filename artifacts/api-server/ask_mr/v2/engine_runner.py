@@ -87,6 +87,11 @@ def _default_checks(
         })
     elif eid == "family_approval":
         checks["family_approval_level"] = level
+    elif eid == "long_distance":
+        checks.update({
+            "long_distance_level": level,
+            "ldr_level": level,
+        })
     elif eid == "toxicity":
         checks["toxicity_level"] = level
     elif eid == "communication":

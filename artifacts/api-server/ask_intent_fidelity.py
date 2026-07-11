@@ -627,6 +627,62 @@ def family_approval_angle_label(angle: str | None) -> str:
     return _FAMILY_APPROVAL_ANGLE_LABELS.get(key, "Family approval / ghar wale")
 
 
+_LONG_DISTANCE_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("online_relationship", re.compile(r"(?ix)\b(online\s*relationship|online\s*rishta|virtual\s*love|internet\s*love|virtual)\b")),
+    ("different_city", re.compile(r"(?ix)\b(alag\s*(?:shahar|shahr)|different\s*city|different\s*country|alag\s+city)\b")),
+    ("foreign_partner", re.compile(r"(?ix)\b(foreign|abroad|videsh|videshi)\b")),
+    ("reunion_plans", re.compile(r"(?ix)\b(reunion|milna|visits?|visit|milenge|meet\s+up)\b")),
+    ("communication_ldr", re.compile(r"(?ix)\b(video\s*call|calls|long\s*distance.*communication|door.*baat)\b")),
+    ("trust_distance", re.compile(r"(?ix)\b(trust.*distance|distance.*trust|vishwas.*door|door.*vishwas|trust.*door|door\s*reh\w*.*trust)\b")),
+    ("physical_gap", re.compile(r"(?ix)\b(physical\s*gap|face[\s-]to[\s-]face|mil\s+pa|in\s+person)\b")),
+    ("separation_stress", re.compile(r"(?ix)\b(separation\s+stress|doori\s+stress|weak\s+ho|weak\s+to|strain)\b")),
+    ("ldr_viability", re.compile(r"(?ix)\b(chalega|work\s+karega|successful|survive|sustainable|\bldr\b|nibha)\b")),
+    ("door_rehkar", re.compile(r"(?ix)\b(door\s*reh\w*|dur\s*reh\w*|dur\s*se\s*rishta|door\s*rehkar)\b")),
+    ("bond_strength", re.compile(r"(?ix)\b(strong\s+reh|bond\s+hold|rishta\s+strong|hold\s+karega)\b")),
+    ("general_ldr", re.compile(r"(?ix)\b(long[\s-]*distance|distance\s+relationship|doori)\b")),
+]
+
+_LONG_DISTANCE_ANGLE_LABELS: dict[str, str] = {
+    "general_ldr": "General long-distance relationship",
+    "ldr_viability": "LDR chalega / viability",
+    "door_rehkar": "Door rehkar rishta",
+    "online_relationship": "Online / virtual relationship",
+    "different_city": "Alag shahar / different city",
+    "foreign_partner": "Foreign / abroad distance",
+    "trust_distance": "Door rehkar trust",
+    "reunion_plans": "Reunion / visit planning",
+    "communication_ldr": "LDR communication / calls",
+    "physical_gap": "Physical gap / in-person meet",
+    "bond_strength": "Bond strength door rehkar",
+    "separation_stress": "Separation / doori stress",
+}
+
+
+def infer_long_distance_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    gate = re.search(
+        r"(?ix)\b(long[\s-]*distance|ldr|alag\s*(?:shahar|shahr)|different\s*city|dur\s*se|online\s*relationship|"
+        r"online\s*rishta|virtual\s*love|internet\s*love|door\s*reh\w*|dur\s*reh\w*|doori|abroad|foreign|videsh|trust)\b",
+        q,
+    )
+    if not gate and not (
+        re.search(r"(?:door\s*reh\w*|dur\s*reh\w*)", q, re.I)
+        and re.search(r"(?ix)\b(relation|relationship|partner|marriage|pyaar|pyar|love|rishta|shaadi)\b", q)
+    ):
+        return None
+    for name, rx in _LONG_DISTANCE_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    return "general_ldr"
+
+
+def long_distance_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _LONG_DISTANCE_ANGLE_LABELS.get(key, "Long-distance relationship")
+
+
 def infer_partner_commitment_angle(question: str) -> str | None:
     q = (question or "").strip()
     if not q:

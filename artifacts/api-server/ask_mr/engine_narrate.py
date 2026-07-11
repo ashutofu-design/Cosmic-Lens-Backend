@@ -61,6 +61,7 @@ def format_engine_rich_plain(
         infer_compatibility_angle,
         infer_emotional_attachment_angle,
         infer_family_approval_angle,
+        infer_long_distance_angle,
         infer_loyalty_angle,
         infer_partner_commitment_angle,
         infer_partner_nature_angle,
@@ -190,6 +191,17 @@ def format_engine_rich_plain(
 
             data = engine_result_to_family_approval_json(result, question=q)
             big = render_family_approval_template_answer(data, q, lang=lang)
+        except Exception:
+            big = str(getattr(result, "verdict", "") or "").strip()
+    elif arch == "long_distance" or infer_long_distance_angle(q):
+        try:
+            from ask_mr.long_distance_narrator import (
+                engine_result_to_long_distance_json,
+                render_long_distance_template_answer,
+            )
+
+            data = engine_result_to_long_distance_json(result, question=q)
+            big = render_long_distance_template_answer(data, q, lang=lang)
         except Exception:
             big = str(getattr(result, "verdict", "") or "").strip()
     else:
@@ -528,6 +540,25 @@ def narrate_mr_engine_llm(
             )
         else:
             return render_family_approval_template_answer(narrator_json, question or "", lang=eff_lang)
+    elif arch == "long_distance":
+        from ask_mr.long_distance_narrator import (
+            engine_result_to_long_distance_json,
+            long_distance_engine_narrator_payload,
+            render_long_distance_template_answer,
+            validate_long_distance_narrator_output,
+        )
+
+        narrator_json = engine_result_to_long_distance_json(engine_result, question=question or "")
+        _checks = dict(engine_result.checks or {})
+        _checks["narrator_input"] = narrator_json
+        _checks["question"] = question or ""
+        engine_result.checks = _checks
+        if os.environ.get("ASK_LONG_DISTANCE_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+            chart_text = long_distance_engine_narrator_payload(
+                engine_result, wants_explain=wants_explain, question=question or ""
+            )
+        else:
+            return render_long_distance_template_answer(narrator_json, question or "", lang=eff_lang)
     else:
         chart_text = engine_result.to_narrator_payload()
     intent = narrator_intent_hint(
@@ -713,6 +744,18 @@ def narrate_mr_engine_llm(
                     from ask_mr.family_approval_narrator import render_family_approval_template_answer
 
                     return render_family_approval_template_answer(
+                        narrator_json, question or "", lang=eff_lang
+                    )
+            if arch == "long_distance" and narrator_json:
+                ok, issues = validate_long_distance_narrator_output(polished or "", narrator_json)
+                if not ok:
+                    print(
+                        f"[engine_narrate] long_distance validation failed {issues} — using locked template",
+                        flush=True,
+                    )
+                    from ask_mr.long_distance_narrator import render_long_distance_template_answer
+
+                    return render_long_distance_template_answer(
                         narrator_json, question or "", lang=eff_lang
                     )
             return polished or None

@@ -67,6 +67,7 @@ function RootLayoutNav() {
       <Stack.Screen name="my-reports"                options={{ headerShown: false }} />
       <Stack.Screen name="personalization"           options={{ headerShown: false }} />
       <Stack.Screen name="panchang"                  options={{ headerShown: false }} />
+      <Stack.Screen name="ask-engine-debug"          options={{ headerShown: false }} />
     </Stack>
   );
 }

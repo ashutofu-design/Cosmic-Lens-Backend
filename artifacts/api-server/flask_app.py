@@ -7791,6 +7791,32 @@ def history_route():
     return jsonify({"items": items})
 
 
+@app.route("/api/history/<question_id>/debug", methods=["GET"])
+def history_debug_route(question_id: str):
+    """Developer debugger for one Ask row — same bundle as admin detail (owner only)."""
+    raw_uid = request.headers.get("X-User-Id", "").strip()
+    try:
+        uid = int(raw_uid)
+    except ValueError:
+        return jsonify({"error": "X-User-Id required"}), 401
+    user, err = get_authed_user(uid)
+    if err:
+        return err
+    try:
+        from question_history import get_user_ask_question_debug
+
+        row = get_user_ask_question_debug(user.id, question_id)
+        if not row:
+            return jsonify({"error": "Not found"}), 404
+        return jsonify(row)
+    except Exception as exc:
+        import traceback
+
+        traceback.print_exc()
+        app.logger.exception("history debug detail failed")
+        return jsonify({"error": str(exc)[:500]}), 500
+
+
 @app.route("/api/history/search", methods=["GET"])
 def history_search_route():
     """Filter the user's history by topic OR question_text substring.
@@ -9704,12 +9730,14 @@ def ask_stream_route():
                                 "engine_tag": _final_payload.get("engine_tag"),
                             }
                             with _app_for_save.app_context():
-                                save_stream_ask_question(
+                                _saved_qid = save_stream_ask_question(
                                     user_id=log_user_id,
                                     question_text=log_question,
                                     event=_save_evt,
                                     primary_kundli_id=log_kundli_id,
                                 )
+                            if _saved_qid:
+                                _final_payload["question_id"] = _saved_qid
                         except Exception as exc:
                             print(
                                 f"[ask/stream] question_history save failed (non-fatal): {exc}"

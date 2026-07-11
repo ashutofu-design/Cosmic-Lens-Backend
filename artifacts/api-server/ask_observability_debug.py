@@ -1292,3 +1292,171 @@ def attach_observability_to_context(
         row_meta=row_meta,
     )
     return out
+
+
+OBS_DEBUGGER_VERSION = "2.4.0"
+
+
+def _format_pipeline_section(title: str, steps: list[dict[str, Any]] | None) -> list[str]:
+    lines = [f"=== {title} ==="]
+    for step in steps or []:
+        label = str(step.get("label") or "").strip()
+        value = str(step.get("value") or "—").strip()
+        if label:
+            lines.append(f"{label}: {value}")
+    lines.append("")
+    return lines
+
+
+def build_ask_debug_export_text(row: dict[str, Any]) -> str:
+    """Plain-text debugger export — parity with admin Ask Q&A Copy All."""
+    llm_ctx = row.get("llm_context") if isinstance(row.get("llm_context"), dict) else {}
+    obs = llm_ctx.get("observability") if isinstance(llm_ctx.get("observability"), dict) else {}
+    if not obs:
+        obs = row.get("observability") if isinstance(row.get("observability"), dict) else {}
+    exec_block = obs.get("engine_execution") if isinstance(obs.get("engine_execution"), dict) else {}
+    health = obs.get("engine_health") if isinstance(obs.get("engine_health"), dict) else {}
+    evidence = obs.get("planet_evidence") if isinstance(obs.get("planet_evidence"), dict) else {}
+    conflict = obs.get("conflict_resolution") if isinstance(obs.get("conflict_resolution"), dict) else {}
+    scorecard = obs.get("scorecard") if isinstance(obs.get("scorecard"), dict) else {}
+    perf = obs.get("performance") if isinstance(obs.get("performance"), dict) else {}
+
+    user_label = row.get("user_name") or row.get("user_email") or f"user #{row.get('user_id')}"
+    lines: list[str] = [
+        "=== Cosmic Lens · Ask Q&A Debug Export ===",
+        f"Debugger: v{OBS_DEBUGGER_VERSION}",
+        f"Question ID: {row.get('id') or '—'}",
+        f"User: {user_label}",
+        f"Email: {row.get('user_email') or '—'}",
+        f"Date: {row.get('created_at') or '—'}",
+        f"Topic: {row.get('topic') or '—'}",
+        f"Engine tag: {row.get('engine_tag') or '—'}",
+        f"Answer source: {row.get('answer_source') or '—'}",
+        f"Verdict summary: {row.get('verdict_summary') or '—'}",
+        "",
+        "=== QUESTION ===",
+        str(row.get("question_text") or "—"),
+        "",
+        "=== FINAL ANSWER (user saw) ===",
+        str(row.get("answer_text") or "No answer saved."),
+        "",
+        "=== TELEMETRY ===",
+        f"Model: {perf.get('model') or row.get('llm_model') or '—'}",
+        f"Tokens: {int(perf.get('prompt_tokens') or row.get('prompt_tokens') or 0)} in · "
+        f"{int(perf.get('completion_tokens') or row.get('completion_tokens') or 0)} out",
+        "",
+    ]
+
+    routing_warning = obs.get("routing_warning")
+    if routing_warning:
+        lines.extend(["=== ROUTING WARNING ===", str(routing_warning), ""])
+
+    lines.extend(_format_pipeline_section("1. QUESTION DNA", obs.get("question_dna_pipeline")))
+    lines.extend([
+        "=== 2. ENGINE HEALTH ===",
+        f"Modules loaded: {health.get('modules_loaded') or '—'}",
+        f"Rules evaluated: {health.get('rules_evaluated') if health.get('rules_evaluated') is not None else '—'}",
+        f"Rules fired: {health.get('rules_fired') if health.get('rules_fired') is not None else '—'}",
+        f"Rules skipped: {health.get('rules_skipped') if health.get('rules_skipped') is not None else '—'}",
+        f"Confidence: {health.get('confidence_pct') if health.get('confidence_pct') is not None else '—'}%",
+        f"Execution: {health.get('execution_ms') if health.get('execution_ms') is not None else '—'}ms",
+        "",
+        "=== 3. ENGINE EXECUTION ===",
+        f"Engine: {exec_block.get('engine_name') or '—'}",
+        f"Final score: {exec_block.get('final_score') if exec_block.get('final_score') is not None else '—'}",
+        f"Verdict: {exec_block.get('verdict') or exec_block.get('verdict_level') or '—'}",
+        "",
+        "Modules:",
+    ])
+    for mod in exec_block.get("modules") or []:
+        if isinstance(mod, dict):
+            mark = "✅" if mod.get("loaded") else "❌"
+            lines.append(f"  {mark} {mod.get('module') or '?'}")
+    lines.extend(["", "Rules fired:"])
+    fired = exec_block.get("fired") or []
+    if not fired:
+        lines.append("  —")
+    else:
+        for rule in fired:
+            if isinstance(rule, dict):
+                mark = "❌" if str(rule.get("polarity") or "").lower() == "negative" else "✅"
+                lines.append(
+                    f"  {rule.get('rule_id') or '?'} {mark} "
+                    f"{rule.get('note') or rule.get('module') or ''}"
+                )
+    lines.append("")
+    lines.append("=== 4. RULE DECISION TABLE ===")
+    decisions = obs.get("rule_decisions") or []
+    if not decisions:
+        lines.append("—")
+    else:
+        for dec in decisions:
+            if isinstance(dec, dict):
+                lines.append(
+                    f"{dec.get('rule_id') or '?'} | {dec.get('status') or '?'} | "
+                    f"{dec.get('weight') if dec.get('weight') is not None else 0} | "
+                    f"{dec.get('reason') or '—'}"
+                )
+    lines.append("")
+    lines.extend(["=== 5. PLANET EVIDENCE ===", "Positive:"])
+    pos = evidence.get("positive") or []
+    if not pos:
+        lines.append("  —")
+    else:
+        for item in pos:
+            if isinstance(item, dict):
+                lines.append(f"  • {item.get('label') or '?'}")
+    lines.append("Negative:")
+    neg = evidence.get("negative") or []
+    if not neg:
+        lines.append("  —")
+    for item in neg:
+        if isinstance(item, dict):
+            lines.append(f"  • {item.get('label') or '?'}")
+    lines.extend([
+        "",
+        "=== 6. CONFLICT RESOLUTION ===",
+        f"Conflict: {conflict.get('conflict') or conflict.get('final_result') or 'None'}",
+        f"Reason: {conflict.get('reason') or '—'}",
+        "",
+        "=== 7. SCORECARD ===",
+    ])
+    if scorecard:
+        for key, val in scorecard.items():
+            lines.append(f"  {key}: {val}")
+    else:
+        lines.append("—")
+    lines.append("")
+    lines.append("=== 8. NARRATOR INPUT (JSON) ===")
+    narrator_input = obs.get("narrator_input")
+    if narrator_input:
+        try:
+            import json
+            lines.append(json.dumps(narrator_input, ensure_ascii=False, indent=2)[:12000])
+        except Exception:
+            lines.append(str(narrator_input)[:8000])
+    else:
+        lines.append("—")
+    lines.append("")
+    lines.extend([
+        "=== 9. NARRATOR OUTPUT ===",
+        str(obs.get("narrator_output") or row.get("answer_text") or "—"),
+        "",
+        "=== 10. HALLUCINATION CHECK ===",
+    ])
+    hall = obs.get("hallucination_summary") if isinstance(obs.get("hallucination_summary"), dict) else {}
+    for key, label in (
+        ("engine_facts_used", "Engine facts used"),
+        ("unused_engine_evidence", "Unused engine evidence"),
+        ("extra_llm_assumptions", "Extra LLM assumptions"),
+    ):
+        block = hall.get(key) if isinstance(hall.get(key), dict) else {}
+        ok = block.get("ok")
+        detail = block.get("detail") or block.get("items")
+        lines.append(f"{label}: {'OK' if ok else 'CHECK'} — {detail or '—'}")
+    lines.append("")
+    lines.append("=== 11. FINAL TRACE ===")
+    for step in obs.get("final_trace") or []:
+        if isinstance(step, dict):
+            lines.append(f"{step.get('label') or '?'}: {step.get('value') or '—'}")
+    return "\n".join(lines).strip() + "\n"

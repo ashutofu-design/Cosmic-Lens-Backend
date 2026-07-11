@@ -687,6 +687,34 @@ def get_admin_ask_question(question_id: str) -> dict | None:
     return d
 
 
+def get_user_ask_question_debug(user_id: int, question_id: str) -> dict | None:
+    """Ask debugger detail for the owning user — same payload as admin detail."""
+    qid = (question_id or "").strip()
+    if not qid:
+        return None
+    row = get_admin_ask_question(qid)
+    if not row:
+        return None
+    try:
+        if int(row.get("user_id") or 0) != int(user_id):
+            return None
+    except (TypeError, ValueError):
+        return None
+    try:
+        from ask_observability_debug import build_ask_debug_export_text
+
+        row["debug_export_text"] = build_ask_debug_export_text(row)
+    except Exception as exc:
+        print(f"[question_history] debug_export_text skipped: {exc}", flush=True)
+    obs = None
+    llm_ctx = row.get("llm_context")
+    if isinstance(llm_ctx, dict):
+        obs = llm_ctx.get("observability")
+    if isinstance(obs, dict):
+        row["observability"] = obs
+    return row
+
+
 def list_admin_ask_questions(
     *,
     page: int = 1,
@@ -907,6 +935,7 @@ def persist_ask_question_result(
         **tok,
     )
     if qid:
+        payload["question_id"] = qid
         print(
             f"[question_history] persist_ok id={qid} topic={topic_logged} "
             f"q={question_text[:72]!r}",

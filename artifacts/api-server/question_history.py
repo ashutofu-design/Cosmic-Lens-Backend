@@ -633,6 +633,37 @@ def get_admin_ask_question(question_id: str) -> dict | None:
         llm_ctx = _bootstrap_admin_llm_context_from_row(uq, None)
     if isinstance(llm_ctx, dict):
         try:
+            qtext = (uq.question_text or "").strip()
+            has_dna = isinstance(llm_ctx.get("question_dna"), dict) and (
+                llm_ctx.get("question_dna") or {}
+            ).get("questions")
+            if not has_dna:
+                li = (
+                    dict(llm_ctx.get("llm_intent") or {})
+                    if isinstance(llm_ctx.get("llm_intent"), dict)
+                    else {}
+                )
+                has_dna = isinstance(li.get("question_dna"), dict) and (
+                    li.get("question_dna") or {}
+                ).get("questions")
+            if not has_dna and qtext:
+                from ask_question_dna import extract_question_dna, question_dna_enabled
+
+                if question_dna_enabled():
+                    dna = extract_question_dna(qtext, client=None)
+                    if isinstance(dna, dict) and dna.get("questions"):
+                        llm_ctx["question_dna"] = dna
+                        li = (
+                            dict(llm_ctx.get("llm_intent") or {})
+                            if isinstance(llm_ctx.get("llm_intent"), dict)
+                            else {}
+                        )
+                        li["question_dna"] = dna
+                        llm_ctx["llm_intent"] = li
+        except Exception as exc:
+            print(f"[question_history] question_dna backfill skipped: {exc}", flush=True)
+    if isinstance(llm_ctx, dict):
+        try:
             from ask_observability_debug import attach_observability_to_context
 
             llm_ctx = attach_observability_to_context(

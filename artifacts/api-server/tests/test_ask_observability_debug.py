@@ -83,7 +83,7 @@ class TestAskObservabilityDebug(unittest.TestCase):
         self.assertEqual(pipeline["Modules"], "D1, D9, DASHA, TRANSIT")
         self.assertEqual(pipeline["Confidence"], "97%")
         self.assertEqual(pipeline["Bucket Match"], "HIGH (97%)")
-        self.assertEqual(pipeline["Timing Required"], "no")
+        self.assertEqual(pipeline["Timing Required"], "No")
         self.assertEqual(pipeline["Time Context"], "present")
 
     def test_attach_observability_preserves_question_dna_on_ctx(self):

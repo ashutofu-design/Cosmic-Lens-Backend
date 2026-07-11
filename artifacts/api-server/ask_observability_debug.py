@@ -257,7 +257,7 @@ def _pipeline_step(label: str, value: Any) -> dict[str, str]:
     if value is None or value == "":
         return {"label": label, "value": "—"}
     if isinstance(value, bool):
-        return {"label": label, "value": "yes" if value else "no"}
+        return {"label": label, "value": "Yes" if value else "No"}
     if isinstance(value, (list, dict)):
         import json
 

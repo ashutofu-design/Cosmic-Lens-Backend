@@ -173,7 +173,7 @@ function linesMatching(pool: string[], pattern: RegExp): string[] {
 }
 
 /** Visible in admin UI — confirms new debugger bundle loaded. */
-export const OBS_DEBUGGER_VERSION = "2.4.1";
+export const OBS_DEBUGGER_VERSION = "2.4.2";
 
 const DNA_DOMAIN_LABEL: Record<string, string> = {
   love: "Relationship",
@@ -432,14 +432,30 @@ function buildFinalTrace(
   ];
 }
 
+function getDnaPrimaryItem(ctx: AskLlmContext | null): Record<string, unknown> | null {
+  const li = (ctx?.llm_intent || {}) as Record<string, unknown>;
+  const dnaFromCtx = (ctx as AskLlmContext & { question_dna?: { questions?: unknown[] } })
+    ?.question_dna;
+  const dnaFromIntent = li.question_dna as { questions?: unknown[] } | undefined;
+  const dna = dnaFromCtx || dnaFromIntent;
+  const questions = Array.isArray(dna?.questions) ? dna!.questions : [];
+  const item = questions[0];
+  return item && typeof item === "object" ? (item as Record<string, unknown>) : null;
+}
+
 function resolveDnaPipeline(
   obs: AskObservability,
   ctx: AskLlmContext | null,
   row: AskQuestionItem,
 ): ObservabilityPipelineStep[] {
+  // Prefer live question_dna (same source as mobile DNA Check).
+  const dnaItem = getDnaPrimaryItem(ctx);
+  if (dnaItem?.bucket) {
+    return buildFullDnaPipeline(ctx, row);
+  }
   const server = obs.question_dna_pipeline;
   const bucket = server?.find((s) => s.label === "Bucket")?.value?.trim() || "";
-  if (server?.length && bucket && bucket !== "—") {
+  if (server && server.length >= 10 && bucket && bucket !== "—") {
     return server;
   }
   return buildFullDnaPipeline(ctx, row);

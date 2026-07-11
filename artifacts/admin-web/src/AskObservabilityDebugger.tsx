@@ -234,6 +234,9 @@ export function AskObservabilityDebugger({ row }: { row: AskQuestionItem }) {
       ) : null}
 
       <Section title="1. Question DNA" stars={1}>
+        <p className="detail-muted" style={{ marginBottom: 8 }}>
+          Same classifier fields as mobile DNA Check (Normalized → Bucket Match).
+        </p>
         <PipelineList steps={obs.question_dna_pipeline || []} />
       </Section>
 

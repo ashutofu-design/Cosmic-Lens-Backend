@@ -9,7 +9,6 @@ import {
   EngineVerificationBadge,
   LlmQuestionUnderstandingBrief,
   parseAskLlmContext,
-  resolveAnswerFidelitySummary,
   resolveEngineVerificationSummary,
 } from "./AskLlmContextPanel";
 import { AskObservabilityDebugger } from "./AskObservabilityDebugger";
@@ -26,7 +25,7 @@ export function AskQuestionDetailPage({
 }) {
   const ctx = parseAskLlmContext(row);
   const engineVerify = resolveEngineVerificationSummary(ctx);
-  const answerFidelity = resolveAnswerFidelitySummary(ctx);
+  const answerFidelity = ctx?.answer_fidelity_summary ?? null;
   const engineDisplay = resolveEngineDisplayFromContext(ctx, row, engineVerify);
 
   return (

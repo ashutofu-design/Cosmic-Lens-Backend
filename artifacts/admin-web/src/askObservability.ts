@@ -1,5 +1,4 @@
 import type { AskLlmContext, AskQuestionItem } from "./api";
-import { parseAskLlmContext } from "./AskLlmContextPanel";
 
 export interface ObservabilityPipelineStep {
   label: string;
@@ -323,6 +322,20 @@ function enrichObservability(
   };
 }
 
+function ctxFromRow(row: AskQuestionItem): AskLlmContext | null {
+  if (row.llm_context && typeof row.llm_context === "object") {
+    return row.llm_context;
+  }
+  const raw = row.llm_context_json;
+  if (!raw || !String(raw).trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as AskLlmContext;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export function orderScorecardEntries(
   scorecard: Record<string, number>,
 ): [string, number][] {
@@ -469,7 +482,7 @@ function buildFallbackObservability(
 }
 
 export function resolveAskObservability(row: AskQuestionItem): AskObservability {
-  const ctx = parseAskLlmContext(row);
+  const ctx = ctxFromRow(row);
   const raw = (ctx as AskLlmContext & { observability?: AskObservability })?.observability;
   const base =
     raw && typeof raw === "object"

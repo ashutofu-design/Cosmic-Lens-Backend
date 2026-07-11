@@ -198,6 +198,45 @@ _PARTNER_COMMITMENT_LABELS: dict[str, str] = {
 }
 
 
+_RECONCILIATION_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("reconciliation_timing", re.compile(r"(?ix)\b(kab|when|kitne\s+saal|kis\s+saal|timing|muhurat)\b")),
+    ("ex_contact", re.compile(r"(?ix)\b(contact|unblock|message|call|baat\s+karega|phone)\b")),
+    ("second_chance", re.compile(r"(?ix)\b(second\s+chance|dusra\s+chance|dobara\s+chance|mauka)\b")),
+    ("breakup_end", re.compile(r"(?ix)\b(break[\s-]?up|separation).{0,35}(khatam|end|over|band)\b")),
+    ("ex_return", re.compile(r"(?ix)\b(wapas|return|laut|aayega|aayegi|aa\s+sakta|come\s+back|previous\s+relationship)\b")),
+]
+
+_RECONCILIATION_ANGLE_LABELS: dict[str, str] = {
+    "ex_return": "Previous relationship / ex wapas aayega ya nahi",
+    "ex_contact": "Ex contact / unblock / message",
+    "second_chance": "Second chance / reconciliation decision",
+    "breakup_end": "Break-up ya separation kab khatam hoga",
+    "reconciliation_timing": "Reconciliation / patch-up timing",
+    "general_reconciliation": "Reconciliation / patch-up possibility",
+}
+
+
+def infer_reconciliation_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    if not re.search(
+        r"(?ix)\b(ex|patch\s*up|patchup|reconcile|reconciliation|wapas|previous\s+relationship|"
+        r"purana\s+rishta|purane\s+rishte|break[\s-]?up|separation|no[\s-]?contact)\b",
+        q,
+    ):
+        return None
+    for name, rx in _RECONCILIATION_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    return "general_reconciliation"
+
+
+def reconciliation_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _RECONCILIATION_ANGLE_LABELS.get(key, "Reconciliation / patch-up possibility")
+
+
 def infer_partner_commitment_angle(question: str) -> str | None:
     q = (question or "").strip()
     if not q:

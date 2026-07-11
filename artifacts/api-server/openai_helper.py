@@ -9137,6 +9137,61 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             llm_intent=_llm_intent_admin,
         )
 
+    # ── Patch-up / reconciliation engine — deterministic template narrator ──
+    if (
+        _is_mr_static
+        and _mr_engine_result is not None
+        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "patchup"
+        and os.environ.get("ASK_PATCHUP_USE_LLM", "").strip().lower()
+        not in ("1", "true", "yes")
+    ):
+        from ask_mr.patchup_narrator import (
+            engine_result_to_patchup_json,
+            render_patchup_template_answer,
+        )
+
+        _patch_json = engine_result_to_patchup_json(_mr_engine_result, question=question or "")
+        _patch_checks = dict(_mr_engine_result.checks or {})
+        _patch_checks["narrator_input"] = _patch_json
+        _patch_checks["question"] = question or ""
+        _mr_engine_result.checks = _patch_checks
+        _patch_text = render_patchup_template_answer(
+            _patch_json,
+            question or "",
+            lang=eff_lang,
+        )
+        _out_patch = {
+            "text": _patch_text,
+            "topic": "marriage",
+            "question_type": qtype,
+            "confidence": max(0.15, min(1.0, float(_patch_json.get("confidence") or 48) / 100.0)),
+            "source": "patchup_engine_template",
+            "engine_tag": "ans-engine",
+            "follow_ups": [],
+        }
+        _pt_checks_patch = {
+            "slice_type": "mr_engine_v1",
+            "resolved_route": _resolved_route,
+            "is_mr_static": True,
+            "archetype": "patchup",
+            "skip_llm": True,
+            "narrator_input": _patch_json,
+            "dasha_included": bool((_patch_json.get("timing") or {}).get("summary")),
+        }
+        return _attach_admin(
+            _out_patch,
+            question=question or "",
+            question_type=qtype,
+            is_timing=bool(is_timing),
+            checks=_pt_checks_patch,
+            chart_text=chart_text,
+            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+            llm_called=False,
+            skip_reason="patchup_engine_template",
+            intent_source=_intent_source,
+            llm_intent=_llm_intent_admin,
+        )
+
     # ── MR engine template-only (skip LLM for simple yes/no e.g. manglik) ──
     if (
         _is_mr_static

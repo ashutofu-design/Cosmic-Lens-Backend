@@ -237,6 +237,58 @@ def reconciliation_angle_label(angle: str | None) -> str:
     return _RECONCILIATION_ANGLE_LABELS.get(key, "Reconciliation / patch-up possibility")
 
 
+_LOYALTY_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("emotional_loyalty", re.compile(r"(?ix)\b(emotionally\s+loyal|dil\s+se\s+loyal|emotional\s+faithful)\b")),
+    ("multiple_partners", re.compile(r"(?ix)\b(double\s+dating|do\s+partner|multiple|dusra\s+rishta|parallel)\b")),
+    ("secret_relationship", re.compile(r"(?ix)\b(secret\s+relationship|chupke\s+rishta|hidden\s+affair|parallel\s+attention)\b")),
+    ("hidden_behavior", re.compile(r"(?ix)\b(chupke|hidden|secretly|chipka|chipak)\b")),
+    ("cheating_risk", re.compile(r"(?ix)\b(cheat|cheating|dhokha|dhoka|affair|chakkar|beimaan|unfaithful|dhokhe)\b")),
+    ("exclusive", re.compile(r"(?ix)\b(exclusive|sirf\s+mujhe|only\s+me|ek\s+hi)\b")),
+    ("faithfulness", re.compile(r"(?ix)\b(faithful|wafadari|wafad|wafadar|vafadar|imandaar)\b")),
+    ("trust_issues", re.compile(r"(?ix)\b(trust\s+issue|vishwas|trust\s+kar|bharosa|vishwas\s+ke\s+layak)\b")),
+    ("is_loyal", re.compile(r"(?ix)\b(loyal\s+(?:hai|raheg[a-z]*|rahe[a-z]*)|trustworthy)\b")),
+    ("flirt_only", re.compile(r"(?ix)\b(flirt|timepass|casual\s+only)\b")),
+]
+
+_LOYALTY_ANGLE_LABELS: dict[str, str] = {
+    "cheating_risk": "Cheating / dhokha risk",
+    "is_loyal": "Partner loyal hai ya nahi",
+    "trust_issues": "Trust / vishwas issues",
+    "faithfulness": "Faithfulness / wafadari",
+    "exclusive": "Exclusive / sirf mujhe",
+    "secret_relationship": "Secret / hidden relationship",
+    "multiple_partners": "Multiple partners / double dating",
+    "hidden_behavior": "Hidden / secret behaviour",
+    "emotional_loyalty": "Emotional loyalty",
+    "flirt_only": "Sirf flirt / casual intent",
+    "general_trust": "General trust / loyalty",
+}
+
+
+def infer_loyalty_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    if not re.search(
+        r"(?ix)\b(partner|spouse|bf|gf|pati|patni|boyfriend|girlfriend|husband|wife|"
+        r"trust|loyal|cheat|dhokha|affair|faithful|vishwas|wafad|exclusive|flirt|"
+        r"chupke|rishta|hidden|double\s+dating|wafadar)\b",
+        q,
+    ):
+        return None
+    for name, rx in _LOYALTY_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    if re.search(r"(?ix)\b(trust|loyal|vishwas|faithful)\b", q):
+        return "general_trust"
+    return "general_trust"
+
+
+def loyalty_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _LOYALTY_ANGLE_LABELS.get(key, "Trust / loyalty")
+
+
 def infer_partner_commitment_angle(question: str) -> str | None:
     q = (question or "").strip()
     if not q:

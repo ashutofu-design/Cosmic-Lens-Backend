@@ -9192,6 +9192,68 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             llm_intent=_llm_intent_admin,
         )
 
+    # ── Loyalty / trust engine — deterministic template narrator ──
+    if (
+        _is_mr_static
+        and _mr_engine_result is not None
+        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "loyalty_trust"
+        and os.environ.get("ASK_LOYALTY_USE_LLM", "").strip().lower()
+        not in ("1", "true", "yes")
+    ):
+        from ask_mr.loyalty_narrator import (
+            engine_result_to_loyalty_json,
+            render_loyalty_template_answer,
+        )
+
+        _loyalty_dna = None
+        if isinstance(_llm_intent_admin, dict):
+            _loyalty_dna = _llm_intent_admin.get("question_dna")
+        _loyalty_json = engine_result_to_loyalty_json(
+            _mr_engine_result,
+            question=question or "",
+            question_dna=_loyalty_dna if isinstance(_loyalty_dna, dict) else None,
+        )
+        _loyalty_checks = dict(_mr_engine_result.checks or {})
+        _loyalty_checks["narrator_input"] = _loyalty_json
+        _loyalty_checks["question"] = question or ""
+        _mr_engine_result.checks = _loyalty_checks
+        _loyalty_text = render_loyalty_template_answer(
+            _loyalty_json,
+            question or "",
+            lang=eff_lang,
+        )
+        _out_loyalty = {
+            "text": _loyalty_text,
+            "topic": "marriage",
+            "question_type": qtype,
+            "confidence": max(0.15, min(1.0, float(_loyalty_json.get("confidence") or 48) / 100.0)),
+            "source": "loyalty_engine_template",
+            "engine_tag": "ans-engine",
+            "follow_ups": [],
+        }
+        _pt_checks_loyalty = {
+            "slice_type": "mr_engine_v1",
+            "resolved_route": _resolved_route,
+            "is_mr_static": True,
+            "archetype": "loyalty_trust",
+            "skip_llm": True,
+            "narrator_input": _loyalty_json,
+            "dasha_included": False,
+        }
+        return _attach_admin(
+            _out_loyalty,
+            question=question or "",
+            question_type=qtype,
+            is_timing=bool(is_timing),
+            checks=_pt_checks_loyalty,
+            chart_text=chart_text,
+            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+            llm_called=False,
+            skip_reason="loyalty_engine_template",
+            intent_source=_intent_source,
+            llm_intent=_llm_intent_admin,
+        )
+
     # ── MR engine template-only (skip LLM for simple yes/no e.g. manglik) ──
     if (
         _is_mr_static

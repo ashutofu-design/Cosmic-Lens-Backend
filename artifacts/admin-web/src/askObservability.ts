@@ -1,4 +1,5 @@
 import type { AskLlmContext, AskQuestionItem } from "./api";
+import { formatDate, formatInr } from "./api";
 
 export interface ObservabilityPipelineStep {
   label: string;
@@ -684,4 +685,188 @@ export function resolveAskObservability(row: AskQuestionItem): AskObservability 
       ? raw
       : buildFallbackObservability(ctx, row);
   return enrichObservability(base, ctx, row);
+}
+
+function formatPipelineSection(title: string, steps: ObservabilityPipelineStep[] | undefined): string[] {
+  if (!steps?.length) return [`=== ${title} ===`, "—", ""];
+  const lines = [`=== ${title} ===`];
+  for (const step of steps) {
+    lines.push(`${step.label}: ${step.value}`);
+  }
+  lines.push("");
+  return lines;
+}
+
+function formatEvidenceList(
+  title: string,
+  items: ObservabilityEvidence[] | undefined,
+  empty = "—",
+): string[] {
+  const lines = [`${title}:`];
+  if (!items?.length) {
+    lines.push(`  ${empty}`);
+  } else {
+    for (const e of items) {
+      const w = e.weight !== 0 ? ` (${e.weight > 0 ? "+" : ""}${e.weight})` : "";
+      lines.push(`  • ${e.label}${w}`);
+    }
+  }
+  return lines;
+}
+
+/** Full plain-text export for admin Ask detail — question, answer, debugger. */
+export function buildAskDetailCopyText(row: AskQuestionItem): string {
+  const obs = resolveAskObservability(row);
+  const exec = obs.engine_execution || {};
+  const health = obs.engine_health || {};
+  const evidence = obs.planet_evidence || {};
+  const conflict = obs.conflict_resolution || {};
+  const scoreEntries = orderScorecardEntries(obs.scorecard || {});
+  const perf = obs.performance || {};
+
+  const lines: string[] = [
+    "=== Cosmic Lens · Ask Q&A Debug Export ===",
+    `Debugger: v${OBS_DEBUGGER_VERSION}`,
+    `Question ID: ${row.id}`,
+    `User: ${row.user_name || row.user_email || `user #${row.user_id}`}`,
+    `Email: ${row.user_email || "—"}`,
+    `Date: ${formatDate(row.created_at)}`,
+    `Topic: ${row.topic || "—"}`,
+    `Engine tag: ${row.engine_tag || "—"}`,
+    `Answer source: ${row.answer_source || "—"}`,
+    `Verdict summary: ${row.verdict_summary || "—"}`,
+    "",
+    "=== QUESTION ===",
+    row.question_text || "—",
+    "",
+    "=== FINAL ANSWER (user saw) ===",
+    row.answer_text || "No answer saved.",
+    "",
+    "=== TELEMETRY ===",
+    `Model: ${perf.model || row.llm_model || "—"}`,
+    `Tokens: ${(perf.prompt_tokens ?? row.prompt_tokens ?? 0).toLocaleString("en-IN")} in · ${(perf.completion_tokens ?? row.completion_tokens ?? 0).toLocaleString("en-IN")} out${(perf.cached_tokens ?? row.cached_tokens) ? ` · ${perf.cached_tokens ?? row.cached_tokens} cached` : ""}`,
+    `Cost: ${row.cost_inr != null ? formatInr(row.cost_inr) : "—"}${row.cost_usd != null ? ` ($${row.cost_usd.toFixed(4)})` : ""}`,
+    "",
+  ];
+
+  if (obs.routing_warning) {
+    lines.push("=== ROUTING WARNING ===", obs.routing_warning, "");
+  }
+
+  lines.push(...formatPipelineSection("1. QUESTION DNA", obs.question_dna_pipeline));
+
+  lines.push(
+    "=== 2. ENGINE HEALTH ===",
+    `Modules loaded: ${health.modules_loaded || "—"}`,
+    `Rules evaluated: ${health.rules_evaluated ?? "—"}`,
+    `Rules fired: ${health.rules_fired ?? "—"}`,
+    `Rules skipped: ${health.rules_skipped ?? "—"}`,
+    `Confidence: ${health.confidence_pct != null ? `${health.confidence_pct}%` : "—"}`,
+    `Execution: ${health.execution_ms != null ? `${health.execution_ms}ms` : "—"}`,
+    "",
+    "=== 3. ENGINE EXECUTION ===",
+    `Engine: ${exec.engine_name || "—"}${exec.engine_version ? ` v${exec.engine_version}` : ""}`,
+    `Final score: ${exec.final_score ?? "—"}`,
+    `Verdict: ${exec.verdict || exec.verdict_level || "—"}`,
+    "",
+    "Modules:",
+  );
+  for (const m of exec.modules || []) {
+    lines.push(`  ${m.loaded ? "✅" : "❌"} ${m.module}`);
+  }
+  lines.push("", "Rules fired:");
+  if (!(exec.fired || []).length) {
+    lines.push("  —");
+  } else {
+    for (const r of exec.fired || []) {
+      const mark = r.polarity === "negative" ? "❌" : "✅";
+      lines.push(`  ${r.rule_id || "?"} ${mark} ${r.note || r.module || ""}${r.weight != null ? ` (${r.weight})` : ""}`);
+    }
+  }
+  if ((exec.ignored || []).length) {
+    lines.push("", "Rules ignored:");
+    for (const r of exec.ignored || []) {
+      lines.push(`  ${r.rule_id || "?"} — ${r.reason || "—"}`);
+    }
+  }
+  lines.push("");
+
+  lines.push("=== 4. RULE DECISION TABLE ===");
+  if (!(obs.rule_decisions || []).length) {
+    lines.push("—", "");
+  } else {
+    for (const d of obs.rule_decisions || []) {
+      lines.push(
+        `${d.rule_id || "?"} | ${d.status || "—"} | ${d.weight ?? 0} | ${d.reason || "—"}`,
+      );
+    }
+    lines.push("");
+  }
+
+  lines.push("=== 5. PLANET EVIDENCE ===");
+  lines.push(...formatEvidenceList("Positive", evidence.positive));
+  lines.push(...formatEvidenceList("Negative", evidence.negative));
+  if ((evidence.neutral || []).length) {
+    lines.push(...formatEvidenceList("Neutral", evidence.neutral));
+  }
+  lines.push("");
+
+  lines.push(
+    "=== 6. CONFLICT RESOLUTION ===",
+    `Conflict: ${conflict.conflict || conflict.final_result || "None"}`,
+    `Reason: ${conflict.reason || "—"}`,
+  );
+  for (const m of conflict.modules || []) {
+    lines.push(`  ${m.module}: ${m.polarity}`);
+  }
+  lines.push("");
+
+  lines.push("=== 7. SCORECARD ===");
+  if (!scoreEntries.length) {
+    lines.push("—", "");
+  } else {
+    for (const [k, v] of scoreEntries) {
+      lines.push(`${k}: ${v}`);
+    }
+    lines.push("");
+  }
+
+  lines.push("=== 8. NARRATOR INPUT (JSON) ===");
+  lines.push(
+    obs.narrator_input
+      ? JSON.stringify(obs.narrator_input, null, 2)
+      : "—",
+    "",
+    "=== 9. NARRATOR OUTPUT ===",
+    obs.narrator_output || row.answer_text || "—",
+    "",
+  );
+
+  lines.push("=== 10. HALLUCINATION CHECK ===");
+  const hall = obs.hallucination_summary;
+  if (hall) {
+    lines.push(
+      `Engine facts used: ${hall.engine_facts_used?.ok ? "OK" : "FAIL"} — ${hall.engine_facts_used?.detail || ""}`,
+      `Unused engine evidence: ${hall.unused_engine_evidence?.ok ? "OK" : "FAIL"}`,
+    );
+    for (const item of hall.unused_engine_evidence?.items || []) {
+      lines.push(`  • ${item}`);
+    }
+    lines.push(
+      `Extra LLM assumptions: ${hall.extra_llm_assumptions?.ok ? "OK" : "FAIL"}`,
+    );
+    for (const item of hall.extra_llm_assumptions?.items || []) {
+      lines.push(`  • ${item}`);
+    }
+  }
+  for (const h of obs.hallucination_checks || []) {
+    lines.push(
+      `${h.field}: engine=${h.engine} | narrator=${h.narrator} | ${h.ok ? "OK" : "HALLUCINATION"}`,
+    );
+  }
+  lines.push("");
+
+  lines.push(...formatPipelineSection("11. FINAL TRACE", obs.final_trace));
+
+  return lines.join("\n").trim() + "\n";
 }

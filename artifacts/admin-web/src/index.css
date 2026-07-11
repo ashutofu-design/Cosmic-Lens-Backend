@@ -1427,6 +1427,18 @@ code {
   margin-bottom: 20px;
 }
 
+.ask-detail-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.ask-detail-nav-row .ask-detail-back {
+  margin-bottom: 0;
+}
+
 .ask-detail-title-row {
   display: flex;
   align-items: flex-start;
@@ -1464,7 +1476,6 @@ code {
 .ask-detail-back {
   display: inline-flex;
   align-items: center;
-  margin-bottom: 12px;
   padding: 6px 14px;
   font-size: 0.85rem;
   border-radius: 8px;

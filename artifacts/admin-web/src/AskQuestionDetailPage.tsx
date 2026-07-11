@@ -1,6 +1,7 @@
 import type { AskQuestionItem } from "./api";
 import { formatDate } from "./api";
 import { AskObservabilityDebugger } from "./AskObservabilityDebugger";
+import { buildAskDetailCopyText } from "./askObservability";
 import { CopyTextButton } from "./CopyTextButton";
 import { QuestionLangBadge } from "./QuestionLangBadge";
 
@@ -12,12 +13,17 @@ export function AskQuestionDetailPage({
   row: AskQuestionItem;
   onBack: () => void;
 }) {
+  const copyAllText = buildAskDetailCopyText(row);
+
   return (
     <section className="section card ask-question-detail-page">
       <div className="ask-detail-header">
-        <button type="button" className="ask-detail-back" onClick={onBack}>
-          ← Back to Ask Q&A
-        </button>
+        <div className="ask-detail-nav-row">
+          <button type="button" className="ask-detail-back" onClick={onBack}>
+            ← Back to Ask Q&A
+          </button>
+          <CopyTextButton text={copyAllText} label="Copy All" copiedLabel="Copied!" />
+        </div>
         <div className="ask-detail-title-row">
           <h2 className="ask-detail-title">
             Developer debugger

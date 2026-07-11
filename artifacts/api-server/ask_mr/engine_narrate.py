@@ -192,21 +192,22 @@ def narrate_mr_engine_llm(
         _checks["narrator_input"] = narrator_json
         _checks["question"] = question or ""
         engine_result.checks = _checks
-        if os.environ.get("ASK_COMMITMENT_TEMPLATE_ONLY", "").strip().lower() in (
+        if os.environ.get("ASK_COMMITMENT_USE_LLM", "").strip().lower() in (
             "1",
             "true",
             "yes",
         ):
+            chart_text = commitment_narrator_payload(
+                engine_result,
+                wants_explain=wants_explain,
+                question=question or "",
+            )
+        else:
             return render_commitment_template_answer(
                 narrator_json,
                 question or "",
                 lang=eff_lang,
             )
-        chart_text = commitment_narrator_payload(
-            engine_result,
-            wants_explain=wants_explain,
-            question=question or "",
-        )
     else:
         chart_text = engine_result.to_narrator_payload()
     intent = narrator_intent_hint(

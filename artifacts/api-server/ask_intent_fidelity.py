@@ -575,6 +575,58 @@ def emotional_attachment_angle_label(angle: str | None) -> str:
     return _EMOTIONAL_ATTACHMENT_ANGLE_LABELS.get(key, "Emotional bonding / lagav")
 
 
+_FAMILY_APPROVAL_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("inter_caste", re.compile(r"(?ix)\b(inter[\s-]?caste|intercaste|jaati|caste)\b")),
+    ("inter_religion", re.compile(r"(?ix)\b(inter[\s-]?religion|interreligion|dharm\s+antar|religion\s+antar)\b")),
+    ("court_marriage", re.compile(r"(?ix)\b(court\s+marriage|court\s+shaadi)\b")),
+    ("family_involvement", re.compile(r"(?ix)\b(family\s+involve|ghar\s+walon\s+ka\s+role|kitna\s+involve|involvement)\b")),
+    ("societal_recognition", re.compile(r"(?ix)\b(societal|samaaj|society|social\s+recognition|recognition)\b")),
+    ("in_laws_approval", re.compile(r"(?ix)\b(saas|sasur|in[\s-]?laws?|inlaw)\b")),
+    ("family_pressure", re.compile(r"(?ix)\b(family\s+pressure|pressure|daban|force)\b")),
+    ("family_resistance", re.compile(r"(?ix)\b(resistance|oppose|virodh|mushkil\s+hogi|mana\s+karenge)\b")),
+    ("accept_partner", re.compile(r"(?ix)\b(pasand\s+ko\s+accept|partner\s+ko\s+accept|meri\s+choice|choice\s+accept|accept\s+karenge)\b")),
+    ("parents_approval", re.compile(r"(?ix)\b(parents?|maanenge|manenge|raazi|mata[\s-]?pita)\b")),
+    ("general_approval", re.compile(r"(?ix)\b(family\s+approval|approval|ghar\s+wal\w*|gharwal\w*|family\s+maan)\b")),
+]
+
+_FAMILY_APPROVAL_ANGLE_LABELS: dict[str, str] = {
+    "general_approval": "General family / ghar wale approval",
+    "parents_approval": "Parents approval / raazi hona",
+    "inter_caste": "Inter-caste marriage approval",
+    "inter_religion": "Inter-religion marriage approval",
+    "court_marriage": "Court marriage family acceptance",
+    "family_involvement": "Family involvement / ghar walon ka role",
+    "societal_recognition": "Societal / samaaj recognition",
+    "in_laws_approval": "Saas-sasur / in-laws approval",
+    "family_resistance": "Family resistance / opposition",
+    "family_pressure": "Family pressure / force",
+    "accept_partner": "Partner / pasand accept karna",
+}
+
+
+def infer_family_approval_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    if not re.search(
+        r"(?ix)\b(parents?|ghar\s*wal\w*|gharwal\w*|approval|inter[\s-]?caste|intercaste|"
+        r"inter[\s-]?religion|interreligion|maanenge|manenge|court\s+marriage|family|raazi|"
+        r"accept|saas|sasur|society|samaaj|resistance|pressure|involve|recognition|elders|"
+        r"maan\s+jayeg|pasand|choice|virodh|oppose)\b",
+        q,
+    ):
+        return None
+    for name, rx in _FAMILY_APPROVAL_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    return "general_approval"
+
+
+def family_approval_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _FAMILY_APPROVAL_ANGLE_LABELS.get(key, "Family approval / ghar wale")
+
+
 def infer_partner_commitment_angle(question: str) -> str | None:
     q = (question or "").strip()
     if not q:

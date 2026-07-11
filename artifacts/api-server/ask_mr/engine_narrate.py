@@ -60,6 +60,7 @@ def format_engine_rich_plain(
         infer_communication_angle,
         infer_compatibility_angle,
         infer_emotional_attachment_angle,
+        infer_family_approval_angle,
         infer_loyalty_angle,
         infer_partner_commitment_angle,
         infer_partner_nature_angle,
@@ -178,6 +179,17 @@ def format_engine_rich_plain(
 
             data = engine_result_to_emotional_attachment_json(result, question=q)
             big = render_emotional_attachment_template_answer(data, q, lang=lang)
+        except Exception:
+            big = str(getattr(result, "verdict", "") or "").strip()
+    elif arch == "family_approval" or infer_family_approval_angle(q):
+        try:
+            from ask_mr.family_approval_narrator import (
+                engine_result_to_family_approval_json,
+                render_family_approval_template_answer,
+            )
+
+            data = engine_result_to_family_approval_json(result, question=q)
+            big = render_family_approval_template_answer(data, q, lang=lang)
         except Exception:
             big = str(getattr(result, "verdict", "") or "").strip()
     else:
@@ -497,6 +509,25 @@ def narrate_mr_engine_llm(
             )
         else:
             return render_emotional_attachment_template_answer(narrator_json, question or "", lang=eff_lang)
+    elif arch == "family_approval":
+        from ask_mr.family_approval_narrator import (
+            engine_result_to_family_approval_json,
+            family_approval_engine_narrator_payload,
+            render_family_approval_template_answer,
+            validate_family_approval_narrator_output,
+        )
+
+        narrator_json = engine_result_to_family_approval_json(engine_result, question=question or "")
+        _checks = dict(engine_result.checks or {})
+        _checks["narrator_input"] = narrator_json
+        _checks["question"] = question or ""
+        engine_result.checks = _checks
+        if os.environ.get("ASK_FAMILY_APPROVAL_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+            chart_text = family_approval_engine_narrator_payload(
+                engine_result, wants_explain=wants_explain, question=question or ""
+            )
+        else:
+            return render_family_approval_template_answer(narrator_json, question or "", lang=eff_lang)
     else:
         chart_text = engine_result.to_narrator_payload()
     intent = narrator_intent_hint(
@@ -670,6 +701,18 @@ def narrate_mr_engine_llm(
                     from ask_mr.emotional_attachment_narrator import render_emotional_attachment_template_answer
 
                     return render_emotional_attachment_template_answer(
+                        narrator_json, question or "", lang=eff_lang
+                    )
+            if arch == "family_approval" and narrator_json:
+                ok, issues = validate_family_approval_narrator_output(polished or "", narrator_json)
+                if not ok:
+                    print(
+                        f"[engine_narrate] family_approval validation failed {issues} — using locked template",
+                        flush=True,
+                    )
+                    from ask_mr.family_approval_narrator import render_family_approval_template_answer
+
+                    return render_family_approval_template_answer(
                         narrator_json, question or "", lang=eff_lang
                     )
             return polished or None

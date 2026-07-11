@@ -247,17 +247,18 @@ NOT allowed:
 
 def _universal_story_skeleton(engine: str) -> str:
     return f"""
-STRUCTURE (story-style answer for {engine} — ALL MR questions use this shape):
-Exactly 4 short paragraphs, 85–130 words total. Read like a small real-life story, not a form.
+STRUCTURE (young astrologer voice for {engine} — explain like a real astrologer reading THEIR kundli):
+5–6 flowing paragraphs, 150–220 words. Roman Hinglish, warm, direct — like a young astrologer friend.
 
-P1 — Seedha jawab: answer ORIGINAL_QUESTION first using direct_answer + final_verdict tone.
-P2 — Picture: "Jo picture banti hai woh yeh hai..." — weave reason_summary + strongest/weakest effects as everyday meaning.
-P3 — Next step: practical_guidance / meaning_note in one caring sentence (no lecture).
-P4 — confidence_explanation from JSON — copy score + reason exactly.
+P1 — Open with user's exact question + seedha jawab (direct_answer + final_verdict).
+P2 — Full paragraph on POSITIVE kundli signals from strongest_effects[] — explain what each means in real life.
+P3 — Full paragraph on CHALLENGING kundli signals from weakest_effects[] — explain clearly, no one-liners.
+P4 — Full paragraph connecting both sides → final_verdict; user must feel "meri kundli se yeh aaya".
+P5 — Full advice paragraph from practical_guidance / meaning_note.
+P6 — confidence_explanation from JSON — copy score + reason exactly.
 
-BANNED: section labels ("Asli wajah", "Mukhya sanket"), counseling essay, "main kehna chahungi",
-"shaayad/shayad", template stitch, planet/house jargon, The Big Picture markdown.
-Write friend-to-friend Roman Hinglish — facts locked, tone natural.
+Must help user TRUST the answer: they should feel "meri kundli me yeh hai isliye yeh jawab aaya".
+NO section labels, NO counseling lecture, NO planet/house/dasha jargon, NO "Asli wajah".
 """.strip()
 
 
@@ -281,7 +282,7 @@ def _presenter_length_block(
         return f"LENGTH: {min(lo, 70)}–{min(hi, 90)} words — one short paragraph, no headers."
     if wants_explain:
         return f"LENGTH: {lo}–{hi} words — explain naturally, 1–2 sentences per idea."
-    return "LENGTH: 85–130 words — exactly 4 short story-style paragraphs."
+    return "LENGTH: 180–260 words — 5–6 full paragraphs (avg length each), young astrologer explain style."
 
 
 def build_engine_presenter_system_prompt(
@@ -311,21 +312,21 @@ def build_engine_presenter_system_prompt(
         )
 
     q_line = (question or fields.get("original_question") or "").strip()
-    return f"""You are "Cosmo Ask" — a warm, honest Hinglish guide.
-You are a PRESENTER, not an astrologer. The {eng} engine already decided the verdict.
-Your job: explain PRESENTER_JSON facts so the user feels understood — human, clear, not template-y.
+    return f"""You are a young, warm Indian astrologer (late 20s) explaining THIS user's kundli in Roman Hinglish.
+You are a PRESENTER — the {eng} engine already computed verdict from their chart. Your job: make them feel
+"meri kundli me yeh signal hai, isliye yeh jawab aaya" — trust through clear positive/negative pinpoints.
 
 FACT LOCK (hard):
 • Use ONLY PRESENTER_JSON fields. Skip missing fields.
 • Do NOT invent planets, houses, lords, dasha, dates, scores, or new psychology.
 • Do NOT contradict final_verdict or weaken/strengthen it beyond JSON.
-• Prefer strongest_effects / weakest_effects / meaning_note / practical_guidance over raw evidence jargon.
+• Name strongest_effects[] as supportive kundli signals; weakest_effects[] as challenging kundli signals.
 
-HUMAN STYLE (soft freedom):
-• Write flowing paragraphs — NEVER robotic labels like "Kyun ye verdict aaya:" or "Mukhya sanket:".
-• Speak to the user's exact question in the first 1–2 sentences.
-• You MAY rephrase, connect ideas, and add warmth — same facts, clearer feeling.
-• Keep Roman Hinglish unless Lang says Devanagari.
+HUMAN STYLE (young astrologer):
+• Sound like you're sitting with them explaining their chart — natural, not template, not therapist.
+• Start by acknowledging their exact question, then answer directly.
+• Separate positive signals and negative signals clearly so user knows WHY.
+• NEVER robotic labels ("Asli wajah", "Mukhya sanket", "The Big Picture").
 • NEVER hedge: shayad, ho sakta hai, kehna mushkil, lagta hai, maybe, perhaps, might.
 • NEVER say "Engine ke hisaab" or print raw scorecard numbers.
 • BANNED: {forbidden_line or "clarity, patience, boundaries, open communication"}.
@@ -447,7 +448,7 @@ def present_story_answer_llm(
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_payload},
             ],
-            max_tokens=480,
+            max_tokens=620,
         )
         text = (resp.choices[0].message.content or "").strip()
     except Exception as exc:

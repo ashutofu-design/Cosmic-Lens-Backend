@@ -234,7 +234,7 @@ _BAD_SECRET_LLM_RX = re.compile(
     r"matlab chances|matlab aise sanket|bina soche samjhe|poori baatein)"
 )
 
-SECRET_ANSWER_MAX_WORDS = 135
+SECRET_ANSWER_MAX_WORDS = 280
 
 
 def looks_like_secret_template_stitch(text: str) -> bool:
@@ -265,29 +265,15 @@ def secret_llm_output_acceptable(
 
 
 def render_secret_human_answer(data: dict[str, Any], question: str = "", *, lang: str = "hn") -> str:
-    """Plain Hinglish paragraphs — conversational, same locked facts."""
-    verdict = str(data.get("final_verdict") or "Possible")
-    level = str(data.get("secret_level") or data.get("secrecy_level") or verdict).strip().lower()
-    angle = str(data.get("answer_focus") or data.get("secret_angle") or "general_secrecy")
-    strongest = list(data.get("strongest") or [])
-    weakest = list(data.get("weakest") or [])
-    strongest_fx = list(data.get("strongest_effects") or []) or effects_from_evidence(strongest, limit=2)
-    weakest_fx = list(data.get("weakest_effects") or []) or effects_from_evidence(weakest, limit=2)
-    score = int(data.get("confidence") or 0)
-    conf_label = str(data.get("confidence_label") or "Medium")
-    scorecard = data.get("scorecard") if isinstance(data.get("scorecard"), dict) else {}
-    q = (question or str(data.get("original_question") or "")).strip()
+    """Young-astrologer answer with kundli pinpoints — delegates to universal story renderer."""
+    from ask_mr.story_answer import render_story_human_answer
 
-    confidence = str(data.get("confidence_explanation") or "").strip() or _build_confidence_explanation(
-        score, conf_label, strongest, weakest, scorecard, topic="secrecy"
+    return render_story_human_answer(
+        data,
+        question,
+        engine="secret_relationship",
+        lang=lang,
     )
-    parts = [
-        _secret_direct_answer(angle, level, verdict, q),
-        _secret_why_human(strongest, weakest, strongest_fx, weakest_fx, verdict, level),
-        _secret_advice_human(angle, level),
-        confidence,
-    ]
-    return "\n\n".join(re.sub(r"\s{2,}", " ", p).strip() for p in parts if p)
 
 
 def render_secret_labeled_answer(data: dict[str, Any], question: str = "", *, lang: str = "hn") -> str:

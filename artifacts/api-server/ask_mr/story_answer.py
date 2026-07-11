@@ -6,7 +6,7 @@ from typing import Any
 
 from ask_mr.v2.registry import FROZEN_ENGINE_IDS
 
-STORY_ANSWER_MAX_WORDS = 140
+STORY_ANSWER_MAX_WORDS = 280
 
 _BAD_STORY_LLM_RX = re.compile(
     r"(?i)(asli wajah|support karne wale|main aapko|kehna chahungi|kehna chahti|"
@@ -48,19 +48,129 @@ def story_llm_output_acceptable(
     return ok or presenter_has_only_soft_issues(issues)
 
 
-def _humanize_opening(direct_answer: str, verdict: str, question: str) -> str:
+def _humanize_effects(raw_list: list[str], *, engine: str, limit: int = 3) -> list[str]:
+    eng = (engine or "").strip().lower()
+    if eng == "secret_relationship":
+        from ask_mr.secret_templates import effects_from_evidence
+
+        return effects_from_evidence(raw_list, limit=limit)
+    out: list[str] = []
+    for raw in raw_list:
+        bit = str(raw or "").strip().rstrip(".")
+        if bit and bit not in out:
+            out.append(bit)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _young_astro_opening(direct_answer: str, verdict: str, question: str) -> str:
     da = (direct_answer or "").strip()
+    q = (question or "").strip()
     if not da:
-        return f"Chart ke signals ke hisaab se verdict {verdict} hai."
-    da = re.sub(r"\s*—\s*", ". ", da).strip()
-    da = re.sub(
-        r"(?i)\blikely indicators active hain\b",
-        "kaafi active signals dikh rahe hain",
-        da,
+        core = f"verdict {verdict} aa raha hai"
+    else:
+        da = re.sub(r"\s*—\s*", ". ", da).strip()
+        da = re.sub(
+            r"(?i)\blikely indicators active hain\b",
+            "kaafi active signals dikh rahe hain",
+            da,
+        )
+        core = da[0].lower() + da[1:] if da else ""
+    if q:
+        return (
+            f"Dekho, tumne jo sawal pucha — \"{q}\" — maine tumhari kundli check ki. "
+            f"Seedhi baat: {core}"
+        )
+    return f"Dekho, maine tumhari kundli check ki. Seedhi baat: {core}"
+
+
+def _kundli_positive_paragraph(effects: list[str]) -> str:
+    cleaned = [e.rstrip(".") for e in effects if e and "limited" not in e.lower()]
+    if not cleaned:
+        return (
+            "Tumhari kundli me supportive ya transparency wale signals abhi kam strong dikh rahe hain. "
+            "Iska matlab chart zyada tar challenging direction me lean kar raha hai, "
+            "aur positive side abhi utni weight nahi le pa rahi — ye point main clearly isliye bol raha hoon "
+            "taaki tum samjho ki picture ek taraf jhuki hui hai."
+        )
+    body = (
+        f"Tumhari kundli me jo supportive side dikha, usme sabse important point yeh hai: {cleaned[0]}. "
     )
-    if not re.match(r"(?i)^(seedhi|haan|nahi|abhi|chart)", da):
-        return f"Seedhi baat — {da[0].lower()}{da[1:]}"
-    return da
+    if len(cleaned) > 1:
+        body += f"Iske alawa ek aur supportive signal bhi active hai — {cleaned[1]}. "
+    body += (
+        "Ye positive signals main isliye explain kar raha hoon taaki tumhe pata chale "
+        "chart me sirf doubt wali side nahi, supportive readings bhi hui hain."
+    )
+    return body
+
+
+def _kundli_negative_paragraph(effects: list[str]) -> str:
+    cleaned = [e.rstrip(".") for e in effects if e]
+    if not cleaned:
+        return (
+            "Challenging side me abhi koi dominant red flag clearly highlight nahi ho raha, "
+            "lekin overall picture me negative signals ko bhi main read karta hoon taaki answer balanced rahe."
+        )
+    body = (
+        f"Ab challenging side pe — yahan sabse zyada weight is signal ne liya: {cleaned[0]}. "
+    )
+    if len(cleaned) > 1:
+        body += (
+            f"Iske saath ek aur challenging reading bhi active hai: {cleaned[1]}. "
+        )
+    body += (
+        "Ye wahi points hain jinke wajah se doubt, tension ya secrecy feel hoti hai — "
+        "main inhe alag se isliye batata hoon taaki tum samjho answer kahan se aaya."
+    )
+    return body
+
+
+def _verdict_bridge(verdict: str, data: dict[str, Any]) -> str:
+    meaning = str(data.get("meaning_note") or "").strip()
+    body = (
+        f"Jab main dono sides ko saath me dekhta hoon, overall verdict {verdict} banta hai. "
+        f"Yeh maine randomly nahi likha — tumhari kundli ke fired signals ko mila ke yeh conclusion aaya hai."
+    )
+    if meaning:
+        body += f" {meaning}"
+    return body
+
+
+def _young_astro_advice(data: dict[str, Any]) -> str:
+    practical = str(data.get("practical_guidance") or "").strip()
+    transparency = str(data.get("transparency_outlook") or "").strip()
+    meaning = str(data.get("meaning_note") or "").strip()
+    extra = str(data.get("scorecard_user_note") or data.get("conditions_line") or "").strip()
+
+    bits: list[str] = []
+    if practical:
+        bits.append(practical.rstrip("."))
+    elif transparency:
+        bits.append(transparency.rstrip("."))
+    if extra and extra not in bits:
+        bits.append(extra.rstrip("."))
+
+    if bits:
+        joined = ". ".join(bits)
+        return (
+            f"Meri advice simple hai: {joined}. "
+            f"Jaldi me reaction ya accusation se bachna — pehle pattern dekho, facts note karo, phir baat karna."
+        )
+    if meaning:
+        return (
+            f"Meri advice: {meaning.rstrip('.')}. "
+            f"Calm approach rakho — chart ne direction di hai, ab tumhe practically handle karna hai."
+        )
+    return (
+        "Meri advice: pattern calmly observe karo, facts jama karo, phir decision lena. "
+        "Chart direction de raha hai — tumhe emotionally react karne se pehle practically verify karna helpful rahega."
+    )
+
+
+def _humanize_opening(direct_answer: str, verdict: str, question: str) -> str:
+    return _young_astro_opening(direct_answer, verdict, question)
 
 
 def _human_why_from_signals(data: dict[str, Any]) -> str:
@@ -136,21 +246,35 @@ def render_story_human_answer(
     engine: str = "",
     lang: str = "hn",
 ) -> str:
-    """4-paragraph story answer from locked narrator JSON."""
+    """Young-astrologer story answer with kundli positive/negative pinpoints."""
     eng = (engine or str(data.get("question_type") or "")).strip().lower()
-    if eng == "secret_relationship":
-        from ask_mr.secret_narrator import render_secret_human_answer
-
-        return render_secret_human_answer(data, question, lang=lang)
-
     verdict = str(data.get("final_verdict") or data.get("verdict") or "Mixed")
     q = (question or str(data.get("original_question") or "")).strip()
     direct = str(data.get("direct_answer") or "").strip()
 
+    strongest_raw = list(data.get("strongest_effects") or data.get("strongest") or [])
+    weakest_raw = list(data.get("weakest_effects") or data.get("weakest") or [])
+    pos_fx = _humanize_effects(strongest_raw, engine=eng, limit=2)
+    neg_fx = _humanize_effects(weakest_raw, engine=eng, limit=2)
+
+    if eng == "secret_relationship":
+        from ask_mr.secret_narrator import _secret_direct_answer
+
+        level = str(data.get("secret_level") or data.get("secrecy_level") or verdict).strip().lower()
+        angle = str(data.get("answer_focus") or data.get("secret_angle") or "general_secrecy")
+        opening = (
+            f"Dekho, tumne jo sawal pucha — \"{q}\" — maine tumhari kundli check ki. "
+            f"{_secret_direct_answer(angle, level, verdict, q)}"
+        )
+    else:
+        opening = _young_astro_opening(direct, verdict, q)
+
     parts = [
-        _humanize_opening(direct, verdict, q),
-        _story_picture_paragraph(data),
-        _story_advice_paragraph(data),
+        opening,
+        _kundli_positive_paragraph(pos_fx),
+        _kundli_negative_paragraph(neg_fx),
+        _verdict_bridge(verdict, data),
+        _young_astro_advice(data),
         _story_confidence_line(data),
     ]
     return "\n\n".join(re.sub(r"\s{2,}", " ", p).strip() for p in parts if p)

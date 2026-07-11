@@ -1137,6 +1137,94 @@ def relationship_decisions_angle_label(angle: str | None) -> str:
     return _RELATIONSHIP_DECISIONS_ANGLE_LABELS.get(key, "Relationship decision")
 
 
+_RELATIONSHIP_VERIFICATION_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    (
+        "proof_gap",
+        re.compile(r"(?ix)\b(proof|saboot|sabut|evidence|proof\s+kya)\b"),
+    ),
+    (
+        "words_actions",
+        re.compile(
+            r"(?ix)\b("
+            r"words.{0,25}actions|bolne.{0,25}karne|actions\s+align|actions\s+match|"
+            r"baat\s+par\s+khada|boli\s+par|kahta.*karta"
+            r")\b"
+        ),
+    ),
+    (
+        "promise_reality",
+        re.compile(r"(?ix)\b(promise|wada|wade|commitment.{0,20}real|reality.{0,15}gap|farq)\b"),
+    ),
+    (
+        "genuine_intent",
+        re.compile(r"(?ix)\b(genuine|sachcha|asli|real\s+intent|act\s+kar)\b"),
+    ),
+    (
+        "cross_check",
+        re.compile(r"(?ix)\b(cross[\s-]*check|verify\s+kar|kaise\s+verify|yakeen\s+kaise|double\s+check)\b"),
+    ),
+    (
+        "general_verification",
+        re.compile(r"(?ix)\b(verification|relationship\s+verification|verify\s+relationship)\b"),
+    ),
+    (
+        "behaviour_consistency",
+        re.compile(r"(?ix)\b(behaviou?r|consistent|inconsistent|actions\s+consistent)\b"),
+    ),
+    (
+        "reliability_signal",
+        re.compile(r"(?ix)\b(reliable|unreliable|dependable|bharosa\s+layak)\b"),
+    ),
+]
+
+_RELATIONSHIP_VERIFICATION_ANGLE_LABELS: dict[str, str] = {
+    "general_verification": "General relationship verification",
+    "words_actions": "Words vs actions alignment",
+    "proof_gap": "Proof / evidence gap",
+    "genuine_intent": "Genuine intent check",
+    "behaviour_consistency": "Behaviour consistency",
+    "promise_reality": "Promise vs reality",
+    "cross_check": "Cross-check / verify how",
+    "reliability_signal": "Reliability / dependability signal",
+}
+
+
+def infer_relationship_verification_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    if re.search(r"(?ix)\b(cheat|dhokha|dhoka|beimaan|affair|chakkar)\b", q) and not re.search(
+        r"(?ix)\b(verify|proof|saboot|consistent|reliable|actions|words|promise|genuine|cross|verification|behaviour|align)",
+        q,
+    ):
+        return None
+    if _TIMING_TRIGGER_RX.search(q) and not re.search(
+        r"(?ix)\b(verify|proof|consistent|reliable|actions|words|promise|genuine|verification|behaviour|saboot)",
+        q,
+    ):
+        return None
+    if not re.search(
+        r"(?ix)\b("
+        r"verify|proof|saboot|consistent|reliable|actions|words|promise|genuine|"
+        r"verification|behaviour|align|cross|yakeen|wada|wade|sachcha|inconsistent|unreliable|"
+        r"baat\s+par|evidence|dependable|farq|real\s+intent|bolne|karne|reality|gap|nibhata|same"
+        r")\b",
+        q,
+    ):
+        return None
+    for name, rx in _RELATIONSHIP_VERIFICATION_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    if re.search(r"(?ix)\b(rishta|relationship|partner)\b", q):
+        return "general_verification"
+    return None
+
+
+def relationship_verification_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _RELATIONSHIP_VERIFICATION_ANGLE_LABELS.get(key, "Relationship verification")
+
+
 def infer_partner_commitment_angle(question: str) -> str | None:
     q = (question or "").strip()
     if not q:
@@ -1258,6 +1346,9 @@ _ARCHETYPE_ANCHOR_RX: dict[str, re.Pattern[str]] = {
     ),
     "relationship_decisions": re.compile(
         r"(?ix)\b(stay\s+or\s+leave|should\s+i|mere\s+liye\s+sahi|rehna\s+chahiye|chhod\s+du|continue\s+karu)\b"
+    ),
+    "relationship_verification": re.compile(
+        r"(?ix)\b(verify|verification|proof|saboot|consistent|reliable|actions\s+align|words\s+and\s+actions)\b"
     ),
     "toxicity": re.compile(
         r"(?ix)\b(toxic|abuse|abusive|manipulat|controlling|red\s*flag|unhealthy)\b"
@@ -1740,6 +1831,7 @@ def archetype_allowed_for_question(question: str, archetype: str | None) -> bool
                 "communication",
                 "relationship_future",
                 "relationship_decisions",
+                "relationship_verification",
                 "toxicity",
                 "relationship_remedies",
                 "emotional_attachment",

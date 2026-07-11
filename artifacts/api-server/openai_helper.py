@@ -9436,6 +9436,64 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
             llm_intent=_llm_intent_admin,
         )
 
+    # ── Relationship verification engine — deterministic template narrator ──
+    if (
+        _is_mr_static
+        and _mr_engine_result is not None
+        and str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower() == "relationship_verification"
+        and os.environ.get("ASK_RELATIONSHIP_VERIFICATION_USE_LLM", "").strip().lower()
+        not in ("1", "true", "yes")
+    ):
+        from ask_mr.relationship_verification_narrator import (
+            engine_result_to_relationship_verification_json,
+            render_relationship_verification_template_answer,
+        )
+
+        _rver_dna = None
+        if isinstance(_llm_intent_admin, dict):
+            _rver_dna = _llm_intent_admin.get("question_dna")
+        _rver_json = engine_result_to_relationship_verification_json(
+            _mr_engine_result,
+            question=question or "",
+            question_dna=_rver_dna if isinstance(_rver_dna, dict) else None,
+        )
+        _rver_checks = dict(_mr_engine_result.checks or {})
+        _rver_checks["narrator_input"] = _rver_json
+        _rver_checks["question"] = question or ""
+        _mr_engine_result.checks = _rver_checks
+        _rver_text = render_relationship_verification_template_answer(_rver_json, question or "", lang=eff_lang)
+        _out_rver = {
+            "text": _rver_text,
+            "topic": "marriage",
+            "question_type": qtype,
+            "confidence": max(0.15, min(1.0, float(_rver_json.get("confidence") or 48) / 100.0)),
+            "source": "relationship_verification_engine_template",
+            "engine_tag": "ans-engine",
+            "follow_ups": [],
+        }
+        _pt_checks_rver = {
+            "slice_type": "mr_engine_v1",
+            "resolved_route": _resolved_route,
+            "is_mr_static": True,
+            "archetype": "relationship_verification",
+            "skip_llm": True,
+            "narrator_input": _rver_json,
+            "dasha_included": False,
+        }
+        return _attach_admin(
+            _out_rver,
+            question=question or "",
+            question_type=qtype,
+            is_timing=bool(is_timing),
+            checks=_pt_checks_rver,
+            chart_text=chart_text,
+            slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+            llm_called=False,
+            skip_reason="relationship_verification_engine_template",
+            intent_source=_intent_source,
+            llm_intent=_llm_intent_admin,
+        )
+
     # ── Relationship decisions engine — deterministic template narrator ──
     if (
         _is_mr_static

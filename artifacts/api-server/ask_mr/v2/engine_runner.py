@@ -131,6 +131,12 @@ def _default_checks(
             "relationship_decisions_level": level,
             "rdec_level": level,
         })
+    elif eid == "relationship_verification":
+        checks.update({
+            "verification_level": level,
+            "relationship_verification_level": level,
+            "rver_level": level,
+        })
     elif eid == "communication":
         checks["communication_level"] = level
     elif eid == "emotional_attachment":

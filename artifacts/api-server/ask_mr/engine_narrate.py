@@ -935,12 +935,13 @@ def narrate_mr_engine_llm(
         word_budget = min(word_budget, 70)
     from ask_mr.engine_presenter import (
         build_engine_presenter_system_prompt,
-        human_narrator_enabled,
         use_engine_presenter_mode,
         validate_presenter_output,
     )
 
     use_presenter = narrator_json is not None and use_engine_presenter_mode(arch)
+    if use_presenter:
+        wants_explain = False
     if use_presenter:
         system_prompt = build_engine_presenter_system_prompt(
             engine=arch,

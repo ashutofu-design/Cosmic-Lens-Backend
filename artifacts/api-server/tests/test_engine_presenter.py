@@ -141,6 +141,21 @@ class EnginePresenterTests(unittest.TestCase):
         ok, issues = validate_presenter_output(human, data, "secret_relationship")
         self.assertTrue(ok, msg=f"issues={issues}")
 
+    def test_presenter_rejects_cosmo_markdown(self):
+        data = {
+            "final_verdict": "Likely",
+            "confidence": 45,
+            "confidence_label": "Medium",
+        }
+        bad = (
+            "**The Big Picture**\nBhai chance hai.\n\n"
+            "**Kyun aisa lagta hai (deep breakdown)**\nLong story.\n\n"
+            "Confidence Medium (45%) hai kyunki test."
+        )
+        ok, issues = validate_presenter_output(bad, data, "secret_relationship")
+        self.assertFalse(ok)
+        self.assertTrue(any("cosmo_markdown" in i for i in issues))
+
 
 if __name__ == "__main__":
     unittest.main()

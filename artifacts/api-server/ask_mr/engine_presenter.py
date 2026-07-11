@@ -337,6 +337,12 @@ def validate_presenter_output(
     if jargon:
         issues.append(f"astro_jargon:{','.join(sorted(jargon)[:5])}")
 
+    if re.search(
+        r"(?i)\b(the\s+big\s+picture|deep\s+breakdown|ab\s+kya\s+karein|relationship\s+counseling)\b",
+        t,
+    ):
+        issues.append("cosmo_markdown_banned")
+
     eng = (engine or "").strip().lower()
     engine_validators: dict[str, Any] = {}
     if eng == "commitment":

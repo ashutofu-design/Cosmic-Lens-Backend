@@ -3,6 +3,104 @@ from __future__ import annotations
 
 from typing import Any
 
+_HUMAN_PRESENTER_ARCHETYPES = frozenset({
+    "commitment",
+    "patchup",
+    "secret_relationship",
+})
+
+
+def try_human_presenter_mr_answer(
+    engine_result: Any,
+    *,
+    question: str,
+    lang: str = "hn",
+    llm_intent: dict | None = None,
+) -> dict | None:
+    """Presenter-only LLM answer for commitment / patchup / secret — never Cosmo markdown."""
+    from ask_mr.engine_presenter import human_narrator_enabled
+
+    if not human_narrator_enabled() or engine_result is None:
+        return None
+    arch = str(getattr(engine_result, "archetype", "") or "").strip().lower()
+    if arch not in _HUMAN_PRESENTER_ARCHETYPES:
+        return None
+    q = (question or "").strip()
+    if not q:
+        return None
+    try:
+        from ask_mr.engine_narrate import narrate_mr_engine_llm
+
+        narrated = narrate_mr_engine_llm(
+            q,
+            engine_result,
+            lang=lang,
+            llm_intent=llm_intent,
+            wants_explain=False,
+        )
+    except Exception as exc:
+        print(f"[static_answer] human presenter failed: {exc}", flush=True)
+        return None
+    if not (narrated and str(narrated).strip()):
+        return None
+
+    checks = dict(getattr(engine_result, "checks", None) or {})
+    narrator_json = checks.get("narrator_input")
+    conf = 0.5
+    if isinstance(narrator_json, dict):
+        try:
+            conf = max(0.15, min(1.0, float(narrator_json.get("confidence") or 48) / 100.0))
+        except (TypeError, ValueError):
+            pass
+    return {
+        "text": str(narrated).strip(),
+        "topic": "marriage",
+        "confidence": conf,
+        "source": f"{arch}_engine_presenter",
+        "engine_tag": "ans-engine",
+        "follow_ups": [],
+        "llm_called": True,
+        "_presenter_archetype": arch,
+        "_narrator_json": narrator_json,
+    }
+
+
+def _locked_template_fallback(
+    engine_result: Any,
+    question: str,
+    *,
+    lang: str = "hn",
+) -> str | None:
+    arch = str(getattr(engine_result, "archetype", "") or "").strip().lower()
+    q = (question or "").strip()
+    try:
+        if arch == "commitment":
+            from ask_mr.commitment_narrator import (
+                engine_result_to_commitment_json,
+                render_commitment_template_answer,
+            )
+
+            data = engine_result_to_commitment_json(engine_result, question=q)
+            return render_commitment_template_answer(data, q, lang=lang)
+        if arch == "patchup":
+            from ask_mr.patchup_narrator import (
+                engine_result_to_patchup_json,
+                render_patchup_template_answer,
+            )
+
+            data = engine_result_to_patchup_json(engine_result, question=q)
+            return render_patchup_template_answer(data, q, lang=lang)
+        if arch == "secret_relationship":
+            from ask_mr.secret_narrator import (
+                engine_result_to_secret_json,
+                render_secret_template_answer,
+            )
+
+            data = engine_result_to_secret_json(engine_result, question=q)
+            return render_secret_template_answer(data, q, lang=lang)
+    except Exception as exc:
+        print(f"[static_answer] locked template fallback failed: {exc}", flush=True)
+    return None
 
 def _plain_mr_fallback(
     question: str,
@@ -57,6 +155,17 @@ def _text_from_engine_result(
             )
             if narrated:
                 return narrated, True
+
+        try:
+            from ask_mr.engine_presenter import human_narrator_enabled
+
+            arch = str(getattr(engine_result, "archetype", "") or "").strip().lower()
+            if human_narrator_enabled() and arch in _HUMAN_PRESENTER_ARCHETYPES:
+                locked = _locked_template_fallback(engine_result, q, lang=lang)
+                if locked:
+                    return locked, False
+        except Exception:
+            pass
 
         plain = _plain_mr_fallback(q, engine_result, lang=lang, llm_intent=llm_intent)
         return plain, False

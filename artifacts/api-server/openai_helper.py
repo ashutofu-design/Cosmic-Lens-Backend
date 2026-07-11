@@ -8125,6 +8125,28 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
                                 _mr_engine_result
                             )
                             _mr_engine_result.checks = _ni_checks
+                        elif _mr_engine_result.archetype == "secret_relationship":
+                            from ask_mr.secret_narrator import (
+                                engine_result_to_secret_json,
+                                secret_narrator_payload,
+                            )
+
+                            _sec_dna = None
+                            if isinstance(_llm_intent_admin, dict):
+                                _sec_dna = _llm_intent_admin.get("question_dna")
+                            chart_text = secret_narrator_payload(
+                                _mr_engine_result,
+                                wants_explain=False,
+                                question=question or "",
+                                question_dna=_sec_dna if isinstance(_sec_dna, dict) else None,
+                            )
+                            _ni_checks = dict(_mr_engine_result.checks or {})
+                            _ni_checks["narrator_input"] = engine_result_to_secret_json(
+                                _mr_engine_result,
+                                question=question or "",
+                                question_dna=_sec_dna if isinstance(_sec_dna, dict) else None,
+                            )
+                            _mr_engine_result.checks = _ni_checks
                         else:
                             chart_text = _mr_engine_result.to_narrator_payload()
                         if _mr_engine_result.archetype == "open_chart_qa":
@@ -9084,6 +9106,43 @@ def raw_passthrough_ask(question: str, kundli: Any, lang: str = "en",
 
     # ── Commitment engine — deterministic template narrator (production) ──
     from ask_mr.engine_presenter import human_narrator_enabled
+
+    if _is_mr_static and _mr_engine_result is not None and human_narrator_enabled():
+        from ask_mr.static_answer import try_human_presenter_mr_answer
+
+        _human_presenter = try_human_presenter_mr_answer(
+            _mr_engine_result,
+            question=question or "",
+            lang=eff_lang,
+            llm_intent=_llm_intent_admin if isinstance(_llm_intent_admin, dict) else None,
+        )
+        if _human_presenter:
+            _hp_arch = str(getattr(_mr_engine_result, "archetype", "") or "").strip().lower()
+            _hp_json = _human_presenter.pop("_narrator_json", None)
+            _human_presenter.pop("_presenter_archetype", None)
+            _pt_checks_hp = {
+                "slice_type": "mr_engine_v1",
+                "resolved_route": _resolved_route,
+                "is_mr_static": True,
+                "archetype": _hp_arch,
+                "skip_llm": False,
+                "presenter_mode": True,
+                "narrator_input": _hp_json,
+                "dasha_included": False,
+            }
+            return _attach_admin(
+                _human_presenter,
+                question=question or "",
+                question_type=qtype,
+                is_timing=bool(is_timing),
+                checks=_pt_checks_hp,
+                chart_text=chart_text,
+                slice_meta=dcr_love_meta if isinstance(dcr_love_meta, dict) else {},
+                llm_called=True,
+                skip_reason=f"{_hp_arch}_engine_presenter",
+                intent_source=_intent_source,
+                llm_intent=_llm_intent_admin,
+            )
 
     if (
         _is_mr_static

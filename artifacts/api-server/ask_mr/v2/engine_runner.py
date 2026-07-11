@@ -77,7 +77,13 @@ def _default_checks(
     elif eid == "secret_relationship":
         checks.update({
             "secrecy_level": level,
+            "secret_level": level,
             "third_person_risk": bool(getattr(sig, "third_person_risk", False)),
+        })
+    elif eid == "partner_nature":
+        checks.update({
+            "nature_level": level,
+            "partner_nature_level": level,
         })
     elif eid == "family_approval":
         checks["family_approval_level"] = level

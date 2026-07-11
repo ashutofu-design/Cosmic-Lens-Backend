@@ -60,7 +60,9 @@ def format_engine_rich_plain(
         infer_compatibility_angle,
         infer_loyalty_angle,
         infer_partner_commitment_angle,
+        infer_partner_nature_angle,
         infer_reconciliation_angle,
+        infer_secret_angle,
     )
     from ask_mr.commitment_reply import (
         format_compatibility_user_reply,
@@ -132,6 +134,28 @@ def format_engine_rich_plain(
             from ask_mr.commitment_reply import format_compatibility_user_reply
 
             big = format_compatibility_user_reply(q, result)
+    elif arch == "secret_relationship" or infer_secret_angle(q):
+        try:
+            from ask_mr.secret_narrator import (
+                engine_result_to_secret_json,
+                render_secret_template_answer,
+            )
+
+            data = engine_result_to_secret_json(result, question=q)
+            big = render_secret_template_answer(data, q, lang=lang)
+        except Exception:
+            big = str(getattr(result, "verdict", "") or "").strip()
+    elif arch == "partner_nature" or infer_partner_nature_angle(q):
+        try:
+            from ask_mr.partner_nature_narrator import (
+                engine_result_to_partner_nature_json,
+                render_partner_nature_template_answer,
+            )
+
+            data = engine_result_to_partner_nature_json(result, question=q)
+            big = render_partner_nature_template_answer(data, q, lang=lang)
+        except Exception:
+            big = str(getattr(result, "verdict", "") or "").strip()
     else:
         big = str(getattr(result, "verdict", "") or "").strip()
         big = re.sub(r"^[A-Za-z /]+:\s*", "", big)
@@ -375,6 +399,42 @@ def narrate_mr_engine_llm(
                 question or "",
                 lang=eff_lang,
             )
+    elif arch == "secret_relationship":
+        from ask_mr.secret_narrator import (
+            engine_result_to_secret_json,
+            render_secret_template_answer,
+            secret_narrator_payload,
+            validate_secret_narrator_output,
+        )
+
+        narrator_json = engine_result_to_secret_json(engine_result, question=question or "")
+        _checks = dict(engine_result.checks or {})
+        _checks["narrator_input"] = narrator_json
+        _checks["question"] = question or ""
+        engine_result.checks = _checks
+        if os.environ.get("ASK_SECRET_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+            chart_text = secret_narrator_payload(engine_result, wants_explain=wants_explain, question=question or "")
+        else:
+            return render_secret_template_answer(narrator_json, question or "", lang=eff_lang)
+    elif arch == "partner_nature":
+        from ask_mr.partner_nature_narrator import (
+            engine_result_to_partner_nature_json,
+            partner_nature_engine_narrator_payload,
+            render_partner_nature_template_answer,
+            validate_partner_nature_narrator_output,
+        )
+
+        narrator_json = engine_result_to_partner_nature_json(engine_result, question=question or "")
+        _checks = dict(engine_result.checks or {})
+        _checks["narrator_input"] = narrator_json
+        _checks["question"] = question or ""
+        engine_result.checks = _checks
+        if os.environ.get("ASK_PARTNER_NATURE_USE_LLM", "").strip().lower() in ("1", "true", "yes"):
+            chart_text = partner_nature_engine_narrator_payload(
+                engine_result, wants_explain=wants_explain, question=question or ""
+            )
+        else:
+            return render_partner_nature_template_answer(narrator_json, question or "", lang=eff_lang)
     else:
         chart_text = engine_result.to_narrator_payload()
     intent = narrator_intent_hint(
@@ -503,6 +563,28 @@ def narrate_mr_engine_llm(
                         narrator_json,
                         question or "",
                         lang=eff_lang,
+                    )
+            if arch == "secret_relationship" and narrator_json:
+                ok, issues = validate_secret_narrator_output(polished or "", narrator_json)
+                if not ok:
+                    print(
+                        f"[engine_narrate] secret validation failed {issues} — using locked template",
+                        flush=True,
+                    )
+                    from ask_mr.secret_narrator import render_secret_template_answer
+
+                    return render_secret_template_answer(narrator_json, question or "", lang=eff_lang)
+            if arch == "partner_nature" and narrator_json:
+                ok, issues = validate_partner_nature_narrator_output(polished or "", narrator_json)
+                if not ok:
+                    print(
+                        f"[engine_narrate] partner_nature validation failed {issues} — using locked template",
+                        flush=True,
+                    )
+                    from ask_mr.partner_nature_narrator import render_partner_nature_template_answer
+
+                    return render_partner_nature_template_answer(
+                        narrator_json, question or "", lang=eff_lang
                     )
             return polished or None
         except Exception as exc:

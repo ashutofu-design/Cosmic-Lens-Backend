@@ -55,6 +55,24 @@ def _run_engine(engine_id: str, kundli: dict, question: str, **kwargs: Any) -> E
             wants_explain=kwargs.get("wants_explain", False),
             orchestrator_meta=kwargs.get("orchestrator_meta"),
         )
+    if eid == "secret_relationship":
+        from .engines.secret_relationship import run_secret_relationship_v2
+
+        return run_secret_relationship_v2(
+            kundli,
+            question,
+            wants_explain=kwargs.get("wants_explain", False),
+            orchestrator_meta=kwargs.get("orchestrator_meta"),
+        )
+    if eid == "partner_nature":
+        from .engines.partner_nature import run_partner_nature_v2
+
+        return run_partner_nature_v2(
+            kundli,
+            question,
+            wants_explain=kwargs.get("wants_explain", False),
+            orchestrator_meta=kwargs.get("orchestrator_meta"),
+        )
     # Other engines: v1 adapter until migrated
     return None
 

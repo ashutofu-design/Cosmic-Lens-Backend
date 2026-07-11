@@ -367,6 +367,102 @@ def breakup_angle_label(angle: str | None) -> str:
     return _BREAKUP_ANGLE_LABELS.get(key, "Breakup / separation risk")
 
 
+_SECRET_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("parallel_attention", re.compile(r"(?ix)\b(parallel\s+attention|parallel\s+rishta|dusra\s+rishta|hidden\s+affair)\b")),
+    ("multiple_relationships", re.compile(r"(?ix)\b(multiple|do\s+rishte|double\s+dating)\b")),
+    ("chupke_rishta", re.compile(r"(?ix)\b(chupke\s+rishta|chhupa\s+rishta|hidden\s+relationship)\b")),
+    ("secret_affair", re.compile(r"(?ix)\b(affair|chakkar|secret\s+affair)\b")),
+    ("third_person_risk", re.compile(r"(?ix)\b(third\s+person|teesra|dusra\s+partner)\b")),
+    ("hidden_behavior", re.compile(r"(?ix)\b(chupke|chhupa|hidden|secretly|chipka|dating)\b")),
+    ("general_secrecy", re.compile(r"(?ix)\b(secret|secrecy|chhipa|chupa)\b")),
+]
+
+_SECRET_ANGLE_LABELS: dict[str, str] = {
+    "secret_affair": "Secret affair / chakkar",
+    "chupke_rishta": "Chupke / hidden rishta",
+    "parallel_attention": "Parallel attention / dusra rishta",
+    "multiple_relationships": "Multiple / parallel relationships",
+    "hidden_behavior": "Hidden / secret behaviour",
+    "third_person_risk": "Third-person / teesra factor",
+    "general_secrecy": "General secrecy / hidden relationship risk",
+}
+
+
+def infer_secret_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    if not re.search(
+        r"(?ix)\b(secret|chupke|chhupa|chhipa|hidden|affair|chakkar|parallel|multiple|"
+        r"do\s+rishte|teesra|third\s+person|secrecy|secretly|dating)\b",
+        q,
+    ):
+        return None
+    for name, rx in _SECRET_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    return "general_secrecy"
+
+
+def secret_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _SECRET_ANGLE_LABELS.get(key, "Secret / hidden relationship risk")
+
+
+_PARTNER_NATURE_ANGLE_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("temper_anger", re.compile(r"(?ix)\b(gussa|anger|temper|garam\s*dimag|krodh|short[-\s]?temper|gusail)\b")),
+    ("emotional_style", re.compile(r"(?ix)\b(expressive|reserved|khul|band|emotionally)\b")),
+    ("dominant_cooperative", re.compile(r"(?ix)\b(dominant|cooperative|dominating|bossy)\b")),
+    ("love_language", re.compile(r"(?ix)\b(love\s+language|care\s+dikhane|pyaar\s+dikh)\b")),
+    ("family_background", re.compile(r"(?ix)\b(family\s+background|khandaan|upbringing|parivaar\s+background)\b")),
+    ("spiritual_practical", re.compile(r"(?ix)\b(spiritual|practical|ambitious|artistic)\b")),
+    ("attachment_depth", re.compile(r"(?ix)\b(attachment|gehra|closeness|emotional\s+bond|feelings)\b")),
+    ("respect_behavior", re.compile(r"(?ix)\b(respect|izzat|samman)\b")),
+    ("ideal_spouse", re.compile(r"(?ix)\b(ideal\s+spouse)\b")),
+    ("qualities_attract", re.compile(r"(?ix)\b(qualities|attract|pasand)\b")),
+    ("culture_background", re.compile(r"(?ix)\b(culture|city|background\s+se|different\s+culture)\b")),
+    ("appearance_personality", re.compile(r"(?ix)\b(appearance|look|overall\s+personality)\b")),
+    ("general_nature", re.compile(r"(?ix)\b(nature|kaisa|kaisi|swabhav|personality)\b")),
+]
+
+_PARTNER_NATURE_ANGLE_LABELS: dict[str, str] = {
+    "general_nature": "Partner ka general nature / personality",
+    "temper_anger": "Gussa / temper / anger style",
+    "emotional_style": "Expressive ya reserved emotional style",
+    "dominant_cooperative": "Dominant ya cooperative nature",
+    "love_language": "Love language / care dikhane ka tareeka",
+    "family_background": "Family background / khandaan",
+    "appearance_personality": "Appearance + personality",
+    "spiritual_practical": "Spiritual / practical / ambitious nature",
+    "attachment_depth": "Emotional attachment depth",
+    "respect_behavior": "Respect / izzat behaviour",
+    "ideal_spouse": "Ideal spouse / life partner qualities",
+    "qualities_attract": "Qualities jo attract karengi",
+    "culture_background": "Culture / city / background",
+}
+
+
+def infer_partner_nature_angle(question: str) -> str | None:
+    q = (question or "").strip()
+    if not q:
+        return None
+    if not re.search(
+        r"(?ix)\b(partner|spouse|pati|patni|boyfriend|girlfriend|husband|wife|biwi|"
+        r"jeevan\s*sathi|life\s+partner|nature|personality|swabhav|kaisa|kaisi)\b",
+        q,
+    ):
+        return None
+    for name, rx in _PARTNER_NATURE_ANGLE_RULES:
+        if rx.search(q):
+            return name
+    return "general_nature"
+
+
+def partner_nature_angle_label(angle: str | None) -> str:
+    key = (angle or "").strip().lower()
+    return _PARTNER_NATURE_ANGLE_LABELS.get(key, "Partner nature / personality")
+
+
 def infer_partner_commitment_angle(question: str) -> str | None:
     q = (question or "").strip()
     if not q:

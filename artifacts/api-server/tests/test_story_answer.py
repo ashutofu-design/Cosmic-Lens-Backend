@@ -44,6 +44,30 @@ class StoryAnswerTests(unittest.TestCase):
         self.assertNotIn("Jo mukhya sanket", text)
         self.assertRegex(text, r"(?i)confidence")
 
+    def test_secret_chart_pinpoints_in_story(self):
+        data = {
+            "question_type": "secret_relationship",
+            "final_verdict": "Likely",
+            "direct_answer": "Partner kisi aur me interest ke likely indicators active hain.",
+            "original_question": "kya mera partner kisi aur me intrested he",
+            "strongest": ["Moon in 7th — emotional bond strong"],
+            "weakest": ["Venus in 12th house — hidden romance tone"],
+            "strongest_effects": ["Emotional bond supportive hai."],
+            "weakest_effects": ["Hidden-romance tone secret attention signals ko colour karta hai."],
+            "practical_guidance": "Accusation se pehle facts collect karein — calm approach rakhein.",
+            "confidence": 45,
+            "confidence_label": "Medium",
+            "confidence_explanation": "Confidence Medium (45%) hai kyunki zyada tar indicators secrecy direction me hain.",
+        }
+        text = render_story_human_answer(
+            data,
+            "kya mera partner kisi aur me intrested he",
+            engine="secret_relationship",
+        )
+        self.assertRegex(text, r"(?i)venus.*12")
+        self.assertRegex(text, r"(?i)moon.*7")
+        self.assertNotIn("Likely matlab secrecy signals", text)
+
 
 if __name__ == "__main__":
     unittest.main()

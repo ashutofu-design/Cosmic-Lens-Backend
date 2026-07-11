@@ -85,50 +85,98 @@ def _young_astro_opening(direct_answer: str, verdict: str, question: str) -> str
     return f"Dekho, maine tumhari kundli check ki. Seedhi baat: {core}"
 
 
-def _kundli_positive_paragraph(effects: list[str]) -> str:
-    cleaned = [e.rstrip(".") for e in effects if e and "limited" not in e.lower()]
-    if not cleaned:
-        return (
-            "Tumhari kundli me supportive ya transparency wale signals abhi kam strong dikh rahe hain. "
-            "Iska matlab chart zyada tar challenging direction me lean kar raha hai, "
-            "aur positive side abhi utni weight nahi le pa rahi — ye point main clearly isliye bol raha hoon "
-            "taaki tum samjho ki picture ek taraf jhuki hui hai."
-        )
-    body = (
-        f"Tumhari kundli me jo supportive side dikha, usme sabse important point yeh hai: {cleaned[0]}. "
+def _user_chart_pinpoint(raw: str) -> str:
+    """User-facing chart line — keep planet/house/lord, strip internal D1/D9 codes."""
+    s = (raw or "").strip().rstrip(".")
+    if not s:
+        return ""
+    s = re.sub(r"(?i)\bd1\s+", "", s)
+    s = re.sub(r"(?i)\bd9\s+", "Navamsa me ", s)
+    s = re.sub(
+        r"(?i)\brelationship\s+axis\b",
+        "rishte ka axis (7th/8th/12th link)",
+        s,
     )
-    if len(cleaned) > 1:
-        body += f"Iske alawa ek aur supportive signal bhi active hai — {cleaned[1]}. "
-    body += (
-        "Ye positive signals main isliye explain kar raha hoon taaki tumhe pata chale "
-        "chart me sirf doubt wali side nahi, supportive readings bhi hui hain."
-    )
-    return body
+    return s
 
 
-def _kundli_negative_paragraph(effects: list[str]) -> str:
-    cleaned = [e.rstrip(".") for e in effects if e]
-    if not cleaned:
-        return (
-            "Challenging side me abhi koi dominant red flag clearly highlight nahi ho raha, "
-            "lekin overall picture me negative signals ko bhi main read karta hoon taaki answer balanced rahe."
+def _kundli_chart_paragraph(
+    raw_lines: list[str],
+    effects: list[str],
+    *,
+    polarity: str,
+) -> str:
+    pinpoints = [_user_chart_pinpoint(x) for x in raw_lines if str(x).strip()]
+    pinpoints = [p for p in pinpoints if p][:2]
+    meanings = [e.rstrip(".") for e in effects if e and "limited" not in e.lower()][:2]
+
+    if polarity == "positive":
+        if not pinpoints and not meanings:
+            return (
+                "Tumhari kundli me supportive ya transparency wale signals abhi kam strong dikh rahe hain. "
+                "Iska matlab chart zyada tar challenging direction me lean kar raha hai, "
+                "aur positive side abhi utni weight nahi le pa rahi — ye point main clearly isliye bol raha hoon "
+                "taaki tum samjho ki picture ek taraf jhuki hui hai."
+            )
+        intro = (
+            "Tumhari kundli me jo supportive chart readings fire hui, unhe main detail me samjhata hoon — "
+            "ye sab tumhari personal chart se aaye hain."
         )
-    body = (
-        f"Ab challenging side pe — yahan sabse zyada weight is signal ne liya: {cleaned[0]}. "
-    )
-    if len(cleaned) > 1:
-        body += (
-            f"Iske saath ek aur challenging reading bhi active hai: {cleaned[1]}. "
+    else:
+        if not pinpoints and not meanings:
+            return (
+                "Challenging side me abhi koi dominant red flag clearly highlight nahi ho raha, "
+                "lekin overall picture me negative signals ko bhi main read karta hoon taaki answer balanced rahe."
+            )
+        intro = (
+            "Ab challenging side pe — ye chart readings sabse zyada weight le rahi hain, "
+            "aur inhi se doubt ya secrecy wala feel aata hai:"
         )
-    body += (
-        "Ye wahi points hain jinke wajah se doubt, tension ya secrecy feel hoti hai — "
-        "main inhe alag se isliye batata hoon taaki tum samjho answer kahan se aaya."
-    )
-    return body
+
+    parts = [intro]
+    if pinpoints:
+        for i, pinpoint in enumerate(pinpoints):
+            meaning = meanings[i] if i < len(meanings) else ""
+            if meaning and meaning.lower() not in pinpoint.lower():
+                parts.append(f"{pinpoint} — iska matlab daily life me: {meaning}.")
+            else:
+                parts.append(
+                    f"{pinpoint} — yeh tumhari kundli ka fired signal hai, isliye picture is direction me jhuki hai."
+                )
+    elif meanings:
+        lead = meanings[0]
+        parts.append(f"Chart me sabse zyada weight is reading ne liya: {lead}.")
+        if len(meanings) > 1:
+            parts.append(f"Iske saath ek aur challenging reading bhi active hai: {meanings[1]}.")
+
+    if polarity == "positive":
+        parts.append(
+            "Ye positive signals main isliye explain kar raha hoon taaki tumhe pata chale "
+            "chart me sirf doubt wali side nahi, supportive readings bhi hui hain."
+        )
+    else:
+        parts.append(
+            "Ye wahi points hain jinke wajah se doubt, tension ya secrecy feel hoti hai — "
+            "main inhe alag se isliye batata hoon taaki tum samjho answer kahan se aaya."
+        )
+    return " ".join(parts)
+
+
+def _kundli_positive_paragraph(raw_lines: list[str], effects: list[str]) -> str:
+    return _kundli_chart_paragraph(raw_lines, effects, polarity="positive")
+
+
+def _kundli_negative_paragraph(raw_lines: list[str], effects: list[str]) -> str:
+    return _kundli_chart_paragraph(raw_lines, effects, polarity="negative")
 
 
 def _verdict_bridge(verdict: str, data: dict[str, Any]) -> str:
     meaning = str(data.get("meaning_note") or "").strip()
+    if meaning and re.search(
+        r"(?i)\b(low|possible|likely|high)\s+risk\s+matlab\b|matlab\s+secrecy\s+signals\s+active",
+        meaning,
+    ):
+        meaning = ""
     body = (
         f"Jab main dono sides ko saath me dekhta hoon, overall verdict {verdict} banta hai. "
         f"Yeh maine randomly nahi likha — tumhari kundli ke fired signals ko mila ke yeh conclusion aaya hai."
@@ -252,8 +300,12 @@ def render_story_human_answer(
     q = (question or str(data.get("original_question") or "")).strip()
     direct = str(data.get("direct_answer") or "").strip()
 
-    strongest_raw = list(data.get("strongest_effects") or data.get("strongest") or [])
-    weakest_raw = list(data.get("weakest_effects") or data.get("weakest") or [])
+    strongest_raw = list(data.get("strongest") or [])
+    weakest_raw = list(data.get("weakest") or [])
+    if not strongest_raw:
+        strongest_raw = list(data.get("strongest_effects") or [])
+    if not weakest_raw:
+        weakest_raw = list(data.get("weakest_effects") or [])
     pos_fx = _humanize_effects(strongest_raw, engine=eng, limit=2)
     neg_fx = _humanize_effects(weakest_raw, engine=eng, limit=2)
 
@@ -271,8 +323,8 @@ def render_story_human_answer(
 
     parts = [
         opening,
-        _kundli_positive_paragraph(pos_fx),
-        _kundli_negative_paragraph(neg_fx),
+        _kundli_positive_paragraph(strongest_raw, pos_fx),
+        _kundli_negative_paragraph(weakest_raw, neg_fx),
         _verdict_bridge(verdict, data),
         _young_astro_advice(data),
         _story_confidence_line(data),

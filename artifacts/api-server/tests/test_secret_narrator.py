@@ -12,6 +12,7 @@ from ask_intent_fidelity import infer_secret_angle
 from ask_mr.secret_templates import OPENING_TEMPLATES, detect_secret_answer_focus, effects_from_evidence, get_opening
 from ask_mr.secret_narrator import (
     engine_result_to_secret_json,
+    looks_like_bad_secret_llm_output,
     looks_like_secret_template_stitch,
     render_secret_template_answer,
     secret_narrator_payload,
@@ -102,6 +103,14 @@ class SecretNarratorTests(unittest.TestCase):
         self.assertRegex(text, r"(?i)seedhi baat|chart ke hisaab se")
         self.assertNotRegex(text, r"(?i)isi wajah se final verdict|likely matlab|parallel attention trust ko test")
 
+    def test_bad_llm_counseling_rejected(self):
+        bad = (
+            "Partner kisi aur me interest ke likely indicators active hain, matlab aise sanket hain. "
+            "Asli wajah yeh hai ki chart me secrecy signals zyada hain. "
+            "Isliye main aapko yeh kehna chahungi ki thanda dimaag rakho."
+        )
+        self.assertTrue(looks_like_bad_secret_llm_output(bad))
+
     def test_template_stitch_detector(self):
         old = (
             "Partner kisi aur me interest ke likely indicators active hain — parallel attention trust ko test karti hai.\n\n"
@@ -113,11 +122,12 @@ class SecretNarratorTests(unittest.TestCase):
         )
         self.assertFalse(looks_like_secret_template_stitch(new))
 
-    def test_render_no_chart_jargon(self):
+    def test_render_chart_pinpoints(self):
         data = engine_result_to_secret_json(self.result, question=SECRET_Q)
-        data["weakest"] = ["D1 relationship axis shows friction"]
+        data["weakest"] = ["Venus in 12th house — hidden romance tone"]
         data["weakest_effects"] = effects_from_evidence(data["weakest"], limit=2)
         text = render_secret_template_answer(data, SECRET_Q)
+        self.assertRegex(text, r"(?i)venus.*12")
         self.assertNotRegex(text, r"(?i)\bd1\b|relationship\s+axis")
 
 

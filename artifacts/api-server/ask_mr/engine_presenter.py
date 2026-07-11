@@ -90,7 +90,7 @@ def presenter_has_only_soft_issues(issues: list[str]) -> bool:
     for issue in issues:
         if issue in _PRESENTER_HARD_ISSUES:
             return False
-        if issue.startswith("astro_jargon:"):
+        if issue.startswith("astro_jargon_invented:"):
             return False
     return True
 
@@ -154,14 +154,10 @@ def _commitment_presenter_fields(data: dict[str, Any]) -> dict[str, Any]:
 def _generic_presenter_fields(engine: str, data: dict[str, Any]) -> dict[str, Any]:
     from ask_mr.secret_templates import effects_from_evidence
 
-    strongest_raw = list(data.get("strongest_effects") or data.get("strongest") or [])
-    weakest_raw = list(data.get("weakest_effects") or data.get("weakest") or [])
-    if (engine or "").strip().lower() == "secret_relationship":
-        strongest_fx = effects_from_evidence(strongest_raw, limit=3)
-        weakest_fx = effects_from_evidence(weakest_raw, limit=3)
-    else:
-        strongest_fx = strongest_raw
-        weakest_fx = weakest_raw
+    strongest_raw = list(data.get("strongest") or data.get("strongest_effects") or [])
+    weakest_raw = list(data.get("weakest") or data.get("weakest_effects") or [])
+    strongest_fx = effects_from_evidence(strongest_raw, limit=3) if strongest_raw else []
+    weakest_fx = effects_from_evidence(weakest_raw, limit=3) if weakest_raw else []
 
     fields: dict[str, Any] = {
         "engine": engine,
@@ -170,6 +166,8 @@ def _generic_presenter_fields(engine: str, data: dict[str, Any]) -> dict[str, An
         "final_verdict": data.get("final_verdict") or data.get("verdict", ""),
         "direct_answer": data.get("direct_answer", ""),
         "reason_summary": data.get("reason_summary", ""),
+        "chart_pinpoints_positive": [str(x) for x in strongest_raw[:3] if str(x).strip()],
+        "chart_pinpoints_negative": [str(x) for x in weakest_raw[:3] if str(x).strip()],
         "strongest_effects": strongest_fx,
         "weakest_effects": weakest_fx,
         "meaning_note": data.get("meaning_note", ""),
@@ -251,14 +249,15 @@ STRUCTURE (young astrologer voice for {engine} — explain like a real astrologe
 5–6 flowing paragraphs, 150–220 words. Roman Hinglish, warm, direct — like a young astrologer friend.
 
 P1 — Open with user's exact question + seedha jawab (direct_answer + final_verdict).
-P2 — Full paragraph on POSITIVE kundli signals from strongest_effects[] — explain what each means in real life.
-P3 — Full paragraph on CHALLENGING kundli signals from weakest_effects[] — explain clearly, no one-liners.
-P4 — Full paragraph connecting both sides → final_verdict; user must feel "meri kundli se yeh aaya".
+P2 — Full paragraph: cite chart_pinpoints_positive[] (planet/house/lord from THEIR kundli) + what it means in real life via strongest_effects[].
+P3 — Full paragraph: cite chart_pinpoints_negative[] (planet/house/lord) + real-life meaning via weakest_effects[].
+P4 — Full paragraph connecting both sides → final_verdict; user must feel "meri kundli me Venus/7th/Rahu aisa hai isliye yeh jawab".
 P5 — Full advice paragraph from practical_guidance / meaning_note.
 P6 — confidence_explanation from JSON — copy score + reason exactly.
 
-Must help user TRUST the answer: they should feel "meri kundli me yeh hai isliye yeh jawab aaya".
-NO section labels, NO counseling lecture, NO planet/house/dasha jargon, NO "Asli wajah".
+Must help user TRUST the answer: cite chart_pinpoints (planet, house, lord) FROM JSON — then explain daily-life meaning.
+MUST use chart_pinpoints_positive[] and chart_pinpoints_negative[] when present — e.g. "tumhari kundli me Venus 12th me hai, isliye..."
+Do NOT invent planets/houses not in JSON. NO section labels, NO counseling lecture, NO "Asli wajah".
 """.strip()
 
 
@@ -318,9 +317,9 @@ You are a PRESENTER — the {eng} engine already computed verdict from their cha
 
 FACT LOCK (hard):
 • Use ONLY PRESENTER_JSON fields. Skip missing fields.
-• Do NOT invent planets, houses, lords, dasha, dates, scores, or new psychology.
-• Do NOT contradict final_verdict or weaken/strengthen it beyond JSON.
-• Name strongest_effects[] as supportive kundli signals; weakest_effects[] as challenging kundli signals.
+• Use chart_pinpoints_positive[] / chart_pinpoints_negative[] for planet-house-lord citations (ONLY if in JSON).
+• Use strongest_effects[] / weakest_effects[] to explain what each chart pinpoint means in daily life.
+• Do NOT invent planets, houses, lords, dasha, dates, or scores not listed in PRESENTER_JSON.
 
 HUMAN STYLE (young astrologer):
 • Sound like you're sitting with them explaining their chart — natural, not template, not therapist.
@@ -354,6 +353,20 @@ def detect_astro_jargon(text: str) -> list[str]:
     return list({m.group(0).lower() for m in _ASTRO_JARGON_RX.finditer(text or "")})
 
 
+def _allowed_astro_blob(narrator_json: dict[str, Any], engine: str) -> str:
+    """Evidence text presenter may cite — planets/houses from engine only."""
+    data = dict(narrator_json or {})
+    parts: list[str] = []
+    for key in ("strongest", "weakest", "strongest_effects", "weakest_effects"):
+        for item in data.get(key) or []:
+            parts.append(str(item))
+    fields = extract_presenter_fields((engine or "").strip().lower(), data)
+    for key in ("chart_pinpoints_positive", "chart_pinpoints_negative"):
+        for item in fields.get(key) or []:
+            parts.append(str(item))
+    return " ".join(parts).lower()
+
+
 def validate_presenter_output(
     text: str,
     narrator_json: dict[str, Any],
@@ -365,9 +378,13 @@ def validate_presenter_output(
     if not t:
         return False, ["empty"]
 
+    eng = (engine or "").strip().lower()
     jargon = detect_astro_jargon(t)
     if jargon:
-        issues.append(f"astro_jargon:{','.join(sorted(jargon)[:5])}")
+        allowed = _allowed_astro_blob(narrator_json, eng)
+        invented = [j for j in jargon if j not in allowed]
+        if invented:
+            issues.append(f"astro_jargon_invented:{','.join(sorted(invented)[:5])}")
 
     if re.search(
         r"(?i)\b(the\s+big\s+picture|deep\s+breakdown|ab\s+kya\s+karein|relationship\s+counseling)\b",
@@ -382,7 +399,6 @@ def validate_presenter_output(
     elif len(t.split()) > STORY_ANSWER_MAX_WORDS:
         issues.append("too_long")
 
-    eng = (engine or "").strip().lower()
     engine_validators: dict[str, Any] = {}
     if eng == "commitment":
         from ask_mr.commitment_narrator import validate_commitment_narrator_output
@@ -465,7 +481,7 @@ def present_story_answer_llm(
         return polished
     hard = [
         i for i in issues
-        if i in _PRESENTER_HARD_ISSUES or i.startswith("astro_jargon:")
+        if i in _PRESENTER_HARD_ISSUES or i.startswith("astro_jargon_invented:")
     ]
     if polished and not hard:
         print(
